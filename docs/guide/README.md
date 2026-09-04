@@ -44,6 +44,7 @@ be runnable as written.
 | [`fields.md`](fields.md) | How do I get a near field out, why is it off by default, and what shape does it come back in? |
 | [`autodiff.md`](autodiff.md) | How do I differentiate a solve, and what does `jax.jit` need that `jax.grad` does not? |
 | [`backends.md`](backends.md) | What can NumPy, JAX and PyTorch each do here, which should I run, and how do I ask for a device or a precision? |
+| [`time-domain.md`](time-domain.md) | When is the *other* solver the right one, and what does a run in the time domain need that a harmonic one does not? |
 
 ### Advanced
 

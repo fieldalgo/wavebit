@@ -4,6 +4,10 @@ One implementation of the physics sits behind a thin adapter and runs on all thr
 a result never depends on which you pick — cross-backend agreement is part of the test suite,
 not a claim.
 
+This chapter is about `rcwa()`. The time-domain solver is NumPy only and takes no `backend`
+argument at all; [`time-domain.md`](time-domain.md) says why, and the capability manifest
+publishes it per door rather than once for the package.
+
 ![NumPy, JAX and PyTorch](../figures/backends.png "Backends")
 
 * [NumPy](https://github.com/numpy/numpy) — the baseline. No autodiff, no GPU, nothing to

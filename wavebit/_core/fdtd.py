@@ -2213,10 +2213,13 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
             answers every wavelength in it at once (§8 of ``docs/fdtd.md``), which is the case
             where this method beats the RCWA path outright.
         tetm: ``'te'`` or ``'tm'``, the pure formulation. Give this or ``psi``, not both.
-        theta: polar angle in degrees. Real -- evanescent (complex-angle) incidence has no
+        theta: polar angle from the normal, in RADIANS, which is wavebit's unit throughout
+            -- a degrees/radians slip returns a legal answer at a legal angle. Real:
+            evanescent (complex-angle) incidence has no
             propagating wave for the TFSF plane to inject, and is refused.
-        phi: azimuth in degrees. Non-zero couples the two polarisations, so it needs ``psi``.
-        psi: polarisation angle in degrees, the conical mount. Answered at any ``theta`` and
+        phi: azimuth of the plane of incidence, in radians. Non-zero couples the two
+            polarisations, so it needs ``psi``.
+        psi: polarisation angle in radians, the conical mount. Answered at any ``theta`` and
             ``phi``; runs the two eigenpolarisations as separate legs and recombines them.
         mu: permeability raster, laid out beside ``structure``. The half-spaces carry theirs
             inside their :class:`Material`.

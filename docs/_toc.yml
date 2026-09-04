@@ -16,6 +16,7 @@ subtrees:
       - file: guide/fields
       - file: guide/autodiff
       - file: guide/backends
+      - file: guide/time-domain
     - caption: Advanced
       entries:
       - file: guide/specs
