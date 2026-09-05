@@ -191,14 +191,29 @@ def distance_gradient_normal_field(xp, polys, grid_shape, lattice, dtype, chunk=
     and is not for 361 of them: **0.57 GiB, and flat at 0.54 / 0.55 / 0.57 across grids 256 /
     512 / 1024.** The promise the paragraph above makes is now kept under ``jit`` too.
 
-    Same arithmetic, so same numbers -- **under ``jit``**, which is the qualifier that matters
-    and is not a formality. The compiled field is bit-identical to the loop's on every scene
-    measured, at 256, 512 and 1024, and so is ``jit(grad)``. **Eagerly it is not**: ``lax.scan``
-    compiles its body, so an untransformed call picks up XLA's rounding where the loop gets
-    op-by-op dispatch. On a tilted rectangle over a circle -- 227 segments -- that is 7.2e-12
-    across 13048 of 131072 pixels at grid 256. The axis-aligned overlapping pair reads
-    bit-identical in both modes, which is exactly why the unqualified claim looked true: it is
-    the one scene where it is.
+    Same arithmetic, so same numbers -- **the compiled field, under ``jit``**, and that is the
+    whole of what is promised. Bit-identical to the loop's across 426 audited cases: grids 64
+    through 1024, six scenes, square and skewed lattices, chunk sizes that divide the grid and
+    that do not. The 35 one-ULP disagreements in that sweep all belong to the *old* code --
+    every one is `old@chunk != old@single-chunk` while `new@chunk == new@single-chunk`, and
+    there is no case the other way round. ``scan`` gives every chunk the same shape, so it is
+    less chunk-sensitive than the loop was, not more.
+
+    **The gradient is not bit-identical, and neither was the loop's.** With one chunk it is,
+    exactly. With more than one the cotangents are summed in a different order and the answers
+    part company in proportion to the chunk count -- 5.4e-11 at grid 128, 6.5e-11 at 256,
+    1.3e-09 at 1024. Those are all *smaller* than the spread the old code already had against
+    itself when only ``chunk`` changed (1.9e-10, 5.9e-10, 3.7e-09 on the same scenes). So the
+    defensible claim is agreement inside a band the loop already occupied, not agreement to
+    every digit, and an earlier version of this note said the latter.
+
+    **Eagerly the field moves too.** ``lax.scan`` compiles its body, so an untransformed call
+    picks up XLA's rounding where the loop gets op-by-op dispatch: 5.1e-14 at grid 64 rising
+    to 8.6e-11 at 1024. Isolated rather than assumed -- dropping ``checkpoint`` changes the
+    forward bytes not at all, and eager-``scan`` equals *jit* of the Python loop exactly, so
+    the new eager answer is the number the old code already produced once compiled. The
+    axis-aligned overlapping pair reads bit-identical in both modes, which is exactly why the
+    unqualified claim looked true: it is the one scene where it is.
 
     Nothing is wrong with those values. The difference scales as ``1/mag``, a fixed absolute
     error in ``v`` amplified by the division, with ``diff * mag`` clustering at two constants;
@@ -244,17 +259,39 @@ def distance_gradient_normal_field(xp, polys, grid_shape, lattice, dtype, chunk=
         j, foot_j = _nearest(xp, p, A, E, L2)
 
         v = p - foot_j
-        mag = xp.sqrt(_sum(xp, v * v))
 
         # A pixel centre exactly on the boundary has no direction; grid-aligned designs hit it.
         # Fall back to that edge's own normal, which is what the limit approaches.
+        #
+        # The guard is on the SQUARED magnitude, and it has to be. Written the obvious way --
+        # `mag = sqrt(sum(v*v))` and then `where(mag > 1e-13, mag, 1)` -- the value is right
+        # and the derivative is not: `sqrt` is evaluated for every pixel before the `where`,
+        # reverse mode sends a zero cotangent down the unselected branch, and `d/dx sqrt(x)`
+        # at zero is infinite, so the chain rule computes `0 * inf` and the whole parameter
+        # derivative comes back NaN. One poisoned pixel is enough, because the loss sums.
+        #
+        # It is reachable from a plain solve, not just a contrived call. `sample_grid` puts
+        # centres at `(i + 0.5) * P / N`, so at `period=300, normal_grid=300` those are the
+        # half-integers and a rectangle at `cx=0` with an ODD width lands its edges exactly on
+        # a column of them. Measured through `rcwa(...).solve()` on two overlapping
+        # rectangles: `lx=121` gives `sum(T)=0.9768138981` and `d/dlx = nan`, while `lx=120`
+        # gives a perfectly ordinary `-7.085e-05`. An integer width, a correct transmission,
+        # and a derivative that is not there.
+        #
+        # Guarding `s2` before the square root keeps `sqrt` off zero entirely, so nothing
+        # infinite is ever differentiated. The comment above this block already said
+        # "grid-aligned designs hit it"; it was describing the trigger for a bug in the
+        # gradient, not only a special case in the value.
+        s2 = _sum(xp, v * v)
+        safe2 = xp.where(s2 > 1e-26, s2, xp.ones_like(s2))
+        mag = xp.sqrt(safe2)
+
         ej = E[j]
         n_edge = xp.stack([ej[:, 1], -ej[:, 0]], axis=-1)
         n_edge = n_edge / xp.sqrt(_sum(xp, n_edge * n_edge))[:, None]
 
-        safe = xp.where(mag > 1e-13, mag, xp.ones_like(mag))
-        n_far = v / safe[:, None]
-        on = (mag <= 1e-13)[:, None]
+        n_far = v / mag[:, None]
+        on = (s2 <= 1e-26)[:, None]
         return xp.where(on, n_edge, n_far)
 
     if 'jax' in xp.__name__:
@@ -278,6 +315,17 @@ def _scanned_normals(xp, body, pts, npix, chunk):
     before returning. ``scan`` needs a rectangular stack, the pixels are independent so a
     repeat changes nothing about the real ones, and repeating a point that is already in the
     set cannot reach a code path the real points do not.
+
+    That last clause is the load-bearing one, and **what it protects is the gradient, not the
+    field**. Padding with zeros, or with the first point, or with NaN, all give a forward field
+    identical to this one -- the trim discards those rows before anything looks at them. The
+    difference only appears under ``grad``: measured on a rectangle with a vertex exactly at
+    the origin, zero-padding and NaN-padding both return a NaN gradient while repeating a real
+    point does not, and the forward comparison between all four is 2.2e-16. So a ``.tobytes()``
+    check on the field can never catch a wrong padding value. Anything that changes what the
+    padding contains has to be checked under a derivative.
+
+    ``chunk`` is clamped to ``npix`` on entry for a separate reason; see there.
     """
     import jax
 
