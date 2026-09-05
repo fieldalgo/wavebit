@@ -162,6 +162,38 @@ def distance_gradient_normal_field(xp, polys, grid_shape, lattice, dtype, chunk=
     chunked run is bit-identical to a flat one. ``None`` targets 4M entries per temporary;
     measured peak is about 5x that, since `_seg_dist` has several ``(chunk, M, 2)`` arrays
     alive at once. Peak then stops growing with the grid, which is the point.
+
+    **That last sentence was false under ``jax.jit``, and the loop below is why.** A Python
+    ``for`` does not survive tracing: it runs once per chunk while the program is recorded and
+    appends its equations each time, so the recorded program holds 361 copies of the body at
+    ``normal_grid=1024`` and no loop at all. The compiler cannot reuse one chunk's buffers for
+    the next because reverse-mode keeps every chunk's residuals live for the backward pass.
+    Measured with ``memory_analysis()`` on the overlapping-pair scene of
+    ``test_frozen_geometry``: 0.78 GiB at grid 256, 2.83 at 512, **10.77 at 1024** -- growing
+    with the grid exactly as the chunking promised it would not. On GitHub's 7.9 GB runners
+    that is `RESOURCE_EXHAUSTED: Out of memory allocating 11559862304 bytes`, which is
+    ``1024**2 x 1378 segments x 8``: the whole pixels-by-segments table the chunking exists to
+    avoid, materialised anyway.
+
+    So JAX takes :func:`lax.scan` with the body under :func:`jax.checkpoint`, and it needs
+    both. ``scan`` puts a real loop in the recorded program -- one instruction instead of 361
+    copies -- which lets the compiler reuse the body's buffers; that alone gets 10.77 GiB to
+    4.73, since scan's reverse still stacks each iteration's residuals. ``checkpoint`` drops
+    those and recomputes the chunk when the backward reaches it, which is cheap for one chunk
+    and is not for 361 of them: **0.57 GiB, and flat at 0.54 / 0.55 / 0.57 across grids 256 /
+    512 / 1024.** The promise the paragraph above makes is now kept under ``jit`` too.
+
+    Same arithmetic, so same numbers: the normal field is bit-identical to the loop's over the
+    whole 1024x1024 grid, and the gradient agrees to every digit a float64 has. Recomputing is
+    not approximating -- the same inputs give the same values.
+
+    NumPy and PyTorch keep the loop. NumPy differentiates nothing, so it never had the
+    problem, and torch's answer would be `torch.utils.checkpoint`, which is a different call
+    with its own caveats and no measured need yet.
+
+    (`cost_analysis()` cannot arbitrate this. It counts a scan body once rather than once per
+    trip, so the same work reports 3.3e5 flops at 16 chunks and 2.0e4 at 256 -- the numbers
+    fall as the loop gets *better*. Read `memory_analysis()` and the field itself.)
     """
     Ny, Nx = grid_shape
     A, E, L2 = segments_of(xp, polys)
@@ -175,9 +207,8 @@ def distance_gradient_normal_field(xp, polys, grid_shape, lattice, dtype, chunk=
     if chunk is None:
         chunk = max(1, min(npix, 4_000_000 // max(M, 1)))
 
-    nxs, nys = [], []
-    for lo in range(0, npix, chunk):
-        p = pts[lo:lo + chunk]
+    def _chunk_normals(p):
+        """One chunk's unit normals, ``(len(p), 2)``. The loop body, named so JAX can reuse it."""
         j, foot_j = _nearest(xp, p, A, E, L2)
 
         v = p - foot_j
@@ -192,14 +223,40 @@ def distance_gradient_normal_field(xp, polys, grid_shape, lattice, dtype, chunk=
         safe = xp.where(mag > 1e-13, mag, xp.ones_like(mag))
         n_far = v / safe[:, None]
         on = (mag <= 1e-13)[:, None]
-        n = xp.where(on, n_edge, n_far)
+        return xp.where(on, n_edge, n_far)
 
-        nxs.append(n[:, 0])
-        nys.append(n[:, 1])
+    if 'jax' in xp.__name__:
+        n = _scanned_normals(xp, _chunk_normals, pts, npix, chunk)
+    else:
+        parts = [_chunk_normals(pts[lo:lo + chunk]) for lo in range(0, npix, chunk)]
+        n = xp.concat(parts, axis=0)
 
-    normal_x = xp.reshape(xp.concat(nxs, axis=0), (Ny, Nx))
-    normal_y = xp.reshape(xp.concat(nys, axis=0), (Ny, Nx))
+    normal_x = xp.reshape(n[:, 0], (Ny, Nx))
+    normal_y = xp.reshape(n[:, 1], (Ny, Nx))
     return normal_x, normal_y
+
+
+def _scanned_normals(xp, body, pts, npix, chunk):
+    """``body`` over ``pts`` in chunks, as a ``lax.scan`` whose body is rematerialised.
+
+    Why not the plain loop: see :func:`distance_gradient_normal_field`. In one line, a Python
+    loop is 361 copies in the traced program and this is one instruction.
+
+    The tail is padded by repeating the last point rather than with zeros, and trimmed off
+    before returning. ``scan`` needs a rectangular stack, the pixels are independent so a
+    repeat changes nothing about the real ones, and repeating a point that is already in the
+    set cannot reach a code path the real points do not.
+    """
+    import jax
+
+    n_chunks = -(-npix // chunk)
+    pad = n_chunks * chunk - npix
+    if pad:
+        pts = xp.concat([pts, xp.repeat(pts[-1:], pad, axis=0)], axis=0)
+    stacked = xp.reshape(pts, (n_chunks, chunk, 2))
+
+    _, out = jax.lax.scan(lambda carry, p: (carry, jax.checkpoint(body)(p)), None, stacked)
+    return xp.reshape(out, (n_chunks * chunk, 2))[:npix]
 
 
 # ============================================ convolution matrices for one layer
