@@ -169,9 +169,14 @@ def distance_gradient_normal_field(xp, polys, grid_shape, lattice, dtype, chunk=
     chunk and no loop at all. Counting ``argmin`` primitives in ``jax.make_jaxpr`` of the old
     path gives exactly ``ceil(npix / chunk)`` -- 24 copies at ``normal_grid=1024`` on the
     overlapping-pair scene of ``test_frozen_geometry``, where the fold leaves 90 segments and
-    so ``chunk`` is 44444. The compiler cannot reuse one chunk's buffers for the next because
-    reverse mode keeps every copy's residuals live for the backward pass, and each copy holds
-    several ``(44444, 90, 2)`` temporaries. Measured with ``memory_analysis()``: 0.78 GiB at
+    so ``chunk`` is 44444. Each copy holds several ``(44444, 90, 2)`` temporaries and the
+    compiler cannot reuse one copy's buffers for the next, so the program grows with the grid
+    **before any derivative is involved**: compiled forward-only, with no AD anywhere in it,
+    the loop needs 0.31 / 0.91 / 3.55 GiB at grids 256 / 512 / 1024 against a flat 0.21 /
+    0.22 / 0.24 for the scan. Reverse mode then multiplies that by about three, which is how
+    3.55 becomes 10.77. An earlier version of this note blamed the backward pass alone; it is
+    an aggravating factor and unrolling is the cause, and the forward-only column is what
+    separates them. Measured with ``memory_analysis()``: 0.78 GiB at
     grid 256, 2.83 at 512, **10.77 at 1024** -- growing with the grid exactly as the chunking
     promised it would not. On GitHub's 7.9 GB runners that is
     `RESOURCE_EXHAUSTED: Out of memory allocating 11559862304 bytes`.
@@ -184,12 +189,14 @@ def distance_gradient_normal_field(xp, polys, grid_shape, lattice, dtype, chunk=
     scene has 90 segments and the real table would be 0.70 GiB.
 
     So JAX takes :func:`lax.scan` with the body under :func:`jax.checkpoint`, and it needs
-    both. ``scan`` puts a real loop in the recorded program -- one instruction instead of 361
-    copies -- which lets the compiler reuse the body's buffers; that alone gets 10.77 GiB to
-    4.73, since scan's reverse still stacks each iteration's residuals. ``checkpoint`` drops
-    those and recomputes the chunk when the backward reaches it, which is cheap for one chunk
-    and is not for 361 of them: **0.57 GiB, and flat at 0.54 / 0.55 / 0.57 across grids 256 /
-    512 / 1024.** The promise the paragraph above makes is now kept under ``jit`` too.
+    both. ``scan`` puts a real loop in the recorded program -- one instruction instead of one
+    copy per chunk -- which lets the compiler reuse the body's buffers; that alone gets 10.77
+    GiB to 4.73, since scan's reverse still stacks each iteration's residuals. ``checkpoint``
+    drops those and recomputes the chunk when the backward reaches it, which is cheap for one
+    chunk and is not for two dozen: **0.57 GiB, and flat at 0.54 / 0.55 / 0.57 across grids
+    256 / 512 / 1024.** Neither half is redundant -- `checkpoint` on the unrolled loop, with
+    no `scan`, measures 12.19 GiB, worse than doing nothing. The promise the paragraph above
+    makes is now kept under ``jit`` too.
 
     Same arithmetic, so same numbers -- **the compiled field, under ``jit``**, and that is the
     whole of what is promised. Bit-identical to the loop's across 426 audited cases: grids 64
@@ -234,13 +241,21 @@ def distance_gradient_normal_field(xp, polys, grid_shape, lattice, dtype, chunk=
     not a parameter of ``normal_projector_coeffs`` or ``conv_mats``, so neither is reachable
     except by calling this function directly.
 
-    NumPy and PyTorch keep the loop. NumPy differentiates nothing, so it never had the
-    problem, and torch's answer would be `torch.utils.checkpoint`, which is a different call
-    with its own caveats and no measured need yet.
+    NumPy and PyTorch keep the loop. NumPy is immune because it never *traces*, not because
+    `SolverNumpy.grad` raises -- the growth above appears under `jit` with no differentiation
+    at all, so "it does not differentiate" would be the wrong reason for the right conclusion.
+    Torch is a different matter: it does differentiate and it does keep the unrolled loop, so
+    the same class of problem plausibly sits there unmeasured. Its answer would be
+    `torch.utils.checkpoint`, a different call with its own caveats, and nobody has yet shown
+    it is needed.
 
-    (`cost_analysis()` cannot arbitrate this. It counts a scan body once rather than once per
-    trip, so the same work reports 3.3e5 flops at 16 chunks and 2.0e4 at 256 -- the numbers
-    fall as the loop gets *better*. Read `memory_analysis()` and the field itself.)
+    (`cost_analysis()` cannot arbitrate this, and the way it fails is worth knowing because it
+    fails *towards* the answer you want. It counts a scan body once rather than once per trip,
+    so as the same work is split into more chunks the reported flops FALL -- measured at grid
+    1024, 1.116e8 at 16 chunks against 1.091e7 at 256, a factor of ten in the direction of
+    "the loop got better". The same sweep over the Python loop is flat, 1.08e8 both times,
+    because there the work really is all in the trace. That contrast is the check; a single
+    scan number means nothing on its own. Read `memory_analysis()` and the field itself.)
     """
     Ny, Nx = grid_shape
     A, E, L2 = segments_of(xp, polys)
@@ -309,7 +324,8 @@ def _scanned_normals(xp, body, pts, npix, chunk):
     """``body`` over ``pts`` in chunks, as a ``lax.scan`` whose body is rematerialised.
 
     Why not the plain loop: see :func:`distance_gradient_normal_field`. In one line, a Python
-    loop is 361 copies in the traced program and this is one instruction.
+    loop is one copy of the body per chunk in the traced program -- 24 at the grid this was
+    written for -- and this is one instruction.
 
     The tail is padded by repeating the last point rather than with zeros, and trimmed off
     before returning. ``scan`` needs a rectangular stack, the pixels are independent so a
