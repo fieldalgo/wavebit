@@ -137,6 +137,21 @@ cell, so a translated structure was a *different* structure; the displacement no
 nearest image, so the field is periodic and a circle's mean `nx²` reads its symmetric ½ from
 anywhere in the cell rather than only from the centre.
 
+**A face the shape's own image covers is not an interface**, and that is a third thing the fold
+does not settle. A rectangle spanning the cell — `ly = Py`, i.e. a 1-D grating written on a 2-D
+cell — has y-faces that bound nothing, and the blend reported a surface normal across them
+anyway, `max|n_y| = 1.000` over a third of the cell. Each face distance is now measured to the
+nearest **image** of that face, so at the span the two opposite families are the same set of lines,
+their distances are equal and their normals cancel identically. That is exact rather than
+approximate: the field becomes `(±1, 0)`, and the parametric path then reproduces a raster of the
+same grating under Li's 1-D rule to 1e−13, where it was 5e−4 to 9e−3 away. Folding the distance
+rather than erasing the face is what keeps it continuous — an erasure has to decide *when*, and
+any threshold puts a step of ~2.5e-3 at its own tolerance, on the edge of the feasible set where
+an optimiser would read it as a gradient. An image slid *along* the face kills only part of it,
+which no closed form over one box reaches, and that geometry is refused instead. Both halves, with
+the convergence tables, are in
+[`normal-field-known-limits.md`](normal-field-known-limits.md).
+
 Several shapes therefore still stay on the sampled route — no phase describes a nonlinear
 combination — but the route is no longer the broken one. They are combined by **distance-product
 weights** rather than the *normalized sum of unit vectors* this used to describe, and that
