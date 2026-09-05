@@ -2163,6 +2163,67 @@ def test_a_crossed_grating_reduces_to_the_2d_path_when_it_is_y_invariant():
     assert worst < 2e-2, f'the 3D path and the 2D path disagree by {worst:.2e}'
 
 
+@pytest.mark.parametrize('tetm', ['te', 'tm'])
+def test_a_crossed_raster_answers_the_polarisation_it_was_asked_for(tetm):
+    """`tetm` on a crossed raster must select the leg, and it silently did not.
+
+    A crossed grating needs all six components whatever the polarisation is, so it turns the
+    conical stepper on -- and then reaches the incident drive with no `leg`, because no conical
+    dispatch happened. Falling through drove the p direction, so BOTH spellings of `tetm`
+    answered the TM problem: on the y-invariant raster below, `tetm='te'` returned
+    T = 0.2713 / 0.1721 / 0.2694, which is the 2D path's TM answer, against a true
+    0.2148 / 0.3533 / 0.2145. Worst per-order gap 1.8e-1, now 1.1e-4.
+
+    **Nothing caught it, and the reason is a gap in the question rather than in the tolerance.**
+    Every other crossed test asks with `psi`, which always carries a leg; none asked with
+    `tetm`. `R + T` stayed at 1.01 throughout, because solving the wrong polarisation is still
+    solving something. The record was the visible symptom -- `field_e` holds `ey`, which is
+    identically zero when only the p leg is driven -- and a shape-only assertion on it saw
+    nothing.
+    """
+    column = np.array([wavebit.eps_from_index(N_TOOTH)] * 8 + [EPS_TOP] * 8)
+    common = dict(thickness=[THICK], top=EPS_TOP, bot=EPS_BOT, wavelength=WL,
+                  resolution=0.05, n_periods=100, theta=0.0, tetm=tetm)
+    flat = solve_fdtd(structure=column.reshape(1, 1, 16), period=[PERIOD], **common)
+    crossed = solve_fdtd(structure=np.repeat(column.reshape(1, 1, 16), 6, axis=1),
+                         period=[PERIOD, 200.0], **common)
+
+    flat_u = np.asarray(flat.orders_u).ravel()
+    crossed_u = np.asarray(crossed.orders_u).ravel()
+    row = int(np.flatnonzero(np.asarray(crossed.orders_v).ravel() == 0)[0])
+    worst = 0.0
+    for i, m in enumerate(crossed_u):
+        if m not in flat_u:
+            continue
+        j = int(np.flatnonzero(flat_u == m)[0])
+        for name in ('R', 'T'):
+            worst = max(worst, abs(float(np.asarray(getattr(crossed, name))[row, i])
+                                   - float(np.asarray(getattr(flat, name)).ravel()[j])))
+    assert worst < 5e-3, (
+        f'a crossed raster asked for {tetm!r} disagrees with the 2D path by {worst:.2e}; '
+        f'if this is ~1.8e-1 the two polarisations have been swapped again')
+
+
+def test_the_record_of_a_crossed_run_carries_the_field_that_was_driven():
+    """The component `record_field` hands back must be the one the incidence drives.
+
+    This is the same defect from the other side, and it is the side a user meets: ask a crossed
+    grating for `tetm='te'` with a record, and `field_e` came back identically zero on a
+    y-invariant raster while the whole field sat in `field_ex`. An all-zero array called `the
+    field` is worse than no array.
+    """
+    column = np.array([wavebit.eps_from_index(N_TOOTH)] * 8 + [EPS_TOP] * 8)
+    _, diag = solve_fdtd(structure=np.repeat(column.reshape(1, 1, 16), 6, axis=1),
+                         thickness=[THICK], top=EPS_TOP, bot=EPS_BOT, period=[PERIOD, 200.0],
+                         wavelength=WL, tetm='te', theta=0.0, resolution=0.05, n_periods=60,
+                         record_field=40, return_diagnostics=True)
+    assert diag['field_e_component'] == 'ey', "a TE run's primary is Ey"
+    driven = np.abs(diag['field_e']).max()
+    assert driven > 1e-2, (
+        f'field_e peaks at {driven:.2e} on a TE crossed run: the record names Ey and the '
+        f'incidence drove the other leg')
+
+
 def test_a_crossed_grating_answers_on_a_two_dimensional_order_grid():
     """`R` and `T` come back on `(orders_v, orders_u)`, and the energy balances.
 

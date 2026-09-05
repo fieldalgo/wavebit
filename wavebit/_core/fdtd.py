@@ -1252,6 +1252,21 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None, record_field=None):
     inc_drive = None
     if conical:
         c_p, s_p = np.cos(grid.phi), np.sin(grid.phi)
+        # A CROSSED grating turns `conical` on for a pure TE/TM incidence too -- it needs all
+        # six components whatever the polarisation is -- and then arrives here with no `leg`,
+        # because no conical dispatch happened. Falling through to the `else` drove the p
+        # direction and so answered the TM problem for BOTH spellings of `tetm`: measured on a
+        # y-invariant crossed raster, `tetm='te'` returned the 2D path's TM answer
+        # (T = 0.2713 / 0.1721 / 0.2694 against a true 0.2148 / 0.3533 / 0.2145), while `R + T`
+        # stayed at 1.01 and every existing crossed test passed, because all of them ask with
+        # `psi` and none with `tetm`.
+        #
+        # `tetm` names the leg rather than a separate rule: TE *is* the s direction and TM the
+        # p one. `phi` is refused alongside `tetm` (`_refuse_out_of_scope`), so at the only
+        # angles that reach here `s_hat` is `(0, 1)` and `p_hat`'s tangential part is
+        # `(-cos theta, 0)` -- exactly the two components the pure formulation drives.
+        if leg is None:
+            leg = 's' if tetm == 'te' else 'p'
         inc_drive = ((-s_p, c_p) if leg == 's'
                      else (-np.cos(grid.theta) * c_p, -np.cos(grid.theta) * s_p))
     # The SAME cell array the 2D grid runs on, not the scalar. Handing it `grid.dz` leaves the
