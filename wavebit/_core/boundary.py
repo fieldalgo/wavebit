@@ -191,13 +191,33 @@ def distance_gradient_normal_field(xp, polys, grid_shape, lattice, dtype, chunk=
     and is not for 361 of them: **0.57 GiB, and flat at 0.54 / 0.55 / 0.57 across grids 256 /
     512 / 1024.** The promise the paragraph above makes is now kept under ``jit`` too.
 
-    Same arithmetic, so same numbers -- **under ``jit``**, which is the qualifier that matters.
-    The compiled field is bit-identical to the loop's over the whole 1024x1024 grid, on every
-    scene measured. Untransformed JAX is not promised: ``lax.scan`` compiles its body, so an
-    eager call picks up XLA's rounding where the loop gets op-by-op dispatch, and the two can
-    differ in the last few ULP -- within the gap the old code already had against its own
-    compiled self. Recomputing is not approximating; the same inputs give the same values, and
-    what moves is which engine evaluates them.
+    Same arithmetic, so same numbers -- **under ``jit``**, which is the qualifier that matters
+    and is not a formality. The compiled field is bit-identical to the loop's on every scene
+    measured, at 256, 512 and 1024, and so is ``jit(grad)``. **Eagerly it is not**: ``lax.scan``
+    compiles its body, so an untransformed call picks up XLA's rounding where the loop gets
+    op-by-op dispatch. On a tilted rectangle over a circle -- 227 segments -- that is 7.2e-12
+    across 13048 of 131072 pixels at grid 256. The axis-aligned overlapping pair reads
+    bit-identical in both modes, which is exactly why the unqualified claim looked true: it is
+    the one scene where it is.
+
+    Nothing is wrong with those values. The difference scales as ``1/mag``, a fixed absolute
+    error in ``v`` amplified by the division, with ``diff * mag`` clustering at two constants;
+    no pixel goes near the ``mag <= 1e-13`` guard, unit norm holds to 3.3e-16, and end-to-end
+    ``sum(T)`` moves by at most 1.7e-14 relative -- inside the band the three backends already
+    occupy against each other. It is also not a new class of error: the loop already differed
+    from *itself* by the same order between eager and compiled, 5.6e-13 on that scene, so this
+    is the pre-existing eager-versus-jit fusion spread and not something ``scan`` introduced.
+    Curved and tilted scenes select for it because they put more pixels at small ``mag``.
+
+    Recomputing is not approximating; the same inputs give the same values, and what moves is
+    which engine evaluates them.
+
+    Two divergences that no public call can reach, recorded because they are real: with
+    ``npix == 0`` the JAX branch returns empty arrays where every other path raises
+    (``check_normal_grid`` rejects a zero grid first), and a non-positive ``chunk`` raises
+    ``ZeroDivisionError`` or ``TypeError`` here against the loop's ``ValueError``. ``chunk`` is
+    not a parameter of ``normal_projector_coeffs`` or ``conv_mats``, so neither is reachable
+    except by calling this function directly.
 
     NumPy and PyTorch keep the loop. NumPy differentiates nothing, so it never had the
     problem, and torch's answer would be `torch.utils.checkpoint`, which is a different call
