@@ -170,14 +170,22 @@ if __name__ == '__main__':
     print(f'Norm of difference, shapes and raster cfs, Torch;'
           f' R: {np.linalg.norm(de_ri_v_2-de_ri_r_2_cfs)}, T: {np.linalg.norm(de_ti_v_2-de_ti_r_2_cfs)}')
 
-    # What that difference is, and why a single number could not answer it.
+    # There is no difference left to explain, and that is the point of the sweep below: the two
+    # paths agree to 4e-16 at truncation_order 3 and hold at 2e-15 and 7e-14 at 10 and 20.
     #
-    # The geometry is identical -- the rods land on pixel boundaries -- and the two paths agree
-    # on it exactly: the `1/eps` coefficient grid matches to 1e-16 between them. What differs is
-    # the *factorization*. The raster runs Li's inverse rule along the grid; the shape path runs
-    # NVF off an analytic normal field, extended off the boundary a different way. Both converge
-    # to the same answer, from different sides, so the gap is a truncation error rather than a
-    # disagreement, and the only honest way to say so is to watch it shrink.
+    # They did not, and the paragraph that used to stand here got it wrong in an instructive
+    # way. It read the R 9.1e-4 / T 4.7e-3 gap as a *factorization* difference -- Li's inverse
+    # rule along the grid against NVF off an analytic normal field, "converging to the same
+    # answer from different sides, so the gap is a truncation error rather than a disagreement".
+    # The numbers were there to check that against and were not read as a check: 4.7e-3 ->
+    # 3.7e-4 -> 1.7e-4 at truncation_order 3 / 10 / 20 is a plateau, not a convergence.
+    #
+    # It was the normal field, and specifically these rods' `ly = 300` on a 300 period. Each rod
+    # spans the cell, so its top and bottom faces are the same line as its own image's and bound
+    # nothing -- the material runs straight through -- and the analytic field reported a face
+    # normal across them anyway. Dropping a covered face pair makes this scene one calculation
+    # rather than two that nearly agree, because with the field constant the NVF projector *is*
+    # Li's 1-D rule. See `docs/normal-field-known-limits.md` section 2a.
     #
     # This is the check that replaced a bit-identity. The block path -- removed on 2026-08-26 --
     # gridded its shapes and applied Li's rule to them, which on a commensurate grating like this

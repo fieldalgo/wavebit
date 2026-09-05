@@ -439,9 +439,11 @@ def check_layer_shapes(layer, lattice, layer_index=0):
     # interpenetration counts, in units of the cell's own size. It keeps *touching* out --
     # a rod exactly filling the period comes out at a gap of zero and is a legal structure,
     # and so are two rods abutting across an edge.
-    hits = _overlap.overlapping_pairs(prims, OVERLAP_TOL_REL * max(Px, Py), lattice,
-                                      image_only=True)
+    tol = OVERLAP_TOL_REL * max(Px, Py)
+
+    hits = _overlap.overlapping_pairs(prims, tol, lattice, image_only=True)
     if not hits:
+        _refuse_partial_self_coincidence(shapes, prims, lattice, tol, layer_index)
         return
 
     i, j, ox, oy, _ = hits[0]
@@ -462,6 +464,51 @@ def check_layer_shapes(layer, lattice, layer_index=0):
         f'built as a different structure -- one that solves, conserves energy, and does not '
         f'converge.\n'
         f'  {fix}, or state the layer as a raster structure, which carries the wrap.')
+
+
+def _refuse_partial_self_coincidence(shapes, prims, lattice, tol, layer_index):
+    """Refuse a box whose face pair coincides with an image of itself over *part* of its length.
+
+    Split out of :func:`check_layer_shapes` only because it is long, and called from its end:
+    see :func:`~wavebit._core.overlap.partial_self_coincidences` for the geometry and
+    ``docs/normal-field-known-limits.md`` for what it costs when it is not caught.
+    """
+    # *After* the interpenetration sweep, and that ordering is load-bearing rather than
+    # stylistic. The two conditions are not disjoint: a rod of `lx = 340` on a 300 period runs
+    # into its own image across `a1 + a2` with `|t . v| = 2b` exactly, so it is partially
+    # coincident *as well as* larger than the period -- and "larger than the period" is the
+    # refusal that names its actual mistake. Asked first, this one answered it with a paragraph
+    # about normal fields for a shape that has a much simpler problem.
+    # No `try` around the read, unlike the block at the top of the caller: getting here means
+    # `Px, Py` and every primitive already came back as numbers, so both halves of what this
+    # reads are concrete by construction. A traced layer left through that block instead.
+    for i, prim in enumerate(prims):
+        runs = _overlap.partial_self_coincidences(prim, lattice, tol)
+        if not runs:
+            continue
+        axis, ox, oy, run = runs[0]
+        along = 'x' if axis == 'u' else 'y'
+        raise ValueError(
+            f'Analytic layer {layer_index}: shape {_shape_name(shapes, i)} runs into its own '
+            f'periodic image{_across(ox, oy)} along part of one face pair -- {run:g} of the '
+            f'face is covered, on the faces normal to the shape\'s own {along}. The boxes only '
+            f'touch, so the permittivity is right; the *normal field* is not. Along that run '
+            f'the material continues into the image and there is no interface, but the field '
+            f'is built from this box alone and still reports the face normal there. Measured '
+            f'on a 700-square cell, a rectangle at atan(1/2) with ly = 700 sin(theta) and '
+            f'lx = 640 -- a run of 13.9 out of a 640-long face: sum(T) 0.801 / 0.811 / 0.823 '
+            f'/ 0.832 / 0.838 at truncation order 6 / 9 / 12 / 15 / 18, where an exact '
+            f'nearest-interface field and an image-aware raster both answer 0.832 / 0.841 / '
+            f'0.849 / 0.853 / 0.857. That is 3e-2 falling to 2e-2 across a tripling of the '
+            f'order -- an error that converges away far too slowly to be a truncation.\n'
+            f'  No closed form over one box fixes it: along the dead run the nearest interface '
+            f'belongs to the *neighbouring* image, so masking the run removes the wrong normal '
+            f'without supplying the right one (measured 1.435 -> 1.552 deg and 4.551 -> 4.580 '
+            f'against an exact oracle). A face covered end to end is a different matter and is '
+            f'built exactly -- a rectangle spanning the cell, i.e. a 1-D grating.\n'
+            f'  Move the shape off the coincidence: change {along}-length or the angle so the '
+            f'faces do not land on their own image, or state the layer as a raster structure, '
+            f'which carries the wrap.')
 
 
 def layer_needs_resolving(layer, lattice):
@@ -908,6 +955,111 @@ def _fold_to_nearest_image(xp, dx, dy, lattice):
     return best_x, best_y
 
 
+#: How far off a lattice direction a shape's own axis may sit and still count as running along
+#: it, as a fraction of the lattice vector's length. Squared, because the test it is read by
+#: compares squared lengths and wants no root.
+#:
+#: The same 1e-12 :func:`~wavebit._core.lattice.is_axis_aligned` draws its diagonal test at, and
+#: it is needed for the same reason: the question is exact in real arithmetic and only ever
+#: fails by rounding. ``angle = pi/2`` is the case -- ``cos(pi/2)`` is 6.1e-17 rather than 0, so
+#: a shape turned a quarter turn misses an exact test by 4.3e-14 on a 700 cell. No exact test
+#: can serve, because ``pi/2`` is not a representable angle in the first place.
+#:
+#: **It is a threshold, and it was measured rather than assumed.** A shape more than half a
+#: repeat long folds, and one just past this tolerance does not, so the field steps across it:
+#: 8.1e-11 at ``angle = 1e-12`` and 1.19e-1 at ``1e-11``, on a rectangle 0.9 of the cell tall.
+#: Through a solve that is ``sum(T)`` 0.976583641 against 0.976535505 -- 4.8e-5, the same size
+#: as the correction the fold itself makes, with the *better* of the two values sitting at
+#: ``angle = 0``. A shape at or below half a repeat has no step at all, because the fold is
+#: arithmetically inert there (measured smooth, 1.2e-12 to 1.5e-1 as the angle grows).
+#:
+#: Nothing an optimiser walks reaches it: 1e-11 rad is 5.7e-10 degrees, ``d(sum T)/dangle`` at zero
+#: is -1.2e-14 by AD against 2.1e-11 by central differences at h = 1e-4 -- both of them the zero
+#: that symmetry requires -- so the step is in the value and not in the slope anything descends.
+#: ``test_the_lattice_direction_test_is_a_threshold`` pins it so it stays known.
+_LATTICE_DIR_TOL2 = 1e-24
+
+
+def _shorter_period(xp, best, along_it, length):
+    """``length`` if it runs along the axis and beats ``best``; ``best`` otherwise. ``0`` = none yet.
+
+    The ``beats`` half is a guard rather than a choice. Swept over 41 shear values x 4 aspect
+    ratios x 37 angles, at most one of ``a1``, ``a2``, ``a1 + a2``, ``a1 - a2`` runs along a given
+    shape axis on any non-degenerate cell, so the comparison never has two live candidates to
+    rank. It is kept because it costs one ``where`` and makes the reduction independent of the
+    order the candidates are visited in, which the caller would otherwise have to guarantee.
+    """
+    return xp.where(along_it & ((best <= 0.0) | (length < best)), length, best)
+
+
+def _reciprocal_or_zero(xp, P):
+    """``1/P``, and ``0`` where ``P`` is — which is what makes :func:`_fold_by` inert, not infinite.
+
+    Spelling "no repeat along this axis" as ``inf`` reads better and does not work at all, before
+    autograd is even reached: :func:`_fold_by` computes ``s - P * round(s * inv_P)``, and with
+    ``P = 0`` and ``inv_P = inf`` that is ``s - 0 * round(s * inf)`` = ``s - 0 * inf`` = NaN --
+    the *forward* value, not only the gradient. Zero puts the inertness in both factors
+    instead: ``s - 0 * round(s * 0)`` is ``s - 0 * 0``, exactly the untouched distance.
+    """
+    live = P > 0.0
+    return xp.where(live, 1.0 / xp.where(live, P, xp.ones_like(P)), xp.zeros_like(P))
+
+
+def _fold_by(xp, s, P, inv_P):
+    """``s`` reduced to its signed offset from the nearest multiple of ``P``.
+
+    ``P = 0`` (with ``inv_P = 0``, which is what :func:`_reciprocal_or_zero` pairs with it)
+    returns ``s`` untouched, so a caller with no repeat to fold by needs no branch of its own.
+    """
+    return s - P * xp.round(s * inv_P)
+
+
+def _axis_lattice_periods(xp, lattice, cos_a, sin_a):
+    """Repeat length along each of the shape's *own* two axes — ``(Pu, 1/Pu, Pv, 1/Pv)``, ``0`` for none.
+
+    A face is never alone: the shape repeats, so its ``+x`` face reappears at every lattice
+    vector, and the copies that a point inside the shape can be nearest to are the ones reached
+    by a lattice vector running **along the shape's x axis** — those land the copy squarely on
+    top of the original, same extent, faces parallel. That length is a lattice question and not
+    ``period``: on an axis-aligned cell the two agree, and on a sheared one they do not. A
+    rectangle spanning ``y`` on ``a1 = (700, 0), a2 = (200, 700)`` has no vector along its ``y``
+    axis at all — every image is displaced 200 in ``x`` as well, so the images step rather than
+    abut and the face is a real interface. ``0`` is that answer, and it makes :func:`_fold_by`
+    do nothing.
+
+    **The candidates are the four the 3x3 image set spans**: ``a1``, ``a2``, ``a1 + a2`` and
+    ``a1 - a2`` (negatives give the same length and the same test). Offering only the two basis
+    vectors was tried first and is wrong, not merely narrow — it was written on the reasoning
+    that a shape reaching across ``a1 + a2`` would run into a nearer image and be refused
+    upstream, and that reasoning is false. On the Li checkerboard basis
+    ``a1 = (1.25, 1.25), a2 = (1.25, -1.25)`` the sum is ``(2.5, 0)``, which runs straight along
+    an unrotated shape's x axis, and :func:`check_layer_shapes` accepts ``lx`` all the way to
+    2.50 there -- exactly the span. Measured with the two-vector version: ``max|n_x| = 1.000``
+    with |n_x| above 0.01 over 46.9% of the cell, on a structure that repeats end to end along x
+    and therefore has no
+    vertical face at all. The same defect this function exists to remove, one cell shape over.
+
+    ``overlap._IMAGES`` is the same 3x3, and that is the point of matching it rather than
+    picking a number: a shape that could reach across a longer direction -- ``2*a1 + a2`` --
+    is one whose images that check never looked at either. Where the refusal stops is where
+    this stops, so the two cannot disagree about which images exist.
+    """
+    a1x, a2x = lattice[0][0], lattice[0][1]
+    a1y, a2y = lattice[1][0], lattice[1][1]
+    Pu = 0.0 * cos_a
+    Pv = 0.0 * cos_a
+    for tx, ty in ((a1x, a1y), (a2x, a2y),
+                   (a1x + a2x, a1y + a2y), (a1x - a2x, a1y - a2y)):
+        length2 = tx * tx + ty * ty
+        on_u = tx * cos_a + ty * sin_a          # the lattice vector on the shape's x axis
+        on_v = -tx * sin_a + ty * cos_a         # ... and on its y axis
+        # "Runs along this axis" is "has no component across it", compared squared so the test
+        # needs neither a root nor a sign.
+        Pu = _shorter_period(xp, Pu, on_v * on_v <= _LATTICE_DIR_TOL2 * length2, xp.abs(on_u))
+        Pv = _shorter_period(xp, Pv, on_u * on_u <= _LATTICE_DIR_TOL2 * length2, xp.abs(on_v))
+    return Pu, _reciprocal_or_zero(xp, Pu), Pv, _reciprocal_or_zero(xp, Pv)
+
+
 def _shape_surface_normal(xp, X, Y, shape, dtype, lattice):
     """``(distance to this shape's surface, normal_x, normal_y)`` — the outward unit normal, periodic.
 
@@ -951,14 +1103,13 @@ def _shape_surface_normal(xp, X, Y, shape, dtype, lattice):
         f = (xr / a) ** 2 + (yr / b) ** 2 - 1.0
         dist = xp.abs(f) / _hypot_safe(xp, gxr, gyr)
     elif stype in _overlap._BOX_TYPES:                   # rectangle / square
+        Pu, inv_Pu, Pv, inv_Pv = _axis_lattice_periods(xp, lattice, cos_a, sin_a)
         qx, qy = xp.abs(xr) - a, xp.abs(yr) - b
         # `xp.maximum` against a Python float is a numpy convenience torch does not share, so
         # every clamp here goes through a zero array of the same dtype.
         zero = xp.zeros_like(xr)
         out_x, out_y = xp.maximum(qx, zero), xp.maximum(qy, zero)
         outside = _hypot_safe(xp, out_x, out_y)
-        dist = xp.where((qx > 0) | (qy > 0), outside,
-                        -xp.minimum(xp.maximum(qx, qy), zero))
 
         # Inside, blend the FOUR faces by the same distance-product rule, each with its own
         # outward normal and its own distance. This is what removes `sign()` from the branch
@@ -977,21 +1128,109 @@ def _shape_surface_normal(xp, X, Y, shape, dtype, lattice):
         # carries that zero, and the sum collapses to that face's normal outright. Two circles
         # were already differentiable and stay so; the rectangle pair goes from 212-274% out
         # against central differences to 0.06 / 0.03 / 1.0%.
-        faces = ((a - xr, 1.0, 0.0), (a + xr, -1.0, 0.0),
-                 (b - yr, 0.0, 1.0), (b + yr, 0.0, -1.0))
-        fd = [xp.maximum(f[0], zero) for f in faces]
+        #
+        # **Each face is one member of a family, and the fold picks the member.** `a - xr` names
+        # the copy in this cell, and that is the nearest one only while the shape is under half
+        # its own repeat: a rectangle 0.9 of the cell tall has its top face 0.9 away from its
+        # own floor going up through itself, and the floor of the image below only 0.1 away
+        # going down. Folding the face distance by the repeat along that axis
+        # (:func:`_axis_lattice_periods`) is what reads the second one. Below half a repeat the
+        # fold is arithmetically inert and this is the old expression bit for bit; above it, the
+        # field moves toward the raster builder rather than away (mean angle to `'contour'` over
+        # the cell: 4.173 -> 3.906 deg at ly = 0.9 of the period, and unchanged to three decimals
+        # in the boundary band at every ly below the period).
+        #
+        # **At `ly == Pv` the two y families become the same set of lines.** `fold(yr - b)` and
+        # `fold(yr + b)` then differ by exactly one repeat, which the fold removes, so the two
+        # distances are equal everywhere -- and a shape whose images abut it face to face has no
+        # interface there, which is what "equal" says. This is the whole defect: it is the only
+        # spelling of a 1-D grating on this path, `ly` above the period is refused by name and
+        # `ly == period` was accepted and then read as two edges, giving `max|n_y| = 1.00` with
+        # |n_y| above 0.01 over 32.9% of the cell (above 0.99 over 8.5%), where the raster builder
+        # for the same grating gives 0.000e+00 everywhere. The permittivity coefficients never
+        # read the field -- replace it with a constant and `epz_i` is bit-identical, while
+        # `epx`/`epy`/`epxy`/`epyx` move by 3.3e-1 and 2.5e-1 because Li's rules are built from
+        # both. That is the whole signature: energy conserves and nothing raises, and the damage
+        # shows only as slow convergence that looks like a property of the path.
+        faces = ((a - xr, Pu, inv_Pu), (a + xr, Pu, inv_Pu),
+                 (b - yr, Pv, inv_Pv), (b + yr, Pv, inv_Pv))
+        fd = [xp.abs(_fold_by(xp, f[0], f[1], f[2])) for f in faces]
+
+        # Equal distances and opposite normals already cancel, but they leave the *other* pair's
+        # weights carrying a factor that vanishes on the one line where the merged family sits --
+        # half a repeat from the shape's centre -- and a normal of (0, 0) on it. Measured: 32 of
+        # 4096 samples, reachable only when a `cy` puts that line on a pixel row. So a merged
+        # pair is dropped outright instead of left to cancel -- and the drop is one thing, not
+        # two: giving both members the *same* weight (`fdn` = 1 below) is what removes them,
+        # because their normals are already exact opposites and equal weights cancel them
+        # identically. Zeroing those normals as well was tried here and is provably inert --
+        # bit-identical on a spanning `lx`, a spanning `ly`, both, and neither -- so the
+        # `normals` below are plain unit vectors and the weight carries the whole mechanism.
+        #
+        # `fold(lx) == 0` is exact and never a tolerance. It is true only when the shape's own
+        # length lands on the repeat to the last bit, and a shape one ulp short of that is
+        # carried by the fold above -- continuously, which is what an optimiser walking `ly` up
+        # to the period needs. There is no cliff to fall off here, only a limit to arrive at.
+        merged_u = (Pu > 0.0) & (_fold_by(xp, 2.0 * a, Pu, inv_Pu) == 0.0)
+        merged_v = (Pv > 0.0) & (_fold_by(xp, 2.0 * b, Pv, inv_Pv) == 0.0)
+        live_u = xp.ones_like(Pu)
+        live_v = xp.ones_like(Pv)
+        normals = ((live_u, 0.0 * live_u), (-live_u, 0.0 * live_u),
+                   (0.0 * live_v, live_v), (0.0 * live_v, -live_v))
+        merged = (merged_u, merged_u, merged_v, merged_v)
+
         fscale = sum(fd) / len(fd)
         fscale = xp.where(fscale > 0, fscale, xp.ones_like(fscale))
-        fdn = [(d / fscale) ** _BLEND_EXPONENT for d in fd]
+        fdn = [xp.where(m, xp.ones_like(d), (d / fscale) ** _BLEND_EXPONENT)
+               for d, m in zip(fd, merged)]
         in_x = xp.zeros_like(xr)
         in_y = xp.zeros_like(xr)
-        for j, (_, ux, uy) in enumerate(faces):
+        for j, (ux, uy) in enumerate(normals):
             w = None
             for k, dk in enumerate(fdn):
                 if k != j:
                     w = dk if w is None else w * dk
             in_x = in_x + w * ux
             in_y = in_y + w * uy
+        # Both pairs merged is a shape that fills the cell -- a uniform slab written as a shape,
+        # with no interface anywhere. That is the same nothing-to-point-at case
+        # `normal_vector_field_analytical` answers with a constant when no shape has a field at
+        # all, so it gets the same answer here rather than the (0, 0) four dropped faces leave.
+        both = merged_u & merged_v
+        in_x = xp.where(both, xp.ones_like(in_x), in_x)
+        in_y = xp.where(both, xp.zeros_like(in_y), in_y)
+
+        # Neutralising one pair leaves two survivors that are *exactly* opposed, so they cancel
+        # wherever they are equidistant -- the surviving pair's own centre line -- and the sum is
+        # the zero vector, which is not a normal. Nothing else breaks that tie: the merged pair
+        # carries weight 1 into both survivors' products, so it scales the difference without
+        # signing it.
+        #
+        # The answer there is simply the surviving axis, and sign is free because the
+        # factorization reads `n n^T`. Worth stating what this is *not*: it is not a rescue of a
+        # case the merge broke. On Li's checkerboard cell, where `lx = |a1 + a2|` makes the shape
+        # a stripe with no u-interface at all, those points read `(+-1, 0)` before any of this --
+        # `n n^T = xx` where the truth is `vv`. The merge moved them from confidently wrong to
+        # null; this moves them to the truth.
+        #
+        # An exact `== 0` is the right test: the tie is an exact symmetry, not a near miss. A
+        # centred shape on an axis-aligned cell never reaches it, because `(i + 0.5)/N` cannot
+        # land on `N/2`; the checkerboard's sample diagonal lands on it once per row, and the
+        # zero set was one line however fine the grid (0.78% / 0.39% / 0.20% at N = 128/256/512).
+        one_pair = merged_u ^ merged_v
+        tie = (in_x == 0.0) & (in_y == 0.0) & one_pair
+        in_x = xp.where(tie, xp.where(merged_u, xp.zeros_like(in_x), xp.ones_like(in_x)), in_x)
+        in_y = xp.where(tie, xp.where(merged_u, xp.ones_like(in_y), xp.zeros_like(in_y)), in_y)
+
+        # Inside, the nearest surface is the nearest live face -- which is `min(a - |xr|,
+        # b - |yr|)` bit for bit whenever nothing folds and nothing merged, and reads the image's
+        # face when something did. A merged pair is not a surface, so it does not get to be the
+        # nearest one; the `where` pair below says that without needing an infinity to beat.
+        near_u = xp.minimum(fd[0], fd[1])
+        near_v = xp.minimum(fd[2], fd[3])
+        near = xp.minimum(xp.where(merged_u, near_v, near_u),
+                          xp.where(merged_v, near_u, near_v))
+        dist = xp.where((qx > 0) | (qy > 0), outside, near)
 
         # Outside, `max(q, 0)` already points at the nearest surface point -- one face when a
         # single axis is out, the corner itself when both are. `sign` is safe here: it is only

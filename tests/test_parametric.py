@@ -1810,6 +1810,19 @@ def test_a_length_is_a_size_and_the_transform_carries_its_sign():
         wavebit.rcwa(backend=0, structure=rod(lx=340.0), **cfg).solve()
 
     # And nothing legal moved: a rod exactly filling the period still touches, not overlaps.
+    # A rod that fits is bit-identical -- `lx = 120` is the 0.980652726 this docstring quotes.
+    assert float(np.sum(np.asarray(wavebit.rcwa(
+        backend=0, structure=rod(lx=120.0), **cfg).solve().T)).real) == pytest.approx(
+            0.980652726, abs=1e-7)
+
+    # `lx = 300` *is* the period, so this rod spans the cell in x and the structure varies in y
+    # alone -- a lamellar grating, whose exact normal field is the constant `(0, +-1)`. Its two
+    # x-faces are covered end to end by the rod's own image and carry no normal; they were
+    # blended in anyway until the distance fold landed, and 0.957157644 is what that cost. The
+    # value below is not a re-baseline but a *check*: under a constant field the NVF projector
+    # reduces to Li's 1-D rule outright, so the same grating rasterized and factorized by 'li'
+    # answers 0.9572319151109526 -- 1.7e-13 away, against 7.4e-5 before.
+    # See `docs/normal-field-known-limits.md` section 2a.
     assert float(np.sum(np.asarray(wavebit.rcwa(
         backend=0, structure=rod(lx=300.0), **cfg).solve().T)).real) == pytest.approx(
-            0.957157644, abs=1e-7)
+            0.957231915, abs=1e-7)
