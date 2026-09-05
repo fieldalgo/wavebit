@@ -147,6 +147,24 @@ shape's own width, because anything closer interpenetrates and is refused upstre
 coverage therefore implies the shape tiles**, its permittivity is uniform, and every convolution
 matrix is `eps * I` whatever the normal field says. Refusing it would refuse an exact answer.
 
+That the field is inert there was checked rather than argued, on the other session's tree:
+
+| | `sum(T)` |
+| --- | ---: |
+| the tiling bar, 2.5 x 1.25 | 0.858800690221 |
+| a uniform slab of `eps = 4` | 0.858800690221 |
+| the tiling bar with its normal field replaced by the constant `(0.6, 0.8)` | 0.858800690221 |
+
+An arbitrary constant field gives the same answer to the last digit, which is what "every conv
+matrix is `eps * I`" means in practice.
+
+**And it exposes a floor under the candidate-set argument.** `_axis_lattice_periods` asks which
+lattice vectors run *along* a shape axis, and matching `overlap._IMAGES` fixes **which images
+exist** — it does not fix **how many it takes to cover a face**. A face covered by two off-axis
+vectors taking half each is outside what a per-vector search can express, which is the same shape
+of limitation as missing `t . u != 0`, one level up. `test_a_rhombic_cell_spans_along_the_sum_of_
+its_basis_vectors` argues for the candidate set more broadly than the set can deliver.
+
 `partial_self_coincidences` accordingly unions the covered intervals per face family and reports
 only what the union leaves uncovered. Neither the fold nor the first refusal had this: the fold
 reads `merged_v = False` there and keeps two faces that are not interfaces, which is harmless for
@@ -407,3 +425,36 @@ What does work, in order of how little it asks you to trust:
    whose edges land on the raster's pixel grid. Any gap is factorization rather than geometry.
 3. **The raster field as an oracle**, which is independent but asks the reader to accept that the
    other builder is right.
+
+
+## 7. What the mutation pass reached
+
+Eighteen mutants over the fold, the refusal and the tie-break, each run against
+`test_nvf_period_spanning_shape.py` and `test_nvf_self_coincident_faces.py`, with the source
+restored and md5-checked afterwards. **Seventeen killed, one survivor, and the survivor is
+explained rather than outstanding.**
+
+Killed: fold disabled; `floor` for `round`; the reciprocal genuinely unguarded (`1/0 -> inf`);
+`merged_u` forced True; `merged_v` forced False; `a1 ± a2` dropped from the candidates; `on_u` /
+`on_v` swapped; the direction tolerance to 1e-2 and to 0; the fill constant `(0,1)` for `(1,0)`;
+the blend exponent 4 -> 2; the x-face pair's fold deleted; the `near` reduction collapsed to a
+plain minimum; the merged test turned into a 7e-4 window; the tie-break removed; the coverage
+test taken per image instead of per union; and the refusal made never to fire.
+
+**The survivor is `_shorter_period` ranking the longer candidate instead of the shorter.** Its
+own docstring says the branch never has two live candidates to rank, and that is checkable rather
+than assertable: align a shape axis with each of `a1`, `a2`, `a1 + a2`, `a1 - a2` in turn over
+800,000 random non-degenerate cells and exactly one candidate is ever live, never two. The
+algebra says the same — if two of those four lie along one axis then so does their difference,
+every such difference is `2*a1`, `2*a2` or `a1 ± a2`, and that forces `a1 ∥ a2`, i.e. a degenerate
+cell that never reaches here. So the branch is unreachable and the `where` is an
+order-independence guard, not a ranking anybody uses. A test for it would have to build a cell
+the solver refuses.
+
+Two of the eighteen had to be re-stated before they meant anything, which is the reason to record
+the pass rather than only its score. "Reciprocal without its guard" first replaced the zero branch
+with a one — but `P * round(s * 1)` is still zero when `P` is zero, so the mutation was inert and
+"survived" said nothing; the mutation that bites is the unguarded division itself. And "refusal
+never fires" was first written with its before and after identical, which the harness reported as
+a no-op rather than counting as a kill. A mutation that does not apply, or applies to nothing, is
+indistinguishable from a passing test unless the harness says so out loud.

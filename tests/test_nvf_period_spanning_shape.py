@@ -398,7 +398,11 @@ def test_a_rhombic_cell_spans_along_the_sum_of_its_basis_vectors():
                                   angle=0.0, material=4.0)], checker)
     assert np.abs(normal_x).max() == 0.0
 
-    # and the candidate set matches `overlap._IMAGES` -- the same 3x3 the refusal tests against
+    # The candidate set matches `overlap._IMAGES`, so the fold and the layer refusal cannot
+    # disagree about *which images exist*. That is all this fixes: it does not fix how many
+    # images it takes to *cover* a face, and on this very cell a 2.5 x 1.25 bar has each
+    # horizontal face covered by `a1` and `-a2` taking half each -- which no per-vector search
+    # can see. See `docs/normal-field-known-limits.md` section 2a.
     from wavebit._core import overlap as _overlap
     assert set(_overlap._IMAGES) == {(m, n) for m in (-1, 0, 1) for n in (-1, 0, 1)}
 
