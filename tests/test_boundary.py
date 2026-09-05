@@ -241,6 +241,73 @@ def test_the_normal_field_gets_the_two_axes_the_right_way_round():
     assert abs(float(normal_y[i, j])) < 1e-14
 
 
+def test_the_jax_path_is_one_loop_and_not_one_copy_per_chunk():
+    """The traced program must hold a `scan`, not `ceil(npix/chunk)` copies of the body.
+
+    This is the whole of `7ff7d0a` and nothing else pins it. The dispatch it depends on is
+    `'jax' in xp.__name__`, and its failure mode is silent: fall through to the Python loop
+    and every value stays correct while the compiled `jit(grad)` goes from 0.57 GiB back to
+    10.77 at `normal_grid=1024`, which is what took the deselect off this file's suite. A
+    value test cannot see that. Counting primitives can, and costs nothing -- `make_jaxpr`
+    traces without allocating, so this runs at any grid.
+
+    `argmin` is the marker because `_nearest` has exactly one per copy of the body. Under the
+    old loop the count is `ceil(npix / chunk)` and rises with the grid; under `lax.scan` it is
+    one at every grid, next to one `scan`.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+
+    V = ellipse_verts(jnp, 0.5, 0.5, 0.34, 0.19, 0.7, 64)
+    seen = []
+    for n in (64, 128, 256):
+        text = str(jax.make_jaxpr(lambda: _b.distance_gradient_normal_field(
+            jnp, [V], (n, n), CELL, jnp.float64))())
+        seen.append((text.count('argmin'), text.count('scan')))
+
+    assert seen == [(1, 1)] * 3, (
+        f'expected one argmin and one scan at every grid, got {seen}. More than one argmin '
+        f'means the body was unrolled once per chunk -- the JAX branch in '
+        f'`_scanned_normals` is not being taken, and the memory this fix bought is gone '
+        f'while every value stays right.')
+
+
+def test_a_chunk_larger_than_the_grid_costs_the_grid_and_not_the_chunk():
+    """`chunk` bounds the temporaries, so an enormous one must mean "one pass", not "pad to it".
+
+    Callers pass a huge `chunk` to say "do not chunk" -- the test below this one uses
+    `10 ** 9` for exactly that. The Python loop is indifferent, since `range(0, npix, chunk)`
+    runs once whatever the step. `scan` needs a rectangular stack, so without a clamp the
+    padded array is `ceil(npix/chunk) * chunk` rows: linear in a number the caller chose to
+    mean "no limit", and at `10 ** 9` a billion-row buffer before any distance is computed.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+
+    V = ellipse_verts(jnp, 0.5, 0.5, 0.34, 0.19, 0.7, 16)
+    npix = 32 * 32
+    ref = None
+    for chunk in (npix, npix * 100, 10 ** 9):
+        got = _b.distance_gradient_normal_field(jnp, [V], (32, 32), CELL, jnp.float64,
+                                                chunk=chunk)
+        got = [np.asarray(x) for x in got]
+        if ref is None:
+            ref = got
+        else:
+            assert all(a.tobytes() == b.tobytes() for a, b in zip(ref, got)), chunk
+
+    def temp(chunk):
+        f = jax.jit(lambda v: jnp.sum(_b.distance_gradient_normal_field(
+            jnp, [V * v], (32, 32), CELL, jnp.float64, chunk=chunk)[0] ** 2))
+        return f.lower(jnp.asarray(1.0)).compile().memory_analysis().temp_size_in_bytes
+
+    small, huge = temp(npix), temp(npix * 1000)
+    assert huge <= 2 * small, (
+        f'a chunk 1000x the grid asked for {huge} bytes against {small} for a chunk of '
+        f'exactly the grid. `chunk` is the bound on the temporaries; it must not become '
+        f'their size.')
+
+
 def test_normal_field_chunking_changes_nothing():
     """Chunking is a static split for memory; it must not be visible in the answer."""
     V = ellipse_verts(xnp, 0.5, 0.5, 0.34, 0.19, 0.7, 64)

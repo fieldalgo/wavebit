@@ -219,37 +219,29 @@ jobs:
         # log, so the objection no longer holds. What it buys is the one thing still
         # missing: *where* the process is stuck, not merely which test was running.
         #
-        # The deselect is temporary. Run
-        # 33730652133 named this test as the one that hangs -- it sits in
-        # `float(jax.jit(jax.grad(total))(x))` waiting on a computation that never
-        # returns, and `thread` ends the run there, so every test after it in
-        # collection order becomes invisible. That is not a small blind spot: the
-        # parametric refactor renamed `test_analytic.py` to `test_parametric.py`,
-        # which moved two known failures from before this point to after it, and
-        # that run reported zero failures while both were still there unrun.
+        # There was a deselect here for four days, and the history is worth keeping
+        # because the first two diagnoses of it were wrong. Run 33730652133 named
+        # `test_a_frozen_geometry_makes_a_shape_parameter_traceable` as the test that
+        # hangs -- stalled in `float(jax.jit(jax.grad(total))(x))` -- and `thread` ends
+        # the run there, so everything after it in collection order went unrun. That
+        # was not a small blind spot: the parametric refactor had renamed
+        # `test_analytic.py` to `test_parametric.py`, moving two known failures from
+        # before this point to after it, and the run reported zero failures with both
+        # still sitting there.
         #
-        # The whole function, not the one parametrisation that was reached. The
-        # `ellipse lx` case is merely the first of the four; `overlapping pair` is
-        # 2.3x heavier again locally (36.7s against 16.2s), so deselecting only the
-        # case that was observed would buy one more 74-minute run to discover the
-        # next one. The two cheap cases go with them, which is the price.
-        #
-        # Down to one case, and the reason the other three came back is the
-        # `XLA_FLAGS` line above rather than anything in this file. The `probes` job
-        # that established it is gone, having answered; sampling the resident set
-        # *while* those tests ran separated two failures that had looked like one: with XLA's Eigen pool serialised, `ellipse lx`, `rectangle lx` and
-        # `rectangle angle` pass in 91 seconds, and `overlapping pair` fails with
-        # `RESOURCE_EXHAUSTED: Out of memory allocating 11559862304 bytes` after
-        # climbing to 6347 MiB with 943 MiB left. The first three were a deadlock;
-        # this one is a genuine 11.6 GB request against a 7.9 GB runner, and no flag
-        # will change that.
-        #
-        # So it stays deselected as a fact about the test rather than the runner, and
-        # it wants a decision this file cannot make: whether a backward pass over a
-        # 98-square problem should be asking for eleven gigabytes at all.
+        # The deselect is gone, and with it the last of this investigation. Two separate
+        # failures wore one symptom here. `ellipse lx`, `rectangle lx` and `rectangle
+        # angle` were a deadlock in XLA's multi-threaded Eigen, which the `XLA_FLAGS`
+        # line above removes -- they came back at 91 seconds once it was set.
+        # `overlapping pair` was not that: it asked for 11559862304 bytes on a 7.9 GB
+        # runner, and this comment used to say "no flag will change that", which was
+        # true and beside the point. The request was never the physics. The chunking in
+        # `boundary.distance_gradient_normal_field` did not survive tracing -- a Python
+        # loop is one copy of the body per chunk, and reverse mode holds them all -- so
+        # with `lax.scan` and a rematerialised body the same solve asks for 0.570 GiB
+        # and the whole function passes, measured at 2202 MB against this runner's 7.9.
         run: >
           pytest tests -v -n 2 --dist loadfile --timeout=1200 --timeout-method=thread
-          --deselect 'tests/test_frozen_geometry.py::test_a_frozen_geometry_makes_a_shape_parameter_traceable[overlapping pair-<lambda>-120.0]'
 
   examples:
     name: examples smoke

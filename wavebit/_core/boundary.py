@@ -165,15 +165,23 @@ def distance_gradient_normal_field(xp, polys, grid_shape, lattice, dtype, chunk=
 
     **That last sentence was false under ``jax.jit``, and the loop below is why.** A Python
     ``for`` does not survive tracing: it runs once per chunk while the program is recorded and
-    appends its equations each time, so the recorded program holds 361 copies of the body at
-    ``normal_grid=1024`` and no loop at all. The compiler cannot reuse one chunk's buffers for
-    the next because reverse-mode keeps every chunk's residuals live for the backward pass.
-    Measured with ``memory_analysis()`` on the overlapping-pair scene of
-    ``test_frozen_geometry``: 0.78 GiB at grid 256, 2.83 at 512, **10.77 at 1024** -- growing
-    with the grid exactly as the chunking promised it would not. On GitHub's 7.9 GB runners
-    that is `RESOURCE_EXHAUSTED: Out of memory allocating 11559862304 bytes`, which is
-    ``1024**2 x 1378 segments x 8``: the whole pixels-by-segments table the chunking exists to
-    avoid, materialised anyway.
+    appends its equations each time, so the recorded program holds one copy of the body per
+    chunk and no loop at all. Counting ``argmin`` primitives in ``jax.make_jaxpr`` of the old
+    path gives exactly ``ceil(npix / chunk)`` -- 24 copies at ``normal_grid=1024`` on the
+    overlapping-pair scene of ``test_frozen_geometry``, where the fold leaves 90 segments and
+    so ``chunk`` is 44444. The compiler cannot reuse one chunk's buffers for the next because
+    reverse mode keeps every copy's residuals live for the backward pass, and each copy holds
+    several ``(44444, 90, 2)`` temporaries. Measured with ``memory_analysis()``: 0.78 GiB at
+    grid 256, 2.83 at 512, **10.77 at 1024** -- growing with the grid exactly as the chunking
+    promised it would not. On GitHub's 7.9 GB runners that is
+    `RESOURCE_EXHAUSTED: Out of memory allocating 11559862304 bytes`.
+
+    Two dozen fat copies, then, not one flat table. An earlier version of this note said 361
+    copies of a ``1024**2 x 1378`` table, and both numbers were arithmetic rather than
+    measurement: 1378 is ``11559862304 / (1024**2 x 8)``, i.e. the runner's byte count divided
+    by the pixel count. But that byte count *is* XLA's whole temp allocation -- the same
+    quantity as the 10.77 GiB above -- so recovering a segment count from it is circular. The
+    scene has 90 segments and the real table would be 0.70 GiB.
 
     So JAX takes :func:`lax.scan` with the body under :func:`jax.checkpoint`, and it needs
     both. ``scan`` puts a real loop in the recorded program -- one instruction instead of 361
@@ -183,9 +191,13 @@ def distance_gradient_normal_field(xp, polys, grid_shape, lattice, dtype, chunk=
     and is not for 361 of them: **0.57 GiB, and flat at 0.54 / 0.55 / 0.57 across grids 256 /
     512 / 1024.** The promise the paragraph above makes is now kept under ``jit`` too.
 
-    Same arithmetic, so same numbers: the normal field is bit-identical to the loop's over the
-    whole 1024x1024 grid, and the gradient agrees to every digit a float64 has. Recomputing is
-    not approximating -- the same inputs give the same values.
+    Same arithmetic, so same numbers -- **under ``jit``**, which is the qualifier that matters.
+    The compiled field is bit-identical to the loop's over the whole 1024x1024 grid, on every
+    scene measured. Untransformed JAX is not promised: ``lax.scan`` compiles its body, so an
+    eager call picks up XLA's rounding where the loop gets op-by-op dispatch, and the two can
+    differ in the last few ULP -- within the gap the old code already had against its own
+    compiled self. Recomputing is not approximating; the same inputs give the same values, and
+    what moves is which engine evaluates them.
 
     NumPy and PyTorch keep the loop. NumPy differentiates nothing, so it never had the
     problem, and torch's answer would be `torch.utils.checkpoint`, which is a different call
@@ -248,6 +260,18 @@ def _scanned_normals(xp, body, pts, npix, chunk):
     set cannot reach a code path the real points do not.
     """
     import jax
+
+    # `chunk` is documented as the bound on the temporaries, so a caller who wants no
+    # chunking at all passes something enormous -- `tests/test_boundary.py` uses `10 ** 9`
+    # as exactly that idiom. The Python loop was indifferent to it: `range(0, npix, chunk)`
+    # runs once over `npix` rows however large the step. `scan` is not. Without this clamp
+    # the padded stack is `n_chunks * chunk` rows rather than `npix`, which is linear in a
+    # number the caller chose to mean "no limit": measured at npix 256, the compiled
+    # `jit(grad)` needs 0.0012 GiB at chunk 256 and 48.73 GiB at chunk 10**7, while the loop
+    # stays at 0.0012 GiB across all of it. At `10 ** 9` it builds a billion-row array and
+    # the process is killed. Clamping inverts nothing: a chunk at least as large as the grid
+    # already means one pass.
+    chunk = min(chunk, npix)
 
     n_chunks = -(-npix // chunk)
     pad = n_chunks * chunk - npix
