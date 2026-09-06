@@ -306,9 +306,20 @@ def test_the_binary_grating_agrees_with_the_rcwa_solve(tetm):
     n = 1.5, normal incidence. In glass orders 0 and +-1 propagate; in air only order 0, so
     ``R[+-1]`` is exactly zero and that is asserted rather than skipped.
 
-    At the 5 nm grid this file does not run (it costs ~12 s a polarisation) the worst per-order
-    gap is 6.5e-4 for TE and 7.5e-4 for TM, against Meep's 7.4e-4 and 6.9e-4 on the same grid
-    -- the agreement is a three-way one, and the number below is the coarser grid's.
+    At the 5 nm grid this file does not run (it costs ~6 s a polarisation) the worst per-order
+    gap is 6.6e-4 for TE and 6.9e-4 for TM, against Meep's 4.9e-4 and 7.4e-4 on the same grid
+    -- the agreement is a three-way one, and the number below is the coarser grid's. Meep's
+    half of it is not a quotation: it is ``tests/references/golden_meep_1d.npz``, frozen from
+    this same scene, and ``tests/references/test_meep_1d_golden.py`` holds this path against
+    it directly on a grid neither code chose for the other.
+
+    **The TM figure was 7.5e-4 here until 2026-09-07 and no configuration reproduced it** --
+    not the shipped one (6.911e-4) and not the ``pad_scale=2.0`` one the published table had
+    drifted to (6.2e-4). It is a number that outlived whatever run produced it, which is the
+    same failure ``docs/fdtd.md`` §2 had and the reason all four of that section's columns
+    are now read out of the markdown and compared to a golden by
+    ``tests/references/test_fdtd_table_golden.py``. A docstring is not covered by that gate,
+    so this one states where its numbers come from: ``golden_fdtd_table.npz``.
     """
     reference = _by_order(_rcwa(_grating(), [THICK], tetm))
     orders = _by_order(_fdtd(_grating(), [THICK], tetm, resolution=0.1))

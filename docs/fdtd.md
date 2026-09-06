@@ -19,10 +19,22 @@ each is a refusal rather than an approximation.
 ## TL;DR
 
 On the benchmark binary grating, at the same 5 nm grid Meep uses, the worst per-order gap
-against the converged RCWA answer is **7.4e-4 (TE) and 6.2e-4 (TM)**, against Meep's 7.4e-4
-and 6.9e-4 — the same number. Refine once more and it reaches 1.8e-4 / 1.9e-4, at a clean
-second order throughout. The two methods agree in the limit, which is the only thing this
-module was built to establish.
+against the converged RCWA answer is **6.6e-4 (TE) and 6.9e-4 (TM)**, against Meep's own
+4.9e-4 and 7.4e-4 on that grid — within 1.4x on TE, where Meep is closer, and within 1.1x on
+TM, where this module is. Both codes are the same distance from the reference to within a
+small factor, which is the claim; neither gap is tighter than the 1.6e-3 the Meep column
+itself moves across two of its own PML settings, so read them as agreement at ~1e-3 rather
+than as a ranking. (Until 2026-09-07 this said "the same number on TM", which was true of the
+superseded pair 7.4e-4 / 6.9e-4 against 7.4e-4 / 6.9e-4 and is not true of these.) Refine once
+more and it reaches 1.4e-4 / 1.9e-4, at a clean second order throughout. The two methods agree
+in the limit, which is the only thing this module was built to establish. All three columns
+of that comparison are committed — `tests/references/golden_fdtd_table.npz`, with the Meep
+half taken from `golden_meep_1d.npz` — and CI reads §2's tables out of the markdown and
+compares them cell by cell. Until 2026-09-06 the Meep column was quoted from a sibling
+repository; until 2026-09-07 the conditions all three were taken at were the phrase "at the
+shipped defaults", which is what let one column go stale. §2 records both, and
+[`tests/references/_meep_1d_cases.py`](../tests/references/_meep_1d_cases.py) is now the
+record a reader regenerating this table reads.
 
 What the exercise actually taught, in the order the findings are worth reading:
 
@@ -81,43 +93,187 @@ are `solve_1d`'s `r_s` and `r_p` outright. No sign patch sits between the two so
 
 λ = 900 nm, period = 700 nm, one 300 nm layer, 50 % duty `n = 3.5` tooth in air, substrate
 `n = 1.5`, normal incidence. In glass orders 0 and ±1 propagate; in air only order 0, so
-`R[±1]` is identically zero. The same scene was solved by Meep (FDTD) and gyptis (FEM) in the
-sibling lab repository on 2026-08-25; those numbers are quoted here, not recomputed.
+`R[±1]` is identically zero.
 
-Reference is the RCWA path at `truncation_order=80`, re-derived in this worktree. TM's `R0`
-and `T0` still move by ~9e-6 out to 120, so the reference itself carries that much
-uncertainty; TE is converged.
+**All three columns are committed, and CI reads this table out of the markdown and compares
+it to them.** The numbers are `tests/references/golden_fdtd_table.npz` — the reference, this
+module's answer and Meep's, with the conditions they were taken at stored beside them; the
+Meep column is copied there from `tests/references/golden_meep_1d.npz`, which is its own
+oracle and carries a closed-form planar calibration.
+`tests/references/test_fdtd_table_golden.py` parses both of this section's tables cell by
+cell and holds every value to half a unit in its last printed place, so a digit edited here,
+or a table left behind by a solver change, is a failing test rather than a stale paragraph.
+The Meep column stopped being a quotation on 2026-09-06 and the other two stopped being
+unread on 2026-09-07; what each of those found is recorded below.
+
+**The conditions are a file, not the phrase "at the shipped defaults".** That phrase is what
+let this section go stale: it stayed true-looking while `PAD_WAVELENGTHS` was halved
+underneath it, and it is unfalsifiable by construction, so no test could have checked it.
+Every determinant of all three columns is now written out **by value** in
+[`tests/references/_meep_1d_cases.py`](../tests/references/_meep_1d_cases.py), and
+`test_fdtd_table_golden.py::test_the_recorded_conditions_are_the_ones_the_module_ships`
+asserts that the recorded values are still the shipped ones — which is the check that would
+have caught the drift on the day it happened. The load-bearing ones, so that a reader can
+tell whether their run is this run without opening the file:
+
+* **this module** — lengths in **micrometres**; `resolution=200`, which is a 5 nm cell only
+  in that unit (140 × 281 nodes, `dt = 3.5001785668734102e-3`, 20571 steps = 80.0 optical
+  cycles); clearance **0.45 µm above the structure and 0.30 µm below**; PML **12 cells =
+  0.060 µm** at each end; `courant=0.99`; subpixel smoothing **on**; the z mesh **uniform**;
+  the CPML at `m = 4`, `κ_max = 2`, `α = 1.5 ω` and a 1e-8 round-trip target. The clearance
+  is stated as a *length* because `pad_scale` and `PAD_WAVELENGTHS` multiply into one product
+  and no result can tell them apart — `PAD_WAVELENGTHS=1.0` reproduces `pad_scale=2.0` bit
+  for bit, so naming either one alone is not a record;
+* **Meep** — `pymeep 1.34.0` (conda-forge `nompi_py312h46debac_101`, serial), resolution 200,
+  `until_after_sources=120`, `dpml=0.6`, `pad=0.7`, monitors 0.10 µm clear of the structure,
+  a Gaussian source of `fwidth = 0.2·fcen` at z = −0.49 in a 0.7 × 2.9 µm cell — **and,
+  because the harness never passes them, meep's own `eps_averaging=True`,
+  `ensure_periodicity=True`, `Courant=0.5`, quadratic PML profile, `R_asymptotic=1e-15` and
+  source `cutoff=5`.** Those six are pinned by nothing but the version string, and four of
+  them move this column by 5e-4 to 1.5e-2 — `eps_averaging` alone by 1.5e-2 here, thirty
+  times the agreement below. Recording a Meep resolution and stopping, which is what this
+  section did until 2026-09-07, records almost none of what fixes the answer.
+
+**What a deviation costs**, worst per-order against the shipped configuration, one knob at a
+time (the record tabulates ~30 more): subpixel smoothing off **3.0e-2**; 6 PML cells
+**2.6e-2**; `resolution` left to the module's own default **4.4e-3**; grading on **9.2e-4**;
+`pad_scale=2.0` **7.9e-5**. **`R + T` sees almost none of it** — turning subpixel smoothing
+off moves the per-order efficiencies by 3.0e-2 while Σ moves 4.5e-6, so an energy check would
+have passed every configuration in that sweep except the 6-cell PML. Amplitudes are 3–10×
+more sensitive than the efficiencies printed here.
+
+Reference is the RCWA path at `truncation_order=80`. TM's worst per-order value still moves
+by 1.30e-5 out to `truncation_order=400`, so the reference itself carries that much
+uncertainty; TE is converged (1.21e-6 over the same span). The smallest gap below clears the
+uncertainty of the column it is read against by 18x (TM `T0`, 2.4e-4 against 1.3e-5) and the
+rest by more. Both figures are frozen in the golden and
+`test_fdtd_table_golden.py::test_the_reference_is_converged_enough_to_carry_the_gaps`
+asserts that margin, because a gap quoted against a reference is only as good as the
+reference and this is the one number in the table with no column of its own.
 
 | | RCWA (ref) | this module, 5 nm | gap | Meep, res 200 | gap |
 | --- | --- | --- | --- | --- | --- |
-| TE `R0` | 0.204898 | 0.205633 | 7.4e-4 | 0.204162 | 7.4e-4 |
-| TE `T0` | 0.352474 | 0.352724 | 2.5e-4 | 0.352583 | 1.1e-4 |
-| TE `T±1` | 0.221314 | 0.220785 | 5.3e-4 | 0.221396 | 8.2e-5 |
-| TM `R0` | 0.282393 | 0.283018 | 6.2e-4 | 0.282607 | 2.1e-4 |
-| TM `T0` | 0.163805 | 0.164256 | 4.5e-4 | 0.164495 | 6.9e-4 |
-| TM `T±1` | 0.276901 | 0.276292 | 6.1e-4 | 0.276318 / 0.276231 | 5.8e-4 / 6.7e-4 |
-| Σ, TE / TM | 1 | 0.999928 / 0.999859 | | 0.999537 / 0.999650 | |
+| TE `R0` | 0.204898 | 0.205554 | 6.6e-4 | 0.204410 | 4.9e-4 |
+| TE `T0` | 0.352474 | 0.352789 | 3.1e-4 | 0.352379 | 9.5e-5 |
+| TE `T±1` | 0.221314 | 0.220831 | 4.8e-4 | 0.221391 | 7.7e-5 |
+| TM `R0` | 0.282393 | 0.283085 | 6.9e-4 | 0.283135 | 7.4e-4 |
+| TM `T0` | 0.163805 | 0.164245 | 4.4e-4 | 0.164044 | 2.4e-4 |
+| TM `T±1` | 0.276901 | 0.276274 | 6.3e-4 | 0.276526 / 0.276413 | 3.8e-4 / 4.9e-4 |
+| Σ, TE / TM | 1 | 1.000006 / 0.999877 | | 0.999572 / 1.000118 | |
 
-**Which Meep column.** Meep reports two — a mode decomposition and a raw flux — differing by
-2.5e-4 (TE) and 3.4e-4 (TM) at res 200, the same order as the agreement being claimed. The
-column above is the mode decomposition.
+**Which reading of the Meep column.** A per-order efficiency is not one thing meep returns.
+The harness projects the monitor's `E` onto each Rayleigh order and converts with the
+analytic `kz`; two other legitimate readings of the *same* run — a per-order
+`Re(E × conj(H))` built from the `H` field meep stepped, and meep's own `add_flux` — do not
+agree with it exactly. Measured at res 200: **≤ 7.2e-5 per order**, and 2.06e-4 (TE) /
+1.17e-4 (TM) on the total. The column above is the E-projection, and it is the one that sits
+apart — the two Poynting readings agree with each other to 5e-6 (TM) and 8.0e-5 (TE).
 
-**Convergence**, at the shipped defaults (12 PML cells), worst per-order gap against RCWA:
+**That number moved, and it moved down.** Until 2026-09-07 this paragraph said the readings
+differ by 2.5e-4 (TE) and 3.4e-4 (TM), a figure inherited from the 2026-08-25 lab run and
+never re-derived here. It reproduces on TE only as a statement about the *total*, and is 2.9x
+too large on TM: **per order the ambiguity is four times smaller than the figure it was
+quoted as**. It is quoted below as a bound on what "reproduced" can mean, so the smaller
+number is the honest one to quote there too. `get_eigenmode_coefficients` — what "mode
+decomposition" means in meep's own vocabulary — is not one of the three readings compared, so
+7.2e-5 is a lower bound on the ambiguity rather than necessarily the same pairing the lab run
+meant.
+
+### What moved when the table was re-derived, and why
+
+Until 2026-09-06 the Meep column was computed in a *sibling lab repository* on 2026-08-25 and
+**quoted here, not recomputed** — `grep meep` over this repository returned nothing at all. So
+the strongest published evidence for this module was not in the project, and neither of the
+two columns beside the reference was checked by anything. Both moved when they were
+re-derived, for two unrelated reasons, and both are corrected above rather than explained
+away. (The same lab run also solved this scene with gyptis, an FEM; that column is not
+reproduced here and so is not printed.)
+
+**The Meep column is a fresh run and differs from the quoted one by up to 5.3e-4** — worst at
+TM `R0`, 0.283135 here against the quoted 0.282607; TE's two first orders land within 5e-6.
+That gap cannot be closed from here and is not a disagreement, but the reason is **not** the
+one this section gave until 2026-09-07. It used to point at the two readings' 2.5e-4, which
+has since come down to 7.2e-5 per order and cannot carry a 5.3e-4 gap. The reason is that
+this section recorded the quoted run's resolution and **nothing else** — not the run length,
+the pad, the PML depth, the monitor distance or the source — and the column is measurably
+sensitive to two of those: changing `dpml` 0.6 → 0.9, or `pad` 0.7 → 1.4, moves it by
+**1.6e-3** at this very resolution, which is 3.2x the agreement the column is being credited
+with. Two FDTD runs of one scene agreeing to 5.3e-4 with that much unrecorded between them is
+the claim, and `test_meep_1d_golden.py::test_the_2026_08_25_lab_column_is_reproduced` holds
+it at 1e-3 for that reason rather than at anything chosen to fit.
+
+**The Meep column has a configuration sensitivity larger than the agreement it certifies, and
+the cause is not established.** In `(dpml, pad)` it is *bimodal*: `dpml` 0.30 / 0.60 / 0.65 /
+0.70 / 0.80 land on one value and 0.75 / 0.90 / 1.20 on another, ~1e-6 apart within a branch
+and 6.5e-3 apart between them at res 100 — and `dpml=0.9` and `pad=1.4` land on the *same*
+other value to 1e-6, which is two branches rather than a continuum. At the frozen res 200,
+re-measured against the committed golden itself: `dpml=0.9` gives TE `R0` **0.205985** where
+`dpml=0.6` gives 0.204410 and RCWA 0.204898, so it is 1.575e-3 away, on the far side of the
+reference, **with `Σ` unchanged at 0.99957 to five decimals**.
+Eleven candidate mechanisms were tested on 2026-09-07 and every one refuted by at least one
+row (cell length, z pixel parity, PML cell count, absorber quality, source plane,
+source-to-PML distance, `ensure_periodicity`, `eps_averaging`, the incident normalisation and
+two more); the sensitivity lives entirely in the scattered field, with `R + T` preserved to
+1e-5. Settling it would need meep's source, which this repository does not open, so it is
+recorded as unexplained in `_meep_1d_cases.py::MEEP_UNEXPLAINED` rather than guessed at. The
+shipped `dpml=0.6` is the branch that agrees better with RCWA and nothing anywhere says why
+those values. **Read the 4.9e-4 / 7.4e-4 gaps with that in mind**: they are what this
+harness's configuration gives, and a differently configured Meep run of the same scene can
+sit 1.6e-3 away.
+
+**The headline pair moves with it.** Against the converged reference, Meep's own worst
+per-order gap is **4.9e-4 (TE) / 7.4e-4 (TM)** where the quoted column gave 7.4e-4 / 6.9e-4.
+
+**The "this module" column was a `pad_scale=2.0` run, which has not been the shipped default
+since the clearance was halved.** At `pad_scale=2.0` all eight values of the old column come
+back to the last printed digit, both `Σ` included, together with the old convergence table's
+whole `Σ` column — which is what identifies the pad rather than a machine or a version.
+(Re-measured 2026-09-07: `pad_scale=2.0` gives TE 0.205633 / 0.352724 / 0.220785, Σ 0.999928
+and TM 0.283018 / 0.164256 / 0.276292, Σ 0.999859 — the old column exactly, and 7.93e-5 /
+6.69e-5 from what the shipped clearance gives.) The paragraph below on halving the clearance
+records the same 5 nm run moving 7.37e-4 → 6.57e-4, so the table and that paragraph were
+taken on either side of one change and only the paragraph was re-derived.
+
+**Nothing about the table moved on the 2026-09-07 pass, and that is the result.** Both tables
+were re-derived from scratch under the recorded conditions and every printed digit came back
+the same, the Meep golden regenerated bit-for-bit identical, and what changed instead is that
+the conditions became a file and the digits became a committed artefact with a test that
+reads them out of this markdown. Three numbers *outside* the tables did move: the two-readings
+figure above (2.5e-4 / 3.4e-4 → ≤7.2e-5 per order), the `wall` column (a different machine
+load, and the one column no test holds), and a stale 7.5e-4 in
+`tests/test_fdtd.py::test_the_binary_grating_agrees_with_the_rcwa_solve`'s docstring, which
+neither configuration reproduces and which is now 6.9e-4.
+
+**Convergence**, at the same recorded conditions — the 5 nm row is *shared* with the table
+above, which is what pins the two to one configuration; at HEAD on 2026-09-06 they had been
+taken on either side of the `PAD_WAVELENGTHS` change and only one of them re-derived, so this
+section disagreed with itself by 8e-5. Worst per-order gap against the same
+`truncation_order=80` reference:
 
 | cell | TE | order | TM | order | Σ (TE / TM) | wall |
 | --- | --- | --- | --- | --- | --- | --- |
-| 20 nm | 1.16e-2 | | 8.89e-3 | | 0.99986 / 0.99834 | 0.3 s |
-| 10 nm | 2.87e-3 | 2.02 | 2.32e-3 | 1.94 | 0.99997 / 0.99941 | 1.3 s |
-| 5 nm | 7.35e-4 | 1.96 | 6.25e-4 | 1.89 | 0.99993 / 0.99986 | 8 s |
-| 2.5 nm | 1.84e-4 | 2.00 | 1.90e-4 | 1.71 | 0.99991 / 1.00000 | 110 s |
+| 20 nm | 1.18e-2 | | 8.80e-3 | | 0.99934 / 0.99876 | 0.3 s |
+| 10 nm | 2.75e-3 | 2.10 | 2.45e-3 | 1.84 | 0.99984 / 0.99965 | 1.2 s |
+| 5 nm | 6.56e-4 | 2.07 | 6.91e-4 | 1.83 | 1.00001 / 0.99988 | 6.3 s |
+| 2.5 nm | 1.36e-4 | 2.27 | 1.94e-4 | 1.84 | 1.00005 / 0.99992 | 44 s |
+
+TM's last two orders read 1.83 and 1.84 against a `truncation_order=80` reference and 1.85 and
+1.87 against a `truncation_order=400` one, which is the reference's own ~1e-5 showing up once
+the run gets below 2e-4; the reference is what the table is quoted against, so it is what is
+printed.
 
 Second order throughout, which is the point of the table — the number in any one row is a
 property of the grid, but the *order* is a property of the method, and it is what says the
 remaining error is discretisation and not a floor.
 
 The cost column is the honest one, and it is the main thing to weigh when choosing between
-the two solvers: 5 nm is 8 s a polarisation against the RCWA solve's fraction of a second, and
-2.5 nm is two minutes.
+the two solvers: 5 nm is 6 s a polarisation against the RCWA solve's fraction of a second, and
+2.5 nm is three quarters of a minute. It is **the one column here no test can hold**, because
+it is a property of the machine rather than of the method — the error and `Σ` columns beside
+it are compared against the golden on every push and the seconds are only frozen in it, so
+that a reader knows which run they came from. They moved on the 2026-09-07 re-derivation (7.1
+→ 6.3 s, 54 → 44 s) while every error and every `Σ` beside them stayed to the digit, which is
+the clearest possible statement of what a wall time is worth.
 
 **A band buys some of that back, but less than it sounds.** A whole spectrum comes out of one
 FDTD run (§8) while RCWA re-solves per wavelength, so the two meet at
@@ -139,6 +295,13 @@ propagating one. Halving it is *more* accurate as well as twice as fast (7.37e-4
 against 6.57e-4 / 13.9 s on the dielectric; 7.43e-4 / 31.9 s against 7.01e-4 / 15.9 s on the
 metal), because a shorter outgoing leg carries less of the analytic-versus-discrete `kz`
 mismatch. Below a quarter wavelength it stops paying. `pad_scale` moves it.
+
+Those are the numbers the decision was taken on and they are left as they were taken.
+Re-derived on 2026-09-07 from the two configurations' own printed columns, the dielectric
+pair is **7.35e-4 → 6.56e-4** (TE) and 6.25e-4 → 6.91e-4 (TM) — the same conclusion on TE, and
+on TM the halving is 6.6e-5 *worse*, which the single worst-of-both-legs figure above hides.
+The wall times are not re-derivable: they belong to that machine on that day. This paragraph
+is not in the golden and no test holds it; the two tables above are, which is the difference.
 
 **Matching on accuracy is the whole point of the table**, and an earlier draft of this document
 did not: it compared a 10 nm FDTD run against `truncation_order=80`, which was a *thousand
