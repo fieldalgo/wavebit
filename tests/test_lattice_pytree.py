@@ -667,18 +667,35 @@ def test_the_parametric_spelling_has_no_frame_to_declare():
     the same geometry on every cell -- solving it on a different one is a thing a caller may
     legitimately want, not a mistake. Wrapping it would turn that into a refusal of a
     **correct** answer, and a guard that blocks correct work is worse than no guard: measured,
-    two shapes on a 640 square give 0.999282 and the identical structure on ``hexagonal(640.)``
-    gives 0.999870, and both are right.
+    two shapes on a 640 square give 0.999273073 and the identical structure on
+    ``hexagonal(640.)`` gives 0.999866166, and both are right.
 
-    Those two numbers were 0.999233 and 0.999851 until 2026-09-06, when the rectangle's field
-    took fixed face normals over its ring of images (the piece field) -- a layer holding a box
-    moves by that class of amount, and the move is booked here against a raster of the same
-    two shapes on each cell, factorized by NVF with the ``'contour'`` field, at order 6:
-    square 0.999167 (N = 640) / 0.999175 (N = 1280), hexagonal 0.999828 / 0.999832. The
-    pieces sit 1.1e-4 and 3.8e-5 above that reference where the fold sat 5.8e-5 and 1.9e-5;
-    at order 9 the square is 0.999395 against 0.999366. Two admissible continuations on either
-    side of an unconverged order, and the point of the test -- a different cell, a different
-    and still-right answer -- is unchanged.
+    Those two numbers were 0.999232558 and 0.999851063 until 2026-09-06, when the rectangle's
+    field took fixed face normals over its ring of images (the piece field) -- a layer holding
+    a box moves by that class of amount, the accepted price of fixed normals (the corner
+    quadrants read the diagonal of their two faces rather than the radial direction, which is
+    what buys the exact grating and the sheared and tilted boxes). The values were re-pinned
+    once in between to a two-stage blend's 0.999282 / 0.999870 and that pin lasted, on a 1e-5
+    tolerance, 1.07e-6 short of failing after the one-stage blend replaced it. The rows of the
+    one-stage tree, at ``normal_grid`` 1024, against a raster of the same two shapes on each
+    cell factorized by NVF with the ``'contour'`` field:
+
+        square   order 6   fold 0.999232558   pieces 0.999273073   raster N=640 0.999166752
+                                                                   raster N=1280 0.999175416
+                 order 9   fold 0.999359317   pieces 0.999389752   raster N=640 0.999355565
+                                                                   raster N=1280 0.999366428
+        hex      order 6   fold 0.999851063   pieces 0.999866166   raster N=640 0.999827858
+                                                                   raster N=1280 0.999832264
+                 order 9   fold 0.999912730   pieces 0.999923934   raster N=640 0.999906577
+                                                                   raster N=1280 0.999911943
+
+    From the N = 1280 reference the fold sits 5.7e-5 / 7.1e-6 (square, orders 6 / 9) and
+    1.9e-5 / 7.9e-7 (hex), the pieces 9.8e-5 / 2.3e-5 and 3.4e-5 / 1.2e-5: the raster
+    instrument sits nearer the fold at both orders on both cells, and that is stated rather
+    than read as a verdict -- its ``'contour'`` construction is distance-based and extends off
+    the interface the way the corner-radial rule did, and off the interface a normal field is
+    a numerical device. The point of the test -- a different cell, a different and still-right
+    answer -- is unchanged. Pinned to 1e-7 now: a rounding-level change should not pass.
 
     The raster is the only spelling with a frame, because its pixels are fractions of the cell.
     """
@@ -697,8 +714,8 @@ def test_the_parametric_spelling_has_no_frame_to_declare():
                          theta=0.0, phi=0.0, psi=0.0)
         return float(np.sum(np.asarray(s.solve().T)))
 
-    assert total(sq) == pytest.approx(0.999282, abs=1e-5)
-    assert total(hx) == pytest.approx(0.999870, abs=1e-5)      # a different cell, still right
+    assert total(sq) == pytest.approx(0.999273073, abs=1e-7)
+    assert total(hx) == pytest.approx(0.999866166, abs=1e-7)   # a different cell, still right
 
     # the raster with the same two features does have a frame, and keeps its guard
     X, Y = (np.asarray(c) for c in sq.meshgrid_xy((64, 64)))
