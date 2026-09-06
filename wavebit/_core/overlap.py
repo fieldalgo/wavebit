@@ -74,7 +74,11 @@ FACES = ('+u', '-u', '+v', '-v')
 #: what they are not: a face 7.1e-10 off its partner's line on a 700 cell is two interfaces, and
 #: one 6.9e-10 off is a pair whose members cancel identically -- the field steps between the two
 #: by a band of depth ``(4 * delta * D**4) ** (1/5)`` (about two units for ``D = 350``), which is
-#: ~1e-7 in ``sum(T)`` at the rungs ``tests/test_gamma_field.py`` puts either side of it. The
+#: 1.4e-5 in ``sum(T)`` on the square grating at order 5 and 1.7e-4 on the sheared box (N = 256)
+#: at the rungs ``tests/test_gamma_field.py`` puts either side of it -- a step in the value at
+#: a rounding-scale location, and one that does not decay with order on the sheared cell
+#: (1.8e-5 / 1.9e-5 / 5.2e-5 at orders 4 / 8 / 12; 1.1e-5 / 4.1e-6 / 1.4e-6 on the square),
+#: since the band's depth is independent of the grid and the samples it holds grow with N. The
 #: same shape of threshold the deleted lattice-direction test had, one level down: it can sit at
 #: rounding scale because everything above it is carried continuously by the blend, so there
 #: is no geometry for a wider window to swallow.

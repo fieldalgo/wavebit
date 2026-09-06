@@ -30,7 +30,8 @@ from wavebit._core.lattice import as_lattice
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from gamma_instruments import band_error, gamma_points, mutated  # noqa: E402
 from test_gamma_layers import (_abc_band_gate, _abc_column_exact,  # noqa: E402
-                               _k_column_above_the_seam_end)
+                               _k_column_above_the_seam_end,
+                               _stacked_off_centre_cross_pair_is_exact)
 
 PERIOD = 700.0
 EPS_HI = 12.25
@@ -613,6 +614,12 @@ MUTANTS = [
      'tx, ty, h_p = -pframe.sin, pframe.cos, pframe.b        # the u faces run along v',
      'tx, ty, h_p = -pframe.sin, pframe.cos, qframe.b        # the u faces run along v',
      _abc_band_gate),
+    ('the cross-pair substitution removed, flush and windowed', P,
+     'if pr.flush:\n                        e2, n2 = pe2, pn2\n                    else:\n'
+     '                        n2 = xp.where(hits[r], pn2, n2)',
+     'if pr.flush:\n                        pass\n                    else:\n'
+     '                        pass',
+     _stacked_off_centre_cross_pair_is_exact),
     ('the arc ring dropped: every round shape at its own instance', P,
      '    if not leaves:\n        return ((0, 0),)',
      '    if True:\n        return ((0, 0),)',

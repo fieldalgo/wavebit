@@ -95,11 +95,28 @@ instrument cannot say more here: with no contact at all, where the fold was righ
 the two fields still sit 1e-3 apart at orders 9-12, and pairwise the three extensions available
 (the blend, the Voronoi field, a `'contour'` raster) disagree at 1e-2 on this box. A box of this
 size at `eps = 12.25` is that sensitive to what a field does *off* the interface at these
-orders. The decay test the design asks for (orders 6..18 against an image-aware raster) is not
-runnable under this laptop's order cap, and the raster's staircase on a tilted edge is itself
-5e-3 here; the band error above is the instrument that answers at this order. The rest of this
-section is the record of what the fold could not do and why, kept because the tables are what
-the fix was measured against; §8 says what moved when it landed.
+orders. **The solve-level decay gate is not an instrument for B and L at this order, and the
+field-level gates stand in for it.** Injecting an exact Voronoi field of the interface set into
+the same shape-path solve at N = 512, the piece field sits +1.2e-2 / -8.1e-4 / +4.0e-3 / +2.1e-3
+/ +2.1e-3 from it at orders 4 / 6 / 8 / 10 / 12 on the sheared box, +4.5e-3 / +1.43e-2 /
++1.04e-2 / +1.11e-2 / +9.2e-3 on the tilted one and +1.6e-2 / +7.2e-4 / -5.5e-4 / +2.2e-3 /
++1.4e-3 on the L box -- and so does every other exact-on-Gamma extension: the blend at exponent
+2 or 8 plateaus at the same levels (tilted at order 12: +1.14e-2 / +7.2e-3), an image-aware
+`'contour'` raster at N = 1024 sits +5.7e-3 / +1.0e-2 / +8.2e-3 / +6.0e-3 from the pieces at
+orders 6..12 with its own staircase, while the one positive control, the one-box field that is
+90 deg wrong along the run, reads -3.2e-2 / -3.4e-2 / -2.6e-2 / -2.5e-2. A box this large at
+`eps = 12.25` is that sensitive to what a field does *off* Gamma below order 12: the piece and
+Voronoi fields differ by more than 10 deg on a third to a half of the cell, mostly farther than
+60 units from any interface, and the tilted box's near-Gamma disagreement is *smaller* than the
+350 box's (0.48 against 0.72 deg mean within 5 units), whose own gap decays to 2e-4 by order 8.
+So the decay of `sum(T)` cannot separate a wrong interface from a different extension on these
+scenes under the order cap, and the gates that answer are on the field: exact on Gamma at
+explicit points of every live segment (0.0 to 1.2e-6 deg, the oracle's own rounding) and the
+interior band error, both in `tests/test_nvf_self_coincident_faces.py`. A solve-level gate,
+if one is wanted, needs a scene the raster resolves exactly -- an axis-aligned box on a
+rectangular cell with its edges on pixels -- or a positive-and-negative control pair as above.
+The rest of this section is the record of what the fold could not do and why, kept because the
+tables are what the fix was measured against; §8 says what moved when it landed.
 
 The fold (§4) merged a face family when a lattice vector ran **along one of the shape's own
 axes**. That is not the condition for a family to merge, only the condition the fold could act
@@ -278,7 +295,12 @@ basis vector (`overlap.COLLINEAR_TOL_REL`, 7e-10 on a 700 cell), and whether two
 opposed at `|n_p + n_q|^2 <= 1e-24`. Both are rounding-scale for the reason below, and both
 step: just above the collinearity threshold two opposed faces `delta` apart cancel only outside a
 band of depth `(4 delta D^4)^(1/5)` — about two units for `D = 350` — and at it they cancel
-identically. Through a solve that is ~1e-7 in `sum(T)`, and
+identically. Through a solve that is a step in the value of 1.4e-5 on the square grating at
+order 5 and 1.7e-4 on the sheared box (N = 256) -- not the ~1e-7 first estimated -- at a
+rounding-scale location, and on the sheared cell it does not decay with order (1.8e-5 / 1.9e-5 /
+5.2e-5 at orders 4 / 8 / 12, against 1.1e-5 / 4.1e-6 / 1.4e-6 on the square; at N = 512 and
+order 5, 1.4e-5 and 4.9e-5), because the band's depth is independent of the grid and the number
+of samples it holds grows with N. The rest of the ladder is monotone on both cells, and
 `tests/test_gamma_field.py::test_the_ladder_through_the_pair_threshold_is_monotone` walks
 `ly = 700 - gap` on the sheared cell down through rungs at 7.1e-10 and 6.9e-10 to 0 and requires
 the approach to be monotone. The paragraphs below are the fold's record.
@@ -413,8 +435,11 @@ at either.
 **A predicate**, reading the same values the fold read so it could not drift from it. It is
 the fold's, kept as the record of what this section measured: `_LATTICE_DIR_TOL2` and the fold
 went on 2026-09-06 (§8), and every box this predicate answered `None` for moved then anyway.
+**A historical listing, not a runnable one**: the import below raises `ImportError` on any tree
+since that day, and the fence says so rather than `python`.
 
-```python
+```text
+# HISTORICAL (2026-09-03 to 2026-09-06): `_LATTICE_DIR_TOL2` no longer exists; this does not import.
 import numpy as np
 from wavebit._core import overlap as _overlap
 from wavebit._core.parametric import shape_geometry, _LATTICE_DIR_TOL2
@@ -508,7 +533,9 @@ bit-identical because both mechanisms are exact on them, and round shapes inside
 Wigner-Seitz cells are untouched (the `'arc'` piece is the old round branch verbatim there; one
 that leaves its cell is carried over a ring since the same day, case L). Multi-shape layers holding a box move by the
 same class through their per-shape field; the cross-shape blend is the ratio form, which is
-direction-identical to the product it replaced (<= 1e-15 relative on round-only layers).
+direction-identical to the product it replaced (a lone round shape bit-identical; on round-only
+layers 3e-14 at N = 256 -- 2.5e-14 on two circles, 1.5e-14 on a circle and an ellipse on a hex
+cell -- not the 1e-15 first written).
 
 Two goldens outside the parametric files moved and were re-derived rather than re-baselined:
 the 120 x 150 rod of `test_a_length_is_a_size_and_the_transform_carries_its_sign` and the
@@ -582,7 +609,12 @@ it always did and one that crosses equality on a seam rebuilds.
 ## 9. The cases, A to L, as of 2026-09-06
 
 The letters are the design's. "Exact" means the field equals the geometry's on the interface
-set; a band error is against `overlap.interfaces_of` over 1.5 pixels at N = 512.
+set; a band error is against `overlap.interfaces_of` over 1.5 pixels at N = 512, and the gate a
+scene is held to is the scene's own -- the fixed-normal wedge beyond a run's end reads 0.22 deg
+on the K seam, 0.27 on the A|B|C scene and 0.32 on two same-material boxes 300 and 400 tall
+(identical whether the taller one is upright or turned a quarter turn, so the wedge, not a
+defect), and a new contact scene is gated by comparison with its one-shape spelling or by its
+separation from the mutants that must fail it (`tests/gamma_instruments.py::band_error`).
 
 | case | scene | status | measured in |
 |---|---|---|---|
@@ -596,7 +628,7 @@ set; a band error is against `overlap.interfaces_of` over 1.5 pixels at N = 512.
 | H | a shape larger than the period | **refused**, as before (§1) | `test_parametric.py` |
 | I | ties: a dead pair's line, a surviving pair's midline, a box's centre | the axis of the pair that did not cancel, across shapes; `(1, 0)` when both or neither did; zero null normals at N = 128 / 256 / 512 on the checkerboard | `test_nvf_self_coincident_faces.py`, `test_gamma_field.py` |
 | J | merges: a face approaching its partner's line, two shapes coming into contact | **No step in the value** -- the ladder `ly = P - gap` is monotone through the one rounding-scale threshold (§4) -- **and a cusp in the derivative.** Above the threshold the two faces cancel only outside a band of depth `(4 gap D^4)^(1/5)` (§4), so `sum(T)` approaches the touching value as `gap^(1/5)`: on the square grating at (5, 5) / N = 256, `T(gap) - T(0)` is -8.0e-4 / -3.6e-4 / -9.2e-5 at gaps 1e-2 / 1e-4 / 1e-6 with `(..) / gap^0.2` at -2.0e-3 / -2.3e-3 / -1.5e-3, and `d sum(T) / d ly` is **+1.0405e-2 / +7.3117e-1 / +5.0640e+1** (central secants at `h = gap / 10`; AD reads +1.0360e-2 / +7.2926e-1 / +5.0401e+1), growing 70x per two decades where `gap^-0.9` predicts 63: unbounded, so an optimiser within 1e-4 of contact reads a gradient three to five orders above the geometry's own slope (~2e-4 per unit here). It is a property of the distance-product blend since 2026-08-17, not of the piece field -- the fold tree (8bfc6aa) reads +1.0399e-2 / +7.3117e-1 / +5.0640e+1 on the same ladder, identical to four digits. The coefficient decays with order (the D pair of two 300 boxes at gap 1e-2: 2.3e-2 / 1.2e-2 / 6.7e-3 / 1.8e-3 / 9.2e-4 at orders 4..12) and the exponent does not, and no blend exponent removes it (the band is `(p gap D^p)^(1/(p+1))`; `p = 1` gives a square root, `p` large approaches `D`). The only known fix is a near-pair record with a ramp from "two interfaces" to "cancelled" as the gap closes -- the tuning constant the design set out to avoid -- and it is not taken; the ladder is pinned instead by `test_gamma_field.py::test_a_merge_is_a_cusp_and_its_derivative_diverges`, so it cannot again be described as smooth. **And a slope kink at contact that does not decay**, the second derivative artefact at a merge: the one-sided slopes of `sum(T)` at B's onset (`lx = 200`) differ by a relative +4.2e-4 / -1.1e-3 / -1.6e-3 / -1.3e-3 / -1.5e-3 at orders 4..12 (secants of 1e-2; the same secants at `lx = 300` read +5.1e-4 / +6.0e-4 / +7.1e-4, the secant's own curvature) -- below the onset the gap between the two face ends reads the faces' residual y-normal, above it the run cancels exactly; in the slope, not the value | `test_gamma_field.py`, `test_gamma_frozen.py` |
-| K | abutting boxes of different material | the seam is an interface: `(+-1, 0)` exactly and Li-exact where it spans, 0.22 deg / 0.09% where it does not, per quantity. **The contact step** (the design's open question 2): the sign flips at exact contact, and a 1e-9 gap -- two opposed faces that cancel to rounding with no pair record -- reads `sum(T)` -2.6e-3 / -9.4e-4 / -1.8e-4 / -7.7e-4 / -3.3e-4 from touching at orders 4 / 6 / 8 / 10 / 12 (two 300 boxes, `eps 4 \| eps 9`): an order down across the cap and not monotone, a residual by the decay rule, against 1e-7..1e-5 for the same-material control | `test_gamma_layers.py` |
+| K | abutting boxes of different material | the seam is an interface: `(+-1, 0)` exactly and Li-exact where it spans, 0.22 deg / 0.09% where it does not, per quantity, and the sign is a window per record in the run's traced bounds (a face on two runs of different equality reads `0 \| 1 \| 1` in `\|n_x\|` along its line, `test_gamma_layers.py`). **Three steps, all recorded.** (1) *The contact step* (the design's open question 2): the sign flips at exact contact, and a 1e-9 gap -- two opposed faces that cancel to rounding with no pair record -- reads `sum(T)` -2.6e-3 / -9.4e-4 / -1.8e-4 / -7.7e-4 / -3.3e-4 from touching at orders 4 / 6 / 8 / 10 / 12 (two 300 boxes, `eps 4 \| eps 9`, N = 512): an order down across the cap and not monotone, a residual by the decay rule, against 1e-7..1e-5 for the same-material control. **The mechanism is that a sub-threshold opposed pair is cancelled whatever its materials**: without a pair record the blend treats two opposed faces `delta` apart as a merging same-material pair, since a material is read only through a record's sign -- so the strip between two close boxes of *different* material reads the far faces' normal instead of the gap faces', which are two real interfaces. On the line 20 units from the seam across the strip `\|y\| < 140` the fraction reading `u` is 0.30 at gap 1e-2, 0.02 at 1e-4 .. 1e-9 and 0.93 at contact, where the exact field reads 0.93 at every gap above zero; off Gamma (both gap faces themselves read exactly) and decaying with order (gap 1e-2: -2.9e-3 at order 4 to +4.1e-4 at 12), but a value step at contact on top of J's cusp. (2) *The material-equality step*: the sign flips when the two slots become exactly equal, and `T(9 + 1e-7 \| 9) - T(9 \| 9)` is -4.77e-3 / -4.91e-4 / -5.76e-4 / -1.36e-4 / -4.26e-5 at orders 4 / 6 / 8 / 10 / 12 (N = 128; `9 + 1e-3` gives the same to leading order) -- the design's accepted one-time jump on the first step, two orders down across the cap and not monotone at 6 -> 8, a residual by the decay rule. A stale self-pair record replayed under `jit` is value-neutral (1.2e-14 either way), so only a stale cross-pair record with different materials could mislead a jitted replay. (3) *The run-end step*: the sign window is a hard `where` on the tangential coordinate, so `sum(T)` is discontinuous in any parameter that moves a run's end -- the partner's `ly` or `cy` -- each time the end crosses a sample row, and `jax.grad` cannot see the jump. Two 300-wide boxes `eps 4 \| 9` abutting at `x = 0`, the right box's `ly` swept through twice the row just below 150, at order 4: the jump is -5.23e-6 at N = 128 and a step, not a slope (the same at `eps = 1e-6` and `1e-8` either side; the window-integrated AD over `[ly* - 0.25, ly* + 0.25]` misses exactly it), against -2.8e-11 for the same-material control (where the window is algebraically a no-op). **It decays with the grid**: -7.38e-8 at N = 256 and +5.00e-9 at N = 512, about 1e-9 per crossing at the default 1024; a `cy` sweep shows the same (-1.5e-6 at N = 128, control -5.6e-12). Pinned to decay in `test_gamma_layers.py`. Making the co-orientation continuous in sigma -- splitting the pair's pieces at the run ends, or scaling the moved weight by a factor that vanishes with the partner's own tangential excess -- would remove it; not taken, since it is a grid artefact at the 1e-9 level where the solve is run | `test_gamma_layers.py`, `test_gamma_frozen.py` |
 | L | a lone box or ellipse leaving its Wigner-Seitz cell without touching anything | the box reads its neighbour's face: 0.19 deg / 0.05% (0.65 / 0.64% on the fold). The ellipse too, since the second commit of 2026-09-06: while its support stays inside the cell (`h(t) <= \|t\| / 2` for every lattice vector, `parametric._arc_offsets`) the nearest centre's level set *is* the nearest interface and the `'arc'` piece keeps its single instance and its field bit for bit; once it leaves, a neighbour's boundary is inside the cell and the piece is carried over a ring with the **exact** Euclidean distance to each instance (`parametric._ellipse_distance`, the nearest point's angle bisected on the sign of the tangency condition, then Newton-polished: 5e-13 against brute force, the gradient implicit). The 720 x 200 ellipse at 10 deg read 7.0 deg mean and 89.9 max on Gamma and 3.09 deg / 3.73% over the band on the fold; over its eleven instances it reads 2.5e-7 deg on Gamma and 0.194 deg / 0.00%, the same as the 690 control that stays inside. **What the threshold costs.** The fold switches instance on the cell's edge where the nearest boundary switches on the Voronoi curve between two tilted tips, so an ellipse *hugging* its edge is wrong in the sliver between the two: 0.47 deg / 0.42% at 0.9 short of the edge (`lx = 708`), 0.71 / 0.77% at 0.1 short, clean from 2.4 short out (the same shape forced over the ring reads 0.19 / 0.00% throughout). Through a solve at order 6 / 9 the fold and the ring differ by 2.6e-5 / 2.9e-5 on a 400 x 200 (the sliver is an extension there), 8.9e-4 / 3.3e-5 at 600, 1.6e-3 / 2.5e-4 at 690, 3.9e-3 / 1.9e-3 at 705 and 4.8e-3 / 2.7e-3 at 709.8 -- and that difference is the **step** `sum(T)` takes when the support crosses the threshold: +4.6e-3 from 709.8 to 710.0 at order 6, against -1.8e-4 per 0.2 of `lx` on either side. The fix that removes the step is the ring for *every* ellipse, whose price is every tilted ellipse's extension (2.6e-5 at order 6 on the 400 x 200) and eleven exact distances per build (6 ms -> 470 ms at N = 512, 1.9 s at 1024); not taken, so the step stands as a plan-level event, refused by name when a frozen record is replayed across it. A circle never leaves: `R > \|t\| / 2` is the overlap the layer check refuses | `test_nvf_self_coincident_faces.py`, `test_gamma_plan.py`, `test_gamma_frozen.py` |
 
 **The fixed-normal decision and its price, in one place.** A face piece's direction is its
@@ -653,7 +685,13 @@ the pair sweep reading a fixed 3x3 instead of the ring (a scene on an unreduced 
 contact sits at `(m, n) = (-2, 1)`), and `mu = None` read as unequal to 1.0 -- that one run in
 a fresh interpreter, because `domain.py` defines `Material`, which `as_material` type-checks
 against and `engine` imports by name, so a reload would leave two classes of that name in one
-process. Fourteen, all killed, none DID-NOT-APPLY. What follows is the record of the pass over
+process. Fourteen then; the verifiers' round added eight more -- the self substitution keyed by
+instance alone (the double-covered face), the arc ring dropped and the ring picking by the
+algebraic distance (the ellipse that leaves its cell), the sign window always open, the sign
+keyed on either piece and the run window built from the partner's half-length (the A|B|C
+scene and the column above the K seam's end), and the cross-pair substitution removed (the
+off-centre stacked bars, exact) -- twenty-two, all killed, none DID-NOT-APPLY. What follows is
+the record of the pass over
 the fold it replaced.
 
 Eighteen mutants over the fold, the refusal and the tie-break, each run against

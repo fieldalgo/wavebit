@@ -49,6 +49,17 @@ def band_error(normal_x, normal_y, grid_shape, lattice, gamma, band_px=1.5):
     Returns ``(mean_deg, fraction_over_45_deg, n_samples)`` over the samples of the
     ``grid_shape`` grid that lie within ``band_px`` pixels of an interface point, each compared
     with the normal of its nearest interface point.
+
+    **The number is scene-dependent, and a gate on it belongs to the scene.** Every box scene
+    carries the fixed-normal wedge beyond a run's end, where the band's samples read the
+    diagonal of two faces (C3's price): a lone 350 box reads 0.24 deg at N = 512, the K seam
+    0.22, the A|B|C scene 0.27, and two same-material boxes 300 and 400 tall abutting inside
+    the cell 0.32 -- identical to the last digit whether the taller one is written upright or
+    turned a quarter turn, so it is the wedge and not a defect, and a flat 0.3 gate would refuse
+    that correct field. Gate a new contact scene by comparison with the same geometry's
+    one-shape spelling where one exists (``D_SHORT`` against ``ONE_SHORT``), and otherwise by
+    its separation from the mutants that must fail it (the A|B|C gate is 0.35 against 3.7 and
+    5.9 for the mutants of the sign window).
     """
     from scipy.spatial import cKDTree
 

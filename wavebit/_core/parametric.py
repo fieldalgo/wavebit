@@ -114,6 +114,29 @@ matter to an optimizer looping at low truncation. Side effect worth knowing when
 ``docs/boundary-modeling.md``: the cost ratio it quotes for swapping in the boundary route's
 field fell from 12x/486x to 2x/182x because this side got slower, not because that one got
 faster.
+
+**And what the pieces cost on top of that** (2026-09-06, measured after the fact again, by a
+verifier rather than by the commit). Every box layer is 2 to 4.5x the blend it replaced, since
+each face is evaluated at every instance of a size-only ring (13 per face on a lone 350 box, 21
+on the grating), and round shapes are unchanged. NumPy field build, best of 3, ``normal_grid``
+1024, against the base commit 8bfc6aa on the same machine: the lone 350 box 101.5 -> **285.8
+ms** (2.8x), the 350 x 700 grating 102.0 -> **463.2** (4.5x), the L box 97.2 -> 424.6, the B
+box on the sheared cell 200.0 -> 513.2 (its previous field was the refused one), two boxes
+apart 194.2 -> 428.5, the stacked D pair 365.5 -> 748.5, the K seam 210.8 -> 622.5, two
+circles 73.9 -> 70.3 and a lone circle 35.5 -> 31.5. At 512: the lone box 24.4 -> 69.7, the
+grating 26.0 -> 116.8. Under ``jax.jit`` at 1024 the lone box is 10.5 -> 41.3 ms and the K
+seam 22.4 -> 110.6. Through a whole solve at order 6 the lone box goes 0.31 -> 0.44 s and the
+K seam 0.42 -> 0.83, and M small boxes at 512 cost a flat 2x (204 / 455 / 1580 / 2971 ms at
+M = 4 / 9 / 25 / 49 against 108 / 247 / 699 / 1520), the plan itself 0.9 / 4.1 / 30 / 121 ms.
+Re-measured on the tree that closed the verifiers' findings: 247 / 404 / 370 / 458 / 568 ms
+for the lone box, grating, L, B and K at 1024 (61 / 100 / 91 / 118 / 145 at 512), 24.5 for a
+lone circle and 63 for two. One round scene is new and dear: an ellipse whose support leaves
+its Wigner-Seitz cell is carried over its ring with an exact distance per instance,
+**1842 ms** at 1024 (454 at 512) against the 5 ms of one that stays inside
+(:func:`_arc_offsets`). The driver everywhere is the size-only instance list, and the cost-only
+options are known: for a lone shape the field is built at the cell centre, so a position-free
+Euclidean test can prune each face's list there with no staleness exposure, and the
+per-instance ``K . (A e)`` products can be hoisted per offset.
 """
 import math
 from collections import namedtuple

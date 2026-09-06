@@ -232,6 +232,34 @@ def test_a_partially_covered_face_is_built_from_the_neighbours_face(name, lattic
     assert over < 0.002, (name, over)
 
 
+@pytest.mark.parametrize('name, lattice, geom', [
+    ('B shear', SHEAR, dict(lx=500.0, ly=PERIOD, angle=0.0)),
+    ('B tilted', SQUARE, dict(lx=640.0, ly=TILT_LY, angle=TILT)),
+    ('L box', SQUARE, dict(lx=689.0, ly=200.0, angle=L_ANGLE)),
+    ('600 x 650 at 10 deg', SQUARE, dict(lx=600.0, ly=650.0, angle=np.deg2rad(10.0))),
+])
+def test_the_field_is_exact_on_every_live_segment(name, lattice, geom):
+    """At explicit points of the interface set the field IS the geometry's normal.
+
+    This is the field-level gate that stands where a solve-level decay gate cannot: under the
+    order cap of 12, every exact-on-Gamma extension of a box this size sits 1e-3 to 1e-2 from
+    every other through ``sum(T)`` (the blend at exponent 2 or 8, an exact Voronoi field, an
+    image-aware raster), so the decay of the solve cannot tell a wrong interface from a
+    different extension on B and L (``docs/normal-field-known-limits.md`` section 2). The
+    oracle's own points -- every image's outline with the covered runs removed -- evaluated
+    through the piece field read their own normal to 1.2e-6 deg at worst, which is the
+    rounding of the oracle's sampled points, and no sample is null.
+    """
+    shape = dict(type='rectangle', material=EPS_HI, cx=0.0, cy=0.0, **geom)
+    A = as_lattice(lattice=lattice)
+    plan = P.plan_gamma([shape], A)
+    gamma = gamma_points([shape], lattice)[::3]
+    n_x, n_y = P._piece_field(np, gamma[:, 0], gamma[:, 1], [shape], plan, None, A, np.float64)
+    assert int((np.hypot(n_x, n_y) == 0.0).sum()) == 0, name
+    angle = np.degrees(np.arccos(np.clip(np.abs(n_x * gamma[:, 2] + n_y * gamma[:, 3]), 0, 1)))
+    assert len(angle) > 2000 and angle.max() < 1e-5, (name, angle.max())
+
+
 def test_the_l_box_reads_its_neighbours_face_without_touching_it():
     """A box that leaves its Wigner-Seitz cell takes its normal from the nearest instance.
 

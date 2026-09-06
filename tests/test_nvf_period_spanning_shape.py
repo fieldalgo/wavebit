@@ -362,7 +362,7 @@ def test_a_rhombic_cell_spans_along_the_sum_of_its_basis_vectors():
     """``a1 + a2`` is a lattice direction too, and on some cells it is the only one that matters.
 
     This is the case that killed the first version of
-    :func:`~wavebit._core.parametric._axis_lattice_periods`, which offered only ``+-a1`` and
+    ``_axis_lattice_periods`` (deleted with the fold on 2026-09-06), which offered only ``+-a1`` and
     ``+-a2`` as candidates on the reasoning that a shape reaching across the sum would run into
     a nearer image and be refused upstream. It would not: on the Li checkerboard basis the two
     basis vectors sit at +-45 degrees, their sum is axis-aligned, and ``check_layer_shapes``
