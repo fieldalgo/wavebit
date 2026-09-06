@@ -372,6 +372,33 @@ def _tiling_bar_is_empty():
     assert P.plan_gamma([_box(lx=2.5, ly=1.25)], as_lattice(lattice=CHECKER)).empty
 
 
+L_ELLIPSE = dict(type='ellipse', cx=0.0, cy=0.0, lx=720.0, ly=200.0, angle=np.deg2rad(10.0),
+                 material=EPS_HI)
+
+
+def _l_ellipse_band_gate():
+    A = as_lattice(lattice=SQUARE)
+    n_x, n_y = P.normal_vector_field_analytical(np, (512, 512), [L_ELLIPSE], np.float64, A)
+    mean, over, _ = band_error(n_x, n_y, (512, 512), SQUARE, gamma_points([L_ELLIPSE], SQUARE))
+    assert mean < 0.3 and over == 0.0, (mean, over)
+
+
+def _l_ellipse_centre_reads_its_own_level_set():
+    # Along the major axis inside the ellipse the nearest boundary is its own, and the piece
+    # must read its own level set there; a distance unbounded at the centre hands it to the
+    # neighbour instead.
+    A = as_lattice(lattice=SQUARE)
+    plan = P.plan_gamma([L_ELLIPSE], A)
+    centre = 0.5 * (np.asarray(A[:, 0]) + np.asarray(A[:, 1]))
+    u = np.linspace(-216.0, 216.0, 37)
+    turn = L_ELLIPSE['angle']
+    X = centre[0] + u * np.cos(turn) - 3.0 * np.sin(turn)
+    Y = centre[1] + u * np.sin(turn) + 3.0 * np.cos(turn)
+    n_x, n_y = P._piece_field(np, X, Y, [L_ELLIPSE], plan, None, A, np.float64)
+    _, gx, gy = P._round_field(np, X, Y, L_ELLIPSE, A, np.float64)
+    assert np.abs(n_x * gx + n_y * gy).min() > 1.0 - 1e-12
+
+
 def _the_350_golden():
     assert _total(SQUARE, _box(lx=350.0, ly=350.0)) == pytest.approx(0.892284142298975, abs=1e-9)
 
@@ -512,6 +539,14 @@ MUTANTS = [
      '    ring = images(r)\n',
      '    ring = images(1)\n',
      _unreduced_basis_has_its_pair),
+    ('the arc ring dropped: every round shape at its own instance', P,
+     '    if not leaves:\n        return ((0, 0),)',
+     '    if True:\n        return ((0, 0),)',
+     _l_ellipse_band_gate),
+    ('the ring picks its instance by the algebraic distance', P,
+     '        dist = _ellipse_distance(xp, xr, yr, a, b)',
+     '        dist = xp.abs((xr / a) ** 2 + (yr / b) ** 2 - 1.0) / _hypot_safe(xp, gxr, gyr)',
+     _l_ellipse_centre_reads_its_own_level_set),
     ('mu = None read as unequal to 1.0', None,
      'return 1.0 if self.mu is None else self.mu',
      'return 1.0 + 1e-9 if self.mu is None else self.mu',

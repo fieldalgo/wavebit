@@ -269,6 +269,125 @@ def test_image_lists_are_bounded_by_size_alone():
         assert all(pc.imgs == plan.pieces[0].imgs for pc in plan.pieces)
 
 
+@pytest.mark.parametrize('name, lattice, shape, leaves', [
+    ('690 x 200 at 10 deg, 9.8 inside', SQUARE,
+     dict(type='ellipse', lx=690.0, ly=200.0, angle=np.deg2rad(10.0)), False),
+    ('710 x 200 at 10 deg, 0.1 outside', SQUARE,
+     dict(type='ellipse', lx=710.0, ly=200.0, angle=np.deg2rad(10.0)), True),
+    ('720 x 200 at 10 deg', SQUARE,
+     dict(type='ellipse', lx=720.0, ly=200.0, angle=np.deg2rad(10.0)), True),
+    ('a disc filling the cell: on the edge, inside', SQUARE,
+     dict(type='circle', lx=PERIOD), False),
+    ('700 x 200 at 0: touching the edge, inside', SQUARE,
+     dict(type='ellipse', lx=PERIOD, ly=200.0, angle=0.0), False),
+    ('sheared cell, 740 x 200 tilted 10 deg off a2, 0.8 outside', SHEAR,
+     dict(type='ellipse', lx=740.0, ly=200.0,
+          angle=float(np.arctan2(700.0, 200.0)) + np.deg2rad(10.0)), True),
+    ('sheared cell, 720 x 200 tilted 10 deg off a2, 9 inside', SHEAR,
+     dict(type='ellipse', lx=720.0, ly=200.0,
+          angle=float(np.arctan2(700.0, 200.0)) + np.deg2rad(10.0)), False),
+])
+def test_a_round_shape_takes_the_ring_iff_its_support_leaves_its_wigner_seitz_cell(
+        name, lattice, shape, leaves):
+    """``h(t) > |t| / 2`` for some lattice vector ``t``: then, and only then, an instance list.
+
+    Inside the cell the nearest centre's level set is the nearest interface and the arc keeps
+    the single instance it always had; outside it a neighbour's boundary enters the cell and
+    the piece is carried over the ring with the exact distance. The ring is bounded by
+    ``|A s| <= diam + min(a, b) + h(s)`` and is checked against a brute-force enumeration of
+    that bound, so the search box cannot silently clip it. A disc filling its cell and an
+    ellipse touching its image at a point sit on the threshold and stay inside, by the
+    rounding-scale tolerance.
+    """
+    A = as_lattice(lattice=lattice)
+    shape = dict(shape, cx=0.0, cy=0.0, material=12.25)
+    plan = P.plan_gamma([shape], A)
+    imgs = plan.pieces[0].imgs
+    assert (len(imgs) > 1) is leaves, (name, imgs)
+    if not leaves:
+        assert imgs == ((0, 0),)
+        return
+    prim = P._primitives([shape], A)[0]
+    a1, a2 = lattice[:, 0], lattice[:, 1]
+    diam = max(np.hypot(*(a1 + a2)), np.hypot(*(a1 - a2)))
+    a, b = prim[3], prim[4]
+    brute = {(0, 0)}
+    for m in range(-8, 9):
+        for n in range(-8, 9):
+            t = m * a1 + n * a2
+            length = np.hypot(*t)
+            if (m, n) != (0, 0) and length <= (diam + min(a, b) + O._support_radius(
+                    prim, t[0] / length, t[1] / length)) * (1.0 + 1e-12):
+                brute.add((m, n))
+    assert set(imgs) == brute, name
+    assert set(imgs) <= set(P._ring_offsets(*(float(v) for v in (a1[0], a1[1], a2[0], a2[1])),
+                                            diam + a + b))
+
+
+def test_the_exact_ellipse_distance_is_exact():
+    """:func:`_ellipse_distance` against a brute-force search, and its derivative against differences.
+
+    Sixty points per ellipse on three ellipses (a thin one, a swapped-axes one, a near-circle):
+    random points inside and out, the major axis inside and outside the evolute, a point
+    1e-7 off it, the centre, and boundary points -- the brute force samples the boundary at
+    20000 angles and refines the best bracket by golden section. The gradient with respect to
+    the semi-axes is the implicit one, because the distance is stationary in the nearest
+    point's angle; it is compared with central differences at ``h = 1e-4``, since the value
+    is exact only to 5e-13 and a smaller step reads that as derivative (4e-7 at ``h = 1e-6``,
+    a relative 3e-4 on the 1.5e-3 that ``d/db`` is near the major-axis tip).
+    """
+    rng = np.random.default_rng(3)
+
+    def brute(u, v, a, b, n=20000):
+        t = np.linspace(0.0, 2.0 * np.pi, n, endpoint=False)
+        bx, by = a * np.cos(t), b * np.sin(t)
+        out = np.empty(len(u))
+        phi = (np.sqrt(5.0) - 1.0) / 2.0
+        for i in range(len(u)):
+            k = int(np.argmin((u[i] - bx) ** 2 + (v[i] - by) ** 2))
+            lo, hi = t[k] - 2.0 * np.pi / n, t[k] + 2.0 * np.pi / n
+            g = lambda s: (u[i] - a * np.cos(s)) ** 2 + (v[i] - b * np.sin(s)) ** 2
+            c, d = hi - phi * (hi - lo), lo + phi * (hi - lo)
+            for _ in range(100):
+                if g(c) < g(d):
+                    hi, d = d, c
+                    c = hi - phi * (hi - lo)
+                else:
+                    lo, c = c, d
+                    d = lo + phi * (hi - lo)
+            out[i] = np.sqrt(g(0.5 * (lo + hi)))
+        return out
+
+    for a, b in ((360.0, 100.0), (100.0, 360.0), (200.0, 199.0)):
+        ev = a * (a * a - b * b) / (a * a) if a > b else 0.0
+        theta = rng.uniform(0.0, 2.0 * np.pi, 12)
+        u = np.concatenate([rng.uniform(-900.0, 900.0, 24), np.linspace(-a * 0.999, a * 0.999, 8),
+                            [0.0, ev, ev * 0.999, ev * 1.001, 111.612], a * np.cos(theta),
+                            rng.uniform(-a, a, 11)])
+        v = np.concatenate([rng.uniform(-900.0, 900.0, 24), np.zeros(8),
+                            [0.0, 0.0, 0.0, 0.0, 1e-7], b * np.sin(theta), np.full(11, 1e-7)])
+        d = P._ellipse_distance(np, u, v, a, b)
+        assert np.abs(d - brute(u, v, a, b)).max() < 1e-11, (a, b)
+        assert np.abs(d[-23:-11]).max() < 1e-12                         # the boundary points
+        assert d[32] == pytest.approx(min(a, b), abs=1e-12)              # the centre
+    # a circle is the radial distance, not a special case
+    u, v = rng.uniform(-500.0, 500.0, 50), rng.uniform(-500.0, 500.0, 50)
+    assert np.abs(P._ellipse_distance(np, u, v, 120.0, 120.0)
+                  - np.abs(np.hypot(u, v) - 120.0)).max() < 1e-12
+
+    jax = pytest.importorskip('jax')
+    jnp = pytest.importorskip('jax.numpy')
+    jax.config.update('jax_enable_x64', True)
+    for uu, vv in ((300.0, 40.0), (100.0, 5.0), (359.0, 2.0), (111.612, 1e-7), (-50.0, -90.0)):
+        f = lambda a, b, uu=uu, vv=vv: P._ellipse_distance(
+            jnp, jnp.asarray([uu]), jnp.asarray([vv]), a, b)[0]
+        h = 1e-4
+        for arg, fd in ((0, (float(f(360.0 + h, 100.0)) - float(f(360.0 - h, 100.0))) / (2 * h)),
+                        (1, (float(f(360.0, 100.0 + h)) - float(f(360.0, 100.0 - h))) / (2 * h))):
+            ad = float(jax.grad(f, arg)(360.0, 100.0))
+            assert ad == pytest.approx(fd, rel=1e-6, abs=1e-8), (uu, vv, arg)
+
+
 def test_a_round_shape_is_never_a_pair_member():
     """A strictly convex boundary meets its translate at points only -- even when it touches."""
     A = as_lattice(lattice=SQUARE)

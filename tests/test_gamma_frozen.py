@@ -363,10 +363,53 @@ def test_a_traced_material_on_a_seam_is_never_served_from_the_cache():
 
 # ---------------------------------------------------------------------------- backends
 
+def _l_ellipse_layer(lx):
+    """L: an ellipse of ``lx`` x 200 at 10 deg; past 709.9 its support leaves its Wigner-Seitz cell."""
+    return [dict(background=1.0, shapes=[dict(type='ellipse', cx=0.0, cy=0.0, lx=lx, ly=200.0,
+                                             angle=np.deg2rad(10.0), material=12.25)])]
+
+
+def test_an_ellipse_over_its_ring_replays_under_jit_and_is_refused_across_the_edge():
+    """The arc's instance list is a plan fact: replayed from the record, re-derived eagerly.
+
+    Frozen at 720 (eleven instances) the jitted solve equals the eager one; frozen at 690
+    (one instance) and replayed at 720 the record is refused, naming the Wigner-Seitz cell,
+    since the recorded list would read the fold's field on a shape whose neighbours' boundaries
+    are inside the cell. The gradient in ``lx`` through the ring is the central difference to
+    1e-6 (``h = 1e-3``, order 4, N = 128): the exact distance is stationary in its nearest
+    point, so the bisection that finds it costs the derivative nothing.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    wavebit.enable_x64()
+
+    solver = wavebit.rcwa(backend=1, lattice=SQUARE, structure=_l_ellipse_layer(720.0), **KW)
+    frozen = solver.freeze_geometry()
+    assert len(frozen.gamma_plans[0].pieces[0].imgs) == 11
+
+    def total(lx, geometry=frozen):
+        return jnp.sum(solver.solve(structure=_l_ellipse_layer(lx), geometry=geometry).T).real
+
+    eager = float(total(jnp.asarray(720.0)))
+    assert float(jax.jit(total)(jnp.asarray(720.0))) == pytest.approx(eager, abs=1e-12)
+    h = 1e-3
+    fd = (float(total(jnp.asarray(720.0 + h), None)) - float(total(jnp.asarray(720.0 - h), None))) / (2 * h)
+    assert float(jax.grad(lambda v: total(v, None))(jnp.asarray(720.0))) == pytest.approx(fd, rel=1e-5)
+
+    inside = wavebit.rcwa(backend=0, lattice=SQUARE, structure=_l_ellipse_layer(690.0), **KW)
+    record = inside.freeze_geometry()
+    assert record.gamma_plans[0].pieces[0].imgs == ((0, 0),)
+    with pytest.raises(StaleGeometryError, match='Wigner-Seitz'):
+        _total(_l_ellipse_layer(720.0), SQUARE, geometry=record)
+    assert _total(_l_ellipse_layer(700.0), SQUARE, geometry=record) == pytest.approx(
+        _total(_l_ellipse_layer(700.0), SQUARE), abs=1e-13)             # still inside: accepted
+
+
 @pytest.mark.parametrize('name, lattice, structure', [
     ('B', SHEAR, _b_layer(500.0)),
     ('D', SQUARE, _d_layer()),
     ('K', SQUARE, _k_layer(4.0, 9.0)),
+    ('L ellipse', SQUARE, _l_ellipse_layer(720.0)),
 ])
 def test_every_backend_builds_the_same_field(name, lattice, structure):
     """NumPy, JAX and Torch through three namespaces, one plan, one answer to 1e-12."""

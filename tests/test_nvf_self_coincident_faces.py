@@ -43,7 +43,7 @@ import pytest
 import wavebit
 from wavebit._core import overlap as O
 from wavebit._core import parametric as P
-from wavebit._core.lattice import as_lattice
+from wavebit._core.lattice import as_lattice, sample_grid
 from wavebit._core.overlap import primitive
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
@@ -247,6 +247,88 @@ def test_the_l_box_reads_its_neighbours_face_without_touching_it():
     n_x, n_y = _field(SQUARE, **geom)
     mean, over, count = band_error(n_x, n_y, GRID, SQUARE, gamma_points([shape], SQUARE))
     assert count > 1000 and mean < 0.3 and over < 0.002, (mean, over)
+
+
+#: Case L for a round shape: an ellipse 720 x 200 at 10 deg reaches 354.9 along ``a1`` on a
+#: 700 square, past the edge of its Wigner-Seitz cell, so part of each neighbour's boundary
+#: lies inside the cell. The 690 control reaches 340.2 and stays inside.
+L_ELLIPSE = dict(type='ellipse', material=EPS_HI, cx=0.0, cy=0.0, ly=200.0,
+                 angle=np.deg2rad(10.0))
+
+
+def _ellipse_band(lx, plan=None):
+    shape = dict(L_ELLIPSE, lx=lx)
+    n_x, n_y = P.normal_vector_field_analytical(np, GRID, [shape], np.float64,
+                                                as_lattice(lattice=SQUARE), plan=plan)
+    return band_error(n_x, n_y, GRID, SQUARE, gamma_points([shape], SQUARE))
+
+
+def test_an_ellipse_leaving_its_cell_reads_the_nearest_boundary_not_the_nearest_centre():
+    """The ``'arc'`` piece over its ring, with the exact distance: exact on Gamma, 0.19 deg over the band.
+
+    The round piece folds the sample to the nearest *centre* and reads that instance's level
+    set, which is the nearest interface only while the shape stays inside the Wigner-Seitz
+    cell of its centre. The 720 ellipse leaves it, a neighbour's tip crosses the cell edge,
+    and the fold read the wrong level set on that part of Gamma: 7.0 deg mean and 89.9 max
+    on the interface itself, 3.09 deg over the band with 3.73% of samples past 45 deg. Planned
+    over eleven instances with the exact Euclidean distance to each, the piece takes the
+    nearest boundary's normal: 2.5e-7 deg mean on Gamma (the oracle's own rounding, the
+    in-cell control reads the same), 0.194 deg over the band and no sample past 45.
+    """
+    shape = dict(L_ELLIPSE, lx=720.0)
+    A = as_lattice(lattice=SQUARE)
+    plan = P.plan_gamma([shape], A)
+    assert len(plan.pieces[0].imgs) == 11 and not plan.pairs
+    mean, over, count = _ellipse_band(720.0)
+    assert count > 1000 and mean < 0.3 and over == 0.0, (mean, over)
+    gamma = gamma_points([shape], SQUARE)[::5]
+    n_x, n_y = P._piece_field(np, gamma[:, 0], gamma[:, 1], [shape], plan, None, A, np.float64)
+    angle = np.degrees(np.arccos(np.clip(np.abs(n_x * gamma[:, 2] + n_y * gamma[:, 3]), 0, 1)))
+    assert angle.max() < 1e-5 and int((np.hypot(n_x, n_y) == 0.0).sum()) == 0
+
+
+def test_an_ellipse_inside_its_cell_keeps_the_field_it_always_had():
+    """The 690 control: one instance, and the round branch's field bit for bit.
+
+    Its support along ``a1`` is 340.2 of the 350 the cell allows, so no neighbour's boundary
+    enters the cell, the plan keeps the single instance, and the field is
+    :func:`_round_field`'s -- every result since 2026-08-17 stands. It reads 0.194 deg over
+    the band, the same as the 720 ellipse over its ring.
+    """
+    shape = dict(L_ELLIPSE, lx=690.0)
+    A = as_lattice(lattice=SQUARE)
+    assert P.plan_gamma([shape], A).pieces[0].imgs == ((0, 0),)
+    n_x, n_y = P.normal_vector_field_analytical(np, GRID, [shape], np.float64, A)
+    X, Y = sample_grid(np, GRID, A, np.float64)
+    _, gx, gy = P._round_field(np, X, Y, shape, A, np.float64)
+    assert np.array_equal(n_x, gx) and np.array_equal(n_y, gy)
+    mean, over, count = _ellipse_band(690.0)
+    assert count > 1000 and mean < 0.3 and over == 0.0, (mean, over)
+
+
+def test_what_the_wigner_seitz_threshold_costs_an_ellipse_hugging_its_cell_edge():
+    """Just inside the threshold the fold's band is wrong beside the neighbour's tip: the known limit.
+
+    At ``lx = 709.8`` the ellipse's tip stops 0.1 short of the cell edge, the plan keeps the
+    single instance, and the interface is exact -- but the fold switches instance on the
+    cell edge while the nearest boundary switches on the Voronoi curve between the two
+    tilted tips, and the sliver between the two sits inside the band there: 0.71 deg mean and
+    0.77% of samples past 45 deg, where the same shape forced over the 720 ellipse's ring
+    reads 0.195 deg and none. Through a solve the two extensions differ by 4.8e-3 at order 6
+    (2.7e-3 at 9), and that difference is the step ``sum(T)`` takes when the support crosses
+    the threshold: +4.6e-3 from 709.8 to 710.0 against -1.8e-4 for the same length either
+    side. Recorded in ``docs/normal-field-known-limits.md`` (case L) with the rows from
+    ``lx = 400`` out, and the fix that removes it -- the ring for every ellipse -- with its
+    price: every tilted ellipse's extension moves (2.6e-5 on a 400 x 200 at order 6) and each
+    build pays eleven exact distances.
+    """
+    ring = P.plan_gamma([dict(L_ELLIPSE, lx=720.0)], as_lattice(lattice=SQUARE))
+    assert P.plan_gamma([dict(L_ELLIPSE, lx=709.8)],
+                        as_lattice(lattice=SQUARE)).pieces[0].imgs == ((0, 0),)
+    fold = _ellipse_band(709.8)
+    forced = _ellipse_band(709.8, plan=ring)
+    assert fold[0] > 0.5 and fold[1] > 0.005, fold
+    assert forced[0] < 0.3 and forced[1] == 0.0, forced
 
 
 @pytest.mark.parametrize('name, lattice, geom', [

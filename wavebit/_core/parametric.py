@@ -808,7 +808,8 @@ def normal_vector_field_analytical(xp, grid_shape, shapes, dtype, lattice, plan=
         return xp.ones((Ny, Nx), dtype=dtype), xp.zeros((Ny, Nx), dtype=dtype)
 
     slots = _material_slots(xp, shapes, dtype)
-    if _tiles_pay(X, Ny, Nx, len(plan.pieces)):
+    n_pieces = sum(len(pc.imgs) if pc.face == 'arc' else 1 for pc in plan.pieces)
+    if _tiles_pay(X, Ny, Nx, n_pieces):
         return _field_tiled(xp, X, Y, shapes, plan, slots, lattice, dtype, (Ny, Nx))
     return _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype)
 
@@ -842,7 +843,8 @@ def _tiles_pay(sample, n_v, n_u, n_pieces):
 
     ``n_pieces`` counts the plan's pieces, not the layer's shapes: a lone box is four of them,
     each carried over a ring of images, and that is already the working set the tiles exist
-    for. A lone round shape is one piece and nothing to blend.
+    for. A lone round shape inside its Wigner-Seitz cell is one piece and nothing to blend;
+    one that leaves it is one piece per instance of its ring, and counts as such.
     """
     import numpy as np
     return (n_pieces > 1 and n_v * n_u >= _TILE_MIN_PIXELS
@@ -892,7 +894,10 @@ class GammaPlan(namedtuple('GammaPlan', 'ring pieces pairs empty')):
         One :class:`Piece` per face of every box (``+u``, ``-u``, ``+v``, ``-v`` -- whole
         faces, never split) and one ``'arc'`` per round shape, in shape order. Each carries
         ``imgs``, the offsets its replay evaluates it at, and ``dead``, whether the shape's own
-        images cover the whole of it (a self run union at full length).
+        images cover the whole of it (a self run union at full length). An arc's ``imgs`` is
+        ``((0, 0),)`` while the shape stays inside the Wigner-Seitz cell of its centre, where
+        the nearest centre's level set is the nearest interface, and the size ring once it
+        leaves (:func:`_arc_offsets`); the replay then blends one sub-piece per instance.
     ``pairs``
         One :class:`Pair` per coincidence: piece ``q`` at lattice offset ``(m, n)`` -- relative
         to ``p``'s own instance -- lies on ``p``'s line, opposed, over a run of positive
@@ -959,6 +964,59 @@ def _ring_offsets(a1x, a1y, a2x, a2y, reach):
                  if math.hypot(m * a1x + n * a2x, m * a1y + n * a2y) <= limit)
 
 
+def _arc_offsets(prim, a1x, a1y, a2x, a2y, diam, tol):
+    """A round shape's instance list: its own alone inside its Wigner-Seitz cell, the ring outside.
+
+    The ``'arc'`` piece reads the level set of the nearest *centre*
+    (:func:`_round_field`), and that is the nearest interface wherever the shape stays inside
+    the Wigner-Seitz cell of its centre: then it and every image lie on opposite sides of
+    the cell's bounding planes, so an image's boundary never enters the cell and no point of
+    the cell is nearer an image's boundary than the plane between them is. The condition is
+    the support function against every lattice vector, ``h(t) <= |t| / 2`` with
+    ``h(t) = sqrt((a t.e1)^2 + (b t.e2)^2)`` -- which only a vector shorter than ``2 R`` can
+    fail, so that is the ring swept. A shape that leaves the cell (an ellipse 720 x 200 at 10
+    deg on a 700 square: ``h = 354.9 > 350`` along ``a1``) has part of a neighbour's boundary
+    *inside* the cell, and the fold read the wrong level set there -- 7.0 deg mean on Gamma,
+    89.9 max, 3.09 deg / 3.73% over the band -- so it is carried over a ring instead, with the
+    exact distance to each
+    instance (:func:`_round_instances`). The ring is every offset ``s`` with
+    ``|A s| <= diam + min(a, b) + h(s)``: the boundary of the shape's own instance is within
+    ``diam / 2 + min(a, b)`` of any sample of the folded cell, the instance at ``s`` reaches
+    ``h(s)`` back towards it, and the fold adds ``diam / 2`` again -- so an instance farther
+    out can never be the nearest, and the list is cost-only (13 offsets on the 720 x 200
+    scene by size alone, 9 by support). Each instance costs an exact distance, so the
+    difference is paid on every build.
+
+    A circle can never leave: ``h = R`` in every direction, and ``R > |t| / 2`` is the overlap
+    ``check_layer_shapes`` refuses. The threshold steps like every combinatorial fact of the
+    plan -- a frozen record holds it, and a shape grown across it is refused by name -- and
+    the tolerance is the collinearity one, rounding scale, so a disc exactly filling its cell
+    keeps its single instance on either side of the rounding.
+    """
+    _, _, _, a, b, _, _ = prim
+
+    def support(m, n):
+        tx, ty = m * a1x + n * a2x, m * a1y + n * a2y
+        length = math.hypot(tx, ty)
+        return length, _overlap._support_radius(prim, tx / length, ty / length)
+
+    leaves = any(h > 0.5 * length + tol
+                 for length, h in (support(m, n)
+                                   for m, n in _ring_offsets(a1x, a1y, a2x, a2y, 2.0 * max(a, b))
+                                   if (m, n) != (0, 0)))
+    if not leaves:
+        return ((0, 0),)
+    ring = []
+    for m, n in _ring_offsets(a1x, a1y, a2x, a2y, diam + a + b):
+        if (m, n) == (0, 0):
+            ring.append((m, n))
+            continue
+        length, h = support(m, n)
+        if length <= (diam + min(a, b) + h) * (1.0 + 1e-12):
+            ring.append((m, n))
+    return tuple(ring)
+
+
 def plan_gamma(shapes, lattice):
     """The :class:`GammaPlan` of one layer, or ``None`` when the parameters are not concrete.
 
@@ -997,7 +1055,8 @@ def plan_gamma(shapes, lattice):
         imgs = _ring_offsets(a1x, a1y, a2x, a2y, diam + 2.0 * radii[i])
         if prim[0] != _overlap.BOX:
             index[(i, 0)] = len(pieces)
-            pieces.append(Piece(i, 'arc', ((0, 0),), False))
+            pieces.append(Piece(i, 'arc', _arc_offsets(prim, a1x, a1y, a2x, a2y, diam, tol),
+                                False))
             continue
         halves = [face[6] for face in _overlap.box_faces(prim)]
         for f, name in enumerate(_overlap.FACES):
@@ -1048,8 +1107,12 @@ def _blind_plan(shapes, lattice):
     pair -- a bar spanning the cell, a box against its own image -- is not told that it is
     one, and its two faces cancel only to rounding: the same values the planned field carries,
     minus the exact zero. That is a field within ulps of the planned one everywhere, with no
-    tie rule at the points where the planned field would have needed one. A scene that leans
-    on either -- Li's checkerboard on a jitted trace -- should freeze its geometry first.
+    tie rule at the points where the planned field would have needed one. A round shape is
+    planned at its own instance alone here too: whether it leaves its Wigner-Seitz cell
+    (:func:`_arc_offsets`) is a question of its size, which a trace cannot read, so an
+    ellipse that does gets the fold's field under ``jax.jit`` with no record. A scene that
+    leans on any of these -- Li's checkerboard on a jitted trace, a 720 x 200 ellipse on a
+    700 cell -- should freeze its geometry first.
     """
     try:
         a1x, a1y, a2x, a2y = _cell_floats(lattice)
@@ -1192,7 +1255,12 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype):
     weights ``w = where(d == d_min, 1, (d_min / d) ** 4)`` in one sum. There is no per-shape
     stage: a two-stage blend switches extension where two shapes come into contact, which was
     measured as a 1.1e-2 step in ``sum(T)`` at order 6, and the one-stage sum has nothing to
-    switch. A lone round shape is one piece and returns its own field, as it always did.
+    switch. A lone round shape inside its Wigner-Seitz cell is one piece and returns its own
+    field, as it always did; one that leaves it is one sub-piece per instance of its ring
+    (:func:`_round_instances`), each with the exact distance to that instance and that
+    instance's level-set normal, and the same blend. A face's instances share one direction,
+    so a face can take the nearest of them by a hard minimum; an arc's do not, and a hard
+    minimum would put a jump line mid-way between two images, which the blend has no seam.
 
     **A piece's distance is the segment distance to the nearest of its instances.** For a face
     with tangential coordinate ``sigma`` and normal coordinate ``nu`` at instance ``K``,
@@ -1248,7 +1316,11 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype):
     index = {(pc.shape, pc.face): k for k, pc in enumerate(plan.pieces)}
 
     if len(plan.pieces) == 1 and plan.pieces[0].face == 'arc':
-        _, gx, gy = _round_field(xp, X, Y, shapes[plan.pieces[0].shape], lattice, dtype)
+        shape, imgs = shapes[plan.pieces[0].shape], plan.pieces[0].imgs
+        if len(imgs) == 1:
+            _, gx, gy = _round_field(xp, X, Y, shape, lattice, dtype)
+        else:
+            _, gx, gy = _round_instances(xp, X, Y, shape, lattice, dtype, imgs)
         return gx, gy
 
     frames = {}
@@ -1343,9 +1415,13 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype):
             d[k] = xp.where(on_face, zero, xp.sqrt(xp.where(on_face, one, best)))
             inside.update(on_run)
     for k, pc in enumerate(plan.pieces):
-        if pc.face == 'arc':
+        if pc.face != 'arc':
+            continue
+        if len(pc.imgs) == 1:
             d[k], gx, gy = _round_field(xp, X, Y, shapes[pc.shape], lattice, dtype)
-            round_dir[k] = (gx, gy)
+        else:
+            d[k], gx, gy = _round_instances(xp, X, Y, shapes[pc.shape], lattice, dtype, pc.imgs)
+        round_dir[k] = (gx, gy)
 
     # 2. The ratio weights, `(d_min / d) ** 4`. The winner's ratio is `d / d`, exactly 1.0 in
     #    IEEE arithmetic, so no `where` picks it out -- and that is a derivative, not a
@@ -1461,11 +1537,14 @@ def _round_field(xp, X, Y, shape, lattice, dtype):
     normal: exact for a circle, and for an ellipse the first-order distance to the level set,
     which is all a nearest-surface pick needs. The nearest *centre* is the nearest instance
     for any circle that does not overlap its own images (a boundary point nearer another
-    instance would put two centres closer than two radii), which is why the ``'arc'`` piece
-    has no image list of its own and this arithmetic is the one the round branch always had.
-    A ring of instances is not taken here on purpose: the algebraic distance ``|f| / |grad f|``
-    is unbounded at a shape's own centre, so a minimum over instances would hand the centre of
-    every circle to its neighbour.
+    instance would put two centres closer than two radii), and for any shape that stays
+    inside the Wigner-Seitz cell of its centre (:func:`_arc_offsets`), which is why the
+    ``'arc'`` piece has a single instance there and this arithmetic is the one the round
+    branch always had -- bit-identical to every result since 2026-08-17. A ring of instances
+    is not taken *with this distance* on purpose: the algebraic ``|f| / |grad f|`` is
+    unbounded at a shape's own centre, so a minimum over instances would hand the centre of
+    every circle to its neighbour. A shape that leaves its cell takes the ring with the
+    exact distance instead (:func:`_round_instances`).
 
     ``diag(Lx, Ly)`` is the one case where the two folds ARE the same fold, so it keeps the
     cheaper spelling -- and stays bit-identical to every result predating the lattice branch.
@@ -1495,6 +1574,122 @@ def _round_field(xp, X, Y, shape, lattice, dtype):
     gy = gxr * sin_a + gyr * cos_a
     norm = _hypot_safe(xp, gx, gy)
     return dist, gx / norm, gy / norm
+
+
+#: Halvings of the angle bracket in :func:`_ellipse_distance` (2e-5 rad), and the Newton steps
+#: that take the root from there to rounding. Measured against a brute-force search over 1200
+#: points on three ellipses (the axes, the evolute and a point 1e-7 off the major axis
+#: included): 24 + 3 reads 4.3e-13 at worst, 16 + 3 the same 4.8e-13 at 42 ms per instance on
+#: a 512 x 512 grid against 56, 12 + 4 1.3e-12, and 8 + 5 breaks down at 1.7e-8.
+_ARC_BISECTIONS = 16
+_ARC_NEWTON = 3
+
+
+def _ellipse_distance(xp, u, v, a, b):
+    """The Euclidean distance from ``(u, v)`` to the ellipse ``(u/a)^2 + (v/b)^2 = 1``, exactly.
+
+    In the shape's own frame. The nearest boundary point is found by its angle ``t``: for a
+    point folded into the closed first quadrant, ``G(t) = (a^2 - b^2) cos t sin t - a u sin t
+    + b v cos t`` -- minus half the derivative of the squared distance along the boundary --
+    is ``b v >= 0`` at ``t = 0``, ``-a u <= 0`` at ``pi / 2``, and changes sign exactly once
+    in between, at the nearest point: the distance's other critical points lie in the other
+    quadrants. So the root is bisected on the sign, :data:`_ARC_BISECTIONS` halvings with
+    the bracket's ends carried as ``(cos, sin)`` and the midpoint by the half-angle rule (no
+    trigonometry in the loop), then polished by :data:`_ARC_NEWTON` Newton steps on ``G``,
+    clamped to the bracket. Measured: 6e-13 at worst against a brute-force search over 800
+    random points on four ellipses, 7e-15 in the median; 1e-13 on boundary points; the centre
+    reads ``min(a, b)``; and ``d/da``, ``d/db``, ``d/du`` agree with central differences to
+    2e-8 at nine points including the axes, the centre and a point 1e-7 off the major axis
+    inside the evolute. The derivative is the implicit one because the distance is stationary
+    in ``t`` at the nearest point, so ``dt/d(theta)`` -- which a bisection gets wrong -- is
+    multiplied by ``dD/dt = 0``; the polish is what makes that zero exact.
+
+    Why the angle and not the Lagrange multiplier. The textbook form (Eberly's bracketed
+    bisection on the multiplier ``s``) has a pole at ``s = -1`` that every interior point near
+    the major axis approaches -- ``s + 1 ~ 1e-9`` for a point 1e-7 off it -- and a float64
+    ``s`` there keeps seven digits of ``s + 1``, which came back as 4e-6 in the distance. The
+    angle has no pole, and the bracket ``[0, pi / 2]`` is the same width for every point.
+
+    Why a hard bracket rather than Newton from a guess: ``G`` is not monotone, so a Newton
+    step from the wrong side leaves the quadrant, and the bisection is what makes the answer
+    array-only with a fixed step count under ``jit``. A circle is not special-cased: ``a == b``
+    makes ``G = b (v cos t - u sin t)``, whose root is the ray through the point, and the
+    distance the radial one. Every discarded ``where`` branch is finite, so autograd never
+    meets ``0 * inf`` (the :func:`_hypot_safe` lesson).
+    """
+    one, zero = xp.ones_like(u), xp.zeros_like(u)
+    y0, y1 = xp.abs(u), xp.abs(v)
+    k = a * a - b * b
+    au, bv = a * y0, b * y1
+    c_lo, s_lo = one, zero                                # t = 0
+    c_hi, s_hi = zero, one                                # t = pi / 2
+    for _ in range(_ARC_BISECTIONS):
+        c_sum = c_lo * c_hi - s_lo * s_hi                 # cos(lo + hi)
+        c_m = xp.sqrt(xp.maximum(0.5 * (1.0 + c_sum), zero))
+        s_m = xp.sqrt(xp.maximum(0.5 * (1.0 - c_sum), zero))
+        pos = (k * c_m * s_m - au * s_m + bv * c_m) > 0.0
+        c_lo, s_lo = xp.where(pos, c_m, c_lo), xp.where(pos, s_m, s_lo)
+        c_hi, s_hi = xp.where(pos, c_hi, c_m), xp.where(pos, s_hi, s_m)
+    t_lo, t_hi = xp.atan2(s_lo, c_lo), xp.atan2(s_hi, c_hi)
+    t = 0.5 * (t_lo + t_hi)
+    for _ in range(_ARC_NEWTON):
+        c, s = xp.cos(t), xp.sin(t)
+        g = k * c * s - au * s + bv * c
+        gp = k * (c * c - s * s) - au * c - bv * s
+        gp = xp.where(gp < 0.0, gp, -one)                 # G' < 0 at a strict minimum
+        t = xp.minimum(xp.maximum(t - g / gp, t_lo), t_hi)
+    c, s = xp.cos(t), xp.sin(t)
+    return xp.sqrt((a * c - y0) ** 2 + (b * s - y1) ** 2)
+
+
+def _round_instances(xp, X, Y, shape, lattice, dtype, imgs):
+    """``(distance, normal_x, normal_y)`` of one round shape over the instances ``imgs``.
+
+    The ``'arc'`` piece of a shape that leaves its Wigner-Seitz cell (:func:`_arc_offsets`):
+    :func:`_round_field` with the nearest instance chosen by its *boundary* rather than by
+    its centre. The sample is folded to the shape's nearest lattice cell as :class:`_Frame`
+    folds it, the offsets are taken from there, each instance carries the exact Euclidean
+    distance to its boundary (:func:`_ellipse_distance`) -- bounded, ``min(a, b)`` at the
+    centre, so the minimum over instances is the nearest interface and nothing hands a
+    shape's centre to its neighbour -- and the piece's direction is the level-set normal of
+    the nearest instance at the sample, the same direction :func:`_round_field` reads. Away
+    from the cell's edge, where the nearest centre is the nearest boundary, this is that
+    function's field bitwise; the two differ only in the sliver beside the edge where the
+    fold read a far instance's level set, and on the neighbour's boundary inside the cell,
+    where the fold was wrong. A hard minimum, as a face takes over its instances: the fold
+    already switches instance across the cell's edge, and this moves that switch to the
+    Voronoi boundary between the two boundaries, which is where the geometry has it.
+    """
+    _stype, cx, cy, lx, ly, angle = shape_geometry(shape, lattice)
+    cos_a = xp.cos(as_array(xp, angle, dtype=dtype))
+    sin_a = xp.sin(as_array(xp, angle, dtype=dtype))
+    a1x, a2x = lattice[0][0], lattice[0][1]
+    a1y, a2y = lattice[1][0], lattice[1][1]
+    det = a1x * a2y - a2x * a1y
+    dx0, dy0 = X - cx, Y - cy
+    km = xp.round((a2y * dx0 - a2x * dy0) / det)
+    kn = xp.round((-a1y * dx0 + a1x * dy0) / det)
+    a, b = lx / 2.0, ly / 2.0
+    best = gx_best = gy_best = None
+    for m, n in imgs:
+        dx = dx0 - (km + m) * a1x - (kn + n) * a2x
+        dy = dy0 - (km + m) * a1y - (kn + n) * a2y
+        xr = dx * cos_a + dy * sin_a
+        yr = -dx * sin_a + dy * cos_a
+        gxr, gyr = 2.0 * xr / (a ** 2), 2.0 * yr / (b ** 2)
+        gx = gxr * cos_a - gyr * sin_a
+        gy = gxr * sin_a + gyr * cos_a
+        norm = _hypot_safe(xp, gx, gy)
+        gx, gy = gx / norm, gy / norm
+        dist = _ellipse_distance(xp, xr, yr, a, b)
+        if best is None:
+            best, gx_best, gy_best = dist, gx, gy
+        else:
+            take = dist < best
+            best = xp.where(take, dist, best)
+            gx_best = xp.where(take, gx, gx_best)
+            gy_best = xp.where(take, gy, gy_best)
+    return best, gx_best, gy_best
 
 
 def _hypot_safe(xp, a, b):
@@ -1965,10 +2160,11 @@ def _gamma_moved(held, fresh, shapes):
         if old.dead != new.dead:
             clauses.append(f"shape {_shape_name(shapes, new.shape)}'s {new.face} face is "
                            f"{'covered by its own images now' if new.dead else 'an interface again'}")
-        if old.imgs != new.imgs and old.face == 'arc' or (old.imgs != new.imgs and old.face == '+u'):
+        if old.imgs != new.imgs and old.face in ('arc', '+u'):
+            why = ('its support crossed the edge of its Wigner-Seitz cell' if old.face == 'arc'
+                   else 'its size crossed a ring boundary')
             clauses.append(f"shape {_shape_name(shapes, new.shape)}'s image list changed "
-                           f"({len(old.imgs)} -> {len(new.imgs)} instances: its size crossed a "
-                           f"ring boundary)")
+                           f"({len(old.imgs)} -> {len(new.imgs)} instances: {why})")
     if held.ring != fresh.ring:
         clauses.append(f'the ring of images swept went from {held.ring} to {fresh.ring}')
     if held.empty != fresh.empty:
