@@ -90,9 +90,11 @@ class StaticGeometry:
             quantity is built on the normal of its own boundary. All three are ``None``
             unless the structure carries a raster ``mu``; the two shape paths need no twin
             here at all, since their records hold the geometry both quantities share.
-        boundary_plans: per-layer ``(table_records, regions)`` for the boundary route — which
-            loop holds which vertex and which edges cross, once the painting is resolved. These
-            are pure Python indices, never coordinates, so a replay
+        boundary_plans: per-layer ``(table_records, regions, reduction)`` for the boundary
+            route — which loop holds which vertex and which edges cross, once the painting is
+            resolved, and the integer transform to the Lagrange-reduced basis its periodic
+            images are enumerated on. These are pure Python indices, never coordinates, so a
+            replay
             carries a gradient to the vertices and they compare by content. ``None`` for a layer
             is an answer rather than a gap: painted, looked at while concrete, and nothing
             overlapped, so it is summed. Both answers are re-asked eagerly

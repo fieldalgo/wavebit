@@ -658,33 +658,45 @@ square, the rectangle, both hexagonal spellings, the `(200, 700)` shear and Li's
 -- reduced already -- 75 of 75 field and projector-coefficient arrays are byte-identical to the
 tree before the change. The solve on the two spellings is deliberately *not* compared: the
 retained order sets differ by the window, not by geometry, and at any affordable order that
-difference dominates. Two things are outside this: the *tolerance scale* of the overlap check
+difference dominates. One thing is outside this: the *tolerance scale* of the overlap check
 (`OVERLAP_TOL_REL * max(|a1|, |a2|)`) is still read off the basis as given, so the `10 a1`
 spelling tolerates touching ten times more loosely than its reduction -- a scale, not a
-geometry; and the boundary route's `boundary.py::periodic_segments`, a copy of the same fold
-and 3x3 for the painted (overlapping) layers, still sweeps the basis as given, and its record
-carries no transform to replay one under `jit`. Measured in the second round: two overlapping
-300 x 300 boxes on the `10 a1` spelling read `sum(T)` 0.810615440141 against 0.948626126969 on
-the reduction, at the one window where both spellings retain the same order set (`u = 0`,
-`v = 6`; `b2` is shared), the same at `normal_grid` 64 / 128 / 256 -- geometry, not resolution
--- while the disjoint control, the closed form, read bitwise the same on both. **So a painted
-layer on a basis whose `reduction_transform` is not the identity is refused by name**
-(`parametric.check_boundary_basis_reduced`, at the solve and at the freeze, quoting the
-reduced spelling): a refusal pending the port of the reduction into `boundary.py`, which is
-that route's own work beside F and H of §1, not a fix. A non-overlapping layer on the same
-spelling is built by the closed form on its reduction and is not touched. Pinned in
-`test_boundary.py`. **The refusal fires eagerly and at the freeze only**: a basis that arrives
-as a `jit` tracer cannot be reduced or compared, so a record taken on the reduced spelling and
-replayed under `jit` on an unreduced one builds the 0.8106 with nothing said. The eager
-re-freeze each step is the guard -- that freeze runs the check on the concrete basis.
+geometry.
+
+**The boundary route carried the same fold, and the port took two folds, not one.**
+`boundary.py::periodic_segments` -- the painted (overlapping) layers -- was a copy of the same
+fold and 3x3 on the basis as given: two overlapping 300 x 300 boxes on the `10 a1` spelling
+read `sum(T)` 0.810615440141 against 0.948626126969 on the reduction at the one window where
+both spellings retain the same order set (`u = 0`, `v = 6`; `b2` is shared), the same at
+`normal_grid` 64 / 128 / 256 -- geometry, not resolution -- while the disjoint control, the
+closed form, read bitwise the same on both. For one revision that was *refused* by name on a
+painted layer. The refusal over-reached: `test_oblique_lattice.py` pins that a painted overlap
+survives the `k = 1` respelling `a2 = (400, 400)` of the 400 square, a genuine invariance the
+sweep as given happens to satisfy for `k <= 2` (the Wigner-Seitz argument fails from `k = 3`),
+and the refusal broke it. So the reduction is ported (2026-09-06): `periodic_segments` folds
+and sweeps on `reduced_basis`, and the painting plan records the integer transform beside its
+loops (`plan_layer` returns `(records, regions, reduction)`, in the content key), taken on the
+concrete basis at the freeze so a jitted replay on a traced basis reduces with the recorded
+integers, as `GammaPlan.reduction` does; a record taken on one spelling and replayed on
+another is refused as stale (`check_plan_still_fits`, naming the basis). Folding the
+*segments* alone moved the `10 a1` answer from 0.810615440141 to 0.985549487763 -- a different
+wrong number, as unmoved by the grid as the first -- because the sample points are laid out on
+the basis as given, and on that spelling that is a sliver reaching ten cells along `a1`, where
+no image of a segment folded into the reduced cell exists. So the sample points are folded
+into the reduced cell by the same rule (`fold_into_cell`); on a basis that is reduced to begin
+with the fold is `x - 0.0 * a`, and the field is the field it was, to the bit. Pinned in
+`test_boundary.py`: the nearest distance and normal at 4000 identical physical points agree on
+`k = 0 / 1 / 3 / 10` to 1e-13 and 2e-6 deg; the solve on `k = 10` reads the `k = 0` value
+**bitwise** (the structure moves by `5 a1`, a lattice vector, and the sample grid folds onto
+the same points); `k = 1` and `k = 3` read one value, within 1.2e-4 of it (their sample grids
+fold half a pixel off -- a sampling difference of the size of the route's own moves between
+`normal_grid` 64 / 128 / 256, 3e-6 to 9e-5, and the same at every `k` of one parity, which is
+what says it is the grid and not the fold); the jitted replay over a traced lattice equals the
+eager one to 1e-12; and three mutants -- the reduction dropped, the point fold dropped, the
+plan recording the identity -- are each killed by the bitwise pin.
 
 ### 8d. Still open (2026-09-06)
 
-* **The polygon route on an unreduced basis** -- refused, not reduced (§8c above), and the
-  refusal cannot fire under a trace. Lifting
-  the refusal means taking `periodic_segments` and the painted route's image loops through
-  `lattice.reduced_basis`, and giving its record the transform to replay under `jit`, as
-  `GammaPlan.reduction` does.
 * **The JAX backend's jitted `solve_field` cannot run on a parametric structure at all.** Its
   `jit` is over the solver itself, and a shape layer's `'type'` string becomes a pytree leaf:
   `solver.solve_field(4, 4, 3, geometry=frozen)` on a lone 350 box raises `TypeError` ("the

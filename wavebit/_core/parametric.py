@@ -580,60 +580,6 @@ _NEEDS_A_FREEZE = (
     "plan compares by content, so an unchanged one is free.")
 
 
-def check_boundary_basis_reduced(lattice, index):
-    """Refuse the polygon route on a cell basis that is not Lagrange-reduced.
-
-    **Eagerly, and at the freeze, only.** A basis that arrives as a ``jit`` tracer cannot be
-    reduced or compared, so this returns without a word -- and a record taken on the reduced
-    spelling and replayed under ``jit`` on an unreduced one builds the wrong structure with
-    nothing said (measured: 0.810615440141 against the eager 0.948626126969). The eager
-    re-freeze each step (README: "re-take the freeze every step") is the guard, since that
-    freeze runs this check on the concrete basis and refuses.
-
-    The closed-form route counts every periodic image on the reduced basis since
-    2026-09-06 (:func:`~wavebit._core.lattice.reduced_basis`; section 8c of
-    ``docs/normal-field-known-limits.md``). The polygon route -- the painted, overlapping
-    layers -- does not: ``boundary.periodic_segments`` folds and sweeps its 3x3 on the basis
-    as given, a copy of the fold that section removed, and its record carries no transform
-    to replay one under ``jit``. On an accepted unreduced spelling that is a different
-    structure in silence: two overlapping 300 x 300 boxes on ``a2 = 10 a1 + (50, 700)`` read
-    ``sum(T)`` 0.810615440141 against 0.948626126969 on ``a2 = (50, 700)`` at the one window
-    where the two spellings retain the same order set (``u = 0, v = 6``), the same at
-    ``normal_grid`` 64 / 128 / 256 -- geometry, not resolution -- while two disjoint boxes,
-    the closed form, read bitwise the same on both. Porting the reduction into
-    ``boundary.py`` is that route's own work, beside the nested shape and the shape larger
-    than the period it still owes (section 1 there), so until it lands a painted layer on
-    such a basis is refused by name, with the reduced spelling quoted. A layer whose shapes
-    do not overlap never reaches this: the closed form handles it on any spelling.
-
-    A basis that cannot be read (a ``jax.jit`` tracer) is not checked here. The plan the
-    polygon route replays is taken at the freeze, which runs this on the concrete basis; a
-    replay on a traced basis is on trust, as the interface set's is. A ``jax.grad`` tracer
-    reads its primal and is checked.
-    """
-    try:
-        transform = reduction_transform(lattice)
-    except Exception:                                  # noqa: BLE001 - a traced basis
-        return
-    if transform == ((1, 0), (0, 1)):
-        return
-    a1x, a1y, a2x, a2y = _cell_floats(lattice)
-    r1x, r1y, r2x, r2y = _cell_floats(reduced_basis(lattice, transform))
-    raise ValueError(
-        f'layer {index} overlaps, so it takes the polygon route, and its cell basis is not '
-        f'Lagrange-reduced: a1 = ({a1x:g}, {a1y:g}), a2 = ({a2x:g}, {a2y:g}) is the cell of '
-        f'a1 = ({r1x:g}, {r1y:g}), a2 = ({r2x:g}, {r2y:g}) spelled with a longer vector. The '
-        f'polygon route does not yet count periodic images on the reduced cell -- it folds '
-        f'and sweeps one cell a side of the basis as given -- while the closed-form route '
-        f'does, so on this spelling the painted layer would be a different structure with '
-        f'nothing said (measured: sum(T) 0.8106 against 0.9486 on the reduction, the same '
-        f'retained orders). Refused rather than reduced here, pending that port into '
-        f'boundary.py. Spell the cell as its reduction, '
-        f'lattice=[[{r1x:g}, {r2x:g}], [{r1y:g}, {r2y:g}]] -- a truncation window on a '
-        f'different spelling retains a different set of orders -- or arrange the layer so '
-        f'that no shapes overlap, which the closed form builds on any spelling.')
-
-
 def shape_ft(xp, shape, ky, kx, lattice):
     """Continuous Fourier transform of one shape's indicator, divided by the cell area.
 
@@ -2446,7 +2392,6 @@ def to_conv_mat_parametric_layers(layer_shapes, half_width_u, half_width_v, latt
             # and transform those. Where nothing overlaps the two are the same structure, so
             # the layer stays here -- exact, and cheaper.
             from .boundary import to_conv_mat_boundary_layer
-            check_boundary_basis_reduced(lattice, index)
             mats = to_conv_mat_boundary_layer(
                 xp, layer.get('shapes', []), background, half_width_u, half_width_v, lattice,
                 dtype, normal_grid=normal_grid, plan=plan)

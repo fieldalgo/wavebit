@@ -3299,14 +3299,13 @@ class CoreFactorizationMixin:
             # Only a layer that actually overlaps has a plan to freeze. One with nothing
             # overlapping means the same structure either way and stays on the closed-form
             # path, so its slot stays None and the replay never looks.
-            # A painted layer on a basis that is not Lagrange-reduced is refused here by
-            # name (`check_boundary_basis_reduced`): the polygon route sweeps its images on
-            # the basis as given, and this is where its plan is taken on concrete numbers.
+            # The plan records the basis reduction beside its loops (`boundary.plan_layer`),
+            # taken here on concrete numbers so that a jitted replay enumerates its periodic
+            # images on the same reduced cell.
             cell = self._geometry_lattice_for(None)
             plans = []
             for index, layer in enumerate(self.structure):
                 if _parametric.layer_needs_resolving(layer, cell):
-                    _parametric.check_boundary_basis_reduced(cell, index)
                     plans.append(_boundary.plan_layer(layer.get('shapes', []), cell))
                 else:
                     plans.append(None)

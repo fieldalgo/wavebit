@@ -39,7 +39,7 @@ from .domain import as_material
 from .backend import checked_float
 from .factorization import check_normal_grid
 from .geometry import StaleGeometryError
-from .lattice import sample_grid
+from .lattice import reduced_basis, reduction_transform, sample_grid
 from .polygon import ellipse_verts, polygon_ft, rect_verts
 
 
@@ -58,7 +58,25 @@ def segments_of(xp, polys):
     return A, E, L2
 
 
-def periodic_segments(xp, A, E, L2, lattice):
+def fold_into_cell(xp, P, lattice):
+    """``P`` (N, 2) carried by lattice vectors into the fundamental parallelogram of ``lattice``.
+
+    ``floor`` of the fractional coordinates, not ``round``: this names the cell a point sits in,
+    and the 3x3 sweep of :func:`periodic_segments` covers the neighbours. Its derivative is
+    zero, which is correct -- the choice of image is locally constant, and moving a point does
+    not move which cell it is in except on a measure-zero seam. A point already inside the
+    parallelogram comes back with its coordinates untouched (``x - 0.0 * a`` is ``x``), so on a
+    basis that is reduced to begin with the sample grid is the sample grid, to the bit.
+    """
+    a1x, a2x = lattice[0][0], lattice[0][1]
+    a1y, a2y = lattice[1][0], lattice[1][1]
+    det = a1x * a2y - a2x * a1y
+    su = xp.floor((a2y * P[:, 0] - a2x * P[:, 1]) / det)
+    sv = xp.floor((-a1y * P[:, 0] + a1x * P[:, 1]) / det)
+    return xp.stack([P[:, 0] - su * a1x - sv * a2x, P[:, 1] - su * a1y - sv * a2y], axis=-1)
+
+
+def periodic_segments(xp, A, E, L2, lattice, transform=None):
     """Every segment, plus the images of it that can be a cell point's nearest boundary.
 
     **The cell is a torus and the distance has to be too.** Without this the field measures the
@@ -92,19 +110,34 @@ def periodic_segments(xp, A, E, L2, lattice):
     is also why this cannot be written as a fold of the *displacement* inside
     :func:`_seg_dist`: that would pick the image nearest the segment's start rather than the
     one nearest the segment, and the two differ for a segment approaching the period in length.
+
+    **On the Lagrange-reduced basis (2026-09-06).** One cell a side is enough only when the
+    Wigner-Seitz cell of the origin lies inside the 3x3 of the fundamental parallelogram, and
+    that is a property of the *spelling*: ``as_lattice`` accepts ``a2 = k a1 + (50, 700)`` for
+    any ``k``, and from ``k = 3`` the nearest image sits past the sweep. Two overlapping 300 x
+    300 boxes on ``k = 10`` read ``sum(T)`` 0.810615440141 against 0.948626126969 on ``k = 0``
+    at the one window where both spellings retain the same order set -- geometry, not
+    resolution (the same at ``normal_grid`` 64 / 128 / 256). So the fold and the sweep run on
+    :func:`~wavebit._core.lattice.reduced_basis`, the same lattice spelled with its two
+    shortest vectors, as the closed-form route's fold does (section 8c of
+    ``docs/normal-field-known-limits.md``); the Fourier side of this layer keeps the basis as
+    given. ``transform`` is the integer ``T`` a frozen plan recorded on the concrete basis
+    (:func:`plan_layer`), so a jitted replay on a traced basis reduces with the recorded
+    integers rather than asking the tracer for a number; left ``None``, it is computed here,
+    which needs a basis that can be read.
+
+    The sample points have to be folded into the *same* parallelogram (:func:`fold_into_cell`,
+    in :func:`distance_gradient_normal_field`): they are laid out on the basis as given, and on
+    the ``10 a1`` spelling that is a sliver reaching ten cells along ``a1``, where no image of a
+    segment folded into the reduced cell exists. Folding the segments alone moved the answer
+    from 0.8106 to 0.9855 -- a different wrong number, unmoved by the grid.
     """
+    lattice = reduced_basis(lattice, transform)
     a1x, a2x = lattice[0][0], lattice[0][1]
     a1y, a2y = lattice[1][0], lattice[1][1]
-    det = a1x * a2y - a2x * a1y
 
-    # `floor`, not `round`: this names the cell the start sits in, and the sweep below covers
-    # the neighbours. Its derivative is zero, which is correct -- the choice of image is
-    # locally constant in the vertices, and moving one does not move which image is nearest
-    # except on a measure-zero seam.
-    su = xp.floor((a2y * A[:, 0] - a2x * A[:, 1]) / det)
-    sv = xp.floor((-a1y * A[:, 0] + a1x * A[:, 1]) / det)
-    ax = A[:, 0] - su * a1x - sv * a2x
-    ay = A[:, 1] - su * a1y - sv * a2y
+    folded = fold_into_cell(xp, A, lattice)
+    ax, ay = folded[:, 0], folded[:, 1]
 
     xs, ys = [], []
     for du in (-1.0, 0.0, 1.0):
@@ -139,7 +172,8 @@ def _nearest(xp, pts, A, E, L2):
     return j, foot[rows, j]
 
 
-def distance_gradient_normal_field(xp, polys, grid_shape, lattice, dtype, chunk=None):
+def distance_gradient_normal_field(xp, polys, grid_shape, lattice, dtype, chunk=None,
+                                   transform=None):
     """Unit normal from the direction to the closest boundary *point*.
 
     The closest *edge* is not well defined -- beyond a corner both edges meeting there have the
@@ -256,14 +290,19 @@ def distance_gradient_normal_field(xp, polys, grid_shape, lattice, dtype, chunk=
     "the loop got better". The same sweep over the Python loop is flat, 1.08e8 both times,
     because there the work really is all in the trace. That contrast is the check; a single
     scan number means nothing on its own. Read `memory_analysis()` and the field itself.)
+
+    ``transform`` is the recorded basis reduction, handed to :func:`periodic_segments`; the
+    sample points are folded into the reduced cell by the same rule (:func:`fold_into_cell`),
+    which is what makes the two agree on a spelling whose sample grid lies outside it.
     """
     Ny, Nx = grid_shape
     A, E, L2 = segments_of(xp, polys)
-    A, E, L2 = periodic_segments(xp, A, E, L2, lattice=lattice)
+    A, E, L2 = periodic_segments(xp, A, E, L2, lattice=lattice, transform=transform)
     M = A.shape[0]
 
     X, Y = sample_grid(xp, grid_shape, lattice, dtype)
     pts = xp.stack([xp.reshape(X, (-1,)), xp.reshape(Y, (-1,))], axis=-1)
+    pts = fold_into_cell(xp, pts, reduced_basis(lattice, transform))
 
     npix = Ny * Nx
     if chunk is None:
@@ -387,7 +426,7 @@ def _centroid(xp, V):
 
 
 def normal_projector_coeffs(xp, loops, grid_shape, lattice, half_width_u, half_width_v,
-                            dtype, cdtype):
+                            dtype, cdtype, transform=None):
     """Coefficient grids of ``n_u**2``, ``n_u*n_v``, ``n_v**2``, built with the layer CENTRED.
 
     The normal field lives on the whole plane, so sampling it in a fixed cell clips a different
@@ -424,7 +463,8 @@ def normal_projector_coeffs(xp, loops, grid_shape, lattice, half_width_u, half_w
         built = loops
         phase = xp.asarray(1.0 + 0j, dtype=cdtype)
 
-    normal_x, normal_y = distance_gradient_normal_field(xp, built, grid_shape, lattice, dtype)
+    normal_x, normal_y = distance_gradient_normal_field(xp, built, grid_shape, lattice, dtype,
+                                                        transform=transform)
     out = []
     for f in (normal_x * normal_x, normal_x * normal_y, normal_y * normal_y):
         out.append(_sampled_coeffs(xp, xp.astype(f, cdtype), half_width_u, half_width_v) * phase)
@@ -432,7 +472,7 @@ def normal_projector_coeffs(xp, loops, grid_shape, lattice, half_width_u, half_w
 
 
 def conv_mats(xp, regions, background, half_width_u, half_width_v, lattice, normal_grid,
-              dtype, cdtype):
+              dtype, cdtype, transform=None):
     """``(epx, epy, epz_i, epxy, epyx)`` for one boundary-resolved layer.
 
     ``regions`` is ``[(material, [loop, ...]), ...]`` -- disjoint, painting already resolved by
@@ -507,7 +547,7 @@ def conv_mats(xp, regions, background, half_width_u, half_width_v, lattice, norm
     all_loops = [V for _, polys in regions for V in polys]
     c_xx, c_xy, c_yy = normal_projector_coeffs(
         xp, all_loops, (normal_grid, normal_grid), lattice, half_width_u, half_width_v,
-        dtype, cdtype)
+        dtype, cdtype, transform=transform)
     return nvf_from_coeffs(xp, eps_c, inv_c, c_xx, c_xy, c_yy, half_width_u, half_width_v)
 
 
@@ -583,8 +623,14 @@ def plan_layer(shapes, lattice, n_poly=POLYGON_VERTICES):
     on NumPy outside any trace. Freeze it once
     (:meth:`~wavebit._core.engine.RCWAEngine.freeze_geometry`) and every later step replays
     it against traced vertices.
+
+    The third entry is the integer transform to the Lagrange-reduced basis
+    (:func:`~wavebit._core.lattice.reduction_transform`), taken here on the concrete basis so
+    that a replay on a traced one enumerates its periodic images on the same reduced cell
+    (:func:`periodic_segments`).
     """
-    return _clipper.resolve_painting(_plan_vertices(shapes, lattice, n_poly))
+    recs, regions = _clipper.resolve_painting(_plan_vertices(shapes, lattice, n_poly))
+    return recs, regions, reduction_transform(lattice)
 
 
 def _concrete_basis(lattice):
@@ -616,9 +662,10 @@ def _plan_vertices(shapes, lattice, n_poly):
 
 def _plan_key(plan):
     """A painting plan as nested lists, so a record compares by content whatever holds it."""
-    recs, regions = plan
+    recs, regions, reduction = plan
     return ([tuple(r) for r in recs],
-            [[list(loop) for loop in region] for region in regions])
+            [[list(loop) for loop in region] for region in regions],
+            tuple(tuple(int(t) for t in row) for row in reduction))
 
 
 def check_plan_still_fits(shapes, lattice, plan, n_poly=POLYGON_VERTICES):
@@ -630,7 +677,10 @@ def check_plan_still_fits(shapes, lattice, plan, n_poly=POLYGON_VERTICES):
     shapes that did not overlap begin to, and the recorded loops describe a painting that is no
     longer the one being asked for. Nothing about the result says so -- on a two-rectangle layer
     a replay stays bit-identical while the overlap holds and then drifts to 3.3e-2 in total
-    transmission once it does not, with no step in between to notice.
+    transmission once it does not, with no step in between to notice. The basis reduction the
+    plan recorded is compared beside the loops: a plan taken on one spelling of the cell and
+    replayed on another would enumerate its periodic images on the wrong cell
+    (:func:`periodic_segments`), so a changed reduction is stale too.
 
     Re-planning is the whole cost of the comparison, and it scales with the shape count rather
     than with the solve: 0.2% of a frozen ``solve`` for the two-rectangle layer above, 1.2% for
@@ -645,7 +695,7 @@ def check_plan_still_fits(shapes, lattice, plan, n_poly=POLYGON_VERTICES):
         verts = _plan_vertices(shapes, lattice, n_poly)
     except (TypeError, ValueError):
         return                      # traced: nothing concrete to re-plan from
-    fresh = _clipper.resolve_painting(verts)
+    fresh = (*_clipper.resolve_painting(verts), reduction_transform(lattice))
     fresh_key, plan_key = _plan_key(fresh), _plan_key(plan)
     if fresh_key == plan_key:
         return
@@ -660,6 +710,9 @@ def check_plan_still_fits(shapes, lattice, plan, n_poly=POLYGON_VERTICES):
 
 def _what_moved(fresh_key, plan_key):
     """The one clause of the refusal that names what the re-plan found, in the layer's terms."""
+    if fresh_key[2] != plan_key[2]:
+        return ('the cell basis reduces by a different transform than the one the record '
+                'enumerated its periodic images on')
     fresh, held = fresh_key[1], plan_key[1]
     if len(fresh) != len(held):
         return (f'it was resolved from {len(held)} painted shapes and this layer has '
@@ -698,13 +751,13 @@ def to_conv_mat_boundary_layer(xp, shapes, background, half_width_u, half_width_
     """
     verts = [shape_vertices(xp, s, lattice, n_poly) for s in shapes]
     if plan is None:
-        recs, regions = plan_layer(shapes, lattice, n_poly)
+        recs, regions, transform = plan_layer(shapes, lattice, n_poly)
     else:
         check_plan_still_fits(shapes, lattice, plan, n_poly)
-        recs, regions = plan
+        recs, regions, transform = plan
     vals = _clipper.eval_table(xp, recs, verts)
     regs = [(s['material'], [_clipper.loop_verts(xp, lp, vals) for lp in region])
             for s, region in zip(shapes, regions)]
     real_dtype = xp.float64 if dtype == xp.complex128 else xp.float32
     return conv_mats(xp, regs, background, half_width_u, half_width_v, lattice, normal_grid,
-                     real_dtype, dtype)
+                     real_dtype, dtype, transform=transform)

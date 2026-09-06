@@ -131,7 +131,7 @@ OVERLAP = [dict(type='rectangle', cx=-70.0, cy=0.0, lx=300.0, ly=300.0, material
 
 def loop_mean_eps(shapes, background=1.0):
     """`<eps>` straight off the boundary route's resolved loops -- areas, no sampling at all."""
-    recs, regions = _b.plan_layer(shapes, CELL)
+    recs, regions, _ = _b.plan_layer(shapes, CELL)
     verts = [_b.shape_vertices(xnp, s, CELL) for s in shapes]
     vals = _c.eval_table(xnp, recs, verts)
     total = background * P * P
@@ -201,7 +201,7 @@ def test_a_hole_is_drawn_as_a_hole():
     assert 2.4256 - geometry > 0.18                    # what ignoring the winding would give
 
     # The premise, pinned: the two loops of the host region are wound opposite ways.
-    recs, regions = _b.plan_layer(shapes, CELL)
+    recs, regions, _ = _b.plan_layer(shapes, CELL)
     vals = _c.eval_table(xnp, recs, [_b.shape_vertices(xnp, s, CELL) for s in shapes])
     areas = [_c.signed_area(np.asarray(_c.loop_verts(xnp, lp, vals), float))
              for lp in regions[0]]

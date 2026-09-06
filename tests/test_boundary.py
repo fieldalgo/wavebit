@@ -17,7 +17,10 @@ Two facts these tests exist to pin down, both learned the hard way:
   bin, and the damage is structural rather than gradual (a constant normal field stops
   transforming to the identity, so NVF no longer collapses onto Li's rules).
 """
+import importlib
 import os
+import pathlib
+import sys
 
 import numpy as np
 import pytest
@@ -28,6 +31,12 @@ import array_api_compat.numpy as xnp
 import wavebit
 from wavebit._core.lattice import as_lattice
 from wavebit._core import boundary as _b
+from wavebit._core import parametric as P
+from wavebit._core.geometry import StaleGeometryError
+from wavebit._core.lattice import reduced_basis
+
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
+from gamma_instruments import mutated  # noqa: E402
 from wavebit._core import clipper as _c
 from wavebit._core.polygon import polygon_ft, polygon_area, rect_verts, ellipse_verts
 
@@ -760,7 +769,7 @@ def test_a_partial_overlap_was_never_affected():
     no reversed loop in it is exactly a region no orientation convention can get wrong, which
     is why this number is bit-identical across both the sign fix and the move to windings.
     """
-    recs, regions = _b.plan_layer(CLIPPED_SHAPES, CELL)
+    recs, regions, _ = _b.plan_layer(CLIPPED_SHAPES, CELL)
     verts = [_b.shape_vertices(xnp, s, CELL) for s in CLIPPED_SHAPES]
     vals = _c.eval_table(xnp, recs, verts)
     areas = [float(polygon_area(xnp, _c.loop_verts(xnp, lp, vals)))
@@ -783,7 +792,7 @@ def test_an_enclosed_shape_comes_back_wound_clockwise():
     when the orientation was normalised away into a separate ``sign`` field, and the enclosure
     tests above are what that cost.
     """
-    recs, regions = _b.plan_layer(ENCLOSED_SHAPES, CELL)
+    recs, regions, _ = _b.plan_layer(ENCLOSED_SHAPES, CELL)
     verts = [_b.shape_vertices(xnp, s, CELL) for s in ENCLOSED_SHAPES]
     vals = _c.eval_table(xnp, recs, verts)
     areas = [[float(polygon_area(xnp, _c.loop_verts(xnp, lp, vals))) for lp in region]
@@ -817,7 +826,7 @@ def test_a_hole_inside_a_hole_is_material_again():
     nested = [dict(type='rectangle', cx=0.0, cy=0.0, lx=0.80, ly=0.80, angle=0.0, material=4.0),
               dict(type='rectangle', cx=0.0, cy=0.0, lx=0.50, ly=0.50, angle=0.0, material=9.0),
               dict(type='rectangle', cx=0.0, cy=0.0, lx=0.20, ly=0.20, angle=0.0, material=16.0)]
-    recs, regions = _b.plan_layer(nested, CELL)
+    recs, regions, _ = _b.plan_layer(nested, CELL)
     verts = [_b.shape_vertices(xnp, s, CELL) for s in nested]
     vals = _c.eval_table(xnp, recs, verts)
 
@@ -862,7 +871,7 @@ def test_the_normal_field_does_not_care_which_way_a_hole_is_wound():
     argument for normalising the loops before the field, and normalising would put back the
     orientation conversion the clipper was rewritten to remove.
     """
-    recs, regions = _b.plan_layer(ENCLOSED_SHAPES, CELL)
+    recs, regions, _ = _b.plan_layer(ENCLOSED_SHAPES, CELL)
     verts = [_b.shape_vertices(xnp, s, CELL) for s in ENCLOSED_SHAPES]
     vals = _c.eval_table(xnp, recs, verts)
     asis = [_c.loop_verts(xnp, lp, vals) for region in regions for lp in region]
@@ -1201,54 +1210,186 @@ def test_the_polygon_normal_field_folds_to_the_nearest_image():
     assert total(0.0) == total(P)
 
 
-def test_a_painted_layer_on_an_unreduced_basis_is_refused_and_the_closed_form_is_not():
-    """The polygon route sweeps its images on the basis as given, so an unreduced one is refused.
+# ------------------------------------------------ the reduced basis (2026-09-06)
 
-    ``a2 = k a1 + (50, 700)`` is the cell of ``a2 = (50, 700)`` on a longer second vector,
-    accepted as it is. The closed-form route counts every periodic image on the Lagrange-
-    reduced basis since 2026-09-06 (``lattice.reduced_basis``); ``boundary.periodic_segments``
-    -- the painted, overlapping layers -- still folds and sweeps one cell a side of the
-    spelling it is handed, so an overlapping layer on such a spelling was a different
-    structure in silence: two overlapping 300 x 300 boxes read ``sum(T)`` 0.810615440141 on
-    ``k = 10`` against 0.948626126969 on ``k = 0`` at the one window where both spellings
-    retain the same order set (``u = 0, v = 6``; ``b2`` is shared), unmoved by the normal
-    grid. Until the reduction is ported into ``boundary.py`` the layer is refused by name
-    (``parametric.check_boundary_basis_reduced``) at the solve and at the freeze, quoting the
-    reduced spelling; the reduced spelling builds the value it built before; and a layer
-    whose shapes do *not* overlap is not touched, because the closed form handles it --
-    bitwise the same on ``k = 10`` and ``k = 0``, whose sample grids are the same points.
+def _spelling(k, period=700.0):
+    """``a2 = k a1 + (50, 700)``: the cell of ``a2 = (50, 700)`` on a longer second vector.
+
+    ``as_lattice`` accepts it as it is for any ``k``; from ``k = 3`` the Wigner-Seitz cell of the
+    origin reaches past the 3x3 of the fundamental parallelogram, and a fold on the basis as
+    given picks a wrong image. ``k`` even moves the cell centre -- the origin every shape is
+    measured from -- by a lattice vector, ``k`` odd by ``a1 / 2``.
     """
-    import wavebit
-    from wavebit._core import parametric as P
+    return np.array([[period, 50.0 + k * period], [0.0, period]])
 
-    period = 700.0
 
-    def box(**geom):
-        return dict(dict(type='rectangle', cx=0.0, cy=0.0, angle=0.0, material=12.25), **geom)
+def _box(**geom):
+    return dict(dict(type='rectangle', cx=0.0, cy=0.0, angle=0.0, material=12.25), **geom)
 
-    overlapping = [box(lx=300.0, ly=300.0, cx=-100.0), box(lx=300.0, ly=300.0, cx=100.0)]
-    disjoint = [box(lx=250.0, ly=300.0, cx=-160.0), box(lx=250.0, ly=300.0, cx=160.0)]
-    kw = dict(backend=0, wavelength=900.0, top=1.0, bot=2.25, theta=0.2, phi=0.3, psi=0.4,
-              thickness=[300.0], normal_grid=64, truncation_order=dict(u=0, v=6))
 
-    def solver(k, shapes):
-        P._PROJECTOR_CACHE.clear()
-        lattice = np.array([[period, 50.0 + k * period], [0.0, period]])
-        return wavebit.rcwa(lattice=lattice, structure=[dict(background=1.0, shapes=shapes)],
-                            **kw)
+_TWO_OVERLAPPING = [_box(lx=300.0, ly=300.0, cx=-100.0), _box(lx=300.0, ly=300.0, cx=100.0)]
+_TWO_DISJOINT = [_box(lx=250.0, ly=300.0, cx=-160.0), _box(lx=250.0, ly=300.0, cx=160.0)]
+#: The one window where every spelling retains the same order set: ``b2`` is shared by all of
+#: them (``a1 . b2 = 0`` and ``(a2 + k a1) . b2 = 2 pi`` for any ``k``), so ``u = 0`` keeps
+#: exactly the orders ``n b2``.
+_SPELLING_KW = dict(backend=0, wavelength=900.0, top=1.0, bot=2.25, theta=0.2, phi=0.3, psi=0.4,
+                    thickness=[300.0], normal_grid=64, truncation_order=dict(u=0, v=6))
 
-    total = lambda s: float(np.sum(np.asarray(s.solve().T)))
 
-    reduced = solver(0, overlapping)
-    assert total(reduced) == pytest.approx(0.948626126969, abs=1e-9)
-    assert reduced.freeze_geometry().boundary_plans[0] is not None
+def _spelled(k, shapes, **over):
+    P._PROJECTOR_CACHE.clear()
+    return wavebit.rcwa(lattice=_spelling(k), structure=[dict(background=1.0, shapes=shapes)],
+                        **dict(_SPELLING_KW, **over))
 
-    message = r'layer 0 overlaps.*not Lagrange-reduced.*a2 = \(7050, 700\).*a2 = \(50, 700\)'
-    unreduced = solver(10, overlapping)
-    with pytest.raises(ValueError, match=message):
-        unreduced.solve()
-    with pytest.raises(ValueError, match=message):
-        unreduced.freeze_geometry()
 
-    assert total(solver(10, disjoint)) == total(solver(0, disjoint))
-    assert solver(10, disjoint).freeze_geometry().boundary_plans == [None]
+def _spelled_total(solver, **kw):
+    return float(np.sum(np.asarray(solver.solve(**kw).T)))
+
+
+def _painted_field_at(k, pts):
+    """Nearest distance and normal of the painted two-box layer on spelling ``k``, at ``pts``."""
+    lattice = as_lattice(lattice=_spelling(k))
+    polys = [_b.shape_vertices(xnp, _b._concrete_shape(s), lattice) for s in _TWO_OVERLAPPING]
+    recs, regions, transform = _b.plan_layer(_TWO_OVERLAPPING, lattice)
+    vals = _b._clipper.eval_table(xnp, recs, polys)
+    loops = [_b._clipper.loop_verts(xnp, lp, vals) for region in regions for lp in region]
+    A, E, L2 = _b.segments_of(xnp, loops)
+    A, E, L2 = _b.periodic_segments(xnp, A, E, L2, lattice, transform)
+    pts = _b.fold_into_cell(xnp, pts, reduced_basis(lattice, transform))
+    j, foot = _b._nearest(xnp, pts, A, E, L2)
+    v = pts - foot
+    mag = np.sqrt((v * v).sum(-1))
+    return mag, v / np.maximum(mag, 1e-300)[:, None], transform
+
+
+def test_a_painted_layer_reads_the_same_field_on_every_spelling_of_its_cell():
+    """The nearest distance and its normal at 4000 identical physical points, ``k = 0 / 1 / 3 / 10``.
+
+    The field-level pin, which is the one that can be exact: a solve on two spellings samples
+    two grids, this samples one set of points. The structure on spelling ``k`` is the ``k = 0``
+    one carried by ``k a1 / 2`` (the cell centre moved), so the points are carried the same
+    way. Distance to 1e-9 and normal to 1e-4 deg -- the residual is the medial axis, where a
+    point equidistant from two segments takes whichever the fold lists first.
+    """
+    pts = np.random.default_rng(0).uniform(-1000.0, 1000.0, size=(4000, 2))
+    mag0, n0, transform0 = _painted_field_at(0, pts)
+    assert transform0 == ((1, 0), (0, 1))
+    for k in (1, 3, 10):
+        mag, n, transform = _painted_field_at(k, pts + np.array([k * 350.0, 0.0]))
+        assert transform == ((1, -k), (0, 1)), k
+        assert np.abs(mag - mag0).max() < 1e-9, k
+        angle = np.degrees(np.arccos(np.clip((n * n0).sum(-1), -1.0, 1.0)))
+        assert angle.max() < 1e-4 and angle.mean() < 1e-6, (k, angle.max(), angle.mean())
+
+
+def test_a_painted_layer_on_an_unreduced_basis_builds_its_reduction():
+    """The painted layer on ``k = 1 / 3 / 10`` is the ``k = 0`` structure, and says so in its record.
+
+    For one revision this spelling was *refused* by name on a painted layer, because
+    ``periodic_segments`` folded and swept on the basis as given and read ``sum(T)``
+    0.810615440141 here against 0.948626126969 on ``k = 0``, unmoved by ``normal_grid``. The
+    refusal over-reached -- ``test_oblique_lattice.py`` pins that a painted overlap survives
+    the ``k = 1`` respelling of the 400 square, an invariance the sweep as given happens to
+    satisfy for ``k <= 2`` -- so the reduction is ported instead (``lattice.reduced_basis``, the
+    segments *and* the sample points; section 8c of ``docs/normal-field-known-limits.md``).
+
+    ``k = 10`` reads the ``k = 0`` value **bitwise**: the structure moves by ``5 a1``, a lattice
+    vector, and the sample grid folds onto the same points. ``k = 1`` and ``k = 3`` move it by
+    ``a1 / 2`` and their sample grids fold half a pixel off, a sampling difference of the size
+    of the route's own moves between ``normal_grid`` 64 / 128 / 256 (3e-6 to 9e-5) -- and the
+    same at every ``k`` of one parity, which is what says it is the grid and not the fold.
+    The plan records the transform, a record taken on one spelling is refused on another by
+    name, and the disjoint control -- the closed form -- is bitwise the same on every spelling.
+    """
+    reference = _spelled_total(_spelled(0, _TWO_OVERLAPPING))
+    assert reference == pytest.approx(0.948626126969, abs=1e-9)
+    assert _spelled_total(_spelled(10, _TWO_OVERLAPPING)) == reference
+    odd = [_spelled_total(_spelled(k, _TWO_OVERLAPPING)) for k in (1, 3)]
+    assert odd[0] == odd[1]
+    assert odd[0] == pytest.approx(reference, abs=2e-4)
+
+    frozen = _spelled(10, _TWO_OVERLAPPING).freeze_geometry()
+    assert frozen.boundary_plans[0][2] == ((1, -10), (0, 1))
+    assert _spelled_total(_spelled(10, _TWO_OVERLAPPING), geometry=frozen) == reference
+
+    stale = _spelled(0, _TWO_OVERLAPPING).freeze_geometry()
+    assert stale.boundary_plans[0][2] == ((1, 0), (0, 1))
+    with pytest.raises(StaleGeometryError, match='the cell basis reduces by a different transform'):
+        _spelled(10, _TWO_OVERLAPPING).solve(geometry=stale)
+
+    assert _spelled_total(_spelled(10, _TWO_DISJOINT)) == _spelled_total(_spelled(0, _TWO_DISJOINT))
+    assert _spelled(10, _TWO_DISJOINT).freeze_geometry().boundary_plans == [None]
+
+
+def test_a_painted_layer_on_an_unreduced_basis_replays_under_jit_over_the_lattice():
+    """``jax.jit`` over the lattice with a record: the recorded transform reduces the tracer.
+
+    A traced basis cannot be reduced (``reduction_transform`` reads through ``checked_float``,
+    which a ``jit`` tracer refuses), so the replay reduces with the integers the freeze recorded
+    on the concrete basis -- the same arrangement as ``GammaPlan.reduction`` -- and reads the
+    eager answer, which is the ``k = 0`` one.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    wavebit.enable_x64()
+
+    solver = _spelled(10, _TWO_OVERLAPPING, backend=1)
+    frozen = solver.freeze_geometry()
+    eager = float(jnp.sum(solver.solve(geometry=frozen).T).real)
+
+    def total(lattice):
+        return jnp.sum(solver.solve(lattice=lattice, geometry=frozen).T).real
+
+    jitted = float(jax.jit(total)(jnp.asarray(_spelling(10))))
+    assert jitted == pytest.approx(eager, rel=1e-12, abs=1e-12)
+    assert eager == pytest.approx(_spelled_total(_spelled(0, _TWO_OVERLAPPING)), abs=1e-9)
+
+
+def _k10_reads_k0():
+    """The instrument the reduced-basis mutants are measured with: ``k = 10`` bitwise ``k = 0``."""
+    try:
+        with_record = _spelled_total(_spelled(10, _TWO_OVERLAPPING),
+                             geometry=_spelled(10, _TWO_OVERLAPPING).freeze_geometry())
+    except StaleGeometryError as e:                 # a record that does not fit is a miss too
+        raise AssertionError(str(e)) from e
+    reference = _spelled_total(_spelled(0, _TWO_OVERLAPPING))
+    assert _spelled_total(_spelled(10, _TWO_OVERLAPPING)) == reference
+    assert with_record == reference
+
+
+_BOUNDARY_MUTANTS = [
+    ('the segments fold on the basis as given',
+     '    lattice = reduced_basis(lattice, transform)\n    a1x, a2x = lattice[0][0], lattice[0][1]',
+     '    a1x, a2x = lattice[0][0], lattice[0][1]'),
+    ('the sample points are not folded',
+     '    pts = fold_into_cell(xp, pts, reduced_basis(lattice, transform))\n',
+     ''),
+    ('the plan records the identity',
+     '    return recs, regions, reduction_transform(lattice)',
+     '    return recs, regions, ((1, 0), (0, 1))'),
+]
+
+
+@pytest.mark.parametrize('what, old, new', _BOUNDARY_MUTANTS, ids=[m[0] for m in _BOUNDARY_MUTANTS])
+def test_the_reduced_basis_mutant_is_killed(what, old, new):
+    """Each mutant of the port is seen by the bitwise ``k = 10`` pin, and the harness says if it never ran.
+
+    Folding the segments alone -- the second mutant -- was the port's first state, and it read
+    0.985549487763 on ``k = 10``: a different wrong number, as unmoved by the grid as the
+    0.8106 before it, because the sample grid on that spelling is a sliver reaching ten cells
+    along ``a1`` where no image of a folded segment exists. ``boundary`` is reloaded in place;
+    ``parametric`` reaches it by name at call time, so the engine sees the mutant.
+    """
+    path = pathlib.Path(_b.__file__)
+    try:
+        with mutated(path, old, new):
+            importlib.reload(_b)
+            try:
+                _k10_reads_k0()
+            except AssertionError:
+                killed = True
+            else:
+                killed = False
+    finally:
+        importlib.reload(_b)
+    assert killed, f'SURVIVED: {what}'
