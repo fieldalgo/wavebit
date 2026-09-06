@@ -557,6 +557,23 @@ def test_a_length_that_moves_without_changing_the_overlaps_reuses_the_compilatio
     Three shapes, because two cannot show it: a pair of rectangles keeps the same plan at every
     width, since growing one never changes *which* shapes overlap. The transition needs a third
     for the middle one to reach.
+
+    **Exactly 120 is its own record** since the interface set joined the freeze (2026-09-06,
+    ``StaticGeometry.gamma_plans``). There the middle rectangle *touches* both neighbours --
+    its faces lie on theirs -- and touching is not overlapping for the painting plan, but it
+    is a combinatorial event for the interface set: two cross pairs appear, of different
+    materials, so both seams are interfaces the field co-orients. So 118 and 120 are two
+    records, 120 and 122 are two records, and the sweep recompiles twice around the contact
+    rather than once. That is the contract, not a cost to trim: a record replayed across
+    contact would cancel a seam or keep one the material runs through.
+
+    The same record also holds each piece's list of periodic instances, bounded by the
+    shape's *size* alone -- every lattice offset within ``diam + 2R`` of the fold -- so a
+    length can grow across one of those thresholds too: the middle rectangle's list goes from
+    9 to 13 instances near ``lx = 145`` (its bounding radius reaches 88, where the ``(2, 0)``
+    family enters at 600 on this 300 cell). 140 and 122 are one record; 180 is a third, and a
+    record frozen at 122 is refused at 180 rather than replayed with a list that could lack a
+    nearest instance. Positions never enter the list, which is what a moving fit needs.
     """
     pytest.importorskip('jax')
     import jax.numpy as jnp
@@ -575,14 +592,25 @@ def test_a_length_that_moves_without_changing_the_overlaps_reuses_the_compilatio
 
     keys = {lx: freeze_at(lx) for lx in (80.0, 100.0, 118.0, 120.0, 122.0, 140.0, 180.0)}
 
-    # Same overlaps: a fresh freeze is the same static argument, hash included.
-    for lx in (100.0, 118.0, 120.0):
+    # Same overlaps and no contact: a fresh freeze is the same static argument, hash included.
+    for lx in (100.0, 118.0):
         assert keys[lx] == keys[80.0], lx
         assert hash(keys[lx]) == hash(keys[80.0]), lx
 
+    # Contact: the interface set changes (two seams appear) while the painting plan does not.
+    assert keys[120.0] != keys[80.0]
+    assert keys[120.0].boundary_plans == keys[80.0].boundary_plans
+    assert keys[120.0].gamma_plans != keys[80.0].gamma_plans
+    assert sum(len(plan.pairs) for plan in keys[120.0].gamma_plans) == 2
+    assert not any(plan.pairs for plan in keys[80.0].gamma_plans)
+
     # They do change eventually, and then the record must not be reused.
-    assert keys[122.0] != keys[80.0]
-    assert keys[180.0] == keys[122.0]
+    assert keys[122.0] != keys[80.0] and keys[122.0] != keys[120.0]
+    assert keys[140.0] == keys[122.0]
+    # ... and once more when the middle rectangle's image list grows with its size.
+    assert keys[180.0] != keys[122.0]
+    assert keys[180.0].boundary_plans == keys[122.0].boundary_plans
+    assert len(keys[180.0].gamma_plans[0].pieces[4].imgs) > len(keys[122.0].gamma_plans[0].pieces[4].imgs)
 
     # And the answer is the one for the structure actually in front of it, each time.
     def total(lx, geometry):
