@@ -1295,25 +1295,41 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype):
                     take = val < best
                     best = xp.where(take, val, best)
                     on_run = {r: xp.where(take, hits[r], on_run[r]) for r in cross}
-            d[k] = xp.sqrt(best)
+            # The root's radicand is guarded, not its result: a sample exactly on the face has
+            # `best == 0`, where `d(sqrt)` is infinite and the cotangent `where` hands the
+            # discarded branch, zero, makes `0 * inf` -- the `_hypot_safe` lesson. Taking the
+            # root of 1 there and writing the 0 back leaves every value bitwise where it was.
+            on_face = best == 0.0
+            d[k] = xp.where(on_face, zero, xp.sqrt(xp.where(on_face, one, best)))
             inside.update(on_run)
     for k, pc in enumerate(plan.pieces):
         if pc.face == 'arc':
             d[k], gx, gy = _round_field(xp, X, Y, shapes[pc.shape], lattice, dtype)
             round_dir[k] = (gx, gy)
 
-    # 2. The ratio weights. The division is guarded on its *input*: the divisor is 1 wherever
-    #    the weight is going to be replaced anyway (`d == d_min`, which covers `d_min == 0`),
-    #    so the branch a `where` discards never sees a zero -- autograd still differentiates
-    #    the discarded branch, the `_hypot_safe` lesson.
+    # 2. The ratio weights, `(d_min / d) ** 4`. The winner's ratio is `d / d`, exactly 1.0 in
+    #    IEEE arithmetic, so no `where` picks it out -- and that is a derivative, not a
+    #    nicety. The previous spelling, `where(d == d_min, 1, ratio ** 4)`, gave every piece
+    #    *tied* with the winner a weight of 1 with a zero derivative, where the ratio's
+    #    derivative is `4 (d_min' - d') / d` and only vanishes for the winner itself. Such
+    #    ties are not rare: a u face and a v face are equidistant on lines the grid samples
+    #    (`5 j - 7 i = 97` on the sheared cell's grid), and freezing their weights put the
+    #    lone sheared box's `d(sum T)/dlx` 0.5% from every central difference down to
+    #    `h = 1e-6`, constant in `h` -- a wrong derivative, not a sawtooth. With the honest
+    #    ratio the two tied weights' derivatives are antisymmetric, which is the central
+    #    difference (and `minimum`'s balanced tie rule). The one guard left is the sample on
+    #    an interface, `d_min == 0`, where the winner is 1 and the rest 0 by the limit; its
+    #    divisor is 1 so the discarded branch never sees a zero.
     d_min = d[0]
     for dk in d[1:]:
         d_min = xp.minimum(d_min, dk)
+    on_gamma = d_min == 0.0
+    safe_min = xp.where(on_gamma, one, d_min)
     w = []
     for dk in d:
-        same = dk == d_min
-        ratio = d_min / xp.where(same, one, dk)
-        w.append(xp.where(same, one, ratio ** _BLEND_EXPONENT))
+        on_face = dk == 0.0
+        ratio = safe_min / xp.where(on_face, one, dk)
+        w.append(xp.where(on_gamma, xp.where(on_face, one, zero), ratio ** _BLEND_EXPONENT))
 
     # 3. The sum. A cross pair's partner hands its weight to the primary's axis over the run,
     #    with the material sign; every face then contributes along its own outward normal, and
