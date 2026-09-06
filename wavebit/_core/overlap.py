@@ -28,8 +28,21 @@ cell: two rods that miss inside the cell can still meet across the boundary, and
 than the period runs into itself. Touching is not overlapping, so the caller's tolerance is
 what keeps abutting rectangles — a checkerboard, a rod exactly filling the period — from
 being reported.
+
+**Touching is the second question this module answers**, and it is asked of *faces* rather
+than of shapes. Two boxes that abut -- a shape against its own periodic image, or against
+another box -- share a line over some run, and along that run the material continues: there is
+no interface there, whatever the outlines say. :func:`face_pairs` finds every such run over the
+ring of images, and :func:`~wavebit._core.parametric.plan_gamma` turns the sweep into the
+combinatorial record the normal field replays. :func:`interfaces_of` is the independent
+instrument for both -- the outlines of every image, sampled densely, with each sample kept
+only if a step along its outward normal lands in no image at all -- and it shares no arithmetic
+with the sweep, which is what makes it an oracle rather than a second copy.
 """
 import math
+from collections import namedtuple
+
+import numpy as np
 
 from .backend import checked_float
 
@@ -47,6 +60,51 @@ _ELLIPSE_TYPES = ('circle', 'disk', 'ellipse')
 # Periodic images of the second shape, in units of the period. A shape reaching past one cell
 # on both sides at once is already reported against its own image, so one ring is enough.
 _IMAGES = tuple((ox, oy) for ox in (-1, 0, 1) for oy in (-1, 0, 1))
+
+#: The four faces of a box in the order every reader of a face index uses: outward normal
+#: along the shape's own ``+u``, ``-u``, ``+v``, ``-v``. A face's *tangent* is the other axis.
+FACES = ('+u', '-u', '+v', '-v')
+
+#: **Rounding-scale thresholds, and they step.** Two face lines are "the same line" when their
+#: offsets along the shared normal agree to this fraction of the longer basis vector, and two
+#: face normals are "opposed" when ``|n_p + n_q|^2`` is under ``ANTIPARALLEL_TOL2``. Both are
+#: the size of the arithmetic's own error, not of any geometry: ``cos(pi/2)`` is 6.1e-17 rather
+#: than 0, so a box turned a quarter turn misses an *exact* test on a 700 cell by 4.3e-14 and
+#: passes this one by ten orders. That is all the tolerances are for, and it is worth saying
+#: what they are not: a face 7.1e-10 off its partner's line on a 700 cell is two interfaces, and
+#: one 6.9e-10 off is a pair whose members cancel identically -- the field steps between the two
+#: by a band of depth ``(4 * delta * D**4) ** (1/5)`` (about two units for ``D = 350``), which is
+#: ~1e-7 in ``sum(T)`` at the rungs ``tests/test_gamma_field.py`` puts either side of it. The
+#: same shape of threshold the deleted lattice-direction test had, one level down: it can sit at
+#: rounding scale because everything above it is carried continuously by the blend, so there
+#: is no geometry for a wider window to swallow.
+COLLINEAR_TOL_REL = 1e-12
+ANTIPARALLEL_TOL2 = 1e-24
+
+
+def images(r):
+    """Every lattice offset ``(m, n)`` with ``|m|, |n| <= r``, ``(0, 0)`` included.
+
+    ``r`` is the plan's ring (:func:`~wavebit._core.parametric.plan_gamma`), read here by the
+    pair sweep and by the oracle so the two cannot disagree about which images exist.
+    """
+    return tuple((m, n) for m in range(-r, r + 1) for n in range(-r, r + 1))
+
+
+def box_faces(p):
+    """The four faces of box ``p`` in :data:`FACES` order: ``(mx, my, nx, ny, sx, sy, h)`` each.
+
+    Midpoint, outward unit normal, unit tangent and half-length. The tangent of a ``u`` face
+    is ``+v`` and of a ``v`` face ``+u`` -- the *same* direction for the two members of an
+    opposite pair, which is what lets a run found on one be read off the other by a sign.
+    """
+    _, cx, cy, a, b, ct, st = p
+    ux, uy = ct, st
+    vx, vy = -st, ct
+    return ((cx + a * ux, cy + a * uy, ux, uy, vx, vy, b),
+            (cx - a * ux, cy - a * uy, -ux, -uy, vx, vy, b),
+            (cx + b * vx, cy + b * vy, vx, vy, ux, uy, a),
+            (cx - b * vx, cy - b * vy, -vx, -vy, ux, uy, a))
 
 
 def primitive(stype, cx, cy, lx, ly, angle):
@@ -258,6 +316,178 @@ def overlapping_pairs(prims, tol, lattice, *, self_only=False, image_only=False)
                     found.append((i, j, ox, oy, gap))
                     break
     return found
+
+
+class Contact(namedtuple('Contact', 'i f j g m n lo hi slide h_p h_q')):
+    """One record of :func:`face_pairs`: which faces, which image, the run, and the slide."""
+    __slots__ = ()
+
+
+def face_pairs(prims, lattice, r, tol):
+    """Every run along which a face of an in-cell box shares its line, opposed, with a face of an image.
+
+    Yields :class:`Contact` records: face ``f`` of primitive ``i`` (in the cell) and face ``g``
+    of primitive ``j``'s image ``(m, n)`` are anti-parallel and collinear, and their tangential
+    extents overlap over ``[lo, hi]`` -- measured along ``f``'s tangent from ``f``'s midpoint, so
+    that ``[-h_p, h_p]`` is the whole of ``f``; ``slide`` is where ``g``'s midpoint sits on that
+    axis, and ``h_q`` its half-length. Only runs longer than ``tol`` count: two faces meeting at
+    an endpoint share a point, not a run. ``j == i`` with ``(m, n) != (0, 0)`` is the shape
+    against its own image; ``j != i`` includes ``(0, 0)``, two boxes abutting inside the cell.
+    Every ordered face is swept, so a coincidence is reported from both of its faces -- the
+    caller that wants one record per coincidence keeps the canonical orientation, and the one
+    that wants each face's *coverage* reads all of them.
+
+    **A face is a segment, not a line, and that is the whole content of this function.** The
+    image of a face under a lattice vector ``t`` lands on a parallel line offset perpendicular
+    by ``t . n`` and slid *along* the face by ``t . s``. Two opposite faces therefore coincide
+    over positive measure -- the material runs on unbroken and there is no interface there at
+    all -- when ``|t . n|`` is the separation between them *and* ``|t . s|`` is short enough
+    that the segments still overlap. :func:`overlapping_pairs` cannot answer this: the two boxes
+    only *touch*, so it reports a gap of zero and passes them, which is the right answer to the
+    question it asks (does the layer need a periodic image to be built) and the wrong one to
+    this one (is every face of this box an interface).
+
+    ``t . s == 0`` is not special here. It used to be: the previous mechanism folded each face
+    distance by the repeat along the shape's own axis, which reaches exactly the zero-slide
+    case and nothing else, and the partial run was refused by name because no closed form
+    over one box reaches it -- along the run the nearest interface belongs to the neighbouring
+    image. The field now evaluates every face over its ring of images, so a run is a run
+    whatever its slide, and the sweep is the one that finds them.
+
+    The sweep is over every face of every image of every box, ``16 M^2 (2r+1)^2`` Python
+    comparisons: microseconds for a handful of shapes at the ``r = 1..3`` an accepted layer
+    reaches (the L box, 689 x 200 on a 700 square, gives 3 -- a 49-image ring per pair).
+
+    Round types never appear. A strictly convex boundary meets its own translate, or a box, at
+    isolated points only, which is measure zero -- so ``ellipse`` / ``circle`` / ``disk`` are
+    skipped rather than tested.
+    """
+    a1x, a2x = checked_float(lattice[0][0]), checked_float(lattice[0][1])
+    a1y, a2y = checked_float(lattice[1][0]), checked_float(lattice[1][1])
+    faces = [box_faces(p) if p is not None and p[0] == BOX else None for p in prims]
+    ring = images(r)
+
+    found = []
+    for i, fi in enumerate(faces):
+        if fi is None:
+            continue
+        for f, (mx, my, nx, ny, sx, sy, h) in enumerate(fi):
+            c_p = nx * mx + ny * my                    # the line, as n . X = c_p
+            for j, fj in enumerate(faces):
+                if fj is None:
+                    continue
+                for m, n in ring:
+                    if j == i and m == 0 and n == 0:
+                        continue                       # a face against itself is parallel
+                    tx = m * a1x + n * a2x
+                    ty = m * a1y + n * a2y
+                    for g, (qx, qy, qnx, qny, _qsx, _qsy, qh) in enumerate(fj):
+                        # Opposed normals, compared squared so the test needs no root.
+                        if (nx + qnx) ** 2 + (ny + qny) ** 2 > ANTIPARALLEL_TOL2:
+                            continue
+                        qmx, qmy = qx + tx, qy + ty
+                        if abs(nx * qmx + ny * qmy - c_p) > tol:
+                            continue                   # parallel lines, not the same line
+                        # q's midpoint along p's tangent; the run is where the extents overlap.
+                        slid = sx * (qmx - mx) + sy * (qmy - my)
+                        lo, hi = max(-h, slid - qh), min(h, slid + qh)
+                        if hi - lo > tol:
+                            found.append(Contact(i, f, j, g, m, n, lo, hi, slid, h, qh))
+    return found
+
+
+def covered_length(runs, tol):
+    """Length of the union of ``(lo, hi)`` intervals -- what several images cover *between* them.
+
+    **The union, not any single image.** Two images can take half a face each and cover it
+    between them, and then there is no interface along it at all -- the material runs on. Li's
+    checkerboard cell reaches that with an ordinary rectangle: on ``a1 = (1.25, 1.25)``,
+    ``a2 = (1.25, -1.25)`` a 2.5 x 1.25 bar has each horizontal face covered by ``a1`` and
+    ``-a2`` taking half each. A per-image reading calls that partial; the face is dead.
+    """
+    covered, edge = 0.0, None
+    for lo, hi in sorted(runs):
+        if edge is None or lo > edge + tol:
+            covered += hi - lo
+            edge = hi
+        elif hi > edge:
+            covered += hi - edge
+            edge = hi
+    return covered
+
+
+def _outline(p, n):
+    """``(x, y, nx, ny)`` rows: ``p``'s outline sampled densely, with the outward unit normal.
+
+    A box gives ``n`` cell-centred samples per face -- the corners themselves are never
+    sampled, so no sample has to choose between two normals -- and a round shape ``4n`` in
+    the parameter of the ellipse, whose normal is its level-set gradient.
+    """
+    kind, cx, cy, a, b, ct, st = p
+    if kind == BOX:
+        rows = []
+        for mx, my, nx, ny, sx, sy, h in box_faces(p):
+            s = ((np.arange(n) + 0.5) / n * 2.0 - 1.0) * h
+            rows.append(np.column_stack([mx + s * sx, my + s * sy,
+                                         np.full(n, nx), np.full(n, ny)]))
+        return np.concatenate(rows)
+    phi = (np.arange(4 * n) + 0.5) / (4 * n) * 2.0 * np.pi
+    u, v = a * np.cos(phi), b * np.sin(phi)
+    gu, gv = np.cos(phi) / a, np.sin(phi) / b
+    gx, gy = gu * ct - gv * st, gu * st + gv * ct
+    g = np.hypot(gx, gy)
+    return np.column_stack([cx + u * ct - v * st, cy + u * st + v * ct, gx / g, gy / g])
+
+
+def strictly_inside(p, x, y):
+    """Boolean mask: which of the points ``(x, y)`` lie strictly inside primitive ``p``."""
+    kind, cx, cy, a, b, ct, st = p
+    dx, dy = np.asarray(x) - cx, np.asarray(y) - cy
+    u = dx * ct + dy * st
+    v = -dx * st + dy * ct
+    if kind == BOX:
+        return (np.abs(u) < a) & (np.abs(v) < b)
+    return (u / a) ** 2 + (v / b) ** 2 < 1.0
+
+
+def interfaces_of(prims, lattice, r, n=1024, step=None):
+    """The exact interface set: ``(x, y, nx, ny)`` rows of Gamma, from the outlines alone.
+
+    Every image ``(m, n)`` in :func:`images` of every primitive has its outline sampled, and a
+    sample is kept only if a step of ``step`` along its **outward** normal lands strictly inside
+    no image at all (over one ring more, so the outermost outlines are judged against their
+    own neighbours). A face a neighbouring image covers loses exactly its covered run; a face
+    facing background keeps all of it; a round shape keeps its whole boundary. Nothing here
+    knows about faces, runs, folds or blends -- it is point-in-shape tests on dense samples --
+    which is what qualifies it to judge :func:`face_pairs` and the field built from it.
+
+    ``step`` defaults to ``1e-6`` of the longer basis vector. It is the oracle's own
+    resolution: two faces closer than it read as one seam, which is also what a solve sees.
+
+    Validated before it was trusted: on a 1-D grating (700 square, ``lx = 350``, ``ly = 700``)
+    the field reads 0.000 deg against it over the boundary band, so the oracle carries no
+    y-normal a bar with no y-face could be measured against.
+    """
+    a1x, a2x = checked_float(lattice[0][0]), checked_float(lattice[0][1])
+    a1y, a2y = checked_float(lattice[1][0]), checked_float(lattice[1][1])
+    if step is None:
+        step = 1e-6 * max(math.hypot(a1x, a1y), math.hypot(a2x, a2y))
+    live = [p for p in prims if p is not None]
+    rows = []
+    for p in live:
+        for m, k in images(r):
+            rows.append(_outline(_shifted(p, m * a1x + k * a2x, m * a1y + k * a2y), n))
+    if not rows:
+        return np.zeros((0, 4))
+    pts = np.concatenate(rows)
+    probe_x = pts[:, 0] + step * pts[:, 2]
+    probe_y = pts[:, 1] + step * pts[:, 3]
+    buried = np.zeros(len(pts), dtype=bool)
+    for p in live:
+        for m, k in images(r + 1):
+            buried |= strictly_inside(_shifted(p, m * a1x + k * a2x, m * a1y + k * a2y),
+                                      probe_x, probe_y)
+    return pts[~buried]
 
 
 def partial_self_coincidences(p, lattice, tol):

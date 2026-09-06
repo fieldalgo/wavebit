@@ -95,6 +95,9 @@ matter to an optimizer looping at low truncation. Side effect worth knowing when
 field fell from 12x/486x to 2x/182x because this side got slower, not because that one got
 faster.
 """
+import math
+from collections import namedtuple
+
 from . import overlap as _overlap
 from .backend import array_namespace, as_array, checked_float, j1, jinc, sinc
 from .domain import as_material
@@ -1254,6 +1257,184 @@ def _shape_surface_normal(xp, X, Y, shape, dtype, lattice):
     gy = gxr * sin_a + gyr * cos_a
     norm = _hypot_safe(xp, gx, gy)
     return dist, gx / norm, gy / norm
+
+
+# ------------------------------------------------------------------------------ the plan
+
+class GammaPlan(namedtuple('GammaPlan', 'ring pieces pairs empty')):
+    """The combinatorics of one layer's interface set, planned once and replayed by array ops.
+
+    Two halves, the way :mod:`.boundary` already splits painting: a **plan** -- pure Python,
+    content-hashable, taken eagerly on concrete floats -- and a **replay** on the traced
+    parameters (:func:`_piece_field`). The plan holds **no coordinates and no material facts**.
+    Everything a length or an angle decides is re-derived from the traced value at replay, and
+    a material never enters at all, so a sweep over sizes, angles, positions or materials never
+    moves the record -- a sweep over what *touches* what does, and that is what the record is.
+
+    ``ring``
+        One integer ``r``: every image ``(m, n)`` with ``|m|, |n| <= r`` was swept for
+        contacts. ``1 + ceil(max_ij (R_i + R_j) / h_min)`` with ``h_min = |det| / max(|a1|,
+        |a2|)`` the shortest lattice height -- a real length ``rho`` moves a fractional
+        coordinate by at most ``rho / h_min``, and centre differences are within one cell. It
+        is 1 to 3 on an ordinary cell: the L box, 689 x 200 on a 700 square, needs 3.
+    ``pieces``
+        One :class:`Piece` per face of every box (``+u``, ``-u``, ``+v``, ``-v`` -- whole
+        faces, never split) and one ``'arc'`` per round shape, in shape order. Each carries
+        ``imgs``, the offsets its replay evaluates it at, and ``dead``, whether the shape's own
+        images cover the whole of it (a self run union at full length).
+    ``pairs``
+        One :class:`Pair` per coincidence: piece ``q`` at lattice offset ``(m, n)`` -- relative
+        to ``p``'s own instance -- lies on ``p``'s line, opposed, over a run of positive
+        length. The run's bounds are not stored: they are the max / min of projections of the
+        traced geometry, which the replay computes where it needs them. A self pair (same
+        shape) is recorded once, from its ``+`` face; a cross pair from the lower shape index.
+    ``empty``
+        Every piece is a dead face: the shape tiles the plane, the layer is uniform, and the
+        field is the constant ``(1, 0)`` -- Li's checkerboard reaches that with a 2.5 x 1.25
+        bar on ``a1 = (1.25, 1.25), a2 = (1.25, -1.25)``.
+
+    ``imgs`` is bounded by **size alone**: every offset ``s`` with ``|s . A| <= diam + 2 R``,
+    taken *around the shape's own fold* -- the sample point is first reduced to the shape's
+    nearest lattice cell, which leaves a residual of at most half the cell's diameter, and the
+    nearest instance of any piece within ``R`` of the shape's centre then sits within
+    ``2 * (diam / 2) + 2 R`` of that. A superset at every position, so a translated shape never
+    lacks its nearest instance and no staleness check reads a position. The list is cost-only:
+    a longer one changes no value.
+    """
+    __slots__ = ()
+
+
+class Piece(namedtuple('Piece', 'shape face imgs dead')):
+    """One piece of :class:`GammaPlan`: shape index, face name (or ``'arc'``), offsets, dead."""
+    __slots__ = ()
+
+
+class Pair(namedtuple('Pair', 'p q m n flush')):
+    """One coincidence in :class:`GammaPlan`: piece ``q`` at offset ``(m, n)`` shares ``p``'s line.
+
+    ``flush`` says the two are the *same segment* -- no slide, equal half-lengths, both at
+    rounding scale -- and not merely the same line over a run: a bar spanning the cell against
+    its own image, at any angle. Its replay then takes the partner's tangential expression
+    from the primary as well as its normal one, so the two distances agree bitwise everywhere
+    rather than over the run alone, and the cancellation is exact at every sample -- which is
+    what a quarter turn of the grating needs, where ``cos(pi/2)`` puts a 4e-14 slide on a
+    segment that has none.
+    """
+    __slots__ = ()
+
+
+def _cell_floats(lattice):
+    """``(a1x, a1y, a2x, a2y)`` as plain floats, for the eager planner. Raises when traced."""
+    return (checked_float(lattice[0][0]), checked_float(lattice[1][0]),
+            checked_float(lattice[0][1]), checked_float(lattice[1][1]))
+
+
+def _cell_diameter(a1x, a1y, a2x, a2y):
+    """The longer diagonal of the cell -- how far a point of it can sit from its centre, doubled."""
+    return max(math.hypot(a1x + a2x, a1y + a2y), math.hypot(a1x - a2x, a1y - a2y))
+
+
+def _ring_offsets(a1x, a1y, a2x, a2y, reach):
+    """Every ``(m, n)`` with ``|m a1 + n a2| <= reach`` -- ``<=`` at the boundary, on purpose.
+
+    ``|m a1 + n a2|`` is at least ``|m|`` times the height of ``a1`` over ``a2`` (and the same
+    for ``n``), which bounds the search box; the test inside it is the Euclidean one.
+    """
+    det = abs(a1x * a2y - a2x * a1y)
+    m_max = int(math.ceil(reach * math.hypot(a2x, a2y) / det))
+    n_max = int(math.ceil(reach * math.hypot(a1x, a1y) / det))
+    limit = reach * (1.0 + 1e-12)
+    return tuple((m, n) for m in range(-m_max, m_max + 1) for n in range(-n_max, n_max + 1)
+                 if math.hypot(m * a1x + n * a2x, m * a1y + n * a2y) <= limit)
+
+
+def plan_gamma(shapes, lattice):
+    """The :class:`GammaPlan` of one layer, or ``None`` when the parameters are not concrete.
+
+    Eager NumPy on ``checked_float`` primals, like every geometry check on this path: a
+    ``jax.grad`` tracer carries a value and is planned per call, a ``jax.jit`` tracer does not
+    and gets ``None``, which the caller answers with :func:`_blind_plan` until the frozen
+    record reaches here.
+
+    The sweep is :func:`~wavebit._core.overlap.face_pairs` over the ring; coverage is the
+    **union** of a face's self runs (:func:`~wavebit._core.overlap.covered_length`); the
+    tolerances are the rounding-scale ones that module states. Nothing about a material is
+    read, and nothing about a position survives: the same structure named one period over
+    plans identically.
+    """
+    prims = _primitives(shapes, lattice)
+    if prims is None:
+        return None
+    try:
+        a1x, a1y, a2x, a2y = _cell_floats(lattice)
+    except Exception:                                  # noqa: BLE001 - a traced basis
+        return None
+    scale = max(math.hypot(a1x, a1y), math.hypot(a2x, a2y))
+    det = abs(a1x * a2y - a2x * a1y)
+    h_min = det / scale
+    diam = _cell_diameter(a1x, a1y, a2x, a2y)
+    tol = _overlap.COLLINEAR_TOL_REL * scale
+
+    radii = [0.0 if p is None else _overlap._bounding_radius(p) for p in prims]
+    ring = 1 + int(math.ceil(2.0 * max(radii, default=0.0) / h_min))
+    records = _overlap.face_pairs(prims, lattice, ring, tol)
+
+    pieces, index = [], {}
+    for i, prim in enumerate(prims):
+        if prim is None:
+            continue
+        imgs = _ring_offsets(a1x, a1y, a2x, a2y, diam + 2.0 * radii[i])
+        if prim[0] != _overlap.BOX:
+            index[(i, 0)] = len(pieces)
+            pieces.append(Piece(i, 'arc', ((0, 0),), False))
+            continue
+        halves = [face[6] for face in _overlap.box_faces(prim)]
+        for f, name in enumerate(_overlap.FACES):
+            runs = [(c.lo, c.hi) for c in records if c.i == i and c.f == f and c.j == i]
+            dead = _overlap.covered_length(runs, tol) >= 2.0 * halves[f] - tol
+            index[(i, f)] = len(pieces)
+            pieces.append(Piece(i, name, imgs, dead))
+
+    pairs = []
+    for c in records:
+        # One record per coincidence. Each is swept from both of its faces, and the mirror
+        # of (i, f) against (j, g) at (m, n) is (j, g) against (i, f) at (-m, -n): keep the
+        # orientation from the lower shape, and within a shape from the `+` face.
+        if c.j < c.i or (c.j == c.i and c.g < c.f):
+            continue
+        flush = abs(c.slide) <= tol and abs(c.h_p - c.h_q) <= tol
+        pairs.append(Pair(index[(c.i, c.f)], index[(c.j, c.g)], c.m, c.n, flush))
+
+    empty = all(pc.face != 'arc' and pc.dead for pc in pieces)
+    return GammaPlan(ring, tuple(pieces), tuple(pairs), empty)
+
+
+def _blind_plan(shapes, lattice):
+    """A plan taken without reading a value: every piece, a generous ring, and **no pairs**.
+
+    What a jitted solve without a frozen record gets. The pieces and the ring need only the
+    shape *types* and, when it is readable, the basis (a traced basis takes a 7x7 ring); what
+    they cannot have is the pair table, which needs the numbers. So an abutting pair -- a bar
+    spanning the cell, a box against its own image -- is not told that it is one, and its two
+    faces cancel only to rounding: the same values the planned field carries, minus the exact
+    zero. That is a field within ulps of the planned one everywhere, with no tie rule at the
+    points where the planned field would have needed one. A scene that leans on either --
+    Li's checkerboard on a jitted trace -- should freeze its geometry first.
+    """
+    try:
+        a1x, a1y, a2x, a2y = _cell_floats(lattice)
+        # `R <= diam / 2` for any shape that fits the cell, which the eager pass enforced.
+        imgs = _ring_offsets(a1x, a1y, a2x, a2y, 2.0 * _cell_diameter(a1x, a1y, a2x, a2y))
+    except Exception:                                  # noqa: BLE001 - a traced basis too
+        imgs = _overlap.images(3)
+    pieces = []
+    for i, shape in enumerate(shapes):
+        stype = shape.get('type', 'rectangle')
+        if stype in _overlap._BOX_TYPES:
+            pieces.extend(Piece(i, name, imgs, False) for name in _overlap.FACES)
+        elif stype in _overlap._ELLIPSE_TYPES:
+            pieces.append(Piece(i, 'arc', ((0, 0),), False))
+    return GammaPlan(3, tuple(pieces), (), False)
 
 
 def _hypot_safe(xp, a, b):
