@@ -409,6 +409,57 @@ def test_an_ellipse_over_its_ring_replays_under_jit_and_is_refused_across_the_ed
         _total(_l_ellipse_layer(700.0), SQUARE), abs=1e-13)             # still inside: accepted
 
 
+def test_a_jitted_ellipse_with_no_record_is_refused_and_a_circle_builds():
+    """The blind plan reads a shape's *type*, not its size -- so an ellipse is refused, a circle not.
+
+    Whether a round shape leaves its Wigner-Seitz cell is decided by its size
+    (:func:`~wavebit._core.parametric._arc_offsets`), which a ``jax.jit`` tracer cannot
+    give. Until 2026-09-07 the blind plan answered every round shape with its single
+    instance, so the 720 x 200 ellipse under ``jax.jit`` with no record was built on the
+    fold's field the ring had replaced: -8.222e-3 / -7.058e-3 in ``sum(T)`` from the eager
+    solve at orders 4 / 6 (``normal_grid`` 128 / 256), the same digits as a NumPy solve with
+    the plan forced to ``None``, and nothing said so. It is refused now with the message every
+    traced decision raises with, naming the freeze; with a record taken outside the trace the
+    eleven-instance list replays to 1e-12 of the eager solve. A circle of any accepted size
+    never leaves its cell, so its single instance *is* the planned list and the jitted circle
+    builds without a record, to 1e-12 of the eager solve.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    wavebit.enable_x64()
+
+    solver = wavebit.rcwa(backend=1, lattice=SQUARE, structure=_l_ellipse_layer(720.0), **KW)
+    frozen = solver.freeze_geometry()
+    assert len(frozen.gamma_plans[0].pieces[0].imgs) == 11
+
+    def total(lx, geometry=None):
+        return jnp.sum(solver.solve(structure=_l_ellipse_layer(lx), geometry=geometry).T).real
+
+    eager = float(total(jnp.asarray(720.0)))
+    with pytest.raises(ValueError, match='freeze_geometry'):
+        jax.jit(total)(jnp.asarray(720.0))
+    replayed = float(jax.jit(lambda lx: total(lx, frozen))(jnp.asarray(720.0)))
+    assert replayed == pytest.approx(eager, abs=1e-12)
+    P._PROJECTOR_CACHE.clear()
+    plain = float(np.sum(np.asarray(wavebit.rcwa(backend=0, lattice=SQUARE,
+                                                 structure=_l_ellipse_layer(720.0),
+                                                 **KW).solve().T)))
+    assert eager == pytest.approx(plain, abs=1e-12)
+
+    def circle_layer(lx):
+        return [dict(background=1.0, shapes=[dict(type='circle', cx=0.0, cy=0.0, lx=lx,
+                                                 material=12.25)])]
+
+    disc = wavebit.rcwa(backend=1, lattice=SQUARE, structure=circle_layer(693.0), **KW)
+
+    def disc_total(lx):
+        return jnp.sum(disc.solve(structure=circle_layer(lx)).T).real
+
+    eager_disc = float(disc_total(jnp.asarray(693.0)))
+    assert float(jax.jit(disc_total)(jnp.asarray(693.0))) == pytest.approx(eager_disc, abs=1e-12)
+    assert np.isfinite(float(jax.jit(jax.grad(disc_total))(jnp.asarray(693.0))))
+
+
 @pytest.mark.parametrize('name, lattice, structure', [
     ('B', SHEAR, _b_layer(500.0)),
     ('D', SQUARE, _d_layer()),

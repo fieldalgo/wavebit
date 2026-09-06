@@ -400,7 +400,14 @@ def test_a_round_shape_is_never_a_pair_member():
 
 
 def test_a_traced_layer_gets_no_plan_and_the_blind_one_has_every_piece():
-    """``jax.jit`` has no primal to read: ``None``, then a blind plan -- pieces, ring, no pairs."""
+    """``jax.jit`` has no primal to read: ``None``, then a blind plan -- pieces, ring, no pairs.
+
+    Every piece the *types* name: four faces per box and one arc per circle. An ellipse is
+    the one shape whose instance list is a question of its size (:func:`_arc_offsets`), and
+    the blind plan cannot read a size, so it refuses one by name rather than build the fold's
+    single instance -- which is what it did until 2026-09-07, 8.2e-3 in ``sum(T)`` on the
+    720 x 200 ellipse (``test_gamma_frozen.py``).
+    """
     jax = pytest.importorskip('jax')
     jnp = pytest.importorskip('jax.numpy')
     jax.config.update('jax_enable_x64', True)
@@ -419,10 +426,15 @@ def test_a_traced_layer_gets_no_plan_and_the_blind_one_has_every_piece():
     jax.grad(probe)(jnp.asarray(350.0))
     assert seen[1] == P.plan_gamma([SCENES['A grating'][1]], A)
 
-    blind = P._blind_plan([SCENES['A grating'][1], SCENES['ellipse'][1]], A)
+    circle = dict(type='circle', cx=0.0, cy=0.0, lx=400.0, material=12.25)
+    blind = P._blind_plan([SCENES['A grating'][1], circle], A)
     assert [pc.face for pc in blind.pieces] == list(O.FACES) + ['arc']
     assert blind.pairs == () and not blind.empty
     assert set(P.plan_gamma([SCENES['A grating'][1]], A).pieces[0].imgs) <= set(blind.pieces[0].imgs)
+    assert blind.pieces[-1].imgs == ((0, 0),)           # a circle never leaves its cell
+    # An ellipse can leave, and whether it does is its size: not readable here, so refused.
+    with pytest.raises(ValueError, match='freeze_geometry'):
+        P._blind_plan([SCENES['A grating'][1], SCENES['ellipse'][1]], A)
 
 
 def test_the_blind_ring_is_read_from_the_basis_and_a_traced_basis_is_refused():

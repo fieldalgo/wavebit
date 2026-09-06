@@ -809,7 +809,8 @@ def normal_vector_field_analytical(xp, grid_shape, shapes, dtype, lattice, plan=
     array ops on the traced ones. Left ``None`` it is planned here; under a trace with no primal
     to read (``jax.jit`` with no frozen record) :func:`_blind_plan` stands in, and that costs
     the exact cancellation of an abutting pair -- see there. A traced *basis* with no record is
-    refused there rather than guessed at: the ring of images is bounded by the cell.
+    refused there rather than guessed at, the ring of images being bounded by the cell, and so
+    is a traced *ellipse*, whose instance list is bounded by its size.
 
     Written without in-place mutation so it stays differentiable in the shape parameters. A
     position is not among them for a lone shape: :func:`normal_projector_coeffs` builds the
@@ -1130,12 +1131,21 @@ def _blind_plan(shapes, lattice):
     pair -- a bar spanning the cell, a box against its own image -- is not told that it is
     one, and its two faces cancel only to rounding: the same values the planned field carries,
     minus the exact zero. That is a field within ulps of the planned one everywhere, with no
-    tie rule at the points where the planned field would have needed one. A round shape is
-    planned at its own instance alone here too: whether it leaves its Wigner-Seitz cell
-    (:func:`_arc_offsets`) is a question of its size, which a trace cannot read, so an
-    ellipse that does gets the fold's field under ``jax.jit`` with no record. A scene that
-    leans on any of these -- Li's checkerboard on a jitted trace, a 720 x 200 ellipse on a
-    700 cell -- should freeze its geometry first.
+    tie rule at the points where the planned field would have needed one. A scene that leans
+    on the tie -- Li's checkerboard on a jitted trace -- should freeze its geometry first.
+
+    **An ellipse is refused here, a circle is not.** Whether a round shape leaves its
+    Wigner-Seitz cell (:func:`_arc_offsets`) is a question of its *size*, and the size is
+    what a trace cannot read; only the type is. A circle never leaves -- one of diameter
+    ``<= P`` sits inside the cell of its centre on any basis, and a larger one is refused
+    eagerly as an overlap -- so its single instance is the planned list and it builds. An
+    ellipse can leave, and until 2026-09-07 one that did was built here on its single
+    instance, which is the fold's field the ring replaced: a 720 x 200 ellipse at 10 deg on a
+    700 square under ``jax.jit`` with no record solved -8.2e-3 in ``sum(T)`` from the eager
+    one at order 4 (-7.1e-3 at order 6), bit-identical to a NumPy solve with the plan forced
+    to ``None``, and nothing said so. Now it raises with :data:`_NEEDS_A_FREEZE`, the same
+    answer a traced basis gets one paragraph up: what cannot be read is refused, not guessed.
+    With a record the planned list -- one instance or the ring -- replays under the trace.
     """
     try:
         a1x, a1y, a2x, a2y = _cell_floats(lattice)
@@ -1149,6 +1159,11 @@ def _blind_plan(shapes, lattice):
         stype = shape.get('type', 'rectangle')
         if stype in _overlap._BOX_TYPES:
             pieces.extend(Piece(i, name, imgs, False) for name in _overlap.FACES)
+        elif stype == 'ellipse':
+            raise ValueError(_NEEDS_A_FREEZE.format(
+                what=f'whether shape {_shape_name(shapes, i)} leaves the Wigner-Seitz cell '
+                     f'of its centre, which decides whether its level set is read at one '
+                     f'instance or over a ring of images and is a question of its size,'))
         elif stype in _overlap._ELLIPSE_TYPES:
             pieces.append(Piece(i, 'arc', ((0, 0),), False))
     return GammaPlan(3, tuple(pieces), (), False)
