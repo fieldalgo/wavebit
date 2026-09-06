@@ -845,6 +845,8 @@ def normal_vector_field_analytical(xp, grid_shape, shapes, dtype, lattice, plan=
         return xp.ones((Ny, Nx), dtype=dtype), xp.zeros((Ny, Nx), dtype=dtype)
 
     slots = _material_slots(xp, shapes, dtype)
+    # An arc over its ring is one piece evaluated at every instance; for the tiling question
+    # the instances are the working set, so they are what is counted (`_tiles_pay`).
     n_pieces = sum(len(pc.imgs) if pc.face == 'arc' else 1 for pc in plan.pieces)
     if _tiles_pay(X, Ny, Nx, n_pieces):
         return _field_tiled(xp, X, Y, shapes, plan, slots, lattice, dtype, (Ny, Nx))
@@ -881,7 +883,9 @@ def _tiles_pay(sample, n_v, n_u, n_pieces):
     ``n_pieces`` counts the plan's pieces, not the layer's shapes: a lone box is four of them,
     each carried over a ring of images, and that is already the working set the tiles exist
     for. A lone round shape inside its Wigner-Seitz cell is one piece and nothing to blend;
-    one that leaves it is one piece per instance of its ring, and counts as such.
+    one that leaves it is still one piece, evaluated at every instance of its ring, and it
+    counts its instances here because that evaluation is the working set the question is
+    about.
     """
     import numpy as np
     return (n_pieces > 1 and n_v * n_u >= _TILE_MIN_PIXELS
@@ -931,10 +935,14 @@ class GammaPlan(namedtuple('GammaPlan', 'ring pieces pairs empty reduction')):
         One :class:`Piece` per face of every box (``+u``, ``-u``, ``+v``, ``-v`` -- whole
         faces, never split) and one ``'arc'`` per round shape, in shape order. Each carries
         ``imgs``, the offsets its replay evaluates it at, and ``dead``, whether the shape's own
-        images cover the whole of it (a self run union at full length). An arc's ``imgs`` is
+        images cover the whole of it (a self run union at full length). ``dead`` is written
+        by the planner and read by ``empty`` and by the staleness check alone: the replay
+        never reads it, cancelling a covered face through its pair records run by run,
+        whether or not the union of the runs is the whole face. An arc's ``imgs`` is
         ``((0, 0),)`` while the shape stays inside the Wigner-Seitz cell of its centre, where
         the nearest centre's level set is the nearest interface, and the size ring once it
-        leaves (:func:`_arc_offsets`); the replay then blends one sub-piece per instance.
+        leaves (:func:`_arc_offsets`); the replay then reads one piece whose distance and
+        direction are the nearest instance's, by a hard minimum (:func:`_round_instances`).
     ``pairs``
         One :class:`Pair` per coincidence: piece ``q`` at lattice offset ``(m, n)`` -- relative
         to ``p``'s own instance -- lies on ``p``'s line, opposed, over a run of positive
@@ -965,7 +973,14 @@ class GammaPlan(namedtuple('GammaPlan', 'ring pieces pairs empty reduction')):
 
 
 class Piece(namedtuple('Piece', 'shape face imgs dead')):
-    """One piece of :class:`GammaPlan`: shape index, face name (or ``'arc'``), offsets, dead."""
+    """One piece of :class:`GammaPlan`: shape index, face name (or ``'arc'``), offsets, dead.
+
+    ``dead`` -- the face's own images cover it end to end, the union of its self runs being
+    its full length -- is the planner's word, written for ``empty``'s sake and read by it and
+    by the staleness check. :func:`_piece_field` never reads it: a covered face cancels
+    through the pair records, run by run, so a partly covered face (``dead = False``) and a
+    fully covered one are built by the same arithmetic. An arc is never dead.
+    """
     __slots__ = ()
 
 
@@ -1342,11 +1357,14 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype):
     stage: a two-stage blend switches extension where two shapes come into contact, which was
     measured as a 1.1e-2 step in ``sum(T)`` at order 6, and the one-stage sum has nothing to
     switch. A lone round shape inside its Wigner-Seitz cell is one piece and returns its own
-    field, as it always did; one that leaves it is one sub-piece per instance of its ring
-    (:func:`_round_instances`), each with the exact distance to that instance and that
-    instance's level-set normal, and the same blend. A face's instances share one direction,
-    so a face can take the nearest of them by a hard minimum; an arc's do not, and a hard
-    minimum would put a jump line mid-way between two images, which the blend has no seam.
+    field, as it always did; one that leaves it is still **one** piece, whose distance and
+    direction are the nearest instance's of its ring by a hard minimum
+    (:func:`_round_instances`: the exact distance to every instance, and the level-set normal
+    of the one that wins). The switch between two instances sits on the Voronoi boundary
+    between their boundaries, where the exact nearest-interface field switches too, so it is
+    not a seam of the field's making: on the 720 x 200 ellipse's own boundary and its
+    neighbours' inside the cell the piece reads 2.6e-7 deg mean and 1.7e-6 max over 4001
+    points, with no null. A face takes the nearest of its instances the same way.
 
     **A piece's distance is the segment distance to the nearest of its instances.** For a face
     with tangential coordinate ``sigma`` and normal coordinate ``nu`` at instance ``K``,
@@ -1370,7 +1388,7 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype):
     record's own run window (:func:`_run_window` on the traced geometry, as for a cross
     pair): one face can be covered from both ends by two different images -- a box on
     ``a1 = (700, 0)``, ``a2 = (400, 700)``, or a grating written as a box on a hex cell -- and
-    each dead run has to read the primary at *its* coincident instance. A flush record is the
+    each covered run has to read the primary at *its* coincident instance. A flush record is the
     same segment and substitutes everywhere, tangential excess included; that is what a
     quarter-turned grating needs. A cross pair (two shapes) reads the two material slots:
     equal, and the partner's weight is subtracted from the primary's over the run they share --
@@ -1384,13 +1402,25 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype):
     identically, and a material swept through equality flips the sign live, with nothing to
     invalidate.
 
-    **The tie.** Where the sum is exactly zero -- a dead pair's line, the midline of a
-    surviving pair -- the direction is the axis of the pair that did *not* cancel at that
-    sample, read off the records by array equality of the members' distances: for each box in
-    turn, the axis whose records did not cancel where the other axis's did, and ``(1, 0)`` when
-    both cancelled or neither did, for every box. Sign is free because the factorization reads
-    ``n n^T``. Li's checkerboard samples that line once per row however fine the grid, and the
-    answer there is ``v``, the axis that has an interface.
+    **The tie.** Where the sum is exactly zero -- a cancelled pair's line (a run its partner
+    covers), the midline of a surviving pair -- the direction is the axis of the pair that did
+    *not* cancel at that sample, read off the records by array equality of the members'
+    distances: for each box in turn, the axis whose records did not cancel where the other
+    axis's did, and ``(1, 0)`` when both cancelled or neither did, for every box. Sign is
+    free because the factorization reads ``n n^T``. Li's checkerboard samples that line once
+    per row however fine the grid, and the answer there is ``v``, the axis that has an
+    interface.
+
+    **A lone box's centre is a tie in exact arithmetic only.** The tie fires when the four
+    face distances are bitwise equal, which the exact centre gives and a sample one ulp off
+    it does not: there the sum of four weights within ulps of one reads whichever direction
+    the rounding leaves. Measured on the 350 box at the sample ``(-5.7e-14, -5.7e-14)`` from
+    the centre, the grid point of a verifier's 175-point sweep: ``(-0.707, -0.707)`` on
+    ``a2 = (50, 700)`` and on the square, ``(0, -1)`` on ``a2 = (7050, 700)`` -- that cell's
+    centre is 3875, whose ulp swallows the x offset, so only ``dy`` survives -- and ``(1, 0)``,
+    the documented answer, at the exact centre on every one of them. One sample of measure
+    zero, recorded as an observation and not fixed: the fix would be a tolerance on the tie,
+    a width in a rule that has none.
 
     ``slots`` is the layer's material slot values (:func:`_material_slots`), computed from the
     shapes when ``None``; self pairs never read one.
@@ -1459,7 +1489,7 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype):
                 # [100, 300] and under the (-1, 1) image over [-300, 0]), and the two primaries
                 # lie on one line mathematically but their `at()` values differ by the lattice
                 # vector's own-axis component, 3e-14 once the scene is turned. Keyed by
-                # instance alone the second record overwrote the first, the dead run of the
+                # instance alone the second record overwrote the first, the covered run of the
                 # first read the primary at the wrong instance, `on_gamma` handed the whole
                 # weight to the member that happened to read 0.0, and the run carried a full
                 # normal. A flush record is the same segment and substitutes everywhere.
@@ -2210,8 +2240,9 @@ def check_gamma_plan_still_fits(layer, lattice, plan, index):
     """Refuse a frozen interface set that the layer in front of it has outgrown.
 
     A :class:`GammaPlan` records *combinatorics* -- which face lies on which image's face,
-    over a run, and what that leaves dead -- and deliberately holds no coordinate and no
-    material, which is what lets a replay carry a gradient to a shape that has moved and a
+    over a run, and which faces that leaves covered end to end (``dead``) -- and deliberately
+    holds no coordinate and no material, which is what lets a replay carry a gradient to a
+    shape that has moved and a
     material that has swept. What makes it stale is the combinatorics changing: a face leaving
     its partner's line (the recorded pair would then cancel two faces that are interfaces), a
     run appearing (two interfaces would be kept where the material runs on), a shape growing

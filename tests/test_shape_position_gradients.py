@@ -409,7 +409,9 @@ def test_two_rectangles_carry_a_correct_relative_gradient_too():
     (the two-stage blend's rows were 6.89695e-03 / 4.03019e-03 / 1.63509e-03 with -8.2e-2,
     -2.6e-2, -2.5e-4 at ``h = 1e-6`` and +2.6e-6, -9.3e-5, -9.7e-5 at ``1e-7``). Both columns
     below 1e-6 agree with each other and with autograd, which is what says the derivative is
-    right and the coarse secant is what was wrong.
+    right and the coarse secant is what was wrong. On this one-stage tree the ``1e-6`` column
+    passes the 1% gate below as well, so ``h = 1e-7`` is a margin here rather than the
+    necessity it was on the two-stage tree; it stays at the value the table is stated at.
     """
     h = 1e-7
     for d in (0.02, 0.05, 0.08):

@@ -220,12 +220,13 @@ That the field is inert there was checked rather than argued, on the other sessi
 An arbitrary constant field gives the same answer to the last digit, which is what "every conv
 matrix is `eps * I`" means in practice.
 
-**And it exposes a floor under the candidate-set argument.** `_axis_lattice_periods` asks which
-lattice vectors run *along* a shape axis, and matching `overlap._IMAGES` fixes **which images
-exist** — it does not fix **how many it takes to cover a face**. A face covered by two off-axis
-vectors taking half each is outside what a per-vector search can express, which is the same shape
-of limitation as missing `t . u != 0`, one level up. `test_a_rhombic_cell_spans_along_the_sum_of_
-its_basis_vectors` argues for the candidate set more broadly than the set can deliver.
+**And it exposed a floor under the candidate-set argument.** `_axis_lattice_periods` (deleted
+2026-09-06 with the fold, §8b) asked which lattice vectors ran *along* a shape axis, and matching
+`overlap._IMAGES` fixed **which images exist** — it did not fix **how many it takes to cover a
+face**. A face covered by two off-axis vectors taking half each was outside what a per-vector
+search could express, which was the same shape of limitation as missing `t . u != 0`, one level
+up. `test_a_rhombic_cell_spans_along_the_sum_of_its_basis_vectors` argued for the candidate set
+more broadly than the set could deliver.
 
 The planner accordingly unions the covered intervals per face (`overlap.covered_length`) and
 calls a face dead only when the union covers it; a layer whose every face is dead is `empty`,
@@ -509,12 +510,14 @@ higher band error than it did, by 0.06 to 0.34 deg in the mean, because every co
 now reads the diagonal of its two faces: at equal grid against the exact interface oracle the
 350 box goes 0.358 -> 0.473 deg at N = 256 and 0.179 -> 0.237 at N = 512, the 120 x 150 rod
 0.099 -> 0.279 and a 200 x 150 box at 25 deg 0.249 -> 0.587 (N = 512), with the fraction of the
-band past 45 deg falling to zero on the 350 box and rising to 0.13% on the other two. The raster
-instruments the goldens are booked against (a `'contour'` raster and Li's rule on a box with its
-edges on pixels) sit nearer the fold at every order on every lone-box golden -- the rod, the 350
-box, the two-shape pair of `test_lattice_pytree.py` -- which is a resemblance of extensions
-(`'contour'` is distance-based and extends the way the corner-radial rule did) and is recorded as
-what the measurement shows, not as a verdict; each test carries its rows.
+band past 45 deg falling to zero on the 350 box and rising to 0.13% on the other two. The
+`'contour'` raster instrument the goldens are booked against sits nearer the fold at every order
+on every lone-box golden -- the rod, the 350 box, the two-shape pair of `test_lattice_pytree.py`
+-- which is a resemblance of extensions (`'contour'` is distance-based and extends the way the
+corner-radial rule did) and is recorded as what the measurement shows, not as a verdict; each
+test carries its rows. Li's rule on a box with its edges on pixels does not say the same at every
+order: on the 350 box it sits nearer the fold at orders 6 and 9 (6.3e-4 against 1.03e-3, 2.74e-3
+against 3.02e-3) and nearer the *pieces* at order 12, by four times (1.1e-4 against 4.7e-4).
 
 | scene, order 6, `normal_grid` 512 | fold (2026-09-03) | pieces | change |
 |---|---|---|---|
