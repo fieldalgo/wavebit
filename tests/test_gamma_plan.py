@@ -306,6 +306,44 @@ def test_a_traced_layer_gets_no_plan_and_the_blind_one_has_every_piece():
     assert set(P.plan_gamma([SCENES['A grating'][1]], A).pieces[0].imgs) <= set(blind.pieces[0].imgs)
 
 
+def test_the_blind_ring_is_read_from_the_basis_and_a_traced_basis_is_refused():
+    """The blind plan's ring comes from the cell, and a cell it cannot read is not guessed.
+
+    ``a2 = 10 a1 + (50, 700)`` is the cell of ``a2 = (50, 700)`` written on an unreduced
+    basis, accepted as it is. Its planned list runs to ring 14 -- 479 offsets, 460 of them
+    outside a 7x7 -- and the contact sits at ``(m, n) = (-10, 1)``. The blind plan used to
+    hand a *traced* basis that 7x7 with no argument, and the field built on it disagreed with
+    the planned one on two thirds of the samples (max 90 deg; 6e-3 in ``sum(T)`` through a
+    jitted solve, ``test_gamma_frozen.py``). A readable basis gets every offset within
+    ``2 * diam`` of the fold, a superset of the planned list for any shape whose bounding
+    radius is at most half the cell's diameter; a traced one raises the freeze message.
+    """
+    jax = pytest.importorskip('jax')
+    jnp = pytest.importorskip('jax.numpy')
+    jax.config.update('jax_enable_x64', True)
+    lattice = np.array([[PERIOD, 7050.0], [0.0, PERIOD]])
+    A = as_lattice(lattice=lattice)
+    shape = _box(lx=500.0, ly=PERIOD)
+    plan = P.plan_gamma([shape], A)
+    assert plan.ring == 14
+    assert {(pr.m, pr.n) for pr in plan.pairs} == {(-10, 1)}
+    planned = set(plan.pieces[0].imgs)
+    assert len(planned) == 479 and len(planned - set(O.images(3))) == 460
+    assert planned <= set(P._blind_plan([shape], A).pieces[0].imgs)
+
+    seen = []
+
+    def probe(L):
+        try:
+            P._blind_plan([shape], L)
+        except ValueError as e:
+            seen.append(str(e))
+        return jnp.sum(L)
+
+    jax.jit(probe)(jnp.asarray(lattice))
+    assert len(seen) == 1 and 'freeze_geometry' in seen[0]
+
+
 def test_an_empty_plan_is_a_uniform_layer():
     """The tiling bar's coefficients are an empty layer's, and its solve is a slab's.
 

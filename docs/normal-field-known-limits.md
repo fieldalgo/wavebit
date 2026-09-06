@@ -557,7 +557,10 @@ replay), `_blind_plan` (a jitted solve with no record) and `check_gamma_plan_sti
 
 **The record is frozen.** `freeze_geometry` records every layer's plan beside its painting
 plan (`StaticGeometry.gamma_plans`, in the content key), both quantities replay the one record,
-a jitted solve with it builds the planned field where one without it gets the blind plan, and
+a jitted solve with it builds the planned field where one without it gets the blind plan (every
+piece on a ring read from the basis, no pairs -- and a basis that cannot be read, a solver built
+inside the trace, is refused with the freeze message since 2026-09-06: the fixed 7x7 ring it fell
+back to lacked 460 of the 479 planned instances on an unreduced basis and solved 6e-3 off), and
 the eager replay re-derives the plan and refuses by name a pair that appeared or vanished, a
 face gone dead or live, an image list that grew across a ring boundary. A material sweep is
 never a staleness: the sign is an array op on the slots at build time. The projector cache

@@ -785,7 +785,8 @@ def normal_vector_field_analytical(xp, grid_shape, shapes, dtype, lattice, plan=
     is left -- is the :class:`GammaPlan`, planned once from concrete numbers and replayed by
     array ops on the traced ones. Left ``None`` it is planned here; under a trace with no primal
     to read (``jax.jit`` with no frozen record) :func:`_blind_plan` stands in, and that costs
-    the exact cancellation of an abutting pair -- see there.
+    the exact cancellation of an abutting pair -- see there. A traced *basis* with no record is
+    refused there rather than guessed at: the ring of images is bounded by the cell.
 
     Written without in-place mutation so it stays differentiable in the shape parameters. A
     position is not among them for a lone shape: :func:`normal_projector_coeffs` builds the
@@ -1020,23 +1021,43 @@ def plan_gamma(shapes, lattice):
 
 
 def _blind_plan(shapes, lattice):
-    """A plan taken without reading a value: every piece, a generous ring, and **no pairs**.
+    """A plan taken without reading a shape: every piece, a ring from the basis, and **no pairs**.
 
-    What a jitted solve without a frozen record gets. The pieces and the ring need only the
-    shape *types* and, when it is readable, the basis (a traced basis takes a 7x7 ring); what
-    they cannot have is the pair table, which needs the numbers. So an abutting pair -- a bar
-    spanning the cell, a box against its own image -- is not told that it is one, and its two
-    faces cancel only to rounding: the same values the planned field carries, minus the exact
-    zero. That is a field within ulps of the planned one everywhere, with no tie rule at the
-    points where the planned field would have needed one. A scene that leans on either --
-    Li's checkerboard on a jitted trace -- should freeze its geometry first.
+    What a jitted solve without a frozen record gets. The pieces need only the shape *types*;
+    the ring needs the basis, and it is read as numbers -- a traced basis is **refused** with
+    :data:`_NEEDS_A_FREEZE`, exactly as :func:`layer_needs_resolving` refuses a traced
+    multi-shape layer. It used to fall back to a fixed 7x7 ring, with no argument that the
+    ring held every instance the planned list holds, and on an accepted unreduced basis it
+    did not: ``a2 = 10 a1 + (50, 700)`` is the same cell as ``a2 = (50, 700)``, which
+    ``as_lattice`` accepts without reducing, and the planned list per piece there is 479
+    offsets out to ring 14, 460 of them outside the 7x7. The two fields disagreed on 43662 of
+    65536 samples at N = 256 (max 90 deg) and the jitted solve sat 6e-3 in ``sum(T)`` from the
+    eager one, with nothing said. A traced basis with no record now raises, and the message
+    names the freeze; with a record the planned list replays under the trace as it always did.
+
+    What the readable basis gets is every offset within ``2 * diam`` of the fold. The planned
+    list is bounded by ``diam + 2 R`` (:class:`GammaPlan`), so this is a superset of it
+    whenever ``R <= diam / 2``: every box or ellipse that fits *inside* its cell, since the
+    diagonal of such a shape is at most the cell's. It is not a theorem about every accepted
+    shape -- a thin bar turned to thread between its images can be far longer than the cell's
+    diagonal without meeting one, and its ``R`` exceeds ``diam / 2`` -- and nothing here can
+    read the size that would say so. Such a shape under ``jax.jit`` with no record is built on
+    the short ring; freezing first is what gives it the planned one.
+
+    What no blind plan can have is the pair table, which needs the numbers. So an abutting
+    pair -- a bar spanning the cell, a box against its own image -- is not told that it is
+    one, and its two faces cancel only to rounding: the same values the planned field carries,
+    minus the exact zero. That is a field within ulps of the planned one everywhere, with no
+    tie rule at the points where the planned field would have needed one. A scene that leans
+    on either -- Li's checkerboard on a jitted trace -- should freeze its geometry first.
     """
     try:
         a1x, a1y, a2x, a2y = _cell_floats(lattice)
-        # `R <= diam / 2` for any shape that fits the cell, which the eager pass enforced.
-        imgs = _ring_offsets(a1x, a1y, a2x, a2y, 2.0 * _cell_diameter(a1x, a1y, a2x, a2y))
-    except Exception:                                  # noqa: BLE001 - a traced basis too
-        imgs = _overlap.images(3)
+    except Exception:                                  # noqa: BLE001 - a traced basis
+        raise ValueError(_NEEDS_A_FREEZE.format(
+            what='the ring of periodic images each face is evaluated over, which the cell '
+                 'bounds,')) from None
+    imgs = _ring_offsets(a1x, a1y, a2x, a2y, 2.0 * _cell_diameter(a1x, a1y, a2x, a2y))
     pieces = []
     for i, shape in enumerate(shapes):
         stype = shape.get('type', 'rectangle')

@@ -303,21 +303,32 @@ def test_the_drop_survives_jit_and_grad():
     The plan is taken eagerly from the frozen record's pass and the replay is array ops on
     the traced values -- no ``float()`` of a tracer anywhere on the way, and a jitted solve of
     a grating is the most ordinary thing an optimizer does.
+
+    The freeze is taken outside the trace, on the solver the trace is handed. This test used
+    to freeze *inside* ``jax.jit``, where the shapes are tracers and the record is ``None``;
+    the blind plan then stood in on a fixed ring, and since 2026-09-06 a traced basis with no
+    record is refused instead (``test_gamma_frozen.py``). The record here carries the pair.
     """
     jax = pytest.importorskip('jax')
     jnp = pytest.importorskip('jax.numpy')
     wavebit.enable_x64()
 
+    def layer(lx):
+        return [dict(background=1.0, shapes=[dict(type='rectangle', cx=0.0, cy=0.0,
+                                                  lx=lx, ly=PERIOD, material=EPS_HI)])]
+
+    solver = wavebit.rcwa(backend=1, period=[PERIOD, PERIOD], structure=layer(350.0),
+                          truncation_order=dict(x=4, y=4), normal_grid=128,
+                          **{k: v for k, v in SOLVE_KW.items() if k != 'backend'})
+    frozen = solver.freeze_geometry()
+    assert frozen.gamma_plans[0].pairs
+
     def total(lx):
-        layer = [dict(background=1.0, shapes=[dict(type='rectangle', cx=0.0, cy=0.0,
-                                                   lx=lx, ly=PERIOD, material=EPS_HI)])]
-        solver = wavebit.rcwa(backend=1, period=[PERIOD, PERIOD], structure=layer,
-                              truncation_order=dict(x=4, y=4), normal_grid=128,
-                              **{k: v for k, v in SOLVE_KW.items() if k != 'backend'})
-        return jnp.sum(solver.solve(geometry=solver.freeze_geometry()).T)
+        return jnp.sum(solver.solve(structure=layer(lx), geometry=frozen).T)
 
     value = float(jax.jit(total)(jnp.asarray(350.0)))
     assert 0.0 < value < 1.0
+    assert value == pytest.approx(float(total(jnp.asarray(350.0))), abs=1e-12)
     g = float(jax.grad(total)(jnp.asarray(350.0)))
     assert np.isfinite(g)
 

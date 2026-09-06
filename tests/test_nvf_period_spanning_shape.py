@@ -308,26 +308,47 @@ def test_every_backend_spans_the_same_way(backend):
 def test_a_spanning_shape_still_traces_and_differentiates():
     """``jit`` and ``grad`` must cross the replay, which is why it carries no Python branch.
 
-    Under ``jax.grad`` the plan is taken from the primal and replayed on the tracer; under
-    ``jax.jit`` with no frozen record there is no primal, and the blind plan stands in -- every
-    piece, no pairs -- whose field is within rounding of the planned one on this scene
-    (the two y faces cancel to ulps instead of exactly). Branching on a traced value anywhere
-    on the way would raise ``TracerBoolConversionError`` on every jitted parametric solve, not
-    just on a spanning one.
+    Under ``jax.grad`` the plan is taken from the primal and replayed on the tracer. Under
+    ``jax.jit`` there is no primal: with a frozen record the planned field replays from it,
+    and without one the blind plan stands in -- every piece, no pairs, a field within
+    rounding of the planned one on this scene (the two y faces cancel to ulps instead of
+    exactly) -- **provided the basis can be read**. A solver built *inside* the trace has a
+    traced basis, whatever ``period`` was spelled as, and that case is refused with the
+    freeze message since 2026-09-06 rather than answered on a ring nothing bounds
+    (``test_gamma_frozen.py`` for the unreduced basis that showed why). So the solver here
+    is built outside and handed ``structure=`` and ``geometry=``, which is also what makes
+    the test cross the jit boundary at all. Branching on a traced value anywhere on the way
+    would raise ``TracerBoolConversionError`` on every jitted parametric solve, not just on a
+    spanning one.
     """
     jax = pytest.importorskip('jax')
     jnp = pytest.importorskip('jax.numpy')
     jax.config.update('jax_enable_x64', True)
 
-    def sum_t(ly):
-        solver = _solver(4, 4, backend=1)
-        solver.structure = [dict(background=1.0, shapes=[dict(
+    def layer(ly):
+        return [dict(background=1.0, shapes=[dict(
             type='rectangle', cx=0.0, cy=0.0, lx=jnp.asarray(350.0), ly=ly,
             angle=jnp.asarray(0.0), material=4.0)])]
-        return jnp.sum(solver.solve().given.T)
+
+    solver = _solver(4, 4, backend=1)
+    solver.structure = layer(jnp.asarray(PERIOD))
+    frozen = solver.freeze_geometry()
+    assert frozen.gamma_plans[0].pairs                  # the spanning pair, recorded
+
+    def sum_t(ly, geometry=None):
+        return jnp.sum(solver.solve(structure=layer(ly), geometry=geometry).given.T)
 
     eager = float(sum_t(jnp.asarray(PERIOD)))
-    assert float(jax.jit(sum_t)(jnp.asarray(PERIOD))) == pytest.approx(eager, abs=1e-12)
+    replayed = jax.jit(lambda ly: sum_t(ly, frozen))(jnp.asarray(PERIOD))
+    assert float(replayed) == pytest.approx(eager, abs=1e-12)
+
+    def built_inside(ly):
+        inner = _solver(4, 4, backend=1)
+        inner.structure = layer(ly)
+        return jnp.sum(inner.solve().given.T)
+
+    with pytest.raises(ValueError, match='freeze_geometry'):
+        jax.jit(built_inside)(jnp.asarray(PERIOD))       # a traced basis and no record
 
     # and the gradient is a real one just below the span, where the fold is doing its work
     grad = float(jax.grad(sum_t)(jnp.asarray(690.0)))

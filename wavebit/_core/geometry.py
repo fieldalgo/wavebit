@@ -101,7 +101,8 @@ class StaticGeometry:
             route's normal field -- which faces lie on which image's faces, over what, and what
             that leaves dead. Pure Python like ``boundary_plans`` and content-hashed beside it;
             recorded for every shape layer, so a ``None`` entry means the shapes were traced at
-            the freeze and the replay plans blind (every piece, no pairs). Re-asked eagerly by
+            the freeze and the replay plans blind (every piece, no pairs; a traced *basis*
+            is refused there rather than guessed at). Re-asked eagerly by
             :func:`parametric.check_gamma_plan_still_fits`.
 
     A field left ``None`` means "auto-detect", which is what the strategy in use does not need

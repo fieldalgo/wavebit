@@ -125,6 +125,53 @@ def test_a_jitted_solve_with_a_record_equals_the_eager_one(name, lattice, make, 
     assert eager == pytest.approx(plain, abs=1e-12), name
 
 
+@pytest.mark.parametrize('name, lattice', [
+    ('shear', SHEAR),
+    # `a2 = 10 a1 + (50, 700)`: the cell of `a2 = (50, 700)` on an unreduced basis, which
+    # `as_lattice` accepts as it is. The planned list per piece is 479 offsets out to ring 14.
+    ('unreduced, 10 a1', np.array([[PERIOD, 7050.0], [0.0, PERIOD]])),
+])
+def test_a_traced_basis_with_no_record_is_refused_and_with_one_replays(name, lattice):
+    """``jax.jit`` over the lattice, lone shape, no record: refused; with a record: the eager answer.
+
+    The blind plan used to answer a traced basis with a fixed 7x7 ring of images and no
+    argument that the ring held every instance the planned list holds. On the unreduced
+    basis here it did not -- 460 of the 479 planned offsets lay outside it -- and the jitted
+    solve came back 6e-3 in ``sum(T)`` from the eager one, unit-length and energy-conserving.
+    Now the case raises with the message every traced decision raises with, naming the
+    freeze; the record taken outside the trace replays the planned list under it, to 1e-12
+    of the eager solve. ``jax.grad`` needs no record: its tracer carries the primal and the
+    basis is planned from it per call (``d/d(a2x)`` finite, and the AD-vs-FD row of the
+    lattice gradient lives in ``test_lattice_pytree.py``).
+
+    The freeze is taken *before* the refused call on purpose: ``solve(lattice=...)`` assigns
+    the design variable to the solver, so a jitted call leaves a tracer in ``solver.lattice``
+    and a freeze taken after it would record ``None`` for the plan.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    wavebit.enable_x64()
+
+    structure = [dict(background=1.0, shapes=[_box(lx=500.0, ly=PERIOD, material=12.25)])]
+    solver = wavebit.rcwa(backend=1, lattice=lattice, structure=structure, **KW)
+    frozen = solver.freeze_geometry()
+    assert frozen.gamma_plans[0].pairs, name
+
+    def total(L, geometry=None):
+        return jnp.sum(solver.solve(lattice=L, geometry=geometry).T).real
+
+    with pytest.raises(ValueError, match='freeze_geometry'):
+        jax.jit(total)(jnp.asarray(lattice))
+    eager = float(total(jnp.asarray(lattice)))
+    replayed = float(jax.jit(lambda L: total(L, frozen))(jnp.asarray(lattice)))
+    assert replayed == pytest.approx(eager, abs=1e-12), name
+    P._PROJECTOR_CACHE.clear()
+    plain = float(np.sum(np.asarray(wavebit.rcwa(backend=0, lattice=lattice, structure=structure,
+                                                 **KW).solve().T)))
+    assert eager == pytest.approx(plain, abs=1e-12), name
+    assert np.isfinite(np.asarray(jax.grad(total)(jnp.asarray(lattice)))).all(), name
+
+
 def test_plan_gamma_runs_once_at_the_freeze_and_never_in_the_trace(monkeypatch):
     """A call counter on the planner: the freeze plans, the trace replays.
 
