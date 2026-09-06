@@ -108,3 +108,24 @@ def _drop_bytecode(path):
         cached.unlink()
     importlib.invalidate_caches()
 
+
+def run_isolated(code, timeout=600):
+    """Run ``code`` in a fresh interpreter on the sources as they are on disk right now.
+
+    For a mutant that cannot be reloaded in place: ``domain.py`` defines :class:`Material`,
+    which ``as_material`` type-checks against and which ``engine`` and ``spec`` import by name,
+    so a ``reload`` leaves two classes called ``Material`` in one process and every later test
+    that builds one fails for a reason that has nothing to do with the mutant. A subprocess
+    imports the mutated file once, cleanly, and its exit status is the verdict: ``True`` means
+    the instrument passed (the mutant SURVIVED), ``False`` that it raised (killed). The stderr
+    is returned beside it so a survivor can be read rather than guessed at.
+    """
+    import subprocess
+    import sys
+    root = pathlib.Path(__file__).resolve().parents[1]
+    proc = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True,
+                          timeout=timeout, cwd=str(root),
+                          env=dict(__import__('os').environ, PYTHONPATH=str(root),
+                                   PYTHONDONTWRITEBYTECODE='1'))
+    return proc.returncode == 0, proc.stderr[-2000:]
+

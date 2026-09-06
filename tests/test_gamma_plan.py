@@ -34,6 +34,10 @@ SQUARE = np.array([[PERIOD, 0.0], [0.0, PERIOD]])
 SHEAR = np.array([[PERIOD, 200.0], [0.0, PERIOD]])
 #: Li's checkerboard primitive cell, where ``a1 + a2 = (2.5, 0)`` and ``a1 - a2 = (0, 2.5)``.
 CHECKER = np.array([[1.25, 1.25], [1.25, -1.25]])
+#: The sheared cell ``a2 = (50, 700)`` written with the unreduced basis ``a2 = 2 a1 + (50, 700)``:
+#: the same structure, but the image that abuts the box now sits at ``(m, n) = (-2, 1)``, outside
+#: any fixed 3x3 -- which is what a reader of the ring that fell back to one would miss.
+UNREDUCED = np.array([[PERIOD, 1450.0], [0.0, PERIOD]])
 TILT = float(np.arctan2(1.0, 2.0))
 TILT_LY = PERIOD * np.sin(TILT)
 L_ANGLE = float(np.arctan2(117.9, 690.0))
@@ -55,6 +59,7 @@ SCENES = {
     '600x650 at 10 deg': (SQUARE, _box(lx=600.0, ly=650.0, angle=np.deg2rad(10.0))),
     'ellipse': (SQUARE, dict(type='ellipse', cx=0.0, cy=0.0, lx=400.0, ly=200.0, angle=0.3,
                              material=12.25)),
+    'unreduced basis': (UNREDUCED, _box(lx=500.0, ly=PERIOD)),
 }
 
 #: What the geometry says about each scene: pairs as ``(p face, q face, m, n, flush)``, which
@@ -74,6 +79,7 @@ EXPECTED = {
     '350 box': dict(pairs=set(), dead=set(), empty=False, ring=2),
     '600x650 at 10 deg': dict(pairs=set(), dead=set(), empty=False, ring=3),
     'ellipse': dict(pairs=set(), dead=set(), empty=False, ring=2),
+    'unreduced basis': dict(pairs={('+v', '-v', -2, 1, False)}, dead=set(), empty=False, ring=4),
 }
 
 

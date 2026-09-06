@@ -162,10 +162,15 @@ weights** rather than the *normalized sum of unit vectors* this used to describe
 difference is not cosmetic: a sum weights a shape ten cells away exactly as heavily as the one
 underfoot, which put the normal 40 deg off at a boundary with two shapes in the layer and 43 with
 three. They are the ratio form now, `(d_min / d_j)^4`, direction-identical to the product and
-linear in the count. The weights collapse to one shape's own normal exactly at its surface, so boundaries read
+linear in the count, and since 2026-09-06 it is **one sum over every piece of every shape** —
+a box's four faces over their periodic images, a round shape's one piece — with no per-shape
+stage in between: two shapes that come into contact share a face line over a run, the plan
+(`parametric.plan_gamma`) records the pair, and their material slots decide whether the two
+faces cancel there (equal: the material runs on) or co-orient (different: the seam is an
+interface). The weights collapse to one piece's own normal exactly at its surface, so boundaries read
 0.000 deg for any number of shapes, naming a shape a period over moves 5.3e−15, and the position
 gradient survives for rectangles as well as circles. See
-`parametric.normal_vector_field_analytical`, `_box_field` and `_ratio_blend`. Why the `½`-symmetrization is
+`parametric.normal_vector_field_analytical` and `_piece_field`. Why the `½`-symmetrization is
 needed — the plain product `Δ C` is not Hermitian, which gives complex `q²` and gross
 energy-conservation violation on curved boundaries — is written out in the
 `nvf_conv_matrices` docstring in `_core/factorization.py`.

@@ -22,6 +22,8 @@ import numpy as np
 import pytest
 
 import wavebit
+from wavebit._core import domain as D
+from wavebit._core import overlap as O
 from wavebit._core import parametric as P
 from wavebit._core.lattice import as_lattice
 
@@ -302,59 +304,160 @@ def _the_350_golden():
     assert _total(SQUARE, _box(lx=350.0, ly=350.0)) == pytest.approx(0.892284142298975, abs=1e-9)
 
 
-SOURCE = pathlib.Path(P.__file__)
+def _rotated_seam_reads_its_own_axis():
+    # K turned by 0.3 rad with its cell: the seam normal is (cos, sin), which the tie's (1, 0)
+    # fallback -- where a sign forced opposed sends every sample -- is 17 deg away from.
+    turn = 0.3
+    rot = np.array([[np.cos(turn), -np.sin(turn)], [np.sin(turn), np.cos(turn)]])
+    bars = [dict(_box(lx=350.0, ly=PERIOD, angle=turn, material=4.0),
+                 cx=-175.0 * np.cos(turn), cy=-175.0 * np.sin(turn)),
+            dict(_box(lx=350.0, ly=PERIOD, angle=turn, material=9.0),
+                 cx=175.0 * np.cos(turn), cy=175.0 * np.sin(turn))]
+    n_x, n_y = P.normal_vector_field_analytical(np, (128, 128), bars, np.float64,
+                                                as_lattice(lattice=rot @ SQUARE))
+    assert np.abs(np.abs(n_x * np.cos(turn) + n_y * np.sin(turn)) - 1.0).max() < 1e-15
 
-#: ``(what, old, new, the instrument that must fail under it)``.
+
+def _unreduced_basis_has_its_pair():
+    # The sheared cell written with an unreduced basis: the abutting image sits at (-2, 1).
+    A = as_lattice(lattice=np.array([[PERIOD, 1450.0], [0.0, PERIOD]]))
+    plan = P.plan_gamma([_box(lx=500.0, ly=PERIOD)], A)
+    assert {(pr.m, pr.n) for pr in plan.pairs} == {(-2, 1)}
+
+
+#: What a fresh interpreter runs for the one mutant that cannot be reloaded in place
+#: (``domain.py`` -- see :func:`gamma_instruments.run_isolated`): a box naming ``mu = 1.0``
+#: beside one naming none, in the permeability view ``_mu_structure`` would build. Their
+#: slots are both 1.0, so the seam cancels and the field equals the spelled-out one; read
+#: absence as anything else and the seam co-orients instead.
+MU_SPELLINGS = """
+import numpy as np
+from wavebit import Material
+from wavebit._core import parametric as P
+from wavebit._core.domain import as_material
+from wavebit._core.lattice import as_lattice
+A = as_lattice(period=[700.0, 700.0])
+left = dict(type='rectangle', cx=-150.0, cy=0.0, lx=300.0, ly=300.0, angle=0.0)
+right = dict(left, cx=150.0)
+def mu_view(shapes):
+    return [dict(s, material=as_material(s['material']).mu_value) for s in shapes]
+absent = mu_view([dict(left, material=Material(4.0, mu=1.0)), dict(right, material=Material(9.0))])
+named = mu_view([dict(left, material=Material(4.0, mu=1.0)), dict(right, material=Material(9.0, mu=1.0))])
+got = P.normal_vector_field_analytical(np, (64, 64), absent, np.float64, A)
+want = P.normal_vector_field_analytical(np, (64, 64), named, np.float64, A)
+assert np.array_equal(got[0], want[0]) and np.array_equal(got[1], want[1])
+"""
+
+
+def _mu_absence_is_one_in_a_fresh_interpreter():
+    from gamma_instruments import run_isolated
+    passed, stderr = run_isolated(MU_SPELLINGS)
+    assert passed, stderr
+
+
+#: The four grouping lines a face's direction goes through, and the foot rule in their place:
+#: beyond a face's tangential extent the direction becomes the vector from the nearest
+#: endpoint to the sample (at the instance on the box's own fold), the corner-radial rule the
+#: fold's box branch used. Inside the extent it is the fixed normal, as before.
+GROUPED_SUM = """        wu = own_w[index[(i, '+u')]] - own_w[index[(i, '-u')]]
+        wv = own_w[index[(i, '+v')]] - own_w[index[(i, '-v')]]
+        sx = sx + (wu * frame.cos - wv * frame.sin)
+        sy = sy + (wu * frame.sin + wv * frame.cos)"""
+FOOT_SUM = """        du, dv = frame.at(frame.km, frame.kn)
+        for face in _overlap.FACES:
+            if face[1] == 'u':
+                nu = du - frame.a if face == '+u' else du + frame.a
+                exc = dv - xp.clip(dv, -frame.b, frame.b)
+                fx, fy = nu * frame.cos - exc * frame.sin, nu * frame.sin + exc * frame.cos
+            else:
+                nu = dv - frame.b if face == '+v' else dv + frame.b
+                exc = du - xp.clip(du, -frame.a, frame.a)
+                fx, fy = exc * frame.cos - nu * frame.sin, exc * frame.sin + nu * frame.cos
+            nrm = _hypot_safe(xp, fx, fy)
+            sx = sx + own_w[index[(i, face)]] * fx / nrm
+            sy = sy + own_w[index[(i, face)]] * fy / nrm"""
+
+SOURCE = pathlib.Path(P.__file__)
+OVERLAP_SOURCE = pathlib.Path(O.__file__)
+DOMAIN_SOURCE = pathlib.Path(D.__file__)
+
+#: ``(what, module to mutate and reload -- None runs the instrument in a fresh interpreter --
+#: old, new, the instrument that must fail under it)``.
 MUTANTS = [
-    ('a flush pair reads its own tangential excess',
-     'if primary[2]:\n                    e2 = pe2',
-     'if False:\n                    e2 = pe2',
+    ('a flush pair reads its own tangential excess', P,
+     'if primary[2]:\n                        e2 = pe2',
+     'if False:\n                        e2 = pe2',
      _own_axis_residual_at_quarter_turn),
-    ('no pair substitution at all',
+    ('no pair substitution at all', P,
      'primary = partner.get((face, (m, n)))',
      'primary = None',
      _grating_exact_off_centre),
-    ('the tie substitution removed',
+    ('the tie substitution removed', P,
      'sx = xp.where(tie, axis_x, sx)\n    sy = xp.where(tie, axis_y, sy)',
      'pass',
      _checkerboard_tie),
-    ('the tie always answers (1, 0)',
-     'axis_x = xp.where(pick_u, cos_a * one, xp.where(pick_v, -sin_a * one, one))',
+    ('the tie always answers (1, 0)', P,
+     'axis_x = xp.where(pick_u, frame.cos * one, xp.where(pick_v, -frame.sin * one, axis_x))',
      'axis_x = one',
      _strip_tie_reads_the_turned_axis),
-    ('the v faces lose their images',
-     'for face in _overlap.FACES:\n            e2, n2 = parts(face, du, dv)',
-     'for face in (_overlap.FACES if (m, n) == (0, 0) else _overlap.FACES[:2]):\n'
-     '            e2, n2 = parts(face, du, dv)',
+    ('one face loses its image list', P,
+     'for m, n in piece.imgs:',
+     "for m, n in (piece.imgs if face != '+v' else ((0, 0),)):",
      lambda: _band_gate(SQUARE, _box(lx=689.0, ly=200.0, angle=L_ANGLE))),
-    ('the u faces lose their images',
-     'for face in _overlap.FACES:\n            e2, n2 = parts(face, du, dv)',
-     'for face in (_overlap.FACES if (m, n) == (0, 0) else _overlap.FACES[2:]):\n'
-     '            e2, n2 = parts(face, du, dv)',
+    ('the v faces lose their images', P,
+     'for m, n in piece.imgs:',
+     "for m, n in (piece.imgs if face[1] == 'u' else ((0, 0),)):",
+     lambda: _band_gate(SQUARE, _box(lx=689.0, ly=200.0, angle=L_ANGLE))),
+    ('the u faces lose their images', P,
+     'for m, n in piece.imgs:',
+     "for m, n in (piece.imgs if face[1] == 'v' else ((0, 0),)):",
      lambda: _band_gate(SQUARE, _box(lx=200.0, ly=689.0, angle=L_ANGLE + np.pi / 2))),
-    ('coverage per image instead of the union',
+    ('coverage per image instead of the union', P,
      'dead = _overlap.covered_length(runs, tol) >= 2.0 * halves[f] - tol',
      'dead = any(hi - lo >= 2.0 * halves[f] - tol for lo, hi in runs)',
      _tiling_bar_is_empty),
-    ('blend exponent 4 -> 2',
+    ('blend exponent 4 -> 2', P,
      '_BLEND_EXPONENT = 4',
      '_BLEND_EXPONENT = 2',
      _the_350_golden),
+    ("the winner's weight is d_min^4 (the synthesis's formula)", P,
+     'w.append(xp.where(same, one, ratio ** _BLEND_EXPONENT))',
+     'w.append((d_min / xp.where(same, one, dk)) ** _BLEND_EXPONENT)',
+     _the_350_golden),
+    ('the seam sign forced opposed', P,
+     'signs[r] = xp.where(equal, as_array(xp, -1.0, dtype=dtype), as_array(xp, 1.0, dtype=dtype))',
+     'signs[r] = as_array(xp, -1.0, dtype=dtype)',
+     _rotated_seam_reads_its_own_axis),
+    ('fixed normals replaced by the foot direction', P,
+     GROUPED_SUM, FOOT_SUM,
+     _grating_exact_off_centre),
+    ('the pair sweep reads a fixed 3x3 instead of the ring', O,
+     '    ring = images(r)\n',
+     '    ring = images(1)\n',
+     _unreduced_basis_has_its_pair),
+    ('mu = None read as unequal to 1.0', None,
+     'return 1.0 if self.mu is None else self.mu',
+     'return 1.0 + 1e-9 if self.mu is None else self.mu',
+     _mu_absence_is_one_in_a_fresh_interpreter),
 ]
 
 
-@pytest.mark.parametrize('what, old, new, instrument', MUTANTS, ids=[m[0] for m in MUTANTS])
-def test_the_mutant_is_killed(what, old, new, instrument):
+@pytest.mark.parametrize('what, module, old, new, instrument', MUTANTS, ids=[m[0] for m in MUTANTS])
+def test_the_mutant_is_killed(what, module, old, new, instrument):
     """Each mutant names the instrument that kills it, and the harness says if it never ran.
 
     A ``DID-NOT-APPLY`` (the text is gone) or a ``NO-OP`` (the replacement changes nothing)
     is a failure of this test, not a survivor; a survivor is the instrument passing under the
     mutation, which is the one outcome the harness cannot tell from a passing test on its
-    own -- so it is asserted.
+    own -- so it is asserted. A mutant of ``overlap`` is reloaded in place, since
+    ``parametric`` reads that module through its name; one of ``domain`` cannot be, and runs
+    its instrument in a fresh interpreter instead.
     """
+    path = {P: SOURCE, O: OVERLAP_SOURCE, None: DOMAIN_SOURCE}[module]
     try:
-        with mutated(SOURCE, old, new):
-            importlib.reload(P)
+        with mutated(path, old, new):
+            if module is not None:
+                importlib.reload(module)
             try:
                 instrument()
             except AssertionError:
@@ -362,5 +465,6 @@ def test_the_mutant_is_killed(what, old, new, instrument):
             else:
                 killed = False
     finally:
-        importlib.reload(P)
+        if module is not None:
+            importlib.reload(module)
     assert killed, f'SURVIVED: {what}'

@@ -450,7 +450,7 @@ def strictly_inside(p, x, y):
     return (u / a) ** 2 + (v / b) ** 2 < 1.0
 
 
-def interfaces_of(prims, lattice, r, n=1024, step=None):
+def interfaces_of(prims, lattice, r, n=1024, step=None, groups=None):
     """The exact interface set: ``(x, y, nx, ny)`` rows of Gamma, from the outlines alone.
 
     Every image ``(m, n)`` in :func:`images` of every primitive has its outline sampled, and a
@@ -460,6 +460,15 @@ def interfaces_of(prims, lattice, r, n=1024, step=None):
     facing background keeps all of it; a round shape keeps its whole boundary. Nothing here
     knows about faces, runs, folds or blends -- it is point-in-shape tests on dense samples --
     which is what qualifies it to judge :func:`face_pairs` and the field built from it.
+
+    ``groups`` makes it material-aware: one hashable label per primitive, and a step that
+    lands inside an image of a primitive with the *same* label is buried while one landing in
+    a different label's image is kept -- a seam between two boxes of different material is an
+    interface and its normal is the first box's outward one. Left ``None`` every primitive is
+    one material and the seam is dropped, which is the reading the geometry-only tests want.
+    The background is never a label: a shape whose material equals the background keeps its
+    outline, as the field keeps its faces (case E), so what this judges is the field's own
+    contract rather than the physics of an inert boundary.
 
     ``step`` defaults to ``1e-6`` of the longer basis vector. It is the oracle's own
     resolution: two faces closer than it read as one seam, which is also what a solve sees.
@@ -472,19 +481,25 @@ def interfaces_of(prims, lattice, r, n=1024, step=None):
     a1y, a2y = checked_float(lattice[1][0]), checked_float(lattice[1][1])
     if step is None:
         step = 1e-6 * max(math.hypot(a1x, a1y), math.hypot(a2x, a2y))
-    live = [p for p in prims if p is not None]
-    rows = []
-    for p in live:
+    if groups is None:
+        groups = [0] * len(prims)
+    live = [(p, g) for p, g in zip(prims, groups) if p is not None]
+    rows, labels = [], []
+    for p, g in live:
         for m, k in images(r):
-            rows.append(_outline(_shifted(p, m * a1x + k * a2x, m * a1y + k * a2y), n))
+            outline = _outline(_shifted(p, m * a1x + k * a2x, m * a1y + k * a2y), n)
+            rows.append(outline)
+            labels.append(np.full(len(outline), hash(g)))
     if not rows:
         return np.zeros((0, 4))
     pts = np.concatenate(rows)
+    label = np.concatenate(labels)
     probe_x = pts[:, 0] + step * pts[:, 2]
     probe_y = pts[:, 1] + step * pts[:, 3]
     buried = np.zeros(len(pts), dtype=bool)
-    for p in live:
+    for p, g in live:
         for m, k in images(r + 1):
-            buried |= strictly_inside(_shifted(p, m * a1x + k * a2x, m * a1y + k * a2y),
-                                      probe_x, probe_y)
+            hit = strictly_inside(_shifted(p, m * a1x + k * a2x, m * a1y + k * a2y),
+                                  probe_x, probe_y)
+            buried |= hit & (label == hash(g))
     return pts[~buried]

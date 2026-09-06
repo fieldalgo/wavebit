@@ -396,15 +396,20 @@ def test_two_rectangles_carry_a_correct_relative_gradient_too():
     1e-5, 0.7% of a pixel, at one sample). A secant that straddles such a crossing averages
     the spin in; the derivative does not. With the fold's corner-radial extension the ridge
     sat elsewhere and 1e-6 was below it at every point here; with fixed face normals
-    (2026-09-06) it is not, and the step is 1e-7:
+    (2026-09-06) it is not, and the step is 1e-7. Re-measured the same day when the layer
+    became one blend over every piece of both boxes (no per-shape stage): the extension off
+    the interfaces changed, so the derivative did -- 6.90e-3 -> 8.69e-3 at ``d = 0.02`` --
+    and it agrees with the difference the same way:
 
         d       AD             FD h=1e-6 (rel)   h=1e-7 (rel)    h=1e-8 (rel)
-        0.02    6.89695e-03    -8.2e-2           +2.6e-6         +2.6e-6
-        0.05    4.03019e-03    -2.6e-2           -9.3e-5         -1.0e-4
-        0.08    1.63509e-03    -2.5e-4           -9.7e-5         -1.4e-4
+        0.02    8.68962e-03    -1.8e-3           -1.9e-5         -2.0e-6
+        0.05    5.04542e-03    -3.6e-5           -3.8e-5         +7.6e-6
+        0.08    2.73522e-03    +1.5e-5           +8.7e-6         -3.0e-5
 
-    Both columns below 1e-6 agree with each other and with autograd, which is what says the
-    derivative is right and the coarse secant is what was wrong.
+    (the two-stage blend's rows were 6.89695e-03 / 4.03019e-03 / 1.63509e-03 with -8.2e-2,
+    -2.6e-2, -2.5e-4 at ``h = 1e-6`` and +2.6e-6, -9.3e-5, -9.7e-5 at ``1e-7``). Both columns
+    below 1e-6 agree with each other and with autograd, which is what says the derivative is
+    right and the coarse secant is what was wrong.
     """
     h = 1e-7
     for d in (0.02, 0.05, 0.08):

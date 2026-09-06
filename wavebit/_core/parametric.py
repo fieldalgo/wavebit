@@ -72,13 +72,13 @@ underfoot: with two shapes the normal at a boundary was already 40 deg from the 
 normal, and with three, 43. It also sampled ``X - cx``, the offset to the shape *as named*, so
 naming a shape one period over slid a different part of an infinite wedge into the cell and
 moved the answer by 1.9e-2. Two changes fix both, and neither carries a width to tune: the
-displacement is folded to the nearest image, and the shapes are combined by distance-ratio
-weights (:func:`_ratio_blend`), which collapse to one shape's own normal exactly at its
+displacement is folded to the nearest image, and the pieces are combined by distance-ratio
+weights (:func:`_piece_field`), which collapse to one piece's own normal exactly at its
 surface. Boundaries now read 0.000 deg for any number of shapes and naming a period over moves
 nothing (5.7e-13).
 
 **A box is four face pieces, each carried over the ring of its periodic images** (2026-09-06,
-:class:`GammaPlan` and :func:`_box_field`). A face is a segment: its image under a lattice
+:class:`GammaPlan` and :func:`_piece_field`). A face is a segment: its image under a lattice
 vector lands on a parallel line, slid along it, and where an opposite face's image lands on
 the same line the material runs on and there is no interface -- a bar spanning the cell, a box
 on a sheared cell, a tilted box whose faces meet their own images part way. The previous
@@ -88,6 +88,17 @@ now every face is evaluated at every instance that can be its nearest, a coincid
 told so by the plan and cancels bitwise, and the sheared and tilted scenes build at 0.19 deg
 against an exact interface oracle. The same rewrite removed ``sign()`` from the rectangle
 branch, which the position gradient had been blocked on.
+
+**Several shapes are one blend over all of their pieces, and a seam between two of them is
+an interface iff their materials differ** (2026-09-06, the second half). Two boxes that abut
+-- inside the cell, or one against the other's periodic image -- share a face line over a run,
+and the plan records that pair too. Over the run the two faces' weights are equal by the same
+bitwise construction a lone box uses across its own images, and the material slots decide the
+sign: equal materials cancel (two touching same-material bars solve as the one bar they are,
+to 1e-14 on the invariants), different ones co-orient so the seam's normal survives (the
+``eps 4 | eps 9`` seam used to be a null band). There is no per-shape stage in between: a
+two-stage blend switches extension at the moment of contact, measured as a 1.1e-2 step in
+``sum(T)``, and a single sum over every piece has nothing to switch.
 
 **What it costs, which the commit that made the change did not measure.** The blend evaluates a
 signed distance per shape and a product over the others, and a rectangle adds four blended faces
@@ -795,9 +806,10 @@ def normal_vector_field_analytical(xp, grid_shape, shapes, dtype, lattice, plan=
         # constant Li's rules read as "x is the normal".
         return xp.ones((Ny, Nx), dtype=dtype), xp.zeros((Ny, Nx), dtype=dtype)
 
+    slots = _material_slots(xp, shapes, dtype)
     if _tiles_pay(X, Ny, Nx, len(plan.pieces)):
-        return _field_tiled(xp, X, Y, shapes, plan, lattice, dtype, (Ny, Nx))
-    return _piece_field(xp, X, Y, shapes, plan, None, lattice, dtype)
+        return _field_tiled(xp, X, Y, shapes, plan, slots, lattice, dtype, (Ny, Nx))
+    return _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype)
 
 
 #: Side of the square block :func:`_field_tiled` works in. 64 doubles is 32 KB per array, so
@@ -836,7 +848,7 @@ def _tiles_pay(sample, n_v, n_u, n_pieces):
             and type(sample) is np.ndarray)
 
 
-def _field_tiled(xp, X, Y, shapes, plan, lattice, dtype, grid_shape):
+def _field_tiled(xp, X, Y, shapes, plan, slots, lattice, dtype, grid_shape):
     """:func:`_piece_field`, evaluated one cache-sized block at a time.
 
     Bit-identical to the whole-grid path by construction: same operations on the same values in
@@ -852,7 +864,7 @@ def _field_tiled(xp, X, Y, shapes, plan, lattice, dtype, grid_shape):
             block = (slice(i0, min(i0 + _TILE, n_v)), slice(j0, min(j0 + _TILE, n_u)))
             bx = np.ascontiguousarray(X[block])
             by = np.ascontiguousarray(Y[block])
-            out_x[block], out_y[block] = _piece_field(xp, bx, by, shapes, plan, None,
+            out_x[block], out_y[block] = _piece_field(xp, bx, by, shapes, plan, slots,
                                                       lattice, dtype)
     return out_x, out_y
 
@@ -1037,232 +1049,317 @@ def _blind_plan(shapes, lattice):
 
 # ---------------------------------------------------------------------------- the replay
 
+def _material_slots(xp, shapes, dtype):
+    """Each shape's material slot as a 0-d array -- what a cross pair's sign compares.
+
+    The slot's ``epsilon``, in both passes. In the permittivity pass that is the permittivity;
+    in the permeability pass it is the permeability, because ``_mu_structure`` hands this
+    builder a *view* whose material slots already hold ``mu_value`` -- ``1.0`` for a material
+    that named none, by the type's own contract -- so one reader serves both quantities and the
+    interface set is decided per quantity, as the raster path's twin records already are.
+    Complex, because a material may be lossy and equality is asked of the whole value; the
+    background never enters, since a seam between two shapes is an interface iff *they*
+    differ.
+    """
+    cdtype = xp.complex64 if dtype == xp.float32 else xp.complex128
+    return [as_array(xp, as_material(shape.get('material', 1.0), 'shape material').epsilon,
+                     dtype=cdtype) for shape in shapes]
+
+
+class _Frame:
+    """One box's traced geometry against the sample points, in the box's own frame.
+
+    ``U``, ``V`` are the samples' coordinates along the box's axes measured from its centre,
+    **not folded**; ``km``, ``kn`` are the integer fold -- which lattice cell the sample sits in
+    relative to the centre, by rounding the fractional coordinates. An instance of the box is
+    named by its *absolute* image ``K = fold + offset``, and :meth:`at` gives the sample's
+    coordinates relative to that instance as ``U - K . (A e_u)``: one expression for every
+    reader. Two pieces that name the same absolute image -- a face, and the face of another
+    box that lies on its line -- therefore compute bitwise the same numbers whatever fold each
+    started from, which is what lets a cross pair cancel exactly without the two shapes
+    sharing a fold. (The partner offset between two folds *is* array-valued, as the previous
+    commit noted; written this way it cancels out of the arithmetic rather than needing a
+    ``where``.) The fold still bounds the instance list: the residual after rounding sits
+    within half the cell's diameter of the centre, so the size-only ring of
+    :class:`GammaPlan` is a superset of the nearest instance at every position.
+    """
+    __slots__ = ('xp', 'cos', 'sin', 'a', 'b', 'cx', 'cy', 'U', 'V', 'km', 'kn',
+                 't1u', 't1v', 't2u', 't2v')
+
+    def __init__(self, xp, X, Y, shape, lattice, dtype):
+        _, cx, cy, lx, ly, angle = shape_geometry(shape, lattice)
+        self.xp = xp
+        self.cos = xp.cos(as_array(xp, angle, dtype=dtype))
+        self.sin = xp.sin(as_array(xp, angle, dtype=dtype))
+        self.a, self.b = lx / 2.0, ly / 2.0
+        self.cx, self.cy = cx, cy
+        a1x, a2x = lattice[0][0], lattice[0][1]
+        a1y, a2y = lattice[1][0], lattice[1][1]
+        det = a1x * a2y - a2x * a1y
+        dx, dy = X - cx, Y - cy
+        self.km = xp.round((a2y * dx - a2x * dy) / det)
+        self.kn = xp.round((-a1y * dx + a1x * dy) / det)
+        self.U = dx * self.cos + dy * self.sin
+        self.V = -dx * self.sin + dy * self.cos
+        self.t1u, self.t1v = a1x * self.cos + a1y * self.sin, -a1x * self.sin + a1y * self.cos
+        self.t2u, self.t2v = a2x * self.cos + a2y * self.sin, -a2x * self.sin + a2y * self.cos
+
+    def at(self, Km, Kn):
+        """``(du, dv)``: the samples relative to the instance at absolute image ``(Km, Kn)``."""
+        return (self.U - Km * self.t1u - Kn * self.t2u,
+                self.V - Km * self.t1v - Kn * self.t2v)
+
+    def parts(self, face, du, dv, zero):
+        """``(squared tangential excess, squared normal coordinate, tangential coordinate)``.
+
+        Of one face, at the instance whose relative coordinates are ``(du, dv)`` -- the ONE
+        spelling of each, so a primary and its dependent compute bitwise the same numbers. The
+        u faces run along v with half-length ``b``; the tangential coordinate is measured from
+        the face's midpoint, which is where a run's bounds are stated.
+        """
+        xp = self.xp
+        if face[1] == 'u':
+            sigma = dv
+            excess = xp.maximum(xp.abs(dv) - self.b, zero)
+        else:
+            sigma = du
+            excess = xp.maximum(xp.abs(du) - self.a, zero)
+        t = {'+u': du - self.a, '-u': du + self.a, '+v': dv - self.b, '-v': dv + self.b}[face]
+        return excess * excess, t * t, sigma
+
+    def midpoint(self, face):
+        """The face's midpoint in the cell frame -- the centre plus the half-length along the normal."""
+        ux, uy = self.cos, self.sin
+        vx, vy = -self.sin, self.cos
+        return {'+u': (self.cx + self.a * ux, self.cy + self.a * uy),
+                '-u': (self.cx - self.a * ux, self.cy - self.a * uy),
+                '+v': (self.cx + self.b * vx, self.cy + self.b * vy),
+                '-v': (self.cx - self.b * vx, self.cy - self.b * vy)}[face]
+
+
+def _run_window(xp, pframe, p_face, qframe, q_face, m, n, lattice, dtype):
+    """``(lo, hi)``: the run a cross pair shares, along ``p``'s tangent from ``p``'s midpoint.
+
+    The plan records the pair by *name*; the bounds are re-derived here from the traced
+    geometry as the max / min of projections, the same arithmetic
+    :func:`~wavebit._core.overlap.face_pairs` used on the concrete numbers. ``q`` sits at
+    lattice offset ``(m, n)`` relative to ``p``'s own instance.
+    """
+    a1x, a2x = lattice[0][0], lattice[0][1]
+    a1y, a2y = lattice[1][0], lattice[1][1]
+    pmx, pmy = pframe.midpoint(p_face)
+    qmx, qmy = qframe.midpoint(q_face)
+    dx = qmx + (m * a1x + n * a2x) - pmx
+    dy = qmy + (m * a1y + n * a2y) - pmy
+    if p_face[1] == 'u':
+        tx, ty, h_p = -pframe.sin, pframe.cos, pframe.b        # the u faces run along v
+    else:
+        tx, ty, h_p = pframe.cos, pframe.sin, pframe.a
+    h_q = qframe.b if q_face[1] == 'u' else qframe.a
+    slid = tx * dx + ty * dy
+    lo = xp.maximum(as_array(xp, -h_p, dtype=dtype), as_array(xp, slid - h_q, dtype=dtype))
+    hi = xp.minimum(as_array(xp, h_p, dtype=dtype), as_array(xp, slid + h_q, dtype=dtype))
+    return lo, hi
+
+
 def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype):
     """The normal field at ``(X, Y)`` from the plan's pieces -- ``(normal_x, normal_y)``.
 
-    Per shape, its pieces are blended into one ``(distance, normal)`` -- :func:`_box_field`
-    for the four faces of a box, :func:`_round_field` for a round shape -- and several shapes
-    are then combined by :func:`_ratio_blend` on their distances. ``slots`` is the layer's
-    material slot values, which a *cross* pair's sign reads at build time (equal materials
-    cancel across a contact, different ones keep the seam); nothing here reads it yet, and it
-    is in the signature so that the reader who adds it changes no caller.
-    """
-    by_shape = {}
-    for k, piece in enumerate(plan.pieces):
-        by_shape.setdefault(piece.shape, []).append(k)
+    **One blend over every piece of every shape.** A box is its four faces and a round shape
+    one piece; each piece has a distance (:class:`_Frame` for a face over its instances,
+    :func:`_round_field` for an arc) and a direction, and they are combined by the ratio
+    weights ``w = where(d == d_min, 1, (d_min / d) ** 4)`` in one sum. There is no per-shape
+    stage: a two-stage blend switches extension where two shapes come into contact, which was
+    measured as a 1.1e-2 step in ``sum(T)`` at order 6, and the one-stage sum has nothing to
+    switch. A lone round shape is one piece and returns its own field, as it always did.
 
-    got = []
-    for i, shape in enumerate(shapes):
-        keys = by_shape.get(i)
-        if not keys:
-            continue            # a type this path cannot build; `check_shape_spec` refuses it
-        first = plan.pieces[keys[0]]
-        if first.face == 'arc':
-            got.append(_round_field(xp, X, Y, shape, lattice, dtype))
-            continue
-        records = [(plan.pieces[pr.p].face, plan.pieces[pr.q].face, pr.m, pr.n, pr.flush)
-                   for pr in plan.pairs
-                   if plan.pieces[pr.p].shape == i and plan.pieces[pr.q].shape == i]
-        dead = {plan.pieces[k].face for k in keys if plan.pieces[k].dead}
-        got.append(_box_field(xp, X, Y, shape, lattice, dtype, first.imgs, records, dead))
+    **A piece's distance is the segment distance to the nearest of its instances.** For a face
+    with tangential coordinate ``sigma`` and normal coordinate ``nu`` at instance ``K``,
+    ``d_K = hypot(max(0, |sigma| - h), nu)`` and ``d = min_K d_K`` over the plan's image list:
+    a superset of candidates that contains the minimiser is the exact periodic distance.
 
-    if not got:
-        return xp.ones(X.shape, dtype=dtype), xp.zeros(X.shape, dtype=dtype)
-    if len(got) == 1:
-        return got[0][1], got[0][2]
-    return _ratio_blend(xp, got)
+    **A piece's direction is its outward normal, everywhere** -- not the foot direction past
+    the extent, not the corner-radial rule the fold's box branch used. Measured: the foot rule
+    breaks the 1-D grating (``max|n_y|`` 0.76 where it must be 0, because a covered face and
+    its partner share endpoints and their foot directions reinforce instead of cancelling) and
+    puts a 4e-4 non-decaying step at every merge; fixed normals give the grating exactly, a
+    zero step at every merge, and the sheared and tilted scenes at 0.19 deg against the exact
+    oracle. The price is ~4e-4 in ``sum(T)`` off the interface on a lone box at order 6.
 
+    **A pair cancels or reinforces by arithmetic, and the materials decide which.** The plan
+    says which face's instance lies on which face's line, opposed. The partner's normal
+    coordinate is computed from the *primary's* expression at the coincident absolute image --
+    bitwise the same value -- so where both are the nearest instance of their piece the two
+    weights are equal. A self pair (the shape against its own image) is then an exact zero
+    through the box's own axis sum. A cross pair (two shapes) reads the two material slots:
+    equal, and the partner's weight is subtracted from the primary's over the run they share --
+    the material runs on, no interface; different, and it is *added* -- the seam is an
+    interface and its normal survives (a null band, until 2026-09-06). The sign is a window in
+    ``sigma`` rebuilt from the traced run bounds (:func:`_run_window`), never one scalar per
+    piece: one face can be a pair member on several runs with different equalities. Beyond the
+    run the two keep their own opposed normals, which is right for both materials -- past the
+    end of a seam there is no interface either way. Nothing decides *when*: a face one ulp
+    off its partner's line is carried continuously by the same blend, one on it cancels
+    identically, and a material swept through equality flips the sign live, with nothing to
+    invalidate.
 
-def _ratio_blend(xp, got):
-    """Several shapes' fields combined by the ratio of surface distances: ``(d_min / d_j)^4``.
-
-    The nearest shape carries weight 1 and every other ``(d_min / d_j) ** _BLEND_EXPONENT``,
-    so at shape A's own surface ``d_A = 0`` zeroes every other weight and the sum collapses to
-    A's normal exactly, while between the shapes the weights vary smoothly. Direction-identical
-    to the product form this replaces (each weight was the product of the *other* distances,
-    which is ``1 / d_j`` up to a common factor) -- but linear in the number of terms, and with
-    no underflow past a few dozen of them, where the product sits at 1e-118 for 256 facets.
-
-    The division is guarded on its *input*: the divisor is 1 wherever the weight is going to
-    be replaced anyway (``d_j == d_min``, which covers ``d_min == 0``), so the branch a
-    ``where`` discards never sees a zero -- the :func:`_hypot_safe` lesson, that autograd
-    still differentiates the discarded branch.
-
-    Smoothness is the point, not a bonus. Picking the nearest shape outright (``argmin``)
-    gives the same exact normals at every surface and a field that JUMPS across the selection
-    boundary -- and moving a shape sweeps that boundary, which contributes a line integral of
-    the jump to the true derivative that no grid sample and no autograd sees. Measured on two
-    circles, the hard pick's autograd sits 44-76% from central differences and does not
-    improve as h shrinks. This weighting has no jump to sweep: the same comparison falls
-    1.5e-2 -> 6.5e-4 -> 6.3e-5 as h goes 1e-4 -> 1e-5 -> 1e-6, a correct gradient with the
-    difference converging onto it.
-    """
-    d_min = got[0][0]
-    for d, _gx, _gy in got[1:]:
-        d_min = xp.minimum(d_min, d)
-    one = xp.ones_like(d_min)
-    sx = xp.zeros_like(d_min)
-    sy = xp.zeros_like(d_min)
-    for d, gx, gy in got:
-        same = d == d_min
-        ratio = d_min / xp.where(same, one, d)
-        w = xp.where(same, one, ratio ** _BLEND_EXPONENT)
-        sx = sx + w * gx
-        sy = sy + w * gy
-    norm = _hypot_safe(xp, sx, sy)
-    return sx / norm, sy / norm
-
-
-def _folded_frame(xp, dx, dy, lattice, cos_a, sin_a):
-    """``(dx, dy)`` reduced to the shape's own lattice cell, in the shape's frame: ``(e_u, e_v)``.
-
-    Rounding the *fractional* coordinates lands the residual in the centred parallelogram,
-    within half the cell's diameter of the origin. That is not the Euclidean nearest image --
-    :func:`_fold_to_nearest_image` sweeps 3x3 for that -- and it does not need to be: the ring
-    of instances :func:`_box_field` evaluates around it is sized for exactly this residual.
-    """
-    a1x, a2x = lattice[0][0], lattice[0][1]
-    a1y, a2y = lattice[1][0], lattice[1][1]
-    det = a1x * a2y - a2x * a1y
-    mf = xp.round((a2y * dx - a2x * dy) / det)
-    nf = xp.round((-a1y * dx + a1x * dy) / det)
-    ex = dx - mf * a1x - nf * a2x
-    ey = dy - mf * a1y - nf * a2y
-    return ex * cos_a + ey * sin_a, -ex * sin_a + ey * cos_a
-
-
-def _box_field(xp, X, Y, shape, lattice, dtype, imgs, records, dead):
-    """``(distance, normal_x, normal_y)`` of one box from its four face pieces, periodic.
-
-    **A piece's distance is the segment distance to the nearest of its instances.** For
-    instance ``t`` of a face with tangential coordinate ``sigma`` and normal coordinate
-    ``nu``, ``d_t = hypot(max(0, |sigma| - h), nu)``, and ``d = min_t d_t`` over ``imgs``: a
-    superset of candidates that contains the minimiser is the exact periodic distance. Inside
-    the box this is the perpendicular distance to the nearer of each family's lines; outside a
-    corner it is the distance to the corner, from either adjacent face.
-
-    **A piece's direction is its outward normal, everywhere.** Not the foot direction past
-    the extent, not the corner-radial rule the previous box branch used. Measured: the foot
-    rule breaks the 1-D grating (``max|n_y|`` 0.76 where it must be 0, because a covered face
-    and its partner share endpoints and their foot directions reinforce instead of
-    cancelling) and puts a 4e-4 non-decaying step at every merge; fixed normals give the
-    grating exactly, a zero step at every merge, and the sheared and tilted scenes that used
-    to be refused (band error 0.19 deg against the exact oracle). The price is ~4e-4 in
-    ``sum(T)`` off the interface on a lone box at order 6 -- an admissible continuation
-    replaced by another, the class of movement every box golden in the suite took.
-
-    **A pair cancels by arithmetic, not by a gate.** ``records`` says which instance of which
-    face lies on which face's line, opposed. Over that run the partner's normal coordinate is
-    by construction the negative of the primary's, so its distance is computed from the
-    *primary's* expression at the partner offset -- bitwise the same value -- and where both
-    are the nearest instance of their piece the two weights are equal and the two normals
-    exact opposites: the sum is an exact zero. Nothing decides when: a face one ulp off its
-    partner's line is carried by the same blend continuously, and one on it cancels
-    identically. That is what makes ``max|n_y| == 0.0`` an assertion rather than a tolerance
-    on a spanning bar, and what leaves no step at the onset of a run.
-
-    **The blend is the ratio form** (:func:`_ratio_blend`): the nearest face weighs 1, every
-    other ``(d_min / d) ** 4``, so a face's own line reads its own normal exactly and a
-    corner reads the diagonal of its two faces.
-
-    **The tie.** Where the sum is exactly zero -- a dead pair's partner line, the midline of a
+    **The tie.** Where the sum is exactly zero -- a dead pair's line, the midline of a
     surviving pair -- the direction is the axis of the pair that did *not* cancel at that
-    point, read off the records by array equality of the members' distances; both cancelled
-    or neither (a box's own centre) reads ``(1, 0)``. Sign is free because the factorization
-    reads ``n n^T``. Li's checkerboard samples that line once per row however fine the grid,
-    and the answer there is ``v``, the axis that has an interface.
+    sample, read off the records by array equality of the members' distances: for each box in
+    turn, the axis whose records did not cancel where the other axis's did, and ``(1, 0)`` when
+    both cancelled or neither did, for every box. Sign is free because the factorization reads
+    ``n n^T``. Li's checkerboard samples that line once per row however fine the grid, and the
+    answer there is ``v``, the axis that has an interface.
 
-    ``dead`` faces stay in the blend -- they cancel -- and leave only the *distance* this
-    returns, which weighs this shape against others: a dead face is not a surface, so it does
-    not get to be the nearest one.
+    ``slots`` is the layer's material slot values (:func:`_material_slots`), computed from the
+    shapes when ``None``; self pairs never read one.
     """
-    _, cx, cy, lx, ly, angle = shape_geometry(shape, lattice)
-    cos_a = xp.cos(as_array(xp, angle, dtype=dtype))
-    sin_a = xp.sin(as_array(xp, angle, dtype=dtype))
-    a, b = lx / 2.0, ly / 2.0
-    e_u, e_v = _folded_frame(xp, X - cx, Y - cy, lattice, cos_a, sin_a)
+    if slots is None:
+        slots = _material_slots(xp, shapes, dtype)
+    zero = xp.zeros_like(X)
+    one = xp.ones_like(X)
+    index = {(pc.shape, pc.face): k for k, pc in enumerate(plan.pieces)}
 
-    # Each instance is a scalar shift of the residual in the shape's frame, taken once.
-    a1x, a2x = lattice[0][0], lattice[0][1]
-    a1y, a2y = lattice[1][0], lattice[1][1]
-    shift = {}
-    for m, n in imgs:
-        tx = m * a1x + n * a2x
-        ty = m * a1y + n * a2y
-        shift[(m, n)] = (tx * cos_a + ty * sin_a, -tx * sin_a + ty * cos_a)
+    if len(plan.pieces) == 1 and plan.pieces[0].face == 'arc':
+        _, gx, gy = _round_field(xp, X, Y, shapes[plan.pieces[0].shape], lattice, dtype)
+        return gx, gy
 
-    # A pair member's instance reads the primary's expression at the partner offset: q's
-    # instance s coincides with p's instance s - (m, n), both relative to the one fold.
-    partner = {}
-    for p_face, q_face, mp, np_, flush in records:
-        for m, n in imgs:
-            offset = (m - mp, n - np_)
-            if offset in shift:
-                partner[(q_face, (m, n))] = (p_face, offset, flush)
+    frames = {}
+    for pc in plan.pieces:
+        if pc.face != 'arc' and pc.shape not in frames:
+            frames[pc.shape] = _Frame(xp, X, Y, shapes[pc.shape], lattice, dtype)
 
-    zero = xp.zeros_like(e_u)
+    # The pair records by role. A self pair substitutes within the box's own instance table;
+    # a cross pair carries a run window and a sign, both from the traced values.
+    self_records, cross_by_q, windows, signs = {}, {}, {}, {}
+    for r, pr in enumerate(plan.pairs):
+        p, q = plan.pieces[pr.p], plan.pieces[pr.q]
+        if p.shape == q.shape:
+            self_records.setdefault(p.shape, []).append((p.face, q.face, pr.m, pr.n, pr.flush))
+            continue
+        cross_by_q.setdefault(pr.q, []).append(r)
+        windows[r] = _run_window(xp, frames[p.shape], p.face, frames[q.shape], q.face,
+                                 pr.m, pr.n, lattice, dtype)
+        equal = xp.all(slots[p.shape] == slots[q.shape])
+        signs[r] = xp.where(equal, as_array(xp, -1.0, dtype=dtype), as_array(xp, 1.0, dtype=dtype))
 
-    def parts(face, du, dv):
-        # (squared tangential excess, squared normal coordinate) of one face at the instance
-        # whose shifted residual is (du, dv) -- the ONE spelling of each, so a primary and its
-        # dependent compute bitwise the same numbers.
-        if face[1] == 'u':
-            exc = xp.maximum(xp.abs(dv) - b, zero)     # the u faces run along v, half-length b
-        else:
-            exc = xp.maximum(xp.abs(du) - a, zero)
-        t = {'+u': du - a, '-u': du + a, '+v': dv - b, '-v': dv + b}[face]
-        return exc * exc, t * t
+    # 1. Every piece's distance, and for a cross pair's partner whether its nearest instance
+    #    sits on the run.
+    d = [None] * len(plan.pieces)
+    round_dir = {}
+    inside = {}
+    for i, frame in frames.items():
+        faces = {face: plan.pieces[index[(i, face)]] for face in _overlap.FACES}
+        offsets = sorted({mn for pc in faces.values() for mn in pc.imgs})
+        own = {(m, n): frame.at(frame.km + m, frame.kn + n) for m, n in offsets}
+        # A self pair member's instance reads the primary's expression at the partner offset:
+        # q's instance s coincides with p's instance s - (m, n), both on this box's fold.
+        partner = {}
+        for p_face, q_face, mp, np_, flush in self_records.get(i, ()):
+            for m, n in offsets:
+                offset = (m - mp, n - np_)
+                if offset in own:
+                    partner[(q_face, (m, n))] = (p_face, offset, flush)
+        for face, piece in faces.items():
+            k = index[(i, face)]
+            cross = cross_by_q.get(k, ())
+            best, on_run = None, {r: None for r in cross}
+            for m, n in piece.imgs:
+                du, dv = own[(m, n)]
+                e2, n2, _ = frame.parts(face, du, dv, zero)
+                primary = partner.get((face, (m, n)))
+                if primary is not None:
+                    pe2, n2, _ = frame.parts(primary[0], *own[primary[1]], zero)
+                    if primary[2]:
+                        e2 = pe2                            # flush: the same segment, bitwise
+                hits = {}
+                for r in cross:
+                    pr = plan.pairs[r]
+                    p = plan.pieces[pr.p]
+                    pframe = frames[p.shape]
+                    # The primary's expression at the coincident absolute image: this box's
+                    # fold plus this instance, less the pair's offset -- the same integers
+                    # the primary's own evaluation names when this instance is the nearest.
+                    pdu, pdv = pframe.at(frame.km + (m - pr.m), frame.kn + (n - pr.n))
+                    pe2, pn2, sigma = pframe.parts(p.face, pdu, pdv, zero)
+                    lo, hi = windows[r]
+                    hits[r] = (sigma >= lo) & (sigma <= hi)
+                    if pr.flush:
+                        e2, n2 = pe2, pn2
+                    else:
+                        n2 = xp.where(hits[r], pn2, n2)
+                val = e2 + n2
+                if best is None:
+                    best, on_run = val, hits
+                else:
+                    take = val < best
+                    best = xp.where(take, val, best)
+                    on_run = {r: xp.where(take, hits[r], on_run[r]) for r in cross}
+            d[k] = xp.sqrt(best)
+            inside.update(on_run)
+    for k, pc in enumerate(plan.pieces):
+        if pc.face == 'arc':
+            d[k], gx, gy = _round_field(xp, X, Y, shapes[pc.shape], lattice, dtype)
+            round_dir[k] = (gx, gy)
 
-    d2 = {}
-    for m, n in imgs:
-        su, sv = shift[(m, n)]
-        du, dv = e_u - su, e_v - sv
-        for face in _overlap.FACES:
-            e2, n2 = parts(face, du, dv)
-            primary = partner.get((face, (m, n)))
-            if primary is not None:
-                psu, psv = shift[primary[1]]
-                pe2, n2 = parts(primary[0], e_u - psu, e_v - psv)
-                if primary[2]:
-                    e2 = pe2                            # flush: the same segment, bitwise
-            val = e2 + n2
-            d2[face] = val if face not in d2 else xp.minimum(d2[face], val)
-    d = {face: xp.sqrt(d2[face]) for face in _overlap.FACES}
+    # 2. The ratio weights. The division is guarded on its *input*: the divisor is 1 wherever
+    #    the weight is going to be replaced anyway (`d == d_min`, which covers `d_min == 0`),
+    #    so the branch a `where` discards never sees a zero -- autograd still differentiates
+    #    the discarded branch, the `_hypot_safe` lesson.
+    d_min = d[0]
+    for dk in d[1:]:
+        d_min = xp.minimum(d_min, dk)
+    w = []
+    for dk in d:
+        same = dk == d_min
+        ratio = d_min / xp.where(same, one, dk)
+        w.append(xp.where(same, one, ratio ** _BLEND_EXPONENT))
 
-    d_min = xp.minimum(xp.minimum(d['+u'], d['-u']), xp.minimum(d['+v'], d['-v']))
-    one = xp.ones_like(d_min)
-    w = {}
-    for face in _overlap.FACES:
-        same = d[face] == d_min
-        ratio = d_min / xp.where(same, one, d[face])
-        w[face] = xp.where(same, one, ratio ** _BLEND_EXPONENT)
-    wu = w['+u'] - w['-u']
-    wv = w['+v'] - w['-v']
-    sx = wu * cos_a - wv * sin_a
-    sy = wu * sin_a + wv * cos_a
+    # 3. The sum. A cross pair's partner hands its weight to the primary's axis over the run,
+    #    with the material sign; every face then contributes along its own outward normal, and
+    #    each box's two opposed faces are differenced *before* the rotation so that a pair's
+    #    cancellation is an exact zero on the box's own axis.
+    own_w = list(w)
+    for r, pr in enumerate(plan.pairs):
+        if r not in windows:
+            continue
+        moved = xp.where(inside[r], w[pr.q], zero)
+        own_w[pr.q] = own_w[pr.q] - moved
+        own_w[pr.p] = own_w[pr.p] + signs[r] * moved
+    sx, sy = zero, zero
+    for i, frame in frames.items():
+        wu = own_w[index[(i, '+u')]] - own_w[index[(i, '-u')]]
+        wv = own_w[index[(i, '+v')]] - own_w[index[(i, '-v')]]
+        sx = sx + (wu * frame.cos - wv * frame.sin)
+        sy = sy + (wu * frame.sin + wv * frame.cos)
+    for k, (gx, gy) in round_dir.items():
+        sx = sx + w[k] * gx
+        sy = sy + w[k] * gy
 
-    tie = (wu == 0.0) & (wv == 0.0)
-    cancelled = {'u': None, 'v': None}
-    for p_face, q_face, _m, _n, _flush in records:
-        same = d[p_face] == d[q_face]
-        axis = p_face[1]
-        cancelled[axis] = same if cancelled[axis] is None else (cancelled[axis] | same)
+    # 4. The tie.
+    tie = (sx == 0.0) & (sy == 0.0)
+    cancelled = {}
+    for r, pr in enumerate(plan.pairs):
+        p, q = plan.pieces[pr.p], plan.pieces[pr.q]
+        same = d[pr.p] == d[pr.q]
+        if r in windows:
+            same = same & (signs[r] < 0.0)
+        for key in ((p.shape, p.face[1]), (q.shape, q.face[1])):
+            cancelled[key] = same if key not in cancelled else (cancelled[key] | same)
     none = tie & ~tie
-    c_u = none if cancelled['u'] is None else cancelled['u']
-    c_v = none if cancelled['v'] is None else cancelled['v']
-    pick_u = c_v & ~c_u
-    pick_v = c_u & ~c_v
-    axis_x = xp.where(pick_u, cos_a * one, xp.where(pick_v, -sin_a * one, one))
-    axis_y = xp.where(pick_u, sin_a * one, xp.where(pick_v, cos_a * one, zero))
+    axis_x, axis_y = one, zero
+    for i in reversed(list(frames)):                 # the first box with an answer wins
+        frame = frames[i]
+        c_u = cancelled.get((i, 'u'), none)
+        c_v = cancelled.get((i, 'v'), none)
+        pick_u = c_v & ~c_u
+        pick_v = c_u & ~c_v
+        axis_x = xp.where(pick_u, frame.cos * one, xp.where(pick_v, -frame.sin * one, axis_x))
+        axis_y = xp.where(pick_u, frame.sin * one, xp.where(pick_v, frame.cos * one, axis_y))
     sx = xp.where(tie, axis_x, sx)
     sy = xp.where(tie, axis_y, sy)
     norm = _hypot_safe(xp, sx, sy)
-
-    live = [face for face in _overlap.FACES if face not in dead] or list(_overlap.FACES)
-    dist = d[live[0]]
-    for face in live[1:]:
-        dist = xp.minimum(dist, d[face])
-    return dist, sx / norm, sy / norm
+    return sx / norm, sy / norm
 
 
 def _fold_to_nearest_image(xp, dx, dy, lattice):

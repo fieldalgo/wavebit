@@ -14,7 +14,7 @@ and the only symptom was slow convergence -- which reads as a property of the pa
 defect in it. It reached a published convergence study before it was caught.
 
 **What the fix is.** A box is four face pieces, each a segment evaluated at every periodic
-instance that can be its nearest (:func:`~wavebit._core.parametric._box_field`), and the plan
+instance that can be its nearest (:func:`~wavebit._core.parametric._piece_field`), and the plan
 (:func:`~wavebit._core.parametric.plan_gamma`) records that at ``ly = Pv`` the ``+y`` face and
 the ``-y`` face of the image above lie on one line, *flush*. The partner's distance is then the
 primary's own expression, so the two are one number at every sample and the two opposite normals
@@ -431,53 +431,65 @@ def test_the_x_fold_carries_its_own_weight():
     assert np.abs(normal_x).max() == 0.0
 
 
-def test_a_dead_face_never_becomes_the_nearest_surface():
-    """A dead face pair must leave the *distance* too, not only the blend. Nothing reached it.
+def test_a_dead_face_is_inert_in_the_sum_however_near_it_is():
+    """A dead pair contributes exactly nothing, so its line may be the nearest one and not matter.
 
-    ``_box_field`` returns a distance alongside the normal, and that distance decides which
-    shape owns a point when a layer holds several. A dead face is not a surface, so it must
-    not be allowed to be the nearest one -- and collapsing that reduction to a plain minimum
-    over all four faces passes every other test in this file, because they all build a layer
-    holding one shape, where the reduction has nothing to arbitrate.
+    With one blend over every piece of every shape (2026-09-06) there is no per-shape distance
+    left to arbitrate, and the question the previous version of this test asked -- may a dead
+    face be the nearest *surface* when a layer holds several shapes -- has a different shape:
+    the dead pair's two weights are equal and its two normals opposed, so it adds an exact
+    zero to the sum, and the sample's direction is decided by the live pieces alone whatever
+    the dead line's distance is. Every weight is ``(d_min / d) ** 4`` with one ``d_min``, so
+    that common factor cannot turn the direction either.
 
-    This checks the distance directly instead, against a closed form, which is what makes it
-    need neither a golden nor a second builder: for a bar spanning ``ly`` the only interfaces are
-    its two vertical faces, so inside it the nearest surface is exactly ``a - |x|``. Clean code
-    reproduces that to 0.0; reading the phantom horizontal face puts it 64.5 out.
-
-    The non-spanning control is the same shape with ``ly`` short of the period. There the
-    horizontal faces are real, the same closed form is *wrong*, and the assertion below would
-    fail -- which is how this test shows it can fail at all.
+    Checked against a closed form the test computes itself, at samples inside a spanning bar
+    and within 50 of its dead line, beside a circle: the three-piece blend of the bar's two
+    vertical faces (distances ``a -/+ x``, normals ``+-x``) and the circle's level set. The
+    field reproduces it to 1e-12 with the dead pair in the sum; the closed form knows nothing
+    about it. The control is the same bar short of the period, whose horizontal faces are
+    real: there the same closed form is wrong by a wide margin, which is how this test shows
+    it can fail at all.
     """
     lattice = as_lattice(period=[PERIOD, PERIOD])
     n = 128
     X, Y = sample_grid(np, (n, n), lattice, np.float64)
-    # Two frames, and they are half a cell apart. `_box_field` wants the *absolute* sample
-    # point, so `X`/`Y` go into it untouched; the closed form below is a statement about where
-    # the point sits relative to the shape, whose `cx = cy = 0` names the cell centre. So the
-    # assertions read `Xc`/`Yc`. `sample_grid` is corner-origin and `meshgrid_xy` is the
-    # public door that re-bases -- mixing them silently misplaces everything by `0.5*(a1 + a2)`.
+    # `sample_grid` is corner-origin and a shape's `cx = cy = 0` names the cell centre, so the
+    # closed form reads `Xc` / `Yc`; mixing the two frames misplaces everything by half a cell.
     mid_x = 0.5 * (lattice[0][0] + lattice[0][1])
     mid_y = 0.5 * (lattice[1][0] + lattice[1][1])
     Xc, Yc = X - mid_x, Y - mid_y
-    a = 70.0
+    a, r, ccx = 70.0, 60.0, 250.0
+    circle = dict(type='circle', cx=ccx, cy=0.0, lx=2 * r, material=4.0)
 
-    def distance(shape):
-        plan = P.plan_gamma([shape], lattice)
-        records = [(plan.pieces[pr.p].face, plan.pieces[pr.q].face, pr.m, pr.n, pr.flush)
-                   for pr in plan.pairs]
-        dead = {pc.face for pc in plan.pieces if pc.dead}
-        return P._box_field(np, X, Y, shape, lattice, np.float64, plan.pieces[0].imgs,
-                            records, dead)[0]
+    def closed_form(xc, yc):
+        d_plus, d_minus = a - xc, a + xc                     # the bar's own vertical faces
+        f = ((xc - ccx) / r) ** 2 + (yc / r) ** 2 - 1.0
+        gx, gy = 2.0 * (xc - ccx) / r ** 2, 2.0 * yc / r ** 2
+        g = np.hypot(gx, gy)
+        d_c = np.abs(f) / g
+        d_min = np.minimum(np.minimum(d_plus, d_minus), d_c)
+        w = lambda d: (d_min / d) ** 4
+        sx = w(d_plus) - w(d_minus) + w(d_c) * gx / g
+        sy = w(d_c) * gy / g
+        norm = np.hypot(sx, sy)
+        return sx / norm, sy / norm
 
-    spanning = _bar(lx=2 * a, ly=PERIOD, angle=0.0)
-    inside = np.abs(Xc) < a
-    assert np.abs(distance(spanning)[inside] - (a - np.abs(Xc))[inside]).max() == 0.0
+    near_dead = (np.abs(Xc) < a) & (np.abs(Yc) > PERIOD / 2 - 50.0)
+    assert near_dead.sum() > 400
+
+    spanning = [_bar(lx=2 * a, ly=PERIOD, angle=0.0), circle]
+    n_x, n_y = _analytic(spanning, lattice, n=n)
+    want_x, want_y = closed_form(Xc[near_dead], Yc[near_dead])
+    got = np.abs(n_x[near_dead] * want_x + n_y[near_dead] * want_y)
+    assert np.abs(got - 1.0).max() < 1e-12
 
     # the control: with real horizontal faces that closed form is not the answer
-    short = _bar(lx=2 * a, ly=300.0, angle=0.0)
-    box = inside & (np.abs(Yc) < 150.0)
-    assert np.abs(distance(short)[box] - (a - np.abs(Xc))[box]).max() > 1.0
+    short = [_bar(lx=2 * a, ly=300.0, angle=0.0), circle]
+    n_x, n_y = _analytic(short, lattice, n=n)
+    inside_short = (np.abs(Xc) < a) & (np.abs(Yc) < 150.0) & (np.abs(Yc) > 100.0)
+    want_x, want_y = closed_form(Xc[inside_short], Yc[inside_short])
+    got = np.abs(n_x[inside_short] * want_x + n_y[inside_short] * want_y)
+    assert np.abs(got - 1.0).max() > 0.5
 
 
 def test_the_pair_test_is_at_rounding_scale_and_not_a_window():
