@@ -74,6 +74,12 @@ def mutated(path, old, new):
     ``AssertionError('NO-OP ...')`` when the replacement leaves the text unchanged, so a mutant
     that never ran is never counted as one that survived. The module under test has to be
     re-imported by the caller (``importlib.reload``) for the mutation to be live.
+
+    The compiled bytecode is deleted on the way in and on the way out. A pyc records the
+    source's size and whole-second mtime, and a same-size replacement written within the
+    second of the last compile -- ``_BLEND_EXPONENT = 4`` to ``2`` -- is served the stale
+    bytecode by ``reload`` and never runs: the third way a mutant can look like a survivor
+    while having done nothing, found by exactly that mutant.
     """
     path = pathlib.Path(path)
     source = path.read_text()
@@ -84,9 +90,21 @@ def mutated(path, old, new):
     if changed == source:
         raise AssertionError(f'NO-OP: replacing {old!r} by {new!r} changes nothing')
     path.write_text(changed)
+    _drop_bytecode(path)
     try:
         yield
     finally:
         path.write_text(source)
+        _drop_bytecode(path)
         assert hashlib.md5(path.read_text().encode()).hexdigest() == digest, \
             f'{path.name} was not restored'
+
+
+def _drop_bytecode(path):
+    import importlib
+    import importlib.util
+    cached = pathlib.Path(importlib.util.cache_from_source(str(path)))
+    if cached.exists():
+        cached.unlink()
+    importlib.invalidate_caches()
+

@@ -387,13 +387,26 @@ def test_two_rectangles_carry_a_correct_relative_gradient_too():
     ``test_analytic_angle_is_smooth_through_normal``.
 
     The seams are gone rather than smoothed. Treating +x and -x (and +y, -y) as four separate
-    faces blended by distance products makes them cancel exactly at the centre line and
+    faces blended by distance ratios makes them cancel exactly at the centre line and
     collapse exactly at each face, with no width anywhere: autograd goes from 212-274% out to
-    1e-5. ``h`` is 1e-6 rather than 1e-5 because the difference, not the derivative, is the
-    limiting party here -- at 1e-5 the d = 0.08 point sits at 1.00e-2 on truncation alone, and
-    every point converges as h shrinks.
+    1e-4 and better. ``h`` is what the *difference* needs, not the derivative: the sampled
+    objective is continuous but carries a sharp feature wherever a grid sample sits on the
+    medial ridge between the two shapes, where the blend's ``|S|`` passes near zero and that
+    sample's normal spins (measured on the piece field: a 115-degree swing over a move of
+    1e-5, 0.7% of a pixel, at one sample). A secant that straddles such a crossing averages
+    the spin in; the derivative does not. With the fold's corner-radial extension the ridge
+    sat elsewhere and 1e-6 was below it at every point here; with fixed face normals
+    (2026-09-06) it is not, and the step is 1e-7:
+
+        d       AD             FD h=1e-6 (rel)   h=1e-7 (rel)    h=1e-8 (rel)
+        0.02    6.89695e-03    -8.2e-2           +2.6e-6         +2.6e-6
+        0.05    4.03019e-03    -2.6e-2           -9.3e-5         -1.0e-4
+        0.08    1.63509e-03    -2.5e-4           -9.7e-5         -1.4e-4
+
+    Both columns below 1e-6 agree with each other and with autograd, which is what says the
+    derivative is right and the coarse secant is what was wrong.
     """
-    h = 1e-6
+    h = 1e-7
     for d in (0.02, 0.05, 0.08):
         frozen = _two_frozen(TWO_RECTANGLES, CA + d, CB)
         auto = float(jax.grad(lambda c: _two_jtotal(TWO_RECTANGLES, c, CB, frozen))(jnp.asarray(CA + d)))

@@ -1620,10 +1620,10 @@ def test_an_alias_spelling_gets_the_same_normal_field(first, second):
 
 @pytest.mark.parametrize('name, make, entries', [
     ('circle radius',
-     lambda k: dict(type='circle', cx=0.0, cy=0.0, lx=140.0 + 8 * k, material=4.0), 1),
+     lambda k: dict(type='circle', cx=0.0, cy=0.0, lx=140.0 + 8 * k, material=4.0), 5),
     ('ellipse, aspect held',
      lambda k: dict(type='ellipse', cx=0.0, cy=0.0, lx=140.0 + 8 * k, ly=70.0 + 4 * k,
-                    angle=0.4, material=4.0), 1),
+                    angle=0.4, material=4.0), 5),
     ('ellipse, aspect swept',
      lambda k: dict(type='ellipse', cx=0.0, cy=0.0, lx=140.0, ly=70.0 + 8 * k,
                     angle=0.4, material=4.0), 5),
@@ -1632,21 +1632,21 @@ def test_an_alias_spelling_gets_the_same_normal_field(first, second):
                     angle=0.4, material=4.0), 5),
 ])
 def test_the_projector_cache_keys_on_what_the_field_depends_on(name, make, entries):
-    """A lone round shape's normal field is scale-free, so its size must not key the cache.
+    """Every size is its own key. A round shape's used to be scale-free, and that was dropped.
 
     The level-set gradient of ``x^2/a^2 + y^2/b^2`` is ``(2x/a^2, 2y/b^2)``, whose *direction*
-    is unchanged when ``a`` and ``b`` scale together. So for one ellipse-family shape the
-    projector coefficients depend on the aspect and not on the size -- measured on
-    ``normal_projector_coeffs`` directly: a circle at lx 40 / 90 / 220 / 280 agrees with lx=140
-    to 2.8e-17, and an ellipse rescaled 2x and 0.5x at a fixed aspect agrees to 0.000e+00.
+    is unchanged when ``a`` and ``b`` scale together, so for one round shape whose field never
+    looks past its own nearest image the projector coefficients depend on the aspect and not on
+    the size (a circle at lx 40 / 90 / 220 / 280 agreed with lx=140 to 2.8e-17). The key used
+    to drop the size for exactly that reason, and a radius sweep hit one entry.
 
-    It is worth keying correctly because the commonest 1D grating sweep is over a *radius*, and
-    with ``lx`` in the key every step missed and rebuilt a bit-identical field. Five steps left
-    five entries where a position or material sweep left one.
-
-    The two arms that must still miss are here for the same reason the hits are: a rectangle's
-    four-face blend weighs absolute distances (8.4e-02 and 5.4e-02 for the same two
-    rescalings), and an aspect change is a genuinely different field.
+    Dropped on 2026-09-06 with the piece field: a face piece is evaluated over its ring of
+    images and is not scale-free, and the round piece is written to take the same ring the
+    moment a bounded distance for it exists -- at which point two ellipses of one aspect and
+    different sizes that both reach their neighbours are different fields, and a shared key
+    would serve the second the first's coefficients silently. The normalisation went ahead of
+    that ring rather than after it, so nothing can inherit the trap; the price is that a
+    radius sweep now rebuilds, five steps, five entries, like every other size sweep.
 
     Every row also asserts the five answers *differ* -- a cache that returned one field for
     five structures would satisfy the entry count and be a much worse bug than the one this
@@ -1810,10 +1810,21 @@ def test_a_length_is_a_size_and_the_transform_carries_its_sign():
         wavebit.rcwa(backend=0, structure=rod(lx=340.0), **cfg).solve()
 
     # And nothing legal moved: a rod exactly filling the period still touches, not overlaps.
-    # A rod that fits is bit-identical -- `lx = 120` is the 0.980652726 this docstring quotes.
+    # A rod that fits is a lone box, and every lone box moved by ~2e-4 on 2026-09-06 when the
+    # corner-radial extension gave way to fixed face normals (the piece field). 0.980652726 was
+    # the fold's number; 0.980863489 is the piece field's, and the move is booked against a
+    # raster of the same rod (edges on pixel boundaries) factorized by NVF with the 'contour'
+    # field -- an instrument that shares no code with either:
+    #     order 6:  fold 0.980652726   pieces 0.980863489   raster N=600 0.980643701,
+    #               N=1200 0.980617617   (raster+li 0.980695225)
+    #     order 9:                     pieces 0.980612878   raster N=1200 0.980678928
+    #     order 12:                    pieces 0.980592210   raster N=1200 0.980649980
+    # 2.5e-4 above the reference at order 6, 6.6e-5 and 5.8e-5 below it at 9 and 12: two
+    # admissible continuations converging on one answer, not a re-baseline. The field itself is
+    # judged in tests/test_nvf_self_coincident_faces.py against the exact interface oracle.
     assert float(np.sum(np.asarray(wavebit.rcwa(
         backend=0, structure=rod(lx=120.0), **cfg).solve().T)).real) == pytest.approx(
-            0.980652726, abs=1e-7)
+            0.980863489, abs=1e-7)
 
     # `lx = 300` *is* the period, so this rod spans the cell in x and the structure varies in y
     # alone -- a lamellar grating, whose exact normal field is the constant `(0, +-1)`. Its two

@@ -82,12 +82,18 @@ def test_a_zero_norm_configuration_is_actually_reached():
     weights instead of summed as unit vectors, so that cancellation has no way to occur:
     ``_twin_circles(0.0)``, built for exactly this, now yields no zeros at all.
 
-    The remaining zero is the one inside the per-shape loop: a shape's own centre, where its
-    level-set gradient ``g`` vanishes and no weighting can put a direction back. It is reachable
-    with a single shape whose centre lands on a sample, which is what this asserts -- and it
-    keeps the guard live, because that is the zero the NaN came through. Note it takes a *lone*
-    shape: with a second shape in the layer the blend contributes a direction at the first
-    shape's centre, so the zero closes.
+    The remaining zero is the one inside the round branch: a round shape's own centre, where
+    its level-set gradient ``g`` vanishes and no weighting can put a direction back. It is
+    reachable with a single circle or ellipse whose centre lands on a sample, which is what this
+    asserts -- and it keeps the guard live, because that is the zero the NaN came through. Note
+    it takes a *lone* shape: with a second shape in the layer the blend contributes a direction
+    at the first shape's centre, so the zero closes.
+
+    **A rectangle closed its own zero on 2026-09-06.** Its centre used to be the one point where
+    the four face weights balanced to ``(0, 0)``; the piece field's tie rule reads an axis there
+    instead (the pair that did not cancel, or ``(1, 0)`` when both did), so a lone box has no
+    null sample at any size or position. Asserted as ``== 0`` so that a return of the null --
+    a null projector at that pixel, not a harmless one -- is noticed.
     """
     def zeros_for(shapes, n=NORMAL_GRID):
         normal_x, normal_y = normal_vector_field_analytical(jnp, (n, n), shapes, jnp.float64,
@@ -96,9 +102,11 @@ def test_a_zero_norm_configuration_is_actually_reached():
 
     n = 256
     c = _grid_point(100, n)
-    for kind in ('circle', 'ellipse', 'rectangle'):
+    for kind in ('circle', 'ellipse'):
         centred = dict(type=kind, cx=c, cy=c, lx=0.20 * P, ly=0.10 * P, material=9.0)
         assert zeros_for([centred], n) > 0, kind
+    box = dict(type='rectangle', cx=c, cy=c, lx=0.20 * P, ly=0.10 * P, material=9.0)
+    assert zeros_for([box], n) == 0
 
     # Half a grid cell away there are none, which is why the NaN read as intermittent.
     off = dict(type='circle', cx=c + 0.5 * P / n, cy=c, lx=0.20 * P, material=9.0)
@@ -136,10 +144,9 @@ def test_shape_centred_on_a_grid_point_has_a_finite_gradient(kind):
     """The other zero, inside the loop: one shape, its own centre, no cancellation involved.
 
     Reachable with a single shape, so it does not need the two-shape geometry above — it needs
-    only a centre that lands on a sample, which ``_grid_point`` arranges. ``rectangle`` returns
-    exactly 0.0 here for an unrelated reason (its normals end in ``sign()``, whose derivative
-    vanishes — see :mod:`test_shape_position_gradients`); zero is finite, which is all this
-    asks.
+    only a centre that lands on a sample, which ``_grid_point`` arranges. ``rectangle`` has no
+    zero to reach any more (its centre reads an axis since 2026-09-06, see the test above) and
+    is kept as the control that a finite gradient is what a field without the zero gives too.
     """
     n = 256
     c = _grid_point(100, n)

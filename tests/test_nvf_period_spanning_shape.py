@@ -13,19 +13,17 @@ raster builder for the same grating gives ``0.000e+00`` everywhere.
 and the only symptom was slow convergence -- which reads as a property of the path rather than a
 defect in it. It reached a published convergence study before it was caught.
 
-**What the fix is.** :func:`~wavebit._core.parametric._shape_surface_normal` measures each face
-distance to the nearest *image* of that face, folding by the repeat along the shape's own axis
-(:func:`~wavebit._core.parametric._axis_lattice_periods`). At ``ly = Pv`` the ``+y`` and ``-y``
-families become the same set of lines, so the two distances are equal everywhere and the two
-opposite normals cancel identically. **The cancellation is an algebraic identity**, not a special
-case, and a shape one ulp short of the period is carried continuously by the same fold.
-
-The path does carry an exact equality on ``ly`` (``merged_v``, and ``merged_u`` for ``lx``), and
-it is worth being precise about what that test is for: the cancellation alone leaves the
-*surviving* pair's weights holding a factor that vanishes on the line where the merged family
-sits, so the equality drops the merged pair outright rather than letting it cancel. It decides
-nothing about the field elsewhere -- a shape one ulp short never reaches it. It is the move ``5e0561b`` already made for the
-displacement -- closing the level set on the torus -- applied to the faces.
+**What the fix is.** A box is four face pieces, each a segment evaluated at every periodic
+instance that can be its nearest (:func:`~wavebit._core.parametric._box_field`), and the plan
+(:func:`~wavebit._core.parametric.plan_gamma`) records that at ``ly = Pv`` the ``+y`` face and
+the ``-y`` face of the image above lie on one line, *flush*. The partner's distance is then the
+primary's own expression, so the two are one number at every sample and the two opposite normals
+cancel identically. **The cancellation is arithmetic, not a gate**: a shape one ulp short of the
+period is carried continuously by the same blend, and the only threshold anywhere is the
+rounding-scale one that decides whether two lines are one line
+(:data:`~wavebit._core.overlap.COLLINEAR_TOL_REL`). It is the move ``5e0561b`` already made for
+the displacement -- closing the level set on the torus -- applied to the faces, and it replaced
+a fold along the shape's own axis (2026-09-03) that reached this case and no other.
 
 The tests are ordered by what they can rule out:
 
@@ -308,13 +306,14 @@ def test_every_backend_spans_the_same_way(backend):
 
 
 def test_a_spanning_shape_still_traces_and_differentiates():
-    """``jit`` and ``grad`` must cross the fold, which is why it carries no Python branch.
+    """``jit`` and ``grad`` must cross the replay, which is why it carries no Python branch.
 
-    Every question the fold asks -- is this lattice vector along the shape's axis, does the
-    shape's own length land on the repeat -- is answered with ``where`` on the value rather than
-    with ``if``, so a traced ``lx`` / ``ly`` / ``angle`` reaches the same code the eager call
-    does. Branching on any of them would raise ``TracerBoolConversionError`` on every jitted
-    parametric solve, not just on a spanning one.
+    Under ``jax.grad`` the plan is taken from the primal and replayed on the tracer; under
+    ``jax.jit`` with no frozen record there is no primal, and the blind plan stands in -- every
+    piece, no pairs -- whose field is within rounding of the planned one on this scene
+    (the two y faces cancel to ulps instead of exactly). Branching on a traced value anywhere
+    on the way would raise ``TracerBoolConversionError`` on every jitted parametric solve, not
+    just on a spanning one.
     """
     jax = pytest.importorskip('jax')
     jnp = pytest.importorskip('jax.numpy')
@@ -338,35 +337,6 @@ def test_a_spanning_shape_still_traces_and_differentiates():
     assert grad == pytest.approx(central, rel=2e-2)
 
 
-def test_the_lattice_direction_test_is_a_threshold():
-    """The one tolerance in the fold is recorded here rather than left to be discovered.
-
-    "Does a lattice vector run along the shape's axis" cannot be asked exactly: ``pi/2`` is not
-    a representable angle, so a shape turned a quarter turn misses an exact test by 4.3e-14 on
-    a 700 cell. :data:`~wavebit._core.parametric._LATTICE_DIR_TOL2` is where the line is drawn,
-    and a shape more than half a repeat long steps across it -- it folds on one side and not on
-    the other.
-
-    Two things make that acceptable, and both are pinned here rather than asserted in prose. The
-    step is at 1e-11 rad, which is 5.7e-10 degrees. And a shape at or below half a repeat does not
-    step at all, because the fold is arithmetically inert there -- which is most shapes.
-    """
-    lattice = as_lattice(period=[PERIOD, PERIOD])
-
-    def field(angle, ly):
-        return np.stack(_analytic([_bar(lx=250.0, ly=ly, angle=angle)], lattice, n=128))
-
-    # above half a repeat: inert below the threshold, a step above it
-    tall = field(0.0, 0.9 * PERIOD)
-    assert np.abs(field(1e-12, 0.9 * PERIOD) - tall).max() < 1e-9
-    assert np.abs(field(1e-11, 0.9 * PERIOD) - tall).max() > 1e-2
-
-    # at or below half a repeat there is no threshold to cross -- the fold never applies
-    squat = field(0.0, 0.5 * PERIOD)
-    for angle in (1e-12, 1e-11, 1e-9, 1e-6):
-        assert np.abs(field(angle, 0.5 * PERIOD) - squat).max() < 1e-3
-
-
 def test_a_rhombic_cell_spans_along_the_sum_of_its_basis_vectors():
     """``a1 + a2`` is a lattice direction too, and on some cells it is the only one that matters.
 
@@ -380,10 +350,15 @@ def test_a_rhombic_cell_spans_along_the_sum_of_its_basis_vectors():
     The structure at that length repeats end to end along x and has no vertical face at all.
     The two-vector version answered ``max|n_x| = 1.000``, above 0.01 over 46.9% of the cell.
 
-    The checkerboard *itself* is the control, and it is why the candidate list is checked with a
-    strict inequality: ``lx = ly = 1.25`` is exactly half of ``|a1 + a2| = 2.5``, the fold is
-    inert at exactly half, and the field is bit-identical to what it was before any of this.
-    That matters because that scene is a published-number comparison.
+    The checkerboard *itself* is the control: ``lx = ly = 1.25`` is exactly half of
+    ``|a1 + a2| = 2.5`` and touches nothing, so it has no pair and keeps every face. That
+    matters because that scene is a published-number comparison.
+
+    The 2.5 x 1.25 bar is the other end: every face is covered -- the u faces by ``a1 + a2``,
+    each v face by ``a1`` and ``-a2`` taking half -- so it tiles the plane, the plan is
+    ``empty`` and the field is the constant ``(1, 0)``, which for a uniform layer is as right
+    as any other vector. The bar of ``ly = 0.8`` keeps its v faces and loses its u faces, and
+    that is the scene with an axis to assert on.
     """
     checker = as_lattice(lattice=np.array([[1.25, 1.25], [1.25, -1.25]]))
     span = np.hypot(1.25 + 1.25, 1.25 - 1.25)          # |a1 + a2| = 2.5, along x
@@ -394,17 +369,23 @@ def test_a_rhombic_cell_spans_along_the_sum_of_its_basis_vectors():
         dict(type='rectangle', cx=0.0, cy=0.0, lx=span, ly=1.25, angle=0.0, material=4.0)]},
         checker)
 
-    normal_x, _ = _analytic([dict(type='rectangle', cx=0.0, cy=0.0, lx=span, ly=1.25,
+    normal_x, _ = _analytic([dict(type='rectangle', cx=0.0, cy=0.0, lx=span, ly=0.8,
                                   angle=0.0, material=4.0)], checker)
     assert np.abs(normal_x).max() == 0.0
+    plan = P.plan_gamma([dict(type='rectangle', cx=0.0, cy=0.0, lx=span, ly=0.8, angle=0.0,
+                              material=4.0)], checker)
+    assert {(pr.m, pr.n) for pr in plan.pairs} == {(1, 1)}       # the diagonal of the ring
 
-    # The candidate set matches `overlap._IMAGES`, so the fold and the layer refusal cannot
-    # disagree about *which images exist*. That is all this fixes: it does not fix how many
-    # images it takes to *cover* a face, and on this very cell a 2.5 x 1.25 bar has each
-    # horizontal face covered by `a1` and `-a2` taking half each -- which no per-vector search
-    # can see. See `docs/normal-field-known-limits.md` section 2a.
-    from wavebit._core import overlap as _overlap
-    assert set(_overlap._IMAGES) == {(m, n) for m in (-1, 0, 1) for n in (-1, 0, 1)}
+    tiling = P.plan_gamma([dict(type='rectangle', cx=0.0, cy=0.0, lx=span, ly=1.25,
+                                angle=0.0, material=4.0)], checker)
+    assert tiling.empty
+    normal_x, normal_y = _analytic([dict(type='rectangle', cx=0.0, cy=0.0, lx=span, ly=1.25,
+                                         angle=0.0, material=4.0)], checker)
+    assert np.all(normal_x == 1.0) and np.all(normal_y == 0.0)
+
+    control = P.plan_gamma([dict(type='rectangle', cx=0.0, cy=0.0, lx=1.25, ly=1.25,
+                                 angle=0.0, material=4.0)], checker)
+    assert not control.pairs and not any(pc.dead for pc in control.pieces)
 
 
 # --------------------------------------------------------------------------------------------
@@ -422,12 +403,13 @@ def test_the_x_fold_carries_its_own_weight():
     The invariant is a mirror, which is what makes it need no reference value: a structure and
     its 90-degree rotation are the same structure with s and p exchanged, so ``sum(T)`` at
     ``psi = 0`` on one must equal ``sum(T)`` at ``psi = pi/2`` on the other, to the last digit.
-    That holds only if both axes fold. With the x fold deleted the two sides part by 2.7e-4,
-    while every ``ly`` number in the file stays byte-identical.
+    That holds only if both axes are carried over their images. With the x half deleted the
+    two sides parted by 2.7e-4, while every ``ly`` number in the file stayed byte-identical.
 
-    ``lx = 630`` is above half of 700 and below it, so the fold is live and the equality is not
-    -- this reaches the fold and not ``merged_u``, which
-    ``test_a_shape_filling_the_cell_gets_the_no_interface_constant`` already covers.
+    ``lx = 630`` is above half of 700 and below it, so the box's x faces have their nearest
+    instance in a neighbouring image over part of the cell without any face being covered --
+    the ring is live and no pair is, which is the half
+    ``test_a_shape_filling_the_cell_gets_the_no_interface_constant`` does not cover.
     """
     def total(lx, ly, psi):
         s = wavebit.rcwa(backend=0, thickness=[300.0], period=dict(x=PERIOD, y=PERIOD),
@@ -449,14 +431,14 @@ def test_the_x_fold_carries_its_own_weight():
     assert np.abs(normal_x).max() == 0.0
 
 
-def test_a_merged_pair_never_becomes_the_nearest_surface():
-    """A dropped face pair must leave the *distance* too, not only the blend. Nothing reached it.
+def test_a_dead_face_never_becomes_the_nearest_surface():
+    """A dead face pair must leave the *distance* too, not only the blend. Nothing reached it.
 
-    ``_shape_surface_normal`` returns a distance alongside the normal, and that distance decides
-    which shape owns a point when a layer holds several. A merged pair is not a surface, so it
-    must not be allowed to be the nearest one -- and collapsing that reduction to a plain
-    ``xp.minimum(near_u, near_v)`` passed every other test in this file, because they all build
-    a layer holding one shape, where the reduction has nothing to arbitrate.
+    ``_box_field`` returns a distance alongside the normal, and that distance decides which
+    shape owns a point when a layer holds several. A dead face is not a surface, so it must
+    not be allowed to be the nearest one -- and collapsing that reduction to a plain minimum
+    over all four faces passes every other test in this file, because they all build a layer
+    holding one shape, where the reduction has nothing to arbitrate.
 
     This checks the distance directly instead, against a closed form, which is what makes it
     need neither a golden nor a second builder: for a bar spanning ``ly`` the only interfaces are
@@ -470,36 +452,42 @@ def test_a_merged_pair_never_becomes_the_nearest_surface():
     lattice = as_lattice(period=[PERIOD, PERIOD])
     n = 128
     X, Y = sample_grid(np, (n, n), lattice, np.float64)
-    # Two frames, and they are half a cell apart. `_shape_surface_normal` wants the *absolute*
-    # sample point, so `X`/`Y` go into it untouched; the closed form below is a statement about
-    # where the point sits relative to the shape, whose `cx = cy = 0` names the cell centre. So
-    # the assertions read `Xc`/`Yc`. `sample_grid` is corner-origin and `meshgrid_xy` is the
+    # Two frames, and they are half a cell apart. `_box_field` wants the *absolute* sample
+    # point, so `X`/`Y` go into it untouched; the closed form below is a statement about where
+    # the point sits relative to the shape, whose `cx = cy = 0` names the cell centre. So the
+    # assertions read `Xc`/`Yc`. `sample_grid` is corner-origin and `meshgrid_xy` is the
     # public door that re-bases -- mixing them silently misplaces everything by `0.5*(a1 + a2)`.
     mid_x = 0.5 * (lattice[0][0] + lattice[0][1])
     mid_y = 0.5 * (lattice[1][0] + lattice[1][1])
     Xc, Yc = X - mid_x, Y - mid_y
     a = 70.0
 
+    def distance(shape):
+        plan = P.plan_gamma([shape], lattice)
+        records = [(plan.pieces[pr.p].face, plan.pieces[pr.q].face, pr.m, pr.n, pr.flush)
+                   for pr in plan.pairs]
+        dead = {pc.face for pc in plan.pieces if pc.dead}
+        return P._box_field(np, X, Y, shape, lattice, np.float64, plan.pieces[0].imgs,
+                            records, dead)[0]
+
     spanning = _bar(lx=2 * a, ly=PERIOD, angle=0.0)
-    dist, _, _ = P._shape_surface_normal(np, X, Y, spanning, np.float64, lattice)
     inside = np.abs(Xc) < a
-    assert np.abs(np.asarray(dist)[inside] - (a - np.abs(Xc))[inside]).max() == 0.0
+    assert np.abs(distance(spanning)[inside] - (a - np.abs(Xc))[inside]).max() == 0.0
 
     # the control: with real horizontal faces that closed form is not the answer
     short = _bar(lx=2 * a, ly=300.0, angle=0.0)
-    d2, _, _ = P._shape_surface_normal(np, X, Y, short, np.float64, lattice)
     box = inside & (np.abs(Yc) < 150.0)
-    assert np.abs(np.asarray(d2)[box] - (a - np.abs(Xc))[box]).max() > 1.0
+    assert np.abs(distance(short)[box] - (a - np.abs(Xc))[box]).max() > 1.0
 
 
-def test_the_merged_test_is_an_equality_and_not_a_window():
-    """``fold(2a, Pu) == 0`` is exact on purpose. A tolerance window passes every other test.
+def test_the_pair_test_is_at_rounding_scale_and_not_a_window():
+    """Two lines are one line at 1e-12 of the cell, and nothing wider. A window passes every other test.
 
-    The code and its comment call the exactness a decided choice; replacing it with a 7e-4
-    absolute window on a 700 period passed all 23 tests. It has to be exact because the fold
-    already carries every length *below* the span continuously -- a window would take shapes the
-    fold is handling correctly and delete their faces instead, and the wider the window the more
-    of them.
+    Replacing the previous mechanism's exact equality with a 7e-4 absolute window on a 700
+    period passed all 23 tests of its day. It has to sit at rounding scale because the blend
+    already carries every length *below* the span continuously -- a window would take shapes
+    the blend is handling correctly and cancel their faces instead, and the wider the window
+    the more of them.
 
     A bar one part in 1e5 short of the period still has two real (if very close) interfaces, and
     its answer has to differ from the spanning one by about the amount its geometry differs --

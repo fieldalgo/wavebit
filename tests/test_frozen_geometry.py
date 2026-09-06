@@ -192,7 +192,13 @@ def test_a_frozen_geometry_makes_a_shape_parameter_traceable(name, make, start):
     assert grad != 0.0
     assert float(jax.jit(jax.grad(total))(x)) == pytest.approx(grad, rel=1e-11)
 
-    step = 1e-3
+    # 1e-5, not 1e-3: the rectangle's normal field is sampled on a grid, and a rotation of
+    # 1e-3 rad sweeps its face lines across enough samples that the secant averages a
+    # sawtooth in (2.6e-3 off autograd on the angle row with the piece field of 2026-09-06,
+    # 1.5e-5 at 1e-5; the other three rows sit within 3e-5 at either step). The derivative
+    # itself is not in question -- it agrees with the difference once the difference is
+    # taken below the sawtooth's scale.
+    step = 1e-5
     fd = (float(total(jnp.asarray(start + step))) - float(total(jnp.asarray(start - step)))) \
         / (2 * step)
     assert grad == pytest.approx(fd, rel=2e-3), (grad, fd)

@@ -301,14 +301,19 @@ def test_a_traced_layer_gets_no_plan_and_the_blind_one_has_every_piece():
 
 
 def test_an_empty_plan_is_a_uniform_layer():
-    """The tiling bar's solve is a slab's.
+    """The tiling bar's coefficients are an empty layer's, and its solve is a slab's.
 
-    ``every conv matrix is eps * I whatever the normal field says`` -- so the plan may call
-    the layer empty, and the solve cannot tell the bar from the slab.
+    ``every conv matrix is eps * I whatever the normal field says`` -- checked here on the
+    field's own output: the projector coefficients of the bar equal those of a layer with no
+    shape at all, because both are the constant ``(1, 0)``.
     """
     import wavebit
     lattice, shape = SCENES['C tiling bar']
-    assert P.plan_gamma([shape], as_lattice(lattice=lattice)).empty
+    A = as_lattice(lattice=lattice)
+    bar = P.normal_projector_coeffs(np, [shape], (64, 64), A, 4, 4, np.complex128)
+    none = P.normal_projector_coeffs(np, [], (64, 64), A, 4, 4, np.complex128)
+    for got, want in zip(bar, none):
+        assert np.array_equal(got, want)
 
     kw = dict(backend=0, lattice=lattice, thickness=[0.3], wavelength=0.94,
               truncation_order=dict(u=4, v=4), top=1.0, bot=1.0, theta=0.1, phi=0.2, psi=0.3)

@@ -7,7 +7,7 @@ or a shear was not expressible as a design variable at all.
 
 Splitting it takes a pytree, and the split is the whole point: the four numbers are children,
 ``axis_aligned`` is aux_data. That flag decides *which branch runs* -- the rectangular fold in
-``parametric._shape_surface_normal`` reads it, and it is what keeps the orthogonal path
+``parametric._round_field`` reads it, and it is what keeps the orthogonal path
 bit-identical -- and a traced value cannot be branched on. As a child it would kill every
 jitted solve while staying invisible eagerly.
 """
@@ -667,8 +667,18 @@ def test_the_parametric_spelling_has_no_frame_to_declare():
     the same geometry on every cell -- solving it on a different one is a thing a caller may
     legitimately want, not a mistake. Wrapping it would turn that into a refusal of a
     **correct** answer, and a guard that blocks correct work is worse than no guard: measured,
-    two shapes on a 640 square give 0.999233 and the identical structure on ``hexagonal(640.)``
-    gives 0.999851, and both are right.
+    two shapes on a 640 square give 0.999282 and the identical structure on ``hexagonal(640.)``
+    gives 0.999870, and both are right.
+
+    Those two numbers were 0.999233 and 0.999851 until 2026-09-06, when the rectangle's field
+    took fixed face normals over its ring of images (the piece field) -- a layer holding a box
+    moves by that class of amount, and the move is booked here against a raster of the same
+    two shapes on each cell, factorized by NVF with the ``'contour'`` field, at order 6:
+    square 0.999167 (N = 640) / 0.999175 (N = 1280), hexagonal 0.999828 / 0.999832. The
+    pieces sit 1.1e-4 and 3.8e-5 above that reference where the fold sat 5.8e-5 and 1.9e-5;
+    at order 9 the square is 0.999395 against 0.999366. Two admissible continuations on either
+    side of an unconverged order, and the point of the test -- a different cell, a different
+    and still-right answer -- is unchanged.
 
     The raster is the only spelling with a frame, because its pixels are fractions of the cell.
     """
@@ -687,8 +697,8 @@ def test_the_parametric_spelling_has_no_frame_to_declare():
                          theta=0.0, phi=0.0, psi=0.0)
         return float(np.sum(np.asarray(s.solve().T)))
 
-    assert total(sq) == pytest.approx(0.999233, abs=1e-5)
-    assert total(hx) == pytest.approx(0.999851, abs=1e-5)      # a different cell, still right
+    assert total(sq) == pytest.approx(0.999282, abs=1e-5)
+    assert total(hx) == pytest.approx(0.999870, abs=1e-5)      # a different cell, still right
 
     # the raster with the same two features does have a frame, and keeps its guard
     X, Y = (np.asarray(c) for c in sq.meshgrid_xy((64, 64)))

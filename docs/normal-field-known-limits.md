@@ -51,11 +51,47 @@ invariant: 4.9e-15, 7.0e-15, 7.3e-15. That route violated it by 1.1e-5 before it
 the geometry so no spanning shape takes part in an overlap.
 
 
-## 2. A face the fold cannot merge is refused, not built — REFUSED
+## 2. A face the fold cannot merge is refused, not built — FIXED (2026-09-06)
 
-**Status: refused.** The fold (§4) merges a face family when a lattice vector runs **along one of
-the shape's own axes**. That is not the condition for a family to merge, only the condition the
-fold can act on, and the true condition is strictly weaker.
+**Status: fixed.** Every scene below builds now, and the refusal is gone. The parametric field
+is built from **pieces** — a box is its four faces, each a segment evaluated at every periodic
+instance that can be its nearest, and a plan (`parametric.plan_gamma`, `GammaPlan`) records
+which face lies on which image's face, opposed, over what run. Over the run the two pieces'
+distances are bitwise one number and their normals cancel exactly; beyond it the neighbouring
+image's face is simply one more candidate, which is exactly the face "no closed form over one
+box" could reach. Measured against the exact interface oracle (`overlap.interfaces_of`) over a
+band of 1.5 pixels, N = 512: the sheared cell at `lx = 500` reads **0.16 deg** mean with 0.11%
+of samples past 45 deg, the tilted box at `lx = 640` **0.18 deg** / 0.15%, where the one-box
+field read 90 deg along the whole run (1.4 to 17 deg averaged over the band).
+
+Through the solve the picture is coarser, and it is worth saying exactly how coarse. The same
+tilted box, the same operating point as the table below (its "shape path" row is reproduced
+digit for digit by the fold's field injected into today's solve), against the exact-interface
+field of the oracle injected in place of the built one -- a Voronoi extension, no staircase,
+the same permittivity transform:
+
+| truncation order | 6 | 9 | 12 |
+| --- | ---: | ---: | ---: |
+| pieces | 0.845760 | 0.850379 | 0.857004 |
+| exact-interface field | 0.829832 | 0.838456 | 0.846136 |
+| gap | 1.6e-2 | 1.2e-2 | 1.1e-2 |
+| the fold's gap (same instrument) | 3.1e-2 | 3.0e-2 | 2.6e-2 |
+| control: the same box at `lx = 500`, no contact | 8.8e-3 | 9.0e-4 | 1.3e-3 |
+
+Half the fold's gap and falling, but not gone by order 12 -- and the control says why the
+instrument cannot say more here: with no contact at all, where the fold was right on Gamma too,
+the two fields still sit 1e-3 apart at orders 9-12, and pairwise the three extensions available
+(the blend, the Voronoi field, a `'contour'` raster) disagree at 1e-2 on this box. A box of this
+size at `eps = 12.25` is that sensitive to what a field does *off* the interface at these
+orders. The decay test the design asks for (orders 6..18 against an image-aware raster) is not
+runnable under this laptop's order cap, and the raster's staircase on a tilted edge is itself
+5e-3 here; the band error above is the instrument that answers at this order. The rest of this
+section is the record of what the fold could not do and why, kept because the tables are what
+the fix was measured against; §8 says what moved when it landed.
+
+The fold (§4) merged a face family when a lattice vector ran **along one of the shape's own
+axes**. That is not the condition for a family to merge, only the condition the fold could act
+on, and the true condition is strictly weaker.
 
 A face is a *segment*. Its images under a lattice vector `t` land on a parallel line offset by
 `t . v` (perpendicular) and slid along itself by `t . u` (tangential). Two opposite families
@@ -121,15 +157,12 @@ sits **outside** the span of every aliveness answer — all-alive 0.8788, all-de
 geometrically-correct partial gate 0.8837. A better gate is not the fix; a working one would have
 to blend face *segments* over several images, which is a different builder.
 
-So the geometry is refused, by `overlap.partial_self_coincidences` from `check_layer_shapes`. The
-refusal names how much of the face is covered, since that is what a caller acts on. State such a
-layer as a raster structure, which carries the wrap; or keep the shape's axes on lattice
-directions, where the fold fires; or keep every extent at or below half the corresponding repeat,
-where no family can merge at all.
-
-The refusal is asked **after** the interpenetration sweep, and that ordering is load-bearing: a rod
-of `lx = 340` on a 300 period is partially coincident *as well as* larger than the period, and the
-latter names its actual mistake.
+So the geometry *was* refused, by `overlap.partial_self_coincidences` from `check_layer_shapes`,
+naming how much of the face was covered. That is the "different builder" the paragraph above
+asks for: `overlap.face_pairs` is the sweep that finds every run (the runs and their union per
+face are what the refusal computed), and `parametric._box_field` blends the face *segments* over
+their images. The refusal and its sweep were deleted with it; the interpenetration refusal
+(larger than the period, overlap through an edge) is unchanged and still asked first.
 
 ### 2a. The union of images, not any single one
 
@@ -165,10 +198,12 @@ vectors taking half each is outside what a per-vector search can express, which 
 of limitation as missing `t . u != 0`, one level up. `test_a_rhombic_cell_spans_along_the_sum_of_
 its_basis_vectors` argues for the candidate set more broadly than the set can deliver.
 
-`partial_self_coincidences` accordingly unions the covered intervals per face family and reports
-only what the union leaves uncovered. Neither the fold nor the first refusal had this: the fold
-reads `merged_v = False` there and keeps two faces that are not interfaces, which is harmless for
-the reason above but is not what the geometry says.
+The planner accordingly unions the covered intervals per face (`overlap.covered_length`) and
+calls a face dead only when the union covers it; a layer whose every face is dead is `empty`,
+and its field is the constant `(1, 0)` — `tests/test_gamma_plan.py` pins that the tiling bar's
+projector coefficients equal an empty layer's and its solve equals the slab's. Neither the fold
+nor the first refusal had this: the fold read `merged_v = False` there and kept two faces that
+are not interfaces, which is harmless for the reason above but is not what the geometry says.
 
 ## 3. Removing a face pair left a null normal on the survivor's midline — FIXED
 
@@ -199,11 +234,14 @@ still gone. Disabling the fold outright — which also clears the gate, since `m
 `Pu > 0` — restores the pair and puts the count back to 0 with `max|n_x|` back to 1.000000. The
 sibling's control did this correctly first.
 
-**The fix breaks the tie instead of changing the removal.** Where the blend lands on zero and
-exactly one pair is gone, substitute the surviving axis — `(0, 1)` when the u pair went, `(1, 0)`
-when the v pair did. It needs no sign, because the factorization reads `n n^T`. Array-only, so it
-survives `jit` and `grad`, and the exact-zero comparison is safe because the tie is an exact
-symmetry rather than a near-miss.
+**The fix breaks the tie instead of changing the removal.** Where the blend lands on zero,
+substitute the axis of the pair that did *not* cancel there — read off the plan's pair records
+by array equality of the two members' distances (since 2026-09-06; the fold's version read a
+static "which pair merged" flag) — and `(1, 0)` when both cancelled or neither did. It needs no
+sign, because the factorization reads `n n^T`. Array-only, so it survives `jit` and `grad`, and
+the exact-zero comparison is safe because the tie is an exact symmetry rather than a near-miss.
+On the sheared cell the two v runs overlap over a strip, and on the box's midline inside it the
+tie reads the u axis — turned with the box, which is what kills a `(1, 0)`-always mutant.
 
 Measured bit-identical on a small box, a box above half the repeat, an ellipse, the 1-D grating,
 its 90-degree mirror, a cell-filling slab and a two-shape layer; the checkerboard scene goes
@@ -217,9 +255,18 @@ where the truth is `v v^T`. Removing the pair moved them from confidently wrong 
 already an improvement for a factorization that reads the outer product; the tie-break finishes it.
 
 
-## 4. The lattice-direction test is a threshold, not an exact question
+## 4. The lattice-direction test is a threshold, not an exact question — REPLACED (2026-09-06)
 
-**Status: by construction, stated rather than removed.**
+**Status: replaced by a threshold one level down.** The fold this section describes is gone; the
+piece field's one threshold is whether two face lines are *one line*, at 1e-12 of the longer
+basis vector (`overlap.COLLINEAR_TOL_REL`, 7e-10 on a 700 cell), and whether two normals are
+opposed at `|n_p + n_q|^2 <= 1e-24`. Both are rounding-scale for the reason below, and both
+step: just above the collinearity threshold two opposed faces `delta` apart cancel only outside a
+band of depth `(4 delta D^4)^(1/5)` — about two units for `D = 350` — and at it they cancel
+identically. Through a solve that is ~1e-7 in `sum(T)`, and
+`tests/test_gamma_field.py::test_the_ladder_through_the_pair_threshold_is_monotone` walks
+`ly = 700 - gap` on the sheared cell down through rungs at 7.1e-10 and 6.9e-10 to 0 and requires
+the approach to be monotone. The paragraphs below are the fold's record.
 
 The parametric fold (§5) has to ask whether a lattice vector runs **along one of the shape's own
 axes**. That question cannot be asked exactly, because `pi/2` is not a representable angle:
@@ -242,8 +289,8 @@ Three things bound it. 1e-11 rad is 5.7e-10 degrees. A shape at or below half a 
 at all, because the fold is arithmetically inert there. And the step is in the value, not in the
 slope: `d(sum T)/d(angle)` at zero is -1.2e-14 by AD against 2.1e-11 by central differences at
 `h = 1e-4`, both of them the zero symmetry requires — so nothing an optimiser descends walks into
-it. `tests/test_nvf_period_spanning_shape.py::test_the_lattice_direction_test_is_a_threshold`
-pins it.
+it. A test pinned it while the fold existed and went with the fold; the threshold that replaced
+it is pinned by `tests/test_gamma_field.py::test_the_ladder_through_the_pair_threshold_is_monotone`.
 
 
 ## 5. Which parametric scenes changed when the fold landed (2026-09-03)
@@ -348,7 +395,9 @@ check carries a `OVERLAP_TOL_REL` slack of 1e-6 relative; 2.5000025 is refused. 
 exist; a shape able to reach across a longer direction is one whose images that check never looked
 at either.
 
-**A predicate**, reading the same values the fold reads so it cannot drift from it:
+**A predicate**, reading the same values the fold read so it could not drift from it. It is
+the fold's, kept as the record of what this section measured: `_LATTICE_DIR_TOL2` and the fold
+went on 2026-09-06 (§8), and every box this predicate answered `None` for moved then anyway.
 
 ```python
 import numpy as np
@@ -400,6 +449,47 @@ bit-identical. Boxes above 1.25 on that cell do move — 2.2e-8 at 1.30, 7.8e-5 
 2.40.
 
 
+## 8. Which scenes changed when the piece field landed (2026-09-06)
+
+**Status: landed.** Recorded because it moves published numbers, and this time the rule for
+which numbers is simple: **every lone box that is not a grating moves, by ~4e-4 in `sum(T)` at
+order 6**, and nothing else does.
+
+The corner-radial extension of the fold's box branch — outside a corner, the normal pointed
+from the corner — gave way to fixed face normals: a face piece's direction is its outward
+normal at every sample, inside or outside its tangential extent, and outside a corner the two
+adjacent faces are equidistant and the blend reads their diagonal. That was measured before it
+was chosen: the foot / corner-radial rule beyond a piece's extent breaks the 1-D grating
+(`max|n_y|` 0.76 where it must be 0, because a covered face and its partner share endpoints and
+their foot directions reinforce instead of cancelling) and puts a ~4e-4 non-decaying step at
+every merge; fixed normals give the grating exactly, a zero step at every merge, and solve the
+sheared and tilted scenes of §2 at 0.16–0.19 deg. The price is off-interface, and an admissible
+continuation replaced by another.
+
+| scene, order 6, `normal_grid` 512 | fold (2026-09-03) | pieces | change |
+|---|---|---|---|
+| 350 x 350 box on a 700 square | 0.891888043 | 0.892284142 | +4.0e-4 |
+| L box, 689 x 200 at atan2(117.9, 690) | 0.918790794 | 0.918264766 | -5.3e-4 |
+| 600 x 650 at 10 deg | 0.545259776 | 0.519815227 | -2.5e-2 |
+| 1-D grating, 350 x 700 | 0.627676664 | 0.627676664 | 0 |
+| stripe along x, 700 x 200 | 0.969594227 | 0.969594227 | 0 |
+| checkerboard span, 2.5 x 0.8 on Li's cell | 0.898529436 | 0.898529436 | 0 |
+| the span golden, (5, 5), 550 nm | 0.9763112427108831 | 0.9763112427108831 | 0 |
+
+The 600 x 650 row is not a free-region shift: its faces were 1.7 deg wrong on the fold with 1.9%
+of the boundary band past 45 deg (the box leaves its Wigner-Seitz cell, and the nearest interface
+for part of the band belonged to a neighbour), against 0.14 deg / 0.04% now. The gratings are
+bit-identical because both mechanisms are exact on them, and round shapes are untouched (the
+`'arc'` piece is the old round branch verbatim). Multi-shape layers holding a box move by the
+same class through their per-shape field; the cross-shape blend is the ratio form, which is
+direction-identical to the product it replaced (<= 1e-15 relative on round-only layers).
+
+Two goldens outside the parametric files moved and were re-derived rather than re-baselined:
+the 120 x 150 rod of `test_a_length_is_a_size_and_the_transform_carries_its_sign` and the
+circle-plus-rectangle pair of `test_the_parametric_spelling_has_no_frame_to_declare`; each
+test carries its reference rows.
+
+
 ## 6. What is *not* an instrument for any of this
 
 **Translation invariance does not detect a non-periodic normal field.** Translating a whole
@@ -428,6 +518,13 @@ What does work, in order of how little it asks you to trust:
 
 
 ## 7. What the mutation pass reached
+
+The piece field carries its own harness: `tests/test_gamma_field.py::test_the_mutant_is_killed`
+applies each mutant to the source (`gamma_instruments.mutated`, which says DID-NOT-APPLY and
+NO-OP out loud and restores by md5), reloads, and asserts that the named instrument fails —
+the flush substitution, the pair substitution, the tie and its axis, one face family's image
+list (killed by the L box and its transpose through the oracle band), the coverage union, and
+the blend exponent. What follows is the record of the pass over the fold it replaced.
 
 Eighteen mutants over the fold, the refusal and the tie-break, each run against
 `test_nvf_period_spanning_shape.py` and `test_nvf_self_coincident_faces.py`, with the source

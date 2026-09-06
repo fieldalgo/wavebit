@@ -72,13 +72,22 @@ underfoot: with two shapes the normal at a boundary was already 40 deg from the 
 normal, and with three, 43. It also sampled ``X - cx``, the offset to the shape *as named*, so
 naming a shape one period over slid a different part of an infinite wedge into the cell and
 moved the answer by 1.9e-2. Two changes fix both, and neither carries a width to tune: the
-displacement is folded to the nearest image (:func:`_shape_surface_normal`), and the shapes are
-combined by distance-product weights, which collapse to one shape's own normal exactly at its
+displacement is folded to the nearest image, and the shapes are combined by distance-ratio
+weights (:func:`_ratio_blend`), which collapse to one shape's own normal exactly at its
 surface. Boundaries now read 0.000 deg for any number of shapes and naming a period over moves
 nothing (5.7e-13).
 
-The same weighting removed ``sign()`` from the rectangle branch, which the position gradient
-had been blocked on -- see :func:`_shape_surface_normal`.
+**A box is four face pieces, each carried over the ring of its periodic images** (2026-09-06,
+:class:`GammaPlan` and :func:`_box_field`). A face is a segment: its image under a lattice
+vector lands on a parallel line, slid along it, and where an opposite face's image lands on
+the same line the material runs on and there is no interface -- a bar spanning the cell, a box
+on a sheared cell, a tilted box whose faces meet their own images part way. The previous
+mechanism folded each face distance by the repeat along the shape's own axis, which reaches the
+zero-slide case exactly and refused every other by name (3e-2 in ``sum(T)``, not decaying);
+now every face is evaluated at every instance that can be its nearest, a coincident pair is
+told so by the plan and cancels bitwise, and the sheared and tilted scenes build at 0.19 deg
+against an exact interface oracle. The same rewrite removed ``sign()`` from the rectangle
+branch, which the position gradient had been blocked on.
 
 **What it costs, which the commit that made the change did not measure.** The blend evaluates a
 signed distance per shape and a product over the others, and a rectangle adds four blended faces
@@ -369,10 +378,12 @@ def check_layer_shapes(layer, lattice, layer_index=0):
     raises ``LinAlgError`` from inside the solve with nothing said about the geometry. An
     omitted length is the same case, since :func:`shape_geometry` defaults it to ``0.0``.
 
-    **Neither builder here reads a shape's periodic images.** The closed form sums each shape's
-    own transform; :func:`~wavebit._core.boundary.resolve_painting` clips loops in unwrapped
-    Cartesian coordinates and enumerates no images either. So two more things are refused, and
-    they are one fact wearing two faces:
+    **Neither transform here reads a shape's periodic images.** The closed form sums each
+    shape's own transform; :func:`~wavebit._core.boundary.resolve_painting` clips loops in
+    unwrapped Cartesian coordinates and enumerates no images either. (The *normal field* does
+    read them, since 2026-09-06 -- :class:`GammaPlan` -- which is why a box abutting its own
+    image along part of a face is built now rather than refused.) So two more things are
+    refused, and they are one fact wearing two faces:
 
     * a shape **larger than the period**, which runs into its own image. Its transform is a
       single sinc, which is not the transform of any periodic indicator. Measured on the
@@ -446,7 +457,6 @@ def check_layer_shapes(layer, lattice, layer_index=0):
 
     hits = _overlap.overlapping_pairs(prims, tol, lattice, image_only=True)
     if not hits:
-        _refuse_partial_self_coincidence(shapes, prims, lattice, tol, layer_index)
         return
 
     i, j, ox, oy, _ = hits[0]
@@ -467,51 +477,6 @@ def check_layer_shapes(layer, lattice, layer_index=0):
         f'built as a different structure -- one that solves, conserves energy, and does not '
         f'converge.\n'
         f'  {fix}, or state the layer as a raster structure, which carries the wrap.')
-
-
-def _refuse_partial_self_coincidence(shapes, prims, lattice, tol, layer_index):
-    """Refuse a box whose face pair coincides with an image of itself over *part* of its length.
-
-    Split out of :func:`check_layer_shapes` only because it is long, and called from its end:
-    see :func:`~wavebit._core.overlap.partial_self_coincidences` for the geometry and
-    ``docs/normal-field-known-limits.md`` for what it costs when it is not caught.
-    """
-    # *After* the interpenetration sweep, and that ordering is load-bearing rather than
-    # stylistic. The two conditions are not disjoint: a rod of `lx = 340` on a 300 period runs
-    # into its own image across `a1 + a2` with `|t . v| = 2b` exactly, so it is partially
-    # coincident *as well as* larger than the period -- and "larger than the period" is the
-    # refusal that names its actual mistake. Asked first, this one answered it with a paragraph
-    # about normal fields for a shape that has a much simpler problem.
-    # No `try` around the read, unlike the block at the top of the caller: getting here means
-    # `Px, Py` and every primitive already came back as numbers, so both halves of what this
-    # reads are concrete by construction. A traced layer left through that block instead.
-    for i, prim in enumerate(prims):
-        runs = _overlap.partial_self_coincidences(prim, lattice, tol)
-        if not runs:
-            continue
-        axis, ox, oy, run = runs[0]
-        along = 'x' if axis == 'u' else 'y'
-        raise ValueError(
-            f'Analytic layer {layer_index}: shape {_shape_name(shapes, i)} runs into its own '
-            f'periodic image{_across(ox, oy)} along part of one face pair -- {run:g} of the '
-            f'face is covered, on the faces normal to the shape\'s own {along}. The boxes only '
-            f'touch, so the permittivity is right; the *normal field* is not. Along that run '
-            f'the material continues into the image and there is no interface, but the field '
-            f'is built from this box alone and still reports the face normal there. Measured '
-            f'on a 700-square cell, a rectangle at atan(1/2) with ly = 700 sin(theta) and '
-            f'lx = 640 -- a run of 13.9 out of a 640-long face: sum(T) 0.801 / 0.811 / 0.823 '
-            f'/ 0.832 / 0.838 at truncation order 6 / 9 / 12 / 15 / 18, where an exact '
-            f'nearest-interface field and an image-aware raster both answer 0.832 / 0.841 / '
-            f'0.849 / 0.853 / 0.857. That is 3e-2 falling to 2e-2 across a tripling of the '
-            f'order -- an error that converges away far too slowly to be a truncation.\n'
-            f'  No closed form over one box fixes it: along the dead run the nearest interface '
-            f'belongs to the *neighbouring* image, so masking the run removes the wrong normal '
-            f'without supplying the right one (measured 1.435 -> 1.552 deg and 4.551 -> 4.580 '
-            f'against an exact oracle). A face covered end to end is a different matter and is '
-            f'built exactly -- a rectangle spanning the cell, i.e. a 1-D grating.\n'
-            f'  Move the shape off the coincidence: change {along}-length or the angle so the '
-            f'faces do not land on their own image, or state the layer as a raster structure, '
-            f'which carries the wrap.')
 
 
 def layer_needs_resolving(layer, lattice):
@@ -787,7 +752,7 @@ def _device(x):
 _BLEND_EXPONENT = 4
 
 
-def normal_vector_field_analytical(xp, grid_shape, shapes, dtype, lattice):
+def normal_vector_field_analytical(xp, grid_shape, shapes, dtype, lattice, plan=None):
     """Unit normal field of the shapes, sampled on ``grid_shape`` — analytic, not from a raster.
 
     The sample points come from :func:`wavebit._core.lattice.sample_grid`, which is where the
@@ -803,47 +768,40 @@ def normal_vector_field_analytical(xp, grid_shape, shapes, dtype, lattice):
     cell moves this field by 1.96 with an explicit centre and no lattice, by 1.7 with a defaulted
     centre and a lattice, and by exactly 0 with both.
 
-    Written without in-place mutation so it stays differentiable in the shape parameters — with
-    the exception of ``cx`` and ``cy``, which the rectangle branch reaches only through
-    ``sign()`` and a comparison. Both have zero derivative everywhere, so a position never
-    survives this function.
+    **The field is built from pieces** (:func:`_piece_field`): a box is its four faces, each a
+    segment carried over the ring of its periodic images, and a round shape is one piece. The
+    combinatorics -- which faces share a line with which image, over what, and whether anything
+    is left -- is the :class:`GammaPlan`, planned once from concrete numbers and replayed by
+    array ops on the traced ones. Left ``None`` it is planned here; under a trace with no primal
+    to read (``jax.jit`` with no frozen record) :func:`_blind_plan` stands in, and that costs
+    the exact cancellation of an abutting pair -- see there.
 
-    That is why :func:`normal_projector_coeffs` does not put a position in: it builds the field
-    with the shape at the centre of the cell and translates the *coefficients*.
+    Written without in-place mutation so it stays differentiable in the shape parameters. A
+    position is not among them for a lone shape: :func:`normal_projector_coeffs` builds the
+    field with the shape at the centre of the cell and translates the *coefficients*.
     """
     Ny, Nx = grid_shape
     X, Y = sample_grid(xp, grid_shape, lattice, dtype)
 
-    if _tiles_pay(X, Ny, Nx, len(shapes)):
-        return _blend_tiled(xp, X, Y, shapes, dtype, (Ny, Nx), lattice)
-
-    got = [g for g in (_shape_surface_normal(xp, X, Y, s, dtype, lattice) for s in shapes)
-           if g is not None]
-    if not got:
+    if plan is None:
+        plan = plan_gamma(shapes, lattice)
+        if plan is None:
+            plan = _blind_plan(shapes, lattice)
+    if plan.empty:
+        # Every face is covered by the shape's own images: the shape tiles the plane, the
+        # layer is a uniform slab written as a shape, and there is no interface to point at.
+        # The same nothing-to-point-at answer an empty shape list gets, and for the same
+        # reason: every conv matrix is `eps * I` whatever this returns, so it returns the
+        # constant Li's rules read as "x is the normal".
         return xp.ones((Ny, Nx), dtype=dtype), xp.zeros((Ny, Nx), dtype=dtype)
-    if len(got) == 1:
-        return got[0][1], got[0][2]
 
-    # Weight each shape by the product of the *other* shapes' surface distances. At shape A's
-    # own surface d_A = 0, so every other weight carries that zero and the sum collapses to
-    # A's normal exactly, while between the shapes the weights vary smoothly. It is `1/d_j`
-    # written without a division, so there is no epsilon and nothing to tune. See :func:`_blend`
-    # for the body, which the tiled traversal above shares.
-    #
-    # Smoothness is the point, not a bonus. Picking the nearest shape outright (`argmin`) gives
-    # the same exact normals at every surface and a field that JUMPS across the selection
-    # boundary -- and moving a shape sweeps that boundary, which contributes a line integral of
-    # the jump to the true derivative that no grid sample and no autograd sees. Measured on two
-    # circles, the hard pick's autograd sits 44-76% from central differences and does not
-    # improve as h shrinks (until h drops below one pixel, where the finite difference stops
-    # seeing the boundary move too and the two agree on being wrong together). This weighting
-    # has no jump to sweep: the same comparison falls 1.5e-2 -> 6.5e-4 -> 6.3e-5 as h goes
-    # 1e-4 -> 1e-5 -> 1e-6, which is a correct gradient with the difference converging onto it.
-    return _blend(xp, got, (Ny, Nx), dtype)
+    if _tiles_pay(X, Ny, Nx, len(plan.pieces)):
+        return _field_tiled(xp, X, Y, shapes, plan, lattice, dtype, (Ny, Nx))
+    return _piece_field(xp, X, Y, shapes, plan, None, lattice, dtype)
 
 
-#: Side of the square block :func:`_blend_tiled` works in. 64 doubles is 32 KB per array, so
-#: the ten-odd live arrays of one shape's evaluation stay inside L2 and the whole pipeline runs
+#: Side of the square block :func:`_field_tiled` works in. 64 doubles is 32 KB per array, so
+#: the ten-odd live arrays of one piece's evaluation stay inside L2 and the whole pipeline runs
 #: without touching memory again. Measured against 128 / 192 / 256 on two and four shapes at
 #: N = 512 / 1024 / 2048: 64 wins or ties everywhere, by up to 1.3x over the next size.
 _TILE = 64
@@ -853,12 +811,12 @@ _TILE = 64
 _TILE_MIN_PIXELS = 512 * 512
 
 
-def _tiles_pay(sample, n_v, n_u, n_shapes):
-    """Whether to evaluate the blend block by block instead of over the whole grid.
+def _tiles_pay(sample, n_v, n_u, n_pieces):
+    """Whether to evaluate the field block by block instead of over the whole grid.
 
     **NumPy only, and that is the point rather than a limitation.** The win here is cache
     residency, which is a property of eager elementwise evaluation: each of the ~50 array
-    operations per shape reads and writes the whole grid, so at N = 1024 a two-shape layer
+    operations per piece reads and writes the whole grid, so at N = 1024 a two-shape layer
     moves roughly 800 MB through memory to do a few tens of megaflops. JAX and Torch under a
     trace do not have that problem — XLA and the compiler fuse the same chain into one pass —
     and a Python loop over 256 tiles would instead unroll into the graph and wreck compile
@@ -868,14 +826,18 @@ def _tiles_pay(sample, n_v, n_u, n_shapes):
     ``xp.__name__.endswith('numpy')``, is wrong and quietly so: ``jax.numpy`` ends with
     ``numpy`` too, and it would have turned the tiling on for exactly the backend the paragraph
     above says to keep it off. ``test_only_numpy_takes_the_tiled_path`` is what caught that.
+
+    ``n_pieces`` counts the plan's pieces, not the layer's shapes: a lone box is four of them,
+    each carried over a ring of images, and that is already the working set the tiles exist
+    for. A lone round shape is one piece and nothing to blend.
     """
     import numpy as np
-    return (n_shapes > 1 and n_v * n_u >= _TILE_MIN_PIXELS
+    return (n_pieces > 1 and n_v * n_u >= _TILE_MIN_PIXELS
             and type(sample) is np.ndarray)
 
 
-def _blend_tiled(xp, X, Y, shapes, dtype, grid_shape, lattice):
-    """:func:`normal_vector_field_analytical`'s blend, evaluated one cache-sized block at a time.
+def _field_tiled(xp, X, Y, shapes, plan, lattice, dtype, grid_shape):
+    """:func:`_piece_field`, evaluated one cache-sized block at a time.
 
     Bit-identical to the whole-grid path by construction: same operations on the same values in
     the same order, only the traversal differs. Pinned by
@@ -890,373 +852,9 @@ def _blend_tiled(xp, X, Y, shapes, dtype, grid_shape, lattice):
             block = (slice(i0, min(i0 + _TILE, n_v)), slice(j0, min(j0 + _TILE, n_u)))
             bx = np.ascontiguousarray(X[block])
             by = np.ascontiguousarray(Y[block])
-            got = [g for g in (_shape_surface_normal(xp, bx, by, s, dtype, lattice)
-                               for s in shapes) if g is not None]
-            if not got:
-                out_x[block], out_y[block] = 1.0, 0.0
-                continue
-            if len(got) == 1:
-                out_x[block], out_y[block] = got[0][1], got[0][2]
-                continue
-            out_x[block], out_y[block] = _blend(xp, got, bx.shape, dtype)
+            out_x[block], out_y[block] = _piece_field(xp, bx, by, shapes, plan, None,
+                                                      lattice, dtype)
     return out_x, out_y
-
-
-def _blend(xp, got, shape, dtype):
-    """The distance-product combination of several shapes' fields — see the caller for why."""
-    dists = [g[0] for g in got]
-    scale = sum(dists) / len(dists)
-    scale = xp.where(scale > 0, scale, xp.ones_like(scale))
-    dn = [(d / scale) ** _BLEND_EXPONENT for d in dists]
-
-    sx = xp.zeros(shape, dtype=dtype)
-    sy = xp.zeros(shape, dtype=dtype)
-    for j, (_, gx, gy) in enumerate(got):
-        w = None
-        for k, dk in enumerate(dn):
-            if k != j:
-                w = dk if w is None else w * dk
-        sx = sx + w * gx
-        sy = sy + w * gy
-    norm = _hypot_safe(xp, sx, sy)
-    return sx / norm, sy / norm
-
-
-def _fold_to_nearest_image(xp, dx, dy, lattice):
-    """``(dx, dy)`` reduced to the nearest periodic image, on the cell's own lattice.
-
-    ``d % P - P/2`` answers "nearest image" only when the images sit at ``(m*Px, n*Py)``. They
-    sit at ``m*a1 + n*a2``, so on a skewed cell the rectangular fold reduces towards a point
-    where no image is: on a 60-degree cell it looks straight up while the neighbour is up and
-    to the right. The field is then wrong wherever a neighbour's surface is the nearest one,
-    which is why it only shows once a shape fills enough of the cell.
-
-    Rounding the *fractional* coordinates lands in the fundamental parallelogram — the nearest
-    image in the lattice metric, not the Euclidean one. The 3x3 sweep after it is what makes
-    the pick Euclidean. One cell a side is enough for any basis this solver accepts.
-    """
-    a1x, a2x = lattice[0][0], lattice[0][1]
-    a1y, a2y = lattice[1][0], lattice[1][1]
-    det = a1x * a2y - a2x * a1y
-    su = xp.round((a2y * dx - a2x * dy) / det)
-    sv = xp.round((-a1y * dx + a1x * dy) / det)
-
-    best_x = best_y = best_d2 = None
-    for du in (-1.0, 0.0, 1.0):
-        for dv in (-1.0, 0.0, 1.0):
-            mu, mv = su + du, sv + dv
-            ex = dx - mu * a1x - mv * a2x
-            ey = dy - mu * a1y - mv * a2y
-            d2 = ex * ex + ey * ey
-            if best_d2 is None:
-                best_x, best_y, best_d2 = ex, ey, d2
-            else:
-                take = d2 < best_d2
-                best_x = xp.where(take, ex, best_x)
-                best_y = xp.where(take, ey, best_y)
-                best_d2 = xp.where(take, d2, best_d2)
-    return best_x, best_y
-
-
-#: How far off a lattice direction a shape's own axis may sit and still count as running along
-#: it, as a fraction of the lattice vector's length. Squared, because the test it is read by
-#: compares squared lengths and wants no root.
-#:
-#: The same 1e-12 :func:`~wavebit._core.lattice.is_axis_aligned` draws its diagonal test at, and
-#: it is needed for the same reason: the question is exact in real arithmetic and only ever
-#: fails by rounding. ``angle = pi/2`` is the case -- ``cos(pi/2)`` is 6.1e-17 rather than 0, so
-#: a shape turned a quarter turn misses an exact test by 4.3e-14 on a 700 cell. No exact test
-#: can serve, because ``pi/2`` is not a representable angle in the first place.
-#:
-#: **It is a threshold, and it was measured rather than assumed.** A shape more than half a
-#: repeat long folds, and one just past this tolerance does not, so the field steps across it:
-#: 8.1e-11 at ``angle = 1e-12`` and 1.19e-1 at ``1e-11``, on a rectangle 0.9 of the cell tall.
-#: Through a solve that is ``sum(T)`` 0.976583641 against 0.976535505 -- 4.8e-5, the same size
-#: as the correction the fold itself makes, with the *better* of the two values sitting at
-#: ``angle = 0``. A shape at or below half a repeat has no step at all, because the fold is
-#: arithmetically inert there (measured smooth, 1.2e-12 to 1.5e-1 as the angle grows).
-#:
-#: Nothing an optimiser walks reaches it: 1e-11 rad is 5.7e-10 degrees, ``d(sum T)/dangle`` at zero
-#: is -1.2e-14 by AD against 2.1e-11 by central differences at h = 1e-4 -- both of them the zero
-#: that symmetry requires -- so the step is in the value and not in the slope anything descends.
-#: ``test_the_lattice_direction_test_is_a_threshold`` pins it so it stays known.
-_LATTICE_DIR_TOL2 = 1e-24
-
-
-def _shorter_period(xp, best, along_it, length):
-    """``length`` if it runs along the axis and beats ``best``; ``best`` otherwise. ``0`` = none yet.
-
-    The ``beats`` half is a guard rather than a choice. Swept over 41 shear values x 4 aspect
-    ratios x 37 angles, at most one of ``a1``, ``a2``, ``a1 + a2``, ``a1 - a2`` runs along a given
-    shape axis on any non-degenerate cell, so the comparison never has two live candidates to
-    rank. It is kept because it costs one ``where`` and makes the reduction independent of the
-    order the candidates are visited in, which the caller would otherwise have to guarantee.
-    """
-    return xp.where(along_it & ((best <= 0.0) | (length < best)), length, best)
-
-
-def _reciprocal_or_zero(xp, P):
-    """``1/P``, and ``0`` where ``P`` is — which is what makes :func:`_fold_by` inert, not infinite.
-
-    Spelling "no repeat along this axis" as ``inf`` reads better and does not work at all, before
-    autograd is even reached: :func:`_fold_by` computes ``s - P * round(s * inv_P)``, and with
-    ``P = 0`` and ``inv_P = inf`` that is ``s - 0 * round(s * inf)`` = ``s - 0 * inf`` = NaN --
-    the *forward* value, not only the gradient. Zero puts the inertness in both factors
-    instead: ``s - 0 * round(s * 0)`` is ``s - 0 * 0``, exactly the untouched distance.
-    """
-    live = P > 0.0
-    return xp.where(live, 1.0 / xp.where(live, P, xp.ones_like(P)), xp.zeros_like(P))
-
-
-def _fold_by(xp, s, P, inv_P):
-    """``s`` reduced to its signed offset from the nearest multiple of ``P``.
-
-    ``P = 0`` (with ``inv_P = 0``, which is what :func:`_reciprocal_or_zero` pairs with it)
-    returns ``s`` untouched, so a caller with no repeat to fold by needs no branch of its own.
-    """
-    return s - P * xp.round(s * inv_P)
-
-
-def _axis_lattice_periods(xp, lattice, cos_a, sin_a):
-    """Repeat length along each of the shape's *own* two axes — ``(Pu, 1/Pu, Pv, 1/Pv)``, ``0`` for none.
-
-    A face is never alone: the shape repeats, so its ``+x`` face reappears at every lattice
-    vector, and the copies that a point inside the shape can be nearest to are the ones reached
-    by a lattice vector running **along the shape's x axis** — those land the copy squarely on
-    top of the original, same extent, faces parallel. That length is a lattice question and not
-    ``period``: on an axis-aligned cell the two agree, and on a sheared one they do not. A
-    rectangle spanning ``y`` on ``a1 = (700, 0), a2 = (200, 700)`` has no vector along its ``y``
-    axis at all — every image is displaced 200 in ``x`` as well, so the images step rather than
-    abut and the face is a real interface. ``0`` is that answer, and it makes :func:`_fold_by`
-    do nothing.
-
-    **The candidates are the four the 3x3 image set spans**: ``a1``, ``a2``, ``a1 + a2`` and
-    ``a1 - a2`` (negatives give the same length and the same test). Offering only the two basis
-    vectors was tried first and is wrong, not merely narrow — it was written on the reasoning
-    that a shape reaching across ``a1 + a2`` would run into a nearer image and be refused
-    upstream, and that reasoning is false. On the Li checkerboard basis
-    ``a1 = (1.25, 1.25), a2 = (1.25, -1.25)`` the sum is ``(2.5, 0)``, which runs straight along
-    an unrotated shape's x axis, and :func:`check_layer_shapes` accepts ``lx`` all the way to
-    2.50 there -- exactly the span. Measured with the two-vector version: ``max|n_x| = 1.000``
-    with |n_x| above 0.01 over 46.9% of the cell, on a structure that repeats end to end along x
-    and therefore has no
-    vertical face at all. The same defect this function exists to remove, one cell shape over.
-
-    ``overlap._IMAGES`` is the same 3x3, and that is the point of matching it rather than
-    picking a number: a shape that could reach across a longer direction -- ``2*a1 + a2`` --
-    is one whose images that check never looked at either. Where the refusal stops is where
-    this stops, so the two cannot disagree about which images exist.
-    """
-    a1x, a2x = lattice[0][0], lattice[0][1]
-    a1y, a2y = lattice[1][0], lattice[1][1]
-    Pu = 0.0 * cos_a
-    Pv = 0.0 * cos_a
-    for tx, ty in ((a1x, a1y), (a2x, a2y),
-                   (a1x + a2x, a1y + a2y), (a1x - a2x, a1y - a2y)):
-        length2 = tx * tx + ty * ty
-        on_u = tx * cos_a + ty * sin_a          # the lattice vector on the shape's x axis
-        on_v = -tx * sin_a + ty * cos_a         # ... and on its y axis
-        # "Runs along this axis" is "has no component across it", compared squared so the test
-        # needs neither a root nor a sign.
-        Pu = _shorter_period(xp, Pu, on_v * on_v <= _LATTICE_DIR_TOL2 * length2, xp.abs(on_u))
-        Pv = _shorter_period(xp, Pv, on_u * on_u <= _LATTICE_DIR_TOL2 * length2, xp.abs(on_v))
-    return Pu, _reciprocal_or_zero(xp, Pu), Pv, _reciprocal_or_zero(xp, Pv)
-
-
-def _shape_surface_normal(xp, X, Y, shape, dtype, lattice):
-    """``(distance to this shape's surface, normal_x, normal_y)`` — the outward unit normal, periodic.
-
-    Two things here differ from what this file did before 2026-08-17, and both are what make
-    :func:`normal_vector_field_analytical` a nearest-surface field rather than a sum.
-
-    **The displacement is folded to the nearest image.** ``X - cx`` is the offset to the shape
-    as it was named, and on a torus the shape is equally at ``cx +- Px``. Folding is what makes
-    one shape's field periodic, and a nearest-surface pick over periodic fields is periodic in
-    turn — which is the whole reason ``cx`` and ``cx + Px`` now give the same answer for
-    several shapes and not only for one.
-
-    **Outside a rectangle's corner the normal is radial from the corner, not the nearest
-    face.** The old rule extended each face's normal into an infinite wedge, which is not the
-    gradient of the distance to a box: past a corner the nearest *point* is the corner itself.
-    Measured against that exact gradient the wedge rule is 24.9 deg out over the corner
-    quadrants and this is 0.000; against the independent raster field (``'contour'``, which is
-    distance-based and periodic) 27.3 deg becomes 2.4.
-    """
-    stype, cx, cy, lx, ly, angle = shape_geometry(shape, lattice)
-    cos_a = xp.cos(as_array(xp, angle, dtype=dtype))
-    sin_a = xp.sin(as_array(xp, angle, dtype=dtype))
-
-    # `diag(Lx, Ly)` is the one case where the two folds ARE the same fold, so it keeps the
-    # cheaper spelling -- and stays bit-identical to every result predating this branch.
-    if is_axis_aligned(lattice):
-        Px, Py = periods_of(lattice)
-        dx = (X - cx + Px / 2.0) % Px - Px / 2.0
-        dy = (Y - cy + Py / 2.0) % Py - Py / 2.0
-    else:
-        dx, dy = _fold_to_nearest_image(xp, X - cx, Y - cy, lattice)
-    xr = dx * cos_a + dy * sin_a
-    yr = -dx * sin_a + dy * cos_a
-    a, b = lx / 2.0, ly / 2.0
-
-    if stype in _overlap._ELLIPSE_TYPES:                 # ellipse / circle / disk
-        gxr = 2.0 * xr / (a ** 2)
-        gyr = 2.0 * yr / (b ** 2)
-        # The algebraic distance |f| / |grad f| -- exact for a circle, and for an ellipse the
-        # first-order distance to the level set, which is all the nearest-surface pick needs.
-        f = (xr / a) ** 2 + (yr / b) ** 2 - 1.0
-        dist = xp.abs(f) / _hypot_safe(xp, gxr, gyr)
-    elif stype in _overlap._BOX_TYPES:                   # rectangle / square
-        Pu, inv_Pu, Pv, inv_Pv = _axis_lattice_periods(xp, lattice, cos_a, sin_a)
-        qx, qy = xp.abs(xr) - a, xp.abs(yr) - b
-        # `xp.maximum` against a Python float is a numpy convenience torch does not share, so
-        # every clamp here goes through a zero array of the same dtype.
-        zero = xp.zeros_like(xr)
-        out_x, out_y = xp.maximum(qx, zero), xp.maximum(qy, zero)
-        outside = _hypot_safe(xp, out_x, out_y)
-
-        # Inside, blend the FOUR faces by the same distance-product rule, each with its own
-        # outward normal and its own distance. This is what removes `sign()` from the branch
-        # -- and with it the defect the module docstring called unfixable without a mollifier.
-        #
-        # The old rule picked the nearest face with `where(qx >= qy, sign(xr), ...)`, and both
-        # halves of that jump. `sign(xr)` flips across the shape's own centre line and the
-        # `>=` flips across the diagonals, so the field was piecewise constant and every bit of
-        # its position dependence sat on those seams: translating the shape slid them, which a
-        # grid sample cannot see. Measured, that is not a resolution problem -- the error is
-        # flat at 1.8e-2 from normal_grid 1024 to 4096, while the circle pair converges.
-        #
-        # Treating +x and -x as separate faces makes the seam vanish rather than smoothing it.
-        # At the centre line the two carry equal weight and opposite normals, so they cancel
-        # exactly and continuously; at a face its own distance goes to zero, every other weight
-        # carries that zero, and the sum collapses to that face's normal outright. Two circles
-        # were already differentiable and stay so; the rectangle pair goes from 212-274% out
-        # against central differences to 0.06 / 0.03 / 1.0%.
-        #
-        # **Each face is one member of a family, and the fold picks the member.** `a - xr` names
-        # the copy in this cell, and that is the nearest one only while the shape is under half
-        # its own repeat: a rectangle 0.9 of the cell tall has its top face 0.9 away from its
-        # own floor going up through itself, and the floor of the image below only 0.1 away
-        # going down. Folding the face distance by the repeat along that axis
-        # (:func:`_axis_lattice_periods`) is what reads the second one. Below half a repeat the
-        # fold is arithmetically inert and this is the old expression bit for bit; above it, the
-        # field moves toward the raster builder rather than away (mean angle to `'contour'` over
-        # the cell: 4.173 -> 3.906 deg at ly = 0.9 of the period, and unchanged to three decimals
-        # in the boundary band at every ly below the period).
-        #
-        # **At `ly == Pv` the two y families become the same set of lines.** `fold(yr - b)` and
-        # `fold(yr + b)` then differ by exactly one repeat, which the fold removes, so the two
-        # distances are equal everywhere -- and a shape whose images abut it face to face has no
-        # interface there, which is what "equal" says. This is the whole defect: it is the only
-        # spelling of a 1-D grating on this path, `ly` above the period is refused by name and
-        # `ly == period` was accepted and then read as two edges, giving `max|n_y| = 1.00` with
-        # |n_y| above 0.01 over 32.9% of the cell (above 0.99 over 8.5%), where the raster builder
-        # for the same grating gives 0.000e+00 everywhere. The permittivity coefficients never
-        # read the field -- replace it with a constant and `epz_i` is bit-identical, while
-        # `epx`/`epy`/`epxy`/`epyx` move by 3.3e-1 and 2.5e-1 because Li's rules are built from
-        # both. That is the whole signature: energy conserves and nothing raises, and the damage
-        # shows only as slow convergence that looks like a property of the path.
-        faces = ((a - xr, Pu, inv_Pu), (a + xr, Pu, inv_Pu),
-                 (b - yr, Pv, inv_Pv), (b + yr, Pv, inv_Pv))
-        fd = [xp.abs(_fold_by(xp, f[0], f[1], f[2])) for f in faces]
-
-        # Equal distances and opposite normals already cancel, but they leave the *other* pair's
-        # weights carrying a factor that vanishes on the one line where the merged family sits --
-        # half a repeat from the shape's centre -- and a normal of (0, 0) on it. Measured: 32 of
-        # 4096 samples, reachable only when a `cy` puts that line on a pixel row. So a merged
-        # pair is dropped outright instead of left to cancel -- and the drop is one thing, not
-        # two: giving both members the *same* weight (`fdn` = 1 below) is what removes them,
-        # because their normals are already exact opposites and equal weights cancel them
-        # identically. Zeroing those normals as well was tried here and is provably inert --
-        # bit-identical on a spanning `lx`, a spanning `ly`, both, and neither -- so the
-        # `normals` below are plain unit vectors and the weight carries the whole mechanism.
-        #
-        # `fold(lx) == 0` is exact and never a tolerance. It is true only when the shape's own
-        # length lands on the repeat to the last bit, and a shape one ulp short of that is
-        # carried by the fold above -- continuously, which is what an optimiser walking `ly` up
-        # to the period needs. There is no cliff to fall off here, only a limit to arrive at.
-        merged_u = (Pu > 0.0) & (_fold_by(xp, 2.0 * a, Pu, inv_Pu) == 0.0)
-        merged_v = (Pv > 0.0) & (_fold_by(xp, 2.0 * b, Pv, inv_Pv) == 0.0)
-        live_u = xp.ones_like(Pu)
-        live_v = xp.ones_like(Pv)
-        normals = ((live_u, 0.0 * live_u), (-live_u, 0.0 * live_u),
-                   (0.0 * live_v, live_v), (0.0 * live_v, -live_v))
-        merged = (merged_u, merged_u, merged_v, merged_v)
-
-        fscale = sum(fd) / len(fd)
-        fscale = xp.where(fscale > 0, fscale, xp.ones_like(fscale))
-        fdn = [xp.where(m, xp.ones_like(d), (d / fscale) ** _BLEND_EXPONENT)
-               for d, m in zip(fd, merged)]
-        in_x = xp.zeros_like(xr)
-        in_y = xp.zeros_like(xr)
-        for j, (ux, uy) in enumerate(normals):
-            w = None
-            for k, dk in enumerate(fdn):
-                if k != j:
-                    w = dk if w is None else w * dk
-            in_x = in_x + w * ux
-            in_y = in_y + w * uy
-        # Both pairs merged is a shape that fills the cell -- a uniform slab written as a shape,
-        # with no interface anywhere. That is the same nothing-to-point-at case
-        # `normal_vector_field_analytical` answers with a constant when no shape has a field at
-        # all, so it gets the same answer here rather than the (0, 0) four dropped faces leave.
-        both = merged_u & merged_v
-        in_x = xp.where(both, xp.ones_like(in_x), in_x)
-        in_y = xp.where(both, xp.zeros_like(in_y), in_y)
-
-        # Neutralising one pair leaves two survivors that are *exactly* opposed, so they cancel
-        # wherever they are equidistant -- the surviving pair's own centre line -- and the sum is
-        # the zero vector, which is not a normal. Nothing else breaks that tie: the merged pair
-        # carries weight 1 into both survivors' products, so it scales the difference without
-        # signing it.
-        #
-        # The answer there is simply the surviving axis, and sign is free because the
-        # factorization reads `n n^T`. Worth stating what this is *not*: it is not a rescue of a
-        # case the merge broke. On Li's checkerboard cell, where `lx = |a1 + a2|` makes the shape
-        # a stripe with no u-interface at all, those points read `(+-1, 0)` before any of this --
-        # `n n^T = xx` where the truth is `vv`. The merge moved them from confidently wrong to
-        # null; this moves them to the truth.
-        #
-        # An exact `== 0` is the right test: the tie is an exact symmetry, not a near miss. A
-        # centred shape on an axis-aligned cell never reaches it, because `(i + 0.5)/N` cannot
-        # land on `N/2`; the checkerboard's sample diagonal lands on it once per row, and the
-        # zero set was one line however fine the grid (0.78% / 0.39% / 0.20% at N = 128/256/512).
-        one_pair = merged_u ^ merged_v
-        tie = (in_x == 0.0) & (in_y == 0.0) & one_pair
-        in_x = xp.where(tie, xp.where(merged_u, xp.zeros_like(in_x), xp.ones_like(in_x)), in_x)
-        in_y = xp.where(tie, xp.where(merged_u, xp.ones_like(in_y), xp.zeros_like(in_y)), in_y)
-
-        # Inside, the nearest surface is the nearest live face -- which is `min(a - |xr|,
-        # b - |yr|)` bit for bit whenever nothing folds and nothing merged, and reads the image's
-        # face when something did. A merged pair is not a surface, so it does not get to be the
-        # nearest one; the `where` pair below says that without needing an infinity to beat.
-        near_u = xp.minimum(fd[0], fd[1])
-        near_v = xp.minimum(fd[2], fd[3])
-        near = xp.minimum(xp.where(merged_u, near_v, near_u),
-                          xp.where(merged_v, near_u, near_v))
-        dist = xp.where((qx > 0) | (qy > 0), outside, near)
-
-        # Outside, `max(q, 0)` already points at the nearest surface point -- one face when a
-        # single axis is out, the corner itself when both are. `sign` is safe here: it is only
-        # read where |xr| > a, far from the flip.
-        is_out = (qx > 0) | (qy > 0)
-        gxr = xp.where(is_out, xp.sign(xr) * out_x, in_x)
-        gyr = xp.where(is_out, xp.sign(yr) * out_y, in_y)
-    else:
-        # A type this does not know. `normal_vector_field_analytical` drops the None and, if
-        # every shape drops out, falls back to a constant `(1, 0)` -- Li's rules with x as the
-        # normal everywhere. That fallback is right for a type nothing here can transform
-        # either, and was silently wrong for two that it can: until 2026-08-27 the branches
-        # above read the *canonical* spellings only, so `type='disk'` and `type='square'` --
-        # both accepted by `check_shape_spec`, both transformed correctly by `shape_ft` -- came
-        # back with no normal field at all. Same geometry, one word apart, `sum(T)` 1.6e-3
-        # adrift at truncation_order 6 and still 7.0e-4 at 14, with R+T exactly 1. The branches
-        # read `overlap`'s alias tuples now, which is the one place the spellings are listed.
-        return None
-
-    gx = gxr * cos_a - gyr * sin_a
-    gy = gxr * sin_a + gyr * cos_a
-    norm = _hypot_safe(xp, gx, gy)
-    return dist, gx / norm, gy / norm
 
 
 # ------------------------------------------------------------------------------ the plan
@@ -1437,6 +1035,315 @@ def _blind_plan(shapes, lattice):
     return GammaPlan(3, tuple(pieces), (), False)
 
 
+# ---------------------------------------------------------------------------- the replay
+
+def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype):
+    """The normal field at ``(X, Y)`` from the plan's pieces -- ``(normal_x, normal_y)``.
+
+    Per shape, its pieces are blended into one ``(distance, normal)`` -- :func:`_box_field`
+    for the four faces of a box, :func:`_round_field` for a round shape -- and several shapes
+    are then combined by :func:`_ratio_blend` on their distances. ``slots`` is the layer's
+    material slot values, which a *cross* pair's sign reads at build time (equal materials
+    cancel across a contact, different ones keep the seam); nothing here reads it yet, and it
+    is in the signature so that the reader who adds it changes no caller.
+    """
+    by_shape = {}
+    for k, piece in enumerate(plan.pieces):
+        by_shape.setdefault(piece.shape, []).append(k)
+
+    got = []
+    for i, shape in enumerate(shapes):
+        keys = by_shape.get(i)
+        if not keys:
+            continue            # a type this path cannot build; `check_shape_spec` refuses it
+        first = plan.pieces[keys[0]]
+        if first.face == 'arc':
+            got.append(_round_field(xp, X, Y, shape, lattice, dtype))
+            continue
+        records = [(plan.pieces[pr.p].face, plan.pieces[pr.q].face, pr.m, pr.n, pr.flush)
+                   for pr in plan.pairs
+                   if plan.pieces[pr.p].shape == i and plan.pieces[pr.q].shape == i]
+        dead = {plan.pieces[k].face for k in keys if plan.pieces[k].dead}
+        got.append(_box_field(xp, X, Y, shape, lattice, dtype, first.imgs, records, dead))
+
+    if not got:
+        return xp.ones(X.shape, dtype=dtype), xp.zeros(X.shape, dtype=dtype)
+    if len(got) == 1:
+        return got[0][1], got[0][2]
+    return _ratio_blend(xp, got)
+
+
+def _ratio_blend(xp, got):
+    """Several shapes' fields combined by the ratio of surface distances: ``(d_min / d_j)^4``.
+
+    The nearest shape carries weight 1 and every other ``(d_min / d_j) ** _BLEND_EXPONENT``,
+    so at shape A's own surface ``d_A = 0`` zeroes every other weight and the sum collapses to
+    A's normal exactly, while between the shapes the weights vary smoothly. Direction-identical
+    to the product form this replaces (each weight was the product of the *other* distances,
+    which is ``1 / d_j`` up to a common factor) -- but linear in the number of terms, and with
+    no underflow past a few dozen of them, where the product sits at 1e-118 for 256 facets.
+
+    The division is guarded on its *input*: the divisor is 1 wherever the weight is going to
+    be replaced anyway (``d_j == d_min``, which covers ``d_min == 0``), so the branch a
+    ``where`` discards never sees a zero -- the :func:`_hypot_safe` lesson, that autograd
+    still differentiates the discarded branch.
+
+    Smoothness is the point, not a bonus. Picking the nearest shape outright (``argmin``)
+    gives the same exact normals at every surface and a field that JUMPS across the selection
+    boundary -- and moving a shape sweeps that boundary, which contributes a line integral of
+    the jump to the true derivative that no grid sample and no autograd sees. Measured on two
+    circles, the hard pick's autograd sits 44-76% from central differences and does not
+    improve as h shrinks. This weighting has no jump to sweep: the same comparison falls
+    1.5e-2 -> 6.5e-4 -> 6.3e-5 as h goes 1e-4 -> 1e-5 -> 1e-6, a correct gradient with the
+    difference converging onto it.
+    """
+    d_min = got[0][0]
+    for d, _gx, _gy in got[1:]:
+        d_min = xp.minimum(d_min, d)
+    one = xp.ones_like(d_min)
+    sx = xp.zeros_like(d_min)
+    sy = xp.zeros_like(d_min)
+    for d, gx, gy in got:
+        same = d == d_min
+        ratio = d_min / xp.where(same, one, d)
+        w = xp.where(same, one, ratio ** _BLEND_EXPONENT)
+        sx = sx + w * gx
+        sy = sy + w * gy
+    norm = _hypot_safe(xp, sx, sy)
+    return sx / norm, sy / norm
+
+
+def _folded_frame(xp, dx, dy, lattice, cos_a, sin_a):
+    """``(dx, dy)`` reduced to the shape's own lattice cell, in the shape's frame: ``(e_u, e_v)``.
+
+    Rounding the *fractional* coordinates lands the residual in the centred parallelogram,
+    within half the cell's diameter of the origin. That is not the Euclidean nearest image --
+    :func:`_fold_to_nearest_image` sweeps 3x3 for that -- and it does not need to be: the ring
+    of instances :func:`_box_field` evaluates around it is sized for exactly this residual.
+    """
+    a1x, a2x = lattice[0][0], lattice[0][1]
+    a1y, a2y = lattice[1][0], lattice[1][1]
+    det = a1x * a2y - a2x * a1y
+    mf = xp.round((a2y * dx - a2x * dy) / det)
+    nf = xp.round((-a1y * dx + a1x * dy) / det)
+    ex = dx - mf * a1x - nf * a2x
+    ey = dy - mf * a1y - nf * a2y
+    return ex * cos_a + ey * sin_a, -ex * sin_a + ey * cos_a
+
+
+def _box_field(xp, X, Y, shape, lattice, dtype, imgs, records, dead):
+    """``(distance, normal_x, normal_y)`` of one box from its four face pieces, periodic.
+
+    **A piece's distance is the segment distance to the nearest of its instances.** For
+    instance ``t`` of a face with tangential coordinate ``sigma`` and normal coordinate
+    ``nu``, ``d_t = hypot(max(0, |sigma| - h), nu)``, and ``d = min_t d_t`` over ``imgs``: a
+    superset of candidates that contains the minimiser is the exact periodic distance. Inside
+    the box this is the perpendicular distance to the nearer of each family's lines; outside a
+    corner it is the distance to the corner, from either adjacent face.
+
+    **A piece's direction is its outward normal, everywhere.** Not the foot direction past
+    the extent, not the corner-radial rule the previous box branch used. Measured: the foot
+    rule breaks the 1-D grating (``max|n_y|`` 0.76 where it must be 0, because a covered face
+    and its partner share endpoints and their foot directions reinforce instead of
+    cancelling) and puts a 4e-4 non-decaying step at every merge; fixed normals give the
+    grating exactly, a zero step at every merge, and the sheared and tilted scenes that used
+    to be refused (band error 0.19 deg against the exact oracle). The price is ~4e-4 in
+    ``sum(T)`` off the interface on a lone box at order 6 -- an admissible continuation
+    replaced by another, the class of movement every box golden in the suite took.
+
+    **A pair cancels by arithmetic, not by a gate.** ``records`` says which instance of which
+    face lies on which face's line, opposed. Over that run the partner's normal coordinate is
+    by construction the negative of the primary's, so its distance is computed from the
+    *primary's* expression at the partner offset -- bitwise the same value -- and where both
+    are the nearest instance of their piece the two weights are equal and the two normals
+    exact opposites: the sum is an exact zero. Nothing decides when: a face one ulp off its
+    partner's line is carried by the same blend continuously, and one on it cancels
+    identically. That is what makes ``max|n_y| == 0.0`` an assertion rather than a tolerance
+    on a spanning bar, and what leaves no step at the onset of a run.
+
+    **The blend is the ratio form** (:func:`_ratio_blend`): the nearest face weighs 1, every
+    other ``(d_min / d) ** 4``, so a face's own line reads its own normal exactly and a
+    corner reads the diagonal of its two faces.
+
+    **The tie.** Where the sum is exactly zero -- a dead pair's partner line, the midline of a
+    surviving pair -- the direction is the axis of the pair that did *not* cancel at that
+    point, read off the records by array equality of the members' distances; both cancelled
+    or neither (a box's own centre) reads ``(1, 0)``. Sign is free because the factorization
+    reads ``n n^T``. Li's checkerboard samples that line once per row however fine the grid,
+    and the answer there is ``v``, the axis that has an interface.
+
+    ``dead`` faces stay in the blend -- they cancel -- and leave only the *distance* this
+    returns, which weighs this shape against others: a dead face is not a surface, so it does
+    not get to be the nearest one.
+    """
+    _, cx, cy, lx, ly, angle = shape_geometry(shape, lattice)
+    cos_a = xp.cos(as_array(xp, angle, dtype=dtype))
+    sin_a = xp.sin(as_array(xp, angle, dtype=dtype))
+    a, b = lx / 2.0, ly / 2.0
+    e_u, e_v = _folded_frame(xp, X - cx, Y - cy, lattice, cos_a, sin_a)
+
+    # Each instance is a scalar shift of the residual in the shape's frame, taken once.
+    a1x, a2x = lattice[0][0], lattice[0][1]
+    a1y, a2y = lattice[1][0], lattice[1][1]
+    shift = {}
+    for m, n in imgs:
+        tx = m * a1x + n * a2x
+        ty = m * a1y + n * a2y
+        shift[(m, n)] = (tx * cos_a + ty * sin_a, -tx * sin_a + ty * cos_a)
+
+    # A pair member's instance reads the primary's expression at the partner offset: q's
+    # instance s coincides with p's instance s - (m, n), both relative to the one fold.
+    partner = {}
+    for p_face, q_face, mp, np_, flush in records:
+        for m, n in imgs:
+            offset = (m - mp, n - np_)
+            if offset in shift:
+                partner[(q_face, (m, n))] = (p_face, offset, flush)
+
+    zero = xp.zeros_like(e_u)
+
+    def parts(face, du, dv):
+        # (squared tangential excess, squared normal coordinate) of one face at the instance
+        # whose shifted residual is (du, dv) -- the ONE spelling of each, so a primary and its
+        # dependent compute bitwise the same numbers.
+        if face[1] == 'u':
+            exc = xp.maximum(xp.abs(dv) - b, zero)     # the u faces run along v, half-length b
+        else:
+            exc = xp.maximum(xp.abs(du) - a, zero)
+        t = {'+u': du - a, '-u': du + a, '+v': dv - b, '-v': dv + b}[face]
+        return exc * exc, t * t
+
+    d2 = {}
+    for m, n in imgs:
+        su, sv = shift[(m, n)]
+        du, dv = e_u - su, e_v - sv
+        for face in _overlap.FACES:
+            e2, n2 = parts(face, du, dv)
+            primary = partner.get((face, (m, n)))
+            if primary is not None:
+                psu, psv = shift[primary[1]]
+                pe2, n2 = parts(primary[0], e_u - psu, e_v - psv)
+                if primary[2]:
+                    e2 = pe2                            # flush: the same segment, bitwise
+            val = e2 + n2
+            d2[face] = val if face not in d2 else xp.minimum(d2[face], val)
+    d = {face: xp.sqrt(d2[face]) for face in _overlap.FACES}
+
+    d_min = xp.minimum(xp.minimum(d['+u'], d['-u']), xp.minimum(d['+v'], d['-v']))
+    one = xp.ones_like(d_min)
+    w = {}
+    for face in _overlap.FACES:
+        same = d[face] == d_min
+        ratio = d_min / xp.where(same, one, d[face])
+        w[face] = xp.where(same, one, ratio ** _BLEND_EXPONENT)
+    wu = w['+u'] - w['-u']
+    wv = w['+v'] - w['-v']
+    sx = wu * cos_a - wv * sin_a
+    sy = wu * sin_a + wv * cos_a
+
+    tie = (wu == 0.0) & (wv == 0.0)
+    cancelled = {'u': None, 'v': None}
+    for p_face, q_face, _m, _n, _flush in records:
+        same = d[p_face] == d[q_face]
+        axis = p_face[1]
+        cancelled[axis] = same if cancelled[axis] is None else (cancelled[axis] | same)
+    none = tie & ~tie
+    c_u = none if cancelled['u'] is None else cancelled['u']
+    c_v = none if cancelled['v'] is None else cancelled['v']
+    pick_u = c_v & ~c_u
+    pick_v = c_u & ~c_v
+    axis_x = xp.where(pick_u, cos_a * one, xp.where(pick_v, -sin_a * one, one))
+    axis_y = xp.where(pick_u, sin_a * one, xp.where(pick_v, cos_a * one, zero))
+    sx = xp.where(tie, axis_x, sx)
+    sy = xp.where(tie, axis_y, sy)
+    norm = _hypot_safe(xp, sx, sy)
+
+    live = [face for face in _overlap.FACES if face not in dead] or list(_overlap.FACES)
+    dist = d[live[0]]
+    for face in live[1:]:
+        dist = xp.minimum(dist, d[face])
+    return dist, sx / norm, sy / norm
+
+
+def _fold_to_nearest_image(xp, dx, dy, lattice):
+    """``(dx, dy)`` reduced to the nearest periodic image, on the cell's own lattice.
+
+    ``d % P - P/2`` answers "nearest image" only when the images sit at ``(m*Px, n*Py)``. They
+    sit at ``m*a1 + n*a2``, so on a skewed cell the rectangular fold reduces towards a point
+    where no image is: on a 60-degree cell it looks straight up while the neighbour is up and
+    to the right. The field is then wrong wherever a neighbour's surface is the nearest one,
+    which is why it only shows once a shape fills enough of the cell.
+
+    Rounding the *fractional* coordinates lands in the fundamental parallelogram — the nearest
+    image in the lattice metric, not the Euclidean one. The 3x3 sweep after it is what makes
+    the pick Euclidean. One cell a side is enough for any basis this solver accepts.
+    """
+    a1x, a2x = lattice[0][0], lattice[0][1]
+    a1y, a2y = lattice[1][0], lattice[1][1]
+    det = a1x * a2y - a2x * a1y
+    su = xp.round((a2y * dx - a2x * dy) / det)
+    sv = xp.round((-a1y * dx + a1x * dy) / det)
+
+    best_x = best_y = best_d2 = None
+    for du in (-1.0, 0.0, 1.0):
+        for dv in (-1.0, 0.0, 1.0):
+            mu, mv = su + du, sv + dv
+            ex = dx - mu * a1x - mv * a2x
+            ey = dy - mu * a1y - mv * a2y
+            d2 = ex * ex + ey * ey
+            if best_d2 is None:
+                best_x, best_y, best_d2 = ex, ey, d2
+            else:
+                take = d2 < best_d2
+                best_x = xp.where(take, ex, best_x)
+                best_y = xp.where(take, ey, best_y)
+                best_d2 = xp.where(take, d2, best_d2)
+    return best_x, best_y
+
+
+def _round_field(xp, X, Y, shape, lattice, dtype):
+    """``(distance, normal_x, normal_y)`` of one round shape -- the ``'arc'`` piece.
+
+    The displacement is folded to the nearest image and the level set's gradient is the
+    normal: exact for a circle, and for an ellipse the first-order distance to the level set,
+    which is all a nearest-surface pick needs. The nearest *centre* is the nearest instance
+    for any circle that does not overlap its own images (a boundary point nearer another
+    instance would put two centres closer than two radii), which is why the ``'arc'`` piece
+    has no image list of its own and this arithmetic is the one the round branch always had.
+    A ring of instances is not taken here on purpose: the algebraic distance ``|f| / |grad f|``
+    is unbounded at a shape's own centre, so a minimum over instances would hand the centre of
+    every circle to its neighbour.
+
+    ``diag(Lx, Ly)`` is the one case where the two folds ARE the same fold, so it keeps the
+    cheaper spelling -- and stays bit-identical to every result predating the lattice branch.
+    """
+    _stype, cx, cy, lx, ly, angle = shape_geometry(shape, lattice)
+    cos_a = xp.cos(as_array(xp, angle, dtype=dtype))
+    sin_a = xp.sin(as_array(xp, angle, dtype=dtype))
+
+    if is_axis_aligned(lattice):
+        Px, Py = periods_of(lattice)
+        dx = (X - cx + Px / 2.0) % Px - Px / 2.0
+        dy = (Y - cy + Py / 2.0) % Py - Py / 2.0
+    else:
+        dx, dy = _fold_to_nearest_image(xp, X - cx, Y - cy, lattice)
+    xr = dx * cos_a + dy * sin_a
+    yr = -dx * sin_a + dy * cos_a
+    a, b = lx / 2.0, ly / 2.0
+
+    gxr = 2.0 * xr / (a ** 2)
+    gyr = 2.0 * yr / (b ** 2)
+    # The algebraic distance |f| / |grad f| -- exact for a circle, and for an ellipse the
+    # first-order distance to the level set, which is all the nearest-surface pick needs.
+    f = (xr / a) ** 2 + (yr / b) ** 2 - 1.0
+    dist = xp.abs(f) / _hypot_safe(xp, gxr, gyr)
+
+    gx = gxr * cos_a - gyr * sin_a
+    gy = gxr * sin_a + gyr * cos_a
+    norm = _hypot_safe(xp, gx, gy)
+    return dist, gx / norm, gy / norm
+
+
 def _hypot_safe(xp, a, b):
     """``hypot`` with zeros replaced by 1, so the division that follows is well defined.
 
@@ -1523,24 +1430,15 @@ def _projector_cache_key(xp, built, grid_shape, lattice, half_width_u, half_widt
     except (TypeError, ValueError):
         return None
 
-    # **A lone round shape's field is scale-free, so its size does not belong in the key.**
-    # The level-set gradient of `x^2/a^2 + y^2/b^2` is `(2x/a^2, 2y/b^2)`, whose *direction*
-    # is unchanged when `a` and `b` scale together -- so the projector coefficients depend on
-    # the aspect and not on the size. Measured on this function: a circle at lx = 40 / 90 /
-    # 220 / 280 agrees with lx = 140 to 2.8e-17, and an ellipse rescaled 2x and 0.5x at a fixed
-    # aspect agrees to 0.000e+00, while changing the aspect moves it 1.2e-01.
-    #
-    # It matters because the commonest 1D grating sweep is over a *radius*, and with `lx` in
-    # the key every step missed and rebuilt a bit-identical field: five steps, five entries,
-    # where a position or material sweep leaves one.
-    #
-    # Only for one shape, and only for the round family. The multi-shape blend weighs absolute
-    # distances between shapes, and a rectangle's four-face blend is absolute too -- measured
-    # 8.4e-02 and 5.4e-02 for the same two rescalings, which is why it keeps its lengths.
-    if len(shapes_key) == 1 and shapes_key[0][0] in _overlap._ELLIPSE_TYPES:
-        stype, cx, cy, lx, ly, angle = shapes_key[0]
-        if lx:
-            shapes_key = ((stype, cx, cy, 1.0, ly / lx, angle),)
+    # A lone round shape's key used to drop its size, keeping only the aspect: the level-set
+    # gradient of `x^2/a^2 + y^2/b^2` is `(2x/a^2, 2y/b^2)`, whose direction does not move
+    # when `a` and `b` scale together, so a radius sweep rebuilt a bit-identical field five
+    # times over. That was true of a field that never looked past the shape's own nearest
+    # image, and it stops being true the moment a round piece is evaluated over a ring of
+    # instances -- two ellipses of one aspect and different sizes that both reach their
+    # neighbours are different fields, and a shared key would serve the second the first's
+    # coefficients silently. The normalisation went on 2026-09-06, ahead of that ring rather
+    # than after it, so that nothing can inherit the trap; a radius sweep now rebuilds.
     # The namespace is redundant with ``str(dtype)``, which already spells it out
     # (``numpy.complex128`` against ``torch.complex128``) -- but that is an accident of how the
     # dtypes are named, not a guarantee, and a cross-backend collision hands one namespace's

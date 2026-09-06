@@ -148,8 +148,12 @@ same grating under Li's 1-D rule to 1e−13, where it was 5e−4 to 9e−3 away.
 rather than erasing the face is what keeps it continuous — an erasure has to decide *when*, and
 any threshold puts a step of ~2.5e-3 at its own tolerance, on the edge of the feasible set where
 an optimiser would read it as a gradient. An image slid *along* the face kills only part of it,
-which no closed form over one box reaches, and that geometry is refused instead. Both halves, with
-the convergence tables, are in
+which no closed form over one box reaches — so since 2026-09-06 the field is not built over one
+box: a box is four face **pieces**, each evaluated at every periodic instance that can be its
+nearest, and a plan (`parametric.plan_gamma`) records which face shares a line with which image's
+face, over what run, so that the two cancel exactly there. The sheared and tilted scenes that
+used to be refused build at 0.16–0.19 deg against an exact interface oracle. Both halves, with
+the convergence tables and what moved, are in
 [`normal-field-known-limits.md`](normal-field-known-limits.md).
 
 Several shapes therefore still stay on the sampled route — no phase describes a nonlinear
@@ -157,10 +161,11 @@ combination — but the route is no longer the broken one. They are combined by 
 weights** rather than the *normalized sum of unit vectors* this used to describe, and that
 difference is not cosmetic: a sum weights a shape ten cells away exactly as heavily as the one
 underfoot, which put the normal 40 deg off at a boundary with two shapes in the layer and 43 with
-three. The weights collapse to one shape's own normal exactly at its surface, so boundaries read
+three. They are the ratio form now, `(d_min / d_j)^4`, direction-identical to the product and
+linear in the count. The weights collapse to one shape's own normal exactly at its surface, so boundaries read
 0.000 deg for any number of shapes, naming a shape a period over moves 5.3e−15, and the position
 gradient survives for rectangles as well as circles. See
-`parametric.normal_vector_field_analytical` and `_shape_surface_normal`. Why the `½`-symmetrization is
+`parametric.normal_vector_field_analytical`, `_box_field` and `_ratio_blend`. Why the `½`-symmetrization is
 needed — the plain product `Δ C` is not Hermitian, which gives complex `q²` and gross
 energy-conservation violation on curved boundaries — is written out in the
 `nvf_conv_matrices` docstring in `_core/factorization.py`.

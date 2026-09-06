@@ -110,7 +110,7 @@ class Lattice:
     variable -- optimising a hex angle or a shear is a real thing to want, and until this class
     existed ``lattice`` was eager NumPy so ``jax.grad`` could not reach it at all. But
     ``axis_aligned`` decides *which branch runs* (:func:`~wavebit._core.parametric.
-    _shape_surface_normal` picks the rectangular fold from it, and it is what keeps the
+    _round_field` picks the rectangular fold from it, and it is what keeps the
     orthogonal path bit-identical), and a traced value cannot be branched on. Carried as a
     child it would kill every jitted solve while staying invisible eagerly -- the same trap
     ``Material`` documents from the other direction, where a value that belonged in a child was

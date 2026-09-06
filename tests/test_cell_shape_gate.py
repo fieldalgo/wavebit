@@ -190,7 +190,7 @@ def test_no_oblique_capable_path_does_rectangle_geometry():
         + '\n\n`period` is (|a1|, |a2|) on a skewed cell -- the angle is already gone, so this '
           'computes a rectangle\'s answer. Take the 2x2 basis instead and branch on '
           '`lattice.is_axis_aligned(A)` if a cheap rectangular path is wanted, as '
-          '`analytic._shape_surface_normal` and `shape_geometry` do. If the path genuinely '
+          '`parametric._round_field` and `shape_geometry` do. If the path genuinely '
           'cannot meet a skewed cell, add it to `_ALLOWED` with the guard that says so.')
 
 
