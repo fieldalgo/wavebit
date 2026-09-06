@@ -33,7 +33,15 @@ did on 2026-08-31.
 **What this file cannot see.** The uniform-slab and multilayer gates are blind to both
 subpixel harmonic averages -- `Ez` is identically zero at normal incidence with no x variation,
 and a harmonic mean along x of a constant is that constant -- so only the grating cases
-arbitrate `component_property`'s rule. Of the five scopes this file once listed as refused, four are
+arbitrate `component_property`'s rule -- and the *x* half of that rule needs two conditions
+the grating comparisons at `resolution=0.1` do not meet. It reaches `eps_xx` alone, so the run
+has to be TM; and `Ex` sits on the x half-steps, so its averaging cell runs node to node and
+the tooth edge has to fall inside one rather than on a boundary, which it does only when `nx`
+is odd. At 70 cells it is even and the rule is inert -- deleting it moves those answers by
+1.4e-16. `test_a_tooth_edge_between_two_cells_arbitrates_the_harmonic_rule` is the one scene
+here that meets both.
+
+Of the five scopes this file once listed as refused, four are
 now implemented and tested here -- oblique incidence, loss, `mu` and a crossed grating -- and
 only a skewed cell is still refused; `test_refusals` is what keeps that last one honest, by
 pinning the refusal rather than the behaviour.
@@ -2091,11 +2099,19 @@ def test_the_in_plane_phase_is_the_outer_product_of_two_vectors():
 # 15. a crossed grating, end to end
 # ---------------------------------------------------------------------------------------
 
-def _crossed_raster(n=16):
-    """Asymmetric in x, in y, AND under transpose -- see `_crossed_grid` for why."""
+def _crossed_raster(n=16, hi=N_TOOTH, lo=2.0):
+    """Asymmetric in x, in y, AND under transpose -- see `_crossed_grid` for why.
+
+    The two indices are arguments because the amplitude comparison in section 16 cannot afford
+    this one. `N_TOOTH = 3.5` leaves under eight cells per wavelength *inside the tooth* even
+    at a 33 nm grid, which is already finer than a 3D run at this period can pay for, and the
+    worst amplitude gap against RCWA is 3.8e-1 there -- against 2.9e-2 at `hi = 2.0` on the
+    coarser 39 nm grid section 16 does run. The footprint, which is what makes the scene see a
+    transpose, is the same either way.
+    """
     raster = np.full((1, n, n), EPS_TOP, dtype=complex)
-    raster[0, :n // 2, :n // 2] = wavebit.eps_from_index(N_TOOTH)
-    raster[0, n // 2:, :n // 4] = wavebit.eps_from_index(2.0)
+    raster[0, :n // 2, :n // 2] = wavebit.eps_from_index(hi)
+    raster[0, n // 2:, :n // 4] = wavebit.eps_from_index(lo)
     return raster
 
 
@@ -2304,3 +2320,325 @@ def test_the_two_pure_legs_are_never_the_same_solve():
         assert not np.allclose(s_amp, p_amp), (
             f'theta={theta_deg} phi={phi_deg}: the two legs returned the same amplitudes, so '
             f'one polarisation was never solved')
+
+
+# ---------------------------------------------------------------------------------------
+# 16. the crossed path's per-order AMPLITUDES, and the contracts around them
+# ---------------------------------------------------------------------------------------
+
+def _crossed_channels(result, leg, name):
+    """``{(m, l): value}`` for one channel of one leg, on the two-dimensional order grid.
+
+    `_channels` above ravels against `orders_u` alone, which is right while there is one `v`
+    order and silently indexes the wrong entry once there are several: the arrays are
+    ``(len(orders_v), len(orders_u))`` and the two axes are not the same length on a
+    rectangular cell. Both label vectors come off the parent `Result`, as there.
+    """
+    a = np.asarray(getattr(getattr(result, leg), name))
+    u = np.asarray(result.orders_u).ravel()
+    v = np.asarray(result.orders_v).ravel()
+    return {(int(m), int(l)): a[j, i] for j, l in enumerate(v) for i, m in enumerate(u)}
+
+
+def _crossed_margin(m, l, n_sq, period_y, scene=CROSSED):
+    """``n**2 - k_par**2`` for order ``(m, l)`` -- positive where the order propagates.
+
+    The 1D `_propagates` with the y ladder added. Compared against a *margin* rather than
+    against zero wherever amplitudes are: `test_the_conical_amplitudes_converge_at_second_order`
+    already records why -- an order within round-off of a Rayleigh point converges at
+    `1/kz`, and the p channel then multiplies by `n/kz` again.
+    """
+    kx = np.sin(scene['theta']) * np.cos(scene['phi']) + m * WL / PERIOD
+    ky = np.sin(scene['theta']) * np.sin(scene['phi']) + l * WL / period_y
+    return float(n_sq - (kx ** 2 + ky ** 2))
+
+
+#: Two crossed cells. The square one is what every other test in section 15 runs on; the
+#: **rectangular** one exists because no test in this file had `Px != Py` and a propagating y
+#: order at the same time, and that is exactly the pair of conditions a y ladder built on the
+#: x period survives -- `l * wl / Px` is `l * wl / Py` on a square cell. Measured with the y
+#: ladder written on `grid.period`: the square case passes untouched and the rectangular one
+#: fails on `s_inc.r_s(0, -1)`, 0.0984 + 0.0047i against 0.0379 + 0.0086i.
+CROSSED_CELLS = [pytest.param(PERIOD, id='square'),
+                 pytest.param(2.0 * PERIOD, id='rectangular')]
+
+
+@pytest.mark.parametrize('period_y', CROSSED_CELLS)
+def test_the_crossed_amplitudes_carry_the_per_leg_signs(period_y):
+    """`_extract_crossed` is a line-for-line copy of `_extract_conical` with **no amplitude oracle**.
+
+    Every per-order sign in it -- the three `sigma` legs, the `s_hat`/`p_hat` frame, the
+    `n / kz_m` secant -- is invisible to `R`, `T` and `R + T`, and the copy inherited them
+    without inheriting the test that measured them. Measured here with the transmitted leg's
+    p sign flipped (`sigma = (-1, 1, +1)`): the worst amplitude moves by 1.21 on the square
+    cell and 1.26 on the rectangular one, and **every efficiency in every leg moves by exactly
+    0.000e+00** on both. That is arithmetic rather than luck -- a global sign on one channel
+    of one leg leaves `|t_p|**2` alone in each pure leg, and `given` is built from the two
+    legs' *amplitudes*, so the mixed leg's efficiencies lose it too.
+
+    So this asserts complex amplitudes, on all three legs, against `wavebit.rcwa`'s crossed
+    conical solve. `psi = 30 deg` and not 45: at 45 the two legs enter `given` with equal
+    weight and a leg swap is invisible.
+
+    Measured worst gap over the orders that propagate: **2.9e-2** on the square cell and
+    2.2e-2 on the rectangular one, at this 39 nm grid. It is the Yee grid's rather than the
+    projection's -- doubling `resolution` takes the square cell to 8.3e-3, a ratio of 3.5 --
+    so the bound below is about 1.7x the measured value and 24x under the 2*|t_p| = 1.21 a
+    leg sign gives.
+    """
+    raster = _crossed_raster(hi=2.0, lo=1.5)
+    got = solve_fdtd(structure=raster, thickness=[THICK], top=EPS_TOP, bot=EPS_BOT,
+                     period=[PERIOD, period_y], wavelength=WL, resolution=0.025,
+                     n_periods=100, **CROSSED)
+    # 9 orders per axis, not 12: on this contrast the reference has converged to 5.0e-4 by 9
+    # -- measured on the square cell against 15, and on the rectangular one against 12 -- which
+    # is 60x below the gap being asserted.
+    ref = wavebit.rcwa(backend=0, wavelength=WL, period=[PERIOD, period_y],
+                       truncation_order=dict(x=9, y=9), top=EPS_TOP, bot=EPS_BOT,
+                       structure=raster, thickness=[THICK], **CROSSED).solve()
+
+    checked = 0
+    for leg in ('s_inc', 'p_inc', 'given'):
+        for name, n_sq in (('r_s', 1.0), ('r_p', 1.0),
+                           ('t_s', N_BOT ** 2), ('t_p', N_BOT ** 2)):
+            a, b = _crossed_channels(got, leg, name), _crossed_channels(ref, leg, name)
+            for key in a:
+                if _crossed_margin(key[0], key[1], n_sq, period_y) < 0.05:
+                    continue        # evanescent, or within round-off of a Rayleigh point
+                checked += 1
+                assert abs(complex(a[key]) - complex(b[key])) < 5e-2, (
+                    f'{leg}.{name}{key}: fdtd {a[key]} against rcwa {b[key]}')
+    assert checked >= 24, (
+        f'only {checked} channels propagate on this cell, so the comparison has quietly '
+        f'stopped covering the legs it exists for')
+
+    # The rectangular cell earns its place only if a y order actually radiates: on the square
+    # cell every `l != 0` order is evanescent above, so a y ladder mis-built on `Px` reaches
+    # nothing that carries power in reflection.
+    if period_y != PERIOD:
+        above = [int(l) for l in np.asarray(got.orders_v).ravel()
+                 if l != 0 and _crossed_margin(0, int(l), 1.0, period_y) > 0.05]
+        assert above, 'the rectangular cell has no propagating y order and measures nothing new'
+
+
+@pytest.mark.parametrize('truncation_order, shape', [(dict(x=10, y=2), '21 x 5'),
+                                                     (dict(x=2, y=10), '5 x 21')])
+def test_orders_past_nyquist_are_refused_on_the_y_axis_as_well(truncation_order, shape):
+    """The transverse transform has two axes now, and the guard has to have two halves.
+
+    The x half is pinned by `test_asking_for_orders_past_nyquist_is_refused`; the y half was
+    not, and deleting `or hy >= ny // 2` left every test in this file passing. On a 21 x 21
+    transverse grid `|l| < 10` resolves, and `dict(x=2, y=10)` asks for 21 y orders: past that
+    an order folds onto another and comes back with a plausible amplitude, which is the same
+    failure in the axis that was added later.
+
+    Both spellings are parametrised, and the message is matched on the **counts** rather than
+    on the word alone -- `5 x 21` can only have come from the y half of the test.
+    """
+    with pytest.raises(ValueError, match=rf'{shape} orders asked of a 21 x 21'):
+        solve_fdtd(structure=_crossed_raster(), thickness=[THICK], top=EPS_TOP, bot=EPS_BOT,
+                   period=[PERIOD, PERIOD], wavelength=WL, tetm='te', theta=0.0,
+                   resolution=0.03, n_periods=80, truncation_order=truncation_order)
+
+
+def test_a_crossed_truncation_order_comes_back_labelled_the_way_it_was_asked():
+    """`dict(x=A, y=B)` with `A != B`, which is the only shape that can see a swap.
+
+    `solve_fdtd` writes the pair out as `((0, want_u), (0, want_v))` rather than zipping it,
+    with a comment saying that the two halves being the same length is what makes a swap here
+    silent -- and every existing crossed test either takes the default window or is square, so
+    the comment was the only thing holding the order. Asked for 3 x 1, this must come back as
+    7 `u` labels, 3 `v` labels and `R` of shape `(3, 7)` -- `v` first, which is the array rule
+    `Result.orders_u` states and the transpose of the `dict(x=..., y=...)` input.
+
+    Every other `truncation_order` in this file is `dict(x=..., y=0)` on a y-invariant
+    raster, so the branch that reads the pair for a crossed grating had never been entered at
+    all -- neither half of it, in either order.
+    """
+    result = solve_fdtd(structure=_crossed_raster(), thickness=[THICK], top=EPS_TOP,
+                        bot=EPS_BOT, period=[PERIOD, PERIOD], wavelength=WL, tetm='te',
+                        theta=0.0, resolution=0.03, n_periods=80,
+                        truncation_order=dict(x=3, y=1))
+    assert np.array_equal(np.asarray(result.orders_u), np.arange(-3, 4))
+    assert np.array_equal(np.asarray(result.orders_v), np.arange(-1, 2))
+    assert np.asarray(result.R).shape == (3, 7), (
+        f'R is {np.asarray(result.R).shape}; it is (len(orders_v), len(orders_u)) = (3, 7), '
+        f'and (7, 3) is the pair handed over the other way round')
+    for name in ('r_s', 'r_p', 't_s', 't_p', 'R_s', 'T_p'):
+        assert np.asarray(getattr(result.given, name)).shape == (3, 7), name
+
+
+def test_an_evanescent_order_on_the_crossed_path_is_nan_rather_than_amplified_round_off():
+    """The de-referencing guard, on the copy of it that had no test.
+
+    Same statement as `test_an_evanescent_order_reports_nan_rather_than_an_amplified_reading`
+    and the same reason -- referencing a decayed order back to the interface multiplies by
+    `exp(k0|Im kz||z_ref|)`, which past `MAX_DEREFERENCE_GAIN` is amplifying round-off into a
+    finite, plausible, meaningless number -- but asked of `_extract_crossed`, where nothing
+    asked it before. Measured on this scene: `|m| = 4` sits at a gain of 2.6e8 and is kept,
+    `|m| = 5` at 3.0e10 and is dropped, and `R` is identically zero across the whole band of
+    them either way, so no efficiency check anywhere can tell the two apart.
+
+    Asserted on `r_s` and not on `t_s`, for the reason the numbers give: the transmission
+    monitor sits 133 nm from the interface against the reflection monitor's 533, so the same
+    `|m| = 5` order is only amplified by 3.8e2 there and is *correctly* kept.
+    """
+    result = solve_fdtd(structure=_crossed_raster(), thickness=[THICK], top=EPS_TOP,
+                        bot=EPS_BOT, period=[PERIOD, PERIOD], wavelength=WL, tetm='te',
+                        theta=0.0, resolution=0.03, n_periods=80,
+                        truncation_order=dict(x=5, y=1))
+    orders = np.asarray(result.orders_u).ravel()
+    r_s = np.asarray(result.given.r_s)
+    deep = np.abs(orders) >= 5              # |kx| = 6.4, far past n_top and n_bot alike
+    assert np.all(np.isnan(r_s[:, deep])), (
+        f'deep evanescent amplitudes are {r_s[:, deep]}, which are finite and meaningless')
+    assert np.all(np.isfinite(r_s[:, np.abs(orders) <= 1])), (
+        'the propagating orders must not be caught by the guard')
+    assert np.all(np.isfinite(np.asarray(result.R))), (
+        'the efficiencies stay finite -- they are identically zero for these orders')
+
+
+def test_the_default_crossed_window_is_the_propagating_set_of_the_shortest_wavelength():
+    """The window against a closed form, because `R + T` cannot see either way it goes wrong.
+
+    A window that is too **wide** reports orders that carry nothing, and they come back as
+    zeros that sum to the same 1. One that is too **narrow** drops power, and the short sum
+    reads as ordinary absorption -- which is what `R + T = 0.9167` was, the day the crossed
+    path took the 1D window. Neither is visible in an energy check, so the set is computed
+    here from `kx_inc`, `ky_inc`, `n_top` and `n_bot` and compared as a set.
+
+    The band is the second half. `kx` is fixed by the grid, so the normalised `kx_inc` and the
+    grating step both scale with the wavelength and the **shortest** wavelength has the most
+    propagating orders: over 700-1100 nm on a 700 x 1400 cell the propagating set reaches
+    `l = -3` at 700 nm and only `l = -2` at the 900 nm centre. A window built on the centre
+    would drop a radiating order and report a short sum, so `-3 in orders_v` is the assertion
+    that separates the two rules.
+    """
+    band = np.array([700.0, 900.0, 1100.0])
+    period_y = 2.0 * PERIOD
+    results = solve_fdtd(structure=_crossed_raster(hi=2.0, lo=1.5), thickness=[THICK],
+                         top=EPS_TOP, bot=EPS_BOT, period=[PERIOD, period_y],
+                         wavelength=band, resolution=0.025, n_periods=100, **CROSSED)
+
+    def propagating(wavelength):
+        """Every ``(m, l)`` that radiates in either half-space, from the closed form."""
+        # The grid holds the PHYSICAL kx, ky fixed across the band, so the normalised pair
+        # scales with the wavelength -- the same rule `_extract_crossed` applies per index.
+        scale = wavelength / float(0.5 * (band.min() + band.max()))
+        kx_inc = N_TOP * np.sin(CROSSED['theta']) * np.cos(CROSSED['phi']) * scale
+        ky_inc = N_TOP * np.sin(CROSSED['theta']) * np.sin(CROSSED['phi']) * scale
+        reach = max(N_TOP, N_BOT)
+        return {(m, l)
+                for m in range(-12, 13) for l in range(-12, 13)
+                if (kx_inc + m * wavelength / PERIOD) ** 2
+                + (ky_inc + l * wavelength / period_y) ** 2 <= reach ** 2}
+
+    short, centre = propagating(float(band.min())), propagating(900.0)
+    assert short - centre, 'the band does not widen the window here and this test is vacuous'
+
+    for result in results:
+        u = [int(m) for m in np.asarray(result.orders_u).ravel()]
+        v = [int(l) for l in np.asarray(result.orders_v).ravel()]
+        for m, l in short:
+            assert m in u and l in v, (
+                f'order ({m}, {l}) propagates at {band.min()} nm and is outside the reported '
+                f'window u={u} v={v}; its power is missing and the sum reads as absorption')
+        # Tight to within the centring: `order_window` is a `(centre, half)` pair per axis, so
+        # a bounding box that is not symmetric about an integer costs at most one extra order.
+        for labels, axis in ((u, 0), (v, 1)):
+            span = max(k[axis] for k in short) - min(k[axis] for k in short) + 1
+            assert len(labels) <= span + 1, (
+                f'the window is {len(labels)} orders wide where the propagating set spans '
+                f'{span}; the extra ones report zero and no energy check can see them')
+        assert np.asarray(result.R).shape == (len(v), len(u))
+    assert -3 in [int(l) for l in np.asarray(results[0].orders_v).ravel()], (
+        'l = -3 radiates at 700 nm and not at the 900 nm centre, so a window missing it was '
+        'built for the centre of the band rather than for the whole of it')
+
+
+# ---------------------------------------------------------------------------------------
+# 17. two-sided: an angle has a sign, and an edge can miss the mesh
+# ---------------------------------------------------------------------------------------
+
+@pytest.mark.parametrize('theta_deg', [0.0, 30.0])
+@pytest.mark.parametrize('phi_deg', [30.0, -30.0])
+def test_the_azimuth_refusal_is_two_sided(theta_deg, phi_deg):
+    """`phi != 0` is refused with `tetm`, and a *negative* azimuth is just as non-zero.
+
+    Every azimuth asked of a refusal in this file is positive, so `!= 0.0` weakened to `> 0.0`
+    survives the whole suite -- and what it lets through is not a refusal with a worse message
+    but a solve. At `theta = 30, phi = -30` the grid then carries `ky_inc = -0.171` while the
+    extraction taken is the one-monitor `_extract`, which is the scalar TE/TM reader: the two
+    polarisations are coupled and only one of them is read.
+
+    Free to pin, because the refusal fires before a grid is built -- which is also why the
+    weakened version fails this test by raising the *wrong* `ValueError`, the run-length floor
+    rather than the mount. Parametrised over `theta` as well because the refusal is about the
+    mount and not about `ky`, which is identically zero at `theta = 0` whatever `phi` is.
+    """
+    with pytest.raises(ValueError, match='pass `psi`'):
+        solve_fdtd(structure=_grating(), thickness=[THICK], top=EPS_TOP, bot=EPS_BOT,
+                   period=[PERIOD], wavelength=WL, theta=np.deg2rad(theta_deg), tetm='te',
+                   phi=np.deg2rad(phi_deg), resolution=0.05, n_periods=20)
+
+
+@pytest.mark.parametrize('theta_deg, phi_deg', [(30.0, 40.0), (-30.0, 40.0),
+                                                (30.0, -40.0), (-30.0, -40.0)])
+def test_the_conical_route_is_chosen_on_both_signs_of_both_angles(theta_deg, phi_deg):
+    """`theta_v != 0.0 and phi_v != 0.0` picks the six-component stepper, at either sign.
+
+    The predicate is the one `_solve_conical` documents as a knife edge, and both halves of it
+    are only ever asked with a positive angle -- so `!= 0.0` weakened to `> 0.0` still routes
+    `(+30, +40)` correctly and sends `(-30, +40)` and `(+30, -40)` to the `theta = 0`
+    projection instead. That path runs its two legs with `phi=None`, so the grids it builds
+    carry `ky_inc = 0` and are then projected onto a frame at the requested azimuth: a
+    different scene, solved and relabelled. Measured at `(-30, +40)` with the predicate
+    weakened, `R + T = 1.0012` -- inside every energy tolerance in this file, and closer to 1
+    than the correct run's own 1.0023 -- while `p_inc.T_s[0]` reads 0.2378 against a true
+    0.0275, a factor of 8.6.
+
+    Measured against `solve_1d_conical` at this 15 nm grid: the worst efficiency gap is
+    8.4e-3 at `+40 deg` and 5.4e-3 at `-40`, and the two signs of `theta` give the same two
+    numbers, mirrored order for order.
+    """
+    scene = dict(theta=np.deg2rad(theta_deg), phi=np.deg2rad(phi_deg), psi=np.deg2rad(30.0))
+    got = _oblique_fdtd(resolution=0.06, n_periods=80, **scene)
+    ref = _oblique_rcwa(**scene)
+    for leg in ('s_inc', 'p_inc', 'given'):
+        for name in ('R_s', 'R_p', 'T_s', 'T_p'):
+            a, b = _channels(got, leg, name), _channels(ref, leg, name)
+            for m in a:
+                assert float(np.real(a[m])) == pytest.approx(float(np.real(b[m])), abs=2e-2), (
+                    f'{leg}.{name}[{m}]')
+
+
+def test_a_tooth_edge_between_two_cells_arbitrates_the_harmonic_rule():
+    """`component_property`'s harmonic-along-x rule, on the only scene that can see it.
+
+    Two conditions have to hold at once and no test in this file held both. The rule reaches
+    `eps_xx` alone, so the run has to be **TM** -- a TE run has no `Ex` and the A/B is
+    bit-identical, 0.0e0. And the tooth edge has to **cut a cell**: `Ex` sits on the x
+    half-steps, so its averaging cell runs from node to node and the 350 nm edge lands on a
+    cell boundary whenever `nx` is even. The grating comparisons run at `resolution=0.1`,
+    where `nx = 70` -- so the harmonic rule is not merely untested there, it is *inert*, and
+    deleting it changes those answers by 1.4e-16.
+
+    At `resolution=0.13` (`nx = 91`, odd) the edge sits at 45.5 cells and the rule does work:
+    measured worst per-order gap against RCWA 1.9e-3 with the harmonic rule and 6.0e-3 with
+    the arithmetic one, a ratio of 3.3. That is what the bound below sits between -- and the
+    failure mode is the typo `component_property`'s own `ValueError` warns about, which
+    "silently selects the arithmetic rule and costs an order of accuracy without failing".
+    """
+    reference = _by_order(_rcwa(_grating(), [THICK], 'tm'))
+    result, diag = solve_fdtd(structure=_grating(), thickness=[THICK], top=EPS_TOP,
+                              bot=EPS_BOT, period=[PERIOD], wavelength=WL, tetm='tm',
+                              resolution=0.13, n_periods=60, return_diagnostics=True)
+    assert diag['nx'] % 2 == 1, (
+        f"nx = {diag['nx']} is even, so the tooth edge lands on an Ex cell boundary and the "
+        f'harmonic rule averages nothing -- this test would measure the mesh, not the rule')
+    orders = _by_order(result)
+    for m in (-1, 0, 1):
+        assert abs(orders[m][0] - reference[m][0]) < 3e-3, (
+            f'R[{m}]: fdtd {orders[m][0]} against rcwa {reference[m][0]}')
+        assert abs(orders[m][1] - reference[m][1]) < 3e-3, (
+            f'T[{m}]: fdtd {orders[m][1]} against rcwa {reference[m][1]}')
