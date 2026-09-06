@@ -1811,17 +1811,28 @@ def test_a_length_is_a_size_and_the_transform_carries_its_sign():
 
     # And nothing legal moved: a rod exactly filling the period still touches, not overlaps.
     # A rod that fits is a lone box, and every lone box moved by ~2e-4 on 2026-09-06 when the
-    # corner-radial extension gave way to fixed face normals (the piece field). 0.980652726 was
-    # the fold's number; 0.980863489 is the piece field's, and the move is booked against a
-    # raster of the same rod (edges on pixel boundaries) factorized by NVF with the 'contour'
-    # field -- an instrument that shares no code with either:
-    #     order 6:  fold 0.980652726   pieces 0.980863489   raster N=600 0.980643701,
-    #               N=1200 0.980617617   (raster+li 0.980695225)
-    #     order 9:                     pieces 0.980612878   raster N=1200 0.980678928
-    #     order 12:                    pieces 0.980592210   raster N=1200 0.980649980
-    # 2.5e-4 above the reference at order 6, 6.6e-5 and 5.8e-5 below it at 9 and 12: two
-    # admissible continuations converging on one answer, not a re-baseline. The field itself is
-    # judged in tests/test_nvf_self_coincident_faces.py against the exact interface oracle.
+    # corner-radial extension gave way to fixed face normals (the piece field): outside a
+    # corner the two adjacent faces are equidistant and the blend reads their diagonal where
+    # the fold read the radial direction, the accepted price of the exact grating and the
+    # sheared and tilted boxes (C3). 0.980652726 was the fold's number; 0.980863489 is the
+    # piece field's. What the rod pays, at equal grid (N = 512) against the exact interface
+    # oracle over a 1.5-pixel band: fold 0.099 deg mean, 0.00% past 45 deg; pieces 0.279 deg,
+    # 0.13% (a 200 x 150 box at 25 deg reads 0.249 / 0.00% against 0.587 / 0.13% the same
+    # way). And against a raster of the same rod (edges on pixel boundaries), factorized by
+    # NVF with the 'contour' field and by Li's rule -- exact for an axis-aligned box -- which
+    # share no code with either:
+    #     order 6:  fold 0.980652726   pieces 0.980863489   contour N=600 0.980643701,
+    #               N=1200 0.980617617   li N=1200 0.980695225
+    #     order 9:  fold 0.980642626   pieces 0.980612878   contour N=600 0.980704327,
+    #               N=1200 0.980678928   li N=1200 0.980653233
+    #     order 12: fold 0.980623007   pieces 0.980592210   contour N=600 0.980673107,
+    #               N=1200 0.980649980   li N=1200 0.980656041
+    # From the N=1200 contour reference the fold sits 3.5e-5 / 3.6e-5 / 2.7e-5 at orders
+    # 6 / 9 / 12 and the pieces 2.5e-4 / 6.6e-5 / 5.8e-5; from Li's rule the fold 4.2e-5 /
+    # 1.1e-5 / 3.3e-5 and the pieces 1.7e-4 / 4.0e-5 / 6.4e-5. Both instruments sit nearer
+    # the fold at every order. Off the interface a normal field is a numerical device, so
+    # that is two admissible continuations at an unconverged order, and the price is stated
+    # rather than read as a verdict either way.
     assert float(np.sum(np.asarray(wavebit.rcwa(
         backend=0, structure=rod(lx=120.0), **cfg).solve().T)).real) == pytest.approx(
             0.980863489, abs=1e-7)

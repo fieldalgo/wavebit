@@ -275,29 +275,42 @@ def test_the_350_box_golden_and_what_it_moved_against():
     """A lone 350 x 350 box on a 700 square, order 6: 0.8918880 -> 0.8922841 (+4.0e-4).
 
     Every lone box golden moved by this class of amount when the corner-radial extension gave
-    way to fixed face normals. Off the interface a normal field is a numerical device, so
-    neither value is "the answer"; what can be measured is where each sits against a
-    converged reference of the same geometry that shares no code with either -- a raster of
-    the box with its edges on pixel boundaries, factorized by NVF with the ``'contour'`` field:
+    way to fixed face normals, and the justification is the one C3 states, not a judgment of
+    either value: a face piece's direction is its outward normal everywhere, so outside a
+    corner the two adjacent faces are equidistant and the blend reads their diagonal where
+    the fold read the radial direction from the corner. That is what buys the exact grating
+    (the foot rule reinforces a covered face and its partner at their shared endpoints,
+    ``max|n_y|`` 0.76 where it must be 0), a zero step at every merge, and the sheared and
+    tilted boxes -- and what a lone box that touches nothing pays for it, measured at equal
+    grid against the exact interface oracle over a 1.5-pixel band:
 
-        order 6   parametric, fold (HEAD)  0.891888043
-                  parametric, pieces       0.892284142
-                  raster N=700  nvf        0.891754321
-                  raster N=1400 nvf        0.891758246
-                  raster N=1400 li         0.891257562
-        order 9   parametric, pieces       0.895966448   raster N=1400 nvf  0.895618806
-        order 12  parametric, pieces       0.892740124   raster N=1400 nvf  0.892973722
+        N = 256   fold 0.358 deg mean, 0.39% past 45 deg    pieces 0.473 deg, 0.00%
+        N = 512   fold 0.179 deg mean, 0.20% past 45 deg    pieces 0.237 deg, 0.00%
 
-    The pieces sit 5.3e-4 above the reference at order 6, 3.5e-4 above at 9 and 2.3e-4 below
-    at 12 -- decaying -- where the fold sat 1.3e-4 / 6.8e-5 / 1.2e-4 from it. The fold tracked
-    the reference more closely because the ``'contour'`` construction is itself distance-based
-    and extends off the interface the way the corner-radial rule did; that is a resemblance of
-    extensions, not a verdict. The field itself is judged in
-    ``test_nvf_self_coincident_faces.py``'s oracle band: 0.237 deg mean against 0.358 for the
-    fold, with 0.00% against 0.39% past 45 deg -- the corner quadrants read the diagonal of
-    their two faces now rather than the radial direction from the corner, which is what the
-    change is, and what C3 chose over the foot rule that keeps HEAD's corners: that rule
-    breaks the 1-D grating (``max|n_y|`` 0.76) and steps 4e-4 at every merge.
+    The mean is higher on the pieces at both grids (the diagonal at every corner) and only
+    the fraction past 45 deg favours them; the 0.237-against-0.358 that stood here before
+    compared the pieces at N = 512 with the fold at N = 256. Off the interface a normal field
+    is a numerical device, so neither value is "the answer"; what can be measured is where
+    each sits against a converged reference of the same geometry that shares no code with
+    either -- a raster of the box with its edges on pixel boundaries, factorized by NVF with
+    the ``'contour'`` field, and by Li's rule, which is exact for an axis-aligned box:
+
+        order 6   fold 0.891888043   pieces 0.892284142   raster N=700 nvf   0.891754321
+                                                          raster N=1400 nvf  0.891758246
+                                                          raster N=1400 li   0.891257562
+        order 9   fold 0.895686917   pieces 0.895966448   raster N=700 nvf   0.895609343
+                                                          raster N=1400 nvf  0.895618806
+                                                          raster N=1400 li   0.892943538
+        order 12  fold 0.893094875   pieces 0.892740124   raster N=700 nvf   0.892945272
+                                                          raster N=1400 nvf  0.892973722
+                                                          raster N=1400 li   0.892629330
+
+    From the N = 1400 ``'contour'`` reference the pieces sit 5.3e-4 / 3.5e-4 / 2.3e-4 at
+    orders 6 / 9 / 12 and the fold 1.3e-4 / 6.8e-5 / 1.2e-4: the instrument sits nearer the
+    fold at every order, as it does on the rod and the two-shape goldens. Its ``'contour'``
+    construction is distance-based and extends off the interface the way the corner-radial
+    rule did, so that is a resemblance of extensions; it is stated here as what the
+    measurement shows, and the price is accepted for what fixed normals buy.
     """
     got = _total(SQUARE, _box(lx=350.0, ly=350.0), order=6, normal_grid=512)
     assert got == pytest.approx(0.892284142298975, abs=1e-9)

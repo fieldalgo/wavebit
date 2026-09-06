@@ -479,7 +479,17 @@ was chosen: the foot / corner-radial rule beyond a piece's extent breaks the 1-D
 their foot directions reinforce instead of cancelling) and puts a ~4e-4 non-decaying step at
 every merge; fixed normals give the grating exactly, a zero step at every merge, and solve the
 sheared and tilted scenes of §2 at 0.16–0.19 deg. The price is off-interface, and an admissible
-continuation replaced by another.
+continuation replaced by another -- and it has a size. A lone box that touches nothing reads a
+higher band error than it did, by 0.06 to 0.34 deg in the mean, because every corner quadrant
+now reads the diagonal of its two faces: at equal grid against the exact interface oracle the
+350 box goes 0.358 -> 0.473 deg at N = 256 and 0.179 -> 0.237 at N = 512, the 120 x 150 rod
+0.099 -> 0.279 and a 200 x 150 box at 25 deg 0.249 -> 0.587 (N = 512), with the fraction of the
+band past 45 deg falling to zero on the 350 box and rising to 0.13% on the other two. The raster
+instruments the goldens are booked against (a `'contour'` raster and Li's rule on a box with its
+edges on pixels) sit nearer the fold at every order on every lone-box golden -- the rod, the 350
+box, the two-shape pair of `test_lattice_pytree.py` -- which is a resemblance of extensions
+(`'contour'` is distance-based and extends the way the corner-radial rule did) and is recorded as
+what the measurement shows, not as a verdict; each test carries its rows.
 
 | scene, order 6, `normal_grid` 512 | fold (2026-09-03) | pieces | change |
 |---|---|---|---|
