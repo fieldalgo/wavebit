@@ -1212,7 +1212,13 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype):
     coordinate is computed from the *primary's* expression at the coincident absolute image --
     bitwise the same value -- so where both are the nearest instance of their piece the two
     weights are equal. A self pair (the shape against its own image) is then an exact zero
-    through the box's own axis sum. A cross pair (two shapes) reads the two material slots:
+    through the box's own axis sum. The substitution is made per *record*, inside that
+    record's own run window (:func:`_run_window` on the traced geometry, as for a cross
+    pair): one face can be covered from both ends by two different images -- a box on
+    ``a1 = (700, 0)``, ``a2 = (400, 700)``, or a grating written as a box on a hex cell -- and
+    each dead run has to read the primary at *its* coincident instance. A flush record is the
+    same segment and substitutes everywhere, tangential excess included; that is what a
+    quarter-turned grating needs. A cross pair (two shapes) reads the two material slots:
     equal, and the partner's weight is subtracted from the primary's over the run they share --
     the material runs on, no interface; different, and it is *added* -- the seam is an
     interface and its normal survives (a null band, until 2026-09-06). The sign is a window in
@@ -1250,13 +1256,16 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype):
         if pc.face != 'arc' and pc.shape not in frames:
             frames[pc.shape] = _Frame(xp, X, Y, shapes[pc.shape], lattice, dtype)
 
-    # The pair records by role. A self pair substitutes within the box's own instance table;
-    # a cross pair carries a run window and a sign, both from the traced values.
+    # The pair records by role. A self pair substitutes within the box's own instance table,
+    # over its own run (a flush one over the whole line); a cross pair carries a run window
+    # and a sign, both from the traced values.
     self_records, cross_by_q, windows, signs = {}, {}, {}, {}
     for r, pr in enumerate(plan.pairs):
         p, q = plan.pieces[pr.p], plan.pieces[pr.q]
         if p.shape == q.shape:
-            self_records.setdefault(p.shape, []).append((p.face, q.face, pr.m, pr.n, pr.flush))
+            window = None if pr.flush else _run_window(
+                xp, frames[p.shape], p.face, frames[q.shape], q.face, pr.m, pr.n, lattice, dtype)
+            self_records.setdefault(p.shape, []).append((p.face, q.face, pr.m, pr.n, window))
             continue
         cross_by_q.setdefault(pr.q, []).append(r)
         windows[r] = _run_window(xp, frames[p.shape], p.face, frames[q.shape], q.face,
@@ -1273,14 +1282,7 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype):
         faces = {face: plan.pieces[index[(i, face)]] for face in _overlap.FACES}
         offsets = sorted({mn for pc in faces.values() for mn in pc.imgs})
         own = {(m, n): frame.at(frame.km + m, frame.kn + n) for m, n in offsets}
-        # A self pair member's instance reads the primary's expression at the partner offset:
-        # q's instance s coincides with p's instance s - (m, n), both on this box's fold.
-        partner = {}
-        for p_face, q_face, mp, np_, flush in self_records.get(i, ()):
-            for m, n in offsets:
-                offset = (m - mp, n - np_)
-                if offset in own:
-                    partner[(q_face, (m, n))] = (p_face, offset, flush)
+        records = self_records.get(i, ())
         for face, piece in faces.items():
             k = index[(i, face)]
             cross = cross_by_q.get(k, ())
@@ -1288,11 +1290,28 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype):
             for m, n in piece.imgs:
                 du, dv = own[(m, n)]
                 e2, n2, _ = frame.parts(face, du, dv, zero)
-                primary = partner.get((face, (m, n)))
-                if primary is not None:
-                    pe2, n2, _ = frame.parts(primary[0], *own[primary[1]], zero)
-                    if primary[2]:
-                        e2 = pe2                            # flush: the same segment, bitwise
+                # A self pair member's instance reads the primary's expression at the partner
+                # offset: q's instance s coincides with p's instance s - (m, n), both on this
+                # box's fold. Per RECORD, and inside that record's own run: one face can be
+                # covered by two images from its two ends (a 600 x 700 box on
+                # a1 = (700, 0), a2 = (400, 700) has its +v face under the (0, 1) image over
+                # [100, 300] and under the (-1, 1) image over [-300, 0]), and the two primaries
+                # lie on one line mathematically but their `at()` values differ by the lattice
+                # vector's own-axis component, 3e-14 once the scene is turned. Keyed by
+                # instance alone the second record overwrote the first, the dead run of the
+                # first read the primary at the wrong instance, `on_gamma` handed the whole
+                # weight to the member that happened to read 0.0, and the run carried a full
+                # normal. A flush record is the same segment and substitutes everywhere.
+                for p_face, q_face, mp, np_, window in records:
+                    offset = (m - mp, n - np_)
+                    if q_face != face or offset not in own:
+                        continue
+                    pe2, pn2, psigma = frame.parts(p_face, *own[offset], zero)
+                    if window is None:
+                        e2, n2 = pe2, pn2                   # flush: the same segment, bitwise
+                    else:
+                        lo, hi = window
+                        n2 = xp.where((psigma >= lo) & (psigma <= hi), pn2, n2)
                 hits = {}
                 for r in cross:
                     pr = plan.pairs[r]

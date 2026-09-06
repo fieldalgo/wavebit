@@ -112,6 +112,13 @@ def test_the_ladder_through_the_pair_threshold_is_monotone():
     threshold there is ``1e-12 * |a2| = 7.28e-10``, not 7e-10, and the straddling rungs scale
     with it. The plan is asserted on both sides too, so the threshold sits where its
     docstring says.
+
+    The floor under the last rung is the geometry's, not the arithmetic's: below the threshold
+    the pair cancels identically over its run, and beyond the run the two faces are their own
+    segments a gap apart -- 7e-10 of a 700 cell, which moves the projector coefficients by
+    1.1e-12 at N = 256 (a self pair substitutes per record inside its run window since the
+    double-covered face was fixed; the unconditional substitution before it read the partner
+    off the primary's line beyond the run too, and sat under 1e-12 for that reason alone).
     """
     at_span = _total(SQUARE, _box(lx=350.0, ly=PERIOD), order=5, normal_grid=256)
     A = as_lattice(lattice=SQUARE)
@@ -143,7 +150,7 @@ def test_the_ladder_through_the_pair_threshold_is_monotone():
         if gap <= 7.1e-4 and previous_t is not None:
             assert value <= previous_t, f'shear: not approaching the span at gap {gap}'
         previous_t = value
-    assert previous_t < 1e-10 and previous_c < 1e-12
+    assert previous_t < 1e-10 and previous_c < 5e-12
 
 
 # --------------------------------------------------------------- invariances, frame carried
@@ -171,6 +178,71 @@ def test_a_rigid_rotation_with_the_incidence_frame_is_an_invariance(name, lattic
     assert abs(same - base) < 5e-12, (name, same - base)
     left_behind = _total(rot @ lattice, turned, order=5, normal_grid=256, phi=0.3)
     assert abs(left_behind - base) > 1e-5, (name, left_behind - base)
+
+
+#: A face covered from BOTH ends by two different images, its middle left live: on
+#: ``a1 = (700, 0)``, ``a2 = (400, 700)`` a 600 x 700 box has its +v face under the (0, 1) image
+#: over [100, 300] and under the (-1, 1) image over [-300, 0], and [0, 100] is an interface. The
+#: hex cell is the ordinary way to reach it: a grating written as a box on ``a2 = (350, 606.2)``
+#: is covered by (0, 1) over [50, 300] and by (-1, 1) over [-300, -50].
+SHEAR2 = np.array([[PERIOD, 400.0], [0.0, PERIOD]])
+HEX = np.array([[PERIOD, PERIOD / 2.0], [0.0, PERIOD * np.sqrt(3.0) / 2.0]])
+DOUBLE_COVERED = {
+    'two images from both ends': (SHEAR2, _box(lx=600.0, ly=PERIOD)),
+    'hex-cell grating as a box': (HEX, _box(lx=600.0, ly=PERIOD * np.sqrt(3.0) / 2.0)),
+}
+
+
+def _both_dead_runs_read_the_live_axis(lattice, shape, turn):
+    """On each covered run of the +v face, on the line and up to 0.1 off it: no v component."""
+    rot = np.array([[np.cos(turn), -np.sin(turn)], [np.sin(turn), np.cos(turn)]])
+    A = as_lattice(lattice=rot @ lattice)
+    turned = dict(shape, angle=turn)
+    plan = P.plan_gamma([turned], A)
+    assert len(plan.pairs) == 2 and not any(pr.flush for pr in plan.pairs)
+    prim = P._primitives([turned], A)[0]
+    runs = [(c.lo, c.hi) for c in O.face_pairs([prim], A, plan.ring, O.COLLINEAR_TOL_REL * PERIOD)
+            if c.f == 2 and c.j == 0]
+    assert len(runs) == 2
+    centre = 0.5 * (np.asarray(A[:, 0]) + np.asarray(A[:, 1]))
+    b = turned['ly'] / 2.0
+    for lo, hi in runs:
+        u = np.linspace(lo + 1e-3, hi - 1e-3, 29)
+        for off in (0.0, 1e-4, 1e-2, 1e-1):
+            v = np.full_like(u, b + off)
+            X = centre[0] + u * np.cos(turn) - v * np.sin(turn)
+            Y = centre[1] + u * np.sin(turn) + v * np.cos(turn)
+            n_x, n_y = P._piece_field(np, X, Y, [turned], plan, None, A, np.float64)
+            assert int((np.hypot(n_x, n_y) == 0.0).sum()) == 0
+            along_v = np.abs(-n_x * np.sin(turn) + n_y * np.cos(turn))
+            assert along_v.max() < 1e-15, ((lo, hi), off, along_v.max())
+
+
+@pytest.mark.parametrize('name', list(DOUBLE_COVERED))
+@pytest.mark.parametrize('turn', [0.3, 1.1])
+def test_a_face_covered_from_both_ends_cancels_on_both_runs(name, turn):
+    """Two self records on one face: each dead run reads the primary at ITS coincident instance.
+
+    The replay substituted the partner's normal coordinate per ``(face, instance)`` in a loop
+    over the records, so the second record overwrote the first for every instance and the
+    first run's partner read the primary at the wrong one. The two primaries lie on one line
+    mathematically, but their ``at()`` values differ by the lattice vector's own-axis
+    component -- 2.8e-14 at 0.3 rad, -5.7e-14 at 1.1, and exactly 0.0 at 0 and at 17 deg,
+    which is why the suite's rotations could not see it -- so on the first run the two
+    members' distances differed by 5e-14, ``on_gamma`` handed the whole weight to the one
+    that read 0.0, and a covered face carried a full normal (``|n . v| = 1.0`` on 11 of 29
+    samples on the line at 0.3 rad, 29 of 29 at 1.1, and out to 0.1 off it). Through a solve
+    that was a rotation invariance of 1.1e-9 at N = 256 where the un-turned scene reads
+    5e-14. Substituted per record inside that record's run window, both runs read the live
+    axis exactly at every turn, and the invariance is back to 1e-11 with the frame carried.
+    """
+    lattice, shape = DOUBLE_COVERED[name]
+    _both_dead_runs_read_the_live_axis(lattice, shape, turn)
+    rot = np.array([[np.cos(turn), -np.sin(turn)], [np.sin(turn), np.cos(turn)]])
+    base = _total(lattice, shape, order=5, normal_grid=256, phi=0.3)
+    same = _total(rot @ lattice, dict(shape, angle=turn), order=5, normal_grid=256,
+                  phi=0.3 + turn)
+    assert abs(same - base) < 1e-11, (name, turn, same - base)
 
 
 def test_x_orders_cannot_change_an_x_invariant_answer():
@@ -385,13 +457,18 @@ DOMAIN_SOURCE = pathlib.Path(D.__file__)
 #: old, new, the instrument that must fail under it)``.
 MUTANTS = [
     ('a flush pair reads its own tangential excess', P,
-     'if primary[2]:\n                        e2 = pe2',
-     'if False:\n                        e2 = pe2',
+     'e2, n2 = pe2, pn2                   # flush: the same segment, bitwise',
+     'n2 = pn2                            # flush: the same segment, bitwise',
      _own_axis_residual_at_quarter_turn),
-    ('no pair substitution at all', P,
-     'primary = partner.get((face, (m, n)))',
-     'primary = None',
+    ('no self pair substitution at all', P,
+     'if q_face != face or offset not in own:',
+     'if True:',
      _grating_exact_off_centre),
+    ('the self substitution keyed by instance alone, the last record winning', P,
+     'n2 = xp.where((psigma >= lo) & (psigma <= hi), pn2, n2)',
+     'n2 = pn2',
+     lambda: _both_dead_runs_read_the_live_axis(*DOUBLE_COVERED['two images from both ends'],
+                                               0.3)),
     ('the tie substitution removed', P,
      'sx = xp.where(tie, axis_x, sx)\n    sy = xp.where(tie, axis_y, sy)',
      'pass',
