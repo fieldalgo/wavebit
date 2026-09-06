@@ -144,9 +144,11 @@ def test_a_traced_basis_with_no_record_is_refused_and_with_one_replays(name, lat
     basis is planned from it per call (``d/d(a2x)`` finite, and the AD-vs-FD row of the
     lattice gradient lives in ``test_lattice_pytree.py``).
 
-    The freeze is taken *before* the refused call on purpose: ``solve(lattice=...)`` assigns
-    the design variable to the solver, so a jitted call leaves a tracer in ``solver.lattice``
-    and a freeze taken after it would record ``None`` for the plan.
+    The freeze is taken before the refused call here; it may be taken after it too, since
+    2026-09-07 -- ``solve()`` puts the concrete cell back once a traced call returns, which
+    is what ``test_the_refusal_recipe_works_in_the_order_it_is_read`` pins. Until then the
+    jitted call left its tracer in ``solver.lattice`` and a freeze taken after it recorded
+    ``None`` for the plan.
     """
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
@@ -170,6 +172,135 @@ def test_a_traced_basis_with_no_record_is_refused_and_with_one_replays(name, lat
                                                  **KW).solve().T)))
     assert eager == pytest.approx(plain, abs=1e-12), name
     assert np.isfinite(np.asarray(jax.grad(total)(jnp.asarray(lattice)))).all(), name
+
+
+@pytest.mark.parametrize('name, lattice, structure, traced', [
+    ('shear 500 x 700 box, lattice traced', SHEAR, _b_layer(500.0), 'lattice'),
+    ('lone 350 box, lattice traced', SQUARE,
+     [dict(background=1.0, shapes=[_box(lx=350.0, ly=350.0)])], 'lattice'),
+    ('720 ellipse, structure traced', SQUARE, None, 'structure'),
+])
+def test_the_refusal_recipe_works_in_the_order_it_is_read(name, lattice, structure, traced):
+    """Jit refused -> ``freeze_geometry()`` -> jitted replay -> eager replay, on one solver.
+
+    The recipe the traced-decision refusal prints, followed literally *after* the refusal.
+    It did not work until 2026-09-07: ``solve(lattice=L)`` assigned the tracer to the solver
+    and left it there, so the freeze taken next recorded ``gamma_plans = [None]`` in silence,
+    the jitted replay with that record was refused again with the same message, and every
+    eager solve on the solver raised ``UnexpectedTracerError`` until the lattice was
+    reassigned by hand -- measured on exactly these two boxes. Now ``solve()`` puts the
+    concrete cell (and structure) back once the traced call returns, so the solver the freeze
+    sees is the one that was built: the record carries the plan, the replay equals the eager
+    solve to 1e-12, and the eager solves after it are the fresh solve's to the bit.
+
+    The ellipse row is the same story through ``structure=``: the blind plan refuses a traced
+    ellipse by name, and a freeze taken off the leaked structure would have recorded nothing.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    wavebit.enable_x64()
+
+    if structure is None:
+        structure = _l_ellipse_layer(720.0)
+    solver = wavebit.rcwa(backend=1, lattice=lattice, structure=structure, **KW)
+    before = np.asarray(solver.lattice)
+    reference = float(jnp.sum(solver.solve().T).real)
+
+    if traced == 'lattice':
+        def total(L, geometry=None):
+            return jnp.sum(solver.solve(lattice=L, geometry=geometry).T).real
+        x = jnp.asarray(lattice)
+    else:
+        def total(lx, geometry=None):
+            return jnp.sum(solver.solve(structure=_l_ellipse_layer(lx), geometry=geometry).T).real
+        x = jnp.asarray(720.0)
+
+    with pytest.raises(ValueError, match='freeze_geometry'):           # step 1
+        jax.jit(total)(x)
+    assert np.array_equal(np.asarray(solver.lattice), before), name    # nothing traced stayed
+    frozen = solver.freeze_geometry()                                  # step 2
+    assert frozen.gamma_plans[0] is not None, name
+    if 'box' in name and 'shear' in name:
+        assert frozen.gamma_plans[0].pairs
+    replayed = float(jax.jit(lambda v: total(v, frozen))(x))          # step 3
+    assert replayed == pytest.approx(reference, abs=1e-12), name
+    assert float(jnp.sum(solver.solve(geometry=frozen).T).real) == reference, name   # 3b
+    assert float(jnp.sum(solver.solve().T).real) == reference, name                  # step 4
+    assert np.isfinite(np.asarray(jax.grad(total)(x))).all(), name
+    assert np.array_equal(np.asarray(solver.lattice), before), name
+
+
+def test_a_freeze_on_a_solver_holding_a_tracer_is_refused_by_name():
+    """A tracer assigned to the solver directly, inside a trace: the freeze refuses, naming the slot.
+
+    ``solve()`` never leaves one behind, so this is the one way a solver holds a tracer at
+    the freeze -- and a record taken then held ``gamma_plans = [None]`` and replayed blind.
+    Both slots are asked: the cell, and a shape layer whose parameter is traced. A
+    ``jax.grad`` tracer is not refused, since its primal plans the same plan the eager call
+    would; the message names ``jax.jit`` and says to freeze on a concrete solver.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    wavebit.enable_x64()
+
+    solver = wavebit.rcwa(backend=1, lattice=SHEAR, structure=_b_layer(500.0), **KW)
+    seen = []
+
+    def traced_cell(L):
+        solver.lattice = L
+        try:
+            solver.freeze_geometry()
+        except ValueError as e:
+            seen.append(str(e))
+        return jnp.sum(L)
+
+    jax.jit(traced_cell)(jnp.asarray(SHEAR))
+    assert len(seen) == 1 and 'cell basis' in seen[0] and 'concrete solver' in seen[0]
+    solver.lattice = SHEAR                                   # assigned directly: put back by hand
+
+    def traced_shape(lx):
+        solver.structure = _b_layer(lx)
+        try:
+            solver.freeze_geometry()
+        except ValueError as e:
+            seen.append(str(e))
+        return lx
+
+    jax.jit(traced_shape)(jnp.asarray(500.0))
+    assert len(seen) == 2 and 'layer 0' in seen[1] and 'concrete solver' in seen[1]
+    solver.structure = _b_layer(500.0)
+    assert solver.freeze_geometry().gamma_plans[0].pairs      # concrete again: a record
+
+    # under grad the primal is read and the plan is the eager one
+    def under_grad(lx):
+        solver.structure = _b_layer(lx)
+        return jnp.sum(solver.solve(geometry=solver.freeze_geometry()).T).real
+
+    assert np.isfinite(float(jax.grad(under_grad)(jnp.asarray(500.0))))
+    solver.structure = _b_layer(500.0)
+
+
+def test_a_reconstruction_after_a_traced_solve_is_refused_rather_than_read_off_the_wrong_cell():
+    """The modes belong to the traced cell; the solver holds the concrete one again. Refuse.
+
+    Putting the cell back after a jitted ``solve(lattice=L)`` opens one door: a
+    reconstruction that reads ``solver.lattice`` would read the put-back cell against modes
+    computed on the tracer, and the old scene check skipped exactly that pairing (one key
+    ``None``). It refuses now, naming ``solve_field`` -- which solves and reconstructs in one
+    traced call -- and the eager solve; the eager solve then reconstructs as before.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    wavebit.enable_x64()
+
+    solver = wavebit.rcwa(backend=1, lattice=SHEAR, structure=_b_layer(500.0), answers='field',
+                          **KW)
+    frozen = solver.freeze_geometry()
+    jax.jit(lambda L: jnp.sum(solver.solve(lattice=L, geometry=frozen).T).real)(jnp.asarray(SHEAR))
+    with pytest.raises(RuntimeError, match='solve_field'):
+        solver.reconstruct_field(4, 4, 3)
+    solver.solve(geometry=frozen)
+    assert np.isfinite(np.asarray(solver.reconstruct_field(4, 4, 3))).all()
 
 
 def test_plan_gamma_runs_once_at_the_freeze_and_never_in_the_trace(monkeypatch):

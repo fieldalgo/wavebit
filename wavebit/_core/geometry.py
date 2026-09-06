@@ -100,10 +100,11 @@ class StaticGeometry:
         gamma_plans: per-layer :class:`~wavebit._core.parametric.GammaPlan` for the closed-form
             route's normal field -- which faces lie on which image's faces, over what, and what
             that leaves dead. Pure Python like ``boundary_plans`` and content-hashed beside it;
-            recorded for every shape layer, so a ``None`` entry means the shapes were traced at
-            the freeze and the replay plans blind (every piece, no pairs; a traced *basis*
-            is refused there rather than guessed at). Re-asked eagerly by
-            :func:`parametric.check_gamma_plan_still_fits`.
+            recorded for every shape layer. A ``None`` entry makes the replay plan blind (every
+            piece, no pairs; a traced *basis* or *ellipse* is refused there rather than guessed
+            at), and since 2026-09-07 no freeze writes one: a solver whose shapes are ``jax.jit``
+            tracers at the freeze is refused by name instead of recorded as nothing. Re-asked
+            eagerly by :func:`parametric.check_gamma_plan_still_fits`.
 
     A field left ``None`` means "auto-detect", which is what the strategy in use does not need
     (a sampled build never touches ``normal_field``, for instance).

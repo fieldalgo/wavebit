@@ -106,6 +106,42 @@ def _concrete_period(value):
     return float(p[0]), float(p[1])
 
 
+def _holds_tracer(value):
+    """Whether ``value`` is, or carries, a JAX tracer -- a value that cannot outlive its trace.
+
+    Structural, never a read: ``isinstance`` against ``jax.core.Tracer`` over the containers a
+    condition arrives in -- a shape layer's dicts and lists, a :class:`Lattice`'s two vectors,
+    a :class:`DrawnOn` raster, a :class:`Material`'s two slots. A tracer under ``jax.grad``
+    counts as much as one under ``jax.jit``: both are dead the moment the traced call
+    returns, and a value that answers a check today (the grad tracer's primal) still raises
+    ``UnexpectedTracerError`` from every array op tomorrow. A PyTorch leaf under autograd is
+    not one -- it converts, detaches and reads at any time -- and stays where it was put.
+    ``False`` whenever JAX is not in the process, which is what makes this free to ask on the
+    other two backends.
+    """
+    import sys
+    jax = sys.modules.get('jax')
+    if jax is None:
+        return False
+    tracer = jax.core.Tracer
+    stack = [value]
+    while stack:
+        v = stack.pop()
+        if isinstance(v, tracer):
+            return True
+        if isinstance(v, dict):
+            stack.extend(v.values())
+        elif isinstance(v, (list, tuple)):
+            stack.extend(v)
+        elif isinstance(v, _lattice.Lattice):
+            stack.extend((v.u, v.v))
+        elif isinstance(v, _lattice.DrawnOn):
+            stack.extend((v.values, v.lattice))
+        elif isinstance(v, Material):
+            stack.extend((v.epsilon, v.mu))
+    return False
+
+
 def _refuse_shaped_half_space(material, where):
     """A half-space is one uniform material, so its numbers must be scalars.
 
@@ -2322,6 +2358,58 @@ class CoreFactorizationMixin:
         for name, value in kwargs.items():
             setattr(self, name, value)
 
+    #: The slots a cell lives in, and the slots a structure lives in -- what :meth:`_conditions`
+    #: puts back after a call that handed one of them a tracer. `_grating_type` rides with the
+    #: structure because the structure setter's re-validation reads it, and `_mu` because the
+    #: raster pair is validated from whichever side completes it.
+    _CELL_SLOTS = ('_lattice_basis', '_period', '_cell_named')
+    _STRUCTURE_SLOTS = ('_structure', '_modeling_path', '_structure_drawn_on', '_grating_type',
+                        '_mu')
+
+    @_contextlib.contextmanager
+    def _conditions(self, kwargs):
+        """Assign the keyword conditions for one call, and put a traced cell or structure back.
+
+        The entry points take conditions so an optimizer can move a design variable and
+        re-solve in one call, and the value has to be *on the solver* while the call runs --
+        `order_kxy`, the geometry, the field build all read it there. What it must not do is
+        stay: a ``jax.jit`` tracer assigned by ``solve(lattice=L)`` outlived the call in
+        ``solver.lattice``, and everything eager after it read a dead value. Measured on the
+        sheared 500 x 700 box and the lone 350 box after the traced-basis refusal of
+        2026-09-06, following the recipe that refusal prints: ``freeze_geometry()`` took its
+        record off the tracer and recorded ``gamma_plans = [None]`` in silence, the jitted
+        replay with that record was refused again with the same message, and every eager
+        ``solve()`` on the solver raised ``UnexpectedTracerError`` until the lattice was
+        reassigned by hand. The same leak predates the refusal -- after a *successful* jitted
+        ``solve(lattice=L)`` the eager solves raised too -- but nobody was told to freeze
+        afterwards then.
+
+        So the cell slots (``lattice`` / ``period``) and the structure slots (``structure`` /
+        ``mu``) are snapshotted when the incoming value carries a tracer (:func:`_holds_tracer`,
+        structural) and restored in a ``finally``: the traced value serves the call and the
+        solver comes back holding the numbers it held before. Nothing else is put back. The
+        scalar conditions -- a thickness, a wavelength, an angle -- are read only by the solve
+        that was handed them and by a reconstruction of *that* solve, which
+        :meth:`_reject_stale_field_scene` guards on its own; a traced one left behind is
+        overwritten by the next call's keyword and read by no eager decision in between. The
+        cell and the structure are different because :meth:`freeze_geometry` reads them, and
+        the freeze is what a refused traced call is told to do next.
+
+        A concrete value (a float, a NumPy or backend array, a torch leaf under autograd) is
+        assigned and stays, exactly as before.
+        """
+        held = {}
+        if any(name in kwargs and _holds_tracer(kwargs[name]) for name in ('lattice', 'period')):
+            held.update((slot, getattr(self, slot)) for slot in self._CELL_SLOTS)
+        if any(name in kwargs and _holds_tracer(kwargs[name]) for name in ('structure', 'mu')):
+            held.update((slot, getattr(self, slot)) for slot in self._STRUCTURE_SLOTS)
+        self._assign_conditions(kwargs)
+        try:
+            yield
+        finally:
+            for slot, value in held.items():
+                setattr(self, slot, value)
+
     def _raster_types(self):
         """The array types a raster may arrive as: NumPy's, plus this backend's own.
 
@@ -2549,7 +2637,10 @@ class CoreFactorizationMixin:
 
         return result
 
-    _solved_scene = None
+    #: The scene of the last solve: a tuple of numbers, ``None`` when a condition it reads was
+    #: traced or under autograd at the solve, and this sentinel while no solve has run. The
+    #: two non-scenes answer differently in `_reject_stale_field_scene`.
+    _solved_scene = _UNSOLVED = object()
 
     def _reconstruction_scene(self):
         """The live conditions a reconstruction reads, as concrete numbers -- or ``None``.
@@ -2602,10 +2693,34 @@ class CoreFactorizationMixin:
 
         Eager only, like every other staleness check here. Under a trace both keys are ``None``
         and the comparison is skipped.
+
+        **A solve whose scene could not be read, reconstructed on a solver that reads now, is
+        refused too.** ``solve()`` puts a traced cell back after its call (:meth:`_conditions`),
+        so after ``jax.jit(lambda L: solver.solve(lattice=L))`` the modes and amplitudes
+        belong to the traced cell and ``solver.lattice`` is the concrete one it held before --
+        the same "neither scene" mix as a wavelength moved after the solve, reached from the
+        other side. The old comparison skipped it (one key ``None``), and inside a trace the
+        reconstruction would have read the put-back cell in silence. Now the record of a
+        traced solve against a concrete live scene is a refusal that names the two ways out:
+        ``solve_field``, which solves and reconstructs in one traced call and assigns its
+        conditions outside ``solve()``, or an eager solve first. A torch leaf under autograd
+        reads the same way -- its scene is ``None`` at the solve -- and reconstructs as before
+        while it stays on the solver, since the live scene is ``None`` then too.
         """
-        if self._solved_scene is None:
+        if self._solved_scene is self._UNSOLVED:
             return
         now = self._reconstruction_scene()
+        if self._solved_scene is None:
+            if now is None:
+                return
+            raise RuntimeError(
+                'the solve whose state this would reconstruct from was posed with a condition '
+                'that could not be read as a number -- a traced cell, wavelength or angle, or '
+                'a leaf under autograd -- and this solver holds concrete conditions now, so '
+                'the modes and amplitudes belong to a scene it no longer describes. `solve()` '
+                'puts a traced cell or structure back after its call, which is one way here. '
+                'Reconstruct inside the traced call with solve_field(..., geometry=...), which '
+                'solves and reconstructs the one scene, or call solve() again eagerly first.')
         if now is None or now == self._solved_scene:
             return
         raise RuntimeError(
@@ -3076,8 +3191,19 @@ class CoreFactorizationMixin:
         The record describes *this* structure. Replaying it onto one whose geometry has moved
         is refused rather than answered, eagerly — see :mod:`wavebit._core.geometry` for what
         each record checks and why a traced replay cannot.
+
+        **A solver holding a tracer it cannot read is refused, by name.** The freeze is the
+        eager pass, and a cell or a shape layer that is a ``jax.jit`` tracer gives it nothing to
+        decide from: the record it took held ``gamma_plans = [None]`` and replayed blind, which
+        is the guess it exists to avoid (:meth:`_refuse_a_freeze_on_a_tracer`). ``solve()``
+        puts a traced cell or structure back after its call, so a solver reaches that refusal
+        only when the tracer was assigned to it directly, inside a trace.
         """
-        self._assign_conditions(kwargs)
+        with self._conditions(kwargs):
+            return self._freeze_geometry()
+
+    def _freeze_geometry(self):
+        """:meth:`freeze_geometry` past its conditions."""
         # A record of a stack that cannot be solved is a record of nothing, and it would be
         # replayed rather than rebuilt -- so the mismatch would surface later, from the replay,
         # further from the assignment that caused it. Only this one refusal, not all of
@@ -3099,6 +3225,8 @@ class CoreFactorizationMixin:
         # `kx` it will meet. Its entries do not otherwise care where the window sits
         # -- `(i, j)` is the harmonic `i - j` -- so only the size travels here.
         (_, half_width_u), (_, half_width_v) = self.order_window
+        basis = self._geometry_lattice_for(None)
+        self._refuse_a_freeze_on_a_tracer(basis)
 
         # The two axes decide independently what has to be frozen: NVF needs the normal
         # field, the integrated series needs the block compression, and ('integrated', 'nvf')
@@ -3107,7 +3235,6 @@ class CoreFactorizationMixin:
         mu_normal_field = mu_normal_field_source = mu_compression = None
         if self._modeling_path == ModelingPath.RASTER:
             if factorization == Factorization.NVF:
-                basis = self._geometry_lattice_for(None)
                 normal_field = _fac.normal_field_for_raster(
                     self.structure, half_width_u, half_width_v, lattice=basis,
                     method=self.normal_method, projector=self.projector)
@@ -3146,7 +3273,6 @@ class CoreFactorizationMixin:
             # 0.9590 and a `dT/dlx` of 9.8e-4 where the true derivative is exactly zero. Both
             # `check_layer_shapes` docstrings named this call as the one that still sees them;
             # until 2026-08-27 it did not make it.
-            basis = self._geometry_lattice_for(None)
             for index, layer in enumerate(self.structure):
                 _parametric.check_layer_spec(layer, index)
                 _parametric.check_layer_shapes(layer, basis, index)
@@ -3168,11 +3294,57 @@ class CoreFactorizationMixin:
             # The interface set of every layer -- which faces lie on which image's faces over
             # a run, which are dead, whether anything is left -- by name, with no float in it.
             # Recorded for every layer whether or not the closed form builds it: a plan is
-            # microseconds, and a `None` here then means one thing only, that the shapes were
-            # traced at the freeze (a `jax.grad` primal plans; a `jax.jit` tracer cannot).
+            # microseconds. It used to be `None` for a layer whose shapes were `jax.jit`
+            # tracers at the freeze; that solver is refused above now, so every entry here is
+            # a plan (a `jax.grad` primal plans, as it always did).
             geometry.gamma_plans = [_parametric.plan_gamma(layer.get('shapes', []), basis)
                                     for layer in self.structure]
         return geometry
+
+    def _refuse_a_freeze_on_a_tracer(self, basis):
+        """Refuse to take a record off a cell or a shape layer that is a tracer with no primal.
+
+        A ``jax.grad`` tracer carries its primal and every geometry read below takes it
+        (:func:`~wavebit._core.backend.checked_float`), so a freeze inside a gradient plans
+        the same plan the eager call would. A ``jax.jit`` tracer has no number: the layer
+        checks skipped, the painting question raised only for two or more shapes, and the
+        interface set was recorded as ``None`` -- a record that says nothing and, handed to
+        the jitted replay, was refused again with the very message that had prescribed it.
+        Measured on the sheared 500 x 700 box and the lone 350 box after a jitted
+        ``solve(lattice=L)`` left its tracer on the solver: ``gamma_plans = [None]``, the
+        replay refused, the eager solves raising ``UnexpectedTracerError``.
+
+        The parametric structure is asked the same question, for the same reason: a lone
+        ellipse of traced size under ``jax.jit`` is refused by the blind plan since
+        2026-09-07, and a record taken off the tracer would send its recipe round the same
+        loop. A raster is not asked -- the NVF freeze cannot read a traced raster at all and
+        says so on its own, and the sampled Li build decides nothing, so an empty record of
+        it is an honest one.
+        """
+        try:
+            _parametric._cell_floats(basis)
+        except Exception:                                  # noqa: BLE001 - no primal to read
+            what = 'cell basis (`lattice`, or the `period` it is spelled as)'
+        else:
+            what = None
+            if self._modeling_path == ModelingPath.PARAMETRIC:
+                for index, layer in enumerate(self.structure):
+                    if _parametric._primitives(layer.get('shapes', []), basis) is None:
+                        what = f'structure (layer {index} holds a traced shape parameter)'
+                        break
+        if what is None:
+            return
+        raise ValueError(
+            f"freeze_geometry: this solver's {what} is a traced value with no number to read "
+            f'-- a `jax.jit` tracer -- so there is nothing to take the geometry decisions from. '
+            f'A record taken here would hold no plan and replay blind, which is the guess the '
+            f'freeze exists to avoid. Freeze on a concrete solver, outside the trace, and hand '
+            f'the record to the traced call:\n'
+            f'    solver.lattice = A                   # or solver.structure = ..., as numbers\n'
+            f'    geometry = solver.freeze_geometry()\n'
+            f'    jax.jit(lambda L: solver.solve(lattice=L, geometry=geometry))(A)\n'
+            f'`solve()` puts a concrete cell or structure back after a call that traced one, so '
+            f'a solver holds a tracer here only when it was assigned directly, inside a trace.')
 
     def solve(self, geometry=None, auto_detune=True, **kwargs):
         """Build the convolution matrices, then solve.
@@ -3209,14 +3381,25 @@ class CoreFactorizationMixin:
         use ~1e-5 there). A traced solve (``jax.jit``) skips every guard and therefore never
         retries — the same line the guards themselves draw.
 
+        **A traced cell or structure does not stay on the solver.** ``solve(lattice=L)``
+        inside ``jax.jit`` has to hold the tracer while it runs; it used to keep it
+        afterwards, so the recipe the traced-basis refusal prints -- freeze, then replay --
+        froze a tracer and recorded no plan. The cell slots and the structure slots are put
+        back to the numbers they held once the call returns (:meth:`_conditions`); the other
+        conditions stay as assigned.
+
         Raises:
             StaleGeometryError: eagerly, when ``geometry`` no longer describes the structure it
                 is being replayed onto. A traced call cannot check — the comparison is the
                 thing the record exists to avoid — so a long fit should re-freeze on a schedule
                 rather than wait to be told.
         """
-        self._assign_conditions(kwargs)   # an optimizer moves a design variable here
-        self._frozen_geometry = geometry
+        with self._conditions(kwargs):    # an optimizer moves a design variable here
+            self._frozen_geometry = geometry
+            return self._solve_detuned(geometry, auto_detune)
+
+    def _solve_detuned(self, geometry, auto_detune):
+        """:meth:`solve` past its conditions: the build, with the Rayleigh-point ladder around it."""
         if not auto_detune:
             return self._solve_built(geometry)
 
@@ -3337,10 +3520,11 @@ class CoreFactorizationMixin:
         -- widening the tuple would change what every existing caller unpacks.
         :meth:`mu_conv_matrices` returns the other five, in the same five-slot layout.
 
-        ``geometry`` behaves as in :meth:`solve`.
+        ``geometry`` behaves as in :meth:`solve`, and so do the conditions: a traced cell or
+        structure serves this call and is put back after it.
         """
-        self._assign_conditions(kwargs)
-        return self._eps_conv_matrices(geometry)
+        with self._conditions(kwargs):
+            return self._eps_conv_matrices(geometry)
 
     def mu_conv_matrices(self, geometry=None, **kwargs):
         """The permeability convolution matrices, or ``None`` for a non-magnetic structure.
@@ -3355,10 +3539,11 @@ class CoreFactorizationMixin:
         magnetic: the solve reads that ``None`` as "take the non-magnetic arithmetic", which
         is bit-identical to the code that existed before ``mu`` did.
 
-        ``geometry`` behaves as in :meth:`solve`.
+        ``geometry`` behaves as in :meth:`solve`, and so do the conditions: a traced cell or
+        structure serves this call and is put back after it.
         """
-        self._assign_conditions(kwargs)
-        return self._mu_conv_matrices(geometry)
+        with self._conditions(kwargs):
+            return self._mu_conv_matrices(geometry)
 
     def slice_structure(self, layer=0, n=512, show='eps', band_limited=False):
         """One layer's structure as an array. See :func:`wavebit._core.draw.slice_structure`.
