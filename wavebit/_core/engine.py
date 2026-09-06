@@ -2336,6 +2336,13 @@ class CoreFactorizationMixin:
         slot goes around it. A private name is neither a constructor parameter nor a public
         property, so it is now simply unknown.
         """
+        self._refuse_unknown_conditions(kwargs)
+        for name, value in kwargs.items():
+            setattr(self, name, value)
+
+    def _refuse_unknown_conditions(self, kwargs):
+        """The name check of :meth:`_assign_conditions`, on its own so :meth:`_conditions` can
+        run it before assigning anything and still assign one keyword at a time."""
         if not kwargs:
             return
 
@@ -2355,20 +2362,9 @@ class CoreFactorizationMixin:
                 f'scene you had, not the one you asked for. Settable conditions: '
                 f'{", ".join(sorted(legal))}.')
 
-        for name, value in kwargs.items():
-            setattr(self, name, value)
-
-    #: The slots a cell lives in, and the slots a structure lives in -- what :meth:`_conditions`
-    #: puts back after a call that handed one of them a tracer. `_grating_type` rides with the
-    #: structure because the structure setter's re-validation reads it, and `_mu` because the
-    #: raster pair is validated from whichever side completes it.
-    _CELL_SLOTS = ('_lattice_basis', '_period', '_cell_named')
-    _STRUCTURE_SLOTS = ('_structure', '_modeling_path', '_structure_drawn_on', '_grating_type',
-                        '_mu')
-
     @_contextlib.contextmanager
     def _conditions(self, kwargs):
-        """Assign the keyword conditions for one call, and put a traced cell or structure back.
+        """Assign the keyword conditions for one call, and put every traced value back.
 
         The entry points take conditions so an optimizer can move a design variable and
         re-solve in one call, and the value has to be *on the solver* while the call runs --
@@ -2384,31 +2380,55 @@ class CoreFactorizationMixin:
         ``solve(lattice=L)`` the eager solves raised too -- but nobody was told to freeze
         afterwards then.
 
-        So the cell slots (``lattice`` / ``period``) and the structure slots (``structure`` /
-        ``mu``) are snapshotted when the incoming value carries a tracer (:func:`_holds_tracer`,
-        structural) and restored in a ``finally``: the traced value serves the call and the
-        solver comes back holding the numbers it held before. Nothing else is put back. The
-        scalar conditions -- a thickness, a wavelength, an angle -- are read only by the solve
-        that was handed them and by a reconstruction of *that* solve, which
-        :meth:`_reject_stale_field_scene` guards on its own; a traced one left behind is
-        overwritten by the next call's keyword and read by no eager decision in between. The
-        cell and the structure are different because :meth:`freeze_geometry` reads them, and
-        the freeze is what a refused traced call is told to do next.
+        The first fix put back the cell and the structure slots by name and left the scalar
+        conditions, on the argument that a thickness, a wavelength or an angle is read by no
+        eager decision before the next keyword overwrites it. The eager ``solve()`` *is* such
+        a decision: after ``jax.jit(lambda w: solver.solve(geometry=g, wavelength=w))(900.0)``
+        the plain ``solver.solve()`` raised ``UnexpectedTracerError`` from the tracer in
+        ``solver.wavelength`` -- the same failure on a different slot -- and so did
+        ``thickness`` and ``theta``. And the snapshot was taken outside the ``try``, so a
+        setter that raised after the traced lattice was assigned (``solve(lattice=L,
+        structure='junk')`` inside a trace) left the tracer on the solver with the ``finally``
+        never reached.
 
-        A concrete value (a float, a NumPy or backend array, a torch leaf under autograd) is
-        assigned and stays, exactly as before.
+        So the keywords are assigned one at a time with the instance ``__dict__``
+        snapshotted around each, and every slot whose setter left it holding a tracer
+        (:func:`_holds_tracer`, structural) -- whatever the slot is called: the private store
+        behind a property, a plain attribute, a slot the setter re-derives -- is restored in
+        the ``finally`` to the object it held before; a slot the setter created is deleted.
+        The test is on what the slot *holds*, not on what came in, because the two differ
+        under a trace: ``thickness=[310.0]`` arrives as a concrete list and is stored by
+        ``as_array`` as a staged constant -- a tracer -- when the JAX setter runs inside
+        ``jax.jit``, and left the same ``UnexpectedTracerError`` on the next eager solve.
+        Slots are keyed by identity, and the first snapshot wins, so a slot two setters touch
+        goes back to what it held before either. The assignment itself runs inside the
+        ``try``: a setter that raises restores what was assigned before it. Read by the diff
+        rather than listed by name because a list goes stale on every new slot -- the first
+        fix's two tuples missed ``wavelength`` the day they were written.
+
+        A value that is concrete once stored (a float, a NumPy or backend array, a torch leaf
+        under autograd; anything at all outside a JAX trace) is assigned and stays, exactly
+        as before, in the order the keywords were given. Nothing traced outlives the call.
         """
+        absent = object()
         held = {}
-        if any(name in kwargs and _holds_tracer(kwargs[name]) for name in ('lattice', 'period')):
-            held.update((slot, getattr(self, slot)) for slot in self._CELL_SLOTS)
-        if any(name in kwargs and _holds_tracer(kwargs[name]) for name in ('structure', 'mu')):
-            held.update((slot, getattr(self, slot)) for slot in self._STRUCTURE_SLOTS)
-        self._assign_conditions(kwargs)
         try:
+            self._refuse_unknown_conditions(kwargs)
+            for name, value in kwargs.items():
+                before = dict(self.__dict__)
+                setattr(self, name, value)
+                for slot in before.keys() | self.__dict__.keys():
+                    now = self.__dict__.get(slot, absent)
+                    was = before.get(slot, absent)
+                    if slot not in held and now is not was and _holds_tracer(now):
+                        held[slot] = was
             yield
         finally:
             for slot, value in held.items():
-                setattr(self, slot, value)
+                if value is absent:
+                    self.__dict__.pop(slot, None)
+                else:
+                    object.__setattr__(self, slot, value)
 
     def _raster_types(self):
         """The array types a raster may arrive as: NumPy's, plus this backend's own.
@@ -3279,11 +3299,17 @@ class CoreFactorizationMixin:
             # Only a layer that actually overlaps has a plan to freeze. One with nothing
             # overlapping means the same structure either way and stays on the closed-form
             # path, so its slot stays None and the replay never looks.
-            plans = [_boundary.plan_layer(layer.get('shapes', []),
-                                          self._geometry_lattice_for(None))
-                     if _parametric.layer_needs_resolving(
-                         layer, self._geometry_lattice_for(None)) else None
-                     for layer in self.structure]
+            # A painted layer on a basis that is not Lagrange-reduced is refused here by
+            # name (`check_boundary_basis_reduced`): the polygon route sweeps its images on
+            # the basis as given, and this is where its plan is taken on concrete numbers.
+            cell = self._geometry_lattice_for(None)
+            plans = []
+            for index, layer in enumerate(self.structure):
+                if _parametric.layer_needs_resolving(layer, cell):
+                    _parametric.check_boundary_basis_reduced(cell, index)
+                    plans.append(_boundary.plan_layer(layer.get('shapes', []), cell))
+                else:
+                    plans.append(None)
             # Recorded whether or not anything needed a plan. The entry *is* the decision:
             # `None` here means "looked at while the numbers were concrete, and it does not
             # overlap". Setting the attribute only when something overlapped made those two
@@ -3381,12 +3407,14 @@ class CoreFactorizationMixin:
         use ~1e-5 there). A traced solve (``jax.jit``) skips every guard and therefore never
         retries — the same line the guards themselves draw.
 
-        **A traced cell or structure does not stay on the solver.** ``solve(lattice=L)``
-        inside ``jax.jit`` has to hold the tracer while it runs; it used to keep it
-        afterwards, so the recipe the traced-basis refusal prints -- freeze, then replay --
-        froze a tracer and recorded no plan. The cell slots and the structure slots are put
-        back to the numbers they held once the call returns (:meth:`_conditions`); the other
-        conditions stay as assigned.
+        **Nothing traced stays on the solver.** ``solve(lattice=L)`` inside ``jax.jit`` has
+        to hold the tracer while it runs; it used to keep it afterwards, so the recipe the
+        traced-basis refusal prints -- freeze, then replay -- froze a tracer and recorded no
+        plan, and a jitted ``solve(wavelength=w)`` left every eager ``solve()`` after it
+        raising ``UnexpectedTracerError``. Every slot a keyword's setter left holding a
+        tracer -- the cell, the structure, a thickness, a wavelength, an angle -- is put back
+        to what it held once the call returns, even when a later keyword's setter raises
+        (:meth:`_conditions`); a value that is concrete once stored stays as assigned.
 
         Raises:
             StaleGeometryError: eagerly, when ``geometry`` no longer describes the structure it

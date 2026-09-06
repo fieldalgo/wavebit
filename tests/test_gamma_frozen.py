@@ -233,6 +233,89 @@ def test_the_refusal_recipe_works_in_the_order_it_is_read(name, lattice, structu
     assert np.array_equal(np.asarray(solver.lattice), before), name
 
 
+@pytest.mark.parametrize('name, value', [
+    ('wavelength', 900.0), ('thickness', [300.0]), ('theta', 0.2)])
+def test_a_traced_scalar_condition_does_not_outlive_its_solve(name, value):
+    """A jitted sweep over a wavelength, a thickness or an angle leaves nothing traced behind.
+
+    The first restore (2026-09-06) put back the cell and the structure slots by name and left
+    the scalars, on the argument that no eager decision reads one before the next keyword
+    overwrites it. The eager ``solve()`` is that decision: after ``jax.jit(lambda w:
+    solver.solve(geometry=g, wavelength=w))(900.0)`` the plain ``solver.solve()`` raised
+    ``UnexpectedTracerError`` from the tracer left in ``solver.wavelength`` -- the failure
+    class the recipe test above names, on a different slot -- and ``thickness`` and
+    ``theta`` did the same. ``_conditions`` now restores every slot a keyword's setter left
+    holding a tracer, read off the instance dictionary rather than a list of names. So the
+    slot reads its number after the jitted call, the eager solve is the fresh solve's to the
+    bit, and a freeze taken afterwards records a plan. The second half is the value that
+    arrives *concrete* and is stored traced: ``thickness=[310.0]`` under the trace is staged
+    by the JAX setter's ``as_array`` into a tracer, and is put back as well.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    wavebit.enable_x64()
+
+    structure = [dict(background=1.0, shapes=[_box(lx=350.0, ly=350.0, material=12.25)])]
+    solver = wavebit.rcwa(backend=1, lattice=SQUARE, structure=structure, **KW)
+    reference = float(jnp.sum(solver.solve().T).real)
+    frozen = solver.freeze_geometry()
+
+    def total(v):
+        return jnp.sum(solver.solve(geometry=frozen, **{name: v}).T).real
+
+    replayed = float(jax.jit(total)(jnp.asarray(value)))
+    assert replayed == pytest.approx(reference, abs=1e-12)
+    assert np.allclose(np.asarray(getattr(solver, name)), np.asarray(value))   # a number, not a tracer
+    assert float(jnp.sum(solver.solve().T).real) == reference
+    assert solver.freeze_geometry().gamma_plans[0] is not None
+    assert np.isfinite(np.asarray(jax.grad(total)(jnp.asarray(value, dtype=float)))).all()
+    assert float(jnp.sum(solver.solve().T).real) == reference
+
+    def mixed(w):
+        return jnp.sum(solver.solve(geometry=frozen, wavelength=w, thickness=[310.0]).T).real
+
+    jax.jit(mixed)(jnp.asarray(900.0))
+    assert np.allclose(np.asarray(solver.thickness), [300.0])
+    assert float(jnp.sum(solver.solve().T).real) == reference
+
+
+def test_a_setter_that_raises_after_a_traced_assignment_still_puts_it_back():
+    """The keywords are assigned inside the ``try``, so a bad one cannot leak a good one's tracer.
+
+    ``solve(lattice=L, geometry=record, structure='junk')`` inside ``jax.jit``: the lattice
+    setter took the tracer, the structure setter raised, and -- with the assignment outside
+    the ``try`` -- the ``finally`` never ran, so ``solver.lattice`` held the tracer and every
+    eager solve after it raised ``UnexpectedTracerError``. The same through
+    ``thickness='junk'``, and through a misspelled keyword, which is refused before anything
+    is assigned. Now the restore covers the assignment: the setter's own error comes out,
+    and the cell is the one the solver was built with.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    wavebit.enable_x64()
+
+    solver = wavebit.rcwa(backend=1, lattice=SHEAR, structure=_b_layer(500.0), **KW)
+    frozen = solver.freeze_geometry()
+    before = np.asarray(solver.lattice)
+    reference = float(jnp.sum(solver.solve().T).real)
+
+    for bad, error in ((dict(structure='junk'), ValueError), (dict(thickness='junk'), ValueError),
+                       (dict(thicknes=[1.0]), TypeError)):
+        seen = []
+
+        def traced(L):
+            try:
+                solver.solve(lattice=L, geometry=frozen, **bad)
+            except error as e:
+                seen.append(e)
+            return jnp.sum(L)
+
+        jax.jit(traced)(jnp.asarray(SHEAR))
+        assert len(seen) == 1, bad
+        assert np.array_equal(np.asarray(solver.lattice), before), bad
+        assert float(jnp.sum(solver.solve().T).real) == reference, bad
+
+
 def test_a_freeze_on_a_solver_holding_a_tracer_is_refused_by_name():
     """A tracer assigned to the solver directly, inside a trace: the freeze refuses, naming the slot.
 

@@ -1199,3 +1199,56 @@ def test_the_polygon_normal_field_folds_to_the_nearest_image():
     total = lambda shift: float(np.sum(np.asarray(
         wavebit.rcwa(structure=layer(shift), **cfg).solve().T)).real)
     assert total(0.0) == total(P)
+
+
+def test_a_painted_layer_on_an_unreduced_basis_is_refused_and_the_closed_form_is_not():
+    """The polygon route sweeps its images on the basis as given, so an unreduced one is refused.
+
+    ``a2 = k a1 + (50, 700)`` is the cell of ``a2 = (50, 700)`` on a longer second vector,
+    accepted as it is. The closed-form route counts every periodic image on the Lagrange-
+    reduced basis since 2026-09-06 (``lattice.reduced_basis``); ``boundary.periodic_segments``
+    -- the painted, overlapping layers -- still folds and sweeps one cell a side of the
+    spelling it is handed, so an overlapping layer on such a spelling was a different
+    structure in silence: two overlapping 300 x 300 boxes read ``sum(T)`` 0.810615440141 on
+    ``k = 10`` against 0.948626126969 on ``k = 0`` at the one window where both spellings
+    retain the same order set (``u = 0, v = 6``; ``b2`` is shared), unmoved by the normal
+    grid. Until the reduction is ported into ``boundary.py`` the layer is refused by name
+    (``parametric.check_boundary_basis_reduced``) at the solve and at the freeze, quoting the
+    reduced spelling; the reduced spelling builds the value it built before; and a layer
+    whose shapes do *not* overlap is not touched, because the closed form handles it --
+    bitwise the same on ``k = 10`` and ``k = 0``, whose sample grids are the same points.
+    """
+    import wavebit
+    from wavebit._core import parametric as P
+
+    period = 700.0
+
+    def box(**geom):
+        return dict(dict(type='rectangle', cx=0.0, cy=0.0, angle=0.0, material=12.25), **geom)
+
+    overlapping = [box(lx=300.0, ly=300.0, cx=-100.0), box(lx=300.0, ly=300.0, cx=100.0)]
+    disjoint = [box(lx=250.0, ly=300.0, cx=-160.0), box(lx=250.0, ly=300.0, cx=160.0)]
+    kw = dict(backend=0, wavelength=900.0, top=1.0, bot=2.25, theta=0.2, phi=0.3, psi=0.4,
+              thickness=[300.0], normal_grid=64, truncation_order=dict(u=0, v=6))
+
+    def solver(k, shapes):
+        P._PROJECTOR_CACHE.clear()
+        lattice = np.array([[period, 50.0 + k * period], [0.0, period]])
+        return wavebit.rcwa(lattice=lattice, structure=[dict(background=1.0, shapes=shapes)],
+                            **kw)
+
+    total = lambda s: float(np.sum(np.asarray(s.solve().T)))
+
+    reduced = solver(0, overlapping)
+    assert total(reduced) == pytest.approx(0.948626126969, abs=1e-9)
+    assert reduced.freeze_geometry().boundary_plans[0] is not None
+
+    message = r'layer 0 overlaps.*not Lagrange-reduced.*a2 = \(7050, 700\).*a2 = \(50, 700\)'
+    unreduced = solver(10, overlapping)
+    with pytest.raises(ValueError, match=message):
+        unreduced.solve()
+    with pytest.raises(ValueError, match=message):
+        unreduced.freeze_geometry()
+
+    assert total(solver(10, disjoint)) == total(solver(0, disjoint))
+    assert solver(10, disjoint).freeze_geometry().boundary_plans == [None]
