@@ -29,6 +29,8 @@ from wavebit._core.lattice import as_lattice
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from gamma_instruments import band_error, gamma_points, mutated  # noqa: E402
+from test_gamma_layers import (_abc_band_gate, _abc_column_exact,  # noqa: E402
+                               _k_column_above_the_seam_end)
 
 PERIOD = 700.0
 EPS_HI = 12.25
@@ -539,6 +541,27 @@ MUTANTS = [
      '    ring = images(r)\n',
      '    ring = images(1)\n',
      _unreduced_basis_has_its_pair),
+    # C4, the per-run window and the per-pair sign. Four mutants that passed the 26 tests of
+    # this file's neighbours: every cross pair the suite had was flush with equal extents and
+    # no face carried two runs, so the window was the whole face everywhere they looked.
+    ('the sign window always open', P,
+     'hits[r] = (sigma >= lo) & (sigma <= hi)',
+     'hits[r] = (sigma == sigma)',
+     _k_column_above_the_seam_end),
+    ('the sign keyed on the q piece', P,
+     'signs[r] = xp.where(equal, as_array(xp, -1.0, dtype=dtype), as_array(xp, 1.0, dtype=dtype))',
+     'signs[r] = next((signs[k] for k, pk in enumerate(plan.pairs[:r]) if pk.q == pr.q and k in '
+     'signs), xp.where(equal, as_array(xp, -1.0, dtype=dtype), as_array(xp, 1.0, dtype=dtype)))',
+     _abc_column_exact),
+    ('the sign keyed on the p piece', P,
+     'signs[r] = xp.where(equal, as_array(xp, -1.0, dtype=dtype), as_array(xp, 1.0, dtype=dtype))',
+     'signs[r] = next((signs[k] for k, pk in enumerate(plan.pairs[:r]) if pk.p == pr.p and k in '
+     'signs), xp.where(equal, as_array(xp, -1.0, dtype=dtype), as_array(xp, 1.0, dtype=dtype)))',
+     _abc_band_gate),
+    ("the run window built from the partner's half-length", P,
+     'tx, ty, h_p = -pframe.sin, pframe.cos, pframe.b        # the u faces run along v',
+     'tx, ty, h_p = -pframe.sin, pframe.cos, qframe.b        # the u faces run along v',
+     _abc_band_gate),
     ('the arc ring dropped: every round shape at its own instance', P,
      '    if not leaves:\n        return ((0, 0),)',
      '    if True:\n        return ((0, 0),)',

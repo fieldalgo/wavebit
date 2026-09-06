@@ -230,6 +230,94 @@ def test_a_seam_of_finite_length_is_an_interface_over_its_run_and_not_beyond():
     assert blind[0] > aware[0] + 0.05, (blind, aware)
 
 
+#: C4. One face on two runs of different equality: B's ``-u`` face (``x = 0``, ``y`` in
+#: [-300, 300]) meets same-material A over [10, 300] (dead: the material runs on), background
+#: over [-10, 10], and different-material C over [-300, -10] (a seam). Three orderings, because
+#: a pair's ``p`` / ``q`` roles and the order of the records follow the shape order, and each of
+#: the four mutants of this window in ``test_gamma_field.py`` survives two of the three.
+A_BOX = _box(cx=-150.0, cy=160.0, lx=300.0, ly=300.0, material=4.0)
+B_BOX = _box(cx=150.0, cy=0.0, lx=300.0, ly=600.0, material=4.0)
+C_BOX = _box(cx=-150.0, cy=-160.0, lx=300.0, ly=300.0, material=9.0)
+ABC = {'A B C': [A_BOX, B_BOX, C_BOX], 'B A C': [B_BOX, A_BOX, C_BOX],
+       'A C B': [A_BOX, C_BOX, B_BOX]}
+
+
+def _abc_band_gate():
+    """Every ordering under 0.35 deg / 0.3% against the material-aware oracle (0.265 / 0.11%).
+
+    The gate is this scene's, not a constant of the mechanism: a contact scene's band carries
+    the fixed-normal wedge beyond each run's end, which reads 0.22 deg on ``K_SHORT``, 0.27
+    here and 0.32 on two same-material boxes 300 and 400 tall -- identical whether the taller
+    one is written upright or turned a quarter turn, so it is the wedge and not a defect. What
+    justifies 0.35 is the separation: the sign keyed on a piece reads 5.87 deg / 6.80% and the
+    window built from the partner's half-length 3.71 / 4.14%.
+    """
+    for name, shapes in ABC.items():
+        mean, over, count = band_error(*_field(shapes), GRID, SQUARE,
+                                       _gamma(shapes, groups=(4.0, 4.0, 9.0) if name != 'A C B'
+                                              else (4.0, 9.0, 4.0)))
+        assert count > 4000 and mean < 0.35 and over < 0.003, (name, mean, over)
+
+
+def _abc_column_exact():
+    """On B's ``-u`` face line, exactly: ``n_x == 0`` over the dead run, ``|n_x| == 1`` on the seam and in the gap."""
+    A = as_lattice(lattice=SQUARE)
+    y = np.concatenate([np.linspace(11.0, 299.0, 41), np.linspace(-299.0, -11.0, 41),
+                        np.linspace(-9.0, 9.0, 7)])
+    for name, shapes in ABC.items():
+        n_x, _ = P._piece_field(np, np.full_like(y, PERIOD / 2.0), PERIOD / 2.0 + y, shapes,
+                                P.plan_gamma(shapes, A), None, A, np.float64)
+        assert np.abs(n_x[:41]).max() == 0.0, name                     # dead: the v axis
+        assert np.abs(np.abs(n_x[41:]) - 1.0).max() == 0.0, name       # the seam, and B alone
+
+
+def _k_column_above_the_seam_end():
+    """Directly above the end of the ``K_SHORT`` seam (``x`` = the seam line, ``y`` in (150, 300)).
+
+    The two seam faces are beyond their run there, so the sign window must leave them opposed
+    and they cancel exactly, the two top faces tie, and the field is ``(0, +-1)`` with
+    ``n_x == 0.0``; a window that is always open co-orients them and reads 0.75.
+    """
+    A = as_lattice(lattice=SQUARE)
+    y = np.linspace(151.0, 299.0, 75)
+    n_x, n_y = P._piece_field(np, np.full_like(y, PERIOD / 2.0), PERIOD / 2.0 + y, K_SHORT,
+                              P.plan_gamma(K_SHORT, A), None, A, np.float64)
+    assert np.abs(n_x).max() == 0.0 and np.abs(np.abs(n_y) - 1.0).max() == 0.0
+
+
+@pytest.mark.parametrize('name', list(ABC))
+def test_one_face_on_two_runs_of_different_equality(name):
+    """The sign is a window per record in the traced run bounds, never one scalar per piece.
+
+    B's ``-u`` face is a pair member twice: with A (equal materials, the run [10, 300] cancels
+    and the tie reads B's own v axis there) and with C (different, the run [-300, -10] keeps
+    the seam's normal), with 20 units of plain interface between them. Both records are on the
+    plan whatever the shape order; the field reads 0.265 deg / 0.11% against the
+    material-aware oracle in every ordering, and on the face line itself the exact pattern
+    ``0 | 1 | 1`` in ``|n_x|`` over dead run, gap and seam. Neither held on any shipped scene
+    before: every cross pair in the suite was flush with equal extents and no face carried two
+    runs, so a window that was always open, a sign keyed on either piece, and a window built
+    from the partner's half-length all passed 26 tests (``test_gamma_field.py`` names them).
+    """
+    shapes = ABC[name]
+    plan = P.plan_gamma(shapes, as_lattice(lattice=SQUARE))
+    b = shapes.index(B_BOX)
+    runs = {(plan.pieces[pr.p].shape, plan.pieces[pr.p].face, plan.pieces[pr.q].shape,
+             plan.pieces[pr.q].face, pr.m, pr.n) for pr in plan.pairs}
+    others = {shapes.index(A_BOX): '+u', shapes.index(C_BOX): '+u'}
+    for i, face in others.items():
+        assert (min(i, b), face if i < b else '-u', max(i, b), '-u' if i < b else face,
+                0, 0) in runs, name
+    assert not any(pr.flush for pr in plan.pairs), name
+    _abc_band_gate()
+    _abc_column_exact()
+
+
+def test_the_sign_window_ends_where_the_run_ends():
+    """Beyond the seam's end the two faces stay opposed: exact, on the column above ``K_SHORT``."""
+    _k_column_above_the_seam_end()
+
+
 def test_touching_different_materials_is_built_and_summed_as_before():
     """The control whose kind must not change: touching is not overlapping, on any material.
 
