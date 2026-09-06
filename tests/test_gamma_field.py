@@ -93,7 +93,9 @@ def _coefficient_distance(lattice, shape, other):
 
 
 def test_the_ladder_through_the_pair_threshold_is_monotone():
-    """``ly = P - gap``: no cliff anywhere, the threshold included, on both cells.
+    """``ly = P - gap``: no step in the value anywhere, the threshold included, on both cells.
+
+    The value only. Its derivative diverges as the gap closes -- the cusp the next test pins.
 
     Above the threshold the two faces are two lines ``gap`` apart with no pair record, and
     the blend cancels them everywhere except where the *other* pair's own weight difference is
@@ -153,6 +155,42 @@ def test_the_ladder_through_the_pair_threshold_is_monotone():
             assert value <= previous_t, f'shear: not approaching the span at gap {gap}'
         previous_t = value
     assert previous_t < 1e-10 and previous_c < 5e-12
+
+
+def test_a_merge_is_a_cusp_and_its_derivative_diverges():
+    """``d sum(T) / d ly`` as ``ly -> P`` grows like ``gap^-0.9``: continuous value, unbounded slope.
+
+    Above the pair threshold the two faces cancel only outside a band of depth
+    ``(4 gap D^4)^(1/5)``, so ``sum(T)`` reaches the touching value as ``gap^(1/5)`` and its
+    derivative as ``gap^(-4/5)`` -- a cusp, not a cliff, and an optimiser within 1e-4 of
+    contact reads a gradient three to five orders above the geometry's own slope (2e-4 per
+    unit of ``ly`` here). Measured on the square grating at (5, 5) / N = 256, central secants
+    at ``h = gap / 10`` (AD agrees to three digits: +1.0360e-2 / +7.2926e-1 / +5.0401e+1):
+
+        gap      T(gap) - T(0)   (..) / gap^0.2   d sum(T) / d ly    the fold, 8bfc6aa
+        1e-2     -8.00e-4        -2.01e-3         +1.04054e-2        +1.03992e-2
+        1e-4     -3.57e-4        -2.25e-3         +7.31173e-1        +7.31171e-1
+        1e-6     -9.22e-5        -1.46e-3         +5.06404e+1        +5.06404e+1
+
+    70x per two decades where ``gap^-0.9`` predicts 63. It is the distance-product blend's
+    since 2026-08-17 -- the fold reads the same ladder to four digits -- and no exponent
+    removes it; the one fix is a near-pair ramp, a tuning constant, not taken (case J of
+    ``docs/normal-field-known-limits.md``). This test exists so the merge can never again be
+    described as smooth: the value ladder above says nothing about the slope.
+    """
+    at_span = _total(SQUARE, _box(lx=350.0, ly=PERIOD), order=5, normal_grid=256)
+    slopes = []
+    for gap in (1e-2, 1e-4, 1e-6):
+        h = gap / 10.0
+        value = _total(SQUARE, _box(lx=350.0, ly=PERIOD - gap), order=5, normal_grid=256)
+        assert value < at_span                                   # approaching from below
+        assert abs(value - at_span) / gap ** 0.2 == pytest.approx(2.0e-3, rel=0.35)
+        slopes.append((_total(SQUARE, _box(lx=350.0, ly=PERIOD - gap + h), order=5, normal_grid=256)
+                       - _total(SQUARE, _box(lx=350.0, ly=PERIOD - gap - h), order=5,
+                                normal_grid=256)) / (2.0 * h))
+    assert slopes[0] == pytest.approx(1.0405e-2, rel=1e-2)
+    assert slopes[1] / slopes[0] > 30.0 and slopes[2] / slopes[1] > 30.0, slopes
+    assert slopes[2] > 40.0
 
 
 # --------------------------------------------------------------- invariances, frame carried

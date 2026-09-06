@@ -228,8 +228,12 @@ def test_the_gradient_across_a_coverage_breakpoint_is_finite():
     one-sided slopes of ``sum(T)`` differ by a relative +4.2e-4 / -1.1e-3 / -1.6e-3 / -1.3e-3
     / -1.5e-3 at orders 4 / 6 / 8 / 10 / 12 (secants of 1e-2 either side). That does not
     decay with order, so by this project's rule it is a limit of the fixed-normal extension
-    at a run's end rather than a residual; it is in the slope, an optimiser crossing contact
-    sees no cliff, and it is recorded in ``docs/normal-field-known-limits.md`` (case J).
+    at a run's end rather than a residual; it is in the slope, not the value, and it is
+    recorded in ``docs/normal-field-known-limits.md`` (case J) beside the other derivative
+    artefact of a merge -- the ``gap^(1/5)`` cusp of two faces closing on one line, whose
+    derivative is unbounded (``test_gamma_field.py::test_a_merge_is_a_cusp_and_its_derivative_diverges``).
+    An onset is not a merge: the faces here slide past each other's ends, and the value's
+    slope is finite on both sides.
     """
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
