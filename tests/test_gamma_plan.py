@@ -22,7 +22,7 @@ import pytest
 
 from wavebit._core import overlap as O
 from wavebit._core import parametric as P
-from wavebit._core.lattice import as_lattice
+from wavebit._core.lattice import as_lattice, reduced_basis
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from gamma_instruments import band_error, gamma_points  # noqa: E402
@@ -35,8 +35,10 @@ SHEAR = np.array([[PERIOD, 200.0], [0.0, PERIOD]])
 #: Li's checkerboard primitive cell, where ``a1 + a2 = (2.5, 0)`` and ``a1 - a2 = (0, 2.5)``.
 CHECKER = np.array([[1.25, 1.25], [1.25, -1.25]])
 #: The sheared cell ``a2 = (50, 700)`` written with the unreduced basis ``a2 = 2 a1 + (50, 700)``:
-#: the same structure, but the image that abuts the box now sits at ``(m, n) = (-2, 1)``, outside
-#: any fixed 3x3 -- which is what a reader of the ring that fell back to one would miss.
+#: the same structure, and since 2026-09-07 the same plan -- every image is counted on the
+#: reduced basis, so the abutting image is ``(0, 1)`` and the ring 3, with the transform to that
+#: spelling recorded. On the basis as given the image sat at ``(-2, 1)``, outside any fixed 3x3,
+#: which is what a reader of the ring that fell back to one would miss.
 UNREDUCED = np.array([[PERIOD, 1450.0], [0.0, PERIOD]])
 TILT = float(np.arctan2(1.0, 2.0))
 TILT_LY = PERIOD * np.sin(TILT)
@@ -79,7 +81,7 @@ EXPECTED = {
     '350 box': dict(pairs=set(), dead=set(), empty=False, ring=2),
     '600x650 at 10 deg': dict(pairs=set(), dead=set(), empty=False, ring=3),
     'ellipse': dict(pairs=set(), dead=set(), empty=False, ring=2),
-    'unreduced basis': dict(pairs={('+v', '-v', -2, 1, False)}, dead=set(), empty=False, ring=4),
+    'unreduced basis': dict(pairs={('+v', '-v', 0, 1, False)}, dead=set(), empty=False, ring=3),
 }
 
 
@@ -143,7 +145,8 @@ def test_the_runs_are_the_oracles_runs(name):
     tol = O.COLLINEAR_TOL_REL * scale
     records = O.face_pairs(prims, A, plan.ring, tol)
 
-    a1, a2 = lattice[:, 0], lattice[:, 1]
+    R = np.asarray(reduced_basis(A))          # the sweep counts images on the reduced basis
+    a1, a2 = R[:, 0], R[:, 1]
     step = 1e-6 * scale
     n = 4000
     for f, (mx, my, nx, ny, sx, sy, h) in enumerate(O.box_faces(prims[0])):
@@ -204,13 +207,17 @@ def test_the_ring_is_the_size_rule_and_every_contact_lies_inside_it():
     """``r = 1 + ceil(2R / h_min)`` -- the L box needs 3 on an ordinary square cell.
 
     Cost-only in one direction (a wider ring finds nothing new) and load-bearing in the other,
-    so every recorded contact must sit inside it and the rule must be the stated one.
+    so every recorded contact must sit inside it and the rule must be the stated one. ``h_min``
+    is the shortest lattice height *of the reduced basis*, which is the basis the ring counts
+    cells of: on the unreduced spelling the rule read off the basis as given gives 4, and the
+    plan is the reduced cell's 3.
     """
     for name, (lattice, shape) in SCENES.items():
         A = as_lattice(lattice=lattice)
         prim = P._primitives([shape], A)[0]
-        a1, a2 = lattice[:, 0], lattice[:, 1]
-        h_min = abs(np.linalg.det(lattice)) / max(np.hypot(*a1), np.hypot(*a2))
+        R = np.asarray(reduced_basis(A))
+        a1, a2 = R[:, 0], R[:, 1]
+        h_min = abs(np.linalg.det(R)) / max(np.hypot(*a1), np.hypot(*a2))
         want = 1 + int(np.ceil(2.0 * O._bounding_radius(prim) / h_min))
         plan = P.plan_gamma([shape], A)
         assert plan.ring == want, name
@@ -441,13 +448,17 @@ def test_the_blind_ring_is_read_from_the_basis_and_a_traced_basis_is_refused():
     """The blind plan's ring comes from the cell, and a cell it cannot read is not guessed.
 
     ``a2 = 10 a1 + (50, 700)`` is the cell of ``a2 = (50, 700)`` written on an unreduced
-    basis, accepted as it is. Its planned list runs to ring 14 -- 479 offsets, 460 of them
-    outside a 7x7 -- and the contact sits at ``(m, n) = (-10, 1)``. The blind plan used to
-    hand a *traced* basis that 7x7 with no argument, and the field built on it disagreed with
-    the planned one on two thirds of the samples (max 90 deg; 6e-3 in ``sum(T)`` through a
-    jitted solve, ``test_gamma_frozen.py``). A readable basis gets every offset within
-    ``2 * diam`` of the fold, a superset of the planned list for any shape whose bounding
-    radius is at most half the cell's diameter; a traced one raises the freeze message.
+    basis, accepted as it is. On the basis as given its planned list ran to ring 14 -- 479
+    offsets, 460 of them outside a 7x7 -- with the contact at ``(m, n) = (-10, 1)``, and the
+    blind plan used to hand a *traced* basis that 7x7 with no argument: the field built on it
+    disagreed with the planned one on two thirds of the samples (max 90 deg; 6e-3 in
+    ``sum(T)`` through a jitted solve, ``test_gamma_frozen.py``). Since 2026-09-07 every
+    image is counted on the reduced basis, so this cell plans exactly as ``a2 = (50, 700)``
+    does -- ring 3, 21 offsets, the contact at ``(0, 1)`` -- with the transform recorded, and
+    the readable blind ring is the 25 offsets of the reduced cell rather than 1559 (the
+    ``2 * diam`` superset of the planned list, for any shape whose bounding radius is at most
+    half the reduced cell's diameter). A traced basis still raises the freeze message: it
+    cannot be reduced either.
     """
     jax = pytest.importorskip('jax')
     jnp = pytest.importorskip('jax.numpy')
@@ -456,11 +467,16 @@ def test_the_blind_ring_is_read_from_the_basis_and_a_traced_basis_is_refused():
     A = as_lattice(lattice=lattice)
     shape = _box(lx=500.0, ly=PERIOD)
     plan = P.plan_gamma([shape], A)
-    assert plan.ring == 14
-    assert {(pr.m, pr.n) for pr in plan.pairs} == {(-10, 1)}
+    assert plan.ring == 3 and plan.reduction == ((1, -10), (0, 1))
+    assert {(pr.m, pr.n) for pr in plan.pairs} == {(0, 1)}
     planned = set(plan.pieces[0].imgs)
-    assert len(planned) == 479 and len(planned - set(O.images(3))) == 460
-    assert planned <= set(P._blind_plan([shape], A).pieces[0].imgs)
+    assert len(planned) == 21 and planned <= set(O.images(3))
+    spelled = P.plan_gamma([shape], as_lattice(lattice=np.array([[PERIOD, 50.0], [0.0, PERIOD]])))
+    assert spelled.reduction == ((1, 0), (0, 1))
+    assert plan._replace(reduction=spelled.reduction) == spelled
+    blind = P._blind_plan([shape], A)
+    assert planned <= set(blind.pieces[0].imgs) and len(blind.pieces[0].imgs) == 25
+    assert blind.reduction == plan.reduction
 
     seen = []
 
@@ -473,6 +489,120 @@ def test_the_blind_ring_is_read_from_the_basis_and_a_traced_basis_is_refused():
 
     jax.jit(probe)(jnp.asarray(lattice))
     assert len(seen) == 1 and 'freeze_geometry' in seen[0]
+
+
+# ----------------------------------------------------------------- the reduced basis
+
+def _own_boundary(shape, A, n=4000):
+    """Points on a round shape's boundary with the level set's normal -- no shared arithmetic."""
+    _, cx, cy, lx, ly, ang = P.shape_geometry(shape, A)
+    a, b = lx / 2.0, ly / 2.0
+    ct, st = np.cos(ang), np.sin(ang)
+    t = (np.arange(n) + 0.5) / n * 2.0 * np.pi
+    u, v = a * np.cos(t), b * np.sin(t)
+    gu, gv = np.cos(t) / a, np.sin(t) / b
+    gx, gy = gu * ct - gv * st, gu * st + gv * ct
+    g = np.hypot(gx, gy)
+    return float(cx) + u * ct - v * st, float(cy) + u * st + v * ct, gx / g, gy / g
+
+
+def _angle_deg(fx, fy, ox, oy):
+    cos = np.clip(np.abs(fx * ox + fy * oy) / np.maximum(np.hypot(fx, fy), 1e-300), 0.0, 1.0)
+    return np.degrees(np.arccos(cos))
+
+
+CIRCLE_693 = dict(type='circle', cx=0.0, cy=0.0, lx=693.0, material=12.25)
+L_ELLIPSE = dict(type='ellipse', cx=0.0, cy=0.0, lx=720.0, ly=200.0, angle=np.deg2rad(10.0),
+                 material=12.25)
+
+
+def _spelling(k):
+    """The cell ``a2 = (50, 700)`` written as ``a2 = k a1 + (50, 700)``; reduced only at ``k = 0``."""
+    return np.array([[PERIOD, 50.0 + k * PERIOD], [0.0, PERIOD]])
+
+
+@pytest.mark.parametrize('name, shape', [('693 circle', CIRCLE_693), ('720 x 200 ellipse', L_ELLIPSE)])
+def test_a_round_shape_on_an_unreduced_basis_reads_its_own_level_set(name, shape):
+    """``a2 = k a1 + (50, 700)``, ``k = 0..10``: on its own boundary the field is its own normal.
+
+    The fold rounds fractional coordinates and sweeps one cell a side, which finds the nearest
+    centre only on a reduced basis (``parametric._fold_to_nearest_image`` has the argument).
+    ``as_lattice`` accepts these spellings as they are, and until 2026-09-07 a lone 693 circle
+    read its own level set 8.89 deg off in the mean on its boundary at ``k = 3`` (69.9 deg
+    max, 900 of 4000 points past 1 deg) and 43.8 / 90.0 at ``k = 10``, on every backend, in
+    silence -- identical digits on the fold tree (8bfc6aa), so pre-existing rather than a
+    regression. Every image is counted on the reduced basis now, and the ladder reads the
+    ``k = 0`` value, 2.4e-7 deg, at every rung; the ellipse keeps its eleven instances on
+    every spelling. The oracle here is the shape's own boundary and level set, built from the
+    shape dict alone.
+    """
+    for k in (0, 1, 2, 3, 4, 10):
+        A = as_lattice(lattice=_spelling(k))
+        P.check_layer_shapes(dict(background=1.0, shapes=[shape]), A)
+        plan = P.plan_gamma([shape], A)
+        assert len(plan.pieces[0].imgs) == (1 if shape['type'] == 'circle' else 11), (name, k)
+        assert plan.reduction == ((1, -k), (0, 1)), (name, k)
+        x, y, ox, oy = _own_boundary(shape, A)
+        n_x, n_y = P._piece_field(np, x, y, [shape], plan, None, A, np.float64)
+        angle = _angle_deg(n_x, n_y, ox, oy)
+        assert angle.mean() < 1e-5 and angle.max() < 1e-4, (name, k, angle.mean(), angle.max())
+
+
+@pytest.mark.parametrize('name, shape', [('350 box', _box(lx=350.0, ly=350.0)),
+                                         ('500 x 700 box', _box(lx=500.0, ly=PERIOD)),
+                                         ('693 circle', CIRCLE_693),
+                                         ('720 x 200 ellipse', L_ELLIPSE)])
+def test_every_spelling_of_a_cell_builds_the_same_field(name, shape):
+    """The field at the same physical points, ``k = 10`` against ``k = 0``: one field.
+
+    The plan is the same plan up to the recorded transform, and the replay reduces with it, so
+    the two spellings run the same arithmetic on the same reduced vectors; what differs is
+    the origin each centre is measured from (the centre of the cell as given, five ``a1``
+    apart here -- a lattice vector, so the same periodic structure) and the rounding of the
+    larger coordinates: the two fields agree to 1.2e-13 in ``|n0 x n10|`` and in their
+    components, which is the ulp of a coordinate near 3875. The instrument is the cross
+    product, not an angle -- ``arccos`` of a dot product one ulp below 1 reads 1.2e-6 deg, a
+    floor of the function rather than of the field. Sampled on a grid around the centre that
+    avoids the centre itself: a lone box's centre sample is a tie decided by ulps
+    (``_piece_field``, "The tie"), not a difference between spellings.
+
+    The solve is deliberately not compared. ``truncation_order`` cuts a rectangle of
+    ``(m, n)`` on each spelling's *own* reciprocal basis, and those are different sets of
+    retained orders -- ``|b1|`` is ten times longer on the unreduced spelling -- so the two
+    solves differ by truncation, not by geometry, at any order this suite can afford. The
+    field is the quantity the reduction touches, and it is compared here point for point.
+    """
+    grid = np.linspace(-345.0, 345.0, 47) + 1.234567       # off every symmetry line and the centre
+    px, py = np.meshgrid(grid, grid)
+    fields = {}
+    for k in (0, 10):
+        A = as_lattice(lattice=_spelling(k))
+        plan = P.plan_gamma([shape], A)
+        centre = 0.5 * (np.asarray(A[:, 0]) + np.asarray(A[:, 1]))
+        fields[k] = P._piece_field(np, centre[0] + px, centre[1] + py, [shape], plan, None, A,
+                                   np.float64)
+    (n0x, n0y), (n1x, n1y) = fields[0], fields[10]
+    cross = np.abs(n0x * n1y - n0y * n1x)                   # sin of the angle, sign-free
+    apart = np.minimum(np.hypot(n0x - n1x, n0y - n1y), np.hypot(n0x + n1x, n0y + n1y))
+    assert cross.max() < 1e-11 and apart.max() < 1e-11, (name, cross.max(), apart.max())
+
+
+def test_a_thin_bar_threading_between_its_images_meets_the_far_one():
+    """A bar along ``2 a1 + a2`` on the square, as long as that vector: a flush pair at ``(2, 1)``.
+
+    The overlap check accepts it -- it threads between every image of the 3x3 without touching
+    one -- and its ends meet its ``(2, 1)`` image face to face, outside the 3x3 on a reduced
+    basis. The ring the size rule gives (4) reaches it, both ``u`` faces are dead, and it is the
+    scene that separates "the pair sweep reads the ring" from "the pair sweep reads a 3x3"
+    now that no accepted spelling of a cell puts a nearer contact past the 3x3.
+    """
+    A = as_lattice(lattice=SQUARE)
+    bar = _box(lx=PERIOD * 5.0 ** 0.5, ly=50.0, angle=float(np.arctan2(1.0, 2.0)))
+    P.check_layer_shapes(dict(background=1.0, shapes=[bar]), A)
+    plan = P.plan_gamma([bar], A)
+    assert plan.ring == 4
+    assert {(pr.m, pr.n, pr.flush) for pr in plan.pairs} == {(2, 1, True)}
+    assert {pc.face for pc in plan.pieces if pc.dead} == {'+u', '-u'}
 
 
 def test_an_empty_plan_is_a_uniform_layer():

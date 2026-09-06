@@ -15,7 +15,8 @@ import numpy as np
 import pytest
 
 import wavebit
-from wavebit._core.lattice import Lattice, as_lattice, is_axis_aligned, periods_of
+from wavebit._core.lattice import (Lattice, as_lattice, is_axis_aligned, periods_of,
+                                   reduced_basis, reduction_transform)
 
 HEX = np.column_stack([[400.0, 0.0], [200.0, 400.0 * np.sqrt(3) / 2]])
 SHEAR = np.column_stack([[400.0, 0.0], [350.0, 150.0]])
@@ -1171,3 +1172,128 @@ def test_a_period_written_as_two_separate_leaves_still_carries_gradient(backend)
         solver.period.detach().numpy()
     assert got.tolist() == [400.0, 800.0], 'the second entry was dropped'
     assert str(np.asarray(got).dtype) == str(np.dtype(np.float64))
+
+
+# ------------------------------------------------------------------- the reduced basis
+
+def _lagrange_reduced(A, tol=1e-9):
+    """The condition itself, on a ``(2, 2)``: ``|a1 . a2| <= min(|a1|^2, |a2|^2) / 2``."""
+    A = np.asarray(A, dtype=float)
+    a1, a2 = A[:, 0], A[:, 1]
+    return abs(a1 @ a2) <= 0.5 * min(a1 @ a1, a2 @ a2) * (1.0 + tol)
+
+
+REDUCED_CELLS = {
+    'square': np.diag([700.0, 700.0]),
+    'rectangle': np.diag([700.0, 1100.0]),
+    'rectangle, long first': np.diag([1100.0, 700.0]),
+    'hex 60, exact': np.array([[700.0, 350.0], [0.0, 700.0 * np.sqrt(3.0) / 2.0]]),
+    'hex 120, via cos': np.asarray(Lattice.hexagonal(700.0)),
+    'hex 60, via cos': np.asarray(Lattice.hexagonal(700.0, np.radians(60.0))),
+    'shear 200 / 700': np.array([[700.0, 200.0], [0.0, 700.0]]),
+    "Li's checkerboard": np.array([[1.25, 1.25], [1.25, -1.25]]),
+    'elongated 700 x 7000': np.diag([700.0, 7000.0]),
+}
+
+
+@pytest.mark.parametrize('name', list(REDUCED_CELLS))
+def test_the_reduction_is_the_identity_on_a_reduced_basis(name):
+    """A reduced basis comes back as itself -- the same object, so nothing built on it moves.
+
+    Both hexagonal spellings are on the boundary of the condition, ``a1 . a2 = +-|a1|^2 / 2``
+    exactly, and ``Lattice.hexagonal`` reaches them through ``cos(2 pi / 3)``, which is one
+    half to 1e-16 and not to the bit: without the 1e-9 band the 120-degree cell would have
+    been "reduced" to the 60-degree one on a rounding hair, and the field on it would not
+    have been byte-identical to the one built before the reduction existed. Measured after
+    the change: 75 of 75 field and projector-coefficient arrays on the square, the
+    rectangle, both hex spellings, the shear and the checkerboard are byte-identical.
+    """
+    A = as_lattice(lattice=REDUCED_CELLS[name])
+    assert _lagrange_reduced(A)
+    assert reduction_transform(A) == ((1, 0), (0, 1))
+    assert reduced_basis(A) is A
+    assert reduced_basis(REDUCED_CELLS[name]).axis_aligned is A.axis_aligned
+
+
+@pytest.mark.parametrize('name, cell', [
+    ('2 a1 + (50, 700)', np.array([[700.0, 1450.0], [0.0, 700.0]])),
+    ('3 a1 + (50, 700)', np.array([[700.0, 2150.0], [0.0, 700.0]])),
+    ('10 a1 + (50, 700)', np.array([[700.0, 7050.0], [0.0, 700.0]])),
+    ('-7 a1 + (50, 700)', np.array([[700.0, -4850.0], [0.0, 700.0]])),
+    ('(400, 700) on a 700 square', np.array([[700.0, 400.0], [0.0, 700.0]])),
+    ('10 a1 on a square', np.array([[700.0, 7000.0], [0.0, 700.0]])),
+    ('this file\'s SHEAR', SHEAR),
+])
+def test_the_reduction_spans_the_same_lattice(name, cell):
+    """``A @ T`` with ``T`` integer and unimodular: the same point lattice, reduced.
+
+    Every offset the normal field enumerates is counted on ``A @ T``, so this is the whole
+    contract: nothing but the *names* of the images may change. ``T`` is the identity here
+    on no row -- each cell is unreduced -- and a shear of ``10 a1`` on a square reduces *to*
+    the square, which the returned :class:`Lattice` reports as axis-aligned.
+    """
+    A = as_lattice(lattice=cell)
+    assert not _lagrange_reduced(A)
+    T = np.asarray(reduction_transform(A))
+    assert T.dtype.kind == 'i' and abs(round(float(np.linalg.det(T)))) == 1
+    R = reduced_basis(A)
+    assert R is not A and isinstance(R, Lattice)
+    assert np.allclose(np.asarray(R), np.asarray(A) @ T, rtol=0, atol=1e-9)
+    assert _lagrange_reduced(R)
+    # the same lattice: each reduced vector is an integer combination of the given ones
+    coefficients = np.linalg.solve(np.asarray(A), np.asarray(R))
+    assert np.allclose(coefficients, np.round(coefficients), atol=1e-9)
+    assert abs(abs(np.linalg.det(np.asarray(R))) - abs(np.linalg.det(np.asarray(A)))) < 1e-6
+    assert R.axis_aligned is bool(is_axis_aligned(np.asarray(R)))
+    assert reduced_basis(R) is R                        # and reduced is a fixed point
+
+
+def test_any_unimodular_spelling_reduces_to_a_reduced_one():
+    """Random reduced cells, re-spelled by random unimodular integer matrices, reduce back.
+
+    Not to the *same* basis -- a lattice has several reduced bases (the sign of a vector,
+    the two hexagonal spellings) -- but to one that is reduced and spans the same points.
+    """
+    rng = np.random.default_rng(20260907)
+    for _ in range(400):
+        length = rng.uniform(1.0, 3.0)
+        angle = rng.uniform(np.radians(60.0), np.radians(120.0))     # reduced: |cos| <= 1/2
+        base = np.array([[1.0, length * np.cos(angle)], [0.0, length * np.sin(angle)]])
+        base = base if _lagrange_reduced(base) else np.array([[1.0, 0.0], [0.0, length]])
+        U = np.eye(2, dtype=int)
+        for _ in range(rng.integers(1, 5)):
+            k = int(rng.integers(-6, 7))
+            U = U @ (np.array([[1, k], [0, 1]]) if rng.random() < 0.5 else np.array([[1, 0], [k, 1]]))
+        if rng.random() < 0.5:
+            U = U @ np.array([[0, 1], [1, 0]])
+        A = base @ U
+        T = np.asarray(reduction_transform(A))
+        R = A @ T
+        assert abs(round(float(np.linalg.det(T)))) == 1
+        assert _lagrange_reduced(R), (A, T)
+        coefficients = np.linalg.solve(base, R)
+        assert np.allclose(coefficients, np.round(coefficients), atol=1e-8)
+
+
+def test_a_traced_basis_reduces_from_its_primal_and_the_gradient_is_the_transform():
+    """``jax.grad``: reduced from the primal, ``dR / dA = T`` exactly; ``jax.jit``: refused.
+
+    The replay reduces a traced basis with the plan's recorded integers, so a gradient with
+    respect to the cell flows through the reduced vectors as the integer combination they
+    are: for ``a2 = 10 a1 + (50, 700)``, ``a2' = a2 - 10 a1``, so ``d(sum a2') / d a1 = -10``
+    and ``d(sum a2') / d a2 = 1``. A ``jax.jit`` tracer has no primal to reduce from and the
+    read raises, which is what the planner turns into the freeze refusal.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    wavebit.enable_x64()
+
+    def sum_of_reduced_a2(M):
+        return jnp.sum(reduced_basis(as_lattice(lattice=M)).v)
+
+    M = jnp.asarray(np.array([[700.0, 7050.0], [0.0, 700.0]]))
+    assert float(sum_of_reduced_a2(M)) == pytest.approx(750.0, abs=1e-9)
+    grad = np.asarray(jax.grad(sum_of_reduced_a2)(M))
+    assert np.array_equal(grad, np.array([[-10.0, 1.0], [-10.0, 1.0]]))
+    with pytest.raises(TypeError):
+        jax.jit(sum_of_reduced_a2)(M)

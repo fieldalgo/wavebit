@@ -128,7 +128,8 @@ def test_a_jitted_solve_with_a_record_equals_the_eager_one(name, lattice, make, 
 @pytest.mark.parametrize('name, lattice', [
     ('shear', SHEAR),
     # `a2 = 10 a1 + (50, 700)`: the cell of `a2 = (50, 700)` on an unreduced basis, which
-    # `as_lattice` accepts as it is. The planned list per piece is 479 offsets out to ring 14.
+    # `as_lattice` accepts as it is. It planned 479 offsets per piece out to ring 14 on the
+    # basis as given; since 2026-09-07 it plans as its reduction, 21 offsets on ring 3.
     ('unreduced, 10 a1', np.array([[PERIOD, 7050.0], [0.0, PERIOD]])),
 ])
 def test_a_traced_basis_with_no_record_is_refused_and_with_one_replays(name, lattice):
@@ -136,11 +137,13 @@ def test_a_traced_basis_with_no_record_is_refused_and_with_one_replays(name, lat
 
     The blind plan used to answer a traced basis with a fixed 7x7 ring of images and no
     argument that the ring held every instance the planned list holds. On the unreduced
-    basis here it did not -- 460 of the 479 planned offsets lay outside it -- and the jitted
-    solve came back 6e-3 in ``sum(T)`` from the eager one, unit-length and energy-conserving.
-    Now the case raises with the message every traced decision raises with, naming the
-    freeze; the record taken outside the trace replays the planned list under it, to 1e-12
-    of the eager solve. ``jax.grad`` needs no record: its tracer carries the primal and the
+    basis here it did not -- 460 of the 479 offsets it then planned lay outside it -- and the
+    jitted solve came back 6e-3 in ``sum(T)`` from the eager one, unit-length and
+    energy-conserving. Now the case raises with the message every traced decision raises
+    with, naming the freeze (a traced basis cannot be reduced either); the record taken
+    outside the trace replays the planned list under it, to 1e-12 of the eager solve --
+    reducing the traced basis with the record's integers, since the offsets count cells of
+    the reduced spelling. ``jax.grad`` needs no record: its tracer carries the primal and the
     basis is planned from it per call (``d/d(a2x)`` finite, and the AD-vs-FD row of the
     lattice gradient lives in ``test_lattice_pytree.py``).
 

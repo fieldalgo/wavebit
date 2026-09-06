@@ -57,10 +57,10 @@ from typing import Any
 
 import numpy as np
 
-from .backend import array_namespace, as_array
+from .backend import array_namespace, as_array, checked_float
 
 __all__ = ['DrawnOn', 'Lattice', 'as_lattice', 'meshgrid_xy', 'is_axis_aligned', 'jacobian',
-           'order_kxy', 'periods_of', 'sample_grid']
+           'order_kxy', 'periods_of', 'reduced_basis', 'reduction_transform', 'sample_grid']
 
 _PYTREE_REGISTERED = False
 
@@ -452,6 +452,126 @@ def as_lattice(period=None, lattice=None):
         raise ValueError(f'period: expected 1 or 2 lengths, got {p.size}')
     D = np.diag(p)
     return Lattice(D[:, 0], D[:, 1], True)   # a period spells a diagonal; nothing to test
+
+
+#: How far past the Lagrange condition a basis may sit and still be its own reduction. The
+#: condition is ``|a1 . a2| <= min(|a1|^2, |a2|^2) / 2``, and a hexagonal cell sits *on* it:
+#: ``a2 = (cos 60, sin 60) |a1|`` gives exactly one half, and the 120-degree spelling minus one
+#: half, but ``Lattice.hexagonal`` reaches them through ``cos(2 pi / 3)``, which is one half
+#: to 1e-16 and not to the bit. A basis that is reduced up to rounding must come back as
+#: itself -- the same object, so the field built on it is bit-identical to the one built
+#: before the reduction existed -- and this band, 1e-9 relative, is what "up to rounding"
+#: means here. A basis past it is reduced; the 3x3 sweep the fold makes after it needs only
+#: the condition to hold within a quantity of this order, which it does with room to spare.
+REDUCTION_TOL = 1e-9
+
+_IDENTITY = ((1, 0), (0, 1))
+
+
+def _nearest_multiple(mu):
+    """The integer nearest ``mu``, a tie resolved toward zero, within :data:`REDUCTION_TOL`.
+
+    ``round`` alone rounds half to even, which sends ``1.5`` to ``2`` and ``0.5`` to ``0`` --
+    the second is what a reduced basis on the boundary needs, the first is merely a
+    different reduced basis, and depending on which half a value falls on is not a rule.
+    Toward zero, always: a projection of exactly one half (the hexagonal cell) is already
+    reduced, and the band keeps it so through the rounding of its own construction.
+    """
+    k = int(mu)                                  # toward zero
+    frac = mu - k
+    if frac > 0.5 + REDUCTION_TOL:
+        k += 1
+    elif frac < -0.5 - REDUCTION_TOL:
+        k -= 1
+    return k
+
+
+def reduction_transform(A):
+    """The integer unimodular ``T`` with ``A @ T`` Lagrange-reduced: ``((t00, t01), (t10, t11))``.
+
+    Gauss / Lagrange reduction of the two column vectors: while the longer's projection on
+    the shorter exceeds half of it, subtract the nearest multiple of the shorter from the
+    longer. It ends with ``|a1' . a2'| <= min(|a1'|^2, |a2'|^2) / 2`` (within
+    :data:`REDUCTION_TOL`), which is the condition under which the Wigner-Seitz cell of the
+    origin lies inside one cell a side of the fundamental parallelogram -- the fact the
+    normal field's 3x3 fold relies on (:func:`~wavebit._core.parametric._fold_to_nearest_image`)
+    and had assumed of every accepted basis. It was not true of ``a2 = 3 a1 + (50, 700)``,
+    which :func:`as_lattice` accepts as it is: a lone 693 circle on that cell read its level
+    set 8.89 deg off in the mean on its own boundary (69.9 max) and 43.8 / 90.0 at ``k =
+    10``, because the nearest centre was two cells over from the rounded fractional
+    coordinates. Reduced, both read 2.5e-7, the same as ``k = 0``.
+
+    ``T`` is the identity on a basis that is already reduced -- the square, the rectangle
+    either way round, both hexagonal spellings, the ``(200, 700)`` shear, Li's checkerboard
+    -- and an integer matrix of determinant ``+-1`` otherwise, so ``A @ T`` spans the same
+    lattice and enumerates the same images under different names. It never swaps the two
+    vectors: the reduced basis is asked to be the *input* wherever the input qualifies, and
+    the Fourier side, the sample grid and the shape origin keep the basis as given in every
+    case. Read through :func:`~wavebit._core.backend.checked_float`, so a ``jax.grad`` tracer
+    reduces from its primal and a ``jax.jit`` tracer raises ``TypeError`` -- the caller that
+    cannot read the basis cannot plan on it either.
+    """
+    a1x, a1y = checked_float(A[0][0]), checked_float(A[1][0])
+    a2x, a2y = checked_float(A[0][1]), checked_float(A[1][1])
+    t00, t01, t10, t11 = 1, 0, 0, 1            # a1' = t00 a1 + t10 a2, a2' = t01 a1 + t11 a2
+    while True:
+        n1 = a1x * a1x + a1y * a1y
+        n2 = a2x * a2x + a2y * a2y
+        dot = a1x * a2x + a1y * a2y
+        if n1 == 0.0 or n2 == 0.0:
+            break                                # degenerate: `as_lattice` refuses it anyway
+        if n1 <= n2:
+            k = _nearest_multiple(dot / n1)
+            if k == 0:
+                break
+            a2x, a2y = a2x - k * a1x, a2y - k * a1y
+            t01, t11 = t01 - k * t00, t11 - k * t10
+        else:
+            k = _nearest_multiple(dot / n2)
+            if k == 0:
+                break
+            a1x, a1y = a1x - k * a2x, a1y - k * a2y
+            t00, t10 = t00 - k * t01, t10 - k * t11
+    return ((t00, t01), (t10, t11))
+
+
+def reduced_basis(A, transform=None):
+    """``A`` on its Lagrange-reduced basis -- the same lattice, spelled so that its images are near.
+
+    A :class:`Lattice`; the very object handed in when the reduction is the identity, so the
+    field built on a basis that was reduced to begin with is the field built before this
+    function existed, to the bit. Otherwise the two new vectors are ``A @ T`` computed on
+    the basis's own entries -- a traced basis stays traced, and ``dR / dA = T`` exactly, since
+    ``T`` is piecewise constant in ``A`` -- and ``axis_aligned`` is read off the numbers where
+    they can be read (a shear of ``10 a1`` on a square reduces *to* the square) and ``False``
+    where they cannot.
+
+    ``transform`` is the integer ``T`` when the caller already holds it -- the frozen
+    :class:`~wavebit._core.parametric.GammaPlan` records it, so a jitted replay on a traced
+    basis reduces with the recorded integers rather than asking the tracer for a number.
+
+    What reads this and what does not is the whole design (2026-09-07): every enumeration of
+    periodic *images* -- the fold, the instance lists, the pair sweep, the overlap check, the
+    oracle -- goes through it, and nothing on the Fourier side does. ``order_kxy``, the
+    truncation window, ``periods_of``, the sample grid, the origin a shape's ``cx`` is measured
+    from: all of those are the basis as the caller spelled it, because they *are* a spelling
+    -- which ``G`` is order ``(m, n)`` is the user's naming of the reciprocal set, and a window
+    on a reduced spelling is a different set of retained orders.
+    """
+    A = as_lattice(lattice=A)
+    T = reduction_transform(A) if transform is None else tuple(map(tuple, transform))
+    if T == _IDENTITY:
+        return A
+    (t00, t01), (t10, t11) = T
+    u = t00 * A.u + t10 * A.v
+    v = t01 * A.u + t11 * A.v
+    try:
+        cols = np.array([[checked_float(u[0]), checked_float(v[0])],
+                         [checked_float(u[1]), checked_float(v[1])]])
+        aligned = is_axis_aligned(cols)
+    except Exception:                       # noqa: BLE001 - a traced basis: the general path
+        aligned = False
+    return Lattice(u, v, aligned)
 
 
 def is_axis_aligned(A, tol=1e-12):

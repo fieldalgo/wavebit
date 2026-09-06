@@ -43,7 +43,7 @@ import pytest
 import wavebit
 from wavebit._core import overlap as O
 from wavebit._core import parametric as P
-from wavebit._core.lattice import as_lattice, sample_grid
+from wavebit._core.lattice import as_lattice, reduced_basis, sample_grid
 from wavebit._core.overlap import primitive
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
@@ -328,7 +328,7 @@ def test_an_ellipse_inside_its_cell_keeps_the_field_it_always_had():
     assert P.plan_gamma([shape], A).pieces[0].imgs == ((0, 0),)
     n_x, n_y = P.normal_vector_field_analytical(np, GRID, [shape], np.float64, A)
     X, Y = sample_grid(np, GRID, A, np.float64)
-    _, gx, gy = P._round_field(np, X, Y, shape, A, np.float64)
+    _, gx, gy = P._round_field(np, X, Y, shape, A, reduced_basis(A), np.float64)
     assert np.array_equal(n_x, gx) and np.array_equal(n_y, gy)
     mean, over, count = _ellipse_band(690.0)
     assert count > 1000 and mean < 0.3 and over == 0.0, (mean, over)

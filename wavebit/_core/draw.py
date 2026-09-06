@@ -26,12 +26,15 @@ from . import clipper as _clipper
 from . import factorization as _fac
 from .domain import as_material, index_from_eps
 from .enums import ModelingPath
-from .lattice import meshgrid_xy, sample_grid
+from .lattice import meshgrid_xy, reduced_basis, sample_grid
 
 #: Periodic images drawn around the cell. A shape's transform is periodic by construction, so
 #: the part that leaves one edge returns at the other and the picture has to show it. One ring
 #: covers anything up to about a full period across; wider than that is not drawn, which is a
 #: limit of the picture and not of the solve.
+#: One cell a side, counted on the *reduced* basis (`lattice.reduced_basis`) as every image
+#: enumeration is since 2026-09-07: on `a2 = 10 a1 + (50, 700)` the neighbour that overlaps the
+#: picture sits at (-10, 1) of the basis as given, and a 3x3 there drew the cell with holes.
 _IMAGES = (-1, 0, 1)
 
 
@@ -114,10 +117,11 @@ def _shape_inside(shape, X, Y, basis, Px, Py):
                              for v in (cx, cy, lx, ly, angle))
     cos_a, sin_a = np.cos(angle), np.sin(angle)
     count = np.zeros(X.shape, dtype=int)
+    images_on = np.asarray(reduced_basis(basis))       # the origin above is the basis as given
     for m in _IMAGES:
         for k in _IMAGES:
-            ox = cx + m * basis[0][0] + k * basis[0][1]
-            oy = cy + m * basis[1][0] + k * basis[1][1]
+            ox = cx + m * images_on[0][0] + k * images_on[0][1]
+            oy = cy + m * images_on[1][0] + k * images_on[1][1]
             dx, dy = X - ox, Y - oy
             u = cos_a * dx + sin_a * dy
             v = -sin_a * dx + cos_a * dy
@@ -217,13 +221,14 @@ def _render_paint(layer, xs, ys, basis, period):
     """The painted structure, from the same disjoint loops the boundary route integrates."""
     eps_b = _eps_of(layer.get('background', 1.0))
     out = np.full((ys.size, xs.size), eps_b, dtype=complex)
+    images_on = np.asarray(reduced_basis(basis))
     for eps_s, loops in _resolved_regions(layer.get('shapes', []), period, basis):
         cover = np.zeros((ys.size, xs.size), dtype=int)
         for V in loops:
             for m in _IMAGES:
                 for k in _IMAGES:
-                    shift = np.array([m * basis[0][0] + k * basis[0][1],
-                                      m * basis[1][0] + k * basis[1][1]])
+                    shift = np.array([m * images_on[0][0] + k * images_on[0][1],
+                                      m * images_on[1][0] + k * images_on[1][1]])
                     cover = cover + _winding(V + shift, xs, ys)
         out = out + (eps_s - eps_b) * cover
     return out

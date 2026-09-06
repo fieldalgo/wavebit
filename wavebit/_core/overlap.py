@@ -45,6 +45,7 @@ from collections import namedtuple
 import numpy as np
 
 from .backend import checked_float
+from .lattice import reduced_basis
 
 #: Penetration below this fraction of the period is touching, not overlapping.
 OVERLAP_TOL_REL = 1e-6
@@ -57,8 +58,10 @@ ELLIPSE = 'ellipse'
 _BOX_TYPES = ('rectangle', 'square')
 _ELLIPSE_TYPES = ('circle', 'disk', 'ellipse')
 
-# Periodic images of the second shape, in units of the period. A shape reaching past one cell
-# on both sides at once is already reported against its own image, so one ring is enough.
+# Periodic images of the second shape, in cells of the *reduced* basis (`reduced_basis`, which
+# every sweep here applies first): there a shape reaching past one cell on both sides at once
+# is already reported against its own image, so one ring is enough. On the basis as given it
+# was not -- `a2 = 10 a1 + (50, 700)` has its (50, 700) neighbour at (-10, 1).
 _IMAGES = tuple((ox, oy) for ox in (-1, 0, 1) for oy in (-1, 0, 1))
 
 #: The four faces of a box in the order every reader of a face index uses: outward normal
@@ -90,7 +93,8 @@ def images(r):
     """Every lattice offset ``(m, n)`` with ``|m|, |n| <= r``, ``(0, 0)`` included.
 
     ``r`` is the plan's ring (:func:`~wavebit._core.parametric.plan_gamma`), read here by the
-    pair sweep and by the oracle so the two cannot disagree about which images exist.
+    pair sweep and by the oracle so the two cannot disagree about which images exist. Both
+    count it in cells of the reduced basis, as the plan does.
     """
     return tuple((m, n) for m in range(-r, r + 1) for n in range(-r, r + 1))
 
@@ -284,13 +288,20 @@ def overlapping_pairs(prims, tol, lattice, *, self_only=False, image_only=False)
     which are far apart by construction, and the direction search is a thousand evaluations
     of Python arithmetic. The bound is one-sided — the true gap is never smaller than the
     circles' — so rejecting on it can only skip a pair that was never going to be reported.
+
+    The images are the 3x3 of the **reduced** basis (:func:`~wavebit._core.lattice.reduced_basis`),
+    whatever spelling arrives: on ``a2 = 10 a1 + (50, 700)`` the neighbour that matters sits
+    at ``(-10, 1)`` of the basis as given, which a 3x3 on that basis never reaches, and a
+    100 x 800 box on that cell -- which overlaps its ``(50, 700)`` image over a 50 x 100
+    patch -- was accepted. ``image_*`` in the result count cells of the reduced basis too.
     """
     # The basis is read once, not per image: it is loop-invariant, and it is read the way the
     # shapes are, because `lattice` is a design variable too (2026-08-23). Spelled `float` it
     # refused a `jax.grad` tracer, and the caller reads that refusal as "skip the check" -- so
     # differentiating the *cell* walked past a refusal that differentiating the *shape* hits.
     # Measured on one 1.6-wide rod in a period of 1.0: refused eagerly, and `grad` wrt the
-    # period returned 0.0265.
+    # period returned 0.0265. `reduced_basis` reads it the same way, and raises the same way.
+    lattice = reduced_basis(lattice)
     a1x, a2x = checked_float(lattice[0][0]), checked_float(lattice[0][1])
     a1y, a2y = checked_float(lattice[1][0]), checked_float(lattice[1][1])
 
@@ -365,7 +376,13 @@ def face_pairs(prims, lattice, r, tol):
     Round types never appear. A strictly convex boundary meets its own translate, or a box, at
     isolated points only, which is measure zero -- so ``ellipse`` / ``circle`` / ``disk`` are
     skipped rather than tested.
+
+    ``(m, n)`` count cells of the **reduced** basis (:func:`~wavebit._core.lattice.reduced_basis`),
+    whichever spelling ``lattice`` is, so ``r`` rings of it reach what ``r`` rings of the
+    reduced cell reach and a record is the same record on every spelling of one cell. The
+    primitives are absolute positions and do not care.
     """
+    lattice = reduced_basis(lattice)
     a1x, a2x = checked_float(lattice[0][0]), checked_float(lattice[0][1])
     a1y, a2y = checked_float(lattice[1][0]), checked_float(lattice[1][1])
     faces = [box_faces(p) if p is not None and p[0] == BOX else None for p in prims]
@@ -480,7 +497,12 @@ def interfaces_of(prims, lattice, r, n=1024, step=None, groups=None):
     Validated before it was trusted: on a 1-D grating (700 square, ``lx = 350``, ``ly = 700``)
     the field reads 0.000 deg against it over the boundary band, so the oracle carries no
     y-normal a bar with no y-face could be measured against.
+
+    ``r`` rings of the **reduced** basis, as for :func:`face_pairs`: the plan's ring is
+    counted there, and an oracle sweeping the basis as given would miss on an unreduced
+    spelling the very images the plan is judged on.
     """
+    lattice = reduced_basis(lattice)
     a1x, a2x = checked_float(lattice[0][0]), checked_float(lattice[0][1])
     a1y, a2y = checked_float(lattice[1][0]), checked_float(lattice[1][1])
     if step is None:

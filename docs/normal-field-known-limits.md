@@ -598,12 +598,70 @@ plan (`StaticGeometry.gamma_plans`, in the content key), both quantities replay 
 a jitted solve with it builds the planned field where one without it gets the blind plan (every
 piece on a ring read from the basis, no pairs -- and a basis that cannot be read, a solver built
 inside the trace, is refused with the freeze message since 2026-09-06: the fixed 7x7 ring it fell
-back to lacked 460 of the 479 planned instances on an unreduced basis and solved 6e-3 off), and
+back to lacked 460 of the 479 planned instances on an unreduced basis and solved 6e-3 off; since
+2026-09-07 that basis plans as its reduction, §8c, and a traced *ellipse* is refused there too,
+its instance list being a size the trace cannot read), and
 the eager replay re-derives the plan and refuses by name a pair that appeared or vanished, a
-face gone dead or live, an image list that grew across a ring boundary. A material sweep is
+face gone dead or live, an image list that grew across a ring boundary, a basis whose reduction
+changed. A material sweep is
 never a staleness: the sign is an array op on the slots at build time. The projector cache
 keys on the plan and on a cross pair's *equality bit*, so a sweep on a pair-free layer hits as
 it always did and one that crosses equality on a seam rebuilds.
+
+### 8c. Every image is counted on the reduced basis (2026-09-07)
+
+**The fold was wrong on an accepted basis, and had been since it was written.** The round
+piece finds the nearest image by rounding the fractional coordinates and sweeping one cell a
+side (`parametric.py::_fold_to_nearest_image`), and its docstring said one cell a side was
+enough for any basis the solver accepts. `as_lattice` accepts `a2 = k a1 + (50, 700)` for any
+`k` -- the cell of `a2 = (50, 700)`, spelled with a longer second vector -- and on it the
+Wigner-Seitz cell of the origin reaches `|s| ~ (1 + k) / 2` in fractional coordinates, past the
+3x3 from `k = 3`. Measured on a lone 693 circle (0.99 of the period) against its own boundary
+and level set, 4000 points: `k = 0 / 1 / 2` read 2.5e-7 deg mean, 1.2e-6 max; `k = 3` reads
+**8.89 deg mean, 69.9 max**, 900 of 4000 points past 1 deg; `k = 4` 31.7 / 90.0; `k = 10` --
+the basis the F1 refusal enshrined as accepted -- **43.8 / 90.0**, 3224 of 4000. Identical digits
+on the fold tree (8bfc6aa): pre-existing, on every backend, on the eager path, with nothing
+said. The box path was right on the same spellings (every face is carried over a size-only
+ring, 441 and 479 instances there) and so was the ring ellipse (419 instances) -- at a price:
+479 offsets per face for a structure whose reduced spelling needs 21, ring 14 against 3, and a
+readable blind ring of 1559 under which a jitted lone box did not finish compiling.
+
+**The fix is contained to the geometry.** `lattice.py::reduction_transform` is Gauss /
+Lagrange reduction of the two vectors -- subtract the nearest multiple of the shorter from the
+longer until `|a1 . a2| <= min(|a1|^2, |a2|^2) / 2`, within 1e-9 relative so that a hexagonal
+cell reached through `cos(2 pi / 3)` stays itself -- returning the integer unimodular `T`;
+`lattice.py::reduced_basis` applies it, and returns the *same object* when `T` is the
+identity. Every enumeration of periodic images goes through it: the fold, `_Frame`'s
+instance offsets, the ring and arc lists of the planner and the blind plan, `_run_window`,
+`overlap.overlapping_pairs` (whose 3x3 on the basis as given accepted a 100 x 800 box on the
+`10 a1` spelling that overlaps its `(50, 700)` image over a 50 x 100 patch), `face_pairs` and
+the oracle `interfaces_of`. The plan records `T` (`GammaPlan.reduction`, in the content key),
+so a jitted replay on a traced basis reduces with the recorded integers rather than reading
+the tracer, and `dR / dA = T` exactly under `jax.grad`. Nothing on the Fourier side sees it:
+`order_kxy`, the truncation window, `periods_of`, the sample grid and the origin a centre is
+measured from are the basis as given, because a window on a different spelling is a different
+set of retained orders. Why the 3x3 is enough on a reduced basis: with `|mu_i| <= 1/2` for both
+projections, a point of the Wigner-Seitz cell has `|s1 + s2 mu1| <= 1/2` and `|s2 + s1 mu2|
+<= 1/2`, hence `|s_i| <= 1`; the rounded residual sits within `|s_i| <= 1/2`, so its nearest
+image is at most 3/2 cells away per index -- an integer in `{-1, 0, 1}`.
+
+**Gates.** The circle ladder `k = 0..10` reads the `k = 0` value, 2.4e-7 deg mean and 1.2e-6
+max, at every rung, and the 720 x 200 ellipse keeps its eleven instances and 1e-7 on every
+spelling (`test_gamma_plan.py`); the 350 box, the 500 x 700 box, the circle and the ellipse
+build one field at the same physical points on the `10 a1` and the reduced spellings to 1e-9
+deg; the plan on the `10 a1` spelling is the reduced spelling's plan up to the recorded
+transform (ring 3, 21 offsets, the pair at `(0, 1)`), the blind ring 25 from 1559; and on the
+square, the rectangle, both hexagonal spellings, the `(200, 700)` shear and Li's checkerboard
+-- reduced already -- 75 of 75 field and projector-coefficient arrays are byte-identical to the
+tree before the change. The solve on the two spellings is deliberately *not* compared: the
+retained order sets differ by the window, not by geometry, and at any affordable order that
+difference dominates. Two things are outside this: the *tolerance scale* of the overlap check
+(`OVERLAP_TOL_REL * max(|a1|, |a2|)`) is still read off the basis as given, so the `10 a1`
+spelling tolerates touching ten times more loosely than its reduction -- a scale, not a
+geometry; and the boundary route's `boundary.py::periodic_segments`, a copy of the same fold
+and 3x3 for the painted (overlapping) layers, still sweeps the basis as given, and its record
+carries no transform to replay one under `jit` -- an overlapping layer on a strongly sheared
+spelling has the defect this section removed from the closed-form route.
 
 
 ## 9. The cases, A to L, as of 2026-09-06
@@ -629,7 +687,7 @@ separation from the mutants that must fail it (`tests/gamma_instruments.py::band
 | I | ties: a dead pair's line, a surviving pair's midline, a box's centre | the axis of the pair that did not cancel, across shapes; `(1, 0)` when both or neither did; zero null normals at N = 128 / 256 / 512 on the checkerboard | `test_nvf_self_coincident_faces.py`, `test_gamma_field.py` |
 | J | merges: a face approaching its partner's line, two shapes coming into contact | **No step in the value** -- the ladder `ly = P - gap` is monotone through the one rounding-scale threshold (§4) -- **and a cusp in the derivative.** Above the threshold the two faces cancel only outside a band of depth `(4 gap D^4)^(1/5)` (§4), so `sum(T)` approaches the touching value as `gap^(1/5)`: on the square grating at (5, 5) / N = 256, `T(gap) - T(0)` is -8.0e-4 / -3.6e-4 / -9.2e-5 at gaps 1e-2 / 1e-4 / 1e-6 with `(..) / gap^0.2` at -2.0e-3 / -2.3e-3 / -1.5e-3, and `d sum(T) / d ly` is **+1.0405e-2 / +7.3117e-1 / +5.0640e+1** (central secants at `h = gap / 10`; AD reads +1.0360e-2 / +7.2926e-1 / +5.0401e+1), growing 70x per two decades where `gap^-0.9` predicts 63: unbounded, so an optimiser within 1e-4 of contact reads a gradient three to five orders above the geometry's own slope (~2e-4 per unit here). It is a property of the distance-product blend since 2026-08-17, not of the piece field -- the fold tree (8bfc6aa) reads +1.0399e-2 / +7.3117e-1 / +5.0640e+1 on the same ladder, identical to four digits. The coefficient decays with order (the D pair of two 300 boxes at gap 1e-2: 2.3e-2 / 1.2e-2 / 6.7e-3 / 1.8e-3 / 9.2e-4 at orders 4..12) and the exponent does not, and no blend exponent removes it (the band is `(p gap D^p)^(1/(p+1))`; `p = 1` gives a square root, `p` large approaches `D`). The only known fix is a near-pair record with a ramp from "two interfaces" to "cancelled" as the gap closes -- the tuning constant the design set out to avoid -- and it is not taken; the ladder is pinned instead by `test_gamma_field.py::test_a_merge_is_a_cusp_and_its_derivative_diverges`, so it cannot again be described as smooth. **And a slope kink at contact that does not decay**, the second derivative artefact at a merge: the one-sided slopes of `sum(T)` at B's onset (`lx = 200`) differ by a relative +4.2e-4 / -1.1e-3 / -1.6e-3 / -1.3e-3 / -1.5e-3 at orders 4..12 (secants of 1e-2; the same secants at `lx = 300` read +5.1e-4 / +6.0e-4 / +7.1e-4, the secant's own curvature) -- below the onset the gap between the two face ends reads the faces' residual y-normal, above it the run cancels exactly; in the slope, not the value | `test_gamma_field.py`, `test_gamma_frozen.py` |
 | K | abutting boxes of different material | the seam is an interface: `(+-1, 0)` exactly and Li-exact where it spans, 0.22 deg / 0.09% where it does not, per quantity, and the sign is a window per record in the run's traced bounds (a face on two runs of different equality reads `0 \| 1 \| 1` in `\|n_x\|` along its line, `test_gamma_layers.py`). **Three steps, all recorded.** (1) *The contact step* (the design's open question 2): the sign flips at exact contact, and a 1e-9 gap -- two opposed faces that cancel to rounding with no pair record -- reads `sum(T)` -2.6e-3 / -9.4e-4 / -1.8e-4 / -7.7e-4 / -3.3e-4 from touching at orders 4 / 6 / 8 / 10 / 12 (two 300 boxes, `eps 4 \| eps 9`, N = 512): an order down across the cap and not monotone, a residual by the decay rule, against 1e-7..1e-5 for the same-material control. **The mechanism is that a sub-threshold opposed pair is cancelled whatever its materials**: without a pair record the blend treats two opposed faces `delta` apart as a merging same-material pair, since a material is read only through a record's sign -- so the strip between two close boxes of *different* material reads the far faces' normal instead of the gap faces', which are two real interfaces. On the line 20 units from the seam across the strip `\|y\| < 140` the fraction reading `u` is 0.30 at gap 1e-2, 0.02 at 1e-4 .. 1e-9 and 0.93 at contact, where the exact field reads 0.93 at every gap above zero; off Gamma (both gap faces themselves read exactly) and decaying with order (gap 1e-2: -2.9e-3 at order 4 to +4.1e-4 at 12), but a value step at contact on top of J's cusp. (2) *The material-equality step*: the sign flips when the two slots become exactly equal, and `T(9 + 1e-7 \| 9) - T(9 \| 9)` is -4.77e-3 / -4.91e-4 / -5.76e-4 / -1.36e-4 / -4.26e-5 at orders 4 / 6 / 8 / 10 / 12 (N = 128; `9 + 1e-3` gives the same to leading order) -- the design's accepted one-time jump on the first step, two orders down across the cap and not monotone at 6 -> 8, a residual by the decay rule. A stale self-pair record replayed under `jit` is value-neutral (1.2e-14 either way), so only a stale cross-pair record with different materials could mislead a jitted replay. (3) *The run-end step*: the sign window is a hard `where` on the tangential coordinate, so `sum(T)` is discontinuous in any parameter that moves a run's end -- the partner's `ly` or `cy` -- each time the end crosses a sample row, and `jax.grad` cannot see the jump. Two 300-wide boxes `eps 4 \| 9` abutting at `x = 0`, the right box's `ly` swept through twice the row just below 150, at order 4: the jump is -5.23e-6 at N = 128 and a step, not a slope (the same at `eps = 1e-6` and `1e-8` either side; the window-integrated AD over `[ly* - 0.25, ly* + 0.25]` misses exactly it), against -2.8e-11 for the same-material control (where the window is algebraically a no-op). **It decays with the grid**: -7.38e-8 at N = 256 and +5.00e-9 at N = 512, about 1e-9 per crossing at the default 1024; a `cy` sweep shows the same (-1.5e-6 at N = 128, control -5.6e-12). Pinned to decay in `test_gamma_layers.py`. Making the co-orientation continuous in sigma -- splitting the pair's pieces at the run ends, or scaling the moved weight by a factor that vanishes with the partner's own tangential excess -- would remove it; not taken, since it is a grid artefact at the 1e-9 level where the solve is run | `test_gamma_layers.py`, `test_gamma_frozen.py` |
-| L | a lone box or ellipse leaving its Wigner-Seitz cell without touching anything | the box reads its neighbour's face: 0.19 deg / 0.05% (0.65 / 0.64% on the fold). The ellipse too, since the second commit of 2026-09-06: while its support stays inside the cell (`h(t) <= \|t\| / 2` for every lattice vector, `parametric._arc_offsets`) the nearest centre's level set *is* the nearest interface and the `'arc'` piece keeps its single instance and its field bit for bit; once it leaves, a neighbour's boundary is inside the cell and the piece is carried over a ring with the **exact** Euclidean distance to each instance (`parametric._ellipse_distance`, the nearest point's angle bisected on the sign of the tangency condition, then Newton-polished: 5e-13 against brute force, the gradient implicit). The 720 x 200 ellipse at 10 deg read 7.0 deg mean and 89.9 max on Gamma and 3.09 deg / 3.73% over the band on the fold; over its eleven instances it reads 2.5e-7 deg on Gamma and 0.194 deg / 0.00%, the same as the 690 control that stays inside. **What the threshold costs.** The fold switches instance on the cell's edge where the nearest boundary switches on the Voronoi curve between two tilted tips, so an ellipse *hugging* its edge is wrong in the sliver between the two: 0.47 deg / 0.42% at 0.9 short of the edge (`lx = 708`), 0.71 / 0.77% at 0.1 short, clean from 2.4 short out (the same shape forced over the ring reads 0.19 / 0.00% throughout). Through a solve at order 6 / 9 the fold and the ring differ by 2.6e-5 / 2.9e-5 on a 400 x 200 (the sliver is an extension there), 8.9e-4 / 3.3e-5 at 600, 1.6e-3 / 2.5e-4 at 690, 3.9e-3 / 1.9e-3 at 705 and 4.8e-3 / 2.7e-3 at 709.8 -- and that difference is the **step** `sum(T)` takes when the support crosses the threshold: +4.6e-3 from 709.8 to 710.0 at order 6, against -1.8e-4 per 0.2 of `lx` on either side. The fix that removes the step is the ring for *every* ellipse, whose price is every tilted ellipse's extension (2.6e-5 at order 6 on the 400 x 200) and eleven exact distances per build (6 ms -> 470 ms at N = 512, 1.9 s at 1024); not taken, so the step stands as a plan-level event, refused by name when a frozen record is replayed across it. A circle never leaves: `R > \|t\| / 2` is the overlap the layer check refuses | `test_nvf_self_coincident_faces.py`, `test_gamma_plan.py`, `test_gamma_frozen.py` |
+| L | a lone box or ellipse leaving its Wigner-Seitz cell without touching anything; a lone round shape on an unreduced spelling of its cell (§8c) | the box reads its neighbour's face: 0.19 deg / 0.05% (0.65 / 0.64% on the fold). The ellipse too, since the second commit of 2026-09-06: while its support stays inside the cell (`h(t) <= \|t\| / 2` for every lattice vector, `parametric._arc_offsets`) the nearest centre's level set *is* the nearest interface and the `'arc'` piece keeps its single instance and its field bit for bit; once it leaves, a neighbour's boundary is inside the cell and the piece is carried over a ring with the **exact** Euclidean distance to each instance (`parametric._ellipse_distance`, the nearest point's angle bisected on the sign of the tangency condition, then Newton-polished: 5e-13 against brute force, the gradient implicit). The 720 x 200 ellipse at 10 deg read 7.0 deg mean and 89.9 max on Gamma and 3.09 deg / 3.73% over the band on the fold; over its eleven instances it reads 2.5e-7 deg on Gamma and 0.194 deg / 0.00%, the same as the 690 control that stays inside. **What the threshold costs.** The fold switches instance on the cell's edge where the nearest boundary switches on the Voronoi curve between two tilted tips, so an ellipse *hugging* its edge is wrong in the sliver between the two: 0.47 deg / 0.42% at 0.9 short of the edge (`lx = 708`), 0.71 / 0.77% at 0.1 short, clean from 2.4 short out (the same shape forced over the ring reads 0.19 / 0.00% throughout). Through a solve at order 6 / 9 the fold and the ring differ by 2.6e-5 / 2.9e-5 on a 400 x 200 (the sliver is an extension there), 8.9e-4 / 3.3e-5 at 600, 1.6e-3 / 2.5e-4 at 690, 3.9e-3 / 1.9e-3 at 705 and 4.8e-3 / 2.7e-3 at 709.8 -- and that difference is the **step** `sum(T)` takes when the support crosses the threshold: +4.6e-3 from 709.8 to 710.0 at order 6, against -1.8e-4 per 0.2 of `lx` on either side. The fix that removes the step is the ring for *every* ellipse, whose price is every tilted ellipse's extension (2.6e-5 at order 6 on the 400 x 200) and eleven exact distances per build (6 ms -> 470 ms at N = 512, 1.9 s at 1024); not taken, so the step stands as a plan-level event, refused by name when a frozen record is replayed across it. A circle never leaves: `R > \|t\| / 2` is the overlap the layer check refuses -- and since 2026-09-07 the fold finds its nearest centre on any spelling of the basis, every image being counted on the reduced one (§8c: 8.89 deg mean on Gamma at `a2 = 3 a1 + (50, 700)` before, 2.4e-7 after) | `test_nvf_self_coincident_faces.py`, `test_gamma_plan.py`, `test_gamma_frozen.py` |
 
 **The fixed-normal decision and its price, in one place.** A face piece's direction is its
 outward normal at every sample, inside or outside its tangential extent (C3 of the design's
@@ -681,8 +739,10 @@ the blend exponent. The second half added its own: the seam sign forced opposed 
 K scene turned with its cell, whose seam axis the tie's `(1, 0)` fallback is 17 deg from), the
 winner's weight reverted to the synthesis's `d_min^4` (the 350 golden), fixed normals replaced
 by the foot direction (the grating's exact zero), one face's image list emptied (the L box),
-the pair sweep reading a fixed 3x3 instead of the ring (a scene on an unreduced basis whose
-contact sits at `(m, n) = (-2, 1)`), and `mu = None` read as unequal to 1.0 -- that one run in
+the pair sweep reading a fixed 3x3 instead of the ring (a bar along `2 a1 + a2` on the square,
+as long as that vector, whose flush contact sits at `(m, n) = (2, 1)` -- it stood on an unreduced
+spelling's `(-2, 1)` contact until §8c made that spelling plan as its reduction), and `mu = None`
+read as unequal to 1.0 -- that one run in
 a fresh interpreter, because `domain.py` defines `Material`, which `as_material` type-checks
 against and `engine` imports by name, so a reload would leave two classes of that name in one
 process. Fourteen then; the verifiers' round added eight more -- the self substitution keyed by
@@ -690,7 +750,10 @@ instance alone (the double-covered face), the arc ring dropped and the ring pick
 algebraic distance (the ellipse that leaves its cell), the sign window always open, the sign
 keyed on either piece and the run window built from the partner's half-length (the A|B|C
 scene and the column above the K seam's end), and the cross-pair substitution removed (the
-off-centre stacked bars, exact) -- twenty-two, all killed, none DID-NOT-APPLY. What follows is
+off-centre stacked bars, exact) -- twenty-two, all killed, none DID-NOT-APPLY. The reduced basis
+(§8c) added two: the replay folding on the basis as given (killed by the 693 circle on the
+`3 a1` spelling, 8.89 deg on Gamma) and the planner reducing nothing (killed by the `10 a1`
+box planning on ring 14 with 479 offsets where its reduction has 3 and 21). What follows is
 the record of the pass over
 the fold it replaced.
 

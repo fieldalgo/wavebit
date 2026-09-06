@@ -137,6 +137,19 @@ its Wigner-Seitz cell is carried over its ring with an exact distance per instan
 options are known: for a lone shape the field is built at the cell centre, so a position-free
 Euclidean test can prune each face's list there with no staleness exposure, and the
 per-instance ``K . (A e)`` products can be hoisted per offset.
+
+**Every enumeration of periodic images is on the Lagrange-reduced basis** (2026-09-07,
+:func:`~wavebit._core.lattice.reduced_basis`). The fold rounds fractional coordinates and
+sweeps one cell a side, and that finds the Euclidean nearest image only when the basis is
+reduced -- ``as_lattice`` accepts ``a2 = 3 a1 + (50, 700)`` as it is, and a lone 693 circle
+on it read its own level set 8.89 deg off in the mean on its boundary (69.9 max; 43.8 / 90.0
+at ``10 a1``), silently, on every backend, since the nearest centre lay two cells past the
+3x3. The plan records the integer transform (:class:`GammaPlan`), the replay reduces the
+traced basis with it, and every offset in a plan counts cells of the reduced spelling: the
+same structure written on any spelling plans identically and builds the same field. The
+Fourier side never sees it -- the sample grid, the reciprocal vectors, the truncation window
+and the origin a centre is measured from are the basis as given, since a window on a
+different spelling is a different set of retained orders.
 """
 import math
 from collections import namedtuple
@@ -145,7 +158,7 @@ from . import overlap as _overlap
 from .backend import array_namespace, as_array, checked_float, j1, jinc, sinc
 from .domain import as_material
 from .factorization import ConvMatrices, check_normal_grid
-from .lattice import periods_of, is_axis_aligned, sample_grid
+from .lattice import periods_of, is_axis_aligned, reduced_basis, reduction_transform, sample_grid
 from .overlap import OVERLAP_TOL_REL
 from .geometry import StaleGeometryError
 
@@ -898,7 +911,7 @@ def _field_tiled(xp, X, Y, shapes, plan, slots, lattice, dtype, grid_shape):
 
 # ------------------------------------------------------------------------------ the plan
 
-class GammaPlan(namedtuple('GammaPlan', 'ring pieces pairs empty')):
+class GammaPlan(namedtuple('GammaPlan', 'ring pieces pairs empty reduction')):
     """The combinatorics of one layer's interface set, planned once and replayed by array ops.
 
     Two halves, the way :mod:`.boundary` already splits painting: a **plan** -- pure Python,
@@ -932,6 +945,13 @@ class GammaPlan(namedtuple('GammaPlan', 'ring pieces pairs empty')):
         Every piece is a dead face: the shape tiles the plane, the layer is uniform, and the
         field is the constant ``(1, 0)`` -- Li's checkerboard reaches that with a 2.5 x 1.25
         bar on ``a1 = (1.25, 1.25), a2 = (1.25, -1.25)``.
+    ``reduction``
+        The integer unimodular ``((t00, t01), (t10, t11))`` that takes the basis as given to
+        its Lagrange-reduced spelling (:func:`~wavebit._core.lattice.reduction_transform`);
+        the identity on every reduced basis. **Every offset above counts cells of the reduced
+        basis**, the ring included, and the replay reduces the traced basis with these
+        integers rather than reading it -- so a record taken on ``a2 = 10 a1 + (50, 700)``
+        is the record of ``a2 = (50, 700)``, pair at ``(0, 1)``, and replays on either.
 
     ``imgs`` is bounded by **size alone**: every offset ``s`` with ``|s . A| <= diam + 2 R``,
     taken *around the shape's own fold* -- the sample point is first reduced to the shape's
@@ -1012,7 +1032,10 @@ def _arc_offsets(prim, a1x, a1y, a2x, a2y, diam, tol):
     difference is paid on every build.
 
     A circle can never leave: ``h = R`` in every direction, and ``R > |t| / 2`` is the overlap
-    ``check_layer_shapes`` refuses. The threshold steps like every combinatorial fact of the
+    ``check_layer_shapes`` refuses. That is a statement about the geometry, true on any
+    spelling of the basis; the fold *finding* the nearest centre is a statement about the
+    arithmetic, true on the reduced one, which is the one it is handed since 2026-09-07
+    (:func:`_fold_to_nearest_image`). The threshold steps like every combinatorial fact of the
     plan -- a frozen record holds it, and a shape grown across it is refused by name -- and
     the tolerance is the collinearity one, rounding scale, so a disc exactly filling its cell
     keeps its single instance on either side of the rounding.
@@ -1053,13 +1076,20 @@ def plan_gamma(shapes, lattice):
     **union** of a face's self runs (:func:`~wavebit._core.overlap.covered_length`); the
     tolerances are the rounding-scale ones that module states. Nothing about a material is
     read, and nothing about a position survives: the same structure named one period over
-    plans identically.
+    plans identically. Neither does the spelling of the basis: the ring, the offsets and the
+    pairs are counted on the Lagrange-reduced basis (:func:`~wavebit._core.lattice.reduced_basis`)
+    and the transform to it is part of the plan, so ``a2 = 10 a1 + (50, 700)`` plans as
+    ``(50, 700)`` does -- ring 3, the pair at ``(0, 1)``, 21 offsets per face -- where it
+    used to plan ring 14, the pair at ``(-10, 1)`` and 479 offsets, all of them the same
+    images under longer names.
     """
     prims = _primitives(shapes, lattice)
     if prims is None:
         return None
     try:
-        a1x, a1y, a2x, a2y = _cell_floats(lattice)
+        transform = reduction_transform(lattice)
+        reduced = reduced_basis(lattice, transform)
+        a1x, a1y, a2x, a2y = _cell_floats(reduced)
     except Exception:                                  # noqa: BLE001 - a traced basis
         return None
     scale = max(math.hypot(a1x, a1y), math.hypot(a2x, a2y))
@@ -1070,7 +1100,7 @@ def plan_gamma(shapes, lattice):
 
     radii = [0.0 if p is None else _overlap._bounding_radius(p) for p in prims]
     ring = 1 + int(math.ceil(2.0 * max(radii, default=0.0) / h_min))
-    records = _overlap.face_pairs(prims, lattice, ring, tol)
+    records = _overlap.face_pairs(prims, reduced, ring, tol)
 
     pieces, index = [], {}
     for i, prim in enumerate(prims):
@@ -1100,7 +1130,7 @@ def plan_gamma(shapes, lattice):
         pairs.append(Pair(index[(c.i, c.f)], index[(c.j, c.g)], c.m, c.n, flush))
 
     empty = all(pc.face != 'arc' and pc.dead for pc in pieces)
-    return GammaPlan(ring, tuple(pieces), tuple(pairs), empty)
+    return GammaPlan(ring, tuple(pieces), tuple(pairs), empty, transform)
 
 
 def _blind_plan(shapes, lattice):
@@ -1118,14 +1148,26 @@ def _blind_plan(shapes, lattice):
     eager one, with nothing said. A traced basis with no record now raises, and the message
     names the freeze; with a record the planned list replays under the trace as it always did.
 
-    What the readable basis gets is every offset within ``2 * diam`` of the fold. The planned
-    list is bounded by ``diam + 2 R`` (:class:`GammaPlan`), so this is a superset of it
-    whenever ``R <= diam / 2``: every box or ellipse that fits *inside* its cell, since the
-    diagonal of such a shape is at most the cell's. It is not a theorem about every accepted
-    shape -- a thin bar turned to thread between its images can be far longer than the cell's
-    diagonal without meeting one, and its ``R`` exceeds ``diam / 2`` -- and nothing here can
-    read the size that would say so. Such a shape under ``jax.jit`` with no record is built on
-    the short ring; freezing first is what gives it the planned one.
+    What the readable basis gets is every offset within ``2 * diam`` of the fold, ``diam``
+    the longer diagonal of the **reduced** cell (:func:`~wavebit._core.lattice.reduced_basis`;
+    the transform rides in the plan, as it does in a planned one). The planned list is bounded
+    by ``diam + 2 R`` (:class:`GammaPlan`), so this is a superset of it whenever ``R <= diam
+    / 2``: every box or ellipse that fits *inside* its cell, since the diagonal of such a shape
+    is at most the cell's. It is not a theorem about every accepted shape -- a thin bar turned
+    to thread between its images can be far longer than the cell's diagonal without meeting
+    one, and its ``R`` exceeds ``diam / 2`` -- and nothing here can read the size that would
+    say so. Such a shape under ``jax.jit`` with no record is built on the short ring; freezing
+    first is what gives it the planned one.
+
+    What the ring costs is set by that diagonal, and reducing the basis is what keeps it a
+    property of the cell rather than of its spelling: on ``a2 = 10 a1 + (50, 700)`` the ring
+    was 1559 offsets per face before the reduction and a jitted blind build of a lone box did
+    not finish compiling in four minutes; reduced it is the 25 of ``a2 = (50, 700)`` and
+    compiles in a second. A cell that is *genuinely* elongated pays for it: on ``a1 = (700,
+    0)``, ``a2 = (0, 7000)`` -- reduced already, since the two are orthogonal -- the diagonal
+    is 7035, the reach 14070 and the blind ring 121 offsets per face, four faces per box, where
+    the planned list of a 350 box on it is 35 by size (45 for a 500 x 700 one). That is the
+    price of not reading the size, and a record is the way not to pay it.
 
     What no blind plan can have is the pair table, which needs the numbers. So an abutting
     pair -- a bar spanning the cell, a box against its own image -- is not told that it is
@@ -1148,7 +1190,8 @@ def _blind_plan(shapes, lattice):
     With a record the planned list -- one instance or the ring -- replays under the trace.
     """
     try:
-        a1x, a1y, a2x, a2y = _cell_floats(lattice)
+        transform = reduction_transform(lattice)
+        a1x, a1y, a2x, a2y = _cell_floats(reduced_basis(lattice, transform))
     except Exception:                                  # noqa: BLE001 - a traced basis
         raise ValueError(_NEEDS_A_FREEZE.format(
             what='the ring of periodic images each face is evaluated over, which the cell '
@@ -1166,7 +1209,7 @@ def _blind_plan(shapes, lattice):
                      f'instance or over a ring of images and is a question of its size,'))
         elif stype in _overlap._ELLIPSE_TYPES:
             pieces.append(Piece(i, 'arc', ((0, 0),), False))
-    return GammaPlan(3, tuple(pieces), (), False)
+    return GammaPlan(3, tuple(pieces), (), False, transform)
 
 
 # ---------------------------------------------------------------------------- the replay
@@ -1203,20 +1246,24 @@ class _Frame:
     commit noted; written this way it cancels out of the arithmetic rather than needing a
     ``where``.) The fold still bounds the instance list: the residual after rounding sits
     within half the cell's diameter of the centre, so the size-only ring of
-    :class:`GammaPlan` is a superset of the nearest instance at every position.
+    :class:`GammaPlan` is a superset of the nearest instance at every position -- on the
+    reduced basis, which is what makes the rounded fold's residual at most half of a diameter
+    that bounds the list (see :func:`_fold_to_nearest_image` for the bound the reduction buys).
     """
     __slots__ = ('xp', 'cos', 'sin', 'a', 'b', 'cx', 'cy', 'U', 'V', 'km', 'kn',
                  't1u', 't1v', 't2u', 't2v')
 
-    def __init__(self, xp, X, Y, shape, lattice, dtype):
+    def __init__(self, xp, X, Y, shape, lattice, reduced, dtype):
+        # `lattice` fixes the origin a centre is measured from (as given); `reduced` is the
+        # basis the fold and the instance offsets count cells of.
         _, cx, cy, lx, ly, angle = shape_geometry(shape, lattice)
         self.xp = xp
         self.cos = xp.cos(as_array(xp, angle, dtype=dtype))
         self.sin = xp.sin(as_array(xp, angle, dtype=dtype))
         self.a, self.b = lx / 2.0, ly / 2.0
         self.cx, self.cy = cx, cy
-        a1x, a2x = lattice[0][0], lattice[0][1]
-        a1y, a2y = lattice[1][0], lattice[1][1]
+        a1x, a2x = reduced[0][0], reduced[0][1]
+        a1y, a2y = reduced[1][0], reduced[1][1]
         det = a1x * a2y - a2x * a1y
         dx, dy = X - cx, Y - cy
         self.km = xp.round((a2y * dx - a2x * dy) / det)
@@ -1259,16 +1306,17 @@ class _Frame:
                 '-v': (self.cx - self.b * vx, self.cy - self.b * vy)}[face]
 
 
-def _run_window(xp, pframe, p_face, qframe, q_face, m, n, lattice, dtype):
+def _run_window(xp, pframe, p_face, qframe, q_face, m, n, reduced, dtype):
     """``(lo, hi)``: the run a cross pair shares, along ``p``'s tangent from ``p``'s midpoint.
 
     The plan records the pair by *name*; the bounds are re-derived here from the traced
     geometry as the max / min of projections, the same arithmetic
     :func:`~wavebit._core.overlap.face_pairs` used on the concrete numbers. ``q`` sits at
-    lattice offset ``(m, n)`` relative to ``p``'s own instance.
+    lattice offset ``(m, n)`` relative to ``p``'s own instance, counted on the reduced basis
+    the plan was taken on.
     """
-    a1x, a2x = lattice[0][0], lattice[0][1]
-    a1y, a2y = lattice[1][0], lattice[1][1]
+    a1x, a2x = reduced[0][0], reduced[0][1]
+    a1y, a2y = reduced[1][0], reduced[1][1]
     pmx, pmy = pframe.midpoint(p_face)
     qmx, qmy = qframe.midpoint(q_face)
     dx = qmx + (m * a1x + n * a2x) - pmx
@@ -1352,19 +1400,22 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype):
     zero = xp.zeros_like(X)
     one = xp.ones_like(X)
     index = {(pc.shape, pc.face): k for k, pc in enumerate(plan.pieces)}
+    # The basis every image is counted on: the plan's integers applied to the basis as given,
+    # traced or not, so a jitted replay on a traced cell reduces without reading it.
+    reduced = reduced_basis(lattice, plan.reduction)
 
     if len(plan.pieces) == 1 and plan.pieces[0].face == 'arc':
         shape, imgs = shapes[plan.pieces[0].shape], plan.pieces[0].imgs
         if len(imgs) == 1:
-            _, gx, gy = _round_field(xp, X, Y, shape, lattice, dtype)
+            _, gx, gy = _round_field(xp, X, Y, shape, lattice, reduced, dtype)
         else:
-            _, gx, gy = _round_instances(xp, X, Y, shape, lattice, dtype, imgs)
+            _, gx, gy = _round_instances(xp, X, Y, shape, lattice, reduced, dtype, imgs)
         return gx, gy
 
     frames = {}
     for pc in plan.pieces:
         if pc.face != 'arc' and pc.shape not in frames:
-            frames[pc.shape] = _Frame(xp, X, Y, shapes[pc.shape], lattice, dtype)
+            frames[pc.shape] = _Frame(xp, X, Y, shapes[pc.shape], lattice, reduced, dtype)
 
     # The pair records by role. A self pair substitutes within the box's own instance table,
     # over its own run (a flush one over the whole line); a cross pair carries a run window
@@ -1374,12 +1425,12 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype):
         p, q = plan.pieces[pr.p], plan.pieces[pr.q]
         if p.shape == q.shape:
             window = None if pr.flush else _run_window(
-                xp, frames[p.shape], p.face, frames[q.shape], q.face, pr.m, pr.n, lattice, dtype)
+                xp, frames[p.shape], p.face, frames[q.shape], q.face, pr.m, pr.n, reduced, dtype)
             self_records.setdefault(p.shape, []).append((p.face, q.face, pr.m, pr.n, window))
             continue
         cross_by_q.setdefault(pr.q, []).append(r)
         windows[r] = _run_window(xp, frames[p.shape], p.face, frames[q.shape], q.face,
-                                 pr.m, pr.n, lattice, dtype)
+                                 pr.m, pr.n, reduced, dtype)
         equal = xp.all(slots[p.shape] == slots[q.shape])
         signs[r] = xp.where(equal, as_array(xp, -1.0, dtype=dtype), as_array(xp, 1.0, dtype=dtype))
 
@@ -1456,9 +1507,10 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype):
         if pc.face != 'arc':
             continue
         if len(pc.imgs) == 1:
-            d[k], gx, gy = _round_field(xp, X, Y, shapes[pc.shape], lattice, dtype)
+            d[k], gx, gy = _round_field(xp, X, Y, shapes[pc.shape], lattice, reduced, dtype)
         else:
-            d[k], gx, gy = _round_instances(xp, X, Y, shapes[pc.shape], lattice, dtype, pc.imgs)
+            d[k], gx, gy = _round_instances(xp, X, Y, shapes[pc.shape], lattice, reduced, dtype,
+                                            pc.imgs)
         round_dir[k] = (gx, gy)
 
     # 2. The ratio weights, `(d_min / d) ** 4`. The winner's ratio is `d / d`, exactly 1.0 in
@@ -1532,7 +1584,7 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype):
     return sx / norm, sy / norm
 
 
-def _fold_to_nearest_image(xp, dx, dy, lattice):
+def _fold_to_nearest_image(xp, dx, dy, reduced):
     """``(dx, dy)`` reduced to the nearest periodic image, on the cell's own lattice.
 
     ``d % P - P/2`` answers "nearest image" only when the images sit at ``(m*Px, n*Py)``. They
@@ -1543,10 +1595,21 @@ def _fold_to_nearest_image(xp, dx, dy, lattice):
 
     Rounding the *fractional* coordinates lands in the fundamental parallelogram — the nearest
     image in the lattice metric, not the Euclidean one. The 3x3 sweep after it is what makes
-    the pick Euclidean. One cell a side is enough for any basis this solver accepts.
+    the pick Euclidean, **and it is enough only on a Lagrange-reduced basis**, which is what
+    ``reduced`` has to be (:func:`~wavebit._core.lattice.reduced_basis`; the caller reduces
+    once, with the plan's integers). The argument: with ``|a1 . a2| <= |a_i|^2 / 2`` for both
+    vectors, a point of the Wigner-Seitz cell written as ``s1 a1 + s2 a2`` has ``|s1 + s2 mu1|
+    <= 1/2`` and ``|s2 + s1 mu2| <= 1/2`` with ``|mu_i| <= 1/2``, hence ``|s_i| <= 1``; the
+    rounded residual sits within ``|s_i| <= 1/2``, so the image it is nearest is at most
+    ``3/2`` cells away in each index and the integer offset is in ``{-1, 0, 1}``. On an
+    unreduced basis the Wigner-Seitz cell reaches ``|s| ~ (1 + k) / 2`` for ``a2 = k a1 +
+    ...``, outside the sweep from ``k = 3``: a lone 693 circle on ``a2 = 3 a1 + (50, 700)`` read
+    its own level set 8.89 deg off in the mean on its boundary, 43.8 at ``k = 10``, and this
+    docstring said one cell a side was enough for any basis the solver accepts. It is now,
+    because the basis handed here is never the one the solver accepted but its reduction.
     """
-    a1x, a2x = lattice[0][0], lattice[0][1]
-    a1y, a2y = lattice[1][0], lattice[1][1]
+    a1x, a2x = reduced[0][0], reduced[0][1]
+    a1y, a2y = reduced[1][0], reduced[1][1]
     det = a1x * a2y - a2x * a1y
     su = xp.round((a2y * dx - a2x * dy) / det)
     sv = xp.round((-a1y * dx + a1x * dy) / det)
@@ -1568,7 +1631,7 @@ def _fold_to_nearest_image(xp, dx, dy, lattice):
     return best_x, best_y
 
 
-def _round_field(xp, X, Y, shape, lattice, dtype):
+def _round_field(xp, X, Y, shape, lattice, reduced, dtype):
     """``(distance, normal_x, normal_y)`` of one round shape -- the ``'arc'`` piece.
 
     The displacement is folded to the nearest image and the level set's gradient is the
@@ -1578,25 +1641,31 @@ def _round_field(xp, X, Y, shape, lattice, dtype):
     instance would put two centres closer than two radii), and for any shape that stays
     inside the Wigner-Seitz cell of its centre (:func:`_arc_offsets`), which is why the
     ``'arc'`` piece has a single instance there and this arithmetic is the one the round
-    branch always had -- bit-identical to every result since 2026-08-17. A ring of instances
-    is not taken *with this distance* on purpose: the algebraic ``|f| / |grad f|`` is
-    unbounded at a shape's own centre, so a minimum over instances would hand the centre of
-    every circle to its neighbour. A shape that leaves its cell takes the ring with the
-    exact distance instead (:func:`_round_instances`).
+    branch always had -- bit-identical to every result since 2026-08-17 on a reduced basis.
+    *Finding* that nearest centre is the fold's job, and it does it on ``reduced``, the
+    Lagrange-reduced basis (:func:`_fold_to_nearest_image` for why one cell a side is enough
+    there and was not on ``a2 = 3 a1 + (50, 700)``); ``lattice`` is the basis as given, which
+    fixes only the origin a centre is measured from. A ring of instances is not taken *with
+    this distance* on purpose: the algebraic ``|f| / |grad f|`` is unbounded at a shape's own
+    centre, so a minimum over instances would hand the centre of every circle to its
+    neighbour. A shape that leaves its cell takes the ring with the exact distance instead
+    (:func:`_round_instances`).
 
     ``diag(Lx, Ly)`` is the one case where the two folds ARE the same fold, so it keeps the
     cheaper spelling -- and stays bit-identical to every result predating the lattice branch.
+    Read off the reduced basis: a shear of ``k a1`` on a rectangle reduces *to* the
+    rectangle, and the rectangular fold is then the right one.
     """
     _stype, cx, cy, lx, ly, angle = shape_geometry(shape, lattice)
     cos_a = xp.cos(as_array(xp, angle, dtype=dtype))
     sin_a = xp.sin(as_array(xp, angle, dtype=dtype))
 
-    if is_axis_aligned(lattice):
-        Px, Py = periods_of(lattice)
+    if is_axis_aligned(reduced):
+        Px, Py = periods_of(reduced)
         dx = (X - cx + Px / 2.0) % Px - Px / 2.0
         dy = (Y - cy + Py / 2.0) % Py - Py / 2.0
     else:
-        dx, dy = _fold_to_nearest_image(xp, X - cx, Y - cy, lattice)
+        dx, dy = _fold_to_nearest_image(xp, X - cx, Y - cy, reduced)
     xr = dx * cos_a + dy * sin_a
     yr = -dx * sin_a + dy * cos_a
     a, b = lx / 2.0, ly / 2.0
@@ -1680,7 +1749,7 @@ def _ellipse_distance(xp, u, v, a, b):
     return xp.sqrt((a * c - y0) ** 2 + (b * s - y1) ** 2)
 
 
-def _round_instances(xp, X, Y, shape, lattice, dtype, imgs):
+def _round_instances(xp, X, Y, shape, lattice, reduced, dtype, imgs):
     """``(distance, normal_x, normal_y)`` of one round shape over the instances ``imgs``.
 
     The ``'arc'`` piece of a shape that leaves its Wigner-Seitz cell (:func:`_arc_offsets`):
@@ -1696,13 +1765,14 @@ def _round_instances(xp, X, Y, shape, lattice, dtype, imgs):
     fold read a far instance's level set, and on the neighbour's boundary inside the cell,
     where the fold was wrong. A hard minimum, as a face takes over its instances: the fold
     already switches instance across the cell's edge, and this moves that switch to the
-    Voronoi boundary between the two boundaries, which is where the geometry has it.
+    Voronoi boundary between the two boundaries, which is where the geometry has it. The
+    fold and the offsets count cells of ``reduced``, as everywhere; ``lattice`` is the origin.
     """
     _stype, cx, cy, lx, ly, angle = shape_geometry(shape, lattice)
     cos_a = xp.cos(as_array(xp, angle, dtype=dtype))
     sin_a = xp.sin(as_array(xp, angle, dtype=dtype))
-    a1x, a2x = lattice[0][0], lattice[0][1]
-    a1y, a2y = lattice[1][0], lattice[1][1]
+    a1x, a2x = reduced[0][0], reduced[0][1]
+    a1y, a2y = reduced[1][0], reduced[1][1]
     det = a1x * a2y - a2x * a1y
     dx0, dy0 = X - cx, Y - cy
     km = xp.round((a2y * dx0 - a2x * dy0) / det)
@@ -2146,8 +2216,9 @@ def check_gamma_plan_still_fits(layer, lattice, plan, index):
     its partner's line (the recorded pair would then cancel two faces that are interfaces), a
     run appearing (two interfaces would be kept where the material runs on), a shape growing
     across a ring boundary of its image list (the list is bounded by size alone, so a grown
-    shape can lack its nearest instance). Nothing about the answer says so -- it comes back
-    unit-length, energy-conserving and wrong.
+    shape can lack its nearest instance), a basis whose reduction changed (every offset then
+    names another image). Nothing about the answer says so -- it comes back unit-length,
+    energy-conserving and wrong.
 
     Re-planning is the whole cost of the comparison, microseconds for a handful of shapes.
     Under a trace it is skipped -- a tracer has no primal to re-plan from, the same reading of
@@ -2205,6 +2276,9 @@ def _gamma_moved(held, fresh, shapes):
                            f"({len(old.imgs)} -> {len(new.imgs)} instances: {why})")
     if held.ring != fresh.ring:
         clauses.append(f'the ring of images swept went from {held.ring} to {fresh.ring}')
+    if held.reduction != fresh.reduction:
+        clauses.append(f'the basis reduces differently now ({held.reduction} -> '
+                       f'{fresh.reduction}), so every recorded offset names another image')
     if held.empty != fresh.empty:
         clauses.append('the layer ' + ('tiles the plane now' if fresh.empty else
                                        'no longer tiles the plane'))

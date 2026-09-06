@@ -25,7 +25,7 @@ import wavebit
 from wavebit._core import domain as D
 from wavebit._core import overlap as O
 from wavebit._core import parametric as P
-from wavebit._core.lattice import as_lattice
+from wavebit._core.lattice import as_lattice, reduced_basis
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from gamma_instruments import band_error, gamma_points, mutated  # noqa: E402
@@ -449,7 +449,7 @@ def _l_ellipse_centre_reads_its_own_level_set():
     X = centre[0] + u * np.cos(turn) - 3.0 * np.sin(turn)
     Y = centre[1] + u * np.sin(turn) + 3.0 * np.cos(turn)
     n_x, n_y = P._piece_field(np, X, Y, [L_ELLIPSE], plan, None, A, np.float64)
-    _, gx, gy = P._round_field(np, X, Y, L_ELLIPSE, A, np.float64)
+    _, gx, gy = P._round_field(np, X, Y, L_ELLIPSE, A, reduced_basis(A), np.float64)
     assert np.abs(n_x * gx + n_y * gy).min() > 1.0 - 1e-12
 
 
@@ -471,11 +471,35 @@ def _rotated_seam_reads_its_own_axis():
     assert np.abs(np.abs(n_x * np.cos(turn) + n_y * np.sin(turn)) - 1.0).max() < 1e-15
 
 
-def _unreduced_basis_has_its_pair():
-    # The sheared cell written with an unreduced basis: the abutting image sits at (-2, 1).
-    A = as_lattice(lattice=np.array([[PERIOD, 1450.0], [0.0, PERIOD]]))
+def _the_bar_along_two_a1_plus_a2_has_its_flush_pair():
+    # A bar as long as `2 a1 + a2` along it threads between the 3x3 images and meets the (2, 1)
+    # one end to end -- the one accepted shape whose contact sits past the 3x3 on a reduced
+    # basis (the unreduced spelling that used to stand here plans as its reduction now).
+    A = as_lattice(lattice=SQUARE)
+    bar = _box(lx=PERIOD * 5.0 ** 0.5, ly=50.0, angle=float(np.arctan2(1.0, 2.0)))
+    plan = P.plan_gamma([bar], A)
+    assert {(pr.m, pr.n, pr.flush) for pr in plan.pairs} == {(2, 1, True)}
+
+
+def _unreduced_circle_reads_its_own_level_set():
+    # `a2 = 3 a1 + (50, 700)`: the first spelling whose Wigner-Seitz cell reaches past the
+    # fold's 3x3 on the basis as given (8.89 deg mean on Gamma there); on the reduced one 2e-7.
+    shape = dict(type='circle', cx=0.0, cy=0.0, lx=693.0, material=EPS_HI)
+    A = as_lattice(lattice=np.array([[PERIOD, 2150.0], [0.0, PERIOD]]))
+    plan = P.plan_gamma([shape], A)
+    centre = 0.5 * (np.asarray(A[:, 0]) + np.asarray(A[:, 1]))
+    t = (np.arange(4000) + 0.5) / 4000 * 2.0 * np.pi
+    X, Y = centre[0] + 346.5 * np.cos(t), centre[1] + 346.5 * np.sin(t)
+    n_x, n_y = P._piece_field(np, X, Y, [shape], plan, None, A, np.float64)
+    cos = np.clip(np.abs(n_x * np.cos(t) + n_y * np.sin(t)), 0.0, 1.0)
+    assert np.degrees(np.arccos(cos)).mean() < 1e-5
+
+
+def _unreduced_box_plans_as_its_reduction():
+    A = as_lattice(lattice=np.array([[PERIOD, 7050.0], [0.0, PERIOD]]))
     plan = P.plan_gamma([_box(lx=500.0, ly=PERIOD)], A)
-    assert {(pr.m, pr.n) for pr in plan.pairs} == {(-2, 1)}
+    assert plan.ring == 3 and len(plan.pieces[0].imgs) == 21
+    assert {(pr.m, pr.n) for pr in plan.pairs} == {(0, 1)}
 
 
 #: What a fresh interpreter runs for the one mutant that cannot be reloaded in place
@@ -592,7 +616,18 @@ MUTANTS = [
     ('the pair sweep reads a fixed 3x3 instead of the ring', O,
      '    ring = images(r)\n',
      '    ring = images(1)\n',
-     _unreduced_basis_has_its_pair),
+     _the_bar_along_two_a1_plus_a2_has_its_flush_pair),
+    # The reduced basis, 2026-09-07: the fold and the offsets count cells of it. The replay
+    # dropping the plan's transform folds on the basis as given, which the circle on the
+    # `3 a1` spelling reads at 8.89 deg; the planner dropping it plans that spelling on ring 14.
+    ('the replay folds on the basis as given', P,
+     '    reduced = reduced_basis(lattice, plan.reduction)\n',
+     '    reduced = lattice\n',
+     _unreduced_circle_reads_its_own_level_set),
+    ('the planner reduces nothing', P,
+     '        transform = reduction_transform(lattice)\n        reduced = reduced_basis(lattice, transform)\n',
+     '        transform = ((1, 0), (0, 1))\n        reduced = reduced_basis(lattice, transform)\n',
+     _unreduced_box_plans_as_its_reduction),
     # C4, the per-run window and the per-pair sign. Four mutants that passed the 26 tests of
     # this file's neighbours: every cross pair the suite had was flush with equal extents and
     # no face carried two runs, so the window was the whole face everywhere they looked.
