@@ -837,17 +837,44 @@ four commits before this axis was added.
 - **A backend other than NumPy**, which is the item that decides whether this is a first-class
   part of a differentiable package or a guest in one. Everything else in wavebit is jax/torch
   traceable; the field updates here are slice-shifted differences and would port unchanged. It
-  is only the time LOOP that has nowhere to live — it needs a `scan` primitive `_core/backend.py`
-  does not have, and adding one is a design decision about the whole backend layer rather than
-  about this module. **fdtdx** (Mahlau et al., https://github.com/ymahlau/fdtdx, MIT;
-  JOSS 10.21105/joss.08912) answers the shape of it with a `custom_vjp` carrying two gradient
-  methods, reversible and checkpointed, and marks where reversibility stops: it refuses
-  dispersive materials, because the ADE polarisation recurrence cannot be run backwards. A metal
-  grating is Drude, so the headline problem lands on the checkpointed path. Cited as prior art
-  only — **nothing here is ported from it**, and it carries no notice in `LICENSE` for that
-  reason. Its own non-uniform-mesh design (one realised grid on which "uniform" is a policy
-  rather than a separate code path) is the same shape as §8f's, arrived at independently and
-  landed before that survey ran; the resemblance is convergence, not lineage.
+  is only the time LOOP that has nowhere to live — a `for` over ~10^4 steps is what `jax.jit`
+  unrolls and autograd tapes, and the primitive that would fix it is a design decision about the
+  whole backend layer rather than about this module.
+
+  **fdtdx** (Mahlau et al., https://github.com/ymahlau/fdtdx, MIT; JOSS 10.21105/joss.08912) is
+  the prior art, and three sentences that stood here were wrong. They were written from a survey;
+  the tree is now at `third_party/fdtd/fdtdx` and was read, which is possible because it is MIT —
+  the point of having it beside oracles whose source this project does not open. Corrected:
+
+  - **There is no `scan` in it.** Not one `jax.lax.scan` in the tree. Both entry points step the
+    fields with `equinox.internal.while_loop`, and its `kind` argument is what selects the AD
+    policy. This paragraph used to say wavebit "needs a `scan`" and imply fdtdx had supplied the
+    shape of one; the second half was invented.
+  - **The `custom_vjp` is not an optimisation over a differentiable loop — it is the only thing
+    that makes the loop differentiable at all.** The forward pass runs `kind="lax"`, which
+    equinox documents as forward-mode differentiable and *not* reverse-differentiable.
+  - **Reversibility stops at DISSIPATION, not at dispersion, and the dispersive case is not a
+    physical impossibility.** Lossy conductive media run on the reversible path — the source says
+    "lossy materials get gain when simulating backwards" and handles it — while the dispersive
+    branch raises `NotImplementedError` worded *under active development*. The claim here that
+    "the ADE polarisation recurrence cannot be run backwards" was a reason this document invented
+    for an unimplemented feature. What the reversible path actually requires is that every step
+    be an explicit algebraic bijection in closed form; the PML is excluded from that and handled
+    by *recording* a one-cell interface plane every step instead.
+
+  What survives, and is worth taking: **the checkpointed half**. The reversible path checkpoints
+  nothing by default (`num_checkpoints_reversible` defaults to 0) and recomputes the whole
+  trajectory backwards, taking a fresh `jax.vjp` of one forward step at each reverse step. For
+  wavebit the concrete ask is one primitive in `_core/backend.py` —
+  `scan(xp, body, carry, n_steps, *, checkpoints=None)`, `body(carry, i) -> carry` over a flat
+  tuple carry — which is the existing Python `for` on NumPy, that `for` plus
+  `torch.utils.checkpoint` on PyTorch, and a scan on JAX. A primitive that exists only in JAX
+  would be no answer for a package whose backends are three.
+
+  Cited as prior art only — **nothing here is ported from it**, and it carries no notice in
+  `LICENSE` for that reason. Its own non-uniform-mesh design (one realised grid on which
+  "uniform" is a policy rather than a separate code path) is the same shape as §8f's, arrived at
+  independently and landed before that survey ran; the resemblance is convergence, not lineage.
 - **A fixed-*angle* spectrum at oblique incidence**, rather than the fixed-`kx` sweep of §8.
   This is the gap that matters most once the module is read as a solver rather than a harness:
   a spectrum at a tilt is an ordinary thing to want, and it is exactly what one run cannot give
