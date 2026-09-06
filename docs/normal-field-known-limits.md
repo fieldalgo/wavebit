@@ -673,11 +673,15 @@ layer on a basis whose `reduction_transform` is not the identity is refused by n
 reduced spelling): a refusal pending the port of the reduction into `boundary.py`, which is
 that route's own work beside F and H of §1, not a fix. A non-overlapping layer on the same
 spelling is built by the closed form on its reduction and is not touched. Pinned in
-`test_boundary.py`.
+`test_boundary.py`. **The refusal fires eagerly and at the freeze only**: a basis that arrives
+as a `jit` tracer cannot be reduced or compared, so a record taken on the reduced spelling and
+replayed under `jit` on an unreduced one builds the 0.8106 with nothing said. The eager
+re-freeze each step is the guard -- that freeze runs the check on the concrete basis.
 
 ### 8d. Still open (2026-09-06)
 
-* **The polygon route on an unreduced basis** -- refused, not reduced (§8c above). Lifting
+* **The polygon route on an unreduced basis** -- refused, not reduced (§8c above), and the
+  refusal cannot fire under a trace. Lifting
   the refusal means taking `periodic_segments` and the painted route's image loops through
   `lattice.reduced_basis`, and giving its record the transform to replay under `jit`, as
   `GammaPlan.reduction` does.

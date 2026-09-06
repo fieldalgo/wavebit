@@ -583,6 +583,13 @@ _NEEDS_A_FREEZE = (
 def check_boundary_basis_reduced(lattice, index):
     """Refuse the polygon route on a cell basis that is not Lagrange-reduced.
 
+    **Eagerly, and at the freeze, only.** A basis that arrives as a ``jit`` tracer cannot be
+    reduced or compared, so this returns without a word -- and a record taken on the reduced
+    spelling and replayed under ``jit`` on an unreduced one builds the wrong structure with
+    nothing said (measured: 0.810615440141 against the eager 0.948626126969). The eager
+    re-freeze each step (README: "re-take the freeze every step") is the guard, since that
+    freeze runs this check on the concrete basis and refuses.
+
     The closed-form route counts every periodic image on the reduced basis since
     2026-09-06 (:func:`~wavebit._core.lattice.reduced_basis`; section 8c of
     ``docs/normal-field-known-limits.md``). The polygon route -- the painted, overlapping
@@ -1935,6 +1942,20 @@ _PROJECTOR_CACHE = {}
 _PROJECTOR_CACHE_MAX = 8
 
 
+def _coeffs_hold_tracer(coeffs):
+    """Whether any coefficient grid is a JAX tracer -- built inside a trace, not to be kept.
+
+    Structural (``isinstance``), never a read; ``False`` whenever JAX is not in the process,
+    so the other backends never pay for the question. The engine's ``_holds_tracer`` walks
+    containers for the same reason; this one only has arrays to look at.
+    """
+    import sys
+    jax = sys.modules.get('jax')
+    if jax is None:
+        return False
+    return any(isinstance(c, jax.core.Tracer) for c in coeffs)
+
+
 def _static_float(v):
     """``v`` as a plain float, refusing anything a cache must not key on.
 
@@ -2178,13 +2199,22 @@ def normal_projector_coeffs(xp, shapes, grid_shape, lattice, half_width_u, half_
                                                             real_dtype, lattice, plan=plan)
         coeffs = tuple(_sampled_coeffs(xp, xp.astype(f, dtype), half_width_u, half_width_v)
                        for f in (normal_x * normal_x, normal_x * normal_y, normal_y * normal_y))
-    if key is not None:
+    if key is not None and not _coeffs_hold_tracer(coeffs):
         # Least-recently-used: the read above is a `pop`, so a hit takes the entry out and this
         # puts it back at the end, and a full cache evicts only on a genuine miss. The case that
         # needs it is a stack holding both a moving layer and a still one -- the moving layer
         # misses every step, and without the refresh the still one ages out from under it.
         # Measured on a two-layer stack over 30 steps: the still layer is built once and the
         # cache stays pinned at its bound, against 60 builds with no cache at all.
+        #
+        # Never stored: coefficients built INSIDE a jit trace. The key is concrete -- every
+        # input was -- but under omnistaging the arrays the build returns are tracers, and a
+        # tracer put under a concrete key is served to the next eager solve on that key, on
+        # any solver in the process, which raises `UnexpectedTracerError` at `c * phase` until
+        # someone clears the cache by hand. Measured 2026-09-06: build, freeze, jit over the
+        # wavelength as the FIRST solve on the key, then `solve()` -- every eager call raised.
+        # An eager solve before the jit hid it by warming the key, which is why the recipe
+        # tests passed. A miss inside a trace is computed and discarded, as a traced key is.
         if len(_PROJECTOR_CACHE) >= _PROJECTOR_CACHE_MAX:
             _PROJECTOR_CACHE.pop(next(iter(_PROJECTOR_CACHE)))
         _PROJECTOR_CACHE[key] = coeffs

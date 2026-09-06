@@ -276,6 +276,43 @@ def test_a_traced_scalar_condition_does_not_outlive_its_solve(name, value):
 
     jax.jit(mixed)(jnp.asarray(900.0))
     assert np.allclose(np.asarray(solver.thickness), [300.0])
+
+
+@pytest.mark.parametrize('name, value', [('wavelength', 900.0), ('thickness', [300.0]),
+                                         ('theta', 0.2)])
+def test_a_jitted_first_solve_leaves_no_tracer_in_the_projector_cache(name, value):
+    """The cold order: no eager solve before the jit, so the projector key is a miss in the trace.
+
+    The test above warms the key at its first line, and that warm order is what hid this: a
+    miss *inside* a jit trace builds the coefficient grids under omnistaging -- tracers, from
+    concrete inputs -- and stored them under the concrete key. The next eager ``solve()`` on
+    that key, on any solver in the process, popped them, put them back, and raised
+    ``UnexpectedTracerError`` at ``c * phase``; it did not heal until the cache was cleared by
+    hand or evicted by eight other keys. So: clear the cache, build, freeze, jit as the FIRST
+    solve, then an eager ``solve()`` must equal a fresh solver's value, and no entry in
+    ``_PROJECTOR_CACHE`` may hold a tracer.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    from wavebit._core import parametric as P
+    wavebit.enable_x64()
+
+    structure = [dict(background=1.0, shapes=[_box(lx=350.0, ly=350.0, material=12.25)])]
+    fresh = wavebit.rcwa(backend=1, lattice=SQUARE, structure=structure, **KW)
+    reference = float(jnp.sum(fresh.solve().T).real)
+
+    P._PROJECTOR_CACHE.clear()
+    solver = wavebit.rcwa(backend=1, lattice=SQUARE, structure=structure, **KW)
+    frozen = solver.freeze_geometry()                      # no eager solve: the key is cold
+
+    def total(v):
+        return jnp.sum(solver.solve(geometry=frozen, **{name: v}).T).real
+
+    assert float(jax.jit(total)(jnp.asarray(value))) == pytest.approx(reference, abs=1e-12)
+    assert not any(isinstance(c, jax.core.Tracer)
+                   for coeffs in P._PROJECTOR_CACHE.values() for c in coeffs)
+    assert float(jnp.sum(solver.solve().T).real) == reference     # raised before the guard
+    assert float(jnp.sum(fresh.solve().T).real) == reference      # ... on every solver
     assert float(jnp.sum(solver.solve().T).real) == reference
 
 
