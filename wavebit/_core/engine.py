@@ -3165,6 +3165,13 @@ class CoreFactorizationMixin:
             # had to re-take the overlap test it had already passed -- on values that can no
             # longer answer it.
             geometry.boundary_plans = plans
+            # The interface set of every layer -- which faces lie on which image's faces over
+            # a run, which are dead, whether anything is left -- by name, with no float in it.
+            # Recorded for every layer whether or not the closed form builds it: a plan is
+            # microseconds, and a `None` here then means one thing only, that the shapes were
+            # traced at the freeze (a `jax.grad` primal plans; a `jax.jit` tracer cannot).
+            geometry.gamma_plans = [_parametric.plan_gamma(layer.get('shapes', []), basis)
+                                    for layer in self.structure]
         return geometry
 
     def solve(self, geometry=None, auto_detune=True, **kwargs):
@@ -3612,7 +3619,10 @@ class CoreFactorizationMixin:
                 # reported complex64, and Torch raised `expected m1 and m2 to have the same
                 # dtype` as soon as anything upstream honoured the request.
                 complex_dtype=self.complex_dtype, xp=xp,
-                boundary_plans=None if geometry is None else geometry.boundary_plans)
+                boundary_plans=None if geometry is None else geometry.boundary_plans,
+                # The same record for both quantities: it is geometric, and the permeability
+                # view's own material slots make the seam signs per quantity at build time.
+                gamma_plans=None if geometry is None else geometry.gamma_plans)
 
         else:
             raise ValueError(

@@ -36,13 +36,14 @@ it.* Each path has its own reading of that, because each record depends on somet
 ``normal_field``        the interfaces it was sampled from must still be where they were
 ``compression``         the cut it recorded must still separate every block the layer has
 ``boundary_plans``      the shapes must still overlap the way the painting was resolved for
+``gamma_plans``         the faces must still meet the image faces the interface set was planned on
 ======================  ==================================================================
 
-All three raise :class:`StaleGeometryError`, and all three run **only eagerly**: under a trace
+All four raise :class:`StaleGeometryError`, and all four run **only eagerly**: under a trace
 the comparison is itself the thing the record exists to avoid, so a jitted call carries no
 check and a long fit should re-freeze on a schedule rather than wait to be told.
 
-``boundary_plans`` reads that rule differently from the other two, because it holds no
+``boundary_plans`` reads that rule differently from the first two, because it holds no
 coordinates at all. A shape *moving* is what it is built to survive -- that is what makes the
 boundary route differentiable -- so only the combinatorics changing makes it stale: shapes that
 begin to overlap, or stop, or a shape that was covered coming out from under the one covering
@@ -50,6 +51,14 @@ it. Its ``None`` entry is a recorded answer too ("painted, and nothing overlappe
 stale the same way. Both are checked by re-asking, which costs a re-plan -- 0.2% of a frozen
 solve for two overlapping shapes and 1.2% for ten, falling as ``truncation_order`` rises. The freeze
 here buys traceability, not speed, so no plateau is given up for it.
+
+``gamma_plans`` reads it the same way, one level down: which face of which box lies on which
+image's face, opposed, over a run -- and which faces that leaves dead. No coordinate and no
+material either, so a shape moving or a material sweeping replays it; a face leaving its
+partner's line, a run appearing, or a shape growing across a ring boundary of its image list
+makes it stale (:func:`parametric.check_gamma_plan_still_fits`). A material swept through
+equality on a seam is *not* a staleness: the sign is an array op on the slots at build time,
+and the record has nothing to say about it.
 
 On the raster paths the sweep a frozen record serves is over the *material values* — those
 never move an interface, so they are always accepted, exactly. A sweep that moves the pattern
@@ -88,6 +97,12 @@ class StaticGeometry:
             is an answer rather than a gap: painted, looked at while concrete, and nothing
             overlapped, so it is summed. Both answers are re-asked eagerly
             (:func:`boundary.check_plan_still_fits`, :func:`parametric.check_no_plan_still_fits`).
+        gamma_plans: per-layer :class:`~wavebit._core.parametric.GammaPlan` for the closed-form
+            route's normal field -- which faces lie on which image's faces, over what, and what
+            that leaves dead. Pure Python like ``boundary_plans`` and content-hashed beside it;
+            recorded for every shape layer, so a ``None`` entry means the shapes were traced at
+            the freeze and the replay plans blind (every piece, no pairs). Re-asked eagerly by
+            :func:`parametric.check_gamma_plan_still_fits`.
 
     A field left ``None`` means "auto-detect", which is what the strategy in use does not need
     (a sampled build never touches ``normal_field``, for instance).
@@ -118,6 +133,7 @@ class StaticGeometry:
     mu_normal_field: Optional[Any] = None
     mu_normal_field_source: Optional[Any] = None
     mu_compression: Optional[Any] = None
+    gamma_plans: Optional[Any] = None
 
     def _cache_key(self):
         """What ``__eq__``/``__hash__`` compare: the content when that is well defined.
@@ -141,7 +157,7 @@ class StaticGeometry:
                 and self.compression is None and self.mu_normal_field is None \
                 and self.mu_normal_field_source is None and self.mu_compression is None:
             try:
-                key = ('content', _hashable(self.boundary_plans))
+                key = ('content', _hashable(self.boundary_plans), _hashable(self.gamma_plans))
                 hash(key)
                 return key
             except TypeError:

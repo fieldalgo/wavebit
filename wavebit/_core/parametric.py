@@ -1526,20 +1526,55 @@ def _static_float(v):
     return float(v)
 
 
-def _projector_cache_key(xp, built, grid_shape, lattice, half_width_u, half_width_v, dtype):
+def _static_complex(v):
+    """``v`` as a plain complex, with :func:`_static_float`'s two refusals -- for a material."""
+    if getattr(v, 'requires_grad', False):
+        raise TypeError('a value under torch autograd is not a cache key')
+    detach = getattr(v, 'detach', None)
+    if detach is not None:
+        v = detach()
+    return complex(v)
+
+
+def _equality_bits(plan, shapes):
+    """Whether each cross pair's two materials are equal, concretely -- or ``None`` if traced.
+
+    The one material fact the field reads (:func:`_piece_field`): a seam cancels or survives
+    by the equality of its two slots, never by their values. So this is what a cache key holds
+    for a layer with a cross pair -- ``4 | 9`` and ``4 | 12`` share an entry, ``4 | 4`` gets
+    another -- and a pair-free layer holds nothing, so its material sweeps hit as they always
+    did. A traced material's equality is unknown, and the answer is ``None``: rebuild.
+    """
+    bits = []
+    for pr in plan.pairs:
+        i, j = plan.pieces[pr.p].shape, plan.pieces[pr.q].shape
+        if i == j:
+            continue
+        a = _static_complex(as_material(shapes[i].get('material', 1.0), 'shape material').epsilon)
+        b = _static_complex(as_material(shapes[j].get('material', 1.0), 'shape material').epsilon)
+        bits.append(a == b)
+    return tuple(bits)
+
+
+def _projector_cache_key(xp, built, grid_shape, lattice, half_width_u, half_width_v, dtype,
+                         plan=None):
     """A content key for the coefficients built below, or ``None`` when caching would be wrong.
 
     Everything :func:`normal_vector_field_analytical` reads goes in and nothing else does. It
-    reads each shape through :func:`shape_geometry` and never touches ``material`` or
-    ``background``, which is what makes the cache worth having: a sweep over the *material*
-    leaves this key alone. ``None`` means at least one value is traced or under autograd, so the
-    build has to happen again -- the gradient runs through it.
+    reads each shape through :func:`shape_geometry`, the plan by content, and of the materials
+    only what a cross pair's sign reads -- the *equality* of its two slots
+    (:func:`_equality_bits`) -- which is what makes the cache worth having: a sweep over the
+    material of a pair-free layer leaves this key alone, and one on a seam rebuilds only when
+    it crosses equality. ``None`` means at least one value is traced or under autograd, so the
+    build has to happen again -- the gradient runs through it. ``plan`` is ``None`` for a
+    traced layer, and then the shapes are too, so the key is.
     """
     try:
         shapes_key = tuple(tuple(v if isinstance(v, str) else _static_float(v)
                                  for v in shape_geometry(shape, lattice))
                            for shape in built)
         lat = tuple(_static_float(v) for row in lattice for v in row)
+        bits = () if plan is None else _equality_bits(plan, built)
     except (TypeError, ValueError):
         return None
 
@@ -1557,12 +1592,18 @@ def _projector_cache_key(xp, built, grid_shape, lattice, half_width_u, half_widt
     # dtypes are named, not a guarantee, and a cross-backend collision hands one namespace's
     # array to another.
     return (getattr(xp, '__name__', ''), shapes_key, tuple(grid_shape),
-            int(half_width_u), int(half_width_v), str(dtype), lat)
+            int(half_width_u), int(half_width_v), str(dtype), lat, plan, bits)
 
 
 def normal_projector_coeffs(xp, shapes, grid_shape, lattice, half_width_u, half_width_v,
-                            dtype):
+                            dtype, plan=None):
     """Coefficient grids of ``normal_x**2``, ``normal_x*normal_y`` and ``normal_y**2`` — the NVF projectors' input.
+
+    ``plan`` is the layer's :class:`GammaPlan` -- the frozen record's entry when there is one,
+    planned here from the concrete values when there is not (``None`` again under a trace
+    with no record, which :func:`normal_vector_field_analytical` answers with the blind plan).
+    A plan holds no coordinate, so the one taken over ``built`` -- a lone shape moved to the
+    cell's centre, below -- is the layer's own.
 
     **One shape is built at the centre of the cell and carried to ``(cx, cy)`` by a phase**,
     the same way :func:`assemble_eps_coeffs` carries the permittivity. Two things follow, and
@@ -1702,11 +1743,14 @@ def normal_projector_coeffs(xp, shapes, grid_shape, lattice, half_width_u, half_
     # reuses it for the other reason: the key holds no material at all because the build reads
     # none. Measured on a five-point sweep at ``normal_grid = 1024``, ``truncation_order = 4``: the call
     # 83% of the wall clock for one shape and 93% for six.
-    key = _projector_cache_key(xp, built, grid_shape, lattice, half_width_u, half_width_v, dtype)
+    if plan is None:
+        plan = plan_gamma(built, lattice)
+    key = _projector_cache_key(xp, built, grid_shape, lattice, half_width_u, half_width_v, dtype,
+                               plan)
     coeffs = _PROJECTOR_CACHE.pop(key, None) if key is not None else None
     if coeffs is None:
         normal_x, normal_y = normal_vector_field_analytical(xp, grid_shape, built,
-                                                            real_dtype, lattice)
+                                                            real_dtype, lattice, plan=plan)
         coeffs = tuple(_sampled_coeffs(xp, xp.astype(f, dtype), half_width_u, half_width_v)
                        for f in (normal_x * normal_x, normal_x * normal_y, normal_y * normal_y))
     if key is not None:
@@ -1731,7 +1775,7 @@ def normal_projector_coeffs(xp, shapes, grid_shape, lattice, half_width_u, half_
 
 
 def to_conv_mat_parametric_nvf(xp, shapes, background, half_width_u, half_width_v, lattice, dtype,
-                           normal_grid=256):
+                           normal_grid=256, plan=None):
     """The five 2D-solve convolution matrices for one parametric layer, via NVF.
 
     ``eps`` / ``1/eps`` come from the exact shape transform (no staircase); the normal
@@ -1743,12 +1787,14 @@ def to_conv_mat_parametric_nvf(xp, shapes, background, half_width_u, half_width_
     conjugates the whole solve by a diagonal and leaves each order's efficiency alone.
 
     The coefficients come from :func:`assemble_eps_coeffs`, which sums -- see there for why
-    a layer whose shapes overlap must not arrive at this function.
+    a layer whose shapes overlap must not arrive at this function. ``plan`` is the layer's
+    frozen :class:`GammaPlan`, or ``None`` to plan from the values.
     """
     eps_c, inv_eps_c = assemble_eps_coeffs(xp, shapes, background, half_width_u,
                                            half_width_v, lattice, dtype)
     c_xx, c_xy, c_yy = normal_projector_coeffs(
-        xp, shapes, (normal_grid, normal_grid), lattice, half_width_u, half_width_v, dtype)
+        xp, shapes, (normal_grid, normal_grid), lattice, half_width_u, half_width_v, dtype,
+        plan=plan)
     return nvf_from_coeffs(xp, eps_c, inv_eps_c, c_xx, c_xy, c_yy, half_width_u, half_width_v)
 
 
@@ -1817,9 +1863,83 @@ def check_no_plan_still_fits(layer, lattice, index):
         f'(Moving a shape never trips this on its own; moving it into another shape does.)')
 
 
+def check_gamma_plan_still_fits(layer, lattice, plan, index):
+    """Refuse a frozen interface set that the layer in front of it has outgrown.
+
+    A :class:`GammaPlan` records *combinatorics* -- which face lies on which image's face,
+    over a run, and what that leaves dead -- and deliberately holds no coordinate and no
+    material, which is what lets a replay carry a gradient to a shape that has moved and a
+    material that has swept. What makes it stale is the combinatorics changing: a face leaving
+    its partner's line (the recorded pair would then cancel two faces that are interfaces), a
+    run appearing (two interfaces would be kept where the material runs on), a shape growing
+    across a ring boundary of its image list (the list is bounded by size alone, so a grown
+    shape can lack its nearest instance). Nothing about the answer says so -- it comes back
+    unit-length, energy-conserving and wrong.
+
+    Re-planning is the whole cost of the comparison, microseconds for a handful of shapes.
+    Under a trace it is skipped -- a tracer has no primal to re-plan from, the same reading of
+    "not concrete" :func:`_primitives` takes -- and the concreteness is probed *before* the
+    planner is called, so a jitted replay never plans at all. ``None`` recorded for a layer
+    means its shapes were traced at the freeze: nothing was decided, and nothing is checked.
+    """
+    if plan is None:
+        return
+    shapes = layer.get('shapes', [])
+    try:
+        _cell_floats(lattice)
+        concrete = _primitives(shapes, lattice) is not None
+    except Exception:                                  # noqa: BLE001 - a traced basis
+        return
+    if not concrete:
+        return
+    fresh = plan_gamma(shapes, lattice)
+    if fresh is None or fresh == plan:
+        return
+    raise StaleGeometryError(
+        f'the frozen geometry no longer fits this structure: {_gamma_moved(plan, fresh, shapes)}. '
+        f'The recorded interface set of layer {index} describes faces this layer no longer '
+        f'has where it has them, so replaying it would cancel an interface or keep one that '
+        f'the material runs through. Call freeze_geometry() again, or drop geometry= to plan '
+        f'eagerly. (Moving a shape never trips this on its own, and neither does a material '
+        f'sweep; a face leaving its partner\'s line, or a shape growing into a wider ring of '
+        f'images, does.)')
+
+
+def _gamma_moved(held, fresh, shapes):
+    """The one clause of the refusal that names what the re-plan found, in the layer's terms."""
+    def name(plan, pr):
+        p, q = plan.pieces[pr.p], plan.pieces[pr.q]
+        return (f"shape {_shape_name(shapes, p.shape)}'s {p.face} face against shape "
+                f"{_shape_name(shapes, q.shape)}'s {q.face} face at image ({pr.m}, {pr.n})")
+
+    held_pairs = {(held.pieces[pr.p].shape, held.pieces[pr.p].face, held.pieces[pr.q].shape,
+                   held.pieces[pr.q].face, pr.m, pr.n): pr for pr in held.pairs}
+    fresh_pairs = {(fresh.pieces[pr.p].shape, fresh.pieces[pr.p].face, fresh.pieces[pr.q].shape,
+                    fresh.pieces[pr.q].face, pr.m, pr.n): pr for pr in fresh.pairs}
+    clauses = []
+    for key in sorted(set(fresh_pairs) - set(held_pairs)):
+        clauses.append(f'a pair appeared, {name(fresh, fresh_pairs[key])}')
+    for key in sorted(set(held_pairs) - set(fresh_pairs)):
+        clauses.append(f'a pair vanished, {name(held, held_pairs[key])}')
+    for old, new in zip(held.pieces, fresh.pieces):
+        if old.dead != new.dead:
+            clauses.append(f"shape {_shape_name(shapes, new.shape)}'s {new.face} face is "
+                           f"{'covered by its own images now' if new.dead else 'an interface again'}")
+        if old.imgs != new.imgs and old.face == 'arc' or (old.imgs != new.imgs and old.face == '+u'):
+            clauses.append(f"shape {_shape_name(shapes, new.shape)}'s image list changed "
+                           f"({len(old.imgs)} -> {len(new.imgs)} instances: its size crossed a "
+                           f"ring boundary)")
+    if held.ring != fresh.ring:
+        clauses.append(f'the ring of images swept went from {held.ring} to {fresh.ring}')
+    if held.empty != fresh.empty:
+        clauses.append('the layer ' + ('tiles the plane now' if fresh.empty else
+                                       'no longer tiles the plane'))
+    return '; '.join(clauses) or 'the recorded plan differs from a fresh one'
+
+
 def to_conv_mat_parametric_layers(layer_shapes, half_width_u, half_width_v, lattice,
                               normal_grid=256, complex_dtype=None, xp=None,
-                              boundary_plans=None):
+                              boundary_plans=None, gamma_plans=None):
     """Stack the parametric-NVF convolution matrices over layers.
 
     ``layer_shapes`` is one ``dict(background=..., shapes=[...])`` per layer, with the shapes'
@@ -1834,6 +1954,11 @@ def to_conv_mat_parametric_layers(layer_shapes, half_width_u, half_width_v, latt
     The array namespace is taken from the first differentiable shape parameter found, so
     passing JAX or PyTorch scalars for e.g. ``lx`` makes the whole build run — and
     differentiate — on that backend. Pass ``xp`` to force it.
+
+    ``boundary_plans`` and ``gamma_plans`` are the frozen record's two per-layer entries
+    (:class:`~wavebit._core.geometry.StaticGeometry`): the painting's resolution for a layer
+    that overlaps, and the interface set the closed form's normal field replays. Both are
+    re-asked eagerly and replayed under a trace.
     """
     if xp is None:
         xp = _infer_namespace(layer_shapes)
@@ -1848,6 +1973,7 @@ def to_conv_mat_parametric_layers(layer_shapes, half_width_u, half_width_v, latt
         # values that cannot answer it.
         frozen = boundary_plans is not None
         plan = boundary_plans[index] if frozen else None
+        gamma = gamma_plans[index] if gamma_plans is not None else None
         if frozen and plan is None:
             check_no_plan_still_fits(layer, lattice, index)
         check_layer_shapes(layer, lattice, index)
@@ -1872,9 +1998,11 @@ def to_conv_mat_parametric_layers(layer_shapes, half_width_u, half_width_v, latt
             # frozen while the shapes were disjoint routes by its own answer, not by the two
             # rules, and once the shapes moved together the check below is what fired -- with
             # a message about this builder rather than about the stale record.
+            if gamma_plans is not None:
+                check_gamma_plan_still_fits(layer, lattice, gamma, index)
             mats = to_conv_mat_parametric_nvf(
                 xp, layer.get('shapes', []), background, half_width_u, half_width_v, lattice,
-                dtype, normal_grid=normal_grid)
+                dtype, normal_grid=normal_grid, plan=gamma)
         for slot, m in zip(out, mats):
             slot.append(m)
 
