@@ -1,8 +1,16 @@
 # Reference cases
 
-Validation against solvers that are not ours. The expected answer is known — agreement to
-~1e-13 — so these are tests, not studies. What makes them their own directory is that
-*producing* the reference needs software this project does not ship.
+Validation against solvers that are not ours. The expected answer is known, so these are tests,
+not studies. What makes them their own directory is that *producing* the reference needs
+software this project does not ship.
+
+**How closely "known" means differs by row, and the difference is a fact about the method
+rather than about the harness.** Where the oracle is another RCWA and neither side truncates,
+agreement is ~1e-13 and a golden is a drift detector as well as a correctness one. Where the
+oracle discretises — the Meep row, which is an FDTD — both sides carry a grid error and the
+agreement is ~1e-2. That row is an oracle for *structure*: it separates a right answer from a
+wrong sign, a swapped axis or a mislabelled order, and it says nothing about the last digits.
+Each row below states which kind it is.
 
 The arrangement is the same for every oracle: the expensive half runs once, by hand, on a
 machine that has the tools; what CI checks on every push is the committed numbers.
@@ -47,10 +55,12 @@ differ are exactly the `__stack` pair above.
 | **fmmax**, the in-cell **field** | uniform stacks exactly (7.8e-16) **and patterned layers to ~1e-4**, through the coupled 2D path | the `fwref` env | `golden_fmmax_field.npz` |
 | **RETICOLO**, the in-cell **field** | the *pure TE/TM 1D* path (`field_1d`), which the two rows above never reach — **1e-14 on gratings**, five components of six | Octave + `RETICOLO_PATH` | `golden_reticolo_field.npz` |
 | **RETICOLO**, the **conical** field | `field_1d_conical` on a *patterned* layer — an azimuth and a discontinuity at once, which nothing else here reached | same | `golden_reticolo_conical_field.npz` |
+| **Meep** (FDTD, GPL) | a **crossed grating in the time domain**: per-order complex amplitudes on a 2D order grid at a conical mount, both incident polarisations. Not RCWA at all, so it is the only entry that can arbitrate `_core/fdtd.py` — and the only external check `_extract_crossed` has ever had | the `meep` env; **never an install dependency**, and its source is not read — see below | `golden_meep_crossed.npz` |
 
-A fourth oracle lives outside this directory: the Berreman 4x4 in
+One more oracle lives outside this directory: the Berreman 4x4 in
 `tests/test_anisotropic_berreman.py` is an independent *formulation* — not RCWA at all — but our
-own implementation, so it sits a tier below these three.
+own implementation, so it sits a tier below the rows above. Meep is the only entry that is both
+at once: a different formulation *and* somebody else's code.
 
 ### Why the field row exists, and what it cost to not have it
 
@@ -202,6 +212,148 @@ Two structural facts came free with the oracle and are pinned:
   RETICOLO code paths (`grating_type` 1 and 0) on the same structure, compared without the
   solver involved at all — which checks both harnesses, both row rules and both array shapes
   against something that is not this project.
+
+### The Meep row: the first oracle here that is not RCWA, and what it took
+
+Added 2026-09-06. Every other row truncates a Fourier series and inherits whatever
+factorization that forces, which is the formulation `_core/engine.py` uses — so none of them
+can arbitrate `_core/fdtd.py`, whose errors are numerical dispersion, a staircased boundary and
+an imperfect absorber instead. Meep is an FDTD. Nothing is shared but Maxwell's equations.
+
+Two gaps close at once, and the second one is wider than it looks:
+
+* **a crossed grating solved in the time domain.** `_extract_crossed` is a line-for-line copy
+  of `_extract_conical`, and every per-order sign in it — the three `sigma` legs, the
+  `s_hat`/`p_hat` frame, the `n / kz_m` secant — is invisible to `R`, `T` and `R + T`. Its only
+  arbiter was `tests/test_fdtd.py`, against **wavebit's own** RCWA path, which shares those
+  conventions with it by construction: a convention wrong in both moves nothing.
+* **per-order complex amplitudes on a two-dimensional order grid, for either solver.**
+  `docs/amplitude-sp-frame.md` §2 names what every golden here compares — efficiencies, or
+  fields, or 1D amplitudes — and concludes that the per-order s/p half-turn "could not have
+  been reached" by any of them. Both cells below have propagating orders on both sides of
+  `kx = 0`, which is what makes that reachable, and `test_the_half_turn_half_plane_is_covered`
+  is what keeps it so as cases are added.
+
+**Nothing in the map is fitted.** The axis map is the *identity* — a 3D meep cell has three
+real axes, so unlike the 2D bridge nothing is permuted. Meep's DFT phasor is `exp(+i k z)` for
+a wave travelling `+z`, which is wavebit's `e^{-iωt}`, so there is no conjugation. The frame is
+`s_hat = z_hat × k_hat_par` and `p_hat = k_hat × s_hat`, and `E · k_hat = 0` collapses the p
+projection to `∓ (n / kz)(c Ex + s Ey)` with the upper sign downgoing — which *is*
+`_extract_crossed`'s `sigma = (-1, +1, -1)`, so those three signs are geometry rather than a
+convention either side chose. `test_the_leg_signs_are_the_ones_the_generator_derived` pins the
+two spellings together.
+
+**The one free factor is an origin, and it is measured rather than assumed.** wavebit places a
+raster from the cell **centre** (`wavebit.meshgrid_xy` on a 7-column cell of period 0.84 returns
+`-0.36 … +0.36`, and the meep blocks are built on the same rule) but references each order's
+amplitude phase from the cell **corner** — its demodulation kernel runs over cells `0 … n-1`,
+in both solvers. Normalised by the incident order the two differ by
+`exp(-i(k_m - k_inc)P/2)` on each axis, which is `(-1)^m (-1)^l`. Applied, not fitted, and
+scored against four alternatives on the square cell at a deliberately coarse resolution 25:
+
+| rule | worst amplitude gap against wavebit's RCWA |
+| --- | --- |
+| identity | 7.2e-1 |
+| `(-1)^m` alone | 4.6e-1 |
+| `(-1)^l` alone | 7.2e-1 |
+| **`(-1)^(m+l)`** | **3.9e-2** |
+| `exp(-i k_m P_x/2) exp(-i k_l P_y/2)` (the whole field, not the envelope) | 8.2e-1 |
+
+That is a 12x separation at a grid where the FDTD's own energy defect is 5 %, so it is not a
+close call. **It is also a finding for the maintainer rather than a fact about meep**:
+`docs/conventions.md` says every coordinate this library takes or hands back is measured from
+the centre of the cell, and does not carve out the per-order amplitude phase. Nothing here says
+which of the two should move — a translation of the structure and a translation of the phase
+origin are the same operation on an amplitude, so no amplitude comparison can separate them,
+and it is `meshgrid_xy` (which involves no amplitude at all) that says the structure is centred.
+
+#### Five harness faults, each returning a plausible energy-conserving wrong number first
+
+Three were inherited from the 2D bridge that established the pure TE/TM map; two are new to 3D
+and to this file. Every one of them is still live for anyone extending the generator.
+
+| what | what it cost, measured |
+| --- | --- |
+| meep replicates geometry periodically along the **PML axis** too, so a substrate block overhanging the far cell edge wraps into the superstrate | `T = 0.412` against a true 0.684, with `R + T` **exactly 1** |
+| DFT monitor samples are **weighted**, not uniform: a plane spanning one period overhangs it by half a cell at each end | a plain mean put 9.9e-3 of a plane wave into orders a plane wave does not have |
+| an oblique source sheet must carry the **Bloch phase itself** (`amp_func`) | `\|E\|` varied 1.66x along a monitor where a plane wave is 1.00; leak 2.99 |
+| the **z pixel count** decides where meep anchors its grid, and an odd count puts a grid point exactly *on* the structure's interfaces | resolutions 40 and 80 (122 and 244 pixels) give 4.5e-3 and 1.2e-3 on `r`; **60** (183 pixels) gives **4.3e-2** — while `\|r\|` and `R + T` stay exactly on the second-order curve |
+| a **layer thickness that is not an integer number of pixels** gets rounded, which moves the plane the transmitted phase is referenced to | a 0.24 µm layer at resolution 60 is 14.4 pixels; snapping it to 14 put the specular amplitude **4.6e-2** from the converged RCWA answer with `R + T = 0.9954` and every per-order efficiency inside 1.6e-2 |
+
+The last one is the one worth reading twice, because it is this directory's recurring shape in
+a new costume. It survived the **two-tier error bar** as well: resolution 30 rounds 7.2 pixels
+to the same `14/60`, so the coarse and fine runs carried the identical offset and agreed with
+each other to 7e-3 while both were 4.6e-2 wrong. A convergence study cannot see an error that
+does not depend on the grid. What saw it was comparing *amplitudes* against a reference that
+had not made the same choice — which is the same instrument `docs/fdtd.md` §5 records finding
+four defects with. The generator now refuses such a thickness by name.
+
+The two instruments that caught the rest are cheap and are both asserted rather than printed:
+decompose the **incident-only** run into orders and demand that every order a plane wave does
+not have comes back at round-off (1.2e-16 to 2.1e-16 on the committed cases), and decompose the
+incident wave into s and p and demand that the leg not driven is empty (2.4e-5 to 3.3e-4). An
+electric current sheet along `s_hat` drives only the s wave and a magnetic one along `s_hat`
+only the p wave, because the two waves' in-plane fields are orthogonal — so both legs are
+driven by purely transverse sheets and neither needs a z-directed source.
+
+#### What it is worth, and what it is not
+
+**This comparison is bounded by two grids rather than one**, which is the price of the oracle
+being a different method rather than a different implementation of the same one. So the golden
+is frozen at **two resolutions** per case, and `test_the_golden_states_its_own_error_bar`
+asserts the claim rather than an estimate: with a converged RCWA answer in hand, the finer tier
+has to be *nearer* it than the coarser one, by an implied order in a band a crossed grating can
+be in.
+
+**The order is not 2, and that turned out to be the interesting part.** Measured against RCWA
+at `truncation_order` 21, which is converged: over 7, 9, 13, 17, 21 the gap below moves by 5e-5
+on the square cell and 7e-4 on the rectangular one, against gaps of 1.2e-2 to 3.7e-2:
+
+| cell | resolutions (dz) | worst propagating amplitude gap | implied order |
+| --- | --- | --- | --- |
+| square, s | 25 → 50 (40 → 20 nm) | 3.9e-2 → 1.6e-2 | 1.26 |
+| square, p | 25 → 50 | 3.8e-2 → 1.2e-2 | 1.63 |
+| rectangular, s | 30 → 60 (33 → 17 nm) | 6.6e-2 → 3.7e-2 | 0.83 |
+| rectangular, p | 30 → 60 | 5.6e-2 → 3.5e-2 | 0.69 |
+
+with the rectangular cell's s leg measured at four resolutions rather than two — 6.6e-2 /
+5.0e-2 / 4.3e-2 / 3.7e-2 at 30 / 40 / 50 / 60, orders 0.99, 0.65, 0.80 — so the sub-second order
+is a trend and not a pair of points. `R + T` on the same runs converges cleanly at second order (defect 1.90e-2 / 9.96e-3 /
+6.14e-3 / 3.95e-3), which is the usual shape: **the energy check is blind to what is actually
+limiting the answer.**
+
+That is worth having as more than a caveat. `docs/fdtd.md` §8g measures wavebit's own crossed
+convergence at 1.83 and 1.50, with a control that stalled at 0.67, and §9 lists as *unmeasured*
+whether the corner cells where a vertical and a horizontal interface meet cost first order or
+second. Meep's subpixel scheme is a different implementation of the same idea, written by
+somebody else, and it degrades the same way on the same class of geometry — which is as close to
+an independent answer as this directory can give, and it says the ceiling is the geometry rather
+than either code.
+
+Against that, a defect of the kind this row exists to catch moves an amplitude by 1e-1 to 1.2 —
+a single flipped leg sign is `2|t_p|`, which is 1.28 and 1.19 on the two cells — and
+`test_a_leg_sign_would_still_be_visible` asserts that rather than assuming it. So the resolving
+power is 13x to 28x, not the 1e13 an RCWA-against-RCWA golden gets. **It is an oracle for
+structure, exactly as the fmmax field row is**; slow drift is the job of the in-process
+comparisons in `tests/test_fdtd.py`. Five mutants, applied and reverted, are what says the
+bounds are doing work rather than merely being satisfied:
+
+| mutant | killed by |
+| --- | --- |
+| the transmitted p leg sign flipped (`sigma = (-1, +1, +1)`) | 3 tests |
+| the y order ladder written on `Px` instead of `Py` | the **rectangular** case alone — which is that case's entire reason for existing |
+| one demodulation kernel for both transverse components instead of four | the **square** case |
+| the per-order frame half-turn dropped from `order_azimuth` | 7 tests, on *both* solver paths |
+| the raster's y rows reversed | 8 tests |
+
+One consequence decides how the time-domain test is run, and it is a measurement rather than a
+budget: **refining wavebit's own grid past the golden's error buys nothing.** wavebit's crossed
+run converges at a clean second order (2.6e-2 → 6.9e-3 over the square's 25 → 50; 6.9e-2 →
+2.5e-2 → 1.4e-2 over the rectangular one's 20 → 30 → 40), so the golden is the binding
+constraint: taking the rectangular run from 30 to 40 costs 2.7x the wall time and moves the gap
+6.0e-2 → 4.8e-2 against a 3.7e-2 floor that is Meep's alone. The test therefore runs at the
+coarse end on purpose. Whole file: 18 tests in 37 s, of which 36 s is the two time-domain
+runs and the rest is four RCWA solves and arithmetic.
 
 ### A generator that could not reproduce its own golden
 
@@ -396,6 +548,39 @@ Morris (1996) with Granet & Guizal (1996) for TM.
 
 > M.F. Schubert and A.M. Hammond, *Fourier modal method for inverse design of
 > metasurface-enhanced micro-LEDs* (2023). [arXiv:2308.08573](https://arxiv.org/abs/2308.08573)
+
+**Meep** (GPL-2.0-or-later).
+
+> A.F. Oskooi, D. Roundy, M. Ibanescu, P. Bermel, J.D. Joannopoulos and S.G. Johnson,
+> *Meep: A flexible free-software package for electromagnetic simulations by the FDTD method*,
+> Comput. Phys. Commun. **181**, 687–702 (2010).
+> [doi:10.1016/j.cpc.2009.11.008](https://doi.org/10.1016/j.cpc.2009.11.008)
+
+### Meep is GPL, and the whole arrangement here is what keeps that a non-issue
+
+wavebit is Apache-2.0, so a GPL dependency is not one of the options. The policy is the same
+one this directory already applies to inkstone, stated up front rather than reached later:
+
+* **no file under the meep package is opened, read, grepped or copied.** Meep is used by
+  *calling* its public Python API and reading the numbers that come back, so every statement
+  this directory makes about its conventions is a black-box measurement. The generator sets
+  `sys.tracebacklimit = 0` so that an uncaught exception cannot print lines of another
+  package's source into the terminal;
+* **nothing in the shipped package imports it**, and it is not a dependency of anything —
+  including the test. `gen_goldens_meep_crossed.py` runs by hand in its own environment,
+  exactly as the RETICOLO generator needs Octave and the fmmax ones need `fwref`;
+* what is committed is **our own adapter code plus the numbers meep produced**, which is the
+  same footing as every other row.
+
+The `meep` environment, for the record:
+
+```bash
+conda create -y -n meep -c conda-forge pymeep
+```
+
+A full regeneration is about 25 minutes on ten cores: 154 s and 210 s for the square cell's two
+legs at resolution 50, 498 s and 517 s for the rectangular one at 60, plus a tenth of that again
+for the two coarse control tiers.
 
 ### What RETICOLO's licence actually says, since the answer is not tidy
 
