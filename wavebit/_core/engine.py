@@ -3342,7 +3342,7 @@ class CoreFactorizationMixin:
 
         The parametric structure is asked the same question, for the same reason: a lone
         ellipse of traced size under ``jax.jit`` is refused by the blind plan since
-        2026-09-07, and a record taken off the tracer would send its recipe round the same
+        2026-09-06, and a record taken off the tracer would send its recipe round the same
         loop. A raster is not asked -- the NVF freeze cannot read a traced raster at all and
         says so on its own, and the sampled Li build decides nothing, so an empty record of
         it is an honest one.

@@ -35,7 +35,7 @@ SHEAR = np.array([[PERIOD, 200.0], [0.0, PERIOD]])
 #: Li's checkerboard primitive cell, where ``a1 + a2 = (2.5, 0)`` and ``a1 - a2 = (0, 2.5)``.
 CHECKER = np.array([[1.25, 1.25], [1.25, -1.25]])
 #: The sheared cell ``a2 = (50, 700)`` written with the unreduced basis ``a2 = 2 a1 + (50, 700)``:
-#: the same structure, and since 2026-09-07 the same plan -- every image is counted on the
+#: the same structure, and since 2026-09-06 the same plan -- every image is counted on the
 #: reduced basis, so the abutting image is ``(0, 1)`` and the ring 3, with the transform to that
 #: spelling recorded. On the basis as given the image sat at ``(-2, 1)``, outside any fixed 3x3,
 #: which is what a reader of the ring that fell back to one would miss.
@@ -412,7 +412,7 @@ def test_a_traced_layer_gets_no_plan_and_the_blind_one_has_every_piece():
     Every piece the *types* name: four faces per box and one arc per circle. An ellipse is
     the one shape whose instance list is a question of its size (:func:`_arc_offsets`), and
     the blind plan cannot read a size, so it refuses one by name rather than build the fold's
-    single instance -- which is what it did until 2026-09-07, 8.2e-3 in ``sum(T)`` on the
+    single instance -- which is what it did until 2026-09-06, 8.2e-3 in ``sum(T)`` on the
     720 x 200 ellipse (``test_gamma_frozen.py``).
     """
     jax = pytest.importorskip('jax')
@@ -452,7 +452,7 @@ def test_the_blind_ring_is_read_from_the_basis_and_a_traced_basis_is_refused():
     offsets, 460 of them outside a 7x7 -- with the contact at ``(m, n) = (-10, 1)``, and the
     blind plan used to hand a *traced* basis that 7x7 with no argument: the field built on it
     disagreed with the planned one on two thirds of the samples (max 90 deg; 6e-3 in
-    ``sum(T)`` through a jitted solve, ``test_gamma_frozen.py``). Since 2026-09-07 every
+    ``sum(T)`` through a jitted solve, ``test_gamma_frozen.py``). Since 2026-09-06 every
     image is counted on the reduced basis, so this cell plans exactly as ``a2 = (50, 700)``
     does -- ring 3, 21 offsets, the contact at ``(0, 1)`` -- with the transform recorded, and
     the readable blind ring is the 25 offsets of the reduced cell rather than 1559 (the
@@ -527,7 +527,7 @@ def test_a_round_shape_on_an_unreduced_basis_reads_its_own_level_set(name, shape
 
     The fold rounds fractional coordinates and sweeps one cell a side, which finds the nearest
     centre only on a reduced basis (``parametric._fold_to_nearest_image`` has the argument).
-    ``as_lattice`` accepts these spellings as they are, and until 2026-09-07 a lone 693 circle
+    ``as_lattice`` accepts these spellings as they are, and until 2026-09-06 a lone 693 circle
     read its own level set 8.89 deg off in the mean on its boundary at ``k = 3`` (69.9 deg
     max, 900 of 4000 points past 1 deg) and 43.8 / 90.0 at ``k = 10``, on every backend, in
     silence -- identical digits on the fold tree (8bfc6aa), so pre-existing rather than a

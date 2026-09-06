@@ -617,7 +617,7 @@ MUTANTS = [
      '    ring = images(r)\n',
      '    ring = images(1)\n',
      _the_bar_along_two_a1_plus_a2_has_its_flush_pair),
-    # The reduced basis, 2026-09-07: the fold and the offsets count cells of it. The replay
+    # The reduced basis, 2026-09-06: the fold and the offsets count cells of it. The replay
     # dropping the plan's transform folds on the basis as given, which the circle on the
     # `3 a1` spelling reads at 8.89 deg; the planner dropping it plans that spelling on ring 14.
     ('the replay folds on the basis as given', P,

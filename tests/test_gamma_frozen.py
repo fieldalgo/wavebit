@@ -129,7 +129,7 @@ def test_a_jitted_solve_with_a_record_equals_the_eager_one(name, lattice, make, 
     ('shear', SHEAR),
     # `a2 = 10 a1 + (50, 700)`: the cell of `a2 = (50, 700)` on an unreduced basis, which
     # `as_lattice` accepts as it is. It planned 479 offsets per piece out to ring 14 on the
-    # basis as given; since 2026-09-07 it plans as its reduction, 21 offsets on ring 3.
+    # basis as given; since 2026-09-06 it plans as its reduction, 21 offsets on ring 3.
     ('unreduced, 10 a1', np.array([[PERIOD, 7050.0], [0.0, PERIOD]])),
 ])
 def test_a_traced_basis_with_no_record_is_refused_and_with_one_replays(name, lattice):
@@ -148,7 +148,7 @@ def test_a_traced_basis_with_no_record_is_refused_and_with_one_replays(name, lat
     lattice gradient lives in ``test_lattice_pytree.py``).
 
     The freeze is taken before the refused call here; it may be taken after it too, since
-    2026-09-07 -- ``solve()`` puts the concrete cell back once a traced call returns, which
+    2026-09-06 -- ``solve()`` puts the concrete cell back once a traced call returns, which
     is what ``test_the_refusal_recipe_works_in_the_order_it_is_read`` pins. Until then the
     jitted call left its tracer in ``solver.lattice`` and a freeze taken after it recorded
     ``None`` for the plan.
@@ -187,7 +187,7 @@ def test_the_refusal_recipe_works_in_the_order_it_is_read(name, lattice, structu
     """Jit refused -> ``freeze_geometry()`` -> jitted replay -> eager replay, on one solver.
 
     The recipe the traced-decision refusal prints, followed literally *after* the refusal.
-    It did not work until 2026-09-07: ``solve(lattice=L)`` assigned the tracer to the solver
+    It did not work until 2026-09-06: ``solve(lattice=L)`` assigned the tracer to the solver
     and left it there, so the freeze taken next recorded ``gamma_plans = [None]`` in silence,
     the jitted replay with that record was refused again with the same message, and every
     eager solve on the solver raised ``UnexpectedTracerError`` until the lattice was
@@ -631,7 +631,7 @@ def test_a_jitted_ellipse_with_no_record_is_refused_and_a_circle_builds():
 
     Whether a round shape leaves its Wigner-Seitz cell is decided by its size
     (:func:`~wavebit._core.parametric._arc_offsets`), which a ``jax.jit`` tracer cannot
-    give. Until 2026-09-07 the blind plan answered every round shape with its single
+    give. Until 2026-09-06 the blind plan answered every round shape with its single
     instance, so the 720 x 200 ellipse under ``jax.jit`` with no record was built on the
     fold's field the ring had replaced: -8.222e-3 / -7.058e-3 in ``sum(T)`` from the eager
     solve at orders 4 / 6 (``normal_grid`` 128 / 256), the same digits as a NumPy solve with
@@ -639,7 +639,11 @@ def test_a_jitted_ellipse_with_no_record_is_refused_and_a_circle_builds():
     traced decision raises with, naming the freeze; with a record taken outside the trace the
     eleven-instance list replays to 1e-12 of the eager solve. A circle of any accepted size
     never leaves its cell, so its single instance *is* the planned list and the jitted circle
-    builds without a record, to 1e-12 of the eager solve.
+    builds without a record, to 1e-12 of the eager solve. "Accepted" is the eager refusal's
+    word, and that refusal is what bounds the circle: it cannot fire on a traced ``lx``, so a
+    jitted sweep carried past ``P`` builds an overlapping structure in silence (750 on the
+    700 square: ``sum(T)`` 0.928891 where the eager solve raises) -- a sweep must not carry
+    it past ``P``, and re-taking the freeze every step (README) is what catches it.
     """
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp

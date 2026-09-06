@@ -138,7 +138,7 @@ options are known: for a lone shape the field is built at the cell centre, so a 
 Euclidean test can prune each face's list there with no staleness exposure, and the
 per-instance ``K . (A e)`` products can be hoisted per offset.
 
-**Every enumeration of periodic images is on the Lagrange-reduced basis** (2026-09-07,
+**Every enumeration of periodic images is on the Lagrange-reduced basis** (2026-09-06,
 :func:`~wavebit._core.lattice.reduced_basis`). The fold rounds fractional coordinates and
 sweeps one cell a side, and that finds the Euclidean nearest image only when the basis is
 reduced -- ``as_lattice`` accepts ``a2 = 3 a1 + (50, 700)`` as it is, and a lone 693 circle
@@ -1096,7 +1096,7 @@ def _arc_offsets(prim, a1x, a1y, a2x, a2y, diam, tol):
     A circle can never leave: ``h = R`` in every direction, and ``R > |t| / 2`` is the overlap
     ``check_layer_shapes`` refuses. That is a statement about the geometry, true on any
     spelling of the basis; the fold *finding* the nearest centre is a statement about the
-    arithmetic, true on the reduced one, which is the one it is handed since 2026-09-07
+    arithmetic, true on the reduced one, which is the one it is handed since 2026-09-06
     (:func:`_fold_to_nearest_image`). The threshold steps like every combinatorial fact of the
     plan -- a frozen record holds it, and a shape grown across it is refused by name -- and
     the tolerance is the collinearity one, rounding scale, so a disc exactly filling its cell
@@ -1242,8 +1242,13 @@ def _blind_plan(shapes, lattice):
     Wigner-Seitz cell (:func:`_arc_offsets`) is a question of its *size*, and the size is
     what a trace cannot read; only the type is. A circle never leaves -- one of diameter
     ``<= P`` sits inside the cell of its centre on any basis, and a larger one is refused
-    eagerly as an overlap -- so its single instance is the planned list and it builds. An
-    ellipse can leave, and until 2026-09-07 one that did was built here on its single
+    eagerly as an overlap -- so its single instance is the planned list and it builds. That
+    eager refusal is the whole of what bounds the circle: under ``jax.jit`` with a traced
+    ``lx`` the overlap check cannot fire, so a jitted sweep that carries a circle past ``P``
+    builds an overlapping structure on the single instance with nothing said (a 750 circle on
+    the 700 square built ``sum(T)`` 0.928891 where the eager solve refuses) -- a sweep must
+    not carry it past ``P``, and re-taking the freeze on a schedule, as the README says
+    (every step), is what catches it. An ellipse can leave, and until 2026-09-06 one that did was built here on its single
     instance, which is the fold's field the ring replaced: a 720 x 200 ellipse at 10 deg on a
     700 square under ``jax.jit`` with no record solved -8.2e-3 in ``sum(T)`` from the eager
     one at order 4 (-7.1e-3 at order 6), bit-identical to a NumPy solve with the plan forced

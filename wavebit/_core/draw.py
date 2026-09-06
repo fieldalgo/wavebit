@@ -33,7 +33,7 @@ from .lattice import meshgrid_xy, reduced_basis, sample_grid
 #: covers anything up to about a full period across; wider than that is not drawn, which is a
 #: limit of the picture and not of the solve.
 #: One cell a side, counted on the *reduced* basis (`lattice.reduced_basis`) as every image
-#: enumeration is since 2026-09-07: on `a2 = 10 a1 + (50, 700)` the neighbour that overlaps the
+#: enumeration is since 2026-09-06: on `a2 = 10 a1 + (50, 700)` the neighbour that overlaps the
 #: picture sits at (-10, 1) of the basis as given, and a 3x3 there drew the cell with holes.
 _IMAGES = (-1, 0, 1)
 

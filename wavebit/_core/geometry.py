@@ -102,7 +102,7 @@ class StaticGeometry:
             that leaves dead. Pure Python like ``boundary_plans`` and content-hashed beside it;
             recorded for every shape layer. A ``None`` entry makes the replay plan blind (every
             piece, no pairs; a traced *basis* or *ellipse* is refused there rather than guessed
-            at), and since 2026-09-07 no freeze writes one: a solver whose shapes are ``jax.jit``
+            at), and since 2026-09-06 no freeze writes one: a solver whose shapes are ``jax.jit``
             tracers at the freeze is refused by name instead of recorded as nothing. Re-asked
             eagerly by :func:`parametric.check_gamma_plan_still_fits`.
 

@@ -550,7 +550,7 @@ def reduced_basis(A, transform=None):
     :class:`~wavebit._core.parametric.GammaPlan` records it, so a jitted replay on a traced
     basis reduces with the recorded integers rather than asking the tracer for a number.
 
-    What reads this and what does not is the whole design (2026-09-07): every enumeration of
+    What reads this and what does not is the whole design (2026-09-06): every enumeration of
     periodic *images* -- the fold, the instance lists, the pair sweep, the overlap check, the
     oracle -- goes through it, and nothing on the Fourier side does. ``order_kxy``, the
     truncation window, ``periods_of``, the sample grid, the origin a shape's ``cx`` is measured
