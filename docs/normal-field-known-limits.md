@@ -13,6 +13,8 @@ of Li's inverse rule to apply along which direction. It never enters the permitt
 coefficients. That is what makes every defect in this file quiet — `R + T` conserves, nothing
 raises, and the only symptom is convergence that looks like a property of the modeling path.
 See `parametric-modeling.md` and `nvf-normal-methods.md` for the constructions themselves.
+§9 is the case table: every scene the piece field was designed on, lettered A to L, with its
+status as of 2026-09-06 and where it is measured.
 
 
 ## 1. The polygon route still reads an abutting face as an interface — OPEN
@@ -49,6 +51,16 @@ invariant: 4.9e-15, 7.0e-15, 7.3e-15. That route violated it by 1.1e-5 before it
 
 **What to do instead.** State the layer as a raster structure, which carries the wrap, or arrange
 the geometry so no spanning shape takes part in an overlap.
+
+**Two of the lettered cases live here, and both are still open.** **F**, a shape nested inside
+another (an overlap, so the polygon route builds it): the hole loop and the inner loop are the
+same curve traced in opposite directions, so their edges are anti-parallel coincident pairs and
+the pair sweep of §2 applies to them as it does to faces -- but the polygon route's builder is
+`distance_gradient_normal_field`, which has no plan and reads every edge as an interface. **H**,
+a shape larger than the period: refused by `check_layer_shapes` as before, because the
+permittivity side has no cell-clipped image union to transform, and the interface set alone
+would not make it right. The ring and the coverage rule of §2 are in place for both; the
+builder swap is the step that has not landed.
 
 
 ## 2. A face the fold cannot merge is refused, not built — FIXED (2026-09-06)
@@ -160,8 +172,8 @@ to blend face *segments* over several images, which is a different builder.
 So the geometry *was* refused, by `overlap.partial_self_coincidences` from `check_layer_shapes`,
 naming how much of the face was covered. That is the "different builder" the paragraph above
 asks for: `overlap.face_pairs` is the sweep that finds every run (the runs and their union per
-face are what the refusal computed), and `parametric._box_field` blends the face *segments* over
-their images. The refusal and its sweep were deleted with it; the interpenetration refusal
+face are what the refusal computed), and `parametric._piece_field` blends the face *segments*
+over their images. The refusal and its sweep were deleted with it; the interpenetration refusal
 (larger than the period, overlap through an edge) is unchanged and still asked first.
 
 ### 2a. The union of images, not any single one
@@ -241,7 +253,10 @@ static "which pair merged" flag) — and `(1, 0)` when both cancelled or neither
 sign, because the factorization reads `n n^T`. Array-only, so it survives `jit` and `grad`, and
 the exact-zero comparison is safe because the tie is an exact symmetry rather than a near-miss.
 On the sheared cell the two v runs overlap over a strip, and on the box's midline inside it the
-tie reads the u axis — turned with the box, which is what kills a `(1, 0)`-always mutant.
+tie reads the u axis — turned with the box, which is what kills a `(1, 0)`-always mutant. With
+several shapes in the layer (§8a) the records are read across shapes: for each box in turn,
+the axis whose records did not cancel where the other axis's did, and a cross pair whose
+materials differ never counts as cancelled, since it did not.
 
 Measured bit-identical on a small box, a box above half the repeat, an ellipse, the 1-D grating,
 its 90-degree mirror, a cell-filling slab and a two-shape layer; the checkerboard scene goes
@@ -489,6 +504,97 @@ the 120 x 150 rod of `test_a_length_is_a_size_and_the_transform_carries_its_sign
 circle-plus-rectangle pair of `test_the_parametric_spelling_has_no_frame_to_declare`; each
 test carries its reference rows.
 
+### 8a. The second half: several shapes, one blend, and the materials decide the seam
+
+Landed the same day. A layer of several shapes was two blends -- each box's four faces into
+one `(distance, normal)`, then the shapes by the ratio of those distances -- and the second
+stage switches extension at the moment two shapes come into contact, measured as a 1.1e-2 step
+in `sum(T)` at order 6. There is one sum now, over the faces of every box and the arc of every
+round shape (`parametric._piece_field`); a lone round shape is one piece and keeps its own
+field.
+
+Two boxes that abut share a face line over a run, inside the cell or against the other's
+periodic image, and the plan records that pair too. Over the run the two faces' distances are
+one number by the construction a lone box uses across its own images -- every instance is
+named by its *absolute* image, fold plus offset, and the partner's normal coordinate is the
+primary's expression at the coincident image, so the two shapes' folds cancel out of the
+arithmetic -- and the **material slots decide the sign**, per pair and per run, as a window in
+the tangential coordinate rebuilt from the traced geometry: equal materials cancel (the
+material runs on), different ones co-orient (the seam's normal survives). Beyond the run the
+two keep their opposed normals, which is right for both materials. The permeability pass reads
+its own slots, so the interface set is per quantity. What it measured:
+
+| scene | before | after |
+|---|---|---|
+| **D** two same-material bars, stacked / side by side, against the one bar they make | two-stage: a step at contact | `(n,0)` vs `(n,n)` at `psi = 0`, `(0,n)` vs `(n,n)` at `psi = pi/2`, and two-bar vs one-bar, all 4e-15..2.4e-14 at n = 3, 5, 7 (one-bar floor 4e-15) |
+| **D** one 350 box against its two halves, `sum(T)`, orders 4..12 | -- | 1.09e-3, 5.11e-4, 4.73e-5, 1.51e-4, 8.05e-5: an order down, not monotone |
+| **K** `eps 4 \| eps 9` bars spanning the cell | a null band on the seam, `\|n_y\| = 0.03` | `(+-1, 0)` exactly, no null; 1.4e-14 / 1.0e-13 from raster + Li at orders 6 / 10 |
+| **K** two 300 boxes of different material abutting inside the cell, band vs the material-aware oracle | -- | 0.22 deg, 0.09% past 45 deg (0.33 deg against the oracle with the seam dropped) |
+| the same two boxes of one material, band vs the oracle | -- | the 600 x 300 box's own numbers to 1e-7 |
+| the two-rectangle position gradient, AD vs central differences at h = 1e-7 | 2.6e-6, 9.3e-5, 9.7e-5 | 1.9e-5, 3.8e-5, 8.7e-6 (the values moved with the extension: 6.90e-3 -> 8.69e-3 at d = 0.02) |
+
+A weight's derivative moved with it, and this is worth a line because it was wrong before the
+rewrite too: the ratio weight `where(d == d_min, 1, (d_min / d)^4)` gave every piece *tied*
+with the nearest one a zero derivative, and such ties sit on lines a grid samples (`5 j - 7 i =
+97` on the sheared cell's grid). The lone sheared box's `d(sum T)/dlx` at `lx = 350` read
+5.2e-3 relative from every central difference down to `h = 1e-6`, constant in `h`; the honest
+ratio (the winner's is `d / d`, exactly 1.0) leaves every value bitwise where it was and brings
+it to 7e-7.
+
+### 8b. What was deleted, and what stands in its place
+
+Gone with the piece field, in the two commits that landed it: `_axis_lattice_periods`,
+`_fold_by`, `_shorter_period`, `_reciprocal_or_zero`, `_LATTICE_DIR_TOL2`, the box branch of
+`_shape_surface_normal` (its round half is `_round_field`), `_blend`, `_blend_tiled`,
+`_refuse_partial_self_coincidence` and its call, `overlap.partial_self_coincidences`; and with
+the second half, `_ratio_blend`, `_box_field` and `_folded_frame`. The cache key's scale-free
+normalisation of a lone round shape went ahead of the round piece's ring. What stands in their
+place: `overlap.face_pairs` (the sweep), `overlap.covered_length` (the union per face),
+`overlap.interfaces_of` (the oracle, material-aware through `groups`), `parametric.plan_gamma`
+/ `GammaPlan` / `Piece` / `Pair` (the record), `_Frame`, `_run_window` and `_piece_field` (the
+replay), `_blind_plan` (a jitted solve with no record) and `check_gamma_plan_still_fits`.
+`_fold_to_nearest_image` stays because the round piece reads it.
+
+**The record is frozen.** `freeze_geometry` records every layer's plan beside its painting
+plan (`StaticGeometry.gamma_plans`, in the content key), both quantities replay the one record,
+a jitted solve with it builds the planned field where one without it gets the blind plan, and
+the eager replay re-derives the plan and refuses by name a pair that appeared or vanished, a
+face gone dead or live, an image list that grew across a ring boundary. A material sweep is
+never a staleness: the sign is an array op on the slots at build time. The projector cache
+keys on the plan and on a cross pair's *equality bit*, so a sweep on a pair-free layer hits as
+it always did and one that crosses equality on a seam rebuilds.
+
+
+## 9. The cases, A to L, as of 2026-09-06
+
+The letters are the design's. "Exact" means the field equals the geometry's on the interface
+set; a band error is against `overlap.interfaces_of` over 1.5 pixels at N = 512.
+
+| case | scene | status | measured in |
+|---|---|---|---|
+| A | a 1-D grating written on a 2-D cell, `ly = P` | exact; `max\|n_y\| == 0.0`, raster + Li to 1e-11, the (5, 5) golden bit-identical to the fold | `test_nvf_self_coincident_faces.py`, `test_gamma_field.py` |
+| B | a box on a sheared cell, a tilted box meeting its own image part way | built (refused until 2026-09-06): 0.16 deg / 0.11% and 0.18 deg / 0.15%; rotation with the frame an invariance to 5e-12 | `test_nvf_self_coincident_faces.py`, `test_gamma_field.py` |
+| C | the bar that tiles Li's checkerboard cell | the plan is empty, the field the constant `(1, 0)`, the solve the slab's to 1e-12 | `test_gamma_plan.py` |
+| D | two touching same-material bars; a box against its two halves | the one bar they are, to float noise (§8a); the 2-D residual an order down by order 8 | `test_gamma_layers.py` |
+| E | a shape whose material equals the background | its faces are kept; a pair-free field is bit-identical across any material sweep, a seam's depends on the equality bit alone | `test_gamma_layers.py` |
+| F | a shape nested in another | **open** -- an overlap, so the polygon route builds it, and that builder has no plan (§1) | -- |
+| G | a shape named a period over | exact: the plan is position-free and a lone shape rides a phase; a multi-shape layer is periodic to 1e-9 | `test_gamma_plan.py`, `test_shape_position_gradients.py` |
+| H | a shape larger than the period | **refused**, as before (§1) | `test_parametric.py` |
+| I | ties: a dead pair's line, a surviving pair's midline, a box's centre | the axis of the pair that did not cancel, across shapes; `(1, 0)` when both or neither did; zero null normals at N = 128 / 256 / 512 on the checkerboard | `test_nvf_self_coincident_faces.py`, `test_gamma_field.py` |
+| J | merges: a face approaching its partner's line, two shapes coming into contact | no step: the ladder `ly = P - gap` is monotone through the one rounding-scale threshold (§4). **One slope kink at contact that does not decay**: the one-sided slopes of `sum(T)` at B's onset (`lx = 200`) differ by a relative 4e-4 / -1.1e-3 / -1.6e-3 / -1.3e-3 / -1.5e-3 at orders 4..12 -- below the onset the gap between the two face ends reads the faces' residual y-normal, above it the run cancels exactly; in the slope, not the value, and an optimiser crossing contact sees no cliff | `test_gamma_field.py`, `test_gamma_frozen.py` |
+| K | abutting boxes of different material | the seam is an interface: `(+-1, 0)` exactly and Li-exact where it spans, 0.22 deg / 0.09% where it does not, per quantity | `test_gamma_layers.py` |
+| L | a lone box or ellipse leaving its Wigner-Seitz cell without touching anything | the box reads its neighbour's face: 0.19 deg / 0.05% (0.65 / 0.64% on the fold); the **ellipse does not** -- the `'arc'` piece takes no instance ring, since the algebraic distance is unbounded at the centre, so a lone ellipse of `lx = 720` still reads the nearest *centre*'s level set | `test_nvf_self_coincident_faces.py` |
+
+**The fixed-normal decision and its price, in one place.** A face piece's direction is its
+outward normal at every sample, inside or outside its tangential extent (C3 of the design's
+corrections). The foot rule beyond the extent -- the corner-radial direction the fold's box
+branch used -- was measured first and rejected: it breaks A (`max|n_y|` 0.76 where it must be
+0, because a covered face and its partner share endpoints and their foot directions reinforce
+instead of cancelling) and puts a ~4e-4 non-decaying step at every merge. Fixed normals give A
+exactly, a zero step at every merge, and B and L. What they cost: ~4e-4 in `sum(T)` off the
+interface on every lone box golden at order 6 (§8's table), the two-spellings residual of D in
+two dimensions (a cut face weighs twice near the cut, decaying), and J's slope kink at contact,
+which is the same wedge near a run's end seen through a derivative.
 
 ## 6. What is *not* an instrument for any of this
 
@@ -524,7 +630,16 @@ applies each mutant to the source (`gamma_instruments.mutated`, which says DID-N
 NO-OP out loud and restores by md5), reloads, and asserts that the named instrument fails —
 the flush substitution, the pair substitution, the tie and its axis, one face family's image
 list (killed by the L box and its transpose through the oracle band), the coverage union, and
-the blend exponent. What follows is the record of the pass over the fold it replaced.
+the blend exponent. The second half added its own: the seam sign forced opposed (killed by the
+K scene turned with its cell, whose seam axis the tie's `(1, 0)` fallback is 17 deg from), the
+winner's weight reverted to the synthesis's `d_min^4` (the 350 golden), fixed normals replaced
+by the foot direction (the grating's exact zero), one face's image list emptied (the L box),
+the pair sweep reading a fixed 3x3 instead of the ring (a scene on an unreduced basis whose
+contact sits at `(m, n) = (-2, 1)`), and `mu = None` read as unequal to 1.0 -- that one run in
+a fresh interpreter, because `domain.py` defines `Material`, which `as_material` type-checks
+against and `engine` imports by name, so a reload would leave two classes of that name in one
+process. Fourteen, all killed, none DID-NOT-APPLY. What follows is the record of the pass over
+the fold it replaced.
 
 Eighteen mutants over the fold, the refusal and the tie-break, each run against
 `test_nvf_period_spanning_shape.py` and `test_nvf_self_coincident_faces.py`, with the source
