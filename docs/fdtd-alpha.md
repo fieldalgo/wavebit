@@ -34,7 +34,13 @@ It accepts native uniform grids with diagonal real coefficients, periodic
 boundaries and optional graded z damping. It does not port the Stack solver's
 CPML, dispersive ADE, Bloch injection or nonuniform grid to JAX. CPU eigenmode,
 NumPy/JAX parity, finite-difference material sensitivities, pulse sensitivities,
-and absorber energy-removal checks pass. Actual GPU execution is unverified on
+and absorber energy-removal checks pass. Live external checks now also compare a
+three-wavelength slab against Meep at three resolutions, and nonuniform diagonal
+material updates/gradients against FDTDX. Meep is accessed only through its public
+API. Both solvers' slab answers approach the independent Airy solution at about
+second order; the fine-grid complex error is 0.0072. Frozen references retain
+these CPU results for regression (see `tests/references/README.md` in the checkout).
+These cases do not cover CPML/ADE or arbitrary scattering. Actual GPU execution is unverified on
 the current CPU-only machine. See the [native-grid guide](guide/time-domain.md).
 
 ## Reproduce the installation check

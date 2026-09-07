@@ -351,7 +351,10 @@ nonnegative conductivity. Enable JAX x64 before array creation for precision stu
 
 `device='cpu'` or `device='gpu'` selects a JAX device; unavailable hardware raises.
 CPU parity, discrete eigenmode propagation, material/pulse derivatives, and block
-checkpoint equivalence are tested. Actual GPU execution has not been validated.
+checkpoint equivalence are tested. External CPU checks additionally compare slab
+complex fields/power with Meep and native 3D updates/material gradients with
+FDTDX; frozen external outputs support regression tests. See the
+[validation scope](../fdtd-alpha.md). Actual GPU execution has not been validated.
 `examples/fdtd_grid_gradient.py` differentiates slab transmission;
 `studies/fdtd_grid_benchmark.py` reports compilation separately from warm execution.
 On one CPU run (32×8×8 cells, 256 steps, complex128), NumPy took 0.0437 s,

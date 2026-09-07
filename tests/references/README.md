@@ -902,3 +902,68 @@ the finer tier. Both helpers and case definitions are included in its physics-ha
 digest. The original measurement was made as separate s/p public-API runs, combined without
 changing their values. `docs/fdtd-alpha.md` records the discrepancy and convergence;
 a reference with insufficient resolution is not grounds to loosen the comparison bound.
+
+
+## Native-grid external validation (2026-09-07)
+
+`golden_native_grid_external.npz` stores independently executed Meep 1.34.0 and
+FDTDX 0.6.2 outputs for the new `wavebit.fdtd_grid` engine. It contains no Wavebit
+outputs. Generator/input hashes and the installed FDTDX update-module digest are
+embedded as provenance. Meep implementation source was not opened or searched;
+only its [documented Python API](https://meep.readthedocs.io/en/master/Python_User_Interface/)
+was used. FDTDX update functions are called from the installed external package,
+with no implementation copied into Wavebit.
+
+The Meep case is a vacuum-surrounded epsilon=2.25 slab of thickness 0.5 at normal
+incidence, wavelengths 0.6/0.7/0.8, and resolution 20/40/80. Both implementations
+use a periodic domain of length 32, Courant number 0.4, a prescribed current
+pulse, and a time window of 18 (before wraparound). The monitor is outside the
+slab. Divide slab Ex/Hy Fourier fields and power by a matching empty run, preserving
+complex phase. Meep's interface averaging and native tangential half-cell weights
+represent the same plane. No PML/absorber is involved in this comparison.
+
+| Resolution | Maximum complex transfer difference | Maximum power difference | Meep complex transfer error against Airy |
+| --- | --- | --- | --- |
+| 20 | 1.59e-7 | 1.43e-7 | 0.12984 |
+| 40 | 2.54e-13 | 2.30e-13 | 0.02947 |
+| 80 | 8.26e-14 | 5.23e-14 | 0.00720 |
+
+The Airy errors decrease at orders 2.14 and 2.03. Agreement between two Yee
+implementations does not remove their shared discretization error. Extending the
+resolution-40 window from 18 to 20 changes either solver's complex transfer by
+1.18e-10. An initial shorter window missed internal echoes; that pilot also used
+unmatched interface sampling and is not the frozen reference. The final setup
+matches the physical averaging and captures the decayed transmitted pulse.
+
+The FDTDX case calls its native `update_H` then `update_E` for 37 steps on a
+9×7×5 periodic grid, with deterministic nonuniform diagonal epsilon and mu and
+initial six-component fields. Arrays are transposed between (z,y,x) and (x,y,z).
+Its Courant number is 0.2, matching the c=1 Wavebit time step/spacing. No source,
+PML, geometry placement or detector is being validated by this test. Maximum E/H
+errors are 1.67e-16 / 2.64e-16. The local field objective's epsilon derivative is
+-0.4196157538227005 (FDTDX) and -0.41961575382270005 (Wavebit); both agree with
+central finite differences within 1e-9 absolute error.
+
+These are **CPU checks**. They do not establish GPU execution, general scattering
+accuracy, CPML/ADE parity, or FDTDX source/detector compatibility. Ordinary tests
+consume the frozen external outputs, so passing them is not a fresh external run.
+
+To reproduce live references, run from the repository root with separate Python
+environments. `$MEEP_PYTHON`, `$FDTDX_PYTHON` and `$WAVEBIT_PYTHON` below are paths
+to their interpreters; choose a new output directory first:
+
+```sh
+mkdir -p /tmp/native-grid-reference
+for resolution in 20 40 80; do
+  "$MEEP_PYTHON" studies/validate_grid_meep.py --backend meep --resolution "$resolution" --output "/tmp/native-grid-reference/meep-grid-$resolution.json"
+  PYTHONPATH=. "$WAVEBIT_PYTHON" studies/validate_grid_meep.py --backend wavebit --resolution "$resolution" --output "/tmp/native-grid-reference/wavebit-grid-$resolution.json"
+done
+"$MEEP_PYTHON" studies/validate_grid_meep.py --backend meep --resolution 40 --duration 20 --output /tmp/native-grid-reference/meep-grid-runtime.json
+"$FDTDX_PYTHON" studies/validate_grid_fdtdx.py --backend fdtdx --output /tmp/native-grid-reference/fdtdx-grid.json
+PYTHONPATH=. "$WAVEBIT_PYTHON" studies/validate_grid_fdtdx.py --backend wavebit --output /tmp/native-grid-reference/wavebit-fdtdx-grid.json
+"$WAVEBIT_PYTHON" studies/freeze_grid_references.py --input /tmp/native-grid-reference --output /tmp/native-grid-reference/external.npz
+"$WAVEBIT_PYTHON" -m pytest tests/references/test_native_grid_external.py
+```
+
+Freezing refuses an existing destination. Review a newly generated archive before
+replacing committed external evidence; never regenerate it merely to pass a test.
