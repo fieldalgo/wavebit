@@ -11,14 +11,17 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
               electric=None, magnetic=None, source=None, pulse=None,
               wavelengths=(), monitor_z=(), backend='numpy', device=None,
               checkpoint_steps=32, absorber_cells=0, poles=(),
-              pml_cells=0, pml_wavelength=1.):
+              pml_cells=0, pml_wavelength=1., bloch_phase=(0., 0., 0.)):
     """Advance a 3D Yee grid and accumulate frequency-domain field planes.
 
     epsilon: positive scalar-per-cell (z,y,x) or diagonal/native (3,z,y,x)
     permittivity. mu and electric conductivity broadcast to that shape. E/H/source
     have shape (3,z,y,x). Source is an electric current pattern; pulse has `steps`
     samples, and the update uses curl(H)-source*pulse. E starts at t=0 and H at
-    t=-dt/2. H is normalized as Z0 H. All axes are periodic.
+    t=-dt/2. H is normalized as Z0 H. bloch_phase=(phase_z,phase_y,phase_x)
+    sets F(r+L_axis)=exp(1j*phase_axis)*F(r), in radians; zeros give periodic
+    boundaries. Real phases are differentiable and applied in field updates and
+    monitor interpolation. With z CPML, phase_z must be zero.
 
     spacing is (dz,dy,dx); lengths and time use c=1. dt is explicit, so optimizing
     epsilon does not change the number of steps or simulation duration. Choose dt
@@ -64,6 +67,7 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
         raise ValueError('spacing must contain positive dz,dy,dx.')
     if not np.isfinite(dt) or dt <= 0:
         raise ValueError('dt must be positive and finite.')
+    dt = float(dt)
     shape = tuple(np.shape(epsilon))
     if len(shape) == 3:
         shape = (3,)+shape
@@ -99,13 +103,20 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
         if device is not None:
             raise ValueError('device selection requires backend=jax.')
         array = np.asarray
+    phase = array(bloch_phase)
+    if phase.shape != (3,) or xp.iscomplexobj(phase):
+        raise ValueError('bloch_phase must contain three real radians in z,y,x order.')
+    phase_valid = xp.all(xp.isfinite(phase))
+    if pml_cells:
+        phase_valid = phase_valid & (phase[0] == 0)
+    factors = xp.exp(1j*phase)
     eps = xp.broadcast_to(array(epsilon), shape)
     permeability = xp.broadcast_to(array(mu), shape)
     sigma = xp.broadcast_to(array(conductivity), shape)
     if any(xp.iscomplexobj(v) for v in (eps, permeability, sigma)):
         raise ValueError('epsilon, mu and conductivity must be real.')
     bound = xp.sqrt(xp.min(eps)*xp.min(permeability))/np.sqrt(np.sum(1/spacing**2))
-    stable = (xp.all(xp.isfinite(eps)) & xp.all(eps > 0) & xp.all(xp.isfinite(permeability))
+    stable = (phase_valid & xp.all(xp.isfinite(eps)) & xp.all(eps > 0) & xp.all(xp.isfinite(permeability))
               & xp.all(permeability > 0) & xp.all(xp.isfinite(sigma)) & xp.all(sigma >= 0)
               & (dt <= bound))
     pole_coefficients = []
@@ -140,7 +151,10 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
     if backend == 'numpy' or not isinstance(stable, jax.core.Tracer):
         if not bool(stable):
             raise ValueError('Invalid material/poles/PML background or dt exceeds the conservative CFL bound.')
-    dtype = xp.result_type(eps, array(1j))
+    dtype = xp.result_type(eps, permeability, sigma, phase, array(1j),
+                           *[v for coefficients in pole_coefficients for v in coefficients])
+    real_dtype = xp.real(xp.zeros((), dtype=dtype)).dtype
+    factors = factors.astype(dtype)
     e = xp.zeros(shape, dtype=dtype) if electric is None else array(electric, dtype=dtype)
     h = xp.zeros(shape, dtype=dtype) if magnetic is None else array(magnetic, dtype=dtype)
     current = xp.zeros(shape, dtype=dtype) if source is None else array(source, dtype=dtype)
@@ -155,7 +169,7 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
         z = np.arange(shape[1])[None, :]+np.asarray(offsets)[:, None]
         distance = np.minimum(z, shape[1]-z)
         ramp = np.maximum(1-distance/absorber_cells, 0)
-        return array((6*ramp**3/(absorber_cells*spacing[0]))[:, :, None, None])
+        return array((6*ramp**3/(absorber_cells*spacing[0]))[:, :, None, None], dtype=real_dtype)
     damping_e = damping_profile((0., 0., .5)) if absorber_cells else 0.
     damping_h = damping_profile((.5, .5, 0.)) if absorber_cells else 0.
     electric_rate = sigma/eps+damping_e
@@ -164,13 +178,22 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
     ah = (1-.5*dt*damping_h)/(1+.5*dt*damping_h)
     bh = (dt/permeability)/(1+.5*dt*damping_h)
     iz = array(indices)
-    frequency = array(1/band)
+    frequency = array(1/band, dtype=real_dtype)
     accum_shape = (len(band), len(indices), 3, shape[2], shape[3])
     accum = xp.zeros(accum_shape, dtype=dtype)
 
+    def shifted(v, axis, forward, factor):
+        interior = [slice(None)]*v.ndim
+        edge = [slice(None)]*v.ndim
+        interior[axis] = slice(1, None) if forward else slice(None, -1)
+        edge[axis] = slice(0, 1) if forward else slice(-1, None)
+        wrapped = v[tuple(edge)]*(factor if forward else 1/factor)
+        pieces = (v[tuple(interior)], wrapped) if forward else (wrapped, v[tuple(interior)])
+        return xp.concatenate(pieces, axis=axis)
+
     def derivative(v, axis, forward):
-        return ((xp.roll(v, -1, axis=axis)-v) if forward else
-                (v-xp.roll(v, 1, axis=axis)))/spacing[axis]
+        neighbor = shifted(v, axis, forward, factors[axis])
+        return (neighbor-v if forward else v-neighbor)/float(spacing[axis])
 
     # Reuse Wavebit's own documented CPML coefficients; no external source.
     if pml_cells:
@@ -178,7 +201,7 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
         def profile(offset):
             position = np.arange(shape[1])+offset
             depth = np.maximum(pml_cells-np.minimum(position, shape[1]-position), 0)*spacing[0]
-            return tuple(array(v[:, None, None]) for v in cpml_coefficients(
+            return tuple(array(v[:, None, None], dtype=real_dtype) for v in cpml_coefficients(
                 depth, pml_cells*spacing[0], dt, pml_wavelength, 1.))
         pml_e, pml_h = profile(0.), profile(.5)
     auxiliary = xp.zeros((2,)+shape[1:], dtype=dtype) if pml_cells else xp.zeros((0,), dtype=dtype)
@@ -200,11 +223,11 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
         for c, (zh, yh, xh) in enumerate(offsets):
             face = v[c, iz]
             if zh:
-                face = .5*(face+v[c, (iz-1)%shape[1]])
+                face = .5*(face+v[c, (iz-1)%shape[1]]*xp.where(iz == 0, 1/factors[0], 1)[:, None, None])
             if yh:
-                face = .5*(face+xp.roll(face, 1, axis=1))
+                face = .5*(face+shifted(face, 1, False, factors[1]))
             if xh:
-                face = .5*(face+xp.roll(face, 1, axis=2))
+                face = .5*(face+shifted(face, 2, False, factors[2]))
             values.append(face)
         return xp.stack(values, axis=1)
 
@@ -247,4 +270,4 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
                 electric_spectrum=fe, magnetic_spectrum=fh,
                 flux_density=flux, power_z=power, wavelengths=array(band), monitor_z=iz,
                 stable=stable, cfl_dt=bound, time=steps*dt,
-                h_time=(steps-.5)*dt, spacing=array(spacing))
+                h_time=(steps-.5)*dt, spacing=array(spacing), bloch_phase=phase)

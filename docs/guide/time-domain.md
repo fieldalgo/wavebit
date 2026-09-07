@@ -333,11 +333,11 @@ solver's source-normalized planes. Electric/magnetic spectra have shape
 `(wavelength, plane, y, x, 3)`, and power has shape `(wavelength, plane)`.
 Use a matching reference simulation for source or incident-power normalization.
 
-All axes are periodic. `absorber_cells=N` adds graded electric/magnetic damping
+All axes are periodic by default. `absorber_cells=N` adds graded electric/magnetic damping
 at both z ends; it is not CPML and needs a width/reflection convergence check.
 `pml_cells` additionally provides convolutional PML at the two vacuum z ends;
 see the material/boundary section below. This engine does not yet accept
-Stack/Incidence, nonuniform meshes, or Bloch boundaries. The existing scene solver
+Stack/Incidence or nonuniform meshes. The existing scene solver
 retains those capabilities on NumPy; selecting a JAX backend on that interface
 is still unsupported.
 
@@ -410,3 +410,30 @@ is symmetric with zero DC, and tests also extend runtime and double PML width.
 This does not establish arbitrary-band or grazing-angle accuracy.
 `examples/fdtd_dispersive_gradient.py` differentiates Lorentz oscillator strength
 with CPML enabled. Actual GPU execution remains unverified.
+
+
+## Native Bloch phases and incidence gradients
+
+`bloch_phase=(phase_z, phase_y, phase_x)` specifies real phase advances in radians
+across each simulation period: `F(r+L_axis)=exp(1j*phase_axis)*F(r)`. It follows
+the `(z,y,x)` order of `spacing`, not physical vector component order. Zero
+phases recover periodic boundaries. Both updates and monitor interpolation apply
+the phases at wrapped edges. z CPML requires `phase_z=0`; transverse phases
+remain available with CPML and dispersive materials.
+
+Phases are JAX-differentiable. For a plane source, vary its spatial phase with
+the boundary phase as well: `phase_x=kx*nx*dx`, `source_y(x)=exp(1j*kx*x)`,
+where `kx=2*pi*sin(theta)/wavelength` in vacuum. A complex temporal carrier
+`envelope*exp(-1j*omega*t)` selects the intended propagation frequency; a real
+sine at fixed nonzero Bloch wavevector contains both temporal frequencies.
+The engine advances the supplied complex fields without automatically adding a
+quadrature solve or normalizing incident power. For transmission ratios, use a
+matching empty reference with the same source and Bloch phases.
+
+Tests check an exact discrete Maxwell mode with arbitrary phases on all three
+axes, monitor interpolation at a wrapped plane, phase derivatives against finite
+differences, and FDTDX complex updates/material gradients. The derivative of a
+fixed-field boundary problem is not automatically an incidence-angle derivative;
+source/initial-field dependencies must be included in the differentiated function.
+`examples/fdtd_bloch_gradient.py` varies the source and boundary together with
+vacuum-end CPML and reports a spectral plane-power derivative.

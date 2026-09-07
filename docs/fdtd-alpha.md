@@ -33,7 +33,7 @@ updates, streaming field/power planes, and differentiable material/source inputs
 It accepts native uniform grids with diagonal real coefficients, periodic
 boundaries, optional graded z damping, vacuum-end z CPML, and electric
 Drude/Lorentz ADE poles. It does not port the Stack/Incidence interface, general
-PML backgrounds, Bloch injection or nonuniform grid to JAX. CPU eigenmode,
+PML backgrounds, automatic plane-wave injection or nonuniform grid to JAX. CPU eigenmode,
 NumPy/JAX parity, finite-difference material sensitivities, pulse sensitivities,
 and absorber energy-removal checks pass. Live external checks now also compare a
 three-wavelength slab against Meep at three resolutions, and nonuniform diagonal
@@ -47,7 +47,10 @@ gradients. Direct Meep comparisons match its documented point sampling of the
 dispersive part; separate tangential half-cell weights converge against Airy.
 PML width/runtime controls and oblique pulse removal are tested. General
 scattering and arbitrary PML materials remain outside this evidence.
-Actual GPU execution is unverified on
+Native three-axis Bloch phases and their gradients are also implemented, with
+exact discrete-mode checks and a live FDTDX complex-field/material-gradient
+comparison. Transverse phases may coexist with z CPML; longitudinal phase must
+be zero. Actual GPU execution is unverified on
 the current CPU-only machine. See the [native-grid guide](guide/time-domain.md).
 
 ## Reproduce the installation check

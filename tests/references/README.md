@@ -1049,3 +1049,31 @@ It reads only external outputs and refuses to overwrite an existing archive.
 These are CPU checks of native electric ADE and vacuum-end z CPML. Magnetic
 poles, arbitrary PML backgrounds, full Stack/Incidence dispatch, and actual GPU
 execution remain unsupported or unverified.
+
+## Native Bloch boundaries (2026-09-08)
+
+`studies/validate_grid_fdtdx_bloch.py` repeats the live FDTDX comparison with
+complex initial E/H and phase advances `(0.3,-0.2,0.4)` in `(z,y,x)` order.
+These phases enter FDTDX as physical `(kx,ky,kz)` radians per meter, divided by
+the matching cell lengths. The grid is 9×7×5, 37 steps, nonuniform diagonal
+epsilon/mu, Courant number 0.2. No source or CPML is involved in this direct
+boundary check. Maximum real/imaginary field differences are below 2.23e-16;
+the material derivative is 0.43721809199586215 (FDTDX) and
+0.4372180919958624 (Wavebit), with both checked against finite differences.
+
+`golden_native_bloch_external.npz` retains only the external real/imaginary E/H,
+objective/derivative and provenance. Regenerate into a new archive with:
+
+```sh
+"$FDTDX_PYTHON" studies/validate_grid_fdtdx_bloch.py --backend fdtdx --output /tmp/fdtdx-bloch.json
+PYTHONPATH=. "$WAVEBIT_PYTHON" studies/validate_grid_fdtdx_bloch.py --backend wavebit --output /tmp/wavebit-fdtdx-bloch.json
+"$WAVEBIT_PYTHON" studies/freeze_grid_references.py --kind bloch --input /tmp --output /tmp/external-bloch.npz
+"$WAVEBIT_PYTHON" -m pytest tests/test_fdtd_grid_bloch.py tests/references/test_native_bloch_external.py
+```
+
+Independent tests check arbitrary-phase discrete Maxwell propagation in all
+three axes, collocation at a wrapped monitor, derivatives with respect to phase,
+and explicit complex64 scans with x64 enabled. The oblique example couples a
+transverse Bloch phase to the source's spatial phase and differentiates both
+through a CPML solve. These remain CPU checks, not GPU validation or a full
+Stack/Incidence adapter.

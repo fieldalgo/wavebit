@@ -8,6 +8,7 @@ optional JAX/PyTorch backends.
 
 | Entry | Question it answers |
 | --- | --- |
+| [`fdtd_bloch_gradient.py`](fdtd_bloch_gradient.py) | Differentiate oblique plane power through both the source phase and the transverse Bloch boundary. |
 | [`fdtd_dispersive_gradient.py`](fdtd_dispersive_gradient.py) | Differentiate Lorentz oscillator strength while vacuum-end CPML absorbs outgoing waves. |
 | [`fdtd_frequency_planes.py`](fdtd_frequency_planes.py) | Measure six frequency-domain fields and integrated slab R/T without keeping time histories. |
 | [`fdtd_grid_gradient.py`](fdtd_grid_gradient.py) | Differentiate spectral transmission through a native Yee grid with JAX; uses a graded absorber, not CPML. |
