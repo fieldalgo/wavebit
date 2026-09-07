@@ -1,13 +1,15 @@
 # Examples
 
-Wavebit applied to problems, in plain scripts. Everything here is pure Wavebit — no ML
-frameworks, no vendored dependencies, nothing that needs a dataset or a GPU.
+Wavebit applied to problems, in plain scripts. No datasets or GPU are required.
+Some examples use optional JAX/PyTorch backends.
 
 Install `wavebit[plot]` for the FDTD image example; the shape examples use the
 optional JAX/PyTorch backends.
 
 | Entry | Question it answers |
 | --- | --- |
+| [`fdtd_frequency_planes.py`](fdtd_frequency_planes.py) | Measure six frequency-domain fields and integrated slab R/T without keeping time histories. |
+| [`fdtd_grid_gradient.py`](fdtd_grid_gradient.py) | Differentiate spectral transmission through a native Yee grid with JAX; uses a graded absorber, not CPML. |
 | [`fdtd_poynting.py`](fdtd_poynting.py) | How do you measure instantaneous energy flow at a point with staggered E/H records? Saves a Sz time trace inside a film; requires the plot extra. |
 | [`fdtd_record.py`](fdtd_record.py) | How do you define a typed FDTD scene, record a conical pulse and save an Ex slice? Run `python fdtd_record.py --output /path/to/field.png`; add `--chi 0.7853981633974483` for circular incidence and `--component hy` to view the magnetic field. FDTD is experimental; see the [research-alpha scope](../docs/fdtd-alpha.md). |
 | [`shapes_1d.py`](shapes_1d.py), [`shapes_2d.py`](shapes_2d.py) | How do you describe a structure as drawn shapes instead of a raster? The `_verification.py` file beside each answers the follow-up: does that path agree with the raster it replaces? |

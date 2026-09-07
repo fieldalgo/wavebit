@@ -1251,3 +1251,13 @@ ey, ex, time = diag['field_e'].real, diag['field_ex'].real, diag['field_t']
   axis-aligned averaging rule is not exact; whether they contribute at first or second order
   has not been measured, and TM's convergence order (1.71–1.94, against TE's 1.96–2.02) is the
   place to look.
+
+
+## Streaming fields and compiled native grids
+
+The scene solver now accepts `field_monitors` for six-component online Fourier
+planes and integrated spectral power. The separate `wavebit.fdtd_grid` provides
+NumPy/JAX uniform Yee updates and checkpointed automatic differentiation.
+See the [time-domain guide](guide/time-domain.md) for normalization, examples,
+CPU benchmark evidence and the boundaries of the two interfaces. The native-grid
+engine is not a JAX port of the scene solver’s CPML/ADE implementation.

@@ -84,6 +84,7 @@ from ._core.conventions import branch_tolerance
 from ._core.draw import plot_structure, slice_structure
 from ._core.time_plot import animate_fdtd_field, plot_fdtd_field
 from ._core.time_probe import fdtd_poynting, sample_fdtd_fields
+from ._core.grid_fdtd import fdtd_grid
 from ._core.enums import (Answers, Backend, Tetm, FourierCoefficients, Factorization,
                           Formulation, NormalMethod, Projector)
 from ._core.domain import (Layer, Stack, Incidence, Material,
@@ -140,7 +141,7 @@ __all__ = [
     'branch_tolerance',
     'plot_structure', 'slice_structure',
     'plot_fdtd_field', 'animate_fdtd_field',
-    'sample_fdtd_fields', 'fdtd_poynting',
+    'sample_fdtd_fields', 'fdtd_poynting', 'fdtd_grid',
     'Answers', 'Backend', 'Tetm', 'FourierCoefficients', 'Factorization', 'Formulation',
     'NormalMethod', 'Projector',
     'Layer', 'Stack', 'Incidence', 'Material', 'eps_from_index', 'index_from_eps',

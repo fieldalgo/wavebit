@@ -271,3 +271,89 @@ energy flow in `S[:, 0:3]`, after interpolating all six fields to common Yee pos
 and times. `sample_fdtd_fields` returns the interpolated E/H directly. Both require
 `record_components='all'`; see [point probes](../fdtd.md#point-probes-and-instantaneous-energy-flow)
 for units, sampling limits and the distinction between total and scattered flux.
+
+
+## Streaming frequency planes
+
+Pass `field_monitors={'near': z_near, 'transmitted': z_out}` together with
+`return_diagnostics=True` to `wavebit.fdtd`. No `record_field` is needed. Each entry
+of `diag['monitors']` contains six complex `fields` arrays `(wavelength, y, x)`,
+`x`/`y` coordinates, `flux_density` `(wavelength, y, x, 3)` and `power_z`
+`(wavelength,)`. Spatial interpolation collocates native Yee components, including
+Bloch phases at lateral edges; Fourier integration uses each component's native
+time. Complex Jones coefficients combine fields before computing power.
+
+The normalization is the soft-source pulse spectrum, **not incident power**.
+With H stored as Z0 H, flux is `0.5*real(E cross conj(H))`; `power_z` integrates
+its z component over the periodic cell, or per unit y depth for a y-invariant
+scene. Run the matching empty scene to normalize transmission. On a scattered
+reflection plane, negate its power and divide by the empty incident power.
+A total-field plane contains incident/reflected interference; it is not a
+separated reflection measurement. `region` identifies the side of the TFSF
+boundary. Planes whose interpolation touches that boundary are refused.
+These local interpolated fluxes converge with mesh refinement and need not equal
+modal diffraction powers exactly at a finite resolution.
+
+See `examples/fdtd_frequency_planes.py` for a three-wavelength slab check.
+Storage scales with six components times wavelengths times plane area; it does
+not grow with the number of time steps. These are streaming Fourier measurements,
+not a whole-volume harmonic field reconstruction.
+
+## Compiled, differentiable native grids
+
+`wavebit.fdtd_grid` is a separate uniform-grid interface for NumPy or optional JAX.
+It accepts native `(z,y,x)` permittivity, or `(3,z,y,x)` diagonal coefficients,
+and `(3,z,y,x)` initial E/H and electric-current source arrays. Specify
+`spacing=(dz,dy,dx)`, `dt` and `steps` explicitly, in c=1 units. E starts at zero
+time and H at `-dt/2`. Scalar or broadcastable positive permeability and nonnegative
+electric conductivity are supported. Coefficients belong on each component's
+native Yee location; the function does not rasterize or average interfaces.
+
+```python
+import jax
+import jax.numpy as jnp
+import wavebit
+
+source = jnp.zeros((3, 32, 2, 2)).at[1, 8].set(1.)
+pulse = jnp.sin(jnp.arange(80) * .3)
+
+def objective(epsilon):
+    out = wavebit.fdtd_grid(
+        epsilon, spacing=(1., 1., 1.), dt=.2, steps=80,
+        source=source, pulse=pulse, wavelengths=[4.], monitor_z=[20],
+        backend='jax', checkpoint_steps=16)
+    return out['power_z'][0, 0]
+
+value, gradient = jax.jit(jax.value_and_grad(objective))(jnp.ones((32, 2, 2)))
+```
+
+Native-grid spectra are **unnormalized time integrals**, unlike the scene
+solver's source-normalized planes. Electric/magnetic spectra have shape
+`(wavelength, plane, component, y, x)`, flux density has shape
+`(wavelength, plane, y, x, 3)`, and power has shape `(wavelength, plane)`.
+Use a matching reference simulation for source or incident-power normalization.
+
+All axes are periodic. `absorber_cells=N` adds graded electric/magnetic damping
+at both z ends; it is not CPML and needs a width/reflection convergence check.
+This engine does not yet accept Stack/Incidence, ADE dispersive poles, nonuniform
+meshes, or Bloch boundaries. The existing scene solver retains those capabilities
+on NumPy; selecting a JAX backend on that interface is still unsupported.
+
+JAX uses compiled scans and recomputes blocks during reverse differentiation.
+`checkpoint_steps` trades stored block boundaries against recomputation and
+within-block storage. No time history is returned, but reverse-mode memory still
+grows with simulation length. Shapes, spacing, step count and monitor configuration
+are static. Materials, source, pulse and initial fields remain differentiable.
+Choose a fixed dt valid throughout optimization: concrete invalid materials or
+CFL violations raise; traced coefficients expose `stable` in the result and must
+be constrained by the caller. An optimizer must preserve positive epsilon/mu and
+nonnegative conductivity. Enable JAX x64 before array creation for precision studies.
+
+`device='cpu'` or `device='gpu'` selects a JAX device; unavailable hardware raises.
+CPU parity, discrete eigenmode propagation, material/pulse derivatives, and block
+checkpoint equivalence are tested. Actual GPU execution has not been validated.
+`examples/fdtd_grid_gradient.py` differentiates slab transmission;
+`studies/fdtd_grid_benchmark.py` reports compilation separately from warm execution.
+On one CPU run (32×8×8 cells, 256 steps, complex128), NumPy took 0.0437 s,
+JAX compilation plus first execution 0.2857 s, and median warm execution 0.00603 s
+(7.25×). This is a small native-grid benchmark, not a scene-solver speed claim.

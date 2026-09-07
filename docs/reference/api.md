@@ -163,3 +163,10 @@ properties every one of them carries.
    :members:
 
 ```
+
+
+## Native-grid time domain
+
+```{eval-rst}
+.. autofunction:: wavebit.fdtd_grid
+```

@@ -16,15 +16,26 @@ An accepted input is not a guarantee of accuracy for every combination in this t
 | Materials | Positive real isotropic epsilon/mu; electric Drude/Lorentz poles | Closed-form dielectric, magnetic and Drude slabs, selected 1D patterned cases. The installation matrix covers planar magnetic/Drude media through both raster paths. Three moderate-contrast patterned cases and one damped negative-epsilon metal have independent Meep references (below); low-loss and strong-resonance regimes remain unvalidated. |
 | Spectra | Multiple wavelengths in one pulse run | At oblique incidence the in-plane wavevector is fixed, so angle varies across the band. Check the reported angles and incident spectrum. |
 | Outputs | R/T and complex s/p amplitudes, labelled diffraction orders | Frozen external-reference tests include complex propagating amplitudes. Evanescent channels are not covered by the convergence table below; deeply evanescent amplitudes can be masked. |
-| Time records | Ex/Ey/Ez/Hx/Hy/Hz snapshots on request, measured axes and times, plotting and animation | Component staggering, coherent polarization, recording invariance and plotting contracts are tested. Circular vacuum records check equal component energy, temporal quadrature and both rotation directions. Six-component recording preserves native Yee staggering, including the H half-step time; Point sampling and instantaneous Poynting vectors interpolate the native axes; nonzero-Bloch time records propagate a positive-frequency carrier so transverse energy flows in the intended direction; manufactured-field checks and vacuum flux/refinement tests cover this interpolation. Frequency-domain near-field reconstruction remains unavailable. |
+| Time records | Ex/Ey/Ez/Hx/Hy/Hz snapshots on request, measured axes and times, plotting and animation | Component staggering, coherent polarization, recording invariance and plotting contracts are tested. Circular vacuum records check equal component energy, temporal quadrature and both rotation directions. Six-component recording preserves native Yee staggering, including the H half-step time; Point sampling and instantaneous Poynting vectors interpolate the native axes; nonzero-Bloch time records propagate a positive-frequency carrier so transverse energy flows in the intended direction; manufactured-field checks and vacuum flux/refinement tests cover this interpolation. Streaming six-component frequency planes and integrated spectral power are available; offline DFT equality, coherent Jones mixing, and slab R/T ratios are tested. Whole-volume harmonic reconstruction remains unavailable. |
 | Execution | NumPy on CPU; optional Matplotlib plotting | Clean wheel installation and calculation checked on macOS arm64/Python 3.12. Other operating systems and Python versions need release CI evidence. |
 
-FDTD does not provide autodiff, JAX/PyTorch execution, GPU/MPI execution, bottom incidence,
+The Stack/Incidence FDTD interface does not provide autodiff, JAX/PyTorch execution, GPU/MPI execution, bottom incidence,
 skewed lattices, parametric geometry input, anisotropic tensors,
 or complex-angle incidence. Complex Jones states support diffraction and transverse time records through
 separately propagated sine/quadrature sources. Use the appropriate RCWA capability where available; do not
 infer FDTD support from RCWA examples. Unsupported inputs are described in [the solver
 notes](fdtd.md) and [API reference](reference/api.md).
+
+## Native-grid JAX engine
+
+The separate `wavebit.fdtd_grid` interface provides NumPy and compiled JAX Yee
+updates, streaming field/power planes, and differentiable material/source inputs.
+It accepts native uniform grids with diagonal real coefficients, periodic
+boundaries and optional graded z damping. It does not port the Stack solver's
+CPML, dispersive ADE, Bloch injection or nonuniform grid to JAX. CPU eigenmode,
+NumPy/JAX parity, finite-difference material sensitivities, pulse sensitivities,
+and absorber energy-removal checks pass. Actual GPU execution is unverified on
+the current CPU-only machine. See the [native-grid guide](guide/time-domain.md).
 
 ## Reproduce the installation check
 
