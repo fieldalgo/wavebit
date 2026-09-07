@@ -205,8 +205,30 @@ MAX_DEREFERENCE_GAIN = 1e10
 # scope
 # ---------------------------------------------------------------------------------------
 
+def _check_incidence(theta, phi, psi, chi, polarization):
+    """Validate before either polarization route can discard an input."""
+    for spelling, given in (('chi', chi), ('polarization', polarization)):
+        if given is not None:
+            raise ValueError(
+                f'fdtd: {spelling}={given!r}. An elliptical or named polarisation is a '
+                f'superposition of the two eigenpolarisations with a phase between them, and '
+                f'this solver drives one real field: the two legs would have to be run and '
+                f'recombined, which is what the RCWA path already does. Pass `psi` for a '
+                f'linear polarisation, or take this scene to `wavebit.rcwa`.')
+    for name, value in (('theta', theta), ('phi', phi), ('psi', psi)):
+        if value is None:
+            continue
+        angle = np.asarray(value, dtype=complex)
+        if angle.ndim != 0 or not np.isfinite(angle):
+            raise ValueError(f'fdtd: {name} must be a finite scalar angle in radians.')
+        if angle.imag != 0.0:
+            raise ValueError(
+                f'fdtd: {name}={value!r} is complex. This solver requires real incidence '
+                f'angles and linear polarization; use wavebit.rcwa for complex incidence.')
+
+
 def _refuse_out_of_scope(structure, mu, theta, phi, tetm, incidence_side, lattice,
-                         top, bot, chi=None, polarization=None):
+                         top, bot):
     """Every input this formulation cannot answer, refused by name.
 
     Refused rather than approximated: each of these returns a *plausible* number if it is
@@ -218,14 +240,6 @@ def _refuse_out_of_scope(structure, mu, theta, phi, tetm, incidence_side, lattic
             "fdtd: an incidence needs either `tetm` or `psi`. `tetm='te'` / `'tm'` is the "
             "pure formulation, the time-domain twin of `solve_1d`; `psi` is the conical one, "
             "which couples the two polarisations and is what a mount with `phi != 0` needs.")
-    for spelling, given in (('chi', chi), ('polarization', polarization)):
-        if given is not None:
-            raise ValueError(
-                f'fdtd: {spelling}={given!r}. An elliptical or named polarisation is a '
-                f'superposition of the two eigenpolarisations with a phase between them, and '
-                f'this solver drives one real field: the two legs would have to be run and '
-                f'recombined, which is what the RCWA path already does. Pass `psi` for a '
-                f'linear polarisation, or take this scene to `wavebit.rcwa`.')
     name = tetm.value if hasattr(tetm, 'value') else str(tetm).lower()
     if name not in ('te', 'tm'):
         raise ValueError(f"fdtd: tetm must be 'te' or 'tm', got {tetm!r}.")
@@ -276,7 +290,7 @@ def _refuse_out_of_scope(structure, mu, theta, phi, tetm, incidence_side, lattic
             f'fdtd: phi={phi!r} with tetm={tetm!r}. A conical mount couples the two '
             f'polarisations, so it has no TE/TM answer to give -- the same split `solve_1d` '
             f'and `solve_1d_conical` make. Ask for it the way the conical path is asked: pass '
-            f'`psi` (or `polarization`) instead of `tetm`, which is answered at any theta '
+            f'`psi` instead of `tetm`, which is answered at any theta '
             f'and any phi.')
     if incidence_side not in (None, 'top'):
         raise ValueError(
@@ -2312,6 +2326,7 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
         Result: the same container an RCWA solve returns, or ``(Result, dict)`` when
         ``return_diagnostics`` is set.
     """
+    _check_incidence(theta, phi, psi, chi, polarization)
     if record_field is not None:
         if (isinstance(record_field, (bool, np.bool_))
                 or not isinstance(record_field, (int, np.integer)) or record_field <= 0):
@@ -2331,8 +2346,7 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
     # names which eigenpolarisation this run drives. It is the one door `phi != 0` comes
     # through, so it bypasses that refusal and nothing else.
     name = _refuse_out_of_scope(structure, mu, theta, None if _leg else phi,
-                                'te' if _leg else tetm, incidence_side, lattice, top, bot,
-                                chi=chi, polarization=polarization)
+                                'te' if _leg else tetm, incidence_side, lattice, top, bot)
 
     # `period` reaches its defaults so that a scene arriving through the typed door is refused
     # by NAME. `Stack.as_kwargs` emits `period` XOR `lattice` (4098406), so a `Stack` built on a
