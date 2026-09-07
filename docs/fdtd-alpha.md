@@ -12,7 +12,7 @@ An accepted input is not a guarantee of accuracy for every combination in this t
 | Area | Available interface | Evidence and limits |
 | --- | --- | --- |
 | Raster geometry | `(layer, y, x)` arrays; y-invariant and rectangular crossed cells | Analytic planar checks, 1D gratings, and selected asymmetric crossed gratings. The crossed external reference covers two dielectric scenes, not arbitrary 3D geometry. |
-| Incidence | From above; real angles; TE/TM at zero azimuth; linear `psi` at general azimuth | Normal, coplanar and conical regression cases; complex per-order amplitudes and both order axes checked. Near-Rayleigh and grazing incidence require separate refinement. |
+| Incidence | From above; finite real scalar angles; TE/TM at zero azimuth; linear `psi` at general azimuth | Invalid complex/nonfinite angles and unsupported polarization settings are refused before either dispatch path. Normal, coplanar and conical regression cases; complex per-order amplitudes and both order axes checked. Near-Rayleigh and grazing incidence require separate refinement. |
 | Materials | Positive real isotropic epsilon/mu; electric Drude/Lorentz poles | Closed-form dielectric, magnetic and Drude slabs, selected 1D patterned cases. The new installation matrix covers planar magnetic/Drude media through both raster paths. It does not validate general patterned 3D magnetic or dispersive devices. |
 | Spectra | Multiple wavelengths in one pulse run | At oblique incidence the in-plane wavevector is fixed, so angle varies across the band. Check the reported angles and incident spectrum. |
 | Outputs | R/T and complex s/p amplitudes, labelled diffraction orders | Frozen external-reference tests include complex propagating amplitudes. Evanescent channels are not covered by the convergence table below; deeply evanescent amplitudes can be masked. |
@@ -94,11 +94,54 @@ structures. Monitor residual is a settling indicator, not an error estimate. A n
 needs separate increases in runtime, padding/PML and spatial resolution until the requested
 observable stabilizes. Symmetry and R+T alone cannot establish amplitude or phase accuracy.
 
+## Runtime and boundary controls
+
+The companion study holds the square scene at resolution 25 and the rectangular scene
+at resolution 30. These are the middle grids above, not the finest grids. It changes
+runtime from 120 to 180 to 240 optical cycles; at 240 cycles it independently increases
+PML depth from 12 to 20 cells and padding scale from 1.0 to 1.5. Each boundary control
+changes one parameter from the 240-cycle baseline. This separates their sensitivity
+from the spatial sweep without claiming the same sensitivity on finer grids.
+
+```sh
+python studies/fdtd_alpha_controls.py --output studies/results/fdtd_alpha_controls.json
+```
+
+The JSON records complete settings, actual grids, residuals, warnings, reference errors,
+and pairwise differences across the same propagating channels. The table reports the
+maximum complex amplitude change between each pair, rather than a total R+T change.
+
+| Control | Square amplitude change | Rectangular amplitude change |
+| --- | --- | --- |
+| 120 → 180 cycles | 0.000145 | 0.001778 |
+| 180 → 240 cycles | 0.000040 | 0.000403 |
+| PML 12 → 20 cells | 0.000551 | 0.001804 |
+| Padding 1.0 → 1.5 | 0.005509 | 0.002415 |
+
+The time sensitivity falls from 120→180 to 180→240 cycles in both scenes. This supports
+using longer runs to reduce the remaining transient, but does not make the spatial error
+vanish. PML and padding controls must still be inspected separately. A larger padding
+region need not monotonically improve the complex coefficient at fixed resolution.
+Residuals differ under the boundary controls: these are finite-runtime sensitivities,
+not isolated asymptotic absorber errors. Tight error targets require further runtime
+refinement for each boundary setting.
+
+An independent analytic check isolates that last point without RCWA: in vacuum,
+`t_s = t_p = exp(i k0 cos(theta) d)`. `tests/test_fdtd_boundary_controls.py` uses wavelength
+0.8, thickness 0.2, period (0.16, 0.16), theta 18 degrees and phi 40 degrees, with 120 cycles
+and 12 PML cells. For padding scales 1.0/1.5, complex transmission errors are respectively
+0.006717/0.008513 at resolution 25, and 0.001716/0.002157 at resolution 50 (both source
+polarizations agree at these digits). The error and padding sensitivity decrease with
+refinement. This is evidence for a numerical phase contribution even in vacuum; it does
+not identify every source of padding sensitivity in a patterned device. The test checks
+both the analytic phase and the decrease, rather than relying on transmitted power alone.
+
 ## Remaining release gates
 
 Before a tagged public alpha, run the configured CI against the final revision, including
 clean installs on the claimed platforms; no remote CI result is asserted by this local
 report. Select and publish the supported scope with the release, and retain warnings and
 known limitations in examples. Before claiming a broader 3D material capability, add
-independent patterned magnetic/dispersive references and runtime/absorber refinement.
+independent patterned magnetic/dispersive references and repeat runtime/absorber refinement
+for those scenes. The dielectric controls above do not cover them.
 GPU execution, autodiff and a general field API are separate development projects.

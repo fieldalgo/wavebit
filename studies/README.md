@@ -12,6 +12,7 @@ makes them assertions, not studies.
 
 | Script | Question it answers |
 | --- | --- |
+| `fdtd_alpha_controls.py` | How runtime, PML depth and padding change the two crossed dielectric results at fixed grids. Write-up: [../docs/fdtd-alpha.md](../docs/fdtd-alpha.md). |
 | `fdtd_alpha_convergence.py` | How two crossed dielectric scenes refine against RCWA, with actual grids, residuals and source provenance. Write-up: [../docs/fdtd-alpha.md](../docs/fdtd-alpha.md). |
 | `fdtd_install_smoke.py` | Whether a clean wheel installation computes 36 planar material/incidence combinations without optional backends. Run outside the checkout with the clean environment Python. |
 | `scene_hash.py` | Not a question -- an instrument. One byte digest over 72 scenes (4 cell shapes x 3 modeling routes x 2 incidence sides x 3 backends), efficiencies and reconstructed fields, refusals hashed by name. Run it before and after a change that must move no number. |
