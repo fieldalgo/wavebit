@@ -8,12 +8,11 @@ between the answers.
 This path is a **research alpha**. Read the [supported scope and validation evidence](../fdtd-alpha.md)
 before using a new combination of geometry, incidence and material.
 
-Two things about the door differ from `rcwa()` and are worth having before the first line of
-code. It returns **the answer, not a solver** — there is no eigendecomposition to cache, no
-frozen geometry and no gradient, so there is no per-instance state an object would hold. And it
-runs on **NumPy only**: the time loop is a Python `for` over ~10^4 steps, which needs a `scan`
-primitive the backend layer does not have, so `backend=` is refused by name rather than
-half-supported.
+It returns the answer directly, in the same `Result` container as RCWA. With no
+`backend` argument, it preserves the legacy NumPy solver, including time records
+and graded meshes. Explicit `backend=0/1/2` (or `numpy/jax/torch`) selects the
+shared uniform-grid engine and supports material automatic differentiation.
+See [the common scene adapter](#common-scene-adapter) for its supported inputs.
 
 ## The same scene, both ways
 
@@ -337,9 +336,9 @@ Use a matching reference simulation for source or incident-power normalization.
 
 All axes are periodic by default. `absorber_cells=N` adds graded electric/magnetic damping
 at both z ends; it is not CPML and needs a width/reflection convergence check.
-`pml_cells` additionally provides convolutional PML at the two vacuum z ends;
+`pml_cells` additionally provides convolutional PML at two homogeneous z ends;
 see the material/boundary section below. This engine does not yet accept
-Stack/Incidence or nonuniform meshes. The existing scene solver
+nonuniform meshes. The common scene adapter below converts Stack/Incidence inputs. The legacy scene solver
 retains those capabilities on NumPy; selecting a JAX backend on that interface
 is still unsupported.
 
@@ -392,7 +391,9 @@ the analytic slab solution. They are not a general tensor interface averaging ru
 
 `pml_cells=N, pml_wavelength=lambda_center` adds convolutional PML at both z
 ends, using Wavebit's existing coefficient formulation evaluated at native E/H
-positions. The end layers **and one adjacent interior cell** must contain vacuum
+positions. The end layers **and one adjacent interior cell** must match the static
+`pml_background=((epsilon_top, mu_top), (epsilon_bottom, mu_bottom))` values
+(default: vacuum)
 (epsilon=mu=1), zero electric conductivity and zero oscillator strength. x/y
 remain periodic. Cannot combine this with `absorber_cells`; the latter remains
 a simpler graded damping option. Keep physical sources and measurement planes
@@ -464,7 +465,73 @@ as well as JAX; they remain frozen references, not a fresh external execution
 on each test run. Use explicit double-precision input tensors for precision checks.
 
 This unifies native-grid **calculation backends**. The existing `wavebit.fdtd`
-Stack/Incidence adapter still dispatches to the legacy NumPy scene solver.
+Stack/Incidence adapter selects this engine when `backend` is explicitly supplied.
 Integrating its rasterization, TFSF injection and modal Result extraction with
 this shared core remains separate work; `fdtd(stack=..., backend=2)` is not yet
 supported. Existing native `fdtd_grid` calls remain compatible.
+
+
+## Common scene adapter
+
+```python
+import torch
+import wavebit
+from wavebit import Stack, Incidence
+
+value = torch.tensor(2.25, dtype=torch.float64, requires_grad=True)
+scene = Stack.from_structure(value.reshape(1, 1, 1), [.3],
+                             top=1., bot=1., period=.4)
+result = wavebit.fdtd(scene, Incidence(wavelength=1., tetm='te'),
+                     backend=2, resolution=20, n_periods=30,
+                     truncation_order=0)
+derivative, = torch.autograd.grad(result.T.sum(), value)
+```
+
+The same adapter runs on NumPy (`0`), JAX (`1`) and Torch (`2`). JAX results are
+registered pytrees, so a function returning the complete `Result` can be jitted.
+Raster epsilon, raster mu, electric Drude/Lorentz parameters and Jones amplitudes
+retain their backend graphs. Cell overlap weights are static; harmonic averaging
+is applied normal to each field component and arithmetic averaging tangentially.
+Pole masks use arithmetic fill fractions, including the normal component; this
+is an approximation to a dispersive interface, not a general tensor homogenizer.
+
+Supported scene inputs include rectangular one-dimensional and crossed rasters,
+positive real magnetic half spaces, normal/oblique/conical incidence, Jones
+polarization, electric pole labels, and scalar or vector wavelengths. Output
+contains `given`, `s_inc`, `p_inc`, diffraction order metadata, complex r/t and
+power R/T. Declared scalar TE/TM uses RCWA's fixed x-z frame; coupled Jones output
+uses each outgoing order's own s/p frame. Reflection is referenced to the top
+interface and transmission to the bottom interface.
+
+Two electric-current basis sheets and two uniform incident-medium reference runs
+calibrate incident polarization and subtract the incident field at the reflection
+plane. All four runs share the same update core. This is reference normalization,
+not a TFSF source. Extraction corrects Yee plane interpolation and uses discrete
+homogeneous propagation to move the phase reference to the interfaces. At oblique
+incidence the transverse wavevector stays fixed across the wavelength band;
+`return_diagnostics=True` includes the corresponding angles.
+
+Geometry, half-space coefficients, wavelength and incidence angles are static.
+An explicit `resolution` is required so material optimization cannot resize the
+grid. Defaults here are `courant=.8`, `n_periods=40`, `n_pml=12`; choose a smaller
+Courant fraction when the minimum material values or pole frequencies demand it.
+The time-step stability bound is checked by the native core. Concrete invalid
+inputs raise; invalid traced JAX runs return NaN amplitudes and efficiencies, with
+`stable=False` in optional diagnostics. Refine resolution,
+PML width, padding and duration for each new structure, especially resonances.
+Exact grazing orders and orders beyond the grid's sampling limit are refused.
+Far-plane extrapolation of strongly evanescent amplitudes is ill-conditioned.
+
+The explicit-backend adapter currently does not accept time-history recording,
+point probes, user-selected field monitors, graded z meshes, bottom incidence,
+skewed lattices or geometry derivatives. Omit `backend` for supported legacy
+recording/graded-mesh features; unsupported explicit-backend keywords raise an
+error. There is no implicit backend fallback. Actual GPU execution remains
+unverified on this CPU-only machine.
+
+Tests compare complex slab amplitudes with Airy under refinement, magnetic
+conical Jones amplitudes and asymmetric diffraction with RCWA, a wavelength-band
+transmission with stored Meep public-API data, and JAX/Torch material derivatives
+with finite differences. Crossed dispersive scenes additionally check Torch/
+NumPy agreement and a pole-strength derivative. These scene checks supplement
+the native-core Meep/FDTDX field and derivative references.

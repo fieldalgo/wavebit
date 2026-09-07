@@ -19,7 +19,10 @@ An accepted input is not a guarantee of accuracy for every combination in this t
 | Time records | Ex/Ey/Ez/Hx/Hy/Hz snapshots on request, measured axes and times, plotting and animation | Component staggering, coherent polarization, recording invariance and plotting contracts are tested. Circular vacuum records check equal component energy, temporal quadrature and both rotation directions. Six-component recording preserves native Yee staggering, including the H half-step time; Point sampling and instantaneous Poynting vectors interpolate the native axes; nonzero-Bloch time records propagate a positive-frequency carrier so transverse energy flows in the intended direction; manufactured-field checks and vacuum flux/refinement tests cover this interpolation. Streaming six-component frequency planes and integrated spectral power are available; offline DFT equality, coherent Jones mixing, and slab R/T ratios are tested. Whole-volume harmonic reconstruction remains unavailable. |
 | Execution | NumPy on CPU; optional Matplotlib plotting | Clean wheel installation and calculation checked on macOS arm64/Python 3.12. Other operating systems and Python versions need release CI evidence. |
 
-The Stack/Incidence FDTD interface does not provide autodiff, JAX/PyTorch execution, GPU/MPI execution, bottom incidence,
+The legacy Stack/Incidence FDTD path does not provide autodiff or JAX/PyTorch execution.
+The explicit-backend common scene adapter now provides both, with static geometry
+and material/pole gradients; see the [guide](guide/time-domain.md#common-scene-adapter).
+Neither scene path provides MPI execution, bottom incidence,
 skewed lattices, parametric geometry input, anisotropic tensors,
 or complex-angle incidence. Complex Jones states support diffraction and transverse time records through
 separately propagated sine/quadrature sources. Use the appropriate RCWA capability where available; do not
@@ -31,9 +34,10 @@ notes](fdtd.md) and [API reference](reference/api.md).
 The separate `wavebit.fdtd_grid` interface provides NumPy, compiled JAX and checkpointed Torch Yee
 updates, streaming field/power planes, and differentiable material/source inputs.
 It accepts native uniform grids with diagonal real coefficients, periodic
-boundaries, optional graded z damping, vacuum-end z CPML, and electric
-Drude/Lorentz ADE poles. It does not port the Stack/Incidence interface, general
-PML backgrounds, automatic plane-wave injection or nonuniform grid to JAX. CPU eigenmode,
+boundaries, optional graded z damping, homogeneous-end z CPML, and electric
+Drude/Lorentz ADE poles. An explicit-backend scene adapter now adds rasterization,
+reference-calibrated plane-wave sources and diffraction Results. Nonuniform grids
+are still outside the common engine. CPU eigenmode,
 NumPy/JAX parity, finite-difference material sensitivities, pulse sensitivities,
 and absorber energy-removal checks pass. Live external checks now also compare a
 three-wavelength slab against Meep at three resolutions, and nonuniform diagonal
@@ -45,16 +49,15 @@ Additional live CPU checks now cover native CPML and dielectric/Lorentz/Drude/
 mixed slabs at two resolutions, plus FDTDX two-pole 3D updates and strength
 gradients. Direct Meep comparisons match its documented point sampling of the
 dispersive part; separate tangential half-cell weights converge against Airy.
-PML width/runtime controls and oblique pulse removal are tested. General
-scattering and arbitrary PML materials remain outside this evidence.
+PML width/runtime controls and oblique pulse removal are tested. Arbitrary spatially varying or dispersive PML backgrounds remain outside this evidence.
 Native three-axis Bloch phases and their gradients are also implemented, with
 exact discrete-mode checks and a live FDTDX complex-field/material-gradient
 comparison. Transverse phases may coexist with z CPML; longitudinal phase must
 be zero. The native core now follows RCWA's Array API architecture: one physics
 implementation, common graph-preserving conversion, and separate NumPy/JAX/Torch
 time-loop policies. Torch additionally passes the existing FDTDX field/gradient
-goldens for non-dispersive, ADE and Bloch cases. This does not change the legacy
-Stack/Incidence dispatch. Actual GPU execution is unverified on
+goldens for non-dispersive, ADE and Bloch cases. Omitting backend preserves legacy
+Stack/Incidence dispatch; explicitly selecting one invokes the common scene adapter. Actual GPU execution is unverified on
 the current CPU-only machine. See the [native-grid guide](guide/time-domain.md).
 
 ## Reproduce the installation check

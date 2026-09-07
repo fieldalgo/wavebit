@@ -14,7 +14,8 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
               electric=None, magnetic=None, source=None, pulse=None,
               wavelengths=(), monitor_z=(), backend='numpy', device=None,
               checkpoint_steps=32, absorber_cells=0, poles=(),
-              pml_cells=0, pml_wavelength=1., bloch_phase=(0., 0., 0.)):
+              pml_cells=0, pml_wavelength=1., bloch_phase=(0., 0., 0.),
+              pml_background=((1., 1.), (1., 1.))):
     """Advance a 3D Yee grid and accumulate frequency-domain field planes.
 
     epsilon: positive scalar-per-cell (z,y,x) or diagonal/native (3,z,y,x)
@@ -44,7 +45,8 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
     differentiable. Their oscillator frequencies tighten the returned CFL bound.
 
     pml_cells adds convolutional PML at both z ends, with pml_wavelength setting
-    its frequency shift. End layers plus one interior cell must be vacuum, with
+    its frequency shift. pml_background gives static (epsilon, mu) pairs at the low/high z ends.
+    End layers plus one interior cell must match these positive backgrounds, with
     no conductivity or nonzero pole strength. Cannot combine with absorber_cells.
     x/y stay periodic. PML accuracy needs width and resolution refinement.
 
@@ -131,10 +133,14 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
         rate = resonance_bound+xp.max(sum(pole_strengths)/eps)
         bound = 1/xp.sqrt(1/bound**2+rate/4)
         stable = stable & (dt < bound)
+    background = np.asarray(pml_background, float)
+    if background.shape != (2, 2) or not np.isfinite(background).all() or np.any(background <= 0):
+        raise ValueError("pml_background needs two positive finite (epsilon, mu) pairs.")
     if pml_cells:
-        # This first native-grid CPML interface assumes vacuum end layers.
         edge = np.r_[0:pml_cells+1, shape[1]-pml_cells-1:shape[1]]
-        stable = stable & xp.all(eps[:, edge] == 1) & xp.all(permeability[:, edge] == 1)
+        for side, cells in enumerate((slice(0, pml_cells+1), slice(-pml_cells-1, None))):
+            stable = stable & xp.all(eps[:, cells] == background[side, 0])
+            stable = stable & xp.all(permeability[:, cells] == background[side, 1])
         stable = stable & xp.all(sigma[:, edge] == 0)
         for strength in pole_strengths:
             stable = stable & xp.all(strength[:, edge] == 0)
@@ -191,7 +197,8 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
             position = np.arange(shape[1])+offset
             depth = np.maximum(pml_cells-np.minimum(position, shape[1]-position), 0)*spacing[0]
             return tuple(array(v[:, None, None], dtype=real_dtype) for v in cpml_coefficients(
-                depth, pml_cells*spacing[0], dt, pml_wavelength, 1.))
+                depth, pml_cells*spacing[0], dt, pml_wavelength,
+                np.where(position < shape[1]/2, np.prod(background[0]), np.prod(background[1]))))
         pml_e, pml_h = profile(0.), profile(.5)
     auxiliary = runtime.zeros((2,)+shape[1:], dtype=dtype) if pml_cells else runtime.zeros((0,), dtype=dtype)
 

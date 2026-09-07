@@ -72,15 +72,17 @@ def fdtd(stack=None, incidence=None, **kwargs):
     translation layer.
 
     Unlike :func:`rcwa` this hands back the answer rather than a solver. There is no reusable
-    per-instance state to keep: no eigen-decomposition to cache, no frozen geometry, no
-    gradient to take. A solver object would be a place to put the state this method does not
-    have.
+    per-instance state to keep. Explicit backend selection enables material gradients
+    through the common native-grid engine.
 
     It answers pure TE / TM at normal and oblique incidence, linear or elliptical incidence through
     ``psi``/``chi`` or a complex ``polarization`` pair at any ``theta`` and ``phi``,
     and a crossed grating; dispersive and magnetic media are
-    carried on all of them. Everything outside that is refused by name. There is no ``backend``
-    argument; ``wavebit/_core/fdtd.py``'s docstring says why.
+    carried on all of them. With no backend specified, the legacy NumPy scene solver
+    preserves time records and graded meshes. Explicit ``backend=0/1/2`` (or
+    ``numpy/jax/torch``) selects the shared uniform-grid scene engine, requires
+    explicit resolution, and differentiates raster materials and electric poles.
+    Geometry and half spaces are static; see the time-domain guide for scope.
 
     Args:
         stack: optional typed ``Stack`` supplying ``structure`` / ``thickness`` / ``top`` /
@@ -101,4 +103,8 @@ def fdtd(stack=None, incidence=None, **kwargs):
     for unset in ('psi', 'chi', 'polarization'):
         if kwargs.get(unset) is None:
             kwargs.pop(unset, None)
+    backend = kwargs.pop("backend", None)
+    if backend is not None:
+        from ._core.scene_fdtd import solve_scene_fdtd
+        return solve_scene_fdtd(backend=backend, **kwargs)
     return solve_fdtd(**kwargs)
