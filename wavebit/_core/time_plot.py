@@ -1,7 +1,7 @@
 """Pictures of recorded Yee fields, using each component's own coordinates.
 
 Matplotlib is optional and imported only when a picture is requested. A time record is
-raw source-driven E, not an intensity or a frequency-domain reconstruction.
+raw source-driven E or normalized H, not an intensity or a frequency-domain reconstruction.
 """
 import operator
 import warnings
@@ -14,18 +14,23 @@ def _record(diagnostics, component, y, part):
         raise ValueError('No time record: solve with record_field=N and return_diagnostics=True.')
     primary = diagnostics['field_e_component']
     component = primary if component is None else component.lower()
-    if component == primary:
-        key, xkey, ykey = 'field_e', 'field_x', 'field_y'
-    elif component == 'ex' and 'field_ex' in diagnostics:
-        key, xkey, ykey = 'field_ex', 'field_ex_x', 'field_ex_y'
+    if component in diagnostics.get('fields', {}):
+        record = diagnostics['fields'][component]
+        field = np.asarray(record['values'])
+        t, z, x, yy = (np.asarray(record[k]) for k in ('t', 'z', 'x', 'y'))
     else:
-        raise ValueError(f'Component {component!r} was not recorded; primary component is {primary!r}.')
+        if component == primary:
+            key, xkey, ykey = 'field_e', 'field_x', 'field_y'
+        elif component == 'ex' and 'field_ex' in diagnostics:
+            key, xkey, ykey = 'field_ex', 'field_ex_x', 'field_ex_y'
+        else:
+            raise ValueError(f'Component {component!r} was not recorded; primary component is {primary!r}.')
+        field = np.asarray(diagnostics[key])
+        t, z, x, yy = (np.asarray(diagnostics[k])
+                        for k in ('field_t', 'field_z', xkey, ykey))
     transforms = {'real': np.real, 'imag': np.imag, 'abs': np.abs}
     if part not in transforms:
         raise ValueError("part must be 'real', 'imag', or 'abs' (field amplitude, not intensity).")
-    field = np.asarray(diagnostics[key])
-    t, z, x, yy = (np.asarray(diagnostics[k])
-                    for k in ('field_t', 'field_z', xkey, ykey))
     if any(a.ndim != 1 or not len(a) or not np.all(np.isfinite(a))
            or np.any(np.diff(a) <= 0) for a in (t, z, x, yy)):
         raise ValueError('Recorded axes must be finite, nonempty, increasing vectors.')
@@ -68,13 +73,15 @@ def _draw(diagnostics, data, frame, part, ax, vmax):
                          vmin=0 if part == 'abs' else -vmax, vmax=vmax)
     name = component.capitalize()
     label = {'real': f'Re {name}', 'imag': f'Im {name}', 'abs': f'|{name}|'}[part]
-    fig.colorbar(mesh, ax=ax, label=f'{label} (source units)')
+    unit = 'Z0 H, source units' if component.startswith('h') else 'source units'
+    fig.colorbar(mesh, ax=ax, label=f'{label} ({unit})')
     grid = diagnostics['grid']
     npml = diagnostics['n_pml']
-    ax.axhspan(z[0], z[npml], color='gray', alpha=0.2, label='PML')
-    ax.axhspan(z[-1 - npml], z[-1], color='gray', alpha=0.2)
+    boundary_z = np.asarray(diagnostics['field_z'])
+    ax.axhspan(boundary_z[0], boundary_z[npml], color='gray', alpha=0.2, label='PML')
+    ax.axhspan(boundary_z[-1 - npml], boundary_z[-1], color='gray', alpha=0.2)
     kt = grid.k_tfsf
-    tfsf = 0.5 * (z[kt - 1] + z[kt])
+    tfsf = 0.5 * (boundary_z[kt - 1] + boundary_z[kt])
     ax.axhline(tfsf, color='darkorange', linestyle='--', linewidth=1.2,
                label='TFSF (scattered field above)')
     for i, depth in enumerate(np.r_[0.0, np.cumsum(grid.thickness)]):
@@ -92,7 +99,7 @@ def _title(component, part, t, y):
 
 def plot_fdtd_field(diagnostics, *, frame=0, component=None, y=0.0, part='real',
                     ax=None, vmax=None):
-    """Plot one recorded x-z electric-field slice; return ``(figure, axes, mesh)``.
+    """Plot one recorded x-z electric or magnetic field slice; return ``(figure, axes, mesh)``.
 
     Args:
         diagnostics: The dictionary from ``fdtd(record_field=N, return_diagnostics=True)``.

@@ -78,3 +78,22 @@ def test_missing_record_and_unrecorded_component_are_explained(record):
 def test_importing_wavebit_does_not_import_matplotlib():
     subprocess.run([sys.executable, '-c',
                     "import sys, wavebit; assert 'matplotlib' not in sys.modules"], check=True)
+
+
+def test_magnetic_plot_uses_native_time_and_z_but_physical_boundary_planes(record):
+    z = record['field_z']
+    record['fields'] = {'hx': dict(values=record['field_e'][:, :-1],
+                                  t=record['field_t']-.5, z=(z[:-1]+z[1:])/2,
+                                  x=record['field_x'], y=record['field_y'])}
+    fig, ax, mesh = wavebit.plot_fdtd_field(record, component='hx', frame=1)
+    coords = mesh.get_coordinates()
+    # On a nonuniform mesh pcolormesh's cell-edge midpoints need not recover
+    # sample centres. Compare its inferred edges instead.
+    half_z = (z[:-1]+z[1:])/2
+    expected = np.r_[half_z[0]-(half_z[1]-half_z[0])/2,
+                     (half_z[:-1]+half_z[1:])/2,
+                     half_z[-1]+(half_z[-1]-half_z[-2])/2]
+    np.testing.assert_allclose(coords[:, 0, 1], expected)
+    assert 't=0.5' in ax.get_title()
+    np.testing.assert_allclose(ax.lines[0].get_ydata(), [-3., -3.])
+    assert 'Z0 H' in fig.axes[1].get_ylabel()

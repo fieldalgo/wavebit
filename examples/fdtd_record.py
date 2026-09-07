@@ -14,6 +14,8 @@ import wavebit
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, default=Path('fdtd-field.png'))
+    parser.add_argument('--component', choices=('ex', 'ey', 'ez', 'hx', 'hy', 'hz'),
+                        default='ex', help='electric or normalized magnetic field component')
     parser.add_argument('--psi', type=float, default=.37, help='polarization angle in radians')
     parser.add_argument('--chi', type=float, default=None,
                         help='ellipticity in radians; pi/4 gives a circular pulse')
@@ -25,11 +27,11 @@ def main():
                                  psi=args.psi, chi=args.chi)
     result, diagnostics = wavebit.fdtd(
         stack=scene, incidence=incidence, resolution=.025, n_periods=80,
-        record_field=5, return_diagnostics=True)
-    # The pulse has left by the final frame; show the strongest recorded Ex slice.
-    strength = np.max(np.abs(diagnostics['field_ex'].real), axis=(1, 2, 3))
+        record_field=5, record_components=(args.component,), return_diagnostics=True)
+    # The pulse has left by the final frame; show the strongest recorded slice.
+    strength = np.max(np.abs(diagnostics['fields'][args.component]['values'].real), axis=(1, 2, 3))
     frame = int(np.argmax(strength))
-    fig, _, _ = wavebit.plot_fdtd_field(diagnostics, frame=frame, component='ex')
+    fig, _, _ = wavebit.plot_fdtd_field(diagnostics, frame=frame, component=args.component)
     fig.savefig(args.output, dpi=150)
     import matplotlib.pyplot as plt
     plt.close(fig)

@@ -1243,7 +1243,7 @@ class _Grid:
 # ---------------------------------------------------------------------------------------
 
 def _time_loop(grid, tetm, n_steps, wavelengths, leg=None, record_field=None,
-               source_quadrature=False):
+               source_quadrature=False, record_components=None):
     """Step the fields and accumulate the running DFT, at every requested wavelength at once.
 
     This is the one thing a time-domain solve does that a frequency-domain one cannot: the
@@ -1418,6 +1418,15 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None, record_field=None,
     snap_e = np.zeros((n_snap, nz, ny, nx), dtype=dtype) if n_snap else None
     snap_x = np.zeros((n_snap, nz, ny, nx), dtype=dtype) if (n_snap and conical) else None
     snap_t = np.zeros(n_snap)
+    components = {}
+    for component in record_components or ():
+        if component == ('ey' if te_on else 'ex'):
+            components[component] = snap_e
+        elif component == 'ex' and conical:
+            components[component] = snap_x
+        else:
+            depth = nz-1 if component in ('ez', 'hx', 'hy') else nz
+            components[component] = np.zeros((n_snap, depth, ny, nx), dtype=dtype)
 
     # The second transverse component, `Ex`, and its own incident reference. A conical mount
     # needs both because the s and p channels of an order are two projections of the same
@@ -1540,6 +1549,14 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None, record_field=None,
             if conical:
                 snap_x[j] = ex
             snap_t[j] = (step + 1) * dt
+            active = {}
+            if te_on:
+                active.update(ey=ey, hx=hx, hz=hz)
+            if tm_on:
+                active.update(ex=ex, hy=hy, ez=ez)
+            for component, history in components.items():
+                if component in active:
+                    history[j] = active[component]
 
         amplitude = float(np.abs(f_trn).max())
         if conical:
@@ -1556,7 +1573,7 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None, record_field=None,
     # as dz**0.6.
     # `Ey` and `Ex` both sit on the z nodes, so a conical run's offset is zero for both.
     offset = 0.0 if conical else (0.5 if tetm == 'tm' else 0.0)
-    return {'snap_e': snap_e, 'snap_x': snap_x, 'snap_t': snap_t[:n_snap] if n_snap else None,
+    return {'components': components, 'snap_e': snap_e, 'snap_x': snap_x, 'snap_t': snap_t[:n_snap] if n_snap else None,
             'dft_ref': dft_ref, 'dft_trn': dft_trn, 'tetm': tetm, 'conical': conical,
             'dft_ref_x': dft_ref_x, 'dft_trn_x': dft_trn_x, 'inc_z0_x': inc_z0_x,
             'wavelengths': wavelengths,
@@ -2118,10 +2135,15 @@ def _phase_weighted_record(diag, coefficient, quadrature_run):
     keys = [key for key in ('field_e', 'field_ex') if key in diag]
     for key in keys:
         out[key] = float(np.real(coefficient)) * diag[key]
+    if 'fields' in diag:
+        out['fields'] = {name: dict(field, values=float(np.real(coefficient))*field['values'])
+                         for name, field in diag['fields'].items()}
     if np.imag(coefficient) != 0:
         _, quadrature = quadrature_run()
         for key in keys:
             out[key] += float(np.imag(coefficient)) * quadrature[key]
+        for name, field in out.get('fields', {}).items():
+            field['values'] += float(np.imag(coefficient))*quadrature['fields'][name]['values']
         out['residual'] = max(diag['residual'], quadrature['residual'])
     return out
 
@@ -2171,6 +2193,8 @@ def _solve_conical_oblique(pair, phi, theta, return_diagnostics, **kw):
         s_diag = records[0]
         for name in ('field_e', 'field_ex'):
             s_diag[name] = records[0][name] + records[1][name]
+        for name, field in s_diag.get('fields', {}).items():
+            field['values'] = field['values'] + records[1]['fields'][name]['values']
         s_diag['residual'] = max(record['residual'] for record in records)
     return (result, s_diag) if return_diagnostics else result
 
@@ -2288,6 +2312,8 @@ def _solve_conical(pair, phi, theta, return_diagnostics, **kw):
         te_diag['field_ex'] = tm_diag['field_e']
         te_diag['field_ex_x'] = tm_diag['field_x']
         te_diag['field_ex_y'] = tm_diag['field_y']
+        for name, field in te_diag.get('fields', {}).items():
+            field['values'] = field['values'] + tm_diag['fields'][name]['values']
         te_diag['residual'] = max(te_diag['residual'], tm_diag['residual'])
     return (result, te_diag) if return_diagnostics else result
 
@@ -2297,7 +2323,8 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
                resolution=None, n_pml=PML_CELLS, n_periods=None, courant=COURANT,
                subpixel=True, truncation_order=None, return_diagnostics=False,
                dispersion=None, poles=None, pad_scale=1.0, grading=None,
-               record_field=None, chi=None, polarization=None, _leg=None, _source_quadrature=False):
+               record_field=None, record_components=None, chi=None, polarization=None,
+               _leg=None, _source_quadrature=False):
     # `mu` is the raster's permeability field, layer-major beside `structure`, and the two
     # half-spaces carry theirs inside their `Material` -- the same two spellings the RCWA path
     # takes, so one `Stack` reaches both solvers unchanged.
@@ -2369,6 +2396,11 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
             accuracy it wins on a metal grating and loses on a dielectric one (§8f).
         record_field: keep every N-th step of the electric field, in the diagnostics, with the
             axes it is measured on (§8h). Off by default and free when off.
+        record_components: optional component name, sequence, or ``'all'``. Requires
+            record_field; adds diagnostics['fields'][component] containing values
+            shaped (time,z,y,x) and its own t/z/y/x axes. H is normalized as Z0*H
+            and sampled half a step before E. Off by default; legacy Ey/Ex records
+            remain available. Components absent in a pure scalar solve are zero.
         return_diagnostics: return ``(result, diagnostics)`` instead of ``result``.
         chi: real ellipticity angle beside ``psi`` (radians); ``abs(chi)=pi/4`` is
             circular. If only chi is supplied, psi defaults to pi/2, as in RCWA.
@@ -2388,6 +2420,19 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
                 or not isinstance(record_field, (int, np.integer)) or record_field <= 0):
             raise ValueError('fdtd: record_field must be a positive integer step interval or None.')
         record_field = int(record_field)
+    if record_components is not None:
+        if record_field is None:
+            raise ValueError('fdtd: record_components requires record_field=N.')
+        allowed = ('ex', 'ey', 'ez', 'hx', 'hy', 'hz')
+        if isinstance(record_components, str):
+            record_components = allowed if record_components == 'all' else (record_components,)
+        try:
+            record_components = tuple(record_components)
+        except TypeError as exc:
+            raise ValueError('fdtd: record_components must name Yee components or all.') from exc
+        if (not record_components or any(c not in allowed for c in record_components)
+                or len(set(record_components)) != len(record_components)):
+            raise ValueError('fdtd: record_components must name unique ex/ey/ez/hx/hy/hz components.')
     pair = _incident_pair(tetm, psi, chi, polarization)
     if pair is not None:
         return _solve_conical(
@@ -2397,7 +2442,7 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
             n_pml=n_pml, n_periods=n_periods, courant=courant, subpixel=subpixel,
             truncation_order=truncation_order, return_diagnostics=return_diagnostics,
             dispersion=dispersion, poles=poles, pad_scale=pad_scale, grading=grading,
-            record_field=record_field)
+            record_field=record_field, record_components=record_components)
 
     # `_leg` is set only by `_solve_conical`, which has already validated the incidence; it
     # names which eigenpolarisation this run drives. It is the one door `phi != 0` comes
@@ -2485,7 +2530,7 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
                  n_max=n_max, period_y=period_y)
     n_steps = int(np.ceil(n_periods * centre / grid.dt))
     out = _time_loop(grid, name, n_steps, band, leg=_leg, record_field=record_field,
-                     source_quadrature=_source_quadrature)
+                     source_quadrature=_source_quadrature, record_components=record_components)
 
     crossed = raster.ndim == 3 and raster.shape[1] > 1
     window_2d = None
@@ -2585,6 +2630,20 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
         if out['snap_x'] is not None:
             record.update({'field_ex': out['snap_x'],
                            'field_ex_x': x_half, 'field_ex_y': y_node})
+        if record_components is not None:
+            # Each component remains on its native Yee coordinates. H is measured
+            # half a time step before E; no interpolation is silently applied.
+            layout = {'ex': (False, True, False), 'ey': (False, False, True),
+                      'ez': (True, False, False), 'hx': (True, False, True),
+                      'hy': (True, True, False), 'hz': (False, True, True)}
+            record['fields'] = {}
+            for component, values in out['components'].items():
+                zh, xh, yh = layout[component]
+                record['fields'][component] = dict(
+                    values=values,
+                    t=out['snap_t'] - (grid.dt/2 if component.startswith('h') else 0.),
+                    z=(grid.z_node[:-1]+grid.z_node[1:])/2 if zh else grid.z_node,
+                    x=x_half if xh else x_node, y=y_half if yh else y_node)
 
     # Read off the node table rather than off `grid.dz`, which is the NOMINAL cell and is set
     # once (`self.dz = self.dx`) whatever the mesh does afterwards. On a graded run (§8f) the

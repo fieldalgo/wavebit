@@ -257,3 +257,10 @@ residual of the two basis runs. Recording is still off by default.
 the full list of refusals and what each one protects, and the two questions a time-domain
 solver can state that a harmonic one cannot. [`../result-guards.md`](../result-guards.md) says
 what a solve checks about its own answer, and why there is no generic energy warning.
+
+
+To record every electric and magnetic component, add `record_components='all'`.
+Read `diag['fields']['hz']['values']` and its `t/z/y/x` axes, or pass `component='hz'`
+to the plotting/animation helpers. H is normalized as `Z0 H`; its timestamps differ
+from E by half a time step. See [the component layout](../fdtd.md#recording-all-six-field-components)
+before combining staggered fields.

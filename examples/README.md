@@ -8,7 +8,7 @@ optional JAX/PyTorch backends.
 
 | Entry | Question it answers |
 | --- | --- |
-| [`fdtd_record.py`](fdtd_record.py) | How do you define a typed FDTD scene, record a conical pulse and save an Ex slice? Run `python fdtd_record.py --output /path/to/field.png`; add `--chi 0.7853981633974483` for circular incidence. FDTD is experimental; see the [research-alpha scope](../docs/fdtd-alpha.md). |
+| [`fdtd_record.py`](fdtd_record.py) | How do you define a typed FDTD scene, record a conical pulse and save an Ex slice? Run `python fdtd_record.py --output /path/to/field.png`; add `--chi 0.7853981633974483` for circular incidence and `--component hy` to view the magnetic field. FDTD is experimental; see the [research-alpha scope](../docs/fdtd-alpha.md). |
 | [`shapes_1d.py`](shapes_1d.py), [`shapes_2d.py`](shapes_2d.py) | How do you describe a structure as drawn shapes instead of a raster? The `_verification.py` file beside each answers the follow-up: does that path agree with the raster it replaces? |
 
 ## How maintained is this?

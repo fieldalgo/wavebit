@@ -1011,6 +1011,48 @@ Crossed rasters always use the coupled route, including zero polar or azimuthal 
 the scalar 1D combiner cannot retain their second order axis. Settling checks include Ex
 as well as Ey, and a `psi` solve reports the larger residual of its two basis runs.
 
+### Recording all six field components
+
+Pass `record_components='all'` alongside `record_field=N` to record Ex, Ey, Ez,
+Hx, Hy and Hz. A component name or sequence such as `('ez', 'hy')` records only
+those additional outputs. Omitting the option retains the original transverse
+record and memory cost. The legacy `field_e`/`field_ex` outputs remain available.
+
+```python
+result, diag = wavebit.fdtd(
+    structure=np.full((1, 1, 2), 2.25), thickness=[100.], top=1., bot=1.,
+    period=[200.], wavelength=900., theta=.3, phi=.4, polarization=(1., 1j),
+    resolution=.02, n_periods=80, record_field=5,
+    record_components='all', return_diagnostics=True,
+)
+hy = diag['fields']['hy']
+# hy['values'].shape == (len(hy['t']), len(hy['z']), len(hy['y']), len(hy['x']))
+fig, ax, mesh = wavebit.plot_fdtd_field(diag, component='hy', frame=20)
+```
+
+Each `diag['fields'][component]` contains `values` and its own `t`, `z`, `y`, `x`
+vectors. Values stay on the native Yee grid, including a graded z mesh:
+
+| Component | x | y | z | Time |
+| --- | --- | --- | --- | --- |
+| Ex | half | node | node | `(step+1) dt` |
+| Ey | node | half | node | `(step+1) dt` |
+| Ez | node | node | half | `(step+1) dt` |
+| Hx | node | half | half | `(step+1/2) dt` |
+| Hy | half | node | half | `(step+1/2) dt` |
+| Hz | half | half | node | `(step+1/2) dt` |
+
+A y-invariant cell has one y coordinate. Components absent in a pure TE/TM solve
+are identically zero. Magnetic fields are the normalized `Z0 H` used by the solver,
+not SI amperes per metre. Complex Jones recording uses the same propagated temporal
+quadrature for all requested components. Plotting and animation use each component's
+native coordinates and timestamp; absorber/source markers stay at their physical planes.
+
+For an instantaneous Poynting vector, interpolate the fields onto a common spatial
+position **and time** before taking a cross product. Direct products of raw E/H array
+indices combine different Yee positions and half-step times. These records provide
+transient fields, not the RCWA `reconstruct_field` frequency-domain API.
+
 ### Elliptical and circular incidence
 
 The diffraction solve accepts the same polarization coordinates as RCWA:
