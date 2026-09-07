@@ -118,7 +118,7 @@ def _z_layout(d, resolution, dpml, pad, gap):
                 z_src=z_min + dpml + snap(0.30 * pad), z_ref=-gap, z_trn=d + gap)
 
 
-def _run(case, leg, resolution, empty, gap=0.10, df_frac=0.2):
+def _run(case, leg, resolution, empty, gap=0.10, df_frac=0.2, material_at=None):
     """One meep run. Returns the two monitor planes and the metadata they need."""
     import meep as mp
 
@@ -171,7 +171,8 @@ def _run(case, leg, resolution, empty, gap=0.10, df_frac=0.2):
     geom = []
     if not empty:
         z0 = 0.0
-        for arr, t in zip(np.asarray(case['index'], dtype=float), case['thickness']):
+        for layer, (arr, t) in enumerate(zip(np.asarray(case['index'], dtype=float),
+                                             case['thickness'])):
             ny, nx = arr.shape
             dx, dy = px / nx, py / ny
             for j in range(ny):
@@ -182,7 +183,8 @@ def _run(case, leg, resolution, empty, gap=0.10, df_frac=0.2):
                         # `wavebit.meshgrid_xy` puts column i as well.
                         center=mp.Vector3((i + 0.5) * dx - 0.5 * px,
                                           (j + 0.5) * dy - 0.5 * py, z0 + 0.5 * t),
-                        material=mp.Medium(index=float(arr[j, i]))))
+                        material=(mp.Medium(index=float(arr[j, i])) if material_at is None
+                                  else material_at(layer, j, i))))
             z0 += t
         # Sized to the +z cell edge and NO further -- fault 1.
         geom.append(mp.Block(size=mp.Vector3(mp.inf, mp.inf, lay['z_max'] - z0),

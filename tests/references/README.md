@@ -7,7 +7,7 @@ software this project does not ship.
 **How closely "known" means differs by row, and the difference is a fact about the method
 rather than about the harness.** Where the oracle is another RCWA and neither side truncates,
 agreement is ~1e-13 and a golden is a drift detector as well as a correctness one. Where the
-oracle discretises — the two Meep rows, which are an FDTD — both sides carry a grid error and
+oracle discretises — the Meep rows, which are an FDTD — both sides carry a grid error and
 the agreement is ~1e-2 on the crossed cells and ~1e-3 on the 1D one, whose single planar
 interface per period both grids hold better than a corner. Those rows are oracles for
 *structure*: they separate a right answer from a wrong sign, a swapped axis or a mislabelled
@@ -57,6 +57,7 @@ differ are exactly the `__stack` pair above.
 | **RETICOLO**, the in-cell **field** | the *pure TE/TM 1D* path (`field_1d`), which the two rows above never reach — **1e-14 on gratings**, five components of six | Octave + `RETICOLO_PATH` | `golden_reticolo_field.npz` |
 | **RETICOLO**, the **conical** field | `field_1d_conical` on a *patterned* layer — an azimuth and a discontinuity at once, which nothing else here reached | same | `golden_reticolo_conical_field.npz` |
 | **Meep** (FDTD, GPL) | a **crossed grating in the time domain**: per-order complex amplitudes on a 2D order grid at a conical mount, both incident polarisations. Not RCWA at all, so it is the only entry that can arbitrate `_core/fdtd.py` — and the only external check `_extract_crossed` has ever had | the `meep` env; **never an install dependency**, and its source is not read — see below | `golden_meep_crossed.npz` |
+| **Meep**, **patterned materials in 3D** | selected asymmetric crossed rasters with permeability contrast, electric Drude and electric Lorentz poles; both source polarizations, complex propagating amplitudes at two grids, and a separate doubled-runtime check | `meep` env, public API only; never an install dependency | `golden_meep_crossed_materials.npz`, `golden_meep_crossed_materials_runtime.json` |
 | **Meep**, the **1D benchmark** | the grating `docs/fdtd.md` §2 publishes and `README.md` leans on — pure TE/TM, normal incidence, both polarisations at two resolutions, plus a **planar control against a closed form**. Not new physics: it *is* that table's Meep column, which until 2026-09-06 was quoted from elsewhere. Grade **~1e-3**, structure not drift | same | `golden_meep_1d.npz` |
 
 One more oracle lives outside this directory: the Berreman 4x4 in
@@ -877,3 +878,15 @@ at `mu = 1`, and the `mu = 1` half *is* held to the solver today. If the harness
 conventions were wrong, that subset would fail now, while the answer is independently knowable.
 The magnetic half carries a physical guard instead of a comparative one: every case is Hermitian
 in both tensors, hence lossless, so `R + T = 1` is enforced on the frozen numbers.
+
+### Crossed material reference scope
+
+The three material scenes are specified in `_meep_crossed_material_cases.py` and documented
+in `docs/fdtd-alpha.md`. Their dispersive active permittivity has positive real part at the
+test wavelength; these are not a validation of negative-epsilon metals. The generator
+checks the external material API at three wavelengths, reuses the existing crossed
+monitor/frame bridge, and freezes a new file. `check_meep_crossed_material_runtime.py`
+checks that file with twice the runtime and records its digest, without replacing it.
+The regression suite compares complex amplitudes, checks spatial refinement against RCWA,
+and verifies that omitting the material contrast is distinguishable from discretization.
+No Meep implementation source is used by these tools.

@@ -13,7 +13,7 @@ An accepted input is not a guarantee of accuracy for every combination in this t
 | --- | --- | --- |
 | Raster geometry | `(layer, y, x)` arrays; y-invariant and rectangular crossed cells | Analytic planar checks, 1D gratings, and selected asymmetric crossed gratings. The crossed external reference covers two dielectric scenes, not arbitrary 3D geometry. |
 | Incidence | From above; finite real scalar angles; TE/TM at zero azimuth; linear `psi` at general azimuth | Invalid complex/nonfinite angles and unsupported polarization settings are refused before either dispatch path. Normal, coplanar and conical regression cases; complex per-order amplitudes and both order axes checked. Near-Rayleigh and grazing incidence require separate refinement. |
-| Materials | Positive real isotropic epsilon/mu; electric Drude/Lorentz poles | Closed-form dielectric, magnetic and Drude slabs, selected 1D patterned cases. The new installation matrix covers planar magnetic/Drude media through both raster paths. It does not validate general patterned 3D magnetic or dispersive devices. |
+| Materials | Positive real isotropic epsilon/mu; electric Drude/Lorentz poles | Closed-form dielectric, magnetic and Drude slabs, selected 1D patterned cases. The installation matrix covers planar magnetic/Drude media through both raster paths. Three selected patterned 3D material cases now have independent Meep references (below); broader material regimes remain unvalidated. |
 | Spectra | Multiple wavelengths in one pulse run | At oblique incidence the in-plane wavevector is fixed, so angle varies across the band. Check the reported angles and incident spectrum. |
 | Outputs | R/T and complex s/p amplitudes, labelled diffraction orders | Frozen external-reference tests include complex propagating amplitudes. Evanescent channels are not covered by the convergence table below; deeply evanescent amplitudes can be masked. |
 | Time records | Ey/Ex snapshots as available, measured axes, plotting and animation | Component staggering, coherent polarization, recording invariance and plotting contracts are tested. This is not a complete six-component field or frequency-domain near-field API. |
@@ -136,12 +136,83 @@ refinement. This is evidence for a numerical phase contribution even in vacuum; 
 not identify every source of padding sensitivity in a patterned device. The test checks
 both the analytic phase and the decrease, rather than relying on transmitted power alone.
 
+## Selected patterned 3D materials
+
+`tests/references/golden_meep_crossed_materials.npz` adds black-box Meep references for
+three asymmetric crossed rasters: patterned permeability, electric Drude dispersion and
+electric Lorentz dispersion. Meep is used only through its public API in an external
+environment; it is never a Wavebit installation dependency. The generator checks Meep's
+actual epsilon and mu at three wavelengths against a closed-form material evaluation.
+Its frequency conversion follows the [Meep susceptibility API](https://meep.readthedocs.io/en/master/Python_User_Interface/#lorentziansusceptibility).
+
+All three scenes use period (0.6, 0.8), thickness 0.2, wavelength 0.9 micrometres,
+theta 20 degrees and phi 35 degrees. Both half-spaces have mu=1; their indices are
+1.0 and 1.4. The active material occupies the ones in this y-by-x raster:
+
+```text
+1 1 0
+1 0 0
+0 0 0
+0 1 1
+```
+
+Background epsilon/mu are 1. The active material has epsilon_infinity=2.25. For the
+magnetic case mu=1.5; for both dispersive cases mu=1. With `omega_c=2*pi/0.9`, the
+Drude pole is `(0, 0.2*omega_c, 0.9*omega_c**2)` and the Lorentz pole is
+`(1.5*omega_c, 0.2*omega_c, 1.2*omega_c**2)`. At the test wavelength their respective
+active permittivities are 1.384615+0.173077i and 3.186037+0.149766i. These are moderate
+contrast, positive-real-epsilon cases; they do not validate metallic negative-epsilon
+regimes, arbitrary resonances, or magnetic dispersion.
+
+Meep 1.34.0 runs at resolutions 20/40, PML thickness 0.5, padding 0.6, monitor gap 0.1,
+source fractional bandwidth 0.2 and post-source duration 120, inheriting that version's
+remaining defaults. The runtime control doubles the post-source duration at resolution
+40 and leaves the frozen reference untouched. Wavebit uses resolutions 20/40, 160
+optical cycles, 12 PML cells, padding scale 1, Courant fraction 0.99, subpixel averaging
+and uniform z spacing. The solvers' time parameters have different meanings and are
+not treated as equal runtimes.
+
+Comparisons cover both incident polarizations and all complex s/p reflection/transmission
+coefficients in propagating orders with `n²-|k_parallel|² > 0.05`, on explicit order labels.
+RCWA orders 7 and 11 provide an additional internal refinement check; the frozen values
+come exclusively from Meep.
+
+| Material | FDTD / Meep | FDTD / RCWA 11 | Meep / RCWA 11 | Material omitted / Meep |
+| --- | --- | --- | --- | --- |
+| magnetic | 0.032199 | 0.009064 | 0.031502 | 0.169766 |
+| drude | 0.024954 | 0.007410 | 0.025702 | 0.186435 |
+| lorentz | 0.048092 | 0.011859 | 0.044459 | 0.171626 |
+
+Values are maximum absolute complex-amplitude differences, not percentages. The last
+column uses RCWA with mu contrast or the poles removed. The largest Meep doubled-runtime
+change across all six material/source combinations was 6.83e-8, below the 0.001 control
+criterion and far below these spatial discrepancies.
+
+Both solvers' finer grids are closer to RCWA order 11 than their coarser grids. Removing
+mu contrast or removing the electric poles produces a discrepancy distinguishable from
+the correct-material reference gap; the regression test checks that separation. This is
+evidence for these material paths and scenes, not a universal 0.05 accuracy guarantee.
+The runtime control and its reference-file digest are recorded separately in
+`tests/references/golden_meep_crossed_materials_runtime.json`.
+
+Reproduce the external half in the dedicated Meep environment, choosing new output paths:
+
+```sh
+python tests/references/gen_goldens_meep_crossed_materials.py --output /tmp/new-materials.npz
+python tests/references/check_meep_crossed_material_runtime.py --output /tmp/new-runtime.json
+```
+
+The second command checks the committed reference, not the first command's output.
+Both tools refuse to overwrite an existing output. CI reads the frozen artifacts with
+NumPy and never imports Meep. Broader cases need their own external and convergence checks.
+
 ## Remaining release gates
 
 Before a tagged public alpha, run the configured CI against the final revision, including
 clean installs on the claimed platforms; no remote CI result is asserted by this local
 report. Select and publish the supported scope with the release, and retain warnings and
 known limitations in examples. Before claiming a broader 3D material capability, add
-independent patterned magnetic/dispersive references and repeat runtime/absorber refinement
-for those scenes. The dielectric controls above do not cover them.
+more independent material cases, especially negative-epsilon and resonant regimes, and
+repeat runtime/absorber refinement for those scenes. The selected cases above do not
+cover the whole input space.
 GPU execution, autodiff and a general field API are separate development projects.
