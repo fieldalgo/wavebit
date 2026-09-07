@@ -23,6 +23,16 @@ Four instruments, and the order is the order of their strength:
 ``R + T = 1`` holds for magnetic scenes that are wrong — a boundary using the same admittance
 for both polarizations conserves energy perfectly, and so does a reconstruction whose ``H_z``
 is scaled by ``mu_zz``. Every assertion below is against something that can fail.
+
+**A crossing neither this file nor its partner stands at (found 2026-09-07, unfixed).**
+``incidence_side='bottom'`` x a magnetic scene is arbitrated by nothing. This file never sets
+``incidence_side``; ``test_backside_incidence.py`` never names a permeability. Measured: dropping
+the ``eps_top`` / ``eps_bot`` half-space swap from the backside mirror in EITHER 1D solve
+(``solve_1d.py``, the pure TE/TM branch and the conical one) leaves the whole suite green while a
+passive stack returns ``R + T = 2.69``. It came out of a mutation audit run for the FDTD path,
+where the same shape of hole -- a cell of the input cross-product no test visits -- had already
+shipped two defects. Closing it is a scene, not a new instrument: one magnetic stack solved from
+both sides, checked against the duality this file already uses.
 """
 import numpy as np
 import pytest
