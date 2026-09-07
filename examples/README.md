@@ -8,6 +8,7 @@ optional JAX/PyTorch backends.
 
 | Entry | Question it answers |
 | --- | --- |
+| [`fdtd_backends.py`](fdtd_backends.py) | Evaluate one FDTD objective on NumPy/JAX/Torch and compare automatic derivatives with finite differences. |
 | [`fdtd_bloch_gradient.py`](fdtd_bloch_gradient.py) | Differentiate oblique plane power through both the source phase and the transverse Bloch boundary. |
 | [`fdtd_dispersive_gradient.py`](fdtd_dispersive_gradient.py) | Differentiate Lorentz oscillator strength while vacuum-end CPML absorbs outgoing waves. |
 | [`fdtd_frequency_planes.py`](fdtd_frequency_planes.py) | Measure six frequency-domain fields and integrated slab R/T without keeping time histories. |

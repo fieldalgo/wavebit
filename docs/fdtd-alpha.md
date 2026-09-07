@@ -26,9 +26,9 @@ separately propagated sine/quadrature sources. Use the appropriate RCWA capabili
 infer FDTD support from RCWA examples. Unsupported inputs are described in [the solver
 notes](fdtd.md) and [API reference](reference/api.md).
 
-## Native-grid JAX engine
+## Shared native-grid engine
 
-The separate `wavebit.fdtd_grid` interface provides NumPy and compiled JAX Yee
+The separate `wavebit.fdtd_grid` interface provides NumPy, compiled JAX and checkpointed Torch Yee
 updates, streaming field/power planes, and differentiable material/source inputs.
 It accepts native uniform grids with diagonal real coefficients, periodic
 boundaries, optional graded z damping, vacuum-end z CPML, and electric
@@ -50,7 +50,11 @@ scattering and arbitrary PML materials remain outside this evidence.
 Native three-axis Bloch phases and their gradients are also implemented, with
 exact discrete-mode checks and a live FDTDX complex-field/material-gradient
 comparison. Transverse phases may coexist with z CPML; longitudinal phase must
-be zero. Actual GPU execution is unverified on
+be zero. The native core now follows RCWA's Array API architecture: one physics
+implementation, common graph-preserving conversion, and separate NumPy/JAX/Torch
+time-loop policies. Torch additionally passes the existing FDTDX field/gradient
+goldens for non-dispersive, ADE and Bloch cases. This does not change the legacy
+Stack/Incidence dispatch. Actual GPU execution is unverified on
 the current CPU-only machine. See the [native-grid guide](guide/time-domain.md).
 
 ## Reproduce the installation check

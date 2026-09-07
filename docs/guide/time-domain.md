@@ -299,9 +299,11 @@ Storage scales with six components times wavelengths times plane area; it does
 not grow with the number of time steps. These are streaming Fourier measurements,
 not a whole-volume harmonic field reconstruction.
 
-## Compiled, differentiable native grids
+## Shared NumPy, JAX and Torch native grids
 
-`wavebit.fdtd_grid` is a separate uniform-grid interface for NumPy or optional JAX.
+`wavebit.fdtd_grid` is a uniform-grid interface sharing one Array API calculation
+core across NumPy, JAX and Torch. `backend=0/1/2` has the same meaning as RCWA;
+`'numpy'/'jax'/'torch'` remain accepted aliases.
 It accepts native `(z,y,x)` permittivity, or `(3,z,y,x)` diagonal coefficients,
 and `(3,z,y,x)` initial E/H and electric-current source arrays. Specify
 `spacing=(dz,dy,dx)`, `dt` and `steps` explicitly, in c=1 units. E starts at zero
@@ -342,6 +344,8 @@ retains those capabilities on NumPy; selecting a JAX backend on that interface
 is still unsupported.
 
 JAX uses compiled scans and recomputes blocks during reverse differentiation.
+Torch uses eager autograd with non-reentrant block checkpointing; Torch compile
+has not been validated.
 `checkpoint_steps` trades stored block boundaries against recomputation and
 within-block storage. No time history is returned, but reverse-mode memory still
 grows with simulation length. Shapes, spacing, step count and monitor configuration
@@ -351,7 +355,9 @@ CFL violations raise; traced coefficients expose `stable` in the result and must
 be constrained by the caller. An optimizer must preserve positive epsilon/mu and
 nonnegative conductivity. Enable JAX x64 before array creation for precision studies.
 
-`device='cpu'` or `device='gpu'` selects a JAX device; unavailable hardware raises.
+`device='cpu'` or `device='gpu'` selects a device; Torch also accepts `'cuda'`
+and device objects. Torch inherits a tensor epsilon's device when device is
+omitted, otherwise uses CPU. Unavailable hardware raises.
 CPU parity, discrete eigenmode propagation, material/pulse derivatives, and block
 checkpoint equivalence are tested. External CPU checks additionally compare slab
 complex fields/power with Meep and native 3D updates/material gradients with
@@ -437,3 +443,28 @@ fixed-field boundary problem is not automatically an incidence-angle derivative;
 source/initial-field dependencies must be included in the differentiated function.
 `examples/fdtd_bloch_gradient.py` varies the source and boundary together with
 vacuum-end CPML and reports a spectral plane-power derivative.
+
+
+## Backend architecture
+
+The native solver now uses the same `array_api_compat` namespaces and
+`_core.backend.as_array` conversion as RCWA. Maxwell curls, CPML, ADE, Bloch
+wrapping and Fourier-plane accumulation have one implementation in
+`_core/grid_fdtd.py`. Array creation/device selection and time-loop execution
+live in `backends/time_domain.py`: a NumPy loop, JAX scan, or Torch checkpointed
+loop. The physics code does not import JAX or Torch and has no backend-specific
+update branches. Optional frameworks load only when their backend is selected.
+
+`examples/fdtd_backends.py` evaluates one CPML/Lorentz objective with all three
+backends and compares both automatic derivatives with a NumPy finite difference.
+Torch tests also preserve live input graphs, compare checkpoint block sizes, and
+exercise pole, material, source, initial-field and Bloch-phase derivatives. Existing
+FDTDX non-dispersive, two-pole and complex-Bloch goldens are checked through Torch
+as well as JAX; they remain frozen references, not a fresh external execution
+on each test run. Use explicit double-precision input tensors for precision checks.
+
+This unifies native-grid **calculation backends**. The existing `wavebit.fdtd`
+Stack/Incidence adapter still dispatches to the legacy NumPy scene solver.
+Integrating its rasterization, TFSF injection and modal Result extraction with
+this shared core remains separate work; `fdtd(stack=..., backend=2)` is not yet
+supported. Existing native `fdtd_grid` calls remain compatible.

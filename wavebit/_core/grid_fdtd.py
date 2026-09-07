@@ -1,10 +1,13 @@
-"""Functional uniform-grid Yee engine with NumPy and compiled differentiable JAX loops.
+"""Single-source uniform-grid Yee engine with NumPy, JAX and Torch execution.
 
 This low-level API takes native grid coefficients, not Stack/Incidence scenes.
 """
 import operator
 
 import numpy as np
+
+from .backend import _concrete
+from ..backends.time_domain import time_loop_backend
 
 
 def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
@@ -45,13 +48,16 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
     no conductivity or nonzero pole strength. Cannot combine with absorber_cells.
     x/y stay periodic. PML accuracy needs width and resolution refinement.
 
-    backend='jax' uses lax.scan on CPU/GPU, with block checkpointing for reverse
-    differentiation; device may be a JAX device or 'cpu'/'gpu'. Selecting unavailable
-    hardware raises. Inputs remain differentiable: jax.grad may differentiate
-    material, initial field, source and pulse. No full time history is stored.
+    backend selects the shared Array API core: 0/'numpy', 1/'jax', or 2/'torch',
+    matching RCWA's numeric IDs. JAX uses compiled scan; Torch uses an autograd
+    loop with non-reentrant block checkpointing. Both differentiate materials,
+    initial fields, sources, poles and Bloch phases. device selects hardware;
+    Torch defaults to epsilon's device, or CPU for non-tensor epsilon. Unavailable
+    hardware raises. No full time history is returned. Torch compile is not a
+    validated execution mode; JAX jit and Torch eager autograd are tested.
     """
-    if backend not in ('numpy', 'jax'):
-        raise ValueError("backend must be 'numpy' or 'jax'.")
+    runtime = time_loop_backend(backend, device=device, reference=epsilon)
+    xp, array = runtime.xp, runtime.array
     steps = operator.index(steps)
     checkpoint_steps = operator.index(checkpoint_steps)
     absorber_cells = operator.index(absorber_cells)
@@ -87,24 +93,8 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
         raise ValueError('wavelengths must be a positive finite vector.')
     if bool(len(indices)) != bool(len(band)):
         raise ValueError('monitor_z and wavelengths must be provided together.')
-    if backend == 'jax':
-        import jax
-        import jax.numpy as xp
-        if isinstance(device, str):
-            available = jax.devices(device)
-            if not available:
-                raise ValueError(f'No JAX {device} device is available.')
-            device = available[0]
-        def array(value, dtype=None):
-            result = xp.asarray(value, dtype=dtype)
-            return jax.device_put(result, device) if device is not None else result
-    else:
-        xp = np
-        if device is not None:
-            raise ValueError('device selection requires backend=jax.')
-        array = np.asarray
     phase = array(bloch_phase)
-    if phase.shape != (3,) or xp.iscomplexobj(phase):
+    if phase.shape != (3,) or xp.isdtype(phase.dtype, 'complex floating'):
         raise ValueError('bloch_phase must contain three real radians in z,y,x order.')
     phase_valid = xp.all(xp.isfinite(phase))
     if pml_cells:
@@ -113,7 +103,7 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
     eps = xp.broadcast_to(array(epsilon), shape)
     permeability = xp.broadcast_to(array(mu), shape)
     sigma = xp.broadcast_to(array(conductivity), shape)
-    if any(xp.iscomplexobj(v) for v in (eps, permeability, sigma)):
+    if any(xp.isdtype(v.dtype, 'complex floating') for v in (eps, permeability, sigma)):
         raise ValueError('epsilon, mu and conductivity must be real.')
     bound = xp.sqrt(xp.min(eps)*xp.min(permeability))/np.sqrt(np.sum(1/spacing**2))
     stable = (phase_valid & xp.all(xp.isfinite(eps)) & xp.all(eps > 0) & xp.all(xp.isfinite(permeability))
@@ -126,7 +116,7 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
         if len(pole) != 3:
             raise ValueError('Each pole must be (omega0, gamma, strength).')
         omega0, gamma, strength = [xp.broadcast_to(array(v), shape) for v in pole]
-        if any(xp.iscomplexobj(v) for v in (omega0, gamma, strength)):
+        if any(xp.isdtype(v.dtype, 'complex floating') for v in (omega0, gamma, strength)):
             raise ValueError('Pole parameters must be real.')
         for v in (omega0, gamma, strength):
             stable = stable & xp.all(xp.isfinite(v)) & xp.all(v >= 0)
@@ -148,17 +138,16 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
         stable = stable & xp.all(sigma[:, edge] == 0)
         for strength in pole_strengths:
             stable = stable & xp.all(strength[:, edge] == 0)
-    if backend == 'numpy' or not isinstance(stable, jax.core.Tracer):
-        if not bool(stable):
-            raise ValueError('Invalid material/poles/PML background or dt exceeds the conservative CFL bound.')
+    if _concrete(stable) is False:
+        raise ValueError('Invalid material/poles/PML background or dt exceeds the conservative CFL bound.')
     dtype = xp.result_type(eps, permeability, sigma, phase, array(1j),
                            *[v for coefficients in pole_coefficients for v in coefficients])
-    real_dtype = xp.real(xp.zeros((), dtype=dtype)).dtype
-    factors = factors.astype(dtype)
-    e = xp.zeros(shape, dtype=dtype) if electric is None else array(electric, dtype=dtype)
-    h = xp.zeros(shape, dtype=dtype) if magnetic is None else array(magnetic, dtype=dtype)
-    current = xp.zeros(shape, dtype=dtype) if source is None else array(source, dtype=dtype)
-    drive = xp.zeros(steps, dtype=dtype) if pulse is None else array(pulse, dtype=dtype)
+    real_dtype = xp.real(runtime.zeros((), dtype=dtype)).dtype
+    factors = xp.astype(factors, dtype)
+    e = runtime.zeros(shape, dtype=dtype) if electric is None else array(electric, dtype=dtype)
+    h = runtime.zeros(shape, dtype=dtype) if magnetic is None else array(magnetic, dtype=dtype)
+    current = runtime.zeros(shape, dtype=dtype) if source is None else array(source, dtype=dtype)
+    drive = runtime.zeros(steps, dtype=dtype) if pulse is None else array(pulse, dtype=dtype)
     if e.shape != shape or h.shape != shape or current.shape != shape or drive.shape != (steps,):
         raise ValueError('E/H/source must match (3,z,y,x); pulse must have steps samples.')
     # Static damping geometry; epsilon/mu remain differentiable through updates.
@@ -180,7 +169,7 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
     iz = array(indices)
     frequency = array(1/band, dtype=real_dtype)
     accum_shape = (len(band), len(indices), 3, shape[2], shape[3])
-    accum = xp.zeros(accum_shape, dtype=dtype)
+    accum = runtime.zeros(accum_shape, dtype=dtype)
 
     def shifted(v, axis, forward, factor):
         interior = [slice(None)]*v.ndim
@@ -189,7 +178,7 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
         edge[axis] = slice(0, 1) if forward else slice(-1, None)
         wrapped = v[tuple(edge)]*(factor if forward else 1/factor)
         pieces = (v[tuple(interior)], wrapped) if forward else (wrapped, v[tuple(interior)])
-        return xp.concatenate(pieces, axis=axis)
+        return xp.concat(pieces, axis=axis)
 
     def derivative(v, axis, forward):
         neighbor = shifted(v, axis, forward, factors[axis])
@@ -204,7 +193,7 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
             return tuple(array(v[:, None, None], dtype=real_dtype) for v in cpml_coefficients(
                 depth, pml_cells*spacing[0], dt, pml_wavelength, 1.))
         pml_e, pml_h = profile(0.), profile(.5)
-    auxiliary = xp.zeros((2,)+shape[1:], dtype=dtype) if pml_cells else xp.zeros((0,), dtype=dtype)
+    auxiliary = runtime.zeros((2,)+shape[1:], dtype=dtype) if pml_cells else runtime.zeros((0,), dtype=dtype)
 
     def curl(v, forward, memory):
         ex, ey, ez = v[0], v[1], v[2]
@@ -247,25 +236,12 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
             fh = fh+hk[:, None, None, None, None]*planes(h, True)[None]
         return (e, h, fe, fh, pe, ph, updated, polarizations), None
 
-    polarization = tuple(xp.zeros(shape, dtype=dtype) for _ in pole_coefficients)
+    polarization = tuple(runtime.zeros(shape, dtype=dtype) for _ in pole_coefficients)
     state = (e, h, accum, accum, auxiliary, auxiliary, polarization, polarization)
-    if backend == 'jax':
-        if device is not None:
-            state = jax.tree.map(lambda v: jax.device_put(v, device), state)
-        chunks, tail = divmod(steps, checkpoint_steps)
-        def block(state, ns):
-            return jax.lax.scan(step, state, ns)[0], None
-        if chunks:
-            ns = array(np.arange(chunks*checkpoint_steps).reshape(chunks, checkpoint_steps))
-            state = jax.lax.scan(jax.checkpoint(block), state, ns)[0]
-        if tail:
-            state = jax.lax.scan(step, state, array(np.arange(chunks*checkpoint_steps, steps)))[0]
-    else:
-        for n in range(steps):
-            state, _ = step(state, n)
+    state = runtime.advance(step, state, steps, checkpoint_steps)
     e, h, fe, fh, _, _, polarization, previous = state
-    flux = .5*xp.real(xp.cross(xp.moveaxis(fe, 2, -1), xp.conj(xp.moveaxis(fh, 2, -1))))
-    power = flux[..., 2].sum(axis=(-2, -1))*spacing[1]*spacing[2]
+    flux = .5*xp.real(xp.linalg.cross(xp.moveaxis(fe, 2, -1), xp.conj(xp.moveaxis(fh, 2, -1)), axis=-1))
+    power = xp.sum(flux[..., 2], axis=(-2, -1))*spacing[1]*spacing[2]
     return dict(E=e, H=h, polarization=polarization, previous_polarization=previous,
                 electric_spectrum=fe, magnetic_spectrum=fh,
                 flux_density=flux, power_z=power, wavelengths=array(band), monitor_z=iz,

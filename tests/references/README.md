@@ -1077,3 +1077,16 @@ and explicit complex64 scans with x64 enabled. The oblique example couples a
 transverse Bloch phase to the source's spatial phase and differentiates both
 through a CPML solve. These remain CPU checks, not GPU validation or a full
 Stack/Incidence adapter.
+
+
+## Shared Torch FDTD execution (2026-09-08)
+
+After moving device/scan/checkpoint policies into `backends/time_domain.py`, the
+same native Array API core also runs on Torch. `test_native_torch_external.py`
+reproduces the non-dispersive, two-pole and complex-Bloch problem inputs above
+and compares full E/H fields, objective values and material/strength derivatives
+with the existing FDTDX archives. All three pass with 1e-11 relative / 1e-12
+absolute field bounds. No goldens were regenerated for the refactor. The Meep
+CPML/material checks continue through JAX, while direct Torch/NumPy parity tests
+cover the CPML/ADE/Bloch combination and derivatives. This distinguishes frozen
+external regressions from fresh external runs. GPU execution remains unverified.
