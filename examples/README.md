@@ -3,8 +3,12 @@
 Wavebit applied to problems, in plain scripts. Everything here is pure Wavebit — no ML
 frameworks, no vendored dependencies, nothing that needs a dataset or a GPU.
 
+Install `wavebit[plot]` for the FDTD image example; the shape examples use the
+optional JAX/PyTorch backends.
+
 | Entry | Question it answers |
 | --- | --- |
+| [`fdtd_record.py`](fdtd_record.py) | How do you define a typed FDTD scene, record a conical pulse and save an Ex slice? Run `python fdtd_record.py --output /path/to/field.png`. FDTD is experimental; see the [research-alpha scope](../docs/fdtd-alpha.md). |
 | [`shapes_1d.py`](shapes_1d.py), [`shapes_2d.py`](shapes_2d.py) | How do you describe a structure as drawn shapes instead of a raster? The `_verification.py` file beside each answers the follow-up: does that path agree with the raster it replaces? |
 
 ## How maintained is this?
@@ -15,8 +19,7 @@ that the examples still run.
 
 The `examples smoke` job in [`../.github/workflows/tests.yml`](../.github/workflows/tests.yml)
 runs every script from its own directory with `MPLBACKEND=Agg` and fails on a non-zero exit or
-on `Traceback` in the output. The whole set takes well under a minute, which is why it is a
-separate job from the verification suite rather than part of it.
+on `Traceback` in the output. This is a separate smoke job; runtime depends on the machine and installed backends.
 
 **It cannot tell you the numbers are right.** A green tick means the code ran; it says nothing
 about what was printed. It used to also fail on an `UnphysicalResultWarning`, but that check

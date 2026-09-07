@@ -2,10 +2,9 @@
 """Run every script under ``examples/`` and fail on any sign it did not work.
 
 Not collected by pytest: the filename has no ``test_`` prefix, deliberately, so ``pytest tests
--q`` does not pick it up. The verification suite takes ~9 minutes and is where the physics is
-checked; this takes well under a minute and only asks whether the examples still *run*. Keeping
-them apart means a broken example is a fast, separately-named red mark rather than nine minutes
-of waiting, and the suite stays the thing that says whether the library is correct.
+-q`` does not pick it up. The verification suite checks the physics; this only asks whether the examples still *run*.
+Keeping them apart gives broken examples a separately named failure. Runtime depends
+on the machine and installed backends.
 
 It is still an assert-first check -- both conditions below can be written down before the
 run -- so by the routing rule in ``CONTRIBUTING.md`` it lives here rather than in ``studies/``.
@@ -41,9 +40,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 EXAMPLES = REPO_ROOT / 'examples'
 
-# Generous. Not a performance budget -- the whole set runs in well under a minute, and a script
-# that takes 15 times its share is hung, not slow. It exists so a deadlock is a failed step in a
-# couple of minutes instead of a job that occupies a runner until GitHub's own limit cuts it off.
+# A per-script timeout prevents a hung example from occupying a runner indefinitely.
+# This is a smoke-test budget, not a promise about solver performance.
 TIMEOUT_S = 300
 
 # Substrings that mean failure even when the script exited 0. Matched against stdout and stderr
@@ -77,10 +75,7 @@ def run_one(script: Path) -> tuple[bool, float, list[str], str]:
     """Run one script and judge it. Returns ``(ok, seconds, reasons, output)``."""
     env = dict(os.environ)
 
-    # Headless, kept as insurance rather than for a current need: nothing under examples/ imports
-    # matplotlib today, but a plotting example that ends in plt.show() would block forever on an
-    # interactive backend -- silently, until this script's timeout -- and setting it here costs
-    # nothing. On a runner there is no display anyway; Agg is what makes the two behave alike.
+    # Plot examples must also finish on runners without an interactive display.
     env['MPLBACKEND'] = 'Agg'
 
     # The repository ahead of anything installed. Scripts run from their own directory, so the

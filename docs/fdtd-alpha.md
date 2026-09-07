@@ -27,15 +27,26 @@ notes](fdtd.md) and [API reference](reference/api.md).
 
 ## Reproduce the installation check
 
-Build and install a wheel into a fresh environment without system site packages:
+The distribution runner builds a source archive, builds its wheel from that archive,
+checks metadata with `twine check --strict`, and installs into a fresh virtual environment.
+It verifies package origin, bundled material tables, a NumPy RCWA solve, and the 36-case
+FDTD matrix. It then installs the same wheel's `plot` extra and runs the public
+`examples/fdtd_record.py` scene to save a field image. Python isolated mode prevents the
+checkout or `PYTHONPATH` from shadowing the installed package. No artifacts are published.
 
 ```sh
-python -m pip wheel . --no-deps --wheel-dir /tmp/wavebit-wheel
-python -m venv /tmp/wavebit-clean
-/tmp/wavebit-clean/bin/python -m pip install /tmp/wavebit-wheel/wavebit-0.1.0-py3-none-any.whl
-cd /tmp
-/tmp/wavebit-clean/bin/python /absolute/path/to/checkout/studies/fdtd_install_smoke.py
+python -m pip install build twine
+# Choose a new output directory. The runner works on Windows, macOS and Linux.
+python tests/run_distribution_smoke.py --output /tmp/wavebit-distribution
 ```
+
+The configured CI runs this check on Linux, macOS and Windows with Python 3.12.
+Configuration is not evidence of a successful remote run; those results remain a release
+gate. The output directory retains both distributions, `fdtd-install.json` and
+`fdtd-field.png`; temporary build sources and virtual environments are removed afterward.
+
+The underlying `studies/fdtd_install_smoke.py` can also run directly with an installed
+package's Python from outside the checkout.
 
 The script uses public APIs and does not add the checkout to the import path. Its JSON
 prints the imported package path, dependency versions, and every measured case. It checks
