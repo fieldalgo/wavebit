@@ -5,6 +5,9 @@
 reads and hands back the same `Result`, so one scene is solved two ways with nothing translated
 between the answers.
 
+This path is a **research alpha**. Read the [supported scope and validation evidence](../fdtd-alpha.md)
+before using a new combination of geometry, incidence and material.
+
 Two things about the door differ from `rcwa()` and are worth having before the first line of
 code. It returns **the answer, not a solver** — there is no eigendecomposition to cache, no
 frozen geometry and no gradient, so there is no per-instance state an object would hold. And it
@@ -56,8 +59,9 @@ back a little short; the RCWA row above is 1 to a few times 1e-15 for contrast. 
 deliberately no generic guard on it here — one existed and fired on 85 of 243 ordinary
 time-domain solves, which is why it was removed ([`../result-guards.md`](../result-guards.md)).
 
-**`T[+1] == T[-1]` on a mirror-symmetric grating is a free error bar.** It is exact here, needs
-no reference solve at all, and costs nothing to assert on any symmetric scene.
+**`T[+1] == T[-1]` is a symmetry check for this scene at normal incidence.** A symmetric
+discretization can preserve that equality even on a coarse grid, so it does not bound the
+error in either efficiency. Use grid and runtime refinement to assess accuracy.
 
 ## Which of the two to reach for
 
@@ -91,7 +95,7 @@ What follows is what a time-domain run adds on top; every default here was measu
 
 | Keyword | Default | What it is for |
 | --- | --- | --- |
-| `resolution` | 20 cells per wavelength **in the densest material in the scene** | cells per unit length, so `resolution=0.1` is a 10 nm cell when lengths are nm. The knob that costs: halving it is roughly 8x the work in 3D, and buys second-order accuracy. A pole model raises the index it is sized against, so a Drude metal gets a fine grid without being asked for |
+| `resolution` | 20 cells per wavelength **in the densest material in the scene** | cells per unit length, so `resolution=0.1` is a 10 nm cell when lengths are nm. The knob that costs: doubling it halves the nominal cell size and can cost roughly 16x the work in full 3D (8x the cells and 2x the steps). The convergence rate depends on the geometry; sharp corners need a measured refinement study. A pole model raises the index it is sized against, so a Drude metal gets a fine grid without being asked for |
 | `n_periods` | `80` | optical cycles to run. The pulse has to enter, scatter and leave before the running DFT means anything: at 40 the transmission monitor still holds 61% of its peak and the answer is wrong by 0.09; at 80 the residual is 5e-6 and the answer no longer moves. A run under 48 cycles is refused outright — the source has not finished emitting — and one merely too short to settle warns `UnsettledFieldWarning` and reports `residual`. An oblique or near-grazing scene often needs twice a normal-incidence one |
 | `n_pml` | `12` | absorber depth in **cells**, not in length. A correctly graded CPML is dz-independent, which is what makes cells the right unit: at 12 the layer reflects 1.1e-5, and 20 buys 1.5e-6 |
 | `courant` | `0.99` | fraction of the stability bound. The bound carries `n_min`, so a material faster than vacuum (`eps < 1`) is stable rather than divergent. Lower it only if a run diverges |

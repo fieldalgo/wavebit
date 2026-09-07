@@ -12,6 +12,8 @@ makes them assertions, not studies.
 
 | Script | Question it answers |
 | --- | --- |
+| `fdtd_alpha_convergence.py` | How two crossed dielectric scenes refine against RCWA, with actual grids, residuals and source provenance. Write-up: [../docs/fdtd-alpha.md](../docs/fdtd-alpha.md). |
+| `fdtd_install_smoke.py` | Whether a clean wheel installation computes 36 planar material/incidence combinations without optional backends. Run outside the checkout with the clean environment Python. |
 | `scene_hash.py` | Not a question -- an instrument. One byte digest over 72 scenes (4 cell shapes x 3 modeling routes x 2 incidence sides x 3 backends), efficiencies and reconstructed fields, refusals hashed by name. Run it before and after a change that must move no number. |
 | `benchmark_backends.py` | Which backend, and whether to freeze the geometry, for a *differentiated* run. Sweeps the shape and raster paths across four modes and a range of `truncation_order`, and reports the compile cost that decides between them. Write-up: [../docs/backend-choice.md](../docs/backend-choice.md). |
 | `sweep_cell_angle.py` | How to sweep a unit-cell angle, and the one way it goes wrong. Three arms -- a raster redrawn at each angle, one drawn once and reused, and parametric circles as the staircase-free control -- plus the axis ratio of the lit pixels, which is the mechanism rather than the symptom. Write-up: [../docs/oblique-lattice.md](../docs/oblique-lattice.md), "Sweeping the cell angle". |

@@ -13,15 +13,19 @@
 
 **Differentiable electromagnetic simulation suite — by [FieldAlgo](https://fieldalgo.com)**
 
-Wavebit simulates how light interacts with nanostructures, and differentiates through the whole
-calculation — so the same code that predicts a device's response can also optimize it.
+Wavebit simulates how light interacts with nanostructures. Its RCWA path differentiates
+through the calculation, so the same model can predict and optimize a device response.
 
 * **Modeling** — describe a structure parametrically or as a raster
 * **EM simulation** — RCWA solver, rigorous and fully vectorial
 * **Optimization** — gradients flow end to end, from geometry to diffraction efficiency
 
-One implementation of the physics runs on NumPy, JAX and PyTorch, so a result never depends on
-which you pick — cross-backend agreement is part of the test suite rather than a claim.
+The RCWA implementation runs on NumPy, JAX and PyTorch; cross-backend agreement is tested.
+
+**FDTD is an experimental, NumPy-only research-alpha path.** It supports periodic raster
+scenes and shares the RCWA scene and result interfaces. It has no autodiff or GPU backend.
+See the [FDTD scope and validation report](docs/fdtd-alpha.md) before relying on a new
+geometry, angle or material combination.
 
 ## Install
 

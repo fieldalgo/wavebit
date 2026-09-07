@@ -53,6 +53,7 @@ subtrees:
       - file: what-a-solve-answers
       - file: multimode-incidence
       - file: fdtd
+      - file: fdtd-alpha
       - file: result-guards
     - caption: Numerical conventions
       entries:
