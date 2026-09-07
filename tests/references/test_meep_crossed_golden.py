@@ -29,7 +29,17 @@ footing this directory's README puts inkstone on. This module needs only numpy.
 **What the tolerances are, and why they are not tighter.** Both sides discretise space,
 so this comparison is bounded by two grids rather than one, and on a corner-rich crossed
 raster **neither code converges at second order** — measured 0.69 to 1.63 here, against
-the 1.83 / 1.50 ``docs/fdtd.md`` §8g records for wavebit's own crossed path. So the golden
+the 1.83 / 1.50 ``docs/fdtd.md`` §8g records for wavebit's own crossed path. That was
+measured before it was read, and Meep's *published documentation* — not its source — states
+the same thing as a property of the method rather than of this harness: subpixel smoothing
+gives "roughly second-order convergence", but "objects with sharp corners or edges are
+associated with field singularities which introduce an unavoidable error **intermediate
+between first and second order**"
+(https://meep.readthedocs.io/en/latest/Subpixel_Smoothing/, read 2026-09-07). A crossed
+raster is corners everywhere; the 1D grating below has one vertical interface per period and
+no corners, and both codes keep second order there. **Reading the documentation is not
+reading the source**, and the distinction is deliberate: the licence footing above is about
+implementation, and every published word about behaviour is fair to cite. So the golden
 is frozen at two resolutions and ``test_the_golden_states_its_own_error_bar`` asserts the
 claim rather than an estimate: the finer tier has to be nearer a converged RCWA answer
 than the coarser one, by an order in a band a crossed grating can be in. That leaves

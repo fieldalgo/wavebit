@@ -524,7 +524,16 @@ SENSITIVITY = {
     ('meep', 'meep_until'): [
         (30.0, 8.4e-8, 'NOT a determinant at either end -- 240 moves 3.9e-10. It is a cost '
                        'knob, and the record should say so rather than leave a reader '
-                       'guessing that 120 was tuned'),
+                       'guessing that 120 was tuned. A fixed `until_after_sources` is '
+                         'used rather than the `stop_when_fields_decayed` meep\'s FAQ '
+                         'recommends, because a fixed duration is a RECORDABLE condition '
+                         'while a decay threshold is a stopping rule whose outcome depends '
+                         'on the scene -- and the point of this file is that someone can '
+                         'reproduce the number in five years. The FAQ gives spectral '
+                         'leakage as the reason for its recommendation ("the minimum '
+                         'runtime should be the inverse of the desired frequency '
+                         'resolution"), which 120 clears here by the measurement above. '
+                         'https://meep.readthedocs.io/en/latest/FAQ/, read 2026-09-07'),
     ],
     ('meep', 'meep_df_frac'): [
         (0.05, 1.0e-7, 'not a determinant -- the DFT is at a single frequency. In the case '
