@@ -1465,7 +1465,10 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None, record_field=None):
             f_ref, f_trn = ey[grid.k_ref], ey[grid.k_trn]
             g_ref, g_trn = ex[grid.k_ref], ex[grid.k_trn]
             i_z0, j_z0 = inc.ey[grid.k_z0], inc.ex[grid.k_z0]
-            i_ref, i_trn = inc.ey[grid.k_ref], inc.ey[grid.k_trn]
+            # A p source at phi=0 has no Ey. Read its driven component so the balance
+            # diagnostic does not divide 0 by 0 on a perfectly valid crossed run.
+            incident_e = inc.ex if abs(inc.drive[0]) > abs(inc.drive[1]) else inc.ey
+            i_ref, i_trn = incident_e[grid.k_ref], incident_e[grid.k_trn]
             t_now = (step + 1) * dt
         elif tetm == 'te':
             f_ref, f_trn = ey[grid.k_ref], ey[grid.k_trn]
@@ -1497,6 +1500,8 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None, record_field=None):
             snap_t[j] = (step + 1) * dt
 
         amplitude = float(np.abs(f_trn).max())
+        if conical:
+            amplitude = max(amplitude, float(np.abs(g_trn).max()))
         if conical:
             amplitude = max(amplitude, float(np.abs(g_trn).max()))
         peak = max(peak, amplitude)
@@ -2072,7 +2077,7 @@ def _solve_conical_oblique(psi, phi, theta, return_diagnostics, **kw):
     for leg in ('s', 'p'):
         legs[leg] = solve_fdtd(tetm='te', theta=theta, phi=phi, _leg=leg,
                                return_diagnostics=True, **kw)
-    (s_res, s_diag), (p_res, _) = legs['s'], legs['p']
+    (s_res, s_diag), (p_res, p_diag) = legs['s'], legs['p']
     single = not isinstance(s_res, list)
     s_list = [s_res] if single else s_res
     p_list = [p_res] if single else p_res
@@ -2094,6 +2099,10 @@ def _solve_conical_oblique(psi, phi, theta, return_diagnostics, **kw):
                           order_window=s_one.order_window))
 
     result = out[0] if single else out
+    s_diag = dict(s_diag, residual=max(s_diag['residual'], p_diag['residual']))
+    if 'field_e' in s_diag:
+        for name in ('field_e', 'field_ex'):
+            s_diag[name] = a_s * s_diag[name] + a_p * p_diag[name]
     return (result, s_diag) if return_diagnostics else result
 
 
@@ -2161,7 +2170,11 @@ def _solve_conical(psi, phi, theta, tetm, return_diagnostics, **kw):
     # order Yee truncation error, which is not a defect. It has since been removed; what pins
     # this case is the `abs(total - 1.0) < 2e-2` assertion in `test_fdtd.py`, whose tolerance
     # is chosen for the method rather than inherited from the frequency-domain path.
-    if theta_v != 0.0 and phi_v != 0.0:
+    shape = np.shape(kw['structure'])
+    crossed = len(shape) == 3 and shape[1] > 1
+    # A crossed raster couples the two electric components even when incident ky is zero.
+    # Its two-dimensional order set cannot be projected by the scalar 1D combiner either.
+    if crossed or (theta_v != 0.0 and phi_v != 0.0):
         return _solve_conical_oblique(psi, phi_v, theta, return_diagnostics, **kw)
 
     legs = {}
@@ -2202,6 +2215,16 @@ def _solve_conical(psi, phi, theta, tetm, return_diagnostics, **kw):
         out.append(Result(order_window=((centre, half), (0, 0)), **subs))
 
     result = out[0] if single else out
+    te_diag = dict(te_diag, residual=max(te_diag['residual'], tm_diag['residual']))
+    if 'field_e' in te_diag:
+        # Scalar sources drive +Ey and +Ex. The incident p direction has negative
+        # tangential E, so its raw time record needs that sign, unlike its efficiency.
+        a_s, a_p = np.sin(psi), np.cos(psi)
+        c, s, ct = np.cos(phi_v), np.sin(phi_v), np.cos(theta_v)
+        te_diag['field_e'] = (a_s * c - a_p * ct * s) * te_diag['field_e']
+        te_diag['field_ex'] = (-a_s * s - a_p * ct * c) * tm_diag['field_e']
+        te_diag['field_ex_x'] = tm_diag['field_x']
+        te_diag['field_ex_y'] = tm_diag['field_y']
     return (result, te_diag) if return_diagnostics else result
 
 
@@ -2289,6 +2312,11 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
         Result: the same container an RCWA solve returns, or ``(Result, dict)`` when
         ``return_diagnostics`` is set.
     """
+    if record_field is not None:
+        if (isinstance(record_field, (bool, np.bool_))
+                or not isinstance(record_field, (int, np.integer)) or record_field <= 0):
+            raise ValueError('fdtd: record_field must be a positive integer step interval or None.')
+        record_field = int(record_field)
     if psi is not None:
         return _solve_conical(
             psi=psi, phi=phi, theta=theta, structure=structure, thickness=thickness, top=top,
@@ -2297,7 +2325,7 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
             n_pml=n_pml, n_periods=n_periods, courant=courant, subpixel=subpixel,
             truncation_order=truncation_order, return_diagnostics=return_diagnostics,
             dispersion=dispersion, poles=poles, pad_scale=pad_scale, grading=grading,
-            tetm=tetm)
+            tetm=tetm, record_field=record_field)
 
     # `_leg` is set only by `_solve_conical`, which has already validated the incidence; it
     # names which eigenpolarisation this run drives. It is the one door `phi != 0` comes
