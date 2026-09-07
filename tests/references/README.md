@@ -967,3 +967,85 @@ PYTHONPATH=. "$WAVEBIT_PYTHON" studies/validate_grid_fdtdx.py --backend wavebit 
 
 Freezing refuses an existing destination. Review a newly generated archive before
 replacing committed external evidence; never regenerate it merely to pass a test.
+
+## Native CPML and dispersive materials (2026-09-08)
+
+`golden_native_material_external.npz` contains additional live Meep 1.34.0
+outputs and a two-pole FDTDX 0.6.2 update/gradient reference. External input and
+worker digests are stored in the archive. Meep source was never read; its
+[material API](https://meep.readthedocs.io/en/master/Python_User_Interface/) and
+[subpixel smoothing documentation](https://meep.readthedocs.io/en/latest/Subpixel_Smoothing/)
+specify the conventions used. No external solver implementation was copied.
+
+`studies/validate_grid_dispersive.py` uses a length-12 cell, vacuum-end PML of
+width 1, source at z=3, slab at 7..7.5 and measurement at 9. The three wavelengths
+are 0.6/0.7/0.8, resolutions 40/80, cdt/dx=0.4 and duration 24. Meep's own PML
+and Wavebit's CPML need not have the same implementation. The electric current
+has a Gaussian envelope of width 0.7 centered at 3.5 and a period-0.7 sine carrier;
+it has zero DC by symmetry. Both fields and power are divided by an empty run.
+
+| Model | epsilon-infinity | (omega0, gamma, strength), angular c=1 units |
+| --- | --- | --- |
+| dielectric | 2.25 | none |
+| Lorentz | 1.5 | (12, 1.5, 60) |
+| Drude | 1 | (0, 1.2, 100) |
+| mixed | 1.5 | (0, 1.2, 40), (12, 1.5, 60) |
+
+Meep averages epsilon-infinity at interfaces but **does not average the
+frequency-dependent part**. The `--pole-sampling point` Wavebit worker explicitly
+uses the same point sampling of dispersive strength. All four models at both
+resolutions pass a 3e-6 absolute bound for complex Ex/Hy transfer and power.
+This is an actual direct comparison, not a loose allowance for different
+interface discretizations.
+
+The independent `--pole-sampling average` worker uses tangential half-cell
+strength weights. It is checked against the Airy solution, not against Meep's
+point-sampled result. Maximum complex transfer errors are:
+
+| Model | resolution 40 | resolution 80 |
+| --- | --- | --- |
+| dielectric | 0.029475 | 0.007204 |
+| Lorentz | 0.021089 | 0.005210 |
+| Drude | 0.006561 | 0.001631 |
+| mixed | 0.014133 | 0.003494 |
+
+All four converge at approximately second order on this tangential planar case.
+The initial comparison mixed these two discretizations and differed by up to
+0.065 at resolution 40; the difference halved with refinement. Matching Meep's
+documented strength sampling removed that discrepancy without changing the
+solver or relaxing a test tolerance.
+
+CPML controls extend the dielectric runtime to 36 or double PML width to 2;
+complex transfer changes remain below 3e-6. A broader pilot pulse with nonzero
+DC left slowly decaying CPML tails: extending duration from 24 to 48 reduced the
+dielectric Meep difference from 6.7e-4 to 1.2e-4, while width alone did not fix
+it. This behavior is retained as a convergence limitation, not hidden by the
+zero-DC reference pulse. Separate tests require late normal/oblique pulse energy
+to drop below 1e-5/1e-4 of a periodic control. These bounds are not universal
+reflection specifications or grazing-angle validation.
+
+`studies/validate_grid_fdtdx_ade.py` independently asks FDTDX's coefficient factory
+for a Drude and a Lorentz pole, then calls its native H/E updates for 53 steps
+on a 9×7×5 periodic grid with nonuniform diagonal epsilon/mu and oscillator
+strength. Frequencies are converted from c=1 to rad/s; no waveform/geometry
+adapter is involved. E/H differences are 9.54e-16 / 7.08e-16. The oscillator
+strength derivative is -0.25818464174803096 (FDTDX) and -0.25818464174803113
+(Wavebit); both match central finite differences to within 1e-10 absolute.
+
+Run each worker with its own environment, as above. Example commands:
+
+```sh
+"$MEEP_PYTHON" studies/validate_grid_dispersive.py --backend meep --model lorentz --resolution 40 --output /tmp/meep-lorentz-40-band.json
+PYTHONPATH=. "$WAVEBIT_PYTHON" studies/validate_grid_dispersive.py --backend wavebit --model lorentz --resolution 40 --pole-sampling point --output /tmp/wavebit-lorentz-40-point.json
+"$FDTDX_PYTHON" studies/validate_grid_fdtdx_ade.py --backend fdtdx --output /tmp/fdtdx-ade.json
+PYTHONPATH=. "$WAVEBIT_PYTHON" studies/validate_grid_fdtdx_ade.py --backend wavebit --output /tmp/wavebit-fdtdx-ade.json
+"$WAVEBIT_PYTHON" -m pytest tests/test_fdtd_grid_materials.py tests/references/test_native_material_external.py
+```
+
+To regenerate a separate archive, produce every `meep-{model}-{40,80}-band.json`
+for the four models and `fdtdx-ade.json` in one directory, then run
+`studies/freeze_grid_material_references.py --input DIR --output NEW.npz`.
+It reads only external outputs and refuses to overwrite an existing archive.
+These are CPU checks of native electric ADE and vacuum-end z CPML. Magnetic
+poles, arbitrary PML backgrounds, full Stack/Incidence dispatch, and actual GPU
+execution remain unsupported or unverified.

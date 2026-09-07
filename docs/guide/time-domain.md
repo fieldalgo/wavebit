@@ -335,9 +335,11 @@ Use a matching reference simulation for source or incident-power normalization.
 
 All axes are periodic. `absorber_cells=N` adds graded electric/magnetic damping
 at both z ends; it is not CPML and needs a width/reflection convergence check.
-This engine does not yet accept Stack/Incidence, ADE dispersive poles, nonuniform
-meshes, or Bloch boundaries. The existing scene solver retains those capabilities
-on NumPy; selecting a JAX backend on that interface is still unsupported.
+`pml_cells` additionally provides convolutional PML at the two vacuum z ends;
+see the material/boundary section below. This engine does not yet accept
+Stack/Incidence, nonuniform meshes, or Bloch boundaries. The existing scene solver
+retains those capabilities on NumPy; selecting a JAX backend on that interface
+is still unsupported.
 
 JAX uses compiled scans and recomputes blocks during reverse differentiation.
 `checkpoint_steps` trades stored block boundaries against recomputation and
@@ -360,3 +362,51 @@ FDTDX; frozen external outputs support regression tests. See the
 On one CPU run (32×8×8 cells, 256 steps, complex128), NumPy took 0.0437 s,
 JAX compilation plus first execution 0.2857 s, and median warm execution 0.00603 s
 (7.25×). This is a small native-grid benchmark, not a scene-solver speed claim.
+
+
+## Native dispersive materials and CPML
+
+`fdtd_grid(..., poles=[(omega0, gamma, strength), ...])` advances electric
+polarization with a centered ADE recurrence. Each parameter broadcasts to
+`(3,z,y,x)` at the native electric component locations. The material law is
+`epsilon(omega) = epsilon_infinity + sum(strength / (omega0**2 - omega**2 - 1j*gamma*omega))`.
+The `epsilon` argument is epsilon-infinity; `omega0=0` gives Drude. Frequencies
+and damping are **angular** in c=1 time units. Parameters must be finite,
+nonnegative, and real; epsilon-infinity and mu must be positive. Pole frequencies
+and strengths tighten the conservative CFL bound. Traced invalid parameters
+return `stable=False` and must be excluded by the optimization parameterization.
+
+Both initial polarization levels are zero. Final `polarization` and
+`previous_polarization` are tuples of component arrays at E time and one step
+before it. Thus each active pole retains two volume arrays in addition to E/H.
+This API does not yet take a restart state or magnetic/off-diagonal dispersion.
+There is no interface rasterization: supply native coefficient weights explicitly.
+For a tangential planar interface, half-cell strength weights converge against
+the analytic slab solution. They are not a general tensor interface averaging rule.
+
+`pml_cells=N, pml_wavelength=lambda_center` adds convolutional PML at both z
+ends, using Wavebit's existing coefficient formulation evaluated at native E/H
+positions. The end layers **and one adjacent interior cell** must contain vacuum
+(epsilon=mu=1), zero electric conductivity and zero oscillator strength. x/y
+remain periodic. Cannot combine this with `absorber_cells`; the latter remains
+a simpler graded damping option. Keep physical sources and measurement planes
+in the interior. Four CPML memory arrays are retained, each with the spatial
+volume shape. The CPML coefficients depend on static geometry and center
+wavelength; material/pole gradients propagate through the interior updates.
+
+Validation includes displacement conservation, NumPy/JAX agreement, finite
+differences for all three pole parameters, checkpoint agreement, and normal/
+oblique pulse removal. External CPU runs compare complex slab fields and power
+against Meep for dielectric, Lorentz, Drude and two-pole media, and compare 3D
+mixed-pole updates/strength gradients against FDTDX. Meep's documented point
+sampling of dispersion is matched explicitly for the direct comparison; a
+separate weighted run checks convergence to the Airy solution. See the external
+reference record in `tests/references/README.md` in the checkout.
+
+PML thickness and run time are convergence parameters. Broad pulses with a
+near-zero-frequency component can leave slowly decaying CPML tails; simply
+increasing width does not demonstrate temporal convergence. The reference pulse
+is symmetric with zero DC, and tests also extend runtime and double PML width.
+This does not establish arbitrary-band or grazing-angle accuracy.
+`examples/fdtd_dispersive_gradient.py` differentiates Lorentz oscillator strength
+with CPML enabled. Actual GPU execution remains unverified.

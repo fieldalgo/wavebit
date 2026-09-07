@@ -31,8 +31,9 @@ notes](fdtd.md) and [API reference](reference/api.md).
 The separate `wavebit.fdtd_grid` interface provides NumPy and compiled JAX Yee
 updates, streaming field/power planes, and differentiable material/source inputs.
 It accepts native uniform grids with diagonal real coefficients, periodic
-boundaries and optional graded z damping. It does not port the Stack solver's
-CPML, dispersive ADE, Bloch injection or nonuniform grid to JAX. CPU eigenmode,
+boundaries, optional graded z damping, vacuum-end z CPML, and electric
+Drude/Lorentz ADE poles. It does not port the Stack/Incidence interface, general
+PML backgrounds, Bloch injection or nonuniform grid to JAX. CPU eigenmode,
 NumPy/JAX parity, finite-difference material sensitivities, pulse sensitivities,
 and absorber energy-removal checks pass. Live external checks now also compare a
 three-wavelength slab against Meep at three resolutions, and nonuniform diagonal
@@ -40,7 +41,13 @@ material updates/gradients against FDTDX. Meep is accessed only through its publ
 API. Both solvers' slab answers approach the independent Airy solution at about
 second order; the fine-grid complex error is 0.0072. Frozen references retain
 these CPU results for regression (see `tests/references/README.md` in the checkout).
-These cases do not cover CPML/ADE or arbitrary scattering. Actual GPU execution is unverified on
+Additional live CPU checks now cover native CPML and dielectric/Lorentz/Drude/
+mixed slabs at two resolutions, plus FDTDX two-pole 3D updates and strength
+gradients. Direct Meep comparisons match its documented point sampling of the
+dispersive part; separate tangential half-cell weights converge against Airy.
+PML width/runtime controls and oblique pulse removal are tested. General
+scattering and arbitrary PML materials remain outside this evidence.
+Actual GPU execution is unverified on
 the current CPU-only machine. See the [native-grid guide](guide/time-domain.md).
 
 ## Reproduce the installation check

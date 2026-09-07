@@ -1261,3 +1261,9 @@ NumPy/JAX uniform Yee updates and checkpointed automatic differentiation.
 See the [time-domain guide](guide/time-domain.md) for normalization, examples,
 CPU benchmark evidence and the boundaries of the two interfaces. The native-grid
 engine is not a JAX port of the scene solver’s CPML/ADE implementation.
+
+
+Native `fdtd_grid` now also has electric Drude/Lorentz ADE poles and vacuum-end
+z CPML. This is a limited uniform-grid implementation, with live Meep/FDTDX
+comparisons documented in the [scope](fdtd-alpha.md); it does not provide the
+full Stack/Incidence feature set on JAX.

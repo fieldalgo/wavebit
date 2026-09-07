@@ -10,7 +10,8 @@ import numpy as np
 def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
               electric=None, magnetic=None, source=None, pulse=None,
               wavelengths=(), monitor_z=(), backend='numpy', device=None,
-              checkpoint_steps=32, absorber_cells=0):
+              checkpoint_steps=32, absorber_cells=0, poles=(),
+              pml_cells=0, pml_wavelength=1.):
     """Advance a 3D Yee grid and accumulate frequency-domain field planes.
 
     epsilon: positive scalar-per-cell (z,y,x) or diagonal/native (3,z,y,x)
@@ -30,6 +31,17 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
     z-node indices; streaming planes are collocated in space, with native E/H DFT
     timestamps. Fields are unnormalized integrals in source*time units.
 
+    poles contains (omega0, gamma, strength) tuples, broadcastable to native E.
+    They solve P'' + gamma P' + omega0**2 P = strength E, starting from zero
+    polarization and its previous time level. Frequencies are angular in c=1
+    units; omega0=0 gives Drude. epsilon is epsilon-infinity. Pole parameters are
+    differentiable. Their oscillator frequencies tighten the returned CFL bound.
+
+    pml_cells adds convolutional PML at both z ends, with pml_wavelength setting
+    its frequency shift. End layers plus one interior cell must be vacuum, with
+    no conductivity or nonzero pole strength. Cannot combine with absorber_cells.
+    x/y stay periodic. PML accuracy needs width and resolution refinement.
+
     backend='jax' uses lax.scan on CPU/GPU, with block checkpointing for reverse
     differentiation; device may be a JAX device or 'cpu'/'gpu'. Selecting unavailable
     hardware raises. Inputs remain differentiable: jax.grad may differentiate
@@ -40,6 +52,11 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
     steps = operator.index(steps)
     checkpoint_steps = operator.index(checkpoint_steps)
     absorber_cells = operator.index(absorber_cells)
+    pml_cells = operator.index(pml_cells)
+    if pml_cells < 0 or (pml_cells and absorber_cells):
+        raise ValueError("pml_cells must be nonnegative and cannot combine with absorber_cells.")
+    if not np.isfinite(pml_wavelength) or pml_wavelength <= 0:
+        raise ValueError("pml_wavelength must be positive and finite.")
     if steps < 1 or checkpoint_steps < 1 or absorber_cells < 0:
         raise ValueError('steps/checkpoint_steps must be positive; absorber_cells nonnegative.')
     spacing = np.asarray(spacing, float)
@@ -52,7 +69,7 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
         shape = (3,)+shape
     if len(shape) != 4 or shape[0] != 3 or min(shape[1:]) < 2:
         raise ValueError('epsilon needs (z,y,x) or (3,z,y,x), each spatial dimension >=2.')
-    if 2*absorber_cells >= shape[1]:
+    if 2*max(absorber_cells, pml_cells) >= shape[1]:
         raise ValueError('Absorbing layers must leave a nonempty interior.')
     indices = np.asarray(monitor_z)
     if indices.size == 0:
@@ -91,9 +108,38 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
     stable = (xp.all(xp.isfinite(eps)) & xp.all(eps > 0) & xp.all(xp.isfinite(permeability))
               & xp.all(permeability > 0) & xp.all(xp.isfinite(sigma)) & xp.all(sigma >= 0)
               & (dt <= bound))
+    pole_coefficients = []
+    pole_strengths = []
+    resonance_bound = array(0.)
+    for pole in poles:
+        if len(pole) != 3:
+            raise ValueError('Each pole must be (omega0, gamma, strength).')
+        omega0, gamma, strength = [xp.broadcast_to(array(v), shape) for v in pole]
+        if any(xp.iscomplexobj(v) for v in (omega0, gamma, strength)):
+            raise ValueError('Pole parameters must be real.')
+        for v in (omega0, gamma, strength):
+            stable = stable & xp.all(xp.isfinite(v)) & xp.all(v >= 0)
+        denominator = 1+.5*gamma*dt
+        pole_coefficients.append(((2-omega0**2*dt**2)/denominator,
+                                  (1-.5*gamma*dt)/denominator, strength*dt**2/denominator))
+        pole_strengths.append(strength)
+        resonance_bound = xp.maximum(resonance_bound, xp.max(omega0**2))
+    if pole_coefficients:
+        # Conservative coupled Maxwell/oscillator bound; uncoupled resonances
+        # must still satisfy the centered oscillator time-step restriction.
+        rate = resonance_bound+xp.max(sum(pole_strengths)/eps)
+        bound = 1/xp.sqrt(1/bound**2+rate/4)
+        stable = stable & (dt < bound)
+    if pml_cells:
+        # This first native-grid CPML interface assumes vacuum end layers.
+        edge = np.r_[0:pml_cells+1, shape[1]-pml_cells-1:shape[1]]
+        stable = stable & xp.all(eps[:, edge] == 1) & xp.all(permeability[:, edge] == 1)
+        stable = stable & xp.all(sigma[:, edge] == 0)
+        for strength in pole_strengths:
+            stable = stable & xp.all(strength[:, edge] == 0)
     if backend == 'numpy' or not isinstance(stable, jax.core.Tracer):
         if not bool(stable):
-            raise ValueError('Invalid material or dt exceeds the conservative CFL bound.')
+            raise ValueError('Invalid material/poles/PML background or dt exceeds the conservative CFL bound.')
     dtype = xp.result_type(eps, array(1j))
     e = xp.zeros(shape, dtype=dtype) if electric is None else array(electric, dtype=dtype)
     h = xp.zeros(shape, dtype=dtype) if magnetic is None else array(magnetic, dtype=dtype)
@@ -126,11 +172,27 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
         return ((xp.roll(v, -1, axis=axis)-v) if forward else
                 (v-xp.roll(v, 1, axis=axis)))/spacing[axis]
 
-    def curl(v, forward):
+    # Reuse Wavebit's own documented CPML coefficients; no external source.
+    if pml_cells:
+        from .fdtd import cpml_coefficients
+        def profile(offset):
+            position = np.arange(shape[1])+offset
+            depth = np.maximum(pml_cells-np.minimum(position, shape[1]-position), 0)*spacing[0]
+            return tuple(array(v[:, None, None]) for v in cpml_coefficients(
+                depth, pml_cells*spacing[0], dt, pml_wavelength, 1.))
+        pml_e, pml_h = profile(0.), profile(.5)
+    auxiliary = xp.zeros((2,)+shape[1:], dtype=dtype) if pml_cells else xp.zeros((0,), dtype=dtype)
+
+    def curl(v, forward, memory):
         ex, ey, ez = v[0], v[1], v[2]
-        return xp.stack((derivative(ez, 1, forward)-derivative(ey, 0, forward),
-                         derivative(ex, 0, forward)-derivative(ez, 2, forward),
-                         derivative(ey, 2, forward)-derivative(ex, 1, forward)))
+        dzey, dzex = derivative(ey, 0, forward), derivative(ex, 0, forward)
+        if pml_cells:
+            b, a, kappa = pml_h if forward else pml_e
+            memory = b*memory+a*xp.stack((dzey, dzex))
+            dzey, dzex = dzey/kappa+memory[0], dzex/kappa+memory[1]
+        return xp.stack((derivative(ez, 1, forward)-dzey,
+                         dzex-derivative(ez, 2, forward),
+                         derivative(ey, 2, forward)-derivative(ex, 1, forward))), memory
 
     def planes(v, magnetic_field):
         offsets = ((1, 1, 0), (1, 0, 1), (0, 1, 1)) if magnetic_field else ((0, 0, 1), (0, 1, 0), (1, 0, 0))
@@ -147,17 +209,23 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
         return xp.stack(values, axis=1)
 
     def step(state, n):
-        e, h, fe, fh = state
-        h = ah*h-bh*curl(e, True)
-        e = ae*e+be*(curl(h, False)-current*drive[n])
+        e, h, fe, fh, pe, ph, polarizations, previous = state
+        rotation, ph = curl(e, True, ph)
+        h = ah*h-bh*rotation
+        rotation, pe = curl(h, False, pe)
+        updated = tuple(gain*p-hold*old+drive_p*e for (gain, hold, drive_p), p, old
+                        in zip(pole_coefficients, polarizations, previous))
+        delta_p = sum((new-old for new, old in zip(updated, polarizations)), 0.)
+        e = ae*e+be*(rotation-current*drive[n]-delta_p/dt)
         if len(indices):
             ek = xp.exp(2j*xp.pi*frequency*(n+1)*dt)*dt
             hk = xp.exp(2j*xp.pi*frequency*(n+.5)*dt)*dt
             fe = fe+ek[:, None, None, None, None]*planes(e, False)[None]
             fh = fh+hk[:, None, None, None, None]*planes(h, True)[None]
-        return (e, h, fe, fh), None
+        return (e, h, fe, fh, pe, ph, updated, polarizations), None
 
-    state = (e, h, accum, accum)
+    polarization = tuple(xp.zeros(shape, dtype=dtype) for _ in pole_coefficients)
+    state = (e, h, accum, accum, auxiliary, auxiliary, polarization, polarization)
     if backend == 'jax':
         if device is not None:
             state = jax.tree.map(lambda v: jax.device_put(v, device), state)
@@ -172,10 +240,11 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
     else:
         for n in range(steps):
             state, _ = step(state, n)
-    e, h, fe, fh = state
+    e, h, fe, fh, _, _, polarization, previous = state
     flux = .5*xp.real(xp.cross(xp.moveaxis(fe, 2, -1), xp.conj(xp.moveaxis(fh, 2, -1))))
     power = flux[..., 2].sum(axis=(-2, -1))*spacing[1]*spacing[2]
-    return dict(E=e, H=h, electric_spectrum=fe, magnetic_spectrum=fh,
+    return dict(E=e, H=h, polarization=polarization, previous_polarization=previous,
+                electric_spectrum=fe, magnetic_spectrum=fh,
                 flux_density=flux, power_z=power, wavelengths=array(band), monitor_z=iz,
                 stable=stable, cfl_dt=bound, time=steps*dt,
                 h_time=(steps-.5)*dt, spacing=array(spacing))
