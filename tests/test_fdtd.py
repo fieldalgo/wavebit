@@ -372,9 +372,9 @@ def test_the_result_is_the_same_container_an_rcwa_solve_returns():
 REFUSED = [
     (dict(tetm=None), r'needs either `tetm` or `psi`'),
     (dict(tetm='psi'), r'tetm must be'),
-    (dict(chi=10.0), r'elliptical or named polarisation'),
+    (dict(chi=10.0), r'chi beside tetm'),
     (dict(period=dict(u=700.0, v=700.0)), r"a mapping needs exactly \{'x', 'y'\}"),
-    (dict(polarization='rcp'), r'elliptical or named polarisation'),
+    (dict(polarization='rcp'), r'polarization beside tetm'),
     (dict(theta=0.3 + 0.1j), r'is complex'),
     (dict(phi=0.5), r'conical mount'),
     (dict(incidence_side='bottom'), r'incidence_side'),

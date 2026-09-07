@@ -522,7 +522,6 @@ inside this document's own branch.
 
 | Refused | Why not just implement it |
 | --- | --- |
-| `chi` / `polarization` incidence | An elliptical or named polarisation is a superposition of the two eigenpolarisations with a phase between them, and this solver drives one real field. `psi` is answered (§8d, §8e); these two need both legs run and recombined, which is what the RCWA path already does |
 | complex `theta` | Evanescent incidence has no propagating incident wave to normalise against, and the TFSF plane injects one by construction. The RCWA path answers this — see `docs/branch-cuts.md` |
 | `incidence_side='bottom'` | The mirror the ETM applies has no counterpart here yet |
 | complex permittivity | One complex number describes a material at **one** frequency, and a run carries every frequency in its band. Give the dispersion as poles instead (§8b) — that *is* the frequency dependence, rather than one sample of it |
@@ -1011,6 +1010,42 @@ frequency-domain equality are checked in `tests/test_fdtd_record.py`.
 Crossed rasters always use the coupled route, including zero polar or azimuthal angles;
 the scalar 1D combiner cannot retain their second order axis. Settling checks include Ex
 as well as Ey, and a `psi` solve reports the larger residual of its two basis runs.
+
+### Elliptical and circular incidence
+
+The diffraction solve accepts the same polarization coordinates as RCWA:
+
+- `psi` alone means `(a_s, a_p) = (sin(psi), cos(psi))`.
+- `psi` with `chi` gives
+  `a_s = sin(psi) cos(chi) + i cos(psi) sin(chi)` and
+  `a_p = cos(psi) cos(chi) - i sin(psi) sin(chi)`.
+  All angles are radians. With only `chi`, `psi` defaults to pi/2, as in RCWA.
+- `polarization=(a_s, a_p)` accepts a finite nonzero complex Jones vector.
+  Its norm is removed, but its overall phase is preserved in the complex outputs.
+  `(1, 1j)` and `(1, -1j)` are the two circular states in Wavebit's s/p frame;
+  the explicit pairs avoid a viewing-direction-dependent handedness label.
+
+`tetm`, the angle chart, and a Jones pair are mutually exclusive spellings.
+Both basis runs are performed for a general state. Amplitudes are combined before
+squaring, retaining the interference term; averaging the two basis powers is incorrect.
+The returned `s_inc` and `p_inc` are the unit basis answers, independent of the requested
+state. The same Jones vector applies to each wavelength of a broadband solve; the
+existing fixed-in-plane-wavevector rule still applies at oblique incidence.
+
+```python
+result = wavebit.fdtd(
+    structure=np.full((1, 1, 2), 2.25), thickness=[100.],
+    top=1., bot=1.44, period=[100.], wavelength=900.,
+    theta=.3, phi=.4, polarization=(1., 1j),
+    resolution=.03, n_periods=80,
+)
+```
+
+Complex-coefficient states currently support diffraction amplitudes and powers.
+`record_field` with those states is refused: a physical time record needs a quadrature
+pulse source, whereas multiplying real-pulse snapshots by a complex coefficient would
+misrepresent their real part. Real Jones pairs and the existing linear `psi` retain
+recording support. This restriction does not affect complex diffraction amplitudes.
 
 ## 9. What is not yet answered
 

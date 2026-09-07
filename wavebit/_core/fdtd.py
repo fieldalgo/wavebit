@@ -12,7 +12,7 @@ unlikely to belong to either, so the two paths cross-check each other for free. 
 why the conventions below are wavebit's rather than the FDTD literature's.
 
 **What it answers.** Pure TE / TM on a raster periodic along one axis, at normal and at
-oblique incidence; a conical mount through ``psi``, at normal incidence and away from it; and a
+oblique incidence; general Jones or psi/chi incidence, at normal incidence and away from it; and a
 crossed grating, where the raster is periodic along both. Dispersive and magnetic media are
 carried on every one of those. The pure branch mirrors :func:`~wavebit._core.solve_1d.solve_1d`
 down to the amplitude conventions -- TE carries everything on ``s``, TM everything on ``p``, and
@@ -79,7 +79,8 @@ import warnings
 
 import numpy as np
 
-from .conventions import order_azimuth, parse_order_pair, parse_period_mapping
+from .conventions import (incidence_clashes, incident_sp_amplitudes, order_azimuth,
+                          parse_order_pair, parse_period_mapping)
 from .domain import as_material
 from .result import Result, ResultSub
 
@@ -207,15 +208,7 @@ MAX_DEREFERENCE_GAIN = 1e10
 
 def _check_incidence(theta, phi, psi, chi, polarization):
     """Validate before either polarization route can discard an input."""
-    for spelling, given in (('chi', chi), ('polarization', polarization)):
-        if given is not None:
-            raise ValueError(
-                f'fdtd: {spelling}={given!r}. An elliptical or named polarisation is a '
-                f'superposition of the two eigenpolarisations with a phase between them, and '
-                f'this solver drives one real field: the two legs would have to be run and '
-                f'recombined, which is what the RCWA path already does. Pass `psi` for a '
-                f'linear polarisation, or take this scene to `wavebit.rcwa`.')
-    for name, value in (('theta', theta), ('phi', phi), ('psi', psi)):
+    for name, value in (('theta', theta), ('phi', phi), ('psi', psi), ('chi', chi)):
         if value is None:
             continue
         angle = np.asarray(value, dtype=complex)
@@ -224,7 +217,35 @@ def _check_incidence(theta, phi, psi, chi, polarization):
         if angle.imag != 0.0:
             raise ValueError(
                 f'fdtd: {name}={value!r} is complex. This solver requires real incidence '
-                f'angles and linear polarization; use wavebit.rcwa for complex incidence.')
+                f'angles; use wavebit.rcwa for complex incidence.')
+
+
+def _incident_pair(tetm, psi, chi, polarization):
+    """Resolve a unit incident Jones vector, preserving its overall phase."""
+    conflicts = incidence_clashes(tetm=tetm, psi=psi, chi=chi, polarization=polarization)
+    if conflicts:
+        raise ValueError('fdtd: ' + '; '.join(conflicts))
+    if polarization is not None:
+        try:
+            pair = np.asarray(polarization, dtype=complex)
+        except (TypeError, ValueError) as exc:
+            raise ValueError('fdtd: polarization must be a finite nonzero pair (a_s, a_p).') from exc
+        if pair.shape != (2,) or not np.isfinite(pair).all():
+            raise ValueError('fdtd: polarization must be a finite nonzero pair (a_s, a_p).')
+        # Scale BEFORE squaring: huge and subnormal Jones vectors are valid states.
+        scale = max(np.max(np.abs(pair.real)), np.max(np.abs(pair.imag)))
+        if scale == 0:
+            raise ValueError('fdtd: polarization must be a finite nonzero pair (a_s, a_p).')
+        pair = pair.real / scale + 1j * (pair.imag / scale)
+        pair = pair / np.sqrt(np.sum(np.abs(pair)**2))
+        return tuple(pair)
+    if psi is None and chi is None:
+        return None
+    psi = np.pi/2 if psi is None else float(np.real(psi))
+    if chi is None:
+        return np.sin(psi), np.cos(psi)
+    chi = float(np.real(chi))
+    return incident_sp_amplitudes(np, np.complex128, psi, chi=chi)
 
 
 def _refuse_out_of_scope(structure, mu, theta, phi, tetm, incidence_side, lattice,
@@ -2078,7 +2099,7 @@ def _check_dispersion(dispersion, poles, raster):
     return dispersion, checked
 
 
-def _solve_conical_oblique(psi, phi, theta, return_diagnostics, **kw):
+def _solve_conical_oblique(pair, phi, theta, return_diagnostics, **kw):
     """A conical mount away from normal: the six-component stepper, run once per eigenpolarisation.
 
     At ``ky != 0`` the two triples are coupled, so there is no pair of scalar solves to combine
@@ -2100,7 +2121,7 @@ def _solve_conical_oblique(psi, phi, theta, return_diagnostics, **kw):
         raise AssertionError(
             f'fdtd: the two legs disagree about the order window, {s_list[0].order_window} '
             f'against {p_list[0].order_window}.')
-    a_s, a_p = np.sin(psi), np.cos(psi)
+    a_s, a_p = pair
 
     out = []
     for s_one, p_one in zip(s_list, p_list):
@@ -2124,21 +2145,22 @@ def _efficiencies_from(mix, s_one, p_one, a_s, a_p):
     """Rebuild the mixed leg's efficiencies from its own amplitudes, not by averaging.
 
     ``R`` is quadratic in the amplitude, so ``|a_s r_s + a_p r_p|**2`` is not
-    ``a_s**2 |r_s|**2 + a_p**2 |r_p|**2`` -- the cross term is the whole content of a mixed
+    ``|a_s|**2 |r_s|**2 + |a_p|**2 |r_p|**2`` -- the cross term is the whole content of a mixed
     polarisation. Each channel's flux weight is recovered from a leg where that channel is
     nonzero, which is exact because the weight is a property of the order and the half-space,
     not of the incidence.
     """
     def weight(name, amp_name):
+        weights = np.zeros_like(np.asarray(getattr(s_one.given, name)), dtype=float)
+        found = np.zeros_like(weights, dtype=bool)
         for one in (s_one, p_one):
             a = np.asarray(getattr(one.given, amp_name))
             e = np.asarray(getattr(one.given, name))
             power = np.real(a * np.conj(a))
-            with np.errstate(invalid='ignore', divide='ignore'):
-                w = np.where(power > 1e-30, e / np.where(power > 1e-30, power, 1.0), np.nan)
-            if np.any(np.isfinite(w)):
-                return np.nan_to_num(w, nan=0.0)
-        return np.zeros_like(np.asarray(getattr(s_one.given, name)))
+            usable = np.isfinite(power) & np.isfinite(e) & (power > 1e-30) & ~found
+            np.divide(e, power, out=weights, where=usable)
+            found |= usable
+        return weights
 
     sq = lambda a: np.nan_to_num(np.real(a * np.conj(a)), nan=0.0)
     R_s = sq(mix.r_s) * weight('R_s', 'r_s')
@@ -2149,27 +2171,15 @@ def _efficiencies_from(mix, s_one, p_one, a_s, a_p):
                      R_s + R_p, R_s, R_p, T_s + T_p, T_s, T_p)
 
 
-def _solve_conical(psi, phi, theta, tetm, return_diagnostics, **kw):
-    """A ``psi`` incidence at ``theta = 0``, any ``phi``: two scalar solves, then projected.
+def _solve_conical(pair, phi, theta, return_diagnostics, **kw):
+    """A Jones incidence: use coupled basis runs or project two scalar solves at ky=0.
 
-    **Restricted to normal incidence, and the refusal below says why rather than that.** At
-    ``theta = 0`` the in-plane wavevector is the origin, so ``ky`` is exactly zero whatever
-    ``phi`` is -- the six-component conical stepper is never reached, the two scalar problems
-    stay decoupled, and the entire ``phi`` dependence is the output frame. Away from normal
-    that stops being true: ``ky != 0`` couples all six components through four terms, and no
-    combination of TE and TM runs can produce that.
-
-    Both legs come back for free because the scalar solves are independent, so `s_inc` and
-    `p_inc` are the two runs and `given` is their combination -- the same contract
-    `solve_1d_conical` offers, and the reason a caller can reweight the polarisation without
-    solving again.
+    Crossed rasters and nonzero incident ky use two six-component basis runs.
+    A y-invariant raster at ky=0 instead uses the decoupled TE/TM steppers,
+    projecting their amplitudes into each diffraction order's s/p frame.
+    The requested Jones vector weights amplitudes coherently; the unit basis
+    answers remain available as ``s_inc`` and ``p_inc``.
     """
-    if tetm is not None:
-        raise ValueError(
-            f'fdtd: psi={psi!r} and tetm={tetm!r} together name the polarisation twice. '
-            f'`psi` sets (a_s, a_p) = (sin psi, cos psi) and couples both; `tetm` picks one '
-            f'decoupled scalar problem. Pass one.')
-
     phi_v = 0.0 if phi is None else float(np.real(phi))
     theta_v = float(np.real(theta))
     # **The two polarisations decouple where `ky` vanishes, and `ky = n sin(theta) sin(phi)`
@@ -2189,7 +2199,7 @@ def _solve_conical(psi, phi, theta, tetm, return_diagnostics, **kw):
     # A crossed raster couples the two electric components even when incident ky is zero.
     # Its two-dimensional order set cannot be projected by the scalar 1D combiner either.
     if crossed or (theta_v != 0.0 and phi_v != 0.0):
-        return _solve_conical_oblique(psi, phi_v, theta, return_diagnostics, **kw)
+        return _solve_conical_oblique(pair, phi_v, theta, return_diagnostics, **kw)
 
     legs = {}
     for leg, tt in (('s', 'te'), ('p', 'tm')):
@@ -2222,7 +2232,7 @@ def _solve_conical(psi, phi, theta, tetm, return_diagnostics, **kw):
         kx_inc = grid.kx_inc * wl / grid.wavelength
         kx = kx_inc + np.arange(centre - half, centre + half + 1) * wl / period_x
         subs = {}
-        for leg, (a_s, a_p) in (('given', (np.sin(psi), np.cos(psi))),
+        for leg, (a_s, a_p) in (('given', pair),
                                 ('s_inc', (1.0, 0.0)), ('p_inc', (0.0, 1.0))):
             subs[leg] = _combine_at_normal_incidence(grid, te.given, tm.given, kx, wl,
                                                      phi_v, a_s, a_p)
@@ -2233,7 +2243,7 @@ def _solve_conical(psi, phi, theta, tetm, return_diagnostics, **kw):
     if 'field_e' in te_diag:
         # Scalar sources drive +Ey and +Ex. The incident p direction has negative
         # tangential E, so its raw time record needs that sign, unlike its efficiency.
-        a_s, a_p = np.sin(psi), np.cos(psi)
+        a_s, a_p = pair
         c, s, ct = np.cos(phi_v), np.sin(phi_v), np.cos(theta_v)
         te_diag['field_e'] = (a_s * c - a_p * ct * s) * te_diag['field_e']
         te_diag['field_ex'] = (-a_s * s - a_p * ct * c) * tm_diag['field_e']
@@ -2276,13 +2286,14 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
         wavelength: one wavelength, or a band. A band costs **one** run: the running DFT
             answers every wavelength in it at once (§8 of ``docs/fdtd.md``), which is the case
             where this method beats the RCWA path outright.
-        tetm: ``'te'`` or ``'tm'``, the pure formulation. Give this or ``psi``, not both.
+        tetm: ``'te'`` or ``'tm'``, the pure formulation. Mutually exclusive with
+            ``psi``, ``chi`` and ``polarization``.
         theta: polar angle from the normal, in RADIANS, which is wavebit's unit throughout
             -- a degrees/radians slip returns a legal answer at a legal angle. Real:
             evanescent (complex-angle) incidence has no
             propagating wave for the TFSF plane to inject, and is refused.
         phi: azimuth of the plane of incidence, in radians. Non-zero couples the two
-            polarisations, so it needs ``psi``.
+            polarisations, so it needs ``psi``, ``chi`` or ``polarization``.
         psi: polarisation angle in radians, the conical mount. Answered at any ``theta`` and
             ``phi``; runs the two eigenpolarisations as separate legs and recombines them.
         mu: permeability raster, laid out beside ``structure``. The half-spaces carry theirs
@@ -2319,8 +2330,12 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
         record_field: keep every N-th step of the electric field, in the diagnostics, with the
             axes it is measured on (§8h). Off by default and free when off.
         return_diagnostics: return ``(result, diagnostics)`` instead of ``result``.
-        chi, polarization: refused. An elliptical or named polarisation needs both legs run
-            and recombined, which the RCWA path already does.
+        chi: real ellipticity angle beside ``psi`` (radians); ``abs(chi)=pi/4`` is
+            circular. If only chi is supplied, psi defaults to pi/2, as in RCWA.
+        polarization: finite nonzero complex pair ``(a_s, a_p)``, normalized to unit
+            incident power while preserving overall phase. Mutually exclusive with
+            tetm or psi/chi. Both basis solves are coherently combined. Complex
+            coefficients support diffraction outputs, but not ``record_field``.
 
     Returns:
         Result: the same container an RCWA solve returns, or ``(Result, dict)`` when
@@ -2332,15 +2347,21 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
                 or not isinstance(record_field, (int, np.integer)) or record_field <= 0):
             raise ValueError('fdtd: record_field must be a positive integer step interval or None.')
         record_field = int(record_field)
-    if psi is not None:
+    pair = _incident_pair(tetm, psi, chi, polarization)
+    if pair is not None:
+        if record_field is not None and any(np.imag(a) != 0 for a in pair):
+            raise ValueError(
+                'fdtd: record_field with complex polarization needs a quadrature pulse source. '
+                'Complex Jones states are supported for diffraction amplitudes and powers; '
+                'omit record_field or use real polarization coefficients for time records.')
         return _solve_conical(
-            psi=psi, phi=phi, theta=theta, structure=structure, thickness=thickness, top=top,
+            pair=pair, phi=phi, theta=theta, structure=structure, thickness=thickness, top=top,
             bot=bot, period=period, wavelength=wavelength, mu=mu,
             incidence_side=incidence_side, lattice=lattice, resolution=resolution,
             n_pml=n_pml, n_periods=n_periods, courant=courant, subpixel=subpixel,
             truncation_order=truncation_order, return_diagnostics=return_diagnostics,
             dispersion=dispersion, poles=poles, pad_scale=pad_scale, grading=grading,
-            tetm=tetm, record_field=record_field)
+            record_field=record_field)
 
     # `_leg` is set only by `_solve_conical`, which has already validated the incidence; it
     # names which eigenpolarisation this run drives. It is the one door `phi != 0` comes

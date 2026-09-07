@@ -10,7 +10,7 @@ from wavebit._core import fdtd as core
 @pytest.mark.parametrize('incidence', [dict(tetm='te'), dict(psi=.4, phi=0.),
                                       dict(psi=.4, phi=.3)])
 @pytest.mark.parametrize('override, message', [
-    (dict(chi=.2), 'chi'),
+    (dict(chi=.2+.1j), 'chi.*complex'),
     (dict(polarization='rcp'), 'polarization'),
     (dict(theta=.3+.1j), 'theta.*complex'),
     (dict(phi=.3+.1j), 'phi.*complex'),

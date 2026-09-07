@@ -76,8 +76,9 @@ def fdtd(stack=None, incidence=None, **kwargs):
     gradient to take. A solver object would be a place to put the state this method does not
     have.
 
-    It answers pure TE / TM at normal and oblique incidence, a conical mount through ``psi``
-    at any ``theta`` and ``phi``, and a crossed grating; dispersive and magnetic media are
+    It answers pure TE / TM at normal and oblique incidence, linear or elliptical incidence through
+    ``psi``/``chi`` or a complex ``polarization`` pair at any ``theta`` and ``phi``,
+    and a crossed grating; dispersive and magnetic media are
     carried on all of them. Everything outside that is refused by name. There is no ``backend``
     argument; ``wavebit/_core/fdtd.py``'s docstring says why.
 
@@ -96,8 +97,7 @@ def fdtd(stack=None, incidence=None, **kwargs):
         kwargs = _merge_domain(kwargs, stack.as_kwargs(), 'stack', 'fdtd')
     if incidence is not None:
         kwargs = _merge_domain(kwargs, incidence.as_kwargs(), 'incidence', 'fdtd')
-    # `Incidence.as_kwargs` always names the whole polarization family; the three this
-    # formulation cannot carry are dropped only when they are unset, and refused otherwise.
+    # The typed carrier names the whole polarization family; omit its unset values.
     for unset in ('psi', 'chi', 'polarization'):
         if kwargs.get(unset) is None:
             kwargs.pop(unset, None)

@@ -12,7 +12,7 @@ An accepted input is not a guarantee of accuracy for every combination in this t
 | Area | Available interface | Evidence and limits |
 | --- | --- | --- |
 | Raster geometry | `(layer, y, x)` arrays; y-invariant and rectangular crossed cells | Analytic planar checks, 1D gratings, and selected asymmetric crossed gratings. The crossed external reference covers two dielectric scenes, not arbitrary 3D geometry. |
-| Incidence | From above; finite real scalar angles; TE/TM at zero azimuth; linear `psi` at general azimuth | Invalid complex/nonfinite angles and unsupported polarization settings are refused before either dispatch path. Normal, coplanar and conical regression cases; complex per-order amplitudes and both order axes checked. Near-Rayleigh and grazing incidence require separate refinement. |
+| Incidence | From above; finite real scalar angles; TE/TM at zero azimuth; `psi`/`chi` or complex Jones pairs at general azimuth | Invalid complex/nonfinite angles, malformed Jones vectors and conflicting settings are refused before dispatch. Circular slab amplitudes are compared with RCWA on scalar and coupled paths; patterned ellipticity, overall phase and interference are checked. Near-Rayleigh and grazing incidence require separate refinement. |
 | Materials | Positive real isotropic epsilon/mu; electric Drude/Lorentz poles | Closed-form dielectric, magnetic and Drude slabs, selected 1D patterned cases. The installation matrix covers planar magnetic/Drude media through both raster paths. Three moderate-contrast patterned cases and one damped negative-epsilon metal have independent Meep references (below); low-loss and strong-resonance regimes remain unvalidated. |
 | Spectra | Multiple wavelengths in one pulse run | At oblique incidence the in-plane wavevector is fixed, so angle varies across the band. Check the reported angles and incident spectrum. |
 | Outputs | R/T and complex s/p amplitudes, labelled diffraction orders | Frozen external-reference tests include complex propagating amplitudes. Evanescent channels are not covered by the convergence table below; deeply evanescent amplitudes can be masked. |
@@ -20,8 +20,9 @@ An accepted input is not a guarantee of accuracy for every combination in this t
 | Execution | NumPy on CPU; optional Matplotlib plotting | Clean wheel installation and calculation checked on macOS arm64/Python 3.12. Other operating systems and Python versions need release CI evidence. |
 
 FDTD does not provide autodiff, JAX/PyTorch execution, GPU/MPI execution, bottom incidence,
-skewed lattices, parametric geometry input, anisotropic tensors, elliptical polarization,
-or complex-angle incidence. Use the appropriate RCWA capability where available; do not
+skewed lattices, parametric geometry input, anisotropic tensors,
+or complex-angle incidence. Complex Jones states currently provide diffraction outputs;
+time records require real polarization coefficients. Use the appropriate RCWA capability where available; do not
 infer FDTD support from RCWA examples. Unsupported inputs are described in [the solver
 notes](fdtd.md) and [API reference](reference/api.md).
 

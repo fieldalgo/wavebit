@@ -84,7 +84,10 @@ as one complex number per wavelength.
 
 Reach for `rcwa()` for everything else, and for everything the time domain refuses: near fields
 through `reconstruct_field`, gradients, JAX and PyTorch, a skewed `lattice`, parametric shapes,
-elliptical polarization and evanescent (complex-angle) incidence.
+and evanescent (complex-angle) incidence. Elliptical diffraction is available using
+`psi` with `chi`, or `polarization=(a_s, a_p)`; for example `(1, 1j)` is a circular
+state in the s/p frame. The pair is normalized while preserving its overall phase.
+Time recording currently requires real coefficients; see [polarization details](../fdtd.md#elliptical-and-circular-incidence).
 
 ## The keywords a time-domain run adds
 
