@@ -98,6 +98,11 @@ contour = [
     "contourpy>=1.3",
 ]
 
+# Only plotting imports Matplotlib; numerical solves and minimal installs do not need it.
+plot = [
+    "matplotlib>=3.10.1",
+]
+
 [project.urls]
 Homepage = "https://github.com/fieldalgo/wavebit"
 

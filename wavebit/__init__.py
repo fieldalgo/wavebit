@@ -82,6 +82,7 @@ from ._core.backend import (AutoDetuneWarning, AxisNameWarning, PrecisionLossWar
                             get_j1_implementation, set_j1_implementation)
 from ._core.conventions import branch_tolerance
 from ._core.draw import plot_structure, slice_structure
+from ._core.time_plot import animate_fdtd_field, plot_fdtd_field
 from ._core.enums import (Answers, Backend, Tetm, FourierCoefficients, Factorization,
                           Formulation, NormalMethod, Projector)
 from ._core.domain import (Layer, Stack, Incidence, Material,
@@ -137,6 +138,7 @@ __all__ = [
     'get_j1_implementation', 'set_j1_implementation',
     'branch_tolerance',
     'plot_structure', 'slice_structure',
+    'plot_fdtd_field', 'animate_fdtd_field',
     'Answers', 'Backend', 'Tetm', 'FourierCoefficients', 'Factorization', 'Formulation',
     'NormalMethod', 'Projector',
     'Layer', 'Stack', 'Incidence', 'Material', 'eps_from_index', 'index_from_eps',

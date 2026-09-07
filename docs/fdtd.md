@@ -995,6 +995,23 @@ cell corner for as long as the feature existed, and the document above had alrea
 about the origin move and concluded the module was unaffected — which was true when written,
 four commits before this axis was added.
 
+`wavebit.plot_fdtd_field` and `wavebit.animate_fdtd_field` read this record directly. They
+use each component's measured axes and nonuniform z coordinates, mark PML and the TFSF
+boundary (scattered field above, total field below), and keep the color scale fixed across
+frames. The default is signed real E; magnitude is available but is not intensity. A record
+that undersamples the shortest requested optical period warns rather than depicting an
+aliased oscillation without comment. Matplotlib is optional and imported only on use.
+
+The public `psi` route records both electric components of the requested coherent mixture.
+Previously it dropped `record_field` while dispatching, so no snapshots survived that route.
+The coupled route now combines the raw s/p histories; the scalar route rotates the incident
+electric vector onto its unit-Ey and unit-Ex drives, preserving the negative tangential p
+direction and the separate Yee coordinates. Field superposition and recording-on/off
+frequency-domain equality are checked in `tests/test_fdtd_record.py`.
+Crossed rasters always use the coupled route, including zero polar or azimuthal angles;
+the scalar 1D combiner cannot retain their second order axis. Settling checks include Ex
+as well as Ey, and a `psi` solve reports the larger residual of its two basis runs.
+
 ## 9. What is not yet answered
 
 - **A backend other than NumPy**, which is the item that decides whether this is a first-class

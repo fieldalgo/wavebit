@@ -125,6 +125,10 @@ properties every one of them carries.
 
 .. autofunction:: wavebit.slice_structure
 
+.. autofunction:: wavebit.plot_fdtd_field
+
+.. autofunction:: wavebit.animate_fdtd_field
+
 ```
 
 
@@ -151,4 +155,3 @@ properties every one of them carries.
    :members:
 
 ```
-

@@ -214,6 +214,35 @@ in-plane coordinate in this library is measured from the centre of the cell, and
 centres `wavebit.meshgrid_xy` returns are half a cell from where `Ey` lives. The measurements
 behind all three are in [`../fdtd.md`](../fdtd.md) §8h.
 
+The same record can be plotted or animated with optional Matplotlib
+(`pip install 'wavebit[plot]'`):
+
+```python
+# Use record_field=10 in the solve above to resolve the optical oscillation.
+fig, ax, mesh = wavebit.plot_fdtd_field(diagnostics, frame=len(diagnostics['field_t']) // 2)
+animation = wavebit.animate_fdtd_field(diagnostics, interval=50)
+# Keep animation alive, then use plt.show() or display(HTML(animation.to_jshtml())).
+# animation.save('field.gif', writer='pillow')
+```
+
+Both functions show an x-z slice at the nearest recorded `y` coordinate (default 0); the
+title reports the row actually selected. `component='ex'` selects Ex when recorded, using
+its own staggered coordinates. `part='real'` shows signed E by default; `'imag'` and `'abs'`
+are also available. Absolute E is field amplitude, not intensity. The color scale is fixed
+across the whole selected time history. Graded z coordinates are drawn as a nonuniform mesh,
+PML cells are shaded, and the TFSF line marks where the record changes from scattered field
+above to total field below. Layer planes are marked, without implying an in-plane geometry.
+
+Time is in the solver's `c=1` units, the same units used for lengths. Playback `interval`
+is milliseconds per snapshot and does not change simulated time. An undersampled record
+warns: reduce `record_field` in the solve, since slowing the animation cannot recover missing
+optical cycles. `record_field` must be a positive integer.
+
+With `psi`, the record contains the requested coherent combination of the two source
+polarisations, including both Ey and Ex. The amplitudes retain the raw source scale; they
+are not normalized monitor coefficients. The settling diagnostic reports the larger
+residual of the two basis runs. Recording is still off by default.
+
 ## Where to read further
 
 [`../fdtd.md`](../fdtd.md) is the decision document: what each default was measured against,
