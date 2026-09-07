@@ -14,11 +14,15 @@ import wavebit
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, default=Path('fdtd-field.png'))
+    parser.add_argument('--psi', type=float, default=.37, help='polarization angle in radians')
+    parser.add_argument('--chi', type=float, default=None,
+                        help='ellipticity in radians; pi/4 gives a circular pulse')
     args = parser.parse_args()
     scene = wavebit.Stack(
         layers=[wavebit.Layer(thickness=100., structure=np.array([[1., 2.25]]))],
         top=1., bot=1.44, period=(300.,))
-    incidence = wavebit.Incidence(wavelength=900., theta=.3, phi=.4, psi=.37)
+    incidence = wavebit.Incidence(wavelength=900., theta=.3, phi=.4,
+                                 psi=args.psi, chi=args.chi)
     result, diagnostics = wavebit.fdtd(
         stack=scene, incidence=incidence, resolution=.025, n_periods=80,
         record_field=5, return_diagnostics=True)

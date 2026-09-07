@@ -87,7 +87,8 @@ through `reconstruct_field`, gradients, JAX and PyTorch, a skewed `lattice`, par
 and evanescent (complex-angle) incidence. Elliptical diffraction is available using
 `psi` with `chi`, or `polarization=(a_s, a_p)`; for example `(1, 1j)` is a circular
 state in the s/p frame. The pair is normalized while preserving its overall phase.
-Time recording currently requires real coefficients; see [polarization details](../fdtd.md#elliptical-and-circular-incidence).
+Time recording also supports complex coefficients through additional quadrature-source
+runs; see [polarization details](../fdtd.md#elliptical-and-circular-incidence).
 
 ## The keywords a time-domain run adds
 

@@ -688,9 +688,13 @@ def permittivity_at(poles, wavelength, eps_infinity=1.0):
 # the source, and the 1D auxiliary incident field
 # ---------------------------------------------------------------------------------------
 
-def gaussian_pulse(t, f0, width, t0):
-    """A Gaussian-modulated sine, the standard broadband FDTD excitation."""
-    return np.sin(2.0 * np.pi * f0 * (t - t0)) * np.exp(-((t - t0) / width) ** 2)
+def gaussian_pulse(t, f0, width, t0, quadrature=False):
+    """Gaussian sine carrier, or its negative-cosine temporal quadrature."""
+    phase = 2.0 * np.pi * f0 * (t - t0)
+    # With the exp(+i wt) DFT, -cos has +i times sine's positive-frequency
+    # amplitude. Keep the original sine arithmetic unchanged on ordinary runs.
+    carrier = -np.cos(phase) if quadrature else np.sin(phase)
+    return carrier * np.exp(-((t - t0) / width) ** 2)
 
 
 class _Incident1D:
@@ -726,7 +730,8 @@ class _Incident1D:
     HALF = ('hx', 'hy', 'ez')
 
     def __init__(self, nz, dz, dt, eps_r, n_pml, k_src, wavelength, f0, width, t0,
-                 tetm, kx_op, dtype, mu_r=1.0, ky=0.0, drive=None, ky_op=None):
+                 tetm, kx_op, dtype, mu_r=1.0, ky=0.0, drive=None, ky_op=None,
+                 quadrature=False):
         self.dz, self.dt, self.eps_r, self.k_src = dz, dt, eps_r, k_src
         #: The auxiliary grid rides the SAME mesh as the 2D one -- it is handed the same
         #: object, not a copy, so a graded 2D mesh grades this too. That is not a nicety:
@@ -747,6 +752,7 @@ class _Incident1D:
         self.dz_dual = np.concatenate([[cells[0]], inner, [cells[-1]]])
         self.mu_r = float(np.real(mu_r))
         self.f0, self.width, self.t0 = f0, width, t0
+        self.quadrature = quadrature
         #: **Dimensional** (1/length), like `kx_op` beside it -- NOT the normalised `ky_inc`
         #: every other name in this module carries. Passing the normalised value is a factor
         #: `k0` too large, which on a 900 nm run is 143x and diverges to 1e267 in 200 steps.
@@ -851,7 +857,7 @@ class _Incident1D:
         # It drives the two tangential electric components in the ratio the incident
         # polarisation names, which for a uniform medium at fixed (kx, ky) excites exactly one
         # of the two eigenpolarisations.
-        pulse = gaussian_pulse(t, self.f0, self.width, self.t0)
+        pulse = gaussian_pulse(t, self.f0, self.width, self.t0, self.quadrature)
         drive_x, drive_y = self.drive
         if te and drive_y:
             self.ey[self.k_src] += drive_y * pulse
@@ -1236,7 +1242,8 @@ class _Grid:
 # the time loop
 # ---------------------------------------------------------------------------------------
 
-def _time_loop(grid, tetm, n_steps, wavelengths, leg=None, record_field=None):
+def _time_loop(grid, tetm, n_steps, wavelengths, leg=None, record_field=None,
+               source_quadrature=False):
     """Step the fields and accumulate the running DFT, at every requested wavelength at once.
 
     This is the one thing a time-domain solve does that a frequency-domain one cannot: the
@@ -1314,7 +1321,7 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None, record_field=None):
                       ky=(2.0 * np.pi / centre) * grid.ky_inc if conical else 0.0,
                       ky_op=((2j * np.sin(0.5 * (2.0 * np.pi / centre) * grid.ky_inc * grid.dy) / grid.dy)
                              if grid.ny > 1 else None),
-                      drive=inc_drive)
+                      drive=inc_drive, quadrature=source_quadrature)
 
     # The incident field the TFSF plane injects varies across the cell as `exp(i kx x)`; the
     # auxiliary grid carries only its amplitude, so the plane multiplies it back on. `Ey`/`Hx`
@@ -2099,6 +2106,26 @@ def _check_dispersion(dispersion, poles, raster):
     return dispersion, checked
 
 
+def _phase_weighted_record(diag, coefficient, quadrature_run):
+    """Weight a real carrier and, when needed, a separately propagated quadrature.
+
+    Bloch fields remain complex spatial amplitudes. The source coefficients used
+    here are real: Re(a)*sin(wt) - Im(a)*cos(wt), under the Gaussian envelope.
+    Multiplying the sine record by a complex number instead would confuse spatial
+    Bloch phase with temporal phase and discard a component at normal incidence.
+    """
+    out = dict(diag)
+    keys = [key for key in ('field_e', 'field_ex') if key in diag]
+    for key in keys:
+        out[key] = float(np.real(coefficient)) * diag[key]
+    if np.imag(coefficient) != 0:
+        _, quadrature = quadrature_run()
+        for key in keys:
+            out[key] += float(np.imag(coefficient)) * quadrature[key]
+        out['residual'] = max(diag['residual'], quadrature['residual'])
+    return out
+
+
 def _solve_conical_oblique(pair, phi, theta, return_diagnostics, **kw):
     """A conical mount away from normal: the six-component stepper, run once per eigenpolarisation.
 
@@ -2136,8 +2163,15 @@ def _solve_conical_oblique(pair, phi, theta, return_diagnostics, **kw):
     result = out[0] if single else out
     s_diag = dict(s_diag, residual=max(s_diag['residual'], p_diag['residual']))
     if 'field_e' in s_diag:
+        records = []
+        for leg, coefficient, diag in (('s', a_s, s_diag), ('p', a_p, p_diag)):
+            records.append(_phase_weighted_record(diag, coefficient, lambda: solve_fdtd(
+                tetm='te', theta=theta, phi=phi, _leg=leg, _source_quadrature=True,
+                return_diagnostics=True, **kw)))
+        s_diag = records[0]
         for name in ('field_e', 'field_ex'):
-            s_diag[name] = a_s * s_diag[name] + a_p * p_diag[name]
+            s_diag[name] = records[0][name] + records[1][name]
+        s_diag['residual'] = max(record['residual'] for record in records)
     return (result, s_diag) if return_diagnostics else result
 
 
@@ -2245,10 +2279,16 @@ def _solve_conical(pair, phi, theta, return_diagnostics, **kw):
         # tangential E, so its raw time record needs that sign, unlike its efficiency.
         a_s, a_p = pair
         c, s, ct = np.cos(phi_v), np.sin(phi_v), np.cos(theta_v)
-        te_diag['field_e'] = (a_s * c - a_p * ct * s) * te_diag['field_e']
-        te_diag['field_ex'] = (-a_s * s - a_p * ct * c) * tm_diag['field_e']
+        te_diag = _phase_weighted_record(te_diag, a_s*c - a_p*ct*s, lambda: solve_fdtd(
+            tetm='te', theta=theta_v, phi=None, _source_quadrature=True,
+            return_diagnostics=True, **kw))
+        tm_diag = _phase_weighted_record(tm_diag, -a_s*s - a_p*ct*c, lambda: solve_fdtd(
+            tetm='tm', theta=theta_v, phi=None, _source_quadrature=True,
+            return_diagnostics=True, **kw))
+        te_diag['field_ex'] = tm_diag['field_e']
         te_diag['field_ex_x'] = tm_diag['field_x']
         te_diag['field_ex_y'] = tm_diag['field_y']
+        te_diag['residual'] = max(te_diag['residual'], tm_diag['residual'])
     return (result, te_diag) if return_diagnostics else result
 
 
@@ -2257,7 +2297,7 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
                resolution=None, n_pml=PML_CELLS, n_periods=None, courant=COURANT,
                subpixel=True, truncation_order=None, return_diagnostics=False,
                dispersion=None, poles=None, pad_scale=1.0, grading=None,
-               record_field=None, chi=None, polarization=None, _leg=None):
+               record_field=None, chi=None, polarization=None, _leg=None, _source_quadrature=False):
     # `mu` is the raster's permeability field, layer-major beside `structure`, and the two
     # half-spaces carry theirs inside their `Material` -- the same two spellings the RCWA path
     # takes, so one `Stack` reaches both solvers unchanged.
@@ -2335,7 +2375,8 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
         polarization: finite nonzero complex pair ``(a_s, a_p)``, normalized to unit
             incident power while preserving overall phase. Mutually exclusive with
             tetm or psi/chi. Both basis solves are coherently combined. Complex
-            coefficients support diffraction outputs, but not ``record_field``.
+            coefficients also support ``record_field`` through additional quadrature
+            basis runs, up to four runs in total. Real coefficients use two runs.
 
     Returns:
         Result: the same container an RCWA solve returns, or ``(Result, dict)`` when
@@ -2349,11 +2390,6 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
         record_field = int(record_field)
     pair = _incident_pair(tetm, psi, chi, polarization)
     if pair is not None:
-        if record_field is not None and any(np.imag(a) != 0 for a in pair):
-            raise ValueError(
-                'fdtd: record_field with complex polarization needs a quadrature pulse source. '
-                'Complex Jones states are supported for diffraction amplitudes and powers; '
-                'omit record_field or use real polarization coefficients for time records.')
         return _solve_conical(
             pair=pair, phi=phi, theta=theta, structure=structure, thickness=thickness, top=top,
             bot=bot, period=period, wavelength=wavelength, mu=mu,
@@ -2448,7 +2484,8 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
                  mu_top=mu_top, mu_bot=mu_bot, pad_scale=pad_scale, grading=grading,
                  n_max=n_max, period_y=period_y)
     n_steps = int(np.ceil(n_periods * centre / grid.dt))
-    out = _time_loop(grid, name, n_steps, band, leg=_leg, record_field=record_field)
+    out = _time_loop(grid, name, n_steps, band, leg=_leg, record_field=record_field,
+                     source_quadrature=_source_quadrature)
 
     crossed = raster.ndim == 3 and raster.shape[1] > 1
     window_2d = None

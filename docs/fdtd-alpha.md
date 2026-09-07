@@ -16,13 +16,13 @@ An accepted input is not a guarantee of accuracy for every combination in this t
 | Materials | Positive real isotropic epsilon/mu; electric Drude/Lorentz poles | Closed-form dielectric, magnetic and Drude slabs, selected 1D patterned cases. The installation matrix covers planar magnetic/Drude media through both raster paths. Three moderate-contrast patterned cases and one damped negative-epsilon metal have independent Meep references (below); low-loss and strong-resonance regimes remain unvalidated. |
 | Spectra | Multiple wavelengths in one pulse run | At oblique incidence the in-plane wavevector is fixed, so angle varies across the band. Check the reported angles and incident spectrum. |
 | Outputs | R/T and complex s/p amplitudes, labelled diffraction orders | Frozen external-reference tests include complex propagating amplitudes. Evanescent channels are not covered by the convergence table below; deeply evanescent amplitudes can be masked. |
-| Time records | Ey/Ex snapshots as available, measured axes, plotting and animation | Component staggering, coherent polarization, recording invariance and plotting contracts are tested. This is not a complete six-component field or frequency-domain near-field API. |
+| Time records | Ey/Ex snapshots as available, measured axes, plotting and animation | Component staggering, coherent polarization, recording invariance and plotting contracts are tested. Circular vacuum records check equal component energy, temporal quadrature and both rotation directions. This is not a complete six-component field or frequency-domain near-field API. |
 | Execution | NumPy on CPU; optional Matplotlib plotting | Clean wheel installation and calculation checked on macOS arm64/Python 3.12. Other operating systems and Python versions need release CI evidence. |
 
 FDTD does not provide autodiff, JAX/PyTorch execution, GPU/MPI execution, bottom incidence,
 skewed lattices, parametric geometry input, anisotropic tensors,
-or complex-angle incidence. Complex Jones states currently provide diffraction outputs;
-time records require real polarization coefficients. Use the appropriate RCWA capability where available; do not
+or complex-angle incidence. Complex Jones states support diffraction and transverse time records through
+separately propagated sine/quadrature sources. Use the appropriate RCWA capability where available; do not
 infer FDTD support from RCWA examples. Unsupported inputs are described in [the solver
 notes](fdtd.md) and [API reference](reference/api.md).
 

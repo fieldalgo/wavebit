@@ -1041,11 +1041,33 @@ result = wavebit.fdtd(
 )
 ```
 
-Complex-coefficient states currently support diffraction amplitudes and powers.
-`record_field` with those states is refused: a physical time record needs a quadrature
-pulse source, whereas multiplying real-pulse snapshots by a complex coefficient would
-misrepresent their real part. Real Jones pairs and the existing linear `psi` retain
-recording support. This restriction does not affect complex diffraction amplitudes.
+Complex-coefficient states also support `record_field`. The source for each basis
+coefficient `a` is a Gaussian envelope multiplying
+`Re(a)*sin(omega_c*(t-t0)) - Im(a)*cos(omega_c*(t-t0))`.
+The negative cosine gives the positive `i` quadrature under Wavebit's `exp(+i wt)`
+DFT convention. Both carriers are propagated through the same Yee grid, material
+response and absorber before their records are combined. This is a physical
+phase-shifted pulse, rather than a complex rescaling of real-carrier snapshots.
+At nonzero Bloch wavevector, stored fields still carry spatial complex phase;
+`field_e.real` and `field_ex.real` give the physical instantaneous fields.
+
+Recording adds a quadrature basis run only when its coefficient has a nonzero imaginary
+part, for at most four basis runs in total. Linear recording and diffraction-only calls
+retain their original cost. The returned diffraction results use the original normalized
+basis answers and are identical whether recording is on or off. The diagnostics residual
+includes every propagated carrier. For a broadband pulse, the equation above specifies
+the recorded waveform exactly; finite Gaussian envelopes are not strictly analytic
+signals, so far spectral tails need not have an exact constant quadrature ratio.
+
+```python
+result, diag = wavebit.fdtd(
+    structure=np.ones((1, 1, 2)), thickness=[100.], top=1., bot=1.,
+    period=[100.], wavelength=900., polarization=(1., 1j),
+    resolution=.02, n_periods=100, record_field=3, return_diagnostics=True,
+)
+# Both transverse components are nonzero and rotate in time.
+ey, ex, time = diag['field_e'].real, diag['field_ex'].real, diag['field_t']
+```
 
 ## 9. What is not yet answered
 

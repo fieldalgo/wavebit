@@ -100,11 +100,6 @@ def test_extreme_jones_scale_preserves_phase(scale):
     np.testing.assert_allclose(pair, np.array([1, 1j])/np.sqrt(2), atol=1e-15)
 
 
-def test_complex_time_records_are_not_misrepresented_as_a_real_pulse():
-    with pytest.raises(ValueError, match='quadrature pulse'):
-        wavebit.fdtd(**scene(), polarization=(1, 1j), record_field=10)
-
-
 def test_flux_weight_falls_back_per_order_when_first_basis_has_a_dark_channel():
     # The two orders have different physical flux weights. Each basis has one dark
     # channel; choosing a single basis for the whole array silently drops an order.
