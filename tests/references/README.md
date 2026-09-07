@@ -58,6 +58,7 @@ differ are exactly the `__stack` pair above.
 | **RETICOLO**, the **conical** field | `field_1d_conical` on a *patterned* layer — an azimuth and a discontinuity at once, which nothing else here reached | same | `golden_reticolo_conical_field.npz` |
 | **Meep** (FDTD, GPL) | a **crossed grating in the time domain**: per-order complex amplitudes on a 2D order grid at a conical mount, both incident polarisations. Not RCWA at all, so it is the only entry that can arbitrate `_core/fdtd.py` — and the only external check `_extract_crossed` has ever had | the `meep` env; **never an install dependency**, and its source is not read — see below | `golden_meep_crossed.npz` |
 | **Meep**, **patterned materials in 3D** | selected asymmetric crossed rasters with permeability contrast, electric Drude and electric Lorentz poles; both source polarizations, complex propagating amplitudes at two grids, and a separate doubled-runtime check | `meep` env, public API only; never an install dependency | `golden_meep_crossed_materials.npz`, `golden_meep_crossed_materials_runtime.json` |
+| **Meep**, **damped negative-epsilon metal** | a subwavelength rectangular 3D Drude patch; only zeroth order radiates. Preserved grids 30/60, separate grid 120, runtime control at 60; coarse-reference discrepancy is documented | same public-API-only Meep environment | `golden_meep_crossed_metal.npz`, `golden_meep_crossed_metal_fine.npz` |
 | **Meep**, the **1D benchmark** | the grating `docs/fdtd.md` §2 publishes and `README.md` leans on — pure TE/TM, normal incidence, both polarisations at two resolutions, plus a **planar control against a closed form**. Not new physics: it *is* that table's Meep column, which until 2026-09-06 was quoted from elsewhere. Grade **~1e-3**, structure not drift | same | `golden_meep_1d.npz` |
 
 One more oracle lives outside this directory: the Berreman 4x4 in
@@ -890,3 +891,14 @@ checks that file with twice the runtime and records its digest, without replacin
 The regression suite compares complex amplitudes, checks spatial refinement against RCWA,
 and verifies that omitting the material contrast is distinguishable from discretization.
 No Meep implementation source is used by these tools.
+
+### Damped metal and reference resolution
+
+The negative-epsilon case is separate from the positive-epsilon material file. The original
+Meep-60 comparison failed the selected amplitude/absorption bounds. Those data remain in
+`golden_meep_crossed_metal.npz`; the separately measured Meep-120 tier is tied to it by a
+digest in `golden_meep_crossed_metal_fine.npz`. `refine_meep_crossed_metal.py` reproduces
+the finer tier. Both helpers and case definitions are included in its physics-harness
+digest. The original measurement was made as separate s/p public-API runs, combined without
+changing their values. `docs/fdtd-alpha.md` records the discrepancy and convergence;
+a reference with insufficient resolution is not grounds to loosen the comparison bound.

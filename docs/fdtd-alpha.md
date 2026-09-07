@@ -13,7 +13,7 @@ An accepted input is not a guarantee of accuracy for every combination in this t
 | --- | --- | --- |
 | Raster geometry | `(layer, y, x)` arrays; y-invariant and rectangular crossed cells | Analytic planar checks, 1D gratings, and selected asymmetric crossed gratings. The crossed external reference covers two dielectric scenes, not arbitrary 3D geometry. |
 | Incidence | From above; finite real scalar angles; TE/TM at zero azimuth; linear `psi` at general azimuth | Invalid complex/nonfinite angles and unsupported polarization settings are refused before either dispatch path. Normal, coplanar and conical regression cases; complex per-order amplitudes and both order axes checked. Near-Rayleigh and grazing incidence require separate refinement. |
-| Materials | Positive real isotropic epsilon/mu; electric Drude/Lorentz poles | Closed-form dielectric, magnetic and Drude slabs, selected 1D patterned cases. The installation matrix covers planar magnetic/Drude media through both raster paths. Three selected patterned 3D material cases now have independent Meep references (below); broader material regimes remain unvalidated. |
+| Materials | Positive real isotropic epsilon/mu; electric Drude/Lorentz poles | Closed-form dielectric, magnetic and Drude slabs, selected 1D patterned cases. The installation matrix covers planar magnetic/Drude media through both raster paths. Three moderate-contrast patterned cases and one damped negative-epsilon metal have independent Meep references (below); low-loss and strong-resonance regimes remain unvalidated. |
 | Spectra | Multiple wavelengths in one pulse run | At oblique incidence the in-plane wavevector is fixed, so angle varies across the band. Check the reported angles and incident spectrum. |
 | Outputs | R/T and complex s/p amplitudes, labelled diffraction orders | Frozen external-reference tests include complex propagating amplitudes. Evanescent channels are not covered by the convergence table below; deeply evanescent amplitudes can be masked. |
 | Time records | Ey/Ex snapshots as available, measured axes, plotting and animation | Component staggering, coherent polarization, recording invariance and plotting contracts are tested. This is not a complete six-component field or frequency-domain near-field API. |
@@ -206,13 +206,78 @@ The second command checks the committed reference, not the first command's outpu
 Both tools refuse to overwrite an existing output. CI reads the frozen artifacts with
 NumPy and never imports Meep. Broader cases need their own external and convergence checks.
 
+## Damped negative-epsilon metal
+
+A separate subwavelength crossed case uses a Drude material with epsilon_infinity=1,
+mu=1 and pole `(0, 0.5*omega_c, 4*omega_c**2)`, where `omega_c=2*pi/0.9`.
+Its active permittivity is **-2.2+1.6i** at wavelength 0.9 micrometres. The rectangular
+period is (0.2, 0.3), thickness 0.1, and the active y-by-x raster is:
+
+```text
+1 0
+1 1
+0 0
+```
+
+The background and half-spaces are nondispersive; incidence and half-space indices
+match the material cases above. Only order (0,0) propagates in either half-space.
+This is a 3D patterned, strongly damped metal case, not a low-loss plasmonic resonance
+or a higher-order metallic diffraction benchmark.
+
+The original Meep grids 30/60 are preserved in `golden_meep_crossed_metal.npz`, including
+a doubled-runtime control at resolution 60. That control changes amplitudes by at most
+2.10e-9. Nevertheless, comparing Wavebit resolution 60 with Meep resolution 60 **failed**
+the initial 0.06 complex-amplitude and 0.05 absorption criteria: amplitude difference
+0.08069, and absorption differences 0.09168 (s) and 0.07004 (p). Increasing runtime alone
+cannot establish spatial accuracy. These discrepant reference arrays are retained.
+
+A separate resolution-120 tier is reproduced by `refine_meep_crossed_metal.py`; it does
+not replace the coarser arrays. All tiers use the same physical geometry and public Meep
+material API. The finer tier uses post-source duration 120; the doubled-runtime evidence
+belongs specifically to resolution 60.
+
+The original comparison bounds are unchanged. With the independent Meep-120 tier,
+Wavebit resolution 60 at 240 cycles gives maximum complex-amplitude difference **0.05160**
+(bound 0.06). Absorption is 0.42090/0.44907 (s/p), versus Meep's 0.47043/0.48626;
+differences 0.04954/0.03719 are below the 0.05 absolute criterion (five percentage points).
+This is a structural regression check at modest accuracy, not a precision guarantee.
+
+| Meep resolution | Max amplitude difference from RCWA order 11 | s absorption | p absorption |
+| --- | --- | --- | --- |
+| 30 | 0.103694 | 0.509381 | 0.533899 |
+| 60 | 0.067957 | 0.512580 | 0.519110 |
+| 120 | 0.031885 | 0.470433 | 0.486264 |
+
+Wavebit's amplitude difference from RCWA order 11 decreases from 0.06273 at resolution
+30 to 0.03433 at resolution 60. The separate Meep tiers also approach that internal
+reference. The near-constant s absorption on Meep's first two grids was not evidence
+of spatial convergence. The new regression retains those grids and checks the decrease
+in complex-amplitude discrepancy across all three external tiers.
+
+
+Wavebit's opt-in `studies/fdtd_metal_validation.py` records grids 30/60 and separate
+resolution-60 controls for 160→240 optical cycles, PML 12→20 cells and padding 1→1.5.
+It compares against the preserved Meep-60 reference, making that discrepancy reproducible.
+The control changes are respectively 3.24e-12, 5.37e-5 and 3.32e-4 in maximum complex
+amplitude; monitor residuals are below 3.5e-11. These small changes do not erase spatial
+error. RCWA orders 7→11 change amplitudes by 0.001061, another finite-truncation check
+rather than an exact solution.
+
+```sh
+# In the separate Meep environment; choose fresh output paths.
+python tests/references/gen_goldens_meep_crossed_metal.py --output /tmp/metal-base.npz
+python tests/references/refine_meep_crossed_metal.py --output /tmp/metal-fine.npz
+# In the Wavebit development environment, with committed references available.
+python studies/fdtd_metal_validation.py --output studies/results/fdtd_metal_validation.json
+```
+
 ## Remaining release gates
 
 Before a tagged public alpha, run the configured CI against the final revision, including
 clean installs on the claimed platforms; no remote CI result is asserted by this local
 report. Select and publish the supported scope with the release, and retain warnings and
 known limitations in examples. Before claiming a broader 3D material capability, add
-more independent material cases, especially negative-epsilon and resonant regimes, and
+more independent material cases, especially low-loss metals and strong resonances, and
 repeat runtime/absorber refinement for those scenes. The selected cases above do not
 cover the whole input space.
 GPU execution, autodiff and a general field API are separate development projects.
