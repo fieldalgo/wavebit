@@ -82,6 +82,7 @@ import numpy as np
 from .conventions import (incidence_clashes, incident_sp_amplitudes, order_azimuth,
                           parse_order_pair, parse_period_mapping)
 from .domain import as_material
+from .frequency_monitor import PlaneDFT, combine_monitors
 from .result import Result, ResultSub
 
 
@@ -1243,7 +1244,7 @@ class _Grid:
 # ---------------------------------------------------------------------------------------
 
 def _time_loop(grid, tetm, n_steps, wavelengths, leg=None, record_field=None,
-               source_quadrature=False, record_components=None):
+               source_quadrature=False, record_components=None, field_monitors=None):
     """Step the fields and accumulate the running DFT, at every requested wavelength at once.
 
     This is the one thing a time-domain solve does that a frequency-domain one cannot: the
@@ -1437,6 +1438,7 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None, record_field=None,
     inc_ref = np.zeros(n_f, dtype=complex)
     inc_trn = np.zeros(n_f, dtype=complex)
     inc_z0 = np.zeros(n_f, dtype=complex)
+    monitors = PlaneDFT(grid, field_monitors, wavelengths) if field_monitors else None
     peak = tail = 0.0
 
     for step in range(n_steps):
@@ -1541,6 +1543,14 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None, record_field=None,
             dft_trn_x = dft_trn_x + kernel[:, None, None] * g_trn[None, :, :]
             inc_z0_x += kernel * j_z0
 
+        if monitors is not None:
+            active = {}
+            if te_on:
+                active.update(ey=ey, hx=hx, hz=hz)
+            if tm_on:
+                active.update(ex=ex, hy=hy, ez=ez)
+            monitors.update(active, step, gaussian_pulse((step+1)*dt, inc.f0, inc.width, inc.t0))
+
         if n_snap and step % record_field == 0:
             # The ELECTRIC field, whichever component this polarisation carries -- a TM run
             # steps `Hy` as its primary but `Ex` is what a reader means by "the field".
@@ -1573,7 +1583,8 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None, record_field=None,
     # as dz**0.6.
     # `Ey` and `Ex` both sit on the z nodes, so a conical run's offset is zero for both.
     offset = 0.0 if conical else (0.5 if tetm == 'tm' else 0.0)
-    return {'components': components, 'snap_e': snap_e, 'snap_x': snap_x, 'snap_t': snap_t[:n_snap] if n_snap else None,
+    return {'monitors': monitors.result() if monitors is not None else {},
+            'components': components, 'snap_e': snap_e, 'snap_x': snap_x, 'snap_t': snap_t[:n_snap] if n_snap else None,
             'dft_ref': dft_ref, 'dft_trn': dft_trn, 'tetm': tetm, 'conical': conical,
             'dft_ref_x': dft_ref_x, 'dft_trn_x': dft_trn_x, 'inc_z0_x': inc_z0_x,
             'wavelengths': wavelengths,
@@ -2193,6 +2204,7 @@ def _solve_conical_oblique(pair, phi, theta, return_diagnostics, **kw):
 
     result = out[0] if single else out
     s_diag = dict(s_diag, residual=max(s_diag['residual'], p_diag['residual']))
+    s_diag['monitors'] = combine_monitors(s_diag.get('monitors', {}), p_diag.get('monitors', {}), a_s, a_p)
     if 'field_e' in s_diag:
         records = []
         for leg, coefficient, diag in (('s', a_s, s_diag), ('p', a_p, p_diag)):
@@ -2307,6 +2319,11 @@ def _solve_conical(pair, phi, theta, return_diagnostics, **kw):
 
     result = out[0] if single else out
     te_diag = dict(te_diag, residual=max(te_diag['residual'], tm_diag['residual']))
+    c, s = np.cos(phi_v), np.sin(phi_v)
+    a_s, a_p = pair
+    te_diag['monitors'] = combine_monitors(te_diag.get('monitors', {}), tm_diag.get('monitors', {}),
+                                         a_s*c-a_p*np.cos(theta_v)*s,
+                                         -a_s*s-a_p*np.cos(theta_v)*c)
     if 'field_e' in te_diag:
         # Scalar sources drive +Ey and +Ex. The incident p direction has negative
         # tangential E, so its raw time record needs that sign, unlike its efficiency.
@@ -2332,7 +2349,7 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
                resolution=None, n_pml=PML_CELLS, n_periods=None, courant=COURANT,
                subpixel=True, truncation_order=None, return_diagnostics=False,
                dispersion=None, poles=None, pad_scale=1.0, grading=None,
-               record_field=None, record_components=None, chi=None, polarization=None,
+               record_field=None, record_components=None, field_monitors=None, chi=None, polarization=None,
                _leg=None, _source_quadrature=False):
     # `mu` is the raster's permeability field, layer-major beside `structure`, and the two
     # half-spaces carry theirs inside their `Material` -- the same two spellings the RCWA path
@@ -2410,6 +2427,14 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
             shaped (time,z,y,x) and its own t/z/y/x axes. H is normalized as Z0*H
             and sampled half a step before E. Off by default; legacy Ey/Ex records
             remain available. Components absent in a pure scalar solve are zero.
+        field_monitors: optional nonempty mapping of names to z-plane coordinates.
+            Requires return_diagnostics; streams all six frequency-domain fields
+            without record_field. diagnostics['monitors'][name] includes fields
+            (wavelength,y,x), flux_density (wavelength,y,x,3), and power_z
+            (wavelength,). Fields are divided by the soft-source pulse spectrum;
+            power uses 0.5*Re(E cross conj(H)), H=Z0*H, integrated over the cell
+            (per unit y length for a 2D scene). Use an empty reference run for
+            incident-power normalization. TFSF-crossing interpolation is refused.
         return_diagnostics: return ``(result, diagnostics)`` instead of ``result``.
         chi: real ellipticity angle beside ``psi`` (radians); ``abs(chi)=pi/4`` is
             circular. If only chi is supplied, psi defaults to pi/2, as in RCWA.
@@ -2426,6 +2451,11 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
         ``return_diagnostics`` is set.
     """
     _check_incidence(theta, phi, psi, chi, polarization)
+    if field_monitors is not None:
+        if not isinstance(field_monitors, dict) or not field_monitors:
+            raise ValueError('field_monitors must map names to plane z coordinates.')
+        if not return_diagnostics:
+            raise ValueError('field_monitors requires return_diagnostics=True.')
     if record_field is not None:
         if (isinstance(record_field, (bool, np.bool_))
                 or not isinstance(record_field, (int, np.integer)) or record_field <= 0):
@@ -2453,7 +2483,8 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
             n_pml=n_pml, n_periods=n_periods, courant=courant, subpixel=subpixel,
             truncation_order=truncation_order, return_diagnostics=return_diagnostics,
             dispersion=dispersion, poles=poles, pad_scale=pad_scale, grading=grading,
-            record_field=record_field, record_components=record_components)
+            record_field=record_field, record_components=record_components,
+            field_monitors=field_monitors)
 
     # `_leg` is set only by `_solve_conical`, which has already validated the incidence; it
     # names which eigenpolarisation this run drives. It is the one door `phi != 0` comes
@@ -2541,7 +2572,8 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
                  n_max=n_max, period_y=period_y)
     n_steps = int(np.ceil(n_periods * centre / grid.dt))
     out = _time_loop(grid, name, n_steps, band, leg=_leg, record_field=record_field,
-                     source_quadrature=_source_quadrature, record_components=record_components)
+                     source_quadrature=_source_quadrature, record_components=record_components,
+                     field_monitors=None if _source_quadrature else field_monitors)
     positive_carrier = (record_field is not None and not _source_quadrature
                         and (grid.kx_inc != 0.0 or grid.ky_inc != 0.0))
     if positive_carrier:
@@ -2685,7 +2717,7 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
     dz_cells = np.diff(z_node)
     return result, {'grid': grid, 'dz': float(dz_cells.min()), 'dz_max': float(dz_cells.max()),
                     'nz': grid.nz, 'nx': grid.nx, 'dt': grid.dt,
-                    **record,
+                    **record, 'monitors': out['monitors'],
                     'n_steps': n_steps, 'n_pml': grid.n_pml,
                     'pml_thickness': (float(z_node[grid.n_pml] - z_node[0]),
                                       float(z_node[-1] - z_node[-1 - grid.n_pml])),
