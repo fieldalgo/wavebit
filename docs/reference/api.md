@@ -118,6 +118,14 @@ properties every one of them carries.
 ```
 
 
+## Transient point probes
+
+```{eval-rst}
+.. autofunction:: wavebit.sample_fdtd_fields
+
+.. autofunction:: wavebit.fdtd_poynting
+```
+
 ## Plotting
 
 ```{eval-rst}

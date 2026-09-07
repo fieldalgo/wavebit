@@ -264,3 +264,10 @@ Read `diag['fields']['hz']['values']` and its `t/z/y/x` axes, or pass `component
 to the plotting/animation helpers. H is normalized as `Z0 H`; its timestamps differ
 from E by half a time step. See [the component layout](../fdtd.md#recording-all-six-field-components)
 before combining staggered fields.
+
+
+`wavebit.fdtd_poynting(diag, z=50., x=0., y=0.)` returns a point's instantaneous
+energy flow in `S[:, 0:3]`, after interpolating all six fields to common Yee positions
+and times. `sample_fdtd_fields` returns the interpolated E/H directly. Both require
+`record_components='all'`; see [point probes](../fdtd.md#point-probes-and-instantaneous-energy-flow)
+for units, sampling limits and the distinction between total and scattered flux.

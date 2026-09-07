@@ -1053,6 +1053,40 @@ position **and time** before taking a cross product. Direct products of raw E/H 
 indices combine different Yee positions and half-step times. These records provide
 transient fields, not the RCWA `reconstruct_field` frequency-domain API.
 
+### Point probes and instantaneous energy flow
+
+`sample_fdtd_fields` interpolates the six recorded components to one common point
+and time vector. `fdtd_poynting` adds the instantaneous vector
+`S = cross(E.real, H.real)`. Use either with `record_components='all'`:
+
+```python
+probe = wavebit.fdtd_poynting(diag, x=0., y=0., z=50.)
+time, flux = probe['t'], probe['S']
+# E/H/S have shape (number of times, 3), with x/y/z columns.
+sz = flux[:, 2]  # positive means down into the stack
+# An explicit time vector or scalar is also accepted, within the common interval.
+fields = wavebit.sample_fdtd_fields(diag, z=50., t=time[10])
+```
+
+By default the probe uses recorded Ex times within the common E/H interval; the last
+E sample is usually excluded because H ends half a step earlier. Linear interpolation
+uses each component's actual x/y/z/t axes, including a graded mesh. It reads only the
+neighbouring spatial samples, rather than resampling the whole recorded volume.
+Refine both the mesh and `record_field` for quantitative accuracy: interpolation of a
+sparsely recorded oscillation can attenuate its amplitude. Temporally aliased records warn.
+
+The probe refuses extrapolation, periodic wrapping and interpolation that touches or
+crosses the TFSF discontinuity. Singleton axes accept only their recorded coordinate;
+this includes y=0 for the algebraic-y formulation. `region` is `'total'` below the TFSF
+plane and `'scattered'` above it. Scattered flux above that plane does not include the
+incident beam. Positions near material interfaces require spatial refinement.
+
+This is **instantaneous** flow: there is no complex conjugation and no factor of 1/2.
+Those belong to a harmonic cycle average. H is stored as Z0 H, so S is in squared
+source-electric-field units. It is Z0 times SI flux only if E is calibrated in V/m;
+it is not an absolute W/m² output. Surface integration and frequency-domain flux
+monitors are separate from this point-probe API.
+
 ### Elliptical and circular incidence
 
 The diffraction solve accepts the same polarization coordinates as RCWA:
@@ -1090,12 +1124,20 @@ The negative cosine gives the positive `i` quadrature under Wavebit's `exp(+i wt
 DFT convention. Both carriers are propagated through the same Yee grid, material
 response and absorber before their records are combined. This is a physical
 phase-shifted pulse, rather than a complex rescaling of real-carrier snapshots.
-At nonzero Bloch wavevector, stored fields still carry spatial complex phase;
-`field_e.real` and `field_ex.real` give the physical instantaneous fields.
+At nonzero Bloch wavevector, **both temporal carriers are always propagated** for
+recording, even for a linear polarization. Their complex combination is
+`sin(omega_c*(t-t0)) + i*cos(omega_c*(t-t0))`, a positive-frequency carrier under
+`exp(+i wt)`. Keeping only the real sine at fixed positive in-plane wavevector
+would mix in an unintended oppositely directed temporal component and give wrong
+instantaneous transverse energy flow. The diagnostics identifies this representation
+as `field_temporal_representation='positive_frequency_carrier'`; its real part is
+the physical instantaneous field. The complex record carries both temporal and spatial
+Bloch phase, not just spatial phase.
 
-Recording adds a quadrature basis run only when its coefficient has a nonzero imaginary
-part, for at most four basis runs in total. Linear recording and diffraction-only calls
-retain their original cost. The returned diffraction results use the original normalized
+At zero Bloch wavevector, recording adds a quadrature basis run only when its
+coefficient has a nonzero imaginary part. At nonzero Bloch wavevector, recording
+uses two temporal runs per polarization basis (up to four total). Diffraction-only
+calls retain their original cost. The returned diffraction results use the original normalized
 basis answers and are identical whether recording is on or off. The diagnostics residual
 includes every propagated carrier. For a broadband pulse, the equation above specifies
 the recorded waveform exactly; finite Gaussian envelopes are not strictly analytic

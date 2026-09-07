@@ -77,7 +77,7 @@ def test_elliptical_recording_preserves_diffraction_and_physical_superposition(c
     np.testing.assert_allclose(negative.R, recorded.R, atol=1e-14)
 
 
-def test_real_coefficients_do_not_launch_quadrature_runs(monkeypatch):
+def test_normal_incidence_real_coefficients_do_not_launch_quadrature_runs(monkeypatch):
     original = core._time_loop
     quadratures = []
     def count(*args, **kwargs):

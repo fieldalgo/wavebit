@@ -2126,13 +2126,22 @@ def _check_dispersion(dispersion, poles, raster):
 def _phase_weighted_record(diag, coefficient, quadrature_run):
     """Weight a real carrier and, when needed, a separately propagated quadrature.
 
-    Bloch fields remain complex spatial amplitudes. The source coefficients used
-    here are real: Re(a)*sin(wt) - Im(a)*cos(wt), under the Gaussian envelope.
-    Multiplying the sine record by a complex number instead would confuse spatial
-    Bloch phase with temporal phase and discard a component at normal incidence.
+    At zero Bloch wavevector the physical source is
+    Re(a)*sin(wt) - Im(a)*cos(wt), under the Gaussian envelope. Nonzero Bloch
+    records already carry sin+i*cos from two propagated temporal runs, so they
+    accept complex Jones weights directly before taking their physical real part.
     """
     out = dict(diag)
     keys = [key for key in ('field_e', 'field_ex') if key in diag]
+    if diag.get('field_temporal_representation') == 'positive_frequency_carrier':
+        # The two temporal carriers have already been propagated for this Bloch
+        # basis. Complex Jones multiplication now shifts time phase correctly.
+        for key in keys:
+            out[key] = coefficient*diag[key]
+        if 'fields' in diag:
+            out['fields'] = {name: dict(field, values=coefficient*field['values'])
+                             for name, field in diag['fields'].items()}
+        return out
     for key in keys:
         out[key] = float(np.real(coefficient)) * diag[key]
     if 'fields' in diag:
@@ -2408,7 +2417,9 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
             incident power while preserving overall phase. Mutually exclusive with
             tetm or psi/chi. Both basis solves are coherently combined. Complex
             coefficients also support ``record_field`` through additional quadrature
-            basis runs, up to four runs in total. Real coefficients use two runs.
+            basis runs, up to four runs in total. At nonzero Bloch wavevector,
+            recording always propagates both temporal carriers per basis to
+            represent physical instantaneous fields with the correct direction.
 
     Returns:
         Result: the same container an RCWA solve returns, or ``(Result, dict)`` when
@@ -2531,6 +2542,22 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
     n_steps = int(np.ceil(n_periods * centre / grid.dt))
     out = _time_loop(grid, name, n_steps, band, leg=_leg, record_field=record_field,
                      source_quadrature=_source_quadrature, record_components=record_components)
+    positive_carrier = (record_field is not None and not _source_quadrature
+                        and (grid.kx_inc != 0.0 or grid.ky_inc != 0.0))
+    if positive_carrier:
+        # A real sine at fixed +k_parallel also contains negative temporal
+        # frequencies. Taking its real part adds a +frequency wave at -k_parallel,
+        # corrupting instantaneous transverse flux. sin + i*cos = i*exp(-i wt)
+        # selects the intended carrier. The quadrature source is -cos, hence -i.
+        quadrature = _time_loop(grid, name, n_steps, band, leg=_leg, record_field=record_field,
+                                source_quadrature=True, record_components=record_components)
+        for key in ('snap_e', 'snap_x'):
+            if out[key] is not None:
+                out[key] = out[key]-1j*quadrature[key]
+        for component in out['components']:
+            out['components'][component] = (out['components'][component]
+                                           - 1j*quadrature['components'][component])
+        out['residual'] = max(out['residual'], quadrature['residual'])
 
     crossed = raster.ndim == 3 and raster.shape[1] > 1
     window_2d = None
@@ -2622,7 +2649,9 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
             y_node = y_half = np.zeros(1)
         # `_time_loop` records `ey` whenever it steps one -- which a conical leg always does.
         te_on = out['conical'] or out['tetm'] == 'te'
-        record = {'field_t': out['snap_t'], 'field_e': out['snap_e'],
+        record = {'field_temporal_representation': ('positive_frequency_carrier' if positive_carrier
+                                                     else 'real_carrier'),
+                  'field_t': out['snap_t'], 'field_e': out['snap_e'],
                   'field_e_component': 'ey' if te_on else 'ex',
                   'field_z': grid.z_node,
                   'field_x': x_node if te_on else x_half,
