@@ -2452,6 +2452,58 @@ def test_orders_past_nyquist_are_refused_on_the_y_axis_as_well(truncation_order,
                    resolution=0.03, n_periods=80, truncation_order=truncation_order)
 
 
+def test_the_crossed_vacuum_transmission_has_the_oblique_propagation_phase():
+    """A vacuum layer transmits exp(i k0 cos(theta) d), independently of azimuth.
+
+    The grating amplitude oracles allow a discretisation error larger than the effect of
+    dropping ky from the INCIDENT kz. Their tight normal-incidence controls have ky == 0.
+    Here theta=45 and phi=60 make that omission large, while a uniform medium removes
+    corner errors. The small rectangular transverse cell still runs the 3D extraction.
+    At this resolution the co-polar amplitude error is 1.2e-3 and cross-polar leakage 2.7e-4.
+    Both phase and amplitude are checked: a wrong reference plane can preserve all powers.
+    """
+    theta = np.deg2rad(45.0)
+    got, diag = solve_fdtd(
+        structure=np.ones((1, 2, 2)), thickness=[THICK], top=1.0, bot=1.0,
+        period=[300.0, 400.0], wavelength=WL, theta=theta, phi=np.deg2rad(60.0),
+        psi=0.4, resolution=0.025, n_periods=80, truncation_order=dict(x=0, y=0),
+        return_diagnostics=True)
+    assert diag['grid'].ny > 1
+    expected = np.exp(2j * np.pi * THICK / WL * np.cos(theta))
+    for leg, co, cross in (('s_inc', 't_s', 't_p'), ('p_inc', 't_p', 't_s')):
+        sub = getattr(got, leg)
+        np.testing.assert_allclose(getattr(sub, co), expected, rtol=0, atol=3e-3)
+        np.testing.assert_allclose(getattr(sub, cross), 0, rtol=0, atol=5e-4)
+        np.testing.assert_allclose(sub.r_s, 0, rtol=0, atol=1e-12)
+        np.testing.assert_allclose(sub.r_p, 0, rtol=0, atol=1e-12)
+
+
+def test_the_conical_dereference_guard_keeps_near_orders_and_masks_deep_ones():
+    """Exercise the conical guard on both polarisations, beyond its actual threshold.
+
+    Oblique incidence makes the cutoff asymmetric: reflection orders -6, +5, +6 exceed
+    the 1e10 gain limit, but -5 stays below it. The nearer transmission plane keeps every
+    requested order. Zero evanescent power cannot arbitrate any of these amplitude masks.
+    """
+    got = solve_fdtd(
+        structure=_grating(), thickness=[THICK], top=EPS_TOP, bot=EPS_BOT,
+        period=[PERIOD], wavelength=WL, theta=np.deg2rad(30.0), phi=np.deg2rad(40.0),
+        psi=0.4, resolution=0.03, n_periods=80, truncation_order=dict(x=6, y=0))
+    orders = np.asarray(got.orders_u).ravel()
+    np.testing.assert_array_equal(orders, np.arange(-6, 7))
+    masked = np.isin(orders, [-6, 5, 6])[None, :]
+    for leg in ('s_inc', 'p_inc'):
+        sub = getattr(got, leg)
+        for name in ('r_s', 'r_p'):
+            values = np.asarray(getattr(sub, name))
+            np.testing.assert_array_equal(np.isnan(values), masked)
+            assert np.all(np.isfinite(values[~masked]))
+        for name in ('t_s', 't_p'):
+            assert np.all(np.isfinite(getattr(sub, name)))
+        np.testing.assert_array_equal(np.asarray(sub.R)[masked], 0.0)
+        assert np.all(np.isfinite(sub.T))
+
+
 def test_a_crossed_truncation_order_comes_back_labelled_the_way_it_was_asked():
     """`dict(x=A, y=B)` with `A != B`, which is the only shape that can see a swap.
 
