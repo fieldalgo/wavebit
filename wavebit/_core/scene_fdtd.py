@@ -237,7 +237,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                      convergence_window=None, convergence_tol=1e-4, dft_subsample=1, record_bounds=None,
                      pulse_width=None, align_layers=False, diffraction_distance=None,
                      diffraction_method='electric', pml_reflection=1e-8, pulse_notches=None,
-                     source_distance=None):
+                     source_distance=None, transverse_resolution=None):
     """Solve a static rectangular scene with NumPy/JAX/Torch material gradients.
 
     Explicit resolution is required: optimizing materials must not resize the
@@ -260,6 +260,8 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     resolved, including the carrier when time records are requested.
     source_distance optionally selects a source sheet a fixed physical distance
     from the incident interface, independently of padding and monitor positions.
+    transverse_resolution optionally sets static x/y cells per unit length,
+    as a scalar or (x,y) pair. The z mesh continues to use resolution.
     """
     record_bounds = _validate_record_bounds(record_bounds)
     if record_bounds is not None and record_field is None:
@@ -305,6 +307,13 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
         raise ValueError('grading must be True or a static growth ratio between 1 and 2.')
     if resolution is None or not np.isfinite(resolution) or resolution <= 0:
         raise ValueError('The common scene engine requires a positive explicit resolution (cells/length).')
+    transverse = np.asarray(resolution if transverse_resolution is None else transverse_resolution)
+    if (transverse.shape not in ((), (2,)) or transverse.dtype.kind not in 'fiu'
+            or not np.isfinite(transverse).all() or np.any(transverse <= 0)):
+        raise ValueError('transverse_resolution must be a positive finite static scalar or (x,y) pair.')
+    rx, ry = np.broadcast_to(transverse, (2,)).astype(float)
+    if not np.isfinite([rx, ry]).all():
+        raise ValueError('transverse_resolution must be representable as finite static values.')
     if not 0 < courant < 1 or not np.isfinite(n_periods) or n_periods <= 0:
         raise ValueError('Require 0 < courant < 1 and positive n_periods.')
     if int(n_pml) != n_pml or n_pml < 2 or not np.isfinite(pad_scale) or pad_scale <= 0:
@@ -376,9 +385,9 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
         raise ValueError('A crossed raster requires both x and y periods.')
     lx = float(lengths[0])
     dz = 1/float(resolution)
-    ly = float(lengths[1]) if len(lengths) == 2 else 2*dz
-    nx = max(2, math.ceil(lx*resolution))
-    ny = max(2, math.ceil(ly*resolution)) if raster.shape[1] > 1 or phi != 0 else 2
+    ly = float(lengths[1]) if len(lengths) == 2 else 2/ry
+    nx = max(2, math.ceil(lx*rx))
+    ny = max(2, math.ceil(ly*ry)) if raster.shape[1] > 1 or phi != 0 else 2
     dx, dy = lx/nx, ly/ny
     pad = max(6, math.ceil(pad_scale*centre/min(nt, nb)/dz))
     source_z, reflect_z = int(n_pml)+2, int(n_pml)+2+pad
@@ -443,9 +452,15 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
             offsets = np.ones(3)*.5 if magnetic else np.zeros(3)
             offsets[c] = 0. if magnetic else .5  # physical x,y,z offsets
             v = values
-            for axis, centres, width, edges, periodic in (
+            transverse_axes = [
                 (2, (np.arange(nx)+offsets[0])*dx, dx, np.linspace(0, lx, raster.shape[2]+1), True),
-                (1, (np.arange(ny)+offsets[1])*dy, dy, np.linspace(0, ly, raster.shape[1]+1), True)):
+                (1, (np.arange(ny)+offsets[1])*dy, dy, np.linspace(0, ly, raster.shape[1]+1), True)]
+            # Normal harmonic averaging precedes tangential arithmetic averaging
+            # in the transverse plane. A fixed x-then-y order treated Ex and Ey
+            # differently at crossed raster corners and broke x/y covariance.
+            if harmonic and c == 1:
+                transverse_axes.reverse()
+            for axis, centres, width, edges, periodic in transverse_axes:
                 weights = array(_weights(centres, width, edges, periodic, subpixel), dtype=v.dtype)
                 use_harmonic = harmonic and c == 2-axis
                 v = 1/v if use_harmonic else v
@@ -744,6 +759,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                            stable=stable, dt=dt, steps=steps, n_steps=steps, dft_subsample=dft_subsample,
                            dft_samples=native_runs[0]['dft_samples'],
                            spacing=(float(widths.min()), dy, dx), shape=shape, wavelengths=array(band),
+                           transverse_resolution=(float(rx), float(ry)),
                            pulse={key: array(value) if isinstance(value, np.ndarray) else value
                                   for key, value in pulse_info.items()},
                            z_nodes=array(z), z_spacing=array(widths), grading=grading, align_layers=bool(align_layers),

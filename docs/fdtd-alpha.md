@@ -94,6 +94,13 @@ outgoing-boundary solution refines approximately at second order against RCWA.
 A separate finite-CPML solve exposes boundary errors hidden by cancellation
 with lattice and finite-time errors. These are bounded study instruments,
 sharing the native rasterization, rather than general frequency-domain APIs.
+Static [independent transverse resolution](fdtd-transverse-resolution.md)
+now permits x/y refinement without moving z nodes, sources or measurement
+planes. The time step still follows all actual spacings. Transverse normal
+harmonic averaging now precedes tangential arithmetic averaging consistently
+for epsilon and mu, fixing an x/y asymmetry in crossed raster corner cells.
+This can change crossed-raster results even at the default mesh; it does not
+replace the diagonal interface model with general tensor homogenization.
 
 The common engine reports physical and discrete lower-cutoff classifications
 and supports independent diffraction-plane distances. A binary dielectric

@@ -46,11 +46,12 @@ def reference(order):
 
 def run(expected, backend, resolution, periods=300, distance=None, width=3., pml_width=.3,
         method='electric', pad_scale=1., pml_reflection=1e-8, convergence_window=200,
-        pulse_notches=None, source_distance=None):
+        pulse_notches=None, source_distance=None, transverse_resolution=None):
     results, d = wavebit.fdtd(
         structure=STRUCTURE, thickness=[.2], top=1., bot=1., period=PERIOD,
         wavelength=BAND, theta=THETA, tetm='te', truncation_order=1,
         backend=backend, resolution=resolution, n_pml=round(pml_width*resolution),
+        transverse_resolution=transverse_resolution,
         n_periods=periods, align_layers=True, pulse_width=width,
         pulse_notches=pulse_notches,
         source_distance=source_distance,
@@ -64,6 +65,7 @@ def run(expected, backend, resolution, periods=300, distance=None, width=3., pml
         earlier[pol] = amplitudes(results, 1, pol)-delta if np.isfinite(delta).all() else None
     return dict(
         resolution=resolution, periods=periods, distance=distance, pulse_width=width,
+        transverse_resolution=d['transverse_resolution'],
         method=method, pml_width=pml_width, pml_reflection=d['pml_reflection'],
         pad_scale=pad_scale, shape=d['shape'], dt=d['dt'], steps=d['steps'],
         pulse_notches=np.asarray(d['pulse']['notches']).tolist(),

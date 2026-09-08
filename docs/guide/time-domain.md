@@ -518,6 +518,10 @@ registered pytrees, so a function returning the complete `Result` can be jitted.
 Raster epsilon, raster mu, electric Drude/Lorentz parameters and Jones amplitudes
 retain their backend graphs. Cell overlap weights are static; harmonic averaging
 is applied normal to each field component and arithmetic averaging tangentially.
+Within the transverse plane, normal harmonic averaging is performed before
+tangential arithmetic averaging, for both epsilon and mu. This ordering makes
+exchanging x and y rotate the same discretized material. It remains a diagonal,
+separable approximation at raster corners, not full tensor homogenization.
 Pole masks use arithmetic fill fractions, including the normal component; this
 is an approximation to a dispersive interface, not a general tensor homogenizer.
 
@@ -558,6 +562,49 @@ transmission with stored Meep public-API data, and JAX/Torch material derivative
 with finite differences. Crossed dispersive scenes additionally check Torch/
 NumPy agreement and a pole-strength derivative. These scene checks supplement
 the native-core Meep/FDTDX field and derivative references.
+
+
+### Independent transverse resolution
+
+The explicit-backend adapter accepts `transverse_resolution=R` or
+`transverse_resolution=(Rx, Ry)`, in cells per unit length. These positive finite
+static values set x/y sampling while `resolution` continues to set the z mesh,
+layer alignment and PML cell thickness. `None` uses `resolution` for both axes.
+The pair is in **x, y order**; native `spacing` and grid `shape` remain in z, y, x
+order. Material and pole gradients retain their usual meaning; mesh sizes and
+these resolution controls are not differentiable.
+
+```python
+result, diagnostic = wavebit.fdtd(
+    structure=[[[2.25, 1.]]], thickness=[.2], top=1., bot=1., period=.8,
+    wavelength=1., tetm='te', backend='numpy', resolution=40,
+    transverse_resolution=(80, 40), truncation_order=1,
+    return_diagnostics=True)
+print(diagnostic['transverse_resolution'])  # (80.0, 40.0), requested x/y targets
+print(diagnostic['spacing'])                # actual dz, dy, dx
+```
+
+Each represented transverse period is divided into at least two cells, rounding
+the target count upward: `Nx = max(2, ceil(Lx Rx))`, and similarly for a fully
+represented y axis. A one-row raster at `phi=0` retains two y cells. If a y
+period is supplied, their width is `Ly/2`; changing `Ry` does not subdivide that
+collapsed axis. With a single x period, the auxiliary y period is `2/Ry`, so
+its two cells have width `1/Ry`, including conical illumination of a y-invariant
+structure. Diagnostics expose the actual spacing rather than assuming targets
+were attained identically on every axis.
+
+Changing transverse sampling preserves z nodes, layer faces, the selected
+source sheet, PML faces and diffraction planes. It recomputes the CFL time step
+from **all three actual spacings**, and may therefore increase the update count
+even when the number of z cells is unchanged. Source zeros specified as numerical
+frequencies are not automatically retuned to a different discrete cutoff.
+Nyquist and grazing checks use the new mesh and still reject unresolved retained
+orders. All four current-basis/reference runs use the same mesh.
+
+Independent refinement is useful when one direction limits accuracy, but it
+does not guarantee less work or monotonically smaller error. The
+[transverse refinement study](../fdtd-transverse-resolution.md) separates
+harmonic lattice accuracy from finite-time and finite-boundary differences.
 
 
 ### Source position independent of padding

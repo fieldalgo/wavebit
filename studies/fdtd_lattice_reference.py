@@ -20,7 +20,8 @@ from studies.fdtd_rayleigh import BAND, STRUCTURE, THETA, PERIOD, reference
 from wavebit._core.fdtd import cpml_profiles
 
 
-def capture_grid(resolution, structure=STRUCTURE, *, pml_width=.6, pml_reflection=1e-40):
+def capture_grid(resolution, structure=STRUCTURE, *, pml_width=.6, pml_reflection=1e-40,
+                 transverse_resolution=None):
     """Capture this study's static material arrays before any time-domain run.
 
     The reference run returns a placeholder, then the actual call captures its
@@ -42,6 +43,7 @@ def capture_grid(resolution, structure=STRUCTURE, *, pml_width=.6, pml_reflectio
             structure=structure, thickness=[.2], top=1., bot=1., period=PERIOD,
             wavelength=BAND, theta=THETA, tetm='te', truncation_order=1,
             backend=0, resolution=resolution, n_pml=round(pml_width*resolution), n_periods=800,
+            transverse_resolution=transverse_resolution,
             pulse_width=60., align_layers=True, diffraction_distance=.2,
             diffraction_method='directional', pml_reflection=pml_reflection, source_distance=1.)
     except Captured:
@@ -299,6 +301,9 @@ def main():
                 continue
             if row.get('method') != 'directional' or not np.isclose(row['dt'], data['dt'], rtol=1e-12):
                 raise ValueError('Time comparison requires the same discrete step and directional extraction.')
+            if not np.allclose(row.get('transverse_resolution', [resolution, resolution]),
+                               [resolution, resolution], rtol=1e-12, atol=0):
+                raise ValueError('Time comparison requires the same transverse resolution.')
             measured = {pol: np.array(row['amplitude_real'][pol])+1j*np.array(row['amplitude_imag'][pol]) for pol in expected}
             comparison = dict(case=row.get('case'), difference={
                 pol: float(np.max(abs(measured[pol]-amplitudes[pol]))) for pol in expected})
