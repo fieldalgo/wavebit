@@ -127,7 +127,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                      checkpoint_steps=32, return_diagnostics=False,
                      field_monitors=None, record_field=None, record_components=None, grading=None,
                      convergence_window=None, convergence_tol=1e-4, dft_subsample=1, record_bounds=None,
-                     pulse_width=None):
+                     pulse_width=None, align_layers=False):
     """Solve a static rectangular scene with NumPy/JAX/Torch material gradients.
 
     Explicit resolution is required: optimizing materials must not resize the
@@ -136,6 +136,8 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     coordinates. Optional grading builds a static nonuniform z mesh; material
     gradients do not resize it. pulse_width is the static Gaussian envelope's
     1/e amplitude half-width in c=1 time units; None uses the central wavelength.
+    align_layers places every layer boundary on a z node using equal cells per
+    layer, each no wider than 1/resolution. It can be combined with grading.
     """
     record_bounds = _validate_record_bounds(record_bounds)
     if record_bounds is not None and record_field is None:
@@ -154,6 +156,8 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
         raise ValueError("incidence_side must be 'top' or 'bottom'.")
     if lattice is not None:
         raise ValueError('The common scene engine requires rectangular period.')
+    if not isinstance(align_layers, (bool, np.bool_)):
+        raise ValueError('align_layers must be a static boolean.')
     if grading is True:
         grading = 1.06
     elif grading is False:
@@ -245,22 +249,34 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     z = (np.arange(nz)-interface)*dz
     widths = np.full(nz, dz)
     bottom_interface = interface+math.ceil(thick.sum()/dz)
-    if grading is not None:
-        from .fdtd import graded_cells
-        h_core = thick.sum()/max(1, math.ceil(thick.sum()/dz))
-        coarse = lambda index: max(h_core, min(2*h_core, band.min()/(20*index)))
-        up = graded_cells(h_core, coarse(nt), interface*dz, grading)[::-1]
-        down = graded_cells(h_core, coarse(nb), (nz-bottom_interface)*dz, grading)
-        core = np.full(bottom_interface-interface, h_core)
+    nonuniform = grading is not None or align_layers
+    if nonuniform:
+        if align_layers:
+            counts = np.ceil(thick*resolution).astype(int)
+            core = np.concatenate([np.full(count, t/count) for t, count in zip(thick, counts)])
+        else:
+            core = np.full(bottom_interface-interface, thick.sum()/(bottom_interface-interface))
+        if grading is not None:
+            from .fdtd import graded_cells
+            coarse = lambda fine, index: max(fine, min(2*fine, band.min()/(20*index)))
+            up = graded_cells(core[0], coarse(core[0], nt), interface*dz, grading)[::-1]
+            down = graded_cells(core[-1], coarse(core[-1], nb), (nz-bottom_interface)*dz, grading)
+        else:
+            up = np.full(interface, dz)
+            down = np.full(nz-bottom_interface, dz)
         widths = np.r_[up, core, down]
         interface, bottom_interface = len(up), len(up)+len(core)
         nz = len(widths)
         z = np.r_[0., np.cumsum(widths[:-1])]-up.sum()
+        if align_layers:
+            # Keep represented faces exact even after long padding accumulation.
+            # Point sampling must not pick a different side due to cancellation.
+            z[interface+np.r_[0, np.cumsum(counts)]] = np.r_[0., np.cumsum(thick)]
         source_z = int(n_pml)+2
         reflect_z = int(np.argmin(abs(z+pad*dz)))
         transmit_z = int(np.argmin(abs(z-(thick.sum()+pad*dz))))
         if not source_z+2 < reflect_z < interface or transmit_z >= nz-int(n_pml)-2:
-            raise ValueError('Graded padding cannot fit source/monitors/PML; increase pad_scale.')
+            raise ValueError('Nonuniform padding cannot fit source/monitors/PML; increase pad_scale.')
     dual = .5*(widths+np.roll(widths, 1))
     cuts = np.r_[z[0]-2*widths.max(), 0., np.cumsum(thick), z[-1]+2*widths.max()]
     shape = (nz, ny, nx)
@@ -279,14 +295,14 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                 v = xp.moveaxis(xp.tensordot(weights, v, axes=((1,), (axis,))), 0, axis)
                 v = 1/v if use_harmonic else v
             v = xp.concat((xp.ones_like(v[:1])*upper, v, xp.ones_like(v[:1])*lower), axis=0)
-            if grading is None:
+            if not nonuniform:
                 centres, cell_widths = z+offsets[2]*dz, dz
             elif offsets[2]:
                 centres, cell_widths = z+widths/2, widths
             else:
                 centres = z+(widths-np.roll(widths, 1))/4
                 cell_widths = dual
-            if not subpixel and grading is not None:
+            if not subpixel and nonuniform:
                 centres = z+offsets[2]*widths
             weights = array(_weights(centres, cell_widths, cuts, subpixel=subpixel), dtype=v.dtype)
             v = 1/(xp.tensordot(weights, 1/v, axes=((1,), (0,)))) if harmonic and c == 2 else xp.tensordot(weights, v, axes=((1,), (0,)))
@@ -411,7 +427,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                         wavelengths=run_band, monitor_z=monitor_indices, backend=backend,
                         device=device, checkpoint_steps=checkpoint_steps, pml_cells=int(n_pml),
                         convergence_window=convergence_window, convergence_tol=convergence_tol, dft_subsample=dft_subsample,
-                        pml_wavelength=centre, z_spacing=widths if grading is not None else None, bloch_phase=(0., ky0*ly, kx0*lx))
+                        pml_wavelength=centre, z_spacing=widths if nonuniform else None, bloch_phase=(0., ky0*ly, kx0*lx))
         reference = fdtd_grid(xp.ones_like(epsilon)*et, mu=mt,
                               pml_background=(background[0], background[0]), **settings)
         actual = fdtd_grid(epsilon, mu=permeability, poles=native_poles,
@@ -448,7 +464,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
         kz_inc = propagation(nt, kx0, ky0)
         phase_ref, phase_trn = kz_top*z[reflect_z], kz_bot*(z[transmit_z]-thick.sum())
         phase_inc = kz_inc*z[reflect_z]
-        if grading is not None:
+        if nonuniform:
             def path_phase(index, kx_value, ky_value, start, stop):
                 segment = widths[min(start, stop):max(start, stop)]
                 transverse = (np.sin(kx_value*dx/2)/dx)**2+(np.sin(ky_value*dy/2)/dy)**2
@@ -513,9 +529,10 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                            spacing=(float(widths.min()), dy, dx), shape=shape, wavelengths=array(band),
                            pulse=dict(width=width, peak_time=5*width, frequency=1/centre,
                                       relative_spectrum=array(np.exp(-(np.pi*width*(1/band-1/centre))**2))),
-                           z_nodes=array(z), z_spacing=array(widths), grading=grading,
+                           z_nodes=array(z), z_spacing=array(widths), grading=grading, align_layers=bool(align_layers),
                            n_pml=int(n_pml), source_z=z[source_z], layer_planes=np.r_[0., np.cumsum(thick)],
-                           pml_bounds=(z[0], z[int(n_pml)], z[-int(n_pml)], z[-1]),
+                           # The final closing cell also belongs to the lower PML.
+                           pml_bounds=(z[0], z[int(n_pml)], z[-int(n_pml)], z[-1]+widths[-1]),
                            angles=np.arcsin(band/centre*np.sin(theta)),
                            normalization='uniform-medium reference; two electric-current bases')
         weights = xp.stack(weights)

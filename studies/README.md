@@ -12,6 +12,7 @@ makes them assertions, not studies.
 
 | Script | Question it answers |
 | --- | --- |
+| `fdtd_layer_alignment.py` | Does fitting every layer boundary reduce planar dispersive-interface errors under refinement? [Measurement](../docs/fdtd-layer-alignment.md). |
 | `fdtd_oblique_pulse.py` | Which oblique-metal errors come from pulse bandwidth, interface placement or unresolved diffraction? [Measurement](../docs/fdtd-oblique-pulse.md). |
 | `fdtd_mixed_metal.py` | How do low-loss mixed Drude/Lorentz amplitudes and damping sensitivities settle and refine? [Measurement](../docs/fdtd-mixed-metal.md). |
 | `fdtd_lorentz_decay.py` | Can material motion survive field decay, and how does a resonant slab settle toward Airy? [Measurement](../docs/fdtd-lorentz-decay.md). |

@@ -64,6 +64,11 @@ refine against Airy, and a selected TE metal grating refines against RCWA. This
 does not validate arbitrary low-loss patterns: the corresponding sharp-corner
 TM RCWA reference remains unconverged, and normal-component dispersive
 interface averaging remains approximate.
+The common engine also supports [layer-aligned z meshes](fdtd-layer-alignment.md):
+`align_layers=True` fits every planar layer face without changing its thickness.
+Capped-metal TE/TM tests refine against an independent characteristic matrix,
+including bottom incidence. This reduces a selected normal-interface error;
+it does not resolve the lateral metal-corner limitation above.
 Native three-axis Bloch phases and their gradients are also implemented, with
 exact discrete-mode checks and a live FDTDX complex-field/material-gradient
 comparison. Transverse phases may coexist with z CPML; longitudinal phase must

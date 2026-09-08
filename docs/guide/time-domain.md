@@ -719,7 +719,8 @@ result, diag = wavebit.fdtd(
 print(diag['shape'], diag['z_spacing'].min(), diag['z_spacing'].max())
 ```
 
-The structure remains uniform in z, with both outer interfaces exactly on nodes.
+With the default `align_layers=False`, the structure remains uniform in z, with
+both outer interfaces exactly on nodes. Internal layer interfaces may cut cells.
 Half-space padding grows gradually to at most twice the core width, capped by
 20 cells per shortest in-medium wavelength. If the requested mesh is already
 coarser than that cap, grading does not further coarsen it. This geometry policy
@@ -745,6 +746,48 @@ illumination data, and JAX/Torch derivatives through graded records and monitors
 The Meep reference uses a uniform grid, so the comparison establishes optical
 agreement under refinement rather than identical discretizations. No Meep
 implementation was read.
+
+### Aligning every layer boundary
+
+The explicit-backend scene API accepts `align_layers=True` independently of
+`grading`. For a layer of thickness `d`, it uses `ceil(d * resolution)` equal
+z cells with width `d / ceil(d * resolution)`. Every layer retains its physical
+thickness; every boundary lies on a z node. Cell widths inside the structure are
+at most `1/resolution`, and x/y sampling is unchanged. The default is `False`.
+
+```python
+result, diag = wavebit.fdtd(
+    structure=np.array([[[2.25]], [[1.5]]]), thickness=[.113, .213],
+    top=1., bot=1., period=.1, wavelength=1., tetm='tm', theta=.45,
+    backend=0, resolution=40, align_layers=True,
+    n_periods=50, pulse_width=3., truncation_order=0,
+    return_diagnostics=True,
+)
+print(diag['align_layers'], diag['layer_planes'])
+```
+
+Without grading, padding keeps width `1/resolution`; a jump in cell width can
+occur at a layer face. With grading, each half-space ramp starts from its adjacent
+layer's cell width, with the same coarsening policy described above. Grading does
+not smooth jumps between different layers. Material overlap weights, time step,
+CPML, phase extraction and field coordinates all use the realized mesh.
+`pml_bounds` includes the final closing cell at the outer boundary, so each
+reported absorber span contains all `n_pml` cells.
+
+Thin layers can force a much smaller global time step, including when a layer
+fits in just one cell. Inspect `diag['dt']`, `diag['steps']`, `diag['shape']`,
+`diag['z_nodes']` and `diag['z_spacing']` before scaling up. A fitted layer is not
+necessarily well resolved. Geometry and mesh selection are static; this is not
+thickness differentiation or adaptive refinement. The option requires a boolean
+and explicit backend selection; the legacy backend-omitted path does not accept it.
+
+Records, physical record bounds, frequency planes, bottom incidence and
+NumPy/JAX/Torch material and pole gradients retain their usual semantics.
+Bottom coordinates remain in the original stack frame. Alignment avoids mixing
+different layers inside a normal Ez cell, but does not change the dispersive
+averaging model or align lateral raster edges. The
+[multilayer measurements](../fdtd-layer-alignment.md) check complex TE/TM
+refinement and distinguish this planar improvement from unresolved metal corners.
 
 ### Pulse-decay diagnostics in the common engine
 
