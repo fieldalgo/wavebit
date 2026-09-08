@@ -64,6 +64,13 @@ refine against Airy, and a selected TE metal grating refines against RCWA. This
 does not validate arbitrary low-loss patterns: the corresponding sharp-corner
 TM RCWA reference remains unconverged, and normal-component dispersive
 interface averaging remains approximate.
+Optional [directional E/H extraction](fdtd-directional.md) separates outgoing
+and returning components using the discrete Maxwell admittance. Exact-mode,
+magnetic/conical, bottom-record and backend-gradient checks cover the extraction.
+A nearby long-lived TM oscillation remains a separate source-bandwidth and
+temporal-convergence concern; direction separation alone does not validate
+near-Rayleigh scattering.
+
 The common engine reports physical and discrete lower-cutoff classifications
 and supports independent diffraction-plane distances. A binary dielectric
 experiment at wavelengths 0.2% either side of a Rayleigh threshold exposes a

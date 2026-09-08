@@ -20,6 +20,7 @@ subtrees:
     - caption: Advanced
       entries:
       - file: guide/specs
+  - file: fdtd-directional
   - file: fdtd-rayleigh
   - file: fdtd-enz
   - file: fdtd-layer-alignment

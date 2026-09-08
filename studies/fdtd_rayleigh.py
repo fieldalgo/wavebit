@@ -44,17 +44,19 @@ def reference(order):
     return answer
 
 
-def run(expected, backend, resolution, periods=300, distance=None, width=3., pml_width=.3):
+def run(expected, backend, resolution, periods=300, distance=None, width=3., pml_width=.3,
+        method='electric', pad_scale=1.):
     results, d = wavebit.fdtd(
         structure=STRUCTURE, thickness=[.2], top=1., bot=1., period=PERIOD,
         wavelength=BAND, theta=THETA, tetm='te', truncation_order=1,
         backend=backend, resolution=resolution, n_pml=round(pml_width*resolution),
         n_periods=periods, align_layers=True, pulse_width=width,
+        diffraction_method=method, pad_scale=pad_scale,
         diffraction_distance=distance, convergence_window=200, return_diagnostics=True)
     info, c = d['diffraction'], d['convergence']
     return dict(
         resolution=resolution, periods=periods, distance=distance, pulse_width=width,
-        pml_width=pml_width, shape=d['shape'], dt=d['dt'], steps=d['steps'],
+        method=method, pml_width=pml_width, pad_scale=pad_scale, shape=d['shape'], dt=d['dt'], steps=d['steps'],
         comparison_duration=200*d['dt'],
         monitor_z=[info[name] for name in ('reflection_monitor_z', 'transmission_monitor_z')],
         error={pol: float(abs(amplitudes(results, 1, pol)-expected[pol]).max()) for pol in expected},
@@ -68,6 +70,11 @@ def run(expected, backend, resolution, periods=300, distance=None, width=3., pml
         state_decayed=bool(c['state_decayed']), scattering_settled=bool(c['scattering_settled']),
         amplitude_change={basis: max(float(abs(v).max()) for v in c[basis]['amplitude_change'].values())
                           for basis in ('s_inc', 'p_inc')},
+        tail_by_order={basis: np.max(np.abs(np.stack(list(c[basis]['amplitude_change'].values()))), axis=(0, 1, 2)).tolist()
+                       for basis in ('s_inc', 'p_inc')},
+        incoming_by_order={basis: {key: np.max(abs(np.asarray(value)), axis=(0, 1)).tolist()
+                                    for key, value in components.items()}
+                           for basis, components in info.get('incoming', {}).items()},
         field_decay=[float(b[k]['field_decay']) for b in c['bases'] for k in ('actual', 'reference')])
 
 

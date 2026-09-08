@@ -596,6 +596,65 @@ stepping. Orders are not silently discarded. See the
 channel and an unresolved TM response despite correct cutoff classification.
 
 
+### Directional diffraction extraction
+
+The default `diffraction_method='electric'` preserves the existing extraction.
+With an explicit backend, `diffraction_method='directional'` uses both E and H
+to separate propagation toward and away from the stack at each measurement plane:
+
+```python
+result, diag = wavebit.fdtd(
+    structure=np.full((1, 1, 1), 2.25), thickness=[.2],
+    top=1., bot=1., period=.1, wavelength=1., tetm='tm',
+    backend=0, resolution=40, n_pml=12,
+    diffraction_method='directional', diffraction_distance=.2,
+    return_diagnostics=True, convergence_window=100,
+)
+print(diag['diffraction']['incoming']['p_inc']['t_p'])
+```
+
+This option uses the **discrete Yee admittance**, including electric/magnetic
+spatial interpolation and their separate DFT timestamps. It supports conical
+incidence, magnetic half spaces, coupled order windows and evanescent branches.
+Each plane must have equal z-cell widths immediately above and below it; a
+plane inside a grading transition is refused. Grading elsewhere and aligned
+layer interiors remain available, but their propagation errors still need
+refinement. Discrete cutoff and longitudinal/temporal Nyquist singularities
+are refused before time stepping. The physical grazing refusal also applies.
+
+Reflection uses the backward actual field minus the backward uniform-medium
+reference. Transmission uses the forward actual field. Incident normalization
+uses the **forward** reference field. The four native solves, material gradients
+and interface reference planes remain the same. Time records use the forward
+reference calibration at the carrier. Calibrated convergence diagnostics use
+the same directional extraction on the full and prefix DFTs, including when
+`dft_subsample` exceeds one.
+
+`diag['diffraction']['method']` identifies the method. For directional extraction,
+`diag['diffraction']['incoming']` contains `given`, `s_inc` and `p_inc` mappings,
+each with complex `r_s`, `r_p`, `t_s`, `t_p` arrays of shape
+`(wavelength, order_y, order_x)`:
+
+| Keys | Meaning |
+| --- | --- |
+| `r_s`, `r_p` | Forward actual field minus forward reference at the reflection plane, referred to the incident interface. This excludes the prescribed reference illumination. |
+| `t_s`, `t_p` | Backward actual field at the transmission plane, referred to the outgoing interface. |
+
+The prefixes name the measurement **leg**, while these components travel in the
+opposite direction from the corresponding outgoing r/t. The p sign follows each
+wave's own propagation direction. Legs remain incidence-relative for bottom
+incidence. Values are unit-incident-E amplitudes, not reflected-power fractions;
+evanescent entries should not be interpreted as powers.
+
+Direction separation prevents an incoming wave from being added directly to an
+outgoing coefficient. It cannot undo how returning waves alter the illumination
+and structure response. A finite DFT also has endpoint terms while fields are
+still oscillating; its apparent incoming components may include that error.
+Compare amplitude tails, runtime, grid, padding and PML independently. See the
+[directional measurements](../fdtd-directional.md) for exact-mode verification
+and a near-Rayleigh example that still fails temporal convergence.
+
+
 ### Gaussian source width
 
 The explicit-backend scene adapter accepts `pulse_width`, a positive static scalar

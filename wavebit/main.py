@@ -91,6 +91,8 @@ def fdtd(stack=None, incidence=None, **kwargs):
     time units. ``diffraction_distance`` sets extraction-plane distances from
     the incident and outgoing interfaces without resizing the mesh. Diagnostics
     report physical and Yee transverse cutoff classifications for each order.
+    ``diffraction_method='directional'`` separates travelling E/H components
+    and reports incoming residuals; its measurement planes need locally uniform z cells.
     See the time-domain guide for scope and coordinate conventions.
 
     Args:
