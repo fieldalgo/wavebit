@@ -28,6 +28,23 @@ class NumpyTimeLoop:
             state, _ = step(state, n)
         return state
 
+    def advance_recorded(self, step, state, steps, checkpoint_steps, interval, capture):
+        """Keep requested snapshots, without retaining unsampled forward fields."""
+        state, _ = step(state, 0)
+        samples = [capture(state)]
+        count = (steps-1)//interval
+        for index in range(count):
+            start = 1+index*interval
+            def shifted(current, n, start=start):
+                return step(current, n+start)
+            state = self.advance(shifted, state, interval, checkpoint_steps)
+            samples.append(capture(state))
+        start = 1+count*interval
+        if start < steps:
+            state = self.advance(lambda current, n: step(current, n+start),
+                                 state, steps-start, checkpoint_steps)
+        return state, self.xp.stack(samples)
+
 
 class JaxTimeLoop(NumpyTimeLoop):
     def __init__(self, device=None, reference=None):
@@ -53,6 +70,27 @@ class JaxTimeLoop(NumpyTimeLoop):
         if tail:
             state = jax.lax.scan(step, state, self.array(np.arange(chunks*checkpoint_steps, steps)))[0]
         return state
+
+    def advance_recorded(self, step, state, steps, checkpoint_steps, interval, capture):
+        import jax
+        if self.device is not None:
+            state = jax.tree.map(lambda v: jax.device_put(v, self.device), state)
+        state, _ = step(state, 0)
+        first = capture(state)[None]
+        count = (steps-1)//interval
+        def block(current, index):
+            start = 1+index*interval
+            current = self.advance(lambda value, n: step(value, n+start),
+                                   current, interval, checkpoint_steps)
+            return current, capture(current)
+        if count:
+            state, samples = jax.lax.scan(jax.checkpoint(block), state, self.array(np.arange(count)))
+            first = self.xp.concat((first, samples), axis=0)
+        start = 1+count*interval
+        if start < steps:
+            state = self.advance(lambda current, n: step(current, n+start),
+                                 state, steps-start, checkpoint_steps)
+        return state, first
 
 
 class TorchTimeLoop(NumpyTimeLoop):

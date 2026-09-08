@@ -75,16 +75,25 @@ def _draw(diagnostics, data, frame, part, ax, vmax):
     label = {'real': f'Re {name}', 'imag': f'Im {name}', 'abs': f'|{name}|'}[part]
     unit = 'Z0 H, source units' if component.startswith('h') else 'source units'
     fig.colorbar(mesh, ax=ax, label=f'{label} ({unit})')
-    grid = diagnostics['grid']
-    npml = diagnostics['n_pml']
-    boundary_z = np.asarray(diagnostics['field_z'])
-    ax.axhspan(boundary_z[0], boundary_z[npml], color='gray', alpha=0.2, label='PML')
-    ax.axhspan(boundary_z[-1 - npml], boundary_z[-1], color='gray', alpha=0.2)
-    kt = grid.k_tfsf
-    tfsf = 0.5 * (boundary_z[kt - 1] + boundary_z[kt])
-    ax.axhline(tfsf, color='darkorange', linestyle='--', linewidth=1.2,
-               label='TFSF (scattered field above)')
-    for i, depth in enumerate(np.r_[0.0, np.cumsum(grid.thickness)]):
+    grid = diagnostics.get('grid')
+    if grid is None:
+        low, inner_low, inner_high, high = diagnostics['pml_bounds']
+        source = diagnostics['source_z']
+        source_label = 'Current sheet (total field on both sides)'
+        layer_planes = diagnostics['layer_planes']
+    else:
+        npml = diagnostics['n_pml']
+        boundary_z = np.asarray(diagnostics['field_z'])
+        low, inner_low = boundary_z[0], boundary_z[npml]
+        inner_high, high = boundary_z[-1-npml], boundary_z[-1]
+        kt = grid.k_tfsf
+        source = .5*(boundary_z[kt-1]+boundary_z[kt])
+        source_label = 'TFSF (scattered field above)'
+        layer_planes = np.r_[0., np.cumsum(grid.thickness)]
+    ax.axhspan(low, inner_low, color='gray', alpha=.2, label='PML')
+    ax.axhspan(inner_high, high, color='gray', alpha=.2)
+    ax.axhline(source, color='darkorange', linestyle='--', linewidth=1.2, label=source_label)
+    for i, depth in enumerate(layer_planes):
         ax.axhline(depth, color='black', linewidth=0.7, linestyle=':',
                    label='Layer planes' if i == 0 else None)
     ax.set(xlabel='x (length units)', ylabel='z (length units)', ylim=(z[-1], z[0]))

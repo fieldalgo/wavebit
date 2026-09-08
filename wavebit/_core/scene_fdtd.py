@@ -34,14 +34,21 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                      psi=None, chi=None, polarization=None, mu=None,
                      truncation_order=None, dispersion=None, poles=None,
                      pad_scale=1., incidence_side='top', lattice=None,
-                     checkpoint_steps=32, return_diagnostics=False):
+                     checkpoint_steps=32, return_diagnostics=False,
+                     field_monitors=None, record_field=None, record_components=None):
     """Solve a static rectangular scene with NumPy/JAX/Torch material gradients.
 
     Explicit resolution is required: optimizing materials must not resize the
     grid. Half spaces, geometry, wavelength and incidence angles are static.
-    Time records, nonuniform grading and bottom incidence use the legacy API;
+    Nonuniform grading and bottom incidence use the legacy API;
     they are not silently executed by a different backend.
     """
+    if (field_monitors is not None or record_field is not None) and not return_diagnostics:
+        raise ValueError('field_monitors/record_field require return_diagnostics=True.')
+    if field_monitors is not None and (not isinstance(field_monitors, dict) or not field_monitors):
+        raise ValueError('field_monitors must be a nonempty mapping of names to z coordinates.')
+    if record_components is not None and record_field is None:
+        raise ValueError('record_components requires record_field.')
     if lattice is not None or incidence_side != 'top':
         raise ValueError('The common scene engine requires rectangular period and top incidence.')
     if resolution is None or not np.isfinite(resolution) or resolution <= 0:
@@ -191,6 +198,27 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     def modes(spectrum):
         tangential = xp.sum(spectrum[:, :, :2, None, None]*transform[None, None, None], axis=(-2, -1))/(nx*ny)
         return tangential/correction[None, None]
+    monitor_indices = [reflect_z, transmit_z]
+    monitor_brackets = {}
+    for name, coordinate in (field_monitors or {}).items():
+        if not isinstance(name, str) or not name:
+            raise ValueError('Monitor names must be nonempty strings.')
+        if np.ndim(coordinate) or np.iscomplexobj(coordinate) or not np.isfinite(coordinate):
+            raise ValueError('Monitor z must be a finite real scalar.')
+        if coordinate < z[int(n_pml)+1] or coordinate > z[-int(n_pml)-2]:
+            raise ValueError('Monitor must lie in the interior outside the PML.')
+        hi = int(np.searchsorted(z, coordinate))
+        lo = hi if z[hi] == coordinate else hi-1
+        if lo <= source_z <= hi:
+            raise ValueError('Monitor interpolation must not touch the current sheet.')
+        for index in (lo, hi):
+            if index not in monitor_indices:
+                monitor_indices.append(index)
+        monitor_brackets[name] = (monitor_indices.index(lo), monitor_indices.index(hi),
+                                  0. if lo == hi else (coordinate-z[lo])/dz)
+    # Include the carrier frequency for causal, centre-calibrated time records.
+    run_band = np.r_[band, centre] if record_field is not None else band
+    native_runs = []
     runs = []
     stable = array(True)
     for vector in ((-np.sin(phi), np.cos(phi)), (-np.cos(phi), -np.sin(phi))):
@@ -200,15 +228,17 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
             yy = (np.arange(ny)+(.5 if c == 1 else 0))*dy
             source[c, source_z] = vector[c]*np.exp(1j*(kx0*xx[None, :]+ky0*yy[:, None]))
         settings = dict(spacing=(dz, dy, dx), dt=dt, steps=steps, source=source, pulse=pulse,
-                        wavelengths=band, monitor_z=[reflect_z, transmit_z], backend=backend,
+                        wavelengths=run_band, monitor_z=monitor_indices, backend=backend,
                         device=device, checkpoint_steps=checkpoint_steps, pml_cells=int(n_pml),
                         pml_wavelength=centre, bloch_phase=(0., ky0*ly, kx0*lx))
         reference = fdtd_grid(xp.ones_like(epsilon)*et, mu=mt,
                               pml_background=(background[0], background[0]), **settings)
         actual = fdtd_grid(epsilon, mu=permeability, poles=native_poles,
-                           pml_background=background, **settings)
+                           pml_background=background, record_field=record_field,
+                           record_components=record_components, **settings)
         stable = stable & reference['stable'] & actual['stable']
         runs.append((modes(reference['electric_spectrum']), modes(actual['electric_spectrum'])))
+        native_runs.append(actual)
     ResultType, SubType = Result, ResultSub
     if backend in (1, 'jax'):
         from ..backends.jax_backend import ResultJax, ResultSubJax
@@ -218,7 +248,8 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     if _concrete(xp.isfinite(a_s) & xp.isfinite(a_p)) is False:
         raise ValueError('Incident polarization must be finite and nonzero.')
     results = []
-    for f, wl in enumerate(band):
+    weights = []
+    for f, wl in enumerate(run_band):
         k0 = 2*np.pi/wl
         qtop = np.sqrt((nt**2-(kx/k0)**2-(ky/k0)**2).astype(complex))
         qbot = np.sqrt((nb**2-(kx/k0)**2-(ky/k0)**2).astype(complex))
@@ -229,7 +260,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
             return 2/dz*np.arcsin(dz*np.sqrt(np.asarray(square, complex)))
         kz_top, kz_bot = array(propagation(nt, kx, ky)), array(propagation(nb, kx, ky))
         kz_inc = propagation(nt, kx0, ky0)
-        if np.min(np.abs(qtop)) < 1e-8 or np.min(np.abs(qbot)) < 1e-8:
+        if f < len(band) and (np.min(np.abs(qtop)) < 1e-8 or np.min(np.abs(qbot)) < 1e-8):
             raise ValueError('A retained diffraction order is exactly grazing; adjust wavelength/window.')
         qt, qb = array(qtop), array(qbot)
         incident_columns, outgoing = [], []
@@ -237,13 +268,17 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
             inc = ref[f, 0, :, halfy, halfx]*np.exp(-1j*kz_inc*z[reflect_z])
             incident_columns.append(xp.stack((-np.sin(phi)*inc[0]+np.cos(phi)*inc[1],
                                               -nt/qi*(np.cos(phi)*inc[0]+np.sin(phi)*inc[1]))))
-            reflected = (act[f, 0]-ref[f, 0])*xp.exp(1j*kz_top*z[reflect_z])
-            transmitted = act[f, 1]*xp.exp(-1j*kz_bot*(z[transmit_z]-thick.sum()))
-            outgoing.append(xp.stack((-si*reflected[0]+co*reflected[1],
-                                      nt/qt*(co*reflected[0]+si*reflected[1]),
-                                      -si*transmitted[0]+co*transmitted[1],
-                                      -nb/qb*(co*transmitted[0]+si*transmitted[1]))))
+            if f < len(band):
+                reflected = (act[f, 0]-ref[f, 0])*xp.exp(1j*kz_top*z[reflect_z])
+                transmitted = act[f, 1]*xp.exp(-1j*kz_bot*(z[transmit_z]-thick.sum()))
+                outgoing.append(xp.stack((-si*reflected[0]+co*reflected[1],
+                                          nt/qt*(co*reflected[0]+si*reflected[1]),
+                                          -si*transmitted[0]+co*transmitted[1],
+                                          -nb/qb*(co*transmitted[0]+si*transmitted[1]))))
         calibration = xp.linalg.inv(xp.stack(incident_columns, axis=1))
+        weights.append(calibration @ xp.stack((a_s, a_p)))
+        if f == len(band):
+            continue
         scattering = xp.tensordot(xp.stack(outgoing, axis=-1), calibration, axes=((-1,), (0,)))
         def pack(amplitudes):
             rs, rp, ts, tp = xp.where(stable, amplitudes, array(complex(float("nan"), 0.)))
@@ -254,9 +289,59 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
         results.append(ResultType(pack(scattering[..., 0]*a_s+scattering[..., 1]*a_p),
                                   pack(scattering[..., 0]), pack(scattering[..., 1]),
                                   order_window=((0, halfx), (0, halfy))))
+    results = results[:len(band)]
     result = results[0] if np.ndim(wavelength) == 0 else results
     if return_diagnostics:
-        return result, dict(stable=stable, dt=dt, steps=steps, spacing=(dz, dy, dx), shape=shape,
-                            angles=np.arcsin(band/centre*np.sin(theta)),
-                            normalization='uniform-medium reference; two electric-current bases')
+        diagnostics = dict(stable=stable, dt=dt, steps=steps, n_steps=steps,
+                           spacing=(dz, dy, dx), shape=shape, wavelengths=array(band),
+                           n_pml=int(n_pml), source_z=z[source_z], layer_planes=np.r_[0., np.cumsum(thick)],
+                           pml_bounds=(z[0], z[int(n_pml)], z[-int(n_pml)], z[-1]),
+                           angles=np.arcsin(band/centre*np.sin(theta)),
+                           normalization='uniform-medium reference; two electric-current bases')
+        weights = xp.stack(weights)
+        monitors = {}
+        for name, (lo, hi, fraction) in monitor_brackets.items():
+            fields = {}
+            for family, key in (('e', 'electric_spectrum'), ('h', 'magnetic_spectrum')):
+                combined = sum(native[key][:len(band)]*weights[:len(band), leg, None, None, None, None]
+                               for leg, native in enumerate(native_runs))
+                plane = (1-fraction)*combined[:, lo]+fraction*combined[:, hi]
+                if raster.shape[1] == 1:
+                    plane = plane[:, :, :1]
+                for component, axis in enumerate('xyz'):
+                    fields[family+axis] = plane[:, component]
+            electric = xp.stack([fields['e'+axis] for axis in 'xyz'], axis=-1)
+            magnetic = xp.stack([fields['h'+axis] for axis in 'xyz'], axis=-1)
+            density = .5*xp.real(xp.linalg.cross(electric, xp.conj(magnetic), axis=-1))
+            area = lx*(ly if raster.shape[1] > 1 else 1.)
+            monitors[name] = dict(fields=fields, z=float(field_monitors[name]),
+                                  x=array(np.arange(nx)*dx-lx/2),
+                                  y=array(np.arange(ny)*dy-ly/2 if raster.shape[1] > 1 else [0.]),
+                                  wavelengths=array(band), flux_density=density,
+                                  power_z=xp.mean(density[..., 2], axis=(-2, -1))*area,
+                                  cell_area=area, per_unit_y=raster.shape[1] == 1,
+                                  region='total', normalization='unit incident E at top interface')
+        diagnostics['monitors'] = monitors
+        if record_field is not None:
+            # Constant centre-frequency coefficients preserve a causal waveform.
+            # Frequency-by-frequency calibration cannot be applied to time samples.
+            carrier_spectrum = array(np.sum(pulse*np.exp(2j*np.pi*(time+dt)/centre))*dt)
+            coefficients = weights[-1]*carrier_spectrum
+            fields = {}
+            for name, first in native_runs[0]['fields'].items():
+                values = sum(coefficients[leg]*native['fields'][name]['values']
+                             for leg, native in enumerate(native_runs))
+                if raster.shape[1] == 1:
+                    values = values[:, :, :1]
+                fields[name] = dict(first, values=values, x=first['x']-lx/2,
+                                    y=first['y']-ly/2 if raster.shape[1] > 1 else array([0.]),
+                                    z=first['z']-interface*dz)
+            primary = next((name for name in ('ey', 'ex') if name in fields), next(iter(fields)))
+            first = fields[primary]
+            diagnostics.update(field_e=first['values'], field_e_component=primary,
+                               field_t=first['t'], field_z=first['z'], field_x=first['x'], field_y=first['y'])
+            diagnostics.update(fields=fields, field_temporal_representation='positive_frequency_carrier',
+                               field_normalization='unit incident E at carrier frequency',
+                               field_carrier_wavelength=centre)
+        return result, diagnostics
     return result

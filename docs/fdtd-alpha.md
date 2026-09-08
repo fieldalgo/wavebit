@@ -21,7 +21,9 @@ An accepted input is not a guarantee of accuracy for every combination in this t
 
 The legacy Stack/Incidence FDTD path does not provide autodiff or JAX/PyTorch execution.
 The explicit-backend common scene adapter now provides both, with static geometry
-and material/pole gradients; see the [guide](guide/time-domain.md#common-scene-adapter).
+and material/pole gradients. Common-backend time histories and user z monitors
+are also available, with native component staggering and centre-calibrated
+causal time records; see the [guide](guide/time-domain.md#common-scene-adapter).
 Neither scene path provides MPI execution, bottom incidence,
 skewed lattices, parametric geometry input, anisotropic tensors,
 or complex-angle incidence. Complex Jones states support diffraction and transverse time records through

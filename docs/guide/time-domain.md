@@ -346,8 +346,8 @@ JAX uses compiled scans and recomputes blocks during reverse differentiation.
 Torch uses eager autograd with non-reentrant block checkpointing; Torch compile
 has not been validated.
 `checkpoint_steps` trades stored block boundaries against recomputation and
-within-block storage. No time history is returned, but reverse-mode memory still
-grows with simulation length. Shapes, spacing, step count and monitor configuration
+within-block storage. Time history is optional via `record_field=N`; reverse-mode
+memory and requested snapshot storage still grow with simulation length. Shapes, spacing, step count and monitor configuration
 are static. Materials, source, pulse and initial fields remain differentiable.
 Choose a fixed dt valid throughout optimization: concrete invalid materials or
 CFL violations raise; traced coefficients expose `stable` in the result and must
@@ -522,11 +522,9 @@ PML width, padding and duration for each new structure, especially resonances.
 Exact grazing orders and orders beyond the grid's sampling limit are refused.
 Far-plane extrapolation of strongly evanescent amplitudes is ill-conditioned.
 
-The explicit-backend adapter currently does not accept time-history recording,
-point probes, user-selected field monitors, graded z meshes, bottom incidence,
-skewed lattices or geometry derivatives. Omit `backend` for supported legacy
-recording/graded-mesh features; unsupported explicit-backend keywords raise an
-error. There is no implicit backend fallback. Actual GPU execution remains
+The explicit-backend adapter currently does not accept graded z meshes, bottom
+incidence, skewed lattices or geometry derivatives. Omit `backend` for legacy
+graded-mesh features; unsupported explicit-backend keywords raise an error. There is no implicit backend fallback. Actual GPU execution remains
 unverified on this CPU-only machine.
 
 Tests compare complex slab amplitudes with Airy under refinement, magnetic
@@ -535,3 +533,62 @@ transmission with stored Meep public-API data, and JAX/Torch material derivative
 with finite differences. Crossed dispersive scenes additionally check Torch/
 NumPy agreement and a pole-strength derivative. These scene checks supplement
 the native-core Meep/FDTDX field and derivative references.
+
+
+### Shared-backend time records and user monitors
+
+```python
+result, diag = wavebit.fdtd(
+    scene, Incidence(wavelength=1., tetm='te'), backend=2,
+    resolution=20, n_periods=30, truncation_order=0,
+    record_field=5, record_components='all',
+    field_monitors={'inside': .15, 'after': .6},
+    return_diagnostics=True,
+)
+trajectory = diag['fields']['ey']      # values(time,z,y,x), t/z/y/x axes
+plane = diag['monitors']['after']     # six fields(wavelength,y,x), flux, power
+```
+
+Both options now use the common NumPy/JAX/Torch stepper. Records sample after
+steps `0,N,2N,...`; E has time `(step+1)*dt` and H `(step+.5)*dt`. Each component
+retains its native Yee coordinates. An invariant-y raster returns a singleton
+y axis. The low-level `fdtd_grid` accepts the same recording options and retains
+its full native grid. All six components are recorded by default when recording
+is enabled; select a component or sequence to reduce storage. JAX scans across
+record intervals; Torch checkpoints inside them. Unsampled forward fields are
+not added to the record. Backpropagation and snapshot memory still need sizing.
+
+User monitor coordinates are relative to the top interface (`z=0`). Monitors
+interpolate the core's collocated node planes linearly in z, and must stay outside
+PML and away from the current sheet. Fields are calibrated independently at each
+requested wavelength to unit incident electric amplitude at the top interface.
+`power_z` integrates the cycle-averaged normalized `E x H* / 2`; invariant-y
+outputs are per unit y length. Spatial interpolation causes finite-grid errors;
+refine the grid when comparing flux with modal diffraction efficiencies.
+
+Time records use **constant centre-frequency calibration**, multiplied by the
+pulse's carrier-frequency spectrum. They remain a causal complex carrier with
+real physical field `Re(values)`. This fixes the incident Jones state at the
+carrier wavelength. Away from that wavelength a fixed current sheet's emitted
+polarization need not equal the independently normalized frequency-domain
+monitor state. Applying a wavelength-dependent calibration directly to time
+samples would not preserve this waveform. At the carrier, an offline record DFT
+divided by the source spectrum matches the streaming normalized monitor.
+
+The current sheet radiates in both directions. Records and user monitors contain
+**total fields on both sides**, unlike the legacy TFSF scattered-field region.
+Diffraction reflection still subtracts the separate uniform reference run.
+Diagnostics name the normalization, temporal representation, source coordinate,
+layer planes and PML boundaries. Existing NumPy plotting, animation and point
+probe helpers accept these scene records and label the current sheet correctly.
+These visualization/probe helpers remain NumPy postprocessing; convert/detach
+JAX/Torch diagnostics explicitly before using them. Native record and monitor
+arrays themselves preserve material and polarization gradients. JIT functions
+can return selected array outputs; the descriptive diagnostic strings are not
+JAX array outputs.
+
+The recording tests propagate an independent exact discrete Yee eigenmode,
+compare streaming and offline DFTs, check every recording-interval tail, compare
+three backends, differentiate histories and monitor powers, preserve circular
+quadrature, and exercise plot/probe compatibility. Enabling recording leaves the
+diffraction result unchanged.

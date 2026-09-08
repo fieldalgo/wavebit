@@ -15,7 +15,8 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
               wavelengths=(), monitor_z=(), backend='numpy', device=None,
               checkpoint_steps=32, absorber_cells=0, poles=(),
               pml_cells=0, pml_wavelength=1., bloch_phase=(0., 0., 0.),
-              pml_background=((1., 1.), (1., 1.))):
+              pml_background=((1., 1.), (1., 1.)),
+              record_field=None, record_components=None):
     """Advance a 3D Yee grid and accumulate frequency-domain field planes.
 
     epsilon: positive scalar-per-cell (z,y,x) or diagonal/native (3,z,y,x)
@@ -55,11 +56,24 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
     loop with non-reentrant block checkpointing. Both differentiate materials,
     initial fields, sources, poles and Bloch phases. device selects hardware;
     Torch defaults to epsilon's device, or CPU for non-tensor epsilon. Unavailable
-    hardware raises. No full time history is returned. Torch compile is not a
+    hardware raises. Optional record_field=N keeps steps 0,N,2N,... after
+    their updates. record_components selects ex/ey/ez/hx/hy/hz (default all).
+    fields contains native values(time,z,y,x), staggered coordinates and E/H
+    timestamps. Records retain gradients and allocate only requested snapshots. Torch compile is not a
     validated execution mode; JAX jit and Torch eager autograd are tested.
     """
     runtime = time_loop_backend(backend, device=device, reference=epsilon)
     xp, array = runtime.xp, runtime.array
+    names = ('ex', 'ey', 'ez', 'hx', 'hy', 'hz')
+    if record_field is not None:
+        if isinstance(record_field, (bool, np.bool_)) or not isinstance(record_field, (int, np.integer)) or record_field <= 0:
+            raise ValueError('record_field must be a positive integer interval.')
+    if record_components is not None and record_field is None:
+        raise ValueError('record_components requires record_field.')
+    selected = names if record_components is None or (isinstance(record_components, str) and record_components == 'all') else record_components
+    selected = (selected,) if isinstance(selected, str) else tuple(selected)
+    if not selected or len(set(selected)) != len(selected) or any(v not in names for v in selected):
+        raise ValueError('record_components must name unique ex/ey/ez/hx/hy/hz components.')
     steps = operator.index(steps)
     checkpoint_steps = operator.index(checkpoint_steps)
     absorber_cells = operator.index(absorber_cells)
@@ -245,11 +259,27 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
 
     polarization = tuple(runtime.zeros(shape, dtype=dtype) for _ in pole_coefficients)
     state = (e, h, accum, accum, auxiliary, auxiliary, polarization, polarization)
-    state = runtime.advance(step, state, steps, checkpoint_steps)
+    records = {}
+    if record_field is None:
+        state = runtime.advance(step, state, steps, checkpoint_steps)
+    else:
+        def capture(current):
+            return xp.stack([current[names.index(name)//3][names.index(name)%3] for name in selected])
+        state, history = runtime.advance_recorded(step, state, steps, checkpoint_steps, record_field, capture)
+        stamps = array((np.arange(0, steps, record_field)+1)*dt)
+        for index, name in enumerate(selected):
+            component = names.index(name)%3
+            offsets = np.ones(3)*.5 if name.startswith('h') else np.zeros(3)
+            offsets[component] = 0. if name.startswith('h') else .5
+            records[name] = dict(values=history[:, index],
+                                 t=stamps-(dt/2 if name.startswith('h') else 0.),
+                                 x=array((np.arange(shape[3])+offsets[0])*spacing[2]),
+                                 y=array((np.arange(shape[2])+offsets[1])*spacing[1]),
+                                 z=array((np.arange(shape[1])+offsets[2])*spacing[0]))
     e, h, fe, fh, _, _, polarization, previous = state
     flux = .5*xp.real(xp.linalg.cross(xp.moveaxis(fe, 2, -1), xp.conj(xp.moveaxis(fh, 2, -1)), axis=-1))
     power = xp.sum(flux[..., 2], axis=(-2, -1))*spacing[1]*spacing[2]
-    return dict(E=e, H=h, polarization=polarization, previous_polarization=previous,
+    return dict(E=e, H=h, fields=records, polarization=polarization, previous_polarization=previous,
                 electric_spectrum=fe, magnetic_spectrum=fh,
                 flux_density=flux, power_z=power, wavelengths=array(band), monitor_z=iz,
                 stable=stable, cfl_dt=bound, time=steps*dt,

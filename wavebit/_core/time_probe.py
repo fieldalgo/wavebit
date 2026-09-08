@@ -58,7 +58,7 @@ def sample_fdtd_fields(diagnostics, *, z, x=0., y=0., t=None):
     if (grid is not None and (getattr(grid, 'kx_inc', 0.) != 0. or getattr(grid, 'ky_inc', 0.) != 0.)
             and diagnostics.get('field_temporal_representation') != 'positive_frequency_carrier'):
         raise ValueError('Bloch probes require positive-frequency-carrier records; regenerate the time record.')
-    source_z = None if grid is None else .5*(grid.z_node[grid.k_tfsf-1]+grid.z_node[grid.k_tfsf])
+    source_z = diagnostics.get('source_z') if grid is None else .5*(grid.z_node[grid.k_tfsf-1]+grid.z_node[grid.k_tfsf])
     traces, times = [], []
     for name in _COMPONENTS:
         record = records[name]
@@ -78,7 +78,8 @@ def sample_fdtd_fields(diagnostics, *, z, x=0., y=0., t=None):
         lower, upper, _ = brackets['z']
         if source_z is not None and (point['z'] == source_z or
                 axes['z'][lower] <= source_z <= axes['z'][upper]):
-            raise ValueError('The point interpolation crosses the TFSF discontinuity; choose a point farther from it.')
+            boundary = 'source' if grid is None else 'TFSF'
+            raise ValueError(f'The point interpolation crosses the {boundary} discontinuity; choose a point farther from it.')
         trace = np.zeros(len(axes['t']), dtype=complex)
         for iz, wz in ((brackets['z'][0], 1-brackets['z'][2]), (brackets['z'][1], brackets['z'][2])):
             for iy, wy in ((brackets['y'][0], 1-brackets['y'][2]), (brackets['y'][1], brackets['y'][2])):
@@ -108,7 +109,8 @@ def sample_fdtd_fields(diagnostics, *, z, x=0., y=0., t=None):
         warnings.warn('Time record undersamples the optical period; interpolation cannot recover '
                       'missing oscillations. Reduce record_field.', UserWarning, stacklevel=2)
     sampled = np.stack([np.interp(target, axis, trace) for axis, trace in zip(times, traces)], axis=1)
-    region = None if source_z is None else ('total' if point['z'] > source_z else 'scattered')
+    region = ('total' if grid is None and source_z is not None else
+              None if source_z is None else ('total' if point['z'] > source_z else 'scattered'))
     return dict(t=target, **point, E=sampled[:, :3], H=sampled[:, 3:], region=region)
 
 

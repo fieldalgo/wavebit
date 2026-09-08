@@ -82,6 +82,8 @@ def fdtd(stack=None, incidence=None, **kwargs):
     preserves time records and graded meshes. Explicit ``backend=0/1/2`` (or
     ``numpy/jax/torch``) selects the shared uniform-grid scene engine, requires
     explicit resolution, and differentiates raster materials and electric poles.
+    Both paths support time records and user frequency planes; source and
+    normalization conventions are documented in the time-domain guide.
     Geometry and half spaces are static; see the time-domain guide for scope.
 
     Args:
