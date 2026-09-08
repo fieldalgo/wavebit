@@ -17,6 +17,8 @@ makes them assertions, not studies.
 | `fdtd_ringdown.py` | Does the remaining late-time signal behave like fixed damped modes or a cutoff-related algebraic tail? [Measurement](../docs/fdtd-ringdown.md). |
 | `fdtd_pulse_notches.py` | Does suppressing a discrete cutoff in the source reduce finite-time scattering error across duration, grid and notch choices? [Measurement](../docs/fdtd-pulse-notches.md). |
 | `fdtd_source_clearance.py` | How do fixed-source boundary clearance and fixed-boundary source movement separately affect near-cutoff scattering? [Measurement](../docs/fdtd-source-clearance.md). |
+| `fdtd_lattice_reference.py` | How much near-cutoff scattering error comes from the Yee lattice and from finite CPML boundaries, before any time truncation? [Measurement](../docs/fdtd-lattice-reference.md). |
+| `fdtd_lattice_time_check.py` | Does a shaped pulse with stronger, wider CPML approach the independently solved finite-grid harmonic limit? [Measurement](../docs/fdtd-lattice-reference.md). |
 | `fdtd_rayleigh.py` | Can a cutoff classification agree while near-Rayleigh scattering remains unsettled? [Measurement](../docs/fdtd-rayleigh.md). |
 | `fdtd_enz.py` | Which errors remain in a lossy ENZ film after its two incidence columns settle? [Measurement](../docs/fdtd-enz.md). |
 | `fdtd_layer_alignment.py` | Does fitting every layer boundary reduce planar dispersive-interface errors under refinement? [Measurement](../docs/fdtd-layer-alignment.md). |

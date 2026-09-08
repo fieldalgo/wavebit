@@ -67,6 +67,17 @@ def time_delay_phase(xp, frequency, delay):
     return xp.exp(-2j*np.pi*frequency*delay)
 
 
+def yee_longitudinal_phase(xp, q, step_frequency, spacing):
+    """Outgoing phase advance of a uniform Yee cell on the passive branch.
+
+    q is the normalized transverse-complement root from boundary_kz, and
+    step_frequency = 2*sin(omega*dt/2)/dt. The principal complex asin
+    continues positive propagating q into decaying evanescent/Bloch-gap modes.
+    exp(1j*phase) advances toward the outgoing half space without growth.
+    """
+    return 2*xp.asin(q*step_frequency*spacing/2+0j)
+
+
 _FLAT = 1e-12      # below this, a real part counts as zero and the tie-break decides
 
 _PI = 3.141592653589793

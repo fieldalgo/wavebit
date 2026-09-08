@@ -57,6 +57,11 @@ def run(expected, backend, resolution, periods=300, distance=None, width=3., pml
         diffraction_method=method, pad_scale=pad_scale, pml_reflection=pml_reflection,
         diffraction_distance=distance, convergence_window=convergence_window, return_diagnostics=True)
     info, c = d['diffraction'], d['convergence']
+    earlier = {}
+    for pol, component, basis in (('te', 's', 's_inc'), ('tm', 'p', 'p_inc')):
+        delta = np.stack([np.asarray(c[basis]['amplitude_change'][key+'_'+component])
+                          for key in ('r', 't')], axis=1)[:, :, 0, 1+np.array(ORDERS)]
+        earlier[pol] = amplitudes(results, 1, pol)-delta if np.isfinite(delta).all() else None
     return dict(
         resolution=resolution, periods=periods, distance=distance, pulse_width=width,
         method=method, pml_width=pml_width, pml_reflection=d['pml_reflection'],
@@ -70,6 +75,8 @@ def run(expected, backend, resolution, periods=300, distance=None, width=3., pml
         error={pol: float(abs(amplitudes(results, 1, pol)-expected[pol]).max()) for pol in expected},
         amplitude_real={pol: amplitudes(results, 1, pol).real.tolist() for pol in expected},
         amplitude_imag={pol: amplitudes(results, 1, pol).imag.tolist() for pol in expected},
+        prefix_amplitude_real={pol: value.real.tolist() if value is not None else None for pol, value in earlier.items()},
+        prefix_amplitude_imag={pol: value.imag.tolist() if value is not None else None for pol, value in earlier.items()},
         energy={pol: [float(np.asarray(getattr(r, basis).R+getattr(r, basis).T).sum()) for r in results]
                 for pol, basis in (('te', 's_inc'), ('tm', 'p_inc'))},
         cutoff_resolved=bool(info['cutoff_resolved']),

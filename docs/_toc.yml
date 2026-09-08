@@ -25,6 +25,7 @@ subtrees:
   - file: fdtd-ringdown
   - file: fdtd-pulse-notches
   - file: fdtd-source-clearance
+  - file: fdtd-lattice-reference
   - file: fdtd-rayleigh
   - file: fdtd-enz
   - file: fdtd-layer-alignment

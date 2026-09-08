@@ -88,6 +88,12 @@ The [independent source-position control](fdtd-source-clearance.md) now allows
 fixed illumination and measurement planes when padding changes. In the tested
 near-cutoff case, separate source and clearance changes are much smaller than
 the remaining RCWA discrepancy; they do not settle its time or grid error.
+An [independent harmonic lattice reference](fdtd-lattice-reference.md) now
+separates these contributions in that uniform-grid dielectric case. Its exact
+outgoing-boundary solution refines approximately at second order against RCWA.
+A separate finite-CPML solve exposes boundary errors hidden by cancellation
+with lattice and finite-time errors. These are bounded study instruments,
+sharing the native rasterization, rather than general frequency-domain APIs.
 
 The common engine reports physical and discrete lower-cutoff classifications
 and supports independent diffraction-plane distances. A binary dielectric
