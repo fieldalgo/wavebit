@@ -11,7 +11,7 @@ before using a new combination of geometry, incidence and material.
 It returns the answer directly, in the same `Result` container as RCWA. With no
 `backend` argument, it preserves the legacy NumPy solver, including time records
 and graded meshes. Explicit `backend=0/1/2` (or `numpy/jax/torch`) selects the
-shared uniform-grid engine and supports material automatic differentiation.
+shared Yee engine and supports material automatic differentiation.
 See [the common scene adapter](#common-scene-adapter) for its supported inputs.
 
 ## The same scene, both ways
@@ -300,7 +300,7 @@ not a whole-volume harmonic field reconstruction.
 
 ## Shared NumPy, JAX and Torch native grids
 
-`wavebit.fdtd_grid` is a uniform-grid interface sharing one Array API calculation
+`wavebit.fdtd_grid` is a Cartesian Yee interface sharing one Array API calculation
 core across NumPy, JAX and Torch. `backend=0/1/2` has the same meaning as RCWA;
 `'numpy'/'jax'/'torch'` remain accepted aliases.
 It accepts native `(z,y,x)` permittivity, or `(3,z,y,x)` diagonal coefficients,
@@ -338,7 +338,8 @@ All axes are periodic by default. `absorber_cells=N` adds graded electric/magnet
 at both z ends; it is not CPML and needs a width/reflection convergence check.
 `pml_cells` additionally provides convolutional PML at two homogeneous z ends;
 see the material/boundary section below. This engine does not yet accept
-nonuniform meshes. The common scene adapter below converts Stack/Incidence inputs. The legacy scene solver
+curved or skew meshes. Static nonuniform z widths and scene grading are now supported.
+The common scene adapter below converts Stack/Incidence inputs. The legacy scene solver
 retains those capabilities on NumPy; selecting a JAX backend on that interface
 is still unsupported.
 
@@ -522,9 +523,8 @@ PML width, padding and duration for each new structure, especially resonances.
 Exact grazing orders and orders beyond the grid's sampling limit are refused.
 Far-plane extrapolation of strongly evanescent amplitudes is ill-conditioned.
 
-The explicit-backend adapter currently does not accept graded z meshes, skewed
-lattices or geometry derivatives. Omit `backend` for legacy
-graded-mesh features; unsupported explicit-backend keywords raise an error. There is no implicit backend fallback. Actual GPU execution remains
+The explicit-backend adapter currently does not accept skewed lattices or geometry
+derivatives; unsupported explicit-backend keywords raise an error. There is no implicit backend fallback. Actual GPU execution remains
 unverified on this CPU-only machine.
 
 Tests compare complex slab amplitudes with Airy under refinement, magnetic
@@ -631,3 +631,65 @@ at resolution 80. Increasing Meep's duration from 30 to 40 changes the reference
 by less than 7e-15. Only documented Meep APIs were used; its implementation was
 not read. See `studies/validate_scene_bottom_meep.py` and the frozen reference
 in `tests/references/golden_scene_bottom_meep.json`.
+
+
+### Static nonuniform z meshes
+
+The shared engine now accepts `z_spacing`, a static positive vector with one
+cell width per z index. It overrides `spacing[0]`; x and y stay uniform.
+The last width is the closing periodic cell, so the complete z period is the
+sum of all widths. Native E nodes start at zero and follow cumulative widths;
+z-half components lie at each cell midpoint. Returned `z_nodes`, `z_spacing`
+and the per-component record axes describe the actual geometry.
+
+The magnetic update uses adjacent E-node distances; the electric update uses
+the distances between adjacent H midpoints. The CFL bound uses the smallest
+cell width. Plane interpolation weights depend on physical distances. CPML
+and the optional matched conductivity absorber use each end's physical width,
+so equal counts need not imply equal absorber thicknesses. Materials, poles,
+fields and sources retain NumPy/JAX/Torch behavior and gradients. The mesh itself
+is static and is not a differentiable design variable.
+
+For `Stack` scenes, pass `grading=True` (ratio 1.06) or a ratio between 1 and 2:
+
+```python
+import numpy as np
+import wavebit
+from wavebit import Stack, Incidence
+
+scene = Stack.from_structure(np.full((1, 1, 1), 2.25), [.3],
+                             top=1., bot=1., period=.1)
+result, diag = wavebit.fdtd(
+    scene, Incidence(wavelength=1., tetm='te'), backend=1,
+    resolution=40, grading=1.06, n_periods=30,
+    truncation_order=0, return_diagnostics=True,
+)
+print(diag['shape'], diag['z_spacing'].min(), diag['z_spacing'].max())
+```
+
+The structure remains uniform in z, with both outer interfaces exactly on nodes.
+Half-space padding grows gradually to at most twice the core width, capped by
+20 cells per shortest in-medium wavelength. If the requested mesh is already
+coarser than that cap, grading does not further coarsen it. This geometry policy
+depends on static half spaces and resolution, not optimized raster values.
+Existing `graded_cells` supplies the geometric ramps. E-node material averaging
+uses the actual asymmetric dual-cell bounds; half-node values use primal cells.
+
+Source and monitor indices are selected on the realized mesh. If the padding
+cannot fit source, monitors and PML, increase `pad_scale`. CPML still counts
+`n_pml` cells per end, with physical thickness measured from the mesh. Phase
+extraction integrates local discrete homogeneous dispersion between each monitor
+and its reference interface. Grading introduces mesh reflections; this phase
+correction does not remove them. Refine resolution, grading, padding and duration
+for new structures. The slab example at resolution40 uses 112 z cells instead
+of 200; this is a cell-count saving, not a universal speedup guarantee.
+
+Records, user planes, bottom incidence and material differentiation all work with
+scene grading. Native-grid tests compare against an independent generalized
+Yee eigenproblem, check physically weighted interpolation, uniform-grid parity,
+CPML/ADE sensitivities and absorption. Scene tests check Airy refinement,
+magnetic conical amplitudes against RCWA, existing independent Meep bottom-
+illumination data, and JAX/Torch derivatives through graded records and monitors.
+The Meep reference uses a uniform grid, so the comparison establishes optical
+agreement under refinement rather than identical discretizations. No Meep
+implementation was read.

@@ -21,6 +21,8 @@ def _weights(centres, width, edges, periodic=False, subpixel=True):
     if not subpixel:
         x = np.mod(centres, edges[-1]) if periodic else centres
         return np.eye(len(edges)-1)[np.clip(np.searchsorted(edges, x, side='right')-1, 0, len(edges)-2)]
+    width = np.asarray(width)
+    width = width[:, None] if width.ndim else width
     left, right = centres[:, None]-width/2, centres[:, None]+width/2
     shifts = (-edges[-1], 0., edges[-1]) if periodic else (0.,)
     weights = sum(np.maximum(0., np.minimum(right, edges[None, 1:]+s)
@@ -78,6 +80,9 @@ def _solve_bottom_scene(options):
     if 'fields' in diagnostics:
         first = diagnostics['fields'][diagnostics['field_e_component']]
         diagnostics.update(field_e=first['values'], field_z=first['z'])
+    diagnostics['z_nodes'] = depth-xp.flip(diagnostics['z_nodes'], axis=0)
+    # Reversed nodal grid: closing cell remains last; reverse the interior widths.
+    diagnostics['z_spacing'] = xp.concat((xp.flip(diagnostics['z_spacing'][:-1], axis=0), diagnostics['z_spacing'][-1:]))
     diagnostics.update(source_z=depth-diagnostics['source_z'],
                        pml_bounds=tuple(depth-z for z in reversed(diagnostics['pml_bounds'])),
                        layer_planes=np.r_[0., np.cumsum(thickness)],
@@ -92,13 +97,14 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                      truncation_order=None, dispersion=None, poles=None,
                      pad_scale=1., incidence_side='top', lattice=None,
                      checkpoint_steps=32, return_diagnostics=False,
-                     field_monitors=None, record_field=None, record_components=None):
+                     field_monitors=None, record_field=None, record_components=None, grading=None):
     """Solve a static rectangular scene with NumPy/JAX/Torch material gradients.
 
     Explicit resolution is required: optimizing materials must not resize the
     grid. Half spaces, geometry, wavelength and incidence angles are static.
     Bottom incidence uses a z-reflected scene and returns fields in original
-    coordinates. Nonuniform grading is available only through the legacy API.
+    coordinates. Optional grading builds a static nonuniform z mesh; material
+    gradients do not resize it.
     """
     if incidence_side == 'bottom':
         return _solve_bottom_scene(locals().copy())
@@ -112,6 +118,12 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
         raise ValueError("incidence_side must be 'top' or 'bottom'.")
     if lattice is not None:
         raise ValueError('The common scene engine requires rectangular period.')
+    if grading is True:
+        grading = 1.06
+    elif grading is False:
+        grading = None
+    if grading is not None and (not np.isfinite(grading) or not 1 < grading < 2):
+        raise ValueError('grading must be True or a static growth ratio between 1 and 2.')
     if resolution is None or not np.isfinite(resolution) or resolution <= 0:
         raise ValueError('The common scene engine requires a positive explicit resolution (cells/length).')
     if not 0 < courant < 1 or not np.isfinite(n_periods) or n_periods <= 0:
@@ -181,7 +193,26 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     transmit_z = interface+math.ceil(thick.sum()/dz)+pad
     nz = transmit_z+pad+int(n_pml)+2
     z = (np.arange(nz)-interface)*dz
-    cuts = np.r_[-(nz+2)*dz, 0., np.cumsum(thick), (nz+2)*dz]
+    widths = np.full(nz, dz)
+    bottom_interface = interface+math.ceil(thick.sum()/dz)
+    if grading is not None:
+        from .fdtd import graded_cells
+        h_core = thick.sum()/max(1, math.ceil(thick.sum()/dz))
+        coarse = lambda index: max(h_core, min(2*h_core, band.min()/(20*index)))
+        up = graded_cells(h_core, coarse(nt), interface*dz, grading)[::-1]
+        down = graded_cells(h_core, coarse(nb), (nz-bottom_interface)*dz, grading)
+        core = np.full(bottom_interface-interface, h_core)
+        widths = np.r_[up, core, down]
+        interface, bottom_interface = len(up), len(up)+len(core)
+        nz = len(widths)
+        z = np.r_[0., np.cumsum(widths[:-1])]-up.sum()
+        source_z = int(n_pml)+2
+        reflect_z = int(np.argmin(abs(z+pad*dz)))
+        transmit_z = int(np.argmin(abs(z-(thick.sum()+pad*dz))))
+        if not source_z+2 < reflect_z < interface or transmit_z >= nz-int(n_pml)-2:
+            raise ValueError('Graded padding cannot fit source/monitors/PML; increase pad_scale.')
+    dual = .5*(widths+np.roll(widths, 1))
+    cuts = np.r_[z[0]-2*widths.max(), 0., np.cumsum(thick), z[-1]+2*widths.max()]
     shape = (nz, ny, nx)
     def sample(values, upper, lower, magnetic=False, harmonic=True):
         components = []
@@ -198,7 +229,16 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                 v = xp.moveaxis(xp.tensordot(weights, v, axes=((1,), (axis,))), 0, axis)
                 v = 1/v if use_harmonic else v
             v = xp.concat((xp.ones_like(v[:1])*upper, v, xp.ones_like(v[:1])*lower), axis=0)
-            weights = array(_weights(z+offsets[2]*dz, dz, cuts, subpixel=subpixel), dtype=v.dtype)
+            if grading is None:
+                centres, cell_widths = z+offsets[2]*dz, dz
+            elif offsets[2]:
+                centres, cell_widths = z+widths/2, widths
+            else:
+                centres = z+(widths-np.roll(widths, 1))/4
+                cell_widths = dual
+            if not subpixel and grading is not None:
+                centres = z+offsets[2]*widths
+            weights = array(_weights(centres, cell_widths, cuts, subpixel=subpixel), dtype=v.dtype)
             v = 1/(xp.tensordot(weights, 1/v, axes=((1,), (0,)))) if harmonic and c == 2 else xp.tensordot(weights, v, axes=((1,), (0,)))
             # Exact half-space values also make CPML material validation exact.
             v = xp.where(array((z < -dz)[:, None, None]), upper, v)
@@ -225,8 +265,8 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
             for omega, gamma, strength in terms:
                 native_poles.append((omega, gamma, array(strength)*fill))
     # A static vacuum-speed CFL leaves the optimization grid/time step unchanged.
-    dt = courant/np.sqrt(dz**-2+dy**-2+dx**-2)
-    if n_periods*centre < 10*centre+2*(transmit_z-source_z)*dz*max(nt, nb):
+    dt = courant/np.sqrt(widths.min()**-2+dy**-2+dx**-2)
+    if n_periods*centre < 10*centre+2*(z[transmit_z]-z[source_z])*max(nt, nb):
         raise ValueError('n_periods is too short for the pulse and a round trip across the scene.')
     steps = math.ceil(n_periods*centre/dt)
     time = np.arange(steps)*dt
@@ -276,7 +316,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
             if index not in monitor_indices:
                 monitor_indices.append(index)
         monitor_brackets[name] = (monitor_indices.index(lo), monitor_indices.index(hi),
-                                  0. if lo == hi else (coordinate-z[lo])/dz)
+                                  0. if lo == hi else (coordinate-z[lo])/(z[hi]-z[lo]))
     # Include the carrier frequency for causal, centre-calibrated time records.
     run_band = np.r_[band, centre] if record_field is not None else band
     native_runs = []
@@ -291,7 +331,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
         settings = dict(spacing=(dz, dy, dx), dt=dt, steps=steps, source=source, pulse=pulse,
                         wavelengths=run_band, monitor_z=monitor_indices, backend=backend,
                         device=device, checkpoint_steps=checkpoint_steps, pml_cells=int(n_pml),
-                        pml_wavelength=centre, bloch_phase=(0., ky0*ly, kx0*lx))
+                        pml_wavelength=centre, z_spacing=widths if grading is not None else None, bloch_phase=(0., ky0*ly, kx0*lx))
         reference = fdtd_grid(xp.ones_like(epsilon)*et, mu=mt,
                               pml_background=(background[0], background[0]), **settings)
         actual = fdtd_grid(epsilon, mu=permeability, poles=native_poles,
@@ -321,17 +361,29 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
             return 2/dz*np.arcsin(dz*np.sqrt(np.asarray(square, complex)))
         kz_top, kz_bot = array(propagation(nt, kx, ky)), array(propagation(nb, kx, ky))
         kz_inc = propagation(nt, kx0, ky0)
+        phase_ref, phase_trn = kz_top*z[reflect_z], kz_bot*(z[transmit_z]-thick.sum())
+        phase_inc = kz_inc*z[reflect_z]
+        if grading is not None:
+            def path_phase(index, kx_value, ky_value, start, stop):
+                segment = widths[min(start, stop):max(start, stop)]
+                transverse = (np.sin(kx_value*dx/2)/dx)**2+(np.sin(ky_value*dy/2)/dy)**2
+                square = (index*np.sin(k0*dt/2)/dt)**2-transverse
+                angles = 2*np.arcsin(segment.reshape((-1,)+(1,)*np.ndim(square))*np.sqrt(np.asarray(square, complex)))
+                return np.sign(stop-start)*angles.sum(axis=0)
+            phase_ref = array(path_phase(nt, kx, ky, interface, reflect_z))
+            phase_trn = array(path_phase(nb, kx, ky, bottom_interface, transmit_z))
+            phase_inc = path_phase(nt, kx0, ky0, interface, reflect_z)
         if f < len(band) and (np.min(np.abs(qtop)) < 1e-8 or np.min(np.abs(qbot)) < 1e-8):
             raise ValueError('A retained diffraction order is exactly grazing; adjust wavelength/window.')
         qt, qb = array(qtop), array(qbot)
         incident_columns, outgoing = [], []
         for ref, act in runs:
-            inc = ref[f, 0, :, halfy, halfx]*np.exp(-1j*kz_inc*z[reflect_z])
+            inc = ref[f, 0, :, halfy, halfx]*np.exp(-1j*phase_inc)
             incident_columns.append(xp.stack((-np.sin(phi)*inc[0]+np.cos(phi)*inc[1],
                                               -nt/qi*(np.cos(phi)*inc[0]+np.sin(phi)*inc[1]))))
             if f < len(band):
-                reflected = (act[f, 0]-ref[f, 0])*xp.exp(1j*kz_top*z[reflect_z])
-                transmitted = act[f, 1]*xp.exp(-1j*kz_bot*(z[transmit_z]-thick.sum()))
+                reflected = (act[f, 0]-ref[f, 0])*xp.exp(1j*phase_ref)
+                transmitted = act[f, 1]*xp.exp(-1j*phase_trn)
                 outgoing.append(xp.stack((-si*reflected[0]+co*reflected[1],
                                           nt/qt*(co*reflected[0]+si*reflected[1]),
                                           -si*transmitted[0]+co*transmitted[1],
@@ -355,7 +407,8 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     if return_diagnostics:
         diagnostics = dict(incidence_side='top', reflection_z=0., transmission_z=float(thick.sum()),
                            stable=stable, dt=dt, steps=steps, n_steps=steps,
-                           spacing=(dz, dy, dx), shape=shape, wavelengths=array(band),
+                           spacing=(float(widths.min()), dy, dx), shape=shape, wavelengths=array(band),
+                           z_nodes=array(z), z_spacing=array(widths), grading=grading,
                            n_pml=int(n_pml), source_z=z[source_z], layer_planes=np.r_[0., np.cumsum(thick)],
                            pml_bounds=(z[0], z[int(n_pml)], z[-int(n_pml)], z[-1]),
                            angles=np.arcsin(band/centre*np.sin(theta)),
@@ -397,7 +450,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                     values = values[:, :, :1]
                 fields[name] = dict(first, values=values, x=first['x']-lx/2,
                                     y=first['y']-ly/2 if raster.shape[1] > 1 else array([0.]),
-                                    z=first['z']-interface*dz)
+                                    z=first['z']+z[0])
             primary = next((name for name in ('ey', 'ex') if name in fields), next(iter(fields)))
             first = fields[primary]
             diagnostics.update(field_e=first['values'], field_e_component=primary,

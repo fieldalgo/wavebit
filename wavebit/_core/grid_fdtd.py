@@ -1,4 +1,4 @@
-"""Single-source uniform-grid Yee engine with NumPy, JAX and Torch execution.
+"""Single-source Yee engine with NumPy, JAX and Torch execution.
 
 This low-level API takes native grid coefficients, not Stack/Incidence scenes.
 """
@@ -16,7 +16,7 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
               checkpoint_steps=32, absorber_cells=0, poles=(),
               pml_cells=0, pml_wavelength=1., bloch_phase=(0., 0., 0.),
               pml_background=((1., 1.), (1., 1.)),
-              record_field=None, record_components=None):
+              record_field=None, record_components=None, z_spacing=None):
     """Advance a 3D Yee grid and accumulate frequency-domain field planes.
 
     epsilon: positive scalar-per-cell (z,y,x) or diagonal/native (3,z,y,x)
@@ -28,7 +28,12 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
     boundaries. Real phases are differentiable and applied in field updates and
     monitor interpolation. With z CPML, phase_z must be zero.
 
-    spacing is (dz,dy,dx); lengths and time use c=1. dt is explicit, so optimizing
+    spacing is (dz,dy,dx); lengths and time use c=1. Optional static z_spacing
+    overrides dz with one positive width per z index, including the last periodic
+    closing cell. E nodes are cumulative widths; H z halves lie between nodes.
+    Curls use primal/dual widths, monitors interpolate by physical distance, and
+    z CPML uses physical end-layer thicknesses. Geometry is not differentiable.
+    dt is explicit, so optimizing
     epsilon does not change the number of steps or simulation duration. Choose dt
     below the CFL bound over the whole optimization domain. Concrete inputs are
     validated; traced JAX inputs expose validity through returned `stable`.
@@ -95,6 +100,15 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
         shape = (3,)+shape
     if len(shape) != 4 or shape[0] != 3 or min(shape[1:]) < 2:
         raise ValueError('epsilon needs (z,y,x) or (3,z,y,x), each spatial dimension >=2.')
+    nonuniform = z_spacing is not None
+    if z_spacing is not None and np.iscomplexobj(z_spacing):
+        raise ValueError('z_spacing must contain real positive cell widths.')
+    widths = np.full(shape[1], spacing[0]) if z_spacing is None else np.asarray(z_spacing, float)
+    if widths.shape != (shape[1],) or not np.isfinite(widths).all() or np.any(widths <= 0):
+        raise ValueError('z_spacing must contain one positive static cell width per z index.')
+    nodes = np.r_[0., np.cumsum(widths)]
+    dual = .5*(widths+np.roll(widths, 1))
+    minimum_spacing = np.array([widths.min(), spacing[1], spacing[2]])
     if 2*max(absorber_cells, pml_cells) >= shape[1]:
         raise ValueError('Absorbing layers must leave a nonempty interior.')
     indices = np.asarray(monitor_z)
@@ -121,7 +135,7 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
     sigma = xp.broadcast_to(array(conductivity), shape)
     if any(xp.isdtype(v.dtype, 'complex floating') for v in (eps, permeability, sigma)):
         raise ValueError('epsilon, mu and conductivity must be real.')
-    bound = xp.sqrt(xp.min(eps)*xp.min(permeability))/np.sqrt(np.sum(1/spacing**2))
+    bound = xp.sqrt(xp.min(eps)*xp.min(permeability))/np.sqrt(np.sum(1/minimum_spacing**2))
     stable = (phase_valid & xp.all(xp.isfinite(eps)) & xp.all(eps > 0) & xp.all(xp.isfinite(permeability))
               & xp.all(permeability > 0) & xp.all(xp.isfinite(sigma)) & xp.all(sigma >= 0)
               & (dt <= bound))
@@ -163,6 +177,9 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
     dtype = xp.result_type(eps, permeability, sigma, phase, array(1j),
                            *[v for coefficients in pole_coefficients for v in coefficients])
     real_dtype = xp.real(runtime.zeros((), dtype=dtype)).dtype
+    dz_forward = array(widths[:, None, None], dtype=real_dtype)
+    dz_backward = array(dual[:, None, None], dtype=real_dtype)
+    plane_weight = array((np.roll(widths, 1)/(2*dual))[indices, None, None], dtype=real_dtype)
     factors = xp.astype(factors, dtype)
     e = runtime.zeros(shape, dtype=dtype) if electric is None else array(electric, dtype=dtype)
     h = runtime.zeros(shape, dtype=dtype) if magnetic is None else array(magnetic, dtype=dtype)
@@ -175,6 +192,14 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
         # Evaluate the matched electric/magnetic rates at their native z
         # locations. Across both end layers the continuum amplitude decays
         # by exp(-3): two integrals of 6*u**3 over a unit-width layer.
+        if nonuniform:
+            z = nodes[:-1][None, :]+np.asarray(offsets)[:, None]*widths
+            low, high = nodes[absorber_cells], nodes[-1]-nodes[-absorber_cells-1]
+            on_low = low-z >= high-(nodes[-1]-z)
+            distance = np.where(on_low, z, nodes[-1]-z)
+            thickness = np.where(on_low, low, high)
+            ramp = np.maximum(1-distance/thickness, 0)
+            return array((6*ramp**3/thickness)[:, :, None, None], dtype=real_dtype)
         z = np.arange(shape[1])[None, :]+np.asarray(offsets)[:, None]
         distance = np.minimum(z, shape[1]-z)
         ramp = np.maximum(1-distance/absorber_cells, 0)
@@ -202,7 +227,9 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
 
     def derivative(v, axis, forward):
         neighbor = shifted(v, axis, forward, factors[axis])
-        return (neighbor-v if forward else v-neighbor)/float(spacing[axis])
+        denominator = ((dz_forward if forward else dz_backward)
+                       if nonuniform and axis == 0 else float(spacing[axis]))
+        return (neighbor-v if forward else v-neighbor)/denominator
 
     # Reuse Wavebit's own documented CPML coefficients; no external source.
     if pml_cells:
@@ -213,7 +240,15 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
             return tuple(array(v[:, None, None], dtype=real_dtype) for v in cpml_coefficients(
                 depth, pml_cells*spacing[0], dt, pml_wavelength,
                 np.where(position < shape[1]/2, np.prod(background[0]), np.prod(background[1]))))
-        pml_e, pml_h = profile(0.), profile(.5)
+        if nonuniform:
+            from .fdtd import cpml_profiles
+            pe, ph = cpml_profiles(nodes, nodes[:-1]+widths/2, nodes[pml_cells],
+                                   nodes[-1]-nodes[-pml_cells-1], dt, pml_wavelength,
+                                   np.prod(background[0]), np.prod(background[1]))
+            pml_e = tuple(array(pe[key][:-1, None, None], dtype=real_dtype) for key in ('b', 'a', 'kappa'))
+            pml_h = tuple(array(ph[key][:, None, None], dtype=real_dtype) for key in ('b', 'a', 'kappa'))
+        else:
+            pml_e, pml_h = profile(0.), profile(.5)
     auxiliary = runtime.zeros((2,)+shape[1:], dtype=dtype) if pml_cells else runtime.zeros((0,), dtype=dtype)
 
     def curl(v, forward, memory):
@@ -233,7 +268,9 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
         for c, (zh, yh, xh) in enumerate(offsets):
             face = v[c, iz]
             if zh:
-                face = .5*(face+v[c, (iz-1)%shape[1]]*xp.where(iz == 0, 1/factors[0], 1)[:, None, None])
+                previous = v[c, (iz-1)%shape[1]]*xp.where(iz == 0, 1/factors[0], 1)[:, None, None]
+                weight = plane_weight if nonuniform else .5
+                face = weight*face+(1-weight)*previous
             if yh:
                 face = .5*(face+shifted(face, 1, False, factors[1]))
             if xh:
@@ -275,7 +312,7 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
                                  t=stamps-(dt/2 if name.startswith('h') else 0.),
                                  x=array((np.arange(shape[3])+offsets[0])*spacing[2]),
                                  y=array((np.arange(shape[2])+offsets[1])*spacing[1]),
-                                 z=array((np.arange(shape[1])+offsets[2])*spacing[0]))
+                                 z=array(nodes[:-1]+offsets[2]*widths))
     e, h, fe, fh, _, _, polarization, previous = state
     flux = .5*xp.real(xp.linalg.cross(xp.moveaxis(fe, 2, -1), xp.conj(xp.moveaxis(fh, 2, -1)), axis=-1))
     power = xp.sum(flux[..., 2], axis=(-2, -1))*spacing[1]*spacing[2]
@@ -283,4 +320,5 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
                 electric_spectrum=fe, magnetic_spectrum=fh,
                 flux_density=flux, power_z=power, wavelengths=array(band), monitor_z=iz,
                 stable=stable, cfl_dt=bound, time=steps*dt,
-                h_time=(steps-.5)*dt, spacing=array(spacing), bloch_phase=phase)
+                h_time=(steps-.5)*dt, spacing=array(spacing), bloch_phase=phase,
+                z_nodes=array(nodes[:-1]), z_spacing=array(widths))

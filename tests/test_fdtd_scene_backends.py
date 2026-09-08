@@ -95,7 +95,7 @@ def test_invalid_scene_features_are_not_silently_routed():
     with pytest.raises(ValueError, match='must name'):
         wavebit.fdtd(structure=structure, backend=0, dispersion=np.ones((1, 1, 1), int),
                       poles={2: [(1., .1, .2)]}, **options())
-    with pytest.raises(TypeError, match='grading'):
+    with pytest.raises(ValueError, match='grading'):
         wavebit.fdtd(structure=structure, backend=0, grading=.2, **options())
 
 

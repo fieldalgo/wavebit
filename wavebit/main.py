@@ -80,11 +80,11 @@ def fdtd(stack=None, incidence=None, **kwargs):
     and a crossed grating; dispersive and magnetic media are
     carried on all of them. With no backend specified, the legacy NumPy scene solver
     preserves time records and graded meshes. Explicit ``backend=0/1/2`` (or
-    ``numpy/jax/torch``) selects the shared uniform-grid scene engine, requires
+    ``numpy/jax/torch``) selects the shared scene engine, requires
     explicit resolution, and differentiates raster materials and electric poles.
     Both paths support time records and user frequency planes; source and
     normalization conventions are documented in the time-domain guide.
-    Explicit backends also support bottom incidence; geometry and half spaces
+    Explicit backends also support bottom incidence and static z grading; geometry and half spaces
     are static. See the time-domain guide for scope and coordinate conventions.
 
     Args:

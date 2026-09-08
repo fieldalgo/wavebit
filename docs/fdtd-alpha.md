@@ -37,11 +37,12 @@ notes](fdtd.md) and [API reference](reference/api.md).
 
 The separate `wavebit.fdtd_grid` interface provides NumPy, compiled JAX and checkpointed Torch Yee
 updates, streaming field/power planes, and differentiable material/source inputs.
-It accepts native uniform grids with diagonal real coefficients, periodic
+It accepts native grids with uniform x/y and optional nonuniform z widths, diagonal real coefficients, periodic
 boundaries, optional graded z damping, homogeneous-end z CPML, and electric
 Drude/Lorentz ADE poles. An explicit-backend scene adapter now adds rasterization,
-reference-calibrated plane-wave sources and diffraction Results. Nonuniform grids
-are still outside the common engine. CPU eigenmode,
+reference-calibrated plane-wave sources and diffraction Results. Static nonuniform
+z widths and scene grading now share this engine, including CPML, records,
+monitors and material gradients. CPU eigenmode,
 NumPy/JAX parity, finite-difference material sensitivities, pulse sensitivities,
 and absorber energy-removal checks pass. Live external checks now also compare a
 three-wavelength slab against Meep at three resolutions, and nonuniform diagonal
