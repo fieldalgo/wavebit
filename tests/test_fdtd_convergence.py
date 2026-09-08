@@ -116,3 +116,58 @@ def test_nonuniform_field_norm_uses_native_control_volumes():
     initial = 4*dual[0]
     expected = np.sqrt(norm[-3:].max()/max(initial, norm.max()))
     assert result['convergence']['field_decay'] == pytest.approx(expected)
+
+
+@pytest.mark.parametrize('side', ['top', 'bottom'])
+def test_calibrated_amplitude_change_matches_independently_truncated_scene(side):
+    settings = dict(structure=np.array([[[4.]]]), thickness=[.25], top=1., bot=1.,
+                    period=.2, wavelength=[.95, 1.05], backend=0, resolution=10,
+                    n_periods=30, truncation_order=0, tetm='te', incidence_side=side,
+                    grading=True, return_diagnostics=True)
+    result, diagnostic = wavebit.fdtd(**settings, convergence_window=75)
+    # ceil() gives exactly the prefix step count; the centre wavelength is 1.
+    settings['n_periods'] = (diagnostic['steps']-75-.25)*diagnostic['dt']
+    prefix, earlier = wavebit.fdtd(**settings)
+    assert earlier['steps'] == diagnostic['steps']-75
+    for key in ('r_s', 'r_p', 't_s', 't_p'):
+        expected = np.stack([getattr(full.given, key)-getattr(short.given, key)
+                             for full, short in zip(result, prefix)])
+        np.testing.assert_allclose(diagnostic['convergence']['amplitude_change'][key], expected,
+                                   atol=2e-14, rtol=0)
+    assert diagnostic['convergence']['calibration_valid'].all()
+
+
+def test_prefix_before_pulse_arrival_cannot_certify_amplitudes():
+    settings = dict(structure=np.array([[[2.]]]), thickness=[.2], top=1., bot=1.,
+                    period=.2, wavelength=1., backend=0, resolution=10,
+                    n_periods=25, truncation_order=0, tetm='te', return_diagnostics=True)
+    _, plain = wavebit.fdtd(**settings)
+    _, diagnostic = wavebit.fdtd(**settings, convergence_window=plain['steps']-1)
+    assert not diagnostic['convergence']['calibration_valid'].any()
+    assert not diagnostic['convergence']['amplitudes_settled']
+    assert np.isnan(diagnostic['convergence']['amplitude_change']['t_s']).all()
+
+
+@pytest.mark.parametrize('backend', [1, 2])
+def test_calibrated_change_retains_material_gradient(backend):
+    def objective(value, which):
+        structure = np.ones((1, 1, 1))*value if which == 0 else value*ones
+        _, diag = wavebit.fdtd(structure=structure, thickness=[.25], top=1., bot=1.,
+                              period=.2, wavelength=1., backend=which, resolution=10,
+                              n_periods=25, truncation_order=0, tetm='te',
+                              return_diagnostics=True, convergence_window=60)
+        return diag['convergence']['amplitude_change']['t_s'].real.sum()
+    if backend == 1:
+        jax = pytest.importorskip('jax')
+        jax.config.update('jax_enable_x64', True)
+        import jax.numpy as jnp
+        ones = jnp.ones((1, 1, 1))
+        actual = jax.jit(jax.grad(lambda v: objective(v, 1)))(4.)
+    else:
+        torch = pytest.importorskip('torch')
+        ones = torch.ones((1, 1, 1), dtype=torch.float64)
+        value = torch.tensor(4., dtype=torch.float64, requires_grad=True)
+        actual, = torch.autograd.grad(objective(value, 2), value)
+    delta = 1e-3
+    expected = (objective(4.+delta, 0)-objective(4.-delta, 0))/(2*delta)
+    assert float(actual) == pytest.approx(expected, rel=1e-3, abs=1e-9)

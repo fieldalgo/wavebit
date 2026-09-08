@@ -324,6 +324,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     run_band = np.r_[band, centre] if record_field is not None else band
     native_runs = []
     convergence_runs = []
+    earlier_runs = []
     runs = []
     stable = array(True)
     for vector in ((-np.sin(phi), np.cos(phi)), (-np.cos(phi), -np.sin(phi))):
@@ -347,6 +348,8 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
         native_runs.append(actual)
         if convergence_window is not None:
             convergence_runs.append(dict(reference=reference['convergence'], actual=actual['convergence']))
+            earlier_runs.append(tuple(modes(run['convergence']['electric_spectrum_before_window'])
+                                      for run in (reference, actual)))
     ResultType, SubType = Result, ResultSub
     if backend in (1, 'jax'):
         from ..backends.jax_backend import ResultJax, ResultSubJax
@@ -357,6 +360,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
         raise ValueError('Incident polarization must be finite and nonzero.')
     results = []
     weights = []
+    amplitude_changes, calibration_valid = [], []
     for f, wl in enumerate(run_band):
         k0 = 2*np.pi/wl
         qtop = np.sqrt((nt**2-(kx/k0)**2-(ky/k0)**2).astype(complex))
@@ -383,23 +387,40 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
         if f < len(band) and (np.min(np.abs(qtop)) < 1e-8 or np.min(np.abs(qbot)) < 1e-8):
             raise ValueError('A retained diffraction order is exactly grazing; adjust wavelength/window.')
         qt, qb = array(qtop), array(qbot)
-        incident_columns, outgoing = [], []
-        for ref, act in runs:
-            inc = ref[f, 0, :, halfy, halfx]*np.exp(-1j*phase_inc)
-            incident_columns.append(xp.stack((-np.sin(phi)*inc[0]+np.cos(phi)*inc[1],
-                                              -nt/qi*(np.cos(phi)*inc[0]+np.sin(phi)*inc[1]))))
-            if f < len(band):
-                reflected = (act[f, 0]-ref[f, 0])*xp.exp(1j*phase_ref)
-                transmitted = act[f, 1]*xp.exp(-1j*phase_trn)
-                outgoing.append(xp.stack((-si*reflected[0]+co*reflected[1],
-                                          nt/qt*(co*reflected[0]+si*reflected[1]),
-                                          -si*transmitted[0]+co*transmitted[1],
-                                          -nb/qb*(co*transmitted[0]+si*transmitted[1]))))
-        calibration = xp.linalg.inv(xp.stack(incident_columns, axis=1))
+        def extract(run_values, reference_scale=None):
+            incident_columns, outgoing = [], []
+            for ref, act in run_values:
+                inc = ref[f, 0, :, halfy, halfx]*np.exp(-1j*phase_inc)
+                incident_columns.append(xp.stack((-np.sin(phi)*inc[0]+np.cos(phi)*inc[1],
+                                                  -nt/qi*(np.cos(phi)*inc[0]+np.sin(phi)*inc[1]))))
+                if f < len(band):
+                    reflected = (act[f, 0]-ref[f, 0])*xp.exp(1j*phase_ref)
+                    transmitted = act[f, 1]*xp.exp(-1j*phase_trn)
+                    outgoing.append(xp.stack((-si*reflected[0]+co*reflected[1],
+                                              nt/qt*(co*reflected[0]+si*reflected[1]),
+                                              -si*transmitted[0]+co*transmitted[1],
+                                              -nb/qb*(co*transmitted[0]+si*transmitted[1]))))
+            incident = xp.stack(incident_columns, axis=1)
+            valid = xp.all(xp.isfinite(incident)) & (xp.abs(xp.linalg.det(incident))
+                     > 100*xp.finfo(xp.real(incident).dtype).eps*xp.sum(xp.abs(incident)**2))
+            scale = xp.sum(xp.abs(incident)**2)
+            if reference_scale is not None:
+                valid = valid & (scale > (100*xp.finfo(xp.real(incident).dtype).eps)**2*reference_scale)
+                incident = xp.where(valid, incident, array(np.eye(2), dtype=incident.dtype))
+            calibration = xp.linalg.inv(incident)
+            scattering = (xp.tensordot(xp.stack(outgoing, axis=-1), calibration, axes=((-1,), (0,)))
+                          if f < len(band) else None)
+            return scattering, calibration, valid, scale
+        scattering, calibration, valid, scale = extract(runs)
         weights.append(calibration @ xp.stack((a_s, a_p)))
         if f == len(band):
             continue
-        scattering = xp.tensordot(xp.stack(outgoing, axis=-1), calibration, axes=((-1,), (0,)))
+        if convergence_window is not None:
+            earlier, _, earlier_valid, _ = extract(earlier_runs, reference_scale=scale)
+            change = (scattering-earlier)[..., 0]*a_s+(scattering-earlier)[..., 1]*a_p
+            valid = valid & earlier_valid & xp.all(xp.isfinite(change))
+            amplitude_changes.append(xp.where(valid, change, array(complex(float('nan'), 0.))))
+            calibration_valid.append(valid)
         def pack(amplitudes):
             rs, rp, ts, tp = xp.where(stable, amplitudes, array(complex(float("nan"), 0.)))
             fr, ft = xp.real(qt)/qi, xp.real(qb/mb)/(qi/mt)
@@ -422,8 +443,15 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                            normalization='uniform-medium reference; two electric-current bases')
         weights = xp.stack(weights)
         if convergence_window is not None:
+            change = xp.stack(amplitude_changes)
+            valid = xp.stack(calibration_valid)
+            inactive = xp.all(xp.stack([run[kind]['source_inactive']
+                                       for run in convergence_runs for kind in ('reference', 'actual')]))
             diagnostics['convergence'] = dict(
-                bases=convergence_runs,
+                bases=convergence_runs, calibration_valid=valid,
+                comparison_time=(steps-convergence_window)*dt,
+                amplitude_change={key: change[:, i] for i, key in enumerate(('r_s', 'r_p', 't_s', 't_p'))},
+                amplitudes_settled=stable & inactive & xp.all(valid) & xp.all(xp.abs(change) <= convergence_tol),
                 field_decayed=xp.all(xp.stack([run[kind]['field_decayed']
                                               for run in convergence_runs for kind in ('reference', 'actual')])))
         monitors = {}

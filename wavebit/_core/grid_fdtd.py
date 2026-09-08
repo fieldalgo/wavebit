@@ -366,6 +366,8 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
                            signal_present=signal_present, source_inactive=source_inactive,
                            field_decay=xp.where(signal_present, field_ratio, array(float('nan'))),
                            field_decayed=stable & signal_present & source_inactive & (field_ratio <= convergence_tol),
+                           electric_spectrum_before_window=fe-tail_e,
+                           magnetic_spectrum_before_window=fh-tail_h,
                            spectral_signal_present=spectral_signal,
                            spectral_tail=xp.where(spectral_signal, spectral_ratio, array(float('nan'))))
     flux = .5*xp.real(xp.linalg.cross(xp.moveaxis(fe, 2, -1), xp.conj(xp.moveaxis(fh, 2, -1)), axis=-1))

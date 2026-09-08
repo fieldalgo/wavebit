@@ -12,6 +12,7 @@ makes them assertions, not studies.
 
 | Script | Question it answers |
 | --- | --- |
+| `fdtd_pulse_convergence.py` | Does temporal settling certify slab scattering accuracy? [Measurement](../docs/fdtd-pulse-convergence.md) separates calibrated amplitude changes from spatial error. |
 | `fdtd_metal_validation.py` | How a damped negative-epsilon pattern changes with spatial resolution, runtime, PML and padding. Preserves the discrepancy against Meep resolution 60; see [../docs/fdtd-alpha.md](../docs/fdtd-alpha.md). |
 | `fdtd_alpha_controls.py` | How runtime, PML depth and padding change the two crossed dielectric results at fixed grids. Write-up: [../docs/fdtd-alpha.md](../docs/fdtd-alpha.md). |
 | `fdtd_alpha_convergence.py` | How two crossed dielectric scenes refine against RCWA, with actual grids, residuals and source provenance. Write-up: [../docs/fdtd-alpha.md](../docs/fdtd-alpha.md). |

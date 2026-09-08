@@ -738,3 +738,23 @@ are not smooth everywhere. Fixed step counts preserve the existing differentiati
 contract. The distinction between pulse decay and detector convergence was informed
 by [FDTDX's stopping-condition design](https://github.com/ymahlau/fdtdx/blob/main/src/fdtdx/fdtd/stop_conditions.py).
 This implementation does not copy its source code.
+
+The native convergence mapping also returns `electric_spectrum_before_window`
+and `magnetic_spectrum_before_window`, with the same shape and units as the full
+spectra. These are prefix integrals obtained by subtracting the final-window
+integral; extremely weak prefixes can lose relative precision.
+
+For the scene API, `convergence['amplitude_change']` maps `r_s`, `r_p`, `t_s`,
+`t_p` to **signed complex full-minus-prefix differences** for the requested
+polarization, shaped `(wavelength, order_y, order_x)`, including a length-one
+wavelength axis for scalar input. Both windows use their own incident-reference
+calibration and the same interface reference planes. `comparison_time` is the
+prefix end time. `calibration_valid` is a per-wavelength boolean: singular,
+nonfinite, or numerically vanishing prefix references yield NaN changes.
+
+`amplitudes_settled` requires finite valid calibration, inactive sources in all
+four runs, valid material/CFL inputs, and every requested amplitude change at
+most `convergence_tol` in absolute value. It is separate from `field_decayed`.
+It does not certify relative accuracy of weak diffraction orders or future
+settling. For measured examples of temporal settling with remaining spatial
+error, see [pulse settling versus spatial accuracy](../fdtd-pulse-convergence.md).
