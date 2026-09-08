@@ -16,7 +16,7 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
               checkpoint_steps=32, absorber_cells=0, poles=(),
               pml_cells=0, pml_wavelength=1., bloch_phase=(0., 0., 0.),
               pml_background=((1., 1.), (1., 1.)),
-              record_field=None, record_components=None, z_spacing=None,
+              record_field=None, record_components=None, z_spacing=None, record_region=None,
               convergence_window=None, convergence_tol=1e-4, dft_subsample=1):
     """Advance a 3D Yee grid and accumulate frequency-domain field planes.
 
@@ -64,6 +64,10 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
     Torch defaults to epsilon's device, or CPU for non-tensor epsilon. Unavailable
     hardware raises. Optional record_field=N keeps steps 0,N,2N,... after
     their updates. record_components selects ex/ey/ez/hx/hy/hz (default all).
+    record_region optionally selects (z,y,x) integer indices or positive-step
+    slices before storing each snapshot. Integer selections keep length-one
+    axes; negative indices follow Python indexing. Empty regions are refused.
+    Selection is static and requires record_field. It does not crop the solver.
     fields contains native values(time,z,y,x), staggered coordinates and E/H
     timestamps. Records retain gradients and allocate only requested snapshots. Torch compile is not a
     validated execution mode; JAX jit and Torch eager autograd are tested.
@@ -86,6 +90,8 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
     if record_field is not None:
         if isinstance(record_field, (bool, np.bool_)) or not isinstance(record_field, (int, np.integer)) or record_field <= 0:
             raise ValueError('record_field must be a positive integer interval.')
+    if record_region is not None and record_field is None:
+        raise ValueError('record_region requires record_field.')
     if record_components is not None and record_field is None:
         raise ValueError('record_components requires record_field.')
     selected = names if record_components is None or (isinstance(record_components, str) and record_components == 'all') else record_components
@@ -123,6 +129,28 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
         shape = (3,)+shape
     if len(shape) != 4 or shape[0] != 3 or min(shape[1:]) < 2:
         raise ValueError('epsilon needs (z,y,x) or (3,z,y,x), each spatial dimension >=2.')
+    region = (slice(None),)*3 if record_region is None else record_region
+    if not isinstance(region, (tuple, list)) or len(region) != 3:
+        raise ValueError('record_region must contain three z,y,x indices or slices.')
+    record_slices = []
+    for selection, size in zip(region, shape[1:]):
+        if isinstance(selection, (int, np.integer)) and not isinstance(selection, (bool, np.bool_)):
+            index = int(selection)+size if selection < 0 else int(selection)
+            if not 0 <= index < size:
+                raise ValueError('record_region index lies outside the grid.')
+            selection = slice(index, index+1)
+        if not isinstance(selection, slice):
+            raise ValueError('record_region entries must be integer indices or slices.')
+        if any(v is not None and (isinstance(v, (bool, np.bool_)) or not isinstance(v, (int, np.integer)))
+               for v in (selection.start, selection.stop, selection.step)):
+            raise ValueError('record_region slice bounds and steps must be integers.')
+        if selection.step is not None and selection.step <= 0:
+            raise ValueError('record_region slice steps must be positive.')
+        start, stop, stride = selection.indices(size)
+        if start >= stop:
+            raise ValueError('record_region must be nonempty on every axis.')
+        record_slices.append(slice(start, stop, stride))
+    record_slices = tuple(record_slices)
     nonuniform = z_spacing is not None
     if z_spacing is not None and np.iscomplexobj(z_spacing):
         raise ValueError('z_spacing must contain real positive cell widths.')
@@ -359,7 +387,7 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
         state = runtime.advance(step, state, steps, checkpoint_steps)
     else:
         def capture(current):
-            return xp.stack([current[names.index(name)//3][names.index(name)%3] for name in selected])
+            return xp.stack([current[names.index(name)//3][names.index(name)%3][record_slices] for name in selected])
         state, history = runtime.advance_recorded(step, state, steps, checkpoint_steps, record_field, capture)
         stamps = array((np.arange(0, steps, record_field)+1)*dt)
         for index, name in enumerate(selected):
@@ -368,9 +396,9 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
             offsets[component] = 0. if name.startswith('h') else .5
             records[name] = dict(values=history[:, index],
                                  t=stamps-(dt/2 if name.startswith('h') else 0.),
-                                 x=array((np.arange(shape[3])+offsets[0])*spacing[2]),
-                                 y=array((np.arange(shape[2])+offsets[1])*spacing[1]),
-                                 z=array(nodes[:-1]+offsets[2]*widths))
+                                 x=array((np.arange(shape[3])+offsets[0])*spacing[2])[record_slices[2]],
+                                 y=array((np.arange(shape[2])+offsets[1])*spacing[1])[record_slices[1]],
+                                 z=array(nodes[:-1]+offsets[2]*widths)[record_slices[0]])
     e, h, fe, fh, _, _, polarization, previous = state[:8]
     convergence = None
     if convergence_window is not None:

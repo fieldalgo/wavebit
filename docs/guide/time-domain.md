@@ -793,3 +793,34 @@ its quadrature weight between prefix and tail. Thus the prefix spectrum matches
 a shorter run with the same stride and starting sample. The field-decay norm is
 still evaluated at every update. An apparently settled subsampled spectrum does
 not certify freedom from aliasing; see the [sampling measurement](../fdtd-dft-sampling.md).
+
+### Recording a region of the native grid
+
+`fdtd_grid(..., record_field=N, record_region=(z, y, x))` stores only the selected
+region at each requested snapshot. Each entry is an integer index or a slice
+with positive step; negative indices and slice bounds follow Python indexing.
+Integer selections preserve length-one axes. Empty regions, reversed slices,
+out-of-range integer indices and noninteger entries are refused. The region is
+static and requires `record_field`; it is available on the native grid API.
+
+```python
+out = wavebit.fdtd_grid(
+    epsilon, spacing=(dz, dy, dx), dt=dt, steps=steps,
+    record_field=10, record_components=('ey', 'hx'),
+    record_region=(slice(4, 20, 2), 0, slice(None)))
+plane_history = out['fields']['ey']  # values: (time, 8, 1, nx)
+```
+
+Selection occurs before stacking snapshots in NumPy, JAX and Torch. It reduces
+retained field-history arrays; it does not reduce the Maxwell grid, checkpoint
+state, final E/H arrays or frequency-monitor accumulators. Raw values, timestamps
+and coordinate vectors match the same region selected from full-domain records.
+Yee staggering is preserved: the same cell index can have different physical
+coordinates for different field components. With nonuniform z spacing, use the
+returned component coordinates instead of reconstructing them from nominal dz.
+
+For example, selecting `(3,1,2)` cells from a `(12,4,6)` grid stores 48 times fewer
+field-history values at the same components and snapshot count. This is an array
+storage ratio, not a peak-process-memory or speed claim. Spatial subsampling
+selects nodes without filtering or interpolation. Region coordinates are not
+differentiable; recorded field values retain material/source gradients.
