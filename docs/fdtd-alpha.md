@@ -78,6 +78,12 @@ Offline [ringdown fitting](fdtd-ringdown.md) now extracts damped frequencies
 from point traces and is checked against exact/native/external field records.
 The remaining near-Rayleigh signal has a cutoff-related, window-dependent tail;
 a small multimode residual alone does not establish a physical Q or time convergence.
+Optional [source spectral zeros](fdtd-pulse-notches.md) suppress one or two
+selected frequencies before the four scene runs. Uniform material-mode suppression
+and complex records match fresh public-API Meep results on all three CPU backends;
+calibrated Airy optics and material gradients are preserved. In the cutoff study,
+smaller returning components do not reliably reduce both polarizations' total
+amplitude errors. The Gaussian remains the default.
 
 The common engine reports physical and discrete lower-cutoff classifications
 and supports independent diffraction-plane distances. A binary dielectric

@@ -23,6 +23,7 @@ subtrees:
   - file: fdtd-directional
   - file: fdtd-pml-strength
   - file: fdtd-ringdown
+  - file: fdtd-pulse-notches
   - file: fdtd-rayleigh
   - file: fdtd-enz
   - file: fdtd-layer-alignment

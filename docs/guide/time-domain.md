@@ -732,6 +732,71 @@ See the [oblique-pulse measurement](../fdtd-oblique-pulse.md) for the separate
 effects of source tails, dispersive interfaces and patterned metal corners.
 
 
+### Suppressing selected source frequencies
+
+The explicit-backend scene adapter also accepts `pulse_notches`: a positive
+static frequency or a vector of one or two frequencies in inverse c=1 time units,
+**not wavelengths or angular frequencies**. `None` preserves the original
+Gaussian. Each frequency must be below the time grid's Nyquist frequency.
+For example, to weaken an unwanted oscillation at frequency 0.8 while measuring
+wavelengths 0.9, 1.0 and 1.1:
+
+```python
+result, diag = wavebit.fdtd(
+    structure=np.full((1, 1, 1), 2.25), thickness=[.2],
+    top=1., bot=1., period=.1, wavelength=[.9, 1., 1.1],
+    backend=0, resolution=40, truncation_order=0,
+    pulse_width=2., pulse_notches=[.8], n_periods=45,
+    return_diagnostics=True,
+)
+print(diag['pulse']['relative_spectrum'])
+```
+
+At each notch frequency `fn`, shaping applies the causal two-sample filter
+
+```text
+p_new[n] = p[n] - exp(-2*pi*i*fn*dt)*p[n-1],
+```
+
+with zero extension before the first sample. The complete finite convolution
+has a spectral zero at `fn`, subject to floating-point roundoff. Each notch
+reserves one final sample before filtering; the runtime allowance includes
+those samples. The shaped source is normalized to unit sampled peak amplitude.
+Two equal frequencies create a double zero. Higher multiplicities are refused:
+repeated differences amplify the Gaussian's finite start/stop edges and
+floating-point errors. Even two zeros can increase out-of-band excitation;
+compare runtime and source width rather than assuming more zeros help.
+All four actual/reference runs
+use the same shaped pulse, and each requested wavelength retains its own
+incident-field calibration. No field data are filtered after the solve.
+
+For a shaped source, `diag['pulse']['spectrum_kind']` is `'sampled_l1'`:
+`relative_spectrum` is now the **actual finite-sample** Fourier magnitude at
+each requested frequency divided by `sum(abs(pulse))`. This bounds it between
+zero and one; it is not a ratio to the carrier. `carrier_fraction` uses the
+same normalization at the carrier, `notches` reports the applied frequencies,
+and `sampled_peak_time` locates the actual shaped pulse maximum. The existing
+`width`, `peak_time` and `frequency` still describe the underlying Gaussian.
+Without notches, `spectrum_kind='ideal_gaussian'` and the original analytic
+`relative_spectrum` above is preserved.
+
+A notch at a requested frequency is refused. When recording time fields, the
+carrier must also remain excited because it normalizes those records; without
+time records an unrequested carrier may be suppressed. Required sampled
+spectra at or below 100 epsilons of the source's L1 bound are refused, using
+the backend's source precision. This is only a numerical floor. Weak remaining
+excitation can still amplify finite-time, boundary and roundoff errors.
+
+The control supports bottom incidence, grading, directional extraction,
+recording and material/pole gradients. Notch frequencies and source width are
+static, and the legacy scene path has no `pulse_notches` option. Use the native
+grid's explicit `pulse` array for arbitrary waveforms or source gradients.
+A spectral zero changes excitation, not the material or open-boundary model;
+it does not guarantee shorter convergence. See the
+[cutoff-source measurements](../fdtd-pulse-notches.md) before using it near a
+diffraction threshold.
+
+
 ### Shared-backend time records and user monitors
 
 ```python

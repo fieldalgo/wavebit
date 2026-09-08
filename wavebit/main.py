@@ -88,7 +88,9 @@ def fdtd(stack=None, incidence=None, **kwargs):
     ``align_layers=True`` places every layer boundary on a z node, independently
     of padding grading; geometry and half spaces are static.
     ``pulse_width`` controls their Gaussian source envelope in c=1
-    time units. ``diffraction_distance`` sets extraction-plane distances from
+    time units; ``pulse_notches`` optionally suppresses selected positive
+    frequencies with causal delayed copies of that pulse.
+    ``diffraction_distance`` sets extraction-plane distances from
     the incident and outgoing interfaces without resizing the mesh. Diagnostics
     report physical and Yee transverse cutoff classifications for each order.
     ``diffraction_method='directional'`` separates travelling E/H components

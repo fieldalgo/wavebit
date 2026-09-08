@@ -9,11 +9,54 @@ import math
 import numpy as np
 
 from .backend import _concrete
-from .conventions import boundary_kz, incidence_clashes, incident_sp_amplitudes, order_azimuth, parse_order_pair, parse_period_mapping
+from .conventions import boundary_kz, incidence_clashes, incident_sp_amplitudes, order_azimuth, parse_order_pair, parse_period_mapping, time_delay_phase
 from .domain import as_material
 from .grid_fdtd import _validate_pml_reflection, fdtd_grid
 from .result import Result, ResultSub
 from ..backends.time_domain import time_loop_backend
+
+
+def _notched_pulse(pulse, dt, frequencies, notches, epsilon, carrier, record=False):
+    """Static causal FIR shaping; finite-sum spectra guard incident calibration.
+
+    Each zero adds one delayed sample. Reserve those samples before filtering,
+    rather than dropping a convolution tail and filling the intended zero.
+    Host NumPy is intentional: scene source/mesh parameters are static.
+    """
+    values = np.asarray(notches)
+    if (values.ndim > 1 or not values.size or values.dtype.kind not in 'fiu'
+            or not np.isfinite(values).all() or np.any(values <= 0)):
+        raise ValueError('pulse_notches must be a positive finite static frequency or nonempty frequency vector.')
+    values = np.atleast_1d(values).astype(float)
+    if len(values) > 2:
+        raise ValueError('pulse_notches supports at most two zeros; repeated differences amplify pulse truncation and roundoff.')
+    if not np.isfinite(values).all() or np.any(values >= .5/dt):
+        raise ValueError('pulse_notches must lie below temporal Nyquist.')
+    if len(values) >= len(pulse)-1:
+        raise ValueError('pulse_notches requires more time samples; increase n_periods.')
+    checked = np.r_[frequencies, carrier] if record else frequencies
+    if np.any(abs(checked[:, None]-values) <= 32*np.finfo(float).eps*np.maximum(checked[:, None], values)):
+        raise ValueError('pulse_notches must avoid requested frequencies and the time-record carrier.')
+    result = pulse[:-len(values)].copy()
+    for frequency in values:
+        result = np.convolve(result, [1., -time_delay_phase(np, frequency, dt)])
+        scale = np.max(abs(result))
+        if not np.isfinite(scale) or scale == 0:
+            raise ValueError('pulse_notches produced an unresolved pulse; reduce the number of notches.')
+        result /= scale
+    # Check the actual source precision, including rounding after cancellation.
+    result = result.astype(np.complex64 if epsilon > 1e-10 else np.complex128)
+    samples = result.astype(np.complex128)
+    norm = np.sum(abs(samples))
+    time = np.arange(len(samples))*dt
+    spectrum = np.array([abs(np.sum(samples*np.exp(2j*np.pi*f*time)))/norm
+                         for f in np.r_[frequencies, carrier]])
+    required = spectrum if record else spectrum[:-1]
+    if not np.isfinite(spectrum).all() or np.any(required <= 100*epsilon):
+        raise ValueError('pulse_notches leaves a required frequency in the numerical source tail; move or remove notches.')
+    return result, dict(notches=values, relative_spectrum=spectrum[:-1],
+                        spectrum_kind='sampled_l1', carrier_fraction=spectrum[-1],
+                        sampled_peak_time=float(time[np.argmax(abs(samples))]))
 
 
 def _scattering_change_bound(xp, columns):
@@ -193,7 +236,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                      field_monitors=None, record_field=None, record_components=None, grading=None,
                      convergence_window=None, convergence_tol=1e-4, dft_subsample=1, record_bounds=None,
                      pulse_width=None, align_layers=False, diffraction_distance=None,
-                     diffraction_method='electric', pml_reflection=1e-8):
+                     diffraction_method='electric', pml_reflection=1e-8, pulse_notches=None):
     """Solve a static rectangular scene with NumPy/JAX/Torch material gradients.
 
     Explicit resolution is required: optimizing materials must not resize the
@@ -211,6 +254,9 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     pml_reflection sets a static nominal normal-incidence round-trip amplitude
     target in (0,1) on both ends; smaller means stronger absorption. It is not
     a finite-grid error bound and does not change the PML thickness.
+    pulse_notches optionally suppresses selected positive frequencies using
+    causal delayed copies of the Gaussian. Required frequencies must remain
+    resolved, including the carrier when time records are requested.
     """
     record_bounds = _validate_record_bounds(record_bounds)
     if record_bounds is not None and record_field is None:
@@ -432,6 +478,15 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     steps = math.ceil(n_periods*centre/dt)
     time = np.arange(steps)*dt
     pulse = np.exp(-((time-5*width)/width)**2)*np.exp(-2j*np.pi*time/centre)
+    pulse_info = dict(width=width, peak_time=5*width, frequency=1/centre,
+                      notches=np.array([], dtype=float), spectrum_kind='ideal_gaussian',
+                      relative_spectrum=np.exp(-(np.pi*width*(1/band-1/centre))**2))
+    if pulse_notches is not None:
+        pulse, shaped = _notched_pulse(pulse, dt, 1/band, pulse_notches, source_epsilon,
+                                       1/centre, record=record_field is not None)
+        if (steps-len(shaped['notches']))*dt < 10*width+2*(z[transmit_z]-z[source_z])*max(nt, nb):
+            raise ValueError('n_periods is too short for pulse_notches and the scene round trip.')
+        pulse_info.update(shaped)
     kx0, ky0 = 2*np.pi/centre*nt*np.sin(theta)*np.array([np.cos(phi), np.sin(phi)])
     if np.any((band/centre)*np.sin(theta) >= 1):
         raise ValueError('The fixed Bloch wavevector must propagate throughout the wavelength band.')
@@ -671,8 +726,8 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                            stable=stable, dt=dt, steps=steps, n_steps=steps, dft_subsample=dft_subsample,
                            dft_samples=native_runs[0]['dft_samples'],
                            spacing=(float(widths.min()), dy, dx), shape=shape, wavelengths=array(band),
-                           pulse=dict(width=width, peak_time=5*width, frequency=1/centre,
-                                      relative_spectrum=array(np.exp(-(np.pi*width*(1/band-1/centre))**2))),
+                           pulse={key: array(value) if isinstance(value, np.ndarray) else value
+                                  for key, value in pulse_info.items()},
                            z_nodes=array(z), z_spacing=array(widths), grading=grading, align_layers=bool(align_layers),
                            n_pml=int(n_pml), pml_reflection=pml_reflection,
                            source_z=z[source_z], layer_planes=np.r_[0., np.cumsum(thick)],

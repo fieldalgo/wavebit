@@ -58,6 +58,15 @@ def time_pole_parameters(xp, pole, dt):
     return exponent, -xp.imag(exponent)/(2*np.pi*dt), -xp.real(exponent)/dt
 
 
+def time_delay_phase(xp, frequency, delay):
+    """Phase multiplying a delayed pulse to place a zero at positive frequency.
+
+    For the exp(-i*omega*t) convention, p(t)-phase*p(t-delay) has Fourier
+    multiplier 1-exp(2j*pi*(f-frequency)*delay).
+    """
+    return xp.exp(-2j*np.pi*frequency*delay)
+
+
 _FLAT = 1e-12      # below this, a real part counts as zero and the tie-break decides
 
 _PI = 3.141592653589793
