@@ -98,7 +98,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                      pad_scale=1., incidence_side='top', lattice=None,
                      checkpoint_steps=32, return_diagnostics=False,
                      field_monitors=None, record_field=None, record_components=None, grading=None,
-                     convergence_window=None, convergence_tol=1e-4):
+                     convergence_window=None, convergence_tol=1e-4, dft_subsample=1):
     """Solve a static rectangular scene with NumPy/JAX/Torch material gradients.
 
     Explicit resolution is required: optimizing materials must not resize the
@@ -336,7 +336,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
         settings = dict(spacing=(dz, dy, dx), dt=dt, steps=steps, source=source, pulse=pulse,
                         wavelengths=run_band, monitor_z=monitor_indices, backend=backend,
                         device=device, checkpoint_steps=checkpoint_steps, pml_cells=int(n_pml),
-                        convergence_window=convergence_window, convergence_tol=convergence_tol,
+                        convergence_window=convergence_window, convergence_tol=convergence_tol, dft_subsample=dft_subsample,
                         pml_wavelength=centre, z_spacing=widths if grading is not None else None, bloch_phase=(0., ky0*ly, kx0*lx))
         reference = fdtd_grid(xp.ones_like(epsilon)*et, mu=mt,
                               pml_background=(background[0], background[0]), **settings)
@@ -434,7 +434,8 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     result = results[0] if np.ndim(wavelength) == 0 else results
     if return_diagnostics:
         diagnostics = dict(incidence_side='top', reflection_z=0., transmission_z=float(thick.sum()),
-                           stable=stable, dt=dt, steps=steps, n_steps=steps,
+                           stable=stable, dt=dt, steps=steps, n_steps=steps, dft_subsample=dft_subsample,
+                           dft_samples=native_runs[0]['dft_samples'],
                            spacing=(float(widths.min()), dy, dx), shape=shape, wavelengths=array(band),
                            z_nodes=array(z), z_spacing=array(widths), grading=grading,
                            n_pml=int(n_pml), source_z=z[source_z], layer_planes=np.r_[0., np.cumsum(thick)],

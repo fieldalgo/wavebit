@@ -70,6 +70,7 @@ comes next. The outward-pointing rule above binds `guide/` too; only the house s
 
 | Document | Question it answers | Decision |
 | --- | --- | --- |
+| [DFT sampling](fdtd-dft-sampling.md) | What is the cost/error tradeoff of skipping monitor evaluations? | Keep stride 1 by default; compare explicit strides for each pulse. |
 | [Pulse settling](fdtd-pulse-convergence.md) | Does a small temporal tail certify accurate scattering? | Report calibrated amplitude changes separately; spatial refinement remains necessary. |
 | [`backend-choice.md`](backend-choice.md) | Which backend, and whether to freeze the geometry, for a *differentiated* run? | Shapes: `jax jit` at every size, re-freezing every step. Rasters: PyTorch below `truncation_order≈5`. And `normal_grid` outweighs both |
 | [`parametric-modeling.md`](parametric-modeling.md) | How does the staircase-free shape path converge against a raster staircase? | The parametric path for tilted and curved boundaries |

@@ -758,3 +758,38 @@ most `convergence_tol` in absolute value. It is separate from `field_decayed`.
 It does not certify relative accuracy of weak diffraction orders or future
 settling. For measured examples of temporal settling with remaining spatial
 error, see [pulse settling versus spatial accuracy](../fdtd-pulse-convergence.md).
+
+### Subsampling frequency monitors
+
+`dft_subsample=K` is available on `fdtd_grid` and the explicit-backend scene API.
+The default is `1`. It must be a positive integer no larger than the number of
+steps. With `K > 1`, all requested wavelengths must stay strictly below the
+sampling Nyquist frequency, including the extra carrier used for time records.
+This check does not establish that the entire transient signal is band-limited.
+
+The engine evaluates DFT planes after updates `0,K,2K,...`, with the existing E/H
+half-step timestamps. A sample represents `min(K, steps-n)` updates; the final
+partial block is weighted accordingly. This is left-sample quadrature of the
+**demodulated** field. No anti-alias filter is applied. Compare with `K=1` before
+using it on broadband pulses, rapidly changing fields, or resonant materials.
+There is no automatic stride selection.
+
+```python
+result, diagnostic = wavebit.fdtd(
+    stack, incidence, backend='numpy', resolution=40,
+    dft_subsample=2, return_diagnostics=True)
+print(diagnostic['dft_samples'])
+```
+
+Every Maxwell/ADE/CPML update is still executed. Unsampled steps skip monitor
+interpolation and Fourier accumulation through a Python branch on NumPy/Torch
+and `lax.cond` on JAX. Accumulator storage is unchanged. Native final fields and
+raw time records are unchanged; calibrated scene records can inherit the small
+change in reference normalization. The result/scene diagnostics report
+`dft_subsample` and `dft_samples` (zero for native runs without spectra).
+
+With `convergence_window`, a sample block crossing the prefix boundary splits
+its quadrature weight between prefix and tail. Thus the prefix spectrum matches
+a shorter run with the same stride and starting sample. The field-decay norm is
+still evaluated at every update. An apparently settled subsampled spectrum does
+not certify freedom from aliasing; see the [sampling measurement](../fdtd-dft-sampling.md).

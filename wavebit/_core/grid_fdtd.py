@@ -17,7 +17,7 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
               pml_cells=0, pml_wavelength=1., bloch_phase=(0., 0., 0.),
               pml_background=((1., 1.), (1., 1.)),
               record_field=None, record_components=None, z_spacing=None,
-              convergence_window=None, convergence_tol=1e-4):
+              convergence_window=None, convergence_tol=1e-4, dft_subsample=1):
     """Advance a 3D Yee grid and accumulate frequency-domain field planes.
 
     epsilon: positive scalar-per-cell (z,y,x) or diagonal/native (3,z,y,x)
@@ -68,6 +68,11 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
     timestamps. Records retain gradients and allocate only requested snapshots. Torch compile is not a
     validated execution mode; JAX jit and Torch eager autograd are tested.
 
+    dft_subsample=K evaluates DFT planes every K steps (default 1). Each
+    sample represents min(K, remaining steps) updates. This saves monitor work,
+    not Maxwell steps or accumulator storage; no anti-alias filter is applied.
+    Refine K against 1 for transient and out-of-band signals.
+
     Optional convergence_window is the number of final steps inspected for pulse
     decay (positive and smaller than steps). convergence_tol is a relative
     amplitude threshold in (0,1). The returned convergence mapping reports a
@@ -88,6 +93,9 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
     if not selected or len(set(selected)) != len(selected) or any(v not in names for v in selected):
         raise ValueError('record_components must name unique ex/ey/ez/hx/hy/hz components.')
     steps = operator.index(steps)
+    if (isinstance(dft_subsample, (bool, np.bool_))
+            or not isinstance(dft_subsample, (int, np.integer)) or not 1 <= dft_subsample <= steps):
+        raise ValueError('dft_subsample must be a positive integer no larger than steps.')
     if convergence_window is not None:
         if (isinstance(convergence_window, (bool, np.bool_))
                 or not isinstance(convergence_window, (int, np.integer))
@@ -138,6 +146,8 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
         raise ValueError('wavelengths must be a positive finite vector.')
     if bool(len(indices)) != bool(len(band)):
         raise ValueError('monitor_z and wavelengths must be provided together.')
+    if dft_subsample > 1 and len(band) and 2*dft_subsample*dt >= band.min():
+        raise ValueError('dft_subsample must keep the requested band strictly below sampling Nyquist.')
     phase = array(bloch_phase)
     if phase.shape != (3,) or xp.isdtype(phase.dtype, 'complex floating'):
         raise ValueError('bloch_phase must contain three real radians in z,y,x order.')
@@ -308,23 +318,36 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
                         in zip(pole_coefficients, polarizations, previous))
         delta_p = sum((new-old for new, old in zip(updated, polarizations)), 0.)
         e = ae*e+be*(rotation-current*drive[n]-delta_p/dt)
+        monitor_state = (fe, fh)
+        if convergence_window is not None:
+            monitor_state += state[10:12]
         if len(indices):
-            ek = xp.exp(2j*xp.pi*frequency*(n+1)*dt)*dt
-            hk = xp.exp(2j*xp.pi*frequency*(n+.5)*dt)*dt
-            de = ek[:, None, None, None, None]*planes(e, False)[None]
-            dh = hk[:, None, None, None, None]*planes(h, True)[None]
-            fe, fh = fe+de, fh+dh
+            def accumulate(values):
+                fe, fh = values[:2]
+                # Left sample represents up to stride steps; clip the last block.
+                weight = xp.minimum(array(dft_subsample), array(steps-n))
+                ek = xp.exp(2j*xp.pi*frequency*(n+1)*dt)*dt
+                hk = xp.exp(2j*xp.pi*frequency*(n+.5)*dt)*dt
+                de = ek[:, None, None, None, None]*planes(e, False)[None]
+                dh = hk[:, None, None, None, None]*planes(h, True)[None]
+                updated = (fe+weight*de, fh+weight*dh)
+                if convergence_window is not None:
+                    tail_weight = xp.maximum(array(0), n+weight-(steps-convergence_window))
+                    tail_weight = xp.minimum(weight, tail_weight)
+                    updated += (values[2]+tail_weight*de, values[3]+tail_weight*dh)
+                return updated
+            monitor_state = (accumulate(monitor_state) if dft_subsample == 1 else
+                             runtime.conditional(n % dft_subsample == 0, accumulate,
+                                                 lambda v: v, monitor_state))
+        fe, fh = monitor_state[:2]
         result = (e, h, fe, fh, pe, ph, updated, polarizations)
         if convergence_window is not None:
-            peak, tail_peak, tail_e, tail_h = state[8:]
+            peak, tail_peak = state[8:10]
             norm = field_norm_squared(e, h)
             in_tail = array(n >= steps-convergence_window)
             peak = xp.maximum(peak, norm)
             tail_peak = xp.maximum(tail_peak, xp.where(in_tail, norm, 0.))
-            if len(indices):
-                tail_e = tail_e+xp.where(in_tail, de, 0.)
-                tail_h = tail_h+xp.where(in_tail, dh, 0.)
-            result += (peak, tail_peak, tail_e, tail_h)
+            result += (peak, tail_peak)+monitor_state[2:]
         return result, None
 
     polarization = tuple(runtime.zeros(shape, dtype=dtype) for _ in pole_coefficients)
@@ -376,5 +399,6 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
                 electric_spectrum=fe, magnetic_spectrum=fh,
                 flux_density=flux, power_z=power, wavelengths=array(band), monitor_z=iz,
                 stable=stable, convergence=convergence, cfl_dt=bound, time=steps*dt,
+                dft_subsample=dft_subsample, dft_samples=(steps-1)//dft_subsample+1 if len(band) else 0,
                 h_time=(steps-.5)*dt, spacing=array(spacing), bloch_phase=phase,
                 z_nodes=array(nodes[:-1]), z_spacing=array(widths))

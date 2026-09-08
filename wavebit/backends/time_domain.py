@@ -23,6 +23,9 @@ class NumpyTimeLoop:
     def zeros(self, shape, dtype):
         return self.xp.zeros(shape, dtype=dtype, device=self.device)
 
+    def conditional(self, predicate, yes, no, operand):
+        return yes(operand) if predicate else no(operand)
+
     def advance(self, step, state, steps, checkpoint_steps):
         for n in range(steps):
             state, _ = step(state, n)
@@ -56,6 +59,10 @@ class JaxTimeLoop(NumpyTimeLoop):
             device = jax.devices(device)[0]
         self.xp = xp
         self.device = device
+
+    def conditional(self, predicate, yes, no, operand):
+        import jax
+        return jax.lax.cond(predicate, yes, no, operand)
 
     def advance(self, step, state, steps, checkpoint_steps):
         import jax
