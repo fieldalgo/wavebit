@@ -82,7 +82,11 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
     amplitude threshold in (0,1). The returned convergence mapping reports a
     volume-weighted field norm and the final-window DFT contribution. It does
     not terminate early or certify spatial/PML convergence. Fields include the
-    absorbing layers; the norm is not dispersive stored energy.
+    absorbing layers; the norm is not dispersive stored energy. Separate
+    material_decay ratios track each excited ADE pole via weighted
+    (omega0**2*abs(P)**2 + abs((P-P_previous)/dt)**2)/strength.
+    material_decayed ignores unexcited/zero-strength poles; state_decayed
+    requires field_decayed and material_decayed. CPML memory is not assessed.
     """
     runtime = time_loop_backend(backend, device=device, reference=epsilon)
     xp, array = runtime.xp, runtime.array
@@ -194,6 +198,7 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
               & (dt <= bound))
     pole_coefficients = []
     pole_strengths = []
+    pole_frequencies_squared = []
     resonance_bound = array(0.)
     for pole in poles:
         if len(pole) != 3:
@@ -207,6 +212,8 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
         pole_coefficients.append(((2-omega0**2*dt**2)/denominator,
                                   (1-.5*gamma*dt)/denominator, strength*dt**2/denominator))
         pole_strengths.append(strength)
+        if convergence_window is not None:
+            pole_frequencies_squared.append(omega0**2)
         resonance_bound = xp.maximum(resonance_bound, xp.max(omega0**2))
     if pole_coefficients:
         # Conservative coupled Maxwell/oscillator bound; uncoupled resonances
@@ -274,6 +281,16 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
         weights_h = array(np.stack((widths, widths, dual))[:, :, None, None], dtype=real_dtype)
         def field_norm_squared(e, h):
             return xp.sum(weights_e*xp.abs(e)**2+weights_h*xp.abs(h)**2)*spacing[1]*spacing[2]
+        material_zero = runtime.zeros((len(pole_coefficients),), dtype=real_dtype)
+        def material_activity(polarizations, previous):
+            values = []
+            for p, old, omega2, strength in zip(polarizations, previous, pole_frequencies_squared, pole_strengths):
+                active = strength > 0
+                # Positive oscillator activity; P and its backward-difference
+                # velocity are staggered, so this is not a conserved Yee energy.
+                density = (omega2*xp.abs(p)**2+xp.abs((p-old)/dt)**2)/xp.where(active, strength, 1.)
+                values.append(xp.sum(weights_e*xp.where(active, density, 0.))*spacing[1]*spacing[2])
+            return xp.stack(values) if values else material_zero
 
     def shifted(v, axis, forward, factor):
         interior = [slice(None)]*v.ndim
@@ -375,13 +392,16 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
             in_tail = array(n >= steps-convergence_window)
             peak = xp.maximum(peak, norm)
             tail_peak = xp.maximum(tail_peak, xp.where(in_tail, norm, 0.))
-            result += (peak, tail_peak)+monitor_state[2:]
+            activity = material_activity(updated, polarizations)
+            material_peak = xp.maximum(state[12], activity)
+            material_tail = xp.maximum(state[13], xp.where(in_tail, activity, 0.))
+            result += (peak, tail_peak)+monitor_state[2:]+(material_peak, material_tail)
         return result, None
 
     polarization = tuple(runtime.zeros(shape, dtype=dtype) for _ in pole_coefficients)
     state = (e, h, accum, accum, auxiliary, auxiliary, polarization, polarization)
     if convergence_window is not None:
-        state += (field_norm_squared(e, h), array(0., dtype=real_dtype), accum, accum)
+        state += (field_norm_squared(e, h), array(0., dtype=real_dtype), accum, accum, material_zero, material_zero)
     records = {}
     if record_field is None:
         state = runtime.advance(step, state, steps, checkpoint_steps)
@@ -402,7 +422,12 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
     e, h, fe, fh, _, _, polarization, previous = state[:8]
     convergence = None
     if convergence_window is not None:
-        peak, tail_peak, tail_e, tail_h = state[8:]
+        peak, tail_peak, tail_e, tail_h = state[8:12]
+        material_peak, material_tail = state[12:14]
+        material_signal = xp.isfinite(material_peak) & (material_peak > 0)
+        material_ratio = xp.sqrt(material_tail/xp.where(material_signal, material_peak, 1.))
+        material_decayed = stable & xp.all(xp.isfinite(material_peak) & xp.isfinite(material_tail)
+                                          & ((material_peak == 0) | (material_ratio <= convergence_tol)))
         signal_present = xp.isfinite(peak) & (peak > 0)
         field_ratio = xp.sqrt(tail_peak/xp.where(signal_present, peak, 1.))
         drive_peak = xp.max(xp.abs(drive))
@@ -417,10 +442,15 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
                            signal_present=signal_present, source_inactive=source_inactive,
                            field_decay=xp.where(signal_present, field_ratio, array(float('nan'))),
                            field_decayed=stable & signal_present & source_inactive & (field_ratio <= convergence_tol),
+                           material_signal_present=material_signal,
+                           material_decay=xp.where(material_signal, material_ratio, array(float('nan'))),
+                           material_activity_peak=material_peak, material_activity_tail=material_tail,
+                           material_decayed=material_decayed,
                            electric_spectrum_before_window=fe-tail_e,
                            magnetic_spectrum_before_window=fh-tail_h,
                            spectral_signal_present=spectral_signal,
                            spectral_tail=xp.where(spectral_signal, spectral_ratio, array(float('nan'))))
+        convergence['state_decayed'] = convergence['field_decayed'] & material_decayed
     flux = .5*xp.real(xp.linalg.cross(xp.moveaxis(fe, 2, -1), xp.conj(xp.moveaxis(fh, 2, -1)), axis=-1))
     power = xp.sum(flux[..., 2], axis=(-2, -1))*spacing[1]*spacing[2]
     return dict(E=e, H=h, fields=records, polarization=polarization, previous_polarization=previous,

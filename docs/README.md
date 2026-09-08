@@ -70,6 +70,7 @@ comes next. The outward-pointing rule above binds `guide/` too; only the house s
 
 | Document | Question it answers | Decision |
 | --- | --- | --- |
+| [Lorentz decay](fdtd-lorentz-decay.md) | Can material motion outlive a small field? | Track per-pole activity and expose a combined decay flag. |
 | [Bragg cavity](fdtd-bragg-cavity.md) | Do long-lived resonances pass temporal diagnostics too early? | Short runs fail; spatial detuning remains independent. |
 | [DFT sampling](fdtd-dft-sampling.md) | What is the cost/error tradeoff of skipping monitor evaluations? | Keep stride 1 by default; compare explicit strides for each pulse. |
 | [Pulse settling](fdtd-pulse-convergence.md) | Does a small temporal tail certify accurate scattering? | Report calibrated amplitude changes separately; spatial refinement remains necessary. |

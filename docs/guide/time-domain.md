@@ -861,3 +861,45 @@ snapshot accumulation; bounds covering the full domain still record that domain.
 gradients retain their original behavior. Bounds are static geometry, not
 optimization parameters. For direct grid-index selection on `fdtd_grid`, use
 `record_region` instead.
+
+### Checking residual material oscillations
+
+When `convergence_window` is enabled, the native convergence mapping also reports
+activity for every ADE pole, in input pole order. At each E-component control
+volume it evaluates
+
+$$
+A_j=\sum_{\text{cells, components}} \Delta V\,
+\frac{\omega_{0,j}^2 |P_j|^2+|(P_j-P_{j,\mathrm{previous}})/\Delta t|^2}{s_j},
+$$
+
+where $s_j$ is pole strength and cells with zero strength contribute zero.
+This positive oscillator activity combines polarization and its discrete
+velocity. They are evaluated at different time levels, so it is not a conserved
+discrete energy or a complete electromagnetic/PML energy measurement. For Drude
+poles, omega0=0: a static polarization offset has no activity once its velocity
+vanishes.
+
+| Field | Meaning |
+| --- | --- |
+| `material_activity_peak` | Maximum activity for each pole over the full run |
+| `material_activity_tail` | Maximum activity for each pole over the last requested window |
+| `material_signal_present` | Each pole's activity peak is finite and positive |
+| `material_decay` | Square root of tail/peak for each excited pole; NaN for unexcited poles |
+| `material_decayed` | Valid material/CFL inputs and finite activity; every excited pole has `material_decay <= convergence_tol` |
+| `state_decayed` | Both `field_decayed` and `material_decayed` |
+
+Absent poles yield empty per-pole arrays and `material_decayed=True`. Unexcited
+poles do not block the material flag. Each excited pole uses its own peak, so even
+a weakly excited slow oscillator can keep this conservative flag false. The
+combined flag still requires a nonzero observed field and an inactive source.
+It does not inspect CPML auxiliary memory, establish spatial accuracy, or
+predict future behavior.
+
+The scene diagnostics expose `material_decayed` and `state_decayed` aggregated
+over both actual and reference runs for both source bases; per-pole values remain
+in `convergence['bases']`. Existing `field_decayed` and `amplitudes_settled` retain
+their separate meanings. All diagnostics remain opt-in, fixed-step and backend
+native. Activity reductions add work proportional to the number of poles and
+grid cells, retaining only two scalars per pole across the time loop. Ratios and
+maxima retain gradients where differentiable.

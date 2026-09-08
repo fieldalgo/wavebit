@@ -512,6 +512,9 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                 amplitudes_settled=stable & inactive & xp.all(valid) & xp.all(xp.abs(change) <= convergence_tol),
                 field_decayed=xp.all(xp.stack([run[kind]['field_decayed']
                                               for run in convergence_runs for kind in ('reference', 'actual')])))
+            for key in ('material_decayed', 'state_decayed'):
+                diagnostics['convergence'][key] = xp.all(xp.stack(
+                    [run[kind][key] for run in convergence_runs for kind in ('reference', 'actual')]))
         monitors = {}
         for name, (lo, hi, fraction) in monitor_brackets.items():
             fields = {}
