@@ -15,6 +15,7 @@ compares the code to itself proves continuity, not correctness.
 
 | Oracle | Files | What a pass means |
 | --- | --- | --- |
+| **Mixed dispersive metals** | `test_fdtd_mixed_metal.py`, `references/test_native_material_external.py` | Do low-loss Drude/Lorentz scenes match an independent discrete boundary problem and Airy refinement, preserve all six material gradients, and agree with frozen Meep fields at matched interface sampling? |
 | **An outside solver** | `test_reticolo_golden.py`, `test_oblique_lattice.py` (published Li 1997 table) | The strongest evidence here: a different group's code, in a different language. RETICOLO is the only reference that validates individual diffraction *orders* rather than totals. |
 | **Region records** | `test_fdtd_record_region.py`, `test_fdtd_scene_record_bounds.py` | Do cropped histories preserve exact Yee modes, coordinates, retained array size and material gradients? |
 | **DFT sampling** | `test_fdtd_dft_sampling.py` | Do sampled spectra preserve exact-carrier quadrature, staggered phases, prefix weights and backend gradients? |

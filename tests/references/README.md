@@ -970,6 +970,44 @@ replacing committed external evidence; never regenerate it merely to pass a test
 
 ## Native CPML and dispersive materials (2026-09-08)
 
+The additional `golden_low_loss_metal_meep.json` reference covers a low-loss
+mixed metal with epsilon-infinity 1.5 and poles (0, 0.08, 160), (10, 0.12, 40).
+Its wavelengths are 0.9/1/1.1 and duration is 160; the remaining geometry,
+Courant factor and field normalization follow the worker below. The sine
+carrier period and Gaussian width are 1, centered at time 5. Meep 1.34.0 and
+Wavebit with point-sampled strengths agree within 1.2e-7 for complex Ex/Hy and
+2.7e-9 for power. The test bound is 1e-6 absolute. See the
+[measurement](../../docs/fdtd-mixed-metal.md) for the distinct scene, Airy and
+gradient comparisons. Earlier goldens were not regenerated.
+
+Reproduce the new external runs using a Meep environment; only the public API
+is used, and tracebacks are suppressed to avoid displaying implementation frames:
+
+```sh
+for res in 40 80; do
+  "$MEEP_PYTHON" studies/validate_grid_dispersive.py --backend meep --model low-loss-mixed --resolution "$res" --duration 160 --output "/tmp/low-loss-meep-$res.json"
+done
+```
+
+To freeze a separate candidate file, preserving the committed reference:
+
+```python
+import hashlib
+import json
+from datetime import date
+from pathlib import Path
+
+worker = Path('studies/validate_grid_dispersive.py')
+payload = dict(
+    description='Low-loss mixed Drude/Lorentz slab; Meep public API execution, no implementation inspection.',
+    generated=date.today().isoformat(), worker=str(worker),
+    worker_sha256=hashlib.sha256(worker.read_bytes()).hexdigest(),
+    epsilon_inf=1.5, poles=[[0., .08, 160.], [10., .12, 40.]],
+    runs=[json.loads(Path(f'/tmp/low-loss-meep-{r}.json').read_text()) for r in (40, 80)])
+with Path('/tmp/golden_low_loss_metal_meep.json').open('x') as output:
+    output.write(json.dumps(payload, indent=2)+'\n')
+```
+
 `golden_native_material_external.npz` contains additional live Meep 1.34.0
 outputs and a two-pole FDTDX 0.6.2 update/gradient reference. External input and
 worker digests are stored in the archive. Meep source was never read; its

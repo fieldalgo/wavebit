@@ -903,3 +903,7 @@ their separate meanings. All diagnostics remain opt-in, fixed-step and backend
 native. Activity reductions add work proportional to the number of poles and
 grid cells, retaining only two scalars per pole across the time loop. Ratios and
 maxima retain gradients where differentiable.
+
+See the [low-loss mixed-metal measurement](../fdtd-mixed-metal.md) for a case
+where calibrated amplitudes settle before material motion decays, together with
+separate checks of grid error and material-parameter sensitivities.

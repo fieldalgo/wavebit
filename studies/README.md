@@ -12,6 +12,7 @@ makes them assertions, not studies.
 
 | Script | Question it answers |
 | --- | --- |
+| `fdtd_mixed_metal.py` | How do low-loss mixed Drude/Lorentz amplitudes and damping sensitivities settle and refine? [Measurement](../docs/fdtd-mixed-metal.md). |
 | `fdtd_lorentz_decay.py` | Can material motion survive field decay, and how does a resonant slab settle toward Airy? [Measurement](../docs/fdtd-lorentz-decay.md). |
 | `fdtd_bragg_cavity.py` | Does a long-lived cavity reveal incomplete time settling or spatial detuning? [Measurement](../docs/fdtd-bragg-cavity.md). |
 | `fdtd_dft_sampling.py` | How much monitor time does DFT subsampling save, at what quadrature error? [Measurement](../docs/fdtd-dft-sampling.md). |

@@ -1,5 +1,6 @@
 """External CPML and electric dispersive material references; no Meep import."""
 from pathlib import Path
+import json
 import runpy
 
 import numpy as np
@@ -7,6 +8,21 @@ import pytest
 
 HERE=Path(__file__).resolve().parent
 ROOT=HERE.parents[1]
+
+
+@pytest.mark.parametrize('resolution', [40, 80])
+def test_low_loss_mixed_metal_against_meep(resolution):
+    pytest.importorskip('jax')
+    worker = runpy.run_path(str(ROOT/'studies/validate_grid_dispersive.py'))['worker']
+    reference = json.loads((HERE/'golden_low_loss_metal_meep.json').read_text())
+    expected, = [v for v in reference['runs'] if v['resolution'] == resolution]
+    actual = worker('wavebit', resolution, 'low-loss-mixed', duration=160., pole_sampling='point')
+    for key in ('model', 'resolution', 'duration', 'wavelengths', 'pml_width', 'pole_sampling'):
+        assert actual[key] == expected[key]
+    def fields(data):
+        return np.array(data['field_real'])+1j*np.array(data['field_imag'])
+    np.testing.assert_allclose(fields(actual), fields(expected), atol=1e-6, rtol=0)
+    np.testing.assert_allclose(actual['transmission'], expected['transmission'], atol=1e-6, rtol=0)
 
 
 @pytest.mark.parametrize('model',['dielectric','lorentz','drude','mixed'])
