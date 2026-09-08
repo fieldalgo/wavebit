@@ -11,7 +11,7 @@ import numpy as np
 from .backend import _concrete
 from .conventions import boundary_kz, incidence_clashes, incident_sp_amplitudes, order_azimuth, parse_order_pair, parse_period_mapping
 from .domain import as_material
-from .grid_fdtd import fdtd_grid
+from .grid_fdtd import _validate_pml_reflection, fdtd_grid
 from .result import Result, ResultSub
 from ..backends.time_domain import time_loop_backend
 
@@ -193,7 +193,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                      field_monitors=None, record_field=None, record_components=None, grading=None,
                      convergence_window=None, convergence_tol=1e-4, dft_subsample=1, record_bounds=None,
                      pulse_width=None, align_layers=False, diffraction_distance=None,
-                     diffraction_method='electric'):
+                     diffraction_method='electric', pml_reflection=1e-8):
     """Solve a static rectangular scene with NumPy/JAX/Torch material gradients.
 
     Explicit resolution is required: optimizing materials must not resize the
@@ -208,6 +208,9 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     reference interfaces without resizing the padding, source or PML mesh.
     diffraction_method='directional' separates E/H into travelling directions
     using the discrete admittance; both planes need locally uniform z cells.
+    pml_reflection sets a static nominal normal-incidence round-trip amplitude
+    target in (0,1) on both ends; smaller means stronger absorption. It is not
+    a finite-grid error bound and does not change the PML thickness.
     """
     record_bounds = _validate_record_bounds(record_bounds)
     if record_bounds is not None and record_field is None:
@@ -230,6 +233,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
         raise ValueError('align_layers must be a static boolean.')
     if diffraction_method not in ('electric', 'directional'):
         raise ValueError("diffraction_method must be 'electric' or 'directional'.")
+    pml_reflection = _validate_pml_reflection(pml_reflection)
     if diffraction_distance is not None:
         distances = np.asarray(diffraction_distance)
         if (distances.shape not in ((), (2,)) or distances.dtype.kind not in 'fiu'
@@ -546,7 +550,8 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                         wavelengths=run_band, monitor_z=monitor_indices, backend=backend,
                         device=device, checkpoint_steps=checkpoint_steps, pml_cells=int(n_pml),
                         convergence_window=convergence_window, convergence_tol=convergence_tol, dft_subsample=dft_subsample,
-                        pml_wavelength=centre, z_spacing=widths if nonuniform else None, bloch_phase=(0., ky0*ly, kx0*lx))
+                        pml_wavelength=centre, pml_reflection=pml_reflection,
+                        z_spacing=widths if nonuniform else None, bloch_phase=(0., ky0*ly, kx0*lx))
         reference = fdtd_grid(xp.ones_like(epsilon)*et, mu=mt,
                               pml_background=(background[0], background[0]), **settings)
         actual = fdtd_grid(epsilon, mu=permeability, poles=native_poles,
@@ -669,7 +674,8 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                            pulse=dict(width=width, peak_time=5*width, frequency=1/centre,
                                       relative_spectrum=array(np.exp(-(np.pi*width*(1/band-1/centre))**2))),
                            z_nodes=array(z), z_spacing=array(widths), grading=grading, align_layers=bool(align_layers),
-                           n_pml=int(n_pml), source_z=z[source_z], layer_planes=np.r_[0., np.cumsum(thick)],
+                           n_pml=int(n_pml), pml_reflection=pml_reflection,
+                           source_z=z[source_z], layer_planes=np.r_[0., np.cumsum(thick)],
                            # The final closing cell also belongs to the lower PML.
                            pml_bounds=(z[0], z[int(n_pml)], z[-int(n_pml)], z[-1]+widths[-1]),
                            angles=np.arcsin(band/centre*np.sin(theta)),

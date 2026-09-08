@@ -461,10 +461,14 @@ def component_property(raster, thickness, top, bot, period, z_centres, z_widths,
 # CPML
 # ---------------------------------------------------------------------------------------
 
-def cpml_coefficients(depth, thickness, dt, wavelength, eps_r):
+def cpml_coefficients(depth, thickness, dt, wavelength, eps_r, *,
+                      target_reflection=PML_TARGET_REFLECTION):
     """``(b, a, kappa)`` of the CFS-PML at a given depth into a layer (Roden & Gedney 2000).
 
     ``depth`` is measured in length units from the inner face.
+    ``target_reflection`` sets the nominal normal-incidence round-trip amplitude
+    attenuation of the unshifted continuous profile. It is not a bound on the
+    finite-grid reflection, especially at grazing incidence.
 
     **Both material-dependent quantities here were wrong in the obvious direction once.**
     ``sigma`` in a *stretched coordinate* is normalised by the vacuum permittivity, so the
@@ -480,7 +484,7 @@ def cpml_coefficients(depth, thickness, dt, wavelength, eps_r):
     this a complex-frequency-shifted PML and what lets it absorb evanescent fields, which a
     grating close to its boundary produces in quantity.
     """
-    sigma_max = (-(PML_ORDER + 1.0) * np.log(PML_TARGET_REFLECTION)
+    sigma_max = (-(PML_ORDER + 1.0) * np.log(target_reflection)
                  / (2.0 * np.sqrt(eps_r) * thickness))
     alpha_max = PML_ALPHA_RELATIVE * 2.0 * np.pi / wavelength
 
@@ -579,7 +583,7 @@ def build_z_mesh(h_fine, thickness_total, above, below, n_top, n_bot, n_max, wav
 
 
 def cpml_profiles(z_node, z_half, top_thickness, bot_thickness, dt, wavelength,
-                  eps_top, eps_bot):
+                  eps_top, eps_bot, *, target_reflection=PML_TARGET_REFLECTION):
     """CPML coefficients per z index, at node (``nz``) and half (``nz-1``) positions.
 
     Outside the two layers the triple is ``(1, 0, 1)``, which makes every stretched update
@@ -601,7 +605,8 @@ def cpml_profiles(z_node, z_half, top_thickness, bot_thickness, dt, wavelength,
         on_top = d_top >= d_bot
         eps_side = np.where(on_top, eps_top, eps_bot)
         side_thickness = np.where(on_top, top_thickness, bot_thickness)
-        b, a, kappa = cpml_coefficients(depth, side_thickness, dt, wavelength, eps_side)
+        b, a, kappa = cpml_coefficients(depth, side_thickness, dt, wavelength, eps_side,
+                                       target_reflection=target_reflection)
         outside = depth <= 0.0
         return {'b': np.where(outside, 1.0, b), 'a': np.where(outside, 0.0, a),
                 'kappa': np.where(outside, 1.0, kappa)}

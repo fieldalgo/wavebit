@@ -10,6 +10,18 @@ from .backend import _concrete
 from ..backends.time_domain import time_loop_backend
 
 
+def _validate_pml_reflection(value):
+    """Keep CPML profile selection static and independent of material graphs."""
+    value = np.asarray(value)
+    message = 'pml_reflection must be a finite static scalar strictly between zero and one.'
+    if value.shape != () or value.dtype.kind not in 'fiu':
+        raise ValueError(message)
+    value = float(value)
+    if not np.isfinite(value) or not 0 < value < 1:
+        raise ValueError(message)
+    return value
+
+
 def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
               electric=None, magnetic=None, source=None, pulse=None,
               wavelengths=(), monitor_z=(), backend='numpy', device=None,
@@ -17,7 +29,8 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
               pml_cells=0, pml_wavelength=1., bloch_phase=(0., 0., 0.),
               pml_background=((1., 1.), (1., 1.)),
               record_field=None, record_components=None, z_spacing=None, record_region=None,
-              convergence_window=None, convergence_tol=1e-4, dft_subsample=1):
+              convergence_window=None, convergence_tol=1e-4, dft_subsample=1,
+              pml_reflection=1e-8):
     """Advance a 3D Yee grid and accumulate frequency-domain field planes.
 
     epsilon: positive scalar-per-cell (z,y,x) or diagonal/native (3,z,y,x)
@@ -55,7 +68,10 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
     its frequency shift. pml_background gives static (epsilon, mu) pairs at the low/high z ends.
     End layers plus one interior cell must match these positive backgrounds, with
     no conductivity or nonzero pole strength. Cannot combine with absorber_cells.
-    x/y stay periodic. PML accuracy needs width and resolution refinement.
+    x/y stay periodic. Static pml_reflection in (0,1), default 1e-8, sets nominal
+    round-trip amplitude attenuation at normal incidence before frequency
+    shifting. Smaller values increase conductivity; this is not a measured
+    reflection bound. PML accuracy needs strength, width and resolution checks.
 
     backend selects the shared Array API core: 0/'numpy', 1/'jax', or 2/'torch',
     matching RCWA's numeric IDs. JAX uses compiled scan; Torch uses an autograd
@@ -120,6 +136,7 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
         raise ValueError("pml_cells must be nonnegative and cannot combine with absorber_cells.")
     if not np.isfinite(pml_wavelength) or pml_wavelength <= 0:
         raise ValueError("pml_wavelength must be positive and finite.")
+    pml_reflection = _validate_pml_reflection(pml_reflection)
     if steps < 1 or checkpoint_steps < 1 or absorber_cells < 0:
         raise ValueError('steps/checkpoint_steps must be positive; absorber_cells nonnegative.')
     spacing = np.asarray(spacing, float)
@@ -315,12 +332,14 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
             depth = np.maximum(pml_cells-np.minimum(position, shape[1]-position), 0)*spacing[0]
             return tuple(array(v[:, None, None], dtype=real_dtype) for v in cpml_coefficients(
                 depth, pml_cells*spacing[0], dt, pml_wavelength,
-                np.where(position < shape[1]/2, np.prod(background[0]), np.prod(background[1]))))
+                np.where(position < shape[1]/2, np.prod(background[0]), np.prod(background[1])),
+                target_reflection=pml_reflection))
         if nonuniform:
             from .fdtd import cpml_profiles
             pe, ph = cpml_profiles(nodes, nodes[:-1]+widths/2, nodes[pml_cells],
                                    nodes[-1]-nodes[-pml_cells-1], dt, pml_wavelength,
-                                   np.prod(background[0]), np.prod(background[1]))
+                                   np.prod(background[0]), np.prod(background[1]),
+                                   target_reflection=pml_reflection)
             pml_e = tuple(array(pe[key][:-1, None, None], dtype=real_dtype) for key in ('b', 'a', 'kappa'))
             pml_h = tuple(array(ph[key][:, None, None], dtype=real_dtype) for key in ('b', 'a', 'kappa'))
         else:
@@ -459,4 +478,4 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
                 stable=stable, convergence=convergence, cfl_dt=bound, time=steps*dt,
                 dft_subsample=dft_subsample, dft_samples=(steps-1)//dft_subsample+1 if len(band) else 0,
                 h_time=(steps-.5)*dt, spacing=array(spacing), bloch_phase=phase,
-                z_nodes=array(nodes[:-1]), z_spacing=array(widths))
+                z_nodes=array(nodes[:-1]), z_spacing=array(widths), pml_reflection=pml_reflection)

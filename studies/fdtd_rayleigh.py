@@ -45,19 +45,20 @@ def reference(order):
 
 
 def run(expected, backend, resolution, periods=300, distance=None, width=3., pml_width=.3,
-        method='electric', pad_scale=1.):
+        method='electric', pad_scale=1., pml_reflection=1e-8, convergence_window=200):
     results, d = wavebit.fdtd(
         structure=STRUCTURE, thickness=[.2], top=1., bot=1., period=PERIOD,
         wavelength=BAND, theta=THETA, tetm='te', truncation_order=1,
         backend=backend, resolution=resolution, n_pml=round(pml_width*resolution),
         n_periods=periods, align_layers=True, pulse_width=width,
-        diffraction_method=method, pad_scale=pad_scale,
-        diffraction_distance=distance, convergence_window=200, return_diagnostics=True)
+        diffraction_method=method, pad_scale=pad_scale, pml_reflection=pml_reflection,
+        diffraction_distance=distance, convergence_window=convergence_window, return_diagnostics=True)
     info, c = d['diffraction'], d['convergence']
     return dict(
         resolution=resolution, periods=periods, distance=distance, pulse_width=width,
-        method=method, pml_width=pml_width, pad_scale=pad_scale, shape=d['shape'], dt=d['dt'], steps=d['steps'],
-        comparison_duration=200*d['dt'],
+        method=method, pml_width=pml_width, pml_reflection=d['pml_reflection'],
+        pad_scale=pad_scale, shape=d['shape'], dt=d['dt'], steps=d['steps'],
+        convergence_window=convergence_window, comparison_duration=convergence_window*d['dt'],
         monitor_z=[info[name] for name in ('reflection_monitor_z', 'transmission_monitor_z')],
         error={pol: float(abs(amplitudes(results, 1, pol)-expected[pol]).max()) for pol in expected},
         energy={pol: [float(np.asarray(getattr(r, basis).R+getattr(r, basis).T).sum()) for r in results]

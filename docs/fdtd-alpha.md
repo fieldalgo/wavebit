@@ -70,6 +70,10 @@ magnetic/conical, bottom-record and backend-gradient checks cover the extraction
 A nearby long-lived TM oscillation remains a separate source-bandwidth and
 temporal-convergence concern; direction separation alone does not validate
 near-Rayleigh scattering.
+Static [CPML strength](fdtd-pml-strength.md) is now independently configurable
+on the shared grid and explicit-backend scene interfaces. Its nominal amplitude
+target is not a measured-reflection bound; width, strength, mesh and temporal
+checks remain separate, and the original default profile is preserved.
 
 The common engine reports physical and discrete lower-cutoff classifications
 and supports independent diffraction-plane distances. A binary dielectric

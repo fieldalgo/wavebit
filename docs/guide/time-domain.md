@@ -420,6 +420,31 @@ This does not establish arbitrary-band or grazing-angle accuracy.
 `examples/fdtd_dispersive_gradient.py` differentiates Lorentz oscillator strength
 with CPML enabled. Actual GPU execution remains unverified.
 
+### CPML strength
+
+Both `wavebit.fdtd_grid` and `wavebit.fdtd(..., backend=...)` accept
+`pml_reflection=1e-8`. It must be a finite real static scalar strictly between
+zero and one; booleans, complex values and arrays with dimensions are refused.
+The same setting applies at both ends, including bottom incidence, and to all
+four scene calibration/structure runs. It is recorded as `pml_reflection` in the
+native result or scene diagnostics. It has no effect when native `pml_cells=0`.
+The legacy scene path selected by omitting `backend` keeps its existing profile.
+
+This is a **nominal normal-incidence round-trip amplitude target**, defined for
+the continuous profile before its frequency shift. It is neither a power target
+nor a bound on measured reflection. Smaller values increase the polynomial
+conductivity without changing its order, kappa, frequency shift, cell widths or
+PML depth. `pml_reflection=1e-40` gives five times the conductivity of `1e-8`;
+it does not imply forty-digit accuracy. The default profile is unchanged.
+
+Use `n_pml` (scene) or `pml_cells` (native grid) to vary thickness independently
+of strength. Stronger absorption can increase reflection on an under-resolved
+grid. Compare strength, physical thickness and resolution, and recheck temporal
+decay after changing the boundary. In a directional scene, returning amplitudes
+and calibrated scattering tails help distinguish boundary and time errors.
+The [near-Rayleigh strength study](../fdtd-pml-strength.md) records a concrete
+comparison and its remaining limits.
+
 
 ## Native Bloch phases and incidence gradients
 

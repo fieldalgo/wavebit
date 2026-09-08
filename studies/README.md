@@ -13,6 +13,7 @@ makes them assertions, not studies.
 | Script | Question it answers |
 | --- | --- |
 | `fdtd_directional.py` | Does E/H direction separation isolate boundary returns from a slowly decaying near-Rayleigh mode? [Measurement](../docs/fdtd-directional.md). |
+| `fdtd_pml_strength.py` | How do CPML strength, physical thickness and refinement affect returning near-Rayleigh waves after source narrowing? [Measurement](../docs/fdtd-pml-strength.md). |
 | `fdtd_rayleigh.py` | Can a cutoff classification agree while near-Rayleigh scattering remains unsettled? [Measurement](../docs/fdtd-rayleigh.md). |
 | `fdtd_enz.py` | Which errors remain in a lossy ENZ film after its two incidence columns settle? [Measurement](../docs/fdtd-enz.md). |
 | `fdtd_layer_alignment.py` | Does fitting every layer boundary reduce planar dispersive-interface errors under refinement? [Measurement](../docs/fdtd-layer-alignment.md). |
