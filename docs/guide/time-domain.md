@@ -824,3 +824,40 @@ field-history values at the same components and snapshot count. This is an array
 storage ratio, not a peak-process-memory or speed claim. Spatial subsampling
 selects nodes without filtering or interpolation. Region coordinates are not
 differentiable; recorded field values retain material/source gradients.
+
+### Physical record bounds for Stack scenes
+
+The explicit-backend `fdtd` scene API accepts `record_bounds`, a nonempty mapping
+from any of `x`, `y`, `z` to `(lower, upper)` physical coordinates. It requires
+`record_field` and `return_diagnostics=True`. Bounds must be finite real numbers
+with `lower <= upper`; unspecified axes keep their entire extent.
+
+```python
+result, diagnostic = wavebit.fdtd(
+    stack, incidence, backend='jax', resolution=40,
+    record_field=10, record_components=('ey', 'hx'),
+    record_bounds={'z': (-0.2, 0.5), 'x': (-0.1, 0.1)},
+    return_diagnostics=True)
+```
+
+Use the same coordinates as returned field records: x/y are centered on the
+periodic cell, z=0 is the first interface and positive z proceeds down the stack.
+These coordinates stay fixed for bottom incidence. A y-invariant scene exposes
+only y=0. Bounds select native sample coordinates inclusively, with an eight-epsilon
+floating-point tolerance scaled by coordinate magnitude. Equal bounds select an
+existing coordinate plane; they do not request interpolation. Bounds extending
+outside the simulation select their intersection with its samples.
+
+Each requested component must have at least one sample on every axis, otherwise
+the call raises an error suggesting wider bounds or finer resolution. Because
+components are staggered, their returned coordinate arrays and shapes can differ.
+Use each component's own coordinates when combining or interpolating fields.
+The `field_e`/`field_z` convenience aliases still follow the primary recorded
+component.
+
+The engine stores the smallest common native box covering the selected component
+samples, then trims individual staggered boundaries. Spatial selection happens before
+snapshot accumulation; bounds covering the full domain still record that domain. The full simulation, frequency monitors and material
+gradients retain their original behavior. Bounds are static geometry, not
+optimization parameters. For direct grid-index selection on `fdtd_grid`, use
+`record_region` instead.

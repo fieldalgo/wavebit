@@ -16,7 +16,7 @@ compares the code to itself proves continuity, not correctness.
 | Oracle | Files | What a pass means |
 | --- | --- | --- |
 | **An outside solver** | `test_reticolo_golden.py`, `test_oblique_lattice.py` (published Li 1997 table) | The strongest evidence here: a different group's code, in a different language. RETICOLO is the only reference that validates individual diffraction *orders* rather than totals. |
-| **Region records** | `test_fdtd_record_region.py` | Do cropped histories preserve exact Yee modes, coordinates, retained array size and material gradients? |
+| **Region records** | `test_fdtd_record_region.py`, `test_fdtd_scene_record_bounds.py` | Do cropped histories preserve exact Yee modes, coordinates, retained array size and material gradients? |
 | **DFT sampling** | `test_fdtd_dft_sampling.py` | Do sampled spectra preserve exact-carrier quadrature, staggered phases, prefix weights and backend gradients? |
 | **Pulse-decay diagnostics** | `test_fdtd_convergence.py` | Does the reported decay and DFT tail match an exact conductive-field solution, preserve JAX/Torch sensitivities, and reject absent or persistent signals? |
 | **Physics** | `test_lossy_media.py`, `test_stability.py`, `test_fp_warnings.py`, `test_polarization.py` (circular states against the gyrotropic-slab Airy answer), `test_slot_order.py` (every builder splatted into `solve_conv`), energy checks throughout | R+T = 1 on a lossless stack, Airy recursion on uniform layers. Independent of how we implement it. |

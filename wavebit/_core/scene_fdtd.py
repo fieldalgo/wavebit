@@ -30,6 +30,29 @@ def _weights(centres, width, edges, periodic=False, subpixel=True):
     return weights/weights.sum(axis=1, keepdims=True)
 
 
+def _validate_record_bounds(bounds):
+    if bounds is None:
+        return None
+    if not isinstance(bounds, dict) or not bounds or set(bounds)-{'x', 'y', 'z'}:
+        raise ValueError('record_bounds must map x/y/z to finite (lower, upper) pairs.')
+    result = {}
+    for axis, pair in bounds.items():
+        values = np.asarray(pair)
+        if (values.shape != (2,) or values.dtype.kind not in 'fiu'
+                or not np.isfinite(values).all() or values[0] > values[1]):
+            raise ValueError('record_bounds requires finite real lower <= upper pairs.')
+        result[axis] = tuple(float(v) for v in values)
+    return result
+
+
+def _bounded_indices(coordinates, bounds):
+    if bounds is None:
+        return np.arange(len(coordinates))
+    lower, upper = bounds
+    tolerance = 8*np.finfo(float).eps*max(1., abs(lower), abs(upper), np.max(np.abs(coordinates)))
+    return np.flatnonzero((coordinates >= lower-tolerance) & (coordinates <= upper+tolerance))
+
+
 def _solve_bottom_scene(options):
     """Reflect z about the stack midplane; E is polar and H is axial.
 
@@ -48,6 +71,11 @@ def _solve_bottom_scene(options):
     depth = float(thickness.sum())
     mirrored = dict(options, incidence_side='top', top=options['bot'], bot=options['top'],
                     thickness=thickness[::-1], structure=xp.flip(raster, axis=0))
+    if options['record_bounds'] is not None:
+        mirrored['record_bounds'] = dict(options['record_bounds'])
+        if 'z' in mirrored['record_bounds']:
+            lower, upper = mirrored['record_bounds']['z']
+            mirrored['record_bounds']['z'] = (depth-upper, depth-lower)
     if options['mu'] is not None:
         permeability = array(options['mu'])
         if permeability.shape != raster.shape:
@@ -98,7 +126,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                      pad_scale=1., incidence_side='top', lattice=None,
                      checkpoint_steps=32, return_diagnostics=False,
                      field_monitors=None, record_field=None, record_components=None, grading=None,
-                     convergence_window=None, convergence_tol=1e-4, dft_subsample=1):
+                     convergence_window=None, convergence_tol=1e-4, dft_subsample=1, record_bounds=None):
     """Solve a static rectangular scene with NumPy/JAX/Torch material gradients.
 
     Explicit resolution is required: optimizing materials must not resize the
@@ -107,6 +135,9 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     coordinates. Optional grading builds a static nonuniform z mesh; material
     gradients do not resize it.
     """
+    record_bounds = _validate_record_bounds(record_bounds)
+    if record_bounds is not None and record_field is None:
+        raise ValueError('record_bounds requires record_field.')
     if incidence_side == 'bottom':
         return _solve_bottom_scene(locals().copy())
     if (field_monitors is not None or record_field is not None) and not return_diagnostics:
@@ -320,6 +351,32 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                 monitor_indices.append(index)
         monitor_brackets[name] = (monitor_indices.index(lo), monitor_indices.index(hi),
                                   0. if lo == hi else (coordinate-z[lo])/(z[hi]-z[lo]))
+    # Capture the smallest common native box, then trim each staggered component.
+    # The union differs from individual bounds by at most the staggering cells.
+    record_region, record_trims = None, {}
+    if record_bounds is not None:
+        names = ('ex', 'ey', 'ez', 'hx', 'hy', 'hz')
+        selected = names if record_components is None or (isinstance(record_components, str) and record_components == 'all') else record_components
+        selected = (selected,) if isinstance(selected, str) else tuple(selected)
+        if not selected or len(set(selected)) != len(selected) or any(name not in names for name in selected):
+            raise ValueError('record_components must name unique ex/ey/ez/hx/hy/hz components.')
+        positions = {}
+        for name in selected:
+            offsets = np.ones(3)*.5 if name.startswith('h') else np.zeros(3)
+            offsets[names.index(name)%3] = 0. if name.startswith('h') else .5
+            coordinates = (z+offsets[2]*widths,
+                           (np.arange(ny)+offsets[1])*dy-ly/2 if raster.shape[1] > 1 else np.array([0.]),
+                           (np.arange(nx)+offsets[0])*dx-lx/2)
+            positions[name] = tuple(_bounded_indices(v, record_bounds.get(axis))
+                                    for axis, v in zip(('z', 'y', 'x'), coordinates))
+            if any(len(v) == 0 for v in positions[name]):
+                raise ValueError(f'record_bounds contains no native samples for {name}; widen bounds or refine resolution.')
+        region_starts = [min(v[axis][0] for v in positions.values()) for axis in range(3)]
+        record_region = tuple(slice(start, max(v[axis][-1] for v in positions.values())+1)
+                              for axis, start in enumerate(region_starts))
+        record_trims = {name: tuple(slice(v[0]-start, v[-1]-start+1)
+                                   for v, start in zip(indices, region_starts))
+                        for name, indices in positions.items()}
     # Include the carrier frequency for causal, centre-calibrated time records.
     run_band = np.r_[band, centre] if record_field is not None else band
     native_runs = []
@@ -342,7 +399,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                               pml_background=(background[0], background[0]), **settings)
         actual = fdtd_grid(epsilon, mu=permeability, poles=native_poles,
                            pml_background=background, record_field=record_field,
-                           record_components=record_components, **settings)
+                           record_components=record_components, record_region=record_region, **settings)
         stable = stable & reference['stable'] & actual['stable']
         runs.append((modes(reference['electric_spectrum']), modes(actual['electric_spectrum'])))
         native_runs.append(actual)
@@ -492,6 +549,10 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                 fields[name] = dict(first, values=values, x=first['x']-lx/2,
                                     y=first['y']-ly/2 if raster.shape[1] > 1 else array([0.]),
                                     z=first['z']+z[0])
+            for name, (zs, ys, xs) in record_trims.items():
+                field = fields[name]
+                field.update(values=field['values'][:, zs, ys, xs],
+                             z=field['z'][zs], y=field['y'][ys], x=field['x'][xs])
             primary = next((name for name in ('ey', 'ex') if name in fields), next(iter(fields)))
             first = fields[primary]
             diagnostics.update(field_e=first['values'], field_e_component=primary,
