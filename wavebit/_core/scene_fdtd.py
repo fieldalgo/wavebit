@@ -16,6 +16,14 @@ from .result import Result, ResultSub
 from ..backends.time_domain import time_loop_backend
 
 
+def _scattering_change_bound(xp, columns):
+    """Maximum component change for unit Jones inputs; zero subgradient at zero."""
+    squared = xp.sum(xp.abs(columns)**2, axis=-1)
+    zero = squared == 0
+    return xp.where(zero, xp.zeros_like(squared),
+                    xp.sqrt(xp.where(zero, xp.ones_like(squared), squared)))
+
+
 def _weights(centres, width, edges, periodic=False, subpixel=True):
     """Static cell overlaps; material arithmetic is performed by the backend."""
     if not subpixel:
@@ -451,6 +459,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     results = []
     weights = []
     amplitude_changes, calibration_valid = [], []
+    basis_changes, basis_calibration_valid = [], []
     for f, wl in enumerate(run_band):
         k0 = 2*np.pi/wl
         qtop = np.sqrt((nt**2-(kx/k0)**2-(ky/k0)**2).astype(complex))
@@ -507,7 +516,12 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
             continue
         if convergence_window is not None:
             earlier, _, earlier_valid, _ = extract(earlier_runs, reference_scale=scale)
-            change = (scattering-earlier)[..., 0]*a_s+(scattering-earlier)[..., 1]*a_p
+            difference = scattering-earlier
+            basis_valid = valid & earlier_valid & xp.all(xp.isfinite(difference), axis=(0, 1, 2))
+            basis_changes.append(xp.where(basis_valid[None, None, None, :], difference,
+                                           array(complex(float('nan'), 0.))))
+            basis_calibration_valid.append(basis_valid)
+            change = difference[..., 0]*a_s+difference[..., 1]*a_p
             valid = valid & earlier_valid & xp.all(xp.isfinite(change))
             amplitude_changes.append(xp.where(valid, change, array(complex(float('nan'), 0.))))
             calibration_valid.append(valid)
@@ -551,6 +565,22 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
             for key in ('material_decayed', 'state_decayed'):
                 diagnostics['convergence'][key] = xp.all(xp.stack(
                     [run[kind][key] for run in convergence_runs for kind in ('reference', 'actual')]))
+            columns = xp.stack(basis_changes)
+            column_valid = xp.stack(basis_calibration_valid)
+            for leg, name in enumerate(('s_inc', 'p_inc')):
+                diagnostics['convergence'][name] = dict(
+                    calibration_valid=column_valid[:, leg],
+                    amplitude_change={key: columns[:, i, ..., leg]
+                                      for i, key in enumerate(('r_s', 'r_p', 't_s', 't_p'))},
+                    amplitudes_settled=stable & inactive & xp.all(column_valid[:, leg])
+                    & xp.all(xp.abs(columns[..., leg]) <= convergence_tol))
+            # A row's Euclidean norm bounds its change for every unit Jones
+            # vector, including constructive interference between both bases.
+            row_bound = _scattering_change_bound(xp, columns)
+            diagnostics['convergence']['scattering_change_bound'] = {
+                key: row_bound[:, i] for i, key in enumerate(('r_s', 'r_p', 't_s', 't_p'))}
+            diagnostics['convergence']['scattering_settled'] = (
+                stable & inactive & xp.all(column_valid) & xp.all(row_bound <= convergence_tol))
         monitors = {}
         for name, (lo, hi, fraction) in monitor_brackets.items():
             fields = {}

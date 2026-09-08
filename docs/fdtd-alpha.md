@@ -69,6 +69,11 @@ The common engine also supports [layer-aligned z meshes](fdtd-layer-alignment.md
 Capped-metal TE/TM tests refine against an independent characteristic matrix,
 including bottom incidence. This reduces a selected normal-interface error;
 it does not resolve the lateral metal-corner limitation above.
+Selected [lossy ENZ film](fdtd-enz.md) checks now cover complex TE/TM scattering,
+the enhanced internal normal field, bottom illumination and material sensitivity
+refinement. Per-column and Jones-input convergence diagnostics distinguish late
+TM transients from a settled TE column. Time-step refinement remains necessary
+near the material zero crossing; the exactly lossless ENZ limit is not validated.
 Native three-axis Bloch phases and their gradients are also implemented, with
 exact discrete-mode checks and a live FDTDX complex-field/material-gradient
 comparison. Transverse phases may coexist with z CPML; longitudinal phase must

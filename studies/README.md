@@ -12,6 +12,7 @@ makes them assertions, not studies.
 
 | Script | Question it answers |
 | --- | --- |
+| `fdtd_enz.py` | Which errors remain in a lossy ENZ film after its two incidence columns settle? [Measurement](../docs/fdtd-enz.md). |
 | `fdtd_layer_alignment.py` | Does fitting every layer boundary reduce planar dispersive-interface errors under refinement? [Measurement](../docs/fdtd-layer-alignment.md). |
 | `fdtd_oblique_pulse.py` | Which oblique-metal errors come from pulse bandwidth, interface placement or unresolved diffraction? [Measurement](../docs/fdtd-oblique-pulse.md). |
 | `fdtd_mixed_metal.py` | How do low-loss mixed Drude/Lorentz amplitudes and damping sensitivities settle and refine? [Measurement](../docs/fdtd-mixed-metal.md). |

@@ -854,6 +854,42 @@ It does not certify relative accuracy of weak diffraction orders or future
 settling. For measured examples of temporal settling with remaining spatial
 error, see [pulse settling versus spatial accuracy](../fdtd-pulse-convergence.md).
 
+The same convergence mapping now includes `s_inc` and `p_inc`, matching the
+two unit-electric-field incidence bases returned in `result.s_inc` and
+`result.p_inc`. Each contains `amplitude_change`, `calibration_valid` and
+`amplitudes_settled` with the same units, shapes, prefix calibration and validity
+rules as the supplied-polarization quantities above. These are calibrated s/p
+columns, not the raw current bases stored in `convergence['bases']`. They remain
+independent of the supplied Jones vector. Existing top-level `amplitude_change`
+and `amplitudes_settled` retain their supplied-polarization meaning.
+
+```python
+c = diagnostic['convergence']
+print(c['s_inc']['amplitudes_settled'], c['p_inc']['amplitudes_settled'])
+print(c['scattering_settled'])
+```
+
+`scattering_change_bound` maps each of `r_s`, `r_p`, `t_s`, `t_p` to the largest
+possible absolute full-minus-prefix change for **any unit Jones input**, separately
+at each wavelength and outgoing order. For an output row with changes `ds` and
+`dp` in the two incident columns, its bound is `sqrt(abs(ds)**2 + abs(dp)**2)`.
+The norm accounts for constructive interference between the columns; checking
+each column against a tolerance alone does not provide this bound. A single Jones
+vector need not attain all output rows' bounds at once.
+
+`scattering_settled` requires all these bounds to be at most `convergence_tol`,
+both valid calibrated columns, inactive sources and valid material/CFL inputs.
+It does not require `state_decayed` and is not an error bound against the
+continuum solution. An invalid prefix gives NaN bounds and a false flag.
+The arrays retain material gradients; at an exactly zero row norm, the reported
+bound uses a zero subgradient. Flags are boolean decisions, not smooth objectives.
+
+All of these fields are enabled by the existing `convergence_window`; they reuse
+the four scene runs and prefix spectra, without additional time stepping.
+There is still no automatic termination. The [lossy ENZ measurements](../fdtd-enz.md)
+show a case where the s column settles well before the p column, and where both
+eventually pass despite a significant time-discretization error.
+
 ### Subsampling frequency monitors
 
 `dft_subsample=K` is available on `fdtd_grid` and the explicit-backend scene API.
