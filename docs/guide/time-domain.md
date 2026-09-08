@@ -81,9 +81,10 @@ expensive** — a metal, many layers, a high truncation order — and for two th
 state at all: a record of the field arriving, and a material given as a pole model rather than
 as one complex number per wavelength.
 
-Reach for `rcwa()` for everything else, and for everything the time domain refuses: near fields
-through `reconstruct_field`, gradients, JAX and PyTorch, a skewed `lattice`, parametric shapes,
-and evanescent (complex-angle) incidence. Elliptical diffraction is available using
+Reach for `rcwa()` for harmonic fields through `reconstruct_field`, a skewed
+`lattice`, parametric shapes and evanescent (complex-angle) incidence. Explicit
+FDTD backends support JAX/PyTorch material gradients through the common scene
+adapter described below. Elliptical diffraction is available using
 `psi` with `chi`, or `polarization=(a_s, a_p)`; for example `(1, 1j)` is a circular
 state in the s/p frame. The pair is normalized while preserving its overall phase.
 Time recording also supports complex coefficients through additional quadrature-source
@@ -465,11 +466,10 @@ FDTDX non-dispersive, two-pole and complex-Bloch goldens are checked through Tor
 as well as JAX; they remain frozen references, not a fresh external execution
 on each test run. Use explicit double-precision input tensors for precision checks.
 
-This unifies native-grid **calculation backends**. The existing `wavebit.fdtd`
+This unifies native-grid **calculation backends**. The `wavebit.fdtd`
 Stack/Incidence adapter selects this engine when `backend` is explicitly supplied.
-Integrating its rasterization, TFSF injection and modal Result extraction with
-this shared core remains separate work; `fdtd(stack=..., backend=2)` is not yet
-supported. Existing native `fdtd_grid` calls remain compatible.
+Its static rasterization, current-sheet reference calibration and modal Result
+extraction are described below. Existing native `fdtd_grid` calls remain compatible.
 
 
 ## Common scene adapter
@@ -533,6 +533,67 @@ transmission with stored Meep public-API data, and JAX/Torch material derivative
 with finite differences. Crossed dispersive scenes additionally check Torch/
 NumPy agreement and a pole-strength derivative. These scene checks supplement
 the native-core Meep/FDTDX field and derivative references.
+
+
+### Diffraction planes and cutoff diagnostics
+
+`diffraction_distance` controls the extraction-plane distances from the reflection
+and transmission reference interfaces. It accepts a positive static scalar for
+both legs, or a `(reflection, transmission)` pair in length units. The default
+`None` preserves the original placement. Each target is snapped to the nearest
+electric z node; the setting leaves the mesh, source and PML placement unchanged.
+The reflection plane must be between the current sheet and stack; the transmission
+plane must precede the PML. Neither plane may touch a mixed interface cell.
+An unplaceable request raises instead of silently expanding the simulation.
+
+```python
+result, diag = wavebit.fdtd(
+    structure=np.full((1, 1, 1), 2.25), thickness=[.213],
+    top=1., bot=1., period=.1, wavelength=1., tetm='tm', theta=.25,
+    backend=0, resolution=80, n_pml=24, align_layers=True,
+    diffraction_distance=(.2, .3), return_diagnostics=True,
+)
+print(diag['diffraction']['reflection_monitor_z'])
+print(diag['diffraction']['cutoff_resolved'])
+```
+
+`diag['diffraction']` reports the realized `reflection_monitor_z` and
+`transmission_monitor_z` in original scene coordinates, including for bottom
+incidence. The pair is always incidence-relative. Complex r/t remain referenced
+to the interfaces, not to these measurement planes. Moving a plane can change
+finite-grid reference calibration and hence calibrated fields as well as r/t;
+compare positions under spatial, PML and runtime refinement.
+
+The diagnostic also contains `(order_y, order_x)` arrays `order_x`, `order_y`,
+`kx`, `ky`; the latter two are fixed transverse wavevectors in radians per length
+throughout the band. Its `reflection` and `transmission` mappings describe each
+lossless half space with the following static arrays:
+
+| Key | Shape | Meaning |
+| --- | --- | --- |
+| `q` | `(wavelength, order_y, order_x)` | Outgoing normalized longitudinal wavevector: positive real for propagation, positive imaginary for decay. It is not signed Cartesian kz for bottom incidence. |
+| `propagating` | same | Continuum open-channel mask; closed channels have exactly zero outgoing R/T power. |
+| `yee_cutoff_parameter` | same | Discrete lower-cutoff parameter defined below. |
+| `cutoff_resolved` | same | Whether the continuum and discrete lower-cutoff signs agree. |
+| `p_projection_gain` | same | `n/abs(q)`, the tangential-E to p-amplitude projection gain; large values amplify extraction error. |
+| `cutoff_wavelength` | `(order_y, order_x)` | `2*pi*n/hypot(kx,ky)` for fixed transverse k, or infinity at zero transverse k. |
+
+Here `n=sqrt(epsilon*mu)`, `k0=2*pi/wavelength`, and the Yee cutoff parameter is
+
+```text
+(2/k0)^2 * ((n*sin(k0*dt/2)/dt)^2
+            - (sin(kx*dx/2)/dx)^2 - (sin(ky*dy/2)/dy)^2).
+```
+
+Its positive sign is only the lower edge of the longitudinal passband. It does
+not rule out longitudinal Nyquist limits, mesh reflections or PML errors.
+The outer scalar `diag['diffraction']['cutoff_resolved']` is true only when all
+retained orders at all requested wavelengths agree in both half spaces. It is
+independent of temporal convergence flags and is not an accuracy certificate.
+Exact grazing, including roundoff-sized distance from it, is refused before time
+stepping. Orders are not silently discarded. See the
+[near-Rayleigh measurements](../fdtd-rayleigh.md) for a false-open coarse-grid
+channel and an unresolved TM response despite correct cutoff classification.
 
 
 ### Gaussian source width

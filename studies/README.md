@@ -12,6 +12,7 @@ makes them assertions, not studies.
 
 | Script | Question it answers |
 | --- | --- |
+| `fdtd_rayleigh.py` | Can a cutoff classification agree while near-Rayleigh scattering remains unsettled? [Measurement](../docs/fdtd-rayleigh.md). |
 | `fdtd_enz.py` | Which errors remain in a lossy ENZ film after its two incidence columns settle? [Measurement](../docs/fdtd-enz.md). |
 | `fdtd_layer_alignment.py` | Does fitting every layer boundary reduce planar dispersive-interface errors under refinement? [Measurement](../docs/fdtd-layer-alignment.md). |
 | `fdtd_oblique_pulse.py` | Which oblique-metal errors come from pulse bandwidth, interface placement or unresolved diffraction? [Measurement](../docs/fdtd-oblique-pulse.md). |

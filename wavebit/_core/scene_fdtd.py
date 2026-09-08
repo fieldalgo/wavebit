@@ -9,7 +9,7 @@ import math
 import numpy as np
 
 from .backend import _concrete
-from .conventions import incidence_clashes, incident_sp_amplitudes, order_azimuth, parse_order_pair, parse_period_mapping
+from .conventions import boundary_kz, incidence_clashes, incident_sp_amplitudes, order_azimuth, parse_order_pair, parse_period_mapping
 from .domain import as_material
 from .grid_fdtd import fdtd_grid
 from .result import Result, ResultSub
@@ -22,6 +22,29 @@ def _scattering_change_bound(xp, columns):
     zero = squared == 0
     return xp.where(zero, xp.zeros_like(squared),
                     xp.sqrt(xp.where(zero, xp.ones_like(squared), squared)))
+
+
+def _diffraction_channels(band, kx, ky, index, dt, dx, dy):
+    """Static continuum and Yee transverse-cutoff data for a lossless half space.
+
+    Positive Yee cutoff parameter is the lower edge of the longitudinal
+    passband, not a guarantee against longitudinal Nyquist or mesh reflections.
+    """
+    k0 = 2*np.pi/band[:, None, None]
+    transverse = (kx/k0)**2+(ky/k0)**2
+    q2 = index**2-(kx/k0)**2-(ky/k0)**2
+    grazing = ((abs(q2) < 1e-16)
+               | (abs(q2) <= 32*np.finfo(float).eps*(index**2+transverse)))
+    if np.any(grazing):
+        raise ValueError('A retained diffraction order is exactly grazing; adjust wavelength/window.')
+    q = boundary_kz(np, index**2, transverse.astype(complex))
+    yee = (2/k0)**2*((index*np.sin(k0*dt/2)/dt)**2
+                       -(np.sin(kx*dx/2)/dx)**2-(np.sin(ky*dy/2)/dy)**2)
+    length = np.hypot(kx, ky)
+    cutoff = np.divide(2*np.pi*index, length, out=np.full_like(length, np.inf), where=length > 0)
+    return dict(q=q, propagating=q2 > 0, cutoff_wavelength=cutoff,
+                yee_cutoff_parameter=yee, cutoff_resolved=(q2 > 0) == (yee > 0),
+                p_projection_gain=index/abs(q))
 
 
 def _weights(centres, width, edges, periodic=False, subpixel=True):
@@ -123,6 +146,8 @@ def _solve_bottom_scene(options):
                        pml_bounds=tuple(depth-z for z in reversed(diagnostics['pml_bounds'])),
                        layer_planes=np.r_[0., np.cumsum(thickness)],
                        incidence_side='bottom', reflection_z=depth, transmission_z=0.)
+    for key in ('reflection_monitor_z', 'transmission_monitor_z'):
+        diagnostics['diffraction'][key] = depth-diagnostics['diffraction'][key]
     return result, diagnostics
 
 
@@ -135,7 +160,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                      checkpoint_steps=32, return_diagnostics=False,
                      field_monitors=None, record_field=None, record_components=None, grading=None,
                      convergence_window=None, convergence_tol=1e-4, dft_subsample=1, record_bounds=None,
-                     pulse_width=None, align_layers=False):
+                     pulse_width=None, align_layers=False, diffraction_distance=None):
     """Solve a static rectangular scene with NumPy/JAX/Torch material gradients.
 
     Explicit resolution is required: optimizing materials must not resize the
@@ -146,6 +171,8 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     1/e amplitude half-width in c=1 time units; None uses the central wavelength.
     align_layers places every layer boundary on a z node using equal cells per
     layer, each no wider than 1/resolution. It can be combined with grading.
+    diffraction_distance optionally places the extraction planes near their
+    reference interfaces without resizing the padding, source or PML mesh.
     """
     record_bounds = _validate_record_bounds(record_bounds)
     if record_bounds is not None and record_field is None:
@@ -166,6 +193,12 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
         raise ValueError('The common scene engine requires rectangular period.')
     if not isinstance(align_layers, (bool, np.bool_)):
         raise ValueError('align_layers must be a static boolean.')
+    if diffraction_distance is not None:
+        distances = np.asarray(diffraction_distance)
+        if (distances.shape not in ((), (2,)) or distances.dtype.kind not in 'fiu'
+                or not np.isfinite(distances).all() or np.any(distances <= 0)):
+            raise ValueError('diffraction_distance must be a positive finite scalar or (reflection, transmission) pair.')
+        distances = np.broadcast_to(distances, (2,))
     if grading is True:
         grading = 1.06
     elif grading is False:
@@ -285,6 +318,13 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
         transmit_z = int(np.argmin(abs(z-(thick.sum()+pad*dz))))
         if not source_z+2 < reflect_z < interface or transmit_z >= nz-int(n_pml)-2:
             raise ValueError('Nonuniform padding cannot fit source/monitors/PML; increase pad_scale.')
+    if diffraction_distance is not None:
+        reflect_z = int(np.argmin(abs(z+distances[0])))
+        transmit_z = int(np.argmin(abs(z-(thick.sum()+distances[1]))))
+        if (not source_z+2 < reflect_z or z[reflect_z]+widths[reflect_z]/2 > 0
+                or z[transmit_z]-widths[transmit_z-1]/2 < thick.sum()
+                or transmit_z >= nz-int(n_pml)-2):
+            raise ValueError('diffraction_distance must select exterior planes between the source/stack and stack/PML; adjust distance, resolution or pad_scale.')
     dual = .5*(widths+np.roll(widths, 1))
     cuts = np.r_[z[0]-2*widths.max(), 0., np.cumsum(thick), z[-1]+2*widths.max()]
     shape = (nz, ny, nx)
@@ -359,10 +399,13 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
         raise ValueError('Diffraction window exceeds the spatial Nyquist limit; increase resolution.')
     mx, my = np.meshgrid(np.arange(-halfx, halfx+1), np.arange(-halfy, halfy+1))
     kx, ky = kx0+2*np.pi*mx/lx, ky0+2*np.pi*my/ly
+    # Refuse singular retained channels before any of the four time-domain runs.
+    reflection_channels = _diffraction_channels(band, kx, ky, nt, dt, dx, dy)
+    transmission_channels = _diffraction_channels(band, kx, ky, nb, dt, dx, dy)
     # Declared scalar TE/TM uses the fixed x-z frame, like RCWA's scalar
     # solver. Coupled/Jones scenes use each outgoing order's own s/p frame.
     azimuth = (np.zeros_like(kx) if tetm is not None and raster.shape[1] == 1 and phi == 0
-               else order_azimuth(np, ky.astype(complex), kx.astype(complex), phi))
+               else order_azimuth(np, ky.astype(complex), kx.astype(complex), phi).reshape(kx.shape))
     co, si = array(np.cos(azimuth)), array(np.sin(azimuth))
     # Raster coordinates start at zero, as in the RCWA Fourier coefficients.
     transform = array(np.exp(-1j*(kx[..., None, None]*np.arange(nx)[None, :]*dx
@@ -483,8 +526,6 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
             phase_ref = array(path_phase(nt, kx, ky, interface, reflect_z))
             phase_trn = array(path_phase(nb, kx, ky, bottom_interface, transmit_z))
             phase_inc = path_phase(nt, kx0, ky0, interface, reflect_z)
-        if f < len(band) and (np.min(np.abs(qtop)) < 1e-8 or np.min(np.abs(qbot)) < 1e-8):
-            raise ValueError('A retained diffraction order is exactly grazing; adjust wavelength/window.')
         qt, qb = array(qtop), array(qbot)
         def extract(run_values, reference_scale=None):
             incident_columns, outgoing = [], []
@@ -550,6 +591,13 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                            angles=np.arcsin(band/centre*np.sin(theta)),
                            normalization='uniform-medium reference; two electric-current bases')
         weights = xp.stack(weights)
+        diagnostics['diffraction'] = dict(
+            order_x=array(mx), order_y=array(my), kx=array(kx), ky=array(ky),
+            reflection_monitor_z=float(z[reflect_z]), transmission_monitor_z=float(z[transmit_z]),
+            reflection={key: array(value) for key, value in reflection_channels.items()},
+            transmission={key: array(value) for key, value in transmission_channels.items()},
+            cutoff_resolved=array(np.all(reflection_channels['cutoff_resolved'])
+                                  and np.all(transmission_channels['cutoff_resolved'])))
         if convergence_window is not None:
             change = xp.stack(amplitude_changes)
             valid = xp.stack(calibration_valid)

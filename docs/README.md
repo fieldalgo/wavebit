@@ -70,6 +70,7 @@ comes next. The outward-pointing rule above binds `guide/` too; only the house s
 
 | Document | Question it answers | Decision |
 | --- | --- | --- |
+| [Near-Rayleigh channels](fdtd-rayleigh.md) | Can a coarse grid classify a diffraction channel on the wrong side of cutoff? | Expose physical/discrete cutoff agreement and independent plane placement; retain the unresolved TM accuracy limit. |
 | [ENZ and scattering convergence](fdtd-enz.md) | Can one settled incidence column hide ENZ transients in the other? | Report both calibrated columns and a Jones-input bound; separate temporal settling from ADE and spatial error. |
 | [Layer-aligned meshes](fdtd-layer-alignment.md) | Does placing every layer boundary on a node improve dispersive TM optics? | Fit layer thicknesses explicitly and separate planar interface error from time and boundary effects. |
 | [Oblique pulse bandwidth](fdtd-oblique-pulse.md) | Can source tails hide metal-interface errors? | Expose pulse width; independently check temporal settling, interface placement and reference convergence. |

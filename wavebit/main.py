@@ -88,7 +88,10 @@ def fdtd(stack=None, incidence=None, **kwargs):
     ``align_layers=True`` places every layer boundary on a z node, independently
     of padding grading; geometry and half spaces are static.
     ``pulse_width`` controls their Gaussian source envelope in c=1
-    time units. See the time-domain guide for scope and coordinate conventions.
+    time units. ``diffraction_distance`` sets extraction-plane distances from
+    the incident and outgoing interfaces without resizing the mesh. Diagnostics
+    report physical and Yee transverse cutoff classifications for each order.
+    See the time-domain guide for scope and coordinate conventions.
 
     Args:
         stack: optional typed ``Stack`` supplying ``structure`` / ``thickness`` / ``top`` /

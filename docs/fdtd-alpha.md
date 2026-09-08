@@ -64,6 +64,13 @@ refine against Airy, and a selected TE metal grating refines against RCWA. This
 does not validate arbitrary low-loss patterns: the corresponding sharp-corner
 TM RCWA reference remains unconverged, and normal-component dispersive
 interface averaging remains approximate.
+The common engine reports physical and discrete lower-cutoff classifications
+and supports independent diffraction-plane distances. A binary dielectric
+experiment at wavelengths 0.2% either side of a Rayleigh threshold exposes a
+false-open channel on a coarse grid and persistent TM amplitude errors after the
+classification agrees. See the [near-Rayleigh measurements](fdtd-rayleigh.md);
+this regime remains an accuracy limit, even when R+T is close to one.
+
 The common engine also supports [layer-aligned z meshes](fdtd-layer-alignment.md):
 `align_layers=True` fits every planar layer face without changing its thickness.
 Capped-metal TE/TM tests refine against an independent characteristic matrix,
