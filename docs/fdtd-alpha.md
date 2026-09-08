@@ -8,6 +8,8 @@ states what has evidence, what remains uncertain, and how to reproduce the check
 ## Supported interface versus validation coverage
 
 An accepted input is not a guarantee of accuracy for every combination in this table.
+This table describes the legacy scene path selected by omitting `backend`;
+the following sections describe the shared engine and explicit-backend scene path.
 
 | Area | Available interface | Evidence and limits |
 | --- | --- | --- |
@@ -55,6 +57,13 @@ mixed slabs at two resolutions, plus FDTDX two-pole 3D updates and strength
 gradients. Direct Meep comparisons match its documented point sampling of the
 dispersive part; separate tangential half-cell weights converge against Airy.
 PML width/runtime controls and oblique pulse removal are tested. Arbitrary spatially varying or dispersive PML backgrounds remain outside this evidence.
+The common scene engine now also has bounded [low-loss mixed-metal](fdtd-mixed-metal.md)
+and [oblique-pulse](fdtd-oblique-pulse.md) checks. Its static `pulse_width` control
+narrows source bandwidth to reduce glancing-wave tails. Planar TE/TM amplitudes
+refine against Airy, and a selected TE metal grating refines against RCWA. This
+does not validate arbitrary low-loss patterns: the corresponding sharp-corner
+TM RCWA reference remains unconverged, and normal-component dispersive
+interface averaging remains approximate.
 Native three-axis Bloch phases and their gradients are also implemented, with
 exact discrete-mode checks and a live FDTDX complex-field/material-gradient
 comparison. Transverse phases may coexist with z CPML; longitudinal phase must

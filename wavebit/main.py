@@ -85,7 +85,8 @@ def fdtd(stack=None, incidence=None, **kwargs):
     Both paths support time records and user frequency planes; source and
     normalization conventions are documented in the time-domain guide.
     Explicit backends also support bottom incidence and static z grading; geometry and half spaces
-    are static. See the time-domain guide for scope and coordinate conventions.
+    are static. ``pulse_width`` controls their Gaussian source envelope in c=1
+    time units. See the time-domain guide for scope and coordinate conventions.
 
     Args:
         stack: optional typed ``Stack`` supplying ``structure`` / ``thickness`` / ``top`` /

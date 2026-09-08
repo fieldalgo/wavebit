@@ -126,14 +126,16 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                      pad_scale=1., incidence_side='top', lattice=None,
                      checkpoint_steps=32, return_diagnostics=False,
                      field_monitors=None, record_field=None, record_components=None, grading=None,
-                     convergence_window=None, convergence_tol=1e-4, dft_subsample=1, record_bounds=None):
+                     convergence_window=None, convergence_tol=1e-4, dft_subsample=1, record_bounds=None,
+                     pulse_width=None):
     """Solve a static rectangular scene with NumPy/JAX/Torch material gradients.
 
     Explicit resolution is required: optimizing materials must not resize the
     grid. Half spaces, geometry, wavelength and incidence angles are static.
     Bottom incidence uses a z-reflected scene and returns fields in original
     coordinates. Optional grading builds a static nonuniform z mesh; material
-    gradients do not resize it.
+    gradients do not resize it. pulse_width is the static Gaussian envelope's
+    1/e amplitude half-width in c=1 time units; None uses the central wavelength.
     """
     record_bounds = _validate_record_bounds(record_bounds)
     if record_bounds is not None and record_field is None:
@@ -181,8 +183,22 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     if band.ndim != 1 or not len(band) or not np.isfinite(band).all() or np.any(band <= 0):
         raise ValueError('wavelength must be a positive scalar or vector.')
     centre = float((band.min()+band.max())/2)
+    if pulse_width is None:
+        width = centre
+    else:
+        value = np.asarray(pulse_width)
+        if value.shape != () or value.dtype.kind not in 'fiu' or not np.isfinite(value) or value <= 0:
+            raise ValueError('pulse_width must be a positive finite static scalar in c=1 time units.')
+        width = float(value)
+    span = float(np.max(np.abs(1/band-1/centre)))
     runtime = time_loop_backend(backend, device=device, reference=structure)
     xp, array = runtime.xp, runtime.array
+    # A requested frequency in the Gaussian's numerical tail cannot provide
+    # reliable incident calibration. This is a roundoff guard, not an accuracy
+    # guarantee for weakly excited frequencies.
+    source_epsilon = xp.finfo(xp.real(array(np.array(0j, dtype=np.complex128))).dtype).eps
+    if span and width > np.sqrt(-np.log(100*source_epsilon))/(np.pi*span):
+        raise ValueError('pulse_width leaves a requested wavelength in the numerical source tail; reduce pulse_width or narrow the wavelength band.')
     raster = array(structure)
     if raster.ndim != 3 or min(raster.shape) < 1:
         raise ValueError('structure must have shape (layers, y, x).')
@@ -300,11 +316,12 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                 native_poles.append((omega, gamma, array(strength)*fill))
     # A static vacuum-speed CFL leaves the optimization grid/time step unchanged.
     dt = courant/np.sqrt(widths.min()**-2+dy**-2+dx**-2)
-    if n_periods*centre < 10*centre+2*(z[transmit_z]-z[source_z])*max(nt, nb):
+    if width < dt:
+        raise ValueError('pulse_width must span at least one time step; increase pulse_width or resolution.')
+    if n_periods*centre < 10*width+2*(z[transmit_z]-z[source_z])*max(nt, nb):
         raise ValueError('n_periods is too short for the pulse and a round trip across the scene.')
     steps = math.ceil(n_periods*centre/dt)
     time = np.arange(steps)*dt
-    width = centre
     pulse = np.exp(-((time-5*width)/width)**2)*np.exp(-2j*np.pi*time/centre)
     kx0, ky0 = 2*np.pi/centre*nt*np.sin(theta)*np.array([np.cos(phi), np.sin(phi)])
     if np.any((band/centre)*np.sin(theta) >= 1):
@@ -494,6 +511,8 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                            stable=stable, dt=dt, steps=steps, n_steps=steps, dft_subsample=dft_subsample,
                            dft_samples=native_runs[0]['dft_samples'],
                            spacing=(float(widths.min()), dy, dx), shape=shape, wavelengths=array(band),
+                           pulse=dict(width=width, peak_time=5*width, frequency=1/centre,
+                                      relative_spectrum=array(np.exp(-(np.pi*width*(1/band-1/centre))**2))),
                            z_nodes=array(z), z_spacing=array(widths), grading=grading,
                            n_pml=int(n_pml), source_z=z[source_z], layer_planes=np.r_[0., np.cumsum(thick)],
                            pml_bounds=(z[0], z[int(n_pml)], z[-int(n_pml)], z[-1]),

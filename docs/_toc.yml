@@ -20,6 +20,7 @@ subtrees:
     - caption: Advanced
       entries:
       - file: guide/specs
+  - file: fdtd-oblique-pulse
   - file: fdtd-mixed-metal
   - file: fdtd-lorentz-decay
   - file: fdtd-bragg-cavity

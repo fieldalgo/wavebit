@@ -70,6 +70,7 @@ comes next. The outward-pointing rule above binds `guide/` too; only the house s
 
 | Document | Question it answers | Decision |
 | --- | --- | --- |
+| [Oblique pulse bandwidth](fdtd-oblique-pulse.md) | Can source tails hide metal-interface errors? | Expose pulse width; independently check temporal settling, interface placement and reference convergence. |
 | [Mixed low-loss metal](fdtd-mixed-metal.md) | Do combined Drude/Lorentz spectra and gradients converge? | Separate material settling, spatial error and differentiation; match interface sampling for Meep comparisons. |
 | [Lorentz decay](fdtd-lorentz-decay.md) | Can material motion outlive a small field? | Track per-pole activity and expose a combined decay flag. |
 | [Bragg cavity](fdtd-bragg-cavity.md) | Do long-lived resonances pass temporal diagnostics too early? | Short runs fail; spatial detuning remains independent. |

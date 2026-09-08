@@ -535,6 +535,58 @@ NumPy agreement and a pole-strength derivative. These scene checks supplement
 the native-core Meep/FDTDX field and derivative references.
 
 
+### Gaussian source width
+
+The explicit-backend scene adapter accepts `pulse_width`, a positive static scalar
+in c=1 time units (the same numerical units as length). It is the Gaussian
+envelope's 1/e **amplitude half-width**, not a frequency bandwidth or a FWHM.
+Omitting it, or passing `None`, uses the central vacuum wavelength
+`centre = (min(wavelengths)+max(wavelengths))/2`, preserving the original pulse.
+
+At sample time `t=n*dt`, both actual and reference runs use
+
+```text
+pulse(t) = exp(-((t-5*pulse_width)/pulse_width)^2) * exp(-2*pi*i*t/centre).
+```
+
+A larger width narrows the frequency band. This can reduce slowly decaying
+glancing waves at oblique incidence, but also weakens the source at wavelengths
+away from its center. Use a longer total run when increasing the width:
+
+```python
+result, diag = wavebit.fdtd(
+    structure=np.full((1, 1, 1), 2.25), thickness=[.2],
+    top=1., bot=1., period=.1, wavelength=[.9, 1., 1.1],
+    theta=.45, tetm='te', backend=0, resolution=40,
+    pulse_width=3., n_periods=80, truncation_order=0,
+    return_diagnostics=True, convergence_window=200,
+)
+print(diag['pulse']['relative_spectrum'])
+print(diag['convergence']['state_decayed'])
+```
+
+`diag['pulse']` provides `width`, `peak_time=5*width`, `frequency=1/centre`, and
+`relative_spectrum` in requested-wavelength order. The latter is the ideal
+untruncated Gaussian's amplitude spectrum relative to its carrier:
+`exp(-(pi*width*(1/wavelength-1/centre))^2)`. It describes the source envelope,
+not measured incident flux or a calibration error bound.
+
+Widths shorter than one time step, and widths that leave a requested frequency
+below 100 machine epsilons of the nominal peak, are refused. That numerical-tail
+guard follows the backend source dtype; a passing value does not certify accuracy
+at a weakly excited frequency. The guard also applies when the width is omitted.
+Reduce `pulse_width` or narrow the requested
+wavelength interval if it fails. The minimum runtime includes ten pulse widths
+plus the scene round-trip allowance. `n_periods` still measures total time from
+zero in central-wavelength optical cycles, not time after the source peak.
+
+This setting works with bottom incidence, grading, recording, DFT subsampling
+and material autodiff. The width itself is static. The legacy scene path has no
+`pulse_width` keyword; the native grid API accepts an explicit pulse array.
+See the [oblique-pulse measurement](../fdtd-oblique-pulse.md) for the separate
+effects of source tails, dispersive interfaces and patterned metal corners.
+
+
 ### Shared-backend time records and user monitors
 
 ```python
