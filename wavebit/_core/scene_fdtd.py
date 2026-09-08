@@ -97,7 +97,8 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                      truncation_order=None, dispersion=None, poles=None,
                      pad_scale=1., incidence_side='top', lattice=None,
                      checkpoint_steps=32, return_diagnostics=False,
-                     field_monitors=None, record_field=None, record_components=None, grading=None):
+                     field_monitors=None, record_field=None, record_components=None, grading=None,
+                     convergence_window=None, convergence_tol=1e-4):
     """Solve a static rectangular scene with NumPy/JAX/Torch material gradients.
 
     Explicit resolution is required: optimizing materials must not resize the
@@ -110,6 +111,8 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
         return _solve_bottom_scene(locals().copy())
     if (field_monitors is not None or record_field is not None) and not return_diagnostics:
         raise ValueError('field_monitors/record_field require return_diagnostics=True.')
+    if convergence_window is not None and not return_diagnostics:
+        raise ValueError('convergence_window requires return_diagnostics=True.')
     if field_monitors is not None and (not isinstance(field_monitors, dict) or not field_monitors):
         raise ValueError('field_monitors must be a nonempty mapping of names to z coordinates.')
     if record_components is not None and record_field is None:
@@ -320,6 +323,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     # Include the carrier frequency for causal, centre-calibrated time records.
     run_band = np.r_[band, centre] if record_field is not None else band
     native_runs = []
+    convergence_runs = []
     runs = []
     stable = array(True)
     for vector in ((-np.sin(phi), np.cos(phi)), (-np.cos(phi), -np.sin(phi))):
@@ -331,6 +335,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
         settings = dict(spacing=(dz, dy, dx), dt=dt, steps=steps, source=source, pulse=pulse,
                         wavelengths=run_band, monitor_z=monitor_indices, backend=backend,
                         device=device, checkpoint_steps=checkpoint_steps, pml_cells=int(n_pml),
+                        convergence_window=convergence_window, convergence_tol=convergence_tol,
                         pml_wavelength=centre, z_spacing=widths if grading is not None else None, bloch_phase=(0., ky0*ly, kx0*lx))
         reference = fdtd_grid(xp.ones_like(epsilon)*et, mu=mt,
                               pml_background=(background[0], background[0]), **settings)
@@ -340,6 +345,8 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
         stable = stable & reference['stable'] & actual['stable']
         runs.append((modes(reference['electric_spectrum']), modes(actual['electric_spectrum'])))
         native_runs.append(actual)
+        if convergence_window is not None:
+            convergence_runs.append(dict(reference=reference['convergence'], actual=actual['convergence']))
     ResultType, SubType = Result, ResultSub
     if backend in (1, 'jax'):
         from ..backends.jax_backend import ResultJax, ResultSubJax
@@ -414,6 +421,11 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                            angles=np.arcsin(band/centre*np.sin(theta)),
                            normalization='uniform-medium reference; two electric-current bases')
         weights = xp.stack(weights)
+        if convergence_window is not None:
+            diagnostics['convergence'] = dict(
+                bases=convergence_runs,
+                field_decayed=xp.all(xp.stack([run[kind]['field_decayed']
+                                              for run in convergence_runs for kind in ('reference', 'actual')])))
         monitors = {}
         for name, (lo, hi, fraction) in monitor_brackets.items():
             fields = {}

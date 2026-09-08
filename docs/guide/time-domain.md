@@ -693,3 +693,48 @@ illumination data, and JAX/Torch derivatives through graded records and monitors
 The Meep reference uses a uniform grid, so the comparison establishes optical
 agreement under refinement rather than identical discretizations. No Meep
 implementation was read.
+
+### Pulse-decay diagnostics in the common engine
+
+`fdtd_grid(..., convergence_window=N, convergence_tol=1e-4)` inspects the last
+`N` steps without changing the time loop or stopping early. `N` must be a positive
+integer smaller than `steps`; the relative amplitude tolerance must lie strictly
+between zero and one. The default `convergence_window=None` disables the extra
+reductions and spectral accumulators. The explicit-backend scene API accepts the
+same options with `return_diagnostics=True`.
+
+The native result's `convergence` mapping contains:
+
+| Field | Meaning |
+| --- | --- |
+| `field_decay` | Maximum field norm in the final window divided by the maximum over the entire run, including initial fields |
+| `signal_present` | A finite, nonzero peak field norm was observed; a zero simulation is not evidence of convergence |
+| `source_inactive` | The final-window pulse maximum is at most `convergence_tol` times its full-run maximum, or the current pattern is zero |
+| `field_decayed` | Valid input/CFL, a nonzero signal, an inactive source, and `field_decay <= convergence_tol` |
+| `spectral_tail` | For each wavelength and monitor plane, the joint E/H norm of the final-window DFT contribution divided by the full-run DFT norm |
+| `spectral_signal_present` | The denominator of that spectral ratio is finite and nonzero |
+| `window_steps`, `tolerance` | The requested settings |
+
+Undefined ratios are NaN. The field norm is the square root of the volume-weighted
+sum of `abs(E)**2 + abs(Z0 H)**2`, using each component's native control volumes,
+including absorbing layers. E and H retain their half-step time separation. This
+is a field-decay indicator, **not stored electromagnetic energy**, particularly
+for dispersive media; ADE and PML auxiliary states are not included. Persistent
+lossless fields and active continuous-wave sources should not pass this pulse
+criterion. Choose a window long enough to cover the relevant oscillations and
+propagation, and repeat with a longer run: a quiet window cannot exclude delayed
+re-emission or a later source pulse.
+
+The scene diagnostics contain `convergence['bases']`, with one mapping per source
+basis and separate `actual` and `reference` native diagnostics. Their spectra are
+uncalibrated basis spectra, in the native run's wavelength/monitor order (including
+the extra carrier frequency when recording time fields). The scene-level
+`field_decayed` requires all four runs to pass. This does not certify r/t accuracy,
+spatial resolution, PML convergence, or the absence of long-lived material
+oscillations. `stable` continues to mean material/CFL validity, not convergence.
+
+The diagnostic arrays retain backend gradients; the maxima and boolean decisions
+are not smooth everywhere. Fixed step counts preserve the existing differentiation
+contract. The distinction between pulse decay and detector convergence was informed
+by [FDTDX's stopping-condition design](https://github.com/ymahlau/fdtdx/blob/main/src/fdtdx/fdtd/stop_conditions.py).
+This implementation does not copy its source code.
