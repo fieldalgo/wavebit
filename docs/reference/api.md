@@ -124,6 +124,8 @@ properties every one of them carries.
 .. autofunction:: wavebit.sample_fdtd_fields
 
 .. autofunction:: wavebit.fdtd_poynting
+
+.. autofunction:: wavebit.fit_fdtd_modes
 ```
 
 ## Plotting

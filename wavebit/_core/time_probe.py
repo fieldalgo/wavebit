@@ -1,8 +1,9 @@
-"""Point probes on native Yee records, with explicit space/time interpolation."""
+"""Point probes and offline mode analysis of native Yee time records."""
 import warnings
 
 import numpy as np
 
+from .conventions import time_pole_parameters
 
 _COMPONENTS = ('ex', 'ey', 'ez', 'hx', 'hy', 'hz')
 
@@ -127,3 +128,116 @@ def fdtd_poynting(diagnostics, *, z, x=0., y=0., t=None):
     sampled = sample_fdtd_fields(diagnostics, z=z, x=x, y=y, t=t)
     sampled['S'] = np.cross(sampled['E'].real, sampled['H'].real)
     return sampled
+
+
+def fit_fdtd_modes(t, signal, *, modes=1, start=None, stop=None, pencil=None, rcond=1e-10):
+    """Fit a point ringdown to a finite sum of damped complex exponentials.
+
+    The model is ``sum(a * exp((-decay_rate-2j*pi*frequency)*(t-time_origin)))``.
+    Frequencies are cycles per c=1 time unit; positive decay_rate means amplitude
+    decay, and Q=pi*abs(frequency)/decay_rate. Growing modes are retained, with
+    NaN Q for nonpositive decay. Amplitudes refer to the first selected sample,
+    not the simulation's t=0. No positivity, conjugacy or decay constraint is
+    imposed. A real cosine needs two modes (the conjugate-frequency pair).
+
+    Args:
+        t: real, finite, increasing, uniformly spaced one-dimensional times.
+        signal: one real or complex trace of the same length. Select a point
+            and component from native records or :func:`sample_fdtd_fields`.
+        modes: positive integer number of exponentials; at least 2*modes+1
+            selected samples are required. Increase it only with independent
+            window/order checks; noise can produce spurious modes.
+        start, stop: optional inclusive time bounds. Select a source-free
+            interval; this function cannot check whether the source has stopped.
+        pencil: Hankel column count, between modes and samples-modes. Default
+            min(samples//2, max(128, 2*modes)) bounds the default matrix width.
+        rcond: relative singular-value floor in (0,1). A requested mode count
+            beyond the resolved Hankel rank is refused.
+
+    Returns:
+        dict: frequency-sorted ``frequency``, ``decay_rate``, ``quality_factor``,
+        ``amplitude``, ``complex_frequency`` and ``discrete_pole`` arrays;
+        ``time_origin``, ``dt``, selected ``t`` and ``fitted`` trace;
+        ``relative_residual``, normalized ``singular_values``, ``basis_condition``,
+        ``modes`` and ``pencil``. The residual measures the selected record only;
+        it is not a mode-frequency uncertainty or a convergence certificate.
+
+    This is NumPy CPU postprocessing, not a differentiable/JIT operation. Move
+    backend records to host arrays explicitly (detach Torch records if needed).
+    Storage is O(samples*pencil). No resampling or anti-alias filter is applied:
+    frequencies are reported on the signed sampled Nyquist branch. Undersampled
+    modes cannot be recovered. Weak damping and close modes require window,
+    sampling, model-order and physical boundary/grid checks before interpreting Q.
+
+    Independently implemented from the matrix-pencil construction of Hua and
+    Sarkar, IEEE TASSP 38 (1990), 814-824, doi:10.1109/29.56027, section II.
+    No external solver or harmonic-inversion implementation is used.
+    """
+    times, values = np.asarray(t), np.asarray(signal)
+    if (times.ndim != 1 or times.dtype.kind not in 'fiu' or len(times) < 3
+            or not np.isfinite(times).all() or np.any(np.diff(times.astype(float)) <= 0)):
+        raise ValueError('t must contain at least three finite increasing real times.')
+    if (values.ndim != 1 or values.shape != times.shape or values.dtype.kind not in 'fciu'
+            or not np.isfinite(values).all()):
+        raise ValueError('signal must be one finite numeric trace with the same shape as t.')
+    if isinstance(modes, (bool, np.bool_)) or not isinstance(modes, (int, np.integer)) or modes < 1:
+        raise ValueError('modes must be a positive integer.')
+    floor = np.asarray(rcond)
+    if floor.shape != () or floor.dtype.kind not in 'fiu':
+        raise ValueError('rcond must be a finite real scalar strictly between zero and one.')
+    floor = float(floor)
+    if not np.isfinite(floor) or not 0 < floor < 1:
+        raise ValueError('rcond must be a finite real scalar strictly between zero and one.')
+    lower = times[0] if start is None else _coordinate(start, 'start')
+    upper = times[-1] if stop is None else _coordinate(stop, 'stop')
+    if lower > upper or lower < times[0] or upper > times[-1]:
+        raise ValueError('start/stop must select an ordered interval inside the recorded times.')
+    selected = (times >= lower) & (times <= upper)
+    times, values = times[selected].astype(float), values[selected].astype(complex)
+    count = len(times)
+    if count < 2*modes+1:
+        raise ValueError('The selected interval needs at least 2*modes+1 samples.')
+    dt = float((times[-1]-times[0])/(count-1))
+    if not np.allclose(np.diff(times), dt, rtol=1e-7, atol=1e-12*dt):
+        raise ValueError('Selected t must be uniformly spaced; no resampling is performed.')
+    if pencil is None:
+        pencil = min(count//2, max(128, 2*modes))
+    if (isinstance(pencil, (bool, np.bool_)) or not isinstance(pencil, (int, np.integer))
+            or not modes <= pencil <= count-modes):
+        raise ValueError('pencil must be an integer between modes and samples-modes.')
+    scale = np.max(np.abs(values))
+    if not np.isfinite(scale) or scale == 0:
+        raise ValueError('signal needs a finite nonzero amplitude scale.')
+    normalized = values/scale
+    windows = np.lib.stride_tricks.sliding_window_view(normalized, pencil+1)
+    h0, h1 = windows[:, :-1], windows[:, 1:]
+    u, singular, vh = np.linalg.svd(h0, full_matrices=False)
+    if singular[modes-1] <= floor*singular[0]:
+        raise ValueError('Requested modes exceed the resolved Hankel rank; reduce modes or inspect rcond and the signal.')
+    # The nonzero eigenvalues of the truncated pseudoinverse H0^+ H1
+    # can be found in this modes-by-modes projection (Hua/Sarkar eq. 2.17).
+    reduced = (u[:, :modes].conj().T @ h1 @ vh[:modes].conj().T)/singular[:modes, None]
+    poles = np.linalg.eigvals(reduced)
+    if not np.isfinite(poles).all() or np.any(poles == 0):
+        raise ValueError('The fitted discrete poles cannot represent finite continuous frequencies; reduce modes or change the interval.')
+    exponents, frequency, decay = time_pole_parameters(np, poles, dt)
+    order = np.argsort(frequency)
+    poles, exponents, frequency, decay = (v[order] for v in (poles, exponents, frequency, decay))
+    # Anchor a growing column at the last sample, keeping every exponential's
+    # magnitude <=1. This avoids overflowing the least-squares basis.
+    anchor = np.where(exponents.real > 0, count-1, 0)
+    basis = np.exp((np.arange(count)[:, None]-anchor)*exponents)
+    coefficients, _, rank, basis_singular = np.linalg.lstsq(basis, normalized, rcond=floor)
+    if rank < modes:
+        raise ValueError('The fitted modal amplitudes are unresolved; reduce modes or change the interval.')
+    fitted = basis @ coefficients
+    amplitude = coefficients*np.exp(-anchor*exponents)*scale
+    quality = np.full(modes, np.nan)
+    decaying = decay > 0
+    quality[decaying] = np.pi*np.abs(frequency[decaying])/decay[decaying]
+    return dict(frequency=frequency, decay_rate=decay, quality_factor=quality, amplitude=amplitude,
+                complex_frequency=frequency-1j*decay/(2*np.pi), discrete_pole=poles,
+                time_origin=float(times[0]), dt=dt, t=times, fitted=fitted*scale,
+                relative_residual=float(np.linalg.norm(normalized-fitted)/np.linalg.norm(normalized)),
+                singular_values=singular/singular[0], basis_condition=float(basis_singular[0]/basis_singular[-1]),
+                modes=int(modes), pencil=int(pencil))

@@ -13,7 +13,7 @@ returned amplitudes were never conjugated back. Every boundary added after that 
 which side of the seam it was on, and three of them guessed wrong (absorbing substrates and
 superstrates came out as gain media). The seam is gone; this module holds what replaced it.
 
-Two branch rules, and they are *not* the same rule:
+Two spatial branch rules, and they are *not* the same rule:
 
 ``mode_q``       a layer's modal constant, used as ``exp(-k0*q*z)`` going down.
 ``boundary_kz``  a half-space's ``kz``, used as ``exp(+i*k0*kz*z)`` going down.
@@ -44,6 +44,19 @@ from typing import NamedTuple
 import numpy as np
 
 from .backend import AxisNameWarning, UnresolvedBranchWarning, as_array
+
+
+def time_pole_parameters(xp, pole, dt):
+    """Log step multiplier, signed frequency and amplitude decay for a time pole.
+
+    ``pole=exp((-decay-2j*pi*f)*dt)`` uses the package's ``exp(-i*omega*t)``
+    time convention. The principal logarithm selects the sampled Nyquist
+    branch; aliases cannot be distinguished from the samples. The caller
+    supplies finite nonzero complex poles and a positive time step.
+    """
+    exponent = xp.log(pole)
+    return exponent, -xp.imag(exponent)/(2*np.pi*dt), -xp.real(exponent)/dt
+
 
 _FLAT = 1e-12      # below this, a real part counts as zero and the tie-break decides
 

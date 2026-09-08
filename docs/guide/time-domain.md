@@ -1138,6 +1138,54 @@ gradients retain their original behavior. Bounds are static geometry, not
 optimization parameters. For direct grid-index selection on `fdtd_grid`, use
 `record_region` instead.
 
+### Fitting frequencies and decay rates from a time trace
+
+`wavebit.fit_fdtd_modes(t, signal, modes=...)` analyzes a single point/component
+after the source becomes negligible. Select a trace from the recorded fields:
+
+```python
+field = diagnostics['fields']['ey']
+signal = np.asarray(field['values'])[:, 0, 0, 0]
+fit = wavebit.fit_fdtd_modes(
+    np.asarray(field['t']), signal, modes=2, start=60., stop=120.,
+)
+print(fit['frequency'], fit['decay_rate'], fit['relative_residual'])
+```
+
+The example assumes that the recorded interval contains 60 through 120 and the
+source is negligible there. Choose the indices using that component's own
+staggered coordinates. The analysis uses NumPy CPU arrays; move JAX/Torch data
+to the host explicitly and detach Torch records when they carry gradients. It
+does not alter the simulation or provide gradients through the fit.
+
+The model sums `amplitude * exp((-decay_rate-2j*pi*frequency)*(t-time_origin))`.
+Amplitudes refer to the first selected sample. `frequency` is in cycles per c=1
+time unit, and positive `decay_rate` describes amplitude decay, not energy decay.
+`quality_factor` is `pi*abs(frequency)/decay_rate`; nonpositive decay produces
+NaN Q and is retained for inspection. Very small fitted decay may be roundoff,
+so a large Q requires independent checks. Real cosines need both conjugate
+frequencies: use two modes per damped cosine. Complex records need not contain
+conjugate pairs. The default requests one exponential.
+
+The selected samples must be uniformly spaced. Frequencies use the signed
+Nyquist branch; the function does not filter or repair aliased records. At least
+`2*modes+1` samples are required. Optional `pencil` chooses the Hankel matrix's
+column count, between `modes` and `samples-modes`. Its default is
+`min(samples//2, max(128, 2*modes))`, with storage proportional to
+`samples*pencil`. `rcond=1e-10` is a relative singular-value floor. Unresolved
+mode counts and amplitude bases are refused. This floor is not a physical noise
+estimate or mode-frequency uncertainty.
+
+Results include frequency-sorted modes, normalized `singular_values`,
+`basis_condition`, the selected `t` and reconstructed `fitted` trace.
+`relative_residual` is the fit error over this interval only. Compare different
+start/stop times, mode counts and pencil widths before identifying a resonance.
+An algebraic tail can be approximated by several exponentials with a small
+residual but changing frequencies and decay rates. This neither certifies Q nor
+justifies automatically extrapolating a DFT to infinite time. The
+[ringdown measurements](../fdtd-ringdown.md) show this limitation near a diffraction
+threshold and validate the fitter against exact modes and external Meep records.
+
 ### Checking residual material oscillations
 
 When `convergence_window` is enabled, the native convergence mapping also reports

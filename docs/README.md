@@ -72,6 +72,7 @@ comes next. The outward-pointing rule above binds `guide/` too; only the house s
 | --- | --- | --- |
 | [Directional diffraction](fdtd-directional.md) | Can returning waves and a nearby long-lived resonance hide in electric-only extraction? | Separate E/H directions using discrete Maxwell admittance, and retain independent temporal and boundary checks. |
 | [CPML strength](fdtd-pml-strength.md) | Can absorption strength and thickness be varied independently near a Rayleigh threshold? | Expose the nominal amplitude target without changing defaults, and recheck time and mesh convergence after boundary changes. |
+| [Ringdown fits](fdtd-ringdown.md) | Does a small exponential-fit residual establish a physical resonance or Q? | Recover known material/Maxwell modes, then identify a window-dependent near-cutoff tail that needs broader convergence checks. |
 | [Near-Rayleigh channels](fdtd-rayleigh.md) | Can a coarse grid classify a diffraction channel on the wrong side of cutoff? | Expose physical/discrete cutoff agreement and independent plane placement; retain the unresolved TM accuracy limit. |
 | [ENZ and scattering convergence](fdtd-enz.md) | Can one settled incidence column hide ENZ transients in the other? | Report both calibrated columns and a Jones-input bound; separate temporal settling from ADE and spatial error. |
 | [Layer-aligned meshes](fdtd-layer-alignment.md) | Does placing every layer boundary on a node improve dispersive TM optics? | Fit layer thicknesses explicitly and separate planar interface error from time and boundary effects. |

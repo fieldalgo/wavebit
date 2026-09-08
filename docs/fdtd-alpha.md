@@ -74,6 +74,10 @@ Static [CPML strength](fdtd-pml-strength.md) is now independently configurable
 on the shared grid and explicit-backend scene interfaces. Its nominal amplitude
 target is not a measured-reflection bound; width, strength, mesh and temporal
 checks remain separate, and the original default profile is preserved.
+Offline [ringdown fitting](fdtd-ringdown.md) now extracts damped frequencies
+from point traces and is checked against exact/native/external field records.
+The remaining near-Rayleigh signal has a cutoff-related, window-dependent tail;
+a small multimode residual alone does not establish a physical Q or time convergence.
 
 The common engine reports physical and discrete lower-cutoff classifications
 and supports independent diffraction-plane distances. A binary dielectric
