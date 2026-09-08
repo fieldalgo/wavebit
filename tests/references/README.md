@@ -1090,3 +1090,20 @@ absolute field bounds. No goldens were regenerated for the refactor. The Meep
 CPML/material checks continue through JAX, while direct Torch/NumPy parity tests
 cover the CPML/ADE/Bloch combination and derivatives. This distinguishes frozen
 external regressions from fresh external runs. GPU execution remains unverified.
+
+
+## Bottom-incident common scene (2026-09-08)
+
+`golden_scene_bottom_meep.json` is a fresh Meep 1.34.0 CPU public-API run from
+`studies/validate_scene_bottom_meep.py`. Two layers (epsilon 2/3, thickness
+.13/.21) sit at original z=0..0.34 in vacuum. A physical source at z=3 illuminates
+toward -z; field planes at z=2/-2 isolate reflected/transmitted amplitudes using
+an empty reference run. No coordinate reflection is used in this oracle.
+Native vacuum Yee propagation de-embeds r to z=.34 and t to z=0.
+
+Resolution80, Courant.4, duration30, wavelengths.9/1/1.1. A duration40 control
+changed complex r/t components by at most6.1e-15. The common Wavebit scene adapter
+uses its own Courant fraction and sampling; complex r gap<6e-4, t gap<2e-4.
+`test_scene_bottom_meep.py` holds both to1.5e-3. This checks phases/signs, not
+only power. New reference only; no existing goldens were regenerated. The worker
+suppresses implementation tracebacks and reads no Meep source.

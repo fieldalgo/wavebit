@@ -522,8 +522,8 @@ PML width, padding and duration for each new structure, especially resonances.
 Exact grazing orders and orders beyond the grid's sampling limit are refused.
 Far-plane extrapolation of strongly evanescent amplitudes is ill-conditioned.
 
-The explicit-backend adapter currently does not accept graded z meshes, bottom
-incidence, skewed lattices or geometry derivatives. Omit `backend` for legacy
+The explicit-backend adapter currently does not accept graded z meshes, skewed
+lattices or geometry derivatives. Omit `backend` for legacy
 graded-mesh features; unsupported explicit-backend keywords raise an error. There is no implicit backend fallback. Actual GPU execution remains
 unverified on this CPU-only machine.
 
@@ -592,3 +592,42 @@ compare streaming and offline DFTs, check every recording-interval tail, compare
 three backends, differentiate histories and monitor powers, preserve circular
 quadrature, and exercise plot/probe compatibility. Enabling recording leaves the
 diffraction result unchanged.
+
+
+### Bottom illumination in the common engine
+
+Set `Incidence(..., incidence_side='bottom')` or pass `incidence_side='bottom'`
+with an explicit backend. The structure, top/bottom materials and layer ordering
+remain in the original scene. Angles are measured relative to the incidence
+medium's inward normal, matching RCWA. R is reflected power into that medium;
+T leaves through the opposite side. Complex r is referenced to the bottom
+interface and t to the top interface. `given`, `s_inc`, `p_inc` and order labels
+keep their incidence-relative conventions.
+
+The adapter reverses layer-associated epsilon, mu and dispersion labels, swaps
+half spaces, and uses the same top-incident stepper. No backend duplicates the
+field update. Recorded coordinates and monitor locations are mapped back with
+`z_original = total_thickness - z_mirror`. E is a polar vector, so Ez changes
+sign; H is axial, so Hx and Hy change sign. Returned z axes remain increasing.
+The source/PML/layer markers use original coordinates. Time is not reversed.
+User-plane `power_z` remains a laboratory-coordinate signed flux: transmission
+from below normally has **negative** power_z, while diffraction T stays positive.
+
+This route supports the same raster, positive magnetic medium, electric pole,
+Jones state, record and monitor options as top incidence, including JAX/Torch
+material gradients. It is independent of the legacy NumPy path, which still
+refuses bottom incidence unless an explicit backend selects the common engine.
+Grid refinement is needed for reciprocity comparisons: reflecting a stack whose
+interfaces do not align to grid nodes changes its sampled interfaces. For an
+asymmetric lossy two-layer test the matched-wavevector transmission difference
+falls from 0.0083 at resolution 40 to 0.0018 at resolution 80.
+
+Verification includes complex magnetic multilayer amplitudes against RCWA,
+crossed dispersive layer reversal, physical field and flux signs, input
+immutability, typed-scene gradients and a live Meep 1.34.0 reference. The Meep
+reference places the source physically below the original stack; it does not
+mirror the simulation. Three-wavelength r/t agree within 6e-4 in complex amplitude
+at resolution 80. Increasing Meep's duration from 30 to 40 changes the reference
+by less than 7e-15. Only documented Meep APIs were used; its implementation was
+not read. See `studies/validate_scene_bottom_meep.py` and the frozen reference
+in `tests/references/golden_scene_bottom_meep.json`.

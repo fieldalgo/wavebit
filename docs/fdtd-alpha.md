@@ -24,7 +24,9 @@ The explicit-backend common scene adapter now provides both, with static geometr
 and material/pole gradients. Common-backend time histories and user z monitors
 are also available, with native component staggering and centre-calibrated
 causal time records; see the [guide](guide/time-domain.md#common-scene-adapter).
-Neither scene path provides MPI execution, bottom incidence,
+The common backend adapter additionally supports bottom incidence with original-coordinate
+records/monitors; the legacy path still supports only top incidence.
+Neither scene path provides MPI execution,
 skewed lattices, parametric geometry input, anisotropic tensors,
 or complex-angle incidence. Complex Jones states support diffraction and transverse time records through
 separately propagated sine/quadrature sources. Use the appropriate RCWA capability where available; do not

@@ -84,7 +84,8 @@ def fdtd(stack=None, incidence=None, **kwargs):
     explicit resolution, and differentiates raster materials and electric poles.
     Both paths support time records and user frequency planes; source and
     normalization conventions are documented in the time-domain guide.
-    Geometry and half spaces are static; see the time-domain guide for scope.
+    Explicit backends also support bottom incidence; geometry and half spaces
+    are static. See the time-domain guide for scope and coordinate conventions.
 
     Args:
         stack: optional typed ``Stack`` supplying ``structure`` / ``thickness`` / ``top`` /

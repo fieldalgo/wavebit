@@ -28,6 +28,63 @@ def _weights(centres, width, edges, periodic=False, subpixel=True):
     return weights/weights.sum(axis=1, keepdims=True)
 
 
+def _solve_bottom_scene(options):
+    """Reflect z about the stack midplane; E is polar and H is axial.
+
+    Diffraction amplitudes are incidence-relative, as in RCWA, so their s/p
+    coefficients do not change. Field coordinates and Cartesian components do.
+    """
+    runtime = time_loop_backend(options['backend'], device=options['device'],
+                                reference=options['structure'])
+    xp, array = runtime.xp, runtime.array
+    thickness = np.asarray(options['thickness'], float)
+    raster = array(options['structure'])
+    if raster.ndim != 3 or min(raster.shape) < 1:
+        raise ValueError('structure must have shape (layers, y, x).')
+    if thickness.shape != (raster.shape[0],) or not np.isfinite(thickness).all() or np.any(thickness <= 0):
+        raise ValueError('thickness must contain one positive static length per layer.')
+    depth = float(thickness.sum())
+    mirrored = dict(options, incidence_side='top', top=options['bot'], bot=options['top'],
+                    thickness=thickness[::-1], structure=xp.flip(raster, axis=0))
+    if options['mu'] is not None:
+        permeability = array(options['mu'])
+        if permeability.shape != raster.shape:
+            raise ValueError('mu must have the same raster shape as structure.')
+        mirrored['mu'] = xp.flip(permeability, axis=0)
+    if options['dispersion'] is not None:
+        mirrored['dispersion'] = np.flip(np.asarray(options['dispersion']), axis=0)
+    if options['field_monitors'] is not None:
+        planes = options['field_monitors']
+        if not isinstance(planes, dict) or not planes:
+            raise ValueError('field_monitors must be a nonempty mapping of names to z coordinates.')
+        for coordinate in planes.values():
+            if np.ndim(coordinate) or np.iscomplexobj(coordinate) or not np.isfinite(coordinate):
+                raise ValueError('Monitor z must be a finite real scalar.')
+        mirrored['field_monitors'] = {name: depth-z for name, z in planes.items()}
+    answer = solve_scene_fdtd(**mirrored)
+    if not options['return_diagnostics']:
+        return answer
+    result, diagnostics = answer
+    signs = dict(ex=1, ey=1, ez=-1, hx=-1, hy=-1, hz=1)
+    for plane in diagnostics['monitors'].values():
+        plane['z'] = depth-plane['z']
+        plane['fields'] = {name: signs[name]*value for name, value in plane['fields'].items()}
+        plane['flux_density'] = plane['flux_density']*array([1., 1., -1.])
+        plane['power_z'] = -plane['power_z']
+        plane['normalization'] = 'unit incident E at bottom interface'
+    for name, field in diagnostics.get('fields', {}).items():
+        field['values'] = signs[name]*xp.flip(field['values'], axis=1)
+        field['z'] = depth-xp.flip(field['z'], axis=0)
+    if 'fields' in diagnostics:
+        first = diagnostics['fields'][diagnostics['field_e_component']]
+        diagnostics.update(field_e=first['values'], field_z=first['z'])
+    diagnostics.update(source_z=depth-diagnostics['source_z'],
+                       pml_bounds=tuple(depth-z for z in reversed(diagnostics['pml_bounds'])),
+                       layer_planes=np.r_[0., np.cumsum(thickness)],
+                       incidence_side='bottom', reflection_z=depth, transmission_z=0.)
+    return result, diagnostics
+
+
 def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=None, *,
                      backend=0, device=None, resolution=None, n_pml=12, n_periods=40,
                      courant=.8, subpixel=True, theta=0., phi=None, tetm=None,
@@ -40,17 +97,21 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
 
     Explicit resolution is required: optimizing materials must not resize the
     grid. Half spaces, geometry, wavelength and incidence angles are static.
-    Nonuniform grading and bottom incidence use the legacy API;
-    they are not silently executed by a different backend.
+    Bottom incidence uses a z-reflected scene and returns fields in original
+    coordinates. Nonuniform grading is available only through the legacy API.
     """
+    if incidence_side == 'bottom':
+        return _solve_bottom_scene(locals().copy())
     if (field_monitors is not None or record_field is not None) and not return_diagnostics:
         raise ValueError('field_monitors/record_field require return_diagnostics=True.')
     if field_monitors is not None and (not isinstance(field_monitors, dict) or not field_monitors):
         raise ValueError('field_monitors must be a nonempty mapping of names to z coordinates.')
     if record_components is not None and record_field is None:
         raise ValueError('record_components requires record_field.')
-    if lattice is not None or incidence_side != 'top':
-        raise ValueError('The common scene engine requires rectangular period and top incidence.')
+    if incidence_side != 'top':
+        raise ValueError("incidence_side must be 'top' or 'bottom'.")
+    if lattice is not None:
+        raise ValueError('The common scene engine requires rectangular period.')
     if resolution is None or not np.isfinite(resolution) or resolution <= 0:
         raise ValueError('The common scene engine requires a positive explicit resolution (cells/length).')
     if not 0 < courant < 1 or not np.isfinite(n_periods) or n_periods <= 0:
@@ -292,7 +353,8 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     results = results[:len(band)]
     result = results[0] if np.ndim(wavelength) == 0 else results
     if return_diagnostics:
-        diagnostics = dict(stable=stable, dt=dt, steps=steps, n_steps=steps,
+        diagnostics = dict(incidence_side='top', reflection_z=0., transmission_z=float(thick.sum()),
+                           stable=stable, dt=dt, steps=steps, n_steps=steps,
                            spacing=(dz, dy, dx), shape=shape, wavelengths=array(band),
                            n_pml=int(n_pml), source_z=z[source_z], layer_planes=np.r_[0., np.cumsum(thick)],
                            pml_bounds=(z[0], z[int(n_pml)], z[-int(n_pml)], z[-1]),
