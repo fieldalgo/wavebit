@@ -84,6 +84,10 @@ and complex records match fresh public-API Meep results on all three CPU backend
 calibrated Airy optics and material gradients are preserved. In the cutoff study,
 smaller returning components do not reliably reduce both polarizations' total
 amplitude errors. The Gaussian remains the default.
+The [independent source-position control](fdtd-source-clearance.md) now allows
+fixed illumination and measurement planes when padding changes. In the tested
+near-cutoff case, separate source and clearance changes are much smaller than
+the remaining RCWA discrepancy; they do not settle its time or grid error.
 
 The common engine reports physical and discrete lower-cutoff classifications
 and supports independent diffraction-plane distances. A binary dielectric

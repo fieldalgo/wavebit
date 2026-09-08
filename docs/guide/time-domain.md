@@ -560,6 +560,51 @@ NumPy agreement and a pole-strength derivative. These scene checks supplement
 the native-core Meep/FDTDX field and derivative references.
 
 
+### Source position independent of padding
+
+`source_distance` optionally places the incident electric-current sheet a
+positive static distance from the incident interface, in length units. `None`
+keeps the original source position. The nearest z node is selected without
+changing the mesh, PML, layer boundaries or extraction planes. With top
+incidence its target is `z=-source_distance`; with bottom incidence the target
+is `z=total_thickness+source_distance` in the original scene coordinates.
+
+```python
+result, diag = wavebit.fdtd(
+    structure=np.full((1, 1, 1), 2.25), thickness=[.213],
+    top=1., bot=1., period=.1, wavelength=1., backend=0,
+    resolution=40, n_pml=12, pulse_width=3., n_periods=50,
+    source_distance=1., diffraction_distance=.2,
+    align_layers=True, return_diagnostics=True,
+)
+print(diag['source_distance'])   # requested interface distance
+print(diag['source_z'])          # realized node in original scene coordinates
+```
+
+The selected node must lie in the incident half space, at least two cells past
+the PML's inner face, and at least three cell intervals before the reflection
+plane. Invalid, nonfinite, nonpositive and unplaceable distances raise before
+time stepping. A user frequency monitor still cannot interpolate across the
+current sheet. On a graded mesh, distance is physical rather than a cell count;
+the reported node may differ from the request by the local snapping distance.
+
+This makes two separate experiments possible: vary `pad_scale` while keeping
+both `source_distance` and `diffraction_distance` fixed, or move the source at
+fixed padding. The former changes boundary clearance; the latter changes the
+illumination path. Inspect realized coordinates because changing a graded mesh
+can change the nearest nodes. Each wavelength still uses its own uniform-medium
+reference calibration. Source placement changes finite-time transients and
+boundary returns, so equal calibrated amplitudes require convergence rather
+than an assumption of exact invariance on every grid.
+
+The option supports the shared NumPy/JAX/Torch scene engine, bottom incidence,
+grading, source notches, recordings and material gradients. The distance itself
+is static and has no shape derivative; the legacy scene path has no corresponding
+keyword. See the [source-clearance measurements](../fdtd-source-clearance.md)
+for a near-cutoff control where moving the source and moving the boundary need
+to be distinguished.
+
+
 ### Diffraction planes and cutoff diagnostics
 
 `diffraction_distance` controls the extraction-plane distances from the reflection

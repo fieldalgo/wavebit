@@ -236,7 +236,8 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                      field_monitors=None, record_field=None, record_components=None, grading=None,
                      convergence_window=None, convergence_tol=1e-4, dft_subsample=1, record_bounds=None,
                      pulse_width=None, align_layers=False, diffraction_distance=None,
-                     diffraction_method='electric', pml_reflection=1e-8, pulse_notches=None):
+                     diffraction_method='electric', pml_reflection=1e-8, pulse_notches=None,
+                     source_distance=None):
     """Solve a static rectangular scene with NumPy/JAX/Torch material gradients.
 
     Explicit resolution is required: optimizing materials must not resize the
@@ -257,6 +258,8 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     pulse_notches optionally suppresses selected positive frequencies using
     causal delayed copies of the Gaussian. Required frequencies must remain
     resolved, including the carrier when time records are requested.
+    source_distance optionally selects a source sheet a fixed physical distance
+    from the incident interface, independently of padding and monitor positions.
     """
     record_bounds = _validate_record_bounds(record_bounds)
     if record_bounds is not None and record_field is None:
@@ -280,6 +283,14 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     if diffraction_method not in ('electric', 'directional'):
         raise ValueError("diffraction_method must be 'electric' or 'directional'.")
     pml_reflection = _validate_pml_reflection(pml_reflection)
+    if source_distance is not None:
+        value = np.asarray(source_distance)
+        if (value.shape != () or value.dtype.kind not in 'fiu'
+                or not np.isfinite(value) or value <= 0):
+            raise ValueError('source_distance must be a positive finite static scalar.')
+        source_distance = float(value)
+        if not np.isfinite(source_distance):
+            raise ValueError('source_distance must be representable as a finite static scalar.')
     if diffraction_distance is not None:
         distances = np.asarray(diffraction_distance)
         if (distances.shape not in ((), (2,)) or distances.dtype.kind not in 'fiu'
@@ -405,9 +416,16 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
         transmit_z = int(np.argmin(abs(z-(thick.sum()+pad*dz))))
         if not source_z+2 < reflect_z < interface or transmit_z >= nz-int(n_pml)-2:
             raise ValueError('Nonuniform padding cannot fit source/monitors/PML; increase pad_scale.')
+    if source_distance is not None:
+        source_z = int(np.argmin(abs(z+source_distance)))
+        if source_z < int(n_pml)+2 or source_z >= interface:
+            raise ValueError('source_distance must place the source in the incident half space outside the PML; increase padding or adjust distance.')
     if diffraction_distance is not None:
         reflect_z = int(np.argmin(abs(z+distances[0])))
         transmit_z = int(np.argmin(abs(z-(thick.sum()+distances[1]))))
+    if source_distance is not None and not source_z+2 < reflect_z:
+        raise ValueError('source_distance must leave at least three cells before the reflection plane; adjust source or diffraction_distance.')
+    if diffraction_distance is not None:
         if (not source_z+2 < reflect_z or z[reflect_z]+widths[reflect_z]/2 > 0
                 or z[transmit_z]-widths[transmit_z-1]/2 < thick.sum()
                 or transmit_z >= nz-int(n_pml)-2):
@@ -730,7 +748,8 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                                   for key, value in pulse_info.items()},
                            z_nodes=array(z), z_spacing=array(widths), grading=grading, align_layers=bool(align_layers),
                            n_pml=int(n_pml), pml_reflection=pml_reflection,
-                           source_z=z[source_z], layer_planes=np.r_[0., np.cumsum(thick)],
+                           source_z=z[source_z], source_distance=source_distance,
+                           layer_planes=np.r_[0., np.cumsum(thick)],
                            # The final closing cell also belongs to the lower PML.
                            pml_bounds=(z[0], z[int(n_pml)], z[-int(n_pml)], z[-1]+widths[-1]),
                            angles=np.arcsin(band/centre*np.sin(theta)),

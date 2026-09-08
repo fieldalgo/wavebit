@@ -110,6 +110,7 @@ has decreased. All listed field/state decay checks remain false.
 | 40 | 1600 | Double Yee-cutoff zero | 0.024983 | 0.051266 |
 | 80 | 800 | Gaussian, previous control | 0.015474 | 0.010338 |
 | 80 | 800 | One Yee-cutoff zero | 0.013935 | 0.011963 |
+| 80 | 800 | Double Yee-cutoff zero | 0.014372 | 0.011892 |
 
 At resolution 40 and 800 periods, one Yee-cutoff zero reduces the maximum
 transmission-side incoming order -1 amplitudes from TE/TM 0.009470/0.003621 to
@@ -127,6 +128,10 @@ Gaussian controls, but still far above the 1e-4 convergence tolerance.
 A double-zero 800-period run and a single-zero resolution-80 run pass the short
 200-update scattering test while still failing state decay. Those local flags
 must not be treated as infinite-time certificates.
+The double-zero resolution-80 run also passes that short test, yet has larger
+TE error than the single-zero run and larger TM error than the Gaussian. Its
+transmission-side incoming TE/TM order -1 amplitudes are 0.007336/0.002005;
+the coarse-grid reduction in incoming TE does not persist under refinement.
 
 A notch at the physical threshold here also removes the unrequested carrier.
 It is valid for band-only scattering, but the common scene adapter refuses
@@ -148,6 +153,7 @@ python -m studies.fdtd_pulse_notches --case physical40
 python -m studies.fdtd_pulse_notches --case long40
 python -m studies.fdtd_pulse_notches --case double-long40
 python -m studies.fdtd_pulse_notches --case single80
+python -m studies.fdtd_pulse_notches --case double80
 ```
 
 The default study backend is double-precision JAX on CPU. `--backend numpy`

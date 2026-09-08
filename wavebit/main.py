@@ -95,6 +95,8 @@ def fdtd(stack=None, incidence=None, **kwargs):
     report physical and Yee transverse cutoff classifications for each order.
     ``diffraction_method='directional'`` separates travelling E/H components
     and reports incoming residuals; its measurement planes need locally uniform z cells.
+    ``source_distance`` places the incident current sheet independently of
+    padding and extraction planes, using the nearest incident-side z node.
     See the time-domain guide for scope and coordinate conventions.
 
     Args:
