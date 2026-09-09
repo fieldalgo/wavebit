@@ -667,6 +667,91 @@ def _shape_cell_fractions(vertices, x, y, dx, dy, periods, *, xp, array, smoothi
     return xp.where(fraction > 1, xp.ones_like(fraction), fraction)
 
 
+def _rectangle_edge_moments(vertices, x, y, dx, dy, periods, *, xp, array, check=_require_scene):
+    """Per-cell interface arclength and second normal moment of a straight-sided shape.
+
+    Returns (L, M_xx, M_xy, M_yy), each of shape (len(y), len(x)): arrays are v-first in this
+    file, so the row index runs over y, while periods stays the x-first typed pair every caller
+    passes. M_cd integrates n_c n_d over the shape's own boundary inside a cell, so M/L is the
+    mean of n n^T over that interface and M_xx + M_yy == L identically.
+
+    The second moment, not the first. A first moment N, normalised as N N^T/|N|^2, collapses to
+    rank one at a symmetric 90-degree corner -- [[1/4, 1/4], [1/4, 1/4]], a spurious diagonal
+    normal, where n n^T reads diag(1/2, 1/2) -- and cancels to zero between the antiparallel
+    faces of a feature thinner than a cell, which is exactly the laminate for which
+    eps = <eps> I - Delta n n^T is exact. It is not a factor of two waiting to be simplified away.
+
+    It is also not liftable out of _clipped_rectangle_area: that routine's eight-vertex repack is
+    what lets a topology change happen inside one trace and equally what forgets which vertices
+    came from a shape edge and which from a box face, and the rotated chords of the closed clipped
+    polygon sum to zero identically, so no identity recovers the shape's own edges afterwards.
+    """
+    if vertices.ndim == 1 or vertices.shape[-2] != 4:
+        raise ValueError('_rectangle_edge_moments walks the four oriented edges of a straight-sided '
+                         'shape. A circle/ellipse recipe carries axes rather than vertices and has '
+                         'no polygon to walk; refused rather than approximated by a chord.')
+    tol = 32*xp.finfo(vertices.dtype).eps*max(periods)
+    # The same 3x3 image ring and the same closed cell boxes as the *sharp* branch of
+    # _shape_cell_fractions -- a fraction built with nonzero smoothing is a different geometry
+    # (wider ring, trapezoidal windows) and pairing the two mixes two structures. This sums each
+    # image's boundary, not the boundary of their union, so touching images double a shared face
+    # that a sign-blind moment cannot cancel, and a wider shape outruns the ring and loses
+    # arclength; one refusal excludes both, exactly rather than conservatively, since images a
+    # lattice vector apart overlap along a face only when a projected extent spans a period.
+    for axis, period in enumerate(periods):
+        check(xp.max(vertices[:, axis])-xp.min(vertices[:, axis]) < period,
+              'Interface moments require projected shape extents strictly smaller than their periods; '
+              'a touching or oversized periodic image shares a face with its neighbour, which this sum '
+              'counts twice rather than cancels.')
+    shifts = array([(i*periods[0], j*periods[1]) for i in (-1, 0, 1) for j in (-1, 0, 1)])
+    start = vertices[None, :, :]+shifts[:, None, :]
+    edge = xp.roll(start, -1, axis=-2)-start
+    edge_x, edge_y = edge[..., 0], edge[..., 1]
+    # Guarded normalisation in the idiom of _clipped_rectangle_area's inactive denominators: a
+    # zero-length edge leaves a zero normal and a zero length, so it contributes nothing and
+    # differentiates without the infinite slope of sqrt at the origin. Normalising the whole edge
+    # once rather than each clipped piece needs one such guard instead of one per cell and 36
+    # square roots rather than 9*4*len(y)*len(x), for the same direction either way.
+    squared = edge_x*edge_x+edge_y*edge_y
+    extended = squared > 0
+    safe = xp.where(extended, squared, xp.ones_like(squared))
+    length = xp.where(extended, xp.sqrt(safe), xp.zeros_like(squared))
+    inverse = 1/xp.sqrt(safe)
+    normal_x, normal_y = -edge_y*inverse, edge_x*inverse
+    # Cell boxes carry x on the last axis and y on the second to last, so that the
+    # accumulated result is (len(y), len(x)) without a transpose anywhere.
+    left_x = array(x)-dx/2
+    bottom_y = array(y)-dy/2
+    left_x, right_x = left_x[None, None, None, :], (left_x+dx)[None, None, None, :]
+    bottom_y, top_y = bottom_y[None, None, :, None], (bottom_y+dy)[None, None, :, None]
+    start_x, start_y = start[..., 0][..., None, None], start[..., 1][..., None, None]
+    edge_x, edge_y = edge_x[..., None, None], edge_y[..., None, None]
+    # Liang-Barsky parametric clipping (Liang and Barsky, ACM TOG 3, 1 (1984), 1-22):
+    # each half plane is one inequality slope*t <= offset on the edge's own parameter, so
+    # the four faces only ever move the entry/exit limits and never rebuild a polygon.
+    enter = xp.zeros_like(start_x+left_x+bottom_y)
+    leave = xp.ones_like(enter)
+    outside = xp.zeros_like(enter, dtype=xp.bool)
+    for slope, offset in ((-edge_x, start_x-left_x), (edge_x, right_x-start_x),
+                          (-edge_y, start_y-bottom_y), (edge_y, top_y-start_y)):
+        moving = xp.abs(slope) > tol
+        t = offset/xp.where(moving, slope, xp.ones_like(slope))
+        enter = xp.where(moving & (slope < 0), xp.maximum(enter, t), enter)
+        leave = xp.where(moving & (slope > 0), xp.minimum(leave, t), leave)
+        # A face the edge runs parallel to admits the whole segment or none of it. The closed box
+        # keeps an exactly coincident edge (offset == 0) in both neighbours: harmless where that
+        # face is a cell's only interface, a genuine step in L where a transverse face also cuts it.
+        outside = outside | (~moving & (offset < 0))
+    span = xp.where(outside, xp.zeros_like(enter), xp.maximum(leave-enter, xp.zeros_like(enter)))
+    # The clipped fraction of the parameter interval times the FULL edge length, and the
+    # full edge's normal: nothing here is read off the clipped piece.
+    arclength = span*length[..., None, None]
+    return (xp.sum(arclength, axis=(0, 1)),
+            xp.sum(arclength*(normal_x*normal_x)[..., None, None], axis=(0, 1)),
+            xp.sum(arclength*(normal_x*normal_y)[..., None, None], axis=(0, 1)),
+            xp.sum(arclength*(normal_y*normal_y)[..., None, None], axis=(0, 1)))
+
+
 def _periodic_shape_weights(centres, width, edges, period, smoothing, *, xp, array):
     """Integrate a translated periodic interval partition over fixed Yee cells.
 
