@@ -156,7 +156,7 @@ def _shape_partition(structure, periods, *, xp, array, check, integration='separ
     derivatives even for disjoint shapes whose projected edges coincide.
     Face coordinates retain AD; actual paint topology changes can have kinks.
     The partition is not the Yee mesh and is never detached or rasterized on
-    a fixed auxiliary grid. The area route returns one live polygon or disk per
+    a fixed auxiliary grid. The area route returns one live polygon, disk or ellipse per
     layer instead, for integration against fixed Yee cells. Shared shape readers
     own lengths and cell origin on both routes.
     """
@@ -183,7 +183,7 @@ def _shape_partition(structure, periods, *, xp, array, check, integration='separ
         check_layer_spec(layer, i)
         base = material(layer.get('background', 1.))
         if integration == 'area' and len(layer.get('shapes', [])) > 1:
-            raise ValueError('Area integration currently supports at most one rectangle or circle per layer.')
+            raise ValueError('Area integration currently supports at most one rectangle, circle or ellipse per layer.')
         shapes = []
         area_shape = None
         for j, shape in enumerate(layer.get('shapes', [])):
@@ -193,10 +193,10 @@ def _shape_partition(structure, periods, *, xp, array, check, integration='separ
             kind, cx, cy, lx, ly, angle = shape_geometry(shape, lattice)
             y_invariant &= isinstance(ly, (int, float, np.number)) and np.isreal(ly) and ly == periods[1]
             circular = kind in ('circle', 'disk')
-            if kind not in ('rectangle', 'square', 'circle', 'disk'):
-                raise ValueError('Parametric FDTD supports rectangles, squares and circles; ellipses are unsupported.')
-            if circular and integration != 'area':
-                raise ValueError('Circles require shape_integration=area.')
+            if kind not in ('rectangle', 'square', 'circle', 'disk', 'ellipse'):
+                raise ValueError('Unsupported parametric FDTD shape.')
+            if (circular or kind == 'ellipse') and integration != 'area':
+                raise ValueError('Circles and ellipses require shape_integration=area.')
             if integration == 'separable' and (not isinstance(angle, (int, float, np.number)) or not np.isreal(angle) or angle != 0):
                 raise ValueError('Separable FDTD requires static angle=0; use shape_integration=area for rotation.')
             centres = [scalar(v, 'Shape centre') for v in (cx, cy)]
@@ -213,6 +213,13 @@ def _shape_partition(structure, periods, *, xp, array, check, integration='separ
                     area_shape = (xp.stack((*centres, sizes[0]/2)), material(shape.get('material', 1.)))
                     continue
                 co, si = xp.abs(xp.cos(angle)), xp.abs(xp.sin(angle))
+                if kind == 'ellipse':
+                    check(((co*sizes[0])**2+(si*sizes[1])**2 <= periods[0]**2)
+                          & ((si*sizes[0])**2+(co*sizes[1])**2 <= periods[1]**2),
+                          'Ellipse projected x/y extents must not exceed their periods.')
+                    area_shape = (xp.stack((*centres, sizes[0]/2, sizes[1]/2, angle)),
+                                  material(shape.get('material', 1.)))
+                    continue
                 check((co*sizes[0]+si*sizes[1] <= periods[0]) & (si*sizes[0]+co*sizes[1] <= periods[1]),
                       'Area integration requires rotated x/y extents no larger than the periods.')
                 vertices = rect_verts(xp, *centres, *sizes, angle)
@@ -419,19 +426,79 @@ def _clipped_circle_area(circle, left, right, bottom, top, *, xp, moment_weights
     return xp.where(area < 0, xp.zeros_like(area), area)
 
 
+def _clipped_ellipse_area(ellipse, left, right, bottom, top, *, xp, moment_weights=None):
+    """Integrate rotated ellipse chords without a polygonal approximation.
+
+    Split vertical strips at the ellipse's intersections with horizontal box
+    faces and at x=0. On each strip, x=A*sin(theta) makes the weighted chord
+    integral a trigonometric polynomial of degree <=4 on a span <=pi/2. A
+    fixed 16-point Gauss rule resolves both sharp and bilinear cell kernels.
+    All cut coordinates remain live; inactive tangent roots are guarded.
+    """
+    cx, cy, a, b, angle = (ellipse[..., k] for k in range(5))
+    co, si = xp.cos(angle), xp.sin(angle)
+    xx, yy, xy = (a*co)**2+(b*si)**2, (a*si)**2+(b*co)**2, (a*a-b*b)*co*si
+    ax, ay = xp.sqrt(xx), xp.sqrt(yy)
+    tilt, chord = xy/ax, a*b/ax
+    l, r, low, high = left-cx, right-cx, bottom-cy, top-cy
+    l, r = xp.maximum(l, -ax), xp.minimum(r, ax)
+    nonempty = (r > l) & (top > bottom)
+    r = xp.where(nonempty, r, l)
+    # Use in-domain zeroes for empty boxes before any inverse sine is taken.
+    l, r = xp.where(nonempty, l, xp.zeros_like(l)), xp.where(nonempty, r, xp.zeros_like(r))
+    cuts = [l, r, xp.zeros_like(l)]
+    for face in (low, high):
+        active = xp.abs(face) < ay
+        v = xp.where(active, face/ay, xp.zeros_like(face))
+        spread = a*b/ay*xp.sqrt(1-v*v)
+        centre = xy/ay*v
+        cuts.extend([xp.where(active, centre-spread, l), xp.where(active, centre+spread, l)])
+    cuts = xp.sort(xp.stack([xp.maximum(l, xp.minimum(r, v)) for v in cuts], axis=-1), axis=-1)
+    u = cuts/ax[..., None]
+    # Projected contacts can land a few ulps inside the endpoint. Inverse-sine
+    # slopes there amplify quadrature roundoff by 1/sqrt(eps). Use the limiting
+    # tangent for roundoff-close contacts (area change is O(eps**1.5)).
+    interior = xp.abs(u) < 1-4*xp.finfo(u.dtype).eps
+    theta = xp.where(interior, xp.asin(xp.where(interior, u, xp.zeros_like(u))),
+                     xp.where(u >= 0, np.pi/2, -np.pi/2))
+    start, end = theta[..., :-1], theta[..., 1:]
+    half, mid = (end-start)/2, (end+start)/2
+    nodes, gauss = [xp.asarray(v, dtype=a.dtype, device=getattr(a, 'device', None))
+                    for v in np.polynomial.legendre.leggauss(16)]
+    angles = mid[..., None]+half[..., None]*nodes
+    sine, cosine = xp.sin(angles), xp.cos(angles)
+    x = ax[..., None, None]*sine
+    y = tilt[..., None, None]*sine
+    h = chord[..., None, None]*cosine
+    lower = xp.maximum(y-h, low[..., None, None])
+    upper = xp.minimum(y+h, high[..., None, None])
+    height = xp.where(upper > lower, upper-lower, xp.zeros_like(upper))
+    integrand = ax[..., None, None]*cosine*height
+    if moment_weights is not None:
+        wx, wy = right-left, top-bottom
+        wx, wy = xp.where(wx > 0, wx, xp.ones_like(wx)), xp.where(wy > 0, wy, xp.ones_like(wy))
+        a0, a1, b0, b1 = (moment_weights[..., k, None, None] for k in range(4))
+        fx = a0+a1*(x+(cx-left)[..., None, None])/wx[..., None, None]
+        fy = b0+b1*((upper+lower)/2-low[..., None, None])/wy[..., None, None]
+        integrand = integrand*fx*fy
+    area = xp.sum(half*xp.sum(gauss*integrand, axis=-1), axis=-1)
+    return xp.where(nonempty & (area >= 0), area, xp.zeros_like(area))
+
+
 def _shape_cell_fractions(vertices, x, y, dx, dy, periods, *, xp, array, smoothing=(0., 0.)):
-    """Exact periodic area fractions, optionally averaged over box translations.
+    """Periodic shape fractions, optionally averaged over box translations.
 
     A translated cell has a trapezoidal weight on each axis. Split its support
     into linear pieces and integrate their bilinear product with polygon
-    moments or disk arc strips. Wide kernels need a second periodic image ring near cell seams.
-    Projected rectangle extents and smoothing widths must not exceed periods.
+    moments or disk/ellipse arc strips. Wide kernels need a second periodic image ring near cell seams.
+    Projected shape extents and smoothing widths must not exceed periods.
     """
-    circular = vertices.ndim == 1
-    clip = _clipped_circle_area if circular else _clipped_rectangle_area
+    curved = vertices.ndim == 1
+    clip = (_clipped_circle_area if vertices.shape[0] == 3 else _clipped_ellipse_area) if curved else _clipped_rectangle_area
     def images(shifts, smoothed):
-        if circular:
-            shifts = xp.concat((shifts, xp.zeros_like(shifts[:, :1])), axis=-1)
+        if curved:
+            shifts = xp.concat((shifts, xp.broadcast_to(xp.zeros_like(shifts[:, :1]),
+                                                       (len(shifts), vertices.shape[0]-2))), axis=-1)
             return (vertices+shifts)[:, None, None, None, :] if smoothed else (vertices+shifts)[:, None, None, :]
         return (vertices[None, None, None, None, :, :]+shifts[:, None, None, None, None, :] if smoothed else
                 vertices[None, None, None, :, :]+shifts[:, None, None, None, :])
@@ -449,10 +516,14 @@ def _shape_cell_fractions(vertices, x, y, dx, dy, periods, *, xp, array, smoothi
         mass = clip(images(shifts, True), left, right, bottom, top, xp=xp, moment_weights=weights)
         fraction = xp.sum(mass, axis=(0, 1))/(dx*dy)
         return xp.where(fraction > 1, xp.ones_like(fraction), fraction)
-    left, bottom = xp.broadcast_arrays(array(x)[None, :]-dx/2, array(y)[:, None]-dy/2)
+    if curved:
+        left, bottom = xp.broadcast_arrays(array(np.asarray(x)-dx/2)[None, :],
+                                           array(np.asarray(y)-dy/2)[:, None])
+    else:
+        left, bottom = xp.broadcast_arrays(array(x)[None, :]-dx/2, array(y)[:, None]-dy/2)
     shifts = array([(i*periods[0], j*periods[1]) for i in (-1, 0, 1) for j in (-1, 0, 1)])
     left, bottom = xp.broadcast_arrays(left[None, ...]+xp.zeros_like(shifts[:, 0, None, None]), bottom[None, ...])
-    if circular:
+    if curved:
         # Reuse identical stored faces on adjoining cells. Tiny independent
         # rounding gaps produce sqrt(gap) changes in tangent chord slopes.
         xleft, ybottom = np.asarray(x)-dx/2, np.asarray(y)-dy/2
@@ -784,11 +855,13 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     (x,y) pair of full physical averaging widths in [0,period]. Positive widths
     average transverse translations before sampling; moving contacts between
     shapes can still have topology kinks. The Yee mesh never follows a shape.
-    shape_integration='area' instead accepts one rotated rectangle or circle
-    per layer. Rectangle angles retain derivatives in radians; circle/disk
-    lx (or l) is the diameter, with no ly. Extents must fit the periods.
+    shape_integration='area' instead accepts one rectangle, circle or ellipse
+    per layer. Rectangle/ellipse angles retain derivatives in radians; ellipse lx/ly
+    are full principal-axis lengths, and ellipse cells use fixed 16-point angular
+    integration. For circle/disk,
+    lx (or l) is the diameter, with no ly. Projected extents must fit the periods.
     Positive shape_smoothing averages translations using exact polygon
-    moments or stable disk arc strips with fixed 16-point Gaussian integration.
+    moments or stable disk/ellipse arc strips with fixed 16-point Gaussian integration.
     No user sampling grid or quadrature order is introduced. Cell integrals give arithmetic transverse
     material averages. This is not a full rotated effective tensor and does not promise second-order interface accuracy.
     Area integration always retains the full y-period mesh, including angle=0.

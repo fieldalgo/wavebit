@@ -172,7 +172,7 @@ def test_single_trace_accepts_periodic_motion_and_masks_invalid_circle(side):
 
 @pytest.mark.parametrize('shape, integration, message', [
     (dict(type='circle', lx=.2), 'separable', 'require'),
-    (dict(type='ellipse', lx=.2, ly=.1), 'area', 'ellipses'),
+    (dict(type='ellipse', lx=.2, ly=.1), 'separable', 'require'),
     (dict(type='circle', lx=.2, ly=.2), 'area', 'one length'),
     (dict(type='circle', lx=0.), 'area', 'positive'),
     (dict(type='disk', lx=.31), 'area', 'diameter'),

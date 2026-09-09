@@ -115,7 +115,8 @@ from ._core.spec import SPEC_VERSION
 #: Version 16 permits live total depth with fixed laboratory meshes and live
 #: reference-plane phases, including reflected incidence and exterior smoothing.
 #: Version 17 adds exact disk cells and stable averaged disk shape derivatives.
-MANIFEST_VERSION = '17'
+#: Version 18 adds rotated ellipse cells and live centre/axis/angle derivatives.
+MANIFEST_VERSION = '18'
 
 
 # --------------------------------------------------------------- how a structure is spelled
@@ -529,19 +530,20 @@ SOLVERS = {
                 'differentiable_parameters': ('theta', 'phi', 'raster epsilon', 'raster mu',
                                               'electric pole coefficients', 'half-space epsilon',
                                               'half-space mu', 'fixed-total layer thickness', 'independent layer thickness (variable_depth)',
-                                              'rectangle centre', 'rectangle size', 'rectangle angle (area)', 'circle centre (area)', 'circle diameter (area)', 'shape epsilon/mu'),
+                                              'rectangle centre', 'rectangle size', 'rectangle angle (area)', 'circle centre (area)', 'circle diameter (area)', 'ellipse centre/axes/angle (area)', 'shape epsilon/mu'),
                 'static_parameters': ('periods', 'shape types/count/paint order', 'nominal mesh depth', 'wavelength',
                                       'mesh_indices', 'mesh_thickness', 'variable_depth', 'layer_smoothing', 'shape_smoothing', 'shape_integration', 'truncation_order'),
-                'parametric_shapes': ('rectangle', 'square', 'circle', 'disk'),
+                'parametric_shapes': ('rectangle', 'square', 'circle', 'disk', 'ellipse'),
                 'parametric_requires': ('two rectangular periods', 'subpixel=True'),
                 'shape_integration': ('separable', 'area'),
                 'separable_requires': 'rectangle/square with static angle=0',
-                'area_requires': 'at most one rectangle/square/circle/disk per layer; projected extents within periods',
-                'area_smoothing': 'exact bilinear polygon moments or disk arc strips with fixed 16-point Gaussian integration; no user quadrature order',
-                'area_averaging': 'exact polygon/disk cell areas; arithmetic transverse material averages; full y sampling',
+                'area_requires': 'at most one rectangle/square/circle/disk/ellipse per layer; projected extents within periods',
+                'area_smoothing': 'exact bilinear polygon moments or disk/ellipse arc strips with fixed 16-point Gaussian integration; no user quadrature order',
+                'area_averaging': 'analytic polygon/disk sharp areas; ellipse arc integration; arithmetic transverse material averages; full y sampling',
                 'circle_convention': 'lx or l is diameter; no ly; finite angle has no effect; diameter <= both periods',
-                'parametric_refused': ('ellipses', 'raster mu', 'dispersion labels'),
-                'shape_constraint': 'positive lengths no larger than periods; periodic later-shape painting; '
+                'ellipse_convention': 'lx/ly are full principal-axis lengths; live angle in radians; projected extents <= both periods',
+                'parametric_refused': ('raster mu', 'dispersion labels'),
+                'shape_constraint': 'positive lengths; projected area extents within periods; periodic later-shape painting; '
                                     'gradients piecewise across topology changes',
                 'shape_smoothing_constraint': 'static scalar or (x,y) widths in [0,period]; '
                                               'averages translations before sampling; changes the sampled profile',
@@ -565,8 +567,8 @@ SOLVERS = {
         'sections': ('material_quantity', 'results'),
         'structure': 'an array of relative permittivity, shape (n_layers, Ny, Nx); '
                      'Ny = 1 is a grating invariant along y and anything larger is a crossed '
-                     'one. The explicit common route also accepts rectangle/square/circle/disk recipes, with '
-                     'rotation and circles through opt-in area integration, using the shared parametric conventions; the default legacy route refuses them',
+                     'one. The explicit common route also accepts rectangle/square/circle/disk/ellipse recipes, with '
+                     'rotation and curved shapes through opt-in area integration, using the shared parametric conventions; the default legacy route refuses them',
         'answers': ('pure te/tm at any theta in the classical mount (phi = 0)',
                     'a conical mount through psi/chi or a complex Jones pair',
                     'a crossed grating, the raster periodic along both axes',

@@ -811,7 +811,7 @@ def test_published_fdtd_rectangles_use_common_route(backend, integration):
     if backend == 'jax':
         pytest.importorskip('jax').config.update('jax_enable_x64', True)
     common = SOLVERS['fdtd']['routes']['common']
-    assert common['parametric_shapes'] == ('rectangle', 'square', 'circle', 'disk')
+    assert common['parametric_shapes'] == ('rectangle', 'square', 'circle', 'disk', 'ellipse')
     assert 'rectangle centre' in common['differentiable_parameters']
     assert 'shape_smoothing' in common['static_parameters']
     assert common['shape_integration'] == ('separable', 'area')
@@ -958,3 +958,23 @@ def test_published_fdtd_disk_contract_uses_common_area_route(backend, kind):
         return_diagnostics=True)
     assert np.isfinite(np.asarray(result.given.r_s)).all()
     assert diagnostics['geometry_kind'] == 'parametric'
+
+
+@pytest.mark.parametrize('backend', [0, 1, 2])
+def test_published_fdtd_ellipse_is_rotated_and_uses_full_axis_lengths(backend):
+    if backend == 1:
+        pytest.importorskip('jax').config.update('jax_enable_x64', True)
+    elif backend == 2:
+        pytest.importorskip('torch')
+    common = manifest()['solvers']['fdtd']['routes']['common']
+    assert 'ellipse' in common['parametric_shapes']
+    assert 'ellipse centre/axes/angle (area)' in common['differentiable_parameters']
+    assert 'full principal-axis lengths' in common['ellipse_convention']
+    stack = wavebit.Stack.from_structure([dict(shapes=[
+        dict(type='ellipse', lx=.15, ly=.07, angle=.41, material=2.)])],
+        [.1], top=1., bot=1., period=[.2, .2])
+    result, out = wavebit.fdtd(stack, wavebit.Incidence(wavelength=1.), backend=backend,
+        resolution=10, n_pml=5, n_periods=30, truncation_order=0, shape_integration='area',
+        shape_smoothing=.02, return_diagnostics=True)
+    assert np.isfinite(np.asarray(result.given.r_s)).all()
+    assert out['geometry_kind'] == 'parametric' and out['stable']

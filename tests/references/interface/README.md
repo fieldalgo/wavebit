@@ -4,7 +4,7 @@
 | --- | --- |
 | `meep_multilayer.py` | Do six optimized coating variables give stable independent complex-amplitude derivatives through Meep's public global material-function API? |
 | `meep_rectangle.py` | Do a rectangle's width and translation change three TE diffraction amplitudes consistently under independent Meep perturbations and runtime controls? |
-| `meep_rotation.py` | Do eight complex scattering channels and rotation/width or disk diameter derivatives agree with independent sharp Blocks/Cylinders and graded sinc/Bessel MaterialGrid runs under duration, perturbation and profile-grid controls? |
+| `meep_rotation.py` | Do eight complex scattering channels and rotation/axis lengths or disk diameter derivatives agree with independent sharp Blocks/Cylinders and graded rectangle/disk/ellipse sinc/Bessel MaterialGrid runs under duration, perturbation and profile-grid controls? |
 | `meep_adjoint_rotation.py` | Do public Meep adjoint gradients and matching forward differences agree for complex co-polarized transmission with an independently differentiated profile? |
 | `meep_ringdown.py` | Can source-free time traces be generated through Meep's public API for independent mode-fitting checks? |
 | `meep_source_notch.py` | Does a unit-peak custom source zero suppress a known undamped material mode, with fields matching the native solver at the same current times? |

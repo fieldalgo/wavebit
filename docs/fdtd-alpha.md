@@ -137,8 +137,8 @@ also permits a moving exterior face with fixed laboratory coordinates and
 live reference-phase derivatives. It supports both incidence sides and
 optionally averages the moving face. Independent magnetic-film optics and
 public-API Meep perturbations bound one selected case; arbitrary combinations
-still need refinement. Ellipses and general higher-order geometry derivatives remain unsupported;
-circles have the bounded area route described below. Opt-in rectangle rotation is described below.
+still need refinement. General higher-order geometry derivatives remain unsupported; circles and
+ellipses have the bounded area route described below. Opt-in rectangle rotation is described below.
 
 The explicit route now accepts [axis-aligned rectangle and square recipes](fdtd-rectangle-gradients.md)
 using the same geometry reader as RCWA. Centres, lengths and scalar Material
@@ -479,3 +479,11 @@ areas, stable translation averaging, joint shape/material/thickness derivatives,
 and independent Fourier and public-API Meep comparisons. One shape per layer,
 positive scalar materials and diameters within both periods remain required.
 CPU validation does not establish GPU or general higher-order derivative support.
+
+Rotated `ellipse` recipes now retain both principal-axis lengths, centres and
+angle on the same common area route. [Ellipse integration and validation](fdtd-ellipse-gradients.md)
+cover independent implicit-conic chords, circle/axis-swap limits, full JAX/Torch
+graphs and controlled graded optical comparisons. Angular integration uses a
+fixed 16-point rule; one shape per layer and projected extents within the two
+periods remain required. Multiple area shapes and recipe dispersion are still
+outside this route.

@@ -528,7 +528,7 @@ Pole masks use arithmetic fill fractions, including the normal component; this
 is an approximation to a dispersive interface, not a general tensor homogenizer.
 
 Supported scene inputs include rectangular one-dimensional and crossed rasters,
-rectangle/square/circle recipes using the shared RCWA conventions (rotation and circles through
+rectangle/square/circle/ellipse recipes using the shared RCWA conventions (rotation and curved shapes through
 opt-in area integration),
 positive real magnetic half spaces, normal/oblique/conical incidence, Jones
 polarization, electric pole labels, and scalar or vector wavelengths. Output
@@ -606,10 +606,11 @@ value, slope = jax.jit(jax.value_and_grad(reflection))(jnp.array(.43))
 ```
 
 The recipe requires two finite positive rectangular periods and
-`subpixel=True`. Each size must be positive and no larger than its period.
+`subpixel=True`. For separable rectangles, each size must be positive and no
+larger than its period.
 The separable `type` values are `rectangle` and `square`; `l` and omitted
 centres retain their shared RCWA meaning. The default separable method requires
-a static `angle=0`. Circles require the [area method](#circular-shape-derivatives); ellipses are refused. Use each shape's `Material(epsilon,
+a static `angle=0`. Circles and [ellipses](#elliptical-shape-derivatives) require the area method. Use each shape's `Material(epsilon,
 mu=...)` for magnetic media. Separate raster `mu`, dispersion labels and poles
 are not accepted on this recipe path. Raster inputs retain their existing
 dispersion support. Combining live layer thicknesses also requires the usual
@@ -672,9 +673,9 @@ def reflection(angle):
 value, slope = jax.jit(jax.value_and_grad(reflection))(jnp.asarray(.37))
 ```
 
-The area route accepts at most one rectangle, square, circle or disk per layer;
+The area route accepts at most one rectangle, square, circle, disk or ellipse per layer;
 empty shape lists describe uniform layers. Periods must be static and positive,
-with two entries. Sizes must be positive, and the projected extents
+with two entries. Sizes must be positive. For rectangles, the projected extents
 `abs(cos(angle))*lx + abs(sin(angle))*ly` and
 `abs(sin(angle))*lx + abs(cos(angle))*ly` must not exceed their respective
 periods. Centres wrap periodically. `subpixel=True` is required. Use the shape's `Material` for epsilon/mu; recipe dispersion
@@ -764,6 +765,64 @@ are not full effective tensors, so exact cell geometry does not establish
 sharp-interface optical gradient accuracy. Check resolution and a matching
 physical reference. [Disk measurements](../fdtd-circle-gradients.md) separate
 geometry, complete-graph derivatives, profile bias and independent optics.
+
+### Elliptical shape derivatives
+
+The explicit common route accepts `type='ellipse'` with
+`shape_integration='area'`. `lx` and `ly` are the **full lengths of the two
+principal axes**, before rotation, in the same units as the periods. `l` is the
+shared fallback for both lengths. `angle` rotates the ellipse counterclockwise
+in radians; it may be live even when its current value is zero. Centres keep
+the common period-centred convention and wrap periodically.
+
+```python
+import jax
+import jax.numpy as jnp
+import wavebit
+
+jax.config.update('jax_enable_x64', True)
+
+def transmission(parameters):
+    angle, width, height = parameters
+    stack = wavebit.Stack.from_structure([
+        dict(background=1., shapes=[dict(type='ellipse', angle=angle,
+             lx=width, ly=height, cx=.071, cy=-.047, material=2.25)])
+    ], [.2], top=1., bot=1.21, period=[.6, .6])
+    result = wavebit.fdtd(stack, wavebit.Incidence(wavelength=1.), backend='jax',
+                          resolution=20, n_pml=20, n_periods=60, pulse_width=2.5,
+                          truncation_order=0, shape_integration='area',
+                          shape_smoothing=.05, diffraction_method='directional')
+    return result.s_inc.t_s[0, 0]
+
+parameters = jnp.array([.37, .34, .2])
+t = jax.jit(transmission)(parameters)
+dt_dshape = jax.jit(jax.jacfwd(transmission))(parameters)
+```
+
+Each axis length must be positive. The projected full widths
+`sqrt((lx*cos(angle))**2 + (ly*sin(angle))**2)` and
+`sqrt((lx*sin(angle))**2 + (ly*cos(angle))**2)` must fit in the x and y periods.
+A principal axis may therefore exceed its unrotated period when the rotated
+ellipse fits. Shape count/type, the two rectangular periods, the mesh and the
+smoothing widths remain static. One shape per area layer and `subpixel=True`
+are required. Centres, both lengths, angle and positive scalar shape
+`Material` epsilon/mu retain JAX/Torch gradients. Layer-thickness and bottom
+incidence contracts also apply.
+
+Both sharp and averaged ellipse cells use angular strip integration with a
+fixed 16-point Gaussian rule. Cartesian cell faces intersect the analytic
+ellipse; its boundary is not polygonized or sampled on an auxiliary raster.
+Projected tangencies within a few floating-point rounding units use their
+limiting endpoint to avoid an ill-conditioned inverse-sine derivative. General
+second derivatives are not provided.
+
+`shape_smoothing` averages translations along the **laboratory x/y axes**.
+Rotating the ellipse does not rotate this averaging box. Zero, narrow, full-cell
+and full-period widths keep the same meaning as for circles. The transverse
+material coefficients are arithmetic averages, not full curved-interface
+effective tensors. Check an independent reference and resolution convergence
+for the material profile actually optimized. [Ellipse measurements](../fdtd-ellipse-gradients.md)
+separate integration accuracy, complete graphs and graded optical refinement.
 
 ### Incidence-angle derivatives
 
