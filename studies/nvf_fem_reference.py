@@ -1,4 +1,4 @@
-"""Independent H(curl) FEM study of the tilted NVF contact fixture.
+"""Independent H(curl) FEM studies of tilted and affine NVF interfaces.
 
 This imports NGSolve, not Wavebit. It is an optional research reference, not an
 NVF replacement or a converged golden value. Mesh, polynomial degree, and the
@@ -365,8 +365,8 @@ def rayleigh_data(cut, epsilon, *, lattice=None, theta=THETA, phi=0.):
     in micrometers; None retains the original square fixture. The incident
     lateral vector uses the unit-index superstrate and angles in radians.
 
-    Only these boundary data accept another lattice or incidence: the FEM
-    geometry, source, trace integrals and flux normalization remain fixed.
+    The original square-fixture solves retain their fixed lattice/incidence;
+    solve_affine_rayleigh connects these data to a physical affine mesh.
     Exactly grazing retained orders are not implemented by this instrument.
     """
     if isinstance(cut, (bool, np.bool_)) or not isinstance(cut, (int, np.integer)) or cut < 0:
@@ -542,6 +542,259 @@ def solve_rayleigh(h=.18, order=3, cut=2, uniform=None, pad=.4,
     if uniform is not None:
         result.update(analytic_T=slab_efficiencies(uniform)['T'],
                       analytic_T_error=abs(transmission-slab_efficiencies(uniform)['T']))
+    return result
+
+
+def _affine_incidence(theta, phi):
+    """Validate real incidence angles before constructing any affine mesh."""
+    values = []
+    for name, value in (('theta', theta), ('phi', phi)):
+        array = np.asarray(value)
+        if array.shape != () or array.dtype.kind not in 'iuf' or not np.isfinite(array):
+            raise ValueError(f'{name} must be a finite real scalar')
+        values.append(float(array))
+    theta, phi = values
+    if not -np.pi/2 < theta < np.pi/2:
+        raise ValueError('theta must lie strictly between -pi/2 and pi/2')
+    return theta, phi
+
+
+def slab_efficiencies_polarized(epsilon, theta=THETA):
+    """Independent p/s Fabry--Perot control for the fixed three-medium slab.
+
+    Exterior permittivities are 1 and 2.25, wavelength .9 micrometers, and film
+    thickness .3 micrometers. Reflection amplitudes use tangential electric
+    components; efficiencies are independent of that amplitude convention.
+    """
+    theta, _ = _affine_incidence(theta, 0.)
+    value = np.asarray(epsilon)
+    if (value.shape != () or value.dtype.kind not in 'iuf'
+            or not np.isfinite(value) or value <= 0):
+        raise ValueError('epsilon must be a positive finite real scalar')
+    permittivities = np.array([1., float(value), SUBSTRATE])
+    q = np.sqrt(permittivities.astype(complex)-np.sin(theta)**2)
+    if np.any(abs(q) < 1e-12):
+        raise ValueError('the slab control does not implement an exactly grazing layer')
+    phase = np.exp(2j*np.pi/WAVELENGTH*q[1]*THICKNESS)
+    result = {}
+    for polarization, admittance in (('p', permittivities/q), ('s', q)):
+        y0, yf, y1 = admittance
+        r01, r12 = (y0-yf)/(y0+yf), (yf-y1)/(yf+y1)
+        denominator = 1+r01*r12*phase**2
+        r = (r01+r12*phase**2)/denominator
+        t = (1+r01)*(1+r12)*phase/denominator
+        result[polarization] = dict(T=float(y1.real/y0.real*abs(t)**2),
+                                    R=float(abs(r)**2))
+    return result
+
+
+def _affine_background_fields(theta, phi):
+    """Unit-electric-amplitude p/s incidence on the bare physical interface.
+
+    The Bloch factor has been removed. Each tuple contains E, H, and the two
+    outgoing tangential electric amplitudes evaluated at the interface z=0.
+    H is scaled by vacuum impedance, with the e^-iwt convention.
+    """
+    k0 = 2*np.pi/WAVELENGTH
+    kt, g0 = k0*np.sin(theta), k0*np.cos(theta)
+    g1 = k0*np.sqrt(SUBSTRATE-np.sin(theta)**2)
+    tangent = np.array([np.cos(phi), np.sin(phi)])
+    transverse = np.array([-np.sin(phi), np.cos(phi)])
+    t, s, z = ng.CF((*tangent, 0.)), ng.CF((*transverse, 0.)), ng.CF((0., 0., 1.))
+    incident = ng.exp(-1j*g0*ng.z)
+    result = {}
+    for polarization, y0, y1, amplitude, direction in (
+            ('p', k0/g0, k0*SUBSTRATE/g1, np.cos(theta), tangent),
+            ('s', g0/k0, g1/k0, 1., transverse)):
+        reflection = (y0-y1)/(y0+y1)
+        reflected = reflection*ng.exp(1j*g0*ng.z)
+        transmitted = (1+reflection)*ng.exp(-1j*g1*ng.z)
+        if polarization == 'p':
+            upper_e = amplitude*((incident+reflected)*t+kt/g0*(incident-reflected)*z)
+            lower_e = amplitude*transmitted*(t+kt/g1*z)
+            upper_h = amplitude*y0*(-incident+reflected)*s
+            lower_h = -amplitude*y1*transmitted*s
+        else:
+            upper_e = (incident+reflected)*s
+            lower_e = transmitted*s
+            upper_h = y0*(incident-reflected)*t+kt/k0*(incident+reflected)*z
+            lower_h = transmitted*(y1*t+kt/k0*z)
+        result[polarization] = (
+            ng.IfPos(ng.z, upper_e, lower_e), ng.IfPos(ng.z, upper_h, lower_h),
+            amplitude*reflection*direction, amplitude*(1+reflection)*direction)
+    return result
+
+
+def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
+                          *, transform=None, theta=THETA, phi=0., condense=True,
+                          progress=None):
+    """Independent affine H(curl) FEM with shared p/s Rayleigh boundary solves.
+
+    The physical profile is fixed to the .7-micrometer reference cell, width
+    .350, gap .017, seam .031, and .3-thick film. ``transform`` changes its
+    physical affine image; all lengths and lattice columns are in micrometers.
+    ``uniform`` replaces the patterned film by a positive scalar permittivity.
+
+    One mesh, sparse factorization, Fourier trace response and two-column
+    Woodbury solve serve both polarizations. At finite cut, omitted evanescent
+    traces retain a local Robin condition. Mesh/order, cut and physical padding
+    remain separate reference uncertainties; small residual and energy error
+    do not qualify a continuum Maxwell oracle.
+    """
+    start = time.monotonic()
+    if (isinstance(order, (bool, np.bool_)) or not isinstance(order, (int, np.integer))
+            or order < 1):
+        raise ValueError('order must be a positive integer')
+    if not isinstance(condense, (bool, np.bool_)):
+        raise ValueError('condense must be boolean')
+    order, condense = int(order), bool(condense)
+    theta, phi = _affine_incidence(theta, phi)
+    transform = np.asarray([[1., .45], [0., .7]] if transform is None else transform)
+    if (transform.shape != (2, 2) or transform.dtype.kind not in 'iuf'
+            or not np.isfinite(transform).all()):
+        raise ValueError('transform must be a finite real 2-by-2 matrix')
+    transform = transform.astype(float)
+    determinant = np.linalg.det(transform)
+    if not np.isfinite(determinant) or determinant <= 0:
+        raise ValueError('transform must preserve orientation and have positive determinant')
+    lattice = PERIOD*transform
+    area = float(np.linalg.det(lattice))
+    port_data = [rayleigh_data(cut, epsilon, lattice=lattice, theta=theta, phi=phi)
+                 for epsilon in (1., SUBSTRATE)]
+    mesh, materials = make_affine_profile_mesh(h, transform=transform, uniform=uniform, pad=pad)
+    epsilon = mesh.MaterialCF(materials)
+    background = _affine_background_fields(theta, phi)
+    polarizations = ('p', 's')
+    k0 = 2*np.pi/WAVELENGTH
+    lateral = ng.CF((k0*np.sin(theta)*np.cos(phi), k0*np.sin(theta)*np.sin(phi), 0.))
+    space = ng.Compress(ng.Periodic(ng.HCurl(mesh, order=order, complex=True)))
+    u, v = space.TnT()
+    curl_u = ng.curl(u)+1j*ng.Cross(lateral, u)
+    curl_v = ng.curl(v)-1j*ng.Cross(lateral, v)
+    a = ng.BilinearForm(space, condense=condense)
+    a += (curl_u*curl_v-k0*k0*epsilon*u*v)*ng.dx
+    sides = [('outer_top', 1.), ('outer_bottom', SUBSTRATE)]
+    for side, eps_half in sides:
+        a += (-1j*k0*np.sqrt(eps_half)*u.Trace()*v.Trace())*ng.ds(side)
+    sources = []
+    for polarization in polarizations:
+        f = ng.LinearForm(space)
+        for name, value in materials.items():
+            if name not in ('substrate', 'superstrate'):
+                f += k0*k0*(value-1)*background[polarization][0]*v*ng.dx(name, bonus_intorder=6)
+        sources.append(f)
+    modes = port_data[0][0]
+    count, rank = len(modes), 4*len(modes)
+    settings = dict(h=h, order=order, cut=int(cut), uniform=uniform, pad=pad,
+                    condense=condense, period=PERIOD, width=.350, gap=.017,
+                    seam=.031, thickness=THICKNESS)
+    metadata = dict(fixture='affine_partitioned_gap', boundary='rayleigh',
+                    lattice=lattice.tolist(), transform=transform.tolist(),
+                    area=area, theta=theta, phi=phi, settings=settings,
+                    units='micrometers', wavelength=WAVELENGTH, thickness=THICKNESS,
+                    period=PERIOD, width=.350, gap=.017, seam=.031, values=[4., 9.],
+                    h=h, order=order, cut=int(cut), uniform=uniform, pad=pad,
+                    elements=mesh.ne, dofs=space.ndof, rank=rank,
+                    periodic_pairs=periodic_counts(mesh, lattice),
+                    modes=[list(mode) for mode in modes])
+
+    def report(stage):
+        if progress is not None:
+            progress(dict(stage=stage, **metadata, seconds=time.monotonic()-start))
+
+    report('mesh')
+    with ng.TaskManager():
+        a.Assemble()
+        for f in sources:
+            f.Assemble()
+        inverse = a.mat.Inverse(space.FreeDofs(coupling=condense), inverse='umfpack')
+        report('factorized')
+        base = np.empty((space.ndof, 2), complex)
+        for column, f in enumerate(sources):
+            rhs = f.vec.CreateVector()
+            rhs.data = f.vec
+            if condense:
+                rhs.data += a.harmonic_extension_trans*f.vec
+            response = rhs.CreateVector()
+            response.data = inverse*rhs
+            base[:, column] = response.FV().NumPy()
+        traces = np.zeros((space.ndof, rank), complex)
+        responses = np.zeros_like(traces)
+        correction = np.zeros((rank, rank), complex)
+        reciprocal = 2*np.pi*np.linalg.inv(lattice).T
+        for side_index, (side, eps_half) in enumerate(sides):
+            blocks = port_data[side_index][1]
+            for mode_index, (m, n) in enumerate(modes):
+                ids = [2*side_index*count+component*count+mode_index for component in range(2)]
+                correction[np.ix_(ids, ids)] = -1j*(blocks[mode_index]-k0*np.sqrt(eps_half)*np.eye(2))
+                g = reciprocal@np.array([m, n])
+                phase = ng.exp(1j*(g[0]*ng.x+g[1]*ng.y))/np.sqrt(area)
+                for component, column in enumerate(ids):
+                    trace = ng.LinearForm(space)
+                    trace += phase*v.Trace()[component]*ng.ds(side, bonus_intorder=2*cut+6)
+                    trace.Assemble()
+                    traces[:, column] = trace.vec.FV().NumPy()
+                    response = trace.vec.CreateVector()
+                    response.data = inverse*trace.vec
+                    responses[:, column] = response.FV().NumPy()
+        report('boundary')
+        small = np.eye(rank)+correction@(traces.conj().T@responses)
+        right = correction@(traces.conj().T@base)
+        weights = np.linalg.solve(small, right)
+        solved = base-responses@weights
+        fields = []
+        for column, f in enumerate(sources):
+            field = ng.GridFunction(space)
+            field.vec.FV().NumPy()[:] = solved[:, column]
+            if condense:
+                field.vec.data += a.harmonic_extension*field.vec
+                field.vec.data += a.inner_solve*f.vec
+            fields.append(field)
+
+    free = np.asarray(list(space.FreeDofs()), dtype=bool)
+    g0 = k0*np.cos(theta)
+    g1 = k0*np.sqrt(SUBSTRATE-np.sin(theta)**2)
+    zero_mode = modes.index((0, 0))
+    result = dict(stage='result', **metadata)
+    analytic = slab_efficiencies_polarized(uniform, theta) if uniform is not None else None
+    for polarization, f, field in zip(polarizations, sources, fields):
+        residual = f.vec.CreateVector()
+        a.Apply(field.vec, residual)
+        residual.data -= f.vec
+        ports = traces.conj().T@field.vec.FV().NumPy()
+        residual.FV().NumPy()[:] += traces@(correction@ports)
+        norm_f = np.linalg.norm(f.vec.FV().NumPy()[free])
+        norm_r = np.linalg.norm(residual.FV().NumPy()[free])
+        relative_residual = norm_r/norm_f if norm_f > 0 else norm_r
+        e_background, h_background, reflected, transmitted = background[polarization]
+        e = field+e_background
+        magnetic = (ng.curl(field)+1j*ng.Cross(lateral, field))/(1j*k0)+h_background
+        flux = e[0]*ng.Conj(magnetic[1])-e[1]*ng.Conj(magnetic[0])
+        divisor = area*pad*np.cos(theta)
+        top, bottom = [ng.Integrate(flux, mesh, definedon=mesh.Materials(name),
+                                    order=2*order+6).real/divisor
+                       for name in ('superstrate', 'substrate')]
+        amplitudes = ports.reshape(2, 2, count).transpose(0, 2, 1).copy()
+        amplitudes[0, zero_mode] += np.sqrt(area)*reflected*np.exp(1j*g0*(THICKNESS+pad))
+        amplitudes[1, zero_mode] += np.sqrt(area)*transmitted*np.exp(1j*g1*pad)
+        powers = [np.einsum('mi,mij,mj->m', amplitude.conj(), data[1], amplitude).real
+                  /(area*k0*np.cos(theta))
+                  for amplitude, data in zip(amplitudes, port_data)]
+        reflection, transmission = (float(np.sum(power)) for power in powers)
+        if (not np.isfinite([transmission, reflection, top, bottom, relative_residual]).all()
+                or not np.isfinite(powers).all()):
+            raise FloatingPointError('nonfinite affine Rayleigh FEM result')
+        if relative_residual > 1e-9:
+            raise FloatingPointError(f'affine FEM algebraic residual too large: {relative_residual}')
+        record = dict(T=transmission, R=reflection, volume_T=-bottom, volume_R=1+top,
+                      flux_disagreement=max(abs(transmission+bottom), abs(reflection-1-top)),
+                      energy_error=abs(transmission+reflection-1), residual=float(relative_residual),
+                      order_R=powers[0].tolist(), order_T=powers[1].tolist())
+        if analytic is not None:
+            record.update(analytic_T=analytic[polarization]['T'],
+                          analytic_T_error=abs(transmission-analytic[polarization]['T']))
+        result[polarization] = record
+    result['seconds'] = time.monotonic()-start
     return result
 
 

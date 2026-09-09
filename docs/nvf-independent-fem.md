@@ -1,9 +1,10 @@
-# Independent FEM reference for the tilted NVF contact
+# Independent FEM references for NVF interfaces
 
 This investigation is still open. The new reference instrument is
 [`studies/nvf_fem_reference.py`](../studies/nvf_fem_reference.py). It solves the
 three-dimensional Maxwell problem with NGSolve H(curl) elements and imports no
-Wavebit solver or factorization code. **It is a reference study, not a replacement
+Wavebit solver or factorization code. It includes the tilted contact fixture
+and a separate affine two-material gap profile. **It is a reference study, not a replacement
 for rectangular NVF or a converged golden answer.**
 
 The immediate purpose is to obtain an independently converged answer before
@@ -96,12 +97,12 @@ physical lattice with `A=[[.7,2.8],[0,.7]]`; its original near-grazing
 wave has labels `(1,4)`, so cut 3 must be rejected. These checks require
 no tetrahedral mesh or large FEM solve.
 
-`solve` and `solve_rayleigh` still use the fixed square geometry, p source,
-trace phases and area normalization described above. They do not yet solve
-the affine fixture. The separate physical geometry helper below prepares
-the mesh; both polarization sources, matching trace normalization and
-independent flux controls still need integration before claiming a 3D
-affine optical reference.
+`solve` and `solve_rayleigh` retain the fixed square geometry, p source,
+trace phases and area normalization described above. The separate
+`solve_affine_rayleigh` entry point now connects the physical mesh below
+to both polarization sources, affine trace phases and physical-area flux
+normalization. Its discretization and outgoing-boundary uncertainties
+still need qualification before assigning an affine optical reference value.
 
 ## Physical affine geometry and periodic pairs
 
@@ -118,7 +119,8 @@ affine profile.
 The cell has physical area .343 square micrometers. It includes .1 of
 physical padding above and below, with permittivities 1 and 2.25. There
 are no absorbing layers. `uniform=4.` replaces the entire film with a
-uniform slab for later analytic controls; it does not solve that slab.
+uniform slab for analytic controls. The scattering entry point consumes
+that mesh; the geometry helper itself solves no field equation.
 The patterned material volumes are .02954658, .02065392 and .05269950
 cubic micrometers for the first piece, second piece and background.
 Each exterior region occupies .0343 cubic micrometers.
@@ -151,9 +153,68 @@ a finite real orientation-preserving transform, and h smaller than half
 each physical cell width between opposite faces. Invalid inputs, failed
 face matching, and incorrect material volumes or exterior areas raise.
 Exact contact and general physical-rectangle inputs remain outside this
-helper's scope. Source, boundary-trace and power-normalization integration
-with these meshes remains open; the existing scattering entry points
-retain their original square fixture.
+helper's scope. The new scattering entry point uses these meshes with
+the source, boundary-trace and power normalization described next.
+
+## Affine Maxwell connection and independent controls
+
+`solve_affine_rayleigh` solves the physical affine profile for p and s
+incidence in one call. It shares one mesh, sparse Maxwell factorization
+and Fourier trace response between the two source vectors. A two-column
+Woodbury solve applies the same retained Rayleigh boundary correction to
+both fields. Interior unknowns are reconstructed after that correction,
+and each polarization is checked against the full uncondensed operator.
+The existing square-fixture entry points retain their previous behavior.
+
+The incident electric field has unit magnitude for both polarizations.
+Writing `t=(cos(phi),sin(phi),0)` and `s=(-sin(phi),cos(phi),0)`, its
+tangential p amplitude is `cos(theta)*t` and its s amplitude is `s`.
+The bare-substrate incident, reflected and transmitted electric and
+magnetic fields are analytic, with `H=k cross E/k0`. Only the film
+contrast `epsilon-1` drives the scattered-field source; no additional
+source is applied inside the substrate.
+
+The periodic field has its incident Bloch factor removed. For physical
+lattice A and reciprocal label `(m,n)`, the trace basis is
+`exp(i*G.r)/sqrt(area)`, where `G=2*pi*A^(-T)*(m,n)` and
+`area=det(A)`. Its amplitude is therefore `sqrt(area)` times the
+physical tangential electric amplitude. Bare-interface reflected and
+transmitted waves are added to the zero-order ports before computing
+outgoing powers. The modal power divisor is `area*k0*cos(theta)`;
+the volume-averaged Poynting-flux divisor is `area*pad*cos(theta)`.
+Both readouts and every retained diffraction-order R/T power are returned.
+
+Four new optional tests compare the result with an independent Airy
+slab formula, the exact zero-contrast interface, full/condensed solutions,
+and invalid requests. The zero-contrast test includes both polarizations,
+nonzero azimuth, normal incidence, and a different affine cell area.
+The driven slab test checks the specular order and absent nonzero orders
+as well as total R/T. It spies on the actual sparse `Inverse` call to
+confirm one factorization supplies both polarizations.
+
+The driven epsilon-4 slab at h=.18, theta=.2, phi=.37, pad=.1 and cut 1
+fails the predetermined `5e-4` accuracy target at FEM degree 3: its p
+transmission differs from the analytic value by `1.78042e-3`. Refining
+to degree 4 on the same 438-element mesh passes that unchanged target:
+
+| polarization | analytic T | FEM degree-4 T | absolute T error | modal/volume disagreement | lossless balance error |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| p | .838052025533 | .838490396510 | 4.38371e-4 | 1.262e-7 | 4.276e-5 |
+| s | .826108566299 | .826577853556 | 4.69287e-4 | 1.472e-7 | 4.405e-5 |
+
+The degree-4 slab has 23,085 unknowns and takes 7.80 s with peak process
+RSS 1.191 GB on the observed host. These are measurements of this control,
+not an accuracy or performance guarantee for the patterned profile.
+The combined selection passes 21 tests: four new scattering checks,
+eight affine geometry checks and nine existing algebraic checks.
+An independent review compares 64 electric/magnetic field samples with
+Maxwell plane waves to within `5.56e-16` and modal admittance power with
+direct Poynting power to within `2.23e-16`.
+
+These controls verify the affine connection. The `5e-4` slab criterion
+is an instrument check, not a chosen NVF convergence threshold. The
+patterned profile needs separate mesh/degree, Rayleigh-cut and padding
+refinements. Small linear residuals alone cannot establish optical accuracy.
 
 ## A failed periodic-boundary request was caught by the control
 
@@ -317,5 +378,30 @@ Five existing square-fixture mesh and periodic-identification tests also
 pass in 0.387 s. The five existing scattering-solve tests are not rerun for
 the geometry-only change. The new checks establish geometry and space
 consistency, not a converged optical reference.
+
+The full affine integration is checked separately, including both
+polarizations and the driven degree-4 slab:
+
+```bash
+PYTHONPATH=$PWD "$NVF_FEM_PYTHON" -m unittest tests.test_nvf_fem_affine_scattering tests.test_nvf_fem_affine_geometry tests.test_nvf_fem_reference.FEMAlgebraicTests -v
+```
+
+This selection passes 21 tests in 9.686 s. To reproduce a physical affine
+solve through the Python entry point:
+
+```bash
+PYTHONPATH=$PWD "$NVF_FEM_PYTHON" - <<'PY'
+import json
+import ngsolve as ng
+from studies.nvf_fem_reference import solve_affine_rayleigh
+ng.SetNumThreads(1)
+result = solve_affine_rayleigh(h=.18, order=4, cut=2, pad=.1)
+print(json.dumps(result, allow_nan=False))
+PY
+```
+
+Adding `uniform=4., phi=.37` reproduces the slab geometry and incidence;
+its reported control above uses `cut=1`. The default command-line entry
+point continues to select the historical square fixture.
 Selected results, with prototype-versus-packaged flux provenance, are retained in
 [`studies/results/nvf_fem_reference.log`](../studies/results/nvf_fem_reference.log).

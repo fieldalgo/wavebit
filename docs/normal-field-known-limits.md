@@ -1240,7 +1240,10 @@ fixed, with its Fourier export extended to cap 72 and the shared cap-64
 coefficients unchanged. This still supplies no optical tail bound. The
 independent FEM instrument has affine reciprocal-lattice boundary data
 and a separately checked physical mesh with material and periodic-pair
-controls. Source, trace and power-normalization integration remains open.
+controls. Its [full affine Maxwell connection](nvf-independent-fem.md#affine-maxwell-connection-and-independent-controls)
+now passes independent p/s slab, source and flux checks while sharing
+one sparse factorization. Patterned mesh and outgoing-boundary refinement
+still prevent assigning an independent optical error bound.
 
 The [reference-degree refinement at (24,32)](nvf-affine-convergence.md#reference-degree-refinement-at-y32)
 raises the fitted field from degree 8 to 10 at fixed optical order. The

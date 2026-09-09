@@ -467,8 +467,11 @@ comparison remains at `(24,24)`. The independent
 [Rayleigh-data helper](nvf-independent-fem.md#rayleigh-data-for-a-physical-primitive-lattice)
 handles the physical affine reciprocal lattice, and its separate
 [geometry helper](nvf-independent-fem.md#physical-affine-geometry-and-periodic-pairs)
-passes material-volume and periodic-pair controls. Sources, boundary
-traces and power normalization still need integration with that mesh.
+passes material-volume and periodic-pair controls. The new
+[affine Maxwell entry point](nvf-independent-fem.md#affine-maxwell-connection-and-independent-controls)
+connects both polarization sources, boundary traces and physical-area
+power normalization and passes independent slab controls. Its patterned
+discretization and outgoing-boundary uncertainties remain open.
 
 ## Reference degree refinement at y=32
 
