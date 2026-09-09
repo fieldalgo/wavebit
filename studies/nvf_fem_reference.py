@@ -625,6 +625,51 @@ def _affine_background_fields(theta, phi):
     return result
 
 
+def robin_complement_power(mesh, scattered_field, ports, *, area, theta,
+                           quadrature_order):
+    """Outgoing power assigned to the omitted trace by the local Robin term.
+
+    ``ports`` has shape (2, retained_modes, 2): top/bottom, orthonormal Fourier
+    mode, physical tangential x/y component. Its basis is exp(i*G.r)/sqrt(area).
+    ``scattered_field`` has the lateral Bloch phase removed. The analytic
+    interface field is a retained constant trace, so it has no complement.
+
+    On each horizontal side this is sqrt(epsilon) times the difference between
+    the integrated tangential squared norm and the retained coefficient norm,
+    divided by area*cos(theta). Epsilon is 1 above and 2.25 below. This is a
+    numerical outgoing sink from the finite Robin complement, not material
+    absorption. Quadrature/projection error may make it negative; return that
+    signed observation without clamping or treating it as an optical bound.
+    """
+    theta, _ = _affine_incidence(theta, 0.)
+    area_value = np.asarray(area)
+    if (area_value.shape != () or area_value.dtype.kind not in 'iuf'
+            or not np.isfinite(area_value) or area_value <= 0):
+        raise ValueError('area must be a positive finite real scalar')
+    if (isinstance(quadrature_order, (bool, np.bool_))
+            or not isinstance(quadrature_order, (int, np.integer))
+            or quadrature_order < 0):
+        raise ValueError('quadrature_order must be a nonnegative integer')
+    ports = np.asarray(ports)
+    if (ports.ndim != 3 or ports.shape[0] != 2 or ports.shape[1] < 1 or ports.shape[2] != 2
+            or ports.dtype.kind not in 'iufc' or not np.isfinite(ports).all()):
+        raise ValueError('ports must be finite coefficients with shape (2, retained_modes, 2)')
+    tangential_norm = sum(scattered_field[i]*ng.Conj(scattered_field[i]) for i in (0, 1))
+    divisor = float(area_value)*np.cos(theta)
+    result = {}
+    for side_index, (name, side, epsilon) in enumerate(
+            (('top', 'outer_top', 1.), ('bottom', 'outer_bottom', SUBSTRATE))):
+        whole = ng.Integrate(tangential_norm, mesh, definedon=mesh.Boundaries(side),
+                             order=int(quadrature_order)).real
+        retained = np.sum(abs(ports[side_index])**2)
+        value = float(np.sqrt(epsilon)*(whole-retained)/divisor)
+        if not np.isfinite(value):
+            raise FloatingPointError('nonfinite Robin complement power')
+        result[name] = value
+    result['total'] = result['top']+result['bottom']
+    return result
+
+
 def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
                           *, transform=None, theta=THETA, phi=0., condense=True,
                           progress=None):
@@ -790,6 +835,13 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
                       flux_disagreement=max(abs(transmission+bottom), abs(reflection-1-top)),
                       energy_error=abs(transmission+reflection-1), residual=float(relative_residual),
                       order_R=powers[0].tolist(), order_T=powers[1].tolist())
+        complement = robin_complement_power(
+            mesh, field, ports.reshape(2, 2, count).transpose(0, 2, 1),
+            area=area, theta=theta, quadrature_order=2*order+6)
+        record['robin_complement_power'] = complement
+        # The remaining budget can contain FEM, quadrature, source and linear
+        # solve error; it is not a pure Galerkin defect or an optical error bound.
+        record['energy_budget_residual'] = float(1-reflection-transmission-complement['total'])
         if analytic is not None:
             record.update(analytic_T=analytic[polarization]['T'],
                           analytic_T_error=abs(transmission-analytic[polarization]['T']))

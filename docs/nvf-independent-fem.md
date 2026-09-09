@@ -216,6 +216,48 @@ is an instrument check, not a chosen NVF convergence threshold. The
 patterned profile needs separate mesh/degree, Rayleigh-cut and padding
 refinements. Small linear residuals alone cannot establish optical accuracy.
 
+## Separating the omitted Robin boundary power
+
+The affine solver also returns `robin_complement_power` for each side and
+their sum. This measures the outgoing power assigned by the local Robin
+condition to the part of the scattered trace outside the retained Fourier
+space. For an orthonormal trace basis and retained coefficients `ports`,
+the contribution of a side with exterior permittivity epsilon is
+
+```text
+L_side = sqrt(epsilon) * (integral_side |u_sc,t|^2 - sum |ports|^2)
+         / (area*cos(theta)).
+energy_budget_residual = 1 - R - T - L_top - L_bottom.
+```
+
+Only physical tangential x/y components enter the norm. The bare-interface
+annex is a retained constant trace, so adding it does not change the
+complement. This quantity is a numerical outgoing sink, not physical
+absorption by evanescent waves. Quadrature or projection errors can make
+the observed difference negative; the diagnostic preserves its sign.
+The remaining signed energy budget can contain FEM, quadrature, source
+and linear-solve error. Neither number is an optical error bound.
+
+Six small-mesh tests integrate independent analytic coefficient functions,
+without assembling a Maxwell matrix. They check Parseval power on both
+sides, removal of a retained mode, constant-annex invariance, physical
+rotation and scale, signed projection overshoot, and invalid inputs.
+Together with the affine scattering, geometry and algebraic controls,
+27 tests pass. An independent review confirms the formula, port ordering,
+normalization and use of the scattered trace before the modal add-back.
+
+On the patterned h=.18, FEM-degree-4, cut-1, pad=.1 calculation, adding
+this postprocessing leaves all previous R/T, volume readouts, residuals
+and individual diffraction powers exactly identical:
+
+| polarization | signed `1-R-T` | Robin complement power | remaining signed budget |
+| --- | ---: | ---: | ---: |
+| p | 3.78233e-3 | 3.80466e-3 | -2.23299e-5 |
+| s | 4.51552e-3 | 4.55214e-3 | -3.66228e-5 |
+
+The omitted Robin trace accounts for most of this cut-1 energy deficit.
+The small remaining budget does not qualify the patterned transmission.
+
 ## A failed periodic-boundary request was caught by the control
 
 The first local FEM prototype selected outer faces within 1e-8. OpenCascade pads
