@@ -356,7 +356,9 @@ def _fourier2d_grid(xp, cell, half_width_u, half_width_v, *, inverse_rule, piece
     if inv_v:             # v discontinuous: the inverse rule starts from 1/eps
         cell = 1 / cell
 
-    dfs1d = xp.fft.fft(cell / cell.shape[1])
+    # A one-sample transform is the identity. Avoiding its FFT also bypasses
+    # a JAX CPU layout failure for transposed singleton axes under jit.
+    dfs1d = cell*(1+0j) if cell.shape[1] == 1 else xp.fft.fft(cell / cell.shape[1])
 
     dev = _device(xp, cell)
     orders_v = list(range(-2 * half_width_v, 2 * half_width_v + 1))
@@ -391,7 +393,7 @@ def _fourier2d_grid(xp, cell, half_width_u, half_width_v, *, inverse_rule, piece
 
     conv1d_t = xp.matrix_transpose(conv1d)
     n_u = conv1d_t.shape[1]
-    dfs_2d = xp.fft.fft(conv1d_t / n_u)
+    dfs_2d = conv1d_t*(1+0j) if n_u == 1 else xp.fft.fft(conv1d_t / n_u)
 
     coeff_u = dfs_2d[:, xp.asarray(_wrap(orders_u, n_u), device=dev)]
     # Both kinds of grid carry the half-pixel offset; only a staircase also carries

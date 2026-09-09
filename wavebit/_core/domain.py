@@ -37,7 +37,7 @@ from typing import Any, Optional
 
 from .conventions import (_COMPLEX_CHI, incidence_clashes, reject_complex_angle,
                           wavelength_problem)
-from .backend import array_namespace
+from .backend import array_namespace, as_array, _concrete
 from .enums import Tetm  # noqa: F401  (re-exported for spec's tetm parsing)
 
 
@@ -346,6 +346,69 @@ def index_from_eps(eps):
             eps = eps * (1 + 0j)
         return xp.sqrt(eps)
     return _complex_sqrt(complex(eps))
+
+
+def layer_thicknesses(logits, total, *, minimum=0.):
+    """Map design weights to positive physical lengths with a fixed total.
+
+    Return ``minimum + (total-sum(minimum))*softmax(logits)``. The one-dimensional
+    real ``logits`` array chooses NumPy, JAX or Torch and retains its floating
+    dtype, device and gradient. A plain numeric list uses NumPy; integer weights
+    are promoted to float64. ``total`` and ``minimum`` are static host values;
+    minimum is a nonnegative scalar or one length per layer, with sum < total.
+
+    The output is an ordinary thickness array accepted by :class:`Stack`, RCWA
+    and FDTD. For FDTD, also pass static ``mesh_thickness`` with the same total.
+    With positive ``layer_smoothing=h``, give the first and last layers minimum
+    lengths of at least h/2 so the averaged interfaces stay inside the stack.
+
+    Adding a constant to all logits changes nothing. Fix one logit when an
+    optimizer needs independent coordinates. Very unequal logits can saturate
+    the softmax and its derivatives. With a zero minimum they can underflow to
+    a zero length; this is refused rather than silently creating a missing layer.
+    Invalid concrete weights raise; invalid JAX-traced weights return NaN lengths.
+    Total and minima are not differentiated. No clipping or custom gradient is
+    applied to valid design weights.
+    """
+    import numpy as np
+    if not hasattr(logits, 'dtype'):
+        if not isinstance(logits, (list, tuple)) or not all(isinstance(v, (int, float, np.number)) for v in logits):
+            raise ValueError('logits must be a nonempty one-dimensional real array or numeric list.')
+        logits = np.asarray(logits)
+    xp = array_namespace(logits)
+    if logits.ndim != 1 or logits.shape[0] == 0 or not xp.isdtype(logits.dtype, ('real floating', 'integral')):
+        raise ValueError('logits must be a nonempty one-dimensional real array or numeric list.')
+    if xp.isdtype(logits.dtype, 'integral'):
+        logits = xp.astype(logits, xp.float64)
+    def host(value, name):
+        numeric = (int, float, np.number)
+        if not (isinstance(value, (*numeric, np.ndarray)) or
+                isinstance(value, (list, tuple)) and all(isinstance(v, numeric) for v in value)):
+            raise ValueError(f'{name} must be static real host values.')
+        value = np.asarray(value)
+        if value.dtype.kind not in 'fiu' or not np.isfinite(value).all():
+            raise ValueError(f'{name} must be finite static real host values.')
+        return value
+    total = host(total, 'total')
+    floors = host(minimum, 'minimum')
+    if total.shape != () or total <= 0:
+        raise ValueError('total must be a positive finite static real scalar.')
+    if floors.shape not in ((), logits.shape) or np.any(floors < 0):
+        raise ValueError('minimum must be nonnegative and scalar or one value per layer.')
+    floors = np.broadcast_to(floors, logits.shape).astype(float)
+    remaining = float(total)-float(floors.sum())
+    if not np.isfinite(remaining) or remaining <= 0:
+        raise ValueError('The sum of minimum thicknesses must be strictly less than total.')
+    valid = xp.all(xp.isfinite(logits))
+    if _concrete(valid) is False:
+        raise ValueError('logits must be finite.')
+    weights = xp.exp(logits-xp.max(logits))
+    lengths = as_array(xp, floors, dtype=logits.dtype, device=getattr(logits, 'device', None))
+    lengths = lengths+remaining*weights/xp.sum(weights)
+    valid = valid & xp.all(xp.isfinite(lengths) & (lengths > 0))
+    if _concrete(valid) is False:
+        raise ValueError('Thicknesses are not positive and finite; reduce the logit range or choose positive minima.')
+    return xp.where(valid, lengths, xp.full_like(lengths, float('nan')))
 
 
 #: The sentence every retired material spelling has to carry. The rename is the *smaller* half

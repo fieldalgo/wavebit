@@ -88,7 +88,7 @@ from ._core.grid_fdtd import fdtd_grid
 from ._core.enums import (Answers, Backend, Tetm, FourierCoefficients, Factorization,
                           Formulation, NormalMethod, Projector)
 from ._core.domain import (Layer, Stack, Incidence, Material,
-                           eps_from_index, index_from_eps)
+                           eps_from_index, index_from_eps, layer_thicknesses)
 # The type `eps_conv_matrices()` hands back and `solve_conv()` takes: a NamedTuple, so the five
 # slots still splat and unpack, but `conv.epz_i` reaches one by name.
 from ._core.factorization import ConvMatrices
@@ -145,6 +145,7 @@ __all__ = [
     'Answers', 'Backend', 'Tetm', 'FourierCoefficients', 'Factorization', 'Formulation',
     'NormalMethod', 'Projector',
     'Layer', 'Stack', 'Incidence', 'Material', 'eps_from_index', 'index_from_eps',
+    'layer_thicknesses',
     'ConvMatrices', 'ScatteringMatrix', 'Port',
     'StaticGeometry', 'StaleGeometryError',
     'find_material', 'find_nk_index', 'read_material_table',

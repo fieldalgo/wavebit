@@ -134,6 +134,15 @@ width changes the material profile; sharp and graded continuum references
 separate that bias from finite-grid error. Transverse shapes, varying total
 depth and general higher-order geometry derivatives remain unsupported.
 
+The shared `layer_thicknesses` helper now supplies positive, fixed-total
+lengths with individual minima for NumPy, JAX and Torch. A
+[six-variable coating example](fdtd-multilayer-optimization.md) jointly
+optimizes three lengths and three dielectric permittivities, with finer-grid,
+sharp/graded continuum and public-API Meep derivative checks. An independent
+81-wavelength sharp-stack check confirms improvement beyond the three training
+wavelengths. The example stops at an iteration limit; these measurements do
+not establish global optimization convergence or arbitrary-material design.
+
 The common engine reports physical and discrete lower-cutoff classifications
 and supports independent diffraction-plane distances. A binary dielectric
 experiment at wavelengths 0.2% either side of a Rayleigh threshold exposes a

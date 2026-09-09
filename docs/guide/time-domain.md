@@ -1149,6 +1149,12 @@ Here the second layer is a substrate spacer. Its changing length preserves
 the fixed output plane at z=0.4. For more layers, normalize positive design
 fractions to a fixed total. Gradients are defined along constant-total paths;
 they do not represent independent changes to the total stack depth.
+The shared [`layer_thicknesses`](autodiff.md#constraining-several-layer-thicknesses)
+function performs this normalization while enforcing specified minimum
+lengths. The [multilayer optimization example](../../examples/fdtd_multilayer_optimization.py)
+combines three independent thickness coordinates with three permittivities;
+its [validation report](../fdtd-multilayer-optimization.md) includes a dense
+independent spectrum and refined gradients.
 
 `subpixel=True` is required. Cell-overlap fractions retain the thickness graph
 through epsilon/mu averaging and electric-pole masks. Values are continuous,
