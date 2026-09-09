@@ -59,3 +59,42 @@ def test_projected_uniform_matrices_and_invalid_exports():
     c[0, 0, 0] = 1j
     with pytest.raises(ValueError, match='real-field'):
         projected_matrices(c, 2)
+
+
+@pytest.mark.parametrize('order', [(0, 0), (3, 1), (1, 3), (7, 4), (4, 7)])
+def test_projected_fields_obey_energy_identity_across_assembly_tiles(order):
+    # A nonsymmetric real change of field with no reflection reduction. Build
+    # its Gram field pointwise, independently of the closure's linear solves.
+    cap = 2*max(order)+6
+    size = 2*cap+1
+    y, x = np.meshgrid(2*np.pi*np.arange(size)/size, 2*np.pi*np.arange(size)/size, indexing='ij')
+    bxx, bxy = 1+.15*np.cos(x), .1*np.sin(x+y)
+    byx, byy = .12*np.cos(2*x-y), 1+.2*np.sin(y)
+    epsilon = 3+.4*np.cos(x-2*y)
+    fields = np.array([bxx, bxy, byx, byy, epsilon*(bxx*bxx+byx*byx),
+                       epsilon*(bxx*bxy+byx*byy), epsilon*(bxy*bxy+byy*byy), epsilon])
+    c = np.fft.fftshift(np.fft.fft2(fields), axes=(-2, -1))/size**2
+    original = c.copy()
+    # Explicit mode enumeration also checks the rectangular ordering and the
+    # final short tile (135 modes for (7,4) and (4,7)).
+    modes = np.array([(m, n) for n in range(-order[1], order[1]+1)
+                      for m in range(-order[0], order[0]+1)])
+    conv = [np.array([[row[cap+ni-nj, cap+mi-mj] for mj, nj in modes] for mi, ni in modes]) for row in c]
+    change = np.block([[conv[0], conv[1]], [conv[2], conv[3]]])
+    gram = np.block([[conv[4], conv[5]], [conv[5], conv[6]]])
+    xx, yy, zi, neg_xy, neg_yx = projected_matrices(c, order)
+    effective = np.block([[xx, -neg_xy], [-neg_yx, yy]])
+    np.testing.assert_allclose(change.conj().T@effective@change, gram, atol=2e-13, rtol=0)
+    np.testing.assert_allclose(effective, effective.conj().T, atol=2e-13, rtol=0)
+    np.testing.assert_allclose(conv[7]@zi, np.eye(len(modes)), atol=2e-13, rtol=0)
+    np.testing.assert_array_equal(c, original)
+
+
+@pytest.mark.parametrize('singular_row', [0, 3, 7])
+def test_singular_projected_fields_still_raise(singular_row):
+    c = np.zeros((8, 1, 1), complex)
+    c[[0, 3], 0, 0] = 1
+    c[[4, 6, 7], 0, 0] = 4
+    c[singular_row] = 0
+    with pytest.raises(np.linalg.LinAlgError):
+        projected_matrices(c, 0)

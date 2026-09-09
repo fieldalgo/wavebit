@@ -12,6 +12,7 @@ import numpy as np
 from scipy.fft import fft2, ifft2, next_fast_len
 from scipy.linalg import eigvalsh, solve
 
+from studies.nvf_energy_closure import congruence_solve, hermitian_defect
 from studies.nvf_fourier_orders import order_grid, orders_xy
 
 
@@ -74,7 +75,8 @@ def projected_matrices(coefficients, order):
     remains the exporter's responsibility; lossless energy alone cannot check it.
     order is a square half width or an explicit (x, y) pair. Each retained
     space gets its own closure; cropping an already inverted larger closure
-    would define a different model.
+    would define a different model. Tiled assembly and two-sided solves avoid
+    full Fourier-index grids and an explicit change-of-field inverse.
     """
     c = np.asarray(coefficients)
     if c.ndim != 3 or c.shape[0] != 8 or c.shape[1] != c.shape[2] or c.shape[1] % 2 != 1:
@@ -85,18 +87,31 @@ def projected_matrices(coefficients, order):
     if not np.isfinite(c).all() or np.max(abs(c-c[:, ::-1, ::-1].conj())) > 1e-9:
         raise ValueError('invalid real-field Fourier coefficients')
     n, m = order_grid(order)
-    dm, dn = m.ravel()[:, None]-m.ravel(), n.ravel()[:, None]-n.ravel()
+    n, m = n.ravel(), m.ravel()
     count = m.size
-    def conv(row):
-        return c[row, dn+cap, dm+cap]
-    change = np.block([[conv(0), conv(1)], [conv(2), conv(3)]])
-    gram = np.block([[conv(4), conv(5)], [conv(5), conv(6)]])
-    inverse = solve(change, np.eye(2*count))
-    effective = inverse.conj().T@gram@inverse
-    if not np.isfinite(effective).all() or np.max(abs(effective-effective.conj().T)) > 1e-9:
+    def fill(target, row):
+        for start in range(0, count, 128):
+            stop = min(start+128, count)
+            dm = m[start:stop, None]-m[None]
+            dn = n[start:stop, None]-n[None]
+            target[start:stop] = c[row, dn+cap, dm+cap]
+    def blocks(rows):
+        result = np.empty((2*count, 2*count), dtype=np.complex128, order='F')
+        for i in range(2):
+            for j in range(2):
+                fill(result[i*count:(i+1)*count, j*count:(j+1)*count], rows[i][j])
+        return result
+    change, gram = blocks(((0, 1), (2, 3))), blocks(((4, 5), (5, 6)))
+    effective = congruence_solve(change, gram, overwrite=True)
+    del change, gram
+    if not np.isfinite(effective).all() or hermitian_defect(effective) > 1e-9:
         raise FloatingPointError('invalid projected energy closure')
+    material = np.empty((count, count), dtype=np.complex128, order='F')
+    fill(material, 7)
+    longitudinal = solve(material, np.eye(count, dtype=np.complex128, order='F'),
+                         overwrite_a=True, overwrite_b=True)
     return (effective[:count, :count], effective[count:, count:],
-            np.linalg.inv(conv(7)), -effective[:count, count:], -effective[count:, :count])
+            longitudinal, -effective[:count, count:], -effective[count:, :count])
 
 
 def serializable(result):

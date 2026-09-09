@@ -131,3 +131,52 @@ The mirror symmetry, real-field conjugacy, effective Hermiticity and power
 balance thresholds are unchanged. This remains an explicit research path.
 Reduced memory does not establish optical convergence, extend the mirror
 method to asymmetric geometry or integrate the candidate into production NVF.
+
+## Full-space projected fields
+
+`studies/nvf_cell_bounds.py::projected_matrices` now uses the same two-sided
+solve for independently projected real fields, including the asymmetric
+[affine profile](nvf-affine-convergence.md). It retains every requested
+Fourier mode without a symmetry split. Each quadrant of Q and G is filled
+directly in its final Fortran storage, in tiles of at most 128 rows; a full
+convolution temporary is unnecessary. The effective Hermiticity guard keeps
+its absolute `1e-9` threshold. The material inverse is evaluated by solving
+against the identity after the Q storage is released.
+
+On the fixed degree-8 FEM affine projection at retained order `(24,24)`, two
+fresh processes give the following closure-only observations. The exports,
+coefficient cap 64 and quadrature 40 are identical. Peak RSS includes imports;
+GB denotes `10^9` bytes. The old evaluation is the parent implementation
+`e19fd82`; the new evaluation changes only assembly/storage and the algebraic
+evaluation of the same closure.
+
+| Evaluation | Peak process memory | Time |
+| --- | ---: | ---: |
+| Explicit inverse, full index grids and block copies | 3.430 GB | 9.45 s |
+| Two-sided solve and direct tiled assembly | .963 GB | 7.58 s |
+
+This is about 72% less peak process memory for this closure stage. The
+maximum difference across every 97th column of all five returned matrices
+is `7.19e-14`. This sampled comparison is a continuity check, not an optical
+accuracy bound or a full-matrix error norm. The timings are single
+observations, with a short regression run overlapping the new measurement;
+they do not establish a general speed improvement or the memory of a full
+Maxwell solve. NumPy/SciPy use Apple Accelerate; setting
+`OPENBLAS_NUM_THREADS=1` and `OMP_NUM_THREADS=1` does not establish its thread
+count. Raw records are appended to `studies/results/nvf_closure_memory.log`.
+
+The independent controls construct a nonsymmetric real change of field and
+its Gram field pointwise. They check the defining identity `Q.H D Q = G`,
+the longitudinal inverse, Hermiticity and input preservation for square,
+rectangular and zero orders. Both rectangular orientations cross the
+128-row assembly boundary and exercise the final short tile. Singular
+change-of-field and material matrices still raise. These controls do not
+require mirror symmetry or a positive-definiteness assumption in the solve.
+
+The complete order-24 optical rerun changes p/s transmission by only
+`+1.15e-12` / `+1.86e-12` relative to the preceding explicit-inverse record.
+Validation passes 214 distinct checks across projected-cell algebra,
+directional and affine exports, contact controls, mirror/doubling,
+the optional fitted FEM instrument and documentation contracts. The strict
+documentation build and Ruff also pass. The appended validation details are
+in `studies/results/nvf_energy_closure_validation.log`.
