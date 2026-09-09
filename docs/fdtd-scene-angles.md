@@ -20,9 +20,11 @@ axis, where an angle-ratio representation previously discarded a derivative.
 The [usage contract](guide/time-domain.md#incidence-angle-derivatives) requires
 an explicit diffraction window for every array-valued theta. No order count may
 be inferred from a differentiable scalar. Plain scalar numbers retain automatic
-selection. Geometry, phi, half spaces, cell counts, source/monitor locations,
-PML, time step and run length remain static. Their derivatives are outside this
-feature. Array-backed geometry does not become differentiable by association.
+selection. These theta measurements hold phi, geometry, half spaces, cell
+counts, source/monitor locations, PML, time step and run length fixed. The
+subsequent [azimuth extension](fdtd-scene-azimuth.md) also differentiates phi;
+geometry and half-space derivatives remain outside the scene interface.
+Array-backed geometry does not become differentiable by association.
 
 The transverse wavevector uses the incident index and the midpoint wavelength
 of the requested band. Each wavelength therefore has its own physical angle,
@@ -59,7 +61,8 @@ value but a zero derivative there. Normalization gives `1/2` on both JAX and
 Torch to the test's `1e-15` absolute tolerance, including the negative y axis
 and the corresponding sine derivative on the x axis.
 
-At the origin the caller's static phi supplies the frame. The implementation
+At the origin the caller's phi supplies the frame. The theta checks hold phi
+fixed; a phi derivative rotates the frame. The implementation
 guards the unused zero-norm square root so its undefined derivative cannot
 contaminate a valid gradient. This is the derivative along a fixed incident
 ray, not a definition for arbitrary two-dimensional perturbations at the

@@ -87,9 +87,10 @@ def fdtd(stack=None, incidence=None, **kwargs):
     Both paths support time records and user frequency planes; source and
     normalization conventions are documented in the time-domain guide.
     Explicit backends also support bottom incidence and static z grading.
-    Their real scalar ``theta`` can retain an autodiff graph when an explicit
-    ``truncation_order`` fixes the output window. Azimuth ``phi`` remains static;
-    theta changes the Bloch wavevector shared by the wavelength band.
+    Their real scalar ``theta`` and ``phi`` can retain autodiff graphs when an
+    explicit ``truncation_order`` fixes the output window. Array ``phi`` uses
+    the full y-period mesh even at zero and requires Jones/psi polarization.
+    Both angles change the Bloch wavevector shared by the wavelength band.
     ``align_layers=True`` places every layer boundary on a z node, independently
     of padding grading; geometry and half spaces are static.
     ``pulse_width`` controls their Gaussian source envelope in c=1

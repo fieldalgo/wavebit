@@ -1,6 +1,6 @@
 """Differentiable rectangular Stack adapter for the shared Yee time-domain core.
 
-Geometry is static; incidence theta, raster epsilon, mu and electric pole values
+Geometry is static; incidence theta/phi, raster epsilon, mu and electric pole values
 retain their backend graph. A uniform incident-medium run calibrates each current-sheet basis.
 No external implementation is used here.
 """
@@ -247,10 +247,12 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     """Solve a rectangular scene with NumPy/JAX/Torch angle/material gradients.
 
     Explicit resolution is required: optimizing materials must not resize the
-    grid. Half spaces, geometry, wavelength and azimuth phi are static. theta
-    can be a backend real scalar; array theta requires explicit truncation_order
-    to fix the diffraction window. Its derivative holds the mesh and phi fixed,
-    and changes the one Bloch wavevector shared by the whole wavelength band.
+    grid. Half spaces, geometry and wavelength are static. theta and phi can
+    be backend real scalars; either array angle requires truncation_order to
+    fix the diffraction window. Array phi always samples the full y period,
+    including at zero, and requires Jones/psi polarization rather than tetm.
+    Angle derivatives hold the mesh fixed and change the one Bloch wavevector
+    shared by the whole wavelength band.
     Bottom incidence uses a z-reflected scene and returns fields in original
     coordinates. Optional grading builds a static nonuniform z mesh; material
     gradients do not resize it. pulse_width is the static Gaussian envelope's
@@ -334,15 +336,15 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
         raise ValueError('polarization must contain exactly two scalar amplitudes.')
     if tetm not in (None, 'te', 'tm'):
         raise ValueError("tetm must be 'te' or 'tm'.")
-    phi = 0. if phi is None else float(phi)
+    phi = 0. if phi is None else phi
+    scalar_phi = isinstance(phi, (int, float, np.number))
+    in_plane = scalar_phi and phi == 0
     # Inferred order counts may depend on a host scalar, never on a live array.
-    if truncation_order is None and not isinstance(theta, (int, float, np.number)):
-        raise ValueError('Array theta requires explicit truncation_order to keep the diffraction window fixed.')
-    host_theta = theta
-    if tetm is not None and phi != 0:
-        raise ValueError('Use psi or polarization for conical incidence instead of tetm.')
-    if not np.isfinite(phi):
-        raise ValueError('Require finite incidence angles, 0 <= theta < pi/2.')
+    if truncation_order is None and (not scalar_phi or not isinstance(theta, (int, float, np.number))):
+        raise ValueError('Array theta or phi requires explicit truncation_order to keep the diffraction window fixed.')
+    host_theta, host_phi = theta, phi
+    if tetm is not None and not in_plane:
+        raise ValueError('Use psi or polarization for conical incidence or array phi instead of tetm.')
     band = np.atleast_1d(np.asarray(wavelength, float))
     if band.ndim != 1 or not len(band) or not np.isfinite(band).all() or np.any(band <= 0):
         raise ValueError('wavelength must be a positive scalar or vector.')
@@ -361,6 +363,10 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     if theta.shape != () or not xp.isdtype(theta.dtype, ('real floating', 'integral')):
         raise ValueError('theta must be a real scalar, 0 <= theta < pi/2.')
     theta = xp.astype(theta, xp.result_type(theta, array(1.)))
+    phi = array(phi)
+    if phi.shape != () or not xp.isdtype(phi.dtype, ('real floating', 'integral')):
+        raise ValueError('phi must be a finite real scalar.')
+    phi = xp.astype(phi, xp.result_type(phi, array(1.)))
     scene_valid = array(True)
     def check(valid, message):
         nonlocal scene_valid
@@ -368,6 +374,8 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
         scene_valid = scene_valid & valid
     check(xp.isfinite(theta) & (theta >= 0) & (theta < np.pi/2),
           'Require finite incidence angles, 0 <= theta < pi/2.')
+    check(xp.isfinite(phi), 'phi must be a finite real scalar.')
+    cos_phi, sin_phi = xp.cos(phi), xp.sin(phi)
     # A requested frequency in the Gaussian's numerical tail cannot provide
     # reliable incident calibration. This is a roundoff guard, not an accuracy
     # guarantee for weakly excited frequencies.
@@ -410,7 +418,9 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     dz = 1/float(resolution)
     ly = float(lengths[1]) if len(lengths) == 2 else 2/ry
     nx = max(2, math.ceil(lx*rx))
-    ny = max(2, math.ceil(ly*ry)) if raster.shape[1] > 1 or phi != 0 else 2
+    # Array azimuths must not collapse/expand the mesh while crossing zero.
+    # Scalar zero retains the established two-cell y-invariant shortcut.
+    ny = max(2, math.ceil(ly*ry)) if raster.shape[1] > 1 or not in_plane else 2
     dx, dy = lx/nx, ly/ny
     pad = max(6, math.ceil(pad_scale*centre/min(nt, nb)/dz))
     source_z, reflect_z = int(n_pml)+2, int(n_pml)+2+pad
@@ -543,11 +553,11 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
         if (steps-len(shaped['notches']))*dt < 10*width+2*(z[transmit_z]-z[source_z])*max(nt, nb):
             raise ValueError('n_periods is too short for pulse_notches and the scene round trip.')
         pulse_info.update(shaped)
-    kx0, ky0 = 2*np.pi/centre*nt*xp.sin(theta)*array([np.cos(phi), np.sin(phi)])
+    kx0, ky0 = 2*np.pi/centre*nt*xp.sin(theta)*xp.stack((cos_phi, sin_phi))
     check(xp.all((array(band)/centre)*xp.sin(theta) < 1),
           'The fixed Bloch wavevector must propagate throughout the wavelength band.')
     if truncation_order is None:
-        host_kx, host_ky = 2*np.pi/centre*nt*np.sin(host_theta)*np.array([np.cos(phi), np.sin(phi)])
+        host_kx, host_ky = 2*np.pi/centre*nt*np.sin(host_theta)*np.array([np.cos(float(host_phi)), np.sin(float(host_phi))])
         halfx = math.floor(lx*(max(nt, nb)/band.min()+abs(host_kx)/(2*np.pi)))
         halfy = math.floor(ly*(max(nt, nb)/band.min()+abs(host_ky)/(2*np.pi))) if raster.shape[1] > 1 else 0
     else:
@@ -561,7 +571,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     transmission_channels = _diffraction_channels(array(band), kx, ky, nb, dt, dx, dy, xp=xp, check=check)
     # Declared scalar TE/TM uses the fixed x-z frame, like RCWA's scalar
     # solver. Coupled/Jones scenes use each outgoing order's own s/p frame.
-    co, si = ((xp.ones_like(kx), xp.zeros_like(kx)) if tetm is not None and raster.shape[1] == 1 and phi == 0
+    co, si = ((xp.ones_like(kx), xp.zeros_like(kx)) if tetm is not None and raster.shape[1] == 1 and in_plane
               else real_order_frame(xp, ky, kx, phi))
     # Raster coordinates start at zero, as in the RCWA Fourier coefficients.
     transform = xp.exp(-1j*(kx[..., None, None]*array(np.arange(nx)[None, :]*dx)
@@ -652,7 +662,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     runs = []
     stable = scene_valid
     source_plane = array((np.arange(shape[0]) == source_z)[:, None, None])
-    for vector in ((-np.sin(phi), np.cos(phi)), (-np.cos(phi), -np.sin(phi))):
+    for vector in ((-sin_phi, cos_phi), (-cos_phi, -sin_phi)):
         components = []
         for c in range(2):
             xx = array((np.arange(nx)+(.5 if c == 0 else 0))*dx)
@@ -718,8 +728,8 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
             for ref, act in run_values:
                 reference = ref[f, 0, 0] if diffraction_method == 'directional' else ref[f, 0]
                 inc = reference[:, halfy, halfx]*xp.exp(-1j*phase_inc)
-                incident_columns.append(xp.stack((-np.sin(phi)*inc[0]+np.cos(phi)*inc[1],
-                                                  -nt/qi*(np.cos(phi)*inc[0]+np.sin(phi)*inc[1]))))
+                incident_columns.append(xp.stack((-sin_phi*inc[0]+cos_phi*inc[1],
+                                                  -nt/qi*(cos_phi*inc[0]+sin_phi*inc[1]))))
                 if f < len(band):
                     if diffraction_method == 'directional':
                         reflected = (act[f, 0, 1]-ref[f, 0, 1])*xp.exp(1j*phase_ref)
@@ -792,7 +802,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                            layer_planes=np.r_[0., np.cumsum(thick)],
                            # The final closing cell also belongs to the lower PML.
                            pml_bounds=(z[0], z[int(n_pml)], z[-int(n_pml)], z[-1]+widths[-1]),
-                           angles=xp.asin(array(band)/centre*xp.sin(theta)),
+                           angles=xp.asin(array(band)/centre*xp.sin(theta)), azimuth=phi,
                            normalization='uniform-medium reference; two electric-current bases')
         weights = xp.stack(weights)
         diagnostics['diffraction'] = dict(

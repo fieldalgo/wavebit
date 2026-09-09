@@ -23,7 +23,7 @@ the following sections describe the shared engine and explicit-backend scene pat
 
 The legacy Stack/Incidence FDTD path does not provide autodiff or JAX/PyTorch execution.
 The explicit-backend common scene adapter now provides both, with static geometry
-and incidence-theta/material/pole gradients. Common-backend time histories and user z monitors
+and incidence-angle/material/pole gradients. Common-backend time histories and user z monitors
 are also available, with native component staggering and centre-calibrated
 causal time records; see the [guide](guide/time-domain.md#common-scene-adapter).
 The common backend adapter additionally supports bottom incidence with original-coordinate
@@ -104,11 +104,17 @@ replace the diagonal interface model with general tensor homogenization.
 Fixed-grid [incidence-angle sensitivities](fdtd-scene-angles.md) now preserve
 the `theta` graph through illumination, Bloch boundaries, diffraction and
 reference normalization. Array angles require an explicit order window;
-`phi`, geometry and half-space coefficients remain static. CPU checks cover
+geometry and half-space coefficients remain static. CPU checks cover
 exact uniform-medium phase derivatives, differentiated magnetic Airy refinement,
 crossed material/pole derivatives, bottom incidence and calibrated records.
 These checks do not establish derivative convergence near diffraction thresholds
 or sharp dispersive corners.
+The [azimuth extension](fdtd-scene-azimuth.md) now differentiates phi jointly
+with theta and material parameters. Array phi keeps full y sampling across
+zero and requires Jones/psi polarization. Exact discrete phase derivatives,
+normal-incidence field rotations, axis exchange and two finite-difference
+steps check this path. Unequal transverse cells introduce a small planar
+azimuth sensitivity that decreases under refinement toward continuum Airy.
 
 The common engine reports physical and discrete lower-cutoff classifications
 and supports independent diffraction-plane distances. A binary dielectric

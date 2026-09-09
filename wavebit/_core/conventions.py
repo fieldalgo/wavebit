@@ -502,8 +502,9 @@ def real_order_frame(xp, ky, kx, phi):
 
     Normalization retains derivatives on either coordinate axis without the
     removable atan(ky/kx) singularity. At the origin only the supplied incident
-    azimuth defines a frame. Its angle derivative is zero along that fixed ray;
-    an arbitrary transverse perturbation at the origin has no unique frame.
+    azimuth defines a frame. Theta changes along a fixed ray hold it fixed;
+    phi changes rotate it. An arbitrary transverse perturbation at the origin
+    has no unique frame.
     Complex transverse wavevectors use order_azimuth instead.
     """
     squared = kx*kx+ky*ky
