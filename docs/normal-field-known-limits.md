@@ -1219,6 +1219,17 @@ followed by `+2.92e-5` from y=28 to 32; the preceding y=20-to-24 change
 was negative. x=24 confirms the pattern, with changes of `+6.50e-6`
 and `+2.93e-5`. Thus the small change near y=28 does not establish a
 monotone tail or a stopping criterion. The auxiliary field remains fixed.
+
+The [completed x=28 comparisons](nvf-affine-convergence.md#completing-the-x28-comparisons)
+give s changes of `+6.45087e-6` and `+2.92259e-5` over those same y
+intervals, so the renewed y variation persists at three tested x orders.
+At y=32, x=24-to-28 changes p by `-5.65747e-6` and s by `-2.10834e-6`.
+The smaller x increments and mixed terms do not bound the remaining tail.
+Both new optical rows use the same fitted field and the
+[direct boundary solve](what-a-solve-answers.md#11-solving-only-the-requested-boundary-columns);
+their largest lossless balance error is `7.20e-12`. Independent optical
+qualification and the degree-10/candidate comparison beyond (24,24) remain open.
+
 The study's full-space closure now uses tiled assembly and an exact
 two-sided solve, reducing measured order-24 closure peak memory from
 3.43 GB to .96 GB. The memory result concerns that stage, not the full

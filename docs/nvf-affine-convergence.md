@@ -316,6 +316,62 @@ nor the missing rectangle corners at x=28. Across all six new optical
 rows, the largest lossless energy error is `1.39e-11`, below the unchanged
 algebraic guard. No optical convergence criterion has been selected.
 
+## Completing the x=28 comparisons
+
+The continuation retains the same cap-64, degree-8, quadrature-40 fitted
+field and physical profile. It uses the production runtime at `ea4c85e`,
+including diagonal scaling and the [direct boundary solve](what-a-solve-answers.md#11-solving-only-the-requested-boundary-columns).
+The boundary equations, retained Fourier sets and optical guards are
+unchanged. At order 20, per-order p/s R/T agrees with the saved
+lifetime-only calculation within `5.54e-12`; no threshold was adjusted to
+admit the higher orders. The older corners below precede the runtime
+arithmetic changes, while sharing the identical projection export.
+
+| x half width | y half width | p T | s T |
+| ---: | ---: | ---: | ---: |
+| 28 | 28 | .852374558731 | .730981857810 |
+| 28 | 32 | .852375041494 | .731011083754 |
+
+The first new corner completes x=24/28, y=24/28. Its signed changes from
+the lower corner are:
+
+| polarization | x only | y only | mixed | diagonal |
+| --- | ---: | ---: | ---: | ---: |
+| p | -5.55739e-6 | -1.71647e-6 | -7.70926e-8 | -7.35095e-6 |
+| s | -2.03340e-6 | +6.49503e-6 | -4.41597e-8 | +4.41747e-6 |
+
+At y=28 the x=24-to-28 edge changes p by `-5.63448e-6` and s by
+`-2.07756e-6`. p remains more sensitive to x, while the s x/y changes
+oppose each other. The small square-order s increment consequently includes
+partial cancellation. At x=28 the y=24-to-28 s change is `+6.45087e-6`,
+confirming the earlier sign reversal at a third x order. Neither the
+smaller p x increment nor the small s diagonal supplies a tail bound.
+
+The second new corner completes x=24/28, y=28/32:
+
+| polarization | x only | y only | mixed | diagonal |
+| --- | ---: | ---: | ---: | ---: |
+| p | -5.63448e-6 | +5.05747e-7 | -2.29844e-8 | -5.15172e-6 |
+| s | -2.07756e-6 | +2.92567e-5 | -3.07740e-8 | +2.71484e-5 |
+
+At x=28, y=28-to-32 changes p by `+4.82763e-7` and s by
+`+2.92259e-5`. The s change is about 4.53 times its preceding y-window
+change. Across x=20, 24 and 28, the same y=28-to-32 s increment is
+`+2.91962e-5`, `+2.92567e-5` and `+2.92259e-5`, respectively. Raising
+x does not remove the observed y variation over these tested windows.
+At y=32 the x=24-to-28 changes are `-5.65747e-6` for p and
+`-2.10834e-6` for s. The small mixed terms and decreasing x increments
+do not make the remaining y tail bounded or monotone.
+
+The two fresh processes complete in 390.16 s and 453.82 s, with maximum
+RSS of 6.395 GB and 6.477 GB, respectively (macOS bytes, including imports,
+projection closure and native workspaces). These shared-host observations
+are not an isolated speed comparison. The greatest new-row lossless balance
+error is `7.20e-12`, below the unchanged algebraic guard. The fitted
+reference remains degree 8; the degree-10/candidate comparison remains at
+`(24,24)`. Neither the static field enclosure nor these finite optical
+windows supplies an independent three-dimensional optical error bound.
+
 ## Reproduction and guards
 
 The reference runs used separately installed `ngsolve==6.2.2606` and
@@ -377,10 +433,20 @@ on the same mesh, then run:
 PYTHONPATH=$PWD python studies/nvf_affine_convergence.py --orders 24 20:28 24:28 20:32 24:32 28:24 --projections "$NVF_AFFINE_REF" --cells --directional-changes
 ```
 
-This sequence includes an order-24 continuity rerun, a complete rectangle
+That sequence includes an order-24 continuity rerun, a complete rectangle
 on x=20/24 and y=28/32, and a separate x=24-to-28 edge at y=24. It does
 not contain the additional corners needed for a rectangle reaching x=28;
 the reporting tool does not invent them or merge different quadratures.
+
+For the x=28 follow-up, the additional optical orders are `28:28` and
+`28:32`. Earlier `(24,24)`, `(24,28)`, `(24,32)` and `(28,24)` corners
+can be reused after checking that their complete projection metadata is
+identical. To regenerate all six corners and both adjacent rectangles in
+one invocation, use the same cap-64, degree-8, quadrature-40 export:
+
+```bash
+PYTHONPATH=$PWD python studies/nvf_affine_convergence.py --orders 24 28:24 24:28 28 24:32 28:32 --projections "$NVF_AFFINE_REF" --cells --directional-changes
+```
 
 The measurements and validation details are retained in
 [the study log](https://github.com/fieldalgo/wavebit/blob/develop/studies/results/nvf_affine_convergence.log).
