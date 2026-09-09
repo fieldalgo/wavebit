@@ -1,6 +1,7 @@
 # What a solve answers — and why the field state is off by default
 
-Written: 2026-08-20. Measured on an Apple M4 (16 GB), NumPy 2.5.1 against Accelerate, float64,
+Written: 2026-08-20; transient-lifetime follow-up on 2026-09-09 in section 9.
+Sections 1–8 were measured on an Apple M4 (16 GB), NumPy 2.5.1 against Accelerate, float64,
 single thread as configured. Retention is counted by walking the retained objects and charging
 each array to its owning buffer, so views are counted once. Peak comes from `tracemalloc`,
 which tracks NumPy's own allocator exactly. Times are best-of-N after a warm-up. Neither
@@ -87,15 +88,17 @@ implies `'amplitude'`, and the ladder is monotone for a structural reason.
 
 ## 4. It is a lifetime change at one layer, and a peak change from two up
 
-Peak memory for a **single-layer** solve is unchanged by the declaration — measured at
+When the declaration was introduced, peak memory for a **single-layer** solve was unchanged — measured at
 **+0.01 MB**, which is the noise floor of the instrument. That is not a defect; it is what
 "retention" means. The matrices are built either way, because they are the loop's own working
-set, and the declaration only decides whether anything still points at them afterwards.
+set, and the declaration only decided whether anything still pointed at them afterwards.
+The later transient-lifetime changes in section 9 release unneeded references inside
+that working set too, so this historical one-layer peak equality no longer applies.
 
 From two layers up it is also a peak change, and the mechanism is the *accumulation* rather
 than the per-iteration locals. With the append in place, live memory grows as `k * 4.25`
-blocks across `k` layers; without it each layer's matrices become garbage as soon as the next
-iteration rebinds the names, and only `F`, `G` and `T` — the ETM recursion state — carry
+blocks across `k` layers; without it, in that implementation, each layer's matrices became garbage
+when the next iteration rebound the names, and only `F`, `G` and `T` — the ETM recursion state — carried
 across. So the appends are conditional, not just the returns.
 
 Measured with `tracemalloc`, `truncation_order=(8, 8)`, one process, ETM:
@@ -251,3 +254,79 @@ ETM fixes one illumination's boundary condition and never forms a both-sides ope
 for one is not a request being silently dropped. Everything else on the ladder is
 algorithm-independent, and measurably so — `layer_info_list`, `T1` and the reconstructed field
 come out identical from both paths (see `connecting-algorithms.md` §8).
+
+## 9. Releasing transient 2D matrices after their last use
+
+The 2D runtime now reduces simultaneous dense storage without changing
+its products, inverses, Fourier modes or field declarations. In the common
+nonmagnetic layer, the right Maxwell factor is built after the eigensolve;
+the left blocks and product matrix are released once their consumers finish.
+For magnetic layers the right factor is still built before the product,
+as that algebra requires. The same left blocks are reconstructed if the
+existing grazing guard requests a coupled-cluster rebuild. Cutoff thresholds,
+branches and refusal behavior remain unchanged.
+
+The ETM substrate seed is also delayed until the first layer's modes are
+available, with the same seed used for a stack containing no layers. Rotation,
+propagation and identity matrices are formed when used. Raw modes are
+released after rotation for declarations below `field`; inverse and transfer
+temporaries are released after their final use, including before the next
+layer and final boundary matching. A `field` declaration still retains its
+original reconstruction state. These are changes in object lifetime rather
+than in-place mutations, so automatic differentiation can retain its own
+required graph references.
+
+For the [fixed affine fixture](nvf-affine-convergence.md), an order-8 direct
+ETM comparison uses the same already-built convolution matrices, exterior
+media, incidence and 300 nm layer. The baseline is `023b03e`'s `solve_2d`
+loaded under a separate module name in the same process. Each measured call
+starts a fresh `tracemalloc` trace after garbage collection. MB here denotes
+`10^6` bytes; the input convolution matrices and imports precede the trace.
+
+| declaration | previous peak traced allocation | new peak traced allocation | live traced allocation after return |
+| --- | ---: | ---: | ---: |
+| amplitude | 176.472 MB | 110.987 MB | .196 / .192 MB |
+| field | 176.469 MB | 132.369 MB | 21.612 / 21.612 MB |
+
+The measured transient peak falls by about 37% for amplitude and 25% for
+field, while the returned field allocation remains unchanged at this
+precision. Across every retained diffraction order's p/s reflection and
+transmission, the largest before/after power difference is `1.06e-15`.
+The trace measures Python/NumPy allocations during this core call, not
+native LAPACK workspace, whole-process resident memory or an autograd graph.
+It does not establish the same savings for JAX, PyTorch, different stacks,
+or declarations that must retain more state. The comparison is a continuity
+measurement, not independent optical accuracy qualification.
+
+Two separate fresh-process observations extend the check to order 20
+through the public `solve_conv` path, including the unchanged projected
+energy closure. Peak resident memory includes imports and native workspaces;
+GB denotes `10^9` bytes.
+
+| evaluation | peak process RSS | time including closure and solve |
+| --- | ---: | ---: |
+| previous runtime | 3.701 GB | 178.03 s |
+| current runtime | 3.445 GB | 193.40 s |
+
+The largest p/s R/T difference over all retained diffraction orders is
+`6.68e-12`, and the new lossless balance error is `5.40e-12` or less.
+The resident peak is about 7% lower in these observations; this is a
+different quantity and scope from the 37% traced-core allocation reduction.
+RSS is affected by native workspaces, allocator behavior and operating-system
+memory compression, so it does not measure precisely how many array bytes
+were released. These single timings on a shared machine do not establish
+a speedup. No other numerical job from this task ran during either solve,
+but unrelated host activity was uncontrolled. The Python/NumPy/SciPy runtime
+is the same, using Apple Accelerate. Setting `OPENBLAS_NUM_THREADS=1` and
+`OMP_NUM_THREADS=1` does not establish Accelerate's actual thread count.
+
+Validation passes 539 distinct cases, covering the NumPy/JAX/PyTorch
+core and gradients, ETM/SMM agreement, field reconstruction, declarations,
+grazing guards, magnetic and asymmetric tensors, retained affine orders,
+RETICOLO reference data and documentation contracts. Two new cases compare
+a stack containing no layers with independent p/s Fresnel formulas. The
+initial broader run was intentionally stopped after 395 passes in an
+unchanged overlapping-circle geometry preprocessing test; 144 additional
+focused cases completed separately. This does not claim a full repository
+test run. Raw observations and the exact validation scope are in
+`studies/results/nvf_rcwa_memory.log`.

@@ -165,6 +165,26 @@ def test_2d_gradient_jax_torch_fd():
     assert abs(g_jax - g_fd) < 1e-4, (g_jax, g_fd)
 
 
+@pytest.mark.parametrize('polarization', ['p', 's'])
+def test_empty_2d_stack_matches_single_interface_fresnel(polarization):
+    # A delayed substrate seed must also work when no layer invokes it.
+    theta, phi = .2, .37
+    kx = np.sin(theta)*np.cos(phi)+2*np.arange(-1, 2)
+    ky = np.sin(theta)*np.sin(phi)+2*np.arange(-2, 3)
+    empty = np.empty((0, 15, 15), complex)
+    r, t = solve_2d(900., kx, ky, 1., 1.5, theta,
+                    (0., 1.) if polarization == 'p' else (1., 0.), [],
+                    empty, empty, empty, phi=phi)
+    kz = np.sqrt(np.array([1., 2.25])-np.sin(theta)**2)
+    admittance = kz/np.array([1., 2.25]) if polarization == 'p' else kz
+    reflection = ((admittance[0]-admittance[1])/admittance.sum())**2
+    expected = np.zeros((5, 3))
+    expected[2, 1] = reflection
+    np.testing.assert_allclose(r, expected, atol=3e-15, rtol=0)
+    expected[2, 1] = 1-reflection
+    np.testing.assert_allclose(t, expected, atol=3e-15, rtol=0)
+
+
 def test_python_scalar_incidence_keeps_double_precision_on_torch():
     """A Python-complex theta/psi must not inherit torch's default float32 dtype.
 

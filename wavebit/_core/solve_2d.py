@@ -220,29 +220,33 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
     mux_conv, muy_conv, muz_conv_i, muxy_conv, muyx_conv = (
         (I, I, None, None, None) if mu is None else mu)
 
-    B = Kx @ epz_conv_i @ Kx - muy_conv
-    D = Ky @ epz_conv_i @ Ky - mux_conv
-    Cc = Kx @ epz_conv_i @ Ky
-    E = Ky @ epz_conv_i @ Kx
-    if muyx_conv is not None:
-        Cc = Cc - muyx_conv
-    if muxy_conv is not None:
-        E = E - muxy_conv
+    def left_blocks():
+        B = Kx @ epz_conv_i @ Kx - muy_conv
+        D = Ky @ epz_conv_i @ Ky - mux_conv
+        Cc = Kx @ epz_conv_i @ Ky
+        E = Ky @ epz_conv_i @ Kx
+        if muyx_conv is not None:
+            Cc = Cc - muyx_conv
+        if muxy_conv is not None:
+            E = E - muxy_conv
+        return B, D, Cc, E
 
     # `Omega_R`'s three geometry products carry `muz_conv_i` between the K factors, exactly as
     # `epz_conv_i` sits between them in `Omega_L`. Skipped entirely when non-magnetic rather
     # than multiplying an identity through, so the arithmetic stays the operations it was.
-    if muz_conv_i is None:
-        KxKy, KxKx, KyKy, KyKx = Kx @ Ky, Kx @ Kx, Ky @ Ky, Ky @ Kx
-    else:
-        KxKy, KxKx = Kx @ muz_conv_i @ Ky, Kx @ muz_conv_i @ Kx
-        KyKy, KyKx = Ky @ muz_conv_i @ Ky, Ky @ muz_conv_i @ Kx
+    def right_factor():
+        if muz_conv_i is None:
+            KxKy, KxKx, KyKy, KyKx = Kx @ Ky, Kx @ Kx, Ky @ Ky, Ky @ Kx
+        else:
+            KxKy, KxKx = Kx @ muz_conv_i @ Ky, Kx @ muz_conv_i @ Kx
+            KyKy, KyKx = Ky @ muz_conv_i @ Ky, Ky @ muz_conv_i @ Kx
+        return _block(xp, [
+            [-KxKy + epyx_conv, KxKx - epy_conv],
+            [epx_conv - KyKy, KyKx - epxy_conv],
+        ])
 
-    Omega_R = _block(xp, [
-        [-KxKy + epyx_conv, KxKx - epy_conv],
-        [epx_conv - KyKy, KyKx - epxy_conv],
-    ])
-
+    B, D, Cc, E = left_blocks()
+    Omega_R = None
     if mu is None:
         # The hand-expanded product. Its four bare ``K @ K`` terms are not geometry that
         # survived the multiplication untouched — they are what two *other* terms collapse to
@@ -257,9 +261,17 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
             [E @ epx_conv - Ky @ Kx - D @ epyx_conv, Kx @ Kx + D @ epy_conv - E @ epxy_conv],
         ])
     else:
+        Omega_R = right_factor()
         Omega2_LR = _block(xp, [[-Cc, B], [-D, E]]) @ Omega_R
 
+    # The eigensolve needs only the product. Reconstruct the left factor
+    # later if the existing grazing guard requires it; ordinary modes do
+    # not retain its four dense blocks or an unused right factor here.
+    del B, D, Cc, E
     w, W = eig(Omega2_LR)
+    del Omega2_LR
+    if Omega_R is None:
+        Omega_R = right_factor()
     q = mode_q(xp, xp.astype(w, C))
     V = (Omega_R @ W) / q
 
@@ -276,7 +288,9 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
     aw = xp.abs(_readable(w, xp))
     grazing = _concrete(xp.min(aw) < _COUPLED_REL * xp.max(aw))
     if grazing:
+        B, D, Cc, E = left_blocks()
         Omega_L = _block(xp, [[-Cc, B], [-D, E]])
+        del B, D, Cc, E
         try:
             rebuilt = _rebuild_grazing_cluster(xp, w, W, V, q, Omega_L, Omega_R)
         except FloatingPointError:
@@ -406,25 +420,22 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
 
     if eps_bot is None:
         eps_bot = n_bot ** 2 / mu_bot      # n stays the refractive index; eps carries the mu
-    Kz_bot = _diag(xp, kz_bot)
-
     # The substrate's two admittances: kz/eps on the magnetic (p) amplitude, kz/mu on the
-    # electric (s) one. Both are the previous expression at mu_bot = 1.
-    big_F = _block(xp, [[I, O], [O, -1j * Kz_bot / eps_bot]])
-    big_G = _block(xp, [[-1j * Kz_bot / mu_bot, O], [O, I]])
-    big_T = xp.astype(xp.eye(2 * n_orders), C)
-
+    # electric (s) one. Delay their dense storage until the first modes are
+    # ready. The empty stack uses the same seed before final matching.
+    def substrate_state():
+        Kz_bot = _diag(xp, kz_bot)
+        return (_block(xp, [[I, O], [O, -1j * Kz_bot / eps_bot]]),
+                _block(xp, [[-1j * Kz_bot / mu_bot, O], [O, I]]),
+                xp.astype(xp.eye(2 * n_orders), C))
+    big_F = big_G = big_T = None
 
     # The order grid flattened row-major: m fastest, matching how the ``fourier2d_*`` builders
     # lay out the convolution matrices. Diagonal either way — the eigenproblem below reads
     # only these two diagonals, which is why a skewed lattice never reaches it.
     Kx = _diag(xp, xp.reshape(kx_g, (-1,)))
     Ky = _diag(xp, xp.reshape(ky_g, (-1,)))
-    F_c = _diag(xp, xp.cos(varphi))
-    F_s = _diag(xp, xp.sin(varphi))
-
     # --- stage 2/3: per-layer eig + coupled block transfer (transfer_2d_2 / transfer_2d_3)
-    big_I = xp.astype(xp.eye(2 * n_orders), C)
     keep_field = answers_of(answers).covers(Answers.FIELD)
     layer_info_list = []
     n_layers = len(thickness) if not hasattr(thickness, 'shape') else thickness.shape[0]
@@ -447,22 +458,31 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
         W, V, q = layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i,
                                  epxy_conv, epyx_conv, C, mu=layer_mu)
 
-        q_1 = q[:n_orders]
-        q_2 = q[n_orders:]
-        X_1 = _diag(xp, xp.exp(-k0 * q_1 * d))
-        X_2 = _diag(xp, xp.exp(-k0 * q_2 * d))
-        big_X = _block(xp, [[X_1, O], [O, X_2]])
-
+        F_c = _diag(xp, xp.cos(varphi))
+        F_s = _diag(xp, xp.sin(varphi))
         big_W, big_V = sp_modes_2d(xp, W, V, F_c, F_s, n_orders)
+        del F_c, F_s
+        if not keep_field:
+            del W, V
+        if big_F is None:
+            big_F, big_G, big_T = substrate_state()
 
         big_W_i = xp.linalg.inv(big_W)
         big_V_i = xp.linalg.inv(big_V)
         big_B = 0.5 * (big_W_i @ big_F - big_V_i @ big_G)
         big_A_i = xp.linalg.inv(0.5 * (big_W_i @ big_F + big_V_i @ big_G))
+        del big_W_i, big_V_i
+
+        X_1 = _diag(xp, xp.exp(-k0 * q[:n_orders] * d))
+        X_2 = _diag(xp, xp.exp(-k0 * q[n_orders:] * d))
+        big_X = _block(xp, [[X_1, O], [O, X_2]])
+        del X_1, X_2
 
         Y = big_X @ big_B @ big_A_i @ big_X
+        big_I = xp.astype(xp.eye(2 * n_orders), C)
         big_F = big_W @ (big_I + Y)
         big_G = big_V @ (big_I - Y)
+        del big_W, big_V, big_I, Y
         big_T = big_T @ big_A_i @ big_X
 
         # Bottom-to-top, matching the legacy append order; consumed by field reconstruction.
@@ -480,8 +500,13 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
         if keep_field:
             layer_info_list.append([epz_conv_i, W, V, q, d, big_A_i, big_B,
                                     None if layer_mu is None else layer_mu[2]])
+        # Field declarations own the saved references above. Other solves
+        # release them before the next layer or final boundary elimination.
+        del big_X, big_A_i, big_B
 
     # --- stage 3: final matching -> efficiency (transfer_2d_4 == transfer_1d_conical_4) --
+    if big_F is None:
+        big_F, big_G, big_T = substrate_state()
     out = final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
                          n_top, n_bot, n_orders_u, n_orders_v, answers=answers,
                          mu_top=mu_top, mu_bot=mu_bot, eps_top=eps_top,

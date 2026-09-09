@@ -1224,6 +1224,15 @@ two-sided solve, reducing measured order-24 closure peak memory from
 3.43 GB to .96 GB. The memory result concerns that stage, not the full
 Maxwell solve or improved optical accuracy.
 
+The subsequent [runtime lifetime change](what-a-solve-answers.md#9-releasing-transient-2d-matrices-after-their-last-use)
+releases 2D Maxwell and ETM temporaries after their last use while preserving
+field declarations and grazing treatment. On the affine fixture, the direct
+order-8 core's peak traced allocation falls by about 37% for amplitude and
+25% for field; the order-20 process RSS observations decrease by about 7%.
+The same-order per-diffraction-order R/T change is below `6.68e-12`.
+These memory measurements do not establish faster execution, higher optical
+accuracy or a new convergence criterion.
+
 The affine cell now factors its vanishing body correction by the gap,
 removing a source of contact-derivative roundoff. An
 [independent contact variation](nvf-affine-cells.md#contact-fourier-variation-without-subtracting-nearby-solutions)
