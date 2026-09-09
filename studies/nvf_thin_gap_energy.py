@@ -17,6 +17,7 @@ from numpy.polynomial.legendre import leggauss
 from scipy.linalg import solve
 
 from studies.nvf_harmonic_energy import PERIOD, powers
+from wavebit import ConvMatrices
 
 
 def _periodic_line(intervals, quadrature):
@@ -204,19 +205,30 @@ class ThinGapEnergyModel:
         coefficients, metadata = self.coefficients(gap, epsilon, width, xp)
         return self._matrices_from_coefficients(coefficients, metadata, xp)
 
+    def conv_matrices(self, gap, epsilon=12.25, width=350., xp=np):
+        """One layer for Wavebit solve_conv, in the fixed local square cell.
+
+        Use period=(700, 700) and truncation_order=(self.order, self.order)
+        on the consuming solver. Its wavelength, incidence, thickness and
+        exterior media belong to that solver, not the fixed study propagator.
+        The cell's positive-real material and rectangular geometry restrictions
+        remain in force. No geometry-selection fallback is performed.
+        """
+        slots, _ = self.matrices(gap, epsilon, width, xp)
+        return ConvMatrices(*(slot[None] for slot in slots))
+
     def _matrices_from_coefficients(self, coefficients, metadata, xp):
         convolutions = coefficients[:, self.dn, self.dm]
         change = xp.block([[convolutions[0], convolutions[1]],
                            [convolutions[2], convolutions[3]]])
         gram = xp.block([[convolutions[4], convolutions[5]],
                          [convolutions[5], convolutions[6]]])
-        inverse = xp.linalg.solve(change, xp.eye(2*self.count))
-        effective = inverse.conj().T@gram@inverse
-        hermiticity = xp.max(xp.abs(effective-effective.conj().T))
-        effective = xp.where(hermiticity < 1e-9, effective, xp.nan)
-        count = self.count
-        slots = (effective[:count, :count], effective[count:, count:],
-                 xp.linalg.inv(convolutions[7]), -effective[:count, count:], -effective[count:, :count])
+        slots = ConvMatrices.from_energy(change, gram, convolutions[7])
+        hermiticity = xp.maximum(xp.maximum(
+            xp.max(xp.abs(slots.epx-slots.epx.conj().T)),
+            xp.max(xp.abs(slots.epy-slots.epy.conj().T))),
+            xp.max(xp.abs(slots.epxy-slots.epyx.conj().T)))
+        slots = ConvMatrices(*(xp.where(hermiticity < 1e-9, slot, xp.nan) for slot in slots))
         return slots, dict(**metadata, hermiticity=hermiticity)
 
     def transmission(self, gap, epsilon=12.25, width=350., xp=np, *, polarization='p'):

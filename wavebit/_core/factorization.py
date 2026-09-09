@@ -134,6 +134,64 @@ class ConvMatrices(NamedTuple):
     epxy: object
     epyx: object
 
+    @classmethod
+    def from_energy(cls, change, gram, longitudinal):
+        """Build solve slots from a supplied NVF change of field and Gram matrix.
+
+        ``change`` is Q = C(B), ``gram`` is G = C(B.H epsilon B), and
+        ``longitudinal`` is C(epsilon_zz). Q and G have shape (2H, 2H),
+        or (layers, 2H, 2H); the longitudinal shape is (H, H), or
+        (layers, H, H), respectively. The same Fourier orders and Cartesian
+        frame must describe all three inputs and the consuming solver; Q
+        and G group all x-component orders before all y-component orders.
+        This five-slot closure assumes no xz, yz, zx or zy material coupling.
+
+        Two solves form Q^(-H) G Q^(-1). No Hermitian projection, clipping
+        or regularization is applied: complex, lossy Gram matrices retain
+        their anti-Hermitian part. The zz slot is inverted separately, and
+        the xy/yx slots carry the solver's negative off-diagonal convention.
+        Inputs are preserved, including their autodiff graph and precision.
+
+        A layer stack can be passed directly to ``solver.solve_conv(*conv)``.
+        This closes supplied constitutive data; it neither constructs B from
+        shapes nor certifies its discretization or optical convergence.
+        """
+        from .backend import _concrete
+
+        xp = array_namespace(change, gram, longitudinal)
+        if (change.ndim not in (2, 3) or change.shape[-1] == 0
+                or change.shape[-1] % 2 or change.shape[-2] != change.shape[-1]
+                or gram.shape != change.shape):
+            raise ValueError('energy change and Gram matrices need matching nonempty even square shapes')
+        count = change.shape[-1] // 2
+        if longitudinal.shape != (*change.shape[:-2], count, count):
+            raise ValueError('longitudinal matrix must match the energy layers and Fourier order count')
+        if change.ndim == 3 and change.shape[0] == 0:
+            raise ValueError('energy layer stack must not be empty')
+        dtype = xp.result_type(change, gram, longitudinal)
+        if not xp.isdtype(dtype, ('real floating', 'complex floating')):
+            raise TypeError('energy matrices must have floating-point or complex dtype')
+        change, gram, longitudinal = (xp.astype(a, dtype, copy=False)
+                                      for a in (change, gram, longitudinal))
+        valid = (xp.all(xp.isfinite(change)) & xp.all(xp.isfinite(gram))
+                 & xp.all(xp.isfinite(longitudinal)))
+        if _concrete(valid) is False:
+            raise ValueError('energy matrices must be finite')
+        transpose = xp.matrix_transpose
+        left = xp.linalg.solve(transpose(xp.conj(change)), gram)
+        effective = transpose(xp.linalg.solve(transpose(change), transpose(left)))
+        identity = xp.eye(count, dtype=dtype, device=_device(xp, longitudinal))
+        z_inverse = xp.linalg.solve(longitudinal, xp.broadcast_to(identity, longitudinal.shape))
+        valid = valid & xp.all(xp.isfinite(effective)) & xp.all(xp.isfinite(z_inverse))
+        if _concrete(valid) is False:
+            raise ValueError('energy matrices must define finite nonsingular solves')
+        # Under JIT, invalid data has no concrete boolean to raise on. Poison
+        # every slot instead of returning a partly usable constitutive tensor.
+        effective = xp.where(valid, effective, xp.nan)
+        z_inverse = xp.where(valid, z_inverse, xp.nan)
+        return cls(effective[..., :count, :count], effective[..., count:, count:],
+                   z_inverse, -effective[..., :count, count:], -effective[..., count:, :count])
+
 
 def _inverse_axes(inverse_rule):
     """``inverse_rule`` as ``(along_u, along_v)`` booleans, refusing anything else.
@@ -2163,5 +2221,3 @@ def to_conv_mat_raster_integrated_nvf(structure, half_width_u, half_width_v, nor
             slot.append(mat)
 
     return ConvMatrices(*(xp.stack(slot) for slot in out))
-
-

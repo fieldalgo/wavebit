@@ -44,6 +44,30 @@ subtrees:
       - file: anisotropic-materials
       - file: patterned-anisotropic-factorization
       - file: magnetic-materials
+    - caption: NVF construction and validation
+      entries:
+      - file: nvf-energy-engine
+      - file: nvf-contact-followup
+      - file: nvf-independent-fem
+      - file: nvf-harmonic-energy
+      - file: nvf-cell-corrector
+      - file: nvf-thin-gap-energy
+      - file: nvf-partitioned-gap-energy
+      - file: nvf-harmonic-coordinates
+      - file: nvf-continuous-flux
+      - file: nvf-gap-convergence
+      - file: nvf-interface-resolution
+      - file: nvf-directional-convergence
+      - file: nvf-polynomial-body
+      - file: nvf-polynomial-flux
+      - file: nvf-local-flux
+      - file: nvf-posed-gap
+      - file: nvf-scattering-doubling
+      - file: nvf-energy-closure
+      - file: nvf-mirror-convergence
+      - file: nvf-mirror-doubling
+      - file: nvf-mirror-modal-memory
+      - file: nvf-mirror-reference
     - caption: The solve
       entries:
       - file: formulation

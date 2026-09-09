@@ -1153,3 +1153,14 @@ block all NVF development or trigger unbounded order increases. Numerical
 integrity checks retain their thresholds; accuracy qualification and
 integration of the new conforming energy construction remain separate work.
 The earlier circular shape NVF is already integrated in production.
+
+The conforming energy construction now has an explicit
+[engine integration](nvf-energy-engine.md): a public
+`ConvMatrices.from_energy()` closure and a `conv_matrices()` export on the
+rectangular study model. The exported layer stack runs through the actual
+Wavebit engine for NumPy, JAX and Torch forward calculations; the auxiliary
+cell itself remains NumPy/JAX. The closure preserves material loss and
+autodiff graphs, with independent slab, basis-invariance and layer-splitting
+controls. This connects the validated finite model to standard scattering
+and result objects. Automatic shape dispatch, general corrector geometry
+and optical accuracy qualification remain open.
