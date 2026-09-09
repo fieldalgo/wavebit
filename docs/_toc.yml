@@ -53,6 +53,7 @@ subtrees:
       - file: nvf-separated-rectangles
       - file: nvf-common-loss
       - file: nvf-complex-material
+      - file: nvf-lattice-rebasing
       - file: nvf-contact-followup
       - file: nvf-independent-fem
       - file: nvf-harmonic-energy

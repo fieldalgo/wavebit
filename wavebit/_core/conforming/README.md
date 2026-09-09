@@ -2,7 +2,7 @@
 
 | Entry | Question it answers |
 | --- | --- |
-| `__init__.py` | How do rectangle layers with different tiling axes become energy closures in one Cartesian frame and Fourier order layout? |
+| `__init__.py` | How do rebased rectangle layers preserve physical geometry and the original Cartesian frame and Fourier order set? |
 | `thin_gap.py` | How is the one-sided contact limit retained in a periodic conforming cell? |
 | `partitioned_gap.py` | How do material intervals retain their opening derivatives at zero width without adding interface constraints? |
 | `continuous_flux.py` | How can body displacement remain continuous across auxiliary mesh nodes? |

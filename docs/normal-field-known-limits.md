@@ -1190,3 +1190,9 @@ independent loss ratios within one patterned layer, including a lossy
 inclusion in a lossless background. It uses the complex weak equations and
 sesquilinear energy projection; it does not discard loss or substitute a
 Li factorization. Nonpositive real permittivities remain unsupported.
+
+The [lattice-rebasing extension](nvf-lattice-rebasing.md) accepts skew basis
+vectors that describe the same orthogonal point lattice. It preserves
+physical rectangles, the supplied cell-center convention and the exact
+original Fourier set. Genuinely nonorthogonal point lattices still need a
+different cell construction.

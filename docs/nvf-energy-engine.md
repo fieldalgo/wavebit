@@ -165,3 +165,9 @@ increment a product accuracy requirement.
 PYTHONPATH=$PWD python -m pytest -q tests/test_nvf_energy_builder.py tests/test_nvf_thin_gap_energy.py tests/test_nvf_polynomial_body.py tests/test_nvf_local_flux.py tests/test_nvf_posed_gap.py tests/test_slot_order.py
 PYTHONPATH=$PWD python -m pytest -q tests/test_conforming_nvf.py
 ```
+
+The [lattice-rebasing extension](nvf-lattice-rebasing.md) accepts skew basis
+vectors that describe the same orthogonal point lattice. It preserves
+physical rectangles, the supplied cell-center convention and the exact
+original Fourier set. Genuinely nonorthogonal point lattices still need a
+different cell construction.

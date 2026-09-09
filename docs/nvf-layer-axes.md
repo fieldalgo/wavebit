@@ -115,3 +115,9 @@ another construction for unsupported input.
 The subsequent [background-interval extension](nvf-separated-rectangles.md)
 allows rectangles to be separated along the chosen axis. Intervals may open
 or close under the same plan; the axis and input-index ordering stay fixed.
+
+The [lattice-rebasing extension](nvf-lattice-rebasing.md) accepts skew basis
+vectors that describe the same orthogonal point lattice. It preserves
+physical rectangles, the supplied cell-center convention and the exact
+original Fourier set. Genuinely nonorthogonal point lattices still need a
+different cell construction.

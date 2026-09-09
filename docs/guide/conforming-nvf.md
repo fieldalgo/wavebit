@@ -6,7 +6,7 @@ ordinary `background` / `shapes` dictionaries. An installed Wavebit package
 is sufficient; research scripts are not runtime dependencies.
 
 Each patterned layer is a sequence of nonoverlapping rectangles along either
-lattice axis. The rectangles share their extent and center perpendicular
+axis of the orthogonal reduced lattice. The rectangles share their extent and center perpendicular
 to that axis. Materials may differ across their shared edges, and the
 tiling direction may differ between layers. Internal gaps contain the layer's
 background material; they can open and close during JAX replay.
@@ -49,11 +49,11 @@ explain the distinction.
 | Input | Contract |
 | --- | --- |
 | `truncation_order` | Nonnegative integer or `(u, v)` integer pair, matching the consuming solver. Projection uses this order set before closing the energy matrices. |
-| `lattice` | A `wavebit.Lattice` or 2-by-2 array with basis vectors in columns. Right-handed orthogonal cells with two independently positive periods and rigid rotation are supported. |
+| `lattice` | A `wavebit.Lattice` or 2-by-2 array with basis vectors in columns. A right-handed basis that reduces to an orthogonal basis by an integer unimodular change is supported. The two reduced periods are positive and may vary independently. |
 | `structure` | Nonempty list or tuple of layer dictionaries, each with `background` and/or `shapes`. A layer with no shapes is uniform. |
-| `cx`, `cy` | Cartesian offsets from the cell center, in the lattice's length units. Default zero. Periodic translation is unrestricted; coordinates must describe one ordered profile with span below one period, rather than separately wrapped pieces. |
+| `cx`, `cy` | Cartesian offsets from the original supplied cell center, in the lattice's length units. Default zero. Periodic translation is unrestricted; coordinates must describe one ordered profile with span below one period, rather than separately wrapped pieces. |
 | `lx`, `ly` | Positive physical lengths along the rectangle's own axes. A tiling has equal perpendicular extent and center. Its span along the tiling axis is strictly less than that period; the perpendicular extent may reach the other period, including exact contact. |
-| `angle` | Radians from laboratory x, default zero. Rectangle edges align with the lattice axes. Adding pi/2 and exchanging `lx` and `ly` describes the same rectangle. Arbitrary angles within a fixed lattice are unsupported. |
+| `angle` | Radians from laboratory x, default zero. Rectangle edges align with the orthogonal reduced lattice axes. Adding pi/2 and exchanging `lx` and `ly` describes the same rectangle. Arbitrary angles within a fixed lattice are unsupported. |
 | Materials | Finite scalar permittivities with positive real part and nonnegative imaginary part, as numbers or `Material(epsilon=...)`. Every shape and background may have an independent loss ratio. A declared `mu`, including `mu=1`, is unsupported. |
 
 The shape list can arrive in any order; planning sorts along the chosen
@@ -64,10 +64,45 @@ Uniform and patterned layers may share one stack, in the same order as the
 solver's thickness list.
 
 Curves, overlaps, unequal perpendicular extents or centers,
-edges not aligned with the lattice, sheared cells, tensors, gain, nonpositive
-real permittivity are refused. This builder does not select a different NVF or
+edges not aligned with the reduced lattice, genuinely nonorthogonal point
+lattices, tensors, gain and nonpositive real permittivity are refused.
+This builder does not select a different NVF or
 Li factorization for unsupported input. The existing circular shape NVF
 remains available through the ordinary solver API.
+
+## Equivalent lattice bases
+
+A skew basis can describe an orthogonal point lattice. For example,
+`a1=(700,0)` and `a2=(2100,430)` generate the same translations as
+`(700,0)` and `(0,430)`. Planning records the integer matrix T for which
+`lattice @ T` is orthogonal. Rectangle lengths and angles keep their physical
+meaning; the adapter does not turn them into parallelograms.
+
+```python
+import numpy as np
+import wavebit
+
+lattice = np.array([[700., 2100.], [0., 430.]])
+structure = [dict(background=1.7, shapes=[
+    dict(type='rectangle', lx=350., ly=401., material=4.+.4j),
+])]
+builder = wavebit.ConformingNVF((2, 1), rows=2, body_degree=2, gap_degree=2)
+plan = builder.plan(structure, lattice)
+conv = builder.conv_matrices(structure, lattice, plan=plan)
+print(plan.reduction, conv.epx.shape)
+```
+
+The consuming solver still receives the original `lattice` and
+`truncation_order`. Those define its physical wavevectors. The adapter
+selects the transformed version of that exact mode set before energy
+closure; the output matrix dimensions do not grow. Computing the required
+Fourier coefficients can cost more for large integer shears.
+
+Centers remain offsets from the original supplied cell center. When
+changing from lattice A to another basis Anew while keeping absolute shape
+positions fixed, add `sum(A-Anew, axis=1)/2` to every `(cx,cy)` offset.
+The [rebasing derivation](../nvf-lattice-rebasing.md) explains the phase and
+mode mapping. A genuine shear such as `(700,0),(50,430)` remains unsupported.
 
 ## Passive complex materials
 
@@ -122,7 +157,7 @@ separately; the physical aspect ratio enters the cell equations and energy
 integrals. There is no physical 700-unit period restriction. The
 [rectangular-cell derivation](../nvf-rectangular-cells.md) explains why
 stretching square-cell coefficients alone would give a different result.
-For a second-axis tiling, the cell uses the right-handed frame `(a2, -a1)`
+For a second-axis tiling, the cell uses the reduced right-handed frame `(a2, -a1)`
 and the reciprocal aspect ratio. Each layer is exported in the original
 solver's common Cartesian frame and Fourier order layout. The
 [layer-axis construction](../nvf-layer-axes.md) describes this mapping.
@@ -136,10 +171,13 @@ construction and the energy closure. The consuming eigensolver retains its
 own [autodiff behavior](autodiff.md).
 
 Build an immutable plan from concrete geometry before `jit`. It stores
-each layer's input-index ordering and tiling axis. Planning prefers the
-first lattice axis when both are valid, as for many single rectangles.
+each layer's input-index ordering and tiling axis, plus the integer lattice
+reduction. Planning prefers the first reduced axis when both are valid,
+as for many single rectangles.
 Coordinates, dimensions, materials, backgrounds, both lattice periods,
-and common rotation remain live on replay.
+and common rotation remain live on replay. The recorded reduction must keep
+the live lattice orthogonal; independent continuous shear leaves this
+supported family and is refused eagerly or produces NaNs under tracing.
 
 ```python
 import jax

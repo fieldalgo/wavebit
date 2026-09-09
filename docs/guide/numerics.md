@@ -104,6 +104,8 @@ different directions allowed per layer, live materials, translations, both
 physical periods, common lattice rotation, and internal background intervals
 that can open or close during JAX replay. Passive complex materials are
 supported with independent loss in every shape and background, provided
-the real parts are positive and the imaginary parts nonnegative. The general
+the real parts are positive and the imaginary parts nonnegative. Integer
+rebasing supports nonorthogonal basis vectors that describe the same
+orthogonal point lattice, preserving the original retained Fourier set. The general
 energy closure API also accepts externally constructed fields. Arbitrary
 shape correctors remain outside the rectangular builder's scope.

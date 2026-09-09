@@ -135,3 +135,9 @@ The [common-loss extension](nvf-common-loss.md) supports a shared passive
 complex factor without changing these real storage-cell equations. The
 [complex-material extension](nvf-complex-material.md) solves the complex
 weak equations for independent material loss ratios.
+
+The [lattice-rebasing extension](nvf-lattice-rebasing.md) accepts skew basis
+vectors that describe the same orthogonal point lattice. It preserves
+physical rectangles, the supplied cell-center convention and the exact
+original Fourier set. Genuinely nonorthogonal point lattices still need a
+different cell construction.

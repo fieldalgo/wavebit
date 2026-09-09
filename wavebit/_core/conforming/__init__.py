@@ -8,12 +8,14 @@ from ..backend import _concrete
 from ..domain import as_material
 from ..factorization import ConvMatrices
 from ..geometry import StaleGeometryError
+from ..lattice import reduction_transform
 from ..parametric import check_layer_spec, check_shape_spec
 from .polynomial_body import ComplexMaterialGapModel
 from .thin_gap import PERIOD, CONTACT_ROUNDOFF
 
 
-_Plan = namedtuple('ConformingNVFPlan', 'layers axes')
+_IDENTITY = ((1, 0), (0, 1))
+_Plan = namedtuple('ConformingNVFPlan', 'layers axes reduction')
 
 
 def _require(condition, message, error=ValueError):
@@ -61,14 +63,21 @@ class ConformingNVF:
     and imaginary parts remain live on replay, including one-sided loss
     derivatives at the passive boundary.
 
+    An integer change of lattice basis may spell the same orthogonal point
+    lattice with nonorthogonal vectors. Planning records its unimodular
+    reduction; the physical rectangles, original cell origin and retained
+    Fourier set are preserved. Genuinely nonorthogonal point lattices remain
+    unsupported. During replay the reduced basis must remain orthogonal.
+
     ``truncation_order`` is an integer or (u, v) pair. Cell resolution settings
     are explicit; their defaults do not certify optical accuracy. NumPy and
     JAX with x64 construct the cell. Exported matrices also feed the Torch
     engine. No Li result or existing projector is substituted for this NVF.
 
     Call ``plan(structure, lattice)`` on concrete geometry before JAX JIT.
-    The resulting immutable plan holds rectangle ordering and each layer's
-    tiling axis. If both axes are valid, planning prefers the first. Replays read
+    The resulting immutable plan holds rectangle ordering, each layer's
+    tiling axis and the integer lattice reduction. If both axes are valid,
+    planning prefers the first reduced axis. Replays read
     all coordinates and materials live and check the supported tiling; invalid
     eager replays raise, and invalid traced geometry produces NaN matrices.
     """
@@ -80,15 +89,14 @@ class ConformingNVF:
                 or any(isinstance(n, bool) or not isinstance(n, Integral) or n < 0 for n in order)):
             raise ValueError('truncation_order must be a nonnegative integer or integer pair')
         self.truncation_order = tuple(int(n) for n in order)
-        self._cell = ComplexMaterialGapModel(max(self.truncation_order), **dict(
-            dict(rows=4, body_degree=2, gap_degree=4, flux_basis='local'), **cell_settings))
-        self._cap = 2*max(order)
+        self._cell_settings = dict(dict(rows=4, body_degree=2, gap_degree=4, flux_basis='local'), **cell_settings)
+        self._cell = ComplexMaterialGapModel(max(self.truncation_order), **self._cell_settings)
+        self._cells = {self._cell.order: self._cell}
         u, v = self.truncation_order
         n, m = np.meshgrid(np.arange(-v, v+1), np.arange(-u, u+1), indexing='ij')
-        self._dn = n.ravel()[:, None]-n.ravel()+self._cap
-        self._dm = m.ravel()[:, None]-m.ravel()+self._cap
+        self._m, self._n = m.ravel(), n.ravel()
 
-    def _layers(self, structure, lattice, xp):
+    def _layers(self, structure, lattice, xp, reduction=_IDENTITY):
         if xp is not np and getattr(xp, '__name__', '') != 'jax.numpy':
             raise NotImplementedError('conforming cell construction supports NumPy and JAX x64')
         if xp.asarray(0.).dtype != np.dtype('float64'):
@@ -99,6 +107,11 @@ class ConformingNVF:
         _require(xp.all(xp.isfinite(basis)), 'conforming NVF lattice must be finite')
         real = xp.all(xp.imag(basis) == 0)
         basis = xp.real(basis)
+        original = basis
+        basis = basis@xp.asarray(reduction)
+        # Shape offsets refer to the caller's cell center. Keep their absolute
+        # positions when constructing the cell on a different lattice basis.
+        center_shift = xp.sum(original-basis, axis=1)/2
         periods = xp.sqrt(xp.sum(basis**2, axis=0))
         safe_periods = xp.where(periods > 0, periods, 1.)
         rotation = basis/safe_periods
@@ -107,7 +120,7 @@ class ConformingNVF:
         valid = (real & xp.all(xp.isfinite(basis)) & xp.all(periods > 0)
                  & (xp.max(xp.abs(rotation.T@rotation-xp.eye(2))) < 128*np.finfo(float).eps)
                  & (xp.linalg.det(rotation) > 0))
-        _require(valid, 'conforming NVF requires a right-handed orthogonal lattice')
+        _require(valid, 'conforming NVF requires a right-handed lattice with an orthogonal reduced basis')
         periods = xp.where(valid, periods, xp.nan)
         angle = xp.arctan2(rotation[1, 0], rotation[0, 0])
         if not isinstance(structure, (tuple, list)) or not structure:
@@ -130,11 +143,11 @@ class ConformingNVF:
                     raise NotImplementedError('conforming NVF currently supports rectangular tilings')
                 center = xp.stack([_real(shape.get('cx', 0.), xp, 'cx'),
                                    _real(shape.get('cy', 0.), xp, 'cy')])
-                center = rotation.T@center*(PERIOD/periods)
+                center = rotation.T@(center+center_shift)*(PERIOD/periods)
                 orientation = _real(shape.get('angle', 0.), xp, 'rectangle angle')
                 cosine, sine = xp.cos(orientation-angle), xp.sin(orientation-angle)
                 aligned = xp.abs(sine*cosine) < 128*np.finfo(float).eps
-                _require(aligned, 'conforming rectangles must align with a lattice axis')
+                _require(aligned, 'conforming rectangles must align with a reduced lattice axis')
                 lx = _real(shape.get('lx', 0.), xp, 'lx')
                 ly = _real(shape.get('ly', 0.), xp, 'ly')
                 positive = (lx > 0) & (ly > 0)
@@ -159,15 +172,23 @@ class ConformingNVF:
         return layers, rotation, valid, periods[0]/periods[1]
 
     def plan(self, structure, lattice):
-        """Freeze layer axes and input permutations, never geometry or material values.
+        """Freeze lattice reduction, layer axes and input permutations.
 
-        Try a tiling along the first lattice axis, then the second. Replay
+        Try a tiling along the first reduced lattice axis, then the second. Replay
         keeps that choice even if another axis later becomes valid. Re-plan
         explicitly when changing layer/shape counts or ordering, or when the
         chosen axis becomes invalid. Internal gaps may open or close on replay.
         """
         try:
-            layers, _, _, _ = self._layers(structure, lattice, np)
+            basis = np.asarray(getattr(lattice, 'columns', lattice))
+            if (basis.shape != (2, 2) or not np.all(np.isfinite(basis))
+                    or np.any(np.imag(basis) != 0)):
+                raise ValueError('conforming NVF lattice must be a finite real 2-by-2 matrix')
+            basis = np.real(basis)
+            if np.linalg.det(basis) <= 0:
+                raise ValueError('conforming NVF lattice must be right-handed and nonsingular')
+            reduction = reduction_transform(basis)
+            layers, _, _, _ = self._layers(structure, lattice, np, reduction)
         except (TypeError, RuntimeError) as exc:
             raise ValueError('plan conforming NVF on concrete geometry before JIT') from exc
         orders, axes = [], []
@@ -186,7 +207,21 @@ class ConformingNVF:
                 break
             else:
                 raise ValueError('conforming rectangles must form a nonoverlapping profile along a lattice axis')
-        return _Plan(tuple(orders), tuple(axes))
+        return _Plan(tuple(orders), tuple(axes), reduction)
+
+    def _cell_orders(self, reduction, axis):
+        # k_reduced = T.T @ k_original. Form exactly the caller's finite set,
+        # including its holes in a rectangular reduced-coordinate envelope.
+        # Selecting after matrix inversion would describe a different closure.
+        t = np.asarray(reduction)
+        m = t[0, 0]*self._m+t[1, 0]*self._n
+        n = t[0, 1]*self._m+t[1, 1]*self._n
+        order = int(max(np.max(np.abs(m)), np.max(np.abs(n))))
+        if order not in self._cells:
+            self._cells[order] = ComplexMaterialGapModel(order, **self._cell_settings)
+        if axis == 1:
+            m, n = n, -m
+        return self._cells[order], n[:, None]-n[None]+2*order, m[:, None]-m[None]+2*order
 
     @staticmethod
     def _axis_shapes(shapes, axis):
@@ -235,15 +270,23 @@ class ConformingNVF:
             xp = np
         replay = plan is not None
         plan = self.plan(structure, lattice) if plan is None else plan
-        layers, rotation, valid_lattice, aspect = self._layers(structure, lattice, xp)
-        if (not isinstance(plan, _Plan) or len(plan.layers) != len(layers)
+        if not isinstance(plan, _Plan):
+            raise StaleGeometryError('conforming NVF plan type is invalid; plan again')
+        t = plan.reduction
+        if (not isinstance(t, tuple) or len(t) != 2
+                or any(not isinstance(row, tuple) or len(row) != 2 for row in t)
+                or any(isinstance(v, bool) or not isinstance(v, Integral) for row in t for v in row)
+                or t[0][0]*t[1][1]-t[0][1]*t[1][0] != 1):
+            raise StaleGeometryError('conforming NVF plan lattice reduction must be unimodular and right-handed')
+        layers, rotation, valid_lattice, aspect = self._layers(structure, lattice, xp, t)
+        if (len(plan.layers) != len(layers)
                 or len(plan.axes) != len(layers) or any(axis not in (0, 1) for axis in plan.axes)):
             raise StaleGeometryError('conforming NVF layer count, plan type or tiling axis is invalid; plan again')
         stacks = []
         for (shapes, background), order, axis in zip(layers, plan.layers, plan.axes):
             if sorted(order) != list(range(len(shapes))):
                 raise StaleGeometryError('conforming NVF shape count changed; plan again')
-            count = len(self._dn)
+            count = len(self._m)
             if not shapes:
                 identity = xp.eye(count, dtype=xp.complex128)
                 slots = ConvMatrices(background*identity, background*identity, identity/background,
@@ -254,13 +297,9 @@ class ConformingNVF:
                 gap, width, cx, cy, profile, valid = self._profile([local[i] for i in order], xp, replay)
                 cell_rotation = rotation if axis == 0 else rotation@xp.asarray([[0., -1.], [1., 0.]])
                 cell_aspect = aspect if axis == 0 else 1/aspect
-                # (m_cell, n_cell)=(n, -m) in the second-axis frame. Select
-                # these difference indices before closure, preserving the
-                # original solver's layer/order layout in a mixed-axis stack.
-                dn, dm = ((self._dn, self._dm) if axis == 0
-                          else (2*self._cap-self._dm, self._dn))
-                coefficients, _ = self._cell.coefficients(gap, profile, width, xp, aspect=cell_aspect)
-                modes = xp.asarray(self._cell.modes)
+                cell, dn, dm = self._cell_orders(t, axis)
+                coefficients, _ = cell.coefficients(gap, profile, width, xp, aspect=cell_aspect)
+                modes = xp.asarray(cell.modes)
                 # The cell kernels integrate around zero. Ordinary shape
                 # centers are offsets from (a1+a2)/2, while the engine's
                 # Fourier origin is the cell corner. Translate every field,
