@@ -298,7 +298,7 @@ def _constant_along_x(shape):
 
 
 def _two_phase_indicator(eps):
-    """Minority-phase indicator of a two-phase raster — canonical in the REGION, and periodic.
+    """Minority-phase indicator, canonical up to complementation at half fill.
 
     Which phase is *marked* is read from the corner pixel and then oriented by area, and both
     halves are load-bearing.
@@ -333,37 +333,15 @@ def _two_phase_indicator(eps):
     is where the orientation now differs from the corner's; the other three constructions are
     bit-identical (0.00e+00 on both discs tried), as is ``'contour'`` below half.
 
-    **The tie at exactly half fill is a LIVE DEFECT, not a harmless corner.** At half fill
-    neither phase is the smaller, so this falls back to the corner rule -- the very thing it
-    was written to replace, and a translation moves what sits in the corner.
-
-    This docstring claimed the opposite until 2026-08-31, on the grounds that *a 50/50 split
-    that no translation-invariant function can separate is one whose two phases are exchanged
-    by a symmetry*, and on a 50/50 **stripe** holding at 1.144e-14. The argument is false, and
-    the stripe is the one scene where its conclusion happens to hold anyway: a stripe *is* its
-    own complement under a half-period shift.
-
-    The counterexample is ordinary. A compact asymmetric blob covering exactly 2048 of 4096
-    pixels, touching no cell edge, with **no** roll of the 4096 mapping it to its complement:
-
-    ==========  ==============  ============================
-    method      total spread    within each indicator class
-    ==========  ==============  ============================
-    'contour'   **2.066e-04**   6.6e-14 / 9.1e-14
-    'spectral'  4.8e-14         --
-    ==========  ==============  ============================
-
-    (1.977e-03 before 2026-09-01; the seam-window rewrite took an order off it and left the
-    defect standing, which is the useful thing to know about it.)
-
-    Every bit of the spread is *between* the two classes and none of it inside them, which is
-    the indicator-flip signature and nothing else. It is six orders past the 1e-9 the
-    periodicity pins assert, and it is reachable deliberately rather than by accident: a binary
-    topology optimisation under a 50% volume constraint sits exactly on it.
-
-    No fix is landed. A tiebreak must be a function of the geometry surviving both a
-    translation and a relabeling, and area -- the one this uses -- is precisely what does not
-    exist at the tie. Pinned by ``test_the_half_fill_tie_falls_back_to_the_corner_rule``.
+    At exactly half fill the indicator itself still follows the corner, so a
+    translation may complement it. The consuming fields must therefore be
+    invariant to that complement. The contour path now canonicalizes traversal
+    geometrically before offset resampling: closed loops by signed area and
+    winding curves by winding direction. This removes the former ~2e-4
+    transmission step on an asymmetric 2048-of-4096-pixel blob without reading
+    material values or weakening the geometry-only frozen-record contract.
+    See ``test_half_fill_contour_translation_is_invariant``. The other methods
+    already ignore a global indicator inversion in their normal projector.
     """
     indicator = (eps != eps.flat[0]).astype(float)
     return 1.0 - indicator if indicator.mean() > 0.5 else indicator
@@ -654,6 +632,34 @@ def _resample(pts, h, periodic):
     return out if periodic else np.vstack([out, pts[-1:]])
 
 
+def _orient_half_fill_contours(polylines):
+    """Choose traversal from the curves, independently of which phase was marked.
+
+    Complementing a half-filled indicator reverses contourpy's traversal. An
+    off-center resampling phase then selects different points on the same curve.
+    Orient contractible loops by signed area and winding curves by their first
+    nonzero winding component. Both rules survive a translation and material
+    relabeling. Reverse the winding along with the vertices so tiled adjacency
+    still follows the same geometric curve.
+    """
+    oriented = []
+    for pts, winding in polylines:
+        if winding == (0, 0):
+            local = pts - pts[0]
+            area2 = np.sum(local[:-1, 0] * local[1:, 1]
+                           - local[:-1, 1] * local[1:, 0])
+            reverse = area2 < 0
+        else:
+            direction = pts[-1] - pts[0] if winding is None else winding
+            first = next((v for v in direction if v != 0), 0)
+            reverse = first < 0
+        if reverse:
+            pts = pts[::-1]
+            winding = None if winding is None else tuple(-v for v in winding)
+        oriented.append((pts, winding))
+    return oriented
+
+
 def _assemble(polylines, h):
     """Concatenate resampled polylines into ``(points, prev, nxt, links)`` adjacency arrays.
 
@@ -810,7 +816,10 @@ def contour_normal_field(eps, interface_mask, lattice=None, base_shape=None):
 
     indicator = _two_phase_indicator(eps)
     smoothed = _isotropic_blur(indicator, sigma_phys, M)
-    asm = _assemble(_contour_polylines(smoothed), _CONTOUR_RESAMPLE_H)
+    polylines = _contour_polylines(smoothed)
+    if np.count_nonzero(indicator) * 2 == indicator.size:
+        polylines = _orient_half_fill_contours(polylines)
+    asm = _assemble(polylines, _CONTOUR_RESAMPLE_H)
     if asm is None:
         # No 0.5 crossing survived the smoothing (a feature thinner than the kernel).
         return _constant_along_x(shape)
