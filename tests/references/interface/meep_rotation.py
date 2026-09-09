@@ -1,4 +1,4 @@
-"""Independent block/disk scattering derivatives through Meep's documented API.
+"""Independent shape-scattering derivatives through Meep's documented API.
 
 Only public documentation and black-box execution are used. Cylinder contract:
 https://meep.readthedocs.io/en/latest/Python_User_Interface/#cylinder
@@ -17,10 +17,10 @@ warnings.showwarning = lambda message, category, filename, lineno, file=None, li
 
 def generate(output, resolution=40, duration=80., step=1e-4, subpixel_tol=1e-8, smoothing=0., profile_grid=256,
              shape='rectangle'):
-    if shape not in ('rectangle', 'circle', 'ellipse'):
-        raise ValueError('shape must be rectangle, circle or ellipse.')
-    if shape == 'ellipse' and smoothing <= 0:
-        raise ValueError('This ellipse reference bridge requires positive smoothing.')
+    if shape not in ('rectangle', 'circle', 'ellipse', 'painted_rectangles'):
+        raise ValueError('shape must be rectangle, circle, ellipse or painted_rectangles.')
+    if shape in ('ellipse', 'painted_rectangles') and smoothing <= 0:
+        raise ValueError('This ellipse/painted reference bridge requires positive smoothing.')
     import meep as mp
     mp.verbosity(0)
     if smoothing:
@@ -31,6 +31,8 @@ def generate(output, resolution=40, duration=80., step=1e-4, subpixel_tol=1e-8, 
             from studies.fdtd_circle_gradients import density
         elif shape == 'ellipse':
             from studies.fdtd_ellipse_gradients import density
+        elif shape == 'painted_rectangles':
+            from studies.fdtd_painted_shapes import density
         else:
             from studies.fdtd_rotation_smoothing import density
     if smoothing < 0 or smoothing > .6 or not np.isfinite(smoothing):
@@ -38,7 +40,8 @@ def generate(output, resolution=40, duration=80., step=1e-4, subpixel_tol=1e-8, 
     if profile_grid < 8:
         raise ValueError('profile_grid must be at least eight.')
     profile_errors = []
-    p = np.array({'circle': [.3], 'rectangle': [.37, .3], 'ellipse': [.37, .34, .2]}[shape])
+    p = np.array({'circle': [.3], 'rectangle': [.37, .3], 'ellipse': [.37, .34, .2],
+                  'painted_rectangles': [.37, .055, .22]}[shape])
     period, depth, length = .6, .2, 8.
     zr, zt, dt = -1., 1.2, .4/resolution
     if not np.isclose(period*resolution, round(period*resolution)):
@@ -113,16 +116,21 @@ def generate(output, resolution=40, duration=80., step=1e-4, subpixel_tol=1e-8, 
         print(f'Completed duration {until:g}', flush=True)
     np.savez_compressed(output, version=mp.__version__, parameters=p,
                         parameter_names=({'circle': ['diameter'], 'rectangle': ['angle', 'width'],
-                                          'ellipse': ['angle', 'width', 'height']}[shape]), shape=shape,
+                                          'ellipse': ['angle', 'width', 'height'],
+                                          'painted_rectangles': ['angle', 'separation', 'width']}[shape]), shape=shape,
                         wavelength=1., period=[period, period], thickness=depth, top=1., bottom=1.21,
-                        epsilon=2.25, ly=p[-1] if shape == 'ellipse' else .18, centre=[.071, -.047], resolution=resolution,
+                        epsilon=2.25, ly=p[-1] if shape == 'ellipse' else .18,
+                        centre=[.025, -.025] if shape == 'painted_rectangles' else [.071, -.047], resolution=resolution,
                         durations=durations, deltas=deltas, dimensions=3, cell_length=length,
                         pml_thickness=1., courant=.4, subpixel_tol=subpixel_tol,
                         shape_smoothing=smoothing, profile_grid=profile_grid if smoothing else 0,
                         material_grid_averaging=False, profile_sampling='cell_centres' if smoothing else 'none',
                         profile_probe_error=max(profile_errors, default=0.),
                         source_position=-2., monitor_positions=[zr, zt], pulse_width=2.5,
-                        pulse_peak=12.5, source_end=25., amplitudes=values, jacobians=jacobians)
+                        pulse_peak=12.5, source_end=25., amplitudes=values, jacobians=jacobians,
+                        **(dict(paint_rule='later_shape_overwrites', paint_epsilon=[1.8, 2.25],
+                                local_rectangles=[[-.04, -.015, .3, .18], [p[1], .025, p[2], .22]],
+                                global_centre=[.025, -.025]) if shape == 'painted_rectangles' else {}))
 
 
 if __name__ == '__main__':
@@ -134,6 +142,6 @@ if __name__ == '__main__':
     parser.add_argument('--subpixel-tol', type=float, default=1e-8)
     parser.add_argument('--smoothing', type=float, default=0.)
     parser.add_argument('--profile-grid', type=int, default=256)
-    parser.add_argument('--shape', choices=['rectangle', 'circle', 'ellipse'], default='rectangle')
+    parser.add_argument('--shape', choices=['rectangle', 'circle', 'ellipse', 'painted_rectangles'], default='rectangle')
     args = parser.parse_args()
     generate(args.output, args.resolution, args.duration, args.step, args.subpixel_tol, args.smoothing, args.profile_grid, args.shape)

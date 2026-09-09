@@ -162,9 +162,8 @@ def test_area_option_contract_rejects_unsupported_combinations(change):
         wavebit.fdtd(**dict(options, **change))
 
 
-def test_area_rejects_multiple_shapes_and_projected_self_overlap():
+def test_area_rejects_projected_self_overlap():
     runtime = time_loop_backend(0)
-    for shapes in ([dict(lx=.2, ly=.1)]*2, [dict(lx=.9, ly=.7, angle=.7)]):
-        with pytest.raises(ValueError, match='one rectangle|extents'):
-            _shape_partition([dict(shapes=shapes)], [1., .8], xp=runtime.xp, array=runtime.array,
-                                  check=_require_scene, integration='area')
+    with pytest.raises(ValueError, match='extents'):
+        _shape_partition([dict(shapes=[dict(lx=.9, ly=.7, angle=.7)])], [1., .8],
+                         xp=runtime.xp, array=runtime.array, check=_require_scene, integration='area')

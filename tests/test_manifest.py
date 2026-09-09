@@ -978,3 +978,23 @@ def test_published_fdtd_ellipse_is_rotated_and_uses_full_axis_lengths(backend):
         shape_smoothing=.02, return_diagnostics=True)
     assert np.isfinite(np.asarray(result.given.r_s)).all()
     assert out['geometry_kind'] == 'parametric' and out['stable']
+
+
+@pytest.mark.parametrize('backend', [0, 1, 2])
+def test_published_fdtd_multiple_area_rectangles_use_last_shape_painting(backend):
+    if backend == 1:
+        pytest.importorskip('jax').config.update('jax_enable_x64', True)
+    elif backend == 2:
+        pytest.importorskip('torch')
+    common = manifest()['solvers']['fdtd']['routes']['common']
+    assert 'multiple rectangle/square' in common['area_requires']
+    assert 'later rectangles overwrite' in common['area_painting']
+    stack = wavebit.Stack.from_structure([dict(shapes=[
+        dict(lx=.13, ly=.07, cx=-.02, angle=.31, material=1.8),
+        dict(lx=.09, ly=.11, cx=.025, angle=-.2, material=2.3)])],
+        [.1], top=1., bot=1., period=[.2, .2])
+    result, out = wavebit.fdtd(stack, wavebit.Incidence(wavelength=1.), backend=backend,
+        resolution=10, n_pml=5, n_periods=30, truncation_order=0, shape_integration='area',
+        shape_smoothing=.02, return_diagnostics=True)
+    assert np.isfinite(np.asarray(result.given.r_s)).all()
+    assert out['geometry_kind'] == 'parametric' and out['stable']

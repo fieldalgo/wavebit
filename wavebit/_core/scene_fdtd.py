@@ -156,8 +156,9 @@ def _shape_partition(structure, periods, *, xp, array, check, integration='separ
     derivatives even for disjoint shapes whose projected edges coincide.
     Face coordinates retain AD; actual paint topology changes can have kinks.
     The partition is not the Yee mesh and is never detached or rasterized on
-    a fixed auxiliary grid. The area route returns one live polygon, disk or ellipse per
-    layer instead, for integration against fixed Yee cells. Shared shape readers
+    a fixed auxiliary grid. The area route returns live boundary events for
+    multiple painted rectangles or one polygon/disk/ellipse per layer,
+    for integration against fixed Yee cells. Shared shape readers
     own lengths and cell origin on both routes.
     """
     from .lattice import as_lattice
@@ -182,10 +183,8 @@ def _shape_partition(structure, periods, *, xp, array, check, integration='separ
             raise ValueError('Parametric FDTD structure must contain only layer dictionaries.')
         check_layer_spec(layer, i)
         base = material(layer.get('background', 1.))
-        if integration == 'area' and len(layer.get('shapes', [])) > 1:
-            raise ValueError('Area integration currently supports at most one rectangle, circle or ellipse per layer.')
         shapes = []
-        area_shape = None
+        area_shapes = []
         for j, shape in enumerate(layer.get('shapes', [])):
             if not isinstance(shape, dict):
                 raise ValueError('Parametric FDTD shapes must be dictionaries.')
@@ -210,20 +209,20 @@ def _shape_partition(structure, periods, *, xp, array, check, integration='separ
                           'Circle diameter must not exceed either rectangular period.')
                     # The shared circle/disk contract uses lx (or l) as its
                     # diameter. A finite angle has no effect on a disk.
-                    area_shape = (xp.stack((*centres, sizes[0]/2)), material(shape.get('material', 1.)))
+                    area_shapes.append((xp.stack((*centres, sizes[0]/2)), material(shape.get('material', 1.))))
                     continue
                 co, si = xp.abs(xp.cos(angle)), xp.abs(xp.sin(angle))
                 if kind == 'ellipse':
                     check(((co*sizes[0])**2+(si*sizes[1])**2 <= periods[0]**2)
                           & ((si*sizes[0])**2+(co*sizes[1])**2 <= periods[1]**2),
                           'Ellipse projected x/y extents must not exceed their periods.')
-                    area_shape = (xp.stack((*centres, sizes[0]/2, sizes[1]/2, angle)),
-                                  material(shape.get('material', 1.)))
+                    area_shapes.append((xp.stack((*centres, sizes[0]/2, sizes[1]/2, angle)),
+                                        material(shape.get('material', 1.))))
                     continue
                 check((co*sizes[0]+si*sizes[1] <= periods[0]) & (si*sizes[0]+co*sizes[1] <= periods[1]),
                       'Area integration requires rotated x/y extents no larger than the periods.')
                 vertices = rect_verts(xp, *centres, *sizes, angle)
-                area_shape = (vertices, material(shape.get('material', 1.)))
+                area_shapes.append((vertices, material(shape.get('material', 1.))))
                 continue
             face_ids = []
             for axis, (c, size, period) in enumerate(zip(centres, sizes, periods)):
@@ -232,6 +231,11 @@ def _shape_partition(structure, periods, *, xp, array, check, integration='separ
                 faces[axis].extend((xp.remainder(c-size/2, period), xp.remainder(c+size/2, period)))
             shapes.append((sizes, face_ids, material(shape.get('material', 1.))))
         layers.append((base, shapes))
+        area_shape = area_shapes[0] if area_shapes else None
+        if len(area_shapes) > 1:
+            if any(v.ndim != 2 for v, _ in area_shapes):
+                raise ValueError('Multiple area shapes currently require rectangles or squares; circles and ellipses require a single-shape layer.')
+            area_shape = {'edges': _painted_rectangle_edges(area_shapes, base, periods, xp=xp, array=array)}
         area_layers.append((base, area_shape))
     if integration == 'area':
         # Two placeholder rows select the full, static y mesh. Their values
@@ -334,6 +338,133 @@ def _translation_windows(centres, width, smoothing):
     values = [0., height, height, 0.]
     return [(centres+left, centres+right, low, high-low)
             for left, right, low, high in zip(cuts[:-1], cuts[1:], values[:-1], values[1:]) if right > left]
+
+
+def _painted_rectangle_edges(shapes, base, periods, *, xp, array):
+    """Piecewise material jumps on a fundamental cell's straight boundaries.
+
+    Rectangle/rectangle intersections split each oriented edge. Infinitesimal
+    left/right membership supplies the last-painted material on both sides;
+    coincident boundaries belong to their last owner. Cell-border segments
+    retain the periodic constant mode even when shapes cover the whole cell.
+    Static event arrays permit topology changes within one traced function.
+    Contacts retain only piecewise first derivatives, not a unique shape slope.
+    """
+    vertices = xp.stack([s[0] for s in shapes])
+    shifts = array([(a*periods[0], b*periods[1]) for a in (-1, 0, 1) for b in (-1, 0, 1)])
+    images = vertices[:, None, :, :]+shifts[None, :, None, :]
+    directions = xp.roll(images, -1, axis=-2)-images
+    normals = xp.stack((-directions[..., 1], directions[..., 0]), axis=-1)
+    normals = normals/xp.sqrt(xp.sum(normals**2, axis=-1, keepdims=True))
+    tol = 32*xp.finfo(vertices.dtype).eps*max(periods)
+    cell = array(np.array([[0., 0.], [periods[0], 0.], periods, [0., periods[1]]]))
+    result = []
+    for owner, polygon in [*enumerate(vertices), (-1, cell)]:
+        for edge in range(4):
+            a, b = polygon[edge], polygon[(edge+1)%4]
+            direction = b-a
+            normal = xp.stack((-direction[1], direction[0]))
+            normal = normal/xp.sqrt(xp.sum(normal**2))
+            # Clip this segment to every periodic rectangle using half planes.
+            d = xp.sum((a-images)*normals, axis=-1)
+            slope = xp.sum(direction*normals, axis=-1)
+            moving = xp.abs(slope) > tol
+            t = -d/xp.where(moving, slope, xp.ones_like(slope))
+            lower = xp.max(xp.where(moving & (slope > 0), t, xp.zeros_like(t)), axis=-1)
+            upper = xp.min(xp.where(moving & (slope < 0), t, xp.ones_like(t)), axis=-1)
+            valid = (upper > lower) & xp.all(moving | (d >= -tol), axis=-1)
+            lower = xp.where(valid, xp.maximum(lower, xp.zeros_like(lower)), xp.zeros_like(lower))
+            upper = xp.where(valid, xp.minimum(upper, xp.ones_like(upper)), xp.zeros_like(upper))
+            lower = xp.minimum(lower, xp.ones_like(lower)); upper = xp.maximum(upper, xp.zeros_like(upper))
+            cuts = [lower.reshape(-1), upper.reshape(-1)]
+            for axis, period in enumerate(periods):
+                active = xp.abs(direction[axis]) > tol
+                face = (array([0., period])-a[axis])/xp.where(active, direction[axis], 1.)
+                cuts.append(xp.where(active, xp.clip(face, 0., 1.), xp.zeros_like(face)))
+            # Internal events can coincide with an endpoint while retaining a
+            # live slope. They must not replace the segment's fixed 0/1 limits.
+            cuts = xp.concat((array([0.]), xp.sort(xp.concat(cuts)), array([1.])))
+            lo, hi = cuts[:-1], cuts[1:]
+            midpoint = a+((lo+hi)/2)[:, None]*direction
+            distance = xp.sum((midpoint[None, None, :, None, :]-images[:, :, None, :, :])
+                              *normals[:, :, None, :, :], axis=-1)
+            # Roundoff-close contacts use the one-sided limiting half plane.
+            on = xp.abs(distance) <= tol
+            side = xp.sum(normals*normal, axis=-1)[:, :, None, :]
+            left = xp.any(xp.all((distance > tol) | (on & (side >= 0)), axis=-1), axis=1)
+            right = xp.any(xp.all((distance > tol) | (on & (side <= 0)), axis=-1), axis=1)
+            closed = xp.all(distance >= -tol, axis=-1)
+            boundary = xp.any(closed & xp.any(on, axis=-1), axis=1)
+            inside = xp.broadcast_to(xp.stack(base), (len(lo), 2))
+            outside = inside
+            for j, (_, values) in enumerate(shapes):
+                inside = xp.where(left[j, :, None], xp.stack(values), inside)
+                outside = xp.where(right[j, :, None], xp.stack(values), outside)
+            if owner < 0:
+                jump = inside-xp.stack(base)
+                shift = xp.zeros_like(midpoint)
+            else:
+                jump = inside-outside
+                hidden = xp.any(boundary[owner+1:], axis=0) if owner+1 < len(shapes) else xp.zeros_like(lo, dtype=xp.bool)
+                # Fold only physical boundaries. The cell-border loop stays
+                # closed in its original coordinates and replaces seam edges.
+                shift = xp.floor(midpoint/array(periods))*array(periods)
+                local = midpoint-shift
+                seam = xp.any((xp.abs(direction) <= tol) & ((local < tol) | (array(periods)-local < tol)), axis=-1)
+                jump = xp.where((hidden | seam)[:, None], xp.zeros_like(jump), jump)
+            result.append((a+lo[:, None]*direction-shift, a+hi[:, None]*direction-shift, jump))
+    return result
+
+
+def _painted_cell_materials(edges, base, x, y, dx, dy, periods, *, xp, array, smoothing=(0., 0.)):
+    """Integrate painted boundaries against static separable cell kernels.
+
+    Green's theorem converts the cell mass into integral(CDF_x * weight_y dy).
+    Translation windows are piecewise linear; splitting at every window knot
+    leaves a cubic polynomial along each straight edge, exact with two Gauss
+    nodes. No intermediate raster, frozen host clipping plan or custom VJP.
+    """
+    xwindows = [tuple(array(v) if np.ndim(v) else v for v in row) for row in _translation_windows(x, dx, smoothing[0])]
+    ywindows = [tuple(array(v) if np.ndim(v) else v for v in row) for row in _translation_windows(y, dy, smoothing[1])]
+    shifts = array([(a*periods[0], b*periods[1]) for a in (-1, 0, 1) for b in (-1, 0, 1)])
+    if smoothing[0]+dx > periods[0] or smoothing[1]+dy > periods[1]:
+        shifts = array([(a*periods[0], b*periods[1]) for a in (-2, -1, 0, 1, 2) for b in (-2, -1, 0, 1, 2)])
+    total = xp.broadcast_to(xp.stack(base), (len(y), len(x), 2))
+    for start, end, jump in edges:
+        a = start[:, None, None, None, :]+shifts[None, :, None, None, :]
+        delta = (end-start)[:, None, None, None, :]
+        shape = (len(start), len(shifts), len(y), len(x))
+        lo = xp.zeros(shape, dtype=start.dtype, device=getattr(start, 'device', None))
+        cuts = []
+        for axis, windows in enumerate([xwindows, ywindows]):
+            for face in [windows[0][0], *(w[1] for w in windows)]:
+                f = face[None, :] if axis == 0 else face[:, None]
+                active = xp.abs(delta[..., axis]) > 32*xp.finfo(start.dtype).eps*periods[axis]
+                t = (f-a[..., axis])/xp.where(active, delta[..., axis], xp.ones_like(delta[..., axis]))
+                cuts.append(xp.broadcast_to(xp.where(active, xp.clip(t, 0., 1.), xp.zeros_like(t)), shape))
+        cuts = xp.concat((lo[..., None], xp.sort(xp.stack(cuts, axis=-1), axis=-1),
+                          xp.ones_like(lo)[..., None]), axis=-1)
+        half, mid = (cuts[..., 1:]-cuts[..., :-1])/2, (cuts[..., 1:]+cuts[..., :-1])/2
+        nodes = mid[..., None]+half[..., None]*array([-1/np.sqrt(3), 1/np.sqrt(3)])
+        points = a[..., None, None, :]+nodes[..., None]*delta[..., None, None, :]
+        cdf, weight = xp.zeros_like(nodes), xp.zeros_like(nodes)
+        for l, r, a0, a1 in xwindows:
+            width = r-l
+            u = xp.clip((points[..., 0]-l[None, None, None, :, None, None])/xp.where(width > 0, width, 1.)[None, None, None, :, None, None], 0., 1.)
+            cdf = cdf+width[None, None, None, :, None, None]*(a0*u+a1*u*u/2)
+        for l, r, a0, a1 in ywindows:
+            width = r-l
+            u = (points[..., 1]-l[None, None, :, None, None, None])/xp.where(width > 0, width, 1.)[None, None, :, None, None, None]
+            # A horizontal edge can lie on a shared knot for a whole segment.
+            # Count that knot once, even though dy=0: its angle derivative need
+            # not vanish. Use coordinates for membership, not rounded ratios.
+            inside = ((points[..., 1] >= l[None, None, :, None, None, None])
+                      & (points[..., 1] < r[None, None, :, None, None, None])
+                      & (width > 0)[None, None, :, None, None, None])
+            weight = weight+xp.where(inside, a0+a1*u, xp.zeros_like(u))
+        value = delta[..., 1]*xp.sum(half*xp.sum(cdf*weight, axis=-1), axis=-1)
+        total = total+xp.sum(value[..., None]*jump[:, None, None, None, :], axis=(0, 1))/(dx*dy)
+    return xp.moveaxis(total, -1, 0)
 
 
 def _weighted_circle_area(circle, left, right, bottom, top, weights, *, xp):
@@ -855,8 +986,10 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     (x,y) pair of full physical averaging widths in [0,period]. Positive widths
     average transverse translations before sampling; moving contacts between
     shapes can still have topology kinks. The Yee mesh never follows a shape.
-    shape_integration='area' instead accepts one rectangle, circle or ellipse
-    per layer. Rectangle/ellipse angles retain derivatives in radians; ellipse lx/ly
+    shape_integration='area' instead accepts multiple rectangles or one circle/ellipse
+    per layer. Later rectangles overwrite earlier ones, including periodic overlaps;
+    live boundary events permit changing overlap topology. Multiple/mixed curved
+    shapes are refused. Rectangle/ellipse angles retain derivatives in radians; ellipse lx/ly
     are full principal-axis lengths, and ellipse cells use fixed 16-point angular
     integration. For circle/disk,
     lx (or l) is the diameter, with no ly. Projected extents must fit the periods.
@@ -1186,8 +1319,10 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     if area_layers is not None:
         for ox, oy in ((0., 0.), (.5, 0.), (0., .5), (.5, .5)):
             area_fractions[ox, oy] = [None if s is None else
+                _painted_cell_materials(s['edges'], base, (np.arange(nx)+ox)*dx, (np.arange(ny)+oy)*dy,
+                                       dx, dy, lengths, xp=xp, array=array, smoothing=shape_width) if isinstance(s, dict) else
                 _shape_cell_fractions(s[0], (np.arange(nx)+ox)*dx, (np.arange(ny)+oy)*dy,
-                                          dx, dy, lengths, xp=xp, array=array, smoothing=shape_width) for _, s in area_layers]
+                                     dx, dy, lengths, xp=xp, array=array, smoothing=shape_width) for base, s in area_layers]
     def sample(values, upper, lower, magnetic=False, harmonic=True):
         components = []
         for c in range(3):
@@ -1215,7 +1350,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                 k = int(magnetic)
                 fractions = area_fractions[offsets[0], offsets[1]]
                 v = xp.stack([xp.ones((ny, nx), dtype=base[k].dtype, device=getattr(base[k], 'device', None))*base[k]
-                              if item is None else base[k]+fraction*(item[1][k]-base[k])
+                              if item is None else fraction[k] if isinstance(item, dict) else base[k]+fraction*(item[1][k]-base[k])
                               for (base, item), fraction in zip(area_layers, fractions)])
             v = xp.concat((xp.ones_like(v[:1])*upper, v, xp.ones_like(v[:1])*lower), axis=0)
             if not nonuniform:

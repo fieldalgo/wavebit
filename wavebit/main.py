@@ -92,13 +92,15 @@ def fdtd(stack=None, incidence=None, **kwargs):
     integration preserves shape gradients and periodic painting. Optional
     shape_smoothing averages transverse translations over static (x,y) widths;
     shape contacts can still have topology kinks. Two periods are required.
-    ``shape_integration='area'`` accepts one rectangle, circle or ellipse per layer,
+    ``shape_integration='area'`` accepts multiple rectangles or one circle/ellipse per layer,
     with projected extents within both periods. Circle/disk lx (or l) is the diameter.
     Rectangle/ellipse angles retain derivatives in radians; ellipse lx/ly are
     full principal-axis lengths. Ellipses use fixed 16-point angular integration
     for sharp and averaged cells. Positive shape_smoothing
     averages translations by exact polygon moments or stable disk/ellipse arc strips
     with fixed 16-point Gaussian integration.
+    Multiple rectangles retain later-shape painting through live boundary events
+    and exact cubic boundary integrals; mixed or multiple curved shapes are refused.
     Cell integrals give arithmetic transverse averages, with full y sampling even at angle zero. It is not
     a full rotated effective tensor or a second-order accuracy guarantee.
     Their real scalar ``theta`` and ``phi`` can retain autodiff graphs when an

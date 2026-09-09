@@ -673,8 +673,8 @@ def reflection(angle):
 value, slope = jax.jit(jax.value_and_grad(reflection))(jnp.asarray(.37))
 ```
 
-The area route accepts at most one rectangle, square, circle, disk or ellipse per layer;
-empty shape lists describe uniform layers. Periods must be static and positive,
+The area route accepts multiple rectangles/squares with later-shape painting,
+or one circle/disk/ellipse per layer. Empty shape lists describe uniform layers. Periods must be static and positive,
 with two entries. Sizes must be positive. For rectangles, the projected extents
 `abs(cos(angle))*lx + abs(sin(angle))*ly` and
 `abs(sin(angle))*lx + abs(cos(angle))*ly` must not exceed their respective
@@ -712,6 +712,63 @@ result as a design gradient. The [rotation measurement](../fdtd-rotation-gradien
 records the independent area, complete graph and optical checks.
 
 
+
+### Multiple rotated rectangles
+
+Use the same `shapes` list with `shape_integration='area'` to put multiple
+rectangles or squares in one layer. Each rectangle may have its own live
+position, two sizes, angle and positive scalar `Material(epsilon, mu=...)`.
+**Later shapes overwrite earlier shapes**, including overlaps through a
+periodic cell edge. A completely hidden shape has no material or geometry
+sensitivity until its boundary becomes exposed.
+
+```python
+import jax
+import jax.numpy as jnp
+import wavebit
+
+jax.config.update('jax_enable_x64', True)
+
+def reflection(angle):
+    stack = wavebit.Stack.from_structure([
+        dict(background=1., shapes=[
+            dict(lx=.17, ly=.1, cx=-.035, cy=-.012, angle=angle, material=1.8),
+            dict(lx=.15, ly=.12, cx=.025, cy=.014, angle=-.27, material=2.25)])
+    ], [.2], top=1., bot=1.21, period=[.4, .3])
+    result = wavebit.fdtd(stack, wavebit.Incidence(wavelength=1.), backend='jax',
+                          resolution=15, n_pml=15, n_periods=60, pulse_width=2.5,
+                          truncation_order=0, shape_integration='area',
+                          shape_smoothing=.035, diffraction_method='directional')
+    return jnp.real(result.s_inc.r_s[0, 0])
+
+value, slope = jax.jit(jax.value_and_grad(reflection))(jnp.asarray(.31))
+```
+
+The shape count, shape types and paint order remain static. Positions and
+angles may move across overlap configurations inside one JAX trace; a host
+clipping plan is not required. This retains **piecewise first derivatives**.
+Actual shape contacts and coincident boundaries can have distinct one-sided
+shape derivatives even with positive `shape_smoothing`. Smoothing translates
+the already-painted material pattern as a whole; it does not soften the
+relative contact between two shapes.
+
+Each rectangle's projected extents must fit the periods. Every layer that
+contains a circle/disk/ellipse must still contain only that shape; mixing curved
+shapes with other area shapes is refused. Layer-thickness, incidence and scalar
+material constraints are unchanged.
+
+Boundary intersections select the material on each side. Exact straight-line
+cell integrals recover the painted material without an auxiliary raster or
+pairwise area subtraction. Translation averaging leaves cubic integrands on
+split segments, evaluated exactly in arithmetic by two Gaussian nodes. Roundoff
+still limits floating-point accuracy. Work and storage grow with the number of
+boundary events; the absence of a hard shape-count limit is not a performance
+promise for large layouts.
+
+[Painted-shape measurements](../fdtd-painted-shapes.md) separate geometric and
+complete-graph checks from graded optical refinement. Transverse material
+coefficients remain arithmetic averages; this extension does not introduce a
+full interface-effective tensor.
 
 ### Circular shape derivatives
 
@@ -804,8 +861,7 @@ Each axis length must be positive. The projected full widths
 `sqrt((lx*sin(angle))**2 + (ly*cos(angle))**2)` must fit in the x and y periods.
 A principal axis may therefore exceed its unrotated period when the rotated
 ellipse fits. Shape count/type, the two rectangular periods, the mesh and the
-smoothing widths remain static. One shape per area layer and `subpixel=True`
-are required. Centres, both lengths, angle and positive scalar shape
+smoothing widths remain static. Ellipse layers require one shape and `subpixel=True`. Centres, both lengths, angle and positive scalar shape
 `Material` epsilon/mu retain JAX/Torch gradients. Layer-thickness and bottom
 incidence contracts also apply.
 

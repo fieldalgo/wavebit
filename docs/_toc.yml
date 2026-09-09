@@ -37,6 +37,7 @@ subtrees:
   - file: fdtd-rotation-gradients
   - file: fdtd-rotation-smoothing
   - file: fdtd-adjoint-validation
+  - file: fdtd-painted-shapes
   - file: fdtd-ellipse-gradients
   - file: fdtd-circle-gradients
   - file: fdtd-variable-depth

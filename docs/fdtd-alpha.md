@@ -485,5 +485,12 @@ angle on the same common area route. [Ellipse integration and validation](fdtd-e
 cover independent implicit-conic chords, circle/axis-swap limits, full JAX/Torch
 graphs and controlled graded optical comparisons. Angular integration uses a
 fixed 16-point rule; one shape per layer and projected extents within the two
-periods remain required. Multiple area shapes and recipe dispersion are still
-outside this route.
+periods remain required for curved shapes. Recipe dispersion remains outside
+this route.
+
+Multiple rotated rectangles/squares now use [live boundary painting](fdtd-painted-shapes.md)
+with last-shape priority, periodic overlaps and shape/material derivatives.
+Overlap topology may change inside one trace; exact contacts still have only
+piecewise shape sensitivities. Curved shapes remain limited to single-shape
+layers. Boundary-event costs grow with shape count; this is not a demonstrated
+large-layout performance result.

@@ -116,7 +116,8 @@ from ._core.spec import SPEC_VERSION
 #: reference-plane phases, including reflected incidence and exterior smoothing.
 #: Version 17 adds exact disk cells and stable averaged disk shape derivatives.
 #: Version 18 adds rotated ellipse cells and live centre/axis/angle derivatives.
-MANIFEST_VERSION = '18'
+#: Version 19 adds live periodic painting of multiple rotated area rectangles.
+MANIFEST_VERSION = '19'
 
 
 # --------------------------------------------------------------- how a structure is spelled
@@ -537,12 +538,13 @@ SOLVERS = {
                 'parametric_requires': ('two rectangular periods', 'subpixel=True'),
                 'shape_integration': ('separable', 'area'),
                 'separable_requires': 'rectangle/square with static angle=0',
-                'area_requires': 'at most one rectangle/square/circle/disk/ellipse per layer; projected extents within periods',
-                'area_smoothing': 'exact bilinear polygon moments or disk/ellipse arc strips with fixed 16-point Gaussian integration; no user quadrature order',
+                'area_requires': 'multiple rectangle/square shapes or one circle/disk/ellipse per layer; projected extents within periods',
+                'area_painting': 'later rectangles overwrite earlier ones, including periodic overlaps; live boundary events allow topology changes',
+                'area_smoothing': 'exact bilinear polygon moments or cubic painted-boundary integrals; disk/ellipse arc strips use fixed 16-point Gaussian integration; no user quadrature order',
                 'area_averaging': 'analytic polygon/disk sharp areas; ellipse arc integration; arithmetic transverse material averages; full y sampling',
                 'circle_convention': 'lx or l is diameter; no ly; finite angle has no effect; diameter <= both periods',
                 'ellipse_convention': 'lx/ly are full principal-axis lengths; live angle in radians; projected extents <= both periods',
-                'parametric_refused': ('raster mu', 'dispersion labels'),
+                'parametric_refused': ('multiple/mixed curved area shapes', 'raster mu', 'dispersion labels'),
                 'shape_constraint': 'positive lengths; projected area extents within periods; periodic later-shape painting; '
                                     'gradients piecewise across topology changes',
                 'shape_smoothing_constraint': 'static scalar or (x,y) widths in [0,period]; '

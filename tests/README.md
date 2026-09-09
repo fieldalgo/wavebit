@@ -15,6 +15,7 @@ compares the code to itself proves continuity, not correctness.
 
 | Oracle | Files | What a pass means |
 | --- | --- | --- |
+| **Multiple painted area shapes** | `test_fdtd_painted_shapes.py`, `test_fdtd_painted_optics.py`, `references/test_meep_painted_shapes.py` | Do overlapping rotated rectangles preserve last-shape priority, periodic cell masses and live topology/geometry/material derivatives against independent Cartesian integration and graded optical references? |
 | **Elliptical shape derivatives** | `test_fdtd_ellipses.py`, `test_fdtd_ellipse_optics.py`, `references/test_meep_ellipses.py` | Do independent implicit-conic cells, complete graphs and graded ellipse optics agree under refinement? |
 | **Circular shape derivatives** | `test_fdtd_circles.py`, `test_fdtd_circle_optics.py`, `references/test_meep_circles.py` | Do exact disk cells, narrow translation windows, complete shape/material graphs and independent graded optics agree under controlled refinement? |
 | **Transverse rectangle derivatives** | `test_fdtd_rectangles.py`, `references/test_meep_rectangle.py` | Do shared parametric rectangles preserve periodic painting, exact cell integrals, shape/material graphs and independent translation, RCWA and Meep sensitivities? |
