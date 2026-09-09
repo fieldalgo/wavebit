@@ -122,7 +122,7 @@ rules. NumPy and JAX x64 construct the cell; a NumPy export can be
 transferred to the Torch engine. The lower-level energy closure itself
 accepts all three array frameworks and complex material data, while the
 rectangular constructor supports positive-real-part passive materials with
-a common loss ratio throughout each patterned layer.
+independent loss ratios for every material and background.
 
 The [rectangular-cell extension](nvf-rectangular-cells.md) supplies the live
 physical aspect metric, with separate energy-stationarity, quadrature and
@@ -148,8 +148,13 @@ closure, including its inverse longitudinal slot. Uniform layers can have
 independent passive permittivities. The underlying real cell explicitly
 refuses unfactored imaginary material values.
 
+The [complex-material extension](nvf-complex-material.md) removes the
+common-ratio restriction by using complex correctors, conjugate test fields
+and independent cross-energy terms. The original real kernels remain
+available for reproducing their studies.
+
 Arbitrary shapes, object edges not aligned with the lattice, sheared
-corrector cells, unequal material loss ratios within a patterned layer,
+corrector cells,
 automatic selection through the ordinary
 solver's `projector` setting, and accuracy qualification across use cases
 remain separate work. The existing circular shape projector remains

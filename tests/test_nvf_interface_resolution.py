@@ -24,8 +24,8 @@ def independent_roots(targets, seams, values, strength=8., radius=.01):
             # Integrate in radius units. Physical-coordinate quadrature loses
             # digits in (x-seam)/radius at the narrowest supported radius.
             def density(u):
-                return strength/np.sqrt(np.pi)*np.sum(
-                    jumps*np.exp(-.5*(u+(anchor-seams)/radius)**2))**2
+                return strength/np.sqrt(np.pi)*abs(np.sum(
+                    jumps*np.exp(-.5*(u+(anchor-seams)/radius)**2)))**2
             result += quad(density, (lo-anchor)/radius, (hi-anchor)/radius,
                            epsabs=2e-14, epsrel=2e-14)[0]
         return result
@@ -34,13 +34,16 @@ def independent_roots(targets, seams, values, strength=8., radius=.01):
 
 
 @pytest.mark.parametrize('radius', [.01, .001, .0001])
-def test_density_roots_match_independent_bracketed_solver_and_cancel_redundant_seams(radius):
+@pytest.mark.parametrize('complex_material', [False, True])
+def test_density_roots_match_independent_bracketed_solver_and_cancel_redundant_seams(radius, complex_material):
     targets = np.r_[0., np.geomspace(1e-5, .1, 5), .25, .5, .75, .9, .99, 1.]
     seams, values = np.array([.21, .63]), np.array([4., 9., 6.25])
+    if complex_material:
+        values = values+1j*np.array([.8, -.6, 2.1])
     actual, residual = graded_fractions(targets, seams, values, radius=radius)
     np.testing.assert_allclose(actual, independent_roots(targets, seams, values, radius=radius), atol=8e-15, rtol=0)
-    density = 1+8/(np.sqrt(np.pi)*radius)*np.sum(
-        np.diff(np.log(values))[None]/2*np.exp(-.5*((actual[:, None]-seams)/radius)**2), axis=1)**2
+    density = 1+8/(np.sqrt(np.pi)*radius)*abs(np.sum(
+        np.diff(np.log(values))[None]/2*np.exp(-.5*((actual[:, None]-seams)/radius)**2), axis=1))**2
     # A float64 root can have an irreducible CDF residual on a steep density.
     # C(1)>=1, so this bounds its half-ULP contribution without underestimating
     # the normalized residual. The independent root tolerance remains 8e-15;
@@ -48,10 +51,28 @@ def test_density_roots_match_independent_bracketed_solver_and_cancel_redundant_s
     rounding_floor = np.max(np.spacing(actual)*density)/2
     assert residual < 2e-14+rounding_floor
     assert np.min(np.diff(actual)) > 0
-    redundant, _ = graded_fractions(targets, [.1, .21, .5, .63, .8], [4., 4., 9., 9., 6.25, 6.25], radius=radius)
+    redundant, _ = graded_fractions(targets, [.1, .21, .5, .63, .8], np.repeat(values, 2), radius=radius)
     np.testing.assert_array_equal(actual, redundant)
     constant, _ = graded_fractions(targets, [.21, .63], [4., 4., 4.], radius=radius)
     np.testing.assert_array_equal(constant, targets)
+
+
+@pytest.mark.parametrize('radius', [.01, .001, .0001])
+def test_complex_mesh_jacobian_matches_independent_quadrature_root_secants(radius):
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    jax.config.update('jax_enable_x64', True)
+    targets = np.array([.1, .25, .5, .75, .9])
+    p = np.array([.51, 4., 9., .8, -.6])
+    actual = np.asarray(jax.jit(jax.jacfwd(lambda p: graded_fractions(
+        targets, p[:1], p[1:3]+1j*p[3:], radius=radius, xp=jnp)[0]))(jnp.asarray(p)))
+    for i, step in enumerate((1e-5, 1e-4, 1e-4, 1e-4, 1e-4)):
+        delta = np.eye(5)[i]*step
+        plus, minus = p+delta, p-delta
+        reference = (independent_roots(targets, plus[:1], plus[1:3]+1j*plus[3:], radius=radius)
+                     -independent_roots(targets, minus[:1], minus[1:3]+1j*minus[3:], radius=radius))/(2*step)
+        np.testing.assert_allclose(actual[:, i], reference, atol=2e-8, rtol=1e-6)
+    jax.clear_caches()
 
 
 @pytest.mark.parametrize('radius', [.01, .001, .0001])

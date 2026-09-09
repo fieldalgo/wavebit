@@ -134,7 +134,7 @@ class ThinGapEnergyModel:
 
     def _solve_cell(self, g, me, ke, load, derivative_load, mb, kb, background_load, xp,
                     *, gap_derivative_load=None):
-        """Common variational solve for any positive x material profile."""
+        """Common variational solve from the supplied x material integrals."""
         length = 1-g
         boundary = xp.asarray(self.boundary)
         avv = (length*xp.kron(self.ymass, ke)+xp.kron(self.ystiffness, me)/length
@@ -142,6 +142,7 @@ class ThinGapEnergyModel:
         # A_va = g*C. The normal-gradient cross term vanishes because every
         # periodic body basis has integral(dh/dt)=0. The gap's mean ramp is zero.
         cross = length*xp.kron(self.ycross[:, None], ke)
+        reverse_cross = length*xp.kron(self.ycross[None], ke)
         scaled_aa = mb+g/length*me+g*length/12*ke+g*g/12*kb
         rhs_x = -length*xp.kron(self.yload, derivative_load)
         if gap_derivative_load is not None:
@@ -152,7 +153,7 @@ class ThinGapEnergyModel:
         # Pin one ordinary potential DOF. The enrichment test rows have already
         # been divided by g; there is no numerical 0/0, cutoff, or stopped grad.
         system = xp.block([[avv[1:, 1:], g*cross[1:]],
-                           [cross[1:].T, scaled_aa]])
+                           [reverse_cross[:, 1:], scaled_aa]])
         right = xp.concatenate([rhs_v[1:], rhs_a])
         solution = solve(system, right) if xp is np else xp.linalg.solve(system, right)
         residual = xp.linalg.norm(system@solution-right)/xp.maximum(xp.linalg.norm(right), 1.)
@@ -202,7 +203,7 @@ class ThinGapEnergyModel:
         Use period=(700, 700) and truncation_order=(self.order, self.order)
         on the consuming solver. Its wavelength, incidence, thickness and
         exterior media belong to that solver, not the fixed study propagator.
-        The cell's positive-real material and rectangular geometry restrictions
+        The concrete cell class's material and rectangular geometry restrictions
         remain in force. No geometry-selection fallback is performed.
         """
         slots, _ = self.matrices(gap, epsilon, width, xp)
@@ -213,11 +214,12 @@ class ThinGapEnergyModel:
         change = xp.block([[convolutions[0], convolutions[1]],
                            [convolutions[2], convolutions[3]]])
         gram = xp.block([[convolutions[4], convolutions[5]],
-                         [convolutions[5], convolutions[6]]])
+                         [convolutions[8] if len(coefficients) == 9 else convolutions[5], convolutions[6]]])
         slots = ConvMatrices.from_energy(change, gram, convolutions[7])
         hermiticity = xp.maximum(xp.maximum(
             xp.max(xp.abs(slots.epx-slots.epx.conj().T)),
             xp.max(xp.abs(slots.epy-slots.epy.conj().T))),
             xp.max(xp.abs(slots.epxy-slots.epyx.conj().T)))
-        slots = ConvMatrices(*(xp.where(hermiticity < 1e-9, slot, xp.nan) for slot in slots))
+        valid = xp.all(xp.isfinite(convolutions)) if len(coefficients) == 9 else hermiticity < 1e-9
+        slots = ConvMatrices(*(xp.where(valid, slot, xp.nan) for slot in slots))
         return slots, dict(**metadata, hermiticity=hermiticity)

@@ -171,7 +171,7 @@ def test_lossy_internal_and_perpendicular_contact_derivatives(axis):
     jax.clear_caches()
 
 
-def test_unequal_loss_ratios_and_gain_are_refused_eagerly_and_poison_traced_replay():
+def test_independent_loss_ratios_are_live_but_gain_and_nonfinite_loss_are_refused():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     jax.config.update('jax_enable_x64', True)
@@ -184,10 +184,10 @@ def test_unequal_loss_ratios_and_gain_are_refused_eagerly_and_poison_traced_repl
             shape['material'] *= 1+1j*loss
         return builder.conv_matrices(structure, lattice, plan=plan, xp=xp)
     traced = jax.jit(lambda losses: build(losses, jnp))
-    for losses in ([.2, .2, .2], [.2, .2+np.spacing(.2), .2]):
+    for losses in ([.2, .2, .2], [.2, .2+np.spacing(.2), .2], [.2, .21, .2], [.21, .2, .2], [0., .2, .7]):
         assert all(np.isfinite(np.asarray(a)).all() for a in traced(jnp.asarray(losses)))
-    for losses in ([.2, .21, .2], [.21, .2, .2], [.2, .2, .2+1e-9], [-.1, -.1, -.1], [np.nan, .2, .2]):
-        with pytest.raises(ValueError):
+    for losses in ([-.1, -.1, -.1], [0., -.1, .2], [np.nan, .2, .2], [.1, np.inf, .2]):
+        with np.errstate(invalid='ignore'), pytest.raises(ValueError):
             build(np.asarray(losses), np)
         assert all(np.isnan(np.asarray(a)).all() for a in traced(jnp.asarray(losses)))
     jax.clear_caches()

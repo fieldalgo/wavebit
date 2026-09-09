@@ -143,7 +143,12 @@ Strength zero still selects the unchanged fixed mesh.
 These controls qualify construction, derivatives and integration. They do
 not certify optical convergence or turn the provisional 1e-5 order increment
 into a product requirement. Unequal perpendicular extents or centers,
-L-shaped unions, oblique or curved interfaces, sheared cells, and unequal
-material loss ratios remain unsupported by this builder. The
+L-shaped unions, oblique or curved interfaces, and sheared cells remain
+unsupported by this builder. The
 [common-loss extension](nvf-common-loss.md) permits a shared passive factor
 for every material in a patterned layer, including its internal background.
+
+The later [complex-material extension](nvf-complex-material.md) supports
+independent material loss. Its positive grading density uses the squared
+magnitude of the smoothed complex log jumps, retaining interface merging
+and including phase contrast. Real-material grading is unchanged.

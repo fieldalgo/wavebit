@@ -103,7 +103,7 @@ nonoverlapping rectangle sequences along either axis of an orthogonal cell, with
 different directions allowed per layer, live materials, translations, both
 physical periods, common lattice rotation, and internal background intervals
 that can open or close during JAX replay. Passive complex materials are
-supported when every material in a patterned layer shares a common loss
-ratio, including its background; the ratio may differ between layers. The general
+supported with independent loss in every shape and background, provided
+the real parts are positive and the imaginary parts nonnegative. The general
 energy closure API also accepts externally constructed fields. Arbitrary
 shape correctors remain outside the rectangular builder's scope.

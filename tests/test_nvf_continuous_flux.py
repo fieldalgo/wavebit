@@ -43,14 +43,18 @@ def test_zero_width_degree_four_moments_retain_their_jit_derivative():
 
 @pytest.mark.parametrize('basis', ['global', 'local'])
 @pytest.mark.parametrize('nodes', [[-.5, -.25, 0., .25], [-.5, -.29, .04, .33]])
-def test_integrated_flux_packs_match_independent_piecewise_gauss_integration(basis, nodes):
+@pytest.mark.parametrize('complex_material', [False, True])
+def test_integrated_flux_packs_match_independent_piecewise_gauss_integration(basis, nodes, complex_material):
     nodes = np.asarray(nodes)
     lengths = np.diff(np.r_[nodes, .5])
     seams, values = np.array([-.11, .13]), np.array([4., 9., 6.25])
+    if complex_material:
+        values = values+1j*np.array([.8, -.6, 2.1])
     modes, inside = np.arange(-7, 8), np.array([False, True, True, False])
-    body, gap = flux_integrals(nodes, lengths, seams, values, inside, modes, 2, basis=basis)
+    body, gap = flux_integrals(nodes, lengths, seams, values, inside, modes, 2,
+                               basis=basis, sesquilinear=complex_material)
     q, qw = leggauss(48)
-    cumulative = np.zeros(len(nodes))
+    cumulative = np.zeros(len(nodes), dtype=values.dtype)
     xs, ws, es, potentials, derivatives = [], [], [], [], []
     # Integrate physical flux hats piece by piece. This path uses no Fourier
     # moment recurrence, material-jump cancellation or polynomial-pack code.
@@ -69,7 +73,7 @@ def test_integrated_flux_packs_match_independent_piecewise_gauss_integration(bas
         cumulative += length/epsilon*((rb-ra)*left+(rb*rb-ra*ra)/2*change)
         xs.extend(x)
         ws.extend((b-a)/2*qw)
-        es.extend(np.full_like(x, epsilon))
+        es.extend(np.full(x.shape, epsilon))
         potentials.extend(potential)
         derivatives.extend(derivative)
     x, weights, epsilon, f, df = map(np.asarray, (xs, ws, es, potentials, derivatives))
@@ -90,12 +94,15 @@ def test_integrated_flux_packs_match_independent_piecewise_gauss_integration(bas
     wave = np.exp(-2j*np.pi*modes[:, None]*x[None])*weights[None]
     for actual, material in ((body, epsilon), (gap, np.ones_like(epsilon))):
         weighted = wave*material[None]
-        expected = dict(mass=np.einsum('mq,qi,qj->mij', weighted, f, f),
-                        stiffness=np.einsum('mq,qi,qj->mij', weighted, df, df),
+        dual_f, dual_df = (f.conj(), df.conj()) if complex_material else (f, df)
+        expected = dict(mass=np.einsum('mq,qi,qj->mij', weighted, dual_f, f),
+                        stiffness=np.einsum('mq,qi,qj->mij', weighted, dual_df, df),
                         load=weighted@f, derivative=weighted@df,
-                        force=(weighted*lift[None])@df,
-                        lift=weighted@lift, lift_squared=weighted@lift**2,
+                        force=(weighted*lift[None])@dual_df,
+                        lift=weighted@lift, lift_squared=weighted@(lift*(lift.conj() if complex_material else lift)),
                         material=weighted.sum(axis=1))
+        if complex_material:
+            expected.update(dual_load=weighted@f.conj(), reverse_force=(weighted*lift.conj()[None])@df)
         for key in expected:
             np.testing.assert_allclose(actual[key], expected[key], atol=2e-12, rtol=1e-13)
 

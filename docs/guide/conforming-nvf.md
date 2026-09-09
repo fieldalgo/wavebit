@@ -54,7 +54,7 @@ explain the distinction.
 | `cx`, `cy` | Cartesian offsets from the cell center, in the lattice's length units. Default zero. Periodic translation is unrestricted; coordinates must describe one ordered profile with span below one period, rather than separately wrapped pieces. |
 | `lx`, `ly` | Positive physical lengths along the rectangle's own axes. A tiling has equal perpendicular extent and center. Its span along the tiling axis is strictly less than that period; the perpendicular extent may reach the other period, including exact contact. |
 | `angle` | Radians from laboratory x, default zero. Rectangle edges align with the lattice axes. Adding pi/2 and exchanging `lx` and `ly` describes the same rectangle. Arbitrary angles within a fixed lattice are unsupported. |
-| Materials | Finite scalar permittivities with positive real part and nonnegative imaginary part, as numbers or `Material(epsilon=...)`. Every material in a patterned layer, including its background, shares `Im(epsilon)/Re(epsilon)`. Each layer may use a different ratio. A declared `mu`, including `mu=1`, is unsupported. |
+| Materials | Finite scalar permittivities with positive real part and nonnegative imaginary part, as numbers or `Material(epsilon=...)`. Every shape and background may have an independent loss ratio. A declared `mu`, including `mu=1`, is unsupported. |
 
 The shape list can arrive in any order; planning sorts along the chosen
 tiling axis. Shared boundaries between different materials remain live.
@@ -65,31 +65,30 @@ solver's thickness list.
 
 Curves, overlaps, unequal perpendicular extents or centers,
 edges not aligned with the lattice, sheared cells, tensors, gain, nonpositive
-real permittivity, and unequal loss ratios within a patterned layer are
-refused. This builder does not select a different NVF or
+real permittivity are refused. This builder does not select a different NVF or
 Li factorization for unsupported input. The existing circular shape NVF
 remains available through the ordinary solver API.
 
-## Passive materials with a common loss ratio
+## Passive complex materials
 
-Within a patterned layer, supply `epsilon_j = (1 + 1j*eta)*storage_j`, with
-positive real `storage_j` and nonnegative `eta`. The background carries the
-same factor. For example, `4+.4j`, `9+.9j` and background `1.7+.17j` share
-`eta=.1`. Each patterned or uniform layer can have its own loss ratio.
+Every shape and background accepts its own passive complex permittivity.
+For example, materials `4+.4j` and `9+1.8j` can share a lossless background
+`1.7`, or an absorbing background `1.7+.2j`. Both real and imaginary parts
+remain live during JAX replay. Gain and nonpositive real parts are refused.
 
-The common factor cancels from the cell equations. It multiplies the
-transverse constitutive matrices and divides the inverse longitudinal slot,
-so the loss reaches the actual engine. The real storage cell retains its
-Hermitian check. The [common-loss derivation](../nvf-common-loss.md) gives
-the passivity argument and independent absorbing-layer controls.
+The cell uses complex trial fields and conjugate test fields. It retains
+both transverse cross terms and projects the full complex material energy
+into the engine's constitutive matrices. The
+[complex-material derivation](../nvf-complex-material.md) explains this
+construction and its independent controls. The common-factor case described
+in the [earlier derivation](../nvf-common-loss.md) remains a useful exact
+control, but is no longer an input restriction.
 
-On JAX replay, vary the shared `eta` together for all materials in that
-patterned layer, as in the example below. Derivatives are supported along
-this common-ratio constraint; at `eta=0`, the loss derivative is one-sided
-from positive loss. Unequal ratios raise eagerly and produce NaN matrices
-when traced. Ratio agreement permits only floating-point roundoff:
-`128*machine_epsilon*(1+abs(eta_background))`. A lossy inclusion in a lossless
-background still requires the separate complex-corrector extension.
+Vary each material's imaginary part independently, as in the JAX example
+below. At zero imaginary part, a passive loss derivative is one-sided from
+positive loss. Invalid traced materials produce NaN matrices; eager calls
+raise. The mesh follows the magnitude and phase of material contrast and
+keeps the same topology when loss changes.
 
 ## Resolution controls
 
@@ -153,9 +152,8 @@ lattice = np.eye(2)*700.
 builder = wavebit.ConformingNVF(1, rows=2, body_degree=2, gap_degree=2)
 
 def layers(gap, epsilon, loss):
-    factor = 1+1j*loss
-    return [dict(background=factor, shapes=[
-        dict(type='rectangle', lx=350., ly=700.-gap, material=factor*epsilon),
+    return [dict(background=1., shapes=[
+        dict(type='rectangle', lx=350., ly=700.-gap, material=epsilon+1j*loss),
     ])]
 
 plan = builder.plan(layers(17., 4., .1), lattice)

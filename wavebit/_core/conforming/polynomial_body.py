@@ -45,11 +45,12 @@ def body_space(edges, degree):
     return indices, polynomials, matrices
 
 
-def project_body_polynomial(potential, normal, moments, body, background, xp=np, *, metric_y=1.):
+def project_body_polynomial(potential, normal, moments, body, background, xp=np, *, metric_y=1., sesquilinear=False):
     """Integrate the actual polynomial field/energy over all body intervals."""
     def quadratic(matrix, coefficients):
+        dual = xp.conj(coefficients) if sesquilinear else coefficients
         return sum(xp.einsum('ne,emcd->nmcd', moments[..., i+j],
-                             xp.einsum('mij,eic,ejd->emcd', matrix, coefficients[:, i], coefficients[:, j]))
+                             xp.einsum('mij,eic,ejd->emcd', matrix, dual[:, i], coefficients[:, j]))
                    for i in range(coefficients.shape[1]) for j in range(coefficients.shape[1]))
 
     def linear(weight, coefficients):
@@ -58,13 +59,19 @@ def project_body_polynomial(potential, normal, moments, body, background, xp=np,
 
     field_linear = xp.stack([linear(background['derivative'], potential), linear(background['load'], normal)], axis=-2)
     energy_linear = xp.stack([linear(body['force'], potential), metric_y*linear(body['load'], normal)], axis=-2)
+    energy_dual = energy_linear
+    if sesquilinear:
+        energy_linear = xp.stack([linear(body['reverse_force'], potential),
+                                  metric_y*linear(body['load'], normal)], axis=-2)
+        energy_dual = xp.stack([linear(body['force'], xp.conj(potential)),
+                                metric_y*linear(body['dual_load'], xp.conj(normal))], axis=-2)
     energy = quadratic(body['stiffness'], potential)+metric_y*quadratic(body['mass'], normal)
     scale = xp.sum(moments[..., 0], axis=1)[:, None]
     ex, ey = xp.diag(xp.asarray([1., 0.])), xp.diag(xp.asarray([0., 1.]))
     field = (field_linear+scale[..., None, None]*background['lift'][None, :, None, None]*ex
              +scale[..., None, None]*background['material'][None, :, None, None]*ey)
     material = scale*body['material'][None]
-    gram = (energy+energy_linear+xp.swapaxes(energy_linear, -1, -2)
+    gram = (energy+energy_linear+xp.swapaxes(energy_dual, -1, -2)
             +(scale*body['lift_squared'][None])[..., None, None]*ex+metric_y*material[..., None, None]*ey)
     return field, gram, material
 
@@ -96,8 +103,21 @@ class PolynomialBodyGapModel(MaterialGradedGapModel):
                   /((1-g)*dt[:, None, None, None]))
         moments = polynomial_moments((1-g)*t, (1-g)*dt, xp.zeros_like(t), xp.ones_like(t),
                                       self.modes, xp, degree=2*self.body_degree)
-        return project_body_polynomial(potential, normal, moments, body, background, xp, metric_y=metric_y)
+        return project_body_polynomial(potential, normal, moments, body, background, xp,
+                                        metric_y=metric_y, sesquilinear=self._complex_materials)
 
     def coefficients(self, *args, **kwargs):
         c, metadata = super().coefficients(*args, **kwargs)
         return c, dict(**metadata, body_degree=self.body_degree)
+
+
+class ComplexMaterialGapModel(PolynomialBodyGapModel):
+    """Complex trial fields and sesquilinear projection for positive-real profiles.
+
+    Values are relative to the layer background, so their imaginary parts
+    may have either sign. The public adapter checks physical passivity before
+    normalization. The ninth coefficient is the independent yx energy term;
+    the preceding eight indices retain the real kernel's layout.
+    """
+
+    _complex_materials = True

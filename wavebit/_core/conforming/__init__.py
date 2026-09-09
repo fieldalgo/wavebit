@@ -9,7 +9,7 @@ from ..domain import as_material
 from ..factorization import ConvMatrices
 from ..geometry import StaleGeometryError
 from ..parametric import check_layer_spec, check_shape_spec
-from .polynomial_body import PolynomialBodyGapModel
+from .polynomial_body import ComplexMaterialGapModel
 from .thin_gap import PERIOD, CONTACT_ROUNDOFF
 
 
@@ -57,10 +57,9 @@ class ConformingNVF:
     translation of a layer is unrestricted, and its axes may rotate together
     with the rectangles. Materials must be scalar and non-magnetic, with
     positive real part and nonnegative imaginary part.
-    In a patterned layer all materials, including the background, must share
-    Im(epsilon)/Re(epsilon). The common loss ratio may differ between layers
-    and remains live on replay; only derivatives within this constraint are
-    supported. Uniform layers may have independent passive permittivities.
+    Every material and background may have its own loss ratio. Both real
+    and imaginary parts remain live on replay, including one-sided loss
+    derivatives at the passive boundary.
 
     ``truncation_order`` is an integer or (u, v) pair. Cell resolution settings
     are explicit; their defaults do not certify optical accuracy. NumPy and
@@ -81,7 +80,7 @@ class ConformingNVF:
                 or any(isinstance(n, bool) or not isinstance(n, Integral) or n < 0 for n in order)):
             raise ValueError('truncation_order must be a nonnegative integer or integer pair')
         self.truncation_order = tuple(int(n) for n in order)
-        self._cell = PolynomialBodyGapModel(max(self.truncation_order), **dict(
+        self._cell = ComplexMaterialGapModel(max(self.truncation_order), **dict(
             dict(rows=4, body_degree=2, gap_degree=4, flux_basis='local'), **cell_settings))
         self._cap = 2*max(order)
         u, v = self.truncation_order
@@ -123,9 +122,6 @@ class ConformingNVF:
             supplied = layer.get('shapes', [])
             if not isinstance(supplied, (tuple, list)):
                 raise ValueError('conforming NVF shapes must be a sequence of dictionaries')
-            if supplied:
-                loss_ratio = xp.imag(background)/xp.real(background)
-                _require(xp.isfinite(loss_ratio), 'conforming NVF background loss ratio must be finite')
             for index, shape in enumerate(supplied):
                 if not isinstance(shape, dict):
                     raise ValueError('each conforming NVF shape must be a dictionary')
@@ -149,23 +145,16 @@ class ConformingNVF:
                 width = cosine**2*lx+sine**2*ly
                 height = sine**2*lx+cosine**2*ly
                 epsilon = _epsilon(shape.get('material', 1.), xp)
-                shape_loss = xp.imag(epsilon)/xp.real(epsilon)
-                common_loss = (xp.isfinite(shape_loss) & xp.isfinite(loss_ratio)
-                               & (xp.abs(shape_loss-loss_ratio)
-                                  <= 128*np.finfo(float).eps*(1+xp.abs(loss_ratio))))
-                _require(common_loss, 'conforming NVF patterned layers require a common loss ratio')
                 shapes.append(dict(
                     lx=width*(PERIOD/periods[0]),
                     ly=height*(PERIOD/periods[1]),
                     gap=(periods[1]-height)*(PERIOD/periods[1]),
                     gap_x=(periods[0]-width)*(PERIOD/periods[0]),
                     cx=center[0], cy=center[1],
-                    # For epsilon=(1+i*loss_ratio)*epsilon_real, the common
-                    # factor cancels from the cell equations. Using the real
-                    # parts avoids spurious cell derivatives from cancellation
-                    # in a complex division; the alignment guard stays live.
-                    epsilon=xp.real(epsilon)/xp.real(background),
-                    valid=positive & aligned & valid & common_loss))
+                    # Normalization changes neither the cell equation nor
+                    # physical passivity after restoring the background.
+                    epsilon=epsilon/background,
+                    valid=positive & aligned & valid))
             layers.append((shapes, background))
         return layers, rotation, valid, periods[0]/periods[1]
 
@@ -280,29 +269,31 @@ class ConformingNVF:
                                                 +modes[None]*(cx+PERIOD/2)))
                 c = coefficients*phase[None]
                 field = xp.stack([xp.stack([c[0], c[1]]), xp.stack([c[2], c[3]])])
-                gram = xp.stack([xp.stack([c[4], c[5]]), xp.stack([c[5], c[6]])])
+                gram = xp.stack([xp.stack([c[4], c[5]]), xp.stack([c[8], c[6]])])
                 field, gram = (xp.einsum('ai,ijmn,bj->abmn', cell_rotation, a, cell_rotation)
                                for a in (field, gram))
                 def blocks(a):
                     a = a[..., dn, dm]
                     return xp.block([[a[0, 0], a[0, 1]], [a[1, 0], a[1, 1]]])
-                storage = xp.real(background)
-                slots = ConvMatrices.from_energy(blocks(field), storage*blocks(gram),
-                                                  storage*c[7, dn, dm])
-                defect = xp.maximum(xp.maximum(xp.max(xp.abs(slots.epx-slots.epx.conj().T)),
-                                                xp.max(xp.abs(slots.epy-slots.epy.conj().T))),
-                                    xp.max(xp.abs(slots.epxy-slots.epyx.conj().T)))
-                valid = valid & (defect < 1e-9)
-                _require(valid, 'conforming NVF energy closure failed its Hermitian guard')
-                # Close and check the storage matrices before applying loss.
-                # Both transverse tensors scale by alpha, while inverse zz
-                # scales by 1/alpha. This is the same energy closure because
-                # alpha is constant over this layer's cell.
-                alpha = 1+1j*(xp.imag(background)/storage)
-                slots = ConvMatrices(slots.epx*alpha, slots.epy*alpha, slots.epz_i/alpha,
-                                     slots.epxy*alpha, slots.epyx*alpha)
-                valid = valid & xp.all(xp.stack([xp.all(xp.isfinite(slot)) for slot in slots]))
-                _require(valid, 'conforming NVF common-loss scaling produced nonfinite matrices')
+                slots = ConvMatrices.from_energy(blocks(field), background*blocks(gram),
+                                                  background*c[7, dn, dm])
+                tensor = xp.block([[slots.epx, -slots.epxy], [-slots.epyx, slots.epy]])
+                adjoint = tensor.conj().T
+                storage = (tensor+adjoint)/2
+                dissipation = (tensor-adjoint)/(2j)
+                lossless = (xp.imag(background) == 0) & xp.all(xp.imag(profile['values']) == 0)
+                hermitian_defect = xp.maximum(xp.maximum(xp.max(xp.abs(slots.epx-slots.epx.conj().T)),
+                                                         xp.max(xp.abs(slots.epy-slots.epy.conj().T))),
+                                             xp.max(xp.abs(slots.epxy-slots.epyx.conj().T)))
+                # Positive real physical materials give a coercive storage
+                # form; passive imaginary parts give nonnegative dissipation.
+                # Test these forms without changing the exported matrices.
+                valid = (valid & xp.all(xp.isfinite(tensor))
+                         & (~lossless | (hermitian_defect < 1e-9))
+                         & (xp.linalg.eigvalsh(storage)[0] > 0)
+                         & (xp.linalg.eigvalsh(dissipation)[0] > -1e-9)
+                         & xp.all(xp.isfinite(slots.epz_i)))
+                _require(valid, 'conforming NVF energy closure failed its passivity guard')
             stacks.append(tuple(xp.where(valid, slot, xp.nan) for slot in slots))
         return ConvMatrices(*(xp.stack([s[i] for s in stacks]) for i in range(5)))
 

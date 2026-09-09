@@ -8,13 +8,18 @@ Targets:
 - `tests/test_conforming_common_loss.py`
 - `tests/test_conforming_nvf.py`
 
-`ConformingNVF` accepts passive complex permittivities with positive real
+The implementation measured on this page is the common-factor extension at
+revision `6b0a60b`. The later [complex-material extension](nvf-complex-material.md)
+removes the common-ratio restriction. The derivation below remains an exact
+control for that general construction.
+
+At that revision, `ConformingNVF` accepts passive complex permittivities with positive real
 parts when all materials in a patterned layer share
 `eta = Im(epsilon)/Re(epsilon)`. This includes the background, both outside
 and between rectangles. Different layers may use different ratios. Uniform
 layers can have independent positive-real-part passive permittivities.
-The [manual](guide/conforming-nvf.md) gives the input contract and a JAX
-example that varies a common loss ratio together with geometry.
+The [manual](guide/conforming-nvf.md) gives the current input contract and
+a JAX example with independently varying inclusion loss.
 
 ## Factoring the cell equation and energy closure
 
@@ -103,7 +108,8 @@ documentation build also passed. These qualify the finite construction
 and integration; they do not certify optical convergence.
 
 A lossy inclusion in a lossless background, or two materials with different
-loss ratios in one patterned layer, remains outside this extension. Curved
+loss ratios in one patterned layer, was outside this common-factor extension
+and is supported by the later complex-material construction. Curved
 interfaces, sheared cells, nonpositive real permittivities and automatic
 projector selection also remain separate work. The common-factor case does
 not complete general lossy-corrector development.

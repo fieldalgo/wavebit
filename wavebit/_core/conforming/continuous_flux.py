@@ -35,7 +35,8 @@ def polynomial_moments(nodes, lengths, lo, hi, modes, xp=np, *, degree=4):
                      for k in range(degree+1)], axis=-1)
 
 
-def flux_integrals(nodes, lengths, seams, values, inside, modes, pivot, xp=np, *, basis='global'):
+def flux_integrals(nodes, lengths, seams, values, inside, modes, pivot, xp=np, *, basis='global',
+                   sesquilinear=False):
     """Weighted basis, affine-lift and energy integrals; no equality branch."""
     if basis not in ('global', 'local'):
         raise ValueError('flux basis must be global or local')
@@ -87,7 +88,8 @@ def flux_integrals(nodes, lengths, seams, values, inside, modes, pivot, xp=np, *
 
         def quadratic(poly):
             degree = poly.shape[1]-1
-            return xp.stack([sum(poly[:, i, :, None]*poly[:, j, None, :]
+            dual = xp.conj(poly) if sesquilinear else poly
+            return xp.stack([sum(dual[:, i, :, None]*poly[:, j, None, :]
                                  for i in range(degree+1) for j in range(degree+1) if i+j == k)
                              for k in range(2*degree+1)], axis=1)
 
@@ -96,6 +98,11 @@ def flux_integrals(nodes, lengths, seams, values, inside, modes, pivot, xp=np, *
                           load=potential, derivative=derivative,
                           force=derivative*lift[:, None, None], lift=lift[:, None],
                           lift_squared=lift[:, None]**2, material=xp.ones((count, 1)))
+        if sesquilinear:
+            unweighted.update(dual_load=xp.conj(potential),
+                               force=xp.conj(derivative)*lift[:, None, None],
+                               reverse_force=derivative*xp.conj(lift)[:, None, None],
+                               lift_squared=(xp.conj(lift)*lift)[:, None])
         if basis == 'local':
             # Carry factors into integration. Expanded quadratic packs require
             # O(elements * basis_count**2) storage although most entries vanish.
@@ -123,31 +130,37 @@ def flux_integrals(nodes, lengths, seams, values, inside, modes, pivot, xp=np, *
                     entries = []
                     delta = None if previous is None else value-previous[key]
                     for i in range(value.shape[1]):
-                        for j in range(i+1):
+                        for j in range(value.shape[1] if sesquilinear else i+1):
                             weight = moments[..., i+j, None]
+                            dual = xp.conj(value[:, i]) if sesquilinear else value[:, i]
                             if previous is None:
-                                entry = value[:, i].T@(weight*value[None, :, j])
+                                entry = dual.T@(weight*value[None, :, j])
                             else:
                                 old = previous[key]
                                 # Polarize the weighted quadratic difference
                                 # before integration. Subtracting two completed
                                 # Fourier matrices loses small material changes.
-                                entry = (delta[:, i].T@(weight*value[None, :, j])
-                                         +old[:, i].T@(weight*delta[None, :, j])
-                                         +old[:, i].T@(change_moments[..., i+j, None]*old[None, :, j]))
-                            entries.append(entry if i == j else entry+xp.swapaxes(entry, -1, -2))
+                                dual_delta = xp.conj(delta[:, i]) if sesquilinear else delta[:, i]
+                                dual_old = xp.conj(old[:, i]) if sesquilinear else old[:, i]
+                                entry = (dual_delta.T@(weight*value[None, :, j])
+                                         +dual_old.T@(weight*delta[None, :, j])
+                                         +dual_old.T@(change_moments[..., i+j, None]*old[None, :, j]))
+                            entries.append(entry if sesquilinear or i == j else entry+xp.swapaxes(entry, -1, -2))
                     result[key] = sum(entries)
                     sampled = sum(r[..., None]**i*value[None, :, i] for i in range(value.shape[1]))
                     weighted = quad_weight*pack['weight'][None]
                     if previous is None:
-                        mean = sum(sampled[k].T@(weighted[k, :, None]*sampled[k]) for k in range(3))
+                        dual_sampled = xp.conj(sampled) if sesquilinear else sampled
+                        mean = sum(dual_sampled[k].T@(weighted[k, :, None]*sampled[k]) for k in range(3))
                     else:
                         old_sampled = sum(r[..., None]**i*previous[key][None, :, i] for i in range(value.shape[1]))
                         sampled_delta = sum(r[..., None]**i*delta[None, :, i] for i in range(value.shape[1]))
                         dw = quad_weight*(pack['weight']-previous['weight'])[None]
-                        mean = sum(sampled_delta[k].T@(weighted[k, :, None]*sampled[k])
-                                   +old_sampled[k].T@(weighted[k, :, None]*sampled_delta[k])
-                                   +old_sampled[k].T@(dw[k, :, None]*old_sampled[k]) for k in range(3))
+                        dual_delta = xp.conj(sampled_delta) if sesquilinear else sampled_delta
+                        dual_old = xp.conj(old_sampled) if sesquilinear else old_sampled
+                        mean = sum(dual_delta[k].T@(weighted[k, :, None]*sampled[k])
+                                   +dual_old[k].T@(weighted[k, :, None]*sampled_delta[k])
+                                   +dual_old[k].T@(dw[k, :, None]*old_sampled[k]) for k in range(3))
                     result[key] = xp.where(xp.asarray(modes)[:, None, None] == 0, mean[None], result[key])
                 else:
                     if previous is None:
@@ -180,12 +193,12 @@ def flux_integrals(nodes, lengths, seams, values, inside, modes, pivot, xp=np, *
     return body, gap
 
 
-def project_flux_strip(left, right, normal, ymoments, pack, xp=np, *, metric_y=1.):
+def project_flux_strip(left, right, normal, ymoments, pack, xp=np, *, metric_y=1., sesquilinear=False):
     """Project the actual affine lift plus periodic integrated-flux potential."""
     y0, y1, y2 = (ymoments[..., i] for i in range(3))
 
     def quadratic(matrix, a, b):
-        return xp.einsum('mij,eic,ejd->emcd', matrix, a, b)
+        return xp.einsum('mij,eic,ejd->emcd', matrix, xp.conj(a) if sesquilinear else a, b)
 
     def integrate(weights, value):
         return xp.einsum('ne,emcd->nmcd', weights, value)
@@ -195,30 +208,36 @@ def project_flux_strip(left, right, normal, ymoments, pack, xp=np, *, metric_y=1
               +integrate(y2, quadratic(pack['stiffness'], right, right))
               +metric_y*integrate(y0, quadratic(pack['mass'], normal, normal)))
 
-    def xform(weights):
-        return (xp.einsum('ne,mi,eic->nmc', y0-y1, weights, left)
-                +xp.einsum('ne,mi,eic->nmc', y1, weights, right))
+    def xform(weights, dual=False):
+        a, b = (xp.conj(left), xp.conj(right)) if dual else (left, right)
+        return (xp.einsum('ne,mi,eic->nmc', y0-y1, weights, a)
+                +xp.einsum('ne,mi,eic->nmc', y1, weights, b))
 
     dx = xform(pack['derivative'])
     dy = xp.einsum('ne,mi,eic->nmc', y0, pack['load'], normal)
     linear = xp.stack([dx, dy], axis=-2)
     energy_linear = xp.stack([xform(pack['force']), metric_y*dy], axis=-2)
+    energy_dual = energy_linear
+    if sesquilinear:
+        energy_linear = xp.stack([xform(pack['reverse_force']), metric_y*dy], axis=-2)
+        dual_y = xp.einsum('ne,mi,eic->nmc', y0, pack['dual_load'], xp.conj(normal))
+        energy_dual = xp.stack([xform(pack['force'], dual=True), metric_y*dual_y], axis=-2)
     scale = xp.sum(y0, axis=1)[:, None]
     material, lift, lift_squared = [scale*pack[key][None] for key in ('material', 'lift', 'lift_squared')]
     ex, ey = xp.diag(xp.asarray([1., 0.])), xp.diag(xp.asarray([0., 1.]))
     field = linear+lift[..., None, None]*ex+material[..., None, None]*ey
-    gram = (energy+energy_linear+xp.swapaxes(energy_linear, -1, -2)
+    gram = (energy+energy_linear+xp.swapaxes(energy_dual, -1, -2)
             +lift_squared[..., None, None]*ex+metric_y*material[..., None, None]*ey)
     return field, gram, material
 
 
-def project_flux_polynomial(potential, normal, moments, pack, xp=np, *, metric_y=1.):
+def project_flux_polynomial(potential, normal, moments, pack, xp=np, *, metric_y=1., sesquilinear=False):
     """Fourier projection of a polynomial gap potential and its normal field."""
     def quadratic(matrix, a):
         # Contract the x basis before applying the y Fourier moment. A single
         # unfactored einsum repeats that contraction for every y mode in NumPy.
         return sum(moments[:, i+j, None, None, None]
-                   *xp.einsum('mij,ic,jd->mcd', matrix, a[i], a[j])[None]
+                   *xp.einsum('mij,ic,jd->mcd', matrix, xp.conj(a[i]) if sesquilinear else a[i], a[j])[None]
                    for i in range(len(a)) for j in range(len(a)))
 
     def linear(weights, a):
@@ -227,12 +246,17 @@ def project_flux_polynomial(potential, normal, moments, pack, xp=np, *, metric_y
     dx, dy = linear(pack['derivative'], potential), linear(pack['load'], normal)
     field_linear = xp.stack([dx, dy], axis=-2)
     energy_linear = xp.stack([linear(pack['force'], potential), metric_y*dy], axis=-2)
+    energy_dual = energy_linear
+    if sesquilinear:
+        energy_linear = xp.stack([linear(pack['reverse_force'], potential), metric_y*dy], axis=-2)
+        energy_dual = xp.stack([linear(pack['force'], xp.conj(potential)),
+                                metric_y*linear(pack['dual_load'], xp.conj(normal))], axis=-2)
     energy = quadratic(pack['stiffness'], potential)+metric_y*quadratic(pack['mass'], normal)
     material, lift, lift_squared = [moments[:, 0, None]*pack[key][None]
                                     for key in ('material', 'lift', 'lift_squared')]
     ex, ey = xp.diag(xp.asarray([1., 0.])), xp.diag(xp.asarray([0., 1.]))
     field = field_linear+lift[..., None, None]*ex+material[..., None, None]*ey
-    gram = (energy+energy_linear+xp.swapaxes(energy_linear, -1, -2)
+    gram = (energy+energy_linear+xp.swapaxes(energy_dual, -1, -2)
             +lift_squared[..., None, None]*ex+metric_y*material[..., None, None]*ey)
     return field, gram, material
 
@@ -280,15 +304,18 @@ class ContinuousFluxGapModel(PartitionedGapEnergyModel):
         avv = (length*xp.kron(self.ymass, ke)+xp.kron(self.ystiffness, me)/length
                +g*xp.kron(xp.outer(boundary, boundary), kb))
         cross = length*xp.kron(self.ycross[:, None], ke)
+        reverse_cross = length*xp.kron(self.ycross[None], ke)
         aa = mb+g/length*me+g*length/12*ke+g*g/12*kb
         vb = xp.kron(boundary[:, None]*xp.asarray(self.gap_mean)[None], kb)
         ab = xp.kron(xp.asarray(self.gap_ramp)[None], kb)
+        reverse_vb = xp.kron(xp.asarray(self.gap_mean)[:, None]*boundary[None], kb)
+        reverse_ab = xp.kron(xp.asarray(self.gap_ramp)[:, None], kb)
         bb = xp.kron(self.gap_gradient_mass, mb)+g*g*xp.kron(self.gap_mass, kb)
         # Both enrichment test rows are divided by g analytically. Bubble
         # normal derivatives integrate to zero, so they have no y forcing.
         system = xp.block([[avv[1:, 1:], g*cross[1:], g*g*vb[1:]],
-                           [cross[1:].T, aa, g*g*ab],
-                           [g*vb[1:].T, g*g*ab.T, bb]])
+                           [reverse_cross[:, 1:], aa, g*g*ab],
+                           [g*reverse_vb[:, 1:], g*g*reverse_ab, bb]])
         rhs_v = xp.stack([-length*xp.kron(self.yload, de)-g*xp.kron(boundary, dg),
                            xp.zeros(self.nx*self.rows)], axis=1)
         rhs_a = xp.stack([xp.zeros(self.nx), le-lb], axis=1)
@@ -331,8 +358,11 @@ class ContinuousFluxGapModel(PartitionedGapEnergyModel):
         g, edges, values, nodes, lengths, valid = self._profile_geometry(gap, epsilon, width, xp)
         body, background = self._x_integrals(nodes, lengths, edges[1:-1], values, xp)
         center = 2*self.order
-        me, ke, le, de = [body[key][center].real for key in ('mass', 'stiffness', 'load', 'force')]
-        mb, kb, lb, dg = [background[key][center].real for key in ('mass', 'stiffness', 'load', 'force')]
+        keys = ('mass', 'stiffness', 'dual_load' if self._complex_materials else 'load', 'force')
+        me, ke, le, de = [body[key][center] for key in keys]
+        mb, kb, lb, dg = [background[key][center] for key in keys]
+        if not self._complex_materials:
+            me, ke, le, de, mb, kb, lb, dg = [v.real for v in (me, ke, le, de, mb, kb, lb, dg)]
         v, a, b, residual = self._solve_flux_cell(
             g, metric_y*me, ke, metric_y*le, de, metric_y*mb, kb, metric_y*lb, dg, xp)
         v, a = xp.where(valid, v, xp.nan), xp.where(valid, a, xp.nan)
@@ -345,8 +375,11 @@ class ContinuousFluxGapModel(PartitionedGapEnergyModel):
         row_scale = xp.stack([xp.ones_like(aspect), aspect])
         field = field*row_scale[:, None]*column_scale[None, :]
         gram = gram*column_scale[:, None]*column_scale[None, :]
-        coefficients = xp.stack([field[:, :, 0, 0], field[:, :, 0, 1], field[:, :, 1, 0], field[:, :, 1, 1],
-                                 gram[:, :, 0, 0], gram[:, :, 0, 1], gram[:, :, 1, 1], eps])
+        components = [field[:, :, 0, 0], field[:, :, 0, 1], field[:, :, 1, 0], field[:, :, 1, 1],
+                      gram[:, :, 0, 0], gram[:, :, 0, 1], gram[:, :, 1, 1], eps]
+        if self._complex_materials:
+            components.append(gram[:, :, 1, 0])
+        coefficients = xp.stack(components)
         return coefficients, dict(cell_residual=residual, degrees_of_freedom=self.nx*(self.rows+self.gap_degree)-1,
                                   gap_degree=self.gap_degree)
 
@@ -357,7 +390,7 @@ class ContinuousFluxGapModel(PartitionedGapEnergyModel):
         pivot = self.per_region//2 if self.flux_basis == 'local' else self.per_region+self.per_region//2
         return flux_integrals(nodes, lengths, seams, values,
                               np.arange(len(nodes))//self.per_region == 1, self.modes,
-                              pivot, xp, basis=self.flux_basis)
+                              pivot, xp, basis=self.flux_basis, sesquilinear=self._complex_materials)
 
     def _project_body(self, v, a, g, body, background, xp, *, metric_y=1.):
         t = xp.asarray(self.yedges)-.5
@@ -366,15 +399,18 @@ class ContinuousFluxGapModel(PartitionedGapEnergyModel):
         left, right = v-g*t[:-1, None, None]*a, following-g*t[1:, None, None]*a
         normal = (following-v)/((1-g)*dt[:, None, None])-g/(1-g)*a
         body_y = interval_moments((1-g)*t[:-1], (1-g)*dt, xp.zeros_like(dt), xp.ones_like(dt), self.modes, xp)
-        field, _, _ = project_flux_strip(left, right, normal, body_y, background, xp, metric_y=metric_y)
-        _, gram, eps = project_flux_strip(left, right, normal, body_y, body, xp, metric_y=metric_y)
+        field, _, _ = project_flux_strip(left, right, normal, body_y, background, xp,
+                                         metric_y=metric_y, sesquilinear=self._complex_materials)
+        _, gram, eps = project_flux_strip(left, right, normal, body_y, body, xp,
+                                         metric_y=metric_y, sesquilinear=self._complex_materials)
         return field, gram, eps
 
     def _project_gap(self, v, a, b, g, background, xp, *, metric_y=1.):
         if self.gap_degree == 1:
             gap_y = interval_moments(xp.asarray([.5-g/2]), xp.asarray([g]), xp.asarray([0.]), xp.asarray([1.]), self.modes, xp)
             gap_field, gap_gram, gap_eps = project_flux_strip((v[0]-g/2*a)[None], (v[0]+g/2*a)[None],
-                                                             a[None], gap_y, background, xp, metric_y=metric_y)
+                                                             a[None], gap_y, background, xp,
+                                                             metric_y=metric_y, sesquilinear=self._complex_materials)
         else:
             beta = xp.asarray(self.gap_beta)
             bubble = xp.einsum('bk,bic->kic', beta, b)
@@ -384,5 +420,5 @@ class ContinuousFluxGapModel(PartitionedGapEnergyModel):
             moments = polynomial_moments(xp.asarray([.5-g/2]), xp.asarray([g]), xp.asarray([0.]),
                                           xp.asarray([1.]), self.modes, xp, degree=2*self.gap_degree)[:, 0]
             gap_field, gap_gram, gap_eps = project_flux_polynomial(
-                potential, normal_gap, moments, background, xp, metric_y=metric_y)
+                potential, normal_gap, moments, background, xp, metric_y=metric_y, sesquilinear=self._complex_materials)
         return gap_field, gap_gram, gap_eps

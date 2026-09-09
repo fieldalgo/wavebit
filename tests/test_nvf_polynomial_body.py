@@ -43,7 +43,8 @@ def test_body_matrices_match_independent_gauss_rule_with_periodic_traces(degree)
 
 @pytest.mark.parametrize('degree', [2, 3, 4])
 @pytest.mark.parametrize('metric_y', [.36, 1., 3.24])
-def test_polynomial_body_field_and_energy_match_independent_tensor_quadrature(degree, metric_y):
+@pytest.mark.parametrize('complex_material', [False, True])
+def test_polynomial_body_field_and_energy_match_independent_tensor_quadrature(degree, metric_y, complex_material):
     q, weights = leggauss(64)
     x, wx = q/2, weights/2
     r, wr = (q+1)/2, weights/2
@@ -53,18 +54,28 @@ def test_polynomial_body_field_and_energy_match_independent_tensor_quadrature(de
     df = np.column_stack([np.zeros_like(x), -2*np.pi*np.sin(2*np.pi*x), 2*np.pi*np.cos(2*np.pi*x)])
     lift = 1+.2*np.cos(2*np.pi*x)
     epsilon = 2+.5*np.sin(2*np.pi*x)
+    if complex_material:
+        f, df = f*(1+.3j), df*(1+.3j)
+        lift = lift+.1j*np.sin(2*np.pi*x)
+        epsilon = epsilon+1j*(.6+.3*np.sin(2*np.pi*x))
     wave = np.exp(-2j*np.pi*modes[:, None]*x[None])*wx[None]
     def pack(material):
         w = wave*material[None]
-        return dict(mass=np.einsum('mx,xi,xj->mij', w, f, f),
-                    stiffness=np.einsum('mx,xi,xj->mij', w, df, df), derivative=w@df,
-                    load=w@f, force=(w*lift[None])@df, material=w.sum(axis=1),
-                    lift=w@lift, lift_squared=w@lift**2)
+        dual_f, dual_df = (f.conj(), df.conj()) if complex_material else (f, df)
+        result = dict(mass=np.einsum('mx,xi,xj->mij', w, dual_f, f),
+                      stiffness=np.einsum('mx,xi,xj->mij', w, dual_df, df), derivative=w@df,
+                      load=w@f, force=(w*lift[None])@dual_df, material=w.sum(axis=1),
+                      lift=w@lift, lift_squared=w@(lift*(lift.conj() if complex_material else lift)))
+        if complex_material:
+            result.update(dual_load=w@f.conj(), reverse_force=(w*lift.conj()[None])@df)
+        return result
     potential = np.random.default_rng(811).normal(size=(2, degree+1, 3, 2))*.02
+    if complex_material:
+        potential = potential+1j*np.random.default_rng(812).normal(size=potential.shape)*.02
     normal = potential[:, 1:]*np.arange(1, degree+1)[None, :, None, None]/lengths[:, None, None, None]
     moments = polynomial_moments(nodes, lengths, np.zeros(2), np.ones(2), modes, degree=2*degree)
     actual = project_body_polynomial(potential, normal, moments, pack(epsilon), pack(np.ones_like(x)),
-                                     metric_y=metric_y)
+                                     metric_y=metric_y, sesquilinear=complex_material)
     field = np.zeros((len(modes), len(modes), 2, 2), complex)
     gram = field.copy()
     material = np.zeros((len(modes), len(modes)), complex)
@@ -75,7 +86,7 @@ def test_polynomial_body_field_and_energy_match_independent_tensor_quadrature(de
         b[:, :, 0, 0] += lift[None]
         b[:, :, 1, 1] += 1
         weighted = b*np.array([1., metric_y])[None, None, :, None]
-        energy = epsilon[None, :, None, None]*np.einsum('yxic,yxid->yxcd', b, weighted)
+        energy = epsilon[None, :, None, None]*np.einsum('yxic,yxid->yxcd', b.conj() if complex_material else b, weighted)
         ey = np.exp(-2j*np.pi*modes[:, None]*(nodes[e]+lengths[e]*r)[None])*(lengths[e]*wr)[None]
         field += np.einsum('ny,yxcd,mx->nmcd', ey, b, wave)
         gram += np.einsum('ny,yxcd,mx->nmcd', ey, energy, wave)

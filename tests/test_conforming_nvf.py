@@ -243,7 +243,7 @@ def test_unsupported_lattice_is_refused(lattice):
 
 @pytest.mark.parametrize('change', [dict(lx=-3.), dict(ly=701.), dict(ly=0.), dict(cx=900.),
                                     dict(cy=17.), dict(angle=.4), dict(material=-2.),
-                                    dict(material=3.+.1j), dict(material=np.eye(3)),
+                                    dict(material=3.-.1j), dict(material=np.eye(3)),
                                     dict(material=wavebit.Material(epsilon=3., mu=1.)),
                                     dict(angel=.3)])
 def test_unsupported_or_invalid_shape_is_refused(change):

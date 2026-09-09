@@ -43,7 +43,7 @@ def independent_graded_fractions(targets, seams, values, strength=8., radius=.01
 def graded_fractions(targets, seams, values, strength=8., radius=.01, xp=np):
     """Invert a positive density formed from signed, smoothed log-material jumps.
 
-    Log jumps add before squaring, so coincident interfaces merge and opposite
+    Log jumps add before taking the squared magnitude, so interfaces merge and opposite
     jumps cancel. Gaussian products have exact erf primitives. Eighteen bracket
     steps and four Newton steps differentiate the same forward CDF, including
     zero-width material intervals, without merging or a custom backward rule.
@@ -57,7 +57,7 @@ def graded_fractions(targets, seams, values, strength=8., radius=.01, xp=np):
     terms = []
     for i, seam in enumerate(seams):
         for j in range(i, len(seams)):
-            weight = (strength/2*(1 if i == j else 2)*jumps[i]*jumps[j]
+            weight = (strength/2*(1 if i == j else 2)*xp.real(xp.conj(jumps[i])*jumps[j])
                       *xp.exp(-((seam-seams[j])/(2*radius))**2))
             terms.append(((seam+seams[j])/2, weight))
     def cumulative(x):
@@ -69,14 +69,14 @@ def graded_fractions(targets, seams, values, strength=8., radius=.01, xp=np):
         field = xp.zeros_like(x)
         for seam, jump in zip(seams, jumps):
             field = field+jump*xp.exp(-.5*((x-seam)/radius)**2)
-        return 1+strength/(np.sqrt(np.pi)*radius)*field**2
+        return 1+strength/(np.sqrt(np.pi)*radius)*xp.real(xp.conj(field)*field)
     return _invert_cdf(targets, cumulative, density, xp)
 
 
 class MaterialGradedGapModel(ContinuousFluxGapModel):
-    """Resolve real seams with material-defined node positions and fixed topology.
+    """Resolve material seams with real node positions and fixed topology.
 
-    Signed log-material jumps are smoothed together before squaring, so a
+    Log-material jumps are smoothed before taking the squared magnitude, so a
     collapsing interval cannot leave a fictitious grading interface behind.
     grading_radius is a fraction of the envelope width. grading_strength is
     dimensionless. Zero strength selects the original fixed mesh exactly.
