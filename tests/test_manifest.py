@@ -774,7 +774,6 @@ FDTD_REFUSALS = {
     'a complex theta': dict(theta=0.3 + 0.1j),
     'a complex permittivity': dict(structure=np.array([[[1.0 + 0.3j, 1.0]]])),
     'Re(eps) <= 0': dict(structure=np.array([[[-2.0, 1.0]]])),
-    'a parametric structure': dict(structure=[{'background': 1.0, 'shapes': []}]),
     'lattice': dict(lattice=[[1.0, 0.0], [0.5, 1.0]]),
 }
 
@@ -801,6 +800,26 @@ def test_a_refusal_the_manifest_publishes_is_refused(name, backend):
 FDTD_COMMON_KW = dict(structure=np.full((1, 1, 1), 2.), thickness=[.2], top=1., bot=1.,
                       period=.2, wavelength=1., resolution=10, n_pml=4, n_periods=25,
                       truncation_order=0)
+
+
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
+def test_published_fdtd_rectangles_use_common_route(backend):
+    from wavebit.manifest import SOLVERS
+    if backend != 'numpy':
+        pytest.importorskip(backend)
+    if backend == 'jax':
+        pytest.importorskip('jax').config.update('jax_enable_x64', True)
+    common = SOLVERS['fdtd']['routes']['common']
+    assert common['parametric_shapes'] == ('rectangle', 'square')
+    assert 'rectangle centre' in common['differentiable_parameters']
+    assert 'shape_smoothing' in common['static_parameters']
+    settings = dict(FDTD_COMMON_KW, period=[.2, .2], structure=[dict(background=2., shapes=[
+        dict(type='square', l=.08, material=2.)])], backend=backend, shape_smoothing=.02)
+    result = wavebit.fdtd(**settings)
+    target = wavebit.fdtd(**dict(settings, structure=np.full((1, 2, 2), 2.), shape_smoothing=0.))
+    np.testing.assert_allclose(result.s_inc.R, target.s_inc.R, atol=1e-13)
+    with pytest.raises((TypeError, ValueError)):
+        wavebit.fdtd(**dict(settings, backend=None))
 
 
 @pytest.mark.parametrize('backend', ['jax', 'torch'])

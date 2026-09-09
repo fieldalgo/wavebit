@@ -3,6 +3,7 @@
 | Entry | Question |
 | --- | --- |
 | `meep_multilayer.py` | Do six optimized coating variables give stable independent complex-amplitude derivatives through Meep's public global material-function API? |
+| `meep_rectangle.py` | Do a rectangle's width and translation change three TE diffraction amplitudes consistently under independent Meep perturbations and runtime controls? |
 | `meep_ringdown.py` | Can source-free time traces be generated through Meep's public API for independent mode-fitting checks? |
 | `meep_source_notch.py` | Does a unit-peak custom source zero suppress a known undamped material mode, with fields matching the native solver at the same current times? |
 | `meep_halfspace.py` | Do magnetic half-space, sharp-film or graded-interface perturbations give stable complex derivatives under smaller perturbations, longer runs and tighter material averaging? |

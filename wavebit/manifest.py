@@ -108,7 +108,9 @@ from ._core.spec import SPEC_VERSION
 #: interfaces, whose thickness derivatives require a fixed positive total depth.
 #: Version 12 distinguishes default piecewise thickness derivatives from optional
 #: C1 internal-interface averaging, including its static width and clearance.
-MANIFEST_VERSION = '12'
+#: Version 13 adds shared axis-aligned rectangle recipes on the explicit FDTD
+#: route, including moving transverse faces and optional translation averaging.
+MANIFEST_VERSION = '13'
 
 
 # --------------------------------------------------------------- how a structure is spelled
@@ -521,9 +523,17 @@ SOLVERS = {
                 'required': ('resolution',),
                 'differentiable_parameters': ('theta', 'phi', 'raster epsilon', 'raster mu',
                                               'electric pole coefficients', 'half-space epsilon',
-                                              'half-space mu', 'fixed-total layer thickness'),
-                'static_parameters': ('transverse geometry', 'total depth', 'wavelength',
-                                      'mesh_indices', 'mesh_thickness', 'layer_smoothing', 'truncation_order'),
+                                              'half-space mu', 'fixed-total layer thickness',
+                                              'rectangle centre', 'rectangle size', 'shape epsilon/mu'),
+                'static_parameters': ('periods', 'shape types/count/paint order', 'total depth', 'wavelength',
+                                      'mesh_indices', 'mesh_thickness', 'layer_smoothing', 'shape_smoothing', 'truncation_order'),
+                'parametric_shapes': ('rectangle', 'square'),
+                'parametric_requires': ('two rectangular periods', 'subpixel=True', 'static angle=0'),
+                'parametric_refused': ('rotated shapes', 'circles/ellipses', 'raster mu', 'dispersion labels'),
+                'shape_constraint': 'positive lengths no larger than periods; periodic later-shape painting; '
+                                    'gradients piecewise across topology changes',
+                'shape_smoothing_constraint': 'static scalar or (x,y) widths in [0,period]; '
+                                              'averages translations before sampling; changes the sampled profile',
                 'array_angles_require': ('truncation_order',),
                 'array_phi_requires': 'Jones or psi polarization; full y-period sampling including zero',
                 'array_half_spaces_require': ('mesh_indices', 'truncation_order'),
@@ -541,7 +551,8 @@ SOLVERS = {
         'sections': ('material_quantity', 'results'),
         'structure': 'an array of relative permittivity, shape (n_layers, Ny, Nx); '
                      'Ny = 1 is a grating invariant along y and anything larger is a crossed '
-                     'one. The parametric spelling `paths` publishes is refused here',
+                     'one. The explicit common route also accepts axis-aligned rectangle/square '
+                     'recipes using the shared parametric conventions; the default legacy route refuses them',
         'answers': ('pure te/tm at any theta in the classical mount (phi = 0)',
                     'a conical mount through psi/chi or a complex Jones pair',
                     'a crossed grating, the raster periodic along both axes',
@@ -552,7 +563,7 @@ SOLVERS = {
         #: for. Each is refused rather than approximated because each returns a *plausible*
         #: number if it is quietly ignored, and a plausible wrong number from the cross-check
         #: solver is worse than no cross-check at all.
-        'refused': ('a complex theta', 'a complex permittivity', 'Re(eps) <= 0', 'a parametric structure',
+        'refused': ('a complex theta', 'a complex permittivity', 'Re(eps) <= 0',
                     'lattice'),
         #: ``given`` is guaranteed on both routes. The common route additionally
         #: guarantees both pure-incidence columns for every solve.

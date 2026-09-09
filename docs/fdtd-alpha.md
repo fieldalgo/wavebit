@@ -30,7 +30,7 @@ causal time records; see the [guide](guide/time-domain.md#common-scene-adapter).
 The common backend adapter additionally supports bottom incidence with original-coordinate
 records/monitors; the legacy path still supports only top incidence.
 Neither scene path provides MPI execution,
-skewed lattices, parametric geometry input, anisotropic tensors,
+skewed lattices, curved/rotated parametric geometry, anisotropic tensors,
 or complex-angle incidence. Complex Jones states support diffraction and transverse time records through
 separately propagated sine/quadrature sources. Use the appropriate RCWA capability where available; do not
 infer FDTD support from RCWA examples. Unsupported inputs are described in [the solver
@@ -131,8 +131,17 @@ even when the two FDTD derivatives closely agree. A coating-optimization example
 includes a finer-grid physical check. Optional [internal-interface averaging](fdtd-layer-smoothing.md)
 provides C1 cell fractions at a fixed positive `layer_smoothing` width. The
 width changes the material profile; sharp and graded continuum references
-separate that bias from finite-grid error. Transverse shapes, varying total
+separate that bias from finite-grid error. Curved/rotated transverse shapes, varying total
 depth and general higher-order geometry derivatives remain unsupported.
+
+The explicit route now accepts [axis-aligned rectangle and square recipes](fdtd-rectangle-gradients.md)
+using the same geometry reader as RCWA. Centres, lengths and scalar Material
+epsilon/mu retain gradients on a fixed mesh, including periodic wrapping and
+later-shape painting. Optional transverse translation averaging smooths cell
+crossings; actual shape contacts can still have topology kinks. CPU checks
+include exact area/cell integrals, coincident projected edges, bottom joint
+material/thickness gradients, RCWA refinement and public-API Meep perturbations.
+This path does not yet accept rotated/curved shapes or dispersive shape materials.
 
 The shared `layer_thicknesses` helper now supplies positive, fixed-total
 lengths with individual minima for NumPy, JAX and Torch. A

@@ -82,7 +82,7 @@ state at all: a record of the field arriving, and a material given as a pole mod
 as one complex number per wavelength.
 
 Reach for `rcwa()` for harmonic fields through `reconstruct_field`, a skewed
-`lattice`, parametric shapes and evanescent (complex-angle) incidence. Explicit
+`lattice`, curved/rotated parametric shapes and evanescent (complex-angle) incidence. Explicit
 FDTD backends support JAX/PyTorch material gradients through the common scene
 adapter described below. Elliptical diffraction is available using
 `psi` with `chi`, or `polarization=(a_s, a_p)`; for example `(1, 1j)` is a circular
@@ -518,7 +518,7 @@ derivative, = torch.autograd.grad(result.T.sum(), value)
 The same adapter runs on NumPy (`0`), JAX (`1`) and Torch (`2`). JAX results are
 registered pytrees, so a function returning the complete `Result` can be jitted.
 Incidence `theta`/`phi`, raster epsilon, raster mu, electric Drude/Lorentz parameters and Jones amplitudes
-retain their backend graphs. Cell overlap weights are static; harmonic averaging
+retain their backend graphs. Raster cell boundaries are static; harmonic averaging
 is applied normal to each field component and arithmetic averaging tangentially.
 Within the transverse plane, normal harmonic averaging is performed before
 tangential arithmetic averaging, for both epsilon and mu. This ordering makes
@@ -528,6 +528,7 @@ Pole masks use arithmetic fill fractions, including the normal component; this
 is an approximation to a dispersive interface, not a general tensor homogenizer.
 
 Supported scene inputs include rectangular one-dimensional and crossed rasters,
+axis-aligned rectangle/square recipes using the shared RCWA conventions,
 positive real magnetic half spaces, normal/oblique/conical incidence, Jones
 polarization, electric pole labels, and scalar or vector wavelengths. Output
 contains `given`, `s_inc`, `p_inc`, diffraction order metadata, complex r/t and
@@ -543,7 +544,8 @@ homogeneous propagation to move the phase reference to the interfaces. At obliqu
 incidence the transverse wavevector stays fixed across the wavelength band;
 `return_diagnostics=True` includes the corresponding angles.
 
-The mesh, transverse geometry and wavelength are static. Internal layer
+The mesh, periods and wavelength are static. Rectangle centres and sizes can
+vary on that mesh; see [rectangle derivatives](#transverse-rectangle-shape-derivatives). Internal layer
 boundaries can vary at fixed total depth with `mesh_thickness`; see
 [layer derivatives](#internal-layer-thickness-derivatives).
 Half-space epsilon/mu can retain gradients
@@ -559,7 +561,7 @@ Exact grazing orders and orders beyond the grid's sampling limit are refused.
 Far-plane extrapolation of strongly evanescent amplitudes is ill-conditioned.
 
 The explicit-backend adapter currently does not accept skewed lattices,
-transverse shape derivatives or total-depth derivatives; unsupported
+curved/rotated shape derivatives or total-depth derivatives; unsupported
 explicit-backend keywords raise an error. There is no implicit backend fallback. Actual GPU execution remains
 unverified on this CPU-only machine.
 
@@ -569,6 +571,76 @@ transmission with stored Meep public-API data, and JAX/Torch material derivative
 with finite differences. Crossed dispersive scenes additionally check Torch/
 NumPy agreement and a pole-strength derivative. These scene checks supplement
 the native-core Meep/FDTDX field and derivative references.
+
+
+### Transverse rectangle shape derivatives
+
+Explicit backends accept the same layer dictionaries and `Material` objects
+as RCWA for axis-aligned rectangles and squares. A centre is measured from
+the centre of the cell; sizes are absolute lengths in the units of `period`.
+Later shapes paint over earlier shapes, including periodic images. Coordinates,
+sizes and scalar positive real epsilon/mu can be NumPy, JAX or Torch values.
+
+```python
+import jax
+import jax.numpy as jnp
+import wavebit
+
+jax.config.update('jax_enable_x64', True)
+
+def reflection(width):
+    scene = wavebit.Stack.from_structure([
+        dict(background=1., shapes=[
+            dict(type='rectangle', lx=width, ly=.05, cx=.083, material=2.25)])
+    ], [.2], top=1., bot=1.21, period=[1.3, .05])
+    result = wavebit.fdtd(scene, wavebit.Incidence(wavelength=1.), backend='jax',
+                          resolution=20, n_pml=20, n_periods=65, pulse_width=3.,
+                          truncation_order=(1, 0), shape_smoothing=[.05, 0.],
+                          align_layers=True, diffraction_method='directional')
+    return result.s_inc.R.sum()
+
+value, slope = jax.jit(jax.value_and_grad(reflection))(jnp.array(.43))
+```
+
+The recipe requires two finite positive rectangular periods and
+`subpixel=True`. Each size must be positive and no larger than its period.
+The supported `type` values are `rectangle` and `square`; `l` and omitted
+centres retain their shared RCWA meaning. Only a static `angle=0` is accepted.
+Circles, ellipses and rotation are refused. Use each shape's `Material(epsilon,
+mu=...)` for magnetic media. Separate raster `mu`, dispersion labels and poles
+are not accepted on this recipe path. Raster inputs retain their existing
+dispersion support. Combining live layer thicknesses also requires the usual
+`mesh_thickness` and fixed-total constraints.
+
+Shape count, type, paint order, periods and the Yee mesh remain static.
+A recipe whose shapes all have static `ly=period[1]` uses the one-row grating
+shortcut. A live `ly`, including a tensor currently equal to the full period,
+retains full y sampling. The existing array-phi rules also keep full y sampling.
+Unsupported inputs raise; invalid traced geometry produces NaN scattering and
+`stable=False` in diagnostics. No unsupported shape or angle is silently dropped.
+
+By default, `shape_smoothing=0` integrates sharp periodic material regions over
+each Yee cell. Derivatives are piecewise smooth and can jump as a face crosses
+a cell face. An optional static nonnegative scalar or `(x,y)` pair averages
+common translations of the entire painted layer before cell integration.
+Widths use physical length units, must not exceed their respective periods,
+and can be zero independently. Positive widths give C1 cell fractions at cell
+crossings within a fixed paint topology. They also change the sampled material
+profile: reduce the widths with grid refinement and independently check the
+intended sharp geometry.
+
+A contact at which one shape starts covering another can have a physical
+one-sided derivative, even with positive averaging. This is different from
+unrelated projected edges sharing a coordinate; those retain correct derivatives.
+Derivatives at a size bound, topology changes, and general second derivatives
+are not promised. Normal harmonic and tangential arithmetic averaging retain
+the existing separable corner approximation, rather than a general effective
+tensor for a corner.
+
+Diagnostics report `geometry_kind`, `shape_smoothing`, and live `shape_edges`
+in cell-centred x/y coordinates. These edges describe the material partition;
+the returned Yee `shape`, `spacing` and sampling coordinates remain fixed.
+See the [measured refinement and independent references](../fdtd-rectangle-gradients.md).
 
 
 ### Incidence-angle derivatives

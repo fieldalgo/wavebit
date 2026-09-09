@@ -87,6 +87,11 @@ def fdtd(stack=None, incidence=None, **kwargs):
     Both paths support time records and user frequency planes; source and
     normalization conventions are documented in the time-domain guide.
     Explicit backends also support bottom incidence and static z grading.
+    They accept axis-aligned rectangle/square layer recipes with the same
+    centre, absolute length and Material conventions as RCWA. Subpixel cell
+    integration preserves shape gradients and periodic painting. Optional
+    shape_smoothing averages transverse translations over static (x,y) widths;
+    shape contacts can still have topology kinks. Two periods are required.
     Their real scalar ``theta`` and ``phi`` can retain autodiff graphs when an
     explicit ``truncation_order`` fixes the output window. Array ``phi`` uses
     the full y-period mesh even at zero and requires Jones/psi polarization.

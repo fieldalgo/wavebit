@@ -15,6 +15,7 @@ compares the code to itself proves continuity, not correctness.
 
 | Oracle | Files | What a pass means |
 | --- | --- | --- |
+| **Transverse rectangle derivatives** | `test_fdtd_rectangles.py`, `references/test_meep_rectangle.py` | Do shared parametric rectangles preserve periodic painting, exact cell integrals, shape/material graphs and independent translation, RCWA and Meep sensitivities? |
 | **Constrained multilayer design** | `test_layer_thicknesses.py`, `test_fdtd_multilayer_optimization.py`, `references/test_meep_multilayer.py` | Do fixed-total minimum-length coordinates match their analytic Jacobian, preserve RCWA/FDTD graphs and agree with independent multilayer optics and Meep? |
 | **Continuous internal-interface derivatives** | `test_fdtd_layer_smoothing.py`, `references/test_meep_layer_smoothing.py` | Do averaged fractions match independently integrated geometry, preserve exterior faces and give continuous first derivatives through complete scattering, with independent graded-continuum and Meep checks? |
 | **Directional diffraction** | `test_fdtd_directional.py` | Do forward/backward amplitudes recover exact discrete Maxwell modes and preserve magnetic, conical, bottom, record, prefix and material-gradient contracts? |

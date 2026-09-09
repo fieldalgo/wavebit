@@ -143,6 +143,122 @@ def _weights(centres, width, edges, periodic=False, subpixel=True):
     return weights/weights.sum(axis=1, keepdims=True)
 
 
+def _rectangle_recipe(structure):
+    return isinstance(structure, (list, tuple)) and any(isinstance(layer, dict) for layer in structure)
+
+
+def _rectangle_partition(structure, periods, *, xp, array, check):
+    """Resolve RCWA rectangle recipes into a live rectilinear material partition.
+
+    Sorting every periodic face keeps the partition size static. Face events
+    define membership, including zero-width intervals between coincident faces.
+    Midpoint classification there would choose an arbitrary material and lose
+    derivatives even for disjoint shapes whose projected edges coincide.
+    Face coordinates retain AD; actual paint topology changes can have kinks.
+    The partition is not the Yee mesh and is never detached or rasterized on
+    a fixed auxiliary grid. Shared shape readers own lengths and cell origin.
+    """
+    from .lattice import as_lattice
+    from .parametric import check_layer_spec, check_shape_spec, shape_geometry
+    lattice = as_lattice(period=periods)
+    def scalar(value, name, *, positive=False):
+        v = array(value)
+        if v.shape != () or not xp.isdtype(v.dtype, ('real floating', 'integral', 'complex floating')):
+            raise ValueError(f'{name} must be a real scalar.')
+        real = xp.real(v) if xp.isdtype(v.dtype, 'complex floating') else v
+        valid = xp.isfinite(v) & ((xp.imag(v) == 0) if xp.isdtype(v.dtype, 'complex floating') else True)
+        valid = valid & (real > 0) if positive else valid
+        check(valid, f'{name} must be finite and real'+(' and positive.' if positive else '.'))
+        return xp.astype(real, xp.result_type(real, array(1.)))
+    def material(value):
+        m = as_material(value)
+        return scalar(m.epsilon, 'Shape epsilon', positive=True), scalar(m.mu_value, 'Shape mu', positive=True)
+    layers, faces = [], [[array(0.), array(periods[0])], [array(0.), array(periods[1])]]
+    y_invariant = True
+    for i, layer in enumerate(structure):
+        if not isinstance(layer, dict):
+            raise ValueError('Parametric FDTD structure must contain only layer dictionaries.')
+        check_layer_spec(layer, i)
+        base = material(layer.get('background', 1.))
+        shapes = []
+        for j, shape in enumerate(layer.get('shapes', [])):
+            if not isinstance(shape, dict):
+                raise ValueError('Parametric FDTD shapes must be dictionaries.')
+            check_shape_spec(shape, j, i)
+            kind, cx, cy, lx, ly, angle = shape_geometry(shape, lattice)
+            y_invariant &= isinstance(ly, (int, float, np.number)) and np.isreal(ly) and ly == periods[1]
+            if kind not in ('rectangle', 'square'):
+                raise ValueError('Parametric FDTD currently supports rectangles and squares only.')
+            if not isinstance(angle, (int, float, np.number)) or not np.isreal(angle) or angle != 0:
+                raise ValueError('Parametric FDTD requires static angle=0; rotated-shape derivatives are unsupported.')
+            centres = [scalar(v, 'Shape centre') for v in (cx, cy)]
+            sizes = [scalar(v, 'Shape length', positive=True) for v in (lx, ly)]
+            centres = [xp.remainder(c, p) for c, p in zip(centres, periods)]
+            face_ids = []
+            for axis, (c, size, period) in enumerate(zip(centres, sizes, periods)):
+                check(size <= period, 'Shape lengths must not exceed their rectangular periods.')
+                face_ids.append((len(faces[axis]), len(faces[axis])+1))
+                faces[axis].extend((xp.remainder(c-size/2, period), xp.remainder(c+size/2, period)))
+            shapes.append((sizes, face_ids, material(shape.get('material', 1.))))
+        layers.append((base, shapes))
+    edges, ranks = [], []
+    for axis in faces:
+        values = xp.stack(axis)
+        order = xp.argsort(values, stable=True)
+        edges.append(values[order])
+        ranks.append(xp.argsort(order, stable=True))
+    def membership(axis, ids, size):
+        start, end = ranks[axis][ids[0]], ranks[axis][ids[1]]
+        cells = xp.arange(len(edges[axis])-1, device=getattr(start, 'device', None))
+        inside = xp.where(start < end, (cells >= start) & (cells < end),
+                          (cells >= start) | (cells < end))
+        return inside | (size == periods[axis])
+    epsilon, mu = [], []
+    for base, shapes in layers:
+        shape = (len(edges[1])-1, len(edges[0])-1)
+        eps, permeability = [xp.ones(shape, dtype=v.dtype, device=getattr(v, 'device', None))*v for v in base]
+        for sizes, ids, values in shapes:
+            inside = membership(0, ids[0], sizes[0])[None, :] & membership(1, ids[1], sizes[1])[:, None]
+            eps, permeability = xp.where(inside, values[0], eps), xp.where(inside, values[1], permeability)
+        epsilon.append(eps); mu.append(permeability)
+    epsilon, mu = xp.stack(epsilon), xp.stack(mu)
+    if y_invariant:
+        # A statically full-height recipe is the same one-row grating the
+        # raster path accepts. Live ly values never choose this shortcut.
+        epsilon, mu = epsilon[:, :1], mu[:, :1]
+        edges[1] = array([0., periods[1]])
+    return epsilon, mu, edges
+
+
+def _periodic_shape_weights(centres, width, edges, period, smoothing, *, xp, array):
+    """Integrate a translated periodic interval partition over fixed Yee cells.
+
+    Positive smoothing additionally averages a common translation uniformly
+    over its full physical width. Three periodic images suffice for cells no
+    wider than period/2 and smoothing <= period. Saturated step fractions are
+    exact, avoiding remote cancellation when intervals disappear at a seam.
+    """
+    left = array(centres)[:, None]-width/2
+    right = left+width
+    def fraction(face):
+        l, r = left-face, right-face
+        if not smoothing:
+            return xp.clip(r/width, 0., 1.)
+        half = smoothing/2
+        def primitive(v):
+            u = (xp.clip(v, -half, half)+half)/smoothing
+            return xp.where(v <= -half, xp.zeros_like(v), xp.where(v >= half, v, .5*smoothing*u*u))
+        f = (primitive(r)-primitive(l))/width
+        return xp.where(l >= half, xp.ones_like(f), xp.where(r <= -half, xp.zeros_like(f), f))
+    weights = sum(fraction(edges[None, :-1]+shift)-fraction(edges[None, 1:]+shift)
+                  for shift in (-period, 0., period))
+    # A zero-width partition interval can carry a nonzero face derivative.
+    # max(0,0) would split/drop that derivative on JAX/Torch at coincident
+    # projected edges. Clip only negative roundoff; preserve the zero branch.
+    weights = xp.where(weights < 0, xp.zeros_like(weights), weights)
+    return weights/xp.sum(weights, axis=1, keepdims=True)
+
+
 def _smoothed_layer_weights(centres, width, edges, smoothing, *, xp, array):
     """C1 cell fractions: average internal interface positions over a box.
 
@@ -280,15 +396,16 @@ def _solve_bottom_scene(options):
     runtime = time_loop_backend(options['backend'], device=options['device'],
                                 reference=options['structure'])
     xp, array = runtime.xp, runtime.array
-    raster = array(options['structure'])
-    if raster.ndim != 3 or min(raster.shape) < 1:
+    parametric = _rectangle_recipe(options['structure'])
+    raster = options['structure'] if parametric else array(options['structure'])
+    if not parametric and (raster.ndim != 3 or min(raster.shape) < 1):
         raise ValueError('structure must have shape (layers, y, x).')
     geometry_valid = array(True)
     def check_geometry(valid, message):
         nonlocal geometry_valid
         _require_scene(valid, message)
         geometry_valid = geometry_valid & valid
-    nominal, layer_planes = _layer_geometry(options['thickness'], options['mesh_thickness'], raster.shape[0],
+    nominal, layer_planes = _layer_geometry(options['thickness'], options['mesh_thickness'], len(raster),
                                              xp=xp, array=array, check=check_geometry, smoothing=options['layer_smoothing'])
     depth = float(nominal.sum())
     thickness = xp.flip(array(options['thickness']), axis=0) if options['mesh_thickness'] is not None else nominal[::-1]
@@ -298,7 +415,7 @@ def _solve_bottom_scene(options):
         thickness = xp.astype(thickness, xp.result_type(thickness, array(1.)))
         thickness = xp.where(geometry_valid, thickness, xp.full_like(thickness, float('nan')))
     mirrored = dict(options, incidence_side='top', top=options['bot'], bot=options['top'],
-                    thickness=thickness, structure=xp.flip(raster, axis=0))
+                    thickness=thickness, structure=raster[::-1] if parametric else xp.flip(raster, axis=0))
     if options['mesh_thickness'] is not None:
         mirrored['mesh_thickness'] = nominal[::-1]
     if options['mesh_indices'] is not None:
@@ -383,11 +500,20 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                      pulse_width=None, align_layers=False, diffraction_distance=None,
                      diffraction_method='electric', pml_reflection=1e-8, pulse_notches=None,
                      source_distance=None, transverse_resolution=None, mesh_indices=None,
-                     mesh_thickness=None, layer_smoothing=0.):
+                     mesh_thickness=None, layer_smoothing=0., shape_smoothing=0.):
     """Solve a rectangular scene with fixed-mesh layer/angle/material gradients.
 
     Explicit resolution is required: optimizing materials must not resize the
-    grid. Transverse geometry and wavelength are static. Half-space epsilon/mu can be live
+    grid. Wavelength and periods are static. Axis-aligned rectangle/square
+    recipes use the shared RCWA shape convention and retain centre, size and
+    scalar Material epsilon/mu gradients. Later shapes paint over earlier
+    shapes, including periodic wrapping. They require two rectangular periods,
+    subpixel=True and sizes in (0,period]; circles, rotation and raster pole
+    labels are unsupported on recipes. shape_smoothing is a static scalar or
+    (x,y) pair of full physical averaging widths in [0,period]. Positive widths
+    average transverse translations before sampling; moving contacts between
+    shapes can still have topology kinks. The Yee mesh never follows a shape.
+    Half-space epsilon/mu can be live
     positive real scalars with explicit mesh_indices and truncation_order.
     mesh_indices=(n_top,n_bottom) fixes padding/grading using nominal static
     refractive indices; actual materials still determine all physics and CPML.
@@ -431,13 +557,22 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     as a scalar or (x,y) pair. The z mesh continues to use resolution.
     """
     layer_smoothing = _validate_layer_smoothing(layer_smoothing)
+    parametric = _rectangle_recipe(structure)
+    shape_width = np.asarray(shape_smoothing)
+    if (shape_width.shape not in ((), (2,)) or shape_width.dtype.kind not in 'fiu'
+            or not np.isfinite(shape_width).all() or np.any(shape_width < 0)):
+        raise ValueError('shape_smoothing must be a nonnegative finite static scalar or (x,y) pair.')
+    if np.any(shape_width) and not parametric:
+        raise ValueError('shape_smoothing requires parametric rectangle layers.')
+    if parametric and (not subpixel or mu is not None or dispersion is not None or poles is not None):
+        raise ValueError('Parametric FDTD requires subpixel=True and Material epsilon/mu; raster mu and dispersion labels are unsupported.')
     if layer_smoothing and (mesh_thickness is None or not subpixel):
         raise ValueError('Positive layer_smoothing requires explicit mesh_thickness and subpixel=True.')
     record_bounds = _validate_record_bounds(record_bounds)
     if record_bounds is not None and record_field is None:
         raise ValueError('record_bounds requires record_field.')
     if incidence_side == 'bottom':
-        return _solve_bottom_scene(locals().copy())
+        return _solve_bottom_scene({k: v for k, v in locals().items() if k not in ('parametric', 'shape_width')})
     if (field_monitors is not None or record_field is not None) and not return_diagnostics:
         raise ValueError('field_monitors/record_field require return_diagnostics=True.')
     if convergence_window is not None and not return_diagnostics:
@@ -541,7 +676,17 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     source_epsilon = xp.finfo(xp.real(array(np.array(0j, dtype=np.complex128))).dtype).eps
     if span and width > np.sqrt(-np.log(100*source_epsilon))/(np.pi*span):
         raise ValueError('pulse_width leaves a requested wavelength in the numerical source tail; reduce pulse_width or narrow the wavelength band.')
-    raster = array(structure)
+    transverse_edges = None
+    if parametric:
+        periods = np.atleast_1d(np.asarray(parse_period_mapping(period), float))
+        if periods.shape != (2,) or not np.isfinite(periods).all() or np.any(periods <= 0):
+            raise ValueError('Parametric FDTD requires two positive static rectangular periods.')
+        shape_width = np.broadcast_to(shape_width, (2,)).astype(float)
+        if np.any(shape_width > periods):
+            raise ValueError('shape_smoothing must not exceed either rectangular period.')
+        raster, mu, transverse_edges = _rectangle_partition(structure, periods, xp=xp, array=array, check=check)
+    else:
+        raster = array(structure)
     if raster.ndim != 3 or min(raster.shape) < 1:
         raise ValueError('structure must have shape (layers, y, x).')
     def real_material(value):
@@ -664,15 +809,18 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
             offsets[c] = 0. if magnetic else .5  # physical x,y,z offsets
             v = values
             transverse_axes = [
-                (2, (np.arange(nx)+offsets[0])*dx, dx, np.linspace(0, lx, raster.shape[2]+1), True),
-                (1, (np.arange(ny)+offsets[1])*dy, dy, np.linspace(0, ly, raster.shape[1]+1), True)]
+                (2, (np.arange(nx)+offsets[0])*dx, dx,
+                 np.linspace(0, lx, raster.shape[2]+1) if transverse_edges is None else transverse_edges[0], True),
+                (1, (np.arange(ny)+offsets[1])*dy, dy,
+                 np.linspace(0, ly, raster.shape[1]+1) if transverse_edges is None else transverse_edges[1], True)]
             # Normal harmonic averaging precedes tangential arithmetic averaging
             # in the transverse plane. A fixed x-then-y order treated Ex and Ey
             # differently at crossed raster corners and broke x/y covariance.
             if harmonic and c == 1:
                 transverse_axes.reverse()
             for axis, centres, width, edges, periodic in transverse_axes:
-                weights = array(_weights(centres, width, edges, periodic, subpixel), dtype=v.dtype)
+                weights = array(_weights(centres, width, edges, periodic, subpixel), dtype=v.dtype) if transverse_edges is None else \
+                    _periodic_shape_weights(centres, width, edges, lengths[2-axis], shape_width[2-axis], xp=xp, array=array)
                 use_harmonic = harmonic and c == 2-axis
                 v = 1/v if use_harmonic else v
                 v = xp.moveaxis(xp.tensordot(weights, v, axes=((1,), (axis,))), 0, axis)
@@ -982,10 +1130,14 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                            n_pml=int(n_pml), pml_reflection=pml_reflection,
                            source_z=z[source_z], source_distance=source_distance,
                            layer_planes=layer_planes, layer_smoothing=layer_smoothing,
+                           geometry_kind='rectangles' if parametric else 'raster',
+                           shape_smoothing=tuple(shape_width) if parametric else (0., 0.),
                            # The final closing cell also belongs to the lower PML.
                            pml_bounds=(z[0], z[int(n_pml)], z[-int(n_pml)], z[-1]+widths[-1]),
                            angles=xp.asin(array(band)/centre*xp.sin(theta)), azimuth=phi,
                            normalization='uniform-medium reference; two electric-current bases')
+        if transverse_edges is not None:
+            diagnostics['shape_edges'] = tuple(edge-period/2 for edge, period in zip(transverse_edges, lengths))
         weights = xp.stack(weights)
         diagnostics['diffraction'] = dict(
             method=diffraction_method,
