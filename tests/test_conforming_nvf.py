@@ -263,14 +263,14 @@ def test_invalid_structure_or_unsupported_shape_kind_is_refused(structure):
 def test_stale_shape_count_order_tiling_and_layer_count_are_refused():
     builder = wavebit.ConformingNVF(0, **SETTINGS)
     plan = builder.plan(*scene())
-    for change in ('count', 'order', 'gap', 'layers'):
+    for change in ('count', 'order', 'overlap', 'layers'):
         structure, lattice = scene()
         if change == 'count':
             structure[0]['shapes'].pop()
         elif change == 'order':
             structure[0]['shapes'].reverse()
-        elif change == 'gap':
-            structure[0]['shapes'][0]['lx'] -= 1.
+        elif change == 'overlap':
+            structure[0]['shapes'][0]['lx'] += 1.
         else:
             structure.append(dict(background=1.))
         with pytest.raises(wavebit.StaleGeometryError):

@@ -39,8 +39,9 @@ correspondence. Finite input and output checks are separate from an accuracy
 estimate. An ill-conditioned but finite solve is not certified as accurate.
 
 The real-dielectric cell retains its absolute 1e-9
-Hermitian-defect guard. Its coefficient construction, material grading and
-contact equations are unchanged. The specialized high-order mirror path
+Hermitian-defect guard. The closure integration itself did not change cell
+construction or contact equations; subsequent grading changes are described
+below. The specialized high-order mirror path
 retains its existing memory-conscious LU implementation.
 
 The new tests recover a prescribed non-Hermitian constitutive tensor under
@@ -70,7 +71,7 @@ are in `studies/results/nvf_energy_engine_validation.log`.
 
 ## Shape construction and Fourier origin
 
-The public constructor accepts a contiguous rectangle tiling along either
+The public constructor accepts a nonoverlapping rectangle sequence along either
 lattice axis in each layer, uniform layers, positive scalar backgrounds,
 independent orthogonal periods,
 translations, common lattice/shape rotations and rectangular retained-order
@@ -132,6 +133,12 @@ tilings in the same stack. It maps every layer back to the solver's original
 Cartesian frame and retained-order layout before closure. Plans freeze both
 ordering and axis; equivalent quarter-turn rectangle spellings preserve
 the geometry and all five matrices.
+
+The [separated-rectangle extension](nvf-separated-rectangles.md) inserts live
+background intervals between shapes. It retains zero-width intervals and
+their opening derivatives, and uses signed log-jump grading so coincident
+boundaries merge or cancel. This changes the finite approximation used by
+graded cells; historical measurements retain their original density.
 
 Arbitrary shapes, object edges not aligned with the lattice, sheared
 corrector cells, lossy corrector construction, automatic selection through the ordinary

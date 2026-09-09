@@ -2,6 +2,7 @@
 import numpy as np
 import pytest
 from scipy.optimize import brentq
+from scipy.integrate import quad
 
 from studies.nvf_cell_bounds import energy_bounds
 from studies.nvf_continuous_flux import ContinuousFluxGapModel
@@ -10,9 +11,24 @@ from studies.nvf_interface_resolution import MaterialGradedGapModel, graded_frac
 
 
 def independent_roots(targets, seams, values, strength=8., radius=.01):
-    weights = strength/np.pi*(np.diff(values)/(values[1:]+values[:-1]))**2
+    seams, values = np.asarray(seams), np.asarray(values)
+    jumps = np.diff(np.log(values))/2
     def cdf(x):
-        return x+np.sum(weights*(np.arctan((x-seams)/radius)-np.arctan(-seams/radius)))
+        # Integrate sampled density independently of the erf-product primitive.
+        points = (seams[:, None]+radius*np.arange(-8, 9)[None]).ravel()
+        points = np.unique(points[(points > 0) & (points < x)])
+        bounds = np.r_[0., points, x]
+        result = x
+        for lo, hi in zip(bounds[:-1], bounds[1:]):
+            anchor = seams[np.argmin(abs(seams-(lo+hi)/2))]
+            # Integrate in radius units. Physical-coordinate quadrature loses
+            # digits in (x-seam)/radius at the narrowest supported radius.
+            def density(u):
+                return strength/np.sqrt(np.pi)*np.sum(
+                    jumps*np.exp(-.5*(u+(anchor-seams)/radius)**2))**2
+            result += quad(density, (lo-anchor)/radius, (hi-anchor)/radius,
+                           epsabs=2e-14, epsrel=2e-14)[0]
+        return result
     total = cdf(1.)
     return np.array([brentq(lambda x: cdf(x)-target*total, 0., 1., xtol=5e-15, rtol=5e-15) for target in targets])
 
@@ -23,7 +39,14 @@ def test_density_roots_match_independent_bracketed_solver_and_cancel_redundant_s
     seams, values = np.array([.21, .63]), np.array([4., 9., 6.25])
     actual, residual = graded_fractions(targets, seams, values, radius=radius)
     np.testing.assert_allclose(actual, independent_roots(targets, seams, values, radius=radius), atol=8e-15, rtol=0)
-    assert residual < 2e-14
+    density = 1+8/(np.sqrt(np.pi)*radius)*np.sum(
+        np.diff(np.log(values))[None]/2*np.exp(-.5*((actual[:, None]-seams)/radius)**2), axis=1)**2
+    # A float64 root can have an irreducible CDF residual on a steep density.
+    # C(1)>=1, so this bounds its half-ULP contribution without underestimating
+    # the normalized residual. The independent root tolerance remains 8e-15;
+    # the production CDF guard remains 2e-12.
+    rounding_floor = np.max(np.spacing(actual)*density)/2
+    assert residual < 2e-14+rounding_floor
     assert np.min(np.diff(actual)) > 0
     redundant, _ = graded_fractions(targets, [.1, .21, .5, .63, .8], [4., 4., 9., 9., 6.25, 6.25], radius=radius)
     np.testing.assert_array_equal(actual, redundant)

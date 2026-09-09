@@ -1,5 +1,14 @@
 # Resolving real material interfaces with a differentiable mesh
 
+This page records the independent-jump density used through revision
+`532489b`, including its historical measurements and reproduction commands.
+The current [separated-rectangle construction](nvf-separated-rectangles.md)
+uses a signed log-jump density that merges coincident interfaces. Its finite
+cell results differ from the tables below. The former CDF remains available
+as `independent_graded_fractions` in the shared material-grading module for
+direct comparisons; reproducing the complete historical cells requires the
+earlier revision.
+
 `studies/nvf_interface_resolution.py` adds an opt-in, material-defined mesh to
 the [continuous-flux rectangular model](nvf-continuous-flux.md). It keeps the
 number and connectivity of unknowns fixed while concentrating interior x nodes

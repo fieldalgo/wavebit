@@ -126,6 +126,8 @@ class PartitionedGapEnergyModel(ThinGapEnergyModel):
     the centered envelope of the supplied width. Geometry, seams and each
     material value remain live under JAX. Mesh density depends on the envelope,
     not on the number, positions or equality of the interior material pieces.
+    Coincident seams retain zero-width intervals and their one-sided opening
+    derivatives; only negative widths beyond contact roundoff are refused.
 
     An unequal interior interface is unfitted to this mesh. Representation
     invariance does not assert accuracy for that unresolved material interface.
@@ -184,10 +186,10 @@ class PartitionedGapEnergyModel(ThinGapEnergyModel):
         edges = xp.concatenate([xp.asarray([-width/2]), seams, xp.asarray([width/2])])/PERIOD
         g, w = gap/PERIOD, width/PERIOD
         valid = (xp.all(xp.isfinite(edges)) & xp.all(xp.isfinite(values)) & xp.all(values > 0)
-                 & xp.all(edges[1:] > edges[:-1]) & (w > 0) & (w < 1)
+                 & xp.all(edges[1:]-edges[:-1] >= -CONTACT_ROUNDOFF) & (w > 0) & (w < 1)
                  & (g >= -CONTACT_ROUNDOFF) & (g < 1))
         if xp is np and not valid:
-            raise ValueError('profile requires finite positive materials and strictly ordered interior seams')
+            raise ValueError('profile requires finite positive materials and nondecreasing interior seams')
         starts = xp.asarray([-.5, -w/2, w/2])
         sizes = xp.asarray([(1-w)/2, w, (1-w)/2])
         nodes = (starts[:, None]+sizes[:, None]*xp.asarray(self.fractions[:-1])).ravel()

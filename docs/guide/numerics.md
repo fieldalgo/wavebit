@@ -99,8 +99,9 @@ print(result.p_inc.T.sum(), result.s_inc.T.sum())
 
 [`wavebit.ConformingNVF`](conforming-nvf.md) constructs this standard layer
 stack directly from ordinary rectangle layer dictionaries. It supports
-contiguous rectangle tilings along either axis of an orthogonal cell, with
+nonoverlapping rectangle sequences along either axis of an orthogonal cell, with
 different directions allowed per layer, live materials, translations, both
-physical periods, and common lattice rotation. The general
+physical periods, common lattice rotation, and internal background intervals
+that can open or close during JAX replay. The general
 energy closure API also accepts externally constructed fields. Arbitrary
 shape correctors remain outside the rectangular builder's scope.

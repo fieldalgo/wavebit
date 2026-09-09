@@ -6,7 +6,7 @@ Targets:
 - `wavebit/_core/conforming/__init__.py`
 - `tests/test_conforming_layer_axes.py`
 
-`ConformingNVF` accepts contiguous rectangle tilings along either lattice
+`ConformingNVF` accepts nonoverlapping rectangle sequences along either lattice
 axis. Each layer chooses its own axis, so horizontal and vertical material
 sequences can share one optical stack. Equivalent rectangle descriptions
 obtained by adding a quarter turn and exchanging lengths give the same
@@ -100,10 +100,14 @@ The selected suites pass 107 public construction checks, 62 engine and pose
 regressions, and 31 documentation contract checks. Both manual examples,
 the strict Sphinx build and lint also pass.
 
-Within each layer, rectangles must touch without gaps or overlaps, share
+Within each layer, rectangles must avoid overlaps, share
 their perpendicular extent and center, and span less than one period along
 the tiling axis. Full perpendicular-period contact is supported. L-shaped
-unions, disconnected profiles, oblique edges, sheared cells and lossy
+unions, unequal perpendicular extents, oblique edges, sheared cells and lossy
 corrector construction remain unsupported. General shape NVF is available
 through the existing solver API; this explicit builder does not substitute
 another construction for unsupported input.
+
+The subsequent [background-interval extension](nvf-separated-rectangles.md)
+allows rectangles to be separated along the chosen axis. Intervals may open
+or close under the same plan; the axis and input-index ordering stay fixed.

@@ -42,11 +42,12 @@ def _epsilon(value, xp):
 class ConformingNVF:
     """Build energy-factorized matrices from ordinary rectangle layer dictionaries.
 
-    Each patterned layer must be a contiguous tiling along either local axis
+    Each patterned layer must be a nonoverlapping sequence along either local axis
     of a right-handed orthogonal lattice, with equal perpendicular extent and
     center. Its span along the tiling axis must be less than that period;
-    its perpendicular extent may reach the other period. Gaps and overlaps
-    between rectangles are refused. Different layers may use different axes.
+    its perpendicular extent may reach the other period. Internal gaps contain
+    the layer background and may open or close during replay. Different layers
+    may use different axes.
     Adding pi/2 to a rectangle angle and exchanging its lengths preserves
     the geometry; rectangle edges must remain aligned with lattice axes.
     Uniform layers are supported. The two periods may differ and must be positive;
@@ -153,7 +154,8 @@ class ConformingNVF:
 
         Try a tiling along the first lattice axis, then the second. Replay
         keeps that choice even if another axis later becomes valid. Re-plan
-        explicitly when changing the topology or the chosen axis becomes invalid.
+        explicitly when changing layer/shape counts or ordering, or when the
+        chosen axis becomes invalid. Internal gaps may open or close on replay.
         """
         try:
             layers, _, _, _ = self._layers(structure, lattice, np)
@@ -174,7 +176,7 @@ class ConformingNVF:
                 axes.append(axis)
                 break
             else:
-                raise ValueError('conforming rectangles must form a contiguous tiling along a lattice axis')
+                raise ValueError('conforming rectangles must form a nonoverlapping profile along a lattice axis')
         return _Plan(tuple(orders), tuple(axes))
 
     @staticmethod
@@ -196,14 +198,20 @@ class ConformingNVF:
                  & (width > 0) & (width < PERIOD) & (gap >= -tol) & (gap < PERIOD)
                  & xp.all(xp.abs(values['ly']-values['ly'][0]) <= tol)
                  & xp.all(xp.abs(values['cy']-cy) <= tol)
-                 & xp.all(xp.abs(right[:-1]-left[1:]) <= tol))
-        _require(valid, 'conforming rectangles must form a contiguous equal-height tiling within one period',
+                 & xp.all(right[:-1]-left[1:] <= tol))
+        _require(valid, 'conforming rectangles must form a nonoverlapping equal-height profile within one period',
                  StaleGeometryError if replay else ValueError)
         # The analytically continued contact equations accept this same tiny
         # roundoff neighborhood. Snapping negative roundoff to zero would erase
         # the live gap derivative when a rotated lattice norm rounds down.
-        seams = (right[:-1]+left[1:])/2-cx
-        return gap, width, cx, cy, dict(seams=seams, values=values['epsilon']), valid
+        # Every internal interval carries background, including at zero width.
+        # Keep both live endpoints: averaging a contacting pair would discard
+        # the one-sided derivative when that background interval opens.
+        seams = xp.stack([right[:-1], left[1:]], axis=-1).ravel()-cx
+        materials = xp.concatenate([
+            xp.stack([values['epsilon'][:-1], xp.ones_like(values['epsilon'][:-1])], axis=-1).ravel(),
+            values['epsilon'][-1:]])
+        return gap, width, cx, cy, dict(seams=seams, values=materials), valid
 
     def conv_matrices(self, structure, lattice, *, plan=None, xp=np):
         """Return a layer stack for solve_conv with matching lattice and retained orders.
