@@ -494,6 +494,41 @@ and 4.011 GB, versus 94.30 s and 2.301 GB for the original degree-5
 mesh. The reduction in degree sensitivity comes with higher cost at
 this fixed degree; no default mesh choice has been changed.
 
+## Testing a second physical edge interval
+
+Further edge-size controls keep h=.18, cut 4, pad=.2 and quadrature bonus
+6 fixed. They compare degree 5 at targets .12 and .10, and degree 4 at
+targets .10 and .08. Each target remeshes the same physical geometry;
+the two intervals at different degrees are not one convergence sequence.
+
+| edge target | degree | tetrahedra | full / condensed unknowns | p T | s T |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| .12 | 5 | 780 | 71,796 / 43,716 | .852038068565 | .730662922035 |
+| .10 | 5 | 908 | 83,448 / 50,760 | .852099612881 | .730691646657 |
+| .10 | 4 | 908 | 46,720 / 33,100 | .851926548859 | .730496704608 |
+| .08 | 4 | 1,441 | 73,850 / 52,235 | .852018977392 | .730725046570 |
+
+At degree 5, target .12-to-.10 changes p/s T by
+`+6.15443e-5`/`+2.87246e-5`; the largest individual R/T changes are
+`8.57057e-5`/`2.99748e-5`. The .12 row already has energy errors of
+only `2.54e-8`/`1.28e-8`, yet its optical result still changes at these
+larger scales. Its modal/volume disagreements are `9.99e-6`/`5.47e-6`.
+
+At degree 4, target .10-to-.08 changes T by
+`+9.24285e-5`/`+2.28342e-4`; the largest individual R/T changes are
+`9.33087e-5`/`2.64493e-4`. The finer-edge row has energy errors of
+`1.34e-6`/`1.87e-6`, slightly larger than at target .10, and
+modal/volume disagreements of `2.22e-5`/`2.40e-5`. Thus a finer edge
+target alone does not yield monotone improvement in these diagnostics.
+These controls leave both degree and mesh uncertainty open and do not
+establish a remaining-error estimate.
+
+The new target-.12 degree-5 and target-.08 degree-4 solves take
+177.08 and 167.12 s, with peak process RSS 3.168 and 3.416 GB.
+They ran sequentially using the original full-row boundary arrays.
+These shared-host observations compare different finite approximations,
+not cost at equal optical accuracy.
+
 ## Comparing the physical diffraction orders with Wavebit
 
 Both solvers use `k_parallel=k_incident+G`. At the saved Wavebit optical
