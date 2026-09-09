@@ -803,6 +803,33 @@ FDTD_COMMON_KW = dict(structure=np.full((1, 1, 1), 2.), thickness=[.2], top=1., 
                       truncation_order=0)
 
 
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
+def test_published_fdtd_thickness_capability_requires_fixed_mesh_and_total(backend):
+    from wavebit.manifest import SOLVERS
+    from wavebit.backends.time_domain import time_loop_backend
+    from test_fdtd_scene_angles import value_and_jacobian
+    pytest.importorskip(backend)
+    common = SOLVERS['fdtd']['routes']['common']
+    assert 'fixed-total layer thickness' in common['differentiable_parameters']
+    assert common['backend_thickness_requires'] == ('mesh_thickness', 'subpixel=True')
+    which = 1 if backend == 'jax' else 2
+    def objective(d, backend=which):
+        return wavebit.fdtd(**dict(FDTD_COMMON_KW, structure=np.array([[[2.]], [[1.]]]),
+                                   thickness=[d, .4-d], mesh_thickness=[.2, .2],
+                                   backend=backend)).s_inc.T.reshape(1)
+    value, derivative = value_and_jacobian(objective, .173, which)
+    step = 1e-5
+    finite = (objective(.173+step, 0)-objective(.173-step, 0))/(2*step)
+    np.testing.assert_allclose(value, objective(.173, 0), atol=1e-10)
+    np.testing.assert_allclose(derivative, finite, atol=2e-8, rtol=3e-5)
+    assert abs(finite).item() > .01
+    with pytest.raises(ValueError, match='fixed total depth'):
+        wavebit.fdtd(**dict(FDTD_COMMON_KW, backend=backend, mesh_thickness=[.3]))
+    with pytest.raises(ValueError, match='explicit mesh_thickness'):
+        wavebit.fdtd(**dict(FDTD_COMMON_KW, backend=backend,
+                            thickness=time_loop_backend(which).array([.2])))
+
+
 def test_fdtd_manifest_scopes_backend_omission_to_legacy_top_incidence():
     from wavebit.manifest import SOLVERS
     entry = SOLVERS['fdtd']

@@ -22,8 +22,9 @@ the following sections describe the shared engine and explicit-backend scene pat
 | Execution | NumPy on CPU; optional Matplotlib plotting | Clean wheel installation and calculation checked on macOS arm64/Python 3.12. Other operating systems and Python versions need release CI evidence. |
 
 The legacy Stack/Incidence FDTD path does not provide autodiff or JAX/PyTorch execution.
-The explicit-backend common scene adapter now provides both, with static geometry
-and incidence-angle/material/pole gradients. Common-backend time histories and user z monitors
+The explicit-backend common scene adapter now provides both, with fixed meshes
+and incidence-angle/material/pole and constant-total layer-thickness gradients.
+Common-backend time histories and user z monitors
 are also available, with native component staggering and centre-calibrated
 causal time records; see the [guide](guide/time-domain.md#common-scene-adapter).
 The common backend adapter additionally supports bottom incidence with original-coordinate
@@ -104,7 +105,7 @@ replace the diagonal interface model with general tensor homogenization.
 Fixed-grid [incidence-angle sensitivities](fdtd-scene-angles.md) now preserve
 the `theta` graph through illumination, Bloch boundaries, diffraction and
 reference normalization. Array angles require an explicit order window;
-geometry remains static. CPU checks cover
+the mesh remains static. CPU checks cover
 exact uniform-medium phase derivatives, differentiated magnetic Airy refinement,
 crossed material/pole derivatives, bottom incidence and calibrated records.
 These checks do not establish derivative convergence near diffraction thresholds
@@ -121,6 +122,15 @@ An explicit pair of nominal mesh indices fixes padding/grading. CPU checks
 include analytic CPML derivatives, magnetic Airy refinement and new public-API
 Meep finite differences with duration and perturbation-size controls.
 
+The [layer-thickness extension](fdtd-layer-gradients.md) moves internal
+interfaces through a fixed nominal mesh while preserving total depth. CPU
+JAX/Torch checks include typed scenes, bottom illumination, dispersive masks,
+field records and user monitors. Planar Airy refinement and independent Meep
+thickness perturbations expose position-dependent continuum derivative error,
+even when the two FDTD derivatives closely agree. A coating-optimization example
+includes a finer-grid physical check. Transverse shapes, varying total depth
+and globally smooth geometry derivatives remain unsupported.
+
 The common engine reports physical and discrete lower-cutoff classifications
 and supports independent diffraction-plane distances. A binary dielectric
 experiment at wavelengths 0.2% either side of a Rayleigh threshold exposes a
@@ -129,7 +139,8 @@ classification agrees. See the [near-Rayleigh measurements](fdtd-rayleigh.md);
 this regime remains an accuracy limit, even when R+T is close to one.
 
 The common engine also supports [layer-aligned z meshes](fdtd-layer-alignment.md):
-`align_layers=True` fits every planar layer face without changing its thickness.
+`align_layers=True` fits every nominal layer face without changing its thickness;
+with `mesh_thickness`, actual internal faces can move through the fixed mesh.
 Capped-metal TE/TM tests refine against an independent characteristic matrix,
 including bottom incidence. This reduces a selected normal-interface error;
 it does not resolve the lateral metal-corner limitation above.

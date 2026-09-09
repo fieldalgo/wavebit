@@ -1,4 +1,4 @@
-"""Magnetic half-space finite differences through Meep's documented API only.
+"""Magnetic half-space or film-thickness differences through Meep's public API.
 
 No external implementation is inspected. Each perturbation repeats both the
 incident-medium reference and the physical slab experiment on one fixed cell.
@@ -16,22 +16,26 @@ warnings.showwarning = lambda message, category, filename, lineno, file=None, li
     f'{category.__name__}: {message}', file=sys.stderr)
 
 
-def generate(output, resolution=80, duration=50.):
+def generate(output, resolution=80, duration=50., parameter='halfspace'):
     import meep as mp
     mp.verbosity(0)
     band = np.array([.98, 1.02])
-    parameters = np.array([1.2, 1.1, 1.6, 1.15])
-    epsilon, mu, depth = 2.25, 1.12, .2
+    background = np.array([1.2, 1.1, 1.6, 1.15])
+    parameters = background.copy() if parameter == 'halfspace' else np.array([.173])
+    names = ['epsilon_top', 'mu_top', 'epsilon_bottom', 'mu_bottom'] if parameter == 'halfspace' else ['film_thickness']
+    epsilon, mu, depth = 2.25, 1.12, .2 if parameter == 'halfspace' else .4
     dt = .4/resolution
     zr, zt = -1., 1.2
     def pulse(t):
         return np.exp(-((t-6.)/1.2)**2)*np.sin(2*np.pi*t)
     def fields(p, actual, until):
-        top = mp.Medium(epsilon=p[0], mu=p[1])
+        coefficients = p if parameter == 'halfspace' else background
+        film_depth = depth if parameter == 'halfspace' else p[0]
+        top = mp.Medium(epsilon=coefficients[0], mu=coefficients[1])
         geometry = [] if not actual else [
-            mp.Block(center=mp.Vector3(z=(depth+5)/2), size=mp.Vector3(mp.inf, mp.inf, 5-depth),
-                     material=mp.Medium(epsilon=p[2], mu=p[3])),
-            mp.Block(center=mp.Vector3(z=depth/2), size=mp.Vector3(mp.inf, mp.inf, depth),
+            mp.Block(center=mp.Vector3(z=(film_depth+5)/2), size=mp.Vector3(mp.inf, mp.inf, 5-film_depth),
+                     material=mp.Medium(epsilon=coefficients[2], mu=coefficients[3])),
+            mp.Block(center=mp.Vector3(z=film_depth/2), size=mp.Vector3(mp.inf, mp.inf, film_depth),
                      material=mp.Medium(epsilon=epsilon, mu=mu))]
         sim = mp.Simulation(cell_size=mp.Vector3(z=10.), dimensions=1, resolution=resolution,
                             boundary_layers=[mp.PML(1.)], Courant=.4, default_material=top,
@@ -50,7 +54,8 @@ def generate(output, resolution=80, duration=50.):
         # Independent homogeneous Yee dispersion de-embeds E-node phases.
         def kz(epsilon, mu):
             return 2*resolution*np.arcsin(np.sqrt(epsilon*mu)*np.sin(np.pi*dt/band)/(dt*resolution))
-        kt, kb = kz(*p[:2]), kz(*p[2:])
+        coefficients = p if parameter == 'halfspace' else background
+        kt, kb = kz(*coefficients[:2]), kz(*coefficients[2:])
         r = (actual[0]/reference[0]-1)*np.exp(2j*kt*zr)
         t = actual[1]/reference[0]*np.exp(1j*kt*zr-1j*kb*(zt-depth))
         return np.stack((r, t))
@@ -61,11 +66,12 @@ def generate(output, resolution=80, duration=50.):
         values.append(amplitudes(parameters, until))
         jacobians.append(np.stack([
             np.stack([(amplitudes(parameters+v, until)-amplitudes(parameters-v, until))/(2*step)
-                      for v in np.eye(4)*step], axis=-1) for step in deltas]))
+                      for v in np.eye(len(parameters))*step], axis=-1) for step in deltas]))
     np.savez_compressed(output, version=mp.__version__, resolution=resolution,
                         durations=durations, deltas=deltas, parameters=parameters,
-                        parameter_names=['epsilon_top', 'mu_top', 'epsilon_bottom', 'mu_bottom'],
-                        wavelengths=band, epsilon=epsilon, mu=mu, thickness=depth,
+                        parameter_names=names, background=background, reference_depth=depth,
+                        wavelengths=band, epsilon=epsilon, mu=mu,
+                        thickness=depth if parameter == 'halfspace' else parameters[0],
                         source_z=-3., monitor_z=[zr, zt], pml_thickness=1., cell_length=10.,
                         courant=.4, pulse_width=1.2, pulse_peak=6., source_end=12.,
                         amplitudes=np.array(values), jacobians=np.array(jacobians))
@@ -76,5 +82,6 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--resolution', type=int, default=80)
     parser.add_argument('--duration', type=float, default=50.)
+    parser.add_argument('--parameter', choices=('halfspace', 'thickness'), default='halfspace')
     args = parser.parse_args()
-    generate(args.output, args.resolution, args.duration)
+    generate(args.output, args.resolution, args.duration, args.parameter)

@@ -1,7 +1,8 @@
 """Differentiable rectangular Stack adapter for the shared Yee time-domain core.
 
-Geometry is static; incidence theta/phi, raster/half-space epsilon, mu and electric pole values
-retain their backend graph. A uniform incident-medium run calibrates each current-sheet basis.
+The mesh is static; internal layer boundaries, incidence theta/phi, raster/half-space
+epsilon, mu and electric pole values retain their backend graph. A uniform
+incident-medium run calibrates each current-sheet basis.
 No external implementation is used here.
 """
 import math
@@ -142,6 +143,61 @@ def _weights(centres, width, edges, periodic=False, subpixel=True):
     return weights/weights.sum(axis=1, keepdims=True)
 
 
+def _layer_weights(centres, width, edges, *, xp, array):
+    """Exact cell fractions for moving planar interfaces on a fixed z mesh.
+
+    Piecewise differentiable: at a cell-face crossing the two one-sided
+    derivatives can differ. No stop-gradient or straight-through estimator.
+    """
+    centres, width = array(centres), array(width)
+    width = width[:, None] if width.ndim else width
+    left, right = centres[:, None]-width/2, centres[:, None]+width/2
+    weights = xp.maximum(array(0.), xp.minimum(right, edges[None, 1:])
+                         - xp.maximum(left, edges[None, :-1]))/width
+    return weights/xp.sum(weights, axis=1, keepdims=True)
+
+
+def _static_thickness(value, layers, name):
+    message = f'{name} must contain one positive finite static real length per layer.'
+    # Never silently detach an eager backend tensor while selecting a mesh.
+    if not (isinstance(value, np.ndarray) or
+            isinstance(value, (list, tuple)) and all(isinstance(v, (int, float, np.number)) for v in value)):
+        raise ValueError(message+' Backend thickness values require explicit mesh_thickness.')
+    value = np.asarray(value)
+    if (value.shape != (layers,) or value.dtype.kind not in 'fiu'
+            or not np.isfinite(value).all() or np.any(value <= 0)):
+        raise ValueError(message)
+    value = value.astype(float)
+    if not np.isfinite(value.sum()):
+        raise ValueError(message)
+    return value
+
+
+def _layer_geometry(thickness, mesh_thickness, layers, *, xp, array, check=_require_scene):
+    """Separate static mesh selection from physical boundaries at fixed depth.
+
+    Differentiation is defined along positive, constant-total-thickness paths.
+    Pin both outer faces exactly, including when a low-precision sum rounds.
+    """
+    if mesh_thickness is None:
+        nominal = _static_thickness(thickness, layers, 'thickness')
+        return nominal, np.r_[0., np.cumsum(nominal)]
+    nominal = _static_thickness(mesh_thickness, layers, 'mesh_thickness')
+    actual = array(thickness)
+    if actual.shape != (layers,) or not xp.isdtype(actual.dtype, ('real floating', 'integral')):
+        raise ValueError('thickness must contain one positive finite real length per layer.')
+    actual = xp.astype(actual, xp.result_type(actual, array(1.)))
+    check(xp.all(xp.isfinite(actual) & (actual > 0)),
+          'thickness must contain one positive finite real length per layer.')
+    depth = float(nominal.sum())
+    check(xp.abs(xp.sum(actual)-depth) <= 32*xp.finfo(actual.dtype).eps*depth,
+          'thickness must preserve the fixed total depth of mesh_thickness.')
+    planes = xp.concat((array([0.]), xp.cumulative_sum(actual)[:-1], array([depth])))
+    check(xp.all(planes[1:] > planes[:-1]),
+          'thickness boundaries must remain distinct and inside the fixed total depth.')
+    return nominal, planes
+
+
 def _validate_record_bounds(bounds):
     if bounds is None:
         return None
@@ -174,15 +230,27 @@ def _solve_bottom_scene(options):
     runtime = time_loop_backend(options['backend'], device=options['device'],
                                 reference=options['structure'])
     xp, array = runtime.xp, runtime.array
-    thickness = np.asarray(options['thickness'], float)
     raster = array(options['structure'])
     if raster.ndim != 3 or min(raster.shape) < 1:
         raise ValueError('structure must have shape (layers, y, x).')
-    if thickness.shape != (raster.shape[0],) or not np.isfinite(thickness).all() or np.any(thickness <= 0):
-        raise ValueError('thickness must contain one positive static length per layer.')
-    depth = float(thickness.sum())
+    geometry_valid = array(True)
+    def check_geometry(valid, message):
+        nonlocal geometry_valid
+        _require_scene(valid, message)
+        geometry_valid = geometry_valid & valid
+    nominal, layer_planes = _layer_geometry(options['thickness'], options['mesh_thickness'], raster.shape[0],
+                                             xp=xp, array=array, check=check_geometry)
+    depth = float(nominal.sum())
+    thickness = xp.flip(array(options['thickness']), axis=0) if options['mesh_thickness'] is not None else nominal[::-1]
+    if options['mesh_thickness'] is not None:
+        # Preserve original-coordinate invalidity through the reflected solve.
+        # Roundoff may collapse a final layer only on one side of the reflection.
+        thickness = xp.astype(thickness, xp.result_type(thickness, array(1.)))
+        thickness = xp.where(geometry_valid, thickness, xp.full_like(thickness, float('nan')))
     mirrored = dict(options, incidence_side='top', top=options['bot'], bot=options['top'],
-                    thickness=thickness[::-1], structure=xp.flip(raster, axis=0))
+                    thickness=thickness, structure=xp.flip(raster, axis=0))
+    if options['mesh_thickness'] is not None:
+        mirrored['mesh_thickness'] = nominal[::-1]
     if options['mesh_indices'] is not None:
         mirrored['mesh_indices'] = _validate_mesh_indices(options['mesh_indices'])[::-1]
     if options['record_bounds'] is not None:
@@ -227,11 +295,12 @@ def _solve_bottom_scene(options):
     diagnostics['z_spacing'] = xp.concat((xp.flip(diagnostics['z_spacing'][:-1], axis=0), diagnostics['z_spacing'][-1:]))
     diagnostics.update(source_z=depth-diagnostics['source_z'],
                        pml_bounds=tuple(depth-z for z in reversed(diagnostics['pml_bounds'])),
-                       layer_planes=np.r_[0., np.cumsum(thickness)],
+                       layer_planes=layer_planes,
                        incidence_side='bottom', reflection_z=depth, transmission_z=0.)
     for key in ('reflection_monitor_z', 'transmission_monitor_z'):
         diagnostics['diffraction'][key] = depth-diagnostics['diffraction'][key]
     diagnostics['mesh_indices'] = diagnostics['mesh_indices'][::-1]
+    diagnostics['mesh_thickness'] = diagnostics['mesh_thickness'][::-1]
     diagnostics['background'] = xp.flip(diagnostics['background'], axis=0)
     return result, diagnostics
 
@@ -263,15 +332,22 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                      convergence_window=None, convergence_tol=1e-4, dft_subsample=1, record_bounds=None,
                      pulse_width=None, align_layers=False, diffraction_distance=None,
                      diffraction_method='electric', pml_reflection=1e-8, pulse_notches=None,
-                     source_distance=None, transverse_resolution=None, mesh_indices=None):
-    """Solve a rectangular scene with NumPy/JAX/Torch angle/material gradients.
+                     source_distance=None, transverse_resolution=None, mesh_indices=None,
+                     mesh_thickness=None):
+    """Solve a rectangular scene with fixed-mesh layer/angle/material gradients.
 
     Explicit resolution is required: optimizing materials must not resize the
-    grid. Geometry and wavelength are static. Half-space epsilon/mu can be live
+    grid. Transverse geometry and wavelength are static. Half-space epsilon/mu can be live
     positive real scalars with explicit mesh_indices and truncation_order.
     mesh_indices=(n_top,n_bottom) fixes padding/grading using nominal static
     refractive indices; actual materials still determine all physics and CPML.
     Without it, host scalar half spaces retain automatic mesh selection.
+    mesh_thickness fixes nominal layer lengths for the z mesh while actual
+    thickness values move internal interfaces. All lengths must remain positive
+    and their sum must equal the nominal total. Backend thickness values require
+    mesh_thickness and subpixel=True. Gradients are defined along fixed-total
+    paths and are piecewise smooth, with possible kinks at cell-face crossings.
+    align_layers fits nominal boundaries only; outer reference planes stay fixed.
     theta and phi can
     be backend real scalars; either array angle requires truncation_order to
     fix the diffraction window. Array phi always samples the full y period,
@@ -448,9 +524,9 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     et, mt = background[0]
     eb, mb = background[1]
     nt, nb = xp.sqrt(et*mt), xp.sqrt(eb*mb)
-    thick = np.asarray(thickness, float)
-    if thick.shape != (raster.shape[0],) or not np.isfinite(thick).all() or np.any(thick <= 0):
-        raise ValueError('thickness must contain one positive static length per layer.')
+    if mesh_thickness is not None and not subpixel:
+        raise ValueError('mesh_thickness requires subpixel=True for moving layer interfaces.')
+    thick, layer_planes = _layer_geometry(thickness, mesh_thickness, raster.shape[0], xp=xp, array=array, check=check)
     lengths = np.atleast_1d(np.asarray(parse_period_mapping(period), float))
     if lengths.ndim != 1 or len(lengths) not in (1, 2) or not np.isfinite(lengths).all() or np.any(lengths <= 0):
         raise ValueError('period must contain one or two positive lengths.')
@@ -519,7 +595,8 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
         if not np.allclose(widths[indices], widths[indices-1], rtol=1e-12, atol=0):
             raise ValueError('Directional diffraction requires locally uniform z cells at both planes; adjust diffraction_distance or grading.')
     dual = .5*(widths+np.roll(widths, 1))
-    cuts = np.r_[z[0]-2*widths.max(), 0., np.cumsum(thick), z[-1]+2*widths.max()]
+    cuts = (np.r_[z[0]-2*widths.max(), layer_planes, z[-1]+2*widths.max()] if mesh_thickness is None else
+            xp.concat((array([z[0]-2*widths.max()]), layer_planes, array([z[-1]+2*widths.max()]))))
     shape = (nz, ny, nx)
     def sample(values, upper, lower, magnetic=False, harmonic=True):
         components = []
@@ -551,7 +628,8 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                 cell_widths = dual
             if not subpixel and nonuniform:
                 centres = z+offsets[2]*widths
-            weights = array(_weights(centres, cell_widths, cuts, subpixel=subpixel), dtype=v.dtype)
+            weights = array(_weights(centres, cell_widths, cuts, subpixel=subpixel) if mesh_thickness is None else
+                            _layer_weights(centres, cell_widths, cuts, xp=xp, array=array), dtype=v.dtype)
             v = 1/(xp.tensordot(weights, 1/v, axes=((1,), (0,)))) if harmonic and c == 2 else xp.tensordot(weights, v, axes=((1,), (0,)))
             # Exact half-space values also make CPML material validation exact.
             v = xp.where(array((z < -dz)[:, None, None]), upper, v)
@@ -837,13 +915,13 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                            dft_samples=native_runs[0]['dft_samples'],
                            spacing=(float(widths.min()), dy, dx), shape=shape, wavelengths=array(band),
                            transverse_resolution=(float(rx), float(ry)),
-                           mesh_indices=mesh_indices, background=array(background),
+                           mesh_indices=mesh_indices, mesh_thickness=tuple(thick), background=array(background),
                            pulse={key: array(value) if isinstance(value, np.ndarray) else value
                                   for key, value in pulse_info.items()},
                            z_nodes=array(z), z_spacing=array(widths), grading=grading, align_layers=bool(align_layers),
                            n_pml=int(n_pml), pml_reflection=pml_reflection,
                            source_z=z[source_z], source_distance=source_distance,
-                           layer_planes=np.r_[0., np.cumsum(thick)],
+                           layer_planes=layer_planes,
                            # The final closing cell also belongs to the lower PML.
                            pml_bounds=(z[0], z[int(n_pml)], z[-int(n_pml)], z[-1]+widths[-1]),
                            angles=xp.asin(array(band)/centre*xp.sin(theta)), azimuth=phi,

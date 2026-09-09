@@ -104,7 +104,9 @@ from ._core.spec import SPEC_VERSION
 #: Version 10 scopes FDTD capability flags to available routes, and names the
 #: default/explicit-backend selectors. Consumers must select a differentiable
 #: route before applying AD; backend omission still selects legacy NumPy.
-MANIFEST_VERSION = '10'
+#: Version 11 distinguishes fixed mesh geometry from moving internal layer
+#: interfaces, whose thickness derivatives require a fixed positive total depth.
+MANIFEST_VERSION = '11'
 
 
 # --------------------------------------------------------------- how a structure is spelled
@@ -517,11 +519,15 @@ SOLVERS = {
                 'required': ('resolution',),
                 'differentiable_parameters': ('theta', 'phi', 'raster epsilon', 'raster mu',
                                               'electric pole coefficients', 'half-space epsilon',
-                                              'half-space mu'),
-                'static_parameters': ('geometry', 'wavelength', 'mesh_indices', 'truncation_order'),
+                                              'half-space mu', 'fixed-total layer thickness'),
+                'static_parameters': ('transverse geometry', 'total depth', 'wavelength',
+                                      'mesh_indices', 'mesh_thickness', 'truncation_order'),
                 'array_angles_require': ('truncation_order',),
                 'array_phi_requires': 'Jones or psi polarization; full y-period sampling including zero',
                 'array_half_spaces_require': ('mesh_indices', 'truncation_order'),
+                'backend_thickness_requires': ('mesh_thickness', 'subpixel=True'),
+                'thickness_constraint': 'positive lengths with the same total as mesh_thickness; '
+                                        'piecewise derivatives along constant-total paths',
                 'results_incidences': ('given', 's_inc', 'p_inc'),
                 'verified_devices': ('cpu',),
                 'source': 'docs/guide/time-domain.md',

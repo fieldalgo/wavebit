@@ -4,7 +4,7 @@
 | --- | --- |
 | `meep_ringdown.py` | Can source-free time traces be generated through Meep's public API for independent mode-fitting checks? |
 | `meep_source_notch.py` | Does a unit-peak custom source zero suppress a known undamped material mode, with fields matching the native solver at the same current times? |
-| `meep_halfspace.py` | Do magnetic half-space perturbations give stable complex-amplitude derivatives under smaller perturbations and longer runs? |
+| `meep_halfspace.py` | Do magnetic half-space or film-thickness perturbations give stable complex-amplitude derivatives under smaller perturbations and longer runs? |
 | `Reticolo.py`, `__init__.py` | How do tests access the existing separately installed RETICOLO oracle? |
 | `reticolo_res2.m`, `reticolo_res3.m`, `reti_aniso.m` | How do the existing RETICOLO bridge calls return scattering and field data? |
 
@@ -23,6 +23,12 @@ scene, measured controls and limits. Generate with a separate Meep interpreter:
 ```shell
 "$MEEP_PYTHON" tests/references/interface/meep_halfspace.py --output /tmp/meep-halfspace.npz
 ```
+
+With `--parameter thickness`, the same public-API experiment fixes the magnetic
+half spaces and perturbs the film thickness around 0.173. The output reference
+plane remains at 0.4. `golden_meep_layer_thickness.npz` retains the same two
+perturbation sizes and durations; the [layer note](../../../docs/fdtd-layer-gradients.md)
+compares its derivative with both Wavebit and continuum Airy.
 
 Run the ringdown generator by hand with an interpreter containing Meep:
 

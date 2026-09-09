@@ -543,7 +543,10 @@ homogeneous propagation to move the phase reference to the interfaces. At obliqu
 incidence the transverse wavevector stays fixed across the wavelength band;
 `return_diagnostics=True` includes the corresponding angles.
 
-Geometry and wavelength are static. Half-space epsilon/mu can retain gradients
+The mesh, transverse geometry and wavelength are static. Internal layer
+boundaries can vary at fixed total depth with `mesh_thickness`; see
+[layer derivatives](#internal-layer-thickness-derivatives).
+Half-space epsilon/mu can retain gradients
 with explicit `mesh_indices` and `truncation_order`, as described below.
 An explicit `resolution` is required so material optimization cannot resize the
 grid. Defaults here are `courant=.8`, `n_periods=40`, `n_pml=12`; choose a smaller
@@ -555,8 +558,9 @@ PML width, padding and duration for each new structure, especially resonances.
 Exact grazing orders and orders beyond the grid's sampling limit are refused.
 Far-plane extrapolation of strongly evanescent amplitudes is ill-conditioned.
 
-The explicit-backend adapter currently does not accept skewed lattices or geometry
-derivatives; unsupported explicit-backend keywords raise an error. There is no implicit backend fallback. Actual GPU execution remains
+The explicit-backend adapter currently does not accept skewed lattices,
+transverse shape derivatives or total-depth derivatives; unsupported
+explicit-backend keywords raise an error. There is no implicit backend fallback. Actual GPU execution remains
 unverified on this CPU-only machine.
 
 Tests compare complex slab amplitudes with Airy under refinement, magnetic
@@ -1091,8 +1095,9 @@ At fixed theta/phi, changing the **incident** medium changes the transverse
 wavevector so that the central-wavelength incidence angle stays fixed. The
 whole band shares that wavevector. This is not a derivative at fixed kx/ky.
 Angles, raster materials and electric poles can vary jointly with the four
-half-space coefficients. Thickness, periods, wavelength and mesh geometry
-are still static; lossy/dispersive half spaces are not supported.
+half-space coefficients, and with constant-total layer thicknesses using
+`mesh_thickness`. Periods, wavelength and mesh geometry remain static;
+lossy/dispersive half spaces are not supported.
 
 The pair always names original **top, bottom**, including bottom illumination.
 Diagnostics return static `mesh_indices` and live `background`, the latter a
@@ -1107,6 +1112,61 @@ material range. Check resolution, padding, physical PML thickness and duration
 at relevant design points. The [verification note](../fdtd-halfspace-gradients.md)
 separates finite-grid derivative correctness from continuum and external-solver
 agreement.
+
+### Internal layer thickness derivatives
+
+Pass static `mesh_thickness` to choose the z mesh while backend `thickness`
+values move the internal interfaces. The actual lengths must stay positive,
+and their sum must equal the nominal total depth. This keeps both exterior
+reference planes, sources, monitors, PML, record coordinates and time step
+fixed. The spelling is shared with RCWA and typed `Stack` objects:
+
+```python
+import jax
+import jax.numpy as jnp
+from wavebit import Stack, Incidence, fdtd
+
+jax.config.update('jax_enable_x64', True)
+
+def reflection(d):
+    scene = Stack.from_structure(
+        jnp.array([[[1.5]], [[2.25]]]), [d, .4-d],
+        top=1., bot=2.25, period=.05,
+    )
+    light = Incidence(wavelength=1., polarization=(1., 0.))
+    result = fdtd(
+        scene, light, backend='jax', resolution=40,
+        mesh_thickness=[.2, .2], align_layers=True, truncation_order=0,
+        n_pml=40, n_periods=60, pulse_width=3.,
+        diffraction_method='directional',
+    )
+    return result.s_inc.R.sum()
+
+value, derivative = jax.jit(jax.value_and_grad(reflection))(.173)
+```
+
+Here the second layer is a substrate spacer. Its changing length preserves
+the fixed output plane at z=0.4. For more layers, normalize positive design
+fractions to a fixed total. Gradients are defined along constant-total paths;
+they do not represent independent changes to the total stack depth.
+
+`subpixel=True` is required. Cell-overlap fractions retain the thickness graph
+through epsilon/mu averaging and electric-pole masks. Values are continuous,
+but derivatives may have kinks when a boundary crosses a cell face. Do not
+use a subgradient at that crossing as a unique physical shape derivative.
+Refine the grid and sample several interface positions when assessing gradient
+accuracy. The [validation note](../fdtd-layer-gradients.md) separates AD/finite
+differences, Airy convergence and independent public-API Meep perturbations.
+The [optimization example](../../examples/fdtd_layer_optimization.py) includes
+backtracking and a final check at twice the resolution.
+
+JAX/Torch thickness arrays require explicit `mesh_thickness`; no eager tensor
+is detached to select the mesh. NumPy finite differences use the same option.
+`align_layers=True` fits nominal faces, while actual interfaces move through
+the fixed cells. The option also works with grading, bottom illumination,
+cropped records and field monitors. Diagnostics return original-order static
+`mesh_thickness` and live `layer_planes`. Invalid concrete values raise; JIT
+invalidity masks scattering and normalized fields and sets `stable=False`.
 
 ### Bottom illumination in the common engine
 
@@ -1240,8 +1300,9 @@ reported absorber span contains all `n_pml` cells.
 Thin layers can force a much smaller global time step, including when a layer
 fits in just one cell. Inspect `diag['dt']`, `diag['steps']`, `diag['shape']`,
 `diag['z_nodes']` and `diag['z_spacing']` before scaling up. A fitted layer is not
-necessarily well resolved. Geometry and mesh selection are static; this is not
-thickness differentiation or adaptive refinement. The option requires a boolean
+necessarily well resolved. Mesh selection stays static. For thickness
+differentiation, supply `mesh_thickness` as described above; alignment then fits
+nominal faces. This is not adaptive refinement. The option requires a boolean
 and explicit backend selection; the legacy backend-omitted path does not accept it.
 
 Records, physical record bounds, frequency planes, bottom incidence and
