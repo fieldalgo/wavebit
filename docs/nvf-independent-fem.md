@@ -494,6 +494,68 @@ and 4.011 GB, versus 94.30 s and 2.301 GB for the original degree-5
 mesh. The reduction in degree sensitivity comes with higher cost at
 this fixed degree; no default mesh choice has been changed.
 
+## Retaining only boundary rows of the Fourier responses
+
+The affine solver originally stored two complex arrays with shape
+`(full_unknowns, 4*(2*cut+1)**2)`: the Fourier boundary traces and their
+responses under the factorized Robin operator. A trace has support only
+on the top and bottom boundary degrees of freedom. The updated solver
+gets those rows from the final periodic, compressed space and stores
+only them in both arrays.
+
+Let U denote the full trace array, B the selected boundary rows, Q the
+existing inverse action, D the port correction and b the two base
+solutions. The smaller representation uses the same Woodbury equation:
+
+```text
+T = U[B, :]
+V = (Q U)[B, :]
+w = solve(I + D T* V, D T* b[B, :])
+q[B, :] = T w; q[other rows, :] = 0
+solution = b - Q q
+```
+
+Here `T*` denotes conjugate transpose. Applying Q to the final two
+right-hand sides recovers all correction rows; the sparse factorization
+is reused. Interior reconstruction follows that correction, as before.
+For an uncondensed solve, this also recovers the interior correction
+directly. Keeping only coupling rows of the solution would lose that
+correction in the uncondensed case.
+
+The same boundary selection evaluates physical ports and adds the
+Rayleigh term to the full uncondensed residual. It does not reduce the
+retained Fourier set, approximate the inverse or change the source.
+The extra cost is two inverse applications, compared with 324 trace
+right-hand sides at cut 4. Small independent complex block systems
+check both condensation choices against a direct solve, including
+interior reconstruction and the full residual.
+
+The result records `boundary_dofs` and `boundary_array_bytes`. The
+latter counts the two retained arrays, excluding sparse factorization,
+dense port matrices, work vectors and temporary products. At edge
+target .12, degree 5 and cut 4, the original 71,796-row arrays require
+709.90 MiB together; the 1,584 boundary rows require 15.66 MiB. This
+is an array-footprint reduction, not a prediction of total process RSS
+or runtime, and it changes no optical convergence criterion.
+
+A matched repeat at that setting changes individual R/T powers by at
+most `3.34e-16` and total or volume R/T by at most `5.56e-16`.
+The full residuals remain below `1.19e-14`. Peak process RSS changes
+from 3.168 to 2.986 GB, a 5.76% reduction; measured runtime changes
+from 177.08 to 169.19 s. The RSS reduction is much smaller than the
+retained-array reduction because the sparse solve and other stages
+also contribute to the process peak. These are two shared-host runs,
+with small validation controls overlapping the repeat; they do not
+establish a speedup across workloads or repeated timing uncertainty.
+
+Separate patterned controls with nonzero azimuth compare the original
+and revised solver under both condensation choices. Their largest
+reported numerical differences are `1.79e-15` and `1.15e-15`. The
+focused tests verify actual trace support, one factorization and the
+two extra inverse applications, and driven full/condensed agreement.
+Together with the existing scattering, Robin and square-fixture
+controls, the selected 31 tests pass in 57.533 s.
+
 ## Testing a second physical edge interval
 
 Further edge-size controls keep h=.18, cut 4, pad=.2 and quadrature bonus

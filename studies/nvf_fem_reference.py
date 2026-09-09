@@ -707,6 +707,11 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
     remain separate reference uncertainties; small residual and energy error
     do not qualify a continuum Maxwell oracle.
 
+    Trace and inverse-response arrays retain only outer-boundary rows. Two
+    final inverse applications recover the full p/s corrections using the same
+    factorization. ``boundary_array_bytes`` reports those two retained arrays,
+    excluding the sparse factorization, dense port matrices and work vectors.
+
     ``quadrature_bonus`` is a nonnegative integer for numerical integration
     studies, not mesh or FEM polynomial refinement. It sets the source bonus,
     the trace bonus to 2*cut+bonus, and flux/norm readout order to 2*order+bonus.
@@ -746,6 +751,7 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
     k0 = 2*np.pi/WAVELENGTH
     lateral = ng.CF((k0*np.sin(theta)*np.cos(phi), k0*np.sin(theta)*np.sin(phi), 0.))
     space = ng.Compress(ng.Periodic(ng.HCurl(mesh, order=order, complex=True)))
+    boundary = np.flatnonzero(list(space.GetDofs(mesh.Boundaries('outer_top|outer_bottom'))))
     u, v = space.TnT()
     curl_u = ng.curl(u)+1j*ng.Cross(lateral, u)
     curl_v = ng.curl(v)-1j*ng.Cross(lateral, v)
@@ -777,6 +783,8 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
                     quadrature_bonus=quadrature_bonus, edge_h=edge_h,
                     elements=mesh.ne, dofs=space.ndof,
                     coupling_dofs=sum(space.FreeDofs(coupling=True)), rank=rank,
+                    boundary_dofs=len(boundary),
+                    boundary_array_bytes=2*len(boundary)*rank*np.dtype(complex).itemsize,
                     periodic_pairs=periodic_counts(mesh, lattice),
                     modes=[list(mode) for mode in modes])
 
@@ -800,7 +808,7 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
             response = rhs.CreateVector()
             response.data = inverse*rhs
             base[:, column] = response.FV().NumPy()
-        traces = np.zeros((space.ndof, rank), complex)
+        traces = np.zeros((len(boundary), rank), complex)
         responses = np.zeros_like(traces)
         correction = np.zeros((rank, rank), complex)
         reciprocal = 2*np.pi*np.linalg.inv(lattice).T
@@ -816,19 +824,28 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
                     trace += phase*v.Trace()[component]*ng.ds(
                         side, bonus_intorder=2*cut+quadrature_bonus)
                     trace.Assemble()
-                    traces[:, column] = trace.vec.FV().NumPy()
+                    traces[:, column] = trace.vec.FV().NumPy()[boundary]
                     response = trace.vec.CreateVector()
                     response.data = inverse*trace.vec
-                    responses[:, column] = response.FV().NumPy()
+                    responses[:, column] = response.FV().NumPy()[boundary]
         report('boundary')
         small = np.eye(rank)+correction@(traces.conj().T@responses)
-        right = correction@(traces.conj().T@base)
+        right = correction@(traces.conj().T@base[boundary])
         weights = np.linalg.solve(small, right)
-        solved = base-responses@weights
+        # Linearity gives (inverse U) weights = inverse (U weights). Keeping
+        # only boundary rows of inverse U suffices for the Gram matrix above;
+        # these two extra applications recover every active correction row.
+        boundary_rhs = traces@weights
+        del responses
         fields = []
         for column, f in enumerate(sources):
+            rhs = f.vec.CreateVector()
+            rhs[:] = 0
+            rhs.FV().NumPy()[boundary] = boundary_rhs[:, column]
+            response = rhs.CreateVector()
+            response.data = inverse*rhs
             field = ng.GridFunction(space)
-            field.vec.FV().NumPy()[:] = solved[:, column]
+            field.vec.FV().NumPy()[:] = base[:, column]-response.FV().NumPy()
             if condense:
                 field.vec.data += a.harmonic_extension*field.vec
                 field.vec.data += a.inner_solve*f.vec
@@ -844,8 +861,8 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
         residual = f.vec.CreateVector()
         a.Apply(field.vec, residual)
         residual.data -= f.vec
-        ports = traces.conj().T@field.vec.FV().NumPy()
-        residual.FV().NumPy()[:] += traces@(correction@ports)
+        ports = traces.conj().T@field.vec.FV().NumPy()[boundary]
+        residual.FV().NumPy()[boundary] += traces@(correction@ports)
         norm_f = np.linalg.norm(f.vec.FV().NumPy()[free])
         norm_r = np.linalg.norm(residual.FV().NumPy()[free])
         relative_residual = norm_r/norm_f if norm_f > 0 else norm_r
