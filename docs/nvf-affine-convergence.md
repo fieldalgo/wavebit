@@ -372,6 +372,58 @@ reference remains degree 8; the degree-10/candidate comparison remains at
 `(24,24)`. Neither the static field enclosure nor these finite optical
 windows supplies an independent three-dimensional optical error bound.
 
+## Refining the candidate at fixed optical orders
+
+Increasing the candidate's x subdivisions from 2 to 4 while retaining
+base rows 4, body degree 4 and gap degree 6 raises the auxiliary unknown
+count from 3,887 to 7,775. The y subdivisions, local flux basis, material
+grading, edge fraction and physical profile stay fixed. The new projection
+uses the [bounded x batches](nvf-affine-cells.md#bounded-fourier-projection-intermediates)
+and covers coefficient cap 48. The batching changes storage, while the
+explicit x refinement changes the finite auxiliary space.
+
+The relative static enclosure narrows from `1.42965e-4` to `3.35654e-5`,
+a 76.5% reduction. Against the saved degree-10 FEM projection, the maximum
+coefficient difference through cap 48 falls from `1.93657e-3` to
+`6.31351e-4`. The analytic material-coefficient error in the new candidate
+is below `4.00e-15`. Its primal and reciprocal cell residuals are
+`5.95e-10` and `1.37e-10`, below the unchanged `1e-8` residual guard.
+
+The fixed-order optical comparisons give:
+
+| optical order | candidate x subdivisions | p T | s T | p difference from fitted field | s difference from fitted field |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 12 | 2 | .852522051245 | .731678833971 | -5.60579e-6 | -9.68474e-6 |
+| 12 | 4 | .852525824322 | .731684219311 | -1.83272e-6 | -4.29940e-6 |
+| 24 | 2 | .852377641159 | .730966937870 | -4.28069e-6 | -1.05289e-5 |
+| 24 | 4 | .852380240145 | .730973827940 | -1.68170e-6 | -3.63887e-6 |
+
+The order-12 reference is the earlier degree-8 fitted field, and the
+order-24 reference is the degree-10 refinement. Each difference compares
+the candidate and reference at the same optical order. The x=2 and fitted
+optical rows are retained from the earlier measurements; the new x=4 rows
+use the current production runtime. The separate arithmetic continuity
+checks above and exact before/after candidate coefficient comparison
+distinguish the storage change from this auxiliary refinement.
+
+At order 24, the absolute p/s differences shrink by about 61%/65%.
+At order 12, they shrink by about 67%/56%. This is evidence that the
+candidate cell itself benefits from further x resolution while its body
+degree is retained. It does not change a default resolution or convert
+the static enclosure into an optical bound. The remaining fixed-order
+differences are still measurable, and the y-order oscillation of the
+fitted-field optics remains unresolved.
+
+The new primal cap-48 projection takes 45.29 s; including the reciprocal
+mean-energy solve takes 53.80 s. Maximum process RSS at that point is
+4.231 GB, including imports, model construction and native workspaces.
+The order-12 and order-24 optical calculations take 2.92 s and 120.41 s;
+their greatest lossless balance error is `4.20e-12`. These are shared-host
+observations, not controlled performance comparisons. No new FEM solve,
+third-party code or dependency is used for these rows: the references
+are the already-qualified numerical exports. The independent 3D Maxwell
+comparison and candidate/reference comparison beyond `(24,24)` remain open.
+
 ## Reproduction and guards
 
 The reference runs used separately installed `ngsolve==6.2.2606` and
@@ -425,6 +477,12 @@ PYTHONPATH=$PWD python studies/nvf_affine_convergence.py --orders 16 20:16 16:20
 For the separate reference-refinement check, export cap 48 with degree 10
 and quadrature 40, keeping the same geometry and mesh settings. Compare
 that export and the candidate at `--orders 24 --cells 2:4:4:6`.
+
+For the additional candidate refinement, use
+`--orders 12 24 --cells 4:4:4:6`. This projects the x=4 field once through
+cap 48, checks its reciprocal mean-energy enclosure, and closes each
+retained optical space independently. Keep the fitted degree explicit
+when comparing with the earlier x=2 and reference rows above.
 
 For the next directional intervals, use cap 64, degree 8 and quadrature 40
 on the same mesh, then run:

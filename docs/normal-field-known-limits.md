@@ -1206,8 +1206,11 @@ The [independent affine comparison](nvf-affine-convergence.md) now separates
 auxiliary-cell refinement from directional optical truncation. A fitted
 static FEM reference reaches a relative primal/complementary enclosure of
 1.43e-7 after degree-10 refinement on the tested profile. At optical order
-(24,24), the refined candidate differs from that reference by about 4.3e-6
-in p transmission and 1.1e-5 in s. The fixed degree-8 reference's 20-to-24
+(24,24), the [further x-refined candidate](nvf-affine-convergence.md#refining-the-candidate-at-fixed-optical-orders)
+with 7,775 unknowns differs from that reference by about 1.7e-6 in p
+transmission and 3.6e-6 in s. These differences are about 61%/65% smaller
+than for the earlier 3,887-unknown candidate, while the relative static
+enclosure narrows by 76.5% to 3.36e-5. The fixed degree-8 reference's 20-to-24
 order changes remain larger: about 2.0e-5 and 5.9e-5, respectively. The
 complete directional rectangles still identify y as the largest measured
 s-polarized optical limitation. These are comparisons, not an independent
