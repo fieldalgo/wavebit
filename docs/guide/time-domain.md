@@ -515,7 +515,7 @@ derivative, = torch.autograd.grad(result.T.sum(), value)
 
 The same adapter runs on NumPy (`0`), JAX (`1`) and Torch (`2`). JAX results are
 registered pytrees, so a function returning the complete `Result` can be jitted.
-Raster epsilon, raster mu, electric Drude/Lorentz parameters and Jones amplitudes
+Incidence `theta`, raster epsilon, raster mu, electric Drude/Lorentz parameters and Jones amplitudes
 retain their backend graphs. Cell overlap weights are static; harmonic averaging
 is applied normal to each field component and arithmetic averaging tangentially.
 Within the transverse plane, normal harmonic averaging is performed before
@@ -541,7 +541,7 @@ homogeneous propagation to move the phase reference to the interfaces. At obliqu
 incidence the transverse wavevector stays fixed across the wavelength band;
 `return_diagnostics=True` includes the corresponding angles.
 
-Geometry, half-space coefficients, wavelength and incidence angles are static.
+Geometry, half-space coefficients, wavelength and azimuth `phi` are static.
 An explicit `resolution` is required so material optimization cannot resize the
 grid. Defaults here are `courant=.8`, `n_periods=40`, `n_pml=12`; choose a smaller
 Courant fraction when the minimum material values or pole frequencies demand it.
@@ -562,6 +562,62 @@ transmission with stored Meep public-API data, and JAX/Torch material derivative
 with finite differences. Crossed dispersive scenes additionally check Torch/
 NumPy agreement and a pole-strength derivative. These scene checks supplement
 the native-core Meep/FDTDX field and derivative references.
+
+
+### Incidence-angle derivatives
+
+With an explicit `backend`, `theta` may be a real scalar NumPy, JAX or Torch
+array. Supply an explicit `truncation_order` whenever `theta` is an array,
+including a constant zero-dimensional array. This keeps the output shape fixed
+while the angle changes. A Python or NumPy scalar number continues to support
+automatic order selection. Azimuth `phi` remains a static number.
+
+```python
+import torch
+import wavebit
+
+theta = torch.tensor(.3, dtype=torch.float64, requires_grad=True)
+result = wavebit.fdtd(
+    structure=[[[2.25]]], thickness=[.2], top=1., bot=1., period=.2,
+    wavelength=1., theta=theta, tetm='tm', backend='torch',
+    resolution=20, n_periods=40, truncation_order=0)
+dT_dtheta, = torch.autograd.grad(result.given.T.sum(), theta)
+```
+
+The derivative is per radian, at fixed geometry, cell sizes, time step, number
+of updates, source location, PML and diffraction window. `Incidence(theta=theta)`
+preserves the same graph. The path includes source-sheet phase, Bloch boundaries,
+spatial Fourier extraction, interpolation, propagation to the interfaces,
+outgoing s/p frames, power factors and both incident reference runs. It also
+includes normalized frequency monitors, cropped time records and prefix
+convergence diagnostics. Material and electric-pole parameters can be
+differentiated together with `theta`; independent transverse resolution,
+static z grading, layer alignment, source notches and bottom incidence remain
+available.
+
+For multiple wavelengths there is one transverse Bloch wavevector, set using
+the midpoint `lambda_c` of the requested wavelength range. In the static
+incident half space,
+
+`theta(lambda) = asin((lambda/lambda_c) * sin(theta))`.
+
+Thus an angle derivative changes the whole broadband experiment along this
+curve. It is not a separate fixed-angle derivative at each wavelength.
+Diagnostics return backend arrays in `angles`, so their derivatives follow the
+same rule. The fixed-wavevector convention is also described in the
+[Meep public FAQ](https://meep.readthedocs.io/en/latest/FAQ/).
+
+Only finite real `0 <= theta < pi/2` is accepted, and the incident wave must
+propagate throughout the band. Exact physical grazing, interpolation Nyquist
+zeros and the directional method's discrete singularities remain unsupported.
+Concrete invalid angles raise before stepping; abstract invalid angles under
+JAX JIT produce `stable=False` and NaN scattering, normalized monitors and time
+records. Boolean propagation masks are classifications, not differentiable
+observables. At normal incidence the derivative follows the fixed `phi` ray;
+the two-dimensional polarization frame has no unique arbitrary direction at
+its origin. At thresholds or long-lived resonances, establish spatial and
+temporal convergence before interpreting a sensitivity. See the
+[validation note](../fdtd-scene-angles.md) for the checked cases and limits.
 
 
 ### Independent transverse resolution

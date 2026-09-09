@@ -497,6 +497,23 @@ def incident_column(xp, C, lit, n_orders, specular):
     return xp.stack(column)
 
 
+def real_order_frame(xp, ky, kx, phi):
+    """Cosine/sine of the s/p frame for real transverse wavevectors.
+
+    Normalization retains derivatives on either coordinate axis without the
+    removable atan(ky/kx) singularity. At the origin only the supplied incident
+    azimuth defines a frame. Its angle derivative is zero along that fixed ray;
+    an arbitrary transverse perturbation at the origin has no unique frame.
+    Complex transverse wavevectors use order_azimuth instead.
+    """
+    squared = kx*kx+ky*ky
+    origin = squared == 0
+    length = xp.sqrt(xp.where(origin, xp.ones_like(squared), squared))
+    p = as_array(xp, phi, dtype=length.dtype)
+    return (xp.where(origin, xp.cos(p), kx/length),
+            xp.where(origin, xp.sin(p), ky/length))
+
+
 def order_azimuth(xp, ky, kx, phi):
     """Azimuth of each retained order's in-plane wavevector, flattened.
 

@@ -1,7 +1,7 @@
 """Differentiable rectangular Stack adapter for the shared Yee time-domain core.
 
-Geometry is static; raster epsilon, mu and electric pole values retain their
-backend graph. A uniform incident-medium run calibrates each current-sheet basis.
+Geometry is static; incidence theta, raster epsilon, mu and electric pole values
+retain their backend graph. A uniform incident-medium run calibrates each current-sheet basis.
 No external implementation is used here.
 """
 import math
@@ -9,7 +9,7 @@ import math
 import numpy as np
 
 from .backend import _concrete
-from .conventions import boundary_kz, incidence_clashes, incident_sp_amplitudes, order_azimuth, parse_order_pair, parse_period_mapping, time_delay_phase
+from .conventions import boundary_kz, incidence_clashes, incident_sp_amplitudes, parse_order_pair, parse_period_mapping, real_order_frame, time_delay_phase, yee_longitudinal_phase
 from .domain import as_material
 from .grid_fdtd import _validate_pml_reflection, fdtd_grid
 from .result import Result, ResultSub
@@ -67,8 +67,14 @@ def _scattering_change_bound(xp, columns):
                     xp.sqrt(xp.where(zero, xp.ones_like(squared), squared)))
 
 
-def _diffraction_channels(band, kx, ky, index, dt, dx, dy):
-    """Static continuum and Yee transverse-cutoff data for a lossless half space.
+def _require_scene(valid, message):
+    """Reject concrete invalid inputs; the scene accumulates abstract validity."""
+    if _concrete(valid) is False:
+        raise ValueError(message)
+
+
+def _diffraction_channels(band, kx, ky, index, dt, dx, dy, *, xp=np, check=_require_scene):
+    """Continuum and Yee transverse-cutoff data for a lossless half space.
 
     Positive Yee cutoff parameter is the lower edge of the longitudinal
     passband, not a guarantee against longitudinal Nyquist or mesh reflections.
@@ -78,41 +84,41 @@ def _diffraction_channels(band, kx, ky, index, dt, dx, dy):
     q2 = index**2-(kx/k0)**2-(ky/k0)**2
     grazing = ((abs(q2) < 1e-16)
                | (abs(q2) <= 32*np.finfo(float).eps*(index**2+transverse)))
-    if np.any(grazing):
-        raise ValueError('A retained diffraction order is exactly grazing; adjust wavelength/window.')
-    q = boundary_kz(np, index**2, transverse.astype(complex))
-    yee = (2/k0)**2*((index*np.sin(k0*dt/2)/dt)**2
-                       -(np.sin(kx*dx/2)/dx)**2-(np.sin(ky*dy/2)/dy)**2)
-    length = np.hypot(kx, ky)
-    cutoff = np.divide(2*np.pi*index, length, out=np.full_like(length, np.inf), where=length > 0)
+    check(~xp.any(grazing), 'A retained diffraction order is exactly grazing; adjust wavelength/window.')
+    q = boundary_kz(xp, index**2, transverse+0j)
+    yee = (2/k0)**2*((index*xp.sin(k0*dt/2)/dt)**2
+                       -(xp.sin(kx*dx/2)/dx)**2-(xp.sin(ky*dy/2)/dy)**2)
+    squared = kx*kx+ky*ky
+    # Avoid an unused sqrt(0) derivative at normal incidence.
+    length = xp.sqrt(xp.where(squared == 0, xp.ones_like(squared), squared))
+    cutoff = xp.where(squared == 0, xp.full_like(length, np.inf), 2*np.pi*index/length)
     return dict(q=q, propagating=q2 > 0, cutoff_wavelength=cutoff,
                 yee_cutoff_parameter=yee, cutoff_resolved=(q2 > 0) == (yee > 0),
                 p_projection_gain=index/abs(q))
 
 
-def _directional_projection(band, kx, ky, epsilon, mu, dt, dx, dy, dz):
+def _directional_projection(band, kx, ky, epsilon, mu, dt, dx, dy, dz, *, xp=np, check=_require_scene):
     """Map co-located tangential H to E+ - E- on a uniform Yee cell pair.
 
     Transverse interpolation is already removed. H retains its z interpolation;
-    this matrix removes that factor and uses discrete Maxwell admittance. Static
-    geometry/half spaces stay in NumPy; application preserves backend field graphs.
+    this matrix removes that factor and uses discrete Maxwell admittance. Both
+    the angle-dependent matrix and its application preserve backend graphs.
     """
     omega = 2*np.pi/band[:, None, None]
-    if np.any(omega*dt >= np.pi):
-        raise ValueError('Directional diffraction requires frequencies below temporal Nyquist.')
-    frequency = 2*np.sin(omega*dt/2)/dt
-    x, y = 2*np.sin(kx*dx/2)/dx, 2*np.sin(ky*dy/2)/dy
+    check(~xp.any(omega*dt >= np.pi), 'Directional diffraction requires frequencies below temporal Nyquist.')
+    frequency = 2*xp.sin(omega*dt/2)/dt
+    x, y = 2*xp.sin(kx*dx/2)/dx, 2*xp.sin(ky*dy/2)/dy
     transverse = (x/frequency)**2+(y/frequency)**2
     square = epsilon*mu-transverse
-    if np.any(abs(square) <= 32*np.finfo(float).eps*(epsilon*mu+transverse)):
-        raise ValueError('Directional diffraction is singular at a discrete cutoff; refine the grid or shift wavelength.')
-    z = frequency*boundary_kz(np, epsilon*mu, transverse.astype(complex))
-    if np.any(dz*z.real/2 >= 1-32*np.finfo(float).eps):
-        raise ValueError('Directional diffraction reaches longitudinal Nyquist; refine the grid.')
-    interpolation = np.cos(np.arcsin(dz*z/2))
+    check(~xp.any(abs(square) <= 32*np.finfo(float).eps*(epsilon*mu+transverse)),
+          'Directional diffraction is singular at a discrete cutoff; refine the grid or shift wavelength.')
+    z = frequency*boundary_kz(xp, epsilon*mu, transverse+0j)
+    check(~xp.any(dz*xp.real(z)/2 >= 1-32*np.finfo(float).eps),
+          'Directional diffraction reaches longitudinal Nyquist; refine the grid.')
+    interpolation = xp.cos(xp.asin(dz*z/2))
     scale = epsilon*frequency*z*interpolation
-    return np.stack((np.stack((np.broadcast_to(x*y, scale.shape), z*z+y*y), axis=1),
-                     np.stack((-(z*z+x*x), np.broadcast_to(-x*y, scale.shape)), axis=1)), axis=1)/scale[:, None, None]
+    return xp.stack((xp.stack((xp.broadcast_to(x*y, scale.shape), z*z+y*y), axis=1),
+                     xp.stack((-(z*z+x*x), xp.broadcast_to(-x*y, scale.shape)), axis=1)), axis=1)/scale[:, None, None]
 
 
 def _split_directions(xp, electric, magnetic, projection):
@@ -238,10 +244,13 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                      pulse_width=None, align_layers=False, diffraction_distance=None,
                      diffraction_method='electric', pml_reflection=1e-8, pulse_notches=None,
                      source_distance=None, transverse_resolution=None):
-    """Solve a static rectangular scene with NumPy/JAX/Torch material gradients.
+    """Solve a rectangular scene with NumPy/JAX/Torch angle/material gradients.
 
     Explicit resolution is required: optimizing materials must not resize the
-    grid. Half spaces, geometry, wavelength and incidence angles are static.
+    grid. Half spaces, geometry, wavelength and azimuth phi are static. theta
+    can be a backend real scalar; array theta requires explicit truncation_order
+    to fix the diffraction window. Its derivative holds the mesh and phi fixed,
+    and changes the one Bloch wavevector shared by the whole wavelength band.
     Bottom incidence uses a z-reflected scene and returns fields in original
     coordinates. Optional grading builds a static nonuniform z mesh; material
     gradients do not resize it. pulse_width is the static Gaussian envelope's
@@ -326,10 +335,13 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     if tetm not in (None, 'te', 'tm'):
         raise ValueError("tetm must be 'te' or 'tm'.")
     phi = 0. if phi is None else float(phi)
-    theta = float(theta)
+    # Inferred order counts may depend on a host scalar, never on a live array.
+    if truncation_order is None and not isinstance(theta, (int, float, np.number)):
+        raise ValueError('Array theta requires explicit truncation_order to keep the diffraction window fixed.')
+    host_theta = theta
     if tetm is not None and phi != 0:
         raise ValueError('Use psi or polarization for conical incidence instead of tetm.')
-    if not np.isfinite([theta, phi]).all() or not 0 <= theta < np.pi/2:
+    if not np.isfinite(phi):
         raise ValueError('Require finite incidence angles, 0 <= theta < pi/2.')
     band = np.atleast_1d(np.asarray(wavelength, float))
     if band.ndim != 1 or not len(band) or not np.isfinite(band).all() or np.any(band <= 0):
@@ -345,6 +357,17 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     span = float(np.max(np.abs(1/band-1/centre)))
     runtime = time_loop_backend(backend, device=device, reference=structure)
     xp, array = runtime.xp, runtime.array
+    theta = array(theta)
+    if theta.shape != () or not xp.isdtype(theta.dtype, ('real floating', 'integral')):
+        raise ValueError('theta must be a real scalar, 0 <= theta < pi/2.')
+    theta = xp.astype(theta, xp.result_type(theta, array(1.)))
+    scene_valid = array(True)
+    def check(valid, message):
+        nonlocal scene_valid
+        _require_scene(valid, message)
+        scene_valid = scene_valid & valid
+    check(xp.isfinite(theta) & (theta >= 0) & (theta < np.pi/2),
+          'Require finite incidence angles, 0 <= theta < pi/2.')
     # A requested frequency in the Gaussian's numerical tail cannot provide
     # reliable incident calibration. This is a roundoff guard, not an accuracy
     # guarantee for weakly excited frequencies.
@@ -520,33 +543,32 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
         if (steps-len(shaped['notches']))*dt < 10*width+2*(z[transmit_z]-z[source_z])*max(nt, nb):
             raise ValueError('n_periods is too short for pulse_notches and the scene round trip.')
         pulse_info.update(shaped)
-    kx0, ky0 = 2*np.pi/centre*nt*np.sin(theta)*np.array([np.cos(phi), np.sin(phi)])
-    if np.any((band/centre)*np.sin(theta) >= 1):
-        raise ValueError('The fixed Bloch wavevector must propagate throughout the wavelength band.')
+    kx0, ky0 = 2*np.pi/centre*nt*xp.sin(theta)*array([np.cos(phi), np.sin(phi)])
+    check(xp.all((array(band)/centre)*xp.sin(theta) < 1),
+          'The fixed Bloch wavevector must propagate throughout the wavelength band.')
     if truncation_order is None:
-        halfx = math.floor(lx*(max(nt, nb)/band.min()+abs(kx0)/(2*np.pi)))
-        halfy = math.floor(ly*(max(nt, nb)/band.min()+abs(ky0)/(2*np.pi))) if raster.shape[1] > 1 else 0
+        host_kx, host_ky = 2*np.pi/centre*nt*np.sin(host_theta)*np.array([np.cos(phi), np.sin(phi)])
+        halfx = math.floor(lx*(max(nt, nb)/band.min()+abs(host_kx)/(2*np.pi)))
+        halfy = math.floor(ly*(max(nt, nb)/band.min()+abs(host_ky)/(2*np.pi))) if raster.shape[1] > 1 else 0
     else:
         (halfx, halfy), _ = parse_order_pair(truncation_order)
     if 2*halfx+1 > nx or 2*halfy+1 > ny:
         raise ValueError('Diffraction window exceeds the spatial Nyquist limit; increase resolution.')
     mx, my = np.meshgrid(np.arange(-halfx, halfx+1), np.arange(-halfy, halfy+1))
-    kx, ky = kx0+2*np.pi*mx/lx, ky0+2*np.pi*my/ly
+    kx, ky = kx0+array(2*np.pi*mx/lx), ky0+array(2*np.pi*my/ly)
     # Refuse singular retained channels before any of the four time-domain runs.
-    reflection_channels = _diffraction_channels(band, kx, ky, nt, dt, dx, dy)
-    transmission_channels = _diffraction_channels(band, kx, ky, nb, dt, dx, dy)
+    reflection_channels = _diffraction_channels(array(band), kx, ky, nt, dt, dx, dy, xp=xp, check=check)
+    transmission_channels = _diffraction_channels(array(band), kx, ky, nb, dt, dx, dy, xp=xp, check=check)
     # Declared scalar TE/TM uses the fixed x-z frame, like RCWA's scalar
     # solver. Coupled/Jones scenes use each outgoing order's own s/p frame.
-    azimuth = (np.zeros_like(kx) if tetm is not None and raster.shape[1] == 1 and phi == 0
-               else order_azimuth(np, ky.astype(complex), kx.astype(complex), phi).reshape(kx.shape))
-    co, si = array(np.cos(azimuth)), array(np.sin(azimuth))
+    co, si = ((xp.ones_like(kx), xp.zeros_like(kx)) if tetm is not None and raster.shape[1] == 1 and phi == 0
+              else real_order_frame(xp, ky, kx, phi))
     # Raster coordinates start at zero, as in the RCWA Fourier coefficients.
-    transform = array(np.exp(-1j*(kx[..., None, None]*np.arange(nx)[None, :]*dx
-                                  + ky[..., None, None]*np.arange(ny)[:, None]*dy)))
-    correction = np.stack((np.cos(kx*dx/2), np.cos(ky*dy/2)))
-    if np.min(np.abs(correction)) < 1e-8:
-        raise ValueError('A retained order lies at the Yee interpolation Nyquist zero.')
-    correction = array(correction)
+    transform = xp.exp(-1j*(kx[..., None, None]*array(np.arange(nx)[None, :]*dx)
+                            + ky[..., None, None]*array(np.arange(ny)[:, None]*dy)))
+    correction = xp.stack((xp.cos(kx*dx/2), xp.cos(ky*dy/2)))
+    check(xp.min(xp.abs(correction)) >= 1e-8,
+          'A retained order lies at the Yee interpolation Nyquist zero.')
     def modes(spectrum, magnetic=False):
         tangential = xp.sum(spectrum[:, :, :2, None, None]*transform[None, None, None], axis=(-2, -1))/(nx*ny)
         divisor = xp.flip(correction, axis=0) if magnetic else correction
@@ -602,19 +624,20 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
         for kind, materials in (('reference', (background[0], background[0])), ('actual', background)):
             planes = []
             for index, (eps, mu_value) in zip((reflect_z, transmit_z), materials):
-                matrix = _directional_projection(band, kx, ky, eps, mu_value, dt, dx, dy, widths[index])
+                matrix = _directional_projection(array(band), kx, ky, eps, mu_value, dt, dx, dy,
+                                                  widths[index], xp=xp, check=check)
                 if record_field is not None:
                     # Only the incident order at the extra carrier is used for
                     # time-record calibration. Unrequested orders may be grazing.
-                    carrier = np.zeros((1, 2, 2)+kx.shape, complex)
+                    carrier = array(np.zeros((1, 2, 2)+kx.shape, complex))
                     if kind == 'reference' and index == reflect_z:
-                        value = _directional_projection(np.array([centre]), kx[halfy:halfy+1, halfx:halfx+1],
+                        value = _directional_projection(array([centre]), kx[halfy:halfy+1, halfx:halfx+1],
                                                          ky[halfy:halfy+1, halfx:halfx+1], eps, mu_value,
-                                                         dt, dx, dy, widths[index])
-                        carrier[..., halfy:halfy+1, halfx:halfx+1] = value
-                    matrix = np.concatenate((matrix, carrier))
+                                                         dt, dx, dy, widths[index], xp=xp, check=check)
+                        carrier = value*array((mx == 0) & (my == 0))
+                    matrix = xp.concat((matrix, carrier))
                 planes.append(matrix)
-            projections[kind] = array(np.stack(planes, axis=1))
+            projections[kind] = xp.stack(planes, axis=1)
     def run_modes(run, kind, prefix=False):
         data = run['convergence'] if prefix else run
         suffix = '_before_window' if prefix else ''
@@ -627,19 +650,21 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     convergence_runs = []
     earlier_runs = []
     runs = []
-    stable = array(True)
+    stable = scene_valid
+    source_plane = array((np.arange(shape[0]) == source_z)[:, None, None])
     for vector in ((-np.sin(phi), np.cos(phi)), (-np.cos(phi), -np.sin(phi))):
-        source = np.zeros((3,)+shape, complex)
+        components = []
         for c in range(2):
-            xx = (np.arange(nx)+(.5 if c == 0 else 0))*dx
-            yy = (np.arange(ny)+(.5 if c == 1 else 0))*dy
-            source[c, source_z] = vector[c]*np.exp(1j*(kx0*xx[None, :]+ky0*yy[:, None]))
+            xx = array((np.arange(nx)+(.5 if c == 0 else 0))*dx)
+            yy = array((np.arange(ny)+(.5 if c == 1 else 0))*dy)
+            components.append(source_plane*vector[c]*xp.exp(1j*(kx0*xx[None, :]+ky0*yy[:, None])))
+        source = xp.stack((*components, xp.zeros_like(components[0])))
         settings = dict(spacing=(dz, dy, dx), dt=dt, steps=steps, source=source, pulse=pulse,
                         wavelengths=run_band, monitor_z=monitor_indices, backend=backend,
                         device=device, checkpoint_steps=checkpoint_steps, pml_cells=int(n_pml),
                         convergence_window=convergence_window, convergence_tol=convergence_tol, dft_subsample=dft_subsample,
                         pml_wavelength=centre, pml_reflection=pml_reflection,
-                        z_spacing=widths if nonuniform else None, bloch_phase=(0., ky0*ly, kx0*lx))
+                        z_spacing=widths if nonuniform else None, bloch_phase=xp.stack((array(0.), ky0*ly, kx0*lx)))
         reference = fdtd_grid(xp.ones_like(epsilon)*et, mu=mt,
                               pml_background=(background[0], background[0]), **settings)
         actual = fdtd_grid(epsilon, mu=permeability, poles=native_poles,
@@ -667,33 +692,32 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     incoming_columns = []
     for f, wl in enumerate(run_band):
         k0 = 2*np.pi/wl
-        qtop = np.sqrt((nt**2-(kx/k0)**2-(ky/k0)**2).astype(complex))
-        qbot = np.sqrt((nb**2-(kx/k0)**2-(ky/k0)**2).astype(complex))
-        qi = float(np.sqrt(nt**2-(kx0/k0)**2-(ky0/k0)**2))
-        def propagation(index, kx_value, ky_value):
-            transverse = (np.sin(kx_value*dx/2)/dx)**2+(np.sin(ky_value*dy/2)/dy)**2
-            square = (index*np.sin(k0*dt/2)/dt)**2-transverse
-            return 2/dz*np.arcsin(dz*np.sqrt(np.asarray(square, complex)))
-        kz_top, kz_bot = array(propagation(nt, kx, ky)), array(propagation(nb, kx, ky))
-        kz_inc = propagation(nt, kx0, ky0)
+        transverse = (kx/k0)**2+(ky/k0)**2
+        qt = boundary_kz(xp, nt**2, transverse+0j)
+        qb = boundary_kz(xp, nb**2, transverse+0j)
+        qi = xp.real(boundary_kz(xp, nt**2, (kx0/k0)**2+(ky0/k0)**2+0j))
+        frequency = 2*np.sin(k0*dt/2)/dt
+        def propagation(index, kx_value, ky_value, spacing):
+            transverse = (2*xp.sin(kx_value*dx/2)/(dx*frequency))**2+(2*xp.sin(ky_value*dy/2)/(dy*frequency))**2
+            q = boundary_kz(xp, index**2, transverse+0j)
+            return yee_longitudinal_phase(xp, q, frequency, spacing)
+        kz_top, kz_bot = propagation(nt, kx, ky, dz)/dz, propagation(nb, kx, ky, dz)/dz
+        kz_inc = propagation(nt, kx0, ky0, dz)/dz
         phase_ref, phase_trn = kz_top*z[reflect_z], kz_bot*(z[transmit_z]-thick.sum())
         phase_inc = kz_inc*z[reflect_z]
         if nonuniform:
             def path_phase(index, kx_value, ky_value, start, stop):
                 segment = widths[min(start, stop):max(start, stop)]
-                transverse = (np.sin(kx_value*dx/2)/dx)**2+(np.sin(ky_value*dy/2)/dy)**2
-                square = (index*np.sin(k0*dt/2)/dt)**2-transverse
-                angles = 2*np.arcsin(segment.reshape((-1,)+(1,)*np.ndim(square))*np.sqrt(np.asarray(square, complex)))
-                return np.sign(stop-start)*angles.sum(axis=0)
-            phase_ref = array(path_phase(nt, kx, ky, interface, reflect_z))
-            phase_trn = array(path_phase(nb, kx, ky, bottom_interface, transmit_z))
+                angles = propagation(index, kx_value, ky_value, array(segment.reshape((-1,)+(1,)*kx_value.ndim)))
+                return np.sign(stop-start)*xp.sum(angles, axis=0)
+            phase_ref = path_phase(nt, kx, ky, interface, reflect_z)
+            phase_trn = path_phase(nb, kx, ky, bottom_interface, transmit_z)
             phase_inc = path_phase(nt, kx0, ky0, interface, reflect_z)
-        qt, qb = array(qtop), array(qbot)
         def extract(run_values, reference_scale=None):
             incident_columns, outgoing, incoming = [], [], []
             for ref, act in run_values:
                 reference = ref[f, 0, 0] if diffraction_method == 'directional' else ref[f, 0]
-                inc = reference[:, halfy, halfx]*np.exp(-1j*phase_inc)
+                inc = reference[:, halfy, halfx]*xp.exp(-1j*phase_inc)
                 incident_columns.append(xp.stack((-np.sin(phi)*inc[0]+np.cos(phi)*inc[1],
                                                   -nt/qi*(np.cos(phi)*inc[0]+np.sin(phi)*inc[1]))))
                 if f < len(band):
@@ -727,7 +751,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                         if incoming else None)
             return scattering, calibration, valid, scale, returned
         scattering, calibration, valid, scale, returned = extract(runs)
-        weights.append(calibration @ xp.stack((a_s, a_p)))
+        weights.append(xp.where(stable, calibration @ xp.stack((a_s, a_p)), array(complex(float('nan'), 0.))))
         if f == len(band):
             continue
         if returned is not None:
@@ -768,7 +792,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                            layer_planes=np.r_[0., np.cumsum(thick)],
                            # The final closing cell also belongs to the lower PML.
                            pml_bounds=(z[0], z[int(n_pml)], z[-int(n_pml)], z[-1]+widths[-1]),
-                           angles=np.arcsin(band/centre*np.sin(theta)),
+                           angles=xp.asin(array(band)/centre*xp.sin(theta)),
                            normalization='uniform-medium reference; two electric-current bases')
         weights = xp.stack(weights)
         diagnostics['diffraction'] = dict(
@@ -777,8 +801,8 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
             reflection_monitor_z=float(z[reflect_z]), transmission_monitor_z=float(z[transmit_z]),
             reflection={key: array(value) for key, value in reflection_channels.items()},
             transmission={key: array(value) for key, value in transmission_channels.items()},
-            cutoff_resolved=array(np.all(reflection_channels['cutoff_resolved'])
-                                  and np.all(transmission_channels['cutoff_resolved'])))
+            cutoff_resolved=xp.all(reflection_channels['cutoff_resolved'])
+                            & xp.all(transmission_channels['cutoff_resolved']))
         if incoming_columns:
             incoming = xp.stack(incoming_columns)
             diagnostics['diffraction']['incoming'] = {

@@ -27,6 +27,7 @@ subtrees:
   - file: fdtd-source-clearance
   - file: fdtd-lattice-reference
   - file: fdtd-transverse-resolution
+  - file: fdtd-scene-angles
   - file: fdtd-rayleigh
   - file: fdtd-enz
   - file: fdtd-layer-alignment
