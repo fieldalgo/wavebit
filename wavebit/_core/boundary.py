@@ -34,6 +34,7 @@ removed block path, while tying on axis-aligned overlap, where a staircase has n
 lose.
 """
 from . import clipper as _clipper
+from .interfaces import plan_interfaces, replay_interfaces
 from .parametric import nvf_from_coeffs, shape_geometry, _sampled_coeffs
 from .domain import as_material
 from .backend import checked_float
@@ -62,7 +63,7 @@ def fold_into_cell(xp, P, lattice):
     """``P`` (N, 2) carried by lattice vectors into the fundamental parallelogram of ``lattice``.
 
     ``floor`` of the fractional coordinates, not ``round``: this names the cell a point sits in,
-    and the 3x3 sweep of :func:`periodic_segments` covers the neighbours. Its derivative is
+    and the bounded sweep of :func:`periodic_segments` covers the candidate images. Its derivative is
     zero, which is correct -- the choice of image is locally constant, and moving a point does
     not move which cell it is in except on a measure-zero seam. A point already inside the
     parallelogram comes back with its coordinates untouched (``x - 0.0 * a`` is ``x``), so on a
@@ -76,61 +77,25 @@ def fold_into_cell(xp, P, lattice):
     return xp.stack([P[:, 0] - su * a1x - sv * a2x, P[:, 1] - su * a1y - sv * a2y], axis=-1)
 
 
-def periodic_segments(xp, A, E, L2, lattice, transform=None):
-    """Every segment, plus the images of it that can be a cell point's nearest boundary.
+def periodic_segments(xp, A, E, L2, lattice, transform=None, images=None, image_groups=None):
+    """Fold segment starts and enumerate images on the reduced lattice.
 
-    **The cell is a torus and the distance has to be too.** Without this the field measures the
-    distance to each polygon *where it sits*, so a shape whose body crosses the cell edge is
-    invisible from the other side and the points there take their normal from whatever is next
-    nearest. `epz_i` -- which never touches a normal field -- stays bit-identical under the
-    same translation, which is what located it: rigidly sliding an overlapping pair moved
-    `epx`/`epy` by -0.0323/+0.0323 in their DC entries the moment a rod crossed the edge, and
-    `sum(T)` stopped converging (1.8e-3 to 3.9e-4 over truncation order 4 to 16, against
-    5.6e-4 to 3.6e-5 for the same structure sitting inside the cell).
+    E and L2 are translation invariant. Folding the start rather than the
+    point-to-start displacement lets the minimum select the image nearest the
+    segment, including near its far endpoint. Samples must fold on the same
+    reduced cell (distance_gradient_normal_field does this).
 
-    Two steps, and both are the ones :func:`wavebit._core.parametric._fold_to_nearest_image`
-    takes, because this is the same theorem one representation over:
+    Production passes images and image_groups from interfaces.plan_interfaces.
+    The image ring is bounded by fractional edge extents; groups drop only
+    segment/image combinations farther than a guaranteed nearest-endpoint upper
+    bound. Arbitrarily long segments therefore do not rely on a fixed 3x3 ring.
+    The default 3x3 remains for legacy unplanned field probes; callers with long
+    segments must supply their image bound explicitly.
 
-    * **Fold in the lattice, not in a rectangle.** ``A % P`` answers "which cell is this in"
-      only for images at ``(m*Px, n*Py)``. They sit at ``m*a1 + n*a2``, so the fold runs
-      through the fractional coordinates and a skewed cell folds towards an image that exists.
-    * **Then sweep 3x3.** The fractional fold lands in the fundamental parallelogram, which is
-      the nearest image in the *lattice* metric; the sweep is what makes the pick Euclidean.
-
-    Segments are folded one at a time and a loop is free to come apart across the seam. That is
-    sound here and only here: the caller reduces over `argmin` of a distance, which asks nothing
-    about connectivity, and NVF reads only ``nx**2``, ``nx*ny``, ``ny**2``, so the inside/outside
-    sign the winding would have carried is not read either.
-
-    One ring is enough because a shape wider than the period is refused before this
-    (:func:`wavebit._core.parametric.check_layer_shapes`); with every segment shorter than the
-    period, folding its start into the cell puts the whole segment within one period of it.
-
-    ``E`` and ``L2`` are translation invariant, so an image needs neither recomputed -- which
-    is also why this cannot be written as a fold of the *displacement* inside
-    :func:`_seg_dist`: that would pick the image nearest the segment's start rather than the
-    one nearest the segment, and the two differ for a segment approaching the period in length.
-
-    **On the Lagrange-reduced basis (2026-09-06).** One cell a side is enough only when the
-    Wigner-Seitz cell of the origin lies inside the 3x3 of the fundamental parallelogram, and
-    that is a property of the *spelling*: ``as_lattice`` accepts ``a2 = k a1 + (50, 700)`` for
-    any ``k``, and from ``k = 3`` the nearest image sits past the sweep. Two overlapping 300 x
-    300 boxes on ``k = 10`` read ``sum(T)`` 0.810615440141 against 0.948626126969 on ``k = 0``
-    at the one window where both spellings retain the same order set -- geometry, not
-    resolution (the same at ``normal_grid`` 64 / 128 / 256). So the fold and the sweep run on
-    :func:`~wavebit._core.lattice.reduced_basis`, the same lattice spelled with its two
-    shortest vectors, as the closed-form route's fold does (section 8c of
-    ``docs/normal-field-known-limits.md``); the Fourier side of this layer keeps the basis as
-    given. ``transform`` is the integer ``T`` a frozen plan recorded on the concrete basis
-    (:func:`plan_layer`), so a jitted replay on a traced basis reduces with the recorded
-    integers rather than asking the tracer for a number; left ``None``, it is computed here,
-    which needs a basis that can be read.
-
-    The sample points have to be folded into the *same* parallelogram (:func:`fold_into_cell`,
-    in :func:`distance_gradient_normal_field`): they are laid out on the basis as given, and on
-    the ``10 a1`` spelling that is a sliver reaching ten cells along ``a1``, where no image of a
-    segment folded into the reduced cell exists. Folding the segments alone moved the answer
-    from 0.8106 to 0.9855 -- a different wrong number, unmoved by the grid.
+    transform is the integer basis reduction recorded while geometry was
+    concrete. Replaying it preserves JIT over a traced lattice and avoids an
+    unreduced spelling such as a2 = 10*a1 + (50, 700) changing which physical
+    images are searched. Fourier coefficients retain the basis as supplied.
     """
     lattice = reduced_basis(lattice, transform)
     a1x, a2x = lattice[0][0], lattice[0][1]
@@ -139,14 +104,22 @@ def periodic_segments(xp, A, E, L2, lattice, transform=None):
     folded = fold_into_cell(xp, A, lattice)
     ax, ay = folded[:, 0], folded[:, 1]
 
+    if image_groups is not None:
+        indices = [xp.asarray(ids, dtype=xp.int64) for ids in image_groups]
+        shifted = [folded[ids] + xp.stack([xp.asarray(u * a1x + v * a2x),
+                                          xp.asarray(u * a1y + v * a2y)])
+                   for (u, v), ids in zip(images, indices)]
+        return (xp.concat(shifted, axis=0), xp.concat([E[ids] for ids in indices], axis=0),
+                xp.concat([L2[ids] for ids in indices], axis=0))
     xs, ys = [], []
-    for du in (-1.0, 0.0, 1.0):
-        for dv in (-1.0, 0.0, 1.0):
-            xs.append(ax + (du * a1x + dv * a2x))
-            ys.append(ay + (du * a1y + dv * a2y))
+    if images is None:
+        images = tuple((u, v) for u in (-1, 0, 1) for v in (-1, 0, 1))
+    for du, dv in images:
+        xs.append(ax + (du * a1x + dv * a2x))
+        ys.append(ay + (du * a1y + dv * a2y))
     A9 = xp.stack([xp.concat(xs, axis=0), xp.concat(ys, axis=0)], axis=-1)
-    E9 = xp.concat([E] * 9, axis=0)
-    L29 = xp.concat([L2] * 9, axis=0)
+    E9 = xp.concat([E] * len(images), axis=0)
+    L29 = xp.concat([L2] * len(images), axis=0)
     return A9, E9, L29
 
 
@@ -173,8 +146,15 @@ def _nearest(xp, pts, A, E, L2):
 
 
 def distance_gradient_normal_field(xp, polys, grid_shape, lattice, dtype, chunk=None,
-                                   transform=None):
+                                   transform=None, segment_data=None, images=None,
+                                   image_groups=None):
     """Unit normal from the direction to the closest boundary *point*.
+
+    With segment_data, only live material-jump intervals compete in the
+    distance minimum, everywhere in the cell. All-inactive sets return (1, 0).
+    A closed periodic set of parallel interfaces uses its exact line normal.
+    The optional image_groups carry the planner's conservative per-segment
+    image pruning; the scan/checkpoint evaluation is shared with raw probes.
 
     The closest *edge* is not well defined -- beyond a corner both edges meeting there have the
     corner as their closest point, at exactly equal distance, so `argmin`'s tie-break decides on
@@ -296,13 +276,38 @@ def distance_gradient_normal_field(xp, polys, grid_shape, lattice, dtype, chunk=
     which is what makes the two agree on a spelling whose sample grid lies outside it.
     """
     Ny, Nx = grid_shape
-    A, E, L2 = segments_of(xp, polys)
-    A, E, L2 = periodic_segments(xp, A, E, L2, lattice=lattice, transform=transform)
+    if not polys:
+        return xp.ones(grid_shape, dtype=dtype), xp.zeros(grid_shape, dtype=dtype)
+    if segment_data is None:
+        A, E, L2 = segments_of(xp, polys)
+        active = None
+    else:
+        A, E, L2, active = segment_data
+    count = A.shape[0]
+    A, E, L2 = periodic_segments(xp, A, E, L2, lattice=lattice, transform=transform,
+                                images=images, image_groups=image_groups)
     M = A.shape[0]
+    if active is not None:
+        if image_groups is None:
+            active = xp.concat([active] * (M // count))
+        else:
+            active = xp.concat([active[xp.asarray(ids, dtype=xp.int64)] for ids in image_groups])
 
     X, Y = sample_grid(xp, grid_shape, lattice, dtype)
     pts = xp.stack([xp.reshape(X, (-1,)), xp.reshape(Y, (-1,))], axis=-1)
     pts = fold_into_cell(xp, pts, reduced_basis(lattice, transform))
+
+    threshold2 = 1e-26
+    if active is not None:
+        scale = xp.max(xp.abs(xp.stack([xp.asarray(lattice[i][j], dtype=dtype)
+                                       for i in (0, 1) for j in (0, 1)])))
+        threshold2 = (64 * xp.finfo(dtype).eps * scale) ** 2
+        reference = E[xp.argmax(xp.astype(active, xp.int32))]
+        cross = E[:, 0] * reference[1] - E[:, 1] * reference[0]
+        parallel = xp.all((cross == 0) | ~active)
+        reference2 = xp.sum(reference * reference)
+        line_normal = xp.stack([reference[1], -reference[0]]) / xp.sqrt(
+            xp.where(reference2 > 0, reference2, xp.ones_like(reference2)))
 
     npix = Ny * Nx
     if chunk is None:
@@ -310,7 +315,13 @@ def distance_gradient_normal_field(xp, polys, grid_shape, lattice, dtype, chunk=
 
     def _chunk_normals(p):
         """One chunk's unit normals, ``(len(p), 2)``. The loop body, named so JAX can reuse it."""
-        j, foot_j = _nearest(xp, p, A, E, L2)
+        if active is None:
+            j, foot_j = _nearest(xp, p, A, E, L2)
+        else:
+            dist2, foot = _seg_dist(xp, p, A, E, L2)
+            dist2 = xp.where(active[None, :], dist2, xp.asarray(float('inf'), dtype=dtype))
+            j = xp.argmin(dist2, axis=1)
+            foot_j = foot[xp.arange(p.shape[0]), j]
 
         v = p - foot_j
 
@@ -337,16 +348,25 @@ def distance_gradient_normal_field(xp, polys, grid_shape, lattice, dtype, chunk=
         # "grid-aligned designs hit it"; it was describing the trigger for a bug in the
         # gradient, not only a special case in the value.
         s2 = _sum(xp, v * v)
-        safe2 = xp.where(s2 > 1e-26, s2, xp.ones_like(s2))
+        safe2 = xp.where(s2 > threshold2, s2, xp.ones_like(s2))
         mag = xp.sqrt(safe2)
 
         ej = E[j]
         n_edge = xp.stack([ej[:, 1], -ej[:, 0]], axis=-1)
-        n_edge = n_edge / xp.sqrt(_sum(xp, n_edge * n_edge))[:, None]
+        edge2 = _sum(xp, n_edge * n_edge)
+        n_edge = n_edge / xp.sqrt(xp.where(edge2 > 0, edge2, xp.ones_like(edge2)))[:, None]
 
         n_far = v / mag[:, None]
-        on = (s2 <= 1e-26)[:, None]
-        return xp.where(on, n_edge, n_far)
+        on = (s2 <= threshold2)[:, None]
+        result = xp.where(on, n_edge, n_far)
+        if active is not None:
+            # A closed periodic interface set with parallel edges consists of
+            # complete straight lines. Use its exact normal, including on segment
+            # joins; no endpoint-radial extension or transverse roundoff belongs
+            # to a genuinely one-dimensional layer.
+            result = xp.where(parallel, line_normal[None, :], result)
+            result = xp.where(xp.any(active), result, xp.asarray([1., 0.], dtype=dtype))
+        return result
 
     if 'jax' in xp.__name__:
         n = _scanned_normals(xp, _chunk_normals, pts, npix, chunk)
@@ -359,8 +379,11 @@ def distance_gradient_normal_field(xp, polys, grid_shape, lattice, dtype, chunk=
     return normal_x, normal_y
 
 
-def _scanned_normals(xp, body, pts, npix, chunk):
+def _scanned_normals(xp, body, pts, npix, chunk, width=2):
     """``body`` over ``pts`` in chunks, as a ``lax.scan`` whose body is rematerialised.
+
+    The default output width is two real normal components; polygon Jones
+    construction uses the same bounded scan for four complex components.
 
     Why not the plain loop: see :func:`distance_gradient_normal_field`. In one line, a Python
     loop is one copy of the body per chunk in the traced program -- 24 at the grid this was
@@ -403,7 +426,150 @@ def _scanned_normals(xp, body, pts, npix, chunk):
     stacked = xp.reshape(pts, (n_chunks, chunk, 2))
 
     _, out = jax.lax.scan(lambda carry, p: (carry, jax.checkpoint(body)(p)), None, stacked)
-    return xp.reshape(out, (n_chunks * chunk, 2))[:npix]
+    return xp.reshape(out, (n_chunks * chunk, width))[:npix]
+
+
+def polygon_dyadic_projector(xp, pts, polys, lattice, dtype, transform, ring, chunk=None,
+                             reference=None, curved_edges=None):
+    """Complex projector of polygon edges at Cartesian points, ordered xx,xy,yy,yx.
+
+    Each original polygon edge contributes its positive normal dyad, weighted
+    by length and inverse fourth power of periodic segment distance. Clipping
+    only shortens these same lines, so every regular painted interface has its
+    exact polygon normal. Covered edges remain extension geometry, as primitive
+    faces do in rectangular circular NVF; material equality changes no field.
+
+    Fold point-to-midpoint displacements, then minimize over the image ring.
+    An edge's normal is identical at every image, so a nearest-image tie does
+    not switch directions. On a reduced basis a nearest lattice point lies in
+    the 3x3 neighborhood of rounded fractional coordinates. The midpoint-to-
+    foot displacement is bounded by R, the primitive bounding radius; therefore
+    1+ceil(R/h) images per axis suffice. GammaPlan.ring=1+ceil(2R/h) covers them.
+
+    With ``reference``, blend its positive tensor with the polygon tensor only
+    near curved facets. The blend is exactly polygonal on a curved facet and
+    tends to the analytic extension away from it and under polygon refinement.
+    ``curved_edges`` flags the corresponding original edges; covered edges are
+    retained, so neither the blend nor the reference reads material equalities.
+    """
+    if not polys:
+        one = xp.ones((pts.shape[0],), dtype=dtype)
+        return xp.stack([one/2, -.5j*one, one/2, .5j*one], axis=-1)
+    polys = [xp.astype(v, dtype) for v in polys]
+    A, E, _ = segments_of(xp, polys)
+    length2 = _sum(xp, E*E)
+    live = length2 > 0.
+    safe2 = xp.where(live, length2, xp.ones_like(length2))
+    length = xp.sqrt(safe2)
+    tx, ty = E[:, 0]/length, E[:, 1]/length
+    nx, ny = ty, -tx
+    extent = xp.where(live, length/2, xp.zeros_like(length))
+    mass = xp.where(live, length/xp.max(length), xp.zeros_like(length))
+    curved = (xp.asarray(curved_edges, dtype=dtype) if reference is not None else None)
+    mid = A + E/2
+    reduced = reduced_basis(lattice, transform)
+    ax, bx = reduced[0]
+    ay, by = reduced[1]
+    det = ax*by-bx*ay
+    count = A.shape[0]
+    if chunk is None:
+        chunk = max(1, min(pts.shape[0], 4_000_000//(count*(2*ring+1)**2)))
+
+    def evaluate(p):
+        dx, dy = p[:, None, 0]-mid[None, :, 0], p[:, None, 1]-mid[None, :, 1]
+        km = xp.round((by*dx-bx*dy)/det)
+        kn = xp.round((ax*dy-ay*dx)/det)
+        dx, dy = dx-km*ax-kn*bx, dy-km*ay-kn*by
+        best = None
+        for m in range(-ring, ring+1):
+            for n in range(-ring, ring+1):
+                x, y = dx-m*ax-n*bx, dy-m*ay-n*by
+                along, normal = x*tx+y*ty, x*nx+y*ny
+                excess = xp.maximum(xp.abs(along)-extent, xp.zeros_like(along))
+                dist2 = normal*normal+excess*excess
+                best = dist2 if best is None else xp.minimum(best, dist2)
+        best = xp.where(live[None, :], best, xp.asarray(float('inf'), dtype=dtype))
+        minimum = xp.min(best, axis=1, keepdims=True)
+        # Empty/degenerate loops have the circular extension and zero gradients.
+        minimum = xp.where(xp.any(live), minimum, xp.ones_like(minimum))
+        on_gamma, on_edge = minimum == 0., best == 0.
+        ratio = xp.where(on_gamma, xp.ones_like(minimum), minimum) / xp.where(
+            on_edge, xp.ones_like(best), best)
+        weight = xp.where(on_gamma, xp.astype(on_edge, dtype), ratio*ratio)*mass
+        a = xp.sum(weight*(nx*nx), axis=1)
+        b = xp.sum(weight*(nx*ny), axis=1)
+        c = xp.sum(weight*(ny*ny), axis=1)
+        peak = xp.maximum(a, c)
+        empty = peak == 0.
+        divisor = xp.where(empty, xp.ones_like(peak), peak)
+        a = xp.where(empty, xp.ones_like(a), a/divisor)
+        b = b/divisor
+        c = xp.where(empty, xp.ones_like(c), c/divisor)
+        if reference is not None:
+            # Keep the analytic extension away from polygonized curves. Only
+            # a chord-sized neighborhood needs its facet normal corrected.
+            # All weights are continuous sums, not a selected nearest edge.
+            total = xp.sum(weight, axis=1)
+            curve_weight = weight*curved
+            curve_mass = xp.sum(curve_weight, axis=1)
+            band2 = xp.sum(curve_weight*length2, axis=1)/xp.where(
+                curve_mass > 0., curve_mass, xp.ones_like(curve_mass))
+            distance2 = minimum[:, 0]
+            band_ratio = band2/xp.where(band2+distance2 > 0., band2+distance2,
+                                       xp.ones_like(band2))
+            alpha = (curve_mass/xp.where(total > 0., total, xp.ones_like(total)))*band_ratio**2
+            base = reference(p)
+            # Re(P)=M^2/tr(M^2). Its positive square root is proportional to
+            # Re(P)+abs(Im(P_xy))*I, recovering the real dyad tensor up to scale.
+            imaginary = xp.abs(xp.imag(base[:, 1]))
+            aa, bb, cc = xp.real(base[:, 0])+imaginary, xp.real(base[:, 1]), xp.real(base[:, 2])+imaginary
+            tr, base_tr = a+c, aa+cc
+            a, b, c = (alpha*a/tr+(1-alpha)*aa/base_tr,
+                       alpha*b/tr+(1-alpha)*bb/base_tr,
+                       alpha*c/tr+(1-alpha)*cc/base_tr)
+        norm2 = a*a+2*b*b+c*c
+        xx, yy = (a*a+b*b)/norm2, (c*c+b*b)/norm2
+        xy = ((a+c)*b+1j*(b*b-a*c))/norm2
+        return xp.stack([xx, xy, yy, xp.conj(xy)], axis=-1)
+
+    if 'jax' in xp.__name__:
+        return _scanned_normals(xp, evaluate, pts, pts.shape[0], chunk, width=4)
+    return xp.concat([evaluate(pts[lo:lo+chunk]) for lo in range(0, pts.shape[0], chunk)], axis=0)
+
+
+def polygon_projector_coeffs(xp, polys, grid_shape, lattice, hu, hv, dtype, cdtype, plan,
+                             shapes=None):
+    """Sample the polygon Jones projector after removing a common translation."""
+    check_normal_grid(grid_shape, hu, hv)
+    polys = [xp.astype(v, dtype) for v in polys]
+    # Symmetric in the input polygon order. A phase restores a rigid translation
+    # exactly instead of moving the quadrature grid across the painted boundary.
+    centre = xp.mean(xp.concat(polys, axis=0), axis=0)
+    ax, bx = lattice[0]
+    ay, by = lattice[1]
+    shift = centre-xp.stack([xp.asarray(.5*(ax+bx), dtype=dtype),
+                            xp.asarray(.5*(ay+by), dtype=dtype)])
+    built = [v-shift for v in polys]
+    X, Y = sample_grid(xp, grid_shape, lattice, dtype)
+    pts = xp.stack([xp.reshape(X, (-1,)), xp.reshape(Y, (-1,))], axis=-1)
+    options = {}
+    if shapes is not None:
+        from . import parametric as P
+        moved = [dict(s, cx=s.get('cx', 0.)-shift[0], cy=s.get('cy', 0.)-shift[1]) for s in shapes]
+        def reference(p):
+            return xp.stack(P._piece_field(xp, p[:, 0], p[:, 1], moved, plan, None,
+                                           lattice, dtype, dyadic=True), axis=-1)
+        options = dict(reference=reference, curved_edges=[
+            s.get('type', 'rectangle') in ('circle', 'disk', 'ellipse')
+            for s, v in zip(shapes, polys) for _ in range(v.shape[0])])
+    fields = polygon_dyadic_projector(xp, pts, built, lattice, dtype, plan.reduction, plan.ring,
+                                      **options)
+    KY, KX = _k_grids(xp, hu, hv, dtype)
+    det = ax*by-bx*ay
+    su, sv = (by*shift[0]-bx*shift[1])/det, (ax*shift[1]-ay*shift[0])/det
+    phase = xp.exp(xp.astype(-2j*3.141592653589793*(KX*su+KY*sv), cdtype))
+    return tuple(_sampled_coeffs(xp, xp.astype(xp.reshape(fields[:, i], grid_shape), cdtype),
+                                 hu, hv)*phase for i in range(4))
 
 
 # ============================================ convolution matrices for one layer
@@ -425,21 +591,41 @@ def _centroid(xp, V):
                      xp.sum((y + yn) * cr) / (6.0 * a)])
 
 
+def _paint_centroid(xp, segment_data, plan):
+    """Centroid of the unwrapped painted union, with internal traces canceled first.
+
+    The plan picks one oriented representative of each unwrapped exterior interval.
+    This includes periodic abutting faces for the area integral, but excludes zero-area
+    spurs and shared internal cuts. Their cancellation is combinatorial, so an invisible
+    nested contour cannot perturb the quadrature origin through floating-point summation.
+    """
+    a, e, _, _ = segment_data
+    ids = xp.asarray([i for i, p in enumerate(plan.pieces) if p.centroid_sign], dtype=xp.int64)
+    sign = xp.asarray([p.centroid_sign for p in plan.pieces if p.centroid_sign], dtype=a.dtype)
+    a, z = a[ids], (a + e)[ids]
+    cross = (a[:, 0] * z[:, 1] - z[:, 0] * a[:, 1]) * sign
+    return xp.stack([xp.sum((a[:, 0] + z[:, 0]) * cross),
+                     xp.sum((a[:, 1] + z[:, 1]) * cross)]) / (3 * xp.sum(cross))
+
+
 def normal_projector_coeffs(xp, loops, grid_shape, lattice, half_width_u, half_width_v,
-                            dtype, cdtype, transform=None):
+                            dtype, cdtype, transform=None, segment_data=None, images=None,
+                            image_groups=None, anchor=None):
     """Coefficient grids of ``n_u**2``, ``n_u*n_v``, ``n_v**2``, built with the layer CENTRED.
 
-    The normal field lives on the whole plane, so sampling it in a fixed cell clips a different
-    part of it depending on where the shape sits -- a bias, not a discretisation: it does not
-    shrink with the grid. Building at the centre and carrying the *coefficients* by the shift
-    theorem makes the clipping identical every time, and the position dependence exact.
+    The resolved route supplies the area centroid of the unwrapped painted
+    union as anchor. Center every partition count on it, then carry the sampled
+    coefficients back by a Fourier phase. Centering only single loops made an
+    off-center same-material inclusion change quadrature with painting order.
 
-    It only works when the whole field translates as one, i.e. **a single loop**. With several
-    loops, moving one reshapes the field between them and no phase describes that.
+    Relative geometry is rebuilt on every call, including its derivative; the
+    phase describes only the common shift. This is a sampling convention, not
+    a claim that finite quadrature equals the continuous Fourier integral.
+    Legacy raw-loop probes keep their single-loop centroid convention.
     """
     check_normal_grid(grid_shape, half_width_u, half_width_v)
-    if len(loops) == 1:
-        c = _centroid(xp, loops[0])
+    if len(loops) == 1 or anchor is not None:
+        c = anchor if anchor is not None else _centroid(xp, loops[0])
         # The `lattice is None` arm that used to sit here computed the rectangle's answer
         # from `Px`, `Py`. The solver stopped reaching it once `_geometry_lattice_for`
         # became total (`cc016fc`): driving only the public API, the one function that
@@ -450,7 +636,10 @@ def normal_projector_coeffs(xp, loops, grid_shape, lattice, half_width_u, half_w
         a1y, a2y = lattice[1][0], lattice[1][1]
         mid_x, mid_y = 0.5 * (a1x + a2x), 0.5 * (a1y + a2y)
         shift = xp.stack([c[0] - mid_x, c[1] - mid_y])
-        built = [loops[0] - shift[None, :]]
+        built = [v - shift[None, :] for v in loops]
+        if segment_data is not None:
+            a, e, l2, active = segment_data
+            segment_data = (a - shift[None, :], e, l2, active)
         KY, KX = _k_grids(xp, half_width_u, half_width_v, dtype)
         # The displacement in *fractional lattice* coordinates, A^-1 @ shift. The phase is
         # already exp(-i G.d) written that way; it was only ever handed Px / Py fractions.
@@ -464,7 +653,9 @@ def normal_projector_coeffs(xp, loops, grid_shape, lattice, half_width_u, half_w
         phase = xp.asarray(1.0 + 0j, dtype=cdtype)
 
     normal_x, normal_y = distance_gradient_normal_field(xp, built, grid_shape, lattice, dtype,
-                                                        transform=transform)
+                                                        transform=transform,
+                                                        segment_data=segment_data, images=images,
+                                                        image_groups=image_groups)
     out = []
     for f in (normal_x * normal_x, normal_x * normal_y, normal_y * normal_y):
         out.append(_sampled_coeffs(xp, xp.astype(f, cdtype), half_width_u, half_width_v) * phase)
@@ -472,7 +663,7 @@ def normal_projector_coeffs(xp, loops, grid_shape, lattice, half_width_u, half_w
 
 
 def conv_mats(xp, regions, background, half_width_u, half_width_v, lattice, normal_grid,
-              dtype, cdtype, transform=None):
+              dtype, cdtype, transform=None, interface_plan=None, projector_coeffs=None):
     """``(epx, epy, epz_i, epxy, epyx)`` for one boundary-resolved layer.
 
     ``regions`` is ``[(material, [loop, ...]), ...]`` -- disjoint, painting already resolved by
@@ -496,24 +687,15 @@ def conv_mats(xp, regions, background, half_width_u, half_width_v, lattice, norm
     ``<eps> = 2.4256`` against an exact 2.2371 for a disc of permittivity 9 inside a square of 4,
     at every ``truncation_order`` alike, and ``sum(R) = 0.1798`` against a converged raster's 0.4164.
 
-    The normal field is handed the loops as they are, orientation included, and that is safe by
-    construction rather than by luck: it is the direction to the nearest boundary *point*, so it
-    depends on which segments exist and not on how they are wound, and only ``normal_x**2``,
-    ``normal_x*normal_y``, ``normal_y**2`` are consumed, so the vector's overall sign cancels too.
+    The material transform keeps these signed loops unchanged. The normal
+    builder instead receives actual interface intervals: oriented coverage is
+    summed per region, zero-area retraces cancel, and current material values
+    decide whether the two sides differ. Winding matters to this extraction;
+    only after extracting the interface set is the normal's overall sign free.
 
-    It is not, however, bit-invariant, and the choice made here is a measured one rather than an
-    omission. Winding a hole clockwise renumbers its edges, so ``argmin`` breaks its exact ties
-    the other way: on a disc inside a square, 20 pixels of 65536 move, each by 0.024541 in
-    ``normal_x**2`` -- that is ``sin(2*pi/256)``, one facet of the 256-gon, so the tie is between two
-    adjacent facets. It reaches ``c_xx`` and ``c_yy`` as 6.0e-6 and ``c_xy`` as 7.0e-18, and the
-    solve as 1.3e-7 in ``sum(T)``.
-
-    Neither answer is better, and that was checked rather than assumed: against the *ideal*
-    circle's radial normal both choices are off by 0.7031 degrees on every one of those pixels,
-    summing to 1.4062 = 360/256, exactly one facet step. An exact tie. So the loops are not
-    re-normalised here. Doing so would reintroduce the orientation conversion this path exists
-    to delete, in order to pin a bit-pattern the measurement says is arbitrary and that sits
-    1.5e4 times below this path's own 1.8e-3 agreement with a converged raster.
+    The scalar-property view is shared with the permeability pass, which puts
+    mu_value in the epsilon slots. The topology plan therefore holds no material
+    equality and can be replayed under material gradients or either property.
     """
     KY, KX = _k_grids(xp, half_width_u, half_width_v, dtype)
     is_dc = (KY == 0) & (KX == 0)
@@ -540,14 +722,27 @@ def conv_mats(xp, regions, background, half_width_u, half_width_v, lattice, norm
                                      dtype=cdtype), cdtype)
         ft = zero
         for V in polys:
-            ft = ft + polygon_ft(xp, V, KY, KX, lattice)
+            ft = ft + xp.astype(polygon_ft(xp, V, KY, KX, lattice), cdtype)
         eps_c = eps_c + (eps_s - eps_bg) * ft
         inv_c = inv_c + (1.0 / eps_s - 1.0 / eps_bg) * ft
 
+    if projector_coeffs is not None:
+        if len(projector_coeffs) != 4:
+            raise ValueError('the complex shape projector needs xx, xy, yy, yx coefficients')
+        return nvf_from_coeffs(xp, eps_c, inv_c, *projector_coeffs[:3],
+                               half_width_u, half_width_v, c_yx=projector_coeffs[3])
+
     all_loops = [V for _, polys in regions for V in polys]
+    if transform is None:
+        transform = reduction_transform(lattice)
+    if interface_plan is None:
+        interface_plan = plan_interfaces(regions, lattice, transform)
+    segment_data = replay_interfaces(xp, regions, background, lattice, transform, interface_plan)
     c_xx, c_xy, c_yy = normal_projector_coeffs(
         xp, all_loops, (normal_grid, normal_grid), lattice, half_width_u, half_width_v,
-        dtype, cdtype, transform=transform)
+        dtype, cdtype, transform=transform, segment_data=segment_data,
+        images=interface_plan.images, image_groups=interface_plan.groups,
+        anchor=_paint_centroid(xp, segment_data, interface_plan) if segment_data is not None else None)
     return nvf_from_coeffs(xp, eps_c, inv_c, c_xx, c_xy, c_yy, half_width_u, half_width_v)
 
 
@@ -627,10 +822,17 @@ def plan_layer(shapes, lattice, n_poly=POLYGON_VERTICES):
     The third entry is the integer transform to the Lagrange-reduced basis
     (:func:`~wavebit._core.lattice.reduction_transform`), taken here on the concrete basis so
     that a replay on a traced one enumerates its periodic images on the same reduced cell
-    (:func:`periodic_segments`).
+    (:func:`periodic_segments`). The fourth entry records the actual-interface
+    intervals, unwrapped centroid representatives, and bounded image groups.
     """
-    recs, regions = _clipper.resolve_painting(_plan_vertices(shapes, lattice, n_poly))
-    return recs, regions, reduction_transform(lattice)
+    import numpy as np
+    verts = _plan_vertices(shapes, lattice, n_poly)
+    recs, regions = _clipper.resolve_painting(verts)
+    transform = reduction_transform(lattice)
+    vals = _clipper.eval_table(np, recs, verts)
+    regs = [(None, [_clipper.loop_verts(np, lp, vals) for lp in region]) for region in regions]
+    interfaces = plan_interfaces(regs, lattice, transform)
+    return recs, regions, transform, interfaces
 
 
 def _concrete_basis(lattice):
@@ -662,10 +864,10 @@ def _plan_vertices(shapes, lattice, n_poly):
 
 def _plan_key(plan):
     """A painting plan as nested lists, so a record compares by content whatever holds it."""
-    recs, regions, reduction = plan
+    recs, regions, reduction, interfaces = plan
     return ([tuple(r) for r in recs],
             [[list(loop) for loop in region] for region in regions],
-            tuple(tuple(int(t) for t in row) for row in reduction))
+            tuple(tuple(int(t) for t in row) for row in reduction), interfaces)
 
 
 def check_plan_still_fits(shapes, lattice, plan, n_poly=POLYGON_VERTICES):
@@ -682,20 +884,17 @@ def check_plan_still_fits(shapes, lattice, plan, n_poly=POLYGON_VERTICES):
     replayed on another would enumerate its periodic images on the wrong cell
     (:func:`periodic_segments`), so a changed reduction is stale too.
 
-    Re-planning is the whole cost of the comparison, and it scales with the shape count rather
-    than with the solve: 0.2% of a frozen ``solve`` for the two-rectangle layer above, 1.2% for
-    ten overlapping shapes at ``truncation_order = 4``, and falling as ``truncation_order`` rises (0.4% for
-    those ten at ``truncation_order = 8``) because the solve grows faster than the painting does. The
-    freeze on this path buys traceability, not speed, so there is no plateau being given up for
-    it. Under a trace it is skipped -- a tracer has no coordinates to re-plan from, which is the
-    same reading of "not concrete" that :func:`parametric._primitives` takes, and for the same
-    reason.
+    The comparison replays planning on concrete geometry, including interface
+    intervals and image bounds; its cost scales with polygon complexity, not
+    the retained Fourier order count. Under a trace it is skipped because no
+    concrete geometry is available. The caller must recheck eagerly between
+    traced steps when moving through topology or image-bound events.
     """
     try:
-        verts = _plan_vertices(shapes, lattice, n_poly)
+        _plan_vertices(shapes, lattice, n_poly)
     except (TypeError, ValueError):
         return                      # traced: nothing concrete to re-plan from
-    fresh = (*_clipper.resolve_painting(verts), reduction_transform(lattice))
+    fresh = plan_layer(shapes, lattice, n_poly)
     fresh_key, plan_key = _plan_key(fresh), _plan_key(plan)
     if fresh_key == plan_key:
         return
@@ -713,6 +912,8 @@ def _what_moved(fresh_key, plan_key):
     if fresh_key[2] != plan_key[2]:
         return ('the cell basis reduces by a different transform than the one the record '
                 'enumerated its periodic images on')
+    if fresh_key[:2] == plan_key[:2] and fresh_key[3] != plan_key[3]:
+        return 'the polygon interface intervals or their periodic image bounds changed'
     fresh, held = fresh_key[1], plan_key[1]
     if len(fresh) != len(held):
         return (f'it was resolved from {len(held)} painted shapes and this layer has '
@@ -741,23 +942,43 @@ def _what_moved(fresh_key, plan_key):
 
 
 def to_conv_mat_boundary_layer(xp, shapes, background, half_width_u, half_width_v, lattice,
-                               dtype, normal_grid=256, n_poly=POLYGON_VERTICES, plan=None):
+                               dtype, normal_grid=256, n_poly=POLYGON_VERTICES, plan=None,
+                               projector_coeffs=None, projector=None, projector_plan=None):
     """The five convolution matrices for one layer whose shapes are *painted*.
 
     ``shapes`` is in painting order — a later shape covers an earlier one — which is what a
     raster of the same instruction agrees with. Pass
     ``plan`` from a frozen geometry to keep the call traceable; leave it ``None`` and the
     painting is resolved eagerly, which needs concrete shape parameters.
+
+    ``projector='circular'`` corrects the analytic Jones extension near curved
+    polygon facets. ``projector_plan`` carries the primitive image ring alongside
+    the clipping plan. The default retains the actual-interface linear field.
     """
+    if projector not in (None, 'linear', 'circular'):
+        raise ValueError("projector must be 'linear' or 'circular'")
     verts = [shape_vertices(xp, s, lattice, n_poly) for s in shapes]
     if plan is None:
-        recs, regions, transform = plan_layer(shapes, lattice, n_poly)
+        recs, regions, transform, interfaces = plan_layer(shapes, lattice, n_poly)
     else:
         check_plan_still_fits(shapes, lattice, plan, n_poly)
-        recs, regions, transform = plan
+        recs, regions, transform, interfaces = plan
     vals = _clipper.eval_table(xp, recs, verts)
     regs = [(s['material'], [_clipper.loop_verts(xp, lp, vals) for lp in region])
             for s, region in zip(shapes, regions)]
     real_dtype = xp.float64 if dtype == xp.complex128 else xp.float32
+    if projector == 'circular':
+        from . import parametric as P
+        if projector_coeffs is not None:
+            raise ValueError('choose a polygon projector or supplied coefficients, not both')
+        if projector_plan is None:
+            projector_plan = P.plan_gamma(shapes, lattice)
+            if projector_plan is None:
+                projector_plan = P._blind_plan(shapes, lattice)
+        P.check_gamma_plan_still_fits(dict(shapes=shapes), lattice, projector_plan, 0, dyadic=True)
+        projector_coeffs = polygon_projector_coeffs(
+            xp, verts, (normal_grid, normal_grid), lattice, half_width_u, half_width_v,
+            real_dtype, dtype, projector_plan, shapes=shapes)
     return conv_mats(xp, regs, background, half_width_u, half_width_v, lattice, normal_grid,
-                     real_dtype, dtype, transform=transform)
+                     real_dtype, dtype, transform=transform, interface_plan=interfaces,
+                     projector_coeffs=projector_coeffs)

@@ -158,26 +158,16 @@ def test_the_ladder_through_the_pair_threshold_is_monotone():
     assert previous_t < 1e-10 and previous_c < 5e-12
 
 
-def test_a_merge_is_a_cusp_and_its_derivative_diverges():
-    """``d sum(T) / d ly`` as ``ly -> P`` grows like ``gap^-0.9``: continuous value, unbounded slope.
+def test_closing_gap_has_large_slopes_on_the_documented_grid():
+    """Preserve the observed defect ladder without claiming an asymptotic theorem.
 
-    Above the pair threshold the two faces cancel only outside a band of depth
-    ``(4 gap D^4)^(1/5)``, so ``sum(T)`` reaches the touching value as ``gap^(1/5)`` and its
-    derivative as ``gap^(-4/5)`` -- a cusp, not a cliff, and an optimiser within 1e-4 of
-    contact reads a gradient three to five orders above the geometry's own slope (2e-4 per
-    unit of ``ly`` here). Measured on the square grating at (5, 5) / N = 256, central secants
-    at ``h = gap / 10`` (AD agrees to three digits: +1.0360e-2 / +7.2926e-1 / +5.0401e+1):
-
-        gap      T(gap) - T(0)   (..) / gap^0.2   d sum(T) / d ly    the fold, 8bfc6aa
-        1e-2     -8.00e-4        -2.01e-3         +1.04054e-2        +1.03992e-2
-        1e-4     -3.57e-4        -2.25e-3         +7.31173e-1        +7.31171e-1
-        1e-6     -9.22e-5        -1.46e-3         +5.06404e+1        +5.06404e+1
-
-    70x per two decades where ``gap^-0.9`` predicts 63. It is the distance-product blend's
-    since 2026-08-17 -- the fold reads the same ladder to four digits -- and no exponent
-    removes it; the one fix is a near-pair ramp, a tuning constant, not taken (case J of
-    ``docs/normal-field-known-limits.md``). This test exists so the merge can never again be
-    described as smooth: the value ladder above says nothing about the slope.
+    At order (5, 5), grid 256, central secants with h=gap/10 grow from
+    0.010405 to 0.73117 to 50.640 at gaps 1e-2, 1e-4, 1e-6. The value
+    approaches contact while the sampled slope is large. These finite-grid
+    observations do not establish an unbounded physical derivative, a unique
+    power law, or that a tuned near-pair ramp is the only possible remedy.
+    Grid refinement changes the small-gap ladder; see nvf-contact-followup.md.
+    The assertions below still detect the previously recorded solver behavior.
     """
     at_span = _total(SQUARE, _box(lx=350.0, ly=PERIOD), order=5, normal_grid=256)
     slopes = []
@@ -632,8 +622,8 @@ MUTANTS = [
     # this file's neighbours: every cross pair the suite had was flush with equal extents and
     # no face carried two runs, so the window was the whole face everywhere they looked.
     ('the sign window always open', P,
-     'hits[r] = (sigma >= lo) & (sigma <= hi)',
-     'hits[r] = (sigma == sigma)',
+     'hits[r] = xp.where(on_segment, one, pn2 / xp.where(total2 > 0, total2, one))',
+     'hits[r] = one',
      _k_column_above_the_seam_end),
     ('the sign keyed on the q piece', P,
      'signs[r] = xp.where(equal, as_array(xp, -1.0, dtype=dtype), as_array(xp, 1.0, dtype=dtype))',
@@ -651,7 +641,7 @@ MUTANTS = [
      _abc_band_gate),
     ('the cross-pair substitution removed, flush and windowed', P,
      'if pr.flush:\n                        e2, n2 = pe2, pn2\n                    else:\n'
-     '                        n2 = xp.where(hits[r], pn2, n2)',
+     '                        n2 = xp.where(on_segment, pn2, n2)',
      'if pr.flush:\n                        pass\n                    else:\n'
      '                        pass',
      _stacked_off_centre_cross_pair_is_exact),

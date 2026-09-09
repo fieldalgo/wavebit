@@ -225,12 +225,12 @@ def test_the_boundary_sub_path_default_is_unmoved_on_both_axes():
         assert float(np.asarray(_painted(**strategy).solve().T).real.sum()) == base
 
 
-@pytest.mark.parametrize('strategy,named', [(dict(fourier_coefficients='sampled'),
-                                             "fourier_coefficients='sampled'"),
-                                            (dict(factorization='li'), "factorization='li'")])
-def test_the_boundary_sub_path_refuses_what_the_smooth_path_refuses(strategy, named):
-    with pytest.raises(NotImplementedError, match=named):
-        _painted(**strategy).solve()
+def test_cartesian_painting_refuses_sampled_coefficients_but_supports_integrated_li():
+    with pytest.raises(NotImplementedError, match="fourier_coefficients='sampled'"):
+        _painted(fourier_coefficients='sampled').solve()
+    s = _painted(factorization='li', fourier_coefficients='integrated')
+    assert s.factorization == 'li'
+    assert sum(m is not None for m in s._eps_conv_matrices()) == 3
 
 
 def test_the_refusal_names_the_transform_an_overlapping_layer_actually_runs():

@@ -1,5 +1,11 @@
 # The raster normal-field constructions, and the `normal_method` / `projector` options
 
+Shape NVF now also accepts `projector='circular'`, using a positive normal-dyad
+Jones construction for rectangles and circles/ellipses, with a polygon-facet
+correction for curved paintings. Its scope and contact derivatives are documented
+in [parametric modeling](parametric-modeling.md#complex-nvf-projection-for-rectangular-contacts).
+The raster constructions and measurements below retain their existing meaning.
+
 Written: 2026-08-17. Measured 2026-08-16/17 on CPU, NumPy backend, float64.
 
 

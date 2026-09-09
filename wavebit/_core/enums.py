@@ -138,11 +138,13 @@ class Projector(str, Enum):
     direction-independent answer as a *limit*, so there is no threshold anywhere and no
     "is this the medial axis?" test to get wrong.
 
-    Read only where a raster normal field is built (``factorization='nvf'`` on a raster);
-    explicitly set anywhere else it is refused rather than ignored, exactly as
-    ``normal_method`` is. See ``docs/nvf-normal-methods.md`` for what it costs and what it
-    does not fix, and :func:`wavebit._core.factorization.jones_projector_fields` for the
-    construction and its two citations.
+    Raster NVF supports both. Shape NVF also supports circular
+    projection through a positive normal-dyad lift, rather than the raster
+    magnitude mapping above. Disjoint circles and ellipses use a periodic
+    level-set dyad with an isotropic extension away from their boundaries.
+    Overlapping curves correct that extension near their polygon chords so
+    the normal matches the geometry used by the material transform.
+    All projector selections require ``factorization='nvf'``.
 
     **The scalar NVF path only.** The Popov-Neviere tensor builders
     (:func:`~wavebit._core.factorization.pn_eps_conv_matrices` and its ``mu`` twin) never form

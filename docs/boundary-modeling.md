@@ -3,6 +3,15 @@
 Written: 2026-08. Targets `wavebit/_core/boundary.py`, `_core/clipper.py`, `_core/polygon.py`,
 and the overlap route through `_core/parametric.py::to_conv_mat_parametric_layers`.
 
+Curved paintings now also support `projector='circular'` under NVF. The complex
+projector retains the analytic extension away from curves and corrects it to the
+polygon facet normal near each chord. Original edge contributions remain in the
+extension when covered, so material equality does not switch the field. Clipped
+regions still supply the material coefficients. See [usage, derivatives and
+approximation limits](parametric-modeling.md#overlapping-circles-and-ellipses).
+The default linear construction described below still extracts actual material
+interfaces and keeps its existing numerical behavior.
+
 ---
 
 ## The gap this fills
@@ -39,7 +48,9 @@ shapes in painting order
   -> clipper.resolve_painting        Greiner-Hormann, once per layer
   -> disjoint signed loops           +1 material, -1 hole
   -> polygon.polygon_ft              closed form, exact for any straight edge
-  -> boundary.distance_gradient_...  normal field off the *resolved* boundary
+  -> interfaces.plan_interfaces     partition coincident edges, including periodic images
+  -> interfaces.replay_interfaces   traced endpoints and live material-jump flags
+  -> boundary.distance_gradient_...  nearest point on the *actual* interface set
   -> the five NVF convolution matrices
 ```
 
@@ -61,6 +72,45 @@ every use: `clipper.region_area` and the since-removed `clipper.region_ft` did,
 a shape painted entirely inside another one was silently solved as a *thicker* one -- with the
 matrices still Hermitian and `R + T` still exactly 1. The conversion was also self-defeating:
 `plan_difference` already emits a hole clockwise, and `subtract_loop` was flipping it back.
+
+### Actual interfaces after painting (2026-09-07)
+
+Disjoint regions are not sufficient to identify interfaces: two adjacent regions can hold the
+same value. The normal field now keeps material labels through the interval planner/replay in
+`wavebit/_core/interfaces.py`. Collinear edges are partitioned at every contact endpoint,
+including periodic contacts, and their oriented contributions are summed per region before
+assigning the two sides. This cancels the clipper's possible zero-area out-and-back spurs
+without erasing a real third edge on the same run. An interval is a distance candidate only
+when the two sides' current values differ. Material-to-background intervals follow the same rule. The comparison is
+per scalar constitutive quantity: the magnetic pass supplies `Material.mu_value` in the slots
+normally used for epsilon. Complex equality includes loss, and omitted mu has the physical
+value 1. No material equality is frozen into the geometry plan.
+
+The plan stores edge/endpoint references and integer image offsets. Endpoint coordinates are
+recomputed during replay, so an interval endpoint moving along another edge carries a gradient.
+Changing which intervals exist, their endpoint ordering, or the bounded image groups makes an
+eager frozen replay stale. Under JIT, as with the clipper plan, checking is the caller's job
+between traced steps. This is local differentiability at fixed topology, not a guarantee at
+contact, corners, or a nearest-point tie.
+
+Both the samples and the segments fold on the reduced basis. Image enumeration has a fractional
+edge-length bound; conservative per-segment distance bounds prune impossible images. The latter
+keeps small curved facets from paying for another edge's larger image ring. JAX still uses the
+existing scan and checkpoint implementation.
+
+All resolved partitions now use the same sampling anchor: the area centroid of the unwrapped
+painted union, shifted to the cell center and carried back by a Fourier phase. The planner
+selects one oriented representative of each unwrapped exterior interval, canceling internal
+cuts and spurs before summing its moments. Periodic contacts remain in this unwrapped area
+integral even when they are absent from the normal field. Previously one loop was centered and several were not, so an
+off-center same-material inclusion changed quadrature simply by changing the loop count. The
+material Fourier coefficients remain the original signed polygon transforms.
+
+The regression suite is `tests/test_polygon_interfaces.py`; the earlier field defect and the
+scope of the fix are recorded in [known limits, §1](normal-field-known-limits.md#1-polygon-internal-and-periodic-seams--fixed-2026-09-07).
+The nearest-point extension away from interfaces, its finite-grid quadrature, and RCWA
+truncation convergence are separate questions. Matching a normal on a smooth interface does not
+make either of the latter two exact.
 
 ## Using it
 
@@ -388,12 +438,13 @@ answer is stale too, but the dispatch summed on the record's word and
 at the boundary route the caller was already inside and naming neither the record nor the fix. The
 same call with no `geometry=` solves the layer fine.
 
-Checking costs one re-plan. That is **0.2%** of a frozen `solve` for the two-rectangle
-layer above and **1.2%** for ten overlapping shapes at `truncation_order = 4`, falling as `truncation_order` rises (0.4% for
-those ten at `truncation_order = 8`) since the solve grows faster than the painting does. The freeze on this
-path buys traceability rather than a speed plateau, so that is not traded against anything. Under a trace there is nothing to
-re-ask and the replay goes through on trust, the same documented limit every record here has,
-and the reason the instruction above is *every step* rather than *once*.
+Checking costs one re-plan, including the actual-interface intervals and image bounds.
+The earlier clipper-only measurements (0.2% for two rectangles and 1.2% for ten at order 4)
+do not measure this expanded check. Image pruning rounds segment extents outward to whole
+cells so harmless length changes do not invalidate an unchanged overlap. Crossing an extent
+bound, changing periodic contact, or changing the recorded reduced basis still requires a new
+freeze. Under JIT there is no concrete geometry to check, so callers must recheck eagerly
+between traced steps.
 
 ## Two properties worth knowing before you trust a number
 

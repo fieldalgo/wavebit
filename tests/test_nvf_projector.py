@@ -458,22 +458,12 @@ def test_the_basis_is_chiral_and_that_is_where_the_cost_is():
 def test_it_is_refused_where_nothing_would_read_it():
     """An unread knob is the defect this library refuses everywhere, and this is its door.
 
-    Two places have no raster normal field to form a projector from: Li builds none at all,
-    and the parametric path builds one from the geometry, which carries no magnitude for the
-    limit to read. Both run to completion with the request ignored, which is exactly the
-    silent non-choice `_reject_unread_normal_method` exists to stop one axis over.
+    Li builds no normal projector. Unsupported requests must name their limitation
+    instead of silently choosing another field.
     """
     with pytest.raises(NotImplementedError, match="factorization='li' builds no normal field"):
         wavebit.rcwa(structure=DISC[None], **{**SOLVE_KW, 'factorization': 'li'},
                      projector='circular').solve()
-
-    shapes = [dict(background=1.0,
-                   shapes=[dict(type='circle', cx=0.0, cy=0.0, l=0.6, material=12.25)])]
-    with pytest.raises(NotImplementedError, match='carries no magnitude'):
-        wavebit.rcwa(structure=shapes, **{k: v for k, v in SOLVE_KW.items()
-                                          if k != 'factorization'},
-                     projector='circular').solve()
-
 
 def test_an_unknown_value_names_the_ones_that_exist():
     with pytest.raises(ValueError, match=r"projector='bogus'.*'linear', 'circular'"):

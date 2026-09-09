@@ -15,6 +15,7 @@ import functools as _functools
 import numpy as _np
 
 from . import parametric as _parametric
+from . import rectilinear as _rectilinear
 from . import boundary as _boundary
 from . import factorization as _fac
 from . import lattice as _lattice
@@ -2096,25 +2097,16 @@ class CoreSolveMixin:
             eps_top=eps_top, eps_bot=eps_bot))
 
 
-# The rule each modeling path actually implements, for the paths that implement exactly one.
+# The default rule for shape modeling. Explicit Li validates its Cartesian subset separately.
 # `ModelingPath.RASTER` is absent because it implements both and so takes the option as
-# given; on the parametric path the option is a claim to check rather than a choice to make.
+# given; general shapes default to NVF, with explicit Cartesian Li handled on read.
 _FACTORIZATION_IMPLEMENTED_BY = {
     ModelingPath.PARAMETRIC: Factorization.NVF,
 }
 
-# Why each of those two is the only rule its path has, phrased for the person who asked for
-# the other one. The distinction matters: one is unbuilt, the other is unbuildable.
+# General parametric shapes use NVF; Cartesian rectangles have an explicit Li route.
 _FACTORIZATION_REASON = {
-    ModelingPath.PARAMETRIC: (
-        "the parametric path builds eps from a normal field taken from the geometry -- "
-        "the shapes' own (wavebit._core.parametric.to_conv_mat_parametric_nvf), or, for a painted "
-        "layer whose shapes overlap, that of the disjoint polygons the painting resolves into "
-        "(wavebit._core.boundary.to_conv_mat_boundary_layer). There is no raster "
-        "axis to run Li's nested 1D rule along, so Li's rules are not something that path has "
-        "yet to grow -- they are not something it can express. NVF is a superset of Li anyway "
-        "(a constant normal collapses the projector onto Li's rules exactly), so nothing is "
-        "lost: drop the keyword, or pass factorization='nvf' to say so"),
+    ModelingPath.PARAMETRIC: "general shapes require factorization='nvf'; explicit Li supports axis-aligned rectangles",
 }
 
 # The other Fourier axis, exactly the same shape of fact. The shape path describes a layer as
@@ -3159,20 +3151,13 @@ class CoreFactorizationMixin:
     def factorization(self):
         """Which rule closes the discontinuous products: ``'li'`` | ``'nvf'``.
 
-        This reports the rule the *current structure* will be built with, which is not always
-        the one that was asked for, because only the raster path implements both. The smooth
-        shape path has only NVF, so there the keyword is a claim about the build rather than a
-        choice within it, and this resolves it against the modeling path instead of repeating
-        it back.
-
-        Raises:
-            NotImplementedError: when the rule was *explicitly* asked for and this modeling
-                path does not implement it. Refusing rather than substituting is the point --
-                a smooth-path circle used to answer to ``factorization='li'`` with NVF numbers
-                and no way to tell. The default is exempt because it is not a request: it is
-                resolved per path, so a user who never touched the keyword gets Li on a raster
-                and NVF on parametric shapes, which is what each path always did.
+        Shapes default to NVF. Explicit Li uses exact Cartesian intervals for
+        axis-aligned rectangles in a rectangular cell; other shapes are refused.
+        Raster structures support both rules and default to Li.
         """
+        if self._modeling_path == ModelingPath.PARAMETRIC and self._factorization == Factorization.LI:
+            _rectilinear.validate(self.structure, self.lattice)
+            return Factorization.LI
         implemented = _FACTORIZATION_IMPLEMENTED_BY.get(self._modeling_path)
         if implemented is None:                       # raster, or no structure yet: free choice
             return DEFAULT_FACTORIZATION if self._factorization is None else self._factorization
@@ -3210,18 +3195,16 @@ class CoreFactorizationMixin:
 
     @property
     def projector(self):
-        """How the NVF projector is formed from the normal field: ``'linear'`` | ``'circular'``.
+        """NVF projection: ``'linear'`` (default) or ``'circular'``.
 
-        ``'linear'`` is ``P = n n^T``, the direction alone, and is what every number in this
-        repository was measured on. ``'circular'`` builds ``P = J J^H`` from a Jones vector
-        that carries the field's magnitude too, so that ``P`` loses its direction entirely as
-        the magnitude goes to zero — which is what the *medial axis* is, and where the
-        direction is undefined rather than merely hard to find. See
-        :class:`~wavebit._core.enums.Projector` and
-        :func:`~wavebit._core.factorization.jones_projector_fields`.
-
-        Read exactly where :attr:`normal_method` is read, and refused exactly where that is
-        refused: the two are independent axes over one field, not one axis with eight values.
+        Raster circular projection uses field magnitude. For shapes,
+        circular projection lifts the sum of positive normal dyads into a complex
+        basis. It avoids cancelling opposed normals through contact, and supports
+        rotations and live geometry/material gradients. Disjoint circles and
+        ellipses use a regular periodic level-set extension; curved paintings
+        correct it near their polygon chords to follow the resolved geometry.
+        Both are NVF rules;
+        selecting a projector with Li factorization is refused.
         """
         return DEFAULT_PROJECTOR if self._projector is None else self._projector
 
@@ -3328,27 +3311,18 @@ class CoreFactorizationMixin:
             f"needs a raster structure and factorization='nvf'.")
 
     def _reject_unread_projector(self, factorization):
-        """Refuse an explicit ``projector`` where no raster normal field is built.
-
-        Word for word :meth:`_reject_unread_normal_method`'s argument, over the same condition,
-        because the two keywords have the same reader: the raster path under
-        ``factorization='nvf'`` and nothing else. Separate methods rather than one loop over
-        both so that a caller naming one gets told about the one they named -- the two are
-        independent axes and a message about the other sends them to change the wrong thing.
-
-        The parametric path is the case worth naming. It *does* build a normal field, from
-        the geometry rather than from a raster, and it has no magnitude to open into an
-        ellipse -- an analytic normal is exact everywhere its shape is smooth, and the medial
-        axis this exists for is a raster artefact. So the refusal there is not "there is no
-        field", it is "there is nothing about this field for the circular limit to read".
-        """
+        """Reject projector requests without an implementation on this structure."""
         if self._projector is None:
             return
         if self._modeling_path == ModelingPath.RASTER and factorization == Factorization.NVF:
             return
+        if self._modeling_path == ModelingPath.PARAMETRIC and factorization == Factorization.NVF:
+            if self.projector == 'circular':
+                for layer in self.structure:
+                    _parametric.check_dyadic_shapes(layer.get('shapes', []))
+            return
         if self._modeling_path == ModelingPath.PARAMETRIC:
-            where = ('the parametric path builds its normal field from the geometry, which '
-                     'carries no magnitude for the circular limit to read')
+            where = "Cartesian shape factorization='li' builds no normal projector"
         else:
             where = "factorization='li' builds no normal field at all"
         raise NotImplementedError(
@@ -3372,8 +3346,12 @@ class CoreFactorizationMixin:
         The default is exempt for the same reason as everywhere else -- an untouched keyword is
         not a request -- which is what `None` now means (see :meth:`_resolve_normal_grid`).
         """
-        if self._normal_grid is None or self._modeling_path == ModelingPath.PARAMETRIC:
+        if self._normal_grid is None:
             return
+        if self._modeling_path == ModelingPath.PARAMETRIC:
+            if self.factorization == Factorization.NVF:
+                return
+            raise NotImplementedError("normal_grid has no reader with Cartesian shape factorization='li'")
         raise NotImplementedError(
             f'normal_grid={self._normal_grid!r} has no reader here: the raster path builds its '
             f"normal field at the raster's own resolution, lifted to the 4*truncation_order+1 "
@@ -3466,6 +3444,10 @@ class CoreFactorizationMixin:
                                   mu_normal_field_source=mu_normal_field_source,
                                   mu_compression=mu_compression)
         if self._modeling_path == ModelingPath.PARAMETRIC:
+            if factorization == Factorization.LI:
+                geometry.rectilinear_plans = [_rectilinear.plan_layer(layer.get('shapes', []), basis)
+                                              for layer in self.structure]
+                return geometry
             # The layer refusals run here, not only on the solve. This *is* the eager pass --
             # it is where the shapes are concrete by construction -- and a record taken over a
             # layer that would be refused is a record that lets the refusal be replayed past:
@@ -3999,26 +3981,33 @@ class CoreFactorizationMixin:
                         normal_method=self.normal_method,
                         projector=self.projector)
 
-        elif self._modeling_path == ModelingPath.PARAMETRIC:  # NVF on exact transforms
-            # Fixed on both axes: the epsilon tensor comes from the shapes' analytic normal
-            # field, so five matrices always, and each shape's transform is the exact integral
-            # over the cell, so the coefficients are integrated ones. Naming
-            # `factorization='li'` or `fourier_coefficients='sampled'` was refused above.
-            xp = self.xp
-            conv = _parametric.to_conv_mat_parametric_layers(
-                structure, half_width_u, half_width_v,
-                self._geometry_lattice_for(geometry),
-                normal_grid=self._resolve_normal_grid(half_width_u, half_width_v),
-                # The declared width, not a literal. This read `xp.complex128` with
-                # `self.complex_dtype` in scope, so a caller asking for single precision on
-                # this path got double: NumPy and JAX returned float64 from a solver that
-                # reported complex64, and Torch raised `expected m1 and m2 to have the same
-                # dtype` as soon as anything upstream honoured the request.
-                complex_dtype=self.complex_dtype, xp=xp,
-                boundary_plans=None if geometry is None else geometry.boundary_plans,
-                # The same record for both quantities: it is geometric, and the permeability
-                # view's own material slots make the seam signs per quantity at build time.
-                gamma_plans=None if geometry is None else geometry.gamma_plans)
+        elif self._modeling_path == ModelingPath.PARAMETRIC:
+            if factorization == Factorization.LI:
+                if geometry is not None and geometry.rectilinear_plans is None:
+                    raise _fac.StaleGeometryError("freeze_geometry() with factorization='li' before replay")
+                conv = _rectilinear.layer_stack(
+                    self.xp, structure, half_width_u, half_width_v,
+                    self.lattice, self.complex_dtype,
+                    plans=None if geometry is None else geometry.rectilinear_plans)
+            else:
+                if geometry is not None and geometry.rectilinear_plans is not None:
+                    raise _fac.StaleGeometryError("Cartesian Li geometry cannot be replayed with NVF; freeze_geometry() again")
+                xp = self.xp
+                conv = _parametric.to_conv_mat_parametric_layers(
+                    structure, half_width_u, half_width_v,
+                    self._geometry_lattice_for(geometry),
+                    normal_grid=self._resolve_normal_grid(half_width_u, half_width_v),
+                    # The declared width, not a literal. This read `xp.complex128` with
+                    # `self.complex_dtype` in scope, so a caller asking for single precision on
+                    # this path got double: NumPy and JAX returned float64 from a solver that
+                    # reported complex64, and Torch raised `expected m1 and m2 to have the same
+                    # dtype` as soon as anything upstream honoured the request.
+                    complex_dtype=self.complex_dtype, xp=xp,
+                    boundary_plans=None if geometry is None else geometry.boundary_plans,
+                    # The same record for both quantities: it is geometric, and the permeability
+                    # view's own material slots make the seam signs per quantity at build time.
+                    gamma_plans=None if geometry is None else geometry.gamma_plans,
+                    **({} if self._projector is None else {'projector': self.projector}))
 
         else:
             raise ValueError(

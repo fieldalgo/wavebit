@@ -307,12 +307,10 @@ def test_contour_is_periodic_under_a_roll_that_lands_on_the_corner():
 
     What the fix picks between are two readings that converge, so it is a choice and not a
     correction: the same disc at 64 / 128 / 256 samples a side has its branches 3.85e-4,
-    2.51e-5 and 6.73e-7 apart. At exactly half fill the area rule ties and the corner rule
-    stands, which a 50/50 stripe shows is harmless (1.144e-14 across these rolls, before and
-    after alike). Making the tie flip instead -- `>=` for `>` -- is a mutant this test does
-    not kill, and deliberately so: at half fill both readings give the same curve and the
-    same traversal, so nothing downstream can see which was taken. The two that matter do
-    die -- restoring the corner rule, and marking the larger phase instead of the smaller.
+    2.51e-5 and 6.73e-7 apart. At exactly half fill the area rule still ties;
+    the contour consumer now canonicalizes traversal so complementing the
+    indicator samples the same curve. The asymmetric half-fill test below
+    exercises that fix; a stripe alone cannot detect the old defect.
     """
     import wavebit
 
@@ -362,7 +360,7 @@ def test_contour_is_periodic_under_a_roll_that_lands_on_the_corner():
     moved, got = spread(small, ((0, 0), (40, 40)))
     assert moved < 1e-9, f'disc r=12: sum(T) moved by {moved:.2e} across rolls -- {got}'
 
-    # Exactly half fill: the area rule ties, the corner rule stands, and it does not matter.
+    # Half-fill stripe control; the asymmetric blob below is the discriminating case.
     stripe = np.where(U < 32, 12.25, 1.0)
     moved, got = spread(stripe, rolls)
     assert moved < 1e-9, f'50/50 stripe: sum(T) moved by {moved:.2e} across rolls -- {got}'
@@ -715,39 +713,12 @@ def test_one_ring_reaches_the_nearest_point_once_the_fold_is_right(gamma):
                 f'{missed} of {P.shape[0]} pixels')
 
 
-@pytest.mark.xfail(strict=True, reason='at exactly half fill neither phase is the smaller, so '
-                                       'the indicator falls back to the corner pixel')
-def test_the_half_fill_tie_falls_back_to_the_corner_rule():
-    """The one place `_two_phase_indicator`'s area rule does not apply, and it is not harmless.
+def test_half_fill_contour_translation_is_invariant():
+    """An asymmetric half-filled blob must not choose a field from its corner.
 
-    The rule marks the smaller phase, which is translation-invariant. At **exactly** half fill
-    there is no smaller phase and it falls back to reading the corner pixel -- the thing the
-    area rule replaced on 2026-08-29 precisely because a translation moves what is in the
-    corner.
-
-    That fallback was called harmless in `_two_phase_indicator`'s own docstring, on two
-    grounds, and both were wrong. The argument was that a 50/50 split no translation-invariant
-    function can separate must have its two phases exchanged by a symmetry; the measurement was
-    a 50/50 **stripe** holding at 1.144e-14. A stripe is its own complement under a half-period
-    shift, so it is the one scene where the conclusion holds regardless of the argument.
-
-    The scene below is the counterexample and it is ordinary: a compact asymmetric blob, 2048
-    of 4096 pixels, touching no cell edge -- so no percolating level set and no open-curve
-    handling involved -- and **no** roll of the 4096 maps it to its complement. Measured over
-    64 rolls:
-
-    ==========  ==============  ============================
-    method      total spread    within each indicator class
-    ==========  ==============  ============================
-    'contour'   1.977e-03       6.6e-14 / 9.1e-14
-    'spectral'  7.5e-14         --
-    ==========  ==============  ============================
-
-    All of the spread is *between* the two classes and none inside them. That is the
-    indicator-flip signature exactly, and it is six orders past the 1e-9 the other pins here
-    assert.
-
-    A binary topology optimisation under a 50% volume constraint sits on this tie on purpose.
+    No translation of this blob exchanges it with its complement. Before
+    contour traversal was canonicalized, rolls that changed the corner phase
+    changed transmission by about 2e-4. Keep the original 1e-9 solve-level gate.
     """
     n = 64
     ax = np.arange(n)

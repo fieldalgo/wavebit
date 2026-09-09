@@ -1352,8 +1352,13 @@ def _run_window(xp, pframe, p_face, qframe, q_face, m, n, reduced, dtype):
     return lo, hi
 
 
-def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype):
+def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype, dyadic=False):
     """The normal field at ``(X, Y)`` from the plan's pieces -- ``(normal_x, normal_y)``.
+
+    ``dyadic=True`` selects the complex shape projector and returns
+    ``(P_xx, P_xy, P_yy, P_yx)`` instead. It combines positive dyads before
+    normalization and ignores signed-pair substitutions. The description below
+    concerns the default linear field.
 
     **One blend over every piece of every shape.** A box is its four faces and a round shape
     one piece; each piece has a distance (:class:`_Frame` for a face over its instances,
@@ -1400,9 +1405,16 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype):
     the material runs on, no interface; different, and it is *added* -- the seam is an
     interface and its normal survives (a null band, until 2026-09-06). The sign is a window in
     ``sigma`` rebuilt from the traced run bounds (:func:`_run_window`), never one scalar per
-    piece: one face can be a pair member on several runs with different equalities. Beyond the
-    run the two keep their own opposed normals, which is right for both materials -- past the
-    end of a seam there is no interface either way. Nothing decides *when*: a face one ulp
+    piece: one face can be a pair member on several runs with different equalities.
+    On the shared line, transfer is one on the run and zero beyond it, preserving
+    the exact interface directions. Off the line, a normal squared distance n2
+    and tangential excess e give transfer n2/(n2+e**2), with one at e=0. This
+    removes the old jump along the ray extending each run endpoint. It introduces
+    no smoothing length. Tails of several runs on one partner are normalized
+    symmetrically to transfer at most its available weight. Same-material
+    transfers cancel algebraically, so only unequal-material extensions change.
+    This fixes the moving-end value step, not the separate closing-gap cusp.
+    Nothing decides *when*: a face one ulp
     off its partner's line is carried continuously by the same blend, one on it cancels
     identically, and a material swept through equality flips the sign live, with nothing to
     invalidate.
@@ -1430,6 +1442,8 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype):
     ``slots`` is the layer's material slot values (:func:`_material_slots`), computed from the
     shapes when ``None``; self pairs never read one.
     """
+    if dyadic:
+        check_dyadic_shapes(shapes)
     if slots is None:
         slots = _material_slots(xp, shapes, dtype)
     zero = xp.zeros_like(X)
@@ -1439,7 +1453,7 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype):
     # traced or not, so a jitted replay on a traced cell reduces without reading it.
     reduced = reduced_basis(lattice, plan.reduction)
 
-    if len(plan.pieces) == 1 and plan.pieces[0].face == 'arc':
+    if not dyadic and len(plan.pieces) == 1 and plan.pieces[0].face == 'arc':
         shape, imgs = shapes[plan.pieces[0].shape], plan.pieces[0].imgs
         if len(imgs) == 1:
             _, gx, gy = _round_field(xp, X, Y, shape, lattice, reduced, dtype)
@@ -1456,7 +1470,7 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype):
     # over its own run (a flush one over the whole line); a cross pair carries a run window
     # and a sign, both from the traced values.
     self_records, cross_by_q, windows, signs = {}, {}, {}, {}
-    for r, pr in enumerate(plan.pairs):
+    for r, pr in enumerate(() if dyadic else plan.pairs):
         p, q = plan.pieces[pr.p], plan.pieces[pr.q]
         if p.shape == q.shape:
             window = None if pr.flush else _run_window(
@@ -1469,11 +1483,10 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype):
         equal = xp.all(slots[p.shape] == slots[q.shape])
         signs[r] = xp.where(equal, as_array(xp, -1.0, dtype=dtype), as_array(xp, 1.0, dtype=dtype))
 
-    # 1. Every piece's distance, and for a cross pair's partner whether its nearest instance
-    #    sits on the run.
+    # 1. Every piece's distance and each cross run's transfer at the nearest instance.
     d = [None] * len(plan.pieces)
     round_dir = {}
-    inside = {}
+    transfer = {}
     for i, frame in frames.items():
         faces = {face: plan.pieces[index[(i, face)]] for face in _overlap.FACES}
         offsets = sorted({mn for pc in faces.values() for mn in pc.imgs})
@@ -1482,7 +1495,7 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype):
         for face, piece in faces.items():
             k = index[(i, face)]
             cross = cross_by_q.get(k, ())
-            best, on_run = None, {r: None for r in cross}
+            best, best_transfer = None, {r: None for r in cross}
             for m, n in piece.imgs:
                 du, dv = own[(m, n)]
                 e2, n2, _ = frame.parts(face, du, dv, zero)
@@ -1519,27 +1532,39 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype):
                     pdu, pdv = pframe.at(frame.km + (m - pr.m), frame.kn + (n - pr.n))
                     pe2, pn2, sigma = pframe.parts(p.face, pdu, pdv, zero)
                     lo, hi = windows[r]
-                    hits[r] = (sigma >= lo) & (sigma <= hi)
+                    on_segment = (sigma >= lo) & (sigma <= hi)
+                    excess = xp.maximum(xp.maximum(lo - sigma, sigma - hi), zero)
+                    total2 = pn2 + excess * excess
+                    # Exact on the run; zero on its line beyond either end.
+                    # Off the line this approaches the endpoint continuously,
+                    # without introducing a user-selected smoothing length.
+                    hits[r] = xp.where(on_segment, one, pn2 / xp.where(total2 > 0, total2, one))
                     if pr.flush:
                         e2, n2 = pe2, pn2
                     else:
-                        n2 = xp.where(hits[r], pn2, n2)
+                        n2 = xp.where(on_segment, pn2, n2)
                 val = e2 + n2
                 if best is None:
-                    best, on_run = val, hits
+                    best, best_transfer = val, hits
                 else:
                     take = val < best
                     best = xp.where(take, val, best)
-                    on_run = {r: xp.where(take, hits[r], on_run[r]) for r in cross}
+                    best_transfer = {r: xp.where(take, hits[r], best_transfer[r]) for r in cross}
             # The root's radicand is guarded, not its result: a sample exactly on the face has
             # `best == 0`, where `d(sqrt)` is infinite and the cotangent `where` hands the
             # discarded branch, zero, makes `0 * inf` -- the `_hypot_safe` lesson. Taking the
             # root of 1 there and writing the 0 back leaves every value bitwise where it was.
             on_face = best == 0.0
             d[k] = xp.where(on_face, zero, xp.sqrt(xp.where(on_face, one, best)))
-            inside.update(on_run)
+            transfer.update(best_transfer)
+    round_dyads = {}
     for k, pc in enumerate(plan.pieces):
         if pc.face != 'arc':
+            continue
+        if dyadic:
+            d[k], aa, bb, cc = _round_dyad(
+                xp, X, Y, shapes[pc.shape], lattice, reduced, dtype, plan.ring)
+            round_dyads[k] = (aa, bb, cc)
             continue
         if len(pc.imgs) == 1:
             d[k], gx, gy = _round_field(xp, X, Y, shapes[pc.shape], lattice, reduced, dtype)
@@ -1572,6 +1597,43 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype):
         ratio = safe_min / xp.where(on_face, one, dk)
         w.append(xp.where(on_gamma, xp.where(on_face, one, zero), ratio ** _BLEND_EXPONENT))
 
+    if dyadic:
+        # Lift positive normal dyads into a complex basis. Opposite face normals
+        # have the same dyad: no signed-vector cancellation or zero-norm tie.
+        a, b, c = zero, zero, zero
+        for i, frame in frames.items():
+            u = w[index[(i, '+u')]] + w[index[(i, '-u')]]
+            v = w[index[(i, '+v')]] + w[index[(i, '-v')]]
+            a = a + u * frame.cos**2 + v * frame.sin**2
+            b = b + (u-v) * frame.cos * frame.sin
+            c = c + u * frame.sin**2 + v * frame.cos**2
+        for k, (aa, bb, cc) in round_dyads.items():
+            a, b, c = a + w[k]*aa, b + w[k]*bb, c + w[k]*cc
+        if round_dyads:
+            # An isotropic extension makes a curved primitive's zero gradient
+            # (its centre) regular. It vanishes on Gamma, where the pole's
+            # normal dyad alone survives. This is part of the field definition,
+            # not a numerical tolerance or a perturbation of material geometry.
+            scale = _reduced_cell_height(xp, reduced, dtype)
+            isotropic = (d_min / scale)**_BLEND_EXPONENT
+            a, c = a + isotropic, c + isotropic
+            # P is invariant under a positive scalar on M. Scale before
+            # squaring, so small inclusions in float32 do not underflow norm2.
+            peak = xp.maximum(a, c)
+            underflow = peak == 0.
+            divisor = xp.where(underflow, one, peak)
+            a = xp.where(underflow, one, a / divisor)
+            b = b / divisor
+            c = xp.where(underflow, one, c / divisor)
+        norm2 = a*a + 2*b*b + c*c
+        # M is positive semidefinite with positive trace: a face contributes,
+        # or a curved pole contributes on Gamma and its isotropic extension
+        # contributes off Gamma. Thus norm2 >= trace(M)**2/2 > 0.
+        xx = (a*a+b*b)/norm2
+        yy = (c*c+b*b)/norm2
+        xy = ((a+c)*b + 1j*(b*b-a*c))/norm2
+        return xx, xy, yy, xp.conj(xy)
+
     # 3. The sum. A cross pair's partner hands its weight to the primary's axis over the run,
     #    with the material sign; every face then contributes along its own outward normal, and
     #    each box's two opposed faces are differenced *before* the rotation so that a pair's
@@ -1580,7 +1642,14 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype):
     for r, pr in enumerate(plan.pairs):
         if r not in windows:
             continue
-        moved = xp.where(inside[r], w[pr.q], zero)
+        # Several runs can share a partner. Their off-line tails may overlap;
+        # bound the total transferred weight without ordering the records.
+        # Each denominator is >= the sum of all tails since 0 <= tail <= 1.
+        others = one
+        for other in cross_by_q[pr.q]:
+            if other != r:
+                others = others + transfer[other]
+        moved = (transfer[r] / others) * w[pr.q]
         own_w[pr.q] = own_w[pr.q] - moved
         own_w[pr.p] = own_w[pr.p] + signs[r] * moved
     sx, sy = zero, zero
@@ -1617,6 +1686,106 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype):
     sy = xp.where(tie, axis_y, sy)
     norm = _hypot_safe(xp, sx, sy)
     return sx / norm, sy / norm
+
+
+def check_dyadic_shapes(shapes):
+    """Current complex shape projector support, shared by solve and freeze."""
+    supported = _overlap._BOX_TYPES + _overlap._ELLIPSE_TYPES
+    if any(s.get('type', 'rectangle') not in supported for s in shapes):
+        raise NotImplementedError("projector='circular' requires rectangles, circles or ellipses")
+
+
+def _reduced_cell_height(xp, reduced, dtype):
+    a, b = [as_array(xp, v, dtype=dtype) for v in reduced[0]]
+    c, d = [as_array(xp, v, dtype=dtype) for v in reduced[1]]
+    return xp.abs(a*d-b*c) / xp.sqrt(xp.maximum(a*a+c*c, b*b+d*d))
+
+
+def _round_dyad(xp, X, Y, shape, lattice, reduced, dtype, ring):
+    """Periodic positive dyads of a curved level set, with compact image support.
+
+    For f=(u/a)^2+(v/b)^2-1, use g=min(a,b)*grad(f), a pole distance
+    min(a,b)*abs(f), and the positive tensor g g^T. Unlike a unit normal,
+    g is regular at the centre. The caller adds an isotropic extension off Gamma.
+
+    Each image is tapered by (1-r^2/cutoff^2)_+^4, with cutoff=max(a,b)+h/2
+    and h the smaller reduced-cell height. Every real boundary lies strictly
+    inside this support. Images beyond the plan's ring have zero weight: folded
+    fractional coordinates are in [-1/2,1/2], and a supported centre has each
+    index at most 1+max(a,b)/h. The ring is 1+ceil(2*max(a,b)/h).
+    Consequently image switching adds only identically zero terms, rather than
+    changing the chosen normal. No nearest-image direction or centre tie is read.
+    """
+    _, cx, cy, lx, ly, angle = shape_geometry(shape, lattice)
+    a, b = as_array(xp, lx/2., dtype=dtype), as_array(xp, ly/2., dtype=dtype)
+    size = xp.minimum(a,b)
+    cutoff = xp.maximum(a,b) + _reduced_cell_height(xp, reduced, dtype)/2.
+    co = xp.cos(as_array(xp, angle, dtype=dtype))
+    si = xp.sin(as_array(xp, angle, dtype=dtype))
+    ax, bx = reduced[0]
+    ay, by = reduced[1]
+    det = ax*by-bx*ay
+    dx, dy = X-cx, Y-cy
+    km = xp.round((by*dx-bx*dy)/det)
+    kn = xp.round((ax*dy-ay*dx)/det)
+    zero, one = xp.zeros_like(X), xp.ones_like(X)
+    terms = []
+    # Include the caller's isotropic term in the common ratio scale. This
+    # bounds its weight by one without changing the normalized projector.
+    minimum = _reduced_cell_height(xp, reduced, dtype)
+    for m in range(-ring,ring+1):
+        for n in range(-ring,ring+1):
+            x, y = dx-(km+m)*ax-(kn+n)*bx, dy-(km+m)*ay-(kn+n)*by
+            u, v = x*co+y*si, -x*si+y*co
+            distance = size*xp.abs((u/a)**2+(v/b)**2-1.)
+            gu, gv = 2.*size*u/(a*a), 2.*size*v/(b*b)
+            gx, gy = gu*co-gv*si, gu*si+gv*co
+            taper = xp.maximum(1.-(x*x+y*y)/(cutoff*cutoff),zero)**4
+            terms.append((distance,taper*gx*gx,taper*gx*gy,taper*gy*gy))
+            minimum = xp.minimum(minimum,distance)
+    on_gamma = minimum == 0.
+    safe_min = xp.where(on_gamma,one,minimum)
+    aa, bb, cc = zero, zero, zero
+    for distance,a,b,c in terms:
+        on_face = distance == 0.
+        ratio = safe_min/xp.where(on_face,one,distance)
+        weight = xp.where(on_gamma,xp.where(on_face,one,zero),ratio**_BLEND_EXPONENT)
+        aa, bb, cc = aa+weight*a, bb+weight*b, cc+weight*c
+    return minimum, aa, bb, cc
+
+
+def dyadic_projector_fields(xp, grid_shape, shapes, dtype, lattice, plan=None):
+    """Complex normal projector M(1,i), for shape NVF.
+
+    M is a positive sum of normal dyads. This removes the cancellation of
+    opposite signed normals. Primitive faces remain extension geometry even
+    when materials match; finite-order split/merged results need not coincide.
+    Disjoint curves use periodic level-set dyads and an isotropic extension.
+    """
+    check_dyadic_shapes(shapes)
+    X, Y = sample_grid(xp, grid_shape, lattice, dtype)
+    if plan is None:
+        plan = plan_gamma(shapes, lattice)
+        if plan is None:
+            plan = _blind_plan(shapes, lattice)
+    if not plan.pieces:
+        one, zero = xp.ones_like(X), xp.zeros_like(X)
+        return one, zero, zero, zero
+    slots = _material_slots(xp, shapes, dtype)
+    if _tiles_pay(X, *grid_shape, len(plan.pieces)):
+        import numpy as np
+        cdtype = np.complex128 if dtype == xp.float64 else np.complex64
+        out = [np.empty(grid_shape, dtype=cdtype) for _ in range(4)]
+        for i in range(0, grid_shape[0], _TILE):
+            for j in range(0, grid_shape[1], _TILE):
+                block = (slice(i, i+_TILE), slice(j, j+_TILE))
+                values = _piece_field(xp, np.ascontiguousarray(X[block]),
+                                      np.ascontiguousarray(Y[block]), shapes, plan,
+                                      slots, lattice, dtype, dyadic=True)
+                for target, value in zip(out, values):
+                    target[block] = value
+        return tuple(out)
+    return _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype, dyadic=True)
 
 
 def _fold_to_nearest_image(xp, dx, dy, reduced):
@@ -1997,8 +2166,12 @@ def _projector_cache_key(xp, built, grid_shape, lattice, half_width_u, half_widt
 
 
 def normal_projector_coeffs(xp, shapes, grid_shape, lattice, half_width_u, half_width_v,
-                            dtype, plan=None):
+                            dtype, plan=None, projector=None):
     """Coefficient grids of ``normal_x**2``, ``normal_x*normal_y`` and ``normal_y**2`` — the NVF projectors' input.
+
+    With ``projector='circular'``, rectangular dyads supply four components in
+    ``(xx, xy, yy, yx)`` order. Their cache entries are separate from linear
+    fields; the same translation phase applies to every component.
 
     ``plan`` is the layer's :class:`GammaPlan` -- the frozen record's entry when there is one,
     planned here from the concrete values when there is not (``None`` again under a trace
@@ -2148,12 +2321,18 @@ def normal_projector_coeffs(xp, shapes, grid_shape, lattice, half_width_u, half_
         plan = plan_gamma(built, lattice)
     key = _projector_cache_key(xp, built, grid_shape, lattice, half_width_u, half_width_v, dtype,
                                plan)
+    if projector == 'circular' and key is not None:
+        key = ('dyadic-projector', key)
     coeffs = _PROJECTOR_CACHE.pop(key, None) if key is not None else None
     if coeffs is None:
-        normal_x, normal_y = normal_vector_field_analytical(xp, grid_shape, built,
-                                                            real_dtype, lattice, plan=plan)
+        if projector == 'circular':
+            fields = dyadic_projector_fields(xp, grid_shape, built, real_dtype, lattice, plan=plan)
+        else:
+            normal_x, normal_y = normal_vector_field_analytical(xp, grid_shape, built,
+                                                                real_dtype, lattice, plan=plan)
+            fields = (normal_x * normal_x, normal_x * normal_y, normal_y * normal_y)
         coeffs = tuple(_sampled_coeffs(xp, xp.astype(f, dtype), half_width_u, half_width_v)
-                       for f in (normal_x * normal_x, normal_x * normal_y, normal_y * normal_y))
+                       for f in fields)
     here = _device(xp.zeros(())) if key is not None else None
     if (key is not None and not _coeffs_hold_tracer(coeffs)
             and all(_device(c) == here for c in coeffs)):
@@ -2198,7 +2377,7 @@ def normal_projector_coeffs(xp, shapes, grid_shape, lattice, half_width_u, half_
 
 
 def to_conv_mat_parametric_nvf(xp, shapes, background, half_width_u, half_width_v, lattice, dtype,
-                           normal_grid=256, plan=None):
+                           normal_grid=256, plan=None, projector=None):
     """The five 2D-solve convolution matrices for one parametric layer, via NVF.
 
     ``eps`` / ``1/eps`` come from the exact shape transform (no staircase); the normal
@@ -2215,13 +2394,14 @@ def to_conv_mat_parametric_nvf(xp, shapes, background, half_width_u, half_width_
     """
     eps_c, inv_eps_c = assemble_eps_coeffs(xp, shapes, background, half_width_u,
                                            half_width_v, lattice, dtype)
-    c_xx, c_xy, c_yy = normal_projector_coeffs(
+    coeffs = normal_projector_coeffs(
         xp, shapes, (normal_grid, normal_grid), lattice, half_width_u, half_width_v, dtype,
-        plan=plan)
-    return nvf_from_coeffs(xp, eps_c, inv_eps_c, c_xx, c_xy, c_yy, half_width_u, half_width_v)
+        plan=plan, **({} if projector is None else {'projector': projector}))
+    return nvf_from_coeffs(xp, eps_c, inv_eps_c, *coeffs[:3], half_width_u, half_width_v,
+                           c_yx=coeffs[3] if len(coeffs) == 4 else None)
 
 
-def nvf_from_coeffs(xp, eps_c, inv_eps_c, c_xx, c_xy, c_yy, half_width_u, half_width_v):
+def nvf_from_coeffs(xp, eps_c, inv_eps_c, c_xx, c_xy, c_yy, half_width_u, half_width_v, c_yx=None):
     """Assemble the five convolution matrices from coefficient grids — the NVF tensor itself.
 
     The last step of every non-raster NVF path, and the same step for all of them: what differs
@@ -2238,6 +2418,11 @@ def nvf_from_coeffs(xp, eps_c, inv_eps_c, c_xx, c_xy, c_yy, half_width_u, half_w
     ep_dir = conv_matrix_2d(xp, eps_c, half_width_u, half_width_v)
     ep_inv = conv_matrix_2d(xp, inv_eps_c, half_width_u, half_width_v)
 
+    if c_yx is not None:
+        from .factorization import _nvf_assemble
+        matrices = [conv_matrix_2d(xp, f, half_width_u, half_width_v)
+                    for f in (c_xx, c_xy, c_yy, c_yx)]
+        return _nvf_assemble(xp, ep_dir, ep_inv, *matrices)
     delta_ep = ep_dir - xp.linalg.inv(ep_inv)
 
     C_xx = conv_matrix_2d(xp, c_xx, half_width_u, half_width_v)
@@ -2286,8 +2471,12 @@ def check_no_plan_still_fits(layer, lattice, index):
         f'(Moving a shape never trips this on its own; moving it into another shape does.)')
 
 
-def check_gamma_plan_still_fits(layer, lattice, plan, index):
+def check_gamma_plan_still_fits(layer, lattice, plan, index, dyadic=False):
     """Refuse a frozen interface set that the layer in front of it has outgrown.
+
+    With ``dyadic=True`` only the shape/image/reduction decisions are read, so
+    contact and dead-face changes do not make the circular field's plan stale.
+    The signed-pair restrictions below apply to the default linear field.
 
     A :class:`GammaPlan` records *combinatorics* -- which face lies on which image's face,
     over a run, and which faces that leaves covered end to end (``dead``) -- and deliberately
@@ -2320,6 +2509,18 @@ def check_gamma_plan_still_fits(layer, lattice, plan, index):
     fresh = plan_gamma(shapes, lattice)
     if fresh is None or fresh == plan:
         return
+    if dyadic:
+        # Circular projection reads image lists, but never the signed pair
+        # substitutions or dead-face flags. Contact can change without changing
+        # this build's topology; larger image bounds still require refreezing.
+        if (fresh.reduction == plan.reduction and len(fresh.pieces) == len(plan.pieces)
+                and (not any(p.face == 'arc' for p in fresh.pieces) or fresh.ring <= plan.ring)
+                and all(a.shape == b.shape and a.face == b.face
+                        and (a.face == 'arc' or set(a.imgs).issubset(b.imgs))
+                        for a, b in zip(fresh.pieces, plan.pieces))):
+            return
+        raise StaleGeometryError(
+            f'circular NVF image plan changed for layer {index}; freeze_geometry() again')
     raise StaleGeometryError(
         f'the frozen geometry no longer fits this structure: {_gamma_moved(plan, fresh, shapes)}. '
         f'The recorded interface set of layer {index} describes faces this layer no longer '
@@ -2368,7 +2569,7 @@ def _gamma_moved(held, fresh, shapes):
 
 def to_conv_mat_parametric_layers(layer_shapes, half_width_u, half_width_v, lattice,
                               normal_grid=256, complex_dtype=None, xp=None,
-                              boundary_plans=None, gamma_plans=None):
+                              boundary_plans=None, gamma_plans=None, projector=None):
     """Stack the parametric-NVF convolution matrices over layers.
 
     ``layer_shapes`` is one ``dict(background=..., shapes=[...])`` per layer, with the shapes'
@@ -2414,9 +2615,21 @@ def to_conv_mat_parametric_layers(layer_shapes, half_width_u, half_width_v, latt
             # and transform those. Where nothing overlaps the two are the same structure, so
             # the layer stays here -- exact, and cheaper.
             from .boundary import to_conv_mat_boundary_layer
+            options = {}
+            if projector == 'circular':
+                if gamma_plans is not None:
+                    check_gamma_plan_still_fits(layer, lattice, gamma, index,
+                                               dyadic=projector == 'circular')
+                if any(s.get('type', 'rectangle') in _overlap._ELLIPSE_TYPES
+                       for s in layer.get('shapes', [])):
+                    options.update(projector='circular', projector_plan=gamma)
+                else:
+                    options['projector_coeffs'] = normal_projector_coeffs(
+                        xp, layer.get('shapes', []), (normal_grid, normal_grid), lattice,
+                        half_width_u, half_width_v, dtype, plan=gamma, projector=projector)
             mats = to_conv_mat_boundary_layer(
                 xp, layer.get('shapes', []), background, half_width_u, half_width_v, lattice,
-                dtype, normal_grid=normal_grid, plan=plan)
+                dtype, normal_grid=normal_grid, plan=plan, **options)
         else:
             # Reaching this branch means the shapes are disjoint, so the summing this
             # builder does is the painted structure. `assemble_eps_coeffs` re-checks that --
@@ -2428,10 +2641,12 @@ def to_conv_mat_parametric_layers(layer_shapes, half_width_u, half_width_v, latt
             # rules, and once the shapes moved together the check below is what fired -- with
             # a message about this builder rather than about the stale record.
             if gamma_plans is not None:
-                check_gamma_plan_still_fits(layer, lattice, gamma, index)
+                check_gamma_plan_still_fits(layer, lattice, gamma, index,
+                                               dyadic=projector == 'circular')
             mats = to_conv_mat_parametric_nvf(
                 xp, layer.get('shapes', []), background, half_width_u, half_width_v, lattice,
-                dtype, normal_grid=normal_grid, plan=gamma)
+                dtype, normal_grid=normal_grid, plan=gamma,
+                **({} if projector is None else {'projector': projector}))
         for slot, m in zip(out, mats):
             slot.append(m)
 

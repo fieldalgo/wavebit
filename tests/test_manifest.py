@@ -173,9 +173,7 @@ def test_a_normal_method_the_manifest_withholds_is_refused(path):
 def test_a_projector_the_manifest_withholds_is_refused(path):
     """`normal_method`'s twin, over the axis published beside it since 2026-09-01.
 
-    Same contract and the same reason: the shape paths list no projector, because neither
-    forms one from a raster normal field, so naming one there must refuse rather than run to
-    completion with the request ignored.
+    Both raster and shape NVF now implement both published projectors.
     """
     for value in _unavailable(path, 'projector', Projector):
         with pytest.raises(Exception) as excinfo:
@@ -196,6 +194,8 @@ def test_an_option_the_manifest_offers_builds_on_an_overlapping_layer_too():
         wavebit.rcwa(structure=_OVERLAPPING, factorization=value, **KW).solve()
     for value in entry['fourier_coefficients']:
         wavebit.rcwa(structure=_OVERLAPPING, fourier_coefficients=value, **KW).solve()
+    for value in entry['projector']:
+        wavebit.rcwa(structure=_OVERLAPPING, projector=value, **KW).solve()
     for axis, enum_cls in (('factorization', Factorization),
                            ('fourier_coefficients', FourierCoefficients),
                            ('normal_method', NormalMethod), ('projector', Projector)):

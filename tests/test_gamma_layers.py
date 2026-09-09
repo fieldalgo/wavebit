@@ -318,45 +318,29 @@ def test_the_sign_window_ends_where_the_run_ends():
     _k_column_above_the_seam_end()
 
 
-def test_the_run_end_step_of_a_different_material_seam_decays_with_the_grid():
-    """The sign window is a hard ``where`` in sigma: a run's end crossing a sample row steps ``sum(T)``.
+def test_the_run_end_is_continuous_at_every_grid():
+    """The old run window made a 5.23e-6 step at N=128, independent of step size.
 
-    Inside the run the partner's weight is co-oriented (``2 w n_p``), just outside it is
-    opposed with ``w_q == w_p`` at zero excess (``0``), so the unnormalised sum along ``n_p``
-    flips ``2w -> 0`` across the ray ``sigma = hi`` for ``nu != 0``; on Gamma itself the tie
-    keeps it exact. So a parameter that moves the run's end -- the partner's ``ly`` here --
-    steps the answer each time the end crosses a sample row, and ``jax.grad`` cannot see it.
-    Two 300-wide boxes ``eps 4 | 9`` abutting at ``x = 0``, the right one's ``ly`` swept
-    through ``ly* = 2 * (the row just below 150)`` at order 4, 1e-6 either side:
-
-        N = 128   jump -5.23e-6   same-material control -2.8e-11
-        N = 256        -7.38e-8                          -2.8e-11
-        N = 512        +5.00e-9                          -2.8e-11
-
-    A step, not a slope (the same at 1e-8 either side, and the window-integrated AD over
-    ``[ly* - 0.25, ly* + 0.25]`` misses exactly it), and a sampling artefact: it decays with
-    the grid, to about 1e-9 per crossing at the default 1024. The same-material window is
-    algebraically a no-op (moving ``w_q`` from ``n_q`` to ``-n_p`` leaves the sum unchanged),
-    which is what the control says. Recorded in case K of ``docs/normal-field-known-limits.md``
-    with the two other steps of a seam and the continuous co-orientation that would remove it.
+    Moving the endpoint now changes the field continuously off its line. Check
+    that reducing the displacement 100x reduces the transmission difference,
+    rather than merely repinning a smaller jump at one chosen displacement.
+    Same-material transfer remains an algebraic no-op.
     """
     A = as_lattice(lattice=SQUARE)
-
     def layer(ly, right=9.0):
         return [_box(cx=-150.0, lx=300.0, ly=300.0, material=4.0),
                 _box(cx=150.0, lx=300.0, ly=ly, material=right)]
-
-    jumps, controls = [], []
     for grid in (128, 256, 512):
         _, Y = sample_grid(np, (grid, grid), A, np.float64)
         rows = np.unique(np.round(Y[:, 0] - PERIOD / 2.0, 9))
         ly_star = 2.0 * rows[rows < 150.0].max()
-        step = lambda right: (_total(layer(ly_star + 1e-6, right), order=4, normal_grid=grid)
-                              - _total(layer(ly_star - 1e-6, right), order=4, normal_grid=grid))
-        jumps.append(abs(step(9.0)))
-        controls.append(abs(step(4.0)))
-    assert jumps[0] > 1e-6 and max(controls) < 1e-9, (jumps, controls)
-    assert jumps[1] < 0.05 * jumps[0] and jumps[2] < 0.2 * jumps[1], jumps
+        def difference(h, right=9.0):
+            return abs(_total(layer(ly_star+h,right), order=4, normal_grid=grid)
+                       - _total(layer(ly_star-h,right), order=4, normal_grid=grid))
+        large, small = difference(1e-4), difference(1e-6)
+        assert small < .02*large
+        assert small < 2e-9
+        assert difference(1e-6, 4.) < 1e-9
 
 
 def test_an_off_centre_flush_cross_pair_cancels_bitwise():

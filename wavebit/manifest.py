@@ -238,12 +238,15 @@ def _options_for(path):
         # says how the field is built; this says how the projector is formed from it, so the
         # two compose -- publishing them as one list of eight would tell a consumer there are
         # eight independent choices where there are two.
-        'projector': ([m.value for m in Projector] if path == ModelingPath.RASTER else []),
+        'projector': [m.value for m in Projector],
         'projector_reason': (
             "read only under factorization='nvf', beside normal_method"
             if path == ModelingPath.RASTER
-            else 'the parametric path builds its normal field from the geometry, which '
-                 'carries no magnitude for the circular limit to read'),
+            else "shape NVF supports both projectors, including polygon-resolved curved painting"),
+        'conditional_options': ([] if path == ModelingPath.RASTER else [
+            dict(option='factorization', value='li',
+                 requires='axis-aligned rectangles wholly inside a positive axis-aligned rectangular cell'),
+        ]),
     }
 
 

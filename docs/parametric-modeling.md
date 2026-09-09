@@ -36,7 +36,7 @@ Two qualifications, both measured, both easy to trip over:
   improved raster-NVF by ~8x on the metallic circle, and the two are now level there — see §4
   case [2]. The separation that survives is against a *staircase* (case [1]), where the
   geometric error has a floor no Fourier order removes.
-- **On an axis-aligned boundary the parametric path is the slower one.** Li's rules along x and y
+- **On an axis-aligned boundary the default parametric NVF route is the slower one.** Li's rules along x and y
   are already optimal when the interfaces are axis-aligned, so NVF only costs there. Measured
   against RETICOLO: the block path matches at 1e-14 every order while the parametric path needs
   truncation_order≈16 to reach 1e-4.
@@ -44,6 +44,158 @@ Two qualifications, both measured, both easy to trip over:
 Choose the path by the boundary, not on a general expectation that the parametric path wins.
 
 ---
+
+## Complex NVF projection for rectangular contacts
+
+Rectangular shapes can now use `factorization='nvf', projector='circular'`.
+This remains normal-vector Fourier factorization with exact material transforms;
+it changes the normal projector, not the factorization to Li. Rotations, skew
+cells, overlapping paintings, and magnetic materials use the same construction.
+Disjoint circles and ellipses also support circular projection, as described below.
+
+```python
+solver = wavebit.rcwa(
+    backend=1, period=(700., 700.), wavelength=900., thickness=(300.,),
+    truncation_order=(3, 3), normal_grid=128,
+    factorization='nvf', projector='circular',
+    structure=[dict(background=1., shapes=[
+        dict(type='rectangle', cx=-150., lx=300., ly=300., material=4.),
+        dict(type='rectangle', cx=150., lx=300., ly=300., material=9.)])])
+geometry = solver.freeze_geometry()
+result = solver.solve(geometry=geometry)
+```
+
+The construction sums positive normal dyads into `M`, forms the complex vector
+`J = M @ (1, i)`, and uses `P = J J^H / |J|^2`. Opposite normals reinforce as
+matrices rather than cancelling as vectors. The denominator stays positive,
+including at the centre of a rectangle. On a regular interface the projector
+is exactly the normal dyad. Both complex off-diagonal Fourier components are
+passed to the existing NVF assembly; they are not assumed equal.
+
+The tested rectangular period gap, unequal-material contact, and material-equality
+limits have no sampled value step, on both odd and even grids. Frozen JIT geometry
+and material derivatives agree with finite differences. A circular NVF geometry
+record can be frozen at contact and replayed while the gap opens: it reads image
+bounds, not the linear field's signed pair cancellation records. A new overlap,
+changed shape count, or enlarged image set still requires refreezing. Traced calls
+cannot enforce those checks, so keep those constraints when optimizing.
+
+See [the runnable NVF contact example](../examples/nvf_contact.py), which evaluates
+both contact and the one-sided opening derivative through the public JAX API.
+`normal_grid` remains an integration-resolution control; it is not a smoothing
+parameter for a gap. The default projector remains `linear` to preserve existing
+results. Select `circular` explicitly for this NVF construction.
+
+**Accuracy still needs Fourier-order convergence checks.** The circular extension
+retains primitive faces when a material interface disappears. It therefore does not
+inherit linear NVF's exact constant-normal reduction for a full-period bar, and
+splitting a rectangle into equal-material primitives can change finite-order
+answers. The latter also occurs with the existing linear field; it is not a newly
+established 1e-10 equivalence guarantee. These are separate accuracy questions
+from contact continuity. [The investigation record](nvf-contact-followup.md)
+contains the measured order/grid ladders and the remaining representation test.
+
+### Disjoint circles and ellipses
+
+The same `factorization='nvf', projector='circular'` options support circles,
+ellipses, and mixtures with rectangles whose interiors do not overlap. Tangency
+is allowed, including contact with a periodic image. `square` and `disk` aliases
+use their rectangle and circle constructions respectively.
+
+For a curve's local level set `f = (u/a)^2 + (v/b)^2 - 1`, the construction sums
+positive dyads of `min(a,b) * grad(f)` over periodic images, with inverse fourth
+powers of `min(a,b) * abs(f)` and a compact taper on each image. An isotropic term
+extends the tensor away from boundaries. It keeps the projector regular at a
+primitive's centre, where its gradient vanishes (circular when no other image
+contributes), while the pole makes
+the projector exactly the geometric normal dyad on the boundary. The image taper
+and isotropic term define the extension; they do not blur the material transform.
+The support is bounded by the shape radius and reduced cell height. Switching the
+fold's image indices only adds or removes zero contributions, so the periodic
+field does not jump between two selected normals.
+
+The curve implementation passes tangent circle, tangent ellipse, mixed
+rectangle/circle and periodic circle contact checks on odd and even grids.
+Frozen-contact JIT derivatives match one-sided finite differences. Its exact
+boundary normals, periodicity, rotation covariance, image-ring independence,
+centre regularity, and NumPy/JAX/Torch agreement are tested separately.
+
+See [the curved-contact example](../examples/nvf_curved_contact.py). This extension
+does not settle the rectangular split/merged accuracy target or the tilted
+resonant-convergence investigation.
+
+### Overlapping circles and ellipses
+
+Curved paintings also accept `factorization='nvf', projector='circular'`.
+The existing painting route approximates curves with polygon chords and resolves
+their intersections. Circular NVF now follows those same chords: it retains the
+analytic extension away from curves and blends in positive polygon-edge dyads
+near them. The blend is exactly the facet normal on a regular curved polygon
+boundary, and exactly the analytic normal on a rectangular boundary. Its width
+is set by chord length and decreases under polygon refinement.
+
+The original polygon edges remain extension geometry even when covered. Their
+positions and lengths are live parameters; material equality never switches
+their contribution on or off. The resolved painting supplies the material
+coefficients, including complex permittivity and permeability. Both complex
+off-diagonal projector components reach the NVF assembly. NumPy, JAX and Torch
+use the same construction.
+
+Use `freeze_geometry()` before JIT and stay within its recorded intersections
+and periodic image bounds. Re-freeze when painting topology changes. See
+[the curved painting example](../examples/nvf_curved_painting.py), which evaluates
+geometry and material derivatives through the public solver.
+
+**Polygon approximation is still an accuracy limit.** Crossing between analytic
+disjoint curves and polygon-resolved overlaps changes the material approximation.
+The local normal correction avoids the much larger jump caused by replacing
+the entire normal extension, but does not make that approximation switch exact.
+On the recorded tangent-ellipse fixture at order 2 and normal grid 64, the
+256- and 512-vertex polygon solves differ from the analytic solve by 2.65e-7
+and 6.64e-7. Intermediate total errors need not decrease monotonically because
+material and projector quadrature errors can cancel. This is a fixed-order
+approximation comparison, not an external Maxwell convergence guarantee.
+
+## Cartesian rectangles with explicit Li factorization
+
+For axis-aligned rectangular paintings, `factorization='li'` now integrates the
+nonuniform Cartesian intervals at every shape edge exactly. This uses the shape
+coordinates directly, including gaps far smaller than a pixel. Later shapes paint
+over earlier shapes. Shape modeling still defaults to NVF; selecting Li is explicit.
+
+```python
+solver = wavebit.rcwa(
+    backend=1, period=(700., 700.), wavelength=900., thickness=(300.,),
+    truncation_order=(3, 3), factorization='li',
+    structure=[dict(background=1., shapes=[
+        dict(type='rectangle', cx=-150., lx=300., ly=300., material=4.),
+        dict(type='rectangle', cx=150., lx=300., ly=300., material=9.)])])
+geometry = solver.freeze_geometry()
+result = solver.solve(geometry=geometry)
+```
+
+Supported cells are positive, axis-aligned rectangles. Shapes must fit inside the
+cell, including its edges; a rectangle may span a full period. Rotated/curved shapes,
+skew cells, and rectangles crossing a cell edge are refused. Omit `angle` when
+tracing a shape dictionary: this route has a fixed zero angle, not an angle derivative.
+`normal_grid`, `normal_method`, and `projector` are refused because no normal field
+is sampled. Coefficients are integrated; requesting sampled coefficients is refused.
+
+`freeze_geometry()` stores edge order and painting ownership. Lengths, centers,
+permittivity, and permeability remain live. It retains zero-width intervals at
+contact, so a gap can open continuously using the same plan. Eager replay refuses
+crossed edges or a changed shape count. JIT cannot check those values: keep the
+edge order fixed within a traced optimization step and refreeze on concrete
+geometry when the ordering changes. At contact, the plan defines the one-sided
+opening-gap derivative, not a claim that overlap has the same derivative.
+
+See [the runnable contact example](../examples/rectilinear_contact.py) for JIT
+transmission and gap/material gradients. Tests compare convolution matrices with
+independently painted commensurate rasters, including overlaps, complex materials,
+and magnetic layers, and compare derivatives with two finite-difference steps.
+Exact geometry integration does not remove Fourier truncation error; still check
+order convergence for the observable of interest. This route avoids the NVF contact
+blend for the supported geometry; general-shape NVF contact issues remain open.
 
 ## 1. Analytic Fourier coefficients
 

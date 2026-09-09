@@ -90,10 +90,12 @@ class StaticGeometry:
             quantity is built on the normal of its own boundary. All three are ``None``
             unless the structure carries a raster ``mu``; the two shape paths need no twin
             here at all, since their records hold the geometry both quantities share.
-        boundary_plans: per-layer ``(table_records, regions, reduction)`` for the boundary
+        boundary_plans: per-layer ``(table_records, regions, reduction, interfaces)`` for the boundary
             route — which loop holds which vertex and which edges cross, once the painting is
             resolved, and the integer transform to the Lagrange-reduced basis its periodic
-            images are enumerated on. These are pure Python indices, never coordinates, so a
+            images are enumerated on, plus the actual-interface interval and image-group plan.
+            Material equality is evaluated live, separately for epsilon and mu. These records
+            contain pure Python indices, never coordinates, so a
             replay
             carries a gradient to the vertices and they compare by content. ``None`` for a layer
             is an answer rather than a gap: painted, looked at while concrete, and nothing
@@ -102,11 +104,16 @@ class StaticGeometry:
         gamma_plans: per-layer :class:`~wavebit._core.parametric.GammaPlan` for the closed-form
             route's normal field -- which faces lie on which image's faces, over what, and what
             that leaves dead. Pure Python like ``boundary_plans`` and content-hashed beside it;
-            recorded for every shape layer. A ``None`` entry makes the replay plan blind (every
+            recorded for every NVF shape layer. A ``None`` entry makes the replay plan blind (every
             piece, no pairs; a traced *basis* or *ellipse* is refused there rather than guessed
             at), and since 2026-09-06 no freeze writes one: a solver whose shapes are ``jax.jit``
             tracers at the freeze is refused by name instead of recorded as nothing. Re-asked
             eagerly by :func:`parametric.check_gamma_plan_still_fits`.
+
+        rectilinear_plans: Cartesian shape Li edge order and painted-cell ownership, one
+            record per layer. Coordinates and materials stay live. Zero-width contact
+            intervals are retained; eager replay refuses crossed edges. Like the other
+            index-only plans, these participate in content hashing. Never shared with NVF.
 
     A field left ``None`` means "auto-detect", which is what the strategy in use does not need
     (a sampled build never touches ``normal_field``, for instance).
@@ -138,6 +145,7 @@ class StaticGeometry:
     mu_normal_field_source: Optional[Any] = None
     mu_compression: Optional[Any] = None
     gamma_plans: Optional[Any] = None
+    rectilinear_plans: Optional[Any] = None
 
     def _cache_key(self):
         """What ``__eq__``/``__hash__`` compare: the content when that is well defined.
@@ -161,7 +169,8 @@ class StaticGeometry:
                 and self.compression is None and self.mu_normal_field is None \
                 and self.mu_normal_field_source is None and self.mu_compression is None:
             try:
-                key = ('content', _hashable(self.boundary_plans), _hashable(self.gamma_plans))
+                key = ('content', _hashable(self.boundary_plans), _hashable(self.gamma_plans),
+                       _hashable(self.rectilinear_plans))
                 hash(key)
                 return key
             except TypeError:

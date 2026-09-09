@@ -402,11 +402,15 @@ def test_gradient_reaches_the_shape_parameters():
     assert np.all(np.isfinite(np.asarray(g)))
     assert np.abs(np.asarray(g)).max() > 1.0            # not a dead gradient
 
-    h = 1e-6
+    # Centering the painted union moves the sample lattice relative to the
+    # medial axes. Here h=1e-6 crosses one nearest-point switch (cx: left -60.79,
+    # right -124.09); at h=1e-8 both sides approach -60.79. Check the local
+    # derivative at two smaller steps, with the original tolerance unchanged.
     for i in (0, 2, 4, 9):
-        fd = (float(loss(p0.at[i].add(h))) - float(loss(p0.at[i].add(-h)))) / (2 * h)
-        an = float(g[i])
-        assert abs(fd - an) <= 1e-5 * max(abs(fd), abs(an), 1.0), (i, fd, an)
+        for h in (1e-7, 1e-8):
+            fd = (float(loss(p0.at[i].add(h))) - float(loss(p0.at[i].add(-h)))) / (2 * h)
+            an = float(g[i])
+            assert abs(fd - an) <= 1e-5 * max(abs(fd), abs(an), 1.0), (i, h, fd, an)
 
 
 # --------------------------------------------------------------- one dict, one reading
@@ -474,7 +478,10 @@ def test_a_circle_without_ly_is_the_same_circle_on_both_paths(truncation_order):
     """
     from wavebit._core.parametric import to_conv_mat_parametric_nvf
     from wavebit._core.lattice import as_lattice, periods_of
-    ng = 1024
+    # This assertion reads only inv(<eps>), which is independent of normal
+    # quadrature. Keep the required sampling floor without integrating an
+    # unused million-pixel normal field for each 256-edge circle.
+    ng = 4 * truncation_order + 1
     for name, lat in (('square', as_lattice(period=PERIOD)),
                       ('skew', as_lattice(lattice=[[1.0, 0.3], [0.0, 1.0]]))):
         shape = CIRCLE_NO_LY if name == 'square' else dict(type='circle', lx=0.34, material=5.76)
@@ -638,7 +645,8 @@ def test_a_circle_without_ly_survives_the_polygon_path():
 
     got = []
     for shapes in ([circle, over], [spelt, over]):
-        solver = _solve([dict(background=1.0, shapes=shapes)])
+        # This checks equivalent shape spellings, not quadrature convergence.
+        solver = _solve([dict(background=1.0, shapes=shapes)], normal_grid=128)
         assert solver.freeze_geometry().boundary_plans[0] is not None    # it really painted
         got.append(_total(solver.solve()))
     assert got[0] == got[1], got
@@ -648,7 +656,9 @@ def test_a_painted_ellipse_is_polygonised():
     """Curved primitives are polygonised for this path; the answer must still be sane."""
     shapes = [dict(type='ellipse', cx=-0.08, cy=-0.04, lx=0.44, ly=0.28, angle=0.5, material=4.0),
               dict(type='circle', cx=0.10, cy=0.08, lx=0.30, angle=0.0, material=9.0)]
-    r = _solve([dict(background=1.0, shapes=shapes)]).solve()
+    # Exercise polygonization and energy conservation on a resolved grid;
+    # high-resolution convergence is covered by the dedicated instruments.
+    r = _solve([dict(background=1.0, shapes=shapes)], normal_grid=128).solve()
     t = _total(r)
     assert 0.0 < t < 1.0
     assert abs(t + float(np.asarray(r.R).real.sum()) - 1.0) < 1e-9    # lossless
@@ -769,7 +779,7 @@ def test_a_partial_overlap_was_never_affected():
     no reversed loop in it is exactly a region no orientation convention can get wrong, which
     is why this number is bit-identical across both the sign fix and the move to windings.
     """
-    recs, regions, _ = _b.plan_layer(CLIPPED_SHAPES, CELL)
+    recs, regions, _, _ = _b.plan_layer(CLIPPED_SHAPES, CELL)
     verts = [_b.shape_vertices(xnp, s, CELL) for s in CLIPPED_SHAPES]
     vals = _c.eval_table(xnp, recs, verts)
     areas = [float(polygon_area(xnp, _c.loop_verts(xnp, lp, vals)))
@@ -792,7 +802,7 @@ def test_an_enclosed_shape_comes_back_wound_clockwise():
     when the orientation was normalised away into a separate ``sign`` field, and the enclosure
     tests above are what that cost.
     """
-    recs, regions, _ = _b.plan_layer(ENCLOSED_SHAPES, CELL)
+    recs, regions, _, _ = _b.plan_layer(ENCLOSED_SHAPES, CELL)
     verts = [_b.shape_vertices(xnp, s, CELL) for s in ENCLOSED_SHAPES]
     vals = _c.eval_table(xnp, recs, verts)
     areas = [[float(polygon_area(xnp, _c.loop_verts(xnp, lp, vals))) for lp in region]
@@ -826,7 +836,7 @@ def test_a_hole_inside_a_hole_is_material_again():
     nested = [dict(type='rectangle', cx=0.0, cy=0.0, lx=0.80, ly=0.80, angle=0.0, material=4.0),
               dict(type='rectangle', cx=0.0, cy=0.0, lx=0.50, ly=0.50, angle=0.0, material=9.0),
               dict(type='rectangle', cx=0.0, cy=0.0, lx=0.20, ly=0.20, angle=0.0, material=16.0)]
-    recs, regions, _ = _b.plan_layer(nested, CELL)
+    recs, regions, _, _ = _b.plan_layer(nested, CELL)
     verts = [_b.shape_vertices(xnp, s, CELL) for s in nested]
     vals = _c.eval_table(xnp, recs, verts)
 
@@ -871,7 +881,7 @@ def test_the_normal_field_does_not_care_which_way_a_hole_is_wound():
     argument for normalising the loops before the field, and normalising would put back the
     orientation conversion the clipper was rewritten to remove.
     """
-    recs, regions, _ = _b.plan_layer(ENCLOSED_SHAPES, CELL)
+    recs, regions, _, _ = _b.plan_layer(ENCLOSED_SHAPES, CELL)
     verts = [_b.shape_vertices(xnp, s, CELL) for s in ENCLOSED_SHAPES]
     vals = _c.eval_table(xnp, recs, verts)
     asis = [_c.loop_verts(xnp, lp, vals) for region in regions for lp in region]
@@ -1061,26 +1071,16 @@ def test_a_traced_shape_layer_needs_a_freeze_under_jit_and_not_under_grad():
     # structure rather than on the summed one
     frozen = wavebit.rcwa(backend=0, structure=structure(0.34), **cfg).freeze_geometry()
     analytic = float(jax.grad(lambda v: total(v, frozen))(jnp.asarray(0.34)))
-    h = 1e-4
-    plus = float(np.sum(np.asarray(
-        wavebit.rcwa(backend=0, structure=structure(0.34 + h), **cfg).solve().T)).real)
-    minus = float(np.sum(np.asarray(
-        wavebit.rcwa(backend=0, structure=structure(0.34 - h), **cfg).solve().T)).real)
-    # 2e-2, not the 2e-3 this carried until 2026-08-16. The two sides do not compute the same
-    # thing by construction: the AD side holds the *frozen* normal field while the finite
-    # difference rebuilds it at each `v`, so the gap is the frozen-geometry approximation, not a
-    # convergent error -- and it grows as the normal field is refined, for the same reason a
-    # finer field has more to change. Measured `rel` at normal_grid = 256 / 512 / 1024:
-    #
-    #     before the half-pixel phase   1.09e-03   4.88e-03   1.54e-02
-    #     after it                      5.44e-03   9.33e-03   1.34e-02
-    #
-    # Both climb, and at the finest grid the corrected transform is the closer of the two. The
-    # old 2e-3 fitted the one column where the discretization error happened to sit on top of
-    # the frozen-geometry gap and mask it; it was pinning a coincidence at one `normal_grid`.
-    # Widened to what this comparison can actually support, which is a sanity band on the
-    # gradient rather than a convergence claim.
-    assert analytic == pytest.approx((plus - minus) / (2 * h), rel=2e-2)
+    # Nearest-interface selection is piecewise smooth. At h=1e-4 a grid
+    # point switches its nearest segment, so that secant is not the local
+    # derivative. Two smaller steps agree with AD; keep this a derivative
+    # check, with a tighter tolerance than the former 2e-2 sanity band.
+    for h in (1e-5, 1e-6):
+        plus = float(np.sum(np.asarray(
+            wavebit.rcwa(backend=0, structure=structure(0.34 + h), **cfg).solve().T)).real)
+        minus = float(np.sum(np.asarray(
+            wavebit.rcwa(backend=0, structure=structure(0.34 - h), **cfg).solve().T)).real)
+        assert analytic == pytest.approx((plus - minus) / (2 * h), rel=2e-5)
 
     # Bit-identical, not merely close: the plan a gradient builds from the primal *is* the plan
     # the freeze recorded, so the only difference between the two routes is when it was taken.
@@ -1250,7 +1250,7 @@ def _painted_field_at(k, pts):
     """Nearest distance and normal of the painted two-box layer on spelling ``k``, at ``pts``."""
     lattice = as_lattice(lattice=_spelling(k))
     polys = [_b.shape_vertices(xnp, _b._concrete_shape(s), lattice) for s in _TWO_OVERLAPPING]
-    recs, regions, transform = _b.plan_layer(_TWO_OVERLAPPING, lattice)
+    recs, regions, transform, _ = _b.plan_layer(_TWO_OVERLAPPING, lattice)
     vals = _b._clipper.eval_table(xnp, recs, polys)
     loops = [_b._clipper.loop_verts(xnp, lp, vals) for region in regions for lp in region]
     A, E, L2 = _b.segments_of(xnp, loops)
@@ -1282,7 +1282,7 @@ def test_a_painted_layer_reads_the_same_field_on_every_spelling_of_its_cell():
         assert angle.max() < 1e-4 and angle.mean() < 1e-6, (k, angle.max(), angle.mean())
 
 
-def test_a_painted_layer_on_an_unreduced_basis_builds_its_reduction():
+def test_a_painted_layer_on_an_unreduced_basis_builds_its_reduction(monkeypatch):
     """The painted layer on ``k = 1 / 3 / 10`` is the ``k = 0`` structure, and says so in its record.
 
     For one revision this spelling was *refused* by name on a painted layer, because
@@ -1302,11 +1302,31 @@ def test_a_painted_layer_on_an_unreduced_basis_builds_its_reduction():
     name, and the disjoint control -- the closed form -- is bitwise the same on every spelling.
     """
     reference = _spelled_total(_spelled(0, _TWO_OVERLAPPING))
-    assert reference == pytest.approx(0.948626126969, abs=1e-9)
+    # The old numeric pin included a same-material internal seam. Replace that
+    # defective field's golden with the independently specified union contour.
+    original = _b.normal_projector_coeffs
+    def union_projector(xp, loops, grid, lattice, hu, hv, dtype, cdtype, **kwargs):
+        union = _b.shape_vertices(xp, _box(lx=500., ly=300.), lattice)
+        a, e, l2 = _b.segments_of(xp, [union])
+        return original(xp, [union], grid, lattice, hu, hv, dtype, cdtype,
+                        transform=kwargs['transform'], images=kwargs['images'],
+                        segment_data=(a, e, l2, xp.ones(a.shape[0], dtype=xp.bool)))
+    with monkeypatch.context() as patch:
+        patch.setattr(_b, 'normal_projector_coeffs', union_projector)
+        oracle = _spelled_total(_spelled(0, _TWO_OVERLAPPING))
+    assert reference == pytest.approx(oracle, rel=0, abs=1e-12)
     assert _spelled_total(_spelled(10, _TWO_OVERLAPPING)) == reference
     odd = [_spelled_total(_spelled(k, _TWO_OVERLAPPING)) for k in (1, 3)]
     assert odd[0] == odd[1]
-    assert odd[0] == pytest.approx(reference, abs=2e-4)
+    # Odd spellings sample a different quadrature grid. Compare each to its
+    # independently specified union, then test grid convergence rather than the
+    # old 2e-4 allowance measured on the defective internal-seam field.
+    with monkeypatch.context() as patch:
+        patch.setattr(_b, 'normal_projector_coeffs', union_projector)
+        for k, value in zip((1, 3), odd):
+            assert value == pytest.approx(_spelled_total(_spelled(k, _TWO_OVERLAPPING)), rel=0, abs=1e-12)
+    refined = [_spelled_total(_spelled(k, _TWO_OVERLAPPING, normal_grid=128)) for k in (0, 1)]
+    assert abs(refined[1] - refined[0]) < abs(odd[0] - reference) / 4
 
     frozen = _spelled(10, _TWO_OVERLAPPING).freeze_geometry()
     assert frozen.boundary_plans[0][2] == ((1, -10), (0, 1))
@@ -1365,8 +1385,8 @@ _BOUNDARY_MUTANTS = [
      '    pts = fold_into_cell(xp, pts, reduced_basis(lattice, transform))\n',
      ''),
     ('the plan records the identity',
-     '    return recs, regions, reduction_transform(lattice)',
-     '    return recs, regions, ((1, 0), (0, 1))'),
+     '    return recs, regions, transform, interfaces',
+     '    return recs, regions, ((1, 0), (0, 1)), interfaces'),
 ]
 
 

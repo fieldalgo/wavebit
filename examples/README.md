@@ -7,6 +7,24 @@ frameworks, no vendored dependencies, nothing that needs a dataset or a GPU.
 | --- | --- |
 | [`shapes_1d.py`](shapes_1d.py), [`shapes_2d.py`](shapes_2d.py) | How do you describe a structure as drawn shapes instead of a raster? The `_verification.py` file beside each answers the follow-up: does that path agree with the raster it replaces? |
 
+[`rectilinear_contact.py`](rectilinear_contact.py) selects exact Cartesian shape Li
+and prints JIT transmission, gap derivatives, and material derivatives through contact.
+It requires the JAX extra. Unlike the default NVF examples, it uses fixed zero-angle
+rectangles wholly inside the cell.
+
+[`nvf_contact.py`](nvf_contact.py) keeps `factorization='nvf'` and uses the
+rectangular circular projector for contact and material gradients, including a
+frozen plan at contact. It requires JAX. See
+[shape NVF projector details](../docs/parametric-modeling.md#complex-nvf-projection-for-rectangular-contacts).
+
+[`nvf_curved_contact.py`](nvf_curved_contact.py) exercises the same NVF options on
+tangent ellipses and compares the contact derivative with an eager one-sided
+difference. See [curved shape support](../docs/parametric-modeling.md#disjoint-circles-and-ellipses).
+
+[`nvf_curved_painting.py`](nvf_curved_painting.py) uses circular NVF on overlapping
+curves and checks the live width derivative. The projector follows the polygon
+facets used by the painting; see [scope and approximation limits](../docs/parametric-modeling.md#overlapping-circles-and-ellipses).
+
 ## How maintained is this?
 
 **Covered by CI, as a smoke job only.** If something here disagrees with

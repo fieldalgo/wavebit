@@ -258,6 +258,33 @@ CHILD_NAMES = ('top', 'bot', 'theta', 'phi', 'psi', 'period', 'wavelength', 'str
 _PRIVATE = frozenset({'chi', 'polarization', 'mu'})
 
 
+@tree_util.register_pytree_node_class
+class _ShapeStructure:
+    """Internal pytree view: shape strings are declarations, numbers remain children.
+
+    Preserve JAX's treedef for lists, dictionaries, and Materials, including None
+    slots. Only string leaves move to aux data; freezing the entire shape recipe
+    would silently remove geometry and material derivatives.
+    """
+    def __init__(self, value):
+        self.value = value
+
+    def tree_flatten(self):
+        leaves, tree = tree_util.tree_flatten(self.value)
+        static = tuple((i, leaf) for i, leaf in enumerate(leaves) if isinstance(leaf, str))
+        dynamic = tuple(leaf for leaf in leaves if not isinstance(leaf, str))
+        return dynamic, (tree, static)
+
+    @classmethod
+    def tree_unflatten(cls, aux, children):
+        tree, static = aux
+        declarations = dict(static)
+        values = iter(children)
+        leaves = [declarations[i] if i in declarations else next(values)
+                  for i in range(tree.num_leaves)]
+        return cls(tree_util.tree_unflatten(tree, leaves))
+
+
 class SolverJax(RCWAJax, OptimizerJax):
 
     def __init__(self, *args, **kwargs):
@@ -310,6 +337,9 @@ class SolverJax(RCWAJax, OptimizerJax):
         # silence. Two comments below warned about it; now nothing has to.
         children = tuple(getattr(self, '_' + n, None) if n in _PRIVATE else getattr(self, n)
                          for n in CHILD_NAMES)
+        if isinstance(self.structure, list):
+            children = tuple(_ShapeStructure(value) if name == 'structure' else value
+                             for name, value in zip(CHILD_NAMES, children))
         aux_data = {
             'backend': self.backend,
             'tetm': self.tetm,
@@ -427,6 +457,8 @@ class SolverJax(RCWAJax, OptimizerJax):
         # carried, not a parameter anyone passes.
         drawn_on = aux_data.pop('structure_drawn_on')
         named = dict(zip(CHILD_NAMES, children))
+        if isinstance(named['structure'], _ShapeStructure):
+            named['structure'] = named['structure'].value
         polarization = named.pop('polarization')
         # `period` and `lattice` are two spellings of one cell and naming both is refused at
         # the constructor, but this path holds both by construction -- `period` is a child

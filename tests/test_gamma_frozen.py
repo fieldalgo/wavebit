@@ -480,12 +480,12 @@ def test_the_gradient_across_a_coverage_breakpoint_is_finite():
     changes character there -- below the onset the gap between the ends reads the faces'
     residual y-normal, above it the run cancels exactly and reads the u faces -- and the
     one-sided slopes of ``sum(T)`` differ by a relative +4.2e-4 / -1.1e-3 / -1.6e-3 / -1.3e-3
-    / -1.5e-3 at orders 4 / 6 / 8 / 10 / 12 (secants of 1e-2 either side). That does not
-    decay with order, so by this project's rule it is a limit of the fixed-normal extension
-    at a run's end rather than a residual; it is in the slope, not the value, and it is
-    recorded in ``docs/normal-field-known-limits.md`` (case J) beside the other derivative
-    artefact of a merge -- the ``gap^(1/5)`` cusp of two faces closing on one line, whose
-    derivative is unbounded (``test_gamma_field.py::test_a_merge_is_a_cusp_and_its_derivative_diverges``).
+    / -1.5e-3 at orders 4 / 6 / 8 / 10 / 12 (secants of 1e-2 either side).
+    These finite-order secants do not establish the infinite-order limit.
+    The measurements are recorded in ``docs/normal-field-known-limits.md``
+    (case J), beside the large closing-gap slopes measured by
+    ``test_gamma_field.py::test_closing_gap_has_large_slopes_on_the_documented_grid``.
+    That sampled ladder does not establish an unbounded physical derivative.
     An onset is not a merge: the faces here slide past each other's ends, and the value's
     slope is finite on both sides.
     """

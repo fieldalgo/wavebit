@@ -1,29 +1,4 @@
-"""``factorization`` means different things to the two modeling paths — and used to say so to
-neither of them.
-
-Only the raster path implements both rules. The parametric path has NVF alone
-(``to_conv_mat_parametric_nvf`` builds eps from the shapes' own analytic normal field, and there
-is no raster axis to run Li's nested 1D rule along), and it used to not look at the keyword at
-all: a smooth-path circle asked for ``factorization='li'`` returned NVF numbers —
-bit-identical to ``'nvf'``, five convolution matrices either way — with nothing in the result
-to say so. The removed block path had Li's rules alone and the same silence, which is why this
-file was written about *paths* rather than about one path.
-
-The fix is not to implement the missing rule; on the parametric path there is nothing to implement,
-since NVF is a superset of Li and the path has no other axis to factorize along. It is to stop
-substituting silently, in the style the rest of the module already uses
-(``_reject_unsupported_lattice``, ``parametric.check_layer_shapes``): refuse, and say why.
-That also settles a temperament the path did not share with itself — it already refuses a
-layer whose geometry it cannot read rather than guessing, while swallowing a factorization
-request whole.
-
-The whole difficulty is that ``'li'`` is also the *default*, so refusing it outright would
-break every smooth-path user who never touched the keyword. So the solver stores what was
-*asked for* — ``None`` when nobody asked — and resolves it against the modeling path on read.
-An untouched default is not a request and is never refused; a spelled-out one is.
-
-Both halves are pinned below: the refusals, and the silence that must not come back with them.
-"""
+"""Explicit rules are honored: circles require NVF, Cartesian paintings also support Li."""
 import numpy as np
 import pytest
 
@@ -170,36 +145,17 @@ PAINTED_OVERLAP = [{'background': 1.0, 'shapes': [
     {'type': 'rectangle', 'cx': 0.10, 'cy': 0.0, 'lx': 0.4, 'ly': 0.4, 'material': 9.0}]}]
 
 
-def test_the_boundary_sub_path_is_classified_and_refused_like_the_rest_of_smooth():
-    """The polygon route is the same path by every tell that matters, so it must refuse alike."""
-    s = wavebit.rcwa(structure=PAINTED_OVERLAP, **KW)
-    assert s.factorization == 'nvf'
-    assert sum(m is not None for m in s._eps_conv_matrices()) == 5
-    with pytest.raises(NotImplementedError, match="factorization='li'"):
-        wavebit.rcwa(structure=PAINTED_OVERLAP, factorization='li', **KW).solve()
+def test_cartesian_painting_defaults_to_nvf_and_can_explicitly_select_li():
+    default = wavebit.rcwa(structure=PAINTED_OVERLAP, **KW)
+    assert default.factorization == 'nvf'
+    assert sum(m is not None for m in default._eps_conv_matrices()) == 5
+    li = wavebit.rcwa(structure=PAINTED_OVERLAP, factorization='li', **KW)
+    assert li.factorization == 'li'
+    assert sum(m is not None for m in li._eps_conv_matrices()) == 3
 
 
-def test_the_smooth_refusal_names_the_route_the_refused_layer_actually_takes():
-    """A refusal that cites one concrete function has to cite the right one.
-
-    The message named only ``to_conv_mat_parametric_nvf``, which a painted overlapping layer never
-    calls — so the single pointer it offered sent that reader to code their structure does not
-    run. Nothing but a test keeps message text honest, hence this one.
-    """
-    with pytest.raises(NotImplementedError, match='to_conv_mat_boundary_layer'):
-        wavebit.rcwa(structure=PAINTED_OVERLAP, factorization='li', **KW).solve()
-    with pytest.raises(NotImplementedError, match='to_conv_mat_parametric_nvf'):
-        totals('smooth', factorization='li')
-
-
-def test_the_smooth_refusal_says_li_is_not_missing_but_meaningless_there():
-    """Not "not implemented yet" — there is no raster axis for Li's nested rule to run along.
-
-    Worth pinning as text: the natural reading of a ``NotImplementedError`` is "coming soon",
-    and someone acting on that would go looking for a nested 1D rule to add to a path built
-    out of analytic shape transforms.
-    """
-    with pytest.raises(NotImplementedError, match='superset of Li'):
+def test_unsupported_shape_refusal_names_supported_geometry_and_alternative():
+    with pytest.raises(NotImplementedError, match="axis-aligned rectangles.*factorization='nvf'"):
         totals('smooth', factorization='li')
 
 

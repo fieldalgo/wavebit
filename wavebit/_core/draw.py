@@ -165,7 +165,7 @@ def _resolved_regions(shapes, period, basis=None):
     reads that directly -- a plain sum over the loops, no sign to carry alongside and none to
     forget. Ignoring the orientation would put ``<eps>`` at 2.4256 where the geometry is 2.2371.
     """
-    recs, regions, _ = _boundary.plan_layer(shapes, basis)
+    recs, regions, _, _ = _boundary.plan_layer(shapes, basis)
     verts = [_boundary.shape_vertices(xnp, _boundary._concrete_shape(s), basis)
              for s in shapes]
     vals = _clipper.eval_table(xnp, recs, verts)
