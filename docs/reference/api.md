@@ -93,6 +93,9 @@ properties every one of them carries.
 .. autoclass:: wavebit.ConvMatrices
    :members:
 
+.. autoclass:: wavebit.ConformingNVF
+   :members:
+
 ```
 
 
@@ -144,4 +147,3 @@ properties every one of them carries.
    :members:
 
 ```
-

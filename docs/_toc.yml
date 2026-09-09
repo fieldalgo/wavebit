@@ -13,6 +13,7 @@ subtrees:
       - file: guide/scene
       - file: guide/light
       - file: guide/numerics
+      - file: guide/conforming-nvf
       - file: guide/fields
       - file: guide/autodiff
       - file: guide/backends

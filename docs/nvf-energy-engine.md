@@ -1,10 +1,19 @@
 # Conforming NVF energy matrices in the Wavebit engine
 
-The conforming rectangular cell can now feed the existing `solve_conv()`
-pipeline. `ThinGapEnergyModel.conv_matrices()` and its polynomial-body and
-material-graded subclasses return a one-layer `wavebit.ConvMatrices` stack.
-The shared closure is implemented by `ConvMatrices.from_energy()` in the
-library, without importing study modules into production code.
+Written: 2026-09-09
+
+Targets:
+- `wavebit/_core/conforming/__init__.py`
+- `wavebit/_core/conforming/polynomial_body.py`
+- `wavebit/_core/factorization.py`
+- `tests/test_conforming_nvf.py`
+- `tests/test_nvf_energy_builder.py`
+
+`wavebit.ConformingNVF` builds conforming rectangular cells from ordinary
+shape-layer dictionaries and feeds the existing `solve_conv()` pipeline.
+The cell kernels now live in the library; the study classes reuse them and
+keep only their fixed-fixture optical readouts in `studies/`. The shared
+closure is `ConvMatrices.from_energy()`.
 
 This removes the need to reconstruct the five-slot layout, invert the zz
 matrix or guess the off-diagonal signs in an adapter. The consuming solver
@@ -29,7 +38,7 @@ and Cartesian frame; the builder checks dimensions, not that physical
 correspondence. Finite input and output checks are separate from an accuracy
 estimate. An ill-conditioned but finite solve is not certified as accurate.
 
-The existing real-dielectric research cell retains its absolute 1e-9
+The real-dielectric cell retains its absolute 1e-9
 Hermitian-defect guard. Its coefficient construction, material grading and
 contact equations are unchanged. The specialized high-order mirror path
 retains its existing memory-conscious LU implementation.
@@ -53,44 +62,73 @@ identical adjacent layers preserves all returned order efficiencies under
 2e-11 at a different wavelength and substrate. These are finite-model
 integration controls, not a claim of optical convergence.
 
-Validation: 29 new builder/integration checks and 62 existing contact,
+The original closure integration record has 29 builder/integration checks and 62 contact,
 polynomial-body, localized-flux, pose and slot-order checks pass. The 28
 documentation-contract checks also pass. These are 119 distinct checks,
 not a run of the entire repository suite. The recorded command summaries
 are in `studies/results/nvf_energy_engine_validation.log`.
 
+## Shape construction and Fourier origin
+
+The public constructor accepts a contiguous equal-height tiling in each
+layer, uniform layers, positive scalar backgrounds, any square-cell period,
+translations, common lattice/shape rotations and rectangular retained-order
+sets. It normalizes physical lengths and material ratios before the shared
+cell solve. It then applies translation and Cartesian tensor rotation to
+the field and its energy, selects the requested Fourier difference indices,
+and closes the projected matrices. Cropping an already-closed square matrix
+would be a different finite model and is not used.
+
+An independent analytic material integral exposed a half-cell phase mismatch
+during integration. The cell kernels use a centered Fourier origin; the
+ordinary shape API measures center offsets from `(a1+a2)/2` while its
+Fourier coefficients use the cell corner. The adapter applies this shift
+to **all** coefficient fields. The former mismatch changed odd-order signs
+but preserved single-layer total powers, so power conservation alone could
+not have found it. The material-convolution check now covers physical
+scaling, background contrast, large translations, rotation and unequal
+retained orders. An independent rotated Cartesian inverse-rule control
+checks every slot at full-height contact.
+
+Further public-API controls cover both incident polarizations and every
+returned diffraction power under rigid rotation and translation; physical
+scaling of the full stack; NumPy, JAX and Torch forward solves; equal-material
+subdivision; live JIT geometry, material, background, period and pose
+derivatives; one-sided contact derivatives; and invalid eager/traced replay.
+The package-only subprocess smoke test constructs a patterned cell without
+any `studies` package. Commands and results are recorded in
+`studies/results/nvf_conforming_shapes_validation.log`.
+
+The shape integration validation has 48 passing public-API checks, 204
+passing shared-kernel and engine regressions, and 29 passing documentation
+contract checks. One pre-existing strict expected failure records the old
+fixed-P1 model's moving-interface limitation; the polynomial-body model
+used by the public builder passes that control. The two manual examples,
+strict Sphinx build, lint and diff whitespace checks also pass.
+
+The contact derivative test scans finite-difference steps. Steps of 1e-4
+in the 700-unit fixture do not resolve the short scale near contact; two
+windows at 1e-6 and 1e-7 agree with the JAX derivative under the same 3e-6
+absolute criterion. This is a derivative control of a finite cell, not an
+optical convergence threshold.
+
 ## Reproduction and remaining scope
 
-From this repository, the following sends the polynomial-body cell through
-the normal engine and its result objects:
+The [public manual](guide/conforming-nvf.md) contains standalone solve and
+JAX examples, resolution defaults, material semantics and explicit refusal
+rules. NumPy and JAX x64 construct the cell; a NumPy export can be
+transferred to the Torch engine. The lower-level energy closure itself
+accepts all three array frameworks and complex material data, while the
+rectangular cell constructor currently requires positive real materials.
 
-```python
-import wavebit
-from studies.nvf_polynomial_body import PolynomialBodyGapModel
-
-order = 1
-model = PolynomialBodyGapModel(order, rows=2, body_degree=2, gap_degree=2)
-conv = model.conv_matrices(17., dict(seams=[31.], values=[4., 9.]))
-solver = wavebit.rcwa(
-    period=(700., 700.), wavelength=900., thickness=[300.],
-    theta=.2, phi=.37, top=1., bot=2.25,
-    truncation_order=(order, order),
-)
-result = solver.solve_conv(*conv)
-print(result.p_inc.T.sum(), result.s_inc.T.sum())
-```
-
-The coarse cell here keeps the example inexpensive. It is not an accuracy
-recommendation. `conv_matrices()` retains the model's square 700-nm cell,
-centered horizontal geometry, positive real permittivities, fixed background
-and square retained order. NumPy and JAX construct the research cell; a
-NumPy export can be transferred to the Torch engine. The library closure
-itself accepts all three array frameworks, including complex material data.
-
-Arbitrary shapes, independently rotated objects, lossy corrector construction,
-automatic shape dispatch and accuracy qualification across use cases remain
-separate work. The existing circular shape projector remains available.
+Arbitrary shapes, independently rotated objects, nonsquare corrector cells,
+lossy corrector construction, automatic selection through the ordinary
+solver's `projector` setting, and accuracy qualification across use cases
+remain separate work. The existing circular shape projector remains
+available. This integration does not make the provisional 1e-5 research
+increment a product accuracy requirement.
 
 ```bash
 PYTHONPATH=$PWD python -m pytest -q tests/test_nvf_energy_builder.py tests/test_nvf_thin_gap_energy.py tests/test_nvf_polynomial_body.py tests/test_nvf_local_flux.py tests/test_nvf_posed_gap.py tests/test_slot_order.py
+PYTHONPATH=$PWD python -m pytest -q tests/test_conforming_nvf.py
 ```

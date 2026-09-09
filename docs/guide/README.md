@@ -41,6 +41,7 @@ be runnable as written.
 | [`scene.md`](scene.md) | What is the stack made of, and what cell does it repeat in? |
 | [`light.md`](light.md) | Which polarization arrives, on which orders, from which side? |
 | [`numerics.md`](numerics.md) | Which factorization and normal field, and what do they cost? |
+| [`conforming-nvf.md`](conforming-nvf.md) | How do rectangle layers become conforming NVF energy matrices, and what geometry and derivatives are supported? |
 | [`fields.md`](fields.md) | How do I get a near field out, why is it off by default, and what shape does it come back in? |
 | [`autodiff.md`](autodiff.md) | How do I differentiate a solve, and what does `jax.jit` need that `jax.grad` does not? |
 | [`backends.md`](backends.md) | What can NumPy, JAX and PyTorch each do here, which should I run, and how do I ask for a device or a precision? |

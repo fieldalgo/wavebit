@@ -1155,12 +1155,17 @@ integration of the new conforming energy construction remain separate work.
 The earlier circular shape NVF is already integrated in production.
 
 The conforming energy construction now has an explicit
-[engine integration](nvf-energy-engine.md): a public
-`ConvMatrices.from_energy()` closure and a `conv_matrices()` export on the
-rectangular study model. The exported layer stack runs through the actual
-Wavebit engine for NumPy, JAX and Torch forward calculations; the auxiliary
-cell itself remains NumPy/JAX. The closure preserves material loss and
-autodiff graphs, with independent slab, basis-invariance and layer-splitting
-controls. This connects the validated finite model to standard scattering
-and result objects. Automatic shape dispatch, general corrector geometry
-and optical accuracy qualification remain open.
+[engine integration](nvf-energy-engine.md): the public
+`ConvMatrices.from_energy()` closure and
+[`ConformingNVF`](guide/conforming-nvf.md) construction from ordinary
+rectangle layers. The cell kernels live in the library and are shared with
+the research instruments. Contiguous equal-height rectangular tilings,
+uniform layers, live backgrounds, square-cell scaling, translations,
+common lattice rotations and unequal retained-order counts are supported.
+The exported stack runs through the actual Wavebit engine on NumPy, JAX
+and Torch; the auxiliary cell supports NumPy/JAX x64. The general closure
+preserves loss and autodiff graphs, while the cell builder requires positive
+real scalar materials. Independent material integrals, contact controls,
+slab formulas, basis invariance and layer splitting qualify the integration.
+Automatic projector selection, general corrector geometry, lossy cell
+construction and optical accuracy qualification remain open.
