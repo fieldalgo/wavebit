@@ -5,12 +5,15 @@ from numpy.polynomial.legendre import leggauss
 from scipy.special import eval_legendre
 
 from wavebit._core.conforming.continuous_flux import ContinuousFluxGapModel
+from wavebit._core.conforming.affine_cell import AffineCellGapModel
 
 
 @pytest.mark.parametrize('gap_degree', [1, 2, 4])
 @pytest.mark.parametrize('g', [.07, .31])
-def test_complex_cell_solve_satisfies_independently_assembled_weak_equations(gap_degree, g):
-    model = ContinuousFluxGapModel(0, rows=3, grade_y=False, gap_degree=gap_degree, quadrature=24)
+@pytest.mark.parametrize('affine', [False, True])
+def test_complex_cell_solve_satisfies_independently_assembled_weak_equations(gap_degree, g, affine):
+    cls, settings = (AffineCellGapModel, dict(body_degree=1)) if affine else (ContinuousFluxGapModel, {})
+    model = cls(0, rows=3, grade_y=False, gap_degree=gap_degree, quadrature=24, **settings)
     # A small periodic complex basis isolates the weak-system assembly from
     # the material-adapted x integral implementation and its mesh density.
     model.nx = 3
@@ -22,11 +25,20 @@ def test_complex_cell_solve_satisfies_independently_assembled_weak_equations(gap
     lift = 1.+.17j*np.cos(2*np.pi*x)
     epsilon = 2.+.8*np.cos(2*np.pi*x)+1j*(.6+.2*np.sin(2*np.pi*x))
     metric_y = 2.4
+    metric = np.array([[1., -.4], [-.4, metric_y]]) if affine else np.diag([1., metric_y])
     def pack(material):
         w = wx*material
+        if affine:
+            return dict(mass=(f.conj().T*w)@f, stiffness=(df.conj().T*w)@df,
+                        mixed=(df.conj().T*w)@f, reverse_mixed=(f.conj().T*w)@df,
+                        dual_load=w@f.conj(), dual_derivative=w@df.conj(),
+                        force=(w*lift)@df.conj(), potential_force=(w*lift)@f.conj())
         return (metric_y*(f.conj().T*w)@f, (df.conj().T*w)@df,
                 metric_y*w@f.conj(), (w*lift)@df.conj())
-    v, a, b, residual = model._solve_flux_cell(g, *pack(epsilon), *pack(np.ones_like(x)), np)
+    if affine:
+        v, a, b, residual = model._solve_metric_cell(g, pack(epsilon), pack(np.ones_like(x)), metric, np)
+    else:
+        v, a, b, residual = model._solve_flux_cell(g, *pack(epsilon), *pack(np.ones_like(x)), np)
     assert residual < 1e-12
     solution = np.concatenate([v.reshape(-1, 2), a, b.reshape(-1, 2)])[1:]
     count = len(solution)
@@ -36,11 +48,11 @@ def test_complex_cell_solve_satisfies_independently_assembled_weak_equations(gap
         nonlocal matrix, right
         gradient = np.stack([gx, gy], axis=2)[..., 1:]
         w = wy[:, None]*wx[None]*material[None]
-        metric = np.array([1., metric_y])
-        matrix += np.einsum('yx,yxci,c,yxcj->ij', w, gradient.conj(), metric, gradient)
-        affine = np.zeros((*w.shape, 2, 2), complex)
-        affine[:, :, 0, 0], affine[:, :, 1, 1] = lift[None], 1.
-        right -= np.einsum('yx,yxci,c,yxcj->ij', w, gradient.conj(), metric, affine)
+        matrix += np.einsum('yx,yxci,cd,yxdj->ij', w, gradient.conj(), metric, gradient)
+        affine_field = np.zeros((*w.shape, 2, 2), complex)
+        affine_field[:, :, 0, 0], affine_field[:, :, 1, 1] = lift[None], 1.
+        affine_field[:, :, 0, 1] = metric[0, 1]/metric[0, 0]*(lift[None]-1)
+        right -= np.einsum('yx,yxci,cd,yxdj->ij', w, gradient.conj(), metric, affine_field)
 
     h, dh, t = model.yvalue, model.yderivative, model.yt
     vx = np.einsum('yr,xi->yxri', h, df).reshape(len(t), len(x), -1)

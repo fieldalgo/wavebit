@@ -36,7 +36,7 @@ def polynomial_moments(nodes, lengths, lo, hi, modes, xp=np, *, degree=4):
 
 
 def flux_integrals(nodes, lengths, seams, values, inside, modes, pivot, xp=np, *, basis='global',
-                   sesquilinear=False):
+                   sesquilinear=False, mixed=False):
     """Weighted basis, affine-lift and energy integrals; no equality branch."""
     if basis not in ('global', 'local'):
         raise ValueError('flux basis must be global or local')
@@ -86,12 +86,12 @@ def flux_integrals(nodes, lengths, seams, values, inside, modes, pivot, xp=np, *
         derivative = xp.concatenate([xp.zeros((count, 2, 1)), derivative], axis=-1)
         lift = reciprocal/total
 
-        def quadratic(poly):
-            degree = poly.shape[1]-1
+        def quadratic(poly, other=None):
+            other = poly if other is None else other
             dual = xp.conj(poly) if sesquilinear else poly
-            return xp.stack([sum(dual[:, i, :, None]*poly[:, j, None, :]
-                                 for i in range(degree+1) for j in range(degree+1) if i+j == k)
-                             for k in range(2*degree+1)], axis=1)
+            return xp.stack([sum(dual[:, i, :, None]*other[:, j, None, :]
+                                 for i in range(poly.shape[1]) for j in range(other.shape[1]) if i+j == k)
+                             for k in range(poly.shape[1]+other.shape[1]-1)], axis=1)
 
         unweighted = dict(mass=potential if basis == 'local' else quadratic(potential),
                           stiffness=derivative if basis == 'local' else quadratic(derivative),
@@ -103,6 +103,15 @@ def flux_integrals(nodes, lengths, seams, values, inside, modes, pivot, xp=np, *
                                force=xp.conj(derivative)*lift[:, None, None],
                                reverse_force=derivative*xp.conj(lift)[:, None, None],
                                lift_squared=(xp.conj(lift)*lift)[:, None])
+        if mixed:
+            dual = xp.conj(potential) if sesquilinear else potential
+            unweighted.update(
+                mixed=(derivative, potential) if basis == 'local' else quadratic(derivative, potential),
+                reverse_mixed=(potential, derivative) if basis == 'local' else quadratic(potential, derivative),
+                potential_force=dual*lift[:, None, None],
+                reverse_potential_force=potential*(xp.conj(lift) if sesquilinear else lift)[:, None, None],
+                dual_derivative=xp.conj(derivative) if sesquilinear else derivative,
+                dual_lift=(xp.conj(lift) if sesquilinear else lift)[:, None])
         if basis == 'local':
             # Carry factors into integration. Expanded quadratic packs require
             # O(elements * basis_count**2) storage although most entries vanish.
@@ -126,41 +135,48 @@ def flux_integrals(nodes, lengths, seams, values, inside, modes, pivot, xp=np, *
             for key, value in pack.items():
                 if key == 'weight':
                     continue
-                if key in ('mass', 'stiffness'):
+                if key in ('mass', 'stiffness', 'mixed', 'reverse_mixed'):
+                    is_mixed = key in ('mixed', 'reverse_mixed')
+                    first, second = value if is_mixed else (value, value)
+                    old_first, old_second = ((previous[key] if is_mixed else (previous[key], previous[key]))
+                                             if previous is not None else (None, None))
                     entries = []
-                    delta = None if previous is None else value-previous[key]
-                    for i in range(value.shape[1]):
-                        for j in range(value.shape[1] if sesquilinear else i+1):
+                    delta_first = None if previous is None else first-old_first
+                    delta_second = None if previous is None else second-old_second
+                    for i in range(first.shape[1]):
+                        for j in range(second.shape[1] if sesquilinear or is_mixed else i+1):
                             weight = moments[..., i+j, None]
-                            dual = xp.conj(value[:, i]) if sesquilinear else value[:, i]
+                            dual = xp.conj(first[:, i]) if sesquilinear else first[:, i]
                             if previous is None:
-                                entry = dual.T@(weight*value[None, :, j])
+                                entry = dual.T@(weight*second[None, :, j])
                             else:
-                                old = previous[key]
                                 # Polarize the weighted quadratic difference
                                 # before integration. Subtracting two completed
                                 # Fourier matrices loses small material changes.
-                                dual_delta = xp.conj(delta[:, i]) if sesquilinear else delta[:, i]
-                                dual_old = xp.conj(old[:, i]) if sesquilinear else old[:, i]
-                                entry = (dual_delta.T@(weight*value[None, :, j])
-                                         +dual_old.T@(weight*delta[None, :, j])
-                                         +dual_old.T@(change_moments[..., i+j, None]*old[None, :, j]))
-                            entries.append(entry if sesquilinear or i == j else entry+xp.swapaxes(entry, -1, -2))
+                                dual_delta = xp.conj(delta_first[:, i]) if sesquilinear else delta_first[:, i]
+                                dual_old = xp.conj(old_first[:, i]) if sesquilinear else old_first[:, i]
+                                entry = (dual_delta.T@(weight*second[None, :, j])
+                                         +dual_old.T@(weight*delta_second[None, :, j])
+                                         +dual_old.T@(change_moments[..., i+j, None]*old_second[None, :, j]))
+                            entries.append(entry if sesquilinear or is_mixed or i == j else entry+xp.swapaxes(entry, -1, -2))
                     result[key] = sum(entries)
-                    sampled = sum(r[..., None]**i*value[None, :, i] for i in range(value.shape[1]))
+                    def sample(poly):
+                        return sum(r[..., None]**i*poly[None, :, i] for i in range(poly.shape[1]))
+                    sampled_first, sampled_second = sample(first), sample(second)
                     weighted = quad_weight*pack['weight'][None]
                     if previous is None:
-                        dual_sampled = xp.conj(sampled) if sesquilinear else sampled
-                        mean = sum(dual_sampled[k].T@(weighted[k, :, None]*sampled[k]) for k in range(3))
+                        dual_sampled = xp.conj(sampled_first) if sesquilinear else sampled_first
+                        mean = sum(dual_sampled[k].T@(weighted[k, :, None]*sampled_second[k]) for k in range(3))
                     else:
-                        old_sampled = sum(r[..., None]**i*previous[key][None, :, i] for i in range(value.shape[1]))
-                        sampled_delta = sum(r[..., None]**i*delta[None, :, i] for i in range(value.shape[1]))
+                        old_sampled = sample(old_first)
+                        sampled_delta = sample(delta_first)
                         dw = quad_weight*(pack['weight']-previous['weight'])[None]
                         dual_delta = xp.conj(sampled_delta) if sesquilinear else sampled_delta
                         dual_old = xp.conj(old_sampled) if sesquilinear else old_sampled
-                        mean = sum(dual_delta[k].T@(weighted[k, :, None]*sampled[k])
-                                   +dual_old[k].T@(weighted[k, :, None]*sampled_delta[k])
-                                   +dual_old[k].T@(dw[k, :, None]*old_sampled[k]) for k in range(3))
+                        delta_sampled_second, old_sampled_second = sample(delta_second), sample(old_second)
+                        mean = sum(dual_delta[k].T@(weighted[k, :, None]*sampled_second[k])
+                                   +dual_old[k].T@(weighted[k, :, None]*delta_sampled_second[k])
+                                   +dual_old[k].T@(dw[k, :, None]*old_sampled_second[k]) for k in range(3))
                     result[key] = xp.where(xp.asarray(modes)[:, None, None] == 0, mean[None], result[key])
                 else:
                     if previous is None:

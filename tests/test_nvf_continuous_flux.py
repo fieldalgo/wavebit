@@ -44,7 +44,8 @@ def test_zero_width_degree_four_moments_retain_their_jit_derivative():
 @pytest.mark.parametrize('basis', ['global', 'local'])
 @pytest.mark.parametrize('nodes', [[-.5, -.25, 0., .25], [-.5, -.29, .04, .33]])
 @pytest.mark.parametrize('complex_material', [False, True])
-def test_integrated_flux_packs_match_independent_piecewise_gauss_integration(basis, nodes, complex_material):
+@pytest.mark.parametrize('mixed', [False, True])
+def test_integrated_flux_packs_match_independent_piecewise_gauss_integration(basis, nodes, complex_material, mixed):
     nodes = np.asarray(nodes)
     lengths = np.diff(np.r_[nodes, .5])
     seams, values = np.array([-.11, .13]), np.array([4., 9., 6.25])
@@ -52,7 +53,7 @@ def test_integrated_flux_packs_match_independent_piecewise_gauss_integration(bas
         values = values+1j*np.array([.8, -.6, 2.1])
     modes, inside = np.arange(-7, 8), np.array([False, True, True, False])
     body, gap = flux_integrals(nodes, lengths, seams, values, inside, modes, 2,
-                               basis=basis, sesquilinear=complex_material)
+                               basis=basis, sesquilinear=complex_material, mixed=mixed)
     q, qw = leggauss(48)
     cumulative = np.zeros(len(nodes), dtype=values.dtype)
     xs, ws, es, potentials, derivatives = [], [], [], [], []
@@ -103,6 +104,13 @@ def test_integrated_flux_packs_match_independent_piecewise_gauss_integration(bas
                         material=weighted.sum(axis=1))
         if complex_material:
             expected.update(dual_load=weighted@f.conj(), reverse_force=(weighted*lift.conj()[None])@df)
+        if mixed:
+            dual_lift = lift.conj() if complex_material else lift
+            expected.update(mixed=np.einsum('mq,qi,qj->mij', weighted, dual_df, f),
+                            reverse_mixed=np.einsum('mq,qi,qj->mij', weighted, dual_f, df),
+                            potential_force=(weighted*lift[None])@dual_f,
+                            reverse_potential_force=(weighted*dual_lift[None])@f,
+                            dual_derivative=weighted@dual_df, dual_lift=weighted@dual_lift)
         for key in expected:
             np.testing.assert_allclose(actual[key], expected[key], atol=2e-12, rtol=1e-13)
 
