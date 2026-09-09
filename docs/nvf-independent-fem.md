@@ -56,6 +56,53 @@ instrument does not implement their adaptive error estimator, and their error
 bounds must not be assigned to these results. It also reports two flux readouts:
 outgoing Rayleigh power and volume-averaged physical Poynting flux.
 
+## Rayleigh data for a physical primitive lattice
+
+The boundary-data helper now accepts
+`rayleigh_data(cut, epsilon, lattice=A, theta=theta, phi=phi)`, where A
+contains physical primitive vectors in columns, in micrometers. Its default
+retains the original square lattice and incidence. The unit-index incident
+half space supplies the lateral incident vector; the requested epsilon
+belongs to the outgoing half space. For integer labels `(m,n)` it computes
+
+```text
+k = k_incident + 2*pi*A^(-T)*(m,n)
+gamma = sqrt(k0^2*epsilon - k.k), with Im(gamma) >= 0
+Gamma = gamma*I + k*k.T/gamma.
+```
+
+The propagating-order check uses a bound for each integer label separately.
+If a_i is a primitive vector, then
+`label_i = a_i.(k-k_incident)/(2*pi)` over the disk
+`|k| < k0*sqrt(epsilon)`. Projecting that disk onto each a_i gives a finite
+rectangle enclosing every propagating label, including for strongly
+sheared bases. It does not assume that small physical wavevectors have
+small integer labels in the supplied basis.
+
+For the [affine comparison](nvf-affine-convergence.md),
+`A=[[.7,.315],[0,.49]]`, theta=.2 and phi=0 give only `(0,0)` in the top
+half space. The substrate also propagates `(-1,0)` and `(-1,-1)` under
+this FEM helper's `+G` convention; the latter has
+`gamma=1.526674994510` per micrometer. Cut 1 contains these propagating
+orders but does not establish convergence of the omitted evanescent
+boundary correction. Exactly grazing retained orders remain unsupported.
+
+Nine mesh-free algebraic controls pass: the earlier independent slab
+and square-lattice admittance checks, plus seven added cases for affine
+plane-wave admittances, explicit reciprocal components, rotation
+covariance, strongly sheared integer labels, default compatibility,
+invalid inputs and exact grazing. One control represents the square
+physical lattice with `A=[[.7,2.8],[0,.7]]`; its original near-grazing
+wave has labels `(1,4)`, so cut 3 must be rejected. These checks require
+no tetrahedral mesh or large FEM solve.
+
+Only the boundary-data helper is generalized. `solve` and `solve_rayleigh`
+still use the fixed square geometry, p source, trace phases and area
+normalization described above. They do not yet solve the affine fixture.
+Physical affine geometry and periodic identifications, both polarization
+sources, matching trace normalization and independent flux controls must
+be implemented together before claiming a 3D affine optical reference.
+
 ## A failed periodic-boundary request was caught by the control
 
 The first local FEM prototype selected outer faces within 1e-8. OpenCascade pads
@@ -151,6 +198,33 @@ The two readouts disagree by 0.000409769. This observed flux error is kept
 explicit instead of selecting the readout that happens to be closer.
 No production NVF behavior or acceptance tolerance was changed.
 
+## Scope of the optional reference environment
+
+The inspected environment contains `ngsolve==6.2.2606`,
+`netgen-mesher==6.2.2606` and `netgen-occt==7.8.1`. The first two packages
+declare LGPL-2.1-only; OCCT has its LGPL license and additional exception.
+The package declarations do not describe every bundled component.
+In particular, the installed `netgen/libngla.dylib` exports
+`SuiteSparse_version`, `umfpack_dl_report_status` and
+`umfpack_zl_report_status`, and contains an UMFPACK banner and GPL notice.
+The exact bundled UMFPACK version has not been identified. The official
+[UMFPACK license](https://github.com/DrTimothyAldenDavis/SuiteSparse/blob/dev/UMFPACK/Doc/License.txt)
+identifies GPL-2.0-or-later, so this environment must not be described as
+containing only LGPL components or as cleared for product redistribution.
+
+The reference use remains internal numerical validation, with independently
+written study code and numerical outputs that contain no solver
+implementation. The running/output provisions of the
+[NGSolve license](https://github.com/NGSolve/ngsolve/blob/master/LICENSE)
+and [GNU GPL version 2](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html)
+distinguish that use from redistribution. No FEM binaries or external
+solver source are added to the Wavebit runtime or its installation
+dependencies. Bundling, linking or distributing the reference environment
+requires a separate review of exact component versions and their terms.
+The [OCCT license](https://github.com/Open-Cascade-SAS/OCCT/blob/V7_8_1/LICENSE_LGPL_21.txt)
+and [exception](https://github.com/Open-Cascade-SAS/OCCT/blob/V7_8_1/OCCT_LGPL_EXCEPTION.txt)
+are part of that review, not a substitute for it.
+
 ## Reproduction
 
 On the current host NGSolve 6.2.2606 is already installed in
@@ -173,7 +247,12 @@ and one-axis-only identifications, the clipped periodic material geometry,
 analytic and nonzero-source slab controls, the zero-contrast limit, and
 condensation/reconstruction equivalence for both boundary formulations. The
 Rayleigh tests also reject an omitted propagating order and require the mesh to
-contain no PML. All **12 optional tests passed** in the NGSolve environment. They
+contain no PML. All **12 original optional tests passed** in the NGSolve environment. They
 validate the instrument; they are not additional NVF physics successes.
+The lattice-helper extension adds seven tests and moves two existing
+algebraic tests into `FEMAlgebraicTests`, which constructs no mesh. Its
+nine checks pass separately; the ten unchanged mesh/solve checks were
+not rerun for this boundary-data-only change. Run the small selection with
+`python -m unittest tests.test_nvf_fem_reference.FEMAlgebraicTests -v`.
 Selected results, with prototype-versus-packaged flux provenance, are retained in
 [`studies/results/nvf_fem_reference.log`](../studies/results/nvf_fem_reference.log).

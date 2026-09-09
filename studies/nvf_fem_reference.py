@@ -234,29 +234,65 @@ def solve(h=.14, order=3, uniform=None, pad=.4, pml=.4, stretch=2.,
     return result
 
 
-def rayleigh_data(cut, epsilon):
+def rayleigh_data(cut, epsilon, *, lattice=None, theta=THETA, phi=0.):
     """Outgoing tangential DtN blocks, including every propagating order.
 
     The periodic unknown has the Bloch phase removed. For each reciprocal pair,
     Gamma = gamma I + k_parallel k_parallel.T/gamma, with Im(gamma)>=0.
     These blocks have inverse-length units; their quadratic form divided by k0
-    is outgoing power. The fixed fixture has no exactly grazing order.
+    is outgoing power. ``lattice`` has physical primitive vectors as columns,
+    in micrometers; None retains the original square fixture. The incident
+    lateral vector uses the unit-index superstrate and angles in radians.
+
+    Only these boundary data accept another lattice or incidence: the FEM
+    geometry, source, trace integrals and flux normalization remain fixed.
+    Exactly grazing retained orders are not implemented by this instrument.
     """
-    if not isinstance(cut, int) or cut < 0:
+    if isinstance(cut, (bool, np.bool_)) or not isinstance(cut, (int, np.integer)) or cut < 0:
         raise ValueError('Rayleigh cut must be a nonnegative integer')
+
+    def real_scalar(value, name):
+        array = np.asarray(value)
+        if array.shape != () or array.dtype.kind not in 'iuf' or not np.isfinite(array):
+            raise ValueError(f'{name} must be a finite real scalar')
+        return float(array)
+
+    epsilon = real_scalar(epsilon, 'epsilon')
+    theta, phi = real_scalar(theta, 'theta'), real_scalar(phi, 'phi')
+    if epsilon <= 0:
+        raise ValueError('epsilon must be positive')
+    lattice = np.asarray(np.eye(2)*PERIOD if lattice is None else lattice)
+    if (lattice.shape != (2, 2) or lattice.dtype.kind not in 'iuf'
+            or not np.isfinite(lattice).all()):
+        raise ValueError('lattice must be a finite real 2-by-2 matrix')
+    lattice = lattice.astype(float)
+    try:
+        reciprocal = 2*np.pi*np.linalg.inv(lattice).T
+    except np.linalg.LinAlgError as error:
+        raise ValueError('lattice must be nonsingular') from error
+    if not np.isfinite(reciprocal).all():
+        raise ValueError('lattice reciprocal vectors must be finite')
     k0 = 2*np.pi/WAVELENGTH
-    # Check a larger square enclosing the propagating disk; a small cut must not
-    # silently omit the near-grazing substrate (1,0) diffraction order.
-    bound = int(np.ceil(PERIOD/WAVELENGTH*(np.sqrt(epsilon)+abs(np.sin(THETA)))))+1
-    for m in range(-bound, bound+1):
-        for n in range(-bound, bound+1):
-            norm2 = (k0*np.sin(THETA)+2*np.pi*m/PERIOD)**2+(2*np.pi*n/PERIOD)**2
-            if norm2 < k0*k0*epsilon and max(abs(m), abs(n)) > cut:
+    incident = k0*np.sin(theta)*np.array([np.cos(phi), np.sin(phi)])
+    # For a physical propagating vector k, each integer label satisfies
+    # label_i = a_i dot (k-incident)/(2*pi), |k| < k0*sqrt(epsilon).
+    # Bounding these projections encloses the full disk even for a sheared
+    # primitive basis. The extra integer on each side protects rounded bounds.
+    center = -lattice.T@incident/(2*np.pi)
+    radius = np.linalg.norm(lattice, axis=0)*np.sqrt(epsilon)/WAVELENGTH
+    if not np.isfinite(center).all() or not np.isfinite(radius).all():
+        raise ValueError('lattice propagating-order bounds must be finite')
+    ranges = [range(int(np.floor(c-r))-1, int(np.ceil(c+r))+2)
+              for c, r in zip(center, radius)]
+    for m in ranges[0]:
+        for n in ranges[1]:
+            k = incident+reciprocal@np.array([m, n])
+            if k@k < k0*k0*epsilon and max(abs(m), abs(n)) > cut:
                 raise ValueError('Rayleigh cut omits a propagating diffraction order')
     modes = [(m, n) for n in range(-cut, cut+1) for m in range(-cut, cut+1)]
     blocks = []
     for m, n in modes:
-        k = np.array([k0*np.sin(THETA)+2*np.pi*m/PERIOD, 2*np.pi*n/PERIOD])
+        k = incident+reciprocal@np.array([m, n])
         gamma = np.sqrt(complex(k0*k0*epsilon-k@k))
         if abs(gamma) < 1e-12*k0:
             raise ValueError('this reference does not implement an exactly grazing order')
