@@ -692,8 +692,8 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
                    mu_top=1.0, mu_bot=1.0, eps_top=None, lit=None):
     """Boundary match the assembled s/p system to the incident field.
 
-    Shared, byte-identical port of ``transfer_1d_conical_4`` / ``transfer_2d_4`` (their final
-    equations are the same); used by both :func:`solve_1d_conical` and
+    Shared boundary equations from ``transfer_1d_conical_4`` / ``transfer_2d_4``;
+    used by both :func:`solve_1d_conical` and
     :func:`wavebit._core.solve_2d.solve_2d`.
 
     The incidence is ``psi`` — or the complex amplitude pair ``polarization = (a_s, a_p)``,
@@ -716,8 +716,8 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
     Returns ``(de_ri, de_ti)`` for that incidence, shape ``(n_orders_v, n_orders_u)``.
     From ``answers='amplitude'`` up it returns the full result mapping instead: the reflected
     and transmitted amplitudes and their s/p-resolved efficiencies for the given incidence,
-    plus the pure-TE and pure-TM incidence variants (which reuse the same factorized
-    ``final_A``, so they cost one extra solve rather than two full passes).
+    plus the pure-TE and pure-TM incidence variants. All requested incidence
+    columns share one direct solve of ``final_A``; no full inverse is formed.
 
     ``T1`` joins that mapping only at ``'field'``. It is *built from* the variants' columns,
     which is why the two cannot be ordered the other way round: a solve that kept ``T1``
@@ -803,8 +803,25 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
             [1j * h_p_inc * a_p * delta],
         ])
 
-    final_A_inv = xp.linalg.inv(final_A)
-    final_RT = final_A_inv @ final_B
+    if answers.covers(Answers.AMPLITUDE):
+        # Keep the given, pure-TE and pure-TM columns in one right-hand side,
+        # so one factorization answers all three without forming a dense inverse.
+        # The variant sources retain the same admittance and normalization as
+        # before; the declared illumination's column remains first.
+        half_pi = 3.141592653589793 / 2
+        cols = [final_B]
+        for psi_v in (half_pi, 0.0):
+            s_p = xp.sin(xp.asarray(psi_v, dtype=C))
+            c_p = xp.cos(xp.asarray(psi_v, dtype=C))
+            cols.append(_block(xp, [[-s_p * delta],
+                                    [c_p * e_p_inc * delta],
+                                    [1j * s_p * kz_inc / mu_top * delta],
+                                    [1j * h_p_inc * c_p * delta]]))
+        solved = xp.linalg.solve(final_A, xp.concat(cols, axis=1))
+        final_RT, final_RT_tetm = solved[:, :1], solved[:, 1:]
+    else:
+        final_RT = xp.linalg.solve(final_A, final_B)
+    del final_A, final_B
     R_s = xp.reshape(final_RT[:n_orders, :], (n_orders_v, n_orders_u))
     R_p = xp.reshape(final_RT[n_orders:2 * n_orders, :], (n_orders_v, n_orders_u))
 
@@ -839,21 +856,6 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
                 T_s_, T_p_ / (-1j * n_bot / mu_bot))
 
     res = _pack(*fresnel(R_s, R_p, T_s, T_p), de_ri_s, de_ri_p, de_ti_s, de_ti_p)
-
-    # Pure-TE (psi = pi/2) and pure-TM (psi = 0) incidence, solved together against the same
-    # already-inverted final_A. Same four rows as `final_B`, `(sin psi, cos psi)` in place of
-    # `(a_s, a_p)` -- including the same `e_p_inc`, or the variants would be lit by a wave
-    # from a different superstrate than the psi incidence they are reported beside.
-    half_pi = 3.141592653589793 / 2
-    cols = []
-    for psi_v in (half_pi, 0.0):
-        s_p = xp.sin(xp.asarray(psi_v, dtype=C))
-        c_p = xp.cos(xp.asarray(psi_v, dtype=C))
-        cols.append(_block(xp, [[-s_p * delta],
-                                [c_p * e_p_inc * delta],
-                                [1j * s_p * kz_inc / mu_top * delta],
-                                [1j * h_p_inc * c_p * delta]]))
-    final_RT_tetm = final_A_inv @ xp.concat(cols, axis=1)
 
     def split2(M):
         """Two incidence columns -> (2, n_orders_v, n_orders_u), the legacy ``.T.reshape``."""

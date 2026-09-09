@@ -1,7 +1,7 @@
 # What a solve answers — and why the field state is off by default
 
-Written: 2026-08-20; transient-lifetime and diagonal-arithmetic follow-ups
-on 2026-09-09 in sections 9–10.
+Written: 2026-08-20; runtime allocation and arithmetic follow-ups
+on 2026-09-09 in sections 9–11.
 Sections 1–8 were measured on an Apple M4 (16 GB), NumPy 2.5.1 against Accelerate, float64,
 single thread as configured. Retention is counted by walking the retained objects and charging
 each array to its owning buffer, so views are counted once. Peak comes from `tracemalloc`,
@@ -421,3 +421,70 @@ JAX and PyTorch. The selection also covers ETM/SMM, full tensors, field
 reconstruction against S4 reference data, RETICOLO references, gradients,
 grazing guards, rotated/skewed cells, stability and documentation contracts.
 This is a targeted validation, not the entire repository suite.
+
+## 11. Solving only the requested boundary columns
+
+After the ETM layer recursion, the shared conical/2D/full-tensor boundary
+matching forms a `4*N`-square system. Previously it inverted that entire
+matrix, then multiplied the inverse by the given incidence column and,
+for amplitude/field declarations, the two pure s/p columns. Only one or
+three solution columns were ever used. The full inverse consumed another
+`16*N^2` complex entries and required solving for all inverse columns.
+
+Boundary matching now calls the backend's direct linear solve. Efficiency
+requests one right-hand side. Amplitude and field concatenate the original
+given, s and p sources and solve all three together. They share one
+factorization, and the returned columns keep the original order, phase and
+admittance normalization. This includes the original given-incidence source
+for a noncentral or superposed illumination. The coefficient matrix,
+boundary conditions, field-state construction and numerical guards are
+unchanged; no pseudoinverse, diagonal regularization or new threshold is
+introduced. Automatic differentiation follows the backend's solve.
+
+The dense boundary matrix and factorization workspace are still required.
+This removes the full inverse and its unused columns; it does not turn
+the whole solve into a sparse or linear-complexity calculation. Eigensolves
+and layer inverses are unaffected. The same physics at larger retained
+orders is therefore still a substantial calculation.
+
+Validation passes 1,796 distinct targeted cases, with 38 existing conditional
+skips. Four new independent Fresnel controls check every complex amplitude
+for the given, s and p illumination on an empty rectangular order grid,
+including different magnetic half-spaces and both amplitude/field
+declarations. The selection also covers non-finite and grazing guards,
+NumPy/JAX/PyTorch, gradients, efficiency/amplitude/field agreement, ETM/SMM,
+full tensors, loss, backside illumination, complex polarization, superposed
+and shifted-order illumination, rotated/skewed cells, RETICOLO and S4 field
+references, and affine convergence diagnostics. It is not a full repository
+test run, and it does not establish continuum optical convergence.
+
+An order-8 comparison isolates boundary matching against `5312319`:
+the baseline copy uses the same current 2D mode/rotation code and the
+parent's inverse-based boundary function. As in section 10, the fixed
+affine convolution inputs precede measurement, and the stack is either
+one 300 nm layer or three identical 100 nm layers. Both implementations
+are warmed once, then four paired calls alternate execution order.
+
+| layers | median inverse-based time | median direct-solve time | amplitude peak traced allocation, before/after | field peak traced allocation, before/after |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | .56859 s | .47984 s | 111.00 / 81.57 MB | 132.38 / 102.95 MB |
+| 3 | 1.71007 s | 1.44467 s | 111.00 / 81.57 MB | 175.16 / 145.74 MB |
+
+In these observations the median time falls by about 15.6% for one layer
+and 15.5% for three. The amplitude allocation peak falls by about 26.5%;
+field peaks fall by about 22.2% and 16.8%. Live returned field allocations
+remain 21.61 and 64.39 MB, respectively. The largest per-order p/s R/T
+change against the baseline warm-up is `1.61e-15`; the largest lossless
+balance error is `9.91e-14`. Traces are separate from timing and exclude
+prebuilt inputs and native LAPACK workspace. These are core allocation
+measurements, not process RSS; shared-host timings do not establish a
+universal speedup. Raw observations and reproduction details are appended
+to `studies/results/nvf_rcwa_memory.log`.
+
+A separate fresh-process public solve at order 20, including projection
+closure, takes 55.62 s and reaches 2.548 GB process RSS. Its per-order p/s
+R/T difference from the saved lifetime-only result is at most `5.54e-12`,
+with lossless balance error `5.53e-13`. This comparison spans both diagonal
+scaling and the direct boundary solve, so it is not an isolated timing
+comparison with `5312319` or a general speedup claim. It extends continuity
+to a larger retained space before the next affine directional runs.

@@ -120,8 +120,8 @@ def test_the_rungs_agree_on_what_they_share(algo):
     Exact where the rungs run the same call, and to a tolerance where they do not, which is
     not a softening of the claim but the shape of it.
 
-    `scattering.py` builds the cascade's incidence columns as one, or three once the pure-TE
-    and pure-TM variants are wanted, and `answers` is what decides which. So `'efficiency'`
+    The SMM cascade and shared ETM boundary matching build incidence columns as one,
+    or three once the pure-TE and pure-TM variants are wanted, and `answers` decides which. So `'efficiency'`
     asks a one-column question and `'amplitude'` asks a three-column one, of the same matrix.
     Whether a solve with one right-hand side and a solve with three land on the same last bit
     in the column they share is a property of the BLAS -- of gemv against gemm, and of how

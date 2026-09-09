@@ -230,6 +230,39 @@ def test_2d_modes_satisfy_both_dense_maxwell_factors(backend, magnetic):
         assert np.linalg.norm(residual) / scale < 2e-13
 
 
+@pytest.mark.parametrize('answers', ['amplitude', 'field'])
+@pytest.mark.parametrize('mu_top,mu_bot', [(1., 1.), (1.2, .8)])
+def test_empty_stack_incidence_columns_match_complex_fresnel_amplitudes(answers, mu_top, mu_bot):
+    """One batched boundary solve must keep the given/s/p sources and their phases.
+
+    Independent Fresnel admittances cover both polarizations, including the
+    magnetic half-spaces' electric/magnetic amplitude conversion. A rectangular
+    order grid also requires every unilluminated order to remain zero.
+    """
+    theta, phi = .31, .47
+    n = np.array([1., 1.5])
+    mu = np.array([mu_top, mu_bot])
+    eps = n**2/mu
+    kz = np.sqrt(n**2-n[0]**2*np.sin(theta)**2)
+    ys, yp = kz/mu, kz/eps
+    rs = (ys[0]-ys[1])/ys.sum()
+    rp = (yp[0]-yp[1])/yp.sum()
+    ts, tp = 1+rs, (n[0]/mu[0])/(n[1]/mu[1])*(1+rp)
+    pair = (1/np.sqrt(3), 1j*np.sqrt(2/3))
+    kx = np.sin(theta)*np.cos(phi)+2*np.arange(-1, 2)
+    ky = np.sin(theta)*np.sin(phi)+2*np.arange(-2, 3)
+    empty = np.empty((0, 15, 15), complex)
+    result = solve_2d(900., kx, ky, *n, theta, pair, [], empty, empty, empty,
+                      phi=phi, answers=answers, mu_top=mu_top, mu_bot=mu_bot,
+                      eps_top=eps[0], eps_bot=eps[1])
+    for name, (a_s, a_p) in (('given', pair), ('s_inc', (1., 0.)), ('p_inc', (0., 1.))):
+        for key, coefficient in zip(('r_s', 'r_p', 't_s', 't_p'),
+                                    (a_s*rs, a_p*rp, a_s*ts, a_p*tp)):
+            expected = np.zeros((5, 3), complex)
+            expected[2, 1] = coefficient
+            np.testing.assert_allclose(result[name][key], expected, rtol=0, atol=2e-14)
+
+
 def test_python_scalar_incidence_keeps_double_precision_on_torch():
     """A Python-complex theta/psi must not inherit torch's default float32 dtype.
 
