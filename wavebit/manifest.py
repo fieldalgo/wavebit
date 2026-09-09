@@ -101,7 +101,10 @@ from ._core.spec import SPEC_VERSION
 #: already read acquires a second meaning. What WOULD earn a bump is the other placement:
 #: folding ``paths`` / ``lattice`` / ``backends`` under ``solvers.rcwa``, which moves keys a
 #: consumer already indexes.
-MANIFEST_VERSION = '9'
+#: Version 10 scopes FDTD capability flags to available routes, and names the
+#: default/explicit-backend selectors. Consumers must select a differentiable
+#: route before applying AD; backend omission still selects legacy NumPy.
+MANIFEST_VERSION = '10'
 
 
 # --------------------------------------------------------------- how a structure is spelled
@@ -490,20 +493,46 @@ SOLVERS = {
     'fdtd': {
         'entry_point': 'wavebit.fdtd',
         'domain': 'time',
-        'returns': 'a Result directly -- not a solver object, because there is no per-instance '
-                   'state to reuse: no eigen-decomposition to cache, no frozen geometry, no '
-                   'gradient to take',
-        #: NumPy only, and a decision rather than a gap: the time loop is a Python ``for`` over
-        #: ~10^4 steps, which ``jax.jit`` unrolls and autograd tapes. Crossing either needs a
-        #: ``scan`` primitive ``_core/backend.py`` does not have.
-        'backends': ('numpy',),
-        'differentiable': False,
+        'returns': 'a Result directly, or a list for a wavelength vector; optional diagnostics '
+                   'return a (result, diagnostics) pair',
+        #: These flags describe available routes. The selector below is part
+        #: of the contract: omission does not select the common NumPy engine.
+        'backends': tuple(m.name.lower() for m in Backend),
+        'differentiable': True,
+        'default_route': 'legacy_numpy',
+        'routes': {
+            'legacy_numpy': {
+                'selector': 'backend omitted or None',
+                'backends': ('numpy',),
+                'differentiable': False,
+                'incidence_sides': ('top',),
+                'source': 'docs/fdtd.md',
+            },
+            'common': {
+                'selector': 'explicit backend=0/1/2 or numpy/jax/torch',
+                'backends': tuple(m.name.lower() for m in Backend),
+                'differentiable_backends': ('jax', 'torch'),
+                'differentiable': True,
+                'incidence_sides': ('top', 'bottom'),
+                'required': ('resolution',),
+                'differentiable_parameters': ('theta', 'phi', 'raster epsilon', 'raster mu',
+                                              'electric pole coefficients', 'half-space epsilon',
+                                              'half-space mu'),
+                'static_parameters': ('geometry', 'wavelength', 'mesh_indices', 'truncation_order'),
+                'array_angles_require': ('truncation_order',),
+                'array_phi_requires': 'Jones or psi polarization; full y-period sampling including zero',
+                'array_half_spaces_require': ('mesh_indices', 'truncation_order'),
+                'results_incidences': ('given', 's_inc', 'p_inc'),
+                'verified_devices': ('cpu',),
+                'source': 'docs/guide/time-domain.md',
+            },
+        },
         'sections': ('material_quantity', 'results'),
-        'structure': 'a NumPy array of relative permittivity, shape (n_layers, Ny, Nx); '
+        'structure': 'an array of relative permittivity, shape (n_layers, Ny, Nx); '
                      'Ny = 1 is a grating invariant along y and anything larger is a crossed '
                      'one. The parametric spelling `paths` publishes is refused here',
         'answers': ('pure te/tm at any theta in the classical mount (phi = 0)',
-                    'a conical mount through psi, at any theta and any phi',
+                    'a conical mount through psi/chi or a complex Jones pair',
                     'a crossed grating, the raster periodic along both axes',
                     'drude/lorentz dispersion and permeability, on all of those',
                     'a band of wavelengths covered by one run'),
@@ -512,13 +541,12 @@ SOLVERS = {
         #: for. Each is refused rather than approximated because each returns a *plausible*
         #: number if it is quietly ignored, and a plausible wrong number from the cross-check
         #: solver is worse than no cross-check at all.
-        'refused': ('chi', 'polarization', 'a complex theta', "incidence_side='bottom'",
-                    'a complex permittivity', 'Re(eps) <= 0', 'a parametric structure',
+        'refused': ('a complex theta', 'a complex permittivity', 'Re(eps) <= 0', 'a parametric structure',
                     'lattice'),
-        #: Which of ``results`` this door fills. ``given`` only: there are no pure-s / pure-p
-        #: variants to average, and ``answers`` is not a keyword here.
+        #: ``given`` is guaranteed on both routes. The common route additionally
+        #: guarantees both pure-incidence columns for every solve.
         'results_incidences': ('given',),
-        'source': 'docs/fdtd.md',
+        'source': 'docs/fdtd-alpha.md',
     },
 }
 

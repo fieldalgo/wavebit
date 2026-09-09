@@ -24,6 +24,22 @@ deleted a year ago.
 `wavebit.manifest` publishes them instead, as one JSON document generated from the code
 and checked against it by the suite.
 
+Version 10 describes FDTD's available execution routes separately from its
+default. `solvers.fdtd.backends` lists NumPy/JAX/Torch and `differentiable`
+reports that a differentiable route exists. Consult `routes`: omitting
+`backend` selects `legacy_numpy`, which has no autodiff and supports only top
+incidence. An explicit backend selects `common`; JAX/Torch differentiate
+fixed-mesh angle, raster, pole and half-space parameters. Array angles and
+half spaces have separately named static-input requirements. The native-grid
+API is not described by this scene entry.
+
+The common route lists guaranteed pure-incidence result columns and CPU
+validation; it makes no GPU-validation claim. Universal `refused` entries
+apply to both scene routes. Jones/chi polarization is supported and bottom
+incidence is supported by the common route, so neither is a universal refusal.
+Runtime tests execute each published common backend, bottom Jones scenes and
+half-space gradients, and check omissions against the declared requirements.
+
 ```bash
 python -m wavebit.manifest > wavebit-manifest.json
 ```

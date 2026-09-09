@@ -22,8 +22,11 @@ through the calculation, so the same model can predict and optimize a device res
 
 The RCWA implementation runs on NumPy, JAX and PyTorch; cross-backend agreement is tested.
 
-**FDTD is an experimental, NumPy-only research-alpha path.** It supports periodic raster
-scenes and shares the RCWA scene and result interfaces. It has no autodiff or GPU backend.
+**FDTD is an experimental research-alpha path.** It supports periodic raster
+scenes and shares the RCWA scene and result interfaces. An explicit `backend`
+selects the common NumPy/JAX/PyTorch engine; JAX and PyTorch support angle and
+material derivatives on a fixed mesh. Omitting `backend` selects the legacy
+NumPy path. CPU execution is tested; GPU validation remains outstanding.
 See the [FDTD scope and validation report](docs/fdtd-alpha.md) before relying on a new
 geometry, angle or material combination.
 

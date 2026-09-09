@@ -749,15 +749,16 @@ def test_both_published_entry_points_exist_and_are_what_they_claim():
         module, _, name = entry['entry_point'].rpartition('.')
         assert module == 'wavebit', entry['entry_point']
         assert callable(getattr(wavebit, name)), entry['entry_point']
-    assert SOLVERS['fdtd']['differentiable'] is False
-    assert SOLVERS['fdtd']['backends'] == ('numpy',)
+    assert SOLVERS['fdtd']['differentiable'] is True
+    assert SOLVERS['fdtd']['backends'] == ('numpy', 'jax', 'torch')
 
 
 def test_the_sections_a_door_claims_are_keys_of_this_document():
     """`sections` is what scopes `backends` to the door it is true of.
 
     Without it a consumer reads `backends.differentiable` as a promise about every solve here,
-    which is false of the time-domain one -- so the names have to resolve.
+    whose default time-domain route does not differentiate -- so names resolve
+    independently of each route's additional restrictions.
     """
     from wavebit.manifest import SOLVERS
     keys = set(manifest())
@@ -770,10 +771,7 @@ def test_the_sections_a_door_claims_are_keys_of_this_document():
 #: than a list so the two sets can be compared: a refusal published and not exercised, or
 #: exercised and not published, is what fails here.
 FDTD_REFUSALS = {
-    'chi': dict(chi=10.0),
-    'polarization': dict(polarization='rcp'),
     'a complex theta': dict(theta=0.3 + 0.1j),
-    "incidence_side='bottom'": dict(incidence_side='bottom'),
     'a complex permittivity': dict(structure=np.array([[[1.0 + 0.3j, 1.0]]])),
     'Re(eps) <= 0': dict(structure=np.array([[[-2.0, 1.0]]])),
     'a parametric structure': dict(structure=[{'background': 1.0, 'shapes': []}]),
@@ -792,14 +790,80 @@ def test_every_published_refusal_is_one_the_door_performs():
         f'exercised and not published: {sorted(set(FDTD_REFUSALS) - published)}')
 
 
+@pytest.mark.parametrize('backend', [None, 0])
 @pytest.mark.parametrize('name', sorted(FDTD_REFUSALS), ids=sorted(FDTD_REFUSALS))
-def test_a_refusal_the_manifest_publishes_is_refused(name):
+def test_a_refusal_the_manifest_publishes_is_refused(name, backend):
     """Each raises before any time stepping, so the whole battery costs milliseconds."""
-    with pytest.raises(ValueError, match='fdtd:'):
-        wavebit.fdtd(**dict(FDTD_KW, **FDTD_REFUSALS[name]))
+    with pytest.raises((ValueError, TypeError)):
+        wavebit.fdtd(**dict(FDTD_KW, backend=backend, **FDTD_REFUSALS[name]))
 
 
-def test_the_time_domain_door_takes_no_backend_keyword():
-    """`backends: ('numpy',)` is the published claim; this is the runtime half of it."""
-    with pytest.raises(TypeError, match='backend'):
-        wavebit.fdtd(backend=1, **FDTD_KW)
+FDTD_COMMON_KW = dict(structure=np.full((1, 1, 1), 2.), thickness=[.2], top=1., bot=1.,
+                      period=.2, wavelength=1., resolution=10, n_pml=4, n_periods=25,
+                      truncation_order=0)
+
+
+def test_fdtd_manifest_scopes_backend_omission_to_legacy_top_incidence():
+    from wavebit.manifest import SOLVERS
+    entry = SOLVERS['fdtd']
+    legacy = entry['routes'][entry['default_route']]
+    assert legacy['backends'] == ('numpy',)
+    assert legacy['differentiable'] is False
+    assert legacy['incidence_sides'] == ('top',)
+    with pytest.raises(ValueError, match='incidence_side|bottom'):
+        wavebit.fdtd(**dict(FDTD_COMMON_KW, tetm='te', incidence_side='bottom'))
+
+
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
+def test_published_common_fdtd_backends_accept_bottom_jones_and_all_columns(backend):
+    from wavebit.manifest import SOLVERS
+    from wavebit._core.result import Result
+    if backend != 'numpy':
+        pytest.importorskip(backend)
+    common = SOLVERS['fdtd']['routes']['common']
+    assert backend in common['backends']
+    assert 'bottom' in common['incidence_sides']
+    result = wavebit.fdtd(**dict(FDTD_COMMON_KW, backend=backend, incidence_side='bottom',
+                                 polarization=(1., .6j)))
+    assert isinstance(result, Result)
+    for column in common['results_incidences']:
+        values = getattr(result, column).T
+        if hasattr(values, 'detach'):
+            values = values.detach().numpy()
+        assert np.isfinite(values).all()
+
+
+@pytest.mark.parametrize('polarization', [dict(polarization=(1., .6j)), dict(psi=.6, chi=.2)])
+def test_legacy_fdtd_also_accepts_the_published_polarization_family(polarization):
+    # The legacy source has a longer envelope than the common engine's pulse.
+    result = wavebit.fdtd(**dict(FDTD_COMMON_KW, n_periods=60, **polarization))
+    assert np.isfinite(result.given.T).all()
+
+
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
+def test_published_common_fdtd_gradient_and_halfspace_requirements(backend):
+    from wavebit.manifest import SOLVERS
+    from test_fdtd_scene_angles import value_and_jacobian
+    pytest.importorskip(backend)
+    common = SOLVERS['fdtd']['routes']['common']
+    assert backend in common['differentiable_backends']
+    which = 1 if backend == 'jax' else 2
+    def objective(epsilon):
+        return wavebit.fdtd(**dict(FDTD_COMMON_KW, backend=which, top=epsilon,
+                                   mesh_indices=(1., 1.))).s_inc.T.reshape(1)
+    value, gradient = value_and_jacobian(objective, 1.2, which)
+    step = 1e-4
+    def numpy(epsilon):
+        return wavebit.fdtd(**dict(FDTD_COMMON_KW, backend=0, top=epsilon,
+                                   mesh_indices=(1., 1.))).s_inc.T.reshape(1)
+    finite = (numpy(1.2+step)-numpy(1.2-step))/(2*step)
+    np.testing.assert_allclose(value, numpy(1.2), atol=1e-10)
+    np.testing.assert_allclose(gradient, finite, rtol=3e-5, atol=1e-8)
+    assert abs(finite).item() > .001
+    from wavebit.backends.time_domain import time_loop_backend
+    epsilon = time_loop_backend(which).array(1.2)
+    for missing in common['array_half_spaces_require']:
+        options = dict(FDTD_COMMON_KW, backend=which, top=epsilon, mesh_indices=(1., 1.))
+        options[missing] = None
+        with pytest.raises(ValueError, match='explicit mesh_indices and explicit truncation_order'):
+            wavebit.fdtd(**options)
