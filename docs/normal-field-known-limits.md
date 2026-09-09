@@ -1213,6 +1213,17 @@ complete directional rectangles still identify y as the largest measured
 s-polarized optical limitation. These are comparisons, not an independent
 three-dimensional optical error bound or a release criterion.
 
+The affine continuation through y half width 32 exposes a reversal in the
+s transmission sequence. At x=20, the y=24-to-28 change is `+6.45e-6`,
+followed by `+2.92e-5` from y=28 to 32; the preceding y=20-to-24 change
+was negative. x=24 confirms the pattern, with changes of `+6.50e-6`
+and `+2.93e-5`. Thus the small change near y=28 does not establish a
+monotone tail or a stopping criterion. The auxiliary field remains fixed.
+The study's full-space closure now uses tiled assembly and an exact
+two-sided solve, reducing measured order-24 closure peak memory from
+3.43 GB to .96 GB. The memory result concerns that stage, not the full
+Maxwell solve or improved optical accuracy.
+
 The affine cell now factors its vanishing body correction by the gap,
 removing a source of contact-derivative roundoff. An
 [independent contact variation](nvf-affine-cells.md#contact-fourier-variation-without-subtracting-nearby-solutions)

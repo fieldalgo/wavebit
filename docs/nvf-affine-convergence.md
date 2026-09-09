@@ -121,6 +121,34 @@ the fitted reference by `-5.50011e-6` / `-1.06650e-5` for p/s transmission.
 
 ## Keep the exact directional Fourier set
 
+The two orders count spatial Fourier harmonics, not physical mesh cells or
+polarizations. `(Nx,Ny)` retains integer labels `-Nx <= m <= Nx` and
+`-Ny <= n <= Ny`, with physical reciprocal vector
+`2 pi A^(-T) (m,n)`. Thus these are the supplied lattice-coordinate
+directions, which need not be orthogonal in physical space. Increasing Nx
+while fixing Ny resolves additional x-coordinate variation; increasing Ny
+while fixing Nx resolves additional y-coordinate variation. Both orders
+participate in both polarization solves.
+
+This fixture has no x/y exchange symmetry. Its reference x material pieces
+have widths 206 and 144, whereas its transverse background gap has width
+17 in a period of 700. The exact material Fourier integral illustrates
+the narrow-gap scale: with `delta = 17/700`, its nonzero-y factor is
+`(1-delta) sinc(n (1-delta)) = (-1)^(n+1) sin(pi n delta)/(pi n)`.
+For `abs(n) delta` small, its magnitude stays near delta, so many y harmonics
+can remain relevant. This is a statement about the geometry's Fourier
+content, not a required optical order or an optical error estimate.
+
+At phi=0 the incident s electric field is along physical y, normal to the
+gap faces in this particular affine map. The dielectric jump constrains the
+normal displacement while allowing a jump in the normal electric field;
+the p field and the slanted material seams couple differently. This supplies
+a physical reason to expect different directional sensitivities, although
+the optical tables do not isolate every contribution from geometry,
+polarization and lattice coupling. In particular, an x refinement of the
+auxiliary-cell mesh and a y refinement of the outer optical order address
+different errors and can both be effective on the same structure.
+
 `AffineCellGapModel(order=(x,y))` now records that pair as
 `truncation_order`. The x/y directions are the original integer reciprocal
 labels, even though their physical vectors are not orthogonal. The cell
@@ -229,6 +257,65 @@ The comparison supports further outer-order refinement on this fixture;
 it does not remove the need to refine the candidate cell or establish
 an independent three-dimensional optical error bound.
 
+## The next y interval reverses the s change
+
+The continuation uses the same degree-8 fitted auxiliary field and the
+cap-64, quadrature-40 export. Its full-space energy closure now uses the
+[lower-memory two-sided solve](nvf-energy-closure.md#full-space-projected-fields).
+No retained modes, physical settings or optical acceptance criteria change.
+An order-24 rerun agrees with the earlier quadrature-32 optical record
+within `1.86e-12` in transmission; the separate matrix continuity check
+holds the quadrature-40 export fixed.
+
+| x half width | y half width | p T | s T |
+| ---: | ---: | ---: | ---: |
+| 24 | 24 | .852381909686 | .730977440342 |
+| 20 | 28 | .852393633568 | .730986733073 |
+| 24 | 28 | .852380193212 | .730983935373 |
+| 20 | 32 | .852394179680 | .731015929291 |
+| 24 | 32 | .852380698959 | .731013192091 |
+| 28 | 24 | .852376352297 | .730975406939 |
+
+At x=24, increasing y from 24 to 28 changes p transmission by `-1.72e-6`
+and s by `+6.50e-6`. The s change reverses the preceding 20-to-24 decrease
+of `-5.67e-5`. x=20 gives the same reversal (`+6.45e-6`), comparing the
+earlier quadrature-32 row with the current quadrature-40 row. The export
+quadrature comparison and the order-24 optical rerun separate that small
+numerical change from the observed directional increments. These finite
+windows do not support a monotone optical tail or an automatic stopping
+rule based only on the latest small increment.
+
+At x=20, the following y=28-to-32 change in s is `+2.92e-5`, larger
+again than the preceding `+6.45e-6`. Thus the apparent flattening near
+y=28 does not persist over the next measured window. Both current rows
+use quadrature 40 and the same fixed auxiliary field.
+
+x=24 confirms the same pattern: the y=28-to-32 s change is `+2.93e-5`.
+Over that interval, the p changes at x=20 and x=24 are positive too,
+`+5.46e-7` and `+5.06e-7`, but smaller than the x=20-to-24 p change
+of about `-1.35e-5`. The complete rectangle therefore resolves both
+directions and their coupling without assuming either one is converged.
+
+For x=20-to-24 and y=28-to-32, the rectangle gives the following signed
+increments from its lower corner:
+
+| polarization | x only | y only | mixed | diagonal |
+| --- | ---: | ---: | ---: | ---: |
+| p | -1.34404e-5 | +5.46112e-7 | -4.03649e-8 | -1.29346e-5 |
+| s | -2.79770e-6 | +2.91962e-5 | +6.04997e-8 | +2.64590e-5 |
+
+The small mixed terms do not remove the separate directional changes.
+Neither polarization has a demonstrated continuum optical error bound.
+The degree-10 FEM/candidate optical comparison above remains at `(24,24)`;
+it has not been repeated at y=32 and is not an error bound for these rows.
+
+The separate x=24-to-28 edge at y=24 changes p by `-5.56e-6` and s
+by `-2.03e-6`. The p change is smaller than the preceding x=20-to-24
+edge at that y, but it supplies neither a bound on the remaining x tail
+nor the missing rectangle corners at x=28. Across all six new optical
+rows, the largest lossless energy error is `1.39e-11`, below the unchanged
+algebraic guard. No optical convergence criterion has been selected.
+
 ## Reproduction and guards
 
 The reference runs used separately installed `ngsolve==6.2.2606` and
@@ -282,6 +369,18 @@ PYTHONPATH=$PWD python studies/nvf_affine_convergence.py --orders 16 20:16 16:20
 For the separate reference-refinement check, export cap 48 with degree 10
 and quadrature 40, keeping the same geometry and mesh settings. Compare
 that export and the candidate at `--orders 24 --cells 2:4:4:6`.
+
+For the next directional intervals, use cap 64, degree 8 and quadrature 40
+on the same mesh, then run:
+
+```bash
+PYTHONPATH=$PWD python studies/nvf_affine_convergence.py --orders 24 20:28 24:28 20:32 24:32 28:24 --projections "$NVF_AFFINE_REF" --cells --directional-changes
+```
+
+This sequence includes an order-24 continuity rerun, a complete rectangle
+on x=20/24 and y=28/32, and a separate x=24-to-28 edge at y=24. It does
+not contain the additional corners needed for a rectangle reaching x=28;
+the reporting tool does not invent them or merge different quadratures.
 
 The measurements and validation details are retained in
 [the study log](https://github.com/fieldalgo/wavebit/blob/develop/studies/results/nvf_affine_convergence.log).

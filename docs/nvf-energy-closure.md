@@ -175,6 +175,10 @@ require mirror symmetry or a positive-definiteness assumption in the solve.
 
 The complete order-24 optical rerun changes p/s transmission by only
 `+1.15e-12` / `+1.86e-12` relative to the preceding explicit-inverse record.
+That older optical record used quadrature 32 and the rerun uses 40; their
+coefficient difference is below `4.89e-15`. Thus this is an end-to-end
+continuity observation that includes the quadrature change. The separate
+matrix-column comparison above holds the quadrature-40 export fixed.
 Validation passes 214 distinct checks across projected-cell algebra,
 directional and affine exports, contact controls, mirror/doubling,
 the optional fitted FEM instrument and documentation contracts. The strict
