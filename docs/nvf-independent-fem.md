@@ -332,7 +332,8 @@ defaulting to 6 to preserve the earlier numerical settings. This is a
 study parameter separate from the FEM degree: it sets the source bonus
 to that value, the Fourier trace bonus to `2*cut+quadrature_bonus`, and
 the volume-flux and Robin-norm integration order to
-`2*FEM_degree+quadrature_bonus`. Both the result and its settings record
+`2*max_order+quadrature_bonus`, where `max_order` includes any local
+degree enrichment. Both the result and its settings record
 the selected value. Invalid values are rejected before meshing.
 The polynomial bulk and local Robin forms retain their default quadrature.
 
@@ -591,6 +592,58 @@ They ran sequentially using the original full-row boundary arrays.
 These shared-host observations compare different finite approximations,
 not cost at equal optical accuracy.
 
+## Raising the film degree on a fixed mesh
+
+The optional `film_degree` and `film_degree_pad` arguments change the
+H(curl) space while preserving the physical geometry and tetrahedral
+mesh. The base `order` still applies outside the selected region.
+An edge, face or cell receives the higher degree if its vertex-average
+z lies in the closed band `[-film_degree_pad, .3+film_degree_pad]`,
+with a floating-point tolerance at the endpoints. The pad is a physical
+length in micrometers, independent of the outgoing-boundary `pad`.
+
+The helper sets entity degrees in NGSolve's variable-order space before
+applying lateral periodic identifications and compression. Lateral
+translations preserve z, so paired edges and faces receive consistent
+degrees. `film_degree=None` and an explicit degree equal to `order`
+use the original global-order construction. A larger degree must be
+an integer, and the band padding must be finite and nonnegative; a
+positive band padding requires an explicit film degree.
+
+The result's `space_refinement` records the base and maximum degrees,
+requested band, directly selected entity counts, and full/condensed
+unknown counts. A neighboring element can inherit a higher maximum
+degree from a shared edge or face even if its own cell was not
+selected. Thus the cell-selection count is not the number of all
+elements having a high-order finite-element basis. Both the volume
+flux and Robin-norm readouts use `2*max_order+quadrature_bonus`.
+
+On the target-.12, h=.18, pad=.2 mesh, base degree 5 with film degree
+6 and band padding .05 selects 765 edges, 1,129 faces and 587 cells.
+The space has 104,326 full unknowns and 56,288 after condensation,
+compared with 71,796/43,716 for global degree 5 and 116,690/62,090
+for global degree 6 on that same mesh. The outer boundary still has
+1,584 unknowns, so the retained boundary arrays remain 15.66 MiB
+at Rayleigh cut 4. These sizes are resource observations, not evidence
+that either approximation has resolved the optical error.
+
+Seven space controls verify the unchanged default and equal-degree
+spaces, equality with the higher global space when the band covers
+the entire domain, actual entity dimensions, periodic identified DOFs,
+finite-element degree metadata and invalid-input refusals. On a
+transition tetrahedron and face, the default polynomial-form quadrature
+agrees with bonus 6 to relative `5.77e-14` and `3.33e-14`.
+
+An independent review on `J=[[.9,-.25],[.3,1.1]]` checks the degree-3
+to degree-4 band, including boundary trace support and periodic DOFs.
+Two physical integration controls check patterned full/condensed and
+higher-quadrature agreement, and an independently evaluated Airy slab.
+The slab retains the earlier `5e-4` absolute R/T criterion; the
+patterned algebra/quadrature comparisons use `2e-10` and do not serve
+as continuum-accuracy tolerances. All 40 affine geometry, algebra,
+scattering, Robin, boundary-storage and local-degree tests pass in
+42.154 s; this qualifies the finite instrument, not optical convergence.
+
 ## Comparing the physical diffraction orders with Wavebit
 
 Both solvers use `k_parallel=k_incident+G`. At the saved Wavebit optical
@@ -814,5 +867,10 @@ its reported control above uses `cut=1`. The physical-edge trial uses
 `quadrature_bonus=14` requests the higher integration setting independently
 of mesh and FEM degree. The default command-line entry
 point continues to select the historical square fixture.
+The boundary-storage and fixed-mesh degree controls are available as
+`tests.test_nvf_fem_boundary_storage`, `tests.test_nvf_fem_space` and
+`tests.test_nvf_fem_affine_degree`. To raise the film neighborhood on
+the target-.12 mesh, use `solve_affine_rayleigh(h=.18, order=5, cut=4,
+pad=.2, edge_h=.12, film_degree=6, film_degree_pad=.05)`.
 Selected results, with prototype-versus-packaged flux provenance, are retained in
 [`studies/results/nvf_fem_reference.log`](../studies/results/nvf_fem_reference.log).

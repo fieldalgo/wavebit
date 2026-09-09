@@ -691,7 +691,8 @@ def robin_complement_power(mesh, scattered_field, ports, *, area, theta,
 
 def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
                           *, transform=None, theta=THETA, phi=0., condense=True,
-                          quadrature_bonus=6, edge_h=None, progress=None):
+                          quadrature_bonus=6, edge_h=None, film_degree=None,
+                          film_degree_pad=0., progress=None):
     """Independent affine H(curl) FEM with shared p/s Rayleigh boundary solves.
 
     The physical profile is fixed to the .7-micrometer reference cell, width
@@ -700,6 +701,9 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
     ``uniform`` replaces the patterned film by a positive scalar permittivity.
     ``edge_h`` requests a physical edge mesh-size target on the 20 dielectric edges
     of the patterned film, as in ``make_affine_profile_mesh``.
+    ``film_degree`` optionally raises the degree of edges, faces and cells
+    whose vertex-average z lies in [-film_degree_pad, .3+film_degree_pad].
+    This changes the space on the same mesh, using physical micrometer units.
 
     One mesh, sparse factorization, Fourier trace response and two-column
     Woodbury solve serve both polarizations. At finite cut, omitted evanescent
@@ -714,9 +718,12 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
 
     ``quadrature_bonus`` is a nonnegative integer for numerical integration
     studies, not mesh or FEM polynomial refinement. It sets the source bonus,
-    the trace bonus to 2*cut+bonus, and flux/norm readout order to 2*order+bonus.
+    the trace bonus to 2*cut+bonus, and flux/norm readout order to
+    2*max_order+bonus, including any local film degree enrichment.
     The polynomial bulk and local Robin forms retain their default quadrature.
     """
+    from studies.nvf_fem_space import make_affine_hcurl_space
+
     start = time.monotonic()
     if (isinstance(order, (bool, np.bool_)) or not isinstance(order, (int, np.integer))
             or order < 1):
@@ -750,7 +757,12 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
     polarizations = ('p', 's')
     k0 = 2*np.pi/WAVELENGTH
     lateral = ng.CF((k0*np.sin(theta)*np.cos(phi), k0*np.sin(theta)*np.sin(phi), 0.))
-    space = ng.Compress(ng.Periodic(ng.HCurl(mesh, order=order, complex=True)))
+    space, space_refinement = make_affine_hcurl_space(
+        mesh, order, film_degree=film_degree, film_degree_pad=film_degree_pad,
+        thickness=THICKNESS)
+    max_order = space_refinement['max_order']
+    film_degree = space_refinement['film_degree']
+    film_degree_pad = space_refinement['film_degree_pad']
     boundary = np.flatnonzero(list(space.GetDofs(mesh.Boundaries('outer_top|outer_bottom'))))
     u, v = space.TnT()
     curl_u = ng.curl(u)+1j*ng.Cross(lateral, u)
@@ -772,6 +784,7 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
     count, rank = len(modes), 4*len(modes)
     settings = dict(h=h, order=order, cut=int(cut), uniform=uniform, pad=pad,
                     condense=condense, quadrature_bonus=quadrature_bonus, edge_h=edge_h,
+                    film_degree=film_degree, film_degree_pad=film_degree_pad,
                     period=PERIOD, width=.350, gap=.017,
                     seam=.031, thickness=THICKNESS)
     metadata = dict(fixture='affine_partitioned_gap', boundary='rayleigh',
@@ -781,6 +794,7 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
                     period=PERIOD, width=.350, gap=.017, seam=.031, values=[4., 9.],
                     h=h, order=order, cut=int(cut), uniform=uniform, pad=pad,
                     quadrature_bonus=quadrature_bonus, edge_h=edge_h,
+                    max_order=max_order, space_refinement=space_refinement,
                     elements=mesh.ne, dofs=space.ndof,
                     coupling_dofs=sum(space.FreeDofs(coupling=True)), rank=rank,
                     boundary_dofs=len(boundary),
@@ -872,7 +886,7 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
         flux = e[0]*ng.Conj(magnetic[1])-e[1]*ng.Conj(magnetic[0])
         divisor = area*pad*np.cos(theta)
         top, bottom = [ng.Integrate(flux, mesh, definedon=mesh.Materials(name),
-                                    order=2*order+quadrature_bonus).real/divisor
+                                    order=2*max_order+quadrature_bonus).real/divisor
                        for name in ('superstrate', 'substrate')]
         amplitudes = ports.reshape(2, 2, count).transpose(0, 2, 1).copy()
         amplitudes[0, zero_mode] += np.sqrt(area)*reflected*np.exp(1j*g0*(THICKNESS+pad))
@@ -892,7 +906,7 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
                       order_R=powers[0].tolist(), order_T=powers[1].tolist())
         complement = robin_complement_power(
             mesh, field, ports.reshape(2, 2, count).transpose(0, 2, 1),
-            area=area, theta=theta, quadrature_order=2*order+quadrature_bonus)
+            area=area, theta=theta, quadrature_order=2*max_order+quadrature_bonus)
         record['robin_complement_power'] = complement
         # The remaining budget can contain FEM, quadrature, source and linear
         # solve error; it is not a pure Galerkin defect or an optical error bound.
