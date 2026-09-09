@@ -306,8 +306,9 @@ increments from its lower corner:
 
 The small mixed terms do not remove the separate directional changes.
 Neither polarization has a demonstrated continuum optical error bound.
-The degree-10 FEM/candidate optical comparison above remains at `(24,24)`;
-it has not been repeated at y=32 and is not an error bound for these rows.
+The candidate comparison above remains at `(24,24)`. The later
+[reference-degree check](#reference-degree-refinement-at-y32) extends the
+degree-8/10 comparison to y=32, without making it an error bound for these rows.
 
 The separate x=24-to-28 edge at y=24 changes p by `-5.56e-6` and s
 by `-2.03e-6`. The p change is smaller than the preceding x=20-to-24
@@ -368,8 +369,9 @@ RSS of 6.395 GB and 6.477 GB, respectively (macOS bytes, including imports,
 projection closure and native workspaces). These shared-host observations
 are not an isolated speed comparison. The greatest new-row lossless balance
 error is `7.20e-12`, below the unchanged algebraic guard. The fitted
-reference remains degree 8; the degree-10/candidate comparison remains at
-`(24,24)`. Neither the static field enclosure nor these finite optical
+reference remains degree 8. The later reference-degree check reaches
+`(24,32)`, while the candidate comparison remains at `(24,24)`.
+Neither the static field enclosure nor these finite optical
 windows supplies an independent three-dimensional optical error bound.
 
 ## Refining the candidate at fixed optical orders
@@ -459,11 +461,63 @@ lossless balance error `8.20e-12`, below the unchanged algebraic guard.
 These are shared-host observations, not controlled performance timings.
 This continuation checks the next y increment of the fixed degree-8 field.
 It does not check degree-10 reference refinement or candidate-field error
-at the higher order; those comparisons remain at `(24,24)`. The independent
+at y=36; the later reference-degree check reaches y=32 and the candidate
+comparison remains at `(24,24)`. The independent
 3D reference also remains incomplete. Its
 [Rayleigh-data helper](nvf-independent-fem.md#rayleigh-data-for-a-physical-primitive-lattice)
-now handles the physical affine reciprocal lattice, but the full FEM
-geometry, sources and trace normalization still need to be generalized.
+handles the physical affine reciprocal lattice, and its separate
+[geometry helper](nvf-independent-fem.md#physical-affine-geometry-and-periodic-pairs)
+passes material-volume and periodic-pair controls. Sources, boundary
+traces and power normalization still need integration with that mesh.
+
+## Reference degree refinement at y=32
+
+The degree-10 fitted field is now exported through coefficient cap 64,
+retaining h=.04, vertex refinement 40 and the same 1,622-element mesh.
+The 81,101-unknown solution and its relative static enclosure `1.42771e-7`
+are unchanged from the cap-48 export. At quadrature 40, the complete
+shared cap-48 coefficient region is exactly identical, and the metadata
+differ only in cap. This is an export extension, not another field solve
+resolution change.
+
+Increasing export quadrature from 40 to 48 changes any coefficient by
+at most `5.27e-15`. The quadrature-40 analytic material-coefficient error
+is below `1.91e-15`. Comparing degree 8 with degree 10 through cap 64
+gives a maximum coefficient difference of `1.30e-7`. Independent checks
+using explicit interval exponential integrals confirm the material
+coefficients, real-field conjugacy and identity mean. The separate
+reference-degree comparison retains both original metadata records.
+
+Both degrees are solved at `(24,32)` with the same current production
+runtime and cap-64, quadrature-40 exports. Each field's own retained
+space is closed before its Maxwell solve:
+
+| fitted FEM degree | p T | s T | lossless balance error |
+| ---: | ---: | ---: | ---: |
+| 8 | .852380698959 | .731013192091 | 1.39e-11 |
+| 10 | .852380710977 | .731013218636 | 6.91e-12 |
+
+Degree 8 to 10 changes p transmission by `+1.20173e-8` and s by
+`+2.65450e-8`. These are about 2.38% and 0.0907% of the previously
+measured degree-8 y=28-to-32 increments. The largest difference across
+all individual diffraction-order R/T powers is `5.37e-8`; the comparison
+therefore also checks redistribution among the outgoing orders. The
+fresh degree-8 totals agree with the historical row within `6.56e-15`,
+separating earlier runtime arithmetic changes from this field refinement.
+
+The observed reference-degree effect at the y=32 endpoint is much smaller
+than the earlier optical-order changes, particularly for s. This extends
+the reference-field check beyond `(24,24)`. It does not reproduce the
+whole y interval at degree 10 or provide a remaining-error bound: degree
+10 has not been run at y=28 or 36, and the candidate comparison remains
+at `(24,24)`. Both fitted fields still use Wavebit's Maxwell engine;
+the independent 3D affine optical comparison remains open.
+
+The degree-10 optical calculation takes 292.40 s with peak process RSS
+5.367 GB; the degree-8 control takes 283.72 s and 6.290 GB. RSS includes
+imports, closure and native workspaces. The two degree-10 scalar FEM
+exports take 74.05 s and 105.53 s for quadratures 40 and 48. These are
+shared-host observations and do not establish a performance comparison.
 
 ## Reproduction and guards
 
@@ -553,6 +607,16 @@ shared cap-64 coefficients against the previous export, then use
 `--orders 24:36 --cells --projections "$NVF_AFFINE_REF"` with cap 72.
 The older `(24,32)` row is reusable only with that explicit provenance
 check; this does not make the two projection metadata records identical.
+
+For the reference-degree comparison at `(24,32)`, export degree 10 with
+`--cap 64 --h .04 --quadrature 40 --refine 40` and the same transform.
+Repeat with quadrature 48 as a projection control, check the shared
+cap-48 coefficients against the earlier degree-10 export, and use
+`--orders 24:32 --cells --projections "$NVF_AFFINE_REF"` for optics.
+Run the degree-8 cap-64, quadrature-40 export at the same optical order
+with the same runtime before comparing the two degrees. Keep the full
+projection metadata distinct; this is a fixed-order comparison rather
+than a directional rectangle.
 
 The measurements and validation details are retained in
 [the study log](https://github.com/fieldalgo/wavebit/blob/develop/studies/results/nvf_affine_convergence.log).

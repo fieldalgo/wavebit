@@ -1231,15 +1231,25 @@ The smaller x increments and mixed terms do not bound the remaining tail.
 Both new optical rows use the same fitted field and the
 [direct boundary solve](what-a-solve-answers.md#11-solving-only-the-requested-boundary-columns);
 their largest lossless balance error is `7.20e-12`. Independent optical
-qualification and the degree-10/candidate comparison beyond (24,24) remain open.
+qualification and the candidate comparison beyond (24,24) remain open.
 
 At x=24, the [next y=32-to-36 edge](nvf-affine-convergence.md#extending-y-to-36)
 changes p by `+1.17108e-6` and s by `+2.94453e-5`; the s increment is
 slightly larger than in the preceding y window. The degree-8 field stays
 fixed, with its Fourier export extended to cap 72 and the shared cap-64
 coefficients unchanged. This still supplies no optical tail bound. The
-independent FEM instrument now has affine reciprocal-lattice boundary
-data, but its complete affine geometry/source/trace integration remains open.
+independent FEM instrument has affine reciprocal-lattice boundary data
+and a separately checked physical mesh with material and periodic-pair
+controls. Source, trace and power-normalization integration remains open.
+
+The [reference-degree refinement at (24,32)](nvf-affine-convergence.md#reference-degree-refinement-at-y32)
+raises the fitted field from degree 8 to 10 at fixed optical order. The
+p/s transmission changes are about `1.2e-8`/`2.7e-8`; the latter is about
+0.09% of the previously observed degree-8 y=28-to-32 increment. This
+extends the reference-field check to the y=32 endpoint, where its measured
+refinement effect is much smaller than that earlier optical-order change.
+It does not reproduce the entire y interval with degree 10, bound the
+remaining optical error, or qualify the candidate beyond `(24,24)`.
 
 The study's full-space closure now uses tiled assembly and an exact
 two-sided solve, reducing measured order-24 closure peak memory from
