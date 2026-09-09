@@ -34,8 +34,9 @@ def test_diagonal_metric_recovers_existing_complex_cell(degrees, gap, flux_basis
 
 @pytest.mark.parametrize('shear', [-.8, .45, 1.3])
 @pytest.mark.parametrize('epsilon', [4., 4.+.8j])
-def test_contact_is_exact_physical_lamination(shear, epsilon):
-    model = AffineCellGapModel(2, **SETTINGS)
+@pytest.mark.parametrize('order', [2, 5])
+def test_contact_is_exact_physical_lamination(shear, epsilon, order):
+    model = AffineCellGapModel(order, **SETTINGS)
     basis = np.array([[1., shear], [0., .7]])
     coefficients, _ = model.coefficients(0., epsilon, basis=basis)
     field, gram = tensors(coefficients)
@@ -53,6 +54,17 @@ def test_contact_is_exact_physical_lamination(shear, epsilon):
     np.testing.assert_allclose(field, expected_field, atol=2e-11, rtol=0)
     np.testing.assert_allclose(gram, expected_gram, atol=2e-11, rtol=0)
     np.testing.assert_allclose(coefficients[7], eps, atol=2e-14, rtol=0)
+
+
+@pytest.mark.parametrize('flux_basis', ['local', 'global'])
+def test_batched_positive_gap_recovers_separate_diagonal_metric_kernel(flux_basis):
+    settings = dict(SETTINGS, flux_basis=flux_basis)
+    profile = dict(seams=[-53., 31.], values=[4.+.8j, 9.+2.1j, 2.+.3j])
+    expected, _ = ComplexMaterialGapModel(5, **settings).coefficients(17., profile, aspect=1.4)
+    actual, metadata = AffineCellGapModel(5, **settings).coefficients(
+        17., profile, basis=np.diag([1., 1/1.4]))
+    assert metadata['cell_residual'] < 1e-8
+    np.testing.assert_allclose(actual, expected, atol=2e-10, rtol=0)
 
 
 @pytest.mark.parametrize('gap', [0., 23.])
@@ -169,7 +181,9 @@ def test_invalid_affine_basis_raises(basis):
 
 
 @pytest.mark.parametrize('gap', [0., 23.])
-def test_live_shear_material_and_opening_derivatives(gap):
+@pytest.mark.parametrize('batch_size', [2, 16])
+def test_live_shear_material_and_opening_derivatives(gap, batch_size, monkeypatch):
+    monkeypatch.setattr('wavebit._core.conforming.affine_cell._PROJECTION_BATCH_SIZE', batch_size)
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     jax.config.update('jax_enable_x64', True)

@@ -17,6 +17,10 @@ from .polynomial_body import ComplexMaterialGapModel, body_space
 from .thin_gap import CONTACT_ROUNDOFF
 
 
+# Bound the live Fourier-weighted x matrices independently of the outer order.
+_PROJECTION_BATCH_SIZE = 16
+
+
 def affine_lift_axes(metric, xp=np):
     """F0 = lift X + Y has identity mean and exact laminated normal flux."""
     c = metric[0, 1]/metric[0, 0]
@@ -120,14 +124,15 @@ class AffineCellGapModel(ComplexMaterialGapModel):
         self._gap_dh = sum(k*self.gap_beta[:, k][None]*r[:, None]**(k-1)
                            for k in range(1, self.gap_degree+1))
 
-    def _x_integrals(self, nodes, lengths, seams, values, xp):
+    def _x_integrals(self, nodes, lengths, seams, values, xp, *, modes=None):
+        modes = self.modes if modes is None else modes
         pivot = self.per_region//2 if self.flux_basis == 'local' else self.per_region+self.per_region//2
         body, background = flux_integrals(nodes, lengths, seams, values,
-                                         np.arange(len(nodes))//self.per_region == 1, self.modes,
+                                         np.arange(len(nodes))//self.per_region == 1, modes,
                                          pivot, xp, basis=self.flux_basis, sesquilinear=True, mixed=True)
         # epsilon * lift is constant, so its zero-mode weak x load is the
         # integral of a periodic derivative: exactly zero, also for loss.
-        body['force'] = xp.where(xp.asarray(self.modes)[:, None] == 0, 0., body['force'])
+        body['force'] = xp.where(xp.asarray(modes)[:, None] == 0, 0., body['force'])
         return body, background
 
     def _solve_metric_cell(self, g, body, background, metric, xp, *, contact_factor=False):
@@ -206,11 +211,13 @@ class AffineCellGapModel(ComplexMaterialGapModel):
         inverse = xp.linalg.inv(basis)
         metric = inverse@inverse.T
         g, edges, values, nodes, lengths, valid = self._profile_geometry(gap, epsilon, width, xp)
-        body, background = self._x_integrals(nodes, lengths, edges[1:-1], values, xp)
-        center = 2*self.order
+        # The static weak problem needs only the zero Fourier coefficient.
+        # Release its packs before projecting the solved field in x batches.
+        body, background = self._x_integrals(nodes, lengths, edges[1:-1], values, xp, modes=np.array([0]))
         v, a, b, residual = self._solve_metric_cell(
-            g, {k: v[center] for k, v in body.items()},
-            {k: v[center] for k, v in background.items()}, metric, xp, contact_factor=True)
+            g, {k: v[0] for k, v in body.items()},
+            {k: v[0] for k, v in background.items()}, metric, xp, contact_factor=True)
+        del body, background
         v, a, b = [xp.where(valid & valid_basis, value, xp.nan) for value in (v, a, b)]
         dt, t = xp.asarray(np.diff(self.yedges)), xp.asarray(self.yedges[:-1])-.5
         potential = xp.einsum('jk,ejic->ekic', xp.asarray(self._polynomials), v[self._indices])
@@ -220,19 +227,25 @@ class AffineCellGapModel(ComplexMaterialGapModel):
                   /((1-g)*dt[:, None, None, None]))
         moments = polynomial_moments((1-g)*t, (1-g)*dt, xp.zeros_like(t), xp.ones_like(t),
                                      self.modes, xp, degree=2*self.body_degree)
-        field, gram, eps = project_metric_polynomial(potential, normal, moments, body, background, metric, xp)
         bubble = xp.einsum('bk,bic->kic', xp.asarray(self.gap_beta), b)
-        potential = g*bubble+xp.stack([v[0]-g/2*a, g*a]+[xp.zeros_like(a)]*(self.gap_degree-1))
-        normal = (xp.arange(1, self.gap_degree+1)[:, None, None]*bubble[1:]
-                  +xp.stack([a]+[xp.zeros_like(a)]*(self.gap_degree-1)))
-        moments = polynomial_moments(xp.asarray([.5-g/2]), xp.asarray([g]), xp.asarray([0.]),
-                                     xp.asarray([1.]), self.modes, xp, degree=2*self.gap_degree)
-        gf, gg, ge = project_metric_polynomial(potential[None], normal[None], moments,
-                                               background, background, metric, xp)
-        field = inverse.T@(field+gf)@basis.T
-        gram = basis@(gram+gg)@basis.T
-        coefficients = xp.stack([field[..., 0, 0], field[..., 0, 1], field[..., 1, 0], field[..., 1, 1],
-                                 gram[..., 0, 0], gram[..., 0, 1], gram[..., 1, 1], eps+ge, gram[..., 1, 0]])
+        gap_potential = g*bubble+xp.stack([v[0]-g/2*a, g*a]+[xp.zeros_like(a)]*(self.gap_degree-1))
+        gap_normal = (xp.arange(1, self.gap_degree+1)[:, None, None]*bubble[1:]
+                      +xp.stack([a]+[xp.zeros_like(a)]*(self.gap_degree-1)))
+        gap_moments = polynomial_moments(xp.asarray([.5-g/2]), xp.asarray([g]), xp.asarray([0.]),
+                                       xp.asarray([1.]), self.modes, xp, degree=2*self.gap_degree)
+        chunks = []
+        for start in range(0, len(self.modes), _PROJECTION_BATCH_SIZE):
+            modes = self.modes[start:start+_PROJECTION_BATCH_SIZE]
+            body, background = self._x_integrals(nodes, lengths, edges[1:-1], values, xp, modes=modes)
+            field, gram, eps = project_metric_polynomial(potential, normal, moments, body, background, metric, xp)
+            gf, gg, ge = project_metric_polynomial(gap_potential[None], gap_normal[None], gap_moments,
+                                                 background, background, metric, xp)
+            field = inverse.T@(field+gf)@basis.T
+            gram = basis@(gram+gg)@basis.T
+            chunks.append(xp.stack([field[..., 0, 0], field[..., 0, 1], field[..., 1, 0], field[..., 1, 1],
+                                    gram[..., 0, 0], gram[..., 0, 1], gram[..., 1, 1], eps+ge, gram[..., 1, 0]]))
+            del body, background
+        coefficients = xp.concatenate(chunks, axis=2)
         return coefficients, dict(cell_residual=residual, degrees_of_freedom=self.nx*(self.rows+self.gap_degree)-1,
                                   body_degree=self.body_degree, gap_degree=self.gap_degree)
 

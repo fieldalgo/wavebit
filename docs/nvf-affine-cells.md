@@ -152,6 +152,61 @@ that unit-background problem. A caller using relative values for a
 different complex physical background must restore the background in G
 and the longitudinal coefficients before closure.
 
+## Bounded Fourier projection intermediates
+
+The affine kernel now assembles the static weak problem from the zero
+Fourier coefficient alone. After solving it, the kernel projects the body
+and gap fields in consecutive batches of at most 16 x Fourier labels.
+Every batch uses the same solved potentials and complete y coefficient
+range. Concatenation restores the original x ordering and all nine field,
+Gram and material components. The requested coefficient envelope, trial
+space, physical map and full-space matrix closure are unchanged.
+
+Previously, all Fourier-weighted x matrices remained live during the
+dense static solve. Their storage grew with the number of projected
+x labels times the square of the auxiliary x basis size. Batching bounds
+the live projection packs by 16 labels and separates them from the static
+solve. The output coefficients, dense static equations and subsequent
+Maxwell matrices still grow with their respective problem sizes. JAX
+derivatives retain whatever intermediates their compiled graph requires;
+the NumPy allocation measurements do not establish a JAX memory bound.
+
+On the fixed affine profile, x subdivisions 2, base rows 4, body degree 4
+and gap degree 6 give 3,887 auxiliary unknowns. Two coefficient ranges
+give these NumPy measurements during `coefficients`:
+
+| coefficient cap | supported outer half width | previous traced peak | batched traced peak | previous median time | batched median time |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 24 | 12 | 759.36 MB | 726.62 MB | 6.129 s | 6.242 s |
+| 64 | 32 | 813.93 MB | 726.62 MB | 16.912 s | 16.668 s |
+
+Traced peak allocation falls by 4.3% and 10.7%, respectively. The dense
+static solve still dominates the batched peaks. Models and imports are
+constructed before tracing, and native linear-algebra workspaces are
+outside its scope; these are not resident-memory figures or full optical
+solve benchmarks. Increasing cap 24 to 64 does not add traced peak memory
+in this fixed-cell observation, although constructing the higher-order
+model and storing its output still cost additional memory.
+
+Each range uses four alternating before/after timing pairs, following one
+warmup of each implementation. The cap-24 median increases by 1.8%, whereas
+the cap-64 median decreases by 1.4%. All nine coefficient arrays agree exactly in every
+comparison. The baseline is the affine implementation at `67cff19`; both
+versions run in the same NumPy process with identical inputs and no
+overlapping numerical task. This observation does not establish zero
+overhead or a universal runtime ratio. The host uses Apple Accelerate;
+the recorded OpenBLAS/OMP environment variables do not determine its
+actual thread count.
+
+The contact Fourier oracle now also crosses the default batch boundary
+at coefficient cap 10, for both real and complex permittivity and three
+shears. Positive-gap, three-material comparisons use the separate
+diagonal-metric kernel with both local and global x bases. JAX value and
+directional-derivative controls exercise both one and multiple batches.
+Existing tolerances are retained. Raw timings and allocation scope are
+recorded in the
+[projection measurement log](https://github.com/fieldalgo/wavebit/blob/develop/studies/results/nvf_affine_projection_memory.log).
+
 ## Independent controls
 
 The checks cover:
