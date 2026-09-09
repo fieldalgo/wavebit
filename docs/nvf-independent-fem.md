@@ -353,6 +353,42 @@ under this integration refinement. Raising numerical integration order
 does not resolve the observed optical discretization variation in this
 control. The repeated solve takes 46.10 s with peak process RSS 1.353 GB.
 
+## Moving the outgoing boundaries
+
+Increasing physical padding from .1 to .2 moves the Rayleigh planes
+farther from the patterned film. It also regenerates the tetrahedral
+mesh, so the resulting transmission difference is not a pure measure
+of boundary truncation. At h=.18 the new mesh has 464 tetrahedra,
+compared with 469 for pad=.1.
+
+At FEM degree 5 on the new 43,038-unknown mesh, increasing the Rayleigh
+cut from 2 to 4 gives:
+
+| cut | p T | s T | p Robin complement | s Robin complement |
+| ---: | ---: | ---: | ---: | ---: |
+| 2 | .851943145390 | .730434752280 | 1.24444e-7 | 1.35059e-7 |
+| 4 | .851943269585 | .730434871114 | 1.35534e-8 | 8.07164e-9 |
+
+The cut change is `+1.24194e-7`/`+1.18834e-7` in p/s transmission.
+By comparison, pad=.1-to-.2 at degree 5 and cut 4 changes transmission
+by `-1.12559e-4`/`-4.82085e-5`. The measured same-mesh cut change is
+much smaller; separating padding from remeshing still requires
+discretization controls. The cut-4 signed
+energy remainders are `-1.66890e-6`/`-2.67648e-6`, even though the
+omitted Robin power is much smaller. The two cut calculations take
+39.15 and 94.30 s, with peak process RSS 2.232 and 2.301 GB.
+
+Increasing to degree 6 on the pad=.2 mesh gives 69,867 unknowns and
+p/s transmission `.852132216048`/`.730707118806`. Relative to degree 5,
+the changes remain `+1.88946e-4`/`+2.72248e-4`. At degree 6 and cut 4,
+pad=.1-to-.2 changes p/s transmission by `-5.05042e-5`/`+1.12353e-5`;
+the s padding increment has reversed sign from the degree-5 comparison.
+The omitted Robin powers are only `4.39e-9`/`2.47e-9`, while the
+remaining signed budgets are `-2.45e-8`/`-3.52e-8` and modal/volume
+disagreements are `3.27e-6`/`1.37e-6`. These finite controls leave the
+FEM discretization uncertainty unresolved. This solve takes 191.64 s
+with peak process RSS 3.453 GB.
+
 ## Comparing the physical diffraction orders with Wavebit
 
 Both solvers use `k_parallel=k_incident+G`. At the saved Wavebit optical
