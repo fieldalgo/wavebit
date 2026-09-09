@@ -8,7 +8,7 @@
 | `meep_adjoint_rotation.py` | Do public Meep adjoint gradients and matching forward differences agree for complex co-polarized transmission with an independently differentiated profile? |
 | `meep_ringdown.py` | Can source-free time traces be generated through Meep's public API for independent mode-fitting checks? |
 | `meep_source_notch.py` | Does a unit-peak custom source zero suppress a known undamped material mode, with fields matching the native solver at the same current times? |
-| `meep_halfspace.py` | Do magnetic half-space, sharp-film or graded-interface perturbations give stable complex derivatives under smaller perturbations, longer runs and tighter material averaging? |
+| `meep_halfspace.py` | Do magnetic half-space and sharp/graded film perturbations give stable fixed- or moving-reference derivatives under smaller perturbations, longer runs and tighter material averaging? |
 | `Reticolo.py`, `__init__.py` | How do tests access the existing separately installed RETICOLO oracle? |
 | `reticolo_res2.m`, `reticolo_res3.m`, `reti_aniso.m` | How do the existing RETICOLO bridge calls return scattering and field data? |
 

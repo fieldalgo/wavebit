@@ -857,6 +857,22 @@ def test_published_fdtd_thickness_capability_requires_fixed_mesh_and_total(backe
                             thickness=time_loop_backend(which).array([.2])))
 
 
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
+def test_published_variable_depth_uses_live_faces_on_a_fixed_mesh(backend):
+    from wavebit.manifest import SOLVERS
+    pytest.importorskip(backend)
+    common = SOLVERS['fdtd']['routes']['common']
+    assert 'independent layer thickness (variable_depth)' in common['differentiable_parameters']
+    assert 'variable_depth' in common['static_parameters']
+    assert common['variable_depth_requires'][:2] == ('mesh_thickness', 'subpixel=True')
+    result, out = wavebit.fdtd(**dict(FDTD_COMMON_KW, backend=backend, thickness=[.273],
+                                     mesh_thickness=[.2], variable_depth=True, return_diagnostics=True))
+    assert np.isfinite(np.asarray(result.s_inc.T)).all() and out['variable_depth']
+    np.testing.assert_allclose(out['transmission_z'], .273, atol=1e-15)
+    with pytest.raises(ValueError, match='fixed total depth'):
+        wavebit.fdtd(**dict(FDTD_COMMON_KW, backend=backend, thickness=[.273], mesh_thickness=[.2]))
+
+
 def test_fdtd_manifest_scopes_backend_omission_to_legacy_top_incidence():
     from wavebit.manifest import SOLVERS
     entry = SOLVERS['fdtd']

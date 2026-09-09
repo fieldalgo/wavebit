@@ -380,12 +380,13 @@ def _periodic_shape_weights(centres, width, edges, period, smoothing, *, xp, arr
     return weights/xp.sum(weights, axis=1, keepdims=True)
 
 
-def _smoothed_layer_weights(centres, width, edges, smoothing, *, xp, array):
+def _smoothed_layer_weights(centres, width, edges, smoothing, *, xp, array, moving_face=None):
     """C1 cell fractions: average internal interface positions over a box.
 
     The box has full physical width ``smoothing``. Integrating its linear
     step response over each Yee cell gives a piecewise-quadratic primitive.
-    Exterior faces stay sharp; callers keep the internal supports inside them.
+    Exterior faces stay sharp unless moving_face selects one for averaging.
+    Callers keep the supports clear of fixed faces and extraction stencils.
     """
     centres, width = array(centres), array(width)
     width = width[:, None] if width.ndim else width
@@ -404,19 +405,21 @@ def _smoothed_layer_weights(centres, width, edges, smoothing, *, xp, array):
     sharp = xp.clip(right/width, 0., 1.)
     internal = np.zeros(len(edges), bool)
     internal[2:-2] = True  # outside extent, top face, internal faces, bottom, extent
+    if moving_face is not None:
+        internal[1 if moving_face == 'top' else -2] = True
     fraction = xp.where(array(internal)[None, :], smooth, sharp)
     weights = xp.maximum(array(0.), fraction[:, :-1]-fraction[:, 1:])
     return weights/xp.sum(weights, axis=1, keepdims=True)
 
 
-def _layer_weights(centres, width, edges, *, xp, array, smoothing=0.):
+def _layer_weights(centres, width, edges, *, xp, array, smoothing=0., moving_face=None):
     """Exact cell fractions for moving planar interfaces on a fixed z mesh.
 
     At zero smoothing the one-sided derivatives can differ at cell faces.
     Positive smoothing uses C1 fractions. Neither uses a straight-through rule.
     """
     if smoothing:
-        return _smoothed_layer_weights(centres, width, edges, smoothing, xp=xp, array=array)
+        return _smoothed_layer_weights(centres, width, edges, smoothing, xp=xp, array=array, moving_face=moving_face)
     centres, width = array(centres), array(width)
     width = width[:, None] if width.ndim else width
     left, right = centres[:, None]-width/2, centres[:, None]+width/2
@@ -454,13 +457,17 @@ def _validate_layer_smoothing(value):
     return value
 
 
-def _layer_geometry(thickness, mesh_thickness, layers, *, xp, array, check=_require_scene, smoothing=0.):
-    """Separate static mesh selection from physical boundaries at fixed depth.
+def _layer_geometry(thickness, mesh_thickness, layers, *, xp, array, check=_require_scene, smoothing=0.,
+                    variable_depth=False, anchor_bottom=False):
+    """Separate static mesh selection from live physical boundaries.
 
-    Differentiation is defined along positive, constant-total-thickness paths.
-    Pin both outer faces exactly, including when a low-precision sum rounds.
+    By default pin both outer faces exactly, including when a low-precision
+    sum rounds. variable_depth releases the physical exit while retaining the
+    nominal mesh; anchor_bottom implements a fixed-coordinate z reflection.
     """
     if mesh_thickness is None:
+        if variable_depth:
+            raise ValueError('variable_depth requires explicit mesh_thickness.')
         nominal = _static_thickness(thickness, layers, 'thickness')
         return nominal, np.r_[0., np.cumsum(nominal)]
     nominal = _static_thickness(mesh_thickness, layers, 'mesh_thickness')
@@ -471,18 +478,44 @@ def _layer_geometry(thickness, mesh_thickness, layers, *, xp, array, check=_requ
     check(xp.all(xp.isfinite(actual) & (actual > 0)),
           'thickness must contain one positive finite real length per layer.')
     depth = float(nominal.sum())
-    check(xp.abs(xp.sum(actual)-depth) <= 32*xp.finfo(actual.dtype).eps*depth,
-          'thickness must preserve the fixed total depth of mesh_thickness.')
-    planes = xp.concat((array([0.]), xp.cumulative_sum(actual)[:-1], array([depth])))
-    check(xp.all(planes[1:] > planes[:-1]),
-          'thickness boundaries must remain distinct and inside the fixed total depth.')
-    if smoothing and layers > 1:
+    if variable_depth:
+        planes = xp.concat((array([0.]), xp.cumulative_sum(actual)))
+        if anchor_bottom:
+            # Reflection is about the nominal depth, keeping original-coordinate
+            # nodes, source and monitor locations independent of actual depth.
+            planes = depth-xp.concat((xp.flip(xp.cumulative_sum(xp.flip(actual, axis=0)), axis=0), array([0.])))
+    else:
+        check(xp.abs(xp.sum(actual)-depth) <= 32*xp.finfo(actual.dtype).eps*depth,
+              'thickness must preserve the fixed total depth of mesh_thickness.')
+        planes = xp.concat((array([0.]), xp.cumulative_sum(actual)[:-1], array([depth])))
+    check(xp.all(xp.isfinite(planes)) & xp.all(planes[1:] > planes[:-1]),
+          'thickness boundaries must remain finite, distinct and ordered.')
+    if smoothing and (layers > 1 or variable_depth):
         # A bound such as D-h/2 can round to a clearance just below h/2,
         # especially after reflection. Use the same scale as the total check.
         tolerance = 32*xp.finfo(actual.dtype).eps*depth
-        check((planes[1] >= smoothing/2-tolerance) & (depth-planes[-2] >= smoothing/2-tolerance),
-              'layer_smoothing requires internal interfaces at least half its width from both outer faces.')
+        check((planes[1]-planes[0] >= smoothing/2-tolerance) & (planes[-1]-planes[-2] >= smoothing/2-tolerance),
+              'layer_smoothing requires end-layer lengths at least half its width.')
     return nominal, planes
+
+
+def _phase_between_planes(nodes, widths, cell_phases, start, stop, *, xp, array):
+    """Integrate discrete propagation to live planes on a static nodal mesh.
+
+    A plane inside a cell uses that cell's phase per unit length. At a node
+    the right cell defines the one-sided position derivative consistently
+    across backends; uniform meshes have no such derivative discontinuity.
+    """
+    nodes, widths = array(nodes), array(widths)
+    # Share represented endpoints. Reconstructing each right edge as node+dz
+    # can overlap its neighbor by roundoff and count two position derivatives.
+    ends = xp.concat((nodes[1:], nodes[-1:]+widths[-1:]))
+    spans = ends-nodes
+    def fractions(position):
+        offset = position-nodes
+        length = xp.where(offset < 0, xp.zeros_like(offset), xp.where(position >= ends, spans, offset))
+        return length/spans
+    return xp.tensordot(fractions(stop)-fractions(start), cell_phases, axes=((0,), (0,)))
 
 
 def _validate_record_bounds(bounds):
@@ -527,7 +560,8 @@ def _solve_bottom_scene(options):
         _require_scene(valid, message)
         geometry_valid = geometry_valid & valid
     nominal, layer_planes = _layer_geometry(options['thickness'], options['mesh_thickness'], len(raster),
-                                             xp=xp, array=array, check=check_geometry, smoothing=options['layer_smoothing'])
+                                             xp=xp, array=array, check=check_geometry, smoothing=options['layer_smoothing'],
+                                             variable_depth=options['variable_depth'])
     depth = float(nominal.sum())
     thickness = xp.flip(array(options['thickness']), axis=0) if options['mesh_thickness'] is not None else nominal[::-1]
     if options['mesh_thickness'] is not None:
@@ -536,7 +570,8 @@ def _solve_bottom_scene(options):
         thickness = xp.astype(thickness, xp.result_type(thickness, array(1.)))
         thickness = xp.where(geometry_valid, thickness, xp.full_like(thickness, float('nan')))
     mirrored = dict(options, incidence_side='top', top=options['bot'], bot=options['top'],
-                    thickness=thickness, structure=raster[::-1] if parametric else xp.flip(raster, axis=0))
+                    thickness=thickness, structure=raster[::-1] if parametric else xp.flip(raster, axis=0),
+                    _anchor_bottom=options['variable_depth'])
     if options['mesh_thickness'] is not None:
         mirrored['mesh_thickness'] = nominal[::-1]
     if options['mesh_indices'] is not None:
@@ -584,7 +619,7 @@ def _solve_bottom_scene(options):
     diagnostics.update(source_z=depth-diagnostics['source_z'],
                        pml_bounds=tuple(depth-z for z in reversed(diagnostics['pml_bounds'])),
                        layer_planes=layer_planes,
-                       incidence_side='bottom', reflection_z=depth, transmission_z=0.)
+                       incidence_side='bottom', reflection_z=layer_planes[-1], transmission_z=0.)
     for key in ('reflection_monitor_z', 'transmission_monitor_z'):
         diagnostics['diffraction'][key] = depth-diagnostics['diffraction'][key]
     diagnostics['mesh_indices'] = diagnostics['mesh_indices'][::-1]
@@ -621,7 +656,8 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                      pulse_width=None, align_layers=False, diffraction_distance=None,
                      diffraction_method='electric', pml_reflection=1e-8, pulse_notches=None,
                      source_distance=None, transverse_resolution=None, mesh_indices=None,
-                     mesh_thickness=None, layer_smoothing=0., shape_smoothing=0., shape_integration='separable'):
+                     mesh_thickness=None, layer_smoothing=0., shape_smoothing=0., shape_integration='separable',
+                     variable_depth=False, _anchor_bottom=False):
     """Solve a rectangular scene with fixed-mesh layer/angle/material gradients.
 
     Explicit resolution is required: optimizing materials must not resize the
@@ -652,6 +688,14 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     mesh_thickness and subpixel=True. Gradients are defined along fixed-total
     paths and are piecewise smooth, with possible kinks at cell-face crossings.
     align_layers fits nominal boundaries only; outer reference planes stay fixed.
+    Opt-in variable_depth=True also moves the physical exit and retains its
+    de-embedding phase derivative. It requires mesh_thickness and subpixel=True.
+    The laboratory-coordinate mesh, current sheets, extraction planes and
+    records stay fixed for both incidence sides. All interfaces and averaging
+    supports must remain clear of extraction stencils. Positive layer_smoothing
+    also averages the moving exterior face. On nonuniform meshes, fractional
+    reference positions use the local cell's discrete phase; its slope can
+    change at nodes even with material smoothing.
     Positive static layer_smoothing averages internal interface positions over
     a box of that full physical width, giving continuous first derivatives.
     It requires mesh_thickness and subpixel=True; internal supports must stay
@@ -685,6 +729,10 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     as a scalar or (x,y) pair. The z mesh continues to use resolution.
     """
     layer_smoothing = _validate_layer_smoothing(layer_smoothing)
+    if not isinstance(variable_depth, (bool, np.bool_)):
+        raise ValueError('variable_depth must be a static boolean.')
+    if variable_depth and (mesh_thickness is None or not subpixel):
+        raise ValueError('variable_depth requires explicit mesh_thickness and subpixel=True.')
     parametric = _rectangle_recipe(structure)
     if shape_integration not in ('separable', 'area'):
         raise ValueError('shape_integration must be separable or area.')
@@ -867,7 +915,8 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     if mesh_thickness is not None and not subpixel:
         raise ValueError('mesh_thickness requires subpixel=True for moving layer interfaces.')
     thick, layer_planes = _layer_geometry(thickness, mesh_thickness, raster.shape[0], xp=xp, array=array,
-                                          check=check, smoothing=layer_smoothing)
+                                          check=check, smoothing=layer_smoothing, variable_depth=variable_depth,
+                                          anchor_bottom=_anchor_bottom)
     lengths = np.atleast_1d(np.asarray(parse_period_mapping(period), float))
     if lengths.ndim != 1 or len(lengths) not in (1, 2) or not np.isfinite(lengths).all() or np.any(lengths <= 0):
         raise ValueError('period must contain one or two positive lengths.')
@@ -935,6 +984,12 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
         indices = np.array([reflect_z, transmit_z])
         if not np.allclose(widths[indices], widths[indices-1], rtol=1e-12, atol=0):
             raise ValueError('Directional diffraction requires locally uniform z cells at both planes; adjust diffraction_distance or grading.')
+    if variable_depth:
+        # Both extraction stencils must remain entirely in their half spaces,
+        # including the support of an averaged moving exterior interface.
+        check((layer_planes[0]-(layer_smoothing/2 if _anchor_bottom else 0.) >= z[reflect_z]+max(widths[reflect_z-1:reflect_z+1]))
+              & (layer_planes[-1]+(0. if _anchor_bottom else layer_smoothing/2) <= z[transmit_z]-max(widths[transmit_z-1:transmit_z+1])),
+              'variable_depth must keep layer boundaries and smoothing supports clear of the fixed diffraction planes; increase padding or adjust nominal thickness.')
     dual = .5*(widths+np.roll(widths, 1))
     cuts = (np.r_[z[0]-2*widths.max(), layer_planes, z[-1]+2*widths.max()] if mesh_thickness is None else
             xp.concat((array([z[0]-2*widths.max()]), layer_planes, array([z[-1]+2*widths.max()]))))
@@ -986,11 +1041,17 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                 centres = z+offsets[2]*widths
             weights = array(_weights(centres, cell_widths, cuts, subpixel=subpixel) if mesh_thickness is None else
                             _layer_weights(centres, cell_widths, cuts, xp=xp, array=array,
-                                            smoothing=layer_smoothing), dtype=v.dtype)
+                                            smoothing=layer_smoothing,
+                                            moving_face=('top' if _anchor_bottom else 'bottom') if variable_depth else None), dtype=v.dtype)
             v = 1/(xp.tensordot(weights, 1/v, axes=((1,), (0,)))) if harmonic and c == 2 else xp.tensordot(weights, v, axes=((1,), (0,)))
             # Exact half-space values also make CPML material validation exact.
-            v = xp.where(array((z < -dz)[:, None, None]), upper, v)
-            v = xp.where(array((z > thick.sum()+dz)[:, None, None]), lower, v)
+            if variable_depth:
+                guard = widths.max()+layer_smoothing/2
+                v = xp.where((array(z) < layer_planes[0]-guard)[:, None, None], upper, v)
+                v = xp.where((array(z) > layer_planes[-1]+guard)[:, None, None], lower, v)
+            else:
+                v = xp.where(array((z < -dz)[:, None, None]), upper, v)
+                v = xp.where(array((z > thick.sum()+dz)[:, None, None]), lower, v)
             components.append(v)
         return xp.stack(components)
     epsilon = sample(raster, et, eb)
@@ -1201,6 +1262,14 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
             phase_ref = path_phase(nt, kx, ky, interface, reflect_z)
             phase_trn = path_phase(nb, kx, ky, bottom_interface, transmit_z)
             phase_inc = path_phase(nt, kx0, ky0, interface, reflect_z)
+        if variable_depth:
+            def live_phase(index, kx_value, ky_value, start, stop):
+                cells = array(widths.reshape((-1,)+(1,)*kx_value.ndim))
+                angles = propagation(index, kx_value, ky_value, cells)
+                return _phase_between_planes(z, widths, angles, start, stop, xp=xp, array=array)
+            phase_ref = live_phase(nt, kx, ky, layer_planes[0], array(z[reflect_z]))
+            phase_trn = live_phase(nb, kx, ky, layer_planes[-1], array(z[transmit_z]))
+            phase_inc = live_phase(nt, kx0, ky0, layer_planes[0], array(z[reflect_z]))
         def extract(run_values, reference_scale=None):
             incident_columns, outgoing, incoming = [], [], []
             for ref, act in run_values:
@@ -1267,7 +1336,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     results = results[:len(band)]
     result = results[0] if np.ndim(wavelength) == 0 else results
     if return_diagnostics:
-        diagnostics = dict(incidence_side='top', reflection_z=0., transmission_z=float(thick.sum()),
+        diagnostics = dict(incidence_side='top', reflection_z=layer_planes[0], transmission_z=layer_planes[-1],
                            stable=stable, dt=dt, steps=steps, n_steps=steps, dft_subsample=dft_subsample,
                            dft_samples=native_runs[0]['dft_samples'],
                            spacing=(float(widths.min()), dy, dx), shape=shape, wavelengths=array(band),
@@ -1278,7 +1347,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                            z_nodes=array(z), z_spacing=array(widths), grading=grading, align_layers=bool(align_layers),
                            n_pml=int(n_pml), pml_reflection=pml_reflection,
                            source_z=z[source_z], source_distance=source_distance,
-                           layer_planes=layer_planes, layer_smoothing=layer_smoothing,
+                           layer_planes=layer_planes, layer_smoothing=layer_smoothing, variable_depth=bool(variable_depth),
                            geometry_kind='rectangles' if parametric else 'raster',
                            shape_integration=shape_integration,
                            shape_smoothing=tuple(shape_width) if parametric else (0., 0.),

@@ -547,8 +547,9 @@ incidence the transverse wavevector stays fixed across the wavelength band;
 
 The mesh, periods and wavelength are static. Rectangle centres and sizes can
 vary on that mesh; see [rectangle derivatives](#transverse-rectangle-shape-derivatives). Internal layer
-boundaries can vary at fixed total depth with `mesh_thickness`; see
-[layer derivatives](#internal-layer-thickness-derivatives).
+boundaries can vary at fixed total depth with `mesh_thickness`; opt-in
+`variable_depth=True` also varies their total. See [layer derivatives](#internal-layer-thickness-derivatives)
+and [total-depth derivatives](#changing-the-total-stack-depth).
 Half-space epsilon/mu can retain gradients
 with explicit `mesh_indices` and `truncation_order`, as described below.
 An explicit `resolution` is required so material optimization cannot resize the
@@ -561,8 +562,8 @@ PML width, padding and duration for each new structure, especially resonances.
 Exact grazing orders and orders beyond the grid's sampling limit are refused.
 Far-plane extrapolation of strongly evanescent amplitudes is ill-conditioned.
 
-The explicit-backend adapter currently does not accept skewed lattices,
-curved/rotated shape derivatives or total-depth derivatives; unsupported
+The explicit-backend adapter currently does not accept skewed lattices or
+arbitrary curved-shape derivatives; unsupported
 explicit-backend keywords raise an error. There is no implicit backend fallback. Actual GPU execution remains
 unverified on this CPU-only machine.
 
@@ -612,7 +613,7 @@ a static `angle=0`. Circles and ellipses are refused on both methods. Use each s
 mu=...)` for magnetic media. Separate raster `mu`, dispersion labels and poles
 are not accepted on this recipe path. Raster inputs retain their existing
 dispersion support. Combining live layer thicknesses also requires the usual
-`mesh_thickness` and fixed-total constraints.
+`mesh_thickness` and the selected fixed-total or variable-depth constraints.
 
 Shape count, type, paint order, periods and the Yee mesh remain static.
 A separable recipe whose shapes all have static `ly=period[1]` uses the one-row grating
@@ -686,7 +687,7 @@ against each Yee cell, and transverse material coefficients use arithmetic
 area averages. This differs from the separable method even at zero angle.
 It is not a full rotated effective tensor and does not promise second-order
 interface accuracy. Layer sampling retains its existing z averaging rules;
-live layer thicknesses require the usual fixed-total `mesh_thickness` contract.
+live layer thicknesses require `mesh_thickness` and the selected depth contract.
 
 With the default `shape_smoothing=0`, coincident parallel cell/shape edges
 can have different one-sided derivatives. To average transverse translations,
@@ -1315,6 +1316,69 @@ cropped records and field monitors. Diagnostics return original-order static
 `mesh_thickness` and live `layer_planes`. Invalid concrete values raise; JIT
 invalidity masks scattering and normalized fields and sets `stable=False`.
 
+### Changing the total stack depth
+
+Set `variable_depth=True` with an explicit backend, `mesh_thickness` and
+`subpixel=True` to optimize layer lengths independently. All physical lengths
+must remain positive. Their sum may differ from the static nominal sum.
+The physical entrance and exit are at z=0 and z=sum(thickness); complex
+amplitudes are referenced to those live faces, using the same convention as
+RCWA. Both the material fractions and reference-plane propagation phases
+retain JAX/Torch derivatives.
+
+```python
+import jax
+import numpy as np
+from wavebit import fdtd
+
+jax.config.update('jax_enable_x64', True)
+
+def transmission(d):
+    result = fdtd(
+        structure=np.array([[[2.25]]]), thickness=[d],
+        mesh_thickness=[.2], variable_depth=True, layer_smoothing=.025,
+        top=1., bot=1.21, period=.05, wavelength=1.,
+        backend='jax', resolution=40, n_pml=40, n_periods=60,
+        pulse_width=3., truncation_order=0, diffraction_method='directional',
+    )
+    return result.s_inc.t_s.sum()
+
+amplitude, derivative = jax.jit(
+    lambda d: (transmission(d), jax.jacfwd(transmission)(d))
+)(.173)
+```
+
+`variable_depth` is a static boolean, defaulting to False. Nominal mesh lengths
+still determine nodes, source sheets, extraction planes, PML, time step and
+record samples. These laboratory coordinates remain fixed for both top and
+bottom incidence. `source_distance` and `diffraction_distance` select distances
+from nominal faces; they do not move the source or detectors with an optimized
+boundary. Static user monitors and record bounds retain their original coordinates.
+The returned fields remain normalized to unit incident E at the physical
+incident face, so a moving face can change their normalization phase.
+
+Every physical interface and its averaging support must stay clear of the
+fixed diffraction stencils. Each exterior stencil has a conservative clearance
+of one adjacent cell width. Increase nominal padding or adjust nominal lengths
+when the intended design range would cross it. Eager invalid inputs raise;
+traced invalid inputs give `stable=False` and NaN scattering/normalized fields.
+Diagnostics expose `variable_depth`, static `mesh_thickness`, live `layer_planes`
+and live `reflection_z`/`transmission_z` in the original coordinates.
+
+Positive `layer_smoothing` also averages the moving exterior face, while the
+fixed physical face at z=0 remains sharp. First and last layer lengths must be
+at least half that width, including a single-layer stack. The physical graded
+transition extends half a width past the exit reference plane. The reference
+is the plane-wave extrapolation to its centre, not a claim that the material
+there equals the outgoing half space. Zero smoothing retains sharp cell overlaps.
+
+On fitted or graded meshes, propagation to a face inside a cell uses that
+cell's discrete phase per unit length. At a node the right cell defines the
+one-sided phase derivative. Different adjacent cell widths can therefore
+produce a phase-slope kink even when material fractions are smoothed. Assess
+physical accuracy with mesh refinement; see the
+[moving-depth measurements](../fdtd-variable-depth.md).
+
 ### Continuous first derivatives at internal interfaces
 
 Set `layer_smoothing=h` with an explicit backend and `mesh_thickness` to average
@@ -1326,7 +1390,7 @@ tensors, cannot select this width. For a uniform mesh, `h=1/resolution` gives
 one cell of averaging. On a fitted or graded mesh, use the actual cell widths
 when choosing a physical width.
 
-Both outer stack faces remain fixed and sharp. Every internal interface must
+By default both outer stack faces remain fixed and sharp. Every internal interface must
 stay at least `h/2` from the outer faces; internal averaging regions may overlap
 one another. For `[d, D-d]`, this means `h/2 <= d <= D-h/2`, in addition to
 positive lengths. Invalid concrete scenes raise; invalid JAX-traced scenes
@@ -1334,7 +1398,8 @@ use the same `stable=False` and NaN masking as other geometry failures.
 Clearance checks allow the same 32 machine epsilons times D as the total-depth
 check, so touching a face stays valid after floating-point reflection.
 A one-layer stack has no internal interface, so the option has no physical
-effect there. Diagnostics include the static `layer_smoothing` value.
+effect there unless `variable_depth=True` averages its moving exit as described
+above. Diagnostics include the static `layer_smoothing` value.
 
 The cell fractions have continuous first derivatives, including where a
 moving boundary crosses a cell face. This is a C1 guarantee for internal

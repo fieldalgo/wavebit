@@ -23,14 +23,15 @@ the following sections describe the shared engine and explicit-backend scene pat
 
 The legacy Stack/Incidence FDTD path does not provide autodiff or JAX/PyTorch execution.
 The explicit-backend common scene adapter now provides both, with fixed meshes
-and incidence-angle/material/pole and constant-total layer-thickness gradients.
+and incidence-angle/material/pole and layer-thickness gradients. Total depth
+can vary with explicit `variable_depth=True` and a fixed nominal mesh.
 Common-backend time histories and user z monitors
 are also available, with native component staggering and centre-calibrated
 causal time records; see the [guide](guide/time-domain.md#common-scene-adapter).
 The common backend adapter additionally supports bottom incidence with original-coordinate
 records/monitors; the legacy path still supports only top incidence.
 Neither scene path provides MPI execution,
-skewed lattices, curved/rotated parametric geometry, anisotropic tensors,
+skewed lattices, arbitrary curved parametric geometry, anisotropic tensors,
 or complex-angle incidence. Complex Jones states support diffraction and transverse time records through
 separately propagated sine/quadrature sources. Use the appropriate RCWA capability where available; do not
 infer FDTD support from RCWA examples. Unsupported inputs are described in [the solver
@@ -131,7 +132,12 @@ even when the two FDTD derivatives closely agree. A coating-optimization example
 includes a finer-grid physical check. Optional [internal-interface averaging](fdtd-layer-smoothing.md)
 provides C1 cell fractions at a fixed positive `layer_smoothing` width. The
 width changes the material profile; sharp and graded continuum references
-separate that bias from finite-grid error. Curved transverse shapes, varying total depth and general higher-order
+separate that bias from finite-grid error. The [total-depth extension](fdtd-variable-depth.md)
+also permits a moving exterior face with fixed laboratory coordinates and
+live reference-phase derivatives. It supports both incidence sides and
+optionally averages the moving face. Independent magnetic-film optics and
+public-API Meep perturbations bound one selected case; arbitrary combinations
+still need refinement. Curved transverse shapes and general higher-order
 geometry derivatives remain unsupported. Opt-in rectangle rotation is described below.
 
 The explicit route now accepts [axis-aligned rectangle and square recipes](fdtd-rectangle-gradients.md)

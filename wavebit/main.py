@@ -106,6 +106,10 @@ def fdtd(stack=None, incidence=None, **kwargs):
     gradients with explicit ``mesh_indices=(n_top,n_bottom)`` and an order
     window. These static nominal refractive indices set padding/grading;
     actual half-space coefficients determine propagation and CPML.
+    With explicit ``mesh_thickness``, ``variable_depth=True`` permits positive
+    layer lengths with a changing total. Laboratory coordinates remain fixed
+    and complex amplitudes follow the live physical input/output faces.
+    Layers and smoothing supports must clear the fixed extraction planes.
     ``pulse_width`` controls their Gaussian source envelope in c=1
     time units; ``pulse_notches`` optionally suppresses selected positive
     frequencies with causal delayed copies of that pulse.

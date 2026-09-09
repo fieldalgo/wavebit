@@ -18,7 +18,7 @@ warnings.showwarning = lambda message, category, filename, lineno, file=None, li
 
 def generate(output, resolution=80, duration=50., parameter='halfspace', smoothing=0.,
              subpixel_tol=1e-8, transverse_cells=1):
-    if not np.isfinite(smoothing) or smoothing < 0 or (smoothing and parameter != 'thickness'):
+    if not np.isfinite(smoothing) or smoothing < 0 or (smoothing and parameter not in ('thickness', 'depth')):
         raise ValueError('Smoothing must be nonnegative and applies only to thickness perturbations.')
     if transverse_cells < 1 or not np.isfinite(subpixel_tol) or subpixel_tol <= 0:
         raise ValueError('Transverse cell count and averaging tolerance must be positive.')
@@ -84,10 +84,11 @@ def generate(output, resolution=80, duration=50., parameter='halfspace', smoothi
         coefficients = p if parameter == 'halfspace' else background
         kt, kb = kz(*coefficients[:2]), kz(*coefficients[2:])
         r = (actual[0]/reference[0]-1)*np.exp(2j*kt*zr)
-        t = actual[1]/reference[0]*np.exp(1j*kt*zr-1j*kb*(zt-depth))
+        reference_depth = p[0] if parameter == 'depth' else depth
+        t = actual[1]/reference[0]*np.exp(1j*kt*zr-1j*kb*(zt-reference_depth))
         return np.stack((r, t))
     values, jacobians = [], []
-    deltas = np.array([1e-3, 5e-4])
+    deltas = np.array([1e-4, 5e-5]) if parameter == 'depth' else np.array([1e-3, 5e-4])
     durations = np.array([duration, duration+20])
     for until in durations:
         values.append(amplitudes(parameters, until))
@@ -96,9 +97,12 @@ def generate(output, resolution=80, duration=50., parameter='halfspace', smoothi
                       for v in np.eye(len(parameters))*step], axis=-1) for step in deltas]))
     metadata = dict(layer_smoothing=smoothing, subpixel_tol=subpixel_tol, dimensions=dimension,
                     transverse_cells=transverse_cells, transverse_period=side) if smoothing else {}
+    if parameter == 'depth':
+        metadata['reference_plane'] = 'moving_exit'
     np.savez_compressed(output, **metadata, version=mp.__version__, resolution=resolution,
                         durations=durations, deltas=deltas, parameters=parameters,
-                        parameter_names=names, background=background, reference_depth=depth,
+                        parameter_names=names, background=background,
+                        reference_depth=parameters[0] if parameter == 'depth' else depth,
                         wavelengths=band, epsilon=epsilon, mu=mu,
                         thickness=depth if parameter == 'halfspace' else parameters[0],
                         source_z=-3., monitor_z=[zr, zt], pml_thickness=1., cell_length=10.,
@@ -111,7 +115,7 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--resolution', type=int, default=80)
     parser.add_argument('--duration', type=float, default=50.)
-    parser.add_argument('--parameter', choices=('halfspace', 'thickness'), default='halfspace')
+    parser.add_argument('--parameter', choices=('halfspace', 'thickness', 'depth'), default='halfspace')
     parser.add_argument('--smoothing', type=float, default=0., help='Full width of a linear epsilon/mu interface ramp.')
     parser.add_argument('--subpixel-tol', type=float, default=1e-8, help='Public material-function averaging tolerance.')
     parser.add_argument('--transverse-cells', type=int, default=1, help='Periodic cells along each transverse axis for a graded profile.')

@@ -76,7 +76,10 @@ minima keep saturated layers present. With zero minima, underflow to a zero
 length raises rather than silently removing a layer. Other nonfinite concrete
 weights also raise; invalid JAX-traced weights return NaN lengths.
 
-FDTD still needs static `mesh_thickness` with the same total. With interface
+FDTD needs static `mesh_thickness`, with the same total by default. Explicit
+[`variable_depth=True`](time-domain.md#changing-the-total-stack-depth) permits
+independent physical lengths with a changing total; this fixed-total mapping
+continues to hold its chosen total constant. With interface
 averaging width h, first and last layer minima of at least h/2 keep internal
 supports inside the outer faces. The [multilayer example](../../examples/fdtd_multilayer_optimization.py)
 varies three coating thicknesses and three permittivities together, then

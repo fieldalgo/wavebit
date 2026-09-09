@@ -112,7 +112,9 @@ from ._core.spec import SPEC_VERSION
 #: route, including moving transverse faces and optional translation averaging.
 #: Version 14 adds opt-in exact area integration and rotated rectangle gradients.
 #: Version 15 extends area integration with exact translated-polygon moments.
-MANIFEST_VERSION = '15'
+#: Version 16 permits live total depth with fixed laboratory meshes and live
+#: reference-plane phases, including reflected incidence and exterior smoothing.
+MANIFEST_VERSION = '16'
 
 
 # --------------------------------------------------------------- how a structure is spelled
@@ -525,10 +527,10 @@ SOLVERS = {
                 'required': ('resolution',),
                 'differentiable_parameters': ('theta', 'phi', 'raster epsilon', 'raster mu',
                                               'electric pole coefficients', 'half-space epsilon',
-                                              'half-space mu', 'fixed-total layer thickness',
+                                              'half-space mu', 'fixed-total layer thickness', 'independent layer thickness (variable_depth)',
                                               'rectangle centre', 'rectangle size', 'rectangle angle (area)', 'shape epsilon/mu'),
-                'static_parameters': ('periods', 'shape types/count/paint order', 'total depth', 'wavelength',
-                                      'mesh_indices', 'mesh_thickness', 'layer_smoothing', 'shape_smoothing', 'shape_integration', 'truncation_order'),
+                'static_parameters': ('periods', 'shape types/count/paint order', 'nominal mesh depth', 'wavelength',
+                                      'mesh_indices', 'mesh_thickness', 'variable_depth', 'layer_smoothing', 'shape_smoothing', 'shape_integration', 'truncation_order'),
                 'parametric_shapes': ('rectangle', 'square'),
                 'parametric_requires': ('two rectangular periods', 'subpixel=True'),
                 'shape_integration': ('separable', 'area'),
@@ -546,10 +548,13 @@ SOLVERS = {
                 'array_half_spaces_require': ('mesh_indices', 'truncation_order'),
                 'backend_thickness_requires': ('mesh_thickness', 'subpixel=True'),
                 'thickness_constraint': 'positive lengths with the same total as mesh_thickness; '
-                                        'constant-total derivatives; piecewise by default, C1 with positive layer_smoothing',
+                                        'variable_depth=True instead permits a changing total with live reference-plane phases',
+                'variable_depth_requires': ('mesh_thickness', 'subpixel=True', 'interfaces and smoothing supports clear of fixed diffraction stencils'),
+                'variable_depth_coordinates': 'fixed laboratory mesh/source/monitors/records; reference faces at 0 and sum(thickness) for both incidence sides',
                 'positive_layer_smoothing_requires': ('mesh_thickness', 'subpixel=True'),
-                'layer_smoothing_constraint': 'static nonnegative physical width; internal interfaces at least '
-                                              'half its width from both outer faces; changes the material profile',
+                'layer_smoothing_constraint': 'static nonnegative physical width; end layers at least half its width; '
+                                              'averages internal faces and the moving exterior face with variable_depth; changes the material profile; '
+                                              'nonuniform reference-phase slopes remain piecewise',
                 'results_incidences': ('given', 's_inc', 'p_inc'),
                 'verified_devices': ('cpu',),
                 'source': 'docs/guide/time-domain.md',
