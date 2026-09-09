@@ -92,6 +92,51 @@ def power_record(coefficients, order, transform, *, wavelength=900., thickness=3
                 s_T=float(powers[1, 0]), s_R=float(powers[1, 1]), energy_error=error)
 
 
+def directional_changes(records):
+    """Signed changes on complete adjacent order rectangles, with no verdict.
+
+    Geometry, material, candidate resolution and reference metadata identify
+    separate series. Both parallel edges are reported: a small diagonal
+    change can hide cancellation or an unresolved mixed contribution.
+    """
+    measurements = {'order', 'p_T', 'p_R', 's_T', 's_R', 'energy_error', 'seconds'}
+    groups = {}
+    for record in records:
+        if record['kind'] == 'affine_cell_bounds':
+            continue
+        if record['kind'] not in ('affine_fitted_cell', 'affine_candidate'):
+            raise ValueError('directional changes require affine optical records')
+        context = {key: value for key, value in record.items() if key not in measurements}
+        key = json.dumps(context, sort_keys=True, allow_nan=False)
+        order = orders_xy(record['order'])
+        powers = np.array([[record[f'{pol}_{quantity}'] for quantity in ('T', 'R')] for pol in ('p', 's')])
+        if not np.isfinite(powers).all() or np.max(abs(powers.sum(axis=1)-1)) > 1e-9:
+            raise ValueError('directional changes require finite lossless powers')
+        context, points = groups.setdefault(key, (context, {}))
+        if order in points:
+            raise ValueError('duplicate Fourier order in the same affine series')
+        points[order] = powers[:, 0]
+    result = []
+    for context, points in groups.values():
+        xs, ys = sorted({x for x, _ in points}), sorted({y for _, y in points})
+        for x0, x1 in zip(xs[:-1], xs[1:]):
+            for y0, y1 in zip(ys[:-1], ys[1:]):
+                corners = [(x0, y0), (x1, y0), (x0, y1), (x1, y1)]
+                if not all(corner in points for corner in corners):
+                    continue
+                low, right, up, high = [points[corner] for corner in corners]
+                changes = dict(x_at_lower_y=right-low, x_at_upper_y=high-up,
+                               y_at_lower_x=up-low, y_at_upper_x=high-right,
+                               mixed=high-right-up+low, diagonal=high-low)
+                source = dict(context)
+                source['source_kind'] = source.pop('kind')
+                result.append(dict(kind='affine_directional_change', **source,
+                                   x_orders=[x0, x1], y_orders=[y0, y1],
+                                   **{pol: {name: float(value[i]) for name, value in changes.items()}
+                                      for i, pol in enumerate(('p', 's'))}))
+    return result
+
+
 def convergence(orders, cells, *, projections=(), transform=((1., .45), (0., .7)), gap=17., width=350.,
                 seams=(31.,), values=(4., 9.), edge_fraction=1e-5):
     if not orders:
@@ -147,12 +192,20 @@ def main():
     parser.add_argument('--seams', type=float, nargs='*', default=[31.])
     parser.add_argument('--values', type=float, nargs='+', default=[4., 9.])
     parser.add_argument('--edge-fraction', type=float, default=1e-5)
+    parser.add_argument('--directional-changes', action='store_true',
+                        help='append signed changes for complete adjacent x/y order rectangles; no convergence verdict')
     args = parser.parse_args()
     cells = [tuple(map(int, cell.split(':'))) for cell in args.cells]
+    records = []
     for record in convergence(args.orders, cells, projections=args.projections,
                                transform=np.asarray(args.transform).reshape(2, 2), gap=args.gap, width=args.width,
                                seams=args.seams, values=args.values, edge_fraction=args.edge_fraction):
         print(json.dumps(record), flush=True)
+        if args.directional_changes:
+            records.append(record)
+    if args.directional_changes:
+        for record in directional_changes(records):
+            print(json.dumps(record), flush=True)
 
 
 if __name__ == '__main__':

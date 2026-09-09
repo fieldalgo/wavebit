@@ -4,7 +4,9 @@ import json
 import numpy as np
 import pytest
 
-from studies.nvf_affine_convergence import convergence, load_projection, material_coefficients, power_record, real_coefficients
+from studies.nvf_affine_convergence import (
+    convergence, directional_changes, load_projection, material_coefficients, power_record, real_coefficients,
+)
 
 
 def uniform_coefficients(epsilon=4., cap=4):
@@ -104,3 +106,52 @@ def test_contact_candidate_has_exact_anisotropic_static_enclosure():
     for key in ('upper', 'lower'):
         np.testing.assert_allclose(bounds[key], exact, atol=3e-11, rtol=0)
     assert optics['energy_error'] < 2e-12
+
+
+def optical_record(order, p, s, **settings):
+    return dict(kind='affine_candidate', order=order, p_T=p, p_R=1-p, s_T=s, s_R=1-s,
+                transform=[[1., .45], [0., .7]], gap=17., width=350., seams=[31.], values=[4., 9.],
+                **settings)
+
+
+def test_directional_changes_expose_cancellation_and_both_parallel_edges():
+    records = [optical_record(order, p, s) for order, p, s in [
+        ((4, 8), .40, .70), ((6, 8), .42, .71), ((4, 12), .37, .68), ((6, 12), .40, .685),
+    ]]
+    result, = directional_changes(records)
+    assert result['x_orders'] == [4, 6]
+    assert result['y_orders'] == [8, 12]
+    assert result['source_kind'] == 'affine_candidate'
+    assert result['p'] == pytest.approx(dict(x_at_lower_y=.02, x_at_upper_y=.03,
+                                            y_at_lower_x=-.03, y_at_upper_x=-.02,
+                                            mixed=.01, diagonal=0.), abs=2e-16)
+    assert result['s'] == pytest.approx(dict(x_at_lower_y=.01, x_at_upper_y=.005,
+                                            y_at_lower_x=-.02, y_at_upper_x=-.025,
+                                            mixed=-.005, diagonal=-.015), abs=2e-16)
+    assert 'converged' not in result
+
+
+@pytest.mark.parametrize('setting', ['body_degree', 'projection'])
+def test_directional_changes_keep_auxiliary_resolutions_separate(setting):
+    points = [(2, 2), (4, 2), (2, 4), (4, 4)]
+    records = [optical_record(order, .4, .7, **{setting: value}) for value in (2, 4) for order in points]
+    results = directional_changes(records)
+    assert len(results) == 2
+    assert {record[setting] for record in results} == {2, 4}
+    assert directional_changes(records[:3]+records[7:]) == []
+
+
+def test_directional_changes_skip_missing_corners_and_accept_scalar_orders():
+    records = [optical_record(order, .4, .7) for order in [2, (4, 2), (2, 4), 4, (6, 6)]]
+    result, = directional_changes([dict(kind='affine_cell_bounds'), *records])
+    assert result['x_orders'] == [2, 4]
+    assert result['y_orders'] == [2, 4]
+    assert directional_changes(records[:3]) == []
+    with pytest.raises(ValueError, match='duplicate'):
+        directional_changes([*records, optical_record((2, 2), .5, .6)])
+
+
+@pytest.mark.parametrize('changes', [dict(p_T=np.nan), dict(p_R=.1), dict(order=(-1, 2)), dict(kind='unknown')])
+def test_directional_changes_refuse_invalid_optical_records(changes):
+    with pytest.raises(ValueError):
+        directional_changes([dict(optical_record(2, .4, .7), **changes)])

@@ -157,6 +157,78 @@ The square 12-to-16 changes are `-8.45031e-5` and `-4.58629e-4`.
 Optical truncation remains consequential. No value in these tables defines
 a new release threshold or an automatic stopping criterion.
 
+The comparison driver now accepts `--directional-changes`. After the raw
+optical records, it reports changes on each complete adjacent rectangle of
+x/y orders. Each polarization includes the x change at both y levels, the
+y change at both x levels, their mixed difference, and the diagonal change.
+Reporting the parallel edges prevents opposing directional changes from
+being hidden by a small diagonal difference. Geometry, material, candidate
+resolution and reference metadata define separate series; the driver does
+not combine their corners. Missing corners produce no rectangle, and
+duplicate orders within one series raise. These records contain no
+convergence verdict or error-bound estimate.
+
+## Higher optical orders on the same affine profile
+
+The degree-8 fitted reference was exported through coefficient cap 64 on
+the same 1,622-element mesh. Quadrature 32 and 40 differ by at most
+`4.89e-15` in any coefficient; the shared cap-32 coefficients are unchanged
+from the earlier quadrature-32 export. The analytic material-coefficient
+error in the quadrature-40 export is below `1.91e-15`. This extends the
+available Fourier data without changing the fitted auxiliary cell.
+
+Holding that reference fixed gives:
+
+| x half width | y half width | p T | s T |
+| ---: | ---: | ---: | ---: |
+| 16 | 16 | .852443153986 | .731229889742 |
+| 20 | 16 | .852417073421 | .731227345524 |
+| 16 | 20 | .852428151483 | .731039456471 |
+| 20 | 20 | .852401539891 | .731036855555 |
+| 24 | 20 | .852388526661 | .731034096403 |
+| 20 | 24 | .852395205346 | .730980282619 |
+| 24 | 24 | .852381909685 | .730977440340 |
+
+The complete order rectangles expose these signed changes. x-only and
+y-only changes start at the lower corner; mixed is the remaining joint
+contribution, so their sum is the diagonal change.
+
+| order rectangle | polarization | x only | y only | mixed | diagonal |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 16 to 20 | p | -2.60806e-5 | -1.50025e-5 | -5.31027e-7 | -4.16141e-5 |
+| 16 to 20 | s | -2.54422e-6 | -1.90433e-4 | -5.66967e-8 | -1.93034e-4 |
+| 20 to 24 | p | -1.30132e-5 | -6.33454e-6 | -2.82432e-7 | -1.96302e-5 |
+| 20 to 24 | s | -2.75915e-6 | -5.65729e-5 | -8.31265e-8 | -5.94152e-5 |
+
+The square-order changes decrease over these two windows, but neither
+window bounds the remaining optical error. Both directional changes have
+the same sign here, so their small mixed term is not concealing cancellation.
+At 20 to 24, s changes about twenty times as much when increasing y as
+when increasing x. p remains more sensitive to x. The measurements support
+continuing directional refinement; they do not justify declaring optical
+convergence or choosing a universal default order.
+
+A separate fitted reference increases the FEM polynomial degree from 8
+to 10 on the same mesh, raising its scalar unknown count from 51,905 to
+81,101. Its relative static enclosure narrows from `2.624e-7` to
+`1.428e-7`. The largest coefficient change through cap 48 is `1.30e-7`.
+At the same optical order `(24,24)`, this changes p transmission by
+`+1.22e-8` and s by `+2.65e-8`, much less than the preceding optical
+order increments. This is a separate observed reference-refinement check,
+not a bound on optical error; both reference paths use Wavebit's Maxwell
+solver. The degree-10 export uses quadrature 40 and the same affine map,
+profile, mesh length and vertex refinement.
+
+The refined candidate with x subdivisions 2, base body rows 4, body degree
+4 and gap degree 6 gives `p T=.852377641159` and `s T=.730966937870`
+at `(24,24)`. It retains 3,887 auxiliary unknowns and a relative static
+enclosure of `1.42965e-4`. Candidate minus the degree-10 fitted reference
+is `-4.28e-6` for p and `-1.05e-5` for s. These same-order differences
+are smaller than the degree-8 reference's 20-to-24 optical increments.
+The comparison supports further outer-order refinement on this fixture;
+it does not remove the need to refine the candidate cell or establish
+an independent three-dimensional optical error bound.
+
 ## Reproduction and guards
 
 The reference runs used separately installed `ngsolve==6.2.2606` and
@@ -193,6 +265,23 @@ of another material distribution. It rejects non-real field data,
 unequal xy/yx Gram terms and a non-identity field mean. Every retained
 space receives its own closure. Lossless power balance is checked as an
 algebraic diagnostic, not used as a convergence certificate.
+
+Append `--directional-changes` to either a reference or candidate comparison
+to emit the complete order-rectangle diagnostics. The existing `NX:NY`
+spelling still selects retained orders; this option analyzes their changes
+without altering the physical problem or the closure.
+
+To reproduce the higher-order rectangle sequence, export the fitted
+reference with `--cap 64 --h .04 --degree 8 --quadrature 32 --refine 40`
+and the same transform, then run:
+
+```bash
+PYTHONPATH=$PWD python studies/nvf_affine_convergence.py --orders 16 20:16 16:20 20 24:20 20:24 24 --projections "$NVF_AFFINE_REF" --cells --directional-changes
+```
+
+For the separate reference-refinement check, export cap 48 with degree 10
+and quadrature 40, keeping the same geometry and mesh settings. Compare
+that export and the candidate at `--orders 24 --cells 2:4:4:6`.
 
 The measurements and validation details are retained in
 [the study log](https://github.com/fieldalgo/wavebit/blob/develop/studies/results/nvf_affine_convergence.log).
