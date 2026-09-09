@@ -672,7 +672,7 @@ def robin_complement_power(mesh, scattered_field, ports, *, area, theta,
 
 def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
                           *, transform=None, theta=THETA, phi=0., condense=True,
-                          progress=None):
+                          quadrature_bonus=6, progress=None):
     """Independent affine H(curl) FEM with shared p/s Rayleigh boundary solves.
 
     The physical profile is fixed to the .7-micrometer reference cell, width
@@ -685,6 +685,11 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
     traces retain a local Robin condition. Mesh/order, cut and physical padding
     remain separate reference uncertainties; small residual and energy error
     do not qualify a continuum Maxwell oracle.
+
+    ``quadrature_bonus`` is a nonnegative integer for numerical integration
+    studies, not mesh or FEM polynomial refinement. It sets the source bonus,
+    the trace bonus to 2*cut+bonus, and flux/norm readout order to 2*order+bonus.
+    The polynomial bulk and local Robin forms retain their default quadrature.
     """
     start = time.monotonic()
     if (isinstance(order, (bool, np.bool_)) or not isinstance(order, (int, np.integer))
@@ -692,7 +697,12 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
         raise ValueError('order must be a positive integer')
     if not isinstance(condense, (bool, np.bool_)):
         raise ValueError('condense must be boolean')
+    if (isinstance(quadrature_bonus, (bool, np.bool_))
+            or not isinstance(quadrature_bonus, (int, np.integer))
+            or quadrature_bonus < 0):
+        raise ValueError('quadrature_bonus must be a nonnegative integer')
     order, condense = int(order), bool(condense)
+    quadrature_bonus = int(quadrature_bonus)
     theta, phi = _affine_incidence(theta, phi)
     transform = np.asarray([[1., .45], [0., .7]] if transform is None else transform)
     if (transform.shape != (2, 2) or transform.dtype.kind not in 'iuf'
@@ -726,12 +736,14 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
         f = ng.LinearForm(space)
         for name, value in materials.items():
             if name not in ('substrate', 'superstrate'):
-                f += k0*k0*(value-1)*background[polarization][0]*v*ng.dx(name, bonus_intorder=6)
+                f += (k0*k0*(value-1)*background[polarization][0]*v
+                      *ng.dx(name, bonus_intorder=quadrature_bonus))
         sources.append(f)
     modes = port_data[0][0]
     count, rank = len(modes), 4*len(modes)
     settings = dict(h=h, order=order, cut=int(cut), uniform=uniform, pad=pad,
-                    condense=condense, period=PERIOD, width=.350, gap=.017,
+                    condense=condense, quadrature_bonus=quadrature_bonus,
+                    period=PERIOD, width=.350, gap=.017,
                     seam=.031, thickness=THICKNESS)
     metadata = dict(fixture='affine_partitioned_gap', boundary='rayleigh',
                     lattice=lattice.tolist(), transform=transform.tolist(),
@@ -739,6 +751,7 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
                     units='micrometers', wavelength=WAVELENGTH, thickness=THICKNESS,
                     period=PERIOD, width=.350, gap=.017, seam=.031, values=[4., 9.],
                     h=h, order=order, cut=int(cut), uniform=uniform, pad=pad,
+                    quadrature_bonus=quadrature_bonus,
                     elements=mesh.ne, dofs=space.ndof, rank=rank,
                     periodic_pairs=periodic_counts(mesh, lattice),
                     modes=[list(mode) for mode in modes])
@@ -776,7 +789,8 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
                 phase = ng.exp(1j*(g[0]*ng.x+g[1]*ng.y))/np.sqrt(area)
                 for component, column in enumerate(ids):
                     trace = ng.LinearForm(space)
-                    trace += phase*v.Trace()[component]*ng.ds(side, bonus_intorder=2*cut+6)
+                    trace += phase*v.Trace()[component]*ng.ds(
+                        side, bonus_intorder=2*cut+quadrature_bonus)
                     trace.Assemble()
                     traces[:, column] = trace.vec.FV().NumPy()
                     response = trace.vec.CreateVector()
@@ -817,7 +831,7 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
         flux = e[0]*ng.Conj(magnetic[1])-e[1]*ng.Conj(magnetic[0])
         divisor = area*pad*np.cos(theta)
         top, bottom = [ng.Integrate(flux, mesh, definedon=mesh.Materials(name),
-                                    order=2*order+6).real/divisor
+                                    order=2*order+quadrature_bonus).real/divisor
                        for name in ('superstrate', 'substrate')]
         amplitudes = ports.reshape(2, 2, count).transpose(0, 2, 1).copy()
         amplitudes[0, zero_mode] += np.sqrt(area)*reflected*np.exp(1j*g0*(THICKNESS+pad))
@@ -837,7 +851,7 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
                       order_R=powers[0].tolist(), order_T=powers[1].tolist())
         complement = robin_complement_power(
             mesh, field, ports.reshape(2, 2, count).transpose(0, 2, 1),
-            area=area, theta=theta, quadrature_order=2*order+6)
+            area=area, theta=theta, quadrature_order=2*order+quadrature_bonus)
         record['robin_complement_power'] = complement
         # The remaining budget can contain FEM, quadrature, source and linear
         # solve error; it is not a pure Galerkin defect or an optical error bound.

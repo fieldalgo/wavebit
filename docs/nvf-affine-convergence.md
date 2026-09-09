@@ -472,6 +472,13 @@ passes material-volume and periodic-pair controls. The new
 connects both polarization sources, boundary traces and physical-area
 power normalization and passes independent slab controls. Its patterned
 discretization and outgoing-boundary uncertainties remain open.
+The first [patterned FEM refinement](nvf-independent-fem.md#patterned-affine-boundary-and-degree-refinement)
+now reaches Rayleigh cut 4 and three-dimensional FEM degree 6 at two
+mesh sizes. At h=.14, changing degree 5 to 6 still changes p/s transmission
+by `+8.46e-5`/`+1.43e-4`, despite a nearly closed energy budget.
+The [physical per-order comparison](nvf-independent-fem.md#comparing-the-physical-diffraction-orders-with-wavebit)
+checks the shared `+G` convention and shows that total agreement can hide
+larger cancelling errors in individual diffraction orders.
 
 ## Reference degree refinement at y=32
 

@@ -1244,6 +1244,12 @@ controls. Its [full affine Maxwell connection](nvf-independent-fem.md#affine-max
 now passes independent p/s slab, source and flux checks while sharing
 one sparse factorization. Patterned mesh and outgoing-boundary refinement
 still prevent assigning an independent optical error bound.
+Its first [patterned degree/mesh ladder](nvf-independent-fem.md#patterned-affine-boundary-and-degree-refinement)
+reaches FEM degree 6 and Rayleigh cut 4 at two mesh sizes. The energy
+budget can close to about `1e-11` after accounting for omitted Robin
+power while degree refinement still changes transmission by about
+`1e-4`. Per-order comparisons expose cancellation hidden in total R/T;
+these measurements do not provide a converged golden reference.
 
 The [reference-degree refinement at (24,32)](nvf-affine-convergence.md#reference-degree-refinement-at-y32)
 raises the fitted field from degree 8 to 10 at fixed optical order. The

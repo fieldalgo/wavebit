@@ -105,6 +105,8 @@ class AffineScatteringTests(unittest.TestCase):
         invalid += [dict(theta=value) for value in
                     (np.nan, np.inf, np.pi/2, -np.pi/2, np.pi, 1j, [0.], True)]
         invalid += [dict(phi=value) for value in (np.nan, np.inf, 1j, [0.], True)]
+        invalid += [dict(quadrature_bonus=value) for value in
+                    (True, np.bool_(True), -1, 1.5, 6., np.nan, np.inf, 1j, [6], '6')]
         with patch.object(self.reference, 'make_affine_profile_mesh',
                           side_effect=AssertionError('invalid scattering request reached the mesher')):
             for settings in invalid:

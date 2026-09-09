@@ -258,6 +258,134 @@ and individual diffraction powers exactly identical:
 The omitted Robin trace accounts for most of this cut-1 energy deficit.
 The small remaining budget does not qualify the patterned transmission.
 
+## Patterned affine boundary and degree refinement
+
+The following calculations use the physical affine profile above, theta=.2,
+phi=0, pad=.1 and the original quadrature bonus 6. Here h is the global
+maximum tetrahedron size; the affine helper does not impose the h/2 film
+restriction used by the historical square fixture below. This is a
+three-dimensional Maxwell FEM polynomial
+degree, distinct from the degree-10 two-dimensional auxiliary field used
+inside the separate Wavebit comparison. No material or optical parameter
+changes between the rows.
+
+First, the Rayleigh cut increases at h=.18 and FEM degree 4 on the same
+469-tetrahedron, 24,645-unknown mesh. The signed balance is retained because
+the raw energy deficit changes to an excess as the boundary improves.
+
+| cut | p T | s T | p `1-R-T` | s `1-R-T` | largest modal/volume disagreement |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | .848428442375 | .727567584962 | 3.78233e-3 | 4.51552e-3 | 3.973e-3 |
+| 2 | .852230459897 | .731148729630 | 2.09300e-5 | 4.98574e-6 | 2.478e-5 |
+| 3 | .852278152427 | .731186559488 | -2.01608e-5 | -3.48461e-5 | 1.296e-5 |
+| 4 | .852280465907 | .731188011462 | -2.20430e-5 | -3.64442e-5 | 1.463e-5 |
+
+The last cut increment changes p/s transmission by
+`+2.31348e-6`/`+1.45197e-6`. It is one observed finite increment, not a
+bound on the omitted boundary tail. In particular, all signed energy
+errors cannot be described as outgoing Robin loss.
+
+Next, at the same h=.18 and cut 4, the degree increases without changing
+the mesh:
+
+| FEM degree | unknowns | p T | s T | p absolute balance error | s absolute balance error |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 4 | 24,645 | .852280465907 | .731188011462 | 2.20430e-5 | 3.64442e-5 |
+| 5 | 43,854 | .852055828117 | .730483079606 | 5.85361e-7 | 9.76317e-7 |
+| 6 | 71,106 | .852182720280 | .730695883465 | 5.10051e-8 | 2.68792e-8 |
+
+The degree-4-to-5 transmission changes are
+`-2.24638e-4`/`-7.04932e-4`; the degree-5-to-6 changes reverse sign,
+to `+1.26892e-4`/`+2.12804e-4`. Degree 6 has algebraic residuals below
+`1.17e-14` and modal/volume disagreements below `3.44e-6`, but its tiny
+energy balance error does not establish transmission convergence.
+
+At degree 5, reducing h from .18 to .14 regenerates a 555-element mesh
+with 51,906 unknowns. Its p/s transmission is
+`.852106590399`/`.730558488159`, changing by
+`+5.07623e-5`/`+7.54086e-5`. The largest modal/volume disagreement grows
+to `1.54e-5`, despite absolute energy balance errors below `9.31e-8`.
+These meshes are not nested, and neither the maximum element size nor
+the energy budget alone orders the error of every output.
+
+Increasing the h=.14 calculation to degree 6 gives 84,161 unknowns and
+p/s transmission `.852191204024`/`.730701980509`. The h=.18-to-.14 changes
+at degree 6 are `+8.48374e-6`/`+6.09704e-6`, smaller than the measured
+mesh changes at degree 5. However, the degree-5-to-6 changes at h=.14
+remain `+8.46136e-5`/`+1.43492e-4`. This comparison does not establish a
+tail estimate. The degree-6 signed energy remainders after accounting
+for the Robin complement are only `-4.93e-12`/`-2.80e-11`, whereas the
+modal/volume disagreements remain `8.67e-6`/`4.34e-6`. A nearly closed
+global boundary budget does not imply equally accurate interior fields.
+
+The h=.18 degree-4 cut ladder takes 7.68, 14.26, 24.94 and 37.86 s.
+The cut-4 degree-5 and degree-6 solves take 88.10 and 200.13 s, with
+peak process RSS 2.208 and 2.977 GB. The h=.14 degree-5 solve takes
+123.43 s and 2.501 GB; h=.14 degree 6 takes 300.07 s and 3.585 GB.
+These are sequential shared-host observations,
+not controlled speed comparisons or an accuracy guarantee.
+
+## Controlling nonpolynomial integration independently
+
+The affine entry point accepts a nonnegative integer `quadrature_bonus`,
+defaulting to 6 to preserve the earlier numerical settings. This is a
+study parameter separate from the FEM degree: it sets the source bonus
+to that value, the Fourier trace bonus to `2*cut+quadrature_bonus`, and
+the volume-flux and Robin-norm integration order to
+`2*FEM_degree+quadrature_bonus`. Both the result and its settings record
+the selected value. Invalid values are rejected before meshing.
+The polynomial bulk and local Robin forms retain their default quadrature.
+
+A local element-matrix check on the affine mesh compares the default
+bulk/Robin quadrature with bonus 8 at degrees 3 through 6. For the tested
+tetrahedron and outer triangle, the combined Bloch bulk form differs
+relatively by at most `8.95e-14`; the separate mass, curl and Robin
+comparisons are all below `9.92e-14`. This finds no evidence of polynomial
+underintegration in those elements, including the incident-wavevector
+cross terms. It is not a bound for every mesh or field.
+
+The full patterned h=.18, FEM-degree-4, cut-4, pad=.1 solve was then
+repeated with quadrature bonus 14. Its largest individual diffraction
+power change is `3.48e-14`, and its largest total or volume R/T change
+is `3.59e-14`. The original p/s energy excesses of
+`2.20430e-5`/`3.64442e-5` and modal/volume discrepancies therefore persist
+under this integration refinement. Raising numerical integration order
+does not resolve the observed optical discretization variation in this
+control. The repeated solve takes 46.10 s with peak process RSS 1.353 GB.
+
+## Comparing the physical diffraction orders with Wavebit
+
+Both solvers use `k_parallel=k_incident+G`. At the saved Wavebit optical
+order `(24,32)`, an FEM label `(m,n)` maps to array index `[n+32,m+24]`,
+without a sign reversal. The public `order_kxy()` values over the full
+65-by-49 window agree with independently evaluated physical reciprocal
+vectors within `2.28e-13` per micrometer. Reflection propagates only
+`(0,0)`; transmission propagates `(-1,-1)`, `(-1,0)` and `(0,0)`.
+Summing those orders reproduces each full power array within `1.12e-16`.
+Both sets of powers are already normalized by incident power.
+
+The Wavebit row uses the independently fitted degree-10 auxiliary field,
+coefficient cap 64 and projection quadrature 40 at optical order `(24,32)`.
+It still uses Wavebit's Maxwell engine and has its own unresolved Fourier
+tail. The FEM row below uses h=.18, degree 6, cut 4 and pad=.1.
+
+| transmission order | Wavebit p | FEM p | Wavebit s | FEM s |
+| --- | ---: | ---: | ---: | ---: |
+| (-1,-1) | .002546061499 | .002524305231 | .006349820924 | .006288808035 |
+| (-1,0) | .407255483011 | .407069924636 | .269989779138 | .270045795985 |
+| (0,0) | .442579166466 | .442588490413 | .454673618575 | .454361279445 |
+| total | .852380710977 | .852182720280 | .731013218636 | .730695883465 |
+
+The total FEM-minus-Wavebit differences are `-1.97991e-4` for p and
+`-3.17335e-4` for s. Apparent total agreement at lower FEM degree can
+hide substantially larger redistribution: at degree 4, the p differences
+in orders `(-1,0)` and `(0,0)` are `-1.08912e-3` and `+1.06132e-3`,
+while the total difference is only `-1.00245e-4`. The corresponding s
+differences are `-9.44532e-4` and `+1.39708e-3`, with a total difference
+of `+1.74793e-4`. Neither finite solver is assigned as a converged oracle
+from this agreement. FEM discretization, outgoing boundary and Wavebit's
+Fourier truncation still require separate checks.
+
 ## A failed periodic-boundary request was caught by the control
 
 The first local FEM prototype selected outer faces within 1e-8. OpenCascade pads
