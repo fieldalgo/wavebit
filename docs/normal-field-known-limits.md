@@ -1233,6 +1233,14 @@ Both new optical rows use the same fitted field and the
 their largest lossless balance error is `7.20e-12`. Independent optical
 qualification and the degree-10/candidate comparison beyond (24,24) remain open.
 
+At x=24, the [next y=32-to-36 edge](nvf-affine-convergence.md#extending-y-to-36)
+changes p by `+1.17108e-6` and s by `+2.94453e-5`; the s increment is
+slightly larger than in the preceding y window. The degree-8 field stays
+fixed, with its Fourier export extended to cap 72 and the shared cap-64
+coefficients unchanged. This still supplies no optical tail bound. The
+independent FEM instrument now has affine reciprocal-lattice boundary
+data, but its complete affine geometry/source/trace integration remains open.
+
 The study's full-space closure now uses tiled assembly and an exact
 two-sided solve, reducing measured order-24 closure peak memory from
 3.43 GB to .96 GB. The memory result concerns that stage, not the full

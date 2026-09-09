@@ -424,6 +424,47 @@ third-party code or dependency is used for these rows: the references
 are the already-qualified numerical exports. The independent 3D Maxwell
 comparison and candidate/reference comparison beyond `(24,24)` remain open.
 
+## Extending y to 36
+
+The degree-8 fitted field is extended from coefficient cap 64 to 72 on
+the same mesh, without changing the auxiliary solution. At quadrature 40,
+all shared cap-64 coefficients are exactly identical. Increasing the new
+export's quadrature from 40 to 48 changes any coefficient by at most
+`5.27e-15`; its analytic material-coefficient error is below `1.91e-15`.
+The degree, mesh, residuals and static enclosure remain unchanged.
+
+Holding x at 24 and increasing y gives:
+
+| x half width | y half width | p T | s T | coefficient cap |
+| ---: | ---: | ---: | ---: | ---: |
+| 24 | 32 | .852380698959 | .731013192091 | 64 |
+| 24 | 36 | .852381870038 | .731042637367 | 72 |
+
+The y=32-to-36 changes are `+1.17108e-6` for p and `+2.94453e-5` for s.
+The latter is slightly larger than the preceding y=28-to-32 increment
+of `+2.92567e-5`. Thus the renewed s variation persists over another
+window; the latest increment is not decreasing here. Neither the small
+earlier interval near y=28 nor the new positive sequence supplies a
+remaining-error bound or a stopping criterion.
+
+The old row retains its cap-64 provenance. The new row retains its cap-72
+provenance; their exact shared coefficients and identical finite field
+justify this explicit comparison. The directional-reporting helper still
+groups by complete metadata and does not merge these exports automatically.
+This is a single y edge, not a newly completed x/y rectangle. Both rows
+use the exact retained Fourier space before matrix closure.
+
+The new optical solve takes 412.28 s, with peak process RSS 6.681 GB and
+lossless balance error `8.20e-12`, below the unchanged algebraic guard.
+These are shared-host observations, not controlled performance timings.
+This continuation checks the next y increment of the fixed degree-8 field.
+It does not check degree-10 reference refinement or candidate-field error
+at the higher order; those comparisons remain at `(24,24)`. The independent
+3D reference also remains incomplete. Its
+[Rayleigh-data helper](nvf-independent-fem.md#rayleigh-data-for-a-physical-primitive-lattice)
+now handles the physical affine reciprocal lattice, but the full FEM
+geometry, sources and trace normalization still need to be generalized.
+
 ## Reproduction and guards
 
 The reference runs used separately installed `ngsolve==6.2.2606` and
@@ -505,6 +546,13 @@ one invocation, use the same cap-64, degree-8, quadrature-40 export:
 ```bash
 PYTHONPATH=$PWD python studies/nvf_affine_convergence.py --orders 24 28:24 24:28 28 24:32 28:32 --projections "$NVF_AFFINE_REF" --cells --directional-changes
 ```
+
+For the next single y edge, extend the same degree-8 mesh to cap 72
+with quadrature 40 and independently check quadrature 48. Validate the
+shared cap-64 coefficients against the previous export, then use
+`--orders 24:36 --cells --projections "$NVF_AFFINE_REF"` with cap 72.
+The older `(24,32)` row is reusable only with that explicit provenance
+check; this does not make the two projection metadata records identical.
 
 The measurements and validation details are retained in
 [the study log](https://github.com/fieldalgo/wavebit/blob/develop/studies/results/nvf_affine_convergence.log).
