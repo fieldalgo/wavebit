@@ -121,7 +121,8 @@ JAX examples, resolution defaults, material semantics and explicit refusal
 rules. NumPy and JAX x64 construct the cell; a NumPy export can be
 transferred to the Torch engine. The lower-level energy closure itself
 accepts all three array frameworks and complex material data, while the
-rectangular cell constructor currently requires positive real materials.
+rectangular constructor supports positive-real-part passive materials with
+a common loss ratio throughout each patterned layer.
 
 The [rectangular-cell extension](nvf-rectangular-cells.md) supplies the live
 physical aspect metric, with separate energy-stationarity, quadrature and
@@ -140,8 +141,16 @@ their opening derivatives, and uses signed log-jump grading so coincident
 boundaries merge or cancel. This changes the finite approximation used by
 graded cells; historical measurements retain their original density.
 
+The [common-loss extension](nvf-common-loss.md) factors a shared passive
+complex scalar out of each patterned layer's cell equations. It preserves
+the real storage-cell construction and applies the factor to the energy
+closure, including its inverse longitudinal slot. Uniform layers can have
+independent passive permittivities. The underlying real cell explicitly
+refuses unfactored imaginary material values.
+
 Arbitrary shapes, object edges not aligned with the lattice, sheared
-corrector cells, lossy corrector construction, automatic selection through the ordinary
+corrector cells, unequal material loss ratios within a patterned layer,
+automatic selection through the ordinary
 solver's `projector` setting, and accuracy qualification across use cases
 remain separate work. The existing circular shape projector remains
 available. This integration does not make the provisional 1e-5 research

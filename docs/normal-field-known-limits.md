@@ -1164,8 +1164,9 @@ uniform layers, live backgrounds, independent orthogonal periods, translations,
 common lattice rotations and unequal retained-order counts are supported.
 The exported stack runs through the actual Wavebit engine on NumPy, JAX
 and Torch; the auxiliary cell supports NumPy/JAX x64. The general closure
-preserves loss and autodiff graphs, while the cell builder requires positive
-real scalar materials. Independent material integrals, contact controls,
+preserves loss and autodiff graphs, while the patterned cell builder requires
+positive real parts and a shared passive loss ratio within each layer.
+Independent material integrals, contact controls,
 slab formulas, basis invariance and layer splitting qualify the integration.
 The [rectangular-cell metric](nvf-rectangular-cells.md) is present in both
 the variational equations and projected energy. Period derivatives remain
@@ -1177,5 +1178,9 @@ representations, with a fixed axis during JAX replay. The
 rectangles with equal perpendicular extent and center, including live gap
 closure. Signed log-jump grading removes the artificial interface left by
 the earlier independent-jump density at a collapsed interval. Automatic projector
-selection, general corrector geometry, lossy cell
-construction and optical accuracy qualification remain open.
+selection, general corrector geometry, independently varying material loss
+ratios and optical accuracy qualification remain open. The
+[common-loss construction](nvf-common-loss.md) supports absorbing patterned
+layers with a shared ratio and independent absorbing uniform layers, with
+lossless-boundary and contact derivatives, passivity, analytic contact
+matrices and independent slab controls.

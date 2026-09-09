@@ -130,4 +130,6 @@ They do not establish optical convergence for arbitrary aspect ratios or
 geometries. The default cell resolution remains a starting point requiring
 observable-specific refinement, and the provisional 1e-5 optical increment
 is not a release gate. Curved interfaces, object edges not aligned with the lattice,
-sheared cells and lossy corrector construction remain outside this builder.
+sheared cells and independent material loss ratios remain outside this builder.
+The [common-loss extension](nvf-common-loss.md) supports a shared passive
+complex factor without changing these real storage-cell equations.

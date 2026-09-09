@@ -185,11 +185,17 @@ class PartitionedGapEnergyModel(ThinGapEnergyModel):
             raise ValueError('the partitioned-gap study requires JAX x64')
         edges = xp.concatenate([xp.asarray([-width/2]), seams, xp.asarray([width/2])])/PERIOD
         g, w = gap/PERIOD, width/PERIOD
-        valid = (xp.all(xp.isfinite(edges)) & xp.all(xp.isfinite(values)) & xp.all(values > 0)
+        real_material = xp.all(xp.imag(values) == 0)
+        valid = (xp.all(xp.isfinite(edges)) & xp.all(xp.isfinite(values))
+                 & real_material & xp.all(xp.real(values) > 0)
                  & xp.all(edges[1:]-edges[:-1] >= -CONTACT_ROUNDOFF) & (w > 0) & (w < 1)
                  & (g >= -CONTACT_ROUNDOFF) & (g < 1))
         if xp is np and not valid:
-            raise ValueError('profile requires finite positive materials and nondecreasing interior seams')
+            raise ValueError('profile requires finite positive real materials and nondecreasing interior seams')
+        # Complex physical materials are factored by the public common-loss
+        # adapter. This real corrector must not silently discard arbitrary loss
+        # in its real mean matrices or use a complex mesh density.
+        values = xp.where(real_material, xp.real(values), xp.nan)
         starts = xp.asarray([-.5, -w/2, w/2])
         sizes = xp.asarray([(1-w)/2, w, (1-w)/2])
         nodes = (starts[:, None]+sizes[:, None]*xp.asarray(self.fractions[:-1])).ravel()

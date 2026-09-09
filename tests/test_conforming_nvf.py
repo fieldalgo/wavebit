@@ -291,7 +291,7 @@ def test_invalid_traced_geometry_and_material_poison_all_slots_including_uniform
     uniform_plan = builder.plan([dict(background=1.)], np.eye(2)*700)
     uniform = jax.jit(lambda epsilon: builder.conv_matrices(
         [dict(background=epsilon)], jnp.eye(2)*700, plan=uniform_plan, xp=jnp))
-    for value in (-1., 0., np.nan, 3.+.1j):
+    for value in (-1., 0., np.nan, 3.-.1j):
         assert all(np.isnan(np.asarray(slot)).all() for slot in uniform(value))
     jax.clear_caches()
 

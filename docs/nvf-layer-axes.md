@@ -103,8 +103,10 @@ the strict Sphinx build and lint also pass.
 Within each layer, rectangles must avoid overlaps, share
 their perpendicular extent and center, and span less than one period along
 the tiling axis. Full perpendicular-period contact is supported. L-shaped
-unions, unequal perpendicular extents, oblique edges, sheared cells and lossy
-corrector construction remain unsupported. General shape NVF is available
+unions, unequal perpendicular extents, oblique edges, sheared cells and
+unequal material loss ratios remain unsupported. The
+[common-loss construction](nvf-common-loss.md) accepts a shared passive
+factor independently for each layer. General shape NVF is available
 through the existing solver API; this explicit builder does not substitute
 another construction for unsupported input.
 
