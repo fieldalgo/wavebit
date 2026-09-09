@@ -104,7 +104,7 @@ replace the diagonal interface model with general tensor homogenization.
 Fixed-grid [incidence-angle sensitivities](fdtd-scene-angles.md) now preserve
 the `theta` graph through illumination, Bloch boundaries, diffraction and
 reference normalization. Array angles require an explicit order window;
-geometry and half-space coefficients remain static. CPU checks cover
+geometry remains static. CPU checks cover
 exact uniform-medium phase derivatives, differentiated magnetic Airy refinement,
 crossed material/pole derivatives, bottom incidence and calibrated records.
 These checks do not establish derivative convergence near diffraction thresholds
@@ -115,6 +115,11 @@ zero and requires Jones/psi polarization. Exact discrete phase derivatives,
 normal-incidence field rotations, axis exchange and two finite-difference
 steps check this path. Unequal transverse cells introduce a small planar
 azimuth sensitivity that decreases under refinement toward continuum Airy.
+The [half-space extension](fdtd-halfspace-gradients.md) also retains exterior
+epsilon/mu derivatives through CPML, illumination and reference calibration.
+An explicit pair of nominal mesh indices fixes padding/grading. CPU checks
+include analytic CPML derivatives, magnetic Airy refinement and new public-API
+Meep finite differences with duration and perturbation-size controls.
 
 The common engine reports physical and discrete lower-cutoff classifications
 and supports independent diffraction-plane distances. A binary dielectric

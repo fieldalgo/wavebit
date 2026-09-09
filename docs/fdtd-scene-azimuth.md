@@ -45,9 +45,11 @@ through negative, zero and positive azimuth with one trace, and its derivative
 agrees with same-mesh finite differences at each point.
 
 The change does not turn y-invariant monitor slices into full-y records or
-change their power-per-unit-y convention. Geometry, half-space coefficients,
-mesh targets and wavelength remain static. No native Maxwell/ADE/CPML update
-was duplicated or changed for the new parameter.
+change their power-per-unit-y convention. These measurements hold half-space
+coefficients fixed; the [half-space extension](fdtd-halfspace-gradients.md)
+subsequently adds their derivatives. Geometry, mesh targets and wavelength
+remain static. No native Maxwell/ADE/CPML update was duplicated or changed
+for the azimuth parameter.
 
 ## Rotating the source as well as the wavevector
 

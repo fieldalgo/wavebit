@@ -48,6 +48,7 @@ differ are exactly the `__stack` pair above.
 
 | Oracle | Reaches | Generator needs | Golden |
 | --- | --- | --- | --- |
+| **Meep**, **magnetic half-space sensitivities** | normal-incidence slab complex r/t and four exterior epsilon/mu derivatives; two perturbation sizes and two durations | separately installed Meep, documented API only | `golden_meep_halfspace.npz`, `test_meep_halfspace.py`, `interface/meep_halfspace.py` |
 | **RETICOLO** (Li/Lalanne lineage) | diffraction *orders*; uniform layers with a complex 3x3 tensor — **but only up to one off-diagonal pair, at classical mounting**, see below | Octave + a licensed RETICOLO V10 tree (`RETICOLO_PATH`) | `golden_reticolo.npz`, `golden_reticolo_anisotropic.npz` |
 | **RETICOLO**, swept over `(kx, ky)` | conical incidence across the light line, **including complex (evanescent) angles** | nothing — frozen from a 2024-09-09 study, see its generator | `golden_reticolo_conical_sweep.npz` |
 | **fmmax** (Liu & Fan lineage, MIT) | uniform complex tensors, **patterned** tensors, **permeability** | the `fwref` env — see below | `golden_fmmax.npz`, `golden_fmmax_magnetic.npz` |

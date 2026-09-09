@@ -92,7 +92,10 @@ def fdtd(stack=None, incidence=None, **kwargs):
     the full y-period mesh even at zero and requires Jones/psi polarization.
     Both angles change the Bloch wavevector shared by the wavelength band.
     ``align_layers=True`` places every layer boundary on a z node, independently
-    of padding grading; geometry and half spaces are static.
+    of padding grading; geometry is static. Half-space epsilon/mu retain
+    gradients with explicit ``mesh_indices=(n_top,n_bottom)`` and an order
+    window. These static nominal refractive indices set padding/grading;
+    actual half-space coefficients determine propagation and CPML.
     ``pulse_width`` controls their Gaussian source envelope in c=1
     time units; ``pulse_notches`` optionally suppresses selected positive
     frequencies with causal delayed copies of that pulse.

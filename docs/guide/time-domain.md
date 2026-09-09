@@ -393,15 +393,17 @@ the analytic slab solution. They are not a general tensor interface averaging ru
 
 `pml_cells=N, pml_wavelength=lambda_center` adds convolutional PML at both z
 ends, using Wavebit's existing coefficient formulation evaluated at native E/H
-positions. The end layers **and one adjacent interior cell** must match the static
+positions. The end layers **and one adjacent interior cell** must match the
 `pml_background=((epsilon_top, mu_top), (epsilon_bottom, mu_bottom))` values
 (default: vacuum)
 (epsilon=mu=1), zero electric conductivity and zero oscillator strength. x/y
 remain periodic. Cannot combine this with `absorber_cells`; the latter remains
 a simpler graded damping option. Keep physical sources and measurement planes
 in the interior. Four CPML memory arrays are retained, each with the spatial
-volume shape. The CPML coefficients depend on static geometry and center
-wavelength; material/pole gradients propagate through the interior updates.
+volume shape. Geometry and center wavelength are static; the positive real
+`pml_background` pairs can retain gradients. The CPML stretch follows their
+refractive indices, so exterior-material derivatives include the absorbing
+updates. End coefficients must still match the supplied backgrounds exactly.
 
 Validation includes displacement conservation, NumPy/JAX agreement, finite
 differences for all three pole parameters, checkpoint agreement, and normal/
@@ -541,7 +543,8 @@ homogeneous propagation to move the phase reference to the interfaces. At obliqu
 incidence the transverse wavevector stays fixed across the wavelength band;
 `return_diagnostics=True` includes the corresponding angles.
 
-Geometry, half-space coefficients and wavelength are static.
+Geometry and wavelength are static. Half-space epsilon/mu can retain gradients
+with explicit `mesh_indices` and `truncation_order`, as described below.
 An explicit `resolution` is required so material optimization cannot resize the
 grid. Defaults here are `courant=.8`, `n_periods=40`, `n_pml=12`; choose a smaller
 Courant fraction when the minimum material values or pole frequencies demand it.
@@ -775,7 +778,9 @@ compare positions under spatial, PML and runtime refinement.
 The diagnostic also contains `(order_y, order_x)` arrays `order_x`, `order_y`,
 `kx`, `ky`; the latter two are fixed transverse wavevectors in radians per length
 throughout the band. Its `reflection` and `transmission` mappings describe each
-lossless half space with the following static arrays:
+lossless half space with the following arrays. Their shapes are fixed; numeric
+values follow live angles/materials, while the Boolean masks classify the
+current parameters:
 
 | Key | Shape | Meaning |
 | --- | --- | --- |
@@ -1039,6 +1044,70 @@ quadrature, and exercise plot/probe compatibility. Enabling recording leaves the
 diffraction result unchanged.
 
 
+### Half-space material derivatives
+
+With an explicit backend, `top` and `bot` accept positive real scalar
+permittivities, or `Material(epsilon, mu)` with positive real scalar
+coefficients. Array coefficients retain their graphs when both
+`mesh_indices=(n_top, n_bottom)` and `truncation_order` are explicit.
+`mesh_indices` contains **refractive indices**, while the materials continue
+to take **permittivity and permeability**. Keep that nominal pair constant
+over the optimization or finite-difference sweep.
+NumPy vector indexing can return a host scalar rather than an array; still
+provide the same explicit mesh indices and order window for every perturbed
+evaluation. Recomputing the nominal pair from each perturbation changes the
+experiment being compared.
+
+```python
+import jax
+import jax.numpy as jnp
+import wavebit
+
+jax.config.update('jax_enable_x64', True)
+
+def transmission(p):
+    result = wavebit.fdtd(
+        structure=jnp.full((1, 1, 1), 2.25), thickness=[.2],
+        top=wavebit.Material(p[0], p[1]), bot=wavebit.Material(p[2], p[3]),
+        period=.2, wavelength=1., backend=1, resolution=20,
+        mesh_indices=(1.1, 1.4), truncation_order=0,
+        align_layers=True, n_periods=40,
+    )
+    return result.s_inc.T.sum()
+
+value, gradient = jax.jit(jax.value_and_grad(transmission))(
+    jnp.array([1.2, 1.1, 1.6, 1.15]))
+```
+
+The nominal indices select padding length and any graded z-cell sizes.
+Actual epsilon/mu determine rasterized boundary cells, Maxwell updates,
+CPML stretch, Bloch phase, directional projection, interface phase reference
+and incident-field/power normalization. The mesh, source and monitor locations,
+time step and update count stay fixed. The same contract applies to NumPy
+finite differences and Torch autograd. Plain host coefficients retain the
+previous automatic mesh selection when `mesh_indices` is omitted.
+
+At fixed theta/phi, changing the **incident** medium changes the transverse
+wavevector so that the central-wavelength incidence angle stays fixed. The
+whole band shares that wavevector. This is not a derivative at fixed kx/ky.
+Angles, raster materials and electric poles can vary jointly with the four
+half-space coefficients. Thickness, periods, wavelength and mesh geometry
+are still static; lossy/dispersive half spaces are not supported.
+
+The pair always names original **top, bottom**, including bottom illumination.
+Diagnostics return static `mesh_indices` and live `background`, the latter a
+`(2,2)` array of `(epsilon, mu)` in original top/bottom order. Increasing an
+actual index can require a longer pulse run; it never extends the run silently.
+Concrete invalid materials, inadequate duration, CFL violations and singular
+channels raise. Under JAX JIT they invalidate `stable` and mask scattering and
+normalized fields with NaNs. Optimizers must stay inside the valid domain.
+
+Nominal indices do not guarantee physical mesh or PML accuracy across a wide
+material range. Check resolution, padding, physical PML thickness and duration
+at relevant design points. The [verification note](../fdtd-halfspace-gradients.md)
+separates finite-grid derivative correctness from continuum and external-solver
+agreement.
+
 ### Bottom illumination in the common engine
 
 Set `Incidence(..., incidence_side='bottom')` or pass `incidence_side='bottom'`
@@ -1117,7 +1186,8 @@ both outer interfaces exactly on nodes. Internal layer interfaces may cut cells.
 Half-space padding grows gradually to at most twice the core width, capped by
 20 cells per shortest in-medium wavelength. If the requested mesh is already
 coarser than that cap, grading does not further coarsen it. This geometry policy
-depends on static half spaces and resolution, not optimized raster values.
+depends on resolution and static nominal `mesh_indices` (actual host half-space
+indices when omitted), not optimized raster or half-space values.
 Existing `graded_cells` supplies the geometric ramps. E-node material averaging
 uses the actual asymmetric dual-cell bounds; half-node values use primal cells.
 

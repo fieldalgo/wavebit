@@ -65,7 +65,8 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
     differentiable. Their oscillator frequencies tighten the returned CFL bound.
 
     pml_cells adds convolutional PML at both z ends, with pml_wavelength setting
-    its frequency shift. pml_background gives static (epsilon, mu) pairs at the low/high z ends.
+    its frequency shift. pml_background gives differentiable real (epsilon, mu)
+    pairs at the low/high z ends; the profile follows their refractive indices.
     End layers plus one interior cell must match these positive backgrounds, with
     no conductivity or nonzero pole strength. Cannot combine with absorber_cells.
     x/y stay periodic. Static pml_reflection in (0,1), default 1e-8, sets nominal
@@ -238,9 +239,14 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
         rate = resonance_bound+xp.max(sum(pole_strengths)/eps)
         bound = 1/xp.sqrt(1/bound**2+rate/4)
         stable = stable & (dt < bound)
-    background = np.asarray(pml_background, float)
-    if background.shape != (2, 2) or not np.isfinite(background).all() or np.any(background <= 0):
+    background = array(pml_background)
+    if background.shape != (2, 2) or not xp.isdtype(background.dtype, ('real floating', 'integral')):
         raise ValueError("pml_background needs two positive finite (epsilon, mu) pairs.")
+    background = xp.astype(background, xp.result_type(background, array(1.)))
+    background_valid = xp.all(xp.isfinite(background)) & xp.all(background > 0)
+    if _concrete(background_valid) is False:
+        raise ValueError("pml_background needs two positive finite (epsilon, mu) pairs.")
+    stable = stable & background_valid
     if pml_cells:
         edge = np.r_[0:pml_cells+1, shape[1]-pml_cells-1:shape[1]]
         for side, cells in enumerate((slice(0, pml_cells+1), slice(-pml_cells-1, None))):
@@ -332,14 +338,14 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
             depth = np.maximum(pml_cells-np.minimum(position, shape[1]-position), 0)*spacing[0]
             return tuple(array(v[:, None, None], dtype=real_dtype) for v in cpml_coefficients(
                 depth, pml_cells*spacing[0], dt, pml_wavelength,
-                np.where(position < shape[1]/2, np.prod(background[0]), np.prod(background[1])),
-                target_reflection=pml_reflection))
+                xp.where(array(position < shape[1]/2), xp.prod(background[0]), xp.prod(background[1])),
+                target_reflection=pml_reflection, xp=xp, array=array))
         if nonuniform:
             from .fdtd import cpml_profiles
             pe, ph = cpml_profiles(nodes, nodes[:-1]+widths/2, nodes[pml_cells],
                                    nodes[-1]-nodes[-pml_cells-1], dt, pml_wavelength,
-                                   np.prod(background[0]), np.prod(background[1]),
-                                   target_reflection=pml_reflection)
+                                   xp.prod(background[0]), xp.prod(background[1]),
+                                   target_reflection=pml_reflection, xp=xp, array=array)
             pml_e = tuple(array(pe[key][:-1, None, None], dtype=real_dtype) for key in ('b', 'a', 'kappa'))
             pml_h = tuple(array(ph[key][:, None, None], dtype=real_dtype) for key in ('b', 'a', 'kappa'))
         else:

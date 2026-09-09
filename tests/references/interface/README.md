@@ -4,6 +4,7 @@
 | --- | --- |
 | `meep_ringdown.py` | Can source-free time traces be generated through Meep's public API for independent mode-fitting checks? |
 | `meep_source_notch.py` | Does a unit-peak custom source zero suppress a known undamped material mode, with fields matching the native solver at the same current times? |
+| `meep_halfspace.py` | Do magnetic half-space perturbations give stable complex-amplitude derivatives under smaller perturbations and longer runs? |
 | `Reticolo.py`, `__init__.py` | How do tests access the existing separately installed RETICOLO oracle? |
 | `reticolo_res2.m`, `reticolo_res3.m`, `reti_aniso.m` | How do the existing RETICOLO bridge calls return scattering and field data? |
 
@@ -12,6 +13,16 @@ environment. These are project-owned interfaces, not bundled external solvers.
 Meep implementation code must not be opened, inspected or copied. The new
 ringdown generator uses documented public simulation calls only and suppresses
 automatic implementation-source excerpts in external exceptions/warnings.
+
+The half-space generator perturbs epsilon/mu above and below a magnetic film
+on a fixed cell. Its frozen archive retains both 1e-3/5e-4 perturbations and
+50/70 durations, all four complex-amplitude derivatives and solver metadata.
+The [verification note](../../../docs/fdtd-halfspace-gradients.md) gives the
+scene, measured controls and limits. Generate with a separate Meep interpreter:
+
+```shell
+"$MEEP_PYTHON" tests/references/interface/meep_halfspace.py --output /tmp/meep-halfspace.npz
+```
 
 Run the ringdown generator by hand with an interpreter containing Meep:
 

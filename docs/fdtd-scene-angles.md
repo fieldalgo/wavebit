@@ -22,8 +22,9 @@ an explicit diffraction window for every array-valued theta. No order count may
 be inferred from a differentiable scalar. Plain scalar numbers retain automatic
 selection. These theta measurements hold phi, geometry, half spaces, cell
 counts, source/monitor locations, PML, time step and run length fixed. The
-subsequent [azimuth extension](fdtd-scene-azimuth.md) also differentiates phi;
-geometry and half-space derivatives remain outside the scene interface.
+subsequent [azimuth extension](fdtd-scene-azimuth.md) also differentiates phi,
+and the [half-space extension](fdtd-halfspace-gradients.md) differentiates
+exterior coefficients with explicit nominal mesh indices. Geometry stays static.
 Array-backed geometry does not become differentiable by association.
 
 The transverse wavevector uses the incident index and the midpoint wavelength

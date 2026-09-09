@@ -462,10 +462,13 @@ def component_property(raster, thickness, top, bot, period, z_centres, z_widths,
 # ---------------------------------------------------------------------------------------
 
 def cpml_coefficients(depth, thickness, dt, wavelength, eps_r, *,
-                      target_reflection=PML_TARGET_REFLECTION):
+                      target_reflection=PML_TARGET_REFLECTION, xp=np, array=np.asarray):
     """``(b, a, kappa)`` of the CFS-PML at a given depth into a layer (Roden & Gedney 2000).
 
     ``depth`` is measured in length units from the inner face.
+    ``eps_r`` is the squared refractive index (epsilon times mu for magnetic
+    backgrounds). With the shared engine's namespace/converter it retains
+    material derivatives; geometry, wavelength and target stay static.
     ``target_reflection`` sets the nominal normal-incidence round-trip amplitude
     attenuation of the unshifted continuous profile. It is not a bound on the
     finite-grid reflection, especially at grazing incidence.
@@ -484,19 +487,22 @@ def cpml_coefficients(depth, thickness, dt, wavelength, eps_r, *,
     this a complex-frequency-shifted PML and what lets it absorb evanescent fields, which a
     grating close to its boundary produces in quantity.
     """
+    # Geometry is static; the optional namespace/converter retains material
+    # derivatives and device placement in the shared time-domain engine.
+    depth, thickness, eps_r = array(depth), array(thickness), array(eps_r)
     sigma_max = (-(PML_ORDER + 1.0) * np.log(target_reflection)
-                 / (2.0 * np.sqrt(eps_r) * thickness))
+                 / (2.0 * xp.sqrt(eps_r) * thickness))
     alpha_max = PML_ALPHA_RELATIVE * 2.0 * np.pi / wavelength
 
-    f = np.clip(depth / thickness, 0.0, 1.0)
+    f = xp.clip(depth / thickness, 0.0, 1.0)
     sigma = sigma_max * f ** PML_ORDER
     kappa = 1.0 + (PML_KAPPA_MAX - 1.0) * f ** PML_ORDER
     alpha = alpha_max * (1.0 - f)
 
-    b = np.exp(-(sigma / kappa + alpha) * dt)
+    b = xp.exp(-(sigma / kappa + alpha) * dt)
     denom = kappa * (sigma + kappa * alpha)
-    safe = np.where(denom == 0.0, 1.0, denom)
-    return b, np.where(denom == 0.0, 0.0, sigma * (b - 1.0) / safe), kappa
+    safe = xp.where(denom == 0.0, 1.0, denom)
+    return b, xp.where(denom == 0.0, 0.0, sigma * (b - 1.0) / safe), kappa
 
 
 #: How much one cell may grow over its neighbour, and it is a genuine optimum rather than a
@@ -583,7 +589,8 @@ def build_z_mesh(h_fine, thickness_total, above, below, n_top, n_bot, n_max, wav
 
 
 def cpml_profiles(z_node, z_half, top_thickness, bot_thickness, dt, wavelength,
-                  eps_top, eps_bot, *, target_reflection=PML_TARGET_REFLECTION):
+                  eps_top, eps_bot, *, target_reflection=PML_TARGET_REFLECTION,
+                  xp=np, array=np.asarray):
     """CPML coefficients per z index, at node (``nz``) and half (``nz-1``) positions.
 
     Outside the two layers the triple is ``(1, 0, 1)``, which makes every stretched update
@@ -603,13 +610,13 @@ def cpml_profiles(z_node, z_half, top_thickness, bot_thickness, dt, wavelength,
         d_top, d_bot = top_thickness - z, z - ((z_max - z_start) - bot_thickness)
         depth = np.maximum(np.maximum(d_top, d_bot), 0.0)
         on_top = d_top >= d_bot
-        eps_side = np.where(on_top, eps_top, eps_bot)
+        eps_side = xp.where(array(on_top), array(eps_top), array(eps_bot))
         side_thickness = np.where(on_top, top_thickness, bot_thickness)
         b, a, kappa = cpml_coefficients(depth, side_thickness, dt, wavelength, eps_side,
-                                       target_reflection=target_reflection)
-        outside = depth <= 0.0
-        return {'b': np.where(outside, 1.0, b), 'a': np.where(outside, 0.0, a),
-                'kappa': np.where(outside, 1.0, kappa)}
+                                       target_reflection=target_reflection, xp=xp, array=array)
+        outside = array(depth <= 0.0)
+        return {'b': xp.where(outside, 1.0, b), 'a': xp.where(outside, 0.0, a),
+                'kappa': xp.where(outside, 1.0, kappa)}
 
     return build(z_node), build(z_half)
 

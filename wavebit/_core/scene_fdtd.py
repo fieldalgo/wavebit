@@ -1,6 +1,6 @@
 """Differentiable rectangular Stack adapter for the shared Yee time-domain core.
 
-Geometry is static; incidence theta/phi, raster epsilon, mu and electric pole values
+Geometry is static; incidence theta/phi, raster/half-space epsilon, mu and electric pole values
 retain their backend graph. A uniform incident-medium run calibrates each current-sheet basis.
 No external implementation is used here.
 """
@@ -183,6 +183,8 @@ def _solve_bottom_scene(options):
     depth = float(thickness.sum())
     mirrored = dict(options, incidence_side='top', top=options['bot'], bot=options['top'],
                     thickness=thickness[::-1], structure=xp.flip(raster, axis=0))
+    if options['mesh_indices'] is not None:
+        mirrored['mesh_indices'] = _validate_mesh_indices(options['mesh_indices'])[::-1]
     if options['record_bounds'] is not None:
         mirrored['record_bounds'] = dict(options['record_bounds'])
         if 'z' in mirrored['record_bounds']:
@@ -229,7 +231,25 @@ def _solve_bottom_scene(options):
                        incidence_side='bottom', reflection_z=depth, transmission_z=0.)
     for key in ('reflection_monitor_z', 'transmission_monitor_z'):
         diagnostics['diffraction'][key] = depth-diagnostics['diffraction'][key]
+    diagnostics['mesh_indices'] = diagnostics['mesh_indices'][::-1]
+    diagnostics['background'] = xp.flip(diagnostics['background'], axis=0)
     return result, diagnostics
+
+
+def _validate_mesh_indices(value):
+    """Nominal top/bottom indices select geometry, never material coefficients."""
+    message = 'mesh_indices must be two positive finite static refractive indices (top, bottom).'
+    try:
+        value = np.asarray(value)
+    except (TypeError, ValueError, RuntimeError) as error:
+        raise ValueError(message) from error
+    if (value.shape != (2,) or value.dtype.kind not in 'fiu'
+            or not np.isfinite(value).all() or np.any(value <= 0)):
+        raise ValueError(message)
+    result = tuple(float(v) for v in value)
+    if not np.isfinite(result).all():
+        raise ValueError(message)
+    return result
 
 
 def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=None, *,
@@ -243,11 +263,16 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                      convergence_window=None, convergence_tol=1e-4, dft_subsample=1, record_bounds=None,
                      pulse_width=None, align_layers=False, diffraction_distance=None,
                      diffraction_method='electric', pml_reflection=1e-8, pulse_notches=None,
-                     source_distance=None, transverse_resolution=None):
+                     source_distance=None, transverse_resolution=None, mesh_indices=None):
     """Solve a rectangular scene with NumPy/JAX/Torch angle/material gradients.
 
     Explicit resolution is required: optimizing materials must not resize the
-    grid. Half spaces, geometry and wavelength are static. theta and phi can
+    grid. Geometry and wavelength are static. Half-space epsilon/mu can be live
+    positive real scalars with explicit mesh_indices and truncation_order.
+    mesh_indices=(n_top,n_bottom) fixes padding/grading using nominal static
+    refractive indices; actual materials still determine all physics and CPML.
+    Without it, host scalar half spaces retain automatic mesh selection.
+    theta and phi can
     be backend real scalars; either array angle requires truncation_order to
     fix the diffraction window. Array phi always samples the full y period,
     including at zero, and requires Jones/psi polarization rather than tetm.
@@ -397,15 +422,32 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     if muraster.shape != raster.shape:
         raise ValueError('mu must have the same raster shape as structure.')
     background = []
+    host_indices = []
+    array_background = False
     for value in (top, bot):
         material = as_material(value)
-        pair = [complex(material.epsilon), complex(1. if material.mu is None else material.mu)]
-        if any(v.imag != 0 or not np.isfinite(v.real) or v.real <= 0 for v in pair):
-            raise ValueError('Half spaces must have positive real scalar epsilon and mu.')
-        background.append(tuple(v.real for v in pair))
+        raw = (material.epsilon, 1. if material.mu is None else material.mu)
+        host = all(isinstance(v, (int, float, complex, np.number)) for v in raw)
+        array_background |= not host
+        pair = []
+        for v in raw:
+            v = array(v)
+            if v.shape != () or not xp.isdtype(v.dtype, ('real floating', 'complex floating', 'integral')):
+                raise ValueError('Half spaces must have positive real scalar epsilon and mu.')
+            real = xp.real(v) if xp.isdtype(v.dtype, 'complex floating') else v
+            imaginary_ok = xp.imag(v) == 0 if xp.isdtype(v.dtype, 'complex floating') else True
+            check(xp.isfinite(v) & imaginary_ok & (real > 0),
+                  'Half spaces must have positive real scalar epsilon and mu.')
+            pair.append(xp.astype(real, xp.result_type(real, array(1.))))
+        if host:
+            host_indices.append(np.sqrt(complex(raw[0]).real*complex(raw[1]).real))
+        background.append(tuple(pair))
+    if array_background and (mesh_indices is None or truncation_order is None):
+        raise ValueError('Array half spaces require explicit mesh_indices and explicit truncation_order to keep the grid fixed.')
+    mesh_indices = _validate_mesh_indices(host_indices if mesh_indices is None else mesh_indices)
     et, mt = background[0]
     eb, mb = background[1]
-    nt, nb = np.sqrt(et*mt), np.sqrt(eb*mb)
+    nt, nb = xp.sqrt(et*mt), xp.sqrt(eb*mb)
     thick = np.asarray(thickness, float)
     if thick.shape != (raster.shape[0],) or not np.isfinite(thick).all() or np.any(thick <= 0):
         raise ValueError('thickness must contain one positive static length per layer.')
@@ -422,7 +464,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     # Scalar zero retains the established two-cell y-invariant shortcut.
     ny = max(2, math.ceil(ly*ry)) if raster.shape[1] > 1 or not in_plane else 2
     dx, dy = lx/nx, ly/ny
-    pad = max(6, math.ceil(pad_scale*centre/min(nt, nb)/dz))
+    pad = max(6, math.ceil(pad_scale*centre/min(mesh_indices)/dz))
     source_z, reflect_z = int(n_pml)+2, int(n_pml)+2+pad
     interface = reflect_z+pad
     transmit_z = interface+math.ceil(thick.sum()/dz)+pad
@@ -440,8 +482,8 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
         if grading is not None:
             from .fdtd import graded_cells
             coarse = lambda fine, index: max(fine, min(2*fine, band.min()/(20*index)))
-            up = graded_cells(core[0], coarse(core[0], nt), interface*dz, grading)[::-1]
-            down = graded_cells(core[-1], coarse(core[-1], nb), (nz-bottom_interface)*dz, grading)
+            up = graded_cells(core[0], coarse(core[0], mesh_indices[0]), interface*dz, grading)[::-1]
+            down = graded_cells(core[-1], coarse(core[-1], mesh_indices[1]), (nz-bottom_interface)*dz, grading)
         else:
             up = np.full(interface, dz)
             down = np.full(nz-bottom_interface, dz)
@@ -539,8 +581,9 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     dt = courant/np.sqrt(widths.min()**-2+dy**-2+dx**-2)
     if width < dt:
         raise ValueError('pulse_width must span at least one time step; increase pulse_width or resolution.')
-    if n_periods*centre < 10*width+2*(z[transmit_z]-z[source_z])*max(nt, nb):
-        raise ValueError('n_periods is too short for the pulse and a round trip across the scene.')
+    required_duration = 10*width+2*(z[transmit_z]-z[source_z])*xp.maximum(nt, nb)
+    check(n_periods*centre >= required_duration,
+          'n_periods is too short for the pulse and a round trip across the scene.')
     steps = math.ceil(n_periods*centre/dt)
     time = np.arange(steps)*dt
     pulse = np.exp(-((time-5*width)/width)**2)*np.exp(-2j*np.pi*time/centre)
@@ -550,16 +593,16 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     if pulse_notches is not None:
         pulse, shaped = _notched_pulse(pulse, dt, 1/band, pulse_notches, source_epsilon,
                                        1/centre, record=record_field is not None)
-        if (steps-len(shaped['notches']))*dt < 10*width+2*(z[transmit_z]-z[source_z])*max(nt, nb):
-            raise ValueError('n_periods is too short for pulse_notches and the scene round trip.')
+        check((steps-len(shaped['notches']))*dt >= required_duration,
+              'n_periods is too short for pulse_notches and the scene round trip.')
         pulse_info.update(shaped)
     kx0, ky0 = 2*np.pi/centre*nt*xp.sin(theta)*xp.stack((cos_phi, sin_phi))
     check(xp.all((array(band)/centre)*xp.sin(theta) < 1),
           'The fixed Bloch wavevector must propagate throughout the wavelength band.')
     if truncation_order is None:
-        host_kx, host_ky = 2*np.pi/centre*nt*np.sin(host_theta)*np.array([np.cos(float(host_phi)), np.sin(float(host_phi))])
-        halfx = math.floor(lx*(max(nt, nb)/band.min()+abs(host_kx)/(2*np.pi)))
-        halfy = math.floor(ly*(max(nt, nb)/band.min()+abs(host_ky)/(2*np.pi))) if raster.shape[1] > 1 else 0
+        host_kx, host_ky = 2*np.pi/centre*host_indices[0]*np.sin(host_theta)*np.array([np.cos(float(host_phi)), np.sin(float(host_phi))])
+        halfx = math.floor(lx*(max(host_indices)/band.min()+abs(host_kx)/(2*np.pi)))
+        halfy = math.floor(ly*(max(host_indices)/band.min()+abs(host_ky)/(2*np.pi))) if raster.shape[1] > 1 else 0
     else:
         (halfx, halfy), _ = parse_order_pair(truncation_order)
     if 2*halfx+1 > nx or 2*halfy+1 > ny:
@@ -794,6 +837,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                            dft_samples=native_runs[0]['dft_samples'],
                            spacing=(float(widths.min()), dy, dx), shape=shape, wavelengths=array(band),
                            transverse_resolution=(float(rx), float(ry)),
+                           mesh_indices=mesh_indices, background=array(background),
                            pulse={key: array(value) if isinstance(value, np.ndarray) else value
                                   for key, value in pulse_info.items()},
                            z_nodes=array(z), z_spacing=array(widths), grading=grading, align_layers=bool(align_layers),
