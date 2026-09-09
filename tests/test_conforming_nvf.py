@@ -233,7 +233,7 @@ def test_full_height_contact_matches_independent_rotated_cartesian_inverse_rule(
         np.testing.assert_allclose(got[0], want, atol=3e-12, rtol=0)
 
 
-@pytest.mark.parametrize('lattice', [np.diag([700., 701.]), [[700., 1.], [0., 700.]],
+@pytest.mark.parametrize('lattice', [[[700., 1.], [0., 700.]],
                                     np.diag([700., -700.]), np.zeros((2, 2)),
                                     np.array([[np.inf, 0.], [0., 700.]]), [700., 700.]])
 def test_unsupported_lattice_is_refused(lattice):

@@ -4,7 +4,8 @@ import pytest
 from numpy.polynomial.legendre import leggauss
 
 from studies.nvf_cell_bounds import energy_bounds, projected_matrices
-from studies.nvf_continuous_flux import ContinuousFluxGapModel, polynomial_moments, project_flux_polynomial
+from studies.nvf_continuous_flux import (ContinuousFluxGapModel, polynomial_moments,
+                                        project_flux_polynomial, project_flux_strip)
 from studies.nvf_gap_convergence import load_projection, mean_energy, profile_li
 from studies.nvf_harmonic_energy import PERIOD, THETA, THICKNESS, WAVELENGTH, polarized_powers, powers
 
@@ -50,8 +51,9 @@ def test_maximal_projection_can_feed_lower_outer_order_without_changing_the_mode
         np.testing.assert_allclose(got, want, atol=2e-12, rtol=0)
 
 
-@pytest.mark.parametrize('degree', [2, 4, 6])
-def test_gap_polynomial_projection_matches_independent_tensor_gauss_rule(degree):
+@pytest.mark.parametrize('degree', [1, 2, 4, 6])
+@pytest.mark.parametrize('metric_y', [.36, 1., 3.24])
+def test_gap_polynomial_projection_matches_independent_tensor_gauss_rule(degree, metric_y):
     q, qw = leggauss(64)
     x, wx = q/2, qw/2
     r, wr = (q+1)/2, qw/2
@@ -70,19 +72,26 @@ def test_gap_polynomial_projection_matches_independent_tensor_gauss_rule(degree)
     normal = np.arange(1, degree+1)[:, None, None]*potential[1:]/gap
     moments = polynomial_moments(np.array([.5-gap/2]), np.array([gap]), np.array([0.]),
                                   np.array([1.]), modes, degree=2*degree)[:, 0]
-    actual_field, actual_gram, actual_material = project_flux_polynomial(potential, normal, moments, pack)
+    actual_field, actual_gram, actual_material = project_flux_polynomial(
+        potential, normal, moments, pack, metric_y=metric_y)
     v = sum(r[:, None, None]**i*potential[i] for i in range(degree+1))
     n = sum(r[:, None, None]**i*normal[i] for i in range(degree))
     bx, by = np.einsum('yic,xi->yxc', v, df), np.einsum('yic,xi->yxc', n, f)
     basis = np.stack([bx, by], axis=2)
     basis[:, :, 0, 0] += lift[None]
     basis[:, :, 1, 1] += 1
-    gram = np.einsum('yxic,yxid->yxcd', basis, basis)
+    weighted = basis*np.array([1., metric_y])[None, None, :, None]
+    gram = np.einsum('yxic,yxid->yxcd', basis, weighted)
     ey = np.exp(-2j*np.pi*modes[:, None]*y[None])*wy[None]
     expected_field = np.einsum('ny,yxcd,mx->nmcd', ey, basis, wave)
     expected_gram = np.einsum('ny,yxcd,mx->nmcd', ey, gram, wave)
     np.testing.assert_allclose(actual_field, expected_field, atol=2e-13, rtol=0)
     np.testing.assert_allclose(actual_gram, expected_gram, atol=2e-12, rtol=0)
+    if degree == 1:
+        strip = project_flux_strip(potential[0][None], potential.sum(axis=0)[None],
+                                    normal[0][None], moments[:, None], pack, metric_y=metric_y)
+        for got, want in zip(strip, (expected_field, expected_gram, actual_material)):
+            np.testing.assert_allclose(got, want, atol=2e-12, rtol=0)
     np.testing.assert_allclose(actual_material, ey.sum(axis=1)[:, None]*wave.sum(axis=1)[None], atol=2e-13, rtol=0)
 
 

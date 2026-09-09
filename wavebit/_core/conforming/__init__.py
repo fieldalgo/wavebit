@@ -1,4 +1,4 @@
-"""Conforming NVF construction for rectangular tilings in square cells."""
+"""Conforming NVF construction for rectangular tilings in orthogonal cells."""
 from collections import namedtuple
 from numbers import Integral
 
@@ -10,7 +10,7 @@ from ..factorization import ConvMatrices
 from ..geometry import StaleGeometryError
 from ..parametric import check_layer_spec, check_shape_spec
 from .polynomial_body import PolynomialBodyGapModel
-from .thin_gap import PERIOD
+from .thin_gap import PERIOD, CONTACT_ROUNDOFF
 
 
 _Plan = namedtuple('ConformingNVFPlan', 'layers')
@@ -43,9 +43,9 @@ class ConformingNVF:
     """Build energy-factorized matrices from ordinary rectangle layer dictionaries.
 
     Each patterned layer must be a contiguous horizontal tiling in the local
-    axes of a right-handed square lattice: equal rectangle heights and y
-    centers, total width less than the period, and no overlap or internal gap.
-    Uniform layers are supported. The lattice may have any positive period,
+    axes of a right-handed orthogonal lattice: equal rectangle heights and y
+    centers, total width less than the first period, and no overlap or internal gap.
+    Uniform layers are supported. The two periods may differ and must be positive;
     translation of a layer is unrestricted, and its axes may rotate together
     with the rectangles. Materials must be scalar, positive, real and
     non-magnetic; each layer may have its own background permittivity.
@@ -87,16 +87,16 @@ class ConformingNVF:
         _require(xp.all(xp.isfinite(basis)), 'conforming NVF lattice must be finite')
         real = xp.all(xp.imag(basis) == 0)
         basis = xp.real(basis)
-        period = xp.sqrt(xp.sum(basis[:, 0]**2))
-        safe_period = xp.where(period > 0, period, 1.)
-        rotation = basis/safe_period
+        periods = xp.sqrt(xp.sum(basis**2, axis=0))
+        safe_periods = xp.where(periods > 0, periods, 1.)
+        rotation = basis/safe_periods
         # Keep invalid concrete inputs away from determinant evaluation too.
         rotation = xp.where(xp.isfinite(rotation), rotation, 0.)
-        valid = (real & xp.all(xp.isfinite(basis)) & (period > 0)
+        valid = (real & xp.all(xp.isfinite(basis)) & xp.all(periods > 0)
                  & (xp.max(xp.abs(rotation.T@rotation-xp.eye(2))) < 128*np.finfo(float).eps)
                  & (xp.linalg.det(rotation) > 0))
-        _require(valid, 'conforming NVF requires a right-handed square lattice')
-        period = xp.where(valid, period, xp.nan)
+        _require(valid, 'conforming NVF requires a right-handed orthogonal lattice')
+        periods = xp.where(valid, periods, xp.nan)
         angle = xp.arctan2(rotation[1, 0], rotation[0, 0])
         if not isinstance(structure, (tuple, list)) or not structure:
             raise ValueError('conforming NVF needs a nonempty sequence of layer dictionaries')
@@ -118,23 +118,25 @@ class ConformingNVF:
                     raise NotImplementedError('conforming NVF currently supports rectangular tilings')
                 center = xp.stack([_real(shape.get('cx', 0.), xp, 'cx'),
                                    _real(shape.get('cy', 0.), xp, 'cy')])
-                center = rotation.T@center*(PERIOD/period)
+                center = rotation.T@center*(PERIOD/periods)
                 orientation = _real(shape.get('angle', 0.), xp, 'rectangle angle')
                 aligned = xp.abs(xp.sin(orientation-angle)) < 128*np.finfo(float).eps
                 _require(aligned, 'conforming rectangles must align with the first lattice axis')
+                height = _real(shape.get('ly', 0.), xp, 'ly')
                 shapes.append(dict(
-                    lx=_real(shape.get('lx', 0.), xp, 'lx')*(PERIOD/period),
-                    ly=_real(shape.get('ly', 0.), xp, 'ly')*(PERIOD/period),
+                    lx=_real(shape.get('lx', 0.), xp, 'lx')*(PERIOD/periods[0]),
+                    ly=height*(PERIOD/periods[1]),
+                    gap=(periods[1]-height)*(PERIOD/periods[1]),
                     cx=center[0], cy=center[1],
                     epsilon=_epsilon(shape.get('material', 1.), xp)/background,
                     valid=aligned & valid))
             layers.append((shapes, background))
-        return layers, rotation, valid
+        return layers, rotation, valid, periods[0]/periods[1]
 
     def plan(self, structure, lattice):
         """Freeze only input rectangle permutations, never geometry or material values."""
         try:
-            layers, _, _ = self._layers(structure, lattice, np)
+            layers, _, _, _ = self._layers(structure, lattice, np)
         except (TypeError, RuntimeError) as exc:
             raise ValueError('plan conforming NVF on concrete geometry before JIT') from exc
         orders = tuple(tuple(sorted(range(len(shapes)), key=lambda i: float(shapes[i]['cx'])))
@@ -147,11 +149,11 @@ class ConformingNVF:
 
     def _profile(self, shapes, xp, replay):
         values = {key: xp.stack([s[key] for s in shapes])
-                  for key in ('lx', 'ly', 'cx', 'cy', 'epsilon', 'valid')}
+                  for key in ('lx', 'ly', 'gap', 'cx', 'cy', 'epsilon', 'valid')}
         left, right = values['cx']-values['lx']/2, values['cx']+values['lx']/2
         width, cx, cy = right[-1]-left[0], (right[-1]+left[0])/2, values['cy'][0]
-        tol = 32*np.finfo(float).eps*PERIOD
-        gap = PERIOD-values['ly'][0]
+        tol = CONTACT_ROUNDOFF*PERIOD
+        gap = values['gap'][0]
         valid = (xp.all(values['valid']) & xp.all(values['lx'] > 0) & xp.all(values['ly'] > 0)
                  & (width > 0) & (width < PERIOD) & (gap >= -tol) & (gap < PERIOD)
                  & xp.all(xp.abs(values['ly']-values['ly'][0]) <= tol)
@@ -159,9 +161,9 @@ class ConformingNVF:
                  & xp.all(xp.abs(right[:-1]-left[1:]) <= tol))
         _require(valid, 'conforming rectangles must form a contiguous equal-height tiling within one period',
                  StaleGeometryError if replay else ValueError)
-        # Correct only negative roundoff at contact. The zero/positive branch
-        # retains its full one-sided gap derivative and all positive gaps.
-        gap = xp.where((gap < 0) & (gap >= -tol), 0., gap)
+        # The analytically continued contact equations accept this same tiny
+        # roundoff neighborhood. Snapping negative roundoff to zero would erase
+        # the live gap derivative when a rotated lattice norm rounds down.
         seams = (right[:-1]+left[1:])/2-cx
         return gap, width, cx, cy, dict(seams=seams, values=values['epsilon']), valid
 
@@ -178,7 +180,7 @@ class ConformingNVF:
             xp = np
         replay = plan is not None
         plan = self.plan(structure, lattice) if plan is None else plan
-        layers, rotation, valid_lattice = self._layers(structure, lattice, xp)
+        layers, rotation, valid_lattice, aspect = self._layers(structure, lattice, xp)
         if not isinstance(plan, _Plan) or len(plan.layers) != len(layers):
             raise StaleGeometryError('conforming NVF layer count or plan type changed; plan again')
         stacks = []
@@ -193,7 +195,7 @@ class ConformingNVF:
                 valid = valid_lattice & xp.isfinite(background) & (background > 0)
             else:
                 gap, width, cx, cy, profile, valid = self._profile([shapes[i] for i in order], xp, replay)
-                coefficients, _ = self._cell.coefficients(gap, profile, width, xp)
+                coefficients, _ = self._cell.coefficients(gap, profile, width, xp, aspect=aspect)
                 modes = xp.asarray(self._cell.modes)
                 # The cell kernels integrate around zero. Ordinary shape
                 # centers are offsets from (a1+a2)/2, while the engine's

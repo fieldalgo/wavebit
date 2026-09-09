@@ -71,7 +71,7 @@ are in `studies/results/nvf_energy_engine_validation.log`.
 ## Shape construction and Fourier origin
 
 The public constructor accepts a contiguous equal-height tiling in each
-layer, uniform layers, positive scalar backgrounds, any square-cell period,
+layer, uniform layers, positive scalar backgrounds, independent orthogonal periods,
 translations, common lattice/shape rotations and rectangular retained-order
 sets. It normalizes physical lengths and material ratios before the shared
 cell solve. It then applies translation and Cartesian tensor rotation to
@@ -99,7 +99,7 @@ The package-only subprocess smoke test constructs a patterned cell without
 any `studies` package. Commands and results are recorded in
 `studies/results/nvf_conforming_shapes_validation.log`.
 
-The shape integration validation has 48 passing public-API checks, 204
+The initial shape integration validation recorded 48 passing public-API checks, 204
 passing shared-kernel and engine regressions, and 29 passing documentation
 contract checks. One pre-existing strict expected failure records the old
 fixed-P1 model's moving-interface limitation; the polynomial-body model
@@ -121,7 +121,12 @@ transferred to the Torch engine. The lower-level energy closure itself
 accepts all three array frameworks and complex material data, while the
 rectangular cell constructor currently requires positive real materials.
 
-Arbitrary shapes, independently rotated objects, nonsquare corrector cells,
+The [rectangular-cell extension](nvf-rectangular-cells.md) supplies the live
+physical aspect metric, with separate energy-stationarity, quadrature and
+period-derivative controls. It also removes a zero-gradient contact clamp
+that could be triggered by roundoff when normalizing the height.
+
+Arbitrary shapes, independently rotated objects, sheared corrector cells,
 lossy corrector construction, automatic selection through the ordinary
 solver's `projector` setting, and accuracy qualification across use cases
 remain separate work. The existing circular shape projector remains

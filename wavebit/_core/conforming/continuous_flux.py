@@ -4,6 +4,8 @@ import numpy as np
 from numpy.polynomial import Legendre, Polynomial
 from scipy.linalg import solve
 
+from ..backend import _concrete
+from .thin_gap import CONTACT_ROUNDOFF
 from .partitioned_gap import PartitionedGapEnergyModel, interval_moments
 
 
@@ -178,7 +180,7 @@ def flux_integrals(nodes, lengths, seams, values, inside, modes, pivot, xp=np, *
     return body, gap
 
 
-def project_flux_strip(left, right, normal, ymoments, pack, xp=np):
+def project_flux_strip(left, right, normal, ymoments, pack, xp=np, *, metric_y=1.):
     """Project the actual affine lift plus periodic integrated-flux potential."""
     y0, y1, y2 = (ymoments[..., i] for i in range(3))
 
@@ -191,7 +193,7 @@ def project_flux_strip(left, right, normal, ymoments, pack, xp=np):
     energy = (integrate(y0-2*y1+y2, quadratic(pack['stiffness'], left, left))
               +integrate(y1-y2, quadratic(pack['stiffness'], left, right)+quadratic(pack['stiffness'], right, left))
               +integrate(y2, quadratic(pack['stiffness'], right, right))
-              +integrate(y0, quadratic(pack['mass'], normal, normal)))
+              +metric_y*integrate(y0, quadratic(pack['mass'], normal, normal)))
 
     def xform(weights):
         return (xp.einsum('ne,mi,eic->nmc', y0-y1, weights, left)
@@ -200,17 +202,17 @@ def project_flux_strip(left, right, normal, ymoments, pack, xp=np):
     dx = xform(pack['derivative'])
     dy = xp.einsum('ne,mi,eic->nmc', y0, pack['load'], normal)
     linear = xp.stack([dx, dy], axis=-2)
-    energy_linear = xp.stack([xform(pack['force']), dy], axis=-2)
+    energy_linear = xp.stack([xform(pack['force']), metric_y*dy], axis=-2)
     scale = xp.sum(y0, axis=1)[:, None]
     material, lift, lift_squared = [scale*pack[key][None] for key in ('material', 'lift', 'lift_squared')]
     ex, ey = xp.diag(xp.asarray([1., 0.])), xp.diag(xp.asarray([0., 1.]))
     field = linear+lift[..., None, None]*ex+material[..., None, None]*ey
     gram = (energy+energy_linear+xp.swapaxes(energy_linear, -1, -2)
-            +lift_squared[..., None, None]*ex+material[..., None, None]*ey)
+            +lift_squared[..., None, None]*ex+metric_y*material[..., None, None]*ey)
     return field, gram, material
 
 
-def project_flux_polynomial(potential, normal, moments, pack, xp=np):
+def project_flux_polynomial(potential, normal, moments, pack, xp=np, *, metric_y=1.):
     """Fourier projection of a polynomial gap potential and its normal field."""
     def quadratic(matrix, a):
         # Contract the x basis before applying the y Fourier moment. A single
@@ -224,14 +226,14 @@ def project_flux_polynomial(potential, normal, moments, pack, xp=np):
 
     dx, dy = linear(pack['derivative'], potential), linear(pack['load'], normal)
     field_linear = xp.stack([dx, dy], axis=-2)
-    energy_linear = xp.stack([linear(pack['force'], potential), dy], axis=-2)
-    energy = quadratic(pack['stiffness'], potential)+quadratic(pack['mass'], normal)
+    energy_linear = xp.stack([linear(pack['force'], potential), metric_y*dy], axis=-2)
+    energy = quadratic(pack['stiffness'], potential)+metric_y*quadratic(pack['mass'], normal)
     material, lift, lift_squared = [moments[:, 0, None]*pack[key][None]
                                     for key in ('material', 'lift', 'lift_squared')]
     ex, ey = xp.diag(xp.asarray([1., 0.])), xp.diag(xp.asarray([0., 1.]))
     field = field_linear+lift[..., None, None]*ex+material[..., None, None]*ey
     gram = (energy+energy_linear+xp.swapaxes(energy_linear, -1, -2)
-            +lift_squared[..., None, None]*ex+material[..., None, None]*ey)
+            +lift_squared[..., None, None]*ex+metric_y*material[..., None, None]*ey)
     return field, gram, material
 
 
@@ -301,7 +303,7 @@ class ContinuousFluxGapModel(PartitionedGapEnergyModel):
         solution = scale[:, None]*(solve(balanced, forcing) if xp is np else xp.linalg.solve(balanced, forcing))
         # Judge the result in the original equations, not only the balanced ones.
         residual = xp.linalg.norm(system@solution-right)/xp.maximum(xp.linalg.norm(right), 1.)
-        valid = xp.isfinite(residual) & (residual < 1e-8) & (g >= 0) & (g < 1)
+        valid = xp.isfinite(residual) & (residual < 1e-8) & (g >= -CONTACT_ROUNDOFF) & (g < 1)
         solution = xp.where(valid, solution, xp.nan)
         end = self.nx*self.rows-1
         v = xp.concatenate([xp.zeros((1, 2)), solution[:end]]).reshape(self.rows, self.nx, 2)
@@ -309,17 +311,40 @@ class ContinuousFluxGapModel(PartitionedGapEnergyModel):
         b = solution[end+self.nx:].reshape(self.gap_degree-1, self.nx, 2)
         return v, a, b, residual
 
-    def coefficients(self, gap, epsilon=12.25, width=350., xp=np):
+    def coefficients(self, gap, epsilon=12.25, width=350., xp=np, *, aspect=1.):
+        """Project a physical rectangular cell, with aspect = period_x / period_y.
+
+        Width and gap retain their reference-cell units, normalized separately
+        along each axis. The live metric diag(1, aspect**2) enters both the
+        variational solve and energy projection. Field and energy columns are
+        then converted from normalized-coordinate potentials to physical unit
+        electric fields. See docs/nvf-rectangular-cells.md for the pullback.
+        """
+        aspect = xp.asarray(aspect)
+        if aspect.ndim != 0:
+            raise ValueError('cell aspect must be a positive finite real scalar')
+        valid_aspect = xp.isfinite(aspect) & (xp.imag(aspect) == 0) & (xp.real(aspect) > 0)
+        if _concrete(valid_aspect) is False:
+            raise ValueError('cell aspect must be a positive finite real scalar')
+        aspect = xp.where(valid_aspect, xp.real(aspect), xp.nan)
+        metric_y = aspect**2
         g, edges, values, nodes, lengths, valid = self._profile_geometry(gap, epsilon, width, xp)
         body, background = self._x_integrals(nodes, lengths, edges[1:-1], values, xp)
         center = 2*self.order
         me, ke, le, de = [body[key][center].real for key in ('mass', 'stiffness', 'load', 'force')]
         mb, kb, lb, dg = [background[key][center].real for key in ('mass', 'stiffness', 'load', 'force')]
-        v, a, b, residual = self._solve_flux_cell(g, me, ke, le, de, mb, kb, lb, dg, xp)
+        v, a, b, residual = self._solve_flux_cell(
+            g, metric_y*me, ke, metric_y*le, de, metric_y*mb, kb, metric_y*lb, dg, xp)
         v, a = xp.where(valid, v, xp.nan), xp.where(valid, a, xp.nan)
-        field, gram, eps = self._project_body(v, a, g, body, background, xp)
-        gap_field, gap_gram, gap_eps = self._project_gap(v, a, b, g, background, xp)
+        field, gram, eps = self._project_body(v, a, g, body, background, xp, metric_y=metric_y)
+        gap_field, gap_gram, gap_eps = self._project_gap(v, a, b, g, background, xp, metric_y=metric_y)
         field, gram, eps = field+gap_field, gram+gap_gram, eps+gap_eps
+        # B = diag(1, aspect) F diag(1, 1/aspect); G transforms only in
+        # potential-column space because the spatial metric is already in it.
+        column_scale = xp.stack([xp.ones_like(aspect), 1/aspect])
+        row_scale = xp.stack([xp.ones_like(aspect), aspect])
+        field = field*row_scale[:, None]*column_scale[None, :]
+        gram = gram*column_scale[:, None]*column_scale[None, :]
         coefficients = xp.stack([field[:, :, 0, 0], field[:, :, 0, 1], field[:, :, 1, 0], field[:, :, 1, 1],
                                  gram[:, :, 0, 0], gram[:, :, 0, 1], gram[:, :, 1, 1], eps])
         return coefficients, dict(cell_residual=residual, degrees_of_freedom=self.nx*(self.rows+self.gap_degree)-1,
@@ -334,22 +359,22 @@ class ContinuousFluxGapModel(PartitionedGapEnergyModel):
                               np.arange(len(nodes))//self.per_region == 1, self.modes,
                               pivot, xp, basis=self.flux_basis)
 
-    def _project_body(self, v, a, g, body, background, xp):
+    def _project_body(self, v, a, g, body, background, xp, *, metric_y=1.):
         t = xp.asarray(self.yedges)-.5
         dt = xp.asarray(np.diff(self.yedges))
         following = xp.roll(v, -1, axis=0)
         left, right = v-g*t[:-1, None, None]*a, following-g*t[1:, None, None]*a
         normal = (following-v)/((1-g)*dt[:, None, None])-g/(1-g)*a
         body_y = interval_moments((1-g)*t[:-1], (1-g)*dt, xp.zeros_like(dt), xp.ones_like(dt), self.modes, xp)
-        field, _, _ = project_flux_strip(left, right, normal, body_y, background, xp)
-        _, gram, eps = project_flux_strip(left, right, normal, body_y, body, xp)
+        field, _, _ = project_flux_strip(left, right, normal, body_y, background, xp, metric_y=metric_y)
+        _, gram, eps = project_flux_strip(left, right, normal, body_y, body, xp, metric_y=metric_y)
         return field, gram, eps
 
-    def _project_gap(self, v, a, b, g, background, xp):
+    def _project_gap(self, v, a, b, g, background, xp, *, metric_y=1.):
         if self.gap_degree == 1:
             gap_y = interval_moments(xp.asarray([.5-g/2]), xp.asarray([g]), xp.asarray([0.]), xp.asarray([1.]), self.modes, xp)
             gap_field, gap_gram, gap_eps = project_flux_strip((v[0]-g/2*a)[None], (v[0]+g/2*a)[None],
-                                                             a[None], gap_y, background, xp)
+                                                             a[None], gap_y, background, xp, metric_y=metric_y)
         else:
             beta = xp.asarray(self.gap_beta)
             bubble = xp.einsum('bk,bic->kic', beta, b)
@@ -358,5 +383,6 @@ class ContinuousFluxGapModel(PartitionedGapEnergyModel):
                           +xp.stack([a]+[xp.zeros_like(a)]*(self.gap_degree-1)))
             moments = polynomial_moments(xp.asarray([.5-g/2]), xp.asarray([g]), xp.asarray([0.]),
                                           xp.asarray([1.]), self.modes, xp, degree=2*self.gap_degree)[:, 0]
-            gap_field, gap_gram, gap_eps = project_flux_polynomial(potential, normal_gap, moments, background, xp)
+            gap_field, gap_gram, gap_eps = project_flux_polynomial(
+                potential, normal_gap, moments, background, xp, metric_y=metric_y)
         return gap_field, gap_gram, gap_eps

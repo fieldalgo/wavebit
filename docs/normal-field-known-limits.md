@@ -1160,12 +1160,15 @@ The conforming energy construction now has an explicit
 [`ConformingNVF`](guide/conforming-nvf.md) construction from ordinary
 rectangle layers. The cell kernels live in the library and are shared with
 the research instruments. Contiguous equal-height rectangular tilings,
-uniform layers, live backgrounds, square-cell scaling, translations,
+uniform layers, live backgrounds, independent orthogonal periods, translations,
 common lattice rotations and unequal retained-order counts are supported.
 The exported stack runs through the actual Wavebit engine on NumPy, JAX
 and Torch; the auxiliary cell supports NumPy/JAX x64. The general closure
 preserves loss and autodiff graphs, while the cell builder requires positive
 real scalar materials. Independent material integrals, contact controls,
 slab formulas, basis invariance and layer splitting qualify the integration.
-Automatic projector selection, general corrector geometry, lossy cell
+The [rectangular-cell metric](nvf-rectangular-cells.md) is present in both
+the variational equations and projected energy. Period derivatives remain
+live, including contact roundoff, with independent quadrature and
+stationarity controls. Automatic projector selection, general corrector geometry, lossy cell
 construction and optical accuracy qualification remain open.

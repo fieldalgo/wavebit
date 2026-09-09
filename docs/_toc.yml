@@ -48,6 +48,7 @@ subtrees:
     - caption: NVF construction and validation
       entries:
       - file: nvf-energy-engine
+      - file: nvf-rectangular-cells
       - file: nvf-contact-followup
       - file: nvf-independent-fem
       - file: nvf-harmonic-energy

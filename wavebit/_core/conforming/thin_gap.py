@@ -5,8 +5,10 @@ from scipy.linalg import solve
 
 from ..factorization import ConvMatrices
 
-# Internal reference length; the public adapter scales the physical cell uniformly.
+# Internal reference length for each normalized axis. The continuous-flux
+# extension supplies the physical aspect metric when the two periods differ.
 PERIOD = 700.
+CONTACT_ROUNDOFF = 32*np.finfo(float).eps
 
 
 def _periodic_line(intervals, quadrature):
@@ -154,7 +156,7 @@ class ThinGapEnergyModel:
         right = xp.concatenate([rhs_v[1:], rhs_a])
         solution = solve(system, right) if xp is np else xp.linalg.solve(system, right)
         residual = xp.linalg.norm(system@solution-right)/xp.maximum(xp.linalg.norm(right), 1.)
-        valid = xp.isfinite(residual) & (residual < 1e-8) & (g >= 0) & (g < 1)
+        valid = xp.isfinite(residual) & (residual < 1e-8) & (g >= -CONTACT_ROUNDOFF) & (g < 1)
         solution = xp.where(valid, solution, xp.nan)
         v = xp.concatenate([xp.zeros((1, 2)), solution[:self.nx*self.rows-1]])
         v = v.reshape(self.rows, self.nx, 2)

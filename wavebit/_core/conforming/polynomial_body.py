@@ -45,7 +45,7 @@ def body_space(edges, degree):
     return indices, polynomials, matrices
 
 
-def project_body_polynomial(potential, normal, moments, body, background, xp=np):
+def project_body_polynomial(potential, normal, moments, body, background, xp=np, *, metric_y=1.):
     """Integrate the actual polynomial field/energy over all body intervals."""
     def quadratic(matrix, coefficients):
         return sum(xp.einsum('ne,emcd->nmcd', moments[..., i+j],
@@ -57,15 +57,15 @@ def project_body_polynomial(potential, normal, moments, body, background, xp=np)
                    for i in range(coefficients.shape[1]))
 
     field_linear = xp.stack([linear(background['derivative'], potential), linear(background['load'], normal)], axis=-2)
-    energy_linear = xp.stack([linear(body['force'], potential), linear(body['load'], normal)], axis=-2)
-    energy = quadratic(body['stiffness'], potential)+quadratic(body['mass'], normal)
+    energy_linear = xp.stack([linear(body['force'], potential), metric_y*linear(body['load'], normal)], axis=-2)
+    energy = quadratic(body['stiffness'], potential)+metric_y*quadratic(body['mass'], normal)
     scale = xp.sum(moments[..., 0], axis=1)[:, None]
     ex, ey = xp.diag(xp.asarray([1., 0.])), xp.diag(xp.asarray([0., 1.]))
     field = (field_linear+scale[..., None, None]*background['lift'][None, :, None, None]*ex
              +scale[..., None, None]*background['material'][None, :, None, None]*ey)
     material = scale*body['material'][None]
     gram = (energy+energy_linear+xp.swapaxes(energy_linear, -1, -2)
-            +(scale*body['lift_squared'][None])[..., None, None]*ex+material[..., None, None]*ey)
+            +(scale*body['lift_squared'][None])[..., None, None]*ex+metric_y*material[..., None, None]*ey)
     return field, gram, material
 
 
@@ -84,9 +84,9 @@ class PolynomialBodyGapModel(MaterialGradedGapModel):
         self.ymass, self.ystiffness = matrices['mass'], matrices['stiffness']
         self.yload, self.ycross, self.boundary = matrices['load'], matrices['cross'], matrices['boundary']
 
-    def _project_body(self, v, a, g, body, background, xp):
+    def _project_body(self, v, a, g, body, background, xp, *, metric_y=1.):
         if self.body_degree == 1:
-            return super()._project_body(v, a, g, body, background, xp)
+            return super()._project_body(v, a, g, body, background, xp, metric_y=metric_y)
         dt = xp.asarray(np.diff(self.yedges))
         t = xp.asarray(self.yedges[:-1])-.5
         potential = xp.einsum('jk,ejic->ekic', xp.asarray(self.body_polynomials), v[self.body_indices])
@@ -96,7 +96,7 @@ class PolynomialBodyGapModel(MaterialGradedGapModel):
                   /((1-g)*dt[:, None, None, None]))
         moments = polynomial_moments((1-g)*t, (1-g)*dt, xp.zeros_like(t), xp.ones_like(t),
                                       self.modes, xp, degree=2*self.body_degree)
-        return project_body_polynomial(potential, normal, moments, body, background, xp)
+        return project_body_polynomial(potential, normal, moments, body, background, xp, metric_y=metric_y)
 
     def coefficients(self, *args, **kwargs):
         c, metadata = super().coefficients(*args, **kwargs)

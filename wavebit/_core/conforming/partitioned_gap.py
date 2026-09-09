@@ -2,7 +2,7 @@
 import math
 import numpy as np
 
-from .thin_gap import PERIOD, ThinGapEnergyModel, _line_mass, _line_stiffness
+from .thin_gap import PERIOD, CONTACT_ROUNDOFF, ThinGapEnergyModel, _line_mass, _line_stiffness
 
 
 def interval_moments(nodes, lengths, lo, hi, modes, xp=np):
@@ -184,7 +184,8 @@ class PartitionedGapEnergyModel(ThinGapEnergyModel):
         edges = xp.concatenate([xp.asarray([-width/2]), seams, xp.asarray([width/2])])/PERIOD
         g, w = gap/PERIOD, width/PERIOD
         valid = (xp.all(xp.isfinite(edges)) & xp.all(xp.isfinite(values)) & xp.all(values > 0)
-                 & xp.all(edges[1:] > edges[:-1]) & (w > 0) & (w < 1) & (g >= 0) & (g < 1))
+                 & xp.all(edges[1:] > edges[:-1]) & (w > 0) & (w < 1)
+                 & (g >= -CONTACT_ROUNDOFF) & (g < 1))
         if xp is np and not valid:
             raise ValueError('profile requires finite positive materials and strictly ordered interior seams')
         starts = xp.asarray([-.5, -w/2, w/2])

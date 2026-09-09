@@ -42,7 +42,8 @@ def test_body_matrices_match_independent_gauss_rule_with_periodic_traces(degree)
 
 
 @pytest.mark.parametrize('degree', [2, 3, 4])
-def test_polynomial_body_field_and_energy_match_independent_tensor_quadrature(degree):
+@pytest.mark.parametrize('metric_y', [.36, 1., 3.24])
+def test_polynomial_body_field_and_energy_match_independent_tensor_quadrature(degree, metric_y):
     q, weights = leggauss(64)
     x, wx = q/2, weights/2
     r, wr = (q+1)/2, weights/2
@@ -62,7 +63,8 @@ def test_polynomial_body_field_and_energy_match_independent_tensor_quadrature(de
     potential = np.random.default_rng(811).normal(size=(2, degree+1, 3, 2))*.02
     normal = potential[:, 1:]*np.arange(1, degree+1)[None, :, None, None]/lengths[:, None, None, None]
     moments = polynomial_moments(nodes, lengths, np.zeros(2), np.ones(2), modes, degree=2*degree)
-    actual = project_body_polynomial(potential, normal, moments, pack(epsilon), pack(np.ones_like(x)))
+    actual = project_body_polynomial(potential, normal, moments, pack(epsilon), pack(np.ones_like(x)),
+                                     metric_y=metric_y)
     field = np.zeros((len(modes), len(modes), 2, 2), complex)
     gram = field.copy()
     material = np.zeros((len(modes), len(modes)), complex)
@@ -72,7 +74,8 @@ def test_polynomial_body_field_and_energy_match_independent_tensor_quadrature(de
         b = np.stack([np.einsum('yic,xi->yxc', v, df), np.einsum('yic,xi->yxc', n, f)], axis=2)
         b[:, :, 0, 0] += lift[None]
         b[:, :, 1, 1] += 1
-        energy = epsilon[None, :, None, None]*np.einsum('yxic,yxid->yxcd', b, b)
+        weighted = b*np.array([1., metric_y])[None, None, :, None]
+        energy = epsilon[None, :, None, None]*np.einsum('yxic,yxid->yxcd', b, weighted)
         ey = np.exp(-2j*np.pi*modes[:, None]*(nodes[e]+lengths[e]*r)[None])*(lengths[e]*wr)[None]
         field += np.einsum('ny,yxcd,mx->nmcd', ey, b, wave)
         gram += np.einsum('ny,yxcd,mx->nmcd', ey, energy, wave)
