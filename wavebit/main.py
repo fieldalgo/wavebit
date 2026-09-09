@@ -92,9 +92,11 @@ def fdtd(stack=None, incidence=None, **kwargs):
     integration preserves shape gradients and periodic painting. Optional
     shape_smoothing averages transverse translations over static (x,y) widths;
     shape contacts can still have topology kinks. Two periods are required.
-    ``shape_integration='area'`` accepts one rotated rectangle per layer and
-    differentiates its angle in radians, with projected extents within periods.
-    Positive shape_smoothing uses exact polygon moments to average translations.
+    ``shape_integration='area'`` accepts one rotated rectangle or circle per layer,
+    with extents within both periods. Circle/disk lx (or l) is the diameter.
+    Rectangle angles retain derivatives in radians. Positive shape_smoothing
+    averages translations by exact polygon moments or stable disk arc strips
+    with fixed 16-point Gaussian integration.
     Cell integrals give arithmetic transverse averages, with full y sampling even at angle zero. It is not
     a full rotated effective tensor or a second-order accuracy guarantee.
     Their real scalar ``theta`` and ``phi`` can retain autodiff graphs when an

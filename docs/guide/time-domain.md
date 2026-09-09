@@ -528,7 +528,7 @@ Pole masks use arithmetic fill fractions, including the normal component; this
 is an approximation to a dispersive interface, not a general tensor homogenizer.
 
 Supported scene inputs include rectangular one-dimensional and crossed rasters,
-rectangle/square recipes using the shared RCWA conventions (rotation through
+rectangle/square/circle recipes using the shared RCWA conventions (rotation and circles through
 opt-in area integration),
 positive real magnetic half spaces, normal/oblique/conical incidence, Jones
 polarization, electric pole labels, and scalar or vector wavelengths. Output
@@ -607,9 +607,9 @@ value, slope = jax.jit(jax.value_and_grad(reflection))(jnp.array(.43))
 
 The recipe requires two finite positive rectangular periods and
 `subpixel=True`. Each size must be positive and no larger than its period.
-The supported `type` values are `rectangle` and `square`; `l` and omitted
+The separable `type` values are `rectangle` and `square`; `l` and omitted
 centres retain their shared RCWA meaning. The default separable method requires
-a static `angle=0`. Circles and ellipses are refused on both methods. Use each shape's `Material(epsilon,
+a static `angle=0`. Circles require the [area method](#circular-shape-derivatives); ellipses are refused. Use each shape's `Material(epsilon,
 mu=...)` for magnetic media. Separate raster `mu`, dispersion labels and poles
 are not accepted on this recipe path. Raster inputs retain their existing
 dispersion support. Combining live layer thicknesses also requires the usual
@@ -672,7 +672,7 @@ def reflection(angle):
 value, slope = jax.jit(jax.value_and_grad(reflection))(jnp.asarray(.37))
 ```
 
-The initial area route accepts at most one rectangle or square per layer;
+The area route accepts at most one rectangle, square, circle or disk per layer;
 empty shape lists describe uniform layers. Periods must be static and positive,
 with two entries. Sizes must be positive, and the projected extents
 `abs(cos(angle))*lx + abs(sin(angle))*ly` and
@@ -711,6 +711,59 @@ result as a design gradient. The [rotation measurement](../fdtd-rotation-gradien
 records the independent area, complete graph and optical checks.
 
 
+
+### Circular shape derivatives
+
+Use `type='circle'` (alias `'disk'`) with `shape_integration='area'` and an
+explicit backend. The shared RCWA convention uses `lx` or `l` as the **diameter**,
+not the radius; `ly` is refused. The default centre is `(cx, cy)=(0, 0)` relative
+to the period centre. Centres wrap periodically. A finite `angle` has no effect
+on a circle, and its derivative is zero.
+
+```python
+import jax
+import wavebit
+
+jax.config.update('jax_enable_x64', True)
+
+def transmission(diameter):
+    stack = wavebit.Stack.from_structure([
+        dict(background=1., shapes=[dict(type='circle', lx=diameter,
+                                         cx=.071, cy=-.047, material=2.25)])
+    ], [.2], top=1., bot=1.21, period=[.6, .6])
+    result = wavebit.fdtd(stack, wavebit.Incidence(wavelength=1.), backend='jax',
+                          resolution=20, n_pml=20, n_periods=60, pulse_width=2.5,
+                          truncation_order=0, shape_integration='area',
+                          shape_smoothing=.05, diffraction_method='directional')
+    return result.s_inc.t_s[0, 0]
+
+t = jax.jit(transmission)(.3)
+dt_ddiameter = jax.jit(jax.jacfwd(transmission))(.3)
+```
+
+The diameter must be positive and no larger than **either** rectangular period.
+The one-shape-per-layer restriction includes circles, so a circle and rectangle
+can occupy different layers but cannot be painted together in one area layer.
+The two periods, shape types/count, smoothing widths and mesh stay static.
+`subpixel=True` is required. Centres, diameter and positive scalar shape
+`Material` epsilon/mu retain JAX/Torch gradients, including bottom incidence
+and live layer thicknesses under their existing mesh contract.
+
+At `shape_smoothing=0`, disk/cell areas use analytic circular-segment integrals.
+The boundary is not approximated by a polygon or an auxiliary raster. Tangent
+contacts have finite first derivatives; second derivatives can be singular.
+Positive smoothing has the same physical box-translation meaning as for
+rectangles. Disk integration uses exact flat strips and a fixed 16-point
+Gaussian rule on angular arc strips, whose integrands are low-degree
+trigonometric polynomials. There is no user quadrature-order setting. This
+avoids cancellation between global moments when a kernel piece is very narrow.
+Widths of zero, a full period and a cell width are supported.
+
+Transverse material coefficients still use arithmetic area averages. These
+are not full effective tensors, so exact cell geometry does not establish
+sharp-interface optical gradient accuracy. Check resolution and a matching
+physical reference. [Disk measurements](../fdtd-circle-gradients.md) separate
+geometry, complete-graph derivatives, profile bias and independent optics.
 
 ### Incidence-angle derivatives
 

@@ -1,4 +1,8 @@
-"""Independent rotated-block scattering derivatives through Meep's documented API."""
+"""Independent block/disk scattering derivatives through Meep's documented API.
+
+Only public documentation and black-box execution are used. Cylinder contract:
+https://meep.readthedocs.io/en/latest/Python_User_Interface/#cylinder
+"""
 import argparse
 import sys
 import warnings
@@ -11,20 +15,26 @@ warnings.showwarning = lambda message, category, filename, lineno, file=None, li
     f'{category.__name__}: {message}', file=sys.stderr)
 
 
-def generate(output, resolution=40, duration=80., step=1e-4, subpixel_tol=1e-8, smoothing=0., profile_grid=256):
+def generate(output, resolution=40, duration=80., step=1e-4, subpixel_tol=1e-8, smoothing=0., profile_grid=256,
+             shape='rectangle'):
+    if shape not in ('rectangle', 'circle'):
+        raise ValueError('shape must be rectangle or circle.')
     import meep as mp
     mp.verbosity(0)
     if smoothing:
         # The reference profile is an independent Fourier sinc series. Import
         # only its NumPy helper; no FDTD geometry or solver builds these data.
         sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
-        from studies.fdtd_rotation_smoothing import density
+        if shape == 'circle':
+            from studies.fdtd_circle_gradients import density
+        else:
+            from studies.fdtd_rotation_smoothing import density
     if smoothing < 0 or smoothing > .6 or not np.isfinite(smoothing):
         raise ValueError('smoothing must be finite and between zero and the period.')
     if profile_grid < 8:
         raise ValueError('profile_grid must be at least eight.')
     profile_errors = []
-    p = np.array([.37, .3])
+    p = np.array([.3]) if shape == 'circle' else np.array([.37, .3])
     period, depth, length = .6, .2, 8.
     zr, zt, dt = -1., 1.2, .4/resolution
     if not np.isclose(period*resolution, round(period*resolution)):
@@ -34,13 +44,17 @@ def generate(output, resolution=40, duration=80., step=1e-4, subpixel_tol=1e-8, 
     def fields(parameters, until, component):
         geometry = []
         if parameters is not None:
-            angle, width = parameters
+            angle, width = (0., parameters[0]) if shape == 'circle' else parameters
             geometry = [mp.Block(center=mp.Vector3(z=(depth+length/2)/2),
                                  size=mp.Vector3(mp.inf, mp.inf, length/2-depth), material=mp.Medium(epsilon=1.21)),
                         mp.Block(center=mp.Vector3(.071, -.047, depth/2), size=mp.Vector3(width, .18, depth),
                                  e1=mp.Vector3(np.cos(angle), np.sin(angle), 0.),
                                  e2=mp.Vector3(-np.sin(angle), np.cos(angle), 0.),
                                  e3=mp.Vector3(0., 0., 1.), material=mp.Medium(epsilon=2.25))]
+            if shape == 'circle':
+                geometry[1] = mp.Cylinder(radius=width/2, height=depth,
+                    center=mp.Vector3(.071, -.047, depth/2), axis=mp.Vector3(0., 0., 1.),
+                    material=mp.Medium(epsilon=2.25))
             if smoothing:
                 weights = density(parameters, smoothing, profile_grid).T
                 material = mp.MaterialGrid(mp.Vector3(profile_grid, profile_grid, 0),
@@ -90,10 +104,11 @@ def generate(output, resolution=40, duration=80., step=1e-4, subpixel_tol=1e-8, 
         refs = [fields(None, until, c) for c in (mp.Ey, mp.Ex)]
         values.append(amplitude(p, until, refs))
         jacobians.append(np.stack([np.stack([
-            (amplitude(p+d, until, refs)-amplitude(p-d, until, refs))/(2*h) for d in np.eye(2)*h], axis=-1)
+            (amplitude(p+d, until, refs)-amplitude(p-d, until, refs))/(2*h) for d in np.eye(len(p))*h], axis=-1)
             for h in deltas]))
         print(f'Completed duration {until:g}', flush=True)
-    np.savez_compressed(output, version=mp.__version__, parameters=p, parameter_names=['angle', 'width'],
+    np.savez_compressed(output, version=mp.__version__, parameters=p,
+                        parameter_names=['diameter'] if shape == 'circle' else ['angle', 'width'], shape=shape,
                         wavelength=1., period=[period, period], thickness=depth, top=1., bottom=1.21,
                         epsilon=2.25, ly=.18, centre=[.071, -.047], resolution=resolution,
                         durations=durations, deltas=deltas, dimensions=3, cell_length=length,
@@ -114,5 +129,6 @@ if __name__ == '__main__':
     parser.add_argument('--subpixel-tol', type=float, default=1e-8)
     parser.add_argument('--smoothing', type=float, default=0.)
     parser.add_argument('--profile-grid', type=int, default=256)
+    parser.add_argument('--shape', choices=['rectangle', 'circle'], default='rectangle')
     args = parser.parse_args()
-    generate(args.output, args.resolution, args.duration, args.step, args.subpixel_tol, args.smoothing, args.profile_grid)
+    generate(args.output, args.resolution, args.duration, args.step, args.subpixel_tol, args.smoothing, args.profile_grid, args.shape)

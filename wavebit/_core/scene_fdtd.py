@@ -143,12 +143,12 @@ def _weights(centres, width, edges, periodic=False, subpixel=True):
     return weights/weights.sum(axis=1, keepdims=True)
 
 
-def _rectangle_recipe(structure):
+def _parametric_recipe(structure):
     return isinstance(structure, (list, tuple)) and any(isinstance(layer, dict) for layer in structure)
 
 
-def _rectangle_partition(structure, periods, *, xp, array, check, integration='separable'):
-    """Resolve shared recipes into a separable partition or live area vertices.
+def _shape_partition(structure, periods, *, xp, array, check, integration='separable'):
+    """Resolve shared recipes into a separable partition or live area geometry.
 
     Sorting every periodic face keeps the partition size static. Face events
     define membership, including zero-width intervals between coincident faces.
@@ -156,8 +156,8 @@ def _rectangle_partition(structure, periods, *, xp, array, check, integration='s
     derivatives even for disjoint shapes whose projected edges coincide.
     Face coordinates retain AD; actual paint topology changes can have kinks.
     The partition is not the Yee mesh and is never detached or rasterized on
-    a fixed auxiliary grid. The area route returns one live polygon per layer
-    instead, for exact clipping against fixed Yee cells. Shared shape readers
+    a fixed auxiliary grid. The area route returns one live polygon or disk per
+    layer instead, for integration against fixed Yee cells. Shared shape readers
     own lengths and cell origin on both routes.
     """
     from .lattice import as_lattice
@@ -183,7 +183,7 @@ def _rectangle_partition(structure, periods, *, xp, array, check, integration='s
         check_layer_spec(layer, i)
         base = material(layer.get('background', 1.))
         if integration == 'area' and len(layer.get('shapes', [])) > 1:
-            raise ValueError('Area integration currently supports at most one rectangle per layer.')
+            raise ValueError('Area integration currently supports at most one rectangle or circle per layer.')
         shapes = []
         area_shape = None
         for j, shape in enumerate(layer.get('shapes', [])):
@@ -192,8 +192,11 @@ def _rectangle_partition(structure, periods, *, xp, array, check, integration='s
             check_shape_spec(shape, j, i)
             kind, cx, cy, lx, ly, angle = shape_geometry(shape, lattice)
             y_invariant &= isinstance(ly, (int, float, np.number)) and np.isreal(ly) and ly == periods[1]
-            if kind not in ('rectangle', 'square'):
-                raise ValueError('Parametric FDTD currently supports rectangles and squares only.')
+            circular = kind in ('circle', 'disk')
+            if kind not in ('rectangle', 'square', 'circle', 'disk'):
+                raise ValueError('Parametric FDTD supports rectangles, squares and circles; ellipses are unsupported.')
+            if circular and integration != 'area':
+                raise ValueError('Circles require shape_integration=area.')
             if integration == 'separable' and (not isinstance(angle, (int, float, np.number)) or not np.isreal(angle) or angle != 0):
                 raise ValueError('Separable FDTD requires static angle=0; use shape_integration=area for rotation.')
             centres = [scalar(v, 'Shape centre') for v in (cx, cy)]
@@ -202,6 +205,13 @@ def _rectangle_partition(structure, periods, *, xp, array, check, integration='s
             if integration == 'area':
                 from .polygon import rect_verts
                 angle = scalar(angle, 'Shape angle')
+                if circular:
+                    check((sizes[0] <= periods[0]) & (sizes[0] <= periods[1]),
+                          'Circle diameter must not exceed either rectangular period.')
+                    # The shared circle/disk contract uses lx (or l) as its
+                    # diameter. A finite angle has no effect on a disk.
+                    area_shape = (xp.stack((*centres, sizes[0]/2)), material(shape.get('material', 1.)))
+                    continue
                 co, si = xp.abs(xp.cos(angle)), xp.abs(xp.sin(angle))
                 check((co*sizes[0]+si*sizes[1] <= periods[0]) & (si*sizes[0]+co*sizes[1] <= periods[1]),
                       'Area integration requires rotated x/y extents no larger than the periods.')
@@ -319,14 +329,112 @@ def _translation_windows(centres, width, smoothing):
             for left, right, low, high in zip(cuts[:-1], cuts[1:], values[:-1], values[1:]) if right > left]
 
 
-def _rectangle_cell_fractions(vertices, x, y, dx, dy, periods, *, xp, array, smoothing=(0., 0.)):
+def _weighted_circle_area(circle, left, right, bottom, top, weights, *, xp):
+    """Stable bilinear disk integral using flat strips and angular arc strips.
+
+    Direct differences of four global moments lose digits on narrow smoothing
+    windows. Here each strip is integrated in its own box coordinates. On an
+    arc, x=r*sin(theta) makes the integrand a trigonometric polynomial of degree
+    at most four. A fixed 16-point Gauss rule on spans <= pi/2 resolves it to
+    double precision without a polygonal boundary or a tunable sampling grid.
+    """
+    cx, cy, radius = (circle[..., k] for k in range(3))
+    a0, a1, b0, b1 = (weights[..., k] for k in range(4))
+    l, r, b, t = left-cx, right-cx, bottom-cy, top-cy
+    wx, wy = right-left, top-bottom
+    nonempty = (wx > 0) & (wy > 0)
+    # A positive static knot interval can round to zero after its centre is
+    # added. It has no measure; guard every inactive normalized coordinate.
+    wx, wy = xp.where(wx > 0, wx, xp.ones_like(wx)), xp.where(wy > 0, wy, xp.ones_like(wy))
+    def positive(x):
+        return xp.where(x > 0, x, xp.zeros_like(x))
+    def root(v):
+        active = v < radius
+        return xp.where(active, xp.sqrt(xp.where(active, (radius-v)*(radius+v), xp.ones_like(v))), xp.zeros_like(v))
+    def angle(v):
+        active = v < radius
+        return xp.where(active, xp.asin(xp.where(active, v/radius, xp.zeros_like(v))), np.pi/2)
+    nodes, gauss = [xp.asarray(v, dtype=radius.dtype, device=getattr(radius, 'device', None))
+                    for v in np.polynomial.legendre.leggauss(16)]
+    result = xp.zeros_like(left)
+    for sx in (-1., 1.):
+        lo_x, hi_x = (l, r) if sx == 1 else (-r, -l)
+        lo_x, hi_x = xp.minimum(positive(lo_x), radius), xp.minimum(positive(hi_x), radius)
+        for sy in (-1., 1.):
+            lo_y, hi_y = (b, t) if sy == 1 else (-t, -b)
+            lo_y, hi_y = xp.minimum(positive(lo_y), radius), xp.minimum(positive(hi_y), radius)
+            flat_end = xp.minimum(hi_x, root(hi_y))
+            flat_width = positive(flat_end-lo_x)
+            fx = a0+a1*((sx*(flat_end+lo_x)/2-l)/wx)
+            fy = b0+b1*((sy*(hi_y+lo_y)/2-b)/wy)
+            flat = flat_width*(hi_y-lo_y)*fx*fy
+            arc_start = xp.maximum(lo_x, root(hi_y))
+            arc_end = xp.minimum(hi_x, root(lo_y))
+            active = (arc_end > arc_start) & (hi_y > lo_y)
+            theta0 = angle(xp.where(active, arc_start, xp.zeros_like(arc_start)))
+            theta1 = angle(xp.where(active, arc_end, xp.zeros_like(arc_end)))
+            half = (theta1-theta0)/2
+            theta = (theta0+half)[..., None]+half[..., None]*nodes
+            x, y = radius[..., None]*xp.sin(theta), radius[..., None]*xp.cos(theta)
+            weight_x = a0[..., None]+a1[..., None]*(sx*x-l[..., None])/wx[..., None]
+            weight_y = b0[..., None]+b1[..., None]*(sy*(y+lo_y[..., None])/2-b[..., None])/wy[..., None]
+            arc = half*xp.sum(gauss*y*weight_x*(y-lo_y[..., None])*weight_y, axis=-1)
+            result = result+flat+xp.where(active, arc, xp.zeros_like(arc))
+    return xp.where(nonempty & (result >= 0), result, xp.zeros_like(result))
+
+
+def _clipped_circle_area(circle, left, right, bottom, top, *, xp, moment_weights=None):
+    """Analytic disk/box area, dispatching weighted windows to stable arc strips.
+
+    Integrate vertical disk chords on each signed quadrant. The four corner
+    primitives give the area in disk-centred coordinates. No
+    polygon, auxiliary raster or numerical quadrature defines the boundary.
+    Inactive square roots/arcsines are guarded *before* evaluation for AD.
+    Choosing a signed branch at zero preserves centre derivatives on axes.
+    """
+    if moment_weights is not None:
+        return _weighted_circle_area(circle, left, right, bottom, top, moment_weights, xp=xp)
+    cx, cy, radius = (circle[..., k] for k in range(3))
+    r2 = radius*radius
+    def primitive(x, y):
+        sx, sy = xp.where(x >= 0, 1., -1.), xp.where(y >= 0, 1., -1.)
+        a, b = xp.minimum(sx*x, radius), xp.minimum(sy*y, radius)
+        inside = b < radius
+        split = xp.where(inside, xp.sqrt(xp.where(inside, r2-b*b, xp.ones_like(b))), xp.zeros_like(b))
+        s = xp.where(a < split, a, split)
+        def arc(t):
+            # The elementary primitive subtracts divergent derivatives near
+            # t=r. Integrating sqrt(2*z-z*z) as a series at that endpoint
+            # removes this cancellation (the omitted term is < 1e-22).
+            near = t > .99*radius
+            u = xp.where(near, xp.zeros_like(t), t/radius)
+            z = xp.where(near, (radius-t)/radius, xp.zeros_like(t))
+            cap = np.sqrt(2.)*z**1.5*(2/3+z*(-1/10+z*(-1/112+z*(-1/576
+                +z*(-5/11264+z*(-7/53248+z*(-7/163840-z*33/2228224)))))))
+            return r2*xp.where(near, np.pi/4-cap, .5*(u*xp.sqrt(1-u*u)+xp.asin(u)))
+        area = b*s+arc(a)-arc(s)
+        return sx*sy*area
+    l, r, b, t = left-cx, right-cx, bottom-cy, top-cy
+    area = primitive(r, t)-primitive(l, t)-primitive(r, b)+primitive(l, b)
+    return xp.where(area < 0, xp.zeros_like(area), area)
+
+
+def _shape_cell_fractions(vertices, x, y, dx, dy, periods, *, xp, array, smoothing=(0., 0.)):
     """Exact periodic area fractions, optionally averaged over box translations.
 
     A translated cell has a trapezoidal weight on each axis. Split its support
     into linear pieces and integrate their bilinear product with polygon
-    moments. Wide kernels need a second periodic image ring near cell seams.
+    moments or disk arc strips. Wide kernels need a second periodic image ring near cell seams.
     Projected rectangle extents and smoothing widths must not exceed periods.
     """
+    circular = vertices.ndim == 1
+    clip = _clipped_circle_area if circular else _clipped_rectangle_area
+    def images(shifts, smoothed):
+        if circular:
+            shifts = xp.concat((shifts, xp.zeros_like(shifts[:, :1])), axis=-1)
+            return (vertices+shifts)[:, None, None, None, :] if smoothed else (vertices+shifts)[:, None, None, :]
+        return (vertices[None, None, None, None, :, :]+shifts[:, None, None, None, None, :] if smoothed else
+                vertices[None, None, None, :, :]+shifts[:, None, None, None, :])
     if any(smoothing):
         windows = [(a, b) for a in _translation_windows(x, dx, smoothing[0])
                    for b in _translation_windows(y, dy, smoothing[1])]
@@ -338,15 +446,21 @@ def _rectangle_cell_fractions(vertices, x, y, dx, dy, periods, *, xp, array, smo
         left, right, bottom, top = [array(np.stack([b[k] for b in bounds]))[None, ...]
                                     +xp.zeros_like(shifts[:, 0, None, None, None]) for k in range(4)]
         weights = array([[*a[2:], *b[2:]] for a, b in windows])[None, :, None, None, :]
-        images = vertices[None, None, None, None, :, :]+shifts[:, None, None, None, None, :]
-        mass = _clipped_rectangle_area(images, left, right, bottom, top, xp=xp, moment_weights=weights)
+        mass = clip(images(shifts, True), left, right, bottom, top, xp=xp, moment_weights=weights)
         fraction = xp.sum(mass, axis=(0, 1))/(dx*dy)
         return xp.where(fraction > 1, xp.ones_like(fraction), fraction)
     left, bottom = xp.broadcast_arrays(array(x)[None, :]-dx/2, array(y)[:, None]-dy/2)
     shifts = array([(i*periods[0], j*periods[1]) for i in (-1, 0, 1) for j in (-1, 0, 1)])
     left, bottom = xp.broadcast_arrays(left[None, ...]+xp.zeros_like(shifts[:, 0, None, None]), bottom[None, ...])
-    images = vertices[None, None, None, :, :]+shifts[:, None, None, None, :]
-    area = _clipped_rectangle_area(images, left, left+dx, bottom, bottom+dy, xp=xp)
+    if circular:
+        # Reuse identical stored faces on adjoining cells. Tiny independent
+        # rounding gaps produce sqrt(gap) changes in tangent chord slopes.
+        xleft, ybottom = np.asarray(x)-dx/2, np.asarray(y)-dy/2
+        right = array(np.r_[xleft[1:], xleft[:1]+periods[0]])[None, None, :]+xp.zeros_like(left)
+        top = array(np.r_[ybottom[1:], ybottom[:1]+periods[1]])[None, :, None]+xp.zeros_like(bottom)
+    else:
+        right, top = left+dx, bottom+dy
+    area = clip(images(shifts, False), left, right, bottom, top, xp=xp)
     fraction = xp.sum(area, axis=0)/(dx*dy)
     return xp.where(fraction > 1, xp.ones_like(fraction), fraction)
 
@@ -550,7 +664,7 @@ def _solve_bottom_scene(options):
     runtime = time_loop_backend(options['backend'], device=options['device'],
                                 reference=options['structure'])
     xp, array = runtime.xp, runtime.array
-    parametric = _rectangle_recipe(options['structure'])
+    parametric = _parametric_recipe(options['structure'])
     raster = options['structure'] if parametric else array(options['structure'])
     if not parametric and (raster.ndim != 3 or min(raster.shape) < 1):
         raise ValueError('structure must have shape (layers, y, x).')
@@ -665,16 +779,17 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     recipes use the shared RCWA shape convention and retain centre, size and
     scalar Material epsilon/mu gradients. Later shapes paint over earlier
     shapes, including periodic wrapping. They require two rectangular periods,
-    subpixel=True and sizes in (0,period]; circles, rotation and raster pole
-    labels are unsupported on recipes. shape_smoothing is a static scalar or
+    subpixel=True and sizes in (0,period]; raster pole labels are unsupported
+    on recipes. shape_smoothing is a static scalar or
     (x,y) pair of full physical averaging widths in [0,period]. Positive widths
     average transverse translations before sampling; moving contacts between
     shapes can still have topology kinks. The Yee mesh never follows a shape.
-    shape_integration='area' instead accepts one rotated rectangle per layer,
-    retaining angle derivatives in radians. Its projected extents must fit
-    the periods. Positive shape_smoothing averages translations using exact
-    polygon moments of the piecewise bilinear cell kernel. No sampling grid or
-    quadrature order is introduced. Cell integrals give arithmetic transverse
+    shape_integration='area' instead accepts one rotated rectangle or circle
+    per layer. Rectangle angles retain derivatives in radians; circle/disk
+    lx (or l) is the diameter, with no ly. Extents must fit the periods.
+    Positive shape_smoothing averages translations using exact polygon
+    moments or stable disk arc strips with fixed 16-point Gaussian integration.
+    No user sampling grid or quadrature order is introduced. Cell integrals give arithmetic transverse
     material averages. This is not a full rotated effective tensor and does not promise second-order interface accuracy.
     Area integration always retains the full y-period mesh, including angle=0.
     Half-space epsilon/mu can be live
@@ -733,7 +848,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
         raise ValueError('variable_depth must be a static boolean.')
     if variable_depth and (mesh_thickness is None or not subpixel):
         raise ValueError('variable_depth requires explicit mesh_thickness and subpixel=True.')
-    parametric = _rectangle_recipe(structure)
+    parametric = _parametric_recipe(structure)
     if shape_integration not in ('separable', 'area'):
         raise ValueError('shape_integration must be separable or area.')
     if shape_integration == 'area' and not parametric:
@@ -864,7 +979,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
         shape_width = np.broadcast_to(shape_width, (2,)).astype(float)
         if np.any(shape_width > periods):
             raise ValueError('shape_smoothing must not exceed either rectangular period.')
-        raster, mu, partition = _rectangle_partition(structure, periods, xp=xp, array=array, check=check,
+        raster, mu, partition = _shape_partition(structure, periods, xp=xp, array=array, check=check,
                                                      integration=shape_integration)
         if shape_integration == 'area':
             area_layers = partition
@@ -998,7 +1113,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     if area_layers is not None:
         for ox, oy in ((0., 0.), (.5, 0.), (0., .5), (.5, .5)):
             area_fractions[ox, oy] = [None if s is None else
-                _rectangle_cell_fractions(s[0], (np.arange(nx)+ox)*dx, (np.arange(ny)+oy)*dy,
+                _shape_cell_fractions(s[0], (np.arange(nx)+ox)*dx, (np.arange(ny)+oy)*dy,
                                           dx, dy, lengths, xp=xp, array=array, smoothing=shape_width) for _, s in area_layers]
     def sample(values, upper, lower, magnetic=False, harmonic=True):
         components = []
@@ -1348,7 +1463,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                            n_pml=int(n_pml), pml_reflection=pml_reflection,
                            source_z=z[source_z], source_distance=source_distance,
                            layer_planes=layer_planes, layer_smoothing=layer_smoothing, variable_depth=bool(variable_depth),
-                           geometry_kind='rectangles' if parametric else 'raster',
+                           geometry_kind='parametric' if parametric else 'raster',
                            shape_integration=shape_integration,
                            shape_smoothing=tuple(shape_width) if parametric else (0., 0.),
                            # The final closing cell also belongs to the lower PML.

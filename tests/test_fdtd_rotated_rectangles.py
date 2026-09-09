@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 
 import wavebit
-from wavebit._core.scene_fdtd import _rectangle_partition, _rectangle_cell_fractions, _require_scene
+from wavebit._core.scene_fdtd import _shape_partition, _shape_cell_fractions, _require_scene
 from wavebit.backends.time_domain import time_loop_backend
 from test_fdtd_scene_angles import value_and_jacobian
 
@@ -53,10 +53,10 @@ def oracle(p, offset=(0., 0.)):
 
 def fractions(p, backend=0, offset=(0., 0.)):
     runtime = time_loop_backend(backend)
-    _, _, layers = _rectangle_partition([dict(background=1., shapes=[
+    _, _, layers = _shape_partition([dict(background=1., shapes=[
         dict(cx=p[0], cy=p[1], lx=p[2], ly=p[3], angle=p[4], material=2.)])],
         [1., .8], xp=runtime.xp, array=runtime.array, check=_require_scene, integration='area')
-    return _rectangle_cell_fractions(layers[0][1][0], (np.arange(10)+offset[0])*.1,
+    return _shape_cell_fractions(layers[0][1][0], (np.arange(10)+offset[0])*.1,
                                      (np.arange(8)+offset[1])*.1, .1, .1, [1., .8],
                                      xp=runtime.xp, array=runtime.array)
 
@@ -166,5 +166,5 @@ def test_area_rejects_multiple_shapes_and_projected_self_overlap():
     runtime = time_loop_backend(0)
     for shapes in ([dict(lx=.2, ly=.1)]*2, [dict(lx=.9, ly=.7, angle=.7)]):
         with pytest.raises(ValueError, match='one rectangle|extents'):
-            _rectangle_partition([dict(shapes=shapes)], [1., .8], xp=runtime.xp, array=runtime.array,
+            _shape_partition([dict(shapes=shapes)], [1., .8], xp=runtime.xp, array=runtime.array,
                                   check=_require_scene, integration='area')

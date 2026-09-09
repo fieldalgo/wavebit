@@ -17,6 +17,7 @@ makes them assertions, not studies.
 | `fdtd_rotation_gradients.py` | How do exact area-integrated rotation and width derivatives approach independent analytic RCWA as the Yee mesh is refined? [Measurement](../docs/fdtd-rotation-gradients.md). |
 | `fdtd_rotation_smoothing.py` | Does translation averaging improve derivatives of the same graded profile, and how large is its sharp-profile bias? [Measurement](../docs/fdtd-rotation-smoothing.md). |
 | `fdtd_adjoint_comparison.py` | How large are adjoint-versus-difference gaps compared with each solver's continuum-gradient error? [Measurement](../docs/fdtd-adjoint-validation.md). |
+| `fdtd_circle_gradients.py` | How do circular-cell diameter derivatives approach an independent Bessel-series optical target, and how large is the smoothing bias? [Measurement](../docs/fdtd-circle-gradients.md). |
 | `fdtd_variable_depth.py` | Do moving physical reference planes preserve total-depth derivatives and converge to independent graded-film optics? [Measurement](../docs/fdtd-variable-depth.md). |
 | `fdtd_layer_smoothing.py` | Does C1 interface averaging improve thickness derivatives, and how much bias does its physical width add? [Measurement](../docs/fdtd-layer-smoothing.md). |
 | `fdtd_layer_gradients.py` | How do internal-interface position and mesh refinement affect thickness-derivative error against a fixed-reference-plane film solution? [Measurement](../docs/fdtd-layer-gradients.md). |

@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from wavebit._core.scene_fdtd import _rectangle_cell_fractions, _rectangle_partition, _require_scene
+from wavebit._core.scene_fdtd import _shape_cell_fractions, _shape_partition, _require_scene
 from wavebit.backends.time_domain import time_loop_backend
 from test_fdtd_scene_angles import value_and_jacobian
 from test_fdtd_rotated_rectangles import vertices_for, response as sharp_response
@@ -58,10 +58,10 @@ def oracle(p, smoothing, indices=((0, 0), (0, 9), (7, 0), (7, 9), (1, 1), (4, 5)
 
 def fractions(p, smoothing, backend=0):
     rt = time_loop_backend(backend)
-    _, _, layers = _rectangle_partition([dict(background=1., shapes=[
+    _, _, layers = _shape_partition([dict(background=1., shapes=[
         dict(cx=p[0], cy=p[1], lx=p[2], ly=p[3], angle=p[4], material=2.)])],
         [1., .8], xp=rt.xp, array=rt.array, check=_require_scene, integration='area')
-    return _rectangle_cell_fractions(layers[0][1][0], np.arange(10)*.1, np.arange(8)*.1,
+    return _shape_cell_fractions(layers[0][1][0], np.arange(10)*.1, np.arange(8)*.1,
                                      .1, .1, [1., .8], xp=rt.xp, array=rt.array, smoothing=smoothing)
 
 

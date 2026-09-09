@@ -4,7 +4,7 @@ import pytest
 
 import wavebit
 from wavebit.backends.time_domain import time_loop_backend
-from wavebit._core.scene_fdtd import _rectangle_partition, _periodic_shape_weights, _require_scene
+from wavebit._core.scene_fdtd import _shape_partition, _periodic_shape_weights, _require_scene
 from test_fdtd_scene_angles import value_and_jacobian
 
 
@@ -12,7 +12,7 @@ def partition(scene, backend=0, periods=(1., .8)):
     if backend == 1:
         pytest.importorskip('jax').config.update('jax_enable_x64', True)
     runtime = time_loop_backend(backend)
-    return _rectangle_partition(scene, periods, xp=runtime.xp, array=runtime.array, check=_require_scene)
+    return _shape_partition(scene, periods, xp=runtime.xp, array=runtime.array, check=_require_scene)
 
 
 @pytest.mark.parametrize('backend', [0, 1, 2])

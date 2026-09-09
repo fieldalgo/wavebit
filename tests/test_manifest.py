@@ -811,7 +811,7 @@ def test_published_fdtd_rectangles_use_common_route(backend, integration):
     if backend == 'jax':
         pytest.importorskip('jax').config.update('jax_enable_x64', True)
     common = SOLVERS['fdtd']['routes']['common']
-    assert common['parametric_shapes'] == ('rectangle', 'square')
+    assert common['parametric_shapes'] == ('rectangle', 'square', 'circle', 'disk')
     assert 'rectangle centre' in common['differentiable_parameters']
     assert 'shape_smoothing' in common['static_parameters']
     assert common['shape_integration'] == ('separable', 'area')
@@ -937,3 +937,24 @@ def test_published_common_fdtd_gradient_and_halfspace_requirements(backend):
         options[missing] = None
         with pytest.raises(ValueError, match='explicit mesh_indices and explicit truncation_order'):
             wavebit.fdtd(**options)
+
+
+@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('kind', ['circle', 'disk'])
+def test_published_fdtd_disk_contract_uses_common_area_route(backend, kind):
+    if backend == 1:
+        pytest.importorskip('jax').config.update('jax_enable_x64', True)
+    elif backend == 2:
+        pytest.importorskip('torch')
+    import wavebit
+    common = manifest()['solvers']['fdtd']['routes']['common']
+    assert 'circle diameter (area)' in common['differentiable_parameters']
+    assert 'fixed 16-point Gaussian' in common['area_smoothing']
+    assert 'no ly' in common['circle_convention']
+    stack = wavebit.Stack.from_structure([dict(shapes=[dict(type=kind, l=.08, material=2.)])],
+        [.1], top=1., bot=1., period=[.2, .2])
+    result, diagnostics = wavebit.fdtd(stack, wavebit.Incidence(wavelength=1.), backend=backend,
+        resolution=10, n_pml=5, n_periods=30, truncation_order=0, shape_integration='area',
+        return_diagnostics=True)
+    assert np.isfinite(np.asarray(result.given.r_s)).all()
+    assert diagnostics['geometry_kind'] == 'parametric'

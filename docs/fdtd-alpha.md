@@ -137,8 +137,8 @@ also permits a moving exterior face with fixed laboratory coordinates and
 live reference-phase derivatives. It supports both incidence sides and
 optionally averages the moving face. Independent magnetic-film optics and
 public-API Meep perturbations bound one selected case; arbitrary combinations
-still need refinement. Curved transverse shapes and general higher-order
-geometry derivatives remain unsupported. Opt-in rectangle rotation is described below.
+still need refinement. Ellipses and general higher-order geometry derivatives remain unsupported;
+circles have the bounded area route described below. Opt-in rectangle rotation is described below.
 
 The explicit route now accepts [axis-aligned rectangle and square recipes](fdtd-rectangle-gradients.md)
 using the same geometry reader as RCWA. Centres, lengths and scalar Material
@@ -148,7 +148,7 @@ crossings; actual shape contacts can still have topology kinks. CPU checks
 include exact area/cell integrals, coincident projected edges, bottom joint
 material/thickness gradients, RCWA refinement and public-API Meep perturbations.
 The default separable path does not accept rotation; neither recipe method
-accepts curved shapes or dispersive shape materials.
+accepts dispersive shape materials.
 
 The explicit common route also provides opt-in `shape_integration='area'` for
 one rotated rectangle or square per layer. It retains angle derivatives in
@@ -472,3 +472,10 @@ more independent material cases, especially low-loss metals and strong resonance
 repeat runtime/absorber refinement for those scenes. The selected cases above do not
 cover the whole input space.
 GPU execution, autodiff and a general field API are separate development projects.
+
+The common area route also accepts `circle`/`disk` with a live centre and diameter.
+[Disk integration and validation](fdtd-circle-gradients.md) cover exact sharp-cell
+areas, stable translation averaging, joint shape/material/thickness derivatives,
+and independent Fourier and public-API Meep comparisons. One shape per layer,
+positive scalar materials and diameters within both periods remain required.
+CPU validation does not establish GPU or general higher-order derivative support.
