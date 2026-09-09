@@ -159,6 +159,23 @@ a new release threshold or an automatic stopping criterion.
 
 ## Reproduction and guards
 
+The reference runs used separately installed `ngsolve==6.2.2606` and
+`netgen-mesher==6.2.2606`. On 2026-09-09, their installed package metadata and
+official [NGSolve](https://github.com/NGSolve/ngsolve/blob/master/pyproject.toml)
+and [Netgen](https://github.com/NGSolve/netgen/blob/master/pyproject.toml)
+manifests identified both as `LGPL-2.1-only`.
+These are optional reference-generation tools: neither is imported by the
+`wavebit/` runtime or declared as a Wavebit installation dependency, and their
+implementations are not vendored here. The comparison consumes numerical
+projection exports. This internal validation use does not require changing
+Wavebit's Apache-2.0 license; see the running/output provisions in section 0
+of the [upstream license](https://github.com/NGSolve/ngsolve/blob/master/LICENSE).
+
+This records the scope of the reference use, not clearance to redistribute
+the FEM environment. Bundling or integrating the libraries requires a new
+check of notices, corresponding source and replacement/relinking obligations,
+as applicable, together with the licenses of their bundled dependencies.
+
 Run the reference export with an environment containing NGSolve. Set
 `NVF_FEM_PYTHON` to that Python executable and `NVF_AFFINE_REF` to an output
 NPZ path outside the checkout:

@@ -135,3 +135,17 @@ says what has to be true before it runs.
 ## Licensing
 
 Wavebit is licensed under Apache-2.0. By submitting a contribution, you agree that it is your own work and is provided under the same license (inbound = outbound). The third-party notices recorded in [LICENSE](LICENSE) must be preserved.
+
+Before using or upgrading third-party libraries, external validation tools, or
+copied source, check the exact version's official license and any relevant
+transitive or bundled components. Record the source of the license, intended
+use, and applicable obligations with the integration or reference instrument.
+Preserve Wavebit's Apache-2.0 license and commercial use; do not introduce
+terms requiring FieldAlgo code to be relicensed or proprietary source to be
+disclosed. Unclear or incompatible terms require a verified alternative.
+
+Internal validation, runtime integration, and redistribution have different
+obligations. Approval for one use does not cover another. Optional installation
+or a separate environment does not by itself establish compatibility. Recheck
+before copying, modifying, linking, or bundling a reference tool into a product,
+wheel, container, or installer, and preserve all required third-party notices.
