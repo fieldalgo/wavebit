@@ -2,7 +2,7 @@
 
 | Entry | Question it answers |
 | --- | --- |
-| `__init__.py` | How do ordinary rectangle layers become a conforming energy closure in the solver's Cartesian frame? |
+| `__init__.py` | How do rectangle layers with different tiling axes become energy closures in one Cartesian frame and Fourier order layout? |
 | `thin_gap.py` | How is the one-sided contact limit retained in a periodic conforming cell? |
 | `partitioned_gap.py` | How are material partitions integrated without inserting artificial interface constraints? |
 | `continuous_flux.py` | How can body displacement remain continuous across auxiliary mesh nodes? |

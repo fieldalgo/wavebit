@@ -70,8 +70,9 @@ are in `studies/results/nvf_energy_engine_validation.log`.
 
 ## Shape construction and Fourier origin
 
-The public constructor accepts a contiguous equal-height tiling in each
-layer, uniform layers, positive scalar backgrounds, independent orthogonal periods,
+The public constructor accepts a contiguous rectangle tiling along either
+lattice axis in each layer, uniform layers, positive scalar backgrounds,
+independent orthogonal periods,
 translations, common lattice/shape rotations and rectangular retained-order
 sets. It normalizes physical lengths and material ratios before the shared
 cell solve. It then applies translation and Cartesian tensor rotation to
@@ -126,8 +127,14 @@ physical aspect metric, with separate energy-stationarity, quadrature and
 period-derivative controls. It also removes a zero-gradient contact clamp
 that could be triggered by roundoff when normalizing the height.
 
-Arbitrary shapes, independently rotated objects, sheared corrector cells,
-lossy corrector construction, automatic selection through the ordinary
+The [layer-axis extension](nvf-layer-axes.md) permits first- and second-axis
+tilings in the same stack. It maps every layer back to the solver's original
+Cartesian frame and retained-order layout before closure. Plans freeze both
+ordering and axis; equivalent quarter-turn rectangle spellings preserve
+the geometry and all five matrices.
+
+Arbitrary shapes, object edges not aligned with the lattice, sheared
+corrector cells, lossy corrector construction, automatic selection through the ordinary
 solver's `projector` setting, and accuracy qualification across use cases
 remain separate work. The existing circular shape projector remains
 available. This integration does not make the provisional 1e-5 research

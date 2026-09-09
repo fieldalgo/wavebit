@@ -13,7 +13,7 @@ from .polynomial_body import PolynomialBodyGapModel
 from .thin_gap import PERIOD, CONTACT_ROUNDOFF
 
 
-_Plan = namedtuple('ConformingNVFPlan', 'layers')
+_Plan = namedtuple('ConformingNVFPlan', 'layers axes')
 
 
 def _require(condition, message, error=ValueError):
@@ -42,9 +42,13 @@ def _epsilon(value, xp):
 class ConformingNVF:
     """Build energy-factorized matrices from ordinary rectangle layer dictionaries.
 
-    Each patterned layer must be a contiguous horizontal tiling in the local
-    axes of a right-handed orthogonal lattice: equal rectangle heights and y
-    centers, total width less than the first period, and no overlap or internal gap.
+    Each patterned layer must be a contiguous tiling along either local axis
+    of a right-handed orthogonal lattice, with equal perpendicular extent and
+    center. Its span along the tiling axis must be less than that period;
+    its perpendicular extent may reach the other period. Gaps and overlaps
+    between rectangles are refused. Different layers may use different axes.
+    Adding pi/2 to a rectangle angle and exchanging its lengths preserves
+    the geometry; rectangle edges must remain aligned with lattice axes.
     Uniform layers are supported. The two periods may differ and must be positive;
     translation of a layer is unrestricted, and its axes may rotate together
     with the rectangles. Materials must be scalar, positive, real and
@@ -56,7 +60,8 @@ class ConformingNVF:
     engine. No Li result or existing projector is substituted for this NVF.
 
     Call ``plan(structure, lattice)`` on concrete geometry before JAX JIT.
-    The resulting immutable plan holds only rectangle ordering. Replays read
+    The resulting immutable plan holds rectangle ordering and each layer's
+    tiling axis. If both axes are valid, planning prefers the first. Replays read
     all coordinates and materials live and check the supported tiling; invalid
     eager replays raise, and invalid traced geometry produces NaN matrices.
     """
@@ -120,32 +125,65 @@ class ConformingNVF:
                                    _real(shape.get('cy', 0.), xp, 'cy')])
                 center = rotation.T@center*(PERIOD/periods)
                 orientation = _real(shape.get('angle', 0.), xp, 'rectangle angle')
-                aligned = xp.abs(xp.sin(orientation-angle)) < 128*np.finfo(float).eps
-                _require(aligned, 'conforming rectangles must align with the first lattice axis')
-                height = _real(shape.get('ly', 0.), xp, 'ly')
+                cosine, sine = xp.cos(orientation-angle), xp.sin(orientation-angle)
+                aligned = xp.abs(sine*cosine) < 128*np.finfo(float).eps
+                _require(aligned, 'conforming rectangles must align with a lattice axis')
+                lx = _real(shape.get('lx', 0.), xp, 'lx')
+                ly = _real(shape.get('ly', 0.), xp, 'ly')
+                positive = (lx > 0) & (ly > 0)
+                _require(positive, 'conforming rectangle lengths must be positive')
+                # Accepted angles are multiples of pi/2. Squared direction
+                # cosines exchange the local extents without an abs cusp or
+                # a traced orientation branch. The alignment guard remains live.
+                width = cosine**2*lx+sine**2*ly
+                height = sine**2*lx+cosine**2*ly
                 shapes.append(dict(
-                    lx=_real(shape.get('lx', 0.), xp, 'lx')*(PERIOD/periods[0]),
+                    lx=width*(PERIOD/periods[0]),
                     ly=height*(PERIOD/periods[1]),
                     gap=(periods[1]-height)*(PERIOD/periods[1]),
+                    gap_x=(periods[0]-width)*(PERIOD/periods[0]),
                     cx=center[0], cy=center[1],
                     epsilon=_epsilon(shape.get('material', 1.), xp)/background,
-                    valid=aligned & valid))
+                    valid=positive & aligned & valid))
             layers.append((shapes, background))
         return layers, rotation, valid, periods[0]/periods[1]
 
     def plan(self, structure, lattice):
-        """Freeze only input rectangle permutations, never geometry or material values."""
+        """Freeze layer axes and input permutations, never geometry or material values.
+
+        Try a tiling along the first lattice axis, then the second. Replay
+        keeps that choice even if another axis later becomes valid. Re-plan
+        explicitly when changing the topology or the chosen axis becomes invalid.
+        """
         try:
             layers, _, _, _ = self._layers(structure, lattice, np)
         except (TypeError, RuntimeError) as exc:
             raise ValueError('plan conforming NVF on concrete geometry before JIT') from exc
-        orders = tuple(tuple(sorted(range(len(shapes)), key=lambda i: float(shapes[i]['cx'])))
-                       for shapes, _ in layers)
-        # Validate the tiling while planning, without constructing a cell.
-        for (shapes, _), order in zip(layers, orders):
-            if shapes:
-                self._profile([shapes[i] for i in order], np, False)
-        return _Plan(orders)
+        orders, axes = [], []
+        # Validate both possible tiling frames without constructing a cell.
+        for shapes, _ in layers:
+            for axis in (0, 1):
+                local = self._axis_shapes(shapes, axis)
+                order = tuple(sorted(range(len(local)), key=lambda i: float(local[i]['cx'])))
+                try:
+                    if local:
+                        self._profile([local[i] for i in order], np, False)
+                except ValueError:
+                    continue
+                orders.append(order)
+                axes.append(axis)
+                break
+            else:
+                raise ValueError('conforming rectangles must form a contiguous tiling along a lattice axis')
+        return _Plan(tuple(orders), tuple(axes))
+
+    @staticmethod
+    def _axis_shapes(shapes, axis):
+        if axis == 0:
+            return shapes
+        # Right-handed frame (a2, -a1), with periods (Ly, Lx).
+        return [dict(s, lx=s['ly'], ly=s['lx'], cx=s['cy'], cy=-s['cx'],
+                     gap=s['gap_x'], gap_x=s['gap']) for s in shapes]
 
     def _profile(self, shapes, xp, replay):
         values = {key: xp.stack([s[key] for s in shapes])
@@ -181,10 +219,11 @@ class ConformingNVF:
         replay = plan is not None
         plan = self.plan(structure, lattice) if plan is None else plan
         layers, rotation, valid_lattice, aspect = self._layers(structure, lattice, xp)
-        if not isinstance(plan, _Plan) or len(plan.layers) != len(layers):
-            raise StaleGeometryError('conforming NVF layer count or plan type changed; plan again')
+        if (not isinstance(plan, _Plan) or len(plan.layers) != len(layers)
+                or len(plan.axes) != len(layers) or any(axis not in (0, 1) for axis in plan.axes)):
+            raise StaleGeometryError('conforming NVF layer count, plan type or tiling axis is invalid; plan again')
         stacks = []
-        for (shapes, background), order in zip(layers, plan.layers):
+        for (shapes, background), order, axis in zip(layers, plan.layers, plan.axes):
             if sorted(order) != list(range(len(shapes))):
                 raise StaleGeometryError('conforming NVF shape count changed; plan again')
             count = len(self._dn)
@@ -194,8 +233,16 @@ class ConformingNVF:
                                      xp.zeros_like(identity), xp.zeros_like(identity))
                 valid = valid_lattice & xp.isfinite(background) & (background > 0)
             else:
-                gap, width, cx, cy, profile, valid = self._profile([shapes[i] for i in order], xp, replay)
-                coefficients, _ = self._cell.coefficients(gap, profile, width, xp, aspect=aspect)
+                local = self._axis_shapes(shapes, axis)
+                gap, width, cx, cy, profile, valid = self._profile([local[i] for i in order], xp, replay)
+                cell_rotation = rotation if axis == 0 else rotation@xp.asarray([[0., -1.], [1., 0.]])
+                cell_aspect = aspect if axis == 0 else 1/aspect
+                # (m_cell, n_cell)=(n, -m) in the second-axis frame. Select
+                # these difference indices before closure, preserving the
+                # original solver's layer/order layout in a mixed-axis stack.
+                dn, dm = ((self._dn, self._dm) if axis == 0
+                          else (2*self._cap-self._dm, self._dn))
+                coefficients, _ = self._cell.coefficients(gap, profile, width, xp, aspect=cell_aspect)
                 modes = xp.asarray(self._cell.modes)
                 # The cell kernels integrate around zero. Ordinary shape
                 # centers are offsets from (a1+a2)/2, while the engine's
@@ -206,12 +253,13 @@ class ConformingNVF:
                 c = coefficients*phase[None]
                 field = xp.stack([xp.stack([c[0], c[1]]), xp.stack([c[2], c[3]])])
                 gram = xp.stack([xp.stack([c[4], c[5]]), xp.stack([c[5], c[6]])])
-                field, gram = (xp.einsum('ai,ijmn,bj->abmn', rotation, a, rotation) for a in (field, gram))
+                field, gram = (xp.einsum('ai,ijmn,bj->abmn', cell_rotation, a, cell_rotation)
+                               for a in (field, gram))
                 def blocks(a):
-                    a = a[..., self._dn, self._dm]
+                    a = a[..., dn, dm]
                     return xp.block([[a[0, 0], a[0, 1]], [a[1, 0], a[1, 1]]])
                 slots = ConvMatrices.from_energy(blocks(field), background*blocks(gram),
-                                                  background*c[7, self._dn, self._dm])
+                                                  background*c[7, dn, dm])
                 defect = xp.maximum(xp.maximum(xp.max(xp.abs(slots.epx-slots.epx.conj().T)),
                                                 xp.max(xp.abs(slots.epy-slots.epy.conj().T))),
                                     xp.max(xp.abs(slots.epxy-slots.epyx.conj().T)))

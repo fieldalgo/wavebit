@@ -1159,7 +1159,7 @@ The conforming energy construction now has an explicit
 `ConvMatrices.from_energy()` closure and
 [`ConformingNVF`](guide/conforming-nvf.md) construction from ordinary
 rectangle layers. The cell kernels live in the library and are shared with
-the research instruments. Contiguous equal-height rectangular tilings,
+the research instruments. Contiguous rectangle tilings along either lattice axis,
 uniform layers, live backgrounds, independent orthogonal periods, translations,
 common lattice rotations and unequal retained-order counts are supported.
 The exported stack runs through the actual Wavebit engine on NumPy, JAX
@@ -1170,5 +1170,8 @@ slab formulas, basis invariance and layer splitting qualify the integration.
 The [rectangular-cell metric](nvf-rectangular-cells.md) is present in both
 the variational equations and projected energy. Period derivatives remain
 live, including contact roundoff, with independent quadrature and
-stationarity controls. Automatic projector selection, general corrector geometry, lossy cell
+stationarity controls. The [layer-axis mapping](nvf-layer-axes.md) supports
+mixed tiling directions in one stack and equivalent quarter-turn rectangle
+representations, with a fixed axis during JAX replay. Automatic projector
+selection, general corrector geometry, lossy cell
 construction and optical accuracy qualification remain open.

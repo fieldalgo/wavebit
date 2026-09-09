@@ -66,8 +66,9 @@ the standard energy closure and scattering solve.
 
 The same rules cover affine and enriched body/gap potentials. Aspect is a
 live argument of the shared continuous-flux cell, not cached in the mesh.
-The public shape plan still records only input ordering, so either period
-may change on replay while the geometry remains a valid tiling. A square
+The public shape plan records input ordering and a layer's
+[tiling axis](nvf-layer-axes.md), so either period may change on replay while
+the geometry remains a valid tiling in that frame. A square
 cell has `a=1` and recovers the previous equations. Sheared lattices remain
 refused because a full off-diagonal metric requires further assembly work.
 
@@ -128,5 +129,5 @@ These tests qualify the finite cell construction and engine integration.
 They do not establish optical convergence for arbitrary aspect ratios or
 geometries. The default cell resolution remains a starting point requiring
 observable-specific refinement, and the provisional 1e-5 optical increment
-is not a release gate. Curved interfaces, independent object rotations,
+is not a release gate. Curved interfaces, object edges not aligned with the lattice,
 sheared cells and lossy corrector construction remain outside this builder.
