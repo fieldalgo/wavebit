@@ -73,7 +73,14 @@ class CellSolution:
     ndof: int
 
 
-def correctors(mesh, degree, epsilon=12.25, *, reciprocal=False):
+def correctors(mesh, degree, epsilon=12.25, *, reciprocal=False, transform=None):
+    """Periodic scalar correctors, optionally on an affine image of the mesh.
+
+    ``transform`` maps reference coordinates to physical coordinates. All
+    material interfaces and lattice translations undergo the same map. The
+    weak form uses physical gradients and a Cartesian unit forcing directly;
+    it does not use the candidate's material-harmonic lift or trial space.
+    """
     if not isinstance(degree, int) or degree < 1:
         raise ValueError('degree must be a positive integer')
     materials = dict(epsilon) if isinstance(epsilon, dict) else {'inclusion': epsilon}
@@ -81,19 +88,27 @@ def correctors(mesh, degree, epsilon=12.25, *, reciprocal=False):
         raise ValueError('epsilon must be finite, real and positive')
     if isinstance(epsilon, dict) and set(materials) != set(mesh.GetMaterials())-{'background'}:
         raise ValueError('material mapping must cover every non-background mesh region')
+    gradient = ng.grad
+    if transform is not None:
+        transform = np.asarray(transform)
+        if (transform.shape != (2, 2) or not np.isrealobj(transform)
+                or not np.isfinite(transform).all() or np.linalg.det(transform) <= 0):
+            raise ValueError('transform must be finite, real and right-handed with shape (2,2)')
+        inverse_transpose = ng.CF(tuple(np.linalg.inv(transform).T.ravel()), dims=(2, 2))
+        gradient = lambda value: inverse_transpose*ng.grad(value)
     eps = mesh.MaterialCF({name: 1/value if reciprocal else value for name, value in materials.items()}, default=1.)
     scalar = ng.Compress(ng.Periodic(ng.H1(mesh, order=degree)))
     space = ng.FESpace([scalar, ng.NumberSpace(mesh)])
     u, lagrange = space.TrialFunction()
     v, multiplier = space.TestFunction()
     form = ng.BilinearForm(space)
-    form += (eps*ng.grad(u)*ng.grad(v)+u*multiplier+v*lagrange)*ng.dx
+    form += (eps*gradient(u)*gradient(v)+u*multiplier+v*lagrange)*ng.dx
     form.Assemble()
     inverse = form.mat.Inverse(space.FreeDofs(), inverse='umfpack')
     basis, fields, residuals = [], [], []
     for j in range(2):
         right = ng.LinearForm(space)
-        right += -eps*ng.grad(v)[j]*ng.dx
+        right += -eps*gradient(v)[j]*ng.dx
         right.Assemble()
         field = ng.GridFunction(space)
         field.vec.data = inverse*right.vec
@@ -104,25 +119,27 @@ def correctors(mesh, degree, epsilon=12.25, *, reciprocal=False):
             raise FloatingPointError(f'invalid cell residual: {relative}')
         residuals.append(relative)
         fields.append(field)
-        basis.append(ng.grad(field.components[0])+ng.CF((int(j == 0), int(j == 1))))
+        basis.append(gradient(field.components[0])+ng.CF((int(j == 0), int(j == 1))))
     energy = np.array([[ng.Integrate(eps*(a*b), mesh, order=2*degree+2)/PERIOD**2
                         for b in basis] for a in basis])
     return CellSolution(basis, fields, eps, energy, residuals, space.ndof)
 
 
-def project_mesh(mesh, cap, degree=6, quadrature=16, epsilon=12.25):
+def project_mesh(mesh, cap, degree=6, quadrature=16, epsilon=12.25, *, transform=None):
     """Integrate Fourier coefficients on conforming triangles, without a raster.
 
     Duffy-mapped Gauss quadrature is polynomial-exact for the unmodulated Gram
     field at quadrature >= degree. Fourier modulation requires a separate
     quadrature refinement. Point batches bound temporary Fourier-array memory.
+    With transform, field components are physical while Fourier labels remain
+    on the reference lattice. The constant area Jacobian cancels in averages.
     """
     if not isinstance(cap, int) or cap < 0:
         raise ValueError('cap must be a nonnegative integer')
     if not isinstance(quadrature, int) or quadrature < degree:
         raise ValueError('quadrature must be an integer at least the degree')
-    primal = correctors(mesh, degree, epsilon)
-    reciprocal = correctors(mesh, degree, epsilon, reciprocal=True)
+    primal = correctors(mesh, degree, epsilon, transform=transform)
+    reciprocal = correctors(mesh, degree, epsilon, reciprocal=True, transform=transform)
     bounds = serializable(energy_bounds(primal.energy, reciprocal.energy))
     modes = np.arange(-cap, cap+1)[:, None]
     coefficients = np.zeros((8, 2*cap+1, 2*cap+1), complex)
@@ -148,6 +165,8 @@ def project_mesh(mesh, cap, degree=6, quadrature=16, epsilon=12.25):
                     reciprocal_residuals=reciprocal.residuals,
                     mean_energy_quadrature_error=error, quadrature_points=mesh.ne*quadrature**2,
                     quadrature_mapping='element_local')
+    if transform is not None:
+        metadata['transform'] = np.asarray(transform).tolist()
     return coefficients, metadata
 
 

@@ -1,0 +1,183 @@
+# Independent affine-cell and directional optical comparisons
+
+Written: 2026-09-09
+
+The [full-metric affine kernel](nvf-affine-cells.md) now has an independent
+fitted FEM reference and accepts distinct x/y Fourier orders directly.
+On the tested oblique profile, refining x inside the auxiliary cell reduces
+the order-12 transmission difference from the fitted reference by about 73%
+for p and 83% for s. The remaining optical order change is larger, especially
+in y for s. These measurements do not establish optical convergence.
+
+The implementation and instruments are:
+
+- `wavebit/_core/conforming/affine_cell.py`: scalar or `(x,y)` retained orders.
+- `studies/nvf_cell_corrector.py` and `studies/nvf_gap_reference.py`: physical
+  gradients on an affine image of an independently fitted periodic mesh.
+- `studies/nvf_affine_convergence.py`: one maximal projection per cell,
+  checked reference provenance, static enclosures and directional optics.
+
+All shapes here are affine images of reference rectangles, hence physical
+parallelograms. The public physical-rectangle adapter retains its existing
+contract. Neither this reference nor the new order support silently shears
+ordinary rectangle inputs.
+
+## Fixed physical problem
+
+The physical lattice, in nm, has columns
+
+```text
+A = [[700,315], [0,490]]
+J = A/700 = [[1,.45], [0,.7]].
+```
+
+Reference widths use period 700. The envelope width is 350, perpendicular
+gap is 17, and one seam at x=31 separates permittivities 4 and 9 in background
+1. The physical shape is the image under J of this centered reference
+profile. The lossless film has thickness 300 nm, wavelength 900 nm, incidence
+theta=.2 and phi=0, and exterior permittivities 1 and 2.25. These parameters
+are identical in every optical row below.
+
+## An independent physical-gradient reference
+
+The optional NGSolve instrument meshes the material boundaries conformingly
+on the reference square. It uses periodic H1 polynomials with a mean-zero
+constraint. For a reference derivative, the physical gradient is
+`J^(-T) grad(u)`. The equation uses that physical gradient and a Cartesian
+unit forcing directly. It does not import Wavebit, use the candidate's
+integrated-flux basis, or use its laminated contact lift.
+
+The constant area Jacobian cancels between physical integrals and cell-area
+normalization. Fourier phases stay in reference coordinates because the
+physical reciprocal vector is `2 pi A^(-T) k`. Both primal and reciprocal
+material problems are solved in physical components. Their energies give
+the existing two-dimensional variational enclosure. It concerns the static
+scalar cell, with floating-point integration and algebra; it is neither
+interval arithmetic nor an optical transmission bound.
+
+FEM Fourier projection uses element-owned integration points. Five new
+optional tests cover exact isotropic uniform fields, the exact oblique
+laminate, physical rotation/common scale, independent material Fourier
+integrals, quadrature refinement and invalid transforms. The eight existing
+static FEM tests also pass.
+
+| reference h | degree | vertex refinement | elements | scalar unknowns | relative static enclosure |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| .10 | 4 | 20 | 728 | 5825 | 2.01494e-5 |
+| .06 | 6 | 20 | 860 | 15481 | 2.83491e-6 |
+| .04 | 8 | 40 | 1622 | 51905 | 2.62367e-7 |
+
+Here h is a reference mesh length in micrometers. The finest export covers
+coefficient cap 32. Increasing its triangle quadrature from 28 to 32 changes
+any coefficient by at most `2.74e-15`; the independently integrated mean
+energy agrees within `1.37e-13`. The degree-6 to degree-8 refinement changes
+some coefficients by `3.41e-6`, so the quadrature check is not a substitute
+for the separate cell refinement.
+
+Across the tested optical orders through 16, the degree-6 to degree-8
+reference change is below `2.82e-7` for p transmission and `7.18e-7` for s.
+Those are observed reference changes, not certified optical error bounds.
+The FEM reference solves the static auxiliary problem, not independent
+three-dimensional Maxwell scattering. Both optical paths consume their
+fields through the same energy closure and Wavebit engine.
+
+## Which auxiliary direction needs refinement?
+
+All candidate rows use base body rows 4, material grading strength 8 and
+radius .01, local flux functions, and edge fraction `1e-5`. x/y subdivisions
+refer to the candidate mesh, not retained Fourier orders.
+
+| x subdivisions | y subdivisions | body degree | gap degree | unknowns | relative static enclosure |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 1 | 2 | 4 | 1007 | 6.63190e-4 |
+| 1 | 1 | 4 | 6 | 1943 | 5.69499e-4 |
+| 1 | 2 | 4 | 6 | 3671 | 5.67375e-4 |
+| 2 | 1 | 4 | 6 | 3887 | 1.42965e-4 |
+| 4 | 1 | 2 | 4 | 4031 | 1.40300e-4 |
+| 6 | 1 | 1 | 4 | 3455 | 9.74742e-4 |
+
+Doubling y intervals has little effect on the degree-4 body cell here.
+Doubling x intervals narrows its enclosure by about 75%. Spending a similar
+number of unknowns on x=4 with a quadratic body gives a comparable enclosure;
+reducing the body to linear polynomials loses that benefit. Thus increasing
+x alone while reducing every other degree is not supported by this evidence.
+No default mesh setting has changed.
+
+The following comparison uses the degree-8 fitted FEM reference at the same
+outer order 12. Differences are signed candidate minus reference:
+
+| auxiliary field | p T | s T | p difference | s difference |
+| --- | ---: | ---: | ---: | ---: |
+| fitted FEM | .852527657039 | .731688518712 | — | — |
+| x1, body 2, gap 4 | .852506675486 | .731631268484 | -2.09816e-5 | -5.72502e-5 |
+| x1, body 4, gap 6 | .852511035065 | .731652308240 | -1.66220e-5 | -3.62105e-5 |
+| x2, body 4, gap 6 | .852522051245 | .731678833971 | -5.60579e-6 | -9.68474e-6 |
+
+The final difference decreases by about 73%/83% relative to the first
+candidate row. This is improvement in the auxiliary-field comparison at a
+fixed optical order. It is not the total error relative to continuum
+Maxwell scattering. At order 16 the refined candidate still differs from
+the fitted reference by `-5.50011e-6` / `-1.06650e-5` for p/s transmission.
+
+## Keep the exact directional Fourier set
+
+`AffineCellGapModel(order=(x,y))` now records that pair as
+`truncation_order`. The x/y directions are the original integer reciprocal
+labels, even though their physical vectors are not orthogonal. The cell
+projects the required coefficient envelope, then selects exactly those
+modes in Q, G and the longitudinal matrix before closing them. It does not
+extract a submatrix from a larger already-inverted constitutive matrix.
+Zero half widths are supported. Invalid, negative or boolean orders raise.
+
+Twenty checks cover the directional matrices, zero-width order directions,
+contact/positive-gap engine energy balance, the noncommutation of inversion
+and submatrix selection, and order validation. Scalar order behavior is
+retained by the existing affine-cell suite.
+
+For the independently fitted degree-8 field held fixed:
+
+| x half width | y half width | p T | s T |
+| ---: | ---: | ---: | ---: |
+| 8 | 8 | .852727535317 | .732709929588 |
+| 12 | 8 | .852597669148 | .732748852613 |
+| 8 | 12 | .852656933773 | .731651099274 |
+| 12 | 12 | .852527657039 | .731688518712 |
+| 16 | 12 | .852475474946 | .731690420550 |
+| 12 | 16 | .852495746055 | .731227967383 |
+| 16 | 16 | .852443153987 | .731229889742 |
+
+At the last four corners, increasing x alone changes p by `-5.21821e-5`
+and s by `+1.90184e-6`. Increasing y alone changes p by `-3.19110e-5`
+and s by `-4.60551e-4`. The mixed increments are `-4.09975e-7` and
+`+2.05210e-8`. The s order change is overwhelmingly in y, whereas both
+directions still matter for p. A single square-order increment cannot
+identify this allocation.
+
+The square 12-to-16 changes are `-8.45031e-5` and `-4.58629e-4`.
+Optical truncation remains consequential. No value in these tables defines
+a new release threshold or an automatic stopping criterion.
+
+## Reproduction and guards
+
+Run the reference export with an environment containing NGSolve. Set
+`NVF_FEM_PYTHON` to that Python executable and `NVF_AFFINE_REF` to an output
+NPZ path outside the checkout:
+
+```bash
+PYTHONPATH=$PWD "$NVF_FEM_PYTHON" studies/nvf_gap_reference.py --cap 32 --h .04 --degree 8 --quadrature 28 --refine 40 --transform 1 .45 0 .7 --output "$NVF_AFFINE_REF"
+PYTHONPATH=$PWD python studies/nvf_affine_convergence.py --orders 8 12:8 8:12 12 16:12 12:16 16 --projections "$NVF_AFFINE_REF" --cells 2:4:4:6
+PYTHONPATH=$PWD "$NVF_FEM_PYTHON" -m unittest tests.test_nvf_affine_reference tests.test_nvf_cell_corrector tests.test_nvf_gap_reference
+```
+
+The comparison loader requires the identical transform, profile and
+coefficient cap. It checks the longitudinal coefficients against exact
+material integrals, so matching metadata alone cannot admit an export
+of another material distribution. It rejects non-real field data,
+unequal xy/yx Gram terms and a non-identity field mean. Every retained
+space receives its own closure. Lossless power balance is checked as an
+algebraic diagnostic, not used as a convergence certificate.
+
+The measurements and validation details are retained in
+[the study log](https://github.com/fieldalgo/wavebit/blob/develop/studies/results/nvf_affine_convergence.log).
+Independent optical accuracy, complete oblique contact-opening derivative
+qualification, and a public general-geometry adapter remain open.

@@ -61,6 +61,13 @@ For diagonal J these reduce to the existing
 remain the original integers k, with physical reciprocal vectors
 `2 pi A^(-T) k`. There is no integer reduction in this kernel.
 
+The kernel now accepts `order=(x,y)` as well as a square integer order.
+`truncation_order` records the pair for the consuming engine. Projection
+covers the full required coefficient envelope, but Q, G and the
+longitudinal matrix retain only the requested modes before inversion.
+The [independent directional comparison](nvf-affine-convergence.md)
+shows why the two directions must be refined separately.
+
 ## The contact lift includes both forcing directions
 
 Let `rho = 1/epsilon_body(x)`, `l = rho/mean(rho)` and

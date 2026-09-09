@@ -55,10 +55,12 @@ def make_profile_mesh(h=.06, gap=17., width=350., seams=(31.,), values=(4., 9.),
     return mesh, materials
 
 
-def project_profile(cap, h=.06, degree=6, quadrature=16, *, gap=17., width=350., seams=(31.,), values=(4., 9.), refine=20.):
+def project_profile(cap, h=.06, degree=6, quadrature=16, *, gap=17., width=350., seams=(31.,), values=(4., 9.), refine=20.,
+                    transform=None):
     mesh, materials = make_profile_mesh(h, gap, width, seams, values, refine)
-    coefficients, metadata = project_mesh(mesh, cap, degree, quadrature, materials)
-    return coefficients, dict(fixture='partitioned_gap', gap=gap, width=width, seams=list(seams), values=list(values),
+    coefficients, metadata = project_mesh(mesh, cap, degree, quadrature, materials, transform=transform)
+    fixture = 'partitioned_gap' if transform is None else 'affine_partitioned_gap'
+    return coefficients, dict(fixture=fixture, gap=gap, width=width, seams=list(seams), values=list(values),
                               h=h, refine=refine, **metadata)
 
 
@@ -73,11 +75,14 @@ def main():
     parser.add_argument('--seams', type=float, nargs='*', default=[31.])
     parser.add_argument('--values', type=float, nargs='+', default=[4., 9.])
     parser.add_argument('--refine', type=float, default=20.)
+    parser.add_argument('--transform', type=float, nargs=4,
+                        help='optional reference-to-physical 2-by-2 map, row-major; physical lattice = 700 * map in nm')
     parser.add_argument('--output', required=True)
     args = parser.parse_args()
     start = time.monotonic()
     coefficients, metadata = project_profile(args.cap, args.h, args.degree, args.quadrature, gap=args.gap,
-                                            width=args.width, seams=args.seams, values=args.values, refine=args.refine)
+                                            width=args.width, seams=args.seams, values=args.values, refine=args.refine,
+                                            transform=None if args.transform is None else np.asarray(args.transform).reshape(2, 2))
     np.savez(args.output, coefficients=coefficients, metadata=json.dumps(metadata))
     print(json.dumps(dict(kind='gap_fem_cell', **metadata, seconds=time.monotonic()-start)), flush=True)
 

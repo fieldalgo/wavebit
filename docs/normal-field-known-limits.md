@@ -1201,3 +1201,11 @@ contact lift. Such a shear turns reference rectangles into parallelograms;
 it is not applied to ordinary physical rectangle dictionaries. General
 physical-rectangle input and oblique optical accuracy qualification remain
 open.
+
+The [independent affine comparison](nvf-affine-convergence.md) now separates
+auxiliary-cell refinement from directional optical truncation. A fitted
+static FEM reference reaches a relative primal/complementary enclosure of
+2.63e-7 on the tested profile. Refining the candidate reduces its same-order
+transmission discrepancy, while the retained y order remains the largest
+measured s-polarized optical limitation. These are comparisons, not an
+independent three-dimensional optical error bound or a release criterion.

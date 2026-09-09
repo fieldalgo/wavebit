@@ -4,6 +4,8 @@ This internal kernel maps the entire reference geometry through a basis matrix.
 A reference rectangle becomes a physical parallelogram. It must not be used to
 reinterpret physical rectangle dictionaries in the public ConformingNVF API.
 """
+from numbers import Integral
+
 import numpy as np
 from numpy.polynomial.legendre import leggauss
 from scipy.linalg import solve
@@ -75,10 +77,24 @@ class AffineCellGapModel(ComplexMaterialGapModel):
     The trial potentials are H1-conforming; at finite resolution their flux
     need not satisfy the oblique transmission condition pointwise. The affine
     lift does satisfy that condition exactly at full perpendicular contact.
+
+    ``order`` is a nonnegative integer or (x, y) pair. The coefficient envelope
+    covers both directions, while matrix closure keeps the exact requested
+    Fourier set. ``truncation_order`` records the pair for the consuming engine.
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, order=7, *args, **kwargs):
+        pair = (order, order) if isinstance(order, Integral) else order
+        if (not isinstance(pair, (tuple, list)) or len(pair) != 2
+                or any(isinstance(n, bool) or not isinstance(n, Integral) or n < 0 for n in pair)):
+            raise ValueError('affine cell order must be a nonnegative integer or integer pair')
+        self.truncation_order = tuple(int(n) for n in pair)
+        super().__init__(max(self.truncation_order), *args, **kwargs)
+        ox, oy = self.truncation_order
+        n, m = np.meshgrid(np.arange(-oy, oy+1), np.arange(-ox, ox+1), indexing='ij')
+        self.count = m.size
+        self.dm = m.ravel()[:, None]-m.ravel()+2*self.order
+        self.dn = n.ravel()[:, None]-n.ravel()+2*self.order
         # These small real tables integrate the polynomial y factors exactly.
         # Material and geometry differentiation happens in the x packs and g.
         self._indices, self._polynomials, _ = body_space(self.yedges, self.body_degree)
@@ -199,7 +215,7 @@ class AffineCellGapModel(ComplexMaterialGapModel):
         return self._matrices_from_coefficients(coefficients, metadata, xp)
 
     def conv_matrices(self, gap, epsilon=12.25, width=350., xp=np, *, basis):
-        """One layer for solve_conv with this basis and order on the consumer.
+        """One layer for solve_conv with this basis and truncation_order.
 
         The profile background is one. Relative materials with a negative
         imaginary part require restoration of their physical background
