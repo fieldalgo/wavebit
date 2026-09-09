@@ -79,7 +79,7 @@ def periodic_counts(mesh, lattice=None):
 
 def make_affine_profile_mesh(h=.2, *, transform=None, period=PERIOD,
                              width=.350, gap=.017, seam=.031,
-                             thickness=THICKNESS, pad=.1, uniform=None):
+                             thickness=THICKNESS, pad=.1, uniform=None, edge_h=None):
     """Fit the affine two-material gap profile directly in physical space.
 
     All lengths are in micrometers. ``transform`` maps reference x/y positions
@@ -89,6 +89,10 @@ def make_affine_profile_mesh(h=.2, *, transform=None, period=PERIOD,
     1 above and 2.25 below. ``uniform`` replaces the entire film by that positive
     scalar permittivity for slab controls. Only physical Rayleigh padding is
     meshed; this helper supplies no PML or Maxwell scattering solution.
+    ``edge_h`` requests a physical edge mesh-size target on the 20 dielectric edges
+    of the patterned film. It must be positive and no larger than ``h``; it
+    cannot accompany ``uniform``. None retains the global mesh-size control.
+    Netgen treats this as a sizing target, not a strict segment-length bound.
 
     Returns the mesh and its material-permittivity dictionary. The existing
     fixed-fixture solve functions do not consume this mesh.
@@ -105,6 +109,14 @@ def make_affine_profile_mesh(h=.2, *, transform=None, period=PERIOD,
                                or np.asarray(uniform).dtype.kind not in 'iuf'
                                or not np.isfinite(uniform) or uniform <= 0):
         raise ValueError('the uniform control requires a positive real permittivity')
+    if edge_h is not None:
+        edge_value = np.asarray(edge_h)
+        if (edge_value.shape != () or edge_value.dtype.kind not in 'iuf'
+                or not np.isfinite(edge_value) or not 0 < edge_value <= h):
+            raise ValueError('edge_h must be a positive finite real scalar no larger than h')
+        if uniform is not None:
+            raise ValueError('edge_h requires the patterned film, not a uniform control')
+        edge_h = float(edge_value)
     transform = np.asarray([[1., .45], [0., .7]] if transform is None else transform)
     if (transform.shape != (2, 2) or transform.dtype.kind not in 'iuf'
             or not np.isfinite(transform).all()):
@@ -146,6 +158,13 @@ def make_affine_profile_mesh(h=.2, *, transform=None, period=PERIOD,
             part = prism(left, right, -height/2, height/2, 0, thickness)
             name = f'piece_{i}'
             part.mat(name)
+            if edge_h is not None:
+                # Each physical prism has 12 edges; the common interface has
+                # four shared edges, leaving 20 distinct dielectric edges.
+                # Tag before Glue so selection follows the physical prisms
+                # under affine transforms without coordinate-box tolerances.
+                for edge in part.edges:
+                    edge.maxh = edge_h
             materials[name] = epsilon
             volumes[name] = determinant*(right-left)*height*thickness
             parts.append(part)
@@ -672,13 +691,15 @@ def robin_complement_power(mesh, scattered_field, ports, *, area, theta,
 
 def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
                           *, transform=None, theta=THETA, phi=0., condense=True,
-                          quadrature_bonus=6, progress=None):
+                          quadrature_bonus=6, edge_h=None, progress=None):
     """Independent affine H(curl) FEM with shared p/s Rayleigh boundary solves.
 
     The physical profile is fixed to the .7-micrometer reference cell, width
     .350, gap .017, seam .031, and .3-thick film. ``transform`` changes its
     physical affine image; all lengths and lattice columns are in micrometers.
     ``uniform`` replaces the patterned film by a positive scalar permittivity.
+    ``edge_h`` requests a physical edge mesh-size target on the 20 dielectric edges
+    of the patterned film, as in ``make_affine_profile_mesh``.
 
     One mesh, sparse factorization, Fourier trace response and two-column
     Woodbury solve serve both polarizations. At finite cut, omitted evanescent
@@ -716,7 +737,9 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
     area = float(np.linalg.det(lattice))
     port_data = [rayleigh_data(cut, epsilon, lattice=lattice, theta=theta, phi=phi)
                  for epsilon in (1., SUBSTRATE)]
-    mesh, materials = make_affine_profile_mesh(h, transform=transform, uniform=uniform, pad=pad)
+    mesh, materials = make_affine_profile_mesh(
+        h, transform=transform, uniform=uniform, pad=pad, edge_h=edge_h)
+    edge_h = None if edge_h is None else float(edge_h)
     epsilon = mesh.MaterialCF(materials)
     background = _affine_background_fields(theta, phi)
     polarizations = ('p', 's')
@@ -742,7 +765,7 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
     modes = port_data[0][0]
     count, rank = len(modes), 4*len(modes)
     settings = dict(h=h, order=order, cut=int(cut), uniform=uniform, pad=pad,
-                    condense=condense, quadrature_bonus=quadrature_bonus,
+                    condense=condense, quadrature_bonus=quadrature_bonus, edge_h=edge_h,
                     period=PERIOD, width=.350, gap=.017,
                     seam=.031, thickness=THICKNESS)
     metadata = dict(fixture='affine_partitioned_gap', boundary='rayleigh',
@@ -751,8 +774,9 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
                     units='micrometers', wavelength=WAVELENGTH, thickness=THICKNESS,
                     period=PERIOD, width=.350, gap=.017, seam=.031, values=[4., 9.],
                     h=h, order=order, cut=int(cut), uniform=uniform, pad=pad,
-                    quadrature_bonus=quadrature_bonus,
-                    elements=mesh.ne, dofs=space.ndof, rank=rank,
+                    quadrature_bonus=quadrature_bonus, edge_h=edge_h,
+                    elements=mesh.ne, dofs=space.ndof,
+                    coupling_dofs=sum(space.FreeDofs(coupling=True)), rank=rank,
                     periodic_pairs=periodic_counts(mesh, lattice),
                     modes=[list(mode) for mode in modes])
 

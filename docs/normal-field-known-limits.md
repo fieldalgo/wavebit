@@ -1250,6 +1250,11 @@ budget can close to about `1e-11` after accounting for omitted Robin
 power while degree refinement still changes transmission by about
 `1e-4`. Per-order comparisons expose cancellation hidden in total R/T;
 these measurements do not provide a converged golden reference.
+An optional [physical-edge mesh target](nvf-independent-fem.md#refining-the-physical-dielectric-edges)
+now reduces the observed degree-4-to-5 p/s transmission variation by
+60.8%/88.4%, with smaller changes in individual R/T orders too. The
+degree increments reverse sign between the original and refined meshes;
+this finite comparison does not bound the remaining optical error.
 
 The [reference-degree refinement at (24,32)](nvf-affine-convergence.md#reference-degree-refinement-at-y32)
 raises the fitted field from degree 8 to 10 at fixed optical order. The

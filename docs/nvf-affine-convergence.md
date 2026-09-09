@@ -479,6 +479,12 @@ by `+8.46e-5`/`+1.43e-4`, despite a nearly closed energy budget.
 The [physical per-order comparison](nvf-independent-fem.md#comparing-the-physical-diffraction-orders-with-wavebit)
 checks the shared `+G` convention and shows that total agreement can hide
 larger cancelling errors in individual diffraction orders.
+The optional [physical-edge mesh control](nvf-independent-fem.md#refining-the-physical-dielectric-edges)
+subsequently reduces the measured degree-4-to-5 transmission change by
+60.8%/88.4% for p/s; the maximum individual R/T change falls by
+89.0%/95.0%. This is one finite degree interval on a different fitted
+mesh, with larger cost at fixed degree, and still supplies no optical
+error bound.
 
 ## Reference degree refinement at y=32
 

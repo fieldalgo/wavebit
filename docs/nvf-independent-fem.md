@@ -389,6 +389,111 @@ disagreements are `3.27e-6`/`1.37e-6`. These finite controls leave the
 FEM discretization uncertainty unresolved. This solve takes 191.64 s
 with peak process RSS 3.453 GB.
 
+## Refining the physical dielectric edges
+
+The optional `edge_h` setting requests a physical mesh-size target along
+the patterned film's 20 dielectric edges. Each of the two prisms has
+12 edges, with four shared at the internal interface. Assigning the
+target to these actual prism edges before gluing the solids follows
+the geometry under affine maps and rotations; it does not select
+artificial periodic-cell edges using a coordinate box.
+
+The edges include six vertical lines at reference positions
+`x=-.175,.031,.175`, `y=+/- .3415`, and seven horizontal lines on each
+film interface `z=0,.3`. Two vertical lines at x=.031 meet permittivities
+4, 9 and 1. Their endpoints also meet the exterior materials. This
+control provides a way to test resolution near these interfaces without
+asserting that edge singularities dominate the observed optical error.
+
+The default `edge_h=None` retains the original global-size mesh. An
+explicit target must be a finite positive real value no larger than h;
+it cannot accompany the uniform-slab control, which lacks these patterned
+edges. Netgen treats the value as a mesh-size target, not a strict upper
+bound on every generated segment: a .10 target can leave a .144-long
+short CAD edge in one segment. It also does not by itself guarantee
+a chosen number of subdivisions through the 11.9 nm physical normal
+gap corresponding to the 17 nm reference gap.
+
+The result now records `edge_h` and `coupling_dofs` as well as the full
+unknown count. `coupling_dofs` measures the global space after static
+condensation; the count is still reported if an uncondensed solve is
+requested. Equal full unknown counts at different polynomial degrees
+can leave different global factorization sizes, so they are not enough
+to predict equal memory use.
+
+The small-mesh controls define the 20 physical line segments independently
+of the CAD edge selection. At target .08, each line receives more mesh
+points and a smaller largest interval, both before and after whole-cell
+rotation. Material volumes and samples, exterior areas and heights,
+actual periodic pairs and the reduced H(curl) space are checked on both
+refined meshes. A separate pre-assembly progress check verifies the
+requested target and actual global-space count in the solve metadata.
+The full affine selection now passes 29 tests in 11.693 s.
+
+An independent review compares the old helper with both current default
+forms and obtains exactly identical vertices, tetrahedron connectivity
+and periodic identifications. A distinct affine map
+`J=[[.9,-.25],[.3,1.1]]` at target .12 confirms that precisely the
+20 physical dielectric edges carry the target after gluing, while the
+28 other distinct CAD edges do not. Independent material volumes,
+outer-face areas and actual primitive-vector displacements also pass.
+
+For a matched optical comparison, h=.18, cut 4, pad=.2 and quadrature
+bonus 6 stay fixed. At FEM degree 4 the global-size mesh has 464
+tetrahedra and 24,145 full unknowns, with 17,185 remaining after
+condensation. The target-.10 mesh has 908 tetrahedra, 46,720 full
+unknowns and 33,100 after condensation. The degree-4 energy
+balance errors decrease from `5.42e-5`/`8.27e-5` to
+`1.21e-6`/`1.62e-6`, but this change alone cannot establish that the
+transmissions are closer to their continuum values.
+
+Increasing to degree 5 on each fixed mesh gives the following matched
+comparison. The target-.10 degree-5 space has 83,448 full unknowns and
+50,760 after condensation.
+
+| FEM degree | global-size p T | target-.10 p T | global-size s T | target-.10 s T |
+| ---: | ---: | ---: | ---: | ---: |
+| 4 | .852385240563 | .851926548859 | .732112533661 | .730496704608 |
+| 5 | .851943269585 | .852099612881 | .730434871114 | .730691646657 |
+
+The target-.10 degree-4-to-5 increments are
+`+1.73064e-4`/`+1.94942e-4`, compared with
+`-4.41971e-4`/`-1.67766e-3` on the original mesh. Their magnitudes
+decrease by 60.8% for p and 88.4% for s. The largest individual R/T
+power changes decrease from `1.98264e-3`/`3.96889e-3` to
+`2.17578e-4`/`1.96559e-4`, reductions of 89.0%/95.0%. The smaller
+variation therefore also appears in the individual diffraction powers.
+These are observed changes over one degree interval, with reversed
+signs between the two meshes; they are not estimates or bounds for
+the remaining optical error.
+
+The local degree-5 modal/volume disagreements are
+`5.65e-6`/`2.55e-6` and signed energy remainders are
+`-3.26e-8`/`-8.64e-9`. Its total transmission differs from the
+unrefined degree-6 result by `-3.26032e-5`/`-1.54721e-5`. Neither
+agreement nor the small energy budget qualifies an independent oracle.
+The local degree-4 p modal/volume disagreement actually grows from
+`2.00e-5` to `2.37e-5` despite its smaller energy imbalance.
+
+As in the earlier per-order comparison, a close total can be misleading:
+the unrefined degree-4 p total differs from the finite Wavebit row by
+only `+4.53e-6`, while its transmitting `(-1,0)` and `(0,0)` orders
+differ by about `-1.915e-3` and `+2.101e-3`. Local sizing reduces the
+magnitude of each transmitting-order difference in this comparison
+while increasing the total difference. Wavebit's own Fourier tail
+remains unresolved, so this is a cancellation diagnostic, not an
+accuracy ranking against a converged reference.
+
+The degree-4 default and target-.10 solves take 42.31 and 108.35 s,
+with peak process RSS 1.297 and 2.919 GB. The measured local-size
+calculation fits below the 37,387 global unknowns of the unrefined
+degree-6 case, which took 191.64 s and 3.453 GB. These observations
+describe different finite approximations; they are not an equal-accuracy
+performance comparison. The target-.10 degree-5 solve takes 250.73 s
+and 4.011 GB, versus 94.30 s and 2.301 GB for the original degree-5
+mesh. The reduction in degree sensitivity comes with higher cost at
+this fixed degree; no default mesh choice has been changed.
+
 ## Comparing the physical diffraction orders with Wavebit
 
 Both solvers use `k_parallel=k_incident+G`. At the saved Wavebit optical
@@ -586,13 +691,13 @@ the geometry-only change. The new checks establish geometry and space
 consistency, not a converged optical reference.
 
 The full affine integration is checked separately, including both
-polarizations and the driven degree-4 slab:
+polarizations, the driven degree-4 slab, Robin power and local sizing:
 
 ```bash
-PYTHONPATH=$PWD "$NVF_FEM_PYTHON" -m unittest tests.test_nvf_fem_affine_scattering tests.test_nvf_fem_affine_geometry tests.test_nvf_fem_reference.FEMAlgebraicTests -v
+PYTHONPATH=$PWD "$NVF_FEM_PYTHON" -m unittest tests.test_nvf_fem_boundary_power tests.test_nvf_fem_affine_scattering tests.test_nvf_fem_affine_geometry tests.test_nvf_fem_reference.FEMAlgebraicTests -v
 ```
 
-This selection passes 21 tests in 9.686 s. To reproduce a physical affine
+This selection passes 29 tests in 11.693 s. To reproduce a physical affine
 solve through the Python entry point:
 
 ```bash
@@ -607,7 +712,10 @@ PY
 ```
 
 Adding `uniform=4., phi=.37` reproduces the slab geometry and incidence;
-its reported control above uses `cut=1`. The default command-line entry
+its reported control above uses `cut=1`. The physical-edge trial uses
+`solve_affine_rayleigh(h=.18, order=4, cut=4, pad=.2, edge_h=.10)`.
+`quadrature_bonus=14` requests the higher integration setting independently
+of mesh and FEM degree. The default command-line entry
 point continues to select the historical square fixture.
 Selected results, with prototype-versus-packaged flux provenance, are retained in
 [`studies/results/nvf_fem_reference.log`](../studies/results/nvf_fem_reference.log).

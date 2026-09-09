@@ -112,6 +112,14 @@ class AffineScatteringTests(unittest.TestCase):
             for settings in invalid:
                 with self.subTest(settings=settings), self.assertRaises(ValueError):
                     self.reference.solve_affine_rayleigh(**settings)
+        invalid_edges = [dict(edge_h=value) for value in
+                         (0., -.1, .21, np.nan, np.inf, True, np.bool_(True), 1j, [.1], '.1')]
+        invalid_edges += [dict(edge_h=.1, uniform=4.)]
+        with patch.object(self.reference.occ, 'OCCGeometry',
+                          side_effect=AssertionError('invalid edge sizing reached mesh generation')):
+            for settings in invalid_edges:
+                with self.subTest(settings=settings), self.assertRaises(ValueError):
+                    self.reference.solve_affine_rayleigh(**settings)
 
 
 if __name__ == '__main__':
