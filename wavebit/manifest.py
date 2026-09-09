@@ -110,7 +110,8 @@ from ._core.spec import SPEC_VERSION
 #: C1 internal-interface averaging, including its static width and clearance.
 #: Version 13 adds shared axis-aligned rectangle recipes on the explicit FDTD
 #: route, including moving transverse faces and optional translation averaging.
-MANIFEST_VERSION = '13'
+#: Version 14 adds opt-in exact area integration and rotated rectangle gradients.
+MANIFEST_VERSION = '14'
 
 
 # --------------------------------------------------------------- how a structure is spelled
@@ -524,12 +525,16 @@ SOLVERS = {
                 'differentiable_parameters': ('theta', 'phi', 'raster epsilon', 'raster mu',
                                               'electric pole coefficients', 'half-space epsilon',
                                               'half-space mu', 'fixed-total layer thickness',
-                                              'rectangle centre', 'rectangle size', 'shape epsilon/mu'),
+                                              'rectangle centre', 'rectangle size', 'rectangle angle (area)', 'shape epsilon/mu'),
                 'static_parameters': ('periods', 'shape types/count/paint order', 'total depth', 'wavelength',
-                                      'mesh_indices', 'mesh_thickness', 'layer_smoothing', 'shape_smoothing', 'truncation_order'),
+                                      'mesh_indices', 'mesh_thickness', 'layer_smoothing', 'shape_smoothing', 'shape_integration', 'truncation_order'),
                 'parametric_shapes': ('rectangle', 'square'),
-                'parametric_requires': ('two rectangular periods', 'subpixel=True', 'static angle=0'),
-                'parametric_refused': ('rotated shapes', 'circles/ellipses', 'raster mu', 'dispersion labels'),
+                'parametric_requires': ('two rectangular periods', 'subpixel=True'),
+                'shape_integration': ('separable', 'area'),
+                'separable_requires': 'static angle=0',
+                'area_requires': 'at most one rectangle per layer; projected extents within periods; shape_smoothing=0',
+                'area_averaging': 'exact polygon/cell areas; arithmetic transverse material averages; full y sampling',
+                'parametric_refused': ('circles/ellipses', 'raster mu', 'dispersion labels'),
                 'shape_constraint': 'positive lengths no larger than periods; periodic later-shape painting; '
                                     'gradients piecewise across topology changes',
                 'shape_smoothing_constraint': 'static scalar or (x,y) widths in [0,period]; '
@@ -551,8 +556,8 @@ SOLVERS = {
         'sections': ('material_quantity', 'results'),
         'structure': 'an array of relative permittivity, shape (n_layers, Ny, Nx); '
                      'Ny = 1 is a grating invariant along y and anything larger is a crossed '
-                     'one. The explicit common route also accepts axis-aligned rectangle/square '
-                     'recipes using the shared parametric conventions; the default legacy route refuses them',
+                     'one. The explicit common route also accepts rectangle/square recipes, with '
+                     'rotation through opt-in area integration, using the shared parametric conventions; the default legacy route refuses them',
         'answers': ('pure te/tm at any theta in the classical mount (phi = 0)',
                     'a conical mount through psi/chi or a complex Jones pair',
                     'a crossed grating, the raster periodic along both axes',

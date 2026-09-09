@@ -131,8 +131,8 @@ even when the two FDTD derivatives closely agree. A coating-optimization example
 includes a finer-grid physical check. Optional [internal-interface averaging](fdtd-layer-smoothing.md)
 provides C1 cell fractions at a fixed positive `layer_smoothing` width. The
 width changes the material profile; sharp and graded continuum references
-separate that bias from finite-grid error. Curved/rotated transverse shapes, varying total
-depth and general higher-order geometry derivatives remain unsupported.
+separate that bias from finite-grid error. Curved transverse shapes, varying total depth and general higher-order
+geometry derivatives remain unsupported. Opt-in rectangle rotation is described below.
 
 The explicit route now accepts [axis-aligned rectangle and square recipes](fdtd-rectangle-gradients.md)
 using the same geometry reader as RCWA. Centres, lengths and scalar Material
@@ -141,7 +141,17 @@ later-shape painting. Optional transverse translation averaging smooths cell
 crossings; actual shape contacts can still have topology kinks. CPU checks
 include exact area/cell integrals, coincident projected edges, bottom joint
 material/thickness gradients, RCWA refinement and public-API Meep perturbations.
-This path does not yet accept rotated/curved shapes or dispersive shape materials.
+The default separable path does not accept rotation; neither recipe method
+accepts curved shapes or dispersive shape materials.
+
+The explicit common route also provides opt-in `shape_integration='area'` for
+one rotated rectangle or square per layer. It retains angle derivatives in
+radians through exact periodic cell areas, with arithmetic transverse material
+averages and a full static y-period mesh. This is a bounded interface
+approximation, not full effective-tensor smoothing. The
+[rotation contract](guide/time-domain.md#rotated-rectangle-area-integration)
+and [independent measurements](fdtd-rotation-gradients.md) describe its limits.
+
 
 The shared `layer_thicknesses` helper now supplies positive, fixed-total
 lengths with individual minima for NumPy, JAX and Torch. A

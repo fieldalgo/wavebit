@@ -1,0 +1,85 @@
+"""Independent rotated-block scattering derivatives through Meep's documented API."""
+import argparse
+import sys
+import warnings
+from pathlib import Path
+
+import numpy as np
+
+sys.tracebacklimit = 0
+warnings.showwarning = lambda message, category, filename, lineno, file=None, line=None: print(
+    f'{category.__name__}: {message}', file=sys.stderr)
+
+
+def generate(output, resolution=40, duration=80., step=1e-4, subpixel_tol=1e-8):
+    import meep as mp
+    mp.verbosity(0)
+    p = np.array([.37, .3])
+    period, depth, length = .6, .2, 8.
+    zr, zt, dt = -1., 1.2, .4/resolution
+    if not np.isclose(period*resolution, round(period*resolution)):
+        raise ValueError('The Meep period must contain an integer number of cells.')
+    kz = lambda n: 2*resolution*np.arcsin(n*np.sin(np.pi*dt)/(.4))
+    pulse = lambda t: np.exp(-((t-12.5)/2.5)**2)*np.sin(2*np.pi*t)
+    def fields(parameters, until, component):
+        geometry = []
+        if parameters is not None:
+            angle, width = parameters
+            geometry = [mp.Block(center=mp.Vector3(z=(depth+length/2)/2),
+                                 size=mp.Vector3(mp.inf, mp.inf, length/2-depth), material=mp.Medium(epsilon=1.21)),
+                        mp.Block(center=mp.Vector3(.071, -.047, depth/2), size=mp.Vector3(width, .18, depth),
+                                 e1=mp.Vector3(np.cos(angle), np.sin(angle), 0.),
+                                 e2=mp.Vector3(-np.sin(angle), np.cos(angle), 0.),
+                                 e3=mp.Vector3(0., 0., 1.), material=mp.Medium(epsilon=2.25))]
+        sim = mp.Simulation(cell_size=mp.Vector3(period, period, length), dimensions=3, resolution=resolution,
+                            boundary_layers=[mp.PML(1., direction=mp.Z)], Courant=.4, k_point=mp.Vector3(),
+                            geometry=geometry, eps_averaging=True, subpixel_tol=subpixel_tol,
+                            sources=[mp.Source(mp.CustomSource(pulse, end_time=25.), component=component,
+                                               center=mp.Vector3(z=-2.), size=mp.Vector3(period, period, 0.))])
+        monitors = [sim.add_dft_fields([mp.Ex, mp.Ey], [1.], center=mp.Vector3(z=z),
+                                       size=mp.Vector3(period, period, 0.), decimation_factor=1) for z in (zr, zt)]
+        sim.run(until=until)
+        values = []
+        for monitor in monitors:
+            _, _, _, weights = sim.get_array_metadata(dft_cell=monitor)
+            weights = np.asarray(weights)
+            assert np.isclose(weights.sum(), period**2)
+            values.append([np.sum(sim.get_dft_array(monitor, c, 0)*weights)/period**2 for c in (mp.Ex, mp.Ey)])
+        sim.reset_meep()
+        return np.array(values)
+    def amplitude(parameters, until, refs):
+        columns = []
+        for component, ref in zip((mp.Ey, mp.Ex), refs):
+            actual = fields(parameters, until, component)
+            incident = ref[0, 1 if component == mp.Ey else 0]*(1 if component == mp.Ey else -1)*np.exp(-1j*kz(1.)*zr)
+            r = (actual[0]-ref[0])/incident*np.exp(1j*kz(1.)*zr)
+            t = actual[1]/incident*np.exp(-1j*kz(1.1)*(zt-depth))
+            columns.extend((r[1], r[0], t[1], -t[0]))
+        return np.array(columns)
+    durations, deltas = np.array([duration, duration+20.]), np.array([step, step/2])
+    values, jacobians = [], []
+    for until in durations:
+        refs = [fields(None, until, c) for c in (mp.Ey, mp.Ex)]
+        values.append(amplitude(p, until, refs))
+        jacobians.append(np.stack([np.stack([
+            (amplitude(p+d, until, refs)-amplitude(p-d, until, refs))/(2*h) for d in np.eye(2)*h], axis=-1)
+            for h in deltas]))
+        print(f'Completed duration {until:g}', flush=True)
+    np.savez_compressed(output, version=mp.__version__, parameters=p, parameter_names=['angle', 'width'],
+                        wavelength=1., period=[period, period], thickness=depth, top=1., bottom=1.21,
+                        epsilon=2.25, ly=.18, centre=[.071, -.047], resolution=resolution,
+                        durations=durations, deltas=deltas, dimensions=3, cell_length=length,
+                        pml_thickness=1., courant=.4, subpixel_tol=subpixel_tol,
+                        source_position=-2., monitor_positions=[zr, zt], pulse_width=2.5,
+                        pulse_peak=12.5, source_end=25., amplitudes=values, jacobians=jacobians)
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--resolution', type=int, default=40)
+    parser.add_argument('--duration', type=float, default=80.)
+    parser.add_argument('--step', type=float, default=1e-4)
+    parser.add_argument('--subpixel-tol', type=float, default=1e-8)
+    args = parser.parse_args()
+    generate(args.output, args.resolution, args.duration, args.step, args.subpixel_tol)

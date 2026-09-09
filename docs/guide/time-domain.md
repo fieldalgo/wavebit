@@ -528,7 +528,8 @@ Pole masks use arithmetic fill fractions, including the normal component; this
 is an approximation to a dispersive interface, not a general tensor homogenizer.
 
 Supported scene inputs include rectangular one-dimensional and crossed rasters,
-axis-aligned rectangle/square recipes using the shared RCWA conventions,
+rectangle/square recipes using the shared RCWA conventions (rotation through
+opt-in area integration),
 positive real magnetic half spaces, normal/oblique/conical incidence, Jones
 polarization, electric pole labels, and scalar or vector wavelengths. Output
 contains `given`, `s_inc`, `p_inc`, diffraction order metadata, complex r/t and
@@ -576,7 +577,8 @@ the native-core Meep/FDTDX field and derivative references.
 ### Transverse rectangle shape derivatives
 
 Explicit backends accept the same layer dictionaries and `Material` objects
-as RCWA for axis-aligned rectangles and squares. A centre is measured from
+as RCWA for rectangles and squares. The default `shape_integration='separable'`
+accepts axis-aligned shapes; opt-in area integration supports rotation. A centre is measured from
 the centre of the cell; sizes are absolute lengths in the units of `period`.
 Later shapes paint over earlier shapes, including periodic images. Coordinates,
 sizes and scalar positive real epsilon/mu can be NumPy, JAX or Torch values.
@@ -605,15 +607,15 @@ value, slope = jax.jit(jax.value_and_grad(reflection))(jnp.array(.43))
 The recipe requires two finite positive rectangular periods and
 `subpixel=True`. Each size must be positive and no larger than its period.
 The supported `type` values are `rectangle` and `square`; `l` and omitted
-centres retain their shared RCWA meaning. Only a static `angle=0` is accepted.
-Circles, ellipses and rotation are refused. Use each shape's `Material(epsilon,
+centres retain their shared RCWA meaning. The default separable method requires
+a static `angle=0`. Circles and ellipses are refused on both methods. Use each shape's `Material(epsilon,
 mu=...)` for magnetic media. Separate raster `mu`, dispersion labels and poles
 are not accepted on this recipe path. Raster inputs retain their existing
 dispersion support. Combining live layer thicknesses also requires the usual
 `mesh_thickness` and fixed-total constraints.
 
 Shape count, type, paint order, periods and the Yee mesh remain static.
-A recipe whose shapes all have static `ly=period[1]` uses the one-row grating
+A separable recipe whose shapes all have static `ly=period[1]` uses the one-row grating
 shortcut. A live `ly`, including a tensor currently equal to the full period,
 retains full y sampling. The existing array-phi rules also keep full y sampling.
 Unsupported inputs raise; invalid traced geometry produces NaN scattering and
@@ -637,10 +639,62 @@ are not promised. Normal harmonic and tangential arithmetic averaging retain
 the existing separable corner approximation, rather than a general effective
 tensor for a corner.
 
-Diagnostics report `geometry_kind`, `shape_smoothing`, and live `shape_edges`
-in cell-centred x/y coordinates. These edges describe the material partition;
+Diagnostics report `geometry_kind`, `shape_integration`, `shape_smoothing`, and live `shape_edges`
+in cell-centred x/y coordinates for the separable method. These edges describe the material partition;
 the returned Yee `shape`, `spacing` and sampling coordinates remain fixed.
 See the [measured refinement and independent references](../fdtd-rectangle-gradients.md).
+
+### Rotated rectangle area integration
+
+Set `shape_integration='area'` on an explicit backend to differentiate a
+rectangle's `angle` in radians along with its centre, size and scalar material.
+The same shared RCWA recipe is used:
+
+```python
+import jax
+import jax.numpy as jnp
+import wavebit
+
+jax.config.update('jax_enable_x64', True)
+
+def reflection(angle):
+    stack = wavebit.Stack.from_structure([
+        dict(background=1., shapes=[
+            dict(lx=.3, ly=.18, angle=angle, material=2.25)])],
+        [.2], top=1., bot=1.21, period=[.6, .6])
+    result = wavebit.fdtd(stack, wavebit.Incidence(wavelength=1.),
+                          backend='jax', resolution=16, n_pml=16, n_periods=60,
+                          pulse_width=2.5, truncation_order=0, align_layers=True,
+                          shape_integration='area', diffraction_method='directional')
+    return result.s_inc.R.sum()
+
+value, slope = jax.jit(jax.value_and_grad(reflection))(jnp.asarray(.37))
+```
+
+The initial area route accepts at most one rectangle or square per layer;
+empty shape lists describe uniform layers. Periods must be static and positive,
+with two entries. Sizes must be positive, and the projected extents
+`abs(cos(angle))*lx + abs(sin(angle))*ly` and
+`abs(sin(angle))*lx + abs(cos(angle))*ly` must not exceed their respective
+periods. Centres wrap periodically. `subpixel=True` and `shape_smoothing=0`
+are required. Use the shape's `Material` for epsilon/mu; recipe dispersion
+labels and separate raster mu remain unsupported. Rotation and geometry may
+be live on JAX/Torch, while period, mesh and shape count stay static.
+
+The full y-period mesh is always retained, including when a live angle is
+zero or a rectangle currently fills the period. Geometry integrates exactly
+against each Yee cell, and transverse material coefficients use arithmetic
+area averages. This differs from the separable method even at zero angle.
+It is not a full rotated effective tensor and does not promise second-order
+interface accuracy. Layer sampling retains its existing z averaging rules;
+live layer thicknesses require the usual fixed-total `mesh_thickness` contract.
+
+At coincident parallel cell/shape edges, one-sided derivatives can differ.
+General second derivatives and C1 smoothing of such contacts are not supplied.
+Check grid refinement and an independent physical reference when using the
+result as a design gradient. The [rotation measurement](../fdtd-rotation-gradients.md)
+records the independent area, complete graph and optical checks.
+
 
 
 ### Incidence-angle derivatives
