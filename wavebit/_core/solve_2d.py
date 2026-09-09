@@ -25,8 +25,8 @@ from .solve_1d import _block, _diag, _is_backside, _mirrored_scene, final_matchi
 # rescued solve at ratio ~1e-11 — with a 1e-12 gate the retry fell back into the shipped
 # construction's degraded band and returned 1e-6..8e-6 errors on the harder graze stacks,
 # with 1e-9 it lands in the rebuild's regime and matches the extrapolated exact-point
-# oracle to its own uncertainty. Above the gate the function is bit-identical to what it
-# always returned; a random non-grazing solve reaches ratio 1e-9 with probability ~1e-8
+# oracle to its own uncertainty. Above the gate the ordinary product modes are returned;
+# a random non-grazing solve reaches ratio 1e-9 with probability ~1e-8
 # per solve (an order within 4e-9 of a cutoff), measured as 0 engagements over the
 # 40-config validation sweep.
 _COUPLED_REL = 1e-9
@@ -194,8 +194,9 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
     ``mu`` is an optional ``(mux_conv, muy_conv, muz_conv_i, muxy_conv, muyx_conv)``
     permeability tuple in **the same five slots and the same convention as the
     permittivity** — ``muz_conv_i`` inverted, the off-diagonals negated. Left ``None`` the
-    layer is non-magnetic and every expression below is the one that was here before,
-    unchanged, so a non-magnetic solve is bit-identical.
+    layer is non-magnetic and the same non-magnetic Maxwell equations apply. ``Kx`` and
+    ``Ky`` are diagonal wavevector matrices; their action on the longitudinal inverse is
+    evaluated by row and column scaling, including during a grazing-cluster rebuild.
 
     Where it enters is a duality, not a patch. Under ``(E, H, eps, mu) -> (H, -E, mu, eps)``
     the two curl equations map onto each other, so ``Omega_L`` — which eliminates ``E_z``
@@ -219,12 +220,15 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
     """
     mux_conv, muy_conv, muz_conv_i, muxy_conv, muyx_conv = (
         (I, I, None, None, None) if mu is None else mu)
+    kx, ky = xp.linalg.diagonal(Kx), xp.linalg.diagonal(Ky)
 
     def left_blocks():
-        B = Kx @ epz_conv_i @ Kx - muy_conv
-        D = Ky @ epz_conv_i @ Ky - mux_conv
-        Cc = Kx @ epz_conv_i @ Ky
-        E = Ky @ epz_conv_i @ Kx
+        # diag(k) A diag(l) scales rows and columns. Keep that multiplication
+        # order, but do not spend eight dense matrix products on diagonal factors.
+        B = (kx[:, None] * epz_conv_i) * kx[None, :] - muy_conv
+        D = (ky[:, None] * epz_conv_i) * ky[None, :] - mux_conv
+        Cc = (kx[:, None] * epz_conv_i) * ky[None, :]
+        E = (ky[:, None] * epz_conv_i) * kx[None, :]
         if muyx_conv is not None:
             Cc = Cc - muyx_conv
         if muxy_conv is not None:
@@ -311,7 +315,12 @@ def sp_modes_2d(xp, W, V, F_c, F_s, n_orders):
 
     ``big_W`` maps mode amplitudes to the boundary variables ``(E_s, F_p)`` and ``big_V`` to
     ``(H_s, H_p)`` — the pair the substrate seed ``big_F`` / ``big_G`` is written in.
+    ``F_c`` and ``F_s`` are per-order cosine/sine vectors or their diagonal matrices.
+    Rotation only scales rows, so it needs neither dense products nor dense storage
+    for those diagonals. The matrix spelling remains available to the full-tensor seed.
     """
+    c = (F_c if F_c.ndim == 1 else xp.linalg.diagonal(F_c))[:, None]
+    s = (F_s if F_s.ndim == 1 else xp.linalg.diagonal(F_s))[:, None]
     W_11 = W[:n_orders, :n_orders]
     W_12 = W[:n_orders, n_orders:]
     W_21 = W[n_orders:, :n_orders]
@@ -321,15 +330,15 @@ def sp_modes_2d(xp, W, V, F_c, F_s, n_orders):
     V_21 = V[n_orders:, :n_orders]
     V_22 = V[n_orders:, n_orders:]
 
-    W_ss = F_c @ W_21 - F_s @ W_11
-    W_sp = F_c @ W_22 - F_s @ W_12
-    W_ps = F_c @ W_11 + F_s @ W_21
-    W_pp = F_c @ W_12 + F_s @ W_22
+    W_ss = c * W_21 - s * W_11
+    W_sp = c * W_22 - s * W_12
+    W_ps = c * W_11 + s * W_21
+    W_pp = c * W_12 + s * W_22
 
-    V_ss = F_c @ V_11 + F_s @ V_21
-    V_sp = F_c @ V_12 + F_s @ V_22
-    V_ps = F_c @ V_21 - F_s @ V_11
-    V_pp = F_c @ V_22 - F_s @ V_12
+    V_ss = c * V_11 + s * V_21
+    V_sp = c * V_12 + s * V_22
+    V_ps = c * V_21 - s * V_11
+    V_pp = c * V_22 - s * V_12
 
     big_W = _block(xp, [[W_ss, W_sp], [W_ps, W_pp]])
     big_V = _block(xp, [[V_ss, V_sp], [V_ps, V_pp]])
@@ -435,6 +444,7 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     # only these two diagonals, which is why a skewed lattice never reaches it.
     Kx = _diag(xp, xp.reshape(kx_g, (-1,)))
     Ky = _diag(xp, xp.reshape(ky_g, (-1,)))
+    F_c, F_s = xp.cos(varphi), xp.sin(varphi)
     # --- stage 2/3: per-layer eig + coupled block transfer (transfer_2d_2 / transfer_2d_3)
     keep_field = answers_of(answers).covers(Answers.FIELD)
     layer_info_list = []
@@ -458,10 +468,7 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
         W, V, q = layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i,
                                  epxy_conv, epyx_conv, C, mu=layer_mu)
 
-        F_c = _diag(xp, xp.cos(varphi))
-        F_s = _diag(xp, xp.sin(varphi))
         big_W, big_V = sp_modes_2d(xp, W, V, F_c, F_s, n_orders)
-        del F_c, F_s
         if not keep_field:
             del W, V
         if big_F is None:

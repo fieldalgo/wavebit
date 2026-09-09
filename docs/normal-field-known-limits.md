@@ -1233,6 +1233,13 @@ The same-order per-diffraction-order R/T change is below `6.68e-12`.
 These memory measurements do not establish faster execution, higher optical
 accuracy or a new convergence criterion.
 
+A subsequent [diagonal-scaling change](what-a-solve-answers.md#10-keeping-diagonal-actions-out-of-dense-matrix-multiplication)
+replaces 24 dense matrix products per 2D layer with row/column scaling.
+ETM and SMM retain only cosine/sine vectors, and reconstructing the left
+blocks at a grazing guard now takes quadratic rather than cubic work.
+The same-order comparison retains the earlier memory reduction; this
+changes computational cost, not the optical convergence evidence above.
+
 The affine cell now factors its vanishing body correction by the gap,
 removing a source of contact-derivative roundoff. An
 [independent contact variation](nvf-affine-cells.md#contact-fourier-variation-without-subtracting-nearby-solutions)

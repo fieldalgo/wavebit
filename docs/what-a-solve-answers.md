@@ -1,6 +1,7 @@
 # What a solve answers — and why the field state is off by default
 
-Written: 2026-08-20; transient-lifetime follow-up on 2026-09-09 in section 9.
+Written: 2026-08-20; transient-lifetime and diagonal-arithmetic follow-ups
+on 2026-09-09 in sections 9–10.
 Sections 1–8 were measured on an Apple M4 (16 GB), NumPy 2.5.1 against Accelerate, float64,
 single thread as configured. Retention is counted by walking the retained objects and charging
 each array to its owning buffer, so views are counted once. Peak comes from `tracemalloc`,
@@ -257,7 +258,7 @@ come out identical from both paths (see `connecting-algorithms.md` §8).
 
 ## 9. Releasing transient 2D matrices after their last use
 
-The 2D runtime now reduces simultaneous dense storage without changing
+The lifetime change in `9acae35` reduces simultaneous dense storage without changing
 its products, inverses, Fourier modes or field declarations. In the common
 nonmagnetic layer, the right Maxwell factor is built after the eigensolve;
 the left blocks and product matrix are released once their consumers finish.
@@ -306,7 +307,7 @@ GB denotes `10^9` bytes.
 | evaluation | peak process RSS | time including closure and solve |
 | --- | ---: | ---: |
 | previous runtime | 3.701 GB | 178.03 s |
-| current runtime | 3.445 GB | 193.40 s |
+| runtime after the lifetime change | 3.445 GB | 193.40 s |
 
 The largest p/s R/T difference over all retained diffraction orders is
 `6.68e-12`, and the new lossless balance error is `5.40e-12` or less.
@@ -330,3 +331,93 @@ unchanged overlapping-circle geometry preprocessing test; 144 additional
 focused cases completed separately. This does not claim a full repository
 test run. Raw observations and the exact validation scope are in
 `studies/results/nvf_rcwa_memory.log`.
+
+## 10. Keeping diagonal actions out of dense matrix multiplication
+
+Most of the lifetime change only moves allocation and release: the main
+eigensolves, inverse factorizations and matrix products occur just as often.
+Two exceptions have real recomputation cost. ETM used to build the cosine,
+sine and block identity matrices once per stack; the lifetime change builds
+them for each layer. At a grazing rebuild it also recomputes four left
+Maxwell blocks, previously retained through the eigensolve. A measured time
+increase is therefore not logically required for ordinary single-layer
+solves, but those two costs should be addressed explicitly.
+
+The cosine and sine are now kept as two length-`N` vectors, where
+`N = (2*order_x+1)*(2*order_y+1)`. Both ETM and SMM form them once per solve.
+Their action on a mode matrix is row scaling; no dense diagonal matrix is
+needed. The shared rotation helper also accepts diagonal matrices for the
+full-tensor solver's existing half-space seed. This removes sixteen dense
+`N`-square matrix products from each rotation, with the same scalar sums,
+signs, ordering and complex coefficients.
+
+The four left Maxwell blocks similarly use
+`(diag(k) @ A @ diag(l))[i,j] = (k[i]*A[i,j])*l[j]`.
+Row and column scaling replaces eight dense products each time those blocks
+are built. This applies to the ordinary layer and its grazing rebuild,
+including magnetic tensors. No conjugation or real-part projection is
+introduced for complex wavevectors. All operations remain out of place and
+retain the automatic-differentiation graph.
+
+Together these replace **24 cubic-cost dense matrix products per 2D layer**
+with quadratic-cost scaling. A grazing rebuild replaces eight more.
+The left blocks are still reconstructed at the guard, but the reconstruction
+now costs `O(N^2)` rather than `O(N^3)`. The ETM block identity is still formed
+when each layer needs it, also at quadratic cost; it has not been restored
+as persistent dense storage. The transfer formula's multiplication order,
+eigensolves, inverses, cutoff thresholds, modes and field declarations are
+unchanged. Lower operation count does not imply a fixed percentage reduction
+in whole-solve time: the unchanged eigensolves and boundary inverses remain.
+
+The timing comparison uses `9acae35` as the baseline, loaded beside the new
+core in one process. Both functions receive identical, already-built
+convolution matrices from the fixed affine projection in section 9. One
+300 nm layer and three identical 100 nm layers exercise the same physical
+stack with different numbers of layer solves. Each implementation is warmed
+once for each configuration. Six before/after pairs at order 8 and four
+at order 12 alternate which implementation runs first; garbage collection precedes each timed
+call. Timings exclude imports, convolution assembly and allocation tracing.
+The same shared Apple Accelerate host and thread-setting caveats apply.
+
+| retained order | layers | median before | median after |
+| --- | ---: | ---: | ---: |
+| (8,8) | 1 | .58202 s | .58189 s |
+| (8,8) | 3 | 1.50443 s | 1.48240 s |
+| (12,12) | 1 | 4.25891 s | 4.10174 s |
+| (12,12) | 3 | 10.95294 s | 10.57249 s |
+
+At order 8, the single-layer medians are effectively unchanged and the
+three-layer median is about 1.5% lower. At order 12 the medians fall by
+about 3.7% and 3.5%, respectively. The greatest p/s R/T difference from
+the baseline warm-up, across all retained orders and repeated timed calls,
+is `9.44e-16` at order 8 and `5.51e-13` at order 12; the largest lossless
+balance errors are `9.75e-14` and `7.81e-13`. These are continuity
+measurements at fixed optical order, not a new optical convergence
+criterion. The repeated observations support a modest time reduction for
+these configurations; they do not establish a universal speedup or explain
+the different order-20 single timings in section 9.
+
+Separate `tracemalloc` calls retain the memory reduction from section 9.
+At order 8, the amplitude peak is 110.99 MB before and 111.00 MB after for
+both one and three layers. Field peaks are 132.37/132.38 MB for one layer
+and 175.15/175.16 MB for three. The approximately .01 MB increase comes with
+the two small vectors retained through the solve; it does not restore the
+dense rotation matrices. These trace totals exclude prebuilt inputs and
+native LAPACK workspace, and are not process RSS.
+
+At order 12, amplitude peaks are 518.89/518.91 MB for either layer count;
+field peaks are 618.89/618.91 MB for one layer and 818.93/818.95 MB for
+three. The retained field state is unchanged at the shown precision:
+100.48 MB for one layer and 300.52 MB for three. The approximately .02 MB
+peak increase again accompanies the two retained vectors, against hundreds
+of MB in the dense solve. Raw timings and allocations are appended to
+`studies/results/nvf_rcwa_memory.log`.
+
+The diagonal change passes 1,012 distinct targeted cases, with 38 existing
+conditional skips. Six new cases check both first-order Maxwell residuals
+against independently assembled dense factors for complex wavevectors,
+distinct off-diagonal tensors and magnetic/nonmagnetic layers on NumPy,
+JAX and PyTorch. The selection also covers ETM/SMM, full tensors, field
+reconstruction against S4 reference data, RETICOLO references, gradients,
+grazing guards, rotated/skewed cells, stability and documentation contracts.
+This is a targeted validation, not the entire repository suite.

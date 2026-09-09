@@ -8,8 +8,9 @@ import numpy as np
 import pytest
 
 import wavebit
+from wavebit._core.backend import array_namespace
 from wavebit._core.factorization import to_conv_mat_raster_sampled
-from wavebit._core.solve_2d import solve_2d
+from wavebit._core.solve_2d import layer_modes_2d, solve_2d
 
 # Enables jax x64, which every jax case here needs: at float32 the cross-backend comparisons
 # miss their 1e-10 tolerance and the gradient checks miss 1e-6. Guarded because jax is optional
@@ -183,6 +184,50 @@ def test_empty_2d_stack_matches_single_interface_fresnel(polarization):
     np.testing.assert_allclose(r, expected, atol=3e-15, rtol=0)
     expected[2, 1] = 1-reflection
     np.testing.assert_allclose(t, expected, atol=3e-15, rtol=0)
+
+
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('magnetic', [False, True])
+def test_2d_modes_satisfy_both_dense_maxwell_factors(backend, magnetic):
+    """Row scaling must retain both coupled equations, including complex wavevectors.
+
+    The residual oracle uses dense first-order factors, without the product
+    eigenproblem or row-scaling implementation. Distinct off-diagonal tensor
+    slots and noncommuting longitudinal inverses expose misplaced axes.
+    """
+    if backend != 'numpy':
+        pytest.importorskip(backend)
+    rng = np.random.default_rng(2718)
+    n = 6
+    I, Z = np.eye(n, dtype=complex), np.zeros((n, n), complex)
+
+    def perturbation():
+        return .02 * (rng.normal(size=(n, n)) + 1j*rng.normal(size=(n, n)))
+
+    Kx = np.diag(np.linspace(-1.7, 1.1, n) + .013j)
+    Ky = np.diag(np.array([.9, -.8, .4, -1.2, .6, -.1]) - .009j)
+    ex, ey, ezi = 3*I+perturbation(), 4*I+perturbation(), .3*I+perturbation()
+    exy, eyx = perturbation(), perturbation()
+    mx, my, mzi, mxy, myx = ((1.2*I+perturbation(), 1.4*I+perturbation(),
+                              .8*I+perturbation(), perturbation(), perturbation())
+                             if magnetic else (I, I, I, Z, Z))
+    L = np.block([[-Kx @ ezi @ Ky + myx, Kx @ ezi @ Kx - my],
+                  [mx - Ky @ ezi @ Ky, Ky @ ezi @ Kx - mxy]])
+    R = np.block([[-Kx @ mzi @ Ky + eyx, Kx @ mzi @ Kx - ey],
+                  [ex - Ky @ mzi @ Ky, Ky @ mzi @ Kx - exy]])
+
+    def convert(a):
+        return a if backend == 'numpy' else _to(backend, a)
+
+    xp = array_namespace(convert(I))
+    mu = tuple(convert(a) for a in (mx, my, mzi, mxy, myx)) if magnetic else None
+    W, V, q = (np.asarray(a) for a in layer_modes_2d(
+        xp, *(convert(a) for a in (Kx, Ky, I, ex, ey, ezi, exy, eyx)),
+        xp.complex128, mu=mu))
+    for factor, source, target in ((L, V, W), (R, W, V)):
+        residual = factor @ source - target*q[None, :]
+        scale = np.linalg.norm(factor)*np.linalg.norm(source)
+        assert np.linalg.norm(residual) / scale < 2e-13
 
 
 def test_python_scalar_incidence_keeps_double_precision_on_torch():

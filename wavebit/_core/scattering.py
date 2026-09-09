@@ -863,8 +863,7 @@ def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
 
     Kx = _diag(xp, xp.reshape(kx_g, (-1,)))
     Ky = _diag(xp, xp.reshape(ky_g, (-1,)))
-    F_c = _diag(xp, xp.cos(varphi))
-    F_s = _diag(xp, xp.sin(varphi))
+    F_c, F_s = xp.cos(varphi), xp.sin(varphi)
 
     def layer_modes(layer_index):
         epxy_conv = O if epxy_conv_all is None else epxy_conv_all[layer_index]
