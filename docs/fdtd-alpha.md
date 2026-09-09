@@ -128,8 +128,11 @@ JAX/Torch checks include typed scenes, bottom illumination, dispersive masks,
 field records and user monitors. Planar Airy refinement and independent Meep
 thickness perturbations expose position-dependent continuum derivative error,
 even when the two FDTD derivatives closely agree. A coating-optimization example
-includes a finer-grid physical check. Transverse shapes, varying total depth
-and globally smooth geometry derivatives remain unsupported.
+includes a finer-grid physical check. Optional [internal-interface averaging](fdtd-layer-smoothing.md)
+provides C1 cell fractions at a fixed positive `layer_smoothing` width. The
+width changes the material profile; sharp and graded continuum references
+separate that bias from finite-grid error. Transverse shapes, varying total
+depth and general higher-order geometry derivatives remain unsupported.
 
 The common engine reports physical and discrete lower-cutoff classifications
 and supports independent diffraction-plane distances. A binary dielectric

@@ -4,7 +4,7 @@
 | --- | --- |
 | `meep_ringdown.py` | Can source-free time traces be generated through Meep's public API for independent mode-fitting checks? |
 | `meep_source_notch.py` | Does a unit-peak custom source zero suppress a known undamped material mode, with fields matching the native solver at the same current times? |
-| `meep_halfspace.py` | Do magnetic half-space or film-thickness perturbations give stable complex-amplitude derivatives under smaller perturbations and longer runs? |
+| `meep_halfspace.py` | Do magnetic half-space, sharp-film or graded-interface perturbations give stable complex derivatives under smaller perturbations, longer runs and tighter material averaging? |
 | `Reticolo.py`, `__init__.py` | How do tests access the existing separately installed RETICOLO oracle? |
 | `reticolo_res2.m`, `reticolo_res3.m`, `reti_aniso.m` | How do the existing RETICOLO bridge calls return scattering and field data? |
 

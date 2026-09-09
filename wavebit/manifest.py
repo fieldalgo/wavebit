@@ -106,7 +106,9 @@ from ._core.spec import SPEC_VERSION
 #: route before applying AD; backend omission still selects legacy NumPy.
 #: Version 11 distinguishes fixed mesh geometry from moving internal layer
 #: interfaces, whose thickness derivatives require a fixed positive total depth.
-MANIFEST_VERSION = '11'
+#: Version 12 distinguishes default piecewise thickness derivatives from optional
+#: C1 internal-interface averaging, including its static width and clearance.
+MANIFEST_VERSION = '12'
 
 
 # --------------------------------------------------------------- how a structure is spelled
@@ -521,13 +523,16 @@ SOLVERS = {
                                               'electric pole coefficients', 'half-space epsilon',
                                               'half-space mu', 'fixed-total layer thickness'),
                 'static_parameters': ('transverse geometry', 'total depth', 'wavelength',
-                                      'mesh_indices', 'mesh_thickness', 'truncation_order'),
+                                      'mesh_indices', 'mesh_thickness', 'layer_smoothing', 'truncation_order'),
                 'array_angles_require': ('truncation_order',),
                 'array_phi_requires': 'Jones or psi polarization; full y-period sampling including zero',
                 'array_half_spaces_require': ('mesh_indices', 'truncation_order'),
                 'backend_thickness_requires': ('mesh_thickness', 'subpixel=True'),
                 'thickness_constraint': 'positive lengths with the same total as mesh_thickness; '
-                                        'piecewise derivatives along constant-total paths',
+                                        'constant-total derivatives; piecewise by default, C1 with positive layer_smoothing',
+                'positive_layer_smoothing_requires': ('mesh_thickness', 'subpixel=True'),
+                'layer_smoothing_constraint': 'static nonnegative physical width; internal interfaces at least '
+                                              'half its width from both outer faces; changes the material profile',
                 'results_incidences': ('given', 's_inc', 'p_inc'),
                 'verified_devices': ('cpu',),
                 'source': 'docs/guide/time-domain.md',

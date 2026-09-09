@@ -804,7 +804,8 @@ FDTD_COMMON_KW = dict(structure=np.full((1, 1, 1), 2.), thickness=[.2], top=1., 
 
 
 @pytest.mark.parametrize('backend', ['jax', 'torch'])
-def test_published_fdtd_thickness_capability_requires_fixed_mesh_and_total(backend):
+@pytest.mark.parametrize('smoothing', [0., .05])
+def test_published_fdtd_thickness_capability_requires_fixed_mesh_and_total(backend, smoothing):
     from wavebit.manifest import SOLVERS
     from wavebit.backends.time_domain import time_loop_backend
     from test_fdtd_scene_angles import value_and_jacobian
@@ -812,10 +813,12 @@ def test_published_fdtd_thickness_capability_requires_fixed_mesh_and_total(backe
     common = SOLVERS['fdtd']['routes']['common']
     assert 'fixed-total layer thickness' in common['differentiable_parameters']
     assert common['backend_thickness_requires'] == ('mesh_thickness', 'subpixel=True')
+    assert 'layer_smoothing' in common['static_parameters']
+    assert common['positive_layer_smoothing_requires'] == ('mesh_thickness', 'subpixel=True')
     which = 1 if backend == 'jax' else 2
     def objective(d, backend=which):
         return wavebit.fdtd(**dict(FDTD_COMMON_KW, structure=np.array([[[2.]], [[1.]]]),
-                                   thickness=[d, .4-d], mesh_thickness=[.2, .2],
+                                   thickness=[d, .4-d], mesh_thickness=[.2, .2], layer_smoothing=smoothing,
                                    backend=backend)).s_inc.T.reshape(1)
     value, derivative = value_and_jacobian(objective, .173, which)
     step = 1e-5

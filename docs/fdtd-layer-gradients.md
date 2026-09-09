@@ -162,8 +162,10 @@ the exact quarter-wave thickness is 0.204124. The final design is close to
 the physical optimum, but the smaller training-grid reflection alone would
 overstate its physical performance.
 
-Total-depth variation, transverse shape/raster-boundary derivatives, globally
-smooth interface parametrization, anisotropic shape homogenization and GPU
+The later [interface-averaging extension](fdtd-layer-smoothing.md) adds optional
+C1 sampling with a fixed physical averaging width. The default sharp-overlap
+measurements above remain unchanged. Total-depth variation, transverse
+shape/raster-boundary derivatives, anisotropic shape homogenization and GPU
 execution remain outside this change. Fixed-total layer derivatives can be
 combined with existing angle/material derivatives, but each new physical
 regime still needs optical and gradient refinement checks.

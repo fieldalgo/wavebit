@@ -1154,6 +1154,7 @@ they do not represent independent changes to the total stack depth.
 through epsilon/mu averaging and electric-pole masks. Values are continuous,
 but derivatives may have kinks when a boundary crosses a cell face. Do not
 use a subgradient at that crossing as a unique physical shape derivative.
+Set the optional `layer_smoothing` described below for continuous first derivatives.
 Refine the grid and sample several interface positions when assessing gradient
 accuracy. The [validation note](../fdtd-layer-gradients.md) separates AD/finite
 differences, Airy convergence and independent public-API Meep perturbations.
@@ -1167,6 +1168,40 @@ the fixed cells. The option also works with grading, bottom illumination,
 cropped records and field monitors. Diagnostics return original-order static
 `mesh_thickness` and live `layer_planes`. Invalid concrete values raise; JIT
 invalidity masks scattering and normalized fields and sets `stable=False`.
+
+### Continuous first derivatives at internal interfaces
+
+Set `layer_smoothing=h` with an explicit backend and `mesh_thickness` to average
+each internal interface position uniformly over `[-h/2, h/2]` before material
+sampling. `h` is a static, finite, nonnegative real scalar in the same physical
+length unit as `thickness`. The default `0.` preserves exact cell overlaps.
+Positive widths require `subpixel=True`; backend tensors, even eager scalar
+tensors, cannot select this width. For a uniform mesh, `h=1/resolution` gives
+one cell of averaging. On a fitted or graded mesh, use the actual cell widths
+when choosing a physical width.
+
+Both outer stack faces remain fixed and sharp. Every internal interface must
+stay at least `h/2` from the outer faces; internal averaging regions may overlap
+one another. For `[d, D-d]`, this means `h/2 <= d <= D-h/2`, in addition to
+positive lengths. Invalid concrete scenes raise; invalid JAX-traced scenes
+use the same `stable=False` and NaN masking as other geometry failures.
+Clearance checks allow the same 32 machine epsilons times D as the total-depth
+check, so touching a face stays valid after floating-point reflection.
+A one-layer stack has no internal interface, so the option has no physical
+effect there. Diagnostics include the static `layer_smoothing` value.
+
+The cell fractions have continuous first derivatives, including where a
+moving boundary crosses a cell face. This is a C1 guarantee for internal
+interface sampling, not for Boolean validity decisions, every possible loss
+function, or higher derivatives. Epsilon/mu and electric-pole fills retain
+their existing averaging rules and JAX/Torch graphs.
+
+A positive width changes the material profile. Keep it fixed within one
+optimization; shrink it along with the mesh and check the final sharp-interface
+design separately when that is the intended physical structure. The
+[smoothing measurements](../fdtd-layer-smoothing.md) distinguish this bias from
+finite-grid error. Run the coating example with `--smoothing-cells 1` for
+backtracking optimization followed by both smoothed and sharp finer-grid checks.
 
 ### Bottom illumination in the common engine
 

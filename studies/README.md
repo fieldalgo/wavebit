@@ -12,6 +12,7 @@ makes them assertions, not studies.
 
 | Script | Question it answers |
 | --- | --- |
+| `fdtd_layer_smoothing.py` | Does C1 interface averaging improve thickness derivatives, and how much bias does its physical width add? [Measurement](../docs/fdtd-layer-smoothing.md). |
 | `fdtd_layer_gradients.py` | How do internal-interface position and mesh refinement affect thickness-derivative error against a fixed-reference-plane film solution? [Measurement](../docs/fdtd-layer-gradients.md). |
 | `fdtd_directional.py` | Does E/H direction separation isolate boundary returns from a slowly decaying near-Rayleigh mode? [Measurement](../docs/fdtd-directional.md). |
 | `fdtd_pml_strength.py` | How do CPML strength, physical thickness and refinement affect returning near-Rayleigh waves after source narrowing? [Measurement](../docs/fdtd-pml-strength.md). |

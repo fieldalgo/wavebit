@@ -15,6 +15,7 @@ compares the code to itself proves continuity, not correctness.
 
 | Oracle | Files | What a pass means |
 | --- | --- | --- |
+| **Continuous internal-interface derivatives** | `test_fdtd_layer_smoothing.py`, `references/test_meep_layer_smoothing.py` | Do averaged fractions match independently integrated geometry, preserve exterior faces and give continuous first derivatives through complete scattering, with independent graded-continuum and Meep checks? |
 | **Directional diffraction** | `test_fdtd_directional.py` | Do forward/backward amplitudes recover exact discrete Maxwell modes and preserve magnetic, conical, bottom, record, prefix and material-gradient contracts? |
 | **Diffraction planes and cutoffs** | `test_fdtd_diffraction_planes.py` | Do independent plane positions preserve refined slab optics, backend derivatives and bottom records, and do continuum/Yee masks identify false-open channels before singular extraction? |
 | **Calibrated scattering convergence and ENZ** | `test_fdtd_scattering_convergence.py`, `test_fdtd_enz.py` | Do each incidence column and its Jones-input bound match independent prefix solves, and do lossy ENZ fields, spectra and material derivatives converge? |

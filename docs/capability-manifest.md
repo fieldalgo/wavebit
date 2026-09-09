@@ -32,6 +32,8 @@ incidence. An explicit backend selects `common`; JAX/Torch differentiate
 fixed-mesh angle, raster, pole and half-space parameters. Version 11 also names
 constant-total layer thicknesses, their nominal `mesh_thickness` requirement,
 and the distinction between moving internal boundaries and static mesh geometry.
+Version 12 adds optional C1 internal-interface averaging and its static
+`layer_smoothing` width, required mesh inputs and exterior clearance.
 Array angles and
 half spaces have separately named static-input requirements. The native-grid
 API is not described by this scene entry.

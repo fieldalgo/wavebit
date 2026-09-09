@@ -31,6 +31,7 @@ subtrees:
   - file: fdtd-scene-azimuth
   - file: fdtd-halfspace-gradients
   - file: fdtd-layer-gradients
+  - file: fdtd-layer-smoothing
   - file: fdtd-rayleigh
   - file: fdtd-enz
   - file: fdtd-layer-alignment

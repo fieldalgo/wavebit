@@ -107,7 +107,8 @@ def test_fixed_mesh_crossings_and_nominal_forward_compatibility(side, fitted):
 
 @pytest.mark.parametrize('backend', [1, 2])
 @pytest.mark.parametrize('side,method', [('top', 'electric'), ('bottom', 'directional')])
-def test_joint_layer_material_pole_gradients_in_typed_stack(backend, side, method):
+@pytest.mark.parametrize('smoothing', [0., .06])
+def test_joint_layer_material_pole_gradients_in_typed_stack(backend, side, method, smoothing):
     pattern = np.array([[[1.2, 1.8], [1.5, 1.1]], [[1.6, 1.3], [1.1, 1.7]]])
     def objective(p, which):
         runtime = time_loop_backend(which)
@@ -120,6 +121,7 @@ def test_joint_layer_material_pole_gradients_in_typed_stack(backend, side, metho
                                   polarization=(1., .6j), incidence_side=side)
         results, d = wavebit.fdtd(stack, light, backend=which, resolution=10,
                                  mesh_indices=(1.1, 1.2), mesh_thickness=[.13, .27],
+                                 layer_smoothing=smoothing,
                                  transverse_resolution=(12., 13.), n_pml=6, n_periods=35,
                                  grading=True, align_layers=True, pulse_width=1.5,
                                  pulse_notches=.7, source_distance=1., diffraction_distance=.3,

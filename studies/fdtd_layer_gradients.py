@@ -33,7 +33,7 @@ def airy(d, *, band=BAND, depth=DEPTH, background=BACKGROUND, film=FILM):
 
 
 def scene_vector(d, resolution, *, backend=1, band=BAND, depth=DEPTH,
-                 background=BACKGROUND, film=FILM):
+                 background=BACKGROUND, film=FILM, smoothing=0.):
     xp = time_loop_backend(backend).xp
     et, mt, eb, mb = background
     epsilon, mu = film
@@ -43,6 +43,7 @@ def scene_vector(d, resolution, *, backend=1, band=BAND, depth=DEPTH,
                            bot=wavebit.Material(eb, mb), mesh_indices=(np.sqrt(et*mt), np.sqrt(eb*mb)),
                            period=.05, wavelength=band, backend=backend, resolution=resolution,
                            n_pml=resolution, n_periods=65, pulse_width=3., align_layers=True,
+                           layer_smoothing=smoothing,
                            diffraction_method='directional', truncation_order=0)
     r = xp.stack([s.s_inc.r_s.reshape(()) for s in results])
     t = xp.stack([s.s_inc.t_s.reshape(()) for s in results])
