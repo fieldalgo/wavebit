@@ -10,8 +10,9 @@ from wavebit._core.conforming.affine_cell import AffineCellGapModel
 
 @pytest.mark.parametrize('gap_degree', [1, 2, 4])
 @pytest.mark.parametrize('g', [.07, .31])
-@pytest.mark.parametrize('affine', [False, True])
-def test_complex_cell_solve_satisfies_independently_assembled_weak_equations(gap_degree, g, affine):
+@pytest.mark.parametrize('cell', ['diagonal', 'affine', 'affine-contact-factor'])
+def test_complex_cell_solve_satisfies_independently_assembled_weak_equations(gap_degree, g, cell):
+    affine, contact_factor = cell != 'diagonal', cell == 'affine-contact-factor'
     cls, settings = (AffineCellGapModel, dict(body_degree=1)) if affine else (ContinuousFluxGapModel, {})
     model = cls(0, rows=3, grade_y=False, gap_degree=gap_degree, quadrature=24, **settings)
     # A small periodic complex basis isolates the weak-system assembly from
@@ -24,6 +25,10 @@ def test_complex_cell_solve_satisfies_independently_assembled_weak_equations(gap
     df = np.column_stack([np.zeros_like(x), -2*np.pi*np.sin(2*np.pi*x), 2*np.pi*np.cos(2*np.pi*x)])@change
     lift = 1.+.17j*np.cos(2*np.pi*x)
     epsilon = 2.+.8*np.cos(2*np.pi*x)+1j*(.6+.2*np.sin(2*np.pi*x))
+    if contact_factor:
+        # Factoring the body correction by g uses the exact laminated lift.
+        # Its weak x load vanishes for every periodic test basis.
+        lift = (1/epsilon)/np.sum(wx/epsilon)
     metric_y = 2.4
     metric = np.array([[1., -.4], [-.4, metric_y]]) if affine else np.diag([1., metric_y])
     def pack(material):
@@ -36,7 +41,8 @@ def test_complex_cell_solve_satisfies_independently_assembled_weak_equations(gap
         return (metric_y*(f.conj().T*w)@f, (df.conj().T*w)@df,
                 metric_y*w@f.conj(), (w*lift)@df.conj())
     if affine:
-        v, a, b, residual = model._solve_metric_cell(g, pack(epsilon), pack(np.ones_like(x)), metric, np)
+        v, a, b, residual = model._solve_metric_cell(g, pack(epsilon), pack(np.ones_like(x)), metric, np,
+                                                   contact_factor=contact_factor)
     else:
         v, a, b, residual = model._solve_flux_cell(g, *pack(epsilon), *pack(np.ones_like(x)), np)
     assert residual < 1e-12

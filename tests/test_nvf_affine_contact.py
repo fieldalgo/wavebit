@@ -1,0 +1,158 @@
+"""Contact shape derivatives from independent trace and body weak problems.
+
+Reconstruct the integrated flux basis by piecewise physical quadrature, then
+solve the limiting trace and the first body variation separately. This oracle
+uses no production weak assembly, Fourier moments, projection, or autodiff.
+The geometry helper only supplies the finite space to be checked.
+"""
+import numpy as np
+import pytest
+from numpy.polynomial.legendre import leggauss
+from scipy.special import eval_legendre
+from wavebit._core.conforming.affine_cell import AffineCellGapModel
+
+
+def x_samples(model, profile, width, quadrature):
+    """Integrate periodic flux hats directly across mesh and material cuts."""
+    _, edges, values, nodes, lengths, _ = model._profile_geometry(0., profile, width, np)
+    seams = edges[1:-1]
+    count = len(nodes)
+    q, qw = leggauss(quadrature)
+    cumulative = np.zeros(count, dtype=complex)
+    xs, ws, es, fs, dfs = [], [], [], [], []
+    cuts = np.unique(np.r_[nodes, .5, seams])
+    for a, b in zip(cuts[:-1], cuts[1:]):
+        middle = (a+b)/2
+        element = np.searchsorted(nodes, middle, side='right')-1
+        epsilon = values[np.searchsorted(seams, middle)] if element//model.per_region == 1 else 1.
+        x = middle+(b-a)/2*q
+        left = np.eye(count)[element]
+        change = np.eye(count)[(element+1) % count]-left
+        length = lengths[element]
+        ra, rb, r = (a-nodes[element])/length, (b-nodes[element])/length, (x-nodes[element])/length
+        fs.extend(cumulative+length/epsilon*(np.outer(r-ra, left)+np.outer((r*r-ra*ra)/2, change)))
+        dfs.extend((left+np.outer(r, change))/epsilon)
+        cumulative += length/epsilon*((rb-ra)*left+(rb*rb-ra*ra)/2*change)
+        xs.extend(x)
+        ws.extend((b-a)/2*qw)
+        es.extend(np.full(x.shape, epsilon))
+    x, w, eps, f, df = map(np.asarray, (xs, ws, es, fs, dfs))
+    lift = 1/eps/cumulative.sum()
+    pivot = model.per_region//2 if model.flux_basis == 'local' else model.per_region+model.per_region//2
+    keep = np.arange(count) != pivot
+    if model.flux_basis == 'local':
+        first = x < nodes[1]
+        origin = np.sum(w[first]*df[first, 0])/cumulative[0]
+        offsets = (1-origin)*np.eye(count)[0]+origin*np.eye(count)[-1]
+        f, df = f/cumulative, df/cumulative
+        f, df = (np.roll(f, -1, axis=1)-f-offsets)[:, keep], (np.roll(df, -1, axis=1)-df)[:, keep]
+    else:
+        f = (f/cumulative-f.sum(axis=1)[:, None]/cumulative.sum())[:, keep]
+        df = (df/cumulative-lift[:, None])[:, keep]
+    return x, w, eps, lift, np.column_stack([np.ones(len(x)), f]), np.column_stack([np.zeros(len(x)), df])
+
+
+def y_samples(model, quadrature):
+    """Evaluate periodic nodal functions and integrated Legendre bubbles."""
+    q, w = leggauss(quadrature)
+    r = (q+1)/2
+    elements = len(model.yedges)-1
+    h = np.zeros((elements*quadrature, model.rows))
+    dh = np.zeros_like(h)
+    times, weights = [], []
+    for e, (left, right) in enumerate(zip(model.yedges[:-1], model.yedges[1:])):
+        selection = slice(e*quadrature, (e+1)*quadrature)
+        h[selection, e] += 1-r
+        h[selection, (e+1) % elements] += r
+        dh[selection, e] -= 1/(right-left)
+        dh[selection, (e+1) % elements] += 1/(right-left)
+        for k in range(1, model.body_degree):
+            index = elements+e*(model.body_degree-1)+k-1
+            h[selection, index] = (eval_legendre(k+1, q)-eval_legendre(k-1, q))/(2*(2*k+1))
+            dh[selection, index] = eval_legendre(k, q)/(right-left)
+        times.extend(left+(right-left)*r-.5)
+        weights.extend((right-left)*w/2)
+    return np.array(times), np.array(weights), h, dh
+
+
+def balanced_solve(matrix, right):
+    scale = 1/np.sqrt(abs(np.diag(matrix)))
+    return scale[:, None]*np.linalg.solve(scale[:, None]*matrix*scale[None], scale[:, None]*right)
+
+
+def contact_derivative(model, profile, width, basis, quadrature=24):
+    """Return d(coefficients)/dg at contact, with dimensionless gap g."""
+    basis = basis/np.linalg.norm(basis[:, 0])
+    inverse = np.linalg.inv(basis)
+    metric = inverse@inverse.T
+    x, wx, epsilon, lift, f, df = x_samples(model, profile, width, quadrature)
+    t, wy, h, dh = y_samples(model, quadrature)
+    base = np.tile(np.eye(2, dtype=complex), (len(x), 1, 1))
+    base[:, 0, 0] = lift
+    base[:, 0, 1] = metric[0, 1]/metric[0, 0]*(lift-1)
+    flux = metric@base
+    mass = (f.conj().T*wx)@f
+    forcing = f.conj().T@((wx*(epsilon-1))[:, None]*flux[:, 1])
+    a = balanced_solve(metric[1, 1]*mass, forcing)
+    trace = f@a
+    # Differentiated periodic body problem, with the known linear trace ramp.
+    matrix = np.zeros((model.rows*model.nx,)*2, complex)
+    right = np.zeros((model.rows, model.nx, 2), complex)
+    for i, hy in enumerate((h, dh)):
+        for j, ky in enumerate((h, dh)):
+            fx, kx = (df, f)[i], (df, f)[j]
+            pack = (fx.conj().T*(wx*epsilon))@kx
+            matrix += metric[i, j]*np.kron((hy.T*wy)@ky, pack)
+            weight = wy*(t if j == 0 else 1)
+            right += metric[i, j]*(weight@hy)[:, None, None]*(pack@a)[None]
+    gap_flux = flux[:, 0]+metric[0, 1]*trace
+    right[0] -= df.conj().T@(wx[:, None]*gap_flux)
+    solution = np.zeros((model.rows*model.nx, 2), complex)
+    solution[1:] = balanced_solve(matrix[1:, 1:], right.reshape(-1, 2)[1:])
+    v = solution.reshape(model.rows, model.nx, 2)
+    derivative = np.stack([np.einsum('yr,ric,xi->yxc', h, v, df)-t[:, None, None]*(df@a)[None],
+                           np.einsum('yr,ric,xi->yxc', dh, v, f)-trace[None]], axis=-2)
+    gram_derivative = epsilon[None, :, None, None]*(np.swapaxes(derivative.conj(), -1, -2)@metric@base
+                                                   +np.swapaxes(base.conj(), -1, -2)@metric@derivative)
+    gap_field = base.copy()
+    gap_field[:, 1] += trace
+    gap_energy = np.swapaxes(gap_field.conj(), -1, -2)@metric@gap_field
+    body_energy = epsilon[:, None, None]*(np.swapaxes(base.conj(), -1, -2)@metric@base)
+    xwave = wx[None]*np.exp(-2j*np.pi*model.modes[:, None]*x[None])
+    ywave = wy[None]*np.exp(-2j*np.pi*model.modes[:, None]*t[None])
+    boundary_phase = (-1.)**model.modes
+    field = (np.einsum('ny,mx,yxcd->nmcd', ywave, xwave, derivative)
+             +boundary_phase[:, None, None, None]*np.einsum('mx,xcd->mcd', xwave, gap_field-base)[None])
+    gram = (np.einsum('ny,mx,yxcd->nmcd', ywave, xwave, gram_derivative)
+            +boundary_phase[:, None, None, None]*np.einsum('mx,xcd->mcd', xwave, gap_energy-body_energy)[None])
+    field = inverse.T@field@basis.T
+    gram = basis@gram@basis.T
+    eps = boundary_phase[:, None]*(xwave@(1-epsilon))[None]
+    return np.stack([field[..., 0, 0], field[..., 0, 1], field[..., 1, 0], field[..., 1, 1],
+                     gram[..., 0, 0], gram[..., 0, 1], gram[..., 1, 1], eps, gram[..., 1, 0]])
+
+
+@pytest.mark.parametrize('profile,body_degree,gap_degree,grade_y,shear', [
+    (4.+.8j, 2, 2, False, .45),
+    (dict(seams=[31.], values=[4.+.8j, 9.+2.1j]), 4, 6, False, .45),
+    (dict(seams=[-73., 31.], values=[4., 9., 6.25]), 1, 4, False, -.8),
+    (4., 2, 1, True, -.8),
+])
+def test_contact_fourier_opening_derivative_matches_independent_weak_variation(
+        profile, body_degree, gap_degree, grade_y, shear):
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    jax.config.update('jax_enable_x64', True)
+    model = AffineCellGapModel(1, rows=2, body_degree=body_degree, gap_degree=gap_degree,
+                               grade_y=grade_y, flux_basis='local')
+    basis = np.array([[1., shear], [0., .7]])
+    expected = contact_derivative(model, profile, 350., basis, 16)
+    refined = contact_derivative(model, profile, 350., basis, 24)
+    np.testing.assert_allclose(expected, refined, atol=3e-10, rtol=0)
+
+    def coefficients(g):
+        return model.coefficients(700*g, profile, xp=jnp, basis=jnp.asarray(basis))[0]
+
+    _, derivative = jax.jit(lambda g: jax.jvp(coefficients, (g,), (jnp.ones_like(g),)))(jnp.asarray(0.))
+    np.testing.assert_allclose(derivative, refined, atol=3e-9, rtol=0)
+    jax.clear_caches()

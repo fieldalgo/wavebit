@@ -1209,3 +1209,11 @@ static FEM reference reaches a relative primal/complementary enclosure of
 transmission discrepancy, while the retained y order remains the largest
 measured s-polarized optical limitation. These are comparisons, not an
 independent three-dimensional optical error bound or a release criterion.
+
+The affine cell now factors its vanishing body correction by the gap,
+removing a source of contact-derivative roundoff. An
+[independent contact variation](nvf-affine-cells.md#contact-fourier-variation-without-subtracting-nearby-solutions)
+checks every projected component through coefficient cap 2 for four real
+or complex profiles and mesh configurations. This verifies differentiation
+of those finite cells; continuum derivative convergence and oblique optical
+contact accuracy remain open.

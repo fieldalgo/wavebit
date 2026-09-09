@@ -122,12 +122,21 @@ class AffineCellGapModel(ComplexMaterialGapModel):
 
     def _x_integrals(self, nodes, lengths, seams, values, xp):
         pivot = self.per_region//2 if self.flux_basis == 'local' else self.per_region+self.per_region//2
-        return flux_integrals(nodes, lengths, seams, values,
-                              np.arange(len(nodes))//self.per_region == 1, self.modes,
-                              pivot, xp, basis=self.flux_basis, sesquilinear=True, mixed=True)
+        body, background = flux_integrals(nodes, lengths, seams, values,
+                                         np.arange(len(nodes))//self.per_region == 1, self.modes,
+                                         pivot, xp, basis=self.flux_basis, sesquilinear=True, mixed=True)
+        # epsilon * lift is constant, so its zero-mode weak x load is the
+        # integral of a periodic derivative: exactly zero, also for loss.
+        body['force'] = xp.where(xp.asarray(self.modes)[:, None] == 0, 0., body['force'])
+        return body, background
 
-    def _solve_metric_cell(self, g, body, background, metric, xp):
-        """Weak equations with enrichment test rows divided by g analytically."""
+    def _solve_metric_cell(self, g, body, background, metric, xp, *, contact_factor=False):
+        """Weak equations with enrichment test rows divided by g analytically.
+
+        With the exact laminated lift, factor g from body unknowns too and
+        cancel it from their equations. Arbitrary supplied lifts retain the
+        unfactored path, which does not assume a zero body correction at g=0.
+        """
         length = 1-g
         zeros = xp.zeros((len(self._body_t), self.gap_degree-1))
         bx = xp.concatenate([xp.asarray(self._body_h), -xp.asarray(self._body_t)[:, None], zeros], axis=1)
@@ -138,16 +147,31 @@ class AffineCellGapModel(ComplexMaterialGapModel):
         gy = xp.concatenate([xp.zeros((len(self._gap_s), self.rows)), xp.ones((len(self._gap_s), 1)),
                              xp.asarray(self._gap_dh)], axis=1)
         x, y = affine_lift_axes(metric, xp)
-        matrix, right = 0., 0.
+        matrix = 0.
+        body_factors = ((bx*scales, by*scales), (bx, by)) if contact_factor else ((bx, by), (bx*scales, by*scales))
+        gap_factors = ((gx*scales, gy), (g*gx, gy)) if contact_factor else ((g*gx, gy), (gx*scales, gy))
         for test, trial, weights, pack in (
-                ((bx, by), (bx*scales, by*scales), length*xp.asarray(self._body_w), body),
-                ((g*gx, gy), (gx*scales, gy), xp.asarray(self._gap_w), background)):
+                (*body_factors, length*xp.asarray(self._body_w), body),
+                (*gap_factors, xp.asarray(self._gap_w), background)):
             for i, j, key in ((0, 0, 'stiffness'), (0, 1, 'mixed'),
                               (1, 0, 'reverse_mixed'), (1, 1, 'mass')):
                 matrix = matrix+metric[i, j]*xp.kron((test[i].T*weights)@trial[j], pack[key])
-            for i, constant, lifted in ((0, 'dual_derivative', 'force'), (1, 'dual_load', 'potential_force')):
-                forcing = pack[lifted][:, None]*(metric@x)[i]+pack[constant][:, None]*(metric@y)[i]
-                right = right-((weights@test[i])[:, None, None]*forcing[None]).reshape(-1, 2)
+        # Periodic body derivatives and gap-bubble derivatives integrate to
+        # zero exactly. Preserve those zeros before multiplying large trace
+        # stiffnesses; quadrature roundoff here contaminates the contact JVP.
+        # (M Y)_x is also exactly zero for the laminated affine lift.
+        body_x = body['force'][:, None]*metric[0]
+        gap_x = background['force'][:, None]*metric[0]
+        trace = ((body['potential_force']-background['potential_force'])[:, None]*(metric@x)[1]
+                 +(body['dual_load']-background['dual_load'])[:, None]*(metric@y)[1])
+        right_v = (-length*xp.asarray(self.yload)[:, None, None]*body_x[None]
+                   -g*xp.asarray(self.boundary)[:, None, None]*gap_x[None])
+        if contact_factor:
+            # epsilon * lift is constant: the body x load is exactly zero.
+            # The remaining body forcing and correction both contain g.
+            right_v = -xp.asarray(self.boundary)[:, None, None]*gap_x[None]
+        right_b = -g*xp.asarray(self.gap_mean)[:, None, None]*gap_x[None]
+        right = xp.concatenate([right_v.reshape(-1, 2), trace, right_b.reshape(-1, 2)])
         matrix, right = matrix[1:, 1:], right[1:]
         scale = 1/xp.sqrt(xp.abs(xp.diag(matrix)))
         balanced, forcing = scale[:, None]*matrix*scale[None], scale[:, None]*right
@@ -157,6 +181,8 @@ class AffineCellGapModel(ComplexMaterialGapModel):
         solution = xp.where(valid, solution, xp.nan)
         end = self.nx*self.rows-1
         v = xp.concatenate([xp.zeros((1, 2)), solution[:end]]).reshape(self.rows, self.nx, 2)
+        if contact_factor:
+            v = g*v
         a = solution[end:end+self.nx]
         b = solution[end+self.nx:].reshape(self.gap_degree-1, self.nx, 2)
         return v, a, b, residual
@@ -184,7 +210,7 @@ class AffineCellGapModel(ComplexMaterialGapModel):
         center = 2*self.order
         v, a, b, residual = self._solve_metric_cell(
             g, {k: v[center] for k, v in body.items()},
-            {k: v[center] for k, v in background.items()}, metric, xp)
+            {k: v[center] for k, v in background.items()}, metric, xp, contact_factor=True)
         v, a, b = [xp.where(valid & valid_basis, value, xp.nan) for value in (v, a, b)]
         dt, t = xp.asarray(np.diff(self.yedges)), xp.asarray(self.yedges[:-1])-.5
         potential = xp.einsum('jk,ejic->ekic', xp.asarray(self._polynomials), v[self._indices])

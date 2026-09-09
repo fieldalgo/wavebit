@@ -6,6 +6,7 @@ Targets:
 - `wavebit/_core/conforming/affine_cell.py`
 - `wavebit/_core/conforming/continuous_flux.py`
 - `tests/test_nvf_affine_cell.py`
+- `tests/test_nvf_affine_contact.py`
 - `tests/test_nvf_complex_variational.py`
 - `tests/test_nvf_continuous_flux.py`
 
@@ -105,10 +106,23 @@ The body and gap use the same periodic potentials and gap-scaled
 enrichments as the polynomial rectangular cell. The new solver assembles
 all four directional products using exact small polynomial y integrals
 and the material-integrated x packs. Enrichment test rows are divided
-by g analytically before assembly. Every row therefore has a finite
-limit at g=0; there is no small-gap cutoff, conditional deletion,
-regularization, or custom derivative. The original-equation residual
-threshold remains `1e-8`, and the contact roundoff allowance is unchanged.
+by g analytically before assembly. The exact laminated lift also makes
+the body correction vanish at contact. The implementation now writes that
+correction as `v = g w` and cancels g from its equations analytically.
+Every row therefore has a finite limit at g=0; there is no small-gap
+cutoff, conditional deletion, regularization, or custom derivative.
+The residual threshold in the assembled equations before diagonal balancing
+remains `1e-8`, and the contact roundoff allowance is unchanged.
+
+This factorization prevents a small numerical body correction at g=0 from
+polluting the opening derivative through the narrow interface basis.
+Periodic derivative integrals, bubble derivative integrals, and the mean
+body x load are set by their exact identities. In particular,
+`epsilon_body * l` is constant, so the mean body x load is the integral
+of a periodic derivative and equals zero, including for complex material.
+The generic internal weak-assembly control retains an unfactored path for
+arbitrary supplied lifts; the physical cell uses the factored path for
+all valid gaps, with no switch near contact.
 
 These trial potentials are H1-conforming. For positive gap and finite
 resolution, their oblique normal flux is not guaranteed to be continuous
@@ -174,13 +188,59 @@ G'_reference = integral F0^T (1-epsilon_body) M F0
 The test derives this trace system independently of the coupled cell
 solve and checks the physical energy derivative after the J transform.
 It uses the default `edge_fraction=1e-5` and a `3e-9` absolute bound.
-For this fine mesh, forward finite differences of a general weighted
-Fourier objective at contact do not provide a reliable `3e-6` oracle:
+In the earlier implementation, forward finite differences of a general weighted
+Fourier objective on this fine contact mesh did not provide a reliable `3e-6` oracle:
 the probe's fourth-order errors ranged from roughly `4e-3` to `3e-5`
 as its dimensionless step decreased from `2e-6` to `1e-9`. The contact
 test therefore uses the independent energy variation, not an enlarged
-finite-difference tolerance. This check does not certify all Fourier
-opening derivatives or an optical contact derivative for oblique cells.
+finite-difference tolerance. The additional Fourier opening check below
+now tests all nine projected components in selected affine cells.
+
+## Contact Fourier variation without subtracting nearby solutions
+
+The new oracle reconstructs the x basis by integrating physical flux hats
+piecewise across mesh and material cuts. It evaluates the y nodal functions
+and integrated Legendre bubbles independently. It uses no production weak
+assembly, Fourier moments, field projection, or automatic differentiation.
+The geometry helper supplies only the finite space being checked.
+
+Let `a(x)` be the contact trace correction. It solves
+
+```text
+Myy integral conj(f) a = integral conj(f) (epsilon_body-1) (M F0)_y.
+```
+
+The first body variation is `W = grad(w - t a)`, where `t` ranges from
+`-1/2` to `1/2`. A separate periodic body solve determines w from
+
+```text
+integral epsilon_body grad(test)^H M grad(w)
+  = integral epsilon_body grad(test)^H M grad(t a)
+    - integral_boundary conj(test_x) [M (F0 + e_y a)]_x.
+```
+
+For integer y Fourier label n, the disappearing body edge and new gap
+contribute phase `(-1)^n`. Thus the field derivative contains the body
+Fourier transform of W and the boundary transform of `e_y a`. The Gram
+derivative contains both sesquilinear body cross terms with W, and the
+boundary difference between the gap and body energies. The material
+derivative is the boundary transform of `1-epsilon_body`. Physical tensor
+components are then transformed by J as above.
+
+Four cases cover real and complex material, mixed intervals, both shear
+signs, body degrees 1/2/4, gap degrees 1/2/4/6, and uniform or graded y
+meshes at the default `edge_fraction=1e-5`. Independent quadrature orders
+16 and 24 agree within `3e-10`; JAX opening derivatives of all nine
+components and all coefficient modes through cap 2 agree with the
+independent variation within `3e-9` absolute per dimensionless gap.
+
+For the ungraded degree-2 case with `epsilon=4+.8j` and
+`J=[[1,.45],[0,.7]]`, the largest component discrepancy against a
+quadrature-24 oracle was `1.142e-7` before factoring the body correction
+and is below `7.58e-11` afterwards. A separate quadrature-32 check changes
+the oracle by less than `5.91e-11`. These observations concern numerical
+differentiation of the stated finite cells. They establish neither
+continuum opening-derivative convergence nor an optical contact derivative.
 
 Run details are recorded in
 [the validation log](https://github.com/fieldalgo/wavebit/blob/develop/studies/results/nvf_affine_cell_validation.log).
