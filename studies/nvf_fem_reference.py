@@ -47,25 +47,146 @@ def slab_efficiencies(epsilon, theta=THETA):
                 R=float(y0.real*abs(r)**2/amplitude))
 
 
-def periodic_counts(mesh):
+def periodic_counts(mesh, lattice=None):
     """Check the generated point identifications, not just the geometry request.
 
     OCC's padded face bounding boxes can make a too-tight selection empty.
     Identify() on empty lists succeeds and produces a nonperiodic calculation.
     Requiring actual pairs in BOTH directions catches this failure.
+    ``lattice`` contains two physical primitive columns in micrometers; None
+    retains the original square cell for both 2D and 3D reference meshes.
+    Pair orientations may be reversed, but componentwise sign changes may not.
     """
+    lattice = np.asarray(np.eye(2)*PERIOD if lattice is None else lattice)
+    if (lattice.shape != (2, 2) or lattice.dtype.kind not in 'iuf'
+            or not np.isfinite(lattice).all()
+            or np.linalg.det(lattice.astype(float)) == 0):
+        raise ValueError('periodic lattice must be a finite nonsingular real 2-by-2 matrix')
+    vectors = np.vstack((lattice, np.zeros(2))).T
     counts = [0, 0]
     for a, b in mesh.ngmesh.GetIdentifications():
-        delta = np.abs(np.asarray(mesh.ngmesh[b].p)-np.asarray(mesh.ngmesh[a].p))
-        if np.allclose(delta, [PERIOD, 0, 0], rtol=0, atol=1e-9):
-            counts[0] += 1
-        elif np.allclose(delta, [0, PERIOD, 0], rtol=0, atol=1e-9):
-            counts[1] += 1
-        else:
+        delta = np.asarray(mesh.ngmesh[b].p)-np.asarray(mesh.ngmesh[a].p)
+        matches = [i for i, vector in enumerate(vectors)
+                   if np.allclose(delta, vector, rtol=0, atol=1e-9)
+                   or np.allclose(delta, -vector, rtol=0, atol=1e-9)]
+        if len(matches) != 1:
             raise ValueError(f'unexpected periodic point displacement: {delta}')
+        counts[matches[0]] += 1
     if not all(counts):
         raise ValueError(f'missing periodic point identifications: x={counts[0]}, y={counts[1]}')
     return dict(x=counts[0], y=counts[1])
+
+
+def make_affine_profile_mesh(h=.2, *, transform=None, period=PERIOD,
+                             width=.350, gap=.017, seam=.031,
+                             thickness=THICKNESS, pad=.1, uniform=None):
+    """Fit the affine two-material gap profile directly in physical space.
+
+    All lengths are in micrometers. ``transform`` maps reference x/y positions
+    to physical x/y positions, with default [[1,.45],[0,.7]]. The centered
+    reference envelope has ``width`` and height ``period-gap``; ``seam`` splits
+    epsilon 4 from epsilon 9. The film occupies 0 < z < thickness, with epsilon
+    1 above and 2.25 below. ``uniform`` replaces the entire film by that positive
+    scalar permittivity for slab controls. Only physical Rayleigh padding is
+    meshed; this helper supplies no PML or Maxwell scattering solution.
+
+    Returns the mesh and its material-permittivity dictionary. The existing
+    fixed-fixture solve functions do not consume this mesh.
+    """
+    settings = (h, period, width, gap, seam, thickness, pad)
+    if any(np.asarray(value).shape != () or np.asarray(value).dtype.kind not in 'iuf'
+           for value in settings):
+        raise ValueError('affine geometry lengths must be finite real scalars')
+    if (not np.isfinite(settings).all() or min(h, period, thickness, pad) <= 0
+            or not 0 < width < period or not 0 < gap < period
+            or not -width/2 < seam < width/2):
+        raise ValueError('invalid affine material profile or mesh settings')
+    if uniform is not None and (np.asarray(uniform).shape != ()
+                               or np.asarray(uniform).dtype.kind not in 'iuf'
+                               or not np.isfinite(uniform) or uniform <= 0):
+        raise ValueError('the uniform control requires a positive real permittivity')
+    transform = np.asarray([[1., .45], [0., .7]] if transform is None else transform)
+    if (transform.shape != (2, 2) or transform.dtype.kind not in 'iuf'
+            or not np.isfinite(transform).all()):
+        raise ValueError('transform must be a finite real 2-by-2 matrix')
+    transform = transform.astype(float)
+    determinant = np.linalg.det(transform)
+    if not np.isfinite(determinant) or determinant <= 0:
+        raise ValueError('transform must preserve orientation and have positive determinant')
+    inverse = np.linalg.inv(transform)
+    # Opposite face distances, not primitive-vector lengths, constrain whether
+    # the periodic cell can contain more than one element across each direction.
+    if h >= period/(2*np.linalg.norm(inverse, axis=1).max()):
+        raise ValueError('h must be less than half each physical cell width')
+    lattice = period*transform
+
+    def prism(left, right, lower_y, upper_y, lower_z, upper_z):
+        corners = np.array([[left, lower_y], [right, lower_y],
+                            [right, upper_y], [left, upper_y]])@transform.T
+        plane = occ.WorkPlane().MoveTo(*corners[0])
+        for corner in corners[1:]:
+            plane = plane.LineTo(*corner)
+        return plane.Close().Face().Extrude(upper_z-lower_z).Move(occ.Vec(0, 0, lower_z))
+
+    def cell(lower_z, upper_z):
+        return prism(-period/2, period/2, -period/2, period/2, lower_z, upper_z)
+
+    film = cell(0, thickness)
+    materials, volumes, parts = {}, {}, []
+    area = determinant*period**2
+    if uniform is not None:
+        film.mat('film')
+        parts.append(film)
+        materials['film'], volumes['film'] = float(uniform), area*thickness
+    else:
+        remaining = film
+        height = period-gap
+        for i, (left, right, epsilon) in enumerate(
+                ((-width/2, seam, 4.), (seam, width/2, 9.))):
+            part = prism(left, right, -height/2, height/2, 0, thickness)
+            name = f'piece_{i}'
+            part.mat(name)
+            materials[name] = epsilon
+            volumes[name] = determinant*(right-left)*height*thickness
+            parts.append(part)
+            remaining = remaining-part
+        remaining.mat('background')
+        parts.append(remaining)
+        materials['background'] = 1.
+        volumes['background'] = area*thickness-sum(volumes.values())
+    for name, lower, upper, epsilon in (('substrate', -pad, 0, SUBSTRATE),
+                                        ('superstrate', thickness, thickness+pad, 1.)):
+        part = cell(lower, upper)
+        part.mat(name)
+        materials[name], volumes[name] = epsilon, area*pad
+        parts.append(part)
+    shape = occ.Glue(parts)
+    shape.faces.Min(occ.Z).name = 'outer_bottom'
+    shape.faces.Max(occ.Z).name = 'outer_top'
+    for i, label in enumerate(('periodic_x', 'periodic_y')):
+        axis = occ.Vec(*inverse[i], 0.)
+        # Filter in reference coordinates while retaining the physical faces.
+        # OCC pads its bounds; requests must select nonempty whole outer planes.
+        lower = shape.faces[axis < -period/2+1e-6]
+        upper = shape.faces[axis > period/2-1e-6]
+        if not len(lower) or len(lower) != len(upper):
+            raise ValueError(f'{label}: unmatched affine outer faces')
+        lower.name = upper.name = label
+        lower.Identify(upper, label, IdentificationType.PERIODIC,
+                       occ.Translation(occ.Vec(*lattice[:, i], 0.)))
+    mesh = ng.Mesh(occ.OCCGeometry(shape).GenerateMesh(maxh=h))
+    periodic_counts(mesh, lattice)
+    for name, volume in volumes.items():
+        actual = ng.Integrate(1, mesh, definedon=mesh.Materials(name))
+        if not np.isclose(actual, volume, rtol=0, atol=1e-11):
+            raise ValueError(f'{name}: affine material volume mismatch')
+    if not np.isclose(ng.Integrate(1, mesh), area*(thickness+2*pad), rtol=0, atol=1e-11):
+        raise ValueError('affine cell volume mismatch')
+    for side in ('outer_top', 'outer_bottom'):
+        actual = ng.Integrate(1, mesh, definedon=mesh.Boundaries(side))
+        if not np.isclose(actual, area, rtol=0, atol=1e-11):
+            raise ValueError(f'{side}: affine outer face area mismatch')
+    return mesh, materials
 
 
 def make_mesh(h, uniform=None, pad=.4, pml=.4, *, boundary='pml'):

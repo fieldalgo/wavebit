@@ -96,12 +96,64 @@ physical lattice with `A=[[.7,2.8],[0,.7]]`; its original near-grazing
 wave has labels `(1,4)`, so cut 3 must be rejected. These checks require
 no tetrahedral mesh or large FEM solve.
 
-Only the boundary-data helper is generalized. `solve` and `solve_rayleigh`
-still use the fixed square geometry, p source, trace phases and area
-normalization described above. They do not yet solve the affine fixture.
-Physical affine geometry and periodic identifications, both polarization
-sources, matching trace normalization and independent flux controls must
-be implemented together before claiming a 3D affine optical reference.
+`solve` and `solve_rayleigh` still use the fixed square geometry, p source,
+trace phases and area normalization described above. They do not yet solve
+the affine fixture. The separate physical geometry helper below prepares
+the mesh; both polarization sources, matching trace normalization and
+independent flux controls still need integration before claiming a 3D
+affine optical reference.
+
+## Physical affine geometry and periodic pairs
+
+`make_affine_profile_mesh()` constructs the affine comparison's material
+volumes directly in physical space and returns `(mesh, materials)`. All
+lengths are in micrometers. With `J=[[1,.45],[0,.7]]`, the reference
+period .7, width .350, gap .017 and seam .031 produce two adjoining
+parallelogram prisms of permittivities 4 and 9. Their reference widths
+are .206 and .144; their reference height is .683 and physical film
+thickness is .3. The reference rectangles are transformed before
+extrusion. Ordinary physical rectangles are not reinterpreted as this
+affine profile.
+
+The cell has physical area .343 square micrometers. It includes .1 of
+physical padding above and below, with permittivities 1 and 2.25. There
+are no absorbing layers. `uniform=4.` replaces the entire film with a
+uniform slab for later analytic controls; it does not solve that slab.
+The patterned material volumes are .02954658, .02065392 and .05269950
+cubic micrometers for the first piece, second piece and background.
+Each exterior region occupies .0343 cubic micrometers.
+
+Opposite faces are selected using reference coordinates on the physical
+shape and identified by translation through the corresponding physical
+primitive vector. `periodic_counts(mesh, lattice=A)` checks the resulting
+point-pair displacements against each complete vector or its negative.
+It rejects componentwise sign flips, unexpected displacements and either
+missing direction. Its default square lattice remains compatible with
+both existing 3D and static 2D reference meshes.
+
+Eight small-mesh controls check material and total volume, outer-face
+areas and heights, material values on both sides of each interface,
+actual periodic pairs, reduced H(curl) unknown counts, whole-lattice
+rotation, the uniform slab geometry and invalid inputs. The existing
+nine mesh-free algebraic controls also pass. At maximum tetrahedron
+size .2, the observed mesh sizes are:
+
+| geometry | tetrahedra | vertices | ordinary order-1 H(curl) unknowns | periodic unknowns |
+| --- | ---: | ---: | ---: | ---: |
+| affine profile | 436 | 138 | 1342 | 1128 |
+| profile rotated by .53 radians | 448 | 140 | 1370 | 1122 |
+| uniform affine slab | 414 | 134 | 1294 | 1074 |
+
+These are geometry and finite-element-space checks, with no Maxwell
+system assembled or solved. The helper requires positive padding,
+thickness and gap, an interior seam, width below the reference period,
+a finite real orientation-preserving transform, and h smaller than half
+each physical cell width between opposite faces. Invalid inputs, failed
+face matching, and incorrect material volumes or exterior areas raise.
+Exact contact and general physical-rectangle inputs remain outside this
+helper's scope. Source, boundary-trace and power-normalization integration
+with these meshes remains open; the existing scattering entry points
+retain their original square fixture.
 
 ## A failed periodic-boundary request was caught by the control
 
@@ -254,5 +306,16 @@ algebraic tests into `FEMAlgebraicTests`, which constructs no mesh. Its
 nine checks pass separately; the ten unchanged mesh/solve checks were
 not rerun for this boundary-data-only change. Run the small selection with
 `python -m unittest tests.test_nvf_fem_reference.FEMAlgebraicTests -v`.
+The subsequent geometry extension passes all eight affine geometry tests
+plus those nine algebraic tests in 0.358 s:
+
+```bash
+PYTHONPATH=$PWD "$NVF_FEM_PYTHON" -m unittest tests.test_nvf_fem_affine_geometry tests.test_nvf_fem_reference.FEMAlgebraicTests -v
+```
+
+Five existing square-fixture mesh and periodic-identification tests also
+pass in 0.387 s. The five existing scattering-solve tests are not rerun for
+the geometry-only change. The new checks establish geometry and space
+consistency, not a converged optical reference.
 Selected results, with prototype-versus-packaged flux provenance, are retained in
 [`studies/results/nvf_fem_reference.log`](../studies/results/nvf_fem_reference.log).
