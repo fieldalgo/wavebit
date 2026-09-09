@@ -36,6 +36,7 @@ subtrees:
   - file: fdtd-rectangle-gradients
   - file: fdtd-rotation-gradients
   - file: fdtd-rotation-smoothing
+  - file: fdtd-adjoint-validation
   - file: fdtd-rayleigh
   - file: fdtd-enz
   - file: fdtd-layer-alignment

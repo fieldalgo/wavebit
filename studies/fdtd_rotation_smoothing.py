@@ -6,12 +6,15 @@ from pathlib import Path
 import numpy as np
 
 
-def density(parameters, smoothing=.05, grid=256, clip=True):
+def density(parameters, smoothing=.05, grid=256, clip=True, return_jacobian=False):
     """Independent Fourier-series rectangle convolved with a translation box.
 
     This reference uses sinc transforms, not FDTD polygon clipping or moments.
     Rows are y, columns x; samples are cell-centred. Clipping bounds the series
     for Meep MaterialGrid; grid refinement controls that approximation.
+    Optional analytic derivatives have final axis (angle, width). At clipping
+    knots the chosen derivative is zero; finite differences crossing a knot
+    need not match that local derivative.
     """
     angle, width = parameters
     period, height = .6, .18
@@ -24,7 +27,26 @@ def density(parameters, smoothing=.05, grid=256, clip=True):
                     *np.exp(-1j*(kx*(.071+period/2)+ky*(-.047+period/2)))
                     *np.exp(1j*(kx+ky)*.5*period/grid))
     samples = np.fft.ifft2(coefficients*grid**2).real
-    return np.clip(samples, 0., 1.) if clip else samples
+    result = np.clip(samples, 0., 1.) if clip else samples
+    if not return_jacobian:
+        return result
+    def dsinc(z):
+        small = abs(z) < 1e-3
+        safe = np.where(small, 1., z)
+        return np.where(small, -z/3+z**3/30-z**5/840,
+                        (safe*np.cos(safe)-np.sin(safe))/safe**2)
+    z, t = u*width/2, v*height/2
+    kernel = (np.sinc(kx*hx/(2*np.pi))*np.sinc(ky*hy/(2*np.pi))
+              *np.exp(-1j*(kx*(.071+period/2)+ky*(-.047+period/2)))
+              *np.exp(1j*(kx+ky)*.5*period/grid))
+    angle_coeff = width*height/period**2*kernel*(dsinc(z)*v*width/2*np.sinc(t/np.pi)
+                                              -np.sinc(z/np.pi)*dsinc(t)*u*height/2)
+    # d/dwidth [width*sin(z)/z] = cos(z), with z=u*width/2; safe at u=0.
+    width_coeff = height/period**2*kernel*np.cos(z)*np.sinc(t/np.pi)
+    jacobian = np.stack([np.fft.ifft2(c*grid**2).real for c in (angle_coeff, width_coeff)], axis=-1)
+    if clip:
+        jacobian = np.where(((samples > 0) & (samples < 1))[..., None], jacobian, 0.)
+    return result, jacobian
 
 
 def graded_reference(parameters, smoothing=.05, grid=256, order=8):

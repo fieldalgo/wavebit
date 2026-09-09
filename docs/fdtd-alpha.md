@@ -156,7 +156,10 @@ translated-polygon moments. Independent geometry and full JAX/Torch graph
 checks cover its continuous cell-crossing derivatives. Matching graded RCWA
 references separate the changed physical profile from finite-grid error;
 [the measurements](fdtd-rotation-smoothing.md) do not establish general
-sharp-interface gradient accuracy.
+sharp-interface gradient accuracy. A separate [adjoint comparison](fdtd-adjoint-validation.md)
+checks Meep adjoint against its own forward differences for two complex
+transmissions. The existence of an adjoint gradient does not establish its
+finite-grid or continuum accuracy.
 
 
 The shared `layer_thicknesses` helper now supplies positive, fixed-total

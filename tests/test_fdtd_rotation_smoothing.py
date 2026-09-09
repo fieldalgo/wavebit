@@ -173,3 +173,48 @@ def test_fourier_reference_profile_matches_independent_box_intersections():
             expected = sum(vertical_integral(vertices+[a, b], x-smooth/2, x+smooth/2, y-smooth/2, y+smooth/2)
                            for a in (-.6, 0., .6) for b in (-.6, 0., .6))/smooth**2
             np.testing.assert_allclose(profile[j, i], expected, atol=tolerance, rtol=0)
+
+
+@pytest.mark.parametrize('angle', [0., .37, np.pi/2])
+@pytest.mark.parametrize('clip', [False, True])
+def test_independent_sinc_profile_analytic_shape_jacobian(angle, clip):
+    from studies.fdtd_rotation_smoothing import density
+    p = np.array([angle, .3])
+    raw = density(p, grid=128, clip=False)
+    _, jac = density(p, grid=128, clip=clip, return_jacobian=True)
+    assert np.isfinite(jac).all()
+    if not clip:
+        np.testing.assert_allclose(jac.mean(axis=(0, 1)), [0., .18/.6**2], atol=3e-15)
+    else:
+        np.testing.assert_array_equal(jac[(raw < 0) | (raw > 1)], 0.)
+    for step in (2e-7, 1e-7):
+        for k, delta in enumerate(np.eye(2)*step):
+            plus, minus = [density(p+d, grid=128, clip=False) for d in (delta, -delta)]
+            # Central differences crossing a clipping knot average two local
+            # slopes. Check the analytic derivative where the branch is fixed.
+            if clip:
+                region = lambda a: np.where(a <= 0, -1, np.where(a >= 1, 1, 0))
+                smooth = (region(raw) == region(plus)) & (region(raw) == region(minus))
+                plus, minus = np.clip(plus, 0., 1.), np.clip(minus, 0., 1.)
+            else:
+                smooth = np.ones(raw.shape, dtype=bool)
+            assert smooth.mean() > .98
+            np.testing.assert_allclose(jac[..., k][smooth], ((plus-minus)/(2*step))[smooth], atol=8e-9, rtol=2e-5)
+
+
+def test_smoothed_complex_transmission_forward_reverse_and_finite_gradients():
+    jax = pytest.importorskip('jax'); jax.config.update('jax_enable_x64', True)
+    import jax.numpy as jnp
+    from studies.fdtd_rotation_gradients import response, finite_difference
+    p = np.array([.37, .3])
+    def f(p):
+        value = response(p, resolution=10, smoothing=.05)[jnp.array([2, 7])]
+        return jnp.concatenate((jnp.real(value), jnp.imag(value)))
+    forward = np.asarray(jax.jit(jax.jacfwd(f))(p))
+    reverse = np.asarray(jax.jit(jax.jacrev(f))(p))
+    np.testing.assert_allclose(reverse, forward, atol=3e-11, rtol=2e-9)
+    def independent(p):
+        value = np.asarray(response(p, resolution=10, smoothing=.05, backend=0))[[2, 7]]
+        return np.r_[value.real, value.imag]
+    for step in (2e-5, 1e-5):
+        np.testing.assert_allclose(reverse, finite_difference(independent, p, step), atol=3e-8, rtol=2e-5)

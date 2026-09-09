@@ -172,6 +172,11 @@ accuracy against the matching graded continuum is checked with the separate
 Fourier reference. It does not equate local derivative repeatability with
 continuum accuracy or hide the width discrepancy behind the amplitude result.
 
+The Meep derivatives on this page are central differences of forward solves.
+The separate [adjoint comparison](fdtd-adjoint-validation.md) executes
+`meep.adjoint` and measures its difference from those discrete derivatives.
+These methods must not be conflated.
+
 ## Reproduce
 
 Measured on an arm64 CPU with Python 3.12.9, NumPy 2.5.1, JAX 0.11.0 x64 and
