@@ -151,6 +151,12 @@ averages and a full static y-period mesh. This is a bounded interface
 approximation, not full effective-tensor smoothing. The
 [rotation contract](guide/time-domain.md#rotated-rectangle-area-integration)
 and [independent measurements](fdtd-rotation-gradients.md) describe its limits.
+Positive `shape_smoothing` also works on this area route through exact
+translated-polygon moments. Independent geometry and full JAX/Torch graph
+checks cover its continuous cell-crossing derivatives. Matching graded RCWA
+references separate the changed physical profile from finite-grid error;
+[the measurements](fdtd-rotation-smoothing.md) do not establish general
+sharp-interface gradient accuracy.
 
 
 The shared `layer_thicknesses` helper now supplies positive, fixed-total

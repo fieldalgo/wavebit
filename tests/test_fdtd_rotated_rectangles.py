@@ -98,12 +98,12 @@ def scene(p):
         dict(background=1.4, shapes=[])], [p[7], .3-p[7]], top=1., bot=1.4, period=[.4, .3])
 
 
-def response(p, backend=0, diagnostics=False, side='bottom'):
+def response(p, backend=0, diagnostics=False, side='bottom', smoothing=0.):
     result, out = wavebit.fdtd(scene(p), wavebit.Incidence(wavelength=.9, theta=.17, phi=.23,
                              polarization=(1., .4j), incidence_side=side), backend=backend,
                              resolution=9, transverse_resolution=[12., 15.], n_pml=6, n_periods=38,
                              pulse_width=1.5, truncation_order=0, mesh_thickness=[.15, .15],
-                             layer_smoothing=.025, align_layers=True, shape_integration='area',
+                             layer_smoothing=.025, align_layers=True, shape_integration='area', shape_smoothing=smoothing,
                              diffraction_method='directional', return_diagnostics=True)
     xp = time_loop_backend(backend).xp
     value = xp.concat([xp.real(result.given.r_s).reshape(-1), xp.imag(result.given.t_p).reshape(-1)])
@@ -128,12 +128,13 @@ def test_bottom_conical_jones_joint_eight_parameter_derivatives(backend):
 
 
 @pytest.mark.parametrize('side', ['top', 'bottom'])
-def test_one_jit_trace_handles_rotation_translation_and_invalid_extent(side):
+@pytest.mark.parametrize('smoothing', [0., (.04, .03)])
+def test_one_jit_trace_handles_rotation_translation_and_invalid_extent(side, smoothing):
     jax = pytest.importorskip('jax'); jax.config.update('jax_enable_x64', True)
     traces = []
     def run(p):
         traces.append(None)
-        value, out = response(p, 1, diagnostics=True, side=side)
+        value, out = response(p, 1, diagnostics=True, side=side, smoothing=smoothing)
         return value, out['stable']
     run = jax.jit(run)
     p = np.array([.13, -.09, .16, .12, 0., 2.4, 1.13, .14])
@@ -151,7 +152,7 @@ def test_one_jit_trace_handles_rotation_translation_and_invalid_extent(side):
     assert len(traces) == 1
 
 
-@pytest.mark.parametrize('change', [dict(shape_integration='unknown'), dict(shape_smoothing=.01),
+@pytest.mark.parametrize('change', [dict(shape_integration='unknown'), dict(shape_smoothing=.5),
                                    dict(subpixel=False), dict(period=.4), dict(mu=np.ones((1, 1, 1)))])
 def test_area_option_contract_rejects_unsupported_combinations(change):
     options = dict(structure=[dict(background=1., shapes=[dict(lx=.2, ly=.1, angle=.3, material=2.)])],

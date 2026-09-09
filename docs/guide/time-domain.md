@@ -676,8 +676,7 @@ empty shape lists describe uniform layers. Periods must be static and positive,
 with two entries. Sizes must be positive, and the projected extents
 `abs(cos(angle))*lx + abs(sin(angle))*ly` and
 `abs(sin(angle))*lx + abs(cos(angle))*ly` must not exceed their respective
-periods. Centres wrap periodically. `subpixel=True` and `shape_smoothing=0`
-are required. Use the shape's `Material` for epsilon/mu; recipe dispersion
+periods. Centres wrap periodically. `subpixel=True` is required. Use the shape's `Material` for epsilon/mu; recipe dispersion
 labels and separate raster mu remain unsupported. Rotation and geometry may
 be live on JAX/Torch, while period, mesh and shape count stay static.
 
@@ -689,8 +688,23 @@ It is not a full rotated effective tensor and does not promise second-order
 interface accuracy. Layer sampling retains its existing z averaging rules;
 live layer thicknesses require the usual fixed-total `mesh_thickness` contract.
 
-At coincident parallel cell/shape edges, one-sided derivatives can differ.
-General second derivatives and C1 smoothing of such contacts are not supplied.
+With the default `shape_smoothing=0`, coincident parallel cell/shape edges
+can have different one-sided derivatives. To average transverse translations,
+add `shape_smoothing=.05` or a static `(x, y)` pair to the solve above. Each
+width must be finite, nonnegative and no larger than its period; a zero
+component keeps that axis sharp. Positive widths use exact bilinear polygon
+moments, without a sampling grid or quadrature-order setting. This smooths
+cell-crossing derivatives on the averaged axes; general second derivatives
+are not supplied. The widths stay static during differentiation.
+
+Averaging changes the material distribution: it represents the rectangle
+convolved with a uniform translation box. Hold the physical widths fixed
+when refining this graded target, or explicitly study the additional bias
+when shrinking them toward a sharp target. It preserves period-integrated
+material area. It does not introduce a rotated effective tensor. See the
+[averaging measurements](../fdtd-rotation-smoothing.md) for independent
+geometry and matching graded-profile references.
+
 Check grid refinement and an independent physical reference when using the
 result as a design gradient. The [rotation measurement](../fdtd-rotation-gradients.md)
 records the independent area, complete graph and optical checks.

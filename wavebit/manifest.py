@@ -111,7 +111,8 @@ from ._core.spec import SPEC_VERSION
 #: Version 13 adds shared axis-aligned rectangle recipes on the explicit FDTD
 #: route, including moving transverse faces and optional translation averaging.
 #: Version 14 adds opt-in exact area integration and rotated rectangle gradients.
-MANIFEST_VERSION = '14'
+#: Version 15 extends area integration with exact translated-polygon moments.
+MANIFEST_VERSION = '15'
 
 
 # --------------------------------------------------------------- how a structure is spelled
@@ -532,7 +533,8 @@ SOLVERS = {
                 'parametric_requires': ('two rectangular periods', 'subpixel=True'),
                 'shape_integration': ('separable', 'area'),
                 'separable_requires': 'static angle=0',
-                'area_requires': 'at most one rectangle per layer; projected extents within periods; shape_smoothing=0',
+                'area_requires': 'at most one rectangle per layer; projected extents within periods',
+                'area_smoothing': 'exact bilinear polygon moments for box translations; no quadrature order',
                 'area_averaging': 'exact polygon/cell areas; arithmetic transverse material averages; full y sampling',
                 'parametric_refused': ('circles/ellipses', 'raster mu', 'dispersion labels'),
                 'shape_constraint': 'positive lengths no larger than periods; periodic later-shape painting; '

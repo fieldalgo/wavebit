@@ -815,10 +815,11 @@ def test_published_fdtd_rectangles_use_common_route(backend, integration):
     assert 'rectangle centre' in common['differentiable_parameters']
     assert 'shape_smoothing' in common['static_parameters']
     assert common['shape_integration'] == ('separable', 'area')
+    assert 'exact bilinear polygon moments' in common['area_smoothing']
     assert 'rectangle angle (area)' in common['differentiable_parameters']
     settings = dict(FDTD_COMMON_KW, period=[.2, .2], structure=[dict(background=2., shapes=[
         dict(type='square', l=.08, angle=.23 if integration == 'area' else 0., material=2.)])],
-        backend=backend, shape_integration=integration, shape_smoothing=.02 if integration == 'separable' else 0.)
+        backend=backend, shape_integration=integration, shape_smoothing=.02)
     result = wavebit.fdtd(**settings)
     target = wavebit.fdtd(**dict(settings, structure=np.full((1, 2, 2), 2.), shape_smoothing=0., shape_integration='separable'))
     np.testing.assert_allclose(result.s_inc.R, target.s_inc.R, atol=1e-13)

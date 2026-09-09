@@ -251,8 +251,8 @@ def _rectangle_partition(structure, periods, *, xp, array, check, integration='s
     return epsilon, mu, edges
 
 
-def _clipped_rectangle_area(vertices, left, right, bottom, top, *, xp):
-    """Exact rectangle/cell intersection area with fixed-capacity live vertices.
+def _clipped_rectangle_area(vertices, left, right, bottom, top, *, xp, moment_weights=None):
+    """Exact clipped area or bilinearly weighted integral with live vertices.
 
     Four half-plane clips can produce at most eight vertices. Stable packing
     keeps their cyclic order without a host geometry plan or detached values.
@@ -285,13 +285,63 @@ def _clipped_rectangle_area(vertices, left, right, bottom, top, *, xp):
     # Cell-relative coordinates reduce cancellation for tiny clipped pieces.
     origin = xp.stack((left, bottom), axis=-1)[..., None, :]
     a, b = polygon-origin, other-origin
+    if moment_weights is not None:
+        extent = xp.stack((right-left, top-bottom), axis=-1)
+        scale = xp.where(extent > 0, extent, xp.ones_like(extent))[..., None, :]
+        active = (index < count[..., None])[..., None]
+        a = xp.where(active, a/scale, xp.zeros_like(a))
+        b = xp.where(active, b/scale, xp.zeros_like(b))
     cross = a[..., 0]*b[..., 1]-a[..., 1]*b[..., 0]
-    area = .5*xp.sum(xp.where(index < count[..., None], cross, xp.zeros_like(cross)), axis=-1)
+    cross = xp.where(index < count[..., None], cross, xp.zeros_like(cross))
+    area = .5*xp.sum(cross, axis=-1)
+    if moment_weights is not None:
+        # Exact integrals of 1, u, v, uv on the clipped polygon, in normalized
+        # box coordinates. Integrate (a0+a1*u)*(b0+b1*v) without quadrature.
+        mx = xp.sum((a[..., 0]+b[..., 0])*cross, axis=-1)/6
+        my = xp.sum((a[..., 1]+b[..., 1])*cross, axis=-1)/6
+        mxy = xp.sum((2*a[..., 0]*a[..., 1]+a[..., 0]*b[..., 1]
+                       +b[..., 0]*a[..., 1]+2*b[..., 0]*b[..., 1])*cross, axis=-1)/24
+        a0, a1, b0, b1 = [moment_weights[..., k] for k in range(4)]
+        area = (a0*b0*area+a1*b0*mx+a0*b1*my+a1*b1*mxy)*extent[..., 0]*extent[..., 1]
     return xp.where(area < 0, xp.zeros_like(area), area)
 
 
-def _rectangle_cell_fractions(vertices, x, y, dx, dy, periods, *, xp, array):
-    """Periodic exact area fractions; projected extents <= periods avoid self overlap."""
+def _translation_windows(centres, width, smoothing):
+    """Static linear pieces of a cell indicator averaged over translations."""
+    centres = np.asarray(centres)
+    if not smoothing:
+        return [(centres-width/2, centres+width/2, 1., 0.)]
+    cuts = np.sort([-(width+smoothing)/2, (smoothing-width)/2,
+                    (width-smoothing)/2, (width+smoothing)/2])
+    height = min(width, smoothing)/smoothing
+    values = [0., height, height, 0.]
+    return [(centres+left, centres+right, low, high-low)
+            for left, right, low, high in zip(cuts[:-1], cuts[1:], values[:-1], values[1:]) if right > left]
+
+
+def _rectangle_cell_fractions(vertices, x, y, dx, dy, periods, *, xp, array, smoothing=(0., 0.)):
+    """Exact periodic area fractions, optionally averaged over box translations.
+
+    A translated cell has a trapezoidal weight on each axis. Split its support
+    into linear pieces and integrate their bilinear product with polygon
+    moments. Wide kernels need a second periodic image ring near cell seams.
+    Projected rectangle extents and smoothing widths must not exceed periods.
+    """
+    if any(smoothing):
+        windows = [(a, b) for a in _translation_windows(x, dx, smoothing[0])
+                   for b in _translation_windows(y, dy, smoothing[1])]
+        bounds = [np.broadcast_arrays(a[0][None, :], a[1][None, :], b[0][:, None], b[1][:, None])
+                  for a, b in windows]
+        rings = [2 if w+h > p else 1 for w, h, p in zip((dx, dy), smoothing, periods)]
+        shifts = array([(i*periods[0], j*periods[1]) for i in range(-rings[0], rings[0]+1)
+                        for j in range(-rings[1], rings[1]+1)])
+        left, right, bottom, top = [array(np.stack([b[k] for b in bounds]))[None, ...]
+                                    +xp.zeros_like(shifts[:, 0, None, None, None]) for k in range(4)]
+        weights = array([[*a[2:], *b[2:]] for a, b in windows])[None, :, None, None, :]
+        images = vertices[None, None, None, None, :, :]+shifts[:, None, None, None, None, :]
+        mass = _clipped_rectangle_area(images, left, right, bottom, top, xp=xp, moment_weights=weights)
+        fraction = xp.sum(mass, axis=(0, 1))/(dx*dy)
+        return xp.where(fraction > 1, xp.ones_like(fraction), fraction)
     left, bottom = xp.broadcast_arrays(array(x)[None, :]-dx/2, array(y)[:, None]-dy/2)
     shifts = array([(i*periods[0], j*periods[1]) for i in (-1, 0, 1) for j in (-1, 0, 1)])
     left, bottom = xp.broadcast_arrays(left[None, ...]+xp.zeros_like(shifts[:, 0, None, None]), bottom[None, ...])
@@ -586,9 +636,10 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     shapes can still have topology kinks. The Yee mesh never follows a shape.
     shape_integration='area' instead accepts one rotated rectangle per layer,
     retaining angle derivatives in radians. Its projected extents must fit
-    the periods; shape_smoothing must be zero. Exact cell intersection areas
-    give arithmetic transverse material averages. This is not a full rotated
-    effective tensor and does not promise second-order interface accuracy.
+    the periods. Positive shape_smoothing averages translations using exact
+    polygon moments of the piecewise bilinear cell kernel. No sampling grid or
+    quadrature order is introduced. Cell integrals give arithmetic transverse
+    material averages. This is not a full rotated effective tensor and does not promise second-order interface accuracy.
     Area integration always retains the full y-period mesh, including angle=0.
     Half-space epsilon/mu can be live
     positive real scalars with explicit mesh_indices and truncation_order.
@@ -645,8 +696,6 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
         raise ValueError('shape_smoothing must be a nonnegative finite static scalar or (x,y) pair.')
     if np.any(shape_width) and not parametric:
         raise ValueError('shape_smoothing requires parametric rectangle layers.')
-    if shape_integration == 'area' and np.any(shape_width):
-        raise ValueError('Area integration currently requires shape_smoothing=0.')
     if parametric and (not subpixel or mu is not None or dispersion is not None or poles is not None):
         raise ValueError('Parametric FDTD requires subpixel=True and Material epsilon/mu; raster mu and dispersion labels are unsupported.')
     if layer_smoothing and (mesh_thickness is None or not subpixel):
@@ -895,7 +944,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
         for ox, oy in ((0., 0.), (.5, 0.), (0., .5), (.5, .5)):
             area_fractions[ox, oy] = [None if s is None else
                 _rectangle_cell_fractions(s[0], (np.arange(nx)+ox)*dx, (np.arange(ny)+oy)*dy,
-                                          dx, dy, lengths, xp=xp, array=array) for _, s in area_layers]
+                                          dx, dy, lengths, xp=xp, array=array, smoothing=shape_width) for _, s in area_layers]
     def sample(values, upper, lower, magnetic=False, harmonic=True):
         components = []
         for c in range(3):

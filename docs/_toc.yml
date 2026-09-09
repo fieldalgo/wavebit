@@ -35,6 +35,7 @@ subtrees:
   - file: fdtd-multilayer-optimization
   - file: fdtd-rectangle-gradients
   - file: fdtd-rotation-gradients
+  - file: fdtd-rotation-smoothing
   - file: fdtd-rayleigh
   - file: fdtd-enz
   - file: fdtd-layer-alignment

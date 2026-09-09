@@ -11,9 +11,19 @@ warnings.showwarning = lambda message, category, filename, lineno, file=None, li
     f'{category.__name__}: {message}', file=sys.stderr)
 
 
-def generate(output, resolution=40, duration=80., step=1e-4, subpixel_tol=1e-8):
+def generate(output, resolution=40, duration=80., step=1e-4, subpixel_tol=1e-8, smoothing=0., profile_grid=256):
     import meep as mp
     mp.verbosity(0)
+    if smoothing:
+        # The reference profile is an independent Fourier sinc series. Import
+        # only its NumPy helper; no FDTD geometry or solver builds these data.
+        sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+        from studies.fdtd_rotation_smoothing import density
+    if smoothing < 0 or smoothing > .6 or not np.isfinite(smoothing):
+        raise ValueError('smoothing must be finite and between zero and the period.')
+    if profile_grid < 8:
+        raise ValueError('profile_grid must be at least eight.')
+    profile_errors = []
     p = np.array([.37, .3])
     period, depth, length = .6, .2, 8.
     zr, zt, dt = -1., 1.2, .4/resolution
@@ -31,11 +41,29 @@ def generate(output, resolution=40, duration=80., step=1e-4, subpixel_tol=1e-8):
                                  e1=mp.Vector3(np.cos(angle), np.sin(angle), 0.),
                                  e2=mp.Vector3(-np.sin(angle), np.cos(angle), 0.),
                                  e3=mp.Vector3(0., 0., 1.), material=mp.Medium(epsilon=2.25))]
+            if smoothing:
+                weights = density(parameters, smoothing, profile_grid).T
+                material = mp.MaterialGrid(mp.Vector3(profile_grid, profile_grid, 0),
+                                           mp.Medium(epsilon=1.), mp.Medium(epsilon=2.25),
+                                           weights=weights, do_averaging=False, beta=0.)
+                geometry[1] = mp.Block(center=mp.Vector3(z=depth/2),
+                                       size=mp.Vector3(period, period, depth), material=material)
         sim = mp.Simulation(cell_size=mp.Vector3(period, period, length), dimensions=3, resolution=resolution,
                             boundary_layers=[mp.PML(1., direction=mp.Z)], Courant=.4, k_point=mp.Vector3(),
                             geometry=geometry, eps_averaging=True, subpixel_tol=subpixel_tol,
                             sources=[mp.Source(mp.CustomSource(pulse, end_time=25.), component=component,
                                                center=mp.Vector3(z=-2.), size=mp.Vector3(period, period, 0.))])
+        if smoothing and parameters is not None:
+            # Verify axes and sampling positions through the public geometry
+            # API, independently of the Yee grid and the scattering result.
+            sim.init_sim()
+            ix = (np.array([.207, .5, .602, .742, .848])*profile_grid).astype(int)
+            iy = (np.array([.152, .355, .422, .543])*profile_grid).astype(int)
+            epsilon = sim.get_epsilon_grid((ix+.5)*period/profile_grid-period/2,
+                                           (iy+.5)*period/profile_grid-period/2, np.array([depth/2]))
+            error = np.max(abs(epsilon-(1+1.25*weights[np.ix_(ix, iy)])))
+            assert error < 2e-12, 'MaterialGrid sampling differs from the prescribed Fourier profile.'
+            profile_errors.append(error)
         monitors = [sim.add_dft_fields([mp.Ex, mp.Ey], [1.], center=mp.Vector3(z=z),
                                        size=mp.Vector3(period, period, 0.), decimation_factor=1) for z in (zr, zt)]
         sim.run(until=until)
@@ -70,6 +98,9 @@ def generate(output, resolution=40, duration=80., step=1e-4, subpixel_tol=1e-8):
                         epsilon=2.25, ly=.18, centre=[.071, -.047], resolution=resolution,
                         durations=durations, deltas=deltas, dimensions=3, cell_length=length,
                         pml_thickness=1., courant=.4, subpixel_tol=subpixel_tol,
+                        shape_smoothing=smoothing, profile_grid=profile_grid if smoothing else 0,
+                        material_grid_averaging=False, profile_sampling='cell_centres' if smoothing else 'none',
+                        profile_probe_error=max(profile_errors, default=0.),
                         source_position=-2., monitor_positions=[zr, zt], pulse_width=2.5,
                         pulse_peak=12.5, source_end=25., amplitudes=values, jacobians=jacobians)
 
@@ -81,5 +112,7 @@ if __name__ == '__main__':
     parser.add_argument('--duration', type=float, default=80.)
     parser.add_argument('--step', type=float, default=1e-4)
     parser.add_argument('--subpixel-tol', type=float, default=1e-8)
+    parser.add_argument('--smoothing', type=float, default=0.)
+    parser.add_argument('--profile-grid', type=int, default=256)
     args = parser.parse_args()
-    generate(args.output, args.resolution, args.duration, args.step, args.subpixel_tol)
+    generate(args.output, args.resolution, args.duration, args.step, args.subpixel_tol, args.smoothing, args.profile_grid)

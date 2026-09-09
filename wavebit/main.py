@@ -93,9 +93,9 @@ def fdtd(stack=None, incidence=None, **kwargs):
     shape_smoothing averages transverse translations over static (x,y) widths;
     shape contacts can still have topology kinks. Two periods are required.
     ``shape_integration='area'`` accepts one rotated rectangle per layer and
-    differentiates its angle in radians. It requires zero shape_smoothing and
-    projected extents within the periods. Exact cell areas give arithmetic
-    transverse averages, with full y sampling even at angle zero. It is not
+    differentiates its angle in radians, with projected extents within periods.
+    Positive shape_smoothing uses exact polygon moments to average translations.
+    Cell integrals give arithmetic transverse averages, with full y sampling even at angle zero. It is not
     a full rotated effective tensor or a second-order accuracy guarantee.
     Their real scalar ``theta`` and ``phi`` can retain autodiff graphs when an
     explicit ``truncation_order`` fixes the output window. Array ``phi`` uses

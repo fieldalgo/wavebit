@@ -63,8 +63,10 @@ polygonization or intermediate raster is used.
 The actual clipping combinatorics can change. At generic vertex/cell contacts,
 the area and its first derivative have their geometric limits. Coincident
 parallel edges can instead have different one-sided slopes. There is no claim
-of globally C1 geometry or general higher derivatives. Positive
-`shape_smoothing` is refused on this initial area route.
+of globally C1 sharp geometry or general higher derivatives. The measurements
+on this page use zero smoothing. Positive `shape_smoothing` now uses
+[exact translated-polygon moments](fdtd-rotation-smoothing.md); its separate
+measurements distinguish the resulting graded profile from this sharp target.
 
 An independent oracle integrates vertical slice lengths, splitting at all
 vertex x coordinates and intersections with horizontal cell faces. Midpoint

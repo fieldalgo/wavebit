@@ -19,11 +19,11 @@ def amplitudes(result, xp=np, order=0):
                      for name in ('r_s', 'r_p', 't_s', 't_p')])
 
 
-def response(p, resolution=24, backend='jax', duration=60):
+def response(p, resolution=24, backend='jax', duration=60, smoothing=0.):
     from wavebit.backends.time_domain import time_loop_backend
     result = wavebit.fdtd(scene(p), wavebit.Incidence(wavelength=1.), backend=backend,
                           resolution=resolution, n_pml=resolution, n_periods=duration, pulse_width=2.5,
-                          truncation_order=0, align_layers=True, shape_integration='area',
+                          truncation_order=0, align_layers=True, shape_integration='area', shape_smoothing=smoothing,
                           diffraction_method='directional')
     return amplitudes(result, time_loop_backend(backend).xp)
 
