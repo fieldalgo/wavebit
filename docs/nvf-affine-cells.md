@@ -358,9 +358,69 @@ before JAX: q16/q24 discrepancies reach `3.17115e-10` in Gxy,
 `3.42389e-10` in Gyx and `4.46982e-10` in Gyy, exceeding the unchanged
 `3e-10` bound. Its small independent linear residuals do not override
 that check. This unaccepted point cannot extend the accepted spatial
-derivative ladder to x4 or establish a convergence rate. The independent
-quadrature arithmetic
-requires a separate stability check before this space can be accepted.
+derivative ladder to x4 or establish a convergence rate. The following
+stability check preserves that failed record and produces a separately
+validated x4 result.
+
+### Stabilized independent variation
+
+The independent oracle now forms the local element coordinate directly,
+avoiding loss of digits when subtracting nearly equal physical coordinates
+on the smallest graded elements. Kahan accumulation reduces cancellation
+in the same weak products. Each trace or body solve uses one balanced LU
+for its initial solution and three corrections, with compensated residuals
+evaluated against the original weak system. The equations, finite spaces,
+quadrature nodes, production kernel and acceptance guards are unchanged.
+This addresses arithmetic stability without increasing spatial resolution.
+
+New q16/q24 references qualify all three spaces. The integrated reference
+arrays equal the separately checked arithmetic prototype exactly. The x1
+and x2 production JAX arrays are reused without reevaluation after checking
+all seven production source hashes and the physical/settings metadata;
+each is compared anew with the changed oracle. Only x4 receives a new JAX
+evaluation. The log separates the old JAX provenance from the new oracle
+source and preserves both the original failed checkpoint and the new
+complete records, with all nine component arrays saved before validation.
+
+| x subdivisions | production unknowns | max q24-minus-q16 | max JAX-minus-oracle | cell residual |
+| --- | ---: | ---: | ---: | ---: |
+| 1 | 215 | 8.63001e-12 | 5.29690e-11 | 2.80323e-11 |
+| 2 | 431 | 7.20837e-11 | 2.32593e-10 | 1.43430e-10 |
+| 4 | 863 | 1.77110e-10 | 1.23021e-9 | 4.23393e-10 |
+
+All three pass the same respective guards `3e-10`, `3e-9` and `1e-8`.
+The accepted q24 differences below are derivatives per dimensionless g,
+with the physical normal gap still `490*g` nm. The material row denotes
+the physical permittivity coefficient, stored as `epsilon`.
+
+| component | max absolute x2-minus-x1 | max absolute x4-minus-x2 |
+| --- | ---: | ---: |
+| Bxx | 2.18920562e-4 | 2.01228240e-5 |
+| Bxy | 6.19188124e-4 | 5.94180900e-5 |
+| Byx | 7.34523460e-4 | 7.04298835e-5 |
+| Byy | 2.16715844e-3 | 2.07963313e-4 |
+| Gxx | 1.09100308e-3 | 8.93730170e-5 |
+| Gxy | 2.83072231e-3 | 2.71144089e-4 |
+| Gyx | 1.73598458e-3 | 1.66690964e-4 |
+| Gyy | 1.12081878e-3 | 1.06536749e-4 |
+| material | 6.75322301e-16 | 6.77599955e-16 |
+
+For x4-minus-x2, Gxy changes by
+`+1.74892692e-4 + 2.07199573e-4j` at mode `(1,-2)`; its magnitude is
+`2.71144089e-4`. The mean Gyy change is only
+`-8.81919436e-7 - 2.73702560e-7j`. Both intervals retain their signs and
+mode labels in the log. The old and new x2-minus-x1 oracle arrays differ
+by at most `2.21337e-10`; the reused JAX arrays and their first interval
+are identical. These two finite spatial differences do not establish a
+convergence rate, remaining-error bound, continuum derivative accuracy or
+optical derivative qualification.
+
+The new x4 JAX evaluation takes 3.342 s including compilation, with
+803,422,208 bytes of process peak RSS. Its independent q16/q24 evaluations
+take 2.298/4.447 s. The JAX process did not recompute x1/x2, so its peak
+cannot be compared with the earlier sequential process as memory scaling.
+The full contact regression, including the compensated-residual
+cancellation check, passes all five tests in 35.56 s.
 
 Run details are recorded in
 [the validation log](https://github.com/fieldalgo/wavebit/blob/develop/studies/results/nvf_affine_cell_validation.log).

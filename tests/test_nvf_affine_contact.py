@@ -3,11 +3,15 @@
 Reconstruct the integrated flux basis by piecewise physical quadrature, then
 solve the limiting trace and the first body variation separately. This oracle
 uses no production weak assembly, Fourier moments, projection, or autodiff.
-The geometry helper only supplies the finite space to be checked.
+The geometry helper only supplies the finite space to be checked. Compensated
+weak products and residuals control roundoff on the smallest graded elements.
 """
+from fractions import Fraction
+
 import numpy as np
 import pytest
 from numpy.polynomial.legendre import leggauss
+from scipy.linalg import lu_factor, lu_solve
 from scipy.special import eval_legendre
 from wavebit._core.conforming.affine_cell import AffineCellGapModel
 
@@ -29,7 +33,10 @@ def x_samples(model, profile, width, quadrature):
         left = np.eye(count)[element]
         change = np.eye(count)[(element+1) % count]-left
         length = lengths[element]
-        ra, rb, r = (a-nodes[element])/length, (b-nodes[element])/length, (x-nodes[element])/length
+        ra, rb = (a-nodes[element])/length, (b-nodes[element])/length
+        # Form the local coordinate before adding the physical origin. Recovering
+        # it from x-node loses digits on the smallest graded elements.
+        r = (ra+rb)/2+(rb-ra)/2*q
         fs.extend(cumulative+length/epsilon*(np.outer(r-ra, left)+np.outer((r*r-ra*ra)/2, change)))
         dfs.extend((left+np.outer(r, change))/epsilon)
         cumulative += length/epsilon*((rb-ra)*left+(rb*rb-ra*ra)/2*change)
@@ -75,9 +82,69 @@ def y_samples(model, quadrature):
     return np.array(times), np.array(weights), h, dh
 
 
+def compensated_dot(a, b):
+    """Kahan accumulation of the unchanged weak inner products."""
+    a, b = np.asarray(a), np.asarray(b)
+    vector = a.ndim == 1
+    if vector:
+        a = a[None]
+    total = np.zeros((a.shape[0], b.shape[1]), dtype=np.result_type(a, b))
+    correction = np.zeros_like(total)
+    for k in range(a.shape[1]):
+        term = a[:, k, None]*b[k, None, :]-correction
+        updated = total+term
+        correction = (updated-total)-term
+        total = updated
+    return total[0] if vector else total
+
+
+def product_with_error(a, b):
+    """Split a real double product into its rounded value and rounding error.
+
+    Oracle matrices are bounded finite doubles, away from overflow/underflow;
+    this arithmetic helper is not a general extended-precision array backend.
+    """
+    product = a*b
+    split_a, split_b = 134217729.*a, 134217729.*b
+    a_hi, b_hi = split_a-(split_a-a), split_b-(split_b-b)
+    a_lo, b_lo = a-a_hi, b-b_hi
+    return product, ((a_hi*b_hi-product)+a_hi*b_lo+a_lo*b_hi)+a_lo*b_lo
+
+
+def compensated_residual(matrix, solution, right):
+    """Accumulate right-M solution with compensated real products and sums."""
+    result = right.copy()
+    for column in range(solution.shape[1]):
+        totals = [np.zeros(matrix.shape[0]) for _ in range(2)]
+        errors = [np.zeros(matrix.shape[0]) for _ in range(2)]
+        for k in range(matrix.shape[1]):
+            a, b = matrix[:, k], solution[k, column]
+            ac, ace = product_with_error(a.real, b.real)
+            bd, bde = product_with_error(a.imag, b.imag)
+            ad, ade = product_with_error(a.real, b.imag)
+            bc, bce = product_with_error(a.imag, b.real)
+            for part, high_terms, low in ((0, (ac, -bd), ace-bde), (1, (ad, bc), ade+bce)):
+                for term in high_terms:
+                    old = totals[part]
+                    updated = old+term
+                    remainder = updated-old
+                    errors[part] += (old-(updated-remainder))+(term-remainder)
+                    totals[part] = updated
+                errors[part] += low
+        result[:, column] = ((right[:, column].real-totals[0])-errors[0]
+                             +1j*((right[:, column].imag-totals[1])-errors[1]))
+    return result
+
+
 def balanced_solve(matrix, right):
+    """One balanced LU, refined against the original independent weak system."""
     scale = 1/np.sqrt(abs(np.diag(matrix)))
-    return scale[:, None]*np.linalg.solve(scale[:, None]*matrix*scale[None], scale[:, None]*right)
+    factor = lu_factor(scale[:, None]*matrix*scale[None])
+    solution = scale[:, None]*lu_solve(factor, scale[:, None]*right)
+    for _ in range(3):
+        defect = compensated_residual(matrix, solution, right)
+        solution += scale[:, None]*lu_solve(factor, scale[:, None]*defect)
+    return solution
 
 
 def contact_derivative(model, profile, width, basis, quadrature=24):
@@ -91,8 +158,8 @@ def contact_derivative(model, profile, width, basis, quadrature=24):
     base[:, 0, 0] = lift
     base[:, 0, 1] = metric[0, 1]/metric[0, 0]*(lift-1)
     flux = metric@base
-    mass = (f.conj().T*wx)@f
-    forcing = f.conj().T@((wx*(epsilon-1))[:, None]*flux[:, 1])
+    mass = compensated_dot(f.conj().T*wx, f)
+    forcing = compensated_dot(f.conj().T, (wx*(epsilon-1))[:, None]*flux[:, 1])
     a = balanced_solve(metric[1, 1]*mass, forcing)
     trace = f@a
     # Differentiated periodic body problem, with the known linear trace ramp.
@@ -101,12 +168,12 @@ def contact_derivative(model, profile, width, basis, quadrature=24):
     for i, hy in enumerate((h, dh)):
         for j, ky in enumerate((h, dh)):
             fx, kx = (df, f)[i], (df, f)[j]
-            pack = (fx.conj().T*(wx*epsilon))@kx
-            matrix += metric[i, j]*np.kron((hy.T*wy)@ky, pack)
+            pack = compensated_dot(fx.conj().T*(wx*epsilon), kx)
+            matrix += metric[i, j]*np.kron(compensated_dot(hy.T*wy, ky), pack)
             weight = wy*(t if j == 0 else 1)
-            right += metric[i, j]*(weight@hy)[:, None, None]*(pack@a)[None]
+            right += metric[i, j]*compensated_dot(weight, hy)[:, None, None]*(pack@a)[None]
     gap_flux = flux[:, 0]+metric[0, 1]*trace
-    right[0] -= df.conj().T@(wx[:, None]*gap_flux)
+    right[0] -= compensated_dot(df.conj().T, wx[:, None]*gap_flux)
     solution = np.zeros((model.rows*model.nx, 2), complex)
     solution[1:] = balanced_solve(matrix[1:, 1:], right.reshape(-1, 2)[1:])
     v = solution.reshape(model.rows, model.nx, 2)
@@ -130,6 +197,29 @@ def contact_derivative(model, profile, width, basis, quadrature=24):
     eps = boundary_phase[:, None]*(xwave@(1-epsilon))[None]
     return np.stack([field[..., 0, 0], field[..., 0, 1], field[..., 1, 0], field[..., 1, 1],
                      gram[..., 0, 0], gram[..., 0, 1], gram[..., 1, 1], eps, gram[..., 1, 0]])
+
+
+def test_compensated_complex_residual_matches_exact_rational_cancellation():
+    small, large = 2.**-27, 2.**53
+    matrix = np.array([[1+small, 1, -1, 0],
+                       [0, large+1j, 1+1j, -large+1j],
+                       [1j*(1+small), -1j, 0, 0]], complex)
+    solution = np.outer([1-small, 1, 1, 1], [1, 1j])
+    right = np.outer([1, 0, 0], [1, 1j])
+    expected = np.empty(right.shape, complex)
+    # Exact rational arithmetic on the original double operands independently
+    # retains both a sub-ulp product term and an order-one cancelled sum.
+    for row in range(len(matrix)):
+        for column in range(solution.shape[1]):
+            real, imag = Fraction(float(right[row, column].real)), Fraction(float(right[row, column].imag))
+            for a, b in zip(matrix[row], solution[:, column]):
+                ar, ai = Fraction(float(a.real)), Fraction(float(a.imag))
+                br, bi = Fraction(float(b.real)), Fraction(float(b.imag))
+                real -= ar*br-ai*bi
+                imag -= ar*bi+ai*br
+            expected[row, column] = complex(float(real), float(imag))
+    np.testing.assert_array_equal(expected, np.outer([2.**-54, -1-3j, 1j*2.**-54], [1, 1j]))
+    np.testing.assert_array_equal(compensated_residual(matrix, solution, right), expected)
 
 
 @pytest.mark.parametrize('profile,body_degree,gap_degree,grade_y,shear,batch_size', [

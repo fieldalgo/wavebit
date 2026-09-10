@@ -1339,3 +1339,13 @@ checks every projected component through coefficient cap 2 for four real
 or complex profiles and mesh configurations. This verifies differentiation
 of those finite cells; continuum derivative convergence and oblique optical
 contact accuracy remain open.
+
+The [contact x-refinement study](nvf-affine-cells.md#contact-opening-under-x-refinement)
+now includes subdivisions 1, 2 and 4 under the same independent quadrature
+and derivative guards. Forming element coordinates locally and compensating
+the independent weak products and residuals resolves the original x4
+roundoff failure. The x4 JVP/reference difference is `1.23021e-9`, below
+the unchanged `3e-9` guard. The largest coefficient-derivative change from
+x2 to x4 is still `2.71144e-4` per dimensionless opening fraction. This
+checks the finite-cell derivative and measures its spatial sensitivity;
+it does not establish a continuum error bound or an optical derivative.
