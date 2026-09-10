@@ -96,6 +96,9 @@ properties every one of them carries.
 .. autoclass:: wavebit.ConformingNVF
    :members:
 
+.. autoclass:: wavebit.AffineProfileNVF
+   :members:
+
 ```
 
 

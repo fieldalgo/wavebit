@@ -1197,7 +1197,10 @@ physical rectangles, the supplied cell-center convention and the exact
 original Fourier set. The internal [full-metric affine cell](nvf-affine-cells.md)
 now handles affine images of reference strip profiles on genuinely
 nonorthogonal lattices, including their mixed weak terms and exact laminated
-contact lift. Such a shear turns reference rectangles into parallelograms;
+contact lift. The separate public
+[`AffineProfileNVF`](guide/affine-profile-nvf.md) now accepts this explicit
+fractional-profile contract, with live lattice, material and offset values.
+Such a shear turns reference rectangles into parallelograms;
 it is not applied to ordinary physical rectangle dictionaries. General
 physical-rectangle input and oblique optical accuracy qualification remain
 open.

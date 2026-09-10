@@ -70,6 +70,11 @@ This builder does not select a different NVF or
 Li factorization for unsupported input. The existing circular shape NVF
 remains available through the ordinary solver API.
 
+For explicit affine images of fractional profiles on nonorthogonal lattices,
+use [`AffineProfileNVF`](affine-profile-nvf.md). That builder takes fractional
+widths, heights and material intervals; it does not reinterpret the physical
+rectangle inputs described here.
+
 ## Equivalent lattice bases
 
 A skew basis can describe an orthogonal point lattice. For example,

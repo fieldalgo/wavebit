@@ -9,8 +9,10 @@
 | `material_grading.py` | How can mesh resolution follow magnitude and phase material jumps and merge coincident interfaces while parameters stay differentiable? |
 | `polynomial_body.py` | How do real and complex polynomial-body cells retain their contact traces and full energy projection? |
 | `affine_cell.py` | How does an affine reference profile retain the full oblique metric, exact laminated contact and stable opening derivative, physical field frame and exact directional Fourier set? |
+| `affine_profile.py` | How do explicit fractional profiles on nonorthogonal lattices preserve physical materials, offsets, contact and the caller's Fourier modes? |
 
 These kernels build constitutive data. Optical study fixtures and their
-fixed-wavelength propagators remain in `studies/`. The public entry point is
-`wavebit.ConformingNVF`; direct kernel inputs retain the historical reference
-length and are implementation details.
+fixed-wavelength propagators remain in `studies/`. The public entry points are
+`wavebit.ConformingNVF` for physical rectangle layers and
+`wavebit.AffineProfileNVF` for explicit fractional profiles. Direct kernel
+inputs retain the historical reference length and are implementation details.

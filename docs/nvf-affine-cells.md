@@ -17,7 +17,12 @@ an affine lift with the exact laminated contact flux, and conversion back
 to laboratory electric-field components. Its matrices feed `solve_conv`
 with the same physical lattice and retained order set.
 
-This is a cell-kernel extension. The public `ConformingNVF` shape adapter
+The public [`AffineProfileNVF`](guide/affine-profile-nvf.md) adapter now
+accepts explicit fractional width, height and ordered material intervals
+on the supplied physical lattice. It preserves the original Fourier
+labels, restores the physical background before energy closure and
+translates the centered profile to the engine's Fourier origin.
+The `ConformingNVF` shape adapter
 still accepts physical rectangles on orthogonal point lattices, including
 the [equivalent-basis construction](nvf-lattice-rebasing.md). A continuous
 shear maps a reference rectangle to a parallelogram. The new kernel does
@@ -304,5 +309,10 @@ continuum opening-derivative convergence nor an optical contact derivative.
 
 Run details are recorded in
 [the validation log](https://github.com/fieldalgo/wavebit/blob/develop/studies/results/nvf_affine_cell_validation.log).
-General physical-rectangle input, an explicit public affine-shape contract,
-and optical convergence qualification remain open.
+The explicit fractional-profile public contract is implemented separately
+from ordinary rectangle input. Its NumPy/JAX acceptance checks cover
+physical material Fourier integrals, the analytic reciprocal-normal
+contact rule, diagonal rectangle equivalence, exact mode selection,
+rigid motions, physical scaling, passive complex backgrounds, live
+geometry/material derivatives and invalid updates. General
+physical-rectangle input and optical convergence qualification remain open.
