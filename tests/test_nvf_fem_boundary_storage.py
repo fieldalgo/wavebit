@@ -55,6 +55,7 @@ class FEMBoundaryStorageTests(unittest.TestCase):
         original_inverse = ng.BaseMatrix.Inverse
         for condense in (False, True):
             factorizations, applications = [], []
+            events = []
 
             class CountedInverse:
                 def __init__(self, matrix):
@@ -68,9 +69,13 @@ class FEMBoundaryStorageTests(unittest.TestCase):
                 factorizations.append(None)
                 return CountedInverse(original_inverse(matrix, *args, **kwargs))
 
+            def progress(record):
+                events.append((record, len(applications)))
+
             with patch.object(ng.BaseMatrix, 'Inverse', inverse):
                 result = self.reference.solve_affine_rayleigh(
-                    .2, 3, 1, theta=.31, phi=.23, condense=condense)
+                    .2, 3, 1, theta=.31, phi=.23, condense=condense,
+                    progress=progress, boundary_progress_every=np.int64(16) if condense else None)
             results.append(result)
             with self.subTest(condense=condense):
                 self.assertEqual(len(factorizations), 1)
@@ -82,6 +87,19 @@ class FEMBoundaryStorageTests(unittest.TestCase):
                                  2*result['boundary_dofs']*result['rank']*16)
                 for pol in ('p', 's'):
                     self.assertLess(result[pol]['residual'], 1e-11)
+                stages = [record['stage'] for record, _ in events]
+                if condense:
+                    self.assertEqual(stages, ['mesh', 'factorized']
+                                     + ['boundary_progress']*3 + ['boundary'])
+                    self.assertEqual([record['boundary_columns_completed']
+                                      for record, _ in events[2:-1]], [16, 32, 36])
+                    for record, applied in events[2:-1]:
+                        self.assertEqual(record['boundary_columns_total'], result['rank'])
+                        self.assertEqual(applied, 2+record['boundary_columns_completed'])
+                        for key in ('dofs', 'rank', 'settings', 'periodic_pairs'):
+                            self.assertEqual(record[key], result[key])
+                else:
+                    self.assertEqual(stages, ['mesh', 'factorized', 'boundary'])
 
         full, condensed = results
         self.assertEqual(full['modes'], condensed['modes'])
@@ -96,6 +114,48 @@ class FEMBoundaryStorageTests(unittest.TestCase):
                 self.assertAlmostEqual(full[pol]['robin_complement_power'][side],
                                        condensed[pol]['robin_complement_power'][side],
                                        delta=2e-10)
+
+    def test_boundary_callback_can_abort_before_the_next_inverse(self):
+        original_inverse = ng.BaseMatrix.Inverse
+        factorizations, applications, events = [], [], []
+
+        class AbortReference(RuntimeError):
+            pass
+
+        class CountedInverse:
+            def __init__(self, matrix):
+                self.matrix = matrix
+
+            def __mul__(self, rhs):
+                applications.append(None)
+                return self.matrix*rhs
+
+        def inverse(matrix, *args, **kwargs):
+            factorizations.append(None)
+            return CountedInverse(original_inverse(matrix, *args, **kwargs))
+
+        def progress(record):
+            events.append(record)
+            if record['stage'] == 'boundary_progress':
+                raise AbortReference('caller resource guard')
+
+        with patch.object(ng.BaseMatrix, 'Inverse', inverse), self.assertRaises(AbortReference):
+            self.reference.solve_affine_rayleigh(
+                .2, 2, 1, progress=progress, boundary_progress_every=8)
+        self.assertEqual(len(factorizations), 1)
+        self.assertEqual(len(applications), 2+8)
+        self.assertEqual([record['stage'] for record in events],
+                         ['mesh', 'factorized', 'boundary_progress'])
+        self.assertEqual(events[-1]['boundary_columns_completed'], 8)
+        self.assertEqual(events[-1]['boundary_columns_total'], 36)
+
+    def test_invalid_boundary_progress_interval_is_rejected_before_meshing(self):
+        with patch.object(self.reference, 'make_affine_profile_mesh') as make_mesh:
+            for interval in (True, np.bool_(False), 0, -1, 1.5, '8', np.nan):
+                with self.subTest(interval=interval), self.assertRaisesRegex(
+                        ValueError, 'boundary_progress_every'):
+                    self.reference.solve_affine_rayleigh(boundary_progress_every=interval)
+            make_mesh.assert_not_called()
 
 
 if __name__ == '__main__':

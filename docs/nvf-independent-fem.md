@@ -1110,5 +1110,20 @@ pad=.2, edge_h=.12, film_degree=6, film_degree_pad=.05)`.
 For the separate physical-corner mesh control, use
 `solve_affine_rayleigh(h=.18, order=5, cut=4, pad=.2, edge_h=.12,
 vertex_h=.07)`; no film-degree enrichment is selected by that call.
+
+For resource monitoring, the optional `progress` callback receives `mesh`,
+`factorized` and `boundary` records. Setting `boundary_progress_every=32`
+also emits `boundary_progress` after each 32 completed trace inverse
+applications and after the last trace. The fields
+`boundary_columns_completed` and `boundary_columns_total` count completed
+traces, not the percentage of the entire solve. A caller can raise from the
+callback to abort before the next trace, including when an observed RSS
+limit is exceeded. This is not a hard memory cap: it cannot interrupt
+native assembly or inverse calls, and the two final full-field corrections
+still follow the boundary stage. The default `None` preserves the original
+callback sequence. Boundary-storage tests compare the full and condensed
+physical solutions with reporting disabled/enabled, count actual inverse
+applications, and verify that a callback exception stops before the next one.
+
 Selected results, with prototype-versus-packaged flux provenance, are retained in
 [`studies/results/nvf_fem_reference.log`](../studies/results/nvf_fem_reference.log).

@@ -711,7 +711,7 @@ def robin_complement_power(mesh, scattered_field, ports, *, area, theta,
 def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
                           *, transform=None, theta=THETA, phi=0., condense=True,
                           quadrature_bonus=6, edge_h=None, vertex_h=None, film_degree=None,
-                          film_degree_pad=0., progress=None):
+                          film_degree_pad=0., progress=None, boundary_progress_every=None):
     """Independent affine H(curl) FEM with shared p/s Rayleigh boundary solves.
 
     The physical profile is fixed to the .7-micrometer reference cell, width
@@ -742,6 +742,13 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
     the trace bonus to 2*cut+bonus, and flux/norm readout order to
     2*max_order+bonus, including any local film degree enrichment.
     The polynomial bulk and local Robin forms retain their default quadrature.
+
+    ``boundary_progress_every`` optionally reports after that many completed
+    trace inverse applications, and after the final trace. The callback receives
+    a ``boundary_progress`` stage and completed/total boundary-column counts.
+    Raising from the callback aborts before the next trace; native assembly and
+    inverse calls themselves are not interruptible through this callback.
+    The default None preserves the original three progress stages.
     """
     from studies.nvf_fem_space import make_affine_hcurl_space
 
@@ -757,6 +764,12 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
         raise ValueError('quadrature_bonus must be a nonnegative integer')
     order, condense = int(order), bool(condense)
     quadrature_bonus = int(quadrature_bonus)
+    if boundary_progress_every is not None:
+        if (isinstance(boundary_progress_every, (bool, np.bool_))
+                or not isinstance(boundary_progress_every, (int, np.integer))
+                or boundary_progress_every < 1):
+            raise ValueError('boundary_progress_every must be a positive integer or None')
+        boundary_progress_every = int(boundary_progress_every)
     theta, phi = _affine_incidence(theta, phi)
     transform = np.asarray([[1., .45], [0., .7]] if transform is None else transform)
     if (transform.shape != (2, 2) or transform.dtype.kind not in 'iuf'
@@ -825,9 +838,9 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
                     periodic_pairs=periodic_counts(mesh, lattice),
                     modes=[list(mode) for mode in modes])
 
-    def report(stage):
+    def report(stage, **details):
         if progress is not None:
-            progress(dict(stage=stage, **metadata, seconds=time.monotonic()-start))
+            progress(dict(stage=stage, **metadata, seconds=time.monotonic()-start, **details))
 
     report('mesh')
     with ng.TaskManager():
@@ -849,6 +862,7 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
         responses = np.zeros_like(traces)
         correction = np.zeros((rank, rank), complex)
         reciprocal = 2*np.pi*np.linalg.inv(lattice).T
+        completed = 0
         for side_index, (side, eps_half) in enumerate(sides):
             blocks = port_data[side_index][1]
             for mode_index, (m, n) in enumerate(modes):
@@ -865,6 +879,11 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
                     response = trace.vec.CreateVector()
                     response.data = inverse*trace.vec
                     responses[:, column] = response.FV().NumPy()[boundary]
+                    completed += 1
+                    if boundary_progress_every is not None and (
+                            completed % boundary_progress_every == 0 or completed == rank):
+                        report('boundary_progress', boundary_columns_completed=completed,
+                               boundary_columns_total=rank)
         report('boundary')
         small = np.eye(rank)+correction@(traces.conj().T@responses)
         right = correction@(traces.conj().T@base[boundary])
