@@ -1202,6 +1202,12 @@ it is not applied to ordinary physical rectangle dictionaries. General
 physical-rectangle input and oblique optical accuracy qualification remain
 open.
 
+The [global-degree-7 FEM attempt](nvf-independent-fem.md#resource-limited-global-degree-7)
+on the vertex-.070 mesh stops at 32 of 324 boundary responses after its
+8-GiB RSS guard is exceeded. It produces no optical value. Smaller
+spaces have been checked for their dimensions, but those counts do not
+complete the missing degree interval or certify a memory bound.
+
 The [independent affine comparison](nvf-affine-convergence.md) now separates
 auxiliary-cell refinement from directional optical truncation. A fitted
 static FEM reference reaches a relative primal/complementary enclosure of

@@ -879,6 +879,40 @@ measurements describe different finite approximations, not equal-accuracy
 performance. The higher cost does not resolve the remaining degree
 sensitivity.
 
+## Resource-limited global degree 7
+
+Raising the target-.070 vertex mesh to global degree 7 retains 1,002
+tetrahedra and periodic pair counts 25/62, but increases the full/coupling
+space to 227,280/107,040 unknowns. The 2,880 outer-boundary unknowns retain
+29,859,840 bytes of trace/response arrays. These counts pass the
+pre-assembly space limits; they do not bound factorization memory.
+
+With the optional boundary progress callback, factorization finishes at
+335.696 s with reported process peak RSS 4,759,371,776 bytes. After the
+first 32 of 324 trace inverse applications, at 521.971 s, peak RSS reaches
+9,447,981,056 bytes and the caller's unchanged 8-GiB RSS guard raises.
+The next trace and the optical readout are not evaluated. A separate
+process-specific `vmmap` observation during boundary responses reports
+physical footprint 10.8G, peak footprint 17.1G and 8.8G swapped out; these
+retain the tool's units and displayed precision. Footprint, RSS and the
+small retained boundary arrays have different accounting scopes.
+
+This attempt returns no optical result and cannot extend the degree
+ladder or define a stopping criterion. It demonstrates why checking RSS
+only after factorization is insufficient. Even the new callback can
+detect a limit only between completed native calls.
+
+A mesh-only check identifies a smaller global-degree-7 interval on the
+existing edge-.12 mesh without the extra vertex restriction: 780
+tetrahedra, periodic pairs 22/36, full/coupling counts 177,232/83,632 and
+the same 2,880 boundary unknowns. Its degree-5 and degree-6 baselines
+already exist. This changes the mesh branch of the study; it is not a
+replacement value for the unfinished vertex-.070 result. A separate
+base-6/film-7 space on this smaller mesh has 149,287/74,187 unknowns
+without an added film neighborhood, or 160,774/76,824 with a .05
+neighborhood. Those counts are preflights, not solved fields or memory
+guarantees. None relaxes the existing linear, power or optical controls.
+
 ## Comparing the physical diffraction orders with Wavebit
 
 Both solvers use `k_parallel=k_incident+G`. At the saved Wavebit optical
