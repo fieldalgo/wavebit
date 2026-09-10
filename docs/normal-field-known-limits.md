@@ -1256,6 +1256,15 @@ now reduces the observed degree-4-to-5 p/s transmission variation by
 degree increments reverse sign between the original and refined meshes;
 this finite comparison does not bound the remaining optical error.
 
+The subsequent [fixed-mesh degree control](nvf-independent-fem.md#raising-the-film-degree-on-a-fixed-mesh)
+still changes p/s T by `+1.09803e-4`/`+1.14131e-4` from global FEM
+degree 5 to 6 on the target-.12 mesh. A film-band-only increase misses
+individual-order changes up to `5.74162e-5`/`2.33078e-5` that appear
+when the remaining space, including the outer boundary, also reaches
+degree 6. These changes prevent assigning an independent optical
+reference uncertainty from the small energy budget. Separate physical
+vertex sizing supplies another mesh control; it does not certify an oracle.
+
 The [reference-degree refinement at (24,32)](nvf-affine-convergence.md#reference-degree-refinement-at-y32)
 raises the fitted field from degree 8 to 10 at fixed optical order. The
 p/s transmission changes are about `1.2e-8`/`2.7e-8`; the latter is about

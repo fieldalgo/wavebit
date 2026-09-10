@@ -486,6 +486,15 @@ subsequently reduces the measured degree-4-to-5 transmission change by
 mesh, with larger cost at fixed degree, and still supplies no optical
 error bound.
 
+The independent Maxwell instrument's
+[fixed-mesh degree-5-to-6 comparison](nvf-independent-fem.md#raising-the-film-degree-on-a-fixed-mesh)
+on an edge-refined physical mesh still changes p/s transmission by
+`+1.09803e-4`/`+1.14131e-4`. Raising only the film neighborhood hides
+further individual-order changes behind smaller total changes. The
+independent optical uncertainty remains open despite much smaller
+energy-budget remainders; these FEM degrees are separate from the
+two-dimensional auxiliary-field degree comparison below.
+
 ## Reference degree refinement at y=32
 
 The degree-10 fitted field is now exported through coefficient cap 64,

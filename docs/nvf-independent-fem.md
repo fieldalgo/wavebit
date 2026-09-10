@@ -532,6 +532,41 @@ dominates the optical error or that the refined optical result is
 closer to the continuum solution. Results record the requested
 `vertex_h` in both the top-level metadata and settings.
 
+The first optical intervals keep global degree 5, h=.18, edge target
+.12, outgoing pad .2, Rayleigh cut 4 and quadrature bonus 6 fixed:
+
+| vertex target | tetrahedra | full / condensed unknowns | p T | s T |
+| ---: | ---: | ---: | ---: | ---: |
+| none | 780 | 71,796 / 43,716 | .852038068565 | .730662922035 |
+| .070 | 1,002 | 92,016 / 55,944 | .852108495556 | .730802741386 |
+| .065 | 1,093 | 100,428 / 61,080 | .852094870566 | .730861555984 |
+
+Adding target .070 changes p/s T by `+7.04270e-5`/`+1.39819e-4`;
+the largest individual R/T changes are `8.80527e-5`/`2.09671e-4`.
+Reducing the target from .070 to .065 changes T by
+`-1.36250e-5`/`+5.88146e-5`, with individual changes up to
+`5.28178e-5`/`7.30630e-5`. The p increment reverses sign and its
+total again hides larger individual-order changes. These targets
+regenerate different meshes, not a nested finite-element space, and
+do not establish a convergence rate or remaining-error estimate.
+The boundary space also changes from 1,584 to 1,848 unknowns between
+the two vertex targets, even at the same Rayleigh cut. Consequently,
+the observed change cannot be attributed only to corner-adjacent cells.
+
+The .065 modal/volume discrepancies are `9.17e-6`/`5.35e-6`, larger
+than `5.45e-6`/`2.55e-6` at .070. Its energy errors remain only
+`2.43e-8`/`1.62e-8`, while signed remaining budgets are
+`-3.77e-8`/`-1.99e-8`. The smaller geometric target therefore does
+not monotonically improve the optical diagnostics. Degree sensitivity
+must still be checked on vertex-refined meshes.
+
+The .070 and .065 solves take 231.82 and 260.27 s, with peak process
+RSS 4.032 and 3.816 GB. The larger unknown count does not give a
+larger observed process peak in these two runs; sparse factorization
+structure and shared-host observations must be kept separate from
+simple DOF counts. These timings compare different finite solutions,
+not performance at an established equal accuracy.
+
 ## Retaining only boundary rows of the Fourier responses
 
 The affine solver originally stored two complex arrays with shape
@@ -689,8 +724,9 @@ degree gives:
 | --- | ---: | ---: | ---: | ---: |
 | global degree 5 | .852038068565 | .730662922035 | 9.98735e-6 | 5.47086e-6 |
 | degree 5, film band degree 6 | .852128153667 | .730772027375 | 6.03287e-6 | 3.61977e-6 |
+| global degree 6 | .852147871193 | .730777052860 | 5.32953e-6 | 2.62282e-6 |
 
-The p/s total changes are `+9.00851e-5`/`+1.09105e-4`, with maximum
+The p/s changes to the film-band space are `+9.00851e-5`/`+1.09105e-4`, with maximum
 individual R/T changes `9.00954e-5`/`1.09111e-4`. The refined row has
 energy errors of `1.51e-8`/`7.58e-9`, omitted Robin powers of
 `1.48e-8`/`4.25e-9`, and signed remaining budgets of
@@ -702,6 +738,28 @@ There is some cancellation between transmitting orders. In particular,
 the s `(-1,0)` difference from the finite Wavebit row grows from
 `-1.17534e-5` to `-2.51812e-5` even though total T moves closer.
 This comparison does not show improvement in every diffraction order.
+
+Completing the same-mesh increase to global degree 6 changes total T
+by another `+1.97175e-5`/`+5.02549e-6`. That increase also raises the
+outer-boundary space from 1,584 to 2,184 unknowns, so it is not solely
+an exterior-cell interior-basis change. Both degree-6 readouts use
+quadrature order 18. The transmitting-order changes expose cancellation:
+
+| T order | global 5 to 6, p | global 5 to 6, s | film-band 6 to global 6, p | film-band 6 to global 6, s |
+| --- | ---: | ---: | ---: | ---: |
+| (-1,-1) | +4.49134e-6 | +1.79042e-5 | -1.31212e-6 | +4.63624e-7 |
+| (-1,0) | +1.44154e-4 | +9.87997e-6 | +5.74162e-5 | +2.33078e-5 |
+| (0,0) | -3.88424e-5 | +8.63466e-5 | -3.63865e-5 | -1.87459e-5 |
+| total | +1.09803e-4 | +1.14131e-4 | +1.97175e-5 | +5.02549e-6 |
+
+The largest individual local-to-global R/T changes are
+`5.74162e-5`/`2.33078e-5`, substantially larger than the corresponding
+total changes. The global-degree-6 signed energy remainders are
+`-1.77e-9`/`-6.10e-10`, yet modal/volume disagreements remain
+`5.33e-6`/`2.62e-6`. No optical error bound or convergence rate follows.
+This solve takes 340.82 s with peak process RSS 4.584 GB; its two
+retained boundary arrays occupy 21.59 MiB. The cost comparison covers
+different finite spaces on a shared host.
 
 ## Comparing the physical diffraction orders with Wavebit
 
