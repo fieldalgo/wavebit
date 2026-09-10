@@ -495,6 +495,13 @@ independent optical uncertainty remains open despite much smaller
 energy-budget remainders; these FEM degrees are separate from the
 two-dimensional auxiliary-field degree comparison below.
 
+The completed [vertex/degree rectangle](nvf-independent-fem.md#separating-vertex-and-degree-refinement)
+still gives p/s degree-5-to-6 changes of `+9.00952e-5`/`+7.22772e-5`
+on the vertex-target-.070 mesh. At degree 6, adding that target changes
+T by `+5.07196e-5`/`+9.79657e-5`, with larger cancelling changes in
+individual orders. Both refinement axes remain relevant; a tiny energy
+budget does not qualify an independent optical reference.
+
 ## Reference degree refinement at y=32
 
 The degree-10 fitted field is now exported through coefficient cap 64,

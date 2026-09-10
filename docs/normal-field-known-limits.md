@@ -1265,6 +1265,13 @@ degree 6. These changes prevent assigning an independent optical
 reference uncertainty from the small energy budget. Separate physical
 vertex sizing supplies another mesh control; it does not certify an oracle.
 
+The completed [vertex/degree comparison](nvf-independent-fem.md#separating-vertex-and-degree-refinement)
+finds smaller degree-5-to-6 changes on the target-.070 mesh, but they
+remain `+9.00952e-5`/`+7.22772e-5` in p/s T. Adding vertex sizing at
+degree 6 changes individual powers by up to `5.90348e-5`/`1.53018e-4`.
+The mixed difference does not bound the remaining error; independent
+optical qualification remains open.
+
 The [reference-degree refinement at (24,32)](nvf-affine-convergence.md#reference-degree-refinement-at-y32)
 raises the fitted field from degree 8 to 10 at fixed optical order. The
 p/s transmission changes are about `1.2e-8`/`2.7e-8`; the latter is about

@@ -557,8 +557,9 @@ The .065 modal/volume discrepancies are `9.17e-6`/`5.35e-6`, larger
 than `5.45e-6`/`2.55e-6` at .070. Its energy errors remain only
 `2.43e-8`/`1.62e-8`, while signed remaining budgets are
 `-3.77e-8`/`-1.99e-8`. The smaller geometric target therefore does
-not monotonically improve the optical diagnostics. Degree sensitivity
-must still be checked on vertex-refined meshes.
+not monotonically improve the optical diagnostics. The matched
+[degree comparison below](#separating-vertex-and-degree-refinement)
+checks degree sensitivity on the target-.070 mesh.
 
 The .070 and .065 solves take 231.82 and 260.27 s, with peak process
 RSS 4.032 and 3.816 GB. The larger unknown count does not give a
@@ -760,6 +761,61 @@ total changes. The global-degree-6 signed energy remainders are
 This solve takes 340.82 s with peak process RSS 4.584 GB; its two
 retained boundary arrays occupy 21.59 MiB. The cost comparison covers
 different finite spaces on a shared host.
+
+## Separating vertex and degree refinement
+
+Completing global degree 6 on the target-.070 mesh gives a two-by-two
+comparison of vertex sizing and degree. All four rows retain h=.18,
+edge target .12, pad .2, Rayleigh cut 4 and quadrature bonus 6:
+
+| vertex target | global FEM degree | p T | s T |
+| --- | ---: | ---: | ---: |
+| none | 5 | .852038068565 | .730662922035 |
+| none | 6 | .852147871193 | .730777052860 |
+| .070 | 5 | .852108495556 | .730802741386 |
+| .070 | 6 | .852198590802 | .730875018549 |
+
+Degree is assigned after mesh generation. Within each degree pair,
+the recorded geometry, element counts and periodic-pair summaries match;
+the historical output does not include exact mesh-topology fingerprints.
+The vertex change regenerates the mesh and can alter elements away
+from the selected corners. It is not a nested spatial refinement.
+
+| change | p total T | s total T | largest individual p R/T change | largest individual s R/T change |
+| --- | ---: | ---: | ---: | ---: |
+| vertex target none to .070, degree 5 | +7.04270e-5 | +1.39819e-4 | 8.80527e-5 | 2.09671e-4 |
+| vertex target none to .070, degree 6 | +5.07196e-5 | +9.79657e-5 | 5.90348e-5 | 1.53018e-4 |
+| degree 5 to 6, without vertex target | +1.09803e-4 | +1.14131e-4 | 1.44154e-4 | 1.14144e-4 |
+| degree 5 to 6, vertex target .070 | +9.00952e-5 | +7.22772e-5 | 1.15136e-4 | 7.22608e-5 |
+
+The mixed difference, defined as the degree increment with target .070
+minus the degree increment without it, is `-1.97074e-5`/`-4.18537e-5`
+for p/s total T. The observed degree variation is smaller on the
+vertex mesh, but both refinement axes still change individual powers
+by about `1e-4`. Neither this mixed difference nor either interval
+estimates the remaining error. For example, the degree-6 spatial change
+in s T combines `+2.87469e-5`, `-8.37994e-5` and `+1.53018e-4` in
+the three transmitting orders. The total hides that cancellation.
+
+The new row's modal/volume disagreements are `2.81115e-6`/`1.08678e-6`,
+while its energy errors are `1.36e-10`/`1.46e-9`. Omitted Robin powers
+are `1.83008e-9`/`1.73054e-9` and signed remaining budgets are
+`-1.69394e-9`/`-2.67070e-10`. The full linear residuals stay below
+`1.05e-14`; none of these small algebraic diagnostics resolves the
+larger optical changes. Against the finite degree-10 auxiliary-field
+Wavebit row at `(24,32)`, total T still differs by
+`-1.82120e-4`/`-1.38200e-4`. Both methods retain unresolved
+discretization uncertainty, so that comparison supplies no oracle.
+
+The new 1,002-tetrahedron space has 149,604 full and 79,464 condensed
+unknowns, with 2,184 boundary unknowns. Its two retained response arrays
+occupy 21.59 MiB. The solve takes 488.62 s with peak process RSS
+5.795 GB; the observed peak after factorization is 4.526 GB, rising
+during the boundary responses. These are shared-host measurements of
+different finite approximations, not equal-accuracy speed comparisons.
+All four completed results pass independent metadata, power-sum,
+signed-budget and per-order difference checks; no convergence
+acceptance threshold is inferred from the rectangle.
 
 ## Comparing the physical diffraction orders with Wavebit
 
