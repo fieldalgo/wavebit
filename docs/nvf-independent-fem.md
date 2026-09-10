@@ -644,6 +644,28 @@ as continuum-accuracy tolerances. All 40 affine geometry, algebra,
 scattering, Robin, boundary-storage and local-degree tests pass in
 42.154 s; this qualifies the finite instrument, not optical convergence.
 
+The first patterned comparison fixes h=.18, edge target .12, cut 4,
+outgoing pad .2 and quadrature bonus 6. Raising the film band by one
+degree gives:
+
+| space | p T | s T | p modal/volume disagreement | s modal/volume disagreement |
+| --- | ---: | ---: | ---: | ---: |
+| global degree 5 | .852038068565 | .730662922035 | 9.98735e-6 | 5.47086e-6 |
+| degree 5, film band degree 6 | .852128153667 | .730772027375 | 6.03287e-6 | 3.61977e-6 |
+
+The p/s total changes are `+9.00851e-5`/`+1.09105e-4`, with maximum
+individual R/T changes `9.00954e-5`/`1.09111e-4`. The refined row has
+energy errors of `1.51e-8`/`7.58e-9`, omitted Robin powers of
+`1.48e-8`/`4.25e-9`, and signed remaining budgets of
+`-3.00e-8`/`-1.18e-8`. Those smaller budgets do not bound the much
+larger observed degree sensitivity. The enriched solve takes 311.79 s
+with peak process RSS 4.277 GB. It is a different finite approximation,
+not an equal-accuracy performance comparison with global degree 5.
+There is some cancellation between transmitting orders. In particular,
+the s `(-1,0)` difference from the finite Wavebit row grows from
+`-1.17534e-5` to `-2.51812e-5` even though total T moves closer.
+This comparison does not show improvement in every diffraction order.
+
 ## Comparing the physical diffraction orders with Wavebit
 
 Both solvers use `k_parallel=k_incident+G`. At the saved Wavebit optical
