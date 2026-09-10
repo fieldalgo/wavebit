@@ -1159,13 +1159,58 @@ SuperLU's per-solve residual checks and adds native-matrix validation,
 copies and observations, so these are instrumented shared-host timings,
 not production performance benchmarks.
 
-These default-pivot alternatives provide no memory improvement on this
+These unscaled default-pivot alternatives provide no memory improvement on this
 control. In particular, the matched stored-mode comparison is larger and
 slower for both tested SuperLU orderings. This supports keeping the native
 factorization as the reference default and does not justify a high-degree
 retry with these settings. All six processes complete within their
 180-second parent limit and unchanged 8-GiB peak-RSS guard. The results
 qualify the small algebraic comparison, not an optical convergence bound.
+
+### Explicit row-maximum scaling
+
+A separate control changes only the scaling of the selected sparse system.
+For its original matrix A, define r_i=max_j |A_ij| and the positive real
+diagonal D_i=1/sqrt(r_i). Factor D A D, solve against D b and recover
+x=D y. This is an equivalent change of unknowns for a complex,
+non-Hermitian matrix; it assumes neither symmetry nor a nonzero diagonal
+of A. The same explicit ordering and diagonal pivot threshold 1 remain.
+The original selected matrix is retained for every residual check.
+
+The implementation refuses zero rows, nonfinite input or scaling,
+malformed CSC indices and nonzero coefficients erased by underflow.
+Three independent helper controls include an invertible zero-diagonal
+matrix, complex non-Hermitian entries and unequal row magnitudes;
+19 invalid controls are rejected. Two complete native-matrix synthetic
+controls retain the noncontiguous mask, known solution, unchanged RHS
+and zero embedding. Their maximum solution error is below `4.5e-16`.
+The four degree-3 FEM controls use the same fixture and unchanged
+equation and observable criteria as above.
+
+| Scaled backend and storage | Factor time, s | Diagnostic time, s | Peak RSS, bytes | Reported factor nonzeros |
+| --- | ---: | ---: | ---: | ---: |
+| SuperLU COLAMD, full | 4.387 | 5.798 | 646,070,272 | 20,587,541 |
+| SuperLU COLAMD, stored | 2.651 | 3.747 | 506,150,912 | 14,894,345 |
+| SuperLU COLAMD, recomputed | 2.752 | 4.727 | 510,787,584 | 14,894,345 |
+| SuperLU MMD_AT_PLUS_A, stored | 9.953 | 11.272 | 638,877,696 | 22,163,980 |
+
+The 11 comparisons include the saved native full result and matching
+stored/unscaled controls; no baseline solve is repeated. All matching
+original selected CSC and mask hashes are identical. The largest
+absolute observable difference from native full is `2.499e-14`; across
+all comparisons it is `3.943e-13`. The largest final full Maxwell
+residual is `7.027e-14`, and the largest selected sparse residual is
+`8.308e-14`. Independent record validation rejects 28 malformed controls.
+
+Scaled COLAMD stored uses about 12.5% less observed peak RSS than native
+stored on this small fixture, while its diagnostic takes 3.747 s versus
+2.292 s. The scaled CSC copy and diagonal construction are included in
+the process peak; the original CSC and per-solve residual overhead also
+remain. This is a measured memory/time tradeoff, not a production speed
+claim. The predefined small resource gate permits a bounded degree-6
+first-source diagnostic. It does not establish that degree 7 fits or
+that a complete optical solve converges. Native UMFPACK remains the
+reference default.
 
 ## Completing degree 7 on the smaller edge mesh
 
