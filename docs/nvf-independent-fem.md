@@ -1762,6 +1762,95 @@ scope. It supplies a complete finite corner for the separately audited
 [degree-6/7 comparison](#vertex-and-degree-refinement-at-degrees-6-and-7),
 not an optical stopping certificate.
 
+### Native selected action without a retained CSC copy
+
+A later small control removes the last retained SciPy copy of the selected
+matrix. The [reference-release control](#releasing-scaled-matrix-references-after-factorization)
+still keeps the selected complex128 CSC `A128` for every original residual
+and Krylov product. This control applies the same selected operator through
+the native stored-condensed NGSolve matrix `M` as `P.T M P`, where `P`
+embeds the existing free mask into the full space. Before any release, the
+helper compares the native and CSC products on two fixed pseudo-random
+vectors at the existing `1e-12` operator threshold. It then releases A128,
+B128, B64 and the cast buffer after the factor returns. The action retains
+the native matrix with its CSR views, the private and native free masks, D
+and the complete complex64 factor.
+
+Before each request, and again after its final residual product, the helper
+checks the native object type and dimensions, the captured and freshly
+exposed CSR hashes and storage addresses, both free masks and D. The
+equations, scaling, conversion, MMD factor with .1 pivot threshold, flexible
+correction options, residual thresholds and physical model are unchanged.
+Native row accumulation replaces SciPy accumulation, so the control requires
+agreement within the existing tolerances rather than bitwise outputs or
+identical iteration counts.
+
+The source-frozen tiny controls use two 12-unknown native matrices, each
+with an interleaved eight-unknown free mask. In each case, all 16
+weak-reference targets are dead before the known and zero right-hand-side
+solves. They cover three CSC matrix objects and nine distinct owning
+allocations occupying 1,356 bytes. The native action matches the original
+CSC exactly on both vectors and an independent dense block within
+`1.62e-16`. There are 35 exact refusals: the 22 original controls, seven
+native-matrix, mask or D mutations and injections before a request, one D
+mutation after the final native product, three invalid native inputs and
+two deliberately retained A128 or B64 aliases. The refusal for freshly
+exposed storage substitutes a copied CSR; it does not reallocate native
+storage. Both known-solution controls pass with maximum errors `5.32e-15`
+and `1.85e-11`.
+
+The one complete stored degree-3 control passes independent closed-result
+review with unchanged settings: h=.2, cut 1, pad .1, theta=.31, phi=.23,
+quadrature bonus 6, 436 tetrahedra, 11,256 full and 9,512 selected
+unknowns. Its native CSR, selected matrix, free mask, D, B128 and B64
+fingerprints match the earlier runs before release, and the native and CSC
+selected products agree exactly. All 40 original requests complete with
+three factor actions and two outer callbacks each. Counters, the maximum
+original selected residual `7.28e-14` and p/s full Maxwell residuals
+`6.78e-14`/`4.99e-14` are unchanged. All 58 p/s scalar, mode-power,
+volume-flux and Robin-budget outputs are bitwise equal to both earlier
+mixed-precision results. Comparisons with the three saved direct controls
+therefore remain within `1.38e-13`.
+
+| Stored degree-3 control | Peak process RSS, bytes | Child elapsed, s |
+| --- | ---: | ---: |
+| Retaining A128, B128 and B64 | 356,499,456 | 3.95168 |
+| Releasing B128 and B64 after factorization | 357,351,424 | 3.36817 |
+| Native action, releasing all three | 350,633,984 | 4.82071 |
+
+The native-action peak is 6,717,440 bytes, about 1.88%, below the B128/B64
+release control. This is one shared-host observation. It is smaller than
+the 20,834,852-byte A128 array that is no longer retained and does not
+establish a general memory reduction. The child takes 1.45 s longer, and the
+mean request takes .0511 s instead of .0269 s. The added per-request work
+includes hashing the full native CSR at entry and exit and building
+full-length native vectors for every product; the split of the extra time
+was not profiled. The factor again has 8,932,284 nonzeros.
+
+The released references now cover all 54,185,836 bytes of the three
+construction CSC matrices, and no selected CSC copy remains. These are
+Python reference lifetimes, not measured operating-system savings. At
+degree 7 the retained selected CSC is the 950,904,964-byte array of the
+[degree-7 reference-release control](#degree-7-reference-release-control).
+In that run the observed RSS high-water mark is 4,336,680,960 bytes when
+factorization returns. It reaches 7,014,957,056 bytes after the first
+request, 8,051,359,744 at the boundary stage and its final 8,578,875,392
+only at the solver return, so the array is held while that peak is set.
+Whether releasing it lowers the peak is not predicted here: RSS excludes
+compressed and swapped memory, allocator reuse is unmeasured and no
+degree-7 native-action run exists. Per-request hashing of the degree-7
+native CSR, with 47,523,840 nonzeros, would also add time that this small
+control cannot extrapolate.
+
+Both the tiny and the degree-3 parents close with exit 0 and unchanged
+source pins. The independent p3 audit checks the lifetime transition, all
+original requests, physical outputs and comparisons without rerunning a
+solver. This independently authored helper remains a separate internal
+numerical validation experiment, with no new dependency, product solver
+integration or redistribution scope. It qualifies the small construction
+and its finite equations; it does not establish that a finer or
+higher-degree problem will fit or complete.
+
 ## Completing degree 7 on the smaller edge mesh
 
 The separate edge-.12 branch completes global degree 7 within the same
