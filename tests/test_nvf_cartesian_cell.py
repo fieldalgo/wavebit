@@ -4,12 +4,14 @@ The oracle shares only the frozen finite mesh definition. It separately
 assembles and differentiates original nodal weak equations, then integrates
 moving Fourier moments with Duffy quadrature instead of polygon transforms.
 """
+from dataclasses import FrozenInstanceError
+
 import numpy as np
 import pytest
 from numpy.polynomial.legendre import leggauss
 from scipy.linalg import lu_factor, lu_solve
 
-from studies.nvf_cartesian_cell import CartesianRectangleCell
+from studies.nvf_cartesian_cell import CartesianRectangleCell, CartesianRectanglePlan
 
 LENGTH = 700.
 PARAMETERS = np.array([1., .45, 0., .7, .5, 3/7, 0., .07, -.03, 4., .8, 1., .1])
@@ -20,6 +22,12 @@ def settings(p, xp=np):
     return dict(basis=LENGTH*p[:4].reshape(2, 2), width=LENGTH*p[4], height=LENGTH*p[5],
                 angle=p[6], offset=LENGTH*p[7:9], epsilon=p[9]+1j*p[10],
                 background=p[11]+1j*p[12], xp=xp)
+
+
+def geometry_plan(p):
+    physical = settings(p)
+    return CartesianRectanglePlan.from_geometry(**{
+        key: physical[key] for key in ('basis', 'width', 'height', 'angle', 'offset')})
 
 
 def rectangle_coefficients(p, order):
@@ -301,18 +309,22 @@ def test_invalid_options_and_physical_geometry():
 
 
 @pytest.mark.parametrize('refinement', [0, 1, 2])
-def test_jax_all_physical_directions_against_independent_oracle(refinement):
+@pytest.mark.parametrize('planned', [False, True])
+def test_jax_all_physical_directions_against_independent_oracle(refinement, planned):
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     jax.config.update('jax_enable_x64', True)
-    cell = CartesianRectangleCell(refinement=refinement)
+    parameters = PARAMETERS.copy()
+    if planned:
+        parameters[6] = np.pi+.31
+    cell = CartesianRectangleCell(refinement=refinement, plan=geometry_plan(parameters) if planned else None)
     evaluate = jax.jit(lambda p, d: jax.jvp(lambda p: cell.coefficients(**settings(p, jnp))[0], (p,), (d,)))
     generator = np.array([[0., -1.], [1., 0.]])
     rotation = np.zeros(13)
-    rotation[:4], rotation[6] = (generator@PARAMETERS[:4].reshape(2, 2)).ravel(), 1.
-    rotation[7:9] = generator@PARAMETERS[7:9]
+    rotation[:4], rotation[6] = (generator@parameters[:4].reshape(2, 2)).ravel(), 1.
+    rotation[7:9] = generator@parameters[7:9]
     scale = np.zeros(13)
-    scale[:6], scale[7:9] = PARAMETERS[:6], PARAMETERS[7:9]
+    scale[:6], scale[7:9] = parameters[:6], parameters[7:9]
     shift = np.zeros(13)
     shift[7:9] = [.2, -.1]
     directions = [np.array([.05, -.09, .04, .03, .06, -.05, .11, .07, -.08, .2, -.1, .09, .03]),
@@ -320,13 +332,131 @@ def test_jax_all_physical_directions_against_independent_oracle(refinement):
     if refinement == 1:
         directions.extend(np.eye(13))
     for direction in directions:
-        low, dlow, _ = oracle(PARAMETERS, direction, cell, 16)
-        expected, derivative, _ = oracle(PARAMETERS, direction, cell, 24)
+        low, dlow, _ = oracle(parameters, direction, cell, 16)
+        expected, derivative, _ = oracle(parameters, direction, cell, 24)
         np.testing.assert_allclose(expected, low, rtol=0, atol=3e-10)
         np.testing.assert_allclose(derivative, dlow, rtol=0, atol=3e-10)
-        actual, tangent = evaluate(jnp.asarray(PARAMETERS), jnp.asarray(direction))
+        actual, tangent = evaluate(jnp.asarray(parameters), jnp.asarray(direction))
         np.testing.assert_allclose(actual, expected, rtol=0, atol=3e-10)
         np.testing.assert_allclose(tangent, derivative, rtol=0, atol=3e-9)
+
+
+@pytest.mark.parametrize('refinement', [0, 1, 2])
+def test_planned_geometry_equivalent_charts_and_independent_variation(refinement):
+    p = PARAMETERS.copy()
+    p[6] = np.pi+.31
+    cell = CartesianRectangleCell(refinement=refinement, plan=geometry_plan(p))
+    direction = np.array([.05, -.09, .04, .03, .06, -.05, .11, .07, -.08, .2, -.1, .09, .03])
+    actual, metadata = cell.coefficients(**settings(p))
+    low, dlow, _ = oracle(p, direction, cell, 16)
+    high, dhigh, _ = oracle(p, direction, cell, 24)
+    np.testing.assert_allclose(high, low, rtol=0, atol=3e-10)
+    np.testing.assert_allclose(dhigh, dlow, rtol=0, atol=3e-10)
+    np.testing.assert_allclose(actual, high, rtol=0, atol=3e-10)
+    assert metadata['inner_permutation'] == cell.plan.permutation
+    indicator, delta = rectangle_coefficients(p, (1, 1))
+    np.testing.assert_allclose(actual[7], (p[11]+1j*p[12])*delta
+                               +(p[9]+1j*p[10]-p[11]-1j*p[12])*indicator, rtol=0, atol=2e-12)
+    original_points = geometry_variation(p, np.zeros(13), cell)[2]
+    for swap in (False, True):
+        equivalent = p.copy()
+        equivalent[6] += np.pi/2 if swap else np.pi
+        if swap:
+            equivalent[4:6] = equivalent[4:6][::-1]
+        other = CartesianRectangleCell(refinement=refinement, plan=geometry_plan(equivalent))
+        np.testing.assert_allclose(geometry_variation(equivalent, np.zeros(13), other)[2],
+                                   original_points, rtol=0, atol=2e-12*LENGTH)
+        np.testing.assert_allclose(other.coefficients(**settings(equivalent))[0], actual, rtol=0, atol=2e-11)
+        for value, reference in zip(other.conv_matrices(**settings(equivalent)), cell.conv_matrices(**settings(p))):
+            np.testing.assert_allclose(value, reference, rtol=0, atol=2e-10)
+
+
+def test_concrete_plan_covariance_immutability_and_invalid_replay():
+    p = PARAMETERS.copy()
+    p[6] = np.pi+.31
+    plan = geometry_plan(p)
+    with pytest.raises(FrozenInstanceError):
+        plan.permutation = (0, 1, 2, 3)
+    assert isinstance(plan.permutation, tuple)
+    assert hash(plan) == hash(CartesianRectanglePlan(plan.permutation))
+    rotation_angle = .37
+    rotation = np.array([[np.cos(rotation_angle), -np.sin(rotation_angle)],
+                         [np.sin(rotation_angle), np.cos(rotation_angle)]])
+    rotated = p.copy()
+    rotated[:4], rotated[6] = (rotation@p[:4].reshape(2, 2)).ravel(), p[6]+rotation_angle
+    rotated[7:9] = rotation@p[7:9]
+    scaled = p.copy()
+    scaled[:6], scaled[7:9] = p[:6]*1.73, p[7:9]*1.73
+    shifted = p.copy()
+    shifted[7:9] += [.13, -.07]
+    assert geometry_plan(rotated) == geometry_plan(scaled) == geometry_plan(shifted) == plan
+    cell = CartesianRectangleCell(plan=plan)
+    stale = p.copy()
+    stale[6] += np.pi
+    with pytest.raises(ValueError, match='nonpositive triangles'):
+        cell.coefficients(**settings(stale))
+    # The new physical chart is valid only after explicit concrete replanning.
+    CartesianRectangleCell(plan=geometry_plan(stale)).coefficients(**settings(stale))
+    for bad in (True, (0, 1, 2, 3), 'auto'):
+        with pytest.raises(ValueError, match='plan'):
+            CartesianRectangleCell(plan=bad)
+    for bad in ([0, 1, 2, 3], (0, 2, 1, 3), (True, 1, 2, 3), (0, 1, 2), (0., 1., 2., 3.)):
+        with pytest.raises(ValueError, match='permutation'):
+            CartesianRectanglePlan(bad)
+    physical = settings(p)
+    geometry = {key: physical[key] for key in ('basis', 'width', 'height', 'angle', 'offset')}
+    for update in (dict(basis=[[1., 1.], [1., 1.]]), dict(basis=[[1., 0.], [0., -1.]]),
+                   dict(width=0.), dict(width=1400.), dict(height=np.nan), dict(width=True),
+                   dict(angle=1j), dict(offset=[np.nan, 0.]), dict(offset=[0.])):
+        with pytest.raises(ValueError):
+            CartesianRectanglePlan.from_geometry(**dict(geometry, **update))
+
+
+@pytest.mark.parametrize('skew,lattice_height,aspect,degrees,fill', [
+    (.45, .7, 7/6, 0., .6), (.45, .7, 7/6, 45., .95), (.45, .7, .1, 87., .98),
+    (-3., .2, .1, 0., .2), (3., .2, 10., 115., .98), (-1.5, 2., 3., 35., .7),
+    (0., 1., 1., 45., .98), (0., 1., 1., 90., .98)])
+def test_concrete_plan_contained_orientation_samples(skew, lattice_height, aspect, degrees, fill):
+    basis = np.array([[1., skew], [0., lattice_height]])
+    angle = np.deg2rad(degrees)
+    width, height = np.sqrt(aspect), 1/np.sqrt(aspect)
+    rotation = np.array([[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]])
+    signs = np.array([[-.5, -.5], [.5, -.5], [.5, .5], [-.5, .5]])
+    extent = abs((signs*[width, height])@rotation.T@np.linalg.inv(basis).T).max()
+    width, height = width*.5*fill/extent, height*.5*fill/extent
+    physical = dict(basis=basis, width=width, height=height, angle=angle)
+    plan = CartesianRectanglePlan.from_geometry(**physical)
+    cell = CartesianRectangleCell(0, plan=plan)
+    _, metadata = cell.coefficients(**physical, epsilon=4.+.8j, background=1.+.1j)
+    assert metadata['minimum_signed_area'] > 0
+    np.testing.assert_allclose(metadata['area'], lattice_height, rtol=2e-12, atol=0)
+    np.testing.assert_allclose(metadata['inclusion_area'], width*height, rtol=2e-12, atol=0)
+    for swap in (False, True):
+        equivalent = dict(physical, width=height if swap else width, height=width if swap else height,
+                          angle=angle+(np.pi/2 if swap else np.pi))
+        other = CartesianRectanglePlan.from_geometry(**equivalent)
+        # Equivalent raw vertex arrays are cyclically shifted by one or two.
+        shift = 1 if swap else 2
+        assert tuple((i+shift) % 4 for i in other.permutation) == plan.permutation
+
+
+def test_jax_frozen_plan_stale_chart_and_planning_inside_trace_are_refused():
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    jax.config.update('jax_enable_x64', True)
+    p = PARAMETERS.copy()
+    p[6] = np.pi+.31
+    cell = CartesianRectangleCell(plan=geometry_plan(p))
+    evaluate = jax.jit(lambda p: cell.coefficients(**settings(p, jnp))[0])
+    assert np.isfinite(np.asarray(evaluate(jnp.asarray(p)))).all()
+    for index, invalid in ((6, p[6]+np.pi), (4, 2.)):
+        invalid_p = p.copy()
+        invalid_p[index] = invalid
+        assert np.isnan(np.asarray(evaluate(jnp.asarray(invalid_p)))).all()
+    with pytest.raises(ValueError):
+        jax.jit(lambda angle: CartesianRectanglePlan.from_geometry(
+            basis=LENGTH*p[:4].reshape(2, 2), width=LENGTH*p[4], height=LENGTH*p[5],
+            angle=angle).permutation[0])(p[6])
 
 
 def test_jax_homogeneous_closure_derivative_and_invalid_live_updates():

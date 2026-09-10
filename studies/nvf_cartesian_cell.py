@@ -7,6 +7,7 @@ template triangles are required; containment alone does not guarantee that
 every rectangle orientation is supported. No contact, multiple rectangles,
 public shape-adapter integration or optical accuracy is claimed.
 """
+from dataclasses import dataclass
 from numbers import Integral
 
 import numpy as np
@@ -37,13 +38,15 @@ def _array(value, shape, name, xp, *, real=True):
     return result, valid
 
 
-def _topology(refinement):
+def _topology(refinement, permutation=None):
     """Fixed interpolation weights and periodic node identities, without geometry."""
     cells = [(4, 5, 6), (4, 6, 7)]
     for i in range(4):
         j = (i+1) % 4
         cells.extend([(i, j, i+4), (j, j+4, i+4)])
     cells, weights = np.array(cells), np.eye(8)
+    if permutation is not None:
+        weights = weights[np.r_[np.arange(4), np.array(permutation)+4]]
     inclusion = np.array([True, True]+[False]*8)
     for _ in range(refinement):
         midpoint_ids, new = {}, list(weights)
@@ -79,6 +82,73 @@ def _topology(refinement):
     return weights, cells, inclusion, periodic, restriction
 
 
+@dataclass(frozen=True)
+class CartesianRectanglePlan:
+    """Immutable cyclic vertex chart selected from concrete physical geometry.
+
+    Only the permutation is retained. Creation chooses among four cyclic
+    shifts of the original ten-triangle template; it neither changes the
+    rectangle nor searches for a general triangulation. Equivalent angle
+    representations require their own concrete plans. Replay never changes
+    the selected chart, and derivatives do not include plan selection.
+    """
+
+    permutation: tuple
+
+    def __post_init__(self):
+        p = self.permutation
+        if (not isinstance(p, tuple) or len(p) != 4
+                or any(isinstance(i, (bool, np.bool_)) or not isinstance(i, Integral) for i in p)
+                or p not in tuple(tuple((i+j) % 4 for j in range(4)) for i in range(4))):
+            raise ValueError('plan permutation must be a cyclic integer tuple')
+        object.__setattr__(self, 'permutation', tuple(map(int, p)))
+
+    @classmethod
+    def from_geometry(cls, *, basis, width, height, angle=0., offset=(0., 0.)):
+        """Select a positive template once, outside tracing or differentiation.
+
+        Fractional coordinates make ranking invariant under joint rotation
+        and common scaling. A 1e-12 fractional tie tolerance stabilizes the
+        discrete decision; it does not relax containment or positive areas.
+        No differentiability or continuity across selection ties is claimed.
+        """
+        basis, _ = _array(getattr(basis, 'columns', basis), (2, 2), 'basis', np)
+        determinant = np.linalg.det(basis)
+        _require(np.isfinite(determinant) & (determinant > 0), 'basis must have positive finite determinant')
+        width, _ = _array(width, (), 'width', np)
+        height, _ = _array(height, (), 'height', np)
+        angle, _ = _array(angle, (), 'angle', np)
+        offset, _ = _array(offset, (2,), 'offset', np)
+        center = basis.sum(axis=1)/2+offset
+        inner = rect_verts(np, center[0], center[1], width, height, angle)
+        fractional = (inner-offset)@np.linalg.inv(basis).T
+        _require((width > 0) & (height > 0)
+                 & np.all((fractional > 1e-10) & (fractional < 1-1e-10)),
+                 'rectangle must be strictly inside its centered cell')
+        # Quantization is only a deterministic tie-breaker for concrete
+        # planning. Integer sums avoid roundoff reordering symmetric corners.
+        keys = np.rint(fractional*1e12).astype(np.int64)
+        start = min(range(4), key=lambda i: (keys[i].sum(), keys[i, 0], keys[i, 1]))
+        outer = np.array([[0., 0.], [1., 0.], [1., 1.], [0., 1.]])
+        cells = _topology(0)[1]
+        candidates = []
+        for shift in range(4):
+            permutation = tuple((start+shift+i) % 4 for i in range(4))
+            points = np.concatenate([outer, fractional[list(permutation)]])[cells]
+            jacobian = np.stack([points[:, 1]-points[:, 0], points[:, 2]-points[:, 0]], axis=-1)
+            score = np.min(np.linalg.det(jacobian))/2
+            physical = np.concatenate([outer@basis.T+offset, inner[list(permutation)]])[cells]
+            jacobian = np.stack([physical[:, 1]-physical[:, 0], physical[:, 2]-physical[:, 0]], axis=-1)
+            physical_determinants = np.linalg.det(jacobian)
+            if (np.isfinite(score) and score > 0
+                    and np.all(np.isfinite(physical_determinants) & (physical_determinants > 0))):
+                candidates.append((score, permutation))
+        if not candidates:
+            raise ValueError('no positive cyclic rectangle template was found')
+        best = max(score for score, _ in candidates)
+        return cls(next(p for score, p in candidates if score >= best-1e-12))
+
+
 class CartesianRectangleCell:
     """Bounded experimental corrector with physical Cartesian geometry.
 
@@ -92,11 +162,14 @@ class CartesianRectangleCell:
     the finite space translation covariant, including the Fourier phase.
     Joint rotation of lattice and rectangle is distinct from changing only
     the rectangle angle within the fixed lattice and triangle template.
+    ``plan=None`` preserves the historical template. An explicit immutable
+    ``CartesianRectanglePlan`` expands the available vertex charts while
+    keeping topology fixed throughout live replay and differentiation.
     """
 
     components = ('Bxx', 'Bxy', 'Byx', 'Byy', 'Gxx', 'Gxy', 'Gyy', 'epsilon', 'Gyx')
 
-    def __init__(self, truncation_order=1, *, refinement=0):
+    def __init__(self, truncation_order=1, *, refinement=0, plan=None):
         pair = ((truncation_order, truncation_order)
                 if isinstance(truncation_order, Integral) else truncation_order)
         if (not isinstance(pair, (tuple, list)) or len(pair) != 2
@@ -107,7 +180,11 @@ class CartesianRectangleCell:
             raise ValueError('refinement must be 0, 1 or 2')
         self.truncation_order = tuple(map(int, pair))
         self.refinement = int(refinement)
-        self._weights, self._cells, self._inclusion, self._periodic, self._restriction = _topology(self.refinement)
+        if plan is not None and not isinstance(plan, CartesianRectanglePlan):
+            raise ValueError('plan must be a CartesianRectanglePlan or None')
+        self.plan = plan
+        self._weights, self._cells, self._inclusion, self._periodic, self._restriction = _topology(
+            self.refinement, None if plan is None else plan.permutation)
         self.degrees_of_freedom = self._restriction.shape[2]-1
         ox, oy = self.truncation_order
         self._x_modes, self._y_modes = np.arange(-2*ox, 2*ox+1), np.arange(-2*oy, 2*oy+1)
@@ -184,12 +261,15 @@ class CartesianRectangleCell:
         valid = valid & valid_basis & valid_shape & valid_triangles & valid_material
         valid = valid & xp.isfinite(residual) & (residual <= 1e-10) & xp.all(xp.isfinite(result))
         _require(valid, 'invalid frozen P1 cell or linear residual')
-        return xp.where(valid, result, xp.nan), dict(
+        metadata = dict(
             cell_residual=residual, degrees_of_freedom=self.degrees_of_freedom,
             refinement=self.refinement, elements=len(self._cells), vertices=len(self._weights),
             periodic_dofs=self.degrees_of_freedom+1, periodic_pairs_per_axis=(2**self.refinement+1,)*2,
             area=xp.linalg.det(basis), inclusion_area=xp.sum(xp.where(xp.asarray(self._inclusion), areas, 0.)),
             minimum_signed_area=xp.min(areas), truncation_order=self.truncation_order)
+        if self.plan is not None:
+            metadata['inner_permutation'] = self.plan.permutation
+        return xp.where(valid, result, xp.nan), metadata
 
     def conv_matrices(self, **settings):
         """One layer of energy-closure slots on exactly the requested Fourier set."""

@@ -41,11 +41,55 @@ numerical geometry values change.
 
 These deliberately small spaces use dense linear algebra. Refinement is
 limited to 0, 1 or 2. The rectangle must lie strictly inside the centered
-cell, and every template triangle must have positive area. Containment
-alone is insufficient: even adding pi to a contained rectangle's angle
-can reverse a template triangle. That input is refused. A general
-orientation planner, contact continuation, multiple rectangles and
-crossing periodic interfaces are outside this implementation.
+cell, and every template triangle must have positive finite area.
+Containment alone is insufficient for the default template: even adding
+pi to a contained rectangle's angle can reverse a triangle. That input
+is refused unless an appropriate explicit plan is supplied.
+
+## Choosing and replaying an orientation plan
+
+`CartesianRectanglePlan.from_geometry` selects among four cyclic
+orderings of the rectangle's vertices using concrete NumPy geometry.
+Each candidate retains the original ten triangles and annular diagonals.
+The planner maximizes the smallest signed triangle area in fractional
+coordinates among positive candidates. A `1e-12` fractional tolerance and
+integer-quantized vertex keys resolve planning ties. This tolerance does
+not relax the strict containment or positive-area guards.
+
+```python
+from studies.nvf_cartesian_cell import CartesianRectangleCell, CartesianRectanglePlan
+
+geometry = dict(basis=[[700., 315.], [0., 490.]], width=350., height=300.,
+                angle=3.45, offset=(49., -21.))
+plan = CartesianRectanglePlan.from_geometry(**geometry)
+cell = CartesianRectangleCell((1, 2), refinement=1, plan=plan)
+coefficients, metadata = cell.coefficients(**geometry, epsilon=4.+.8j,
+                                         background=1.+.1j)
+```
+
+The immutable plan stores only a cyclic permutation. Geometry and
+materials remain live numerical inputs, while interpolation weights,
+connectivity and periodic identities stay fixed during replay. The
+returned metadata includes `inner_permutation` for explicit plans.
+`plan=None` retains the original template and metadata. Planning is
+separate from JAX tracing: derivatives apply to the chosen finite space,
+with no derivative or continuity claim across planning ties. A live
+update that invalidates the chosen triangles raises eagerly or returns
+all-NaN coefficients under tracing; changing charts requires explicit
+replanning. The replay guards do not detect every change of parameter
+representation: a different representation can still describe positive
+triangles with a different finite triangulation.
+
+A deterministic geometry-only scan covers 15,120 strictly contained
+rectangles across lattice skews, lattice heights, aspect ratios, angles
+and containment fractions. The default template is positive for 6,981
+cases; the four cyclic choices admit all 15,120 sampled cases. Separate
+plans for angle-plus-pi and angle-plus-pi/2 with swapped dimensions
+produce the same physical meshes in all 30,240 comparisons. Fractional
+ranking also preserves joint rotation and common length scaling in the
+tested controls. This sampled coverage is not a general triangulation
+theorem. Contact continuation, multiple rectangles and crossing periodic
+interfaces remain outside this implementation.
 
 ## Weak equations and physical coefficients
 
@@ -122,8 +166,8 @@ invalid live updates covering lattice orientation, containment, template
 orientation, material passivity and nonfinite offset. These are tests of
 the admitted finite space and its validity checks.
 
-The self-contained study module is separately tested after this frozen
-preliminary comparison. All 22 committed controls pass in 3.27 s,
+The initial self-contained study module is separately tested after this
+frozen preliminary comparison. All 22 initial controls pass in 3.27 s,
 including the independent derivative oracle, physical periodic pairs,
 analytic material transform, homogeneous constitutive derivatives,
 translation/scale/rotation covariance, lossless and lossy passivity, and
@@ -131,6 +175,19 @@ exact closure selection for `(0,0)`, `(0,1)`, `(2,0)`, `(1,2)` and `(2,1)`.
 Source hashes are unchanged across the run. This test duration includes
 JAX compilation on the Apple M4 host with 16 GiB memory; it is not a solver
 performance comparison.
+
+With the optional orientation plan, all 38 controls pass in 5.42 s.
+The rotated planned fixture uses angle `pi+.31`; its additional 25
+directions include all 13 coordinates at refinement 1 and mixed,
+translation, scale and rotation directions at all three refinements.
+The independent quadrature and JVP criteria remain `3e-10` and `3e-9`.
+Equivalent physical representations also agree in the coefficients and
+closure slots, and invalid stale-plan replay returns NaNs under JIT.
+Module and test hashes remain unchanged across this run. A separate
+comparison with the initial implementation finds bitwise-identical
+default coefficients, closure slots, metadata and topology arrays for
+all three refinements, both lossy/lossless materials and outer order
+`(1,2)`. These are finite-space compatibility and derivative controls.
 
 A supplementary five-point finite difference at dimensionless step
 `.002` initially fails its `3e-8` criterion for a translation direction,
@@ -149,7 +206,7 @@ into this cell.
 
 These small cells do not certify corner resolution, a continuum
 derivative, contact behavior or Maxwell transmission. Their finite
-spaces depend on a fixed triangulation; a general geometry adapter must
-address that topology explicitly. The separate
+spaces depend on the explicitly chosen triangulation; the four-choice
+planner does not implement a general geometry adapter. The separate
 [independent Maxwell study](nvf-independent-fem.md) remains the optical
 qualification work.
