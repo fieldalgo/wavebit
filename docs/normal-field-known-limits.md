@@ -923,6 +923,15 @@ convergence: at order 22, grid 512, circular NVF gives T=0.853755019 and S4 dire
 gives T=0.890772020 (difference 0.037017001). Neither is a converged reference. See the
 [comparison, rejected alternatives and reproducible commands](nvf-contact-followup.md#independent-tilted-fixture-comparison-2026-09-08).
 
+The [resonance-position study of 2026-09-11](nvf-contact-followup.md#resonance-position-convergence-on-the-tilted-fixture-2026-09-11)
+settles what that difference is: a reflection resonance riding the substrate
+`(1,0)` Rayleigh line at 910.93 nm, with 900 nm on its flank. Both order
+ladders approach one resonance position from opposite sides at about `1/N`
+(peak `914.5 +- 0.1` nm; `T(900) = 0.867 +- 0.003` by common-limit
+extrapolation through order 26, with the degree-4 Rayleigh FEM at 0.866).
+Neither order-22 value is the answer; circular NVF is nearer by a factor of
+about two at the same decay rate.
+
 The newer [independent FEM study](nvf-independent-fem.md) caught a separate
 reference-boundary bias: a short PML appeared stable under mesh refinement but
 reflected a near-grazing substrate diffraction order. Its 0.876 transmission

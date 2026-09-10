@@ -1414,3 +1414,146 @@ All four added final-resolution contact configurations retain the existing
 independent p/s derivative criterion with conditioning warnings treated as
 errors. The degree-3 direct JAX CLI also matches the closed-laminate static
 energy and real-seam derivative to floating-point precision.
+
+## Resonance-position convergence on the tilted fixture, 2026-09-11
+
+The question left open above is which of the order-22 answers on the tilted
+contact fixture is right: circular NVF `T=0.853755` or the direct rule
+`T=0.890772`. Neither is, and the reason is that `T(900)` is the wrong
+observable for this fixture. Instrument: `studies/nvf_resonant_spectrum.py`,
+the probe's methods with a wavelength argument and every propagating order
+recorded; NumPy backend, grid 512, this host (10 cores, 16 GB). Raw JSON lines
+are in `studies/results/nvf_resonant_spectrum.log`.
+
+### What the total hides
+
+The substrate propagates `(0,0)`, `(+-1,0)` and `(0,+-1)`; air only `(0,0)`.
+The `(1,0)` substrate order has its Rayleigh line at
+`700 (1.5 - sin .2) = 910.93` nm, 11 nm from the operating wavelength, and at
+900 nm it still leaves at 81.7 degrees (`kz/k0 = 0.216`) carrying a fifth of
+the power. Circular minus direct at 900 nm, grid 512:
+
+| order | T(0,0) | T(1,0) | T(-1,0) | T(0,1) | T(0,-1) | R(0,0) | sum(T) |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 6 | -0.2492 | +0.1233 | +0.0760 | -0.0426 | -0.0226 | +0.1152 | -0.1152 |
+| 14 | -0.1160 | +0.0614 | +0.0333 | -0.0245 | -0.0129 | +0.0588 | -0.0588 |
+| 22 | -0.0724 | +0.0382 | +0.0215 | -0.0155 | -0.0088 | +0.0370 | -0.0370 |
+| 26 | -0.0593 | +0.0309 | +0.0179 | -0.0126 | -0.0072 | +0.0303 | -0.0303 |
+
+The total difference is half the `(0,0)` difference; every channel moves
+with the same sign pattern at every order, which is what a shifted
+resonance looks like, not what a factorization disagreement about a smooth
+quantity looks like.
+
+### The spectrum
+
+A 5 nm scan from 860 to 960 nm at orders 6/10/14 finds a reflection
+resonance (`R(0,0)` up to 0.76) sitting on the Rayleigh line, with a second
+one near 955 nm. 900 nm is on the blue flank of the first: the slope there is
+about `-0.015` per nm for circular NVF and `-0.010` per nm for the direct rule,
+so a 0.1 nm shift of the resonance is `1.5e-3` in `T(900)`, and the
+0.037 gap corresponds to a 2-3 nm shift. At every wavelength the two order
+ladders move toward each other (at 900 circular rises 0.8265 / 0.8386 / 0.8455
+and direct falls 0.9417 / 0.9175 / 0.9043; at 920 direct rises
+0.32 / 0.39 / 0.43 and circular falls 0.63 / 0.59 / 0.58).
+
+A 1 nm scan from 905 to 925 nm then gives two markers per method and order:
+the `R(0,0)` peak (parabola through the maximum and its two neighbours) and
+the wavelength where `T` crosses 0.5 on the red side. The blue crossing sits
+on the Rayleigh cusp itself and is not used.
+
+| order | circular peak | circular red crossing | pieces peak | pieces red crossing | direct peak | direct red crossing |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 6 | 912.531 | 917.926 | 913.283 | 918.450 | 918.086 | 922.248 |
+| 10 | 913.233 | 918.566 | 914.008 | 919.108 | 916.857 | 921.331 |
+| 14 | 913.556 | 918.828 | 914.245 | 919.309 | 916.226 | 920.845 |
+| 18 | 913.789 | 918.991 | — | — | 915.859 | 920.561 |
+| 22 | 913.967 | 919.117 | — | — | — | — |
+
+Circular NVF moves red with order, the direct rule moves blue, and the
+increments decay at about `1/N` on both sides. Fitting orders 6-18 of both
+methods to one common limit with one shared exponent gives:
+
+| marker | common limit | exponent | max residual | last-pair `1/N`, circular | last-pair `1/N`, direct | order-22 circular: measured / predicted |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| `R(0,0)` peak | 914.52 nm | 0.88 | 0.05 nm | 914.60 | 914.58 | 913.967 / 913.883 |
+| red `T=0.5` crossing | 919.61 nm | 0.90 | 0.05 nm | 919.56 | 919.57 | 919.117 / 919.093 |
+
+Dropping order 18 from the fit moves the limits by 0.01 and 0.02 nm. Two
+independent factorizations approaching one wavelength from opposite sides and
+agreeing to 0.03 nm after extrapolation is the evidence that the limit is
+real; the default linear piece field lands about 0.25 nm redder on the same
+extrapolation and was not run past order 14.
+
+### `T(900)` to order 26, and the FEM row
+
+| order | circular NVF | direct rule | circular increment | direct increment | seconds (circular / direct) | peak RSS |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 6 | 0.826543208 | 0.941709091 | | | 0.2 / 0.2 | |
+| 10 | 0.838581537 | 0.917495725 | +0.01204 | -0.02421 | 1.3 / 1.3 | |
+| 14 | 0.845478595 | 0.904278462 | +0.00690 | -0.01322 | 6.3 / 6.1 | |
+| 18 | 0.850166086 | 0.896188108 | +0.00469 | -0.00809 | 23 / 22 | |
+| 22 | 0.853755019 | 0.890772020 | +0.00359 | -0.00542 | 71 / 66 | 3.6 GB (3.4 GB physical) |
+| 26 | 0.856604151 | 0.886903561 | +0.00285 | -0.00387 | 178 / 171 | 5.0 GB (6.4 GB physical, 1.6 GB compressed) |
+
+Order 30 would need about 8.5 GB and was not attempted. The common-limit fit
+of `T(900)` gives 0.8665 (exponent 0.85, orders 6-26), 0.8660 (6-22), 0.8674
+(10-26) and 0.8668 (10-22); the last-pair `1/N` extrapolations are 0.8723 /
+0.8656 (22-26) and 0.8699 / 0.8664 (18-22). The direct rule's increment
+ratios (1.83, 1.63, 1.49, 1.40) track `1/N` (2.33, 1.80, 1.57, 1.44); the
+circular ladder's (1.75, 1.47, 1.31, 1.26) fall below it from order 18 on, so
+its own limit is less certain than the joint one -- that is the reason the
+last-pair number on the circular side drifts up.
+
+The independent H(curl) FEM with the Rayleigh boundary
+(`studies/nvf_fem_reference.py`, [details](nvf-independent-fem.md)) on the
+same fixture: `h=.18`, degree 3, cut 2, pad .4 gives modal `T=0.863053`,
+volume `T=0.862943` (bit-identical to the logged prototype value), energy
+error `1.6e-4`, 81 s, peak RSS 4.19 GB (ru_maxrss 4.58 GB, physical footprint
+3.59 GB). The logged degree-4 row on the same mesh gives volume `T=0.866056`
+(538 s, footprint never recorded; a degree-3 to degree-4 scaling estimate says
+10-14 GB, and it was not rerun on this host with 7 GB of swap already in use).
+Moving the Rayleigh planes from pad .4 to .6 at degree 3 (which also
+regenerates the mesh: 3,421 elements, 84,860 unknowns) gives modal
+`T=0.861317`, volume `T=0.861203`, energy error `7.8e-4`, 79 s, peak RSS
+4.91 GB (physical 4.59 GB) -- a `-1.7e-3` change with the energy error up by
+5x. The FEM's own degree step is `3.1e-3` and its pad/remesh step `1.7e-3`,
+so the FEM band on this fixture is about `+-3e-3`, the same width as the
+spread of the RCWA extrapolations.
+
+### What this decides
+
+- **Neither order-22 answer is right.** Both ladders converge at roughly
+  `1/N` from opposite sides of one limit: `T(900) = 0.867 +- 0.003` from the
+  RCWA extrapolations, with the degree-4 FEM at 0.866 inside that band. At
+  order 22 circular NVF is `-0.013` from it and the direct rule `+0.024`;
+  at order 26, `-0.010` and `+0.020`.
+- **The defensible reference is a resonance position, not a number at
+  900 nm:** peak `914.5 +- 0.1` nm, red `T=0.5` crossing `919.6 +- 0.05` nm.
+  A `T(900)` reference at `1e-3` would need the resonance to 0.07 nm, which no
+  method here has reached.
+- **On this fixture NVF buys a prefactor, not a rate.** The circular NVF
+  prefactor is about half the direct rule's at the same `1/N` decay. The
+  contact leaves two 270-degree re-entrant corners at the ends of the 13.9 nm
+  run, and a corner singularity is not something any interface factorization
+  removes; the fixture measures corner convergence with a resonance as the
+  amplifier.
+- The circular / pieces / polygon spread (0.003-0.008 at orders 18-22) is
+  the extension's contribution and is small against the truncation error;
+  none of the three is wrong in a way the others are not.
+
+Where this stops being trustworthy: the common-limit fits assume one limit
+and one shared power, which the pieces field's 0.25 nm offset shows is only
+approximately true across extensions; the circular `T(900)` ladder is slowing
+below `1/N` at orders 22-26; the FEM has a `3e-3` degree sensitivity and its
+degree-4 footprint is unrecorded. A reference good to `1e-3` needs the
+degree-4 FEM (or finer) with its footprint recorded, run on a host with more
+free memory, plus a FEM wavelength scan at degree 3 to pin the resonance
+independently. Reproduce with:
+
+```bash
+PYTHONPATH=$PWD python studies/nvf_resonant_spectrum.py --orders 6 10 14 --methods circular pieces wavebit-direct
+PYTHONPATH=$PWD python studies/nvf_resonant_spectrum.py --orders 6 10 14 18 --methods circular wavebit-direct --wavelengths $(seq 905 925)
+PYTHONPATH=$PWD python studies/nvf_resonant_spectrum.py --orders 22 26 --methods circular wavebit-direct --wavelengths 900
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=2 "$NVF_FEM_PYTHON" studies/nvf_fem_reference.py --hs .18 --orders 3 --boundary rayleigh --cut 2
+```
