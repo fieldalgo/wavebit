@@ -1625,6 +1625,74 @@ the missing spatial/degree comparison. The vertex-.070 degree-7 optical
 corner remains absent; no four-corner increment or convergence bound is
 computed from the partial sources.
 
+### Releasing scaled matrix references after factorization
+
+A separate small control shortens the lifetime of the scaled construction
+matrices without changing the numerical precision method. It retains the
+same original complex128 operator, row-max scaling, checked complex64
+conversion, complete MMD factor with .1 pivot threshold, fixed flexible
+correction and original selected/full Maxwell residual guards. After the
+factor returns and all native/original/scaled/rounded/D identities have been
+checked, the helper releases its B128, B64 and cast-buffer references before
+the first inverse request. The action retains A128, D and the completed
+factor. Later identity checks cover A128 and D, with native CSR, free-mask and
+right-hand-side checks preserved; the discarded matrices'
+hashes are historical construction evidence rather than per-request checks.
+
+The source-frozen tiny controls establish actual Python object lifetime.
+In each of the two known-solution cases, all 12 weak-reference targets are
+dead before the known and zero right-hand-side solves. These targets cover
+two CSC matrix objects, their array views and six distinct owning allocations
+occupying 840 bytes per case. A deliberately retained B64 data alias is
+refused. The 22 original refusal controls, two new A128/D mutation checks and
+that ownership check give 25 refusals in total. Both known-solution controls
+still pass, with maximum errors `5.33e-15` and `1.86e-11`; exact zero loads
+still return zero without a factor action. Separate phase records preserve
+that B128 is retained during factor creation and released afterward.
+Weak-reference disappearance establishes reference lifetime, not the amount
+of memory returned to the operating system.
+
+The one complete stored degree-3 FEM control also passes independent closed
+result review. Its settings remain h=.2, cut 1, pad .1, theta=.31, phi=.23
+and quadrature bonus 6, on 436 tetrahedra with 11,256 full and 9,512 selected
+unknowns. All 40 original requests complete with three factor actions each,
+120 actions and 80 outer callbacks in total. There is one factorization,
+one bilinear assembly, 38 linear assemblies, two full operator applications
+and no internal block recomputation. Maximum original selected residual is
+`7.28e-14`; p/s full Maxwell residuals are `6.78e-14`/`4.99e-14`. Every scalar,
+mode power, volume flux and signed Robin-budget output is exactly equal to
+the earlier retained-reference mixed-precision result. Comparisons with all
+three saved direct controls remain within `1.38e-13`.
+
+| Stored degree-3 lifetime control | Peak process RSS, bytes | Child elapsed, s |
+| --- | ---: | ---: |
+| Previous method retaining B128 and B64 | 356,499,456 | 3.95168 |
+| Same method releasing them after factorization | 357,351,424 | 3.36817 |
+
+This measurement **does not reduce observed memory**: the new peak is
+851,968 bytes, about .239%, higher. One elapsed time is shorter, but this
+shared-host observation does not establish a general speedup. The factor
+has the same 8,932,284 nonzeros and takes .95519 s.
+
+The removed references cover 33,350,984 bytes of B128/B64 arrays. The original
+CSC still occupies 20,834,852 bytes and D adds 76,096 bytes. The earlier
+54,185,836-byte three-matrix count remains a construction-phase observation.
+These byte counts are not measured OS savings or an allocation subtraction
+from peak RSS. Native condensation and trace storage, Krylov bases, opaque
+factor/workspaces and allocator behavior remain relevant; release cannot
+undo a process high-water mark reached earlier. The original 180-s parent
+and 8-GiB observed process guard are unchanged.
+
+Both tiny and full degree-3 parents close with exit 0 and unchanged source
+pins. The independent p3 audit checks the lifetime transition, all original
+requests, physical outputs and comparisons without rerunning a solver.
+This independently authored helper remains a separate internal numerical
+validation experiment, with no new dependency or product solver integration.
+It does not authorize redistribution of the optional reference environment.
+The missing vertex-.070 degree-7 optical corner remains absent. The reference
+release qualifies the small construction and its finite equations; it does
+not establish that the larger problem will fit or complete.
+
 ## Completing degree 7 on the smaller edge mesh
 
 The separate edge-.12 branch completes global degree 7 within the same
