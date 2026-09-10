@@ -1570,6 +1570,61 @@ source/launch/completion pins without rerunning a solver. No tolerance or
 factor setting changes during the run. The missing vertex-.070 degree-7
 optical corner and the convergence stopping criterion remain unresolved.
 
+### Degree-7 precision attempt on the vertex-.070 mesh
+
+The same frozen precision method does **not** complete the missing global
+degree-7 corner. The physical settings remain h=.18, edge target .12,
+vertex target .070, cut 4, pad .2 and quadrature bonus 6, with stored internal
+blocks. Its 1,002 tetrahedra have 227,280 full, 107,040 selected and 2,880
+boundary unknowns. The explicit readout quadrature would be 20 rather than
+degree 6's 18. No degree-6 optical-equality gate or unavailable degree-7
+golden is imposed. The fixed parent allows 3,600 s; the observed process
+limit remains 8 GiB.
+
+The complete complex64 factor succeeds in 449.451 s and contains 581,066,720
+nonzeros. The first source request, for p polarization, completes four factor
+actions with GCROT info 0 and original selected residual `4.73e-14`. During
+the second source request's second outer callback, observed process peak RSS
+reaches 8,960,032,768 bytes (8.345 GiB), exceeding the guard by 370,098,176
+bytes. The guard raises before that request returns an accepted iterate or
+GCROT info. Its callback residual, `2.16e-14` after four factor actions, is
+therefore a partial observation, not a completed inverse or full-field check.
+
+| Observed stage | Peak process RSS, bytes | Child elapsed, s |
+| --- | ---: | ---: |
+| Complete factor returned | 3,217,162,240 | 573.11325 |
+| First original inverse completed | 7,614,627,840 | 591.24939 |
+| Second-source callback raised; failure recorded | 8,960,032,768 | 593.81245 |
+
+Exactly one of the required 328 inverse requests completes. There is one
+factorization, one bilinear assembly and two linear assemblies, with no
+boundary response, full operator application or internal recomputation.
+Neither polarization has a completed Maxwell residual or optical output.
+The parent reaps the failed child after 594.249 s, without a timeout, and
+all frozen source pins remain unchanged. An independent standard-library
+audit accepts this closed **failure record**, not a completed reference.
+It checks actual partial stages and counters without rerunning the solver.
+
+The selected original CSC has 47,523,840 nonzeros. Retained original/scaled
+complex128 and rounded complex64 CSC arrays total 2,472,524,172 bytes;
+the diagonal adds 856,320 bytes. The conservative vector allowance is
+345,953,280 bytes and the conversion-diagnostic allowance is 3,041,525,760
+bytes. These separate live-array counts and workspace allowances are not
+an allocation sum or a bound on opaque LU/native storage. Stage readings
+are cumulative process peaks observed after native calls, not a continuous
+memory trace or a hard allocation cap. A lower observed peak at factor
+return does not establish lower eventual resident memory.
+
+New original/scaled matrix and free-mask fingerprints are captured before
+casting; the rounded-matrix fingerprint follows conversion. Retained inputs
+are checked during the accepted work.
+Historical native stored/recomputed degree-7 attempts lack a complete optical
+result and do not supply matching original-matrix fingerprints. This attempt
+therefore establishes neither a complete resource improvement over them nor
+the missing spatial/degree comparison. The vertex-.070 degree-7 optical
+corner remains absent; no four-corner increment or convergence bound is
+computed from the partial sources.
+
 ## Completing degree 7 on the smaller edge mesh
 
 The separate edge-.12 branch completes global degree 7 within the same
