@@ -55,15 +55,52 @@ def test_unresolved_source_or_incomplete_run_is_rejected(changes, match):
         wavebit.fdtd(**options(**changes))
 
 
-def test_source_tail_guard_uses_backend_source_precision():
+def test_source_tail_guard_refuses_past_the_double_precision_limit(monkeypatch):
+    """The guard refuses a pulse whose tail the source precision cannot represent.
+
+    The guard reads the backend's source precision, and that precision is double on every
+    backend now, JAX included -- so which backend it read is no longer observable from a scene
+    call, and a guard hard-coding float64 would pass this too: ``JaxTimeLoop.__init__``
+    lifts ``jax_enable_x64`` when the run builds its time loop, which is upstream of the
+    ``finfo`` this guard reads. So the float32 limit this test used to straddle -- with
+    ``pulse_width=10.``, between the float64 floor and 100 times float32 epsilon -- is no
+    longer reachable from a scene call: setting the cap back on below is overridden from
+    inside ``wavebit.fdtd``, and that is asserted rather than worked around.
+
+    The limit is therefore the double one, ``sqrt(-log(100*eps))/(pi*span)`` with
+    ``span = max|1/wavelength - 1/centre|``, computed here from the same two quantities the
+    guard uses rather than pasted in (16.0629 for this band, against 9.6460 at float32). It is
+    straddled from both sides: just past it must refuse, just short of it must reach the time
+    loop -- which is stubbed out, because what is under test is the guard, not a 16-unit pulse
+    and the 180 periods a run of one would need. The cap is switched off again before each arm,
+    so each one shows on its own that the call lifts it before the guard reads ``finfo``.
+    """
     jax = pytest.importorskip('jax')
+    import wavebit._core.scene_fdtd as scene
+
+    band = np.array([.9, 1., 1.1])
+    centre = (band.min()+band.max())/2
+    span = np.max(np.abs(1/band-1/centre))
+    limit = np.sqrt(-np.log(100*np.finfo(np.float64).eps))/(np.pi*span)
+    assert limit == pytest.approx(16.0629, abs=1e-4)
+
+    class Stepped(Exception):
+        """Raised in place of the time loop: the guard let this width through."""
+
+    def stub(*args, **kwargs):
+        raise Stepped
+    monkeypatch.setattr(scene, 'fdtd_grid', stub)
+
     previous = jax.config.jax_enable_x64
     try:
         jax.config.update('jax_enable_x64', False)
-        # About 5e-6 relative source amplitude: above the float64 numerical
-        # floor, below 100 times float32 epsilon. Rejected before time stepping.
         with pytest.raises(ValueError, match='numerical source tail'):
-            wavebit.fdtd(**options(backend=1, pulse_width=10., n_periods=150))
+            wavebit.fdtd(**options(backend=1, pulse_width=1.01*limit, n_periods=180))
+        assert jax.config.jax_enable_x64, 'the run must lift the cap before its first array'
+        jax.config.update('jax_enable_x64', False)
+        with pytest.raises(Stepped):
+            wavebit.fdtd(**options(backend=1, pulse_width=.99*limit, n_periods=180))
+        assert jax.config.jax_enable_x64, 'the run must lift the cap before its first array'
     finally:
         jax.config.update('jax_enable_x64', previous)
 

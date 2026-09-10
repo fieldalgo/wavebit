@@ -6,7 +6,7 @@ _core.grid_fdtd and must not be duplicated by a backend.
 """
 import numpy as np
 
-from .._core.backend import as_array
+from .._core.backend import as_array, lift_jax_x64
 
 
 class NumpyTimeLoop:
@@ -52,6 +52,16 @@ class NumpyTimeLoop:
 class JaxTimeLoop(NumpyTimeLoop):
     def __init__(self, device=None, reference=None):
         import jax
+        # The FDTD door onto JAX, and it must lift the 32-bit cap for the same reason
+        # `backends/jax_backend.py` does at its own top: with x64 off, `jnp.asarray(x,
+        # float64)` still yields float32, so the time loop runs at complex64 while every
+        # reported dtype reads complex128 and nothing warns. This constructor is the
+        # earliest point on the path -- `scene_fdtd` and `grid_fdtd` both take `runtime.xp`
+        # and `runtime.array` from it before building anything -- so it goes here: after
+        # `import jax` (the shared body only acts on a loaded JAX) and before any array is
+        # built. Not at module level: `import wavebit` already imports this module, and four
+        # committed assertions pin that it pulls in no JAX.
+        lift_jax_x64(required=True)
         import jax.numpy as xp
         if device in (0, 1):
             device = 'cpu' if device == 0 else 'gpu'

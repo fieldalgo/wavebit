@@ -57,7 +57,7 @@ from typing import Any
 
 import numpy as np
 
-from .backend import array_namespace, as_array, checked_float
+from .backend import array_namespace, as_array, checked_float, lift_jax_x64
 
 __all__ = ['DrawnOn', 'Lattice', 'as_lattice', 'meshgrid_xy', 'is_axis_aligned', 'jacobian',
            'order_kxy', 'periods_of', 'reduced_basis', 'reduction_transform', 'sample_grid']
@@ -796,6 +796,10 @@ def meshgrid_xy(grid_shape, period=None, lattice=None, backend=0, dtype=None):
         import array_api_compat.numpy as xp
     elif backend == 1:
         import jax.numpy as xp
+        # A door onto JAX of its own: it asks for float64 below, and under JAX's 32-bit cap
+        # that request yields float32 -- coordinates a solve's own later lift cannot restore.
+        # The import has loaded JAX, which is all the shared lift needs.
+        lift_jax_x64(required=True)
     elif backend == 2:
         import array_api_compat.torch as xp
     else:

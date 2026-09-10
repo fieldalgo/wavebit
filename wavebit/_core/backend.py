@@ -19,6 +19,65 @@ def array_namespace(*xs):
     return ac.array_namespace(*xs)
 
 
+def lift_jax_x64(required=False):
+    """Lift JAX's 32-bit cap, if JAX is loaded, and say whether it is lifted. **The one body.**
+
+    It lifts a *cap*, not a default: with ``jax_enable_x64`` off, ``jnp.asarray(x,
+    jnp.float64)`` still yields **float32**, so double precision cannot be opted into at all.
+    That is why the ordering is a correctness condition rather than a preference — wavebit
+    asks for float64 correctly, JAX hands back float32, every reported dtype still reads
+    float64 because the result is widened on the way out, and nothing warns. Widening
+    afterwards cannot recover digits that were never computed: a solve reporting
+    ``complex_dtype=0`` everywhere once returned ``|R| = 3.94`` against a true 0.67. See
+    :class:`PrecisionLossWarning` and ``docs/branch-cuts.md``.
+
+    So every public door onto JAX must call this **after** JAX is loaded (the body acts only
+    on the ``jax`` in ``sys.modules``) and **before** the first array is built behind it, and
+    there must be exactly one body doing it -- a door without the call is how the FDTD time
+    loop ended up running its first call of a process at complex64 while ``rcwa`` did not.
+    The doors:
+
+    * ``wavebit/backends/jax_backend.py``, at its top, above the imports that could build an
+      array (``rcwa``);
+    * ``wavebit.backends.time_domain.JaxTimeLoop.__init__``, before it hands out ``xp``
+      (``fdtd`` and ``fdtd_grid``);
+    * ``wavebit.meshgrid_xy(..., backend=1)``, before it samples the grid;
+    * ``wavebit.__init__``, on ``import wavebit`` when JAX is *already* loaded;
+    * ``wavebit.enable_x64()``, the public early lift, which additionally *imports* JAX.
+
+    Code that only ever receives arrays one of those produced (``eig``, the float reads, the
+    boundary and factorization kernels) is behind a door, not one.
+
+    This does not import JAX. That is deliberate and load-bearing in two directions: the
+    setting is process-wide and does not belong to a caller who never asks for JAX, and
+    ``import wavebit`` already imports ``wavebit.backends.time_domain``, so a lift at that
+    module's top level would pull JAX into every ``import wavebit`` -- which four committed
+    assertions pin against (``tests/test_fp_warnings.py``, ``tests/test_material.py``,
+    ``studies/fdtd_install_smoke.py``). Hence a function call rather than a side-effect
+    import, which ``F401`` would flag anyway.
+
+    Idempotent. With ``required=False`` -- only ``import wavebit``, which may run with JAX
+    absent or mid-import -- a cap it cannot lift is a no-op and the return value says so.
+    Every other door has just imported JAX and is about to build arrays, so it passes
+    ``required=True``: a lift that did not take raises there rather than letting the run
+    proceed at single precision, which is the failure this function exists to stop.
+    """
+    import sys
+    jax = sys.modules.get('jax')
+    failure = None
+    try:
+        jax.config.update('jax_enable_x64', True)
+    except Exception as err:          # absent, or mid-import and not yet usable
+        failure = err
+    # Read back rather than trusted: what the run gets is the config, not the call's return.
+    lifted = bool(getattr(getattr(jax, 'config', None), 'jax_enable_x64', False))
+    if required and not lifted:
+        raise RuntimeError(
+            "could not lift JAX's 32-bit cap (jax_enable_x64), so a JAX run would silently be "
+            'single precision') from failure
+    return lifted
+
+
 def _readable(v, xp):
     """``v`` as something ``xp`` can reduce, without disturbing an autograd graph.
 

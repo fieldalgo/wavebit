@@ -78,10 +78,12 @@ Tutorials [`03-jax`](https://github.com/fieldalgo/wavebit/blob/develop/tutorials
 
 JAX caps arrays at 32 bits unless `jax_enable_x64` is on. It is a **cap, not a default**: with
 it off, `jnp.asarray(x, jnp.float64)` still yields float32, so double precision cannot be opted
-into at all. Two things already lift it, and neither covers every ordering:
+into at all. Several things already lift it, and none covers every ordering:
 
 * `import wavebit` lifts it if JAX is **already** imported.
-* The JAX backend lifts it when it is first **used**.
+* The JAX RCWA backend lifts it when it is first **used**.
+* A JAX FDTD run (`fdtd` or `fdtd_grid`) lifts it when it builds its time loop, and
+  `meshgrid_xy(..., backend=1)` before it samples — each before its first array.
 
 The gap is JAX arriving after wavebit and being used before the first solve — an array built in
 that window is silently `complex64` while `complex_dtype` still reads 128 everywhere. That

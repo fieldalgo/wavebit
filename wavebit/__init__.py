@@ -1,10 +1,11 @@
 def _enable_jax_x64_if_already_imported():
     """Lift JAX's 32-bit cap now, if the caller has JAX loaded.
 
-    ``wavebit/backends/jax_backend.py`` enables ``jax_enable_x64`` when the JAX backend is first
-    *used*. That was chosen so the process-wide setting is not touched on behalf of a caller
-    who never asks for JAX, and that half still holds — this does not import JAX, it only acts
-    when JAX is already there.
+    Each door onto JAX lifts the cap as it opens -- ``wavebit/backends/jax_backend.py`` when the
+    RCWA backend is first *used*, ``JaxTimeLoop.__init__`` when an FDTD run first builds its
+    time loop; :func:`wavebit._core.backend.lift_jax_x64` lists them all. That was chosen so
+    the process-wide setting is not touched on behalf of a caller who never asks for JAX, and
+    that half still holds — this does not import JAX, it only acts when JAX is already there.
 
     What did not hold is the other half. The setting gets flipped either way, so deferring it
     does not spare the caller the side effect; it only makes the *moment* depend on import and
@@ -20,13 +21,13 @@ def _enable_jax_x64_if_already_imported():
     64-bit for the caller's own code too, which is why this stays limited to callers who have
     already imported JAX, and why `PrecisionLossWarning` still covers the ordering this cannot
     reach (``import wavebit`` before ``import jax``).
+
+    The lift itself is the shared body, :func:`wavebit._core.backend.lift_jax_x64`, so a door
+    that forgets it is a missing call rather than a copy that drifted. This is the one caller
+    that tolerates failure: JAX may be absent, or mid-import, and that is not an error here.
     """
-    import sys
-    jax = sys.modules.get('jax')
-    try:
-        jax.config.update('jax_enable_x64', True)
-    except Exception:                 # absent, or mid-import and not yet usable
-        pass
+    from ._core.backend import lift_jax_x64
+    lift_jax_x64()
 
 
 _enable_jax_x64_if_already_imported()
@@ -49,10 +50,11 @@ def enable_x64():
     See :class:`~wavebit._core.backend.PrecisionLossWarning`, which is what says so at runtime,
     and ``docs/branch-cuts.md`` for the case.
 
-    Two other things already lift it, and this exists because neither covers every ordering.
-    ``import wavebit`` lifts it if JAX is *already* loaded, and the JAX backend lifts it when it
-    is first used. The gap is JAX arriving after wavebit and being used before the first solve,
-    which is exactly the ordering above.
+    Other things already lift it, and this exists because none of them covers every ordering.
+    ``import wavebit`` lifts it if JAX is *already* loaded, the JAX RCWA backend lifts it when
+    it is first used, and the JAX time loop lifts it when an FDTD run first builds one. The gap
+    is JAX arriving after wavebit and being used before the first solve, which is exactly the
+    ordering above.
 
     It lifts a **cap**, not a choice. With x64 off, ``jnp.asarray(x, jnp.float64)`` still gives
     float32, so double precision cannot be opted into at all; with it on, ``jnp.asarray(x,
@@ -72,8 +74,12 @@ def enable_x64():
             'Install it (`pip install jax`) or drop the call -- NumPy and PyTorch have no '
             'such cap, and `complex_dtype` selects the solve precision on every backend.')
 
-    import jax
-    jax.config.update('jax_enable_x64', True)
+    # lift_jax_x64 reads JAX from sys.modules, so importing it is the point; a bare
+    # `import jax` here would be an unused name (F401). `required=True` keeps the promise
+    # above: a lift that does not take raises instead of returning quietly.
+    importlib.import_module('jax')
+    from ._core.backend import lift_jax_x64
+    lift_jax_x64(required=True)
 
 from .main import fdtd, rcwa
 from ._core.fdtd import UnsettledFieldWarning, permittivity_at

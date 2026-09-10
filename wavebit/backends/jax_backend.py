@@ -7,16 +7,22 @@ depth went.
 effect nobody chose: RCWA needs double precision, and with x64 off JAX silently truncates
 float64 and complex128 at array creation. It happens here, on first use of this backend, rather
 than on `import wavebit`, because the setting is process-wide and belongs to the caller. The
-line sits above every other import in this file for the reason it sat above the solver import
+call sits above every import but the two it needs, for the reason it sat above the solver import
 in the package this module replaces: whatever runs first must not build an array under the cap.
 
 `wavebit.enable_x64()` is the public way to lift it earlier, which is what a caller who builds
 JAX arrays *before* the first solve needs -- see :class:`~wavebit._core.backend.PrecisionLossWarning`.
+
+The lift itself lives in :func:`wavebit._core.backend.lift_jax_x64`, the only body that performs
+it, which lists every door that calls it. That module imports nothing but `array_api_compat`
+and NumPy, so naming it here pulls in no JAX of its own.
 """
 import jax
 
+from .._core.backend import lift_jax_x64
+
 # Above the rest, and before anything here can build an array. See the module docstring.
-jax.config.update('jax_enable_x64', True)
+lift_jax_x64(required=True)
 
 from functools import partial                                    # noqa: E402
 
