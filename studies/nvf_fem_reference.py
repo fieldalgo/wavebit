@@ -712,7 +712,8 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
                           *, transform=None, theta=THETA, phi=0., condense=True,
                           recompute_internal=False,
                           quadrature_bonus=6, edge_h=None, vertex_h=None, film_degree=None,
-                          film_degree_pad=0., progress=None, boundary_progress_every=None):
+                          film_degree_pad=0., progress=None, boundary_progress_every=None,
+                          source_progress=False):
     """Independent affine H(curl) FEM with shared p/s Rayleigh boundary solves.
 
     The physical profile is fixed to the .7-micrometer reference cell, width
@@ -751,6 +752,13 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
     2*max_order+bonus, including any local film degree enrichment.
     The polynomial bulk and local Robin forms retain their default quadrature.
 
+    ``source_progress=True`` reports after each completed p/s source inverse
+    and stored source response. The ``source_progress`` stage includes completed
+    and total source-column counts and the polarization. Raising from this
+    callback prevents the next source or any boundary trace from starting.
+    Its default False adds no progress events. This reports completed native
+    calls; it neither interrupts those calls nor reduces their memory use.
+
     ``boundary_progress_every`` optionally reports after that many completed
     trace inverse applications, and after the final trace. The callback receives
     a ``boundary_progress`` stage and completed/total boundary-column counts.
@@ -768,6 +776,8 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
         raise ValueError('condense must be boolean')
     if not isinstance(recompute_internal, (bool, np.bool_)):
         raise ValueError('recompute_internal must be boolean')
+    if not isinstance(source_progress, (bool, np.bool_)):
+        raise ValueError('source_progress must be boolean')
     if recompute_internal and not condense:
         raise ValueError('recompute_internal requires condense=True')
     if (isinstance(quadrature_bonus, (bool, np.bool_))
@@ -776,6 +786,7 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
         raise ValueError('quadrature_bonus must be a nonnegative integer')
     order, condense = int(order), bool(condense)
     recompute_internal = bool(recompute_internal)
+    source_progress = bool(source_progress)
     quadrature_bonus = int(quadrature_bonus)
     if boundary_progress_every is not None:
         if (isinstance(boundary_progress_every, (bool, np.bool_))
@@ -885,6 +896,9 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
             response = rhs.CreateVector()
             response.data = inverse*rhs
             base[:, column] = response.FV().NumPy()
+            if source_progress:
+                report('source_progress', source_columns_completed=column+1,
+                       source_columns_total=len(sources), polarization=polarizations[column])
         traces = np.zeros((len(boundary), rank), complex)
         responses = np.zeros_like(traces)
         correction = np.zeros((rank, rank), complex)

@@ -1044,6 +1044,22 @@ SuiteSparse workspace and operating-system page residency remain
 unmeasured by these observations. No external implementation is copied
 into the reference instrument.
 
+The optional `source_progress=True` argument now reports immediately
+after each p/s source inverse has completed and its response has been
+stored. Each `source_progress` stage records `source_columns_completed`,
+`source_columns_total=2` and `polarization`. A caller's resource guard can
+therefore stop after the first source, before starting the second source
+or assembling any boundary trace. The default False preserves the
+existing stage sequence and metadata. This earlier observation cannot
+interrupt a native call or lower its peak memory use.
+
+Forced-evaluation controls stop after source 1 and source 2 under both
+storage choices. They confirm one factorization, exactly the requested
+number of completed inverses, two assembled volume loads and no assembled
+boundary trace. Invalid flags are refused before meshing; the existing
+default-stage controls remain unchanged. The 12 focused storage and
+affine-scattering tests pass in 31.964 s.
+
 ## Completing degree 7 on the smaller edge mesh
 
 The separate edge-.12 branch completes global degree 7 within the same

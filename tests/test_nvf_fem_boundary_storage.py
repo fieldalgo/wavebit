@@ -217,6 +217,82 @@ class FEMBoundaryStorageTests(unittest.TestCase):
         self.assertEqual(events[-1]['boundary_columns_completed'], 8)
         self.assertEqual(events[-1]['boundary_columns_total'], 36)
 
+    def test_source_callback_stops_after_completed_inverses_before_any_trace(self):
+        original_inverse = ng.BaseMatrix.Inverse
+        original_assemble = ng.LinearForm.Assemble
+        original_compute = ng.BilinearForm.ComputeInternal
+
+        class AbortReference(RuntimeError):
+            pass
+
+        for recompute_internal in (False, True):
+            for stop_after in (1, 2):
+                factorizations, applications, assemblies, reconstructions, events = [], [], [], [], []
+
+                class EagerCountedInverse:
+                    def __init__(self, matrix):
+                        self.matrix = matrix
+
+                    def __mul__(self, rhs):
+                        result = rhs.CreateVector()
+                        # Count only after the native solve has actually run;
+                        # matrix*rhs alone would return a lazy expression.
+                        result.data = self.matrix*rhs
+                        applications.append(None)
+                        return result
+
+                def inverse(matrix, *args, **kwargs):
+                    result = original_inverse(matrix, *args, **kwargs)
+                    factorizations.append(None)
+                    return EagerCountedInverse(result)
+
+                def assemble(form, *args, **kwargs):
+                    result = original_assemble(form, *args, **kwargs)
+                    assemblies.append(None)
+                    return result
+
+                def compute(form, *args, **kwargs):
+                    result = original_compute(form, *args, **kwargs)
+                    reconstructions.append(None)
+                    return result
+
+                def progress(record):
+                    events.append((record, len(applications), len(assemblies)))
+                    if (record['stage'] == 'source_progress'
+                            and record['source_columns_completed'] == stop_after):
+                        raise AbortReference('caller source resource guard')
+
+                with (self.subTest(recompute_internal=recompute_internal, stop_after=stop_after),
+                      patch.object(ng.BaseMatrix, 'Inverse', inverse),
+                      patch.object(ng.LinearForm, 'Assemble', assemble),
+                      patch.object(ng.BilinearForm, 'ComputeInternal', compute),
+                      self.assertRaises(AbortReference)):
+                    self.reference.solve_affine_rayleigh(
+                        .2, 3, 1, recompute_internal=recompute_internal,
+                        progress=progress, source_progress=np.bool_(True), boundary_progress_every=1)
+                self.assertEqual(len(factorizations), 1)
+                self.assertEqual(len(applications), stop_after)
+                self.assertEqual(len(reconstructions), stop_after if recompute_internal else 0)
+                # Both original volume loads are assembled before factorization.
+                # The first trace would be a third LinearForm assembly.
+                self.assertEqual(len(assemblies), 2)
+                self.assertEqual([record['stage'] for record, _, _ in events],
+                                 ['mesh', 'factorized']+['source_progress']*stop_after)
+                self.assertGreater(events[0][0]['dofs'], events[0][0]['coupling_dofs'])
+                for count, (record, completed_inverses, assembled_loads) in enumerate(events[2:], 1):
+                    self.assertEqual(record['source_columns_completed'], count)
+                    self.assertEqual(record['source_columns_total'], 2)
+                    self.assertEqual(record['polarization'], ('p', 's')[count-1])
+                    self.assertEqual(completed_inverses, count)
+                    self.assertEqual(assembled_loads, 2)
+
+    def test_invalid_source_progress_flag_is_rejected_before_meshing(self):
+        with patch.object(self.reference, 'make_affine_profile_mesh') as make_mesh:
+            for enabled in (0, 1, 0., 1., None, 'yes', [], np.nan):
+                with self.subTest(source_progress=enabled), self.assertRaisesRegex(ValueError, 'source_progress'):
+                    self.reference.solve_affine_rayleigh(source_progress=enabled)
+            make_mesh.assert_not_called()
+
     def test_invalid_boundary_progress_interval_is_rejected_before_meshing(self):
         with patch.object(self.reference, 'make_affine_profile_mesh') as make_mesh:
             for interval in (True, np.bool_(False), 0, -1, 1.5, '8', np.nan):
