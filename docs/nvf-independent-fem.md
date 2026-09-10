@@ -1406,6 +1406,53 @@ candidate did not record its failed original residual, so their convergence
 quality cannot be compared from the iteration counts. Neither candidate
 qualifies a degree-6/7 run or changes the native direct-solver default.
 
+### Exact additional condensation of independent face blocks
+
+A separate algebraic candidate eliminates independent face-interior blocks
+after the existing element-interior condensation. Actual compressed periodic
+face DOFs define the groups; top/bottom boundary and edge DOFs remain retained.
+A fixed greedy pass checks both directions of the original sparse adjacency,
+ignoring only exact zeros. Identical periodic aliases are deduplicated;
+overlapping or partially excluded groups are refused.
+
+With eliminated block diagonal H, the retained matrix is
+`S = A_RR - A_RB H^-1 A_BR`. Every request forms
+`g = b_R - A_RB H^-1 b_B`, solves `S x_R = g`, and reconstructs
+`x_B = H^-1 (b_B - A_BR x_R)`, including when `b_B=0`.
+These are ordinary complex solves, with no adjoint substitution. A singular
+local block is refused even when the original full matrix is invertible.
+The retained factor keeps the previously qualified row scaling, MMD ordering
+and .1 pivot threshold. Shared face DOFs are not reclassified as element-local.
+
+Two known-solution complex synthetic cases pass, with largest solution error
+`2.67e-14` and complex-linearity error `5.94e-14`. Twenty refusal controls
+include singular local and retained factors, ambiguous groups and finite
+inaccurate solve outputs rejected by their original residual checks.
+
+The single stored degree-3 FEM control also completes. Its original selected
+CSC and free mask exactly match the stored controls. All 40 reconstructed
+inverse actions pass, with maximum selected residual `4.48e-14` and p/s full
+Maxwell residuals `3.85e-14`/`2.89e-14`. All compared outputs, including every
+diffraction order and signed Robin budget, agree with the three saved direct
+controls within `1.67e-13`.
+
+However, this construction **does not reduce observed memory**. The 197 local
+blocks remove 1,576 of 9,512 selected unknowns, leaving 7,936, but the Schur
+matrix grows from 1,039,840 to 1,255,680 nonzeros. Its retained LU has
+9,114,416 nonzeros versus 8,932,284 for the original scaled MMD control,
+in addition to the local factors. Peak process RSS is 758,153,216 bytes,
+compared with 578,551,808 for native stored and 384,696,320 for scaled MMD
+stored. The child takes 4.887 s, including 1.828 s for the retained factor;
+these are shared-host observations, not equal-accuracy performance bounds.
+
+The preallocation estimate is 379,691,640 bytes against the declared 512-MiB
+adapter-array limit. It includes streamed nonsymmetric Schur updates and
+retained local factors, but excludes opaque sparse-factor workspaces, native
+condensation storage and runtime allocators. The separate 8-GiB observed
+process guard includes those costs. A smaller retained dimension is therefore
+insufficient evidence for a higher-degree run. The default solver and optical
+convergence status remain unchanged.
+
 ## Completing degree 7 on the smaller edge mesh
 
 The separate edge-.12 branch completes global degree 7 within the same
