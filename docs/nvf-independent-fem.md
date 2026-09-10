@@ -681,6 +681,10 @@ with its existing `5e-4` criterion. A mixed base-2/film-3 control checks
 the same equivalence with variable entity degrees. These controls test
 the alternative elimination path, not optical discretization accuracy.
 All seven focused controls pass in 28.733 s with the original thresholds.
+The [vertex-degree-7 retry](#resource-limited-global-degree-7) nevertheless
+exceeds the same 8-GiB process RSS guard. The small equivalence controls
+therefore establish the arithmetic option, not a solution to that resource
+limit.
 
 ## Testing a second physical edge interval
 
@@ -953,6 +957,26 @@ This attempt returns no optical result and cannot extend the degree
 ladder or define a stopping criterion. It demonstrates why checking RSS
 only after factorization is insufficient. Even the new callback can
 detect a limit only between completed native calls.
+
+A second attempt uses `recompute_internal=True` from commit `ee47fb4`,
+with the same physical problem, mesh settings, global degree, quadrature,
+full/coupling limits and 8-GiB RSS ceiling. It confirms the same mesh and
+space counts. The reporting interval is reduced from 32 to 8 completed
+trace responses. Factorization finishes at 310.463 s with reported peak
+RSS 4,895,817,728 bytes. At the first report, after 8 of 324 responses
+and 569.202 s, peak RSS is 9,416,654,848 bytes and the guard raises again.
+This attempt also exits without a boundary completion or optical result.
+
+Omitting internal blocks has not made this case fit the limit. These
+two partial executions stop at different trace counts, so their peak RSS
+and elapsed times do not establish a memory saving or speed comparison.
+The interval between factorization and the first trace report includes
+source condensation, source inverse applications, trace assembly and
+trace inverse applications. The available observations do not identify
+which operation produced the peak. In particular, the 29,859,840 retained
+boundary-array bytes cannot account for the full process RSS. Both raw
+failures remain recorded; neither fills the missing vertex-degree-7
+point or supplies an optical stopping criterion.
 
 A mesh-only check identifies a smaller global-degree-7 interval on the
 existing edge-.12 mesh without the extra vertex restriction: 780

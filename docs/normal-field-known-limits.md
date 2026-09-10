@@ -1207,7 +1207,10 @@ open.
 
 The [global-degree-7 FEM attempt](nvf-independent-fem.md#resource-limited-global-degree-7)
 on the vertex-.070 mesh stops at 32 of 324 boundary responses after its
-8-GiB RSS guard is exceeded. It produces no optical value. The separate
+8-GiB RSS guard is exceeded. A retry that recomputes internal elimination
+blocks also exceeds that ceiling, reporting peak RSS 9.417 GB after
+8 responses. Neither attempt produces an optical value, and the different
+partial executions do not establish a memory or speed improvement. The separate
 [edge-only degree-7 solve](nvf-independent-fem.md#completing-degree-7-on-the-smaller-edge-mesh)
 completes at peak RSS 7.056 GB. Its p/s degree-6-to-7 transmission changes
 are `+6.55835e-5` / `+6.89266e-5`; individual powers still move by up to
