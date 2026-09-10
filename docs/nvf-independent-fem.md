@@ -1330,6 +1330,49 @@ UMFPACK remains the reference default. This completed first source has no
 full Maxwell residual, boundary response, optical result or degree-7
 qualification. Another resource trial needs a distinct validated change.
 
+### One incomplete-factor Krylov candidate
+
+A separate fixed candidate targets factor storage with incomplete LU of
+D A D. The factors serve only as a left preconditioner
+`M(v) = D P.solve(D v)` for restarted GMRES on the **original** selected
+system A x = b. The original selected and full Maxwell residual guards
+remain `1e-11`, with `2e-10` required for all matched observables. A
+tolerance-stopped Krylov action is not exactly a fixed linear map, so the
+Woodbury correction also requires those full residual and observable checks.
+
+The declared candidate uses drop tolerance `1e-4`, fill factor 2,
+`basic,area` dropping, MMD_AT_PLUS_A, diagonal pivot threshold .1 and
+`RowPerm=NOROWPERM`. The last option avoids requesting the excluded optional
+matching implementation. GMRES uses relative tolerance `1e-12`, zero
+absolute tolerance and initial guess, restart length 60 and at most ten
+cycles. Nonzero exit information always fails; there is no direct-solve
+fallback or tolerance adjustment. These are candidate settings, not a
+convergence guarantee. Only the already licensed installed SciPy/SuperLU
+internal-validation scope is used.
+
+Two known-solution complex synthetic controls, including zero diagonals,
+noncontiguous free indices and prescribed positive diagonal rescaling,
+pass with largest solution error `4.837e-13`. The same request validator
+returns exact zero for zero loads and refuses 16 injected failures,
+including a misleading zero preconditioned-residual report.
+
+The single planned degree-3 stored control then **fails its first GMRES
+request** after 600 inner iterations and 611 preconditioner actions. Its
+original CSC, free mask, D and D A D match the saved same-storage direct
+control. The incomplete factor reports 1,997,505 nonzeros and takes
+0.311 s to construct. No inverse request completes: the counts are one
+factorization, one assembled bilinear form and two source loads, with no
+boundary response or internal recovery. The failed return's exact exit
+value and original residual were not recorded because the exit-information
+guard runs before those observations.
+
+The child fails after 2.469 s with observed peak RSS 283,279,360 bytes;
+the closed parent records exit 1 after 2.535 s, without a timeout. This is
+an aborted first-source attempt, not a complete low-memory solve. It has
+no full Maxwell residual or optical result and supplies no basis for a
+degree-6/7 run. The fixed weak preconditioner is not adopted; changing it
+would require another declared construction and independent qualification.
+
 ## Completing degree 7 on the smaller edge mesh
 
 The separate edge-.12 branch completes global degree 7 within the same
