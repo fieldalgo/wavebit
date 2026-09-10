@@ -159,3 +159,7 @@ vertical shifts, overlapping pairs, gain or tensor materials. It does not
 prove accuracy for all admitted contrasts or geometries, establish an optical
 stopping rule, or turn a fixed-contact JAX tangent into a domain-crossing
 shape derivative.
+
+The separate [exact finite-gap family](nvf-cartesian-pair-gap.md) extends evaluation
+to admitted positive gaps with analytically rescaled coordinates. This endpoint
+implementation remains unchanged and supplies an independent qualified reference.

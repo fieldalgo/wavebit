@@ -1234,6 +1234,12 @@ pair charts. Independent nodal, moving-triangle and closure equations verify
 its per-length derivative. This does not widen ordinary contact-preserving
 JAX tangents or establish general geometry or optical accuracy.
 
+The separate [NumPy exact finite-gap family](nvf-cartesian-pair-gap.md) also
+evaluates admitted positive gaps on the same frozen contact/open chart, using
+finite rescaled equations and a per-length analytical derivative. Thirty
+contact/positive-gap cases pass original nodal and moving-simplex controls;
+this does not change ordinary contact JVP admission or certify optical accuracy.
+
 The [global-degree-7 FEM attempt](nvf-independent-fem.md#resource-limited-global-degree-7)
 on the vertex-.070 mesh stops at 32 of 324 boundary responses after its
 8-GiB RSS guard is exceeded. A retry that recomputes internal elimination

@@ -13,6 +13,7 @@
 | `cartesian_rectangle.py` | How does a separated physical rectangle retain its Cartesian edges and finite derivatives on an oblique lattice with an explicit frozen orientation plan? |
 | `cartesian_pair.py` | How do two horizontal equal-height rectangles retain physical edges, exact contact state, input identity and finite derivatives through an explicitly planned public adapter? |
 | `cartesian_pair_opening.py` | How does the finite pair retain its analytical right-opening response through exact collapsed topology, Laurent weak operators and moving Fourier weights? |
+| `cartesian_pair_gap.py` | How can the finite pair cross exact contact and positive gaps without dividing its weak solve or thin fields by gap? |
 
 These kernels build constitutive data. Optical study fixtures and their
 fixed-wavelength propagators remain in `studies/`. The public entry points are

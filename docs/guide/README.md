@@ -46,6 +46,7 @@ be runnable as written.
 | [`cartesian-rectangle-nvf.md`](cartesian-rectangle-nvf.md) | How does one physical rectangle per layer retain its geometry and live derivatives on an oblique lattice? |
 | [`cartesian-rectangle-pair-nvf.md`](cartesian-rectangle-pair-nvf.md) | How do two horizontal equal-height physical rectangles retain input identity, exact contact state and live constrained derivatives? |
 | [`cartesian-pair-opening.md`](cartesian-pair-opening.md) | How do I evaluate a separate NumPy finite right-opening value and per-length derivative at exact contact? |
+| [`cartesian-pair-gap.md`](cartesian-pair-gap.md) | How do I evaluate a separate NumPy finite pair at zero or positive physical gap and obtain its per-length derivative? |
 | [`fields.md`](fields.md) | How do I get a near field out, why is it off by default, and what shape does it come back in? |
 | [`autodiff.md`](autodiff.md) | How do I differentiate a solve, and what does `jax.jit` need that `jax.grad` does not? |
 | [`backends.md`](backends.md) | What can NumPy, JAX and PyTorch each do here, which should I run, and how do I ask for a device or a precision? |
