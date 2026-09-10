@@ -3,8 +3,10 @@
 Written: 2026-09-10
 
 Targets:
+- `wavebit/_core/conforming/cartesian_rectangle.py`
 - `studies/nvf_cartesian_cell.py`
 - `tests/test_nvf_cartesian_cell.py`
+- `tests/test_nvf_cartesian_rectangle_api.py`
 - `studies/results/nvf_cartesian_cell.log`
 
 The experimental `CartesianRectangleCell` keeps a rectangle's physical
@@ -15,6 +17,9 @@ material derivatives agree with an independently differentiated weak
 system and moving-triangle quadrature. This establishes a differentiable
 finite cell for one separated rectangle. It does not establish optical
 accuracy or extend the public `ConformingNVF` geometry contract.
+The separate explicit
+[`CartesianRectangleNVF`](guide/cartesian-rectangle-nvf.md) builder exposes
+this bounded finite space through ordinary rectangle layer dictionaries.
 
 ## Geometry and finite space
 
@@ -199,6 +204,46 @@ does not change the independent quadrature or automatic-derivative gates.
 
 ## Scope of the result
 
+The public integration and preserved cell suite pass all 59 controls in
+7.44 s. The promoted numerical definitions match the qualified kernel;
+only imports and the module's scope description change before the new
+adapter is added. The original 38-test file is unchanged. A fresh process
+using only the copied package builds the new public surface without
+importing `studies` or JAX.
+The existing `ConformingNVF` and `AffineProfileNVF` public regression
+files separately pass 97 controls in 47.47 s. The literal public guide
+example also executes successfully. Source hashes remain unchanged
+across each verification; these durations include compilation and are
+not performance comparisons.
+
+The public derivative checks independently differentiate the closure
+`H = Q^-H G Q^-1` and longitudinal inverse using
+
+```text
+dH = Q^-H dG Q^-1 - Q^-H dQ^H H - H dQ Q^-1
+d inverse(E) = -inverse(E) dE inverse(E).
+```
+
+Their Q, G, E and variations come from the independent weak-system and
+moving-triangle oracle above. Raw scalar and `Material` inputs each
+exercise all 13 coordinates plus mixed, translation, scale and rotation
+directions: 34 public closure JVP cases under the unchanged `3e-9` gate.
+The quadrature and value comparisons retain `3e-10`. Exact unequal/zero
+mode selection, ordinary length aliases, structural plan refusal,
+uniform-layer poisoning for invalid traced lattices, and existing
+builders' geometry admission are also checked. Tiny `solve_conv` controls
+at `(0,0)`, `(1,0)` and `(0,1)` match independent uniform Airy powers;
+patterned power balance checks slot integration only, not optical accuracy.
+
+The implementation now lives in the installed package's conforming core;
+the study module retains compatibility imports. `CartesianRectangleNVF`
+maps ordinary physical lengths, angle, offset and scalar materials
+directly to this cell. It adds no lattice reduction, fractional shear,
+material rescaling, rotation or Fourier phase. An explicit immutable
+stack plan contains only uniform/patterned layer choices and cyclic
+vertex permutations. The original `ConformingNVF` and `AffineProfileNVF`
+geometry contracts remain unchanged.
+
 The implementation uses the project's existing NumPy/JAX arithmetic and
 polygon transform. The weak-system and quadrature controls are original
 test code. No optional NGSolve runtime or external FEM source is imported
@@ -206,7 +251,8 @@ into this cell.
 
 These small cells do not certify corner resolution, a continuum
 derivative, contact behavior or Maxwell transmission. Their finite
-spaces depend on the explicitly chosen triangulation; the four-choice
-planner does not implement a general geometry adapter. The separate
+spaces depend on the explicitly chosen triangulation; the public adapter
+and four-choice planner admit only the stated single-rectangle domain.
+The separate
 [independent Maxwell study](nvf-independent-fem.md) remains the optical
 qualification work.

@@ -1213,8 +1213,10 @@ controls. An explicit four-choice orientation plan admits additional
 contained rotations while retaining one fixed triangulation during live
 replay. This bounded experimental module supports separated rectangles
 on the admitted templates; it does not prove general orientation coverage,
-add contact, multiple shapes or a public geometry adapter, or certify
-optical accuracy.
+add contact or multiple shapes, or certify optical accuracy. The explicit
+[`CartesianRectangleNVF`](guide/cartesian-rectangle-nvf.md) builder now
+exposes one such physical rectangle per patterned layer with a required
+frozen plan; it does not broaden the other builders' geometry contracts.
 
 The [global-degree-7 FEM attempt](nvf-independent-fem.md#resource-limited-global-degree-7)
 on the vertex-.070 mesh stops at 32 of 324 boundary responses after its

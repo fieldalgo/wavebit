@@ -10,9 +10,13 @@
 | `polynomial_body.py` | How do real and complex polynomial-body cells retain their contact traces and full energy projection? |
 | `affine_cell.py` | How does an affine reference profile retain the full oblique metric, exact laminated contact and stable opening derivative, physical field frame and exact directional Fourier set? |
 | `affine_profile.py` | How do explicit fractional profiles on nonorthogonal lattices preserve physical materials, offsets, contact and the caller's Fourier modes? |
+| `cartesian_rectangle.py` | How does a separated physical rectangle retain its Cartesian edges and finite derivatives on an oblique lattice with an explicit frozen orientation plan? |
 
 These kernels build constitutive data. Optical study fixtures and their
 fixed-wavelength propagators remain in `studies/`. The public entry points are
 `wavebit.ConformingNVF` for physical rectangle layers and
-`wavebit.AffineProfileNVF` for explicit fractional profiles. Direct kernel
-inputs retain the historical reference length and are implementation details.
+`wavebit.AffineProfileNVF` for explicit fractional profiles. The separate
+experimental `wavebit.CartesianRectangleNVF` admits one separated physical
+rectangle per patterned layer on its planned mesh. Strip-profile kernel
+inputs retain the historical reference length; the Cartesian rectangle
+kernel uses physical lengths. Direct kernel inputs are implementation details.

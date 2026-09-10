@@ -90,6 +90,7 @@ from ._core.domain import (Layer, Stack, Incidence, Material,
 from ._core.factorization import ConvMatrices
 from ._core.conforming import ConformingNVF
 from ._core.conforming.affine_profile import AffineProfileNVF
+from ._core.conforming.cartesian_rectangle import CartesianRectangleNVF
 # `Lattice` is public because the constructors live on it -- `Lattice.hexagonal(400.)` says
 # what it returns where `hexagonal(400.)` did not, and a hexagon is a plausible *shape* in a
 # package whose shape types are already `rectangle` / `circle` / `ellipse`. It is also the type
@@ -137,7 +138,7 @@ __all__ = [
     'Answers', 'Backend', 'Tetm', 'FourierCoefficients', 'Factorization', 'Formulation',
     'NormalMethod', 'Projector',
     'Layer', 'Stack', 'Incidence', 'Material', 'eps_from_index', 'index_from_eps',
-    'ConvMatrices', 'ConformingNVF', 'AffineProfileNVF', 'ScatteringMatrix', 'Port',
+    'ConvMatrices', 'ConformingNVF', 'AffineProfileNVF', 'CartesianRectangleNVF', 'ScatteringMatrix', 'Port',
     'StaticGeometry', 'StaleGeometryError',
     'find_material', 'find_nk_index', 'read_material_table',
     'JobSpec', 'Numerics', 'Sweep', 'SpecError', 'run',

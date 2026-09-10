@@ -99,6 +99,9 @@ properties every one of them carries.
 .. autoclass:: wavebit.AffineProfileNVF
    :members:
 
+.. autoclass:: wavebit.CartesianRectangleNVF
+   :members:
+
 ```
 
 
