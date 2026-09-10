@@ -1373,6 +1373,39 @@ no full Maxwell residual or optical result and supplies no basis for a
 degree-6/7 run. The fixed weak preconditioner is not adopted; changing it
 would require another declared construction and independent qualification.
 
+### A separately fixed fill-factor-4 control
+
+The next candidate changes only the incomplete-factor fill factor from 2
+to 4. All equation, scaling, ordering, dropping, pivoting, GMRES and
+acceptance settings above remain fixed. Failed-return telemetry now records
+the returned exit information and, when finite, the original-system residual
+before applying the unchanged rejection guard. This adds a diagnostic sparse
+matrix-vector product; it cannot turn a failed request into an accepted one.
+The declared scope is the synthetic controls followed by one stored degree-3
+control, with no adaptive retuning or higher-degree solve.
+
+Both known-solution synthetic cases and all 16 injected refusals pass again;
+the largest solution error is `4.837e-13`. An injected nonzero exit code
+remains rejected even when its returned original relative residual is
+`1.58e-16`. Nonfinite answers or exit information also remain failures.
+
+The actual degree-3 first request returns integer `info=10` after 545 inner
+iterations and 556 preconditioner actions. Its finite original residual
+norm is 252.698 against a right-hand-side norm of 17.4831, giving relative
+residual **14.4539**. It fails without completing an inverse request. The
+original CSC, free mask, D and D A D exactly match the saved direct stored
+control. The incomplete factor contains 3,979,819 nonzeros and takes 0.726 s
+to construct. The child closes after 3.425 s with observed peak RSS
+312,164,352 bytes; the parent closes with exit 1 after 3.533 s, without a
+timeout.
+
+The factorization and two source-load assemblies complete, but internal
+recovery, boundary responses and final Maxwell checks do not. This candidate
+also supplies no optical result or complete-run memory benefit. The first
+candidate did not record its failed original residual, so their convergence
+quality cannot be compared from the iteration counts. Neither candidate
+qualifies a degree-6/7 run or changes the native direct-solver default.
+
 ## Completing degree 7 on the smaller edge mesh
 
 The separate edge-.12 branch completes global degree 7 within the same
@@ -1519,6 +1552,23 @@ differences are `-9.44532e-4` and `+1.39708e-3`, with a total difference
 of `+1.74793e-4`. Neither finite solver is assigned as a converged oracle
 from this agreement. FEM discretization, outgoing boundary and Wavebit's
 Fourier truncation still require separate checks.
+
+Across the completed pad-.2 controls, global degree 6 to 7 on the edge-only
+mesh changes p/s total T by `+6.55835e-5`/`+6.89266e-5`. Adding vertex
+target .070 at degree 6 changes them by `+5.07196e-5`/`+9.79657e-5`;
+the next .070-to-.065 interval changes them by
+`-8.71206e-6`/`+4.04727e-5`. In particular, the p spatial increment
+reverses sign. These unresolved Maxwell changes exceed the candidate-minus-
+fitted-auxiliary-degree-10 total differences at the same `(24,32)` Fourier
+order, `-1.52748e-6`/`-3.42893e-6`. Close agreement between those two
+finite NVF fields therefore does not establish Maxwell or Fourier convergence.
+
+The missing global-degree-7 result at vertex target .070 would complete the
+no-vertex/.070 by degree-6/7 comparison, retaining h=.18, edge target .12,
+cut 4, pad .2 and quadrature bonus 6. A local film-band enrichment or a
+different mesh does not fill that corner. The recorded resource failures
+leave it uncomputed; the completed intervals supply sensitivity measurements,
+not a remaining-error bound.
 
 ## A failed periodic-boundary request was caught by the control
 
