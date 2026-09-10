@@ -495,6 +495,43 @@ and 4.011 GB, versus 94.30 s and 2.301 GB for the original degree-5
 mesh. The reduction in degree sensitivity comes with higher cost at
 this fixed degree; no default mesh choice has been changed.
 
+## Refining the physical dielectric vertices
+
+The independent `vertex_h` setting requests a physical mesh-size target
+at the patterned film's 12 distinct dielectric vertices. Each prism has
+eight vertices; four are shared at their common material interface.
+Targets are assigned to the actual prism vertices before gluing, so
+the selected points follow the physical affine transform. Artificial
+periodic-cell corners are not selected.
+
+The value must be finite, positive and no larger than h, and cannot
+accompany a uniform-slab control. It can be used with or without
+`edge_h`; the two CAD attributes retain their independent requested
+values, without requiring one to be smaller than the other. Netgen
+combines these sizing controls when regenerating the mesh. They are
+targets, not strict segment-length bounds, and a coarser vertex target
+is not promised to leave the existing mesh unchanged.
+
+`vertex_h=None` preserves the original mesh construction. Independent
+comparisons against the preceding source revision find exactly the
+same points, volume/boundary connectivity and periodic identifications
+for default, edge-only and uniform meshes. The focused geometry
+selection now passes 14 tests, including the actual 12 target points,
+rotation, material volumes, outer areas/heights, periodic displacements
+and input validation. At target .07 with edge target .12, the vertical
+edge segment next to each physical vertex is shorter than on the
+matched edge-only mesh, before and after rotation.
+
+At h=.18, outgoing pad .2, edge target .12 and vertex target .07,
+the generated mesh has 1,002 tetrahedra. Its global degree-5 space
+has 92,016 full and 55,944 condensed unknowns, compared with
+71,796/43,716 on the edge-only mesh. This supplies a separate spatial
+refinement axis alongside the fixed-mesh degree controls. The counts
+and shorter corner segments do not establish that vertex resolution
+dominates the optical error or that the refined optical result is
+closer to the continuum solution. Results record the requested
+`vertex_h` in both the top-level metadata and settings.
+
 ## Retaining only boundary rows of the Fourier responses
 
 The affine solver originally stored two complex arrays with shape
@@ -894,5 +931,8 @@ The boundary-storage and fixed-mesh degree controls are available as
 `tests.test_nvf_fem_affine_degree`. To raise the film neighborhood on
 the target-.12 mesh, use `solve_affine_rayleigh(h=.18, order=5, cut=4,
 pad=.2, edge_h=.12, film_degree=6, film_degree_pad=.05)`.
+For the separate physical-corner mesh control, use
+`solve_affine_rayleigh(h=.18, order=5, cut=4, pad=.2, edge_h=.12,
+vertex_h=.07)`; no film-degree enrichment is selected by that call.
 Selected results, with prototype-versus-packaged flux provenance, are retained in
 [`studies/results/nvf_fem_reference.log`](../studies/results/nvf_fem_reference.log).

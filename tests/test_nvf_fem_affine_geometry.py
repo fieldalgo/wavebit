@@ -156,16 +156,136 @@ class AffineFEMGeometryTests(unittest.TestCase):
         with patch.object(self.reference, 'make_affine_profile_mesh', capture_mesh):
             with self.assertRaises(MeshStageComplete):
                 self.reference.solve_affine_rayleigh(
-                    order=3, edge_h=.12, condense=False, progress=stop_before_assembly)
+                    order=3, edge_h=.12, vertex_h=.07,
+                    condense=False, progress=stop_before_assembly)
         self.assertEqual(len(events), 1)
         metadata = events[0]
         self.assertEqual(metadata['stage'], 'mesh')
         self.assertEqual(metadata['edge_h'], .12)
         self.assertEqual(metadata['settings']['edge_h'], .12)
+        self.assertEqual(metadata['vertex_h'], .07)
+        self.assertEqual(metadata['settings']['vertex_h'], .07)
         space = ng.Compress(ng.Periodic(ng.HCurl(meshes[0], order=3, complex=True)))
         self.assertEqual(metadata['dofs'], space.ndof)
         self.assertEqual(metadata['coupling_dofs'], sum(space.FreeDofs(coupling=True)))
         self.assertLess(metadata['coupling_dofs'], metadata['dofs'])
+
+    def test_absent_vertex_target_preserves_existing_mesh_exactly(self):
+        for options in ({}, dict(h=.18, pad=.2, edge_h=.12), dict(uniform=4.)):
+            ordinary, materials = self.reference.make_affine_profile_mesh(**options)
+            explicit, explicit_materials = self.reference.make_affine_profile_mesh(
+                **options, vertex_h=None)
+            with self.subTest(options=options):
+                self.assertEqual(materials, explicit_materials)
+                np.testing.assert_array_equal(
+                    [tuple(point.p) for point in ordinary.ngmesh.Points()],
+                    [tuple(point.p) for point in explicit.ngmesh.Points()])
+                for region in (ng.VOL, ng.BND):
+                    self.assertEqual(
+                        [(element.index, tuple(vertex.nr for vertex in element.vertices))
+                         for element in ordinary.Elements(region)],
+                        [(element.index, tuple(vertex.nr for vertex in element.vertices))
+                         for element in explicit.Elements(region)])
+                self.assertEqual(
+                    [(first.nr, second.nr) for first, second in ordinary.ngmesh.GetIdentifications()],
+                    [(first.nr, second.nr) for first, second in explicit.ngmesh.GetIdentifications()])
+
+    def test_vertex_target_follows_twelve_physical_corners_and_preserves_geometry(self):
+        original_glue = self.reference.occ.Glue
+        expected_volumes = {'piece_0': .7*.206*.683*.3, 'piece_1': .7*.144*.683*.3,
+                            'background': .343*.3-.7*.350*.683*.3,
+                            'substrate': .343*.2, 'superstrate': .343*.2}
+        reference_corners = np.array([(x, y, z) for x in (-.175, .031, .175)
+                                      for y in (-.3415, .3415) for z in (0., .3)])
+        for transform in (self.transform, self.rotation@self.transform):
+            tagged = set()
+
+            def capture_corners(parts):
+                for part in parts:
+                    for vertex in part.vertices:
+                        if vertex.maxh == .07:
+                            tagged.add(tuple(np.round(tuple(vertex.p), 12)))
+                return original_glue(parts)
+
+            ordinary, _ = self.reference.make_affine_profile_mesh(
+                .18, pad=.2, edge_h=.12, transform=transform)
+            with patch.object(self.reference.occ, 'Glue', capture_corners):
+                refined, materials = self.reference.make_affine_profile_mesh(
+                    .18, pad=.2, edge_h=.12, vertex_h=.07, transform=transform)
+            expected_corners = reference_corners.copy()
+            expected_corners[:, :2] = expected_corners[:, :2]@transform.T
+            self.assertEqual(len(tagged), 12)
+            distances = np.linalg.norm(np.asarray(list(tagged))[:, None, :]
+                                       -expected_corners[None, :, :], axis=2)
+            self.assertTrue(np.all(distances.min(axis=0) < 1e-11))
+            self.assertTrue(np.all(distances.min(axis=1) < 1e-11))
+            self.assertEqual(materials, self.materials)
+            for material, volume in expected_volumes.items():
+                self.assertAlmostEqual(ng.Integrate(1, refined,
+                                                    definedon=refined.Materials(material)),
+                                       volume, delta=1e-11)
+            self.assertAlmostEqual(ng.Integrate(1, refined), .343*.7, delta=1e-11)
+            for side, height in (('outer_top', .5), ('outer_bottom', -.2)):
+                region = refined.Boundaries(side)
+                self.assertAlmostEqual(ng.Integrate(1, refined, definedon=region),
+                                       .343, delta=1e-11)
+                self.assertAlmostEqual(ng.Integrate(ng.z, refined, definedon=region),
+                                       .343*height, delta=1e-11)
+            counts = self.reference.periodic_counts(refined, .7*transform)
+            self.assertGreater(counts['x'], 0)
+            self.assertGreater(counts['y'], 0)
+            vectors = [np.r_[.7*transform[:, axis], 0.] for axis in (0, 1)]
+            for first, second in refined.ngmesh.GetIdentifications():
+                delta = np.array(refined.ngmesh[second].p)-np.array(refined.ngmesh[first].p)
+                self.assertTrue(any(np.linalg.norm(delta-sign*vector) < 1e-9
+                                    for vector in vectors for sign in (-1, 1)))
+            # Each corner terminates a vertical dielectric edge. Compare the
+            # adjacent physical segment, not the nearest point across the gap.
+            steps = []
+            for mesh in (ordinary, refined):
+                points = np.array([tuple(point.p) for point in mesh.ngmesh.Points()])
+                reference_xy = points[:, :2]@np.linalg.inv(transform).T
+                adjacent = []
+                for x in (-.175, .031, .175):
+                    for y in (-.3415, .3415):
+                        on_edge = ((abs(reference_xy[:, 0]-x) < 1e-9)
+                                   & (abs(reference_xy[:, 1]-y) < 1e-9)
+                                   & (points[:, 2] >= -1e-9) & (points[:, 2] <= .3+1e-9))
+                        z = np.sort(points[on_edge, 2])
+                        self.assertGreaterEqual(len(z), 3)
+                        adjacent.extend((z[1]-z[0], z[-1]-z[-2]))
+                steps.append(np.asarray(adjacent))
+            self.assertTrue(np.all(steps[1] < steps[0]))
+
+    def test_vertex_and_edge_targets_are_independent(self):
+        original_glue = self.reference.occ.Glue
+        vertex_values, edge_values = [], []
+
+        def capture_targets(parts):
+            for part in parts:
+                vertex_values.extend(vertex.maxh for vertex in part.vertices if vertex.maxh < 1.)
+                edge_values.extend(edge.maxh for edge in part.edges if edge.maxh < 1.)
+            return original_glue(parts)
+
+        with patch.object(self.reference.occ, 'Glue', capture_targets):
+            self.reference.make_affine_profile_mesh(.18, edge_h=.10, vertex_h=.12)
+        self.assertEqual(set(vertex_values), {.12})
+        self.assertEqual(set(edge_values), {.10})
+        # A vertex target does not require an edge target.
+        mesh, _ = self.reference.make_affine_profile_mesh(.18, vertex_h=.12)
+        self.assertGreater(mesh.ne, 0)
+
+    def test_invalid_vertex_requests_fail_before_mesh_generation(self):
+        invalid = [dict(vertex_h=value) for value in
+                   (0., -.1, .21, np.nan, np.inf, True, np.bool_(True), 1j, [.1], '.1')]
+        invalid += [dict(vertex_h=.1, uniform=4.)]
+        with patch.object(self.reference.occ, 'OCCGeometry',
+                          side_effect=AssertionError('invalid vertex target reached mesh generation')):
+            for options in invalid:
+                for entry in (self.reference.make_affine_profile_mesh,
+                              self.reference.solve_affine_rayleigh):
+                    with self.subTest(options=options, entry=entry.__name__), self.assertRaises(ValueError):
+                        entry(**options)
 
     def test_uniform_control_fills_the_entire_affine_film(self):
         self.assertEqual(self.uniform_materials,

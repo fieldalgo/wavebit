@@ -79,7 +79,8 @@ def periodic_counts(mesh, lattice=None):
 
 def make_affine_profile_mesh(h=.2, *, transform=None, period=PERIOD,
                              width=.350, gap=.017, seam=.031,
-                             thickness=THICKNESS, pad=.1, uniform=None, edge_h=None):
+                             thickness=THICKNESS, pad=.1, uniform=None, edge_h=None,
+                             vertex_h=None):
     """Fit the affine two-material gap profile directly in physical space.
 
     All lengths are in micrometers. ``transform`` maps reference x/y positions
@@ -93,6 +94,11 @@ def make_affine_profile_mesh(h=.2, *, transform=None, period=PERIOD,
     of the patterned film. It must be positive and no larger than ``h``; it
     cannot accompany ``uniform``. None retains the global mesh-size control.
     Netgen treats this as a sizing target, not a strict segment-length bound.
+    ``vertex_h`` similarly requests a physical size target at the 12 dielectric
+    vertices. It is independently positive and no larger than ``h``; it cannot
+    accompany ``uniform``. No ordering with ``edge_h`` is required: both CAD
+    attributes retain their independently requested targets. Either option
+    can change the generated mesh without changing the physical geometry.
 
     Returns the mesh and its material-permittivity dictionary. The existing
     fixed-fixture solve functions do not consume this mesh.
@@ -117,6 +123,14 @@ def make_affine_profile_mesh(h=.2, *, transform=None, period=PERIOD,
         if uniform is not None:
             raise ValueError('edge_h requires the patterned film, not a uniform control')
         edge_h = float(edge_value)
+    if vertex_h is not None:
+        vertex_value = np.asarray(vertex_h)
+        if (vertex_value.shape != () or vertex_value.dtype.kind not in 'iuf'
+                or not np.isfinite(vertex_value) or not 0 < vertex_value <= h):
+            raise ValueError('vertex_h must be a positive finite real scalar no larger than h')
+        if uniform is not None:
+            raise ValueError('vertex_h requires the patterned film, not a uniform control')
+        vertex_h = float(vertex_value)
     transform = np.asarray([[1., .45], [0., .7]] if transform is None else transform)
     if (transform.shape != (2, 2) or transform.dtype.kind not in 'iuf'
             or not np.isfinite(transform).all()):
@@ -165,6 +179,11 @@ def make_affine_profile_mesh(h=.2, *, transform=None, period=PERIOD,
                 # under affine transforms without coordinate-box tolerances.
                 for edge in part.edges:
                     edge.maxh = edge_h
+            if vertex_h is not None:
+                # Eight vertices on each prism, with four at their common
+                # interface, give 12 distinct physical dielectric corners.
+                for vertex in part.vertices:
+                    vertex.maxh = vertex_h
             materials[name] = epsilon
             volumes[name] = determinant*(right-left)*height*thickness
             parts.append(part)
@@ -691,7 +710,7 @@ def robin_complement_power(mesh, scattered_field, ports, *, area, theta,
 
 def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
                           *, transform=None, theta=THETA, phi=0., condense=True,
-                          quadrature_bonus=6, edge_h=None, film_degree=None,
+                          quadrature_bonus=6, edge_h=None, vertex_h=None, film_degree=None,
                           film_degree_pad=0., progress=None):
     """Independent affine H(curl) FEM with shared p/s Rayleigh boundary solves.
 
@@ -701,6 +720,8 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
     ``uniform`` replaces the patterned film by a positive scalar permittivity.
     ``edge_h`` requests a physical edge mesh-size target on the 20 dielectric edges
     of the patterned film, as in ``make_affine_profile_mesh``.
+    ``vertex_h`` independently requests a size target at its 12 dielectric
+    corners. It has the same geometry and validation contract as the mesh helper.
     ``film_degree`` optionally raises the degree of edges, faces and cells
     whose vertex-average z lies in [-film_degree_pad, .3+film_degree_pad].
     This changes the space on the same mesh, using physical micrometer units.
@@ -750,8 +771,9 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
     port_data = [rayleigh_data(cut, epsilon, lattice=lattice, theta=theta, phi=phi)
                  for epsilon in (1., SUBSTRATE)]
     mesh, materials = make_affine_profile_mesh(
-        h, transform=transform, uniform=uniform, pad=pad, edge_h=edge_h)
+        h, transform=transform, uniform=uniform, pad=pad, edge_h=edge_h, vertex_h=vertex_h)
     edge_h = None if edge_h is None else float(edge_h)
+    vertex_h = None if vertex_h is None else float(vertex_h)
     epsilon = mesh.MaterialCF(materials)
     background = _affine_background_fields(theta, phi)
     polarizations = ('p', 's')
@@ -784,6 +806,7 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
     count, rank = len(modes), 4*len(modes)
     settings = dict(h=h, order=order, cut=int(cut), uniform=uniform, pad=pad,
                     condense=condense, quadrature_bonus=quadrature_bonus, edge_h=edge_h,
+                    vertex_h=vertex_h,
                     film_degree=film_degree, film_degree_pad=film_degree_pad,
                     period=PERIOD, width=.350, gap=.017,
                     seam=.031, thickness=THICKNESS)
@@ -793,7 +816,7 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
                     units='micrometers', wavelength=WAVELENGTH, thickness=THICKNESS,
                     period=PERIOD, width=.350, gap=.017, seam=.031, values=[4., 9.],
                     h=h, order=order, cut=int(cut), uniform=uniform, pad=pad,
-                    quadrature_bonus=quadrature_bonus, edge_h=edge_h,
+                    quadrature_bonus=quadrature_bonus, edge_h=edge_h, vertex_h=vertex_h,
                     max_order=max_order, space_refinement=space_refinement,
                     elements=mesh.ne, dofs=space.ndof,
                     coupling_dofs=sum(space.FreeDofs(coupling=True)), rank=rank,
