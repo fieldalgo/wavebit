@@ -1215,6 +1215,13 @@ are `+6.55835e-5` / `+6.89266e-5`; individual powers still move by up to
 vertex-.070 point, establish an optical stopping rule or certify a
 general memory bound.
 
+The [local film-band degree-7 comparison](nvf-independent-fem.md#separating-the-film-band-and-exterior-at-degree-7)
+reduces observed peak RSS to 6.465 GB, while individual powers still
+differ from global degree 7 by up to `3.06867e-5` for p and `1.24043e-5`
+for s. Exterior and boundary-degree contributions can cancel in total
+transmission. The local space is not an established equal-accuracy
+replacement, and this run does not show a speedup.
+
 The [independent affine comparison](nvf-affine-convergence.md) now separates
 auxiliary-cell refinement from directional optical truncation. A fitted
 static FEM reference reaches a relative primal/complementary enclosure of

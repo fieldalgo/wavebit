@@ -911,8 +911,9 @@ replacement value for the unfinished vertex-.070 result. A separate
 base-6/film-7 space on this smaller mesh has 149,287/74,187 unknowns
 without an added film neighborhood, or 160,774/76,824 with a .05
 neighborhood. Preflight counts alone are not solved fields or memory
-guarantees. The local film-7 spaces remain unsolved. None relaxes the
-existing linear, power or optical controls.
+guarantees. The zero-neighborhood local film-7 space remains unsolved;
+the .05-neighborhood result is recorded below. None relaxes the existing
+linear, power or optical controls.
 
 ## Completing degree 7 on the smaller edge mesh
 
@@ -965,6 +966,68 @@ at 324/324. Counts match preflight and the two numerical source hashes
 match the clean launch at `5bc835e`. These are shared-host costs;
 small independent-oracle arithmetic checks overlap part of this run.
 They are not a general runtime or memory guarantee.
+
+## Separating the film band and exterior at degree 7
+
+On the same edge-.12 mesh branch, base degree 6 with film degree 7 and
+band padding .05 completes with 160,774 full and 76,824 coupling unknowns.
+It selects 765 edges, 1,129 faces and 587 cells, while the outer boundary
+retains 2,184 unknowns. The geometry settings, 780 tetrahedra and 22/36
+periodic point counts match the completed global-degree rows. Historical
+mesh summaries still do not provide an exact topology fingerprint.
+
+| space | p T | s T |
+| --- | ---: | ---: |
+| global degree 6 | .852147871193 | .730777052860 |
+| base 6, film-band degree 7 | .852203145502 | .730843282952 |
+| global degree 7 | .852213454659 | .730845979436 |
+
+| change | p total T | s total T | largest p individual R/T | largest s individual R/T |
+| --- | ---: | ---: | ---: | ---: |
+| global 6 to film-band 7 | +5.52743e-5 | +6.62301e-5 | 5.52756e-5 | 6.71155e-5 |
+| film-band 7 to global 7 | +1.03092e-5 | +2.69648e-6 | 3.06867e-5 | 1.24043e-5 |
+
+The first change also raises explicit readout quadrature from 18 to 20.
+The second keeps order 20 and raises the unselected exterior entities
+and boundary traces; its boundary space increases from 2,184 to 2,880
+unknowns. These are different space increments, not equal refinement steps.
+Their signed sums reproduce the completed global-6-to-7 interval.
+
+The exterior-and-boundary contribution remains visible in individual
+transmitting orders even when the total is small:
+
+| T order | film-band 7 to global 7, p | film-band 7 to global 7, s |
+| --- | ---: | ---: |
+| (-1,-1) | -7.40278e-7 | +2.25865e-7 |
+| (-1,0) | +3.06867e-5 | +1.24043e-5 |
+| (0,0) | -1.96373e-5 | -9.93373e-6 |
+| sum of absolute changes | 5.10643e-5 | 2.25639e-5 |
+
+For s `(-1,0)`, film-band enrichment first changes the power by
+`-1.18618e-5`; the remaining global increase adds `+1.24043e-5`.
+Those contributions nearly cancel in the global-degree interval, whose
+change in that order is only `+5.42548e-7`. This finite comparison does
+not qualify the local space as optically equivalent to global degree 7,
+bound either solver's remaining error or fill the unfinished vertex-.070
+global-degree-7 point.
+
+The local p/s modal-volume disagreements are `3.45926e-6` / `1.75515e-6`,
+and full residuals are `1.22413e-14` / `7.83061e-15`. Raw energy errors
+are `3.99176e-9` / `8.80404e-10`; after the reported Robin complement,
+the signed remainders are `-1.75517e-9` / `-5.59611e-10`. These checks
+do not replace the larger optical space differences. Relative to the
+saved finite Wavebit `(24,32)` row, total p/s T differences remain
+`-1.77565e-4` / `-1.69936e-4`.
+
+The run completes in 831.270 s with peak RSS 6,464,536,576 bytes,
+compared with 818.731 s and 7,055,966,208 bytes for the saved global-7
+run. Factorization completes by 218.549 s, boundary responses by
+814.522 s, and all 324 traces pass the interval-eight progress guard.
+The smaller space uses less observed peak RSS but is not faster in
+these two shared-host runs. Small NumPy geometry checks overlap part
+of this run. These observations compare different finite approximations
+and do not establish equal-accuracy performance. The numerical source
+hashes match the clean launch at `747dd25` when checked after completion.
 
 ## Comparing the physical diffraction orders with Wavebit
 
