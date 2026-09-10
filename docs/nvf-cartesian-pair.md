@@ -14,8 +14,10 @@ material coefficients for two horizontal, equal-height physical rectangles
 inside an oblique periodic cell. A positive gap and an exact full-height
 shared edge each have a fixed conforming mesh. Independent weak equations,
 triangle integration and NumPy/JAX derivatives verify these finite models.
-Opening a gap from contact, more general pairs and optical convergence remain
-unqualified. The explicit experimental
+Opening a gap is handled by a separate
+[NumPy finite right-opening response](nvf-cartesian-pair-opening.md); it does
+not change this cell's fixed-contact JAX tangents. More general pairs and
+optical convergence remain unqualified. The explicit experimental
 [`CartesianRectanglePairNVF`](guide/cartesian-rectangle-pair-nvf.md) exposes this
 bounded model through ordinary rectangle dictionaries and a mandatory plan.
 The other public geometry adapters keep their current scope.

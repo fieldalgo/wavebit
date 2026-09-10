@@ -12,6 +12,7 @@
 | `affine_profile.py` | How do explicit fractional profiles on nonorthogonal lattices preserve physical materials, offsets, contact and the caller's Fourier modes? |
 | `cartesian_rectangle.py` | How does a separated physical rectangle retain its Cartesian edges and finite derivatives on an oblique lattice with an explicit frozen orientation plan? |
 | `cartesian_pair.py` | How do two horizontal equal-height rectangles retain physical edges, exact contact state, input identity and finite derivatives through an explicitly planned public adapter? |
+| `cartesian_pair_opening.py` | How does the finite pair retain its analytical right-opening response through exact collapsed topology, Laurent weak operators and moving Fourier weights? |
 
 These kernels build constitutive data. Optical study fixtures and their
 fixed-wavelength propagators remain in `studies/`. The public entry points are
@@ -24,3 +25,8 @@ rectangles with frozen input indices and separated/contact charts. Neither
 builder certifies optical convergence. Strip-profile kernel
 inputs retain the historical reference length; the Cartesian rectangle
 and pair kernels use physical lengths. Direct kernel inputs are implementation details.
+
+The separate NumPy-only `CartesianPairOpeningPlan` and
+`CartesianPairOpeningCell` expose an explicit finite right-opening response
+from their submodule. They do not change ordinary contact replay or JAX
+tangents. See the [manual](../../../docs/guide/cartesian-pair-opening.md).

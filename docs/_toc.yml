@@ -17,6 +17,7 @@ subtrees:
       - file: guide/affine-profile-nvf
       - file: guide/cartesian-rectangle-nvf
       - file: guide/cartesian-rectangle-pair-nvf
+      - file: guide/cartesian-pair-opening
       - file: guide/fields
       - file: guide/autodiff
       - file: guide/backends
@@ -60,6 +61,7 @@ subtrees:
       - file: nvf-affine-cells
       - file: nvf-cartesian-cell
       - file: nvf-cartesian-pair
+      - file: nvf-cartesian-pair-opening
       - file: nvf-affine-convergence
       - file: nvf-contact-followup
       - file: nvf-independent-fem
