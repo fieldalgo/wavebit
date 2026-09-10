@@ -1212,6 +1212,39 @@ first-source diagnostic. It does not establish that degree 7 fits or
 that a complete optical solve converges. Native UMFPACK remains the
 reference default.
 
+### Bounded degree-6 scaled-factor attempt
+
+The next diagnostic preserves the qualified scaling, sparse conversion and
+inverse-application definitions, and deliberately stops after the first
+completed p source. A degree-3 wrapper control confirms the exact original
+CSC, free mask, D and D A D hashes against the completed recomputed control.
+It performs one factorization, one inverse, one form assembly, two volume
+load assemblies, one `ComputeInternal` and one `Apply` call, with no
+boundary trace. Its original selected residual is `3.974e-14`. This stop
+does not produce a final Maxwell residual or optical powers.
+
+The larger attempt uses the existing vertex-.07 degree-6 setup: h=.18,
+edge=.12, pad=.2, cut 4 and bonus 6, with 1,002 tetrahedra and
+149,604 full / 79,464 coupling / 2,184 boundary unknowns. The selected
+CSC has 27,036,828 nonzeros and occupies 541,054,420 bytes. Native/CSR
+operator checks pass before the reported factorization start at 37.045 s.
+The recorded peak RSS at that point is 1,782,251,520 bytes.
+
+The parent terminates and waits for the child at its predefined 600-second
+limit; recorded parent elapsed time is 600.282 s. No completed factor,
+first inverse or source completion is reported. The last recorded RSS is
+not the unobserved process peak during the interval after the last record.
+Parent and child clocks start separately; subtracting their times does not
+give a measured factorization duration.
+There is no completed factor fill count, selected source residual for
+degree 6 or optical result. The source/probe hashes and closed parent
+record are preserved.
+
+Consequently, the small-case memory reduction has not established a usable
+degree-6 resource improvement. It does not justify retrying the same
+settings or increasing to degree 7. A further attempt needs a different
+validated factorization choice or reduction of the retained system.
+
 ## Completing degree 7 on the smaller edge mesh
 
 The separate edge-.12 branch completes global degree 7 within the same
