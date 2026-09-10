@@ -307,6 +307,61 @@ the oracle by less than `5.91e-11`. These observations concern numerical
 differentiation of the stated finite cells. They establish neither
 continuum opening-derivative convergence nor an optical contact derivative.
 
+## Contact opening under x refinement
+
+The first spatial comparison fixes `A=700*[[1,.45],[0,.7]]`, width 350,
+physical permittivity `4+.8j`, unit background and exact contact. The
+opening parameter is dimensionless g: the reference gap is `700*g` and
+the physical normal gap is `490*g` in the same length units. Outer
+order 1 retains coefficient cap 2. Rows, body degree and gap degree are
+all 2, with ungraded y, local flux basis, edge fraction `1e-5`, grading
+strength 8, radius .01 and projection quadrature 12. Only x subdivisions
+change from 1 to 2, increasing the auxiliary unknowns from 215 to 431.
+
+Both spaces pass the existing independent q16/q24 bound `3e-10`,
+JAX/independent opening-derivative bound `3e-9` and cell residual guard
+`1e-8`. The respective maximum discrepancies are `6.07049e-11` /
+`1.37889e-10` for quadrature and `7.59735e-11` / `1.61586e-10` for
+JAX versus the independent variation. Cell residuals are `2.80323e-11`
+and `1.43430e-10`. These limits check the two finite cells separately;
+they do not make the two cells' derivatives equal.
+
+| component | maximum absolute x2-minus-x1 derivative change over cap 2 |
+| --- | ---: |
+| Bxx | 2.18921e-4 |
+| Bxy | 6.19188e-4 |
+| Byx | 7.34523e-4 |
+| Byy | 2.16716e-3 |
+| Gxx | 1.09100e-3 |
+| Gxy | 2.83072e-3 |
+| Gyx | 1.73598e-3 |
+| Gyy | 1.12082e-3 |
+| material | 6.75322e-16 |
+
+These are derivatives per dimensionless g from the independent q24
+arrays. For example, Gxy changes by
+`+1.82947843e-3 + 2.16009198e-3j` at mode `(-1,2)`. The mean Gyy
+change is only `-2.50216619e-6 - 8.47190175e-7j`, so a mean-energy
+comparison alone misses the larger nonzero-mode changes. The mean B
+derivative stays at roundoff because the cell field has identity mean;
+that identity is not a resolution criterion.
+
+The JAX evaluations, including compilation, take 2.760 s and 2.631 s.
+The two q16/q24 oracle pairs take .061/.137 s and .225/.495 s.
+Cumulative process peak RSS reaches 729 MB and 885 MB in this sequential
+run. These observations are not a runtime scaling claim or a memory bound.
+Full settings, source hashes, signed component changes and retained
+array identities accompany the measurement log.
+
+An initial x4 extension saves its independent reference arrays but stops
+before JAX: q16/q24 discrepancies reach `3.17115e-10` in Gxy,
+`3.42389e-10` in Gyx and `4.46982e-10` in Gyy, exceeding the unchanged
+`3e-10` bound. Its small independent linear residuals do not override
+that check. This unaccepted point cannot extend the accepted spatial
+derivative ladder to x4 or establish a convergence rate. The independent
+quadrature arithmetic
+requires a separate stability check before this space can be accepted.
+
 Run details are recorded in
 [the validation log](https://github.com/fieldalgo/wavebit/blob/develop/studies/results/nvf_affine_cell_validation.log).
 The explicit fractional-profile public contract is implemented separately
