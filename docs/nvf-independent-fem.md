@@ -1508,8 +1508,67 @@ work allowance. These are array counts and allowances, not an allocation
 cap. Native condensation, trace storage, small dense QR, opaque factor
 workspaces and runtime allocators also contribute to the observed process
 peak. The 8-GiB observed process guard and 180-s parent remain in force.
-This qualifies the fixed small precision strategy; high-degree resource
-use and optical convergence remain unqualified.
+This qualifies the fixed small precision strategy. The separate larger
+control below measures its degree-6 behavior; optical convergence remains open.
+
+### Full degree-6 precision control on the vertex-.070 mesh
+
+The unchanged complete-complex64/flexible-complex128 strategy also completes
+the stored global-degree-6 problem at h=.18, edge target .12, vertex target
+.070, cut 4, physical pad .2 and quadrature bonus 6. The fixed mesh has
+1,002 tetrahedra, 149,604 full and 79,464 selected unknowns, 2,184 boundary
+unknowns and all 81 ordered modes. The full trial is bounded by a 1,800-s
+parent and the same 8-GiB observed process guard; neither is a prediction
+of resource use at another degree.
+
+All 328 original inverse requests complete: two source fields, 324 boundary
+responses and two final corrections. There is one factorization, one bilinear
+assembly, 326 linear assemblies, two full operator applications and no internal
+block recomputation. Of the requests, 173 need three lower-precision factor
+actions and 155 need four, totaling 1,139 actions. Every request uses two outer
+callbacks. Maximum original selected residual is `6.16e-13`; the p/s full
+Maxwell residuals are `1.52e-14` and `1.79e-14`.
+
+Every scalar, diffraction-order power, volume flux and Robin-budget output
+agrees with the historical complete stored native degree-6 result within
+`4.26e-14`. Transmission is .8521985908020011 for p and .7308750185490156
+for s. This agreement qualifies the finite linear-solver replacement at
+this case; the nonzero mesh/degree differences remain separate.
+
+| Complete stored degree-6 control | Peak process RSS, bytes | Child elapsed, s |
+| --- | ---: | ---: |
+| Historical native direct | 5,795,479,552 | 488.61995 |
+| Complete complex64 MMD with flexible correction | 5,849,022,464 | 734.46170 |
+
+This larger measurement **does not reduce observed memory** against the
+complete native result: the peak is 53,542,912 bytes (about .924%) higher,
+and elapsed time is about 50.3% longer. The complete factor has 340,024,111
+nonzeros and takes 214.639 s. Retained original/scaled/rounded CSC arrays
+occupy 1,406,868,636 bytes; separate vector and conversion-work allowances
+are 256,827,648 and 1,730,356,992 bytes. Those counts exclude native
+condensation storage, opaque factor workspace and runtime allocations.
+The final peak, after reconstructed fields, exceeds the boundary-stage peak.
+Passing the process guard is not evidence that degree 7 will fit.
+
+Historical provenance limits remain explicit. The native stored record
+contains physical metadata and complete mode/output arrays, but no original
+CSC/D/B128 fingerprints or clean-launch numerical-source hash. Only its
+documented absent `recompute_internal=False` setting is normalized. The new
+run verifies native-CSR orientation, exact free-mask restriction and DAD
+identities, records fresh fingerprints before conversion, and checks retained
+inputs throughout. Its original/scaled matrices differ from the saved
+**recomputed** degree-6 first-source experiment, although the free mask agrees;
+that different-storage experiment is not a matched full-run baseline.
+Current instrumentation also retains matrices and checks casts, hashes and
+iterations. The table therefore reports shared-host observations, not a
+controlled timing replication or allocation bound.
+
+The source-frozen parent closes normally after 734.727 s. An independent
+standard-library audit verifies the complete stage sequence, all original
+requests, physical metadata, every output comparison, budget arithmetic and
+source/launch/completion pins without rerunning a solver. No tolerance or
+factor setting changes during the run. The missing vertex-.070 degree-7
+optical corner and the convergence stopping criterion remain unresolved.
 
 ## Completing degree 7 on the smaller edge mesh
 
