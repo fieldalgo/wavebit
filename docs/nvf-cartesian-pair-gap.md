@@ -167,3 +167,8 @@ measurements and source pins are in the
 [result log](https://github.com/fieldalgo/wavebit/blob/develop/studies/results/nvf_cartesian_pair_gap.log).
 This finite family does not establish continuum, arbitrary-contrast or patterned
 optical accuracy, and introduces no ordinary contact-geometry JVP guarantee.
+
+A separate [NumPy/JAX x64 value evaluator](nvf-cartesian-pair-gap-autodiff.md)
+now qualifies ordinary automatic differentiation with respect to the physical
+gap on the same frozen family. This analytical NumPy reference remains
+unchanged, and ordinary contact-adapter tangents retain their existing scope.

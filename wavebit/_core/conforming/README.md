@@ -14,6 +14,7 @@
 | `cartesian_pair.py` | How do two horizontal equal-height rectangles retain physical edges, exact contact state, input identity and finite derivatives through an explicitly planned public adapter? |
 | `cartesian_pair_opening.py` | How does the finite pair retain its analytical right-opening response through exact collapsed topology, Laurent weak operators and moving Fourier weights? |
 | `cartesian_pair_gap.py` | How can the finite pair cross exact contact and positive gaps without dividing its weak solve or thin fields by gap? |
+| `cartesian_pair_gap_autodiff.py` | How can a separate value evaluator provide the finite physical gap right-JVP at contact using ordinary JAX x64 operations? |
 
 These kernels build constitutive data. Optical study fixtures and their
 fixed-wavelength propagators remain in `studies/`. The public entry points are
@@ -31,3 +32,8 @@ The separate NumPy-only `CartesianPairOpeningPlan` and
 `CartesianPairOpeningCell` expose an explicit finite right-opening response
 from their submodule. They do not change ordinary contact replay or JAX
 tangents. See the [manual](../../../docs/guide/cartesian-pair-opening.md).
+
+The separate `CartesianPairGapEvaluator` supports NumPy values and JAX x64
+gap derivatives on the same explicit finite family. See the
+[gap differentiation manual](../../../docs/guide/cartesian-pair-gap-autodiff.md).
+Other live-parameter gradients and optical convergence remain unqualified.

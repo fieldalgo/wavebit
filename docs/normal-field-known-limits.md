@@ -1240,6 +1240,14 @@ finite rescaled equations and a per-length analytical derivative. Thirty
 contact/positive-gap cases pass original nodal and moving-simplex controls;
 this does not change ordinary contact JVP admission or certify optical accuracy.
 
+The separate [finite-gap automatic differentiation evaluator](nvf-cartesian-pair-gap-autodiff.md)
+qualifies the physical gap right-JVP at contact and local gap derivatives at
+positive gap using ordinary JAX x64 operations. Fixed-chart values and gap
+JVPs agree with independent original equations and selected closure references;
+this does not qualify arbitrary live geometry/material gradients, higher
+responses or optical convergence. Ordinary contact-preserving adapter JVPs
+remain unchanged.
+
 The [global-degree-7 FEM attempt](nvf-independent-fem.md#resource-limited-global-degree-7)
 on the vertex-.070 mesh stops at 32 of 324 boundary responses after its
 8-GiB RSS guard is exceeded. A retry that recomputes internal elimination
