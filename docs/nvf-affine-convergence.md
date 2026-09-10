@@ -9,6 +9,12 @@ the order-12 transmission difference from the fitted reference by about 73%
 for p and 83% for s. The remaining optical order change is larger, especially
 in y for s. These measurements do not establish optical convergence.
 
+The latest [candidate endpoint comparison](#candidate-comparison-at-y32)
+reaches `(24,32)`, with p/s total-transmission differences of
+`-1.52748e-6`/`-3.42893e-6` from the degree-10 fitted auxiliary field.
+Independent 3D optical accuracy, oblique contact-opening derivative
+qualification and a public general-geometry adapter remain open.
+
 The implementation and instruments are:
 
 - `wavebit/_core/conforming/affine_cell.py`: scalar or `(x,y)` retained orders.
@@ -306,7 +312,9 @@ increments from its lower corner:
 
 The small mixed terms do not remove the separate directional changes.
 Neither polarization has a demonstrated continuum optical error bound.
-The candidate comparison above remains at `(24,24)`. The later
+The candidate comparison for this sequence uses `(24,24)`; the later
+[candidate endpoint](#candidate-comparison-at-y32) reaches `(24,32)`.
+The separate
 [reference-degree check](#reference-degree-refinement-at-y32) extends the
 degree-8/10 comparison to y=32, without making it an error bound for these rows.
 
@@ -370,7 +378,7 @@ projection closure and native workspaces). These shared-host observations
 are not an isolated speed comparison. The greatest new-row lossless balance
 error is `7.20e-12`, below the unchanged algebraic guard. The fitted
 reference remains degree 8. The later reference-degree check reaches
-`(24,32)`, while the candidate comparison remains at `(24,24)`.
+`(24,32)`, as does the later [candidate endpoint](#candidate-comparison-at-y32).
 Neither the static field enclosure nor these finite optical
 windows supplies an independent three-dimensional optical error bound.
 
@@ -424,7 +432,8 @@ their greatest lossless balance error is `4.20e-12`. These are shared-host
 observations, not controlled performance comparisons. No new FEM solve,
 third-party code or dependency is used for these rows: the references
 are the already-qualified numerical exports. The independent 3D Maxwell
-comparison and candidate/reference comparison beyond `(24,24)` remain open.
+uncertainty remains open; the subsequent
+[candidate/reference endpoint](#candidate-comparison-at-y32) extends to `(24,32)`.
 
 ## Extending y to 36
 
@@ -461,8 +470,8 @@ lossless balance error `8.20e-12`, below the unchanged algebraic guard.
 These are shared-host observations, not controlled performance timings.
 This continuation checks the next y increment of the fixed degree-8 field.
 It does not check degree-10 reference refinement or candidate-field error
-at y=36; the later reference-degree check reaches y=32 and the candidate
-comparison remains at `(24,24)`. The independent
+at y=36; the later reference-degree and candidate endpoint checks both
+reach y=32. The independent
 3D reference also remains incomplete. Its
 [Rayleigh-data helper](nvf-independent-fem.md#rayleigh-data-for-a-physical-primitive-lattice)
 handles the physical affine reciprocal lattice, and its separate
@@ -501,6 +510,13 @@ on the vertex-target-.070 mesh. At degree 6, adding that target changes
 T by `+5.07196e-5`/`+9.79657e-5`, with larger cancelling changes in
 individual orders. Both refinement axes remain relevant; a tiny energy
 budget does not qualify an independent optical reference.
+
+The subsequent [.070/.065 vertex interval](nvf-independent-fem.md#checking-the-nearer-vertex-interval-at-both-degrees)
+also retains degree sensitivity. At .065, raising global degree 5 to 6
+changes p/s T by `+9.50082e-5`/`+5.39352e-5`. The p degree change
+grows compared with .070 while s shrinks, and total changes conceal
+larger individual-order changes. Further degree verification remains
+necessary before qualifying an independent reference.
 
 ## Reference degree refinement at y=32
 

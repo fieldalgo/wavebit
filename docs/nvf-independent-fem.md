@@ -817,6 +817,68 @@ All four completed results pass independent metadata, power-sum,
 signed-budget and per-order difference checks; no convergence
 acceptance threshold is inferred from the rectangle.
 
+## Checking the nearer vertex interval at both degrees
+
+The target-.065 global-degree-6 solve completes a second rectangle,
+using vertex targets .070/.065 and global degrees 5/6. It retains
+h=.18, edge target .12, pad .2, Rayleigh cut 4 and quadrature bonus 6.
+The new space has 1,093 tetrahedra, 163,268 full and 86,758 condensed
+unknowns, with 2,548 boundary unknowns and 26/67 periodic point pairs.
+Its geometry summaries match the existing .065 degree-5 row; historical
+logs still contain no exact topology fingerprint.
+
+| vertex target | global FEM degree | p T | s T |
+| ---: | ---: | ---: | ---: |
+| .070 | 5 | .852108495556 | .730802741386 |
+| .070 | 6 | .852198590802 | .730875018549 |
+| .065 | 5 | .852094870566 | .730861555984 |
+| .065 | 6 | .852189878745 | .730915491210 |
+
+The .070-to-.065 spatial increments keep their signs at both degrees:
+at degree 5, p/s T changes by `-1.36250e-5`/`+5.88146e-5`; at degree
+6, by `-8.71206e-6`/`+4.04727e-5`. The smaller total changes still
+include larger, cancelling changes in individual transmitting orders:
+
+| T order | spatial change at degree 6, p | spatial change at degree 6, s |
+| --- | ---: | ---: |
+| (-1,-1) | +1.90569e-6 | +5.99615e-6 |
+| (-1,0) | -3.66723e-5 | -1.52531e-5 |
+| (0,0) | +2.60545e-5 | +4.97297e-5 |
+| total | -8.71206e-6 | +4.04727e-5 |
+
+At target .065, the degree-5-to-6 p/s T increments are
+`+9.50082e-5`/`+5.39352e-5`, with maximum individual R/T changes
+`1.31281e-4`/`5.39520e-5`. Relative to target .070, the p degree
+increment grows while the s increment shrinks. The mixed difference,
+defined as the .065 degree increment minus the .070 degree increment,
+is `+4.91293e-6`/`-1.83419e-5`. The two axes remain coupled; neither
+the smaller spatial difference nor the mixed difference supplies a
+remaining-error estimate or a monotone accuracy ranking.
+
+The new modal/volume disagreements are `4.95502e-6`/`2.64781e-6`,
+larger than `2.81115e-6`/`1.08678e-6` on the .070 degree-6 mesh.
+Energy errors are `3.00e-9`/`6.04e-10`; omitted Robin powers are
+`4.89342e-9`/`1.19511e-9` and signed remaining budgets are
+`-1.89230e-9`/`-5.90956e-10`. The full residuals stay below
+`1.02e-14`. Independent checks of the full power arrays, physical
+port mapping and signed identities pass, but these small algebraic
+quantities do not qualify an optical reference.
+
+Against the finite degree-10 auxiliary-field Wavebit row at `(24,32)`,
+the new total-T differences are `-1.90832e-4`/`-9.77274e-5`. The p
+difference grows in magnitude while the s total moves closer. However,
+the s `(-1,0)` difference grows to `-1.00926e-4` and the s `(0,0)`
+difference crosses to `+1.28527e-5`. Neither the spatial refinement
+nor closer s total establishes improvement in every channel.
+
+The solve takes 593.84 s with peak process RSS 7.034 GB, compared
+with 488.62 s and 5.795 GB for .070 at degree 6. The retained boundary
+arrays account for 25.19 MiB; the sparse factorization and other
+workspaces dominate the process peak. These sequential shared-host
+measurements describe different finite approximations, not equal-accuracy
+performance. The higher cost does not resolve the remaining degree
+sensitivity.
+
 ## Comparing the physical diffraction orders with Wavebit
 
 Both solvers use `k_parallel=k_incident+G`. At the saved Wavebit optical

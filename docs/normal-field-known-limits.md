@@ -1273,6 +1273,13 @@ degree 6 changes individual powers by up to `5.90348e-5`/`1.53018e-4`.
 The mixed difference does not bound the remaining error; independent
 optical qualification remains open.
 
+The [nearer .070/.065 vertex interval](nvf-independent-fem.md#checking-the-nearer-vertex-interval-at-both-degrees)
+now has both global degrees 5 and 6. At .065, the degree increase changes
+p/s T by `+9.50082e-5`/`+5.39352e-5`: p degree sensitivity grows while
+s shrinks compared with .070. Individual spatial changes still cancel,
+and modal/volume disagreements grow on the .065 degree-6 mesh. This
+comparison does not supply monotone accuracy or a stopping criterion.
+
 The [reference-degree refinement at (24,32)](nvf-affine-convergence.md#reference-degree-refinement-at-y32)
 raises the fitted field from degree 8 to 10 at fixed optical order. The
 p/s transmission changes are about `1.2e-8`/`2.7e-8`; the latter is about
