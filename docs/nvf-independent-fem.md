@@ -1053,6 +1053,50 @@ or assembling any boundary trace. The default False preserves the
 existing stage sequence and metadata. This earlier observation cannot
 interrupt a native call or lower its peak memory use.
 
+### Allocation and residency observations at the first source
+
+A further degree-6 diagnostic uses that first-source stop and adds three
+`vmmap` summaries of its own process. It keeps the same mesh, recomputed
+internal blocks, numerical source and 8-GiB peak-RSS ceiling. A small
+wrapper control verifies the observations before the degree-6 run. Both
+finish intentionally after one factorization, one completed source
+inverse, one `ComputeInternal` call and one full form application;
+only the two volume loads are assembled, with no boundary traces or
+optical result.
+
+| Observation | After factorization | Before first inverse | After first inverse |
+| --- | ---: | ---: | ---: |
+| Current `ps` RSS, bytes | 1,304,248,320 | 1,323,319,296 | 5,827,772,416 |
+| Physical footprint, tool units | 2.5G | 2.5G | 5.5G |
+| Peak physical footprint, tool units | 9.3G | 9.3G | 9.3G |
+| Malloc-zone total allocated, tool units | 5.7G | 5.7G | 5.7G |
+| Malloc-zone total resident, tool units | 801.2M | 816.1M | 5.0G |
+| Malloc-zone total swapped, tool units | 1.7G | 1.7G | 545.3M |
+
+The `ps` RSS samples immediately precede the corresponding `vmmap`
+captures; these metrics are not sampled simultaneously.
+
+The first inverse increases current RSS by 4,504,453,120 bytes. The
+malloc-zone allocated total remains at the same rounded display value,
+while its resident total increases and its swapped total decreases.
+This is consistent with a substantial change in residency of existing
+allocations. It does not prove exact constancy of allocation, identify
+individual factor pages, or exclude temporary native allocations between
+the snapshots. The independent process-region table reports 563.4M
+swapped after the inverse; the writable-region summary reports 556.5M.
+These different totals are retained separately, not substituted for the
+malloc-zone total.
+
+The diagnostic completes in 159.906 s at peak RSS 5,829,935,104 bytes.
+The already higher 9.3G peak *physical footprint* is a different measure
+from this RSS ceiling. Each `vmmap` capture takes time and can affect
+paging; the before-to-after inverse interval includes the before-snapshot
+capture and is not a native-solve benchmark. The extra inverse output
+vector still occupies 2,393,664 bytes. These observations support testing
+ways to reduce the retained sparse factor and its working set before
+retrying degree 7; they do not themselves reduce memory or establish a
+degree-7 resource guarantee.
+
 Forced-evaluation controls stop after source 1 and source 2 under both
 storage choices. They confirm one factorization, exactly the requested
 number of completed inverses, two assembled volume loads and no assembled
@@ -1328,6 +1372,25 @@ requires a separate review of exact component versions and their terms.
 The [OCCT license](https://github.com/Open-Cascade-SAS/OCCT/blob/V7_8_1/LICENSE_LGPL_21.txt)
 and [exception](https://github.com/Open-Cascade-SAS/OCCT/blob/V7_8_1/OCCT_LGPL_EXCEPTION.txt)
 are part of that review, not a substitute for it.
+
+The existing validation environments also contain SciPy 1.18.0, source
+revision `54ef5423f2e4376230ec3bfda6912a07a50958e3`, with its vendored
+SuperLU extension. The [same-version bundled license inventory](https://github.com/scipy/scipy/blob/v1.18.0/LICENSES_bundled.txt)
+and [bundled SuperLU license](https://github.com/scipy/scipy/blob/v1.18.0/scipy/sparse/linalg/_dsolve/SuperLU/License.txt)
+specify BSD-3-Clause. The vendored header identifies 7.0.1, while its
+README still says 6.0.1; this is source-header evidence rather than a
+separate binary version query. SciPy replaces the optional MC64 routines
+with error stubs. The FEM environment links OpenBLAS 0.3.34
+(BSD-3-Clause), libgfortran 16.2.0 (GPL-3.0 with GCC runtime exception)
+and LLVM OpenMP 22.1.8 (Apache-2.0 with LLVM exception); the main test
+environment instead links system Accelerate.
+
+This inspection permits an independently written internal comparison
+using explicit SciPy `splu` ordering without installing dependencies or
+copying solver implementation. It does not establish a performance
+benefit: the earlier slower and unfinished square SuperLU trials remain
+recorded above. Redistribution retains the components' required notices
+and needs the separate whole-environment review described here.
 
 ## Reproduction
 
