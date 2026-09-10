@@ -471,8 +471,8 @@ These are shared-host observations, not controlled performance timings.
 This continuation checks the next y increment of the fixed degree-8 field.
 It does not check degree-10 reference refinement or candidate-field error
 at y=36; the later reference-degree and candidate endpoint checks both
-reach y=32. The independent
-3D reference also remains incomplete. Its
+reach y=32. Independent three-dimensional optical convergence qualification
+also remains open. Its
 [Rayleigh-data helper](nvf-independent-fem.md#rayleigh-data-for-a-physical-primitive-lattice)
 handles the physical affine reciprocal lattice, and its separate
 [geometry helper](nvf-independent-fem.md#physical-affine-geometry-and-periodic-pairs)
@@ -517,6 +517,17 @@ changes p/s T by `+9.50082e-5`/`+5.39352e-5`. The p degree change
 grows compared with .070 while s shrinks, and total changes conceal
 larger individual-order changes. Further degree verification remains
 necessary before qualifying an independent reference.
+
+The later [degree-6/7 vertex rectangle](nvf-independent-fem.md#vertex-and-degree-refinement-at-degrees-6-and-7)
+now contains all four finite results after the separately audited
+vertex-.070 degree-7 control completes. On that mesh, p/s degree changes
+are `+5.23387e-5`/`+4.23733e-5`; adding the vertex target at degree 7
+changes T by `+3.74748e-5`/`+7.14124e-5`. The corresponding mixed
+differences are `-1.32448e-5`/`-2.65533e-5`. Individual s transmission
+changes still reach `1.14586e-4`, with 64.24% cancellation in the spatial
+total. Completion removes the missing finite corner without providing a
+remaining optical-error bound or qualifying either finite Maxwell result
+as a converged oracle.
 
 ## Reference degree refinement at y=32
 

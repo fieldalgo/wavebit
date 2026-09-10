@@ -975,15 +975,17 @@ source condensation, source inverse applications, trace assembly and
 trace inverse applications. The available observations do not identify
 which operation produced the peak. In particular, the 29,859,840 retained
 boundary-array bytes cannot account for the full process RSS. Both raw
-failures remain recorded; neither fills the missing vertex-degree-7
-point or supplies an optical stopping criterion.
+failures remain recorded; neither attempt supplies an optical value or
+stopping criterion. The later completed
+[reference-release control](#degree-7-reference-release-control) is a
+separate execution.
 
 A mesh-only check identifies a smaller global-degree-7 interval on the
 existing edge-.12 mesh without the extra vertex restriction: 780
 tetrahedra, periodic pairs 22/36, full/coupling counts 177,232/83,632 and
 the same 2,880 boundary unknowns. Its degree-5 and degree-6 baselines
 already exist. This changes the mesh branch of the study; it is not a
-replacement value for the unfinished vertex-.070 result. A separate
+replacement for a value on the distinct vertex-.070 mesh branch. A separate
 base-6/film-7 space on this smaller mesh has 149,287/74,187 unknowns
 without an added film neighborhood, or 160,774/76,824 with a .05
 neighborhood. Preflight counts alone are not solved fields or memory
@@ -1567,13 +1569,16 @@ The source-frozen parent closes normally after 734.727 s. An independent
 standard-library audit verifies the complete stage sequence, all original
 requests, physical metadata, every output comparison, budget arithmetic and
 source/launch/completion pins without rerunning a solver. No tolerance or
-factor setting changes during the run. The missing vertex-.070 degree-7
-optical corner and the convergence stopping criterion remain unresolved.
+factor setting changes during the run. This degree-6 control alone does
+not complete the spatial/degree comparison; the later
+[degree-7 control](#degree-7-reference-release-control) supplies that corner.
+The optical convergence stopping criterion remains unresolved.
 
 ### Degree-7 precision attempt on the vertex-.070 mesh
 
-The same frozen precision method does **not** complete the missing global
-degree-7 corner. The physical settings remain h=.18, edge target .12,
+The retained-reference attempt with this frozen precision method does
+**not** complete the global-degree-7 corner. The physical settings remain
+h=.18, edge target .12,
 vertex target .070, cut 4, pad .2 and quadrature bonus 6, with stored internal
 blocks. Its 1,002 tetrahedra have 227,280 full, 107,040 selected and 2,880
 boundary unknowns. The explicit readout quadrature would be 20 rather than
@@ -1621,9 +1626,9 @@ are checked during the accepted work.
 Historical native stored/recomputed degree-7 attempts lack a complete optical
 result and do not supply matching original-matrix fingerprints. This attempt
 therefore establishes neither a complete resource improvement over them nor
-the missing spatial/degree comparison. The vertex-.070 degree-7 optical
-corner remains absent; no four-corner increment or convergence bound is
-computed from the partial sources.
+the spatial/degree comparison. This attempt returns no full optical value;
+no four-corner increment or convergence bound is computed from its partial
+sources. The later completed control below preserves this failure record.
 
 ### Releasing scaled matrix references after factorization
 
@@ -1689,9 +1694,73 @@ requests, physical outputs and comparisons without rerunning a solver.
 This independently authored helper remains a separate internal numerical
 validation experiment, with no new dependency or product solver integration.
 It does not authorize redistribution of the optional reference environment.
-The missing vertex-.070 degree-7 optical corner remains absent. The reference
-release qualifies the small construction and its finite equations; it does
-not establish that the larger problem will fit or complete.
+These small controls qualify the construction and its finite equations;
+they do not predict that the larger problem will fit or complete. The
+following full run supplies separate evidence for that outcome.
+
+### Degree-7 reference-release control
+
+The vertex-.070 global-degree-7 run now completes and passes independent
+closed-result review. It retains h=.18, edge target .12, cut 4, pad .2,
+quadrature bonus 6 and stored internal blocks on the same physical affine
+fixture. Its 1,002 tetrahedra have 227,280 full, 107,040 coupling and 2,880
+outer-boundary unknowns, with periodic point counts 25/62. Explicit readout
+quadrature is 20. The retained boundary arrays occupy 29,859,840 bytes.
+
+The numerical precision method is unchanged: original complex128 equations
+and flexible correction use the complete complex64 MMD factor with .1 pivot
+threshold. B128/B64 and cast-buffer references are released after the
+construction checks and factor return. Native CSR, selected A128, free-mask,
+D, B128 and B64 fingerprints match the earlier retained-reference attempt
+on the current numerical source. Later identity checks cover retained A128
+and D, with native CSR, free-mask and right-hand-side checks preserved;
+recorded construction hashes do not become new checks of opaque factor
+contents. Earlier native degree-7 failures still lack a complete optical
+golden and matching original-matrix fingerprints.
+
+All 328 original inverse requests complete: two sources, 324 boundary
+responses and two final corrections. There is one factorization, one
+bilinear assembly, 326 linear assemblies, two full operator applications
+and no internal recomputation. The inverse requests use 1,164 factor actions
+and 656 outer callbacks. The maximum original selected residual is
+`4.41588e-13`; the full reconstructed Maxwell residuals and optical
+readouts are:
+
+| finite degree-7 output | p | s |
+| --- | ---: | ---: |
+| T | .8522509294793323 | .7309173918139138 |
+| R | .1477490697957023 | .2690826075914002 |
+| full Maxwell residual | 5.11783e-14 | 2.39552e-14 |
+| modal/volume flux disagreement | 1.68216e-6 | 6.10961e-7 |
+| raw energy error | 7.24965e-10 | 5.94686e-10 |
+| signed Robin complement total | +6.67916e-10 | +6.30397e-10 |
+| signed energy-budget remainder | +5.70498e-11 | -3.57110e-11 |
+
+The independent audit checks the complete stage/request sequence, physical
+lattice and propagating modes, all modal sums, volume readouts, signed
+Robin-budget identities and source/launch/completion pins without another
+solve. Reflection propagates only `(0,0)` and transmission `(-1,-1)`,
+`(-1,0)` and `(0,0)`. The small budget remainders remain distinct from the
+larger modal/volume disagreement and optical refinement sensitivity.
+
+The factor contains 581,066,720 nonzeros and takes 460.388 s. The child
+closes normally after 1,367.095 s and the parent after 1,367.636 s, without
+a timeout or source change. Observed peak process RSS is **8,578,875,392
+bytes**, only **11,059,200 bytes (about 10.55 MiB) below 8 GiB**. This is
+a cumulative process peak checked after native calls, not a continuous
+memory trace or hard allocation cap. It leaves very little observed margin
+and supplies no general resource guarantee.
+
+The released B128/B64 array references cover 1,521,619,208 bytes; A128 and
+D retain 951,761,284 bytes. These are reference-array counts, not measured
+OS savings. The tiny weak-reference proof is not repeated as a large-run
+deallocation measurement. The earlier retained-reference degree-7 run
+failed during the second source and supplies no matched complete timing or
+memory baseline. This remains a separate internal numerical validation
+experiment, without product integration or an expanded dependency/license
+scope. It supplies a complete finite corner for the separately audited
+[degree-6/7 comparison](#vertex-and-degree-refinement-at-degrees-6-and-7),
+not an optical stopping certificate.
 
 ## Completing degree 7 on the smaller edge mesh
 
@@ -1720,8 +1789,9 @@ the degree-6-to-7 changes in `(-1,-1)`, `(-1,0)` and `(0,0)` are
 `+2.93487e-6`, `+8.38648e-5` and `-2.12162e-5`; cancellation reduces
 the total. The corresponding s changes are `+1.12023e-5`, `+5.42548e-7`
 and `+5.71817e-5`. Two finite intervals do not establish an asymptotic
-rate or a remaining-error bound. This result does not fill the
-resource-limited vertex-.070 degree-7 point.
+rate or a remaining-error bound. This edge-only result belongs to a
+different mesh branch from the separately completed
+[vertex-.070 degree-7 control](#degree-7-reference-release-control).
 
 At degree 7, modal/volume flux disagreements are `3.33281e-6` and
 `1.54597e-6`, smaller than the degree-6 values `5.32953e-6` and
@@ -1786,8 +1856,8 @@ For s `(-1,0)`, film-band enrichment first changes the power by
 Those contributions nearly cancel in the global-degree interval, whose
 change in that order is only `+5.42548e-7`. This finite comparison does
 not qualify the local space as optically equivalent to global degree 7,
-bound either solver's remaining error or fill the unfinished vertex-.070
-global-degree-7 point.
+bound either solver's remaining error or replace the distinct
+[vertex-.070 global-degree-7 result](#degree-7-reference-release-control).
 
 The local p/s modal-volume disagreements are `3.45926e-6` / `1.75515e-6`,
 and full residuals are `1.22413e-14` / `7.83061e-15`. Raw energy errors
@@ -1850,12 +1920,75 @@ fitted-auxiliary-degree-10 total differences at the same `(24,32)` Fourier
 order, `-1.52748e-6`/`-3.42893e-6`. Close agreement between those two
 finite NVF fields therefore does not establish Maxwell or Fourier convergence.
 
-The missing global-degree-7 result at vertex target .070 would complete the
-no-vertex/.070 by degree-6/7 comparison, retaining h=.18, edge target .12,
-cut 4, pad .2 and quadrature bonus 6. A local film-band enrichment or a
-different mesh does not fill that corner. The recorded resource failures
-leave it uncomputed; the completed intervals supply sensitivity measurements,
-not a remaining-error bound.
+The completed vertex-.070 global-degree-7 control now closes the separate
+no-vertex/.070 by degree-6/7 comparison below. The previous failures remain
+historical records; the new finite intervals still supply sensitivity
+measurements rather than a remaining-error bound.
+
+## Vertex and degree refinement at degrees 6 and 7
+
+A separately frozen reader uses the accepted complete degree-7 audit and
+the three saved native-direct results. It checks common physical settings
+and ordered modes, modal sums and signed Robin budgets before computing
+the four-corner differences. All rows retain h=.18, edge target .12,
+cut 4, pad .2 and quadrature bonus 6. Degree 6/7 uses explicit readout
+quadrature 18/20. Within each degree pair, mesh settings, element counts
+and periodic point counts agree; historical counts alone do not prove
+identical topology. Adding vertex sizing remeshes the cell. The new corner
+uses the qualified mixed-precision correction; the other three use native
+direct solves. Their original-matrix and forward-error provenance limits
+remain, so this readout is not a full solver-performance replication.
+
+Let E6/E7 denote the edge-only rows and V6/V7 the vertex-.070 rows:
+
+| row | tetrahedra | full / coupling unknowns | p T | s T |
+| --- | ---: | ---: | ---: | ---: |
+| E6 | 780 | 116,690 / 62,090 | .8521478711930495 | .7307770528597978 |
+| E7 | 780 | 177,232 / 83,632 | .8522134546586737 | .7308459794359807 |
+| V6 | 1,002 | 149,604 / 79,464 | .8521985908019867 | .7308750185489832 |
+| V7 | 1,002 | 227,280 / 107,040 | .8522509294793323 | .7309173918139138 |
+
+Each maximum below ranges over individual propagating **R and T** orders.
+The mixed difference is `V7 - V6 - E7 + E6`, evaluated on each power as
+well as the totals; it is not a remaining-error estimate.
+
+| signed change | p total T | s total T | largest p individual R/T magnitude | largest s individual R/T magnitude |
+| --- | ---: | ---: | ---: | ---: |
+| degree on edge mesh, E7 − E6 | +6.55834656e-5 | +6.89265762e-5 | 8.38648320e-5 | 6.89265185e-5 |
+| degree on vertex mesh, V7 − V6 | +5.23386773e-5 | +4.23732649e-5 | 6.55808985e-5 | 4.23723961e-5 |
+| vertex target at degree 6, V6 − E6 | +5.07196089e-5 | +9.79656892e-5 | 5.90348270e-5 | 1.53018200e-4 |
+| vertex target at degree 7, V7 − E7 | +3.74748207e-5 | +7.14123779e-5 | 4.07508935e-5 | 1.14585678e-4 |
+| mixed vertex/degree difference | -1.32447883e-5 | -2.65533113e-5 | 1.82839335e-5 | 3.84325217e-5 |
+
+On the vertex mesh, degree 6 to 7 changes p transmission in `(-1,-1)`,
+`(-1,0)` and `(0,0)` by `+3.33410e-6`, `+6.55809e-5` and
+`-1.65763e-5`. Their cancellation fraction,
+`1 - |sum(delta)| / sum(|delta|)`, is 38.78%. The three s transmission
+changes are positive: `+3.42686e-6`, `+2.01972e-5` and `+1.87492e-5`.
+The largest s individual change across R/T is instead the specular
+reflection change `-4.23724e-5`; using only the transmitting channels
+would understate that maximum.
+
+Adding the vertex target at degree 7 still redistributes s transmission
+by `+2.09715e-5`, `-6.41448e-5` and `+1.14585678e-4` in the same order.
+The absolute changes sum to `1.99701927e-4`, while their signed total is
+`+7.14123779e-5`: 64.24% cancels. The p changes are `+2.08183e-7`,
+`+4.07509e-5` and `-3.48426e-6`. Both total-transmission degree and vertex increments are smaller here
+than on the corresponding earlier side of this rectangle. This does not
+hold for every individual order: the s `(-1,0)` transmission degree
+increment grows from `+5.42548e-7` on the edge mesh to `+2.01972e-5`
+on the vertex mesh. Individual changes and the nonzero mixed difference
+remain visible.
+This does not establish an asymptotic rate, monotone accuracy or an optical
+stopping criterion.
+
+V6 to V7 reduces p/s modal-volume disagreement from
+`2.81115e-6`/`1.08678e-6` to `1.68216e-6`/`6.10961e-7`. All four rows
+have full linear residuals below `5.12e-14`; the signed Robin-budget
+remainders range from `-1.77116e-9` to `+5.70498e-11`. These verify
+finite equations and readout identities without bounding the larger
+optical differences. The outgoing-boundary and Wavebit Fourier checks
+remain separate, and no missing vertex-.065 degree-7 value is inferred.
 
 ## A failed periodic-boundary request was caught by the control
 

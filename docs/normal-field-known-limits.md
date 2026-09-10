@@ -1248,7 +1248,7 @@ this does not qualify arbitrary live geometry/material gradients, higher
 responses or optical convergence. Ordinary contact-preserving adapter JVPs
 remain unchanged.
 
-The [global-degree-7 FEM attempt](nvf-independent-fem.md#resource-limited-global-degree-7)
+The earlier [global-degree-7 FEM attempt](nvf-independent-fem.md#resource-limited-global-degree-7)
 on the vertex-.070 mesh stops at 32 of 324 boundary responses after its
 8-GiB RSS guard is exceeded. A retry that recomputes internal elimination
 blocks also exceeds that ceiling, reporting peak RSS 9.417 GB after
@@ -1257,9 +1257,14 @@ partial executions do not establish a memory or speed improvement. The separate
 [edge-only degree-7 solve](nvf-independent-fem.md#completing-degree-7-on-the-smaller-edge-mesh)
 completes at peak RSS 7.056 GB. Its p/s degree-6-to-7 transmission changes
 are `+6.55835e-5` / `+6.89266e-5`; individual powers still move by up to
-`8.38648e-5`. This smaller mesh branch does not fill the unfinished
-vertex-.070 point, establish an optical stopping rule or certify a
-general memory bound.
+`8.38648e-5`. That smaller mesh branch remains a distinct finite
+approximation, without an optical stopping rule or general memory bound.
+The later [reference-release control](nvf-independent-fem.md#degree-7-reference-release-control)
+completes all 328 original requests on the vertex-.070 degree-7 mesh and
+passes independent full-result review. Its peak RSS is 8,578,875,392 bytes,
+only 11,059,200 bytes (about 10.55 MiB) below 8 GiB. This supplies the finite
+corner, with very little observed resource margin; it does not establish
+optical convergence or a general memory guarantee.
 
 The [local film-band degree-7 comparison](nvf-independent-fem.md#separating-the-film-band-and-exterior-at-degree-7)
 reduces observed peak RSS to 6.465 GB, while individual powers still
@@ -1345,6 +1350,14 @@ p/s T by `+9.50082e-5`/`+5.39352e-5`: p degree sensitivity grows while
 s shrinks compared with .070. Individual spatial changes still cancel,
 and modal/volume disagreements grow on the .065 degree-6 mesh. This
 comparison does not supply monotone accuracy or a stopping criterion.
+
+The separately completed [degree-6/7 vertex comparison](nvf-independent-fem.md#vertex-and-degree-refinement-at-degrees-6-and-7)
+gives p/s degree increments `+5.23387e-5`/`+4.23733e-5` on the
+vertex-.070 mesh. Adding that target at degree 7 changes s total T by
+`+7.14124e-5`, but one transmission order moves by `+1.14586e-4` and
+64.24% of the absolute transmission-order changes cancel in the total.
+Both finite refinement directions remain relevant; the nonzero mixed
+difference and small linear/energy residuals do not bound optical error.
 
 The [reference-degree refinement at (24,32)](nvf-affine-convergence.md#reference-degree-refinement-at-y32)
 raises the fitted field from degree 8 to 10 at fixed optical order. The
