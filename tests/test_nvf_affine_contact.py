@@ -132,14 +132,16 @@ def contact_derivative(model, profile, width, basis, quadrature=24):
                      gram[..., 0, 0], gram[..., 0, 1], gram[..., 1, 1], eps, gram[..., 1, 0]])
 
 
-@pytest.mark.parametrize('profile,body_degree,gap_degree,grade_y,shear', [
-    (4.+.8j, 2, 2, False, .45),
-    (dict(seams=[31.], values=[4.+.8j, 9.+2.1j]), 4, 6, False, .45),
-    (dict(seams=[-73., 31.], values=[4., 9., 6.25]), 1, 4, False, -.8),
-    (4., 2, 1, True, -.8),
+@pytest.mark.parametrize('profile,body_degree,gap_degree,grade_y,shear,batch_size', [
+    (4.+.8j, 2, 2, False, .45, 2),
+    (dict(seams=[31.], values=[4.+.8j, 9.+2.1j]), 4, 6, False, .45, 16),
+    (dict(seams=[-73., 31.], values=[4., 9., 6.25]), 1, 4, False, -.8, 16),
+    (4., 2, 1, True, -.8, 16),
 ])
 def test_contact_fourier_opening_derivative_matches_independent_weak_variation(
-        profile, body_degree, gap_degree, grade_y, shear):
+        profile, body_degree, gap_degree, grade_y, shear, batch_size, monkeypatch):
+    # Five Fourier labels cross three batches in the first contact-opening case.
+    monkeypatch.setattr('wavebit._core.conforming.affine_cell._PROJECTION_BATCH_SIZE', batch_size)
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     jax.config.update('jax_enable_x64', True)

@@ -288,6 +288,11 @@ meshes at the default `edge_fraction=1e-5`. Independent quadrature orders
 16 and 24 agree within `3e-10`; JAX opening derivatives of all nine
 components and all coefficient modes through cap 2 agree with the
 independent variation within `3e-9` absolute per dimensionless gap.
+The first complex-material case now explicitly splits its five Fourier
+labels across three projection batches (batch size 2). It passes the
+same independent quadrature and opening-derivative limits; the other
+three cases retain the default batch size. This checks contact opening
+across projection batches without adding a new physical accuracy claim.
 
 For the ungraded degree-2 case with `epsilon=4+.8j` and
 `J=[[1,.45],[0,.7]]`, the largest component discrepancy against a
