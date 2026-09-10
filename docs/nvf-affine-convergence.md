@@ -541,8 +541,8 @@ The observed reference-degree effect at the y=32 endpoint is much smaller
 than the earlier optical-order changes, particularly for s. This extends
 the reference-field check beyond `(24,24)`. It does not reproduce the
 whole y interval at degree 10 or provide a remaining-error bound: degree
-10 has not been run at y=28 or 36, and the candidate comparison remains
-at `(24,24)`. Both fitted fields still use Wavebit's Maxwell engine;
+10 has not been run at y=28 or 36. The subsequent candidate endpoint
+comparison is recorded below. Both fitted fields still use Wavebit's Maxwell engine;
 the independent 3D affine optical comparison remains open.
 
 The degree-10 optical calculation takes 292.40 s with peak process RSS
@@ -550,6 +550,72 @@ The degree-10 optical calculation takes 292.40 s with peak process RSS
 imports, closure and native workspaces. The two degree-10 scalar FEM
 exports take 74.05 s and 105.53 s for quadratures 40 and 48. These are
 shared-host observations and do not establish a performance comparison.
+
+## Candidate comparison at y=32
+
+The candidate with x subdivisions 4, base rows 4, body degree 4 and
+gap degree 6 is now exported through coefficient cap 64 for optical
+order `(24,32)`. Its 7,775-unknown auxiliary space is unchanged:
+y subdivisions 1, local flux basis, edge fraction `1e-5`, grading
+strength 8, grading radius .01 and quadrature 12. The shared cap-48
+coefficients are exactly equal to the earlier export. Extending the
+Fourier representation therefore does not refine this auxiliary field.
+
+The analytic material-coefficient error is `4.00e-15`; real-field
+conjugacy is exact, identity-mean error is `8.88e-16` and the independently
+computed xy/yx Gram terms differ by at most `4.81e-12`. Primal and
+reciprocal residuals are `5.95e-10`/`1.36e-10`, below the existing
+`1e-8` guard. The relative static enclosure remains `3.35654e-5`.
+These controls establish projection continuity and finite static
+consistency, not optical accuracy.
+
+The optical comparison reuses the saved degree-10, quadrature-40 fitted
+projection and its `(24,32)` powers. The Wavebit runtime and projection
+closure sources are unchanged between that calculation and this candidate
+run, as checked against the recorded source revision and current file
+hashes. Both calculations use the same physical profile and p/s incident
+power normalization, with a separate closure at the selected optical order.
+
+| polarization | candidate T | fitted-field T | candidate minus fitted T | candidate minus fitted R |
+| --- | ---: | ---: | ---: | ---: |
+| p | .852379183496 | .852380710977 | -1.52748e-6 | +1.52750e-6 |
+| s | .731009789706 | .731013218636 | -3.42893e-6 | +3.42892e-6 |
+
+An independent array audit evaluates the physical `+G` reciprocal vectors
+and maps `(m,n)` to `[n+32,m+24]`. Reflection propagates only `(0,0)`;
+transmission propagates the following three orders:
+
+| transmitting order | candidate minus fitted, p | candidate minus fitted, s |
+| --- | ---: | ---: |
+| (-1,-1) | -4.60836e-7 | -9.37715e-7 |
+| (-1,0) | +6.09474e-8 | +2.42107e-6 |
+| (0,0) | -1.12759e-6 | -4.91228e-6 |
+
+The largest individual R/T differences are `1.52750e-6`/`4.91228e-6`
+for p/s. In particular, the s transmitting orders partly cancel, leaving
+a smaller total-T difference. Candidate lossless balance error is
+`7.93e-12`, below the unchanged `1e-9` algebraic guard. The maximum
+coefficient difference from the fitted field through cap 64 is
+`6.31351e-4`. This extends the fixed-order auxiliary-field comparison
+beyond `(24,24)`; it does not establish a Fourier tail bound, a
+continuum optical error bound or a release tolerance. Both fields
+still use the same Maxwell engine, and the independent 3D FEM
+discretization uncertainty remains open.
+
+The recorded candidate totals change from the historical `(24,24)` row
+by `-1.05665e-6`/`+3.59618e-5`. The auxiliary profile, settings and shared
+coefficients match, but the older optical runtime hash and per-order
+arrays were not saved. These are historical total differences, not a
+newly controlled same-runtime directional refinement or an interval
+reproduced with both candidate and fitted fields.
+
+The primal cap-64 export takes 59.82 s and the reciprocal mean check
+8.68 s, with peak process RSS 4.425 GB. The optical calculation takes
+279.65 s, including a 16.60 s closure, with peak RSS 6.228 GB.
+Primal coefficients are saved before the reciprocal stage, and all p/s
+diffraction powers are saved with physical settings and input/source
+hashes before the final comparison. Each stage completed; timings are
+shared-host observations and do not establish a speed comparison.
 
 ## Reproduction and guards
 
@@ -649,6 +715,13 @@ Run the degree-8 cap-64, quadrature-40 export at the same optical order
 with the same runtime before comparing the two degrees. Keep the full
 projection metadata distinct; this is a fixed-order comparison rather
 than a directional rectangle.
+
+For the candidate endpoint comparison, retain that degree-10, cap-64,
+quadrature-40 fitted export and use `--orders 24:32 --cells 4:4:4:6`.
+Check the candidate's common cap-48 coefficients against its earlier
+export before interpreting the new optical row. The candidate and
+fitted projections must each receive the `(24,32)` closure; padding
+the old cap-48 coefficients with zeros does not extend the field.
 
 The measurements and validation details are retained in
 [the study log](https://github.com/fieldalgo/wavebit/blob/develop/studies/results/nvf_affine_convergence.log).
