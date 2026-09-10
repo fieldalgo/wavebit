@@ -991,6 +991,59 @@ guarantees. The zero-neighborhood local film-7 space remains unsolved;
 the .05-neighborhood result is recorded below. None relaxes the existing
 linear, power or optical controls.
 
+## Locating memory growth before the first boundary trace
+
+Separate diagnostic processes revisit the completed vertex-.070 degree-6
+mesh, with 149,604 full, 79,464 coupling and 2,184 outer-boundary unknowns.
+They keep h=.18, edge=.12, cut 4, pad=.2, quadrature bonus 6 and the
+8-GiB peak-RSS guard. Both stop intentionally after the first completed
+trace response. They measure operations, without repeating the complete
+optical calculation or supplying new optical results.
+
+The diagnostic samples process peak RSS and current `ps` RSS before and
+after assembly, factorization, internal reconstruction, full form
+application and each inverse. Because matrix multiplication is lazy,
+the inverse wrapper forces evaluation into an additional full complex
+vector before the after-sample. That adds 2,393,664 bytes and a subsequent
+copy, while process observations add timing overhead. A smaller wrapper
+control first verifies the operation counts and intentional stop.
+
+| Observation | Stored blocks | Recomputed blocks |
+| --- | ---: | ---: |
+| Current RSS after assembly, bytes | 1,275,527,168 | 793,772,032 |
+| Current RSS after factorization, bytes | 1,659,879,424 | 2,033,303,552 |
+| Current RSS before first inverse, bytes | 1,875,410,944 | 2,049,245,184 |
+| Current RSS after first inverse, bytes | 6,152,339,456 | 5,961,564,160 |
+| Peak RSS at diagnostic completion, bytes | 7,166,689,280 | 5,983,043,584 |
+| Diagnostic duration, s | 128.575 | 191.093 |
+
+Both large observed resident-memory increases occur during the first
+global inverse application. In the recomputed run, the first internal
+reconstruction increases current RSS by 9,568,256 bytes and the first
+full form application by 802,816 bytes. The following inverse increases
+it by 3,912,318,976 bytes. In the stored run, that inverse increases
+current RSS by 4,276,928,512 bytes without increasing the process peak,
+because factorization has already reached a higher peak.
+
+This localizes the resident-memory change on degree 6; it does not
+identify fresh allocations, factor-page residency or an operating-system
+cause. The recomputed diagnostic has a smaller observed peak but also
+adds 65.190 s of internal reconstruction and 2.170 s of full form
+applications. These partial shared-host observations are not a full-run
+performance comparison or a resource guarantee for degree 7. Reducing
+the retained boundary arrays alone does not address the operation where
+this diagnostic observes the large increase.
+
+The same-version [NGSolve UMFPACK wrapper](https://github.com/NGSolve/ngsolve/blob/v6.2.2606/linalg/umfpackinverse.cpp)
+constructs the symbolic and numeric factor during factorization. Its
+complex inverse application uses that existing factor and two compressed
+complex vectors, totaling 2,542,848 bytes for this coupling dimension.
+The visible wrapper does not defer a new factorization to the first
+application. This narrows the source inspection, while internal
+SuiteSparse workspace and operating-system page residency remain
+unmeasured by these observations. No external implementation is copied
+into the reference instrument.
+
 ## Completing degree 7 on the smaller edge mesh
 
 The separate edge-.12 branch completes global degree 7 within the same
