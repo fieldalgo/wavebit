@@ -1287,6 +1287,49 @@ observations justify a separately bounded MMD threshold-.1 first-source
 test at degree 6. They do not establish that it finishes within the large
 resource limit, nor qualify degree 7 or an optical convergence bound.
 
+### Bounded degree-6 first source with MMD and threshold .1
+
+The separately declared MMD_AT_PLUS_A / threshold-.1 / symmetric-rowmax
+experiment uses recomputed local elimination and stops after the first
+actual p-source solve and base-column copy. A degree-3 first-source control
+first reproduces the completed small recomputed solve's original CSC, free mask,
+D and D A D fingerprints, with selected residual `1.193e-13`. Thirty
+malformed first-source audit controls are rejected. The controls retain the
+600 s parent kill-and-wait limit, 8 GiB observed peak-RSS ceiling and unchanged
+`1e-11` selected-system residual criterion.
+
+The vertex-.07 degree-6 diagnostic then completes on the same 1,002-element
+mesh, with 149,604 full and 79,464 coupling unknowns. Its original selected
+CSC and free mask exactly match the earlier timed-out scaled COLAMD run.
+Independent validation confirms one factorization, one inverse application,
+one assembled bilinear form, two assembled source loads, one internal
+recovery and one full-form application. No boundary trace is assembled.
+
+| Completed first-source observation | Value |
+| --- | ---: |
+| Factorization time | 429.016 s |
+| Reported factor nonzeros | 340,024,111 |
+| Child diagnostic time | 502.961 s |
+| Parent elapsed time | 503.829 s |
+| Process peak RSS at diagnostic completion | 6,777,683,968 bytes |
+| Original selected-system relative residual | 3.590e-13 |
+
+The factorized-stage peak is 2,929,623,040 bytes and rises to
+6,767,001,600 bytes after the first inverse. A factorization-stage snapshot
+therefore does not represent the completed source's memory requirement.
+These observations do not identify a particular allocation or prove a
+cause for resident-page growth.
+
+The prior native recomputed first-source diagnostic recorded
+5,829,935,104 bytes and 159.906 s. Its physical geometry, source and space
+metadata agree, but it did not record original CSC fingerprints and the
+two diagnostics have different instrumentation. The new observation
+provides no evidence of a large-problem memory or time improvement; the
+small degree-3 reduction does not transfer to this experiment. Native
+UMFPACK remains the reference default. This completed first source has no
+full Maxwell residual, boundary response, optical result or degree-7
+qualification. Another resource trial needs a distinct validated change.
+
 ## Completing degree 7 on the smaller edge mesh
 
 The separate edge-.12 branch completes global degree 7 within the same
