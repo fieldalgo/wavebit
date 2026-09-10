@@ -1218,6 +1218,16 @@ add contact or multiple shapes, or certify optical accuracy. The explicit
 exposes one such physical rectangle per patterned layer with a required
 frozen plan; it does not broaden the other builders' geometry contracts.
 
+The separate [`CartesianRectanglePairNVF`](guide/cartesian-rectangle-pair-nvf.md)
+now exposes the [finite pair cell](nvf-cartesian-pair.md) for exactly two
+horizontal equal-height physical rectangles per patterned layer. Its required
+plan fixes original input indices, cyclic mesh choice and strictly computed
+positive-gap/exact-contact state. Native geometry and material mapping and
+within-chart shared-height/shared-y/contact-preserving derivatives pass
+independent controls. It does not snap contact, admit contact-opening or
+arbitrary one-height/vertical-center tangents, add general pair geometry, or
+certify patterned optical accuracy. The existing builders retain their scopes.
+
 The [global-degree-7 FEM attempt](nvf-independent-fem.md#resource-limited-global-degree-7)
 on the vertex-.070 mesh stops at 32 of 324 boundary responses after its
 8-GiB RSS guard is exceeded. A retry that recomputes internal elimination

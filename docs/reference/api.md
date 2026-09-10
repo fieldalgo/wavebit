@@ -102,6 +102,9 @@ properties every one of them carries.
 .. autoclass:: wavebit.CartesianRectangleNVF
    :members:
 
+.. autoclass:: wavebit.CartesianRectanglePairNVF
+   :members:
+
 ```
 
 

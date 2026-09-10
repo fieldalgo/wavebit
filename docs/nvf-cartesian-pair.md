@@ -3,8 +3,10 @@
 Written: 2026-09-10
 
 Targets:
+- `wavebit/_core/conforming/cartesian_pair.py`
 - `studies/nvf_cartesian_pair.py`
 - `tests/test_nvf_cartesian_pair.py`
+- `tests/test_nvf_cartesian_rectangle_pair_api.py`
 - `studies/results/nvf_cartesian_pair.log`
 
 The experimental `CartesianPairCell` supplies finite P1 field, energy and
@@ -13,7 +15,10 @@ inside an oblique periodic cell. A positive gap and an exact full-height
 shared edge each have a fixed conforming mesh. Independent weak equations,
 triangle integration and NumPy/JAX derivatives verify these finite models.
 Opening a gap from contact, more general pairs and optical convergence remain
-unqualified. The existing public geometry adapters keep their current scope.
+unqualified. The explicit experimental
+[`CartesianRectanglePairNVF`](guide/cartesian-rectangle-pair-nvf.md) exposes this
+bounded model through ordinary rectangle dictionaries and a mandatory plan.
+The other public geometry adapters keep their current scope.
 
 ## Physical geometry and frozen charts
 
@@ -136,6 +141,56 @@ bytes; the child process resource high-water mark was 665,124,864 bytes.
 Source and test hashes were unchanged across both runs. These operational
 measurements describe these tiny controls, not the cost or accuracy of a
 practical optical solve.
+
+## Public physical-input qualification
+
+The packaged kernel preserves every prior cell helper, planner and numerical
+method's abstract syntax exactly; only module wording, exports and relative
+imports change. The study module re-exports that implementation, and its
+25-test source is unchanged. The public builder adds structural admission
+and maps physical widths and centers directly into the existing finite cell.
+It performs no background normalization, lattice reduction, extra Fourier
+phase or rotation. Planning sorts concrete centers once while preserving
+original input indices and material identity during replay.
+
+Public tests cover both input orders, ordinary `l`/`lx`/`ly` precedence,
+Material wrappers, uniform/patterned stacks, translations, common scale,
+zero/unequal Fourier orders, strict constraints and invalid traced inputs.
+The original nodal/Duffy oracle independently supplies explicit closure
+variations for 111 public native-parameter directions across the same six
+finite cases. The native coordinates are physical lattice entries, two
+widths, one shared height, two horizontal centers, one shared vertical center
+and six material components. Their tangents are mapped analytically from the
+original dimensionless family. Contact directions preserve the shared edge;
+arbitrary one-height, one-y or opening-gap tangents are outside that family.
+The prior per-case quadrature choices and `3e-10` value/reference and `3e-9`
+derivative guards are unchanged.
+
+The API fixtures prescribe physical decimal dimensions and centers directly.
+An initial test instead formed contact centers from dimensionless floating
+values and produced a tiny negative gap, which admission correctly refused.
+The computed contact gap was `-2.842170943040401e-14` nm. That failed fixture
+record is preserved. The final physical primal is
+specified explicitly; the adapter performs no snapping and separately refuses
+a representable nonzero contact opening. This test-fixture correction changes
+neither the finite model nor any tolerance. Mapped native geometry differs
+from the dimensionless oracle coordinates by at most `1.137e-13` nm from
+representation roundoff; the value and derivative comparisons pass their
+original guards on those explicitly recorded primals.
+
+The existing 25 and new 29 controls passed together: **54 tests in 15.89 s**.
+A fresh process with JAX imports blocked passed 38 and skipped 16 in 5.54 s.
+A package-only numerical smoke imports no study or JAX module. The combined
+run sampled 759,201,792 bytes RSS, with a separate resource high-water mark of
+759,513,088 bytes; source hashes stayed fixed. Three tiny `solve_conv` controls
+at `(0, 0)`, `(1, 0)` and `(0, 1)` match independent uniform Airy powers and
+check patterned lossless slot layout/energy. The patterned energy check and
+manual example are integration controls, not independent optical references.
+A further 156 existing single-cell, single-rectangle, ConformingNVF and
+AffineProfileNVF controls pass in 56.83 s. The literal guide example runs
+without importing study or JAX modules; its finite p/s transmissions are
+0.9901311633000325 and 0.9366247460109753. These values document execution,
+not optical convergence.
 
 ## Contact and accuracy limits
 

@@ -16,6 +16,7 @@ subtrees:
       - file: guide/conforming-nvf
       - file: guide/affine-profile-nvf
       - file: guide/cartesian-rectangle-nvf
+      - file: guide/cartesian-rectangle-pair-nvf
       - file: guide/fields
       - file: guide/autodiff
       - file: guide/backends
