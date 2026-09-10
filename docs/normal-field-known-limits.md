@@ -1207,9 +1207,13 @@ open.
 
 The [global-degree-7 FEM attempt](nvf-independent-fem.md#resource-limited-global-degree-7)
 on the vertex-.070 mesh stops at 32 of 324 boundary responses after its
-8-GiB RSS guard is exceeded. It produces no optical value. Smaller
-spaces have been checked for their dimensions, but those counts do not
-complete the missing degree interval or certify a memory bound.
+8-GiB RSS guard is exceeded. It produces no optical value. The separate
+[edge-only degree-7 solve](nvf-independent-fem.md#completing-degree-7-on-the-smaller-edge-mesh)
+completes at peak RSS 7.056 GB. Its p/s degree-6-to-7 transmission changes
+are `+6.55835e-5` / `+6.89266e-5`; individual powers still move by up to
+`8.38648e-5`. This smaller mesh branch does not fill the unfinished
+vertex-.070 point, establish an optical stopping rule or certify a
+general memory bound.
 
 The [independent affine comparison](nvf-affine-convergence.md) now separates
 auxiliary-cell refinement from directional optical truncation. A fitted

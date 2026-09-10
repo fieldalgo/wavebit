@@ -910,8 +910,61 @@ already exist. This changes the mesh branch of the study; it is not a
 replacement value for the unfinished vertex-.070 result. A separate
 base-6/film-7 space on this smaller mesh has 149,287/74,187 unknowns
 without an added film neighborhood, or 160,774/76,824 with a .05
-neighborhood. Those counts are preflights, not solved fields or memory
-guarantees. None relaxes the existing linear, power or optical controls.
+neighborhood. Preflight counts alone are not solved fields or memory
+guarantees. The local film-7 spaces remain unsolved. None relaxes the
+existing linear, power or optical controls.
+
+## Completing degree 7 on the smaller edge mesh
+
+The separate edge-.12 branch completes global degree 7 within the same
+8-GiB RSS guard. It uses h=.18, physical pad=.2, cut 4, quadrature bonus 6
+and no added vertex restriction. Degree is assigned after mesh generation;
+all three rows have 780 tetrahedra and periodic point counts 22/36.
+Matching historical mesh summaries does not establish an exact topology
+fingerprint. Explicit readout quadrature follows degree, with orders
+16/18/20 at degrees 5/6/7.
+
+| global degree | p T | s T |
+| ---: | ---: | ---: |
+| 5 | .852038068565 | .730662922035 |
+| 6 | .852147871193 | .730777052860 |
+| 7 | .852213454659 | .730845979436 |
+
+| interval | p total T change | s total T change | largest p individual R/T change | largest s individual R/T change |
+| --- | ---: | ---: | ---: | ---: |
+| 5 to 6 | +1.09803e-4 | +1.14131e-4 | 1.44154e-4 | 1.14144e-4 |
+| 6 to 7 | +6.55835e-5 | +6.89266e-5 | 8.38648e-5 | 6.89265e-5 |
+
+Both measured intervals become smaller, but the final individual changes
+are still tens of parts per million of incident power. In p transmission,
+the degree-6-to-7 changes in `(-1,-1)`, `(-1,0)` and `(0,0)` are
+`+2.93487e-6`, `+8.38648e-5` and `-2.12162e-5`; cancellation reduces
+the total. The corresponding s changes are `+1.12023e-5`, `+5.42548e-7`
+and `+5.71817e-5`. Two finite intervals do not establish an asymptotic
+rate or a remaining-error bound. This result does not fill the
+resource-limited vertex-.070 degree-7 point.
+
+At degree 7, modal/volume flux disagreements are `3.33281e-6` and
+`1.54597e-6`, smaller than the degree-6 values `5.32953e-6` and
+`2.62282e-6`. Full linear residuals are `1.31802e-14` and `7.24477e-15`.
+The signed energy remainders after the Robin complement are
+`+1.45691e-11` and `+5.18571e-13`. These algebraic and readout checks
+remain distinct from optical degree sensitivity.
+
+Against the saved finite Wavebit `(24,32)` result, p/s total transmission
+differences are `-1.67256e-4` / `-1.67239e-4`. For s, the `(-1,0)`
+order differs by only `-1.33087e-6`, while `(0,0)` still differs by
+`-1.32713e-4`. Agreement in one channel does not qualify the others;
+both finite solvers retain unresolved optical discretization error.
+
+The solve has 177,232 full, 83,632 coupling and 2,880 boundary unknowns.
+It completes in 818.731 s, including factorization by 252.240 s and
+the boundary stage by 800.012 s. Observed peak RSS is 7,055,966,208 bytes.
+The callback reports every eight completed trace applications, ending
+at 324/324. Counts match preflight and the two numerical source hashes
+match the clean launch at `5bc835e`. These are shared-host costs;
+small independent-oracle arithmetic checks overlap part of this run.
+They are not a general runtime or memory guarantee.
 
 ## Comparing the physical diffraction orders with Wavebit
 
