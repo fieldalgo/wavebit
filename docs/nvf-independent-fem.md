@@ -1453,6 +1453,64 @@ process guard includes those costs. A smaller retained dimension is therefore
 insufficient evidence for a higher-degree run. The default solver and optical
 convergence status remain unchanged.
 
+### Complete lower-precision LU with double-precision correction
+
+A further candidate changes the precision of a complete sparse factor, while
+retaining the original complex128 matrix, right-hand sides, Krylov vectors,
+solutions and Maxwell checks. It forms the same verified `B128 = D A128 D`,
+then factors its complex64 conversion with the existing MMD ordering and .1
+pivot threshold. The original and both scaled matrices remain available in
+this small control. Nonfinite conversion or loss of a nonzero real or
+imaginary component to zero is refused; this does not rule out underflow
+inside the sparse factorization.
+
+Each approximate right action is
+`M(v) = D cast128(LU64.solve(cast64(D v)))`. Fixed `gcrotmk` parameters
+`m=30`, `k=10`, `maxiter=15`, `rtol=1e-12`, `atol=0` use this action with the
+original `A128`. The installed flexible implementation stores each actual
+preconditioned vector before applying `A128`, so it accommodates rounded
+actions without assuming exact linearity. Every right-hand side starts from
+zero with an empty recycled-vector list. A successful solver flag is
+insufficient: every returned solution must also pass the original selected
+residual, and the completed fields must pass the full Maxwell and all-output
+comparisons. No fallback or parameter search is used.
+
+Two known-solution complex synthetic cases pass, including a pivot-requiring
+zero diagonal and positive diagonal rescaling. Their largest solution error
+is `1.86e-11`; both require two actual complex64 factor actions. Twenty-two
+refusal controls cover precision conversion, invalid outputs and solver
+flags, mutated inputs, and fixed action/callback limits. Exact zero right-hand
+sides return zero without a factor action.
+
+The single stored degree-3 FEM control completes all 40 original solves.
+Each uses three factor actions, giving 120 in total. Maximum selected residual
+is `7.28e-14`; p/s full Maxwell residuals are `6.78e-14`/`4.99e-14`. Every
+compared output agrees with all three saved direct controls within `1.38e-13`.
+The original CSC, free mask, D and B128 hashes match before precision
+conversion. All input and solution precision checks pass.
+
+| Complete stored degree-3 control | Peak process RSS, bytes | Child elapsed, s |
+| --- | ---: | ---: |
+| Native direct | 578,551,808 | 2.29228 |
+| Scaled complex128 MMD direct | 384,696,320 | 2.78916 |
+| Complete complex64 MMD with flexible correction | 356,499,456 | 3.95168 |
+
+This measurement reduces observed memory by about 7.3% against the scaled
+complex128 control, with increased elapsed time. The complex64 factor takes
+.91307 s and has 8,932,284 nonzeros, matching that control's factor nonzero count.
+These are shared-host observations; they neither guarantee the same pivot
+pattern at higher degree nor imply that total memory is halved.
+
+The arrays of the three retained CSC matrices occupy 54,185,836 bytes. The
+explicit vector allowance is 30,742,784 bytes, including possible overlap
+between successive Krylov bases, and conversion diagnostics have a separate 66,549,760-byte
+work allowance. These are array counts and allowances, not an allocation
+cap. Native condensation, trace storage, small dense QR, opaque factor
+workspaces and runtime allocators also contribute to the observed process
+peak. The 8-GiB observed process guard and 180-s parent remain in force.
+This qualifies the fixed small precision strategy; high-degree resource
+use and optical convergence remain unqualified.
+
 ## Completing degree 7 on the smaller edge mesh
 
 The separate edge-.12 branch completes global degree 7 within the same
