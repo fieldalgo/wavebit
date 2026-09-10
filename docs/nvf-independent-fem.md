@@ -1836,11 +1836,11 @@ In that run the observed RSS high-water mark is 4,336,680,960 bytes when
 factorization returns. It reaches 7,014,957,056 bytes after the first
 request, 8,051,359,744 at the boundary stage and its final 8,578,875,392
 only at the solver return, so the array is held while that peak is set.
-Whether releasing it lowers the peak is not predicted here: RSS excludes
-compressed and swapped memory, allocator reuse is unmeasured and no
-degree-7 native-action run exists. Per-request hashing of the degree-7
-native CSR, with 47,523,840 nonzeros, would also add time that this small
-control cannot extrapolate.
+This small control does not predict whether releasing it lowers that
+peak: RSS excludes compressed and swapped memory and allocator reuse is
+unmeasured. Per-request hashing of the degree-7 native CSR, with
+47,523,840 nonzeros, also adds time. The
+[degree-7 control](#native-selected-action-at-degree-7) below measures both.
 
 Both the tiny and the degree-3 parents close with exit 0 and unchanged
 source pins. The independent p3 audit checks the lifetime transition, all
@@ -1850,6 +1850,60 @@ numerical validation experiment, with no new dependency, product solver
 integration or redistribution scope. It qualifies the small construction
 and its finite equations; it does not establish that a finer or
 higher-degree problem will fit or complete.
+
+### Native selected action at degree 7
+
+The native action was also run once at the completed vertex-.070
+global-degree-7 stored corner, as a separately released resource control.
+Its probe, launcher, plan and auditor are the accepted degree-7 sources with
+only the native lifetime validators, the native tiny and p3 gates and one
+added comparison. Fourteen inherited probe functions are unchanged at the
+syntax-tree level, and 17 focused refusals were checked before the launch.
+The expected-fingerprint table gains the native CSR and rounded-matrix
+entries that the native helper reads; the physical fixture, settings,
+factor options and guards are the accepted degree-7 contract.
+
+All 328 original requests complete, and the independent audit accepts the
+closed run. Before release the native and CSC selected products agree
+exactly on both check vectors. Counters, the 1,164 factor actions, the 656
+outer callbacks, the maximum original selected residual `4.41588e-13` and the
+p/s full Maxwell residuals `5.11783e-14`/`2.39552e-14` repeat the accepted
+release row. All 346 p/s scalar, 81-order and Robin-budget outputs are
+bitwise equal to it. The factor again has 581,066,720 nonzeros and takes
+467.989 s.
+
+| Stored degree-7 observed peak RSS, bytes | Factor start | Factor return | First request | Final |
+| --- | ---: | ---: | ---: | ---: |
+| Releasing B128 and B64 | 4,336,680,960 | 4,336,680,960 | 7,014,957,056 | 8,578,875,392 |
+| Native action, releasing all three | 3,141,402,624 | 3,521,511,424 | 6,948,880,384 | 7,332,790,272 |
+
+The final observed peak is 1,246,085,120 bytes, about 14.5%, lower, but
+**this is not a measured saving**. At factorization start both helpers
+still run identical code, and the observations there already differ by
+1,195,278,336 bytes. The host was under memory pressure during this run. An
+external sampler, reading `top` and `vm_stat` every 30 s without pausing the
+solver, recorded up to 8.79 GiB of the solver's memory compressed, a memory
+footprint of about 10 GiB during factorization, and system swap between 9.7
+and 13.4 GiB. RSS excludes compressed and swapped pages, so both rows partly
+track the host state. Across the release point the footprint drops by about
+2.4 GiB; the released arrays are 2.30 GiB, but factor workspace is freed at
+the same moment. The release run has no footprint record, so no footprint
+comparison is possible.
+
+The child takes 1,699.576 s instead of 1,367.095 s, and the mean request
+2.948 s instead of 1.938 s. The added per-request work includes hashing the
+native CSR at entry and exit; the split was not profiled, and the memory
+pressure may also have slowed the run. The observed 8 GiB guard never
+tripped, yet it did not bound the solver's real memory: the factorization
+footprint exceeded 8 GiB while the observed RSS high-water mark stayed at
+most 3,521,511,424 bytes. A separate watchdog on the kernel memory-pressure
+level read normal or warning at every 5 s check and never critical.
+
+This control therefore qualifies the native action at full degree-7 scale
+for arithmetic and outputs only. It does not establish a memory reduction,
+the fit of a finer mesh or a vertex-.065 degree-7 run. A clean memory
+attribution needs physical footprint recorded inside both variants under
+matched host conditions.
 
 ## Completing degree 7 on the smaller edge mesh
 
