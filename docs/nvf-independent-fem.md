@@ -630,6 +630,58 @@ two extra inverse applications, and driven full/condensed agreement.
 Together with the existing scattering, Robin and square-fixture
 controls, the selected 31 tests pass in 57.533 s.
 
+## Recomputing the internal condensation blocks
+
+The optional `recompute_internal=True` argument to `solve_affine_rayleigh`
+retains the condensed Maxwell system while omitting the stored harmonic
+extension and internal inverse matrices. It requires `condense=True` and
+accepts a boolean. The default False keeps the existing storage path.
+Both settings and stage metadata record the selected value.
+
+Let I denote element-interior unknowns, E the retained coupling unknowns
+and A the original local-Robin operator. For each of the two original
+volume sources, the new path constructs:
+
+```text
+z_E = 0;  z_I = inverse(A_II) f_I
+rhs_E = (f - A z)_E = f_E - A_EI inverse(A_II) f_I
+```
+
+The installed `ComputeInternal` operation evaluates z, and a full form
+application evaluates A z. The temporary vectors are released after this
+source condensation. The same single sparse factorization supplies the
+two source solves, every boundary-trace response and the two final
+Rayleigh corrections. A boundary trace has zero interior load, so those
+inverse applications need no additional source elimination.
+
+After the boundary correction, each field's internal values are recovered
+from its corrected coupling values and its original volume source. This
+preserves the full uncondensed residual check. The Robin boundary form
+does not act on the zero tangential traces of the interior H(curl) bubbles;
+that property is essential when reconstructing local interior blocks.
+
+The installed NGSolve 6.2.2606 API behavior was checked against its
+[versioned implementation](https://github.com/NGSolve/ngsolve/blob/v6.2.2606/comp/bilinearform.cpp).
+This option calls the existing optional runtime; no external source is
+copied into Wavebit. It adds four local reconstruction sweeps and two full
+form applications for the two polarizations. The global inverse count
+remains `rank+4`; including the existing final residual checks, there
+are four full form applications in the new path. Avoiding stored blocks
+does not imply a faster solve or guarantee that a larger case fits a
+particular RSS limit.
+
+The small patterned control compares the full, stored-condensed and
+recomputed-condensed paths at h=.2, degree 3, cut 1, theta=.31 and
+phi=.23. It retains the existing `2e-10` absolute criteria for total and
+individual R/T, volume flux and signed Robin budgets, and `1e-11` for
+full residuals. Instrumentation checks one factorization, `rank+4`
+inverse applications, the four reconstruction calls and absent internal
+matrix storage. A driven uniform slab uses the independent Airy formula
+with its existing `5e-4` criterion. A mixed base-2/film-3 control checks
+the same equivalence with variable entity degrees. These controls test
+the alternative elimination path, not optical discretization accuracy.
+All seven focused controls pass in 28.733 s with the original thresholds.
+
 ## Testing a second physical edge interval
 
 Further edge-size controls keep h=.18, cut 4, pad=.2 and quadrature bonus

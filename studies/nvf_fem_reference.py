@@ -710,6 +710,7 @@ def robin_complement_power(mesh, scattered_field, ports, *, area, theta,
 
 def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
                           *, transform=None, theta=THETA, phi=0., condense=True,
+                          recompute_internal=False,
                           quadrature_bonus=6, edge_h=None, vertex_h=None, film_degree=None,
                           film_degree_pad=0., progress=None, boundary_progress_every=None):
     """Independent affine H(curl) FEM with shared p/s Rayleigh boundary solves.
@@ -737,6 +738,13 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
     factorization. ``boundary_array_bytes`` reports those two retained arrays,
     excluding the sparse factorization, dense port matrices and work vectors.
 
+    ``recompute_internal=True`` requires condensation and omits the stored
+    harmonic extension and internal inverse matrices. Local elimination is
+    recomputed for each source and each final field, with two additional full
+    form applications to construct the source Schur complements. The equations
+    and trace inverse count are unchanged. The default False preserves the
+    existing stored-matrix path; omitted storage is not a peak-RSS guarantee.
+
     ``quadrature_bonus`` is a nonnegative integer for numerical integration
     studies, not mesh or FEM polynomial refinement. It sets the source bonus,
     the trace bonus to 2*cut+bonus, and flux/norm readout order to
@@ -758,11 +766,16 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
         raise ValueError('order must be a positive integer')
     if not isinstance(condense, (bool, np.bool_)):
         raise ValueError('condense must be boolean')
+    if not isinstance(recompute_internal, (bool, np.bool_)):
+        raise ValueError('recompute_internal must be boolean')
+    if recompute_internal and not condense:
+        raise ValueError('recompute_internal requires condense=True')
     if (isinstance(quadrature_bonus, (bool, np.bool_))
             or not isinstance(quadrature_bonus, (int, np.integer))
             or quadrature_bonus < 0):
         raise ValueError('quadrature_bonus must be a nonnegative integer')
     order, condense = int(order), bool(condense)
+    recompute_internal = bool(recompute_internal)
     quadrature_bonus = int(quadrature_bonus)
     if boundary_progress_every is not None:
         if (isinstance(boundary_progress_every, (bool, np.bool_))
@@ -802,7 +815,7 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
     u, v = space.TnT()
     curl_u = ng.curl(u)+1j*ng.Cross(lateral, u)
     curl_v = ng.curl(v)-1j*ng.Cross(lateral, v)
-    a = ng.BilinearForm(space, condense=condense)
+    a = ng.BilinearForm(space, condense=condense, keep_internal=not recompute_internal)
     a += (curl_u*curl_v-k0*k0*epsilon*u*v)*ng.dx
     sides = [('outer_top', 1.), ('outer_bottom', SUBSTRATE)]
     for side, eps_half in sides:
@@ -818,7 +831,8 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
     modes = port_data[0][0]
     count, rank = len(modes), 4*len(modes)
     settings = dict(h=h, order=order, cut=int(cut), uniform=uniform, pad=pad,
-                    condense=condense, quadrature_bonus=quadrature_bonus, edge_h=edge_h,
+                    condense=condense, recompute_internal=recompute_internal,
+                    quadrature_bonus=quadrature_bonus, edge_h=edge_h,
                     vertex_h=vertex_h,
                     film_degree=film_degree, film_degree_pad=film_degree_pad,
                     period=PERIOD, width=.350, gap=.017,
@@ -829,6 +843,7 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
                     units='micrometers', wavelength=WAVELENGTH, thickness=THICKNESS,
                     period=PERIOD, width=.350, gap=.017, seam=.031, values=[4., 9.],
                     h=h, order=order, cut=int(cut), uniform=uniform, pad=pad,
+                    recompute_internal=recompute_internal,
                     quadrature_bonus=quadrature_bonus, edge_h=edge_h, vertex_h=vertex_h,
                     max_order=max_order, space_refinement=space_refinement,
                     elements=mesh.ne, dofs=space.ndof,
@@ -853,7 +868,19 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
         for column, f in enumerate(sources):
             rhs = f.vec.CreateVector()
             rhs.data = f.vec
-            if condense:
+            if recompute_internal:
+                # With zero coupling values, z_I = A_II^-1 f_I. Subtracting
+                # the full form gives f_E - A_EI A_II^-1 f_I on coupling rows.
+                # ComputeInternal takes the original volume source directly;
+                # no attached LinearForm or unavailable ModifyRHS is needed.
+                internal = f.vec.CreateVector()
+                internal[:] = 0
+                a.ComputeInternal(internal, f.vec)
+                applied = internal.CreateVector()
+                a.Apply(internal, applied)
+                rhs.data -= applied
+                del internal, applied
+            elif condense:
                 rhs.data += a.harmonic_extension_trans*f.vec
             response = rhs.CreateVector()
             response.data = inverse*rhs
@@ -902,7 +929,11 @@ def solve_affine_rayleigh(h=.2, order=2, cut=1, uniform=None, pad=.1,
             response.data = inverse*rhs
             field = ng.GridFunction(space)
             field.vec.FV().NumPy()[:] = base[:, column]-response.FV().NumPy()
-            if condense:
+            if recompute_internal:
+                # The boundary correction has no interior load. Recover from
+                # the corrected coupling solution and the original source.
+                a.ComputeInternal(field.vec, f.vec)
+            elif condense:
                 field.vec.data += a.harmonic_extension*field.vec
                 field.vec.data += a.inner_solve*f.vec
             fields.append(field)

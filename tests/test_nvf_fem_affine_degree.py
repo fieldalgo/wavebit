@@ -26,8 +26,10 @@ class AffineDegreeScatteringTests(unittest.TestCase):
         self.assertEqual(baseline['max_order'], 3)
         self.assertGreater(baseline['space_refinement']['selected_entities']['cells'], 0)
         self.assertLess(baseline['coupling_dofs'], baseline['dofs'])
-        for options in (dict(condense=False), dict(quadrature_bonus=14)):
+        for options in (dict(condense=False), dict(quadrature_bonus=14),
+                        dict(recompute_internal=True)):
             result = self.solve(**settings, **options)
+            self.assertEqual(result['recompute_internal'], options.get('recompute_internal', False))
             self.assertEqual(result['modes'], baseline['modes'])
             self.assertEqual(result['space_refinement'], baseline['space_refinement'])
             for pol in ('p', 's'):

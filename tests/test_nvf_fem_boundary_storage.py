@@ -53,8 +53,11 @@ class FEMBoundaryStorageTests(unittest.TestCase):
     def test_driven_full_and_condensed_solutions_share_one_factorization(self):
         results = []
         original_inverse = ng.BaseMatrix.Inverse
-        for condense in (False, True):
-            factorizations, applications = [], []
+        original_form = ng.BilinearForm
+        original_compute = original_form.ComputeInternal
+        original_apply = original_form.Apply
+        for condense, recompute_internal in ((False, False), (True, False), (True, True)):
+            factorizations, applications, forms, internal_calls, apply_calls = [], [], [], [], []
             events = []
 
             class CountedInverse:
@@ -72,15 +75,51 @@ class FEMBoundaryStorageTests(unittest.TestCase):
             def progress(record):
                 events.append((record, len(applications)))
 
-            with patch.object(ng.BaseMatrix, 'Inverse', inverse):
+            def form(*args, **kwargs):
+                result = original_form(*args, **kwargs)
+                forms.append(result)
+                return result
+
+            def compute_internal(form, vector, source):
+                internal_calls.append((vector.FV().NumPy().copy(), source.FV().NumPy().copy()))
+                return original_compute(form, vector, source)
+
+            def apply(form, *args, **kwargs):
+                apply_calls.append(None)
+                return original_apply(form, *args, **kwargs)
+
+            with (patch.object(ng.BaseMatrix, 'Inverse', inverse),
+                  patch.object(ng, 'BilinearForm', form),
+                  patch.object(original_form, 'ComputeInternal', compute_internal),
+                  patch.object(original_form, 'Apply', apply)):
                 result = self.reference.solve_affine_rayleigh(
                     .2, 3, 1, theta=.31, phi=.23, condense=condense,
+                    recompute_internal=np.bool_(recompute_internal),
                     progress=progress, boundary_progress_every=np.int64(16) if condense else None)
             results.append(result)
-            with self.subTest(condense=condense):
+            with self.subTest(condense=condense, recompute_internal=recompute_internal):
                 self.assertEqual(len(factorizations), 1)
+                self.assertEqual(len(forms), 1)
                 # Two sources, one inverse per trace, then two full corrections.
                 self.assertEqual(len(applications), result['rank']+4)
+                self.assertIs(result['recompute_internal'], recompute_internal)
+                self.assertIs(result['settings']['recompute_internal'], recompute_internal)
+                self.assertEqual(len(internal_calls), 4 if recompute_internal else 0)
+                self.assertEqual(len(apply_calls), 4 if recompute_internal else 2)
+                if recompute_internal:
+                    for name in ('harmonic_extension', 'harmonic_extension_trans',
+                                 'inner_solve', 'inner_matrix'):
+                        self.assertIsNone(getattr(forms[0], name), name)
+                    for column in range(2):
+                        # Source elimination starts from zero, and final
+                        # reconstruction must receive the original volume load.
+                        self.assertEqual(np.count_nonzero(internal_calls[column][0]), 0)
+                        self.assertGreater(np.linalg.norm(internal_calls[column][1]), 0.)
+                        np.testing.assert_array_equal(internal_calls[column][1],
+                                                      internal_calls[column+2][1])
+                elif condense:
+                    for name in ('harmonic_extension', 'harmonic_extension_trans', 'inner_solve'):
+                        self.assertIsNotNone(getattr(forms[0], name), name)
                 self.assertLess(result['boundary_dofs'], result['coupling_dofs'])
                 self.assertLess(result['coupling_dofs'], result['dofs'])
                 self.assertEqual(result['boundary_array_bytes'],
@@ -101,19 +140,48 @@ class FEMBoundaryStorageTests(unittest.TestCase):
                 else:
                     self.assertEqual(stages, ['mesh', 'factorized', 'boundary'])
 
-        full, condensed = results
-        self.assertEqual(full['modes'], condensed['modes'])
+        full = results[0]
+        for condensed in results[1:]:
+            self.assertEqual(full['modes'], condensed['modes'])
+            for pol in ('p', 's'):
+                for key in ('T', 'R', 'volume_T', 'volume_R', 'flux_disagreement',
+                            'energy_error', 'energy_budget_residual'):
+                    self.assertAlmostEqual(full[pol][key], condensed[pol][key], delta=2e-10)
+                for key in ('order_T', 'order_R'):
+                    np.testing.assert_allclose(full[pol][key], condensed[pol][key],
+                                               rtol=0, atol=2e-10)
+                for side in ('top', 'bottom', 'total'):
+                    self.assertAlmostEqual(full[pol]['robin_complement_power'][side],
+                                           condensed[pol]['robin_complement_power'][side],
+                                           delta=2e-10)
+
+    def test_recomputed_internal_driven_slab_matches_analytic_control(self):
+        from tests.test_nvf_fem_affine_scattering import airy_slab
+
+        result = self.reference.solve_affine_rayleigh(
+            .18, 4, 1, uniform=4., phi=.37, recompute_internal=True)
+        center = result['modes'].index([0, 0])
         for pol in ('p', 's'):
-            for key in ('T', 'R', 'volume_T', 'volume_R', 'flux_disagreement',
-                        'energy_error', 'energy_budget_residual'):
-                self.assertAlmostEqual(full[pol][key], condensed[pol][key], delta=2e-10)
-            for key in ('order_T', 'order_R'):
-                np.testing.assert_allclose(full[pol][key], condensed[pol][key],
-                                           rtol=0, atol=2e-10)
-            for side in ('top', 'bottom', 'total'):
-                self.assertAlmostEqual(full[pol]['robin_complement_power'][side],
-                                       condensed[pol]['robin_complement_power'][side],
-                                       delta=2e-10)
+            exact = airy_slab(4., polarization=pol)
+            for quantity in ('T', 'R'):
+                powers = np.asarray(result[pol]['order_'+quantity])
+                self.assertAlmostEqual(result[pol][quantity], exact[quantity], delta=5e-4)
+                self.assertAlmostEqual(result[pol]['volume_'+quantity], exact[quantity], delta=5e-4)
+                self.assertAlmostEqual(powers[center], exact[quantity], delta=5e-4)
+                self.assertLess(np.sum(abs(np.delete(powers, center))), 5e-4)
+            self.assertLess(result[pol]['residual'], 1e-11)
+
+    def test_invalid_internal_storage_options_fail_before_meshing(self):
+        invalid = [dict(recompute_internal=value)
+                   for value in (0, 1, 0., 1., None, 'yes', [], np.nan)]
+        invalid += [dict(condense=False, recompute_internal=True),
+                    dict(condense=np.bool_(False), recompute_internal=np.bool_(True))]
+        with patch.object(self.reference, 'make_affine_profile_mesh') as make_mesh:
+            for settings in invalid:
+                with self.subTest(settings=settings), self.assertRaisesRegex(
+                        ValueError, 'recompute_internal'):
+                    self.reference.solve_affine_rayleigh(**settings)
+            make_mesh.assert_not_called()
 
     def test_boundary_callback_can_abort_before_the_next_inverse(self):
         original_inverse = ng.BaseMatrix.Inverse
