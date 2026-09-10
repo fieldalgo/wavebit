@@ -1245,6 +1245,48 @@ degree-6 resource improvement. It does not justify retrying the same
 settings or increasing to degree 7. A further attempt needs a different
 validated factorization choice or reduction of the retained system.
 
+### Nonzero pivot threshold under the same scaling
+
+Another bounded comparison changes the diagonal pivot threshold from 1
+to .1 while retaining D A D scaling and the same original equations.
+This changes which diagonal pivots the factorization accepts; the selected
+residual, full Maxwell residual and observable criteria remain unchanged.
+It does not disable pivoting or replace LU by an approximate factorization.
+
+The initial six controls comprise two known-solution synthetic controls
+and four degree-3 solves: COLAMD full/stored/recomputed and MMD stored.
+After MMD stored has the lowest observed peak RSS, two separately declared
+followups qualify its full and recomputed paths before any larger use.
+The following six rows are complete FEM solves, each with one factor,
+40 inverse applications and 38 assembled loads.
+
+| Scaled threshold-.1 backend and storage | Factor time, s | Diagnostic time, s | Peak RSS, bytes | Reported factor nonzeros |
+| --- | ---: | ---: | ---: | ---: |
+| SuperLU COLAMD, full | 2.318 | 3.396 | 523,223,040 | 14,819,080 |
+| SuperLU COLAMD, stored | 1.878 | 2.887 | 462,651,392 | 12,353,272 |
+| SuperLU COLAMD, recomputed | 1.902 | 3.686 | 448,790,528 | 12,353,272 |
+| SuperLU MMD_AT_PLUS_A, full | 2.791 | 3.765 | 444,465,152 | 10,687,044 |
+| SuperLU MMD_AT_PLUS_A, stored | 1.878 | 2.789 | 384,696,320 | 8,932,284 |
+| SuperLU MMD_AT_PLUS_A, recomputed | 1.932 | 3.638 | 379,633,664 | 8,932,284 |
+
+Independent validation accepts all eight controls and 16 comparisons,
+with a largest absolute observable difference of `3.908e-14`. The largest
+full Maxwell and selected sparse residuals are `2.051e-13` and
+`3.771e-13`, respectively. All matched original CSC, masks, D and D A D
+hashes agree. Twenty-seven malformed audit controls are rejected.
+The saved MMD threshold-1 baseline covers stored mode only. The full and
+recomputed MMD comparisons therefore use COLAMD threshold 1 for those
+storage modes and change both ordering and threshold; those comparisons
+do not isolate the effect of pivot threshold alone.
+
+The MMD stored observation reduces peak RSS by about 33.5% from native
+stored, while taking 2.789 s versus 2.292 s. Both stored orderings pass
+the predefined smaller-peak, fewer-factor-nonzeros and shorter-factor-time
+criteria relative to the previous scaled COLAMD control. These small
+observations justify a separately bounded MMD threshold-.1 first-source
+test at degree 6. They do not establish that it finishes within the large
+resource limit, nor qualify degree 7 or an optical convergence bound.
+
 ## Completing degree 7 on the smaller edge mesh
 
 The separate edge-.12 branch completes global degree 7 within the same
