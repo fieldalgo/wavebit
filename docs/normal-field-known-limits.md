@@ -1205,6 +1205,15 @@ it is not applied to ordinary physical rectangle dictionaries. General
 physical-rectangle input and oblique optical accuracy qualification remain
 open.
 
+The separate [Cartesian P1 cell](nvf-cartesian-cell.md) now constructs one
+physical rectangle inside an oblique cell without shearing its edges. Its
+fixed positive triangle template retains live lattice, shape, offset and
+complex-material derivatives, with independent weak-system and quadrature
+controls. This bounded experimental module supports separated rectangles
+on the admitted template; it does not add general orientations, contact,
+multiple shapes or a public geometry adapter, and does not certify optical
+accuracy.
+
 The [global-degree-7 FEM attempt](nvf-independent-fem.md#resource-limited-global-degree-7)
 on the vertex-.070 mesh stops at 32 of 324 boundary responses after its
 8-GiB RSS guard is exceeded. A retry that recomputes internal elimination

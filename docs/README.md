@@ -70,6 +70,7 @@ comes next. The outward-pointing rule above binds `guide/` too; only the house s
 
 | Document | Question it answers | Decision |
 | --- | --- | --- |
+| [`nvf-cartesian-cell.md`](nvf-cartesian-cell.md) | Can a physical rectangle retain its edges and derivatives on an oblique periodic lattice? | A small fixed P1 template passes independent moving-cell controls; contact, general geometry and optical convergence remain open. |
 | [`backend-choice.md`](backend-choice.md) | Which backend, and whether to freeze the geometry, for a *differentiated* run? | Shapes: `jax jit` at every size, re-freezing every step. Rasters: PyTorch below `truncation_order≈5`. And `normal_grid` outweighs both |
 | [`parametric-modeling.md`](parametric-modeling.md) | How does the staircase-free shape path converge against a raster staircase? | The parametric path for tilted and curved boundaries |
 | [`boundary-modeling.md`](boundary-modeling.md) | Can a layer be painted *and* keep a tilted edge exact? | Yes — resolve the painting into polygons once, then transform those |

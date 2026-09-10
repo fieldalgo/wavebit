@@ -56,6 +56,7 @@ subtrees:
       - file: nvf-complex-material
       - file: nvf-lattice-rebasing
       - file: nvf-affine-cells
+      - file: nvf-cartesian-cell
       - file: nvf-affine-convergence
       - file: nvf-contact-followup
       - file: nvf-independent-fem
