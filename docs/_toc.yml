@@ -58,6 +58,7 @@ subtrees:
       - file: nvf-lattice-rebasing
       - file: nvf-affine-cells
       - file: nvf-cartesian-cell
+      - file: nvf-cartesian-pair
       - file: nvf-affine-convergence
       - file: nvf-contact-followup
       - file: nvf-independent-fem
