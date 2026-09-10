@@ -1053,6 +1053,13 @@ or assembling any boundary trace. The default False preserves the
 existing stage sequence and metadata. This earlier observation cannot
 interrupt a native call or lower its peak memory use.
 
+Native forced-evaluation controls stop after source 1 and source 2 under both
+storage choices. They confirm one factorization, exactly the requested
+number of completed inverses, two assembled volume loads and no assembled
+boundary trace. Invalid flags are refused before meshing; the existing
+default-stage controls remain unchanged. The 12 focused storage and
+affine-scattering tests pass in 31.964 s.
+
 ### Allocation and residency observations at the first source
 
 A further degree-6 diagnostic uses that first-source stop and adds three
@@ -1097,12 +1104,68 @@ ways to reduce the retained sparse factor and its working set before
 retrying degree 7; they do not themselves reduce memory or establish a
 degree-7 resource guarantee.
 
-Forced-evaluation controls stop after source 1 and source 2 under both
-storage choices. They confirm one factorization, exactly the requested
-number of completed inverses, two assembled volume loads and no assembled
-boundary trace. Invalid flags are refused before meshing; the existing
-default-stage controls remain unchanged. The 12 focused storage and
-affine-scattering tests pass in 31.964 s.
+### Small affine comparisons with explicit SuperLU orderings
+
+An independently written adapter restricts the original native matrix to
+its exact free-DOF subset, converts that matrix to canonical complex CSC
+and calls the existing SciPy `splu` with explicit column ordering and
+diagonal pivot threshold 1. No transpose or conjugate transpose is applied.
+Each result is embedded into a full vector with zero nonselected entries.
+The source elimination, Rayleigh correction, field reconstruction and
+original Maxwell residual remain unchanged.
+
+Two known-solution complex matrix controls check noncontiguous free-DOF
+selection, complex orientation, zero embedding and an unchanged input
+right-hand side. Their largest solution error is below `6.3e-16`. The
+five-by-five native fixture has a numerically zero last column, with
+structural zeros retained. It does not test a structurally absent last
+column. Two earlier fixture setup errors occurred before any factorization
+and remain separate from numerical results.
+
+The patterned affine control uses h=.2, degree 3, cut 1, pad=.1,
+theta=.31 and phi=.23, with 11,256 full and 9,512 coupling unknowns.
+Before factorization, two deterministic complex vectors check the native
+operator against the full CSR representation with relative criterion
+`1e-12`. SuperLU additionally checks the original selected sparse residual
+after every solve at `1e-11`; both final full Maxwell residuals use the
+same `1e-11` small-control criterion. Every complete run uses one factor,
+40 inverse applications and 38 assembled loads. Full, stored-condensed
+and recomputed-condensed COLAMD paths are compared with the native full
+solution under the existing `2e-10` observable criterion, including p/s
+reflection, transmission, per-order powers, volume fluxes and Robin
+complement budgets.
+Across the completed comparisons, the largest absolute observable
+difference from the native full solution is `4.003e-13`. The largest
+full Maxwell residual is `1.159e-12`, and the largest measured selected
+SuperLU residual is `1.926e-12`, all below the unchanged criteria.
+
+| Backend and storage | Factor time, s | Diagnostic time, s | Peak RSS, bytes | Reported factor nonzeros |
+| --- | ---: | ---: | ---: | ---: |
+| Native UMFPACK, full | .430 | 2.520 | 660,717,568 | Not measured |
+| Native UMFPACK, stored | .418 | 2.292 | 578,551,808 | Not measured |
+| SuperLU COLAMD, full | 7.227 | 8.576 | 830,078,976 | 31,578,377 |
+| SuperLU COLAMD, stored | 5.222 | 6.383 | 680,542,208 | 24,161,993 |
+| SuperLU COLAMD, recomputed | 5.268 | 7.195 | 664,027,136 | 24,161,993 |
+| SuperLU MMD_AT_PLUS_A, stored | 71.570 | 73.997 | 1,883,095,040 | 65,213,972 |
+
+The factor nonzero count uses the scalar `lu.nnz` property. The
+[same-version SciPy wrapper](https://github.com/scipy/scipy/blob/v1.18.0/scipy/sparse/linalg/_dsolve/_superluobject.c)
+shows that accessing
+`lu.L` or `lu.U` would create cached CSC factor copies in this SciPy
+version and alter the memory measurement. Native factor nonzeros and
+native selected sparse residuals are not measured; missing values are
+not zeros. The diagnostic retains an additional selected CSC for
+SuperLU's per-solve residual checks and adds native-matrix validation,
+copies and observations, so these are instrumented shared-host timings,
+not production performance benchmarks.
+
+These default-pivot alternatives provide no memory improvement on this
+control. In particular, the matched stored-mode comparison is larger and
+slower for both tested SuperLU orderings. This supports keeping the native
+factorization as the reference default and does not justify a high-degree
+retry with these settings. All six processes complete within their
+180-second parent limit and unchanged 8-GiB peak-RSS guard. The results
+qualify the small algebraic comparison, not an optical convergence bound.
 
 ## Completing degree 7 on the smaller edge mesh
 
