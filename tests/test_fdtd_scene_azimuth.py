@@ -271,7 +271,7 @@ def test_magnetic_airy_azimuth_invariance_is_recovered_under_refinement(record_p
         # The isotropic planar continuum has no azimuth dependence. Unequal
         # Yee cell widths break that invariance at finite resolution.
         errors.append(np.array([abs(float(value)-expected), abs(float(derivative))]))
-        record_property(f'objective_error_{resolution}', errors[-1][0])
+        record_property(f'objective_error_{resolution}', float(errors[-1][0]))
         record_property(f'azimuth_derivative_{resolution}', float(derivative))
     assert np.all(errors[1] < .005)
     assert np.all(errors[1] < .45*errors[0])
