@@ -1510,9 +1510,20 @@ The independent H(curl) FEM with the Rayleigh boundary
 same fixture: `h=.18`, degree 3, cut 2, pad .4 gives modal `T=0.863053`,
 volume `T=0.862943` (bit-identical to the logged prototype value), energy
 error `1.6e-4`, 81 s, peak RSS 4.19 GB (ru_maxrss 4.58 GB, physical footprint
-3.59 GB). The logged degree-4 row on the same mesh gives volume `T=0.866056`
-(538 s, footprint never recorded; a degree-3 to degree-4 scaling estimate says
-10-14 GB, and it was not rerun on this host with 7 GB of swap already in use).
+3.59 GB). Degree 4 on the same mesh (177,625 unknowns), rerun with the footprint
+sampled from outside: modal `T=0.866063`, volume `T=0.866056` (bit-identical
+to the logged prototype value), energy error `2.7e-6`, modal/volume
+disagreement `6.7e-6`, 362 s. Peak RSS 8.57 GB (ru_maxrss 9.01 GB) while the
+physical footprint peaked at 14 GB with 11-12 GB of it compressed, swap grew
+from 4.7 to 18 GB, and the memory-pressure level never passed 2 (warning)
+on this 16 GB host. That is the size the RSS guard was hiding: a lone
+process this big runs, slowly, because macOS compresses and swaps it; the
+documented panics came from two such processes at once. The same degree
+with pad .6 (174,645 unknowns after remeshing) gives modal `T=0.866027`,
+volume `T=0.866020`, energy error `1.5e-5`, 437 s, RSS 8.26 GB, footprint
+15.4 GB: the pad step that was `-1.7e-3` at degree 3 is `-3.6e-5` at
+degree 4, so at degree 4 the outgoing boundary is settled and what remains
+of the FEM's uncertainty is its own degree step.
 Moving the Rayleigh planes from pad .4 to .6 at degree 3 (which also
 regenerates the mesh: 3,421 elements, 84,860 unknowns) gives modal
 `T=0.861317`, volume `T=0.861203`, energy error `7.8e-4`, 79 s, peak RSS
@@ -1520,6 +1531,26 @@ regenerates the mesh: 3,421 elements, 84,860 unknowns) gives modal
 5x. The FEM's own degree step is `3.1e-3` and its pad/remesh step `1.7e-3`,
 so the FEM band on this fixture is about `+-3e-3`, the same width as the
 spread of the RCWA extrapolations.
+
+The FEM can also be asked the better question. Setting the instrument's
+module wavelength before each `solve_rayleigh` call (every reader of `k0`
+takes it from the module at call time, and the mesh does not depend on it),
+degree 3, cut 2, pad .4, 81-89 s per point:
+
+| wavelength (nm) | 909 | 911 | 913 | 915 | 917 | 919 | 921 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| modal `R(0,0)` | 0.3619 | 0.5858 | 0.7225 | 0.7413 | 0.6589 | 0.5180 | 0.3787 |
+| modal `T` | 0.6380 | 0.4141 | 0.2775 | 0.2588 | 0.3412 | 0.4819 | 0.6212 |
+
+Its `R(0,0)` peak (parabola through 913/915/917) is at **914.37 nm**, peak
+0.746, and its red `T=0.5` crossing at **919.26 nm** -- 0.15 and 0.35 nm
+blue of the RCWA common limits (914.52, 919.61), between the order-22
+circular markers (913.97, 919.12) and the order-18 direct ones (915.86,
+920.56). A 0.35 nm blue offset on a `-0.012`/nm flank is `4e-3` in `T(900)`,
+which is the degree-3 FEM's distance from the extrapolated 0.867; degree 4
+moves it red by the `3.1e-3` step above. Three discretizations -- two
+factorizations of one Fourier solver approaching from opposite sides, and a
+conforming FEM -- put the resonance at 914.4-914.5 nm.
 
 ### What this decides
 
