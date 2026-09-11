@@ -78,7 +78,9 @@ continuity both survive. Moving one shape alone is not made exact by this -- its
 moves against the grid as it always did, and leaves a sampling ripple across a pixel of about
 five times the legitimate change over that pixel: 1.2e-3 / 7.9e-4 / 1.6e-4 in the largest
 coefficient at `normal_grid` 64 / 256 / 1024, against 2.1e-4 / 1.7e-4 / 7.9e-5, which is what
-`normal_grid` is for.
+`normal_grid` is for. In the total at the default grid it is small: moving one of the two boxes
+across one 1024-grid pixel changes `sum(T)` by 1.3e-3, monotonically, and the difference
+between the 1024 and 2048 grids varies by 1.5e-5 along the way -- about 1% of the change.
 
 **The unsampled projector is not the cure, measured.** Exact Fourier coefficients exist for a
 field that is piecewise constant on polygons; the blend is not, and the field that nearly is --
