@@ -1613,3 +1613,71 @@ PYTHONPATH=$PWD python studies/nvf_resonant_spectrum.py --orders 6 10 14 18 --me
 PYTHONPATH=$PWD python studies/nvf_resonant_spectrum.py --orders 22 26 --methods circular wavebit-direct --wavelengths 900
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=2 "$NVF_FEM_PYTHON" studies/nvf_fem_reference.py --hs .18 --orders 3 --boundary rayleigh --cut 2
 ```
+
+## The J and K steps are not resonance-shift artefacts (2026-09-11)
+
+The tilted fixture taught that a fixed-wavelength `T` near a resonance is
+not a convergence observable. Every number in the case J and K rows is a
+fixed-wavelength `T` difference, and both ladders are non-monotone in the
+order, which is the signature a sliding spectral feature leaves. So the
+same instrument was pointed at them: a wavelength scan over 864-936 nm
+(`+-4%` of 900) at the documented order and grid, for each member of each
+pair, asking whether the documented step equals the local slope times the
+shift of the nearest spectral feature. Scripts under the session
+scratchpad; each fixture was first reproduced to every printed digit of its
+row (J: `-8.0007e-4 / -3.5678e-4 / -9.2235e-5` and secants
+`0.0104054 / 0.7311734 / 50.64041`; K: the pre-fix row values reproduced on
+`git archive` copies of the commits that wrote them, e2fdafd and c000c73).
+
+The answer is no, for both. The only sharp feature in the window is the
+substrate `(1, 0)` Rayleigh cutoff at `700 (1.5 - sin 0.2) = 910.93` nm,
+which depends on the period, the angle and the substrate index alone and
+does not move between pair members (`< 0.1` nm measured, zero analytically).
+There is no structure resonance: J's spectrum has one very flat `sum(T)`
+maximum at 890.7 nm (curvature `-4.3e-5` per nm squared) that shifts by
+`-0.074` nm at gap 1e-4, whose slope times shift is at most 29% of the
+`-3.57e-4` step; K's four spectra have no extremum other than the cusp.
+The decisive test is the sign: a shift makes the difference proportional
+to the local slope, vanishing at an extremum and changing sign with the
+slope. J's difference from contact is negative at every one of the 41 + 81
++ 61 wavelengths measured, including at the 890.7 peak where the slope is
+zero (`-2.88e-4`) and on both flanks where it changes sign. K's `-diff /
+slope` runs from `+5.2` nm at 864 through zero near 888 to `-0.35` nm at
+900 and `-0.80` nm at 936 for the contact pair, and from `+0.50` through
+zero near 886 to `-0.38` and `-0.49` nm for the material pair: not a
+constant, so not a shift.
+
+What the scan adds is that the steps are wavelength-dependent and change
+sign across the window. J's difference from contact at gap 1e-4 runs from
+`-1.1e-4` at 864 to `-7.1e-4` at the cusp; K's contact step (order 8,
+N = 512) is `+8.0e-4` at 864, zero near 888, `-2.0e-4` at 900 and `+5.6e-4`
+at 936, and its material-equality step (N = 128) `+8.6e-4`, zero near 886,
+`-5.9e-4` at 900, `-1.04e-3` at 929. The single-wavelength values in the
+rows are point samples of smooth functions; the band across the window is
+the honest size. Both fixtures sit 11 nm below a Wood anomaly with the
+`(1, 0)` substrate order near grazing (`k_z / k_0 = 0.216`, carrying
+`0.166` of the transmitted power in K), which is where a factorization
+error is amplified, and is the same Rayleigh line the tilted fixture's
+resonance sits 3.6 nm from.
+
+The K row's ladders predate the 2026-09-07 run-end fix; on the current code
+(c1c210d) they read contact `-2.736e-3 / -8.737e-4 / -2.006e-4 / -7.183e-4 /
+-3.444e-4` and material-equality `-5.003e-3 / -4.799e-4 / -5.894e-4 /
+-1.393e-4 / -3.708e-5` at orders 4 / 6 / 8 / 10 / 12. Only `T_touching`
+moved (`T_gap` agrees with the archived commit to 1e-15), consistent with
+the fix's stated scope. The J fixture did not move at all.
+
+So the resonance lens applies to the tilted fixture and not to J or K: the
+contact steps are genuine finite-order steps of the factorization at 900 nm
+and may be judged at the fixed wavelength, at the documented order. The
+scan says nothing about their infinite-order limit.
+
+Placement dependence, re-verified the same day on c1c210d: the closed
+form's coefficient spread over translations of two disjoint boxes is
+`1.074e-2 / 4.056e-3 / 1.592e-3` at N = 64 / 128 / 256 (fitted exponent
+1.38) and the `sum(T)` spread `1.242e-3 / 6.395e-4 / 1.560e-4`, identical to
+the 2026-09-07 numbers to every printed digit; a single shape is at
+rounding (`2.8e-17`) on every route. The polygon route with its production
+anchor (6f6ca34) is at rounding for the disjoint pair too, but production
+routes a disjoint layer to the closed form (`painted=False`), so that fix
+reaches only painted layers.
