@@ -339,13 +339,27 @@ def device_scoped(func):
     """Run ``func`` inside the solver's own device scope.
 
     Replaces a `jax_device_set` that lived in the JAX backend and named `jax.default_device`
-    directly. The five methods it decorates all have counterparts on the other two backends,
-    so the decorator has to stop being one backend's before those bodies can become one body.
+    directly. The methods it decorates all have counterparts on the other two backends, so
+    the decorator has to stop being one backend's before those bodies can become one body.
 
     The scope itself is :meth:`CoreSolveMixin._device_scope`, which is a declared member: the
     base answers `nullcontext` and JAX overrides it. Declared rather than duck-typed because a
     missing device scope is invisible -- everything still computes, on the wrong device, and a
     CPU-only test machine cannot tell the difference.
+
+    That last sentence was a prediction, and on 2026-09-10 it came true. Five internal methods
+    carried this decorator and the public entry points did not -- `solve`,
+    `eps_conv_matrices`, `mu_conv_matrices`, `freeze_geometry`, `order_kxy` -- so on a CUDA
+    jaxlib a `device='cpu'` solve ran on the GPU while `solver.device` reported the CPU, and
+    omitting `device` did the same. Decorating them is one part of the fix. The second is
+    `_array_device` in the JAX backend: the stored arrays are built by setters that no
+    decorator reaches, and once the builders committed the convolution matrices to where the
+    structure happened to live, the scope around `solve_conv` was open and overruled. The
+    third is :meth:`CoreSolveMixin._placed`, for the arrays a caller hands in rather than a
+    setter builds. The scope places what a call builds from scalars; the arrays carry where
+    the work runs.
+    `tests/test_jax_device_placement.py` checks both on two host devices, which any machine
+    has, and counts GPU allocations where there is a GPU.
     """
     @_functools.wraps(func)
     def wrapped(self, *args, **kwargs):
@@ -537,7 +551,7 @@ class CoreSolveMixin:
                 'Leave it unset for the ordinary single wave on the specular order.')
         # Which orders are legal depends on `truncation_order`, which may still change; that check
         # belongs where the solve reads them (`conventions.lit_orders`). This one is the shape.
-        self._excitation = dict(value)
+        self._excitation = {order: self._placed(amplitude) for order, amplitude in value.items()}
 
     _incidence_side = 'top'
 
@@ -656,7 +670,7 @@ class CoreSolveMixin:
         Material it was worse: ``is_magnetic`` flipped, which selects a different arithmetic
         path entirely.
         """
-        material = as_material(value, 'top')
+        material = self._placed(as_material(value, 'top'))
         self._n_top = _half_space_index(material, 'top')
         self._top = material
 
@@ -668,7 +682,7 @@ class CoreSolveMixin:
     @bot.setter
     def bot(self, value):
         """Both, or neither -- see :attr:`top`, which had the same order and the same defect."""
-        material = as_material(value, 'bot')
+        material = self._placed(as_material(value, 'bot'))
         self._n_bot = _half_space_index(material, 'bot')
         self._bot = material
 
@@ -1229,6 +1243,17 @@ class CoreSolveMixin:
         as well as the backend's own device object. The codes are wavebit's, not device
         indices: handing ``0`` straight to Torch selects device *index* 0, which on a Mac is
         MPS and refuses float64.
+
+        **On JAX this is where the solve runs, not only what is reported.** Every array the
+        solver holds is committed to this device and every public entry point opens its scope,
+        so the solve, its convolution matrices, its field and the library's own `grad` / `fit`
+        run here whatever JAX's default device is. Until 2026-09-11 this getter was the one
+        thing that honoured the request: on a CUDA jaxlib `device='cpu'` -- and the default,
+        which is the CPU -- ran on the GPU while this read `[CpuDevice(id=0)]`, since it reports
+        the request, not the placement. A transformation the caller writes *around* a solve
+        stays the caller's: `jax.grad` builds its seed and a few zeros on JAX's default device
+        (58 small GPU allocations around a CPU solve that made none, measured), and a gradient
+        comes back on the device of the input it was taken with respect to.
         """
         return self._device
 
@@ -1252,11 +1277,15 @@ class CoreSolveMixin:
             f'device: the NumPy backend has one device and it is the CPU; got {value!r}. '
             f'Use backend=1 (JAX) or backend=2 (Torch) for anything else.')
 
-    #: Where `_as_complex` and `_as_real_angle` place what they build. `None` on the two
-    #: namespaces that have no device to name; Torch overrides it with `self.device`, because
-    #: there a tensor is placed at creation and there is nowhere else to say it. Declared for
-    #: the same reason `_device_scope` is: a wrong placement computes the right numbers in the
-    #: wrong place, and a CPU-only machine cannot tell.
+    #: Where the setters place what they build -- `_as_complex`, `_as_real_angle`,
+    #: `_as_lengths`, `_coerce_raster`, `_separable_kxy`'s order ranges -- and where `_placed`
+    #: moves what the caller hands in. `None` on NumPy,
+    #: which has no device to name. Torch and JAX override it with the solver's device: Torch
+    #: because a tensor is placed at creation, JAX because a committed array is the one
+    #: placement a later computation cannot overrule (it was `None` there too until
+    #: 2026-09-11, and a `device='cpu'` solve ran on the GPU -- see the JAX override). Declared
+    #: for the same reason `_device_scope` is: a wrong placement computes nearly the right
+    #: numbers in the wrong place, and a CPU-only machine cannot tell.
     _array_device = None
 
     def _as_complex(self, value):
@@ -1268,6 +1297,35 @@ class CoreSolveMixin:
         xp = self.xp
         real = xp.real(value) if hasattr(value, 'dtype') else _np.real(value)
         return as_array(xp, real, dtype=self.float_dtype, device=self._array_device)
+
+    def _placed(self, value):
+        """``value`` on this solver's device if it is one of this backend's arrays, or a
+        :class:`~wavebit._core.domain.Material` holding one. Anything else comes back as itself.
+
+        The setters above place what they build, but some values reach a solve as the caller
+        wrote them: a Material's permittivity and permeability, a shape's coordinates, an
+        excitation amplitude. A native array among them on another device -- one the caller
+        built on JAX's default device, or that `jax.grad` built there for them -- was
+        *followed*: the shape builder places its order grid at the background's `.device`,
+        which committed it to the GPU under a CPU solver, and the build raised
+        `Received incompatible devices for jitted computation` (measured 2026-09-11,
+        `test_analytic_shape_gradients[background-jax]` on a CUDA box).
+
+        A move, not a conversion: the dtype is kept and the move is differentiable. It is the
+        identity on NumPy, for every Python number, and for an array already where it belongs,
+        so a scene that holds no foreign array reaches the builders object for object as before.
+        """
+        if self._array_device is None:
+            return value
+        if isinstance(value, Material):
+            epsilon = self._placed(value.epsilon)
+            mu = None if value.mu is None else self._placed(value.mu)
+            if epsilon is value.epsilon and mu is value.mu:
+                return value
+            return Material(epsilon, mu)
+        if isinstance(value, self._ARRAY_TYPES):
+            return as_array(self.xp, value, device=self._array_device)
+        return value
 
     def _default_psi(self):
         """The unstated polarization: 45 degrees, so `s` and `p` arrive with equal amplitude.
@@ -1503,6 +1561,21 @@ class CoreSolveMixin:
     def thickness(self, thickness):
         self._thickness = self._as_lengths(thickness, pair=False)
 
+    @property
+    def wavelength(self):
+        """The vacuum wavelength, in the unit ``period`` and ``thickness`` share.
+
+        Stored as given -- no cast, no conversion -- as it was when this was a plain attribute.
+        The setter exists for placement alone: a wavelength the caller built as an array on
+        another device was held there and the scalar arithmetic on it ran there, the one
+        condition no setter placed (see :meth:`_placed`).
+        """
+        return self._wavelength
+
+    @wavelength.setter
+    def wavelength(self, wavelength):
+        self._wavelength = self._placed(wavelength)
+
     def _device_scope(self):
         """Where this solver's arrays are placed, as a context manager.
 
@@ -1555,6 +1628,7 @@ class CoreSolveMixin:
         return (xp.astype(self.n_inc * sin_theta * xp.cos(phi), C),
                 xp.astype(self.n_inc * sin_theta * xp.sin(phi), C))
 
+    @device_scoped
     def order_kxy(self):
         """Per-order in-plane wavevectors ``(kx, ky)``, normalized by ``k0``.
 
@@ -2200,10 +2274,10 @@ class CoreFactorizationMixin:
         if cached is None:
             import inspect
 
-            # Two sources, because neither alone is the set. Properties miss `wavelength`,
-            # `layer_algorithm` and `normal_grid`, which are plain attributes and are exactly
-            # what a sweep moves -- deriving from properties alone refused a wavelength sweep,
-            # which is the most ordinary call this library has. The constructor misses the
+            # Two sources, because neither alone is the set. Properties miss `layer_algorithm`,
+            # a plain attribute and exactly what a sweep moves -- deriving from properties alone
+            # once refused a wavelength sweep, when `wavelength` was a plain attribute too, and
+            # that is the most ordinary call this library has. The constructor misses the
             # retired spellings, which have no parameter and must stay in so their own setters
             # can say what replaced them.
             # Every `__init__` in the MRO, not `cls.__init__`: the public wrapper is
@@ -2502,7 +2576,7 @@ class CoreFactorizationMixin:
                     'the same rule on a commensurate 1D grating and behind NVF everywhere '
                     'else. Write the shapes as dicts for the parametric path, or sample them '
                     'onto a raster.')
-            kind, value = ModelingPath.PARAMETRIC, structure
+            kind, value = ModelingPath.PARAMETRIC, self._placed_layers(structure)
         elif structure is None:
             kind, value = None, None
         else:
@@ -3200,6 +3274,7 @@ class CoreFactorizationMixin:
             f'floor, so this changes nothing. It sizes the grid the *shape* paths sample their '
             f'analytic normal field on, and needs a structure of shape dicts.')
 
+    @device_scoped
     def freeze_geometry(self, **kwargs):
         """Take this structure's discrete geometry decisions once, eagerly.
 
@@ -3371,6 +3446,7 @@ class CoreFactorizationMixin:
             f'`solve()` puts a concrete cell or structure back after a call that traced one, so '
             f'a solver holds a tracer here only when it was assigned directly, inside a trace.')
 
+    @device_scoped
     def solve(self, geometry=None, auto_detune=True, **kwargs):
         """Build the convolution matrices, then solve.
 
@@ -3511,6 +3587,7 @@ class CoreFactorizationMixin:
                 AutoDetuneWarning, stacklevel=2)
         return res
 
+    @device_scoped
     def eps_conv_matrices(self, geometry=None, **kwargs):
         """The permittivity convolution matrices for this structure, without solving.
 
@@ -3553,6 +3630,7 @@ class CoreFactorizationMixin:
         with self._conditions(kwargs):
             return self._eps_conv_matrices(geometry)
 
+    @device_scoped
     def mu_conv_matrices(self, geometry=None, **kwargs):
         """The permeability convolution matrices, or ``None`` for a non-magnetic structure.
 
@@ -3915,6 +3993,30 @@ class CoreFactorizationMixin:
                             background=as_material(layer.get('background', 1.0)).mu_value,
                             shapes=shapes))
         return out
+
+    def _placed_layers(self, structure):
+        """A shape structure with every value in it passed through :meth:`_placed`.
+
+        What the `structure` setter stores for the shape spelling, for the reason the raster
+        branch goes through `_coerce_raster`: a background, a material or a coordinate the
+        caller built on another device would otherwise be held there, and followed -- see
+        :meth:`_placed`. The permeability pass reads the stored structure, so it inherits the
+        placement. A layer or shape dict is rebuilt only when one of its values actually moved,
+        so a scene written in Python numbers is stored as the very list it was handed.
+        """
+        def placed(entry):
+            out = {key: ([placed(shape) for shape in value] if key == 'shapes'
+                         else self._placed(value))
+                   for key, value in entry.items()}
+            moved = any(out[key] is not value if key != 'shapes'
+                        else any(a is not b for a, b in zip(out[key], value))
+                        for key, value in entry.items())
+            return out if moved else entry
+
+        if self._array_device is None:
+            return structure
+        layers = [placed(layer) for layer in structure]
+        return layers if any(a is not b for a, b in zip(layers, structure)) else structure
 
     def _solve_built(self, geometry=None):
         """Build this structure's convolution matrices and hand them to the solve.

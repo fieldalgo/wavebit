@@ -59,8 +59,33 @@ class _BaseRCWA(CoreSolveMixin):
         `self.device` is a *list* here -- `jax.devices('cpu')` -- so it is indexed. That is
         the one thing about it that is not obvious, and it is why this is an override rather
         than a value the base could hold.
+
+        The scope places what the core builds from Python scalars inside a call, which has no
+        operand to follow. It does not decide where a computation *on the solver's arrays*
+        runs -- a committed operand outranks it -- and that is `_array_device`'s job.
         """
         return jax.default_device(self.device[0])
+
+    @property
+    def _array_device(self):
+        """The first of `self.device`, so every array a setter builds is *committed* there.
+
+        The scope above is not enough on its own, and that was measured, not argued
+        (2026-09-11, jax 0.11.0, a CUDA jaxlib, `device='cpu'`). The constructor and every
+        setter run outside any decorated method, so the structure, the thickness and the rest
+        were built on JAX's default device -- the GPU -- while `solver.device` read
+        `[CpuDevice(id=0)]`. The builders then place their index arrays with
+        `device=<the structure's device>`, which committed the convolution matrices to the GPU,
+        and a committed operand outranks `jax.default_device`: `solve_conv`'s scope was open and
+        the eig ran on the GPU anyway. On a 2D raster T came back 8.77000489428177987e-01,
+        against 8.77000489428339414e-01 from a CPU-only jaxlib.
+
+        Committing at the setters makes the device a property of the value, which is what JAX
+        consults once a computation has a committed operand -- at the dispatch of a jitted call
+        too, where a `device_put` inside the trace moves nothing. It is Torch's arrangement as
+        well: there a tensor is placed at creation, and there is nowhere else to say it.
+        """
+        return self.device[0]
 
     #: A JAX array -- and a `DynamicJaxprTracer` too, which is what lets a period be
     #: differentiated or closed over inside `jax.jit`.
@@ -181,6 +206,9 @@ class OptimizerJax:
         # thickness sweep never showed it and why this went out at all.
         return loss_value, {k: jnp.conj(v) for k, v in grads.items()}
 
+    # Scoped, so what `forward` and the optimizer build from scalars -- `optimizer.init`'s
+    # zeros, a loss's constants -- lands where the solve runs rather than on JAX's default.
+    @device_scoped
     def grad(self, parameters, forward, loss_fn):
         params = {name: (getattr(self, name)) for name in parameters}
         _, grads = self._grad(params, forward, loss_fn)
@@ -188,6 +216,7 @@ class OptimizerJax:
 
         return grads
 
+    @device_scoped
     def fit(self, parameters, forward, loss_fn, optimizer, iteration=1):
         params = {name: (getattr(self, name)) for name in parameters}
         opt_state = optimizer.init(params)

@@ -460,7 +460,7 @@ def test_every_backend_declares_where_its_arrays_are_placed():
     A missing device scope is invisible in every other check here. Everything still computes,
     on the wrong device, and the 96-scene digest is CPU-only on this machine -- it cannot tell
     a scoped call from an unscoped one. So the contract is asserted directly: every backend
-    answers `_device_scope()` with a context manager, and the five methods that need one carry
+    answers `_device_scope()` with a context manager, and the methods that need one carry
     the decorator that opens it.
 
     `self.device` is a list on JAX (`jax.devices('cpu')`) and a scalar elsewhere, which is why
@@ -469,8 +469,13 @@ def test_every_backend_declares_where_its_arrays_are_placed():
     import contextlib
     import inspect
 
+    # This asserts a decorator is present, which is not where anything landed: with all five
+    # of the original names decorated, a `device='cpu'` solve still ran on a CUDA GPU, because
+    # the public entry points were not on this list and the stored arrays were never placed.
+    # Where arrays land is `tests/test_jax_device_placement.py`'s question.
     scoped = ('solve_conv', 'reconstruct_field', 'solve_field', 'solve_field_eager',
-              '_separable_kxy')
+              '_separable_kxy', 'solve', 'eps_conv_matrices', 'mu_conv_matrices',
+              'freeze_geometry', 'order_kxy', 'grad', 'fit')
 
     for backend in (0, 1, 2):
         solver = wavebit.rcwa(backend=backend, structure=np.ones((1, 4, 4)), period=[P, P],
