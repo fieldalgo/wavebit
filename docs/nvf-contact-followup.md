@@ -1552,6 +1552,31 @@ moves it red by the `3.1e-3` step above. Three discretizations -- two
 factorizations of one Fourier solver approaching from opposite sides, and a
 conforming FEM -- put the resonance at 914.4-914.5 nm.
 
+Degree 4 on the same mesh, five points, 347-383 s each, RSS 8.8-9.0 GB:
+
+| wavelength (nm) | 913 | 915 | 917 | 919 | 921 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| modal `R(0,0)`, degree 4 | 0.7137 | 0.7437 | 0.6734 | 0.5380 | 0.3968 |
+| modal `T`, degree 4 | 0.2863 | 0.2563 | 0.3266 | 0.4620 | 0.6032 |
+| `T` change from degree 3 | +0.0088 | -0.0025 | -0.0146 | -0.0200 | -0.0181 |
+
+Its `R(0,0)` peak is at **914.60 nm** (0.746) and its red `T=0.5` crossing at
+**919.54 nm**. The degree-3 to degree-4 step moves both markers red by
+0.23 / 0.28 nm, while the RCWA common limits sit at 914.52 / 919.61 and the
+two last-pair `1/N` extrapolations at 914.60, 914.58 / 919.56, 919.57. The
+independent FEM at degree 4 therefore lands within 0.1 nm of the value the
+two Fourier ladders extrapolate to from opposite sides, and 0.6 / 1.3 nm
+from the order-22 circular and order-18 direct markers. On the flank that
+is `1e-3` in `T(900)`. The per-point `T` changes of up to 0.02 between FEM
+degrees are the same resonance shift seen through a fixed wavelength, which
+is why a single-wavelength FEM ladder reads as unconverged when the position
+is already settled to a quarter of a nanometre.
+
+Resource note for the scan: the process footprint reached 19.5 GB (swap,
+not RAM), and one 5-second sample during the 921 nm point read pressure
+level 4; the guard requires two consecutive critical samples and did not
+fire. That is the edge of what a lone process should be asked to do here.
+
 ### What this decides
 
 - **Neither order-22 answer is right.** Both ladders converge at roughly

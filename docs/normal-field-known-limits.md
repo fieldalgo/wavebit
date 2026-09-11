@@ -928,7 +928,8 @@ settles what that difference is: a reflection resonance riding the substrate
 `(1,0)` Rayleigh line at 910.93 nm, with 900 nm on its flank. Both order
 ladders approach one resonance position from opposite sides at about `1/N`
 (peak `914.5 +- 0.1` nm; `T(900) = 0.867 +- 0.003` by common-limit
-extrapolation through order 26, with the degree-4 Rayleigh FEM at 0.866).
+extrapolation through order 26, with the degree-4 Rayleigh FEM at 0.866 and
+its own wavelength scan putting the peak at 914.60 nm).
 Neither order-22 value is the answer; circular NVF is nearer by a factor of
 about two at the same decay rate.
 
