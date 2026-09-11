@@ -1983,7 +1983,16 @@ def _projector_cache_key(xp, built, grid_shape, lattice, half_width_u, half_widt
     # (``numpy.complex128`` against ``torch.complex128``) -- but that is an accident of how the
     # dtypes are named, not a guarantee, and a cross-backend collision hands one namespace's
     # array to another.
-    return (getattr(xp, '__name__', ''), shapes_key, tuple(grid_shape),
+    #
+    # **The device is read too, just not from an argument.** The build starts from Python
+    # floats, so it lands wherever a fresh array lands right now -- under JAX, the solver's
+    # device scope -- and the coefficients come back committed there. Left out of the key, a
+    # solver on one device was handed another device's arrays: measured 2026-09-11, a `cpu:1`
+    # solve followed by a `cpu:0` one raised `Received incompatible devices for jitted
+    # computation` on a 49x49 matmul, and a CPU solve followed by a GPU one did the same on a
+    # CUDA box. It could not happen before then only because every JAX array landed on JAX's
+    # default device whatever `device=` said. NumPy and Torch put a constant here.
+    return (getattr(xp, '__name__', ''), _device(xp.zeros(())), shapes_key, tuple(grid_shape),
             int(half_width_u), int(half_width_v), str(dtype), lat, plan, bits)
 
 
