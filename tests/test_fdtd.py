@@ -1143,7 +1143,7 @@ def test_a_magnetic_slab_matches_the_closed_form(tetm):
 
 
 def test_the_same_index_with_a_different_impedance_is_a_different_scene():
-    """The one thing a solver carrying only `n` cannot express, stated as the test.
+    r"""The one thing a solver carrying only `n` cannot express, stated as the test.
 
     `eps = 2, mu = 3` and `eps = 6, mu = 1` have the **same index** `sqrt(eps*mu) = 2.449` and
     different impedances `sqrt(mu/eps)` -- 1.22 against 0.41. Every `kz`, every Snell relation
