@@ -269,7 +269,7 @@ class ConformingNVF:
         if getattr(xp, '__name__', '') == 'array_api_compat.numpy':
             xp = np
         replay = plan is not None
-        plan = self.plan(structure, lattice) if plan is None else plan
+        plan = self.plan(structure, lattice=lattice) if plan is None else plan
         if not isinstance(plan, _Plan):
             raise StaleGeometryError('conforming NVF plan type is invalid; plan again')
         t = plan.reduction

@@ -58,6 +58,13 @@ _ALLOWED = {
         "NotImplementedError`. The add-path branch beside it already goes through "
         "`sample_grid` with the lattice. It was four until the block path was removed -- its "
         "own pair was guarded by `draw._refuse_layer`, and both went with it."),
+    ('wavebit/_core/conforming/__init__.py', '_layers'): (
+        5,
+        "the research conforming cell is a rectangle by construction: `periods` are the reduced "
+        "basis's axis lengths behind `_require(valid, 'conforming NVF requires a right-handed "
+        "lattice with an orthogonal reduced basis')`, and every rectangle is further held to a "
+        "reduced axis by `_require(aligned, ...)`. A skewed cell never reaches the arithmetic; "
+        "it is invalidated at the door, the way `slice_structure` raises."),
 }
 
 

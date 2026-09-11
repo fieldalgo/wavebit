@@ -120,6 +120,7 @@ Airy, contact and JAX/doubling checks. Log:
 The exact pre-change modal/matching comparison script is retained as
 `studies/results/nvf_mirror_propagation_check.py.txt`. Copy it to a `.py`
 file and run with arguments `original 32 p` or `panels 32 p` after generating
-the specified cap-96 projection. The benchmark runtime and source hashes are
-recorded in `studies/results/nvf_modal_memory_manifest.json`. This records the
+the specified cap-96 projection. The benchmark runtime and source hashes were
+recorded in a manifest beside that log (`nvf_modal_memory_manifest.json`, a
+machine-readable file the results directory does not commit). It records the
 dirty-worktree implementation rather than implying a committed release.
