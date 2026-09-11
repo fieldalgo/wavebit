@@ -6,9 +6,10 @@ jitted solve with a record builds the *planned* field -- pairs, windows, ties --
 without a record gets the blind plan (every piece, no pairs). The record holds no coordinate
 and no material, so a shape moving or a material sweeping never invalidates it; what does is
 the combinatorics changing, which ``check_gamma_plan_still_fits`` re-derives eagerly and
-refuses by name. The projector cache keys on the plan's structure and, for a layer with a
-cross pair, on the concrete equality bits of its materials, so a material sweep on a pair-free
-layer still hits and one that crosses equality on a seam rebuilds.
+refuses by name. The projector cache keys on the plan's structure and, for a layer of several
+shapes, on every shape's concrete material -- the seam contrast reads the values, since
+2026-09-11 -- so a lone shape's material sweep still hits and a multi-shape sweep rebuilds per
+value.
 
 Every jitted solve here builds its solver **outside** the trace and hands ``structure=`` and
 ``geometry=`` to ``solve``: a solver built inside the traced function never crosses the jit
@@ -98,7 +99,7 @@ def test_the_record_hashes_by_content_with_its_gamma_plans():
 def test_a_jitted_solve_with_a_record_equals_the_eager_one(name, lattice, make, start):
     """B and K under ``jax.jit`` with a frozen record, the solver built outside the trace.
 
-    The planned field -- the pair's exact cancellation on B, the seam's sign on K -- replays
+    The planned field -- the pair's exact cancellation on B, the seam's contrast on K -- replays
     from the record inside the trace, where nothing can be read off a tracer; ``jax.grad``
     reads the primal and plans per call, and the two agree with the eager solve to 1e-12.
     """
@@ -508,11 +509,11 @@ def test_the_gradient_across_a_coverage_breakpoint_is_finite():
 
 # ------------------------------------------------------------------- what the record survives
 
-def test_a_frozen_material_sweep_is_accepted_and_the_seam_sign_follows():
-    """The record holds no material, so a sweep through equality replays -- and flips the sign.
+def test_a_frozen_material_sweep_is_accepted_and_the_seam_contrast_follows():
+    """The record holds no material: a sweep through equality replays, and the contrast follows.
 
-    Frozen at ``4 | 9`` and replayed at ``9 | 9`` the seam pair cancels, live: the answer is
-    the eager same-material solve's to 1e-12, eagerly and under ``jax.jit`` with the
+    Frozen at ``4 | 9`` and replayed at ``9 | 9`` the seam's contrast is zero, live: the answer
+    is the eager same-material solve's to 1e-12, eagerly and under ``jax.jit`` with the
     materials traced. Nothing was invalidated and nothing had to be.
     """
     jax = pytest.importorskip('jax')
@@ -533,7 +534,7 @@ def test_a_frozen_material_sweep_is_accepted_and_the_seam_sign_follows():
     assert float(jax.jit(total)(jnp.asarray(9.0))) == pytest.approx(same, abs=1e-12)
     differ = _total(_k_layer(4.0, 9.0), SQUARE)
     assert float(jax.jit(total)(jnp.asarray(4.0))) == pytest.approx(differ, abs=1e-12)
-    assert abs(differ - same) > 1e-4                                      # the sign did something
+    assert abs(differ - same) > 1e-4                             # the contrast did something
 
 
 def test_a_pair_that_appears_or_vanishes_is_refused_by_name():
@@ -580,29 +581,65 @@ def test_a_face_that_becomes_dead_or_a_list_that_grows_is_refused_too():
 
 # ------------------------------------------------------------------------------ the cache
 
-def test_the_projector_cache_reads_the_equality_bits_of_a_cross_pair():
-    """A material sweep rebuilds a layer with a seam only when it crosses equality.
+def _apart_layer(right):
+    """Two boxes 200 apart, ``4 | right``: no pair, and the seam contrast reads both."""
+    return [dict(background=1.0, shapes=[_box(cx=-200.0, lx=200.0, ly=300.0, material=4.0),
+                                         _box(cx=200.0, lx=200.0, ly=300.0, material=right)])]
 
-    The key holds the plan's structure and, for a cross pair, whether its two materials are
-    equal -- never the values. So ``4 | 9``, ``4 | 9.5`` and ``4 | 12`` are one entry, ``4 | 4``
-    a second; a pair-free layer swept the same way stays at one, as it always did.
+
+def _lone_layer(material):
+    return [dict(background=1.0, shapes=[_box(lx=350.0, ly=350.0, material=material)])]
+
+
+def _cache_sizes(make, values):
+    """``len(_PROJECTOR_CACHE)`` after each solve of ``make(v)``, from a cleared cache."""
+    P._PROJECTOR_CACHE.clear()
+    sizes = []
+    for v in values:
+        wavebit.rcwa(backend=0, lattice=SQUARE, structure=make(v), **KW).solve()
+        sizes.append(len(P._PROJECTOR_CACHE))
+    return sizes
+
+
+def test_the_projector_cache_reads_every_material_of_a_multishape_layer():
+    """A material sweep on a multi-shape layer rebuilds per value; on a lone shape it hits.
+
+    The seam contrast reads the *values* (``|eps_a - eps_b| / (|eps_a| + |eps_b|)``), so the
+    key of a multi-shape layer holds every shape's material (:func:`parametric._material_key`):
+    the K sweep ``4 | 9, 9.5, 12, 4, 4, 9`` is one entry per distinct pair, the repeats served
+    -- 1, 2, 3, 4, 4, 4 against the cache's maximum of 8. The formula reads no record, so a
+    pair-free layer reads the same contrast between its facing faces at any gap and the
+    'apart' sweep rebuilds per value too (1, 2, 3, 4), where until 2026-09-11 it stayed at one
+    -- the key then held only each cross pair's equality bit, and a pair-free layer's held
+    nothing. A lone shape's field reads no material, and its sweep is one entry as it always
+    was.
     """
-    P._PROJECTOR_CACHE.clear()
-    for right in (9.0, 9.5, 12.0, 4.0, 4.0, 9.0):
-        wavebit.rcwa(backend=0, lattice=SQUARE, structure=_k_layer(4.0, right), **KW).solve()
-    assert len(P._PROJECTOR_CACHE) == 2
+    assert P._material_key(_k_layer(4.0, 9.0)[0]['shapes']) == (4.0 + 0j, 9.0 + 0j)
+    assert _cache_sizes(lambda right: _k_layer(4.0, right),
+                        (9.0, 9.5, 12.0, 4.0, 4.0, 9.0)) == [1, 2, 3, 4, 4, 4]
 
-    P._PROJECTOR_CACHE.clear()
-    apart = lambda right: [dict(background=1.0, shapes=[
-        _box(cx=-200.0, lx=200.0, ly=300.0, material=4.0),
-        _box(cx=200.0, lx=200.0, ly=300.0, material=right)])]
-    for right in (9.0, 9.5, 4.0, 12.0):
-        wavebit.rcwa(backend=0, lattice=SQUARE, structure=apart(right), **KW).solve()
-    assert len(P._PROJECTOR_CACHE) == 1
+    assert not P.plan_gamma(_apart_layer(9.0)[0]['shapes'], as_lattice(lattice=SQUARE)).pairs
+    assert _cache_sizes(_apart_layer, (9.0, 9.5, 4.0, 12.0)) == [1, 2, 3, 4]
+
+    assert P._material_key(_lone_layer(9.0)[0]['shapes']) == ()
+    assert _cache_sizes(_lone_layer, (9.0, 9.5, 4.0, 12.0)) == [1, 1, 1, 1]
 
 
-def test_a_traced_material_on_a_seam_is_never_served_from_the_cache():
-    """The equality bit of a tracer is unknown, so the key is ``None`` and the field is rebuilt."""
+def _keys_asked_for(monkeypatch):
+    """A spy on the key: every key a build asked the cache for, in order."""
+    keys = []
+    real = P._projector_cache_key
+
+    def spy(*args, **kwargs):
+        keys.append(real(*args, **kwargs))
+        return keys[-1]
+
+    monkeypatch.setattr(P, '_projector_cache_key', spy)
+    return keys
+
+
+def test_a_traced_material_on_a_seam_is_never_served_from_the_cache(monkeypatch):
+    """A tracer has no concrete value, so the key is ``None`` and the field is rebuilt."""
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     wavebit.enable_x64()
@@ -615,8 +652,43 @@ def test_a_traced_material_on_a_seam_is_never_served_from_the_cache():
         return jnp.sum(wavebit.rcwa(backend=1, lattice=SQUARE, structure=_k_layer(4.0, right),
                                     **KW).solve().T).real
 
+    keys = _keys_asked_for(monkeypatch)
     g = float(jax.grad(total)(jnp.asarray(9.0)))
-    assert np.isfinite(g) and len(P._PROJECTOR_CACHE) == 1     # built, not cached
+    assert np.isfinite(g) and g != 0.0
+    assert keys == [None] and len(P._PROJECTOR_CACHE) == 1     # built, not cached
+
+
+def test_a_traced_material_on_a_pair_free_layer_is_never_served_from_the_cache(monkeypatch):
+    """``jax.grad`` over one material of the 'apart' layer: key ``None``, the field rebuilt.
+
+    A pair-free layer's key held no material until 2026-09-11, so a gradient with respect to
+    one was served the coefficients built at the first value -- right then, since the field
+    read no material, and wrong now that the seam contrast reads every shape's. The key of a
+    layer of several shapes holds the values, a tracer has none, and the key is ``None``: the
+    one key the solve under ``grad`` asks for, one entry before and after, and the gradient is
+    the central difference. Measured at order 4, N = 128: AD 2.078100e-2 against
+    2.078106e-2 at ``h = 1e-4`` (``h = 1e-5`` agrees with it to 7e-8), 3.2e-6 apart; served
+    from a material-blind key -- the key a pair-free layer had -- the same gradient reads
+    2.056730e-2, 1.0e-2 apart, which is what the 1e-5 tolerance separates.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    wavebit.enable_x64()
+
+    def total(right):
+        return jnp.sum(wavebit.rcwa(backend=1, lattice=SQUARE, structure=_apart_layer(right),
+                                    **KW).solve().T).real
+
+    h = 1e-4
+    fd = (float(total(jnp.asarray(9.0 + h))) - float(total(jnp.asarray(9.0 - h)))) / (2 * h)
+    P._PROJECTOR_CACHE.clear()
+    wavebit.rcwa(backend=1, lattice=SQUARE, structure=_apart_layer(9.0), **KW).solve()
+    assert len(P._PROJECTOR_CACHE) == 1
+
+    keys = _keys_asked_for(monkeypatch)
+    g = float(jax.grad(total)(jnp.asarray(9.0)))
+    assert keys == [None] and len(P._PROJECTOR_CACHE) == 1     # built, not cached
+    assert g == pytest.approx(fd, rel=1e-5)
 
 
 # ---------------------------------------------------------------------------- backends

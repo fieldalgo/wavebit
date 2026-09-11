@@ -2,8 +2,10 @@
 
 The lone-shape half of the piece field is judged in ``test_nvf_self_coincident_faces.py`` and
 ``test_gamma_field.py``. This file is the multi-shape half (2026-09-06, the second commit of the
-mechanism): two boxes that abut share a face line over a run, the plan records the pair, and the
-two material slots decide the sign -- equal materials cancel there, different ones co-orient so
+mechanism): two boxes that abut share a face line over a run, the plan records the pair, and
+the pair cancels there whatever the materials; a seam between *different* materials is put
+back co-oriented in proportion to their contrast (the seam contrast, 2026-09-11 -- it replaced
+an equality bit that stepped at contact, at material equality and with the listing order), so
 the seam's normal survives. There is no per-shape stage: a two-stage blend switches extension
 at the moment of contact (measured as a 1.1e-2 step in ``sum(T)`` at order 6), and a single sum
 over every piece has nothing to switch.
@@ -11,10 +13,13 @@ over every piece has nothing to switch.
 The cases carry the design's letters. **D**: two touching same-material bars are the one bar
 they make -- the invariants a 1-D structure must satisfy hold to float noise, and the two
 spellings of a 2-D structure differ by a residual that decays with order. **K**: an ``eps 4 |
-eps 9`` seam is an interface, exact where the structure is 1-D and 0.22 deg against a
-material-aware oracle where it is not (it was a null band). **E**: a shape whose material
-equals the background keeps its faces, so the field is a function of the *equality bits* alone
-and a material sweep never moves a pair-free field. And the seam is decided per quantity: the
+eps 9`` seam is an interface, exact where the structure is 1-D and 0.23 deg against a
+material-aware oracle where it is not (it was a null band), and it is one formula at any gap:
+opening a contact by 1e-9, sweeping a material through equality and swapping the listing
+order each move ``sum(T)`` by rounding, where the equality bit stepped 2.7e-3, 5e-3 and
+1.5e-3. **E**: a shape whose material equals the background keeps its faces, a material sweep
+never moves a pair-free field, and a touching pair's field is a continuous function of the
+pair's contrast -- not of an equality bit. And the seam is decided per quantity: the
 permeability pass reads the permeability slots.
 
 Every rotation transports the incidence frame with the structure (``psi`` stated, ``phi``
@@ -64,6 +69,10 @@ K_SHORT = [_box(cx=-150.0, lx=300.0, ly=300.0, material=4.0),
            _box(cx=150.0, lx=300.0, ly=300.0, material=9.0)]
 D_SHORT = [dict(s, material=4.0) for s in K_SHORT]
 ONE_SHORT = [_box(lx=600.0, ly=300.0)]
+#: Three materials in a row, two seams of different contrast: ``4 | 9 | 12``.
+THREE_TOUCHING = [_box(cx=-200.0, lx=200.0, ly=300.0, material=4.0),
+                  _box(cx=0.0, lx=200.0, ly=300.0, material=9.0),
+                  _box(cx=200.0, lx=200.0, ly=300.0, material=12.0)]
 
 
 def _field(shapes, lattice=SQUARE, grid=GRID):
@@ -179,11 +188,12 @@ def test_a_seam_between_different_materials_is_an_interface():
     """``eps 4 | eps 9`` bars spanning the cell: the seam's normal survives, and the answer is Li's.
 
     Every face here is a pair member -- the two seams are cross pairs, the top and bottom faces
-    self pairs -- and with the materials different the seams co-orient instead of cancelling.
-    The structure is a 1-D grating with no background left, so its exact field is the constant
-    ``(+-1, 0)``, under which the NVF projector *is* Li's 1-D rule: the parametric solve and a
-    raster of the same profile factorized by ``'li'`` must agree to machine precision. They do
-    (1.4e-14 and 1.0e-13 at orders 6 and 10). The one-box fold read this seam as a null band.
+    self pairs -- and with the materials different the seam contrast puts the two seams back
+    co-oriented after their pairs cancel. The structure is a 1-D grating with no background
+    left, so its exact field is the constant ``(+-1, 0)``, under which the NVF projector *is*
+    Li's 1-D rule: the parametric solve and a raster of the same profile factorized by
+    ``'li'`` must agree to machine precision. They do (1.4e-14 and 1.0e-13 at orders 6 and
+    10). The one-box fold read this seam as a null band.
     """
     n_x, n_y = _field(K_SPANNING)
     assert np.abs(n_y).max() == 0.0 and np.abs(np.abs(n_x) - 1.0).max() == 0.0
@@ -203,8 +213,8 @@ def test_the_seam_normal_turns_with_the_structure():
 
     The unrotated scene cannot tell a co-oriented seam from the tie's fallback, because its
     seam normal *is* ``(1, 0)``; turning the cell and both bars by 0.3 rad separates the two.
-    A sign forced opposed cancels every pair, sends every sample to the tie, and the tie, with
-    both of each box's axes cancelled, answers ``(1, 0)``: 17 deg off.
+    A seam contrast forced to zero leaves every pair cancelled, sends every sample to the tie,
+    and the tie, with both of each box's axes cancelled, answers ``(1, 0)``: 17 deg off.
     """
     turn = 0.3
     rot = np.array([[np.cos(turn), -np.sin(turn)], [np.sin(turn), np.cos(turn)]])
@@ -219,15 +229,21 @@ def test_a_seam_of_finite_length_is_an_interface_over_its_run_and_not_beyond():
 
     Judged against the oracle made material-aware (``groups``): a step across the seam lands
     in a box of the *other* label, so the seam's samples are kept with the left box's outward
-    normal, while its two ends are corners like any other. The sign window is the run: beyond
-    the seam's end the two faces cancel, which is right -- no interface continues there -- and
-    is what the blind oracle (seam dropped) reads worse, since it has no seam to agree with.
+    normal, while its two ends are corners like any other. Over the run the seam is exact --
+    both weights are one there and nothing else survives. Beyond the seam's end no interface
+    continues, and the two faces no longer cancel exactly there: the seam contrast is
+    windowless, so it leaks past the run at strength ``c = (5/13) ** 4`` (the 0.024 that
+    ``_k_column_above_the_seam_end`` pins), which the blind oracle (seam dropped) still reads
+    worse, having no seam to agree with -- 0.238 deg against the aware 0.230 at N = 512. Under
+    the equality bit the two read 0.351 and 0.22: the band against the seam-blind oracle, which
+    judges the whole field, improved by more than the leak cost the aware one, and the 0.05
+    margin the old gate carried went with the gap it measured.
     """
     n_x, n_y = _field(K_SHORT)
     aware = band_error(n_x, n_y, GRID, SQUARE, _gamma(K_SHORT, groups=(4.0, 9.0)))
     blind = band_error(n_x, n_y, GRID, SQUARE, _gamma(K_SHORT))
     assert aware[2] > 4000 and aware[0] < 0.3 and aware[1] < 0.002, aware
-    assert blind[0] > aware[0] + 0.05, (blind, aware)
+    assert blind[0] > aware[0], (blind, aware)
 
 
 #: C4. One face on two runs of different equality: B's ``-u`` face (``x = 0``, ``y`` in
@@ -243,14 +259,16 @@ ABC = {'A B C': [A_BOX, B_BOX, C_BOX], 'B A C': [B_BOX, A_BOX, C_BOX],
 
 
 def _abc_band_gate():
-    """Every ordering under 0.35 deg / 0.3% against the material-aware oracle (0.265 / 0.11%).
+    """Every ordering under 0.35 deg / 0.3% against the material-aware oracle (0.337 / 0.21%).
 
     The gate is this scene's, not a constant of the mechanism: a contact scene's band carries
-    the fixed-normal wedge beyond each run's end, which reads 0.22 deg on ``K_SHORT``, 0.27
+    the fixed-normal wedge beyond each run's end, which reads 0.23 deg on ``K_SHORT``, 0.34
     here and 0.32 on two same-material boxes 300 and 400 tall -- identical whether the taller
     one is written upright or turned a quarter turn, so it is the wedge and not a defect. What
     justifies 0.35 is the separation: the sign keyed on a piece reads 5.87 deg / 6.80% and the
-    window built from the partner's half-length 3.71 / 4.14%.
+    window built from the partner's half-length 3.71 / 4.14%. The seam contrast (2026-09-11)
+    moved this scene from 0.265 / 0.11% to 0.337 / 0.21%, identical to 1e-9 across the three
+    orderings; the margin to the gate is now 0.013 deg.
     """
     for name, shapes in ABC.items():
         mean, over, count = band_error(*_field(shapes), GRID, SQUARE,
@@ -271,18 +289,32 @@ def _abc_column_exact():
         assert np.abs(np.abs(n_x[41:]) - 1.0).max() == 0.0, name       # the seam, and B alone
 
 
+def _seam_column(shapes, y):
+    """The field on ``K_SHORT``'s seam line ``x = 0`` at the centred ``y``, off any grid."""
+    A = as_lattice(lattice=SQUARE)
+    return P._piece_field(np, np.full_like(y, PERIOD / 2.0), PERIOD / 2.0 + y, shapes,
+                          P.plan_gamma(shapes, A), None, A, np.float64)
+
+
 def _k_column_above_the_seam_end():
     """Directly above the end of the ``K_SHORT`` seam (``x`` = the seam line, ``y`` in (150, 300)).
 
-    The two seam faces are beyond their run there, so the sign window must leave them opposed
-    and they cancel exactly, the two top faces tie, and the field is ``(0, +-1)`` with
-    ``n_x == 0.0``; a window that is always open co-orients them and reads 0.75.
+    The two seam faces are beyond their run there: the record's transfer leaves them cancelled,
+    the two top faces carry the field and it is ``(0, +-1)`` -- ``n_x == 0.0`` exactly under
+    the equality bit, whose window was the run. The seam contrast has no window: it is one
+    formula at any gap and past any run, so the cancelled pair comes back here too, at
+    strength ``c = (5/13) ** 4 = 0.022`` times the seam faces' shared weight. Measured over the
+    column: ``|n_x|`` 0.0219 to 0.0240, ``|n_y|`` at least 0.9997. The leak is the price of a
+    windowless term: a contrast windowed by the *record* would read the record, which exists
+    only at contact, and put back the contact step the term exists to remove (a window cut
+    from the transfer's off-run tail is the candidate the docs leave unmeasured), and the
+    whole-field band against the seam-blind oracle improved with the leak in it (0.351 to
+    0.238 deg at N = 512). The old mutant, a sign window always open, read 0.75 here; the gate
+    is a fifteenth of that and twice the leak.
     """
-    A = as_lattice(lattice=SQUARE)
-    y = np.linspace(151.0, 299.0, 75)
-    n_x, n_y = P._piece_field(np, np.full_like(y, PERIOD / 2.0), PERIOD / 2.0 + y, K_SHORT,
-                              P.plan_gamma(K_SHORT, A), None, A, np.float64)
-    assert np.abs(n_x).max() == 0.0 and np.abs(np.abs(n_y) - 1.0).max() == 0.0
+    n_x, n_y = _seam_column(K_SHORT, np.linspace(151.0, 299.0, 75))
+    assert np.abs(n_x).max() < 0.05 and np.abs(n_y).min() > 0.998, (np.abs(n_x).max(),
+                                                                     np.abs(n_y).min())
 
 
 @pytest.mark.parametrize('name', list(ABC))
@@ -292,8 +324,9 @@ def test_one_face_on_two_runs_of_different_equality(name):
     B's ``-u`` face is a pair member twice: with A (equal materials, the run [10, 300] cancels
     and the tie reads B's own v axis there) and with C (different, the run [-300, -10] keeps
     the seam's normal), with 20 units of plain interface between them. Both records are on the
-    plan whatever the shape order; the field reads 0.265 deg / 0.11% against the
-    material-aware oracle in every ordering, and on the face line itself the exact pattern
+    plan whatever the shape order; the field reads 0.337 deg / 0.21% against the
+    material-aware oracle in every ordering (0.265 / 0.11% under the equality bit; the seam
+    contrast leaks past the C run's ends), and on the face line itself the exact pattern
     ``0 | 1 | 1`` in ``|n_x|`` over dead run, gap and seam. Neither held on any shipped scene
     before: every cross pair in the suite was flush with equal extents and no face carried two
     runs, so a window that was always open, a sign keyed on either piece, and a window built
@@ -314,7 +347,8 @@ def test_one_face_on_two_runs_of_different_equality(name):
 
 
 def test_the_sign_window_ends_where_the_run_ends():
-    """Beyond the seam's end the two faces stay opposed: exact, on the column above ``K_SHORT``."""
+    """Beyond the seam's end the pair stays cancelled but for the contrast's leak: the column
+    above ``K_SHORT`` reads the top faces' ``(0, +-1)`` to within ``|n_x| < 0.05``."""
     _k_column_above_the_seam_end()
 
 
@@ -383,35 +417,116 @@ def test_touching_different_materials_is_built_and_summed_as_before():
     assert 0.0 < _total(K_SHORT) < 1.0
 
 
+def _opened(shapes, i, by):
+    """``shapes`` with box ``i`` slid along ``x`` by ``by``: its seam opened to ``|by|``."""
+    return [dict(s, cx=s['cx'] + by) if j == i else s for j, s in enumerate(shapes)]
+
+
+def test_a_different_material_contact_has_no_step():
+    """Opening a seam by 1e-9 moves ``sum(T)`` by rounding, on one seam and on two.
+
+    The seam contrast reads no record: two opposed faces a positive gap apart cancel by
+    arithmetic and the contrast puts the pair's cancelled part back in proportion to the
+    materials, the same on both sides of contact. The equality bit read the record only, so
+    the strip between the boxes read the far faces' normal until the gap closed and the answer
+    stepped there: -2.7e-3 at order 4 on ``K_SHORT`` (-8.7e-4 to -3.4e-4 at orders 6 to 12,
+    against 1.4e-9 for the explicit Li rule) and -5.8e-4 / -2.7e-2 on the two seams of ``4 | 9
+    | 12``. Measured now at order 4, N = 128: 2.0e-12 on ``K_SHORT``, -1.7e-12 and 8.3e-12 on
+    the three-box seams (1e-12 to 2.2e-12 on ``K_SHORT`` at N = 512 across orders 4 to 12).
+    The 1e-9 bound is three decades above rounding and five below the smaller old step; a box
+    slid by 1e-9 also moves the structure, and that is inside it.
+    """
+    base = _total(K_SHORT, order=4, normal_grid=128)
+    assert abs(_total(_opened(K_SHORT, 1, 1e-9), order=4, normal_grid=128) - base) < 1e-9
+    base = _total(THREE_TOUCHING, order=4, normal_grid=128)
+    for i, by in ((0, -1e-9), (2, 1e-9)):
+        step = _total(_opened(THREE_TOUCHING, i, by), order=4, normal_grid=128) - base
+        assert abs(step) < 1e-9, (i, step)
+
+
+def test_the_material_equality_limit_is_continuous():
+    """``T(9 + delta | 9) - T(9 | 9)`` is Li's ramp, linear in ``delta`` down to 1e-7.
+
+    Measured at order 4, N = 128: 2.36e-9, 2.36e-7 and 2.36e-5 for ``delta`` of 1e-7, 1e-5 and
+    1e-3 -- the explicit Li rule on the same profile gives 2.27e-9 at 1e-7, and the ratio of
+    the first two is 100 to 4e-6. The equality bit switched the seam's whole normal on the
+    moment the two slots differed, whatever ``delta``, and stepped -5.0e-3 at order 4 (-4.8e-4
+    to -4.0e-5 at 6 to 12; 9.2e-2 on ``12.25 | 12.25 + 1e-3``); the contrast switches on as
+    ``delta ** 4``, so the strip the seam claims shrinks linearly with the material difference
+    and the total follows the material. A residual step ``s`` would read as a ratio
+    ``(s + 100 a) / (s + a)``, not 100: the second gate is the one a small step cannot pass.
+    """
+    def total(delta):
+        return _total([dict(K_SHORT[0], material=9.0 + delta), dict(K_SHORT[1], material=9.0)],
+                      order=4, normal_grid=128)
+
+    base = total(0.0)
+    step = {delta: total(delta) - base for delta in (1e-7, 1e-5)}
+    assert abs(step[1e-7]) < 1e-8, step
+    assert abs(step[1e-5] / step[1e-7] - 100.0) < 1.0, step
+
+
+def test_the_listing_order_of_a_touching_pair_moves_nothing():
+    """``K_SHORT`` and ``K_SHORT[::-1]`` are one structure and solve as one: 6.4e-15 apart.
+
+    The co-oriented vector on a seam is the materials' -- pointed from the lower-``|eps|``
+    shape toward the higher -- where the equality bit laid it along the *primary's* normal,
+    the earlier-listed shape's, so the same structure listed both ways solved 1.5e-3 apart at
+    every grid. The projector anchors a multi-shape layer on its first shape, so the two
+    listings sample the structure 300 units apart: N = 504 makes that 216 whole pixels and
+    the two totals differ by 6.4e-15 at order 4; at N = 128 (54.9 pixels) they differ by
+    1.7e-4, which is the anchor's sampling offset and not the listing's.
+    """
+    ab = _total(K_SHORT, order=4, normal_grid=504)
+    ba = _total(K_SHORT[::-1], order=4, normal_grid=504)
+    assert abs(ab - ba) < 1e-12, ab - ba
+
+
 # ------------------------------------------------------------------------------------- E
 
-def test_a_field_reads_no_material_beyond_the_equality_of_touching_pairs():
-    """A background-material shape keeps its faces; only a cross pair's equality bit is read.
+def test_a_pair_free_field_reads_no_material_and_a_touching_pair_reads_its_contrast():
+    """A pair-free field reads no material; a touching pair's field follows its contrast.
 
     Dropping a shape's faces when its material equals the background is a cliff in a material
     design variable and puts a material fact into a frozen record (C7). So the field of a
     pair-free layer is bit-identical across any material sweep, including through the
-    background's value, and a layer with a cross pair depends on nothing but whether the two
-    members agree: ``4 | 9`` and ``4 | 1`` are one field, ``4 | 4`` and ``1 | 1`` another.
+    background's value -- a layer swept as a whole, both shapes one material, is one field.
+    A layer with a cross pair reads the pair's contrast ``|eps_a - eps_b| / (|eps_a| +
+    |eps_b|)`` and nothing else of the materials: equal materials add an exact zero, so ``4 |
+    4``, ``1 | 1`` and ``9 | 9`` are one field; ``4 | 9`` and ``4 | 1`` are two (the equality
+    bit made them one); and the field of ``9 | 9 + delta`` tends to the field of ``9 | 9`` as
+    ``delta`` does to zero. Measured at N = 128, the largest move of a component: 0.0 at
+    ``delta`` 1e-9 and 1e-6 (the contrast's fourth power is below an ulp of every sum), 5.9e-10
+    at 1e-3, 5.8e-2 at 1e-1 -- so the gate at 1e-3 has a thousandfold margin and the control at
+    1e-1 shows there is a seam to grow. The two listings of one pair are one field, since the
+    seam's vector is oriented by the materials and not by the earlier-listed shape: 1.3e-15
+    apart at N = 252, the summation order's rounding. (``_field`` samples the shapes where
+    they are, so any grid would do here; 252 keeps the listings' 300-unit anchor offset on 108
+    whole pixels, the condition the solved total needs in
+    ``test_the_listing_order_of_a_touching_pair_moves_nothing``.)
     """
     lone = [_box(lx=300.0, ly=200.0, angle=0.3)]
     apart = [_box(lx=200.0, ly=150.0, cx=-200.0), _box(lx=150.0, ly=200.0, cx=180.0, cy=100.0)]
-    for shapes in (lone, apart):
+    for shapes in (lone, apart, K_SHORT):
         fields = [_field([dict(s, material=m) for s in shapes], grid=(128, 128))
                   for m in (4.0, 1.0, 12.25)]
         for got in fields[1:]:
             assert np.array_equal(got[0], fields[0][0]) and np.array_equal(got[1], fields[0][1])
 
-    def seam(left, right):
+    def seam(left, right, grid=128):
         return _field([dict(K_SHORT[0], material=left), dict(K_SHORT[1], material=right)],
-                      grid=(128, 128))
+                      grid=(grid, grid))
 
-    differ = [seam(4.0, 9.0), seam(4.0, 1.0), seam(1.0, 4.0)]
-    same = [seam(4.0, 4.0), seam(1.0, 1.0), seam(9.0, 9.0)]
-    for group in (differ, same):
-        for got in group[1:]:
-            assert np.array_equal(got[0], group[0][0]) and np.array_equal(got[1], group[0][1])
-    assert not np.array_equal(differ[0][0], same[0][0])
+    def apart_by(one, other):
+        return max(np.abs(one[0] - other[0]).max(), np.abs(one[1] - other[1]).max())
+
+    assert apart_by(seam(4.0, 9.0), seam(4.0, 1.0)) > 1.0
+    merged = seam(9.0, 9.0)
+    assert apart_by(seam(9.0, 9.0 + 1e-9), merged) < 1e-9
+    assert apart_by(seam(9.0, 9.0 + 1e-3), merged) < 1e-6
+    assert 1e-2 < apart_by(seam(9.0, 9.0 + 1e-1), merged) < 1e-1
+    swapped = _field(K_SHORT[::-1], grid=(252, 252))
+    assert apart_by(seam(4.0, 9.0, grid=252), swapped) < 1e-12
 
 
 def test_the_seam_is_decided_per_quantity():
@@ -419,10 +534,15 @@ def test_the_seam_is_decided_per_quantity():
 
     The permeability pass hands the builder a view whose material slots hold ``mu_value`` --
     ``1.0`` for a material that named none -- so the same reader decides each quantity's
-    interface set from its own slots, as the raster path's twin records do. A box that names
-    ``mu = 1.0`` beside one that names none is one permeability, and the mu field says so.
+    interface set from its own slots, as the raster path's twin records do. On the seam line
+    inside the run the eps view (``4 | 4``) reads ``n_x == 0`` exactly -- the pair cancels and
+    the tie answers the boxes' v axis -- and the mu view (``mu 2 | 3``) reads ``|n_x| == 1``
+    exactly: both weights are one there and nothing else survives, so any contrast above zero
+    gives the seam's direction, ``(1/5) ** 4`` here. Off the line the strength is the
+    contrast's, which is why the mu field is no longer array-equal to the ``eps 4 | 9`` field
+    (``(5/13) ** 4``) as it was under the equality bit. A box that names ``mu = 1.0`` beside
+    one that names none is one permeability, and the mu field says so.
     """
-    A = as_lattice(lattice=SQUARE)
     left, right = K_SHORT
     eps_alike = [dict(left, material=Material(4.0, mu=2.0)),
                  dict(right, material=Material(4.0, mu=3.0))]
@@ -434,8 +554,12 @@ def test_the_seam_is_decided_per_quantity():
     eps_field = _field(view(eps_alike, 'permittivity'), grid=(128, 128))
     mu_field = _field(view(eps_alike, 'permeability'), grid=(128, 128))
     assert np.array_equal(eps_field[0], _field(D_SHORT, grid=(128, 128))[0])
-    assert np.array_equal(mu_field[0], _field(K_SHORT, grid=(128, 128))[0])
     assert not np.array_equal(eps_field[0], mu_field[0])
+    y = np.linspace(-149.0, 149.0, 75)
+    e_x, e_y = _seam_column(view(eps_alike, 'permittivity'), y)
+    m_x, m_y = _seam_column(view(eps_alike, 'permeability'), y)
+    assert np.abs(e_x).max() == 0.0 and np.abs(np.abs(e_y) - 1.0).max() == 0.0
+    assert np.abs(np.abs(m_x) - 1.0).max() == 0.0 and np.abs(m_y).max() == 0.0
 
     named = [dict(left, material=Material(4.0, mu=1.0)), dict(right, material=Material(9.0, mu=1.0))]
     absent = [dict(left, material=Material(4.0, mu=1.0)), dict(right, material=Material(9.0))]

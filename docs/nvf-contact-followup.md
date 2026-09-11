@@ -203,9 +203,26 @@ grid defect rather than assert a physical divergence or a unique remedy.
 
 ## Material-contrast contact candidate
 
-The cross-material contact step has a promising experimental alternative in
-`tests/contact_material_probe.py`. This instrument changes only an in-memory
-copy of `_piece_field`; the production strategy is unchanged. It weights each
+> **Superseded 2026-09-11; instrument retired.** The seam contrast now in production
+> (`_core/parametric.py`, `_piece_field`, step 3b; `normal-field-known-limits.md` §8e) passes
+> the gates this candidate failed, by the mechanism this section names: the candidate's seam
+> band was a quarter power of the contrast wide, because its residual seam vector was linear in
+> `delta` against inverse-fourth-power distance weights, so the material-equality limit stepped
+> on the grids that sampled the shrinking band. Production raises the contrast to the blend's
+> own fourth power, `c = (|eps_a - eps_b| / (|eps_a| + |eps_b|))**4`, which makes the band
+> linear in the contrast: `T(9 + 1e-7 | 9) - T(9 | 9)` reads +2.1e-9 to +2.4e-9 across orders
+> 4 to 12 against Li's +2.2e-9 to +2.3e-9, the ramp from `delta = 1e-7` to 1e-2 tracks Li
+> within 4% (12% at 1, the two rules' ordinary finite-order difference at full contrast), and
+> the contact step of the same fixture is at rounding (2e-12 against -2.7e-3). Its four files
+> -- the instruments contact_material_probe.py and contact_quadrature_probe.py and their tests
+> test_contact_material_probe.py and test_contact_quadrature_probe.py, all under tests/ -- were
+> deleted the same day; `studies/nvf_seam_contrast.py` reproduces the gates on production, and
+> the record below is kept as it was written, as the reason the quarter-power width was the
+> thing to fix.
+
+The cross-material contact step had a promising experimental alternative in
+contact_material_probe.py (under tests/, deleted 2026-09-11). This instrument changed only an
+in-memory copy of `_piece_field`; the production strategy was unchanged. It weights each
 piece by its complex material contrast to the background and transfers cross
 weights with subtraction, avoiding the equal/different sign flip. If the
 resulting complex vector is `(sx, sy)`, a real unit normal is the principal
@@ -214,12 +231,9 @@ axis of `Re(s s*)`, computed from
 materials with equal real parts still have a surviving seam. Background-equal
 pieces are excluded before the nearest-distance weights are calculated.
 
-Reproduce from the checkout:
-
-```sh
-PYTHONPATH=$PWD python tests/contact_material_probe.py --orders 4 8 12
-PYTHONPATH=$PWD python tests/contact_material_probe.py --orders 4 8 --lossy
-```
+Reproduced from the checkout, while the instrument existed, by running the probe from the
+repo root with `PYTHONPATH=$PWD`: `--orders 4 8 12` for the ladder and `--orders 4 8 --lossy`
+for the lossy row.
 
 Two 300-square boxes at centers `x=±(150+gap/2)`, all other operating parameters
 as above; grid 256. The tables give `T(gap=1e-6)-T(contact)`.
@@ -372,7 +386,7 @@ convergence tests retain their own grids.
 
 ## The material-limit defect is not only a normal-grid artifact
 
-`material_transition_width` in `tests/contact_material_probe.py` bisects the
+`material_transition_width` in the retired contact_material_probe.py bisected the
 pointwise candidate field, without a normal sampling grid or a Maxwell solve.
 On the `4 | 4+delta` seam, sample at internal y=400 and move from x=350 into
 the right box. The transition width is the distance where P_xx reaches 1/2.
@@ -438,7 +452,8 @@ selects Li for the investigated solves nor changes the production default.
 
 ### Resolve the weak seam before accepting a material derivative
 
-`tests/contact_quadrature_probe.py` replaces only the three sampled normal
+contact_quadrature_probe.py (under tests/; retired 2026-09-11 with the candidate it served)
+replaced only the three sampled normal
 projector integrals with tensor Gauss quadrature, graded geometrically around the
 internal seam. The epsilon transforms and Maxwell/NVF assembly remain unchanged.
 Plane-wave Fourier moments and a 1e-6-wide strip independently verify quadrature
@@ -464,11 +479,8 @@ not claims of infinite-order accuracy. In particular, matching a derivative on
 one grid or at one order does not establish a correct general NVF field. Nothing
 in this material experiment fixes the lone-box closing-gap geometry by itself.
 
-Reproduce with:
-
-```sh
-PYTHONPATH=. python tests/contact_quadrature_probe.py --orders 3 7 11 15 --degrees 16 32 --exponent .5
-```
+Reproduced, while the instrument existed, by running the quadrature probe from the repo root
+with `PYTHONPATH=.` and `--orders 3 7 11 15 --degrees 16 32 --exponent .5`.
 
 ### A non-cancelling complex NVF projector
 
@@ -518,10 +530,12 @@ representation question is
 removing artificial equal-material seams without restoring the contact singularity;
 no accepted construction for that combination has been established here.
 
-Reproduce the field, derivative, and unresolved representation checks with:
+The field, derivative, and unresolved representation checks were reproduced with the
+quadrature probe's test beside the Jones probe's; the former is retired since 2026-09-11 and
+the latter stands:
 
 ```sh
-PYTHONPATH=. python -m pytest tests/test_contact_quadrature_probe.py tests/test_contact_jones_probe.py -q
+PYTHONPATH=. python -m pytest tests/test_contact_jones_probe.py -q
 PYTHONPATH=. python tests/contact_jones_probe.py --orders 3 7 11 15 --grids 127 128 256 512
 ```
 

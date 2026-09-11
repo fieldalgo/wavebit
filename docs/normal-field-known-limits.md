@@ -14,7 +14,7 @@ coefficients. That is what makes every defect in this file quiet — `R + T` con
 raises, and the only symptom is convergence that looks like a property of the modeling path.
 See `parametric-modeling.md` and `nvf-normal-methods.md` for the constructions themselves.
 §9 is the case table: every scene the piece field was designed on, lettered A to L, with its
-status as of 2026-09-06 and where it is measured.
+status as of 2026-09-11 and where it is measured.
 
 
 ## 1. Polygon internal and periodic seams — FIXED (2026-09-07)
@@ -628,11 +628,14 @@ periodic image, and the plan records that pair too. Over the run the two faces' 
 one number by the construction a lone box uses across its own images -- every instance is
 named by its *absolute* image, fold plus offset, and the partner's normal coordinate is the
 primary's expression at the coincident image, so the two shapes' folds cancel out of the
-arithmetic -- and the **material slots decide the sign**, per pair and per run, as a window in
-the tangential coordinate rebuilt from the traced geometry: equal materials cancel (the
-material runs on), different ones co-orient (the seam's normal survives). Beyond the run the
-two keep their opposed normals, which is right for both materials. The permeability pass reads
-its own slots, so the interface set is per quantity. What it measured:
+arithmetic -- and the pair cancels over the run (the material runs on). Until 2026-09-11 the
+**material slots decided a sign** on that record, per pair and per run, as a window in the
+tangential coordinate rebuilt from the traced geometry: equal materials cancelled, different
+ones co-oriented so the seam's normal survived. Since then every record cancels and a seam
+between different materials is put back after the sum by its contrast (§8e), which is what
+removed the contact and material-equality steps row K recorded. Beyond the run the two keep
+their opposed normals, which is right for both materials. The permeability pass reads its own
+slots, so the interface set is per quantity. What it measured on the day:
 
 | scene | before | after |
 |---|---|---|
@@ -676,9 +679,11 @@ its instance list being a size the trace cannot read), and
 the eager replay re-derives the plan and refuses by name a pair that appeared or vanished, a
 face gone dead or live, an image list that grew across a ring boundary, a basis whose reduction
 changed. A material sweep is
-never a staleness: the sign is an array op on the slots at build time. The projector cache
-keys on the plan and on a cross pair's *equality bit*, so a sweep on a pair-free layer hits as
-it always did and one that crosses equality on a seam rebuilds.
+never a staleness: the contrast is an array op on the slots at build time (the sign was, until
+2026-09-11). The projector cache keys on the plan and, for a layer of several shapes, on every
+shape's material value (`parametric._material_key`; until 2026-09-11 on each cross pair's
+*equality bit*, which was every material fact the field then read), so a lone shape's sweep
+hits as it always did and a multi-shape layer's rebuilds per value.
 
 ### 8c. Every image is counted on the reduced basis (2026-09-06)
 
@@ -789,7 +794,143 @@ field with respect to width and permittivity. The raster field and solver round-
 regressions remain applicable too.
 
 
-## 9. The cases, A to L, as of 2026-09-06
+### 8e. The seam contrast (2026-09-11)
+
+**The rule.** A cross pair's record carries no sign any more. Every record cancels -- the
+partner's weight is subtracted from the primary's over the run they share, whatever the two
+materials, with the 2026-09-07 transfer (one on the run, `n2 / (n2 + e**2)` off the line beyond
+its ends, zero on the line beyond them) deciding how much -- and after the sum
+(`_piece_field`, step 3b) every pair of pieces `(a, b)` of *different* owners adds
+
+```
+c * h * max(0, -n_a . n_b) * t,    c = (|eps_a - eps_b| / (|eps_a| + |eps_b|)) ** 4,
+h = 2 w_a w_b / (w_a + w_b),       t = n_a - n_b, from the lower-|eps| shape toward the higher
+```
+
+where `w` are the pieces' blend weights and `n` their fixed normals (a round piece's is its
+foot direction). On a live seam both weights are one and `on_gamma` zeroes every other piece,
+so the direction is exact for any `c > 0`; at a positive gap the pair's cancelled part comes
+back in proportion to the contrast by the same formula on either side of contact, so nothing
+steps there; equal materials read `c = 0` and add exactly zero, so every same-material scene is
+bit for bit what it was (five scenes checked against the b92e85a tree, and the same-material
+control below agrees on both to every printed digit). It is pointwise in the weights, so the
+tiled path is bit-identical to the whole-grid one, and it reads no record, so a jitted replay
+has nothing to go stale on: a stale record is value-neutral in the sum, since both faces of a
+record are opposed on one line and the transfer only moves weight between them -- the same
+reason the 2026-09-07 transfer is now algebraically neutral there, surviving as the tie's
+evidence and the tiled path's bookkeeping rather than as a value (only the tie reads a record).
+The projector cache key of a multi-shape layer holds every shape's material value
+(`parametric._material_key`), the contrast being a continuous function of them; a lone shape's
+key holds none, as before.
+
+**Why the fourth power.** `p = 4` is `_BLEND_EXPONENT`, the blend's own. A lower power leaves a
+band around the seam whose width goes as `contrast ** (p / 4)` -- the residual seam vector is
+linear in the contrast against inverse-fourth-power distance weights, so the point where the
+seam's vector overtakes the neighbours' moves as that root -- and with it a bump of `T` against
+the material of about 20x Li's at `d ~ 1e-3` for `p = 2`. At `p = 4` the band is linear in the
+contrast and the material-equality limit is Li's. That quarter-power width is exactly what sank
+the 2026-09-09 material-contrast candidate (`nvf-contact-followup.md`, "Material-contrast
+contact candidate"); its instrument was retired the day this landed.
+
+**Why the materials orient the vector.** The old rule put the co-oriented vector along the
+*primary's* normal, the earlier-listed shape's, which was a listing dependence nobody had
+recorded: the same structure listed `[A, B]` and `[B, A]` solved 1.5e-3 apart at order 4, at
+every grid. From the lower-`|eps|` shape to the higher is listing-invariant, rotates with the
+structure, and is fragile nowhere for real materials (`|eps_a| == |eps_b|` with `eps_a != eps_b`
+needs complex slots on one circle, where `c` is small anyway); an orientation by the sign of
+the base sum was tried and is fragile in the corner cones (contact step 7e-7). The swap reads
+6.4e-15 at N = 504, where the 300 between the two centres is 216 pixels exactly and the swap is
+a permutation of the samples; at N = 512 it reads 4.4e-5, which is the first-shape anchor's
+sampling offset (§1), not the listing.
+
+**What it measured** -- `studies/nvf_seam_contrast.py`, whose log holds a production run and a
+run of the same script against the b92e85a tree it replaced, so every "before" here is the
+same instrument on the old code. The K fixture (§9: two 300 boxes `eps 4 | eps 9` touching, 700
+square, 900 nm, theta 0.2, top 1, bot 2.25), in `sum(T)`:
+
+| order | contact step `T(gap 1e-9) - T(0)`, N = 512: before -> after | same-material control (both trees) | material-equality step `T(9 + 1e-7 \| 9) - T(9 \| 9)`, N = 128: before -> after (Li) | distance to Li at contact: before -> after |
+|---|---|---|---|---|
+| 4 | -2.73e-3 -> -2.2e-12 | +8.6e-7 | -5.02e-3 -> +2.36e-9 (+2.27e-9) | +2.07e-3 -> +1.07e-4 |
+| 6 | -8.79e-4 -> -1.4e-12 | +1.8e-6 | -4.82e-4 -> +2.14e-9 (+2.19e-9) | -4.86e-4 -> -1.68e-3 |
+| 8 | -2.11e-4 -> -1.1e-12 | +7.8e-7 | -5.98e-4 -> +2.22e-9 (+2.20e-9) | +2.64e-4 -> +5.81e-4 |
+| 10 | -7.23e-4 -> -8.8e-13 | +2.7e-7 | -1.41e-4 -> +2.21e-9 (+2.21e-9) | +6.33e-4 -> +3.19e-4 |
+| 12 | -3.46e-4 -> -1.2e-12 | -7.5e-7 | -4.00e-5 -> +2.19e-9 (+2.21e-9) | -1.12e-4 -> +5.91e-5 |
+
+The explicit Li rule's own contact step is under 1e-12 at every order (3e-13 to 7e-13). The
+equality *ramp*
+`T(9 + d | 9) - T(9 | 9)` at order 4, N = 128, was -5.0e-3 flat from `d = 1e-7` to `1e-2`
+(-2.4e-3 at 0.1: a step, not a ramp) and is now Li's times 1.036 from `d = 1e-7` to `1e-2`,
+1.08 at 0.1 and 1.12 at 1, where the two rules' ordinary finite-order difference at full
+contrast shows. Three boxes `4 | 9 | 12` touching (200 wide each): opening the left seam by
+1e-9 moved `sum(T)` by -1.15e-3 and the right by -1.35e-2; they read -2e-12 and -4e-12 now. The
+band against the material-aware oracle over 1.5 pixels at N = 512 reads 0.230 deg / 0.18% past
+45 deg (0.237 / 0.09% before), and against the seam-blind oracle, which judges the whole field,
+0.238 (0.351 before; `test_gamma_layers.py`).
+
+**The held-out matrix.** Eleven cells at order 4 (one at 8), N = 512 -- the K fixture as the
+reference row and ten the rule was not tuned on. The ramp is
+`T(eps_b + 1e-3 | eps_b) - T(eps_b | eps_b)` on the cell's own second material and geometry,
+with Li's where the explicit rule applies (axis-aligned rectangles), and the band is against
+the material-aware oracle:
+
+| cell | contact step, before -> after | equality ramp at d = 1e-3: before / after / Li | band vs the aware oracle, before -> after | distance to Li at contact, before -> after |
+|---|---|---|---|---|
+| 4 \| 9 | -2.73e-3 -> -2.2e-12 | -5.03e-3 / +2.37e-5 / +2.27e-5 | 0.237 / 0.09% -> 0.230 / 0.18% | +2.07e-3 -> +1.06e-4 |
+| 2.25 \| 12.25 | -1.46e-4 -> -9.3e-13 | +9.11e-2 / -7.08e-5 / -7.80e-5 | 0.237 / 0.09% -> 0.202 / 0.09% | -1.91e-2 -> -1.85e-2 |
+| 4 \| 4.4 | -6.20e-5 -> -3.2e-11 | -1.82e-6 / +5.72e-6 / +5.85e-6 | 0.237 / 0.09% -> 1.050 / 1.00% | +1.32e-4 -> +7.28e-5 |
+| lossy 4 \| 4 + 0.5j | -6.48e-4 -> -7.5e-10 | +1.09e-3 / -1.12e-5 / -1.11e-5 | 0.237 / 0.09% -> 0.830 / 0.73% | -6.16e-5 -> -7.96e-4 |
+| metal 12.25 \| -10 + 1j | -3.20e-1 -> +2.6e-10 | +2.53e-6 / -4.76e-6 / -3.88e-6 | 0.237 / 0.09% -> 0.258 / 0.09% | +1.48e-2 -> -1.75e-1 |
+| heights 300 \| 280 | -2.75e-3 -> -2.3e-12 | -8.89e-3 / +2.92e-5 / +2.88e-5 | 0.287 / 0.08% -> 0.524 / 0.42% | +1.77e-3 -> -1.69e-4 |
+| rotated 0.3 in place (overlaps: polygon route, a control) | +1.9e-13 -> +1.9e-13 | -1.67e-3 / -1.67e-3 / -- | 0.390 / 0.15% -> 0.390 / 0.15% | -- |
+| box \| circle | -7.9e-13 -> -6.9e-13 | +2.56e-5 / +2.56e-5 / -- | 0.388 / 0.23% -> 0.317 / 0.14% | -- |
+| theta 0 | -2.38e-3 -> -2.0e-12 | -7.92e-3 / +2.99e-5 / +2.93e-5 | 0.237 / 0.09% -> 0.230 / 0.18% | +6.13e-4 -> -6.95e-4 |
+| 700 nm | -1.40e-2 -> -1.2e-12 | -9.52e-3 / -4.81e-5 / -4.48e-5 | 0.237 / 0.09% -> 0.230 / 0.18% | +1.17e-2 -> +6.23e-3 |
+| order 8 | -2.11e-4 -> -1.1e-12 | -5.88e-4 / +2.22e-5 / +2.20e-5 | 0.237 / 0.09% -> 0.230 / 0.18% | +2.64e-4 -> +5.81e-4 |
+
+Read down the columns. The contact step is below 1e-9 in every cell (7.5e-10 on the lossy
+pair, 2.6e-10 on the metal, 3.2e-11 on `4 | 4.4` and under 3e-12 elsewhere), where the old
+sign stepped by up to
+-0.32 on the metal seam and -1.4e-2 at 700 nm. The equality ramp is Li's within 5% in six of
+the nine Li cells and off it by 7% at 700 nm, 9% on `2.25 | 12.25` and 23% on the metal, where
+it used to have the wrong sign in eight of the nine (700 nm alone had it) and the wrong size by
+up to 1200x (+9.1e-2
+against Li's -7.8e-5 on `12.25 | 12.25 + 1e-3`); the two rule-free cells did not move (the
+circle has no pair record, so the sign never touched it, and the rotated pair overlaps and
+solves on the polygon route, which this change does not reach -- its -1.67e-3 ramp is the
+polygon route's own material-equality step, §1's "equal values exclude the interval", and
+stands). The distance to Li at contact is nearer in five cells, about equal in one (theta 0)
+and farther in three: order 8 by 2x, the lossy pair by 13x (-6.2e-5 -> -8.0e-4) and the metal
+by 12x (+1.5e-2 -> -1.7e-1). The band is better in six cells and worse in four, and the four
+are of one kind: against an oracle that wants the full seam normal within 1.5 pixels, a *weak*
+seam reads worse the weaker it is -- `4 | 4.4` (c = 5e-6) 0.24 -> 1.05 deg, the lossy pair
+(c = 1.5e-5) 0.24 -> 0.83, the metal 0.24 -> 0.26, and the unequal heights 0.29 -> 0.52, where
+over the ten units the taller box stands above the shorter one the old transfer co-oriented
+the short box's tail along the exposed face and the contrast, at 0.022, does not replace it.
+The ramp column says the weak seam is the proportionate one (Li's concurrent-jump argument:
+the factorization error is second order in the jump), so the two gates disagree on purpose,
+and the band is not the one to gate a weak seam on.
+
+**What it costs, and what leaks.** The field build is O(pieces^2): +21% for two boxes, +97%
+for four and 2.7x for six, measured the day the rule landed. The contrast is windowless, so it
+carries past a run's end: on the seam line directly above the K seam's end the field read
+exactly 0 in `|n_x|` and reads 0.022 to 0.024 now over the 150 above the corner (c = 0.022;
+`test_gamma_layers.py` pins it), up to 0.24 on `2.25 | 12.25` (c = 0.23) and 0.74 on the metal
+pair, whose contrast is nearly one -- a unit field, so a column of background above a corner
+turned up to 48 deg from the top face's normal toward the seam's axis. Half a pixel off the line
+the old transfer's own tail read 0.030 there and the contrast reads 0.022, so off the line this
+is not new. The band gates saw the whole-field improvement outweigh it on K; on a high-contrast
+pair the corner column is where to look first when a number moves.
+
+**What stays open.** The extension off the interface at finite order is a choice, judged on
+these gates, and the lossy and metal cells say it is not yet the best one: 13x and 12x farther
+from Li at order 4 is an extension-accuracy question, not a step. J's closing-gap cusp is
+untouched. The polygon route still steps at material equality (the rotated control's
+-1.67e-3). And the leak scales with the contrast, so a windowed contrast -- the transfer's
+`n2 / (n2 + e**2)` applied to the put-back term -- is the obvious next candidate, to be
+measured on this matrix before it is believed.
+
+
+## 9. The cases, A to L, as of 2026-09-11
 
 The letters are the design's. "Exact" means the field equals the geometry's on the interface
 set; a band error is against `overlap.interfaces_of` over 1.5 pixels at N = 512, and the gate a
@@ -805,13 +946,13 @@ separation from the mutants that must fail it (`tests/gamma_instruments.py::band
 | B | a box on a sheared cell, a tilted box meeting its own image part way | built (refused until 2026-09-06): 0.16 deg / 0.11% and 0.18 deg / 0.15%; rotation with the frame an invariance to 5e-12 | `test_nvf_self_coincident_faces.py`, `test_gamma_field.py` |
 | C | the bar that tiles Li's checkerboard cell | the plan is empty, the field the constant `(1, 0)`, the solve the slab's to 1e-12 | `test_gamma_plan.py` |
 | D | two touching same-material bars; a box against its two halves | the one bar they are, to float noise (§8a); the 2-D residual an order down by order 8 | `test_gamma_layers.py` |
-| E | a shape whose material equals the background | its faces are kept; a pair-free field is bit-identical across any material sweep, a seam's depends on the equality bit alone | `test_gamma_layers.py` |
+| E | a shape whose material equals the background | its faces are kept; a pair-free field is bit-identical across any material sweep, and so is a multi-shape field whose materials sweep *together* (equal materials read a contrast of exactly zero, and the sum is bit for bit what it was before 2026-09-11); a touching or nearby pair of *different* materials varies continuously with their contrast since 2026-09-11 (§8e), where its field depended on the equality bit alone | `test_gamma_layers.py` |
 | F | a shape nested in another | **fixed 2026-09-07** — actual polygon interface intervals; equal-material inner contours are absent throughout the cell (§1) | `test_polygon_interfaces.py` |
 | G | a shape named a period over | exact: the plan is position-free and a lone shape rides a phase; a multi-shape layer is periodic to 1e-9 | `test_gamma_plan.py`, `test_shape_position_gradients.py` |
 | H | a shape larger than the period | **refused**, as before (§1) | `test_parametric.py` |
 | I | ties: a dead pair's line, a surviving pair's midline, a box's centre | the axis of the pair that did not cancel, across shapes; `(1, 0)` when both or neither did; zero null normals at N = 128 / 256 / 512 on the checkerboard | `test_nvf_self_coincident_faces.py`, `test_gamma_field.py` |
 | J | merges: a face approaching its partner's line, two shapes coming into contact | **Closing-gap sensitivity remains unresolved.** On the square grating at order (5,5), normal grid 256, central secants with `h=gap/10` are +0.010405 / +0.73117 / +50.640 at gaps 1e-2 / 1e-4 / 1e-6. The corresponding transmission differences from contact are -8.0e-4 / -3.6e-4 / -9.2e-5. This finite ladder records a large slope in the current blend, not an established physical divergence or a universal power law. Smaller gaps require normal-grid refinement; that refinement changes the measured ladder. Separating the derivative at gap 1e-4 shows the large positive contribution comes from the changing normal projector. Freezing it also disagrees with the independent Cartesian Li reference, so that is not a gradient fix. An attenuated-field candidate likewise fails the reference comparison and remains excluded. Earlier claims that a tuned ramp is the only remedy, or that these measurements prove an unbounded physical slope, are withdrawn. Historical B-onset one-sided secants at `lx=200` differ relatively by +4.2e-4 / -1.1e-3 / -1.6e-3 / -1.3e-3 / -1.5e-3 at orders 4..12; this finite range also does not prove persistence at infinite order. See `nvf-contact-followup.md` for grids, reference convergence, and the reproducible derivative decomposition. A wavelength scan over 864-936 nm at this order (2026-09-11) shows no structure resonance -- only the fixed substrate `(1, 0)` Rayleigh cutoff at 910.93 nm -- and the difference from contact negative at every wavelength, so the step is a genuine finite-order step and not a resonance-shift artefact (`nvf-contact-followup.md`). | `test_gamma_field.py::test_closing_gap_has_large_slopes_on_the_documented_grid`, `test_contact_reference.py`, `test_gamma_frozen.py` |
-| K | abutting boxes of different material | the seam is an interface: `(+-1, 0)` exactly and Li-exact where it spans, 0.22 deg / 0.09% where it does not, per quantity, and the sign is a window per record in the run's traced bounds (a face on two runs of different equality reads `0 \| 1 \| 1` in `\|n_x\|` along its line, `test_gamma_layers.py`). **Three steps, all recorded.** (1) *The contact step* (the design's open question 2; the following measurements precede the 2026-09-07 endpoint fix): the sign flips at exact contact, and a 1e-9 gap -- two opposed faces that cancel to rounding with no pair record -- reads `sum(T)` -2.6e-3 / -9.4e-4 / -1.8e-4 / -7.7e-4 / -3.3e-4 from touching at orders 4 / 6 / 8 / 10 / 12 (two 300 boxes, `eps 4 \| eps 9`, N = 512): an order down across the cap and not monotone, a residual by the decay rule, against 1e-7..1e-5 for the same-material control. **The mechanism is that a sub-threshold opposed pair is cancelled whatever its materials**: without a pair record the blend treats two opposed faces `delta` apart as a merging same-material pair, since a material is read only through a record's sign -- so the strip between two close boxes of *different* material reads the far faces' normal instead of the gap faces', which are two real interfaces. On the line 20 units from the seam across the strip `\|y\| < 140` the fraction reading `u` is 0.30 at gap 1e-2, 0.02 at 1e-4 .. 1e-9 and 0.93 at contact, where the exact field reads 0.93 at every gap above zero; off Gamma (both gap faces themselves read exactly) and decaying with order (gap 1e-2: -2.9e-3 at order 4 to +4.1e-4 at 12), but a value step at contact on top of J's cusp. (2) *The material-equality step*: the sign flips when the two slots become exactly equal, and `T(9 + 1e-7 \| 9) - T(9 \| 9)` is -4.77e-3 / -4.91e-4 / -5.76e-4 / -1.36e-4 / -4.26e-5 at orders 4 / 6 / 8 / 10 / 12 (N = 128; `9 + 1e-3` gives the same to leading order) -- the design's accepted one-time jump on the first step, two orders down across the cap and not monotone at 6 -> 8, a residual by the decay rule. A stale self-pair record replayed under `jit` is value-neutral (1.2e-14 either way), so only a stale cross-pair record with different materials could mislead a jitted replay. (3) *The run-end step* — **fixed 2026-09-07**. The old hard sign window jumped whenever an endpoint crossed a sample row (-5.23e-6 in transmission at N=128, unchanged as the displacement shrank). Transfer now uses the normal squared distance `n2` and tangential excess `e`: one on the run, `n2/(n2+e**2)` off it, and zero on the line beyond the run. Multiple tails sharing a partner are normalized symmetrically so their total never exceeds its weight. The exact line values and material decisions are preserved; only the off-interface extension of different-material cross pairs changes. The old N=128/256/512 fixture now changes by 1.13e-9 / 1.37e-9 / 1.42e-9 for a 2e-6 displacement, and that change scales with the displacement rather than staying a step. Field and solve JIT derivatives agree with local secants. This does not fix J's closing-gap cusp or K's separate contact/material-equality steps. See `tests/test_gamma_contact_smooth.py` and `docs/nvf-contact-followup.md`. | `test_gamma_layers.py`, `test_gamma_frozen.py` |
+| K | abutting boxes of different material | the seam is an interface: `(+-1, 0)` exactly and Li-exact where it spans, 0.230 deg / 0.18% against the material-aware oracle where it does not (0.237 / 0.09% before 2026-09-11; 0.238 against the seam-blind oracle, 0.351 before), per quantity. **Three steps, all recorded, all fixed** -- and a fourth nobody had recorded, fixed with them. (1) *The contact step* -- **fixed 2026-09-11 by the seam contrast** (§8e). Until then the sign flipped at exact contact: a 1e-9 gap -- two opposed faces that cancel to rounding with no pair record -- read `sum(T)` -2.73e-3 / -8.79e-4 / -2.11e-4 / -7.23e-4 / -3.46e-4 from touching at orders 4 / 6 / 8 / 10 / 12 (two 300 boxes, `eps 4 \| eps 9`, N = 512; the explicit Li rule under 1e-12), against 1e-7..1e-6 for the same-material control: an order down across the cap and not monotone, a residual by the decay rule. The mechanism was that a sub-threshold opposed pair was cancelled whatever its materials, since a material was read only through a record's sign, so the strip between two close boxes of *different* material read the far faces' normal instead of the gap faces', which are two real interfaces (on the line 20 units from the seam across the strip `\|y\| < 140` the fraction reading `u` was 0.02 at gaps 1e-4 .. 1e-9 and 0.93 at contact, where the exact field reads 0.93 at every gap). Now every record cancels and the seam is put back in proportion to the contrast at any gap, and the same ladder reads -2.2e-12 / -1.4e-12 / -1.1e-12 / -8.8e-13 / -1.2e-12, the control the same to every printed digit. (2) *The material-equality step* -- **fixed the same day**: the sign flipped when the two slots became exactly equal, and `T(9 + 1e-7 \| 9) - T(9 \| 9)` read -5.02e-3 / -4.82e-4 / -5.98e-4 / -1.41e-4 / -4.00e-5 at orders 4 / 6 / 8 / 10 / 12 (N = 128), the design's accepted one-time jump; it reads +2.36e-9 / +2.14e-9 / +2.22e-9 / +2.21e-9 / +2.19e-9 now against Li's +2.27e-9 / +2.19e-9 / +2.20e-9 / +2.21e-9 / +2.21e-9, and the ramp `T(9 + d \| 9) - T(9 \| 9)` at order 4 is Li's within 4% from d = 1e-7 to 1e-2 (it was -5e-3, flat). (3) *The run-end step* -- **fixed 2026-09-07**: the old hard sign window jumped whenever an endpoint crossed a sample row (-5.23e-6 at N = 128, unchanged as the displacement shrank); the transfer became `n2 / (n2 + e**2)` off the run and zero on the line beyond it, tails normalized symmetrically, and the fixture moved 1.13e-9 / 1.37e-9 / 1.42e-9 at N = 128 / 256 / 512 for a 2e-6 displacement, scaling with it. Since 2026-09-11 that transfer is algebraically neutral in the vector sum -- both faces of a record are opposed on one line and every record cancels -- so it survives as the tie's evidence and the tiled path's bookkeeping, not as a value, and a stale record replayed under `jit` is value-neutral for the same reason (1.2e-14 for a self pair before; only the tie reads a record now). (4) *The listing order*: the co-oriented vector lay along the *primary's* normal, the earlier-listed shape's, so the same structure listed `[A, B]` and `[B, A]` solved 1.5e-3 apart at order 4 at every grid; the orientation is the materials' now (from the lower-`\|eps\|` shape to the higher) and the swap reads 6.4e-15 at N = 504, where the 300 between the centres is an integer number of pixels (4.4e-5 at N = 512: the first-shape anchor's sampling offset, §1, not the listing). What the fix costs and where it is weaker -- the contrast leaking past a run's end at strength `c`, the band against the material-aware oracle worse on weak seams, the lossy and metal pairs farther from Li at order 4 -- is in §8e with the held-out matrix; J's closing-gap cusp is untouched. See `studies/nvf_seam_contrast.py`, `tests/test_gamma_contact_smooth.py` and `docs/nvf-contact-followup.md`. | `test_gamma_layers.py`, `test_gamma_frozen.py` |
 | L | a lone box or ellipse leaving its Wigner-Seitz cell without touching anything; a lone round shape on an unreduced spelling of its cell (§8c) | the box reads its neighbour's face: 0.19 deg / 0.05% (0.65 / 0.64% on the fold). The ellipse too, since the second commit of 2026-09-06: while its support stays inside the cell (`h(t) <= \|t\| / 2` for every lattice vector, `parametric._arc_offsets`) the nearest centre's level set *is* the nearest interface and the `'arc'` piece keeps its single instance and its field bit for bit; once it leaves, a neighbour's boundary is inside the cell and the piece is carried over a ring with the **exact** Euclidean distance to each instance (`parametric._ellipse_distance`, the nearest point's angle bisected on the sign of the tangency condition, then Newton-polished: 5e-13 against brute force, the gradient implicit). The 720 x 200 ellipse at 10 deg read 7.0 deg mean and 89.9 max on Gamma and 3.09 deg / 3.73% over the band on the fold; over its eleven instances it reads 2.5e-7 deg on Gamma and 0.194 deg / 0.00%, the same as the 690 control that stays inside. **What the threshold costs.** The fold switches instance on the cell's edge where the nearest boundary switches on the Voronoi curve between two tilted tips, so an ellipse *hugging* its edge is wrong in the sliver between the two: 0.47 deg / 0.42% at 0.9 short of the edge (`lx = 708`), 0.71 / 0.77% at 0.1 short, clean from 2.4 short out (the same shape forced over the ring reads 0.19 / 0.00% throughout). Through a solve at order 6 / 9 the fold and the ring differ by 2.6e-5 / 2.9e-5 on a 400 x 200 (the sliver is an extension there), 8.9e-4 / 3.3e-5 at 600, 1.6e-3 / 2.5e-4 at 690, 3.9e-3 / 1.9e-3 at 705 and 4.8e-3 / 2.7e-3 at 709.8 -- and that difference is the **step** `sum(T)` takes when the support crosses the threshold: +4.6e-3 from 709.8 to 710.0 at order 6, against -1.8e-4 per 0.2 of `lx` on either side. The fix that removes the step is the ring for *every* ellipse, whose price is every tilted ellipse's extension (2.6e-5 at order 6 on the 400 x 200) and eleven exact distances per build (6 ms -> 470 ms at N = 512, 1.9 s at 1024); not taken, so the step stands as a plan-level event, refused by name when a frozen record is replayed across it. A circle never leaves: `R > \|t\| / 2` is the overlap the layer check refuses -- and since 2026-09-06 the fold finds its nearest centre on any spelling of the basis, every image being counted on the reduced one (§8c: 8.89 deg mean on Gamma at `a2 = 3 a1 + (50, 700)` before, 2.4e-7 after) | `test_nvf_self_coincident_faces.py`, `test_gamma_plan.py`, `test_gamma_frozen.py` |
 
 **The fixed-normal decision and its price, in one place.** A face piece's direction is its
@@ -861,7 +1002,11 @@ NO-OP out loud and restores by md5), reloads, and asserts that the named instrum
 the flush substitution, the pair substitution, the tie and its axis, one face family's image
 list (killed by the L box and its transpose through the oracle band), the coverage union, and
 the blend exponent. The second half added its own: the seam sign forced opposed (killed by the
-K scene turned with its cell, whose seam axis the tie's `(1, 0)` fallback is 17 deg from), the
+K scene turned with its cell, whose seam axis the tie's `(1, 0)` fallback is 17 deg from -- a
+mutant of the record's sign, which the seam contrast retired on 2026-09-11, §8e; the three sign
+mutants in this paragraph describe the pass as it was run on the 2026-09-06 code, and the
+mutants over the contrast -- its power, its orientation, its pair filter -- are the test file's
+to list), the
 winner's weight reverted to the synthesis's `d_min^4` (the 350 golden), fixed normals replaced
 by the foot direction (the grating's exact zero), one face's image list emptied (the L box),
 the pair sweep reading a fixed 3x3 instead of the ring (a bar along `2 a1 + a2` on the square,

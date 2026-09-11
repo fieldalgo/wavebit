@@ -29,9 +29,7 @@ from wavebit._core.lattice import as_lattice, reduced_basis
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from gamma_instruments import band_error, gamma_points, mutated  # noqa: E402
-from test_gamma_layers import (_abc_band_gate, _abc_column_exact,  # noqa: E402
-                               _k_column_above_the_seam_end,
-                               _stacked_off_centre_cross_pair_is_exact)
+from test_gamma_layers import _stacked_off_centre_cross_pair_is_exact  # noqa: E402
 
 PERIOD = 700.0
 EPS_HI = 12.25
@@ -447,18 +445,77 @@ def _the_350_golden():
     assert _total(SQUARE, _box(lx=350.0, ly=350.0)) == pytest.approx(0.892284142298975, abs=1e-9)
 
 
-def _rotated_seam_reads_its_own_axis():
-    # K turned by 0.3 rad with its cell: the seam normal is (cos, sin), which the tie's (1, 0)
-    # fallback -- where a sign forced opposed sends every sample -- is 17 deg away from.
-    turn = 0.3
-    rot = np.array([[np.cos(turn), -np.sin(turn)], [np.sin(turn), np.cos(turn)]])
-    bars = [dict(_box(lx=350.0, ly=PERIOD, angle=turn, material=4.0),
-                 cx=-175.0 * np.cos(turn), cy=-175.0 * np.sin(turn)),
-            dict(_box(lx=350.0, ly=PERIOD, angle=turn, material=9.0),
-                 cx=175.0 * np.cos(turn), cy=175.0 * np.sin(turn))]
-    n_x, n_y = P.normal_vector_field_analytical(np, (128, 128), bars, np.float64,
-                                                as_lattice(lattice=rot @ SQUARE))
-    assert np.abs(np.abs(n_x * np.cos(turn) + n_y * np.sin(turn)) - 1.0).max() < 1e-15
+def _layer_total(shapes, order=4, normal_grid=128):
+    """``sum(T)`` of a multi-shape layer on the square cell, at this file's operating point."""
+    P._PROJECTOR_CACHE.clear()
+    res = wavebit.rcwa(lattice=SQUARE, structure=[dict(background=1.0, shapes=shapes)],
+                       truncation_order=dict(u=order, v=order), normal_grid=normal_grid,
+                       **SOLVE_KW).solve()
+    return float(np.sum(np.asarray(res.T)))
+
+
+def _k_short(left=4.0, right=9.0):
+    """K: two 300 x 300 boxes abutting inside the cell, materials ``left | right``."""
+    return [_box(cx=-150.0, lx=300.0, ly=300.0, material=left),
+            _box(cx=150.0, lx=300.0, ly=300.0, material=right)]
+
+
+#: The seam contrast's three factors (``_piece_field``, block 3b), one instrument each. Every
+#: number here was measured on 2026-09-11 at order 4, against the mutant named beside it.
+
+def _the_seam_contrast_vanishes_with_the_contrast():
+    # The equality limit: T(9 + 1e-7 | 9) - T(9 | 9) reads 2.4e-9 at N = 128, Li's rule
+    # 2.3e-9. The contrast enters to the blend's own power, which is what makes the strip the
+    # seam claims linear in the contrast; to the first power it is a quarter-power wide and
+    # the step reads 2.3e-5 -- the width that sank the 2026-09-09 candidate.
+    step = _layer_total(_k_short(9.0 + 1e-7, 9.0)) - _layer_total(_k_short(9.0, 9.0))
+    assert abs(step) < 1e-8
+
+
+def _the_seam_is_oriented_by_the_materials():
+    # [A, B] against [B, A] at N = 504, where the first-shape anchor's translation is a whole
+    # number of pixels (108) and the two listings sample one field: 6e-15. An orientation read
+    # off the listing -- the co-oriented vector along the earlier shape's normal, which is
+    # what the record's sign did -- puts them 7.7e-4 apart, at N = 504 and at 512 alike.
+    assert abs(_layer_total(_k_short(), normal_grid=504)
+               - _layer_total(list(reversed(_k_short())), normal_grid=504)) < 1e-12
+
+
+def _the_seam_contrast_reads_opposed_pairs_only():
+    # Directly above the K seam's end (x = the seam line, y in (150, 300)) the four near faces
+    # tie at weight one: the two top faces read (0, 2), the one opposed pair of different owners
+    # leaks 2c along x with c = (5/13)**4, and the far faces and images make it
+    # c (1 - w_u) / (1 - w_v), 0.0240 at most on this column. Without the max(0, -n_a.n_b)
+    # gate the two perpendicular pairs add their (1, +-1) as well and double it, to 0.051.
+    A = as_lattice(lattice=SQUARE)
+    y = np.linspace(151.0, 299.0, 75)
+    n_x, _ = P._piece_field(np, np.full_like(y, PERIOD / 2.0), PERIOD / 2.0 + y, _k_short(),
+                            P.plan_gamma(_k_short(), A), None, A, np.float64)
+    assert np.abs(n_x).max() < 1.5 * (5.0 / 13.0) ** P._BLEND_EXPONENT
+
+
+def _an_off_centre_windowed_cross_pair_cancels_bitwise_over_its_run():
+    # The windowed twin of `_stacked_off_centre_cross_pair_is_exact`: a 500-tall box listed
+    # first, a 300-tall one abutting it 100 higher, both at an awkward offset, so the run is
+    # [-50, 250] along the primary's face and the two faces' own roundings of the normal
+    # coordinate differ (8.1e-28 against 3.2e-27 in n2). Over the run the partner reads the
+    # primary's n2, the two weights are one number, the dead seam cancels exactly and the tie
+    # reads the v axis: |n_x| 1.6e-15 at most on the line. A window built from the partner's
+    # half-length is [-50, 150] here -- too narrow, since the primary is the taller -- and
+    # the 50 unsubstituted samples over (150, 250) read their own rounding, weights 1 and
+    # 1/16, and the seam normal: |n_x| = 1.0. On the exact-centre columns every face reads an
+    # exact zero and no window can be told from another, which is why the A|B|C gates passed
+    # this mutant once the window stopped gating a sign.
+    off = 0.123456
+    tall = [_box(cx=-150.0 + off, lx=300.0, ly=500.0, material=4.0),
+            _box(cx=150.0 + off, lx=300.0, ly=300.0, cy=100.0, material=4.0)]
+    A = as_lattice(lattice=SQUARE)
+    plan = P.plan_gamma(tall, A)
+    assert {(pr.m, pr.n, pr.flush) for pr in plan.pairs} == {(0, 0, False)}
+    y = np.linspace(-49.0, 249.0, 150)
+    n_x, n_y = P._piece_field(np, np.full_like(y, PERIOD / 2.0 + off), PERIOD / 2.0 + y, tall,
+                              plan, None, A, np.float64)
+    assert np.abs(n_x).max() < 1e-12 and np.abs(np.abs(n_y) - 1.0).max() < 1e-12
 
 
 def _the_bar_along_two_a1_plus_a2_has_its_flush_pair():
@@ -513,6 +570,12 @@ named = mu_view([dict(left, material=Material(4.0, mu=1.0)), dict(right, materia
 got = P.normal_vector_field_analytical(np, (64, 64), absent, np.float64, A)
 want = P.normal_vector_field_analytical(np, (64, 64), named, np.float64, A)
 assert np.array_equal(got[0], want[0]) and np.array_equal(got[1], want[1])
+# The field cannot arbitrate this alone any more: the seam contrast is continuous in the
+# materials, so a permeability of 1 + 1e-9 beside 1.0 reads a contrast of (5e-10) ** 4 and
+# moves the field by nothing a float can hold. The slot the field reads is the instrument.
+slots = P._material_slots(np, absent, np.float64)
+assert complex(slots[1]) == 1.0 and complex(slots[0]) == 1.0, [complex(v) for v in slots]
+assert as_material(Material(9.0)).mu_value == 1.0
 """
 
 
@@ -596,10 +659,21 @@ MUTANTS = [
      'w.append(xp.where(on_gamma, xp.where(on_face, one, zero), ratio ** _BLEND_EXPONENT))',
      'w.append((d_min / xp.where(dk == d_min, one, dk)) ** _BLEND_EXPONENT)',
      _the_350_golden),
-    ('the seam sign forced opposed', P,
-     'signs[r] = xp.where(equal, as_array(xp, -1.0, dtype=dtype), as_array(xp, 1.0, dtype=dtype))',
-     'signs[r] = as_array(xp, -1.0, dtype=dtype)',
-     _rotated_seam_reads_its_own_axis),
+    # The seam contrast, 2026-09-11: a mutant per factor of block 3b. These replaced the three
+    # mutants of the record's material sign ('forced opposed', 'keyed on the q piece', 'keyed
+    # on the p piece'), whose line is gone.
+    ('the contrast enters to the first power', P,
+     'contrast = xp.astype(contrast, dtype) ** _BLEND_EXPONENT',
+     'contrast = xp.astype(contrast, dtype) ** 1',
+     _the_seam_contrast_vanishes_with_the_contrast),
+    ('the seam oriented by the listing instead of the materials', P,
+     'corr = contrast * mean * opposed * sign',
+     'corr = contrast * mean * opposed',
+     _the_seam_is_oriented_by_the_materials),
+    ('the opposed gate removed: every cross pair of pieces adds its difference', P,
+     'opposed = xp.where(dot < 0.0, -dot, zero)',
+     'opposed = one',
+     _the_seam_contrast_reads_opposed_pairs_only),
     ('fixed normals replaced by the foot direction', P,
      GROUPED_SUM, FOOT_SUM,
      _grating_exact_off_centre),
@@ -618,27 +692,22 @@ MUTANTS = [
      '        transform = reduction_transform(lattice)\n        reduced = reduced_basis(lattice, transform)\n',
      '        transform = ((1, 0), (0, 1))\n        reduced = reduced_basis(lattice, transform)\n',
      _unreduced_box_plans_as_its_reduction),
-    # C4, the per-run window and the per-pair sign. Four mutants that passed the 26 tests of
-    # this file's neighbours: every cross pair the suite had was flush with equal extents and
-    # no face carried two runs, so the window was the whole face everywhere they looked.
-    ('the sign window always open', P,
-     'hits[r] = xp.where(on_segment, one, pn2 / xp.where(total2 > 0, total2, one))',
-     'hits[r] = one',
-     _k_column_above_the_seam_end),
-    ('the sign keyed on the q piece', P,
-     'signs[r] = xp.where(equal, as_array(xp, -1.0, dtype=dtype), as_array(xp, 1.0, dtype=dtype))',
-     'signs[r] = next((signs[k] for k, pk in enumerate(plan.pairs[:r]) if pk.q == pr.q and k in '
-     'signs), xp.where(equal, as_array(xp, -1.0, dtype=dtype), as_array(xp, 1.0, dtype=dtype)))',
-     _abc_column_exact),
-    ('the sign keyed on the p piece', P,
-     'signs[r] = xp.where(equal, as_array(xp, -1.0, dtype=dtype), as_array(xp, 1.0, dtype=dtype))',
-     'signs[r] = next((signs[k] for k, pk in enumerate(plan.pairs[:r]) if pk.p == pr.p and k in '
-     'signs), xp.where(equal, as_array(xp, -1.0, dtype=dtype), as_array(xp, 1.0, dtype=dtype)))',
-     _abc_band_gate),
+    # C4, the per-run window. Of the four mutants that passed the 26 tests of this file's
+    # neighbours (every cross pair the suite had was flush with equal extents and no face
+    # carried two runs), the half-length window below is what is left; the substitution
+    # mutant after it was never one of the four. 'The sign window always open'
+    # (`hits[r] = one`) is dropped, not moved: since 2026-09-11 the sum reads no sign from a
+    # record, and the transfer that `hits` gates takes `moved` from both members of a record,
+    # which are opposed on one line -- neutral in the vector sum, so no instrument at the value
+    # can see it (the K contact step, the equality step and the listing gap all move by less
+    # than 1e-14 under it; measured). The run window still decides the substitution, and its
+    # mutant moved from the A|B|C band gate (3.71 deg when the window gated a sign; 0.3371 now,
+    # the unmutated field's own figure, a survivor) to the off-centre windowed pair, where a
+    # narrowed window leaves rounding uncancelled on the line.
     ("the run window built from the partner's half-length", P,
      'tx, ty, h_p = -pframe.sin, pframe.cos, pframe.b        # the u faces run along v',
      'tx, ty, h_p = -pframe.sin, pframe.cos, qframe.b        # the u faces run along v',
-     _abc_band_gate),
+     _an_off_centre_windowed_cross_pair_cancels_bitwise_over_its_run),
     ('the cross-pair substitution removed, flush and windowed', P,
      'if pr.flush:\n                        e2, n2 = pe2, pn2\n                    else:\n'
      '                        n2 = xp.where(on_segment, pn2, n2)',

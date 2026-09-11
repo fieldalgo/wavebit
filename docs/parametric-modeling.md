@@ -327,9 +327,17 @@ three. They are the ratio form now, `(d_min / d_j)^4`, direction-identical to th
 linear in the count, and since 2026-09-06 it is **one sum over every piece of every shape** —
 a box's four faces over their periodic images, a round shape's one piece — with no per-shape
 stage in between: two shapes that come into contact share a face line over a run, the plan
-(`parametric.plan_gamma`) records the pair, and their material slots decide whether the two
-faces cancel there (equal: the material runs on) or co-orient (different: the seam is an
-interface). The weights collapse to one piece's own normal exactly at its surface, so boundaries read
+(`parametric.plan_gamma`) records the pair and the two faces cancel there, and a seam between
+*different* materials is put back by the **seam contrast** (2026-09-11): after the sum, every
+pair of opposed pieces of different owners adds `c · h · max(0, −n_a·n_b) · (n_a − n_b)`, with
+`c = (|ε_a − ε_b| / (|ε_a| + |ε_b|))^4`, `h` the harmonic mean of the two weights and the
+difference pointed from the lower-|ε| shape to the higher — exact on the seam at any contrast,
+exactly zero for equal materials (the material runs on), continuous through contact and through
+material equality, and the same whichever shape is listed first. Until then the two material
+slots set a sign on the record — equal cancelled, different co-oriented along the first-listed
+shape's normal — which stepped at contact, at material equality and with the listing order
+(`normal-field-known-limits.md`, §8e). The weights collapse to one piece's own normal exactly at
+its surface, so boundaries read
 0.000 deg for any number of shapes, naming a shape a period over moves 5.3e−15, and the position
 gradient survives for rectangles as well as circles. See
 `parametric.normal_vector_field_analytical` and `_piece_field`. Why the `½`-symmetrization is

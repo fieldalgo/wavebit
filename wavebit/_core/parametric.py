@@ -93,10 +93,12 @@ branch, which the position gradient had been blocked on.
 an interface iff their materials differ** (2026-09-06, the second half). Two boxes that abut
 -- inside the cell, or one against the other's periodic image -- share a face line over a run,
 and the plan records that pair too. Over the run the two faces' weights are equal by the same
-bitwise construction a lone box uses across its own images, and the material slots decide the
-sign: equal materials cancel (two touching same-material bars solve as the one bar they are,
-to 1e-14 on the invariants), different ones co-orient so the seam's normal survives (the
-``eps 4 | eps 9`` seam used to be a null band). There is no per-shape stage in between: a
+bitwise construction a lone box uses across its own images, and the pair cancels (two touching
+same-material bars solve as the one bar they are, to 1e-14 on the invariants). A seam between
+two *different* materials is then put back co-oriented, in proportion to their contrast and at
+any gap (the seam contrast, 2026-09-11), so its normal survives -- the ``eps 4 | eps 9`` seam
+used to be a null band, then a binary sign that stepped at contact and at material equality.
+There is no per-shape stage in between: a
 two-stage blend switches extension at the moment of contact, measured as a 1.1e-2 step in
 ``sum(T)``, and a single sum over every piece has nothing to switch.
 
@@ -1235,7 +1237,7 @@ def _blind_plan(shapes, lattice):
 # ---------------------------------------------------------------------------- the replay
 
 def _material_slots(xp, shapes, dtype):
-    """Each shape's material slot as a 0-d array -- what a cross pair's sign compares.
+    """Each shape's material slot as a 0-d array -- what a seam's contrast reads.
 
     The slot's ``epsilon``, in both passes. In the permittivity pass that is the permittivity;
     in the permeability pass it is the permeability, because ``_mu_structure`` hands this
@@ -1400,24 +1402,53 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype, dyadic=False):
     ``a1 = (700, 0)``, ``a2 = (400, 700)``, or a grating written as a box on a hex cell -- and
     each covered run has to read the primary at *its* coincident instance. A flush record is the
     same segment and substitutes everywhere, tangential excess included; that is what a
-    quarter-turned grating needs. A cross pair (two shapes) reads the two material slots:
-    equal, and the partner's weight is subtracted from the primary's over the run they share --
-    the material runs on, no interface; different, and it is *added* -- the seam is an
-    interface and its normal survives (a null band, until 2026-09-06). The sign is a window in
-    ``sigma`` rebuilt from the traced run bounds (:func:`_run_window`), never one scalar per
-    piece: one face can be a pair member on several runs with different equalities.
-    On the shared line, transfer is one on the run and zero beyond it, preserving
-    the exact interface directions. Off the line, a normal squared distance n2
-    and tangential excess e give transfer n2/(n2+e**2), with one at e=0. This
-    removes the old jump along the ray extending each run endpoint. It introduces
-    no smoothing length. Tails of several runs on one partner are normalized
-    symmetrically to transfer at most its available weight. Same-material
-    transfers cancel algebraically, so only unequal-material extensions change.
-    This fixes the moving-end value step, not the separate closing-gap cusp.
-    Nothing decides *when*: a face one ulp
-    off its partner's line is carried continuously by the same blend, one on it cancels
-    identically, and a material swept through equality flips the sign live, with nothing to
-    invalidate.
+    quarter-turned grating needs. A cross pair (two shapes) cancels over the run it shares,
+    whatever the materials: the partner's weight is subtracted from the primary's, and the
+    transfer is one on the run, ``n2/(n2+e**2)`` off the line beyond its ends (a normal squared
+    distance ``n2`` and tangential excess ``e``, one at ``e=0``) and zero on the line beyond
+    them, with the tails of several runs on one partner normalized symmetrically. That
+    transfer moved a value step along the ray extending each run endpoint (2026-09-07); it
+    introduces no smoothing length. Since every record cancels it is algebraically neutral in
+    the vector sum -- both faces of a record are opposed on one line, so subtracting the same
+    ``moved`` from both changes nothing but rounding -- and it stays only until its removal
+    lands as its own change, so that this one leaves every same-material field bit for bit.
+
+    **A seam between different materials is put back by the seam contrast** (2026-09-11), not
+    by a sign on the record. Until then a cross pair read its two material slots as an
+    equality bit -- equal cancelled, different co-oriented -- which was right on the shared
+    line and wrong everywhere near it: two opposed faces a positive gap apart have no record,
+    so they cancelled by arithmetic whatever their materials, the strip between two boxes of
+    ``eps 4 | eps 9`` read the far faces' normal until the gap closed, and the answer stepped
+    at contact (-2.7e-3 at order 4) and again when a material swept through equality (-5e-3;
+    9e-2 on ``12.25 | 12.25 + 1e-3``); the co-oriented vector also lay along the *primary's*
+    normal, so the same structure listed ``[A, B]`` and ``[B, A]`` solved 1.5e-3 apart. Now,
+    after the sum, every pair of pieces of different owners adds
+    ``c * h * max(0, -n_a.n_b) * t`` with ``c = (|eps_a - eps_b| / (|eps_a| + |eps_b|))``
+    to the power :data:`_BLEND_EXPONENT`, ``h = 2 w_a w_b / (w_a + w_b)`` and ``t`` the
+    difference of the two directions, pointed from the lower-``|eps|`` shape to the higher.
+    On a live seam both weights are one and nothing else survives (``on_gamma`` zeroes every
+    other piece), so the direction is exact for any ``c > 0``; at a positive gap the pair's
+    cancelled part comes back in proportion to the contrast, the same on both sides of contact,
+    so the contact step is at rounding (2e-12); and as the materials approach equality
+    ``c -> 0`` and the field tends to the merged one -- with the blend's own power, so the
+    strip the seam claims shrinks *linearly* in the contrast, where a lower power leaves a
+    ``delta**(p/4)`` band and a bump of ``T`` against the material (the quarter-power width
+    that sank the 2026-09-09 material-contrast candidate). ``T(9 + delta | 9) - T(9 | 9)`` now
+    follows the explicit Li rule within 4% from ``delta = 1e-7`` to ``1``, the material and gap
+    derivatives match secants, and the vector's orientation is the materials', so the listing
+    order moves nothing (6e-15 at an integer-pixel anchor). Equal materials read ``c = 0`` and
+    the field is bit for bit what it was; a lossy seam of small contrast reads a weak
+    co-orientation, which Li's concurrent-jump argument says is proportionate (its factorization
+    error is second order in the jump). Off the interface this is an extension like every
+    other, judged on the gates: the band error against the seam-blind exact-interface oracle
+    fell from 0.35 to 0.24 degrees on the K seam (0.237 to 0.230 against the material-aware
+    one), and on a held-out matrix of contrasts, heights, a circle, angles and wavelengths the
+    contact step is below 1e-9 and the equality ramp has Li's sign and size in every cell,
+    within 5% in six of the nine Li cells and 7-23% in three (docs/normal-field-known-limits.md,
+    section 8e). Nothing decides *when*: a
+    face one ulp off its partner's line is carried continuously by the same blend, one on it
+    cancels identically, and a material swept through equality moves the contrast live, with
+    nothing to invalidate.
 
     **The tie.** Where the sum is exactly zero -- a cancelled pair's line (a run its partner
     covers), the midline of a surviving pair -- the direction is the axis of the pair that did
@@ -1468,8 +1499,9 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype, dyadic=False):
 
     # The pair records by role. A self pair substitutes within the box's own instance table,
     # over its own run (a flush one over the whole line); a cross pair carries a run window
-    # and a sign, both from the traced values.
-    self_records, cross_by_q, windows, signs = {}, {}, {}, {}
+    # from the traced values, and its materials' equality for the tie below -- the sum reads
+    # no sign from a record since 2026-09-11 (the seam contrast, 3b).
+    self_records, cross_by_q, windows, equalities = {}, {}, {}, {}
     for r, pr in enumerate(() if dyadic else plan.pairs):
         p, q = plan.pieces[pr.p], plan.pieces[pr.q]
         if p.shape == q.shape:
@@ -1480,8 +1512,7 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype, dyadic=False):
         cross_by_q.setdefault(pr.q, []).append(r)
         windows[r] = _run_window(xp, frames[p.shape], p.face, frames[q.shape], q.face,
                                  pr.m, pr.n, reduced, dtype)
-        equal = xp.all(slots[p.shape] == slots[q.shape])
-        signs[r] = xp.where(equal, as_array(xp, -1.0, dtype=dtype), as_array(xp, 1.0, dtype=dtype))
+        equalities[r] = xp.all(slots[p.shape] == slots[q.shape])
 
     # 1. Every piece's distance and each cross run's transfer at the nearest instance.
     d = [None] * len(plan.pieces)
@@ -1635,9 +1666,9 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype, dyadic=False):
         return xx, xy, yy, xp.conj(xy)
 
     # 3. The sum. A cross pair's partner hands its weight to the primary's axis over the run,
-    #    with the material sign; every face then contributes along its own outward normal, and
-    #    each box's two opposed faces are differenced *before* the rotation so that a pair's
-    #    cancellation is an exact zero on the box's own axis.
+    #    to cancel; every face then contributes along its own outward normal, and each box's
+    #    two opposed faces are differenced *before* the rotation so that a pair's cancellation
+    #    is an exact zero on the box's own axis.
     own_w = list(w)
     for r, pr in enumerate(plan.pairs):
         if r not in windows:
@@ -1651,7 +1682,7 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype, dyadic=False):
                 others = others + transfer[other]
         moved = (transfer[r] / others) * w[pr.q]
         own_w[pr.q] = own_w[pr.q] - moved
-        own_w[pr.p] = own_w[pr.p] + signs[r] * moved
+        own_w[pr.p] = own_w[pr.p] - moved
     sx, sy = zero, zero
     for i, frame in frames.items():
         wu = own_w[index[(i, '+u')]] - own_w[index[(i, '-u')]]
@@ -1662,6 +1693,42 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype, dyadic=False):
         sx = sx + w[k] * gx
         sy = sy + w[k] * gy
 
+    # 3b. The seam contrast. Every opposed pair cancelled above, at any gap and over a shared
+    #     run through its record; a seam between two DIFFERENT materials is put back here,
+    #     co-oriented, in proportion to the contrast -- see the docstring. Pointwise in the
+    #     weights, so the tiled path is bit-identical to the whole-grid one; it reads no
+    #     record, so a positive gap and a contact are one formula. Equal materials add exactly
+    #     zero and leave the field bit for bit.
+    if slots is not None and not dyadic and len(plan.pieces) > 1:
+        dirs = {}
+        for i, frame in frames.items():
+            dirs[index[(i, '+u')]] = (frame.cos * one, frame.sin * one)
+            dirs[index[(i, '-u')]] = (-frame.cos * one, -frame.sin * one)
+            dirs[index[(i, '+v')]] = (-frame.sin * one, frame.cos * one)
+            dirs[index[(i, '-v')]] = (frame.sin * one, -frame.cos * one)
+        for k, g in round_dir.items():
+            dirs[k] = g
+        pieces = plan.pieces
+        for a in range(len(pieces)):
+            for b in range(a + 1, len(pieces)):
+                if pieces[a].shape == pieces[b].shape or a not in dirs or b not in dirs:
+                    continue
+                ea, eb = slots[pieces[a].shape], slots[pieces[b].shape]
+                contrast = xp.abs(ea - eb) / (xp.abs(ea) + xp.abs(eb))
+                contrast = xp.astype(contrast, dtype) ** _BLEND_EXPONENT
+                nax, nay = dirs[a]
+                nbx, nby = dirs[b]
+                dot = nax * nbx + nay * nby
+                opposed = xp.where(dot < 0.0, -dot, zero)
+                total = w[a] + w[b]
+                mean = 2.0 * w[a] * w[b] / xp.where(total > 0.0, total, one)
+                # from the lower-|eps| shape toward the higher: the materials' rule, not the
+                # listing's, and fragile nowhere for real materials
+                sign = xp.where(xp.abs(eb) < xp.abs(ea), -one, one)
+                corr = contrast * mean * opposed * sign
+                sx = sx + corr * (nax - nbx)
+                sy = sy + corr * (nay - nby)
+
     # 4. The tie.
     tie = (sx == 0.0) & (sy == 0.0)
     cancelled = {}
@@ -1669,7 +1736,7 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype, dyadic=False):
         p, q = plan.pieces[pr.p], plan.pieces[pr.q]
         same = d[pr.p] == d[pr.q]
         if r in windows:
-            same = same & (signs[r] < 0.0)
+            same = same & equalities[r]
         for key in ((p.shape, p.face[1]), (q.shape, q.face[1])):
             cancelled[key] = same if key not in cancelled else (cancelled[key] | same)
     none = tie & ~tie
@@ -2097,24 +2164,23 @@ def _static_complex(v):
     return complex(v)
 
 
-def _equality_bits(plan, shapes):
-    """Whether each cross pair's two materials are equal, concretely -- or ``None`` if traced.
+def _material_key(shapes):
+    """Every shape's material slot, concretely, for a layer of several shapes -- else nothing.
 
-    The one material fact the field reads (:func:`_piece_field`): a seam cancels or survives
-    by the equality of its two slots, never by their values. So this is what a cache key holds
-    for a layer with a cross pair -- ``4 | 9`` and ``4 | 12`` share an entry, ``4 | 4`` gets
-    another -- and a pair-free layer holds nothing, so its material sweeps hit as they always
-    did. A traced material's equality is unknown, and the answer is ``None``: rebuild.
+    What the field reads of the materials (:func:`_piece_field`, the seam contrast): for a
+    multi-shape layer the contrast of every pair of owners, a continuous function of their
+    values, so the key holds each value and a material sweep rebuilds per value -- ``4 | 9``
+    and ``4 | 12`` are two entries. A lone shape's field reads no material, so its key holds
+    none and its sweeps hit as they always did. Until 2026-09-11 this held only the equality
+    bit of each cross pair, which was every material fact the field then read; a key that
+    stopped there now would serve ``4 | 9``'s coefficients to ``4 | 12``, and a torch material
+    with ``requires_grad`` on a pair-free layer would be built into stored coefficients. A
+    traced or autograd value raises here, and the key is ``None``: rebuild.
     """
-    bits = []
-    for pr in plan.pairs:
-        i, j = plan.pieces[pr.p].shape, plan.pieces[pr.q].shape
-        if i == j:
-            continue
-        a = _static_complex(as_material(shapes[i].get('material', 1.0), 'shape material').epsilon)
-        b = _static_complex(as_material(shapes[j].get('material', 1.0), 'shape material').epsilon)
-        bits.append(a == b)
-    return tuple(bits)
+    if len(shapes) < 2:
+        return ()
+    return tuple(_static_complex(as_material(shape.get('material', 1.0), 'shape material').epsilon)
+                 for shape in shapes)
 
 
 def _projector_cache_key(xp, built, grid_shape, lattice, half_width_u, half_width_v, dtype,
@@ -2123,10 +2189,10 @@ def _projector_cache_key(xp, built, grid_shape, lattice, half_width_u, half_widt
 
     Everything :func:`normal_vector_field_analytical` reads goes in and nothing else does. It
     reads each shape through :func:`shape_geometry`, the plan by content, and of the materials
-    only what a cross pair's sign reads -- the *equality* of its two slots
-    (:func:`_equality_bits`) -- which is what makes the cache worth having: a sweep over the
-    material of a pair-free layer leaves this key alone, and one on a seam rebuilds only when
-    it crosses equality. ``None`` means at least one value is traced or under autograd, so the
+    what the seam contrast reads -- every shape's slot, for a layer of several shapes, and
+    nothing for a lone one (:func:`_material_key`) -- which is what makes the cache worth
+    having for the lone shape: its material sweeps hit, and a multi-shape sweep rebuilds per
+    value since 2026-09-11. ``None`` means at least one value is traced or under autograd, so the
     build has to happen again -- the gradient runs through it. ``plan`` is ``None`` for a
     traced layer, and then the shapes are too, so the key is.
     """
@@ -2135,7 +2201,7 @@ def _projector_cache_key(xp, built, grid_shape, lattice, half_width_u, half_widt
                                  for v in shape_geometry(shape, lattice))
                            for shape in built)
         lat = tuple(_static_float(v) for row in lattice for v in row)
-        bits = () if plan is None else _equality_bits(plan, built)
+        bits = _material_key(built)
     except (TypeError, ValueError):
         return None
 
@@ -2303,9 +2369,10 @@ def normal_projector_coeffs(xp, shapes, grid_shape, lattice, half_width_u, half_
     # ``(cx, cy)`` are, which makes a position sweep -- and a position *gradient*, which runs
     # through the phase -- reuse one field instead of rebuilding it every step. (Several shapes
     # are keyed on their offsets from the first, which a rigid slide changes by an ulp, so a
-    # multi-shape slide rebuilds.) A material sweep
-    # reuses it for the other reason: the key holds no material at all because the build reads
-    # none. Measured on a five-point sweep at ``normal_grid = 1024``, ``truncation_order = 4``: the call
+    # multi-shape slide rebuilds.) A lone shape's material sweep reuses it for the other reason:
+    # its key holds no material because its build reads none; a multi-shape layer's key holds
+    # every material since 2026-09-11 (the seam contrast reads them), so its sweeps rebuild.
+    # Measured on a five-point sweep at ``normal_grid = 1024``, ``truncation_order = 4``: the call
     # 83% of the wall clock for one shape and 93% for six.
     if plan is None:
         plan = plan_gamma(built, lattice)
