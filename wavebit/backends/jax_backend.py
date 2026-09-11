@@ -66,6 +66,16 @@ class _BaseRCWA(CoreSolveMixin):
         """
         return jax.default_device(self.device[0])
 
+    def _eager(self):
+        """`jax.ensure_compile_time_eval`: a device move is carried out in a trace, not staged.
+
+        See :meth:`CoreSolveMixin._eager`. Inside ``jax.jit`` a ``device_put`` of a concrete
+        array is otherwise a step of the traced program and hands back a tracer; under this
+        context it moves the array now and hands back the array (measured on jax 0.11.0 with two
+        host devices). A tracer still stages, which is what a tracer should do.
+        """
+        return jax.ensure_compile_time_eval()
+
     @property
     def _array_device(self):
         """The first of `self.device`, so every array a setter builds is *committed* there.

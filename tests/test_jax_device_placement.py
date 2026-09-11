@@ -86,7 +86,7 @@ def _solvers(device_kw, foreign):
     }
 
 
-def _touch(device_kw, foreign=None):
+def _touch(device_kw, foreign=None, move_to=None):
     """Drive every public entry point; return ``({tag: array}, {tag: what it raised})``.
 
     The solver itself is read as a pytree before and after, because its children are what
@@ -113,6 +113,11 @@ def _touch(device_kw, foreign=None):
                 found[f'{tag}[{i}]'] = leaf
 
     solvers = _solvers(device_kw, _foreign() if foreign is None else foreign)
+    if move_to is not None:
+        # Built on one device and then moved: a live solver's arrays follow `device`, or every
+        # entry point below reads two devices at once.
+        for s in solvers.values():
+            s.device = move_to
     for name, s in solvers.items():
         take(f'{name}/constructed', lambda: s)
         take(f'{name}/eps_conv_matrices', lambda: tuple(s.eps_conv_matrices()))
@@ -132,9 +137,9 @@ def _touch(device_kw, foreign=None):
     return found, raised
 
 
-def misplaced(device_kw, expected, foreign=None):
+def misplaced(device_kw, expected, foreign=None, move_to=None):
     """Every array `_touch` produced off ``expected``, and every entry point that raised."""
-    found, raised = _touch(device_kw, foreign)
+    found, raised = _touch(device_kw, foreign, move_to)
     return ([f'{tag} on {sorted(str(d) for d in a.devices())}'
              for tag, a in found.items() if a.devices() != {expected}]
             + [f'{tag} raised {msg}' for tag, msg in raised.items()])
@@ -151,9 +156,8 @@ def poisoned(first, second):
     too, on any solver in the process.
 
     The trigger here is a device change on a live solver, which keeps its stored arrays where
-    they were. Whether that solve itself answers is not asked: moving a live solver is a
-    separate question. What is asked is only that a fresh solver on ``second`` is not handed
-    ``first``'s arrays.
+    they were. Whether that solve itself answers is :func:`moved`'s question. What is asked
+    here is only that a fresh solver on ``second`` is not handed ``first``'s arrays.
     """
     import wavebit
     wavebit.enable_x64()
@@ -188,6 +192,179 @@ def poisoned(first, second):
     return f'a fresh solver on {second} answered on {off}' if off else 'OK'
 
 
+def moved(first, second):
+    """What a solver built on ``first`` and moved to ``second`` gets wrong, against one born there.
+
+    Moving is a promise about the arrays: the moved solver holds nothing on ``first``, and its
+    solve is the one a solver built on ``second`` gives -- bit for bit, since the two run the
+    same programs on the same device. Both routes are asked: the attribute, and the
+    `solve(device=...)` keyword, whose call opens its device scope before the keyword is
+    assigned -- eagerly, inside `jax.jit`, and under `jax.grad` with a differentiated keyword
+    given *before* ``device``. What the solver holds is read off the whole instance, the
+    solve's own state included, right after the move and after each call; a cell basis built
+    from JAX arrays is asked about separately, because no other scene stores one. A field
+    reconstruction from a solve taken on ``first`` is refused as a changed scene, the way a
+    changed width is, and answers on ``second`` once solved again.
+    """
+    import jax
+    bad = []
+
+    def on(tree):
+        leaves = [x for x in jax.tree_util.tree_leaves(tree) if isinstance(x, jax.Array)]
+        return {str(d) for x in leaves for d in x.devices()}, leaves
+
+    def held_off(s):
+        """Each slot of the instance holding something off ``second``, solve state included.
+
+        The pytree's children are not enough: the solve's scattering matrix, its modes and `T1`
+        are not children, and a partial move that skipped them passed a children-only check.
+        Named by slot, so that one solver's findings can be compared with another's.
+        """
+        import dataclasses
+        found = set()
+        for slot, value in vars(s).items():
+            stack = [value]
+            while stack:
+                v = stack.pop()
+                if isinstance(v, jax.core.Tracer):
+                    found.add(f'{slot} holds a tracer')
+                elif isinstance(v, jax.Array):
+                    found |= {f'{slot} on {d}' for d in v.devices() if str(d) != str(second)}
+                elif isinstance(v, dict):
+                    stack.extend(v.values())
+                elif isinstance(v, (list, tuple)):
+                    stack.extend(v)
+                elif dataclasses.is_dataclass(v) and not isinstance(v, type):
+                    stack.extend(getattr(v, f.name) for f in dataclasses.fields(v))
+        return sorted(found)
+
+    def same(a, b):
+        return len(a) == len(b) and all(
+            x.shape == y.shape and x.dtype == y.dtype
+            and np.array_equal(np.asarray(x), np.asarray(y)) for x, y in zip(a, b))
+
+    want = {name: on(s.solve())[1]
+            for name, s in _solvers(dict(device=second), _foreign()).items()}
+    by_attribute = _solvers(dict(device=first), _foreign())
+    by_keyword = _solvers(dict(device=first), _foreign())
+    for name in want:
+        by_attribute[name].solve()
+        by_attribute[name].device = second
+        off = held_off(by_attribute[name])
+        if off:
+            bad.append(f'{name}: right after the move the solver still holds arrays on {off}')
+        routes = (('attribute', by_attribute[name].solve),
+                  ('keyword', lambda n=name: by_keyword[n].solve(device=second)))
+        for route, run in routes:
+            try:
+                got = run()
+            except Exception as exc:                   # noqa: BLE001 - reported, not hidden
+                bad.append(f'{name}/{route} raised {type(exc).__name__}: '
+                           f'{str(exc).splitlines()[0][:160]}')
+                continue
+            devices, leaves = on(got)
+            if devices != {str(second)}:
+                bad.append(f'{name}/{route} answered on {sorted(devices)}')
+            elif not same(leaves, want[name]):
+                bad.append(f'{name}/{route} differs from a solver born on {second}')
+        for route, s in (('attribute', by_attribute[name]), ('keyword', by_keyword[name])):
+            off = held_off(s)
+            if off:
+                bad.append(f'{name}/{route}: after its solve the solver holds arrays on {off}')
+
+    s = _solvers(dict(device=first), _foreign())['magnetic']
+    s.solve()
+    s.device = second
+    try:
+        s.reconstruct_field(4, 4, 2)
+        bad.append('magnetic: a field was reconstructed from a solve taken on the old device')
+    except RuntimeError as exc:
+        if 'scene has changed' not in str(exc):
+            bad.append(f'magnetic: refused for another reason: {str(exc).splitlines()[0][:160]}')
+    except Exception as exc:                           # noqa: BLE001 - reported, not hidden
+        bad.append(f'magnetic: reconstruct raised {type(exc).__name__}: '
+                   f'{str(exc).splitlines()[0][:160]}')
+    try:
+        s.solve()
+        devices = on(s.reconstruct_field(4, 4, 2))[0]
+        if devices != {str(second)}:
+            bad.append(f'magnetic: the field after re-solving is on {sorted(devices)}')
+    except Exception as exc:                           # noqa: BLE001 - reported, not hidden
+        bad.append(f'magnetic: re-solve and reconstruct raised {type(exc).__name__}: '
+                   f'{str(exc).splitlines()[0][:160]}')
+
+    import jax.numpy as jnp
+    import wavebit
+
+    def oblique(device):
+        rng = np.random.default_rng(1)
+        eps = np.where(rng.random((1, 8, 8)) < 0.4, 5.76, 1.0)
+        basis = wavebit.Lattice(jnp.asarray([P, 0.0]), jnp.asarray([0.2 * P, 0.9 * P]), False)
+        return wavebit.rcwa(backend=1, structure=eps, lattice=basis, truncation_order=[2, 2],
+                            thickness=[H], wavelength=WL, factorization='nvf', device=device)
+
+    try:
+        s = oblique(first)
+        s.solve()
+        s.device = second
+        off = held_off(s)
+        if off:
+            bad.append(f'oblique: right after the move the solver still holds arrays on {off}')
+        if not same(on(s.solve())[1], on(oblique(second).solve())[1]):
+            bad.append(f'oblique: differs from a solver born on {second}')
+    except Exception as exc:                           # noqa: BLE001 - reported, not hidden
+        bad.append(f'oblique raised {type(exc).__name__}: {str(exc).splitlines()[0][:160]}')
+
+    def total(r):
+        return jnp.sum(jnp.real(r.T))
+
+    def exact(a, b):
+        return np.array_equal(np.asarray(a), np.asarray(b))
+
+    # Inside `jax.jit`: the move is a fact about the solver, carried out when the trace runs.
+    for name in ('1d', 'magnetic', 'shapes'):
+        try:
+            s = _solvers(dict(device=first), _foreign())[name]
+            born = _solvers(dict(device=second), _foreign())[name]
+            got = jax.jit(lambda w: total(s.solve(device=second, wavelength=w)))(WL)
+            ref = jax.jit(lambda w: total(born.solve(wavelength=w)))(WL)
+            if {str(d) for d in got.devices()} != {str(second)}:
+                bad.append(f'{name}/jit answered on {sorted(str(d) for d in got.devices())}')
+            elif not exact(got, ref):
+                bad.append(f'{name}/jit gave {float(got)!r} against {float(ref)!r} born there')
+            # A jitted solve that keeps its field state leaves that state traced on ANY solver,
+            # moved or not -- `T1`, the modes and the scattering matrix of the magnetic scene,
+            # measured on develop e8fcf67 with no move involved, and kept from use by the
+            # reconstruction's refusal of a traced scene. What is asked here is only that the
+            # move adds nothing to it.
+            off = sorted(set(held_off(s)) - set(held_off(born)))
+            if off:
+                bad.append(f'{name}/jit: after the call the moved solver, unlike one born '
+                           f'there, holds {off}')
+            if not same(on(s.solve())[1], on(born.solve())[1]):
+                bad.append(f'{name}/jit: the eager solve after it differs from one born there')
+        except Exception as exc:                       # noqa: BLE001 - reported, not hidden
+            bad.append(f'{name}/jit raised {type(exc).__name__}: {str(exc).splitlines()[0][:160]}')
+
+    # Under `jax.grad`, a differentiated keyword given before `device`: its setter placed it
+    # on the old device, so the move has to take the tracer as well.
+    try:
+        s = _solvers(dict(device=first), _foreign())['1d']
+        born = _solvers(dict(device=second), _foreign())['1d']
+        got = jax.grad(lambda w: total(s.solve(wavelength=w, device=second)))(WL)
+        ref = jax.grad(lambda w: total(born.solve(wavelength=w)))(WL)
+        if not exact(got, ref):
+            bad.append(f'1d/grad gave {float(got)!r} against {float(ref)!r} born there')
+        off = held_off(s)
+        if off:
+            bad.append(f'1d/grad: after the call the solver holds arrays on {off}')
+        if not same(on(s.solve())[1], on(born.solve())[1]):
+            bad.append('1d/grad: the eager solve after it differs from one born there')
+    except Exception as exc:                           # noqa: BLE001 - reported, not hidden
+        bad.append(f'1d/grad raised {type(exc).__name__}: {str(exc).splitlines()[0][:160]}')
+    return bad
+
+
 _CHILD = """
     import sys
     sys.path.insert(0, {tests!r})
@@ -199,6 +376,8 @@ _CHILD = """
 
     # Asked for the second device by object; JAX's default is still the first.
     bad = misplaced(dict(device=cpus[1]), cpus[1])
+    # Built on the first device and moved to the second: everything follows the move.
+    bad += misplaced(dict(device=cpus[0]), cpus[1], move_to=cpus[1])
 
     # JAX's default moved to the second device. The documented default and 'cpu' both
     # resolve to jax.devices('cpu')[0], so everything must stay on the first -- the CUDA
@@ -206,6 +385,7 @@ _CHILD = """
     jax.config.update('jax_default_device', cpus[1])
     assert jnp.zeros(1).devices() == {{cpus[1]}}, 'the default did not move: vacuous check'
     bad += misplaced({{}}, cpus[0]) + misplaced(dict(device='cpu'), cpus[0])
+    bad += misplaced(dict(device=cpus[1]), cpus[0], move_to=cpus[0])
     print('\\n'.join(bad) if bad else 'OK')
 """
 
@@ -217,6 +397,17 @@ _POISON_CHILD = """
     assert len(cpus) == 2, f'the forced second host device did not appear: {{cpus}}'
     from test_jax_device_placement import poisoned
     print(poisoned(cpus[1], cpus[0]))
+"""
+
+_MOVE_CHILD = """
+    import sys
+    sys.path.insert(0, {tests!r})
+    import jax
+    cpus = jax.devices('cpu')
+    assert len(cpus) == 2, f'the forced second host device did not appear: {{cpus}}'
+    from test_jax_device_placement import moved
+    bad = moved(cpus[1], cpus[0]) + moved(cpus[0], cpus[1])
+    print('; '.join(bad) if bad else 'OK')
 """
 
 
@@ -301,3 +492,27 @@ def test_a_cpu_solve_puts_nothing_on_the_gpu():
     bad = misplaced(dict(device='gpu'), gpus[0], foreign)
     assert not bad, 'a GPU solve placed arrays elsewhere:\n' + '\n'.join(bad)
     assert allocations() > before, 'the counter did not move for a GPU solve: it measures nothing'
+
+
+def test_a_moved_solver_answers_as_one_built_where_it_was_moved():
+    """`solver.device = X` and `solve(device=X)` move a live solver, both ways, on two host devices.
+
+    Measured 2026-09-11 before the move existed: the setter rebound the device and left every
+    stored array where the setters had committed it, so the next solve raised `Received
+    incompatible devices` -- a new-device order range against an old-device period -- by
+    either route. The keyword also opened the old device's scope, before it was assigned.
+    """
+    lines = _two_host_devices(_MOVE_CHILD)
+    assert lines and lines[-1] == 'OK', '; '.join(lines)[-3000:]
+
+
+def test_a_moved_solver_answers_as_one_built_where_it_was_moved_cpu_and_gpu():
+    """The same, between the CPU and the GPU, in both directions -- where a GPU is visible."""
+    import jax
+    gpus = [d for d in jax.devices() if d.platform == 'gpu']
+    if not gpus:
+        pytest.skip('no GPU visible to JAX; the two-host-device test covers this here')
+    cpu = jax.devices('cpu')[0]
+    bad = moved(cpu, gpus[0]) + moved(gpus[0], cpu)
+    assert not bad, '; '.join(bad)
+

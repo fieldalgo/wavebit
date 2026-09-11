@@ -1254,12 +1254,90 @@ class CoreSolveMixin:
         stays the caller's: `jax.grad` builds its seed and a few zeros on JAX's default device
         (58 small GPU allocations around a CPU solve that made none, measured), and a gradient
         comes back on the device of the input it was taken with respect to.
+
+        **Assigning it moves the solver**, on JAX and Torch alike: every array the solver holds
+        -- the ones its setters built and the ones a caller handed in -- goes to the new device
+        (:meth:`_move_to_device`), so a solver moved to ``X`` answers what one built on ``X``
+        answers, bit for bit. ``solve(device=X)`` moves it too, and like any concrete condition
+        it stays moved -- inside ``jax.jit`` and ``jax.grad`` as well, where the move is carried
+        out when the trace runs rather than staged into it. A field reconstruction from a solve taken before the move is refused as
+        a changed scene; solve again first.
         """
         return self._device
 
     @device.setter
     def device(self, value):
-        self._device = self._resolve_device(value)
+        new = self._resolve_device(value)
+        # The constructor's assignment is the first and has nothing to move. Read from the
+        # instance, so a class attribute could never pass for a device this solver was on.
+        moving = '_device' in self.__dict__ and self._device != new
+        self._device = new
+        if moving:
+            self._move_to_device()
+
+    def _move_to_device(self):
+        """Put every array this solver holds on its device -- what assigning ``device`` means.
+
+        The setters commit what they store to the device current when they run, and a
+        committed operand outranks the device scope. So a device assigned *after* them used to
+        leave every stored array behind: measured 2026-09-11 on two host devices, a solver
+        built on ``cpu:1`` and moved to ``cpu:0`` raised ``Received incompatible devices`` on
+        its next solve (a new-device order range against the old-device period), by the
+        attribute and by ``solve(device=...)`` alike. Before the arrays were committed at all,
+        the same call answered -- on JAX's default device, whatever ``device`` said.
+
+        The instance is walked rather than its slots listed, for the reason
+        :meth:`_conditions` gives: a list goes stale on the first new slot. The walk enters
+        the containers :func:`_holds_tracer` enters -- dicts, lists, tuples (the solve's
+        :class:`~wavebit._core.scattering.ScatteringMatrix` among them), a
+        :class:`~wavebit._core.lattice.Lattice`'s two vectors and a
+        :class:`~wavebit._core.domain.Material`'s two slots -- and moves each native array
+        with :meth:`_placed`, so a moved solver holds what one built on the new device would.
+        Containers are rebuilt, never mutated: a caller may hold the same list or dict.
+
+        Inside a trace the walk runs under :meth:`_eager`, so a concrete slot is moved for real
+        rather than staged. Staged, every slot came back a tracer: measured 2026-09-11, a jitted
+        ``solve(device=X)`` on a TE solver at ``phi = 0`` was refused as "tetm and a nonzero
+        phi", because the azimuth check could no longer read ``phi``. A tracer is moved too --
+        a keyword's value that arrived before ``device`` in the same call, which its setter
+        placed on the old device. Under ``jax.grad`` that move is eager and keeps the
+        derivative; under ``jax.jit`` it is a transfer in the program. Left where it was,
+        ``jax.grad`` of ``solve(wavelength=w, device=X)`` raised ``Received incompatible
+        devices`` while the reverse keyword order answered.
+
+        On Torch the move is ``.to()``: differentiable, but a new tensor, so an optimizer that
+        holds the old leaf no longer reaches the solver -- as with any solver rebuilt on
+        another device.
+        """
+        with self._eager():
+            for slot, value in list(vars(self).items()):
+                moved = self._moved(value)
+                if moved is not value:
+                    object.__setattr__(self, slot, moved)
+
+    def _moved(self, value):
+        """``value`` with every native array in it on this solver's device, or ``value`` itself.
+
+        Itself -- the same object -- when nothing in it moved, so a slot already in place is not
+        rebuilt and the walk costs nothing on a solver that never changes device.
+        """
+        if isinstance(value, dict):
+            items = {k: self._moved(v) for k, v in value.items()}
+            return value if all(items[k] is value[k] for k in value) else type(value)(items)
+        if isinstance(value, (list, tuple)):
+            items = [self._moved(v) for v in value]
+            if all(a is b for a, b in zip(items, value)):
+                return value
+            if hasattr(value, '_fields'):                  # a NamedTuple
+                return type(value)(*items)
+            return type(value)(items)
+        if isinstance(value, _lattice.Lattice):
+            u, v = self._moved(value.u), self._moved(value.v)
+            if u is value.u and v is value.v:
+                return value
+            import dataclasses
+            return dataclasses.replace(value, u=u, v=v)
+        return self._placed(value)       # a native array or a Material; anything else is itself
 
     def _resolve_device(self, value):
         """A device request as this backend's own device object. One device here.
@@ -1582,6 +1660,16 @@ class CoreSolveMixin:
         `nullcontext` on every backend that does not need one -- NumPy has no device and
         Torch places tensors at creation. JAX overrides it, because `jax.default_device` is
         the only way to say it there and the answer is scoped rather than an argument.
+        """
+        return _contextlib.nullcontext()
+
+    def _eager(self):
+        """Evaluate what is concrete now, even inside a trace -- as a context manager.
+
+        `nullcontext` on NumPy and Torch, which stage nothing. JAX overrides it with
+        `jax.ensure_compile_time_eval`. :meth:`_move_to_device` runs under it, because a move
+        is a fact about the solver rather than a step of the traced program: staged, it leaves
+        a tracer in every slot it touches.
         """
         return _contextlib.nullcontext()
 
@@ -2486,6 +2574,7 @@ class CoreFactorizationMixin:
         """
         absent = object()
         held = {}
+        device_before = self._device
         try:
             self._refuse_unknown_conditions(kwargs)
             for name, value in kwargs.items():
@@ -2496,13 +2585,25 @@ class CoreFactorizationMixin:
                     was = before.get(slot, absent)
                     if slot not in held and now is not was and _holds_tracer(now):
                         held[slot] = was
-            yield
+            if self._device != device_before:
+                # `solve(device=X)`: the decorator opened the scope of the device this solver
+                # was on, before the keyword was assigned. The new device's opens inside it.
+                with self._device_scope():
+                    yield
+            else:
+                yield
         finally:
-            for slot, value in held.items():
-                if value is absent:
-                    self.__dict__.pop(slot, None)
-                else:
-                    object.__setattr__(self, slot, value)
+            # A slot put back after `device` moved the solver goes back on the device it is on
+            # now: its snapshot was taken before the move. Put back as it was, a jitted
+            # `solve(device=X)` left the solver reporting X over the old device's arrays, and
+            # every eager solve after it raised `Received incompatible devices`.
+            moved = self._device != device_before
+            with self._eager():
+                for slot, value in held.items():
+                    if value is absent:
+                        self.__dict__.pop(slot, None)
+                    else:
+                        object.__setattr__(self, slot, self._moved(value) if moved else value)
 
     def _raster_types(self):
         """The array types a raster may arrive as: NumPy's, plus this backend's own.
@@ -2766,6 +2867,11 @@ class CoreFactorizationMixin:
                 # `complex_dtype=1` moves `theta=0.1` and leaves `theta=0.0` alone, so without
                 # this the refusal would depend on whether a value happens to survive float32.
                 self._complex_dtype,
+                # The device, for the width's reason: a move carries the conditions over, and a
+                # field is a claim about one solve on one device -- the moved solver's next
+                # solve is the one that answers there. As text, so a device's own equality
+                # (a JAX list, a Torch object) never decides a refusal.
+                str(self._device),
             )
         except (TypeError, ValueError, RuntimeError):
             # Three ways a condition declines to be a number, and all three mean the same
