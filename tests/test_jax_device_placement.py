@@ -140,6 +140,54 @@ def misplaced(device_kw, expected, foreign=None):
             + [f'{tag} raised {msg}' for tag, msg in raised.items()])
 
 
+def poisoned(first, second):
+    """Whether a solve that mixed two devices leaves a cache entry that breaks the next solver.
+
+    The shape path's projector cache is keyed on the device a fresh array lands on -- the
+    scope's -- while the build follows whatever committed operand it reads. A shape value
+    committed to ``first``, read under ``second``'s scope, filed an entry keyed on ``second``
+    that held ``first``'s arrays. The solve that filed it raised at once, but the entry stayed,
+    and every later solve of that geometry on ``second`` raised `Received incompatible devices`
+    too, on any solver in the process.
+
+    The trigger here is a device change on a live solver, which keeps its stored arrays where
+    they were. Whether that solve itself answers is not asked: moving a live solver is a
+    separate question. What is asked is only that a fresh solver on ``second`` is not handed
+    ``first``'s arrays.
+    """
+    import wavebit
+    wavebit.enable_x64()
+    import jax
+    import jax.numpy as jnp
+    from wavebit._core import parametric
+
+    def solver(lx, device):
+        shapes = [dict(background=1.0, shapes=[
+            dict(type='ellipse', cx=0.0, cy=0.0, lx=lx, ly=150.0, angle=0.7, material=5.76),
+            dict(type='circle', cx=-200.0, cy=-250.0, lx=80.0, material=9.0)])]
+        return wavebit.rcwa(backend=1, structure=shapes, period=[P, 1.2 * P],
+                            truncation_order=[2, 2], thickness=[H], wavelength=WL, top=1.0,
+                            bot=2.25, theta=0.1, phi=0.3, psi=0.4, normal_grid=64,
+                            device=device)
+
+    parametric._PROJECTOR_CACHE.clear()
+    moved = solver(jnp.asarray(250.0), first)          # the shape value is committed to `first`
+    moved.solve()
+    moved.device = second
+    try:
+        moved.solve()
+    except Exception:                                  # noqa: BLE001 - not what is measured
+        pass
+    try:
+        result = solver(250.0, second).solve()
+    except Exception as exc:                           # noqa: BLE001 - reported, not hidden
+        return (f'a fresh solver on {second} raised {type(exc).__name__}: '
+                f'{str(exc).splitlines()[0][:200]}')
+    leaves = [leaf for leaf in jax.tree_util.tree_leaves(result) if isinstance(leaf, jax.Array)]
+    off = sorted({str(d) for leaf in leaves for d in leaf.devices()} - {str(second)})
+    return f'a fresh solver on {second} answered on {off}' if off else 'OK'
+
+
 _CHILD = """
     import sys
     sys.path.insert(0, {tests!r})
@@ -161,6 +209,31 @@ _CHILD = """
     print('\\n'.join(bad) if bad else 'OK')
 """
 
+_POISON_CHILD = """
+    import sys
+    sys.path.insert(0, {tests!r})
+    import jax
+    cpus = jax.devices('cpu')
+    assert len(cpus) == 2, f'the forced second host device did not appear: {{cpus}}'
+    from test_jax_device_placement import poisoned
+    print(poisoned(cpus[1], cpus[0]))
+"""
+
+
+def _two_host_devices(child):
+    """Run ``child`` in a fresh interpreter with two host devices; return its stdout lines."""
+    tests = pathlib.Path(__file__).resolve().parent
+    env = {k: v for k, v in os.environ.items() if not k.startswith('JAX')}
+    env['JAX_PLATFORMS'] = 'cpu'
+    env['XLA_FLAGS'] = (env.get('XLA_FLAGS', '') +
+                        ' --xla_force_host_platform_device_count=2').strip()
+    env['PYTHONPATH'] = str(tests.parent)
+    out = subprocess.run([sys.executable, '-c', textwrap.dedent(child.format(tests=str(tests)))],
+                         capture_output=True, text=True, env=env, cwd=str(tests.parent))
+    assert out.returncode == 0, out.stderr[-3000:]
+    return out.stdout.strip().splitlines()
+
+
 
 def test_every_array_lands_on_the_requested_device_not_on_jaxs_default():
     """Two host devices, so the requested device and JAX's default can differ anywhere.
@@ -169,17 +242,32 @@ def test_every_array_lands_on_the_requested_device_not_on_jaxs_default():
     placed nothing, and the builders then *committed* the convolution matrices to wherever the
     structure happened to be, which overruled the scope `solve_conv` did open.
     """
-    tests = pathlib.Path(__file__).resolve().parent
-    env = {k: v for k, v in os.environ.items() if not k.startswith('JAX')}
-    env['JAX_PLATFORMS'] = 'cpu'
-    env['XLA_FLAGS'] = (env.get('XLA_FLAGS', '') +
-                        ' --xla_force_host_platform_device_count=2').strip()
-    env['PYTHONPATH'] = str(tests.parent)
-    out = subprocess.run([sys.executable, '-c', textwrap.dedent(_CHILD.format(tests=str(tests)))],
-                         capture_output=True, text=True, env=env, cwd=str(tests.parent))
-    assert out.returncode == 0, out.stderr[-3000:]
-    lines = out.stdout.strip().splitlines()
-    assert lines and lines[-1] == 'OK', 'placed on the wrong device:\n' + out.stdout[-3000:]
+    lines = _two_host_devices(_CHILD)
+    assert lines and lines[-1] == 'OK', 'placed on the wrong device:\n' + '\n'.join(lines)[-3000:]
+
+
+def test_the_projector_cache_hands_no_solver_another_devices_arrays():
+    """A solve that mixed devices must not leave an entry a correctly placed solver is served.
+
+    Measured 2026-09-11 on two host devices: a solver built on `cpu:1` with a shape value
+    committed there, moved to `cpu:0` and solved, raised -- and left an entry keyed `cpu:0`
+    holding `cpu:1` arrays, so a fresh `cpu:0` solver of the same geometry raised too until
+    `_PROJECTOR_CACHE` was cleared by hand. The GPU half of this is the next test.
+    """
+    lines = _two_host_devices(_POISON_CHILD)
+    assert lines and lines[-1] == 'OK', '\n'.join(lines)[-3000:]
+
+
+def test_the_projector_cache_hands_no_solver_another_devices_arrays_cpu_and_gpu():
+    """The same, between the CPU and the GPU, in both directions -- where a GPU is visible."""
+    import jax
+    gpus = [d for d in jax.devices() if d.platform == 'gpu']
+    if not gpus:
+        pytest.skip('no GPU visible to JAX; the two-host-device test covers this here')
+    cpu = jax.devices('cpu')[0]
+    assert poisoned(gpus[0], cpu) == 'OK'
+    assert poisoned(cpu, gpus[0]) == 'OK'
+
 
 
 def test_a_cpu_solve_puts_nothing_on_the_gpu():

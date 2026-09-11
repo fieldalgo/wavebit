@@ -2154,7 +2154,9 @@ def normal_projector_coeffs(xp, shapes, grid_shape, lattice, half_width_u, half_
                                                             real_dtype, lattice, plan=plan)
         coeffs = tuple(_sampled_coeffs(xp, xp.astype(f, dtype), half_width_u, half_width_v)
                        for f in (normal_x * normal_x, normal_x * normal_y, normal_y * normal_y))
-    if key is not None and not _coeffs_hold_tracer(coeffs):
+    here = _device(xp.zeros(())) if key is not None else None
+    if (key is not None and not _coeffs_hold_tracer(coeffs)
+            and all(_device(c) == here for c in coeffs)):
         # Least-recently-used: the read above is a `pop`, so a hit takes the entry out and this
         # puts it back at the end, and a full cache evicts only on a genuine miss. The case that
         # needs it is a stack holding both a moving layer and a still one -- the moving layer
@@ -2170,6 +2172,17 @@ def normal_projector_coeffs(xp, shapes, grid_shape, lattice, half_width_u, half_
         # wavelength as the FIRST solve on the key, then `solve()` -- every eager call raised.
         # An eager solve before the jit hid it by warming the key, which is why the recipe
         # tests passed. A miss inside a trace is computed and discarded, as a traced key is.
+        #
+        # Never stored either: coefficients that are not where the key says. The key reads the
+        # device a fresh array lands on -- the scope's -- but the build follows any committed
+        # operand it reads, so a shape value committed to another device builds the field
+        # there. A live solver moved with `device=` does exactly that, because it keeps its
+        # stored arrays where they were. Measured 2026-09-11 on two host devices, and between
+        # the CPU and the GPU on a CUDA box: the solve that filed such an entry raised, and the
+        # entry -- keyed on one device, holding the other's arrays -- made every later solve of
+        # that geometry on the key's device raise `Received incompatible devices`, on any
+        # solver in the process, until the cache was cleared by hand. The mismatched build
+        # still serves its own call; it is only not kept.
         if len(_PROJECTOR_CACHE) >= _PROJECTOR_CACHE_MAX:
             _PROJECTOR_CACHE.pop(next(iter(_PROJECTOR_CACHE)))
         _PROJECTOR_CACHE[key] = coeffs
