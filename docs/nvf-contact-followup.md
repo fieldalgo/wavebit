@@ -1672,7 +1672,9 @@ contact steps are genuine finite-order steps of the factorization at 900 nm
 and may be judged at the fixed wavelength, at the documented order. The
 scan says nothing about their infinite-order limit.
 
-Placement dependence, re-verified the same day on c1c210d: the closed
+Placement dependence, re-verified the same day on c1c210d with
+`studies/nvf_placement_spread.py` (its rows in
+`studies/results/nvf_placement_spread.log`): the closed
 form's coefficient spread over translations of two disjoint boxes is
 `1.074e-2 / 4.056e-3 / 1.592e-3` at N = 64 / 128 / 256 (fitted exponent
 1.38) and the `sum(T)` spread `1.242e-3 / 6.395e-4 / 1.560e-4`, identical to
