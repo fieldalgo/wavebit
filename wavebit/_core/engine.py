@@ -3264,14 +3264,17 @@ class CoreFactorizationMixin:
         **The default's stated reason was the right kind of reason and the wrong measurement.**
         It read "sets the floor on shape gradients (a translation-invariant structure should
         give d/dcx == 0 exactly; the sampling leaves a sawtooth instead -- 5e-4 at 256, 4.2e-5
-        at 1024)". That *translation* number is a multi-shape one written as a general one: a
+        at 1024)". That *translation* number was a multi-shape one written as a general one: a
         lone shape is built at the centre of the cell and carried to its position by a phase
-        (`parametric.normal_projector_coeffs`), so it is translation-exact at every grid.
-        Peak-to-peak `sum(T)` over a one-pixel rigid translation, `truncation_order=6`:
+        (`parametric.normal_projector_coeffs`), so it was translation-exact at every grid, and
+        since 2026-09-11 several shapes are built with their first shape at the centre and
+        carried the same way. Peak-to-peak `sum(T)` over a one-pixel rigid translation, `truncation_order=6`:
 
             normal_grid        128       256       512      1024
             one shape      1.1e-13   7.0e-14   1.3e-13   8.1e-14      flat, machine precision
-            two shapes     2.8e-06   6.4e-07   2.6e-07   1.3e-07      converges
+            two shapes     2.8e-06   6.4e-07   2.6e-07   1.3e-07      converged, until 2026-09-11
+            two shapes     1.5e-13   2.9e-13   2.8e-13   9.8e-14      flat since (two 250 x 300
+                                                                      boxes, the placement study's)
 
         But the conclusion that looks like -- that the default is over-specified and could be
         256 -- is wrong, and 256 was tried and reverted. It is a rectangle's **angle** that

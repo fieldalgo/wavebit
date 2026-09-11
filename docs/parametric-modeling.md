@@ -275,8 +275,9 @@ and `truncation_order` modest; where there is nothing to win (`normal_grid = 256
 The key is `None` — no reuse, rebuild — whenever a value it would have to hold is traced or under
 autograd, which is what keeps this from touching a gradient. A JAX tracer cannot be converted, so
 it refuses itself; a PyTorch tensor converts happily and is refused by hand on `requires_grad`.
-A layer of several shapes is rebuilt whenever any of them moves, since there the positions enter
-the field itself rather than a phase. Holding the field fixed across a move instead would be
+A layer of several shapes is rebuilt whenever any of them moves: the offsets from the first
+shape enter the field itself, and even a rigid slide changes them by an ulp, which the key sees.
+Holding the field fixed across a move instead would be
 quietly wrong, not merely stale: on a lone shape it reports `d(sum T)/dcx = +0.046` where the true
 answer is zero, and on a pair it is 8% to 18% off.
 
@@ -308,8 +309,17 @@ used to be refused build at 0.16–0.19 deg against an exact interface oracle. B
 the convergence tables and what moved, are in
 [`normal-field-known-limits.md`](normal-field-known-limits.md).
 
-Several shapes therefore still stay on the sampled route — no phase describes a nonlinear
-combination — but the route is no longer the broken one. They are combined by **distance-product
+Several shapes are built the same way since 2026-09-11, with the **first** shape at the centre
+of the cell and the others at their offsets from it, and carried by the same phase, so a rigid
+slide of the whole layer is exact too (coefficients at 3e-17, `sum(T)` at 3e-13 over sub-pixel
+shifts, against 1.1e-2 / 1.2e-3 before; `studies/nvf_placement_spread.py`). The first shape and
+not a centroid, because a centroid is not invariant under naming one shape a period over and that
+broke the layer's periodicity across the cell edge (3.2e-5 where 1e-9 is promised); one shape's
+centre shifts by a lattice vector or not at all, which the fold and the grid cannot see. What
+stays sampled is the *relative* geometry: moving one shape alone still leaves a sampling ripple
+across a pixel of about five times the legitimate change over that pixel (1.2e-3 / 7.9e-4 /
+1.6e-4 in the largest coefficient at `normal_grid` 64 / 256 / 1024, against 2.1e-4 / 1.7e-4 /
+7.9e-5), which is what `normal_grid` is for. They are combined by **distance-product
 weights** rather than the *normalized sum of unit vectors* this used to describe, and that
 difference is not cosmetic: a sum weights a shape ten cells away exactly as heavily as the one
 underfoot, which put the normal 40 deg off at a boundary with two shapes in the layer and 43 with
@@ -459,10 +469,10 @@ keep passing.
   `tanh` mollification of `sign()`, rejected for breaking smoothness through `angle = 0`; it
   needed no mollifier at all. Treating +x and −x (and +y, −y) as four faces blended the same
   way makes them cancel exactly at the centre line, so `sign()` is not smoothed but gone.
-- The normal projectors still depend on `normal_grid` sampling (default 1024) — the
-  coefficients themselves are analytic, and the shape's *position* is now carried
-  analytically too, but the field's shape (size, rotation) retains grid error. Increase the
-  grid if needed.
+- The normal projectors still depend on `normal_grid` sampling (default 1024) -- the
+  coefficients themselves are analytic, and the layer's *position* (one shape or several) is
+  carried analytically, but the field's shape (size, rotation, and the relative placement of
+  several shapes) retains grid error. Increase the grid if needed.
 - `fourier_coefficients` and `factorization` both have exactly one value here, and this path
   resolves them to it rather than reading them: `('integrated', 'nvf')`, the closed-form shape
   Fourier transform in the NVF 5-matrix form. Leaving either unset is not a request and gets

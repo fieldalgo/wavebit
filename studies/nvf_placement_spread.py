@@ -3,12 +3,15 @@
 A rigid translation of every shape by ``d`` multiplies each Fourier coefficient by
 ``exp(-i G.d)`` and changes nothing else, so the un-phased projector coefficients
 ``exp(+i G.d) c[G]`` must be independent of ``d``. A single shape satisfies that to rounding on
-every route. For two shapes the closed form (``parametric.normal_projector_coeffs``) carries no
-per-shape phase, and the coefficients spread with the placement at roughly ``1/N^1.4`` in the
-normal grid ``N``; the solve-level ``sum(T)`` spread follows. This study measures that spread,
-its exponent, and which routes are exact -- it does not attempt a cure. The 2026-09-07 roadmap
-instruments this reconstructs were never committed; their numbers are reproduced here to every
-printed digit (write-up: ``docs/nvf-contact-followup.md``, "Placement dependence").
+every route. Until 2026-09-11 the closed form (``parametric.normal_projector_coeffs``) sampled a
+multi-shape layer where it sat, and the coefficients spread with the placement at roughly
+``1/N^1.4`` in the normal grid ``N``, the solve-level ``sum(T)`` spread following; since then it
+builds the layer with its first shape at the cell centre and carries it by a phase, and the same
+rows are at rounding. This study measures that spread, its exponent, and which routes are exact. The
+2026-09-07 roadmap instruments it reconstructs were never committed; their numbers were
+reproduced here to every printed digit before the fix, and ``DOCUMENTED`` keeps them so a rerun
+says at once whether a route has moved (write-up: ``docs/nvf-contact-followup.md``, "Placement
+dependence", and ``docs/normal-field-known-limits.md``).
 
 Fixture: square cell 700 x 700, background eps 1, boxes eps 12.25, angle 0, truncation (8, 8)
 so each projector grid is 33 x 33, NumPy float64.
@@ -78,7 +81,8 @@ FIXTURES = dict(
     ONE_PAINTED=[box(lx=200., ly=200.), box(lx=300., ly=300.)],
 )
 
-# The values the 2026-09-07 session recorded, so a rerun says at once whether anything moved.
+# The values the 2026-09-07 session recorded (pre-anchor for the closed rows, which read ~3e-17
+# since 2026-09-11), so a rerun says at once whether anything moved.
 DOCUMENTED = {
     ('closed', 'TWO_CLOSED', 'xy16'): (1.074e-2, 4.056e-3, 1.592e-3),
     ('closed', 'TWO_CLOSED', 'x30'): (1.074e-2, 4.056e-3, 1.592e-3),

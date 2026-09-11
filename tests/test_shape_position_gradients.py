@@ -424,18 +424,18 @@ def test_two_rectangles_carry_a_correct_relative_gradient_too():
 
 
 def test_a_layer_of_two_shapes_is_translation_invariant_too():
-    """Sliding every shape together is one structure named twice, and no phase carries it.
+    """Sliding every shape together is one structure named twice, and a phase carries it.
 
-    A lone shape is translated by a phase on its coefficients, which is exact. Several shapes
-    combine nonlinearly, so a common shift is not a common factor and the field has to be
-    right about the shift itself. It now is: fold the displacement to the nearest image and the
-    combination of periodic fields is periodic.
+    A lone shape is built at the centre of the cell and translated by a phase on its
+    coefficients. Several shapes are built with their first shape at the centre and the others
+    at their offsets from it, and translated the same way (2026-09-11), so a rigid shift of the
+    layer is a common factor after all: the field is sampled about the same point of the same
+    geometry whatever the shift, and the answer is the same to rounding at every grid.
 
-    Stated at two tolerances because two different things are being measured. A shift that
-    lands on the sampling grid is exact -- the same field read at the same points. A
-    fractional-pixel shift resamples it elsewhere and leaves a discretization residual that
-    converges with the grid (7.3e-6, 5.2e-6, 1.8e-6, 7.6e-7 at normal_grid 256 to 2048), which
-    is what separates it from the clipped window this used to measure at 1e-2.
+    Until then a fractional-pixel shift resampled the field elsewhere and left a discretization
+    residual (7.3e-6, 5.2e-6, 1.8e-6, 7.6e-7 at normal_grid 256 to 2048 on this fixture), which
+    is what this measured; a shift landing on the grid was exact even then. Both are at
+    rounding now and both are asserted there.
     """
     cfg = dict(backend=0, period=(1.0, 1.0), wavelength=0.94, thickness=(0.32,), truncation_order=(4, 4),
                top=1.0, bot=2.1025, theta=0.0, phi=None, psi=np.pi / 2)
@@ -453,8 +453,36 @@ def test_a_layer_of_two_shapes_is_translation_invariant_too():
 
     coarse = np.ptp([total(d, 256) for d in np.linspace(0.0, 0.2, 5)])
     fine = np.ptp([total(d, 1024) for d in np.linspace(0.0, 0.2, 5)])
-    assert coarse < 1e-4, coarse
-    assert fine < coarse, (coarse, fine)
+    assert coarse < 1e-11, coarse
+    assert fine < 1e-11, fine
+
+
+def test_several_shapes_move_by_a_common_phase_and_by_nothing_else():
+    """The mechanism for several shapes, with no solver in the way.
+
+    The three projector grids of a layer shifted rigidly by ``(dx, dy)`` are the unshifted grids
+    times ``exp(-2i*pi*(kx*dx + ky*dy)/P)``, exactly -- a sub-pixel shift, so nothing about the
+    sampling grid can be hiding it. The layer is built with its first shape at the centre of
+    the cell and the second at its offset from the first; that offset is what the field reads,
+    and the shift is the phase alone.
+    """
+    from wavebit._core.parametric import normal_projector_coeffs
+
+    truncation_order, grid = 4, 256
+    dx, dy = -0.19 * P, 0.071 * P
+
+    def coeffs(sx, sy):
+        shapes = [dict(_shape('rectangle', 'cx', -0.15 * P), cx=-0.15 * P + sx, cy=sy),
+                  dict(_shape('circle', 'cx', 0.18 * P), cx=0.18 * P + sx, cy=0.05 * P + sy)]
+        return normal_projector_coeffs(np, shapes, (grid, grid), as_lattice(period=(P, P)),
+                                       truncation_order, truncation_order, np.complex128)
+
+    k = np.arange(-2 * truncation_order, 2 * truncation_order + 1)
+    phase = np.exp(-2j * np.pi * (k[None, :] * dx + k[:, None] * dy) / P)
+
+    base, moved = coeffs(0.0, 0.0), coeffs(dx, dy)
+    for at_ref, at_d in zip(base, moved):
+        assert np.abs(np.asarray(at_d) - np.asarray(at_ref) * phase).max() < 1e-14
 
 
 def test_a_multishape_layer_is_periodic_across_the_cell_edge():
@@ -506,13 +534,12 @@ def test_a_multishape_layer_is_periodic_across_the_cell_edge():
 
 
 def test_a_common_translation_of_every_shape_leaves_the_answer_alone():
-    """The other half of the same invariant, and the one a phase never reached.
+    """The other half of the same invariant, on two rectangles.
 
-    Sliding *all* the shapes together is again one structure named twice, but no phase carries
-    it: the field is a nonlinear combination, so a common shift is not a common factor. It is
-    exact here only for a shift that lands on the sampling grid -- a fractional-pixel shift
-    resamples a periodic field at different points and leaves ~6e-5, which is discretization
-    and not the clipped window this used to be confused with.
+    Sliding *all* the shapes together is again one structure named twice. A shift landing on
+    the sampling grid was always exact; a fractional-pixel shift used to resample the field at
+    different points and leave ~6e-5 of discretization. Since the layer is built with its first
+    shape at the centre and carried by a phase (2026-09-11) the fractional shifts are exact too.
     """
     cfg = dict(backend=0, period=(1.0, 1.0), wavelength=0.94, thickness=(0.32,), truncation_order=(4, 4),
                top=1.0, bot=2.1025, theta=0.0, phi=None, psi=np.pi / 2)
@@ -528,3 +555,5 @@ def test_a_common_translation_of_every_shape_leaves_the_answer_alone():
 
     on_grid = [total(k / 256) for k in (0, 16, 32, 64)]
     assert np.ptp(on_grid) < 1e-11, on_grid
+    off_grid = [total((k + 0.37) / 256) for k in (0, 5, 16, 41)]
+    assert np.ptp(on_grid + off_grid) < 1e-11, off_grid

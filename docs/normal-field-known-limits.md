@@ -60,6 +60,39 @@ before the floating-point sum. Periodic abutting faces still belong to this unwr
 integral even though they may be absent from the normal field. This is a common quadrature convention, not a change to the
 permittivity transform or a claim that off-interface extensions are unique.
 
+The closed form got the same convention on 2026-09-11. A layer of several disjoint shapes
+used to be sampled where it sat, so the un-phased projector coefficients of two 250 x 300
+boxes spread 1.074e-2 / 4.056e-3 / 1.592e-3 over sub-pixel translations at `normal_grid`
+64 / 128 / 256 and `sum(T)` by 1.242e-3 / 6.395e-4 / 1.560e-4; `parametric.normal_projector_coeffs`
+now builds the layer with its first shape at the centre of the cell and the others at their
+offsets from it, and carries it by the phase, and both rows are at rounding (3e-17, 3e-13;
+`studies/nvf_placement_spread.py`). The first shape, not the area centroid the polygon route
+anchors a painted union on: the centroid of unfolded centres moves by a fraction of the period
+when one shape is named a period over, so the same torus structure was sampled at a different
+offset and the case-G total moved 3.2e-5 where 1e-9 is promised; folding the centres instead
+puts a step of that size wherever a shape crosses the fold line; and no continuous,
+translation-equivariant, period-invariant centre of several points on a torus exists (two
+shapes half a period apart have no canonical midpoint). One shape's centre shifts by a lattice
+vector or not at all, which the fold and the periodic grid cannot see, so periodicity and
+continuity both survive. Moving one shape alone is not made exact by this -- its staircase
+moves against the grid as it always did, and leaves a sampling ripple across a pixel of about
+five times the legitimate change over that pixel: 1.2e-3 / 7.9e-4 / 1.6e-4 in the largest
+coefficient at `normal_grid` 64 / 256 / 1024, against 2.1e-4 / 1.7e-4 / 7.9e-5, which is what
+`normal_grid` is for.
+
+**The unsampled projector is not the cure, measured.** Exact Fourier coefficients exist for a
+field that is piecewise constant on polygons; the blend is not, and the field that nearly is --
+the nearest-interface extension the polygon route samples, constant on each edge's Voronoi
+region and radial on each vertex's -- carries a value step at every same-material merge. As
+two 250 x 300 boxes close from a gap of 20 to 0.01, the blend's coefficients approach the
+merged 500 x 300 box's (largest deviation 0.081 -> 0.027, reaching 0.024 at contact, which is
+case D's split-spelling residual), while the nearest-point field's deviation plateaus at 0.086,
+at `normal_grid` 256 and again at 512 so it is not sampling: the gap face's Voronoi cell is a
+triangle of a quarter of the box reading `n = +-x` until the face dies. The pair records of
+`_piece_field` exist to remove exactly that step. The Voronoi regions are also not polygons in
+general -- the bisector between a vertex and a non-adjacent edge is a parabola, so the polygon
+transform would not cover them either. The extension stays and only its sampling origin moved.
+
 **Regression evidence.** `tests/test_polygon_interfaces.py` covers nested and partial overlap,
 a hand-written union contour over the whole cell, different and lossy materials, x/y exchange,
 rotation with the cell, partial periodic contact on positive and negative shear, long segments

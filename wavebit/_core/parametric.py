@@ -2199,81 +2199,64 @@ def normal_projector_coeffs(xp, shapes, grid_shape, lattice, half_width_u, half_
     reached ``sum(R)`` as 1.6e-3, so the same structure translated gave a different answer.
     Built here it reproduces the centred one to 1e-14, at every ``truncation_order``.
 
-    Several shapes cannot use it, and the reason is worth stating precisely because it is two
-    reasons. The field is a *normalized sum* (``sum(g/|g|)``, divided by its own norm), so a
-    **common** translation is not carried by a phase and the clipped window comes back; and
-    moving one shape **relative** to the others genuinely reshapes the field, which no phase
-    describes at all. The second is the hard half: a rectangle's level-set gradient is piecewise
-    constant, so its derivative is a line measure on the wedge boundaries that no grid sample
-    sees, and the closed form that would serve a lone rectangle does not exist here either —
-    ``|sum|`` varies continuously between two shapes, so the combined field is not piecewise
-    constant even when both of them are rectangles. Measured: two circles, whose normals are
-    linear in position, already agree with central differences to 4.7e-6; two rectangles are off
-    by 11% to 105%.
+    **Several shapes are built with their first shape at the centre and carried by the same
+    phase** (2026-09-11). The other shapes keep their offsets from the first, so a rigid
+    translation of the layer samples the same field at the same points and is restored exactly
+    as ``exp(-i G.d)``. Before this the layer was sampled where it sat, and the un-phased
+    coefficients of two disjoint boxes spread 1.074e-2 / 4.056e-3 / 1.592e-3 over sub-pixel
+    translations at ``normal_grid`` 64 / 128 / 256, ``sum(T)`` by 1.242e-3 / 6.395e-4 / 1.560e-4
+    (``studies/nvf_placement_spread.py``); both are at rounding now, as a lone shape's always
+    were. The choice of the first shape is the caller's own spelling, like painting order, and
+    it is the choice that moves no other invariant: naming any shape a period over shifts the
+    built layer by a lattice vector or not at all, which the fold and the periodic grid cannot
+    see, so a multi-shape layer stays periodic across the cell edge to 1e-9 in the total
+    (``test_a_multishape_layer_is_periodic_across_the_cell_edge``), and every position stays
+    continuous. The area centroid of the shapes -- the polygon route's anchor for a painted
+    union -- was built and measured first, and rejected on exactly that invariant: naming one
+    shape a period over moves the unfolded centroid by a fraction of the period, so the same
+    torus structure was sampled at a different offset and the case-G total moved 3.2e-5 where
+    1e-9 is promised; folding the centres instead puts a step of the same size wherever a shape
+    crosses the fold line. No continuous, translation-equivariant, period-invariant centre of
+    several points on a torus exists (two shapes half a period apart have no canonical
+    midpoint), so one shape's centre is the anchor.
 
-    Three routes were measured and rejected.
+    What the anchor does not do is make the *relative* motion of one shape exact: the second
+    shape's staircase moves against the grid when it moves, as it always did, and the
+    coefficients keep a sampling ripple across a pixel. Measured against a 1024 reference on
+    the same two boxes, the second one moved across one pixel: the error varies by 8.6e-3 at
+    ``normal_grid`` 64 and 1.2e-3 at 256, where the legitimate coefficient change over the same
+    move is 2.9e-4 / 2.6e-4. That ripple, and the sampling error itself, are what ``normal_grid``
+    is for, since the field is still read off a grid.
 
-    * *Interpolating* each shape's field onto the common grid holds the forward error to 7e-5,
-      but the residue oscillates over one grid cell, so its derivative is 2e-1 — worse than the
-      bias being removed.
-    * *Centring on the mean of the shape centres* (which reduces to the rule above for one
-      shape) fixes the common-translation half exactly, 1.2e-4 to 6.6e-15 on a rectangle pair.
-      It manufactured the degeneracy it needs to avoid: two shapes then sit exactly opposed
-      about the centre of the cell, their unit fields cancel exactly along the segment between
-      them, and for two identical circles 16 grid points reach ``|n_total| == 0`` — where
-      :func:`_hypot_safe` is finite but its gradient is ``0 * inf``. The common-translation
-      gradient came back NaN.
+    The unsampled alternative was measured and is not taken. Exact coefficients exist for a
+    field that is piecewise constant on polygons, which the blend is not; the field that is --
+    the nearest-interface (segment Voronoi) extension the polygon route samples -- carries a
+    value step at every same-material merge. As two 250 x 300 boxes close from a gap of 20 to
+    0.01, the blend's coefficients approach the merged box's (largest deviation 0.081 -> 0.027,
+    reaching 0.024 at contact, which is case D's split-spelling residual) while the
+    nearest-point field's deviation plateaus at 0.086 at ``normal_grid`` 256 and again at 512:
+    the gap face's Voronoi cell is a triangle of a quarter of the box that reads ``n = +-x``
+    until the face dies. The pair records of :func:`_piece_field` exist to remove exactly that
+    step, so the extension stays and only its sampling origin moved.
 
-      **That rejection is dated and the route is worth re-measuring before it is dismissed
-      again.** It was decided against the *sum of unit vectors*, where ``n1 + n2 = 0`` along the
-      whole segment between two opposed centres — a curve the grid samples. The distance-product
-      blend that replaced it (2026-08-17) does not cancel there: off the midpoint ``w1 != w2``,
-      so the zero set collapses to the single midpoint, which the ``(i+0.5)/N`` grid never
-      contains. Measured on two identical circles on the cell diagonal, zero grid points reach
-      ``|n| == 0`` at N = 256, 512 and 1024, against 85, 144 and 303 under the old rule. What
-      has not been re-measured is whether the route is *good*: it makes the common translation
-      exact and appears to cost 1.5-3.4x on relative jitter. It also moved the relative-position
-      error for rectangles from 1.6e-1 to 2.9e-1.
-    * *Mollifying* ``sign()`` (``tanh(xr/w)``) removes the zero derivative at the source and
-      would serve both halves, but the width that makes the position gradient accurate is not
-      the width that keeps the answer smooth through ``angle = 0``: it broke
-      ``test_analytic_angle_is_smooth_through_normal``, and any value chosen between the two is
-      a tuning constant.
+    The centroid anchor was rejected once, against the *sum of unit vectors* this field used to
+    be: two shapes opposed about the cell centre cancelled along the whole segment between them
+    and the common-translation gradient came back NaN through ``0 * inf`` in
+    :func:`_hypot_safe`. The ratio blend does not cancel there -- zero grid points reach
+    ``|n| == 0`` at N = 256, 512 and 1024 on two identical circles, against 85, 144 and 303
+    under the old rule -- and the rejection's other number, 1.5-3.4x more relative jitter, was
+    measured on that old field too; on this one the jitter falls, as above. Two other routes
+    stay rejected: interpolating each shape's field onto the common grid (forward 7e-5,
+    derivative 2e-1), and mollifying ``sign()`` (a width that is a tuning constant, and it broke
+    ``test_analytic_angle_is_smooth_through_normal``). A fourth, the boundary route's
+    gradient-of-distance field for disjoint layers, integrates its position gradient to the
+    wrong sign across a window (``studies/benchmark_boundary_normal_field.py``,
+    ``docs/boundary-modeling.md``) and costs 2x / 182x on a rectangle / circle pair.
 
-    A fourth is *replacing the field wholesale* for multi-shape layers with the boundary route's
-    gradient-of-distance field
-    (:func:`~wavebit._core.boundary.distance_gradient_normal_field`), which a disjoint layer
-    can be given today by passing ``boundary_plans`` to :func:`to_conv_mat_parametric_layers`.
-    Tried, and rejected on the half it was reached for. Integrate its autodiff position
-    gradient across a six-pixel window on two tilted rectangles and it comes to -3.5e-4 over a
-    window the loss *rises* through by +1.4e-4 -- the wrong sign, at all 25 sampled positions,
-    at truncation_order 8 and again at truncation_order 12; the sampled field integrates to +1.4e-4 against
-    +1.1e-4, high by 22%. A circle pair reverses it rather than widening it: there the sampled
-    field accounts for the loss to 1% and the replacement is 19% out. The cost is a pixel scan
-    over every segment of every loop, and ``POLYGON_VERTICES`` is 256, so a circle carries 64x
-    the segments a rectangle does: at the ``normal_grid`` of 1024 this solver defaults to, the
-    swap costs 12x on a rectangle pair and 486x on a circle pair, 0.4 s and 23 s per layer per
-    build. Its *forward* accuracy is open rather than settled, and the two are not separable at
-    reachable truncations: they still sit 2e-4 apart on a total at truncation_order 24, so neither has
-    reached the limit any ratio between them would have to be measured against. Reproduced by
-    ``studies/benchmark_boundary_normal_field.py``; see ``docs/boundary-modeling.md``.
-
-    Multi-shape layers therefore keep the sampled field. Both halves of what that costs are
-    pinned in ``test_shape_position_gradients.py``, the working one as a test and the broken one
-    as a strict xfail, so neither can be inferred from the other. Both of those run at
-    ``truncation_order = 4``, where the model's own slope is about twice its truncation_order 12 one, so they
-    hold autodiff to finite differences rather than to the slope the structure has.
-
-    **The forward answer is affected too, not only the gradient — keep every shape inside the
-    cell.** A shape straddling the boundary may be named in any period; ``cx`` and ``cx + Px``
-    are one structure. A single shape agrees exactly across periods because the phase carries
-    it. Several shapes do not: for a rod at ``cx`` = 0.10 / 1.10 / 2.10 beside a fixed second
-    rod, total transmission comes out 0.8532 / 0.8678 / 0.8665. Splitting the layer's inputs
-    puts it here rather than in the transform — across one period the permittivity coefficients
-    agree to 1.1e-15 while ``<normal_x**2>`` differs by 3.1e-1. The boundary route inherits it
-    identically, bit for bit, since it takes its field from the same place. An optimizer left
-    free to move a shape will walk it over the edge and climb the artefact, so clamp the
-    centres. Pinned by ``test_a_multishape_layer_is_not_periodic_across_the_cell_edge``.
+    A multi-shape layer is periodic across the cell edge -- ``cx`` and ``cx + Px`` are one
+    structure to 1e-9 in the total and 1e-12 in the projectors
+    (``test_a_multishape_layer_is_periodic_across_the_cell_edge``) -- since every distance in
+    the field folds to the nearest image, and a fold is the same fold about any origin.
 
     ``grid_shape`` is checked against the ``4*truncation_order+1`` floor
     (:func:`~wavebit._core.factorization.check_normal_grid`). The boundary route has done that
@@ -2285,7 +2268,7 @@ def normal_projector_coeffs(xp, shapes, grid_shape, lattice, half_width_u, half_
     check_normal_grid(grid_shape, half_width_u, half_width_v)
     real_dtype = xp.float64 if dtype == xp.complex128 else xp.float32
 
-    if len(shapes) == 1:
+    if shapes:
         _, cx, cy, _, _, _ = shape_geometry(shapes[0], lattice)
         # The `lattice is None` arm that stood here read `Px / 2` as the centre and
         # `1 / Px` as the fraction. The solver stopped reaching it once
@@ -2305,15 +2288,22 @@ def normal_projector_coeffs(xp, shapes, grid_shape, lattice, half_width_u, half_
         # `0.0`, not `mid`: a centre is measured from `0.5*(a1 + a2)` since 2026-08-31, so the
         # centre of the cell is what an explicit zero names. Writing `mid` here would add the
         # origin twice and build the field for a shape one cell-centre away from where the
-        # phase then puts it.
+        # phase then puts it. The other shapes keep their offsets from the first, in the same
+        # centre-relative spelling, so the layer's relative geometry is what gets sampled and
+        # its position is what the phase carries -- see the docstring for why the first shape
+        # and not a centroid.
+        ax, ay = shapes[0].get('cx', 0.0), shapes[0].get('cy', 0.0)
         built = [dict(shapes[0], cx=0.0, cy=0.0)]
+        built += [dict(s, cx=s.get('cx', 0.0) - ax, cy=s.get('cy', 0.0) - ay) for s in shapes[1:]]
     else:
         built, shift_v, shift_u = shapes, None, None
 
     # The build above is the expensive half and the phase below is the cheap one, so what is
     # cached is the split: for a single shape ``built`` sits at the centre of the cell whatever
     # ``(cx, cy)`` are, which makes a position sweep -- and a position *gradient*, which runs
-    # through the phase -- reuse one field instead of rebuilding it every step. A material sweep
+    # through the phase -- reuse one field instead of rebuilding it every step. (Several shapes
+    # are keyed on their offsets from the first, which a rigid slide changes by an ulp, so a
+    # multi-shape slide rebuilds.) A material sweep
     # reuses it for the other reason: the key holds no material at all because the build reads
     # none. Measured on a five-point sweep at ``normal_grid = 1024``, ``truncation_order = 4``: the call
     # 83% of the wall clock for one shape and 93% for six.

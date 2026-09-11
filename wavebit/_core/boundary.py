@@ -542,9 +542,15 @@ def polygon_projector_coeffs(xp, polys, grid_shape, lattice, hu, hv, dtype, cdty
     """Sample the polygon Jones projector after removing a common translation."""
     check_normal_grid(grid_shape, hu, hv)
     polys = [xp.astype(v, dtype) for v in polys]
-    # Symmetric in the input polygon order. A phase restores a rigid translation
-    # exactly instead of moving the quadrature grid across the painted boundary.
-    centre = xp.mean(xp.concat(polys, axis=0), axis=0)
+    # The first shape's centre, as on the parametric route since 2026-09-11 (the vertex mean
+    # of an area-matched n-gon or a box is its centre to rounding). A phase restores a rigid
+    # translation exactly instead of moving the quadrature grid across the painted boundary,
+    # and anchoring both routes on the same point is what lets a polygon-count ladder
+    # converge to the parametric solve of the same scene at the same grid
+    # (``test_polygon_refinement_approaches_the_analytic_contact_solve``). It was the mean of
+    # every vertex before, which is symmetric in the shape order but sits nowhere the
+    # parametric route samples from.
+    centre = xp.mean(polys[0], axis=0)
     ax, bx = lattice[0]
     ay, by = lattice[1]
     shift = centre-xp.stack([xp.asarray(.5*(ax+bx), dtype=dtype),

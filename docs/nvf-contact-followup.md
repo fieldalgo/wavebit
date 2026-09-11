@@ -1683,3 +1683,12 @@ rounding (`2.8e-17`) on every route. The polygon route with its production
 anchor (6f6ca34) is at rounding for the disjoint pair too, but production
 routes a disjoint layer to the closed form (`painted=False`), so that fix
 reaches only painted layers.
+
+Fixed on 2026-09-11 by building the closed form's layer with its first shape at the cell
+centre and carrying it by the phase (the area centroid the polygon route uses was built first
+and rejected: it moves under naming a shape a period over and broke the layer's periodicity
+across the cell edge): the closed rows are at 3e-17 and the `sum(T)` spread at 3e-13 on a rerun
+of the same study. What remains, and why the unsampled Voronoi projector was measured and rejected
+(a 0.086 value step at every same-material merge), is recorded in
+`docs/normal-field-known-limits.md` beside the polygon route's anchor and in the
+`normal_projector_coeffs` docstring.

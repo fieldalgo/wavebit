@@ -163,8 +163,13 @@ def test_polygon_refinement_approaches_the_analytic_contact_solve():
         errors.append(abs(result.T.sum()-target))
     # Geometry error and sampled-projector error can cancel at an intermediate
     # polygon count. Require convergence over the ladder, not monotonic totals.
-    assert max(errors[-2:])<1e-6
-    assert errors[-1]<errors[0]/32
+    # Both routes sample with the first ellipse at the centre of the cell since
+    # 2026-09-11 (they anchored on the scene's centre before, which on this
+    # symmetric scene was the cell centre); the ladder reads 4.4e-5, 7.2e-6,
+    # 1.35e-6, 1.0e-6 there, a floor twice the old one and still 1e4 below the
+    # 1.6e-2 the polygon-only extension jumped by.
+    assert max(errors[-2:])<2e-6, errors
+    assert errors[-1]<errors[0]/32, errors
 
 
 def test_corrected_projector_rotates_covariantly():

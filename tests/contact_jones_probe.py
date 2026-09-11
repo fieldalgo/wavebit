@@ -43,16 +43,26 @@ def field_builder():
 def matrices(xp,shapes,background,hu,hv,lattice,dtype,normal_grid=256,plan=None):
     # Explicit fixture grid in the same internal Cartesian origin as _piece_field.
     from wavebit._core.lattice import is_axis_aligned
+    from wavebit._core.boundary import _k_grids
     if not is_axis_aligned(lattice):
         raise ValueError('the probe grid requires an axis-aligned cell')
     real_dtype=xp.float64 if dtype==xp.complex128 else xp.float32
     x=(xp.arange(normal_grid,dtype=real_dtype)+.5)*lattice[0][0]/normal_grid
     y=(xp.arange(normal_grid,dtype=real_dtype)+.5)*lattice[1][1]/normal_grid
     X,Y=xp.meshgrid(x,y,indexing='xy')
+    # Production builds the layer with its first shape at the centre of the cell and carries it
+    # by a phase (2026-09-11); the instrument samples the same way, so what the comparison
+    # reads is the field and not the sampling origin.
+    ax,ay=shapes[0].get('cx',0.),shapes[0].get('cy',0.)
+    built=[dict(shapes[0],cx=0.,cy=0.)]
+    built+=[dict(s,cx=s.get('cx',0.)-ax,cy=s.get('cy',0.)-ay) for s in shapes[1:]]
     if plan is None:
-        plan=P.plan_gamma(shapes,lattice)
-    fields=field_builder()(xp,X,Y,shapes,plan,None,lattice,real_dtype)
-    cs=[P.conv_matrix_2d(xp,P._sampled_coeffs(xp,xp.astype(f,dtype),hu,hv),hu,hv) for f in fields]
+        plan=P.plan_gamma(built,lattice)
+    fields=field_builder()(xp,X,Y,built,plan,None,lattice,real_dtype)
+    KY,KX=_k_grids(xp,hu,hv,real_dtype)
+    phase=xp.exp(xp.astype(KY*(ay/lattice[1][1])+KX*(ax/lattice[0][0]),dtype)*(-2j*np.pi))
+    cs=[P.conv_matrix_2d(xp,P._sampled_coeffs(xp,xp.astype(f,dtype),hu,hv)*phase,hu,hv)
+        for f in fields]
     eps,inv=P.assemble_eps_coeffs(xp,shapes,background,hu,hv,lattice,dtype)
     E=P.conv_matrix_2d(xp,eps,hu,hv);I=P.conv_matrix_2d(xp,inv,hu,hv)
     return F._nvf_assemble(xp,E,I,cs[0],cs[1],cs[3],cs[2])
