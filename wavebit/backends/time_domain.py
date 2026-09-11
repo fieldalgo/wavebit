@@ -8,6 +8,121 @@ import numpy as np
 
 from .._core.backend import as_array, lift_jax_x64
 
+# Compiled eager scan programs, keyed by structure; least recently used first. See _eager_scan.
+_SCAN_PROGRAMS = {}
+_SCAN_PROGRAMS_MAX = 64
+
+
+def _eager_scan(f, init, xs):
+    """``jax.lax.scan(f, init, xs)``, compiled once per program instead of once per closure.
+
+    An eager ``lax.scan`` dispatches through ``xla_primitive_callable`` (jax 0.11.0, in JAX's
+    dispatch module), whose cache key holds the traced body jaxpr, and a jaxpr
+    hashes by identity. ``fdtd_grid`` builds a fresh ``step`` closure on every call, so every
+    eager scan traced to a new jaxpr and ran XLA again: 8 compilations on every scene solve,
+    which contains 2 distinct programs (4 when it records a field). Here the body is traced
+    once, and its closed-over arrays become explicit arguments of one jitted program (closure
+    conversion; ``jax.closure_convert`` is JAX's own form of it). The program is keyed on the
+    jaxpr's structure (``_program_key``): an equal key means the same equations, literals and
+    shapes, so the program runs on this call's arrays exactly as a fresh compile would.
+    Python scalars (``dt``, a record offset) are literals in the jaxpr, so a changed one is a
+    different key.
+
+    Falls back to the plain call whenever sharing could not be exact: inside a trace (nothing
+    is dispatched here then), when a closed-over value is a tracer (eager AD), when a carry is
+    weakly typed (``lax.scan`` would retrace it promoted), or when the key cannot see every
+    value the program depends on (``_Unshareable``).
+    """
+    import jax
+    if any(isinstance(v, jax.core.Tracer) for v in jax.tree.leaves((init, xs))):
+        return jax.lax.scan(f, init, xs)
+    row = jax.tree.map(lambda x: jax.ShapeDtypeStruct(x.shape[1:], x.dtype), xs)
+    closed, shape = jax.make_jaxpr(f, return_shape=True)(init, row)
+    if (any(isinstance(c, jax.core.Tracer) for c in closed.consts)
+            or any(jax.typeof(v).weak_type for v in jax.tree.leaves((init, xs)))):
+        return jax.lax.scan(f, init, xs)
+    out_tree = jax.tree.structure(shape)
+    try:
+        key = (_program_key(closed.jaxpr), jax.tree.structure((init, xs)), out_tree)
+    except _Unshareable:
+        return jax.lax.scan(f, init, xs)
+    program = _SCAN_PROGRAMS.pop(key, None)
+    if program is None:
+        program = _scan_program(closed.jaxpr, out_tree)
+    _SCAN_PROGRAMS[key] = program
+    while len(_SCAN_PROGRAMS) > _SCAN_PROGRAMS_MAX:
+        del _SCAN_PROGRAMS[next(iter(_SCAN_PROGRAMS))]
+    return program(closed.consts, init, xs)
+
+
+def _scan_program(jaxpr, out_tree):
+    import jax
+
+    def scan_program(consts, init, xs):
+        def body(carry, x):
+            flat = jax.core.eval_jaxpr(jaxpr, consts, *jax.tree.leaves((carry, x)))
+            return jax.tree.unflatten(out_tree, flat)
+        return jax.lax.scan(body, init, xs)
+    return jax.jit(scan_program)
+
+
+class _Unshareable(Exception):
+    """A traced body whose program the key cannot see whole; it runs unshared."""
+
+
+def _program_key(jaxpr):
+    """Structural identity of a jaxpr: equal keys are one program.
+
+    Built like the key JAX's eager dispatch caches executables on (primitive and parameters,
+    ``xla_primitive_callable``), except that a nested jaxpr enters by structure instead of by
+    identity: variables by position, literals by bit pattern (so ``-0.0`` is not ``0.0``),
+    avals, equation contexts and effects by value. A nested closed jaxpr carrying constants,
+    or a parameter with no value equality, raises ``_Unshareable``: the key cannot see it.
+    """
+    from jax.extend.core import ClosedJaxpr, Jaxpr, Literal
+    names = {}
+
+    def bind(variables):
+        avals = []
+        for v in variables:
+            names[v] = len(names)
+            avals.append(v.aval)
+        return tuple(avals)
+
+    def atom(v):
+        if isinstance(v, Literal):
+            value = np.asarray(v.val)
+            return ('literal', value.dtype.str, value.shape, value.tobytes(), v.aval)
+        return names[v]
+
+    def parameter(v):
+        if isinstance(v, Jaxpr):
+            return ('jaxpr', _program_key(v))
+        if isinstance(v, ClosedJaxpr):
+            if v.consts:
+                raise _Unshareable
+            return ('jaxpr', _program_key(v.jaxpr))
+        if isinstance(v, (tuple, list)):
+            return (type(v), tuple(parameter(w) for w in v))
+        if isinstance(v, np.ndarray):
+            return (np.ndarray, v.dtype.str, v.shape, v.tobytes())
+        if isinstance(v, (float, complex, np.inexact)):
+            return (type(v), np.asarray(v).tobytes())
+        try:
+            hash(v)
+        except TypeError:
+            raise _Unshareable from None
+        return (type(v), v)
+
+    head = (bind(jaxpr.constvars), bind(jaxpr.invars), frozenset(jaxpr.effects))
+    equations = []
+    for eqn in jaxpr.eqns:
+        inputs = tuple(atom(v) for v in eqn.invars)
+        params = tuple((name, parameter(v)) for name, v in sorted(eqn.params.items()))
+        equations.append((eqn.primitive, inputs, params, eqn.ctx, frozenset(eqn.effects),
+                          bind(eqn.outvars)))
+    return head, tuple(equations), tuple(atom(v) for v in jaxpr.outvars)
+
 
 class NumpyTimeLoop:
     def __init__(self, device=None, reference=None):
@@ -83,9 +198,9 @@ class JaxTimeLoop(NumpyTimeLoop):
             return jax.lax.scan(step, current, ns)[0], None
         if chunks:
             ns = self.array(np.arange(chunks*checkpoint_steps).reshape(chunks, checkpoint_steps))
-            state = jax.lax.scan(jax.checkpoint(block), state, ns)[0]
+            state = _eager_scan(jax.checkpoint(block), state, ns)[0]
         if tail:
-            state = jax.lax.scan(step, state, self.array(np.arange(chunks*checkpoint_steps, steps)))[0]
+            state = _eager_scan(step, state, self.array(np.arange(chunks*checkpoint_steps, steps)))[0]
         return state
 
     def advance_recorded(self, step, state, steps, checkpoint_steps, interval, capture):
@@ -101,7 +216,7 @@ class JaxTimeLoop(NumpyTimeLoop):
                                    current, interval, checkpoint_steps)
             return current, capture(current)
         if count:
-            state, samples = jax.lax.scan(jax.checkpoint(block), state, self.array(np.arange(count)))
+            state, samples = _eager_scan(jax.checkpoint(block), state, self.array(np.arange(count)))
             first = self.xp.concat((first, samples), axis=0)
         start = 1+count*interval
         if start < steps:
