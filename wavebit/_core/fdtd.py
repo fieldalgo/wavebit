@@ -1237,14 +1237,20 @@ class _Grid:
             self.dx, self.nx, x_half, None, subpixel=self.subpixel,
             dy=self.dy, ny=self.ny, y_half=y_half, period_y=self.period_y))
 
-    def pole_state(self, shape, z_half, x_half, dtype):
+    def pole_state(self, shape, z_half, x_half, dtype, y_half=False):
         """The :class:`_PoleSet` for one electric component, or ``None`` if the scene is
-        non-dispersive."""
+        non-dispersive.
+
+        ``z_half`` / ``x_half`` / ``y_half`` are the component's own Yee position and have to
+        be the ones its ``eps_for`` call is given: the pole strength is the dispersive part of
+        the same permittivity, so a fill sampled anywhere else puts the dispersive strength
+        half a cell off the Yee position its component is updated at.
+        """
         if self.dispersion is None or not self.poles:
             return None
         flat, fills = [], []
         for pole_id in sorted(self.poles):
-            fill = self.fill_for(pole_id, z_half, x_half)
+            fill = self.fill_for(pole_id, z_half, x_half, y_half=y_half)
             for pole in self.poles[pole_id]:
                 flat.append(pole)
                 fills.append(fill)
@@ -1400,7 +1406,13 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None, record_field=None,
         ey = np.zeros((nz, ny, nx), dtype=dtype)
         hx = np.zeros((nz - 1, ny, nx), dtype=dtype)
         hz = np.zeros((nz, ny, nx), dtype=dtype)
-        poles_y = grid.pole_state((nz, ny, nx), False, False, dtype)
+        # `y_half=True` for the same reason `eps` above has it: the pole strength is the
+        # dispersive half of Ey's permittivity and belongs at Ey's own y half-step. Sampling it
+        # on the y nodes left 1c521ea's move of `eps` half done -- invisible while the raster
+        # has no y axis (`ny == 1`), where the two spellings are one computation, while on the
+        # crossed damped metal it put s absorption at 0.402 against RCWA's 0.431 (co-located:
+        # 0.433).
+        poles_y = grid.pole_state((nz, ny, nx), False, False, dtype, y_half=True)
     if tm_on:
         # (Hy, Ex, Ez). Ex is normal to the tooth's vertical walls, Ez to the horizontal ones.
         eps_x = grid.eps_for(False, True, 'x').real
