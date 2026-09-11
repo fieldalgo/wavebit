@@ -1359,7 +1359,10 @@ def test_the_two_pure_legs_compose_the_given_incidence():
 
 def test_psi_and_tetm_together_are_refused():
     """Two spellings of the polarisation at once name it twice, and neither wins silently."""
-    with pytest.raises(ValueError, match='name the polarisation twice'):
+    # d206a69 moved this refusal into the shared incidence check (`_core/conventions.py`), which
+    # words it for every solver; the regex follows that wording, and the test still pins that
+    # the two spellings are refused rather than silently reconciled.
+    with pytest.raises(ValueError, match='tetm and an incidence polarization'):
         _ = solve_fdtd(structure=_grating(), thickness=[THICK], top=EPS_TOP, bot=EPS_BOT,
                        period=[PERIOD], wavelength=WL, theta=0.0, psi=0.3, tetm='te',
                        resolution=0.05, n_periods=20)
