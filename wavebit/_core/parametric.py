@@ -1403,15 +1403,14 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype, dyadic=False):
     each covered run has to read the primary at *its* coincident instance. A flush record is the
     same segment and substitutes everywhere, tangential excess included; that is what a
     quarter-turned grating needs. A cross pair (two shapes) cancels over the run it shares,
-    whatever the materials: the partner's weight is subtracted from the primary's, and the
-    transfer is one on the run, ``n2/(n2+e**2)`` off the line beyond its ends (a normal squared
-    distance ``n2`` and tangential excess ``e``, one at ``e=0``) and zero on the line beyond
-    them, with the tails of several runs on one partner normalized symmetrically. That
-    transfer moved a value step along the ray extending each run endpoint (2026-09-07); it
-    introduces no smoothing length. Since every record cancels it is algebraically neutral in
-    the vector sum -- both faces of a record are opposed on one line, so subtracting the same
-    ``moved`` from both changes nothing but rounding -- and it stays only until its removal
-    lands as its own change, so that this one leaves every same-material field bit for bit.
+    whatever the materials: over the run the partner's normal coordinate is the primary's,
+    bitwise, so the two weights are one number and the opposed normals sum to an exact zero.
+    Until 2026-09-12 a transfer also moved the partner's weight to the primary's axis, one on
+    the run and ``n2/(n2+e**2)`` off the line beyond its ends (the 2026-09-07 fix of a value
+    step along the ray extending each run endpoint, carrying the material sign); once every
+    record cancelled it took the same amount from both members, opposed on one line, and
+    changed the sum by nothing but rounding, so it was removed -- the run's end is continuous
+    without it, because nothing in the sum reads the run beyond the substitution.
 
     **A seam between different materials is put back by the seam contrast** (2026-09-11), not
     by a sign on the record. Until then a cross pair read its two material slots as an
@@ -1514,10 +1513,9 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype, dyadic=False):
                                  pr.m, pr.n, reduced, dtype)
         equalities[r] = xp.all(slots[p.shape] == slots[q.shape])
 
-    # 1. Every piece's distance and each cross run's transfer at the nearest instance.
+    # 1. Every piece's distance at the nearest instance.
     d = [None] * len(plan.pieces)
     round_dir = {}
-    transfer = {}
     for i, frame in frames.items():
         faces = {face: plan.pieces[index[(i, face)]] for face in _overlap.FACES}
         offsets = sorted({mn for pc in faces.values() for mn in pc.imgs})
@@ -1526,7 +1524,7 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype, dyadic=False):
         for face, piece in faces.items():
             k = index[(i, face)]
             cross = cross_by_q.get(k, ())
-            best, best_transfer = None, {r: None for r in cross}
+            best = None
             for m, n in piece.imgs:
                 du, dv = own[(m, n)]
                 e2, n2, _ = frame.parts(face, du, dv, zero)
@@ -1552,7 +1550,6 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype, dyadic=False):
                     else:
                         lo, hi = window
                         n2 = xp.where((psigma >= lo) & (psigma <= hi), pn2, n2)
-                hits = {}
                 for r in cross:
                     pr = plan.pairs[r]
                     p = plan.pieces[pr.p]
@@ -1560,34 +1557,32 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype, dyadic=False):
                     # The primary's expression at the coincident absolute image: this box's
                     # fold plus this instance, less the pair's offset -- the same integers
                     # the primary's own evaluation names when this instance is the nearest.
+                    # Over the run (a flush record everywhere) the partner's normal coordinate
+                    # is the primary's, bitwise, which is what lets two opposed faces cancel
+                    # to an exact zero. The 2026-09-07 transfer that also moved a partner's
+                    # weight to the primary's axis here -- one on the run, ``n2/(n2+e**2)``
+                    # off the line beyond its ends -- went on 2026-09-12: once every record
+                    # cancels (3b) it took the same amount from both members, opposed on one
+                    # line, and changed nothing but rounding.
                     pdu, pdv = pframe.at(frame.km + (m - pr.m), frame.kn + (n - pr.n))
                     pe2, pn2, sigma = pframe.parts(p.face, pdu, pdv, zero)
                     lo, hi = windows[r]
                     on_segment = (sigma >= lo) & (sigma <= hi)
-                    excess = xp.maximum(xp.maximum(lo - sigma, sigma - hi), zero)
-                    total2 = pn2 + excess * excess
-                    # Exact on the run; zero on its line beyond either end.
-                    # Off the line this approaches the endpoint continuously,
-                    # without introducing a user-selected smoothing length.
-                    hits[r] = xp.where(on_segment, one, pn2 / xp.where(total2 > 0, total2, one))
                     if pr.flush:
                         e2, n2 = pe2, pn2
                     else:
                         n2 = xp.where(on_segment, pn2, n2)
                 val = e2 + n2
                 if best is None:
-                    best, best_transfer = val, hits
+                    best = val
                 else:
-                    take = val < best
-                    best = xp.where(take, val, best)
-                    best_transfer = {r: xp.where(take, hits[r], best_transfer[r]) for r in cross}
+                    best = xp.where(val < best, val, best)
             # The root's radicand is guarded, not its result: a sample exactly on the face has
             # `best == 0`, where `d(sqrt)` is infinite and the cotangent `where` hands the
             # discarded branch, zero, makes `0 * inf` -- the `_hypot_safe` lesson. Taking the
             # root of 1 there and writing the 0 back leaves every value bitwise where it was.
             on_face = best == 0.0
             d[k] = xp.where(on_face, zero, xp.sqrt(xp.where(on_face, one, best)))
-            transfer.update(best_transfer)
     round_dyads = {}
     for k, pc in enumerate(plan.pieces):
         if pc.face != 'arc':
@@ -1665,28 +1660,14 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype, dyadic=False):
         xy = ((a+c)*b + 1j*(b*b-a*c))/norm2
         return xx, xy, yy, xp.conj(xy)
 
-    # 3. The sum. A cross pair's partner hands its weight to the primary's axis over the run,
-    #    to cancel; every face then contributes along its own outward normal, and each box's
-    #    two opposed faces are differenced *before* the rotation so that a pair's cancellation
-    #    is an exact zero on the box's own axis.
-    own_w = list(w)
-    for r, pr in enumerate(plan.pairs):
-        if r not in windows:
-            continue
-        # Several runs can share a partner. Their off-line tails may overlap;
-        # bound the total transferred weight without ordering the records.
-        # Each denominator is >= the sum of all tails since 0 <= tail <= 1.
-        others = one
-        for other in cross_by_q[pr.q]:
-            if other != r:
-                others = others + transfer[other]
-        moved = (transfer[r] / others) * w[pr.q]
-        own_w[pr.q] = own_w[pr.q] - moved
-        own_w[pr.p] = own_w[pr.p] - moved
+    # 3. The sum. Every face contributes along its own outward normal, and each box's two
+    #    opposed faces are differenced *before* the rotation so that a self pair's cancellation
+    #    is an exact zero on the box's own axis; a cross pair's two faces carry one weight over
+    #    their run (step 1) and cancel across the boxes the same way.
     sx, sy = zero, zero
     for i, frame in frames.items():
-        wu = own_w[index[(i, '+u')]] - own_w[index[(i, '-u')]]
-        wv = own_w[index[(i, '+v')]] - own_w[index[(i, '-v')]]
+        wu = w[index[(i, '+u')]] - w[index[(i, '-u')]]
+        wv = w[index[(i, '+v')]] - w[index[(i, '-v')]]
         sx = sx + (wu * frame.cos - wv * frame.sin)
         sy = sy + (wu * frame.sin + wv * frame.cos)
     for k, (gx, gy) in round_dir.items():

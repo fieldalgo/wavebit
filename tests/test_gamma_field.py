@@ -589,8 +589,8 @@ def _mu_absence_is_one_in_a_fresh_interpreter():
 #: beyond a face's tangential extent the direction becomes the vector from the nearest
 #: endpoint to the sample (at the instance on the box's own fold), the corner-radial rule the
 #: fold's box branch used. Inside the extent it is the fixed normal, as before.
-GROUPED_SUM = """        wu = own_w[index[(i, '+u')]] - own_w[index[(i, '-u')]]
-        wv = own_w[index[(i, '+v')]] - own_w[index[(i, '-v')]]
+GROUPED_SUM = """        wu = w[index[(i, '+u')]] - w[index[(i, '-u')]]
+        wv = w[index[(i, '+v')]] - w[index[(i, '-v')]]
         sx = sx + (wu * frame.cos - wv * frame.sin)
         sy = sy + (wu * frame.sin + wv * frame.cos)"""
 FOOT_SUM = """        du, dv = frame.at(frame.km, frame.kn)
@@ -604,8 +604,8 @@ FOOT_SUM = """        du, dv = frame.at(frame.km, frame.kn)
                 exc = du - xp.clip(du, -frame.a, frame.a)
                 fx, fy = exc * frame.cos - nu * frame.sin, exc * frame.sin + nu * frame.cos
             nrm = _hypot_safe(xp, fx, fy)
-            sx = sx + own_w[index[(i, face)]] * fx / nrm
-            sy = sy + own_w[index[(i, face)]] * fy / nrm"""
+            sx = sx + w[index[(i, face)]] * fx / nrm
+            sy = sy + w[index[(i, face)]] * fy / nrm"""
 
 SOURCE = pathlib.Path(P.__file__)
 OVERLAP_SOURCE = pathlib.Path(O.__file__)
@@ -697,10 +697,10 @@ MUTANTS = [
     # carried two runs), the half-length window below is what is left; the substitution
     # mutant after it was never one of the four. 'The sign window always open'
     # (`hits[r] = one`) is dropped, not moved: since 2026-09-11 the sum reads no sign from a
-    # record, and the transfer that `hits` gates takes `moved` from both members of a record,
+    # record, and the transfer that `hits` gated took `moved` from both members of a record,
     # which are opposed on one line -- neutral in the vector sum, so no instrument at the value
-    # can see it (the K contact step, the equality step and the listing gap all move by less
-    # than 1e-14 under it; measured). The run window still decides the substitution, and its
+    # could see it (the K contact step, the equality step and the listing gap all moved by
+    # less than 1e-14 under it; measured), and on 2026-09-12 the transfer itself was removed. The run window still decides the substitution, and its
     # mutant moved from the A|B|C band gate (3.71 deg when the window gated a sign; 0.3371 now,
     # the unmutated field's own figure, a survivor) to the off-centre windowed pair, where a
     # narrowed window leaves rounding uncancelled on the line.
