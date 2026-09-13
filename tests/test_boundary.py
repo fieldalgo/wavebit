@@ -392,23 +392,29 @@ def test_gradient_reaches_the_shape_parameters():
     _, plan = resolve(xnp, TWO_RODS)
     p0 = jnp.asarray([v for s in TWO_RODS for v in s[:5]])
 
-    def loss(flat):
+    def matrices(flat):
         params = [tuple(flat[i] for i in range(0, 5)) + (TWO_RODS[0][5],),
                   tuple(flat[i] for i in range(5, 10)) + (TWO_RODS[1][5],)]
         (m, _) = _mats(jnp, params, plan, dtype=jnp.float64, cdtype=jnp.complex128)
+        return m
+
+    def loss(flat):
+        m = matrices(flat)
         return jnp.real(jnp.sum(m[0] * jnp.conj(m[0])) + jnp.sum(m[2] * jnp.conj(m[2])))
 
     g = jax.grad(loss)(p0)
     assert np.all(np.isfinite(np.asarray(g)))
     assert np.abs(np.asarray(g)).max() > 1.0            # not a dead gradient
 
-    # Centering the painted union moves the sample lattice relative to the
-    # medial axes. Here h=1e-6 crosses one nearest-point switch (cx: left -60.79,
-    # right -124.09); at h=1e-8 both sides approach -60.79. Check the local
-    # derivative at two smaller steps, with the original tolerance unchanged.
+    # The contrast envelope retains nearest-point switches: h=1e-6 crosses
+    # one for cx, while 1e-7 and 1e-8 are local. Difference the matrix entries
+    # before summation using |a|^2-|b|^2 = Re((a-b)*conj(a+b)); subtracting
+    # two large scalar norms erased the small second-angle sensitivity.
     for i in (0, 2, 4, 9):
         for h in (1e-7, 1e-8):
-            fd = (float(loss(p0.at[i].add(h))) - float(loss(p0.at[i].add(-h)))) / (2 * h)
+            plus, minus = matrices(p0.at[i].add(h)), matrices(p0.at[i].add(-h))
+            fd = sum(float(jnp.sum(jnp.real((plus[k]-minus[k])*jnp.conj(plus[k]+minus[k]))))
+                     for k in (0, 2)) / (2*h)
             an = float(g[i])
             assert abs(fd - an) <= 1e-5 * max(abs(fd), abs(an), 1.0), (i, h, fd, an)
 

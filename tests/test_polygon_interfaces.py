@@ -325,12 +325,13 @@ def test_material_gradient_with_a_frozen_interface_plan():
     np.testing.assert_allclose(got, want, atol=2e-8, rtol=2e-7)
 
 
-def test_disabling_the_interface_mask_is_detected(monkeypatch):
-    original = b.replay_interfaces
+def test_disabling_the_material_contrast_is_detected(monkeypatch):
+    # Production now removes an invisible interval through its zero contrast. Forcing
+    # only the old boolean mask on is neutral; force the live contrast on instead.
+    original = b.interface_contrasts
     def all_edges(xp, *args):
-        a, e, l2, live = original(xp, *args)
-        return a, e, l2, xp.ones_like(live)
-    monkeypatch.setattr(b, 'replay_interfaces', all_edges)
+        return xp.ones_like(original(xp, *args))
+    monkeypatch.setattr(b, 'interface_contrasts', all_edges)
     with pytest.raises(AssertionError):
         test_nested_same_material_paint_order_does_not_change_matrices()
 

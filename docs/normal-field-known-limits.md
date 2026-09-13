@@ -33,7 +33,9 @@ clipper contour: an opposed spur must not erase a third, genuine exterior edge. 
 references, neighbor-region indices, the reduced-basis image offsets, and bounded image groups.
 `replay_interfaces` recomputes the interval endpoints from traced vertices and the traced
 lattice, then compares the values on the two sides. Equal values exclude the entire interval
-from the distance minimum at **every** sample. Unequal values retain it. Uncovered intervals
+from the distance minimum at **every** sample. Unequal values retain it. Since 2026-09-13,
+the production extension also uses a continuous contrast weight; see section 1a below.
+The binary mask remains available to the legacy nearest-interface probes. Uncovered intervals
 compare against the background. The comparison includes the imaginary part of a lossy value.
 The permeability pass uses the same geometry record with `mu_value` in the material slots;
 `mu=None` consequently means 1, rather than a different physical permeability.
@@ -100,7 +102,8 @@ a hand-written union contour over the whole cell, different and lossy materials,
 rotation with the cell, partial periodic contact on positive and negative shear, long segments
 against a much larger image set, multi-image face coverage, zero-area spurs, three-material
 contacts, empty interfaces, the epsilon/mu split, frozen JIT and
-geometry/material derivatives, and changed-contact staleness. It also disables the live mask
+geometry/material derivatives, and changed-contact staleness. It also replaces the production
+contrast weights with ones
 as a negative control. The original 400-square / rotated 200-square reproducer on a 700-square
 cell retains its raw-loop control: the old `nnT` differs by 0.5 on more than 17% of the 128x128
 samples; the actual-interface field matches the outer contour throughout the cell. Before the
@@ -129,6 +132,60 @@ assumes that topology still fits. Resonant truncation convergence and contact cu
 behavior in the parametric builder remain open. The separate `solve_field` string pytree
 issue is fixed in §8d.
 
+
+### 1a. Painted material-equality limit (2026-09-13)
+
+Removing an interval only at exact material equality created a finite step in the
+default painted extension. An arbitrarily weak internal interface still owned its
+whole nearest-point region until the two materials became equal. The exact material
+Fourier coefficients themselves were continuous.
+
+The production field now uses each interval's live relative contrast
+`c = abs(eps_left-eps_right)/(abs(eps_left)+abs(eps_right))`, with zero for two
+zero values. For each unordered pair of region labels, retain its nearest point:
+a farther interval of the same contrast cannot contribute to the envelope below.
+Order these candidates by geometric distance, and let `a_i = c_i^4/d_i^4`.
+The positive increments of the prefix maximum of `a_i`, divided by its final
+maximum, are the weights of the nearest-point normal vectors. An equivalent
+description is averaging the nearest candidate over all influence thresholds.
+Distances are scaled by their minimum before taking powers, avoiding poles in
+the actual arithmetic; on an interface only coincident candidates contribute.
+Normalize the resulting real vector and form its rank-one projector.
+
+Equal nonzero contrasts recover the existing nearest-point projector. An invisible
+interval contributes zero throughout the cell, so equal-material partitions and
+their common centroid convention remain invariant. A weak interval loses its
+influence with material contrast away from its interface. The same construction
+uses the full complex material difference, retains real projector arrays, and
+transports under physical rotations and reflections. It adds no material ranking
+or discrete equality-dependent choice of extension. Candidates sharing a foot
+point carry the same vector; their tie order cannot change the weighted sum.
+
+The `painted` section of `studies/nvf_seam_contrast.py` reproduces the change on
+two 300-square boxes centered at x = -150 and +150, each rotated by 0.3 radians.
+They overlap. Other settings match section 8e, with order 4. The table gives
+`T(base + delta*direction | base) - T(base | base)` at normal grid 128.
+
+| base, direction | old, delta=1e-7 | new, delta=1e-5 | new, delta=1e-7 |
+| --- | ---: | ---: | ---: |
+| 9, 1 | -1.70284e-3 | +2.29905e-7 | +2.29904e-9 |
+| 4+0.4i, i | -2.99729e-4 | -2.84151e-6 | -2.84152e-8 |
+| -4+0.3i, 1 | -1.34443e-3 | +3.47185e-7 | +3.47200e-9 |
+
+The 64 and 256 grids show the same removal of a fixed material-equality step.
+The before/after runs are recorded with source hashes in the existing result log.
+`test_painted_material_continuity.py` checks the material ramps, exact interface
+normals, projector rank, rotation/reflection, passivity, chunking and JAX/Torch
+derivatives. Existing tests retain independent union contours, 1D Li invariants,
+painted geometry gradients and periodic-basis mutation controls. The close-mode
+derivative exposed by this extension also required the separate
+[eigenvalue reciprocal correction](nvf-scattering-doubling.md).
+
+This fixes the recorded equality step, not every regularity or accuracy problem.
+Nearest-point switches at medial axes and a zero-vector tie remain. At a sample
+exactly on an interface that disappears, the normal field itself need not have a
+pointwise material limit. Complex or metallic optical convergence is not inferred
+from these material ramps, energy balance or representation invariants.
 
 ## 2. A face the fold cannot merge is refused, not built — FIXED (2026-09-06)
 
@@ -919,8 +976,9 @@ it does not choose a uniquely accurate extension off the interface. At order 4 t
 and metal cells still differ from Li by about `-7.9e-4` and `-1.75e-1`. Weak seams retain
 larger band errors than strong seams; the contrast term remains windowless and extends past
 a seam endpoint. On K the direct column above the endpoint has `|n_x|` about 0.022--0.024.
-J's closing-gap cusp and the polygon route's material-equality step (the rotated row's
-`-1.67e-3`) remain. The same-material control's contact residual is visible above.
+J's closing-gap cusp and the same-material control's contact residual remain.
+The polygon route's material-equality step in this historical table (the rotated
+row's `-1.67e-3`) was subsequently removed by section 1a's contrast envelope.
 
 The pair loop is still quadratic in the number of pieces. Real inputs retain the original
 real arrays and three components. Complex seams require complex arrays and a fourth Fourier

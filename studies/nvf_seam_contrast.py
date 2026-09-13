@@ -42,6 +42,8 @@ of these numbers it moved:
            a box against a circle, theta 0, 700 nm and order 8
   modulus  distinct equal-modulus materials crossed radially with h = 1e-4, 1e-6, 1e-8;
            coefficient and transmission changes must shrink with h, not retain a jump
+  painted  the overlapping rotated pair through material equality at three normal grids,
+           including positive-real, absorbing and metallic material values
 
 Fixture (``tests/test_gamma_layers.py::K_SHORT``): square cell 700, two 300 x 300 boxes at
 cx = -150 / +150 of eps 4 | 9 on background 1, thickness 300, wavelength 900, top 1, bot 2.25,
@@ -361,8 +363,24 @@ def modulus(log):
                             heights=[300., 280.], phi=.13, psi=.2), work)
 
 
+def painted(log):
+    print('== painted: overlapping rotated boxes through material equality, order 4')
+    for base, direction in ((9., 1.), (4.+.4j, 1j), (-4.+.3j, 1.)):
+        for grid in (64, 128, 256):
+            def work(base=base, direction=direction, grid=grid):
+                t0 = sum_T(pair(base, base, angle=.3), 4, grid)
+                ramp = []
+                for delta in (1e-3, 1e-5, 1e-7):
+                    value = sum_T(pair(base+delta*direction, base, angle=.3), 4, grid)-t0
+                    ramp.append(dict(delta=delta, transmission_change=value))
+                print(f'  base={base} N={grid} T0={t0:.12f} '
+                      f'changes={[row["transmission_change"] for row in ramp]}', flush=True)
+                return dict(T0=t0, ramp=ramp)
+            timed(log, dict(kind='painted', base=base, direction=direction, N=grid, order=4), work)
+
+
 SECTIONS = dict(ladder=ladder, ramp=ramp, listing=listing, three=three, band=band_section,
-                matrix=matrix, modulus=modulus)
+                matrix=matrix, modulus=modulus, painted=painted)
 
 
 def main(argv=None):
@@ -379,10 +397,12 @@ def main(argv=None):
     def digest(path):
         with open(path, 'rb') as source_file:
             return hashlib.sha256(source_file.read()).hexdigest()
+    from wavebit._core import boundary, interfaces
     log.emit(dict(kind='header', head=head, tag=args.tag, numpy=np.__version__,
                   wavebit_in_checkout=source == os.path.join('..', 'wavebit'),
                   opening='positive gap', gap=GAP,
-                  source_sha256=dict(parametric=digest(P.__file__), instrument=digest(__file__)),
+                  source_sha256=dict(parametric=digest(P.__file__), boundary=digest(boundary.__file__),
+                                     interfaces=digest(interfaces.__file__), instrument=digest(__file__)),
                   sections=args.sections, started=time.strftime('%Y-%m-%d %H:%M:%S')))
     print(f'HEAD={head} tag={args.tag} numpy {np.__version__}')
     for name in args.sections:

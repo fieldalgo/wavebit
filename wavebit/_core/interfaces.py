@@ -31,6 +31,23 @@ class InterfacePlan(namedtuple('InterfacePlan', 'pieces images groups')):
     __slots__ = ()
 
 
+def interface_contrasts(xp, regions, background, plan, dtype):
+    """Live contrast of each interval, including zero at material equality.
+
+    The interval topology remains independent of the material values. The magnetic
+    pass supplies its permeability view through the same scalar slots.
+    """
+    cdtype = xp.complex128 if dtype == xp.float64 else xp.complex64
+    values = xp.stack([xp.asarray(as_material(m).epsilon, dtype=cdtype)
+                       for m, _ in regions] + [xp.asarray(as_material(background).epsilon,
+                                                        dtype=cdtype)])
+    left = xp.asarray([p.left for p in plan.pieces], dtype=xp.int64)
+    right = xp.asarray([p.right for p in plan.pieces], dtype=xp.int64)
+    a, b = values[left], values[right]
+    scale = xp.abs(a) + xp.abs(b)
+    return xp.abs(a-b) / xp.where(scale > 0., scale, xp.ones_like(scale))
+
+
 def plan_interfaces(regions, lattice, transform):
     """Plan on concrete resolved loops; integer images count the reduced basis.
 

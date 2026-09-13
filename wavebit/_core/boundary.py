@@ -34,7 +34,7 @@ removed block path, while tying on axis-aligned overlap, where a staircase has n
 lose.
 """
 from . import clipper as _clipper
-from .interfaces import plan_interfaces, replay_interfaces
+from .interfaces import plan_interfaces, replay_interfaces, interface_contrasts
 from .parametric import nvf_from_coeffs, shape_geometry, _sampled_coeffs
 from .domain import as_material
 from .backend import checked_float
@@ -121,6 +121,14 @@ def periodic_segments(xp, A, E, L2, lattice, transform=None, images=None, image_
     E9 = xp.concat([E] * len(images), axis=0)
     L29 = xp.concat([L2] * len(images), axis=0)
     return A9, E9, L29
+
+
+def _folded_sample_points(xp, grid_shape, lattice, dtype, transform):
+    """The same reduced-cell quadrature for both nearest-interface extensions."""
+    X, Y = sample_grid(xp, grid_shape, lattice, dtype)
+    pts = xp.stack([xp.reshape(X, (-1,)), xp.reshape(Y, (-1,))], axis=-1)
+    pts = fold_into_cell(xp, pts, reduced_basis(lattice, transform))
+    return pts
 
 
 def _seg_dist(xp, pts, A, E, L2):
@@ -293,9 +301,7 @@ def distance_gradient_normal_field(xp, polys, grid_shape, lattice, dtype, chunk=
         else:
             active = xp.concat([active[xp.asarray(ids, dtype=xp.int64)] for ids in image_groups])
 
-    X, Y = sample_grid(xp, grid_shape, lattice, dtype)
-    pts = xp.stack([xp.reshape(X, (-1,)), xp.reshape(Y, (-1,))], axis=-1)
-    pts = fold_into_cell(xp, pts, reduced_basis(lattice, transform))
+    pts = _folded_sample_points(xp, grid_shape, lattice, dtype, transform)
 
     threshold2 = 1e-26
     if active is not None:
@@ -614,9 +620,130 @@ def _paint_centroid(xp, segment_data, plan):
                      xp.sum((a[:, 1] + z[:, 1]) * cross)]) / (3 * xp.sum(cross))
 
 
+def material_projector_fields(xp, grid_shape, lattice, dtype, segment_data, contrasts,
+                               interface_plan, transform=None, chunk=None):
+    """A contrast-weighted extension of the nearest-interface normal projector.
+
+    Keep only the nearest point per unordered pair of region labels: all its intervals
+    have the same contrast, and a farther copy cannot increase its inverse-distance
+    influence. This also makes subdivision of a straight interval invisible.
+
+    In increasing distance order, a candidate contributes only the positive increase
+    over the largest preceding influence, with influence ``contrast**4 / distance**4``.
+    Normalize those increases by their maximum. Equal nonzero contrasts recover the
+    nearest-point extension exactly; a vanishing contrast loses its influence continuously
+    off its own interface. On an interface its pole recovers the exact normal dyad.
+    Equivalently, average the nearest-point vectors over all influence thresholds,
+    then normalize. Shared endpoint candidates carry the same vector, so exchanging
+    their order does not change that average. Material-dependent phases would break
+    this property. The vectors and weights are real even for complex materials.
+
+    This retains nearest-point spatial switches and the usual zero-vector tie;
+    it does not promise global smoothness at medial axes or disappearing interfaces.
+    """
+    from .parametric import _BLEND_EXPONENT
+    A, E, L2, active = segment_data
+    ids = [i for group in interface_plan.groups for i in group]
+    groups = {}
+    for image_index, i in enumerate(ids):
+        piece = interface_plan.pieces[i]
+        key = tuple(sorted((piece.left, piece.right)))
+        if key[0] != key[1]:
+            groups.setdefault(key, []).append(image_index)
+    if not groups:
+        one = xp.ones(grid_shape, dtype=dtype)
+        zero = xp.zeros_like(one)
+        return one, zero, zero
+    A, E, L2 = periodic_segments(xp, A, E, L2, lattice, transform,
+                                interface_plan.images, interface_plan.groups)
+    extended = xp.asarray(ids, dtype=xp.int64)
+    active, contrasts = active[extended], contrasts[extended]
+    candidates = []
+    for indices in groups.values():
+        index = xp.asarray(indices, dtype=xp.int64)
+        valid = xp.sum(E[index]*E[index], axis=1) > 0.
+        candidates.append((A[index], E[index], L2[index], contrasts[indices[0]], valid))
+    pts = _folded_sample_points(xp, grid_shape, lattice, dtype, transform)
+    reference = E[xp.argmax(xp.astype(active, xp.int32))]
+    cross = E[:, 0]*reference[1] - E[:, 1]*reference[0]
+    parallel = xp.all((cross == 0.) | ~active)
+    reference2 = xp.sum(reference*reference)
+    normal = xp.stack([reference[1], -reference[0]]) / xp.sqrt(
+        xp.where(reference2 > 0., reference2, xp.ones_like(reference2)))
+    scale = xp.max(xp.abs(xp.stack([xp.asarray(lattice[i][j], dtype=dtype)
+                                   for i in (0, 1) for j in (0, 1)])))
+    threshold2 = (64*xp.finfo(dtype).eps*scale)**2
+    contrast = xp.stack([item[3] for item in candidates])
+    strengths = contrast**_BLEND_EXPONENT*xp.stack([
+        xp.astype(xp.any(item[4]), dtype) for item in candidates])
+    count = len(candidates)
+    if chunk is None:
+        chunk = max(1, min(pts.shape[0], 4_000_000 // max(len(A), 1)))
+
+    def evaluate(p):
+        rows = xp.arange(p.shape[0])
+        distances, normals = [], []
+        for a, e, l2, _, valid in candidates:
+            dist2, foot = _seg_dist(xp, p, a, e, l2)
+            dist2 = xp.where(valid[None, :], dist2, xp.asarray(float('inf'), dtype=dtype))
+            nearest = xp.argmin(dist2, axis=1)
+            distance = dist2[rows, nearest]
+            delta = p-foot[rows, nearest]
+            edge = e[nearest]
+            n_edge = xp.stack([edge[:, 1], -edge[:, 0]], axis=-1)
+            edge2 = xp.sum(n_edge*n_edge, axis=1)
+            n_edge = n_edge / xp.sqrt(xp.where(edge2 > 0., edge2,
+                                               xp.ones_like(edge2)))[:, None]
+            n_far = delta / xp.sqrt(xp.where(distance > threshold2, distance,
+                                              xp.ones_like(distance)))[:, None]
+            normals.append(xp.where((distance <= threshold2)[:, None], n_edge, n_far))
+            distances.append(distance)
+        d2 = xp.stack(distances, axis=1)
+        direction = xp.stack(normals, axis=1)
+        minimum = xp.min(xp.where(strengths[None, :] > 0., d2,
+                                  xp.asarray(float('inf'), dtype=dtype)), axis=1)
+        minimum = xp.where(xp.any(strengths > 0.), minimum, xp.ones_like(minimum))
+        on = minimum <= threshold2
+        ratio = xp.where(on, xp.ones_like(minimum), minimum)[:, None] / xp.where(
+            d2 > 0., d2, xp.ones_like(d2))
+        influence = strengths[None, :] * xp.where(on[:, None], xp.astype(d2 <= threshold2, dtype),
+                                                   ratio**(_BLEND_EXPONENT/2))
+        order = xp.argsort(d2, axis=1, stable=True)
+        sorted_influence = influence[rows[:, None], order]
+        sorted_direction = direction[rows[:, None], order]
+        # Parallel prefix maximum in log2(number of material pairs) Array-API steps.
+        prefix = sorted_influence
+        offset = 1
+        while offset < count:
+            shifted = xp.concat([xp.zeros_like(prefix[:, :offset]), prefix[:, :-offset]], axis=1)
+            prefix = xp.maximum(prefix, shifted)
+            offset *= 2
+        previous = xp.concat([xp.zeros_like(prefix[:, :1]), prefix[:, :-1]], axis=1)
+        mass = xp.maximum(sorted_influence-previous, xp.zeros_like(sorted_influence))
+        peak = prefix[:, -1]
+        mass = mass / xp.where(peak > 0., peak, xp.ones_like(peak))[:, None]
+        sx = xp.sum(mass*sorted_direction[:, :, 0], axis=1)
+        sy = xp.sum(mass*sorted_direction[:, :, 1], axis=1)
+        tie = (sx == 0.) & (sy == 0.)
+        reference_direction = sorted_direction[rows, xp.argmax(mass, axis=1)]
+        sx, sy = (xp.where(tie, reference_direction[:, 0], sx),
+                  xp.where(tie, reference_direction[:, 1], sy))
+        sx, sy = xp.where(parallel, normal[0], sx), xp.where(parallel, normal[1], sy)
+        sx, sy = xp.where(xp.any(active), sx, 1.), xp.where(xp.any(active), sy, 0.)
+        norm2 = sx*sx+sy*sy
+        return xp.stack([sx*sx/norm2, sx*sy/norm2, sy*sy/norm2], axis=-1)
+
+    if 'jax' in xp.__name__:
+        result = _scanned_normals(xp, evaluate, pts, pts.shape[0], chunk, width=3)
+    else:
+        result = xp.concat([evaluate(pts[lo:lo+chunk])
+                            for lo in range(0, pts.shape[0], chunk)], axis=0)
+    return tuple(xp.reshape(result[:, i], grid_shape) for i in range(3))
+
+
 def normal_projector_coeffs(xp, loops, grid_shape, lattice, half_width_u, half_width_v,
                             dtype, cdtype, transform=None, segment_data=None, images=None,
-                            image_groups=None, anchor=None):
+                            image_groups=None, anchor=None, contrasts=None, interface_plan=None):
     """Coefficient grids of ``n_u**2``, ``n_u*n_v``, ``n_v**2``, built with the layer CENTRED.
 
     The resolved route supplies the area centroid of the unwrapped painted
@@ -658,12 +785,17 @@ def normal_projector_coeffs(xp, loops, grid_shape, lattice, half_width_u, half_w
         built = loops
         phase = xp.asarray(1.0 + 0j, dtype=cdtype)
 
-    normal_x, normal_y = distance_gradient_normal_field(xp, built, grid_shape, lattice, dtype,
-                                                        transform=transform,
-                                                        segment_data=segment_data, images=images,
-                                                        image_groups=image_groups)
+    if contrasts is not None and segment_data is not None:
+        fields = material_projector_fields(xp, grid_shape, lattice, dtype, segment_data,
+                                            contrasts, interface_plan, transform)
+    else:
+        normal_x, normal_y = distance_gradient_normal_field(xp, built, grid_shape, lattice, dtype,
+                                                            transform=transform,
+                                                            segment_data=segment_data, images=images,
+                                                            image_groups=image_groups)
+        fields = (normal_x*normal_x, normal_x*normal_y, normal_y*normal_y)
     out = []
-    for f in (normal_x * normal_x, normal_x * normal_y, normal_y * normal_y):
+    for f in fields:
         out.append(_sampled_coeffs(xp, xp.astype(f, cdtype), half_width_u, half_width_v) * phase)
     return out
 
@@ -744,12 +876,15 @@ def conv_mats(xp, regions, background, half_width_u, half_width_v, lattice, norm
     if interface_plan is None:
         interface_plan = plan_interfaces(regions, lattice, transform)
     segment_data = replay_interfaces(xp, regions, background, lattice, transform, interface_plan)
-    c_xx, c_xy, c_yy = normal_projector_coeffs(
+    coeffs = normal_projector_coeffs(
         xp, all_loops, (normal_grid, normal_grid), lattice, half_width_u, half_width_v,
         dtype, cdtype, transform=transform, segment_data=segment_data,
         images=interface_plan.images, image_groups=interface_plan.groups,
+        contrasts=interface_contrasts(xp, regions, background, interface_plan, dtype),
+        interface_plan=interface_plan,
         anchor=_paint_centroid(xp, segment_data, interface_plan) if segment_data is not None else None)
-    return nvf_from_coeffs(xp, eps_c, inv_c, c_xx, c_xy, c_yy, half_width_u, half_width_v)
+    return nvf_from_coeffs(xp, eps_c, inv_c, *coeffs[:3], half_width_u, half_width_v,
+                           c_yx=coeffs[3] if len(coeffs) == 4 else None)
 
 
 # ================================================== one painted layer, end to end
