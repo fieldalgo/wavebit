@@ -980,6 +980,13 @@ J's closing-gap cusp and the same-material control's contact residual remain.
 The polygon route's material-equality step in this historical table (the rotated
 row's `-1.67e-3`) was subsequently removed by section 1a's contrast envelope.
 
+The [experimental passive closure](nvf-passive-closure.md) subsequently identified
+negative constitutive dissipation in these metal and lossy matrices. Its normalized
+energy form removes that defect and improves the order-12 metal comparison, but
+worsens the same-material contact control. It remains explicit and does not replace
+the ordinary closure. Neither that prototype nor a power-balance check closes the
+remaining optical convergence question.
+
 The pair loop is still quadratic in the number of pieces. Real inputs retain the original
 real arrays and three components. Complex seams require complex arrays and a fourth Fourier
 component; the previously measured 2026-09-11 runtime ratios do not quantify this extra cost.

@@ -12,6 +12,7 @@ is still being investigated belongs here until a reference value is established.
 
 | Script | Question it answers |
 | --- | --- |
+| `nvf_passive_closure.py`, `results/nvf_passive_closure.log` | Can a normalized passive NVF energy form remove negative constitutive dissipation without losing contact accuracy? The metal comparison improves, but the contact control worsens, so the matrix kernel remains experimental and ordinary dispatch is unchanged. [Method, evidence and limits](../docs/nvf-passive-closure.md). |
 | `nvf_harmonic_energy.py` | Can a material-defined electrostatic basis and an energy Gram closure remove artificial seams while retaining contact derivatives? Split equality and lossless energy pass; inner and outer convergence remain open. [Investigation](../docs/nvf-harmonic-energy.md). |
 | `nvf_harmonic_energy_jax.py` | Are the finite candidate's derivatives correct under JIT, and physically correct at contact? P controls pass; the expanded s contact derivative fails despite agreement with its own secants. A separate 6 ppm eigenvalue-gradient bias is also recorded. [Measurements](../docs/nvf-cell-corrector.md). |
 | `nvf_cell_bounds.py` | How much static cell uncertainty remains after CG converges? Primal/complementary enclosures separate it from optical error; also consumes independently projected fields with a [lower-memory full-space closure](../docs/nvf-energy-closure.md#full-space-projected-fields). [Investigation](../docs/nvf-cell-corrector.md). |
