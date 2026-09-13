@@ -69,6 +69,7 @@ subtrees:
       - file: nvf-pair-material-sector
       - file: nvf-pair-refinement
       - file: nvf-pair-quadratic
+      - file: nvf-pair-normal-frame
       - file: nvf-affine-convergence
       - file: nvf-contact-followup
       - file: nvf-independent-fem
