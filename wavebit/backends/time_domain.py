@@ -4,13 +4,51 @@ Use the same Array API namespaces and graph-preserving conversion as RCWA.
 Only execution/checkpointing differs here; Maxwell/ADE/CPML equations stay in
 _core.grid_fdtd and must not be duplicated by a backend.
 """
+import dataclasses
+import functools
+import threading
+import types
+import warnings
+
 import numpy as np
 
 from .._core.backend import as_array, lift_jax_x64
 
-# Compiled eager scan programs, keyed by structure; least recently used first. See _eager_scan.
+# Compiled eager scan programs, keyed by structure and scan length; least recently used
+# first. See _eager_scan.
 _SCAN_PROGRAMS = {}
 _SCAN_PROGRAMS_MAX = 64
+# Whichever thread solves reads and writes the cache; a `pop` racing an eviction could otherwise
+# raise `KeyError`, or change the dict's size under the eviction loop.
+_SCAN_LOCK = threading.Lock()
+_API_WARNED = []
+_FUNCTION_TYPES = (types.FunctionType, types.MethodType, types.BuiltinFunctionType,
+                   functools.partial)
+
+
+@functools.lru_cache(maxsize=None)
+def _jax_api():
+    """The JAX names the program key reads, or ``None`` when this JAX no longer has one of them.
+
+    Not all are public promises -- ``jax.extend.core`` exists so that code like this can reach
+    the jaxpr types, and it says it may change -- so a JAX that moves one costs the sharing,
+    never the solve: :func:`_eager_scan` warns once and runs the plain ``lax.scan``.
+    """
+    try:
+        import jax
+        from jax.extend import core
+        api = types.SimpleNamespace(
+            Tracer=jax.core.Tracer, typeof=jax.typeof, eval_jaxpr=jax.core.eval_jaxpr,
+            ClosedJaxpr=core.ClosedJaxpr, Jaxpr=core.Jaxpr, Literal=core.Literal)
+    except (ImportError, AttributeError):
+        return None
+    try:
+        from jax.extend import linear_util
+        wrapped = (linear_util.WrappedFun,)
+    except (ImportError, AttributeError):
+        wrapped = ()
+    api.functions = _FUNCTION_TYPES + wrapped
+    return api
 
 
 def _eager_scan(f, init, xs):
@@ -23,36 +61,66 @@ def _eager_scan(f, init, xs):
     which contains 2 distinct programs (4 when it records a field). Here the body is traced
     once, and its closed-over arrays become explicit arguments of one jitted program (closure
     conversion; ``jax.closure_convert`` is JAX's own form of it). The program is keyed on the
-    jaxpr's structure (``_program_key``): an equal key means the same equations, literals and
-    shapes, so the program runs on this call's arrays exactly as a fresh compile would.
-    Python scalars (``dt``, a record offset) are literals in the jaxpr, so a changed one is a
-    different key.
+    jaxpr's structure (``_program_key``) and on the scan's length: an equal key means the same
+    equations, literals, shapes and trip count, so the program runs on this call's arrays
+    exactly as a fresh compile would. Python scalars (``dt``, a record offset) are literals in
+    the jaxpr, so a changed one is a different key. The length is in the key so that a sweep of
+    tail lengths (``checkpoint_steps``) is one entry per length under the LRU bound, rather than
+    one entry whose jit grows a compiled copy per length where the bound cannot see it. A cached
+    program holds none of the arrays it was first traced with (:func:`_without_consts`).
 
     Falls back to the plain call whenever sharing could not be exact: inside a trace (nothing
     is dispatched here then), when a closed-over value is a tracer (eager AD), when a carry is
-    weakly typed (``lax.scan`` would retrace it promoted), or when the key cannot see every
-    value the program depends on (``_Unshareable``).
+    weakly typed (``lax.scan`` would retrace it promoted), when the key cannot see every value
+    the program depends on (``_Unshareable``), and when this JAX lacks a name the key reads
+    (warned once).
     """
     import jax
-    if any(isinstance(v, jax.core.Tracer) for v in jax.tree.leaves((init, xs))):
+    api = _jax_api()
+    if api is None:
+        if not _API_WARNED:
+            _API_WARNED.append(True)
+            warnings.warn(
+                'wavebit: this JAX moved a name the eager-scan program cache reads, so every '
+                'eager FDTD scan compiles again on each call, as it did before the cache. The '
+                'answers are unaffected.', RuntimeWarning, stacklevel=2)
+        return jax.lax.scan(f, init, xs)
+    leaves = jax.tree.leaves((init, xs))
+    lengths = tuple(np.shape(x)[:1] for x in jax.tree.leaves(xs))
+    if (not lengths or () in lengths
+            or any(isinstance(v, api.Tracer) for v in leaves)):
         return jax.lax.scan(f, init, xs)
     row = jax.tree.map(lambda x: jax.ShapeDtypeStruct(x.shape[1:], x.dtype), xs)
     closed, shape = jax.make_jaxpr(f, return_shape=True)(init, row)
-    if (any(isinstance(c, jax.core.Tracer) for c in closed.consts)
-            or any(jax.typeof(v).weak_type for v in jax.tree.leaves((init, xs)))):
+    if (any(isinstance(c, api.Tracer) for c in closed.consts)
+            or any(api.typeof(v).weak_type for v in leaves)):
         return jax.lax.scan(f, init, xs)
     out_tree = jax.tree.structure(shape)
     try:
-        key = (_program_key(closed.jaxpr), jax.tree.structure((init, xs)), out_tree)
+        key = (_program_key(closed.jaxpr), jax.tree.structure((init, xs)), out_tree, lengths)
     except _Unshareable:
         return jax.lax.scan(f, init, xs)
-    program = _SCAN_PROGRAMS.pop(key, None)
-    if program is None:
-        program = _scan_program(closed.jaxpr, out_tree)
-    _SCAN_PROGRAMS[key] = program
-    while len(_SCAN_PROGRAMS) > _SCAN_PROGRAMS_MAX:
-        del _SCAN_PROGRAMS[next(iter(_SCAN_PROGRAMS))]
+    with _SCAN_LOCK:
+        program = _SCAN_PROGRAMS.pop(key, None)
+        if program is None:
+            program = _scan_program(_without_consts(closed.jaxpr), out_tree)
+        _SCAN_PROGRAMS[key] = program
+        while len(_SCAN_PROGRAMS) > _SCAN_PROGRAMS_MAX:
+            del _SCAN_PROGRAMS[next(iter(_SCAN_PROGRAMS))]
     return program(closed.consts, init, xs)
+
+
+def _without_consts(jaxpr):
+    """``jaxpr`` holding no constants of its own; the cached program is handed them per call.
+
+    jax 0.11 made ``ClosedJaxpr`` and ``Jaxpr`` one class, so ``closed.jaxpr`` is ``closed``
+    itself, the first call's closed-over arrays included. A cached program that closed over it
+    kept those arrays alive on the device -- about 120 KB per program at resolution 20, up to 64
+    programs -- although it never reads them: ``eval_jaxpr`` takes the constants it is handed.
+    """
+    if getattr(jaxpr, 'consts', None):
+        return jaxpr.replace(consts=[])
+    return jaxpr
 
 
 def _scan_program(jaxpr, out_tree):
@@ -70,16 +138,61 @@ class _Unshareable(Exception):
     """A traced body whose program the key cannot see whole; it runs unshared."""
 
 
+def _param_key(v):
+    """One equation parameter as part of a key, or ``_Unshareable`` when the key cannot see it."""
+    api = _jax_api()
+    if isinstance(v, (api.Jaxpr, api.ClosedJaxpr)):
+        # jax 0.11 made the two one class, so a nested *Jaxpr* can carry constants -- an inner
+        # `jax.jit` closing over an array puts that array here. The branch that used to check
+        # sat below the Jaxpr branch, reachable only on a JAX where they were two classes, and
+        # the key then handed a second call the first call's constants: [4, 8, 12] where
+        # [40, 80, 120] was asked, silently (measured 2026-09-12).
+        if getattr(v, 'consts', None):
+            raise _Unshareable
+        return ('jaxpr', _program_key(v if isinstance(v, api.Jaxpr) else v.jaxpr))
+    if isinstance(v, (tuple, list)):
+        return (type(v), tuple(_param_key(w) for w in v))
+    if isinstance(v, np.ndarray):
+        return (np.ndarray, v.dtype.str, v.shape, v.tobytes())
+    if isinstance(v, (float, complex, np.inexact)):
+        return (type(v), np.asarray(v).tobytes())
+    if isinstance(v, api.functions):
+        # A rule the primitive calls -- a custom_jvp's jvp, a custom_vjp's bwd, a callback -- is
+        # rebuilt by every trace. It hashes, so it would not raise below; it would key every
+        # call apart instead: a compile per call, and a cache filling with programs that nothing
+        # asks for again, evicting the ones that are asked for.
+        raise _Unshareable
+    if dataclasses.is_dataclass(v) and not isinstance(v, type) and any(
+            isinstance(getattr(v, field.name), api.functions) for field in dataclasses.fields(v)):
+        # A callback primitive (pure_callback, io_callback, debug.callback) carries the caller's
+        # function inside a frozen dataclass. That hashes, and compares the function by identity,
+        # so it gets past both checks here and would key every call apart just the same.
+        raise _Unshareable
+    try:
+        hash(v)
+    except TypeError:
+        raise _Unshareable from None
+    return (type(v), v)
+
+
 def _program_key(jaxpr):
     """Structural identity of a jaxpr: equal keys are one program.
 
     Built like the key JAX's eager dispatch caches executables on (primitive and parameters,
     ``xla_primitive_callable``), except that a nested jaxpr enters by structure instead of by
     identity: variables by position, literals by bit pattern (so ``-0.0`` is not ``0.0``),
-    avals, equation contexts and effects by value. A nested closed jaxpr carrying constants,
-    or a parameter with no value equality, raises ``_Unshareable``: the key cannot see it.
+    avals and effects by value. A nested jaxpr carrying constants, a function-valued parameter,
+    or one with no hash raises ``_Unshareable`` (:func:`_param_key`).
+
+    Any other parameter enters by its own equality. An enum member, a dtype, the empty device
+    mesh a ``jit`` equation names and JAX's forwarding tuples all compare equal across traces --
+    the only parameter kinds the FDTD body holds besides plain values, checked 2026-09-12 -- but
+    an object built afresh by each trace and compared by identity would key every call apart:
+    no wrong answer, only the compile per call this cache exists to remove. Equation contexts
+    are compared by their own equality too, which jax 0.11 backs by interning them; a JAX whose
+    contexts stopped comparing equal would cost the sharing, never the answer.
     """
-    from jax.extend.core import ClosedJaxpr, Jaxpr, Literal
+    api = _jax_api()
     names = {}
 
     def bind(variables):
@@ -90,35 +203,16 @@ def _program_key(jaxpr):
         return tuple(avals)
 
     def atom(v):
-        if isinstance(v, Literal):
+        if isinstance(v, api.Literal):
             value = np.asarray(v.val)
             return ('literal', value.dtype.str, value.shape, value.tobytes(), v.aval)
         return names[v]
-
-    def parameter(v):
-        if isinstance(v, Jaxpr):
-            return ('jaxpr', _program_key(v))
-        if isinstance(v, ClosedJaxpr):
-            if v.consts:
-                raise _Unshareable
-            return ('jaxpr', _program_key(v.jaxpr))
-        if isinstance(v, (tuple, list)):
-            return (type(v), tuple(parameter(w) for w in v))
-        if isinstance(v, np.ndarray):
-            return (np.ndarray, v.dtype.str, v.shape, v.tobytes())
-        if isinstance(v, (float, complex, np.inexact)):
-            return (type(v), np.asarray(v).tobytes())
-        try:
-            hash(v)
-        except TypeError:
-            raise _Unshareable from None
-        return (type(v), v)
 
     head = (bind(jaxpr.constvars), bind(jaxpr.invars), frozenset(jaxpr.effects))
     equations = []
     for eqn in jaxpr.eqns:
         inputs = tuple(atom(v) for v in eqn.invars)
-        params = tuple((name, parameter(v)) for name, v in sorted(eqn.params.items()))
+        params = tuple((name, _param_key(v)) for name, v in sorted(eqn.params.items()))
         equations.append((eqn.primitive, inputs, params, eqn.ctx, frozenset(eqn.effects),
                           bind(eqn.outvars)))
     return head, tuple(equations), tuple(atom(v) for v in jaxpr.outvars)
