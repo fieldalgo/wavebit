@@ -68,6 +68,7 @@ subtrees:
       - file: nvf-cartesian-pair-gap-autodiff
       - file: nvf-pair-material-sector
       - file: nvf-pair-refinement
+      - file: nvf-pair-quadratic
       - file: nvf-affine-convergence
       - file: nvf-contact-followup
       - file: nvf-independent-fem

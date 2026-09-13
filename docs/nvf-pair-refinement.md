@@ -157,3 +157,8 @@ PYTHONPATH=. python -m pytest -q tests/test_nvf_pair_refinement.py
 PYTHONPATH=. OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python studies/nvf_pair_assembly_cost.py
 PYTHONPATH=. OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python studies/nvf_pair_material_sector.py --refinements 2 3 --orders 4 8 --out studies/results/nvf_pair_refinement.log
 ```
+
+The subsequent [quadratic-potential instrument](nvf-pair-quadratic.md) changes
+the polynomial space at matched numbers of potentials. It retains analytical
+contact derivatives and tests optical behavior separately from the finite
+equation controls.

@@ -70,6 +70,7 @@ comes next. The outward-pointing rule above binds `guide/` too; only the house s
 
 | Document | Question it answers | Decision |
 | --- | --- | --- |
+| [`nvf-pair-quadratic.md`](nvf-pair-quadratic.md) | Does a quadratic auxiliary potential improve matched-size contact cells? | Exact polynomial transforms and finite derivatives are verified; dielectric comparisons improve while metal convergence remains unresolved. |
 | [`nvf-pair-refinement.md`](nvf-pair-refinement.md) | Can the finite contact family be refined without quadratic element storage? | Refinements 2/3 and contracted weak assembly pass independent finite derivative controls; dielectric comparisons improve but metal optical convergence remains unresolved. |
 | [`nvf-pair-material-sector.md`](nvf-pair-material-sector.md) | Can the exact contact/opening cell admit passive metals? | A common half-plane certificate extends the finite NumPy/JAX family without changing its physical equations; independent derivatives pass, but coarse optical values and slopes fail convergence controls. |
 | [`nvf-cartesian-cell.md`](nvf-cartesian-cell.md) | Can a physical rectangle retain its edges and derivatives on an oblique periodic lattice? | A small P1 template and explicit public builder keep the planned finite mesh fixed during live replay; contact, general geometry and optical convergence remain open. |
