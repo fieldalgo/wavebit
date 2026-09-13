@@ -16,6 +16,9 @@ import numpy as np
 from .cartesian_pair import CartesianPairPlan
 from ..factorization import ConvMatrices
 from ..polygon import polygon_ft
+from .material_sector import (
+    passive_pair_materials, phase_from_angle, minimum_rotated_storage,
+)
 
 
 COMPONENTS = ("Bxx", "Bxy", "Byx", "Byy", "Gxx", "Gxy", "Gyy", "epsilon", "Gyx")
@@ -32,25 +35,8 @@ def real_array(value, shape, name):
     return result.astype(np.float64)
 
 
-def materials_array(epsilon, background):
-    e, b = np.asarray(epsilon), np.asarray(background)
-    if (
-        e.shape != (2,)
-        or b.shape != ()
-        or e.dtype.kind not in "iufc"
-        or b.dtype.kind not in "iufc"
-    ):
-        raise ValueError(
-            "materials must be two numeric scalar permittivities and a scalar background"
-        )
-    values = np.r_[b, e].astype(np.complex128)
-    if (
-        not np.isfinite(values).all()
-        or np.any(values.real <= 0)
-        or np.any(values.imag < 0)
-    ):
-        raise ValueError("materials must be finite, positive-real and passive")
-    return values
+def materials_array(epsilon, background, phase=1.0):
+    return passive_pair_materials(epsilon, background, phase)[0]
 
 
 def validate_geometry(basis, widths, height, offset):
@@ -195,7 +181,7 @@ def topology(plan):
     )
 
 
-def weak_limit(vertices, velocity, data, materials):
+def weak_limit(vertices, velocity, data, materials, phase=1.0):
     size = len(data["pmap"])
     k, f = np.zeros((3, size, size), complex), np.zeros((2, size, 2), complex)
     local = []
@@ -267,7 +253,9 @@ def weak_limit(vertices, velocity, data, materials):
     f0, f1 = f[:, 1:]
     min_contact = np.linalg.eigvalsh((a00 + a00.conj().T) / 2)[0]
     min_difference = np.linalg.eigvalsh((a11 + a11.conj().T) / 2)[0]
-    if min_contact <= 0 or min_difference <= 0:
+    rotated_contact = min_contact if phase == 1.0 else minimum_rotated_storage(a00, phase)
+    rotated_difference = min_difference if phase == 1.0 else minimum_rotated_storage(a11, phase)
+    if rotated_contact <= 0 or rotated_difference <= 0:
         raise ValueError("limiting weak blocks failed coercivity")
     u0 = np.linalg.solve(a00, cf0)
     v0 = np.linalg.solve(a11, zf0 - a01.T @ u0)
@@ -314,6 +302,8 @@ def weak_limit(vertices, velocity, data, materials):
             pole_cancellation=pole,
             projected_operator_agreement=projected_agreement,
             contact_minimum_real_eigenvalue=min_contact,
+            contact_minimum_rotated_eigenvalue=rotated_contact,
+            difference_minimum_rotated_eigenvalue=rotated_difference,
             difference_minimum_real_eigenvalue=min_difference,
             contact_condition=np.linalg.cond(a00),
             difference_condition=np.linalg.cond(a11),
@@ -418,7 +408,9 @@ def freeze_topology(data):
 class CartesianPairOpeningCell:
     """Frozen finite pair response; derivative per caller length unit, NumPy only."""
 
-    def __init__(self, plan, order=1):
+    def __init__(self, plan, order=1, *, coercivity_angle=0.0):
+        self._coercivity_phase = phase_from_angle(coercivity_angle)
+        self._coercivity_angle = float(coercivity_angle)
         if not isinstance(plan, CartesianPairOpeningPlan):
             raise ValueError("an explicit CartesianPairOpeningPlan is required")
         pair = (order, order) if isinstance(order, Integral) else order
@@ -438,6 +430,10 @@ class CartesianPairOpeningCell:
         )
 
     @property
+    def coercivity_angle(self):
+        return self._coercivity_angle
+
+    @property
     def data(self):
         return self._data
 
@@ -445,7 +441,7 @@ class CartesianPairOpeningCell:
         self, *, basis, widths, height, epsilon, background=1.0, offset=(0.0, 0.0)
     ):
         geometry = validate_geometry(basis, widths, height, offset)
-        material = materials_array(epsilon, background)
+        material = materials_array(epsilon, background, self._coercivity_phase)
         points, _, _, _, _ = CartesianPairPlan(
             True, self.plan.shift, self.plan.refinement
         ).replay(**geometry)
@@ -456,7 +452,7 @@ class CartesianPairOpeningCell:
             self.data["open_numerators"] / self.data["weight_denominator"]
         ) @ base_velocity
         w0, w1, difference, local, weak = weak_limit(
-            vertices, velocity, self.data, material
+            vertices, velocity, self.data, material, self._coercivity_phase
         )
         ox, oy = self.order
         n, m = np.meshgrid(
@@ -508,6 +504,7 @@ class CartesianPairOpeningCell:
             raise ValueError("nonfinite opening coefficient response")
         metadata = dict(
             order=self.order,
+            coercivity_angle=self.coercivity_angle,
             refinement=self.plan.refinement,
             shift=self.plan.shift,
             area=area,
@@ -539,11 +536,12 @@ class CartesianPairOpeningCell:
             self.order,
             settings["epsilon"],
             settings.get("background", 1.0),
+            phase=self._coercivity_phase,
         )
         return slots, dslots, dict(metadata, **closure_meta), details
 
 
-def energy_opening(coefficients, derivative, order, epsilon, background):
+def energy_opening(coefficients, derivative, order, epsilon, background, *, phase=1.0):
     ox, oy = order
     n, m = np.meshgrid(np.arange(-oy, oy + 1), np.arange(-ox, ox + 1), indexing="ij")
     dn, dm = (
@@ -577,6 +575,7 @@ def energy_opening(coefficients, derivative, order, epsilon, background):
         np.linalg.eigvalsh((h + h.conj().T) / 2)[0],
         np.linalg.eigvalsh((h - h.conj().T) / (2j))[0],
     )
+    rotated_storage = storage if phase == 1.0 else minimum_rotated_storage(h, phase)
     lossless = np.all(np.imag(epsilon) == 0) and np.imag(background) == 0
     hermitian_error = np.max(np.abs(h - h.conj().T))
     residuals = [
@@ -592,7 +591,7 @@ def energy_opening(coefficients, derivative, order, epsilon, background):
         not np.isfinite(h).all()
         or not np.isfinite(dh).all()
         or not np.isfinite(dzi).all()
-        or storage <= 0
+        or rotated_storage <= 0
         or loss <= -1e-9
         or (lossless and hermitian_error >= 1e-9)
         or max(residuals) > 1e-10
@@ -605,6 +604,7 @@ def energy_opening(coefficients, derivative, order, epsilon, background):
         ConvMatrices(*(v[None] for v in dslots)),
         dict(
             minimum_storage=storage,
+            minimum_rotated_storage=rotated_storage,
             minimum_dissipation=loss,
             hermitian_error=hermitian_error,
             lossless=lossless,

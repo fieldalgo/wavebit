@@ -1713,3 +1713,15 @@ of the same study. What remains, and why the unsampled Voronoi projector was mea
 (a 0.086 value step at every same-material merge), is recorded in
 `docs/normal-field-known-limits.md` beside the polygon route's anchor and in the
 `normal_projector_coeffs` docstring.
+
+
+## Passive metal admission of the exact finite pair — 2026-09-13
+
+The [common material-sector certificate](nvf-pair-material-sector.md) now
+allows the exact contact/opening family to evaluate passive metals while
+retaining its original physical weak equations. Independent nodal/Laurent
+references qualify the finite coefficients, closures and gap derivatives,
+including JAX at contact. Both polarizations still show strong cell/order
+changes and discrepancies from the separate Cartesian Li factorization.
+The ordinary distance-field contact residual and final metallic optical
+convergence remain open; no default dispatch changed.

@@ -70,6 +70,7 @@ comes next. The outward-pointing rule above binds `guide/` too; only the house s
 
 | Document | Question it answers | Decision |
 | --- | --- | --- |
+| [`nvf-pair-material-sector.md`](nvf-pair-material-sector.md) | Can the exact contact/opening cell admit passive metals? | A common half-plane certificate extends the finite NumPy/JAX family without changing its physical equations; independent derivatives pass, but coarse optical values and slopes fail convergence controls. |
 | [`nvf-cartesian-cell.md`](nvf-cartesian-cell.md) | Can a physical rectangle retain its edges and derivatives on an oblique periodic lattice? | A small P1 template and explicit public builder keep the planned finite mesh fixed during live replay; contact, general geometry and optical convergence remain open. |
 | [`nvf-cartesian-pair.md`](nvf-cartesian-pair.md) | Can two equal-height physical rectangles share an exact contact edge inside an oblique finite cell? | Separate frozen contact/open charts and an explicit public adapter pass independent finite weak, mapping and constrained derivative controls; ordinary contact JVP, general pairs and optical convergence retain their stated limits. |
 | [`nvf-cartesian-pair-opening.md`](nvf-cartesian-pair-opening.md) | Can the finite pair retain its right derivative as a physical contact gap opens? | Exact collapse and analytical Laurent operators pass independent NumPy coefficient/closure controls on refinements 0/1; ordinary contact JVP and optical accuracy remain separate. |

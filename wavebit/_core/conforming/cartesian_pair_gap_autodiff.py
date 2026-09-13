@@ -10,13 +10,18 @@ from .cartesian_pair import _numeric_array, _require
 from .cartesian_pair_opening import CartesianPairOpeningCell
 from ..factorization import ConvMatrices
 from ..polygon import polygon_ft
+from .material_sector import (
+    passive_pair_materials, phase_from_angle, minimum_rotated_storage,
+)
 
 
 class CartesianPairGapEvaluator:
     """Evaluate coefficients and closure together; obtain derivatives by AD."""
 
-    def __init__(self, plan, order=1):
-        endpoint = CartesianPairOpeningCell(plan, order)
+    def __init__(self, plan, order=1, *, coercivity_angle=0.0):
+        endpoint = CartesianPairOpeningCell(plan, order, coercivity_angle=coercivity_angle)
+        self._coercivity_angle = endpoint.coercivity_angle
+        self._coercivity_phase = phase_from_angle(self._coercivity_angle)
         self._plan, self._order, self._data = (
             endpoint.plan,
             endpoint.order,
@@ -64,6 +69,10 @@ class CartesianPairGapEvaluator:
             array.flags.writeable = False
 
     @property
+    def coercivity_angle(self):
+        return self._coercivity_angle
+
+    @property
     def plan(self):
         return self._plan
 
@@ -101,12 +110,9 @@ class CartesianPairGapEvaluator:
         ):
             values[name], good = _numeric_array(value, shape, name, xp, real=True)
             valid = valid & good
-        epsilon, good_e = _numeric_array(epsilon, (2,), "epsilon", xp, real=False)
-        background, good_b = _numeric_array(
-            background, (), "background", xp, real=False
+        materials, valid_material = passive_pair_materials(
+            epsilon, background, self._coercivity_phase, xp
         )
-        valid_material = good_e & good_b
-        materials = xp.concatenate([xp.reshape(background, (1,)), epsilon])
         materials = xp.where(valid_material, materials, xp.ones(3, dtype=xp.complex128))
         a, widths, height, gap, offset = (
             values[name] for name in ("basis", "widths", "height", "gap", "offset")
@@ -257,7 +263,11 @@ class CartesianPairGapEvaluator:
         safe_h11 = xp.where(valid_blocks, h11, xp.eye(nz))
         contact_min = xp.linalg.eigvalsh((safe_h00 + safe_h00.conj().T) / 2)[0]
         difference_min = xp.linalg.eigvalsh((safe_h11 + safe_h11.conj().T) / 2)[0]
-        coercive = (contact_min > 0) & (difference_min > 0)
+        rotated_contact = (contact_min if self._coercivity_phase == 1.0 else
+                           minimum_rotated_storage(safe_h00, self._coercivity_phase, xp))
+        rotated_difference = (difference_min if self._coercivity_phase == 1.0 else
+                              minimum_rotated_storage(safe_h11, self._coercivity_phase, xp))
+        coercive = (rotated_contact > 0) & (rotated_difference > 0)
         _require(coercive, "contact/difference diagonal blocks must be coercive")
         valid_before_solve = (
             valid_geometry & valid_triangles & valid_material & valid_blocks & coercive
@@ -331,6 +341,8 @@ class CartesianPairGapEvaluator:
         tensor = xp.block([[slots.epx, -slots.epxy], [-slots.epyx, slots.epy]])
         adjoint = tensor.conj().T
         storage = xp.linalg.eigvalsh((tensor + adjoint) / 2)[0]
+        rotated_storage = (storage if self._coercivity_phase == 1.0 else
+                           minimum_rotated_storage(tensor, self._coercivity_phase, xp))
         loss = xp.linalg.eigvalsh((tensor - adjoint) / (2j))[0]
         hermitian_error = xp.max(xp.abs(tensor - adjoint))
         lossless = xp.all(xp.imag(materials) == 0)
@@ -342,7 +354,7 @@ class CartesianPairGapEvaluator:
         )
         valid_closure = (
             xp.all(xp.isfinite(tensor))
-            & (storage > 0)
+            & (rotated_storage > 0)
             & (loss > -1e-9)
             & (~lossless | (hermitian_error < 1e-9))
             & xp.isfinite(inverse_residual)
@@ -358,6 +370,7 @@ class CartesianPairGapEvaluator:
         )
         metadata = dict(
             gap=gap,
+            coercivity_angle=self.coercivity_angle,
             normalization_length=length,
             normalized_gap=s,
             open_free_dofs=nc + nz,
@@ -366,9 +379,12 @@ class CartesianPairGapEvaluator:
             linear_residual=residual,
             original_flux_residual=original_residual,
             contact_minimum=contact_min,
+            contact_minimum_rotated_eigenvalue=rotated_contact,
+            difference_minimum_rotated_eigenvalue=rotated_difference,
             difference_minimum=difference_min,
             matrix_condition=xp.linalg.cond(matrix),
             minimum_storage=storage,
+            minimum_rotated_storage=rotated_storage,
             minimum_dissipation=loss,
             hermitian_error=hermitian_error,
             inverse_residual=inverse_residual,

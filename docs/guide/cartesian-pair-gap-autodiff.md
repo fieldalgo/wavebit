@@ -57,8 +57,11 @@ With `center = basis @ (.5, .5) + offset`, their centers are
 `center + ((left_width + gap)/2, 0)`. Increasing physical gap moves each rectangle
 outward by half that change while holding the outer cell fixed. `offset`
 translates the whole integration cell. `epsilon` gives the corresponding
-left/right materials; it and `background` require finite positive real parts
-and nonnegative imaginary parts.
+left/right materials; by default it and `background` require finite positive
+real parts and nonnegative imaginary parts. An explicit constructor
+`coercivity_angle` also admits passive metals in a common certified half-plane;
+see [material sectors](../nvf-pair-material-sector.md). The angle is static
+before tracing, and does not alter the physical equations or material values.
 
 The evaluator accepts finite real `gap >= 0`. At zero, a positive gap tangent
 is the physical right derivative. A negative tangent at zero is only the

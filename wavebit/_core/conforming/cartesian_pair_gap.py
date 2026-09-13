@@ -19,18 +19,27 @@ from .cartesian_pair_opening import (
     validate_geometry,
 )
 from ..polygon import polygon_ft
+from .material_sector import (
+    phase_from_angle, minimum_rotated_storage,
+)
 
 
 class CartesianPairGapCell:
     """Separate explicit gap>=0 response, never an ordinary contact JVP."""
 
-    def __init__(self, plan, order=1):
-        endpoint = CartesianPairOpeningCell(plan, order)
+    def __init__(self, plan, order=1, *, coercivity_angle=0.0):
+        endpoint = CartesianPairOpeningCell(plan, order, coercivity_angle=coercivity_angle)
+        self._coercivity_angle = endpoint.coercivity_angle
+        self._coercivity_phase = phase_from_angle(self._coercivity_angle)
         self._plan, self._order, self._data = (
             endpoint.plan,
             endpoint.order,
             endpoint.data,
         )
+
+    @property
+    def coercivity_angle(self):
+        return self._coercivity_angle
 
     @property
     def plan(self):
@@ -48,7 +57,7 @@ class CartesianPairGapCell:
         self, *, gap, basis, widths, height, epsilon, background=1.0, offset=(0.0, 0.0)
     ):
         geometry = validate_geometry(basis, widths, height, offset)
-        material = materials_array(epsilon, background)
+        material = materials_array(epsilon, background, self._coercivity_phase)
         gap = real_array(gap, (), "gap").item()
         if gap < 0:
             raise ValueError("gap must be nonnegative")
@@ -152,7 +161,11 @@ class CartesianPairGapCell:
             raise ValueError("nonfinite rescaled weak equations")
         contact_min = np.linalg.eigvalsh((h00 + h00.conj().T) / 2)[0]
         difference_min = np.linalg.eigvalsh((h11 + h11.conj().T) / 2)[0]
-        if min(contact_min, difference_min) <= 0:
+        rotated_contact = (contact_min if self._coercivity_phase == 1.0 else
+                           minimum_rotated_storage(h00, self._coercivity_phase))
+        rotated_difference = (difference_min if self._coercivity_phase == 1.0 else
+                              minimum_rotated_storage(h11, self._coercivity_phase))
+        if min(rotated_contact, rotated_difference) <= 0:
             raise ValueError("contact/difference diagonal blocks failed coercivity")
         solution = np.linalg.solve(matrix, rhs)
         derivative = np.linalg.solve(matrix, drhs - dmatrix @ solution)
@@ -243,6 +256,7 @@ class CartesianPairGapCell:
             raise ValueError("nonfinite finite-gap coefficients")
         metadata = dict(
             gap=gap,
+            coercivity_angle=self.coercivity_angle,
             normalized_gap=s,
             normalization_length=length,
             area=length**2,
@@ -254,6 +268,8 @@ class CartesianPairGapCell:
             difference_dofs=nz,
             matrix_condition=np.linalg.cond(matrix),
             contact_minimum_real_eigenvalue=contact_min,
+            contact_minimum_rotated_eigenvalue=rotated_contact,
+            difference_minimum_rotated_eigenvalue=rotated_difference,
             difference_minimum_real_eigenvalue=difference_min,
             linear_residual=residual,
             linear_derivative_residual=derivative_residual,
@@ -287,5 +303,6 @@ class CartesianPairGapCell:
             self.order,
             settings["epsilon"],
             settings.get("background", 1.0),
+            phase=self._coercivity_phase,
         )
         return slots, dslots, dict(metadata, **closure_meta), details

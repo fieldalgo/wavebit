@@ -83,3 +83,9 @@ multiple pairs and tensors are not supported.
 The independent finite-space qualification and the weak-limit derivation are
 in [the method note](../nvf-cartesian-pair-opening.md). Neither the finite
 coefficients nor their right derivative certifies patterned optical accuracy.
+
+The optional constructor `coercivity_angle` also admits passive metals in a
+common complex half-plane. The certificate affects admission and diagnostics,
+while the physical equations retain the original materials. See
+[material sectors](../nvf-pair-material-sector.md) for a runnable example,
+independent metal gap checks and the unresolved optical limits.

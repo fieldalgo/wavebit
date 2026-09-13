@@ -126,3 +126,9 @@ The explicit `matrices` helper returns single-layer `ConvMatrices`; its fixed
 cell/background and nonoverlapping analytic-shape domain are the study's.
 `passive_nvf_assemble` is an internal experimental matrix kernel, not a new
 solver option or a public geometry adapter.
+
+A separate [metal-capable finite contact family](nvf-pair-material-sector.md)
+extends the existing exact gap cell using a rotated coercivity certificate.
+It keeps passive energy and finite contact derivatives, but coarse optical
+values and slopes still fail the comparison controls. It is a distinct field
+construction, not a contact repair to this normalized-projector closure.

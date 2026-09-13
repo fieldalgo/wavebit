@@ -66,8 +66,11 @@ of collapsed triangles. Replanning is explicit if the chart becomes invalid.
 A gap that fits inside the parallelogram can still fail the triangle guards.
 A valid geometric interval is not a uniform conditioning or accuracy guarantee.
 
-`epsilon` and `background` must have finite strictly positive real parts and
-nonnegative imaginary parts. Complex geometry is refused even when its
+By default, `epsilon` and `background` require finite strictly positive real
+parts and nonnegative imaginary parts. An explicit constructor
+`coercivity_angle` also admits passive metals in a common certified half-plane;
+see [material sectors](../nvf-pair-material-sector.md) for conditions and optical limits.
+Complex geometry is refused even when its
 imaginary part is zero. Negative, boolean, complex or nonfinite gap values,
 invalid geometry/materials, unsupported orders and extra keywords raise.
 Unequal heights, vertical shifts, rotated rectangles, overlap, multiple pairs
