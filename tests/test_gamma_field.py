@@ -667,7 +667,7 @@ MUTANTS = [
      'contrast = xp.astype(contrast, dtype) ** 1',
      _the_seam_contrast_vanishes_with_the_contrast),
     ('the seam oriented by the listing instead of the materials', P,
-     'corr = contrast * mean * opposed * sign',
+     'corr = contrast * mean * opposed * phase',
      'corr = contrast * mean * opposed',
      _the_seam_is_oriented_by_the_materials),
     ('the opposed gate removed: every cross pair of pieces adds its difference', P,

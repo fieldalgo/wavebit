@@ -203,6 +203,13 @@ grid defect rather than assert a physical divergence or a unique remedy.
 
 ## Material-contrast contact candidate
 
+**Correction, 2026-09-13.** The production seam now uses the complex phase of the material
+difference and a Hermitian projector. Ranking by material magnitude introduced a new jump
+at distinct equal-modulus materials. The seam study's opening helper also moved the boxes
+inward; its historical ladder and matrix contact columns measured overlaps. Corrected
+positive-gap runs, modulus-crossing tests and current limitations are recorded in
+[the seam contrast](normal-field-known-limits.md#8e-the-seam-contrast-2026-09-11).
+
 > **Superseded 2026-09-11; instrument retired.** The seam contrast now in production
 > (`_core/parametric.py`, `_piece_field`, step 3b; `normal-field-known-limits.md` §8e) passes
 > the gates this candidate failed, by the mechanism this section names: the candidate's seam

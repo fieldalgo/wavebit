@@ -329,9 +329,14 @@ a box's four faces over their periodic images, a round shape's one piece — wit
 stage in between: two shapes that come into contact share a face line over a run, the plan
 (`parametric.plan_gamma`) records the pair and the two faces cancel there, and a seam between
 *different* materials is put back by the **seam contrast** (2026-09-11): after the sum, every
-pair of opposed pieces of different owners adds `c · h · max(0, −n_a·n_b) · (n_a − n_b)`, with
+pair of opposed pieces of different owners adds `c · h · max(0, −n_a·n_b) · q · (n_a − n_b)`, with
 `c = (|ε_a − ε_b| / (|ε_a| + |ε_b|))^4`, `h` the harmonic mean of the two weights and the
-difference pointed from the lower-|ε| shape to the higher — exact on the seam at any contrast,
+phase `q = (ε_b − ε_a) / |ε_b − ε_a|` (zero at equality). The product `c q` is continuous
+through equality. Since 2026-09-13, a complex material difference produces a complex field
+and its Hermitian projector `n nᴴ`; on the interface its phase cancels, leaving the exact
+real normal projector. Real inputs retain real arithmetic and the three symmetric
+components. This replaced ranking the materials by magnitude, which jumped when distinct
+materials had equal magnitudes, including `4` and `−4`. The construction is exact on the seam at any contrast,
 exactly zero for equal materials (the material runs on), continuous through contact and through
 material equality, and the same whichever shape is listed first. Until then the two material
 slots set a sign on the record — equal cancelled, different co-oriented along the first-listed

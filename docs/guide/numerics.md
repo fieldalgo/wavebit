@@ -32,6 +32,10 @@ boundaries not aligned with x or y, which is what a fit of a tilted sidewall wan
 On that path, `projector` composes with all four field constructions. Shape NVF
 also accepts `projector='linear'` or `'circular'`: the circular shape construction
 supports rectangles, circles, ellipses and their polygon-resolved painting.
+For disjoint shapes with complex material inputs, the default piece field carries
+the phase of material differences and uses a Hermitian projector. Its phase cancels
+on each interface. Real material inputs keep real arithmetic; this does not select
+the separate `'circular'` dyad construction.
 Projector selections require NVF; `normal_method` remains a raster option.
 See [shape projector details](../parametric-modeling.md#complex-nvf-projection-for-rectangular-contacts).
 

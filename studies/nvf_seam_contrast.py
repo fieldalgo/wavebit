@@ -9,8 +9,10 @@ stepped at contact (-2.7e-3 at order 4 on the K fixture), stepped again when a m
 through equality (-5e-3), and depended on which shape was listed first (1.5e-3). The seam
 contrast cancels every record and adds, after the sum, ``c * h * max(0, -n_a.n_b) * (n_a -
 n_b)`` for every pair of pieces of different owners, with ``c = (|eps_a - eps_b| / (|eps_a| +
-|eps_b|)) ** 4``, ``h`` the harmonic mean of the two weights and the difference oriented from
-the lower-|eps| shape to the higher (docs/normal-field-known-limits.md, "The seam contrast").
+|eps_b|)) ** 4``, ``h`` the harmonic mean of the two weights and the complex phase of
+``eps_b - eps_a`` multiplying the difference (docs/normal-field-known-limits.md, "The seam
+contrast"). The 2026-09-11 magnitude ranking jumped at unequal equal-modulus materials;
+the phase and Hermitian projector remove that switch.
 This study reproduces the evidence that decided it, so a later change can say at once which
 of these numbers it moved:
 
@@ -38,6 +40,8 @@ of these numbers it moved:
            12.25|-10+1j), unequal heights 300|280, a rotated pair (angle 0.3 in place, which
            overlaps and routes to the polygon route, so it is a control the fix must not move),
            a box against a circle, theta 0, 700 nm and order 8
+  modulus  distinct equal-modulus materials crossed radially with h = 1e-4, 1e-6, 1e-8;
+           coefficient and transmission changes must shrink with h, not retain a jump
 
 Fixture (``tests/test_gamma_layers.py::K_SHORT``): square cell 700, two 300 x 300 boxes at
 cx = -150 / +150 of eps 4 | 9 on background 1, thickness 300, wavelength 900, top 1, bot 2.25,
@@ -51,10 +55,15 @@ Usage, from the repo root::
 
 The second form is how the "before" column was taken: ``wavebit`` is imported from the
 archived tree while the instrument and the oracle come from this checkout, and the header row
-records the tag and where ``wavebit`` was imported from relative to this file. Rows stream to
+records the tag, source digests and whether ``wavebit`` came from this checkout. Rows stream to
 ``studies/results/nvf_seam_contrast.log`` as JSON lines; the log holds both runs.
+
+Correction, 2026-09-13: ``opened`` previously moved both centres inward, testing a negative
+gap. Those historical log headers are labelled ``overlap``. Current runs open a positive
+gap and must not be compared to the old contact-step column as the same experiment.
 """
 import argparse
+import hashlib
 import json
 import os
 import subprocess
@@ -83,18 +92,6 @@ N_SOLVE, N_EQUAL, N_LIST = 512, 128, 504
 ORDERS = (4, 6, 8, 10, 12)
 RAMP = (1e-7, 1e-5, 1e-3, 1e-2, 1e-1, 1.0)
 
-# What the 2026-09-11 session recorded on the K ladder, before (b92e85a) and after the seam
-# contrast, so a rerun says at once whether either column is the one it reproduces. The after
-# column is at rounding, so its sign is noise: this instrument reads it negative.
-DOCUMENTED = dict(
-    contact_before=(-2.7e-3, -8.7e-4, -2.1e-4, -7.2e-4, -3.4e-4),
-    contact_after=(2.2e-12, 1.4e-12, 1.2e-12, 1.0e-12, 1.4e-12),
-    equality_before=(-5.0e-3, -4.8e-4, -6.0e-4, -1.4e-4, -4.0e-5),
-    equality_after=2.2e-9,
-    listing_before=1.5e-3, listing_after=6e-15,
-)
-
-
 def _box(**geom):
     return dict(dict(type='rectangle', cx=0.0, cy=0.0, angle=0.0, material=4.0), **geom)
 
@@ -111,7 +108,7 @@ def pair(ea, eb, ly_b=300.0, angle=0.0, second='rectangle'):
 
 def opened(shapes, gap=GAP):
     """The same shapes with the seam at ``x = 0`` opened by ``gap``, symmetrically."""
-    return [dict(s, cx=s['cx'] - 0.5 * gap * np.sign(s['cx'])) for s in shapes]
+    return [dict(s, cx=s['cx'] + 0.5 * gap * np.sign(s['cx'])) for s in shapes]
 
 
 K = pair(4.0, 9.0)
@@ -223,8 +220,8 @@ def timed(log, row, work):
 # ------------------------------------------------------------------------------ sections
 def ladder(log):
     print('== ladder: the K fixture, orders 4..12')
-    for i, order in enumerate(ORDERS):
-        def work(order=order, i=i):
+    for order in ORDERS:
+        def work(order=order):
             t0, t_gap = sum_T(K, order), sum_T(opened(K), order)
             d0, d_gap = sum_T(D, order), sum_T(opened(D), order)
             li0, li_gap = li_T(K, order), li_T(opened(K), order)
@@ -234,11 +231,7 @@ def ladder(log):
             l1 = li_T(pair(9.0 + 1e-7, 9.0), order)
             out = dict(T0=t0, contact_step=t_gap - t0, control_step=d_gap - d0,
                        li_contact_step=li_gap - li0, li_distance=t0 - li0,
-                       equality_step=e1 - e0, li_equality_step=l1 - l0,
-                       documented_contact=(DOCUMENTED['contact_before'][i],
-                                           DOCUMENTED['contact_after'][i]),
-                       documented_equality=(DOCUMENTED['equality_before'][i],
-                                            DOCUMENTED['equality_after']))
+                       equality_step=e1 - e0, li_equality_step=l1 - l0)
             print(f'  order {order:2d}  contact {out["contact_step"]:+.2e}  control '
                   f'{out["control_step"]:+.2e}  Li contact {out["li_contact_step"]:+.2e}  '
                   f'Li distance {out["li_distance"]:+.2e}  equality {out["equality_step"]:+.2e}'
@@ -268,9 +261,7 @@ def listing(log):
             ab, ba = sum_T(K, 4, n), sum_T(K[::-1], 4, n)
             print(f'  N = {n}  {ab - ba:+.2e}', flush=True)
             return dict(T_ab=ab, T_ba=ba, swap=ab - ba)
-        timed(log, dict(kind='listing', order=4, N=n,
-                        documented=(DOCUMENTED['listing_before'], DOCUMENTED['listing_after'])),
-              work)
+        timed(log, dict(kind='listing', order=4, N=n), work)
 
 
 def three(log):
@@ -349,8 +340,29 @@ def matrix(log):
                         materials=[s['material'] for s in shapes]), work)
 
 
+def modulus(log):
+    print('== modulus: unequal materials crossing equal moduli, order 2, N = 128')
+    for eb in (2. + np.sqrt(12.)*1j, -4., 4j):
+        for h in (1e-4, 1e-6, 1e-8):
+            def work(eb=eb, h=h):
+                low, high = [pair(4., eb*(1+s*h), ly_b=280.) for s in (-1, 1)]
+                coeff = [P.normal_projector_coeffs(np, shapes, (128, 128), LAT,
+                                                  2, 2, np.complex128)
+                         for shapes in (low, high)]
+                options = dict(order=2, phi=.13, psi=.2)
+                step = sum_T(high, normal_grid=128, **options)-sum_T(low, normal_grid=128,
+                                                                                **options)
+                li_step = li_T(high, **options)-li_T(low, **options)
+                change = max(float(np.max(np.abs(a-b))) for a, b in zip(*coeff))
+                print(f'  eps_b {eb!s:<24} h={h:.0e}  coefficients {change:.3e} '
+                      f'T {step:+.3e}  Li {li_step:+.3e}', flush=True)
+                return dict(coefficient_change=change, transmission_step=step, li_step=li_step)
+            timed(log, dict(kind='modulus', ea=4., eb=eb, h=h, order=2, N=128,
+                            heights=[300., 280.], phi=.13, psi=.2), work)
+
+
 SECTIONS = dict(ladder=ladder, ramp=ramp, listing=listing, three=three, band=band_section,
-                matrix=matrix)
+                matrix=matrix, modulus=modulus)
 
 
 def main(argv=None):
@@ -364,8 +376,13 @@ def main(argv=None):
                           text=True, cwd=HERE).stdout.strip()
     source = os.path.relpath(os.path.dirname(wavebit.__file__), HERE)
     log = Log(args.out)
+    def digest(path):
+        with open(path, 'rb') as source_file:
+            return hashlib.sha256(source_file.read()).hexdigest()
     log.emit(dict(kind='header', head=head, tag=args.tag, numpy=np.__version__,
                   wavebit_in_checkout=source == os.path.join('..', 'wavebit'),
+                  opening='positive gap', gap=GAP,
+                  source_sha256=dict(parametric=digest(P.__file__), instrument=digest(__file__)),
                   sections=args.sections, started=time.strftime('%Y-%m-%d %H:%M:%S')))
     print(f'HEAD={head} tag={args.tag} numpy {np.__version__}')
     for name in args.sections:

@@ -903,15 +903,19 @@ def _field_tiled(xp, X, Y, shapes, plan, slots, lattice, dtype, grid_shape):
     """
     import numpy as np
     n_v, n_u = grid_shape
-    out_x = np.empty(grid_shape, dtype=dtype)
-    out_y = np.empty(grid_shape, dtype=dtype)
+    # A multi-shape seam carries the complex phase of the material difference.
+    # Allocate from the first block so tiling preserves its dtype as well as its values.
+    out_x = out_y = None
     for i0 in range(0, n_v, _TILE):
         for j0 in range(0, n_u, _TILE):
             block = (slice(i0, min(i0 + _TILE, n_v)), slice(j0, min(j0 + _TILE, n_u)))
             bx = np.ascontiguousarray(X[block])
             by = np.ascontiguousarray(Y[block])
-            out_x[block], out_y[block] = _piece_field(xp, bx, by, shapes, plan, slots,
-                                                      lattice, dtype)
+            nx, ny = _piece_field(xp, bx, by, shapes, plan, slots, lattice, dtype)
+            if out_x is None:
+                out_x = np.empty(grid_shape, dtype=nx.dtype)
+                out_y = np.empty(grid_shape, dtype=ny.dtype)
+            out_x[block], out_y[block] = nx, ny
     return out_x, out_y
 
 
@@ -1244,13 +1248,20 @@ def _material_slots(xp, shapes, dtype):
     builder a *view* whose material slots already hold ``mu_value`` -- ``1.0`` for a material
     that named none, by the type's own contract -- so one reader serves both quantities and the
     interface set is decided per quantity, as the raster path's twin records already are.
-    Complex, because a material may be lossy and equality is asked of the whole value; the
-    background never enters, since a seam between two shapes is an interface iff *they*
-    differ.
+    Preserve whether the input is real or complex, a dtype fact available under a trace.
+    Real inputs keep the real field and three projector components; complex inputs retain
+    the material difference's phase and need four Hermitian components. No material value
+    selects a branch. The background never enters, since a seam between two shapes is an
+    interface iff *they* differ.
     """
     cdtype = xp.complex64 if dtype == xp.float32 else xp.complex128
-    return [as_array(xp, as_material(shape.get('material', 1.0), 'shape material').epsilon,
-                     dtype=cdtype) for shape in shapes]
+    values = [as_material(shape.get('material', 1.0), 'shape material').epsilon
+              for shape in shapes]
+    # Infer only the kind with the temporary conversion; cast the original value to avoid
+    # first rounding Python floats to a backend's default precision (notably Torch float32).
+    return [as_array(xp, value, dtype=cdtype if xp.isdtype(as_array(xp, value).dtype,
+                                                         'complex floating') else dtype)
+            for value in values]
 
 
 class _Frame:
@@ -1412,42 +1423,38 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype, dyadic=False):
     changed the sum by nothing but rounding, so it was removed -- the run's end is continuous
     without it, because nothing in the sum reads the run beyond the substitution.
 
-    **A seam between different materials is put back by the seam contrast** (2026-09-11), not
-    by a sign on the record. Until then a cross pair read its two material slots as an
-    equality bit -- equal cancelled, different co-oriented -- which was right on the shared
-    line and wrong everywhere near it: two opposed faces a positive gap apart have no record,
-    so they cancelled by arithmetic whatever their materials, the strip between two boxes of
-    ``eps 4 | eps 9`` read the far faces' normal until the gap closed, and the answer stepped
-    at contact (-2.7e-3 at order 4) and again when a material swept through equality (-5e-3;
-    9e-2 on ``12.25 | 12.25 + 1e-3``); the co-oriented vector also lay along the *primary's*
-    normal, so the same structure listed ``[A, B]`` and ``[B, A]`` solved 1.5e-3 apart. Now,
-    after the sum, every pair of pieces of different owners adds
-    ``c * h * max(0, -n_a.n_b) * t`` with ``c = (|eps_a - eps_b| / (|eps_a| + |eps_b|))``
-    to the power :data:`_BLEND_EXPONENT`, ``h = 2 w_a w_b / (w_a + w_b)`` and ``t`` the
-    difference of the two directions, pointed from the lower-``|eps|`` shape to the higher.
-    On a live seam both weights are one and nothing else survives (``on_gamma`` zeroes every
-    other piece), so the direction is exact for any ``c > 0``; at a positive gap the pair's
-    cancelled part comes back in proportion to the contrast, the same on both sides of contact,
-    so the contact step is at rounding (2e-12); and as the materials approach equality
-    ``c -> 0`` and the field tends to the merged one -- with the blend's own power, so the
-    strip the seam claims shrinks *linearly* in the contrast, where a lower power leaves a
-    ``delta**(p/4)`` band and a bump of ``T`` against the material (the quarter-power width
-    that sank the 2026-09-09 material-contrast candidate). ``T(9 + delta | 9) - T(9 | 9)`` now
-    follows the explicit Li rule within 4% from ``delta = 1e-7`` to ``1``, the material and gap
-    derivatives match secants, and the vector's orientation is the materials', so the listing
-    order moves nothing (6e-15 at an integer-pixel anchor). Equal materials read ``c = 0`` and
-    the field is bit for bit what it was; a lossy seam of small contrast reads a weak
-    co-orientation, which Li's concurrent-jump argument says is proportionate (its factorization
-    error is second order in the jump). Off the interface this is an extension like every
-    other, judged on the gates: the band error against the seam-blind exact-interface oracle
-    fell from 0.35 to 0.24 degrees on the K seam (0.237 to 0.230 against the material-aware
-    one), and on a held-out matrix of contrasts, heights, a circle, angles and wavelengths the
-    contact step is below 1e-9 and the equality ramp has Li's sign and size in every cell,
-    within 5% in six of the nine Li cells and 7-23% in three (docs/normal-field-known-limits.md,
-    section 8e). Nothing decides *when*: a
-    face one ulp off its partner's line is carried continuously by the same blend, one on it
-    cancels identically, and a material swept through equality moves the contrast live, with
-    nothing to invalidate.
+    **A seam between different materials is put back by its contrast and material phase.**
+    After the signed sum, every opposed pair of pieces of different owners adds
+    ``c * h * max(0, -n_a.n_b) * q * (n_a - n_b)``, where
+    ``c = (|eps_b - eps_a| / (|eps_a| + |eps_b|)) ** _BLEND_EXPONENT``,
+    ``h = 2 w_a w_b / (w_a + w_b)`` and ``q = (eps_b - eps_a) / |eps_b - eps_a|``.
+    At equality q is zero; c*q tends continuously to zero as
+    ``(eps_b-eps_a) * |eps_b-eps_a|**(p-1) / (|eps_a|+|eps_b|)**p``. The fourth power
+    keeps the seam's shrinking band linear in the material difference, as measured by the
+    equality ramp against the explicit Li rule. Both zero slots give zero contrast.
+
+    The material phase replaces the 2026-09-11 ranking by |eps| (2026-09-13). That ranking
+    flipped a finite correction when unequal materials crossed equal magnitudes: at order 2,
+    ``eps_a=4``, ``eps_b=(2+sqrt(12)*i)*(1+-h)``, h=1e-8, the transmission jumped 4.74e-4;
+    at ``4 | -4`` it jumped 0.0358. A real scalar orientation cannot distinguish every complex
+    material difference continuously without a zero or switch. The complex phase is
+    antisymmetric under exchanging owners, as is their normal difference, so their product
+    is listing-invariant. Real inputs retain real arithmetic, and positive real materials
+    recover the old orientation; complex inputs retain both parts of the vector.
+
+    On a live seam both weights are one and ``on_gamma`` zeroes all other pieces. The vector
+    is then a nonzero complex multiple of the real interface normal. Hermitian normalization
+    and the projector ``n n^H`` remove its phase: the exact interface normal projector remains.
+    :func:`normal_projector_coeffs` carries both xy and yx components for a complex field,
+    rather than dropping its imaginary part or assuming a symmetric projector. The tiled
+    path preserves that dtype. At a positive gap the same pointwise formula is used, with no
+    material rank or pair-record switch; equal materials add exactly zero.
+
+    The corrected positive-gap study reads K's contact change at about 1e-12 over orders
+    4..12, and its material-equality ramp follows Li within 4% from 1e-7 to 1e-2. Its original
+    opening helper moved the boxes inward; the old ladder and matrix logs are labelled as
+    overlap-side measurements. Current evidence and finite-order limitations are in
+    ``docs/normal-field-known-limits.md``, section 8e, and ``studies/nvf_seam_contrast.py``.
 
     **The tie.** Where the sum is exactly zero -- a cancelled pair's line (a run its partner
     covers), the midline of a surviving pair -- the direction is the axis of the pair that did
@@ -1695,7 +1702,9 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype, dyadic=False):
                 if pieces[a].shape == pieces[b].shape or a not in dirs or b not in dirs:
                     continue
                 ea, eb = slots[pieces[a].shape], slots[pieces[b].shape]
-                contrast = xp.abs(ea - eb) / (xp.abs(ea) + xp.abs(eb))
+                difference = xp.abs(eb - ea)
+                scale = xp.abs(ea) + xp.abs(eb)
+                contrast = difference / xp.where(scale > 0.0, scale, xp.ones_like(scale))
                 contrast = xp.astype(contrast, dtype) ** _BLEND_EXPONENT
                 nax, nay = dirs[a]
                 nbx, nby = dirs[b]
@@ -1703,10 +1712,15 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype, dyadic=False):
                 opposed = xp.where(dot < 0.0, -dot, zero)
                 total = w[a] + w[b]
                 mean = 2.0 * w[a] * w[b] / xp.where(total > 0.0, total, one)
-                # from the lower-|eps| shape toward the higher: the materials' rule, not the
-                # listing's, and fragile nowhere for real materials
-                sign = xp.where(xp.abs(eb) < xp.abs(ea), -one, one)
-                corr = contrast * mean * opposed * sign
+                # The material difference supplies an antisymmetric complex phase. Ranking
+                # |eps| flips a finite correction when distinct materials have equal moduli.
+                # Here contrast*phase tends continuously to zero at material equality, and
+                # exchanging the owners reverses both phase and normal difference. On Gamma
+                # the surviving vector is a complex scalar times the real interface normal;
+                # its Hermitian projector removes that phase exactly.
+                phase = (eb - ea) / xp.where(difference > 0.0, difference,
+                                              xp.ones_like(difference))
+                corr = contrast * mean * opposed * phase
                 sx = sx + corr * (nax - nbx)
                 sy = sy + corr * (nay - nby)
 
@@ -1732,7 +1746,8 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype, dyadic=False):
         axis_y = xp.where(pick_u, frame.sin * one, xp.where(pick_v, frame.cos * one, axis_y))
     sx = xp.where(tie, axis_x, sx)
     sy = xp.where(tie, axis_y, sy)
-    norm = _hypot_safe(xp, sx, sy)
+    norm = (_hypot_safe(xp, xp.abs(sx), xp.abs(sy))
+            if xp.isdtype(sx.dtype, 'complex floating') else _hypot_safe(xp, sx, sy))
     return sx / norm, sy / norm
 
 
@@ -2183,6 +2198,11 @@ def _projector_cache_key(xp, built, grid_shape, lattice, half_width_u, half_widt
                            for shape in built)
         lat = tuple(_static_float(v) for row in lattice for v in row)
         bits = _material_key(built)
+        # Equal numerical values can request different representations: real 4.0 uses
+        # three symmetric components, complex 4.0+0j uses four Hermitian components.
+        complex_material = len(built) > 1 and any(xp.isdtype(as_array(
+            xp, as_material(s.get('material', 1.0), 'shape material').epsilon).dtype,
+            'complex floating') for s in built)
     except (TypeError, ValueError):
         return None
 
@@ -2209,12 +2229,17 @@ def _projector_cache_key(xp, built, grid_shape, lattice, half_width_u, half_widt
     # CUDA box. It could not happen before then only because every JAX array landed on JAX's
     # default device whatever `device=` said. NumPy and Torch put a constant here.
     return (getattr(xp, '__name__', ''), _device(xp.zeros(())), shapes_key, tuple(grid_shape),
-            int(half_width_u), int(half_width_v), str(dtype), lat, plan, bits)
+            int(half_width_u), int(half_width_v), str(dtype), lat, plan, bits, complex_material)
 
 
 def normal_projector_coeffs(xp, shapes, grid_shape, lattice, half_width_u, half_width_v,
                             dtype, plan=None, projector=None):
-    """Coefficient grids of ``normal_x**2``, ``normal_x*normal_y`` and ``normal_y**2`` — the NVF projectors' input.
+    """Coefficient grids of the normal projector, in ``(xx, xy, yy[, yx])`` order.
+
+    A real piece field supplies three symmetric components. Complex material inputs can
+    produce a complex piece field: its unit Hermitian projector supplies four components,
+    with ``xy = normal_x * conj(normal_y)`` and ``yx = conj(xy)`` before Fourier sampling.
+    Conjugate in real space, not on the coefficients after applying a translation phase.
 
     With ``projector='circular'``, rectangular dyads supply four components in
     ``(xx, xy, yy, yx)`` order. Their cache entries are separate from linear
@@ -2368,7 +2393,12 @@ def normal_projector_coeffs(xp, shapes, grid_shape, lattice, half_width_u, half_
         else:
             normal_x, normal_y = normal_vector_field_analytical(xp, grid_shape, built,
                                                                 real_dtype, lattice, plan=plan)
-            fields = (normal_x * normal_x, normal_x * normal_y, normal_y * normal_y)
+            if xp.isdtype(normal_x.dtype, 'complex floating'):
+                xy = normal_x * xp.conj(normal_y)
+                fields = (xp.real(normal_x * xp.conj(normal_x)), xy,
+                          xp.real(normal_y * xp.conj(normal_y)), xp.conj(xy))
+            else:
+                fields = (normal_x * normal_x, normal_x * normal_y, normal_y * normal_y)
         coeffs = tuple(_sampled_coeffs(xp, xp.astype(f, dtype), half_width_u, half_width_v)
                        for f in fields)
     here = _device(xp.zeros(())) if key is not None else None
