@@ -3,7 +3,7 @@
 `studies/nvf_scattering_doubling.py` implements a short-slice Maxwell transfer
 followed by scattering-matrix doubling. On the recorded rotated-rectangle
 material-derivative fixture, it removes the approximately 6 ppm s-polarized
-bias of the existing regularized eigenvector derivative: the new difference
+bias of the then-existing regularized eigenvector derivative: the new difference
 from the first independent NumPy secant is approximately 0.028 ppm. The
 original two-step derivative criterion passes without relaxing its tolerance.
 
@@ -13,6 +13,20 @@ research model. The cell equations, live material grading and NVF Gram closure
 are unchanged. Production NVF dispatch and its existing eigensolver are not
 changed. This fixes a propagation-derivative issue in the new path; it does
 not repair the old Fourier auxiliary field's separate s contact error.
+
+**Production derivative update (2026-09-13).** The modal derivative now normalizes
+eigenvalue gaps and sets the Lorentzian denominator guard to
+`(matrix_dimension * machine_epsilon)**2`. The former `1e-12` relative denominator
+and fixed absolute floor damped numerically distinct modes. On a painted-layer
+width derivative, the old guard gave `-0.71919175`; the revised guard gives
+`-0.71978335`, matching independent NumPy secants. An eig-based spelling of `A@A`
+also matches the direct product's off-diagonal derivative for nearby distinct
+modes over sixteen decades of operator scale, on JAX and Torch. The harmonic
+energy model's former s-polarized expected failure now passes its unchanged
+two-step criterion and is a regular regression test. The measurements below
+describe the earlier comparison; scattering doubling still avoids eigenvector
+derivatives altogether. A finite reciprocal guard is not a general exact
+derivative at repeated or defective eigenvalues.
 
 ## Propagation without modal derivatives
 
@@ -105,7 +119,8 @@ The s relative difference is about 0.028 ppm at this step; roundoff in the
 secant remains, so this is not an absolute derivative-error certificate.
 Width, height, angle and material derivatives pass the original
 `atol=2e-9, rtol=3e-6` comparison at both original step sizes. The old
-regularized-path expected failure remains a control for that unchanged path.
+regularized-path expected failure was retained until the production derivative
+update above made it pass under the original criterion.
 
 Further tests exercise the current polynomial-body NVF adapter at order 2,
 rows 4, body degree 4, gap degree 6 and edge fraction 1e-5:

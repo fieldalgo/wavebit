@@ -512,25 +512,24 @@ def as_array(xp, v, dtype=None, device=None, copy=False):
 # and a uniform buffer or spacer layer at normal incidence is an ordinary thing to put in a
 # stack, so an inverse-design run walks into it without doing anything unusual.
 #
-# The fix is Lorentzian broadening of that reciprocal, ``1/d -> conj(d)/(|d|**2 + eps)``,
-# which is what every differentiable RCWA does; the variation is in the epsilon. Broadening
-# is not a patch over the singularity so much as the correct value at it: a degenerate
-# eigenspace has a gauge freedom, a physical loss cannot depend on it, and the sensitivity
-# the naive expression computes as 0/0 really is zero. The regularized gradient at exact
-# degeneracy comes out equal to the limit approaching it, not merely finite.
+# Lorentzian broadening, ``1/d -> conj(d)/(|d|**2 + eps)``, keeps that reciprocal
+# finite. A repeated eigenspace has gauge freedom, but setting its reciprocal to zero
+# alone is not a general derivative of a matrix function at degeneracy. The uniform
+# optical controls below do agree with their approach limits; that is a tested case,
+# not a universal guarantee for arbitrary repeated or defective eigenvalues.
 #
 # `_eig_grad` below is a PORT of `_eig_bwd` from fmmax (MIT, Copyright (c) 2023 Meta
 # Research, facebookresearch/fmmax, in its `utils.py`; the maintained fork invrs-io/fmmax
-# carries it in `eig.py`). Both epsilons, the broadening, and every term of `rhs`
-# are theirs; what is ours is the generalization to the array API so one body serves all
-# three backends, and the move to PyTorch's conjugate convention. See LICENSE.fmmax — the
+# carries it in `eig.py`). The broadening and every term of `rhs` are theirs; our
+# changes generalize it to the array API and PyTorch's conjugate convention, and
+# replace its two epsilon constants with a dtype/dimension-relative guard. See LICENSE.fmmax — the
 # MIT terms require that notice to travel with this code.
 #
-# Their eps is relative to the eigenvalue range with an absolute floor rather than fixed
-# (torcwa 1e-10, meent 1e-10 on Torch and 1e-20 on JAX). A fixed eps is tied to the matrix
-# scale: measured against finite differences, the fixed one degrades from ~2e-10 to ~1e-7 as
-# the operator shrinks four decades, where the scale-aware one stays flat. That difference is
-# the reason to prefer it.
+# The former relative denominator 1e-12 suppressed distinct pairs separated by about
+# 1e-6 of the spectral range. A painted-layer derivative read -0.71919175 against
+# the finite-difference limit -0.71978335. Normalize the gaps and use (n*machine_eps)^2
+# instead; the same response reads -0.71978335. A direct A@A derivative independently
+# checks nearby distinct modes over sixteen decades of operator scale.
 #
 # The gauge term (the third one in `rhs`) is theirs too; grcwa carries it, meent and
 # torcwa drop it. It is kept here on their authority rather than on evidence: for a
@@ -539,10 +538,6 @@ def as_array(xp, v, dtype=None, device=None, copy=False):
 #
 # Equation 4.77 of Boeddeker et al., arXiv:1701.00392. Cross-checked against both
 # frameworks' native rules where those are defined (see tests/test_eig_grad).
-
-EIG_EPS_RELATIVE = 1e-12
-EIG_EPS_MINIMUM = 1e-24
-
 
 def _eig_grad(xp, w, V, gw, gV):
     """Gradient of ``A`` given the eigendecomposition's, in PyTorch's complex convention.
@@ -558,11 +553,18 @@ def _eig_grad(xp, w, V, gw, gV):
     eye = xp.astype(I, xp.bool)
 
     delta = w[..., None, :] - w[..., :, None]
-    delta_sq = xp.abs(delta) ** 2
-    # Scale-aware: the broadening has to shrink with the problem, or the same structure in
-    # different units gets a different gradient.
-    eps = xp.maximum(EIG_EPS_RELATIVE * xp.max(delta_sq), as_array(xp, EIG_EPS_MINIMUM))
-    f = xp.conj(delta) / (delta_sq + eps)
+    # Normalize before squaring: the guard is on a relative eigenvalue gap,
+    # independent of operator units and without underflow in tiny matrices.
+    # Squaring a fixed 1e-6 relative gap (the former 1e-12 denominator term)
+    # damped well-resolved modes and biased physical shape derivatives. Use
+    # the dtype's rounding scale accumulated over n entries instead. This is
+    # a numerical guard, not an exact derivative rule at repeated eigenvalues
+    # or a condition estimate for defective eigenvectors.
+    scale = xp.max(xp.abs(delta), axis=(-2, -1), keepdims=True)
+    scale = xp.where(scale > 0., scale, xp.ones_like(scale))
+    relative = delta / scale
+    eps = (n * xp.finfo(xp.real(w).dtype).eps) ** 2
+    f = (xp.conj(relative) / (xp.abs(relative)**2 + eps)) / scale
     f = xp.where(eye, xp.zeros_like(f), f)            # no broadening on the diagonal
 
     V_H = xp.matrix_transpose(xp.conj(V))

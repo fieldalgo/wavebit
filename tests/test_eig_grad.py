@@ -117,6 +117,47 @@ def test_matches_finite_differences_at_any_operator_scale(scale):
 # ----------------------------------------------------------------------
 # 2. degeneracy: finite, and equal to the limit
 # ----------------------------------------------------------------------
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
+@pytest.mark.parametrize('gap', [1e-5, 1e-7])
+@pytest.mark.parametrize('scale', [1., 1e-8, 1e8])
+def test_resolved_nearby_modes_keep_off_diagonal_sensitivity(backend, gap, scale):
+    """The eig spelling of A squared must differentiate like the direct product.
+
+    A far third eigenvalue used to set a broadening width that suppressed the
+    well-resolved first pair. The off-diagonal direction makes that error visible;
+    an eigenvalue-only loss cannot detect it.
+    """
+    A = np.diag([1., 1.+gap, 3.]).astype(complex)*scale
+    D = np.zeros((3, 3), dtype=complex)
+    D[0, 1], D[1, 0] = scale*(1.+.2j), scale*(.3-.1j)
+    if backend == 'jax':
+        def response(t, spectral):
+            matrix = jnp.asarray(A)+t*jnp.asarray(D)
+            if spectral:
+                w, v = eig(matrix)
+                square = (v*(w*w)[None, :]) @ jnp.linalg.inv(v)
+            else:
+                square = matrix @ matrix
+            return jnp.real(square[0, 1]+square[1, 0]) / scale**2
+        actual = float(jax.grad(lambda t: response(t, True))(0.))
+        expected = float(jax.grad(lambda t: response(t, False))(0.))
+    else:
+        torch = pytest.importorskip('torch')
+        def derivative(spectral):
+            t = torch.tensor(0., dtype=torch.float64, requires_grad=True)
+            matrix = torch.tensor(A)+t*torch.tensor(D)
+            if spectral:
+                w, v = eig(matrix)
+                square = (v*(w*w)[None, :]) @ torch.linalg.inv(v)
+            else:
+                square = matrix @ matrix
+            loss = torch.real(square[0, 1]+square[1, 0])/scale**2
+            loss.backward()
+            return float(t.grad)
+        actual, expected = derivative(True), derivative(False)
+    assert actual == pytest.approx(expected, rel=2e-8, abs=1e-10)
+
+
 DEGENERATE = [
     ('distinct', [1.0, 2.0, 3.0, 4.0, 5.0]),
     ('double', [2.0, 2.0, 3.0, 4.0, 5.0]),

@@ -15,8 +15,7 @@ jax.config.update('jax_enable_x64', True)
 
 @pytest.mark.parametrize('polarization,eigen_rule', [
     ('p', 'regularized'),
-    pytest.param('s', 'regularized', marks=pytest.mark.xfail(
-        strict=True, reason='existing eigenvalue broadening biases the s material derivative by 6 ppm')),
+    ('s', 'regularized'),
     ('s', 'native'),
 ])
 def test_jit_forward_and_geometry_material_gradient_against_numpy_secants(
