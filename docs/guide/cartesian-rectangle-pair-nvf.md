@@ -39,7 +39,7 @@ refinement and optical Fourier order are distinct resolutions; the
 | Input | Contract |
 | --- | --- |
 | `truncation_order` | Nonnegative integer or `(x, y)` pair, default 1. Either or both axes may be zero. The exact original difference-mode set is selected before closure. |
-| `refinement` | 0 or 1, default 0. Separated pairs have 8 or 35 free potential unknowns; contacts have 6 or 27. |
+| `refinement` | Integer 0 through 3, default 0. Separated pairs have 8/35/143/575 free potential unknowns; contacts have 6/27/111/447. See the [refinement controls and optical limits](../nvf-pair-refinement.md). |
 | `lattice` | A `Lattice` or finite real 2-by-2 matrix whose columns are physical basis vectors, with positive finite determinant. No lattice reduction is performed. |
 | `structure` | Nonempty list or tuple of dictionaries with only `background` and `shapes`. Background defaults to vacuum. |
 | Uniform layer | Omit `shapes` or supply an empty list or tuple. Its construction still requires a plan. |

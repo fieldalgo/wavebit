@@ -56,7 +56,9 @@ This explicit family does not change the contact-preserving JAX contract of
 
 Create the concrete plan at contact with `CartesianPairOpeningPlan.from_geometry`.
 It selects one of four cyclic charts; `shift=0`, `1`, `2` or `3` requests a
-specific chart. `refinement` defaults to 0 and accepts only 0 or 1. The plan
+specific chart. `refinement` defaults to 0 and accepts integers 0 through 3.
+The [refinement note](../nvf-pair-refinement.md) records independent checks,
+resource costs and optical limitations of the finer spaces. The plan
 stores only those immutable choices and the cell reuses its fixed topology.
 All physical geometry and materials are supplied when evaluating the cell.
 

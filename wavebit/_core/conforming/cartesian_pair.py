@@ -2,7 +2,7 @@
 
 A positive gap and exact full-height contact use different immutable charts.
 The physical pair and its fundamental cell translate together. Only strictly
-contained, positive-triangle charts and refinement 0/1 are admitted. This
+contained, positive-triangle charts and refinement 0 through 3 are admitted. This
 module provides finite coefficients and an explicit experimental adapter.
 Opening-gap derivatives and optical convergence remain unqualified.
 """
@@ -112,7 +112,7 @@ class CartesianPairPlan:
     ``from_geometry`` selects one of four cyclic charts. It stores no lattice,
     width, material or offset value. Planning under JIT is refused; creating a
     new chart is an explicit operation outside differentiation. Refinement is
-    restricted to 0 or 1. Contact means an exact full-height shared edge and
+    restricted to 0 through 3. Contact means an exact full-height shared edge and
     excludes derivatives that open the gap.
     """
 
@@ -123,9 +123,9 @@ class CartesianPairPlan:
     def __post_init__(self):
         if not isinstance(self.contact, (bool, np.bool_)):
             raise ValueError('contact must be a concrete bool')
-        for value, allowed in ((self.shift, range(4)), (self.refinement, (0, 1))):
+        for value, allowed in ((self.shift, range(4)), (self.refinement, range(4))):
             if isinstance(value, (bool, np.bool_)) or not isinstance(value, Integral) or value not in allowed:
-                raise ValueError('shift must be 0..3 and refinement must be 0 or 1')
+                raise ValueError('shift and refinement must be integers from 0 through 3')
 
     @classmethod
     def from_geometry(cls, *, refinement=0, **geometry):
@@ -344,7 +344,7 @@ class CartesianRectanglePairNVF:
 
     Plan concrete geometry once and pass that immutable plan to every replay.
     Planning records the original input indices in left-to-right order, the
-    exact contact state, cyclic mesh choice and refinement (0 or 1). Replay
+    exact contact state, cyclic mesh choice and refinement (0 through 3). Replay
     never sorts shapes. Heights and cy must be exactly equal; the computed gap
     must stay strictly positive or exactly zero as planned. Nothing is snapped
     to contact. Changes in input ordering, contact state or layer kinds require

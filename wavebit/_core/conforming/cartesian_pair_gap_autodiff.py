@@ -15,6 +15,22 @@ from .material_sector import (
 )
 
 
+def _gap_weak_blocks(xp, x, x1, y, factor, thin_factor, thin, s):
+    # Contract the element and Cartesian axes before allocating the global
+    # blocks. An element-by-unknown-by-unknown outer product costs O(E*N^2)
+    # storage although assembly only returns O(N^2). This bilinear product
+    # is not Hermitian: passive complex permittivities remain unconjugated.
+    def bilinear(weight, left, right):
+        return (left.reshape(-1, left.shape[-1]).T
+                @ (weight[:, None, None] * right).reshape(-1, right.shape[-1]))
+
+    selected_x = xp.where(thin[:, None, None], x1, x)
+    h00 = bilinear(xp.where(thin, thin_factor * s, factor), selected_x, selected_x)
+    h01 = bilinear(xp.where(thin, thin_factor, factor), selected_x, y)
+    h11 = bilinear(xp.where(thin, thin_factor, factor * s), y, y)
+    return h00, h01, h11
+
+
 class CartesianPairGapEvaluator:
     """Evaluate coefficients and closure together; obtain derivatives by AD."""
 
@@ -227,26 +243,11 @@ class CartesianPairGapEvaluator:
         x = xp.einsum("eia,eic->eac", n, c)
         y = xp.einsum("eia,eic->eac", n, z)
 
-        def product(left, right):
-            return xp.einsum("eac,ead->ecd", left, right)
-
         tagged = materials[xp.asarray(self.data["tags"])]
         factor, thin_factor = tagged / (2 * safe_d), tagged / (2 * safe_d1)
 
-        def blend(regular, collapsed):
-            return xp.sum(xp.where(thin[:, None, None], collapsed, regular), axis=0)
-
-        h00 = blend(
-            factor[:, None, None] * product(x, x),
-            (thin_factor * safe_s)[:, None, None] * product(x1, x1),
-        )
-        h01 = blend(
-            factor[:, None, None] * product(x, y),
-            thin_factor[:, None, None] * product(x1, y),
-        )
-        h11 = blend(
-            (factor * safe_s)[:, None, None] * product(y, y),
-            thin_factor[:, None, None] * product(y, y),
+        h00, h01, h11 = _gap_weak_blocks(
+            xp, x, x1, y, factor, thin_factor, thin, safe_s
         )
         fc = -xp.sum(
             tagged[:, None, None]

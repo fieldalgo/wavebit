@@ -13,6 +13,7 @@ import time
 import numpy as np
 import wavebit
 from wavebit._core.conforming import cartesian_pair_gap as gap_module
+from wavebit._core.conforming import cartesian_pair as pair_module
 from wavebit._core.conforming import cartesian_pair_opening as opening_module
 from wavebit._core.conforming import material_sector
 
@@ -43,6 +44,7 @@ def li_value(order, polarization, material, gap):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--orders", type=int, nargs="+", default=[4, 8])
+    parser.add_argument("--refinements", type=int, nargs="+", choices=range(4), default=[0, 1])
     parser.add_argument("--out", type=Path, default=Path(__file__).parent/"results/nvf_pair_material_sector.log")
     args = parser.parse_args()
     if any(order < 0 for order in args.orders):
@@ -55,14 +57,15 @@ def main():
             sink.flush()
             print(line, flush=True)
 
-        sources = [gap_module.__file__, opening_module.__file__, material_sector.__file__, __file__]
+        sources = [gap_module.__file__, opening_module.__file__, pair_module.__file__, material_sector.__file__, __file__]
         emit(dict(kind="header", numpy=np.__version__, orders=args.orders,
+                  refinements=args.refinements,
                   source_sha256={Path(p).name: hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in sources},
                   coercivity_angle=1.53, gaps=GAPS,
                   cell=700., width=300., height=300., thickness=300., wavelength=900.,
                   theta=.2, phi=0., top=1., bot=2.25, background=1.))
         for order in args.orders:
-            for refinement in (0, 1):
+            for refinement in args.refinements:
                 plan = opening_module.CartesianPairOpeningPlan.from_geometry(**GEOMETRY, refinement=refinement)
                 cell = gap_module.CartesianPairGapCell(plan, order, coercivity_angle=1.53)
                 for material, epsilon in MATERIALS.items():

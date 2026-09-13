@@ -48,7 +48,8 @@ geometry JVP and there is no `xp` or JAX mode.
 
 `from_geometry` selects one of four positive cyclic mesh charts. `shift=0`,
 `1`, `2` or `3` requests a concrete chart explicitly. `refinement` is 0 by
-default and accepts only 0 or 1. The frozen plan stores only shift and
+default and accepts integers 0 through 3. See the [refinement controls](../nvf-pair-refinement.md)
+for the enlarged finite scope and optical limits. The frozen plan stores only shift and
 refinement. Replay uses the current physical settings and requires strict
 containment, positive regular triangles and positive opening-area slopes.
 Replanning is explicit when a different chart is needed.

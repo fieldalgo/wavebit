@@ -373,7 +373,7 @@ def test_frozen_plan_and_invalid_concrete_admission():
     for order in (-1, True, (1, -1), (1, 2, 3), 1.5):
         with pytest.raises(ValueError):
             CartesianPairCell(cell.plan, order)
-    for args in ((False, 4, 0), (False, 0, 2), (False, True, 0), (0, 0, 0)):
+    for args in ((False, 4, 0), (False, 0, 4), (False, True, 0), (0, 0, 0)):
         with pytest.raises(ValueError):
             CartesianPairPlan(*args)
     with pytest.raises(ValueError):

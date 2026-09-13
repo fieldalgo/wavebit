@@ -78,7 +78,9 @@ continues to require contact-preserving tangents on its contact chart.
 ## Fixed chart and returned values
 
 `CartesianPairOpeningPlan.from_geometry` plans concrete contact geometry, with
-`refinement=0` or `1` and an optional cyclic `shift` from 0 through 3.
+`refinement` from 0 through 3 and an optional cyclic `shift` from 0 through 3.
+The [refinement note](../nvf-pair-refinement.md) covers the larger finite spaces,
+JAX gap controls, reduced assembly storage and unresolved optical limits.
 The evaluator stores that immutable topology and its nonnegative Fourier
 half-widths, supplied as an integer or `(x, y)` tuple. Zero widths are allowed
 for Fourier orders. There is no dynamic planning during tracing, physical

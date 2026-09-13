@@ -160,3 +160,10 @@ optical convergence result that resolves the discrepancies above.
 PYTHONPATH=. python -m pytest -q tests/test_nvf_pair_material_sector.py
 PYTHONPATH=. OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python studies/nvf_pair_material_sector.py --orders 4 8
 ```
+
+
+The subsequent [refinement extension](nvf-pair-refinement.md) admits levels
+2/3 and contracts the value/JAX weak blocks with less storage. Independent
+finite derivatives pass on those spaces too, but the enlarged metal optical
+comparison still fails to establish convergence. The 0/1 table above remains
+the original material-admission evidence.

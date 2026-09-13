@@ -1,4 +1,4 @@
-"""Reusable NumPy finite right-opening response on explicit r0/r1 pair charts.
+"""Reusable NumPy finite right-opening response on explicit refined pair charts.
 
 Lengths use the caller's common physical unit. Returned derivatives are per
 unit gap, with fixed basis, widths, shared height, offset and material values.

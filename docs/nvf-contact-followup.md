@@ -1725,3 +1725,13 @@ including JAX at contact. Both polarizations still show strong cell/order
 changes and discrepancies from the separate Cartesian Li factorization.
 The ordinary distance-field contact residual and final metallic optical
 convergence remain open; no default dispatch changed.
+
+
+## Finer finite contact cells — 2026-09-13
+
+[Refinements 2/3 and contracted weak assembly](nvf-pair-refinement.md) now
+support independent finite values and derivatives through contact with lower
+assembly storage. The dielectric value and slope comparison improves, while
+metal values and slopes retain large changes with both cell refinement and
+outer Fourier order. These are qualified finite numerical tools, not a
+resolution of the ordinary NVF contact field or metallic optical convergence.

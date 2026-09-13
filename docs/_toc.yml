@@ -66,10 +66,13 @@ subtrees:
       - file: nvf-cartesian-pair-opening
       - file: nvf-cartesian-pair-gap
       - file: nvf-cartesian-pair-gap-autodiff
+      - file: nvf-pair-material-sector
+      - file: nvf-pair-refinement
       - file: nvf-affine-convergence
       - file: nvf-contact-followup
       - file: nvf-independent-fem
       - file: nvf-harmonic-energy
+      - file: nvf-passive-closure
       - file: nvf-cell-corrector
       - file: nvf-thin-gap-energy
       - file: nvf-partitioned-gap-energy

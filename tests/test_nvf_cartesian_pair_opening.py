@@ -749,7 +749,7 @@ def test_invalid_and_immutable(index):
         lambda: cell.data["mapping"].setflags(write=True),
         lambda: cell.closure(coefficients=(None,) * 4, **settings),
         lambda: CartesianPairOpeningPlan(True, 0),
-        lambda: CartesianPairOpeningPlan(0, 2),
+        lambda: CartesianPairOpeningPlan(0, 4),
         lambda: CartesianPairOpeningCell(cell.plan, True),
         lambda: cell.coefficients(
             **dict(settings, basis=np.asarray(settings["basis"], complex))
