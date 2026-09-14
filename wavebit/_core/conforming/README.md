@@ -15,6 +15,8 @@
 | `cartesian_pair_opening.py` | How does the finite pair retain its analytical right-opening response through exact collapsed topology, Laurent weak operators and moving Fourier weights? |
 | `cartesian_pair_quadratic.py` | Does a quadratic potential retain a finite contact derivative on the same geometry and periodic collapse graph? |
 | `cartesian_pair_galerkin.py` | Can real linear or quadratic potential corrections for every retained field preserve reciprocity, passivity and complex-linear material/contact derivatives in the original weak equations? |
+| `cartesian_pair_polynomial_galerkin.py` | Can cubic and quartic interface/interior potentials preserve the same original constraints and contact/material derivatives? |
+| `triangle_polynomials.py` | Can real Bernstein gradients, products and moving Fourier means be integrated without dividing by a vanishing triangle area? |
 | `periodic_rectangle_galerkin.py` | Can the same retained-field constraints cross a rectangle's periodic closing gap with a finite original contact derivative? |
 | `periodic_seam_trace.py` | Can continuous positive-gap potentials supply the unrestricted normal contact trace through their original material energy? |
 | `periodic_seam_galerkin.py` | Can the complete retained tensor couple those seam fields to the quadratic mesh, with finite contact and positive-gap derivatives? |

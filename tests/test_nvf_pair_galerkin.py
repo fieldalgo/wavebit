@@ -153,14 +153,16 @@ def quadratic_reference(epsilon, gap, refinement=0, order=(1, 2), quadrature=24,
     return nodal_reference(g, epsilon, gap, order, quadrature, length, settings['basis'], degree=2)
 
 
-def nodal_reference(g, epsilon, gap, order, quadrature, length, basis, *, degree=2, background=1.):
+def nodal_reference(g, epsilon, gap, order, quadrature, length, basis, *, degree=2, background=1.,
+                    gradient_evaluator=None):
     """Original nodal/Laurent calculation for an independently supplied chart."""
     from test_nvf_pair_quadratic import nodal_gradients
     p0, speed = np.asarray(g['vertices0'], float), np.asarray(g['vertices1'], float)
     s = gap/length
     material = np.array([background, *epsilon], complex)
     bary, weights = duffy(quadrature)
-    reference_grad = (nodal_gradients(bary) if degree == 2 else
+    reference_grad = (gradient_evaluator(bary) if gradient_evaluator is not None else
+                      nodal_gradients(bary) if degree == 2 else
                       np.broadcast_to(np.array([[-1., -1.], [1., 0.], [0., 1.]]), (len(bary), 3, 2)))
     ox, oy = order
     n, m = np.meshgrid(np.arange(-oy, oy+1), np.arange(-ox, ox+1), indexing='ij')

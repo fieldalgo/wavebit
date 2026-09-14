@@ -131,6 +131,28 @@ class CartesianPairGalerkinGapCell:
     def coercivity_angle(self):
         return self._angle
 
+    @staticmethod
+    def _inner(left, right):
+        return _inner(left, right)
+
+    @staticmethod
+    def _moment(gradient, average):
+        return _moment(gradient, average)
+
+    def _reference_gradient_coefficients(self):
+        return (np.array([[-1., -1.], [1., 0.], [0., 1.]])
+                if self.degree == 1 else _reference_gradients())
+
+    def _polynomial_phase_average(self, points, velocity, waves):
+        return triangle_linear_phase_average(points, velocity, waves)
+
+    def _elimination(self, potential_count, retained_count):
+        return 'retained' if potential_count > 2*retained_count else 'potential'
+
+    def _gradient_basis(self, barycentric, tangent):
+        """Values and variations of the linear gradient's barycentric basis."""
+        return barycentric, tangent
+
     def _chart_geometry(self, gap, geometry):
         length = np.sqrt(np.linalg.det(geometry['basis']))
         normalized = {k: geometry[k]/length for k in ('basis', 'widths', 'height', 'offset')}
@@ -182,20 +204,19 @@ class CartesianPairGalerkinGapCell:
         retained_index = ((n+2*oy)*(4*ox+1)+m+2*ox).astype(int)
         all_average = np.empty((len(self.data['triangles']), len(waves)), complex)
         all_change = np.empty_like(all_average)
-        if self.degree == 2:
-            linear_average = np.empty((len(all_average), 3, size), complex)
+        reference = self._reference_gradient_coefficients()
+        if self.degree > 1:
+            linear_average = np.empty((len(all_average), len(reference), size), complex)
             linear_change = np.empty_like(linear_average)
         for first in range(0, len(all_average), 16):
             triangles = self.data['triangles'][first:first+16, :3]
             avg, davg = triangle_phase_average(vertices[triangles], velocity[triangles], waves)
             all_average[first:first+16], all_change[first:first+16] = avg, davg
-            if self.degree == 2:
-                avg, davg = triangle_linear_phase_average(
+            if self.degree > 1:
+                avg, davg = self._polynomial_phase_average(
                     vertices[triangles], velocity[triangles], waves[retained_index])
                 linear_average[first:first+16], linear_change[first:first+16] = avg, davg
         adj = lambda j: np.array([[j[1, 1], -j[0, 1]], [-j[1, 0], j[0, 0]]])
-        reference = (np.array([[-1., -1.], [1., 0.], [0., 1.]])
-                     if self.degree == 1 else _reference_gradients())
         for ie, (triangle, tag, thin) in enumerate(zip(self.data['triangles'], self.data['tags'], self.data['thin'])):
             p, dp = zero[triangle[:3]], velocity[triangle[:3]]
             j0, j1 = (np.column_stack([v[1]-v[0], v[2]-v[0]]) for v in (p, dp))
@@ -227,16 +248,16 @@ class CartesianPairGalerkinGapCell:
             # Material-independent geometric blocks retain their own scaling;
             # no square root of gap, small-gap switch, or inverse gap appears.
             if thin:
-                a00, a01, a11 = s*_inner(x1, x1)/d1, _inner(x1, y)/d1, _inner(y, y)/d1
-                da00 = _inner(x1, x1)/d1
-                da01 = _inner(x1, y1)/d1
-                da11 = (_inner(y1, y)+_inner(y, y1))/d1
+                a00, a01, a11 = s*self._inner(x1, x1)/d1, self._inner(x1, y)/d1, self._inner(y, y)/d1
+                da00 = self._inner(x1, x1)/d1
+                da01 = self._inner(x1, y1)/d1
+                da11 = (self._inner(y1, y)+self._inner(y, y1))/d1
             else:
                 d = d0+s*d1
-                a00, a01, a11 = _inner(x, x)/d, _inner(x, y)/d, s*_inner(y, y)/d
-                da00 = (_inner(x1, x)+_inner(x, x1))/d-a00*d1/d
-                da01 = (_inner(x1, y)+_inner(x, y1))/d-a01*d1/d
-                da11 = (_inner(y, y)+s*(_inner(y1, y)+_inner(y, y1)))/d-a11*d1/d
+                a00, a01, a11 = self._inner(x, x)/d, self._inner(x, y)/d, s*self._inner(y, y)/d
+                da00 = (self._inner(x1, x)+self._inner(x, x1))/d-a00*d1/d
+                da01 = (self._inner(x1, y)+self._inner(x, y1))/d-a01*d1/d
+                da11 = (self._inner(y, y)+s*(self._inner(y1, y)+self._inner(y, y1)))/d-a11*d1/d
             i00, i01, i11 = np.ix_(ci, ci), np.ix_(ci, zi), np.ix_(zi, zi)
             h00[i00] += e*a00; h01[i01] += e*a01; h11[i11] += e*a11
             dh00[i00] += de*a00+e*ds*da00
@@ -244,11 +265,11 @@ class CartesianPairGalerkinGapCell:
             dh11[i11] += de*a11+e*ds*da11
             avg, davg = all_average[ie], all_change[ie]
             average, change = avg[retained_index], davg[retained_index]
-            if self.degree == 2:
+            if self.degree > 1:
                 average, change = linear_average[ie], linear_change[ie]
-            xc, xz = _moment(x, average), _moment(y, average)
-            dxc = ds*(_moment(x1, average)+_moment(x, change))
-            dxz = ds*(_moment(y1, average)+_moment(y, change))
+            xc, xz = self._moment(x, average), self._moment(y, average)
+            dxc = ds*(self._moment(x1, average)+self._moment(x, change))
+            dxz = ds*(self._moment(y1, average)+self._moment(y, change))
             qc[:, :, ci] += xc; qz[:, :, zi] += xz; rc[:, :, ci] += e*xc; rz[:, :, zi] += e*xz
             dqc[:, :, ci] += dxc; dqz[:, :, zi] += dxz
             drc[:, :, ci] += de*xc+e*dxc; drz[:, :, zi] += de*xz+e*dxz
@@ -285,7 +306,7 @@ class CartesianPairGalerkinGapCell:
             raise ValueError('nonfinite constrained Galerkin assembly')
         a, da = np.kron(np.eye(2), e), np.kron(np.eye(2), de)
         identity = np.eye(count)
-        form = 'retained' if len(k) > 2*count else 'potential'
+        form = self._elimination(len(k), count)
         potential, dpotential, x, dx, tensor, dtensor, condition = _response(
             k, dk, q, dq, r, dr, qt, dqt, source, dsource, a, da, form)
         weak = _relative(k@potential+source@x-qt@tensor, k@potential, source@x, qt@tensor)
@@ -343,13 +364,13 @@ class CartesianPairGalerkinGapCell:
                 field = numerator/d
                 dfield = (ds*c1@uc+c@dc+ds*z@uz+s*ds*z1@uz+s*z@dz)/d-field*ds*d1/d
             # Test integration uses exp(+i G.r), while avg stores exp(-i G.r).
-            moment = _moment(normal.swapaxes(-1, -2), avg.conj()).reshape(2*size, -1).T
-            dmoment = ds*(_moment(n1.swapaxes(-1, -2), avg.conj())
-                          +_moment(normal.swapaxes(-1, -2), davg.conj())).reshape(2*size, -1).T
+            moment = self._moment(normal.swapaxes(-1, -2), avg.conj()).reshape(2*size, -1).T
+            dmoment = ds*(self._moment(n1.swapaxes(-1, -2), avg.conj())
+                          +self._moment(normal.swapaxes(-1, -2), davg.conj())).reshape(2*size, -1).T
             transposed = normal.swapaxes(-1, -2)
-            term = e*_inner(transposed, field)
-            dterm = (de*_inner(transposed, field)+e*ds*_inner(n1.swapaxes(-1, -2), field)
-                     +e*_inner(transposed, dfield))
+            term = e*self._inner(transposed, field)
+            dterm = (de*self._inner(transposed, field)+e*ds*self._inner(n1.swapaxes(-1, -2), field)
+                     +e*self._inner(transposed, dfield))
             load = moment@(e*x-tensor)
             dload = dmoment@(e*x-tensor)+moment@(de*x+e*dx-dtensor)
             np.add.at(reaction, ids, term+load)

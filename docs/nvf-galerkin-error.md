@@ -100,7 +100,7 @@ operator's sensitivity to H.
 ## Integration and floating arithmetic
 
 The residual on each regular triangle is the sum of retained plane waves and
-a constant or linear polynomial gradient. Polynomial products and mixed
+a polynomial gradient of the selected supported degree. Polynomial products and mixed
 Fourier moments use the original exact triangle integration routines. Pure
 Fourier products use a separate exact rectangle indicator transform, including
 the larger difference-frequency set. Collapsed triangles have zero physical
@@ -127,7 +127,9 @@ at roundoff instead of subtracting two large tensor energies.
 ## Automatic refinement and its limits
 
 `estimate_closed_error(cell, **geometry)` accepts an explicit pair or periodic
-rectangle Galerkin cell, degree one or two. Geometry keywords follow that
+rectangle Galerkin cell, degree one or two, or the explicit
+[polynomial pair family](nvf-polynomial-galerkin.md), degree two through four.
+Geometry keywords follow that
 cell's `closure` call with gap and all tangents omitted. It returns the
 unchanged electric tensor, dual tensor, raw residual Gram, energy/operator
 bounds and diagnostics. Pair oblique geometry uses the original fixed plan.
@@ -148,6 +150,9 @@ There is no plateau acceptance rule. At least one requested tolerance must be
 positive. Reaching `max_refinement` without meeting the budget returns
 `converged=False`, reason `refinement_limit`, and every level's measurements.
 Numerical or material guard failures raise instead of returning success.
+Omitting `max_refinement` selects the family's supported cap: level 3 for
+the original linear/quadratic families, level 2 for cubic/quartic pairs.
+An explicitly requested level outside that family is refused.
 
 ```python
 from wavebit._core.conforming.periodic_rectangle_galerkin import PeriodicRectangleGalerkinGapCell

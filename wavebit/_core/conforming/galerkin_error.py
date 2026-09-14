@@ -10,9 +10,10 @@ from dataclasses import dataclass
 from numbers import Integral
 import numpy as np
 
-from .cartesian_pair_galerkin import CartesianPairGalerkinGapCell, _response, _solve, _inner, _moment, _relative
+from .cartesian_pair_galerkin import CartesianPairGalerkinGapCell, _response, _solve, _relative
 from .cartesian_pair_opening import CartesianPairOpeningPlan, real_array
 from .periodic_rectangle_galerkin import PeriodicRectangleGalerkinGapCell
+from .cartesian_pair_polynomial_galerkin import CartesianPairPolynomialGalerkinGapCell
 from .material_sector import minimum_rotated_storage
 
 
@@ -66,7 +67,7 @@ def _periodic_settings(*, period=(700., 700.), width=350., epsilon=12.25,
 def _settings(cell, geometry):
     # Reject unknown subclasses too: their geometry and physical spaces may
     # differ from the exact rectangle indicators used in the estimator.
-    if type(cell) is CartesianPairGalerkinGapCell:
+    if type(cell) in (CartesianPairGalerkinGapCell, CartesianPairPolynomialGalerkinGapCell):
         return _pair_settings(**geometry)
     if type(cell) is PeriodicRectangleGalerkinGapCell:
         return _periodic_settings(**geometry)
@@ -80,7 +81,7 @@ def _closed_state(cell, geometry):
     if not all(np.isfinite(v).all() for v in assembled[:-1]):
         raise ValueError('nonfinite closed error-control assembly')
     direct = np.kron(np.eye(2), e)
-    form = 'retained' if len(k) > 4*len(e) else 'potential'
+    form = cell._elimination(len(k), 2*len(e))
     u, du, x, dx, h, dh, condition = _response(
         k, dk, q, dq, r, dr, qt, dqt, source, dsource, direct, np.zeros_like(direct), form)
     original, _ = cell._original_residual(x, dx, h, dh, u, du, info)
@@ -150,10 +151,10 @@ def _indicators(cell, geometry):
 def estimate_closed_error(cell, **geometry):
     """Estimate closed transverse cell error using a conforming flux solve.
 
-    ``cell`` must be exactly ``CartesianPairGalerkinGapCell`` or
-    ``PeriodicRectangleGalerkinGapCell``. Geometry/material keywords follow
-    its ``closure`` signature, omitting gap and all tangents. Both degree 1
-    and 2 are supported. The original coercivity and physical guards apply.
+    ``cell`` must be an explicitly supported pair, polynomial pair, or
+    periodic rectangle Galerkin cell. Geometry/material keywords follow
+    its ``closure`` signature, omitting gap and all tangents. The original
+    coercivity and physical guards apply at every supported degree.
 
     The bound controls the infinite constrained H1 cell problem at the given
     Fourier set. It is evaluated in floating point, with a reported roundoff
@@ -179,8 +180,8 @@ def estimate_closed_error(cell, **geometry):
         flux_gradient = c@ud[ci]/determinant
         flux = np.stack([-flux_gradient[..., 1, :], flux_gradient[..., 0, :]], axis=-2)
         residual = eps*electric-flux
-        moments[tag] += determinant*_moment(residual, average).reshape(hd.shape)
-        term = determinant*_inner(residual.conj(), residual)/alpha[tag]
+        moments[tag] += determinant*cell._moment(residual, average).reshape(hd.shape)
+        term = determinant*cell._inner(residual.conj(), residual)/alpha[tag]
         gram += term
         term_scale += np.linalg.norm(term)
     weight = np.zeros_like(hd)
@@ -217,7 +218,7 @@ def estimate_closed_error(cell, **geometry):
 
 
 def refine_closed_error(cell, *, absolute_tolerance=0., relative_tolerance=0.,
-                        max_refinement=3, **geometry):
+                        max_refinement=None, **geometry):
     """Refine the closed mesh until an explicit constitutive error budget passes.
 
     The criterion is B <= atol + rtol * max(0, ||H_h|| - B), so its relative
@@ -232,9 +233,13 @@ def refine_closed_error(cell, *, absolute_tolerance=0., relative_tolerance=0.,
     if (min(absolute_tolerance, relative_tolerance) < 0
             or max(absolute_tolerance, relative_tolerance) <= 0):
         raise ValueError('nonnegative tolerances with at least one positive value required')
+    limit = (min(3, 4-(cell.degree-1).bit_length())
+             if type(cell) is CartesianPairPolynomialGalerkinGapCell else 3)
+    if max_refinement is None:
+        max_refinement = limit
     if (isinstance(max_refinement, (bool, np.bool_)) or not isinstance(max_refinement, Integral)
-            or not cell.plan.refinement <= max_refinement <= 3):
-        raise ValueError('maximum refinement must be an integer from the current level through 3')
+            or not cell.plan.refinement <= max_refinement <= limit):
+        raise ValueError('maximum refinement must lie inside the current family\'s supported range')
     history = []
     for refinement in range(cell.plan.refinement, max_refinement+1):
         if refinement != cell.plan.refinement:
@@ -242,7 +247,7 @@ def refine_closed_error(cell, *, absolute_tolerance=0., relative_tolerance=0.,
                 cell = PeriodicRectangleGalerkinGapCell(cell.order, degree=cell.degree,
                     refinement=refinement, coercivity_angle=cell.coercivity_angle)
             else:
-                cell = CartesianPairGalerkinGapCell(CartesianPairOpeningPlan(cell.plan.shift, refinement),
+                cell = type(cell)(CartesianPairOpeningPlan(cell.plan.shift, refinement),
                     cell.order, degree=cell.degree, coercivity_angle=cell.coercivity_angle)
         result = estimate_closed_error(cell, **geometry)
         budget = absolute_tolerance+relative_tolerance*result.exact_tensor_norm_lower_bound
