@@ -173,3 +173,40 @@ refinement was added, all 20 affected positive-gap controls passed, including
 the newly restored refined gap-1e-9 target. These sets overlap; the final
 pair/remainder suite contains 85 distinct controls. The 57 documentation
 checks and warnings-as-errors Sphinx build also pass.
+
+## Twice-refined closed fields
+
+The subsequent source-pinned record
+`studies/results/nvf_polynomial_pair_refinement_two.log` contains eight
+completed polarization rows: cubic and quartic fields, Fourier orders 4
+and 8, and refinement level 2 for the same dissimilar metal pair. Each
+degree has its own source header. Cubic measurements predate the guarded
+solver and flat field-product optimizations; quartic measurements use them.
+Those optimizations preserve the same finite equations and acceptance limits.
+
+| Degree | Fourier order | T, p | T, s | Contact slope, p | Contact slope, s |
+| --- | --- | --- | --- | --- | --- |
+| 3 | 4 | 0.462741504 | 0.412446823 | -0.119876028 | 0.007393669 |
+| 3 | 8 | 0.470190520 | 0.379490252 | -0.168592579 | 0.015198594 |
+| 4 | 4 | 0.473280359 | 0.434992756 | -0.063208885 | 0.049665974 |
+| 4 | 8 | 0.476993193 | 0.376108368 | 0.024792239 | -0.010924138 |
+
+Both quartic runs reject the original retained elimination and accept the
+complete physical QR state. The largest original/energy residual is
+1.03e-12 at order 4 and 2.49e-12 at order 8, below the unchanged 1e-10
+limit. Their actual integration orders are 32 and 48 respectively. The
+constitutive value/JVP calls took about 234 and 919 seconds in these local
+runs; this is still an expensive dense family.
+
+The quartic order-4 mesh change from level 1 to level 2 changes s-polarized
+transmission from about 0.404495 to 0.434993. At level 2, increasing Fourier
+order from 4 to 8 changes it by about 0.058884, and changes the sign of both
+reported contact slopes. Raising degree also changes the slopes substantially.
+The additional resolution therefore does not yet demonstrate joint mesh,
+degree and Fourier convergence. Small finite-equation residuals still do
+not qualify these optical values or contact derivatives for ordinary routing.
+
+The measurements establish the current finite result and its remaining
+resolution dependence. They are not a proof that an infinite-resolution
+limit fails to exist, and they do not justify replacing NVF with Li or
+weakening the acceptance criteria.
