@@ -140,11 +140,13 @@ inferred from them.
 
 The component's `normal_response` returns one yy matrix and its derivative,
 not five convolution slots. The existing finite-element Galerkin response
-is unchanged. Combining them requires assembling their mutual physical
-energy and retained projections. Replacing only the old yy derivative, or
+is unchanged. The separate [coupled seam family](nvf-coupled-seam-galerkin.md)
+now assembles their mutual physical energy and retained projections into a
+complete finite transverse tensor. Replacing only the old yy derivative, or
 splicing this yy block into an otherwise unrelated tensor, would not perform
-that coupling and is not implemented. Other y orders, the complete tensor,
-and backend integration remain necessary before this becomes a full closure.
+that coupling and is not implemented. The coupled family's independent
+qualification and optical scope are documented separately. Ordinary routing,
+other geometries and backend integration remain open.
 
 The implementation uses the existing NumPy dependency and original formulas;
 no new external dependency or copied source is introduced.
