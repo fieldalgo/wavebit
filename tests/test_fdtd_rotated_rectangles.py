@@ -111,6 +111,7 @@ def response(p, backend=0, diagnostics=False, side='bottom', smoothing=0.):
 
 
 @pytest.mark.parametrize('backend', [1, 2])
+@pytest.mark.slow
 def test_bottom_conical_jones_joint_eight_parameter_derivatives(backend):
     pytest.importorskip('jax' if backend == 1 else 'torch')
     p = np.array([.13, -.09, .16, .12, .37, 2.4, 1.13, .14])

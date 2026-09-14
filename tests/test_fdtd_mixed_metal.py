@@ -61,6 +61,7 @@ def test_all_mixed_scene_material_gradients_match_numpy(numpy_reference, backend
     np.testing.assert_allclose(convert(derivative), finite, rtol=3e-5, atol=2e-8)
 
 
+@pytest.mark.slow
 def test_mixed_metal_matches_independent_discrete_ade_boundary_problem():
     # Harmonic substitution into centered P''/P' gives the discrete material
     # susceptibility below. Solve the resulting Yee Helmholtz matrix with exact

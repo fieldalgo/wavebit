@@ -59,6 +59,7 @@ def test_independent_graded_meep_controls_and_cell_refinement(references, record
     assert errors[40][0] < .008 and errors[40][1] < .006
 
 
+@pytest.mark.slow
 def test_smoothed_area_scattering_refines_against_graded_rcwa_and_meep(references, record_property):
     jax = pytest.importorskip('jax'); jax.config.update('jax_enable_x64', True)
     data, target, derivative = references

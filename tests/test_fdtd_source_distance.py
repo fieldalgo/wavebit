@@ -75,6 +75,7 @@ def test_graded_source_uses_nearest_node_and_avoids_user_monitor(monkeypatch):
         wavebit.fdtd(**options(source_distance=1.013, grading=True, field_monitors={'source': d['source_z']}))
 
 
+@pytest.mark.slow
 def test_moved_source_refines_to_independent_oblique_airy():
     band = np.array([.9, 1., 1.1])
     q0 = np.sqrt(1-(band*np.sin(.25))**2)

@@ -106,7 +106,7 @@ rebase. Found the hard way by a session that thought it had a backup.
 git clone https://github.com/fieldalgo/wavebit.git
 cd wavebit
 pip install -e .[jax]      # or .[pytorch], or plain -e . for NumPy only
-pytest tests/ -q
+pytest tests/ -q           # skips the tests marked slow; add --run-slow for all
 ```
 
 ### Documentation

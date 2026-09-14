@@ -128,6 +128,7 @@ def test_equal_and_nearly_equal_kernel_cell_widths_remain_finite():
 
 
 @pytest.mark.parametrize('backend', [1, 2])
+@pytest.mark.slow
 def test_smoothed_bottom_conical_eight_parameter_graph(backend):
     pytest.importorskip('jax' if backend == 1 else 'torch')
     p = np.array([.13, -.09, .16, .12, .37, 2.4, 1.13, .14])

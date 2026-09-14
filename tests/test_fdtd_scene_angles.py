@@ -104,6 +104,7 @@ def test_uniform_phase_angle_derivative_matches_independent_yee_dispersion(backe
 
 @pytest.mark.parametrize('backend', [1, 2])
 @pytest.mark.parametrize('method', ['electric', 'directional'])
+@pytest.mark.slow
 def test_angle_material_poles_monitors_and_records_share_one_graph(backend, method):
     from wavebit.backends.time_domain import time_loop_backend
     pattern = np.array([[[1., 1.2], [1.4, 1.1]]])

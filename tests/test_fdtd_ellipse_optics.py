@@ -38,6 +38,7 @@ def test_independent_reference_grid_order_and_difference_controls(target):
     assert np.max(abs(finite_difference(reference, p, 5e-6)-jac)) < 2e-6
 
 
+@pytest.mark.slow
 def test_eight_complex_channels_and_three_shape_derivatives_refine(target, record_property):
     jax = pytest.importorskip('jax'); jax.config.update('jax_enable_x64', True)
     p, value, jac = target

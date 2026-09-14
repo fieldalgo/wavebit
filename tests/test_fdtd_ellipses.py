@@ -132,6 +132,7 @@ def response(p, backend=0, diagnostics=False, side='bottom', smoothing=0.):
 
 @pytest.mark.parametrize('backend', [1, 2])
 @pytest.mark.parametrize('smoothing', [0., (.04, .03)])
+@pytest.mark.slow
 def test_bottom_conical_joint_eight_parameter_shape_material_and_depth_graph(backend, smoothing):
     setup(backend)
     p = np.array([.13, -.09, .18, .11, .37, 2.4, 1.13, .14])

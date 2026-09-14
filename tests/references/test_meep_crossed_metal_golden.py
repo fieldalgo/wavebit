@@ -36,6 +36,7 @@ def computed():
     return extract(result, CASE)
 
 
+@pytest.mark.slow
 def test_complex_metal_amplitudes_match_meep(computed, golden):
     error = gap(computed, frozen(golden, 'metal', 120), CASE)
     print('METAL_AMPLITUDE_ERROR', error, flush=True)
@@ -43,6 +44,7 @@ def test_complex_metal_amplitudes_match_meep(computed, golden):
 
 
 @pytest.mark.parametrize('leg', ['s', 'p'])
+@pytest.mark.slow
 def test_metal_absorption_matches_meep(computed, golden, leg):
     measured = 1 - computed[f'{leg}.R'].sum() - computed[f'{leg}.T'].sum()
     want = float(1 - golden[f'metal__120__{leg}__R'].sum()

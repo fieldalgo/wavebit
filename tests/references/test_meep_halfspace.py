@@ -7,6 +7,7 @@ import pytest
 import wavebit
 
 
+@pytest.mark.slow
 def test_halfspace_amplitudes_and_jacobian_against_meep(record_property):
     jax = pytest.importorskip('jax'); jax.config.update('jax_enable_x64', True)
     import jax.numpy as jnp

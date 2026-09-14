@@ -1,7 +1,11 @@
 # Verification suite
 
-Everything whose expected answer can be stated before the run. CI runs all of it on every push
-(`pytest tests -q`); there is no second, unasserted tier.
+Everything whose expected answer can be stated before the run. CI runs all of it on every push,
+as two jobs -- `pytest tests -m "not slow"` and `pytest tests -m slow` -- so there is no second,
+unasserted tier. The `slow` marker ([`conftest.py`](conftest.py)) only takes the minutes-long
+checks -- the FDTD line's refinement, finite-difference and Meep comparisons, and develop's
+painted-overlap polygon tests -- out of a plain local `pytest tests -q`. Naming a file, any `-k`
+or `-m`, a re-run of failures (`--lf`) and `--run-slow` all still run them.
 
 The test for whether something belongs here: **can you write the `assert` line first?** If
 writing it would mean asserting the thing you are trying to find out, it is a study and belongs

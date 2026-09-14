@@ -2059,6 +2059,7 @@ def test_the_courant_bound_counts_the_y_axis_once():
 
 @pytest.mark.parametrize('phi_deg', [0.0, 30.0, 45.0])
 @pytest.mark.parametrize('leg', ['s', 'p'])
+@pytest.mark.slow
 def test_the_tfsf_source_injects_a_crossed_plane_wave(phi_deg, leg):
     """On vacuum the scattered-field region must stay empty -- with a y axis as with only x.
 

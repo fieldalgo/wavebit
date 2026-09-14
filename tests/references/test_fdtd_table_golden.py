@@ -360,6 +360,7 @@ def test_the_recorded_conditions_are_the_ones_the_module_ships():
           'published digits mean.')
 
 
+@pytest.mark.slow
 def test_the_recorded_grid_is_the_one_the_solver_builds():
     """The derived half of the record: lengths and counts, against the run's diagnostics.
 
@@ -386,6 +387,7 @@ def test_the_recorded_grid_is_the_one_the_solver_builds():
     assert abs(pad * wl / n_bot - WAVEBIT_DERIVED['clearance_bot']) < 1e-12
 
 
+@pytest.mark.slow
 def test_the_frozen_wavebit_column_is_still_what_the_solver_returns(table, solutions):
     """§2's "this module, 5 nm" column, re-solved through ``WAVEBIT_CALL``.
 

@@ -108,6 +108,7 @@ def test_fixed_mesh_crossings_and_nominal_forward_compatibility(side, fitted):
 @pytest.mark.parametrize('backend', [1, 2])
 @pytest.mark.parametrize('side,method', [('top', 'electric'), ('bottom', 'directional')])
 @pytest.mark.parametrize('smoothing', [0., .06])
+@pytest.mark.slow
 def test_joint_layer_material_pole_gradients_in_typed_stack(backend, side, method, smoothing):
     pattern = np.array([[[1.2, 1.8], [1.5, 1.1]], [[1.6, 1.3], [1.1, 1.7]]])
     def objective(p, which):

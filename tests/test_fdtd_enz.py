@@ -5,6 +5,7 @@ import pytest
 from studies.fdtd_enz import BAND, reference, run, solve
 
 
+@pytest.mark.slow
 def test_lossy_enz_resolves_both_basis_tails_and_refines_to_continuum():
     epsilon, _, _ = reference()
     assert abs(epsilon[1].real) < 1e-14

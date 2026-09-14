@@ -1,7 +1,12 @@
-# Five jobs with different purposes.
+# Six jobs with different purposes.
 #
-#   test     — installs both optional backends and runs the whole suite. This is
-#              where the physics is verified.
+#   test     — installs both optional backends and runs every test not marked
+#              `slow`. With `slow` below, this is where the physics is verified.
+#   slow     — runs the tests marked `slow` (tests/conftest.py): the FDTD line's
+#              resolution-refinement studies, finite-difference gradient checks
+#              and Meep comparisons, and develop's painted-overlap polygon tests.
+#              Together with `test` it is the whole suite on every push, split so
+#              that neither half runs into the job limit.
 #   minimal  — builds an sdist and its wheel, installs in an isolated venv, and
 #              checks NumPy RCWA/FDTD, bundled data and the optional plot extra.
 #              Runs on Linux, macOS and Windows; no source-tree import fallback.
@@ -169,11 +174,10 @@ jobs:
         # is the claim worth checking, since the speedup is arithmetic and the breakage
         # would not be.
         #
-        # It also splits the six tests that cost 32 of those 77 minutes across two workers:
-        # four are in `test_boundary.py` and two in `test_oblique_lattice.py`, so they land
-        # on different ones. They are slow for a reason -- f453b21 folds polygon segments
-        # over the 3x3 periodic images, which is 9x the segments and is correctness work,
-        # not a regression to revert.
+        # The six tests that cost 32 of those 77 minutes -- four in `test_boundary.py`, two in
+        # `test_oblique_lattice.py` -- are marked slow now and run in `slow` below. They are
+        # slow for a reason -- f453b21 folds polygon segments over the 3x3 periodic images,
+        # which is 9x the segments and is correctness work, not a regression to revert.
         #
         # `--timeout` turns a hung test into a named failure instead of a dead job.
         # Without it the run that hangs reports nothing at all: pytest prints its
@@ -238,8 +242,59 @@ jobs:
         # loop is one copy of the body per chunk, and reverse mode holds them all -- so
         # with `lax.scan` and a rematerialised body the same solve asks for 0.570 GiB
         # and the whole function passes, measured at 2202 MB against this runner's 7.9.
+        #
+        # `-m "not slow"`: the tests marked slow run in their own job, `slow` below, and
+        # the two jobs together are the whole suite. Measured 2026-09-15 on the desktop under
+        # `-n 5`, the FDTD line's full suite was 97 minutes of wall clock and 484
+        # worker-minutes, and 74 cases took 281 of those. develop's own runs take 27 minutes
+        # there and 65 to 78 here, and by that ratio this job was headed for about 260 minutes
+        # against the 180 above. Split, this half took 42 minutes on the desktop, which is
+        # roughly 100 to 120 here by the same ratio.
         run: >
-          pytest tests -v -n 2 --dist loadfile --timeout=1200 --timeout-method=thread
+          pytest tests -v -m "not slow" -n 2 --dist loadfile --timeout=1200 --timeout-method=thread
+
+  slow:
+    name: slow tests
+    runs-on: ubuntu-latest
+    # Provisional, and deliberately above `test`'s 180: this job has not yet run on a
+    # runner. Its 82 cases took 51 minutes of wall clock at `-n 5` on the desktop, and the
+    # rest of the suite 42 (2026-09-15). At the ratio develop's runs show -- 27 minutes there,
+    # 65 to 78 here -- that is roughly 125 to 150 minutes here. Lower this once a run has
+    # measured it.
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      # The same installation as `test`, for the same reasons given there.
+      - name: Install CPU-only PyTorch
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install Wavebit with both optional backends, contour, and plotting
+        run: pip install -e '.[jax,pytorch,contour,plot]' pytest pytest-timeout pytest-xdist
+
+      - name: Verify all three backends and contourpy are importable
+        run: python -c "import numpy, jax, torch, contourpy, matplotlib, wavebit; print(wavebit.__file__)"
+
+      # The environment is `test`'s, and the comments there are the reasons for it. What
+      # differs is the per-test bound, 2400 s rather than 1200 s. The slowest of these took
+      # 752 s at `-n 5` on the desktop, and 1110 s on another run, where 1200 s killed its
+      # worker. These runners are slower than that machine, and the bound is for a hung test,
+      # not a slow one.
+      - name: Run the slow tests
+        env:
+          OPENBLAS_NUM_THREADS: 1
+          OMP_NUM_THREADS: 1
+          MKL_NUM_THREADS: 1
+          NUMEXPR_NUM_THREADS: 1
+          VECLIB_MAXIMUM_THREADS: 1
+          XLA_FLAGS: --xla_cpu_multi_thread_eigen=false
+        run: >
+          pytest tests -v -m slow -n 2 --dist loadfile --timeout=2400 --timeout-method=thread
 
   examples:
     name: examples smoke

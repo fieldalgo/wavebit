@@ -208,6 +208,7 @@ def test_the_crossed_efficiencies_match_meep(golden, rcwa_solutions, name):
 # ---------------------------------------------------------------------------------------
 
 @pytest.mark.parametrize('name', list(CASES), ids=list(CASES))
+@pytest.mark.slow
 def test_the_crossed_fdtd_matches_meep(golden, name):
     """``_extract_crossed`` against a solver that is not ours.
 

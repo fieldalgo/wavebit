@@ -30,6 +30,7 @@ def test_graded_reference_fourier_grid_order_and_difference_controls(target):
     assert np.max(abs(finite_difference(reference, p, 5e-6)-jac)) < 1e-6
 
 
+@pytest.mark.slow
 def test_complex_scattering_and_diameter_gradient_refine_toward_fourier_optics(target, record_property):
     jax = pytest.importorskip('jax'); jax.config.update('jax_enable_x64', True)
     p, value, jac = target

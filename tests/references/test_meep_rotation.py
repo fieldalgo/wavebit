@@ -38,6 +38,7 @@ def test_independent_rotated_block_reference_uncertainty_and_refinement(referenc
     assert errors[40][1] < .004 and errors[40][2] < .05
 
 
+@pytest.mark.slow
 def test_area_scattering_derivatives_against_rcwa_and_independent_meep(references, record_property):
     jax = pytest.importorskip('jax'); jax.config.update('jax_enable_x64', True)
     data, target, derivative = references

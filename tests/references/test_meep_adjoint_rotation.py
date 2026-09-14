@@ -55,6 +55,7 @@ def test_meep_adjoint_and_finite_difference_reference_controls(resolution, suffi
     record_property('measured_adjoint_finite_gaps', controls['adjoint_finite_gap'])
 
 
+@pytest.mark.slow
 def test_common_fdtd_accuracy_is_checked_against_independent_fourier_reference(record_property):
     pytest.importorskip('jax')
     result = measure()

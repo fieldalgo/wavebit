@@ -11,6 +11,7 @@ def options(**changes):
                      resolution=20, n_periods=30, truncation_order=0, tetm='te'), **changes)
 
 
+@pytest.mark.slow
 def test_slab_complex_amplitudes_converge_to_airy():
     phase = 2*np.pi*1.5*.3
     interface = (1-1.5)/(1+1.5)

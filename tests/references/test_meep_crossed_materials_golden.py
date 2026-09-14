@@ -88,6 +88,7 @@ def comparison(request):
     return name, case, results
 
 
+@pytest.mark.slow
 def test_material_amplitudes_match_independent_reference(comparison, golden):
     name, case, got = comparison
     fine = frozen(golden, name, 40)
@@ -98,6 +99,7 @@ def test_material_amplitudes_match_independent_reference(comparison, golden):
     assert gap(got['fdtd40'], fine, case, power=True) < .04
 
 
+@pytest.mark.slow
 def test_both_spatial_refinements_reduce_reference_error(comparison, golden):
     name, case, got = comparison
     assert gap(got['rcwa7'], got['rcwa11'], case) < .005
@@ -109,6 +111,7 @@ def test_both_spatial_refinements_reduce_reference_error(comparison, golden):
         assert b < a
 
 
+@pytest.mark.slow
 def test_material_omission_is_resolved(comparison, golden):
     name, case, got = comparison
     fine = frozen(golden, name, 40)

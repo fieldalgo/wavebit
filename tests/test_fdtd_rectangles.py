@@ -98,6 +98,7 @@ def solve_joint(p, backend, *, diagnostics=False):
 
 
 @pytest.mark.parametrize('backend', [1, 2])
+@pytest.mark.slow
 def test_bottom_joint_shape_material_and_thickness_gradients(backend):
     pytest.importorskip('jax' if backend == 1 else 'torch')
     p = np.array([.16, -.093, .15, .14, 2.4, 1.2, .14])

@@ -61,6 +61,7 @@ def test_array_azimuth_keeps_y_cells_and_time_step_while_crossing_zero(period):
 
 @pytest.mark.parametrize('backend', [1, 2])
 @pytest.mark.parametrize('side', ['top', 'bottom'])
+@pytest.mark.slow
 def test_two_angle_jacobian_matches_independent_uniform_yee_phase(backend, side, record_property):
     from wavebit.backends.time_domain import time_loop_backend
     if backend == 1:
@@ -132,6 +133,7 @@ def test_normal_incidence_rotates_calibrated_monitors_and_records(backend, side)
 
 @pytest.mark.parametrize('backend', [1, 2])
 @pytest.mark.parametrize('method', ['electric', 'directional'])
+@pytest.mark.slow
 def test_azimuth_and_material_graphs_match_two_finite_difference_steps(backend, method):
     from wavebit.backends.time_domain import time_loop_backend
     pattern = np.array([[[1., 1.2], [1.4, 1.1]]])
@@ -219,6 +221,7 @@ def test_azimuth_dependent_grazing_is_invalid_in_eager_and_jit_calls():
 
 
 @pytest.mark.parametrize('backend', [1, 2])
+@pytest.mark.slow
 def test_azimuth_derivative_respects_axis_exchange(backend):
     from wavebit.backends.time_domain import time_loop_backend
     pattern = np.array([[[1.3, 2.2, 1.6], [2.5, 1.7, 1.1]]])

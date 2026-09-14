@@ -397,6 +397,7 @@ def test_the_grating_efficiencies_match_the_rcwa_path(golden, rcwa_solutions, le
 
 
 @pytest.mark.parametrize('leg', list(LEGS), ids=list(LEGS))
+@pytest.mark.slow
 def test_the_time_domain_path_matches_meep(golden, fdtd_solutions, leg):
     """``solve_fdtd`` against a time-domain solver that is not ours.
 

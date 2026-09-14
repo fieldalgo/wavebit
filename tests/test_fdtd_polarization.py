@@ -39,6 +39,7 @@ def patterned():
     return common, result
 
 
+@pytest.mark.slow
 def test_crossed_ellipse_retains_complex_interference_and_overall_phase(patterned):
     common, circular = patterned
     psi, chi, phase = .37, -.22, np.exp(.63j)

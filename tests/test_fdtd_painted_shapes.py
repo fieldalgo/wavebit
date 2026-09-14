@@ -165,6 +165,7 @@ def response(p, backend=0, diagnostics=False, side='bottom'):
 
 
 @pytest.mark.parametrize('backend', [1, 2])
+@pytest.mark.slow
 def test_bottom_conical_complete_shape_material_and_layer_graph(backend):
     setup(backend)
     p = np.array([.31, .17, .025, -.27, .15, 2.8, 1.13, .14])

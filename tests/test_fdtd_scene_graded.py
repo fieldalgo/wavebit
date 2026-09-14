@@ -60,6 +60,7 @@ def test_graded_scene_material_gradient_and_original_bottom_coordinates(backend)
     np.testing.assert_allclose(derivative,finite,rtol=1e-5,atol=1e-8)
 
 
+@pytest.mark.slow
 def test_graded_bottom_stack_against_independent_meep_reference():
     ref=json.loads((Path(__file__).parent/'references/golden_scene_bottom_meep.json').read_text())
     result=wavebit.fdtd(structure=np.asarray(ref['epsilon']).reshape(-1,1,1),backend=0,
