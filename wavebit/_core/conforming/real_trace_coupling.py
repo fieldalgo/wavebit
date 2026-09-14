@@ -14,7 +14,14 @@ def _contract(*arguments):
     return np.einsum(*arguments, optimize=True)
 
 
-def coupled_positive(obj, base, quadrature, free_energy, trace_order):
+def _field_product(field, coefficients):
+    """Apply all quadrature/component rows in one dense multiplication."""
+    count, components, columns = field.shape
+    return (field.reshape(count*components, columns)@coefficients).reshape(
+        count, components, coefficients.shape[1])
+
+
+def coupled_positive(obj, base, quadrature, free_energy, trace_order, *, elimination=None):
     """Solve the original weak system and verify reconstructed physical fields.
 
     Pure Fourier energy is supplied independently. Added mixed/trace energies
@@ -67,7 +74,9 @@ def coupled_positive(obj, base, quadrature, free_energy, trace_order):
     dSS = np.vstack([dsource, dR[info['reverse']].T / s - R[info['reverse']].T * ds / s ** 2])
     A = np.kron(np.eye(2), e)
     DA = np.kron(np.eye(2), de)
-    U, dU, x, dx, H, DH, cond = _response(KK, dKK, QQ, dQQ, RR, dRR, QT, dQT, SS, dSS, A, DA, 'potential')
+    if elimination is None:
+        elimination = 'retained' if len(KK) > 4*N else 'potential'
+    U, dU, x, dx, H, DH, cond = _response(KK, dKK, QQ, dQQ, RR, dRR, QT, dQT, SS, dSS, A, DA, elimination)
     count = len(obj.data['pmap'])
     res = np.zeros((count, 2 * N), complex)
     dres = res.copy()
@@ -87,25 +96,25 @@ def coupled_positive(obj, base, quadrature, free_energy, trace_order):
         F[:, 1, N:] = phase.conj()
         DF[:, 0, :N] = dphase.conj()
         DF[:, 1, N:] = dphase.conj()
-        E = F @ x + gc @ U[ci] + s * gz @ U[nc + zi] + le @ U[nc + nz:]
-        DE = DF @ x + F @ dx + dgc @ U[ci] + gc @ dU[ci] + ds * gz @ U[nc + zi] + s * dgz @ U[nc + zi] + s * gz @ dU[nc + zi] + dle @ U[nc + nz:] + le @ dU[nc + nz:]
-        T = mat * E - F @ H
-        DT = dmat * E + mat * DE - DF @ H - F @ DH
+        E = _field_product(F, x) + _field_product(gc, U[ci]) + s * gz @ U[nc + zi] + _field_product(le, U[nc + nz:])
+        DE = _field_product(DF, x) + _field_product(F, dx) + _field_product(dgc, U[ci]) + _field_product(gc, dU[ci]) + ds * gz @ U[nc + zi] + s * dgz @ U[nc + zi] + s * gz @ dU[nc + zi] + _field_product(dle, U[nc + nz:]) + _field_product(le, dU[nc + nz:])
+        T = mat * E - _field_product(F, H)
+        DT = dmat * E + mat * DE - _field_product(DF, H) - _field_product(F, DH)
         react = _contract('q,qai,qaj->ij', w, gn, T)
         change = _contract('q,qai,qaj->ij', dw, gn, T) + _contract('q,qai,qaj->ij', w, dgn, T) + _contract('q,qai,qaj->ij', w, gn, DT)
         np.add.at(res, ids, react)
         np.add.at(dres, ids, change)
-        np.add.at(res_scale, ids, _contract('q,qai,qaj->ij', abs(w), abs(gn), abs(mat * E) + abs(F @ H)))
+        np.add.at(res_scale, ids, _contract('q,qai,qaj->ij', abs(w), abs(gn), abs(mat * E) + abs(_field_product(F, H))))
         np.add.at(dres_scale, ids, _contract('q,qai,qaj->ij', abs(dw), abs(gn), abs(T)) + _contract('q,qai,qaj->ij', abs(w), abs(dgn), abs(T)) + _contract('q,qai,qaj->ij', abs(w), abs(gn), abs(DT)))
-        free = F @ x
-        correction = gc @ U[ci] + s * gz @ U[nc + zi] + le @ U[nc + nz:]
+        free = _field_product(F, x)
+        correction = _field_product(gc, U[ci]) + s * gz @ U[nc + zi] + _field_product(le, U[nc + nz:])
         for left, right in ((free, correction), (correction, free), (correction, correction)):
             energy += mat * _contract('q,qai,qaj->ij', w, left.conj(), right)
         reverse = info['reverse']
-        added = le @ U[nc + nz:]
-        dadded = dle @ U[nc + nz:]
-        old = F @ x + gc @ U[ci] + s * gz @ U[nc + zi]
-        dold = DF @ x + dgc @ U[ci] + ds * gz @ U[nc + zi] + s * dgz @ U[nc + zi] - F @ (dQQ @ U)
+        added = _field_product(le, U[nc + nz:])
+        dadded = _field_product(dle, U[nc + nz:])
+        old = _field_product(F, x) + _field_product(gc, U[ci]) + s * gz @ U[nc + zi]
+        dold = _field_product(DF, x) + _field_product(dgc, U[ci]) + ds * gz @ U[nc + zi] + s * dgz @ U[nc + zi] - _field_product(F, dQQ @ U)
         for L, DL, R, DR in ((old, dold, added, dadded), (added, dadded, old, dold), (added, dadded, added, dadded)):
             denergy += dmat * _contract('q,qai,qaj->ij', w, L[:, :, reverse], R) + mat * _contract('q,qai,qaj->ij', dw, L[:, :, reverse], R) + mat * _contract('q,qai,qaj->ij', w, DL[:, :, reverse], R) + mat * _contract('q,qai,qaj->ij', w, L[:, :, reverse], DR)
     for ids, ci, zi, w, dw, mat, dmat, phase, dphase, gc, dgc, gz, dgz, le, dle, gn, dgn in quadrature(split=False):
@@ -115,10 +124,10 @@ def coupled_positive(obj, base, quadrature, free_energy, trace_order):
         F[:, 1, N:] = phase.conj()
         DF[:, 0, :N] = dphase.conj()
         DF[:, 1, N:] = dphase.conj()
-        free = F @ x
-        dfree = DF @ x - F @ (dQQ @ U)
-        correction = gc @ U[ci] + s * gz @ U[nc + zi]
-        dcorrection = dgc @ U[ci] + ds * gz @ U[nc + zi] + s * dgz @ U[nc + zi]
+        free = _field_product(F, x)
+        dfree = _field_product(DF, x) - _field_product(F, dQQ @ U)
+        correction = _field_product(gc, U[ci]) + s * gz @ U[nc + zi]
+        dcorrection = _field_product(dgc, U[ci]) + ds * gz @ U[nc + zi] + s * dgz @ U[nc + zi]
         reverse = info['reverse']
         for left, dl, right, dright in ((free, dfree, correction, dcorrection),
                                        (correction, dcorrection, free, dfree),
@@ -133,6 +142,7 @@ def coupled_positive(obj, base, quadrature, free_energy, trace_order):
     meta['weak_derivative_residual'] = _relative(dKK @ U + KK @ dU + dSS @ x + SS @ dx - dQT @ H - QT @ DH, dKK @ U, KK @ dU, dSS @ x, SS @ dx, dQT @ H, QT @ DH)
     meta['direct_fourier_residual'] = _relative(A - exact_free, exact_free)
     meta['direct_fourier_derivative_residual'] = _relative(DA - exact_free_derivative, exact_free_derivative)
+    meta['elimination'] = elimination
     inv = _solve(e, np.eye(N))
     return (_slots(H, inv), _slots(DH, -inv @ de @ inv), meta)
 
@@ -219,4 +229,3 @@ def coupled_contact(obj, base, C, Z, Qbar, Rbar, EE, *, elimination=None):
     meta['closed_elimination'] = elimination
     inv = _solve(e, np.eye(N))
     return (_slots(H, inv), _slots(DH, -inv @ de @ inv), meta)
-

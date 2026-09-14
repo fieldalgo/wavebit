@@ -9,6 +9,7 @@ Targets:
 - `studies/nvf_coupled_pair_seam_galerkin.py`
 - `studies/results/nvf_coupled_pair_seam_galerkin.log`
 - `studies/results/nvf_pair_seam_retained_contact.log`
+- `studies/results/nvf_pair_positive_retained.log`
 
 TL;DR: The internal rectangle pair now has continuous real gap potentials in
 its complete quadratic Galerkin solve. The independent original nodal system
@@ -216,3 +217,56 @@ The sign changes at order 8 are a remaining optical failure, even though
 the original finite equations are solved accurately. Stable elimination
 removes a numerical obstruction; it does not establish metal optical
 convergence or justify production NVF dispatch.
+
+## Positive-gap elimination and coincident sweep vertices
+
+Positive gaps now use the same original-K elimination already available in
+the underlying Galerkin solver when the full nodal/trace system is larger
+than its retained field/flux system. Coarse cases keep potential elimination.
+The matrix and its complete analytical variation still describe the same
+real field space. Eight controls compare both eliminations for internal and
+periodic gaps, dielectric and metal materials, gaps 7 and 1e-9, and simultaneous
+gap/material directions. Every original nodal and physical energy check is
+retained. At positive gaps, `elimination` identifies the chosen formulation,
+and `condition` describes that formulation's solved matrix.
+
+Physical field reconstruction applies the combined quadrature/component
+rows in one dense multiplication. It retains the same fields, quadrature
+points, energy contractions and residual scales. This removes many separate
+small batched multiplications; no general speedup is inferred from that
+change alone.
+
+The first order-4/refinement-2 positive-gap run exposed a separate geometry
+failure before it could solve the enlarged equations. Two vertices on the
+same horizontal edge had different barycentric representations. Independently
+rounded control products gave their y coordinates a one-ulp difference. The
+sweep then created a fictitious strip whose rounded midpoint was its upper
+endpoint, leaving no active edge pair.
+
+The local chart now combines equal-coordinate control weights as integers
+before multiplying by physical lengths. Symbolically identical coordinates
+therefore have identical floating representations. This is an exact graph
+identity; it does not merge nearby physical boundaries by a tolerance or
+skip narrow sweep intervals. Independent rational-geometry checks verify
+each triangle's area and area derivative at refinement 2 for gaps 0.001 and
+1e-9, including the vanishing thin-triangle areas with a relative guard.
+
+The positive-gap raw record preserves the failed source snapshot followed by
+the corrected rerun. Both polarizations complete at order 4, refinement 2,
+quadrature 32, with the metal fixture and gaps 0/0.001. Current source hashes
+match the corrected snapshot. At the positive gap the original nodal value
+and derivative residuals are below 3.81e-14; energy value and derivative
+residuals are below 4.17e-12, against the unchanged 1e-10 guards.
+
+| Polarization | Contact T | T at gap 0.001 | Contact dT/dgap | Gap secant |
+| --- | ---: | ---: | ---: | ---: |
+| p | 0.454192751 | 0.454095364 | -0.097133836 | -0.097386443 |
+| s | 0.398871799 | 0.398907274 | 0.035238119 | 0.035474886 |
+
+This run took about 95 seconds on its host, including assembly, all physical
+checks and both optical readouts; it is not a comparative timing benchmark.
+It verifies this formerly blocked finite positive-gap case. It does not
+qualify all finer meshes or all gap samples. The contact slope remains the
+same underresolved metal result, and the optical convergence failure above
+remains open. Closed-cell approximation is now measured separately by the
+[conforming electric/flux error evaluator](nvf-galerkin-error.md).

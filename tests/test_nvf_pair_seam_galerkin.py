@@ -257,3 +257,55 @@ def test_order_eight_finest_contact_preserves_the_original_energy_guard():
     assert max(v for k,v in meta.items() if k.endswith('residual') and v is not None) < 1e-10
     assert meta['derivative_reciprocity'] < 1e-9
     assert np.isfinite(value).all() and np.isfinite(derivative).all()
+
+
+@pytest.mark.parametrize('gap', (7., 1e-9))
+@pytest.mark.parametrize('epsilon', ((4., 9.), (12.25, -10+1j)))
+def test_positive_eliminations_preserve_all_physical_variations(gap, epsilon):
+    from wavebit._core.conforming.cartesian_pair_seam_galerkin import _quadrature, _free_fourier_energy
+    from wavebit._core.conforming.real_trace_coupling import coupled_positive
+    obj = cell(order=(1, 1), refinement=1, quadrature=32)
+    settings = dict(GEOMETRY, gap=gap, epsilon=epsilon, background=1., gap_tangent=.7,
+                    epsilon_tangent=(.3+.2j, -.4+.1j), background_tangent=.2+.3j)
+    base = obj._base._assemble(**settings)
+    quad = lambda split=True: _quadrature(obj._base, base, settings, 32, split)
+    values = [coupled_positive(obj._base, base, quad, _free_fourier_energy(obj.order, settings),
+                              obj.order[1], elimination=form) for form in ('potential', 'retained')]
+    np.testing.assert_allclose(values[0][0], values[1][0], atol=3e-10, rtol=0)
+    np.testing.assert_allclose(values[0][1], values[1][1], atol=3e-9, rtol=0)
+    for _, _, meta in values:
+        assert max(v for k,v in meta.items() if k.endswith('residual')) < 1e-10
+    _, _, default = obj.closure(**settings)
+    assert default['elimination'] == 'retained'
+
+
+@pytest.mark.parametrize('gap', (.001, 1e-9))
+def test_refined_sweep_preserves_each_rational_triangle_area_and_variation(gap):
+    from wavebit._core.conforming.cartesian_pair_seam_galerkin import _quadrature
+    geometry = dict(basis=np.diag([700., 700.]), widths=(300., 300.), height=300., offset=(0., 0.))
+    obj = cell(order=(0, 0), refinement=2, quadrature=16)._base
+    settings = dict(geometry, gap=gap, epsilon=(12.25, -10+1j), background=1., gap_tangent=1.,
+                    epsilon_tangent=(0., 0.), background_tangent=0.)
+    base = obj._assemble(**settings)
+    length = np.sqrt(np.linalg.det(geometry['basis']))
+    graph = _oracle_geometry(obj.data, {k: np.asarray(v)/length for k,v in geometry.items()})
+    p0, velocity = np.asarray(graph['vertices0'], float), np.asarray(graph['vertices1'], float)
+    triangles = graph['triangles']
+    key = lambda ids: tuple(int(i) for i in ids)
+    index = {key(ids): i for i,ids in enumerate(graph['periodic'][triangles])}
+    assert len(index) == len(triangles)
+    areas, changes = np.zeros(len(triangles)), np.zeros(len(triangles))
+    for row in _quadrature(obj, base, settings, 16):
+        i = index[key(row[0])]
+        areas[i] += row[3].sum()
+        changes[i] += row[4].sum()
+    for i, triangle in enumerate(triangles):
+        p, v = p0[triangle[:3]], velocity[triangle[:3]]
+        a, b = p[1]-p[0], p[2]-p[0]
+        da, db = v[1]-v[0], v[2]-v[0]
+        cross = lambda x,y: x[0]*y[1]-x[1]*y[0]
+        area0 = 0. if graph['thin'][i] else cross(a,b)/2
+        change = (cross(da,b)+cross(a,db))/(2*length)
+        area = area0+gap*change
+        np.testing.assert_allclose(areas[i], area, atol=0., rtol=3e-12)
+        np.testing.assert_allclose(changes[i], change, atol=3e-14, rtol=0)

@@ -30,13 +30,21 @@ def _geometry(obj, settings):
     center[0]+=(widths[0]-widths[1])/2
     # Build local coordinates from exact control identities. This preserves
     # material-edge equality under unit changes and never shifts a tiny gap.
-    rows=(obj.data['contact_numerators']/obj.data['weight_denominator'])[obj.data['mapping']]
-    corners=np.array([[0.,0.],[period[0]/length,0.],period/length,[0.,period[1]/length]])
-    corners-=period/(2*length)+[(widths[0]-widths[1])/2,0.]
-    xs=np.array([-widths[0],0.,widths[1]])
-    inner=np.vstack([np.column_stack([xs,np.full(3,-height/2)]),
-                     np.column_stack([xs[::-1],np.full(3,height/2)])])
-    zero=rows@np.vstack([corners,inner])
+    numerators=obj.data['contact_numerators'][obj.data['mapping']]
+    denominator=obj.data['weight_denominator']
+    rows=numerators/denominator
+    # Combine equal control coordinates as integers before multiplying by
+    # physical lengths. Distinct barycentric representations of one horizontal
+    # edge must have identical y values; separately rounded products create a
+    # fictitious one-ulp sweep strip with no representable interior point.
+    group=lambda ids:numerators[:,ids].sum(axis=1)
+    outer=group([0,1,2,3])
+    x=((group([1,2])-group([0,3]))*(period[0]/length)
+       -(outer+2*group([4,9]))*widths[0]
+       +(outer+2*group([6,7]))*widths[1])/(2*denominator)
+    y=((group([2,3])-group([0,1]))*(period[1]/length)
+       +(group([7,8,9])-group([4,5,6]))*height)/(2*denominator)
+    zero=np.column_stack([x,y])
     for indices,x in (([4,9],-widths[0]),([5,8],0.),([6,7],widths[1])):
         zero[np.sum(rows[:,indices],axis=1)==1,0]=x
     for indices,y in (([4,5,6],-height/2),([7,8,9],height/2)):

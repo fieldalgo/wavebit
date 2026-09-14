@@ -246,3 +246,27 @@ def test_exact_free_energy_matches_independent_rectangle_quadrature_and_variatio
 def test_invalid_inputs_are_refused(update):
     with pytest.raises(ValueError):
         PeriodicSeamGalerkinGapCell().closure(**dict(dict(SETTINGS, gap=0.), **update))
+
+
+@pytest.mark.parametrize('gap', (7., 1e-9))
+@pytest.mark.parametrize('epsilon', (12.25, -10+1j))
+def test_positive_eliminations_preserve_simultaneous_gap_and_material_direction(gap, epsilon):
+    from wavebit._core.conforming.periodic_seam_galerkin import _quadrature
+    from wavebit._core.conforming.real_trace_coupling import coupled_positive
+    obj = PeriodicSeamGalerkinGapCell((1, 0), refinement=1, quadrature=32, coercivity_angle=1.53)
+    settings = dict(SETTINGS, gap=gap, epsilon=epsilon, background=1., gap_tangent=.7,
+                    epsilon_tangent=.3+.2j, background_tangent=.2+.3j)
+    period = np.asarray(settings['period'])
+    base = obj._base._assemble(gap=gap, basis=np.diag(period), widths=(settings['width']/2,)*2,
+        height=period[1], epsilon=(epsilon,)*2, background=1., offset=settings['offset'],
+        gap_tangent=.7, epsilon_tangent=(settings['epsilon_tangent'],)*2,
+        background_tangent=settings['background_tangent'])
+    quad = lambda split=True: _quadrature(obj._base, obj._trace, base, settings, 32, split)
+    values = [coupled_positive(obj._base, base, quad, _free_fourier_energy(obj.order, settings),
+                              obj.order[0], elimination=form) for form in ('potential', 'retained')]
+    np.testing.assert_allclose(values[0][0], values[1][0], atol=3e-10, rtol=0)
+    np.testing.assert_allclose(values[0][1], values[1][1], atol=3e-9, rtol=0)
+    for _, _, meta in values:
+        assert max(v for k,v in meta.items() if k.endswith('residual')) < 1e-10
+    _, _, default = obj.closure(**settings)
+    assert default['elimination'] == 'retained'

@@ -222,3 +222,14 @@ It returns the five convolution slots, their directional derivative and
 diagnostics. It remains an explicit NumPy kernel; there is no ordinary NVF
 dispatch or JAX/Torch integration. No new external dependency or copied
 source is introduced.
+
+The shared positive-gap solve now chooses original-K retained elimination
+when it is smaller than the full nodal/trace system. Both eliminations agree
+under simultaneous gap/material variations for dielectric and metal controls
+at gaps 7 and 1e-9. Physical reconstruction combines quadrature/component
+rows into one dense multiplication while preserving every energy contraction
+and original nodal guard. `elimination` reports the chosen formulation and
+`condition` reports the matrix solved in that formulation. This numerical
+change does not supply a new optical convergence claim. The separate
+[closed-cell error evaluator](nvf-galerkin-error.md) measures the auxiliary
+approximation error that a small weak residual cannot establish.

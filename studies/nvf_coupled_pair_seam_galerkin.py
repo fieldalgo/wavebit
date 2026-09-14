@@ -21,12 +21,16 @@ def main():
     parser.add_argument('--refinements', type=int, nargs='+', choices=range(4), default=[0, 1])
     parser.add_argument('--materials', nargs='+', choices=tuple(fixture.MATERIALS), default=list(fixture.MATERIALS))
     parser.add_argument('--contact-only', action='store_true', help='record exact contact and its tensor JVP without positive-gap qualification')
+    parser.add_argument('--gaps', type=float, nargs='+', help='explicit gap samples, starting with exact contact')
     parser.add_argument('--quadrature', type=int, default=32)
     parser.add_argument('--out', type=Path, default=Path(__file__).parent/'results/nvf_coupled_pair_seam_galerkin.log')
     args = parser.parse_args()
     if any(n < 0 for n in args.orders):
         parser.error('orders must be nonnegative')
-    gaps = (0.,) if args.contact_only else GAPS
+    if args.gaps is not None and (args.contact_only or args.gaps[0] != 0
+                                  or any(not np.isfinite(g) or g < 0 for g in args.gaps)):
+        parser.error('explicit gaps must start at zero, be finite and nonnegative, and exclude --contact-only')
+    gaps = (0.,) if args.contact_only else (tuple(args.gaps) if args.gaps is not None else GAPS)
     modules = (cartesian_pair_seam_galerkin, real_trace_coupling, periodic_seam_trace,
                cartesian_pair_galerkin, cartesian_pair_quadratic, cartesian_pair_opening,
                cartesian_pair, triangle_moments, material_sector, fixture)
