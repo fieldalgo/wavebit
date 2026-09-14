@@ -25,22 +25,26 @@ def edge_rows(obj,settings,base,chart,quadrature):
             if p[ia,0]>p[ib,0]:ia,ib=ib,ia
             left,right=p[ia,0]-center[0],p[ib,0]-center[0]
             if right<=left:continue
-            left_corner=np.any(fields.hats[tri[ia],[4,6,7,9]]==1)
-            right_corner=np.any(fields.hats[tri[ib],[4,6,7,9]]==1)
-            if left_corner:bl,br=1-t**5,t**5;ww=5*t**4*w
-            elif right_corner:bl,br=t**5,1-t**5;ww=5*t**4*w
-            else:bl,br=1-t,t;ww=w
-            bb=np.zeros((quadrature,3));bb[:,ia]=bl;bb[:,ib]=br
-            poly=obj._gradient_basis(bb,np.zeros_like(bb))[0]
-            gc=_contract('qv,vai->qai',poly,cc)/d0
-            _,added,_=fields.sample(tri,bb,inv,np.zeros_like(inv))
-            gc=np.concatenate([gc,added],axis=2);indices=np.r_[ci,np.arange(nold,nc)]
-            # The small complementary barycentric weight must never be
-            # reconstructed by subtracting a rounded endpoint coordinate.
-            fleft=0. if left_corner else (-(left+a)/(2*a) if (left+right)<0 else (b-left)/(2*b))
-            fright=0. if right_corner else (-(right+a)/(2*a) if (left+right)<0 else (b-right)/(2*b))
-            profile=bl*fleft+br*fright
-            yield indices,ep,bb@p,gc,.5*sign*ww*(right-left)*profile,edge
+            left_corner=np.any(fields.hats[tri[ia],fields.controls]==1)
+            right_corner=np.any(fields.hats[tri[ib],fields.controls]==1)
+            parts=[(0.,.5,True),(.5,1.,False)] if left_corner and right_corner else [(0.,1.,left_corner)]
+            for begin,end,from_left in parts:
+                if left_corner or right_corner:
+                    radial=t**5;ww=5*t**4*w*(end-begin)
+                    if from_left:bl,br=(1-begin)*(1-radial)+(1-end)*radial,begin*(1-radial)+end*radial
+                    else:bl,br=(1-end)*(1-radial)+(1-begin)*radial,end*(1-radial)+begin*radial
+                else:bl,br=1-t,t;ww=w
+                bb=np.zeros((quadrature,3));bb[:,ia]=bl;bb[:,ib]=br
+                poly=obj._gradient_basis(bb,np.zeros_like(bb))[0]
+                gc=_contract('qv,vai->qai',poly,cc)/d0
+                _,added,_=fields.sample(tri,bb,inv,np.zeros_like(inv))
+                gc=np.concatenate([gc,added],axis=2);indices=np.r_[ci,np.arange(nold,nc)]
+                left_outer=np.any(fields.hats[tri[ia],[4,6,7,9]]==1)
+                right_outer=np.any(fields.hats[tri[ib],[4,6,7,9]]==1)
+                fleft=0. if left_outer else (-(left+a)/(2*a) if (left+right)<0 else (b-left)/(2*b))
+                fright=0. if right_outer else (-(right+a)/(2*a) if (left+right)<0 else (b-right)/(2*b))
+                profile=bl*fleft+br*fright
+                yield indices,ep,bb@p,gc,.5*sign*ww*(right-left)*profile,edge
 
 
 def context(obj,settings,base,transform,quadrature):
@@ -78,19 +82,19 @@ def context(obj,settings,base,transform,quadrature):
     return chart,records
 
 
-def blocks(obj,settings,quadrature,exponents):
+def blocks(obj,settings,quadrature,exponents,junctions=False):
     original=_contact_blocks(obj,settings,quadrature)
     oldtransform=_trace_change(obj,settings,quadrature)
     changed=_changed_contact(obj,settings,original,oldtransform,quadrature)
-    base=augment(obj,settings,exponents=exponents,quadrature=quadrature)
+    base=augment(obj,settings,exponents=exponents,quadrature=quadrature,junctions=junctions)
     nc=base[-1]['nc'];nold=base[-1]['original_nc']
     common=np.zeros((nc,oldtransform[0].shape[1]));common[:nold]=oldtransform[0]
     transform=(common,*oldtransform[1:]);chart,records=context(obj,settings,base,transform,quadrature)
     C=np.zeros((nc,changed[1].shape[1]),complex);C[:nold]=changed[1]
     for row,local,weight,phi,dphi,added in records():
-        if local[11]:continue
         _,ci,zi,w,dw,ep,dep,phase,dphase,gc,*_=row
-        C[nold:]+=ep*_contract('q,qai,qaj->ij',w,gc[:,:,len(ci)-(nc-nold):],added)
+        measure=weight*local[10] if local[11] else w
+        C[nold:]+=ep*_contract('q,qai,qaj->ij',measure,gc[:,:,len(ci)-(nc-nold):],added)
     trace,tg=chart[8:]
     for ci,ep,p,gc,weight,edge in edge_rows(obj,settings,base,chart,quadrature):
         jump=trace._basis(np.array([edge]),tg)[0][0]@transform[2]
@@ -98,8 +102,8 @@ def blocks(obj,settings,quadrature,exponents):
     return (base,C,*changed[2:]),transform,chart,records
 
 
-def solve(obj,settings,quadrature=48,exponents=(.6,.8)):
-    data,transform,chart,records=blocks(obj,settings,quadrature,exponents)
+def solve(obj,settings,quadrature=48,exponents=(.6,.8),junctions=False):
+    data,transform,chart,records=blocks(obj,settings,quadrature,exponents,junctions)
     base,C,Z,Qbar,Rbar,EE=data
     k,dk,q,dq,r,dr,qt,dqt,S,dS,e,de,info=base
     nc,nz,N,ds=(info[key] for key in ('nc','nz','size','ds'))

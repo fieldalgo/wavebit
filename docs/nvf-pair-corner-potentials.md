@@ -18,8 +18,9 @@ contact tensor and its right-opening derivative. The explicit NumPy class is
 
 This finite family uses the existing Cartesian opening plan: two horizontal,
 equal-height rectangles inside a positive diagonal periodic cell. Four outer
-body corners are enriched. The two material junctions at the closing gap need
-separate resolution. These controls do not certify joint mesh, polynomial,
+body corners are enriched by default. The optional `junctions=True` extension
+is described in [the junction-family note](nvf-pair-junction-potentials.md).
+These controls do not certify joint mesh, polynomial,
 Fourier or optical convergence, and ordinary NVF routing is unchanged.
 
 ## The added real fields
@@ -148,7 +149,7 @@ the independent stationary-energy check.
 
 Passing these finite-space controls establishes the coupling and variations
 tested here. It does not establish an accurate optical solution for every
-geometry or resolution. Joint optical convergence and material-junction
-resolution remain necessary before this family can determine a default.
+geometry or resolution. Joint optical convergence, including resolution of
+material junctions, remains necessary before this family can determine a default.
 The implementation uses the existing NumPy runtime and Python standard
 library, with no external solver code or new dependency.

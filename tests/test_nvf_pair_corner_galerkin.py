@@ -1,5 +1,5 @@
 """Real corner fields, complete pair constraints and physical variations."""
-from functools import lru_cache
+from functools import lru_cache, partial
 import numpy as np
 import pytest
 from wavebit._core.conforming.cartesian_pair_opening import CartesianPairOpeningPlan
@@ -16,10 +16,10 @@ GEOMETRY = dict(basis=np.eye(2), widths=(.3, .4), height=.45, offset=(.01, -.03)
 @lru_cache(None)
 def closure(gap=.003, epsilon=(4., 9.), background=1., gap_tangent=1.,
             epsilon_tangent=(0., 0.), background_tangent=0., exponents=(.6, .8),
-            quadrature=32, degree=3, length=1.):
+            quadrature=32, degree=3, length=1., junctions=False):
     cell = CartesianPairCornerGalerkinGapCell(
         PLAN, 1, degree=degree, quadrature=quadrature,
-        exponents=exponents, coercivity_angle=1.53)
+        exponents=exponents, junctions=junctions, coercivity_angle=1.53)
     geometry = {key: np.asarray(value)*length for key, value in GEOMETRY.items()}
     result = cell.closure(gap=gap*length, epsilon=epsilon, background=background,
                          gap_tangent=gap_tangent, epsilon_tangent=epsilon_tangent,
@@ -29,10 +29,20 @@ def closure(gap=.003, epsilon=(4., 9.), background=1., gap_tangent=1.,
     return np.asarray(result[0]), np.asarray(result[1]), result[2]
 
 
+@pytest.fixture(params=(False, True), ids=('outer', 'junction'))
+def junctions(request):
+    return request.param
+
+
+@pytest.fixture
+def corner_case(junctions):
+    return partial(closure, junctions=junctions)
+
+
 @pytest.mark.parametrize('degree', (3, 4))
-def test_corner_field_gradients_and_moving_gradients_match_finite_variations(degree):
+def test_corner_field_gradients_and_moving_gradients_match_finite_variations(degree, junctions):
     obj = CartesianPairPolynomialGalerkinGapCell(PLAN, 1, degree=degree)
-    fields = PairCornerFields(obj)
+    fields = PairCornerFields(obj, junctions=junctions)
     jacobian = np.array([[.7, .1], [.05, .6]])
     direction = np.array([[.13, -.04], [.01, -.03]])
     inverse = np.linalg.inv(jacobian)
@@ -40,7 +50,7 @@ def test_corner_field_gradients_and_moving_gradients_match_finite_variations(deg
     bary = np.array([[.2, .3, .5], [.65, .25, .1]])
     dbary = np.array([[.04, -.02, -.02], [-.06, .03, .03]])
     triangle = next(tri for tri, thin in zip(obj.data['triangles'], obj.data['thin'])
-                    if not thin and np.any(fields.hats[tri[:3]][:, [4, 6, 7, 9]]))
+                    if not thin and np.any(fields.hats[tri[:3]][:, [5, 8] if junctions else [4, 6, 7, 9]]))
     value, gradient, tangent = fields.sample(triangle, bary, inverse, dinverse, dbary)
     # Independently evaluate the defining powers minus their short Taylor
     # polynomials away from the singular corner, without fifth-root factors.
@@ -87,71 +97,75 @@ def test_corner_field_gradients_and_moving_gradients_match_finite_variations(deg
                                    dict(quadrature=23), dict(quadrature=True),
                                    dict(exponents=(.5,)), dict(exponents=(.6, .6)),
                                    dict(exponents=(True,)), dict(exponents=(complex(.6),)),
-                                   dict(exponents=(np.nan,))])
+                                   dict(exponents=(np.nan,)), dict(junctions=1), dict(junctions=None)])
 def test_unsupported_corner_spaces_are_rejected(kwargs):
     with pytest.raises(ValueError):
         CartesianPairCornerGalerkinGapCell(PLAN, **kwargs)
 
 
 @pytest.mark.parametrize('gap', (0., .003))
-def test_empty_enrichment_preserves_original_whole_seam_value_and_jvp(gap):
+def test_empty_enrichment_preserves_original_whole_seam_value_and_jvp(gap, corner_case):
     old = CartesianPairSeamGalerkinGapCell(
         PLAN, 1, degree=3, quadrature=48 if gap == 0 else 32,
         coercivity_angle=1.53, contact_solver='projected').closure(
             gap=gap, epsilon=(4., 9.), **GEOMETRY)
-    value, tangent, _ = closure(gap=gap, exponents=())
+    value, tangent, _ = corner_case(gap=gap, exponents=())
     np.testing.assert_allclose(value, old[0], atol=3e-10, rtol=0)
     np.testing.assert_allclose(tangent, old[1], atol=3e-9, rtol=0)
 
 
-def test_uniform_material_has_no_corner_or_gap_correction():
-    value, tangent, _ = closure(gap=1e-7, epsilon=(1., 1.))
+@pytest.mark.parametrize('gap', (0., 1e-7))
+def test_uniform_material_has_no_corner_or_gap_correction(corner_case, gap):
+    value, tangent, _ = corner_case(gap=gap, epsilon=(1., 1.))
     expected = np.zeros_like(value)
     expected[0, 0] = expected[1, 0] = expected[2, 0] = np.eye(9)
     np.testing.assert_allclose(value, expected, atol=3e-10, rtol=0)
     np.testing.assert_allclose(tangent, 0., atol=3e-9, rtol=0)
 
 
-def test_material_directions_are_complex_linear_and_add_to_gap_direction():
-    _, gap, _ = closure()
+@pytest.mark.parametrize('gap_value', (0., .003))
+def test_material_directions_are_complex_linear_and_add_to_gap_direction(corner_case, gap_value):
+    corner_case = partial(corner_case, gap=gap_value)
+    _, gap, _ = corner_case()
     directions = dict(epsilon_tangent=(.3+.2j, -.4+.1j), background_tangent=.2+.3j)
-    _, material, _ = closure(gap_tangent=0., **directions)
+    _, material, _ = corner_case(gap_tangent=0., **directions)
     imaginary = dict(epsilon_tangent=tuple(1j*v for v in directions['epsilon_tangent']),
                      background_tangent=1j*directions['background_tangent'])
-    _, imaterial, _ = closure(gap_tangent=0., **imaginary)
-    _, together, _ = closure(**directions)
+    _, imaterial, _ = corner_case(gap_tangent=0., **imaginary)
+    _, together, _ = corner_case(**directions)
     np.testing.assert_allclose(imaterial, 1j*material, atol=3e-9, rtol=0)
     np.testing.assert_allclose(together, gap+material, atol=3e-9, rtol=0)
 
 
-def test_negative_gap_direction_rescales_the_complete_positive_jvp():
-    value, tangent, _ = closure()
-    reversed_value, reversed_tangent, _ = closure(gap_tangent=-.75)
+def test_negative_gap_direction_rescales_the_complete_positive_jvp(corner_case):
+    value, tangent, _ = corner_case()
+    reversed_value, reversed_tangent, _ = corner_case(gap_tangent=-.75)
     np.testing.assert_allclose(reversed_value, value, atol=3e-10, rtol=0)
     np.testing.assert_allclose(reversed_tangent, -.75*tangent, atol=3e-9, rtol=0)
 
 
-def test_length_units_preserve_value_and_inverse_length_gap_derivative():
-    value, tangent, _ = closure()
-    scaled, dscaled, _ = closure(length=700.)
+def test_length_units_preserve_value_and_inverse_length_gap_derivative(corner_case):
+    value, tangent, _ = corner_case()
+    scaled, dscaled, _ = corner_case(length=700.)
     np.testing.assert_allclose(scaled, value, atol=3e-10, rtol=0)
     np.testing.assert_allclose(700*dscaled, tangent, atol=3e-9, rtol=0)
 
 
 @pytest.mark.parametrize('degree', (3, 4))
-def test_quadrature_and_independent_finite_gap_variations(degree):
-    value, tangent, _ = closure(degree=degree)
-    refined, drefined, _ = closure(quadrature=40, degree=degree)
+def test_quadrature_and_independent_finite_gap_variations(degree, corner_case):
+    value, tangent, _ = corner_case(degree=degree)
+    refined, drefined, _ = corner_case(quadrature=40, degree=degree)
     np.testing.assert_allclose(value, refined, atol=3e-10, rtol=0)
     np.testing.assert_allclose(tangent, drefined, atol=3e-9, rtol=0)
     for h in (3e-5, 1.5e-5):
-        values = [closure(gap=.003+j*h, degree=degree)[0] for j in (-2, -1, 1, 2)]
+        values = [corner_case(gap=.003+j*h, degree=degree)[0] for j in (-2, -1, 1, 2)]
         difference = (values[0]-8*values[1]+8*values[2]-values[3])/(12*h)
         np.testing.assert_allclose(tangent, difference, atol=3e-9, rtol=0)
 
 
-def test_metal_positive_values_and_jvps_approach_same_enriched_contact():
-    cell = CartesianPairCornerGalerkinGapCell(PLAN, 1, quadrature=32, coercivity_angle=1.53)
+def test_metal_positive_values_and_jvps_approach_same_enriched_contact(junctions):
+    cell = CartesianPairCornerGalerkinGapCell(
+        PLAN, 1, quadrature=32, junctions=junctions, coercivity_angle=1.53)
     settings = dict(basis=np.diag([700., 700.]), widths=(300., 300.), height=300.,
                     epsilon=(12.25, -10+1j))
     value0, tangent0, _ = cell.closure(gap=0., **settings)
@@ -161,11 +175,17 @@ def test_metal_positive_values_and_jvps_approach_same_enriched_contact():
         assert max(v for k, v in meta.items() if k.endswith('residual') and v is not None) < 1e-10
         assert np.linalg.norm(np.asarray(value)-value0) < 2*gap*np.linalg.norm(tangent0)
         errors.append(np.linalg.norm(np.asarray(tangent)-tangent0))
-    assert errors[1] < .02*errors[0]
-    assert errors[2] < .2*errors[1]
+    if junctions:
+        # Junction fields have fractional endpoint remainders. This checks
+        # approach to the same exact contact response, without assigning
+        # them the outer-only square-root taper rate or optical accuracy.
+        assert errors[2] < errors[1] < errors[0]
+    else:
+        assert errors[1] < .02*errors[0]
+        assert errors[2] < .2*errors[1]
 
 
-def test_independent_stationary_energy_rejects_corrupted_positive_jvp(monkeypatch):
+def test_independent_stationary_energy_rejects_corrupted_positive_jvp(monkeypatch, junctions):
     from wavebit._core.conforming import cartesian_pair_corner_galerkin as module
     original = module.solve_positive
     observed = []
@@ -179,7 +199,8 @@ def test_independent_stationary_energy_rejects_corrupted_positive_jvp(monkeypatc
         return check(value, tangent, meta)
     monkeypatch.setattr(module, 'solve_positive', corrupt)
     monkeypatch.setattr(module, '_check_response', record)
-    cell = CartesianPairCornerGalerkinGapCell(PLAN, 1, quadrature=32, coercivity_angle=1.53)
+    cell = CartesianPairCornerGalerkinGapCell(
+        PLAN, 1, quadrature=32, junctions=junctions, coercivity_angle=1.53)
     with pytest.raises(ValueError, match='original/energy/physical guards'):
         cell.closure(gap=.003, epsilon=(4., 9.), **GEOMETRY)
     assert observed[0]['energy_derivative_residual'] > 1e-10
@@ -212,12 +233,17 @@ def test_exact_clipped_partitions_preserve_area_and_zero_partition_variation(gap
     assert all(change == 0 for change in changes.values())
 
 
-def test_nested_real_corner_space_cannot_increase_minimum_energy():
+def test_nested_real_corner_space_cannot_increase_minimum_energy(corner_case, junctions):
     def tensor(value):
         xx, yy, zz, xy, yx = value[:, 0]
         return np.block([[xx, -xy], [-yx, yy]])
-    original = tensor(closure(exponents=())[0])
-    enriched = tensor(closure()[0])
+    original = tensor(corner_case(exponents=())[0])
+    enriched = tensor(corner_case()[0])
     np.testing.assert_allclose(enriched, enriched.conj().T, atol=3e-10, rtol=0)
     difference = original-enriched
     assert np.linalg.eigvalsh((difference+difference.conj().T)/2)[0] > -3e-10
+
+    if junctions:
+        outer = tensor(closure()[0])
+        improvement = outer-enriched
+        assert np.linalg.eigvalsh((improvement+improvement.conj().T)/2)[0] > -3e-10

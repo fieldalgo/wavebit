@@ -1,4 +1,4 @@
-"""Explicit real outer-corner enrichment of the complete pair NVF tensor."""
+"""Explicit real corner and junction enrichment of the complete pair NVF tensor."""
 from numbers import Integral
 import numpy as np
 from .cartesian_pair_opening import real_array
@@ -7,6 +7,7 @@ from .cartesian_pair_seam_galerkin import _trace_change, _free_fourier_energy, _
 from .pair_corner_fields import PairCornerFields
 from .pair_corner_assembly import augment
 from .pair_corner_quadrature import quadrature as sample_quadrature
+from .pair_junction_quadrature import quadrature as junction_quadrature
 from .pair_corner_contact import solve as solve_contact
 from .pair_corner_positive import response as solve_positive, verify as verify_energy
 from .real_trace_coupling import coupled_positive
@@ -21,14 +22,15 @@ class CartesianPairCornerGalerkinGapCell:
     derivative is the right-opening derivative of this same enriched family.
 
     Exponents are distinct members of (0.6, 0.8), fixed independently of the
-    materials. They enrich only the four outer body corners. The empty tuple
+    materials. They enrich the four outer body corners. With junctions=True, both
+    closing-gap material junctions are included as well. The empty tuple
     is the original polynomial/continuous-trace space. All original physical
     guards apply. Choosing a field space or quadrature does not establish
     mesh/Fourier/optical convergence or change ordinary NVF routing.
     """
 
     def __init__(self, plan, order=1, *, degree=3, quadrature=48,
-                 exponents=(.6, .8), coercivity_angle=0.):
+                 exponents=(.6, .8), junctions=False, coercivity_angle=0.):
         if (isinstance(degree, (bool, np.bool_)) or not isinstance(degree, Integral)
                 or degree not in (3, 4)):
             raise ValueError('corner pair polynomial degree must be 3 or 4')
@@ -39,7 +41,9 @@ class CartesianPairCornerGalerkinGapCell:
                 or quadrature < max(24, 2*max(self.order)+4)):
             raise ValueError('quadrature must be an integer at least max(24, 2*max(order)+4)')
         self.exponents = tuple(exponents)
-        PairCornerFields(self._base, self.exponents)
+        fields=PairCornerFields(self._base, self.exponents, junctions=junctions)
+        self.junctions=fields.junctions
+        self.corner_controls=fields.controls
         self.quadrature = int(quadrature)
 
     def closure(self, *, gap, basis, widths, height, epsilon, background=1.,
@@ -54,15 +58,16 @@ class CartesianPairCornerGalerkinGapCell:
         if gap == 0:
             order = max(48, order)
             value, tangent, metadata = solve_contact(
-                self._base, settings, quadrature=order, exponents=self.exponents)
+                self._base, settings, quadrature=order, exponents=self.exponents, junctions=self.junctions)
         else:
-            base = augment(self._base, settings, exponents=self.exponents, quadrature=order)
+            base = augment(self._base, settings, exponents=self.exponents, quadrature=order, junctions=self.junctions)
+            sample = junction_quadrature if self.junctions else sample_quadrature
             transform = _trace_change(self._base, settings, order)
-            quadrature = lambda split=True: sample_quadrature(
+            quadrature = lambda split=True: sample(
                 self._base, base, settings, order, transform, split, False)
-            normalized = lambda: sample_quadrature(
+            normalized = lambda: sample(
                 self._base, base, settings, order, transform, True, True)
-            weighted = lambda: sample_quadrature(
+            weighted = lambda: sample(
                 self._base, base, settings, order, transform, True, True, weighted=True)
             free = _free_fourier_energy(self.order, settings)
             response = lambda q, dq, blocks: solve_positive(
@@ -78,5 +83,6 @@ class CartesianPairCornerGalerkinGapCell:
                         refinement=self._base.plan.refinement, shift=self._base.plan.shift,
                         degree=self._base.degree, quadrature=self.quadrature,
                         integration_quadrature=order, gap=gap,
-                        corner_exponents=self.exponents, corner_controls=(4, 6, 7, 9))
+                        corner_exponents=self.exponents, corner_controls=self.corner_controls,
+                        junctions=self.junctions)
         return value, tangent, metadata

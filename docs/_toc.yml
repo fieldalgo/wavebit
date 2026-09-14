@@ -81,6 +81,7 @@ subtrees:
       - file: nvf-polynomial-pair-coupling
       - file: nvf-analytic-polynomial-traces
       - file: nvf-pair-corner-potentials
+      - file: nvf-pair-junction-potentials
       - file: nvf-polynomial-galerkin
       - file: nvf-affine-convergence
       - file: nvf-contact-followup

@@ -1,4 +1,4 @@
-"""Material-independent real outer-corner potentials for the pair cell.
+"""Material-independent real corner and junction potentials for the pair cell.
 
 NumPy-only geometry evaluation, like the explicit polynomial pair family.
 The fixed exponents 3/5 and 4/5 admit the common r=t**5 quadrature pullback.
@@ -29,15 +29,17 @@ from numpy.polynomial.legendre import leggauss
 
 
 class PairCornerFields:
-    """Real outer-corner powers modulo the existing polynomial space.
+    """Real corner powers modulo the existing polynomial space.
 
     Closed control hats define h*n*(1-h)**(alpha-1) and
     h*n*m*(1-h)**(alpha-2). The Taylor polynomial already represented by
     the cubic or quartic mesh is removed by an invertible real change of
     coordinates. Exact fifth-root factorization preserves small remainders.
-    All fields vanish on the periodic boundary and on collapsing triangles.
+    All fields vanish on the periodic boundary. Outer-corner fields also
+    vanish on collapsing triangles; optional junction fields remain finite
+    tangential potentials there.
     """
-    def __init__(self, obj, exponents=(.6,.8)):
+    def __init__(self, obj, exponents=(.6,.8), *, junctions=False):
         if obj.degree not in (3, 4):
             raise ValueError('corner potentials require degree 3 or 4')
         exponents=tuple(exponents)
@@ -45,14 +47,18 @@ class PairCornerFields:
                 or value not in (.6,.8) for value in exponents)
                 or len(set(exponents)) != len(exponents)):
             raise ValueError('corner exponents must be distinct members of (0.6, 0.8)')
+        if not isinstance(junctions,(bool,np.bool_)):
+            raise ValueError('junctions must be a boolean')
+        self.junctions=bool(junctions)
+        self.controls=(4,5,6,7,8,9) if self.junctions else (4,6,7,9)
         self.obj=obj
         self.hats=obj.data['contact_numerators'][obj.data['mapping']]/obj.data['weight_denominator']
         triangles=obj.data['triangles'][:,:3]
         regular=~obj.data['thin']
         self.powers=[]
         self.bubbles=[]
-        for corner in (4,6,7,9):
-            if np.any(self.hats[triangles[~regular],corner]):
+        for corner in self.controls:
+            if corner not in (5,8) and np.any(self.hats[triangles[~regular],corner]):
                 raise ValueError('outer corner fields must vanish on collapsing triangles')
             active=regular & np.any(self.hats[triangles,corner]>0,axis=1)
             for neighbor in range(10):
@@ -121,7 +127,23 @@ class PairCornerFields:
 
     def quadrature(self, tri, order):
         t,w=leggauss(order);t=(t+1)/2;w=w/2
-        refs=np.eye(3);singular=np.flatnonzero(np.any(self.hats[tri[:3]][:,[4,6,7,9]]==1,axis=1))
+        refs=np.eye(3)
+        seam_hats=self.hats[tri[:3]][:,[5,8]]
+        singular_edges=np.flatnonzero(np.sum(seam_hats==1,axis=0)==2)
+        if self.junctions and len(singular_edges):
+            edge=np.flatnonzero(seam_hats[:,singular_edges[0]]==1)
+            other=next(i for i in range(3) if i not in edge)
+            # Both ends can be singular after the triangle collapses.
+            # Retain the small complement instead of subtracting from one.
+            small=.5*t**5;measure=2.5*t**4
+            for radial,complement in ((small,1-small),(1-small,small)):
+                bary=np.zeros((order,order,3))
+                bary[:,:,other]=radial[:,None]
+                bary[:,:,edge[0]]=complement[:,None]*(1-t)
+                bary[:,:,edge[1]]=complement[:,None]*t
+                yield bary.reshape(-1,3),(complement[:,None]*measure[:,None]*w[:,None]*w).ravel()
+            return
+        singular=np.flatnonzero(np.any(self.hats[tri[:3]][:,self.controls]==1,axis=1))
         if len(singular)==1:
             subs=[np.roll(refs,-int(singular[0]),axis=0)];power=5
         elif len(singular)==0:
