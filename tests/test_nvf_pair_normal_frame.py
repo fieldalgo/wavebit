@@ -24,7 +24,7 @@ def make_cell(**kwargs):
     return CartesianPairNormalFrame(**settings)
 
 
-def reference(epsilon, gap, geometry=GEOMETRY, order=(1, 2), quadrature=16, background=1.):
+def reference(epsilon, gap, geometry=GEOMETRY, order=(1, 2), quadrature=16, background=1., return_fields=False):
     """Direct B and epsilon B^H B at independently constructed physical nodes."""
     px, py = np.diag(geometry['basis'])
     wa, wb = geometry['widths']
@@ -58,6 +58,8 @@ def reference(epsilon, gap, geometry=GEOMETRY, order=(1, 2), quadrature=16, back
     kappa = sum(epsilon)/2
     field = np.eye(2)+(kappa/materials-1)[:, None, None]*projector
     gram = materials[:, None, None]*(field.conj().swapaxes(-1, -2)@field)
+    if return_fields:
+        return points, weights/(px*py), materials, field
     n, m = np.meshgrid(np.arange(-2*order[1], 2*order[1]+1),
                        np.arange(-2*order[0], 2*order[0]+1), indexing='ij')
     wave = 2*np.pi*np.column_stack([m.ravel()/px, n.ravel()/py])

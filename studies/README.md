@@ -12,6 +12,7 @@ is still being investigated belongs here until a reference value is established.
 
 | Script | Question it answers |
 | --- | --- |
+| `nvf_pair_reciprocal_energy.py`, `results/nvf_pair_reciprocal_energy.log` | Does averaging conjugate-paired physical field energies restore reciprocity while retaining passivity, contact derivatives and optical accuracy? [Finite guarantees and optical limits](../docs/nvf-paired-frame.md). |
 | `nvf_pair_normal_frame.py`, `results/nvf_pair_normal_frame.log` | Does a coercive material-referenced normal frame resolve contact optics without an auxiliary weak solve? Finite controls pass, but independent quadrature and Fourier ladders retain optical discrepancies. [Method and limits](../docs/nvf-pair-normal-frame.md). |
 | `nvf_pair_normal_frame_quadrature.py`, `results/nvf_pair_normal_frame_quadrature.log` | Does row-wise field integration lower memory while preserving the same finite coefficients, and how much error remains on a finer inner quadrature ladder? [Storage and integration evidence](../docs/nvf-pair-normal-frame.md#bounded-numpy-field-storage). |
 | `nvf_pair_quadratic.py`, `results/nvf_pair_quadratic.log` | Does raising the auxiliary potential degree improve optical convergence at matched numbers of potentials? [Finite method and measured limits](../docs/nvf-pair-quadratic.md). |

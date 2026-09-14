@@ -304,6 +304,11 @@ establish reciprocity and passivity together with the interface limits
 and contact/material derivatives. Positive matrix storage alone is
 insufficient for adopting this complex frame in ordinary NVF.
 
+The separate [conjugate-paired energy](nvf-paired-frame.md) now provides
+an explicit reciprocal and passive alternative through `paired_closure`.
+It preserves the raw diagnostics for comparison and defines a different
+finite energy; the original `evaluate` path retains the limitations above.
+
 ## Optical decision
 
 The recorded study uses a square period of 700, two touching 300-by-300

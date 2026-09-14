@@ -236,3 +236,42 @@ class CartesianPairNormalFrame:
                     z_inverse_residual=z_residual, **_reciprocity_defects(tensor, xp))
         return (xp.where(valid, value, xp.nan),
                 ConvMatrices(*(xp.where(valid, matrix, xp.nan)[None] for matrix in slots)), meta)
+
+    def paired_closure(self, *, gap, epsilon, background=1., xp=np):
+        """Explicit reciprocal energy of conjugate-paired normalized fields.
+
+        For F=B C(B)^(-1), average the physical energies of F and its
+        conjugate with reversed Fourier labels. This distinct finite model
+        gives (H+J H.T J)/2. Both fields have identity retained Fourier
+        projection; their averaged energies preserve passivity and rotated
+        coercivity while satisfying reciprocity exactly.
+
+        Returns (slots, metadata), not coefficient grids for the original
+        pointwise B. Raw frame diagnostics remain under metadata['raw'],
+        including its inverse residual and unmodified reciprocity defect.
+        The paired closure has its own physical guards. No failed raw guard
+        is repaired. This construction does not certify optical convergence
+        or equivalence to a full Maxwell variational discretization.
+        """
+        _, original, raw = self.evaluate(gap=gap, epsilon=epsilon, background=background, xp=xp)
+        tensor = xp.block([[original.epx[0], -original.epxy[0]],
+                           [-original.epyx[0], original.epy[0]]])
+        count = len(original.epx[0])
+        reverse = xp.concatenate((xp.arange(count-1, -1, -1), xp.arange(2*count-1, count-1, -1)))
+        paired = (tensor+tensor[reverse][:, reverse].T)/2
+        reciprocity = _reciprocity_defects(paired, xp)
+        rotated = minimum_rotated_storage(paired, self._phase, xp)
+        loss = xp.linalg.eigvalsh((paired-paired.conj().T)/(2j))[0]
+        hermitian_error = xp.max(xp.abs(paired-paired.conj().T))
+        valid = (raw['valid'] & xp.all(xp.isfinite(paired)) & (rotated > 0) & (loss > -1e-9)
+                 & (reciprocity['reciprocity_error'] < 1e-9)
+                 & (~raw['lossless'] | (hermitian_error < 1e-9)))
+        _require(valid, 'paired normal-frame closure failed raw/physical/reciprocity guards')
+        slots = ConvMatrices(paired[:count, :count], paired[count:, count:], original.epz_i[0],
+                             -paired[:count, count:], -paired[count:, :count])
+        meta = dict(valid=valid, closure='conjugate_paired_energy', raw=raw,
+                    minimum_rotated_storage=rotated, minimum_dissipation=loss,
+                    hermitian_error=hermitian_error, maximum_pairing_change=xp.max(xp.abs(paired-tensor)),
+                    relative_pairing_change=xp.linalg.norm(paired-tensor)/xp.maximum(xp.linalg.norm(tensor), 1.),
+                    **reciprocity)
+        return ConvMatrices(*(xp.where(valid, matrix, xp.nan)[None] for matrix in slots)), meta
