@@ -70,6 +70,7 @@ comes next. The outward-pointing rule above binds `guide/` too; only the house s
 
 | Document | Question it answers | Decision |
 | --- | --- | --- |
+| [`nvf-galerkin-error.md`](nvf-galerkin-error.md) | Can conforming electric and displacement fields bound the closed auxiliary-cell error and drive mesh refinement? | Exact physical residual integrals and a coercivity bound separate nodal solve accuracy from constitutive approximation; optical accuracy remains separate. |
 | [`nvf-pair-galerkin.md`](nvf-pair-galerkin.md) | Can a real constrained-gradient space retain reciprocity, passivity and holomorphic material dependence across contact? | Original nodal/Laurent checks verify the finite response and its derivatives; metal optical convergence remains separate. |
 | [`nvf-periodic-galerkin.md`](nvf-periodic-galerkin.md) | Does a constrained real field resolve periodic closing-gap optics? | The p derivative approaches Li; s retains a significant trace-space error despite the correct closed-bar value. |
 | [`nvf-seam-trace.md`](nvf-seam-trace.md) | Can continuous positive-gap potentials supply the missing unrestricted normal trace? | Their k_y=0 normal response passes independent field-energy and exact contact checks; full mesh coupling remains separate. |
