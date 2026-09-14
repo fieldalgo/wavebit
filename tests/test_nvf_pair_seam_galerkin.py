@@ -411,10 +411,11 @@ def test_quartic_refined_order_four_positive_gap_keeps_all_original_guards(gap):
 
 @pytest.mark.parametrize('degree', (3, 4))
 @pytest.mark.parametrize('epsilon', ((4., 4.), (12.25, -10+1j)))
-def test_order_eight_contact_preserves_every_trace_and_original_guard(degree, epsilon):
+@pytest.mark.parametrize('contact_solver', ('auto', 'projected'))
+def test_order_eight_contact_preserves_every_trace_and_original_guard(degree, epsilon, contact_solver):
     geometry = dict(basis=np.diag([700., 700.]), widths=(300., 300.), height=300.)
     obj = CartesianPairSeamGalerkinGapCell(CartesianPairOpeningPlan(0), 8,
-        degree=degree, quadrature=48, coercivity_angle=1.53)
+        degree=degree, quadrature=48, coercivity_angle=1.53, contact_solver=contact_solver)
     value, tangent, metadata = obj.closure(gap=0., epsilon=epsilon, **geometry)
     assert metadata['trace_basis'] == 'analytic_polynomial_remainder'
     assert max(v for k, v in metadata.items() if k.endswith('residual') and v is not None) < 1e-10

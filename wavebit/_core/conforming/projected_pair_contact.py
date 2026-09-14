@@ -8,7 +8,7 @@ solved together. This NumPy-only kernel supplies no replacement tensor blocks.
 """
 import numpy as np
 from numpy.polynomial.legendre import leggauss
-from .real_trace_coupling import _contract
+from .real_trace_coupling import _contract, _field_product
 
 
 def _real_geometry(field):
@@ -55,11 +55,14 @@ def projected_contact_response(obj, blocks, chart, transform, free_energy, quadr
             gc=_contract('qv,vai->qai',poly,c1 if thin else cc)/den
             gz=_contract('qv,vai->qai',poly,zz)/den
             phi,dphi=phi_at(points,ds*(bary@velocity[tri[:3]]))
-            psi=-(phi@qc);psi[:,:,ci]+=gc;psi=_real_geometry(psi)
+            # Flatten only the sample/component axes. Keep the physical
+            # subtraction before the QR transform: reassociating Q*T first
+            # amplifies cancellation between nearly coincident fields.
+            psi=-_field_product(phi,qc);psi[:,:,ci]+=gc;psi=_real_geometry(psi)
             if thin:dpsi=None
             else:
                 dg=ds*(_contract('qv,vai->qai',poly,c1)/d0-gc*d1/d0)
-                dpsi=-(dphi@qc+phi@dqc);dpsi[:,:,ci]+=dg;dpsi=_real_geometry(dpsi)
+                dpsi=-(_field_product(dphi,qc)+_field_product(phi,dqc));dpsi[:,:,ci]+=dg;dpsi=_real_geometry(dpsi)
             yield tri,tag,local,points,gc,gz,phi,dphi,psi,dpsi
     # QR acts on real high-mode fields before forming any energy product.
     # Every column survives; a singular basis is an error, not a rank cutoff.
@@ -79,19 +82,19 @@ def projected_contact_response(obj, blocks, chart, transform, free_energy, quadr
     profile=lambda x:np.where(x<0,-(x+a)/(2*a),(b-x)/(2*b))
     for tri,tag,local,points,gc,gz,phi,dphi,psi,dpsi in samples():
         _,ci,zi,_,_,cc,c1,zz,_,d0,d1,thin,ep,dep,*_=local
-        psi=psi@transform_c
+        psi=_field_product(psi,transform_c)
         old=np.zeros((len(bary),2,ne));v=zero[tri[:3]]
         if thin:
             if np.all(v[:,0]==0) and v[:,1].min()>=-height/2 and v[:,1].max()<=height/2:
                 old[:,0]=trace._basis(points[:,1],tg)[0]
-            added=(old-gz@projection[zi])@change
+            added=(old-_field_product(gz,projection[zi]))@change
         else:
             if tag:
                 fun,fun_y,_=trace._basis(points[:,1],tg)
                 old[:,0]=-fun/(2*widths[tag-1]);old[:,1]=profile(points[:,0])[:,None]*fun_y
-            added=(old-gc@common[ci]-gz@projection[zi])@change
+            added=(old-_field_product(gc,common[ci])-_field_product(gz,projection[zi]))@change
         chi=np.zeros((len(bary),2,m));chi[:,:,zi]=gz;chi[:,:,nz:]=added
-        if not thin:chi-=_real_geometry(phi@qbar)
+        if not thin:chi-=_real_geometry(_field_product(phi,qbar))
         measure=(d1 if thin else d0)*weight
         mz+=ep*_contract('q,qai,qaj->ij',measure,chi,psi)
         sz+=ep*_contract('q,qai,qaj->ij',measure,chi,phi)
@@ -99,7 +102,7 @@ def projected_contact_response(obj, blocks, chart, transform, free_energy, quadr
             dmc+=ds*ep*_contract('q,qai,qaj->ij',measure,psi,psi)
             dsc+=ds*ep*_contract('q,qai,qaj->ij',measure,psi,phi)
             continue
-        dpsi=dpsi@transform_c
+        dpsi=_field_product(dpsi,transform_c)
         mc+=ep*_contract('q,qai,qaj->ij',measure,psi,psi)
         sc+=ep*_contract('q,qai,qaj->ij',measure,psi,phi)
         dm=(dep*d0+ep*ds*d1)*weight
@@ -115,7 +118,7 @@ def projected_contact_response(obj, blocks, chart, transform, free_energy, quadr
             bb=np.zeros((quadrature,3));bb[:,ia]=1-t;bb[:,ib]=t;x=left+(right-left)*t
             gp=_contract('qv,vai->qai',obj._gradient_basis(bb,np.zeros_like(bb))[0],cc)/d0
             ph=phi_at(np.column_stack([x,np.full_like(x,edge)]))
-            ps=-(ph@qc);ps[:,:,ci]+=gp;ps=_real_geometry(ps)@transform_c
+            ps=-_field_product(ph,qc);ps[:,:,ci]+=gp;ps=_field_product(_real_geometry(ps),transform_c)
             jump=trace._basis(np.array([edge]),tg)[0][0]@change
             ew=.5*sign*w*(right-left)*profile(x)
             mz[nz:]+=ep*_contract('q,i,qj->ij',ew,jump,ps[:,1])

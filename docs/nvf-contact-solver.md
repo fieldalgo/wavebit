@@ -5,10 +5,12 @@ Written: 2026-09-15
 Targets:
 - `wavebit/_core/conforming/cartesian_pair_seam_galerkin.py`
 - `wavebit/_core/conforming/real_trace_coupling.py`
+- `wavebit/_core/conforming/projected_pair_contact.py`
 - `tests/test_nvf_contact_solver.py`
 - `tests/test_nvf_pair_seam_galerkin.py`
 - `studies/nvf_coupled_pair_seam_galerkin.py`
 - `studies/results/nvf_contact_solver_comparison.log`
+- `studies/results/nvf_contact_field_products.log`
 
 The cubic and quartic pair family now tries original retained-variable
 elimination before constructing the more expensive physical QR coordinates.
@@ -106,3 +108,41 @@ Timings describe these local runs, not a hardware-independent speed guarantee.
 A rejected retained solve adds cost before physical QR. Acceptance criteria
 decide whether it can be used; speed does not override them. Optical
 mesh/Fourier variation remains unresolved.
+
+## Applying all physical sample rows together
+
+The physical QR path subsequently reuses the existing `_field_product`
+helper when applying coefficient matrices to sampled fields. It reshapes
+only the quadrature and Cartesian-component axes, from `(q, 2, n)` to
+`(2*q, n)`, and performs one matrix multiplication before restoring the shape.
+This avoids many separate two-row multiplications. No sample is averaged,
+removed or shared across geometries or materials.
+
+The operation order remains `(G - Phi*Q)*T`: the high-mode physical field is
+formed and checked for reality before applying the QR transform. Multiplying
+`Q*T` first would change cancellation between nearly coincident fields and
+is deliberately avoided. The same row application is used for physical
+derivatives, disappearing potentials and boundary energy terms. The geometry
+QR, material energy contractions, quadrature orders and acceptance checks
+are unchanged.
+
+A separate source-pinned run in `nvf_contact_field_products.log` repeats the
+forced-QR cubic comparison after this change. Existing independent physical
+references and whole-state QR comparisons are supplemented by forced-QR
+order-8 controls for both polynomial degrees and both material cases.
+Positive-gap solvers do not use this changed function.
+
+All four requested polarization rows completed and passed the original
+guards. The recorded powers are identical to the earlier forced-QR rows;
+the largest difference in the differenced optical contact slope is 2.59e-9.
+
+| Refinement | Earlier two-row batches, seconds | All sample rows, seconds |
+| --- | ---: | ---: |
+| 1 | 8.1501 | 6.4520 |
+| 2 | 126.4553 | 119.9303 |
+
+These single local timings include variations in background verification
+load. They show a reduction in these runs, rather than a universal speed
+factor. In separate whole-state comparisons, the electric tensors were
+identical and dimensionless contact derivatives agreed within 7.34e-10.
+The physical equations and convergence limitations are unchanged.
