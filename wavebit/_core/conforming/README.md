@@ -18,6 +18,8 @@
 | `periodic_rectangle_galerkin.py` | Can the same retained-field constraints cross a rectangle's periodic closing gap with a finite original contact derivative? |
 | `periodic_seam_trace.py` | Can continuous positive-gap potentials supply the unrestricted normal contact trace through their original material energy? |
 | `periodic_seam_galerkin.py` | Can the complete retained tensor couple those seam fields to the quadratic mesh, with finite contact and positive-gap derivatives? |
+| `cartesian_pair_seam_galerkin.py` | Can real continuous internal-gap traces share the whole pair tensor and its exact contact/material derivative? |
+| `real_trace_coupling.py` | How do periodic and internal traces retain the same original weak solve and independently reconstructed physical energy? |
 | `cartesian_pair_normal_frame.py` | Can a material-referenced normal frame retain coercivity and fitted gap/material derivatives without an auxiliary weak solve, and can conjugate-paired energies preserve reciprocity? |
 | `triangle_moments.py` | How can quadratic triangle Fourier integrals and their moving derivatives remain finite at collapse and repeated phases? |
 | `cartesian_pair_gap.py` | How can the finite pair cross exact contact and positive gaps without dividing its weak solve or thin fields by gap? |

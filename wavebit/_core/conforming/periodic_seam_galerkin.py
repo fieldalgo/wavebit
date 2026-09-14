@@ -9,9 +9,8 @@ import numpy as np
 from numpy.polynomial.legendre import leggauss
 from .periodic_rectangle_galerkin import PeriodicRectangleGalerkinGapCell
 from .periodic_seam_trace import PeriodicSeamTrace
-from .cartesian_pair_galerkin import _response, _slots, _relative, _solve
+from .real_trace_coupling import coupled_positive, coupled_contact, _contract
 from .cartesian_pair_opening import real_array
-from .material_sector import minimum_rotated_storage
 
 def _free_fourier_energy(order, settings):
     """Independent exact rectangle energy for two retained plane waves.
@@ -188,120 +187,9 @@ energy or discarding a weak-system derivative.
     order = obj.order
     settings = dict(gap=gap, period=period, width=width, offset=offset, epsilon=epsilon, background=background, gap_tangent=gap_tangent, epsilon_tangent=epsilon_tangent, background_tangent=background_tangent)
     base = obj._assemble(gap=gap, basis=np.diag(period), widths=(width / 2, width / 2), height=period[1], epsilon=(epsilon, epsilon), background=background, offset=offset, gap_tangent=gap_tangent, epsilon_tangent=(epsilon_tangent, epsilon_tangent), background_tangent=background_tangent)
-    k, dk, q, dq, r, dr, qt, dqt, source, dsource, e, de, info = base
-    N = len(e)
-    nc, nz = (info['nc'], info['nz'])
-    NE = 2 * order[0] + 1
-    s = info['s']
-    ds = info['ds']
-    Q = np.zeros((2 * N, NE), complex)
-    R = Q.copy()
-    dQ = Q.copy()
-    dR = Q.copy()
-    K = np.zeros((nc + nz, NE), complex)
-    dK = K.copy()
-    EE = np.zeros((NE, NE), complex)
-    dEE = EE.copy()
-    for ids, ci, zi, w, dw, mat, dmat, phase, dphase, gc, dgc, gz, dgz, le, dle, gn, dgn in _quadrature(obj, trace, base, settings, quadrature_order):
-        moment = _contract('q,qm,qaj->amj', w, phase, le).reshape(2 * N, NE)
-        dm = (_contract('q,qm,qaj->amj', dw, phase, le) + _contract('q,qm,qaj->amj', w, dphase, le) + _contract('q,qm,qaj->amj', w, phase, dle)).reshape(2 * N, NE)
-        Q += moment
-        dQ += dm
-        R += mat * moment
-        dR += dmat * moment + mat * dm
-        for rows, g, dg in ((ci, gc, dgc), (nc + zi, gz, dgz)):
-            cross = _contract('q,qai,qaj->ij', w, g, le)
-            dcross = _contract('q,qai,qaj->ij', dw, g, le) + _contract('q,qai,qaj->ij', w, dg, le) + _contract('q,qai,qaj->ij', w, g, dle)
-            K[rows] += mat * cross
-            dK[rows] += dmat * cross + mat * dcross
-        en = _contract('q,qai,qaj->ij', w, le, le) / s
-        den = (_contract('q,qai,qaj->ij', dw, le, le) + _contract('q,qai,qaj->ij', w, dle, le) + _contract('q,qai,qaj->ij', w, le, dle)) / s - en * ds / s
-        EE += mat * en
-        dEE += dmat * en + mat * den
-    scale = np.r_[np.ones(nc), np.full(nz, s)]
-    dscale = np.r_[np.zeros(nc), np.full(nz, ds)]
-    row = K.T * scale[None] / s
-    drow = (dK.T * scale[None] + K.T * dscale[None]) / s - row * ds / s
-    KK = np.block([[k, K], [row, EE]])
-    dKK = np.block([[dk, dK], [drow, dEE]])
-    QQ = np.hstack([q, Q])
-    dQQ = np.hstack([dq, dQ])
-    RR = np.hstack([r, R])
-    dRR = np.hstack([dr, dR])
-    QT = np.vstack([qt, Q.conj().T / s])
-    dQT = np.vstack([dqt, dQ.conj().T / s - Q.conj().T * ds / s ** 2])
-    SS = np.vstack([source, R[info['reverse']].T / s])
-    dSS = np.vstack([dsource, dR[info['reverse']].T / s - R[info['reverse']].T * ds / s ** 2])
-    A = np.kron(np.eye(2), e)
-    DA = np.kron(np.eye(2), de)
-    U, dU, x, dx, H, DH, cond = _response(KK, dKK, QQ, dQQ, RR, dRR, QT, dQT, SS, dSS, A, DA, 'potential')
-    count = len(obj.data['pmap'])
-    res = np.zeros((count, 2 * N), complex)
-    dres = res.copy()
-    res_scale = np.zeros_like(res, float)
-    dres_scale = res_scale.copy()
-    exact_free, exact_free_derivative = _free_fourier_energy(order, settings)
-    dx_geometry = -dQQ @ U
-    reverse = info['reverse']
-    xr, dxr = x[:, reverse].T[:, reverse], dx_geometry[:, reverse].T[:, reverse]
-    energy = x.conj().T @ exact_free @ x
-    denergy = (dxr @ exact_free @ x + xr @ exact_free_derivative @ x
-               + xr @ exact_free @ dx_geometry)
-    for ids, ci, zi, w, dw, mat, dmat, phase, dphase, gc, dgc, gz, dgz, le, dle, gn, dgn in _quadrature(obj, trace, base, settings, quadrature_order):
-        F = np.zeros((len(w), 2, 2 * N), complex)
-        DF = F.copy()
-        F[:, 0, :N] = phase.conj()
-        F[:, 1, N:] = phase.conj()
-        DF[:, 0, :N] = dphase.conj()
-        DF[:, 1, N:] = dphase.conj()
-        E = F @ x + gc @ U[ci] + s * gz @ U[nc + zi] + le @ U[nc + nz:]
-        DE = DF @ x + F @ dx + dgc @ U[ci] + gc @ dU[ci] + ds * gz @ U[nc + zi] + s * dgz @ U[nc + zi] + s * gz @ dU[nc + zi] + dle @ U[nc + nz:] + le @ dU[nc + nz:]
-        T = mat * E - F @ H
-        DT = dmat * E + mat * DE - DF @ H - F @ DH
-        react = _contract('q,qai,qaj->ij', w, gn, T)
-        change = _contract('q,qai,qaj->ij', dw, gn, T) + _contract('q,qai,qaj->ij', w, dgn, T) + _contract('q,qai,qaj->ij', w, gn, DT)
-        np.add.at(res, ids, react)
-        np.add.at(dres, ids, change)
-        np.add.at(res_scale, ids, _contract('q,qai,qaj->ij', abs(w), abs(gn), abs(mat * E) + abs(F @ H)))
-        np.add.at(dres_scale, ids, _contract('q,qai,qaj->ij', abs(dw), abs(gn), abs(T)) + _contract('q,qai,qaj->ij', abs(w), abs(dgn), abs(T)) + _contract('q,qai,qaj->ij', abs(w), abs(gn), abs(DT)))
-        free = F @ x
-        correction = gc @ U[ci] + s * gz @ U[nc + zi] + le @ U[nc + nz:]
-        for left, right in ((free, correction), (correction, free), (correction, correction)):
-            energy += mat * _contract('q,qai,qaj->ij', w, left.conj(), right)
-        reverse = info['reverse']
-        added = le @ U[nc + nz:]
-        dadded = dle @ U[nc + nz:]
-        old = F @ x + gc @ U[ci] + s * gz @ U[nc + zi]
-        dold = DF @ x + dgc @ U[ci] + ds * gz @ U[nc + zi] + s * dgz @ U[nc + zi] - F @ (dQQ @ U)
-        for L, DL, R, DR in ((old, dold, added, dadded), (added, dadded, old, dold), (added, dadded, added, dadded)):
-            denergy += dmat * _contract('q,qai,qaj->ij', w, L[:, :, reverse], R) + mat * _contract('q,qai,qaj->ij', dw, L[:, :, reverse], R) + mat * _contract('q,qai,qaj->ij', w, DL[:, :, reverse], R) + mat * _contract('q,qai,qaj->ij', w, L[:, :, reverse], DR)
-    for ids, ci, zi, w, dw, mat, dmat, phase, dphase, gc, dgc, gz, dgz, le, dle, gn, dgn in _quadrature(obj, trace, base, settings, quadrature_order, split=False):
-        F = np.zeros((len(w), 2, 2 * N), complex)
-        DF = F.copy()
-        F[:, 0, :N] = phase.conj()
-        F[:, 1, N:] = phase.conj()
-        DF[:, 0, :N] = dphase.conj()
-        DF[:, 1, N:] = dphase.conj()
-        free = F @ x
-        dfree = DF @ x - F @ (dQQ @ U)
-        correction = gc @ U[ci] + s * gz @ U[nc + zi]
-        dcorrection = dgc @ U[ci] + ds * gz @ U[nc + zi] + s * dgz @ U[nc + zi]
-        reverse = info['reverse']
-        for left, dl, right, dright in ((free, dfree, correction, dcorrection),
-                                       (correction, dcorrection, free, dfree),
-                                       (correction, dcorrection, correction, dcorrection)):
-            denergy += (dmat * _contract('q,qai,qaj->ij', w, left[:, :, reverse], right)
-                        + mat * _contract('q,qai,qaj->ij', dw, left[:, :, reverse], right)
-                        + mat * _contract('q,qai,qaj->ij', w, dl[:, :, reverse], right)
-                        + mat * _contract('q,qai,qaj->ij', w, left[:, :, reverse], dright))
-    rr = info['reverse']
-    meta = dict(condition=cond, reciprocity=_relative(H - H[rr][:, rr].T, H), derivative_reciprocity=_relative(DH - DH[rr][:, rr].T, DH), original_residual=_relative(res, res_scale), original_derivative_residual=_relative(dres, dres_scale), energy_residual=_relative(energy - H, H), energy_derivative_residual=_relative(denergy - DH, DH), minimum_rotated_storage=minimum_rotated_storage(H, obj._phase), minimum_dissipation=np.linalg.eigvalsh((H - H.conj().T) / 2j)[0])
-    meta['weak_residual'] = _relative(KK @ U + SS @ x - QT @ H, KK @ U, SS @ x, QT @ H)
-    meta['weak_derivative_residual'] = _relative(dKK @ U + KK @ dU + dSS @ x + SS @ dx - dQT @ H - QT @ DH, dKK @ U, KK @ dU, dSS @ x, SS @ dx, dQT @ H, QT @ DH)
-    meta['direct_fourier_residual'] = _relative(A - exact_free, exact_free)
-    meta['direct_fourier_derivative_residual'] = _relative(DA - exact_free_derivative, exact_free_derivative)
-    inv = _solve(e, np.eye(N))
-    return (_slots(H, inv), _slots(DH, -inv @ de @ inv), meta)
+    return coupled_positive(obj, base,
+        lambda split=True: _quadrature(obj, trace, base, settings, quadrature_order, split),
+        _free_fourier_energy(order, settings), order[0])
 
 def _contact(obj, trace, *, period, width, offset, epsilon, background, gap_tangent, epsilon_tangent, background_tangent, quadrature_order):
     """Finite physical weak limit, including both material-side edge terms.
@@ -403,46 +291,8 @@ when evaluating the reciprocal bilinear energy.
     Qbar = np.vstack([1j * wave[:, 0, None] * X * Y[:, None] * YP[:, None], X * (wave[:, 1] != 0)[:, None] * YP[:, None]])
     Rbar = np.vstack([(epsilon * Xp + (epsilon + background) / 2 * jump) * Y[:, None] * YP[:, None], X * (background - epsilon * (wave[:, 1] == 0))[:, None] * YP[:, None]])
     EE = background * B.T @ (((edge_b - edge_a) * w)[:, None] * B)
-    KK = np.block([[k, np.vstack([np.zeros_like(C), Z])], [np.hstack([C.T, Z.T]), EE]])
-    QQ = np.hstack([q, np.zeros_like(Qbar)])
-    RR = np.hstack([r, np.zeros_like(Rbar)])
-    QT = np.vstack([qt, Qbar.conj().T])
-    SS = np.vstack([source, Rbar[info['reverse']].T])
-    A = np.kron(np.eye(2), e)
-    DA = np.kron(np.eye(2), de)
-    BB = RR - A @ QQ
-    CC = SS - QT @ A
-    DD = KK - SS @ QQ - QT @ BB
-    U = _solve(DD, -CC)
-    H = A + BB @ U
-    dQQ = np.hstack([dq, ds * Qbar])
-    dRR = np.hstack([dr, ds * Rbar])
-    dBB = dRR - DA @ QQ - A @ dQQ
-    dKK = np.hstack([dk[:nc], ds * C])
-    dDD = dKK - dsource[:nc] @ QQ - source[:nc] @ dQQ - dqt[:nc] @ BB - qt[:nc] @ dBB
-    dCC = dsource[:nc] - dqt[:nc] @ A - qt[:nc] @ DA
-    dUC = _solve(DD[:nc, :nc], -dCC - dDD @ U)
-    DH = DA + dBB @ U + BB[:, :nc] @ dUC
-    x = np.eye(2 * N) - QQ @ U
-    rr = info['reverse']
-    scale = np.r_[np.ones(nc), np.zeros(nz + NE)]
-    dscale = np.r_[np.zeros(nc), np.full(nz + NE, ds)]
-    physical = scale[:, None] * KK
-    dphysical = dscale[:, None] * KK
-    dphysical[:nc] += dKK
-    source_physical = RR[rr].T
-    dsource_physical = dRR[rr].T
-    dx_geometry = -dQQ @ U
-    xr = x[:, rr].T[:, rr]
-    dxr = dx_geometry[:, rr].T[:, rr]
-    ur = U[:, rr].T
-    energy = xr @ A @ x + xr @ RR @ U + ur @ source_physical @ x + ur @ physical @ U
-    denergy = dxr @ A @ x + xr @ DA @ x + xr @ A @ dx_geometry + dxr @ RR @ U + xr @ dRR @ U + ur @ dsource_physical @ x + ur @ source_physical @ dx_geometry + ur @ dphysical @ U
-    weak = _relative(KK @ U + SS @ x - QT @ H, KK @ U, SS @ x, QT @ H)
-    cweak = _relative(dDD @ U + DD[:nc, :nc] @ dUC + dCC, dDD @ U, DD[:nc, :nc] @ dUC, dCC)
-    meta = dict(condition=np.linalg.cond(DD), reciprocity=_relative(H - H[rr][:, rr].T, H), derivative_reciprocity=_relative(DH - DH[rr][:, rr].T, DH), weak_residual=weak, weak_derivative_residual=None, contact_derivative_residual=cweak, energy_residual=_relative(energy - H, H), energy_derivative_residual=_relative(denergy - DH, DH), minimum_rotated_storage=minimum_rotated_storage(H, obj._phase), minimum_dissipation=np.linalg.eigvalsh((H - H.conj().T) / 2j)[0])
-    inv = _solve(e, np.eye(N))
-    return (_slots(H, inv), _slots(DH, -inv @ de @ inv), meta)
+    base = (k, dk, q, dq, r, dr, qt, dqt, source, dsource, e, de, info)
+    return coupled_contact(obj, base, C, Z, Qbar, Rbar, EE)
 
 class PeriodicSeamGalerkinGapCell:
     """Explicit quadratic mesh plus continuous real seam-potential closure.
@@ -478,8 +328,3 @@ class PeriodicSeamGalerkinGapCell:
             raise ValueError('coupled seam Galerkin response failed original/energy/physical guards')
         metadata.update(closure='real_coupled_periodic_seam_galerkin', order=self.order, refinement=self._base.plan.refinement, quadrature=self.quadrature, degree=2, gap=gap)
         return (value, tangent, metadata)
-
-
-def _contract(*arguments):
-    """Contract local weighted fields with bounded intermediates and BLAS."""
-    return np.einsum(*arguments, optimize=True)
