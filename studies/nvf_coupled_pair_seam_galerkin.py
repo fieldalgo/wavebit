@@ -27,12 +27,15 @@ def main():
     parser.add_argument('--gaps', type=float, nargs='+', help='explicit gap samples, starting with exact contact')
     parser.add_argument('--quadrature', type=int, default=32)
     parser.add_argument('--degree', type=int, choices=(2, 3, 4), default=2)
+    parser.add_argument('--contact-solver', choices=('auto', 'projected'), default='auto')
     parser.add_argument('--out', type=Path, default=Path(__file__).parent/'results/nvf_coupled_pair_seam_galerkin.log')
     args = parser.parse_args()
     if any(n < 0 for n in args.orders):
         parser.error('orders must be nonnegative')
     if any(args.degree*2**r > 16 for r in args.refinements):
         parser.error('dense polynomial edge resolution must not exceed 16')
+    if args.degree == 2 and args.contact_solver == 'projected':
+        parser.error('projected contact selection requires degree 3 or 4')
     if args.gaps is not None and (args.contact_only or args.gaps[0] != 0
                                   or any(not np.isfinite(g) or g < 0 for g in args.gaps)):
         parser.error('explicit gaps must start at zero, be finite and nonnegative, and exclude --contact-only')
@@ -51,6 +54,7 @@ def main():
             sink.write(line+'\n'); sink.flush(); print(line, flush=True)
         emit(dict(kind='header', numpy=np.__version__, orders=args.orders, refinements=args.refinements,
                   materials=args.materials, quadrature=args.quadrature, degree=args.degree, gaps=gaps,
+                  contact_solver=args.contact_solver,
                   period=[700.,700.], widths=[300.,300.], height=300., background=1.,
                   wavelength=900., thickness=300., theta=.2, phi=0., top=1., bot=2.25,
                   coercivity_angle=1.53,
@@ -60,12 +64,14 @@ def main():
                 plan = cartesian_pair_opening.CartesianPairOpeningPlan.from_geometry(
                     **fixture.GEOMETRY, refinement=refinement)
                 obj = cartesian_pair_seam_galerkin.CartesianPairSeamGalerkinGapCell(
-                    plan, (n,n), degree=args.degree, quadrature=args.quadrature, coercivity_angle=1.53)
+                    plan, (n,n), degree=args.degree, quadrature=args.quadrature, coercivity_angle=1.53,
+                    contact_solver=args.contact_solver)
                 for name in args.materials:
                     start = time.perf_counter()
                     totals = {pol: [] for pol in ('p','s')}
                     reflections = {pol: [] for pol in ('p','s')}
                     diagnostics = []
+                    closure_seconds = []
                     def power(pol, slots):
                         output = fixture.solver(n,pol).solve_conv(*slots)
                         t, r = float(output.T.real.sum()), float(output.R.real.sum())
@@ -76,12 +82,15 @@ def main():
                         return t,r
                     try:
                         for gap in gaps:
+                            solve_start = time.perf_counter()
                             value, tangent, metadata = obj.closure(
                                 gap=gap, epsilon=fixture.MATERIALS[name], **fixture.GEOMETRY)
-                            diagnostics.append({k: (v if isinstance(v, str) else float(v) if v is not None else None)
+                            closure_seconds.append(time.perf_counter()-solve_start)
+                            diagnostics.append({k: (v if isinstance(v, (str, tuple)) else float(v) if v is not None else None)
                                                 for k,v in metadata.items()
                                                 if k.endswith('residual') or k in ('condition', 'closed_elimination',
-                                                    'elimination', 'integration_quadrature', 'physical_quadrature', 'trace_basis', 'reciprocity',
+                                                    'elimination', 'contact_solver_attempts', 'retained_contact_rejection',
+                                                    'integration_quadrature', 'physical_quadrature', 'trace_basis', 'reciprocity',
                                                     'derivative_reciprocity','minimum_rotated_storage','minimum_dissipation')})
                             if gap == 0:
                                 closed, derivative = np.asarray(value), np.asarray(tangent)
@@ -96,7 +105,8 @@ def main():
                                       polarization=pol, gaps=gaps, T=totals[pol], R=reflections[pol],
                                       li_T=comparison, tangent_gap_slopes=slopes,
                                       gap_secants=[(v-totals[pol][0])/g for g,v in zip(gaps[1:3],totals[pol][1:3])],
-                                      diagnostics=diagnostics, seconds=time.perf_counter()-start))
+                                      diagnostics=diagnostics, closure_seconds=closure_seconds,
+                                      seconds=time.perf_counter()-start))
                     except ValueError as error:
                         failed = True
                         emit(dict(kind='failure', order=n, refinement=refinement, degree=args.degree, material=name,

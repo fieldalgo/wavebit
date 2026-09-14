@@ -2,6 +2,11 @@
 
 Written: 2026-09-15
 
+The subsequent [guarded contact solver](nvf-contact-solver.md) tries complete
+retained elimination before physical QR, using the same trace space and
+unchanged original acceptance criteria. The measurements below used the
+physical projected solver directly.
+
 Targets:
 - `wavebit/_core/conforming/polynomial_pair_trace.py`
 - `wavebit/_core/conforming/cartesian_pair_seam_galerkin.py`

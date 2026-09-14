@@ -494,6 +494,18 @@ def _changed_contact(obj, settings, blocks, transform, quadrature):
     return base,c,z,q,r,energy
 
 
+def _check_response(value, tangent, metadata):
+    """Apply the same original, independent-energy and physical guards."""
+    residuals = [v for k, v in metadata.items() if k.endswith('residual') and v is not None]
+    if (not np.isfinite(np.asarray(value)).all() or not np.isfinite(np.asarray(tangent)).all()
+            or not all(np.isfinite(v) for v in residuals) or max(residuals) > 1e-10
+            or not np.isfinite([metadata['reciprocity'], metadata['derivative_reciprocity'],
+                                   metadata['minimum_rotated_storage'], metadata['minimum_dissipation']]).all()
+            or max(metadata['reciprocity'], metadata['derivative_reciprocity']) > 1e-9
+            or metadata['minimum_rotated_storage'] <= 0 or metadata['minimum_dissipation'] < -1e-9):
+        raise ValueError('coupled pair Galerkin response failed original/energy/physical guards')
+
+
 class CartesianPairSeamGalerkinGapCell:
     """Polynomial mesh and continuous real gap potentials in one weak solve.
 
@@ -503,11 +515,23 @@ class CartesianPairSeamGalerkinGapCell:
     This finite NumPy family does not change ordinary NVF dispatch or certify
     optical convergence. No third-party solver or material-dependent trial
     frame is used.
+
+    At contact, ``contact_solver='auto'`` first tries the original retained
+    elimination and accepts its entire state only after every original guard.
+    Otherwise it solves the same space in real physical QR coordinates.
+    ``contact_solver='projected'`` forces that QR path for reproducible controls.
+    Positive-gap solves are unaffected by this selection.
     """
 
-    def __init__(self, plan, order=1, *, degree=2, quadrature=32, coercivity_angle=0.):
+    def __init__(self, plan, order=1, *, degree=2, quadrature=32, coercivity_angle=0.,
+                 contact_solver='auto'):
         if (isinstance(degree,(bool,np.bool_)) or not isinstance(degree,Integral) or degree not in (2,3,4)):
             raise ValueError('coupled pair polynomial degree must be 2, 3 or 4')
+        if not isinstance(contact_solver, str) or contact_solver not in ('auto', 'projected'):
+            raise ValueError("contact_solver must be 'auto' or 'projected'")
+        if degree == 2 and contact_solver == 'projected':
+            raise ValueError('projected contact selection requires degree 3 or 4')
+        self.contact_solver = contact_solver
         family=CartesianPairGalerkinGapCell if degree==2 else CartesianPairPolynomialGalerkinGapCell
         self._base=family(plan,order,degree=degree,coercivity_angle=coercivity_angle)
         self.order = self._base.order
@@ -547,8 +571,27 @@ class CartesianPairSeamGalerkinGapCell:
                     transform,free,physical_quadrature)
                 verifier=lambda x,dx,u:verify_contact_energy(self._base,settings,blocks[0],chart,
                     transform,x,dx,u,physical_quadrature)
-            value, tangent, metadata = coupled_contact(self._base, *blocks, energy_verifier=verifier,
-                                                        response_solver=response_solver)
+            attempts=[]
+            rejection=None
+            result=None
+            if transform is not None and self.contact_solver == 'auto':
+                attempts.append('retained')
+                try:
+                    candidate=coupled_contact(self._base, *blocks, energy_verifier=verifier)
+                    _check_response(*candidate)
+                    result=candidate
+                except (ValueError, np.linalg.LinAlgError) as error:
+                    # The complete candidate is discarded. No tensor or JVP
+                    # block is carried into the independent full QR solve.
+                    rejection=str(error)
+            if result is None:
+                attempts.append('physical_projected' if response_solver is not None else 'retained')
+                result=coupled_contact(self._base, *blocks, energy_verifier=verifier,
+                                       response_solver=response_solver)
+            value, tangent, metadata=result
+            metadata['contact_solver_attempts']=tuple(attempts)
+            if rejection is not None:
+                metadata['retained_contact_rejection']=rejection
             if transform is not None:
                 metadata['physical_quadrature']=physical_quadrature
         else:
@@ -561,12 +604,7 @@ class CartesianPairSeamGalerkinGapCell:
                 base[-1],normalized,free,q,dq,blocks)
             value, tangent, metadata = coupled_positive(self._base, base, quadrature,
                 free, self.order[1], response_solver=response_solver, normalized_quadrature=normalized)
-        residuals = [v for k, v in metadata.items() if k.endswith('residual') and v is not None]
-        if (not np.isfinite(np.asarray(value)).all() or not np.isfinite(np.asarray(tangent)).all()
-                or not all(np.isfinite(v) for v in residuals) or max(residuals) > 1e-10
-                or max(metadata['reciprocity'], metadata['derivative_reciprocity']) > 1e-9
-                or metadata['minimum_rotated_storage'] <= 0 or metadata['minimum_dissipation'] < -1e-9):
-            raise ValueError('coupled pair Galerkin response failed original/energy/physical guards')
+        _check_response(value, tangent, metadata)
         metadata.update(closure='real_coupled_pair_seam_galerkin', order=self.order,
                         refinement=self._base.plan.refinement, shift=self._base.plan.shift,
                         quadrature=self.quadrature, integration_quadrature=working_quadrature, degree=self._base.degree, gap=gap,

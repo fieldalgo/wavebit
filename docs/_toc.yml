@@ -77,6 +77,7 @@ subtrees:
       - file: nvf-coupled-seam-galerkin
       - file: nvf-coupled-pair-seam-galerkin
       - file: nvf-galerkin-error
+      - file: nvf-contact-solver
       - file: nvf-polynomial-pair-coupling
       - file: nvf-analytic-polynomial-traces
       - file: nvf-polynomial-galerkin

@@ -14,9 +14,10 @@ from test_nvf_polynomial_galerkin import cardinal_gradient
 GEOMETRY = dict(basis=np.diag([700., 560.]), widths=(170., 230.), height=280., offset=(21., -14.))
 
 
-def cell(order=(1, 2), refinement=0, quadrature=24, degree=2):
+def cell(order=(1, 2), refinement=0, quadrature=24, degree=2, contact_solver='auto'):
     return CartesianPairSeamGalerkinGapCell(CartesianPairOpeningPlan(0, refinement), order,
-                                           degree=degree, quadrature=quadrature, coercivity_angle=1.53)
+                                           degree=degree, quadrature=quadrature, coercivity_angle=1.53,
+                                           contact_solver=contact_solver)
 
 
 def clip(polygon, vertex, axis, bound, sign):
@@ -373,7 +374,7 @@ def test_refined_sweep_preserves_each_rational_triangle_area_and_variation(gap):
 def test_quartic_refined_order_four_contact_keeps_all_original_guards(quadrature):
     geometry = dict(basis=np.diag([700., 700.]), widths=(300., 300.), height=300.)
     obj = CartesianPairSeamGalerkinGapCell(CartesianPairOpeningPlan(0, 1), 4,
-        degree=4, quadrature=quadrature, coercivity_angle=1.53)
+        degree=4, quadrature=quadrature, coercivity_angle=1.53, contact_solver='projected')
     value, tangent, metadata = obj.closure(gap=0., epsilon=(12.25, -10+1j), **geometry)
     assert metadata['closed_elimination'] == 'physical_projected'
     assert max(v for k, v in metadata.items() if k.endswith('residual') and v is not None) < 1e-10
@@ -392,7 +393,8 @@ def test_projected_verification_rejects_an_inconsistent_full_state(monkeypatch, 
         return tuple(state)
     monkeypatch.setattr(module, name, inconsistent)
     with pytest.raises(ValueError, match='original/energy/physical guards'):
-        cell(order=(1, 1), degree=4).closure(gap=gap, epsilon=(12.25, -10+1j), **GEOMETRY)
+        cell(order=(1, 1), degree=4, contact_solver='projected').closure(
+            gap=gap, epsilon=(12.25, -10+1j), **GEOMETRY)
 
 
 @pytest.mark.parametrize('gap', (.001, 1e-9))
