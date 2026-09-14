@@ -395,13 +395,26 @@ def test_projected_verification_rejects_an_inconsistent_full_state(monkeypatch, 
         cell(order=(1, 1), degree=4).closure(gap=gap, epsilon=(12.25, -10+1j), **GEOMETRY)
 
 
-def test_quartic_refined_order_four_positive_gap_keeps_all_original_guards():
-    gap = .001
+@pytest.mark.parametrize('gap', (.001, 1e-9))
+def test_quartic_refined_order_four_positive_gap_keeps_all_original_guards(gap):
     geometry = dict(basis=np.diag([700., 700.]), widths=(300., 300.), height=300.)
     obj = CartesianPairSeamGalerkinGapCell(CartesianPairOpeningPlan(0, 1), 4,
         degree=4, quadrature=32, coercivity_angle=1.53)
     value, tangent, metadata = obj.closure(gap=gap, epsilon=(12.25, -10+1j), **geometry)
     assert metadata['elimination'] == 'physical_projected'
     assert max(v for k, v in metadata.items() if k.endswith('residual')) < 1e-10
+    assert metadata['derivative_reciprocity'] < 1e-9
+    assert np.isfinite(value).all() and np.isfinite(tangent).all()
+
+
+@pytest.mark.parametrize('degree', (3, 4))
+@pytest.mark.parametrize('epsilon', ((4., 4.), (12.25, -10+1j)))
+def test_order_eight_contact_preserves_every_trace_and_original_guard(degree, epsilon):
+    geometry = dict(basis=np.diag([700., 700.]), widths=(300., 300.), height=300.)
+    obj = CartesianPairSeamGalerkinGapCell(CartesianPairOpeningPlan(0), 8,
+        degree=degree, quadrature=48, coercivity_angle=1.53)
+    value, tangent, metadata = obj.closure(gap=0., epsilon=epsilon, **geometry)
+    assert metadata['trace_basis'] == 'analytic_polynomial_remainder'
+    assert max(v for k, v in metadata.items() if k.endswith('residual') and v is not None) < 1e-10
     assert metadata['derivative_reciprocity'] < 1e-9
     assert np.isfinite(value).all() and np.isfinite(tangent).all()

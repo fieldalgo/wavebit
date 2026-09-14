@@ -78,6 +78,7 @@ subtrees:
       - file: nvf-coupled-pair-seam-galerkin
       - file: nvf-galerkin-error
       - file: nvf-polynomial-pair-coupling
+      - file: nvf-analytic-polynomial-traces
       - file: nvf-polynomial-galerkin
       - file: nvf-affine-convergence
       - file: nvf-contact-followup

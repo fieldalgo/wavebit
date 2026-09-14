@@ -58,14 +58,28 @@ def projected_positive_response(info, quadrature, free, Q, dQ, original_blocks):
     physical=np.r_[np.ones(nc),np.full(total-nc,s)]
     flux_correction=R-A@Q
     for _ in range(2):
-        defect=dKK@original+KK@doriginal+dS@field+S@dfield-dQT@H-QT@DH
+        terms=(dKK@original,KK@doriginal,dS@field,S@dfield,-dQT@H,-QT@DH)
+        defect=sum(terms)
         retained=dfield+dQ@original+Q@doriginal
         flux=DH-DA@field-A@dfield-dR@original-R@doriginal
-        residual=max(_relative(defect,dKK@original,KK@doriginal,dS@field,S@dfield,dQT@H,QT@DH),
-                     _relative(retained,dfield,dQ@original,Q@doriginal),
-                     _relative(flux,DH,DA@field,A@dfield,dR@original,R@doriginal))
+        retained_error=_relative(retained,dfield,dQ@original,Q@doriginal)
+        flux_error=_relative(flux,DH,DA@field,A@dfield,dR@original,R@doriginal)
+        residual=max(_relative(defect,*terms),retained_error,flux_error)
         if residual < 1e-11:
             break
+        # A trace row may need refinement while the original nodal equations
+        # already satisfy this stricter target. Feeding their matrix roundoff
+        # back through a nearly coincident closed basis corrupts an accurate
+        # physical derivative. Correct only unresolved equation groups; the
+        # coupled stiffness still updates the entire original state, and all
+        # groups are verified again by the caller at the unchanged guard.
+        for group in (slice(0,nc),slice(nc,nc+nz),slice(nc+nz,total)):
+            if _relative(defect[group],*(term[group] for term in terms)) < 1e-11:
+                defect[group]=0.
+        if retained_error < 1e-11:
+            retained[:]=0.
+        if flux_error < 1e-11:
+            flux[:]=0.
         forcing=-defect+(S-QT@A)@retained-QT@flux
         correction=coordinate@np.linalg.solve(mc,coordinate.T@(physical[:,None]*forcing))
         doriginal+=correction

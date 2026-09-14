@@ -2,6 +2,12 @@
 
 Written: 2026-09-15
 
+This page records the initial polynomial coupling and its measurements.
+The subsequent [analytic remainder formulation](nvf-analytic-polynomial-traces.md)
+resolves the order-8 contact refusals recorded below. Together with selective
+refinement of unresolved equations, it also resolves the recorded refined
+tiny-gap refusal.
+
 Targets:
 - `wavebit/_core/conforming/cartesian_pair_seam_galerkin.py`
 - `wavebit/_core/conforming/projected_pair_contact.py`
@@ -225,7 +231,7 @@ qualification boundary in this experimental family, in addition to the
 unresolved optical mesh dependence.
 
 
-The current numerical regression set contains 96 passing pair/periodic
+The initial coupling regression set contained 96 passing pair/periodic
 controls, including the refined quartic contact and gap-0.001 controls.
 The 56 documentation checks and the warnings-as-errors Sphinx build pass.
 These counts exclude the unresolved high-order tiny-gap qualification target;

@@ -9,6 +9,7 @@ from numbers import Integral
 import numpy as np
 from numpy.polynomial.legendre import leggauss
 from .periodic_seam_trace import PeriodicSeamTrace
+from .polynomial_pair_trace import PolynomialPairTrace
 from .cartesian_pair_galerkin import CartesianPairGalerkinGapCell
 from .cartesian_pair_polynomial_galerkin import CartesianPairPolynomialGalerkinGapCell
 from .cartesian_pair_opening import real_array
@@ -53,7 +54,8 @@ def _geometry(obj, settings):
         zero[np.sum(rows[:,indices],axis=1)==1,0]=x
     for indices,y in (([4,5,6],-height/2),([7,8,9],height/2)):
         zero[np.sum(rows[:,indices],axis=1)==1,1]=y
-    trace=PeriodicSeamTrace(obj.order[1], quadrature=max(64,2*obj.order[1]+4))
+    trace=(PolynomialPairTrace(obj.order[1], obj.degree, quadrature=max(64,2*obj.order[1]+4))
+           if obj.degree>2 else PeriodicSeamTrace(obj.order[1], quadrature=max(64,2*obj.order[1]+4)))
     tg=trace._geometry(settings['gap'],period[::-1],settings['height'],0.)
     return length,s,zero,vel,period/length,widths,height,center,trace,tg
 
@@ -163,10 +165,14 @@ def _quadrature(obj, base, settings, qorder, split=True, transform=None, normali
                 dhy=side*3*((1-2*fraction)*dfraction/delta-fraction*(1-fraction)*ddelta/delta**2)
             else:
                 hat=np.full(qorder,float(-height/2<mid<height/2));dhat=np.zeros(qorder);hy=dhat;dhy=dhat
-            B,By,Byy=trace._basis(y,tg)
-            T=hat[:,None]*B;dT=dhat[:,None]*B+hat[:,None]*By*dy[:,None]
-            Ty=hy[:,None]*B+hat[:,None]*By
-            dTy=dhy[:,None]*B+hy[:,None]*By*dy[:,None]+dhat[:,None]*By+hat[:,None]*Byy*dy[:,None]
+            if isinstance(trace, PolynomialPairTrace):
+                T,dT,Ty,dTy=trace.tapered_basis(y,dy,tg,hat,dhat,hy,dhy,side,
+                                               fraction if side else None,delta)
+            else:
+                B,By,Byy=trace._basis(y,tg)
+                T=hat[:,None]*B;dT=dhat[:,None]*B+hat[:,None]*By*dy[:,None]
+                Ty=hy[:,None]*B+hat[:,None]*By
+                dTy=dhy[:,None]*B+hy[:,None]*By*dy[:,None]+dhat[:,None]*By+hat[:,None]*Byy*dy[:,None]
             for (left,dleft),(right,dright) in zip(slabs,slabs[1:]):
                 coordinate=left[:,None]+(right-left)[:,None]*t
                 dcoordinate=dleft[:,None]+(dright-dleft)[:,None]*t
@@ -564,5 +570,5 @@ class CartesianPairSeamGalerkinGapCell:
         metadata.update(closure='real_coupled_pair_seam_galerkin', order=self.order,
                         refinement=self._base.plan.refinement, shift=self._base.plan.shift,
                         quadrature=self.quadrature, integration_quadrature=working_quadrature, degree=self._base.degree, gap=gap,
-                        trace_basis='nodal_orthogonal' if transform is not None else 'restricted_fourier')
+                        trace_basis='analytic_polynomial_remainder' if transform is not None else 'restricted_fourier')
         return value, tangent, metadata

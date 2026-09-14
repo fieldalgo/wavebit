@@ -11,6 +11,7 @@ from wavebit._core.conforming import (
     cartesian_pair, triangle_moments, material_sector,
     cartesian_pair_polynomial_galerkin, triangle_polynomials,
     projected_pair_contact, projected_pair_positive, pair_contact_energy,
+    polynomial_pair_trace,
 )
 from studies import nvf_pair_material_sector as fixture
 
@@ -40,7 +41,7 @@ def main():
                cartesian_pair_galerkin, cartesian_pair_quadratic, cartesian_pair_opening,
                cartesian_pair, triangle_moments, material_sector, fixture,
                cartesian_pair_polynomial_galerkin, triangle_polynomials,
-               projected_pair_contact, projected_pair_positive, pair_contact_energy)
+               projected_pair_contact, projected_pair_positive, pair_contact_energy, polynomial_pair_trace)
     sources = [Path(m.__file__) for m in modules]+[Path(__file__)]
     args.out.parent.mkdir(parents=True, exist_ok=True)
     failed = False

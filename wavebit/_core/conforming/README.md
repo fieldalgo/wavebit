@@ -21,6 +21,7 @@
 | `periodic_seam_trace.py` | Can continuous positive-gap potentials supply the unrestricted normal contact trace through their original material energy? |
 | `periodic_seam_galerkin.py` | Can the complete retained tensor couple those seam fields to the quadratic mesh, with finite contact and positive-gap derivatives? |
 | `cartesian_pair_seam_galerkin.py` | Can real continuous internal-gap traces share the whole pair tensor and its exact contact/material derivative? |
+| `polynomial_pair_trace.py` | Can analytic polynomial remainders retain every real trace column without subtracting nearly equal sampled fields? |
 | `projected_pair_contact.py` | Can nearly coincident high-degree closed fields retain all original contact equations when their physical difference is assembled before its energy? |
 | `projected_pair_positive.py` | Can streamed real physical gradient coordinates preserve the whole positive-gap solution and its variation? |
 | `pair_contact_energy.py` | Can the complete reconstructed contact field independently verify its energy and variation without receiving a candidate tensor? |
