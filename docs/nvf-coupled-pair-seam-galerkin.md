@@ -29,6 +29,11 @@ underresolved closed-body field.
 | Backend | Explicit NumPy finite kernel; ordinary NVF routing is unchanged |
 | Optical qualification | Separate mesh/Fourier convergence measurement, still incomplete |
 
+The separate [polynomial extension](nvf-polynomial-pair-coupling.md) adds
+degrees 3 and 4 with real invertible trace coordinates and direct physical
+contact assembly. The quadratic default and measurements below retain their
+original scope.
+
 ## One physical field space
 
 Let the normalized gap be s, with the seam at x=0, widths a and b and common

@@ -21,7 +21,7 @@ def _field_product(field, coefficients):
         count, components, coefficients.shape[1])
 
 
-def coupled_positive(obj, base, quadrature, free_energy, trace_order, *, elimination=None):
+def coupled_positive(obj, base, quadrature, free_energy, trace_order, *, elimination=None, response_solver=None, normalized_quadrature=None):
     """Solve the original weak system and verify reconstructed physical fields.
 
     Pure Fourier energy is supplied independently. Added mixed/trace energies
@@ -42,41 +42,88 @@ def coupled_positive(obj, base, quadrature, free_energy, trace_order, *, elimina
     dK = K.copy()
     EE = np.zeros((NE, NE), complex)
     dEE = EE.copy()
-    for ids, ci, zi, w, dw, mat, dmat, phase, dphase, gc, dgc, gz, dgz, le, dle, gn, dgn in quadrature():
-        moment = _contract('q,qm,qaj->amj', w, phase, le).reshape(2 * N, NE)
-        dm = (_contract('q,qm,qaj->amj', dw, phase, le) + _contract('q,qm,qaj->amj', w, dphase, le) + _contract('q,qm,qaj->amj', w, phase, dle)).reshape(2 * N, NE)
-        Q += moment
-        dQ += dm
-        R += mat * moment
-        dR += dmat * moment + mat * dm
-        for rows, g, dg in ((ci, gc, dgc), (nc + zi, gz, dgz)):
-            cross = _contract('q,qai,qaj->ij', w, g, le)
-            dcross = _contract('q,qai,qaj->ij', dw, g, le) + _contract('q,qai,qaj->ij', w, dg, le) + _contract('q,qai,qaj->ij', w, g, dle)
-            K[rows] += mat * cross
-            dK[rows] += dmat * cross + mat * dcross
-        en = _contract('q,qai,qaj->ij', w, le, le) / s
-        den = (_contract('q,qai,qaj->ij', dw, le, le) + _contract('q,qai,qaj->ij', w, dle, le) + _contract('q,qai,qaj->ij', w, le, dle)) / s - en * ds / s
-        EE += mat * en
-        dEE += dmat * en + mat * den
-    scale = np.r_[np.ones(nc), np.full(nz, s)]
-    dscale = np.r_[np.zeros(nc), np.full(nz, ds)]
-    row = K.T * scale[None] / s
-    drow = (dK.T * scale[None] + K.T * dscale[None]) / s - row * ds / s
-    KK = np.block([[k, K], [row, EE]])
-    dKK = np.block([[dk, dK], [drow, dEE]])
-    QQ = np.hstack([q, Q])
-    dQQ = np.hstack([dq, dQ])
-    RR = np.hstack([r, R])
-    dRR = np.hstack([dr, dR])
-    QT = np.vstack([qt, Q.conj().T / s])
-    dQT = np.vstack([dqt, dQ.conj().T / s - Q.conj().T * ds / s ** 2])
-    SS = np.vstack([source, R[info['reverse']].T / s])
-    dSS = np.vstack([dsource, dR[info['reverse']].T / s - R[info['reverse']].T * ds / s ** 2])
+    if normalized_quadrature is not None:
+        # Divide the thin measure by gap before differentiating. Applying the
+        # quotient rule to already integrated O(gap) blocks loses the finite
+        # normalized derivative through cancellation at subpixel gaps.
+        rowC=np.zeros((NE,nc),complex);drowC=np.zeros_like(rowC)
+        Qbar=np.zeros_like(Q);dQbar=np.zeros_like(Q)
+        Rbar=np.zeros_like(Q);dRbar=np.zeros_like(Q)
+        for row_data in normalized_quadrature():
+            (ids,ci,zi,w,dw,mat,dmat,phase,dphase,gc,dgc,gz,dgz,
+             le,dle,gn,dgn,wb,dwb,sgz,dsgz,test,dtest)=row_data
+            moment=_contract('q,qm,qaj->amj',wb,phase,test).reshape(2*N,NE)
+            dm=(_contract('q,qm,qaj->amj',dwb,phase,test)
+                +_contract('q,qm,qaj->amj',wb,dphase,test)
+                +_contract('q,qm,qaj->amj',wb,phase,dtest)).reshape(2*N,NE)
+            Qbar+=moment;dQbar+=dm
+            Rbar+=mat*moment;dRbar+=dmat*moment+mat*dm
+            for indices,g,dg in ((ci,gc,dgc),(nc+zi,sgz,dsgz)):
+                cross=_contract('q,qai,qaj->ij',wb,g,test)
+                dcross=(_contract('q,qai,qaj->ij',dwb,g,test)
+                        +_contract('q,qai,qaj->ij',wb,dg,test)
+                        +_contract('q,qai,qaj->ij',wb,g,dtest))
+                if indices is ci:
+                    rowC[:,ci]+=mat*cross.T
+                    drowC[:,ci]+=dmat*cross.T+mat*dcross.T
+                else:
+                    K[indices]+=mat*cross
+                    dK[indices]+=dmat*cross+mat*dcross
+            en=_contract('q,qai,qaj->ij',wb,test,le)
+            den=(_contract('q,qai,qaj->ij',dwb,test,le)
+                 +_contract('q,qai,qaj->ij',wb,dtest,le)
+                 +_contract('q,qai,qaj->ij',wb,test,dle))
+            EE+=mat*en;dEE+=dmat*en+mat*den
+        K[:nc]=s*rowC.T;dK[:nc]=ds*rowC.T+s*drowC.T
+        Q=s*Qbar;dQ=ds*Qbar+s*dQbar
+        R=s*Rbar;dR=ds*Rbar+s*dRbar
+        row=np.hstack([rowC,K[nc:].T]);drow=np.hstack([drowC,dK[nc:].T])
+        KK=np.block([[k,K],[row,EE]]);dKK=np.block([[dk,dK],[drow,dEE]])
+        QQ=np.hstack([q,Q]);dQQ=np.hstack([dq,dQ])
+        RR=np.hstack([r,R]);dRR=np.hstack([dr,dR])
+        QT=np.vstack([qt,Qbar.conj().T]);dQT=np.vstack([dqt,dQbar.conj().T])
+        SS=np.vstack([source,Rbar[info['reverse']].T])
+        dSS=np.vstack([dsource,dRbar[info['reverse']].T])
+    else:
+        for ids, ci, zi, w, dw, mat, dmat, phase, dphase, gc, dgc, gz, dgz, le, dle, gn, dgn in quadrature():
+            moment = _contract('q,qm,qaj->amj', w, phase, le).reshape(2 * N, NE)
+            dm = (_contract('q,qm,qaj->amj', dw, phase, le) + _contract('q,qm,qaj->amj', w, dphase, le) + _contract('q,qm,qaj->amj', w, phase, dle)).reshape(2 * N, NE)
+            Q += moment
+            dQ += dm
+            R += mat * moment
+            dR += dmat * moment + mat * dm
+            for rows, g, dg in ((ci, gc, dgc), (nc + zi, gz, dgz)):
+                cross = _contract('q,qai,qaj->ij', w, g, le)
+                dcross = _contract('q,qai,qaj->ij', dw, g, le) + _contract('q,qai,qaj->ij', w, dg, le) + _contract('q,qai,qaj->ij', w, g, dle)
+                K[rows] += mat * cross
+                dK[rows] += dmat * cross + mat * dcross
+            en = _contract('q,qai,qaj->ij', w, le, le) / s
+            den = (_contract('q,qai,qaj->ij', dw, le, le) + _contract('q,qai,qaj->ij', w, dle, le) + _contract('q,qai,qaj->ij', w, le, dle)) / s - en * ds / s
+            EE += mat * en
+            dEE += dmat * en + mat * den
+        scale = np.r_[np.ones(nc), np.full(nz, s)]
+        dscale = np.r_[np.zeros(nc), np.full(nz, ds)]
+        row = K.T * scale[None] / s
+        drow = (dK.T * scale[None] + K.T * dscale[None]) / s - row * ds / s
+        KK = np.block([[k, K], [row, EE]])
+        dKK = np.block([[dk, dK], [drow, dEE]])
+        QQ = np.hstack([q, Q])
+        dQQ = np.hstack([dq, dQ])
+        RR = np.hstack([r, R])
+        dRR = np.hstack([dr, dR])
+        QT = np.vstack([qt, Q.conj().T / s])
+        dQT = np.vstack([dqt, dQ.conj().T / s - Q.conj().T * ds / s ** 2])
+        SS = np.vstack([source, R[info['reverse']].T / s])
+        dSS = np.vstack([dsource, dR[info['reverse']].T / s - R[info['reverse']].T * ds / s ** 2])
     A = np.kron(np.eye(2), e)
     DA = np.kron(np.eye(2), de)
     if elimination is None:
-        elimination = 'retained' if len(KK) > 4*N else 'potential'
-    U, dU, x, dx, H, DH, cond = _response(KK, dKK, QQ, dQQ, RR, dRR, QT, dQT, SS, dSS, A, DA, elimination)
+        elimination = obj._elimination(len(KK), 2*N)
+    if response_solver is None:
+        U, dU, x, dx, H, DH, cond = _response(KK, dKK, QQ, dQQ, RR, dRR, QT, dQT, SS, dSS, A, DA, elimination)
+    else:
+        U, dU, x, dx, H, DH, cond = response_solver(QQ, dQQ, (KK,dKK,RR,dRR,QT,dQT,SS,dSS,A,DA))
+        elimination = 'physical_projected'
     count = len(obj.data['pmap'])
     res = np.zeros((count, 2 * N), complex)
     dres = res.copy()
@@ -87,6 +134,8 @@ def coupled_positive(obj, base, quadrature, free_energy, trace_order, *, elimina
     reverse = info['reverse']
     xr, dxr = x[:, reverse].T[:, reverse], dx_geometry[:, reverse].T[:, reverse]
     energy = x.conj().T @ exact_free @ x
+    if response_solver is not None:
+        energy=np.zeros_like(energy)
     denergy = (dxr @ exact_free @ x + xr @ exact_free_derivative @ x
                + xr @ exact_free @ dx_geometry)
     for ids, ci, zi, w, dw, mat, dmat, phase, dphase, gc, dgc, gz, dgz, le, dle, gn, dgn in quadrature():
@@ -108,8 +157,13 @@ def coupled_positive(obj, base, quadrature, free_energy, trace_order, *, elimina
         np.add.at(dres_scale, ids, _contract('q,qai,qaj->ij', abs(dw), abs(gn), abs(T)) + _contract('q,qai,qaj->ij', abs(w), abs(dgn), abs(T)) + _contract('q,qai,qaj->ij', abs(w), abs(gn), abs(DT)))
         free = _field_product(F, x)
         correction = _field_product(gc, U[ci]) + s * gz @ U[nc + zi] + _field_product(le, U[nc + nz:])
-        for left, right in ((free, correction), (correction, free), (correction, correction)):
-            energy += mat * _contract('q,qai,qaj->ij', w, left.conj(), right)
+        if response_solver is not None:
+            # Nearly coincident polynomial and retained fields have large
+            # cancelling coefficients. Integrate their complete physical E.
+            energy += mat * _contract('q,qai,qaj->ij', w, E.conj(), E)
+        else:
+            for left, right in ((free, correction), (correction, free), (correction, correction)):
+                energy += mat * _contract('q,qai,qaj->ij', w, left.conj(), right)
         reverse = info['reverse']
         added = _field_product(le, U[nc + nz:])
         dadded = _field_product(dle, U[nc + nz:])
@@ -142,12 +196,17 @@ def coupled_positive(obj, base, quadrature, free_energy, trace_order, *, elimina
     meta['weak_derivative_residual'] = _relative(dKK @ U + KK @ dU + dSS @ x + SS @ dx - dQT @ H - QT @ DH, dKK @ U, KK @ dU, dSS @ x, SS @ dx, dQT @ H, QT @ DH)
     meta['direct_fourier_residual'] = _relative(A - exact_free, exact_free)
     meta['direct_fourier_derivative_residual'] = _relative(DA - exact_free_derivative, exact_free_derivative)
+    meta['retained_residual'] = _relative(x+QQ@U-np.eye(2*N), np.eye(2*N))
+    meta['flux_residual'] = _relative(A@x+RR@U-H, A@x, RR@U, H)
+    meta['retained_derivative_residual'] = _relative(dx+dQQ@U+QQ@dU, dx, dQQ@U, QQ@dU)
+    meta['flux_derivative_residual'] = _relative(DA@x+A@dx+dRR@U+RR@dU-DH,
+                                               DA@x, A@dx, dRR@U, RR@dU, DH)
     meta['elimination'] = elimination
     inv = _solve(e, np.eye(N))
     return (_slots(H, inv), _slots(DH, -inv @ de @ inv), meta)
 
 
-def coupled_contact(obj, base, C, Z, Qbar, Rbar, EE, *, elimination=None):
+def coupled_contact(obj, base, C, Z, Qbar, Rbar, EE, *, elimination=None, energy_verifier=None, response_solver=None):
     """Exact physical limit and derivative, without differentiating singular rows.
 
     C is the regular/trace cross limit divided by gap, Z is the disappearing
@@ -164,12 +223,16 @@ def coupled_contact(obj, base, C, Z, Qbar, Rbar, EE, *, elimination=None):
     SS = np.vstack([source, Rbar[info['reverse']].T])
     A = np.kron(np.eye(2), e)
     DA = np.kron(np.eye(2), de)
-    BB = RR - A @ QQ
-    CC = SS - QT @ A
-    DD = KK - SS @ QQ - QT @ BB
+    if response_solver is None:
+        BB = RR - A @ QQ
+        CC = SS - QT @ A
+        DD = KK - SS @ QQ - QT @ BB
     if elimination is None:
-        elimination = 'retained' if nc > 4*N else 'potential'
-    if elimination == 'retained':
+        elimination = obj._elimination(nc, 2*N)
+    if response_solver is not None:
+        U, dUC, field, dfield, H, DH, condition = response_solver()
+        elimination = 'physical_projected'
+    elif elimination == 'retained':
         # The contact value lives entirely in the closed C space. Eliminate
         # its original physical K before applying retained constraints; a
         # large projected K-SQ-Q.HB unnecessarily magnifies roundoff on fine
@@ -183,21 +246,24 @@ def coupled_contact(obj, base, C, Z, Qbar, Rbar, EE, *, elimination=None):
         uc = v@flux-w@field
         ud = _solve(DD[nc:, nc:], -CC[nc:]-DD[nc:, :nc]@uc)
         U = np.vstack([uc, ud])
+        H = flux
     elif elimination == 'potential':
         U = _solve(DD, -CC)
+        H = A + BB@U
+        field = np.eye(2*N)-QQ@U
     else:
         raise ValueError('unknown contact Galerkin elimination')
-    H = A + BB @ U
     dQQ = np.hstack([dq, ds * Qbar])
     dRR = np.hstack([dr, ds * Rbar])
-    dBB = dRR - DA @ QQ - A @ dQQ
     dKK = np.hstack([dk[:nc], ds * C])
-    dDD = dKK - dsource[:nc] @ QQ - source[:nc] @ dQQ - dqt[:nc] @ BB - qt[:nc] @ dBB
-    dCC = dsource[:nc] - dqt[:nc] @ A - qt[:nc] @ DA
+    if response_solver is None:
+        dBB = dRR - DA @ QQ - A @ dQQ
+        dDD = dKK - dsource[:nc] @ QQ - source[:nc] @ dQQ - dqt[:nc] @ BB - qt[:nc] @ dBB
+        dCC = dsource[:nc] - dqt[:nc] @ A - qt[:nc] @ DA
+        condition = np.linalg.cond(DD)
     if elimination == 'retained':
         # Differentiate the same closed physical equations with the full
         # gap/contact forcing, including every disappearing potential.
-        field = np.eye(2*N)-QQ@U
         weak_rhs = -dKK@U-dsource[:nc]@field+dqt[:nc]@H
         particular = _solve(kc, weak_rhs)
         field_rhs = -dQQ@U
@@ -205,10 +271,11 @@ def coupled_contact(obj, base, C, Z, Qbar, Rbar, EE, *, elimination=None):
         dfield, DH = np.split(_solve(retained,
             np.vstack([field_rhs-qc@particular, flux_rhs+rc@particular])), 2, axis=0)
         dUC = v@DH-w@dfield+particular
-    else:
+    elif elimination == 'potential':
         dUC = _solve(DD[:nc, :nc], -dCC-dDD@U)
         DH = DA+dBB@U+BB[:, :nc]@dUC
-    x = np.eye(2 * N) - QQ @ U
+        dfield = -dQQ@U-QQ[:, :nc]@dUC
+    x = field
     rr = info['reverse']
     scale = np.r_[np.ones(nc), np.zeros(nz + NE)]
     dscale = np.r_[np.zeros(nc), np.full(nz + NE, ds)]
@@ -223,9 +290,19 @@ def coupled_contact(obj, base, C, Z, Qbar, Rbar, EE, *, elimination=None):
     ur = U[:, rr].T
     energy = xr @ A @ x + xr @ RR @ U + ur @ source_physical @ x + ur @ physical @ U
     denergy = dxr @ A @ x + xr @ DA @ x + xr @ A @ dx_geometry + dxr @ RR @ U + xr @ dRR @ U + ur @ dsource_physical @ x + ur @ source_physical @ dx_geometry + ur @ dphysical @ U
+    if energy_verifier is not None:
+        energy,denergy=energy_verifier(x,dx_geometry,U)
     weak = _relative(KK @ U + SS @ x - QT @ H, KK @ U, SS @ x, QT @ H)
-    cweak = _relative(dDD @ U + DD[:nc, :nc] @ dUC + dCC, dDD @ U, DD[:nc, :nc] @ dUC, dCC)
-    meta = dict(condition=np.linalg.cond(DD), reciprocity=_relative(H - H[rr][:, rr].T, H), derivative_reciprocity=_relative(DH - DH[rr][:, rr].T, DH), weak_residual=weak, weak_derivative_residual=None, contact_derivative_residual=cweak, energy_residual=_relative(energy - H, H), energy_derivative_residual=_relative(denergy - DH, DH), minimum_rotated_storage=minimum_rotated_storage(H, obj._phase), minimum_dissipation=np.linalg.eigvalsh((H - H.conj().T) / 2j)[0])
+    terms = (dKK@U, KK[:nc, :nc]@dUC, dsource[:nc]@x,
+             source[:nc]@dfield, -dqt[:nc]@H, -qt[:nc]@DH)
+    cweak = _relative(sum(terms), *terms)
+    meta = dict(condition=condition, reciprocity=_relative(H - H[rr][:, rr].T, H), derivative_reciprocity=_relative(DH - DH[rr][:, rr].T, DH), weak_residual=weak, weak_derivative_residual=None, contact_derivative_residual=cweak, energy_residual=_relative(energy - H, H), energy_derivative_residual=_relative(denergy - DH, DH), minimum_rotated_storage=minimum_rotated_storage(H, obj._phase), minimum_dissipation=np.linalg.eigvalsh((H - H.conj().T) / 2j)[0])
     meta['closed_elimination'] = elimination
+    meta['retained_residual'] = _relative(x+QQ@U-np.eye(2*N), np.eye(2*N))
+    meta['flux_residual'] = _relative(A@x+RR@U-H, A@x, RR@U, H)
+    meta['retained_derivative_residual'] = _relative(dfield+dQQ@U+QQ[:, :nc]@dUC,
+                                                   dfield, dQQ@U, QQ[:, :nc]@dUC)
+    meta['flux_derivative_residual'] = _relative(DA@x+A@dfield+dRR@U+RR[:, :nc]@dUC-DH,
+                                               DA@x, A@dfield, dRR@U, RR[:, :nc]@dUC, DH)
     inv = _solve(e, np.eye(N))
     return (_slots(H, inv), _slots(DH, -inv @ de @ inv), meta)

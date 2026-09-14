@@ -9,13 +9,14 @@ from wavebit._core.conforming.cartesian_pair_opening import CartesianPairOpening
 from test_nvf_cartesian_pair_opening import _oracle_geometry
 from test_nvf_pair_quadratic import nodal_gradients
 from test_nvf_pair_galerkin import tensor
+from test_nvf_polynomial_galerkin import cardinal_gradient
 
 GEOMETRY = dict(basis=np.diag([700., 560.]), widths=(170., 230.), height=280., offset=(21., -14.))
 
 
-def cell(order=(1, 2), refinement=0, quadrature=24):
+def cell(order=(1, 2), refinement=0, quadrature=24, degree=2):
     return CartesianPairSeamGalerkinGapCell(CartesianPairOpeningPlan(0, refinement), order,
-                                           quadrature=quadrature, coercivity_angle=1.53)
+                                           degree=degree, quadrature=quadrature, coercivity_angle=1.53)
 
 
 def clip(polygon, vertex, axis, bound, sign):
@@ -32,14 +33,14 @@ def clip(polygon, vertex, axis, bound, sign):
 
 
 @lru_cache(None)
-def reference(gap, epsilon, quadrature, background=1.):
+def reference(gap, epsilon, quadrature, background=1., degree=2):
     """Raw nodal variables, raw sine/cosine traces and clipped physical triangles.
 
-    The reference uses a six-node Vandermonde, an independent polygon partition,
-    and one unscaled constrained solve. No production trace basis, gradient,
-    sweep, contact formula or coupled matrix is used.
+    The reference uses cardinal nodal functions, an independent polygon
+    partition, and one unscaled constrained solve. No production trace basis,
+    gradient, sweep, contact formula or coupled matrix is used.
     """
-    obj = cell()._base
+    obj = cell(degree=degree)._base
     length = np.sqrt(np.linalg.det(GEOMETRY['basis']))
     settings = {k: np.asarray(v)/length for k, v in GEOMETRY.items()}
     graph = _oracle_geometry(obj.data, settings)
@@ -65,6 +66,7 @@ def reference(gap, epsilon, quadrature, background=1.):
     k = np.zeros((size, size), complex)
     q, r = np.zeros((2*count, size), complex), np.zeros((2*count, size), complex)
     conv = np.zeros((count, count), complex)
+    samples = []
     for number, triangle in enumerate(graph['triangles']):
         vertex = points[triangle[:3]]
         jac = np.column_stack([vertex[1]-vertex[0], vertex[2]-vertex[0]])
@@ -86,7 +88,8 @@ def reference(gap, epsilon, quadrature, background=1.):
                     x, y = xy.T
                     weights = qw*area*determinant
                     gradient = np.zeros((len(weights), 2, size))
-                    raw_gradient = nodal_gradients(bary)@np.linalg.inv(jac)
+                    reference_gradient = nodal_gradients(bary) if degree == 2 else cardinal_gradient(bary, degree)
+                    raw_gradient = reference_gradient@np.linalg.inv(jac)
                     for local_id, index in enumerate(graph['periodic'][triangle]):
                         if index:
                             gradient[:, :, index-1] += raw_gradient[:, local_id]
@@ -115,34 +118,65 @@ def reference(gap, epsilon, quadrature, background=1.):
                     moment = np.einsum('q,qm,qai->ami', weights, phase.conj(), gradient, optimize=True).reshape(2*count, size)
                     q += moment; r += material*moment
                     conv += material*(phase.conj().T@(weights[:, None]*phase))
+                    if degree > 2:
+                        samples.append((weights, gradient, phase, material))
     reverse = np.r_[np.arange(count-1, -1, -1), np.arange(2*count-1, count-1, -1)]
     direct = np.kron(np.eye(2), conv)
     source = r[reverse].T
-    weak = k-source@q-q.conj().T@(r-direct@q)
-    return direct-(r-direct@q)@np.linalg.solve(weak, source-q.conj().T@direct)
+    if degree > 2:
+        # Orthogonalize the actual sampled high-mode fields. A matrix formed
+        # by subtracting nearly coincident integrated energies loses digits
+        # before a higher-degree reference can check a physical variation.
+        # QR retains every column; it applies no numerical rank cutoff.
+        fields, retained, materials = [], [], []
+        for weights, gradient, phase, material in samples:
+            phi = np.zeros((len(weights), 2, 2*count), complex)
+            phi[:, 0, :count], phi[:, 1, count:] = phase, phase
+            root = np.sqrt(weights)[:, None, None]
+            fields.append(((gradient-phi@q)*root).reshape(-1, size))
+            retained.append((phi*root).reshape(-1, 2*count))
+            materials.append(np.full(2*len(weights), material))
+        orthogonal, _ = np.linalg.qr(np.concatenate(fields), mode='reduced')
+        phi, epsilon_samples = np.concatenate(retained), np.concatenate(materials)
+        stiffness = orthogonal.conj().T@(epsilon_samples[:, None]*orthogonal)
+        load = orthogonal.conj().T@(epsilon_samples[:, None]*phi)
+        flux = phi.conj().T@(epsilon_samples[:, None]*orthogonal)
+        return direct-flux@np.linalg.solve(stiffness, load)
+    # Keep all original unknowns. The projected high-degree matrix subtracts
+    # almost coincident gradient spaces before the reference solve and loses
+    # precision needed by a physical finite variation.
+    identity = np.eye(2*count)
+    matrix = np.block([[k, source, -q.conj().T],
+                       [q, identity, np.zeros_like(identity)],
+                       [-r, -direct, identity]])
+    rhs = np.vstack([np.zeros((size, 2*count)), identity, np.zeros_like(identity)])
+    return np.linalg.solve(matrix, rhs)[-2*count:]
 
 
 @pytest.mark.parametrize('epsilon', ((4., 9.), (12.25, -10+1j)))
-def test_full_tensor_matches_independent_original_nodal_and_trace_equations(epsilon):
-    refs = [reference(7., epsilon, q) for q in (16, 24)]
+@pytest.mark.parametrize('degree', (2, 3, 4))
+def test_full_tensor_matches_independent_original_nodal_and_trace_equations(epsilon, degree):
+    refs = [reference(7., epsilon, q, degree=degree) for q in (16, 24)]
     np.testing.assert_allclose(refs[0], refs[1], atol=3e-10, rtol=0)
-    value, _, _ = cell().closure(gap=7., epsilon=epsilon, **GEOMETRY)
+    value, _, _ = cell(degree=degree).closure(gap=7., epsilon=epsilon, **GEOMETRY)
     np.testing.assert_allclose(tensor(value), refs[1], atol=3e-10, rtol=0)
 
 
-def test_gap_jvp_matches_variations_of_the_independent_clipped_reference():
+@pytest.mark.parametrize('degree', (2, 3, 4))
+def test_gap_jvp_matches_variations_of_the_independent_clipped_reference(degree):
     epsilon = (4., 9.)
-    _, direction, _ = cell().closure(gap=7., epsilon=epsilon, **GEOMETRY)
+    _, direction, _ = cell(degree=degree).closure(gap=7., epsilon=epsilon, **GEOMETRY)
     for h in (.04, .02):
-        samples = [reference(7.+i*h, epsilon, 24) for i in (-2, -1, 1, 2)]
+        samples = [reference(7.+i*h, epsilon, 24, degree=degree) for i in (-2, -1, 1, 2)]
         expected = (samples[0]-8*samples[1]+8*samples[2]-samples[3])/(12*h)
         np.testing.assert_allclose(560*tensor(direction), 560*expected, atol=3e-9, rtol=0)
 
 
 @pytest.mark.parametrize('epsilon', ((4., 9.), (12.25, -10+1j)))
 @pytest.mark.parametrize('refinement', (0, 1))
-def test_exact_contact_preserves_the_closed_mesh_value_and_physical_guards(epsilon, refinement):
-    obj = cell(refinement=refinement)
+@pytest.mark.parametrize('degree', (2, 3, 4))
+def test_exact_contact_preserves_the_closed_mesh_value_and_physical_guards(epsilon, refinement, degree):
+    obj = cell(refinement=refinement, degree=degree)
     value, tangent, metadata = obj.closure(gap=0., epsilon=epsilon, **GEOMETRY)
     base, _, _ = obj._base.closure(gap=0., epsilon=epsilon, **GEOMETRY)
     np.testing.assert_allclose(value, base, atol=3e-10, rtol=0)
@@ -153,8 +187,9 @@ def test_exact_contact_preserves_the_closed_mesh_value_and_physical_guards(epsil
 
 
 @pytest.mark.parametrize('epsilon', ((4., 9.), (12.25, -10+1j)))
-def test_positive_gap_jvp_approaches_the_exact_contact_with_sqrt_gap_remainder(epsilon):
-    obj = cell()
+@pytest.mark.parametrize('degree', (2, 3, 4))
+def test_positive_gap_jvp_approaches_the_exact_contact_with_sqrt_gap_remainder(epsilon, degree):
+    obj = cell(degree=degree)
     closed, derivative, _ = obj.closure(gap=0., epsilon=epsilon, **GEOMETRY)
     errors = []
     for gap in (.001, 1e-5, 1e-9):
@@ -167,17 +202,19 @@ def test_positive_gap_jvp_approaches_the_exact_contact_with_sqrt_gap_remainder(e
 
 
 @pytest.mark.parametrize('gap', (0., 7., 1e-9))
-def test_uniform_material_has_no_auxiliary_correction(gap):
+@pytest.mark.parametrize('degree', (2, 4))
+def test_uniform_material_has_no_auxiliary_correction(gap, degree):
     epsilon = 3+.4j
-    value, tangent, _ = cell().closure(gap=gap, epsilon=(epsilon, epsilon), background=epsilon, **GEOMETRY)
+    value, tangent, _ = cell(degree=degree).closure(gap=gap, epsilon=(epsilon, epsilon), background=epsilon, **GEOMETRY)
     count = len(value[0][0])
     np.testing.assert_allclose(tensor(value), epsilon*np.eye(2*count), atol=3e-10, rtol=0)
     np.testing.assert_allclose(tangent, 0., atol=3e-10, rtol=0)
 
 
 @pytest.mark.parametrize('gap', (0., 7.))
-def test_complex_material_jvp_is_holomorphic_and_additive(gap):
-    obj = cell(order=(1, 1))
+@pytest.mark.parametrize('degree', (2, 4))
+def test_complex_material_jvp_is_holomorphic_and_additive(gap, degree):
+    obj = cell(order=(1, 1), degree=degree)
     epsilon = np.array([12.25+.2j, -10+1j]); de = np.array([.3+.2j, -.4+.1j]); db = .2+.3j
     settings = dict(GEOMETRY, gap=gap, epsilon=epsilon, background=1+.1j)
     _, real, _ = obj.closure(**settings, gap_tangent=0., epsilon_tangent=de, background_tangent=db)
@@ -186,15 +223,20 @@ def test_complex_material_jvp_is_holomorphic_and_additive(gap):
     _, dg, _ = obj.closure(**settings)
     _, combined, _ = obj.closure(**settings, gap_tangent=.7, epsilon_tangent=de, background_tangent=db)
     np.testing.assert_allclose(combined, .7*np.asarray(dg)+real, atol=3e-9, rtol=0)
-    for h in (.002, .001):
-        values = [obj.closure(**dict(settings, epsilon=epsilon+i*h*de, background=1+.1j+i*h*db), gap_tangent=0.)[0] for i in (-2,-1,1,2)]
-        reference_jvp = (np.asarray(values[0])-8*np.asarray(values[1])+8*np.asarray(values[2])-np.asarray(values[3]))/(12*h)
+    # A sixth-order physical stencil permits larger steps for the finer
+    # field space, without amplifying solve roundoff or relaxing tolerance.
+    steps, offsets = ((.01, .005), (-3,-2,-1,1,2,3)) if degree > 2 else ((.002,.001), (-2,-1,1,2))
+    coefficients = np.array([-1,9,-45,45,-9,1])/60 if degree > 2 else np.array([1,-8,8,-1])/12
+    for h in steps:
+        values = np.array([obj.closure(**dict(settings, epsilon=epsilon+i*h*de, background=1+.1j+i*h*db), gap_tangent=0.)[0] for i in offsets])
+        reference_jvp = np.einsum('i,i...->...', coefficients, values)/h
         np.testing.assert_allclose(real, reference_jvp, atol=3e-9, rtol=0)
 
 
 @pytest.mark.parametrize('gap', (0., 7.))
-def test_units_translation_and_quadrature_preserve_the_tensor(gap):
-    obj = cell(order=(1, 1))
+@pytest.mark.parametrize('degree', (2, 4))
+def test_units_translation_and_quadrature_preserve_the_tensor(gap, degree):
+    obj = cell(order=(1, 1), degree=degree)
     settings = dict(GEOMETRY, gap=gap, epsilon=(12.25, -10+1j))
     value, tangent, _ = obj.closure(**settings)
     scale = .001
@@ -202,7 +244,7 @@ def test_units_translation_and_quadrature_preserve_the_tensor(gap):
     other, change, _ = obj.closure(**scaled, gap=scale*gap, epsilon=settings['epsilon'])
     np.testing.assert_allclose(other, value, atol=3e-10, rtol=0)
     np.testing.assert_allclose(scale*np.asarray(change), tangent, atol=3e-9, rtol=0)
-    other, change, _ = cell(order=(1, 1), quadrature=32).closure(**settings)
+    other, change, _ = cell(order=(1, 1), quadrature=32, degree=degree).closure(**settings)
     np.testing.assert_allclose(other, value, atol=3e-10, rtol=0)
     np.testing.assert_allclose(change, tangent, atol=3e-9, rtol=0)
     delta = np.array([31., -17.])
@@ -220,6 +262,22 @@ def test_units_translation_and_quadrature_preserve_the_tensor(gap):
 def test_invalid_or_unqualified_inputs_are_refused(update):
     with pytest.raises(ValueError):
         cell().closure(**(dict(GEOMETRY, gap=7., epsilon=(12.25, -10+1j)) | update))
+
+
+@pytest.mark.parametrize('degree,refinement', ((1,0),(5,0),(True,0),(3,3)))
+def test_invalid_coupled_polynomial_spaces_are_refused(degree,refinement):
+    with pytest.raises(ValueError):
+        cell(degree=degree,refinement=refinement)
+
+
+def test_trace_coordinates_do_not_inherit_the_physical_material_sector():
+    obj=CartesianPairSeamGalerkinGapCell(CartesianPairOpeningPlan(0),(0,0),degree=4,
+                                       coercivity_angle=2.4)
+    epsilon=-3+.5j
+    for gap in (0.,7.):
+        value,tangent,_=obj.closure(gap=gap,epsilon=(epsilon,epsilon),background=epsilon,**GEOMETRY)
+        np.testing.assert_allclose(tensor(value),epsilon*np.eye(2),atol=3e-10,rtol=0)
+        np.testing.assert_allclose(tangent,0.,atol=3e-10,rtol=0)
 
 
 @pytest.mark.parametrize('order', ((0, 2), (2, 0)))
@@ -309,3 +367,41 @@ def test_refined_sweep_preserves_each_rational_triangle_area_and_variation(gap):
         area = area0+gap*change
         np.testing.assert_allclose(areas[i], area, atol=0., rtol=3e-12)
         np.testing.assert_allclose(changes[i], change, atol=3e-14, rtol=0)
+
+
+@pytest.mark.parametrize('quadrature', (32, 40))
+def test_quartic_refined_order_four_contact_keeps_all_original_guards(quadrature):
+    geometry = dict(basis=np.diag([700., 700.]), widths=(300., 300.), height=300.)
+    obj = CartesianPairSeamGalerkinGapCell(CartesianPairOpeningPlan(0, 1), 4,
+        degree=4, quadrature=quadrature, coercivity_angle=1.53)
+    value, tangent, metadata = obj.closure(gap=0., epsilon=(12.25, -10+1j), **geometry)
+    assert metadata['closed_elimination'] == 'physical_projected'
+    assert max(v for k, v in metadata.items() if k.endswith('residual') and v is not None) < 1e-10
+    assert metadata['derivative_reciprocity'] < 1e-9
+    assert np.isfinite(value).all() and np.isfinite(tangent).all()
+
+
+@pytest.mark.parametrize('gap', (0., 7.))
+def test_projected_verification_rejects_an_inconsistent_full_state(monkeypatch, gap):
+    from wavebit._core.conforming import cartesian_pair_seam_galerkin as module
+    name = 'projected_contact_response' if gap == 0 else 'projected_positive_response'
+    original = getattr(module, name)
+    def inconsistent(*args):
+        state = list(original(*args))
+        state[5] = state[5]+1e-3*np.eye(len(state[5]))
+        return tuple(state)
+    monkeypatch.setattr(module, name, inconsistent)
+    with pytest.raises(ValueError, match='original/energy/physical guards'):
+        cell(order=(1, 1), degree=4).closure(gap=gap, epsilon=(12.25, -10+1j), **GEOMETRY)
+
+
+def test_quartic_refined_order_four_positive_gap_keeps_all_original_guards():
+    gap = .001
+    geometry = dict(basis=np.diag([700., 700.]), widths=(300., 300.), height=300.)
+    obj = CartesianPairSeamGalerkinGapCell(CartesianPairOpeningPlan(0, 1), 4,
+        degree=4, quadrature=32, coercivity_angle=1.53)
+    value, tangent, metadata = obj.closure(gap=gap, epsilon=(12.25, -10+1j), **geometry)
+    assert metadata['elimination'] == 'physical_projected'
+    assert max(v for k, v in metadata.items() if k.endswith('residual')) < 1e-10
+    assert metadata['derivative_reciprocity'] < 1e-9
+    assert np.isfinite(value).all() and np.isfinite(tangent).all()
