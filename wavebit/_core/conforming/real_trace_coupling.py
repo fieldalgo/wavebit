@@ -137,7 +137,7 @@ def coupled_positive(obj, base, quadrature, free_energy, trace_order):
     return (_slots(H, inv), _slots(DH, -inv @ de @ inv), meta)
 
 
-def coupled_contact(obj, base, C, Z, Qbar, Rbar, EE):
+def coupled_contact(obj, base, C, Z, Qbar, Rbar, EE, *, elimination=None):
     """Exact physical limit and derivative, without differentiating singular rows.
 
     C is the regular/trace cross limit divided by gap, Z is the disappearing
@@ -157,7 +157,26 @@ def coupled_contact(obj, base, C, Z, Qbar, Rbar, EE):
     BB = RR - A @ QQ
     CC = SS - QT @ A
     DD = KK - SS @ QQ - QT @ BB
-    U = _solve(DD, -CC)
+    if elimination is None:
+        elimination = 'retained' if nc > 4*N else 'potential'
+    if elimination == 'retained':
+        # The contact value lives entirely in the closed C space. Eliminate
+        # its original physical K before applying retained constraints; a
+        # large projected K-SQ-Q.HB unnecessarily magnifies roundoff on fine
+        # meshes. Both eliminations solve exactly the same weak equations.
+        kc, qc, rc = KK[:nc, :nc], QQ[:, :nc], RR[:, :nc]
+        v, w = np.split(_solve(kc, np.hstack([QT[:nc], SS[:nc]])), 2, axis=1)
+        identity = np.eye(2*N)
+        retained = np.block([[identity-qc@w, qc@v],
+                             [-A+rc@w, identity-rc@v]])
+        field, flux = np.split(_solve(retained, np.vstack([identity, np.zeros_like(identity)])), 2, axis=0)
+        uc = v@flux-w@field
+        ud = _solve(DD[nc:, nc:], -CC[nc:]-DD[nc:, :nc]@uc)
+        U = np.vstack([uc, ud])
+    elif elimination == 'potential':
+        U = _solve(DD, -CC)
+    else:
+        raise ValueError('unknown contact Galerkin elimination')
     H = A + BB @ U
     dQQ = np.hstack([dq, ds * Qbar])
     dRR = np.hstack([dr, ds * Rbar])
@@ -165,8 +184,20 @@ def coupled_contact(obj, base, C, Z, Qbar, Rbar, EE):
     dKK = np.hstack([dk[:nc], ds * C])
     dDD = dKK - dsource[:nc] @ QQ - source[:nc] @ dQQ - dqt[:nc] @ BB - qt[:nc] @ dBB
     dCC = dsource[:nc] - dqt[:nc] @ A - qt[:nc] @ DA
-    dUC = _solve(DD[:nc, :nc], -dCC - dDD @ U)
-    DH = DA + dBB @ U + BB[:, :nc] @ dUC
+    if elimination == 'retained':
+        # Differentiate the same closed physical equations with the full
+        # gap/contact forcing, including every disappearing potential.
+        field = np.eye(2*N)-QQ@U
+        weak_rhs = -dKK@U-dsource[:nc]@field+dqt[:nc]@H
+        particular = _solve(kc, weak_rhs)
+        field_rhs = -dQQ@U
+        flux_rhs = DA@field+dRR@U
+        dfield, DH = np.split(_solve(retained,
+            np.vstack([field_rhs-qc@particular, flux_rhs+rc@particular])), 2, axis=0)
+        dUC = v@DH-w@dfield+particular
+    else:
+        dUC = _solve(DD[:nc, :nc], -dCC-dDD@U)
+        DH = DA+dBB@U+BB[:, :nc]@dUC
     x = np.eye(2 * N) - QQ @ U
     rr = info['reverse']
     scale = np.r_[np.ones(nc), np.zeros(nz + NE)]
@@ -185,6 +216,7 @@ def coupled_contact(obj, base, C, Z, Qbar, Rbar, EE):
     weak = _relative(KK @ U + SS @ x - QT @ H, KK @ U, SS @ x, QT @ H)
     cweak = _relative(dDD @ U + DD[:nc, :nc] @ dUC + dCC, dDD @ U, DD[:nc, :nc] @ dUC, dCC)
     meta = dict(condition=np.linalg.cond(DD), reciprocity=_relative(H - H[rr][:, rr].T, H), derivative_reciprocity=_relative(DH - DH[rr][:, rr].T, DH), weak_residual=weak, weak_derivative_residual=None, contact_derivative_residual=cweak, energy_residual=_relative(energy - H, H), energy_derivative_residual=_relative(denergy - DH, DH), minimum_rotated_storage=minimum_rotated_storage(H, obj._phase), minimum_dissipation=np.linalg.eigvalsh((H - H.conj().T) / 2j)[0])
+    meta['closed_elimination'] = elimination
     inv = _solve(e, np.eye(N))
     return (_slots(H, inv), _slots(DH, -inv @ de @ inv), meta)
 

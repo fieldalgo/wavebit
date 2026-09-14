@@ -150,7 +150,7 @@ continuum error bound. The separate optical study reports p and s results
 across Fourier and mesh orders; it retains physical power and all original
 residual checks.
 
-The 24 coupled tests, 53 seam-component tests and 52 documentation checks
+The 26 coupled tests, 53 seam-component tests and 53 documentation checks
 pass. The numerical checks used NumPy 2.5.1 on an Apple Silicon host. The
 optical fixture is the same lossless 700 by 700 cell, width 350, epsilon
 12.25, background 1, film thickness 300, wavelength 900, theta 0.2 and phi

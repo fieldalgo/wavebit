@@ -8,6 +8,7 @@ Targets:
 - `tests/test_nvf_pair_seam_galerkin.py`
 - `studies/nvf_coupled_pair_seam_galerkin.py`
 - `studies/results/nvf_coupled_pair_seam_galerkin.log`
+- `studies/results/nvf_pair_seam_retained_contact.log`
 
 TL;DR: The internal rectangle pair now has continuous real gap potentials in
 its complete quadratic Galerkin solve. The independent original nodal system
@@ -126,7 +127,7 @@ refined subpixel gaps. The directional subpixel test retains the nonzero
 first-order change; a small positive gap is not required to equal contact
 when the actual finite derivative is large.
 
-The 22 pair tests, 24 periodic coupling tests, 53 seam-component tests and
+The 25 pair tests, 26 periodic coupling tests, 53 seam-component tests and
 53 documentation checks pass. Numerical verification uses NumPy 2.5.1 on
 an Apple Silicon host. No external
 solver source or new dependency is integrated. The optical study retains the
@@ -136,7 +137,8 @@ retained order, not a continuum oracle or an automatic fallback.
 
 ## Recorded optical result
 
-The committed record contains the eight completed order-4 rows at mesh
+The first committed record carries the `7d199ef` source snapshot and contains
+the eight completed order-4 rows at mesh
 refinements 0 and 1: equal dielectric and mixed dielectric/metal materials,
 both polarizations, and all four gaps 0, 0.001, 1e-5 and 1e-9. Its header
 also requests order 8, but the explicit coverage row marks that larger run
@@ -161,6 +163,56 @@ power checks. The metal slopes still change strongly with mesh refinement,
 and differ from the order-4 Li comparison near -0.017255 and +0.009315.
 The finite operator is verified; these data do not meet a metal optical
 convergence criterion. Refinement of the closed field, higher Fourier orders,
-and stable high-refinement elimination still require development. General
+and positive-gap qualification on these fine meshes still require development. General
 shapes, oblique lattices, automatic NVF routing and other backends are outside
 this class's current contract.
+
+## Stable elimination of the closed physical equations
+
+At exact contact the added and disappearing physical columns are zero, so
+the closed field can be solved before the gap-response coefficients. Forming
+a large projected matrix K-SQ-Qtest*(R-AQ) first magnifies roundoff on fine
+meshes. The contact implementation now uses the existing original physical
+K_C to eliminate the closed nodal variables into retained field and flux
+unknowns whenever that retained system is smaller. Coarse cases keep the
+algebraically equivalent potential elimination.
+
+With V=K_C**-1 Qtest_C and W=K_C**-1 S_C, the retained matrix is
+
+```text
+[ I-Q_C*W        Q_C*V    ] [x] = [I]
+[ -A+R_C*W      I-R_C*V  ] [H]   [0]
+```
+
+The contact derivative uses the same matrix with the complete differentiated
+physical forcing, including every disappearing-potential contribution. This
+changes neither the trial space nor the original weak equations. Both
+eliminations agree for dielectric and metal controls with simultaneous gap
+and material directions. The highest-refinement order-8 metal case is now a
+regression under the original, unchanged physical-energy guard. Periodic
+contact regressions also include refinement 2 under this elimination.
+
+On the order-8/refinement-3 metal control, the former energy derivative
+residual was about 3.26e-10 and was refused by the 1e-10 guard. Original-K
+elimination reduces it to about 3.16e-11. No residual threshold, material,
+Fourier order or mesh is changed. The reported `condition` still describes
+the full projected contact matrix; `closed_elimination` identifies the
+actual closed solve.
+
+The second raw record uses `--contact-only` and contains sixteen completed
+rows at Fourier orders 4/8 and refinements 2/3, for both materials and
+polarizations. Every recorded exact-contact case passes the original
+energy/reciprocity and optical power guards. Positive gaps on these fine
+meshes are not qualified by this contact-only record.
+
+| Fourier order | Refinement | Metal p contact dT/dgap | Metal s contact dT/dgap |
+| ---: | ---: | ---: | ---: |
+| 4 | 2 | -0.097133837 | 0.035238120 |
+| 4 | 3 | -0.045289485 | 0.021832954 |
+| 8 | 2 | -0.020622742 | 0.038088257 |
+| 8 | 3 | 0.034894333 | -0.045718330 |
+
+The sign changes at order 8 are a remaining optical failure, even though
+the original finite equations are solved accurately. Stable elimination
+removes a numerical obstruction; it does not establish metal optical
+convergence or justify production NVF dispatch.

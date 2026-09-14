@@ -115,7 +115,7 @@ def test_complete_tensor_matches_original_unscaled_nodal_equations(epsilon):
 
 
 @pytest.mark.parametrize('epsilon', (12.25, -10+1j))
-@pytest.mark.parametrize('refinement', (0, 1))
+@pytest.mark.parametrize('refinement', (0, 1, 2))
 def test_contact_keeps_the_closed_tensor_and_supplies_the_exact_normal_trace(epsilon, refinement):
     order = (2, 1)
     obj = PeriodicSeamGalerkinGapCell(order, refinement=refinement, quadrature=24, coercivity_angle=1.53)

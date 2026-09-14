@@ -231,3 +231,29 @@ def test_directional_orders_and_refined_subpixel_gap_keep_original_guards(order)
     assert np.isfinite(derivative).all()
     assert max(v for k,v in metadata.items() if k.endswith('residual')) < 1e-10
     np.testing.assert_allclose(value, np.asarray(closed)+1e-9*np.asarray(contact_jvp), atol=3e-10, rtol=0)
+
+
+@pytest.mark.parametrize('epsilon', ((4., 9.), (12.25, -10+1j)))
+def test_contact_eliminations_match_with_simultaneous_physical_forcing(epsilon):
+    from wavebit._core.conforming.cartesian_pair_seam_galerkin import _contact_blocks
+    from wavebit._core.conforming.real_trace_coupling import coupled_contact
+    obj = cell()
+    settings = dict(GEOMETRY, gap=0., epsilon=epsilon, background=1., gap_tangent=.7,
+                    epsilon_tangent=(.3+.2j, -.4+.1j), background_tangent=.2+.3j)
+    blocks = _contact_blocks(obj._base, settings, 32)
+    values = [coupled_contact(obj._base, *blocks, elimination=form) for form in ('potential', 'retained')]
+    np.testing.assert_allclose(values[0][0], values[1][0], atol=3e-10, rtol=0)
+    np.testing.assert_allclose(values[0][1], values[1][1], atol=3e-9, rtol=0)
+    for _, _, meta in values:
+        assert max(v for k,v in meta.items() if k.endswith('residual') and v is not None) < 1e-10
+
+
+def test_order_eight_finest_contact_preserves_the_original_energy_guard():
+    geometry = dict(basis=np.diag([700.,700.]), widths=(300.,300.), height=300.)
+    plan = CartesianPairOpeningPlan.from_geometry(**geometry, refinement=3)
+    obj = CartesianPairSeamGalerkinGapCell(plan, 8, quadrature=48, coercivity_angle=1.53)
+    value, derivative, meta = obj.closure(gap=0., epsilon=(12.25,-10+1j), **geometry)
+    assert meta['closed_elimination'] == 'retained'
+    assert max(v for k,v in meta.items() if k.endswith('residual') and v is not None) < 1e-10
+    assert meta['derivative_reciprocity'] < 1e-9
+    assert np.isfinite(value).all() and np.isfinite(derivative).all()
