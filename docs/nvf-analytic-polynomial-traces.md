@@ -158,7 +158,19 @@ variation residual was about 1.58e-10 and was refused. Re-evaluating the energy
 with full physical fields and factored gradients did not remove that error.
 The corrected complete solve passes with energy derivative residual 5.73e-11,
 weak derivative residual 2.83e-16, and derivative reciprocity defect 6.66e-13.
-The original energy verifier is unchanged.
+That measurement used the original expanded energy verifier.
+
+For positive-gap projected states, verification now reconstructs the complete
+physical field and its stationary variation before taking their products.
+It consumes the analytically scaled fields `s*GZ` and `d(s*GZ)` from the
+normalized quadrature, avoiding a subtraction of inverse-gap terms. The
+stationary variation holds auxiliary coefficients fixed and does not consume
+the candidate tensor JVP or potential JVP. It includes moving measures,
+complex material directions, the retained constraint variation and every
+continuous trace field. The original equations, reciprocity, physical guards
+and acceptance tolerances remain the same; the computed tensor and JVP are
+unchanged. This improves the representation of the independent check and
+does not certify field or optical convergence.
 
 For this tiny gap, the full tensor changes from contact by about 5.95e-7;
 the contact derivative norm is about 595.023, consistent with the expected

@@ -138,15 +138,31 @@ def coupled_positive(obj, base, quadrature, free_energy, trace_order, *, elimina
         energy=np.zeros_like(energy)
     denergy = (dxr @ exact_free @ x + xr @ exact_free_derivative @ x
                + xr @ exact_free @ dx_geometry)
-    for ids, ci, zi, w, dw, mat, dmat, phase, dphase, gc, dgc, gz, dgz, le, dle, gn, dgn in quadrature():
+    direct_energy = response_solver is not None and normalized_quadrature is not None
+    if direct_energy:
+        denergy = np.zeros_like(denergy)
+    physical_rows = normalized_quadrature() if direct_energy else quadrature()
+    for physical_row in physical_rows:
+        ids, ci, zi, w, dw, mat, dmat, phase, dphase, gc, dgc, gz, dgz, le, dle, gn, dgn = physical_row[:17]
         F = np.zeros((len(w), 2, 2 * N), complex)
         DF = F.copy()
         F[:, 0, :N] = phase.conj()
         F[:, 1, N:] = phase.conj()
         DF[:, 0, :N] = dphase.conj()
         DF[:, 1, N:] = dphase.conj()
-        E = _field_product(F, x) + _field_product(gc, U[ci]) + s * gz @ U[nc + zi] + _field_product(le, U[nc + nz:])
-        DE = _field_product(DF, x) + _field_product(F, dx) + _field_product(dgc, U[ci]) + _field_product(gc, dU[ci]) + ds * gz @ U[nc + zi] + s * dgz @ U[nc + zi] + s * gz @ dU[nc + zi] + _field_product(dle, U[nc + nz:]) + _field_product(le, dU[nc + nz:])
+        if direct_energy:
+            # The physical s*Z field and its variation are already finite.
+            # Recovering d(s*Z) as ds*Z+s*dZ would subtract inverse-gap terms.
+            sgz, dsgz = physical_row[19:21]
+            E = (_field_product(F, x) + _field_product(gc, U[ci])
+                 + _field_product(sgz, U[nc+zi]) + _field_product(le, U[nc+nz:]))
+            DE = (_field_product(DF, x) + _field_product(F, dx)
+                  + _field_product(dgc, U[ci]) + _field_product(gc, dU[ci])
+                  + _field_product(dsgz, U[nc+zi]) + _field_product(sgz, dU[nc+zi])
+                  + _field_product(dle, U[nc+nz:]) + _field_product(le, dU[nc+nz:]))
+        else:
+            E = _field_product(F, x) + _field_product(gc, U[ci]) + s * gz @ U[nc + zi] + _field_product(le, U[nc + nz:])
+            DE = _field_product(DF, x) + _field_product(F, dx) + _field_product(dgc, U[ci]) + _field_product(gc, dU[ci]) + ds * gz @ U[nc + zi] + s * dgz @ U[nc + zi] + s * gz @ dU[nc + zi] + _field_product(dle, U[nc + nz:]) + _field_product(le, dU[nc + nz:])
         T = mat * E - _field_product(F, H)
         DT = dmat * E + mat * DE - _field_product(DF, H) - _field_product(F, DH)
         react = _contract('q,qai,qaj->ij', w, gn, T)
@@ -155,15 +171,26 @@ def coupled_positive(obj, base, quadrature, free_energy, trace_order, *, elimina
         np.add.at(dres, ids, change)
         np.add.at(res_scale, ids, _contract('q,qai,qaj->ij', abs(w), abs(gn), abs(mat * E) + abs(_field_product(F, H))))
         np.add.at(dres_scale, ids, _contract('q,qai,qaj->ij', abs(dw), abs(gn), abs(T)) + _contract('q,qai,qaj->ij', abs(w), abs(dgn), abs(T)) + _contract('q,qai,qaj->ij', abs(w), abs(gn), abs(DT)))
-        free = _field_product(F, x)
-        correction = _field_product(gc, U[ci]) + s * gz @ U[nc + zi] + _field_product(le, U[nc + nz:])
         if response_solver is not None:
             # Nearly coincident polynomial and retained fields have large
             # cancelling coefficients. Integrate their complete physical E.
             energy += mat * _contract('q,qai,qaj->ij', w, E.conj(), E)
         else:
+            free = _field_product(F, x)
+            correction = _field_product(gc, U[ci]) + s * gz @ U[nc + zi] + _field_product(le, U[nc + nz:])
             for left, right in ((free, correction), (correction, free), (correction, correction)):
                 energy += mat * _contract('q,qai,qaj->ij', w, left.conj(), right)
+        if direct_energy:
+            # Differentiate the complete physical field at fixed auxiliary
+            # coefficients. This independent stationary variation consumes
+            # neither the candidate tensor JVP nor its potential derivative.
+            stationary = (_field_product(DF, x) + _field_product(F, dx_geometry)
+                          + _field_product(dgc, U[ci]) + _field_product(dsgz, U[nc+zi])
+                          + _field_product(dle, U[nc+nz:]))
+            denergy += (_contract('q,qai,qaj->ij', dmat*w+mat*dw, E[:, :, reverse], E)
+                        + mat*_contract('q,qai,qaj->ij', w, stationary[:, :, reverse], E)
+                        + mat*_contract('q,qai,qaj->ij', w, E[:, :, reverse], stationary))
+            continue
         reverse = info['reverse']
         added = _field_product(le, U[nc + nz:])
         dadded = _field_product(dle, U[nc + nz:])
@@ -171,7 +198,8 @@ def coupled_positive(obj, base, quadrature, free_energy, trace_order, *, elimina
         dold = _field_product(DF, x) + _field_product(dgc, U[ci]) + ds * gz @ U[nc + zi] + s * dgz @ U[nc + zi] - _field_product(F, dQQ @ U)
         for L, DL, R, DR in ((old, dold, added, dadded), (added, dadded, old, dold), (added, dadded, added, dadded)):
             denergy += dmat * _contract('q,qai,qaj->ij', w, L[:, :, reverse], R) + mat * _contract('q,qai,qaj->ij', dw, L[:, :, reverse], R) + mat * _contract('q,qai,qaj->ij', w, DL[:, :, reverse], R) + mat * _contract('q,qai,qaj->ij', w, L[:, :, reverse], DR)
-    for ids, ci, zi, w, dw, mat, dmat, phase, dphase, gc, dgc, gz, dgz, le, dle, gn, dgn in quadrature(split=False):
+    unsplit_rows = () if direct_energy else quadrature(split=False)
+    for ids, ci, zi, w, dw, mat, dmat, phase, dphase, gc, dgc, gz, dgz, le, dle, gn, dgn in unsplit_rows:
         F = np.zeros((len(w), 2, 2 * N), complex)
         DF = F.copy()
         F[:, 0, :N] = phase.conj()

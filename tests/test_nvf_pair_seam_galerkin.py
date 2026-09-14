@@ -392,9 +392,42 @@ def test_projected_verification_rejects_an_inconsistent_full_state(monkeypatch, 
         state[5] = state[5]+1e-3*np.eye(len(state[5]))
         return tuple(state)
     monkeypatch.setattr(module, name, inconsistent)
+    original_check = module._check_response
+    def check(value, tangent, metadata):
+        # The independently integrated energy must detect the corrupt JVP,
+        # even without relying on the original matrix residual diagnostics.
+        assert metadata['energy_derivative_residual'] > 1e-10
+        original_check(value, tangent, metadata)
+    monkeypatch.setattr(module, '_check_response', check)
     with pytest.raises(ValueError, match='original/energy/physical guards'):
         cell(order=(1, 1), degree=4, contact_solver='projected').closure(
             gap=gap, epsilon=(12.25, -10+1j), **GEOMETRY)
+
+
+def test_projected_positive_verification_uses_the_finite_scaled_fields(monkeypatch):
+    from wavebit._core.conforming import cartesian_pair_seam_galerkin as module
+    settings = dict(GEOMETRY, gap=1e-9, epsilon=(12.25, -10+1j))
+    expected = cell(order=(1, 1), degree=4).closure(**settings)
+    original = module._quadrature
+    def scaled_only(*args, **kwargs):
+        normalized = kwargs.get('normalized', args[6] if len(args) > 6 else False)
+        for row in original(*args, **kwargs):
+            if normalized:
+                # The physical fields s*GZ and d(s*GZ) remain unchanged.
+                # A consumer of normalized rows must not recover them from
+                # individually unbounded, cancelling representatives.
+                row = list(row)
+                row[11] = np.full_like(row[11], np.nan)
+                row[12] = np.full_like(row[12], np.nan)
+            yield tuple(row)
+    monkeypatch.setattr(module, '_quadrature', scaled_only)
+    actual = cell(order=(1, 1), degree=4).closure(**settings)
+    np.testing.assert_array_equal(actual[0], expected[0])
+    np.testing.assert_array_equal(actual[1], expected[1])
+    for key in ('original_residual', 'original_derivative_residual',
+                'energy_residual', 'energy_derivative_residual'):
+        assert actual[2][key] == expected[2][key]
+        assert actual[2][key] < 1e-10
 
 
 @pytest.mark.parametrize('gap', (.001, 1e-9))
