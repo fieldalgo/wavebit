@@ -73,6 +73,7 @@ subtrees:
       - file: nvf-paired-frame
       - file: nvf-pair-galerkin
       - file: nvf-periodic-galerkin
+      - file: nvf-seam-trace
       - file: nvf-affine-convergence
       - file: nvf-contact-followup
       - file: nvf-independent-fem

@@ -164,6 +164,12 @@ only into the reported derivative would leave the old forward error intact.
 This identity is a qualification target for that field-space development; it
 does not change the production derivative or relax an acceptance criterion.
 
+The separate [continuous seam trace component](nvf-seam-trace.md) now supplies
+this unrestricted normal trace through actual positive-gap potentials. Its
+k_y=0 normal response passes independent physical-field checks. Coupling those
+potentials with the full finite-element tensor remains necessary; the periodic
+Galerkin results in the table above are not replaced by that component.
+
 ## Explicit use and limits
 
 ```python
