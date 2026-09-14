@@ -21,12 +21,14 @@ def _field_product(field, coefficients):
         count, components, coefficients.shape[1])
 
 
-def coupled_positive(obj, base, quadrature, free_energy, trace_order, *, elimination=None, response_solver=None, normalized_quadrature=None):
+def coupled_positive(obj, base, quadrature, free_energy, trace_order, *, elimination=None, response_solver=None, normalized_quadrature=None, energy_verifier=None):
     """Solve the original weak system and verify reconstructed physical fields.
 
     Pure Fourier energy is supplied independently. Added mixed/trace energies
     use the moving partition, while baseline mesh terms use unsplit triangles.
     The differentiated energy is the stationary reciprocal bilinear form.
+    An optional verifier receives x, its fixed-potential geometric variation,
+    and U; it never receives the candidate H/DH or the solved variation of U.
     """
     k, dk, q, dq, r, dr, qt, dqt, source, dsource, e, de, info = base
     N = len(e)
@@ -171,6 +173,8 @@ def coupled_positive(obj, base, quadrature, free_energy, trace_order, *, elimina
         np.add.at(dres, ids, change)
         np.add.at(res_scale, ids, _contract('q,qai,qaj->ij', abs(w), abs(gn), abs(mat * E) + abs(_field_product(F, H))))
         np.add.at(dres_scale, ids, _contract('q,qai,qaj->ij', abs(dw), abs(gn), abs(T)) + _contract('q,qai,qaj->ij', abs(w), abs(dgn), abs(T)) + _contract('q,qai,qaj->ij', abs(w), abs(gn), abs(DT)))
+        if energy_verifier is not None:
+            continue
         if response_solver is not None:
             # Nearly coincident polynomial and retained fields have large
             # cancelling coefficients. Integrate their complete physical E.
@@ -198,7 +202,7 @@ def coupled_positive(obj, base, quadrature, free_energy, trace_order, *, elimina
         dold = _field_product(DF, x) + _field_product(dgc, U[ci]) + ds * gz @ U[nc + zi] + s * dgz @ U[nc + zi] - _field_product(F, dQQ @ U)
         for L, DL, R, DR in ((old, dold, added, dadded), (added, dadded, old, dold), (added, dadded, added, dadded)):
             denergy += dmat * _contract('q,qai,qaj->ij', w, L[:, :, reverse], R) + mat * _contract('q,qai,qaj->ij', dw, L[:, :, reverse], R) + mat * _contract('q,qai,qaj->ij', w, DL[:, :, reverse], R) + mat * _contract('q,qai,qaj->ij', w, L[:, :, reverse], DR)
-    unsplit_rows = () if direct_energy else quadrature(split=False)
+    unsplit_rows = () if direct_energy or energy_verifier is not None else quadrature(split=False)
     for ids, ci, zi, w, dw, mat, dmat, phase, dphase, gc, dgc, gz, dgz, le, dle, gn, dgn in unsplit_rows:
         F = np.zeros((len(w), 2, 2 * N), complex)
         DF = F.copy()
@@ -218,6 +222,8 @@ def coupled_positive(obj, base, quadrature, free_energy, trace_order, *, elimina
                         + mat * _contract('q,qai,qaj->ij', dw, left[:, :, reverse], right)
                         + mat * _contract('q,qai,qaj->ij', w, dl[:, :, reverse], right)
                         + mat * _contract('q,qai,qaj->ij', w, left[:, :, reverse], dright))
+    if energy_verifier is not None:
+        energy, denergy = energy_verifier(x, dx_geometry, U)
     rr = info['reverse']
     meta = dict(condition=cond, reciprocity=_relative(H - H[rr][:, rr].T, H), derivative_reciprocity=_relative(DH - DH[rr][:, rr].T, DH), original_residual=_relative(res, res_scale), original_derivative_residual=_relative(dres, dres_scale), energy_residual=_relative(energy - H, H), energy_derivative_residual=_relative(denergy - DH, DH), minimum_rotated_storage=minimum_rotated_storage(H, obj._phase), minimum_dissipation=np.linalg.eigvalsh((H - H.conj().T) / 2j)[0])
     meta['weak_residual'] = _relative(KK @ U + SS @ x - QT @ H, KK @ U, SS @ x, QT @ H)

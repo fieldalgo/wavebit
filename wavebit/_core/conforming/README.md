@@ -21,6 +21,13 @@
 | `periodic_seam_trace.py` | Can continuous positive-gap potentials supply the unrestricted normal contact trace through their original material energy? |
 | `periodic_seam_galerkin.py` | Can the complete retained tensor couple those seam fields to the quadratic mesh, with finite contact and positive-gap derivatives? |
 | `cartesian_pair_seam_galerkin.py` | Can real continuous internal-gap traces share the whole pair tensor and its exact contact/material derivative? |
+| `cartesian_pair_corner_galerkin.py` | Can fixed real outer-corner powers join that whole tensor and its positive-gap/contact/material derivative? |
+| `pair_corner_fields.py` | How do exact fifth-root remainders preserve corner powers already overlapping the polynomial trial space? |
+| `pair_corner_assembly.py` | How do added common corner fields retain the original C/Z equations and their physical variations? |
+| `pair_corner_partition.py` | How are moving clipped polygons integrated radially from actual corners without negative or tolerance-clipped areas? |
+| `pair_corner_quadrature.py` | How do original, corner and continuous trace fields share the same moving positive quadrature? |
+| `pair_corner_contact.py` | How does the enlarged physical field space retain its exact contact state and right-opening derivative? |
+| `pair_corner_positive.py` | How can unsplit smooth-field products and split trace products preserve the complete positive solution and independent stationary energy? |
 | `polynomial_pair_trace.py` | Can analytic polynomial remainders retain every real trace column without subtracting nearly equal sampled fields? |
 | `projected_pair_contact.py` | Can nearly coincident high-degree closed fields retain all original contact equations when their physical difference is assembled before its energy? |
 | `projected_pair_positive.py` | Can streamed real physical gradient coordinates preserve the whole positive-gap solution and its variation? |
