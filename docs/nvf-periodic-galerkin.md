@@ -60,7 +60,7 @@ order than the smaller separated-pair triangles: q=16 leaves about 2.5e-8
 Fourier error in a coarse contact reference. The q=24 and q=32 integrals agree
 under the unchanged 3e-10 value and 3e-9 normalized derivative guards.
 
-The 36 periodic tests cover both potential degrees, positive and zero gaps,
+The periodic tests cover both potential degrees, positive and zero gaps,
 dielectric and passive metal materials, the finest admitted contact mesh,
 the collapsing gauge group, uniform materials, complex-linear material JVPs,
 simultaneous gap/material directions, physical units, nested lossless energy,
@@ -116,6 +116,53 @@ potential space lowers the bias, but refinement three retains an absolute
 slope discrepancy near 5.4e-4 at the larger Fourier orders. Resolving the
 finite gap trace, including its ends, remains necessary. Metal pair optics and
 the separate tilted resonant cases also remain unresolved.
+
+## The normal trace error has an independent variational expression
+
+In the retained `k_y=0` sector, a closed bar's y-directed electric field is
+exactly its retained plane wave: epsilon varies only with x, so this field
+has zero constitutive divergence. The closed transverse yy response is
+therefore the direct material convolution for every potential refinement.
+
+For positive real inclusion and background permittivities, opening the gap
+introduces a normal electric-field correction. Let V denote
+the finite leading normal gradients on the collapsed gap triangles, M their
+background-weighted Gram matrix, and F the forcing from the contrast between
+the body and background traces. In the normalized coordinates used by the
+implementation, with `L = sqrt(cell_area)`, the finite yy contact derivative is
+
+```text
+H'_yy = C((epsilon_background - epsilon) indicator) / period_y
+        - F.H solve(M, F) / L.
+```
+
+Here the convolution and its retained sector are one-dimensional in x. The
+test constructs M and F from rational geometry, independent nodal polynomials
+and gap integrals alone; it does not use the candidate matrix blocks or an
+optical/Li result. The independently assembled expression reproduces the
+candidate's yy derivative under the existing normalized 3e-9 guard.
+
+If the normal gap trace could vary freely in L2, the same quadratic
+minimization would instead give
+
+```text
+H'_yy,unrestricted = C((epsilon - epsilon**2 / epsilon_background)
+                       indicator) / period_y.
+```
+
+For positive real materials, the finite derivative minus this unrestricted
+response is a positive semidefinite projection-error Gram matrix. Twelve
+tests verify the finite identity and that ordering for both potential degrees,
+three refinements and two material/background pairs. The result identifies a
+missing trace approximation term, rather than an optical differentiation
+error. It does not imply a sign for the resulting transmission-derivative
+error, since transmission is a separate nonlinear function of the tensor.
+
+A valid forward improvement must supply the missing normal traces through a
+consistent positive-gap field space. Substituting the unrestricted expression
+only into the reported derivative would leave the old forward error intact.
+This identity is a qualification target for that field-space development; it
+does not change the production derivative or relax an acceptance criterion.
 
 ## Explicit use and limits
 

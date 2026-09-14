@@ -4,7 +4,9 @@ import numpy as np
 import pytest
 
 from wavebit._core.conforming.periodic_rectangle_galerkin import PeriodicRectangleGalerkinGapCell
-from test_nvf_pair_galerkin import nodal_reference, tensor
+from test_nvf_pair_galerkin import nodal_reference, tensor, duffy
+from test_nvf_pair_quadratic import nodal_gradients
+from test_nvf_cartesian_pair_opening import _oracle_polynomial_vandermonde
 
 
 SETTINGS = dict(period=(700., 560.), width=310., offset=(21., -14.))
@@ -183,3 +185,63 @@ def test_nested_periodic_spaces_lower_the_lossless_constitutive_energy():
             assert np.linalg.eigvalsh(previous-current)[0] > -1e-9
         previous = current
 
+
+def trace_projection_reference(obj, epsilon, background):
+    """Independent leading gap energy in the k_y=0 normal-field sector.
+
+    The finite trace projection and the unrestricted L2 interface response
+    differ by a positive semidefinite Gram error. No optical result or Li
+    factorizer supplies this reference.
+    """
+    graph, length = oracle_chart(obj, SETTINGS)
+    z = np.vstack([np.zeros((1, graph['Z'].shape[1])), graph['Z']])
+    count = z.shape[1]
+    modes = np.arange(-obj.order[0], obj.order[0]+1)
+    mass = np.zeros((count, count), complex)
+    forcing = np.zeros((count, len(modes)), complex)
+    bary, weights = duffy(24)
+    gradient = (nodal_gradients(bary) if obj.degree == 2 else
+                np.broadcast_to(np.array([[-1., -1.], [1., 0.], [0., 1.]]), (len(bary), 3, 2)))
+    px = SETTINGS['period'][0]/length
+    center = (SETTINGS['period'][0]/2+SETTINGS['offset'][0])/length
+    width = SETTINGS['width']/length
+    for triangle, thin in zip(graph['triangles'], graph['thin']):
+        if not thin:
+            continue
+        det, numerator = _oracle_polynomial_vandermonde(
+            graph['vertices0'][triangle[:3]], graph['vertices1'][triangle[:3]])
+        points = np.asarray(graph['vertices0'][triangle[:3]], float)
+        local_z = z[graph['periodic'][triangle]]
+        columns = np.flatnonzero(np.any(local_z, axis=0))
+        normal = np.einsum('qia,ij->qaj', gradient@np.asarray(numerator[0, 1:], float),
+                           local_z[:, columns])
+        mass[np.ix_(columns, columns)] += background*np.einsum(
+            'q,qai,qaj->ij', weights, normal, normal)/float(det[1])
+        if abs(points[:, 0].mean()-center) < width/2:
+            phase = np.exp(2j*np.pi*(bary@points)[:, 0, None]*modes[None]/px)
+            forcing[columns] += (background-epsilon)*np.einsum(
+                'q,qi,qm->im', weights, normal[:, 1], phase)
+    difference = modes[:, None]-modes
+    fraction = SETTINGS['width']/SETTINGS['period'][0]
+    indicator = (fraction*np.sinc(difference*fraction)
+                 *np.exp(-2j*np.pi*difference*(.5+SETTINGS['offset'][0]/SETTINGS['period'][0])))
+    direct = (background-epsilon)*indicator/SETTINGS['period'][1]
+    finite = direct-forcing.conj().T@np.linalg.solve(mass, forcing)/length
+    unrestricted = (epsilon-epsilon**2/background)*indicator/SETTINGS['period'][1]
+    return finite, unrestricted
+
+
+@pytest.mark.parametrize('degree', (1, 2))
+@pytest.mark.parametrize('refinement', (0, 1, 2))
+@pytest.mark.parametrize('epsilon,background', ((12.25, 1.), (4., 2.25)))
+def test_normal_contact_derivative_is_the_finite_gap_trace_projection(degree, refinement, epsilon, background):
+    obj = PeriodicRectangleGalerkinGapCell((2, 2), degree=degree, refinement=refinement)
+    finite, unrestricted = trace_projection_reference(obj, epsilon, background)
+    _, derivative, _ = obj.closure(gap=0., epsilon=epsilon, background=background, **SETTINGS)
+    size = (2*obj.order[0]+1)*(2*obj.order[1]+1)
+    indices = size+obj.order[1]*(2*obj.order[0]+1)+np.arange(2*obj.order[0]+1)
+    actual = tensor(derivative)[np.ix_(indices, indices)]
+    np.testing.assert_allclose(actual, finite, atol=3e-9/np.sqrt(np.prod(SETTINGS['period'])), rtol=0)
+    error = finite-unrestricted
+    np.testing.assert_allclose(error, error.conj().T, atol=3e-10, rtol=0)
+    assert np.linalg.eigvalsh(error)[0] > -1e-10
