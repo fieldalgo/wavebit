@@ -7,14 +7,19 @@ Targets:
 - `tests/test_nvf_pair_normal_frame.py`
 - `studies/nvf_pair_normal_frame.py`
 - `studies/results/nvf_pair_normal_frame.log`
+- `studies/nvf_pair_normal_frame_quadrature.py`
+- `studies/results/nvf_pair_normal_frame_quadrature.log`
 
 **TL;DR:** An explicit normal frame removes the electrostatic auxiliary solve
 and has a positive lower bound on its compressed matrix. Fitted physical
 quadrature retains the newly opening material strip, including ordinary JAX
 gap and material derivatives. Exact uniform and laminated controls pass.
-Metal optical values still change substantially with Fourier order, so this
-is an experimental constitutive instrument, not a replacement for ordinary
-NVF or a claim of converged contact optics.
+Metal optical values still change substantially with Fourier order, and
+the finite complex frame does not preserve reciprocity. This is an
+experimental constitutive instrument, not a replacement for ordinary NVF
+or a claim of converged contact optics. Tiled NumPy integration lowers
+the measured order-512 quadrature peak from 3.09 GB to 0.49 GB without
+changing its finite coefficients.
 
 | Question | Answer |
 | --- | --- |
@@ -23,7 +28,7 @@ NVF or a claim of converged contact optics.
 | What parameters are live? | The nonnegative physical gap and all three scalar permittivities, including background. Other geometry is fixed. |
 | What prevents a singular compressed frame? | A common material half-plane gives an explicit positive lower bound, including a bound for base-integral quadrature error. |
 | What does a passed derivative establish? | The derivative of the declared fitted finite quadrature. It is not a continuum optical error certificate. |
-| What remains unresolved? | Optical order convergence, arbitrary shape/partition invariance and automatic integration into ordinary NVF. |
+| What remains unresolved? | Reciprocity of the finite complex closure, optical order convergence, arbitrary shape/partition invariance and automatic integration into ordinary NVF. |
 
 ## Pointwise frame and energy
 
@@ -191,6 +196,114 @@ right derivative per caller length unit. Torch, live lattice/size/offset
 derivatives, more general geometry and public automatic routing are not
 implemented in this instrument.
 
+## Bounded NumPy field storage
+
+The NumPy evaluator integrates the same fitted nodes in tiles of at most
+64 y rows. Every tile retains its absolute row indices, so body ownership
+and the special collapsed strip remain correct even when a tile crosses
+a material boundary. A short final tile uses its actual physical weights.
+The Fourier contributions are summed before the exact base terms and
+unchanged coercivity/energy guards are applied. No field is interpolated,
+truncated or recomputed from a lower-order approximation.
+
+At quadrature order `q`, the full field has `15 q^2` nodes. A NumPy field
+evaluation now has at most `320 q` nodes. Field temporary storage therefore
+grows linearly with quadrature order for a fixed tile size, although
+arithmetic still visits every node. The coefficient grids and convolution
+matrices retain their existing Fourier-order costs. Metadata records
+`field_tile_rows` and `maximum_field_samples` separately from total
+`sample_count`.
+
+JAX retains one array expression. Unrolling the geometric field once per
+tile would enlarge its traced program, and the present change makes no
+claim about JAX memory. The tiled NumPy and single-expression JAX results
+are compared explicitly across a tile boundary. Independent physical
+quadrature also exercises seven-row and 64-row tiles, positive and zero
+gaps, and a short final tile. All 65 normal-frame tests pass, including
+the existing forward/reverse and complex material derivative controls.
+
+The reproducible instrument runs whole-grid and tiled coefficient
+integration in fresh processes. Peak process memory includes imports
+and quadrature setup; the timed region includes coefficient construction
+only. Its subsequent optical calculations reuse the resulting coefficient
+arrays and are excluded from those memory/time figures. The record is
+`studies/results/nvf_pair_normal_frame_quadrature.log`.
+
+On macOS arm64 with NumPy 2.5.1, Fourier coefficient cap 12 and the
+metal contact fixture, the measurements are:
+
+| Gauss order | Whole-grid peak process GB | Tiled peak process GB | Whole-grid coefficient time, s | Tiled coefficient time, s | Largest coefficient difference |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 128 | 0.354 | 0.160 | 0.169 | 0.140 | 1.23e-15 |
+| 256 | 1.131 | 0.292 | 0.848 | 0.594 | 2.00e-15 |
+| 512 | 3.085 | 0.487 | 5.104 | 2.735 | 3.46e-15 |
+
+GB is `10^9` bytes. The finest row lowers observed peak process memory
+by 84.2%. These single-run times improved in this measurement, but they
+are not a whole-solver speed guarantee. No other calculation from this
+task was running during the coefficient-only worker measurements;
+unrelated activity on the host is not controlled.
+
+At Fourier order 12, the finer inner ladder gives:
+
+| Gauss order | Metal p transmission | Metal s transmission |
+| ---: | ---: | ---: |
+| 128 | 0.415474961 | 0.436566439 |
+| 256 | 0.415465282 | 0.436585134 |
+| 512 | 0.415465368 | 0.436583486 |
+
+The last p/s changes are about `8.55e-8 / 1.65e-6`, much smaller than
+the observed Fourier-order changes. This is empirical separation of
+two errors, not a rigorous quadrature enclosure. Refining this field's
+integrals alone does not remove the large outer discrepancy.
+
+```bash
+PYTHONPATH=. OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 python -m studies.nvf_pair_normal_frame_quadrature
+```
+
+The original optical record below describes the initial whole-grid
+implementation. The newer source hashes identify the storage refactor;
+they do not change the material reference or the mathematical integrals.
+
+## Reciprocity is independent of passivity
+
+The finite complex energy closure has another limitation, separate from
+the quadrature error. In the physical Fourier coordinates, reciprocal
+constitutive data satisfy
+
+```text
+H = J H^T J,
+```
+
+where `J` reverses the Fourier labels within each Cartesian component.
+Equivalently, transforming from complex exponentials to real sine/cosine
+standing waves makes the constitutive matrix transpose-symmetric. This
+condition uses a transpose, not a Hermitian adjoint, and applies to
+absorbing reciprocal materials too.
+
+The finite frame trial space `B f_N` is generally not closed under complex
+conjugation. Thus its passive energy congruence does not, by itself,
+supply reciprocal constitutive data in the physical retained coordinates.
+The evaluator now reports the maximum-entry `reciprocity_error` and the
+Frobenius `relative_reciprocity_defect`. The latter divides by
+`max(norm(H), 1)`. Its `valid` flag still means the stated finite,
+coercivity, loss and inverse-residual checks passed; it does **not**
+certify reciprocity or optical accuracy.
+
+An independent test constructs the real standing-wave basis and compares
+its transpose defect to the reported Fourier-coordinate defect. Uniform
+materials and exact full-height laminates retain reciprocity. On the
+metal contact fixture at Gauss order 512, the relative defects at Fourier
+orders 4/8/12 are about `1.2023 / 0.4615 / 0.3974`. At order 12 the
+defect remains about 0.3974 over Gauss orders 128/256/512, even though
+the integration changes become much smaller. This is a property of the
+finite frame closure, not a small numerical integration residual.
+
+The diagnostic leaves the measured tensor intact. A replacement must
+establish reciprocity and passivity together with the interface limits
+and contact/material derivatives. Positive matrix storage alone is
+insufficient for adopting this complex frame in ordinary NVF.
+
 ## Optical decision
 
 The recorded study uses a square period of 700, two touching 300-by-300
@@ -236,8 +349,9 @@ are observations, not a precision certificate for a tiny-gap derivative.
 
 The implementation is useful for isolating frame invertibility and
 material-weighted contact integration from the auxiliary weak solve.
-It does not currently solve the metal convergence problem or establish
-general primitive-partition independence. Ordinary NVF contact behavior
+It does not currently solve the metal convergence problem, preserve
+general finite complex reciprocity or establish primitive-partition
+independence. Ordinary NVF contact behavior
 retains its existing limitations. No default, stopping tolerance or
 reference answer is changed to accept these optical discrepancies.
 

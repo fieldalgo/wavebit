@@ -16,6 +16,26 @@ from .cartesian_pair_opening import validate_geometry
 from .material_sector import passive_pair_materials, phase_from_angle, minimum_rotated_storage
 
 
+# NumPy field temporaries use a fixed row count rather than the full q-by-q
+# tensor grid. JAX retains one array expression so tracing does not unroll
+# the field geometry once per tile; no JAX memory improvement is claimed.
+_QUADRATURE_TILE_ROWS = 64
+
+
+def _reciprocity_defects(tensor, xp):
+    """Lorentz transpose defect with both Cartesian Fourier sets reversed.
+
+    A passive finite energy congruence need not be reciprocal when its
+    complex trial space is not closed under conjugation. Report the defect;
+    do not project it out or reinterpret an algebraic guard as certification.
+    """
+    count = tensor.shape[0]//2
+    reverse = xp.concatenate((xp.arange(count-1, -1, -1), xp.arange(2*count-1, count-1, -1)))
+    defect = tensor-tensor[reverse][:, reverse].T
+    return dict(reciprocity_error=xp.max(xp.abs(defect)),
+                relative_reciprocity_defect=xp.linalg.norm(defect)/xp.maximum(xp.linalg.norm(tensor), 1.))
+
+
 def _order_pair(order):
     pair = (order, order) if isinstance(order, Integral) else order
     if (not isinstance(pair, (tuple, list)) or len(pair) != 2
@@ -33,6 +53,8 @@ class CartesianPairNormalFrame:
     Gap derivatives at zero are right derivatives. NumPy supplies values;
     ordinary JAX x64 AD supplies gap and material derivatives of this finite
     quadrature. Geometry other than gap is fixed by construction.
+    The validity flag covers the declared algebraic guards, not reciprocity
+    or optical accuracy. Complex frames report their reciprocity defect.
     """
 
     def __init__(self, *, basis, widths, height, offset=(0., 0.), order=1,
@@ -114,50 +136,57 @@ class CartesianPairNormalFrame:
             return points.reshape(-1), (span[:, None]*weights/2).reshape(-1)
         x, wx = interval_points(xcuts)
         y, wy = interval_points(ycuts)
-        X, Y = xp.meshgrid(x, y)
-        row = xp.arange(3*q)[:, None]//q
         column = xp.arange(5*q)[None, :]//q
-        strip = (row == 1) & (column == 2)
-        collapsed = (s == 0) & strip
-        # The zero-width strip has zero value weight but nonzero opening
-        # weight. Its limiting normal is x, independent of the normal-field
-        # tie on the closed, equal-material seam. Do not differentiate that tie.
-        proxy_x = ox+px/2-wb/2
-        field_x = xp.where(collapsed, proxy_x, X)
-        nx, ny = P._piece_field(xp, field_x, Y, shapes, self._plan, materials[1:], lattice, xp.float64)
-        xx = xp.where(collapsed, 1., xp.real(nx*xp.conj(nx)))
-        yy = xp.where(collapsed, 0., xp.real(ny*xp.conj(ny)))
-        xy = xp.where(collapsed, 0., nx*xp.conj(ny))
-        yx = xp.conj(xy)
-        local = xp.where((row == 1) & (column == 1), materials[1],
-                         xp.where((row == 1) & (column == 3), materials[2], materials[0]))
         reference = (materials[1]+materials[2])/2
-        # For a unit Hermitian normal projector P:
-        # B=I+(reference/epsilon-1)P;
-        # epsilon B^H B=epsilon I+(|reference|^2/conj(epsilon)-epsilon)P.
-        change = reference/local-1
-        energy = xp.real(reference*xp.conj(reference))/xp.conj(local)-local
         hu, hv = self.order
         u, v = xp.arange(-2*hu, 2*hu+1), xp.arange(-2*hv, 2*hv+1)
         fx = xp.exp(-2j*xp.pi*x[:, None]*u[None, :]/px)
         fy = xp.exp(-2j*xp.pi*v[:, None]*y[None, :]/py)
-        def fourier(field):
-            return (fy@(wy[:, None]*field*wx[None, :])@fx)/(px*py)
+        tile_rows = min(_QUADRATURE_TILE_ROWS, len(y)) if xp is np else len(y)
+        accumulated = None
+        for first in range(0, len(y), tile_rows):
+            last = min(first+tile_rows, len(y))
+            X, Y = xp.meshgrid(x, y[first:last])
+            row = xp.arange(first, last)[:, None]//q
+            strip = (row == 1) & (column == 2)
+            collapsed = (s == 0) & strip
+            # A zero-width strip has zero value weight but nonzero opening
+            # weight. Its limiting normal is x, independently of the normal
+            # tie on the closed seam. Do not differentiate that tie.
+            field_x = xp.where(collapsed, ox+px/2-wb/2, X)
+            nx, ny = P._piece_field(xp, field_x, Y, shapes, self._plan, materials[1:], lattice, xp.float64)
+            xx = xp.where(collapsed, 1., xp.real(nx*xp.conj(nx)))
+            yy = xp.where(collapsed, 0., xp.real(ny*xp.conj(ny)))
+            xy = xp.where(collapsed, 0., nx*xp.conj(ny))
+            yx = xp.conj(xy)
+            local = xp.where((row == 1) & (column == 1), materials[1],
+                             xp.where((row == 1) & (column == 3), materials[2], materials[0]))
+            # B=I+(reference/epsilon-1)P, with unit Hermitian P.
+            # epsilon B^H B=epsilon I+(|reference|^2/conj(epsilon)-epsilon)P.
+            change = reference/local-1
+            energy = xp.real(reference*xp.conj(reference))/xp.conj(local)-local
+            def fourier(field):
+                return (fy[:, first:last]@(wy[first:last, None]*field*wx[None, :])@fx)/(px*py)
+            current = xp.stack([fourier(change*xx), fourier(change*xy),
+                                fourier(change*yx), fourier(change*yy),
+                                fourier(energy*xx), fourier(energy*xy),
+                                fourier(energy*yx), fourier(energy*yy), fourier(xp.ones_like(X))])
+            accumulated = current if accumulated is None else accumulated+current
         direct, _ = P.assemble_eps_coeffs(xp, shapes, materials[0], hu, hv, lattice, xp.complex128)
         identity = xp.asarray((np.arange(-2*hv, 2*hv+1)[:, None] == 0)
                               & (np.arange(-2*hu, 2*hu+1)[None, :] == 0), dtype=xp.complex128)
-        value = xp.stack([identity+fourier(change*xx), fourier(change*xy),
-                          fourier(change*yx), identity+fourier(change*yy),
-                          direct+fourier(energy*xx), fourier(energy*xy),
-                          direct+fourier(energy*yy), direct, fourier(energy*yx)])
+        value = xp.stack([identity+accumulated[0], accumulated[1], accumulated[2],
+                          identity+accumulated[3], direct+accumulated[4], accumulated[5],
+                          direct+accumulated[7], direct, accumulated[6]])
         # The constant Fourier integral is an independent quadrature resolution
         # check for the analytic base terms. It cannot certify nonpolynomial P.
-        constant_error = xp.max(xp.abs(fourier(xp.ones_like(X))-identity))
+        constant_error = xp.max(xp.abs(accumulated[8]-identity))
         valid = valid_gap & material_valid & xp.all(xp.isfinite(value)) & (constant_error < 1e-11)
         _require(valid, 'normal-frame coefficients failed finite/base-integral guards')
         meta = dict(valid=valid, gap=gap, order=self.order, quadrature=q,
                     reference_epsilon=reference, constant_integral_error=constant_error,
                     coercivity_angle=self.coercivity_angle, sample_count=15*q*q,
+                    field_tile_rows=tile_rows, maximum_field_samples=tile_rows*5*q,
                     derivative_units='per caller length unit')
         return xp.where(valid, value, xp.nan), meta
 
@@ -204,6 +233,6 @@ class CartesianPairNormalFrame:
                     frame_condition=xp.linalg.cond(change), frame_storage_lower_bound=certified_min,
                     lossless=lossless, hermitian_error=hermitian_error, minimum_rotated_storage=rotated,
                     minimum_dissipation=loss, inverse_residual=inverse_residual,
-                    z_inverse_residual=z_residual)
+                    z_inverse_residual=z_residual, **_reciprocity_defects(tensor, xp))
         return (xp.where(valid, value, xp.nan),
                 ConvMatrices(*(xp.where(valid, matrix, xp.nan)[None] for matrix in slots)), meta)

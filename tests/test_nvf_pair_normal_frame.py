@@ -10,6 +10,7 @@ import pytest
 
 from wavebit._core import parametric as P
 from wavebit._core.conforming.cartesian_pair_normal_frame import CartesianPairNormalFrame
+from wavebit._core.conforming import cartesian_pair_normal_frame as normal_frame_module
 from wavebit._core.lattice import as_lattice
 
 
@@ -91,6 +92,26 @@ def test_fitted_normal_products_against_direct_field_integrals(name, gap):
                                rtol=0, atol=3e-10)
 
 
+@pytest.mark.parametrize('gap', [0., 7., 1e-9])
+@pytest.mark.parametrize('tile_rows', [7, 64])
+def test_tiled_integrals_retain_material_regions_and_last_partial_tile(gap, tile_rows, monkeypatch):
+    epsilon = MATERIALS['metal']
+    expected = reference(epsilon, gap, quadrature=24)
+    field = P._piece_field
+    visited = []
+    def observed(xp, x, y, *args, **kwargs):
+        visited.append(x.shape)
+        return field(xp, x, y, *args, **kwargs)
+    monkeypatch.setattr(normal_frame_module, '_QUADRATURE_TILE_ROWS', tile_rows)
+    monkeypatch.setattr(P, '_piece_field', observed)
+    value, _, meta = make_cell(quadrature=24).evaluate(gap=gap, epsilon=epsilon)
+    np.testing.assert_allclose(value, expected, rtol=0, atol=3e-10)
+    assert sum(shape[0] for shape in visited) == 72
+    assert all(shape[0] <= tile_rows and shape[1] == 120 for shape in visited)
+    assert visited[-1][0] == 72 % tile_rows
+    assert meta['maximum_field_samples'] == tile_rows*120
+
+
 @pytest.mark.parametrize('e,angle', [(4., 0.), (4.+.2j, 0.), (-10.+1j, 1.53)])
 @pytest.mark.parametrize('gap', [0., 7.])
 def test_uniform_material_is_exact_without_a_finite_field_error(e, angle, gap):
@@ -101,6 +122,7 @@ def test_uniform_material_is_exact_without_a_finite_field_error(e, angle, gap):
     identity = np.eye(15)
     np.testing.assert_allclose(slots, np.array([e*identity, e*identity, identity/e,
                                               0*identity, 0*identity])[:, None], rtol=0, atol=2e-13)
+    assert meta['reciprocity_error'] < 2e-13
 
 
 @pytest.mark.parametrize('gap', [0., 7.])
@@ -140,13 +162,40 @@ def test_admission_order_is_not_a_quadrature_accuracy_guarantee():
 @pytest.mark.parametrize('gap', [0., 7.])
 def test_laminated_limit_recovers_exact_cartesian_inverse_and_direct_rules(epsilon, gap):
     cell = make_cell(height=560., offset=(0., 0.), order=(2, 1), quadrature=24)
-    _, slots, _ = cell.evaluate(gap=gap, epsilon=epsilon)
+    _, slots, meta = cell.evaluate(gap=gap, epsilon=epsilon)
     shapes = [dict(type='rectangle', lx=170., ly=560., cx=-(230.+gap)/2, material=epsilon[0]),
               dict(type='rectangle', lx=230., ly=560., cx=(170.+gap)/2, material=epsilon[1])]
     e, r = P.assemble_eps_coeffs(np, shapes, 1., 2, 1, as_lattice(lattice=GEOMETRY['basis']), np.complex128)
     e, r = P.conv_matrix_2d(np, e, 2, 1), P.conv_matrix_2d(np, r, 2, 1)
     expected = np.array([np.linalg.inv(r), e, np.linalg.inv(e), np.zeros_like(e), np.zeros_like(e)])[:, None]
     np.testing.assert_allclose(slots, expected, rtol=0, atol=3e-10)
+    assert meta['reciprocity_error'] < 3e-10
+
+
+@pytest.mark.parametrize('name', MATERIALS)
+def test_reciprocity_diagnostic_matches_transpose_in_a_real_standing_wave_basis(name):
+    _, slots, meta = make_cell().evaluate(gap=0., epsilon=MATERIALS[name])
+    tensor = np.block([[slots.epx[0], -slots.epxy[0]], [-slots.epyx[0], slots.epy[0]]])
+    modes = [(m, n) for n in range(-2, 3) for m in range(-1, 2)]
+    index = {k: i for i, k in enumerate(modes)}
+    transform = np.zeros((len(modes), len(modes)), complex)
+    transform[index[0, 0], 0] = 1.
+    used, column = {(0, 0)}, 1
+    for m, n in modes:
+        if (m, n) in used:
+            continue
+        a, b = index[m, n], index[-m, -n]
+        transform[[a, b], column] = 1/np.sqrt(2)
+        transform[a, column+1], transform[b, column+1] = -1j/np.sqrt(2), 1j/np.sqrt(2)
+        used.update([(m, n), (-m, -n)])
+        column += 2
+    zero = np.zeros_like(transform)
+    change = np.block([[transform, zero], [zero, transform]])
+    real_basis = change.conj().T@tensor@change
+    expected = np.linalg.norm(real_basis-real_basis.T)/max(np.linalg.norm(real_basis), 1.)
+    np.testing.assert_allclose(meta['relative_reciprocity_defect'], expected, rtol=0, atol=3e-13)
+    if name == 'equal':
+        assert expected < 1e-12
 
 
 @pytest.fixture(scope='module')
@@ -288,6 +337,19 @@ def test_reverse_gap_derivative_matches_the_forward_linear_functional(gap, jax_r
     slots = tangent[1]
     expected = np.real(np.sum(np.asarray(slots)*np.arange(slots.size).reshape(slots.shape)/slots.size))
     np.testing.assert_allclose(reverse, expected, rtol=1e-10, atol=1e-10)
+
+
+def test_numpy_tiles_and_single_expression_jax_have_the_same_coefficients(jax_runtime):
+    jax, jnp, _ = jax_runtime
+    cell = make_cell(quadrature=32)
+    value, slots, meta = cell.evaluate(gap=0., epsilon=MATERIALS['metal'])
+    def replay(g):
+        c, s, m = cell.evaluate(gap=g, epsilon=MATERIALS['metal'], xp=jnp)
+        return c, jnp.stack(s), m['field_tile_rows']
+    got, gs, rows = jax.jit(replay)(jnp.asarray(0.))
+    np.testing.assert_allclose(got, value, rtol=0, atol=3e-10)
+    np.testing.assert_allclose(gs, slots, rtol=0, atol=3e-10)
+    assert meta['field_tile_rows'] == 64 and rows == 96
 
 
 @pytest.mark.parametrize('change', [dict(gap=-1.), dict(gap=301.), dict(gap=np.nan),
