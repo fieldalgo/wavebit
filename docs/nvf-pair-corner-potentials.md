@@ -72,6 +72,20 @@ The normalized common/disappearing equations are solved together:
 [ Mzc       Mzz    ] [ uz ]    [ Sz ].
 ```
 
+For positive gaps, the complete solve uses `vc=uc`, `vz=sqrt(s)*uz`:
+
+```text
+[ Mcc             sqrt(s) Mzc^T ] [ vc ] = -[ Sc         ]
+[ sqrt(s) Mzc     Mzz           ] [ vz ]    [ sqrt(s) Sz ].
+```
+
+This real coordinate change balances the common/disappearing off-diagonal
+blocks. The tensor and its JVP are both evaluated from this complete system.
+The derivative includes `d(sqrt(s))=ds/(2*sqrt(s))` in the matrix, source and
+mapping back to the original potential derivative. The reported condition
+number describes this balanced system. Exact contact retains its separate
+analytic limit and never evaluates a square-root quotient at zero.
+
 Every real geometry QR column is retained. Differentiation includes all moving
 measures, fields, retained moments and material terms. If original differentiated
 equations remain unresolved, the existing `1e-11` internal refinement target
@@ -96,6 +110,8 @@ for zero.
 Measurements use the existing NumPy 2.5.1 runtime on macOS arm64 with Python
 3.12 and one BLAS thread. The tests provide the reproduction criteria; the
 additional resolution measurements below are observations, not optical goldens.
+The measurements below preceded the square-root coordinate balance; current
+regressions repeat their acceptance criteria with the balanced full solve.
 The tabulated run's raw log is not published. The committed contact-limit test
 repeats its acceptance criteria with the class's contact quadrature floor of 48.
 

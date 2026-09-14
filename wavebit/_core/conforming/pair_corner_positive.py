@@ -68,11 +68,27 @@ def response(obj,settings,base,order,quadrature,free,Q,dQ,original_blocks):
     S[nc:]=tz.T@S[nc:];DS[nc:]=tz.T@DS[nc:]
     M[:nc,nc:]=s*M[nc:,:nc].T
     DM[:nc,nc:]=ds*M[nc:,:nc].T+s*DM[nc:,:nc].T
-    u=np.linalg.solve(M,-S);du=np.linalg.solve(M,-DS-DM@u)
-    rev=info['reverse'];B=S[:,rev].T;DB=DS[:,rev].T
-    H=free[0]+B[:,:nc]@u[:nc]+s*B[:,nc:]@u[nc:]
-    DH=(free[1]+DB[:,:nc]@u[:nc]+B[:,:nc]@du[:nc]
-        +ds*B[:,nc:]@u[nc:]+s*(DB[:,nc:]@u[nc:]+B[:,nc:]@du[nc:]))
+    # Balance every disappearing coordinate by sqrt(gap). The normalized
+    # equations have off-diagonal blocks Mdc and gap*Mdc.T; their symmetric
+    # coordinates avoid an ill-conditioned full derivative solve near contact.
+    # Differentiate the coordinate map along with every matrix/source block.
+    tau=np.sqrt(s);dtau=ds/(2*tau)
+    balanced=M.copy();dbalanced=DM.copy()
+    balanced[nc:,:nc]=tau*M[nc:,:nc]
+    balanced[:nc,nc:]=balanced[nc:,:nc].T
+    dbalanced[nc:,:nc]=dtau*M[nc:,:nc]+tau*DM[nc:,:nc]
+    dbalanced[:nc,nc:]=dbalanced[nc:,:nc].T
+    source=S.copy();dsource=DS.copy()
+    source[nc:]*=tau
+    dsource[nc:]=dtau*S[nc:]+tau*DS[nc:]
+    v=np.linalg.solve(balanced,-source)
+    dv=np.linalg.solve(balanced,-dsource-dbalanced@v)
+    rev=info['reverse'];B=source[:,rev].T;DB=dsource[:,rev].T
+    H=free[0]+B@v
+    DH=free[1]+DB@v+B@dv
+    u=v.copy();du=dv.copy()
+    u[nc:]/=tau
+    du[nc:]=(dv[nc:]-dtau*u[nc:])/tau
     U=np.vstack([tc@u[:nc],tz@u[nc:]])
     DU=np.vstack([tc@du[:nc],tz@du[nc:]])
     x=np.eye(2*N)-Q@U;dx=-dQ@U-Q@DU
@@ -91,10 +107,12 @@ def response(obj,settings,base,order,quadrature,free,Q,dQ,original_blocks):
         if retained_error<1e-11:retained[:]=0.
         if flux_error<1e-11:flux[:]=0.
         forcing=-defect+(SS-QT@A)@retained-QT@flux
-        correction=coordinate@np.linalg.solve(M,coordinate.T@forcing)
+        right=coordinate.T@forcing;right[nc:]*=tau
+        local_correction=np.linalg.solve(balanced,right);local_correction[nc:]/=tau
+        correction=coordinate@local_correction
         DU+=correction;dx-=retained+Q@correction
         DH+=-flux-A@retained+(R-A@Q)@correction
-    return U,DU,x,dx,H,DH,float(np.linalg.cond(M))
+    return U,DU,x,dx,H,DH,float(np.linalg.cond(balanced))
 
 
 def verify(obj,settings,base,order,quadrature,U,x,dxgeo):

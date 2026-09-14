@@ -124,6 +124,13 @@ def test_material_directions_are_complex_linear_and_add_to_gap_direction():
     np.testing.assert_allclose(together, gap+material, atol=3e-9, rtol=0)
 
 
+def test_negative_gap_direction_rescales_the_complete_positive_jvp():
+    value, tangent, _ = closure()
+    reversed_value, reversed_tangent, _ = closure(gap_tangent=-.75)
+    np.testing.assert_allclose(reversed_value, value, atol=3e-10, rtol=0)
+    np.testing.assert_allclose(reversed_tangent, -.75*tangent, atol=3e-9, rtol=0)
+
+
 def test_length_units_preserve_value_and_inverse_length_gap_derivative():
     value, tangent, _ = closure()
     scaled, dscaled, _ = closure(length=700.)
