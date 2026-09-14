@@ -13,7 +13,7 @@ from numbers import Integral
 from collections import Counter
 from types import MappingProxyType
 import numpy as np
-from .cartesian_pair import CartesianPairPlan
+from .cartesian_pair import CartesianPairPlan, _refined_topology
 from ..factorization import ConvMatrices
 from ..polygon import polygon_ft
 from .material_sector import (
@@ -85,9 +85,14 @@ def canonical(triangle, tag):
 
 
 def topology(plan):
-    ow, ot, om, op = CartesianPairPlan(False, plan.shift, plan.refinement).topology()
-    cw, ct, cm, cp = CartesianPairPlan(True, plan.shift, plan.refinement).topology()
-    denominator = 2**plan.refinement
+    return _opening_topology(plan.shift, plan.refinement)
+
+
+def _opening_topology(shift, refinement):
+    """Certified collapse graph, also usable for P2 edge-node refinement."""
+    ow, ot, om, op = _refined_topology(False, shift, refinement)
+    cw, ct, cm, cp = _refined_topology(True, shift, refinement)
+    denominator = 2**refinement
     on, cn = ow * denominator, cw * denominator
     if not np.array_equal(on, np.round(on)) or not np.array_equal(cn, np.round(cn)):
         raise ValueError("topology weights are not exactly dyadic at this refinement")

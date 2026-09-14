@@ -65,6 +65,25 @@ def triangle_phase_average(points, velocity, wave):
     return value, derivative
 
 
+def triangle_linear_phase_average(points, velocity, wave):
+    """Reference means of lambda_i times a plane wave and their derivatives.
+
+    The last two result axes are (3, modes). Their sum over the barycentric
+    index is ``triangle_phase_average``. A repeated phase contributes twice
+    to its derivative; this matters even at a geometrically collapsed face.
+    """
+    phase = -1j * np.einsum('md,...vd->...mv', wave, points)
+    speed = -1j * np.einsum('md,...vd->...mv', wave, velocity)
+    values, derivatives = [], []
+    for i in range(3):
+        indices = [0, 1, 2, i]
+        values.append(2 * _exp_divided_difference(phase[..., indices]))
+        derivatives.append(sum(2 * (1 + (i == j)) * speed[..., j]
+                               * _exp_divided_difference(phase[..., indices+[j]])
+                               for j in range(3)))
+    return np.stack(values, -2), np.stack(derivatives, -2)
+
+
 def quadratic_triangle_weights(points, velocity, wave):
     """Return six signed integrals and their moving-vertex derivatives.
 

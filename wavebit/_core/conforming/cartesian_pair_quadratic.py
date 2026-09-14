@@ -19,6 +19,7 @@ from .cartesian_pair_opening import (
     CartesianPairOpeningPlan,
     freeze_topology,
     topology,
+    _opening_topology,
     materials_array,
     real_array,
     validate_geometry,
@@ -32,7 +33,7 @@ from .material_sector import (
 def _quadratic_topology(plan):
     """Use the next P1 node graph as the six-node P2 graph on this mesh."""
     coarse = topology(plan)
-    fine = topology(CartesianPairOpeningPlan(plan.shift, plan.refinement+1))
+    fine = _opening_topology(plan.shift, plan.refinement+1)
     weights = fine["open_numerators"] / fine["weight_denominator"]
     parents = coarse["open_numerators"] / coarse["weight_denominator"]
     lookup = {tuple(row): i for i, row in enumerate(weights)}

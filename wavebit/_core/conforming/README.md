@@ -14,7 +14,8 @@
 | `cartesian_pair.py` | How do two horizontal equal-height rectangles retain physical edges, exact contact state, input identity and finite derivatives through an explicitly planned public adapter? |
 | `cartesian_pair_opening.py` | How does the finite pair retain its analytical right-opening response through exact collapsed topology, Laurent weak operators and moving Fourier weights? |
 | `cartesian_pair_quadratic.py` | Does a quadratic potential retain a finite contact derivative on the same geometry and periodic collapse graph? |
-| `cartesian_pair_galerkin.py` | Can independent real gradient corrections for every retained field preserve reciprocity, passivity and complex-linear material/contact derivatives in the original weak equations? |
+| `cartesian_pair_galerkin.py` | Can real linear or quadratic potential corrections for every retained field preserve reciprocity, passivity and complex-linear material/contact derivatives in the original weak equations? |
+| `periodic_rectangle_galerkin.py` | Can the same retained-field constraints cross a rectangle's periodic closing gap with a finite original contact derivative? |
 | `cartesian_pair_normal_frame.py` | Can a material-referenced normal frame retain coercivity and fitted gap/material derivatives without an auxiliary weak solve, and can conjugate-paired energies preserve reciprocity? |
 | `triangle_moments.py` | How can quadratic triangle Fourier integrals and their moving derivatives remain finite at collapse and repeated phases? |
 | `cartesian_pair_gap.py` | How can the finite pair cross exact contact and positive gaps without dividing its weak solve or thin fields by gap? |

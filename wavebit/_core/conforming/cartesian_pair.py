@@ -105,6 +105,42 @@ def _signed_twice_areas(points):
     return np.linalg.det(np.stack([points[:, 1]-points[:, 0], points[:, 2]-points[:, 0]], axis=-1))
 
 
+def _refined_topology(contact, shift, refinement):
+    """Dyadic node graph; one extra level supplies P2 edge nodes only.
+
+    Physical P1 plans retain their 0..3 contract. A quadratic potential on
+    refinement three needs the level-four nodes, but not a level-four P1 cell.
+    """
+    if (isinstance(refinement, (bool, np.bool_)) or not isinstance(refinement, Integral)
+            or refinement not in range(5)):
+        raise ValueError('internal nodal refinement must be in 0..4')
+    cells, tags = _base_topology(contact, shift)
+    weights = np.eye(10 if contact else 12)
+    for _ in range(refinement):
+        midpoint_ids, new = {}, list(weights)
+        def midpoint(a, b):
+            key = tuple(sorted((int(a), int(b))))
+            if key not in midpoint_ids:
+                midpoint_ids[key] = len(new)
+                new.append((weights[a]+weights[b])/2)
+            return midpoint_ids[key]
+        refined = []
+        for a, b, c in cells:
+            ab, bc, ca = midpoint(a, b), midpoint(b, c), midpoint(c, a)
+            refined.extend([(a, ab, ca), (ab, b, bc), (ca, bc, c), (ab, bc, ca)])
+        weights, cells, tags = np.array(new), np.array(refined), np.repeat(tags, 4)
+    lookup, periodic = {}, []
+    for i, row in enumerate(weights):
+        key = ('interior', i) if np.any(row[4:]) else ('boundary', *(row[:4]@_UNIT % 1))
+        if key not in lookup:
+            lookup[key] = len(lookup)
+        periodic.append(lookup[key])
+    periodic = np.array(periodic)
+    for array in (weights, cells, tags, periodic):
+        array.flags.writeable = False
+    return weights, cells, tags, periodic
+
+
 @dataclass(frozen=True)
 class CartesianPairPlan:
     """Concrete cyclic annulus and contact state, fixed during live replay.
@@ -145,31 +181,7 @@ class CartesianPairPlan:
         return cls(contact, next(shift for score, shift in candidates if score >= best-1e-12), refinement)
 
     def topology(self):
-        cells, tags = _base_topology(self.contact, self.shift)
-        weights = np.eye(10 if self.contact else 12)
-        for _ in range(self.refinement):
-            midpoint_ids, new = {}, list(weights)
-            def midpoint(a, b):
-                key = tuple(sorted((int(a), int(b))))
-                if key not in midpoint_ids:
-                    midpoint_ids[key] = len(new)
-                    new.append((weights[a]+weights[b])/2)
-                return midpoint_ids[key]
-            refined = []
-            for a, b, c in cells:
-                ab, bc, ca = midpoint(a, b), midpoint(b, c), midpoint(c, a)
-                refined.extend([(a, ab, ca), (ab, b, bc), (ca, bc, c), (ab, bc, ca)])
-            weights, cells, tags = np.array(new), np.array(refined), np.repeat(tags, 4)
-        lookup, periodic = {}, []
-        for i, row in enumerate(weights):
-            key = ('interior', i) if np.any(row[4:]) else ('boundary', *(row[:4]@_UNIT % 1))
-            if key not in lookup:
-                lookup[key] = len(lookup)
-            periodic.append(lookup[key])
-        periodic = np.array(periodic)
-        for array in (weights, cells, tags, periodic):
-            array.flags.writeable = False
-        return weights, cells, tags, periodic
+        return _refined_topology(self.contact, self.shift, self.refinement)
 
     def replay(self, **geometry):
         control, contact = _physical_geometry(**geometry)

@@ -8,6 +8,7 @@ Targets:
 - `tests/test_nvf_pair_galerkin.py`
 - `studies/nvf_pair_galerkin.py`
 - `studies/results/nvf_pair_galerkin.log`
+- `studies/results/nvf_pair_galerkin_quadratic.log`
 
 The new explicit NumPy finite family solves a different potential correction
 for every retained transverse Fourier column. Its real trial space and original
@@ -21,7 +22,7 @@ qualified default NVF replacement or a completed optical-convergence result.
 ## The retained field is a constraint
 
 Let Phi be the retained orthonormal transverse plane waves, L the gradients of
-real periodic piecewise-linear nodal potentials, and Q their retained Fourier
+real periodic nodal potentials, and Q their retained Fourier
 projection. The constant potential gauge is removed. Write
 
 ```text
@@ -68,6 +69,24 @@ D = K - S Q - Q.H B,
 a = solve(D, -(S - Q.H A)),
 H = A + B a.
 ```
+
+The implementation also eliminates the original weak potentials first when
+their count exceeds the number of retained field/flux unknowns. With
+`U = solve(K, Q.H)` and `V = solve(K, S)`, the same equations become
+
+```text
+[ I-Q V,   Q U ] [x] = [I],
+[-A+R V, I-R U ] [H]   [0]
+a = U H - V x.
+```
+
+At contact, Q.H in these expressions means the analytically scaled test
+moments defined below. Both eliminations differentiate their original equations;
+neither truncates a rank, changes the trial space or adjusts the material. The
+choice depends only on matrix dimensions. Metadata names the `elimination` and
+the selected matrix's `solve_condition`; the old `projected_condition` field
+described only the potential elimination. Independent tests compare both forms
+and reassemble the original nodal equations for each.
 
 The contact version retains the different physical-column and divided-test-row
 scalings described below. The projected matrix has the number of potential
@@ -224,6 +243,65 @@ truncation together; the finite material and reciprocity guarantees alone do
 not establish either optical limit.
 
 
+
+## Quadratic potentials and local assembly
+
+Degree two uses six nodal potentials on each affine triangle. Its gradient
+is linear, specified at the three reference vertices. The physical weak
+integrals therefore contain quadratic polynomials. Fourier loads use the exact
+means `mean(lambda_i exp(-i G.r))`, computed as twice the exponential divided
+difference with vertex i repeated. Differentiating that repeated phase counts
+it twice. These reference means remain finite when a triangle collapses.
+Their sum gives the constant plane-wave mean; no area division is performed.
+
+The contact C/sZ scaling is unchanged. Its transverse polynomial annihilation
+is certified in the integer topology before any physical geometry is evaluated.
+The independent quadratic oracle uses a six-node Vandermonde, rational
+geometric cofactors, numerical Duffy integrals, and successive original Laurent
+equations. Refinement three retains the existing absolute 3e-10 value and 3e-9
+normalized derivative checks. Computing the oracle's cofactors from rounded
+inverse Jacobians initially exceeded the derivative guard; rational cofactors
+resolve that reference roundoff without changing either tolerance.
+
+Assembly now restricts a triangle to the at most three or six potentials it
+actually touches, then scatters its blocks. It no longer constructs a global
+nodal-width gradient or dense global-width local product for every triangle.
+The global weak solve is still dense. This is a bound on local assembly storage,
+not a sparse whole-solver or constant-memory claim.
+
+On the skew, offset metal control at degree two/refinement three and order
+(1,0), the potential elimination's condition number is about 6.74e7, compared
+with 8.65e3 for the retained elimination. This is an observation for that
+specified finite system, not a universal conditioning guarantee. Original
+nodal residuals and the same independent derivative guards apply to either
+elimination.
+
+### Quadratic optical ladder
+
+The quadratic log uses the same fixture, physical power checks and contact
+windows as the linear study above, adding order 12. All 48 requested rows
+passed their finite residual, reciprocity and physical guards. Metal closed
+transmission is:
+
+| Refinement | p, n=4 | p, n=8 | p, n=12 | s, n=4 | s, n=8 | s, n=12 |
+|---:|---:|---:|---:|---:|---:|---:|
+| 0 | 0.378686023 | 0.361990161 | 0.414288503 | 0.631855974 | 0.496658999 | 0.433634811 |
+| 1 | 0.428119068 | 0.457057276 | 0.429199030 | 0.446176516 | 0.415485036 | 0.387158657 |
+| 2 | 0.454192751 | 0.466272060 | 0.442039501 | 0.398871799 | 0.391349471 | 0.395952814 |
+| 3 | 0.467236471 | 0.467848935 | 0.461417724 | 0.417392569 | 0.375747030 | 0.392565033 |
+
+Li at n=12 gives p 0.489085870 and s 0.407928008. Neither the geometric nor
+Fourier ladder is settled by these data. The p contact slope at n=8 also
+changes from -0.0216597 at refinement two to +0.0057894 at refinement three,
+whereas Li gives -0.00323219. Thus the larger space does not qualify the metal
+contact derivative, despite its exact finite algebraic properties.
+
+The separate [periodic rectangle study](nvf-periodic-galerkin.md) applies the
+same equations to the original closing-gap case. It improves that case's
+p-polarized derivative substantially but retains an s-polarized trace error.
+Neither study changes ordinary NVF dispatch.
+
+
 ## Explicit use
 
 ```python
@@ -233,7 +311,7 @@ from wavebit._core.conforming.cartesian_pair_galerkin import CartesianPairGalerk
 
 geometry = dict(basis=np.diag([700., 700.]), widths=(300., 300.), height=300.)
 plan = CartesianPairOpeningPlan.from_geometry(**geometry, refinement=1)
-cell = CartesianPairGalerkinGapCell(plan, order=(2, 1), coercivity_angle=1.53)
+cell = CartesianPairGalerkinGapCell(plan, order=(2, 1), degree=2, coercivity_angle=1.53)
 slots, gap_derivative, metadata = cell.closure(
     gap=0., epsilon=(12.25, -10.+1j), **geometry)
 
@@ -251,6 +329,13 @@ NumPy-only; no JAX tracing or automatic public NVF dispatch is supplied. Plannin
 and geometry admission follow the existing Cartesian pair family, with strict
 containment and refinement 0 through 3.
 
+`degree=1` remains the default and uses three linear potential nodes per
+triangle. `degree=2` uses six quadratic potential nodes and a linear gradient.
+Both permit geometric refinements 0 through 3. Degree two at refinement three
+has 2,303 open and 1,791 contact free potentials; its edge nodes use the next
+dyadic graph. This does not expand the separate P1 plan's refinement contract
+or the earlier two-corrector quadratic cell's supported range.
+
 No dependency, external solver, copied source or reference data was added. The
 implementation uses the existing NumPy dependency and repository triangle and
 periodic-topology code. Reproduce from the checkout:
@@ -258,4 +343,5 @@ periodic-topology code. Reproduce from the checkout:
 ```sh
 PYTHONPATH=. python -m pytest -q tests/test_nvf_pair_galerkin.py tests/test_nvf_pair_quadratic.py
 PYTHONPATH=. OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_pair_galerkin
+PYTHONPATH=. OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_pair_galerkin --degree 2 --orders 4 8 12 --out studies/results/nvf_pair_galerkin_quadratic.log
 ```

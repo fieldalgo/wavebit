@@ -71,6 +71,7 @@ comes next. The outward-pointing rule above binds `guide/` too; only the house s
 | Document | Question it answers | Decision |
 | --- | --- | --- |
 | [`nvf-pair-galerkin.md`](nvf-pair-galerkin.md) | Can a real constrained-gradient space retain reciprocity, passivity and holomorphic material dependence across contact? | Original nodal/Laurent checks verify the finite response and its derivatives; metal optical convergence remains separate. |
+| [`nvf-periodic-galerkin.md`](nvf-periodic-galerkin.md) | Does a constrained real field resolve periodic closing-gap optics? | The p derivative approaches Li; s retains a significant trace-space error despite the correct closed-bar value. |
 | [`nvf-paired-frame.md`](nvf-paired-frame.md) | Can a conjugate pair of normalized field energies retain reciprocity and passivity together? | The explicit paired closure preserves both with finite gap/material derivatives and exact uniform/laminated controls; optical convergence remains separate. |
 | [`nvf-pair-normal-frame.md`](nvf-pair-normal-frame.md) | Can a material-referenced normal frame remove the auxiliary weak solve while retaining contact derivatives? | Coercivity and exact finite controls pass; tiled integration lowers memory, but complex reciprocity and metal optics remain unresolved. |
 | [`nvf-pair-quadratic.md`](nvf-pair-quadratic.md) | Does a quadratic auxiliary potential improve matched-size contact cells? | Exact polynomial transforms and finite derivatives are verified; dielectric comparisons improve while metal convergence remains unresolved. |
