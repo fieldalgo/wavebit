@@ -7,6 +7,8 @@ Targets:
 - `tests/test_nvf_seam_galerkin.py`
 - `studies/nvf_coupled_seam_galerkin.py`
 - `studies/results/nvf_coupled_seam_galerkin.log`
+- `studies/results/nvf_coupled_seam_galerkin_fine.log`
+- `studies/results/nvf_coupled_seam_galerkin_order7.log`
 
 TL;DR: The quadratic periodic mesh and continuous seam potentials now share
 one physical weak solve, including all transverse Fourier components and
@@ -78,6 +80,18 @@ artificial O(1/sqrt(gap)) partition-transport terms analytically. This keeps
 the same energy and guard while avoiding cancellation of large quadrature
 terms. The solve itself still differentiates the original full weak system.
 
+The energy check separates the pure Fourier term as well. Multiplying two
+retained plane waves reaches twice the retained frequency. At Fourier order
+7, a 32-point rule resolves the mixed weak integrals but leaves about 1e-8
+error in this higher-frequency energy term; 48-point integration reduces it
+below 1e-13. The pure Fourier energy and its material/gap derivative are now
+evaluated by an independent exact rectangle transform and checked against
+the original triangle convolution. The mixed and auxiliary energies retain
+their physical quadrature checks. This changes neither the assembled weak
+system nor its analytical tensor JVP, and retains the 1e-10 energy guard.
+Two regressions check 32/48 agreement, and a separate rectangle quadrature
+verifies the exact term and its variation.
+
 ## Exact contact coefficients
 
 At contact, the seam self energy divided by s is the background-weighted
@@ -135,7 +149,7 @@ continuum error bound. The separate optical study reports p and s results
 across Fourier and mesh orders; it retains physical power and all original
 residual checks.
 
-The 21 coupled tests, 53 seam-component tests and 52 documentation checks
+The 24 coupled tests, 53 seam-component tests and 52 documentation checks
 pass. The numerical checks used NumPy 2.5.1 on an Apple Silicon host. The
 optical fixture is the same lossless 700 by 700 cell, width 350, epsilon
 12.25, background 1, film thickness 300, wavelength 900, theta 0.2 and phi
@@ -152,6 +166,35 @@ analytical contact tensor JVP, all residuals, and source hashes:
 | 3 | 1 | 0.00155608195 | 0.00465156950 |
 | 5 | 0 | 0.00187030080 | 0.00018648870 |
 | 5 | 1 | 0.00185494947 | 0.00018648864 |
+
+A further four-row record at Fourier order 3 retains the same positive-gap
+checks on the two finer meshes:
+
+| Fourier order | Mesh refinement | p contact dT/dgap | s contact dT/dgap |
+| ---: | ---: | ---: | ---: |
+| 3 | 2 | 0.00148214497 | 0.00465156949 |
+| 3 | 3 | 0.00147689623 | 0.00465156944 |
+
+The two records above carry source hashes from `ad907d0`. The subsequent
+exact Fourier energy check affects verification, not their constitutive
+operators or tensor derivatives. Every fine-mesh row also passes the
+original and energy guards. The p slope approaches the finite-order Li
+comparison with mesh refinement, while the s slope remains stable. This
+is a finite-order check, not a continuum stopping rule.
+
+After exact integration of the pure Fourier verification term, the order-7
+record also passes the unchanged original, energy and physical power guards:
+
+| Fourier order | Mesh refinement | p contact dT/dgap | s contact dT/dgap |
+| ---: | ---: | ---: | ---: |
+| 7 | 0 | 0.00192106198 | -0.00077857504 |
+| 7 | 1 | 0.00194293045 | -0.00077857503 |
+
+The s slope now has the negative sign of the independent finite-order
+contact reference, rather than the positive coarse-mesh value of the
+unenriched family. The p slope is not monotone across these two coarse
+meshes and still differs from the Li comparison near 0.00189155. The
+order-3 refinement result must not be generalized to all Fourier orders.
 
 The explicit Li comparison's one-sided 1e-5 gap secants are approximately
 0.00147641711 and 0.00465156096 for p/s at order 3, and 0.00181767279 and

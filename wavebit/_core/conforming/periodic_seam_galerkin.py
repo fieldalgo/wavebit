@@ -13,6 +13,32 @@ from .cartesian_pair_galerkin import _response, _slots, _relative, _solve
 from .cartesian_pair_opening import real_array
 from .material_sector import minimum_rotated_storage
 
+def _free_fourier_energy(order, settings):
+    """Independent exact rectangle energy for two retained plane waves.
+
+    Their product reaches twice the retained frequency. Integrating it with
+    the mixed field rule aliases high orders even when the weak solve and
+    every original nodal reaction are resolved. This separated rectangle
+    integral checks the original triangle convolution independently.
+    """
+    nx, ny = order
+    modes = np.array([(m, n) for n in range(-ny, ny + 1) for m in range(-nx, nx + 1)])
+    difference = modes[:, None, :] - modes[None, :, :]
+    px, py = settings['period']
+    width = settings['width'] / px
+    height = (py - settings['gap']) / py
+    phase = np.exp(-2j * np.pi * (difference @ (.5 + np.asarray(settings['offset']) / (px, py))))
+    horizontal = width * np.sinc(difference[:, :, 0] * width)
+    indicator = horizontal * height * np.sinc(difference[:, :, 1] * height) * phase
+    change = (-settings['gap_tangent'] / py * horizontal
+              * np.cos(np.pi * difference[:, :, 1] * height) * phase)
+    epsilon, background = settings['epsilon'], settings['background']
+    de, db = settings['epsilon_tangent'], settings['background_tangent']
+    identity = np.eye(len(modes))
+    value = background * identity + (epsilon - background) * indicator
+    derivative = db * identity + (de - db) * indicator + (epsilon - background) * change
+    return np.kron(np.eye(2), value), np.kron(np.eye(2), derivative)
+
 def _quadrature(obj, trace, base, settings, qorder, split=True):
     """Moving triangle/trace intersections, physical gradients and their JVP.
 
@@ -214,8 +240,13 @@ energy or discarding a weak-system derivative.
     dres = res.copy()
     res_scale = np.zeros_like(res, float)
     dres_scale = res_scale.copy()
-    energy = np.zeros_like(H)
-    denergy = energy.copy()
+    exact_free, exact_free_derivative = _free_fourier_energy(order, settings)
+    dx_geometry = -dQQ @ U
+    reverse = info['reverse']
+    xr, dxr = x[:, reverse].T[:, reverse], dx_geometry[:, reverse].T[:, reverse]
+    energy = x.conj().T @ exact_free @ x
+    denergy = (dxr @ exact_free @ x + xr @ exact_free_derivative @ x
+               + xr @ exact_free @ dx_geometry)
     for ids, ci, zi, w, dw, mat, dmat, phase, dphase, gc, dgc, gz, dgz, le, dle, gn, dgn in _quadrature(obj, trace, base, settings, quadrature_order):
         F = np.zeros((len(w), 2, 2 * N), complex)
         DF = F.copy()
@@ -233,7 +264,10 @@ energy or discarding a weak-system derivative.
         np.add.at(dres, ids, change)
         np.add.at(res_scale, ids, _contract('q,qai,qaj->ij', abs(w), abs(gn), abs(mat * E) + abs(F @ H)))
         np.add.at(dres_scale, ids, _contract('q,qai,qaj->ij', abs(dw), abs(gn), abs(T)) + _contract('q,qai,qaj->ij', abs(w), abs(dgn), abs(T)) + _contract('q,qai,qaj->ij', abs(w), abs(gn), abs(DT)))
-        energy += mat * _contract('q,qai,qaj->ij', w, E.conj(), E)
+        free = F @ x
+        correction = gc @ U[ci] + s * gz @ U[nc + zi] + le @ U[nc + nz:]
+        for left, right in ((free, correction), (correction, free), (correction, correction)):
+            energy += mat * _contract('q,qai,qaj->ij', w, left.conj(), right)
         reverse = info['reverse']
         added = le @ U[nc + nz:]
         dadded = dle @ U[nc + nz:]
@@ -248,14 +282,24 @@ energy or discarding a weak-system derivative.
         F[:, 1, N:] = phase.conj()
         DF[:, 0, :N] = dphase.conj()
         DF[:, 1, N:] = dphase.conj()
-        E = F @ x + gc @ U[ci] + s * gz @ U[nc + zi]
-        DE = DF @ x + dgc @ U[ci] + ds * gz @ U[nc + zi] + s * dgz @ U[nc + zi] - F @ (dQQ @ U)
+        free = F @ x
+        dfree = DF @ x - F @ (dQQ @ U)
+        correction = gc @ U[ci] + s * gz @ U[nc + zi]
+        dcorrection = dgc @ U[ci] + ds * gz @ U[nc + zi] + s * dgz @ U[nc + zi]
         reverse = info['reverse']
-        denergy += dmat * _contract('q,qai,qaj->ij', w, E[:, :, reverse], E) + mat * _contract('q,qai,qaj->ij', dw, E[:, :, reverse], E) + mat * _contract('q,qai,qaj->ij', w, DE[:, :, reverse], E) + mat * _contract('q,qai,qaj->ij', w, E[:, :, reverse], DE)
+        for left, dl, right, dright in ((free, dfree, correction, dcorrection),
+                                       (correction, dcorrection, free, dfree),
+                                       (correction, dcorrection, correction, dcorrection)):
+            denergy += (dmat * _contract('q,qai,qaj->ij', w, left[:, :, reverse], right)
+                        + mat * _contract('q,qai,qaj->ij', dw, left[:, :, reverse], right)
+                        + mat * _contract('q,qai,qaj->ij', w, dl[:, :, reverse], right)
+                        + mat * _contract('q,qai,qaj->ij', w, left[:, :, reverse], dright))
     rr = info['reverse']
     meta = dict(condition=cond, reciprocity=_relative(H - H[rr][:, rr].T, H), derivative_reciprocity=_relative(DH - DH[rr][:, rr].T, DH), original_residual=_relative(res, res_scale), original_derivative_residual=_relative(dres, dres_scale), energy_residual=_relative(energy - H, H), energy_derivative_residual=_relative(denergy - DH, DH), minimum_rotated_storage=minimum_rotated_storage(H, obj._phase), minimum_dissipation=np.linalg.eigvalsh((H - H.conj().T) / 2j)[0])
     meta['weak_residual'] = _relative(KK @ U + SS @ x - QT @ H, KK @ U, SS @ x, QT @ H)
     meta['weak_derivative_residual'] = _relative(dKK @ U + KK @ dU + dSS @ x + SS @ dx - dQT @ H - QT @ DH, dKK @ U, KK @ dU, dSS @ x, SS @ dx, dQT @ H, QT @ DH)
+    meta['direct_fourier_residual'] = _relative(A - exact_free, exact_free)
+    meta['direct_fourier_derivative_residual'] = _relative(DA - exact_free_derivative, exact_free_derivative)
     inv = _solve(e, np.eye(N))
     return (_slots(H, inv), _slots(DH, -inv @ de @ inv), meta)
 

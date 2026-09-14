@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 from numpy.polynomial.legendre import leggauss
 
-from wavebit._core.conforming.periodic_seam_galerkin import PeriodicSeamGalerkinGapCell
+from wavebit._core.conforming.periodic_seam_galerkin import PeriodicSeamGalerkinGapCell, _free_fourier_energy
 from wavebit._core.conforming.periodic_rectangle_galerkin import PeriodicRectangleGalerkinGapCell
 from test_nvf_periodic_galerkin import oracle_chart
 from test_nvf_pair_quadratic import nodal_gradients
@@ -199,6 +199,46 @@ def test_units_translation_and_quadrature_preserve_the_coupled_tensor(gap):
     expected_tangent = phase[:, None]*np.asarray(derivative)*phase.conj()
     np.testing.assert_allclose(other, expected, atol=3e-10, rtol=0)
     np.testing.assert_allclose(change, expected_tangent, atol=3e-10, rtol=0)
+
+
+@pytest.mark.parametrize('epsilon', (12.25, -10+1j))
+def test_double_retained_frequency_does_not_alias_the_energy_check(epsilon):
+    values = [PeriodicSeamGalerkinGapCell((0, 7), quadrature=q, coercivity_angle=1.53).closure(
+        gap=.001, epsilon=epsilon, **SETTINGS) for q in (32, 48)]
+    np.testing.assert_allclose(values[0][0], values[1][0], atol=3e-10, rtol=0)
+    np.testing.assert_allclose(560*np.asarray(values[0][1]), 560*np.asarray(values[1][1]), atol=3e-9, rtol=0)
+    for _, _, metadata in values:
+        assert metadata['energy_residual'] < 1e-10
+        assert metadata['energy_derivative_residual'] < 1e-10
+        assert metadata['direct_fourier_residual'] < 1e-10
+        assert metadata['direct_fourier_derivative_residual'] < 1e-10
+
+
+def test_exact_free_energy_matches_independent_rectangle_quadrature_and_variation():
+    order = (2, 3)
+    settings = dict(SETTINGS, gap=17., epsilon=-10+1j, background=1+.1j,
+                    gap_tangent=.7, epsilon_tangent=.2+.3j, background_tangent=-.1+.2j)
+    value, derivative = _free_fourier_energy(order, settings)
+    modes = np.array([(m, n) for n in range(-3, 4) for m in range(-2, 3)])
+    node, weight = leggauss(40)
+    def reference(step):
+        gap = settings['gap']+step*settings['gap_tangent']
+        epsilon = settings['epsilon']+step*settings['epsilon_tangent']
+        background = settings['background']+step*settings['background_tangent']
+        px, py = settings['period']
+        x = px/2+settings['offset'][0]+settings['width']*node/2
+        y = py/2+settings['offset'][1]+(py-gap)*node/2
+        xx, yy = np.meshgrid(x, y, indexing='ij')
+        phase = np.exp(2j*np.pi*np.column_stack([xx.ravel()/px, yy.ravel()/py])@modes.T)
+        weights = (weight[:, None]*weight[None]*settings['width']*(py-gap)/(4*px*py)).ravel()
+        indicator = phase.conj().T@(weights[:, None]*phase)
+        material = background*np.eye(len(modes))+(epsilon-background)*indicator
+        return np.kron(np.eye(2), material)
+    np.testing.assert_allclose(value, reference(0.), atol=3e-10, rtol=0)
+    for h in (.002, .001):
+        samples = [reference(i*h) for i in (-2, -1, 1, 2)]
+        expected = (samples[0]-8*samples[1]+8*samples[2]-samples[3])/(12*h)
+        np.testing.assert_allclose(derivative, expected, atol=3e-9, rtol=0)
 
 
 @pytest.mark.parametrize('update', ({'gap': -1.}, {'gap': 560.}, {'width': 0.},
