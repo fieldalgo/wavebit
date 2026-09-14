@@ -48,6 +48,23 @@ def _exp_divided_difference(nodes):
     return values[..., 0]
 
 
+def triangle_phase_average(points, velocity, wave):
+    """Mean plane wave on an affine triangle, including its collapsed limit.
+
+    This is twice the integral on the reference simplex, not a physical
+    integral divided numerically by area. Leading triangle batch axes are
+    supported with one shared (modes, 2) wave array. Its moving-vertex derivative is
+    consequently finite even when two physical vertices coincide. Multiplying
+    by the signed physical area gives the ordinary indicator transform.
+    """
+    phase = -1j * np.einsum('md,...vd->...mv', wave, points)
+    speed = -1j * np.einsum('md,...vd->...mv', wave, velocity)
+    value = 2 * _exp_divided_difference(phase)
+    derivative = sum(2 * speed[..., i] * _exp_divided_difference(
+        phase[..., [0, 1, 2, i]]) for i in range(3))
+    return value, derivative
+
+
 def quadratic_triangle_weights(points, velocity, wave):
     """Return six signed integrals and their moving-vertex derivatives.
 

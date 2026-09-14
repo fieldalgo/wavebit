@@ -12,6 +12,7 @@ is still being investigated belongs here until a reference value is established.
 
 | Script | Question it answers |
 | --- | --- |
+| `nvf_pair_galerkin.py`, `results/nvf_pair_galerkin.log` | Does a real constrained-gradient response improve contact optics when potential and Fourier spaces are refined independently? [Finite guarantees and optical evidence](../docs/nvf-pair-galerkin.md). |
 | `nvf_pair_reciprocal_energy.py`, `results/nvf_pair_reciprocal_energy.log` | Does averaging conjugate-paired physical field energies restore reciprocity while retaining passivity, contact derivatives and optical accuracy? [Finite guarantees and optical limits](../docs/nvf-paired-frame.md). |
 | `nvf_pair_normal_frame.py`, `results/nvf_pair_normal_frame.log` | Does a coercive material-referenced normal frame resolve contact optics without an auxiliary weak solve? Finite controls pass, but independent quadrature and Fourier ladders retain optical discrepancies. [Method and limits](../docs/nvf-pair-normal-frame.md). |
 | `nvf_pair_normal_frame_quadrature.py`, `results/nvf_pair_normal_frame_quadrature.log` | Does row-wise field integration lower memory while preserving the same finite coefficients, and how much error remains on a finer inner quadrature ladder? [Storage and integration evidence](../docs/nvf-pair-normal-frame.md#bounded-numpy-field-storage). |
