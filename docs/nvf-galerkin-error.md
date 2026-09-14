@@ -4,9 +4,13 @@ Written: 2026-09-14
 
 Targets:
 - `wavebit/_core/conforming/galerkin_error.py`
+- `wavebit/_core/conforming/equilibrated_flux.py`
 - `tests/test_nvf_galerkin_error.py`
+- `tests/test_nvf_equilibrated_flux.py`
 - `studies/nvf_galerkin_error.py`
 - `studies/results/nvf_galerkin_error.log`
+- `studies/nvf_equilibrated_flux.py`
+- `studies/results/nvf_equilibrated_flux.log`
 
 The finite weak residual checks whether the selected nodal equations were
 solved. It does not measure the field omitted by that mesh. The new closed-cell
@@ -50,6 +54,53 @@ D_h has continuous normal traces. Its high Fourier modes are divergence-free;
 its retained part is free to represent the constitutive response. No complex
 material-dependent trial frame is introduced. The dual tensor is returned as
 a diagnostic and never substituted into the electric tensor.
+
+### Minimizing the mismatch within the same flux space
+
+The optional `flux='least_squares'` strategy keeps the original electric solve
+and minimizes `integral(|epsilon*E_h - D_h|^2/a)` over all fields
+`D_h = Phi*y + R grad(v)` in the same closed potential space. This is a
+positive weighted projection, with complex coefficients in the original real
+geometric basis. The default `flux='surrogate'` retains the reciprocal-material
+method above.
+
+Let G contain the closed common gradients, C(w) be the scalar Fourier
+convolution matrix of w, Q(w) = integral(Phi^H w G), and
+K(w) = integral(G^T w G). With w = 1/a, the full projection system is
+
+```text
+L = [ diag(C(w), C(w))       R Q(w) ]
+    [ (R Q(w))^H             K(w)  ]
+
+b = [ integral(Phi^H w epsilon E_h)       ]
+    [ integral((R G)^T w epsilon E_h)     ]
+
+L [y; v] = b.
+```
+
+The nodal gauge is fixed exactly as in the original closed cell. No potential
+or retained mode is deleted. A separate geometry-identical cell at angle zero
+assembles the positive metric materials, even when the physical material
+sector uses an angle beyond pi/2. The forcing uses the original physical
+sector. Finite, Hermitian, Cholesky positivity and original weighted
+stationarity checks guard the projection before evaluating the residual Gram.
+Neither this metric solve nor the returned flux modifies the electric tensor.
+
+The surrogate flux is a feasible member of the same space. Weighted
+stationarity makes the optimized residual orthogonal to every admissible flux
+variation, for every retained input. Therefore, in exact arithmetic,
+
+```text
+M_surrogate - M_least_squares
+    = integral((D_surrogate - D_least_squares)^H
+               (D_surrogate - D_least_squares)/a) >= 0.
+```
+
+This reduces the bound for every input combination, not merely one sampled
+polarization. Reported floating cancellation allowances still apply. For this
+strategy `dual_tensor` denotes `P D_h`, rather than a separate constitutive
+solution. For real positive materials at angle zero, the weighted optimum
+agrees with the surrogate flux and preserves the hypercircle identity below.
 
 ## Coercivity gives the bound
 
@@ -126,7 +177,7 @@ at roundoff instead of subtracting two large tensor energies.
 
 ## Automatic refinement and its limits
 
-`estimate_closed_error(cell, **geometry)` accepts an explicit pair or periodic
+`estimate_closed_error(cell, flux='surrogate', **geometry)` accepts an explicit pair or periodic
 rectangle Galerkin cell, degree one or two, or the explicit
 [polynomial pair family](nvf-polynomial-galerkin.md), degree two through four.
 Geometry keywords follow that
@@ -134,6 +185,9 @@ cell's `closure` call with gap and all tangents omitted. It returns the
 unchanged electric tensor, dual tensor, raw residual Gram, energy/operator
 bounds and diagnostics. Pair oblique geometry uses the original fixed plan.
 Periodic rectangles retain their positive diagonal basis requirement.
+Both estimator strategies support the same families. The refinement driver
+forwards its `flux` keyword at every level; invalid strategy names are refused
+before a solve. The selected strategy is recorded as `diagnostics['flux_method']`.
 
 `refine_closed_error` begins at that cell's level and advances through the
 supported global refinement range, at fixed order, degree and coercivity
@@ -189,8 +243,8 @@ The pair uses a 700 by 700 cell, two 300-wide, 300-high bodies with materials
 700-high cell at contact, with material 4 or -10+1j. Background is 1. The
 dielectric angle is zero; the metal angle is 1.53 radians.
 
-The completed run contains all 32 requested rows, with source hashes matching
-the implementation. The following table shows the first and last levels.
+The completed run contains all 32 requested rows and records the measured
+implementation's source hashes. The following table shows the first and last levels.
 Intermediate levels, all residuals and cancellation allowances remain in the
 raw log. B is an upper bound on tensor error, not a measured actual error.
 
@@ -219,3 +273,35 @@ levels 2 and 3, independently of the error bound. There is no basis here for
 accepting optical convergence or promoting the finite family. A finer or
 better-resolved closed field remains necessary; increasing only the number
 of opening traces leaves the closed tensor unchanged.
+
+### Weighted flux comparison (2026-09-15)
+
+The second source-pinned instrument compares both flux strategies on the same
+order-4 closed pair, cubic/quartic spaces and refinement levels 0 and 1. Its
+eight comparisons cover equal dielectric and dissimilar metal materials with
+the same geometry and angles as above. All electric tensors are exactly
+unchanged between strategies. Every projection passes its original weighted
+stationarity guard; the largest residual is below 8.8e-14.
+
+| Metal pair degree / level | Surrogate operator bound | Least-squares operator bound | Reduction |
+| --- | ---: | ---: | ---: |
+| 3 / 0 | 4253.0766 | 1904.4797 | 55.2% |
+| 3 / 1 | 3225.5209 | 2261.4515 | 29.9% |
+| 4 / 0 | 3954.7433 | 2001.8851 | 49.4% |
+| 4 / 1 | 2883.5595 | 1970.5044 | 31.7% |
+
+The dielectric estimates agree to floating precision, as the real energy
+identity predicts. The minimum eigenvalue of each Gram improvement is
+nonnegative within the combined reported cancellation allowances. Independent
+tests assemble sampled physical flux columns with rational geometry, cardinal
+gradients and direct Fourier fields, then solve their weighted QR projection.
+Two quadrature orders agree with the implementation's exact-moment residual
+Gram and retained flux for all supported degrees and both geometries. Tests
+also cover exact laminate bounds, units, translation, uniform negative-real
+material sectors, invalid strategies, corrupted solutions and refinement
+exhaustion.
+
+All measured metal bounds still exceed the approximate tensor norm, giving
+an infinite relative bound. A smaller conservative bound is useful, but it
+does not resolve the optical convergence failure or qualify ordinary NVF
+routing. No new third-party code or dependency is used by this projection.

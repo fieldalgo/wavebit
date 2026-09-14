@@ -15,6 +15,7 @@ from .cartesian_pair_opening import CartesianPairOpeningPlan, real_array
 from .periodic_rectangle_galerkin import PeriodicRectangleGalerkinGapCell
 from .cartesian_pair_polynomial_galerkin import CartesianPairPolynomialGalerkinGapCell
 from .material_sector import minimum_rotated_storage
+from .equilibrated_flux import least_squares_flux
 
 
 @dataclass(frozen=True)
@@ -26,6 +27,8 @@ class ClosedErrorEstimate:
     on the exact tensor norm and is infinite when that lower bound is zero.
     ``field_error_bound`` uses the rotated-storage energy norm. No bound on an
     optical observable or on the opening derivative follows from this object.
+    ``dual_tensor`` is the retained admissible flux; for ``least_squares``
+    it comes from the weighted projection, not a separate constitutive solve.
     """
 
     tensor: np.ndarray
@@ -148,24 +151,37 @@ def _indicators(cell, geometry):
     return [np.eye(len(modes))-sum(bodies), *bodies]
 
 
-def estimate_closed_error(cell, **geometry):
+def _validate_flux(flux):
+    if not isinstance(flux, str) or flux not in ('surrogate', 'least_squares'):
+        raise ValueError("flux must be 'surrogate' or 'least_squares'")
+
+
+def estimate_closed_error(cell, *, flux='surrogate', **geometry):
     """Estimate closed transverse cell error using a conforming flux solve.
 
     ``cell`` must be an explicitly supported pair, polynomial pair, or
     periodic rectangle Galerkin cell. Geometry/material keywords follow
     its ``closure`` signature, omitting gap and all tangents. The original
     coercivity and physical guards apply at every supported degree.
+    ``flux='surrogate'`` preserves the reciprocal-material solve.
+    ``flux='least_squares'`` minimizes the weighted physical mismatch over
+    the same admissible flux space, leaving the electric tensor unchanged.
 
     The bound controls the infinite constrained H1 cell problem at the given
     Fourier set. It is evaluated in floating point, with a reported roundoff
     allowance, not certified by interval arithmetic. See the derivation in
     ``docs/nvf-galerkin-error.md``.
     """
+    _validate_flux(flux)
     settings = _settings(cell, geometry)
     primal = _closed_state(cell, settings)
-    surrogate = _closed_state(cell, dict(settings, epsilon=1/np.conj(settings['epsilon']),
-                                        background=1/np.conj(settings['background'])))
-    hd, xd, ud, dual_residuals = _dual_fields(primal, surrogate)
+    if flux == 'surrogate':
+        surrogate = _closed_state(cell, dict(settings, epsilon=1/np.conj(settings['epsilon']),
+                                            background=1/np.conj(settings['background'])))
+        hd, xd, ud, dual_residuals = _dual_fields(primal, surrogate)
+        dual_residuals['surrogate'] = surrogate['diagnostics']
+    else:
+        hd, xd, ud, dual_residuals = least_squares_flux(cell, settings, primal)
     info = primal['info']
     epsilon = info['material']
     alpha = np.real(cell._phase*epsilon)
@@ -178,8 +194,8 @@ def estimate_closed_error(cell, **geometry):
             continue
         electric = c@primal['potential'][ci]/determinant
         flux_gradient = c@ud[ci]/determinant
-        flux = np.stack([-flux_gradient[..., 1, :], flux_gradient[..., 0, :]], axis=-2)
-        residual = eps*electric-flux
+        displacement = np.stack([-flux_gradient[..., 1, :], flux_gradient[..., 0, :]], axis=-2)
+        residual = eps*electric-displacement
         moments[tag] += determinant*cell._moment(residual, average).reshape(hd.shape)
         term = determinant*cell._inner(residual.conj(), residual)/alpha[tag]
         gram += term
@@ -207,7 +223,7 @@ def estimate_closed_error(cell, **geometry):
     exact_lower = max(0., float(np.linalg.norm(primal['tensor'], 2))-operator_bound)
     relative_bound = operator_bound/exact_lower if exact_lower else float('inf')
     diagnostics = dict(primal['diagnostics'], **dual_residuals,
-                       surrogate=surrogate['diagnostics'], order=cell.order, degree=cell.degree,
+                       flux_method=flux, order=cell.order, degree=cell.degree,
                        refinement=cell.plan.refinement, minimum_material_storage=float(min(alpha)),
                        residual_gram_hermitian_defect=hermitian,
                        residual_gram_minimum_eigenvalue=float(eigenvalues[0]),
@@ -218,7 +234,7 @@ def estimate_closed_error(cell, **geometry):
 
 
 def refine_closed_error(cell, *, absolute_tolerance=0., relative_tolerance=0.,
-                        max_refinement=None, **geometry):
+                        max_refinement=None, flux='surrogate', **geometry):
     """Refine the closed mesh until an explicit constitutive error budget passes.
 
     The criterion is B <= atol + rtol * max(0, ||H_h|| - B), so its relative
@@ -226,7 +242,9 @@ def refine_closed_error(cell, *, absolute_tolerance=0., relative_tolerance=0.,
     must be positive. Exhausting the supported dense refinement range returns
     ``converged=False`` with all measurements; it never accepts a plateau.
     This is global mesh refinement at fixed Fourier order, not an NVF router.
+    ``flux`` selects the same estimator strategy at every refinement level.
     """
+    _validate_flux(flux)
     _settings(cell, geometry)
     absolute_tolerance = real_array(absolute_tolerance, (), 'absolute_tolerance').item()
     relative_tolerance = real_array(relative_tolerance, (), 'relative_tolerance').item()
@@ -249,7 +267,7 @@ def refine_closed_error(cell, *, absolute_tolerance=0., relative_tolerance=0.,
             else:
                 cell = type(cell)(CartesianPairOpeningPlan(cell.plan.shift, refinement),
                     cell.order, degree=cell.degree, coercivity_angle=cell.coercivity_angle)
-        result = estimate_closed_error(cell, **geometry)
+        result = estimate_closed_error(cell, flux=flux, **geometry)
         budget = absolute_tolerance+relative_tolerance*result.exact_tensor_norm_lower_bound
         converged = result.operator_error_bound <= budget
         history.append(dict(refinement=refinement, operator_error_bound=result.operator_error_bound,

@@ -26,6 +26,7 @@
 | `projected_pair_positive.py` | Can streamed real physical gradient coordinates preserve the whole positive-gap solution and its variation? |
 | `pair_contact_energy.py` | Can the complete reconstructed contact field independently verify its energy and variation without receiving a candidate tensor? |
 | `galerkin_error.py` | Can conforming electric and displacement fields bound the closed constitutive error and drive refinement without accepting an unresolved mesh? |
+| `equilibrated_flux.py` | Can a full weighted projection tighten the constitutive error bound while keeping the original electric tensor and admissible flux space? |
 | `real_trace_coupling.py` | How do periodic and internal traces retain the same original weak solve and independently reconstructed physical energy? |
 | `cartesian_pair_normal_frame.py` | Can a material-referenced normal frame retain coercivity and fitted gap/material derivatives without an auxiliary weak solve, and can conjugate-paired energies preserve reciprocity? |
 | `triangle_moments.py` | How can quadratic triangle Fourier integrals and their moving derivatives remain finite at collapse and repeated phases? |

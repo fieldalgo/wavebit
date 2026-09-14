@@ -193,7 +193,8 @@ def test_all_frozen_pair_plans_preserve_the_real_energy_identity(shift):
                                atol=3e-10, rtol=0)
 
 
-def test_corrupt_original_response_cannot_return_an_error_bound(monkeypatch):
+@pytest.mark.parametrize('flux', ('surrogate', 'least_squares'))
+def test_corrupt_original_response_cannot_return_an_error_bound(monkeypatch, flux):
     from wavebit._core.conforming import galerkin_error
     response = galerkin_error._response
     def corrupt(*args):
@@ -202,7 +203,7 @@ def test_corrupt_original_response_cannot_return_an_error_bound(monkeypatch):
         return output
     monkeypatch.setattr(galerkin_error, '_response', corrupt)
     with pytest.raises(ValueError, match='original/physical/reciprocity'):
-        estimate_closed_error(cell('pair'), **geometry('pair', (4., 9.)))
+        estimate_closed_error(cell('pair'), flux=flux, **geometry('pair', (4., 9.)))
 
 
 @pytest.mark.parametrize('options', ({'absolute_tolerance': -1}, {'relative_tolerance': np.nan},
