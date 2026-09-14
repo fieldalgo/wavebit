@@ -40,6 +40,46 @@ def corner_case(junctions):
 
 
 @pytest.mark.parametrize('degree', (3, 4))
+@pytest.mark.parametrize('refinement', (0, 1))
+def test_every_triangle_keeps_the_defining_corner_fields(degree, refinement, junctions):
+    obj = CartesianPairPolynomialGalerkinGapCell(
+        CartesianPairOpeningPlan(0, refinement), 1, degree=degree)
+    fields = PairCornerFields(obj, junctions=junctions)
+    definitions = [(c, (n,), a-1, degree-2) for c, n, a in fields.powers]
+    definitions += [(c, (n, m), a-2, degree-3) for c, n, m, a in fields.bubbles]
+    # Reuse the instance with different sample points and geometry: only
+    # exact support may be reused, not any sampled values or gradients.
+    for warm in (False, True):
+        bary = np.array([[.2, .3, .5], [.61, .29, .1]])
+        inverse = np.array([[1.3, .2], [-.1, .8]])
+        if warm:
+            bary = bary[::-1].copy()
+            inverse = np.array([[.9, -.3], [.2, 1.4]])
+        for tri in obj.data['triangles']:
+            value, gradient, _ = fields.sample(tri, bary, inverse, np.zeros((2, 2)))
+            hats = fields.hats[tri[:3]]
+            hv = bary@hats
+            gh = (np.array([[-1., -1.], [1., 0.], [0., 1.]])@inverse).T@hats
+            for column, (corner, neighbors, beta, cutoff) in enumerate(definitions):
+                h = hv[:, corner]
+                coefficients = [1.]
+                for j in range(1, cutoff+1):
+                    coefficients.append(coefficients[-1]*(j-1-beta)/j)
+                remainder = (1-h)**beta-sum(c*h**j for j, c in enumerate(coefficients))
+                derivative = -beta*(1-h)**(beta-1)-sum(
+                    j*c*h**(j-1) for j, c in enumerate(coefficients) if j)
+                product = np.prod(hv[:, neighbors], axis=1)
+                gp = sum(np.prod(hv[:, tuple(n for n in neighbors if n != other)], axis=1)[:, None]
+                         *gh[:, other] for other in neighbors)
+                expected_value = h*product*remainder
+                expected_gradient = product[:, None]*(remainder+h*derivative)[:, None]*gh[:, corner]
+                expected_gradient += (h*remainder)[:, None]*gp
+                np.testing.assert_allclose(value[:, column], expected_value, atol=3e-13, rtol=0)
+                np.testing.assert_allclose(gradient[:, :, column], expected_gradient, atol=3e-13, rtol=0)
+            assert value.shape[-1] == gradient.shape[-1] == len(definitions)
+
+
+@pytest.mark.parametrize('degree', (3, 4))
 def test_corner_field_gradients_and_moving_gradients_match_finite_variations(degree, junctions):
     obj = CartesianPairPolynomialGalerkinGapCell(PLAN, 1, degree=degree)
     fields = PairCornerFields(obj, junctions=junctions)

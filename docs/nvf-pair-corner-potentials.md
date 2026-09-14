@@ -48,6 +48,13 @@ standard-library `Fraction`; `1-u` is evaluated as
 `h/(1+u+u^2+u^3+u^4)`. This avoids subtracting nearly equal sampled powers.
 Both the field gradient and its moving-point/geometry variation are analytic.
 
+Sampling skips a product only when one of its control hats is exactly zero
+at all three triangle vertices. That hat and its gradient vanish throughout
+the triangle. The complete column space is retained; there is no magnitude
+or rank threshold. Only the resulting support index list is cached per field
+instance. Tests compare the defining powers on every triangle at refinements
+0 and 1, with changed points and geometry after cache reuse.
+
 The constructor accepts degree 3 or 4 and distinct exponents selected from
 `(0.6, 0.8)`. The empty exponent tuple reproduces the original polynomial and
 continuous-trace space. Other exponents are refused because their numerical

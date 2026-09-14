@@ -71,6 +71,9 @@ class PairCornerFields:
                     if np.any(active & np.any(self.hats[triangles,first]>0,axis=1) & np.any(self.hats[triangles,second]>0,axis=1)):
                         self.bubbles.extend((corner,first,second,a) for a in exponents)
         self.count=len(self.powers)+len(self.bubbles)
+        self._definitions=[(c,(n,),a-1,self.obj.degree-2) for c,n,a in self.powers]
+        self._definitions += [(c,(n,m),a-2,self.obj.degree-3) for c,n,m,a in self.bubbles]
+        self._support_cache={}
 
     def sample(self, tri, bary, inverse, dinverse, bary_tangent=None):
         hat_values=self.hats[tri[:3]];hv=bary@hat_values
@@ -102,10 +105,17 @@ class PairCornerFields:
             du=-1/(5*u**4);ddu=-4/(25*u**9)
             dr=ru*du;ddr=ruu*du**2+ru*ddu
             cache[key]=(r,dr,ddr);return r,dr,ddr
-        definitions=[(c,(n,),a-1,self.obj.degree-2) for c,n,a in self.powers]
-        definitions += [(c,(n,m),a-2,self.obj.degree-3) for c,n,m,a in self.bubbles]
-        for index,(corner,neighbors,beta,degree) in enumerate(definitions):
-            if not np.any(hat_values[:,corner]):continue
+        # A hat absent at all three vertices is identically zero, including
+        # its gradient and variation. Skip only these exact zero products;
+        # keep every column in the common field space and returned arrays.
+        support=tuple(np.flatnonzero(np.any(hat_values!=0,axis=0)))
+        definitions=self._support_cache.get(support)
+        if definitions is None:
+            active=set(support)
+            definitions=[(index,definition) for index,definition in enumerate(self._definitions)
+                         if definition[0] in active and all(n in active for n in definition[1])]
+            self._support_cache[support]=definitions
+        for index,(corner,neighbors,beta,degree) in definitions:
             h,dh=hv[:,corner],dhv[:,corner]
             r,dr,ddr=radial(corner,beta,degree)
             n=neighbors[0];product=hv[:,n];dproduct=dhv[:,n]
