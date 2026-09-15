@@ -8,6 +8,7 @@ Targets:
 - `wavebit/_core/conforming/pair_corner_positive.py`
 - `wavebit/_core/conforming/pair_corner_contact.py`
 - `tests/test_nvf_pair_corner_galerkin.py`
+- `tests/test_nvf_pair_angular_fields.py`
 
 Fixed real corner powers couple to the cubic/quartic pair potentials and
 continuous gap traces in one constitutive solve. The same enlarged field space
@@ -59,6 +60,39 @@ The constructor accepts degree 3 or 4 and distinct exponents selected from
 `(0.6, 0.8)`. The empty exponent tuple reproduces the original polynomial and
 continuous-trace space. Other exponents are refused because their numerical
 remainder and quadrature treatment is not implemented by this family.
+
+## Nested angular refinement
+
+`angular_order=1` or `2` adds the following powers for each neighboring pair
+already used by the quadratic angular bubbles:
+
+```text
+h n m (n-m)^j (1-h)^(alpha-2-j),    j = 1, ..., angular_order.
+```
+
+The default is zero, which preserves the original linear/quadratic angular
+space. The option works with either the outer corners or `junctions=True`.
+All angular levels retain the lower levels, both fixed real radial exponents
+and every original nodal and disappearing potential.
+
+Near a corner, `n` and `m` each scale with `r=1-h`. Multiplying their product
+by `(n-m)^j` and lowering the radial exponent by `j` keeps the potential's
+leading radial power `r^alpha`. The new factors resolve angular variation
+inside a corner wedge while vanishing along its two bounding rays. They do
+not introduce a material-dependent basis or a different contact formula.
+
+The whole prefactor has polynomial degree `3+j`. A Taylor term of radial
+degree `k` is removed only when `3+j+k` is no larger than the existing
+polynomial degree. When no such term exists, the complete power is evaluated
+without a subtraction. The same fifth-root quadrature and whole positive and
+contact equations integrate every new column and its cross terms.
+
+Independent defining-power and moving-gradient checks cover every triangle
+at degrees 3 and 4. Whole-field controls include nested dielectric energy,
+uniform materials, material linearity, length units, two gap-variation steps
+and approach to the same exact metal contact state. These verify the finite
+extension; selecting an angular level does not establish joint mesh, radial,
+Fourier or optical convergence.
 
 ## Positive gaps and exact contact
 

@@ -23,14 +23,16 @@ class CartesianPairCornerGalerkinGapCell:
 
     Exponents are distinct members of (0.6, 0.8), fixed independently of the
     materials. They enrich the four outer body corners. With junctions=True, both
-    closing-gap material junctions are included as well. The empty tuple
+    closing-gap material junctions are included as well. Angular orders 1 and 2
+    add nested homogeneous bubble powers around each corner. The default 0
+    preserves the original linear/quadratic angular space. The empty tuple
     is the original polynomial/continuous-trace space. All original physical
     guards apply. Choosing a field space or quadrature does not establish
     mesh/Fourier/optical convergence or change ordinary NVF routing.
     """
 
     def __init__(self, plan, order=1, *, degree=3, quadrature=48,
-                 exponents=(.6, .8), junctions=False, coercivity_angle=0.):
+                 exponents=(.6, .8), junctions=False, angular_order=0, coercivity_angle=0.):
         if (isinstance(degree, (bool, np.bool_)) or not isinstance(degree, Integral)
                 or degree not in (3, 4)):
             raise ValueError('corner pair polynomial degree must be 3 or 4')
@@ -41,7 +43,8 @@ class CartesianPairCornerGalerkinGapCell:
                 or quadrature < max(24, 2*max(self.order)+4)):
             raise ValueError('quadrature must be an integer at least max(24, 2*max(order)+4)')
         self.exponents = tuple(exponents)
-        fields=PairCornerFields(self._base, self.exponents, junctions=junctions)
+        fields=PairCornerFields(self._base, self.exponents, junctions=junctions, angular_order=angular_order)
+        self.angular_order=fields.angular_order
         self.junctions=fields.junctions
         self.corner_controls=fields.controls
         self.quadrature = int(quadrature)
@@ -58,9 +61,9 @@ class CartesianPairCornerGalerkinGapCell:
         if gap == 0:
             order = max(48, order)
             value, tangent, metadata = solve_contact(
-                self._base, settings, quadrature=order, exponents=self.exponents, junctions=self.junctions)
+                self._base, settings, quadrature=order, exponents=self.exponents, junctions=self.junctions, angular_order=self.angular_order)
         else:
-            base = augment(self._base, settings, exponents=self.exponents, quadrature=order, junctions=self.junctions)
+            base = augment(self._base, settings, exponents=self.exponents, quadrature=order, junctions=self.junctions, angular_order=self.angular_order)
             sample = junction_quadrature if self.junctions else sample_quadrature
             transform = _trace_change(self._base, settings, order)
             quadrature = lambda split=True: sample(
@@ -84,5 +87,5 @@ class CartesianPairCornerGalerkinGapCell:
                         degree=self._base.degree, quadrature=self.quadrature,
                         integration_quadrature=order, gap=gap,
                         corner_exponents=self.exponents, corner_controls=self.corner_controls,
-                        junctions=self.junctions)
+                        junctions=self.junctions, angular_order=self.angular_order)
         return value, tangent, metadata

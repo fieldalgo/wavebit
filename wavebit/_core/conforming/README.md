@@ -22,7 +22,7 @@
 | `periodic_seam_galerkin.py` | Can the complete retained tensor couple those seam fields to the quadratic mesh, with finite contact and positive-gap derivatives? |
 | `cartesian_pair_seam_galerkin.py` | Can real continuous internal-gap traces share the whole pair tensor and its exact contact/material derivative? |
 | `cartesian_pair_corner_galerkin.py` | Can fixed real corner and optional junction powers join that whole tensor and its positive-gap/contact/material derivative? |
-| `pair_corner_fields.py` | How do exact fifth-root remainders preserve corner powers already overlapping the polynomial trial space? |
+| `pair_corner_fields.py` | How do exact fifth-root remainders and nested angular powers preserve the complete corner field space? |
 | `pair_corner_assembly.py` | How do added common corner fields retain the original C/Z equations and their physical variations? |
 | `pair_corner_partition.py` | How are moving clipped polygons integrated radially from actual corners without negative or tolerance-clipped areas? |
 | `pair_corner_quadrature.py` | How do original, corner and continuous trace fields share the same moving positive quadrature? |

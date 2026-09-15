@@ -82,11 +82,11 @@ def context(obj,settings,base,transform,quadrature):
     return chart,records
 
 
-def blocks(obj,settings,quadrature,exponents,junctions=False):
+def blocks(obj,settings,quadrature,exponents,junctions=False,angular_order=0):
     original=_contact_blocks(obj,settings,quadrature)
     oldtransform=_trace_change(obj,settings,quadrature)
     changed=_changed_contact(obj,settings,original,oldtransform,quadrature)
-    base=augment(obj,settings,exponents=exponents,quadrature=quadrature,junctions=junctions)
+    base=augment(obj,settings,exponents=exponents,quadrature=quadrature,junctions=junctions,angular_order=angular_order)
     nc=base[-1]['nc'];nold=base[-1]['original_nc']
     common=np.zeros((nc,oldtransform[0].shape[1]));common[:nold]=oldtransform[0]
     transform=(common,*oldtransform[1:]);chart,records=context(obj,settings,base,transform,quadrature)
@@ -102,8 +102,8 @@ def blocks(obj,settings,quadrature,exponents,junctions=False):
     return (base,C,*changed[2:]),transform,chart,records
 
 
-def solve(obj,settings,quadrature=48,exponents=(.6,.8),junctions=False):
-    data,transform,chart,records=blocks(obj,settings,quadrature,exponents,junctions)
+def solve(obj,settings,quadrature=48,exponents=(.6,.8),junctions=False,angular_order=0):
+    data,transform,chart,records=blocks(obj,settings,quadrature,exponents,junctions,angular_order)
     base,C,Z,Qbar,Rbar,EE=data
     k,dk,q,dq,r,dr,qt,dqt,S,dS,e,de,info=base
     nc,nz,N,ds=(info[key] for key in ('nc','nz','size','ds'))

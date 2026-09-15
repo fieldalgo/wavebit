@@ -7,6 +7,7 @@ import numpy as np
 from fractions import Fraction
 from functools import lru_cache
 from math import comb
+from numbers import Integral
 
 @lru_cache(None)
 def remainder_polynomial(m,degree):
@@ -35,11 +36,14 @@ class PairCornerFields:
     h*n*m*(1-h)**(alpha-2). The Taylor polynomial already represented by
     the cubic or quartic mesh is removed by an invertible real change of
     coordinates. Exact fifth-root factorization preserves small remainders.
+    Optional angular powers multiply n*m by (n-m)**j and decrease the radial
+    exponent by j, retaining the same leading radial power. Their polynomial
+    overlap is removed only when it lies in the existing polynomial space.
     All fields vanish on the periodic boundary. Outer-corner fields also
     vanish on collapsing triangles; optional junction fields remain finite
     tangential potentials there.
     """
-    def __init__(self, obj, exponents=(.6,.8), *, junctions=False):
+    def __init__(self, obj, exponents=(.6,.8), *, junctions=False, angular_order=0):
         if obj.degree not in (3, 4):
             raise ValueError('corner potentials require degree 3 or 4')
         exponents=tuple(exponents)
@@ -49,6 +53,10 @@ class PairCornerFields:
             raise ValueError('corner exponents must be distinct members of (0.6, 0.8)')
         if not isinstance(junctions,(bool,np.bool_)):
             raise ValueError('junctions must be a boolean')
+        if (isinstance(angular_order,(bool,np.bool_)) or not isinstance(angular_order,Integral)
+                or not 0 <= angular_order <= 2):
+            raise ValueError('corner angular order must be an integer from 0 through 2')
+        self.angular_order=int(angular_order)
         self.junctions=bool(junctions)
         self.controls=(4,5,6,7,8,9) if self.junctions else (4,6,7,9)
         self.obj=obj
@@ -70,9 +78,12 @@ class PairCornerFields:
                     if corner in (first,second):continue
                     if np.any(active & np.any(self.hats[triangles,first]>0,axis=1) & np.any(self.hats[triangles,second]>0,axis=1)):
                         self.bubbles.extend((corner,first,second,a) for a in exponents)
-        self.count=len(self.powers)+len(self.bubbles)
-        self._definitions=[(c,(n,),a-1,self.obj.degree-2) for c,n,a in self.powers]
-        self._definitions += [(c,(n,m),a-2,self.obj.degree-3) for c,n,m,a in self.bubbles]
+        self.angular=[(c,n,m,a,j) for c,n,m,a in self.bubbles
+                      for j in range(1,self.angular_order+1)]
+        self.count=len(self.powers)+len(self.bubbles)+len(self.angular)
+        self._definitions=[(c,(n,),a-1,self.obj.degree-2,0) for c,n,a in self.powers]
+        self._definitions += [(c,(n,m),a-2,self.obj.degree-3,0) for c,n,m,a in self.bubbles]
+        self._definitions += [(c,(n,m),a-2-j,self.obj.degree-3-j,j) for c,n,m,a,j in self.angular]
         self._support_cache={}
 
     def sample(self, tri, bary, inverse, dinverse, bary_tangent=None):
@@ -88,6 +99,12 @@ class PairCornerFields:
             if key in cache:return cache[key]
             h=hv[:,corner];s=bary@hat_values[:,np.arange(10)!=corner].sum(axis=1)
             if np.any(s<=0):raise ValueError('corner gradient needs a positive complementary coordinate')
+            if degree < 0:
+                # No part of this angular polynomial is already in the
+                # base space. The complete power needs no Taylor subtraction.
+                result=(s**beta,-beta*s**(beta-1),beta*(beta-1)*s**(beta-2))
+                cache[key]=result
+                return result
             m=int(round(-5*beta));coefficients=remainder_polynomial(m,degree)
             u=s**.2
             complement=h/(1+u+u*u+u**3+u**4)
@@ -115,7 +132,7 @@ class PairCornerFields:
             definitions=[(index,definition) for index,definition in enumerate(self._definitions)
                          if definition[0] in active and all(n in active for n in definition[1])]
             self._support_cache[support]=definitions
-        for index,(corner,neighbors,beta,degree) in definitions:
+        for index,(corner,neighbors,beta,degree,angular) in definitions:
             h,dh=hv[:,corner],dhv[:,corner]
             r,dr,ddr=radial(corner,beta,degree)
             n=neighbors[0];product=hv[:,n];dproduct=dhv[:,n]
@@ -127,6 +144,19 @@ class PairCornerFields:
                 dgp=(dhv[:,n,None]*gradients[:,m]+hv[:,n,None]*dgradients[:,m]
                      +dhv[:,m,None]*gradients[:,n]+hv[:,m,None]*dgradients[:,n])
                 product=hv[:,n]*hv[:,m];dproduct=dhv[:,n]*hv[:,m]+hv[:,n]*dhv[:,m]
+            if angular:
+                z=hv[:,n]-hv[:,m];dz=dhv[:,n]-dhv[:,m]
+                gz=gradients[:,n]-gradients[:,m];dgz=dgradients[:,n]-dgradients[:,m]
+                factor=z**angular;dfactor=angular*z**(angular-1)*dz
+                gf=(angular*z**(angular-1))[:,None]*gz
+                dgf=(angular*z**(angular-1))[:,None]*dgz
+                if angular>1:
+                    dgf+=(angular*(angular-1)*z**(angular-2)*dz)[:,None]*gz
+                dgp=(dgp*factor[:,None]+gp*dfactor[:,None]
+                     +dproduct[:,None]*gf+product[:,None]*dgf)
+                gp=gp*factor[:,None]+product[:,None]*gf
+                dproduct=dproduct*factor+product*dfactor
+                product=product*factor
             a=product*(r+h*dr);b=h*r
             da=dproduct*(r+h*dr)+product*(2*dr+h*ddr)*dh;db=(r+h*dr)*dh
             value[:,index]=h*product*r

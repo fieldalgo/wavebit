@@ -4,10 +4,10 @@ from .real_trace_coupling import _contract
 from .pair_corner_fields import PairCornerFields
 
 
-def augment(obj, settings, *, exponents=(.6,.8), quadrature=48, junctions=False):
+def augment(obj, settings, *, exponents=(.6,.8), quadrature=48, junctions=False, angular_order=0):
     original=obj._assemble(**settings)
     k,dk,q,dq,r,dr,qt,dqt,source,dsource,e,de,info=original
-    fields=PairCornerFields(obj,exponents,junctions=junctions)
+    fields=PairCornerFields(obj,exponents,junctions=junctions,angular_order=angular_order)
     nold,nz,N=info['nc'],info['nz'],info['size'];nc=nold+fields.count
     indices=np.r_[np.arange(nold),np.arange(nc,nc+nz)];extra=np.arange(nold,nc)
     def square(a):
