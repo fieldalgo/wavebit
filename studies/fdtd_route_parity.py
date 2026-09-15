@@ -47,14 +47,15 @@ reference is exact to round-off (a uniform stack: ``u`` is a floor there, not a
 measurement, so every ``e1 != e2`` would "rank"), and it cannot resolve a ``d`` smaller than
 either run's own settling. In each of those places the output says so instead of a number.
 
-It compares engines only where their inputs match. On this revision that is every
-non-dispersive scene and the uniform dispersive stacks. The patterned dispersive scenes (the
-Drude and Lorentz rasters, the metal) do not match: legacy fills Ey's pole strength half a
-cell off in y from where it samples Ey's ``eps`` (``KNOWN_INPUT_DEFECTS``). There the harness
-measures that defect, not the engines, and every pair classification says ``inputs_differ``.
-They need a rerun once the legacy fix lands. Nor does it settle anything the legacy route
-alone does, or what common gives at its own defaults (``--arms matched,verbatim`` measures
-one such call and nothing more).
+It compares engines only where their inputs match, and whether they match is measured on
+every scene (``materials``), not assumed. The first run, at 0f204f1, found that the
+patterned dispersive scenes (the Drude and Lorentz rasters, the metal) did not: legacy
+filled Ey's pole strength half a cell off in y from where it samples Ey's ``eps``
+(``KNOWN_INPUT_DEFECTS``). There it measured that defect, not the engines, and every pair
+classification said ``inputs_differ``. The legacy fix puts the fill on Ey's y half-step,
+``tests/test_fdtd_pole_colocation.py`` pins it, and the committed results were rerun after
+it. Nor does the harness settle anything the legacy route alone does, or what common gives
+at its own defaults (``--arms matched,verbatim`` measures one such call and nothing more).
 
 **Two metrics, neither privileged.** Every pair is classified on amplitude *and* on power,
 and both are reported. Amplitude is not the stricter test on these scenes: it is the metric
@@ -114,8 +115,8 @@ and ``raw_overstates`` where the raw case sits strictly higher on the
 ``same_error < intermediate < route_changes_answer`` scale. Against the engine ``d`` it is
 several times too large (``effect_over_corrected_d``), so it certifies nothing about the
 engine arm's resolution. The engine arm's right-sized control sits at the input: the
-material comparison catches a pole fill half a cell off, and must fail on this revision's
-pole scenes.
+material comparison caught a pole fill half a cell off on every patterned pole scene of the
+first run, before the legacy fix.
 
 **What "matched" means.** The legacy route runs *as shipped*, with the study's own keywords,
 exactly as ``tests/references/gen_goldens_fdtd_table.py::_fdtd`` drives it. The grid it
@@ -246,19 +247,20 @@ POWER_SETTLING_FACTOR = 2.
 ZERO_REFERENCE = 1e-12
 #: Input differences whose owner is known from reading the source; none of this is measured by
 #: the run. Keyed by the prefix of a name ``compare_materials`` reports, and attached only to
-#: a scene where an array with that prefix differs, so it drops out once the fix lands.
+#: a scene where an array with that prefix differs: after the fix, only to a recurrence.
 KNOWN_INPUT_DEFECTS = {
     'pole_fill.ey': dict(
         owner='legacy',
-        detail="legacy samples Ey's eps at y_half=True (_core/fdtd.py, _time_loop: "
-               "grid.eps_for(False, False, 'y', y_half=True)) but builds Ey's pole state "
-               'through _Grid.pole_state -> _Grid.fill_for, which is called without y_half and '
-               'defaults it to False. The Drude/Lorentz strength therefore sits half a y cell '
-               'from the eps it belongs to. Lines at 0f204f1: fdtd.py:1395 (eps), :1403 '
+        detail="until the fix, legacy sampled Ey's eps at y_half=True (_core/fdtd.py, "
+               "_time_loop: grid.eps_for(False, False, 'y', y_half=True)) but built Ey's pole "
+               'state through _Grid.pole_state -> _Grid.fill_for, which was called without '
+               'y_half and defaulted it to False. The Drude/Lorentz strength therefore sat half '
+               'a y cell from the eps it belongs to. Lines at 0f204f1: fdtd.py:1395 (eps), :1403 '
                '(pole_state call), :1225 (fill_for default), :1247 (the call). Entered in 1c521ea.',
         evidence='source reading. In memory, filling Ey\'s pole state at y_half=True makes '
                  'every material array agree on metal-r30 and material-lorentz-r20.',
-        status='fixed on a separate branch; rerun these scenes once it lands'),
+        status='fixed: pole_state takes y_half and Ey passes y_half=True '
+               '(tests/test_fdtd_pole_colocation.py); kept so that a recurrence is attributed'),
 }
 
 AMPLITUDES = ('r_s', 'r_p', 't_s', 't_p')
@@ -1770,10 +1772,9 @@ def main():
     report = dict(schema=2, complete=False, **provenance(),
                   scope='The legacy and common FDTD routes on shared scenes, each against one '
                         'converged reference; propagating channels with n^2 - k_par^2 > '
-                        f'{MARGIN} only. Engines are compared only where materials match: on '
-                        'this revision the non-dispersive scenes and the uniform dispersive '
-                        'stacks. The patterned dispersive scenes measure a known legacy input '
-                        'defect (materials.attributed) and need a rerun after its fix. Neither '
+                        f'{MARGIN} only. Engines are compared only where materials match, as '
+                        'measured per scene (materials); a difference with a known owner is '
+                        'named in materials.attributed. Neither '
                         'legacy-only behaviour nor common at its own defaults is settled here.',
                   definitions=dict(
                       arms='legacy (as shipped); common (matched to legacy); '
