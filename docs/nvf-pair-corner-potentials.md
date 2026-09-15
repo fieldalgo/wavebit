@@ -125,21 +125,27 @@ fixed physical geometry, selected spaces and source hashes; no convergence
 verdict is inferred from passing the finite equations.
 
 For the period-700 metal contact with two 300-square rectangles, degree three,
-the unrefined symmetric mesh and radial exponents `(0.6, 0.8)`, the measured
+the symmetric mesh and radial exponents `(0.6, 0.8)`, the measured
 transmissions and optical directional slopes are:
 
-| Fourier order | Angular order | Integration order | p T | s T | p optical slope | s optical slope |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 4 | 2 | 64 | .485209 | .467190 | -.0363205 | .0308924 |
-| 4 | 4 | 64 | .487462 | .472262 | -.0513455 | .0153370 |
-| 8 | 2 | 96 | .493193 | .398029 | -.0231899 | .0015036 |
-| 8 | 4 | 96 | .493393 | .399709 | -.0281669 | .0114431 |
+| Fourier order | Mesh refinement | Angular order | Integration order | p T | s T | p optical slope | s optical slope |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 4 | 0 | 2 | 64 | .485209 | .467190 | -.0363205 | .0308924 |
+| 4 | 0 | 4 | 64 | .487462 | .472262 | -.0513455 | .0153370 |
+| 4 | 1 | 2 | 64 | .487422 | .473233 | -.0337288 | .0195839 |
+| 4 | 1 | 4 | 64 | .488676 | .476527 | -.0451643 | .0172902 |
+| 8 | 0 | 2 | 96 | .493193 | .398029 | -.0231899 | .0015036 |
+| 8 | 0 | 4 | 96 | .493393 | .399709 | -.0281669 | .0114431 |
 
-Both new order-four angular cases pass every original physical guard and the
+The angular-order-four cases pass every original physical guard and the
 unchanged `3e-10` value / `3e-9` gap-derivative reflection limits. Their optical
 directional stencil changes are below `8e-8`. Increasing angular resolution
 does not settle the remaining Fourier dependence: at angular order four,
 the order-4 to order-8 s transmission change is still about `.07255`.
+At fixed Fourier and angular order four, refining the mesh changes p/s
+transmission by about `.00121` / `.00426` and the optical slopes by
+`.00618` / `.00195`. This remaining auxiliary-space dependence must also be
+resolved; a stable optical directional stencil alone does not bound it.
 These finite responses remain unqualified as an optically converged default.
 
 ## Positive gaps and exact contact
