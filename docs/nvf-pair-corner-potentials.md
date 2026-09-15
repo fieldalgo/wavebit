@@ -132,14 +132,16 @@ For the period-700 metal contact with two 300-square rectangles, degree three,
 the symmetric mesh and radial exponents `(0.6, 0.8)`, the measured
 transmissions and optical directional slopes are:
 
-| Fourier order | Mesh refinement | Angular order | Integration order | p T | s T | p optical slope | s optical slope |
+| Fourier orders (x, y) | Mesh refinement | Angular order | Integration order | p T | s T | p optical slope | s optical slope |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 4 | 0 | 2 | 64 | .485209 | .467190 | -.0363205 | .0308924 |
-| 4 | 0 | 4 | 64 | .487462 | .472262 | -.0513455 | .0153370 |
-| 4 | 1 | 2 | 64 | .487422 | .473233 | -.0337288 | .0195839 |
-| 4 | 1 | 4 | 64 | .488676 | .476527 | -.0451643 | .0172902 |
-| 8 | 0 | 2 | 96 | .493193 | .398029 | -.0231899 | .0015036 |
-| 8 | 0 | 4 | 96 | .493393 | .399709 | -.0281669 | .0114431 |
+| (4, 4) | 0 | 2 | 64 | .485209 | .467190 | -.0363205 | .0308924 |
+| (4, 4) | 0 | 4 | 64 | .487462 | .472262 | -.0513455 | .0153370 |
+| (4, 4) | 1 | 2 | 64 | .487422 | .473233 | -.0337288 | .0195839 |
+| (4, 4) | 1 | 4 | 64 | .488676 | .476527 | -.0451643 | .0172902 |
+| (8, 8) | 0 | 2 | 96 | .493193 | .398029 | -.0231899 | .0015036 |
+| (8, 8) | 0 | 4 | 96 | .493393 | .399709 | -.0281669 | .0114431 |
+| (8, 4) | 0 | 4 | 64 | .483491 | .420411 | -.0510776 | .0146134 |
+| (4, 8) | 0 | 4 | 64 | .499815 | .441791 | -.0361071 | .0182143 |
 
 The angular-order-four cases pass every original physical guard and the
 unchanged `3e-10` value / `3e-9` gap-derivative reflection limits. Their optical
@@ -150,6 +152,11 @@ At fixed Fourier and angular order four, refining the mesh changes p/s
 transmission by about `.00121` / `.00426` and the optical slopes by
 `.00618` / `.00195`. This remaining auxiliary-space dependence must also be
 resolved; a stable optical directional stencil alone does not bound it.
+At fixed angular order four and the unrefined mesh, increasing only the x
+order from four to eight changes s transmission by about `.05185`; increasing
+only the y order changes it by about `.03047`. Both directional runs pass the
+same physical and reflection guards. Neither directional increase alone
+resolves the full two-axis dependence.
 These finite responses remain unqualified as an optically converged default.
 
 ## Positive gaps and exact contact
