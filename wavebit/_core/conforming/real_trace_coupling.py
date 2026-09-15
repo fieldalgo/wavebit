@@ -240,12 +240,15 @@ def coupled_positive(obj, base, quadrature, free_energy, trace_order, *, elimina
     return (_slots(H, inv), _slots(DH, -inv @ de @ inv), meta)
 
 
-def coupled_contact(obj, base, C, Z, Qbar, Rbar, EE, *, elimination=None, energy_verifier=None, response_solver=None):
+def coupled_contact(obj, base, C, Z, Qbar, Rbar, EE, *, elimination=None, energy_verifier=None, response_solver=None, energy_coordinates=None):
     """Exact physical limit and derivative, without differentiating singular rows.
 
     C is the regular/trace cross limit divided by gap, Z is the disappearing
     nodal/trace cross limit, and EE is the trace energy divided by gap.
     The finite physical energy verifies the contact derivative independently.
+    Optional energy coordinates carry the same field, fixed-potential field
+    variation and potential coefficients in their solver precision. They do
+    not contain the candidate response or its derivative.
     """
     k, dk, q, dq, r, dr, qt, dqt, source, dsource, e, de, info = base
     nc, nz, N, ds = info['nc'], info['nz'], len(e), info['ds']
@@ -325,7 +328,8 @@ def coupled_contact(obj, base, C, Z, Qbar, Rbar, EE, *, elimination=None, energy
     energy = xr @ A @ x + xr @ RR @ U + ur @ source_physical @ x + ur @ physical @ U
     denergy = dxr @ A @ x + xr @ DA @ x + xr @ A @ dx_geometry + dxr @ RR @ U + xr @ dRR @ U + ur @ dsource_physical @ x + ur @ source_physical @ dx_geometry + ur @ dphysical @ U
     if energy_verifier is not None:
-        energy,denergy=energy_verifier(x,dx_geometry,U)
+        coordinates=(x,dx_geometry,U) if energy_coordinates is None else energy_coordinates
+        energy,denergy=energy_verifier(*coordinates)
     weak = _relative(KK @ U + SS @ x - QT @ H, KK @ U, SS @ x, QT @ H)
     terms = (dKK@U, KK[:nc, :nc]@dUC, dsource[:nc]@x,
              source[:nc]@dfield, -dqt[:nc]@H, -qt[:nc]@DH)

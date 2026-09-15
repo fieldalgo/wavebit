@@ -12,7 +12,7 @@ from .pair_corner_precision import D
 from .pair_residual_arithmetic import _product,_sum_pairs
 from .pair_oscillatory_scalar import cp as complex_cp
 from .projected_pair_contact import _real_geometry
-from .pair_contact_quadrature import quadrature,phases
+from .pair_contact_quadrature import quadrature,phases,opening_measure
 from .pair_contact_fourier import moments as free_moments
 
 
@@ -115,7 +115,7 @@ def response(obj,settings,base,transform,chart,order,T,Qbar,records,edge_rows,*,
                 sl=slice(first,first+512);samples=common.sample(tri,bary[sl],inv,dinv)
                 def grad(offset):return tuple(np.stack([getattr(samples[offset+a],part) for a in range(2)],axis=1).reshape(-1,local_count) for part in ('hi','lo'))
                 g,dg=grad(0),grad(2);ph,dph=phases(bary[sl],p,dp,modes,chart[4])
-                mw=weight.exact[sl]*local[9];mdw=weight.exact[sl]*(ds*local[10])
+                mw=weight.exact[sl]*local[9];mdw=weight.exact[sl]*opening_measure(ds,local)
                 ww=tuple(np.repeat(v,2)[:,None] for v in mw.pair)
                 dww=tuple(np.repeat(v,2)[:,None] for v in mdw.pair)
                 chi=np.zeros((len(bary[sl]),2,total));chi[:,:,zi]=gz[sl];chi[:,:,nz:]=added[sl]
@@ -128,7 +128,7 @@ def response(obj,settings,base,transform,chart,order,T,Qbar,records,edge_rows,*,
                 SZ=add(SZ,cp(pair(ep),mat(transpose(chi),cp(measure,ph))))
                 if local[11]:
                     MZZ=add(MZZ,cp(pair(ep),mat(transpose(chi),cp(measure,chi))))
-                    DK=add_at(DK,square,cp(pair(ds*ep),mat(transpose(g),cp(measure,g))))
+                    DK=add_at(DK,square,cp(pair(ds),cp(pair(ep),mat(transpose(g),cp(measure,g)))))
                 if not local[11]:
                     wg=cp(ww,g)
                     K=add_at(K,square,cp(pair(ep),mat(transpose(g),wg)))
@@ -167,4 +167,11 @@ def response(obj,settings,base,transform,chart,order,T,Qbar,records,edge_rows,*,
     DH=add(DA,mat(tuple(v[:,info['reverse']].T for v in DSC),uc),mat(tuple(v[:,info['reverse']].T for v in SC),duc),cp(pair(ds),mat(tuple(v[:,info['reverse']].T for v in SZ),uz)))
     common=mat(pair(T),uc);dcommon=mat(pair(T),duc)
     U=np.vstack([common[0]+common[1],uz[0]+uz[1]])
+    if assembled is not None:
+        # The independent physical verifier receives the complete coefficients,
+        # not the rounded diagnostics or the candidate tensor/JVP. Hold the
+        # common potential fixed when differentiating its retained constraint.
+        geometry_dx=neg(add(mat(DQ,uc),cp(pair(ds),mat(pair(qb),uz))))
+        potential=tuple(np.vstack([c,z]) for c,z in zip(common,uz))
+        assembled['energy_coordinates']=(xx,geometry_dx,potential)
     return (U,dcommon[0]+dcommon[1],xx[0]+xx[1],dx[0]+dx[1],H[0]+H[1],DH[0]+DH[1],float(np.linalg.cond(M[0]+M[1])))

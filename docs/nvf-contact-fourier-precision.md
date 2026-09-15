@@ -74,7 +74,11 @@ Only distinct Fourier *differences* are evaluated, followed by an exact lookup
 for every matrix entry. This avoids repeated arithmetic without deleting a
 retained direction. The original stored triangle areas, their opening
 variations, and all complex material directions are consumed directly,
-including zero-area triangles with a nonzero opening measure.
+including zero-area triangles with a nonzero opening measure. The latter
+retain the high/low product of the caller-unit direction and normalized
+area coefficient, matching the disappearing-field energy scaling. The
+[complete energy-coordinate note](nvf-contact-energy-coordinates.md) describes
+why rounding that product early is inconsistent.
 
 The high/low free moments enter the full projected stiffness, its variation,
 and the complete response before rounding. The original physical checks
@@ -108,7 +112,7 @@ not the complete constitutive solve.
 This change addresses arithmetic consistency. It does not certify joint
 polynomial, mesh, corner-field or Fourier convergence of an optical result.
 
-The 19 free-moment controls and seven existing complete-common regressions
+The free-moment controls and seven existing complete-common regressions
 pass. The latter retain the original non-square metal contact, full joint
 reflection, quadrature comparison and uniform-material checks.
 

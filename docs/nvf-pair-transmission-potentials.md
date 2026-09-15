@@ -216,7 +216,8 @@ The degree-5 positive-gap control also evaluates five complete physical
 states against the independent fourth-order joint gap/material difference
 described above. It passes the unchanged 3e-9 bound and took 832 seconds.
 Uniform-material contact controls cover degrees 5 and 6, including the
-empty transmission bank and joint variation. These checks do not establish
-high-order optical convergence: the degree-6, order-(4,4), two-branch
-contact study still fails an original physical guard and requires further
-investigation. Its rejected output is not an accepted optical measurement.
+empty transmission bank and joint variation. The initial degree-6,
+order-(4,4), two-branch study failed an energy-derivative guard. The
+[energy-coordinate note](nvf-contact-energy-coordinates.md) isolates and
+corrects coefficient handoff and collapsed-measure rounding without changing
+that guard. These finite checks do not establish high-order optical convergence.

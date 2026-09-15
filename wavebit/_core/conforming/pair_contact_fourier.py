@@ -7,7 +7,7 @@ moments; no quadrature order, field cutoff or material regularization is added.
 import numpy as np
 from .pair_complex_precision import C
 from .pair_corner_precision import D
-from .pair_contact_quadrature import PI
+from .pair_contact_quadrature import PI,opening_measure
 from .triangle_exponential_precision import moment
 
 
@@ -20,8 +20,7 @@ def moments(obj,settings,base):
         p=D(zero[tri[:3]]);dp=D(velocity[tri[:3]])*info['ds'];z=2*PI*(p/period@D(unique.T));dz=2*PI*(dp/period@D(unique.T))
         value,change=moment([z[i] for i in range(3)],[dz[i] for i in range(3)])
         total=total+value*C(local[9])*C(local[12])
-        delta=delta+change*C(local[9])*C(local[12])+value*(C(local[9])*C(local[13])+C(info['ds']*local[10])*C(local[12]))
+        delta=delta+change*C(local[9])*C(local[12])+value*(C(local[9])*C(local[13])+C(opening_measure(info['ds'],local))*C(local[12]))
         gram=gram+value*C(local[9])
     N=len(modes)
     return [tuple(v[lookup].reshape(N,N) for v in value.pair) for value in (total,delta,gram)]
-

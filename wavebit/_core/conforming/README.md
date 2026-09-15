@@ -61,6 +61,7 @@
 | `projected_pair_contact.py` | Can nearly coincident high-degree closed fields retain all original contact equations when their physical difference is assembled before its energy? |
 | `projected_pair_positive.py` | Can streamed real physical gradient coordinates preserve the whole positive-gap solution and its variation? |
 | `pair_contact_energy.py` | Can the complete reconstructed contact field independently verify its energy and variation without receiving a candidate tensor? |
+| `pair_contact_energy_precision.py` | How can pointwise contact energy and its physical variation retain the complete solver coordinates without receiving a candidate response? |
 | `galerkin_error.py` | Can conforming electric and displacement fields bound the closed constitutive error and drive refinement without accepting an unresolved mesh? |
 | `equilibrated_flux.py` | Can a full weighted projection tighten the constitutive error bound while keeping the original electric tensor and admissible flux space? |
 | `real_trace_coupling.py` | How do periodic and internal traces retain the same original weak solve and independently reconstructed physical energy? |

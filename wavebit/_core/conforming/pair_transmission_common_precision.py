@@ -36,7 +36,7 @@ class CommonCoordinates:
     def __init__(self,fields,mapping):
         self.fields=fields;self.mapping=D(mapping);self.cache={}
         nold=fields.obj.data['Cfull'].shape[1]-1
-        self.raw=D.zeros((fields.count,mapping.shape[1]))
+        self.raw=D.zeros((fields.count,self.mapping.hi.shape[1]))
         if not fields.count:return
         for ids,transform in zip(fields.groups,fields.transforms):
             if len(ids):self.raw[ids]=D(fields.column_scale[ids,None])*(D(transform)@self.mapping[nold+ids])

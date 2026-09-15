@@ -28,6 +28,15 @@ def stack(values,axis=0):return D(np.stack([v.hi for v in values],axis),np.stack
 def convert(values):
     hi=np.array([float(v) for v in values]);lo=np.array([float(v-Decimal.from_float(float(v))) for v in values]);return D(hi,lo)
 
+def opening_measure(ds,local):
+    """Share the normalized disappearing-domain measure without early rounding.
+
+    Collapsed energies carry ds outside their normalized d1 integral. Their
+    free and common moments must retain the same product. Bulk records keep
+    their existing stored measure variation.
+    """
+    return D(ds)*D(local[10]) if local[11] else D(ds*local[10])
+
 @lru_cache(maxsize=16)
 def gauss(n):
     with localcontext() as ctx:

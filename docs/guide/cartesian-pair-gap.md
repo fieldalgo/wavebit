@@ -145,7 +145,8 @@ at every corner with a noninteger reference mode. Real and imaginary parts
 are retained separately. The common polynomial degree is an integer from 3
 through 6, defaulting to 3. The existing dense resource bound
 `degree * 2**plan.refinement <= 16` applies. Degrees 5 and 6 use complete
-compensated common and free Fourier equations at contact. Degrees 3 and 4
+compensated common and free Fourier equations at contact, with the same
+precision retained through the independent physical energy check. Degrees 3 and 4
 retain their existing evaluation path. Positive gaps use the same selected
 potential space and its complete physical variation.
 

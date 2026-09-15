@@ -200,7 +200,12 @@ def solve(obj,settings,quadrature=48,exponents=(.6,.8),junctions=False,angular_o
             delta+=ds*ep*(_contract('q,qi,j->ij',weight,E[:,1,rev],jump)+_contract('q,i,qj->ij',weight,jump[rev],E[:,1]))
         return value,delta
     response=lambda:(U,dUC,x,dx,H,DH,condition)
-    result=coupled_contact(obj,*data,energy_verifier=energy,response_solver=response)
+    energy_options={}
+    if complete_real:
+        from .pair_contact_energy_precision import verifier
+        energy=verifier(obj,settings,base,transform,chart,quadrature,records,edge_rows)
+        energy_options['energy_coordinates']=assembled['energy_coordinates']
+    result=coupled_contact(obj,*data,energy_verifier=energy,response_solver=response,**energy_options)
     if complete_real:result[2]['common_coordinate_precision']='compensated'
     _check_response(*result)
     return result

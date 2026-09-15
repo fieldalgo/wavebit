@@ -160,18 +160,20 @@ def test_complete_common_gradients_match_independent_potential_differences(degre
                 np.testing.assert_allclose(value.hi+value.lo,finite,atol=3e-9,rtol=0)
 
 
-def test_quintic_metal_fourier_projection_retains_original_energy_identity():
+@pytest.mark.parametrize('degree,background', ((5,1.),(6,1.),(6,1.+.0625j)),
+                         ids=('quintic','sextic','sextic_complex_background'))
+def test_high_degree_metal_fourier_projection_retains_original_energy_identity(degree,background):
     from wavebit._core.conforming.cartesian_pair_opening import CartesianPairOpeningPlan
     from wavebit._core.conforming.cartesian_pair_transmission_galerkin import CartesianPairTransmissionGalerkinGapCell
     # The flat reference isolates the complete polynomial/Fourier projection.
     # Rounding its free material block before projection fails the independent
     # pointwise energy identity, even with all common fields compensated.
     cell=CartesianPairTransmissionGalerkinGapCell(CartesianPairOpeningPlan(0),(4,0),
-        reference=(2.,2.,2.),degree=5,quadrature=100,angular_quadrature=24,
+        reference=(2.,2.,2.),degree=degree,quadrature=20*degree,angular_quadrature=24,
         coercivity_angle=1.53)
     value,tangent,metadata=cell.closure(gap=0.,basis=np.eye(2)*700,
         widths=(300.,300.),height=300.,offset=(-350.,-350.),
-        epsilon=(12.25,-10+1j),background=1.,gap_tangent=1.)
+        epsilon=(12.25,-10+1j),background=background,gap_tangent=1.)
     assert metadata['transmission_directions']==0
     assert metadata['common_coordinate_precision']=='compensated'
     assert metadata['energy_residual']<1e-10

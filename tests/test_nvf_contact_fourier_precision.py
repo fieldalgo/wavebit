@@ -133,7 +133,8 @@ def test_scalar_complex_exponential_retains_its_low_part(value):
         assert abs(Z.from_float(float(high.imag))+Z.from_float(float(low.imag))-im)<Z('3e-28')
 
 
-def test_constant_free_moments_preserve_original_stored_measures():
+@pytest.mark.parametrize('non_dyadic', (False,True))
+def test_constant_free_moments_preserve_original_stored_measures(non_dyadic):
     from wavebit._core.conforming.cartesian_pair_opening import CartesianPairOpeningPlan
     from wavebit._core.conforming.pair_symmetric_mesh import SymmetricPairPolynomialCell
     from wavebit._core.conforming.pair_contact_fourier import moments
@@ -142,6 +143,9 @@ def test_constant_free_moments_preserve_original_stored_measures():
         offset=(-.5,-.5),epsilon=(4+.125j,9+.25j),background=1+.0625j,
         gap_tangent=.5,epsilon_tangent=(.25+.125j,-.5+.25j),
         background_tangent=.125-.0625j)
+    if non_dyadic:
+        settings.update(basis=np.diag([1.2,.9]),widths=(.3,.4),height=.45,
+                        offset=(-.6,-.45),gap_tangent=.7)
     base=obj._assemble(**settings)
     actual=moments(obj,settings,base)
     with localcontext() as context:
@@ -149,7 +153,8 @@ def test_constant_free_moments_preserve_original_stored_measures():
         expected=[(Z(0),Z(0)) for _ in range(3)]
         for row in base[-1]['local']:
             area=Z.from_float(row[9])/2
-            change=Z.from_float(base[-1]['ds']*row[10])/2
+            change=(Z.from_float(base[-1]['ds'])*Z.from_float(row[10])
+                    if row[11] else Z.from_float(base[-1]['ds']*row[10]))/2
             expected[0]=add(expected[0],times(scalar(row[12]),area))
             expected[1]=add(expected[1],add(times(scalar(row[13]),area),
                                           times(scalar(row[12]),change)))
