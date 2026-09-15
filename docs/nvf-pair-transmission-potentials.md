@@ -49,6 +49,24 @@ B = (a+b)/c + c*(1/a + 1/b)
 cos(pi*lambda) = -(4+B)/(2+A+B).
 ```
 
+Near equal quarter-sector coefficients, subtracting nearly equal terms before
+`acos` can round the characteristic to -1 and lose the noninteger separation.
+When that distance is below the square root of machine epsilon, the same
+principal root is evaluated from the factored half-angle identity
+
+```text
+q = ((a-b)/(a+b)) * ((a-b)/(a+c)) * (c/(b+c)) / 2
+lambda = 1 - 2*asin(sqrt(q))/pi.
+```
+
+This changes the evaluation of the characteristic, not the retained field
+space or its closure tolerance. Independent 100-digit checks cover real
+reference contrasts from 1e-4 through 1e-12, on both sides of equality and
+for all four branches. Complex near-equal references also retain closed
+modes. The three standard reference corner types keep their previous root
+values exactly. These root checks do not establish conditioning of an
+arbitrarily near-degenerate complete field bank.
+
 The implementation uses the principal growing root and the successive roots
 `2-lambda`, `2+lambda`, `4-lambda`. A two-component null vector of the full
 monodromy determines the angular coefficients; a separate closure check

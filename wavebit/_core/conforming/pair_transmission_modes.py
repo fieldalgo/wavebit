@@ -54,7 +54,14 @@ class TransmissionMode:
         denominator = 2+first+second
         if denominator == 0 or not np.isfinite(denominator):
             raise ValueError('the reference transmission characteristic is degenerate')
-        root = cmath.acos(-(4+second)/denominator)/np.pi
+        characteristic = -(4+second)/denominator
+        root = cmath.acos(characteristic)/np.pi
+        if abs(characteristic+1) < np.sqrt(np.finfo(float).eps):
+            # Near a homogeneous reference, acos loses the small separation
+            # from the integer root. Factor (1+characteristic)/2 directly;
+            # dimensionless quotients avoid squaring cell-sized coefficients.
+            half = ((a-b)/(a+b))*((a-b)/(a+c))*(c/(b+c))/2
+            root = 1-2*cmath.asin(cmath.sqrt(half))/np.pi
         self.exponent = 2*((branch+1)//2)+(-root if branch % 2 else root)
         if not np.isfinite(self.exponent) or self.exponent.real <= 0:
             raise ValueError('the reference transmission mode must have finite energy')
