@@ -33,20 +33,23 @@ def phase(x,y):
 
 @pytest.mark.parametrize('coefficients', ((12.25,1,1),(-10+1j,1,1),(12.25,-10+1j,1)))
 @pytest.mark.parametrize('branch', range(4))
-def test_compensated_mode_matches_independent_cartesian_power(coefficients,branch):
+@pytest.mark.parametrize('quarter_turn', (0,1,2,-1))
+def test_compensated_mode_matches_independent_cartesian_power(coefficients,branch,quarter_turn):
     global PI
     with localcontext() as context:
 
         context.prec=100
         PI=16*atan(Z(1)/5)-4*atan(Z(1)/239)
         errors=[]
-        mode=TransmissionMode(coefficients,branch=branch)
+        mode=TransmissionMode(coefficients,branch=branch,start=quarter_turn*np.pi/2)
         for sector in range(3):
             center=(sum(mode.angles[:sector])+sum(mode.angles[:sector+1]))/2
             for radius in (.2,1e-70):
-                x0,y0=radius*np.cos(center+.137),radius*np.sin(center+.137)
+                absolute=center+mode.start+.137
+                x0,y0=radius*np.cos(absolute),radius*np.sin(absolute)
                 x,y=Z.from_float(float(x0)),Z.from_float(float(y0));r=(x*x+y*y).sqrt();theta=phase(x,y)
-                shift=round((center-np.arctan2(y0,x0))/(2*np.pi));local=theta+(2*shift-Z(sum((1,1,2)[:sector]))/2)*PI
+                shift=round((center+mode.start-np.arctan2(y0,x0))/(2*np.pi))
+                local=theta+(2*shift-Z(quarter_turn+sum((1,1,2)[:sector]))/2)*PI
                 lam=scalar(mode.exponent);u,q=map(scalar,mode.states[sector]);qa=div(q,scalar(mode.coefficients[sector]))
                 one=(Z(1),Z(0));ii=(Z(0),Z(1));two=(Z(2),Z(0))
                 A=div(add(u,neg(mul(ii,qa))),two);B=div(add(u,mul(ii,qa)),two)
@@ -155,3 +158,24 @@ def test_complete_common_gradients_match_independent_potential_differences(degre
                 finite=(-samples[0]+9*samples[1]-45*samples[2]+45*samples[3]-9*samples[4]+samples[5])/(60*h)
                 value=actual[2*slot+axis]
                 np.testing.assert_allclose(value.hi+value.lo,finite,atol=3e-9,rtol=0)
+
+
+def test_quintic_metal_fourier_projection_retains_original_energy_identity():
+    from wavebit._core.conforming.cartesian_pair_opening import CartesianPairOpeningPlan
+    from wavebit._core.conforming.cartesian_pair_transmission_galerkin import CartesianPairTransmissionGalerkinGapCell
+    # The flat reference isolates the complete polynomial/Fourier projection.
+    # Rounding its free material block before projection fails the independent
+    # pointwise energy identity, even with all common fields compensated.
+    cell=CartesianPairTransmissionGalerkinGapCell(CartesianPairOpeningPlan(0),(4,0),
+        reference=(2.,2.,2.),degree=5,quadrature=100,angular_quadrature=24,
+        coercivity_angle=1.53)
+    value,tangent,metadata=cell.closure(gap=0.,basis=np.eye(2)*700,
+        widths=(300.,300.),height=300.,offset=(-350.,-350.),
+        epsilon=(12.25,-10+1j),background=1.,gap_tangent=1.)
+    assert metadata['transmission_directions']==0
+    assert metadata['common_coordinate_precision']=='compensated'
+    assert metadata['energy_residual']<1e-10
+    assert metadata['energy_derivative_residual']<1e-10
+    # With no y Fourier variation, reflection makes both off-diagonal slots zero.
+    np.testing.assert_allclose(value[3:],0.,atol=3e-10,rtol=0)
+    np.testing.assert_allclose(tangent[3:],0.,atol=3e-9,rtol=0)

@@ -20,8 +20,11 @@ def pair(a):return np.asarray(a),np.zeros_like(a)
 def add(*terms):return _sum_pairs(terms)
 def neg(a):return -a[0],-a[1]
 def mat(a,b):
-    return _sum_pairs([_product(a[0],b[0]),_product(a[0],b[1]),
-                       _product(a[1],b[0]),_product(a[1],b[1])])
+    # Only the leading product needs its full error expansion. Cross products
+    # already contain one low part, so their ordinary rounding is second order.
+    # Retain every term, including low @ low, in the normalized high/low sum.
+    return _sum_pairs([_product(a[0],b[0]),
+                       (a[0]@b[1]+a[1]@b[0],a[1]@b[1])])
 def cp(a,b):
     if not any(np.iscomplexobj(v) for v in (*a,*b)):
         return (D(*a)*D(*b)).pair

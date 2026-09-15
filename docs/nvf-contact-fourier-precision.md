@@ -11,6 +11,8 @@ Targets:
 - `wavebit/_core/conforming/pair_contact_fourier.py`
 - `wavebit/_core/conforming/pair_contact_precision.py`
 - `tests/test_nvf_contact_fourier_precision.py`
+- `tests/test_nvf_pair_compensated_product.py`
+- `tests/test_nvf_transmission_common_precision.py`
 
 ## A small free-block error can survive an otherwise accurate solve
 
@@ -109,3 +111,31 @@ polynomial, mesh, corner-field or Fourier convergence of an optical result.
 The 19 free-moment controls and seven existing complete-common regressions
 pass. The latter retain the original non-square metal contact, full joint
 reflection, quadrature comparison and uniform-material checks.
+
+
+## Complete matrix products and a smaller projection regression
+
+For normalized high/low inputs, the leading high-by-high product needs its
+full error expansion. Each high-by-low or low-by-high product already carries
+one small factor, so ordinary multiplication introduces only second-order
+rounding on the scale of the original dot product. The implementation retains
+both cross products and low-by-low, then combines them with the compensated
+leading product before rounding. It removes no field, entry or cross term.
+
+Independent 100-digit decimal dot products check real and complex matrices
+with alternating cancelling terms at inner dimensions 1, 21, 64, 161 and 512.
+The predeclared error bound is 3e-28 on the summed absolute-product scale.
+In a paired, alternating local timing experiment, the complete product was
+3.54 times faster for a real (161, 1024, 42) multiplication and 2.48 times
+faster for a complex (162, 512, 42) multiplication. These are product timings,
+not an end-to-end solver speedup claim.
+
+A smaller actual library regression isolates the quintic polynomial/Fourier
+space using a flat auxiliary reference (2, 2, 2), Fourier order (4, 0), physical
+materials (12.25, -10+i, 1), period 700 and widths/height 300. It uses radial
+order 100 and angular order 24. With complete free moments, the independent
+pointwise energy identity and all original physical guards pass. Replaying
+the same complete system with the legacy rounded free block fails the
+1e-10 energy guard at 9.65e-10, matching the separately predicted 9.67e-10.
+This regression protects the free-moment integration into the full solver,
+in addition to the scalar and matrix moment tests.

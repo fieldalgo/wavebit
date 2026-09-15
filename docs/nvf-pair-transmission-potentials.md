@@ -204,7 +204,8 @@ retain their original path. At positive gap, the higher degree supplies the
 same complete polynomial and transported transmission field space.
 
 Independent 100-digit Cartesian complex-power formulas verify all twelve
-reference modes in three sectors at radii 0.2 and 1e-70. These check the
+reference modes in three sectors and all four corner orientations at radii
+0.2 and 1e-70. These check the
 potential and both Cartesian gradient components. Complete potential finite
 differences also verify arbitrary mixed polynomial/transmission coordinates
 at degrees 5 and 6 and on a refined degree-5 mesh, retaining the original
