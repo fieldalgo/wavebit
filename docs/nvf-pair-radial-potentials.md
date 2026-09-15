@@ -276,6 +276,20 @@ Those derivative changes remain unresolved auxiliary-space dependence.
 This measurement preceded centered-origin evaluation and used the same
 complete compensated corner sampler; it is not an optically converged result.
 
+The degree-four version of the unrefined, Fourier/angular-order-four
+oscillatory contact remains numerically unqualified. With centered-origin
+evaluation and radial Gauss order 80, angular Gauss orders 24, 32 and 48 all
+passed the original physical guards, but their maximum full derivative
+reflection defects were `8.54e-9`, `7.34e-10` and `1.19e-8`. Only the middle
+calculation passed the unchanged `3e-9` reflection criterion. The entire
+derivative changed by `5.45e-9` from 24 to 32 points and by `8.57e-9` from
+32 to 48 points; increasing quadrature alone did not remove the error.
+The passing 32-point calculation gave p/s transmissions `.48867361` /
+`.47728098` and optical directional slopes `-.03424579` / `.01299966`.
+Those isolated optical values do not qualify either quadrature accuracy or
+auxiliary-space convergence. The study's complete tensor artifacts preserve
+all three candidates and their individual reflection pass/fail metadata.
+
 A positive-gap control with unit period, widths and height `3/7`, gap `.003`,
 materials `12.25` and `-10+i`, Fourier order zero and angular order zero also
 passed the original guards with the complete symmetric oscillatory space at
