@@ -35,8 +35,9 @@ x.H @ (A_precise - A_rounded) @ x
 ```
 
 had relative norm 4.83312e-9. This identifies the free block as the source of
-that energy defect. The internal degree-5 diagnostic does not extend the
-public degree contract or establish optical convergence.
+that energy defect. These finite arithmetic checks do not establish optical
+convergence. The supported degree contract is described in the
+[pair guide](guide/cartesian-pair-gap.md).
 
 Keeping the independently integrated low parts of A and its variation in
 that same complete system reduced the energy-value residual to 1.04e-12 and

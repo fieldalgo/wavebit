@@ -52,11 +52,12 @@ def local_coordinates(fields,tri,nc):
     data=fields.obj.data;nold=data['Cfull'].shape[1]-1
     nodal=np.flatnonzero(np.any(data['Cfull'][data['periodic'][tri],1:]!=0,axis=0))
     present=np.any(fields.hats[tri[:3]]!=0,axis=0)
-    radial=[nold+ids for corner,ids in zip(fields.controls,fields.groups) if present[corner]]
+    radial=[nold+ids for corner,ids in zip(fields.controls,getattr(fields,'groups',())) if present[corner]]
     indices=np.r_[nodal,*radial].astype(int)
     mapping=np.zeros((nc,len(indices)))
     mapping[indices,np.arange(len(indices))]=1.
-    return indices,CommonCoordinates(fields,mapping)
+    coordinate_type=getattr(fields,'common_coordinate_type',CommonCoordinates)
+    return indices,coordinate_type(fields,mapping)
 
 
 def physical_data(base,Qbar,K,DK,Q,DQ,R,DR,L,SZ,MZZ):

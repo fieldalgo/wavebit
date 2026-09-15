@@ -7,7 +7,9 @@ Targets:
 - `wavebit/_core/conforming/cartesian_pair_transmission_galerkin.py`
 - `wavebit/_core/conforming/pair_transmission_fields.py`
 - `wavebit/_core/conforming/pair_transmission_modes.py`
+- `wavebit/_core/conforming/pair_transmission_common_precision.py`
 - `tests/test_nvf_pair_transmission.py`
+- `tests/test_nvf_transmission_common_precision.py`
 - `studies/nvf_pair_angular_resolution.py`
 
 The explicit NumPy transmission family supplies a separate finite trial space
@@ -53,6 +55,12 @@ monodromy determines the angular coefficients; a separate closure check
 verifies continuity after the complete turn. A nonpositive real part is
 rejected because the local gradient energy is not integrable. Equal quarter
 coefficients give a straight interface with no noninteger corner direction.
+At a material junction, a closed vertex becomes an edge of an opening
+triangle. The squared gradient trace then contains
+`integral(r**(2*Re(lambda)-2), dr)`, requiring `Re(lambda) > 1/2`.
+The pair field factory rejects the entire reference bank if any junction
+mode violates this opening condition. Outer-corner hats vanish on all
+collapsing triangles, so their bulk condition remains `Re(lambda) > 0`.
 No numerical rank or field-strength threshold chooses the surviving modes.
 The sector coefficients are divided by the reference background before
 constructing the modes. This common factor leaves the equation unchanged and
@@ -98,7 +106,7 @@ the maximum full derivative reflection defect from about `24.36` to
 `2.92e-12`, without changing any response check.
 
 Independent spatial differences verify all four local branches and complete
-cubic/quartic field transport on the refined mesh. Whole contact controls
+degree-3 through degree-6 field transport on the refined mesh. Whole contact controls
 retain reflection, separate angular integration and length-unit identities
 at absolute `3e-10` / `3e-9`. At positive gap `.02`, a two-branch order-zero
 cell with physical materials `(4+.1i, 9+.2i, 1+.02i)` and the distinct fixed
@@ -141,6 +149,7 @@ constitutive JVP. They are not independent physical gap finite differences.
 | 2 | 3 | 0 | 64 | `.48483934` / `.46813181` | `-.02432054` / `.01957287` |
 | 2 | 4 | 0 | 64 | `.48699404` / `.47283323` | `-.02736622` / `.01666854` |
 | 2 | 4 | 1 | 64 | `.48911480` / `.47894903` | `-.04408189` / `.01018199` |
+| 2 | 5 | 0 | 80 | `.48962262` / `.47820719` | `-.04258852` / `.02204977` |
 | 4 | 3 | 0 | 64 | `.48475992` / `.47363551` | `-.00076895` / `.03447941` |
 | 4 | 4 | 0 | 80 | `.48583765` / `.47515927` | `-.06005934` / `.02990420` |
 
@@ -148,7 +157,11 @@ The 80-point quartic, four-branch row was evaluated by the actual library
 and study entry point in 107 seconds. It passed every original physical and
 full reflection check. After the known Fourier translation to the same
 origin, its complete value and derivative differed from the independent
-64-point prototype by `1.95e-12` and `1.25e-10`. The other rows are finite
+64-point prototype by `1.95e-12` and `1.25e-10`. The quintic two-branch
+row also uses the actual library and study entry point, with radial order
+100. It took 957 seconds and passed all original checks: energy residuals
+were `1.04e-12` / `1.18e-12`, and full reflection defects were
+`2.08e-12` / `1.96e-10`. The remaining rows are finite
 prototype measurements, with complete physical and reflection checks. Raw
 measurement records are not distributed. These changes across trial spaces
 remain unresolved, even when individual finite equations are accurate.
@@ -167,3 +180,42 @@ python -m studies.nvf_pair_angular_resolution --order 4 --degree 4 --refinement 
 The study records source digests, full diagnostics and both polarizations.
 Its optional tensor artifact preserves every value and derivative slot
 before applying the unchanged strict reflection checks.
+
+## Higher polynomial degrees and complete coordinate precision
+
+The explicit transmission family admits common polynomial degrees 3 through
+6. The existing dense bound `degree * 2**refinement <= 16` continues to
+apply. The original fixed-power and polynomial family degree contracts are
+unchanged. Increasing degree retains the complete Bernstein space, every
+selected real transmission direction, and the full continuous Fourier trace.
+
+At degrees 5 and 6, contact assembly combines the common polynomial
+coefficients and every transmission remainder before rounding. The stored
+reference exponent and angular states stay fixed. Compensated logarithms,
+angles and complex powers evaluate those same functions, and their gradients
+use the original triangle's one-sided material sector. No material direction
+changes the reference coefficients or refits the field space.
+
+The field-specific common-coordinate provider feeds the existing complete
+contact equations. Their [free Fourier moments](nvf-contact-fourier-precision.md)
+retain the same precision as K, Q and R. All original physical equations and
+energy checks still apply. The established degree-3 and degree-4 evaluations
+retain their original path. At positive gap, the higher degree supplies the
+same complete polynomial and transported transmission field space.
+
+Independent 100-digit Cartesian complex-power formulas verify all twelve
+reference modes in three sectors at radii 0.2 and 1e-70. These check the
+potential and both Cartesian gradient components. Complete potential finite
+differences also verify arbitrary mixed polynomial/transmission coordinates
+at degrees 5 and 6 and on a refined degree-5 mesh, retaining the original
+3e-9 derivative bound. Separate moving-field differences cover all four
+supported degrees, including collapsing triangles.
+
+The degree-5 positive-gap control also evaluates five complete physical
+states against the independent fourth-order joint gap/material difference
+described above. It passes the unchanged 3e-9 bound and took 832 seconds.
+Uniform-material contact controls cover degrees 5 and 6, including the
+empty transmission bank and joint variation. These checks do not establish
+high-order optical convergence: the degree-6, order-(4,4), two-branch
+contact study still fails an original physical guard and requires further
+investigation. Its rejected output is not an accepted optical measurement.

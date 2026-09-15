@@ -75,6 +75,7 @@ def topology(plan):
 class SymmetricPairPolynomialCell(CartesianPairPolynomialGalerkinGapCell):
     """Internal polynomial base whose geometry reconstruction retains its mesh."""
     _symmetric_mesh=True
+    _maximum_degree=6
 
     @staticmethod
     def _normalization_length(basis):

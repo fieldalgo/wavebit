@@ -61,12 +61,15 @@ class CartesianPairCornerGalerkinGapCell:
     pointwise_refinement_steps; every original physical guard still applies.
     """
 
+    _polynomial_degrees = (3, 4)
+
     def __init__(self, plan, order=1, *, degree=3, quadrature=48,
                  exponents=(.6, .8), junctions=False, angular_order=0, coercivity_angle=0.,
                  mesh='original', oscillatory_radial=False, angular_quadrature=None):
         if (isinstance(degree, (bool, np.bool_)) or not isinstance(degree, Integral)
-                or degree not in (3, 4)):
-            raise ValueError('corner pair polynomial degree must be 3 or 4')
+                or degree not in self._polynomial_degrees):
+            choices=' or '.join(map(str,self._polynomial_degrees))
+            raise ValueError(f'corner pair polynomial degree must be {choices}')
         if not isinstance(mesh, str) or mesh not in ('original', 'symmetric'):
             raise ValueError("corner mesh must be 'original' or 'symmetric'")
         self.mesh=mesh

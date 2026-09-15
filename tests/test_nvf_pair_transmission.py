@@ -58,7 +58,7 @@ def test_transmission_laws_and_independent_spatial_derivatives(coefficients, bra
                 np.testing.assert_allclose(finite, expected, atol=3e-9, rtol=0)
 
 
-@pytest.mark.parametrize('degree', (3, 4))
+@pytest.mark.parametrize('degree', (3, 4, 5, 6))
 def test_complete_refined_field_transport_matches_spatial_differences(degree):
     cell = CartesianPairTransmissionGalerkinGapCell(CartesianPairOpeningPlan(0, 1), 0,
         reference=REFERENCE, branches=2, degree=degree, angular_quadrature=32)
@@ -161,3 +161,30 @@ def test_metal_positive_gap_approaches_the_same_contact_derivative():
         assert np.linalg.norm(np.asarray(opened)-value) < 2*gap*np.linalg.norm(tangent)
         errors.append(np.linalg.norm(np.asarray(direction)-tangent))
     assert errors[2] < errors[1] < errors[0]
+
+
+@pytest.mark.parametrize('degree', (3,5))
+def test_finite_bulk_mode_with_nonintegrable_opening_trace_is_refused(degree):
+    reference=(2.,-.2+.1j,1.)
+    mode=TransmissionMode(reference)
+    assert 0<mode.exponent.real<.5
+    # The mode has finite two-dimensional energy, but its junction trace
+    # contributes integral(r**(2*Re(lambda)-2), dr) on each opening triangle.
+    assert 2*mode.exponent.real-2 < -1
+    cell=CartesianPairTransmissionGalerkinGapCell(CartesianPairOpeningPlan(0),0,
+        reference=reference,branches=4,degree=degree)
+    with pytest.raises(ValueError,match='finite opening energy'):
+        PairTransmissionFields(cell._base,GEOMETRY,reference,4,24)
+
+
+def test_integrable_outer_mode_below_half_power_is_still_retained():
+    reference=(12.25,-4+.1j,1.)
+    cell=CartesianPairTransmissionGalerkinGapCell(CartesianPairOpeningPlan(0),0,
+        reference=reference,branches=1)
+    fields=PairTransmissionFields(cell._base,GEOMETRY,reference,1,24)
+    assert fields.count==10
+    low=[corner for corner,_,mode,_ in fields.modes if mode.exponent.real<=.5]
+    assert low and all(corner not in (5,8) for corner in low)
+    for tri,thin in zip(cell._base.data['triangles'],cell._base.data['thin']):
+        if thin:
+            np.testing.assert_array_equal(fields.hats[tri[:3]][:,low],0.)

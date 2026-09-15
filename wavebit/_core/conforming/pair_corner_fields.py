@@ -46,9 +46,10 @@ class PairCornerFields:
     tangential potentials there.
     """
     def __init__(self, obj, exponents=(.6,.8), *, junctions=False, angular_order=0, oscillatory_radial=False, angular_quadrature=None):
-        if obj.degree not in (3, 4):
-            raise ValueError('corner potentials require degree 3 or 4')
         exponents=tuple(exponents)
+        if obj.degree not in (3, 4) and not (
+                obj.degree in (5, 6) and not exponents and not oscillatory_radial):
+            raise ValueError('corner potentials require degree 3 or 4')
         if (any(isinstance(value,(bool,np.bool_)) or not isinstance(value,(int,float,np.integer,np.floating))
                 or value not in (.55,.6,.8,.95) for value in exponents)
                 or len(set(exponents)) != len(exponents)):

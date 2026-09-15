@@ -4,15 +4,18 @@ from .cartesian_pair import _physical_geometry
 from .pair_corner_fields import PairCornerFields
 from .pair_corner_coordinates import prepare
 from .pair_transmission_modes import TransmissionMode
+from .pair_transmission_common_precision import CommonCoordinates
 
 
 class PairTransmissionFields(PairCornerFields):
     """Transport fixed reference modes with the same common Pp coordinates."""
 
     complete_common_precision = False
+    common_coordinate_type = CommonCoordinates
 
     def __init__(self, obj, settings, reference, branches, angular_quadrature):
         super().__init__(obj, (), junctions=True, angular_quadrature=12)
+        self.complete_common_precision = obj.degree >= 5
         self.root_order = 20
         geometry = {key: np.asarray(settings[key])
                     for key in ('basis', 'widths', 'height', 'offset')}
@@ -36,6 +39,12 @@ class PairTransmissionFields(PairCornerFields):
                 continue
             for branch in range(branches):
                 mode = TransmissionMode(coefficients, start=start, branch=branch)
+                # A junction vertex becomes an edge on an opening triangle.
+                # Its nonzero trace has gradient r**(lambda-1), whose squared
+                # edge integral is finite exactly when Re(lambda) > 1/2.
+                # Reject the whole inadmissible bank; never discard a mode.
+                if corner in (5, 8) and mode.exponent.real <= .5:
+                    raise ValueError('a reference junction mode requires Re(exponent) > 1/2 for a finite opening energy')
                 real = mode.exponent.imag == 0 and all(np.imag(a) == 0 for a in mode.coefficients)
                 parts = ('real',) if real else ('real', 'imag')
                 self.modes.append((corner, corners[corner], mode, parts))

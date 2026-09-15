@@ -14,14 +14,20 @@ class CartesianPairTransmissionGalerkinGapCell(CartesianPairCornerGalerkinGapCel
     noninteger growing roots lambda, 2-lambda, 2+lambda, 4-lambda at all six
     corners. Each complex mode contributes both real directions. A real mode
     with real relative coefficients contributes its single real direction. Straight
-    reference interfaces add no noninteger direction.
+    reference interfaces add no noninteger direction. Junction modes require
+    Re(lambda) > 1/2 for finite opening energy; outer modes require Re(lambda) > 0.
+    An inadmissible reference bank is rejected as a whole.
 
     Every mode is multiplied by its fixed corner hat and transported with the
-    same symmetric cubic/quartic mesh. All original energy, weak, retained
+    same symmetric polynomial mesh of degree 3 through 6. Degrees 5 and 6
+    retain complete compensated common and free Fourier contact equations.
+    All original energy, weak, retained
     and flux checks apply. Contact and positive gap use the same field space.
     Choosing branches, mesh or quadrature does not establish optical accuracy.
     The original fixed-power family and ordinary NVF routing are unchanged.
     """
+
+    _polynomial_degrees = (3, 4, 5, 6)
 
     def __init__(self, plan, order=1, *, reference, branches=2, degree=3,
                  quadrature=80, angular_quadrature=None, coercivity_angle=0.):

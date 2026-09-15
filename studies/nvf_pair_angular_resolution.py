@@ -22,7 +22,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--order',type=int,nargs='+',default=[4],metavar='N',
                         help='One shared Fourier order or separate x and y orders.')
-    parser.add_argument('--degree',type=int,choices=(3,4),default=3,
+    parser.add_argument('--degree',type=int,choices=(3,4,5,6),default=3,
                         help='Common polynomial degree, independent of angular enrichment.')
     parser.add_argument('--angular-order',type=int,choices=range(5),default=4)
     parser.add_argument('--refinement',type=int,choices=range(4),default=0)
@@ -38,6 +38,8 @@ def main():
     args=parser.parse_args()
     if args.transmission_branches is not None and args.oscillatory_radial:
         parser.error('transmission and fixed oscillatory banks are separate field spaces')
+    if args.degree>4 and args.transmission_branches is None:
+        parser.error('degrees 5 and 6 require the transmission field family')
     if len(args.order) not in (1,2) or any(n<0 for n in args.order):
         parser.error('order must be one or two nonnegative integers')
     orders=tuple(args.order*2 if len(args.order)==1 else args.order)

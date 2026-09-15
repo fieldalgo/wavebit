@@ -131,7 +131,10 @@ value, tangent, metadata = cell.closure(
 
 `reference=(left, right, background)` is required and fixes the auxiliary
 transmission coefficients. Each must be finite and nonzero, and the resulting
-noninteger modes must have finite energy. Physical materials belong to each
+noninteger modes must have finite energy: outer modes require
+`Re(lambda) > 0`, and junction modes require `Re(lambda) > 1/2` so their
+opening-edge energy is integrable. An inadmissible reference bank is rejected
+as a whole. Physical materials belong to each
 `closure` call; they may differ from the reference and may vary through
 `epsilon_tangent` and `background_tangent`. Changing them never refits the
 reference basis. Geometry remains fixed during that JVP.
@@ -139,8 +142,15 @@ reference basis. Geometry remains fixed during that JVP.
 `branches` is an integer from 1 through 4, defaulting to 2. It adds the
 successive growing roots `lambda`, `2-lambda`, `2+lambda` and `4-lambda`
 at every corner with a noninteger reference mode. Real and imaginary parts
-are retained separately. The original common degree is 3 or 4. The radial
-quadrature defaults to 80 and its effective order is at least 80;
+are retained separately. The common polynomial degree is an integer from 3
+through 6, defaulting to 3. The existing dense resource bound
+`degree * 2**plan.refinement <= 16` applies. Degrees 5 and 6 use complete
+compensated common and free Fourier equations at contact. Degrees 3 and 4
+retain their existing evaluation path. Positive gaps use the same selected
+potential space and its complete physical variation.
+
+The radial quadrature defaults to 80 and its effective order is at least
+`20*max(degree, 4)` (100 for degree 5, 120 for degree 6);
 `angular_quadrature=None` uses that effective order in both directions.
 An explicit angular order must be at least `max(12, 2*max(order)+4)`.
 

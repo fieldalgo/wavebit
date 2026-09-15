@@ -87,11 +87,13 @@ class CartesianPairPolynomialGalerkinGapCell(CartesianPairGalerkinGapCell):
     ``CartesianPairGalerkinGapCell.closure`` exactly.
     """
 
+    _maximum_degree = 4
+
     def __init__(self, plan, order=1, *, degree=3, coercivity_angle=0.):
         super().__init__(plan, order, degree=1, coercivity_angle=coercivity_angle)
         if (isinstance(degree, (bool, np.bool_)) or not isinstance(degree, Integral)
-                or not 2 <= degree <= 4):
-            raise ValueError('polynomial degree must be an integer from 2 through 4')
+                or not 2 <= degree <= self._maximum_degree):
+            raise ValueError(f'polynomial degree must be an integer from 2 through {self._maximum_degree}')
         if degree*2**plan.refinement > 16:
             raise ValueError('dense polynomial edge resolution must not exceed 16')
         self._degree = int(degree)
