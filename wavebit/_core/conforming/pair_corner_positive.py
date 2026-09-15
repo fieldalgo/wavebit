@@ -36,11 +36,32 @@ def response(obj,settings,base,order,quadrature,free,Q,dQ,original_blocks):
             yield make(row,local[11])
     def split():
         for row in quadrature():yield make(row,row[23])
+    def qr_fields(row,thin,common):
+        # Geometry orthogonalization uses values of exactly one field block.
+        # Its unused partner and both derivatives are still retained in the
+        # complete response assembly below, but need not be formed here.
+        ci,zi,w,phase,gc,gz,le,wb,sgz,test=(row[i] for i in (1,2,3,7,9,11,13,17,19,21))
+        phi=np.zeros((len(w),2,2*N),complex)
+        phi[:,0,:N]=phase.conj();phi[:,1,N:]=phase.conj()
+        if common:
+            pc=-mul(phi,qc);pc[:,:,ci]+=gc
+            return w,_real_geometry(pc)
+        if thin:
+            pz=-s*mul(phi,qb);pz[:,:,zi]+=sgz
+            if le.shape[2]:pz[:,:,nz:]+=le
+            weight=wb
+        else:
+            pz=-mul(phi,qb);pz[:,:,zi]+=gz
+            if test.shape[2]:pz[:,:,nz:]+=test
+            weight=s*w
+        return weight,_real_geometry(pz)
     upperc=np.zeros((0,nc));upperz=np.zeros((0,nd))
-    for w,dw,wz,dwz,f,df,ep,dep,phi,dphi,pc,dpc,pz,dpz in unsplit():
+    for row,local,_ in samples(obj,settings,base,order):
+        w,pc=qr_fields(row,local[11],True)
         upperc=np.linalg.qr(np.vstack([upperc,(np.sqrt(w)[:,None,None]*pc).reshape(-1,nc)]),mode='r')
-    for w,dw,wz,dwz,f,df,ep,dep,phi,dphi,pc,dpc,pz,dpz in split():
-        upperz=np.linalg.qr(np.vstack([upperz,(np.sqrt(f*wz)[:,None,None]*pz).reshape(-1,nd)]),mode='r')
+    for row in quadrature():
+        weight,pz=qr_fields(row,row[23],False)
+        upperz=np.linalg.qr(np.vstack([upperz,(np.sqrt(weight)[:,None,None]*pz).reshape(-1,nd)]),mode='r')
     tc=np.linalg.solve(upperc,np.eye(nc));tz=np.linalg.solve(upperz,np.eye(nd))
     M=np.zeros((total,total),complex);DM=np.zeros_like(M)
     S=np.zeros((total,2*N),complex);DS=np.zeros_like(S)

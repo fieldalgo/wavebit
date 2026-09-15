@@ -56,6 +56,14 @@ or rank threshold. Only the resulting support index list is cached per field
 instance. Tests compare the defining powers on every triangle at refinements
 0 and 1, with changed points and geometry after cache reuse.
 
+Geometry orthogonalization constructs only the field values of its current
+common or disappearing block. It uses exactly the same weighted QR rows as
+the complete sampler, while avoiding the unused partner block and derivative
+arrays during those two passes. The full response assembly and independent
+energy verification still retain every field and derivative. A complete
+positive-gap control retains bitwise-identical tensor and JVP values after
+this change; no general runtime improvement is inferred from concurrent runs.
+
 The constructor accepts degree 3 or 4 and distinct exponents selected from
 `(0.6, 0.8)`. The empty exponent tuple reproduces the original polynomial and
 continuous-trace space. Other exponents are refused because their numerical
