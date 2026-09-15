@@ -64,7 +64,14 @@ def check(fields,tri,bary,dbary,inverse,dinverse,*,corner=False):
             return [(r-l)/(2*step) for l,r in zip(left,right)]
         inv=[[dec(a) for a in row] for row in inverse];dinv=[[dec(a) for a in row] for row in dinverse]
         for q in range(len(bary)):
-            b=tuple(map(dec,bary[q]));db=tuple(map(dec,dbary[q]))
+            # A triangle has two independent coordinates. Keep the smaller
+            # inputs, including sub-ulp corner distances, and define the
+            # remaining coordinate on the exact Decimal unit simplex.
+            b=list(map(dec,bary[q]));db=list(map(dec,dbary[q]))
+            anchor=int(np.argmax(abs(bary[q])))
+            b[anchor]=D(1)-sum(b[i] for i in range(3) if i!=anchor)
+            db[anchor]=-sum(db[i] for i in range(3) if i!=anchor)
+            b,db=tuple(b),tuple(db)
             if corner:step=min(v for v in b if v>0)*D('1e-18')
             value=evaluate(b)
             g=[gradient(b,inv,a) for a in range(2)]
@@ -85,6 +92,15 @@ def check(fields,tri,bary,dbary,inverse,dinverse,*,corner=False):
 def test_complete_coordinates_and_live_shape_variations_against_decimal(fields):
     bary=np.array([[.25,.25,.5],[.625,.25,.125]])
     dbary=np.array([[.0625,-.03125,-.03125],[-.0625,.03125,.03125]])
+    inverse=np.array([[1.25,.25],[.125,.875]])
+    dinverse=np.array([[.03125,.0625],[-.015625,.03125]])
+    for tri in fields.obj.data['triangles'][::23]:
+        check(fields,tri,bary,dbary,inverse,dinverse)
+
+
+def test_nondyadic_simplex_coordinates_and_variations_against_decimal(fields):
+    bary=np.array([[.23,.31,.46],[.58,.13,.29],[.31,.46,.23]])
+    dbary=np.array([[.04,-.01,-.03],[-.03,.02,.01],[.01,-.03,.02]])
     inverse=np.array([[1.25,.25],[.125,.875]])
     dinverse=np.array([[.03125,.0625],[-.015625,.03125]])
     for tri in fields.obj.data['triangles'][::23]:

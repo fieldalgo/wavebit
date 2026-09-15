@@ -9,7 +9,7 @@ combined with a separately evaluated response.
 import numpy as np
 from math import factorial,prod
 from .triangle_polynomials import multi_indices
-from .pair_corner_precision import D,logarithm,product as geometry_product
+from .pair_corner_precision import D,logarithm,simplex_coordinates,product as geometry_product
 from .pair_oscillatory_polynomials import prepare
 from . import pair_oscillatory_scalar as scalar
 
@@ -154,7 +154,8 @@ def sample_complete(fields,tri,bary,inverse,dinverse,bary_tangent=None,gradients
     ref=D(np.array([[-1.,-1.],[1.,0.],[0.,1.]]))
     g=ref if static else ref@D(inverse)
     dg=D.zeros((3,2)) if static else ref@D(dinverse)
-    points=[Jet((D(bary[:,i]),D(dbary[:,i]),g[i,0],g[i,1],dg[i,0],dg[i,1]),static) for i in range(3)]
+    coordinates,changes=simplex_coordinates(bary,dbary)
+    points=[Jet((coordinates[i],changes[i],g[i,0],g[i,1],dg[i,0],dg[i,1]),static) for i in range(3)]
     ordinary=bernstein(points,fields.obj.degree)
     gradient=np.zeros((len(bary),2,fields.count));change=np.zeros_like(gradient)
     output=[gradient[:,0],gradient[:,1],change[:,0],change[:,1]]

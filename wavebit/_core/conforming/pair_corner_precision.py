@@ -72,6 +72,27 @@ class D:
     @staticmethod
     def broadcast(a,shape):return D(np.broadcast_to(D(a).hi,shape),np.broadcast_to(D(a).lo,shape))
 
+
+def simplex_coordinates(barycentric,tangent):
+    """Preserve small coordinates and the exact affine partition of unity.
+
+    Rounded quadrature triples need not sum to one in compensated arithmetic.
+    Homogenized polynomials and their radial expressions agree on the unit
+    simplex, so retain the two smaller coordinates and reconstruct the largest
+    as their compensated complement. Its variation is the negative sum of the
+    other two variations. This changes no potential or physical derivative.
+    """
+    anchor=np.argmax(abs(barycentric),axis=1)
+    values=[D(barycentric[:,i].copy()) for i in range(3)]
+    changes=[D(tangent[:,i].copy()) for i in range(3)]
+    for i in range(3):
+        rows=np.flatnonzero(anchor==i)
+        if len(rows):
+            values[i][rows]=D(1.)-sum(values[j][rows] for j in range(3) if j!=i)
+            changes[i][rows]=-sum(changes[j][rows] for j in range(3) if j!=i)
+    return values,changes
+
+
 with localcontext() as context:
     context.prec=90
     ln2=Decimal(2).ln();high=float(ln2)

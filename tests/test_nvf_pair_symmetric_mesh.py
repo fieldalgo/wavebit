@@ -159,6 +159,28 @@ def test_high_order_positive_metal_retains_physical_energy_and_reflection():
                                        atol=tolerance,rtol=0)
 
 
+def test_quartic_oscillatory_contact_preserves_complete_fourier_reflection():
+    # Separately rounded barycentric coordinates broke the homogeneous
+    # polynomial identities and exceeded 3e-9 in this full physical state.
+    cell=CartesianPairCornerGalerkinGapCell(CartesianPairOpeningPlan(0),4,
+        degree=4,quadrature=80,junctions=True,angular_order=4,
+        coercivity_angle=1.53,mesh='symmetric',angular_quadrature=24,
+        oscillatory_radial=True)
+    value,tangent,metadata=cell.closure(gap=0.,basis=np.eye(2)*700.,
+        widths=(300.,300.),height=300.,epsilon=(12.25,-10+1j))
+    assert metadata['energy_residual']<1e-10
+    assert metadata['energy_derivative_residual']<1e-10
+    assert metadata['coordinate_origin']=='cell_center'
+    assert np.all(np.isfinite(value)) and np.all(np.isfinite(tangent))
+    modes=[(m,n) for n in range(-4,5) for m in range(-4,5)]
+    lookup={mode:i for i,mode in enumerate(modes)}
+    reflected=np.array([lookup[(m,-n)] for m,n in modes])
+    for response,tolerance in ((value,3e-10),(tangent,3e-9)):
+        for slot,sign in zip(response,(1,1,1,-1,-1)):
+            np.testing.assert_allclose(slot,sign*slot[:,reflected][:,:,reflected],
+                                       atol=tolerance,rtol=0)
+
+
 def test_positive_physical_gap_variation_matches_two_fourth_order_differences():
     value,tangent,metadata=_closure(2.1)
     for step in (.01,.005):

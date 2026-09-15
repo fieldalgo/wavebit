@@ -224,6 +224,17 @@ Interior controls use 100 digits; singular-corner controls use 420 digits.
 Neither their reference powers nor their high-precision physical difference
 stencils use the production polynomial coefficient builder.
 
+Compensated evaluation also retains the triangle's affine partition of
+unity. Three separately rounded quadrature coordinates can have an exact
+sum slightly different from one. The radial expression and its homogenized
+polynomial overlap then evaluate different extensions off the triangle;
+large coordinate transforms can amplify that difference. The evaluator
+preserves the two smaller barycentric inputs and reconstructs the largest
+as their high/low complement. Its moving variation is the negative sum of
+the other two variations. Independent Decimal potentials on non-dyadic
+points check the complete values, physical gradients and moving gradients.
+They retain the same `3e-14` normalized coordinate-error criterion.
+
 Returned metadata identifies the option, power and logarithmic frequency as
 `oscillatory_radial`, `oscillatory_radial_power` and
 `oscillatory_radial_frequency`; `corner_exponents` continues to report the
@@ -276,8 +287,9 @@ Those derivative changes remain unresolved auxiliary-space dependence.
 This measurement preceded centered-origin evaluation and used the same
 complete compensated corner sampler; it is not an optically converged result.
 
-The degree-four version of the unrefined, Fourier/angular-order-four
-oscillatory contact remains numerically unqualified. With centered-origin
+Before restoring the affine partition, the degree-four version of the
+unrefined, Fourier/angular-order-four oscillatory contact was numerically
+unqualified. With centered-origin
 evaluation and radial Gauss order 80, angular Gauss orders 24, 32 and 48 all
 passed the original physical guards, but their maximum full derivative
 reflection defects were `8.54e-9`, `7.34e-10` and `1.19e-8`. Only the middle
@@ -289,6 +301,15 @@ The passing 32-point calculation gave p/s transmissions `.48867361` /
 Those isolated optical values do not qualify either quadrature accuracy or
 auxiliary-space convergence. The study's complete tensor artifacts preserve
 all three candidates and their individual reflection pass/fail metadata.
+
+Restoring the compensated unit-simplex coordinates makes the same 80/24
+calculation pass every original physical and full reflection guard. Maximum
+value and derivative reflection defects decrease to `1.21e-12` and
+`5.99e-11`, while the original energy and energy-derivative residuals remain
+`1.36e-12` and `9.72e-13`. The complete calculation took 756 seconds.
+Its p/s transmissions are `.48867361` / `.47728098` and optical directional
+slopes are `-.03424579` / `.01299968`. This finite-space correction does not
+establish joint auxiliary-space or Fourier convergence.
 
 A positive-gap control with unit period, widths and height `3/7`, gap `.003`,
 materials `12.25` and `-10+i`, Fourier order zero and angular order zero also
