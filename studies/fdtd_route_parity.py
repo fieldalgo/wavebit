@@ -159,6 +159,26 @@ upper gap reaches legacy's; ``--common-pad default`` keeps common's own four-pad
 study's keywords verbatim, so the answer a user gets by just adding ``backend=0`` is
 measured too.
 
+**Grazing orders and the termination.** An order that leaves at a small exit-medium
+``cos(theta)`` is partly sent back by the termination -- the CPML, then legacy's grounded end
+rows or common's periodic wrap, then the gap to the monitor -- and the two engines lay that out
+differently (``pml_backing``, ``pml_structure_gap``). On the material scenes the transmitted
+(0, 1) order leaves the substrate at 0.263. On magnetic-r20 and lorentz-r20/r40 the engine ``d``
+sits there, and it was the two terminations' returns (2026-09-15): it did not shrink with the
+grid, it is there for the pole-free material as for the Lorentz one, and with both CPMLs at
+target 1e-16 and 24 cells it fell 27-47x, to 7e-5 to 1e-4, below those runs' settling bounds.
+On lorentz-r20 neither change alone removed it. The reflected (0, -1) order (0.242) carries a
+smaller return that strengthening only partly removed; drude-r20's engine ``d`` sits on the
+specular (0, 0) reflection instead; and at r20 that (0, 0) ``d`` also fell under the deeper
+CPML, so a non-grazing ``d`` is not guaranteed free of the termination either. So every channel
+reports its ``exit_cos`` and a ``grazing`` flag (``GRAZING_COS``), ``cases`` lists the scenes
+whose resolved engine ``d`` sits on a grazing channel, and each material scene has a ``-pml16``
+twin: target 1e-16, 24 cells, and a longer run, because a stronger termination settles more
+slowly. ``termination_control`` compares each scene with its twin channel by channel. Legacy has
+no keyword for its CPML target, so the twin sets it for the legacy call only
+(:class:`_LegacyPmlTarget`), and the match check compares the target legacy's CPML was actually
+built with against common's.
+
 **Determinism.** Wall clock goes to a separate file (``--timing``, default
 ``<output>.timing.json``) together with the machine-load snapshots. The ``--output`` file
 holds no wall clock, so two runs of one scene can be byte-compared with nothing to strip.
@@ -169,7 +189,9 @@ digests read CRLF as LF, so a Windows and a Linux checkout of one commit give on
 
 Scenes are the shipped physics scenes behind ``docs/fdtd-alpha.md``: the planar install
 smoke with its ``psi`` duplicates removed, the two crossed dielectrics, the vacuum phase
-control, the three crossed material rasters and the damped metal. They also include the one
+control, the three crossed material rasters and the damped metal, and -- made by this study,
+not shipped -- each material raster again with a strengthened termination (``-pml16``,
+above). They also include the one
 shipped scene that runs pure TE/TM, ``docs/fdtd.md`` section 2's binary grating, beside its
 closed-form twin ``slab_uniform``. ``--list`` names them; ``--scene`` takes names, group names,
 shell patterns or ``all``. Results are written after each scene, so an interrupted run
@@ -247,6 +269,23 @@ MATERIAL_TOL = 1e-9
 #: factor in ``T`` (at most ``n_bot/n_top`` times the cosine ratio) and the channel's own
 #: ``|a|``, so it is a proxy, not a bound.
 POWER_SETTLING_FACTOR = 2.
+#: An order leaving at an exit-medium cos(theta) below this is ``grazing``. Set from the material
+#: scenes (2026-09-15): the transmitted (0, 1) order at 0.263 carries a return from the
+#: z-termination that is the engine d on three of them and does not shrink with the grid, and
+#: the reflected (0, -1) at 0.242 a smaller one. The next most grazing compared order, 0.394 on
+#: the crossed dielectrics, has had no termination control, and its d is below its scene's
+#: settling bound. So this is a line with one measured side, not a derived bound: every channel
+#: reports its own ``exit_cos``.
+GRAZING_COS = .3
+#: The ``-pml16`` twins' termination: CPML target and depth together (on lorentz-r20 neither
+#: alone removed the grazing return), and a longer run, because a stronger termination settles
+#: more slowly. With it, legacy's residual sets the amplitude settling bound. Measured on the
+#: lorentz scenes (2026-09-15), amplitude bound / engine d by run length:
+#:   r20: 160 periods 6.7e-4 / 2.8e-4, 320 1.2e-4 / 2.6e-4, 480 6.3e-5 / 1.8e-4, 640 2.2e-5 / 1.9e-4
+#:   r40: 320 periods 1.2e-4 / 2.1e-4, 480 3.9e-5 / 6.5e-5
+#: At r20 the d stops moving from 480 and the power call resolves at 640; at r40 the d was still
+#: falling at 480. So 640. Each twin records its own bound.
+PML16 = dict(target=1e-16, n_pml=24, n_periods=640)
 #: On a round-off-floor scene, a reference this small is zero by symmetry (a cross-polarised
 #: channel of a uniform stack), and "resolved at 10 u" says nothing about its errors.
 ZERO_REFERENCE = 1e-12
@@ -354,6 +393,16 @@ def _scenes():
             reference_orders=(7, 11, 15), uniform=False, lossless=case['poles'] is None,
             closed_form=None, reference_key=f'material-{name}',
             source='tests/references/test_meep_crossed_materials_golden.py::comparison')
+    # The same material scenes with a strengthened termination (``termination_control``). The
+    # target is not a legacy keyword, so it rides on the scene, not in ``study``.
+    for name in [n for n in scenes if n.startswith('material-')]:
+        base = scenes[name]
+        scenes[f'{name}-pml16'] = dict(
+            base, group='materials-pml16',
+            study=dict(base['study'], n_pml=PML16['n_pml'], n_periods=PML16['n_periods']),
+            pml_target=PML16['target'], termination_of=name,
+            source=base['source'] + '; termination strengthened for termination_control')
+        base['termination_twin'] = f'{name}-pml16'
     for resolution in (30., 60.):
         call = material_scene(METAL)
         call.update(dispersion=METAL['dispersion'], poles=METAL['poles'])
@@ -847,17 +896,62 @@ def _scene_poles(scene):
             for w, g, s in terms]
 
 
+class _LegacyPmlTarget:
+    """Legacy's CPML target for the length of one call, and a record of the target it built with.
+
+    Legacy has no keyword for its CPML target: ``_core/fdtd.py`` calls ``cpml_profiles`` by its
+    module-global name (from ``_Grid`` and ``_Incident1D``) without one, so the target is the
+    default bound when ``fdtd.py`` was imported. This replaces that module attribute with a
+    function that, on a call passing no target, passes ``target`` -- or, when ``target`` is None,
+    that bound default itself -- and records every target it passes on, so the match check
+    compares what legacy's CPML was built with rather than what the scene asked for. A call that
+    passes its own target keeps it. Common is untouched because :func:`run_common` runs outside
+    the ``with``: ``grid_fdtd`` imports ``cpml_profiles`` at call time and would otherwise get
+    this function, though with its own ``pml_reflection``, which would be kept.
+    """
+
+    def __init__(self, target):
+        self.target, self.used = target, []
+
+    def __enter__(self):
+        original = self._original = LEGACY.cpml_profiles
+        default = original.__kwdefaults__['target_reflection']
+        override = self
+
+        def cpml_profiles(*args, target_reflection=None, **kw):
+            if target_reflection is None:
+                target_reflection = default if override.target is None else override.target
+            override.used.append(float(target_reflection))
+            return original(*args, target_reflection=target_reflection, **kw)
+        LEGACY.cpml_profiles = cpml_profiles
+        return self
+
+    def __exit__(self, *exc):
+        LEGACY.cpml_profiles = self._original
+        return False
+
+
+def _one_target(runs):
+    used = {t for _, _, diag, _ in runs for t in diag['pml_targets_used']}
+    if len(used) != 1:
+        raise AssertionError(f'legacy built its CPML with targets {sorted(used)}, not one')
+    return used.pop()
+
+
 def run_legacy(scene, timing):
-    """The legacy route as shipped: the study's keywords, backend omitted."""
+    """The legacy route as shipped: the study's keywords, backend omitted (and, on a ``-pml16``
+    twin, the scene's CPML target through :class:`_LegacyPmlTarget`)."""
     runs = []
     for leg in (scene['legs'] if scene['kind'] == 'tetm' else (None,)):
         kw = dict(scene['call'], **scene['study'], return_diagnostics=True)
         if leg is not None:
             kw['tetm'] = leg
         start, cpu = time.perf_counter(), time.process_time()
-        with warnings.catch_warnings(record=True) as caught:
+        with warnings.catch_warnings(record=True) as caught, \
+                _LegacyPmlTarget(scene.get('pml_target')) as pml:
             warnings.simplefilter('always')
             result, diag = wavebit.fdtd(**kw)
+        diag['pml_targets_used'] = sorted(set(pml.used))
         timing['legacy' + (f'_{leg}' if leg else '')] = dict(wall_s=time.perf_counter() - start,
                                                              cpu_s=time.process_time() - cpu)
         if 'grid' not in diag:
@@ -893,7 +987,7 @@ def legacy_record(scene, runs):
         courant_keyword=scene['study'].get('courant', LEGACY.COURANT),
         n_periods_keyword=scene['study'].get('n_periods', LEGACY.N_PERIODS),
         pulse_width=LEGACY.SOURCE_CYCLES*wl, peak_time=LEGACY.SOURCE_DELAY*LEGACY.SOURCE_CYCLES*wl,
-        pml_target_reflection=LEGACY.PML_TARGET_REFLECTION,
+        pml_target_reflection=_one_target(runs),
         planes_cells=dict(src=g.k_src, ref=g.k_ref, tfsf=g.k_tfsf, z0=g.k_z0, bottom=k_bottom,
                           trn=g.k_trn),
         reflection_monitor_z=float(g.z_of(g.k_ref)), transmission_monitor_z=float(g.z_of(g.k_trn)),
@@ -990,7 +1084,7 @@ def matched_common(scene, runs, pad_mode, pole_cfl=False):
     steps = math.ceil(n_periods*wl/dt)
     kw = dict(call, backend=0, resolution=1/dz, transverse_resolution=transverse,
               courant=courant, n_periods=n_periods, pulse_width=LEGACY.SOURCE_CYCLES*wl,
-              n_pml=g.n_pml, pml_reflection=LEGACY.PML_TARGET_REFLECTION,
+              n_pml=g.n_pml, pml_reflection=scene.get('pml_target', LEGACY.PML_TARGET_REFLECTION),
               subpixel=study.get('subpixel', True), grading=None, pad_scale=pad_scale,
               diffraction_distance=(-float(g.z_of(g.k_ref)), float(g.z_of(g.k_trn)) - thickness),
               convergence_window=max(1, int(CONVERGENCE_FRACTION*steps)),
@@ -1006,6 +1100,8 @@ def verbatim_common(scene):
     """Common driven by the study's own keywords plus ``backend=0``; courant as legacy's default."""
     kw = dict(scene['call'], **scene['study'], backend=0, return_diagnostics=True)
     kw.setdefault('courant', LEGACY.COURANT)
+    if 'pml_target' in scene:
+        kw['pml_reflection'] = scene['pml_target']
     if scene['kind'] == 'tetm':
         kw['tetm'] = scene['legs'][0]
     return kw
@@ -1105,8 +1201,16 @@ def match_checks(legacy, common, notes, materials):
     return checks
 
 
-def confounds(scene, legacy, common, checks, notes):
+def confounds(scene, legacy, common, checks, notes, rows):
     """Differences the matching cannot remove; each is inside every legacy-vs-common number."""
+    grazing = []
+    for r in rows:
+        side = 'reflection' if r['channel'].split('.')[1][0] in 'rR' else 'transmission'
+        item = dict(order=r['order'], side=side, exit_cos=r['exit_cos'])
+        if r['grazing'] and item not in grazing:
+            grazing.append(item)
+    # annotate() names termination_control here once the scene's twin is in the same report.
+    termination = dict(grazing_channels=grazing, measured_in=None)
     crossed = np.shape(scene['call']['structure'])[1] > 1
     theta = float(scene['call'].get('theta') or 0.)
     phi = float(scene['call'].get('phi') or 0.)
@@ -1131,11 +1235,11 @@ def confounds(scene, legacy, common, checks, notes):
         dict(id='tm_half_cell_sampling', applies=bool(not crossed and (theta == 0. or phi == 0.)),
              detail='on its 2D TM stepper legacy samples Hy half a cell off the plane common '
                     'samples E on.'),
-        dict(id='pml_backing', applies=True,
+        dict(id='pml_backing', applies=True, **termination,
              detail='legacy grounds E on the two end rows; common wraps z periodically with a '
                     'closing cell (its lower PML face one cell further). PML grading on '
                     'magnetic half-spaces (eps on legacy, eps*mu on common): not exercised.'),
-        dict(id='pml_structure_gap', applies=True,
+        dict(id='pml_structure_gap', applies=True, **termination,
              legacy_cells=legacy['pml_gap_cells'], common_cells=common['pml_gap_cells'],
              detail='legacy clears 0.5*pad_scale*lambda/n per side (asymmetric); common lays one '
                     'pad on both sides (2*pad + 2 cells).'),
@@ -1244,6 +1348,21 @@ def yee_deembedded(scene, legacy, values):
     return out
 
 
+def _exit_cos(scene, label, m, l):
+    """cos(theta) of order ``(m, l)`` in the medium channel ``label`` leaves into: the top
+    half-space for a reflection (``r_*``, ``R``), the bottom one for a transmission. From the
+    continuum in-plane wavevector, as :func:`yee_deembedded` spells it."""
+    call = scene['call']
+    k0 = 2*np.pi/call['wavelength']
+    theta, phi = float(call.get('theta') or 0.), float(call.get('phi') or 0.)
+    period = call['period']
+    kx = k0*scene['n_top']*np.sin(theta)*np.cos(phi) + 2*np.pi*m/period[0]
+    ky = (k0*scene['n_top']*np.sin(theta)*np.sin(phi)
+          + (2*np.pi*l/period[1] if len(period) > 1 else 0.))
+    n = scene['n_top'] if label.split('.')[1][0] in 'rR' else scene['n_bot']
+    return float(np.sqrt(max(0., 1 - (kx**2 + ky**2)/(n*k0)**2)))
+
+
 def compare(scene, reference, arms, pairs):
     """Per comparable channel: every arm's value and error, and each pair's distance and ratio."""
     rows = []
@@ -1254,7 +1373,9 @@ def compare(scene, reference, arms, pairs):
                 if not mask[j, i]:
                     continue
                 ref = complex(reference[label][j, i])
-                row = dict(channel=label, order=[m, l], reference=[ref.real, ref.imag])
+                exit_cos = _exit_cos(scene, label, m, l)
+                row = dict(channel=label, order=[m, l], reference=[ref.real, ref.imag],
+                           exit_cos=exit_cos, grazing=exit_cos < GRAZING_COS)
                 for arm, values in arms.items():
                     value = complex(values[label][j, i])
                     finite = bool(np.isfinite(value))
@@ -1359,7 +1480,8 @@ def pair_summary(rows, a, b, u, settling, roundoff_floor, confound_shift=0.):
     worst_a, worst_b = max(r[col_a] for r in usable), max(r[col_b] for r in usable)
     entry.update(d=top[col_d], d_channel=dict(channel=top['channel'], order=top['order'],
                                                e_first=top[col_a], e_second=top[col_b],
-                                               reference=top['reference']),
+                                               reference=top['reference'],
+                                               exit_cos=top['exit_cos'], grazing=top['grazing']),
                  e_first_max=worst_a, e_second_max=worst_b, confound_shift=confound_shift)
 
     def zero_reference(r):
@@ -1532,7 +1654,8 @@ def scene_verdict(summary, materials):
     return out
 
 
-_VARIANT = re.compile(r'^(?P<family>.+)-r(?P<resolution>[0-9.]+)(?:-pad(?P<pad>[0-9.]+))?$')
+_VARIANT = re.compile(r'^(?P<family>.+)-r(?P<resolution>[0-9.]+)(?:-pad(?P<pad>[0-9.]+))?'
+                      r'(?:-(?P<termination>pml16))?$')
 
 
 def families(scenes):
@@ -1557,7 +1680,9 @@ def families(scenes):
             first, second = pair['e_first_max'], pair['e_second_max']
             row[kind] = dict(legacy=first, common=second,
                              smaller='legacy' if first < second else 'common' if second < first else 'tie')
-        out.setdefault(match['family'], dict(variants=[]))['variants'].append(row)
+        # A strengthened termination is its own family: its errors are not the base scene's.
+        family = match['family'] + (f"-{match['termination']}" if match['termination'] else '')
+        out.setdefault(family, dict(variants=[]))['variants'].append(row)
     for family in out.values():
         flips, changes = {}, {}
         for kind in ('amplitude', 'power'):
@@ -1597,14 +1722,80 @@ def cases_by_scene(scenes, family_table):
             out.setdefault(key, []).append(name)
         if verdict['engines']['ranking']:
             out.setdefault(f"ranking: {verdict['engines']['ranking']}", []).append(name)
+        engine = entry['summary']['amplitude']['pairs']['legacy_yee_deembedded_vs_common']
+        d_channel = engine.get('d_channel') or {}
+        resolved = (engine.get('classification') or {}).get('case') != 'unresolved_against_settling'
+        if d_channel.get('grazing') and resolved:
+            out.setdefault(f'engine d on a grazing channel (exit cos < {GRAZING_COS:g}; '
+                           'see termination_control)', []).append(name)
         if entry['deembedding_control'].get('raw_overstates'):
             out.setdefault('control: raw arm overstates the route difference', []).append(name)
+    return out
+
+
+def termination_control(scenes):
+    """What strengthening the termination did, for each material scene run beside its twin.
+
+    Per compared amplitude channel: the engine ``d`` with the study's CPML and with the twin's,
+    and how far each engine's own amplitude moved between the two runs. The twin changes three
+    things at once -- the CPML target, its depth and the run length -- so a move holds what that
+    engine's termination was sending back and whatever the base run had not yet settled. Both
+    runs' settling bounds are carried, and a twin ``d`` below its own bound is marked unresolved.
+    A grazing channel whose ``d`` falls far below its base value, resolved, was measuring the
+    terminations, not the engines.
+    """
+    out = {}
+    for name, entry in scenes.items():
+        twin = scenes.get(f'{name}-pml16')
+        if twin is None:
+            continue
+        twin_rows = {(r['channel'], tuple(r['order'])): r for r in twin['channels']}
+        channels = []
+        for r in entry['channels']:
+            s_ = twin_rows.get((r['channel'], tuple(r['order'])))
+            if s_ is None or r['channel'].split('.')[1] not in AMPLITUDES:
+                continue
+
+            def moved(arm, r=r, s_=s_):
+                a, b = r.get(arm), s_.get(arm)
+                return abs(complex(*a) - complex(*b)) if a and b else None
+            channels.append(dict(channel=r['channel'], order=r['order'], exit_cos=r['exit_cos'],
+                                 grazing=r['grazing'], d_base=r['legacy_yee_deembedded_vs_common'],
+                                 d_strengthened=s_['legacy_yee_deembedded_vs_common'],
+                                 legacy_moved=moved('legacy_yee_deembedded'),
+                                 common_moved=moved('common')))
+
+        def worst(grazing, key):
+            values = [c[key] for c in channels if c['grazing'] == grazing and c[key] is not None]
+            return max(values, default=None)
+        bound = twin['settling']['amplitude']['bound']
+
+        def pair(grazing):
+            strengthened = worst(grazing, 'd_strengthened')
+            return dict(base=worst(grazing, 'd_base'), strengthened=strengthened,
+                        strengthened_resolved=None if strengthened is None else strengthened >= bound)
+        out[name] = dict(
+            twin=f'{name}-pml16', twin_matched=twin['match']['matched'],
+            twin_termination=dict(target=twin['legacy']['pml_target_reflection'],
+                                  n_pml=twin['legacy']['n_pml'],
+                                  n_periods=twin['legacy']['n_periods_keyword']),
+            grazing_d=pair(True), other_d=pair(False),
+            base_settling_bound=entry['settling']['amplitude']['bound'], twin_settling_bound=bound,
+            base_verdict=entry['verdict']['engines'], twin_verdict=twin['verdict']['engines'],
+            channels=channels)
     return out
 
 
 def annotate(report):
     """Cross-scene fields, recomputed from the scenes after each one so they never go stale."""
     report['families'] = families(report['scenes'])
+    report['termination_control'] = termination_control(report['scenes'])
+    for name, entry in report['scenes'].items():
+        base = name[:-len('-pml16')] if name.endswith('-pml16') else name
+        for confound in entry['confounds']:
+            if confound['id'] in ('pml_backing', 'pml_structure_gap'):
+                confound['measured_in'] = ('termination_control' if base in report['termination_control']
+                                           else None)
     for family in report['families'].values():
         for kind, names in family['smaller_route_flips_with_pad'].items():
             for name in names:
@@ -1754,7 +1945,7 @@ def run_scene(name, args, cache, timing):
         quantity=f'1 - sum(R) - sum(T) over propagating orders ({label})',
         window_complete=complete,
         per_leg={leg: {arm: energies[arm][leg] for arm in energies} for leg, _ in legs_of(scene)})
-    entry['confounds'] = confounds(scene, legacy, common, checks, notes)
+    entry['confounds'] = confounds(scene, legacy, common, checks, notes, rows)
     entry['channels'] = rows
     return entry
 
@@ -1838,11 +2029,27 @@ def main():
                               'a ranking only where both metrics rank the same route',
                       cases_field='scene names by verdict, generated; scenes whose materials '
                                   'differ are listed apart and not compared as engines',
+                      exit_cos='cos(theta) of the order in the medium it leaves into (top for '
+                               'a reflection, bottom for a transmission), from the continuum '
+                               'in-plane wavevector',
+                      grazing=f'exit_cos < {GRAZING_COS:g}. Measured on the material scenes: the '
+                              'termination sends part of such an order back, the two engines '
+                              'differently, and on (0, 1) that return did not shrink with the grid '
+                              '(termination_control)',
+                      termination_control='each material scene against its -pml16 twin (CPML '
+                                          f"target {PML16['target']:g}, {PML16['n_pml']} cells, "
+                                          f"{PML16['n_periods']} periods, so a move also holds what "
+                                          'the base run had not settled): the engine d with each '
+                                          'termination, how far each engine moved, and both '
+                                          'settling bounds; legacy has no target keyword, so the '
+                                          'twin sets it for the legacy call and the record holds '
+                                          'the target used',
                       known_input_defects=KNOWN_INPUT_DEFECTS),
                   settings=dict(scenes_requested=args.scene, arms=args.arms.split(','),
                                 common_pad=args.common_pad, check_inert=args.check_inert,
                                 y_invariant_cell_dx=Y_INVARIANT_CELL,
-                                convergence_fraction=CONVERGENCE_FRACTION),
+                                convergence_fraction=CONVERGENCE_FRACTION,
+                                grazing_cos=GRAZING_COS, termination_twin=PML16),
                   scenes={})
     timing = dict(note='Wall clock and CPU seconds. Any snapshot with other Python processes '
                        'alive marks the run contended; a contended timing is not a clean one.',
