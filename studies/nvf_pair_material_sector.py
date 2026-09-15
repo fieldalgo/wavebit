@@ -24,8 +24,9 @@ GAPS = (0., .0005, .001, .002, 1e-6, 1e-9)
 
 
 def solver(order, polarization, **kwargs):
+    orders=(order,order) if isinstance(order,(int,np.integer)) else order
     return wavebit.rcwa(
-        backend=0, lattice=GEOMETRY["basis"], truncation_order=(order, order),
+        backend=0, lattice=GEOMETRY["basis"], truncation_order=orders,
         wavelength=900., thickness=[300.], top=1., bot=2.25, theta=.2,
         phi=0., psi=0. if polarization == "p" else np.pi/2, **kwargs,
     )

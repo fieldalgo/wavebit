@@ -19,18 +19,22 @@ from wavebit._core.conforming.cartesian_pair_corner_galerkin import CartesianPai
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument('--order',type=int,default=4)
+    parser.add_argument('--order',type=int,nargs='+',default=[4],metavar='N',
+                        help='One shared Fourier order or separate x and y orders.')
     parser.add_argument('--angular-order',type=int,choices=range(5),default=4)
     parser.add_argument('--refinement',type=int,choices=range(4),default=0)
     parser.add_argument('--quadrature',type=int,default=64)
     args=parser.parse_args()
-    if args.order<0:parser.error('order must be nonnegative')
+    if len(args.order) not in (1,2) or any(n<0 for n in args.order):
+        parser.error('order must be one or two nonnegative integers')
+    orders=tuple(args.order*2 if len(args.order)==1 else args.order)
     root=Path(__file__).resolve().parents[1]
     sources=sorted((root/'wavebit/_core/conforming').glob('*.py'))
     sources.extend([Path(__file__).resolve(),root/'studies/nvf_pair_material_sector.py'])
     def emit(row):
         print(json.dumps(row,default=lambda a:np.asarray(a).tolist()),flush=True)
-    emit(dict(kind='header',numpy=np.__version__,**vars(args),geometry=dict(
+    configuration=vars(args)|{'order':orders}
+    emit(dict(kind='header',numpy=np.__version__,**configuration,geometry=dict(
         period=700.,widths=[300.,300.],height=300.,gap=0.,offset=[0.,0.],
         epsilon=[[12.25,0.],[-10.,1.]],background=1.,wavelength=900.,
         thickness=300.,top=1.,bottom=2.25,theta=.2,phi=0.),
@@ -39,12 +43,12 @@ def main():
                        for p in sources}))
     start=time.perf_counter()
     cell=CartesianPairCornerGalerkinGapCell(CartesianPairOpeningPlan(0,args.refinement),
-        args.order,degree=3,quadrature=args.quadrature,junctions=True,
+        orders,degree=3,quadrature=args.quadrature,junctions=True,
         angular_order=args.angular_order,coercivity_angle=1.53,mesh='symmetric')
     value,tangent,metadata=cell.closure(gap=0.,epsilon=(12.25,-10+1j),**GEOMETRY)
     value,tangent=np.asarray(value),np.asarray(tangent)
-    n=args.order
-    modes=[(i,j) for j in range(-n,n+1) for i in range(-n,n+1)]
+    nx,ny=orders
+    modes=[(i,j) for j in range(-ny,ny+1) for i in range(-nx,nx+1)]
     lookup={mode:i for i,mode in enumerate(modes)}
     reflection=np.array([lookup[(i,-j)] for i,j in modes])
     defects=[]
@@ -55,7 +59,7 @@ def main():
             np.testing.assert_allclose(slot,reflected,atol=tolerance,rtol=0)
             errors.append(float(np.max(abs(slot-reflected))))
         defects.append(errors)
-    op=solver(n,'p')
+    op=solver(orders,'p')
     def powers(slots):
         result=op.solve_conv(*slots);output=[]
         for sub in (result.p_inc,result.s_inc):

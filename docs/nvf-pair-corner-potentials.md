@@ -118,6 +118,10 @@ optical directional slopes. For example:
 PYTHONPATH=. python studies/nvf_pair_angular_resolution.py --order 4 --angular-order 4 --quadrature 64
 ```
 
+Two values for `--order`, for example `--order 8 4` or `--order 4 8`, vary
+the retained x/y Fourier directions independently. The constitutive cell,
+Maxwell solve and reflection check all use that same pair of orders.
+
 Its two small perturbations of the constitutive tensors check the optical
 directional stencil, not the physical moving-gap derivative. Independent
 physical gap differences remain separate solver tests. The output records the
