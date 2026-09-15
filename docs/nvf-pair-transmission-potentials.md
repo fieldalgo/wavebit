@@ -171,6 +171,7 @@ constitutive JVP. They are not independent physical gap finite differences.
 | 2 | 6 | 0 | 80 | `.48933095` / `.47905421` | `-.04922588` / `.01600262` |
 | 4 | 3 | 0 | 64 | `.48475992` / `.47363551` | `-.00076895` / `.03447941` |
 | 4 | 4 | 0 | 80 | `.48583765` / `.47515927` | `-.06005934` / `.02990420` |
+| 4 | 5 | 0 | 80 | `.48946752` / `.47700685` | `-.04441011` / `.02749882` |
 
 The 80-point quartic, four-branch row was evaluated by the actual library
 and study entry point in 107 seconds. It passed every original physical and
@@ -189,6 +190,14 @@ derivative differ from the preserved-system replay by only `2.42e-22` and
 prototype measurements, with complete physical and reflection checks. Raw
 measurement records are not distributed. These changes across trial spaces
 remain unresolved, even when individual finite equations are accurate.
+
+The quintic four-branch row retains all 40 real transmission directions.
+It re-solves freshly assembled complete weak matrices with the library
+response and independent physical verifier, using radial order 100. That
+replay took 970 seconds and passed all original guards, with energy residuals
+`1.57e-17` / `8.92e-13` and full reflection defects `1.44e-11` / `3.11e-10`.
+Increasing the corner bank still changes the optical slopes appreciably;
+it does not close the approximation-convergence gate.
 
 The refined quartic two-branch prototype took 1,099 seconds and passed the
 original guards, with full value and derivative reflection defects below
@@ -245,3 +254,12 @@ order-(4,4), two-branch study failed an energy-derivative guard. The
 [energy-coordinate note](nvf-contact-energy-coordinates.md) isolates and
 corrects coefficient handoff and collapsed-measure rounding without changing
 that guard. These finite checks do not establish high-order optical convergence.
+
+Higher-degree positive-gap qualification is narrower. The quintic order-zero
+joint variation above passes, but a sextic order-(4,0) metal control at gap
+`.01` is rejected by the original guards. It uses the flat auxiliary reference
+`(2,2,2)`, physical materials `(12.25,-10+i,1)`, period 700, widths/height 300,
+radial order 120 and angular order 24. Its weak residual is `1.98e-15`, while
+its independent energy and derivative-energy residuals are `1.25e-6` and
+`1.97e-7`. This is an unresolved positive-gap precision limit, distinct from
+both the accepted contact controls and the optical approximation changes.
