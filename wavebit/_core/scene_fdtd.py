@@ -147,7 +147,7 @@ def _parametric_recipe(structure):
     return isinstance(structure, (list, tuple)) and any(isinstance(layer, dict) for layer in structure)
 
 
-def _shape_partition(structure, periods, *, xp, array, check, integration='separable'):
+def _shape_partition(structure, periods, *, xp, array, check, integration='separable', lattice=None):
     """Resolve shared recipes into a separable partition or live area geometry.
 
     Sorting every periodic face keeps the partition size static. Face events
@@ -160,10 +160,22 @@ def _shape_partition(structure, periods, *, xp, array, check, integration='separ
     multiple painted rectangles or one polygon/disk/ellipse per layer,
     for integration against fixed Yee cells. Shared shape readers
     own lengths and cell origin on both routes.
+
+    ``lattice`` is the cell the recipe is drawn on, ``diag(periods)`` when omitted. A shape recipe
+    means the same thing on any cell, so the area route reads a skewed one for what it is: the
+    centre folds into the cell on the Lagrange-reduced basis and the size checks compare
+    projected extents with the cell's width across each pair of its edges
+    (:func:`_fits_across_cell`). On an axis-aligned cell both are the rectangular expressions,
+    kept verbatim. The separable route is a tensor product of x and y face intervals, which a
+    skewed cell has none of, so it refuses one; so do several painted rectangles, whose fold
+    stands on the rectangular Yee box (:func:`_yee_box`).
     """
-    from .lattice import as_lattice
+    from .lattice import as_lattice, is_axis_aligned
     from .parametric import check_layer_spec, check_shape_spec, shape_geometry
-    lattice = as_lattice(period=periods)
+    lattice = as_lattice(period=periods, lattice=lattice)
+    if integration != 'area' and not is_axis_aligned(lattice):
+        raise ValueError('Separable FDTD partitions the cell into x and y face intervals, which a skewed '
+                         'cell does not have; use shape_integration=area.')
     def scalar(value, name, *, positive=False):
         v = array(value)
         if v.shape != () or not xp.isdtype(v.dtype, ('real floating', 'integral', 'complex floating')):
@@ -200,27 +212,45 @@ def _shape_partition(structure, periods, *, xp, array, check, integration='separ
                 raise ValueError('Separable FDTD requires static angle=0; use shape_integration=area for rotation.')
             centres = [scalar(v, 'Shape centre') for v in (cx, cy)]
             sizes = [scalar(v, 'Shape length', positive=True) for v in (lx, ly)]
-            centres = [xp.remainder(c, p) for c, p in zip(centres, periods)]
+            if is_axis_aligned(lattice):
+                centres = [xp.remainder(c, p) for c, p in zip(centres, periods)]
+            else:
+                centres = _fold_into_reduced_cell(centres, lattice, xp=xp)
             if integration == 'area':
                 from .polygon import rect_verts
                 angle = scalar(angle, 'Shape angle')
                 if circular:
-                    check((sizes[0] <= periods[0]) & (sizes[0] <= periods[1]),
-                          'Circle diameter must not exceed either rectangular period.')
+                    if is_axis_aligned(lattice):
+                        check((sizes[0] <= periods[0]) & (sizes[0] <= periods[1]),
+                              'Circle diameter must not exceed either rectangular period.')
+                    else:
+                        check(_fits_across_cell(lattice, 'circle', sizes, angle, xp=xp),
+                              'Circle diameter must not exceed the cell width across either pair of '
+                              'cell edges (a1, a2).')
                     # The shared circle/disk contract uses lx (or l) as its
                     # diameter. A finite angle has no effect on a disk.
                     area_shapes.append((xp.stack((*centres, sizes[0]/2)), material(shape.get('material', 1.))))
                     continue
                 co, si = xp.abs(xp.cos(angle)), xp.abs(xp.sin(angle))
                 if kind == 'ellipse':
-                    check(((co*sizes[0])**2+(si*sizes[1])**2 <= periods[0]**2)
-                          & ((si*sizes[0])**2+(co*sizes[1])**2 <= periods[1]**2),
-                          'Ellipse projected x/y extents must not exceed their periods.')
+                    if is_axis_aligned(lattice):
+                        check(((co*sizes[0])**2+(si*sizes[1])**2 <= periods[0]**2)
+                              & ((si*sizes[0])**2+(co*sizes[1])**2 <= periods[1]**2),
+                              'Ellipse projected x/y extents must not exceed their periods.')
+                    else:
+                        check(_fits_across_cell(lattice, 'ellipse', sizes, angle, xp=xp),
+                              'Ellipse projected extents across each pair of cell edges (a1, a2) must '
+                              'not exceed the cell width there.')
                     area_shapes.append((xp.stack((*centres, sizes[0]/2, sizes[1]/2, angle)),
                                         material(shape.get('material', 1.))))
                     continue
-                check((co*sizes[0]+si*sizes[1] <= periods[0]) & (si*sizes[0]+co*sizes[1] <= periods[1]),
-                      'Area integration requires rotated x/y extents no larger than the periods.')
+                if is_axis_aligned(lattice):
+                    check((co*sizes[0]+si*sizes[1] <= periods[0]) & (si*sizes[0]+co*sizes[1] <= periods[1]),
+                          'Area integration requires rotated x/y extents no larger than the periods.')
+                else:
+                    check(_fits_across_cell(lattice, 'rectangle', sizes, angle, xp=xp),
+                          'Area integration requires rotated extents across each pair of cell edges '
+                          '(a1, a2) no larger than the cell width there.')
                 vertices = rect_verts(xp, *centres, *sizes, angle)
                 area_shapes.append((vertices, material(shape.get('material', 1.))))
                 continue
@@ -235,7 +265,8 @@ def _shape_partition(structure, periods, *, xp, array, check, integration='separ
         if len(area_shapes) > 1:
             if any(v.ndim != 2 for v, _ in area_shapes):
                 raise ValueError('Multiple area shapes currently require rectangles or squares; circles and ellipses require a single-shape layer.')
-            area_shape = {'edges': _painted_rectangle_edges(area_shapes, base, periods, xp=xp, array=array)}
+            area_shape = {'edges': _painted_rectangle_edges(area_shapes, base, periods, xp=xp, array=array,
+                                                            lattice=lattice)}
         area_layers.append((base, area_shape))
     if integration == 'area':
         # Two placeholder rows select the full, static y mesh. Their values
@@ -340,7 +371,111 @@ def _translation_windows(centres, width, smoothing):
             for left, right, low, high in zip(cuts[:-1], cuts[1:], values[:-1], values[1:]) if right > left]
 
 
-def _painted_rectangle_edges(shapes, base, periods, *, xp, array):
+def _yee_box(periods, lattice):
+    """The Cartesian Yee grid's periodic box ``(Lx, Ly)`` -- which only an axis-aligned cell has.
+
+    The grid tiles ``[0, Lx) x [0, Ly)`` and closes its last cell onto its first by ``(Lx, 0)``
+    and ``(0, Ly)``, which are lattice vectors only when the cell is ``diag(Lx, Ly)``. A skewed
+    cell has its images at ``m*a1 + n*a2``, and a painted fold, a wrapped face or a one-ring image
+    sum written on this box would describe a rectangle. So the geometry helpers that stand on the
+    box ask for it here, beside their arithmetic, and a skewed ``lattice`` is refused there rather
+    than answered for a rectangle. The entries returned are the caller's own ``periods`` objects,
+    so a rectangular cell computes exactly what it did before the box had a name.
+
+    Not everything on the box goes through here. :func:`solve_scene_fdtd` builds the grid itself,
+    and its Bloch shift, order window and monitor coordinates, from ``lengths`` -- the same pair --
+    with only the refusal of any ``lattice`` at its door in front of them. Relaxing that door
+    means guarding those too; the cell-shape gate cannot see them, because ``lengths`` is not a
+    period alias.
+
+    Written so the cell-shape gate (``tests/test_cell_shape_gate.py``) sees no period pair in the
+    arithmetic that follows: that is honest only because this refusal comes first. A caller that
+    drops it would be laundering a rectangle past the gate.
+    """
+    from .lattice import is_axis_aligned
+    if not is_axis_aligned(lattice):
+        raise ValueError(
+            'The FDTD Yee grid is a Cartesian periodic box: it closes its last cell onto its first by '
+            '(Lx, 0) and (0, Ly), and only an axis-aligned cell has those as lattice vectors. A skewed '
+            'cell has its images at m*a1 + n*a2; refused rather than answered for a rectangle.')
+    cell = np.asarray(lattice)
+    if not (cell[0, 0] == periods[0] and cell[1, 1] == periods[1]):
+        raise ValueError('The Yee box must be the cell it is built on, but periods and lattice disagree.')
+    return periods[0], periods[1]
+
+
+def _image_shifts(periods, lattice, rings=(1, 1), *, array):
+    """A shape's periodic images, ``(m*Lx, n*Ly)`` for ``|m| <= rings[0]``, ``|n| <= rings[1]``.
+
+    ``m`` outer and ``n`` inner, the order the image sums in this file reduce over, so a change of
+    spelling here cannot regroup a floating sum. It replaces six copies of the same literal, so the
+    moment function and the fill fraction now stand on one ring by construction rather than by a
+    docstring's promise (``tests/test_fdtd_interface_moments.py`` pins that pairing).
+
+    The box index set is enough only on the rectangular argument its callers make: a centre
+    folded per axis and a projected extent no wider than the period. It is refused on a skewed
+    cell (:func:`_yee_box`) rather than extended to one. That would need the images enumerated on
+    the reduced basis to a reach, as ``boundary.periodic_segments`` and
+    ``parametric._ring_offsets`` do, and a Yee grid that closes on the same parallelogram, which a
+    Cartesian grid cannot.
+    """
+    Lx, Ly = _yee_box(periods, lattice)
+    return array([(m*Lx, n*Ly) for m in range(-rings[0], rings[0]+1) for n in range(-rings[1], rings[1]+1)])
+
+
+def _fold_into_reduced_cell(centres, lattice, *, xp):
+    """A shape centre carried into the cell on the Lagrange-reduced basis (``boundary.fold_into_cell``).
+
+    The general form of the per-axis ``remainder`` the rectangular route keeps. Reduced first,
+    because only on the reduced basis is one ring of images enough, which is the lesson of the
+    RCWA boundary path (ae4c770): the cell a point is folded into and the cell the images are
+    enumerated on have to be the same one.
+    """
+    from .boundary import fold_into_cell
+    from .lattice import reduced_basis
+    from .parametric import _cell_floats
+    a1x, a1y, a2x, a2y = _cell_floats(reduced_basis(lattice))
+    folded = fold_into_cell(xp, xp.stack(centres)[None, :], ((a1x, a2x), (a1y, a2y)))[0]
+    return [folded[0], folded[1]]
+
+
+def _fits_across_cell(lattice, kind, sizes, angle, *, xp):
+    """Whether a shape's projected extent across each pair of cell edges fits the cell there.
+
+    On the Lagrange-reduced basis ``(a1, a2)`` the cell is ``|det|/|a2|`` wide across the edges
+    parallel to ``a2`` and ``|det|/|a1|`` across the edges parallel to ``a1``. A shape no wider
+    than that in either direction spans at most one cell in each fractional coordinate. That is
+    what the rectangular checks in :func:`_shape_partition` say on ``diag(Px, Py)``, and it is
+    enough for what they guard: a centre folded into the cell stays within one ring of images,
+    and no image overlaps its own neighbour. Enough, not needed: on the hexagonal cell of side
+    ``a`` the width is ``a*sqrt(3)/2``, so a disc with ``a*sqrt(3)/2 < lx <= a`` is refused though
+    it overlaps none of its images -- as a rotated bar that is wider than the period in ``x`` but
+    overlaps nothing is refused on a rectangle.
+
+    Along a unit normal ``n`` a box is ``lx*|u.n| + ly*|v.n|`` wide (``u``, ``v`` the shape's own
+    axes), an ellipse ``sqrt((lx*u.n)**2 + (ly*v.n)**2)``, a circle ``lx``. The basis is static
+    (FDTD periods are), so it is read as floats; the shape's sizes and angle stay live, and the
+    result feeds ``check`` like the rectangular checks do.
+    """
+    from .lattice import reduced_basis
+    from .parametric import _cell_floats
+    a1x, a1y, a2x, a2y = _cell_floats(reduced_basis(lattice))
+    det = abs(a1x*a2y-a2x*a1y)
+    fits = None
+    for (nx, ny), length in (((a2y, -a2x), math.hypot(a2x, a2y)), ((-a1y, a1x), math.hypot(a1x, a1y))):
+        nx, ny, width = nx/length, ny/length, det/length
+        if kind == 'circle':
+            ok = sizes[0] <= width
+        else:
+            pu = xp.cos(angle)*nx+xp.sin(angle)*ny
+            pv = -xp.sin(angle)*nx+xp.cos(angle)*ny
+            ok = ((sizes[0]*pu)**2+(sizes[1]*pv)**2 <= width**2 if kind == 'ellipse'
+                  else sizes[0]*xp.abs(pu)+sizes[1]*xp.abs(pv) <= width)
+        fits = ok if fits is None else fits & ok
+    return fits
+
+
+def _painted_rectangle_edges(shapes, base, periods, *, xp, array, lattice=None):
     """Piecewise material jumps on a fundamental cell's straight boundaries.
 
     Rectangle/rectangle intersections split each oriented edge. Infinitesimal
@@ -349,9 +484,15 @@ def _painted_rectangle_edges(shapes, base, periods, *, xp, array):
     retain the periodic constant mode even when shapes cover the whole cell.
     Static event arrays permit topology changes within one traced function.
     Contacts retain only piecewise first derivatives, not a unique shape slope.
+
+    The cell-border loop, the face cuts and the final fold all stand on the rectangular Yee box:
+    the pieces are folded into the box the Cartesian windows tile. :func:`_image_shifts` refuses a
+    skewed ``lattice`` through :func:`_yee_box`, which is the guard for all of them.
     """
+    from .lattice import as_lattice
+    lattice = as_lattice(period=periods, lattice=lattice)
     vertices = xp.stack([s[0] for s in shapes])
-    shifts = array([(a*periods[0], b*periods[1]) for a in (-1, 0, 1) for b in (-1, 0, 1)])
+    shifts = _image_shifts(periods, lattice, array=array)
     images = vertices[:, None, :, :]+shifts[None, :, None, :]
     directions = xp.roll(images, -1, axis=-2)-images
     normals = xp.stack((-directions[..., 1], directions[..., 0]), axis=-1)
@@ -416,19 +557,26 @@ def _painted_rectangle_edges(shapes, base, periods, *, xp, array):
     return result
 
 
-def _painted_cell_materials(edges, base, x, y, dx, dy, periods, *, xp, array, smoothing=(0., 0.)):
+def _painted_cell_materials(edges, base, x, y, dx, dy, periods, *, xp, array, smoothing=(0., 0.),
+                            lattice=None):
     """Integrate painted boundaries against static separable cell kernels.
 
     Green's theorem converts the cell mass into integral(CDF_x * weight_y dy).
     Translation windows are piecewise linear; splitting at every window knot
     leaves a cubic polynomial along each straight edge, exact with two Gauss
     nodes. No intermediate raster, frozen host clipping plan or custom VJP.
+
+    The windows are Yee cells, the pieces are folded into the Yee box, and the ring rule compares a
+    Cartesian kernel with the box: all of it is the rectangular box :func:`_yee_box` names and
+    refuses a skewed ``lattice`` for.
     """
+    from .lattice import as_lattice
+    lattice = as_lattice(period=periods, lattice=lattice)
+    box = _yee_box(periods, lattice)
     xwindows = [tuple(array(v) if np.ndim(v) else v for v in row) for row in _translation_windows(x, dx, smoothing[0])]
     ywindows = [tuple(array(v) if np.ndim(v) else v for v in row) for row in _translation_windows(y, dy, smoothing[1])]
-    shifts = array([(a*periods[0], b*periods[1]) for a in (-1, 0, 1) for b in (-1, 0, 1)])
-    if smoothing[0]+dx > periods[0] or smoothing[1]+dy > periods[1]:
-        shifts = array([(a*periods[0], b*periods[1]) for a in (-2, -1, 0, 1, 2) for b in (-2, -1, 0, 1, 2)])
+    rings = (2, 2) if smoothing[0]+dx > box[0] or smoothing[1]+dy > box[1] else (1, 1)
+    shifts = _image_shifts(periods, lattice, rings, array=array)
     total = xp.broadcast_to(xp.stack(base), (len(y), len(x), 2))
     for start, end, jump in edges:
         a = start[:, None, None, None, :]+shifts[None, :, None, None, :]
@@ -439,7 +587,7 @@ def _painted_cell_materials(edges, base, x, y, dx, dy, periods, *, xp, array, sm
         for axis, windows in enumerate([xwindows, ywindows]):
             for face in [windows[0][0], *(w[1] for w in windows)]:
                 f = face[None, :] if axis == 0 else face[:, None]
-                active = xp.abs(delta[..., axis]) > 32*xp.finfo(start.dtype).eps*periods[axis]
+                active = xp.abs(delta[..., axis]) > 32*xp.finfo(start.dtype).eps*box[axis]
                 t = (f-a[..., axis])/xp.where(active, delta[..., axis], xp.ones_like(delta[..., axis]))
                 cuts.append(xp.broadcast_to(xp.where(active, xp.clip(t, 0., 1.), xp.zeros_like(t)), shape))
         cuts = xp.concat((lo[..., None], xp.sort(xp.stack(cuts, axis=-1), axis=-1),
@@ -616,14 +764,20 @@ def _clipped_ellipse_area(ellipse, left, right, bottom, top, *, xp, moment_weigh
     return xp.where(nonempty & (area >= 0), area, xp.zeros_like(area))
 
 
-def _shape_cell_fractions(vertices, x, y, dx, dy, periods, *, xp, array, smoothing=(0., 0.)):
+def _shape_cell_fractions(vertices, x, y, dx, dy, periods, *, xp, array, smoothing=(0., 0.), lattice=None):
     """Periodic shape fractions, optionally averaged over box translations.
 
     A translated cell has a trapezoidal weight on each axis. Split its support
     into linear pieces and integrate their bilinear product with polygon
     moments or disk/ellipse arc strips. Wide kernels need a second periodic image ring near cell seams.
     Projected shape extents and smoothing widths must not exceed periods.
+
+    The cells are Yee cells and the last one closes onto the first across the Yee box, so this
+    stands on the rectangular box :func:`_yee_box` names and refuses a skewed ``lattice`` for.
     """
+    from .lattice import as_lattice
+    lattice = as_lattice(period=periods, lattice=lattice)
+    box = _yee_box(periods, lattice)
     curved = vertices.ndim == 1
     clip = (_clipped_circle_area if vertices.shape[0] == 3 else _clipped_ellipse_area) if curved else _clipped_rectangle_area
     def images(shifts, smoothed):
@@ -638,9 +792,8 @@ def _shape_cell_fractions(vertices, x, y, dx, dy, periods, *, xp, array, smoothi
                    for b in _translation_windows(y, dy, smoothing[1])]
         bounds = [np.broadcast_arrays(a[0][None, :], a[1][None, :], b[0][:, None], b[1][:, None])
                   for a, b in windows]
-        rings = [2 if w+h > p else 1 for w, h, p in zip((dx, dy), smoothing, periods)]
-        shifts = array([(i*periods[0], j*periods[1]) for i in range(-rings[0], rings[0]+1)
-                        for j in range(-rings[1], rings[1]+1)])
+        rings = [2 if w+h > p else 1 for w, h, p in zip((dx, dy), smoothing, box)]
+        shifts = _image_shifts(periods, lattice, rings, array=array)
         left, right, bottom, top = [array(np.stack([b[k] for b in bounds]))[None, ...]
                                     +xp.zeros_like(shifts[:, 0, None, None, None]) for k in range(4)]
         weights = array([[*a[2:], *b[2:]] for a, b in windows])[None, :, None, None, :]
@@ -652,14 +805,14 @@ def _shape_cell_fractions(vertices, x, y, dx, dy, periods, *, xp, array, smoothi
                                            array(np.asarray(y)-dy/2)[:, None])
     else:
         left, bottom = xp.broadcast_arrays(array(x)[None, :]-dx/2, array(y)[:, None]-dy/2)
-    shifts = array([(i*periods[0], j*periods[1]) for i in (-1, 0, 1) for j in (-1, 0, 1)])
+    shifts = _image_shifts(periods, lattice, array=array)
     left, bottom = xp.broadcast_arrays(left[None, ...]+xp.zeros_like(shifts[:, 0, None, None]), bottom[None, ...])
     if curved:
         # Reuse identical stored faces on adjoining cells. Tiny independent
         # rounding gaps produce sqrt(gap) changes in tangent chord slopes.
         xleft, ybottom = np.asarray(x)-dx/2, np.asarray(y)-dy/2
-        right = array(np.r_[xleft[1:], xleft[:1]+periods[0]])[None, None, :]+xp.zeros_like(left)
-        top = array(np.r_[ybottom[1:], ybottom[:1]+periods[1]])[None, :, None]+xp.zeros_like(bottom)
+        right = array(np.r_[xleft[1:], xleft[:1]+box[0]])[None, None, :]+xp.zeros_like(left)
+        top = array(np.r_[ybottom[1:], ybottom[:1]+box[1]])[None, :, None]+xp.zeros_like(bottom)
     else:
         right, top = left+dx, bottom+dy
     area = clip(images(shifts, False), left, right, bottom, top, xp=xp)
@@ -667,7 +820,8 @@ def _shape_cell_fractions(vertices, x, y, dx, dy, periods, *, xp, array, smoothi
     return xp.where(fraction > 1, xp.ones_like(fraction), fraction)
 
 
-def _rectangle_edge_moments(vertices, x, y, dx, dy, periods, *, xp, array, check=_require_scene):
+def _rectangle_edge_moments(vertices, x, y, dx, dy, periods, *, xp, array, check=_require_scene,
+                            lattice=None):
     """Per-cell interface arclength and second normal moment of a straight-sided shape.
 
     Returns (L, M_xx, M_xy, M_yy), each of shape (len(y), len(x)): arrays are v-first in this
@@ -690,6 +844,9 @@ def _rectangle_edge_moments(vertices, x, y, dx, dy, periods, *, xp, array, check
         raise ValueError('_rectangle_edge_moments walks the four oriented edges of a straight-sided '
                          'shape. A circle/ellipse recipe carries axes rather than vertices and has '
                          'no polygon to walk; refused rather than approximated by a chord.')
+    from .lattice import as_lattice
+    lattice = as_lattice(period=periods, lattice=lattice)
+    box = _yee_box(periods, lattice)
     tol = 32*xp.finfo(vertices.dtype).eps*max(periods)
     # The same 3x3 image ring and the same closed cell boxes as the *sharp* branch of
     # _shape_cell_fractions -- a fraction built with nonzero smoothing is a different geometry
@@ -697,13 +854,15 @@ def _rectangle_edge_moments(vertices, x, y, dx, dy, periods, *, xp, array, check
     # image's boundary, not the boundary of their union, so touching images double a shared face
     # that a sign-blind moment cannot cancel, and a wider shape outruns the ring and loses
     # arclength; one refusal excludes both, exactly rather than conservatively, since images a
-    # lattice vector apart overlap along a face only when a projected extent spans a period.
-    for axis, period in enumerate(periods):
+    # lattice vector apart overlap along a face only when a projected extent spans a period. Both
+    # are rectangle arguments -- images at (m*Lx, n*Ly) -- which is why the box is asked for above,
+    # and why the ring comes from the same helper as the fill fraction's.
+    for axis, period in enumerate(box):
         check(xp.max(vertices[:, axis])-xp.min(vertices[:, axis]) < period,
               'Interface moments require projected shape extents strictly smaller than their periods; '
               'a touching or oversized periodic image shares a face with its neighbour, which this sum '
               'counts twice rather than cancels.')
-    shifts = array([(i*periods[0], j*periods[1]) for i in (-1, 0, 1) for j in (-1, 0, 1)])
+    shifts = _image_shifts(periods, lattice, array=array)
     start = vertices[None, :, :]+shifts[:, None, :]
     edge = xp.roll(start, -1, axis=-2)-start
     edge_x, edge_y = edge[..., 0], edge[..., 1]
@@ -1270,8 +1429,12 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
         shape_width = np.broadcast_to(shape_width, (2,)).astype(float)
         if np.any(shape_width > periods):
             raise ValueError('shape_smoothing must not exceed either rectangular period.')
+        # The cell the recipe is drawn on. `lattice` is None here -- the door above refused any other --
+        # so this is diag(periods), stated rather than defaulted: a stated None is a decision.
+        from .lattice import as_lattice
+        cell = as_lattice(period=periods, lattice=lattice)
         raster, mu, partition = _shape_partition(structure, periods, xp=xp, array=array, check=check,
-                                                     integration=shape_integration)
+                                                     integration=shape_integration, lattice=cell)
         if shape_integration == 'area':
             area_layers = partition
         else:
@@ -1405,9 +1568,11 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
         for ox, oy in ((0., 0.), (.5, 0.), (0., .5), (.5, .5)):
             area_fractions[ox, oy] = [None if s is None else
                 _painted_cell_materials(s['edges'], base, (np.arange(nx)+ox)*dx, (np.arange(ny)+oy)*dy,
-                                       dx, dy, lengths, xp=xp, array=array, smoothing=shape_width) if isinstance(s, dict) else
+                                       dx, dy, lengths, xp=xp, array=array, smoothing=shape_width,
+                                       lattice=cell) if isinstance(s, dict) else
                 _shape_cell_fractions(s[0], (np.arange(nx)+ox)*dx, (np.arange(ny)+oy)*dy,
-                                     dx, dy, lengths, xp=xp, array=array, smoothing=shape_width) for base, s in area_layers]
+                                     dx, dy, lengths, xp=xp, array=array, smoothing=shape_width,
+                                     lattice=cell) for base, s in area_layers]
     def sample(values, upper, lower, magnetic=False, harmonic=True):
         components = []
         for c in range(3):
