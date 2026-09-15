@@ -22,6 +22,9 @@
 | `periodic_seam_galerkin.py` | Can the complete retained tensor couple those seam fields to the quadratic mesh, with finite contact and positive-gap derivatives? |
 | `cartesian_pair_seam_galerkin.py` | Can real continuous internal-gap traces share the whole pair tensor and its exact contact/material derivative? |
 | `cartesian_pair_corner_galerkin.py` | Can fixed real corner and optional junction powers join that whole tensor and its positive-gap/contact/material derivative? |
+| `cartesian_pair_transmission_galerkin.py` | Can fixed reference transmission modes define a separate complete contact/positive-gap tensor and material JVP? |
+| `pair_transmission_modes.py` | Which finite-energy sector solutions preserve local potential and normal-flux continuity with one-sided interface derivatives? |
+| `pair_transmission_fields.py` | How can all selected real transmission directions share the fitted common polynomial coordinates and their moving gradients? |
 | `pair_corner_fields.py` | How do exact fifth-root remainders and nested angular powers preserve the complete corner field space? |
 | `pair_radial_powers.py` | How can exact root factors remove both polynomial overlap and nearby-exponent cancellation without discarding a radial direction? |
 | `pair_oscillatory_coefficients.py` | Which exact scalar weights and Taylor coefficients define the fixed real exponent columns? |

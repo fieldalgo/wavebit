@@ -103,3 +103,48 @@ The [method note](../nvf-cartesian-pair-gap.md) describes the exact finite
 rescaling and its independent qualification. It gives no continuum or patterned
 optical accuracy certificate. The separate [endpoint response](cartesian-pair-opening.md)
 remains available as an independently qualified reference.
+
+## Fixed reference transmission potentials
+
+`CartesianPairTransmissionGalerkinGapCell` is a separate experimental
+NumPy family with the complete tensor and its analytical gap/material JVP.
+It requires a shift-zero plan on the symmetric Cartesian pair mesh.
+Its `closure` returns `(value, tangent, metadata)`.
+
+```python
+from wavebit._core.conforming.cartesian_pair_transmission_galerkin import (
+    CartesianPairTransmissionGalerkinGapCell,
+)
+
+cell = CartesianPairTransmissionGalerkinGapCell(
+    CartesianPairOpeningPlan(0), order=(1, 1), degree=3,
+    reference=(12.25, -10.0+1.0j, 1.0), branches=2,
+    quadrature=80, angular_quadrature=80, coercivity_angle=1.53,
+)
+value, tangent, metadata = cell.closure(
+    gap=0.0, basis=np.diag([700.0, 700.0]),
+    widths=(300.0, 300.0), height=300.0,
+    epsilon=(12.25, -10.0+1.0j), background=1.0,
+    gap_tangent=1.0,
+)
+```
+
+`reference=(left, right, background)` is required and fixes the auxiliary
+transmission coefficients. Each must be finite and nonzero, and the resulting
+noninteger modes must have finite energy. Physical materials belong to each
+`closure` call; they may differ from the reference and may vary through
+`epsilon_tangent` and `background_tangent`. Changing them never refits the
+reference basis. Geometry remains fixed during that JVP.
+
+`branches` is an integer from 1 through 4, defaulting to 2. It adds the
+successive growing roots `lambda`, `2-lambda`, `2+lambda` and `4-lambda`
+at every corner with a noninteger reference mode. Real and imaginary parts
+are retained separately. The original common degree is 3 or 4. The radial
+quadrature defaults to 80 and its effective order is at least 80;
+`angular_quadrature=None` uses that effective order in both directions.
+An explicit angular order must be at least `max(12, 2*max(order)+4)`.
+
+Metadata identifies `closure='fixed_transmission_pair_galerkin'` and records
+the reference coefficients, branch count and number of real directions.
+The [method and measurement note](../nvf-pair-transmission-potentials.md)
+separates finite physical checks from unresolved optical convergence.

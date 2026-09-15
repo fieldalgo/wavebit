@@ -126,19 +126,20 @@ class CartesianPairCornerGalerkinGapCell:
         _check_response(value,tangent,metadata)
         return value,tangent,metadata
 
-    def _closure_at_offset(self,settings):
+    def _closure_at_offset(self,settings,*,prepared_fields=None):
         """Solve and independently verify the complete state at one origin."""
         gap=settings['gap']
+        fields=self._fields if prepared_fields is None else prepared_fields
         order = max(self.quadrature, 4*max(self.order)+16, self.root_order*max(self._base.degree,4))
         if gap == 0:
             order = max(48, order)
             value, tangent, metadata = solve_contact(
                 self._base, settings, quadrature=order, exponents=self.exponents, junctions=self.junctions,
-                angular_order=self.angular_order,prepared_fields=self._fields,
+                angular_order=self.angular_order,prepared_fields=fields,
                 oscillatory_radial=self.oscillatory_radial,angular_quadrature=self.angular_quadrature)
         else:
             base = augment(self._base, settings, exponents=self.exponents, quadrature=order, junctions=self.junctions,
-                           angular_order=self.angular_order,prepared_fields=self._fields,
+                           angular_order=self.angular_order,prepared_fields=fields,
                            oscillatory_radial=self.oscillatory_radial,angular_quadrature=self.angular_quadrature)
             sample = junction_quadrature if self.junctions or self.root_order==20 else sample_quadrature
             transform = _trace_change(self._base, settings, order)

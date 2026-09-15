@@ -53,6 +53,7 @@ def context(obj,settings,base,transform,quadrature):
     info=base[-1];nc,nz,N=(info[k] for k in ('nc','nz','size'))
     fields=info['corner_fields'];rule=fields.quadrature
     precise=(getattr(obj,'_symmetric_mesh',False) and fields.root_order==20
+             and getattr(fields,'complete_common_precision',True)
              and not fields.oscillatory_radial)
     if precise:
         from .pair_contact_quadrature import quadrature as contact_quadrature
@@ -137,6 +138,7 @@ def solve(obj,settings,quadrature=48,exponents=(.6,.8),junctions=False,angular_o
         phi[:,0,:N]=phase;phi[:,1,N:]=phase;return phi
     complete_real=(getattr(obj,'_symmetric_mesh',False)
                    and info['corner_fields'].root_order==20
+                   and getattr(info['corner_fields'],'complete_common_precision',True)
                    and not info['corner_fields'].oscillatory_radial)
     if complete_real:
         from .pair_contact_precision import response as complete_response

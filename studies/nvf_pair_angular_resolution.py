@@ -15,6 +15,7 @@ import numpy as np
 from studies.nvf_pair_material_sector import GEOMETRY,solver
 from wavebit._core.conforming.cartesian_pair_opening import CartesianPairOpeningPlan
 from wavebit._core.conforming.cartesian_pair_corner_galerkin import CartesianPairCornerGalerkinGapCell
+from wavebit._core.conforming.cartesian_pair_transmission_galerkin import CartesianPairTransmissionGalerkinGapCell
 
 
 def main():
@@ -30,31 +31,48 @@ def main():
                         help='Separate angular integration order; omitted uses the radial order.')
     parser.add_argument('--oscillatory-radial',action='store_true',
                         help='Add the fixed real logarithmic cosine/sine radial pair.')
+    parser.add_argument('--transmission-branches',type=int,choices=range(1,5),default=None,
+                        help='Select fixed-reference transmission modes instead of the fixed-power bank; angular-order then does not apply.')
     parser.add_argument('--tensor-output',type=Path,default=None,
                         help='Optional complete tensor/JVP NPZ, including guard and reflection status.')
     args=parser.parse_args()
+    if args.transmission_branches is not None and args.oscillatory_radial:
+        parser.error('transmission and fixed oscillatory banks are separate field spaces')
     if len(args.order) not in (1,2) or any(n<0 for n in args.order):
         parser.error('order must be one or two nonnegative integers')
     orders=tuple(args.order*2 if len(args.order)==1 else args.order)
     root=Path(__file__).resolve().parents[1]
     sources=sorted((root/'wavebit/_core/conforming').glob('*.py'))
     sources.extend([Path(__file__).resolve(),root/'studies/nvf_pair_material_sector.py'])
+    def encode(value):
+        if isinstance(value,(complex,np.complexfloating)):
+            return [float(value.real),float(value.imag)]
+        return np.asarray(value).tolist()
     def emit(row):
-        print(json.dumps(row,default=lambda a:np.asarray(a).tolist()),flush=True)
+        print(json.dumps(row,default=encode),flush=True)
     configuration=vars(args)|{'order':orders}
     tensor_output=configuration.pop('tensor_output')
+    if args.transmission_branches is not None:
+        configuration.update(angular_order=None,transmission_reference=[[12.25,0.],[-10.,1.],[1.,0.]])
     emit(dict(kind='header',numpy=np.__version__,**configuration,geometry=dict(
         period=700.,widths=[300.,300.],height=300.,gap=0.,offset=[0.,0.],
         epsilon=[[12.25,0.],[-10.,1.]],background=1.,wavelength=900.,
         thickness=300.,top=1.,bottom=2.25,theta=.2,phi=0.),
-        exponents=[.6,.8],mesh='symmetric',coercivity_angle=1.53,
+        exponents=[.6,.8] if args.transmission_branches is None else [],
+        mesh='symmetric',coercivity_angle=1.53,
         source_sha256={str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest()
                        for p in sources}))
     start=time.perf_counter()
-    cell=CartesianPairCornerGalerkinGapCell(CartesianPairOpeningPlan(0,args.refinement),
-        orders,degree=args.degree,quadrature=args.quadrature,junctions=True,
-        angular_order=args.angular_order,coercivity_angle=1.53,mesh='symmetric',
-        oscillatory_radial=args.oscillatory_radial,angular_quadrature=args.angular_quadrature)
+    if args.transmission_branches is None:
+        cell=CartesianPairCornerGalerkinGapCell(CartesianPairOpeningPlan(0,args.refinement),
+            orders,degree=args.degree,quadrature=args.quadrature,junctions=True,
+            angular_order=args.angular_order,coercivity_angle=1.53,mesh='symmetric',
+            oscillatory_radial=args.oscillatory_radial,angular_quadrature=args.angular_quadrature)
+    else:
+        cell=CartesianPairTransmissionGalerkinGapCell(CartesianPairOpeningPlan(0,args.refinement),
+            orders,degree=args.degree,quadrature=args.quadrature,reference=(12.25,-10+1j,1.),
+            branches=args.transmission_branches,coercivity_angle=1.53,
+            angular_quadrature=args.angular_quadrature)
     value,tangent,metadata=cell.closure(gap=0.,epsilon=(12.25,-10+1j),**GEOMETRY)
     value,tangent=np.asarray(value),np.asarray(tangent)
     nx,ny=orders
@@ -75,7 +93,7 @@ def main():
     if tensor_output is not None:
         tensor_output.parent.mkdir(parents=True,exist_ok=True)
         np.savez(tensor_output,value=value,tangent=tangent,
-                 metadata=json.dumps(status,default=lambda a:np.asarray(a).tolist()))
+                 metadata=json.dumps(status,default=encode))
     # Persist diagnostics before applying the unchanged strict reflection
     # criteria. A saved rejected candidate is never labelled as qualified.
     for array,tolerance in ((value,3e-10),(tangent,3e-9)):
