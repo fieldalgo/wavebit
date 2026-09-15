@@ -92,7 +92,7 @@ class PairCornerFields:
         self._definitions += [(c,(n,m),a-2-j,self.obj.degree-3-j,j) for c,n,m,a,j in self.angular]
         self._support_cache={}
         if self.root_order==20:prepare_radial(self)
-        if getattr(obj, '_symmetric_mesh', False) and self.root_order==20 and self.count:
+        if getattr(obj, '_symmetric_mesh', False) and self.count:
             from .pair_corner_coordinates import prepare
             prepare(self)
 

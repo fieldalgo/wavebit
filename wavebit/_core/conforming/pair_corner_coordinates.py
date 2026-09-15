@@ -1,6 +1,6 @@
 """Real full-space corner coordinates formed before physical weak assembly.
 
-The symmetric mesh's expanded radial fields can be nearly dependent in raw
+The symmetric mesh's radial fields can be nearly dependent in raw
 coordinates. A common Pp interpolation subtraction and a complete per-corner
 QR retain the same potential space while avoiding cancellation in the weak
 matrix itself. Every coordinate survives; all original physical checks apply.

@@ -27,7 +27,7 @@
 | `pair_radial_fields.py` | How do homogeneous normalized hats preserve complete radial values and both spatial and moving-field derivatives? |
 | `pair_symmetric_mesh.py` | How can the explicit pair trial mesh preserve reflection and the original exact contact quotient? |
 | `pair_corner_prefactors.py` | Which enrichment coordinates are exactly redundant on the selected mesh, including identities across corner labels? |
-| `pair_corner_coordinates.py` | How can expanded symmetric-mesh fields retain accurate original weak equations before material assembly? |
+| `pair_corner_coordinates.py` | How can every symmetric-mesh radial subset retain accurate original weak equations before material assembly? |
 | `pair_contact_refinement.py` | How can the contact variation correct its original weak, retained and flux defects together in the same complete space? |
 | `pair_corner_assembly.py` | How do added common corner fields retain the original C/Z equations and their physical variations? |
 | `pair_corner_partition.py` | How are moving clipped polygons integrated radially from actual corners without negative or tolerance-clipped areas? |

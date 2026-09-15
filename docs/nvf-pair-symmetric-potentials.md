@@ -82,7 +82,7 @@ With two radial exponents and junctions enabled, angular orders zero, one
 and two retain 168, 260 and 356 coordinates from 192, 308 and 424 candidates.
 The original mesh retains every one of its 112, 168 and 224 coordinates.
 
-## Stable expanded radial coordinates
+## Stable radial coordinates
 
 The four-exponent symmetric space also needs stable coordinates before its
 physical weak matrices are assembled. Orthogonalizing only the later solve
@@ -92,7 +92,7 @@ order-zero metal contact control had a common-coordinate condition of
 unchanged `1e-10` limit, despite passing its independent physical-energy
 checks.
 
-For expanded radial subsets, a real nodal interpolation subtraction first
+For every nonempty symmetric radial subset, a real nodal interpolation subtraction first
 removes an element of the same complete common `Pp` space. Each common node
 has one shared Bernstein coefficient, including at contact. Reference-field
 scales and a complete per-corner QR then define invertible real coordinates
@@ -105,6 +105,35 @@ coordinate change. These coordinates depend on the mesh and field choice,
 not on materials or physical length units. Every coordinate survives.
 The original weak, retained-field, flux, reciprocity, passivity and independent
 energy checks are applied to the resulting complete equations.
+
+The original two-exponent subset needs this preparation as well. In a
+degree-three, Fourier-order-four, angular-order-two metal case at normalized
+gap `0.003`, the unrefined symmetric mesh had a common-coordinate condition
+of `5.88e6` and a common coefficient norm of `1.78e6`. Full-state pointwise
+refinement alone left energy and energy-derivative residuals of `2.67e-10`
+and `6.91e-10`, both above the original `1e-10` guard.
+
+Preparing the same two-exponent space lowers the condition to `6.28e3`
+and the coefficient norm to `3.44e3`. At integration order 64, the complete
+calculation with pointwise refinement passes every original physical guard:
+its energy and energy-derivative residuals are `1.02e-11` and `3.08e-11`.
+The value reflection discrepancy is `3.83e-11`, below `3e-10`. The complete
+gap-derivative reflection discrepancy is still `1.46e-8`, above `3e-9`;
+this high-order derivative is therefore not reflection-qualified. These
+measurements use unit period and otherwise the normalized metal geometry
+given below. The preparation changes no radial exponent, quadrature rule,
+potential count or original-mesh default.
+
+The corresponding full-space regression at the default integration order
+48 also passes every original physical guard. It took about 12 minutes
+23 seconds on the stated runtime, within the 20-minute per-test CI limit.
+
+The coordinate recovery tests undo all real transforms and add independently
+evaluated Bernstein interpolation values and gradients. They recover every
+original potential and its spatial and moving-field derivatives on all 60
+triangles, for degrees three and four, angular orders zero through two and
+the one- and two-exponent fifth-root subsets. The four-exponent case retains
+the same recovery check. The full and gradient-only samplers agree bitwise.
 
 Assembly requests gradients directly, avoiding dense coordinate transforms
 of potential values that the integrals do not use. A bounded cache stores

@@ -138,6 +138,16 @@ def test_complete_metal_response_and_gap_jvp_preserve_reflection(gap):
     np.testing.assert_allclose([tangent.epxy,tangent.epyx],0.,atol=3e-9,rtol=0)
 
 
+def test_high_order_positive_metal_retains_independent_physical_energy():
+    # Raw fifth-root coordinates failed the original energy guards in the
+    # separate q64 control of this full N4/angular-2 space. Keep every
+    # potential at the default quadrature within the per-test CI time limit.
+    value,tangent,metadata=_closure(gap=.003,scale=1.,angular_order=2,order=4)
+    assert metadata['energy_residual']<1e-10
+    assert metadata['energy_derivative_residual']<1e-10
+    assert np.all(np.isfinite(value)) and np.all(np.isfinite(tangent))
+
+
 def test_positive_physical_gap_variation_matches_two_fourth_order_differences():
     value,tangent,metadata=_closure(2.1)
     for step in (.01,.005):
@@ -160,17 +170,23 @@ def test_contact_reflection_with_angular_and_nonzero_fourier_fields(degree,angul
             np.testing.assert_allclose(slot,sign*phase*reflected_slot,atol=tolerance,rtol=0)
 
 
-def test_expanded_coordinates_recover_every_original_potential_and_variation():
-    cell=_cell(exponents=(.55,.6,.8,.95))
-    fields=PairCornerFields(cell._base,(.55,.6,.8,.95),junctions=True)
+@pytest.mark.parametrize('degree,angular,exponents',
+    [(p,a,e) for p in (3,4) for a in (0,1,2) for e in ((.6,),(.6,.8))]
+    +[(3,0,(.55,.6,.8,.95))])
+def test_stable_coordinates_recover_every_original_potential_and_variation(degree,angular,exponents):
+    cell=_cell(degree=degree,exponents=exponents,angular_order=angular)
+    fields=PairCornerFields(cell._base,exponents,junctions=True,angular_order=angular)
     bary=np.array([[.23,.31,.46],[.41,.17,.42]])
     db=np.array([[.03,-.01,-.02],[-.02,.04,-.02]])
     inverse=np.array([[1.2,.1],[-.2,.8]])
     dinverse=np.array([[.03,.01],[-.04,.02]])
     data=cell._base.data
-    for tri in data['triangles'][::7]:
+    for tri in data['triangles']:
         raw=fields._sample(tri,bary,inverse,dinverse,db)
-        restored=[array.copy() for array in fields.sample(tri,bary,inverse,dinverse,db)]
+        sampled=fields.sample(tri,bary,inverse,dinverse,db)
+        for actual,expected in zip(fields.gradients(tri,bary,inverse,dinverse,db),sampled[1:]):
+            np.testing.assert_array_equal(actual,expected)
+        restored=[array.copy() for array in sampled]
         for array in restored:
             for indices,transform in zip(fields.groups,fields.transforms):
                 block=array[...,indices]
