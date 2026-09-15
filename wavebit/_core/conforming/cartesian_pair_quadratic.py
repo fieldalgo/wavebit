@@ -16,7 +16,6 @@ from .cartesian_pair_opening import (
     CartesianPairOpeningCell,
     components,
     energy_opening,
-    CartesianPairOpeningPlan,
     freeze_topology,
     topology,
     _opening_topology,

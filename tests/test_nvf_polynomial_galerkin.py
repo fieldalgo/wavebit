@@ -6,7 +6,7 @@ import pytest
 from wavebit._core.conforming.cartesian_pair_polynomial_galerkin import CartesianPairPolynomialGalerkinGapCell
 from wavebit._core.conforming.cartesian_pair_galerkin import CartesianPairGalerkinGapCell
 from wavebit._core.conforming.cartesian_pair_opening import CartesianPairOpeningPlan
-from wavebit._core.conforming.triangle_polynomials import phase_average, multi_indices
+from wavebit._core.conforming.triangle_polynomials import phase_average
 from wavebit._core.conforming.galerkin_error import estimate_closed_error, refine_closed_error, _closed_state, _dual_fields
 from test_nvf_cartesian_pair_opening import _oracle_geometry
 from test_nvf_pair_galerkin import nodal_reference, tensor

@@ -4,7 +4,6 @@ import numpy as np
 import pytest
 from numpy.polynomial.legendre import leggauss
 from wavebit._core.conforming.cartesian_pair_seam_galerkin import CartesianPairSeamGalerkinGapCell
-from wavebit._core.conforming.cartesian_pair_galerkin import CartesianPairGalerkinGapCell
 from wavebit._core.conforming.cartesian_pair_opening import CartesianPairOpeningPlan
 from test_nvf_cartesian_pair_opening import _oracle_geometry
 from test_nvf_pair_quadratic import nodal_gradients

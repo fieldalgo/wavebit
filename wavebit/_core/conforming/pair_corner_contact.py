@@ -2,7 +2,7 @@
 import numpy as np
 from numpy.polynomial.legendre import leggauss
 from .pair_corner_assembly import augment,samples
-from .cartesian_pair_seam_galerkin import _geometry,_contact_blocks,_trace_change,_changed_contact,_free_fourier_energy,_check_response
+from .cartesian_pair_seam_galerkin import _geometry,_contact_blocks,_trace_change,_changed_contact,_check_response
 from .projected_pair_contact import _real_geometry
 from .real_trace_coupling import _contract,_field_product as mul,coupled_contact
 

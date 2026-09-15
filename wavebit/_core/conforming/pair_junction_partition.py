@@ -9,7 +9,7 @@ import numpy as np
 from numpy.polynomial.legendre import leggauss
 
 
-from .pair_corner_partition import scalar,dot,det,point,moving_point,clip,inverse3,endpoint_linear,root_sum
+from .pair_corner_partition import scalar,dot,det,point,clip,inverse3,endpoint_linear,root_sum
 
 
 def partitions(obj,base,settings,chart,split):

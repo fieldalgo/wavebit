@@ -11,7 +11,7 @@ from fractions import Fraction as F
 from math import factorial
 import numpy as np
 from .pair_oscillatory_radial import two_sum,two_product,add
-from .pair_oscillatory_coefficients import coefficients,NODES,ONE,div,mul
+from .pair_oscillatory_coefficients import coefficients,NODES,div,mul
 
 def cp(a,b):
     rr=two_product(a[0].real,b[0].real);ii=two_product(a[0].imag,b[0].imag)
