@@ -175,6 +175,16 @@ residual is `3.88e-15`, and its original weak-derivative residual is `2.19e-12`.
 The complete positive-gap response preserves reflection. These are finite
 contact-approach measurements, not bounds on optical or continuum error.
 
+That complete four-exponent positive-gap control took about 41 minutes on
+the stated runtime, exceeding the 20-minute limit for one CI test. The
+repeated subpixel-gap regression therefore uses the most singular allowed
+exponent, `(0.55,)`, while keeping the same root-20 integration, full physical
+guards and reflection criteria. It passed in about 11 minutes, with energy
+and energy-derivative residuals of `3.96e-15` and `1.04e-15`. The four-exponent
+contact representation and material-direction tests remain in the suite.
+This bounds the cost of that regression fixture; the solver does not remove
+fields or change the requested radial subset.
+
 The symmetric mesh is an explicit resolution choice. It corrects a known
 finite-space symmetry defect, but the mesh, angular, radial and retained
 Fourier orders must still be qualified for each optical observable. In

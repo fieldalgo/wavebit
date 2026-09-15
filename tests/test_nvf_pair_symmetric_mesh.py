@@ -224,7 +224,13 @@ def test_expanded_contact_preserves_complete_response_under_representations(chan
 
 
 def test_expanded_positive_subpixel_gap_preserves_physical_reflection():
-    value,tangent,_=_closure(gap=1e-7,exponents=(.55,.6,.8,.95))
+    # Exercise the expanded root-20 small-gap path with the most singular
+    # allowed exponent within the per-test CI time limit. The complete
+    # four-node space is tested at contact above; its separate positive-gap
+    # qualification is recorded in nvf-pair-symmetric-potentials.md.
+    value,tangent,metadata=_closure(gap=1e-7,exponents=(.55,))
+    assert metadata['radial_root_order']==20
+    assert metadata['integration_quadrature']==80
     np.testing.assert_allclose([value.epxy,value.epyx],0.,atol=3e-10,rtol=0)
     np.testing.assert_allclose([tangent.epxy,tangent.epyx],0.,atol=3e-9,rtol=0)
 
