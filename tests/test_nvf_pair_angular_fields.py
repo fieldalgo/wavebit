@@ -25,7 +25,7 @@ def closure(gap=.003, quadrature=32, angular_order=2, epsilon=(4., 9.),
     return np.asarray(result[0]), np.asarray(result[1])
 
 
-@pytest.mark.parametrize('angular_order', (True, 1., -1, 3, None))
+@pytest.mark.parametrize('angular_order', (True, 1., -1, 5, None))
 def test_unsupported_angular_orders_are_rejected(angular_order):
     with pytest.raises(ValueError, match='angular order'):
         CartesianPairCornerGalerkinGapCell(
@@ -33,7 +33,7 @@ def test_unsupported_angular_orders_are_rejected(angular_order):
 
 
 @pytest.mark.parametrize('degree', (3, 4))
-@pytest.mark.parametrize('angular_order', (1, 2))
+@pytest.mark.parametrize('angular_order', (1, 2, 3, 4))
 @pytest.mark.parametrize('junctions', (False, True))
 def test_angular_powers_and_gradients_on_every_triangle(degree, angular_order, junctions):
     obj = CartesianPairPolynomialGalerkinGapCell(
@@ -73,20 +73,22 @@ def test_angular_powers_and_gradients_on_every_triangle(degree, angular_order, j
         np.testing.assert_allclose(tangent, difference, atol=3e-9, rtol=0)
 
 
-def test_complete_angular_quadrature_and_two_finite_gap_variations():
-    value, tangent = closure()
-    refined, drefined = closure(quadrature=40)
+@pytest.mark.parametrize('angular_order', (2,4))
+def test_complete_angular_quadrature_and_two_finite_gap_variations(angular_order):
+    value, tangent = closure(angular_order=angular_order)
+    refined, drefined = closure(quadrature=40,angular_order=angular_order)
     np.testing.assert_allclose(value, refined, atol=3e-10, rtol=0)
     np.testing.assert_allclose(tangent, drefined, atol=3e-9, rtol=0)
     for step in (3e-5, 1.5e-5):
-        values = [closure(gap=.003+k*step)[0] for k in (-2, -1, 1, 2)]
+        values = [closure(gap=.003+k*step,angular_order=angular_order)[0]
+                  for k in (-2, -1, 1, 2)]
         difference = (values[0]-8*values[1]+8*values[2]-values[3])/(12*step)
         np.testing.assert_allclose(tangent, difference, atol=3e-9, rtol=0)
 
 
 def test_nested_angular_contact_spaces_reduce_dielectric_energy():
     previous = None
-    for angular_order in (0, 1, 2):
+    for angular_order in (0, 1, 2, 3, 4):
         xx, yy, zz, xy, yx = closure(gap=0., angular_order=angular_order)[0][:, 0]
         tensor = np.block([[xx, -xy], [-yx, yy]])
         np.testing.assert_allclose(tensor, tensor.conj().T, atol=3e-10, rtol=0)

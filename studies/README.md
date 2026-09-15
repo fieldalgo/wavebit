@@ -12,6 +12,7 @@ is still being investigated belongs here until a reference value is established.
 
 | Script | Question it answers |
 | --- | --- |
+| `nvf_pair_angular_resolution.py` | Does increasing the complete corner angular space stabilize metal contact transmission and its optical directional slope across Fourier orders? [Angular refinement and remaining resolution limits](../docs/nvf-pair-corner-potentials.md#nested-angular-refinement). |
 | `nvf_pair_galerkin.py`, `results/nvf_pair_galerkin.log`, `results/nvf_pair_galerkin_quadratic.log` | Does a real constrained-gradient response improve contact optics when potential degree, geometric refinement and Fourier spaces vary independently? [Finite guarantees and optical evidence](../docs/nvf-pair-galerkin.md). |
 | `nvf_periodic_galerkin.py`, `results/nvf_periodic_galerkin.log` | Does the constrained real field resolve the original periodic closing-gap derivative for both polarizations? [p improvement and remaining s trace error](../docs/nvf-periodic-galerkin.md). |
 | `nvf_coupled_seam_galerkin.py`, `results/nvf_coupled_seam_galerkin.log` | Does adding continuous real seam potentials to the full quadratic tensor resolve both periodic-contact polarizations? [Coupled finite family and optical scope](../docs/nvf-coupled-seam-galerkin.md). |

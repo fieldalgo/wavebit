@@ -74,7 +74,7 @@ remainder and quadrature treatment is not implemented by this family.
 
 ## Nested angular refinement
 
-`angular_order=1` or `2` adds the following powers for each neighboring pair
+`angular_order=1` through `4` adds the following powers for each neighboring pair
 already used by the quadratic angular bubbles:
 
 ```text
@@ -103,7 +103,44 @@ at degrees 3 and 4. Whole-field controls include nested dielectric energy,
 uniform materials, material linearity, length units, two gap-variation steps
 and approach to the same exact metal contact state. These verify the finite
 extension; selecting an angular level does not establish joint mesh, radial,
-Fourier or optical convergence.
+Fourier or optical convergence. Orders three and four use the same complete
+homogeneous powers and analytical variations. They extend the selectable space
+without changing the default order, radial exponents, physical equations or
+acceptance criteria.
+
+The angular/Fourier optical comparison is reproducible with
+`studies/nvf_pair_angular_resolution.py`. Each invocation computes the full
+contact state and derivative, checks the original physical guards and both
+Fourier reflection identities, and reports p/s transmission, reflection and
+optical directional slopes. For example:
+
+```sh
+PYTHONPATH=. python studies/nvf_pair_angular_resolution.py --order 4 --angular-order 4 --quadrature 64
+```
+
+Its two small perturbations of the constitutive tensors check the optical
+directional stencil, not the physical moving-gap derivative. Independent
+physical gap differences remain separate solver tests. The output records the
+fixed physical geometry, selected spaces and source hashes; no convergence
+verdict is inferred from passing the finite equations.
+
+For the period-700 metal contact with two 300-square rectangles, degree three,
+the unrefined symmetric mesh and radial exponents `(0.6, 0.8)`, the measured
+transmissions and optical directional slopes are:
+
+| Fourier order | Angular order | Integration order | p T | s T | p optical slope | s optical slope |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 4 | 2 | 64 | .485209 | .467190 | -.0363205 | .0308924 |
+| 4 | 4 | 64 | .487462 | .472262 | -.0513455 | .0153370 |
+| 8 | 2 | 96 | .493193 | .398029 | -.0231899 | .0015036 |
+| 8 | 4 | 96 | .493393 | .399709 | -.0281669 | .0114431 |
+
+Both new order-four angular cases pass every original physical guard and the
+unchanged `3e-10` value / `3e-9` gap-derivative reflection limits. Their optical
+directional stencil changes are below `8e-8`. Increasing angular resolution
+does not settle the remaining Fourier dependence: at angular order four,
+the order-4 to order-8 s transmission change is still about `.07255`.
+These finite responses remain unqualified as an optically converged default.
 
 ## Positive gaps and exact contact
 

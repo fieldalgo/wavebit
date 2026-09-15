@@ -81,6 +81,9 @@ space. The complete enriched potential space is therefore preserved.
 With two radial exponents and junctions enabled, angular orders zero, one
 and two retain 168, 260 and 356 coordinates from 192, 308 and 424 candidates.
 The original mesh retains every one of its 112, 168 and 224 coordinates.
+The symmetric extension at angular orders three and four retains 448 and
+544 coordinates. Exact integer-span checks retain every lower-order prefactor;
+the increase resolves angular dependence without deleting a radial direction.
 
 ## Stable radial coordinates
 
@@ -135,9 +138,15 @@ The corresponding full-space regression at the default integration order
 The coordinate recovery tests undo all real transforms and add independently
 evaluated Bernstein interpolation values and gradients. They recover every
 original potential and its spatial and moving-field derivatives on all 60
-triangles, for degrees three and four, angular orders zero through two and
-the one- and two-exponent fifth-root subsets. The four-exponent case retains
-the same recovery check. The full and gradient-only samplers agree bitwise.
+triangles. Controls cover degrees three and four with the original one- and
+two-exponent subsets at angular orders zero through two, the two-exponent
+extension at orders three and four, and cubic and quartic four-exponent cases.
+The quartic four-exponent, angular-order-four reference inverts its full
+triangular coordinate map independently with 80-digit decimal arithmetic:
+an ordinary double-precision inverse solve can amplify its own rounding in
+the original coordinates. This changes only the reference calculation; the
+sampled fields and recovery tolerances stay fixed. The full and gradient-only
+samplers agree bitwise.
 
 Assembly requests gradients directly, avoiding dense coordinate transforms
 of potential values that the integrals do not use. A bounded cache stores

@@ -27,7 +27,7 @@ class CartesianPairCornerGalerkinGapCell:
     Including 0.55 or 0.95 uses stable normalized radial coordinates and
     twentieth-root integration with at least 20*max(degree,4) points. These powers
     enrich the four outer body corners. With junctions=True, both
-    closing-gap material junctions are included as well. Angular orders 1 and 2
+    closing-gap material junctions are included as well. Angular orders 1 through 4
     add nested homogeneous bubble powers around each corner. The default 0
     preserves the original linear/quadratic angular space. The empty tuple
     is the original polynomial/continuous-trace space. All original physical

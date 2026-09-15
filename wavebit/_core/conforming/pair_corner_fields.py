@@ -56,8 +56,8 @@ class PairCornerFields:
         if not isinstance(junctions,(bool,np.bool_)):
             raise ValueError('junctions must be a boolean')
         if (isinstance(angular_order,(bool,np.bool_)) or not isinstance(angular_order,Integral)
-                or not 0 <= angular_order <= 2):
-            raise ValueError('corner angular order must be an integer from 0 through 2')
+                or not 0 <= angular_order <= 4):
+            raise ValueError('corner angular order must be an integer from 0 through 4')
         self.root_order=20 if any(a not in (.6,.8) for a in exponents) else 5
         self.angular_order=int(angular_order)
         self.junctions=bool(junctions)

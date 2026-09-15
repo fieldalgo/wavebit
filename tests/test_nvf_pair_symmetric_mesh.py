@@ -76,7 +76,7 @@ def test_diagonal_normalization_preserves_exact_caller_unit_charts(gap):
 
 
 @pytest.mark.parametrize('degree',[3,4])
-@pytest.mark.parametrize('angular',[0,1,2])
+@pytest.mark.parametrize('angular',[0,1,2,3,4])
 def test_exact_prefactors_preserve_original_columns_and_remove_only_redundancy(degree,angular):
     original=CartesianPairCornerGalerkinGapCell(CartesianPairOpeningPlan(0),0,
         degree=degree,junctions=True,angular_order=angular)
@@ -131,8 +131,9 @@ def _closure(gap=0.,scale=700.,degree=3,quadrature=48,exponents=(.6,.8),
 
 
 @pytest.mark.parametrize('gap',[0.,2.1])
-def test_complete_metal_response_and_gap_jvp_preserve_reflection(gap):
-    value,tangent,metadata=_closure(gap)
+@pytest.mark.parametrize('angular_order',[0,4])
+def test_complete_metal_response_and_gap_jvp_preserve_reflection(gap,angular_order):
+    value,tangent,metadata=_closure(gap,angular_order=angular_order)
     assert metadata['mesh']=='symmetric'
     np.testing.assert_allclose([value.epxy,value.epyx],0.,atol=3e-10,rtol=0)
     np.testing.assert_allclose([tangent.epxy,tangent.epyx],0.,atol=3e-9,rtol=0)
@@ -157,7 +158,7 @@ def test_positive_physical_gap_variation_matches_two_fourth_order_differences():
         np.testing.assert_allclose(difference,tangent,atol=3e-9,rtol=0)
 
 
-@pytest.mark.parametrize('degree,angular,order',[(3,2,1),(4,0,0)])
+@pytest.mark.parametrize('degree,angular,order',[(3,2,1),(4,0,0),(3,3,1),(3,4,1)])
 def test_contact_reflection_with_angular_and_nonzero_fourier_fields(degree,angular,order):
     value,tangent,metadata=_closure(degree=degree,angular_order=angular,order=order)
     modes=np.array([(m,n) for n in range(-order,order+1) for m in range(-order,order+1)])
@@ -172,8 +173,13 @@ def test_contact_reflection_with_angular_and_nonzero_fourier_fields(degree,angul
 
 @pytest.mark.parametrize('degree,angular,exponents',
     [(p,a,e) for p in (3,4) for a in (0,1,2) for e in ((.6,),(.6,.8))]
-    +[(3,0,(.55,.6,.8,.95))])
+    +[(3,0,(.55,.6,.8,.95))]
+    +[(p,a,(.6,.8)) for p in (3,4) for a in (3,4)])
 def test_stable_coordinates_recover_every_original_potential_and_variation(degree,angular,exponents):
+    _assert_coordinate_recovery(degree,angular,exponents,np.linalg.solve)
+
+
+def _assert_coordinate_recovery(degree,angular,exponents,inverse_solve):
     cell=_cell(degree=degree,exponents=exponents,angular_order=angular)
     fields=PairCornerFields(cell._base,exponents,junctions=True,angular_order=angular)
     bary=np.array([[.23,.31,.46],[.41,.17,.42]])
@@ -190,7 +196,7 @@ def test_stable_coordinates_recover_every_original_potential_and_variation(degre
         for array in restored:
             for indices,transform in zip(fields.groups,fields.transforms):
                 block=array[...,indices]
-                array[...,indices]=np.linalg.solve(transform.T,block.reshape(-1,len(indices)).T).T.reshape(block.shape)
+                array[...,indices]=inverse_solve(transform.T,block.reshape(-1,len(indices)).T).T.reshape(block.shape)
             array/=fields.column_scale
         # Add the globally represented Pp function, using the independent
         # Bernstein derivative coefficients rather than sampled differences.
@@ -205,6 +211,46 @@ def test_stable_coordinates_recover_every_original_potential_and_variation(degre
         restored[2]+=np.einsum('ab,qai->qbi',dinverse,r)+np.einsum('ab,qai->qbi',inverse,dr)
         for actual,expected in zip(restored,raw):
             np.testing.assert_allclose(actual,expected,rtol=2e-10,atol=2e-9)
+
+
+def test_expanded_angular_coordinates_recover_with_independent_decimal_inverse():
+    # This inverse is only a reference instrument. A float64 inverse solve
+    # amplifies its own rounding in these full, poorly scaled raw coordinates.
+    # Restore the exact-input triangular map independently at 80 digits;
+    # neither the sampled fields nor the original error limits change.
+    from decimal import Decimal as D,localcontext
+    @lru_cache(None)
+    def rows(data,size):
+        matrix=np.frombuffer(data,dtype=float).reshape(size,size)
+        assert not np.any(np.triu(matrix,1))
+        return tuple((D.from_float(float(matrix[i,i])),
+                      tuple((j,D.from_float(float(matrix[i,j])))
+                            for j in range(i) if matrix[i,j]!=0)) for i in range(size))
+    def solve(matrix,right):
+        lower=rows(np.asarray(matrix,float).tobytes(),len(matrix))
+        result=np.zeros_like(right)
+        with localcontext() as context:
+            context.prec=80
+            for column in range(right.shape[1]):
+                if not np.any(right[:,column]):continue
+                x=[]
+                for i,(diagonal,entries) in enumerate(lower):
+                    rhs=D.from_float(float(right[i,column]))
+                    x.append((rhs-sum((value*x[j] for j,value in entries),D(0)))/diagonal)
+                result[:,column]=[float(value) for value in x]
+        return result
+    _assert_coordinate_recovery(4,4,(.55,.6,.8,.95),solve)
+
+
+def test_angular_extension_contact_preserves_material_directions_and_units():
+    direction=.3+.2j;reference=None
+    for scale in (1.,700.):
+        value,tangent,_=_closure(scale=scale,angular_order=4,gap_tangent=0.,
+                                 material_direction=direction)
+        expected=np.asarray(value)*direction;expected[2]*=-1
+        np.testing.assert_allclose(tangent,expected,atol=3e-9,rtol=0)
+        if reference is None:reference=value
+        else:np.testing.assert_allclose(value,reference,atol=3e-10,rtol=0)
 
 
 def test_expanded_contact_preserves_physical_units_and_complex_material_directions():
