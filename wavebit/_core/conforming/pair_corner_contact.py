@@ -30,7 +30,8 @@ def edge_rows(obj,settings,base,chart,quadrature):
             parts=[(0.,.5,True),(.5,1.,False)] if left_corner and right_corner else [(0.,1.,left_corner)]
             for begin,end,from_left in parts:
                 if left_corner or right_corner:
-                    radial=t**5;ww=5*t**4*w*(end-begin)
+                    power=fields.root_order
+                    radial=t**power;ww=power*t**(power-1)*w*(end-begin)
                     if from_left:bl,br=(1-begin)*(1-radial)+(1-end)*radial,begin*(1-radial)+end*radial
                     else:bl,br=(1-end)*(1-radial)+(1-begin)*radial,end*(1-radial)+begin*radial
                 else:bl,br=1-t,t;ww=w

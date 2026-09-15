@@ -16,7 +16,7 @@ def intersection(a,b,other,r,dr):
 def samples(obj,base,settings,chart,order,split=True):
     t,w=leggauss(order);t=(t+1)/2;w=w/2
     sf,dsf=scalar(chart[1]),scalar(base[-1]['ds'])
-    fields=base[-1]['corner_fields']
+    fields=base[-1]['corner_fields'];power=fields.root_order
     for tri,local,p,dp,poly in partitions(obj,base,settings,chart,split):
         if not local[11]:continue
         hats=fields.hats[tri[:3]][:,[5,8]]
@@ -72,10 +72,10 @@ def samples(obj,base,settings,chart,order,split=True):
             widthf=high-low;dwidthf=dhi-dlo
             if low==0:
                 if dlo!=0:raise ValueError('fixed thin endpoint has a nonzero derivative')
-                # The exact normalized interpolation is t**5. Differentiating
-                # a quotient of fifth roots would numerically manufacture dxi.
-                xi=t**5;dxi=np.zeros_like(t);complement=1-xi
-                jac=5*float(high)*t**4;djac=5*float(dhi)*t**4
+                # The exact normalized interpolation is t**power. Differentiating
+                # a quotient of roots would numerically manufacture dxi.
+                xi=t**power;dxi=np.zeros_like(t);complement=1-xi
+                jac=power*float(high)*t**(power-1);djac=power*float(dhi)*t**(power-1)
             else:
                 xi=t;dxi=np.zeros_like(t);complement=1-t
                 jac=np.full_like(t,float(widthf));djac=np.full_like(t,float(dwidthf))

@@ -1,13 +1,15 @@
 """Material-independent real corner and junction potentials for the pair cell.
 
 NumPy-only geometry evaluation, like the explicit polynomial pair family.
-The fixed exponents 3/5 and 4/5 admit the common r=t**5 quadrature pullback.
+The default exponents 3/5 and 4/5 admit the common r=t**5 pullback.
+Adding 11/20 or 19/20 uses exact normalized powers and r=t**20.
 """
 import numpy as np
 from fractions import Fraction
 from functools import lru_cache
 from math import comb
 from numbers import Integral
+from .pair_radial_fields import prepare as prepare_radial, sample as sample_radial
 
 @lru_cache(None)
 def remainder_polynomial(m,degree):
@@ -48,14 +50,15 @@ class PairCornerFields:
             raise ValueError('corner potentials require degree 3 or 4')
         exponents=tuple(exponents)
         if (any(isinstance(value,(bool,np.bool_)) or not isinstance(value,(int,float,np.integer,np.floating))
-                or value not in (.6,.8) for value in exponents)
+                or value not in (.55,.6,.8,.95) for value in exponents)
                 or len(set(exponents)) != len(exponents)):
-            raise ValueError('corner exponents must be distinct members of (0.6, 0.8)')
+            raise ValueError('corner exponents must be distinct members of (0.55, 0.6, 0.8, 0.95)')
         if not isinstance(junctions,(bool,np.bool_)):
             raise ValueError('junctions must be a boolean')
         if (isinstance(angular_order,(bool,np.bool_)) or not isinstance(angular_order,Integral)
                 or not 0 <= angular_order <= 2):
             raise ValueError('corner angular order must be an integer from 0 through 2')
+        self.root_order=20 if any(a not in (.6,.8) for a in exponents) else 5
         self.angular_order=int(angular_order)
         self.junctions=bool(junctions)
         self.controls=(4,5,6,7,8,9) if self.junctions else (4,6,7,9)
@@ -85,8 +88,11 @@ class PairCornerFields:
         self._definitions += [(c,(n,m),a-2,self.obj.degree-3,0) for c,n,m,a in self.bubbles]
         self._definitions += [(c,(n,m),a-2-j,self.obj.degree-3-j,j) for c,n,m,a,j in self.angular]
         self._support_cache={}
+        if self.root_order==20:prepare_radial(self)
 
     def sample(self, tri, bary, inverse, dinverse, bary_tangent=None):
+        if self.root_order==20:
+            return sample_radial(self,tri,bary,inverse,dinverse,bary_tangent)
         hat_values=self.hats[tri[:3]];hv=bary@hat_values
         dhv=np.zeros_like(hv) if bary_tangent is None else bary_tangent@hat_values
         reference=np.array([[-1.,-1.],[1.,0.],[0.,1.]])
@@ -175,7 +181,7 @@ class PairCornerFields:
             other=next(i for i in range(3) if i not in edge)
             # Both ends can be singular after the triangle collapses.
             # Retain the small complement instead of subtracting from one.
-            small=.5*t**5;measure=2.5*t**4
+            small=.5*t**self.root_order;measure=(self.root_order/2)*t**(self.root_order-1)
             for radial,complement in ((small,1-small),(1-small,small)):
                 bary=np.zeros((order,order,3))
                 bary[:,:,other]=radial[:,None]
@@ -185,11 +191,11 @@ class PairCornerFields:
             return
         singular=np.flatnonzero(np.any(self.hats[tri[:3]][:,self.controls]==1,axis=1))
         if len(singular)==1:
-            subs=[np.roll(refs,-int(singular[0]),axis=0)];power=5
+            subs=[np.roll(refs,-int(singular[0]),axis=0)];power=self.root_order
         elif len(singular)==0:
             subs=[refs];power=1
         else:
-            center=np.full(3,1/3);subs=[];power=5
+            center=np.full(3,1/3);subs=[];power=self.root_order
             for i in range(3):
                 j,k=(i+1)%3,(i+2)%3
                 subs.extend([np.array([refs[i],(refs[i]+refs[j])/2,center]),np.array([refs[i],center,(refs[i]+refs[k])/2])])

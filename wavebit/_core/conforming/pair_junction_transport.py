@@ -13,6 +13,7 @@ from .pair_junction_thin_partition import samples as thin_samples
 
 
 def samples(obj,base,settings,chart,order,split=True):
+    power=base[-1]['corner_fields'].root_order
     sf,dsf=scalar(chart[1]),scalar(base[-1]['ds'])
     for tri,local,p,dp,poly,bb,dbb,old_measure,old_linear in chain(
             regular_samples(obj,base,settings,chart,order,split),
@@ -42,14 +43,14 @@ def samples(obj,base,settings,chart,order,split=True):
                 continue
             if a>b:a,b,va,vb=b,a,vb,va
             for upper in (False,True):
-                q=.5*t**5
+                q=.5*t**power
                 xi=1-q if upper else q
                 complement=q if upper else 1-q
                 bb=complement[:,None]*np.asarray(a,float)+xi[:,None]*np.asarray(b,float)
                 def measure(normalized):
                     scale=determinant/(sf if normalized else 1)
                     flux=complement*float(scale*va)+xi*float(scale*vb)
-                    return np.zeros_like(w),w*2.5*t**4*flux
+                    return np.zeros_like(w),w*(power/2)*t**(power-1)*flux
                 def linear(values,changes):
                     return (complement*float(dot(a,values))+xi*float(dot(b,values)),
                             complement*float(dot(a,changes))+xi*float(dot(b,changes)))

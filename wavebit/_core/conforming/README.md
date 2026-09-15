@@ -23,11 +23,14 @@
 | `cartesian_pair_seam_galerkin.py` | Can real continuous internal-gap traces share the whole pair tensor and its exact contact/material derivative? |
 | `cartesian_pair_corner_galerkin.py` | Can fixed real corner and optional junction powers join that whole tensor and its positive-gap/contact/material derivative? |
 | `pair_corner_fields.py` | How do exact fifth-root remainders and nested angular powers preserve the complete corner field space? |
+| `pair_radial_powers.py` | How can exact root factors remove both polynomial overlap and nearby-exponent cancellation without discarding a radial direction? |
+| `pair_radial_fields.py` | How do homogeneous normalized hats preserve complete radial values and both spatial and moving-field derivatives? |
 | `pair_corner_assembly.py` | How do added common corner fields retain the original C/Z equations and their physical variations? |
 | `pair_corner_partition.py` | How are moving clipped polygons integrated radially from actual corners without negative or tolerance-clipped areas? |
 | `pair_corner_quadrature.py` | How do original, corner and continuous trace fields share the same moving positive quadrature? |
 | `pair_corner_contact.py` | How does the enlarged physical field space retain its exact contact state and right-opening derivative? |
 | `pair_corner_positive.py` | How can unsplit smooth-field products and split trace products preserve the complete positive solution and independent stationary energy? |
+| `pair_balanced_response.py` | How can the complete positive-gap derivative retain every coordinate without differentiating an artificial square-root balancing map? |
 | `pair_junction_partition.py` | How do all six corner charts retain exact moving geometry, including refined collapsed triangles? |
 | `pair_junction_thin_partition.py` | How can both junction endpoints be resolved on every collapsing triangle, including the exterior annulus? |
 | `pair_junction_transport.py` | How do fixed reference volume derivatives and moving profile-edge fluxes avoid artificial quadrature-node cancellation? |

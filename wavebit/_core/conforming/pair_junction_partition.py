@@ -89,6 +89,7 @@ def charts(obj,base,settings,chart,split):
 
 
 def samples(obj,base,settings,chart,order,split=True):
+    power=base[-1]['corner_fields'].root_order
     t,w=leggauss(order);t=(t+1)/2;w=w/2
     sf,dsf=scalar(chart[1]),scalar(base[-1]['ds'])
     for tri,local,p,dp,poly,B in charts(obj,base,settings,chart,split):
@@ -161,16 +162,16 @@ def samples(obj,base,settings,chart,order,split=True):
                 denominator=den[0]*den[1];ddenominator=dden[0]*den[1]+den[0]*dden[1]
                 width=numerator/denominator;dwidth=(dnumerator-width*ddenominator)/denominator
                 if np.any(width<=0):raise ValueError('nonpositive radial interval')
-                roots=[r**.2 for r in radial]
-                droots=[np.divide(dr,5*u**4,out=np.zeros_like(dr),where=u>0) for dr,u in zip(dradial,roots)]
-                S,DS=root_sum(roots[1],roots[0],droots[1],droots[0])
+                roots=[r**(1/power) for r in radial]
+                droots=[np.divide(dr,power*u**(power-1),out=np.zeros_like(dr),where=u>0) for dr,u in zip(dradial,roots)]
+                S,DS=root_sum(roots[1],roots[0],droots[1],droots[0],power)
                 root_width=width/S;droot_width=(dwidth-root_width*DS)/S
                 u=roots[0][:,None]+root_width[:,None]*t
                 du=droots[0][:,None]+droot_width[:,None]*t
                 if low[2]==0:
-                    r=radial[1][:,None]*t**5
-                    dr=dradial[1][:,None]*t**5
-                else:r=u**5;dr=5*u**4*du
+                    r=radial[1][:,None]*t**power
+                    dr=dradial[1][:,None]*t**power
+                else:r=u**power;dr=power*u**(power-1)*du
                 zeta=np.stack([1-r,r*complement[:,None],r*angle[:,None]],axis=-1)
                 dzeta=np.stack([-dr,dr*complement[:,None]-r*dangle[:,None],dr*angle[:,None]+r*dangle[:,None]],axis=-1)
                 bb=zeta.reshape(-1,3)@np.asarray(B,float);dbb=dzeta.reshape(-1,3)@np.asarray(B,float)
@@ -185,17 +186,17 @@ def samples(obj,base,settings,chart,order,split=True):
                     pref=num/(denominator*S)
                     dpref=(dnum-pref*(ddenominator*S+denominator*DS))/(denominator*S)
                     jac=det(B)*(scalar(local[9])+sf*scalar(local[10]));djac=det(B)*dsf*scalar(local[10])
-                    weighted=5*u**9*pref[:,None]
-                    changed=45*u**8*du*pref[:,None]+5*u**9*dpref[:,None]
+                    weighted=power*u**(2*power-1)*pref[:,None]
+                    changed=power*(2*power-1)*u**(2*power-2)*du*pref[:,None]+power*u**(2*power-1)*dpref[:,None]
                     return ((w[:,None]*w*weighted*float(jac)).ravel(),
                             (w[:,None]*w*(changed*float(jac)+weighted*float(djac))).ravel())
-                a,da=root_sum(u,roots[0][:,None],du,droots[0][:,None])
+                a,da=root_sum(u,roots[0][:,None],du,droots[0][:,None],power)
                 xi=t[None,:]*a/S[:,None]
                 dxi=t[None,:]*(da-xi/t[None,:]*DS[:,None])/S[:,None]
-                ac,_=root_sum(roots[1][:,None],u,droots[1][:,None],du)
+                ac,_=root_sum(roots[1][:,None],u,droots[1][:,None],du,power)
                 one_minus_xi=(1-t)[None,:]*ac/S[:,None]
                 if low[2]==0:
-                    xi=np.broadcast_to(t**5,(order,order));dxi=np.zeros_like(xi)
+                    xi=np.broadcast_to(t**power,(order,order));dxi=np.zeros_like(xi)
                     one_minus_xi=1-xi
                 def linear(values,dvalues):
                     vals=[dot(row,values) for row in B];dvals=[dot(row,dvalues) for row in B]

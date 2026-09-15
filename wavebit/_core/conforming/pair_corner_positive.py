@@ -4,6 +4,7 @@ from .real_trace_coupling import _field_product as mul,_contract
 from .projected_pair_contact import _real_geometry
 from .pair_corner_assembly import samples
 from .cartesian_pair_galerkin import _relative
+from .pair_balanced_response import solve as balanced_response
 
 
 def response(obj,settings,base,order,quadrature,free,Q,dQ,original_blocks):
@@ -89,27 +90,9 @@ def response(obj,settings,base,order,quadrature,free,Q,dQ,original_blocks):
     S[nc:]=tz.T@S[nc:];DS[nc:]=tz.T@DS[nc:]
     M[:nc,nc:]=s*M[nc:,:nc].T
     DM[:nc,nc:]=ds*M[nc:,:nc].T+s*DM[nc:,:nc].T
-    # Balance every disappearing coordinate by sqrt(gap). The normalized
-    # equations have off-diagonal blocks Mdc and gap*Mdc.T; their symmetric
-    # coordinates avoid an ill-conditioned full derivative solve near contact.
-    # Differentiate the coordinate map along with every matrix/source block.
-    tau=np.sqrt(s);dtau=ds/(2*tau)
-    balanced=M.copy();dbalanced=DM.copy()
-    balanced[nc:,:nc]=tau*M[nc:,:nc]
-    balanced[:nc,nc:]=balanced[nc:,:nc].T
-    dbalanced[nc:,:nc]=dtau*M[nc:,:nc]+tau*DM[nc:,:nc]
-    dbalanced[:nc,nc:]=dbalanced[nc:,:nc].T
-    source=S.copy();dsource=DS.copy()
-    source[nc:]*=tau
-    dsource[nc:]=dtau*S[nc:]+tau*DS[nc:]
-    v=np.linalg.solve(balanced,-source)
-    dv=np.linalg.solve(balanced,-dsource-dbalanced@v)
-    rev=info['reverse'];B=source[:,rev].T;DB=dsource[:,rev].T
-    H=free[0]+B@v
-    DH=free[1]+DB@v+B@dv
-    u=v.copy();du=dv.copy()
-    u[nc:]/=tau
-    du[nc:]=(dv[nc:]-dtau*u[nc:])/tau
+    u,du,H,DH,balanced=balanced_response(
+        M,DM,S,DS,nc,s,ds,free,info['reverse'])
+    tau=np.sqrt(s)
     U=np.vstack([tc@u[:nc],tz@u[nc:]])
     DU=np.vstack([tc@du[:nc],tz@du[nc:]])
     x=np.eye(2*N)-Q@U;dx=-dQ@U-Q@DU

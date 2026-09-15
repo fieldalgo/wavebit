@@ -21,8 +21,11 @@ class CartesianPairCornerGalerkinGapCell:
     materials may vary together; geometry is fixed in a JVP. At zero gap the
     derivative is the right-opening derivative of this same enriched family.
 
-    Exponents are distinct members of (0.6, 0.8), fixed independently of the
-    materials. They enrich the four outer body corners. With junctions=True, both
+    Exponents are distinct members of (0.55, 0.6, 0.8, 0.95), fixed independently
+    of the materials. The default (0.6, 0.8) keeps fifth-root evaluation.
+    Including 0.55 or 0.95 uses stable normalized radial coordinates and
+    twentieth-root integration with at least 20*max(degree,4) points. These powers
+    enrich the four outer body corners. With junctions=True, both
     closing-gap material junctions are included as well. Angular orders 1 and 2
     add nested homogeneous bubble powers around each corner. The default 0
     preserves the original linear/quadratic angular space. The empty tuple
@@ -44,6 +47,9 @@ class CartesianPairCornerGalerkinGapCell:
             raise ValueError('quadrature must be an integer at least max(24, 2*max(order)+4)')
         self.exponents = tuple(exponents)
         fields=PairCornerFields(self._base, self.exponents, junctions=junctions, angular_order=angular_order)
+        self.root_order=fields.root_order
+        if self.root_order==20 and quadrature<48:
+            raise ValueError('expanded radial exponents require quadrature at least 48')
         self.angular_order=fields.angular_order
         self.junctions=fields.junctions
         self.corner_controls=fields.controls
@@ -57,14 +63,14 @@ class CartesianPairCornerGalerkinGapCell:
                         epsilon=epsilon, background=background, offset=offset,
                         gap_tangent=gap_tangent, epsilon_tangent=epsilon_tangent,
                         background_tangent=background_tangent)
-        order = max(self.quadrature, 4*max(self.order)+16)
+        order = max(self.quadrature, 4*max(self.order)+16, self.root_order*max(self._base.degree,4))
         if gap == 0:
             order = max(48, order)
             value, tangent, metadata = solve_contact(
                 self._base, settings, quadrature=order, exponents=self.exponents, junctions=self.junctions, angular_order=self.angular_order)
         else:
             base = augment(self._base, settings, exponents=self.exponents, quadrature=order, junctions=self.junctions, angular_order=self.angular_order)
-            sample = junction_quadrature if self.junctions else sample_quadrature
+            sample = junction_quadrature if self.junctions or self.root_order==20 else sample_quadrature
             transform = _trace_change(self._base, settings, order)
             quadrature = lambda split=True: sample(
                 self._base, base, settings, order, transform, split, False)
@@ -87,5 +93,6 @@ class CartesianPairCornerGalerkinGapCell:
                         degree=self._base.degree, quadrature=self.quadrature,
                         integration_quadrature=order, gap=gap,
                         corner_exponents=self.exponents, corner_controls=self.corner_controls,
-                        junctions=self.junctions, angular_order=self.angular_order)
+                        junctions=self.junctions, angular_order=self.angular_order,
+                        radial_root_order=self.root_order)
         return value, tangent, metadata

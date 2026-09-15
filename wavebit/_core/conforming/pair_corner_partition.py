@@ -108,12 +108,12 @@ def endpoint_linear(coefficients,changes,left,dleft,right,dright,t):
     return (1-t)*float(f0)+t*float(f1),(1-t)*float(df0)+t*float(df1)
 
 
-def root_sum(a,b,da,db):
+def root_sum(a,b,da,db,power=5):
     value=np.zeros(np.broadcast_shapes(np.shape(a),np.shape(b)));change=np.zeros_like(value)
-    for j in range(5):
-        value+=a**(4-j)*b**j
-        if j<4:change+=(4-j)*a**(3-j)*b**j*da
-        if j>0:change+=j*a**(4-j)*b**(j-1)*db
+    for j in range(power):
+        value+=a**(power-1-j)*b**j
+        if j<power-1:change+=(power-1-j)*a**(power-2-j)*b**j*da
+        if j>0:change+=j*a**(power-1-j)*b**(j-1)*db
     return value,change
 
 

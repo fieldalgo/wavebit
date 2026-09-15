@@ -65,7 +65,10 @@ positive-gap control retains bitwise-identical tensor and JVP values after
 this change; no general runtime improvement is inferred from concurrent runs.
 
 The constructor accepts degree 3 or 4 and distinct exponents selected from
-`(0.6, 0.8)`. The empty exponent tuple reproduces the original polynomial and
+`(0.55, 0.6, 0.8, 0.95)`. The default `(0.6, 0.8)` retains the original
+evaluation described here. Additional radial powers use the
+[normalized radial construction](nvf-pair-radial-potentials.md) and its
+integration floor. The empty exponent tuple reproduces the original polynomial and
 continuous-trace space. Other exponents are refused because their numerical
 remainder and quadrature treatment is not implemented by this family.
 
@@ -80,7 +83,7 @@ h n m (n-m)^j (1-h)^(alpha-2-j),    j = 1, ..., angular_order.
 
 The default is zero, which preserves the original linear/quadratic angular
 space. The option works with either the outer corners or `junctions=True`.
-All angular levels retain the lower levels, both fixed real radial exponents
+All angular levels retain the lower levels, all selected real radial exponents
 and every original nodal and disappearing potential.
 
 Near a corner, `n` and `m` each scale with `r=1-h`. Multiplying their product
@@ -92,7 +95,7 @@ not introduce a material-dependent basis or a different contact formula.
 The whole prefactor has polynomial degree `3+j`. A Taylor term of radial
 degree `k` is removed only when `3+j+k` is no larger than the existing
 polynomial degree. When no such term exists, the complete power is evaluated
-without a subtraction. The same fifth-root quadrature and whole positive and
+without a subtraction. The same root-based quadrature and whole positive and
 contact equations integrate every new column and its cross terms.
 
 Independent defining-power and moving-gradient checks cover every triangle
@@ -107,7 +110,8 @@ Fourier or optical convergence.
 Positive quadrature clips each original triangle at the moving profile and
 taper boundaries in exact rational barycentric geometry. Zero areas are
 decided before conversion to floating point. Each clipped region is integrated
-along rays from an actual outer corner with radial coordinate `r=t^5`.
+along rays from an actual outer corner. The default radial exponents use
+`r=t^5`; expanded exponent sets use `r=t^20` as described in the radial note.
 Angular intervals are subdivided when a radial-bound denominator changes by
 more than a factor of two. This refines integration without discarding fields.
 
@@ -130,11 +134,13 @@ For positive gaps, the complete solve uses `vc=uc`, `vz=sqrt(s)*uz`:
 ```
 
 This real coordinate change balances the common/disappearing off-diagonal
-blocks. The tensor and its JVP are both evaluated from this complete system.
-The derivative includes `d(sqrt(s))=ds/(2*sqrt(s))` in the matrix, source and
-mapping back to the original potential derivative. The reported condition
-number describes this balanced system. Exact contact retains its separate
-analytic limit and never evaluates a square-root quotient at zero.
+blocks. The value uses this balanced solve. The derivative uses its scaling
+as a fixed preconditioner for the original differentiated equations and the
+complete stationary Schur variation described below. Every physical gap term
+is differentiated; the artificial coordinate derivative need not be formed
+and subtracted. The reported condition number describes the balanced system.
+Exact contact retains its separate analytic limit and never evaluates a
+square-root quotient at zero.
 
 Every real geometry QR column is retained. Differentiation includes all moving
 measures, fields, retained moments and material terms. If original differentiated
@@ -202,3 +208,28 @@ geometry or resolution. Joint optical convergence, including resolution of
 material junctions, remains necessary before this family can determine a default.
 The implementation uses the existing NumPy runtime and Python standard
 library, with no external solver code or new dependency.
+
+## Differentiating the complete balanced response
+
+The positive-gap system balances all disappearing coordinates by the square
+root of the normalized gap. This scaling is used as a fixed preconditioner
+when solving the original differentiated equations. Differentiating the
+scaled solution and subsequently subtracting the derivative of the scaling
+would amplify roundoff as the gap closes.
+
+For the original matrix and source `M*u = -S`, define `W = diag(I, gap)`,
+`K = W*M` and `F = W*S`. The same complete Schur response has the analytic
+stationary derivative
+
+```text
+DH = DA + DF[:, reverse].T @ u + u[:, reverse].T @ DF
+        + u[:, reverse].T @ DK @ u
+```
+
+Both `DK` and `DF` include the physical gap derivative in `W`. All trial
+coordinates remain present, and the full potential variation is still solved
+and checked in the differentiated weak, retained and flux equations. The
+independent physical-energy verifier remains separate and receives neither
+the candidate tensor derivative nor the solved potential derivative. The
+existing refinement can still reject an insufficiently integrated response;
+this derivative formula does not change any acceptance threshold.
