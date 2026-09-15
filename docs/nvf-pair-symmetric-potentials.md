@@ -254,13 +254,81 @@ complete solves, exceeding the 1,200-second per-test CI limit. Its CI
 counterpart uses exact contact; the separate positive calculation keeps every
 field and its joint derivative.
 
-Centering is not a universal accuracy qualification. On that non-square cell,
+Centering alone did not qualify every finite space. On that non-square cell,
 the four-real-exponent metal contact at orders `(1,1)`, cubic degree and
-radial/angular integration orders 80/12 still had a joint-derivative reflection
+radial/angular integration orders 80/12 had a joint-derivative reflection
 defect of `2.13e-7` despite passing the original relative physical guards.
-Increasing the angular integration order to 24 did not resolve it. This
-case remains outside the `3e-9` reflection qualification; the dielectric
-translation controls do not qualify its metal derivative.
+Increasing the angular integration order to 24 did not resolve it.
+
+Symmetric contacts with real root-20 fields now assemble their complete weak
+equations in compensated coordinates. Exact radial/angular coefficients and
+the affine unit-simplex relation preserve the combined polynomial/corner
+potential. Each triangle contributes every function with nonzero topological
+support to high/low common, disappearing and trace matrices. The entire real
+common transform is then applied to those matrices and their Fourier moments,
+before forming the closed projection and its full variation. This avoids
+evaluating dense global coordinates at every quadrature point. All global
+columns survive the integration and coordinate change.
+
+The value, contact derivative and joint material derivative come from that
+same complete system. Every linear-solve column receives compensated residual
+corrections. The result still passes the original nodal, retained, flux and
+independent physical-energy checks; the original derivative-only correction
+is not subsequently applied to the less accurate rounded assembly. Metadata
+identifies this path as `common_coordinate_precision='compensated'`.
+Original-mesh, real fifth-root, oscillatory and positive-gap responses keep
+their respective evaluation paths.
+
+The unprojected common and normal matrices are retained before forming the
+closed equations or solving a response. Restoring the Fourier terms removed
+from the normal test functions supplies the same original weak, retained and
+flux equations at the improved assembly precision. These checks retain their
+original tolerances. The independent pointwise energy verifier still
+reconstructs the physical fields from the potential coefficients.
+
+This distinction matters even at Fourier order zero. In the period-700,
+four-exponent contact with radial/angular integration orders 80/12, a
+compensated state compared against the older rounded matrices had a contact
+variation residual of `2.33e-9`, above the original `1e-10` limit. Two terms
+of norm about `.590` almost cancel. Directly integrating the same physical
+matrices reduced that residual to `1.24e-12`; the independent energy and
+energy-variation residuals remained below `4.2e-14` and `9.9e-15`.
+
+The singular integration map also preserves high/low components. Gaussian
+nodes and weights are computed from the Legendre recurrence with 90-digit
+standard-library arithmetic, then used in the same twentieth-power radial
+substitution. The affine partition, weights and complete Fourier phases keep
+both components during assembly. Exact polynomial moments through degree
+`2q-1`, triangle moments and an independent Decimal phase/variation reference
+check this arithmetic. The finite space, integration orders and physical
+criteria do not change. Cached scalar rules are bounded to 16 orders; local
+field integration uses batches of at most 512 points.
+
+The non-square four-exponent control uses widths `(.3,.4)`, height `.45`,
+materials `(12.25,-10+i)`, background 1, gap direction `.7`, material directions
+`(.2+.1i,-.4+.2i)` and background direction `.1-.03i`. Its full public response
+with compensated common equations passed every original physical guard and
+the unchanged `3e-10` / `3e-9` reflection criteria. Maximum value and derivative
+defects were `5.33e-15` and `1.78e-9`; independent energy and energy-derivative
+residuals were `1.56e-13` and `1.77e-13`. This resolves that finite joint metal
+derivative regression; it does not establish optical convergence.
+
+Compensated fields and matrices alone did not qualify angular integration:
+the full joint derivative changed by `5.06e-9` between angular orders 12 and
+24, and by `3.13e-9` between 24 and 32. Preserving the integration coordinates,
+weights and phases reduced those differences to `1.93e-9` and `2.30e-13`,
+respectively, within the unchanged `3e-9` criterion. The corresponding full
+value differences were `1.06e-12` and `1.19e-25`, below `3e-10`. These are
+complete finite-space integration comparisons, not optical convergence bounds.
+
+The default radial/angular 80/80 rule also passed the complete material-scale
+and length-unit identities with all four real exponents. Its two physical
+solves took 1,058 seconds, close to the 1,200-second CI limit for one test.
+Repeated representation checks therefore retain all those fields and use
+angular order 12, whose complete 12/24 comparison is checked separately.
+The radial 80/96 comparison, reversed exponent order and length-unit change
+keep their original value/variation tolerances. The solver's default
+integration orders are unchanged.
 
 ## Finite controls and limits
 

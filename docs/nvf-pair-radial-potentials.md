@@ -311,6 +311,13 @@ Its p/s transmissions are `.48867361` / `.47728098` and optical directional
 slopes are `-.03424579` / `.01299968`. This finite-space correction does not
 establish joint auxiliary-space or Fourier convergence.
 
+The independent corrected 80/32 calculation also passed every original guard.
+Its maximum value and derivative reflection defects were `6.36e-13` and
+`4.71e-11`. Increasing the angular Gauss order from 24 to 32 changed the entire
+value and derivative by at most `6.43e-13` and `2.03e-11`, respectively. This
+qualifies that finite-space quadrature comparison at the original tolerances;
+the earlier dependence on polynomial degree and mesh refinement remains.
+
 A positive-gap control with unit period, widths and height `3/7`, gap `.003`,
 materials `12.25` and `-10+i`, Fourier order zero and angular order zero also
 passed the original guards with the complete symmetric oscillatory space at

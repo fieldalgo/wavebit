@@ -34,6 +34,9 @@
 | `pair_symmetric_mesh.py` | How can the explicit pair trial mesh preserve reflection and the original exact contact quotient? |
 | `pair_corner_prefactors.py` | Which enrichment coordinates are exactly redundant on the selected mesh, including identities across corner labels? |
 | `pair_corner_coordinates.py` | How can every symmetric-mesh radial subset retain accurate original weak equations before material assembly? |
+| `pair_corner_common_precision.py` | How can the complete polynomial and real root-20 corner transform preserve the unit-simplex potential before contact integration? |
+| `pair_contact_precision.py` | How can full common, disappearing and trace equations retain accurate contact derivatives through cancellation in their weak projection? |
+| `pair_contact_quadrature.py` | How can Gaussian moments, singular coordinate maps and Fourier phases retain enough precision for the complete contact variation? |
 | `pair_contact_refinement.py` | How can the contact variation correct its original weak, retained and flux defects together in the same complete space? |
 | `pair_corner_assembly.py` | How do added common corner fields retain the original C/Z equations and their physical variations? |
 | `pair_corner_partition.py` | How are moving clipped polygons integrated radially from actual corners without negative or tolerance-clipped areas? |

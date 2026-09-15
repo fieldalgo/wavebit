@@ -107,10 +107,12 @@ def test_exact_prefactors_preserve_original_columns_and_remove_only_redundancy(d
     np.testing.assert_array_equal(reconstructed.data['open_numerators'],symmetric._base.data['open_numerators'])
 
 
-def _cell(*,degree=3,quadrature=48,exponents=(.6,.8),angular_order=0,order=0):
+def _cell(*,degree=3,quadrature=48,exponents=(.6,.8),angular_order=0,order=0,
+          angular_quadrature=None):
     return CartesianPairCornerGalerkinGapCell(CartesianPairOpeningPlan(0),order,
         degree=degree,quadrature=quadrature,exponents=exponents,junctions=True,
-        angular_order=angular_order,coercivity_angle=1.53,mesh='symmetric')
+        angular_order=angular_order,coercivity_angle=1.53,mesh='symmetric',
+        angular_quadrature=angular_quadrature)
 
 
 def _settings(gap=0.,scale=700.):
@@ -121,10 +123,11 @@ def _settings(gap=0.,scale=700.):
 
 @lru_cache(None)
 def _closure(gap=0.,scale=700.,degree=3,quadrature=48,exponents=(.6,.8),
-             angular_order=0,order=0,gap_tangent=1.,material_direction=0.):
+             angular_order=0,order=0,gap_tangent=1.,material_direction=0.,
+             angular_quadrature=None):
     settings=_settings(gap,scale)
     cell=_cell(degree=degree,quadrature=quadrature,exponents=exponents,
-               angular_order=angular_order,order=order)
+               angular_order=angular_order,order=order,angular_quadrature=angular_quadrature)
     return cell.closure(**dict(settings,gap_tangent=gap_tangent,
         epsilon_tangent=material_direction*np.asarray(settings['epsilon']),
         background_tangent=material_direction))
@@ -320,7 +323,8 @@ def test_expanded_contact_preserves_physical_units_and_complex_material_directio
     reference=None
     for scale in (1.,700.):
         value,tangent,_=_closure(scale=scale,exponents=(.55,.6,.8,.95),
-                                 gap_tangent=0.,material_direction=direction)
+                                 gap_tangent=0.,material_direction=direction,
+                                 angular_quadrature=12)
         expected=np.asarray(value)*direction
         expected[2]*=-1
         np.testing.assert_allclose(tangent,expected,atol=3e-9,rtol=0)
@@ -331,9 +335,13 @@ def test_expanded_contact_preserves_physical_units_and_complex_material_directio
 
 @pytest.mark.parametrize('change',['quadrature','exponent_order','length_unit'])
 def test_expanded_contact_preserves_complete_response_under_representations(change):
+    # Keep every potential and vary radial integration independently. The
+    # complete non-square Fourier response separately tests angular 12/24
+    # accuracy; repeating default 80/96 angular rules would exceed the
+    # per-test CI budget. The separate 80/80 material/unit control is recorded.
     exponents=(.55,.6,.8,.95)
-    reference=_closure(exponents=exponents)
-    options=dict(exponents=exponents)
+    reference=_closure(exponents=exponents,angular_quadrature=12)
+    options=dict(exponents=exponents,angular_quadrature=12)
     if change=='quadrature':options['quadrature']=96
     elif change=='exponent_order':options['exponents']=exponents[::-1]
     else:options['scale']=1.

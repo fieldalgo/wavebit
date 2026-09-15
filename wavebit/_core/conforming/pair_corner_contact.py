@@ -7,7 +7,7 @@ from .projected_pair_contact import _real_geometry
 from .real_trace_coupling import _contract,_field_product as mul,coupled_contact
 
 
-def edge_rows(obj,settings,base,chart,quadrature):
+def edge_rows(obj,settings,base,chart,quadrature,*,coordinates=False):
     info=base[-1];fields=info['corner_fields'];nold,nc=info['original_nc'],info['nc']
     length,s,zero,velocity=obj._chart_geometry(0.,{k:np.asarray(settings[k]) for k in ('basis','widths','height','offset')})
     center=chart[7];a,b=chart[5];height=chart[6]
@@ -45,11 +45,18 @@ def edge_rows(obj,settings,base,chart,quadrature):
                 fleft=0. if left_outer else (-(left+a)/(2*a) if (left+right)<0 else (b-left)/(2*b))
                 fright=0. if right_outer else (-(right+a)/(2*a) if (left+right)<0 else (b-right)/(2*b))
                 profile=bl*fleft+br*fright
-                yield indices,ep,bb@p,gc,.5*sign*ww*(right-left)*profile,edge
+                row=(indices,ep,bb@p,gc,.5*sign*ww*(right-left)*profile,edge)
+                yield row+(tri,bb,inv) if coordinates else row
 
 
 def context(obj,settings,base,transform,quadrature):
     info=base[-1];nc,nz,N=(info[k] for k in ('nc','nz','size'))
+    fields=info['corner_fields'];rule=fields.quadrature
+    precise=(getattr(obj,'_symmetric_mesh',False) and fields.root_order==20
+             and not fields.oscillatory_radial)
+    if precise:
+        from .pair_contact_quadrature import quadrature as contact_quadrature
+        rule=lambda tri,order:contact_quadrature(fields,tri,order)
     common,projection,change=transform
     chart=_geometry(obj,settings);center=chart[7];a,b=chart[5];height=chart[6];trace,tg=chart[8:]
     length,s,zero,velocity=obj._chart_geometry(0.,{k:np.asarray(settings[k]) for k in ('basis','widths','height','offset')})
@@ -57,9 +64,9 @@ def context(obj,settings,base,transform,quadrature):
         # Coordinate values for the common sampler use the same barycentric
         # partition; recreate its material triangle order without guessing
         # coordinates from oscillatory phases.
-        rows=iter(samples(obj,settings,base,quadrature))
+        rows=iter(samples(obj,settings,base,quadrature,precise=precise))
         for tri,tag,local in zip(obj.data['triangles'],obj.data['tags'],info['local']):
-            for bary,weight in info['corner_fields'].quadrature(tri,quadrature):
+            for bary,weight in rule(tri,quadrature):
                 row,_,_=next(rows)
                 _,ci,zi,w,dw,ep,dep,phase,dphase,gc,dgc,gz,*_=row
                 points=bary@zero[tri[:3]]-center
@@ -123,44 +130,56 @@ def solve(obj,settings,quadrature=48,exponents=(.6,.8),junctions=False,angular_o
         if local[11]:continue
         upper=np.linalg.qr(np.vstack([upper,(np.sqrt(row[3])[:,None,None]*psi).reshape(-1,nc)]),mode='r')
     transform_c=np.linalg.solve(upper,np.eye(nc))
-    mc=np.zeros((nc,nc),complex);dmc=mc.copy();sc=np.zeros((nc,2*N),complex);dsc=sc.copy()
-    mz=np.zeros((total,nc),complex);sz=np.zeros((total,2*N),complex)
-    for row,local,weight,phi,dphi,added,psi,dpsi in fields():
-        _,ci,zi,w,dw,ep,dep,phase,dphase,gc,dgc,gz,*_=row
-        thin=local[11];measure=weight*local[10] if thin else w
-        psi=mul(psi,transform_c)
-        chi=np.zeros((len(w),2,total));chi[:,:,zi]=gz;chi[:,:,nz:]=added
-        if not thin:chi-=_real_geometry(mul(phi,qb))
-        mz+=ep*_contract('q,qai,qaj->ij',measure,chi,psi)
-        sz+=ep*_contract('q,qai,qaj->ij',measure,chi,phi)
-        if thin:
-            dmc+=ds*ep*_contract('q,qai,qaj->ij',measure,psi,psi)
-            dsc+=ds*ep*_contract('q,qai,qaj->ij',measure,psi,phi)
-        else:
-            dpsi=mul(dpsi,transform_c)
-            mc+=ep*_contract('q,qai,qaj->ij',w,psi,psi);sc+=ep*_contract('q,qai,qaj->ij',w,psi,phi)
-            dmc+=_contract('q,qai,qaj->ij',dep*w+ep*dw,psi,psi)+ep*_contract('q,qai,qaj->ij',w,dpsi,psi)+ep*_contract('q,qai,qaj->ij',w,psi,dpsi)
-            dsc+=_contract('q,qai,qaj->ij',dep*w+ep*dw,psi,phi)+ep*_contract('q,qai,qaj->ij',w,dpsi,phi)+ep*_contract('q,qai,qaj->ij',w,psi,dphi)
     nx,ny=obj.order;modes=np.array([(m,n) for n in range(-ny,ny+1) for m in range(-nx,nx+1)])
     waves=2*np.pi*modes/chart[4];trace,tg=chart[8:]
     def phiat(p):
         phase=np.exp(1j*p@waves.T);phi=np.zeros((len(p),2,2*N),complex)
         phi[:,0,:N]=phase;phi[:,1,N:]=phase;return phi
-    for ci,ep,p,gc,weight,edge in edge_rows(obj,settings,base,chart,quadrature):
-        ph=phiat(p);psi=-mul(ph,qc);psi[:,:,ci]+=gc;psi=mul(_real_geometry(psi),transform_c)
-        jump=trace._basis(np.array([edge]),tg)[0][0]@transform[2]
-        mz[nz:]+=ep*_contract('q,i,qj->ij',weight,jump,psi[:,1]);sz[nz:]+=ep*_contract('q,i,qj->ij',weight,jump,ph[:,1])
-    mzz=np.block([[k[nc:,nc:],Z],[Z.T,EE]])
-    uc=np.linalg.solve(mc,-sc);uz=np.linalg.solve(mzz,-sz-mz@uc)
-    duc=np.linalg.solve(mc,-dsc-dmc@uc-ds*mz.T@uz)
-    B=sc[:,rev].T;dB=dsc[:,rev].T;BZ=sz[:,rev].T
-    A,DA=np.kron(np.eye(2),e),np.kron(np.eye(2),de)
-    H=A+B@uc;DH=DA+dB@uc+B@duc+ds*BZ@uz
-    U=np.vstack([transform_c@uc,uz]);dUC=transform_c@duc
-    x=np.eye(2*N)-qc@U[:nc];dx=-dqc@U[:nc]-qc@dUC-ds*qb@uz
-    if getattr(obj,'_symmetric_mesh',False) and info['corner_fields'].root_order==20:
-        from .pair_contact_refinement import refine
-        dUC,dx,DH=refine(base,C,Qbar,Rbar,transform_c,mc,U,dUC,x,dx,H,DH)
+    complete_real=(getattr(obj,'_symmetric_mesh',False)
+                   and info['corner_fields'].root_order==20
+                   and not info['corner_fields'].oscillatory_radial)
+    if complete_real:
+        from .pair_contact_precision import response as complete_response
+        assembled={}
+        U,dUC,x,dx,H,DH,condition=complete_response(
+            obj,settings,base,transform,chart,quadrature,transform_c,Qbar,records,edge_rows,
+            assembled=assembled)
+        data=assembled['data']
+    else:
+        mc=np.zeros((nc,nc),complex);dmc=mc.copy();sc=np.zeros((nc,2*N),complex);dsc=sc.copy()
+        mz=np.zeros((total,nc),complex);sz=np.zeros((total,2*N),complex)
+        for row,local,weight,phi,dphi,added,psi,dpsi in fields():
+            _,ci,zi,w,dw,ep,dep,phase,dphase,gc,dgc,gz,*_=row
+            thin=local[11];measure=weight*local[10] if thin else w
+            psi=mul(psi,transform_c)
+            chi=np.zeros((len(w),2,total));chi[:,:,zi]=gz;chi[:,:,nz:]=added
+            if not thin:chi-=_real_geometry(mul(phi,qb))
+            mz+=ep*_contract('q,qai,qaj->ij',measure,chi,psi)
+            sz+=ep*_contract('q,qai,qaj->ij',measure,chi,phi)
+            if thin:
+                dmc+=ds*ep*_contract('q,qai,qaj->ij',measure,psi,psi)
+                dsc+=ds*ep*_contract('q,qai,qaj->ij',measure,psi,phi)
+            else:
+                dpsi=mul(dpsi,transform_c)
+                mc+=ep*_contract('q,qai,qaj->ij',w,psi,psi);sc+=ep*_contract('q,qai,qaj->ij',w,psi,phi)
+                dmc+=_contract('q,qai,qaj->ij',dep*w+ep*dw,psi,psi)+ep*_contract('q,qai,qaj->ij',w,dpsi,psi)+ep*_contract('q,qai,qaj->ij',w,psi,dpsi)
+                dsc+=_contract('q,qai,qaj->ij',dep*w+ep*dw,psi,phi)+ep*_contract('q,qai,qaj->ij',w,dpsi,phi)+ep*_contract('q,qai,qaj->ij',w,psi,dphi)
+        for ci,ep,p,gc,weight,edge in edge_rows(obj,settings,base,chart,quadrature):
+            ph=phiat(p);psi=-mul(ph,qc);psi[:,:,ci]+=gc;psi=mul(_real_geometry(psi),transform_c)
+            jump=trace._basis(np.array([edge]),tg)[0][0]@transform[2]
+            mz[nz:]+=ep*_contract('q,i,qj->ij',weight,jump,psi[:,1]);sz[nz:]+=ep*_contract('q,i,qj->ij',weight,jump,ph[:,1])
+        mzz=np.block([[k[nc:,nc:],Z],[Z.T,EE]])
+        uc=np.linalg.solve(mc,-sc);uz=np.linalg.solve(mzz,-sz-mz@uc)
+        duc=np.linalg.solve(mc,-dsc-dmc@uc-ds*mz.T@uz)
+        B=sc[:,rev].T;dB=dsc[:,rev].T;BZ=sz[:,rev].T
+        A,DA=np.kron(np.eye(2),e),np.kron(np.eye(2),de)
+        H=A+B@uc;DH=DA+dB@uc+B@duc+ds*BZ@uz
+        U=np.vstack([transform_c@uc,uz]);dUC=transform_c@duc
+        x=np.eye(2*N)-qc@U[:nc];dx=-dqc@U[:nc]-qc@dUC-ds*qb@uz
+        condition=float(np.linalg.cond(mc))
+        if getattr(obj,'_symmetric_mesh',False) and info['corner_fields'].root_order==20:
+            from .pair_contact_refinement import refine
+            dUC,dx,DH=refine(base,C,Qbar,Rbar,transform_c,mc,U,dUC,x,dx,H,DH)
     def energy(field,field_change,potential):
         value=np.zeros_like(H);delta=value.copy();extra=potential[nc+nz:]
         for row,local,weight,phi,dphi,added in records():
@@ -178,7 +197,8 @@ def solve(obj,settings,quadrature=48,exponents=(.6,.8),junctions=False,angular_o
             jump=(trace._basis(np.array([edge]),tg)[0][0]@transform[2])@extra
             delta+=ds*ep*(_contract('q,qi,j->ij',weight,E[:,1,rev],jump)+_contract('q,i,qj->ij',weight,jump[rev],E[:,1]))
         return value,delta
-    response=lambda:(U,dUC,x,dx,H,DH,float(np.linalg.cond(mc)))
+    response=lambda:(U,dUC,x,dx,H,DH,condition)
     result=coupled_contact(obj,*data,energy_verifier=energy,response_solver=response)
+    if complete_real:result[2]['common_coordinate_precision']='compensated'
     _check_response(*result)
     return result

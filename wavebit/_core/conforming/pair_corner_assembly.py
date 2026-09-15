@@ -74,9 +74,13 @@ def augment(obj, settings, *, exponents=(.6,.8), quadrature=48, junctions=False,
     return (K,DK,Q,DQ,R,DR,QT,DQT,S,DS,e,de,dict(info,nc=nc,original_nc=nold,corner_fields=fields,base_original=original))
 
 
-def samples(obj,settings,base,quadrature):
+def samples(obj,settings,base,quadrature,*,precise=False):
     info=base[-1];nc,nz,N,nold=(info[k] for k in ('nc','nz','size','original_nc'))
     fields=info['corner_fields'];extra=np.arange(nold,nc)
+    rule=fields.quadrature
+    if precise:
+        from .pair_contact_quadrature import quadrature as contact_quadrature
+        rule=lambda tri,order:contact_quadrature(fields,tri,order)
     length,s,zero,velocity=obj._chart_geometry(settings['gap'],{key:np.asarray(settings[key]) for key in ('basis','widths','height','offset')})
     ds=info['ds'];nx,ny=obj.order
     modes=np.array([(m,n) for n in range(-ny,ny+1) for m in range(-nx,nx+1)])
@@ -89,7 +93,7 @@ def samples(obj,settings,base,quadrature):
             jac=np.column_stack([p[1]-p[0],p[2]-p[0]])
             djac=np.column_stack([dp[1]-dp[0],dp[2]-dp[0]])
             inv=np.linalg.inv(jac);dinv=-inv@djac@inv
-        for bary,weight in fields.quadrature(tri,quadrature):
+        for bary,weight in rule(tri,quadrature):
             poly=obj._gradient_basis(bary,np.zeros_like(bary))[0]
             if thin:
                 gc=_contract('qv,vai->qai',poly,c1)/d1;dgc=np.zeros_like(gc)
