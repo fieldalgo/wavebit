@@ -67,6 +67,14 @@ in `retained_contact_rejection`. Failure of the final QR solve or its physical
 checks still raises an error. The explicit class remains a NumPy finite
 kernel. No new dependency or third-party code is introduced.
 
+Physical rejection messages name every failed metric, its value and its
+unchanged acceptance bound. Nonfinite response blocks are identified separately.
+This distinguishes an original nodal defect from a stationary-energy or
+material failure without rerunning an expensive solve solely to inspect its
+metadata. A reported metric identifies the failed check, not its cause;
+roundoff, insufficient quadrature and an inaccurate candidate require separate
+diagnosis. All original threshold boundaries remain unchanged.
+
 ## Verification and measured cost
 
 Tests compare complete automatic and forced-QR values and derivatives for

@@ -496,14 +496,29 @@ def _changed_contact(obj, settings, blocks, transform, quadrature):
 
 def _check_response(value, tangent, metadata):
     """Apply the same original, independent-energy and physical guards."""
-    residuals = [v for k, v in metadata.items() if k.endswith('residual') and v is not None]
-    if (not np.isfinite(np.asarray(value)).all() or not np.isfinite(np.asarray(tangent)).all()
-            or not all(np.isfinite(v) for v in residuals) or max(residuals) > 1e-10
-            or not np.isfinite([metadata['reciprocity'], metadata['derivative_reciprocity'],
-                                   metadata['minimum_rotated_storage'], metadata['minimum_dissipation']]).all()
-            or max(metadata['reciprocity'], metadata['derivative_reciprocity']) > 1e-9
-            or metadata['minimum_rotated_storage'] <= 0 or metadata['minimum_dissipation'] < -1e-9):
-        raise ValueError('coupled pair Galerkin response failed original/energy/physical guards')
+    failures = []
+    for name, array in (('value', value), ('tangent', tangent)):
+        if not np.isfinite(np.asarray(array)).all():
+            failures.append(f'{name} contains nonfinite entries')
+    residuals = [(key, result) for key, result in metadata.items()
+                 if key.endswith('residual') and result is not None]
+    if not residuals:
+        failures.append('no computed residuals')
+    for key, result in residuals:
+        if not np.isfinite(result) or result > 1e-10:
+            failures.append(f'{key}={result:.6g} (required <= 1e-10)')
+    for key in ('reciprocity', 'derivative_reciprocity'):
+        result = metadata[key]
+        if not np.isfinite(result) or result > 1e-9:
+            failures.append(f'{key}={result:.6g} (required <= 1e-9)')
+    for key, bound, strict in (('minimum_rotated_storage', 0., True),
+                               ('minimum_dissipation', -1e-9, False)):
+        result = metadata[key]
+        if not np.isfinite(result) or (result <= bound if strict else result < bound):
+            failures.append(f'{key}={result:.6g} (required {">" if strict else ">="} {bound:g})')
+    if failures:
+        raise ValueError('coupled pair Galerkin response failed original/energy/physical guards: '
+                         + '; '.join(failures))
 
 
 class CartesianPairSeamGalerkinGapCell:

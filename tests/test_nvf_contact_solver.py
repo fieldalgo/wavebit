@@ -77,8 +77,51 @@ def test_failure_of_both_complete_solvers_is_reported(monkeypatch):
 def test_nonfinite_physical_diagnostic_cannot_pass_a_candidate(key):
     value, tangent, metadata = cell().closure(gap=0., epsilon=(4., 9.), **GEOMETRY)
     metadata[key] = np.nan
-    with pytest.raises(ValueError, match='original/energy/physical guards'):
+    with pytest.raises(ValueError, match=f'{key}=nan'):
         module._check_response(value, tangent, metadata)
+
+
+def test_guard_failure_reports_each_failed_metric_and_its_bound():
+    value, tangent, metadata = cell().closure(gap=0., epsilon=(4., 9.), **GEOMETRY)
+    metadata['original_residual'] = 5.19e-9
+    metadata['energy_derivative_residual'] = 3e-10
+    with pytest.raises(ValueError, match='original/energy/physical guards') as error:
+        module._check_response(value, tangent, metadata)
+    message = str(error.value)
+    assert 'original_residual=5.19e-09 (required <= 1e-10)' in message
+    assert 'energy_derivative_residual=3e-10 (required <= 1e-10)' in message
+    assert 'minimum_rotated_storage' not in message
+
+
+def test_guard_diagnostics_preserve_existing_threshold_boundaries():
+    # These are acceptance-policy boundaries, independent of any numerical
+    # integration or solver representation.
+    metadata = dict(original_residual=1e-10, weak_derivative_residual=None,
+                    reciprocity=1e-9, derivative_reciprocity=1e-9,
+                    minimum_rotated_storage=np.nextafter(0., 1.),
+                    minimum_dissipation=-1e-9)
+    module._check_response(np.eye(2), np.zeros((2, 2)), metadata)
+    metadata['minimum_rotated_storage'] = 0.
+    with pytest.raises(ValueError, match='minimum_rotated_storage=0 .*required > 0'):
+        module._check_response(np.eye(2), np.zeros((2, 2)), metadata)
+
+
+@pytest.mark.parametrize('target', ('value', 'tangent'))
+def test_guard_diagnostics_identify_nonfinite_response_blocks(target):
+    arrays = dict(value=np.eye(2), tangent=np.zeros((2, 2)))
+    arrays[target][0, 0] = np.nan
+    metadata = dict(energy_residual=0., reciprocity=0., derivative_reciprocity=0.,
+                    minimum_rotated_storage=1., minimum_dissipation=0.)
+    with pytest.raises(ValueError, match=f'{target} contains nonfinite entries'):
+        module._check_response(**arrays, metadata=metadata)
+
+
+@pytest.mark.parametrize('residuals', ({}, {'weak_derivative_residual': None}))
+def test_guard_cannot_accept_a_state_without_computed_residuals(residuals):
+    metadata = dict(reciprocity=0., derivative_reciprocity=0.,
+                    minimum_rotated_storage=1., minimum_dissipation=0., **residuals)
+    with pytest.raises(ValueError, match='no computed residuals'):
+        module._check_response(np.eye(2), np.zeros((2, 2)), metadata)
 
 
 @pytest.mark.parametrize('strategy', ('invalid', None, 1, ['auto']))
