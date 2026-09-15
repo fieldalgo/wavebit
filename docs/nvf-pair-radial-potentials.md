@@ -318,6 +318,18 @@ value and derivative by at most `6.43e-13` and `2.03e-11`, respectively. This
 qualifies that finite-space quadrature comparison at the original tolerances;
 the earlier dependence on polynomial degree and mesh refinement remains.
 
+One uniform refinement of the corrected degree-four space also passes every
+original physical and full reflection guard at radial/angular Gauss orders
+80/24. The maximum value and derivative reflection defects are `1.53e-12`
+and `4.41e-12`; independent energy and energy-derivative residuals are
+`1.15e-12` and `1.28e-12`. The complete calculation took 2,682 seconds.
+Its p/s transmissions are `.48895918` / `.47801515` and optical directional
+slopes are `-.04414283` / `.01784053`. Relative to the unrefined quartic
+space, transmission changes by `.00028557` / `.00073417`, while the slope
+changes by `-.00989704` / `.00484085`. Refining the mesh therefore does not
+remove the unresolved optical slope dependence. Small finite-equation and
+reflection residuals alone do not certify joint approximation convergence.
+
 A positive-gap control with unit period, widths and height `3/7`, gap `.003`,
 materials `12.25` and `-10+i`, Fourier order zero and angular order zero also
 passed the original guards with the complete symmetric oscillatory space at
