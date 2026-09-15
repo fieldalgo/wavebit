@@ -263,13 +263,31 @@ were `2.35e-13` and `1.82e-13`. This is a finite-space numerical accuracy
 result; it does not establish joint mesh, radial, angular or Fourier
 convergence.
 
+One uniform mesh refinement of that degree-three, Fourier/angular-order-four
+oscillatory space also passed every original guard at radial/angular Gauss
+orders 80/24. The maximum full value and derivative reflection defects were
+`3.44e-13` and `4.06e-11`; independent energy and energy-derivative residuals
+were `1.72e-13` and `4.78e-14`. The complete calculation took 2,719 seconds
+on the stated runtime. Its p/s transmissions were `.48877293` / `.47722952`,
+and optical directional slopes were `-.04376010` / `.04292791`. Relative to
+the unrefined space, the transmission changes were about `.0000905` /
+`.0017477`, while the slope changes were about `.0018220` / `.0142963`.
+Those derivative changes remain unresolved auxiliary-space dependence.
+This measurement preceded centered-origin evaluation and used the same
+complete compensated corner sampler; it is not an optically converged result.
+
 A positive-gap control with unit period, widths and height `3/7`, gap `.003`,
 materials `12.25` and `-10+i`, Fourier order zero and angular order zero also
 passed the original guards with the complete symmetric oscillatory space at
 radial/angular orders 80/16. Its entire value and gap derivative differed from
 the independently evaluated raw-coordinate control by at most `1.92e-12` and
-`4.21e-10`. This checks evaluation of that finite space; it is not a
-mesh-convergence result.
+`4.21e-10`. Reusing the same configured space after changing length units
+from 1 to 700, multiplying every material by `1+.02i`, and varying that
+material scale together with the physical gap also passed the complete
+value/JVP identities at `3e-10` / `3e-9`. The final independent energy and
+energy-derivative residuals were `6.03e-15` and `9.70e-15`. These measurements
+precede the centered-origin change and check evaluation of that finite space;
+they are not a mesh-convergence result.
 
 The physical gap-difference CI control uses the original mesh's complete
 outer-corner oscillatory space, with materials `4` and `9`, gap `.02` and
