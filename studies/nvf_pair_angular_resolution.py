@@ -30,6 +30,8 @@ def main():
                         help='Separate angular integration order; omitted uses the radial order.')
     parser.add_argument('--oscillatory-radial',action='store_true',
                         help='Add the fixed real logarithmic cosine/sine radial pair.')
+    parser.add_argument('--tensor-output',type=Path,default=None,
+                        help='Optional complete tensor/JVP NPZ, including guard and reflection status.')
     args=parser.parse_args()
     if len(args.order) not in (1,2) or any(n<0 for n in args.order):
         parser.error('order must be one or two nonnegative integers')
@@ -40,6 +42,7 @@ def main():
     def emit(row):
         print(json.dumps(row,default=lambda a:np.asarray(a).tolist()),flush=True)
     configuration=vars(args)|{'order':orders}
+    tensor_output=configuration.pop('tensor_output')
     emit(dict(kind='header',numpy=np.__version__,**configuration,geometry=dict(
         period=700.,widths=[300.,300.],height=300.,gap=0.,offset=[0.,0.],
         epsilon=[[12.25,0.],[-10.,1.]],background=1.,wavelength=900.,
@@ -63,9 +66,22 @@ def main():
         errors=[]
         for slot,sign in zip(array,(1,1,1,-1,-1)):
             reflected=sign*slot[:,reflection][:,:,reflection]
-            np.testing.assert_allclose(slot,reflected,atol=tolerance,rtol=0)
             errors.append(float(np.max(abs(slot-reflected))))
         defects.append(errors)
+    status=dict(physical_guards_passed=True,
+                reflection_passed=all(max(error)<=tolerance for error,tolerance in zip(defects,(3e-10,3e-9))),
+                reflection_defects=defects,diagnostics=metadata)
+    emit(dict(kind='constitutive',**status,seconds=time.perf_counter()-start))
+    if tensor_output is not None:
+        tensor_output.parent.mkdir(parents=True,exist_ok=True)
+        np.savez(tensor_output,value=value,tangent=tangent,
+                 metadata=json.dumps(status,default=lambda a:np.asarray(a).tolist()))
+    # Persist diagnostics before applying the unchanged strict reflection
+    # criteria. A saved rejected candidate is never labelled as qualified.
+    for array,tolerance in ((value,3e-10),(tangent,3e-9)):
+        for slot,sign in zip(array,(1,1,1,-1,-1)):
+            reflected=sign*slot[:,reflection][:,:,reflection]
+            np.testing.assert_allclose(slot,reflected,atol=tolerance,rtol=0)
     op=solver(orders,'p')
     def powers(slots):
         result=op.solve_conv(*slots);output=[]

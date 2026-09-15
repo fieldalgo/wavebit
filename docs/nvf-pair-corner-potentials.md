@@ -111,7 +111,10 @@ acceptance criteria.
 The polynomial/angular/Fourier optical comparison is reproducible with
 `studies/nvf_pair_angular_resolution.py`. The `--degree` option selects cubic
 or quartic common potentials independently of `--angular-order` and
-`--refinement`; cubic degree remains the default. Each invocation computes the full
+`--refinement`; cubic degree remains the default. The optional
+`--tensor-output` writes complete value/JVP arrays and their physical-guard
+and reflection status to an NPZ file before applying the strict reflection
+check. Rejected candidates retain an explicit failed status for diagnosis. Each invocation computes the full
 contact state and derivative, checks the original physical guards and both
 Fourier reflection identities, and reports p/s transmission, reflection and
 optical directional slopes. For example:
