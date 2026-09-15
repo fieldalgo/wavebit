@@ -117,6 +117,7 @@ def response(obj,settings,base,transform,chart,order,T,Qbar,records,edge_rows,*,
     K=pair(np.zeros((nc,nc),complex));Q=pair(np.zeros((size,nc),complex));R=pair(np.zeros((size,nc),complex));DQ=pair(np.zeros((size,nc),complex))
     DK=pair(np.zeros((nc,nc),complex));DR=pair(np.zeros((size,nc),complex))
     nz=info['nz'];total=nz+Qbar.shape[1];qb=np.hstack([base[6][nc:].conj().T,Qbar]);L=pair(np.zeros((total,nc),complex));SZ=pair(np.zeros((total,size),complex));MZZ=pair(np.zeros((total,total),complex))
+    geometry=pair(np.zeros((nc,nc))) if T is None else None
     rows=iter(records())
     nx,ny=obj.order;modes=np.array([(i,j) for j in range(-ny,ny+1) for i in range(-nx,nx+1)])
     length,s,zero,velocity=obj._chart_geometry(0.,{k:np.asarray(settings[k]) for k in ('basis','widths','height','offset')})
@@ -150,7 +151,9 @@ def response(obj,settings,base,transform,chart,order,T,Qbar,records,edge_rows,*,
                     DK=add_at(DK,square,cp(pair(ds),cp(pair(ep),mat(transpose(g),cp(measure,g)))))
                 if not local[11]:
                     wg=cp(ww,g)
-                    K=add_at(K,square,cp(pair(ep),mat(transpose(g),wg)))
+                    geometric=mat(transpose(g),wg)
+                    if geometry is not None:geometry=add_at(geometry,square,geometric)
+                    K=add_at(K,square,cp(pair(ep),geometric))
                     q=mat(transpose(ph,True),wg);Q=add_at(Q,columns,q);R=add_at(R,columns,cp(pair(ep),q))
                     partial=add(mat(transpose(dph,True),wg),mat(transpose(ph,True),cp(ww,dg)))
                     DQ=add_at(DQ,columns,partial);DR=add_at(DR,columns,cp(pair(ep),partial),cp(pair(dep),q))
@@ -169,6 +172,14 @@ def response(obj,settings,base,transform,chart,order,T,Qbar,records,edge_rows,*,
         assembled['data']=physical_data(base,Qbar,K,DK,Q,DQ,R,DR,L,SZ,MZZ)
     # Integrate local support first, then apply the complete invertible
     # common transform. High/low matrices retain cancellations in both steps.
+    if T is None:
+        # The full closed geometric metric is an invertible coordinate map,
+        # not a modification of the physical material or its retained space.
+        from .pair_positive_precision import cholesky
+        geometry=add(geometry,neg(mat(transpose(Q,True),Q)))
+        _real_geometry(geometry[0]+geometry[1])
+        lower=cholesky(D(*(v.real for v in geometry)))
+        T=np.linalg.solve(lower.hi,np.eye(nc)).T
     tt=pair(T);K=mat(transpose(tt),mat(K,tt));DK=mat(transpose(tt),mat(DK,tt))
     Q,R,DQ,DR,L=(mat(a,tt) for a in (Q,R,DQ,DR,L))
     A=tuple(np.kron(np.eye(2),v) for v in free);DA=tuple(np.kron(np.eye(2),v) for v in dfree)

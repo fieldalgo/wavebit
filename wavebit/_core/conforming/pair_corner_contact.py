@@ -126,20 +126,24 @@ def solve(obj,settings,quadrature=48,exponents=(.6,.8),junctions=False,angular_o
             psi=-mul(phi,qc);psi[:,:,ci]+=gc;psi=_real_geometry(psi)
             dpsi=-(mul(dphi,qc)+mul(phi,dqc));dpsi[:,:,ci]+=dgc;dpsi=_real_geometry(dpsi)
             yield row,local,weight,phi,dphi,added,psi,dpsi
-    upper=np.zeros((0,nc))
-    for row,local,weight,phi,dphi,added,psi,dpsi in fields():
-        if local[11]:continue
-        upper=np.linalg.qr(np.vstack([upper,(np.sqrt(row[3])[:,None,None]*psi).reshape(-1,nc)]),mode='r')
-    transform_c=np.linalg.solve(upper,np.eye(nc))
+    complete_real=(getattr(obj,'_symmetric_mesh',False)
+                   and info['corner_fields'].root_order==20
+                   and getattr(info['corner_fields'],'complete_common_precision',True)
+                   and not info['corner_fields'].oscillatory_radial)
+    geometric_frame=(complete_real and obj.degree>=5
+                     and getattr(info['corner_fields'],'complete_common_precision',False))
+    transform_c=None
+    if not geometric_frame:
+        upper=np.zeros((0,nc))
+        for row,local,weight,phi,dphi,added,psi,dpsi in fields():
+            if local[11]:continue
+            upper=np.linalg.qr(np.vstack([upper,(np.sqrt(row[3])[:,None,None]*psi).reshape(-1,nc)]),mode='r')
+        transform_c=np.linalg.solve(upper,np.eye(nc))
     nx,ny=obj.order;modes=np.array([(m,n) for n in range(-ny,ny+1) for m in range(-nx,nx+1)])
     waves=2*np.pi*modes/chart[4];trace,tg=chart[8:]
     def phiat(p):
         phase=np.exp(1j*p@waves.T);phi=np.zeros((len(p),2,2*N),complex)
         phi[:,0,:N]=phase;phi[:,1,N:]=phase;return phi
-    complete_real=(getattr(obj,'_symmetric_mesh',False)
-                   and info['corner_fields'].root_order==20
-                   and getattr(info['corner_fields'],'complete_common_precision',True)
-                   and not info['corner_fields'].oscillatory_radial)
     if complete_real:
         from .pair_contact_precision import response as complete_response
         assembled={}
@@ -207,5 +211,6 @@ def solve(obj,settings,quadrature=48,exponents=(.6,.8),junctions=False,angular_o
         energy_options['energy_coordinates']=assembled['energy_coordinates']
     result=coupled_contact(obj,*data,energy_verifier=energy,response_solver=response,**energy_options)
     if complete_real:result[2]['common_coordinate_precision']='compensated'
+    if geometric_frame:result[2]['common_geometric_frame']='complete_metric'
     _check_response(*result)
     return result

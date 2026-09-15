@@ -278,3 +278,32 @@ the unchanged physical and reflection thresholds. Its independent full-matrix
 gap difference has error `5.72e-11` against the existing `3e-9` bound.
 This finite precision correction is separate from unresolved optical
 approximation changes.
+
+
+## Complete geometric contact coordinates
+
+For degrees 5 and 6, the complete common gradient space can use its integrated
+geometric metric instead of repeatedly factoring tall sampled field matrices.
+Let `G = integral(grad(psi).T*grad(psi))` and let `Q` contain every retained
+Fourier moment. The closed geometric metric is `G-Q.H*Q`. Its compensated
+Cholesky factor defines a full invertible coordinate change before the same
+material solve. Every polynomial and transmission direction remains present.
+A nonpositive pivot is an error; there is no shifted metric, rank cutoff or
+replacement field space. The physical JVP differentiates the original
+material and geometry, not this computational coordinate change.
+
+The full quintic, two-branch order-4 metal control has 619 common coordinates.
+A prototype comparison with the independently sampled QR coordinates passes
+all original physical and full reflection checks. The maximum changes over
+the entire value and derivative are `1.05e-23` and `1.45e-22`. Energy defects
+are `1.39e-17` and `1.18e-12`; full reflection defects are below `2.08e-12` and
+`1.96e-10`. Reported optical transmission, reflection and directional slopes
+are identical to the QR control at stored double precision.
+
+The QR and integrated-metric runs took 1,095 and 1,050 seconds on the documented
+single-BLAS-thread runtime under different concurrent workloads. These are
+qualification timings, not a controlled speed comparison. The coordinate
+change removes the repeated global sampled QR step; it does not reduce the
+cost of independent physical energy integration or prove optical convergence.
+The positive-gap metric and independent Decimal pivot controls are described
+in [the coordinate precision note](nvf-positive-coordinate-precision.md).

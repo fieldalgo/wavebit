@@ -46,7 +46,7 @@
 | `pair_complex_precision.py` | How can complete complex coordinate sums, products and exponentials retain their high/low parts? |
 | `triangle_exponential_precision.py` | Can complete triangle Fourier moments and their variations remain accurate for repeated or nearly repeated phases? |
 | `pair_contact_fourier.py` | How can the original contact measures supply precise free Fourier blocks before large common-field cancellations? |
-| `pair_contact_precision.py` | How can full common, disappearing and trace equations retain accurate contact derivatives through cancellation in their weak projection? |
+| `pair_contact_precision.py` | Can every contact equation and high-degree geometric coordinate remain complete before and after Fourier projection? |
 | `pair_contact_quadrature.py` | How can Gaussian moments, singular coordinate maps and Fourier phases retain enough precision for the complete contact variation? |
 | `pair_contact_refinement.py` | How can the contact variation correct its original weak, retained and flux defects together in the same complete space? |
 | `pair_corner_assembly.py` | How do added common corner fields retain the original C/Z equations and their physical variations? |
