@@ -21,6 +21,7 @@ optical approximation convergence.
 | Question | Decision | Limit |
 | --- | --- | --- |
 | Does a small original weak residual prove the positive-gap field is accurate? | No. The sextic control has a `1.98e-15` weak residual while its physical energy fails by `1.25e-6`. | Backward equation accuracy alone cannot qualify large cancelling coordinates. |
+| Does passing physical energy prove quadrature accuracy? | No. An independent original-node integral rejects an underresolved transverse metal case even when its same-rule energy passes. | Preserve the independent partition and investigate quadrature separately from arithmetic precision. |
 | Can a better coordinate system retain the complete space? | Factor the complete material-independent projected geometric Gram with compensated positive pivots. | A nonpositive pivot is rejected; no shift, rank cutoff or column removal is allowed. |
 | Can the retained constraint be checked after rounding all coefficients? | Independently integrate the complete physical Fourier mean and compare it with the same identity at `1e-10`. | Keep the rounded-matrix defect visible as a diagnostic; it is not a second physical definition. |
 | Is the analytical gap derivative independently checked? | Five separately assembled nearby physical candidates give a fourth-order difference below the existing `3e-9` bound. | This is a finite gap/space control, not a global error estimate. |
@@ -76,6 +77,37 @@ coefficients of order millions cancel. Its value remains available as
 `rounded_retained_defect`, while `retained_verification='physical_field_integral'`
 identifies the actual physical check. Original nodal, weak, flux, derivative,
 reciprocity, storage and dissipation checks still apply.
+
+### Original-node integration detects underresolved quadrature
+
+A quintic metal control uses order `(0,1)`, gap `.01`, period 700, widths and
+height 300, centered coordinates, reference and physical coefficients
+`(12.25,-10+i,1)`, radial order 100 and angular order 32. All 20 real
+transmission directions and all three transverse continuous trace columns
+remain present. Its energy and stationary-energy defects are `5.19e-22` and
+`3.88e-19`, but the original nodal residual is `5.19e-9`. The existing
+`1e-10` original-equation guard correctly rejects this state.
+
+Reconstructing the original Bernstein test gradients and the complete solved
+field in compensated arithmetic leaves the same `5.19e-9` defect on the
+independent clipped partition. This is not loss of coefficient precision.
+Reusing the assembly's unsplit nodal rule would instead give `5.18e-29` and
+conceal the unresolved integration error; that substitution is not used.
+
+Hold every solved coefficient fixed and increase only the unsplit angular
+integration. The 32-to-64 change is `5.19e-9`, matching the independent nodal
+defect. The 48-to-64 and 64-to-96 changes are `6.22e-12` and `8.05e-15`.
+All three use the same original physical residual normalization. The analogous
+derivative changes are `7.93e-12`, `9.51e-15` and `1.23e-17`.
+These are integration comparisons of one frozen physical field; they are
+not fresh solves or estimates of optical approximation error. An accepted
+angular-order argument is a requested integration resolution, not a promise
+that every material/geometry combination will pass its physical guards.
+
+The public quintic order-`(0,1)` control is then freshly assembled at angular
+order 48. It passes every original physical guard and every tensor/reflected
+tensor comparison at the unchanged `3e-10` value and `3e-9` derivative bounds.
+The complete run takes 993 seconds and is retained as a regression test.
 
 ## Finite measurements and independent oracles
 
@@ -145,6 +177,9 @@ own physical checks. Before the Fourier phase and exact-zero arithmetic cost
 reductions, this test took 1,811 seconds. It has a bounded 3,600-second test
 deadline, instead of the general 1,200-second deadline, to preserve the full
 five-state check and its quadrature. No numerical tolerance changes.
+The complete public five-state run with those arithmetic reductions also
+passes in 1,593 seconds; concurrent workloads differ, so this is another
+qualified run time rather than a controlled speedup measurement.
 
 ## Cost of complete sector evaluation
 

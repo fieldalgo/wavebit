@@ -219,3 +219,27 @@ def test_complete_batched_transmission_contact_retains_metal_field_energy():
     assert metadata['energy_derivative_residual']<1e-10
     np.testing.assert_allclose(value[3:],0.,atol=3e-10,rtol=0)
     np.testing.assert_allclose(tangent[3:],0.,atol=3e-9,rtol=0)
+
+
+def test_complete_positive_gap_retains_transverse_fourier_trace_fields():
+    from wavebit._core.conforming.cartesian_pair_opening import CartesianPairOpeningPlan
+    from wavebit._core.conforming.cartesian_pair_transmission_galerkin import CartesianPairTransmissionGalerkinGapCell
+    # Nonzero y order exercises every transverse seam-trace column in the
+    # complete positive system, beyond the scalar and x-only controls.
+    # Angular order 32 underresolves this metal case: the original nodal
+    # check detects the same defect as a finer independent integral.
+    cell=CartesianPairTransmissionGalerkinGapCell(CartesianPairOpeningPlan(0),(0,1),
+        reference=(12.25,-10+1j,1.),degree=5,quadrature=100,
+        angular_quadrature=48,coercivity_angle=1.53)
+    value,tangent,metadata=cell.closure(gap=.01,basis=np.eye(2)*700,
+        widths=(300.,300.),height=300.,offset=(-350.,-350.),
+        epsilon=(12.25,-10+1j),background=1.,gap_tangent=1.)
+    assert metadata['transmission_directions']==20
+    assert metadata['retained_verification']=='physical_field_integral'
+    for key in ('energy_residual','energy_derivative_residual','retained_residual'):
+        assert metadata[key]<1e-10
+    reflection=np.array([2,1,0])
+    for response,tolerance in ((value,3e-10),(tangent,3e-9)):
+        for slot,sign in zip(response,(1,1,1,-1,-1)):
+            np.testing.assert_allclose(slot,sign*slot[:,reflection][:,:,reflection],
+                                       atol=tolerance,rtol=0)
