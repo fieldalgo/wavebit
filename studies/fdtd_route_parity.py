@@ -677,10 +677,10 @@ class MaterialCapture:
                 capture._pending.append((list(poles), [np.array(f) for f in fills]))
             return pole_init(state, shape, dt, poles, fills, dtype)
 
-        def pole_state_wrapper(grid, shape, z_half, x_half, dtype):
+        def pole_state_wrapper(grid, shape, z_half, x_half, dtype, y_half=False):
             capture._pending = []
             try:
-                state = pole_state(grid, shape, z_half, x_half, dtype)
+                state = pole_state(grid, shape, z_half, x_half, dtype, y_half=y_half)
             finally:
                 pending, capture._pending = capture._pending, None
             name = _LEGACY_ELECTRIC.get((z_half, x_half), f'unmapped{(z_half, x_half)}')
