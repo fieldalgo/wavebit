@@ -87,3 +87,12 @@ pointwise verifier passes all original guards: energy residuals are 7.85e-21
 and 2.47e-12, and complete reflection defects are 1.22e-11 and 1.48e-9.
 This replay took 1,043 seconds, dominated by the complete pointwise check.
 It is a replay of preserved weak matrices, distinct from a fresh assembly.
+
+A subsequent fresh library assembly of that sextic, two-branch order-(4,4)
+cell also passes all original physical and full reflection checks. It uses
+radial order 120 and angular order 80 and took 1,585 seconds on the same
+runtime. Its energy residuals are 1.11e-20 and 2.47e-12; the full tensor and
+derivative differ from the replay by at most 2.42e-22 and 1.39e-17. This
+confirms the correction through fresh assembly and physical reconstruction.
+The remaining optical changes across polynomial and corner spaces are
+recorded in the [transmission study](nvf-pair-transmission-potentials.md).

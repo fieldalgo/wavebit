@@ -168,6 +168,7 @@ constitutive JVP. They are not independent physical gap finite differences.
 | 2 | 4 | 0 | 64 | `.48699404` / `.47283323` | `-.02736622` / `.01666854` |
 | 2 | 4 | 1 | 64 | `.48911480` / `.47894903` | `-.04408189` / `.01018199` |
 | 2 | 5 | 0 | 80 | `.48962262` / `.47820719` | `-.04258852` / `.02204977` |
+| 2 | 6 | 0 | 80 | `.48933095` / `.47905421` | `-.04922588` / `.01600262` |
 | 4 | 3 | 0 | 64 | `.48475992` / `.47363551` | `-.00076895` / `.03447941` |
 | 4 | 4 | 0 | 80 | `.48583765` / `.47515927` | `-.06005934` / `.02990420` |
 
@@ -179,7 +180,12 @@ origin, its complete value and derivative differed from the independent
 row also uses the actual library and study entry point, with radial order
 100. It took 957 seconds and passed all original checks: energy residuals
 were `1.04e-12` / `1.18e-12`, and full reflection defects were
-`2.08e-12` / `1.96e-10`. The remaining rows are finite
+`2.08e-12` / `1.96e-10`. A fresh sextic two-branch library run, with radial
+order 120 and complete physical energy coordinates, took 1,585 seconds.
+It passed every original guard, with energy residuals `1.11e-20` / `2.47e-12`
+and full reflection defects `1.22e-11` / `1.48e-9`. Its complete value and
+derivative differ from the preserved-system replay by only `2.42e-22` and
+`1.39e-17`. The remaining rows are finite
 prototype measurements, with complete physical and reflection checks. Raw
 measurement records are not distributed. These changes across trial spaces
 remain unresolved, even when individual finite equations are accurate.
