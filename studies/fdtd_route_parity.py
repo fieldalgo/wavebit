@@ -32,7 +32,9 @@ to ``e1`` and ``e2``, the route changes the answer, and that is the headline. Th
 is the one the alpha studies use: ``wavebit.rcwa(backend=0)`` at a truncation order where it
 has converged, or a closed form where one exists. Its own uncertainty ``u`` is measured from
 an order series in every run, never assumed. ``e1`` and ``e2`` can be interpreted only at
-``>= 10 u``. A claim that one route is more accurate needs ``|e1 - e2| >= 10 u``. ``d``
+``>= 10 u``: a pair whose largest-``d`` channel has an error below that is filed
+``one_route_below_reference_resolution`` or ``both_below_reference_resolution``, whatever its
+``d / min(e)``. A claim that one route is more accurate needs ``|e1 - e2| >= 10 u``. ``d``
 involves no reference, so the ``10 u`` rule does not apply to it; it is interpretable only
 above both runs' settling (see Settling). The rule for ``u`` is in
 :func:`reference_uncertainty`.
@@ -116,7 +118,9 @@ and ``raw_overstates`` where the raw case sits strictly higher on the
 several times too large (``effect_over_corrected_d``), so it certifies nothing about the
 engine arm's resolution. The engine arm's right-sized control sits at the input: the
 material comparison caught a pole fill half a cell off on every patterned pole scene of the
-first run, before the legacy fix.
+first run, before the legacy fix. ``tests/test_fdtd_route_parity_capture.py`` keeps the
+capture able to: it requires the recorded Ey fill to be the one at Ey's y half-step, which a
+y-node fill is not, and every wrapper to accept what the function it replaces accepts.
 
 **What "matched" means.** The legacy route runs *as shipped*, with the study's own keywords,
 exactly as ``tests/references/gen_goldens_fdtd_table.py::_fdtd`` drives it. The grid it
@@ -158,7 +162,8 @@ measured too.
 **Determinism.** Wall clock goes to a separate file (``--timing``, default
 ``<output>.timing.json``) together with the machine-load snapshots. The ``--output`` file
 holds no wall clock, so two runs of one scene can be byte-compared with nothing to strip.
-The BLAS/OpenMP thread pins are set before NumPy is imported and are recorded. The
+The BLAS/OpenMP thread pins are set before NumPy is imported and are recorded. The source
+digests read CRLF as LF, so a Windows and a Linux checkout of one commit give one digest. The
 ``convergence_window`` diagnostic passed to common is shown not to change the answer by
 ``--check-inert``, which reruns common without it and compares the arrays bit for bit.
 
@@ -633,7 +638,9 @@ class MaterialCapture:
     where a fill computed at the wrong position would show. Common is read at the
     ``fdtd_grid`` call of its structure run (the one handed ``poles``; its uniform reference
     run is not). Values are ``key -> (z centres, array)``; a key built twice must come back
-    bit-identical, or it is listed in ``inconsistent``.
+    bit-identical, or it is listed in ``inconsistent``. Each wrapper restates its target's
+    signature, so a new keyword on the target breaks the study on its first scene;
+    ``tests/test_fdtd_route_parity_capture.py`` fails first.
     """
 
     def __init__(self):
@@ -1618,10 +1625,16 @@ REFERENCE_FILES = ('tests/references/_meep_crossed_cases.py',
 
 
 def _digest(paths):
+    """sha256 over each path and its bytes, with CRLF read as LF.
+
+    Git stores these files with LF and a Windows checkout (``core.autocrlf``) writes CRLF, so
+    hashing the bytes as checked out gave one commit two digests: a result measured on Windows
+    could not be matched to its source on Linux.
+    """
     digest = hashlib.sha256()
     for path in paths:
         digest.update(path.relative_to(ROOT).as_posix().encode())
-        digest.update(path.read_bytes())
+        digest.update(path.read_bytes().replace(b'\r\n', b'\n'))
     return digest.hexdigest()
 
 
@@ -1787,13 +1800,19 @@ def main():
                       u='reference uncertainty: 2x the last order step, or step*N/(N-N_prev) '
                         'when the tail is slow; floored by any closed-form gap, and by '
                         f'{ROUNDOFF:g} on a uniform stack (u_is_roundoff_floor: no ranking)',
-                      cases=f'same_error: d <= {SAME_ERROR_RATIO:.3g} min(e1,e2); '
-                            f'route_changes_answer: d >= {ROUTE_MATTERS_RATIO:g} min(e1,e2); '
-                            f'an e is resolved only at >= {RESOLVABLE:g} u; '
-                            'unresolved_against_settling: d below the settling bound; '
+                      cases='decided on the channel carrying the largest d, from that '
+                            "channel's own e1 and e2, in this order. "
+                            'unresolved_against_settling: d below the settling bound. An e is '
+                            f'resolved at >= {RESOLVABLE:g} u. With both resolved: '
                             'one_route_near_exact: round-off-floor u and one e more than '
-                            f'{RESOLVABLE:g}x below the other; inputs_differ: materials do '
-                            'not match, so no case or ranking is an engine claim',
+                            f'{RESOLVABLE:g}x below the other; otherwise same_error: '
+                            f'd <= {SAME_ERROR_RATIO:.3g} min(e1,e2), route_changes_answer: '
+                            f'd >= {ROUTE_MATTERS_RATIO:g} min(e1,e2), intermediate: between '
+                            'the two. one_route_below_reference_resolution: only one e '
+                            'resolved. both_below_reference_resolution: neither, so the '
+                            'reference cannot judge the pair whatever d/min(e) is. '
+                            'inputs_differ: materials do not match, so no case or ranking is '
+                            'an engine claim',
                       ranking=f'needs |e1 - e2| >= {RESOLVABLE:g} u and above the measured '
                               'de-embedding shift of the same quantity (confound_shift); '
                               'ranking_margin carries the numbers',
