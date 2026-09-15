@@ -139,14 +139,24 @@ def test_complete_metal_response_and_gap_jvp_preserve_reflection(gap,angular_ord
     np.testing.assert_allclose([tangent.epxy,tangent.epyx],0.,atol=3e-9,rtol=0)
 
 
-def test_high_order_positive_metal_retains_independent_physical_energy():
-    # Raw fifth-root coordinates failed the original energy guards in the
-    # separate q64 control of this full N4/angular-2 space. Keep every
-    # potential at the default quadrature within the per-test CI time limit.
-    value,tangent,metadata=_closure(gap=.003,scale=1.,angular_order=2,order=4)
+def test_high_order_positive_metal_retains_physical_energy_and_reflection():
+    # Translated coordinates amplified rounding beyond the original 3e-9
+    # reflection criterion in this complete N4/angular-2 positive state.
+    cell=CartesianPairCornerGalerkinGapCell(CartesianPairOpeningPlan(0),4,
+        degree=3,quadrature=64,junctions=True,angular_order=2,
+        coercivity_angle=1.53,mesh='symmetric',angular_quadrature=24)
+    value,tangent,metadata=cell.closure(**_settings(.003,1.))
     assert metadata['energy_residual']<1e-10
     assert metadata['energy_derivative_residual']<1e-10
     assert np.all(np.isfinite(value)) and np.all(np.isfinite(tangent))
+    modes=np.array([(m,n) for n in range(-4,5) for m in range(-4,5)])
+    lookup={tuple(mode):i for i,mode in enumerate(modes)}
+    reflected=np.array([lookup[(m,-n)] for m,n in modes])
+    phase=np.exp(4j*np.pi*(modes[:,1][None,:]-modes[:,1][:,None])*(-.03))
+    for response,tolerance in ((value,3e-10),(tangent,3e-9)):
+        for slot,sign in zip(response,(1,1,1,-1,-1)):
+            np.testing.assert_allclose(slot,sign*phase*slot[:,reflected][:,:,reflected],
+                                       atol=tolerance,rtol=0)
 
 
 def test_positive_physical_gap_variation_matches_two_fourth_order_differences():

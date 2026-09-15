@@ -1,7 +1,8 @@
 """Explicit real corner and junction enrichment of the complete pair NVF tensor."""
 from numbers import Integral
 import numpy as np
-from .cartesian_pair_opening import real_array
+from .cartesian_pair_opening import real_array, validate_geometry
+from ..factorization import ConvMatrices
 from .cartesian_pair_polynomial_galerkin import CartesianPairPolynomialGalerkinGapCell
 from .pair_symmetric_mesh import SymmetricPairPolynomialCell
 from .cartesian_pair_seam_galerkin import _trace_change, _free_fourier_energy, _check_response
@@ -51,6 +52,9 @@ class CartesianPairCornerGalerkinGapCell:
     mesh='symmetric' selects a reflection-invariant triangle trial space on
     shift-zero Cartesian plans. Exact polynomial identities remove redundant
     enrichment coordinates while retaining their complete potential span.
+    Its physical equations are evaluated with the cell center at zero; an
+    invertible Fourier translation returns every value and JVP slot to the
+    caller's offset. This avoids cancellation in translated mesh coordinates.
     The default 'original' preserves the established mesh and field sampler.
     Positive states with amplified original equation defects receive complete
     pointwise weak refinement. Metadata reports its correction count as
@@ -100,6 +104,31 @@ class CartesianPairCornerGalerkinGapCell:
                         epsilon=epsilon, background=background, offset=offset,
                         gap_tangent=gap_tangent, epsilon_tangent=epsilon_tangent,
                         background_tangent=background_tangent)
+        if self.mesh != 'symmetric':
+            return self._closure_at_offset(settings)
+        geometry=validate_geometry(basis,widths,height,offset)
+        # Preserve validation of the caller's complete physical chart before
+        # selecting an equivalent origin for the same translated cell.
+        self._base._chart_geometry(gap,geometry)
+        center_offset=-geometry['basis'].sum(axis=1)/2
+        value,tangent,metadata=self._closure_at_offset(dict(settings,offset=center_offset))
+        if not np.array_equal(geometry['offset'],center_offset):
+            nx,ny=self.order
+            modes=np.array([(i,j) for j in range(-ny,ny+1) for i in range(-nx,nx+1)])
+            fractional=np.linalg.solve(geometry['basis'],geometry['offset'])
+            # The half-cell shift is exactly +/-1 in Fourier coordinates.
+            # Do not approximate it by evaluating exp(i*pi*integer).
+            phase=(-1.)**modes.sum(axis=1)*np.exp(-2j*np.pi*(modes@fractional))
+            change=phase[:,None]*phase[None,:].conj()
+            value,tangent=(ConvMatrices(*(slot*change for slot in array))
+                           for array in (value,tangent))
+        metadata['coordinate_origin']='cell_center'
+        _check_response(value,tangent,metadata)
+        return value,tangent,metadata
+
+    def _closure_at_offset(self,settings):
+        """Solve and independently verify the complete state at one origin."""
+        gap=settings['gap']
         order = max(self.quadrature, 4*max(self.order)+16, self.root_order*max(self._base.degree,4))
         if gap == 0:
             order = max(48, order)

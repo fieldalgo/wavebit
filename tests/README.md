@@ -15,6 +15,7 @@ compares the code to itself proves continuity, not correctness.
 
 | Oracle | Files | What a pass means |
 | --- | --- | --- |
+| **Separately assembled translated physical equations** | `test_nvf_pair_centered_origin.py` | Centering the same periodic cell preserves every value and joint gap/material derivative slot, unequal Fourier orders and original geometry guards. |
 | **Exact mesh reflection, polynomial identities and physical gap differences** | `test_nvf_pair_symmetric_mesh.py` | The explicit symmetric pair retains its full potential span, original contact quotient, reflection covariance and finite gap variation without projecting its response. |
 | **Original nodal constraints, rational Laurent equations and Duffy integration** | `test_nvf_pair_galerkin.py` | A real constrained-gradient response retains finite contact/material derivatives, reciprocal passive energy and holomorphic material dependence without repairing its tensor. This does not establish optical convergence. |
 | **Independent cardinal functions, original nodal equations and physical error integrals** | `test_nvf_polynomial_galerkin.py` | Higher polynomial fields preserve the complete finite tensor, contact/material derivatives and closed error bound without substituting an optical convergence claim. |

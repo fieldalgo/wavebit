@@ -10,6 +10,7 @@ Targets:
 - `wavebit/_core/conforming/pair_contact_refinement.py`
 - `wavebit/_core/conforming/cartesian_pair_corner_galerkin.py`
 - `tests/test_nvf_pair_symmetric_mesh.py`
+- `tests/test_nvf_pair_centered_origin.py`
 
 The explicit corner family accepts `mesh='symmetric'` on a shift-zero
 Cartesian opening plan. The mesh and the complete potential span preserve
@@ -123,7 +124,7 @@ arithmetic passes every original physical guard:
 its energy and energy-derivative residuals are `1.02e-11` and `3.08e-11`.
 The value reflection discrepancy is `3.83e-11`, below `3e-10`. The complete
 gap-derivative reflection discrepancy is still `1.46e-8`, above `3e-9`;
-this high-order derivative is therefore not reflection-qualified. These
+that earlier high-order derivative was therefore not reflection-qualified. These
 measurements use unit period and otherwise the normalized metal geometry
 given below. The preparation changes no radial exponent, quadrature rule,
 potential count or original-mesh default. The subsequent
@@ -131,9 +132,10 @@ potential count or original-mesh default. The subsequent
 addresses additional arithmetic residue amplified by large coefficients;
 the measurements above isolate the coordinate preparation itself.
 
-The corresponding full-space regression at the default integration order
-48 also passes every original physical guard. It took about 12 minutes
-23 seconds on the stated runtime, within the 20-minute per-test CI limit.
+The earlier full-space regression at integration order 48 also passed every
+original physical guard. It took about 12 minutes 23 seconds on the stated
+runtime. The centered-origin regression described below now checks the
+complete high-order reflection identity as well.
 
 The coordinate recovery tests undo all real transforms and add independently
 evaluated Bernstein interpolation values and gradients. They recover every
@@ -203,6 +205,62 @@ the complete gap-derivative comparison missed its `3e-9` criterion at
 contact value bitwise identical to the unit-period result, and reduces that
 derivative discrepancy to `5.09e-11`. The same normalization applies at zero
 and positive gap. The original mesh retains its existing normalization.
+
+## Centering the physical coordinates
+
+The pair and its fundamental cell translate together. Changing their common
+origin therefore preserves the entire finite trial space, including every
+nodal, corner, disappearing and continuous-trace field. Evaluating the mesh
+at the cell center avoids repeatedly subtracting a common translation from
+nearby physical vertices and Fourier phases. Large potential derivatives can
+amplify the resulting rounding even when the original equations pass.
+
+The symmetric family validates the caller's original geometry, solves at
+`offset = -basis @ (1/2, 1/2)`, then restores the caller's Fourier origin.
+For an integer Fourier mode `m` and fractional caller offset
+`o = solve(basis, offset)`, define
+
+```text
+P[m] = (-1)**(m_x + m_y) * exp(-2*pi*i*m.o)
+H_caller = P @ H_center @ P.conj().T
+DH_caller = P @ DH_center @ P.conj().T
+```
+
+Here `P` is diagonal. The half-cell factor is evaluated as an exact sign.
+Every complete transverse and longitudinal slot uses this same invertible
+translation. Its phase is fixed in the supported gap/material JVP because
+the basis and offset have no tangent in this API. Physical guards are applied
+before and after translation; their thresholds and the potential span remain
+unchanged. The original mesh retains its existing origin and arithmetic.
+
+In the unit-period, degree-three, unrefined symmetric metal fixture at gap
+`.003`, Fourier order four, angular order two and radial/angular integration
+orders 64/24, choosing caller offset zero still left a maximum gap-derivative
+reflection defect of `3.08e-9`, just outside the existing `3e-9` limit. Placing
+the **cell center** at zero reduced it to `1.08e-9`. Translating the complete
+result back to caller offset `(.01,-.03)` preserved that bound. The maximum
+value defect was `4.42e-12`, below `3e-10`, and independent energy and
+energy-derivative residuals were `5.33e-12` and `6.59e-12`, below `1e-10`.
+This resolves that finite high-order regression; it does not establish optical
+or mesh convergence.
+
+Separate translated physical assemblies check complete values and joint
+gap/material JVPs on a non-square cell with basis `diag(1.2,.9)` and offset
+`(.17,-.08)`. Controls include unequal Fourier orders, cubic and quartic
+potentials, empty and expanded real radial subsets, and the complete
+oscillatory space. They retain absolute `3e-10` / `3e-9` comparison criteria.
+The oscillatory positive-gap comparison passed in 1,277 seconds for its two
+complete solves, exceeding the 1,200-second per-test CI limit. Its CI
+counterpart uses exact contact; the separate positive calculation keeps every
+field and its joint derivative.
+
+Centering is not a universal accuracy qualification. On that non-square cell,
+the four-real-exponent metal contact at orders `(1,1)`, cubic degree and
+radial/angular integration orders 80/12 still had a joint-derivative reflection
+defect of `2.13e-7` despite passing the original relative physical guards.
+Increasing the angular integration order to 24 did not resolve it. This
+case remains outside the `3e-9` reflection qualification; the dielectric
+translation controls do not qualify its metal derivative.
 
 ## Finite controls and limits
 
