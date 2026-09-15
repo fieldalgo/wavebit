@@ -5,6 +5,7 @@ from .projected_pair_contact import _real_geometry
 from .pair_corner_assembly import samples
 from .cartesian_pair_galerkin import _relative
 from .pair_balanced_response import solve as balanced_response
+from .pair_positive_refinement import refine
 
 
 def response(obj,settings,base,order,quadrature,free,Q,dQ,original_blocks):
@@ -116,7 +117,9 @@ def response(obj,settings,base,order,quadrature,free,Q,dQ,original_blocks):
         correction=coordinate@local_correction
         DU+=correction;dx-=retained+Q@correction
         DH+=-flux-A@retained+(R-A@Q)@correction
-    return U,DU,x,dx,H,DH,float(np.linalg.cond(balanced))
+    state=refine(obj,settings,base,order,quadrature,original_blocks,Q,dQ,
+                 coordinate,balanced,(U,DU,x,dx,H,DH))
+    return (*state,float(np.linalg.cond(balanced)))
 
 
 def verify(obj,settings,base,order,quadrature,U,x,dxgeo):

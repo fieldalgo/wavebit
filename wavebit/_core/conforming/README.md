@@ -35,6 +35,7 @@
 | `pair_corner_contact.py` | How does the enlarged physical field space retain its exact contact state and right-opening derivative? |
 | `pair_corner_positive.py` | How can unsplit smooth-field products and split trace products preserve the complete positive solution and independent stationary energy? |
 | `pair_balanced_response.py` | How can the complete positive-gap derivative retain every coordinate without differentiating an artificial square-root balancing map? |
+| `pair_positive_refinement.py` | Can pointwise original weak residuals correct large-coefficient roundoff in the complete positive value and variation without using the independent energy verifier? |
 | `pair_junction_partition.py` | How do all six corner charts retain exact moving geometry, including refined collapsed triangles? |
 | `pair_junction_thin_partition.py` | How can both junction endpoints be resolved on every collapsing triangle, including the exterior annulus? |
 | `pair_junction_transport.py` | How do fixed reference volume derivatives and moving profile-edge fluxes avoid artificial quadrature-node cancellation? |

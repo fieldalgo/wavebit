@@ -148,6 +148,46 @@ equations remain unresolved, the existing `1e-11` internal refinement target
 drives a correction to the complete state. It does not replace any tensor or
 derivative block with a different method.
 
+Large cancelling potential coefficients can also amplify matrix-assembly
+roundoff despite a small backward residual. The positive solve weights its
+original weak, retained and flux defects by the complete physical coefficients.
+When these forward-weighted defects exceed the same `1e-11` internal target,
+it reintegrates the original weak equations from the complete physical field
+and refines the value and variation together. At most two corrections use the
+existing balanced matrix as a fixed preconditioner. A value correction also
+updates the forcing of the differentiated equations before all derivative
+variables are corrected. A resolved original state requests no extra quadrature.
+
+The physical weak residual integrates common/disappearing products on unsplit
+triangles and the actual additional trace products on the moving partition.
+Thin rows pair the already normalized measure with their finite physical
+fields; their derivative does not divide an accumulated residual by the gap.
+All retained potentials, the retained-field coefficients, the tensor and their
+full variations are corrected in the same space. The independent energy
+verifier is neither an input nor a stopping criterion. The response metadata
+reports the number of corrections as `pointwise_refinement_steps`; contact
+reports zero because it uses its separate analytic limit.
+
+A metal control with unit period, widths `(0.3,0.4)`, height `0.45`, offset
+`(0.01,-0.03)`, gap `0.003`, materials `(12.25,-10+1j)`, retained order four,
+cubic degree, mesh refinement one, angular order two and coercivity angle
+`1.53` exposed this defect.
+At quadrature 64 the former energy and energy-derivative residuals were
+`1.21e-10` and `3.54e-10`, exceeding the unchanged `1e-10` guards. The
+potential-coefficient norm was about 3,196. Direct physical weak integration,
+weighted by those coefficients, reproduced the `9.59e-9` absolute energy
+defect; the retained-field moment discrepancy contributed only `3.20e-12`.
+The complete public calculation with pointwise refinement now passes all
+original guards at that same resolution. Bounded refinement still cannot
+recover digits already lost in an inadequately conditioned field
+representation: the original guards remain able to reject such a state.
+
+The quadrature-64 public regression took 1,207 seconds on the stated runtime,
+just above the 1,200-second CI limit. The regression suite therefore repeats
+the same complete potential space at the default quadrature 48. It passes
+the original guards in 561 seconds. This changes the integration work of the
+fixture, without changing its mesh, angular, radial or retained Fourier fields.
+
 Independent energy verification first constructs the complete original
 physical field `E0`. It integrates `E0/E0` on unsplit triangles and the three
 remaining `E0/trace`, `trace/E0`, `trace/trace` products on the moving partition.

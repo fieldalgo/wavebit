@@ -38,6 +38,9 @@ class CartesianPairCornerGalerkinGapCell:
     shift-zero Cartesian plans. Exact polynomial identities remove redundant
     enrichment coordinates while retaining their complete potential span.
     The default 'original' preserves the established mesh and field sampler.
+    Positive states with amplified original equation defects receive complete
+    pointwise weak refinement. Metadata reports its correction count as
+    pointwise_refinement_steps; every original physical guard still applies.
     """
 
     def __init__(self, plan, order=1, *, degree=3, quadrature=48,
@@ -108,4 +111,6 @@ class CartesianPairCornerGalerkinGapCell:
                         junctions=self.junctions, angular_order=self.angular_order,
                         radial_root_order=self.root_order)
         metadata['mesh']=self.mesh
+        metadata['pointwise_refinement_steps']=(base[-1].get('pointwise_refinement_steps',0)
+                                                if gap>0 else 0)
         return value, tangent, metadata
