@@ -24,6 +24,10 @@ def main():
     parser.add_argument('--angular-order',type=int,choices=range(5),default=4)
     parser.add_argument('--refinement',type=int,choices=range(4),default=0)
     parser.add_argument('--quadrature',type=int,default=64)
+    parser.add_argument('--angular-quadrature',type=int,default=None,
+                        help='Separate angular integration order; omitted uses the radial order.')
+    parser.add_argument('--oscillatory-radial',action='store_true',
+                        help='Add the fixed real logarithmic cosine/sine radial pair.')
     args=parser.parse_args()
     if len(args.order) not in (1,2) or any(n<0 for n in args.order):
         parser.error('order must be one or two nonnegative integers')
@@ -44,7 +48,8 @@ def main():
     start=time.perf_counter()
     cell=CartesianPairCornerGalerkinGapCell(CartesianPairOpeningPlan(0,args.refinement),
         orders,degree=3,quadrature=args.quadrature,junctions=True,
-        angular_order=args.angular_order,coercivity_angle=1.53,mesh='symmetric')
+        angular_order=args.angular_order,coercivity_angle=1.53,mesh='symmetric',
+        oscillatory_radial=args.oscillatory_radial,angular_quadrature=args.angular_quadrature)
     value,tangent,metadata=cell.closure(gap=0.,epsilon=(12.25,-10+1j),**GEOMETRY)
     value,tangent=np.asarray(value),np.asarray(tangent)
     nx,ny=orders

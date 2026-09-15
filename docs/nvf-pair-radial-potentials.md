@@ -111,3 +111,169 @@ its transmission slopes substantially when all four radial exponents were
 included. The expanded field option therefore remains an explicit resolution
 control. Mesh, angular, radial and retained Fourier convergence must be checked
 together before interpreting a contact slope as an optical prediction.
+
+## Fixed real oscillatory directions
+
+The optional `angular_quadrature` setting separates the angular Gauss rule
+from radial integration in two-dimensional corner and clipped-trace charts.
+It accepts an integer at least `max(12, 2*max(order)+4)`; the default `None`
+uses the effective radial order in both directions. The radial floor and
+one-dimensional moving-edge rules are unchanged. Coordinate preparation
+uses its fixed geometry-only rules, so selecting a physical integration order
+does not reconfigure the prepared field coordinates. Metadata records an
+explicit choice as `angular_integration_quadrature`, and the optical study
+accepts `--angular-quadrature`.
+
+These are local radial/angular directions around a corner, independent of
+the Cartesian x/y Fourier orders. The twentieth-root map needs a high radial
+order even when a lower angular order resolves the smooth angular integrand.
+The setting is an integration parameter, not an accuracy certificate: check
+both directions along with the complete physical response. Exact triangle
+moments test the separate rules; physical material and contact/positive
+variations retain their original tolerances.
+
+A separate `oscillatory_radial=True` option in
+`CartesianPairCornerGalerkinGapCell` adds the real span of
+`s**(19/20) * cos(log(s)/2)` and `s**(19/20) * sin(log(s)/2)` to the fixed
+`(0.6, 0.8)` real powers. Here `s` is the complementary corner hat. The same
+homogeneous neighbor and angular prefactors supply the spatial potentials.
+The pair is selected together, remains independent of material values and
+uses the existing twentieth-root quadrature floor. Other real exponent lists
+are refused with this option. The default is `False`.
+
+Both oscillatory directions enter one real coordinate transformation, rather
+than assigning a complex trial function to a real material-independent
+space. After inserting the integer polynomial-overlap nodes and the two real
+radial nodes, the last block of the real exponent matrix is
+
+```text
+[ 19/20  -1/4 ]
+[     1  19/20 ]
+```
+
+Its eigenvalues are `19/20 +/- i/2`. The first column of the combined
+exponential supplies the divided-difference coordinates. Derivatives use
+that same exponential multiplied by the exponent matrix and by its product
+with the exponent matrix minus identity. The returned fields remain real;
+all original physical equations and acceptance criteria still apply.
+
+A compensated scalar evaluation used for raw coordinates and geometry
+preparation produces the same rounded real exponent columns. For `h <= 1/4`,
+a 96-term series with exact rational high/low
+coefficients retains small remainders. Elsewhere, compensated scalar powers
+combine the complete polynomial remainders and logarithmic derivatives.
+Each scalar exponential uses a scaled 26-term Taylor series and repeated
+squaring, with scaled argument magnitude at most `1/4`. The final column
+normalization follows the matrix evaluator's rounding order. This avoids
+cancellation between close polynomial and radial powers while preserving
+bitwise agreement with the complete matrix evaluation. The latter remains
+an arithmetic reference; independent Decimal power sums are a separate
+accuracy oracle.
+Only exactly identical binary `(h, s)` inputs share evaluations. Every row
+is restored to its original position. The scalar evaluator uses batches of at most 4096 points, with only linear
+scalar-array storage. The matrix reference uses at most 256 points per
+batch. The lower-right polynomial suffixes of one exponential
+supply all homogeneous families of the chosen polynomial degree. Only the
+final radial values and derivatives are retained. Their array and key
+payload is bounded by 64 MiB; a profile larger than that budget is evaluated
+without retaining it. Exact profiles share this budget rather than each
+occupying one equal-sized cache entry. On the unrefined symmetric mesh, all
+25 distinct reference profiles occupy about 25.5 MiB for cubic fields at
+order 80 and 36.4 MiB at order 96. The corresponding quartic payloads are
+33.6 and 47.9 MiB. Larger quadratures and meshes retain the same byte budget. Neither operation removes a point or
+field. No numerical rank threshold or material regularization is introduced.
+
+The symmetric mesh needs additional care: its complete coordinate transform
+can amplify rounding of otherwise accurate raw fields. It therefore evaluates
+the transformed potentials before rounding. If `c_i` is the corner hat at
+triangle vertex `i`, define `q_i = b_i*(1-c_i)/s`. Homogeneous angular products
+become Bernstein polynomials of degree `K = 2 + angular_order` in `q`. Their
+exact rational coefficients and the polynomial overlap are combined with
+the complete stored coordinate transform. Each corner group has the form
+
+```text
+h * sum_l R_l(s) * B_K(q) @ C_l - B_p(b) @ C_p
+```
+
+Here the four real `R_l` are the two real powers and the logarithmic cosine
+and sine pair. Every original field column remains. The polynomial term
+contains both its Taylor overlap and the common nodal interpolant. Values,
+spatial gradients and moving gradients retain high/low components through
+this whole expression. A binary range reduction and 25-term odd-power
+logarithm series supply the radial kernels. For fixed reference nodes, the
+same reference gradient supplies both the physical inverse-Jacobian map and
+its variation; moving reference nodes use the full differentiated expression.
+
+Bernstein evaluation has at most 28 columns. Its compensated products split
+normalized inputs into two bounded integer chunks and the complete floating
+remainder, retain all nine cross products and accumulate their high/low
+parts. Leading integer partial sums stay below `2**50`. This small geometry
+kernel is separate from the unchanged three-chunk original physical residual
+arithmetic. Fixed coefficient tables have a 64 MiB array/key payload budget
+per cell. Oversized tables are evaluated without retention, and sampled
+field intermediates use batches of at most 256 points. This budget does not
+include the complete returned fields or solver matrices. Gradient-only calls
+retain the same spatial and moving derivatives without allocating an unused
+whole-field value array. Their polynomial coordinate products omit only those
+unused value/directional columns. Summation buffers are reused with unchanged
+term order; the original residual arithmetic is unaffected.
+
+Independent Decimal potentials check this complete transformed expression
+and physical variations, including corner distances down to `2**-200`.
+Interior controls use 100 digits; singular-corner controls use 420 digits.
+Neither their reference powers nor their high-precision physical difference
+stencils use the production polynomial coefficient builder.
+
+Returned metadata identifies the option, power and logarithmic frequency as
+`oscillatory_radial`, `oscillatory_radial_power` and
+`oscillatory_radial_frequency`; `corner_exponents` continues to report the
+ordinary real powers. The optical study accepts `--oscillatory-radial` and
+records that choice alongside the complete geometry and source hashes.
+
+Independent 180-digit complex-power sums check all four real radial
+coordinates and both derivatives for cubic/quartic spaces and angular
+orders through four, including complements as small as `1e-78`. Separate
+raw-field controls compare complete spatial and moving gradients with
+fourth-order differences. Selecting this enlarged finite space does not
+establish joint radial, angular, mesh or Fourier convergence.
+
+An initial raw-coordinate control of the period-700 metal contact passed
+through the explicit oscillatory option at Fourier orders `(4, 4)`, degree
+three, angular order two, the unrefined symmetric mesh and integration order
+80. Its original energy and energy-derivative residuals are `2.77e-13` and
+`1.44e-13`. Maximum full Fourier-reflection defects are `1.80e-10` for the
+value and `1.57e-9` for the physical gap derivative, within the unchanged
+`3e-10` / `3e-9` criteria. The p/s transmissions are `.48734923` /
+`.47181436`, and optical directional slopes are `-.04600084` / `.00196346`.
+The two optical stencil estimates differ by less than `7.4e-9`; these
+constitutive perturbations remain distinct from a physical gap-difference
+verification and do not establish optical convergence.
+
+At angular order four, raw-coordinate rounding exceeded the same reflection
+criterion: the largest value defect was `1.75e-9`. Complete compensated
+evaluation with radial/angular Gauss orders 80/24 reduced the maximum value
+and derivative defects to `4.34e-12` and `8.76e-11`, respectively, retaining
+the original `3e-10` / `3e-9` criteria. Original energy and energy-derivative
+residuals were `2.30e-13` and `1.72e-13`. The p/s transmissions were
+`.48868243` / `.47548184`. An independent complete response through the
+public 80/32 quadrature option passed the same guards. Increasing the angular
+Gauss order from 24 to 32 changed the entire value and derivative by at most
+`4.22e-12` and `5.39e-11`; the original energy and energy-derivative residuals
+were `2.35e-13` and `1.82e-13`. This is a finite-space numerical accuracy
+result; it does not establish joint mesh, radial, angular or Fourier
+convergence.
+
+A positive-gap control with unit period, widths and height `3/7`, gap `.003`,
+materials `12.25` and `-10+i`, Fourier order zero and angular order zero also
+passed the original guards with the complete symmetric oscillatory space at
+radial/angular orders 80/16. Its entire value and gap derivative differed from
+the independently evaluated raw-coordinate control by at most `1.92e-12` and
+`4.21e-10`. This checks evaluation of that finite space; it is not a
+mesh-convergence result.
+
+The physical gap-difference CI control uses the original mesh's complete
+outer-corner oscillatory space, with materials `4` and `9`, gap `.02` and
+radial/angular orders 80/12. Fourth-order stencils at `3e-5` and `1.5e-5`
+retain the `3e-9` derivative criterion. Exactly identical complete physical
+states are reused between the stencils. The separate coordinate and joint
+material/gap controls include junction fields and the symmetric space.

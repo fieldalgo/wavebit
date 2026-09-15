@@ -34,6 +34,20 @@ class CartesianPairCornerGalerkinGapCell:
     guards apply. Choosing a field space or quadrature does not establish
     mesh/Fourier/optical convergence or change ordinary NVF routing.
 
+    angular_quadrature optionally sets a separate angular Gauss order for
+    two-dimensional corner and clipped-trace integrals. It must be at least
+    max(12, 2*max(order)+4). None uses the effective radial order in both
+    directions. Radial grading, one-dimensional moving-edge quadrature and
+    geometry-coordinate preparation retain their established orders.
+
+    oscillatory_radial=True appends the fixed real cosine/sine pair with
+    radial power 19/20 and logarithmic frequency 1/2. It requires the default
+    real exponents (0.6, 0.8), uses twentieth-root integration, and retains
+    both real directions independently of the materials. The default False
+    preserves the selected nonoscillatory field space. On the symmetric mesh,
+    complete radial/angular coordinate expressions are evaluated with
+    compensated arithmetic before rounding their values and gradients.
+
     mesh='symmetric' selects a reflection-invariant triangle trial space on
     shift-zero Cartesian plans. Exact polynomial identities remove redundant
     enrichment coordinates while retaining their complete potential span.
@@ -45,7 +59,7 @@ class CartesianPairCornerGalerkinGapCell:
 
     def __init__(self, plan, order=1, *, degree=3, quadrature=48,
                  exponents=(.6, .8), junctions=False, angular_order=0, coercivity_angle=0.,
-                 mesh='original'):
+                 mesh='original', oscillatory_radial=False, angular_quadrature=None):
         if (isinstance(degree, (bool, np.bool_)) or not isinstance(degree, Integral)
                 or degree not in (3, 4)):
             raise ValueError('corner pair polynomial degree must be 3 or 4')
@@ -60,8 +74,15 @@ class CartesianPairCornerGalerkinGapCell:
         if (isinstance(quadrature, (bool, np.bool_)) or not isinstance(quadrature, Integral)
                 or quadrature < max(24, 2*max(self.order)+4)):
             raise ValueError('quadrature must be an integer at least max(24, 2*max(order)+4)')
+        if angular_quadrature is not None and (isinstance(angular_quadrature,(bool,np.bool_))
+                or not isinstance(angular_quadrature,Integral)
+                or angular_quadrature < max(12,2*max(self.order)+4)):
+            raise ValueError('angular_quadrature must be None or an integer at least max(12, 2*max(order)+4)')
+        self.angular_quadrature=None if angular_quadrature is None else int(angular_quadrature)
         self.exponents = tuple(exponents)
-        fields=PairCornerFields(self._base, self.exponents, junctions=junctions, angular_order=angular_order)
+        fields=PairCornerFields(self._base, self.exponents, junctions=junctions, angular_order=angular_order,
+                                oscillatory_radial=oscillatory_radial,angular_quadrature=self.angular_quadrature)
+        self.oscillatory_radial=fields.oscillatory_radial
         self.root_order=fields.root_order
         if self.root_order==20 and quadrature<48:
             raise ValueError('expanded radial exponents require quadrature at least 48')
@@ -84,10 +105,12 @@ class CartesianPairCornerGalerkinGapCell:
             order = max(48, order)
             value, tangent, metadata = solve_contact(
                 self._base, settings, quadrature=order, exponents=self.exponents, junctions=self.junctions,
-                angular_order=self.angular_order,prepared_fields=self._fields)
+                angular_order=self.angular_order,prepared_fields=self._fields,
+                oscillatory_radial=self.oscillatory_radial,angular_quadrature=self.angular_quadrature)
         else:
             base = augment(self._base, settings, exponents=self.exponents, quadrature=order, junctions=self.junctions,
-                           angular_order=self.angular_order,prepared_fields=self._fields)
+                           angular_order=self.angular_order,prepared_fields=self._fields,
+                           oscillatory_radial=self.oscillatory_radial,angular_quadrature=self.angular_quadrature)
             sample = junction_quadrature if self.junctions or self.root_order==20 else sample_quadrature
             transform = _trace_change(self._base, settings, order)
             quadrature = lambda split=True: sample(
@@ -113,6 +136,11 @@ class CartesianPairCornerGalerkinGapCell:
                         corner_exponents=self.exponents, corner_controls=self.corner_controls,
                         junctions=self.junctions, angular_order=self.angular_order,
                         radial_root_order=self.root_order)
+        if self.angular_quadrature is not None:
+            metadata['angular_integration_quadrature']=self.angular_quadrature
+        if self.oscillatory_radial:
+            metadata.update(oscillatory_radial=True,oscillatory_radial_power=.95,
+                            oscillatory_radial_frequency=.5)
         metadata['mesh']=self.mesh
         metadata['pointwise_refinement_steps']=(base[-1].get('pointwise_refinement_steps',0)
                                                 if gap>0 else 0)

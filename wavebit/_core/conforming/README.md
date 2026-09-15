@@ -24,6 +24,12 @@
 | `cartesian_pair_corner_galerkin.py` | Can fixed real corner and optional junction powers join that whole tensor and its positive-gap/contact/material derivative? |
 | `pair_corner_fields.py` | How do exact fifth-root remainders and nested angular powers preserve the complete corner field space? |
 | `pair_radial_powers.py` | How can exact root factors remove both polynomial overlap and nearby-exponent cancellation without discarding a radial direction? |
+| `pair_oscillatory_coefficients.py` | Which exact scalar weights and Taylor coefficients define the fixed real exponent columns? |
+| `pair_oscillatory_scalar.py` | How can compensated scalar powers evaluate those complete columns without repeated dense exponentials? |
+| `pair_corner_precision.py` | How are complete real coordinate operations evaluated with compensated arithmetic before rounding? |
+| `pair_oscillatory_polynomials.py` | How do exact angular Bernstein coefficients retain every oscillatory corner direction and its polynomial overlap? |
+| `pair_oscillatory_fields.py` | How are full symmetric oscillatory fields and their moving gradients evaluated without amplifying coordinate roundoff? |
+| `pair_oscillatory_radial.py` | How can a fixed real logarithmic cosine/sine pair retain both complete radial directions and their derivatives without cancelling nearby powers? |
 | `pair_radial_fields.py` | How do homogeneous normalized hats preserve complete radial values and both spatial and moving-field derivatives? |
 | `pair_symmetric_mesh.py` | How can the explicit pair trial mesh preserve reflection and the original exact contact quotient? |
 | `pair_corner_prefactors.py` | Which enrichment coordinates are exactly redundant on the selected mesh, including identities across corner labels? |

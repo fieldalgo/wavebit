@@ -15,6 +15,9 @@ def intersection(a,b,other,r,dr):
 
 def samples(obj,base,settings,chart,order,split=True):
     t,w=leggauss(order);t=(t+1)/2;w=w/2
+    count=getattr(base[-1]['corner_fields'],'angular_quadrature',None)
+    count=order if count is None else count
+    angle_nodes,angle_weights=leggauss(count);angle_nodes=(angle_nodes+1)/2;angle_weights=angle_weights/2
     sf,dsf=scalar(chart[1]),scalar(base[-1]['ds'])
     fields=base[-1]['corner_fields'];power=fields.root_order
     for tri,local,p,dp,poly in partitions(obj,base,settings,chart,split):
@@ -91,8 +94,8 @@ def samples(obj,base,settings,chart,order,split=True):
             for side in range(2):
                 val,dval=interpolate([ends[side][0] for ends in endpoints],[ends[side][1] for ends in endpoints])
                 boundaries.append(val);dboundaries.append(dval)
-            bb=((1-t)[None,:,None]*boundaries[0][:,None,:]+t[None,:,None]*boundaries[1][:,None,:]).reshape(-1,3)
-            dbb=((1-t)[None,:,None]*dboundaries[0][:,None,:]+t[None,:,None]*dboundaries[1][:,None,:]).reshape(-1,3)
+            bb=((1-angle_nodes)[None,:,None]*boundaries[0][:,None,:]+angle_nodes[None,:,None]*boundaries[1][:,None,:]).reshape(-1,3)
+            dbb=((1-angle_nodes)[None,:,None]*dboundaries[0][:,None,:]+angle_nodes[None,:,None]*dboundaries[1][:,None,:]).reshape(-1,3)
             widths=[ends[1][0][transverse]-ends[0][0][transverse] for ends in endpoints]
             dwidths=[ends[1][1][transverse]-ends[0][1][transverse] for ends in endpoints]
             cross=complement*float(widths[0])+xi*float(widths[1])
@@ -102,8 +105,8 @@ def samples(obj,base,settings,chart,order,split=True):
                 factor=scalar(local[10])*(1 if normalized else sf)
                 dfactor=F(0) if normalized else scalar(local[10])*dsf
                 value=jac*cross;direction=djac*cross+jac*dcross
-                return ((w[:,None]*w*(value*float(factor))[:,None]).ravel(),
-                        (w[:,None]*w*(direction*float(factor)+value*float(dfactor))[:,None]).ravel())
+                return ((w[:,None]*angle_weights*(value*float(factor))[:,None]).ravel(),
+                        (w[:,None]*angle_weights*(direction*float(factor)+value*float(dfactor))[:,None]).ravel())
             def linear(values,changes):
                 val=[];dval=[]
                 for side in range(2):
@@ -112,6 +115,6 @@ def samples(obj,base,settings,chart,order,split=True):
                     vv=complement*float(ev[0])+xi*float(ev[1])
                     dd=complement*float(de[0])+xi*float(de[1])+dxi*float(ev[1]-ev[0])
                     val.append(vv);dval.append(dd)
-                return (((1-t)[None,:]*val[0][:,None]+t[None,:]*val[1][:,None]).ravel(),
-                        ((1-t)[None,:]*dval[0][:,None]+t[None,:]*dval[1][:,None]).ravel())
+                return (((1-angle_nodes)[None,:]*val[0][:,None]+angle_nodes[None,:]*val[1][:,None]).ravel(),
+                        ((1-angle_nodes)[None,:]*dval[0][:,None]+angle_nodes[None,:]*dval[1][:,None]).ravel())
             yield tri,local,p,dp,poly,bb,dbb,measure,linear

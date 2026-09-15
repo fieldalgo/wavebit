@@ -45,7 +45,7 @@ class PairCornerFields:
     vanish on collapsing triangles; optional junction fields remain finite
     tangential potentials there.
     """
-    def __init__(self, obj, exponents=(.6,.8), *, junctions=False, angular_order=0):
+    def __init__(self, obj, exponents=(.6,.8), *, junctions=False, angular_order=0, oscillatory_radial=False, angular_quadrature=None):
         if obj.degree not in (3, 4):
             raise ValueError('corner potentials require degree 3 or 4')
         exponents=tuple(exponents)
@@ -58,7 +58,25 @@ class PairCornerFields:
         if (isinstance(angular_order,(bool,np.bool_)) or not isinstance(angular_order,Integral)
                 or not 0 <= angular_order <= 4):
             raise ValueError('corner angular order must be an integer from 0 through 4')
-        self.root_order=20 if any(a not in (.6,.8) for a in exponents) else 5
+        if not isinstance(oscillatory_radial,(bool,np.bool_)):
+            raise ValueError('oscillatory_radial must be a boolean')
+        if oscillatory_radial and exponents != (.6,.8):
+            raise ValueError('oscillatory radial fields require exponents=(0.6, 0.8)')
+        if angular_quadrature is not None and (isinstance(angular_quadrature,(bool,np.bool_))
+                or not isinstance(angular_quadrature,Integral) or angular_quadrature<12):
+            raise ValueError('angular_quadrature must be None or an integer at least 12')
+        # Coordinate preparation has a fixed geometry-only quadrature. The
+        # requested angular order applies to subsequent physical integrals.
+        self.angular_quadrature=None
+        self.oscillatory_radial=bool(oscillatory_radial)
+        if self.oscillatory_radial:
+            from collections import OrderedDict
+            from threading import RLock
+            self._oscillatory_coordinate_cache=OrderedDict()
+            self._oscillatory_coordinate_lock=RLock()
+            self._oscillatory_coordinate_bytes=0
+        self.radial_nodes=exponents+((.95+.5j,.95-.5j) if self.oscillatory_radial else ())
+        self.root_order=20 if self.oscillatory_radial or any(a not in (.6,.8) for a in exponents) else 5
         self.angular_order=int(angular_order)
         self.exponents=exponents
         self.junctions=bool(junctions)
@@ -76,12 +94,12 @@ class PairCornerFields:
             for neighbor in range(10):
                 if neighbor==corner:continue
                 if np.any(active & np.any(self.hats[triangles,neighbor]>0,axis=1)):
-                    self.powers.extend((corner,neighbor,a) for a in exponents)
+                    self.powers.extend((corner,neighbor,a) for a in self.radial_nodes)
             for first in range(10):
                 for second in range(first+1,10):
                     if corner in (first,second):continue
                     if np.any(active & np.any(self.hats[triangles,first]>0,axis=1) & np.any(self.hats[triangles,second]>0,axis=1)):
-                        self.bubbles.extend((corner,first,second,a) for a in exponents)
+                        self.bubbles.extend((corner,first,second,a) for a in self.radial_nodes)
         self.angular=[(c,n,m,a,j) for c,n,m,a in self.bubbles
                       for j in range(1,self.angular_order+1)]
         if getattr(obj, '_symmetric_mesh', False):
@@ -96,8 +114,12 @@ class PairCornerFields:
         if getattr(obj, '_symmetric_mesh', False) and self.count:
             from .pair_corner_coordinates import prepare
             prepare(self)
+        self.angular_quadrature=None if angular_quadrature is None else int(angular_quadrature)
 
     def sample(self, tri, bary, inverse, dinverse, bary_tangent=None):
+        if self.oscillatory_radial and hasattr(self,'transforms'):
+            from .pair_oscillatory_fields import sample
+            return sample(self,tri,bary,inverse,dinverse,bary_tangent)
         result=self._sample(tri,bary,inverse,dinverse,bary_tangent)
         if hasattr(self,'interpolant'):
             from .pair_corner_coordinates import change_coordinates
@@ -106,6 +128,9 @@ class PairCornerFields:
 
     def gradients(self, tri, bary, inverse, dinverse, bary_tangent=None):
         """Return the identical field and variation without transforming unused values."""
+        if self.oscillatory_radial and hasattr(self,'transforms'):
+            from .pair_oscillatory_fields import sample
+            return sample(self,tri,bary,inverse,dinverse,bary_tangent,gradients_only=True)
         result=self._sample(tri,bary,inverse,dinverse,bary_tangent)[1:]
         if hasattr(self,'interpolant'):
             from .pair_corner_coordinates import change_gradients
@@ -195,6 +220,9 @@ class PairCornerFields:
 
     def quadrature(self, tri, order):
         t,w=leggauss(order);t=(t+1)/2;w=w/2
+        count=getattr(self,'angular_quadrature',None)
+        count=order if count is None else count
+        angle,aw=leggauss(count);angle=(angle+1)/2;aw=aw/2
         refs=np.eye(3)
         seam_hats=self.hats[tri[:3]][:,[5,8]]
         singular_edges=np.flatnonzero(np.sum(seam_hats==1,axis=0)==2)
@@ -205,11 +233,11 @@ class PairCornerFields:
             # Retain the small complement instead of subtracting from one.
             small=.5*t**self.root_order;measure=(self.root_order/2)*t**(self.root_order-1)
             for radial,complement in ((small,1-small),(1-small,small)):
-                bary=np.zeros((order,order,3))
+                bary=np.zeros((order,count,3))
                 bary[:,:,other]=radial[:,None]
-                bary[:,:,edge[0]]=complement[:,None]*(1-t)
-                bary[:,:,edge[1]]=complement[:,None]*t
-                yield bary.reshape(-1,3),(complement[:,None]*measure[:,None]*w[:,None]*w).ravel()
+                bary[:,:,edge[0]]=complement[:,None]*(1-angle)
+                bary[:,:,edge[1]]=complement[:,None]*angle
+                yield bary.reshape(-1,3),(complement[:,None]*measure[:,None]*w[:,None]*aw).ravel()
             return
         singular=np.flatnonzero(np.any(self.hats[tri[:3]][:,self.controls]==1,axis=1))
         if len(singular)==1:
@@ -222,6 +250,6 @@ class PairCornerFields:
                 j,k=(i+1)%3,(i+2)%3
                 subs.extend([np.array([refs[i],(refs[i]+refs[j])/2,center]),np.array([refs[i],center,(refs[i]+refs[k])/2])])
         radial=t**power;dr=power*t**(power-1)
-        uv=np.stack([np.broadcast_to(1-radial[:,None],(order,order)),radial[:,None]*(1-t),radial[:,None]*t],axis=-1).reshape(-1,3)
-        weight=(radial[:,None]*dr[:,None]*w[:,None]*w).ravel()
+        uv=np.stack([np.broadcast_to(1-radial[:,None],(order,count)),radial[:,None]*(1-angle),radial[:,None]*angle],axis=-1).reshape(-1,3)
+        weight=(radial[:,None]*dr[:,None]*w[:,None]*aw).ravel()
         for sub in subs:yield uv@sub,weight*abs(np.linalg.det(sub))

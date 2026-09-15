@@ -5,14 +5,17 @@ from .pair_corner_fields import PairCornerFields
 
 
 def augment(obj, settings, *, exponents=(.6,.8), quadrature=48, junctions=False,
-            angular_order=0,prepared_fields=None):
+            angular_order=0,prepared_fields=None,oscillatory_radial=False,angular_quadrature=None):
     original=obj._assemble(**settings)
     k,dk,q,dq,r,dr,qt,dqt,source,dsource,e,de,info=original
     fields=prepared_fields
     if fields is None:
-        fields=PairCornerFields(obj,exponents,junctions=junctions,angular_order=angular_order)
+        fields=PairCornerFields(obj,exponents,junctions=junctions,angular_order=angular_order,
+                                oscillatory_radial=oscillatory_radial,angular_quadrature=angular_quadrature)
     elif (fields.obj is not obj or fields.exponents!=tuple(exponents)
-          or fields.junctions!=junctions or fields.angular_order!=angular_order):
+          or fields.junctions!=junctions or fields.angular_order!=angular_order
+          or fields.oscillatory_radial!=oscillatory_radial
+          or fields.angular_quadrature!=angular_quadrature):
         raise ValueError('prepared corner fields must match their mesh and field options')
     nold,nz,N=info['nc'],info['nz'],info['size'];nc=nold+fields.count
     indices=np.r_[np.arange(nold),np.arange(nc,nc+nz)];extra=np.arange(nold,nc)

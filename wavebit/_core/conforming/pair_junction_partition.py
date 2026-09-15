@@ -91,6 +91,9 @@ def charts(obj,base,settings,chart,split):
 def samples(obj,base,settings,chart,order,split=True):
     power=base[-1]['corner_fields'].root_order
     t,w=leggauss(order);t=(t+1)/2;w=w/2
+    count=getattr(base[-1]['corner_fields'],'angular_quadrature',None)
+    count=order if count is None else count
+    angle_nodes,angle_weights=leggauss(count);angle_nodes=(angle_nodes+1)/2;angle_weights=angle_weights/2
     sf,dsf=scalar(chart[1]),scalar(base[-1]['ds'])
     for tri,local,p,dp,poly,B in charts(obj,base,settings,chart,split):
         inv=inverse3(B);transposed=list(zip(*inv))
@@ -139,26 +142,26 @@ def samples(obj,base,settings,chart,order,split=True):
                     pending.extend([(mid,hi,dmid,dhi,depth+1),(lo,mid,dlo,dmid,depth+1)])
                 else:segments.append((lo,hi,dlo,dhi))
             for left,right,dleft,dright in segments:
-                angle=(1-t)*float(left)+t*float(right)
-                dangle=(1-t)*float(dleft)+t*float(dright)
-                complement=(1-t)*float(1-left)+t*float(1-right)
+                angle=(1-angle_nodes)*float(left)+angle_nodes*float(right)
+                dangle=(1-angle_nodes)*float(dleft)+angle_nodes*float(dright)
+                complement=(1-angle_nodes)*float(1-left)+angle_nodes*float(1-right)
                 den=[];dden=[];radial=[];dradial=[]
                 for n,dn,c,dc in (low,high):
-                    d,dd=endpoint_linear(n,dn,left,dleft,right,dright,t)
+                    d,dd=endpoint_linear(n,dn,left,dleft,right,dright,angle_nodes)
                     den.append(d);dden.append(dd)
                     if c==0:
                         if dc!=0:raise ValueError('a zero radial boundary has a nonzero direction')
-                        r=np.zeros_like(t);dr=np.zeros_like(t)
+                        r=np.zeros_like(angle_nodes);dr=np.zeros_like(angle_nodes)
                     elif n[0]==n[1] and dn[0]==dn[1]:
                         # A radial reference edge has an exact angle-independent
                         # radius. Do not create a derivative from rounded ratios.
-                        r=np.full_like(t,float(c/n[0]))
-                        dr=np.full_like(t,float((dc*n[0]-c*dn[0])/n[0]**2))
+                        r=np.full_like(angle_nodes,float(c/n[0]))
+                        dr=np.full_like(angle_nodes,float((dc*n[0]-c*dn[0])/n[0]**2))
                     else:r=float(c)/d;dr=(float(dc)-r*dd)/d
                     radial.append(r);dradial.append(dr)
                 coefficients=tuple(high[2]*x-low[2]*y for x,y in zip(low[0],high[0]))
                 changes=tuple(high[3]*x+high[2]*dx-low[3]*y-low[2]*dy for x,dx,y,dy in zip(low[0],low[1],high[0],high[1]))
-                numerator,dnumerator=endpoint_linear(coefficients,changes,left,dleft,right,dright,t)
+                numerator,dnumerator=endpoint_linear(coefficients,changes,left,dleft,right,dright,angle_nodes)
                 denominator=den[0]*den[1];ddenominator=dden[0]*den[1]+den[0]*dden[1]
                 width=numerator/denominator;dwidth=(dnumerator-width*ddenominator)/denominator
                 if np.any(width<=0):raise ValueError('nonpositive radial interval')
@@ -182,21 +185,21 @@ def samples(obj,base,settings,chart,order,split=True):
                     factor=sf if normalized else F(1);dfactor=dsf if normalized else F(0)
                     co=tuple(span*c/factor for c in coefficients)
                     dco=tuple((dspan*c+span*dc)/factor-span*c*dfactor/factor**2 for c,dc in zip(coefficients,changes))
-                    num,dnum=endpoint_linear(co,dco,left,dleft,right,dright,t)
+                    num,dnum=endpoint_linear(co,dco,left,dleft,right,dright,angle_nodes)
                     pref=num/(denominator*S)
                     dpref=(dnum-pref*(ddenominator*S+denominator*DS))/(denominator*S)
                     jac=det(B)*(scalar(local[9])+sf*scalar(local[10]));djac=det(B)*dsf*scalar(local[10])
                     weighted=power*u**(2*power-1)*pref[:,None]
                     changed=power*(2*power-1)*u**(2*power-2)*du*pref[:,None]+power*u**(2*power-1)*dpref[:,None]
-                    return ((w[:,None]*w*weighted*float(jac)).ravel(),
-                            (w[:,None]*w*(changed*float(jac)+weighted*float(djac))).ravel())
+                    return ((angle_weights[:,None]*w*weighted*float(jac)).ravel(),
+                            (angle_weights[:,None]*w*(changed*float(jac)+weighted*float(djac))).ravel())
                 a,da=root_sum(u,roots[0][:,None],du,droots[0][:,None],power)
                 xi=t[None,:]*a/S[:,None]
                 dxi=t[None,:]*(da-xi/t[None,:]*DS[:,None])/S[:,None]
                 ac,_=root_sum(roots[1][:,None],u,droots[1][:,None],du,power)
                 one_minus_xi=(1-t)[None,:]*ac/S[:,None]
                 if low[2]==0:
-                    xi=np.broadcast_to(t**power,(order,order));dxi=np.zeros_like(xi)
+                    xi=np.broadcast_to(t**power,(count,order));dxi=np.zeros_like(xi)
                     one_minus_xi=1-xi
                 def linear(values,dvalues):
                     vals=[dot(row,values) for row in B];dvals=[dot(row,dvalues) for row in B]
@@ -210,9 +213,9 @@ def samples(obj,base,settings,chart,order,split=True):
                         constant=co[pivot]/n[pivot]
                         delta=(dco[pivot]-constant*dn[pivot])/n[pivot]
                         if all(co[j]==constant*n[j] and dco[j]==constant*dn[j]+delta*n[j] for j in range(2)):
-                            val=np.full_like(t,float(constant));change=np.full_like(t,float(delta))
+                            val=np.full_like(angle_nodes,float(constant));change=np.full_like(angle_nodes,float(delta))
                         else:
-                            num,dnum=endpoint_linear(co,dco,left,dleft,right,dright,t)
+                            num,dnum=endpoint_linear(co,dco,left,dleft,right,dright,angle_nodes)
                             val=num/d;change=(dnum-val*dd)/d
                         endpoints.append(val);directions.append(change)
                     value=one_minus_xi*endpoints[0][:,None]+xi*endpoints[1][:,None]

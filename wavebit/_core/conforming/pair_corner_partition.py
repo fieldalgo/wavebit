@@ -119,6 +119,9 @@ def root_sum(a,b,da,db,power=5):
 
 def samples(obj,base,settings,chart,order,split=True):
     t,w=leggauss(order);t=(t+1)/2;w=w/2
+    count=getattr(base[-1]['corner_fields'],'angular_quadrature',None)
+    count=order if count is None else count
+    angle_nodes,angle_weights=leggauss(count);angle_nodes=(angle_nodes+1)/2;angle_weights=angle_weights/2
     sf,dsf=scalar(chart[1]),scalar(base[-1]['ds'])
     for tri,local,p,dp,poly,B in charts(obj,base,settings,chart,split):
         inv=inverse3(B);transposed=list(zip(*inv))
@@ -167,21 +170,21 @@ def samples(obj,base,settings,chart,order,split=True):
                     pending.extend([(mid,hi,dmid,dhi,depth+1),(lo,mid,dlo,dmid,depth+1)])
                 else:segments.append((lo,hi,dlo,dhi))
             for left,right,dleft,dright in segments:
-                angle=(1-t)*float(left)+t*float(right)
-                dangle=(1-t)*float(dleft)+t*float(dright)
-                complement=(1-t)*float(1-left)+t*float(1-right)
+                angle=(1-angle_nodes)*float(left)+angle_nodes*float(right)
+                dangle=(1-angle_nodes)*float(dleft)+angle_nodes*float(dright)
+                complement=(1-angle_nodes)*float(1-left)+angle_nodes*float(1-right)
                 den=[];dden=[];radial=[];dradial=[]
                 for n,dn,c,dc in (low,high):
-                    d,dd=endpoint_linear(n,dn,left,dleft,right,dright,t)
+                    d,dd=endpoint_linear(n,dn,left,dleft,right,dright,angle_nodes)
                     den.append(d);dden.append(dd)
                     if c==0:
                         if dc!=0:raise ValueError('a zero radial boundary has a nonzero direction')
-                        r=np.zeros_like(t);dr=np.zeros_like(t)
+                        r=np.zeros_like(angle_nodes);dr=np.zeros_like(angle_nodes)
                     else:r=float(c)/d;dr=(float(dc)-r*dd)/d
                     radial.append(r);dradial.append(dr)
                 coefficients=tuple(high[2]*x-low[2]*y for x,y in zip(low[0],high[0]))
                 changes=tuple(high[3]*x+high[2]*dx-low[3]*y-low[2]*dy for x,dx,y,dy in zip(low[0],low[1],high[0],high[1]))
-                numerator,dnumerator=endpoint_linear(coefficients,changes,left,dleft,right,dright,t)
+                numerator,dnumerator=endpoint_linear(coefficients,changes,left,dleft,right,dright,angle_nodes)
                 denominator=den[0]*den[1];ddenominator=dden[0]*den[1]+den[0]*dden[1]
                 width=numerator/denominator;dwidth=(dnumerator-width*ddenominator)/denominator
                 if np.any(width<=0):raise ValueError('nonpositive radial interval')
@@ -202,14 +205,14 @@ def samples(obj,base,settings,chart,order,split=True):
                     factor=sf if normalized else F(1);dfactor=dsf if normalized else F(0)
                     co=tuple(span*c/factor for c in coefficients)
                     dco=tuple((dspan*c+span*dc)/factor-span*c*dfactor/factor**2 for c,dc in zip(coefficients,changes))
-                    num,dnum=endpoint_linear(co,dco,left,dleft,right,dright,t)
+                    num,dnum=endpoint_linear(co,dco,left,dleft,right,dright,angle_nodes)
                     pref=num/(denominator*S)
                     dpref=(dnum-pref*(ddenominator*S+denominator*DS))/(denominator*S)
                     jac=det(B)*(scalar(local[9])+sf*scalar(local[10]));djac=det(B)*dsf*scalar(local[10])
                     weighted=5*u**9*pref[:,None]
                     changed=45*u**8*du*pref[:,None]+5*u**9*dpref[:,None]
-                    return ((w[:,None]*w*weighted*float(jac)).ravel(),
-                            (w[:,None]*w*(changed*float(jac)+weighted*float(djac))).ravel())
+                    return ((angle_weights[:,None]*w*weighted*float(jac)).ravel(),
+                            (angle_weights[:,None]*w*(changed*float(jac)+weighted*float(djac))).ravel())
                 a,da=root_sum(u,roots[0][:,None],du,droots[0][:,None])
                 xi=t[None,:]*a/S[:,None]
                 dxi=t[None,:]*(da-xi/t[None,:]*DS[:,None])/S[:,None]
@@ -221,7 +224,7 @@ def samples(obj,base,settings,chart,order,split=True):
                     for n,dn,c,dc,d,dd in zip((low[0],high[0]),(low[1],high[1]),(low[2],high[2]),(low[3],high[3]),den,dden):
                         co=tuple(vals[0]*nj+c*(vj-vals[0]) for nj,vj in zip(n,vals[1:]))
                         dco=tuple(dvals[0]*nj+vals[0]*dnj+dc*(vj-vals[0])+c*(dvj-dvals[0]) for nj,dnj,vj,dvj in zip(n,dn,vals[1:],dvals[1:]))
-                        num,dnum=endpoint_linear(co,dco,left,dleft,right,dright,t)
+                        num,dnum=endpoint_linear(co,dco,left,dleft,right,dright,angle_nodes)
                         val=num/d;change=(dnum-val*dd)/d
                         endpoints.append(val);directions.append(change)
                     value=one_minus_xi*endpoints[0][:,None]+xi*endpoints[1][:,None]

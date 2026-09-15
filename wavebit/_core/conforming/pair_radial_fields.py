@@ -52,7 +52,12 @@ def sample(self,tri,bary,inverse,dinverse,bary_tangent=None):
             # Normalize each successive leading Taylor coefficient to one.
             # This real scaling retains every radial direction.
             scale=(-1.)**(len(nodes)-1)*factorial(r+len(nodes)-1)/factorial(r)
-            cache[key]=tuple(scale*a for a in normalized_power_remainder(s,h,k,r,nodes))
+            if self.oscillatory_radial:
+                from .pair_oscillatory_radial import normalized_oscillatory_remainder
+                remainder=normalized_oscillatory_remainder(s,h,k,r,len(nodes),self.obj.degree)
+            else:
+                remainder=normalized_power_remainder(s,h,k,r,nodes)
+            cache[key]=tuple(scale*a for a in remainder)
         A,As,Ass=cache[key]
         b=A/s;db=(As/s-A/s**2)*ds
         a=A+h*(k*b-As);da=As*ds+dh*(k*b-As)+h*(k*db-Ass*ds)
