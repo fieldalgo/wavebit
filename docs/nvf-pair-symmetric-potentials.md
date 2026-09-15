@@ -164,6 +164,12 @@ their directions remain live inputs to every weak integral. A supplied field
 space must match its owning mesh and all field options. Standalone assembly
 without a prepared space constructs one as before.
 
+Coordinate transforms are applied only to corner groups whose defining hat
+is present on the triangle. An absent hat and its nodal interpolant vanish
+identically there, including their spatial and moving gradients. Every
+column remains in the complete returned space; no magnitude or numerical
+rank determines this exact support check.
+
 The retained storage is one configured geometry space per cell, rather than a
 cache indexed by physical settings. Its gradient-coefficient cache retains the
 same 128-triangle bound. Tests prevent re-preparation during a live contact /

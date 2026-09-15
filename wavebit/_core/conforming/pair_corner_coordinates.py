@@ -68,8 +68,9 @@ def change_coordinates(self,tri,bary,inverse,dinverse,bary_tangent,result):
     polynomial=values_and_tangent(bary,db,self.obj.degree)[0]
     v=(v-polynomial@local)*self.column_scale
     if hasattr(self,'transforms'):
-        for indices,transform in zip(self.groups,self.transforms):
-            if len(indices):v[...,indices]=v[...,indices]@transform
+        present=np.any(self.hats[tri[:3]]!=0,axis=0)
+        for corner,indices,transform in zip(self.controls,self.groups,self.transforms):
+            if present[corner] and len(indices):v[...,indices]=v[...,indices]@transform
     return v,gradient,change
 
 
@@ -95,7 +96,8 @@ def change_gradients(self,tri,bary,inverse,dinverse,bary_tangent,result):
     dg-=np.einsum('ab,qai->qbi',dinverse,gradient)+np.einsum('ab,qai->qbi',inverse,change)
     result=g*self.column_scale,dg*self.column_scale
     if hasattr(self,'transforms'):
+        present=np.any(self.hats[tri[:3]]!=0,axis=0)
         for array in result:
-            for indices,transform in zip(self.groups,self.transforms):
-                if len(indices):array[...,indices]=array[...,indices]@transform
+            for corner,indices,transform in zip(self.controls,self.groups,self.transforms):
+                if present[corner] and len(indices):array[...,indices]=array[...,indices]@transform
     return result
