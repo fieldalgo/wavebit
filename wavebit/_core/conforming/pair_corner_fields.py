@@ -83,14 +83,35 @@ class PairCornerFields:
                         self.bubbles.extend((corner,first,second,a) for a in exponents)
         self.angular=[(c,n,m,a,j) for c,n,m,a in self.bubbles
                       for j in range(1,self.angular_order+1)]
+        if getattr(obj, '_symmetric_mesh', False):
+            from .pair_corner_prefactors import remove_duplicates
+            remove_duplicates(self)
         self.count=len(self.powers)+len(self.bubbles)+len(self.angular)
         self._definitions=[(c,(n,),a-1,self.obj.degree-2,0) for c,n,a in self.powers]
         self._definitions += [(c,(n,m),a-2,self.obj.degree-3,0) for c,n,m,a in self.bubbles]
         self._definitions += [(c,(n,m),a-2-j,self.obj.degree-3-j,j) for c,n,m,a,j in self.angular]
         self._support_cache={}
         if self.root_order==20:prepare_radial(self)
+        if getattr(obj, '_symmetric_mesh', False) and self.root_order==20 and self.count:
+            from .pair_corner_coordinates import prepare
+            prepare(self)
 
     def sample(self, tri, bary, inverse, dinverse, bary_tangent=None):
+        result=self._sample(tri,bary,inverse,dinverse,bary_tangent)
+        if hasattr(self,'interpolant'):
+            from .pair_corner_coordinates import change_coordinates
+            return change_coordinates(self,tri,bary,inverse,dinverse,bary_tangent,result)
+        return result
+
+    def gradients(self, tri, bary, inverse, dinverse, bary_tangent=None):
+        """Return the identical field and variation without transforming unused values."""
+        result=self._sample(tri,bary,inverse,dinverse,bary_tangent)[1:]
+        if hasattr(self,'interpolant'):
+            from .pair_corner_coordinates import change_gradients
+            return change_gradients(self,tri,bary,inverse,dinverse,bary_tangent,result)
+        return result
+
+    def _sample(self, tri, bary, inverse, dinverse, bary_tangent=None):
         if self.root_order==20:
             return sample_radial(self,tri,bary,inverse,dinverse,bary_tangent)
         hat_values=self.hats[tri[:3]];hv=bary@hat_values

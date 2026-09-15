@@ -12,9 +12,10 @@ from .cartesian_pair_opening import freeze_topology, topology
 from .triangle_polynomials import multi_indices, gradient_coefficients, product_integrals, phase_average, values_and_tangent
 
 
-def _polynomial_topology(plan, degree):
+def _polynomial_topology(plan, degree, *, coarse=None):
     """Integer Bernstein control nets, periodic identity and exact collapsed quotient."""
-    coarse = topology(plan)
+    if coarse is None:
+        coarse = topology(plan)
     indices = np.asarray(multi_indices(degree))
     denominator = degree*coarse['weight_denominator']
     rows = list(degree*coarse['open_numerators'])

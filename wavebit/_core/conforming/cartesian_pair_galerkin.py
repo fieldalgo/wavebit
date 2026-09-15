@@ -153,8 +153,12 @@ class CartesianPairGalerkinGapCell:
         """Values and variations of the linear gradient's barycentric basis."""
         return barycentric, tangent
 
+    @staticmethod
+    def _normalization_length(basis):
+        return np.sqrt(np.linalg.det(basis))
+
     def _chart_geometry(self, gap, geometry):
-        length = np.sqrt(np.linalg.det(geometry['basis']))
+        length = self._normalization_length(geometry['basis'])
         normalized = {k: geometry[k]/length for k in ('basis', 'widths', 'height', 'offset')}
         s = gap/length
         _physical_geometry(gap=s, **normalized)

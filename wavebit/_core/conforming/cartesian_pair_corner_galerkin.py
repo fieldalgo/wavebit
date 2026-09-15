@@ -3,6 +3,7 @@ from numbers import Integral
 import numpy as np
 from .cartesian_pair_opening import real_array
 from .cartesian_pair_polynomial_galerkin import CartesianPairPolynomialGalerkinGapCell
+from .pair_symmetric_mesh import SymmetricPairPolynomialCell
 from .cartesian_pair_seam_galerkin import _trace_change, _free_fourier_energy, _check_response
 from .pair_corner_fields import PairCornerFields
 from .pair_corner_assembly import augment
@@ -32,14 +33,25 @@ class CartesianPairCornerGalerkinGapCell:
     is the original polynomial/continuous-trace space. All original physical
     guards apply. Choosing a field space or quadrature does not establish
     mesh/Fourier/optical convergence or change ordinary NVF routing.
+
+    mesh='symmetric' selects a reflection-invariant triangle trial space on
+    shift-zero Cartesian plans. Exact polynomial identities remove redundant
+    enrichment coordinates while retaining their complete potential span.
+    The default 'original' preserves the established mesh and field sampler.
     """
 
     def __init__(self, plan, order=1, *, degree=3, quadrature=48,
-                 exponents=(.6, .8), junctions=False, angular_order=0, coercivity_angle=0.):
+                 exponents=(.6, .8), junctions=False, angular_order=0, coercivity_angle=0.,
+                 mesh='original'):
         if (isinstance(degree, (bool, np.bool_)) or not isinstance(degree, Integral)
                 or degree not in (3, 4)):
             raise ValueError('corner pair polynomial degree must be 3 or 4')
-        self._base = CartesianPairPolynomialGalerkinGapCell(
+        if not isinstance(mesh, str) or mesh not in ('original', 'symmetric'):
+            raise ValueError("corner mesh must be 'original' or 'symmetric'")
+        self.mesh=mesh
+        base_type = (SymmetricPairPolynomialCell if mesh=='symmetric'
+                     else CartesianPairPolynomialGalerkinGapCell)
+        self._base = base_type(
             plan, order, degree=degree, coercivity_angle=coercivity_angle)
         self.order = self._base.order
         if (isinstance(quadrature, (bool, np.bool_)) or not isinstance(quadrature, Integral)
@@ -95,4 +107,5 @@ class CartesianPairCornerGalerkinGapCell:
                         corner_exponents=self.exponents, corner_controls=self.corner_controls,
                         junctions=self.junctions, angular_order=self.angular_order,
                         radial_root_order=self.root_order)
+        metadata['mesh']=self.mesh
         return value, tangent, metadata

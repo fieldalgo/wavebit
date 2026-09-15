@@ -38,7 +38,7 @@ def edge_rows(obj,settings,base,chart,quadrature):
                 bb=np.zeros((quadrature,3));bb[:,ia]=bl;bb[:,ib]=br
                 poly=obj._gradient_basis(bb,np.zeros_like(bb))[0]
                 gc=_contract('qv,vai->qai',poly,cc)/d0
-                _,added,_=fields.sample(tri,bb,inv,np.zeros_like(inv))
+                added,_=fields.gradients(tri,bb,inv,np.zeros_like(inv))
                 gc=np.concatenate([gc,added],axis=2);indices=np.r_[ci,np.arange(nold,nc)]
                 left_outer=np.any(fields.hats[tri[ia],[4,6,7,9]]==1)
                 right_outer=np.any(fields.hats[tri[ib],[4,6,7,9]]==1)
@@ -156,6 +156,9 @@ def solve(obj,settings,quadrature=48,exponents=(.6,.8),junctions=False,angular_o
     H=A+B@uc;DH=DA+dB@uc+B@duc+ds*BZ@uz
     U=np.vstack([transform_c@uc,uz]);dUC=transform_c@duc
     x=np.eye(2*N)-qc@U[:nc];dx=-dqc@U[:nc]-qc@dUC-ds*qb@uz
+    if getattr(obj,'_symmetric_mesh',False) and info['corner_fields'].root_order==20:
+        from .pair_contact_refinement import refine
+        dUC,dx,DH=refine(base,C,Qbar,Rbar,transform_c,mc,U,dUC,x,dx,H,DH)
     def energy(field,field_change,potential):
         value=np.zeros_like(H);delta=value.copy();extra=potential[nc+nz:]
         for row,local,weight,phi,dphi,added in records():

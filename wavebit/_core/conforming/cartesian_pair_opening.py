@@ -93,6 +93,11 @@ def _opening_topology(shift, refinement):
     ow, ot, om, op = _refined_topology(False, shift, refinement)
     cw, ct, cm, cp = _refined_topology(True, shift, refinement)
     denominator = 2**refinement
+    return _collapse_topology(ow, ot, om, op, cw, ct, cm, cp, denominator)
+
+
+def _collapse_topology(ow, ot, om, op, cw, ct, cm, cp, denominator):
+    """Certify the same exact quotient for explicit dyadic pair meshes."""
     on, cn = ow * denominator, cw * denominator
     if not np.array_equal(on, np.round(on)) or not np.array_equal(cn, np.round(cn)):
         raise ValueError("topology weights are not exactly dyadic at this refinement")

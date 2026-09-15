@@ -45,7 +45,7 @@ def quadrature(obj,base,settings,order,transform,split=True,normalized=False,wei
             return g,dg
         gc,dgc=gradient(c,c1);gz,dgz=gradient(z,z1)
         gn,dgn=gradient(normal.swapaxes(-1,-2),n1.swapaxes(-1,-2))
-        _,added,dadded=fields.sample(tri,bb,inverse,dinverse,dbb)
+        added,dadded=fields.gradients(tri,bb,inverse,dinverse,dbb)
         ci_all=np.r_[ci,np.arange(nold,nc)]
         gc_all=np.concatenate([gc,added],axis=2);dgc_all=np.concatenate([dgc,dadded],axis=2)
         if side:

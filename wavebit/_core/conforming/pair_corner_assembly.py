@@ -35,7 +35,7 @@ def augment(obj, settings, *, exponents=(.6,.8), quadrature=48, junctions=False,
         else:
             inv=np.linalg.inv(jac);dinv=-inv@djac@inv
         for bary,weight in fields.quadrature(tri,quadrature):
-            _,g,dg=fields.sample(tri,bary,inv,dinv)
+            g,dg=fields.gradients(tri,bary,inv,dinv)
             poly=obj._gradient_basis(bary,np.zeros_like(bary))[0]
             if thin:
                 gc=_contract('qv,vai->qai',poly,c1)/d1;dgc=np.zeros_like(gc)
@@ -88,13 +88,13 @@ def samples(obj,settings,base,quadrature):
                 dsgz=ds*_contract('qv,vai->qai',poly,z1)/d1
                 j1=np.column_stack([velocity[tri[1]]-velocity[tri[0]],velocity[tri[2]]-velocity[tri[0]]])
                 inv=np.array([[j1[1,1],-j1[0,1]],[-j1[1,0],j1[0,0]]])/d1
-                _,g,dg=fields.sample(tri,bary,inv,np.zeros_like(inv))
+                g,dg=fields.gradients(tri,bary,inv,np.zeros_like(inv))
             else:
                 gc=_contract('qv,vai->qai',poly,c)/det
                 dgc=ds*_contract('qv,vai->qai',poly,c1)/det-gc*ddet/det
                 sgz=s*_contract('qv,vai->qai',poly,z)/det
                 dsgz=(ds*_contract('qv,vai->qai',poly,z)+s*ds*_contract('qv,vai->qai',poly,z1))/det-sgz*ddet/det
-                _,g,dg=fields.sample(tri,bary,inv,dinv)
+                g,dg=fields.gradients(tri,bary,inv,dinv)
             common=np.concatenate([gc,g],axis=2);dcommon=np.concatenate([dgc,dg],axis=2)
             phase=np.exp(-1j*(bary@p)@wave.T);dphase=-1j*(bary@dp)@wave.T*phase
             w=weight*det;dw=weight*ddet;empty=np.zeros((len(w),2,0))

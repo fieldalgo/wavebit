@@ -83,6 +83,7 @@ subtrees:
       - file: nvf-pair-corner-potentials
       - file: nvf-pair-junction-potentials
       - file: nvf-pair-radial-potentials
+      - file: nvf-pair-symmetric-potentials
       - file: nvf-polynomial-galerkin
       - file: nvf-affine-convergence
       - file: nvf-contact-followup

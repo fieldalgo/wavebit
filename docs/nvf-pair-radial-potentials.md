@@ -5,6 +5,11 @@ to `0.6` and `0.8`. This increases the radial trial space while keeping its
 coordinates real and independent of material values. It does not establish
 optical convergence or change ordinary NVF routing.
 
+An explicit [symmetric mesh](nvf-pair-symmetric-potentials.md) additionally
+preserves the physical pair's reflection identities. Expanded radial fields
+on that mesh use real coordinates formed before physical assembly to retain
+accuracy in the original weak equations.
+
 The original exponent subsets retain their original fifth-root evaluation.
 An expanded subset uses twentieth-root integration and requires quadrature
 at least 48. The working integration order is also at least `20*max(p,4)`. The cubic endpoint taper multiplied by the
