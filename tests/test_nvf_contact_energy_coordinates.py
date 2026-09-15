@@ -1,0 +1,46 @@
+"""The physical contact verifier must reject independent response corruption."""
+import numpy as np
+import pytest
+from wavebit._core.conforming import pair_contact_precision as precision
+from wavebit._core.conforming import pair_corner_contact as contact
+from wavebit._core.conforming.cartesian_pair_opening import CartesianPairOpeningPlan
+from wavebit._core.conforming.cartesian_pair_transmission_galerkin import CartesianPairTransmissionGalerkinGapCell
+
+
+@pytest.mark.parametrize('target,metric',(
+    ('value','energy_residual'),
+    ('tangent','energy_derivative_residual'),
+    ('potential','energy_residual'),
+))
+def test_complete_pointwise_contact_energy_rejects_corruption(monkeypatch,target,metric):
+    response=precision.response
+    check=contact._check_response
+    observed=[]
+    def corrupt(*args,**kwargs):
+        result=list(response(*args,**kwargs))
+        if target=='potential':
+            # Alter only the physical verifier's potential; its candidate
+            # response and original-equation coefficients remain untouched.
+            field,change,potential=kwargs['assembled']['energy_coordinates']
+            potential=tuple(v.copy() for v in potential)
+            potential[0][0,0]+=.05
+            kwargs['assembled']['energy_coordinates']=(field,change,potential)
+        else:
+            index=4 if target=='value' else 5
+            result[index]=result[index]+.01*np.eye(len(result[index]))
+        return tuple(result)
+    def record(value,tangent,metadata):
+        observed.append(metadata)
+        return check(value,tangent,metadata)
+    monkeypatch.setattr(precision,'response',corrupt)
+    monkeypatch.setattr(contact,'_check_response',record)
+    cell=CartesianPairTransmissionGalerkinGapCell(CartesianPairOpeningPlan(0),0,
+        reference=(2.,2.,2.),degree=5,quadrature=48,angular_quadrature=12)
+    with pytest.raises(ValueError,match='original/energy/physical guards'):
+        cell.closure(gap=0.,basis=np.eye(2),widths=(.3,.3),height=.4,
+                     offset=(0.,0.),epsilon=(4.,9.),background=1.)
+    assert observed[0][metric]>1e-10
+    if target=='potential':
+        assert observed[0]['weak_residual']<1e-10
+        assert observed[0]['retained_residual']<1e-10
+        assert observed[0]['flux_residual']<1e-10

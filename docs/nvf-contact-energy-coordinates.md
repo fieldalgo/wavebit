@@ -45,6 +45,21 @@ including collapsing triangles and both moving boundary terms. All original
 pointwise energy expressions and their tolerances remain in force. Products
 and accumulated integrals retain high/low parts until the final energy arrays.
 
+The retained Fourier field uses the same scalar phases in two Cartesian
+blocks. Applying those blocks separately avoids multiplying their structural
+zeros and avoids allocating a lifted phase matrix. It keeps every Fourier
+coefficient and every high/low product. Independent 100-digit controls check
+both components with cancelling terms for 1, 9 and 81 modes. A paired,
+alternating seven-repeat timing of 512 quadrature points, 81 modes and 162
+output columns measured a 1.45-fold reduction in this product's median time.
+This is a product measurement, not an end-to-end solver timing.
+
+Three corruption controls independently alter the candidate tensor, its
+derivative, or only the physical verifier's potential coefficients. All three
+are rejected by the original energy guard. In the last case the original
+weak, retained and flux residuals still pass, so those equations alone cannot
+mask a broken handoff to the physical reconstruction.
+
 ## One opening measure for every collapsed-field term
 
 On a collapsed triangle, the normalized area coefficient is `d1` and the

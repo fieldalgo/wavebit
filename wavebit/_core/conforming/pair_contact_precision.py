@@ -25,6 +25,25 @@ def mat(a,b):
     # Retain every term, including low @ low, in the normalized high/low sum.
     return _sum_pairs([_product(a[0],b[0]),
                        (a[0]@b[1]+a[1]@b[0],a[1]@b[1])])
+def retained_field(phase,coefficients):
+    """Apply all Fourier coefficients using the exact Cartesian block support.
+
+    Scalar phases have one column per Fourier mode. The first and second
+    coefficient blocks supply x and y respectively; output rows interleave
+    the two components. Only structural zeros of the lifted phase are absent.
+    """
+    rows,n=phase[0].shape
+    if phase[1].shape!=(rows,n) or any(v.shape!=coefficients[0].shape for v in coefficients) or coefficients[0].shape[0]!=2*n:
+        raise ValueError('retained fields require two complete Fourier coefficient blocks')
+    if not all(np.all(np.isfinite(v)) for v in (*phase,*coefficients)):
+        raise ArithmeticError('retained fields require finite coefficients')
+    out=pair(np.zeros((2*rows,coefficients[0].shape[1]),complex))
+    if not np.any(phase[0]) and not np.any(phase[1]):return out
+    for component in range(2):
+        block=slice(component*n,(component+1)*n)
+        value=mat(phase,tuple(v[block] for v in coefficients))
+        for target,part in zip(out,value):target[component::2]=part
+    return out
 def cp(a,b):
     if not any(np.iscomplexobj(v) for v in (*a,*b)):
         return (D(*a)*D(*b)).pair

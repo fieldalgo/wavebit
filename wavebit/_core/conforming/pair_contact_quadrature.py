@@ -100,9 +100,14 @@ with localcontext() as ctx:
     pi=16*atan(Decimal(1)/5)-4*atan(Decimal(1)/239)
     PI=convert([pi])[0]
 
-def phases(bary,p,dp,modes,period):
+def phase_values(bary,p,dp,modes,period):
+    """Scalar Fourier phases shared by both Cartesian field components."""
     b=stack(coordinates(bary),1);argument=2*PI*((b@D(p))/D(period)@D(modes.T));delta=2*PI*((b@D(dp))/D(period)@D(modes.T))
     phase=scalar.exp_pair((1j*argument.hi,1j*argument.lo));dphase=scalar.cp((1j*delta.hi,1j*delta.lo),phase)
+    return phase,dphase
+
+def phases(bary,p,dp,modes,period):
+    phase,dphase=phase_values(bary,p,dp,modes,period)
     n=len(modes);rows=len(bary)
     def lift(pair):
         out=[np.zeros((rows,2,2*n),complex) for _ in range(2)]

@@ -5,9 +5,9 @@ forming pointwise energy and its stationary physical variation. Its inputs
 contain no candidate tensor, tensor derivative or solved common variation.
 """
 import numpy as np
-from .pair_contact_precision import pair,mat,add,cp
+from .pair_contact_precision import pair,mat,add,cp,retained_field
 from .pair_corner_precision import D
-from .pair_contact_quadrature import quadrature,phases,opening_measure
+from .pair_contact_quadrature import quadrature,phase_values,opening_measure
 from .pair_corner_common_precision import CommonCoordinates
 
 def verifier(obj,settings,base,transform,chart,order,records,edge_rows):
@@ -35,18 +35,18 @@ def verifier(obj,settings,base,transform,chart,order,records,edge_rows):
    for bary,weight in quadrature(fields,tri,order):
     row,_,_,_,_,added=next(rows);_,ci,zi,w,dw,ep,dep,_,_,gc,dgc,gz,*_=row
     for first in range(0,len(bary),512):
-     sl=slice(first,first+512);sample=common.sample(tri,bary[sl],inv,dinv);ph,dph=phases(bary[sl],p,dp,modes,chart[4])
-     e=add(mat(ph,field_pair),combined(sample,0));trace=add(linear(gz[sl],tuple(v[nc+zi] for v in coefficients)),linear(added[sl],extra))
+     sl=slice(first,first+512);sample=common.sample(tri,bary[sl],inv,dinv);ph,dph=phase_values(bary[sl],p,dp,modes,chart[4])
+     e=add(retained_field(ph,field_pair),combined(sample,0));trace=add(linear(gz[sl],tuple(v[nc+zi] for v in coefficients)),linear(added[sl],extra))
      if local[11]:
       e=add(e,trace)
       delta=add(delta,cp(pair(ds),cp(pair(ep),integral(e,e,weight.exact[sl]*local[10]))))
      else:
-      de=add(mat(dph,field_pair),mat(ph,change_pair),combined(sample,2),cp(pair(ds),trace))
+      de=add(retained_field(dph,field_pair),retained_field(ph,change_pair),combined(sample,2),cp(pair(ds),trace))
       ww=weight.exact[sl]*local[9];dww=weight.exact[sl]*opening_measure(ds,local)
       value=add(value,cp(pair(ep),integral(e,e,ww,conjugate=True)))
       delta=add(delta,cp(pair(dep),integral(e,e,ww)),cp(pair(ep),integral(e,e,dww)),cp(pair(ep),integral(de,e,ww)),cp(pair(ep),integral(e,de,ww)))
   for ci,ep,p,gc,weight,edge,tri,bary,inverse in edge_rows(obj,settings,base,chart,order,coordinates=True):
-   sample=common.sample(tri,bary,inverse,np.zeros_like(inverse));ph,_=phases(bary,zero[tri[:3]],np.zeros((3,2)),modes,chart[4]);e=add(mat(ph,field_pair),combined(sample,0));ey=tuple(v.reshape(-1,2,size)[:,1] for v in e)
+   sample=common.sample(tri,bary,inverse,np.zeros_like(inverse));ph,_=phase_values(bary,zero[tri[:3]],np.zeros((3,2)),modes,chart[4]);e=add(retained_field(ph,field_pair),combined(sample,0));ey=tuple(v.reshape(-1,2,size)[:,1] for v in e)
    j=mat(mat(pair(chart[8]._basis(np.array([edge]),chart[9])[0]),pair(transform[2])),extra);jump=tuple(np.broadcast_to(v,(len(weight),size)) for v in j)
    delta=add(delta,cp(pair(ds),cp(pair(ep),integral(ey,jump,D(weight),components=1))),cp(pair(ds),cp(pair(ep),integral(jump,ey,D(weight),components=1))))
   return value[0]+value[1],delta[0]+delta[1]
