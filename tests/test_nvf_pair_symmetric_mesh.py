@@ -253,6 +253,32 @@ def test_angular_extension_contact_preserves_material_directions_and_units():
         else:np.testing.assert_allclose(value,reference,atol=3e-10,rtol=0)
 
 
+def test_prepared_fields_keep_gap_materials_units_and_directions_live(monkeypatch):
+    import wavebit._core.conforming.pair_corner_assembly as assembly
+    cell=_cell();reference={}
+    for gap in (0.,.003):
+        value,tangent,_=cell.closure(**_settings(gap,1.))
+        reference[gap]=np.asarray(value),np.asarray(tangent)
+    # A material/geometry sweep must use its configured coordinates without
+    # another reference QR or an ever-growing cache of physical settings.
+    def forbidden(*args,**kwargs):
+        raise AssertionError('a configured cell must reuse its prepared corner fields')
+    monkeypatch.setattr(assembly,'PairCornerFields',forbidden)
+    factor=1+.02j;direction=.3+.2j
+    slot_scale=np.array([factor,factor,1/factor,factor,factor])[:,None,None,None]
+    sign=np.array([1.,1.,-1.,1.,1.])[:,None,None,None]
+    for gap in (.003,0.):
+        settings=_settings(700*gap,700.)
+        settings['epsilon']=factor*np.asarray(settings['epsilon'])
+        settings.update(background=factor,gap_tangent=700.,
+                        epsilon_tangent=direction*settings['epsilon'],
+                        background_tangent=direction*factor)
+        value,tangent,_=cell.closure(**settings)
+        original,change=reference[gap]
+        np.testing.assert_allclose(value,slot_scale*original,atol=3e-10,rtol=0)
+        np.testing.assert_allclose(tangent,slot_scale*(change+direction*sign*original),atol=3e-9,rtol=0)
+
+
 def test_expanded_contact_preserves_physical_units_and_complex_material_directions():
     # Multiplying every passive material and its background by the same
     # complex scalar multiplies the transverse tensor by that scalar and

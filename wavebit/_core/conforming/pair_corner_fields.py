@@ -60,6 +60,7 @@ class PairCornerFields:
             raise ValueError('corner angular order must be an integer from 0 through 4')
         self.root_order=20 if any(a not in (.6,.8) for a in exponents) else 5
         self.angular_order=int(angular_order)
+        self.exponents=exponents
         self.junctions=bool(junctions)
         self.controls=(4,5,6,7,8,9) if self.junctions else (4,6,7,9)
         self.obj=obj

@@ -68,6 +68,7 @@ class CartesianPairCornerGalerkinGapCell:
         self.angular_order=fields.angular_order
         self.junctions=fields.junctions
         self.corner_controls=fields.controls
+        self._fields=fields
         self.quadrature = int(quadrature)
 
     def closure(self, *, gap, basis, widths, height, epsilon, background=1.,
@@ -82,9 +83,11 @@ class CartesianPairCornerGalerkinGapCell:
         if gap == 0:
             order = max(48, order)
             value, tangent, metadata = solve_contact(
-                self._base, settings, quadrature=order, exponents=self.exponents, junctions=self.junctions, angular_order=self.angular_order)
+                self._base, settings, quadrature=order, exponents=self.exponents, junctions=self.junctions,
+                angular_order=self.angular_order,prepared_fields=self._fields)
         else:
-            base = augment(self._base, settings, exponents=self.exponents, quadrature=order, junctions=self.junctions, angular_order=self.angular_order)
+            base = augment(self._base, settings, exponents=self.exponents, quadrature=order, junctions=self.junctions,
+                           angular_order=self.angular_order,prepared_fields=self._fields)
             sample = junction_quadrature if self.junctions or self.root_order==20 else sample_quadrature
             transform = _trace_change(self._base, settings, order)
             quadrature = lambda split=True: sample(

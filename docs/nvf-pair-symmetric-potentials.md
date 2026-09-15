@@ -156,6 +156,20 @@ available. Across all 60 unrefined triangles, values, gradients and moving
 gradients are bitwise identical to the former full-value arithmetic, including
 repeated calls with changing integration points and geometry tangents.
 
+Each configured corner cell keeps the one field space prepared during its
+construction. Both contact and positive assembly reuse those coordinates,
+including the shared interpolation and reference QR. Preparation depends on
+the static mesh and field choices; physical gaps, length units, materials and
+their directions remain live inputs to every weak integral. A supplied field
+space must match its owning mesh and all field options. Standalone assembly
+without a prepared space constructs one as before.
+
+The retained storage is one configured geometry space per cell, rather than a
+cache indexed by physical settings. Its gradient-coefficient cache retains the
+same 128-triangle bound. Tests prevent re-preparation during a live contact /
+positive sweep and check exact simultaneous material scaling, unit scaling and
+gap/material derivative identities after those inputs change.
+
 In that same contact control, the common-coordinate condition dropped to
 `1.06e4`. The original contact-derivative residual became `6.48e-11`, and
 the independent energy-derivative residual was `9.88e-15`. These measurements
