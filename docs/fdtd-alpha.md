@@ -371,12 +371,23 @@ come exclusively from Meep.
 | Material | FDTD / Meep | FDTD / RCWA 11 | Meep / RCWA 11 | Material omitted / Meep |
 | --- | --- | --- | --- | --- |
 | magnetic | 0.032199 | 0.009064 | 0.031502 | 0.169766 |
-| drude | 0.024954 | 0.007410 | 0.025702 | 0.186435 |
-| lorentz | 0.048092 | 0.011859 | 0.044459 | 0.171626 |
+| drude | 0.026571 | 0.003859 | 0.025702 | 0.186435 |
+| lorentz | 0.045729 | 0.011593 | 0.044459 | 0.171626 |
 
 Values are maximum absolute complex-amplitude differences, not percentages. The last
-column uses RCWA with mu contrast or the poles removed. The largest Meep doubled-runtime
-change across all six material/source combinations was 6.83e-8, below the 0.001 control
+column uses RCWA with mu contrast or the poles removed. The drude and lorentz FDTD columns
+were remeasured after the legacy path (`backend` omitted) moved Ey's pole fill to Ey's own
+y half-step, where Ey's permittivity was already sampled. Before that fix the drude row
+read 0.024954 (FDTD / Meep) and 0.007410 (FDTD / RCWA 11), and the lorentz row 0.048092
+and 0.011859: those rows were produced with Ey's pole strength sampled half a cell off in
+y. At resolution 40, the table's grid, the fix moves FDTD toward RCWA order 11 on both
+rows; at resolution 20 both move slightly away (drude 0.014384 → 0.016455, lorentz
+0.035711 → 0.037368). On the drude row it also moves FDTD away from Meep. But Meep
+resolution 40 is itself 0.025702 (drude) and 0.044459 (lorentz) from RCWA order 11, about
+as far as FDTD is from Meep, so the FDTD / Meep column mostly measures Meep's own grid
+error; the FDTD / RCWA 11 column is the one that shows the fix. The magnetic row has no
+poles and reproduces to the printed digits. The largest Meep doubled-runtime
+change across all six material/source combinations was 6.82e-8, below the 0.001 control
 criterion and far below these spatial discrepancies.
 
 Both solvers' finer grids are closer to RCWA order 11 than their coarser grids. Removing
@@ -418,8 +429,9 @@ or a higher-order metallic diffraction benchmark.
 The original Meep grids 30/60 are preserved in `golden_meep_crossed_metal.npz`, including
 a doubled-runtime control at resolution 60. That control changes amplitudes by at most
 2.10e-9. Nevertheless, comparing Wavebit resolution 60 with Meep resolution 60 **failed**
-the initial 0.06 complex-amplitude and 0.05 absorption criteria: amplitude difference
-0.08069, and absorption differences 0.09168 (s) and 0.07004 (p). Increasing runtime alone
+the initial 0.06 complex-amplitude and 0.05 absorption criteria, and still fails them after
+the Ey pole-fill fix described below: amplitude difference 0.07865, and absorption
+differences 0.08801 (s) and 0.07017 (p). Increasing runtime alone
 cannot establish spatial accuracy. These discrepant reference arrays are retained.
 
 A separate resolution-120 tier is reproduced by `refine_meep_crossed_metal.py`; it does
@@ -428,9 +440,9 @@ material API. The finer tier uses post-source duration 120; the doubled-runtime 
 belongs specifically to resolution 60.
 
 The original comparison bounds are unchanged. With the independent Meep-120 tier,
-Wavebit resolution 60 at 240 cycles gives maximum complex-amplitude difference **0.05160**
-(bound 0.06). Absorption is 0.42090/0.44907 (s/p), versus Meep's 0.47043/0.48626;
-differences 0.04954/0.03719 are below the 0.05 absolute criterion (five percentage points).
+Wavebit resolution 60 at 240 cycles gives maximum complex-amplitude difference **0.04308**
+(bound 0.06). Absorption is 0.42457/0.44894 (s/p), versus Meep's 0.47043/0.48626;
+differences 0.04586/0.03732 are below the 0.05 absolute criterion (five percentage points).
 This is a structural regression check at modest accuracy, not a precision guarantee.
 
 | Meep resolution | Max amplitude difference from RCWA order 11 | s absorption | p absorption |
@@ -439,18 +451,28 @@ This is a structural regression check at modest accuracy, not a precision guaran
 | 60 | 0.067957 | 0.512580 | 0.519110 |
 | 120 | 0.031885 | 0.470433 | 0.486264 |
 
-Wavebit's amplitude difference from RCWA order 11 decreases from 0.06273 at resolution
-30 to 0.03433 at resolution 60. The separate Meep tiers also approach that internal
+Wavebit's amplitude difference from RCWA order 11 decreases from 0.03053 at resolution
+30 to 0.01379 at resolution 60. The separate Meep tiers also approach that internal
 reference. The near-constant s absorption on Meep's first two grids was not evidence
 of spatial convergence. The new regression retains those grids and checks the decrease
 in complex-amplitude discrepancy across all three external tiers.
+
+The Wavebit numbers in this section were remeasured after the Ey pole-fill fix described
+under the material table above. Before it, the same runs gave 0.08069 and 0.09168/0.07004
+(s/p) against Meep 60, 0.05160 and absorption 0.42090/0.44907 (s/p) against Meep 120, and
+0.06273 → 0.03433 from RCWA order 11 at resolutions 30 → 60. At resolution 60 the fix
+moves s absorption 0.0037 toward both Meep tiers and p 0.0001 away from them, and it more
+than halves the amplitude difference from RCWA order 11 at both resolutions. The largest
+single R or T difference from Meep 120 grows, from 0.031 to 0.040 (s) and from 0.021 to
+0.024 (p), still inside the test's 0.05. The Meep-60 comparison still fails its initial
+criteria.
 
 
 Wavebit's opt-in `studies/fdtd_metal_validation.py` records grids 30/60 and separate
 resolution-60 controls for 160→240 optical cycles, PML 12→20 cells and padding 1→1.5.
 It compares against the preserved Meep-60 reference, making that discrepancy reproducible.
-The control changes are respectively 3.24e-12, 5.37e-5 and 3.32e-4 in maximum complex
-amplitude; monitor residuals are below 3.5e-11. These small changes do not erase spatial
+The control changes are respectively 3.19e-12, 5.49e-5 and 3.36e-4 in maximum complex
+amplitude; monitor residuals are below 4.3e-11. These small changes do not erase spatial
 error. RCWA orders 7→11 change amplitudes by 0.001061, another finite-truncation check
 rather than an exact solution.
 
