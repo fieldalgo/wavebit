@@ -11,6 +11,7 @@ from wavebit._core.conforming.cartesian_pair_transmission_galerkin import Cartes
     ('value','energy_residual'),
     ('tangent','energy_derivative_residual'),
     ('potential','energy_residual'),
+    ('retained_field','retained_residual'),
 ))
 def test_complete_pointwise_contact_energy_rejects_corruption(monkeypatch,target,metric):
     response=precision.response
@@ -18,12 +19,16 @@ def test_complete_pointwise_contact_energy_rejects_corruption(monkeypatch,target
     observed=[]
     def corrupt(*args,**kwargs):
         result=list(response(*args,**kwargs))
-        if target=='potential':
+        if target in ('potential','retained_field'):
             # Alter only the physical verifier's potential; its candidate
             # response and original-equation coefficients remain untouched.
             field,change,potential=kwargs['assembled']['energy_coordinates']
-            potential=tuple(v.copy() for v in potential)
-            potential[0][0,0]+=.05
+            if target=='potential':
+                potential=tuple(v.copy() for v in potential)
+                potential[0][0,0]+=.05
+            else:
+                field=tuple(v.copy() for v in field)
+                field[0][:]+=.05*np.eye(len(field[0]))
             kwargs['assembled']['energy_coordinates']=(field,change,potential)
         else:
             index=4 if target=='value' else 5
@@ -40,7 +45,7 @@ def test_complete_pointwise_contact_energy_rejects_corruption(monkeypatch,target
         cell.closure(gap=0.,basis=np.eye(2),widths=(.3,.3),height=.4,
                      offset=(0.,0.),epsilon=(4.,9.),background=1.)
     assert observed[0][metric]>1e-10
-    if target=='potential':
+    if target in ('potential','retained_field'):
         assert observed[0]['weak_residual']<1e-10
-        assert observed[0]['retained_residual']<1e-10
+        assert observed[0]['rounded_retained_defect']<1e-10
         assert observed[0]['flux_residual']<1e-10

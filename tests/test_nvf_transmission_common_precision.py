@@ -79,6 +79,9 @@ def test_high_degree_flat_reference_retains_uniform_tensor_and_joint_variation(d
     assert metadata['transmission_directions']==0
     assert metadata['degree']==degree
     assert metadata['common_coordinate_precision']=='compensated'
+    assert metadata['retained_verification']=='physical_field_integral'
+    assert metadata['retained_residual']<1e-10
+    assert np.isfinite(metadata['rounded_retained_defect'])
     expected=np.array([epsilon,epsilon,1/epsilon,0.,0.])[:,None,None,None]
     delta=np.array([direction,direction,-direction/epsilon**2,0.,0.])[:,None,None,None]
     np.testing.assert_allclose(value,expected,atol=3e-10,rtol=0)
@@ -180,6 +183,9 @@ def test_high_degree_metal_fourier_projection_retains_original_energy_identity(d
         epsilon=(12.25,-10+1j),background=background,gap_tangent=1.)
     assert metadata['transmission_directions']==0
     assert metadata['common_coordinate_precision']=='compensated'
+    assert metadata['retained_verification']=='physical_field_integral'
+    assert metadata['retained_residual']<1e-10
+    assert np.isfinite(metadata['rounded_retained_defect'])
     assert metadata['energy_residual']<1e-10
     assert metadata['energy_derivative_residual']<1e-10
     # With no y Fourier variation, reflection makes both off-diagonal slots zero.

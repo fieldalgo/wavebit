@@ -54,11 +54,12 @@ alternating seven-repeat timing of 512 quadrature points, 81 modes and 162
 output columns measured a 1.45-fold reduction in this product's median time.
 This is a product measurement, not an end-to-end solver timing.
 
-Three corruption controls independently alter the candidate tensor, its
-derivative, or only the physical verifier's potential coefficients. All three
-are rejected by the original energy guard. In the last case the original
-weak, retained and flux residuals still pass, so those equations alone cannot
-mask a broken handoff to the physical reconstruction.
+Corruption controls independently alter the candidate tensor, its derivative,
+the physical verifier's potential coefficients, or only its retained Fourier
+field. The original energy or directly integrated Fourier-mean guard rejects
+each change. When only verifier coordinates change, the original weak,
+rounded retained and flux diagnostics still pass; those equations alone
+cannot mask a broken handoff to the physical reconstruction.
 
 ## One opening measure for every collapsed-field term
 
@@ -74,15 +75,45 @@ predicted a relative derivative-energy discrepancy of 1.12858e-10. The
 observed discrepancy was 1.12861e-10; their difference was 3.93e-15 on the
 same scale.
 
-The opening measure now preserves both scalar factors on collapsed triangles.
-The free Fourier variation, common moments, common opening energy and
-normalized disappearing energies use that consistent scaling. Bulk records
-retain their established measure variation. Geometry, field count, reference
+The first opening-measure correction preserved both scalar factors on
+collapsed triangles while retaining the original bulk measure records.
+The complete vertex-measure correction below additionally preserves the
+determinant itself and its opening coefficient on every triangle. Free
+Fourier variation, common moments, common opening energy and normalized
+disappearing energies use the same measures. Geometry, field count, reference
 materials and every physical acceptance threshold are unchanged.
+
+## Complete vertex measures and physical Fourier constraints
+
+The closed determinant and its opening coefficient are now formed from the
+shared physical vertices in compensated arithmetic. Computing a determinant
+in ordinary precision first can prevent the triangle areas from summing to
+the exact cell area. On the 700-period, 300-wide/300-high pair, the unweighted
+Fourier Gram defects are `3.90e-16` on the original mesh and `2.41e-16` after
+one refinement. Complete vertex measures reduce these defects to `2.51e-31`
+and `1.50e-31`. The Fourier test uses both directions at order `(1,1)`.
+
+The same vertex determinants and complete opening coefficients supply the
+free matrix, common weak matrices and independent physical energy. Changing
+only one of these would compare different finite integrals. Independent
+Decimal rectangle and joint-variation oracles now use the actual mesh without
+replacing its determinant records. A homogeneous-material control on the
+non-dyadic body partition checks the complete free matrix, its material JVP,
+and the unit-cell Fourier identity against their exact values at `3e-28`.
+
+The independent verifier also integrates `Phi.H*E` directly. Its output must
+equal the identity at the original `1e-10` retained-constraint bound. In the
+sextic order-`(4,0)` prototype below, the complete measures reduce that physical
+defect from `7.19e-12` to `1.83e-26`; energy and stationary-energy defects are
+`1.30e-26` and `3.98e-15`. The rounded product `x+Q*U-I` instead gives
+`1.03e-10`, a coefficient-rounding defect. Metadata preserves that diagnostic
+as `rounded_retained_defect`, while `retained_verification='physical_field_integral'`
+identifies the physical check. The response is neither averaged nor corrected
+by the verifier. No candidate tensor or tensor derivative is supplied to it.
 
 ## Physical regression
 
-The actual library control uses a flat reference `(2,2,2)`, physical materials
+The earlier library control, before complete vertex measures, uses a flat reference `(2,2,2)`, physical materials
 `(12.25,-10+i,1)`, Fourier order `(4,0)`, degree 6, period 700 and widths/height
 300. Radial and angular orders are 120 and 24. It now passes all original
 physical guards, with energy and derivative-energy residuals of 8.14e-27 and

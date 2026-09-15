@@ -264,6 +264,8 @@ def coupled_contact(obj, base, C, Z, Qbar, Rbar, EE, *, elimination=None, energy
     Optional energy coordinates carry the same field, fixed-potential field
     variation and potential coefficients in their solver precision. They do
     not contain the candidate response or its derivative.
+    An optional third verifier result checks the retained Fourier constraint
+    by physical integration, preserving the rounded-matrix defect separately.
     """
     k, dk, q, dq, r, dr, qt, dqt, source, dsource, e, de, info = base
     nc, nz, N, ds = info['nc'], info['nz'], len(e), info['ds']
@@ -342,9 +344,13 @@ def coupled_contact(obj, base, C, Z, Qbar, Rbar, EE, *, elimination=None, energy
     ur = U[:, rr].T
     energy = xr @ A @ x + xr @ RR @ U + ur @ source_physical @ x + ur @ physical @ U
     denergy = dxr @ A @ x + xr @ DA @ x + xr @ A @ dx_geometry + dxr @ RR @ U + xr @ dRR @ U + ur @ dsource_physical @ x + ur @ source_physical @ dx_geometry + ur @ dphysical @ U
+    physical_retained = None
     if energy_verifier is not None:
         coordinates=(x,dx_geometry,U) if energy_coordinates is None else energy_coordinates
-        energy,denergy=energy_verifier(*coordinates)
+        verified=energy_verifier(*coordinates)
+        energy,denergy=verified[:2]
+        if len(verified)==3:
+            physical_retained=verified[2]
     weak = _relative(KK @ U + SS @ x - QT @ H, KK @ U, SS @ x, QT @ H)
     terms = (dKK@U, KK[:nc, :nc]@dUC, dsource[:nc]@x,
              source[:nc]@dfield, -dqt[:nc]@H, -qt[:nc]@DH)
@@ -352,6 +358,10 @@ def coupled_contact(obj, base, C, Z, Qbar, Rbar, EE, *, elimination=None, energy
     meta = dict(condition=condition, reciprocity=_relative(H - H[rr][:, rr].T, H), derivative_reciprocity=_relative(DH - DH[rr][:, rr].T, DH), weak_residual=weak, weak_derivative_residual=None, contact_derivative_residual=cweak, energy_residual=_relative(energy - H, H), energy_derivative_residual=_relative(denergy - DH, DH), minimum_rotated_storage=minimum_rotated_storage(H, obj._phase), minimum_dissipation=np.linalg.eigvalsh((H - H.conj().T) / 2j)[0])
     meta['closed_elimination'] = elimination
     meta['retained_residual'] = _relative(x+QQ@U-np.eye(2*N), np.eye(2*N))
+    if physical_retained is not None:
+        meta['rounded_retained_defect'] = meta['retained_residual']
+        meta['retained_residual'] = _relative(physical_retained-np.eye(2*N), np.eye(2*N))
+        meta['retained_verification'] = 'physical_field_integral'
     meta['flux_residual'] = _relative(A@x+RR@U-H, A@x, RR@U, H)
     meta['retained_derivative_residual'] = _relative(dfield+dQQ@U+QQ[:, :nc]@dUC,
                                                    dfield, dQQ@U, QQ[:, :nc]@dUC)

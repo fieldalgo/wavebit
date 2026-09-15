@@ -28,14 +28,19 @@ def stack(values,axis=0):return D(np.stack([v.hi for v in values],axis),np.stack
 def convert(values):
     hi=np.array([float(v) for v in values]);lo=np.array([float(v-Decimal.from_float(float(v))) for v in values]);return D(hi,lo)
 
-def opening_measure(ds,local):
-    """Share the normalized disappearing-domain measure without early rounding.
+def triangle_measures(points,velocity):
+    """Complete closed determinant and its opening coefficient.
 
-    Collapsed energies carry ds outside their normalized d1 integral. Their
-    free and common moments must retain the same product. Bulk records keep
-    their existing stored measure variation.
+    Form both from the shared physical vertices before rounding any area.
+    Rounded per-triangle determinants need not sum to the cell's exact area;
+    their small Fourier-identity defect is amplified by large coefficients.
+    The caller applies the gap direction to the complete opening coefficient.
     """
-    return D(ds)*D(local[10]) if local[11] else D(ds*local[10])
+    p,v=D(points),D(velocity)
+    a,b=p[1]-p[0],p[2]-p[0]
+    da,db=v[1]-v[0],v[2]-v[0]
+    return (a[0]*b[1]-a[1]*b[0],
+            da[0]*b[1]+a[0]*db[1]-da[1]*b[0]-a[1]*db[0])
 
 @lru_cache(maxsize=16)
 def gauss(n):

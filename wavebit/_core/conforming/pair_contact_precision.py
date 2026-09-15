@@ -12,7 +12,7 @@ from .pair_corner_precision import D
 from .pair_residual_arithmetic import _product,_sum_pairs
 from .pair_oscillatory_scalar import cp as complex_cp
 from .projected_pair_contact import _real_geometry
-from .pair_contact_quadrature import quadrature,phases,opening_measure
+from .pair_contact_quadrature import quadrature,phases,triangle_measures
 from .pair_contact_fourier import moments as free_moments
 
 
@@ -125,6 +125,7 @@ def response(obj,settings,base,transform,chart,order,T,Qbar,records,edge_rows,*,
         indices,common=local_coordinates(fields,tri,nc)
         local_count=len(indices);square=np.ix_(indices,indices);columns=(slice(None),indices)
         p=zero[tri[:3]];dp=ds*velocity[tri[:3]]
+        area,slope=triangle_measures(p,velocity[tri[:3]])
         if local[11]:
             j1=np.column_stack([velocity[tri[1]]-velocity[tri[0]],velocity[tri[2]]-velocity[tri[0]]]);inv=np.array([[j1[1,1],-j1[0,1]],[-j1[1,0],j1[0,0]]])/local[10];dinv=np.zeros_like(inv)
         else:
@@ -135,14 +136,14 @@ def response(obj,settings,base,transform,chart,order,T,Qbar,records,edge_rows,*,
                 sl=slice(first,first+512);samples=common.sample(tri,bary[sl],inv,dinv)
                 def grad(offset):return tuple(np.stack([getattr(samples[offset+a],part) for a in range(2)],axis=1).reshape(-1,local_count) for part in ('hi','lo'))
                 g,dg=grad(0),grad(2);ph,dph=phases(bary[sl],p,dp,modes,chart[4])
-                mw=weight.exact[sl]*local[9];mdw=weight.exact[sl]*opening_measure(ds,local)
+                mw=weight.exact[sl]*area;mdw=weight.exact[sl]*D(ds)*slope
                 ww=tuple(np.repeat(v,2)[:,None] for v in mw.pair)
                 dww=tuple(np.repeat(v,2)[:,None] for v in mdw.pair)
                 chi=np.zeros((len(bary[sl]),2,total));chi[:,:,zi]=gz[sl];chi[:,:,nz:]=added[sl]
                 chi=pair(chi.reshape(-1,total))
                 if not local[11]:
                     chi=add(chi,neg(mat(ph,pair(qb))));_real_geometry(chi[0]+chi[1]);chi=tuple(v.real for v in chi)
-                mw=weight.exact[sl]*(local[10] if local[11] else local[9])
+                mw=weight.exact[sl]*(slope if local[11] else area)
                 measure=tuple(np.repeat(v,2)[:,None] for v in mw.pair)
                 L=add_at(L,columns,cp(pair(ep),mat(transpose(chi),cp(measure,g))))
                 SZ=add(SZ,cp(pair(ep),mat(transpose(chi),cp(measure,ph))))

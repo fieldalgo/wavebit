@@ -72,8 +72,9 @@ variation is the sum of the three vertex directions divided by 6.
 
 Only distinct Fourier *differences* are evaluated, followed by an exact lookup
 for every matrix entry. This avoids repeated arithmetic without deleting a
-retained direction. The original stored triangle areas, their opening
-variations, and all complex material directions are consumed directly,
+retained direction. Triangle areas and their opening coefficients are formed
+from the shared physical vertices in complete arithmetic. All complex material
+directions are consumed directly,
 including zero-area triangles with a nonzero opening measure. The latter
 retain the high/low product of the caller-unit direction and normalized
 area coefficient, matching the disappearing-field energy scaling. The
@@ -96,9 +97,11 @@ predeclared 3e-28 bound.
 
 Full free matrices and joint material/opening variations are also compared
 with independent 100-digit rectangle integrals at orders (0,0), (1,2) and
-(1,1), including a refined mesh. These rectangle fixtures supply exact dyadic
-area records. A separate constant-mode check verifies preservation of the
-original stored area records, including their floating-point remainders.
+(1,1), including a refined mesh, using the actual mesh without replacing its
+stored area records. A separate constant-mode check compares against independent
+Decimal determinants of the physical vertices and their variations. Homogeneous
+material checks on a non-dyadic body partition verify the unit Fourier Gram
+matrix before and after refinement at the same 3e-28 bound.
 Four scalar complex exponential controls cover the scalar and complex cases.
 
 For the order-4 diagnostic, independent smooth Gaussian integration at orders
@@ -143,3 +146,9 @@ the same complete system with the legacy rounded free block fails the
 1e-10 energy guard at 9.65e-10, matching the separately predicted 9.67e-10.
 This regression protects the free-moment integration into the full solver,
 in addition to the scalar and matrix moment tests.
+
+The complete contact path also forms each determinant and opening coefficient
+from the physical vertices before rounding. All free, common and independent
+energy integrals share these measures. The original/refined unit-cell Fourier
+identities and the directly integrated retained-field check are described in
+the [contact-coordinate note](nvf-contact-energy-coordinates.md).

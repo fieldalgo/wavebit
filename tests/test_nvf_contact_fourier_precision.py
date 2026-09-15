@@ -78,18 +78,8 @@ def test_entire_free_matrix_and_joint_jvp_match_decimal_rectangles(order,refinem
         gap_tangent=.5,epsilon_tangent=(.25+.125j,-.5+.25j),
         background_tangent=.125-.0625j)
     base=obj._assemble(**settings)
-    # Supply exact dyadic area records for this independent rectangle oracle.
-    # The separate constant-mode check below covers the original stored areas.
-    _,_,points,_=obj._chart_geometry(0.,{k:np.asarray(settings[k]) for k in
-                                       ('basis','widths','height','offset')})
-    local=[]
-    for tri,row in zip(obj.data['triangles'],base[-1]['local']):
-        p0,p1,p2=points[tri[:3]]
-        a,b=p1-p0,p2-p0
-        row=list(row)
-        row[9]=a[0]*b[1]-a[1]*b[0]
-        local.append(tuple(row))
-    base=(*base[:-1],dict(base[-1],local=local))
+    # The actual physical vertices supply complete areas. This oracle needs
+    # no replacement of the original mesh's rounded determinant records.
     free,derivative,gram=moments(obj,settings,base)
     modes=[(i,j) for j in range(-order[1],order[1]+1)
                  for i in range(-order[0],order[0]+1)]
@@ -134,7 +124,7 @@ def test_scalar_complex_exponential_retains_its_low_part(value):
 
 
 @pytest.mark.parametrize('non_dyadic', (False,True))
-def test_constant_free_moments_preserve_original_stored_measures(non_dyadic):
+def test_constant_free_moments_match_physical_vertex_measures(non_dyadic):
     from wavebit._core.conforming.cartesian_pair_opening import CartesianPairOpeningPlan
     from wavebit._core.conforming.pair_symmetric_mesh import SymmetricPairPolynomialCell
     from wavebit._core.conforming.pair_contact_fourier import moments
@@ -148,13 +138,18 @@ def test_constant_free_moments_preserve_original_stored_measures(non_dyadic):
                         offset=(-.6,-.45),gap_tangent=.7)
     base=obj._assemble(**settings)
     actual=moments(obj,settings,base)
+    _,_,points,velocity=obj._chart_geometry(0.,{k:np.asarray(settings[k]) for k in
+                                               ('basis','widths','height','offset')})
     with localcontext() as context:
         context.prec=100
         expected=[(Z(0),Z(0)) for _ in range(3)]
-        for row in base[-1]['local']:
-            area=Z.from_float(row[9])/2
-            change=(Z.from_float(base[-1]['ds'])*Z.from_float(row[10])
-                    if row[11] else Z.from_float(base[-1]['ds']*row[10]))/2
+        for tri,row in zip(obj.data['triangles'],base[-1]['local']):
+            p=[[Z.from_float(float(v)) for v in point] for point in points[tri[:3]]]
+            d=[[Z.from_float(float(v)) for v in point] for point in velocity[tri[:3]]]
+            a,b=([p[k][j]-p[0][j] for j in range(2)] for k in (1,2))
+            da,db=([d[k][j]-d[0][j] for j in range(2)] for k in (1,2))
+            area=(a[0]*b[1]-a[1]*b[0])/2
+            change=Z.from_float(base[-1]['ds'])*(da[0]*b[1]+a[0]*db[1]-da[1]*b[0]-a[1]*db[0])/2
             expected[0]=add(expected[0],times(scalar(row[12]),area))
             expected[1]=add(expected[1],add(times(scalar(row[13]),area),
                                           times(scalar(row[12]),change)))
@@ -164,3 +159,19 @@ def test_constant_free_moments_preserve_original_stored_measures(non_dyadic):
             re=Z.from_float(float(high.real))+Z.from_float(float(low.real))
             im=Z.from_float(float(high.imag))+Z.from_float(float(low.imag))
             assert max(abs(re-target[0]),abs(im-target[1]))<Z('3e-28')
+
+
+@pytest.mark.parametrize('refinement', (0,1))
+def test_non_dyadic_body_partition_preserves_complete_fourier_identity(refinement):
+    from wavebit._core.conforming.cartesian_pair_opening import CartesianPairOpeningPlan
+    from wavebit._core.conforming.pair_symmetric_mesh import SymmetricPairPolynomialCell
+    from wavebit._core.conforming.pair_contact_fourier import moments
+    obj=SymmetricPairPolynomialCell(CartesianPairOpeningPlan(0,refinement=refinement),(1,1),degree=3)
+    epsilon=2.+.125j;direction=.25+.0625j
+    settings=dict(gap=0.,basis=np.eye(2)*700,widths=(300.,300.),height=300.,
+        offset=(-350.,-350.),epsilon=(epsilon,epsilon),background=epsilon,
+        gap_tangent=.7,epsilon_tangent=(direction,direction),background_tangent=direction)
+    free,delta,gram=moments(obj,settings,obj._assemble(**settings))
+    identity=np.eye(9)
+    for actual,expected in ((free,epsilon*identity),(delta,direction*identity),(gram,identity)):
+        np.testing.assert_allclose((actual[0]-expected)+actual[1],0.,atol=3e-28,rtol=0)
