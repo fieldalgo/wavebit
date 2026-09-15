@@ -158,6 +158,28 @@ existing balanced matrix as a fixed preconditioner. A value correction also
 updates the forcing of the differentiated equations before all derivative
 variables are corrected. A resolved original state requests no extra quadrature.
 
+The retained and flux defects themselves need accurate arithmetic. For example,
+`H - A*x - R*U` can subtract terms much larger than `H`; ordinary matrix products
+can leave a rounding residual that the large retained coefficients then amplify.
+Refinement must distinguish this arithmetic residue from an actual defect of the
+original equations. The NumPy residual evaluator scales rows and columns by
+powers of two and splits each matrix entry into three bounded integer chunks
+and its full floating remainder. It keeps all 16 cross products. Leading
+integer dot sums stay below `2**50`, and compensated high/low accumulation
+combines every term before rounding the final small residual. The dimension
+changes the integer units, never the field set or a physical tolerance. Partial
+products are accumulated one at a time, so their complete expansions need not
+remain in memory together.
+
+The same arithmetic evaluates the retained/flux variations and updates the
+differentiated weak forcing after a value correction. It changes no matrix,
+material, constraint or independent energy check. Exact-input, hundred-digit
+oracles test both real and complex cancelling matrix sums, including contraction
+dimensions 631 and 8192, separately from the independent full mixed-system tests.
+The full original-mesh and symmetric-mesh order-four metal regressions also
+pass the unchanged physical guards, as do the expanded subpixel gap, physical
+unit, signed gap direction and complex material direction controls.
+
 The physical weak residual integrates common/disappearing products on unsplit
 triangles and the actual additional trace products on the moving partition.
 Thin rows pair the already normalized measure with their finite physical

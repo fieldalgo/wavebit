@@ -10,6 +10,7 @@ import numpy as np
 from .cartesian_pair_galerkin import _relative
 from .pair_corner_assembly import samples
 from .real_trace_coupling import _contract, _field_product as mul
+from .pair_residual_arithmetic import residual
 
 
 def physical_constraints(obj,settings,base,order,quadrature,state):
@@ -60,8 +61,8 @@ def _residuals(blocks,Q,dQ,state):
     K,dK,R,dR,QT,dQT,S,dS,A,dA=blocks
     return (K@U+S@x-QT@H,
             dK@U+K@DU+dS@x+S@dx-dQT@H-QT@DH,
-            x+Q@U-np.eye(len(H)),dx+dQ@U+Q@DU,
-            H-A@x-R@U,DH-dA@x-A@dx-dR@U-R@DU)
+            residual(x-np.eye(len(H)),(Q,U)),residual(dx,(dQ,U),(Q,DU)),
+            residual(H,(-A,x),(-R,U)),residual(DH,(-dA,x),(-A,dx),(-dR,U),(-R,DU)))
 
 
 def _forward_error(info,state,residuals):
@@ -90,14 +91,14 @@ def correct(blocks,Q,dQ,coordinate,metric,info,state,weak,variation):
         right=coordinate.T@forcing;right[nc:]*=tau
         local=np.linalg.solve(metric,right);local[nc:]/=tau
         return coordinate@local
-    r=x+Q@U-np.eye(len(H));flux=H-A@x-R@U
+    r=residual(x-np.eye(len(H)),(Q,U));flux=residual(H,(-A,x),(-R,U))
     c=solve(weak,r,flux)
     cx=-r-Q@c;cH=-flux-A@r+(R-A@Q)@c
     U=U+c;x=x+cx;H=H+cH
     # Changing the value also changes the differentiated weak equation.
     # Correct this forcing before solving for every derivative variable.
-    variation=variation+dK@c+dS@cx-dQT@cH
-    dr=dx+dQ@U+Q@DU;dflux=DH-dA@x-A@dx-dR@U-R@DU
+    variation=residual(variation,(dK,c),(dS,cx),(-dQT,cH))
+    dr=residual(dx,(dQ,U),(Q,DU));dflux=residual(DH,(-dA,x),(-A,dx),(-dR,U),(-R,DU))
     dc=solve(variation,dr,dflux)
     DU=DU+dc;dx=dx-dr-Q@dc
     DH=DH-dflux-A@dr+(R-A@Q)@dc

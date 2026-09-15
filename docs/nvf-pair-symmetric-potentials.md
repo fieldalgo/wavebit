@@ -115,14 +115,18 @@ and `6.91e-10`, both above the original `1e-10` guard.
 
 Preparing the same two-exponent space lowers the condition to `6.28e3`
 and the coefficient norm to `3.44e3`. At integration order 64, the complete
-calculation with pointwise refinement passes every original physical guard:
+calculation with pointwise refinement and ordinary constraint-residual
+arithmetic passes every original physical guard:
 its energy and energy-derivative residuals are `1.02e-11` and `3.08e-11`.
 The value reflection discrepancy is `3.83e-11`, below `3e-10`. The complete
 gap-derivative reflection discrepancy is still `1.46e-8`, above `3e-9`;
 this high-order derivative is therefore not reflection-qualified. These
 measurements use unit period and otherwise the normalized metal geometry
 given below. The preparation changes no radial exponent, quadrature rule,
-potential count or original-mesh default.
+potential count or original-mesh default. The subsequent
+[accurate retained/flux residual evaluator](nvf-pair-corner-potentials.md)
+addresses additional arithmetic residue amplified by large coefficients;
+the measurements above isolate the coordinate preparation itself.
 
 The corresponding full-space regression at the default integration order
 48 also passes every original physical guard. It took about 12 minutes
