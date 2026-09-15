@@ -13,6 +13,7 @@ from .pair_residual_arithmetic import _product,_sum_pairs
 from .pair_oscillatory_scalar import cp as complex_cp
 from .projected_pair_contact import _real_geometry
 from .pair_contact_quadrature import quadrature,phases
+from .pair_contact_fourier import moments as free_moments
 
 
 def pair(a):return np.asarray(a),np.zeros_like(a)
@@ -85,6 +86,11 @@ def physical_data(base,Qbar,K,DK,Q,DQ,R,DR,L,SZ,MZZ):
 
 def response(obj,settings,base,transform,chart,order,T,Qbar,records,edge_rows,*,assembled=None):
     info=base[-1];nc,N,ds=info['nc'],info['size'],info['ds'];fields=info['corner_fields'];size=2*N
+    free,dfree,_=free_moments(obj,settings,base)
+    # The free block is multiplied by large complete Fourier coefficients.
+    # Keep its low part through projection, just as for K, Q and R. Original
+    # physical checks consume the rounded directly integrated block.
+    base=(*base[:10],free[0]+free[1],dfree[0]+dfree[1],info)
     K=pair(np.zeros((nc,nc),complex));Q=pair(np.zeros((size,nc),complex));R=pair(np.zeros((size,nc),complex));DQ=pair(np.zeros((size,nc),complex))
     DK=pair(np.zeros((nc,nc),complex));DR=pair(np.zeros((size,nc),complex))
     nz=info['nz'];total=nz+Qbar.shape[1];qb=np.hstack([base[6][nc:].conj().T,Qbar]);L=pair(np.zeros((total,nc),complex));SZ=pair(np.zeros((total,size),complex));MZZ=pair(np.zeros((total,total),complex))
@@ -142,7 +148,8 @@ def response(obj,settings,base,transform,chart,order,T,Qbar,records,edge_rows,*,
     # common transform. High/low matrices retain cancellations in both steps.
     tt=pair(T);K=mat(transpose(tt),mat(K,tt));DK=mat(transpose(tt),mat(DK,tt))
     Q,R,DQ,DR,L=(mat(a,tt) for a in (Q,R,DQ,DR,L))
-    A=pair(np.kron(np.eye(2),base[10]));DA=pair(np.kron(np.eye(2),base[11]));QT=transpose(Q,True);DQT=transpose(DQ,True)
+    A=tuple(np.kron(np.eye(2),v) for v in free);DA=tuple(np.kron(np.eye(2),v) for v in dfree)
+    QT=transpose(Q,True);DQT=transpose(DQ,True)
     S=tuple(v[info['reverse']].T for v in R);DS=tuple(v[info['reverse']].T for v in DR)
     M=add(K,neg(mat(S,Q)),neg(mat(QT,add(R,neg(mat(A,Q))))))
     DM=add(DK,neg(mat(DS,Q)),neg(mat(S,DQ)),neg(mat(DQT,R)),neg(mat(QT,DR)),mat(mat(DQT,A),Q),mat(mat(QT,DA),Q),mat(mat(QT,A),DQ))
