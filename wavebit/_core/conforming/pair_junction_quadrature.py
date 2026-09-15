@@ -7,7 +7,9 @@ from .cartesian_pair_seam_galerkin import _geometry
 from .real_trace_coupling import _contract
 
 
-def quadrature(obj,base,settings,order,transform,split=True,normalized=False,weighted=False):
+def quadrature(obj,base,settings,order,transform,split=True,normalized=False,weighted=False,*,coordinate_records=False):
+    if coordinate_records and (not normalized or weighted):
+        raise ValueError('coordinate records require unweighted normalized rows')
     info=base[-1];original=info['base_original'];fields=info['corner_fields']
     nold,nc=info['original_nc'],info['nc'];ds=info['ds']
     chart=_geometry(obj,settings)
@@ -104,5 +106,9 @@ def quadrature(obj,base,settings,order,transform,split=True,normalized=False,wei
         row=(ids,ci_all,zi,weights,dweights,ep,dep,phase,dphase,gc_all,dgc_all,gz,dgz,le,dle,gn,dgn)
         if normalized:
             result=(*row,weights_bar,dweights_bar,sgz,dsgz,barle,dbarle)
-            yield (*result,thin or region==2) if weighted else result
+            if coordinate_records:
+                yield (*result,dict(triangle=tri,barycentric=bb,tangent=dbb,
+                                    common_tangent=closed_dbb))
+            else:
+                yield (*result,thin or region==2) if weighted else result
         else:yield row

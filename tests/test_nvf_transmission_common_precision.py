@@ -102,6 +102,10 @@ def test_high_degree_scope_retains_original_family_and_resource_limits():
             reference=(4.,9.,1.),degree=6)
 
 
+# Five complete independently verified states take about 30 minutes on the
+# documented single-BLAS-thread reference run. Keep this one bounded slow
+# integration control without reducing its field bank or quadrature.
+@pytest.mark.timeout(3600)
 def test_quintic_positive_gap_joint_jvp_matches_independent_values():
     from test_nvf_pair_transmission import GEOMETRY,REFERENCE
     from wavebit._core.conforming.cartesian_pair_opening import CartesianPairOpeningPlan
@@ -179,5 +183,39 @@ def test_high_degree_metal_fourier_projection_retains_original_energy_identity(d
     assert metadata['energy_residual']<1e-10
     assert metadata['energy_derivative_residual']<1e-10
     # With no y Fourier variation, reflection makes both off-diagonal slots zero.
+    np.testing.assert_allclose(value[3:],0.,atol=3e-10,rtol=0)
+    np.testing.assert_allclose(tangent[3:],0.,atol=3e-9,rtol=0)
+
+
+def test_sextic_positive_gap_retains_independent_energy_and_fourier_constraints():
+    from wavebit._core.conforming.cartesian_pair_opening import CartesianPairOpeningPlan
+    from wavebit._core.conforming.cartesian_pair_transmission_galerkin import CartesianPairTransmissionGalerkinGapCell
+    cell=CartesianPairTransmissionGalerkinGapCell(CartesianPairOpeningPlan(0),(4,0),
+        reference=(2.,2.,2.),degree=6,quadrature=120,angular_quadrature=24,
+        coercivity_angle=1.53)
+    value,tangent,metadata=cell.closure(gap=.01,basis=np.eye(2)*700,
+        widths=(300.,300.),height=300.,offset=(-350.,-350.),
+        epsilon=(12.25,-10+1j),background=1.,gap_tangent=1.)
+    assert metadata['transmission_directions']==0
+    assert metadata['retained_verification']=='physical_field_integral'
+    assert metadata['energy_residual']<1e-10
+    assert metadata['energy_derivative_residual']<1e-10
+    assert metadata['retained_residual']<1e-10
+    np.testing.assert_allclose(value[3:],0.,atol=3e-10,rtol=0)
+    np.testing.assert_allclose(tangent[3:],0.,atol=3e-9,rtol=0)
+
+
+def test_complete_batched_transmission_contact_retains_metal_field_energy():
+    from wavebit._core.conforming.cartesian_pair_opening import CartesianPairOpeningPlan
+    from wavebit._core.conforming.cartesian_pair_transmission_galerkin import CartesianPairTransmissionGalerkinGapCell
+    cell=CartesianPairTransmissionGalerkinGapCell(CartesianPairOpeningPlan(0),(1,0),
+        reference=(12.25,-10+1j,1.),degree=5,quadrature=100,angular_quadrature=24,
+        coercivity_angle=1.53)
+    value,tangent,metadata=cell.closure(gap=0.,basis=np.eye(2)*700,
+        widths=(300.,300.),height=300.,offset=(-350.,-350.),
+        epsilon=(12.25,-10+1j),background=1.,gap_tangent=1.)
+    assert metadata['transmission_directions']==20
+    assert metadata['energy_residual']<1e-10
+    assert metadata['energy_derivative_residual']<1e-10
     np.testing.assert_allclose(value[3:],0.,atol=3e-10,rtol=0)
     np.testing.assert_allclose(tangent[3:],0.,atol=3e-9,rtol=0)

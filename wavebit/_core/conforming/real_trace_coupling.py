@@ -21,7 +21,7 @@ def _field_product(field, coefficients):
         count, components, coefficients.shape[1])
 
 
-def coupled_positive(obj, base, quadrature, free_energy, trace_order, *, elimination=None, response_solver=None, normalized_quadrature=None, energy_verifier=None):
+def coupled_positive(obj, base, quadrature, free_energy, trace_order, *, elimination=None, response_solver=None, normalized_quadrature=None, energy_verifier=None, energy_coordinates=None):
     """Solve the original weak system and verify reconstructed physical fields.
 
     Pure Fourier energy is supplied independently. Added mixed/trace energies
@@ -29,6 +29,10 @@ def coupled_positive(obj, base, quadrature, free_energy, trace_order, *, elimina
     The differentiated energy is the stationary reciprocal bilinear form.
     An optional verifier receives x, its fixed-potential geometric variation,
     and U; it never receives the candidate H/DH or the solved variation of U.
+    Complete energy coordinates preserve these three inputs without rounding.
+    A verifier may additionally return the directly integrated retained mean
+    of E. This checks the same identity constraint without subtracting rounded
+    products of large cancelling coefficients.
     """
     k, dk, q, dq, r, dr, qt, dqt, source, dsource, e, de, info = base
     N = len(e)
@@ -222,8 +226,13 @@ def coupled_positive(obj, base, quadrature, free_energy, trace_order, *, elimina
                         + mat * _contract('q,qai,qaj->ij', dw, left[:, :, reverse], right)
                         + mat * _contract('q,qai,qaj->ij', w, dl[:, :, reverse], right)
                         + mat * _contract('q,qai,qaj->ij', w, left[:, :, reverse], dright))
+    physical_retained = None
     if energy_verifier is not None:
-        energy, denergy = energy_verifier(x, dx_geometry, U)
+        coordinates = (x, dx_geometry, U) if energy_coordinates is None else energy_coordinates
+        verified = energy_verifier(*coordinates)
+        energy, denergy = verified[:2]
+        if len(verified) == 3:
+            physical_retained = verified[2]
     rr = info['reverse']
     meta = dict(condition=cond, reciprocity=_relative(H - H[rr][:, rr].T, H), derivative_reciprocity=_relative(DH - DH[rr][:, rr].T, DH), original_residual=_relative(res, res_scale), original_derivative_residual=_relative(dres, dres_scale), energy_residual=_relative(energy - H, H), energy_derivative_residual=_relative(denergy - DH, DH), minimum_rotated_storage=minimum_rotated_storage(H, obj._phase), minimum_dissipation=np.linalg.eigvalsh((H - H.conj().T) / 2j)[0])
     meta['weak_residual'] = _relative(KK @ U + SS @ x - QT @ H, KK @ U, SS @ x, QT @ H)
@@ -231,6 +240,12 @@ def coupled_positive(obj, base, quadrature, free_energy, trace_order, *, elimina
     meta['direct_fourier_residual'] = _relative(A - exact_free, exact_free)
     meta['direct_fourier_derivative_residual'] = _relative(DA - exact_free_derivative, exact_free_derivative)
     meta['retained_residual'] = _relative(x+QQ@U-np.eye(2*N), np.eye(2*N))
+    if physical_retained is not None:
+        # Keep the rounded diagnostic visible, but evaluate the original
+        # physical constraint in the precision of its reconstructed field.
+        meta['rounded_retained_defect'] = meta['retained_residual']
+        meta['retained_residual'] = _relative(physical_retained-np.eye(2*N), np.eye(2*N))
+        meta['retained_verification'] = 'physical_field_integral'
     meta['flux_residual'] = _relative(A@x+RR@U-H, A@x, RR@U, H)
     meta['retained_derivative_residual'] = _relative(dx+dQQ@U+QQ@dU, dx, dQQ@U, QQ@dU)
     meta['flux_derivative_residual'] = _relative(DA@x+A@dx+dRR@U+RR@dU-DH,

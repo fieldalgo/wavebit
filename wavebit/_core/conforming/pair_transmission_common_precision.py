@@ -9,28 +9,26 @@ from .pair_complex_precision import C
 from .pair_corner_precision import D, logarithm, simplex_coordinates
 from .pair_contact_quadrature import coordinates, PI
 from . import pair_oscillatory_fields as jet
+from .pair_complex_exponential import exponential
 
 
-def local_mode(mode,x,y,sector,center_angle):
-    radius=D(np.hypot(x.hi,y.hi))
-    radius=radius+(x*x+y*y-radius*radius)/(2*radius)
-    theta=np.arctan2(y.hi,x.hi)
-    rotated=(C(1j)*C(theta)).exp()
+def evaluated_modes(x,y,exponent,start,sector,center_angle,u,flux,coefficient):
+    """Evaluate every fixed one-sided sector power in one complete batch."""
+    radius=D(np.hypot(x.hi,y.hi));radius=radius+(x*x+y*y-radius*radius)/(2*radius)
+    theta=np.arctan2(y.hi,x.hi);rotated=exponential(C(theta)*1j)
     delta=(y*rotated.real-x*rotated.imag)/(x*rotated.real+y*rotated.imag)
     exact_theta=D(theta)+delta
-    quarters=int(round(mode.start/(np.pi/2)))
-    shift=np.round((center_angle-(theta-mode.start))/(2*np.pi))
-    offset=sum((1,1,2)[:sector])
-    angle=exact_theta+(2*shift-(quarters+offset)/2)*PI
-    arg=C(mode.exponent)*C(angle)*1j
-    ep,em=arg.exp(),(-arg).exp();cosine=(ep+em)/2;sine=(ep-em)/(2j)
-    u,flux=map(C,mode.states[sector]);coefficient=C(mode.coefficients[sector]);exponent=C(mode.exponent)
-    angular=u*cosine+flux/coefficient*sine
-    da=exponent*(-u*sine+flux/coefficient*cosine)
-    power=(exponent*C(logarithm(radius))).exp()
-    value=power*angular;dr=exponent*value/C(radius);dt=power*da/C(radius)
-    cosine=x/radius;sine=y/radius
-    return value,dr*C(cosine)-dt*C(sine),dr*C(sine)+dt*C(cosine)
+    quarters=np.rint(np.asarray(start)/(np.pi/2));shift=np.round((center_angle-(theta-start))/(2*np.pi))
+    angle=exact_theta+(2*shift-(quarters+sector)/2)*PI
+    u,flux,coefficient,exponent=map(C,(u,flux,coefficient,exponent));q=flux/coefficient
+    logarithmic=C(logarithm(radius));positive=(u-1j*q)/2*exponential(exponent*(logarithmic+1j*C(angle)))
+    negative=(u+1j*q)/2*exponential(exponent*(logarithmic-1j*C(angle)))
+    left=positive/(C(x)+1j*C(y));right=negative/(C(x)-1j*C(y))
+    return positive+negative,exponent*(left+right),1j*exponent*(left-right)
+
+def local_mode(mode,x,y,sector,center_angle):
+    u,flux=mode.states[sector]
+    return evaluated_modes(x,y,mode.exponent,mode.start,sector,center_angle,u,flux,mode.coefficients[sector])
 
 class CommonCoordinates:
     def __init__(self,fields,mapping):
@@ -57,20 +55,29 @@ class CommonCoordinates:
         polynomial=jet.mapped(jet.bernstein(points,fields.obj.degree),self.prepared(tri),not moving,True)
         gradients=list(polynomial.parts[2:4]);changes=list(polynomial.parts[4:6])
         vertices=fields.zero[tri[:3]];hats=fields.hats[tri[:3]]
-        first=0
+        # Batch every active mode, preserving all real/imaginary components.
+        # Only exact zero cutoff support is absent from the local table.
+        first=0;entries=[];xs=[];ys=[]
         for corner,center,mode,parts in fields.modes:
             cutoff=hats[:,corner]
             if not np.any(cutoff):first+=len(parts);continue
             offsets=vertices-center;offsets[cutoff==1]=0.
-            # Differentiate the stored offsets that define the potential.
-            # Subtracting refined chart vertices in one word first loses
-            # low terms that remain visible in a complete moving field.
-            jac=D(offsets[1:])-D(offsets[0])
-            jac=jac.T
+            jac=(D(offsets[1:])-D(offsets[0])).T
             x,y=(sum(bb[i]*offsets[i,axis] for i in range(3)) for axis in range(2))
             centroid=offsets.mean(axis=0);angle=(np.arctan2(centroid[1],centroid[0])-mode.start)%(2*np.pi)
             sector=min(np.searchsorted(np.cumsum(mode.angles),angle,side='right'),2)
-            f,gx,gy=local_mode(mode,x,y,sector,angle)
+            entries.append((mode,parts,first,cutoff,offsets,jac,sector,angle))
+            xs.append(x);ys.append(y);first+=len(parts)
+        def packed(values):return D(np.stack([v.hi for v in values],1),np.stack([v.lo for v in values],1))
+        if entries:
+            xx,yy=packed(xs),packed(ys)
+            arguments=[np.array([fn(mode,sector,angle) for mode,parts,first,cutoff,offsets,jac,sector,angle in entries]) for fn in (
+                lambda m,s,a:m.exponent,lambda m,s,a:m.start,lambda m,s,a:s,lambda m,s,a:a,
+                lambda m,s,a:m.states[s][0],lambda m,s,a:m.states[s][1],lambda m,s,a:m.coefficients[s])]
+            sampled=evaluated_modes(xx,yy,*arguments)
+        for column,(mode,parts,first,cutoff,offsets,jac,sector,angle) in enumerate(entries):
+            x,y=xs[column],ys[column]
+            f,gx,gy=(v[:,column] for v in sampled)
             h=sum(bb[i]*cutoff[i] for i in range(3));gh=np.array([cutoff[1]-cutoff[0],cutoff[2]-cutoff[0]])
             raw=[C(h)*(gx*jac[0,a]+gy*jac[1,a])+f*gh[a] for a in range(2)]
             if moving:

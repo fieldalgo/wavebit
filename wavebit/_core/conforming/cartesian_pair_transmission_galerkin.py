@@ -20,9 +20,10 @@ class CartesianPairTransmissionGalerkinGapCell(CartesianPairCornerGalerkinGapCel
 
     Every mode is multiplied by its fixed corner hat and transported with the
     same symmetric polynomial mesh of degree 3 through 6. Degrees 5 and 6
-    retain complete compensated common and free Fourier contact equations.
-    All original energy, weak, retained
-    and flux checks apply. Contact and positive gap use the same field space.
+    retain complete compensated common and free Fourier contact equations,
+    and a full geometric coordinate change at positive gaps. Independent
+    physical Fourier integrals check positive-gap retained constraints.
+    All original energy, weak, retained and flux tolerances apply. Contact and positive gap use the same field space.
     Choosing branches, mesh or quadrature does not establish optical accuracy.
     The original fixed-power family and ordinary NVF routing are unchanged.
     """

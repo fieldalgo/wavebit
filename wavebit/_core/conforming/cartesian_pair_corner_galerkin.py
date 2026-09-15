@@ -157,10 +157,16 @@ class CartesianPairCornerGalerkinGapCell:
                 self._base, settings, base, order, weighted, free, q, dq, blocks)
             energy = lambda x, dx, u: verify_energy(
                 self._base, settings, base, order, normalized, u, x, dx)
-            value, tangent, metadata = coupled_positive(
-                self._base, base, quadrature, free, self.order[1],
-                response_solver=response, normalized_quadrature=normalized,
-                energy_verifier=energy)
+            if self._base.degree >= 5 and getattr(fields,'complete_common_precision',False):
+                from .pair_positive_precision import coupled
+                value, tangent, metadata = coupled(
+                    self._base, settings, base, order, transform,
+                    quadrature, normalized, free)
+            else:
+                value, tangent, metadata = coupled_positive(
+                    self._base, base, quadrature, free, self.order[1],
+                    response_solver=response, normalized_quadrature=normalized,
+                    energy_verifier=energy)
         _check_response(value, tangent, metadata)
         metadata.update(closure='real_coupled_pair_corner_galerkin', order=self.order,
                         refinement=self._base.plan.refinement, shift=self._base.plan.shift,

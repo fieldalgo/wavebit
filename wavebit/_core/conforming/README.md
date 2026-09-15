@@ -26,6 +26,10 @@
 | `pair_transmission_modes.py` | Which finite-energy sector solutions preserve local potential and normal-flux continuity with one-sided interface derivatives? |
 | `pair_transmission_fields.py` | How can all selected real transmission directions share the fitted common polynomial coordinates and their moving gradients? |
 | `pair_transmission_common_precision.py` | How can complete higher-degree polynomial and fixed transmission coordinates retain accurate gradients and moving-sample variations before weak projection? |
+| `pair_complex_exponential.py` | Can complete complex sector powers and Fourier phases use real compensated exponential and trigonometric factors without losing primitive precision? |
+| `pair_positive_fields.py` | Can complete moving positive-gap fields retain primitive coordinate precision, including normalized collapsing gradients? |
+| `pair_positive_precision.py` | Can the full projected geometric metric condition positive-gap equations without removing a potential or shifting a pivot? |
+| `pair_positive_energy_precision.py` | Do independently reconstructed complete positive-gap fields retain physical energy and Fourier constraints through coefficient cancellation? |
 | `pair_corner_fields.py` | How do exact fifth-root remainders and nested angular powers preserve the complete corner field space? |
 | `pair_radial_powers.py` | How can exact root factors remove both polynomial overlap and nearby-exponent cancellation without discarding a radial direction? |
 | `pair_oscillatory_coefficients.py` | Which exact scalar weights and Taylor coefficients define the fixed real exponent columns? |

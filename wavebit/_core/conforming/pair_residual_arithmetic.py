@@ -32,6 +32,10 @@ def _real_product(a,b):
         zero=np.zeros((a.shape[0],b.shape[1]));return zero,zero
     if not np.all(np.isfinite(a)) or not np.all(np.isfinite(b)):
         raise ArithmeticError('physical residual requires finite matrix entries')
+    # An identically zero operand has an exactly zero product. Test only
+    # after the finite-input guard; no nonzero entry or field is discarded.
+    if not np.any(a) or not np.any(b):
+        zero=np.zeros((a.shape[0],b.shape[1]));return zero,zero
     ea=np.frexp(np.max(abs(a),axis=1))[1]
     eb=np.frexp(np.max(abs(b),axis=0))[1]
     x=np.ldexp(a,-ea[:,None]);y=np.ldexp(b,-eb[None,:])
@@ -59,6 +63,14 @@ def _product(a,b):
     a,b=np.asarray(a),np.asarray(b)
     rr=_real_product(a.real,b.real)
     if not np.iscomplexobj(a) and not np.iscomplexobj(b):return rr
+    # A real coordinate map has no imaginary matrix to multiply. Preserve
+    # both components of the complex operand without forming zero products.
+    if not np.iscomplexobj(a):
+        ri=_real_product(a,b.imag)
+        return rr[0]+1j*ri[0],rr[1]+1j*ri[1]
+    if not np.iscomplexobj(b):
+        ir=_real_product(a.imag,b)
+        return rr[0]+1j*ir[0],rr[1]+1j*ir[1]
     ii=_real_product(a.imag,b.imag)
     ri=_real_product(a.real,b.imag);ir=_real_product(a.imag,b.real)
     re=_sum_pairs([rr,(-ii[0],-ii[1])]);im=_sum_pairs([ri,ir])

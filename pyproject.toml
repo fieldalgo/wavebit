@@ -147,3 +147,7 @@ select = ["F401", "F811", "F821", "F632", "E711", "E712", "E714"]
 # in `__all__` now fails the lint. This comment used to carry the count instead, and the count
 # drifted 19 -> 34 unnoticed -- the argument against restating in prose what the code can state
 # itself, and hold itself to.
+
+[tool.pytest.ini_options]
+# Recognize the optional CI timeout plugin marker in base developer installs.
+markers = ["timeout(seconds): per-test deadline enforced by pytest-timeout in CI"]

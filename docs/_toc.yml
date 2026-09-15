@@ -86,6 +86,7 @@ subtrees:
       - file: nvf-pair-symmetric-potentials
       - file: nvf-contact-fourier-precision
       - file: nvf-contact-energy-coordinates
+      - file: nvf-positive-coordinate-precision
       - file: nvf-pair-transmission-potentials
       - file: nvf-polynomial-galerkin
       - file: nvf-affine-convergence

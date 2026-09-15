@@ -36,12 +36,13 @@ def test_all_contact_partitions_preserve_exact_triangle_moments():
             assert np.max(abs(error.hi+error.lo))<3e-30
 
 
-def test_complete_fourier_phase_and_variation_match_decimal_reference():
+@pytest.mark.parametrize("order", (1, 4))
+def test_complete_fourier_phase_and_variation_match_decimal_reference(order):
     bary=np.array([[.23,.31,.46],[.58,.13,.29],[1.,2.**-81,2.**-80]])
     points=np.array([[-.35,-.225],[.35,-.225],[.05,.225]])
     velocity=np.array([[-.125,0.],[.375,0.],[.25,0.]])
     period=np.array([1.2,.9])
-    modes=np.array([(i,j) for j in range(-1,2) for i in range(-1,2)])
+    modes=np.array([(i,j) for j in range(-order,order+1) for i in range(-order,order+1)])
     phase,tangent=phases(bary,points,velocity,modes,period)
     with localcontext() as context:
         context.prec=100

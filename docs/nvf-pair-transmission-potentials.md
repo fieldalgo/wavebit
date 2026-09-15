@@ -266,11 +266,15 @@ order-(4,4), two-branch study failed an energy-derivative guard. The
 corrects coefficient handoff and collapsed-measure rounding without changing
 that guard. These finite checks do not establish high-order optical convergence.
 
-Higher-degree positive-gap qualification is narrower. The quintic order-zero
-joint variation above passes, but a sextic order-(4,0) metal control at gap
-`.01` is rejected by the original guards. It uses the flat auxiliary reference
+The initial sextic order-(4,0) positive-gap metal control at gap `.01`
+was rejected by the original guards. It uses the flat auxiliary reference
 `(2,2,2)`, physical materials `(12.25,-10+i,1)`, period 700, widths/height 300,
 radial order 120 and angular order 24. Its weak residual is `1.98e-15`, while
 its independent energy and derivative-energy residuals are `1.25e-6` and
-`1.97e-7`. This is an unresolved positive-gap precision limit, distinct from
-both the accepted contact controls and the optical approximation changes.
+`1.97e-7`. The [positive-coordinate note](nvf-positive-coordinate-precision.md)
+isolates the amplified coordinate, moment and coefficient rounding and
+records the complete correction. The actual public sextic control now passes
+the unchanged physical and reflection thresholds. Its independent full-matrix
+gap difference has error `5.72e-11` against the existing `3e-9` bound.
+This finite precision correction is separate from unresolved optical
+approximation changes.

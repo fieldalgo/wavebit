@@ -102,8 +102,10 @@ with localcontext() as ctx:
 
 def phase_values(bary,p,dp,modes,period):
     """Scalar Fourier phases shared by both Cartesian field components."""
+    from .pair_complex_exponential import exponential
+    from .pair_complex_precision import C
     b=stack(coordinates(bary),1);argument=2*PI*((b@D(p))/D(period)@D(modes.T));delta=2*PI*((b@D(dp))/D(period)@D(modes.T))
-    phase=scalar.exp_pair((1j*argument.hi,1j*argument.lo));dphase=scalar.cp((1j*delta.hi,1j*delta.lo),phase)
+    phase=exponential(C(1j*argument.hi,1j*argument.lo)).pair;dphase=scalar.cp((1j*delta.hi,1j*delta.lo),phase)
     return phase,dphase
 
 def phases(bary,p,dp,modes,period):
