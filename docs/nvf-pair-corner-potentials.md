@@ -108,8 +108,10 @@ homogeneous powers and analytical variations. They extend the selectable space
 without changing the default order, radial exponents, physical equations or
 acceptance criteria.
 
-The angular/Fourier optical comparison is reproducible with
-`studies/nvf_pair_angular_resolution.py`. Each invocation computes the full
+The polynomial/angular/Fourier optical comparison is reproducible with
+`studies/nvf_pair_angular_resolution.py`. The `--degree` option selects cubic
+or quartic common potentials independently of `--angular-order` and
+`--refinement`; cubic degree remains the default. Each invocation computes the full
 contact state and derivative, checks the original physical guards and both
 Fourier reflection identities, and reports p/s transmission, reflection and
 optical directional slopes. For example:

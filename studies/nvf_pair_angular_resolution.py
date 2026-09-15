@@ -21,6 +21,8 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--order',type=int,nargs='+',default=[4],metavar='N',
                         help='One shared Fourier order or separate x and y orders.')
+    parser.add_argument('--degree',type=int,choices=(3,4),default=3,
+                        help='Common polynomial degree, independent of angular enrichment.')
     parser.add_argument('--angular-order',type=int,choices=range(5),default=4)
     parser.add_argument('--refinement',type=int,choices=range(4),default=0)
     parser.add_argument('--quadrature',type=int,default=64)
@@ -42,12 +44,12 @@ def main():
         period=700.,widths=[300.,300.],height=300.,gap=0.,offset=[0.,0.],
         epsilon=[[12.25,0.],[-10.,1.]],background=1.,wavelength=900.,
         thickness=300.,top=1.,bottom=2.25,theta=.2,phi=0.),
-        exponents=[.6,.8],degree=3,mesh='symmetric',coercivity_angle=1.53,
+        exponents=[.6,.8],mesh='symmetric',coercivity_angle=1.53,
         source_sha256={str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest()
                        for p in sources}))
     start=time.perf_counter()
     cell=CartesianPairCornerGalerkinGapCell(CartesianPairOpeningPlan(0,args.refinement),
-        orders,degree=3,quadrature=args.quadrature,junctions=True,
+        orders,degree=args.degree,quadrature=args.quadrature,junctions=True,
         angular_order=args.angular_order,coercivity_angle=1.53,mesh='symmetric',
         oscillatory_radial=args.oscillatory_radial,angular_quadrature=args.angular_quadrature)
     value,tangent,metadata=cell.closure(gap=0.,epsilon=(12.25,-10+1j),**GEOMETRY)
