@@ -6,7 +6,7 @@ transmission component before rounding the complete physical gradients.
 """
 import numpy as np
 from .pair_complex_precision import C
-from .pair_corner_precision import D, logarithm
+from .pair_corner_precision import D, logarithm, simplex_coordinates
 from .pair_contact_quadrature import coordinates, PI
 from . import pair_oscillatory_fields as jet
 
@@ -49,24 +49,49 @@ class CommonCoordinates:
                 ordinary=ordinary-D(self.fields.interpolant[data['pmap'][data['periodic'][tri]]])@self.raw
             self.cache[key]=ordinary
         return self.cache[key]
-    def sample(self,tri,bary,inverse,dinverse):
+    def sample(self,tri,bary,inverse,dinverse,bary_tangent=None):
         fields=self.fields;bb=coordinates(bary);ref=np.array([[-1.,-1.],[1.,0.],[0.,1.]])
-        points=[jet.Jet((bb[i],D(0.),D(ref[i,0]),D(ref[i,1]),D(0.),D(0.)),True) for i in range(3)]
-        polynomial=jet.mapped(jet.bernstein(points,fields.obj.degree),self.prepared(tri),True,True)
-        gradients=list(polynomial.parts[2:4]);vertices=fields.zero[tri[:3]];hats=fields.hats[tri[:3]]
-        jac=np.column_stack([vertices[1]-vertices[0],vertices[2]-vertices[0]])
+        moving=bary_tangent is not None and np.any(bary_tangent)
+        db=simplex_coordinates(np.asarray(bary),bary_tangent)[1] if moving else [D(0.)]*3
+        points=[jet.Jet((bb[i],db[i],D(ref[i,0]),D(ref[i,1]),D(0.),D(0.)),not moving) for i in range(3)]
+        polynomial=jet.mapped(jet.bernstein(points,fields.obj.degree),self.prepared(tri),not moving,True)
+        gradients=list(polynomial.parts[2:4]);changes=list(polynomial.parts[4:6])
+        vertices=fields.zero[tri[:3]];hats=fields.hats[tri[:3]]
         first=0
         for corner,center,mode,parts in fields.modes:
             cutoff=hats[:,corner]
             if not np.any(cutoff):first+=len(parts);continue
             offsets=vertices-center;offsets[cutoff==1]=0.
+            # Differentiate the stored offsets that define the potential.
+            # Subtracting refined chart vertices in one word first loses
+            # low terms that remain visible in a complete moving field.
+            jac=D(offsets[1:])-D(offsets[0])
+            jac=jac.T
             x,y=(sum(bb[i]*offsets[i,axis] for i in range(3)) for axis in range(2))
             centroid=offsets.mean(axis=0);angle=(np.arctan2(centroid[1],centroid[0])-mode.start)%(2*np.pi)
             sector=min(np.searchsorted(np.cumsum(mode.angles),angle,side='right'),2)
             f,gx,gy=local_mode(mode,x,y,sector,angle)
             h=sum(bb[i]*cutoff[i] for i in range(3));gh=np.array([cutoff[1]-cutoff[0],cutoff[2]-cutoff[0]])
             raw=[C(h)*(gx*jac[0,a]+gy*jac[1,a])+f*gh[a] for a in range(2)]
+            if moving:
+                dx,dy=(sum(db[i]*offsets[i,axis] for i in range(3)) for axis in range(2))
+                # Each sector potential is harmonic and homogeneous. These
+                # identities differentiate its Cartesian gradient without
+                # subtracting nearby singular field samples.
+                scale=(C(mode.exponent)-1)/C(x*x+y*y)
+                fxx=scale*(gx*C(x)-gy*C(y))
+                fxy=scale*(gx*C(y)+gy*C(x))
+                dgx,dgy=fxx*C(dx)+fxy*C(dy),fxy*C(dx)-fxx*C(dy)
+                df=gx*C(dx)+gy*C(dy)
+                dh=sum(db[i]*cutoff[i] for i in range(3))
+                draw=[C(dh)*(gx*jac[0,a]+gy*jac[1,a])
+                      +C(h)*(dgx*jac[0,a]+dgy*jac[1,a])+df*gh[a] for a in range(2)]
             for part in parts:
-                for a in range(2):gradients[a]=gradients[a]+getattr(raw[a],part)[:,None]*self.raw[first]
+                for a in range(2):
+                    gradients[a]=gradients[a]+getattr(raw[a],part)[:,None]*self.raw[first]
+                    if moving:changes[a]=changes[a]+getattr(draw[a],part)[:,None]*self.raw[first]
                 first+=1
-        return [sum(gradients[a]*D(matrix[a,b]) for a in range(2)) for matrix in (inverse,dinverse) for b in range(2)]
+        result=[sum(gradients[a]*D(matrix[a,b]) for a in range(2)) for matrix in (inverse,dinverse) for b in range(2)]
+        if moving:
+            for b in range(2):result[2+b]=result[2+b]+sum(changes[a]*D(inverse[a,b]) for a in range(2))
+        return result

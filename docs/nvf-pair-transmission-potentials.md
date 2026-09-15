@@ -245,6 +245,17 @@ at degrees 5 and 6 and on a refined degree-5 mesh, retaining the original
 3e-9 derivative bound. Separate moving-field differences cover all four
 supported degrees, including collapsing triangles.
 
+The compensated common-coordinate sampler also accepts a moving barycentric
+sample. It differentiates each sector's harmonic homogeneous potential,
+including the cutoff and polynomial interpolant, before applying the moving
+physical inverse map. The inverse map and the moving sample contribute
+separately to the same gradient variation. Refined chart offsets retain both
+words when differentiated; rounding their difference first loses precision.
+Independent 100-digit potential differences check complete mixed coordinates
+at degrees 5 and 6 and refinement 1 against a relative `3e-28` bound. A zero
+sample direction preserves the static path bit for bit. This primitive check
+does not qualify a whole positive-gap response or optical convergence.
+
 The degree-5 positive-gap control also evaluates five complete physical
 states against the independent fourth-order joint gap/material difference
 described above. It passes the unchanged 3e-9 bound and took 832 seconds.
