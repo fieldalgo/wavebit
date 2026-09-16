@@ -143,15 +143,22 @@ reference basis. Geometry remains fixed during that JVP.
 successive growing roots `lambda`, `2-lambda`, `2+lambda` and `4-lambda`
 at every corner with a noninteger reference mode. Real and imaginary parts
 are retained separately. The common polynomial degree is an integer from 3
-through 6, defaulting to 3. The existing dense resource bound
-`degree * 2**plan.refinement <= 16` applies. Degrees 5 and 6 use complete
+through 8, defaulting to 3. The existing dense resource bound
+`degree * 2**plan.refinement <= 16` applies. Degrees 5 through 8 use complete
 compensated common and free Fourier equations at contact, with the same
 precision retained through the independent physical energy check. Degrees 3 and 4
 retain their existing evaluation path. Positive gaps use the same selected
 potential space and its complete physical variation.
 
+At degrees 5 through 8, `cutoff_order=1` or `2` adds every successive
+`h*(1-h)**m` multiple of the chosen reference modes through that order.
+The default `0` retains the original corner-hat multiplier `h`.
+These nested spaces, and all degree-7/8 spaces, combine complete fields
+in three-word arithmetic before the final two-word assembly. The reference
+and physical coefficients still have their distinct roles described above.
+
 The radial quadrature defaults to 80 and its effective order is at least
-`20*max(degree, 4)` (100 for degree 5, 120 for degree 6);
+`20*max(degree, 4)` (100, 120, 140 and 160 for degrees 5 through 8);
 `angular_quadrature=None` uses that effective order in both directions.
 An explicit angular order must be at least `max(12, 2*max(order)+4)`.
 

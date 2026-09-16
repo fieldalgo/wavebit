@@ -19,20 +19,22 @@ class CartesianPairTransmissionGalerkinGapCell(CartesianPairCornerGalerkinGapCel
     An inadmissible reference bank is rejected as a whole.
 
     Every mode is multiplied by its fixed corner hat and transported with the
-    same symmetric polynomial mesh of degree 3 through 6. Degrees 5 and 6
+    same symmetric polynomial mesh of degree 3 through 8. Degrees 5 through 8
     retain complete compensated common and free Fourier contact equations,
     and a full geometric coordinate change at positive gaps. Independent
     physical Fourier integrals check positive-gap retained constraints.
     All original energy, weak, retained and flux tolerances apply. Contact and positive gap use the same field space.
     Choosing branches, mesh or quadrature does not establish optical accuracy.
-    At degree 5 or 6, cutoff_order=1 or 2 retains h*(1-h)**m times every
+    At degrees 5 through 8, cutoff_order=1 or 2 retains h*(1-h)**m times every
     selected mode for all m from zero through cutoff_order. These nested
     spaces use three-word common-field arithmetic before final two-word
-    assembly. The default zero keeps the original h-weighted field space.
+    assembly. Degrees 7 and 8 also use this arithmetic for cutoff zero,
+    including flat reference materials with no added transmission direction.
+    The default zero keeps the original h-weighted field space.
     The original fixed-power family and ordinary NVF routing are unchanged.
     """
 
-    _polynomial_degrees = (3, 4, 5, 6)
+    _polynomial_degrees = (3, 4, 5, 6, 7, 8)
 
     def __init__(self, plan, order=1, *, reference, branches=2, degree=3,
                  quadrature=80, angular_quadrature=None, coercivity_angle=0.,
@@ -47,8 +49,8 @@ class CartesianPairTransmissionGalerkinGapCell(CartesianPairCornerGalerkinGapCel
         if (isinstance(cutoff_order, (bool, np.bool_)) or not isinstance(cutoff_order, Integral)
                 or not 0 <= cutoff_order <= 2):
             raise ValueError('transmission cutoff_order must be an integer from 0 through 2')
-        if cutoff_order and degree not in (5, 6):
-            raise ValueError('nested transmission cutoffs require degree 5 or 6')
+        if cutoff_order and degree not in (5, 6, 7, 8):
+            raise ValueError('nested transmission cutoffs require degree 5 through 8')
         super().__init__(plan, order, degree=degree, quadrature=quadrature,
                          exponents=(), junctions=True, mesh='symmetric',
                          angular_quadrature=angular_quadrature,

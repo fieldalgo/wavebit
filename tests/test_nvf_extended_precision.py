@@ -64,6 +64,31 @@ def test_three_word_logarithm_matches_decimal():
             assert abs(scalar(result,index)-expected)/max(Z(1),abs(expected))<Z('3e-43')
 
 
+@pytest.mark.parametrize('rows,columns,inner',((257,257,0),(257,257,23),(512,324,36)))
+def test_large_three_word_products_preserve_independent_rows_and_decimal_dots(rows,columns,inner):
+    rng=np.random.default_rng(508)
+    a=T(*(rng.normal(size=(rows,inner))*2.**(-55*k) for k in range(3)))
+    b=T(*(rng.normal(size=(inner,columns))*2.**(-55*k) for k in range(3)))
+    if inner:
+        # Whole zero rows and directions that survive only in a low word
+        # must behave identically inside and outside a large field bank.
+        a.hi[:129,:3]=0.;a.words[1][:129,:2]=0.
+        for word in a.words:word[130:135]=0.;word[:128,4]=0.
+        for word in b.words:word[5]=0.
+    actual=a@b
+    pieces=[a[first:first+31]@b for first in range(0,rows,31)]
+    for word,observed in enumerate(actual.words):
+        expected=np.concatenate([piece.words[word] for piece in pieces])
+        np.testing.assert_array_equal(observed.view(np.uint64),expected.view(np.uint64))
+    with localcontext() as context:
+        context.prec=100
+        for row in (0,127,128,130,255,rows-1):
+            for column in (0,columns//2,columns-1):
+                exact=sum(scalar(a,(row,k))*scalar(b,(k,column)) for k in range(inner))
+                error=abs(scalar(actual,(row,column))-exact)/max(Z(1),abs(exact))
+                assert error<Z('3e-43')
+
+
 def test_three_word_products_keep_low_only_operands_and_finite_guards():
     left=T(np.zeros((2,3)),np.full((2,3),2.**-100),np.full((2,3),2.**-200))
     right=T(np.ones((3,2)))

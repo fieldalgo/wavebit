@@ -22,7 +22,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--order',type=int,nargs='+',default=[4],metavar='N',
                         help='One shared Fourier order or separate x and y orders.')
-    parser.add_argument('--degree',type=int,choices=(3,4,5,6),default=3,
+    parser.add_argument('--degree',type=int,choices=(3,4,5,6,7,8),default=3,
                         help='Common polynomial degree, independent of angular enrichment.')
     parser.add_argument('--angular-order',type=int,choices=range(5),default=4)
     parser.add_argument('--refinement',type=int,choices=range(4),default=0)
@@ -34,16 +34,16 @@ def main():
     parser.add_argument('--transmission-branches',type=int,choices=range(1,5),default=None,
                         help='Select fixed-reference transmission modes instead of the fixed-power bank; angular-order then does not apply.')
     parser.add_argument('--transmission-cutoff-order',type=int,choices=range(3),default=0,
-                        help='Retain successive h*(1-h)**m cutoffs of each transmission mode at degree 5 or 6.')
+                        help='Retain successive h*(1-h)**m cutoffs of each transmission mode at degrees 5 through 8.')
     parser.add_argument('--tensor-output',type=Path,default=None,
                         help='Optional complete tensor/JVP NPZ, including guard and reflection status.')
     args=parser.parse_args()
     if args.transmission_branches is not None and args.oscillatory_radial:
         parser.error('transmission and fixed oscillatory banks are separate field spaces')
     if args.degree>4 and args.transmission_branches is None:
-        parser.error('degrees 5 and 6 require the transmission field family')
+        parser.error('degrees 5 through 8 require the transmission field family')
     if args.transmission_cutoff_order and (args.transmission_branches is None or args.degree<5):
-        parser.error('nested cutoffs require the degree-5 or degree-6 transmission family')
+        parser.error('nested cutoffs require the degree-5 through degree-8 transmission family')
     if len(args.order) not in (1,2) or any(n<0 for n in args.order):
         parser.error('order must be one or two nonnegative integers')
     orders=tuple(args.order*2 if len(args.order)==1 else args.order)

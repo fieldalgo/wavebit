@@ -61,14 +61,23 @@ def builder(obj,settings,base):
   if key not in providers:providers[key]=getattr(fields,'common_coordinate_type',CommonCoordinates)(fields,np.eye(nc)[:,ci])
   common_db=meta.get('common_tangent',meta['tangent'])[sl]
   common=providers[key].sample(tri,bary,invc,dic,common_db)
-  ref=np.array([[-1.,-1.],[1.,0.],[0.,1.]])
   static=not any(np.any(v.hi) or np.any(v.lo) for v in db)
-  jets=[jet.Jet((b[i],db[i],D(ref[i,0]),D(ref[i,1]),D(0.),D(0.)),static) for i in range(3)]
-  polynomial=jet.bernstein(jets,obj.degree)
   mapping=D(obj.data['Zfull'][obj.data['periodic'][tri]][:,zi])
-  normal=jet.mapped(polynomial,mapping,static,True);grad=normal.parts[2:4];delta=normal.parts[4:6]
-  gz=[sum(grad[a]*invz[a,k] for a in range(2)) for k in range(2)]
-  dgz=[sum(delta[a]*invz[a,k]+grad[a]*diz[a,k] for a in range(2)) for k in range(2)]
+  if obj.degree>=7:
+   from .pair_extended_precision import Triple as T
+   from .pair_transmission_extended_precision import _coordinates,_polynomial
+   # Differentiate every Bernstein coefficient before the physical map.
+   # Higher degrees exceed the older small-product kernel's proven size.
+   grad,delta=_polynomial(obj.degree,_coordinates(bary),list(map(T,db)),T(mapping),not static)
+   gz=[D(*sum(grad[a]*T(invz[a,k]) for a in range(2)).pair) for k in range(2)]
+   dgz=[D(*sum(delta[a]*T(invz[a,k])+grad[a]*T(diz[a,k]) for a in range(2)).pair) for k in range(2)]
+  else:
+   ref=np.array([[-1.,-1.],[1.,0.],[0.,1.]])
+   jets=[jet.Jet((b[i],db[i],D(ref[i,0]),D(ref[i,1]),D(0.),D(0.)),static) for i in range(3)]
+   polynomial=jet.bernstein(jets,obj.degree)
+   normal=jet.mapped(polynomial,mapping,static,True);grad=normal.parts[2:4];delta=normal.parts[4:6]
+   gz=[sum(grad[a]*invz[a,k] for a in range(2)) for k in range(2)]
+   dgz=[sum(delta[a]*invz[a,k]+grad[a]*diz[a,k] for a in range(2)) for k in range(2)]
   def combine(regular,normal):
    a=stack(regular,1);z=stack(normal,1)
    return D(np.concatenate([a.hi,z.hi],2),np.concatenate([a.lo,z.lo],2))

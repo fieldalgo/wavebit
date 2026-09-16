@@ -77,7 +77,7 @@ def test_normal_maps_match_independent_positive_gap_limits(refinement):
                     actual=dec(observed.hi[i,j])+dec(observed.lo[i,j])
                     assert abs(actual-expected[i][j])/max(Z(1),abs(expected[i][j]))<Z('3e-28')
 
-@pytest.mark.parametrize('degree',(3,4,5,6))
+@pytest.mark.parametrize('degree',(3,4,5,6,7,8))
 @pytest.mark.parametrize('order',(0,1,4))
 def test_complete_stored_trace_matches_decimal_monomials(degree,order):
     with localcontext() as context:
@@ -108,7 +108,7 @@ def test_complete_stored_trace_matches_decimal_monomials(degree,order):
            value=result[component];observed=dec(value.hi[row,column])+dec(value.lo[row,column]);error=abs(observed-target)/max(Z(1),abs(target));worst=max(worst,float(error));assert error<Z('3e-28'),(degree,order,row,column,component,error)
 
 
-@pytest.mark.parametrize('degree',(3,4,5,6))
+@pytest.mark.parametrize('degree',(3,4,5,6,7,8))
 def test_complete_nodal_gradient_matches_decimal_potential(degree):
     rng=np.random.default_rng(742)
     with localcontext() as context:

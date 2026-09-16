@@ -76,9 +76,19 @@ class Triple:
         if not all(np.all(np.isfinite(word)) for word in (*self.words,*v.words)):
             raise ArithmeticError('triple products require finite coefficients')
         a=self.reshape(1,-1) if left else self;b=v.reshape(-1,1) if right else v
-        out=Triple.zeros((a.hi.shape[0],b.hi.shape[1]))
-        for k in range(a.hi.shape[1]):
-            if any(np.any(x[:,k]) for x in a.words) and any(np.any(x[k]) for x in b.words):out=out+a[:,k,None]*b[k,None,:]
+        active=[k for k in range(a.hi.shape[1])
+                if any(np.any(x[:,k]) for x in a.words) and any(np.any(x[k]) for x in b.words)]
+        def accumulate(rows):
+            out=Triple.zeros((rows.hi.shape[0],b.hi.shape[1]))
+            for k in active:out=out+rows[:,k,None]*b[k,None,:]
+            return out
+        if a.hi.shape[0]>128 and a.hi.shape[0]*b.hi.shape[1]>=65536:
+            # Bound the temporary arrays without changing any entry's
+            # multiplication/addition order or its three complete words.
+            # Keep the same global exact-zero decisions in every row tile.
+            out=Triple.zeros((a.hi.shape[0],b.hi.shape[1]))
+            for first in range(0,len(a),128):out[first:first+128]=accumulate(a[first:first+128])
+        else:out=accumulate(a)
         if left and right:return out[0,0]
         if left:return out[0]
         if right:return out[:,0]

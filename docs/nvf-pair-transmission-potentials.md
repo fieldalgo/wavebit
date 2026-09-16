@@ -30,7 +30,7 @@ existing fixed-power family.
 | Reference coefficients | Fixed left, right and background values defining the trial functions |
 | Physical coefficients | Live materials passed to `closure`, independently of the reference |
 | One through four branches | Successive noninteger growing transmission roots at all six corners |
-| Cutoff order zero through two | At degree 5 or 6, include every `h*(1-h)**m` multiplier through that order; zero retains the original space |
+| Cutoff order zero through two | At degrees 5 through 8, include every `h*(1-h)**m` multiplier through that order; zero retains the original space |
 | Real directions | Both real and imaginary parts of complex modes; one direction for a real mode with real relative coefficients |
 | Common coordinates | A continuous Pp interpolation subtraction and complete real QR within each corner group |
 
@@ -242,6 +242,21 @@ original guards, with full value and derivative reflection defects below
 `3.76e-12` and `8.78e-11`. Its transmission and slope still change substantially
 from the unrefined space. It does not close the approximation-convergence gate.
 
+A fresh refined quintic two-branch library calculation uses the complete
+normal Fourier means and independently reconstructed mean variation from
+[the contact energy note](nvf-contact-energy-coordinates.md). At radial/angular
+orders 100/80 and Fourier order `(4,4)`, it passed every original physical
+and reflection guard in 6,311 seconds under concurrent workloads. Energy
+and derivative-energy residuals were `1.61e-25` / `5.29e-22`; the physical
+mean-variation residual was `3.59e-15`. Full-slot value and derivative
+reflection defects were `7.24e-16` / `9.16e-16`.
+
+Its p/s transmissions are `.489284990957` / `.479401083850`, with optical
+directional slopes `-.044017967333` / `.017928929941`. The two slope stencils
+differ by `3.39e-10` / `2.01e-8`. This fresh complete-state qualification
+resolves the earlier refined derivative reflection failure; it does not
+establish approximation or optical convergence.
+
 Reproduce the library measurement with
 
 ```shell
@@ -255,7 +270,7 @@ before applying the unchanged strict reflection checks.
 ## Higher polynomial degrees and complete coordinate precision
 
 The explicit transmission family admits common polynomial degrees 3 through
-6. The existing dense bound `degree * 2**refinement <= 16` continues to
+8. The existing dense bound `degree * 2**refinement <= 16` continues to
 apply. The original fixed-power and polynomial family degree contracts are
 unchanged. Increasing degree retains the complete Bernstein space, every
 selected real transmission direction, and the full continuous Fourier trace.
@@ -320,7 +335,7 @@ approximation changes.
 
 ## Complete geometric contact coordinates
 
-For degrees 5 and 6, [complete retained elimination](nvf-retained-contact-solve.md)
+For degrees 5 through 8, [complete retained elimination](nvf-retained-contact-solve.md)
 uses the smaller block when its dimension is below the common potential count.
 The complete common gradient space can also use its integrated
 geometric metric instead of repeatedly factoring tall sampled field matrices.
@@ -354,7 +369,7 @@ The optional `cutoff_order` extends each fixed transmission potential `F`
 from `h*F` to the nested collection `h*(1-h)**m*F`, for every integer `m`
 from zero through the requested order. Here `h` is the same piecewise affine
 corner hat. No original mode, real component or common polynomial is
-removed. Orders one and two are available at degrees five and six; order
+removed. Orders one and two are available at degrees five through eight; order
 zero remains the default. With the documented two-branch metal reference,
 the three choices contain 20, 40 and 60 real transmission directions.
 
@@ -380,8 +395,13 @@ Three-word products retain every cross term, and normalization carries a
 surviving low remainder into the leading word after cancellation. Complex
 powers use real range reduction and complete-coefficient exponential and
 trigonometric polynomials. No third-party arithmetic implementation or new
-runtime dependency is introduced. The ordinary cutoff-zero path continues
-to use its existing two-word provider.
+runtime dependency is introduced. At degrees five and six the ordinary
+cutoff-zero path continues to use its existing two-word provider. Degrees
+seven and eight use the three-word provider even with an empty transmission
+bank: their Bernstein columns exceed the older small-product kernel's
+qualified dimension. Their disappearing positive-gap polynomial fields are
+also differentiated completely before applying the physical inverse and its
+variation. No existing small-product dimension guard is widened.
 
 Independent 100-digit checks cover both nested orders at degrees five and
 six, a refined degree-five mesh, ordinary points and points carrying a low
@@ -390,6 +410,56 @@ in space and along moving coordinates, retaining the same `3e-28` bound.
 Separate Decimal checks cover the arithmetic, cancellation, complete matrix
 products and complex exponential range. These primitive controls do not
 establish optical convergence of the enlarged trial spaces.
+
+The same independent moving-potential oracle now covers all three cutoff
+orders at degrees seven and eight, on both the original and once-refined
+meshes, with complete low-word coordinates and the unchanged `3e-28` bound.
+Independent normal-gradient and stored-trace checks extend through degree
+eight as well. A separate 160-digit positive-potential oracle differentiates
+the complete polynomial/common/normal combination at degrees six through
+eight and physical gaps `.01`, `1e-9` and `1e-13`, at both ordinary and
+complete low-word coordinates, again at `3e-28`.
+Uniform-material contact controls at degrees five through eight preserve
+the exact tensor and its joint material/opening variation under the original
+physical and reflection bounds. These checks qualify finite field formulas;
+they do not establish optical convergence at higher degree.
+
+Complete metal contact controls use degree seven at Fourier order `(0,1)`
+and degree eight at `(1,0)`, radial orders 140/160, angular order 48 and
+joint gap/material/background directions. Both retain all 20 real
+transmission modes and pass every original physical and reflection guard.
+Their energy/derivative-energy residuals are `1.39e-25` / `2.44e-25` and
+`3.77e-28` / `8.18e-27`; independently integrated mean-variation residuals
+are `4.28e-30` and `1.19e-30`. The runs took 570 and 809 seconds with one
+numerical-library thread under concurrent workloads. These are complete
+finite contact checks, not an optical-convergence measurement.
+
+A degree-seven zero-Fourier-order positive-gap control at gap `.02` uses
+physical materials `(4+.1i, 9+.2i, 1+.02i)` and the distinct fixed reference
+`(12.25, -10+i, 1)`. Its joint gap/material/background direction passes every
+original physical and full reflection guard. Energy and derivative-energy
+residuals are `1.68e-32` / `1.15e-31`; the independently integrated Fourier
+mean defect is `1.11e-16`. Full reflection defects are `1.32e-20` / `2.01e-18`.
+The run took 2,754 seconds under concurrent workloads, with a scoped
+3,600-second test deadline and unchanged physical tolerances. This is one
+complete positive state, not a new finite-difference or contact-limit check.
+
+Large three-word field products now accumulate bounded row tiles. Every
+entry keeps its original multiplication and addition order, including the
+same global exact-zero decisions; all three words remain intact. Independent
+100-digit dot checks and complete row-partition comparisons cover large,
+empty and low-word-only products. A paired three-repeat degree-seven field
+comparison on three triangles, with 512 points and 324 real output columns,
+preserved every output bit and changed median evaluation time from 1.864 to
+1.484 seconds.
+
+A separate comparison reconstructs the actual complete cutoff-two quintic
+order-`(4,4)` electric fields on one bulk and one collapsing triangle.
+All four complete `162 x 162` energy, energy-variation, Fourier-mean and
+mean-variation integrals remained bitwise identical. Those selected integrals
+took 178 and 129 seconds before and after row tiling. Both measurements ran
+under concurrent workloads; neither is a whole-solver speedup or a new
+optical-convergence qualification.
 
 To measure an enlarged space with the full original physical and reflection
 checks, use the existing study entry point, for example:

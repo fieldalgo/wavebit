@@ -54,7 +54,7 @@ class PairTransmissionFields(PairCornerFields):
                     self.cutoff_powers.append(power)
                     self._definitions.extend((corner,) for _ in parts)
         self.count = len(self._definitions)
-        if cutoff_order and self.count:
+        if obj.degree>=7 or cutoff_order and self.count:
             from .pair_transmission_extended_precision import CommonCoordinates as ExtendedCoordinates
             self.common_coordinate_type = ExtendedCoordinates
         if self.count:

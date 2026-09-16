@@ -67,7 +67,7 @@ def test_compensated_mode_matches_independent_cartesian_power(coefficients,branc
                     errors.append(float(error));assert error<Z('3e-28'),(coefficients,branch,sector,radius,error)
 
 
-@pytest.mark.parametrize('degree', (5,6))
+@pytest.mark.parametrize('degree', (5,6,7,8))
 def test_high_degree_flat_reference_retains_uniform_tensor_and_joint_variation(degree):
     from wavebit._core.conforming.cartesian_pair_opening import CartesianPairOpeningPlan
     from wavebit._core.conforming.cartesian_pair_transmission_galerkin import CartesianPairTransmissionGalerkinGapCell
@@ -99,12 +99,16 @@ def test_high_degree_scope_retains_original_family_and_resource_limits():
     for family in (CartesianPairCornerGalerkinGapCell,CartesianPairPolynomialGalerkinGapCell):
         with pytest.raises(ValueError,match='degree'):
             family(plan,0,degree=5)
-    for degree in (True,5.,2,7):
+    for degree in (True,5.,2,9):
         with pytest.raises(ValueError,match='degree'):
             CartesianPairTransmissionGalerkinGapCell(plan,0,reference=(4.,9.,1.),degree=degree)
     with pytest.raises(ValueError,match='resolution'):
         CartesianPairTransmissionGalerkinGapCell(CartesianPairOpeningPlan(0,2),0,
             reference=(4.,9.,1.),degree=6)
+    for degree in (7,8):
+        with pytest.raises(ValueError,match='resolution'):
+            CartesianPairTransmissionGalerkinGapCell(CartesianPairOpeningPlan(0,2),0,
+                reference=(4.,9.,1.),degree=degree)
 
 
 # Five complete independently verified states take about 30 minutes on the

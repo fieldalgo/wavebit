@@ -22,9 +22,15 @@ def test_cutoff_order_rejects_invalid_values(cutoff_order):
 
 @pytest.mark.parametrize('degree',(3,4))
 def test_cutoff_order_requires_complete_high_degree_coordinates(degree):
-    with pytest.raises(ValueError,match='degree 5 or 6'):
+    with pytest.raises(ValueError,match='degree 5 through 8'):
         CartesianPairTransmissionGalerkinGapCell(CartesianPairOpeningPlan(0),0,
             reference=(12.25,-10+1j,1.),degree=degree,cutoff_order=1)
+
+
+@pytest.mark.parametrize('degree,refinement',((7,0),(8,0),(7,1),(8,1)))
+@pytest.mark.parametrize('cutoff_order',(0,1,2))
+def test_higher_degree_moving_potentials_retain_all_complete_directions(degree,refinement,cutoff_order):
+    check_moving_potential(degree,refinement,cutoff_order,exact_points=True)
 
 
 def test_flat_reference_has_no_spurious_nested_directions():
@@ -73,6 +79,45 @@ def test_nested_cutoff_contact_preserves_original_physical_and_reflection_guards
         epsilon_tangent=(.2+.1j,-.4+.2j),background_tangent=.1-.03j)
     assert metadata['transmission_directions']==40
     assert metadata['transmission_cutoff_order']==1
+    assert metadata['retained_verification']=='physical_field_integral'
+    for key in ('energy_residual','energy_derivative_residual','retained_residual'):
+        assert metadata[key]<1e-10
+    for response,tolerance in ((value,3e-10),(tangent,3e-9)):
+        for slot in response[3:]:np.testing.assert_allclose(slot,0.,atol=tolerance,rtol=0)
+
+
+@pytest.mark.parametrize('degree,order',((7,(0,1)),(8,(1,0))))
+def test_higher_degree_contact_preserves_complete_joint_physical_response(degree,order):
+    cell=CartesianPairTransmissionGalerkinGapCell(CartesianPairOpeningPlan(0),order,
+        reference=(12.25,-10+1j,1.),branches=2,degree=degree,
+        quadrature=20*degree,angular_quadrature=48,coercivity_angle=1.53)
+    value,tangent,metadata=cell.closure(gap=0.,basis=np.eye(2)*700,
+        widths=(300.,300.),height=300.,offset=(-350.,-350.),
+        epsilon=(12.25,-10+1j),background=1.,gap_tangent=.7,
+        epsilon_tangent=(.2+.1j,-.4+.2j),background_tangent=.1-.03j)
+    assert metadata['transmission_directions']==20
+    assert metadata['retained_verification']=='physical_field_integral'
+    for key in ('energy_residual','energy_derivative_residual','retained_residual',
+                'physical_retained_derivative_residual'):
+        assert metadata[key]<1e-10
+    reflection=np.array([2,1,0] if order[1] else [0,1,2])
+    for response,tolerance in ((value,3e-10),(tangent,3e-9)):
+        for slot,sign in zip(response,(1,1,1,-1,-1)):
+            np.testing.assert_allclose(slot,sign*slot[:,reflection][:,:,reflection],atol=tolerance,rtol=0)
+
+
+# The full positive-gap space retains its 140-point radial rule and all
+# physical fields; allow the same bounded deadline as the nested control.
+@pytest.mark.timeout(3600)
+def test_degree_seven_positive_gap_retains_joint_energy_and_fourier_mean():
+    from test_nvf_pair_transmission import GEOMETRY,REFERENCE
+    cell=CartesianPairTransmissionGalerkinGapCell(CartesianPairOpeningPlan(0),0,
+        reference=REFERENCE,branches=2,degree=7,quadrature=140,
+        angular_quadrature=32,coercivity_angle=1.53)
+    value,tangent,metadata=cell.closure(gap=.02,**GEOMETRY,
+        epsilon=(4.+.1j,9.+.2j),background=1.+.02j,gap_tangent=.7,
+        epsilon_tangent=(.1+.02j,.2+.03j),background_tangent=.05+.01j)
+    assert metadata['transmission_directions']==20
     assert metadata['retained_verification']=='physical_field_integral'
     for key in ('energy_residual','energy_derivative_residual','retained_residual'):
         assert metadata[key]<1e-10
