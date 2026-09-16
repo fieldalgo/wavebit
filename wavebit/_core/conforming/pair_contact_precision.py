@@ -14,6 +14,7 @@ from .pair_oscillatory_scalar import cp as complex_cp
 from .projected_pair_contact import _real_geometry
 from .pair_contact_quadrature import quadrature,phases,phase_values,triangle_measures,contact_maps
 from .pair_contact_fourier import moments as free_moments
+from .pair_contact_normal_precision import contact_normals,trace_values
 
 
 def pair(a):return np.asarray(a),np.zeros_like(a)
@@ -126,7 +127,7 @@ def response(obj,settings,base,transform,chart,order,T,Qbar,records,edge_rows,*,
     rows=iter(records())
     nx,ny=obj.order;modes=np.array([(i,j) for j in range(-ny,ny+1) for i in range(-nx,nx+1)])
     length,s,zero,velocity=obj._chart_geometry(0.,{k:np.asarray(settings[k]) for k in ('basis','widths','height','offset')})
-    for tri,local in zip(obj.data['triangles'],info['local']):
+    for tri,tag,local in zip(obj.data['triangles'],obj.data['tags'],info['local']):
         indices,common=local_coordinates(fields,tri,nc)
         local_count=len(indices);square=np.ix_(indices,indices);columns=(slice(None),indices)
         p=zero[tri[:3]];dp=D(ds)*D(velocity[tri[:3]])
@@ -134,6 +135,7 @@ def response(obj,settings,base,transform,chart,order,T,Qbar,records,edge_rows,*,
         inv,dinv=contact_maps(p,velocity[tri[:3]],ds,local[11])
         for bary,weight in quadrature(fields,tri,order):
             row,_,_,phi,dphi,added=next(rows);_,ci,zi,w,dw,ep,dep,phase,dphase,gc,dgc,gz,*_=row
+            gz,added=contact_normals(obj,transform,chart,tri,tag,local,bary,zero,velocity)
             for first in range(0,len(bary),512):
                 sl=slice(first,first+512);samples=common.sample(tri,bary[sl],inv,dinv)
                 def grad(offset):return tuple(np.stack([getattr(samples[offset+a],part) for a in range(2)],axis=1).reshape(-1,local_count) for part in ('hi','lo'))
@@ -141,8 +143,8 @@ def response(obj,settings,base,transform,chart,order,T,Qbar,records,edge_rows,*,
                 mw=weight.exact[sl]*area;mdw=weight.exact[sl]*D(ds)*slope
                 ww=tuple(np.repeat(v,2)[:,None] for v in mw.pair)
                 dww=tuple(np.repeat(v,2)[:,None] for v in mdw.pair)
-                chi=np.zeros((len(bary[sl]),2,total));chi[:,:,zi]=gz[sl];chi[:,:,nz:]=added[sl]
-                chi=pair(chi.reshape(-1,total))
+                chi=D.zeros((len(bary[sl]),2,total));chi[:,:,zi]=gz[sl];chi[:,:,nz:]=added[sl]
+                chi=chi.reshape(-1,total).pair
                 if not local[11]:
                     chi=add(chi,neg(mat(ph,pair(qb))));_real_geometry(chi[0]+chi[1]);chi=tuple(v.real for v in chi)
                 mw=weight.exact[sl]*(slope if local[11] else area)
@@ -167,10 +169,10 @@ def response(obj,settings,base,transform,chart,order,T,Qbar,records,edge_rows,*,
         indices,common=local_coordinates(fields,tri,nc);columns=(slice(None),indices)
         phase,_=phase_values(bary,zero[tri[:3]],np.zeros((3,2)),modes,chart[4])
         ph=tuple(np.hstack([np.zeros((len(p),N),complex),value]) for value in phase)
-        rawjump=trace._basis(np.array([edge]),tg)[0][0]@transform[2];jump=np.r_[np.zeros(nz),rawjump]
+        rawjump=trace_values(trace,tg,D(np.array([edge])))[0][0]@D(transform[2]);jump=D.zeros(total);jump[nz:]=rawjump
         inverse,dinverse=contact_maps(zero[tri[:3]],np.zeros((3,2)),0.)
         samples=common.sample(tri,bary,inverse,dinverse);gy=samples[1].pair
-        left=cp(pair(weight[:,None]),pair(np.broadcast_to(jump,(len(p),total))))
+        left=cp(pair(weight[:,None]),D.broadcast(jump,(len(p),total)).pair)
         L=add_at(L,columns,cp(pair(ep),mat(transpose(left),gy)))
         SZ=add(SZ,cp(pair(ep),mat(transpose(left),ph)))
     if assembled is not None:

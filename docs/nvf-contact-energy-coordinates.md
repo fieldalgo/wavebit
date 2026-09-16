@@ -5,10 +5,12 @@ Targets:
 - `wavebit/_core/conforming/pair_contact_energy_precision.py`
 - `wavebit/_core/conforming/pair_contact_precision.py`
 - `wavebit/_core/conforming/pair_contact_quadrature.py`
+- `wavebit/_core/conforming/pair_contact_normal_precision.py`
 - `wavebit/_core/conforming/real_trace_coupling.py`
 - `tests/test_nvf_transmission_common_precision.py`
 - `tests/test_nvf_contact_fourier_precision.py`
 - `tests/test_nvf_contact_map_precision.py`
+- `tests/test_nvf_contact_normal_precision.py`
 - `tests/test_nvf_pair_residual_arithmetic.py`
 
 A complete compensated solve must also preserve its field coefficients when
@@ -134,7 +136,59 @@ triangle of a non-square, non-dyadic original and refined mesh, including
 finite common-gradient opening limits. Their maximum relative component
 errors were `5.66e-32` and `4.38e-31`, below the existing `3e-28` primitive
 bound. These maps preserve the same physical coordinates and field space.
-They do not change the ordinary normal-field bank or quadrature weights.
+They do not change the normal-field bank or quadrature weights. The complete
+evaluation of that same normal-field bank is described below.
+
+## Complete disappearing potentials and seam fields
+
+The polynomial normal potential has a different collapsing map from a common
+potential. Its reference gradient need not annihilate `adj(J0)`: the finite
+scaled opening gradient is `grad_ref(Z)*adj(J0)/det'(J0)`. Bulk triangles use
+the ordinary inverse of `J0`. Forming those gradients from complete Bernstein
+coordinates and integer differentiation coefficients avoids rounding the
+normalized field before the area coefficient and large solved potentials
+multiply it.
+
+The seam lift keeps its original stored polynomial coefficients, real frame
+and geometric coordinate changes. Values and spatial derivatives are now
+evaluated with complete trigonometric factors and a differentiated Clenshaw
+recurrence. Exactly even and odd Chebyshev polynomials use their identities
+in `2*u*u-1` to reduce the work. Every nonzero coefficient survives; no
+polynomial degree or trace column is removed. Common and disappearing
+polynomial projections are combined before rounding, including triangles
+with no local disappearing node. Boundary jumps retain the same two words.
+
+A paired three-repeat evaluation of 4,096 points at transverse order 4
+compared this recurrence with the complete forward Chebyshev recurrence.
+Median times were `0.516 -> 0.209` seconds at degree 4 and
+`0.243 -> 0.112` seconds at degree 5. Complete values and derivatives differed
+by at most `2.04e-31` on the component scale. This measures trace evaluation
+alone with one numerical-library thread, not the whole contact solve.
+
+Both the weak equations and independent physical reconstruction use these
+fields. Independent 100-digit checks cover the stored trace charts at
+degrees 3 through 6 and transverse orders 0, 1 and 4, polynomial-potential
+derivatives, and scaled positive-gap inverse limits on non-square original
+and refined meshes. All use the existing `3e-28` primitive bound. The
+stored trace chart is preserved; this change does not rebuild its reference
+coefficients or change its physical span.
+
+In the first quintic order-`(1,0)` joint gap/material control, the complete
+field prototype passes all original physical and reflection guards, with
+energy and derivative-energy residuals `2.22e-30` and `3.89e-30`. The
+corresponding order-`(0,1)` control with angular order 48 also passes the
+entire reflection test and original physical guards; its derivative-energy
+residual is `1.41e-18`. These controls do not certify refined-mesh or optical
+convergence.
+
+The integrated Clenshaw implementation subsequently passed 25 controls:
+the independent field checks, the transverse joint response, comparisons
+among three complete contact solve paths, and four deliberately corrupted
+physical-coordinate cases. Twelve additional controls passed for the
+existing common-field paths, non-square cells, a quartic single direction,
+and high-degree flat and metal references. The two groups took 1,003 and
+903 seconds respectively in concurrent single-library-thread runs; these
+are validation durations, not comparative performance measurements.
 
 ## Complete products with anticorrelated sample scales
 

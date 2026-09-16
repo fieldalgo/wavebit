@@ -50,6 +50,7 @@
 | `pair_complete_solve.py` | Can a complete complex factorization retain every coordinate when its leading floating-point matrix is singular or poorly conditioned? |
 | `pair_contact_retained.py` | Can the full contact equations and physical variations be solved through a smaller retained block without dense common coordinate transforms? |
 | `pair_contact_precision.py` | Can every contact equation and high-degree geometric coordinate remain complete before and after Fourier projection? |
+| `pair_contact_normal_precision.py` | Can all disappearing polynomial and seam-trace fields preserve complete gradients through their geometric coordinate changes? |
 | `pair_contact_quadrature.py` | How can Gaussian moments, physical inverse maps, opening limits and Fourier phases retain enough precision for the complete contact variation? |
 | `pair_contact_refinement.py` | How can the contact variation correct its original weak, retained and flux defects together in the same complete space? |
 | `pair_corner_assembly.py` | How do added common corner fields retain the original C/Z equations and their physical variations? |
