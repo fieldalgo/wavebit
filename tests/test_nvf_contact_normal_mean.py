@@ -10,6 +10,17 @@ from test_nvf_contact_fourier_precision import decimal_pi,add,mul,times,exponent
 def dec(value):return Z.from_float(float(value))
 
 
+def test_large_resolved_mean_cannot_mask_an_unresolved_small_coefficient(monkeypatch):
+    from wavebit._core.conforming import pair_contact_normal_mean as module
+    def unresolved(obj,settings,base,transform,chart,order):
+        high=np.array([[1e6,order*1e-25]],complex)
+        return high,np.zeros_like(high)
+    monkeypatch.setattr(module,'_integrate',unresolved)
+    obj=SimpleNamespace(degree=5,order=(1,1))
+    with pytest.raises(ArithmeticError,match='normal Fourier means did not resolve'):
+        module.moments(obj,None,None,None,None,40)
+
+
 def polynomial_integral(left,right,slope,constant,wave):
     """Integrate the independent monomial exponential series in Decimal."""
     total=(Z(0),Z(0));coefficient=(Z(1),Z(0))

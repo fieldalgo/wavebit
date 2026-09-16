@@ -86,8 +86,8 @@ def moments(obj,settings,base,transform,chart,order):
     for degree in range(first+8,limit+8,8):
         current=_integrate(obj,settings,base,transform,chart,min(degree,limit))
         delta=add(current,neg(previous))
-        error=np.max(abs(delta[0]+delta[1]))
-        scale=max(1.,float(np.max(abs(current[0]+current[1]))))
-        if np.isfinite(error) and error<=3e-28*scale:return current
+        error=abs(delta[0]+delta[1])
+        scale=np.maximum(1.,abs(current[0]+current[1]))
+        if np.all(np.isfinite(error)) and np.all(error<=3e-28*scale):return current
         previous=current
     raise ArithmeticError('complete normal Fourier means did not resolve at the available quadrature')

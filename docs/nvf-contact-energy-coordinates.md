@@ -206,7 +206,8 @@ The bounded potential retains its original nodal coefficients, stored trace
 chart, common projection, normal projection and full real coordinate change.
 Three arithmetic words survive through those cancelling combinations; the
 completed potential then enters the two-word Fourier integral. Increasing
-Gauss orders must agree at the existing `3e-28` complete-field criterion,
+Gauss orders must agree coefficient by coefficient at the existing `3e-28`
+complete-field criterion,
 or the calculation raises. Both words of the resulting mean enter the
 normal projection and both complete contact elimination paths. The original
 physical equations receive the same mean in their diagnostic coefficients.
