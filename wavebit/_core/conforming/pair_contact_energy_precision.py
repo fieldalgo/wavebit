@@ -8,7 +8,7 @@ The same reconstructed field supplies its directly integrated Fourier mean.
 import numpy as np
 from .pair_contact_precision import pair,mat,add,cp,retained_field,add_at
 from .pair_corner_precision import D
-from .pair_contact_quadrature import quadrature,phase_values,triangle_measures
+from .pair_contact_quadrature import quadrature,phase_values,triangle_measures,contact_maps
 from .pair_corner_common_precision import CommonCoordinates
 
 def verifier(obj,settings,base,transform,chart,order,records,edge_rows):
@@ -29,12 +29,9 @@ def verifier(obj,settings,base,transform,chart,order,records,edge_rows):
    weight=tuple(np.repeat(v,components)[:,None] for v in D(measure).pair)
    return mat(ll,cp(weight,right))
   for tri,local in zip(obj.data['triangles'],info['local']):
-   p=zero[tri[:3]];dp=ds*velocity[tri[:3]]
+   p=zero[tri[:3]];dp=D(ds)*D(velocity[tri[:3]])
    area,slope=triangle_measures(p,velocity[tri[:3]])
-   if local[11]:
-    j1=np.column_stack([velocity[tri[1]]-velocity[tri[0]],velocity[tri[2]]-velocity[tri[0]]]);inv=np.array([[j1[1,1],-j1[0,1]],[-j1[1,0],j1[0,0]]])/local[10];dinv=np.zeros_like(inv)
-   else:
-    jac=np.column_stack([p[1]-p[0],p[2]-p[0]]);dj=np.column_stack([dp[1]-dp[0],dp[2]-dp[0]]);inv=np.linalg.inv(jac);dinv=-inv@dj@inv
+   inv,dinv=contact_maps(p,velocity[tri[:3]],ds,local[11])
    for bary,weight in quadrature(fields,tri,order):
     row,_,_,_,_,added=next(rows);_,ci,zi,w,dw,ep,dep,_,_,gc,dgc,gz,*_=row
     for first in range(0,len(bary),512):
@@ -53,7 +50,8 @@ def verifier(obj,settings,base,transform,chart,order,records,edge_rows):
       value=add(value,cp(pair(ep),integral(e,e,ww,conjugate=True)))
       delta=add(delta,cp(pair(dep),integral(e,e,ww)),cp(pair(ep),integral(e,e,dww)),cp(pair(ep),integral(de,e,ww)),cp(pair(ep),integral(e,de,ww)))
   for ci,ep,p,gc,weight,edge,tri,bary,inverse in edge_rows(obj,settings,base,chart,order,coordinates=True):
-   sample=common.sample(tri,bary,inverse,np.zeros_like(inverse));ph,_=phase_values(bary,zero[tri[:3]],np.zeros((3,2)),modes,chart[4]);e=add(retained_field(ph,field_pair),combined(sample,0));ey=tuple(v.reshape(-1,2,size)[:,1] for v in e)
+   inverse,dinverse=contact_maps(zero[tri[:3]],np.zeros((3,2)),0.)
+   sample=common.sample(tri,bary,inverse,dinverse);ph,_=phase_values(bary,zero[tri[:3]],np.zeros((3,2)),modes,chart[4]);e=add(retained_field(ph,field_pair),combined(sample,0));ey=tuple(v.reshape(-1,2,size)[:,1] for v in e)
    j=mat(mat(pair(chart[8]._basis(np.array([edge]),chart[9])[0]),pair(transform[2])),extra);jump=tuple(np.broadcast_to(v,(len(weight),size)) for v in j)
    delta=add(delta,cp(pair(ds),cp(pair(ep),integral(ey,jump,D(weight),components=1))),cp(pair(ds),cp(pair(ep),integral(jump,ey,D(weight),components=1))))
   return value[0]+value[1],delta[0]+delta[1],retained[0]+retained[1]

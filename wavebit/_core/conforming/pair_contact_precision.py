@@ -12,7 +12,7 @@ from .pair_corner_precision import D
 from .pair_residual_arithmetic import _product,_sum_pairs
 from .pair_oscillatory_scalar import cp as complex_cp
 from .projected_pair_contact import _real_geometry
-from .pair_contact_quadrature import quadrature,phases,triangle_measures
+from .pair_contact_quadrature import quadrature,phases,phase_values,triangle_measures,contact_maps
 from .pair_contact_fourier import moments as free_moments
 
 
@@ -129,12 +129,9 @@ def response(obj,settings,base,transform,chart,order,T,Qbar,records,edge_rows,*,
     for tri,local in zip(obj.data['triangles'],info['local']):
         indices,common=local_coordinates(fields,tri,nc)
         local_count=len(indices);square=np.ix_(indices,indices);columns=(slice(None),indices)
-        p=zero[tri[:3]];dp=ds*velocity[tri[:3]]
+        p=zero[tri[:3]];dp=D(ds)*D(velocity[tri[:3]])
         area,slope=triangle_measures(p,velocity[tri[:3]])
-        if local[11]:
-            j1=np.column_stack([velocity[tri[1]]-velocity[tri[0]],velocity[tri[2]]-velocity[tri[0]]]);inv=np.array([[j1[1,1],-j1[0,1]],[-j1[1,0],j1[0,0]]])/local[10];dinv=np.zeros_like(inv)
-        else:
-            jac=np.column_stack([p[1]-p[0],p[2]-p[0]]);djac=np.column_stack([dp[1]-dp[0],dp[2]-dp[0]]);inv=np.linalg.inv(jac);dinv=-inv@djac@inv
+        inv,dinv=contact_maps(p,velocity[tri[:3]],ds,local[11])
         for bary,weight in quadrature(fields,tri,order):
             row,_,_,phi,dphi,added=next(rows);_,ci,zi,w,dw,ep,dep,phase,dphase,gc,dgc,gz,*_=row
             for first in range(0,len(bary),512):
@@ -165,15 +162,17 @@ def response(obj,settings,base,transform,chart,order,T,Qbar,records,edge_rows,*,
                     DQ=add_at(DQ,columns,partial);DR=add_at(DR,columns,cp(pair(ep),partial),cp(pair(dep),q))
                     DK=add_at(DK,square,cp(pair(ep),mat(transpose(dg),wg)),cp(pair(ep),mat(transpose(g),cp(ww,dg))),cp(pair(dep),mat(transpose(g),wg)),cp(pair(ep),mat(transpose(g),cp(dww,g))))
                 moment=mat(transpose(ph,True),cp(dww,g));DQ=add_at(DQ,columns,moment);DR=add_at(DR,columns,cp(pair(ep),moment))
-    nx,ny=obj.order;modes=np.array([(i,j) for j in range(-ny,ny+1) for i in range(-nx,nx+1)]);waves=2*np.pi*modes/chart[4];trace,tg=chart[8:]
+    nx,ny=obj.order;modes=np.array([(i,j) for j in range(-ny,ny+1) for i in range(-nx,nx+1)]);trace,tg=chart[8:]
     for ci,ep,p,gc,weight,edge,tri,bary,inverse in edge_rows(obj,settings,base,chart,order,coordinates=True):
         indices,common=local_coordinates(fields,tri,nc);columns=(slice(None),indices)
-        phase=np.exp(1j*p@waves.T);ph=np.zeros((len(p),size),complex);ph[:,N:]=phase
+        phase,_=phase_values(bary,zero[tri[:3]],np.zeros((3,2)),modes,chart[4])
+        ph=tuple(np.hstack([np.zeros((len(p),N),complex),value]) for value in phase)
         rawjump=trace._basis(np.array([edge]),tg)[0][0]@transform[2];jump=np.r_[np.zeros(nz),rawjump]
-        samples=common.sample(tri,bary,inverse,np.zeros_like(inverse));gy=samples[1].pair
+        inverse,dinverse=contact_maps(zero[tri[:3]],np.zeros((3,2)),0.)
+        samples=common.sample(tri,bary,inverse,dinverse);gy=samples[1].pair
         left=cp(pair(weight[:,None]),pair(np.broadcast_to(jump,(len(p),total))))
         L=add_at(L,columns,cp(pair(ep),mat(transpose(left),gy)))
-        SZ=add(SZ,cp(pair(ep),mat(transpose(left),pair(ph))))
+        SZ=add(SZ,cp(pair(ep),mat(transpose(left),ph)))
     if assembled is not None:
         assembled['data']=physical_data(base,Qbar,K,DK,Q,DQ,R,DR,L,SZ,MZZ)
     if retained:

@@ -190,6 +190,7 @@ constitutive JVP. They are not independent physical gap finite differences.
 | 2 | 4 | 1 | 64 | `.48911480` / `.47894903` | `-.04408189` / `.01018199` |
 | 2 | 5 | 0 | 80 | `.48962262` / `.47820719` | `-.04258852` / `.02204977` |
 | 2 | 6 | 0 | 80 | `.48933095` / `.47905421` | `-.04922588` / `.01600262` |
+| 2 | 6 | 1 | 80 | `.48936842` / `.47952728` | `-.04493608` / `.01781915` |
 | 4 | 3 | 0 | 64 | `.48475992` / `.47363551` | `-.00076895` / `.03447941` |
 | 4 | 4 | 0 | 80 | `.48583765` / `.47515927` | `-.06005934` / `.02990420` |
 | 4 | 5 | 0 | 80 | `.48946752` / `.47700685` | `-.04441011` / `.02749882` |
@@ -219,6 +220,17 @@ replay took 970 seconds and passed all original guards, with energy residuals
 `1.57e-17` / `8.92e-13` and full reflection defects `1.44e-11` / `3.11e-10`.
 Increasing the corner bank still changes the optical slopes appreciably;
 it does not close the approximation-convergence gate.
+
+The refined sextic two-branch library control used radial order 120 and
+angular order 80. It retained all 3,475 common coordinates and took 7,596
+seconds. This measurement used the integrated geometric solve before the
+complete vertex-measure and local transmission-parameter refinements. Its
+original physical and full reflection checks passed: energy defects were
+`1.55e-24` / `2.58e-12`, and full reflection defects were
+`5.45e-12` / `7.19e-10`. The two optical slope stencils differ by at most
+`2.51e-8`. The subsequent numerical paths require their own refined controls.
+The change from the unrefined sextic space remains substantial, especially
+in the optical slope, so this row does not establish approximation convergence.
 
 The refined quartic two-branch prototype took 1,099 seconds and passed the
 original guards, with full value and derivative reflection defects below

@@ -8,6 +8,7 @@ Targets:
 - `wavebit/_core/conforming/real_trace_coupling.py`
 - `tests/test_nvf_transmission_common_precision.py`
 - `tests/test_nvf_contact_fourier_precision.py`
+- `tests/test_nvf_contact_map_precision.py`
 
 A complete compensated solve must also preserve its field coefficients when
 passing them to the independent physical verifier. Rounding those coefficients
@@ -110,6 +111,29 @@ defect from `7.19e-12` to `1.83e-26`; energy and stationary-energy defects are
 as `rounded_retained_defect`, while `retained_verification='physical_field_integral'`
 identifies the physical check. The response is neither averaged nor corrected
 by the verifier. No candidate tensor or tensor derivative is supplied to it.
+
+## Physical gradient and phase coordinates
+
+The contact gradient maps now form their Jacobians and inverses from the
+same complete physical vertices as their measures. In bulk triangles,
+`inverse = adj(J)/det(J)` and its variation is
+`-inverse*(ds*J1)*inverse`. The direction is multiplied after preserving
+`J1`, so both words of the caller-unit velocity reach the gradient and
+Fourier-phase variations.
+
+For a collapsing triangle, a common reference gradient annihilates the
+collapsed adjugate. Its finite map is `adj(J1)/det'(J0)` and its fixed-common
+variation is zero. This expression agrees with the analytic positive-gap
+limit without forming a singular inverse. Boundary common gradients use the
+same complete inverse; their retained Fourier phases are formed from the
+original barycentric points before rounding, as in the physical verifier.
+
+Independent 100-digit physical inverse and gap-difference checks cover every
+triangle of a non-square, non-dyadic original and refined mesh, including
+finite common-gradient opening limits. Their maximum relative component
+errors were `5.66e-32` and `4.38e-31`, below the existing `3e-28` primitive
+bound. These maps preserve the same physical coordinates and field space.
+They do not change the ordinary normal-field bank or quadrature weights.
 
 ## Physical regression
 

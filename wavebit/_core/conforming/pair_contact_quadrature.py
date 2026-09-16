@@ -42,6 +42,23 @@ def triangle_measures(points,velocity):
     return (a[0]*b[1]-a[1]*b[0],
             da[0]*b[1]+a[0]*db[1]-da[1]*b[0]-a[1]*db[0])
 
+def contact_maps(points,velocity,ds,thin=False):
+    """Complete physical inverse and variation for common contact fields.
+
+    On an opening triangle, the common reference gradient annihilates the
+    collapsed adjugate. Its finite map is adj(J1)/det'(J0), without a
+    singular inverse or cancellation between nearby positive gaps.
+    """
+    p,v=D(points),D(velocity)
+    jac=(p[1:]-p[0]).T;djac=(v[1:]-v[0]).T
+    area,slope=triangle_measures(p,v)
+    def adjugate(j):
+        return stack([stack([j[1,1],-j[0,1]]),stack([-j[1,0],j[0,0]])])
+    if thin:
+        return adjugate(djac)/slope,D.zeros((2,2))
+    inverse=adjugate(jac)/area
+    return inverse,-inverse@(D(ds)*djac)@inverse
+
 @lru_cache(maxsize=16)
 def gauss(n):
     with localcontext() as ctx:
