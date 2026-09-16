@@ -303,7 +303,9 @@ approximation changes.
 
 ## Complete geometric contact coordinates
 
-For degrees 5 and 6, the complete common gradient space can use its integrated
+For degrees 5 and 6, [complete retained elimination](nvf-retained-contact-solve.md)
+uses the smaller block when its dimension is below the common potential count.
+The complete common gradient space can also use its integrated
 geometric metric instead of repeatedly factoring tall sampled field matrices.
 Let `G = integral(grad(psi).T*grad(psi))` and let `Q` contain every retained
 Fourier moment. The closed geometric metric is `G-Q.H*Q`. Its compensated

@@ -211,6 +211,10 @@ def solve(obj,settings,quadrature=48,exponents=(.6,.8),junctions=False,angular_o
         energy_options['energy_coordinates']=assembled['energy_coordinates']
     result=coupled_contact(obj,*data,energy_verifier=energy,response_solver=response,**energy_options)
     if complete_real:result[2]['common_coordinate_precision']='compensated'
-    if geometric_frame:result[2]['common_geometric_frame']='complete_metric'
+    if complete_real:
+        result[2]['closed_elimination']=assembled['elimination']
+        result[2]['contact_solve_size']=assembled['contact_solve_size']
+        if geometric_frame and 'common_geometric_frame' in assembled:
+            result[2]['common_geometric_frame']=assembled['common_geometric_frame']
     _check_response(*result)
     return result

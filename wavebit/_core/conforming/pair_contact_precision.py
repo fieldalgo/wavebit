@@ -107,8 +107,13 @@ def physical_data(base,Qbar,K,DK,Q,DQ,R,DR,L,SZ,MZZ):
             source[nz:,rev].T,MZZ[nz:,nz:])
 
 
-def response(obj,settings,base,transform,chart,order,T,Qbar,records,edge_rows,*,assembled=None):
+def response(obj,settings,base,transform,chart,order,T,Qbar,records,edge_rows,*,assembled=None,method='auto'):
     info=base[-1];nc,N,ds=info['nc'],info['size'],info['ds'];fields=info['corner_fields'];size=2*N
+    if method not in ('auto','metric','retained'):
+        raise ValueError('unknown complete contact elimination')
+    retained=(method=='retained' or (method=='auto' and T is None and 2*size<nc))
+    if method=='retained' and T is not None:
+        raise ValueError('retained contact elimination does not consume a common frame')
     free,dfree,_=free_moments(obj,settings,base)
     # The free block is multiplied by large complete Fourier coefficients.
     # Keep its low part through projection, just as for K, Q and R. Original
@@ -117,7 +122,7 @@ def response(obj,settings,base,transform,chart,order,T,Qbar,records,edge_rows,*,
     K=pair(np.zeros((nc,nc),complex));Q=pair(np.zeros((size,nc),complex));R=pair(np.zeros((size,nc),complex));DQ=pair(np.zeros((size,nc),complex))
     DK=pair(np.zeros((nc,nc),complex));DR=pair(np.zeros((size,nc),complex))
     nz=info['nz'];total=nz+Qbar.shape[1];qb=np.hstack([base[6][nc:].conj().T,Qbar]);L=pair(np.zeros((total,nc),complex));SZ=pair(np.zeros((total,size),complex));MZZ=pair(np.zeros((total,total),complex))
-    geometry=pair(np.zeros((nc,nc))) if T is None else None
+    geometry=pair(np.zeros((nc,nc))) if T is None and not retained else None
     rows=iter(records())
     nx,ny=obj.order;modes=np.array([(i,j) for j in range(-ny,ny+1) for i in range(-nx,nx+1)])
     length,s,zero,velocity=obj._chart_geometry(0.,{k:np.asarray(settings[k]) for k in ('basis','widths','height','offset')})
@@ -171,6 +176,13 @@ def response(obj,settings,base,transform,chart,order,T,Qbar,records,edge_rows,*,
         SZ=add(SZ,cp(pair(ep),mat(transpose(left),pair(ph))))
     if assembled is not None:
         assembled['data']=physical_data(base,Qbar,K,DK,Q,DQ,R,DR,L,SZ,MZZ)
+    if retained:
+        from .pair_contact_retained import response as retained_response
+        return retained_response(base,free,dfree,K,DK,Q,DQ,R,DR,L,SZ,MZZ,qb,assembled)
+    if assembled is not None:
+        assembled['elimination']='physical_projected'
+        assembled['contact_solve_size']=nc
+        assembled['common_geometric_frame']='complete_metric' if T is None else 'provided'
     # Integrate local support first, then apply the complete invertible
     # common transform. High/low matrices retain cancellations in both steps.
     if T is None:

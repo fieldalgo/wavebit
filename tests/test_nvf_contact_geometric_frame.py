@@ -1,4 +1,4 @@
-"""Complete metric coordinates versus independently sampled physical QR."""
+"""Complete retained elimination, geometric coordinates and physical QR."""
 import numpy as np
 import pytest
 
@@ -9,16 +9,21 @@ from wavebit._core.conforming.cartesian_pair_transmission_galerkin import Cartes
 
 
 @pytest.mark.parametrize('degree,order', ((5, (1, 0)), (6, (0, 0))))
-def test_complete_contact_metric_preserves_physical_qr_response(monkeypatch, degree, order):
+def test_complete_contact_eliminations_preserve_physical_qr_response(monkeypatch, degree, order):
     cell=CartesianPairTransmissionGalerkinGapCell(CartesianPairOpeningPlan(0),order,
         reference=(12.25,-10+1j,1.),degree=degree,quadrature=20*degree,
         angular_quadrature=24,coercivity_angle=1.53)
     settings=dict(gap=0.,basis=np.eye(2)*700,widths=(300.,300.),height=300.,
-        offset=(-350.,-350.),epsilon=(12.25,-10+1j),background=1.,gap_tangent=1.)
+        offset=(-350.,-350.),epsilon=(12.25,-10+1j),background=1.,gap_tangent=.7,
+        epsilon_tangent=(.2+.1j,-.4+.2j),background_tangent=.1-.03j)
     actual=cell.closure(**settings)
-    assert actual[2]['common_geometric_frame']=='complete_metric'
+    assert actual[2]['closed_elimination']=='physical_retained'
     assert actual[2]['transmission_directions']==20
     original=precision.response
+    monkeypatch.setattr(precision,'response',
+        lambda *args,**kwargs:original(*args,**kwargs,method='metric'))
+    metric=cell.closure(**settings)
+    assert metric[2]['common_geometric_frame']=='complete_metric'
 
     def sampled_qr(obj,settings,base,transform,chart,quadrature,T,Qbar,records,edge_rows,**kwargs):
         assert T is None
@@ -35,10 +40,11 @@ def test_complete_contact_metric_preserves_physical_qr_response(monkeypatch, deg
 
     monkeypatch.setattr(precision,'response',sampled_qr)
     expected=cell.closure(**settings)
-    for result in (actual,expected):
+    for result in (actual,metric,expected):
         assert result[2]['energy_residual']<1e-10
         assert result[2]['energy_derivative_residual']<1e-10
         np.testing.assert_allclose(result[0][3:],0.,atol=3e-10,rtol=0)
         np.testing.assert_allclose(result[1][3:],0.,atol=3e-9,rtol=0)
-    np.testing.assert_allclose(actual[0],expected[0],atol=3e-12,rtol=0)
-    np.testing.assert_allclose(actual[1],expected[1],atol=3e-11,rtol=0)
+    for result in (actual,metric):
+        np.testing.assert_allclose(result[0],expected[0],atol=3e-12,rtol=0)
+        np.testing.assert_allclose(result[1],expected[1],atol=3e-11,rtol=0)
