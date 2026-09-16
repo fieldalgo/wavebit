@@ -9,6 +9,7 @@ Targets:
 - `tests/test_nvf_transmission_common_precision.py`
 - `tests/test_nvf_contact_fourier_precision.py`
 - `tests/test_nvf_contact_map_precision.py`
+- `tests/test_nvf_pair_residual_arithmetic.py`
 
 A complete compensated solve must also preserve its field coefficients when
 passing them to the independent physical verifier. Rounding those coefficients
@@ -134,6 +135,54 @@ finite common-gradient opening limits. Their maximum relative component
 errors were `5.66e-32` and `4.38e-31`, below the existing `3e-28` primitive
 bound. These maps preserve the same physical coordinates and field space.
 They do not change the ordinary normal-field bank or quadrature weights.
+
+## Complete products with anticorrelated sample scales
+
+Row and column normalization alone does not balance a contact edge dot
+product. A quadrature weight can be tiny precisely where a corner gradient
+is large. Their integrated product remains moderate, but the separate input
+maxima can be enormous. Three integer chunks preserve the leading products;
+ordinary products of their floating remainders can still lose significant
+digits after the final rescaling.
+
+An actual quintic edge product exposed this issue when its structural zero
+rows were omitted. Against an independent 100-digit sum, the padded and
+compact products had absolute errors of `1.34e-18` and `3.41e-20`. Neither
+represented the complete dot to high/low precision. This was an arithmetic
+defect, not a change in the trace field space.
+
+The product now balances each inner coordinate with reciprocal powers of
+two, accepting a scaling only if both operands round-trip exactly. It also
+bounds the roundoff of every noninteger remainder product against the
+absolute dot sum. A dot that exceeds its two-word arithmetic budget is
+recomputed from error-free scalar products and three passes collecting the
+addition remainders. When many dots require correction, a six-integer-chunk
+matrix product first reduces that work; its complete floating remainder is
+still retained and checked against the same bound. Remaining corrections
+use batches of 64 output entries;
+they do not remove any matrix entry, basis field or physical term. Extreme
+exponent cases use exact standard-library fractions before the final
+high/low rounding. Physical acceptance tolerances are unchanged.
+
+Independent Decimal tests cover real and complex inputs, single and multiple
+rows, anticorrelated scales spanning 900 binary exponents, and unrelated large
+entries that defeat a single global balancing step. The tests use the same
+`16*eps**2` absolute-dot-scaled accuracy criterion as the original residual
+oracles. Separate controls cover structural zero padding and extreme finite
+dyadic cancellation. This arithmetic verification does not certify optical
+convergence. A preserved `2419 x 2419` stiffness product with 162 columns
+required 390,202 scalar corrections after three chunks and none after six.
+The adaptive product took 1.86 seconds; 15 independently selected complete
+dots agreed with 150-digit sums within `2.49e-35` on the absolute-dot scale.
+This is a matrix-product measurement, not a full solver timing.
+
+Complete contact controls compare the retained solve, full geometric
+coordinates and independently sampled QR coordinates at quintic order
+`(1,0)` and sextic order `(0,0)`, including joint gap and complex-material
+variations. All original physical guards pass, and the complete tensors and
+derivatives agree at `3e-12` and `3e-11`. Four independent corruptions of the
+response or verifier coordinates are still rejected. These six integration
+controls took 586 seconds with one numerical-library thread.
 
 ## Physical regression
 
