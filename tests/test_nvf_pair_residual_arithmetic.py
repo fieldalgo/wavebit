@@ -52,6 +52,25 @@ def test_product_refinement_preserves_extreme_finite_dyadic_inputs(left,right):
     assert Fraction.from_float(float(high[0,0]))+Fraction.from_float(float(low[0,0]))==expected
 
 
+@pytest.mark.parametrize('size',(1,31,1024))
+def test_exact_binary_accumulation_matches_independent_rational_rounding(size):
+    from fractions import Fraction
+    from wavebit._core.conforming.pair_residual_arithmetic import _exact_dot
+    rng=np.random.default_rng(731)
+    a=np.ldexp(rng.uniform(-1.,1.,size),rng.integers(-1074,1024,size))
+    b=np.ldexp(rng.uniform(-1.,1.,size),rng.integers(-1074,1024,size))
+    # Include products far beyond the float range, exact cancellation,
+    # subnormal rounding ties and residuals below the leading word.
+    for tail in ((1.,2.**-80),(2.**-1074,2.**-1074),(-2.**-1074,0.)):
+        left=np.r_[a,-a,tail];right=np.r_[b,b,1.,.5]
+        permutation=rng.permutation(len(left));left,right=left[permutation],right[permutation]
+        expected=sum((Fraction.from_float(float(u))*Fraction.from_float(float(v))
+                      for u,v in zip(left,right)),Fraction(0))
+        high=float(expected);words=np.array([high,float(expected-Fraction.from_float(high))])
+        actual=np.array(_exact_dot(left,right))
+        np.testing.assert_array_equal(actual.view(np.uint64),words.view(np.uint64))
+
+
 def test_structural_zero_padding_preserves_the_same_complete_dot():
     rng=np.random.default_rng(91)
     powers=np.linspace(-160,160,100).astype(int)

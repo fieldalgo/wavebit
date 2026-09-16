@@ -297,8 +297,21 @@ matrix product first reduces that work; its complete floating remainder is
 still retained and checked against the same bound. Remaining corrections
 use batches of 64 output entries;
 they do not remove any matrix entry, basis field or physical term. Extreme
-exponent cases use exact standard-library fractions before the final
-high/low rounding. Physical acceptance tolerances are unchanged.
+exponent cases align the exact power-of-two denominators of every finite
+binary input and accumulate their products in a Python integer. Only the
+final two rounding operations use standard-library fractions. This gives
+the same exact rational sum without reducing a fraction at every term.
+Physical acceptance tolerances are unchanged.
+
+Independent rational tests compare both output words bit for bit for shuffled
+inputs spanning the entire finite binary range, including cancelling products
+beyond that range and subnormal rounding ties. An actual 1,024-term fallback
+dot took median 5.04 milliseconds with per-term fractions and 0.323 milliseconds
+with integer accumulation, over three batches of 100 repeats. This measures
+one exceptional dot, not the whole solver. A fresh degree-five order-`(0,1)`
+joint metal control passed every physical and reflection guard in 140.6
+seconds, with all 41 diagnostic/configuration entries unchanged. It evaluated
+27,005 exact fallback dots containing 13,510,976 terms in 5.90 seconds.
 
 Independent Decimal tests cover real and complex inputs, single and multiple
 rows, anticorrelated scales spanning 900 binary exponents, and unrelated large

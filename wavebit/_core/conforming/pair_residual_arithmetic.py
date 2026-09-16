@@ -39,6 +39,27 @@ def _distill(values):
     return values[0],np.concatenate(errors)
 
 
+def _exact_dot(left,right):
+    """Accumulate every finite binary product exactly with integer shifts.
+
+    Float denominators are powers of two. Align them in one integer sum
+    instead of reducing a rational after each multiply and add. Conversion
+    to the final two words uses the same exact rational rounding as before.
+    """
+    from fractions import Fraction
+    total=0;power=0
+    for u,v in zip(left,right):
+        un,ud=float(u).as_integer_ratio();vn,vd=float(v).as_integer_ratio()
+        numerator=un*vn
+        exponent=ud.bit_length()+vd.bit_length()-2
+        if exponent>power:
+            total<<=exponent-power;power=exponent
+        total+=numerator<<(power-exponent)
+    exact=Fraction(total,1<<power)
+    high=float(exact)
+    return high,float(exact-Fraction.from_float(high))
+
+
 def _refine_dots(a,b,bad,value,error):
     """Refine complete products, in bounded batches, without field selection.
 
@@ -46,7 +67,6 @@ def _refine_dots(a,b,bad,value,error):
     high/low precision. Dots whose largest scalar product lies outside the safe exponent range use
     exact standard-library fractions before rounding their final two words.
     """
-    from fractions import Fraction
     from .pair_oscillatory_radial import two_product
     rows,columns=np.nonzero(bad)
     for begin in range(0,len(rows),64):
@@ -62,11 +82,7 @@ def _refine_dots(a,b,bad,value,error):
         value[ri[empty],ci[empty]]=0.;error[ri[empty],ci[empty]]=0.
         safe|=empty
         for row,column in zip(ri[~safe],ci[~safe]):
-            exact=sum((Fraction.from_float(float(u))*Fraction.from_float(float(v))
-                       for u,v in zip(a[row],b[:,column])),Fraction(0))
-            high=float(exact)
-            value[row,column]=high
-            error[row,column]=float(exact-Fraction.from_float(high))
+            value[row,column],error[row,column]=_exact_dot(a[row],b[:,column])
         if not np.any(safe):continue
         high,low=two_product(am[:,safe],bm[:,safe])
         high=np.ldexp(high,exponent[:,safe]);low=np.ldexp(low,exponent[:,safe])
