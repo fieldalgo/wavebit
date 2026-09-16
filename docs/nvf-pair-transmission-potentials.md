@@ -352,9 +352,38 @@ different retained Fourier sizes prevent treating these times as a paired
 speed comparison at matched accuracy. Fourier convergence and practical
 runtime remain open.
 
+The corresponding once-refined sextic calculation at Fourier order `(6,6)`
+uses radial/angular orders 120/80, two branches and cutoff zero. Every
+original physical and full reflection guard passes. Energy and
+energy-variation residuals are `8.15e-19` / `1.86e-17`; the independently
+reconstructed mean-variation residual is `5.97e-15`. Full-slot value and
+derivative reflection defects are `6.13e-16` / `4.16e-16`.
+
+Its p/s transmissions are `.485491834179` / `.401176887420`, reflections
+`.297067404219` / `.166832458235`, and optical directional slopes
+`-.035890690295` / `.018412522101`. The two slope stencils differ by
+`5.40e-10` / `1.73e-8`. Relative to degree five at the same Fourier order,
+transmission changes by `+2.08e-5` / `+1.53e-4`, reflection by `-8.37e-6` /
+`-1.39e-5`, and slopes by `-2.69e-5` / `-1.05e-3`. The relative p-slope
+change is 0.0751%, but the s-slope change is 5.38%. Agreement in transmission
+therefore does not establish derivative convergence.
+
+Holding degree six and the once-refined mesh fixed while increasing Fourier
+order from `(4,4)` to `(6,6)` changes transmission by `-.00387659` /
+`-.07835039` and slopes by `+.00904539` / `+.00059339`. The slope changes
+are 20.13% / 3.33% of the preceding magnitudes. Both Fourier and inner-space
+sensitivity must still be resolved. These are finite resolution comparisons,
+not errors against an independent optical reference or derivatives obtained
+from separately solved positive gaps.
+
+The complete sextic `(6,6)` run took 17,712 seconds, with raw equations
+saved after 2,905 seconds and observed peak resident memory of 3.96 GB.
+It includes the independent physical verifier and concurrent workloads;
+it is not a runtime comparison at matched accuracy.
+
 At Fourier order `(4,4)`, the fresh quintic and sextic runs took 6,311 and
-9,912 seconds, respectively, under concurrent workloads. Their raw-equation assembly checkpoints occurred
-at 1,230 and 2,971 seconds; those checkpoints precede the completed response
+9,912 seconds, respectively, under concurrent workloads. Their raw-equation
+assembly checkpoints occurred at 1,230 and 2,971 seconds; those checkpoints precede the completed response
 and independent physical verification. The verifier is part of this explicit
 solver path, not merely an external optional test. These frozen runs predate
 the bounded row tiling described below, and are not paired runtime benchmarks
