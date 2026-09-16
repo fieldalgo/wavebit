@@ -27,6 +27,23 @@ def _sum_pairs(pairs):
     return value,error
 
 
+def _buffered_sum(pairs):
+    """Reuse scratch storage for equally shaped pairs, preserving sum order."""
+    pairs=iter(pairs);value,error=next(pairs)
+    value=value.copy();error=error.copy()
+    t=np.empty_like(value);part=np.empty_like(value);new=np.empty_like(value);aux=np.empty_like(value)
+    for hi,lo in pairs:
+        np.add(value,hi,out=t);np.subtract(t,value,out=part)
+        np.subtract(t,part,out=aux);np.subtract(value,aux,out=new)
+        np.subtract(hi,part,out=aux);np.add(new,aux,out=new)
+        np.add(error,new,out=new);np.add(new,lo,out=new)
+        # t + new, with its exact roundoff, retaining the old t and new.
+        np.add(t,new,out=value);np.subtract(value,t,out=part)
+        np.subtract(value,part,out=aux);np.subtract(t,aux,out=error)
+        np.subtract(new,part,out=aux);np.add(error,aux,out=error)
+    return value,error
+
+
 def _distill(values):
     """Return a tree sum and every exact addition remainder."""
     if len(values)==1:return values[0],np.zeros_like(values)
@@ -134,7 +151,10 @@ def _real_product(a,b,*,_chunks=3):
             scale=-exponents[i]-exponents[j]
             value=np.ldexp(xx[i]@yy[j],scale)
             yield value,np.zeros_like(value)
-    value,error=_sum_pairs(terms());exponent=ea[:,None]+eb[None,:]
+    # Large matrix expansions reuse work arrays with identical arithmetic.
+    # Every integer and remainder product remains in the original order.
+    accumulate=_buffered_sum if a.shape[0]*b.shape[1]>=65536 else _sum_pairs
+    value,error=accumulate(terms());exponent=ea[:,None]+eb[None,:]
     bad=np.zeros_like(value,dtype=bool)
     if present_x[_chunks] or present_y[_chunks]:
         # Sum the integer-chunk magnitudes before their absolute

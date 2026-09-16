@@ -325,6 +325,25 @@ The adaptive product took 1.86 seconds; 15 independently selected complete
 dots agreed with 150-digit sums within `2.49e-35` on the absolute-dot scale.
 This is a matrix-product measurement, not a full solver timing.
 
+For products with at least 65,536 real output entries, the integer and
+floating-remainder expansions reuse the same accumulation work arrays.
+The accumulator is shared with the Bernstein geometry kernel. Every term,
+addition order, rounding remainder and subsequent correction bound is
+unchanged; smaller residual products keep the previous allocation pattern.
+Independent rational controls check every output below, at and above that
+size boundary, including complete small words and unchanged input matrices.
+
+A paired three-repeat measurement uses the qualified quintic once-refined
+order-`(6,6)` contact coordinates. One 512-point batch from a bulk triangle
+and one from a collapsed triangle produce bitwise-identical complete
+`338 x 338` energy, energy-variation, Fourier-mean and mean-variation
+integrals with both accumulators. Median time changes from 6.390 to 6.295
+seconds under concurrent workloads. A separate real `512 x 21` by
+`21 x 676` product changes from 93.1 to 52.6 milliseconds, also with
+identical high/low words. These are bounded arithmetic measurements;
+they exclude other quadrature batches and edges and do not establish a
+whole-solver speedup or optical convergence.
+
 Complete contact controls compare the retained solve, full geometric
 coordinates and independently sampled QR coordinates at quintic order
 `(1,0)` and sextic order `(0,0)`, including joint gap and complex-material

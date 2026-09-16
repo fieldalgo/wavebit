@@ -38,6 +38,37 @@ def test_anticorrelated_scales_preserve_the_complete_dot(size,span,rows,complex_
                 assert abs(actual_real-real)+abs(actual_imag-imag)<=D.from_float(16*np.finfo(float).eps**2)*scale
 
 
+@pytest.mark.parametrize('rows,columns', [(255,256), (256,256), (257,257)])
+def test_wide_complete_products_match_independent_rational_dots(rows,columns):
+    """Every output survives across the reusable-buffer size boundary."""
+    from fractions import Fraction as F
+    rng=np.random.default_rng(947);inner=31
+    powers=np.linspace(-100,100,inner).astype(int)
+    left=np.ldexp(rng.normal(size=(2,inner)),powers)
+    right=np.ldexp(rng.normal(size=(inner,3)),-powers[:,None])
+    ri=np.arange(rows)%2;ci=np.arange(columns)%3
+    re=np.arange(rows)%17-8;ce=np.arange(columns)%19-9
+    a=np.ldexp(left[ri],re[:,None]);b=np.ldexp(right[:,ci],ce[None,:])
+    original_a=a.copy();original_b=b.copy()
+    high,low=_real_product(a,b)
+    np.testing.assert_array_equal(a,original_a)
+    np.testing.assert_array_equal(b,original_b)
+    # Undo exact binary copies and compare all distinct output word pairs
+    # against independently accumulated rational scalar products.
+    high=np.ldexp(high,-re[:,None]-ce[None,:])
+    low=np.ldexp(low,-re[:,None]-ce[None,:])
+    for i in range(2):
+        for j in range(3):
+            terms=[F.from_float(float(u))*F.from_float(float(v))
+                   for u,v in zip(left[i],right[:,j])]
+            exact=sum(terms,F(0));scale=sum(map(abs,terms),F(0))
+            indices=np.ix_(ri==i,ci==j)
+            words=np.unique(np.column_stack((high[indices].ravel(),low[indices].ravel())),axis=0)
+            for hi,lo in words:
+                actual=F.from_float(float(hi))+F.from_float(float(lo))
+                assert abs(actual-exact)<=F.from_float(16*np.finfo(float).eps**2)*scale
+
+
 @pytest.mark.parametrize('left,right', [
     ([1.,2.**-80],[1.,1.]),
     ([2.**1023,2.**1023,1.],[1.,-1.,2.**-1020]),

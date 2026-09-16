@@ -8,7 +8,7 @@ partial sums and every cross product with the complete floating remainder.
 from decimal import Decimal,localcontext
 import numpy as np
 from . import pair_oscillatory_radial as arithmetic
-from .pair_residual_arithmetic import _real_product,_sum_pairs
+from .pair_residual_arithmetic import _real_product,_sum_pairs,_buffered_sum
 
 class D:
     __array_priority__=10000
@@ -108,22 +108,6 @@ def logarithm(value):
     for n in range(1,25):
         term=term*square;total=total+term/(2*n+1)
     return 2*total+exponent*LN2
-
-def _buffered_sum(pairs):
-    # Reuse scratch storage without changing the original summation order.
-    pairs=iter(pairs);value,error=next(pairs)
-    value=value.copy();error=error.copy()
-    t=np.empty_like(value);part=np.empty_like(value);new=np.empty_like(value);aux=np.empty_like(value)
-    for hi,lo in pairs:
-        np.add(value,hi,out=t);np.subtract(t,value,out=part)
-        np.subtract(t,part,out=aux);np.subtract(value,aux,out=new)
-        np.subtract(hi,part,out=aux);np.add(new,aux,out=new)
-        np.add(error,new,out=new);np.add(new,lo,out=new)
-        # t + new, with its exact roundoff, retaining the old t and new.
-        np.add(t,new,out=value);np.subtract(value,t,out=part)
-        np.subtract(value,part,out=aux);np.subtract(t,aux,out=error)
-        np.subtract(new,part,out=aux);np.add(error,aux,out=error)
-    return value,error
 
 
 def real_product(a,b):
