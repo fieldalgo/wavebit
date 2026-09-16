@@ -21,7 +21,7 @@ def verifier(obj,settings,base,transform,chart,order,records,edge_rows):
  def energy(field,field_change,potential):
   coefficients=potential;field_pair=field;change_pair=field_change
   common=provider(fields,D(*(np.hstack([v[:nc].real,v[:nc].imag]) for v in coefficients)))
-  value=pair(np.zeros((size,size),complex));delta=pair(np.zeros((size,size),complex));extra=tuple(v[nc+nz:] for v in coefficients);rows=iter(records())
+  value=pair(np.zeros((size,size),complex));delta=pair(np.zeros((size,size),complex));extra=tuple(v[nc+nz:] for v in coefficients)
   retained=pair(np.zeros((size,size),complex));dretained=pair(np.zeros((size,size),complex))
   def combined(sample,offset):
    return tuple(np.stack([getattr(v,part)[:,:size]+1j*getattr(v,part)[:,size:] for v in sample[offset:offset+2]],axis=1).reshape(-1,size) for part in ('hi','lo'))
@@ -37,11 +37,13 @@ def verifier(obj,settings,base,transform,chart,order,records,edge_rows):
     parts.append(mat(tuple(v.conj().T for v in phase),cp(tuple(v[:,None] for v in measure.pair),block)))
    return tuple(np.vstack([block[word] for block in parts]) for word in range(2))
   for tri,tag,local in zip(obj.data['triangles'],obj.data['tags'],info['local']):
+   # Integrate the reconstructed complete fields directly. The old sampled
+   # records contribute only these original material/topology constants.
+   zi,ep,dep=local[2],local[12],local[13]
    p=zero[tri[:3]];dp=D(ds)*D(velocity[tri[:3]])
    area,slope=triangle_measures(p,velocity[tri[:3]])
    inv,dinv=contact_maps(p,velocity[tri[:3]],ds,local[11])
    for bary,weight in quadrature(fields,tri,order):
-    row,_,_,_,_,added=next(rows);_,ci,zi,w,dw,ep,dep,_,_,gc,dgc,gz,*_=row
     gz,added=contact_normals(obj,transform,chart,tri,tag,local,bary,zero,velocity)
     for first in range(0,len(bary),512):
      sl=slice(first,first+512);sample=common.sample(tri,bary[sl],inv,dinv);ph,dph=phase_values(bary[sl],p,dp,modes,chart[4])

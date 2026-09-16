@@ -132,17 +132,19 @@ def response(obj,settings,base,transform,chart,order,T,Qbar,records,edge_rows,*,
         raise ArithmeticError('complete normal Fourier means lost real-field conjugacy')
     L=pair(np.zeros((total,nc),complex));SZ=pair(np.zeros((total,size),complex));MZZ=pair(np.zeros((total,total),complex))
     geometry=pair(np.zeros((nc,nc))) if T is None and not retained else None
-    rows=iter(records())
     nx,ny=obj.order;modes=np.array([(i,j) for j in range(-ny,ny+1) for i in range(-nx,nx+1)])
     length,s,zero,velocity=obj._chart_geometry(0.,{k:np.asarray(settings[k]) for k in ('basis','widths','height','offset')})
     for tri,tag,local in zip(obj.data['triangles'],obj.data['tags'],info['local']):
+        # The legacy record sampler computes fields replaced below by their
+        # complete counterparts. Only its unchanged material/topology inputs
+        # are needed; read those directly from the original triangle data.
+        zi,ep,dep=local[2],local[12],local[13]
         indices,common=local_coordinates(fields,tri,nc)
         local_count=len(indices);square=np.ix_(indices,indices);columns=(slice(None),indices)
         p=zero[tri[:3]];dp=D(ds)*D(velocity[tri[:3]])
         area,slope=triangle_measures(p,velocity[tri[:3]])
         inv,dinv=contact_maps(p,velocity[tri[:3]],ds,local[11])
         for bary,weight in quadrature(fields,tri,order):
-            row,_,_,phi,dphi,added=next(rows);_,ci,zi,w,dw,ep,dep,phase,dphase,gc,dgc,gz,*_=row
             gz,added=contact_normals(obj,transform,chart,tri,tag,local,bary,zero,velocity)
             for first in range(0,len(bary),512):
                 sl=slice(first,first+512);samples=common.sample(tri,bary[sl],inv,dinv)

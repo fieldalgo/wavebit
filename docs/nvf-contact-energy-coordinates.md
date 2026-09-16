@@ -256,6 +256,22 @@ component scale. Response stages took 166.5 and 135.1 seconds in that one
 run; this is not a repeated whole-solver performance measurement. Large
 refined-mesh and optical convergence require their separate complete checks.
 
+The complete response and its pointwise verifier now read triangle material
+coefficients and normal-coordinate indices directly from the original local
+data. They no longer build the ordinary sampled fields that these paths
+immediately replaced with complete fields. The independent verifier still
+reconstructs every physical field and integrates all four energy and mean
+quantities; it does not consume the response's assembled matrices.
+
+At degree five, order `(0,1)`, radial/angular orders 100/48 and the joint
+metal gap/material/background direction, a before/after comparison produced
+bitwise-identical complete response coordinates, original physical matrices
+and all four independently integrated quantities. Every original physical
+and full reflection guard passed, as did all five corruption controls.
+The two energy integrations took 61.7 and 55.9 seconds; response stages took
+174.5 and 174.2 seconds under concurrent workloads. These are one-run
+qualification timings, not a controlled general speed claim.
+
 ## Complete products with anticorrelated sample scales
 
 Row and column normalization alone does not balance a contact edge dot
