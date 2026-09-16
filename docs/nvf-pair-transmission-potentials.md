@@ -257,6 +257,35 @@ differ by `3.39e-10` / `2.01e-8`. This fresh complete-state qualification
 resolves the earlier refined derivative reflection failure; it does not
 establish approximation or optical convergence.
 
+A fresh sextic calculation on the same once-refined mesh and Fourier order
+uses the same complete normal means, all 20 real transmission directions,
+and radial/angular orders 120/80. Every original physical and full reflection
+guard passes. Energy and derivative-energy residuals are `6.32e-25` /
+`6.14e-20`; the independently reconstructed mean-variation residual is
+`4.69e-15`. Maximum full-slot reflection defects are `7.24e-16` / `8.88e-16`.
+Its p/s transmissions are `.489368420426` / `.479527278613`, and directional
+optical slopes are `-.044936084696` / `.017819129094`. The two slope stencils
+differ by `4.24e-9` / `6.08e-9`. As above, these slopes follow the constitutive
+JVP through Maxwell propagation, not an independent finite-gap solve.
+
+Relative to the fresh quintic calculation, transmission changes by
+`+8.34e-5` / `+1.26e-4` and the slope by `-9.18e-4` / `-1.10e-4`.
+The p-polarized slope changes by about 2.09% relative to the quintic value.
+Thus the remaining trial-space dependence survives the corrected Fourier
+means and independent physical verification; optical convergence is still
+open. The earlier provisional saved-state sextic optics are superseded by
+this complete qualification.
+
+The fresh quintic and sextic runs took 6,311 and 9,912 seconds, respectively,
+under concurrent workloads. Their raw-equation assembly checkpoints occurred
+at 1,230 and 2,971 seconds; those checkpoints precede the completed response
+and independent physical verification. The verifier is part of this explicit
+solver path, not merely an external optional test. These frozen runs predate
+the bounded row tiling described below, and are not paired runtime benchmarks
+against ordinary NVF. Ordinary NVF dispatch remains unchanged. Practical
+runtime, along with optical convergence, remains an unresolved requirement
+for a production replacement.
+
 Reproduce the library measurement with
 
 ```shell
