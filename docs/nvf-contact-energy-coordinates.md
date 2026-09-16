@@ -6,11 +6,13 @@ Targets:
 - `wavebit/_core/conforming/pair_contact_precision.py`
 - `wavebit/_core/conforming/pair_contact_quadrature.py`
 - `wavebit/_core/conforming/pair_contact_normal_precision.py`
+- `wavebit/_core/conforming/pair_contact_normal_mean.py`
 - `wavebit/_core/conforming/real_trace_coupling.py`
 - `tests/test_nvf_transmission_common_precision.py`
 - `tests/test_nvf_contact_fourier_precision.py`
 - `tests/test_nvf_contact_map_precision.py`
 - `tests/test_nvf_contact_normal_precision.py`
+- `tests/test_nvf_contact_normal_mean.py`
 - `tests/test_nvf_pair_residual_arithmetic.py`
 
 A complete compensated solve must also preserve its field coefficients when
@@ -189,6 +191,69 @@ existing common-field paths, non-square cells, a quartic single direction,
 and high-degree flat and metal references. The two groups took 1,003 and
 903 seconds respectively in concurrent single-library-thread runs; these
 are validation durations, not comparative performance measurements.
+
+## Normal Fourier means from the periodic potential
+
+The disappearing normal field includes bulk gradients, the collapsed seam,
+and horizontal interface jumps. Its Fourier mean must include all three.
+For the original periodic potential `V`, integration by parts gives
+`q_b(k) = i*k*integral(exp(-i*k.x)*V(x))`, component by component.
+The zero mode is exactly zero. This distributional identity includes the
+interface terms without subtracting their large separately integrated values.
+It is not a symmetry projection of the response or of its coefficients.
+
+The bounded potential retains its original nodal coefficients, stored trace
+chart, common projection, normal projection and full real coordinate change.
+Three arithmetic words survive through those cancelling combinations; the
+completed potential then enters the two-word Fourier integral. Increasing
+Gauss orders must agree at the existing `3e-28` complete-field criterion,
+or the calculation raises. Both words of the resulting mean enter the
+normal projection and both complete contact elimination paths. The original
+physical equations receive the same mean in their diagnostic coefficients.
+
+On the refined quintic order-`(4,4)` metal geometry, the previous rounded
+normal mean differed from this complete integral by `1.82e-9`. Independent
+complete gradient-plus-jump integration agreed with the potential result
+within `1.80e-24`, while the potential integrals at orders 24 and 32 agreed
+within `1.38e-32`. This comparison diagnoses the mean calculation; it does
+not qualify a complete tensor or its optical convergence. Independent
+100-digit tests separately integrate piecewise constant bulk gradients, a
+seam jump and both horizontal jumps. They cover asymmetric widths, unequal
+periods, translation, zero modes and both Fourier directions at `3e-28`.
+
+The weak assembly first integrates the raw normal fields using their exact
+local nodal support and every seam column. It applies the full Fourier
+subtraction after integration: `L = L_raw-q_b.H*R` and
+`S_Z = S_raw-q_b.H*A`. Here `A` is the same complete free-material Fourier
+matrix used by the retained equations. This removes repeated dense projected
+normal samples while preserving every global coordinate. Exact conjugacy of
+both words is required before this rearrangement; a failure raises, and no
+coefficient is averaged or replaced. The original physical diagnostics
+consume the directly integrated raw blocks.
+
+The independent verifier now also differentiates the physical mean with
+fixed potential coefficients. It directly integrates `dPhi.H*E`, `Phi.H*dE`,
+the moving measure, the collapsing-cell contribution and both interface
+jumps. Its result must vanish at the original `1e-10` constraint bound and is
+reported as `physical_retained_derivative_residual`. Neither the candidate
+response nor the solved common-coefficient variation enters this check.
+
+A uniform-material corruption control adds a skew Cartesian variation only
+to the verifier's retained field. Its stationary energy variation cancels,
+so the energy and original matrix checks pass. The independently integrated
+mean variation rejects it. Four existing corruption controls and the full
+transverse joint gap/material response also pass with the new verifier.
+
+The integrated local assembly passes the full quintic transverse joint
+control, all three complete elimination paths at degrees five and six,
+five flat/metal reference controls, and three non-square/legacy controls.
+In the transverse case its energy, energy-variation and physical
+mean-variation residuals are `1.27e-28`, `8.57e-28` and `1.05e-32`.
+A paired calculation against pointwise Fourier subtraction kept the closed
+tensor identical and changed the derivative by at most `7.84e-30` on its
+component scale. Response stages took 166.5 and 135.1 seconds in that one
+run; this is not a repeated whole-solver performance measurement. Large
+refined-mesh and optical convergence require their separate complete checks.
 
 ## Complete products with anticorrelated sample scales
 

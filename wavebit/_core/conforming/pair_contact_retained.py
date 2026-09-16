@@ -61,12 +61,12 @@ def response(base, free, dfree, K, DK, Q, DQ, R, DR, L, SZ, MZZ, qb, assembled):
     xi, eta = (tuple(value[section] for value in answer)
                for section in (slice(None, size), slice(size, None)))
     duc = add(particular, neg(mat(W, xi)), mat(V, eta))
-    dx = neg(add(mat(DQ, uc), mat(Q, duc), cp(pair(ds), mat(pair(qb), uz))))
+    dx = neg(add(mat(DQ, uc), mat(Q, duc), cp(pair(ds), mat(qb, uz))))
     DH = add(DA, mat(reverse_transpose(DSC, reverse), uc),
              mat(reverse_transpose(SC, reverse), duc),
              cp(pair(ds), mat(reverse_transpose(SZ, reverse), uz)))
     U = stack((uc, uz))
-    geometry_dx = neg(add(mat(DQ, uc), cp(pair(ds), mat(pair(qb), uz))))
+    geometry_dx = neg(add(mat(DQ, uc), cp(pair(ds), mat(qb, uz))))
     if assembled is not None:
         assembled['energy_coordinates'] = (x, geometry_dx, U)
         assembled['elimination'] = 'physical_retained'

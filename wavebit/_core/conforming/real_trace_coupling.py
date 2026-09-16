@@ -266,6 +266,8 @@ def coupled_contact(obj, base, C, Z, Qbar, Rbar, EE, *, elimination=None, energy
     not contain the candidate response or its derivative.
     An optional third verifier result checks the retained Fourier constraint
     by physical integration, preserving the rounded-matrix defect separately.
+    A fourth result independently integrates its fixed-potential physical
+    variation, which must vanish under the same retained-coordinate constraint.
     """
     k, dk, q, dq, r, dr, qt, dqt, source, dsource, e, de, info = base
     nc, nz, N, ds = info['nc'], info['nz'], len(e), info['ds']
@@ -344,13 +346,15 @@ def coupled_contact(obj, base, C, Z, Qbar, Rbar, EE, *, elimination=None, energy
     ur = U[:, rr].T
     energy = xr @ A @ x + xr @ RR @ U + ur @ source_physical @ x + ur @ physical @ U
     denergy = dxr @ A @ x + xr @ DA @ x + xr @ A @ dx_geometry + dxr @ RR @ U + xr @ dRR @ U + ur @ dsource_physical @ x + ur @ source_physical @ dx_geometry + ur @ dphysical @ U
-    physical_retained = None
+    physical_retained = physical_dretained = None
     if energy_verifier is not None:
         coordinates=(x,dx_geometry,U) if energy_coordinates is None else energy_coordinates
         verified=energy_verifier(*coordinates)
         energy,denergy=verified[:2]
-        if len(verified)==3:
+        if len(verified)>=3:
             physical_retained=verified[2]
+        if len(verified)==4:
+            physical_dretained=verified[3]
     weak = _relative(KK @ U + SS @ x - QT @ H, KK @ U, SS @ x, QT @ H)
     terms = (dKK@U, KK[:nc, :nc]@dUC, dsource[:nc]@x,
              source[:nc]@dfield, -dqt[:nc]@H, -qt[:nc]@DH)
@@ -365,6 +369,8 @@ def coupled_contact(obj, base, C, Z, Qbar, Rbar, EE, *, elimination=None, energy
     meta['flux_residual'] = _relative(A@x+RR@U-H, A@x, RR@U, H)
     meta['retained_derivative_residual'] = _relative(dfield+dQQ@U+QQ[:, :nc]@dUC,
                                                    dfield, dQQ@U, QQ[:, :nc]@dUC)
+    if physical_dretained is not None:
+        meta['physical_retained_derivative_residual'] = _relative(physical_dretained, np.eye(2*N))
     meta['flux_derivative_residual'] = _relative(DA@x+A@dfield+dRR@U+RR[:, :nc]@dUC-DH,
                                                DA@x, A@dfield, dRR@U, RR[:, :nc]@dUC, DH)
     inv = _solve(e, np.eye(N))

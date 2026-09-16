@@ -423,3 +423,19 @@ changed from `0.581 -> 0.417` seconds at degree five, `0.617 -> 0.438` at
 degree six, and `0.565 -> 0.392` on the refined degree-five mesh. Every
 coordinate matrix and both words of every resulting field were identical.
 These are field-evaluation timings, not whole-solver speedups.
+
+The public cutoff-one order-`(4,4)` quintic contact study subsequently passed
+all original physical and full reflection checks with radial/angular orders
+100/80. Its maximum derivative reflection defect was `7.42e-10`, within the
+unchanged `3e-9` bound. Relative energy, energy-variation and retained-mean
+defects were `6.85e-18`, `1.98e-16` and `4.62e-18`. This run took 2,525 seconds
+before shared-mode sampling and the normal-mean correction described in
+[the contact-coordinate note](nvf-contact-energy-coordinates.md).
+
+For the documented 900-wavelength, 300-thick contact metal layer, transmission
+was `(0.489720305402, 0.478451080712)` for `(p,s)`, and optical directional
+slopes were `(-0.045886578353, 0.019566672950)`. These slopes vary the Maxwell
+calculation along the constitutive JVP; they are not independent finite-gap
+derivatives. Their two stencil scales differed by `1.34e-9` and `5.79e-9`.
+Changes relative to the unextended trial space remain appreciable, so this
+qualified finite calculation does not establish optical convergence.

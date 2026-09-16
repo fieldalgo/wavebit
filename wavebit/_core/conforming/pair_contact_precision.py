@@ -15,6 +15,7 @@ from .projected_pair_contact import _real_geometry
 from .pair_contact_quadrature import quadrature,phases,phase_values,triangle_measures,contact_maps
 from .pair_contact_fourier import moments as free_moments
 from .pair_contact_normal_precision import contact_normals,trace_values
+from .pair_contact_normal_mean import moments as normal_moments
 
 
 def pair(a):return np.asarray(a),np.zeros_like(a)
@@ -83,18 +84,17 @@ def local_coordinates(fields,tri,nc):
     return indices,coordinate_type(fields,mapping)
 
 
-def physical_data(base,Qbar,K,DK,Q,DQ,R,DR,L,SZ,MZZ):
+def physical_data(base,qb,K,DK,Q,DQ,R,DR,L,SZ,MZZ):
     """Keep the unprojected physical equations before solving any response.
 
-    Undo only the Fourier subtraction in the normal test functions. These
-    directly integrated blocks supply the original weak, retained and flux
+    Consume the unprojected normal test functions directly. These
+    integrated blocks supply the original weak, retained and flux
     checks; their definitions and tolerances do not change. The pointwise
     energy verifier remains independent of this matrix assembly.
     """
     info=base[-1];nc,nz,ds=(info[k] for k in ('nc','nz','ds'));rev=info['reverse']
-    qb=np.hstack([base[6][nc:].conj().T,Qbar])
-    KC=add(L,mat(transpose(pair(qb),True),R))
-    source=add(SZ,mat(transpose(pair(qb),True),pair(np.kron(np.eye(2),base[10]))))
+    KC,source=L,SZ
+    qb=qb[0]+qb[1];Qbar=qb[:,nz:]
     K,DK,Q,DQ,R,DR,KC,source,MZZ=(a+b for a,b in (K,DK,Q,DQ,R,DR,KC,source,MZZ))
     arrays=[a.copy() for a in base[:-1]]
     k,dk,q,dq,r,dr,qt,dqt,S,dS,e,de=arrays
@@ -102,7 +102,7 @@ def physical_data(base,Qbar,K,DK,Q,DQ,R,DR,L,SZ,MZZ):
     dk[:nc,:nc]=DK;dk[:nc,nc:]=ds*KC[:nz].T
     q[:,:nc]=Q;dq[:,:nc]=DQ;dq[:,nc:]=ds*qb[:,:nz]
     r[:,:nc]=R;dr[:,:nc]=DR;dr[:,nc:]=ds*source[:nz,rev].T
-    qt[:nc]=Q.conj().T;dqt[:nc]=DQ.conj().T
+    qt[:nc]=Q.conj().T;qt[nc:]=qb[:,:nz].conj().T;dqt[:nc]=DQ.conj().T
     S[:nc]=R[rev].T;dS[:nc]=DR[rev].T;S[nc:]=source[:nz]
     return ((*arrays,info),KC[nz:].T,MZZ[:nz,nz:],Qbar,
             source[nz:,rev].T,MZZ[nz:,nz:])
@@ -122,7 +122,15 @@ def response(obj,settings,base,transform,chart,order,T,Qbar,records,edge_rows,*,
     base=(*base[:10],free[0]+free[1],dfree[0]+dfree[1],info)
     K=pair(np.zeros((nc,nc),complex));Q=pair(np.zeros((size,nc),complex));R=pair(np.zeros((size,nc),complex));DQ=pair(np.zeros((size,nc),complex))
     DK=pair(np.zeros((nc,nc),complex));DR=pair(np.zeros((size,nc),complex))
-    nz=info['nz'];total=nz+Qbar.shape[1];qb=np.hstack([base[6][nc:].conj().T,Qbar]);L=pair(np.zeros((total,nc),complex));SZ=pair(np.zeros((total,size),complex));MZZ=pair(np.zeros((total,total),complex))
+    nz=info['nz'];total=nz+Qbar.shape[1]
+    qb=normal_moments(obj,settings,base,transform,chart,order)
+    # A real periodic potential has exactly conjugate Fourier coefficients.
+    # Check the identity before moving its real projection outside the point
+    # loop; never replace a failed pair by its average or discard its imaginary
+    # component. This is stricter than a pointwise real-field tolerance.
+    if any(np.any(value!=value[info['reverse']].conj()) for value in qb):
+        raise ArithmeticError('complete normal Fourier means lost real-field conjugacy')
+    L=pair(np.zeros((total,nc),complex));SZ=pair(np.zeros((total,size),complex));MZZ=pair(np.zeros((total,total),complex))
     geometry=pair(np.zeros((nc,nc))) if T is None and not retained else None
     rows=iter(records())
     nx,ny=obj.order;modes=np.array([(i,j) for j in range(-ny,ny+1) for i in range(-nx,nx+1)])
@@ -143,16 +151,16 @@ def response(obj,settings,base,transform,chart,order,T,Qbar,records,edge_rows,*,
                 mw=weight.exact[sl]*area;mdw=weight.exact[sl]*D(ds)*slope
                 ww=tuple(np.repeat(v,2)[:,None] for v in mw.pair)
                 dww=tuple(np.repeat(v,2)[:,None] for v in mdw.pair)
-                chi=D.zeros((len(bary[sl]),2,total));chi[:,:,zi]=gz[sl];chi[:,:,nz:]=added[sl]
-                chi=chi.reshape(-1,total).pair
-                if not local[11]:
-                    chi=add(chi,neg(mat(ph,pair(qb))));_real_geometry(chi[0]+chi[1]);chi=tuple(v.real for v in chi)
+                # Only exact local nodal support is packed. Every seam column
+                # and every global coordinate remains in the final equations.
+                normals=np.r_[zi,nz+np.arange(total-nz)]
+                chi=tuple(np.concatenate([getattr(gz[sl],part),getattr(added[sl],part)],2).reshape(-1,len(normals)) for part in ('hi','lo'))
                 mw=weight.exact[sl]*(slope if local[11] else area)
                 measure=tuple(np.repeat(v,2)[:,None] for v in mw.pair)
-                L=add_at(L,columns,cp(pair(ep),mat(transpose(chi),cp(measure,g))))
-                SZ=add(SZ,cp(pair(ep),mat(transpose(chi),cp(measure,ph))))
+                L=add_at(L,np.ix_(normals,indices),cp(pair(ep),mat(transpose(chi),cp(measure,g))))
+                SZ=add_at(SZ,(normals,slice(None)),cp(pair(ep),mat(transpose(chi),cp(measure,ph))))
                 if local[11]:
-                    MZZ=add(MZZ,cp(pair(ep),mat(transpose(chi),cp(measure,chi))))
+                    MZZ=add_at(MZZ,np.ix_(normals,normals),cp(pair(ep),mat(transpose(chi),cp(measure,chi))))
                     DK=add_at(DK,square,cp(pair(ds),cp(pair(ep),mat(transpose(g),cp(measure,g)))))
                 if not local[11]:
                     wg=cp(ww,g)
@@ -176,7 +184,12 @@ def response(obj,settings,base,transform,chart,order,T,Qbar,records,edge_rows,*,
         L=add_at(L,columns,cp(pair(ep),mat(transpose(left),gy)))
         SZ=add(SZ,cp(pair(ep),mat(transpose(left),ph)))
     if assembled is not None:
-        assembled['data']=physical_data(base,Qbar,K,DK,Q,DQ,R,DR,L,SZ,MZZ)
+        assembled['data']=physical_data(base,qb,K,DK,Q,DQ,R,DR,L,SZ,MZZ)
+    # Linearity moves the full Fourier subtraction after integration, instead
+    # of constructing a dense projected normal bank at every sample. The free
+    # block and both low words are identical to those in the retained equations.
+    L=add(L,neg(mat(transpose(qb,True),R)))
+    SZ=add(SZ,neg(mat(transpose(qb,True),tuple(np.kron(np.eye(2),v) for v in free))))
     if retained:
         from .pair_contact_retained import response as retained_response
         return retained_response(base,free,dfree,K,DK,Q,DQ,R,DR,L,SZ,MZZ,qb,assembled)
@@ -206,7 +219,7 @@ def response(obj,settings,base,transform,chart,order,T,Qbar,records,edge_rows,*,
     uc=solve(M,neg(SC));uz=solve(MZZ,neg(add(SZ,mat(MZ,uc))))
     duc=solve(M,neg(add(DSC,mat(DM,uc),cp(pair(ds),mat(transpose(MZ),uz)))))
     xx=add(pair(np.eye(size)),neg(mat(Q,uc)))
-    dx=neg(add(mat(DQ,uc),mat(Q,duc),cp(pair(ds),mat(pair(qb),uz))))
+    dx=neg(add(mat(DQ,uc),mat(Q,duc),cp(pair(ds),mat(qb,uz))))
     H=add(A,mat(tuple(v[:,info['reverse']].T for v in SC),uc))
     DH=add(DA,mat(tuple(v[:,info['reverse']].T for v in DSC),uc),mat(tuple(v[:,info['reverse']].T for v in SC),duc),cp(pair(ds),mat(tuple(v[:,info['reverse']].T for v in SZ),uz)))
     common=mat(pair(T),uc);dcommon=mat(pair(T),duc)
@@ -215,7 +228,7 @@ def response(obj,settings,base,transform,chart,order,T,Qbar,records,edge_rows,*,
         # The independent physical verifier receives the complete coefficients,
         # not the rounded diagnostics or the candidate tensor/JVP. Hold the
         # common potential fixed when differentiating its retained constraint.
-        geometry_dx=neg(add(mat(DQ,uc),cp(pair(ds),mat(pair(qb),uz))))
+        geometry_dx=neg(add(mat(DQ,uc),cp(pair(ds),mat(qb,uz))))
         potential=tuple(np.vstack([c,z]) for c,z in zip(common,uz))
         assembled['energy_coordinates']=(xx,geometry_dx,potential)
     return (U,dcommon[0]+dcommon[1],xx[0]+xx[1],dx[0]+dx[1],H[0]+H[1],DH[0]+DH[1],float(np.linalg.cond(M[0]+M[1])))

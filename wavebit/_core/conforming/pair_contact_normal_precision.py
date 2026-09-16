@@ -35,7 +35,7 @@ def normal_map(points,velocity,thin):
 
 def _clenshaw(coefficients,u):
     """Evaluate the whole Chebyshev polynomial and its derivative."""
-    one=two=done=dtwo=D.zeros_like(u)
+    one=two=done=dtwo=type(u).zeros_like(u)
     for k in range(len(coefficients)-1,0,-1):
         value=2*u*one-two+coefficients[k]
         derivative=2*(one+u*done)-dtwo
@@ -44,7 +44,7 @@ def _clenshaw(coefficients,u):
 
 
 def _chebyshev(coefficients,u):
-    coefficients=D(coefficients)
+    number=type(u);coefficients=number(coefficients)
     even=not np.any(coefficients.hi[1::2]) and not np.any(coefficients.lo[1::2])
     odd=not np.any(coefficients.hi[::2]) and not np.any(coefficients.lo[::2])
     if even:
@@ -55,7 +55,7 @@ def _chebyshev(coefficients,u):
         # T_(2j+1)(u)/u has Chebyshev coefficients (-1)^j at degree
         # zero and 2*(-1)^(j-k) at degrees 1..j. Keep the complete
         # alternating coefficient sums before evaluating that polynomial.
-        tail=D(0.);reduced=D.zeros((len(coefficients)//2,))
+        tail=number(0.);reduced=number.zeros((len(coefficients)//2,))
         for j in range(len(reduced)-1,-1,-1):
             tail=coefficients[2*j+1]-tail;reduced[j]=(1 if j==0 else 2)*tail
         value,first=_clenshaw(reduced,2*u*u-1)
