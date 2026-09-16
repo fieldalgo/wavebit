@@ -297,6 +297,32 @@ including the original independent physical verification, with raw equations
 saved after 4,564 seconds. It used the earlier arithmetic before row tiling;
 this is not a timing comparison at matched optical accuracy.
 
+The fresh degree-eight calculation extends that same once-refined, two-branch
+sequence at Fourier order `(4,4)`, with radial/angular orders 160/80. It passes
+every original physical and full reflection guard. Energy and derivative-energy
+residuals are `2.31e-18` / `2.87e-17`; the independently integrated mean-variation
+residual is `3.62e-15`. Maximum full-slot reflection defects are `7.24e-16` /
+`8.88e-16`. Its p/s transmissions are `.489379581711` / `.479570175468`,
+reflections `.283051190369` / `.171356821442`, and optical directional slopes
+`-.045193763335` / `.018090695576`. The two slope stencils differ by
+`2.51e-9` / `2.63e-10`.
+
+From degree seven to eight, transmission changes by `+3.44e-6` / `+1.30e-5`,
+reflection by `-1.51e-6` / `-1.05e-7`, and the slopes by `-6.19e-5` / `+6.83e-5`.
+The relative p/s slope changes decrease to 0.137% / 0.379%, compared with
+0.44% / 1.14% in the preceding degree step. Both latest changes therefore
+shrink. These resolution differences do not bound the remaining error:
+mesh and Fourier resolution remain fixed, the optical slopes still follow
+the constitutive JVP rather than independently solved positive gaps, and
+there is no certified independent optical reference for this fixture.
+
+The complete run took 14,575 seconds, with raw equations saved after 3,910
+seconds. It includes the original independent physical verifier and used
+bounded three-word row tiling, before the fixed polynomial-gradient cache
+described below. Different degrees and concurrent workloads prevent treating
+this as a paired speed comparison with the degree-seven run. This finite
+qualification does not close the production convergence or runtime gates.
+
 The fresh quintic and sextic runs took 6,311 and 9,912 seconds, respectively,
 under concurrent workloads. Their raw-equation assembly checkpoints occurred
 at 1,230 and 2,971 seconds; those checkpoints precede the completed response
