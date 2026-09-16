@@ -439,3 +439,21 @@ calculation along the constitutive JVP; they are not independent finite-gap
 derivatives. Their two stencil scales differed by `1.34e-9` and `5.79e-9`.
 Changes relative to the unextended trial space remain appreciable, so this
 qualified finite calculation does not establish optical convergence.
+
+A fresh public cutoff-two calculation at the same degree, mesh, Fourier and
+quadrature settings retains all 60 real transmission directions. It uses
+the complete normal Fourier means and directly reconstructed mean variation
+described in [the contact energy note](nvf-contact-energy-coordinates.md).
+It passed every original physical and reflection guard in 2,868 seconds.
+Energy and derivative-energy residuals were `5.76e-18` and `5.17e-18`;
+the independently integrated mean-variation residual was `1.06e-14`.
+Maximum full-slot reflection defects were `7.24e-16` and `2.28e-17`.
+The resulting p/s transmissions were `.489660564455` / `.478724994095`,
+with directional optical slopes `-.047058406141` / `.017519779557`.
+The two slope stencils differed by `9.94e-9` / `1.41e-9`.
+
+Relative to cutoff one, transmission still changes by approximately
+`-5.97e-5` / `+2.74e-4` and slope by `-1.17e-3` / `-2.05e-3`.
+The larger finite space is therefore qualified, but the cutoff sequence
+has not met an optical convergence criterion. No field or tolerance was
+removed to obtain this result.
