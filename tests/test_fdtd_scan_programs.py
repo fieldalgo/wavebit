@@ -183,15 +183,22 @@ def test_the_cache_stays_within_its_bound():
     assert last in time_domain._SCAN_PROGRAMS
 
 
+def _body_closed_over_a_big_array():
+    """``(weak reference, step function)``. The array lives only in the closure, so deleting
+    the returned function drops the last reference this test holds."""
+    import jax.numpy as jnp
+    c = jnp.arange(1000.)
+    return weakref.ref(c), lambda carry, n: (carry + c[:2], None)
+
+
 def test_a_program_keeps_none_of_the_arrays_it_was_first_traced_with():
     """jax 0.11's ``closed.jaxpr`` is ``closed`` itself, constants included, and the cached
     program closed over it: up to 64 programs, each holding a first call's arrays."""
     import jax.numpy as jnp
     time_domain._SCAN_PROGRAMS.clear()
-    c = jnp.arange(1000.)
-    ref = weakref.ref(c)
-    time_domain._eager_scan(lambda carry, n: (carry + c[:2], None), jnp.zeros(2), jnp.arange(2.))
-    del c
+    ref, body = _body_closed_over_a_big_array()
+    time_domain._eager_scan(body, jnp.zeros(2), jnp.arange(2.))
+    del body
     gc.collect()
     assert len(time_domain._SCAN_PROGRAMS) == 1
     assert ref() is None, 'the cached program still holds the array it was traced with'

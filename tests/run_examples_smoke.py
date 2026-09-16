@@ -44,6 +44,23 @@ EXAMPLES = REPO_ROOT / 'examples'
 # This is a smoke-test budget, not a promise about solver performance.
 TIMEOUT_S = 300
 
+# Scripts that legitimately need longer, with the measurement behind each. 300 s was set when
+# `examples/` held only the four fast `shapes_*` scripts (30b5b35); the FDTD examples that came
+# later optimise through a time-domain solve and take minutes. Measured on a 12-core desktop
+# (2026-09-16), and the runners have measured 2.4-2.9x slower than it on this repository's own
+# suite, so each budget is about 3x the desktop time:
+#
+#   fdtd_multilayer_optimization.py  472-525 s  30 L-BFGS-B iterations, 36 evaluations,
+#                                               JAX gradients through a 3-wavelength solve
+#   fdtd_layer_optimization.py       115-147 s  the same shape of loop, one layer
+#
+# Keeping the default at 300 s means a new example cannot quietly become a five-minute one:
+# it has to be named here, with its measurement.
+BUDGET_S = {
+    'fdtd_multilayer_optimization.py': 1800,
+    'fdtd_layer_optimization.py': 600,
+}
+
 # Substrings that mean failure even when the script exited 0. Matched against stdout and stderr
 # together, because the traceback goes to one and a print to the other.
 BAD_OUTPUT = (
@@ -86,6 +103,7 @@ def run_one(script: Path) -> tuple[bool, float, list[str], str]:
     env['PYTHONPATH'] = os.pathsep.join(
         [str(REPO_ROOT)] + ([env['PYTHONPATH']] if env.get('PYTHONPATH') else []))
 
+    budget = BUDGET_S.get(script.name, TIMEOUT_S)
     start = time.perf_counter()
     try:
         proc = subprocess.run(
@@ -95,12 +113,12 @@ def run_one(script: Path) -> tuple[bool, float, list[str], str]:
             capture_output=True,
             text=True,
             errors='replace',
-            timeout=TIMEOUT_S,
+            timeout=budget,
         )
     except subprocess.TimeoutExpired as exc:
         elapsed = time.perf_counter() - start
         partial = (exc.stdout or '') + (exc.stderr or '')
-        return False, elapsed, [f'timed out after {TIMEOUT_S}s'], partial
+        return False, elapsed, [f'timed out after {budget}s'], partial
 
     elapsed = time.perf_counter() - start
     output = proc.stdout + proc.stderr
