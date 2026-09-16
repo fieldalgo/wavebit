@@ -87,9 +87,9 @@ def test_complete_moving_gradients_match_decimal_potential_differences(degree, r
                     shift = round((center_angle + mode.start - float(theta))/(2*np.pi))
                     quarter = round(mode.start/(np.pi/2))
                     angle = theta + (2*shift - Z(quarter + sum((1, 1, 2)[:sector]))/2)*pi
-                    lam = oracle.scalar(mode.exponent)
-                    u, flux = map(oracle.scalar, mode.states[sector])
-                    q = oracle.div(flux, oracle.scalar(mode.coefficients[sector]))
+                    lam = oracle.scalar(mode.complete_exponent)
+                    u, flux = map(oracle.scalar, mode.complete_states[sector])
+                    q = oracle.div(flux, oracle.scalar(mode.complete_coefficients[sector]))
                     a = oracle.div(oracle.add(u, oracle.neg(oracle.mul((Z(0), Z(1)), q))), (Z(2), Z(0)))
                     bcoef = oracle.div(oracle.add(u, oracle.mul((Z(0), Z(1)), q)), (Z(2), Z(0)))
                     logr = (x*x + y*y).ln()/2

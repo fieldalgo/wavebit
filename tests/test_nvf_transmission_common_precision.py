@@ -10,7 +10,9 @@ def neg(a):return -a[0],-a[1]
 def mul(a,b):return a[0]*b[0]-a[1]*b[1],a[0]*b[1]+a[1]*b[0]
 def div(a,b):
  d=b[0]*b[0]+b[1]*b[1];return (a[0]*b[0]+a[1]*b[1])/d,(a[1]*b[0]-a[0]*b[1])/d
-def scalar(a):return Z.from_float(float(np.real(a))),Z.from_float(float(np.imag(a)))
+def scalar(a):
+ if hasattr(a,'hi') and hasattr(a,'lo'):return add(scalar(a.hi),scalar(a.lo))
+ return Z.from_float(float(np.real(a))),Z.from_float(float(np.imag(a)))
 def exponential(z):
  n=0
  while abs(z[0])+abs(z[1])>Z('.125'):z=(z[0]/2,z[1]/2);n+=1
@@ -50,7 +52,7 @@ def test_compensated_mode_matches_independent_cartesian_power(coefficients,branc
                 x,y=Z.from_float(float(x0)),Z.from_float(float(y0));r=(x*x+y*y).sqrt();theta=phase(x,y)
                 shift=round((center+mode.start-np.arctan2(y0,x0))/(2*np.pi))
                 local=theta+(2*shift-Z(quarter_turn+sum((1,1,2)[:sector]))/2)*PI
-                lam=scalar(mode.exponent);u,q=map(scalar,mode.states[sector]);qa=div(q,scalar(mode.coefficients[sector]))
+                lam=scalar(mode.complete_exponent);u,q=map(scalar,mode.complete_states[sector]);qa=div(q,scalar(mode.complete_coefficients[sector]))
                 one=(Z(1),Z(0));ii=(Z(0),Z(1));two=(Z(2),Z(0))
                 A=div(add(u,neg(mul(ii,qa))),two);B=div(add(u,mul(ii,qa)),two)
                 positive=mul(A,exponential(mul(lam,(r.ln(),local))));negative=mul(B,exponential(mul(lam,(r.ln(),-local))))

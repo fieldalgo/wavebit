@@ -27,8 +27,14 @@ def evaluated_modes(x,y,exponent,start,sector,center_angle,u,flux,coefficient):
     return positive+negative,exponent*(left+right),1j*exponent*(left-right)
 
 def local_mode(mode,x,y,sector,center_angle):
-    u,flux=mode.states[sector]
-    return evaluated_modes(x,y,mode.exponent,mode.start,sector,center_angle,u,flux,mode.coefficients[sector])
+    u,flux=mode.complete_states[sector]
+    return evaluated_modes(x,y,mode.complete_exponent,mode.start,sector,center_angle,u,flux,mode.complete_coefficients[sector])
+
+def packed_parameters(values):
+    """Retain both words of every fixed mode parameter when batching fields."""
+    if isinstance(values[0],C):
+        return C(np.array([v.hi for v in values]),np.array([v.lo for v in values]))
+    return np.array(values)
 
 class CommonCoordinates:
     def __init__(self,fields,mapping):
@@ -71,9 +77,9 @@ class CommonCoordinates:
         def packed(values):return D(np.stack([v.hi for v in values],1),np.stack([v.lo for v in values],1))
         if entries:
             xx,yy=packed(xs),packed(ys)
-            arguments=[np.array([fn(mode,sector,angle) for mode,parts,first,cutoff,offsets,jac,sector,angle in entries]) for fn in (
-                lambda m,s,a:m.exponent,lambda m,s,a:m.start,lambda m,s,a:s,lambda m,s,a:a,
-                lambda m,s,a:m.states[s][0],lambda m,s,a:m.states[s][1],lambda m,s,a:m.coefficients[s])]
+            arguments=[packed_parameters([fn(mode,sector,angle) for mode,parts,first,cutoff,offsets,jac,sector,angle in entries]) for fn in (
+                lambda m,s,a:m.complete_exponent,lambda m,s,a:m.start,lambda m,s,a:s,lambda m,s,a:a,
+                lambda m,s,a:m.complete_states[s][0],lambda m,s,a:m.complete_states[s][1],lambda m,s,a:m.complete_coefficients[s])]
             sampled=evaluated_modes(xx,yy,*arguments)
         for column,(mode,parts,first,cutoff,offsets,jac,sector,angle) in enumerate(entries):
             x,y=xs[column],ys[column]
@@ -85,7 +91,7 @@ class CommonCoordinates:
                 # Each sector potential is harmonic and homogeneous. These
                 # identities differentiate its Cartesian gradient without
                 # subtracting nearby singular field samples.
-                scale=(C(mode.exponent)-1)/C(x*x+y*y)
+                scale=(mode.complete_exponent-1)/C(x*x+y*y)
                 fxx=scale*(gx*C(x)-gy*C(y))
                 fxy=scale*(gx*C(y)+gy*C(x))
                 dgx,dgy=fxx*C(dx)+fxy*C(dy),fxy*C(dx)-fxx*C(dy)

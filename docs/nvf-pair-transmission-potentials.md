@@ -7,9 +7,11 @@ Targets:
 - `wavebit/_core/conforming/cartesian_pair_transmission_galerkin.py`
 - `wavebit/_core/conforming/pair_transmission_fields.py`
 - `wavebit/_core/conforming/pair_transmission_modes.py`
+- `wavebit/_core/conforming/pair_transmission_mode_precision.py`
 - `wavebit/_core/conforming/pair_transmission_common_precision.py`
 - `tests/test_nvf_pair_transmission.py`
 - `tests/test_nvf_transmission_common_precision.py`
+- `tests/test_nvf_transmission_mode_precision.py`
 - `studies/nvf_pair_angular_resolution.py`
 
 The explicit NumPy transmission family supplies a separate finite trial space
@@ -59,18 +61,37 @@ q = ((a-b)/(a+b)) * ((a-b)/(a+c)) * (c/(b+c)) / 2
 lambda = 1 - 2*asin(sqrt(q))/pi.
 ```
 
-This changes the evaluation of the characteristic, not the retained field
-space or its closure tolerance. Independent 100-digit checks cover real
-reference contrasts from 1e-4 through 1e-12, on both sides of equality and
-for all four branches. Complex near-equal references also retain closed
-modes. The three standard reference corner types keep their previous root
-values exactly. These root checks do not establish conditioning of an
-arbitrarily near-degenerate complete field bank.
+The ordinary characteristic chooses the existing root branch. The final root
+is refined in complete high/low arithmetic using
+`sin(pi*(1-lambda)/2) = sqrt(q)`. Solving for this separation retains weak
+contrasts without differentiating or refitting the fixed reference space.
+Independent 100-digit checks cover real contrasts from 1e-4 through 1e-12,
+on both sides of equality and for all four branches, at a 3e-28 bound. The
+rounded standard roots can change by their last floating-point bit; their
+branch choices and defining equation remain the same.
 
 The implementation uses the principal growing root and the successive roots
-`2-lambda`, `2+lambda`, `4-lambda`. A two-component null vector of the full
-monodromy determines the angular coefficients; a separate closure check
-verifies continuity after the complete turn. A nonpositive real part is
+`2-lambda`, `2+lambda`, `4-lambda`. Forming the monodromy minus identity in
+ordinary arithmetic loses the angular state when the contrast is weak.
+Instead, the implementation forms `(M-I)/(a-b)` algebraically, using
+`t = cos(pi*lambda/2) = (a-b)*h`, `h**2 = c/(2*(a+b)*(a+c)*(b+c))`.
+A nonzero row of this complete two-by-two matrix determines its null vector.
+The resulting potential and flux state propagates through all three sectors;
+the original closure check remains unchanged. Both words of the roots,
+normalized coefficients and states enter complete field assembly. Ordinary
+sampling uses their rounded values.
+
+Independent 100-digit characteristic and transfer equations verify eight real
+and complex references, including 1e-12 contrasts, for every branch. The worst
+measured transfer or full-turn discrepancy was 3.49e-31. Separate reflected
+field tests align only the scalar normalization of two independently generated
+modes and compare their entire values and Cartesian gradients at 3e-28. In a
+metal junction diagnostic, ordinary root/state parameters gave a reflection
+defect as large as 1.42e-14; complete parameters reduced it below 6.30e-31.
+These checks concern the local functions. They do not certify conditioning
+of an arbitrarily near-degenerate complete field bank or optical convergence.
+
+A nonpositive real part is
 rejected because the local gradient energy is not integrable. Equal quarter
 coefficients give a straight interface with no noninteger corner direction.
 At a material junction, a closed vertex becomes an edge of an opening

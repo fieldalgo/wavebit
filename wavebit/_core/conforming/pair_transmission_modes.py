@@ -9,6 +9,7 @@ derived here without an external eigensolver or copied implementation.
 import cmath
 from numbers import Integral
 import numpy as np
+from .pair_transmission_mode_precision import parameters
 
 
 def transfer(exponent, coefficient, angle):
@@ -65,18 +66,19 @@ class TransmissionMode:
         self.exponent = 2*((branch+1)//2)+(-root if branch % 2 else root)
         if not np.isfinite(self.exponent) or self.exponent.real <= 0:
             raise ValueError('the reference transmission mode must have finite energy')
-        matrix = np.eye(2, dtype=complex)
-        for coefficient, angle in zip(self.coefficients, self.angles):
-            matrix = transfer(self.exponent, coefficient, angle)@matrix
-        _, _, right = np.linalg.svd(matrix-np.eye(2))
-        state = right[-1].conj()
-        state /= state[np.argmax(abs(state))]
-        states = [state]
-        for coefficient, angle in zip(self.coefficients, self.angles):
-            states.append(transfer(self.exponent, coefficient, angle)@states[-1])
-        if not np.allclose(states[-1], states[0], atol=2e-12, rtol=0):
+        exponent, states, coefficients = parameters(coefficients, branch, root)
+        self.complete_exponent = exponent
+        self.complete_states = states
+        self.complete_coefficients = coefficients
+        # Ordinary sampling remains a rounded view of the same fixed modes.
+        # Complete field assembly consumes both words of these parameters.
+        self.exponent = complex(exponent.hi+exponent.lo)
+        if not np.isfinite(self.exponent) or self.exponent.real <= 0:
+            raise ValueError('the reference transmission mode must have finite energy')
+        self.coefficients = tuple(complex(v.hi+v.lo) for v in coefficients)
+        self.states = tuple(tuple(complex(v.hi+v.lo) for v in row) for row in states)
+        if not np.allclose(self.states[-1], self.states[0], atol=2e-12, rtol=0):
             raise ArithmeticError('the complete reference mode does not close across all sectors')
-        self.states = tuple(tuple(row) for row in states)
 
     def sample(self, points, *, sector, center_angle, hessian=False):
         """Return potential and Cartesian derivatives from one material side.

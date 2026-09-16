@@ -24,6 +24,7 @@
 | `cartesian_pair_corner_galerkin.py` | Can fixed real corner and optional junction powers join that whole tensor and its positive-gap/contact/material derivative? |
 | `cartesian_pair_transmission_galerkin.py` | Can fixed reference transmission modes define a separate complete contact/positive-gap tensor and material JVP? |
 | `pair_transmission_modes.py` | Which finite-energy sector solutions preserve local potential and normal-flux continuity with one-sided interface derivatives? |
+| `pair_transmission_mode_precision.py` | How do complete characteristic roots and factored angular states preserve weak transmission contrasts and reflected field spans? |
 | `pair_transmission_fields.py` | How can all selected real transmission directions share the fitted common polynomial coordinates and their moving gradients? |
 | `pair_transmission_common_precision.py` | How can complete higher-degree polynomial and fixed transmission coordinates retain accurate gradients and moving-sample variations before weak projection? |
 | `pair_complex_exponential.py` | Can complete complex sector powers and Fourier phases use real compensated exponential and trigonometric factors without losing primitive precision? |
