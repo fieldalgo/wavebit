@@ -13,6 +13,7 @@ subtrees:
       - file: guide/scene
       - file: guide/light
       - file: guide/numerics
+      - file: guide/nvf-method-selection
       - file: guide/conforming-nvf
       - file: guide/affine-profile-nvf
       - file: guide/cartesian-rectangle-nvf

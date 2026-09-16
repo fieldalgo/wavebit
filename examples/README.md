@@ -5,6 +5,7 @@ frameworks, no vendored dependencies, nothing that needs a dataset or a GPU.
 
 | Entry | Question it answers |
 | --- | --- |
+| [`nvf_method_selection.py`](nvf_method_selection.py) | How do I choose ordinary NVF, explicit Cartesian Li, or the experimental auxiliary pair solver for the same structure? |
 | [`shapes_1d.py`](shapes_1d.py), [`shapes_2d.py`](shapes_2d.py) | How do you describe a structure as drawn shapes instead of a raster? The `_verification.py` file beside each answers the follow-up: does that path agree with the raster it replaces? |
 
 [`rectilinear_contact.py`](rectilinear_contact.py) selects exact Cartesian shape Li

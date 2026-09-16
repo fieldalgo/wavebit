@@ -75,6 +75,21 @@ properties every one of them carries.
 ```
 
 
+## Experimental auxiliary NVF
+
+These explicit NumPy interfaces do not change ordinary NVF routing or
+certify optical convergence. See the [selection guide](../guide/nvf-method-selection.md).
+
+```{eval-rst}
+.. autoclass:: wavebit.CartesianPairOpeningPlan
+   :members:
+
+.. autoclass:: wavebit.CartesianPairTransmissionGalerkinGapCell
+   :members: closure
+   :inherited-members:
+
+```
+
 ## Results and state
 
 ```{eval-rst}

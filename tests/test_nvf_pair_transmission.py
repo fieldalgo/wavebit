@@ -3,8 +3,7 @@ from functools import lru_cache
 import numpy as np
 import pytest
 
-from wavebit._core.conforming.cartesian_pair_opening import CartesianPairOpeningPlan
-from wavebit._core.conforming.cartesian_pair_transmission_galerkin import CartesianPairTransmissionGalerkinGapCell
+from wavebit import CartesianPairOpeningPlan, CartesianPairTransmissionGalerkinGapCell
 from wavebit._core.conforming.pair_transmission_modes import TransmissionMode
 from wavebit._core.conforming.pair_transmission_fields import PairTransmissionFields
 
@@ -128,6 +127,45 @@ def test_flat_reference_adds_no_noninteger_direction():
     expected = np.array([3., 3., 1/3, 0., 0.])[:, None, None, None]
     np.testing.assert_allclose(value, expected, atol=3e-10, rtol=0)
     np.testing.assert_allclose(tangent, 0., atol=3e-9, rtol=0)
+
+    # The explicit public construction feeds the existing optical engine.
+    import wavebit
+    settings = dict(lattice=GEOMETRY['basis'], truncation_order=0,
+                    wavelength=2., thickness=(.3,), top=1., bot=2.25, theta=.2)
+    auxiliary = wavebit.rcwa(**settings).solve_conv(*value)
+    uniform = wavebit.rcwa(**settings, structure=np.full((1, 1, 1), 3.)).solve()
+    for actual, reference in zip((auxiliary.p_inc, auxiliary.s_inc), (uniform.p_inc, uniform.s_inc)):
+        np.testing.assert_allclose(actual.T, reference.T, atol=3e-10, rtol=0)
+        np.testing.assert_allclose(actual.R, reference.R, atol=3e-10, rtol=0)
+
+
+@pytest.mark.parametrize('method', ('li', 'nvf'))
+def test_expert_example_leaves_auxiliary_off_and_refuses_unread_options(method, monkeypatch):
+    import wavebit
+    from examples.nvf_method_selection import solve_pair
+    def forbidden(*args, **kwargs):
+        raise AssertionError('ordinary selection must not construct the auxiliary cell')
+    monkeypatch.setattr(wavebit, 'CartesianPairTransmissionGalerkinGapCell', forbidden)
+    answer, tangent, metadata, _ = solve_pair(method, order=1)
+    assert tangent is None and metadata['factorization'] == method
+    for result in (answer.p_inc, answer.s_inc):
+        assert result.T.size == 9
+        assert 0 <= result.T.sum() <= 1 and 0 <= result.R.sum() <= 1
+        assert result.T.sum()+result.R.sum() <= 1+1e-9
+    with pytest.raises(ValueError, match='auxiliary_options'):
+        solve_pair(method, auxiliary_options={'degree': 5})
+
+
+def test_expert_example_propagates_auxiliary_failure_without_fallback(monkeypatch):
+    import wavebit
+    from examples.nvf_method_selection import solve_pair
+    def rejected(*args, **kwargs):
+        raise ArithmeticError('auxiliary qualification rejected this case')
+    monkeypatch.setattr(wavebit, 'CartesianPairTransmissionGalerkinGapCell', rejected)
+    with pytest.raises(ArithmeticError, match='qualification rejected'):
+        solve_pair('auxiliary')
+    with pytest.raises(ValueError, match='method must'):
+        solve_pair('auto')
 
 
 def test_positive_gap_and_material_jvp_matches_independent_values():

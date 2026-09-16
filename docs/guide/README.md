@@ -41,6 +41,7 @@ be runnable as written.
 | [`scene.md`](scene.md) | What is the stack made of, and what cell does it repeat in? |
 | [`light.md`](light.md) | Which polarization arrives, on which orders, from which side? |
 | [`numerics.md`](numerics.md) | Which factorization and normal field, and what do they cost? |
+| [`nvf-method-selection.md`](nvf-method-selection.md) | How do I explicitly choose ordinary NVF, turn NVF off, or select the experimental auxiliary solver? |
 | [`conforming-nvf.md`](conforming-nvf.md) | How do rectangle layers become conforming NVF energy matrices, and what geometry and derivatives are supported? |
 | [`affine-profile-nvf.md`](affine-profile-nvf.md) | How does an explicit fractional profile become conforming NVF matrices on a nonorthogonal lattice? |
 | [`cartesian-rectangle-nvf.md`](cartesian-rectangle-nvf.md) | How does one physical rectangle per layer retain its geometry and live derivatives on an oblique lattice? |
