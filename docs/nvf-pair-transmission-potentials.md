@@ -276,6 +276,27 @@ means and independent physical verification; optical convergence is still
 open. The earlier provisional saved-state sextic optics are superseded by
 this complete qualification.
 
+A fresh degree-seven calculation completes the same once-refined, two-branch
+sequence at Fourier order `(4,4)`, with radial/angular integration orders
+140/80. Its complete value and gap derivative pass every original physical
+and reflection guard. Energy and derivative-energy residuals are `2.54e-22`
+and `1.86e-18`; the independently reconstructed mean-variation residual is
+`3.52e-15`. Full-slot reflection defects are `7.24e-16` / `4.44e-16`.
+
+Its p/s transmissions are `.489376142234` / `.479557214869`, with optical
+directional slopes `-.045131822981` / `.018022370310`. The two slope stencils
+differ by `4.77e-9` / `4.58e-9`. Relative to degree six, transmission changes
+by `+7.72e-6` / `+2.99e-5` and the slopes by `-1.96e-4` / `+2.03e-4`.
+The relative p-slope change decreases from about 2.09% to 0.44%, but the
+s-slope change increases from about 0.61% to 1.14% and reverses sign.
+Thus the completed degree-five/six/seven sequence does not establish
+convergence of both derivatives. These are resolution changes, not errors
+against an independent optical golden value, and the Fourier orders have
+not increased in this comparison. The calculation took 13,645 seconds,
+including the original independent physical verification, with raw equations
+saved after 4,564 seconds. It used the earlier arithmetic before row tiling;
+this is not a timing comparison at matched optical accuracy.
+
 The fresh quintic and sextic runs took 6,311 and 9,912 seconds, respectively,
 under concurrent workloads. Their raw-equation assembly checkpoints occurred
 at 1,230 and 2,971 seconds; those checkpoints precede the completed response
