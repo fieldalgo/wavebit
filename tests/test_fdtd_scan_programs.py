@@ -56,14 +56,16 @@ def test_a_repeated_scene_solve_runs_no_compiler():
 
 
 def test_one_solve_compiles_each_distinct_program_once():
-    """Two source bases times reference/actual is four runs of one step program, and each run
-    is a chunk scan plus a tail scan: a solve at a size nothing has compiled needs 2 programs.
+    """Two source bases times reference/actual is four runs, each a chunk scan plus a tail scan.
+    The two structure runs share one shape and the two uniform-reference runs share another --
+    the reference is stepped on a two-cell transverse column (``scene_fdtd._uniform_reference``)
+    -- so a solve at sizes nothing has compiled needs 4 programs, two per shape.
     The program cache is emptied first, so the count cannot come from a warm one; it used to
     rest on no other test in the session choosing resolution 23."""
     time_domain._SCAN_PROGRAMS.clear()
     with CompileLog() as log:
         wavebit.fdtd(**scene(resolution=23.))
-    assert log.names.count('jit(scan_program)') == 2, log.names
+    assert log.names.count('jit(scan_program)') == 4, log.names
 
 
 E0 = np.zeros((3, 16, 2, 2))
