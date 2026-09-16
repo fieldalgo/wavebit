@@ -8,7 +8,6 @@ import pytest
 
 from wavebit._core.conforming.cartesian_pair_opening import CartesianPairOpeningPlan
 from wavebit._core.conforming.cartesian_pair_transmission_galerkin import CartesianPairTransmissionGalerkinGapCell
-from wavebit._core.conforming.pair_transmission_common_precision import CommonCoordinates
 from wavebit._core.conforming.pair_transmission_fields import PairTransmissionFields
 from wavebit._core.conforming.triangle_polynomials import multi_indices
 from test_nvf_pair_transmission import GEOMETRY, REFERENCE
@@ -21,16 +20,24 @@ def dec(value):
 
 @pytest.mark.parametrize('degree,refinement', ((5, 0), (6, 0), (5, 1)))
 def test_complete_moving_gradients_match_decimal_potential_differences(degree, refinement):
+    check_moving_potential(degree, refinement)
+
+
+def check_moving_potential(degree, refinement, cutoff_order=0, exact_points=False):
     obj = CartesianPairTransmissionGalerkinGapCell(
         CartesianPairOpeningPlan(0, refinement), 0, reference=REFERENCE,
-        degree=degree, branches=2, angular_quadrature=32)._base
-    fields = PairTransmissionFields(obj, GEOMETRY, REFERENCE, 2, 32)
+        degree=degree, branches=2, angular_quadrature=32, cutoff_order=cutoff_order)._base
+    fields = PairTransmissionFields(obj, GEOMETRY, REFERENCE, 2, 32, cutoff_order)
     data = obj.data
     nold = data['Cfull'].shape[1] - 1
     mapping = np.random.default_rng(71).normal(size=(nold + fields.count, 3))
     mapping *= [1., 32., 1/32]
-    common = CommonCoordinates(fields, mapping)
+    common = fields.common_coordinate_type(fields, mapping)
     bary = np.array([[.23, .31, .46], [.52, .17, .31]])
+    if exact_points:
+        from wavebit._core.conforming.pair_corner_precision import D
+        from wavebit._core.conforming.pair_contact_quadrature import Exact
+        bary = Exact(D(bary, np.array([[1., -2., 1.], [-2., 1., 1.]])*2.**-59))
     dbary = np.array([[.04, -.01, -.03], [-.03, .02, .01]])
     inverse = np.array([[1.25, .25], [.125, .875]])
     dinverse = np.array([[.03125, .0625], [-.015625, .03125]])
@@ -73,7 +80,7 @@ def test_complete_moving_gradients_match_decimal_potential_differences(degree, r
                 result = [sum(v*polynomial[row, col] for row, v in enumerate(bernstein))
                           for col in range(3)]
                 first = 0
-                for corner, center, mode, parts in fields.modes:
+                for (corner, center, mode, parts), power in zip(fields.modes, fields.cutoff_powers):
                     cutoff = fields.hats[tri[:3], corner]
                     if not np.any(cutoff):
                         first += len(parts)
@@ -97,8 +104,9 @@ def test_complete_moving_gradients_match_decimal_potential_differences(degree, r
                         oracle.mul(a, oracle.exponential(oracle.mul(lam, (logr, angle)))),
                         oracle.mul(bcoef, oracle.exponential(oracle.mul(lam, (logr, -angle)))))
                     hat = sum(b[i]*dec(cutoff[i]) for i in range(3))
+                    complement = sum(b[i]*dec(1-cutoff[i]) for i in range(3))
                     for part in parts:
-                        component = value[0 if part == 'real' else 1]*hat
+                        component = value[0 if part == 'real' else 1]*hat*complement**power
                         for col in range(3):
                             result[col] += component*raw[first, col]
                         first += 1
@@ -114,6 +122,8 @@ def test_complete_moving_gradients_match_decimal_potential_differences(degree, r
             dinv = [[dec(v) for v in row] for row in dinverse]
             for row, point in enumerate(bary):
                 b, db = list(map(dec, point)), list(map(dec, dbary[row]))
+                if exact_points:
+                    b = [dec(bary.exact.hi[row, i])+dec(bary.exact.lo[row, i]) for i in range(3)]
                 anchor = int(np.argmax(abs(point)))
                 b[anchor] = 1-sum(v for i, v in enumerate(b) if i != anchor)
                 db[anchor] = -sum(v for i, v in enumerate(db) if i != anchor)

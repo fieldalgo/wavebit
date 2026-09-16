@@ -33,6 +33,8 @@ def main():
                         help='Add the fixed real logarithmic cosine/sine radial pair.')
     parser.add_argument('--transmission-branches',type=int,choices=range(1,5),default=None,
                         help='Select fixed-reference transmission modes instead of the fixed-power bank; angular-order then does not apply.')
+    parser.add_argument('--transmission-cutoff-order',type=int,choices=range(3),default=0,
+                        help='Retain successive h*(1-h)**m cutoffs of each transmission mode at degree 5 or 6.')
     parser.add_argument('--tensor-output',type=Path,default=None,
                         help='Optional complete tensor/JVP NPZ, including guard and reflection status.')
     args=parser.parse_args()
@@ -40,6 +42,8 @@ def main():
         parser.error('transmission and fixed oscillatory banks are separate field spaces')
     if args.degree>4 and args.transmission_branches is None:
         parser.error('degrees 5 and 6 require the transmission field family')
+    if args.transmission_cutoff_order and (args.transmission_branches is None or args.degree<5):
+        parser.error('nested cutoffs require the degree-5 or degree-6 transmission family')
     if len(args.order) not in (1,2) or any(n<0 for n in args.order):
         parser.error('order must be one or two nonnegative integers')
     orders=tuple(args.order*2 if len(args.order)==1 else args.order)
@@ -74,7 +78,7 @@ def main():
         cell=CartesianPairTransmissionGalerkinGapCell(CartesianPairOpeningPlan(0,args.refinement),
             orders,degree=args.degree,quadrature=args.quadrature,reference=(12.25,-10+1j,1.),
             branches=args.transmission_branches,coercivity_angle=1.53,
-            angular_quadrature=args.angular_quadrature)
+            angular_quadrature=args.angular_quadrature,cutoff_order=args.transmission_cutoff_order)
     value,tangent,metadata=cell.closure(gap=0.,epsilon=(12.25,-10+1j),**GEOMETRY)
     value,tangent=np.asarray(value),np.asarray(tangent)
     nx,ny=orders

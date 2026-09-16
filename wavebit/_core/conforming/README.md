@@ -27,6 +27,7 @@
 | `pair_transmission_mode_precision.py` | How do complete characteristic roots and factored angular states preserve weak transmission contrasts and reflected field spans? |
 | `pair_transmission_fields.py` | How can all selected real transmission directions share the fitted common polynomial coordinates and their moving gradients? |
 | `pair_transmission_common_precision.py` | How can complete higher-degree polynomial and fixed transmission coordinates retain accurate gradients and moving-sample variations before weak projection? |
+| `pair_transmission_extended_precision.py` | How do all nested transmission cutoffs retain complete polynomial and moving gradients through large cancellations? |
 | `pair_complex_exponential.py` | Can complete complex sector powers and Fourier phases use real compensated exponential and trigonometric factors without losing primitive precision? |
 | `pair_positive_fields.py` | Can complete moving positive-gap fields retain primitive coordinate precision, including normalized collapsing gradients? |
 | `pair_positive_precision.py` | Can the full projected geometric metric condition positive-gap equations without removing a potential or shifting a pivot? |
@@ -36,6 +37,7 @@
 | `pair_oscillatory_coefficients.py` | Which exact scalar weights and Taylor coefficients define the fixed real exponent columns? |
 | `pair_oscillatory_scalar.py` | How can compensated scalar powers evaluate those complete columns without repeated dense exponentials? |
 | `pair_corner_precision.py` | How are complete real coordinate operations evaluated with compensated arithmetic before rounding? |
+| `pair_extended_precision.py` | How can an extra arithmetic word preserve strongly cancelling trial potentials without changing the physical equations? |
 | `pair_oscillatory_polynomials.py` | How do exact angular Bernstein coefficients retain every oscillatory corner direction and its polynomial overlap? |
 | `pair_oscillatory_fields.py` | How are full symmetric oscillatory fields and their moving gradients evaluated without amplifying coordinate roundoff? |
 | `pair_oscillatory_radial.py` | How can a fixed real logarithmic cosine/sine pair retain both complete radial directions and their derivatives without cancelling nearby powers? |

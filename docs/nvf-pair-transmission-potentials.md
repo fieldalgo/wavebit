@@ -9,9 +9,13 @@ Targets:
 - `wavebit/_core/conforming/pair_transmission_modes.py`
 - `wavebit/_core/conforming/pair_transmission_mode_precision.py`
 - `wavebit/_core/conforming/pair_transmission_common_precision.py`
+- `wavebit/_core/conforming/pair_transmission_extended_precision.py`
+- `wavebit/_core/conforming/pair_extended_precision.py`
 - `tests/test_nvf_pair_transmission.py`
 - `tests/test_nvf_transmission_common_precision.py`
 - `tests/test_nvf_transmission_mode_precision.py`
+- `tests/test_nvf_transmission_cutoff_precision.py`
+- `tests/test_nvf_extended_precision.py`
 - `studies/nvf_pair_angular_resolution.py`
 
 The explicit NumPy transmission family supplies a separate finite trial space
@@ -26,6 +30,7 @@ existing fixed-power family.
 | Reference coefficients | Fixed left, right and background values defining the trial functions |
 | Physical coefficients | Live materials passed to `closure`, independently of the reference |
 | One through four branches | Successive noninteger growing transmission roots at all six corners |
+| Cutoff order zero through two | At degree 5 or 6, include every `h*(1-h)**m` multiplier through that order; zero retains the original space |
 | Real directions | Both real and imaginary parts of complex modes; one direction for a real mode with real relative coefficients |
 | Common coordinates | A continuous Pp interpolation subtraction and complete real QR within each corner group |
 
@@ -342,3 +347,79 @@ change removes the repeated global sampled QR step; it does not reduce the
 cost of independent physical energy integration or prove optical convergence.
 The positive-gap metric and independent Decimal pivot controls are described
 in [the coordinate precision note](nvf-positive-coordinate-precision.md).
+
+## Nested cutoff spaces and complete cancellation
+
+The optional `cutoff_order` extends each fixed transmission potential `F`
+from `h*F` to the nested collection `h*(1-h)**m*F`, for every integer `m`
+from zero through the requested order. Here `h` is the same piecewise affine
+corner hat. No original mode, real component or common polynomial is
+removed. Orders one and two are available at degrees five and six; order
+zero remains the default. With the documented two-branch metal reference,
+the three choices contain 20, 40 and 60 real transmission directions.
+
+The cutoff changes both the spatial and moving gradients. Writing
+`w(h)=h*(1-h)**m`, the reference gradient is
+`w*grad(F)+w'*F*grad(h)`. Its directional variation retains the full product
+rule, including `w''*dh*F*grad(h)`. The same fixed potential bank and its
+transport apply at contact and at positive gaps. Material differentiation
+still leaves reference exponents and coefficients fixed.
+
+A complete two-word evaluation alone was insufficient for this enlarged
+space. Coordinate combinations of order `1e7` cancelled to fields of order
+one; the independent potential test found normalized gradient errors above
+its original `3e-28` criterion. Recomputing all high/low matrix cross products
+did not resolve the failure. The nested provider therefore retains a third
+arithmetic word through coefficient composition, Bernstein differentiation,
+complex powers, cutoff multiplication and the final common combination.
+Only then does it return the complete two-word physical field. Contact and
+positive-gap weak assembly and physical verification keep their original
+algorithms and tolerances.
+
+Three-word products retain every cross term, and normalization carries a
+surviving low remainder into the leading word after cancellation. Complex
+powers use real range reduction and complete-coefficient exponential and
+trigonometric polynomials. No third-party arithmetic implementation or new
+runtime dependency is introduced. The ordinary cutoff-zero path continues
+to use its existing two-word provider.
+
+Independent 100-digit checks cover both nested orders at degrees five and
+six, a refined degree-five mesh, ordinary points and points carrying a low
+coordinate word. They differentiate the complete potential independently
+in space and along moving coordinates, retaining the same `3e-28` bound.
+Separate Decimal checks cover the arithmetic, cancellation, complete matrix
+products and complex exponential range. These primitive controls do not
+establish optical convergence of the enlarged trial spaces.
+
+To measure an enlarged space with the full original physical and reflection
+checks, use the existing study entry point, for example:
+
+```shell
+python -m studies.nvf_pair_angular_resolution --order 4 --degree 5 --refinement 0 --quadrature 100 --angular-quadrature 80 --transmission-branches 2 --transmission-cutoff-order 1
+```
+
+A nested cutoff choice is an explicit trial-space choice, not an automatic
+accuracy claim. Mesh, Fourier, polynomial, branch and cutoff changes still
+require comparison of complete responses and optical observables.
+
+The initial integrated degree-five order-`(1,0)` contact control, with
+cutoff order one and a joint gap/material/background direction, passed
+all original physical guards and the full reflection condition. It retained
+all 40 real transmission directions and took 271 seconds. This is a finite
+contact control, not an optical-convergence measurement. A degree-five
+zero-Fourier-order positive-gap control at gap `.02`, with joint gap,
+material and background directions, also passed every original physical
+energy, retained-mean and reflection check. It took 1,699 seconds before
+shared-mode sampling. This one integration test has a scoped 3,600-second
+CI deadline; no physical tolerance changes. Its moving fields are checked
+independently above, but this run is not a new finite-difference optical
+or contact-limit measurement.
+
+All cutoffs of one fixed mode share its Cartesian power. Sampling that
+identical power once preserves every separate cutoff and its derivatives.
+A paired three-repeat comparison at four triangles used 512 complete
+quadrature points per triangle and cutoff order two. Median field times
+changed from `0.581 -> 0.417` seconds at degree five, `0.617 -> 0.438` at
+degree six, and `0.565 -> 0.392` on the refined degree-five mesh. Every
+coordinate matrix and both words of every resulting field were identical.
+These are field-evaluation timings, not whole-solver speedups.

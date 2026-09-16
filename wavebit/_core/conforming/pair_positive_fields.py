@@ -58,7 +58,7 @@ def builder(obj,settings,base):
    ddet=djac[0,0]*jac[1,1]+jac[0,0]*djac[1,1]-djac[0,1]*jac[1,0]-jac[0,1]*djac[1,0]
    invc=adj(jac)/det;dic=-(invc@djac@invc);invz=D(s)*invc;diz=D(ds)*invc+D(s)*dic
   key=tuple(tri)
-  if key not in providers:providers[key]=CommonCoordinates(fields,np.eye(nc)[:,ci])
+  if key not in providers:providers[key]=getattr(fields,'common_coordinate_type',CommonCoordinates)(fields,np.eye(nc)[:,ci])
   common_db=meta.get('common_tangent',meta['tangent'])[sl]
   common=providers[key].sample(tri,bary,invc,dic,common_db)
   ref=np.array([[-1.,-1.],[1.,0.],[0.,1.]])

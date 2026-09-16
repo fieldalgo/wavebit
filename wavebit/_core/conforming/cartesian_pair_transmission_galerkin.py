@@ -25,13 +25,18 @@ class CartesianPairTransmissionGalerkinGapCell(CartesianPairCornerGalerkinGapCel
     physical Fourier integrals check positive-gap retained constraints.
     All original energy, weak, retained and flux tolerances apply. Contact and positive gap use the same field space.
     Choosing branches, mesh or quadrature does not establish optical accuracy.
+    At degree 5 or 6, cutoff_order=1 or 2 retains h*(1-h)**m times every
+    selected mode for all m from zero through cutoff_order. These nested
+    spaces use three-word common-field arithmetic before final two-word
+    assembly. The default zero keeps the original h-weighted field space.
     The original fixed-power family and ordinary NVF routing are unchanged.
     """
 
     _polynomial_degrees = (3, 4, 5, 6)
 
     def __init__(self, plan, order=1, *, reference, branches=2, degree=3,
-                 quadrature=80, angular_quadrature=None, coercivity_angle=0.):
+                 quadrature=80, angular_quadrature=None, coercivity_angle=0.,
+                 cutoff_order=0):
         coefficients = np.asarray(reference, complex)
         if (coefficients.shape != (3,) or not np.all(np.isfinite(coefficients))
                 or np.any(coefficients == 0)):
@@ -39,6 +44,11 @@ class CartesianPairTransmissionGalerkinGapCell(CartesianPairCornerGalerkinGapCel
         if (isinstance(branches, (bool, np.bool_)) or not isinstance(branches, Integral)
                 or not 1 <= branches <= 4):
             raise ValueError('transmission branches must be an integer from 1 through 4')
+        if (isinstance(cutoff_order, (bool, np.bool_)) or not isinstance(cutoff_order, Integral)
+                or not 0 <= cutoff_order <= 2):
+            raise ValueError('transmission cutoff_order must be an integer from 0 through 2')
+        if cutoff_order and degree not in (5, 6):
+            raise ValueError('nested transmission cutoffs require degree 5 or 6')
         super().__init__(plan, order, degree=degree, quadrature=quadrature,
                          exponents=(), junctions=True, mesh='symmetric',
                          angular_quadrature=angular_quadrature,
@@ -47,16 +57,19 @@ class CartesianPairTransmissionGalerkinGapCell(CartesianPairCornerGalerkinGapCel
             raise ValueError('transmission modes require quadrature at least 48')
         self.reference = tuple(coefficients)
         self.branches = int(branches)
+        self.cutoff_order = int(cutoff_order)
         self.root_order = 20
 
     def _closure_at_offset(self, settings):
         # Geometry is fixed in a JVP. Construct locally, so separate closure
         # calls cannot overwrite each other's material-independent field bank.
         fields = PairTransmissionFields(self._base, settings, self.reference,
-                                        self.branches, self.angular_quadrature)
+                                        self.branches, self.angular_quadrature,
+                                        self.cutoff_order)
         value, tangent, metadata = super()._closure_at_offset(settings, prepared_fields=fields)
         metadata.update(closure='fixed_transmission_pair_galerkin',
                         transmission_reference=self.reference,
                         transmission_branches=self.branches,
+                        transmission_cutoff_order=self.cutoff_order,
                         transmission_directions=fields.count)
         return value, tangent, metadata

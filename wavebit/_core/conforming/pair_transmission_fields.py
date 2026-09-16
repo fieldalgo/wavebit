@@ -13,9 +13,10 @@ class PairTransmissionFields(PairCornerFields):
     complete_common_precision = False
     common_coordinate_type = CommonCoordinates
 
-    def __init__(self, obj, settings, reference, branches, angular_quadrature):
+    def __init__(self, obj, settings, reference, branches, angular_quadrature, cutoff_order=0):
         super().__init__(obj, (), junctions=True, angular_quadrature=12)
         self.complete_common_precision = obj.degree >= 5
+        self.cutoff_order = cutoff_order
         self.root_order = 20
         geometry = {key: np.asarray(settings[key])
                     for key in ('basis', 'widths', 'height', 'offset')}
@@ -30,6 +31,7 @@ class PairTransmissionFields(PairCornerFields):
                           ((left, right, background), np.pi),
                           ((left, background, background), -np.pi/2)]
         self.modes = []
+        self.cutoff_powers = []
         self._definitions = []
         for corner, (coefficients, start) in zip(self.controls, specifications):
             # Equal quarter-sector coefficients give a straight interface.
@@ -47,9 +49,14 @@ class PairTransmissionFields(PairCornerFields):
                     raise ValueError('a reference junction mode requires Re(exponent) > 1/2 for a finite opening energy')
                 real = mode.exponent.imag == 0 and all(np.imag(a) == 0 for a in mode.coefficients)
                 parts = ('real',) if real else ('real', 'imag')
-                self.modes.append((corner, corners[corner], mode, parts))
-                self._definitions.extend((corner,) for _ in parts)
+                for power in range(cutoff_order+1):
+                    self.modes.append((corner, corners[corner], mode, parts))
+                    self.cutoff_powers.append(power)
+                    self._definitions.extend((corner,) for _ in parts)
         self.count = len(self._definitions)
+        if cutoff_order and self.count:
+            from .pair_transmission_extended_precision import CommonCoordinates as ExtendedCoordinates
+            self.common_coordinate_type = ExtendedCoordinates
         if self.count:
             prepare(self)
         self.angular_quadrature = angular_quadrature
@@ -65,7 +72,7 @@ class PairTransmissionFields(PairCornerFields):
         change = np.zeros_like(gradient)
         first = 0
         moving = np.any(db)
-        for corner, center, mode, parts in self.modes:
+        for (corner, center, mode, parts), power in zip(self.modes, self.cutoff_powers):
             cutoff = hats[:, corner]
             if not np.any(cutoff):
                 first += len(parts)
@@ -81,14 +88,26 @@ class PairTransmissionFields(PairCornerFields):
             h, dh = bary@cutoff, db@cutoff
             gh = np.array([cutoff[1]-cutoff[0], cutoff[2]-cutoff[0]])
             raw = h[:, None]*(g@jacobian)+f[:, None]*gh
+            if power:
+                s = bary@(1-cutoff)
+                weight = h*s**power
+                first_weight = s**power-power*h*s**(power-1)
+                second_weight = (-2*np.ones_like(h) if power == 1 else
+                                 power*(power-1)*h*s**(power-2)-2*power*s**(power-1))
+                raw = weight[:, None]*(g@jacobian)+f[:, None]*first_weight[:, None]*gh
             draw = np.zeros_like(raw)
             if moving:
                 velocity = db@offsets
                 dg = np.einsum('qij,qj->qi', sampled[2], velocity)
                 df = np.sum(g*velocity, axis=1)
                 draw = dh[:, None]*(g@jacobian)+h[:, None]*(dg@jacobian)+df[:, None]*gh
+                if power:
+                    draw = ((first_weight*dh)[:, None]*(g@jacobian)
+                            +weight[:, None]*(dg@jacobian)
+                            +df[:, None]*first_weight[:, None]*gh
+                            +f[:, None]*(second_weight*dh)[:, None]*gh)
             for part in parts:
-                value[:, first] = getattr(h*f, part)
+                value[:, first] = getattr((weight if power else h)*f, part)
                 gradient[:, :, first] = getattr(raw@inverse, part)
                 change[:, :, first] = getattr(draw@inverse+raw@dinverse, part)
                 first += 1
