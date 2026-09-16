@@ -39,9 +39,10 @@ def _bernstein(values,degree):
                    for alpha in multi_indices(degree)])
 
 
-def _polynomial(degree,values,changes,coefficients,moving):
+def _polynomial(degree,values,changes,coefficients,moving,*,matrices=None):
     basis=_bernstein(values,degree-1)
-    matrices=[T(gradient_coefficients(degree)[:,:,axis])@coefficients for axis in range(2)]
+    if matrices is None:
+        matrices=[T(gradient_coefficients(degree)[:,:,axis])@coefficients for axis in range(2)]
     gradients=[basis@matrix for matrix in matrices]
     if not moving:return gradients,[T.zeros_like(v) for v in gradients]
     lower=_bernstein(values,degree-2)
@@ -80,7 +81,7 @@ def _modes(x,y,exponent,start,sector,center_angle,u,flux,coefficient):
 
 class CommonCoordinates:
     def __init__(self,fields,mapping):
-        self.fields=fields;self.mapping=T(mapping);self.cache={}
+        self.fields=fields;self.mapping=T(mapping);self.cache={};self.gradient_cache=None
         nold=fields.obj.data['Cfull'].shape[1]-1
         self.raw=T.zeros((fields.count,self.mapping.hi.shape[1]))
         if not fields.count:return
@@ -97,6 +98,17 @@ class CommonCoordinates:
             self.cache[key]=ordinary
         return self.cache[key]
 
+    def prepared_gradients(self,tri):
+        # These contractions depend only on the fixed triangle coefficients,
+        # not on quadrature points or their motion. Retain one triangle only;
+        # the number of sampled triangles must not grow this extra cache.
+        key=tuple(tri)
+        if self.gradient_cache is None or self.gradient_cache[0]!=key:
+            coefficients=self.prepared(tri)
+            matrices=[T(gradient_coefficients(self.fields.obj.degree)[:,:,axis])@coefficients for axis in range(2)]
+            self.gradient_cache=(key,matrices)
+        return self.gradient_cache[1]
+
     def sample(self,tri,bary,inverse,dinverse,bary_tangent=None):
         fields=self.fields;bb=_coordinates(bary)
         moving=bary_tangent is not None and np.any(bary_tangent)
@@ -107,7 +119,8 @@ class CommonCoordinates:
             for i in range(3):
                 rows=np.flatnonzero(anchor==i)
                 if len(rows):db[i][rows]=-sum(db[j][rows] for j in range(3) if j!=i)
-        gradients,changes=_polynomial(fields.obj.degree,bb,db,self.prepared(tri),moving)
+        gradients,changes=_polynomial(fields.obj.degree,bb,db,self.prepared(tri),moving,
+                                      matrices=self.prepared_gradients(tri))
         vertices=fields.zero[tri[:3]];hats=fields.hats[tri[:3]]
         first=0;entries=[];xs=[];ys=[];unique={};representatives=[];sample_columns=[]
         for (corner,center,mode,parts),power in zip(fields.modes,fields.cutoff_powers):

@@ -511,6 +511,28 @@ took 178 and 129 seconds before and after row tiling. Both measurements ran
 under concurrent workloads; neither is a whole-solver speedup or a new
 optical-convergence qualification.
 
+Repeated samples of a fixed triangle reuse its two complete polynomial-gradient
+coefficient matrices. Only the most recently sampled triangle remains in this
+additional cache; revisiting another triangle recomputes the same contractions.
+The arithmetic and coefficient bank are unchanged. At degree eight with 324
+real output columns, the cached matrices occupy 559,872 bytes, independently
+of the number of triangles sampled.
+
+A 100-digit moving-potential control first checks three complete columns at
+four triangles. Their exact binary-scaled copies then check 258 columns and
+514 repeated points, including a return to the first triangle. Both words of
+every gradient and variation match. Together with the existing moving and
+nested-cutoff controls, all 28 targeted tests pass at the original `3e-28`
+criterion. A separate paired comparison uses the stored degree-eight contact
+candidate's complete coefficients, with 512 points and 324 columns. Every
+output bit is preserved. Three-repeat median field times change from
+`1.088 -> 1.079`, `2.106 -> 2.049`, and `1.083 -> 1.024` seconds under concurrent
+workloads. These observations do not establish a whole-solver speedup or
+qualify the candidate's optical convergence. A fresh complete degree-eight
+order-`(1,0)` contact control with joint gap/material/background variation
+also passes every original physical and full reflection guard in 686 seconds.
+This finite control is not a paired whole-solver timing comparison.
+
 To measure an enlarged space with the full original physical and reflection
 checks, use the existing study entry point, for example:
 

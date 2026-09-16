@@ -42,6 +42,7 @@ def check_moving_potential(degree, refinement, cutoff_order=0, exact_points=Fals
     inverse = np.array([[1.25, .25], [.125, .875]])
     dinverse = np.array([[.03125, .0625], [-.015625, .03125]])
 
+    verified = []
     with localcontext() as context:
         context.prec = 100
         pi = 16*oracle.atan(Z(1)/5) - 4*oracle.atan(Z(1)/239)
@@ -140,3 +141,26 @@ def check_moving_potential(degree, refinement, cutoff_order=0, exact_points=Fals
                             error = abs(observed-reference)/max(Z(1), abs(reference))
                             assert error < Z('3e-28'), (degree, refinement, row, axis, col, error)
             potential.cache_clear()
+            verified.append((tri.copy(), actual))
+    return fields, mapping, bary, dbary, inverse, dinverse, verified
+
+
+def test_wide_chunked_fields_retain_decimal_verified_columns_after_triangle_revisits():
+    from wavebit._core.conforming.pair_corner_precision import D
+    from wavebit._core.conforming.pair_contact_quadrature import Exact
+
+    fields, mapping, bary, dbary, inverse, dinverse, verified = check_moving_potential(
+        8, 1, exact_points=True)
+    # Independently checked Decimal columns also define a wide bank by exact
+    # binary scaling. Repeated samples exercise several bounded row blocks.
+    scales = np.ldexp(np.ones(258), np.arange(258) % 9 - 4)
+    wide_mapping = np.tile(mapping, (1, 86))*scales
+    common = fields.common_coordinate_type(fields, wide_mapping)
+    points = Exact(D(np.tile(bary.exact.hi, (257, 1)),
+                     np.tile(bary.exact.lo, (257, 1))))
+    directions = np.tile(dbary, (257, 1))
+    for tri, reference in [*verified, verified[0]]:
+        actual = common.sample(tri, points, inverse, dinverse, directions)
+        for value, expected in zip(actual, reference):
+            np.testing.assert_array_equal(value.hi, np.tile(expected.hi, (257, 86))*scales)
+            np.testing.assert_array_equal(value.lo, np.tile(expected.lo, (257, 86))*scales)
