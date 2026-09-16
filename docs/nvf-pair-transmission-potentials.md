@@ -323,8 +323,37 @@ described below. Different degrees and concurrent workloads prevent treating
 this as a paired speed comparison with the degree-seven run. This finite
 qualification does not close the production convergence or runtime gates.
 
-The fresh quintic and sextic runs took 6,311 and 9,912 seconds, respectively,
-under concurrent workloads. Their raw-equation assembly checkpoints occurred
+A separate Fourier-resolution comparison holds the quintic once-refined,
+two-branch space fixed, with radial/angular orders 100/80 and cutoff zero.
+Increasing Fourier order from `(4,4)` to `(6,6)` passes every original physical
+and full reflection guard. The latter calculation has energy and
+energy-variation residuals `3.56e-22` / `9.41e-19`, independently reconstructed
+mean-variation residual `4.20e-15`, and maximum full-slot value/derivative
+reflection defects `6.13e-16` / `6.90e-16`.
+
+| Fourier order | Transmission p / s | Reflection p / s | Optical directional slope p / s |
+|---|---|---|---|
+| `(4,4)` | `.489284990957` / `.479401083850` | `.283076728057` / `.171332352257` | `-.044017967333` / `.017928929941` |
+| `(6,6)` | `.485471038870` / `.401024301210` | `.297075772571` / `.166846368605` | `-.035863765328` / `.019458755096` |
+
+The p/s transmission changes are `-.00381395` / `-.07837678`, reflection
+changes `+.01399904` / `-.00448598`, and slope changes `+.00815420` /
+`+.00152983`. The magnitudes of the slope changes are 18.52% / 8.53% of
+the preceding values. Thus shrinking polynomial-degree changes at fixed
+Fourier order do not establish optical convergence. The `(6,6)` slope
+stencils agree to `7.10e-9` / `3.25e-9`, but still propagate the constitutive
+JVP rather than independently solving positive gaps. This comparison has
+no certified independent optical reference.
+
+The complete `(6,6)` run took 13,277 seconds, including the original
+independent physical verifier, with raw equations saved after 1,783 seconds
+and an observed peak resident memory of 3.87 GB. Concurrent workloads and
+different retained Fourier sizes prevent treating these times as a paired
+speed comparison at matched accuracy. Fourier convergence and practical
+runtime remain open.
+
+At Fourier order `(4,4)`, the fresh quintic and sextic runs took 6,311 and
+9,912 seconds, respectively, under concurrent workloads. Their raw-equation assembly checkpoints occurred
 at 1,230 and 2,971 seconds; those checkpoints precede the completed response
 and independent physical verification. The verifier is part of this explicit
 solver path, not merely an external optional test. These frozen runs predate
