@@ -218,3 +218,36 @@ def test_legacy_default_strength_is_the_old_profile_and_is_recorded():
     assert not np.array_equal(omitted.given.r_s, strong.given.r_s)
     assert omitted_diagnostics['pml_reflection'] == explicit_diagnostics['pml_reflection'] == 1e-8
     assert strong_diagnostics['pml_reflection'] == 1e-16
+
+
+@pytest.mark.parametrize('incidence', [dict(tetm='te'), dict(psi=.3)], ids=['tetm', 'psi'])
+@pytest.mark.parametrize('value', [0, 1, -3, 1.5, np.nan, np.inf, True, '12', None])
+def test_legacy_absorber_thinner_than_two_cells_is_refused_before_a_grid_is_built(
+        monkeypatch, value, incidence):
+    # The explicit-backend path already refuses these; the legacy one took n_pml=0 and returned
+    # T = 2e-4 on a slab RCWA puts at 0.885.
+    import wavebit._core.fdtd as legacy
+    def forbidden(*args, **kwargs):
+        raise AssertionError('an invalid absorber depth reached the grid')
+    monkeypatch.setattr(legacy, '_Grid', forbidden)
+    with pytest.raises(ValueError, match='n_pml'):
+        wavebit.fdtd(**LEGACY_SCENE, **incidence, n_pml=value)
+
+
+@pytest.mark.parametrize('value', [2, 12.0, np.int64(24)])
+def test_legacy_absorber_depth_takes_whole_numbers_from_two(monkeypatch, value):
+    import wavebit._core.fdtd as legacy
+    built, grid, grids = legacy._Incident1D.__init__, legacy._Grid, []
+
+    def stop(self, *args, **kwargs):
+        built(self, *args, **kwargs)
+        raise _Built
+
+    def capture(*args, **kwargs):
+        grids.append(grid(*args, **kwargs))
+        return grids[-1]
+    monkeypatch.setattr(legacy._Incident1D, '__init__', stop)
+    monkeypatch.setattr(legacy, '_Grid', capture)
+    with pytest.raises(_Built):
+        wavebit.fdtd(**LEGACY_SCENE, tetm='te', n_pml=value)
+    assert grids and grids[-1].n_pml == int(value)

@@ -2376,6 +2376,25 @@ def _solve_conical(pair, phi, theta, return_diagnostics, **kw):
     return (result, te_diag) if return_diagnostics else result
 
 
+def _check_n_pml(n_pml):
+    """The CPML depth as a whole number of cells, at least the two the explicit-backend path asks for.
+
+    Measured 2026-09-17 on a normal-incidence slab at ``resolution=30``, where RCWA gives
+    T = 0.885: ``n_pml=0`` makes the absorber span the whole domain and returned 2e-4 under
+    numerical warnings, and ``n_pml=1`` returned 0.32. The floor matches the explicit-backend
+    path's, so both doors refuse the same depths. It is a floor against the absurd, not a
+    guarantee: 2 cells returned T = 5.03 and 4-6 cells missed by 0.13-0.25, all with no warning,
+    where the default 12 is within 2.1e-3.
+    """
+    try:
+        whole = not isinstance(n_pml, (bool, np.bool_)) and int(n_pml) == n_pml
+    except (TypeError, ValueError, OverflowError):
+        whole = False
+    if not whole or n_pml < 2:
+        raise ValueError(f'fdtd: n_pml must be a whole number of cells, at least 2; got {n_pml!r}.')
+    return int(n_pml)
+
+
 def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tetm=None,
                theta=0.0, phi=None, psi=None, mu=None, incidence_side='top', lattice=None,
                resolution=None, n_pml=PML_CELLS, pml_reflection=PML_TARGET_REFLECTION,
@@ -2431,7 +2450,8 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
             wavelength`` -- 20 cells per wavelength **in the densest material in the scene**,
             which is what the index has to be read for. This is the knob that costs: halving
             ``dz`` is roughly 8x the work in 3D and buys second-order accuracy.
-        n_pml: CPML depth in cells (12). A correctly graded CPML is dz-independent, so cells
+        n_pml: CPML depth in cells (12; a whole number, at least 2). A correctly graded CPML is
+            dz-independent, so cells
             is the right unit -- and that conclusion was wrong once, in the direction of a
             physical thickness, because the layer was broken rather than the unit.
         pml_reflection: the round-trip amplitude the CPML grading aims at
@@ -2493,6 +2513,7 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
     """
     _check_incidence(theta, phi, psi, chi, polarization)
     pml_reflection = _validate_pml_reflection(pml_reflection)
+    n_pml = _check_n_pml(n_pml)
     if field_monitors is not None:
         if not isinstance(field_monitors, dict) or not field_monitors:
             raise ValueError('field_monitors must map names to plane z coordinates.')
