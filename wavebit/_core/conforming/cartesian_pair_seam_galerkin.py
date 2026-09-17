@@ -269,7 +269,10 @@ def _free_fourier_energy(order,settings):
     """Independent exact pair convolution for the pure Fourier energy check."""
     nx,ny=order;modes=np.array([(m,n) for n in range(-ny,ny+1) for m in range(-nx,nx+1)])
     difference=modes[:,None,:]-modes[None,:,:]
-    period=np.diag(settings['basis']);widths=np.asarray(settings['widths']);height=settings['height'];gap=settings['gap']
+    period=np.diag(settings['basis'])
+    if np.any(np.asarray(settings['basis']) != np.diag(period)) or min(period)<=0:
+        raise ValueError('positive diagonal period required')
+    widths=np.asarray(settings['widths']);height=settings['height'];gap=settings['gap']
     center=period/2+np.asarray(settings['offset'])
     shifts=[-(widths[1]+gap)/2,(widths[0]+gap)/2]
     dirs=[-settings['gap_tangent']/2,settings['gap_tangent']/2]

@@ -27,6 +27,9 @@ import ast
 import pathlib
 import subprocess
 
+import numpy as np
+import pytest
+
 _PERIOD_NAMES = {'Px', 'Py'}
 
 #: ``(module, function) -> (expected number of flagged lines, why it is allowed)``. Each entry
@@ -45,6 +48,29 @@ _SEPARABLE_KXY = (
     "setting grating_type 2 unconditionally.")
 
 _ALLOWED = {
+    ('wavebit/_core/conforming/cartesian_pair_seam_galerkin.py', '_geometry'): (
+        2,
+        "the explicit Cartesian pair chart checks the complete basis against diag(period) "
+        "and requires positive diagonal entries before using either period; "
+        "test_cartesian_auxiliary_families_reject_non_diagonal_bases exercises contact and "
+        "positive gaps for both seam degrees and both corner meshes."),
+    ('wavebit/_core/conforming/cartesian_pair_seam_galerkin.py', '_free_fourier_energy'): (
+        2,
+        "this exact rectangle Fourier integral refuses any off-diagonal basis entry before "
+        "computing an indicator; test_pair_fourier_energy_rejects_non_diagonal_bases "
+        "checks the helper directly, independently of the cell's earlier validation."),
+    ('wavebit/_core/conforming/pair_symmetric_mesh.py', '_normalization_length'): (
+        1,
+        "the symmetric pair explicitly checks basis == diag(diag(basis)) and positive "
+        "periods before multiplying them. Its public closure is covered by "
+        "test_cartesian_auxiliary_families_reject_non_diagonal_bases; unit-chart controls "
+        "also exercise the direct guard in test_nvf_pair_symmetric_mesh.py."),
+    ('wavebit/_core/conforming/periodic_seam_galerkin.py', '_quadrature'): (
+        1,
+        "the periodic seam API accepts exactly two axis lengths, never a general lattice. "
+        "This function constructs basis=np.diag(period) and calls _chart_geometry, which "
+        "requires a positive diagonal basis, before period arithmetic. "
+        "test_periodic_seam_accepts_axis_lengths_not_a_lattice checks the public boundary."),
     # One entry, and three until the body was folded into `_core`. The argument below is
     # entirely about the *callers*, so it did not weaken by moving -- but the gate is keyed by
     # (module, function) and could not know that, which is what makes it a gate. It failed on
@@ -308,3 +334,50 @@ def test_a_function_holding_a_lattice_forwards_it_to_every_sibling_that_takes_on
         'callee defaults to `None` and answers for a rectangle:\n' + '\n'.join(dropped)
         + '\n\nForward it. If the callee genuinely must see the rectangle, pass `lattice=None` '
           'explicitly -- a stated `None` is a decision and an omitted one is a silence.')
+
+
+_NON_DIAGONAL_BASES = (
+    ((1., .1), (0., 1.)),
+    ((1., 0.), (.1, 1.)),
+    ((0., -1.), (1., 0.)),
+)
+
+
+@pytest.mark.parametrize('basis', _NON_DIAGONAL_BASES)
+@pytest.mark.parametrize('gap', (0., .02))
+@pytest.mark.parametrize('family', ('seam2', 'seam3', 'corner_original', 'corner_symmetric'))
+def test_cartesian_auxiliary_families_reject_non_diagonal_bases(basis, gap, family):
+    """The declared rectangular scope must be enforced for every chart family."""
+    from wavebit._core.conforming.cartesian_pair_opening import CartesianPairOpeningPlan
+    from wavebit._core.conforming.cartesian_pair_seam_galerkin import CartesianPairSeamGalerkinGapCell
+    from wavebit._core.conforming.cartesian_pair_corner_galerkin import CartesianPairCornerGalerkinGapCell
+
+    plan = CartesianPairOpeningPlan(0)
+    if family.startswith('seam'):
+        cell = CartesianPairSeamGalerkinGapCell(plan, order=0, degree=int(family[-1]), quadrature=16)
+    else:
+        cell = CartesianPairCornerGalerkinGapCell(
+            plan, order=0, degree=3, exponents=(), mesh=family.split('_')[1])
+    # A quarter-turn can fail the original positive-triangle chart guard first.
+    with pytest.raises(ValueError, match='positive diagonal|regular triangles must remain positive'):
+        cell.closure(basis=np.asarray(basis), widths=(.3, .3), height=.3,
+                     gap=gap, epsilon=(2., 3.), background=1.)
+
+
+@pytest.mark.parametrize('basis', _NON_DIAGONAL_BASES)
+def test_pair_fourier_energy_rejects_non_diagonal_bases(basis):
+    from wavebit._core.conforming.cartesian_pair_seam_galerkin import _free_fourier_energy
+
+    settings = dict(basis=np.asarray(basis), widths=(.3, .3), height=.3, gap=0.,
+                    offset=(0., 0.), epsilon=(2., 3.), background=1., gap_tangent=1.,
+                    epsilon_tangent=(0., 0.), background_tangent=0.)
+    with pytest.raises(ValueError, match='positive diagonal'):
+        _free_fourier_energy((0, 0), settings)
+
+
+def test_periodic_seam_accepts_axis_lengths_not_a_lattice():
+    from wavebit._core.conforming.periodic_seam_galerkin import PeriodicSeamGalerkinGapCell
+
+    cell = PeriodicSeamGalerkinGapCell(order=0, quadrature=16)
+    with pytest.raises(ValueError, match='period'):
+        cell.closure(gap=.02, period=np.array(_NON_DIAGONAL_BASES[0]), width=.3)
