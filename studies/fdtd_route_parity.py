@@ -104,7 +104,7 @@ amplitudes re-de-embedded with common's formula on legacy's own ``dt``, cells an
 planes (:func:`yee_deembedded`), with no free parameter. ``legacy_yee_deembedded`` vs
 ``common`` is the engine comparison; ``legacy`` vs ``common`` stays reported as the raw one.
 A residual stays. On a non-conical TM loop legacy samples its monitors and its incident
-amplitude half a cell above the node (``_core/fdtd.py``, ``offset = 0.5``), and its
+amplitude half a cell below the node (``_core/fdtd.py``, ``offset = 0.5``), and its
 continuum phase runs over those half cells too. The swap is applied on the node planes, as
 the reviewer's ``a4.py`` does, which leaves an ``O((kz_yee - kz) dz)`` residual on those p
 channels. Recomputed from the channel rows, moving the monitor term alone onto legacy's
@@ -1259,7 +1259,7 @@ def yee_deembedded(scene, legacy, values):
     (``scene_fdtd.propagation``, ``conventions.yee_longitudinal_phase``). Swapping one for the
     other multiplies each amplitude by ``exp(-i (kz_yee - kz_continuum) d)``: ``d = |z_ref|``
     for reflection and ``z_trn - thickness`` for transmission, both on legacy's node planes
-    (a TM loop's monitors sit half a cell above them; the module docstring names that
+    (a TM loop's monitors sit half a cell below them; the module docstring names that
     residual), on legacy's own ``dt`` and cells. The transverse terms are discrete on a crossed
     scene; on a 1D one ``ky`` stays the continuum value, because legacy's own ``d/dy`` is the
     exact ``i ky`` there. No parameter is free. This is the reviewer's ``a4.py`` computation,
