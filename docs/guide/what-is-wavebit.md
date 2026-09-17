@@ -41,7 +41,7 @@ taste: see [Backends, devices and precision](backends.md).
 
 ## Status
 
-**Version 0.1.0a1, alpha candidate.** The API may change. The conventions have a normative
+**Version 0.1.0, alpha candidate.** The API may change. The conventions have a normative
 contract in [Conventions](../conventions.md) and a test suite behind them.
 
 The ordinary RCWA/NVF paths and the experimental contact auxiliary solver have separate

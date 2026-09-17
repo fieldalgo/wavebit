@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wavebit"
-version = "0.1.0a1"
+version = "0.1.0"
 description = "Electromagnetic simulation (RCWA) & optimization package in Python"
 readme = "README.md"
 license = "Apache-2.0"

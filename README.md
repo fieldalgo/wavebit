@@ -16,7 +16,7 @@
 Wavebit simulates how light interacts with nanostructures, and differentiates through the whole
 calculation — so the same code that predicts a device's response can also optimize it.
 
-**Alpha candidate: 0.1.0a1.** The API may change. The ordinary RCWA/NVF solver and the
+**Alpha candidate: 0.1.0.** The API may change. The ordinary RCWA/NVF solver and the
 experimental contact auxiliary solver have different validation scopes. The auxiliary solver
 is opt-in, NumPy-only, and limited to one supported rectangle pair; its optical convergence,
 contact derivatives and practical runtime remain under investigation. Ordinary NVF does not

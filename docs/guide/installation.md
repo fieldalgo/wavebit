@@ -1,6 +1,6 @@
 # Installation
 
-This checkout prepares **0.1.0a1**, an alpha candidate. The solver release has not been
+This checkout prepares **0.1.0**, an alpha candidate. The solver release has not been
 published to PyPI. From the source checkout for the version you want to evaluate:
 
 ```shell

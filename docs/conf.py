@@ -38,7 +38,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 project = 'Wavebit'
 author = 'FieldAlgo'
 copyright = '2026, FieldAlgo'
-release = '0.1.0a1'
+release = '0.1.0'
 
 extensions = [
     'myst_parser',              # the docs are markdown, and stay markdown
