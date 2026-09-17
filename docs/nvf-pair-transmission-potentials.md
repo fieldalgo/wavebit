@@ -352,6 +352,29 @@ different retained Fourier sizes prevent treating these times as a paired
 speed comparison at matched accuracy. Fourier convergence and practical
 runtime remain open.
 
+A subsequent quintic once-refined calculation at `(8,8)` keeps radial/angular
+orders 100/80, two branches and cutoff zero. Every original physical and full
+reflection guard passes. The p/s transmissions are `.494962537308` /
+`.400355285583`, reflections `.297901145371` / `.153843914009`, and optical
+directional slopes `-.031459516989` / `.014936181543`. The two slope stencils
+differ by `4.76e-9` / `7.05e-9`.
+
+Relative to the matched `(6,6)` calculation, transmission changes by
+`+.00949150` / `-.00066902`, reflection by `+.00082537` / `-.01300245`, and
+slopes by `+.00440425` / `-.00452257`. The magnitudes of the slope changes
+are 12.28% / 23.24% of the preceding values. These resolution differences
+are not errors against a known answer, and do not establish Fourier or
+opening-derivative convergence. The slopes still propagate the constitutive
+JVP rather than independently solving positive physical gaps.
+
+The complete `(8,8)` run took 32,257 seconds, including the original physical
+verifier, with an observed peak resident memory of 3.53 GB. Its energy and
+energy-variation residuals are `2.17e-17` / `2.52e-17`, independently
+reconstructed mean-variation residual `1.99e-14`, and maximum full-slot
+value/derivative reflection defects `7.19e-15` / `5.30e-15`. Concurrent
+workloads and different resolutions prevent a matched-accuracy speed claim.
+This finite result does not close the convergence or practical runtime gates.
+
 The corresponding once-refined sextic calculation at Fourier order `(6,6)`
 uses radial/angular orders 120/80, two branches and cutoff zero. Every
 original physical and full reflection guard passes. Energy and
