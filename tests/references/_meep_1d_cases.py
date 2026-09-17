@@ -291,9 +291,13 @@ WAVEBIT_CALL = dict(resolution=200)
 #: except the four marked, which are ``solve_fdtd`` signature defaults. **The distinction
 #: matters and is not cosmetic**: ``PML_CELLS`` and ``COURANT`` are bound into the
 #: signature at import, so patching the module attribute is inert, while
-#: ``PAD_WAVELENGTHS``, ``N_PERIODS``, ``CELLS_PER_WAVELENGTH`` and every PML constant are
-#: read at call time and do bite. Anyone re-deriving these by monkeypatching needs to know
-#: which is which or they will report a live knob as inert.
+#: ``PAD_WAVELENGTHS``, ``N_PERIODS``, ``CELLS_PER_WAVELENGTH`` and the PML profile constants
+#: are read at call time and do bite. ``PML_TARGET_REFLECTION`` has since moved to the first
+#: kind: it is a bound default of ``cpml_coefficients``, ``cpml_profiles`` and ``solve_fdtd``'s
+#: ``pml_reflection``, so patching it is inert and ``pml_reflection=`` is the live knob. Its
+#: ``SENSITIVITY`` rows were measured before that, while it was still read at call time.
+#: Anyone re-deriving these by monkeypatching needs to know which is which or they will
+#: report a live knob as inert.
 WAVEBIT_SHIPPED = {
     # -- signature defaults of solve_fdtd --
     'pad_scale': 1.0,
@@ -320,7 +324,7 @@ WAVEBIT_SHIPPED = {
     'PML_ORDER': 4.0,
     'PML_KAPPA_MAX': 2.0,
     'PML_ALPHA_RELATIVE': 1.5,
-    'PML_TARGET_REFLECTION': 1e-8,
+    'PML_TARGET_REFLECTION': 1e-8,  # now bound at import; see the note above the table
     'SETTLED_RESIDUAL': 1e-2,
     'MIN_INCIDENT_FRACTION': 1e-3,
     'MAX_DEREFERENCE_GAIN': 1e10,
