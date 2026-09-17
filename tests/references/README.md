@@ -74,6 +74,10 @@ differ are exactly the `__stack` pair above.
 | **Meep**, **source-free ringdown traces** | uniform Lorentz oscillations and a conductive periodic cavity mode; offline fitted frequencies/decay agree with independently derived discrete poles | same public-API-only Meep environment; ordinary tests read the archive | `golden_meep_ringdown.npz`, `test_meep_ringdown.py`, `interface/meep_ringdown.py` |
 | **Meep**, **source spectral zero** | unit-peak delayed-difference source suppresses an undamped Lorentz mode; complex native records match at identical current/field times on all three CPU backends | same public-API-only Meep environment, using `CustomSource` | `golden_meep_source_notch.npz`, `test_meep_source_notch.py`, `interface/meep_source_notch.py` |
 | **Meep**, the **1D benchmark** | the grating `docs/fdtd.md` §2 publishes and `README.md` leans on — pure TE/TM, normal incidence, both polarisations at two resolutions, plus a **planar control against a closed form**. Not new physics: it *is* that table's Meep column, which until 2026-09-06 was quoted from elsewhere. Grade **~1e-3**, structure not drift | same | `golden_meep_1d.npz` |
+| **Meep** + **FDTDX**, **native-grid Yee updates** | slab complex Ex/Hy transfer and power at resolutions 20/40/80 with a runtime control; FDTDX 3D periodic E/H updates and the epsilon derivative | separate Meep and FDTDX interpreters, public API or installed update functions only; frozen by `interface/freeze_grid_references.py` | `golden_native_grid_external.npz`, `test_native_grid_external.py`, `test_native_torch_external.py`, `interface/validate_grid_meep.py`, `interface/validate_grid_fdtdx.py` |
+| **Meep** + **FDTDX**, **CPML and electric ADE** | four dispersive slab models at two resolutions, a low-loss mixed metal, and FDTDX two-pole updates with the oscillator-strength derivative | the same interpreters; frozen by `interface/freeze_grid_material_references.py` | `golden_native_material_external.npz`, `golden_low_loss_metal_meep.json`, `test_native_material_external.py`, `interface/validate_grid_dispersive.py`, `interface/validate_grid_fdtdx_ade.py` |
+| **FDTDX**, **complex Bloch boundaries** | three-axis phase advance, real and imaginary E/H, and the material derivative | FDTDX interpreter; `interface/freeze_grid_references.py --kind bloch` | `golden_native_bloch_external.npz`, `test_native_bloch_external.py`, `interface/validate_grid_fdtdx_bloch.py` |
+| **Meep**, **bottom-incident scene** | two-layer complex r/t with the source physically below the stack | Meep interpreter, public API only | `golden_scene_bottom_meep.json`, `test_scene_bottom_meep.py`, `interface/validate_scene_bottom_meep.py` |
 
 One more oracle lives outside this directory: the Berreman 4x4 in
 `tests/test_anisotropic_berreman.py` is an independent *formulation* — not RCWA at all — but our
@@ -969,13 +973,13 @@ to their interpreters; choose a new output directory first:
 ```sh
 mkdir -p /tmp/native-grid-reference
 for resolution in 20 40 80; do
-  "$MEEP_PYTHON" studies/validate_grid_meep.py --backend meep --resolution "$resolution" --output "/tmp/native-grid-reference/meep-grid-$resolution.json"
-  PYTHONPATH=. "$WAVEBIT_PYTHON" studies/validate_grid_meep.py --backend wavebit --resolution "$resolution" --output "/tmp/native-grid-reference/wavebit-grid-$resolution.json"
+  "$MEEP_PYTHON" tests/references/interface/validate_grid_meep.py --backend meep --resolution "$resolution" --output "/tmp/native-grid-reference/meep-grid-$resolution.json"
+  PYTHONPATH=. "$WAVEBIT_PYTHON" tests/references/interface/validate_grid_meep.py --backend wavebit --resolution "$resolution" --output "/tmp/native-grid-reference/wavebit-grid-$resolution.json"
 done
-"$MEEP_PYTHON" studies/validate_grid_meep.py --backend meep --resolution 40 --duration 20 --output /tmp/native-grid-reference/meep-grid-runtime.json
-"$FDTDX_PYTHON" studies/validate_grid_fdtdx.py --backend fdtdx --output /tmp/native-grid-reference/fdtdx-grid.json
-PYTHONPATH=. "$WAVEBIT_PYTHON" studies/validate_grid_fdtdx.py --backend wavebit --output /tmp/native-grid-reference/wavebit-fdtdx-grid.json
-"$WAVEBIT_PYTHON" studies/freeze_grid_references.py --input /tmp/native-grid-reference --output /tmp/native-grid-reference/external.npz
+"$MEEP_PYTHON" tests/references/interface/validate_grid_meep.py --backend meep --resolution 40 --duration 20 --output /tmp/native-grid-reference/meep-grid-runtime.json
+"$FDTDX_PYTHON" tests/references/interface/validate_grid_fdtdx.py --backend fdtdx --output /tmp/native-grid-reference/fdtdx-grid.json
+PYTHONPATH=. "$WAVEBIT_PYTHON" tests/references/interface/validate_grid_fdtdx.py --backend wavebit --output /tmp/native-grid-reference/wavebit-fdtdx-grid.json
+"$WAVEBIT_PYTHON" tests/references/interface/freeze_grid_references.py --input /tmp/native-grid-reference --output /tmp/native-grid-reference/external.npz
 "$WAVEBIT_PYTHON" -m pytest tests/references/test_native_grid_external.py
 ```
 
@@ -999,7 +1003,7 @@ is used, and tracebacks are suppressed to avoid displaying implementation frames
 
 ```sh
 for res in 40 80; do
-  "$MEEP_PYTHON" studies/validate_grid_dispersive.py --backend meep --model low-loss-mixed --resolution "$res" --duration 160 --output "/tmp/low-loss-meep-$res.json"
+  "$MEEP_PYTHON" tests/references/interface/validate_grid_dispersive.py --backend meep --model low-loss-mixed --resolution "$res" --duration 160 --output "/tmp/low-loss-meep-$res.json"
 done
 ```
 
@@ -1011,7 +1015,7 @@ import json
 from datetime import date
 from pathlib import Path
 
-worker = Path('studies/validate_grid_dispersive.py')
+worker = Path('tests/references/interface/validate_grid_dispersive.py')
 payload = dict(
     description='Low-loss mixed Drude/Lorentz slab; Meep public API execution, no implementation inspection.',
     generated=date.today().isoformat(), worker=str(worker),
@@ -1029,7 +1033,7 @@ worker digests are stored in the archive. Meep source was never read; its
 [subpixel smoothing documentation](https://meep.readthedocs.io/en/latest/Subpixel_Smoothing/)
 specify the conventions used. No external solver implementation was copied.
 
-`studies/validate_grid_dispersive.py` uses a length-12 cell, vacuum-end PML of
+`tests/references/interface/validate_grid_dispersive.py` uses a length-12 cell, vacuum-end PML of
 width 1, source at z=3, slab at 7..7.5 and measurement at 9. The three wavelengths
 are 0.6/0.7/0.8, resolutions 40/80, cdt/dx=0.4 and duration 24. Meep's own PML
 and Wavebit's CPML need not have the same implementation. The electric current
@@ -1076,7 +1080,7 @@ zero-DC reference pulse. Separate tests require late normal/oblique pulse energy
 to drop below 1e-5/1e-4 of a periodic control. These bounds are not universal
 reflection specifications or grazing-angle validation.
 
-`studies/validate_grid_fdtdx_ade.py` independently asks FDTDX's coefficient factory
+`tests/references/interface/validate_grid_fdtdx_ade.py` independently asks FDTDX's coefficient factory
 for a Drude and a Lorentz pole, then calls its native H/E updates for 53 steps
 on a 9×7×5 periodic grid with nonuniform diagonal epsilon/mu and oscillator
 strength. Frequencies are converted from c=1 to rad/s; no waveform/geometry
@@ -1087,16 +1091,16 @@ strength derivative is -0.25818464174803096 (FDTDX) and -0.25818464174803113
 Run each worker with its own environment, as above. Example commands:
 
 ```sh
-"$MEEP_PYTHON" studies/validate_grid_dispersive.py --backend meep --model lorentz --resolution 40 --output /tmp/meep-lorentz-40-band.json
-PYTHONPATH=. "$WAVEBIT_PYTHON" studies/validate_grid_dispersive.py --backend wavebit --model lorentz --resolution 40 --pole-sampling point --output /tmp/wavebit-lorentz-40-point.json
-"$FDTDX_PYTHON" studies/validate_grid_fdtdx_ade.py --backend fdtdx --output /tmp/fdtdx-ade.json
-PYTHONPATH=. "$WAVEBIT_PYTHON" studies/validate_grid_fdtdx_ade.py --backend wavebit --output /tmp/wavebit-fdtdx-ade.json
+"$MEEP_PYTHON" tests/references/interface/validate_grid_dispersive.py --backend meep --model lorentz --resolution 40 --output /tmp/meep-lorentz-40-band.json
+PYTHONPATH=. "$WAVEBIT_PYTHON" tests/references/interface/validate_grid_dispersive.py --backend wavebit --model lorentz --resolution 40 --pole-sampling point --output /tmp/wavebit-lorentz-40-point.json
+"$FDTDX_PYTHON" tests/references/interface/validate_grid_fdtdx_ade.py --backend fdtdx --output /tmp/fdtdx-ade.json
+PYTHONPATH=. "$WAVEBIT_PYTHON" tests/references/interface/validate_grid_fdtdx_ade.py --backend wavebit --output /tmp/wavebit-fdtdx-ade.json
 "$WAVEBIT_PYTHON" -m pytest tests/test_fdtd_grid_materials.py tests/references/test_native_material_external.py
 ```
 
 To regenerate a separate archive, produce every `meep-{model}-{40,80}-band.json`
 for the four models and `fdtdx-ade.json` in one directory, then run
-`studies/freeze_grid_material_references.py --input DIR --output NEW.npz`.
+`tests/references/interface/freeze_grid_material_references.py --input DIR --output NEW.npz`.
 It reads only external outputs and refuses to overwrite an existing archive.
 These are CPU checks of native electric ADE and vacuum-end z CPML. Magnetic
 poles, arbitrary PML backgrounds, full Stack/Incidence dispatch, and actual GPU
@@ -1104,7 +1108,7 @@ execution remain unsupported or unverified.
 
 ## Native Bloch boundaries (2026-09-08)
 
-`studies/validate_grid_fdtdx_bloch.py` repeats the live FDTDX comparison with
+`tests/references/interface/validate_grid_fdtdx_bloch.py` repeats the live FDTDX comparison with
 complex initial E/H and phase advances `(0.3,-0.2,0.4)` in `(z,y,x)` order.
 These phases enter FDTDX as physical `(kx,ky,kz)` radians per meter, divided by
 the matching cell lengths. The grid is 9×7×5, 37 steps, nonuniform diagonal
@@ -1117,9 +1121,9 @@ the material derivative is 0.43721809199586215 (FDTDX) and
 objective/derivative and provenance. Regenerate into a new archive with:
 
 ```sh
-"$FDTDX_PYTHON" studies/validate_grid_fdtdx_bloch.py --backend fdtdx --output /tmp/fdtdx-bloch.json
-PYTHONPATH=. "$WAVEBIT_PYTHON" studies/validate_grid_fdtdx_bloch.py --backend wavebit --output /tmp/wavebit-fdtdx-bloch.json
-"$WAVEBIT_PYTHON" studies/freeze_grid_references.py --kind bloch --input /tmp --output /tmp/external-bloch.npz
+"$FDTDX_PYTHON" tests/references/interface/validate_grid_fdtdx_bloch.py --backend fdtdx --output /tmp/fdtdx-bloch.json
+PYTHONPATH=. "$WAVEBIT_PYTHON" tests/references/interface/validate_grid_fdtdx_bloch.py --backend wavebit --output /tmp/wavebit-fdtdx-bloch.json
+"$WAVEBIT_PYTHON" tests/references/interface/freeze_grid_references.py --kind bloch --input /tmp --output /tmp/external-bloch.npz
 "$WAVEBIT_PYTHON" -m pytest tests/test_fdtd_grid_bloch.py tests/references/test_native_bloch_external.py
 ```
 
@@ -1147,7 +1151,7 @@ external regressions from fresh external runs. GPU execution remains unverified.
 ## Bottom-incident common scene (2026-09-08)
 
 `golden_scene_bottom_meep.json` is a fresh Meep 1.34.0 CPU public-API run from
-`studies/validate_scene_bottom_meep.py`. Two layers (epsilon 2/3, thickness
+`tests/references/interface/validate_scene_bottom_meep.py`. Two layers (epsilon 2/3, thickness
 .13/.21) sit at original z=0..0.34 in vacuum. A physical source at z=3 illuminates
 toward -z; field planes at z=2/-2 isolate reflected/transmitted amplitudes using
 an empty reference run. No coordinate reflection is used in this oracle.

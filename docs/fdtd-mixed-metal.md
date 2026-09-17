@@ -4,7 +4,7 @@ Written: 2026-09-08
 
 Targets:
 - `studies/fdtd_mixed_metal.py`
-- `studies/validate_grid_dispersive.py`
+- `tests/references/interface/validate_grid_dispersive.py`
 - `tests/test_fdtd_mixed_metal.py`
 - `tests/references/test_native_material_external.py`
 - `tests/references/golden_low_loss_metal_meep.json`

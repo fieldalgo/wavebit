@@ -9,6 +9,11 @@
 | `meep_ringdown.py` | Can source-free time traces be generated through Meep's public API for independent mode-fitting checks? |
 | `meep_source_notch.py` | Does a unit-peak custom source zero suppress a known undamped material mode, with fields matching the native solver at the same current times? |
 | `meep_halfspace.py` | Do magnetic half-space and sharp/graded film perturbations give stable fixed- or moving-reference derivatives under smaller perturbations, longer runs and tighter material averaging? |
+| `validate_grid_meep.py` | Does the native Yee grid reproduce Meep's complex Ex/Hy transfer and power for a planar eps=2.25 slab at resolutions 20, 40 and 80, through Meep's public API only? |
+| `validate_grid_fdtdx.py`, `validate_grid_fdtdx_ade.py`, `validate_grid_fdtdx_bloch.py` | Do the native 3D Yee updates -- with no poles, with two ADE poles, or with complex three-axis Bloch phases -- match FDTDX's installed update functions step for step, fields and material or oscillator-strength derivatives included? |
+| `validate_grid_dispersive.py` | Does a CPML-terminated dielectric, Drude, Lorentz or mixed slab match Meep's point-sampled dispersive transfer, and does the averaged-strength discretisation converge to Airy? |
+| `validate_scene_bottom_meep.py` | What complex r/t does Meep give for a source physically below an asymmetric two-layer stack, with no coordinate reflection? |
+| `freeze_grid_references.py`, `freeze_grid_material_references.py` | Not a question but a freezer: packs the external Meep and FDTDX outputs, with input and generator digests, into a new archive, and refuses to overwrite one. It hashes its generators as raw bytes, so freeze from a checkout that keeps LF line endings. |
 | `Reticolo.py`, `__init__.py` | How do tests access the existing separately installed RETICOLO oracle? |
 | `reticolo_res2.m`, `reticolo_res3.m`, `reti_aniso.m` | How do the existing RETICOLO bridge calls return scattering and field data? |
 

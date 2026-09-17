@@ -6,12 +6,11 @@ import numpy as np
 import pytest
 
 HERE=Path(__file__).resolve().parent
-ROOT=HERE.parents[1]
 
 
 def test_meep_slab_fields_power_and_independent_airy_refinement():
     pytest.importorskip('jax')
-    worker=runpy.run_path(str(ROOT/'studies/validate_grid_meep.py'))['worker']
+    worker=runpy.run_path(str(HERE/'interface/validate_grid_meep.py'))['worker']
     errors=[]
     with np.load(HERE/'golden_native_grid_external.npz',allow_pickle=False) as ref:
         wavelengths=ref['wavelengths']
@@ -35,7 +34,7 @@ def test_meep_slab_fields_power_and_independent_airy_refinement():
 
 def test_fdtdx_three_dimensional_material_fields_and_gradient():
     pytest.importorskip('jax')
-    worker=runpy.run_path(str(ROOT/'studies/validate_grid_fdtdx.py'))['worker']
+    worker=runpy.run_path(str(HERE/'interface/validate_grid_fdtdx.py'))['worker']
     actual=worker('wavebit')
     with np.load(HERE/'golden_native_grid_external.npz',allow_pickle=False) as ref:
         for key in ('E','H','value','gradient'):

@@ -1,7 +1,7 @@
 {
   "description": "Low-loss mixed Drude/Lorentz slab; Meep public API execution, no implementation inspection.",
   "generated": "2026-09-08",
-  "worker": "studies/validate_grid_dispersive.py",
+  "worker": "tests/references/interface/validate_grid_dispersive.py",
   "worker_sha256": "f2e9b23a03c7adcd12853e0a31a63b841ddadfbaa696bdfbf14321f3ca4a6940",
   "epsilon_inf": 1.5,
   "poles": [

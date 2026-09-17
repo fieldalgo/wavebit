@@ -11,7 +11,7 @@ Answer these in order and stop at the first **yes**. The point of the order is t
 | **0** | Is this going into git at all? A fragment, a probe, an idea being tried out. | **No → your scratch space, outside the repository.** Stop here. |
 | 1 | Is it the implementation? | `wavebit/` |
 | 2 | Can you write the `assert` line *before* you run it? | `tests/` |
-| 3 | …and does that criterion come from an **outside solver** (RETICOLO, GRCWA, TORCWA)? | the external-oracle machinery — `tests/references/interface/` plus the golden and its test |
+| 3 | …and does that criterion come from an **outside solver** (RETICOLO, GRCWA, TORCWA, Meep, FDTDX)? | the external-oracle machinery — `tests/references/interface/` plus the golden and its test |
 | 4 | Would writing that `assert` mean asserting the very thing you are trying to find out? | `studies/` — **and** a write-up in `docs/` |
 | 5 | Is it prose telling a user **how to use** something — what a keyword takes, what it defaults to, what it refuses? | `docs/guide/` |
 | 6 | Is it prose **about the code** — why a default is what it is, what was measured to decide it? | `docs/` |

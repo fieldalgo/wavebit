@@ -1620,7 +1620,7 @@ reference places the source physically below the original stack; it does not
 mirror the simulation. Three-wavelength r/t agree within 6e-4 in complex amplitude
 at resolution 80. Increasing Meep's duration from 30 to 40 changes the reference
 by less than 7e-15. Only documented Meep APIs were used; its implementation was
-not read. See `studies/validate_scene_bottom_meep.py` and the frozen reference
+not read. See `tests/references/interface/validate_scene_bottom_meep.py` and the frozen reference
 in `tests/references/golden_scene_bottom_meep.json`.
 
 

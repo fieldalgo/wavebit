@@ -7,13 +7,12 @@ import numpy as np
 import pytest
 
 HERE=Path(__file__).resolve().parent
-ROOT=HERE.parents[1]
 
 
 @pytest.mark.parametrize('resolution', [40, 80])
 def test_low_loss_mixed_metal_against_meep(resolution):
     pytest.importorskip('jax')
-    worker = runpy.run_path(str(ROOT/'studies/validate_grid_dispersive.py'))['worker']
+    worker = runpy.run_path(str(HERE/'interface/validate_grid_dispersive.py'))['worker']
     reference = json.loads((HERE/'golden_low_loss_metal_meep.json').read_text())
     expected, = [v for v in reference['runs'] if v['resolution'] == resolution]
     actual = worker('wavebit', resolution, 'low-loss-mixed', duration=160., pole_sampling='point')
@@ -28,7 +27,7 @@ def test_low_loss_mixed_metal_against_meep(resolution):
 @pytest.mark.parametrize('model',['dielectric','lorentz','drude','mixed'])
 def test_meep_cpml_material_fields_and_resolution_convergence(model):
     pytest.importorskip('jax')
-    worker=runpy.run_path(str(ROOT/'studies/validate_grid_dispersive.py'))['worker']
+    worker=runpy.run_path(str(HERE/'interface/validate_grid_dispersive.py'))['worker']
     errors=[]
     with np.load(HERE/'golden_native_material_external.npz',allow_pickle=False) as ref:
         for resolution in (40,80):
@@ -49,7 +48,7 @@ def test_meep_cpml_material_fields_and_resolution_convergence(model):
 
 def test_fdtdx_two_pole_updates_and_oscillator_strength_derivative():
     pytest.importorskip('jax')
-    actual=runpy.run_path(str(ROOT/'studies/validate_grid_fdtdx_ade.py'))['worker']('wavebit')
+    actual=runpy.run_path(str(HERE/'interface/validate_grid_fdtdx_ade.py'))['worker']('wavebit')
     with np.load(HERE/'golden_native_material_external.npz',allow_pickle=False) as ref:
         for key in ('E','H','value','gradient'):
             np.testing.assert_allclose(actual[key],ref['fdtdx_'+key],rtol=1e-11,atol=1e-12)
@@ -59,7 +58,7 @@ def test_fdtdx_two_pole_updates_and_oscillator_strength_derivative():
 
 def test_cpml_width_and_runtime_controls():
     pytest.importorskip('jax')
-    worker=runpy.run_path(str(ROOT/'studies/validate_grid_dispersive.py'))['worker']
+    worker=runpy.run_path(str(HERE/'interface/validate_grid_dispersive.py'))['worker']
     baseline=worker('wavebit',40,'dielectric')
     def fields(d):
         return np.array(d['field_real'])+1j*np.array(d['field_imag'])
