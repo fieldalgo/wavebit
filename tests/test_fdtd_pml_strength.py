@@ -144,3 +144,77 @@ def test_scene_forwards_strength_to_both_calibration_bases_and_backgrounds(monke
     assert diagnostics['pml_reflection'] == 1e-24
     assert diagnostics['incidence_side'] == side
     assert np.isfinite(result.given.r_s).all() and np.isfinite(result.given.t_p).all()
+
+
+# The legacy route (``backend`` omitted) builds two CPMLs: its grid's, and the one-dimensional
+# grid that carries the incident wave. A target that reaches only the first moves the answers by
+# 2.25e-7 on the route-parity study's magnetic twin (measured with the incident grid left at the
+# default), so no comparison of results can see it; these tests watch the profiles being built.
+LEGACY_SCENE = dict(structure=np.full((1, 1, 1), 2.25), thickness=[.3], top=1., bot=1.44,
+                    period=.5, wavelength=.9)
+
+
+class _Built(Exception):
+    """Raised once the incident grid exists: both CPMLs are built, nothing is stepped."""
+
+
+@pytest.mark.parametrize('incidence', [dict(tetm='te'), dict(psi=.3)], ids=['tetm', 'psi'])
+@pytest.mark.parametrize('value', [0., 1., -.1, np.nan, np.inf, True, [.1], .1+0j, '0.1', None])
+def test_legacy_invalid_strength_is_refused_before_a_grid_is_built(monkeypatch, value, incidence):
+    import wavebit._core.fdtd as legacy
+    def forbidden(*args, **kwargs):
+        raise AssertionError('invalid strength reached the grid')
+    monkeypatch.setattr(legacy, '_Grid', forbidden)
+    with pytest.raises(ValueError, match='pml_reflection'):
+        wavebit.fdtd(**LEGACY_SCENE, **incidence, pml_reflection=value)
+
+
+@pytest.mark.parametrize('incidence', [
+    dict(tetm='te'), dict(psi=.3), dict(psi=.3, theta=.2, phi=.3)],
+    ids=['tetm', 'psi-normal', 'psi-conical'])
+def test_legacy_strength_reaches_both_cpmls_on_every_route(monkeypatch, incidence):
+    import wavebit._core.fdtd as legacy
+    built = legacy._Incident1D.__init__
+
+    def stop(self, *args, **kwargs):
+        built(self, *args, **kwargs)
+        raise _Built
+
+    def profiles(target):
+        profile, calls = legacy.cpml_profiles, []
+
+        def spy(*args, **kwargs):
+            out = profile(*args, **kwargs)
+            calls.append((kwargs.get('target_reflection', 'missing'), out))
+            return out
+        with monkeypatch.context() as patch:
+            patch.setattr(legacy, 'cpml_profiles', spy)
+            patch.setattr(legacy._Incident1D, '__init__', stop)
+            with pytest.raises(_Built):
+                wavebit.fdtd(**LEGACY_SCENE, **incidence, n_pml=4,
+                             **({} if target is None else dict(pml_reflection=target)))
+        return calls
+
+    default, strong = profiles(None), profiles(1e-16)
+    # The grid's CPML, then the incident grid's -- the order `solve_fdtd` builds them in.
+    assert [target for target, _ in default] == [legacy.PML_TARGET_REFLECTION]*2
+    assert [target for target, _ in strong] == [1e-16]*2
+    for (_, (node_default, _)), (_, (node_strong, _)) in zip(default, strong):
+        assert not np.allclose(node_default['b'], node_strong['b']), 'the target changed nothing'
+
+
+def test_legacy_default_strength_is_the_old_profile_and_is_recorded():
+    import inspect
+
+    import wavebit._core.fdtd as legacy
+    assert (inspect.signature(legacy.solve_fdtd).parameters['pml_reflection'].default
+            == legacy.PML_TARGET_REFLECTION == 1e-8)
+    run = dict(LEGACY_SCENE, tetm='te', resolution=20., n_pml=4, return_diagnostics=True)
+    omitted, omitted_diagnostics = wavebit.fdtd(**run)
+    explicit, explicit_diagnostics = wavebit.fdtd(**run, pml_reflection=1e-8)
+    strong, strong_diagnostics = wavebit.fdtd(**run, pml_reflection=1e-16)
+    for name in ('R', 'T', 'r_s', 't_s'):
+        np.testing.assert_array_equal(getattr(omitted.given, name), getattr(explicit.given, name))
+    assert not np.array_equal(omitted.given.r_s, strong.given.r_s)
+    assert omitted_diagnostics['pml_reflection'] == explicit_diagnostics['pml_reflection'] == 1e-8
+    assert strong_diagnostics['pml_reflection'] == 1e-16

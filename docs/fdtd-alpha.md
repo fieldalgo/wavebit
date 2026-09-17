@@ -72,8 +72,8 @@ magnetic/conical, bottom-record and backend-gradient checks cover the extraction
 A nearby long-lived TM oscillation remains a separate source-bandwidth and
 temporal-convergence concern; direction separation alone does not validate
 near-Rayleigh scattering.
-Static [CPML strength](fdtd-pml-strength.md) is now independently configurable
-on the shared grid and explicit-backend scene interfaces. Its nominal amplitude
+Static [CPML strength](fdtd-pml-strength.md) is independently configurable
+on the shared grid and on both scene paths. Its nominal amplitude
 target is not a measured-reflection bound; width, strength, mesh and temporal
 checks remain separate, and the original default profile is preserved.
 Offline [ringdown fitting](fdtd-ringdown.md) now extracts damped frequencies

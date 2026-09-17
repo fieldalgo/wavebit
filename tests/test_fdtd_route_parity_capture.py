@@ -1,4 +1,4 @@
-"""The route-parity study's instruments on the legacy engine: its material capture and its CPML override.
+"""The route-parity study's instruments on the legacy engine: its material capture and its twins.
 
 ``studies/fdtd_route_parity.py`` compares the two FDTD routes only where their material inputs
 match, and it reads legacy's inputs by replacing ``_Grid.eps_for``, ``mu_for``, ``pole_state``,
@@ -8,22 +8,16 @@ gave ``pole_state`` a ``y_half`` keyword, the wrapper kept the old five argument
 run of the study stopped on its first scene with a ``TypeError``. Nothing in the suite entered
 the capture, so that went unseen until the study was rerun by hand (2026-09-15).
 
-The study's ``-pml16`` twins also strengthen legacy's CPML, which has no keyword for its target:
-``_LegacyPmlTarget`` replaces ``cpml_profiles`` for the length of the legacy call. An override
-that was never called fails loudly -- the legacy record requires exactly one recorded target --
-but one that outlived its call, or was called while the CPML was built some other way, would
-pass silently through every run.
+The study's ``-pml16`` twins strengthen both routes' CPML through ``pml_reflection``; that the
+legacy engine applies it to both of its CPMLs is ``tests/test_fdtd_pml_strength.py``'s to check.
 
-Four checks, no solve:
+Three checks, no solve:
 
 1. every capture wrapper accepts every argument its target accepts, so the next signature change
    on the engine side fails here rather than an hour into a rerun;
 2. on the crossed damped-metal Drude grid, the Ey pole fill the capture records is the fill at
    Ey's y half-step -- the one the engine steps with -- and differs from the y-node fill;
-3. the CPML override reaches the profiles of both CPMLs legacy builds (the grid's and the 1D
-   incident grid's), records the target, accepts what ``cpml_profiles`` accepts, and is gone
-   once the call ends, an exception included;
-4. the geometry behind the ``grazing`` flag: the material scenes' (0, 1) transmitted and (0, -1)
+3. the geometry behind the ``grazing`` flag: the material scenes' (0, 1) transmitted and (0, -1)
    reflected orders leave at cos(theta) 0.263 and 0.242, and each material scene has its twin,
    in a group of its own.
 """
@@ -124,48 +118,6 @@ def test_the_capture_records_the_ey_fill_the_engine_steps_with(monkeypatch):
         'above could not tell them apart')
 
 
-def _profiles(grid):
-    """The CPML coefficient arrays a legacy grid steps with, node and half positions."""
-    return [np.asarray(profile[key]) for profile in (grid.node, grid.half)
-            for key in ('b', 'a', 'kappa')]
-
-
-def test_the_legacy_cpml_override_reaches_both_cpmls_and_ends_with_the_call(monkeypatch):
-    original = fdtd_module.cpml_profiles
-    target = parity.PML16['target']
-    default = _profiles(_crossed_drude_grid())
-    _stop_at_first_pole_step(monkeypatch)
-    with pytest.raises(_Stepped):
-        with parity._LegacyPmlTarget(target) as override:
-            wrapper = fdtd_module.cpml_profiles
-            grid = _crossed_drude_grid()
-            # The time loop builds the 1D incident grid's CPML before the first pole step, and
-            # the step raises through the override.
-            fdtd_module._time_loop(grid, None, 10 ** 7, [METAL['wavelength']], leg='s')
-    assert fdtd_module.cpml_profiles is original, 'the override outlived its call'
-    assert wrapper is not original
-    refusal = _refusal(wrapper, original, False)
-    assert refusal is None, f'the override refuses a call cpml_profiles accepts: {refusal}'
-    assert len(override.used) >= 2, f'{len(override.used)} CPMLs built: the grid and the incident grid'
-    assert set(override.used) == {target}
-    strong = _profiles(grid)
-    assert any(not np.allclose(a, b) for a, b in zip(default, strong)), (
-        'the target changed nothing the grid steps with')
-    for a, b in zip(default, _profiles(_crossed_drude_grid())):
-        np.testing.assert_array_equal(a, b)
-    # A scene without a target passes the engine's own bound default through, and records it;
-    # a caller's own target is kept.
-    with parity._LegacyPmlTarget(None) as passthrough:
-        again = _profiles(_crossed_drude_grid())
-    assert set(passthrough.used) == {original.__kwdefaults__['target_reflection']}
-    for a, b in zip(default, again):
-        np.testing.assert_array_equal(a, b)
-    with parity._LegacyPmlTarget(target) as explicit:
-        fdtd_module.cpml_profiles(np.linspace(0., 1., 11), np.linspace(.05, .95, 10), .2, .2, .01,
-                                  1., 1., 1., target_reflection=1e-8)
-    assert explicit.used == [1e-8]
-
-
 def test_the_material_scenes_have_grazing_orders_and_strengthened_twins():
     scene = parity.SCENES['material-lorentz-r40']
     assert parity._exit_cos(scene, 's.t_s', 0, 1) == pytest.approx(.2634, abs=5e-4)
@@ -179,6 +131,9 @@ def test_the_material_scenes_have_grazing_orders_and_strengthened_twins():
         assert parity.SCENES[name]['termination_twin'] == f'{name}-pml16'
         assert twin['termination_of'] == name and 'termination_twin' not in twin
         assert twin['group'] == 'materials-pml16'
-        assert twin['pml_target'] == parity.PML16['target']
+        assert twin['study']['pml_reflection'] == parity.PML16['target']
         assert twin['study']['n_pml'] == parity.PML16['n_pml']
-        assert 'pml_target' not in twin['study'], 'the target is not a legacy keyword'
+        assert 'pml_reflection' not in parity.SCENES[name]['study'], 'the base keeps the default'
+    assert not hasattr(parity, '_LegacyPmlTarget')
+    assert 'cpml_profiles' not in inspect.getsource(parity), (
+        "the study reaches into the engine's CPML again instead of passing pml_reflection")

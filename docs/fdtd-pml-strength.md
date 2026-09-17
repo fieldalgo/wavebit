@@ -10,7 +10,7 @@ Targets:
 - `studies/fdtd_pml_strength.py`
 - `studies/fdtd_rayleigh.py`
 
-TL;DR: the shared grid and scene interfaces now expose static CPML strength
+TL;DR: the shared grid and both scene paths expose static CPML strength
 independently of thickness. Defaults are unchanged. A stronger, resolved
 boundary reduces returning near-Rayleigh waves, but boundary changes require
 fresh temporal checks and do not remove the discrete cutoff shift.

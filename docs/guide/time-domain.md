@@ -102,6 +102,7 @@ What follows is what a time-domain run adds on top; every default here was measu
 | `resolution` | 20 cells per wavelength **in the densest material in the scene** | cells per unit length, so `resolution=0.1` is a 10 nm cell when lengths are nm. The knob that costs: doubling it halves the nominal cell size and can cost roughly 16x the work in full 3D (8x the cells and 2x the steps). The convergence rate depends on the geometry; sharp corners need a measured refinement study. A pole model raises the index it is sized against, so a Drude metal gets a fine grid without being asked for |
 | `n_periods` | `80` | optical cycles to run. The pulse has to enter, scatter and leave before the running DFT means anything: at 40 the transmission monitor still holds 61% of its peak and the answer is wrong by 0.09; at 80 the residual is 5e-6 and the answer no longer moves. A run under 48 cycles is refused outright — the source has not finished emitting — and one merely too short to settle warns `UnsettledFieldWarning` and reports `residual`. An oblique or near-grazing scene often needs twice a normal-incidence one |
 | `n_pml` | `12` | absorber depth in **cells**, not in length. A correctly graded CPML is dz-independent, which is what makes cells the right unit: at 12 the layer reflects 1.1e-5, and 20 buys 1.5e-6 |
+| `pml_reflection` | `1e-8` | the absorber's strength, as the nominal round-trip amplitude its grading aims at; `n_pml` is its depth. Applied to both absorbers and to the incident wave's own. See [CPML strength](#cpml-strength) |
 | `courant` | `0.99` | fraction of the stability bound. The bound carries `n_min`, so a material faster than vacuum (`eps < 1`) is stable rather than divergent. Lower it only if a run diverges |
 | `subpixel` | `True` | average the material over each Yee component's own cell — harmonically along the axis that component points along, arithmetically along the others. It is what buys second order on a boundary that cuts cells rather than first: 2.7e-4 against a point-sampled 3.4e-3 at a 5 nm grid |
 | `grading` | off | a geometric ratio, e.g. `1.06`, that keeps the fine cell in the structure and coarsens toward each half-space. `x` stays uniform — the order extraction is an FFT over it. Off by default is a measurement rather than caution: at equal accuracy it is 1.6x faster on a metal grating and *loses* on a dielectric one |
@@ -424,13 +425,14 @@ with CPML enabled. Actual GPU execution remains unverified.
 
 ### CPML strength
 
-Both `wavebit.fdtd_grid` and `wavebit.fdtd(..., backend=...)` accept
-`pml_reflection=1e-8`. It must be a finite real static scalar strictly between
-zero and one; booleans, complex values and arrays with dimensions are refused.
-The same setting applies at both ends, including bottom incidence, and to all
-four scene calibration/structure runs. It is recorded as `pml_reflection` in the
-native result or scene diagnostics. It has no effect when native `pml_cells=0`.
-The legacy scene path selected by omitting `backend` keeps its existing profile.
+`wavebit.fdtd_grid`, `wavebit.fdtd(..., backend=...)` and `wavebit.fdtd` with
+`backend` omitted all accept `pml_reflection=1e-8`. It must be a finite real
+static scalar strictly between zero and one; booleans, complex values and arrays
+with dimensions are refused. The same setting applies at both ends, including
+bottom incidence, and to all four scene calibration/structure runs; with
+`backend` omitted it also grades the absorbers of the one-dimensional grid that
+carries the incident wave. It is recorded as `pml_reflection` in the native
+result or scene diagnostics. It has no effect when native `pml_cells=0`.
 
 This is a **nominal normal-incidence round-trip amplitude target**, defined for
 the continuous profile before its frequency shift. It is neither a power target

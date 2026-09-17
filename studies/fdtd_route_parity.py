@@ -166,18 +166,19 @@ differently (``pml_backing``, ``pml_structure_gap``). On the material scenes the
 (0, 1) order leaves the substrate at 0.263. On magnetic-r20 and lorentz-r20/r40 the engine ``d``
 sits there, and it was the two terminations' returns (2026-09-15): it did not shrink with the
 grid, it is there for the pole-free material as for the Lorentz one, and with both CPMLs at
-target 1e-16 and 24 cells it fell 27-47x, to 7e-5 to 1e-4, below those runs' settling bounds.
-On lorentz-r20 neither change alone removed it. The reflected (0, -1) order (0.242) carries a
+target 1e-16, 24 cells and 640 periods (the twins below) it fell to 1.1e-5 on magnetic-r20 and
+1.0e-5 on lorentz-r40, below those twins' settling bounds, and to 1.9e-4 on lorentz-r20, whose
+``dt`` is exempt from matching. On
+lorentz-r20 neither change alone removed it. The reflected (0, -1) order (0.242) carries a
 smaller return that strengthening only partly removed; drude-r20's engine ``d`` sits on the
 specular (0, 0) reflection instead; and at r20 that (0, 0) ``d`` also fell under the deeper
 CPML, so a non-grazing ``d`` is not guaranteed free of the termination either. So every channel
 reports its ``exit_cos`` and a ``grazing`` flag (``GRAZING_COS``), ``cases`` lists the scenes
 whose resolved engine ``d`` sits on a grazing channel, and each material scene has a ``-pml16``
 twin: target 1e-16, 24 cells, and a longer run, because a stronger termination settles more
-slowly. ``termination_control`` compares each scene with its twin channel by channel. Legacy has
-no keyword for its CPML target, so the twin sets it for the legacy call only
-(:class:`_LegacyPmlTarget`), and the match check compares the target legacy's CPML was actually
-built with against common's.
+slowly. ``termination_control`` compares each scene with its twin channel by channel. The twin
+passes ``pml_reflection`` to both routes, and the match check compares the target legacy reports
+it built both CPMLs with against common's.
 
 **Determinism.** Wall clock goes to a separate file (``--timing``, default
 ``<output>.timing.json``) together with the machine-load snapshots. The ``--output`` file
@@ -393,14 +394,14 @@ def _scenes():
             reference_orders=(7, 11, 15), uniform=False, lossless=case['poles'] is None,
             closed_form=None, reference_key=f'material-{name}',
             source='tests/references/test_meep_crossed_materials_golden.py::comparison')
-    # The same material scenes with a strengthened termination (``termination_control``). The
-    # target is not a legacy keyword, so it rides on the scene, not in ``study``.
+    # The same material scenes with a strengthened termination (``termination_control``).
     for name in [n for n in scenes if n.startswith('material-')]:
         base = scenes[name]
         scenes[f'{name}-pml16'] = dict(
             base, group='materials-pml16',
-            study=dict(base['study'], n_pml=PML16['n_pml'], n_periods=PML16['n_periods']),
-            pml_target=PML16['target'], termination_of=name,
+            study=dict(base['study'], n_pml=PML16['n_pml'], pml_reflection=PML16['target'],
+                       n_periods=PML16['n_periods']),
+            termination_of=name,
             source=base['source'] + '; termination strengthened for termination_control')
         base['termination_twin'] = f'{name}-pml16'
     for resolution in (30., 60.):
@@ -896,62 +897,24 @@ def _scene_poles(scene):
             for w, g, s in terms]
 
 
-class _LegacyPmlTarget:
-    """Legacy's CPML target for the length of one call, and a record of the target it built with.
-
-    Legacy has no keyword for its CPML target: ``_core/fdtd.py`` calls ``cpml_profiles`` by its
-    module-global name (from ``_Grid`` and ``_Incident1D``) without one, so the target is the
-    default bound when ``fdtd.py`` was imported. This replaces that module attribute with a
-    function that, on a call passing no target, passes ``target`` -- or, when ``target`` is None,
-    that bound default itself -- and records every target it passes on, so the match check
-    compares what legacy's CPML was built with rather than what the scene asked for. A call that
-    passes its own target keeps it. Common is untouched because :func:`run_common` runs outside
-    the ``with``: ``grid_fdtd`` imports ``cpml_profiles`` at call time and would otherwise get
-    this function, though with its own ``pml_reflection``, which would be kept.
-    """
-
-    def __init__(self, target):
-        self.target, self.used = target, []
-
-    def __enter__(self):
-        original = self._original = LEGACY.cpml_profiles
-        default = original.__kwdefaults__['target_reflection']
-        override = self
-
-        def cpml_profiles(*args, target_reflection=None, **kw):
-            if target_reflection is None:
-                target_reflection = default if override.target is None else override.target
-            override.used.append(float(target_reflection))
-            return original(*args, target_reflection=target_reflection, **kw)
-        LEGACY.cpml_profiles = cpml_profiles
-        return self
-
-    def __exit__(self, *exc):
-        LEGACY.cpml_profiles = self._original
-        return False
-
-
 def _one_target(runs):
-    used = {t for _, _, diag, _ in runs for t in diag['pml_targets_used']}
+    used = {float(diag['pml_reflection']) for _, _, diag, _ in runs}
     if len(used) != 1:
         raise AssertionError(f'legacy built its CPML with targets {sorted(used)}, not one')
     return used.pop()
 
 
 def run_legacy(scene, timing):
-    """The legacy route as shipped: the study's keywords, backend omitted (and, on a ``-pml16``
-    twin, the scene's CPML target through :class:`_LegacyPmlTarget`)."""
+    """The legacy route as shipped: the study's keywords, backend omitted."""
     runs = []
     for leg in (scene['legs'] if scene['kind'] == 'tetm' else (None,)):
         kw = dict(scene['call'], **scene['study'], return_diagnostics=True)
         if leg is not None:
             kw['tetm'] = leg
         start, cpu = time.perf_counter(), time.process_time()
-        with warnings.catch_warnings(record=True) as caught, \
-                _LegacyPmlTarget(scene.get('pml_target')) as pml:
+        with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter('always')
             result, diag = wavebit.fdtd(**kw)
-        diag['pml_targets_used'] = sorted(set(pml.used))
         timing['legacy' + (f'_{leg}' if leg else '')] = dict(wall_s=time.perf_counter() - start,
                                                              cpu_s=time.process_time() - cpu)
         if 'grid' not in diag:
@@ -1084,7 +1047,7 @@ def matched_common(scene, runs, pad_mode, pole_cfl=False):
     steps = math.ceil(n_periods*wl/dt)
     kw = dict(call, backend=0, resolution=1/dz, transverse_resolution=transverse,
               courant=courant, n_periods=n_periods, pulse_width=LEGACY.SOURCE_CYCLES*wl,
-              n_pml=g.n_pml, pml_reflection=scene.get('pml_target', LEGACY.PML_TARGET_REFLECTION),
+              n_pml=g.n_pml, pml_reflection=g.pml_reflection,
               subpixel=study.get('subpixel', True), grading=None, pad_scale=pad_scale,
               diffraction_distance=(-float(g.z_of(g.k_ref)), float(g.z_of(g.k_trn)) - thickness),
               convergence_window=max(1, int(CONVERGENCE_FRACTION*steps)),
@@ -1100,8 +1063,6 @@ def verbatim_common(scene):
     """Common driven by the study's own keywords plus ``backend=0``; courant as legacy's default."""
     kw = dict(scene['call'], **scene['study'], backend=0, return_diagnostics=True)
     kw.setdefault('courant', LEGACY.COURANT)
-    if 'pml_target' in scene:
-        kw['pml_reflection'] = scene['pml_target']
     if scene['kind'] == 'tetm':
         kw['tetm'] = scene['legs'][0]
     return kw
@@ -2041,9 +2002,8 @@ def main():
                                           f"{PML16['n_periods']} periods, so a move also holds what "
                                           'the base run had not settled): the engine d with each '
                                           'termination, how far each engine moved, and both '
-                                          'settling bounds; legacy has no target keyword, so the '
-                                          'twin sets it for the legacy call and the record holds '
-                                          'the target used',
+                                          'settling bounds; the twin passes pml_reflection to both '
+                                          'routes and the record holds the target legacy reports',
                       known_input_defects=KNOWN_INPUT_DEFECTS),
                   settings=dict(scenes_requested=args.scene, arms=args.arms.split(','),
                                 common_pad=args.common_pad, check_inert=args.check_inert,

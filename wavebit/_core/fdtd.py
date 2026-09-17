@@ -83,6 +83,7 @@ from .conventions import (incidence_clashes, incident_sp_amplitudes, order_azimu
                           parse_order_pair, parse_period_mapping)
 from .domain import as_material
 from .frequency_monitor import PlaneDFT, combine_monitors
+from .grid_fdtd import _validate_pml_reflection
 from .result import Result, ResultSub
 
 
@@ -744,7 +745,7 @@ class _Incident1D:
 
     def __init__(self, nz, dz, dt, eps_r, n_pml, k_src, wavelength, f0, width, t0,
                  tetm, kx_op, dtype, mu_r=1.0, ky=0.0, drive=None, ky_op=None,
-                 quadrature=False):
+                 quadrature=False, pml_reflection=PML_TARGET_REFLECTION):
         self.dz, self.dt, self.eps_r, self.k_src = dz, dt, eps_r, k_src
         #: The auxiliary grid rides the SAME mesh as the 2D one -- it is handed the same
         #: object, not a copy, so a graded 2D mesh grades this too. That is not a nicety:
@@ -793,7 +794,7 @@ class _Incident1D:
         self.node, self.half = cpml_profiles(
             z_node, z_node[:-1] + 0.5 * self.dz_cell,
             float(self.dz_cell[:n_pml].sum()), float(self.dz_cell[-n_pml:].sum()),
-            dt, wavelength, eps_r, eps_r)
+            dt, wavelength, eps_r, eps_r, target_reflection=pml_reflection)
         self.psi_hx = np.zeros(nz - 1, dtype=dtype)
         self.psi_hy = np.zeros(nz - 1, dtype=dtype)
         self.psi_ey = np.zeros(nz, dtype=dtype)
@@ -944,7 +945,8 @@ class _Grid:
     def __init__(self, wavelength, period, raster, thickness, eps_top, eps_bot,
                  resolution, n_pml, courant, subpixel, theta=0.0, phi=0.0,
                  dispersion=None, poles=None, mu_raster=None, mu_top=1.0, mu_bot=1.0,
-                 pad_scale=1.0, grading=None, n_max=None, period_y=None):
+                 pad_scale=1.0, grading=None, n_max=None, period_y=None,
+                 pml_reflection=PML_TARGET_REFLECTION):
         self.wavelength = float(wavelength)
         self.period = float(period)
         #: The y period, which only means anything once the raster has a y axis. Defaulting it
@@ -967,6 +969,10 @@ class _Grid:
         self.n_bot_sq = self.eps_bot * self.mu_bot
         self.subpixel = bool(subpixel)
         self.n_pml = int(n_pml)
+        #: The round-trip amplitude both CPMLs are graded for -- this grid's, and the incident
+        #: grid's, which ``_time_loop`` hands it on to so the source and the scattered field end
+        #: behind the same absorber.
+        self.pml_reflection = float(pml_reflection)
         #: Per-raster-cell pole-set id, 0 meaning non-dispersive, and the pole lists it
         #: indexes. Kept beside `raster` rather than inside it because a pole model is not a
         #: number: `structure` holds `eps_infinity` and this says what else the cell carries.
@@ -1177,7 +1183,8 @@ class _Grid:
         self.node, self.half = cpml_profiles(
             self.z_node, self.z_mid,
             float(self.dz_cell[:self.n_pml].sum()), float(self.dz_cell[-self.n_pml:].sum()),
-            self.dt, self.wavelength, self.eps_top.real, self.eps_bot.real)
+            self.dt, self.wavelength, self.eps_top.real, self.eps_bot.real,
+            target_reflection=self.pml_reflection)
 
     def z_of(self, k):
         """The z coordinate of z index ``k``; ``k`` may carry a half.
@@ -1340,7 +1347,8 @@ def _time_loop(grid, tetm, n_steps, wavelengths, leg=None, record_field=None,
                       ky=(2.0 * np.pi / centre) * grid.ky_inc if conical else 0.0,
                       ky_op=((2j * np.sin(0.5 * (2.0 * np.pi / centre) * grid.ky_inc * grid.dy) / grid.dy)
                              if grid.ny > 1 else None),
-                      drive=inc_drive, quadrature=source_quadrature)
+                      drive=inc_drive, quadrature=source_quadrature,
+                      pml_reflection=grid.pml_reflection)
 
     # The incident field the TFSF plane injects varies across the cell as `exp(i kx x)`; the
     # auxiliary grid carries only its amplitude, so the plane multiplies it back on. `Ey`/`Hx`
@@ -2370,7 +2378,8 @@ def _solve_conical(pair, phi, theta, return_diagnostics, **kw):
 
 def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tetm=None,
                theta=0.0, phi=None, psi=None, mu=None, incidence_side='top', lattice=None,
-               resolution=None, n_pml=PML_CELLS, n_periods=None, courant=COURANT,
+               resolution=None, n_pml=PML_CELLS, pml_reflection=PML_TARGET_REFLECTION,
+               n_periods=None, courant=COURANT,
                subpixel=True, truncation_order=None, return_diagnostics=False,
                dispersion=None, poles=None, pad_scale=1.0, grading=None,
                record_field=None, record_components=None, field_monitors=None, chi=None, polarization=None,
@@ -2425,6 +2434,14 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
         n_pml: CPML depth in cells (12). A correctly graded CPML is dz-independent, so cells
             is the right unit -- and that conclusion was wrong once, in the direction of a
             physical thickness, because the layer was broken rather than the unit.
+        pml_reflection: the round-trip amplitude the CPML grading aims at
+            (``PML_TARGET_REFLECTION``, 1e-8), for both absorbers and for the incident grid's.
+            The explicit-``backend`` path's keyword, with its rule: a finite static scalar
+            strictly between zero and one. It is a nominal normal-incidence number, not a
+            measured reflection, and it sets the grading's strength only -- ``n_pml`` is the
+            depth. A grazing order is where it matters: on the route-parity study's material
+            scenes neither the target nor the depth alone removed the termination's return,
+            and the stronger layer needed a longer run to settle (``studies/fdtd_route_parity.py``).
         n_periods: optical cycles to run (80). The pulse has to enter, scatter and leave
             before the running DFT means anything. A run too short for the source even to
             finish emitting is refused; one merely too short to settle warns
@@ -2475,6 +2492,7 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
         ``return_diagnostics`` is set.
     """
     _check_incidence(theta, phi, psi, chi, polarization)
+    pml_reflection = _validate_pml_reflection(pml_reflection)
     if field_monitors is not None:
         if not isinstance(field_monitors, dict) or not field_monitors:
             raise ValueError('field_monitors must map names to plane z coordinates.')
@@ -2504,8 +2522,9 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
             pair=pair, phi=phi, theta=theta, structure=structure, thickness=thickness, top=top,
             bot=bot, period=period, wavelength=wavelength, mu=mu,
             incidence_side=incidence_side, lattice=lattice, resolution=resolution,
-            n_pml=n_pml, n_periods=n_periods, courant=courant, subpixel=subpixel,
-            truncation_order=truncation_order, return_diagnostics=return_diagnostics,
+            n_pml=n_pml, pml_reflection=pml_reflection, n_periods=n_periods, courant=courant,
+            subpixel=subpixel, truncation_order=truncation_order,
+            return_diagnostics=return_diagnostics,
             dispersion=dispersion, poles=poles, pad_scale=pad_scale, grading=grading,
             record_field=record_field, record_components=record_components,
             field_monitors=field_monitors)
@@ -2593,7 +2612,7 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
                  resolution, n_pml, courant, subpixel, theta=theta, phi=phi,
                  dispersion=dispersion, poles=poles, mu_raster=mu_raster,
                  mu_top=mu_top, mu_bot=mu_bot, pad_scale=pad_scale, grading=grading,
-                 n_max=n_max, period_y=period_y)
+                 n_max=n_max, period_y=period_y, pml_reflection=pml_reflection)
     n_steps = int(np.ceil(n_periods * centre / grid.dt))
     out = _time_loop(grid, name, n_steps, band, leg=_leg, record_field=record_field,
                      source_quadrature=_source_quadrature, record_components=record_components,
@@ -2742,7 +2761,7 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
     return result, {'grid': grid, 'dz': float(dz_cells.min()), 'dz_max': float(dz_cells.max()),
                     'nz': grid.nz, 'nx': grid.nx, 'dt': grid.dt,
                     **record, 'monitors': out['monitors'],
-                    'n_steps': n_steps, 'n_pml': grid.n_pml,
+                    'n_steps': n_steps, 'n_pml': grid.n_pml, 'pml_reflection': grid.pml_reflection,
                     'pml_thickness': (float(z_node[grid.n_pml] - z_node[0]),
                                       float(z_node[-1] - z_node[-1 - grid.n_pml])),
                     'residual': out['residual'],
