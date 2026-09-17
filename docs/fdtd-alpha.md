@@ -10,6 +10,8 @@ states what has evidence, what remains uncertain, and how to reproduce the check
 An accepted input is not a guarantee of accuracy for every combination in this table.
 This table describes the legacy scene path selected by omitting `backend`;
 the following sections describe the shared engine and explicit-backend scene path.
+How far the two engines agree on the same scenes, with grid, time step and materials
+matched, is measured in [route parity](fdtd-route-parity.md).
 
 | Area | Available interface | Evidence and limits |
 | --- | --- | --- |

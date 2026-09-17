@@ -84,6 +84,7 @@ subtrees:
       - file: multimode-incidence
       - file: fdtd
       - file: fdtd-alpha
+      - file: fdtd-route-parity
       - file: result-guards
     - caption: Numerical conventions
       entries:

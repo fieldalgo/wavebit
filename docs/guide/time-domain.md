@@ -12,7 +12,8 @@ It returns the answer directly, in the same `Result` container as RCWA. With no
 `backend` argument, it preserves the legacy NumPy solver, including time records
 and graded meshes. Explicit `backend=0/1/2` (or `numpy/jax/torch`) selects the
 shared Yee engine and supports material automatic differentiation.
-See [the common scene adapter](#common-scene-adapter) for its supported inputs.
+See [the common scene adapter](#common-scene-adapter) for its supported inputs, and
+[route parity](../fdtd-route-parity.md) for how the two compare on the same scenes.
 
 ## The same scene, both ways
 
