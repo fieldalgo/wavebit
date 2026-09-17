@@ -1260,9 +1260,26 @@ planes and integrated spectral power. The separate `wavebit.fdtd_grid` provides
 NumPy/JAX/Torch uniform Yee updates and checkpointed automatic differentiation.
 Explicit `backend` selection on `wavebit.fdtd` connects Stack/Incidence to that
 core; see the [common scene adapter](guide/time-domain.md#common-scene-adapter).
-See the [time-domain guide](guide/time-domain.md) for normalization, examples,
-CPU benchmark evidence and the boundaries of the two interfaces. The native-grid
-engine is not a JAX port of the scene solver’s CPML/ADE implementation.
+See the [time-domain guide](guide/time-domain.md) for normalization, examples
+and the boundaries of the two interfaces. The native-grid engine is not a JAX port
+of the scene solver’s CPML/ADE implementation.
+
+`studies/fdtd_grid_benchmark.py` asks what JIT compilation costs on the native grid and
+what warm execution saves against NumPy. It times one update of 32×8×8 cells over 256
+complex128 steps: a single NumPy call, JAX's compile-and-first call, and the median of five
+warm JAX calls, after asserting the two fields agree within 1e-12. Measured 2026-09-17 on a
+6-core Ryzen 5 7500F under Windows 11, NumPy 2.5.1 and JAX 0.11.0, default threads:
+
+| Run | NumPy, one call | JAX, compile and first call | JAX, warm median | NumPy / warm JAX |
+| --- | ---: | ---: | ---: | ---: |
+| 1 | 0.0734 s | 0.408 s | 0.00816 s | 9.0× |
+| 2 | 0.0736 s | 0.409 s | 0.00780 s | 9.4× |
+| 3 | 0.0733 s | 0.390 s | 0.00770 s | 9.5× |
+
+The field gap was exactly 0 in all three. An earlier run on another host, not recorded, gave
+0.0437 s, 0.2857 s and 0.00603 s (7.25×), so the ratio belongs to the host, not to the engine.
+Compilation plus the first call costs about five and a half NumPy calls here. This is a small
+native-grid benchmark, not a speed claim for either scene solver.
 
 
 Native `fdtd_grid` now also has electric Drude/Lorentz ADE poles and homogeneous-end

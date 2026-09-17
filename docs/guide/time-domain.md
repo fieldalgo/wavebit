@@ -367,10 +367,9 @@ complex fields/power with Meep and native 3D updates/material gradients with
 FDTDX; frozen external outputs support regression tests. See the
 [validation scope](../fdtd-alpha.md). Actual GPU execution has not been validated.
 `examples/fdtd_grid_gradient.py` differentiates slab transmission;
-`studies/fdtd_grid_benchmark.py` reports compilation separately from warm execution.
-On one CPU run (32×8×8 cells, 256 steps, complex128), NumPy took 0.0437 s,
-JAX compilation plus first execution 0.2857 s, and median warm execution 0.00603 s
-(7.25×). This is a small native-grid benchmark, not a scene-solver speed claim.
+`studies/fdtd_grid_benchmark.py` reports compilation separately from warm execution;
+its measurements, and why the speed-up belongs to the host, are in
+[the design notes](../fdtd.md#streaming-fields-and-compiled-native-grids).
 
 
 ## Native dispersive materials and CPML
