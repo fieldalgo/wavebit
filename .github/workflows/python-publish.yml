@@ -17,7 +17,8 @@ permissions:
 
 jobs:
   deploy:
-
+    # An alpha GitHub pre-release is a source preview, not a PyPI publication.
+    if: ${{ github.event.release.prerelease == false }}
     runs-on: ubuntu-latest
 
     steps:

@@ -16,25 +16,37 @@
 Wavebit simulates how light interacts with nanostructures, and differentiates through the whole
 calculation — so the same code that predicts a device's response can also optimize it.
 
+**Alpha candidate: 0.1.0a1.** The API may change. The ordinary RCWA/NVF solver and the
+experimental contact auxiliary solver have different validation scopes. The auxiliary solver
+is opt-in, NumPy-only, and limited to one supported rectangle pair; its optical convergence,
+contact derivatives and practical runtime remain under investigation. Ordinary NVF does not
+call it automatically. See [method selection](docs/guide/nvf-method-selection.md) before using
+that experimental path.
+
 * **Modeling** — describe a structure parametrically or as a raster
 * **EM simulation** — RCWA solver, rigorous and fully vectorial
 * **Optimization** — gradients flow end to end, from geometry to diffraction efficiency
 
-One implementation of the physics runs on NumPy, JAX and PyTorch, so a result never depends on
-which you pick — cross-backend agreement is part of the test suite rather than a claim.
+The ordinary solver uses one implementation of the physics on NumPy, JAX and PyTorch;
+cross-backend agreement is checked in the test suite. Experimental auxiliary families have
+the narrower backend and derivative support stated in their guides.
 
 ## Install
 
-Wavebit is not on PyPI yet. Install it from source:
+The solver release has not been published to PyPI. Install this alpha candidate from its
+source checkout:
 
 ```shell
-pip install git+https://github.com/fieldalgo/wavebit.git
+pip install .
 ```
+
+Use the source checkout or distribution attached to the version you want to evaluate;
+a Git installation from the repository's default branch can contain a different version.
 
 NumPy alone runs the solver. JAX and PyTorch are optional and bring autodiff and GPU support:
 
 ```shell
-pip install "wavebit[jax] @ git+https://github.com/fieldalgo/wavebit.git"
+pip install '.[jax]'
 ```
 
 For a checkout you intend to edit, or the full development environment:
@@ -126,7 +138,9 @@ Which backend to use, and whether to jit at all, differs by modeling path and is
 
 ## Validation
 
-The physics is checked against references, not only against itself:
+The ordinary solver is checked against references, not only against itself. These checks
+cover their recorded cases; they do not certify the experimental contact auxiliary solver's
+optical convergence or opening derivative:
 
 * **Three outside solvers** — RETICOLO through an Octave bridge, plus fmmax and S4. Their
   numbers are committed as goldens and checked in CI, so the half that needs software this

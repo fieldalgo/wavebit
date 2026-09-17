@@ -4,10 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wavebit"
-version = "0.1.0"
+version = "0.1.0a1"
 description = "Electromagnetic simulation (RCWA) & optimization package in Python"
 readme = "README.md"
 license = "Apache-2.0"
+classifiers = ["Development Status :: 3 - Alpha"]
 authors = [{ name = "FieldAlgo", email = "dev@fieldalgo.com" }]
 
 # Driven by the base install alone, not by the optional backends: jax 0.11 also needs

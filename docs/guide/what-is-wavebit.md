@@ -32,14 +32,21 @@ Being honest about this saves more time than any feature list:
 
 ## The three backends
 
-One implementation of the physics runs on NumPy, JAX and PyTorch behind a thin adapter, so a
-result never depends on which you pick — cross-backend agreement is part of the test suite
-rather than a claim. NumPy is the baseline and the only one that checks its own output; JAX and
+The ordinary solver uses one implementation of the physics on NumPy, JAX and PyTorch behind
+a thin adapter; cross-backend agreement is checked in the test suite. Experimental auxiliary
+families state their narrower backend support separately. NumPy is the baseline and the only
+one that checks its own output; JAX and
 PyTorch add automatic differentiation and GPU support. Which to run is measured, not a matter of
 taste: see [Backends, devices and precision](backends.md).
 
 ## Status
 
-**Version 0.1.0, unreleased.** No release has been tagged and the API is still free to move; the
-things that are *pinned* are the conventions, which have a normative contract in
-[Conventions](../conventions.md) and a test suite behind them.
+**Version 0.1.0a1, alpha candidate.** The API may change. The conventions have a normative
+contract in [Conventions](../conventions.md) and a test suite behind them.
+
+The ordinary RCWA/NVF paths and the experimental contact auxiliary solver have separate
+validation scopes. The auxiliary solver is explicitly selected, NumPy-only, and restricted
+to one supported rectangle pair. Optical convergence, the independently checked optical
+opening derivative and practical runtime remain unresolved. Passing its internal physical
+checks does not certify optical accuracy. It is not called automatically by ordinary NVF;
+see [method selection](nvf-method-selection.md).

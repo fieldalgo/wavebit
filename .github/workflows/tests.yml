@@ -300,48 +300,12 @@ jobs:
       - name: Install Wavebit alone
         run: pip install .
 
-      # Runs outside the checkout on purpose: from the repo root `import
-      # wavebit` would resolve to the source tree and the installed package
-      # would never be exercised.
-      #
-      # Written in today's public spelling, and it has to be: every retired
-      # keyword raises by name, so a stale call here fails the job rather than
-      # solving something else. It was stale exactly once, which is why this
-      # note exists -- the call below survived two renames untouched because no
-      # test imports this file. The scene is the one it always was, restated:
-      #
-      #   pol=1        -> tetm='tm'     (retired earlier and separately -- `pol`
-      #                                  said polarization, solver path and a
-      #                                  derived psi all at once)
-      #   n_top/n_bot  -> top/bot
-      #   ucell        -> structure
-      #   and the values are relative PERMITTIVITY now, so the substrate's
-      #   n = 1.5 is 2.25 and the film's n = 3.8 is 14.44. Renaming without
-      #   squaring is the silent half-migration: 3.8 is a legal permittivity,
-      #   the solve still conserves energy, and it answers a different question.
-      - name: Import and solve without any optional backend
+      # Isolated Python prevents the checkout, PYTHONPATH and user site from
+      # satisfying missing distribution files. The shared check also verifies
+      # installed version metadata, bundled material data and license notices.
+      - name: Check installed distribution without optional backends
         working-directory: ${{ runner.temp }}
-        run: |
-          python - <<'PY'
-          import sys
-          import numpy as np
-          import wavebit
-
-          res = wavebit.rcwa(
-              backend=0, tetm='tm', top=1.0, bot=2.25, theta=0.0, phi=0.0,
-              truncation_order=2, wavelength=632.8, period=[1000],
-              structure=np.array([[[14.44, 14.44]]]), thickness=[200],
-          ).solve()
-
-          R, T = float(res.R.sum()), float(res.T.sum())
-          assert 0.0 <= R <= 1.0 and 0.0 <= T <= 1.0, (R, T)
-          assert abs(R + T - 1.0) < 1e-9, R + T
-
-          eager = {m.split('.')[0] for m in sys.modules} & {'jax', 'torch'}
-          assert not eager, f'optional backend imported on the numpy path: {eager}'
-
-          print(f'numpy-only solve OK: R={R:.6f} T={T:.6f}')
-          PY
+        run: python -I "${{ github.workspace }}/tests/run_installed_smoke.py"
 
   docs:
     name: docs

@@ -1,16 +1,23 @@
 # Installation
 
-Wavebit is not on PyPI yet. Install it from source:
+This checkout prepares **0.1.0a1**, an alpha candidate. The solver release has not been
+published to PyPI. From the source checkout for the version you want to evaluate:
 
 ```shell
-pip install git+https://github.com/fieldalgo/wavebit.git
+pip install .
 ```
+
+A source archive can be extracted and installed with the same command from its root.
+Installing the repository's default branch may give a different version. Check the installed
+version with `python -c "import wavebit; print(wavebit.__version__)"`.
+The alpha API may change; the experimental auxiliary solver has the narrower scope in
+[method selection](nvf-method-selection.md).
 
 NumPy alone runs the solver. JAX and PyTorch are optional and bring automatic differentiation
 and GPU support:
 
 ```shell
-pip install "wavebit[jax] @ git+https://github.com/fieldalgo/wavebit.git"
+pip install '.[jax]'
 ```
 
 The extras are `jax`, `pytorch`, `contour` and `docs`, and they combine —
