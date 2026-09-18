@@ -15,16 +15,33 @@ prepared for one scene must not silently drive another.
 
 **Dtype.** Real (``float64``) unless any face is Bloch; a Bloch phase that is concretely 0
 was refused at ``Bloch(...)``, so the dtype rule is simply "any Bloch face means complex".
+
+**Stage 1 adds four static things** and no new kind of thing: the CPML faces with their slab
+geometry (``cpml``), the absorbing faces and their depths (``absorbing_faces``, split into
+``pml_cells`` and ``absorber_cells``), the snapped structure spans (``spans``), and one
+:class:`~wavebit.fd._kernel.poles.PoleTerm` per dispersive structure in ``terms``. All of it
+is integers, floats and strings, so the skeleton still hashes the whole plan and still reads
+no array. The materials' *numbers* are not here -- they may be traced, and they are leaves.
+
+The stage-1 refusals run here, in ``wavebit/fd/_lower/checks.py``, because this is the first place that
+sees the scene and the grid at once: a layer that does not fit its axis, a structure that
+ends inside a PML, a mesh too coarse for its own material, a pole past the CFL bound. The
+warnings are emitted here too and listed again by ``check``.
 """
 import dataclasses
 import hashlib
 import json
 import math
 
-from ..boundaries import FACES, Bloch
+from ..boundaries import FACES, Absorbing, Bloch, PML
+from ..materials import Dispersive
+from .._kernel.cpml import CpmlFace
 from .._kernel.faces import lower_face
 from .._kernel.grid import Grid
+from .._kernel.masks import Region, Slab
 from .._kernel.observe import PointRecord
+from .._kernel.poles import PoleTerm
+from . import checks
 
 __all__ = ['Plan', 'plan', 'skeleton_of']
 
@@ -77,6 +94,12 @@ class Plan:
     dtype: str
     has_E0: bool
     has_H0: bool
+    cpml: tuple = ()             # (CpmlFace, ...) -- one per PML face
+    absorbing_faces: tuple = ()  # ((face name, cells), ...) for PML and Absorber alike
+    pml_cells: tuple = ()        # ((face name, cells), ...) for PML faces only
+    absorber_cells: tuple = ()   # ((face name, cells), ...) for Absorber faces only
+    pml_wavelengths: tuple = ()  # ((face name, wavelength), ...)
+    spans: tuple = ()            # ((axis, asked lo, asked hi, snapped lo, snapped hi), ...)
     schedule: object = None      # checkpoint block size; None is a plain scan
     skeleton: str = ''
 
@@ -113,10 +136,62 @@ def _finish(p):
     return dataclasses.replace(p, skeleton=skeleton_of(**static))
 
 
+def _absorbing(scene, grid):
+    """The four absorbing tuples of the plan, and the CPML faces, from the scene's boundaries."""
+    cpml, absorbing, pml, absorber, wavelengths = [], [], [], [], []
+    for name in FACES:
+        face = scene.boundaries.face(name)
+        if not isinstance(face, Absorbing):
+            continue
+        axis = 'xyz'.index(name[0])
+        absorbing.append((name, face.cells))
+        if isinstance(face, PML):
+            pml.append((name, face.cells))
+            wavelengths.append((name, checks.face_wavelength(face, scene, name)))
+            cpml.append(CpmlFace(name=name, axis=axis, side=name[1], cells=face.cells,
+                                 region=Region.face(axis, name[1], face.cells, grid.n)))
+        else:
+            absorber.append((name, face.cells))
+    return (tuple(cpml), tuple(absorbing), tuple(pml), tuple(absorber), tuple(wavelengths))
+
+
+def _pole_terms(scene, grid):
+    """One :class:`PoleTerm` per dispersive structure, over that structure's snapped cells.
+
+    "That structure's cells" and not "the cells it still owns": the overlap rule lives in
+    ``coefficients.owner_map`` and this does not read it, which is why a scene where a
+    dispersive structure overlaps another is refused outright
+    (``checks.check_overlaps``, which measures what the wrong answer looks like).
+    """
+    terms = []
+    for index, structure in enumerate(getattr(scene, 'structures', ()) or ()):
+        if not isinstance(structure.material, Dispersive):
+            continue
+        axis = 'xyz'.index(structure.shape.axis)
+        k0, k1 = structure.shape.cells(grid)
+        nx, ny, nz = grid.n
+        spans = {0: [0, nx], 1: [0, ny], 2: [0, nz]}
+        spans[axis] = [k0, k1]
+        region = Region(z=tuple(spans[2]), y=tuple(spans[1]), x=tuple(spans[0]))
+        slabs = tuple(Slab(c=c, z=region.z, y=region.y, x=region.x) for c in range(3))
+        terms.append(PoleTerm(name=f'poles[{index}]', region=region, slabs=slabs,
+                              n_poles=len(structure.material.poles)))
+    if getattr(scene, 'background', None) is not None \
+            and isinstance(scene.background, Dispersive):
+        raise NotImplementedError(
+            'Scene(background=fd.Dispersive(...)): a dispersive background fills the whole '
+            'box, including every absorbing layer, and a PML cannot be matched to it (see '
+            'fd.Absorber). Stage 1 takes a dispersive material as a Structure; a dispersive '
+            'background is not refused on principle, it simply has no gate behind it yet.')
+    return tuple(terms)
+
+
 def plan(scene):
-    """The static plan of ``scene``."""
+    """The static plan of ``scene``, with the stage-1 refusals run and its warnings emitted."""
     grid = Grid.from_domain(scene.domain.size, scene.domain.center, scene.resolution.dx)
     dt = scene.run.courant * grid.dx / math.sqrt(3.0)
+    checks.check_faces(scene, grid, None)
+    checks.check_overlaps(scene, grid)
     rules, pads, masks = [], [], []
     for name in FACES:
         rule, face_pads, face_masks = lower_face(name, scene.boundaries.face(name), grid)
@@ -129,10 +204,23 @@ def plan(scene):
         k, j, i = grid.nearest(m.field, m.index, m.at)
         observers.append(PointRecord(name=m.name, field=m.field, c=m.index, k=k, j=j, i=i))
     initial = scene.initial
+    cpml, absorbing, pml_cells, absorber_cells, wavelengths = _absorbing(scene, grid)
+    spans = tuple((s.shape.axis,) + tuple(s.shape.span) + tuple(s.shape.snapped(grid))
+                  for s in (getattr(scene, 'structures', ()) or ()))
     p = Plan(nx=grid.n[0], ny=grid.n[1], nz=grid.n[2], dx=grid.dx, dt=dt,
              steps=scene.run.steps, courant=scene.run.courant, low=grid.low,
-             face_rules=tuple(rules), pads=tuple(pads), masks=tuple(masks), terms=(),
+             face_rules=tuple(rules), pads=tuple(pads), masks=tuple(masks),
+             terms=_pole_terms(scene, grid),
              observers=tuple(observers), dtype='complex128' if complex_run else 'float64',
              has_E0=initial is not None and initial.E is not None,
-             has_H0=initial is not None and initial.H is not None)
-    return _finish(p)
+             has_H0=initial is not None and initial.H is not None,
+             cpml=cpml, absorbing_faces=absorbing, pml_cells=pml_cells,
+             absorber_cells=absorber_cells, pml_wavelengths=wavelengths, spans=spans)
+    p = _finish(p)
+    checks.check_absorbing_layers(scene, p)
+    checks.check_stability(scene, p)
+    # Emitted through the caller's own filters, and deliberately not forced past them: a
+    # caller who silenced CoarseMeshWarning silenced it, and the default "once per location"
+    # rule is what keeps a sweep of a thousand plans from printing a thousand copies.
+    checks.warn_all(scene, p)
+    return p

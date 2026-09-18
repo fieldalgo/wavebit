@@ -68,7 +68,7 @@ the full box.
 """
 import dataclasses
 
-from ..boundaries import PEC, PMC, Bloch, Periodic, Symmetry
+from ..boundaries import PEC, PMC, Absorber, Bloch, Periodic, Symmetry, PML
 from . import AX
 from .grid import OFFSETS
 from .masks import Mask, Slab
@@ -140,7 +140,14 @@ def lower_face(name, face, grid):
         src = n - 1 if side == '-' else 0
         return (FaceRule(name, 'bloch'),
                 tuple(Pad('bloch', src) for _ in range(3)), ())
-    if isinstance(face, PEC):
+    if isinstance(face, (PEC, PML, Absorber)):
+        # An absorbing face IS a PEC wall with something in front of it: the same zero pad,
+        # the same masks, the same wall position. What differs -- the stretched slab of a
+        # PML, the graded conductivity of an Absorber -- is not a neighbour rule and does
+        # not belong here. ``kind`` still names it, because the report and the skeleton have
+        # to tell the three apart.
+        kind = 'pec' if isinstance(face, PEC) else ('pml' if isinstance(face, PML)
+                                                    else 'absorber')
         position = lo if side == '-' else hi
         masks = ()
         if side == '-':
@@ -149,7 +156,7 @@ def lower_face(name, face, grid):
             # value would sit there for the whole run otherwise.
             masks = (tuple(Mask('E', Slab.layer(c, axis, 0, grid.n)) for c in tangential)
                      + (Mask('H', Slab.layer(axis, axis, 0, grid.n)),))
-        return (FaceRule(name, 'pec', position=position),
+        return (FaceRule(name, kind, position=position),
                 tuple(Pad('zero') for _ in range(3)), masks)
     if isinstance(face, PMC):
         position = lo - dx / 2 if side == '-' else hi - dx / 2
@@ -175,7 +182,8 @@ def lower_face(name, face, grid):
         masks = tuple(Mask(f, Slab.layer(c, axis, layer, grid.n)) for f, c in odd)
         return (FaceRule(name, 'symmetry', position=position, plane=plane, parity=p),
                 pads, masks)
-    raise TypeError(f'face {name!r}: {type(face).__name__} is not a stage-0 face type.')
+    raise TypeError(f'face {name!r}: {type(face).__name__} is not a face type. The seven are '
+                    f'Periodic, Bloch, PEC, PMC, Symmetry, PML and Absorber.')
 
 
 def pad_neighbor(rt, a, axis, side, pad, factor):

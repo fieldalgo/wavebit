@@ -24,6 +24,12 @@ the mask it lowers to, and where the wall physically sits -- is decided in
     Perfect electric conductor: tangential E vanishes on the wall.
 ``PMC()``
     Perfect magnetic conductor: tangential H vanishes on the wall.
+``PML(cells=12, wavelength=...)``
+    An absorbing face: a PEC wall with a complex-frequency-shifted stretched layer in front
+    of it. See the class for what it is in the kernel, why ``wavelength`` is required and
+    where the 12 comes from.
+``Absorber(cells=12)``
+    The fallback where a PML cannot go: a graded matched conductivity instead of a stretch.
 ``Symmetry(parity=+1)`` / ``Symmetry(parity=-1)``
     A mirror plane on that face; the box is one half of a symmetric problem. ``parity`` is
     the eigenvalue of the field under the mirror, stated for the **tangential E**: ``+1``
@@ -35,14 +41,57 @@ the mask it lowers to, and where the wall physically sits -- is decided in
     symmetry gate is the proof.
 
 Presets: ``Boundaries.periodic(z=...)`` for a periodic cell with the given z faces, and
-``Boundaries.open(...)``, which is stage 1's absorber and raises ``NotImplementedError``
-naming stage 1 -- a named refusal, not a silent fallback.
+``Boundaries.open(fd.PML(cells=12, wavelength=0.55))`` for absorbing faces all round, with
+per-axis overrides (``Boundaries.open(pml, z=fd.Periodic())``).
 """
 import numbers
 
-from ._spec import is_jax_typed, spec
+from ._spec import is_jax_typed, spec, static_float, static_int, unknown_keyword_message
 
-__all__ = ['Boundaries', 'Periodic', 'Bloch', 'PEC', 'PMC', 'Symmetry', 'FACES', 'AXES']
+__all__ = ['Boundaries', 'Periodic', 'Bloch', 'PEC', 'PMC', 'Symmetry', 'PML', 'Absorber',
+           'Absorbing', 'FACES', 'AXES', 'PML_CELLS', 'PML_REFLECTION']
+
+#: Default PML depth in cells, and the line below which a ``PML`` is refused without
+#: ``allow_thin=True``. Re-measured for this kernel by the doubling study that *is*
+#: ``tests/test_fd_pml.py`` -- its module docstring carries the table the refusal cites.
+PML_CELLS = 12
+
+#: Round-trip amplitude reflection the conductivity grading is aimed at (the legacy
+#: ``PML_TARGET_REFLECTION``). It is the nominal normal-incidence figure of the *continuous*
+#: profile, not a bound on the discrete reflection, and least of all at grazing incidence.
+PML_REFLECTION = 1e-8
+
+#: The amplitude reflection of this kernel's CPML, re-measured for stage 1 by the doubling
+#: study that *is* ``tests/test_fd_pml.py`` -- read its module docstring for the method and
+#: the caveats. Rows are ``cells``, columns the nominal angle of incidence. Quoted verbatim
+#: by :data:`THIN_PML_MESSAGE`, and asserted against a live re-measurement by that gate, so
+#: the number a user is refused with is a number this kernel actually produced.
+PML_REFLECTION_TABLE = """\
+    cells      0 deg     30 deg     60 deg     80 deg
+        6    2.6e-02    2.1e-02    1.0e-02    1.9e-02
+        8    4.6e-03    3.3e-03    8.8e-04    2.6e-02
+       12    9.2e-05    4.7e-05    1.1e-04    3.4e-02
+       16    1.1e-06    5.9e-07    1.3e-04    3.9e-02
+       24    2.2e-08    1.4e-07    1.2e-04    4.4e-02
+   the target's own law, reflection**cos(theta):
+             1.0e-08    1.2e-07    1.0e-04    4.1e-02"""
+
+#: The refusal below :data:`PML_CELLS`, quoting the table its own gate measured. Kept here
+#: rather than inline so that the test that re-measures the table can assert the message
+#: still carries what it found (``tests/test_fd_pml.py``).
+THIN_PML_MESSAGE = (
+    'PML(cells={cells}) is thinner than the 12 cells this kernel was measured at. The '
+    'doubling study in tests/test_fd_pml.py -- a Gaussian packet launched at a z face, the '
+    'same packet in a longer box as the reference, the amplitude ratio at the carrier '
+    'frequency at a probe three cells in front of the layer -- measures, at the default '
+    'reflection=1e-8:\n'
+    + PML_REFLECTION_TABLE + '\n'
+    'Below 12 the number is the grading\'s own discretization and it rises about a decade '
+    'every two cells; at 12 and above the layer already delivers its design target wherever '
+    'that target dominates, and the last row is why. So more cells buy accuracy near normal '
+    'incidence, and at grazing a lower reflection= is what buys it -- not more cells. Pass '
+    'allow_thin=True to take fewer anyway (the scene runs, it just reflects more), or raise '
+    'cells. The absorber is dx-independent, so cells and not a thickness is the knob.')
 
 #: The three axes in the order the public API spells a triple, and the six face names.
 AXES = ('x', 'y', 'z')
@@ -145,6 +194,141 @@ class Symmetry(FaceType):
         object.__setattr__(self, 'parity', int(p))
 
 
+class Absorbing(FaceType):
+    """Base of the two absorbing faces, :class:`PML` and :class:`Absorber`.
+
+    Both are, in the kernel, a **PEC wall with something in front of it**: the face's
+    neighbour rule is the zero pad and the wall mask that ``PEC()`` lowers to, and the
+    absorption is a slab of ``cells`` cells inside the face. Neither is a face *rule* -- the
+    kernel has four of those (``zero``, ``periodic``, ``bloch``, ``mirror``) and stage 1 adds
+    none. What they differ in is what the slab does:
+
+    ``PML``       stretches the derivative along the axis (four psi arrays per face, carried
+                  in the state), matched to a background it must be told about.
+    ``Absorber``  grades a matched electric and magnetic conductivity into the update
+                  coefficients. No memory, no kernel code, and no matching condition -- which
+                  is why it is the fallback where a stretch cannot be matched.
+
+    An absorbing face is allowed on either or both faces of an axis, and mixes freely with
+    the other four types on the other axes.
+    """
+
+    __slots__ = ()
+
+
+@spec
+class PML(Absorbing):
+    """A complex-frequency-shifted perfectly matched layer (Roden & Gedney 2000).
+
+    ``fd.PML(cells=12, wavelength=0.55)``. Inside the ``cells`` cells behind this face the
+    derivative along the face's axis is stretched,
+
+        psi <- b * psi + a * d           (d is the bare difference, in the slab)
+        d   <- d / kappa + psi
+
+    with ``b``, ``a`` and ``kappa`` per-cell profiles of the depth into the layer, evaluated
+    at the E points and the H points separately. The formulas and their unit audit are
+    ported from ``wavebit/_core/fdtd.py::cpml_coefficients`` (a kernel seed -- ported, never
+    imported); ``wavebit/fd/_lower/cpml.py`` carries them and the audit.
+
+    ``cells``
+        The depth, **in cells and not in a length**: a correctly graded CPML is
+        ``dx``-independent, which the legacy engine measured (a 1-D probe in glass at a fixed
+        20-cell depth reflects 2.06e-6 / 1.63e-6 / 1.42e-6 / 1.37e-6 as ``dz`` runs 20 / 10 /
+        5 / 2.5 nm). Fewer than 12 is refused unless ``allow_thin=True``; the refusal quotes
+        the table ``tests/test_fd_pml.py`` measured on *this* kernel.
+    ``wavelength``
+        **Required, with no default.** It sets ``alpha_max``, the CFS pole, which is a
+        frequency and is therefore meaningless without one to be relative to. Stage 1 has no
+        source to infer it from, so it comes from here or from
+        ``Resolution(wavelength=...)``; a PML with neither is refused by name.
+    ``background``
+        The medium the stretch is matched to: a material, a bare permittivity, or ``None``
+        for the scene's own ``background=``. A structure that reaches into this face must be
+        uniform along the axis there and must equal this, or the scene is refused naming
+        ``Absorber``.
+    ``reflection``
+        The nominal normal-incidence round-trip amplitude the conductivity grading is aimed
+        at (default 1e-8). It is a grading parameter, not a bound: the discrete reflection is
+        set by the grading *and* the cell count *and* the angle, which is what the doubling
+        table measures.
+    ``allow_thin``
+        Take fewer than 12 cells anyway. The scene still runs; it just reflects more.
+    """
+
+    cells: int = PML_CELLS
+    wavelength: object = None
+    background: object = None
+    reflection: float = PML_REFLECTION
+    allow_thin: bool = False
+
+    def __post_init__(self):
+        from .materials import as_material
+        cells = static_int('PML', 'cells', self.cells)
+        if cells < 1:
+            raise ValueError(f'PML(cells={self.cells!r}): a layer is at least one cell deep.')
+        if cells < PML_CELLS and not self.allow_thin:
+            raise ValueError(THIN_PML_MESSAGE.format(cells=cells))
+        object.__setattr__(self, 'cells', cells)
+        if self.wavelength is not None:
+            w = static_float('PML', 'wavelength', self.wavelength)
+            if not w > 0:
+                raise ValueError(f'PML(wavelength={self.wavelength!r}): a positive length.')
+            object.__setattr__(self, 'wavelength', w)
+        r = static_float('PML', 'reflection', self.reflection)
+        if not 0 < r < 1:
+            raise ValueError(
+                f'PML(reflection={self.reflection!r}): the target is an amplitude ratio in '
+                f'(0, 1); 1e-8 is the default and the legacy engine\'s.')
+        object.__setattr__(self, 'reflection', r)
+        object.__setattr__(self, 'allow_thin', bool(self.allow_thin))
+        if self.background is not None:
+            object.__setattr__(self, 'background',
+                               as_material(self.background, 'PML(background=)'))
+
+
+@spec
+class Absorber(Absorbing):
+    """A graded matched conductivity instead of a stretch: the fallback where a PML cannot go.
+
+    A PML is matched to one ``(eps, mu)``; a conductive or dispersive medium crossing the
+    face has no such match, and a stretch that is not matched is a reflector with extra
+    steps. ``Absorber`` grades an electric rate and an equal magnetic rate into ``ae``/``be``
+    and ``ah``/``bh`` over ``cells`` cells, with the ``damping_profile`` shape
+    ``6 u**3 / thickness`` ported from ``wavebit/_core/grid_fdtd.py`` (a kernel seed).
+
+    **What it absorbs by.** The two rates are equal, and equal rates set the attenuation
+    constant ``r`` rather than doubling it (substituting ``E, H -> e^{-rt}E', e^{-rt}H'`` into
+    both curl equations returns the lossless pair). The integral of ``6 u**3`` over a
+    unit-width layer is ``3/2``, so one pass through the layer costs ``exp(-1.5)`` and the
+    round trip a normally incident wave makes -- in, off the PEC wall behind the layer, and
+    out -- is ``exp(-3) = 4.98e-2``. That number does not depend on ``cells``: the profile is
+    normalised by its own thickness, so a deeper layer spreads the same total and buys nothing
+    at normal incidence. ``tests/test_fd_absorber.py`` measures 4.81e-2 to 5.04e-2 from 8 to 32
+    cells and settles the scaling law behind it.
+
+    It absorbs far worse than a PML at any angle and hopelessly at grazing -- it is matched
+    only at normal incidence -- so it is the fallback and never the default. It carries no
+    memory and no kernel code: ``Absorber`` is a change to four coefficient arrays.
+
+    There is no ``background=``: the grading is matched **by construction**, because the
+    electric and magnetic rates are equal whatever the medium is, so there is nothing for a
+    background to change. ``PML(background=...)`` is the one that reads it, and naming it here
+    is refused by ``fd.Absorber``'s own keyword check rather than silently ignored.
+    """
+
+    cells: int = PML_CELLS
+
+    def __post_init__(self):
+        cells = static_int('Absorber', 'cells', self.cells)
+        if cells < 2:
+            raise ValueError(
+                f'Absorber(cells={self.cells!r}): the profile 6*u**3/thickness is zero at the '
+                f'inner face and rises across the layer, so one cell is a step and not a '
+                f'grading; two is the minimum that grades at all.')
+        object.__setattr__(self, 'cells', cells)
+
+
 _WRAPPING = (Periodic, Bloch)
 
 
@@ -178,7 +362,8 @@ def _pair(axis, value):
     raise TypeError(
         f'Boundaries({axis}={value!r}): an axis takes one face type (both faces) or a '
         f'(low, high) pair of face types -- Periodic(), Bloch(phase=...), PEC(), PMC(), '
-        f'Symmetry(parity=...). Every axis is required; there is no default face.')
+        f'Symmetry(parity=...), PML(cells=..., wavelength=...), Absorber(cells=...). Every '
+        f'axis is required; there is no default face.')
 
 
 @spec
@@ -205,8 +390,28 @@ class Boundaries:
         return cls(x=Periodic(), y=Periodic(), z=z)
 
     @classmethod
-    def open(cls, *args, **kwargs):
-        """Absorbing faces all round -- stage 1. Named here so the call fails by name."""
-        raise NotImplementedError(
-            'Boundaries.open(...) is the absorber (PML) preset and belongs to stage 1; stage 0 '
-            'has Periodic, Bloch, PEC, PMC and Symmetry only.')
+    def open(cls, face=None, *, x=None, y=None, z=None, **later):
+        """Absorbing faces all round: ``Boundaries.open(fd.PML(cells=12, wavelength=0.55))``.
+
+        ``face`` is the absorbing face type every axis gets; ``x=``, ``y=`` and ``z=``
+        override one axis each with anything a ``Boundaries`` axis takes, so a periodic cell
+        with absorbing top and bottom is ``Boundaries.open(pml, x=fd.Periodic(),
+        y=fd.Periodic())`` and a half box is ``Boundaries.open(pml, z=(fd.Symmetry(parity=-1),
+        pml))``.
+
+        The default ``face`` is ``PML(cells=12)`` with no wavelength, which the scene refuses
+        unless ``Resolution(wavelength=...)`` supplies one -- so the preset never silently
+        picks a CFS pole for you.
+        """
+        if later:
+            raise TypeError(unknown_keyword_message('Boundaries.open', list(later),
+                                                    ('face', 'x', 'y', 'z')))
+        if face is None:
+            face = PML()
+        if not isinstance(face, Absorbing):
+            raise TypeError(
+                f'Boundaries.open({face!r}): the preset takes an absorbing face -- '
+                f'fd.PML(...) or fd.Absorber(...) -- and puts it on every axis. For anything '
+                f'else, name the faces: fd.Boundaries(x=..., y=..., z=...).')
+        return cls(x=face if x is None else x, y=face if y is None else y,
+                   z=face if z is None else z)

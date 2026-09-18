@@ -50,15 +50,18 @@ COURANT_DEFAULT = 0.5
 #: energy by 1e5 in 2000 steps; 0.999 stays bounded. Stage 1's CPML needs headroom as well.
 COURANT_LIMIT = 1.0
 
-#: Scene keywords that belong to a later stage. Refused by name, with the stage.
+#: Scene keywords that are spelled another way, or belong to a later stage. Refused by name.
 _LATER = {
-    'materials': 'stage 1 (materials other than vacuum)',
-    'structure': 'stage 4 (shapes)',
-    'shapes': 'stage 4 (shapes)',
+    'materials': "not the stage 1 spelling: a scene has one Scene(background=...) and a "
+                 "tuple of Scene(structures=(fd.Structure(shape, material), ...))",
+    'structure': 'stage 4 (shapes); one structure is still Scene(structures=(...,))',
+    'shapes': 'stage 4 (shapes); stage 1 has fd.Slab, inside a Scene(structures=...)',
     'sources': 'stage 2 (sources)',
     'source': 'stage 2 (sources)',
     'decay': 'stage 7 (Decay)',
-    'pml': 'stage 1 (PML / Absorber)',
+    'pml': "not the stage 1 spelling: an absorber is a FACE, so it goes in Boundaries -- "
+           "fd.Boundaries.open(fd.PML(cells=12, wavelength=...)) or fd.Boundaries(z=fd.PML("
+           "...), ...)",
 }
 
 
@@ -154,7 +157,15 @@ class Run:
 
 @spec
 class Scene:
-    """One run, fully stated. See the module docstring for what is validated where."""
+    """One run, fully stated. See the module docstring for what is validated where.
+
+    ``background=`` is what fills every cell no structure claims: a material, a bare
+    permittivity, or ``None`` for vacuum. ``structures=`` is a tuple of
+    ``fd.Structure(shape, material)``, applied **in order**, so a later one wins where two
+    overlap. Both are stage 1; stage 0 scenes are unchanged, because vacuum with no structure
+    is exactly what leaving them out means -- and the coefficients it lowers to are the
+    stage-0 scalars, bit for bit.
+    """
 
     domain: Domain
     boundaries: Boundaries
@@ -162,8 +173,22 @@ class Scene:
     run: Run
     initial: InitialField = None
     monitors: tuple = ()
+    background: object = None
+    structures: tuple = ()
 
     def __post_init__(self):
+        from .geometry import Structure
+        from .materials import as_material
+        object.__setattr__(self, 'background',
+                           as_material(self.background, 'Scene(background=)'))
+        if isinstance(self.structures, Structure):
+            object.__setattr__(self, 'structures', (self.structures,))
+        structures = tuple(self.structures)
+        for s in structures:
+            if not isinstance(s, Structure):
+                raise TypeError(f'Scene(structures=...): every entry is an fd.Structure(shape, '
+                                f'material); got {type(s).__name__}.')
+        object.__setattr__(self, 'structures', structures)
         for name, cls in (('domain', Domain), ('boundaries', Boundaries),
                           ('resolution', Resolution), ('run', Run)):
             if not isinstance(getattr(self, name), cls):

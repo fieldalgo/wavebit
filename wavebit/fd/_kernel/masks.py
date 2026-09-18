@@ -15,10 +15,47 @@ A ``Mask`` is a slab of ``E`` or ``H`` multiplied by zero after that field's upd
 how a wall is realised on the face whose neighbour rule is not itself the wall: PEC
 tangential E on the low-face node layer, PMC tangential H on the high-face layer, and the
 odd components of a mirror on its plane (``faces.py`` says which).
+
+A ``Region`` is the same sub-box of a **single-component** array ``(nz, ny, nx)``: what the
+CPML stretch writes, since the stretch happens inside the curl where one component's
+difference is in hand and the component axis does not exist yet.
 """
 import dataclasses
 
-__all__ = ['Slab', 'Mask']
+__all__ = ['Slab', 'Mask', 'Region']
+
+
+@dataclasses.dataclass(frozen=True)
+class Region:
+    """A sub-box ``[z0, z1) x [y0, y1) x [x0, x1)`` of a single-component ``(nz, ny, nx)`` array."""
+
+    z: tuple
+    y: tuple
+    x: tuple
+
+    @property
+    def slices(self):
+        """The basic-indexing tuple, a view on NumPy and Torch."""
+        return (slice(*self.z), slice(*self.y), slice(*self.x))
+
+    @property
+    def shape(self):
+        return (self.z[1] - self.z[0], self.y[1] - self.y[0], self.x[1] - self.x[0])
+
+    @classmethod
+    def face(cls, axis, side, cells, n):
+        """The ``cells`` cells behind the ``side`` face of ``axis`` (0 = x, 1 = y, 2 = z).
+
+        ``n`` is ``(nx, ny, nz)``. The range is ``[0, cells)`` on a low face and
+        ``[N - cells, N)`` on a high one -- anchored at 0 or at ``N - cells``, full extent on
+        the other two axes and contiguous on this one, which is the shape that makes the JAX
+        dynamic-update-slice the cheapest writing (``studies/fdtd_cpml_slab_cost.py``).
+        """
+        nx, ny, nz = n
+        spans = {0: [0, nx], 1: [0, ny], 2: [0, nz]}
+        N = spans[axis][1]
+        spans[axis] = [0, cells] if side == '-' else [N - cells, N]
+        return cls(z=tuple(spans[2]), y=tuple(spans[1]), x=tuple(spans[0]))
 
 
 @dataclasses.dataclass(frozen=True)

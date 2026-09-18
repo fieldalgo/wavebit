@@ -32,12 +32,13 @@ def execute(plan, params, rt):
     return rt.jit_for(plan, make)(rt.to_device(params))
 
 
-def _results(scene, plan, state, rt):
+def _results(scene, plan, state, rt, params=None):
     series = {}
     for o in plan.observers:
         series[o.name] = Series(name=o.name, component=f'{o.field}{"xyz"[o.c]}',
                                 t=o.times(plan), values=state['obs'][o.name])
-    return Results(series, Final(E=state['E'], H=state['H']), plan, _report(scene, plan), rt.name)
+    return Results(series, Final(E=state['E'], H=state['H']), plan,
+                   _report(scene, plan, params), rt.name)
 
 
 def run(scene, backend='numpy', plan=None, device=None):
@@ -53,4 +54,4 @@ def run(scene, backend='numpy', plan=None, device=None):
     rt = runtime(backend, device)
     params = lower(scene, p, rt)
     state = execute(p, params, rt)
-    return _results(scene, p, state, rt)
+    return _results(scene, p, state, rt, params)

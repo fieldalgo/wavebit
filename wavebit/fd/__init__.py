@@ -35,14 +35,38 @@ The public contract of stage 0::
     res['probe'].t, res['probe'].values       # the time series
     res.final.E, res.final.H                  # (3, nz, ny, nx) on the backend that ran
 
-Out of scope in stage 0, and refused by name rather than silently: absorbers and materials
-(stage 1), sources (stage 2), DFT/flux/far-field monitors and ``algebraic`` faces (stage 3),
-shapes (stage 4), GPU claims (stage 6), ``Decay`` (stage 7), non-uniform grids (not in v1).
+Stage 1 adds absorbers and materials, and nothing else::
+
+    glass = fd.Material(eps=2.25)                      # real, scalar or (ex, ey, ez); mu=
+    lossy = fd.Conductor(eps=2.25, sigma=0.01)         # sigma >= 0, in the scene's units
+    metal = fd.Dispersive(eps_inf=1.0, poles=(fd.Drude(omega_p=..., gamma=...),
+                                              fd.Lorentz(omega_0=..., gamma=..., strength=...),
+                                              fd.Debye(tau=..., delta_eps=...)))
+    scene = fd.Scene(..., background=fd.Material(eps=1.0),
+                     boundaries=fd.Boundaries.open(fd.PML(cells=12, wavelength=0.55)),
+                     structures=(fd.Structure(fd.Slab(z=(-0.2, 0.0)), glass),))
+    fd.eps_at(metal.poles, 0.55, metal.eps_inf)        # the closed form, for a cross-check
+
+A ``PML`` face is a PEC wall with a stretched slab in front of it; ``Absorber`` is the
+fallback where a stretch cannot be matched (a conductive or dispersive medium crossing the
+face). Slabs are **cell-snapped, not subpixel**, and ``check`` prints the snapped span beside
+the one asked for -- until stage 4 a convergence study in ``dx`` is the only route to a right
+answer for an interface that does not land on a cell boundary.
+
+Out of scope in stage 1, and refused by name rather than silently: sources (stage 2),
+DFT/flux/far-field monitors and ``algebraic`` faces (stage 3), shapes other than ``Slab`` and
+subpixel averaging (stage 4), GPU claims (stage 6), ``Decay`` (stage 7), non-uniform grids
+(not in v1).
 """
 from ._check import Report, check
 from ._lower import Plan, lower, plan
 from ._run import run
-from .boundaries import PEC, PMC, Bloch, Boundaries, Periodic, Symmetry
+from .boundaries import (PEC, PMC, Absorber, Absorbing, Bloch, Boundaries, Periodic, PML,
+                         Symmetry)
+from .diagnostics import AbsorberProximityWarning, CoarseMeshWarning
+from .geometry import Slab, Structure
+from .materials import (Conductor, Debye, Dispersive, Drude, Lorentz, Material, MaterialBase,
+                        Pole, eps_at)
 from .monitors import Record
 from .results import Final, Results, Series
 from .scene import Domain, Resolution, Run, Scene
@@ -50,7 +74,11 @@ from .sources import InitialField, Term
 
 __all__ = [
     'Domain', 'Resolution', 'Run', 'Scene',
-    'Boundaries', 'Periodic', 'Bloch', 'PEC', 'PMC', 'Symmetry',
+    'Boundaries', 'Periodic', 'Bloch', 'PEC', 'PMC', 'Symmetry', 'PML', 'Absorber',
+    'Absorbing',
+    'Material', 'Conductor', 'Dispersive', 'Drude', 'Lorentz', 'Debye', 'eps_at',
+    'MaterialBase', 'Pole', 'Slab', 'Structure',
+    'CoarseMeshWarning', 'AbsorberProximityWarning',
     'InitialField', 'Term', 'Record',
     'check', 'plan', 'lower', 'run',
     'Plan', 'Report', 'Results', 'Series', 'Final',

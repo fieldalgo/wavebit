@@ -10,6 +10,9 @@ of them. What each primitive is on each backend was decided by measurement
     slab_add         np.add(view, v, out=view)     4-D index scatter-add            autograd.Function: add_ in place,
                                                    (never a slice add)              mark_dirty; backward slices g
     slab_mul         in place                      4-D index scatter-multiply       same Function pattern with mul_
+    cpml_stretch     four fused in-place ops on    d.at[slices].add -- a DUS,       the same four in place; no
+                     the slab view, one            never the scatter                scratch at all
+                     slab-shaped scratch
     diff / update    out= into preallocated        functional                       functional (out of place)
                      buffers
     array            np.asarray                    jnp.asarray, x64 lifted first    torch.as_tensor(..., device=)
@@ -30,6 +33,26 @@ is O(slab) there. The contract that comes with it: a slab write goes only into a
 operation has consumed yet. ``slab_mul`` cannot be O(slab) in backward -- the cotangent of
 the multiplied slab changes, so its backward clones ``g`` once; in stage 0 the only
 multiplies are the wall masks, two thin layers per face.
+
+**Why the CPML write is not the slab add, on any backend.** ``studies/fdtd_cpml_slab_cost.py``
+(2026-09-18, CPU) settled it: the psi of a CPML face lives in the slab everywhere -- 36 MB
+against 192 MB at 128^3 with six faces, and faster on all three backends -- and the *writing*
+is a different primitive from ``slab_add``. On JAX it is ``d.at[slices].add(...)``, the
+dynamic-update-slice the stage-0 study rejected for a small arbitrary cube, because a CPML
+slab is not one: it has full extent on two axes, is contiguous on the third and is anchored
+at 0 or ``N - cells``, so the loop bounds are exact and LLVM has nothing to unswitch. It beat
+the scatter at every N and on every axis (+6585..+8161 us against +9503..+12910 at N = 128)
+and needs no index arrays, which a scatter pays 1.5x the psi's own bytes for. On NumPy and
+Torch the four operations of the recurrence run in place on the slab *view* of the
+difference; NumPy's fused form is 1.11x against 1.24x for a gather-correct-add-back at
+128^3 / 6 faces. Under reverse mode on JAX the transposed scan body carries exactly one
+full-volume cotangent copy for the DUS form (against five for full-volume psi and none for
+the scatters, which trade them for gather fusions) -- but the times do not follow the counts
+(+21..+27 ms/step at N = 128 for every layout), so read that as the reason the slab layout
+does not get *worse* under reverse mode, not as a saving. **Under Torch autograd neither
+in-place writing applies unchanged**: a psi is read as well as written, so its
+``autograd.Function``'s backward is not the slab-add one, and that case is unmeasured. Until
+it is, a differentiated Torch run takes the out-of-place writing below and pays for it.
 
 **Why NumPy works in preallocated buffers.** A stand-in kernel that allocated a temporary
 per operation ran 40-50x slower than JAX's; the real kernel keeps H, E and the two curl
@@ -203,7 +226,10 @@ class NumpyRuntime:
 
     def update(self, F, cF, alpha, beta):
         # alpha*F + beta*cF, in place in F; cF is scratch and may be scaled in place.
-        if float(alpha) != 1.0:
+        # ``alpha`` is a scalar in vacuum and a (3, nz, ny, nx) array once a material or an
+        # Absorber makes it one; the skip is for the scalar 1.0 only, so a vacuum run keeps
+        # the stage-0 operation count exactly (and its measured transient allocation).
+        if getattr(alpha, 'ndim', 0) or float(alpha) != 1.0:
             np.multiply(F, alpha, out=F)
         np.multiply(cF, beta, out=cF)
         np.add(F, cF, out=F)
@@ -218,6 +244,24 @@ class NumpyRuntime:
         view = a[slab.slices]
         np.multiply(view, m, out=view)
         return a
+
+    def cpml_stretch(self, d, region, psi, b, a, ik, key):
+        """The fused CPML recurrence, four in-place operations on the slab view of ``d``.
+
+        ``psi <- b psi + a d`` then ``d <- d/kappa + psi``, in that order, with one
+        slab-shaped scratch for the ``a * d`` product. Fused rather than gathered: 1.11x
+        against 1.24x over the no-absorber baseline at 128^3 with six faces, and it
+        reproduces the full-volume-psi field exactly (0e+00), where the equivalent
+        add-back form ``d += d(1/kappa - 1) + psi`` differs by one rounding per cell per
+        step.
+        """
+        view = d[region.slices]
+        tmp = self.scratch('cpml_' + key, view.shape, view.dtype)
+        np.multiply(psi, b, out=psi)
+        np.add(psi, np.multiply(a, view, out=tmp), out=psi)
+        np.multiply(view, ik, out=view)
+        np.add(view, psi, out=view)
+        return d, psi
 
     def record(self, acc, n, value):
         acc[n] = value
@@ -304,6 +348,19 @@ class JaxRuntime(_Functional):
             m = m.reshape(-1)
         return self._scatter(a, slab).multiply(m, indices_are_sorted=True, unique_indices=True,
                                                mode='promise_in_bounds')
+
+    def cpml_stretch(self, d, region, psi, b, a, ik, key):
+        """The CPML recurrence, functionally, writing ``d`` with a dynamic-update-slice.
+
+        ``d.at[slices].add(...)`` and never the index scatter ``slab_add`` uses: see the
+        module docstring for why the two are different primitives and must stay so. The
+        quantity added is ``d (1/kappa - 1) + psi``, which is ``d/kappa + psi`` written as an
+        increment; it differs from the fused in-place form by one rounding per cell per step
+        (measured 7e-16..1e-15), which is inside every cross-backend tolerance in the suite.
+        """
+        view = d[region.slices]
+        psi = b * psi + a * view
+        return d.at[region.slices].add(view * (ik - 1.0) + psi), psi
 
     def record(self, acc, n, value):
         return acc.at[n].set(value)
@@ -428,6 +485,33 @@ class TorchRuntime(_Functional):
             return self.SlabMul.apply(a, m, slab.slices)
         a[slab.slices].mul_(m)
         return a
+
+    def cpml_stretch(self, d, region, psi, b, a, ik, key):
+        """The CPML recurrence in place -- four operations, no scratch -- or functionally.
+
+        In place it is exactly the measured writing: ``psi.mul_(b).addcmul_(a, view)`` then
+        ``view.mul_(ik).add_(psi)``, 1.13x against 1.18x for the gathered form at 128^3 with
+        six faces.
+
+        **Under autograd it is out of place instead, and that is a stated gap, not a
+        preference.** The stage-0 study settled that a Torch in-place *slab add* needs a
+        ``mark_dirty`` autograd Function whose backward slices the cotangent; a CPML psi is
+        read as well as written, so that Function's backward is a different one and it was
+        not measured. Writing in place without it would be wrong (autograd would see a
+        version-counter violation or, worse, differentiate the wrong graph); writing with an
+        unmeasured one would be a claim this package has no number for. So a differentiated
+        Torch run takes the functional form and pays a full-volume copy per stretch per step,
+        and measuring the Function is the first thing stage 1 owes stage 6.
+        """
+        view = d[region.slices]
+        if self._live(d, psi, b, a, ik):
+            psi = b * psi + a * view
+            out = d.clone()                      # the full-volume copy the gap costs
+            out[region.slices] = view * ik + psi
+            return out, psi
+        psi.mul_(b).addcmul_(a, view)
+        view.mul_(ik).add_(psi)
+        return d, psi
 
     def record(self, acc, n, value):
         acc[n] = value

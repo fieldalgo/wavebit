@@ -10,22 +10,34 @@ and the step writes it with the coefficients in ``params`` -- ``ah = ae = 1`` an
 (stage 1) changes the numbers and not the code. Between the curl and the update sit the
 three slots every later feature plugs into, in this fixed order:
 
-    cE = curl E                       <- stage 1 stretches the slab here (CPML)
+    cE, psi = curl E                  <- the CPML stretches the slab inside the curl
     cE = t.before_H(cE, ...)          <- terms: sources, polarisations, TFSF
     H  = ah*H - bh*cE
     H  = m.after_H(H)                 <- masks: the walls
-    cH = curl H
+    cH, psi = curl H
     cH = t.before_E(cH, ...)
     E  = ae*E + be*cH
     E  = m.after_E(E)
     mem = t.advance(...)              <- term memory, once per step
     obs = o.observe(...)              <- observers read, last
 
-The state is ``dict(E, H, mem, obs)``: the two fields, one memory entry per term, one
-accumulator per observer. It is a pytree, so the JAX scan carries it whole; on NumPy the
-arrays in it are the preallocated buffers the runtime writes into, and the same dict comes
-back with the same arrays. ``n`` is a Python int on NumPy and Torch and a traced int on
-JAX, so nothing in the step may branch on it.
+The state is ``dict(E, H, psi, mem, obs)``: the two fields, the CPML memory, one memory entry
+per term, one accumulator per observer. It is a pytree, so the JAX scan carries it whole; on
+NumPy the arrays in it are the preallocated buffers the runtime writes into, and the same
+dict comes back with the same arrays. ``n`` is a Python int on NumPy and Torch and a traced
+int on JAX, so nothing in the step may branch on it.
+
+``psi`` sits beside the fields rather than inside ``mem`` because it is not a term's: the
+stretch happens in the curl, before any term runs, and a term that could see it could
+reorder it. It is empty (``{}``) for every scene with no ``PML`` face, which is part of what
+keeps a vacuum run bit-identical to stage 0.
+
+Stage 1 fills the coefficients too: ``ae``, ``be``, ``ah`` and ``bh`` are scalars in vacuum
+and ``(3, nz, ny, nx)`` arrays once a material or an ``Absorber`` makes them so, and the step
+is unchanged by which -- that is what "a material changes the numbers and not the code"
+bought. The H update reads ``minus_bh`` rather than negating ``bh``, because negating an array
+here is a full-volume temporary per step and the lowering can do it once
+(``wavebit/fd/_lower/coefficients.py``).
 """
 from .curl import curl
 
@@ -52,21 +64,23 @@ def initial_state(plan, params, rt):
         H = m.after_H(H, rt)
     mem = {t.name: t.init_mem(plan, rt) for t in plan.terms}
     obs = {o.name: o.init(plan, rt) for o in plan.observers}
-    return dict(E=E, H=H, mem=mem, obs=obs)
+    psi = {key: rt.zeros(face.region.shape, plan.dtype)
+           for face in plan.cpml for key in face.keys()}
+    return dict(E=E, H=H, psi=psi, mem=mem, obs=obs)
 
 
 def step(plan, params, state, n, rt):
     """One leapfrog step; see the module docstring for the slot order."""
-    E, H, mem, obs = state['E'], state['H'], state['mem'], state['obs']
+    E, H, mem, obs, psi = state['E'], state['H'], state['mem'], state['obs'], state['psi']
 
-    cE = curl(E, 'E', plan, params, rt)
+    cE, psi = curl(E, 'E', plan, params, psi, rt)
     for t in plan.terms:
         cE = t.before_H(cE, E, mem[t.name], n, params, rt)
-    H = rt.update(H, cE, params['ah'], -params['bh'])
+    H = rt.update(H, cE, params['ah'], params['minus_bh'])
     for m in plan.masks:
         H = m.after_H(H, rt)
 
-    cH = curl(H, 'H', plan, params, rt)
+    cH, psi = curl(H, 'H', plan, params, psi, rt)
     for t in plan.terms:
         cH = t.before_E(cH, H, mem[t.name], n, params, rt)
     E = rt.update(E, cH, params['ae'], params['be'])
@@ -75,4 +89,4 @@ def step(plan, params, state, n, rt):
 
     mem = {t.name: t.advance(mem[t.name], E, H, n, params, rt) for t in plan.terms}
     obs = {o.name: o.observe(obs[o.name], E, H, n, params, rt) for o in plan.observers}
-    return dict(E=E, H=H, mem=mem, obs=obs)
+    return dict(E=E, H=H, psi=psi, mem=mem, obs=obs)

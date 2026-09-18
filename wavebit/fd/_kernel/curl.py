@@ -20,29 +20,44 @@ Component by component, with ``D_a`` the difference along axis ``a``::
 so component ``c`` is ``D_a F_b - D_b F_a`` with ``a = c+1``, ``b = c+2`` (mod 3). Each
 difference is one call on the runtime; on NumPy the calls write into the curl scratch and
 one temporary layer of it, so a step allocates nothing at full volume.
+
+**Stage 1's CPML stretches a difference here**, between the bare difference and the
+subtraction, which is the one place in the kernel where a single component's derivative
+along a single axis exists as a value. ``psi`` -- the stretch's memory, one entry per
+(face, differenced field, component) -- is threaded through because a recurrence cannot be
+recomputed; ``cpml.py`` says what it is and where it lives. A scene with no PML face has an
+empty ``plan.cpml``, so the loop over faces costs one iteration of nothing and a vacuum run
+is the stage-0 arithmetic exactly.
 """
 from . import AXIS_NAMES, AX
+from .cpml import stretch
 from .faces import pad_neighbor
 
 __all__ = ['curl']
 
 
-def curl(F, field, plan, params, rt):
-    """``curl F`` at the other field's points; ``field`` names what ``F`` is, ``'E'`` or ``'H'``."""
+def curl(F, field, plan, params, psi, rt):
+    """``curl F`` at the other field's points; ``field`` names what ``F`` is, ``'E'`` or ``'H'``.
+
+    Returns ``(curl, psi)``: the CPML advances its memory inside the differences, so the
+    curl is where the new ``psi`` comes back from. With no PML face the same dict comes
+    straight back.
+    """
     side = '+' if field == 'E' else '-'
     out = rt.scratch('curl_' + field, F.shape, F.dtype)
     tmp = rt.scratch('diff_' + field, F.shape[1:], F.dtype)
-    parts = []
+    parts, updates = [], {}
     for c in range(3):
         a, b = (c + 1) % 3, (c + 2) % 3
-        d1 = _diff(F, b, a, side, plan, params, rt, None if out is None else out[c])
-        d2 = _diff(F, a, b, side, plan, params, rt, tmp)
+        d1 = _diff(F, b, a, side, field, plan, params, psi, updates, rt,
+                   None if out is None else out[c])
+        d2 = _diff(F, a, b, side, field, plan, params, psi, updates, rt, tmp)
         parts.append(rt.sub(d1, d2, out=None if out is None else out[c]))
-    return rt.assemble(parts, out)
+    return rt.assemble(parts, out), ({**psi, **updates} if updates else psi)
 
 
-def _diff(F, comp, axis, side, plan, params, rt, out):
-    """``D_axis F[comp]`` with the face's pad closing the stencil at the edge."""
+def _diff(F, comp, axis, side, field, plan, params, psi, updates, rt, out):
+    """``D_axis F[comp]``, with the face's pad closing the stencil and the CPML stretching it."""
     name = AXIS_NAMES[axis]
     face = name + side
     pad = plan.pad(face, comp)
@@ -51,4 +66,8 @@ def _diff(F, comp, axis, side, plan, params, rt, out):
         f = params['bloch'][name]
         factor = f if side == '+' else rt.conj(f)
     layer = pad_neighbor(rt, F[comp], name, side, pad, factor)
-    return rt.diff(F[comp], AX[name], side, layer, out=out)
+    d = rt.diff(F[comp], AX[name], side, layer, out=out)
+    if plan.cpml:
+        d, advanced = stretch(d, field, comp, name, plan, params, psi, rt)
+        updates.update(advanced)
+    return d
