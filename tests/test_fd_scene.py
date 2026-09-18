@@ -516,17 +516,31 @@ def test_bloch_accepts_a_traced_phase_unread():
 # The doors: later stages, refused naming the stage
 # ---------------------------------------------------------------------------------------------
 
+#: Stage 1 turned ``Boundaries.open`` from a named refusal into the absorber preset, so the
+#: gate-9 door that pinned the refusal now pins the preset. The refusal it replaces is kept
+#: for the two spellings that are still not a preset: a bare number, and an unknown keyword.
+def test_boundaries_open_is_the_absorber_preset():
+    """Gate 9 door, stage 1: ``open`` puts one absorbing face on every axis, with overrides."""
+    pml = fd.PML(cells=12, wavelength=0.55)
+    everywhere = fd.Boundaries.open(pml)
+    assert all(everywhere.face(f) is pml for f in ('x-', 'x+', 'y-', 'y+', 'z-', 'z+'))
+    mixed = fd.Boundaries.open(pml, x=fd.Periodic(), z=(fd.Symmetry(parity=-1), pml))
+    assert mixed.face('x-') == fd.Periodic() and mixed.face('y+') is pml
+    assert mixed.face('z-') == fd.Symmetry(parity=-1) and mixed.face('z+') is pml
+    # the default face is a PML with no wavelength, which the scene -- not the preset --
+    # refuses, so the preset never picks a CFS pole for anybody
+    assert isinstance(fd.Boundaries.open().face('z-'), fd.PML)
+
+
 @pytest.mark.parametrize('args, kwargs', [
-    pytest.param((), {}, id='no-arguments'),
-    pytest.param((), dict(pml=0.5), id='pml-keyword'),
-    pytest.param((0.5,), {}, id='positional'),
-    pytest.param((), dict(z=fd.PEC()), id='z-like-the-periodic-preset'),
+    pytest.param((), dict(pml=0.5), id='unknown-keyword'),
+    pytest.param((0.5,), {}, id='a-bare-number'),
+    pytest.param((fd.PEC(),), {}, id='a-non-absorbing-face'),
 ])
-def test_boundaries_open_is_refused_naming_stage_1(args, kwargs):
-    """Gate 9 door: the absorber preset exists so the call fails by name, whatever it is given."""
-    with pytest.raises(NotImplementedError, match='stage 1') as e:
+def test_boundaries_open_refuses_what_is_not_an_absorbing_face(args, kwargs):
+    with pytest.raises(TypeError) as e:
         fd.Boundaries.open(*args, **kwargs)
-    assert 'Boundaries.open' in str(e.value) and 'PML' in str(e.value)
+    assert 'Boundaries.open' in str(e.value)
 
 
 def test_the_periodic_preset_is_the_one_that_works():

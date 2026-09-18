@@ -68,10 +68,13 @@ def test_later_stages_are_refused_by_name():
               run=base.run)
     with pytest.raises(NotImplementedError, match='stage 2'):
         fd.Scene(sources=(), **kw)
+    # ``materials=`` and ``pml=`` are stage-1 features spelled another way, so the refusal
+    # now points at the spelling rather than at the stage; ``Boundaries.open`` is the
+    # absorber preset as of stage 1 and is pinned in tests/test_fd_scene.py instead.
     with pytest.raises(NotImplementedError, match='stage 1'):
         fd.Scene(materials=(), **kw)
-    with pytest.raises(NotImplementedError, match='stage 1'):
-        fd.Boundaries.open(pml=0.5)
+    with pytest.raises(NotImplementedError, match='Boundaries'):
+        fd.Scene(pml=0.5, **kw)
     with pytest.raises(NotImplementedError, match='stage 2'):
         fd.Run(periods=10)
 
@@ -209,6 +212,48 @@ def test_the_numpy_kernel_steps_in_preallocated_buffers():
         tracemalloc.stop()
     assert (peak - before) < NUMPY_TRANSIENT_VOLUMES * volume, (peak - before) / volume
     assert (after - before) < 0.01 * volume                    # nothing kept per step
+    assert state['E'] is E and state['H'] is H
+
+
+def test_the_preallocation_holds_when_the_coefficients_are_arrays():
+    """The same budget with ``ae``/``be``/``ah``/``bh`` at full ``(3, nz, ny, nx)`` shape.
+
+    The vacuum cavity above cannot see the thing this exists for: there every coefficient is a
+    Python float, so an expression in the step body that allocates one array per coefficient
+    per step costs nothing. Stage 1 makes them arrays as soon as an ``Absorber`` (or a set of
+    structures that varies on all three axes) says so, and one such expression -- ``-bh``,
+    negated inside the step because the H update subtracts -- took the transient from 0.14
+    volumes a step to 1.00. It is lowered once as ``minus_bh`` now
+    (``wavebit/fd/_lower/coefficients.py``), and this is the case that would have objected.
+    """
+    # 40^3, not the 32^3 above: the transient the kernel legitimately carries is a *constant*
+    # ~200 kB of ufunc buffer, so the budget below is only a statement about volumes once the
+    # volume is well past it. At 24^3 the constant alone is 0.61 volumes.
+    scene = fd.Scene(domain=fd.Domain(size=(1.0, 1.0, 1.0)),
+                     boundaries=fd.Boundaries.open(fd.Absorber(cells=12)),
+                     resolution=fd.Resolution(cells_per_wavelength=40, wavelength=1.0),
+                     run=fd.Run(steps=8), initial=None, monitors=())
+    plan = fd.plan(scene)
+    rt = runtime('numpy')
+    params = lower(scene, plan, rt)
+    assert all(np.asarray(params[k]).shape == plan.shape
+               for k in ('ae', 'be', 'ah', 'bh', 'minus_bh')), 'the premise: full-volume arrays'
+    state = initial_state(plan, params, rt)
+    E, H = state['E'], state['H']
+    volume = 3 * plan.cells * np.dtype(plan.dtype).itemsize
+    for n in range(3):
+        state = step(plan, params, state, n, rt)              # warm: every scratch exists
+    tracemalloc.start()
+    try:
+        before, _ = tracemalloc.get_traced_memory()
+        tracemalloc.reset_peak()
+        for n in range(3, 6):
+            state = step(plan, params, state, n, rt)
+        after, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert (peak - before) < NUMPY_TRANSIENT_VOLUMES * volume, (peak - before) / volume
+    assert (after - before) < 0.01 * volume
     assert state['E'] is E and state['H'] is H
 
 

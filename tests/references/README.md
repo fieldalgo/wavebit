@@ -149,6 +149,40 @@ freezer never writes over the committed file: it reproduces the archive and prin
 array, what moved and whether the move is inside the budget. **Regenerating is not how a
 failing test gets fixed** here any more than it is for the rows above.
 
+### Its stage-1 twin: `fd_golden_stage1.npz` (2026-09-18)
+
+Stage 1 added everything in `wavebit/fd/` that is not a wall — a stretched CPML slab with
+four psi arrays per face, graded `Absorber` damping, update coefficients built from a
+material, and an ADE pole recurrence carrying its own memory — and an eigenmode in a PEC box
+exercises none of it. So a second archive pins six scenes of its own, one per feature: a 20-cubed
+vacuum box with a PML on all six faces, a 30-degree travelling packet under a Bloch phase (the same
+stretch, complex), a dielectric slab between two PMLs, a Drude + Lorentz half-space running
+out through an `Absorber` face, a conductive slab at 20 degrees, and an `Absorber` box with no PML
+at all. `tests/test_fd_stage1_backends.py` holds the three backends to each other and each to
+its own frozen answer at the same 1e-12, and its two mutants are the argument: a plan with its
+CPML faces dropped, and a pole term whose `drive` is zeroed, both keep all three backends
+agreeing and put every one of them O(1) from its golden.
+
+Two things are new beside the fields and the series. The **lowered numbers are frozen once per
+scene** — the four update coefficient arrays, every CPML profile (`b`, `a`, `1/kappa`) and
+every pole's recurrence coefficients — because they are backend-independent by construction,
+so a failure that touches only those rows says the layer was regraded and one that touches
+only the per-backend rows says the step changed under an unchanged layer. And the scenes are
+built so that **each one empties itself**: the leapfrog conserves the discrete divergence of
+E exactly, so an initial field with a longitudinal part leaves a static charge sitting in the
+box that no absorber could ever remove (measured: 25% of the energy, on a plain Gaussian). The
+cube is driven by the curl of a scalar blob, the oblique lines by an explicit superposition of
+travelling eigenmodes, and the test then holds the frozen energy against the same box with
+PEC in place of every absorbing face — 2e-3 of it in the cube, 5e-2 at 30 degrees where the packet's
+own band reaches grazing and gate 1's table says a 12-cell layer reflects 3e-2.
+
+`interface/freeze_fd_stage1.py` writes it under exactly the stage-0 rules above: this checkout
+only, twice in one process, LF-normalised source digests (its own, its case list's, and the
+stage-0 case list it imports its capture from), a content digest the test recomputes, and
+`--rebaseline` as the only way to overwrite. It adds one line its predecessor has no need of:
+an array whose **shape** moved is reported as a changed scene rather than compared, because
+comparing it raises instead of reporting.
+
 ### Why the field row exists, and what it cost to not have it
 
 Until 2026-08-14 every oracle here checked efficiencies or amplitudes, and **field
@@ -928,6 +962,8 @@ Two consequences worth knowing before touching those generators:
 | `test_*_golden.py` — the assertions | nothing; **run in CI everywhere** |
 | `interface/freeze_fd_stage0.py`, `_fd_stage0_cases.py` — freeze the `wavebit/fd/` kernel's own answers, per backend | the project env with NumPy, JAX and Torch; run by hand |
 | `fd_golden_stage0.npz` — those answers, committed; `tests/test_fd_backends.py` holds them | nothing; **run in CI everywhere** |
+| `interface/freeze_fd_stage1.py`, `_fd_stage1_cases.py` — the same for stage 1's absorbers and materials, plus the lowered coefficients and profiles | the project env with NumPy, JAX and Torch; run by hand |
+| `fd_golden_stage1.npz` — those answers, committed; `tests/test_fd_stage1_backends.py` holds them | nothing; **run in CI everywhere** |
 ## A golden frozen ahead of its consumer
 
 `golden_fmmax_magnetic.npz` holds rows nothing in this solver can consume — permeability has no
