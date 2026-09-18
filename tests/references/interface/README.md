@@ -14,6 +14,7 @@
 | `validate_grid_dispersive.py` | Does a CPML-terminated dielectric, Drude, Lorentz or mixed slab match Meep's point-sampled dispersive transfer, and does the averaged-strength discretisation converge to Airy? |
 | `validate_scene_bottom_meep.py` | What complex r/t does Meep give for a source physically below an asymmetric two-layer stack, with no coordinate reflection? |
 | `freeze_grid_references.py`, `freeze_grid_material_references.py` | Not a question but a freezer: packs the external Meep and FDTDX outputs, with input and generator digests, into a new archive, and refuses to overwrite one. It hashes its generators as raw bytes, so freeze from a checkout that keeps LF line endings. |
+| `freeze_fd_stage0.py` | A freezer for our own numbers, not an oracle: runs the `wavebit/fd/` kernel's gate 1-4 scenes (`../_fd_stage0_cases.py`) on NumPy, JAX and Torch from this checkout, twice, and writes `../fd_golden_stage0.npz` only when the two freezes agree byte for byte -- versions, platform, LF-normalised source digests and a content digest beside the arrays. Without `--rebaseline` it only reproduces and reports; `tests/test_fd_backends.py` reads the archive. |
 | `Reticolo.py`, `__init__.py` | How do tests access the existing separately installed RETICOLO oracle? |
 | `reticolo_res2.m`, `reticolo_res3.m`, `reti_aniso.m` | How do the existing RETICOLO bridge calls return scattering and field data? |
 

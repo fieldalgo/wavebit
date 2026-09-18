@@ -109,6 +109,46 @@ a record that says "the defaults" is true by construction and can be checked aga
 `gen_goldens_fdtd_table.py` writes it, in the project env, and copies the Meep column across
 from `golden_meep_1d.npz` with that file's digest so a stale copy is a failing test.
 
+### A second file that is not an oracle: `fd_golden_stage0.npz` (2026-09-18)
+
+The general FDTD kernel at `wavebit/fd/` runs one body of code on NumPy, JAX and Torch, and
+its fifth gate (`tests/test_fd_backends.py`) holds the three to each other on the scenes of
+gates 1 to 4 — a PEC box, a PMC box, a periodic and a Bloch box each carrying an exact Yee
+eigenmode, and the four half boxes of the symmetry gate — at 1e-12 of each array's peak,
+whole volumes and every recorded series. That agreement is **necessary and nowhere near
+sufficient**: a defect in the plan moves all three backends together, and three backends that
+agree say nothing about a dropped wall mask or a flipped pad sign. So the same test pins
+**each backend to what it itself produced** when this archive was frozen — the probe series,
+the final E and H at eight fixed cells per component, and one whole-volume energy per scene —
+at the same 1e-12. Per backend rather than one shared number, so a red test names the
+backend that moved. The gate's mutant is the argument run: the PEC box's plan with its masks
+dropped passes the agreement half on all three backends and fails the pin on all three by
+O(1) (4e-2 on the energy, 3 to 13 on the series).
+
+What it is not is an oracle for the kernel's correctness. Every number came from `wavebit.fd`,
+so it cannot say the kernel is right — gates 1 to 4 do that against closed forms. What it
+adds is a drift detector with two properties a bare self-capture lacks: the frozen eigenmode
+series are held, in the archive, to the three-term recurrence those gates hold their live
+series to, so what was frozen is known to have been a right answer; and the scene behind
+every key is shown to be the one the test builds — by the plan's skeleton hash for the static
+content and by the sampled initial field for the excitation — so a moved helper reads as a
+moved scene rather than as drift.
+
+`interface/freeze_fd_stage0.py` writes it, in the project env with all three backends, from
+this checkout and no other (it refuses an imported `wavebit` from elsewhere). The archive
+carries the Python, wavebit, numpy, jax and torch versions, the platform, LF-normalised
+digests of the freezer and of the case list, and a SHA-256 over its own numeric content that
+the test recomputes. The freezer validates that digest before it lets it arbitrate anything:
+it freezes **twice in one process and refuses to write unless every array comes back byte
+for byte** — the check that a digest depending on the process (an `id()`, an address in a
+`repr`, an unseeded draw) fails and a digest that is a function of the code passes. Measured
+on the freezing machine: Torch bit-identical to NumPy on every real scene and 2e-15 off on
+the complex one, JAX 1e-15 to 4e-14 off both, so the 1e-12 budget is 25x above the worst of
+that and 1e3 below anything a wrong sign, pad or mask does. Without `--rebaseline` the
+freezer never writes over the committed file: it reproduces the archive and prints, array by
+array, what moved and whether the move is inside the budget. **Regenerating is not how a
+failing test gets fixed** here any more than it is for the rows above.
+
 ### Why the field row exists, and what it cost to not have it
 
 Until 2026-08-14 every oracle here checked efficiencies or amplitudes, and **field
@@ -886,6 +926,8 @@ Two consequences worth knowing before touching those generators:
 | `gen_goldens_*.py` — freeze the reference numbers | the oracle; run by hand, rarely |
 | `golden_*.npz` — the frozen numbers, committed | nothing |
 | `test_*_golden.py` — the assertions | nothing; **run in CI everywhere** |
+| `interface/freeze_fd_stage0.py`, `_fd_stage0_cases.py` — freeze the `wavebit/fd/` kernel's own answers, per backend | the project env with NumPy, JAX and Torch; run by hand |
+| `fd_golden_stage0.npz` — those answers, committed; `tests/test_fd_backends.py` holds them | nothing; **run in CI everywhere** |
 ## A golden frozen ahead of its consumer
 
 `golden_fmmax_magnetic.npz` holds rows nothing in this solver can consume — permeability has no
