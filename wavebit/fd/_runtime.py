@@ -15,6 +15,8 @@ of them. What each primitive is on each backend was decided by measurement
                      slab-shaped scratch
     diff / update    out= into preallocated        functional                       functional (out of place)
                      buffers
+    dft_add          multiply into a region        acc + phase * view               acc + phase * view
+                     scratch, add in place
     array            np.asarray                    jnp.asarray, x64 lifted first    torch.as_tensor(..., device=)
     jit_for          the function itself           jax.jit, once per plan, kept     the function itself
                                                    on the instance
@@ -58,6 +60,16 @@ it is, a differentiated Torch run takes the out-of-place writing below and pays 
 per operation ran 40-50x slower than JAX's; the real kernel keeps H, E and the two curl
 scratch arrays live across steps and writes every full-volume result with ``out=``. The
 pads (one layer thick) are allocated per call: a layer is ``1/N`` of the volume.
+
+**The DFT accumulation (stage 3) is two primitives, ``dft_add`` and ``energy``.** Every
+frequency-domain monitor is a running sum ``acc += phase[f] * F[region]`` per step, over a region
+that is a plane, a box face or a small volume -- never the whole grid unless a caller asks
+for it. On NumPy it writes through one region-sized scratch per component, ``np.multiply(
+phase, view, out=scratch)`` then ``np.add(acc, scratch, out=acc)``, so a step allocates
+nothing at full volume and nothing at region size after the first; the view is a view. On
+JAX and Torch it is the functional ``acc + phase * view``. ``energy`` is ``sum |F|^2`` over
+the region for the decay diagnostic, with the gradient stopped on every backend (it is a
+diagnostic; tracking it would put the region into the backward pass for nothing).
 
 **x64 on JAX.** ``wavebit._core.backend.lift_jax_x64(required=True)`` is called right after
 JAX is imported and before any array is built; it is the one door. JAX is imported lazily
@@ -267,6 +279,20 @@ class NumpyRuntime:
         acc[n] = value
         return acc
 
+    def dft_add(self, acc, view, phase, key):
+        """``acc += phase[:, None, None, None] * view`` in place, through one scratch."""
+        tmp = self.scratch(key, acc.shape, acc.dtype)
+        np.multiply(phase.reshape((phase.shape[0],) + (1,) * view.ndim), view, out=tmp)
+        np.add(acc, tmp, out=acc)
+        return acc
+
+    def energy(self, view):
+        """``sum |view|^2`` without a region-sized temporary (einsum over the strided view)."""
+        if np.iscomplexobj(view):
+            return (np.einsum('ijk,ijk->', view.real, view.real)
+                    + np.einsum('ijk,ijk->', view.imag, view.imag))
+        return np.einsum('ijk,ijk->', view, view)
+
     def scan(self, body, carry, steps, schedule=None):
         for n in range(steps):
             carry = body(carry, n)
@@ -364,6 +390,12 @@ class JaxRuntime(_Functional):
 
     def record(self, acc, n, value):
         return acc.at[n].set(value)
+
+    def dft_add(self, acc, view, phase, key):
+        return acc + phase.reshape((phase.shape[0],) + (1,) * view.ndim) * view[None]
+
+    def energy(self, view):
+        return self.jax.lax.stop_gradient(self.xp.sum(self.xp.abs(view) ** 2))
 
     def scan(self, body, carry, steps, schedule=None):
         lax, jnp = self.jax.lax, self.xp
@@ -516,6 +548,13 @@ class TorchRuntime(_Functional):
     def record(self, acc, n, value):
         acc[n] = value
         return acc
+
+    def dft_add(self, acc, view, phase, key):
+        return acc + phase.reshape((phase.shape[0],) + (1,) * view.ndim) * view[None]
+
+    def energy(self, view):
+        with self.torch.no_grad():
+            return (view.abs() ** 2).sum()
 
     def scan(self, body, carry, steps, schedule=None):
         if schedule is None:

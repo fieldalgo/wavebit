@@ -61,6 +61,13 @@ def _diff(F, comp, axis, side, field, plan, params, psi, updates, rt, out):
     name = AXIS_NAMES[axis]
     face = name + side
     pad = plan.pad(face, comp)
+    if pad.kind == 'axis1d':
+        # An Axis1D axis (one cell): the derivative is i k exactly, forward and backward alike,
+        # so the "difference" is the product i k dx F (``faces.py``). No pad, no CPML.
+        f = params['axis1d'][name]
+        if out is not None:
+            return rt.xp.multiply(F[comp], f, out=out)
+        return F[comp] * f
     factor = None
     if pad.kind == 'bloch':
         f = params['bloch'][name]

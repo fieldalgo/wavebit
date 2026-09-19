@@ -12,6 +12,13 @@ layer is not the wall itself, a mask on the edge layer after the update. No ``N 
     periodic    the opposite edge layer                     Periodic
     bloch       the opposite edge layer times exp(+-i phi)  Bloch (phi traced, in params)
     mirror      +-1 times an interior layer                  Symmetry
+    axis1d      no layer: the difference IS i k dx F         Axis1D (k traced, in params)
+
+``axis1d`` (stage 3) is not a neighbour at all. On an ``Axis1D`` axis the grid holds one cell
+of ``F exp(i k y)``, and the derivative along it is the algebraic ``i k`` -- ``i k dx`` without
+the ``1/dx`` the coefficients carry -- on the forward and the backward difference alike, so
+``curl.py`` multiplies instead of differencing (a Bloch pad would give ``exp(+-i k dx) - 1``,
+the one-cell difference Axis1D replaces). There is no wall, no mask and no stagger along it.
 
 **Wall positions**, which the plan records per face and the eigenmode gates check (a wall
 one cell off changes the mode frequency by ``1/N`` and fails the recurrence by ~1e-2
@@ -68,7 +75,7 @@ the full box.
 """
 import dataclasses
 
-from ..boundaries import PEC, PMC, Absorber, Bloch, Periodic, Symmetry, PML
+from ..boundaries import PEC, PMC, Absorber, Axis1D, Bloch, Periodic, Symmetry, PML
 from . import AX
 from .grid import OFFSETS
 from .masks import Mask, Slab
@@ -140,6 +147,13 @@ def lower_face(name, face, grid):
         src = n - 1 if side == '-' else 0
         return (FaceRule(name, 'bloch'),
                 tuple(Pad('bloch', src) for _ in range(3)), ())
+    if isinstance(face, Axis1D):
+        if n != 1:
+            raise ValueError(
+                f'Axis1D on {name!r}: the axis is {n} cells long, and an Axis1D axis is one cell '
+                f'-- the field along it is exp(i k {name[0]}) and nothing else. Give the domain '
+                f'one cell there, Domain(size=...) with dx = {dx:g} along {name[0]}.')
+        return (FaceRule(name, 'axis1d'), tuple(Pad('axis1d') for _ in range(3)), ())
     if isinstance(face, (PEC, PML, Absorber)):
         # An absorbing face IS a PEC wall with something in front of it: the same zero pad,
         # the same masks, the same wall position. What differs -- the stretched slab of a
@@ -182,8 +196,8 @@ def lower_face(name, face, grid):
         masks = tuple(Mask(f, Slab.layer(c, axis, layer, grid.n)) for f, c in odd)
         return (FaceRule(name, 'symmetry', position=position, plane=plane, parity=p),
                 pads, masks)
-    raise TypeError(f'face {name!r}: {type(face).__name__} is not a face type. The seven are '
-                    f'Periodic, Bloch, PEC, PMC, Symmetry, PML and Absorber.')
+    raise TypeError(f'face {name!r}: {type(face).__name__} is not a face type. The eight are '
+                    f'Periodic, Bloch, Axis1D, PEC, PMC, Symmetry, PML and Absorber.')
 
 
 def pad_neighbor(rt, a, axis, side, pad, factor):

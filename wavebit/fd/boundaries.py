@@ -19,7 +19,11 @@ the mask it lowers to, and where the wall physically sits -- is decided in
     wavevector component along the axis, so ``phi = k * L`` with ``L`` the snapped box size.
     A Bloch face makes the whole run complex, doubling every byte and every flop, so a phase
     that is concretely ``0`` is refused in favour of ``Periodic()`` rather than lowered to it
-    silently -- a user who wrote ``Bloch`` and got a real run would rightly ask why.
+    silently -- a user who wrote ``Bloch`` and got a real run would rightly ask why. A
+    ``Bloch`` phase on an axis one cell long is refused (stage 3), naming ``Axis1D``.
+``Axis1D(k=k, k_max=...)``
+    (Stage 3.) A one-cell axis whose derivative is ``i k`` exactly -- the invariant axis of a
+    2-D (conical) problem, without the one-cell difference's artificial dispersion. Complex.
 ``PEC()``
     Perfect electric conductor: tangential E vanishes on the wall.
 ``PMC()``
@@ -48,8 +52,8 @@ import numbers
 
 from ._spec import is_jax_typed, spec, static_float, static_int, unknown_keyword_message
 
-__all__ = ['Boundaries', 'Periodic', 'Bloch', 'PEC', 'PMC', 'Symmetry', 'PML', 'Absorber',
-           'Absorbing', 'FACES', 'AXES', 'PML_CELLS', 'PML_REFLECTION']
+__all__ = ['Boundaries', 'Periodic', 'Bloch', 'Axis1D', 'PEC', 'PMC', 'Symmetry', 'PML',
+           'Absorber', 'Absorbing', 'FACES', 'AXES', 'PML_CELLS', 'PML_REFLECTION']
 
 #: Default PML depth in cells, and the line below which a ``PML`` is refused without
 #: ``allow_thin=True``. Re-measured for this kernel by the doubling study that *is*
@@ -109,7 +113,7 @@ class Periodic(FaceType):
     """Both faces of the axis wrap; real dtype."""
 
 
-def _concrete_scalar(what, v):
+def _concrete_scalar(what, v, where='Bloch'):
     """``v`` as a float when its value is readable now; ``None`` for a JAX tracer.
 
     The phase is a traced leaf, so a tracer must pass; but a tracer is the *only* thing that
@@ -118,11 +122,11 @@ def _concrete_scalar(what, v):
     lowering to trip over with a NumPy message that names neither ``Bloch`` nor ``phase``.
     """
     if isinstance(v, (bool, complex, str)) or v is None:
-        raise ValueError(f'Bloch({what}={v!r}): a real scalar in radians (or a traced scalar '
-                         f'of jax or torch); got {type(v).__name__}.')
+        raise ValueError(f'{where}({what}={v!r}): a real scalar (or a traced scalar of jax '
+                         f'or torch); got {type(v).__name__}.')
     shape = getattr(v, 'shape', None)
     if shape is not None and tuple(shape) != ():
-        raise ValueError(f'Bloch({what}=...): one real scalar per axis; got shape '
+        raise ValueError(f'{where}({what}=...): one real scalar per axis; got shape '
                          f'{tuple(shape)}. A phase per axis is one Bloch(...) per axis.')
     detach = getattr(v, 'detach', None)
     if detach is not None:
@@ -132,8 +136,8 @@ def _concrete_scalar(what, v):
     except Exception as err:
         if is_jax_typed(v):
             return None
-        raise ValueError(f'Bloch({what}={v!r}): a real scalar in radians (or a traced scalar '
-                         f'of jax or torch); got {type(v).__name__}.') from err
+        raise ValueError(f'{where}({what}={v!r}): a real scalar (or a traced scalar of jax '
+                         f'or torch); got {type(v).__name__}.') from err
 
 
 @spec
@@ -163,7 +167,7 @@ class Bloch(FaceType):
 
 
     @staticmethod
-    def from_source(source, background=None):
+    def from_source(source, background=None, axis1d=()):
         """The transverse faces a :class:`~wavebit.fd.PlaneWave` needs, as ``{axis: face}``.
 
         ``fd.Boundaries(**fd.Bloch.from_source(pw), z=fd.PML(...))`` for a wave along z. The
@@ -177,6 +181,10 @@ class Bloch(FaceType):
         The phase is fixed-k: every frequency in the band shares this ``k_par``, so the angle
         of incidence varies across the band as ``sin(theta(f)) = k_par / (2 pi n f)``, which is
         what a Bloch-periodic time-domain run can carry. The band centre must be concrete.
+
+        ``axis1d`` (stage 3) names transverse axes -- ``'y'`` or ``('x', 'y')`` -- that get
+        :class:`Axis1D` with that ``k`` (and ``k_max = |k|``) instead of ``Bloch``/``Periodic``:
+        the one-cell invariant axis of a conical problem, whose domain is one cell there.
         """
         import math
         from .materials import as_material
@@ -193,15 +201,103 @@ class Bloch(FaceType):
         if n is None:
             raise ValueError('Bloch.from_source(background=<traced>): the index must be '
                              'concrete to fix a phase.')
+        names = (axis1d,) if isinstance(axis1d, str) else tuple(axis1d)
+        for name in names:
+            if name not in AXES or AXES.index(name) == source.axis:
+                raise ValueError(f'Bloch.from_source(axis1d={axis1d!r}): name transverse axes of '
+                                 f'the wave, from {[a for a in AXES if AXES.index(a) != source.axis]}.')
         k, _, _ = source.vectors()
         k0 = n * 2.0 * math.pi / wavelength
         out = {}
         for a, axis in enumerate(AXES):
             if a == source.axis:
                 continue
-            ka = k0 * k[a]
-            out[axis] = Periodic() if abs(k[a]) < 1e-12 else Bloch(k=ka)
+            ka = k0 * k[a] if abs(k[a]) >= 1e-12 else 0.0
+            if axis in names:
+                out[axis] = Axis1D(k=ka)
+            else:
+                out[axis] = Periodic() if ka == 0.0 else Bloch(k=ka)
         return out
+
+@spec
+class Axis1D(FaceType):
+    """A one-cell axis whose derivative is ``i k`` exactly: the invariant axis of a 2-D problem.
+
+    ``fd.Boundaries(x=fd.Bloch(k=kx), y=fd.Axis1D(k=ky, k_max=...), z=fd.PML(...))`` is a
+    conical 1-D grating: the structure is uniform along y, the field is ``F(x, z) exp(i ky
+    y)``, and the grid holds one cell of it along y. **Stage 3.**
+
+    **Why it is not a one-cell Bloch face.** A ``Bloch(k=k)`` axis differences a field
+    ``exp(i k y)`` exactly as the Yee grid does on any number of cells: ``(exp(i k dx) - 1)/dx``,
+    whose modulus ``2 sin(k dx/2)/dx`` is the *discrete* wavenumber. On a multi-cell axis that
+    is the grid's own dispersion and every other difference shares it; on an axis the
+    structure never varies along, it is an artificial dispersion the problem does not have --
+    the wave sees ``K_y = 2 sin(k dx/2)/dx`` instead of ``k``, a relative error of ``(k dx)^2 /
+    24``, and the conical grating it models is a slightly different grating. ``Axis1D``
+    replaces that difference by the exact derivative: ``D_y F = i k dx F`` in the kernel's
+    units (the curl carries no ``1/dx``; ``wavebit/fd/_kernel/curl.py``), on both the forward
+    and the backward difference, so every component's y dependence is ``exp(i k y)`` with no
+    stagger at all. So a user ``Bloch`` phase on a one-cell axis is refused, naming this
+    (the stage-2 PlaneWave and TFSF *columns* are one cell across and Bloch by construction
+    -- they must reproduce the main grid's multi-cell difference exactly -- and are not user
+    faces; they are untouched).
+
+    ``k``
+        The wavevector along the axis, a real scalar, concrete or traced (a gradient may flow
+        through it). ``k = 0`` is allowed: a 2-D problem with no dependence along the axis.
+    ``k_max``
+        The largest ``|k|`` the plan is made for (static). The derivative is ``i k`` and not a
+        bounded difference, so the CFL bound depends on it: the sum ``sum_a max K_a^2 / 4``
+        that the stable ``dt`` is ``n_min / sqrt(...)`` of has ``1/dx^2`` for a differenced
+        axis and ``k_max^2 / 4`` for this one (``wavebit/fd/_lower/checks.py::cfl_bound``).
+        Default ``|k|`` when ``k`` is concrete; required when it is traced. A concrete ``|k| >
+        k_max`` is refused here; a traced one is checked at run time and makes the run
+        ``nan`` with ``res.diagnostics['stable'] = False``.
+    ``algebraic``
+        Must be ``True``: the derivative is the algebraic ``i k``. There is no other kind --
+        the one-cell difference is exactly what is being replaced -- so ``False`` is refused
+        rather than quietly meaning ``Bloch``.
+
+    A run with an ``Axis1D`` face is always complex (``k = 0`` included: one dtype per plan,
+    and a traced ``k`` could become nonzero). The domain must be one cell along the axis
+    (``Domain(size=...)`` equal to ``dx`` there); sources whose support spans cells along it
+    (a ``Dipole``'s stamp, a ``TFSF`` box) are refused, and a ``Diffraction`` monitor has the
+    single order ``0`` along it.
+    """
+
+    k: object = 0.0
+    k_max: object = None
+    algebraic: bool = True
+
+    def __post_init__(self):
+        if self.algebraic is not True:
+            raise ValueError(
+                f'Axis1D(algebraic={self.algebraic!r}): the derivative along a one-cell axis is '
+                f'the algebraic i k and nothing else; the alternative -- the one-cell Bloch '
+                f'difference (exp(i k dx) - 1)/dx -- is the artificial dispersion Axis1D exists '
+                f'to remove. Leave algebraic=True.')
+        if self.k is None:
+            raise ValueError('Axis1D(k=None): k is the real wavevector along the axis (0 for '
+                             'a field uniform along it).')
+        value = _concrete_scalar('k', self.k, 'Axis1D')
+        if self.k_max is None:
+            if value is None:
+                raise ValueError(
+                    'Axis1D(k=<traced>): a traced k needs k_max=..., the largest |k| the plan '
+                    'is made for. The CFL bound depends on it (the derivative is i k, not a '
+                    'bounded difference) and the plan is static.')
+            object.__setattr__(self, 'k_max', abs(value))
+        else:
+            k_max = static_float('Axis1D', 'k_max', self.k_max)
+            if not (k_max >= 0.0 and k_max == k_max and k_max != float('inf')):
+                raise ValueError(f'Axis1D(k_max={self.k_max!r}): a non-negative finite '
+                                 f'wavevector.')
+            object.__setattr__(self, 'k_max', k_max)
+        if value is not None and abs(value) > self.k_max * (1.0 + 1e-12):
+            raise ValueError(
+                f'Axis1D(k={value!r}, k_max={self.k_max!r}): |k| is above k_max, and the '
+                f'plan\'s CFL bound is made for k_max. Raise k_max to at least {abs(value)!r}.')
+
 
 @spec
 class PEC(FaceType):
@@ -370,7 +466,7 @@ class Absorber(Absorbing):
         object.__setattr__(self, 'cells', cells)
 
 
-_WRAPPING = (Periodic, Bloch)
+_WRAPPING = (Periodic, Bloch, Axis1D)
 
 
 def _pair(axis, value):
@@ -391,7 +487,7 @@ def _pair(axis, value):
                 same = False
             if not same:
                 raise ValueError(
-                    f'Boundaries({axis}=({lo}, {hi})): Periodic and Bloch wrap the axis, so '
+                    f'Boundaries({axis}=({lo}, {hi})): Periodic, Bloch and Axis1D wrap the axis, so '
                     f'both faces must carry the same declaration. Give one object for the '
                     f'axis, {axis}={lo if isinstance(lo, _WRAPPING) else hi}.')
         if isinstance(lo, Symmetry) and isinstance(hi, Symmetry):

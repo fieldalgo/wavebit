@@ -13,8 +13,9 @@ two processes agree on it. It never reads an array or an ``id()``. ``fd.run(scen
 plan=other)`` refuses a plan whose skeleton differs from ``plan(scene).skeleton``: a plan
 prepared for one scene must not silently drive another.
 
-**Dtype.** Real (``float64``) unless any face is Bloch; a Bloch phase that is concretely 0
-was refused at ``Bloch(...)``, so the dtype rule is simply "any Bloch face means complex".
+**Dtype.** Real (``float64``) unless any face is Bloch or (stage 3) ``Axis1D``; a Bloch phase
+that is concretely 0 was refused at ``Bloch(...)``, so the dtype rule is simply "any Bloch or
+Axis1D face means complex" (an Axis1D face is complex even at ``k = 0``).
 
 **Stage 1 adds four static things** and no new kind of thing: the CPML faces with their slab
 geometry (``cpml``), the absorbing faces and their depths (``absorbing_faces``, split into
@@ -28,6 +29,15 @@ sees the scene and the grid at once: a layer that does not fit its axis, a struc
 ends inside a PML, a mesh too coarse for its own material, a pole past the CFL bound. The
 warnings are emitted here too and listed again by ``check``.
 
+**Stage 3 adds the frequency-domain observers** (``wavebit/fd/_lower/monitors.py``): each
+``Flux``, ``Field`` and ``Diffraction`` monitor becomes one or more ``DFTRegion`` observers in
+``observers``, after the ``Record`` ones -- static regions and frequencies, no new plan field --
+so a scene without them has the stage-2 plan and skeleton exactly. Two stage-3 doors run
+here too, on the user's scene and never on a source's internal column: a ``Bloch`` phase on an
+axis one cell long is refused naming ``Axis1D`` (``checks.check_one_cell_bloch``), and the
+grazing-order rule (``grazing.enforce``) refuses an order a PML face cannot absorb to the
+measured tolerance.
+
 **Stage 2 adds the source terms** (``wavebit/fd/_lower/sources.py``) after the stage-1 ones,
 in scene order, and a step count read from ``Run(periods=)``. A scene with no source adds
 nothing to the plan, so its skeleton -- and every stage-0/1 golden -- is unchanged.
@@ -37,15 +47,18 @@ import hashlib
 import json
 import math
 
-from ..boundaries import FACES, Absorbing, Bloch, PML
+from ..boundaries import FACES, Absorbing, Axis1D, Bloch, PML
+from ..geometry import cell_box, span_rows
 from ..materials import Dispersive
+from ..monitors import Record
 from .._kernel.cpml import CpmlFace
 from .._kernel.faces import lower_face
 from .._kernel.grid import Grid
 from .._kernel.masks import Region, Slab
 from .._kernel.observe import PointRecord
 from .._kernel.poles import PoleTerm
-from . import checks
+from . import checks, grazing
+from .monitors import monitor_regions
 from .sources import run_steps, source_terms
 
 __all__ = ['Plan', 'plan', 'skeleton_of']
@@ -172,12 +185,8 @@ def _pole_terms(scene, grid):
     for index, structure in enumerate(getattr(scene, 'structures', ()) or ()):
         if not isinstance(structure.material, Dispersive):
             continue
-        axis = 'xyz'.index(structure.shape.axis)
-        k0, k1 = structure.shape.cells(grid)
-        nx, ny, nz = grid.n
-        spans = {0: [0, nx], 1: [0, ny], 2: [0, nz]}
-        spans[axis] = [k0, k1]
-        region = Region(z=tuple(spans[2]), y=tuple(spans[1]), x=tuple(spans[0]))
+        box = cell_box(structure.shape, grid)
+        region = Region(z=tuple(box[2]), y=tuple(box[1]), x=tuple(box[0]))
         slabs = tuple(Slab(c=c, z=region.z, y=region.y, x=region.x) for c in range(3))
         terms.append(PoleTerm(name=f'poles[{index}]', region=region, slabs=slabs,
                               n_poles=len(structure.material.poles)))
@@ -191,11 +200,18 @@ def _pole_terms(scene, grid):
     return tuple(terms)
 
 
-def plan(scene):
-    """The static plan of ``scene``, with the stage-1 refusals run and its warnings emitted."""
+def plan(scene, _column=False):
+    """The static plan of ``scene``, with the stage-1 refusals run and its warnings emitted.
+
+    ``_column`` is the stage-2 source columns' own door (``sources._column_plan``): a column is
+    one cell across and Bloch by construction, which is not a user face, so the one-cell Bloch
+    refusal and the grazing rule are the user's scene's alone.
+    """
     grid = Grid.from_domain(scene.domain.size, scene.domain.center, scene.resolution.dx)
     dt = scene.run.courant * grid.dx / math.sqrt(3.0)
     steps = run_steps(scene, dt)
+    if not _column:
+        checks.check_one_cell_bloch(scene, grid)
     checks.check_faces(scene, grid, None)
     checks.check_overlaps(scene, grid)
     rules, pads, masks = [], [], []
@@ -204,15 +220,20 @@ def plan(scene):
         rules.append((name, rule))
         pads.extend((name, c, pad) for c, pad in enumerate(face_pads))
         masks.extend(face_masks)
-    complex_run = any(isinstance(scene.boundaries.face(n), Bloch) for n in FACES)
+    complex_run = any(isinstance(scene.boundaries.face(n), (Bloch, Axis1D)) for n in FACES)
     observers = []
     for m in scene.monitors:
+        if not isinstance(m, Record):
+            continue
         k, j, i = grid.nearest(m.field, m.index, m.at)
         observers.append(PointRecord(name=m.name, field=m.field, c=m.index, k=k, j=j, i=i))
+    # Stage 3: every frequency-domain monitor as DFTRegion observers, after the records -- a
+    # scene with none adds nothing, so its observers and its skeleton are stage 2's.
+    observers.extend(monitor_regions(scene, grid, dt))
     initial = scene.initial
     cpml, absorbing, pml_cells, absorber_cells, wavelengths = _absorbing(scene, grid)
-    spans = tuple((s.shape.axis,) + tuple(s.shape.span) + tuple(s.shape.snapped(grid))
-                  for s in (getattr(scene, 'structures', ()) or ()))
+    spans = tuple(row for s in (getattr(scene, 'structures', ()) or ())
+                  for row in span_rows(s.shape, grid))
     p = Plan(nx=grid.n[0], ny=grid.n[1], nz=grid.n[2], dx=grid.dx, dt=dt,
              steps=steps, courant=scene.run.courant, low=grid.low,
              face_rules=tuple(rules), pads=tuple(pads), masks=tuple(masks),
@@ -228,6 +249,8 @@ def plan(scene):
     sources = source_terms(scene, p)
     if sources:
         p = p.with_static(terms=tuple(p.terms) + sources)
+    if not _column:
+        grazing.enforce(scene, p)
     # Emitted through the caller's own filters, and deliberately not forced past them: a
     # caller who silenced CoarseMeshWarning silenced it, and the default "once per location"
     # rule is what keeps a sweep of a thousand plans from printing a thousand copies.

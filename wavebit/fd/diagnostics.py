@@ -6,7 +6,7 @@ that would make the numbers meaningless is a refusal instead, and lives at the d
 owns it (``materials.py``, ``geometry.py``, ``boundaries.py``, ``_lower/plan.py``).
 """
 
-__all__ = ['CoarseMeshWarning', 'AbsorberProximityWarning']
+__all__ = ['CoarseMeshWarning', 'AbsorberProximityWarning', 'UnsettledFieldWarning']
 
 
 class CoarseMeshWarning(UserWarning):
@@ -33,4 +33,16 @@ class AbsorberProximityWarning(UserWarning):
     than half costs accuracy. This warns rather than refuses because a structure that
     *crosses* the face is a legitimate scene (the PML then has to be matched to it, or be
     an ``Absorber``); one that merely sits near it is only inaccurate.
+    """
+
+
+class UnsettledFieldWarning(UserWarning):
+    """A frequency-domain monitor's region still held field when the run stopped.
+
+    Stage 3's decay diagnostic, always on and never an error: at the end of every run each
+    DFT monitor's region energy ``sum |F|^2`` over the last period of its longest wavelength is
+    compared with its peak over the run (``wavebit/fd/_assemble.py::decay_report``). A DFT of a
+    signal cut off before it decayed is not the spectrum of the physics, so every flux, order
+    and normalisation built on it carries the truncation. The message names the monitor and
+    the ratio; the line is ``fd._assemble.UNSETTLED_THRESHOLD``, measured.
     """

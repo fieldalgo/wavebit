@@ -67,34 +67,70 @@ Stage 2 adds sources, each a term in the kernel's additive slot::
 A PML with no wavelength takes the sources' band centre; the mesh is checked at
 ``band.shortest_wavelength``. ``_kernel/sources.py`` derives every sign and half step.
 
-Out of scope in stage 2, and refused by name rather than silently: DFT/flux/far-field
-monitors and ``algebraic`` faces (stage 3), shapes other than ``Slab`` -- a ``Box`` is a TFSF
-region only -- and subpixel averaging (stage 4), GPU claims (stage 6), ``GaussianBeam``,
-``ModeSource`` and ``Decay`` (stage 7), non-uniform grids (not in v1).
+Stage 3 adds the frequency-domain monitors, the sources' spectral normalisation, the decay
+diagnostic, ``Run(time=)`` and the cell-snapped ``Box`` structure::
+
+    ws = (0.5, 0.55, 0.6)                                        # vacuum wavelengths, static
+    fd.Flux('out', box=fd.Box(size=(0.5,)*3), wavelengths=ws)    # net outward flux of a box
+    fd.Flux('t', plane=fd.Plane(z=-1.0), wavelengths=ws)         # flux along +z through a plane
+    fd.Field('f', plane=fd.Plane(z=0.2), components=('Ex', 'Ey'), wavelengths=ws)
+    fd.Diffraction('r', z=1.2, side='reflect', wavelengths=ws)   # orders of a periodic cell
+    fd.FarField('ff', box=fd.Box(size=(0.5,)*3), wavelengths=ws) # near-to-far, open scenes
+    fd.Structure(fd.Box(size=(0.2, 1.0, 0.1), center=(...)), glass)   # a lamellar tooth
+    fd.Boundaries(x=fd.Bloch(k=kx), y=fd.Axis1D(k=ky, k_max=...), z=fd.PML(...))   # conical
+    fd.Run(time=12.0)                                            # an end time instead of steps
+    res['out'].flux, res['r'].orders.order(1, 0).R, res['r'].theta_at
+    res['ff'].intensity(theta, phi), res['ff'].flux              # degrees; (nf, ...)
+    res.sources['pw'].incident_amplitude(ws), res.sources['t'].intensity(ws),
+    res.sources['d'].power(ws), res.diagnostics['decay'], res.diagnostics['stable'],
+    res.diagnostics['grazing']
+
+Every one of those monitors lowers to the kernel's one frequency-domain observer, a running
+DFT over a region with each component at its own time level (``_kernel/observe.py``);
+everything built on it is post-processing in the backend's arrays (``_post.py`` derives the
+2-cell flux collocation, the Yee-kz de-embedding of the orders and the E/H direction split).
+A frequency-domain monitor whose region still holds field at the end warns with
+``fd.UnsettledFieldWarning``. ``FarField`` is the equivalence-principle transform of a closed
+box's DFT surface fields (``_post.py``), for open scenes only; ``Axis1D`` is a one-cell axis
+whose derivative is ``i k`` exactly (a user ``Bloch`` phase on a one-cell axis is refused,
+naming it); and a propagating order a PML face cannot absorb to the measured tolerance is
+refused by the grazing rule (``_lower/grazing.py``, which quotes the measurement and judges
+each wavelength with the CFS shift the layer has there). A flux surface -- a Flux or
+Diffraction plane, a Flux or FarField box -- keeps off every source: one that cuts a Dipole's
+stamp, lies on a PlaneWave's sheet (or a box around part of it) or cuts a TFSF surface is
+refused, because the 2-cell face would read part of the source (``_lower/monitors.py``).
+
+Out of scope, and refused by name rather than
+silently: shapes other than ``Slab`` and cell-snapped ``Box``, subpixel averaging and
+differentiable ``Box`` edges (stage 4), GPU claims (stage 6), ``GaussianBeam``, ``ModeSource``,
+mode overlaps (``ModeMonitor``) and decay-driven stopping (``Decay``, ``Run(decay=)``) (stage 7),
+non-uniform grids (not in v1).
 """
 from ._check import Report, check
 from ._lower import Plan, lower, plan
 from ._run import run
-from .boundaries import (PEC, PMC, Absorber, Absorbing, Bloch, Boundaries, Periodic, PML,
-                         Symmetry)
-from .diagnostics import AbsorberProximityWarning, CoarseMeshWarning
-from .geometry import Box, Slab, Structure
+from .boundaries import (PEC, PMC, Absorber, Absorbing, Axis1D, Bloch, Boundaries, Periodic,
+                         PML, Symmetry)
+from .diagnostics import AbsorberProximityWarning, CoarseMeshWarning, UnsettledFieldWarning
+from .geometry import Box, Plane, Slab, Structure
 from .materials import (Conductor, Debye, Dispersive, Drude, Lorentz, Material, MaterialBase,
                         Pole, eps_at)
-from .monitors import Record
-from .results import Final, Results, Series, SourceSeries
+from .monitors import Decay, Diffraction, FarField, Field, Flux, ModeMonitor, Record
+from .results import (DiffractionResult, FarFieldResult, FieldResult, Final, FluxResult, Results,
+                      Series, SourceSeries)
 from .scene import Domain, Resolution, Run, Scene
 from .sources import (TFSF, Band, Dipole, GaussianBeam, InitialField, ModeSource, PlaneWave,
                       Term)
 
 __all__ = [
     'Domain', 'Resolution', 'Run', 'Scene',
-    'Boundaries', 'Periodic', 'Bloch', 'PEC', 'PMC', 'Symmetry', 'PML', 'Absorber',
+    'Boundaries', 'Periodic', 'Bloch', 'Axis1D', 'PEC', 'PMC', 'Symmetry', 'PML', 'Absorber',
     'Absorbing',
     'Material', 'Conductor', 'Dispersive', 'Drude', 'Lorentz', 'Debye', 'eps_at',
     'MaterialBase', 'Pole', 'Slab', 'Structure',
-    'CoarseMeshWarning', 'AbsorberProximityWarning',
-    'InitialField', 'Term', 'Record',
+    'CoarseMeshWarning', 'AbsorberProximityWarning', 'UnsettledFieldWarning',
+    'InitialField', 'Term', 'Record', 'Flux', 'Field', 'Diffraction', 'FarField', 'Plane',
+    'ModeMonitor', 'Decay', 'FluxResult', 'FieldResult', 'FarFieldResult', 'DiffractionResult',
     'Band', 'Dipole', 'PlaneWave', 'TFSF', 'Box', 'GaussianBeam', 'ModeSource',
     'check', 'plan', 'lower', 'run',
     'Plan', 'Report', 'Results', 'Series', 'Final', 'SourceSeries',

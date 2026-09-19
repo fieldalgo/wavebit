@@ -33,7 +33,7 @@ import math
 
 from ._spec import spec, static_float, static_int
 from .boundaries import Boundaries
-from .monitors import Record
+from .monitors import MONITOR_TYPES, Record
 from .sources import InitialField
 
 __all__ = ['Domain', 'Resolution', 'Run', 'Scene', 'COURANT_DEFAULT']
@@ -125,25 +125,36 @@ class Resolution:
 
 @spec
 class Run:
-    """How long: ``steps`` or ``periods``, and the Courant number (``dt = courant dx/sqrt(3)``).
+    """How long: ``steps``, ``periods`` or ``time``, and the Courant number (``dt = courant dx/sqrt(3)``).
 
     ``periods=`` (stage 2) counts optical periods of the sources' band centre: the run takes
     ``ceil(periods * wavelength / dt)`` steps, which ``fd.plan`` computes once the grid is
     known. It needs every source to share one concrete band centre, and a scene with no
-    source has nothing to count periods of; both are refused by the plan. Exactly one of
-    ``steps`` and ``periods``. ``Decay`` is stage 7.
+    source has nothing to count periods of; both are refused by the plan. ``time=`` (stage 3)
+    is an end time in the scene's length unit (``c = 1``): ``ceil(time / dt)`` steps, so the
+    last E sample is at or just past ``time``. Exactly one of the three. Stopping on a decay
+    criterion is stage 7; stage 3 measures the decay after the run instead
+    (``res.diagnostics``).
     """
 
     steps: int = None
     courant: float = COURANT_DEFAULT
     periods: object = None
+    time: object = None
 
     def __post_init__(self):
-        if self.periods is not None:
-            if self.steps is not None:
-                raise ValueError(f'Run(steps={self.steps!r}, periods={self.periods!r}): one '
-                                 f'or the other -- two lengths for one run would have to '
-                                 f'disagree somewhere.')
+        given = [k for k in ('steps', 'periods', 'time') if getattr(self, k) is not None]
+        if len(given) > 1:
+            raise ValueError(f'Run({", ".join(f"{k}={getattr(self, k)!r}" for k in given)}): '
+                             f'one or the other -- one of steps, periods and time; two lengths '
+                             f'for one run would have to disagree somewhere.')
+        if self.time is not None:
+            time = static_float('Run', 'time', self.time)
+            if not (time > 0 and math.isfinite(time)):
+                raise ValueError(f'Run(time={self.time!r}): a positive end time, in the '
+                                 f"scene's length unit (c = 1).")
+            object.__setattr__(self, 'time', time)
+        elif self.periods is not None:
             periods = static_float('Run', 'periods', self.periods)
             if not (periods > 0 and math.isfinite(periods)):
                 raise ValueError(f'Run(periods={self.periods!r}): a positive number of '
@@ -151,9 +162,10 @@ class Run:
             object.__setattr__(self, 'periods', periods)
         else:
             if self.steps is None:
-                raise ValueError('Run(steps=...) or Run(periods=...): the length of the run '
-                                 'is required; periods counts optical periods of the '
-                                 "sources' band centre.")
+                raise ValueError('Run(steps=...) or Run(periods=...) (or, from stage 3, '
+                                 'Run(time=...)): the length of the run is required; periods '
+                                 "counts optical periods of the sources' band centre, time is "
+                                 'an end time.')
             steps = static_int('Run', 'steps', self.steps)
             if steps < 1:
                 raise ValueError(f'Run(steps={self.steps!r}): steps is a positive integer.')
@@ -165,6 +177,25 @@ class Run:
                 f'condition, stable for 0 < courant < 1 in vacuum and nowhere else. At '
                 f'courant = 1 the corner Nyquist mode has cos(w dt) = -1 and grows linearly '
                 f'in n (measured: energy x1e5 in 2000 steps on a periodic 8^3 box).')
+
+
+_run_init = Run.__init__
+
+#: Run keywords that name stage 7's decay-driven stopping; refused by the stage.
+_RUN_LATER = ('decay', 'until', 'shutoff', 'stop')
+
+
+def _run_init_with_stages(self, *args, **kwargs):
+    later = [k for k in kwargs if k in _RUN_LATER]
+    if later:
+        raise NotImplementedError(
+            f'Run({later[0]}=...): stopping a run on a decay criterion is stage 7 (Decay). '
+            f'Stage 3 takes Run(steps=), Run(periods=) or Run(time=) and measures the decay '
+            f"after the run -- res.diagnostics['decay'] and fd.UnsettledFieldWarning.")
+    _run_init(self, *args, **kwargs)
+
+
+Run.__init__ = _run_init_with_stages
 
 
 @spec
@@ -210,13 +241,14 @@ class Scene:
         if self.initial is not None and not isinstance(self.initial, InitialField):
             raise TypeError(f'Scene(initial=...): expected fd.InitialField, got '
                             f'{type(self.initial).__name__}.')
-        if isinstance(self.monitors, Record):
+        if isinstance(self.monitors, MONITOR_TYPES):
             object.__setattr__(self, 'monitors', (self.monitors,))
         monitors = tuple(self.monitors)
         for m in monitors:
-            if not isinstance(m, Record):
-                raise TypeError(f'Scene(monitors=...): every monitor is an fd.Record in stage 0; '
-                                f'got {type(m).__name__}.')
+            if not isinstance(m, MONITOR_TYPES):
+                raise TypeError(f'Scene(monitors=...): every monitor is an fd.Record, fd.Flux, '
+                                f'fd.Field, fd.FarField or fd.Diffraction; got '
+                                f'{type(m).__name__}.')
         names = [m.name for m in monitors]
         if len(set(names)) != len(names):
             dup = sorted({n for n in names if names.count(n) > 1})
@@ -241,9 +273,33 @@ class Scene:
         lo = tuple(c - s / 2 for c, s in zip(self.domain.center, self.domain.size))
         hi = tuple(c + s / 2 for c, s in zip(self.domain.center, self.domain.size))
         for m in monitors:
-            if any(not (a <= p <= b) for p, a, b in zip(m.at, lo, hi)):
-                raise ValueError(f'Record({m.name!r}, at={m.at}) lies outside the box '
-                                 f'{lo} .. {hi}.')
+            if isinstance(m, Record):
+                if any(not (a <= p <= b) for p, a, b in zip(m.at, lo, hi)):
+                    raise ValueError(f'Record({m.name!r}, at={m.at}) lies outside the box '
+                                     f'{lo} .. {hi}.')
+                continue
+            _monitor_inside(m, lo, hi)
+
+
+def _monitor_inside(m, lo, hi):
+    # A region outside the box would clip silently, as a Record would; refused by name.
+    kind = type(m).__name__
+    box = getattr(m, 'box', None)
+    plane = getattr(m, 'plane', None)
+    if box is not None:
+        for a, axis in enumerate('xyz'):
+            if box.low[a] < lo[a] - 1e-12 or box.high[a] > hi[a] + 1e-12:
+                raise ValueError(f'{kind}({m.name!r}, box=...) reaches {axis} = '
+                                 f'{box.low[a]:g} .. {box.high[a]:g}, outside the domain '
+                                 f'{lo[a]:g} .. {hi[a]:g}.')
+        return
+    if plane is not None:
+        axis, position = plane.axis, plane.position
+    else:
+        axis, position = m.axis, m.position
+    if not lo[axis] <= position <= hi[axis]:
+        raise ValueError(f'{kind}({m.name!r}) sits at {"xyz"[axis]} = {position:g}, outside the '
+                         f'domain {lo[axis]:g} .. {hi[axis]:g}.')
 
 
 # ``Scene(decay=...)`` and friends: the spec decorator's generic refusal would suggest the

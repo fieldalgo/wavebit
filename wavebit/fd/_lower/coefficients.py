@@ -14,7 +14,8 @@ changes them and not the code::
 
 **An array is built only where the value is not uniform**, and only along the axes it
 actually varies on. Every stage-1 non-uniformity is axis-aligned -- a ``Slab`` varies along
-one axis, an ``Absorber`` along one axis -- so the coefficients are built at shape
+one axis, an ``Absorber`` along one axis, and stage 3's cell-snapped ``Box`` along each axis
+it does not span -- so the coefficients are built at shape
 ``(3, nz|1, ny|1, nx|1)`` with a full axis only where something varies along it, and
 broadcasting does the rest. A vacuum run keeps the stage-0 Python scalars, which is what
 makes its buffer count, its transient allocation and its golden all still hold; a scene whose
@@ -43,6 +44,7 @@ wavelength and ``eps_at`` all read ``eps``.
 import numpy as np
 
 from .._kernel.grid import OFFSETS
+from ..geometry import bounded_axes, cell_box
 from ..materials import as_material
 from .cpml import damping_profile
 
@@ -63,7 +65,7 @@ def varying_axes(scene, plan):
     axes = set()
     _, structures = materials_of(scene)
     for s in structures:
-        axes.add('xyz'.index(s.shape.axis))
+        axes.update(bounded_axes(s.shape, plan.grid))
     for name, cells in plan.absorber_cells:
         axes.add('xyz'.index(name[0]))
     return axes
@@ -87,10 +89,10 @@ def owner_map(scene, plan, axes):
     owner = np.full(shape, -1, dtype=np.int32)
     grid = plan.grid
     for k, s in enumerate(structures):
-        a = 'xyz'.index(s.shape.axis)
-        k0, k1 = s.shape.cells(grid)
+        box = cell_box(s.shape, grid)
         index = [slice(None)] * 3
-        index[ARRAY_AXIS[a] - 1] = slice(k0, k1)
+        for a in axes:
+            index[ARRAY_AXIS[a] - 1] = slice(*box[a])
         owner[tuple(index)] = k
     return owner
 
@@ -237,8 +239,9 @@ def _has_loss(background, structures):
 
 
 #: Params the report does not count: the initial field *becomes* the state at ``n = 0`` and is
-#: counted there, the amplitude and the Bloch factors are scalars.
-NOT_COUNTED = ('E0', 'H0', 'amplitude', 'bloch')
+#: counted there, the amplitude, the Bloch and Axis1D factors and the stability guard are
+#: scalars.
+NOT_COUNTED = ('E0', 'H0', 'amplitude', 'bloch', 'axis1d', 'stable')
 
 
 def params_bytes(params):

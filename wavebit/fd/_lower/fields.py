@@ -9,6 +9,10 @@ excitation is still ``InitialField(amplitude=...)``.
 
 A complex value on a real run is refused rather than truncated: NumPy would drop the
 imaginary part with a warning and JAX and Torch would each do something else.
+
+Along an ``fd.Axis1D`` axis (stage 3) there is no stagger: the grid holds one cell of ``F exp(i
+k a)`` with one phase reference for every component, so a callable is given that axis's low
+coordinate for every component (``flat=``), not the Yee offset a differenced axis would carry.
 """
 
 __all__ = ['evaluate']
@@ -21,13 +25,15 @@ def _is_complex(v):
     return dtype is not None and 'complex' in str(dtype)
 
 
-def _component(name, c, entry, grid, field, rt, dtype):
+def _component(name, c, entry, grid, field, rt, dtype, flat=()):
     shape = (grid.n[2], grid.n[1], grid.n[0])
     if entry is None:
         return rt.zeros(shape, dtype)
     if callable(entry):
-        X, Y, Z = grid.meshgrid(field, c)
-        entry = entry(X, Y, Z)
+        coords = list(grid.meshgrid(field, c))
+        for a in flat:
+            coords[a] = coords[a] * 0.0 + grid.low[a]
+        entry = entry(*coords)
     if dtype == 'float64' and _is_complex(entry):
         raise ValueError(
             f'InitialField({name}=...): the {"xyz"[c]} component is complex but the run is '
@@ -45,8 +51,11 @@ def _component(name, c, entry, grid, field, rt, dtype):
     return x
 
 
-def evaluate(name, value, grid, field, rt, dtype):
-    """``value`` (an ``InitialField.E`` or ``.H`` entry) as a ``(3, nz, ny, nx)`` array, or None."""
+def evaluate(name, value, grid, field, rt, dtype, flat=()):
+    """``value`` (an ``InitialField.E`` or ``.H`` entry) as a ``(3, nz, ny, nx)`` array, or None.
+
+    ``flat`` are the ``Axis1D`` axes (0, 1, 2), evaluated at their low coordinate.
+    """
     if value is None:
         return None
     shape = (3, grid.n[2], grid.n[1], grid.n[0])
@@ -59,5 +68,6 @@ def evaluate(name, value, grid, field, rt, dtype):
                              f'Bloch face); take its real part or give a Bloch boundary.')
         return rt.array(value, dtype)
     entries = (value, value, value) if callable(value) else tuple(value)
-    parts = [_component(name, c, e, grid, field, rt, dtype) for c, e in enumerate(entries)]
+    parts = [_component(name, c, e, grid, field, rt, dtype, flat)
+             for c, e in enumerate(entries)]
     return rt.xp.stack(parts, axis=0)

@@ -28,15 +28,20 @@ The table, and where each row lives:
     Slab naming two axes, any other shape       geometry.Slab / Structure
     pole CFL violated, concretely                check_stability, here
     two structures overlap, one dispersive      check_overlaps, here
+    (stage 3) a Bloch phase on a one-cell axis    check_one_cell_bloch, here (names Axis1D;
+      in a scene with a source                      a source-free kernel study keeps it)
+    (stage 3) an Axis1D k past k_max              boundaries.Axis1D (concrete); the params'
+                                                  guard (traced), which makes the run nan
 """
 import math
 import warnings
 
 from ..diagnostics import AbsorberProximityWarning, CoarseMeshWarning
+from ..geometry import cell_box, describe, slab_axis
 from ..materials import Conductor, Dispersive, concrete, eps_at
 
 __all__ = ['face_wavelength', 'check_faces', 'check_overlaps', 'check_absorbing_layers',
-           'check_stability', 'notes', 'cfl_bound']
+           'check_stability', 'notes', 'cfl_bound', 'check_one_cell_bloch', 'cfl_axis_sum']
 
 
 def face_wavelength(face, scene, name):
@@ -82,6 +87,61 @@ def check_faces(scene, grid, faces):
                 f'fewer cells per layer.')
 
 
+def check_one_cell_bloch(scene, grid):
+    """A ``Bloch`` face on an axis one cell long, in a scene with a source: refused, naming
+    ``Axis1D`` (stage 3).
+
+    On one cell the Bloch difference ``(exp(i k dx) - 1)/dx`` is the only thing that axis
+    contributes. Where the one cell stands for an axis the problem is invariant along -- the
+    conical grating, a 2-D problem at an oblique ``k`` -- that is an artificial dispersion: the
+    wave sees ``2 sin(k dx/2)/dx`` in place of ``k``, and ``fd.Axis1D(k=...)`` is the exact
+    derivative. So a scene with a source (a PlaneWave, a Dipole, a TFSF -- the scenes a user
+    asks a physical question of) is refused.
+
+    **Where the door does not stand, and why.** The same one cell is also the exact stand-in
+    for a *multi-cell* periodic grid's plane wave -- the difference is the one every cell of
+    such a grid applies to ``exp(i k x)`` -- and that is what two things are built on: the
+    stage-2 source columns (one cell across and Bloch by construction; they never reach this
+    door, ``plan(_column=True)``) and the stage-1 kernel studies, whose ``InitialField`` packets
+    run on a ``1 x 1 x nz`` line under a one-cell Bloch phase (the PML doubling table that
+    ``PML(cells < 12)`` quotes, the Absorber and Airy gates, and the stage-1 golden's
+    ``pml_oblique`` and ``conductor`` scenes). A source-free scene is therefore left to say what
+    it means; the design's unconditional refusal would have removed the measurement the PML
+    refusal is quoted from.
+    """
+    from ..boundaries import Bloch
+    if not tuple(getattr(scene, 'sources', ()) or ()):
+        return
+    for a, axis in enumerate('xyz'):
+        face = scene.boundaries.face(axis + '-')
+        if isinstance(face, Bloch) and grid.n[a] == 1:
+            given = 'k=...' if face.k is not None else 'phase=...'
+            raise ValueError(
+                f'Bloch({given}) on {axis}, an axis one cell long: the one-cell difference '
+                f'(exp(i k dx) - 1)/dx is all that axis would contribute, and it is an artificial '
+                f'dispersion -- the wave sees 2 sin(k dx/2)/dx instead of k. For the invariant axis '
+                f'of a 2-D (conical) problem say fd.Axis1D(k=..., k_max=...), whose derivative is '
+                f'i k exactly (fd.Bloch.from_source(pw, axis1d={axis!r}) writes it); for a real '
+                f'period, give the axis more than one cell.')
+
+
+def cfl_axis_sum(scene, dx):
+    """``sum_a max K_a^2 / 4``: ``1/dx^2`` per differenced axis, ``k_max^2/4`` per ``Axis1D``.
+
+    The leapfrog is stable while ``(dt / n)^2 sum_a max K_a^2 / 4 < 1``, with ``K_a`` the
+    eigenvalue of the derivative along ``a``: ``2 sin(k dx/2)/dx`` for a difference (at most
+    ``2/dx``), and ``k`` itself on an ``Axis1D`` axis -- a multiplication by ``i k``, bounded by
+    nothing but the ``k_max`` the face declares. Three differenced axes give the stage-0
+    ``3/dx^2``, i.e. ``dt < n dx / sqrt(3)``.
+    """
+    from ..boundaries import Axis1D
+    total = 0.0
+    for axis in 'xyz':
+        face = scene.boundaries.face(axis + '-')
+        total += (face.k_max ** 2 / 4.0) if isinstance(face, Axis1D) else 1.0 / dx ** 2
+    return total
+
+
 def check_overlaps(scene, grid):
     """Two structures may overlap, unless a :class:`~wavebit.fd.Dispersive` is party to it.
 
@@ -105,10 +165,7 @@ def check_overlaps(scene, grid):
     the two spellings that work.
     """
     structures = tuple(getattr(scene, 'structures', ()) or ())
-    boxes = []
-    for s in structures:
-        axis = 'xyz'.index(s.shape.axis)
-        boxes.append((axis,) + tuple(s.shape.cells(grid)))
+    boxes = [cell_box(s.shape, grid) for s in structures]
     for i in range(len(structures)):
         for j in range(i + 1, len(structures)):
             if not _intersects(boxes[i], boxes[j]):
@@ -118,8 +175,8 @@ def check_overlaps(scene, grid):
                 continue
             which = f'structures[{i}]' if kinds[0] else f'structures[{j}]'
             raise ValueError(
-                f'structures[{i}] ({structures[i].shape.axis}={structures[i].shape.span}) and '
-                f'structures[{j}] ({structures[j].shape.axis}={structures[j].shape.span}) '
+                f'structures[{i}] ({describe(structures[i].shape)}) and '
+                f'structures[{j}] ({describe(structures[j].shape)}) '
                 f'share cells, and {which} is an fd.Dispersive. Where structures overlap a '
                 f'later one overwrites an earlier one, but that rule is carried by the '
                 f'permittivity map alone: a pole term runs over its own structure\'s whole '
@@ -132,14 +189,13 @@ def check_overlaps(scene, grid):
 
 
 def _intersects(left, right):
-    """Whether two cell-snapped :class:`~wavebit.fd.Slab` boxes share a cell.
+    """Whether two cell boxes ``((i0, i1), (j0, j1), (k0, k1))`` share a cell.
 
-    Each is ``(axis, k0, k1)`` and runs the full width of the other two axes, and a span that
-    snapped to nothing was already refused at ``Slab.cells``.
+    A Slab's box is full on its two other axes (``geometry.cell_box``), so two slabs on
+    different axes always intersect, as stage 1 said; a Box is snapped on all three. A span
+    that snapped to nothing was already refused where it was snapped.
     """
-    if left[0] != right[0]:
-        return True                           # full extent on each other's axis
-    return left[1] < right[2] and right[1] < left[2]
+    return all(a0 < b1 and b0 < a1 for (a0, a1), (b0, b1) in zip(left, right))
 
 
 def check_absorbing_layers(scene, plan):
@@ -178,28 +234,26 @@ def check_absorbing_layers(scene, plan):
         a, side = 'xyz'.index(name[0]), name[1]
         layer = (0, cells) if side == '-' else (grid.n[a] - cells, grid.n[a])
         for index, structure in enumerate(getattr(scene, 'structures', ()) or ()):
-            s_axis = 'xyz'.index(structure.shape.axis)
-            k0, k1 = structure.shape.cells(grid)
-            if s_axis != a:
-                # A slab on another axis runs across this layer and is uniform along it: no
-                # interface inside the layer, but its material is in there.
+            box = cell_box(structure.shape, grid)
+            k0, k1 = box[a]
+            if k1 <= layer[0] or k0 >= layer[1]:
+                continue                          # nowhere near the layer
+            if k0 <= layer[0] and k1 >= layer[1]:
+                # Runs across this layer and is uniform along it (a slab on another axis,
+                # or a box that reaches through the face): no interface inside the layer,
+                # but its material is in there.
                 if kind == 'PML':
                     _refuse_lossy_in_layer(structure.material, name, f'structures[{index}]')
                 continue
-            if k1 <= layer[0] or k0 >= layer[1]:
-                continue                          # nowhere near the layer
-            if not (k0 <= layer[0] and k1 >= layer[1]):
-                raise ValueError(
-                    f'structures[{index}] ({structure.shape.axis}={structure.shape.span}, '
-                    f'cells {k0}..{k1}) ends inside the {kind} on {name!r} (cells '
-                    f'{layer[0]}..{layer[1]}). An absorbing layer terminates the box; an '
-                    f'interface inside one is a mirror the layer cannot undo, because the '
-                    f'reflection leaves the way it came and only the cells in front of the '
-                    f'interface are in its way. (In a PML the stretched coordinate is complex '
-                    f'there as well, so nothing matches it at all.) Move the interface out of '
-                    f'the layer, or run the structure all the way through it.')
-            if kind == 'PML':
-                _refuse_lossy_in_layer(structure.material, name, f'structures[{index}]')
+            raise ValueError(
+                f'structures[{index}] ({describe(structure.shape)}, cells {k0}..{k1} along '
+                f'{name[0]}) ends inside the {kind} on {name!r} (cells '
+                f'{layer[0]}..{layer[1]}). An absorbing layer terminates the box; an '
+                f'interface inside one is a mirror the layer cannot undo, because the '
+                f'reflection leaves the way it came and only the cells in front of the '
+                f'interface are in its way. (In a PML the stretched coordinate is complex '
+                f'there as well, so nothing matches it at all.) Move the interface out of '
+                f'the layer, or run the structure all the way through it.')
         if kind == 'PML':
             _refuse_lossy_in_layer(_background(scene), name, 'Scene(background=)')
 
@@ -279,7 +333,11 @@ def cfl_bound(scene, plan):
             strength_sum += strength
         eps_min = min(concrete(e) for e in material.eps)
         coupling = max(coupling, strength_sum / eps_min)
-    vacuum = n_min * plan.dx / math.sqrt(3.0)
+    axes = cfl_axis_sum(scene, plan.dx)
+    if axes == 3.0 / plan.dx ** 2:
+        vacuum = n_min * plan.dx / math.sqrt(3.0)          # the stage-0 float, to the bit
+    else:
+        vacuum = n_min / math.sqrt(axes)                   # an Axis1D face (stage 3)
     rate = resonance + coupling
     return 1.0 / math.sqrt(1.0 / vacuum ** 2 + rate / 4.0), None
 
@@ -297,6 +355,13 @@ def check_stability(scene, plan):
         name, pole = max(poles, key=lambda np_: sum(abs(v) for v in _rate_values(np_[1])))
         worst = (f' The tightest pole is {name}: {type(pole).__name__}'
                  f'({", ".join(f"{f}={getattr(pole, f)!r}" for f in pole.__dataclass_fields__)}).')
+    from ..boundaries import Axis1D
+    axis1d = [f'{a} (k_max = {scene.boundaries.face(a + "-").k_max:g})' for a in 'xyz'
+              if isinstance(scene.boundaries.face(a + '-'), Axis1D)]
+    if axis1d:
+        worst += (f' An fd.Axis1D axis adds k_max^2/4 to the sum under the bound in place of the 1/dx^2 a '
+                  f'differenced axis adds (its derivative is i k, bounded by nothing but k_max): '
+                  f'{", ".join(axis1d)}; a smaller k_max= widens the bound.')
     raise ValueError(
         f'dt = {plan.dt:g} is at or past the stability bound {bound:g} of this scene. The '
         f'vacuum condition dt < n_min dx / sqrt(3) is tightened by every pole to '
@@ -434,12 +499,14 @@ def _proximity_notes(scene, plan):
         if n is None or n <= 0:
             continue
         clearance = 0.5 * wavelength / n
-        a = 'xyz'.index(structure.shape.axis)
-        lo, hi = structure.shape.snapped(grid)
+        box = cell_box(structure.shape, grid)
         for name, cells in plan.absorbing_faces:
             fa, side = 'xyz'.index(name[0]), name[1]
-            if fa != a:
+            k0, k1 = box[fa]
+            if (k0, k1) == (0, grid.n[fa]) and slab_axis(structure.shape) != fa:
                 continue                # a transverse face: the structure runs through it
+            lo = grid.low[fa] + k0 * grid.dx
+            hi = grid.low[fa] + k1 * grid.dx
             inner = (grid.low[fa] + cells * grid.dx if side == '-'
                      else grid.high[fa] - cells * grid.dx)
             gap = (lo - inner) if side == '-' else (inner - hi)

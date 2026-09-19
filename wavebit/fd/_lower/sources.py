@@ -11,8 +11,11 @@ The refusals, and where each lives:
     a structure that crosses a TFSF face and is not part of  _tfsf_term, here
       the aux grid's 1-D background
     TFSF with an oblique direction                           sources.TFSF (the measurement)
-    PlaneWave on non-Periodic/Bloch transverse faces, or a   _plane_wave_term, here
-      nonzero transverse k on a Periodic face
+    PlaneWave on non-Periodic/Bloch/Axis1D transverse        _plane_wave_term, here
+      faces, or a nonzero transverse k on a Periodic face
+    an Axis1D k that is not the PlaneWave's k_par (stage 3)  _plane_wave_term, here
+    a source spanning cells along an Axis1D axis (a Dipole   _check_indices, here
+      stamp, a TFSF box; stage 3)
     a Bloch phase inconsistent with the PlaneWave's k_par    _plane_wave_term, here
     a structure at a PlaneWave sheet, or any structure       _plane_wave_term, here
       that is not a slab across the propagation axis
@@ -37,7 +40,8 @@ import numpy as np
 
 from wavebit._core.backend import check_input_precision
 
-from ..boundaries import AXES, PML_CELLS, Absorbing, Bloch, Periodic, PML
+from ..boundaries import AXES, PML_CELLS, Absorbing, Axis1D, Bloch, Periodic, PML
+from ..geometry import cell_box, describe, slab_axis
 from ..materials import Dispersive, as_material, concrete
 from ..sources import Dipole, PlaneWave, TFSF, _is_complex
 from .._kernel.grid import OFFSETS
@@ -45,7 +49,7 @@ from .._kernel.masks import Slab
 from .._kernel.sources import ColumnTerm, Correction, DipoleTerm, box_corrections, stamp
 
 __all__ = ['source_terms', 'lower_sources', 'source_wavelength', 'run_steps',
-           'shortest_wavelength', 'column_scene', 'column_pads']
+           'shortest_wavelength', 'column_scene', 'column_pads', 'dipole_indices']
 
 
 def source_wavelength(scene):
@@ -67,9 +71,11 @@ def shortest_wavelength(scene):
 
 
 def run_steps(scene, dt):
-    """The step count: ``Run(steps=)``, or ``ceil(periods * wavelength / dt)``."""
+    """The step count: ``Run(steps=)``, ``ceil(time / dt)`` or ``ceil(periods * wavelength / dt)``."""
     if scene.run.steps is not None:
         return scene.run.steps
+    if getattr(scene.run, 'time', None) is not None:
+        return max(1, int(math.ceil(scene.run.time / dt - 1e-9)))
     sources = tuple(getattr(scene, 'sources', ()) or ())
     if not sources:
         raise ValueError('Run(periods=...) counts optical periods of the sources\' band centre, '
@@ -103,7 +109,12 @@ def _check_indices(what, axis, lo, hi, scene, plan):
     for side in ('-', '+'):
         face_name = name + side
         face = scene.boundaries.face(face_name)
-        if isinstance(face, (Periodic, Bloch)):
+        if isinstance(face, Axis1D):
+            ok = lo == 0 and hi == 0
+            reason = (f'spans cells along an fd.Axis1D axis, which holds one cell of a field '
+                      f'exp(i k {name}); a source there must be uniform along it (a PlaneWave '
+                      f"is), and a Dipole's stamp or a TFSF box is not -- not in this build")
+        elif isinstance(face, (Periodic, Bloch)):
             ok = lo >= 0 if side == '-' else hi <= n - 1
             reason = (f'crosses the periodic seam of the box on {face_name!r}; a source '
                       f'that wraps around the cell is not supported -- move it inside')
@@ -142,16 +153,30 @@ def source_terms(scene, plan):
     return tuple(terms)
 
 
-def _dipole_term(scene, plan, src, row):
-    grid = plan.grid
+def dipole_indices(src, grid):
+    """``((i0, i1), ...)`` per axis: the first and last index (inclusive) the stamp writes.
+
+    The stamp is zero from two cells out (``stamp_weights``), so these are the points of the
+    dipole's component within two cells of its span, the moving range included. The monitors
+    (``monitors.py`` beside this one) read the same range to keep a flux surface off the stamp.
+    """
     field, c = src.field, src.index
-    ranges = []
-    what = f'Dipole({src.name!r})' + ('' if src.range is None else ' over its range')
+    out = []
     for a in range(3):
         offset = 0.5 * OFFSETS[field][c][a]
         lo, hi = src.span[a]
         i0 = int(math.floor((lo - grid.low[a]) / grid.dx - offset - 2.0)) + 1
         i1 = int(math.ceil((hi - grid.low[a]) / grid.dx - offset + 2.0)) - 1
+        out.append((i0, i1))
+    return tuple(out)
+
+
+def _dipole_term(scene, plan, src, row):
+    grid = plan.grid
+    field, c = src.field, src.index
+    ranges = []
+    what = f'Dipole({src.name!r})' + ('' if src.range is None else ' over its range')
+    for a, (i0, i1) in enumerate(dipole_indices(src, grid)):
         _check_indices(what, a, i0, i1, scene, plan)
         ranges.append((i0, i1 + 1))
     slab = Slab(c=c, z=ranges[2], y=ranges[1], x=ranges[0])
@@ -164,7 +189,8 @@ def _node_index(grid, axis, position):
 
 
 def _structure_cells(structure, grid):
-    return 'xyz'.index(structure.shape.axis), structure.shape.cells(grid)
+    """``(slab axis or None, cell box)`` of a structure: its axis if a Slab, and its cells."""
+    return slab_axis(structure.shape), cell_box(structure.shape, grid)
 
 
 def _plane_wave_term(scene, plan, src, row):
@@ -172,7 +198,7 @@ def _plane_wave_term(scene, plan, src, row):
     transverse = [a for a in range(3) if a != P]
     faces = {a: scene.boundaries.face(AXES[a] + '-') for a in transverse}
     for a, face in faces.items():
-        if not isinstance(face, (Periodic, Bloch)):
+        if not isinstance(face, (Periodic, Bloch, Axis1D)):
             raise ValueError(
                 f'PlaneWave({src.name!r}) needs a periodic cell across its propagation axis, '
                 f'but the {AXES[a]} faces are {type(face).__name__}. A plane wave is infinite '
@@ -181,7 +207,7 @@ def _plane_wave_term(scene, plan, src, row):
                 f'Periodic or the matching Bloch phase on both transverse axes.')
     k, e, _ = src.vectors()
     needs_k = any(abs(k[a]) >= 1e-12 for a in transverse) \
-        or any(isinstance(f, Bloch) for f in faces.values())
+        or any(isinstance(f, (Bloch, Axis1D)) for f in faces.values())
     if needs_k:
         wavelength = src.band.concrete_wavelength
         index = as_material(scene.background, 'Scene(background=)').index_bound()
@@ -199,6 +225,17 @@ def _plane_wave_term(scene, plan, src, row):
                         f'transverse wavevector {expected:.6g} along {AXES[a]}, but that axis '
                         f'is Periodic, which carries only k = 0 (mod 2 pi/L). Say '
                         f'fd.Boundaries(**fd.Bloch.from_source(pw, background=...), ...).')
+                continue
+            if isinstance(face, Axis1D):
+                given = concrete(face.k)
+                if given is not None and abs(given - expected) > 1e-9 * max(abs(expected),
+                                                                              k0):
+                    raise ValueError(
+                        f'PlaneWave({src.name!r}): the Axis1D face on {AXES[a]} carries k = '
+                        f"{given:.9g} but the wave's transverse wavevector at the band centre is "
+                        f'{expected:.9g} (n = {index:g}, wavelength {wavelength:g}, theta '
+                        f'{src.theta:g}, phi {src.phi:g}). Use fd.Bloch.from_source(pw, '
+                        f'axis1d={AXES[a]!r}, background=...).')
                 continue
             if abs(k[a]) < 1e-12:
                 raise ValueError(
@@ -223,14 +260,16 @@ def _plane_wave_term(scene, plan, src, row):
     used = (k0i - 1, k0i) if src.sign > 0 else (k0i, k0i + 1)
     _check_indices(f'PlaneWave({src.name!r})', P, used[0], used[1], scene, plan)
     for index, structure in enumerate(scene.structures):
-        s_axis, (c0, c1) = _structure_cells(structure, grid)
-        if s_axis != P:
+        s_axis, box = _structure_cells(structure, grid)
+        c0, c1 = box[P]
+        if s_axis is not None and s_axis != P:
             raise ValueError(
                 f'PlaneWave({src.name!r}) along {AXES[P]} with structures[{index}], a slab '
                 f'across {structure.shape.axis}: the structure is not uniform across the '
                 f'sheet, so the sheet would not be launching into the medium its incident '
-                f'field is computed in. Stage 2\'s PlaneWave takes layers across its '
-                f'propagation axis only; a patterned layer of finite height is stage 4.')
+                f'field is computed in. A PlaneWave takes layers across its propagation axis, '
+                f'and (stage 3) cell-snapped fd.Box structures -- a patterned layer of finite '
+                f'height -- that stay clear of the sheet; other patterned shapes are stage 4.')
         if c0 <= used[1] and c1 > used[0]:
             raise ValueError(
                 f'PlaneWave({src.name!r}) sits at {AXES[P]} = {src.position:g} (cells '
@@ -284,9 +323,13 @@ def _tfsf_term(scene, plan, src, row):
         _check_indices(f'TFSF({src.name!r}) box with its one-cell correction layer', a,
                        lo[a] - 1, hi[a] + 1, scene, plan)
     for index, structure in enumerate(scene.structures):
-        s_axis, (c0, c1) = _structure_cells(structure, grid)
+        s_axis, box = _structure_cells(structure, grid)
         if s_axis == P:
             continue                            # part of the aux grid's layered background
+        if s_axis is None:
+            _check_scatterer(src, index, structure, box, lo, hi)
+            continue
+        c0, c1 = box[s_axis]
         if c0 <= hi[s_axis] and c1 > lo[s_axis] - 1:
             raise ValueError(
                 f'structures[{index}] (a slab across {structure.shape.axis}, cells {c0}..'
@@ -295,8 +338,9 @@ def _tfsf_term(scene, plan, src, row):
                 f'1-D grid along {AXES[P]} whose background is the slabs across {AXES[P]} '
                 f'only, so it is wrong wherever this structure changes the medium on the box '
                 f'surface. A slab across {AXES[P]} is part of that background and may cross '
-                f'the box; a finite scatterer inside it is a stage-4 shape.')
-    layered = any('xyz'.index(s.shape.axis) == P for s in scene.structures)
+                f'the box; a finite scatterer is an fd.Box structure clear of its faces '
+                f'(stage 3; every other shape is a stage-4 shape).')
+    layered = any(slab_axis(s.shape) == P for s in scene.structures)
     driver, sheet = None, ()
     # The one read upstream of the entry plane: the tangential H half a cell outside it,
     # which the E face on the entry side reads. In a layered column that half cell is
@@ -336,6 +380,28 @@ def _tfsf_term(scene, plan, src, row):
                       plane_H=plane + src.sign * 0.5 * grid.dx, driver=driver, sheet=sheet)
 
 
+def _check_scatterer(src, index, structure, box, lo, hi):
+    """A cell-snapped Box near a TFSF box: strictly inside it, or clear of its surface.
+
+    The corrections read the incident field on the node planes ``lo`` and ``hi`` and write
+    the cells one outside them, so a scatterer must keep one cell clear of every face on the
+    inside (cells ``lo+1 .. hi-2``) or stay entirely outside the shell ``lo-1 .. hi`` on some
+    axis. Anything else changes the medium on the box's surface, where the column's 1-D
+    background is what the incident field was computed in.
+    """
+    inside = all(lo[a] + 1 <= box[a][0] and box[a][1] <= hi[a] - 1 for a in range(3))
+    outside = any(box[a][1] <= lo[a] - 1 or box[a][0] >= hi[a] + 1 for a in range(3))
+    if inside or outside:
+        return
+    raise ValueError(
+        f'structures[{index}] ({describe(structure.shape)}, cells '
+        f'{tuple(tuple(r) for r in box)}) touches the surface of TFSF({src.name!r}) (nodes '
+        f'{tuple(lo)}..{tuple(hi)}). The incident field on the box\'s faces comes from a 1-D '
+        f'grid whose background is the slabs across the propagation axis, so a scatterer must '
+        f'sit strictly inside the box with one cell to spare on every side, or outside it '
+        f'clear of the one-cell correction layer.')
+
+
 def _box_nodes(grid, box):
     return ([_node_index(grid, a, box.low[a]) for a in range(3)],
             [_node_index(grid, a, box.high[a]) for a in range(3)])
@@ -358,7 +424,7 @@ def _tfsf_driver(scene, src, grid):
     cells = range(0, lo[P]) if src.sign > 0 else range(hi[P], grid.n[P])
     owners = set()
     spans = [(i, s, s.shape.cells(grid)) for i, s in enumerate(scene.structures)
-             if 'xyz'.index(s.shape.axis) == P]
+             if slab_axis(s.shape) == P]
     for j in cells:
         owner = None
         for i, _, (c0, c1) in spans:                # a later structure overwrites
@@ -465,6 +531,9 @@ def column_scene(scene, src, plan, role='column'):
         if isinstance(src, PlaneWave) and isinstance(face, Bloch):
             faces[axis] = (Bloch(k=face.k) if face.k is not None
                            else Bloch(phase=face.phase / grid.n[a]))
+        elif isinstance(face, Axis1D):
+            # The main grid's own face: one cell and the exact i k, in the column as well.
+            faces[axis] = face
         else:
             faces[axis] = Periodic()
     size = [grid.dx, grid.dx, grid.dx]
@@ -475,7 +544,7 @@ def column_scene(scene, src, plan, role='column'):
     if role == 'driver':
         background = _tfsf_driver(scene, src, grid)
     elif isinstance(src, TFSF):
-        structures = tuple(s for s in scene.structures if 'xyz'.index(s.shape.axis) == P)
+        structures = tuple(s for s in scene.structures if slab_axis(s.shape) == P)
     return scene_module.Scene(
         domain=scene_module.Domain(size=tuple(size), center=tuple(center)),
         boundaries=Boundaries(**faces), resolution=scene_module.Resolution(dx=grid.dx),
@@ -497,7 +566,7 @@ def _column_plan(scene, src, plan, role='column'):
         # The column repeats the scene's own warnings (its mesh, its layers); the scene
         # already emitted them once, where the user can see which scene they belong to.
         warnings.simplefilter('ignore')
-        sub = make_plan(column_scene(scene, src, plan, role))
+        sub = make_plan(column_scene(scene, src, plan, role), _column=True)
     if plan.dtype == 'complex128' and sub.dtype != plan.dtype:
         sub = sub.with_static(dtype=plan.dtype)
     pads = column_pads(scene, src)

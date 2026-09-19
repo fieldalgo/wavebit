@@ -9,12 +9,23 @@ plan and kept on the runtime, which ``runtime()`` hands out once per backend and
 a second ``run`` of the same scene -- a sweep, a gradient loop -- pays no compile. On Torch
 the executor is eager and autograd follows the tensors; on NumPy it is a loop over
 preallocated buffers.
+
+**Stage 3** turns the finished state into results after the scan (``_assemble.py``): each
+frequency-domain monitor's result, each source's spectral normalisation (methods on its
+``SourceSeries``), and the always-on decay diagnostic. A ``Diffraction(polarizations='both')``
+monitor makes ``run`` solve the scene a second time with the PlaneWave's other polarisation;
+``res.diagnostics['runs']`` says how many solves the result is.
 """
+import dataclasses
+
+import numpy as np
+
 from ._check import report as _report
 from ._kernel.sources import has_sources, waveform_table
 from ._kernel.step import initial_state, step
 from ._lower import lower, plan as _plan
 from ._runtime import runtime
+from .monitors import Diffraction, Record
 from .results import Final, Results, Series
 
 __all__ = ['run', 'execute']
@@ -38,15 +49,85 @@ def execute(plan, params, rt):
     return rt.jit_for(plan, make)(rt.to_device(params))
 
 
+@dataclasses.dataclass(frozen=True)
+class _Context:
+    """What a source's spectral methods need from the run: the scene, plan, term, runtime."""
+
+    scene: object
+    plan: object
+    term: object
+    rt: object
+    wavelengths: tuple = None
+
+
+def _shared_wavelengths(scene):
+    lists = {m.wavelengths for m in getattr(scene, 'monitors', ()) if not isinstance(m, Record)}
+    return lists.pop() if len(lists) == 1 else None
+
+
 def _results(scene, plan, state, rt, params=None):
     series = {}
     for o in plan.observers:
+        if not hasattr(o, 'field'):
+            continue                                    # a DFTRegion: assembled below
         series[o.name] = Series(name=o.name, component=f'{o.field}{"xyz"[o.c]}',
                                 t=o.times(plan), values=state['obs'][o.name])
-    sources = {t.name: t.series(plan, state['mem'][t.name], rt)
-               for t in plan.terms if hasattr(t, 'series')}
+    wavelengths = _shared_wavelengths(scene)
+    sources = {}
+    for t in plan.terms:
+        if not hasattr(t, 'series'):
+            continue
+        s = t.series(plan, state['mem'][t.name], rt)
+        sources[t.name] = dataclasses.replace(
+            s, context=_Context(scene=scene, plan=plan, term=t, rt=rt, wavelengths=wavelengths))
+    from ._assemble import decay_report, monitor_results
+    if any(not isinstance(m, Record) for m in getattr(scene, 'monitors', ())):
+        series.update(monitor_results(scene, plan, state, rt, sources, params))
+        # In scene order, so ``for name in res`` reads the monitors as they were declared.
+        series = {m.name: series[m.name] for m in scene.monitors}
+    # Always on: every run reports its decay; only a frequency-domain monitor can warn.
+    diagnostics = decay_report(scene, plan, state, rt, sources)
+    diagnostics['runs'] = 1
+    diagnostics['stable'] = _stable(params, rt)
+    from ._lower.grazing import survey
+    diagnostics['grazing'] = survey(scene, plan)
     return Results(series, Final(E=state['E'], H=state['H']), plan,
-                   _report(scene, plan, params), rt.name, sources=sources)
+                   _report(scene, plan, params), rt.name, sources=sources,
+                   diagnostics=diagnostics)
+
+
+def _stable(params, rt):
+    """Whether the run was inside its stability bound: ``True``, ``False``, or ``None``.
+
+    ``True`` when the bound was checked concretely at the door (no guard was built); otherwise
+    the guard the lowering built (``params['stable']``, ``1`` or ``nan``) read back -- ``False``
+    for a traced material past the CFL bound or a traced ``Axis1D`` ``k`` past its ``k_max``, in
+    which case every returned array is ``nan``. Under a JAX trace (``jax.jit``, ``jax.grad``) the
+    guard has no value yet, and this is the traced boolean itself, ``isfinite(guard)`` -- a
+    jitted function can return it.
+    """
+    guard = None if params is None else params.get('stable')
+    if guard is None:
+        return True
+    try:
+        value = float(np.asarray(rt.numpy(guard)))
+    except Exception:
+        return rt.xp.isfinite(guard)
+    return bool(value == value)
+
+
+def _solve(scene, p, rt):
+    params = lower(scene, p, rt)
+    state = execute(p, params, rt)
+    return _results(scene, p, state, rt, params)
+
+
+def _other_polarization(scene):
+    """``scene`` with its PlaneWave's other polarisation (a Diffraction 'both' second run)."""
+    from .sources import PlaneWave
+    sources = tuple(s.replace(polarization='p' if s.polarization == 's' else 's')
+                    if isinstance(s, PlaneWave) else s for s in scene.sources)
+    return scene.replace(sources=sources)
 
 
 def run(scene, backend='numpy', plan=None, device=None):
@@ -60,6 +141,16 @@ def run(scene, backend='numpy', plan=None, device=None):
                 f'with fd.plan(scene), or pass plan=None.')
         p = plan
     rt = runtime(backend, device)
-    params = lower(scene, p, rt)
-    state = execute(p, params, rt)
-    return _results(scene, p, state, rt, params)
+    res = _solve(scene, p, rt)
+    both = [m for m in scene.monitors
+            if isinstance(m, Diffraction) and m.polarizations == 'both']
+    if both:
+        # The second solve: the same scene with the PlaneWave's other polarisation. Its own
+        # plan (the column's drive weights are static), its own decay check.
+        other = _other_polarization(scene)
+        res2 = _solve(other, _plan(other), rt)
+        for m in both:
+            res._series[m.name] = res[m.name].with_both(res2[m.name].orders.given)
+        res.diagnostics['runs'] = 2
+        res.diagnostics['second_run'] = res2.diagnostics
+    return res

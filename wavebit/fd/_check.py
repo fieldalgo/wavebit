@@ -5,6 +5,12 @@ occupies (E and H; the curl scratch on NumPy doubles it), and the warnings a rea
 see before spending the time: a size that was snapped up to whole cells, a Bloch face
 that made the run complex, a box under two cells thick. ``check`` prints the report and
 returns it; ``run`` builds the same report silently and attaches it to the result.
+
+Stage 3 adds one line per frequency-domain monitor: the bytes of its DFT accumulators (complex
+per point per frequency, plus the per-step region energy the decay diagnostic reads; NumPy
+holds one scratch of the same size beside each, which is not counted), and says
+so when a ``Diffraction(polarizations='both')`` makes the run two solves. A scene without such
+a monitor prints exactly what it printed before.
 """
 import dataclasses
 
@@ -33,6 +39,8 @@ class Report:
     bytes_per_params: int = 0
     absorbers: tuple = ()
     spans: tuple = ()
+    monitors: tuple = ()         # ((name, kind, bytes), ...) of the DFT monitors (stage 3)
+    solves: int = 1
 
     def __str__(self):
         lines = [
@@ -50,6 +58,11 @@ class Report:
         for axis, lo, hi, slo, shi in self.spans:
             snapped = '' if (lo, hi) == (slo, shi) else '   <- snapped'
             lines.append(f'structure  {axis}=({lo:g}, {hi:g}) -> ({slo:g}, {shi:g}){snapped}')
+        for name, kind, nbytes in self.monitors:
+            lines.append(f'monitor    {name}  {kind}, {nbytes / 1e6:.2f} MB (DFT accumulators)')
+        if self.solves != 1:
+            lines.append(f'solves     {self.solves} (a Diffraction monitor asked for both '
+                         f'polarisations: the scene runs once per polarisation)')
         lines.append(f'skeleton   {self.skeleton[:12]}')
         for w in self.warnings:
             lines.append(f'warning    {w}')
@@ -78,8 +91,12 @@ def report(scene, p=None, params=None):
     if p.dtype == 'complex128':
         warnings.append('a Bloch face makes the run complex: twice the bytes and the flops of '
                         'a real run')
+    axis1d = [name[0] for name, rule in p.face_rules if rule.kind == 'axis1d' and name[1] == '-']
+    if axis1d:
+        warnings.append(f'Axis1D on {", ".join(axis1d)}: one cell, derivative i k exactly '
+                        f'(always complex)')
     for axis, n in zip('xyz', grid.n):
-        if n < 4:
+        if n < 4 and axis not in axis1d:
             warnings.append(f'{n} cell(s) along {axis}: a box this thin is all boundary')
     for message, _ in ((m, c) for c, m in _notes(scene, p)):
         warnings.append(message)
@@ -105,11 +122,24 @@ def report(scene, p=None, params=None):
             params = {}
             warnings.append(f'the params could not be built on NumPy for the byte count: '
                             f'{type(err).__name__}: {err}; run the scene to see it')
+    monitors, solves = _monitor_lines(scene, p)
     return Report(cells=grid.n, requested_size=requested, size=grid.size, dx=p.dx, dt=p.dt,
                   steps=p.steps, duration=p.steps * p.dt, dtype=p.dtype,
                   bytes_per_state=2 * 3 * p.cells * itemsize + psi, warnings=tuple(warnings),
                   skeleton=p.skeleton, bytes_per_params=params_bytes(params),
-                  absorbers=absorbers, spans=p.spans)
+                  absorbers=absorbers, spans=p.spans, monitors=monitors, solves=solves)
+
+
+def _monitor_lines(scene, p):
+    """``((name, kind, bytes), ...)`` per frequency-domain monitor, and the solve count."""
+    out = []
+    for m in getattr(scene, 'monitors', ()):
+        regions = [o for o in p.observers if getattr(o, 'monitor', None) == m.name]
+        if regions:
+            out.append((m.name, type(m).__name__, sum(o.nbytes(p) for o in regions)))
+    solves = 2 if any(getattr(m, 'polarizations', 'given') == 'both'
+                      for m in getattr(scene, 'monitors', ())) else 1
+    return tuple(out), solves
 
 
 def check(scene):

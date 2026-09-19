@@ -68,7 +68,8 @@ the discrete one because both come from the same discrete solution.
 corrections to cancel at round-off, and for a laterally uniform medium the full grid's
 solution is ``f(P) exp(i k_par . r)``, which a 1 x 1 transverse column with the same Bloch
 phase per cell reproduces exactly (the same discrete transverse derivative, ``(exp(i phi) -
-1)/dx``). So each ``PlaneWave`` and ``TFSF`` term carries a column in its memory -- a
+1)/dx``; on a stage-3 ``Axis1D`` axis the column carries the scene's own ``Axis1D`` face, so
+the derivative there is the same exact ``i k``). So each ``PlaneWave`` and ``TFSF`` term carries a column in its memory -- a
 sub-plan along the propagation axis stepped by the kernel's own curl, update, masks, CPML
 and pole terms -- driven by a hard source one cell upstream of the surface, so every value
 the corrections read lies in the column's forward region. For ``TFSF`` the column has the

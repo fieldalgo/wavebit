@@ -9,6 +9,11 @@ Torch or NumPy. Its leaves are the numbers a gradient may flow through:
                       full-volume temporary per step (``coefficients.build`` says what that
                       measured)
     bloch             {axis: exp(i*phi)} for each Bloch axis (the low face conjugates it)
+    axis1d            {axis: i k dx} for each Axis1D axis (stage 3): the whole derivative
+                      along it, in the curl's units (``wavebit/fd/_kernel/curl.py``); ``{}``
+                      without one
+    stable            the stability guard (``1.0`` or ``nan``) when one was built, else None --
+                      what ``res.diagnostics['stable']`` reads
     amplitude         the InitialField amplitude, cast to the run's dtype
     E0, H0            the initial fields as (3, nz, ny, nx) arrays, or None
     cpml              {psi key: {'b', 'a', 'ik'}} -- the CPML profiles, 1-D along the
@@ -19,6 +24,7 @@ Torch or NumPy. Its leaves are the numbers a gradient may flow through:
                       ('column', and 'driver' for a layered TFSF column's uniform drive) and
                       transverse Bloch 'pattern' (``wavebit/fd/_lower/sources.py``); the
                       waveform table built from them is added inside the traced function
+    dft               {region name: 2 pi f} per stage-3 ``DFTRegion`` observer; ``{}`` without
 
 Whether ``E0`` or ``H0`` is ``None`` is static and recorded on the plan (``has_E0``,
 ``has_H0``); their values are leaves. That is the pytree rule this repository keeps
@@ -30,7 +36,9 @@ compared against the CFL bound at lowering time. When the bound cannot be read, 
 not, so an unstable run returns ``nan`` arrays rather than a number shaped like a field --
 the stage-0 rule for a condition only run time can know. When every value *is* concrete the
 bound was checked at the door (``checks.check_stability``) and no guard is built, so a vacuum
-run's coefficients are the stage-0 ones to the bit.
+run's coefficients are the stage-0 ones to the bit. **An Axis1D face with a traced ``k``** adds
+one condition only run time can know, ``|k| <= k_max`` (the plan's CFL bound is made for
+``k_max``), to the same guard.
 """
 import math
 
@@ -38,7 +46,7 @@ import numpy as np
 
 from wavebit._core.backend import check_input_precision
 
-from ..boundaries import AXES, Bloch
+from ..boundaries import AXES, Axis1D, Bloch
 from ..materials import as_material
 from .._kernel.cpml import psi_key
 from . import checks
@@ -61,10 +69,13 @@ def lower(scene, plan, rt='numpy', device=None):
     grid = plan.grid
     real = 'float64'
     params = dict(build_coefficients(scene, plan, rt))
-    params.update({'bloch': {}, 'amplitude': None, 'E0': None, 'H0': None,
+    params.update({'bloch': {}, 'axis1d': {}, 'amplitude': None, 'E0': None, 'H0': None,
                    'cpml': _cpml(scene, plan, rt), 'poles': _poles(scene, plan, rt),
-                   'sources': lower_sources(scene, plan, rt)})
+                   'sources': lower_sources(scene, plan, rt), 'dft': _dft(plan, rt),
+                   'stable': None})
     guard = _stability_guard(scene, plan, rt)
+    guard = _axis1d_guard(scene, rt, guard)
+    params['stable'] = guard
     if guard is not None:
         params['be'] = params['be'] * guard
         params['bh'] = params['bh'] * guard
@@ -78,6 +89,9 @@ def lower(scene, plan, rt='numpy', device=None):
             check_input_precision(f'Bloch on {axis}', given, np.float64)
             phase = given if face.k is None else face.k * grid.size[a]
             params['bloch'][axis] = rt.xp.exp(1j * rt.array(phase, real))
+        elif isinstance(face, Axis1D):
+            check_input_precision(f'Axis1D on {axis}', face.k, np.float64)
+            params['axis1d'][axis] = (1j * grid.dx) * rt.array(face.k, real)
     initial = scene.initial
     if initial is None:
         params['amplitude'] = rt.array(1.0, plan.dtype)
@@ -94,8 +108,10 @@ def lower(scene, plan, rt='numpy', device=None):
         if hasattr(value, 'dtype'):
             check_input_precision(name, value, np.float64)
     params['amplitude'] = rt.array(amp, plan.dtype)
-    params['E0'] = evaluate('E', initial.E, grid, 'E', rt, plan.dtype)
-    params['H0'] = evaluate('H', initial.H, grid, 'H', rt, plan.dtype)
+    flat = tuple(a for a, axis in enumerate(AXES)
+                 if isinstance(getattr(scene.boundaries, axis)[0], Axis1D))
+    params['E0'] = evaluate('E', initial.E, grid, 'E', rt, plan.dtype, flat)
+    params['H0'] = evaluate('H', initial.H, grid, 'H', rt, plan.dtype, flat)
     return params
 
 
@@ -146,6 +162,12 @@ def _cpml(scene, plan, rt):
                     'a': rt.array(a.reshape(shape), 'float64'),
                     'ik': rt.array(ik.reshape(shape), 'float64')}
     return out
+
+
+def _dft(plan, rt):
+    """``{region name: 2 pi f (nf,)}`` for every ``DFTRegion``; empty for a scene with none."""
+    return {o.name: rt.array(2.0 * math.pi * np.asarray(o.freqs, dtype=np.float64), 'float64')
+            for o in plan.observers if hasattr(o, 'freqs')}
 
 
 def _poles(scene, plan, rt):
@@ -199,6 +221,25 @@ def _stability_guard(scene, plan, rt):
     return _traced_guard(scene, plan, rt)
 
 
+def _axis1d_guard(scene, rt, guard):
+    """``guard`` times ``where(|k| <= k_max, 1, nan)`` for every Axis1D face with a traced ``k``.
+
+    A concrete ``k`` past ``k_max`` was refused at ``fd.Axis1D``; a traced one is read here,
+    on the backend, so the run turns into ``nan`` rather than returning a field computed past
+    the plan's CFL bound.
+    """
+    from ..materials import concrete
+    for axis in AXES:
+        face = getattr(scene.boundaries, axis)[0]
+        if not isinstance(face, Axis1D) or concrete(face.k) is not None:
+            continue
+        k = rt.array(face.k, 'float64')
+        ok = rt.xp.where(rt.xp.abs(k) <= face.k_max * (1.0 + 1e-12), rt.array(1.0, 'float64'),
+                         rt.array(float('nan'), 'float64'))
+        guard = ok if guard is None else guard * ok
+    return guard
+
+
 def _traced_guard(scene, plan, rt):
     """The same bound, computed on the backend, as ``where(dt < bound, 1, nan)``."""
     background = as_material(getattr(scene, 'background', None), 'Scene(background=)')
@@ -227,7 +268,11 @@ def _traced_guard(scene, plan, rt):
     zero = rt.array(0.0, 'float64')
     rate = (resonance if resonance is not None else zero) \
         + (coupling if coupling is not None else zero)
-    vacuum = n_min * (plan.dx / math.sqrt(3.0))
+    axes = checks.cfl_axis_sum(scene, plan.dx)
+    if axes == 3.0 / plan.dx ** 2:
+        vacuum = n_min * (plan.dx / math.sqrt(3.0))
+    else:
+        vacuum = n_min / math.sqrt(axes)                   # an Axis1D face (stage 3)
     bound = 1.0 / rt.xp.sqrt(1.0 / vacuum ** 2 + rate / 4.0)
     return rt.xp.where(rt.array(plan.dt, 'float64') < bound, rt.array(1.0, 'float64'),
                        rt.array(float('nan'), 'float64'))
