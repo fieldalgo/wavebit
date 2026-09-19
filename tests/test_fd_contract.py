@@ -66,8 +66,10 @@ def test_later_stages_are_refused_by_name():
     base = _scene()
     kw = dict(domain=base.domain, boundaries=base.boundaries, resolution=base.resolution,
               run=base.run)
-    with pytest.raises(NotImplementedError, match='stage 2'):
-        fd.Scene(sources=(), **kw)
+    # Stage 2 made ``sources=`` and ``Run(periods=)`` legal; their refusals live in
+    # tests/test_fd_sources_doors.py. The stage-7 keyword is still refused by its stage.
+    with pytest.raises(NotImplementedError, match='stage 7'):
+        fd.Scene(decay=1e-6, **kw)
     # ``materials=`` and ``pml=`` are stage-1 features spelled another way, so the refusal
     # now points at the spelling rather than at the stage; ``Boundaries.open`` is the
     # absorber preset as of stage 1 and is pinned in tests/test_fd_scene.py instead.
@@ -75,8 +77,8 @@ def test_later_stages_are_refused_by_name():
         fd.Scene(materials=(), **kw)
     with pytest.raises(NotImplementedError, match='Boundaries'):
         fd.Scene(pml=0.5, **kw)
-    with pytest.raises(NotImplementedError, match='stage 2'):
-        fd.Run(periods=10)
+    with pytest.raises(NotImplementedError, match='stage 7'):
+        fd.GaussianBeam()
 
 
 def test_every_axis_is_required():

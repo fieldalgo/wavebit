@@ -183,6 +183,51 @@ stage-0 case list it imports its capture from), a content digest the test recomp
 an array whose **shape** moved is reported as a changed scene rather than compared, because
 comparing it raises instead of reporting.
 
+### Its stage-2 twin: `fd_golden_stage2.npz` (2026-09-19)
+
+Stage 2 added the first things in `wavebit/fd/` that *drive* the grid rather than start from an
+initial field -- a waveform table built inside the traced function, a dipole's stamp added into
+the curl, and an incident column carried in a term's memory that a TFSF box's six faces and a
+PlaneWave sheet read their corrections from -- so a third archive pins four scenes of its own:
+an electric (B-spline) and a magnetic (tent) dipole in a PML box, a 20-degree p `PlaneWave` in a
+Bloch cell over a glass layer (complex), a `+x` TFSF box in vacuum, and a `-z` TFSF box on a
+glass half-space that crosses it. `tests/test_fd_stage2_backends.py` holds the three backends to
+each other and each to its own frozen answer at the same 1e-12 (measured: Torch bit-identical
+to NumPy on both TFSF scenes and 3e-15 off on the other two, JAX 8e-16 to 4e-15), and its two
+mutants are the argument: a stamp normalised by its sum of squares and one TFSF face with its
+sign flipped both keep all three backends agreeing and put every one of them O(1) (1.9 and 1.2)
+from its golden.
+
+Two things are new. **Every source's reference series is frozen**, per backend, beside the
+fields -- the incident E and H a sheet or a box records, the drive, work and stamp-weighted field
+of a dipole -- because stage 3 normalises by them, and a moved reference is a moved answer even
+when the field is unchanged. And **the samples are not the stage-1 cells**: those sit at the
+ends of the long axis and inside the absorbing layers, which in a TFSF scene is all scattered
+region, exactly 0.0 on NumPy and Torch and 1e-16 on JAX. The first freeze of this archive
+pinned that round-off on all eight final-field arrays of both TFSF scenes (a harmless
+reordering would have moved them by O(1) of their own peak); the stage-2 picks cluster on the
+domain centre, inside every box and next to every dipole. What the frozen numbers are known to
+be right about is asserted against closed forms rather than left to the digest: the drive is
+`Band.waveform` at the slot's half step on every backend, the stamps are partitions of unity
+centred on the dipole, the Bloch pattern is `exp(i k_par . r)` with the `k_par` of
+`Bloch.from_source`, and the TFSF runs behind the pins leave the scattered region at round-off.
+
+**`tfsf_substrate` was re-frozen once, on purpose (2026-09-19).** Its first freeze pinned a
+known defect: the layered TFSF column was driven by a hard source, which reflects the
+substrate's echo back down the column (`r = -1`), and the glass top sits one cell inside the
+6-cell box, so every array of that scene carried the echo -- and a self-captured golden agrees
+with whatever produced it. The fix (a uniform driver column feeding the layered column through
+a one-sided sheet, `wavebit/fd/_kernel/sources.py`) moved that scene's arrays by 13-29% of
+their peaks and nothing else: the other three scenes reproduced bit for bit, their skeletons
+changing only because `ColumnTerm` and `Correction` gained fields. What says the new numbers
+are right is `tests/test_fd_tfsf.py`: the box interior over a substrate is the
+`PlaneWave`-driven physical field to round-off at every step, and the discrete Airy field.
+
+`interface/freeze_fd_stage2.py` writes it under exactly the stage-0 and stage-1 rules: this
+checkout only, twice in one process, LF-normalised source digests (its own, its case list's,
+and the stage-0 case list it imports its capture from), a content digest the test recomputes,
+a changed shape reported as a moved scene, and `--rebaseline` as the only way to overwrite.
+
 ### Why the field row exists, and what it cost to not have it
 
 Until 2026-08-14 every oracle here checked efficiencies or amplitudes, and **field
@@ -964,6 +1009,8 @@ Two consequences worth knowing before touching those generators:
 | `fd_golden_stage0.npz` — those answers, committed; `tests/test_fd_backends.py` holds them | nothing; **run in CI everywhere** |
 | `interface/freeze_fd_stage1.py`, `_fd_stage1_cases.py` — the same for stage 1's absorbers and materials, plus the lowered coefficients and profiles | the project env with NumPy, JAX and Torch; run by hand |
 | `fd_golden_stage1.npz` — those answers, committed; `tests/test_fd_stage1_backends.py` holds them | nothing; **run in CI everywhere** |
+| `interface/freeze_fd_stage2.py`, `_fd_stage2_cases.py` — the same for stage 2's sources, with every source's reference series and the lowered stamps, pattern and waveform table | the project env with NumPy, JAX and Torch; run by hand |
+| `fd_golden_stage2.npz` — those answers, committed; `tests/test_fd_stage2_backends.py` holds them | nothing; **run in CI everywhere** |
 ## A golden frozen ahead of its consumer
 
 `golden_fmmax_magnetic.npz` holds rows nothing in this solver can consume — permeability has no

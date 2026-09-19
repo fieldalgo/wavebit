@@ -30,6 +30,11 @@ changes ``k`` by ``1/N`` and the residual by ~1e-2 against a round-off tolerance
 (:class:`Packet`), the doubling pair the CPML gate measures with (:func:`doubling_pair`), a
 slab scene (:func:`slab_scene`) and a half-space scene (:func:`half_space_scene`) for the
 Airy, Fresnel and decay gates that come after it.
+
+**Stage 2's scenes** follow them: a dipole in a PML box (:func:`dipole_box`), a PlaneWave in
+a Bloch cell (:func:`bloch_plane_wave`), a TFSF box in vacuum or on a substrate
+(:func:`tfsf_box`), and the readers the source gates share (:func:`scattered_region_peak`,
+:func:`ring_monitors`, :func:`peak_of`).
 """
 import math
 
@@ -737,3 +742,155 @@ def half_space_scene(material=None, **kwargs):
     """
     kwargs.setdefault('thickness', 6.0 * kwargs.get('wavelength', 1.0))
     return slab_scene(material=material, half_space=True, **kwargs)
+
+
+# ---------------------------------------------------------------------------------------------
+# Stage 2: the source scenes
+# ---------------------------------------------------------------------------------------------
+
+#: The band every stage-2 helper uses unless told otherwise: centre wavelength 1, spectral
+#: sigma 0.15 f0, so ``band.shortest_wavelength`` is 0.642 and 20 cells per centre wavelength is
+#: 12.8 at the short edge -- above the CoarseMeshWarning line in vacuum.
+BAND = dict(wavelength=1.0, df=0.15)
+
+#: The six components, in the order ``outside_peak`` reads them.
+COMPONENTS = ('Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz')
+
+
+def band(**changes):
+    """``fd.Band`` with :data:`BAND` overridden by ``changes``."""
+    return fd.Band(**dict(BAND, **changes))
+
+
+def dipole_box(center=(0.0, 0.0, 0.0), component='Ez', kind='electric', size=1.5,
+               cells_per_wavelength=20, pml=12, steps=None, periods=None, stamp='bspline',
+               src_band=None, rng=None, amplitude=1.0, phase=0.0, delay=0.0, monitors=(),
+               courant=0.5, grid_wavelength=None, pml_wavelength=None):
+    """A point dipole at ``center`` in an open vacuum box: ``size`` of interior, PML all round.
+
+    The PML's wavelength is left out on purpose -- it is inferred from the band centre, which
+    is what stage 2 made legal. ``steps`` or ``periods`` (default: 8 periods of the band
+    centre, which covers the pulse, ``2 t0 = 7.4 / (2 pi df)`` long at the default band, and
+    a little of its ring-down). Returns the scene; ``res.sources['d']`` is the dipole's
+    reference series.
+    """
+    b = band() if src_band is None else src_band
+    # A traced band centre (the AD gate's) cannot size the grid or grade the PML, and a
+    # central difference in it must not move either -- so ``grid_wavelength`` fixes dx and
+    # ``pml_wavelength`` the layer whenever they are given (or the centre is traced).
+    wavelength = grid_wavelength or b.concrete_wavelength or BAND['wavelength']
+    dx = wavelength / cells_per_wavelength
+    if pml_wavelength is None and b.concrete_wavelength is None:
+        pml_wavelength = wavelength
+    layer = fd.PML(cells=pml, wavelength=pml_wavelength)
+    side = size + 2 * pml * dx
+    run = (fd.Run(steps=steps, courant=courant) if steps is not None
+           else fd.Run(periods=8 if periods is None else periods, courant=courant))
+    source = fd.Dipole('d', center=center, component=component, kind=kind, band=b,
+                       stamp=stamp, range=rng, amplitude=amplitude, phase=phase, delay=delay)
+    return fd.Scene(domain=fd.Domain(size=(side, side, side)),
+                    boundaries=fd.Boundaries.open(layer),
+                    resolution=fd.Resolution(dx=dx), run=run, sources=(source,),
+                    monitors=tuple(monitors))
+
+
+def bloch_plane_wave(theta=0.0, phi=0.0, polarization='s', direction='-z', at=0.0,
+                     cells_per_wavelength=20, length=3.0, transverse=(0.25, 0.2), pml=12,
+                     steps=600, background=None, structures=(), monitors=(), src_band=None,
+                     amplitude=1.0, phase=0.0, delay=0.0):
+    """A PlaneWave in a periodic (``theta = 0``) or Bloch cell, PML on the propagation axis z.
+
+    ``length`` is the z extent of the interior; the transverse faces come from
+    ``fd.Bloch.from_source`` in the given background, so the cell is consistent by
+    construction. Returns ``(scene, pw)``.
+    """
+    b = band() if src_band is None else src_band
+    dx = float(b.wavelength) / cells_per_wavelength
+    pw = fd.PlaneWave('pw', z=at, direction=direction, theta=theta, phi=phi,
+                      polarization=polarization, band=b, amplitude=amplitude, phase=phase,
+                      delay=delay)
+    faces = fd.Bloch.from_source(pw, background=background)
+    scene = fd.Scene(domain=fd.Domain(size=(transverse[0], transverse[1],
+                                            length + 2 * pml * dx)),
+                     boundaries=fd.Boundaries(**faces, z=fd.PML(cells=pml)),
+                     resolution=fd.Resolution(dx=dx), run=fd.Run(steps=steps),
+                     background=background, structures=tuple(structures),
+                     sources=(pw,), monitors=tuple(monitors))
+    return scene, pw
+
+
+def tfsf_box(direction='-z', polarization='x', box=(0.5, 0.5, 0.5), center=(0.0, 0.0, 0.0),
+             substrate=None, cells_per_wavelength=20, margin=0.5, pml=12, steps=500,
+             monitors=(), src_band=None, amplitude=1.0, phase=0.0, delay=0.0,
+             background=None):
+    """A TFSF box in an open box (PML all round), in vacuum or on a substrate.
+
+    ``margin`` is the scattered-field clearance on every side between the box and the PML's
+    inner face. ``substrate=(eps, top)`` adds a slab across the propagation axis from ``top``
+    down through the low face of that axis (a half-space running out through the PML, which a
+    lossless ``fd.Material`` may do) -- the layered aux-grid background the TFSF gate's Airy
+    case needs; a box that crosses ``top`` is what that gate asks for. Returns the scene.
+    """
+    b = band() if src_band is None else src_band
+    dx = float(b.wavelength) / cells_per_wavelength
+    size = tuple(s + 2 * margin + 2 * pml * dx for s in box)
+    P = 'xyz'.index(direction[1])
+    structures = ()
+    if substrate is not None:
+        eps, top = substrate
+        low = center[P] - size[P] / 2 - dx
+        structures = (fd.Structure(fd.Slab(**{direction[1]: (low, top)}),
+                                   fd.Material(eps=eps)),)
+    source = fd.TFSF('t', box=fd.Box(size=box, center=center), direction=direction,
+                     polarization=polarization, band=b, amplitude=amplitude, phase=phase,
+                     delay=delay)
+    return fd.Scene(domain=fd.Domain(size=size, center=center),
+                    boundaries=fd.Boundaries.open(fd.PML(cells=pml)),
+                    resolution=fd.Resolution(dx=dx), run=fd.Run(steps=steps),
+                    background=background, structures=structures, sources=(source,),
+                    monitors=tuple(monitors))
+
+
+def ring_monitors(points, prefix='p'):
+    """Six ``fd.Record`` per point, named ``f'{prefix}{i}:{component}'``."""
+    return tuple(fd.Record(f'{prefix}{i}:{c}', at=tuple(at), component=c)
+                 for i, at in enumerate(points) for c in COMPONENTS)
+
+
+def peak_of(res, prefix):
+    """``max |value|`` over every recorded series whose name starts with ``prefix``.
+
+    A non-finite series is refused rather than compared: Python's ``max`` keeps whichever of
+    ``nan`` and a number it saw first, so a run that blew up could read as a small peak.
+    """
+    peaks = [float(np.max(np.abs(to_numpy(res[name].values))))
+             for name in res if name.startswith(prefix)]
+    assert peaks and np.all(np.isfinite(peaks)), f'non-finite or no series under {prefix!r}'
+    return max(peaks)
+
+
+def box_node_range(plan, source):
+    """``(lo, hi)`` node indices per axis (x, y, z) a ``fd.TFSF`` box snapped to."""
+    grid = plan.grid
+    lo = tuple(int(round((source.box.low[a] - grid.low[a]) / grid.dx)) for a in range(3))
+    hi = tuple(int(round((source.box.high[a] - grid.low[a]) / grid.dx)) for a in range(3))
+    return lo, hi
+
+
+def scattered_region_peak(res, source):
+    """``max |F|`` over the final E and H outside the TFSF box's correction layer.
+
+    The correction layer is one cell either side of the snapped box; everything beyond it is
+    pure scattered field, which an empty box must leave at round-off. A non-finite field is
+    refused rather than compared (``max(0.0, nan)`` is ``0.0``, so a run that blew up would
+    otherwise read as a perfect box).
+    """
+    lo, hi = box_node_range(res.plan, source)
+    peak = 0.0
+    for F in (res.final.E, res.final.H):
+        F = np.abs(to_numpy(F))
+        assert np.all(np.isfinite(F)), 'the run produced a non-finite field'
+        mask = np.ones(F.shape[1:], dtype=bool)
+        mask[lo[2] - 1:hi[2] + 2, lo[1] - 1:hi[1] + 2, lo[0] - 1:hi[0] + 2] = False
+        peak = max(peak, float(F[:, mask].max()))
+    return peak

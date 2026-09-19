@@ -555,8 +555,7 @@ def test_the_periodic_preset_is_the_one_that_works():
 LATER_STAGES = [
     pytest.param('pml', 'stage 1', id='pml'),
     pytest.param('materials', 'stage 1', id='materials'),
-    pytest.param('sources', 'stage 2', id='sources'),
-    pytest.param('source', 'stage 2', id='source'),
+    pytest.param('source', 'stage 2', id='source'),       # the stage-2 spelling is sources=
     pytest.param('shapes', 'stage 4', id='shapes'),
     pytest.param('structure', 'stage 4', id='structure'),
     pytest.param('decay', 'stage 7', id='decay'),
@@ -575,13 +574,18 @@ def test_a_later_stage_keyword_on_scene_is_refused_naming_the_stage(keyword, sta
         reference_scene().replace(**{keyword: ()})
 
 
-def test_run_periods_is_refused_naming_stage_2():
-    """Gate 9 door: ``periods`` needs a source's wavelength, which stage 2 brings."""
-    with pytest.raises(NotImplementedError, match='stage 2') as e:
-        fd.Run(periods=10)
-    assert 'steps' in str(e.value)
-    with pytest.raises(NotImplementedError, match='stage 2'):
+def test_run_periods_needs_a_source_and_is_one_length_or_the_other():
+    """Gate 9 door, as stage 2 narrowed it: ``periods`` is legal and counts a source's periods.
+
+    A scene with no source has nothing to count periods of, and ``steps`` with ``periods`` is
+    two lengths for one run; tests/test_fd_sources_doors.py holds the rest of the doors.
+    """
+    assert fd.Run(periods=10).periods == 10.0
+    with pytest.raises(ValueError, match='one or the other'):
         fd.Run(steps=10, periods=10)
+    with pytest.raises(ValueError, match='no source') as e:
+        fd.plan(fd.Scene(**dict(_SCENE_KW, run=fd.Run(periods=10))))
+    assert 'Run(steps=...)' in str(e.value)
 
 
 def test_a_stage_0_scene_is_accepted_and_runs():
