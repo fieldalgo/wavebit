@@ -35,7 +35,11 @@ of its six face shares; ``R = R_s + R_p``; fixed ``k_par`` makes ``sin(theta_at)
 one number across the band; the far-field intensity is ``(|E_theta|^2 + |E_phi|^2) / 2`` in
 vacuum; the lamellar grating's p arrays and ``Ex``/``Hy`` accumulators are exact zeros (TE by
 symmetry) and its ``+1`` and ``-1`` orders equal (the tooth is centred); and no frozen array is
-round-off, the stage-2 README's trap (a first draft of the case list had four).
+round-off, the stage-2 README's trap (a first draft of the case list had four). The stack's
+cross-polarised arrays (``r_s``, ``t_s``, ``R_s``, ``T_s`` of its p wave) are round-off since the
+PlaneWave launches the grid's own p wave (``wavebit/fd/_lower/sources.py::plane_wave_drive``),
+so they are not frozen and are held under a line live instead
+(:func:`test_a_layered_cell_carries_no_cross_polarisation_on_any_backend`).
 """
 import json
 import math
@@ -65,9 +69,9 @@ NAMES = tuple(SCENES)
 
 #: A frozen array is either exactly 0.0 on every backend (a symmetry zero) or at least this
 #: large in absolute terms -- every scene is driven at order one, and the smallest real array
-#: frozen is 1.8e-5 (the bloch_stack's ``R_s``, the conical source's s part, see
-#: ``tests/fd_helpers.py::conical_grating``). The four Hz accumulators of the first draft sat at
-#: 1e-17.
+#: frozen is 1.3e-2 (the bloch_stack's ``Flux`` plane). The four Hz accumulators of the first
+#: draft sat at 1e-17; the bloch_stack's ``R_s`` sat at 1.8e-5 until the PlaneWave launched the
+#: grid's own p wave (2026-09-19), and is round-off now and not frozen.
 ROUND_OFF_LINE = 1e-10
 
 _MARKS = {p.values[0]: list(p.marks) for p in backends()}
@@ -285,6 +289,27 @@ def test_no_frozen_array_is_round_off(golden):
         assert peak == 0.0 or peak > ROUND_OFF_LINE, (key, peak)
 
 
+@pytest.mark.parametrize('backend', backends())
+def test_a_layered_cell_carries_no_cross_polarisation_on_any_backend(backend):
+    """The stack is a slab in a Bloch cell under a conical (``phi = 30``) p wave: it couples no
+    s, on the grid as in the continuum, once the PlaneWave launches the grid's own p wave. So
+    its s arrays are round-off on every backend -- which is why ``capture`` leaves them out
+    (``_fd_stage3_cases.cross_polarised``) -- and the co-polarised ones are order one. Before
+    the drive carried the stagger phase they were ``|r_s| = 4.3e-3``, ``|t_s| = 8.8e-3``
+    (the first freeze of this archive)."""
+    res, _ = result('bloch_stack', backend)
+    for monitor, amp, power in (('r', 'r', 'R'), ('t', 't', 'T')):
+        orders = res[monitor].orders.given
+        co = np.max(np.abs(to_numpy(getattr(orders, f'{amp}_p'))))
+        assert co > 0.1, (monitor, co)
+        assert np.max(np.abs(to_numpy(getattr(orders, f'{amp}_s')))) < 1e-13 * co, monitor
+        assert np.max(np.abs(to_numpy(getattr(orders, f'{power}_s')))) < 1e-24, monitor
+    samples = sample_indices(res.plan.shape)
+    keys = set(capture(res, result('bloch_stack', backend)[1], samples))
+    assert not keys & {f'result__{m}__{k}' for m in 'rt'
+                       for k in ('r_s', 't_s', 'R_s', 'T_s')}, keys
+
+
 def test_the_lamellar_grating_is_te_and_symmetric_on_every_backend(golden):
     """Normal incidence, s, a tooth centred in its cell, one cell deep in y: the field is
     ``Ey``, ``Hx``, ``Hz`` only, so every p array and every ``Ex``/``Hy`` accumulator is an exact
@@ -321,7 +346,9 @@ def test_the_frozen_orders_split_exactly_into_s_and_p(golden):
             got = _per_backend(arrays, name, backend)
             for monitor, total in (('r', 'R'), ('t', 'T')):
                 whole = got[f'result__{monitor}__{total}']
-                parts = got[f'result__{monitor}__{total}_s'] + got[f'result__{monitor}__{total}_p']
+                # A layered cell's cross-polarised part is not frozen (round-off): it adds 0.
+                parts = (got.get(f'result__{monitor}__{total}_s', 0.0)
+                         + got.get(f'result__{monitor}__{total}_p', 0.0))
                 assert np.max(np.abs(parts - whole)) < 1e-14 * np.max(whole), (name, total)
 
 
@@ -465,13 +492,16 @@ def test_mutant_the_continuum_kz_passes_agreement_and_fails_every_golden(golden,
     every field and every source spectrum stays **bit-identical** to its golden, and so do the
     efficiencies ``R`` and ``T`` (a wrong kz over a propagating distance is a phase) -- only the
     pin on the complex amplitudes sees it. Measured 2026-09-19, the same on every backend:
-    ``r_s``/``r_p`` 2.1e-2 and ``t_s``/``t_p`` 1.4e-2 of their peaks on the stack, 1.4e-2 to
+    ``r_p`` 2.1e-2 and ``t_p`` 1.4e-2 of their peaks on the stack (its s arrays are round-off
+    and not frozen), 1.4e-2 to
     2.0e-2 on the conical grating (1.9e-2 / 1.7e-2 on the lamellar one), the ``(kz - kappa)``
     of 20 cells per wavelength over the half wavelength from each plane to its reference."""
     monkeypatch.setattr(_post, 'DIFFRACTION_KZ', 'continuum')
     gaps = _mutant_gaps(golden, name, {b: _rebuild(name, b) for b in INSTALLED})
     amplitudes = ('result__r__r_s', 'result__r__r_p', 'result__t__t_s', 'result__t__t_p')
     for backend, g in gaps.items():
+        amplitudes = tuple(k for k in amplitudes if k in g)     # the stack freezes p only
+        assert len(amplitudes) == (2 if name == 'bloch_stack' else 4), amplitudes
         assert max(v for k, v in g.items() if k not in amplitudes) == 0.0, (backend, g)
         assert min(g[k] for k in amplitudes) > 1e-3, (backend, g)
 

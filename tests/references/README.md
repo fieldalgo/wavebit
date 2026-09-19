@@ -223,6 +223,23 @@ changing only because `ColumnTerm` and `Correction` gained fields. What says the
 are right is `tests/test_fd_tfsf.py`: the box interior over a substrate is the
 `PlaneWave`-driven physical field to round-off at every step, and the discrete Airy field.
 
+**`plane_wave` was re-frozen once, on purpose (2026-09-19).** Its first freeze pinned a launch
+defect: the PlaneWave column's hard source wrote the continuum polarisation into the stored
+`E_x` and `E_y`, without the half-cell stagger phase `exp(i k_c dx/2)` each carries along its
+own axis and not transverse to the grid's discrete `K_par`, so this conical (`phi = 30`) p wave
+was launched with an s part first order in `dx` (an empty conical cell at 20 cells per
+wavelength transmitted `|t_p| = 9.1e-3` for an s wave). The drive now writes the grid's own s
+or p wave (`wavebit/fd/_lower/sources.py::plane_wave_drive` derives it). That moved this
+scene's fields, `Record` series and reference series by 2.7e-2 to 4.7e-2 of their peaks and its
+energy by 7.9e-6, and nothing else: the lowered pattern and waveform rows and the other three
+scenes (116 of 140 arrays) reproduced bit for bit, and the stage-0 and stage-1 archives did too
+(143 of 143, 288 of 288). The skeleton changed because the drive weights are now complex
+(a static plan now encodes a Python `complex`). What says the new numbers are right is
+`tests/test_fd_planewave.py` (the forward field is the closed form with the grid's own
+polarisation, and the incident field carries no trace of the other one at `phi = 35`) and the
+leak tests of `tests/test_fd_axis1d.py` and `tests/test_fd_diffraction.py` (1e-16 where they read
+1e-3 to 1e-2).
+
 `interface/freeze_fd_stage2.py` writes it under exactly the stage-0 and stage-1 rules: this
 checkout only, twice in one process, LF-normalised source digests (its own, its case list's,
 and the stage-0 case list it imports its capture from), a content digest the test recomputes,
@@ -274,6 +291,23 @@ enclose a dipole's stamp (two cells either side of its centre) with a cell to sp
 stamps -- the first freeze pinned a flux that missed part of the power. They were re-frozen with
 `--rebaseline` for that reason alone (only those two scenes moved; 582 of 582 arrays reproduce
 since).
+
+**`bloch_stack` and `conical` were re-frozen (2026-09-19)** for the PlaneWave launch fix that
+re-froze the stage-2 `plane_wave` scene above: both are conical p waves, and both had been
+frozen with the launch's first-order s part in them. Moved, as a fraction of each array's
+peak and the same on every backend: `bloch_stack`'s accumulators 2.8e-2 to 5.9e-2, sampled
+fields 5.1e-2 / 5.7e-2, `incident_amplitude` 5.1e-2 (the stagger phases), and its energies,
+fluxes, `R`, `T`, `R_p`, `T_p` and `intensity` 8e-6 to 9.5e-5, while its complex `r_p` and
+`t_p` moved 4e-16 (the normalisation by the column divides the launch out); `conical`'s
+accumulators 5.9e-4 to 2.2e-2, fields 7.4e-3 / 1.0e-2, complex amplitudes 1.9e-3 to 3.9e-2,
+efficiencies 1.8e-5 to 2.6e-3, `incident_amplitude` 5.1e-3. The three other scenes reproduce bit
+for bit (414 arrays). **Four arrays left the archive:** the stack's `r_s`, `R_s`, `t_s` and
+`T_s` were the defect itself (`|r_s| = 4.3e-3`, `|t_s| = 8.8e-3`, `R_s = 1.8e-5` -- the
+smallest array the round-off line was calibrated on) and are round-off now, because a layered
+cell couples none of the grid's own s into its own p. A pin on round-off is the trap this
+archive's round-off line exists to refuse, so `_fd_stage3_cases.cross_polarised` leaves them
+out of the capture of a `Box`-free cell and `tests/test_fd_stage3_backends.py` holds them live
+under 1e-13 of the co-polarised amplitude on every backend instead; 570 arrays are frozen.
 
 `interface/freeze_fd_stage3.py` writes it under exactly the earlier stages' rules: this checkout
 only, twice in one process, LF-normalised source digests (its own, its case list's, the stage-0

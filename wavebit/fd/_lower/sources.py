@@ -290,7 +290,7 @@ def _plane_wave_term(scene, plan, src, row):
                    pattern=pattern)
         for slot, slab, s, a, read, sign in box_corrections(
             lo, hi, transverse, transverse, n, faces=((P, side),)))
-    drive = tuple((c, float(e[c])) for c in transverse if abs(e[c]) > 1e-15)
+    drive = plane_wave_drive(scene, plan, src)
     ks = k0i - 1 if src.sign > 0 else k0i + 1
     entry_H = k0i if src.sign > 0 else k0i - 1
     plane = grid.low[P] + k0i * grid.dx
@@ -299,6 +299,85 @@ def _plane_wave_term(scene, plan, src, row):
                       ks=ks + off, corrections=corrections, entry_E=k0i + off,
                       entry_H=entry_H + off, plane_E=plane,
                       plane_H=plane + src.sign * 0.5 * grid.dx)
+
+
+def plane_wave_drive(scene, plan, src):
+    """``((component, weight), ...)``: the stored tangential E a PlaneWave's hard source writes.
+
+    **The discrete plane wave in a Bloch cell.** A field ``A exp(i k . r)`` on the Yee grid is
+    stored with each component at its own position (``__init__``'s offsets), so the value in
+    cell ``i`` of component ``F_c`` is ``A_c exp(i k . r_c)``, ``r_c`` the component's position:
+    relative to the cell's low corner, ``E_u`` carries ``exp(i k_u dx/2)`` (half a cell along
+    ``u``), ``E_v`` ``exp(i k_v dx/2)``, ``E_P`` ``exp(i k_P dx/2)``, ``H_u`` ``exp(i (k_v + k_P)
+    dx/2)`` and so on -- each component's stagger along its own offsets. With the stagger
+    removed (``A`` referred to each component's own position), every one-cell difference of
+    the grid is ``i K_a`` with ``K_a = 2 sin(k_a dx/2)/dx`` (``k_a`` itself on an ``Axis1D``
+    axis, whose difference is the exact ``i k`` and which has no stagger), and the time
+    difference is ``-i Omega``, ``Omega = 2 sin(w dt/2)/dt``, so the update equations become
+    the continuum's with ``k -> K``, ``w -> Omega``: ``Z0 H = K x E / (Omega mu)``, ``K . E =
+    0`` and ``|K|^2 = Omega^2 eps mu``. The two polarisations are therefore transverse to the
+    **discrete** ``K``: ``s_hat = P_hat x K_hat_par`` and ``p_hat = s_hat x K_hat``, whose
+    tangential part is ``(K_P / |K|) K_hat_par`` -- along ``K_hat_par`` for every frequency, only
+    its length depending on ``Omega``. That is the frame ``_post.frame`` reads every order in.
+
+    **The drive.** The hard source imposes the stored tangential E at ``ks``; the column
+    radiates the superposition of the s and p modes whose tangential E matches it. Since the
+    two modes' tangential E are ``s_hat_t`` and ``K_hat_par``, orthogonal at every frequency, a
+    drive along ``s_hat_t`` launches pure s and one along ``K_hat_par`` pure p **exactly**,
+    provided the drive is written in stagger-removed amplitudes. So the stored weights are
+
+        s:  (-K_v, K_u) / |K_par|,                       times exp(i k_c dx/2) per component
+        p:  sigma cos(theta) (K_u, K_v) / |K_par|,       times exp(i k_c dx/2) per component
+
+    (``sigma`` the direction's sign; ``cos(theta)`` keeps the continuum's length, which the
+    normalisation -- read off the column -- does not depend on). At ``K_par = 0`` the frame is
+    the PlaneWave's own ``phi`` and every stagger phase is 1. The H partners need nothing
+    here: the column is an exact discrete solution, so its H carries its own stagger and the
+    discrete impedance, and the Huygens sheet reads both through the per-cell ``pattern``.
+
+    Before this (stage 2) the weights were the continuum ``e``'s tangential part with no phase:
+    the launched wave's tangential E was elliptical by ``~ (k_u - k_v) dx/2``, a first-order p
+    part in an s wave off ``phi = 0, 90`` (``|t_p| = 9.1e-3`` in an empty conical cell at 20
+    cells per wavelength; ``tests/test_fd_axis1d.py``, ``tests/test_fd_diffraction.py``).
+
+    ``k_par`` is the wave's own at the band centre, which the transverse faces were checked to
+    carry (``_plane_wave_term``); a traced Bloch phase is not read here, so the drive is static.
+    """
+    grid, P = plan.grid, src.axis
+    u, v = (P + 1) % 3, (P + 2) % 3
+    k, e, _ = src.vectors()
+    kpar = {u: 0.0, v: 0.0}
+    if abs(k[u]) >= 1e-12 or abs(k[v]) >= 1e-12:
+        index = as_material(scene.background, 'Scene(background=)').index_bound()
+        k0 = index * 2.0 * math.pi / src.band.concrete_wavelength
+        kpar = {a: (k0 * k[a] if abs(k[a]) >= 1e-12 else 0.0) for a in (u, v)}
+    dx = grid.dx
+    axis1d = {a: isinstance(scene.boundaries.face(AXES[a] + '-'), Axis1D) for a in (u, v)}
+    K = {a: kpar[a] if axis1d[a] else 2.0 * math.sin(kpar[a] * dx / 2.0) / dx for a in (u, v)}
+    norm = math.hypot(K[u], K[v])
+    if norm <= 1e-12 * (1.0 + norm):
+        tangential = {u: e[u], v: e[v]}
+    else:
+        qu, qv = K[u] / norm, K[v] / norm
+        if src.polarization == 's':
+            tangential = {u: -qv, v: qu}
+        else:
+            length = src.sign * math.cos(math.radians(src.theta))
+            tangential = {u: length * qu, v: length * qv}
+    drive = []
+    for c in (u, v):
+        weight = tangential[c]
+        if abs(weight) <= 1e-15:
+            continue
+        stagger = 0.0 if axis1d[c] else kpar[c] * dx / 2.0
+        if stagger != 0.0:
+            if plan.dtype != 'complex128':
+                raise AssertionError('a transverse k on a real run')
+            weight = complex(weight * math.cos(stagger), weight * math.sin(stagger))
+        else:
+            weight = float(weight)
+        drive.append((c, weight))
+    return tuple(sorted(drive))
 
 
 def _tfsf_term(scene, plan, src, row):

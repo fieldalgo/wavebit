@@ -1178,16 +1178,19 @@ def conical_grating(theta=15.0, phi=60.0, polarization='s', cells_per_wavelength
     over every propagating order's complex ``r_s, r_p, t_s, t_p`` at the three wavelengths:
 
         cells per wavelength          20        40        80
-        s incidence                1.96e-2   8.19e-3   3.81e-3
-        p incidence                3.60e-2   1.46e-2   6.69e-3
+        s incidence                1.79e-2   7.33e-3   3.40e-3
+        p incidence                3.45e-2   1.38e-2   6.30e-3
 
-    first order in ``dx`` (the staircase, and the source's own s/p mix below), with ``R + T``
-    within 6e-4 of 1. Two things in that number are not Axis1D's: (1) the PlaneWave column
-    drives the stored ``E_x`` and ``E_y`` with the continuum polarisation, but each sits half a
-    cell along its own axis, so a conical wave is launched with a p part of ``~ (e . k_hat_par)
-    (k_x - k_y) dx/2`` -- 8.9e-3 in ``t_p`` for this cell at 20 cells per wavelength in vacuum
-    (6.5e-3 with a multi-cell Bloch y), 3e-5 with the stagger phase put into the drive; (2) the
-    grating rings: the reflect monitor's decay ratio is 7.2e-5 (s) and 1.7e-3 (p) at 160
+    first order in ``dx`` (the staircase), with ``R + T`` within 6e-4 of 1, and the efficiencies
+    6.4e-3 / 1.5e-3 / 4.8e-4 (s) and 5.7e-3 / 1.8e-3 / 9.6e-4 (p). Until 2026-09-19 the
+    amplitudes were 1.96e-2 / 8.19e-3 / 3.81e-3 (s) and 3.60e-2 / 1.46e-2 / 6.69e-3 (p): the
+    PlaneWave column drove the stored ``E_x`` and ``E_y`` with the continuum polarisation, but
+    each sits half a cell along its own axis, so a conical wave was launched with a p part of
+    ``~ (e . k_hat_par)(k_x - k_y) dx/2`` -- 9.1e-3 in ``t_p`` for this cell at 20 cells per
+    wavelength in vacuum. The drive now writes the grid's own wave
+    (``wavebit/fd/_lower/sources.py::plane_wave_drive``) and the vacuum cell's ``t_p`` is 2e-16;
+    the efficiencies moved by less than 1e-5. One thing in the number is still not Axis1D's:
+    the grating rings -- the reflect monitor's decay ratio is 7.2e-5 (s) and 1.7e-3 (p) at 160
     periods and does not fall with the run's length (the field left is at the ``(+1, 0)`` and
     ``(-1, 0)`` Rayleigh wavelengths 1.29 and 1.85, inside the band), so
     ``fd.UnsettledFieldWarning`` fires; the orders move by 8.9e-4 (s) / 3.3e-3 (p) between 160

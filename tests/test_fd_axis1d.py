@@ -20,12 +20,12 @@ engine did not compute itself:
   order and the three wavelengths:
 
       incidence   |r_s, r_p, t_s, t_p| amplitude   |R|, |T| per order   |R + T - 1|
-      s           1.96e-2                          6.4e-3               1.5e-4
-      p           3.60e-2                          5.7e-3               6.2e-4
+      s           1.79e-2                          6.4e-3               1.5e-4
+      p           3.45e-2                          5.7e-3               6.2e-4
 
-  and at 40 cells per wavelength 8.2e-3 (s) and 1.46e-2 (p) in amplitude (slow test): first
-  order in ``dx``, the cell-snapped staircase of the tooth (``fd_helpers.box_grating``) plus the
-  source defect below, not the Axis1D.
+  and at 40 cells per wavelength 7.3e-3 (s) and 1.38e-2 (p) in amplitude (slow test): first
+  order in ``dx``, the cell-snapped staircase of the tooth (``fd_helpers.box_grating``), not
+  the Axis1D. (Until the launch fix below: 1.96e-2 / 3.60e-2 at 20, 8.2e-3 / 1.46e-2 at 40.)
 * **A Bloch phase on a one-cell user axis is refused, naming Axis1D** (the artificial
   dispersion above), and the spelling it suggests runs.
 * **The CFL bound carries ``k_max^2/4``.** With two differenced axes at courant 0.5 the line is
@@ -40,14 +40,18 @@ engine did not compute itself:
 at the exact frequency appears and grows as ``k^2`` -- 4.0e-4, 1.6e-3, 7.1e-3 at k = 3, 6, 12
 (measured), 0 at k = 0.
 
-**A kernel defect, pinned as ``xfail(strict=True)``**: a conical ``PlaneWave`` (phi off 0 and
-90 on a two-axis transverse plane) is launched with a p part. The column's hard source writes
-the continuum ``e_c`` into the stored ``E_x`` and ``E_y``, but each sits half a cell along its own
-axis, so the injected tangential E is elliptical: in an empty cell at theta 15, phi 60, 20
-cells per wavelength, s incidence transmits ``|t_p| = 9.1e-3`` (measured) where it must be 0.
-With the stagger phase ``exp(i k_c dx/2)`` in the drive weights it falls to 3e-5 (Build B's
-scratch probe). At phi 90 (E_s along x, which carries no phase) it is exactly 0 -- the control.
-It sits in every conical amplitude above (``t_p`` of the zero order is 8.9e-3 of the 1.96e-2).
+**A launch defect, fixed 2026-09-19** (``xfail(strict=True)`` until then): a conical
+``PlaneWave`` (phi off 0 and 90 on a two-axis transverse plane) was launched with a p part. The
+column's hard source wrote the continuum ``e_c`` into the stored ``E_x`` and ``E_y``, but each
+sits half a cell along its own axis, so the injected tangential E was elliptical: in an empty
+cell at theta 15, phi 60, 20 cells per wavelength, s incidence transmitted ``|t_p| = 9.1e-3``
+where it must be 0. The drive now writes the grid's own wave -- stagger-removed amplitudes
+transverse to the discrete ``K_par`` (here ``K_x = 2 sin(k_x dx/2)/dx`` and the exact ``k_y`` of
+the Axis1D, which has no stagger), times ``exp(i k_x dx/2)`` on ``E_x``
+(``wavebit/fd/_lower/sources.py::plane_wave_drive``) -- and the leak is round-off: 2.4e-16 (s)
+/ 2.8e-16 (p) at phi 60, 1.9e-16 / 3.6e-16 at phi 75, at 20 and 40 cells per wavelength alike,
+with ``|t| = 1`` to 1e-7 (the 40-period run's settling). At phi 90 (E_s along x, where the
+Axis1D ``k_y`` is the whole ``K_par``) it was and is exactly 0 -- the control.
 """
 import math
 import warnings
@@ -141,9 +145,16 @@ def test_mutant_the_one_cell_bloch_difference_errs_and_the_error_grows_with_k(mo
 # ---------------------------------------------------------------------------------------------
 
 #: The worst ``|fd - rcwa|`` allowed at 20 cells per wavelength, (amplitude, efficiency), with
-#: the measured value it sits above.
-CONICAL_TOL = {'s': (2.5e-2, 1e-2),        # measured 1.96e-2, 6.4e-3
-               'p': (4.5e-2, 1e-2)}        # measured 3.60e-2, 5.7e-3
+#: the measured value it sits above. The amplitude lines sit ~3% above the measured values and
+#: below what the pre-fix PlaneWave drive measured, so the old conical-launch leak fails here
+#: too. That is the most this gate can say about the launch: the error it reads is the
+#: tooth's first-order staircase, and a leak much smaller than the old one hides under it.
+#: The launch itself is guarded by the leak tests, which read the cross-polarised amplitude
+#: directly: :func:`test_an_empty_conical_cell_transmits_no_p`,
+#: ``test_fd_diffraction.py::test_a_conical_plane_wave_is_launched_without_the_other_polarisation``
+#: and ``test_fd_stage3_backends.py::test_a_layered_cell_carries_no_cross_polarisation_on_any_backend``.
+CONICAL_TOL = {'s': (1.85e-2, 1e-2),       # measured 1.79e-2, 6.4e-3 (1.96e-2 before the fix)
+               'p': (3.55e-2, 1e-2)}       # measured 3.45e-2, 5.7e-3 (3.60e-2 before the fix)
 
 
 #: RCWA's truncation for the conical twin, and the one it is checked against.
@@ -220,7 +231,8 @@ def test_a_conical_lamellar_grating_matches_rcwa_at_matched_geometry(polarizatio
 @pytest.mark.slow
 @pytest.mark.parametrize('polarization', ['s', 'p'])
 def test_the_conical_grating_converges_toward_rcwa_with_resolution(polarization):
-    """Measured: 1.96e-2 -> 8.2e-3 (s), 3.60e-2 -> 1.46e-2 (p) from 20 to 40 cells/wavelength."""
+    """Measured: 1.79e-2 -> 7.3e-3 (s), 3.45e-2 -> 1.38e-2 (p) from 20 to 40 cells/wavelength
+    (1.96e-2 -> 8.2e-3 and 3.60e-2 -> 1.46e-2 while the launch carried its first-order p part)."""
     coarse = _conical_errors(polarization, 20)[0]
     fine = _conical_errors(polarization, 40)[0]
     assert fine < coarse / 1.8, (coarse, fine)
@@ -328,10 +340,8 @@ def test_an_empty_cell_at_phi_90_transmits_no_p():
     assert _empty_conical_t_p(90.0) < 1e-12                     # measured 0.0
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    'kernel defect (wavebit/fd/_kernel/sources.py PlaneWave column, stage 2): the hard source '
-    'writes the continuum e_c into the stored E_x and E_y without their half-cell stagger phase '
-    'exp(i k_c dx/2), so a conical wave is launched with a p part: |t_p| = 9.1e-3 in an empty '
-    'cell at theta 15, phi 60, 20 cpw (3e-5 with the phase in the drive weights)'))
-def test_an_empty_conical_cell_transmits_no_p():
-    assert _empty_conical_t_p(60.0) < 1e-3
+@pytest.mark.parametrize('phi', [60.0, 75.0])
+def test_an_empty_conical_cell_transmits_no_p(phi):
+    """Measured 2.4e-16 at phi 60 and 1.9e-16 at 75; 9.1e-3 at 60 before the drive carried
+    the stagger phase and the discrete ``K_par`` direction."""
+    assert _empty_conical_t_p(phi) < 1e-13

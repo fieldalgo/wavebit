@@ -30,7 +30,9 @@ code paths, not a settled answer.
     A 25-degree p ``PlaneWave`` at ``phi = 30`` in a 4 x 3 Bloch cell over a three-cell glass
     layer, with a reflect and a transmit ``Diffraction`` monitor (the order extraction, the
     direction split, the Yee kz de-embedding, the s/p frame) and a full-cell ``Flux`` plane;
-    the sheet's ``incident_amplitude()`` and ``intensity()`` spectra. Complex.
+    the sheet's ``incident_amplitude()`` and ``intensity()`` spectra. Complex. A layered cell
+    couples no s into a p wave, so the four s arrays of each monitor (``r_s``, ``R_s`` and
+    ``t_s``, ``T_s``) are round-off and are **not frozen** (:func:`cross_polarised`).
 ``lamellar``
     A cell-snapped ``Box`` tooth (stage 3's structure) 12 x 4 cells in a 24-cell period, one
     cell deep in y, under a normally incident s ``PlaneWave``: three orders propagate (``m = -1,
@@ -47,6 +49,22 @@ code paths, not a settled answer.
     A lamellar ``Box`` tooth 16 x 4 cells in a 32-cell period under a 15-degree p
     ``PlaneWave`` at ``phi = 60``, with y an ``fd.Axis1D`` (the exact ``i k`` derivative) and x
     Bloch: the conical path, where every order couples s and p. Complex.
+
+**``bloch_stack`` and ``conical`` were re-frozen 2026-09-19 with ``--rebaseline``**, for one
+reason: the first freeze pinned a launch defect of the PlaneWave column. Its hard source wrote
+the continuum polarisation into the stored ``E_x`` and ``E_y`` without the half-cell stagger
+phase each carries along its own axis (and not transverse to the grid's discrete ``K``), so both
+scenes' conical p waves were launched with an s part first order in ``dx``; the drive now writes
+the grid's own p wave (``wavebit/fd/_lower/sources.py::plane_wave_drive``). What moved, as a
+fraction of each array's peak (the same on every backend): ``bloch_stack`` -- the accumulators
+2.8e-2 to 5.9e-2, the sampled fields 5.1e-2 / 5.7e-2, ``incident_amplitude`` 5.1e-2 (the
+stagger phases, ``k_x dx/2 = 0.058`` and ``k_y dx/2 = 0.033`` rad here), the energies, fluxes,
+``R``, ``T``, ``R_p``, ``T_p`` and ``intensity`` 8e-6 to 9.5e-5, and its s arrays, which were the
+defect itself (``|r_s| = 4.3e-3``, ``|t_s| = 8.8e-3``, ``R_s = 1.8e-5``), went to round-off
+and out of the archive;
+``conical`` -- the accumulators 5.9e-4 to 2.2e-2, the fields 7.4e-3 / 1.0e-2, the complex
+amplitudes 1.9e-3 to 3.9e-2, the efficiencies 1.8e-5 to 2.6e-3, ``incident_amplitude`` 5.1e-3.
+The other three scenes reproduced bit for bit.
 
 **Every run is short** (300 to 500 steps: the band's pulse peaks at step 273 in the boxes and
 234 in the columns), so every frequency-domain monitor is cut off before the field has
@@ -320,8 +338,12 @@ def capture(res, state, samples):
     for region in dft_regions(res.plan):
         for label, value in state['obs'][region.name].items():
             out[f'dft__{region.name}__{label}'] = _np(value)
+    layered = polarisation_preserving(res.plan)
     for name in res:
-        out.update({f'result__{name}__{k}': v for k, v in monitor_arrays(res[name]).items()})
+        arrays = monitor_arrays(res[name])
+        if layered and type(res[name]).__name__ == 'DiffractionResult':
+            arrays = {k: v for k, v in arrays.items() if k not in cross_polarised(res[name])}
+        out.update({f'result__{name}__{k}': v for k, v in arrays.items()})
     for name, series in res.sources.items():
         if series.kind.startswith('Dipole'):
             out[f'source__{name}__power'] = _np(series.power())
@@ -329,6 +351,23 @@ def capture(res, state, samples):
             out[f'source__{name}__incident_amplitude'] = _np(series.incident_amplitude())
             out[f'source__{name}__intensity'] = _np(series.intensity())
     return out
+
+
+def polarisation_preserving(plan):
+    """Whether every structure of ``plan`` is a slab across one axis (no ``Box``): a layered,
+    isotropic cell, which never couples s and p -- on the grid as in the continuum, because
+    with the stagger removed its equations are the continuum's with ``k -> K``."""
+    return all(not row[0].startswith('box') for row in plan.spans)
+
+
+def cross_polarised(result):
+    """The ``Result`` fields of the polarisation a ``Diffraction`` monitor's source did not
+    launch. In a :func:`polarisation_preserving` cell they are round-off (1e-16, measured) since
+    the PlaneWave launches the grid's own s or p wave, so they are **not frozen** -- a pin on
+    round-off is O(1) of its own peak -- and ``tests/test_fd_stage3_backends.py`` holds them
+    under a line live instead."""
+    other = 'p' if result.polarization == 's' else 's'
+    return {f'r_{other}', f't_{other}', f'R_{other}', f'T_{other}'}
 
 
 def monitor_arrays(result):

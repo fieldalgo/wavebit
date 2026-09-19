@@ -72,8 +72,11 @@ phase per cell reproduces exactly (the same discrete transverse derivative, ``(e
 the derivative there is the same exact ``i k``). So each ``PlaneWave`` and ``TFSF`` term carries a column in its memory -- a
 sub-plan along the propagation axis stepped by the kernel's own curl, update, masks, CPML
 and pole terms -- driven by a hard source one cell upstream of the surface, so every value
-the corrections read lies in the column's forward region. For ``TFSF`` the column has the
-scene's own (absorbing) faces on that axis and every structure that is a slab across it (the
+the corrections read lies in the column's forward region. The hard source fixes the tangential
+E, and the column radiates whatever discrete waves carry it; a PlaneWave's drive is therefore
+the grid's own s or p wave -- transverse to the discrete ``K_par`` and with each stored
+component's stagger phase -- or the column launches both
+(``_lower/sources.py::plane_wave_drive``). For ``TFSF`` the column has the scene's own (absorbing) faces on that axis and every structure that is a slab across it (the
 layered background). For ``PlaneWave`` it has the uniform background, so waves reflected
 back through the sheet by the scene's layers pass it as scattered field, and its two ends
 absorb whatever the scene's do: a PEC, PMC, Symmetry or periodic face along the axis is
@@ -311,7 +314,9 @@ class ColumnTerm:
 
     ``sub`` is the column's own plan (1 x 1 across, the scene's cells along ``axis``);
     ``drive`` is ``((component, weight), ...)`` -- the tangential E the hard source imposes
-    at column index ``ks`` -- and ``entry_E``/``entry_H`` the column indices the reference
+    at column index ``ks``; a PlaneWave's weights are the grid's own s or p wave, each with
+    its component's half-cell stagger phase, so complex off normal incidence
+    (``wavebit/fd/_lower/sources.py::plane_wave_drive`` derives them) -- and ``entry_E``/``entry_H`` the column indices the reference
     series is read at: ``entry_E`` is the node plane where the total field begins (the
     tangential E there) and ``entry_H`` the index of the half plane just inside it (the
     tangential H, and the normal E; the normal H sits on that index's node). ``kind`` is

@@ -18,7 +18,10 @@ against something the engine did not compute itself:
   per wavelength; predicted 9.2e-6 and 4.77e-4), and exactly 0 at theta 0, where the 1-D Yee
   impedance is exactly the continuum's (``Z0 H = -E`` at the staggered points).
 * **The forward field is the closed form at every frequency in the band.** The DFT of E at a
-  probe plane downstream equals ``e_t A W(w) exp(i kz(w) d)``: ``W`` the DFT of the waveform
+  probe plane downstream equals ``e_t A W(w) exp(i kz(w) d)``, ``e_t`` the stored tangential E
+  of the grid's own s or p wave (transverse to the discrete ``K_par``, each component with its
+  half-cell stagger phase ``exp(i k_c dx/2)``, written out in ``_grid_polarisation``; the
+  continuum ``e`` missed by 4e-2 to 6e-2 off normal incidence): ``W`` the DFT of the waveform
   written out here from ``fd.Band``'s definition at the hard source's times ``(n + 1) dt``, ``d``
   the distance from the column's hard-source plane to the probe, and ``kz`` the **discrete**
   propagation constant of the fixed-k Bloch wave, ``(2/dx) sin(kz dx/2) = sqrt(W^2 - Kx^2 -
@@ -44,7 +47,9 @@ against something the engine did not compute itself:
 * **s and p are transverse, and E x H points along k.** ``PlaneWave.vectors()`` is checked for
   the identities; the run's own incident field at the band centre (phases of the staggered
   points removed) is checked for the discrete ones: ``K . E = 0`` and ``W H = K x E`` (so
-  ``Re(E x H*)`` is along ``K``), s with E alone on y and p with H alone on y. At real
+  ``Re(E x H*)`` is along ``K``), s with E alone on ``z_hat x K_hat_par`` and p with H alone
+  there, at every ``phi`` (the conical case included: the grid's s and p, not the continuum's,
+  are what the sheet launches). At real
   frequency the energy flow is along ``K`` to 1e-5 and within 5e-5 (measured) of the
   continuum ``k`` at 20 degrees -- the discrete kz is not the continuum one.
 
@@ -285,6 +290,29 @@ def test_backward_wave_is_at_round_off_in_glass(theta):
 # The forward field against the closed form
 # ---------------------------------------------------------------------------------------------
 
+def _grid_polarisation(pw, plan):
+    """The stored tangential E of the grid's own s or p wave at cell (0, 0), written out here.
+
+    With each component referred to its own Yee point the grid's plane wave is the
+    continuum's with ``k -> K = (2/dx) sin(k dx/2)``, so s is ``z_hat x K_hat_par`` and p's
+    tangential part is along ``K_hat_par`` (its length, ``sigma cos(theta)``, is the drive's);
+    stored at cell (0, 0), ``E_x`` sits half a cell along x and carries ``exp(i k_x dx/2)``,
+    ``E_y`` ``exp(i k_y dx/2)``. At ``K_par = 0`` it is ``pw.vectors()``'s ``e``.
+    """
+    kx, ky = _k_par(pw)
+    dx = plan.dx
+    K = np.array([2.0 * math.sin(kx * dx / 2.0) / dx, 2.0 * math.sin(ky * dx / 2.0) / dx])
+    _, e, _ = pw.vectors()
+    if np.linalg.norm(K) == 0.0:
+        return np.array([e[0], e[1]], dtype=complex)
+    q = K / np.linalg.norm(K)
+    if pw.polarization == 's':
+        t = np.array([-q[1], q[0]])
+    else:
+        t = pw.sign * math.cos(math.radians(pw.theta)) * q
+    return t * np.exp(0.5j * dx * np.array([kx, ky]))
+
+
 def _closed_form_error(theta, pol, phi, direction, steps, gamma, offset=0.8):
     scene, pw = _scene(theta, pol, phi, direction, monitors=_probe_monitors(offset),
                        steps=steps, pml=24, amplitude=A, phase=PHASE, delay=DELAY)
@@ -299,7 +327,7 @@ def _closed_form_error(theta, pol, phi, direction, steps, gamma, offset=0.8):
     W = _dft(t, _waveform(pw, t), w)
     probe = int(round((pw.position + pw.sign * offset - plan.grid.low[2]) / plan.dx))
     distance = abs(probe - term.ks) * plan.dx
-    _, e, _ = pw.vectors()
+    e = _grid_polarisation(pw, plan)
     worst = 0.0
     for c in (0, 1):
         want = e[c] * W * np.exp(1j * _discrete_kz(pw, plan, w) * distance)
@@ -473,11 +501,11 @@ def test_incident_field_is_a_discrete_transverse_plane_wave(case):
     size = np.linalg.norm(E)
     assert abs(K @ E) / np.linalg.norm(K) <= RELATION_TOL * size
     assert np.linalg.norm(Om * H - np.cross(K, E)) <= RELATION_TOL * abs(Om) * size
-    k, e, h = pw.vectors()
-    normal = np.cross(k, [0.0, 0.0, 1.0])
-    if theta > 0 and phi == 0.0:
-        # Off the coordinate planes the grid's s and p are not the continuum's: K is not
-        # parallel to k component by component, so only phi = 0 has an exact normal.
+    if theta > 0:
+        # The grid's s and p are normal to the plane of the *discrete* K and z (off the
+        # coordinate planes K_par is not parallel to k_par); the PlaneWave launches exactly
+        # one of them, so the other is absent to round-off at every phi.
+        normal = np.cross(K.real, [0.0, 0.0, 1.0])
         normal /= np.linalg.norm(normal)
         on, rest = (E, H) if pol == 's' else (H, E)
         # The field on the normal to the plane of incidence is all of it for s's E / p's H,

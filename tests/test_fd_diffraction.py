@@ -52,16 +52,26 @@ gate therefore states the error at each resolution and fits its order rather tha
 number to a second-order tolerance. The resolution sweeps of the gratings are ``slow`` (3 min
 for the crossed one, 2 min each for the others, at ``-n 4``).
 
-**A defect this gate exposes, not fixed here** (``xfail(strict=True)``,
-:func:`test_a_conical_plane_wave_is_launched_without_the_other_polarisation`): off the planes
-``phi = 0`` and ``90`` the PlaneWave column launches a p part with an s wave (and the reverse).
-Its hard source writes the continuum polarisation into the stored ``E_x`` and ``E_y``, each of
-which sits half a cell along its own axis, so the wave it launches is elliptical by ``~ (e .
-k_hat_par)(k_x - k_y) dx/2``. A uniform stack at theta 25, phi 60 transmits ``|t_p| = 9.3e-3 /
-4.6e-3 / 2.3e-3`` for an s wave at 20 / 40 / 80 cells per wavelength (RCWA: 1e-16) -- first order,
-so it is a defect of the launch and not the grid's dispersion. Every gate-3 scene above is at
-``phi = 0``, where it vanishes. (Build B's scratch ``drive_phase_probe.py`` found 3e-5 left
-with the stagger phase put into the drive weights; changing it rebaselines the stage-2 golden.)
+**A defect this gate exposed, fixed 2026-09-19**
+(:func:`test_a_conical_plane_wave_is_launched_without_the_other_polarisation`, an
+``xfail(strict=True)`` until then): off the planes ``phi = 0`` and ``90`` the PlaneWave column
+launched a p part with an s wave (and the reverse). Its hard source wrote the continuum
+polarisation into the stored ``E_x`` and ``E_y``, each of which sits half a cell along its own
+axis, so the launched wave was elliptical by ``~ (e . k_hat_par)(k_x - k_y) dx/2``: a uniform
+stack at theta 25, phi 60 transmitted ``|t_p| = 9.5e-3 / 4.7e-3 / 2.4e-3`` for an s wave at 20 /
+40 / 80 cells per wavelength (and ``|t_s| = 7.8e-3 / 3.9e-3 / 2.0e-3`` for a p wave), first
+order. The drive now writes the grid's own s or p wave -- stagger-removed amplitudes transverse
+to the discrete ``K_par``, times each component's stagger phase ``exp(i k_c dx/2)``
+(``wavebit/fd/_lower/sources.py::plane_wave_drive`` derives it) -- which is the frame
+``_post.frame`` reads the orders in, and the cross-polarised amplitude is round-off: 1.2e-16 to
+6.4e-16 at 20 / 40 / 80, where RCWA gives 1e-16. (Build B's probe, with the stagger phase and
+the continuum direction, left 3e-5: the direction is second order.) At phi 60 the worst
+``|fd - rcwa|`` over co- and cross-polarised amplitudes is unchanged at 20 and 40 cells per
+wavelength (s 2.65e-2 / 6.45e-3, p 3.33e-2 / 9.78e-3: the co-polarised error dominates there),
+and at 80 the s stack's fell from 2.4e-3 to 1.6e-3, the leak having been its largest part.
+Every gate-3 scene above is at ``phi = 0``, where the leak vanished (an s wave's E is along y,
+which carries no k; a p wave's along x carries one common phase, which the normalisation by the
+column divides out), so the table above did not move.
 
 **Mutants** (each re-assembles the *same* finished run under a module switch -- the post-
 processing is all that differs, so the difference is the mutant's alone):
@@ -725,17 +735,16 @@ def test_an_analytic_pulse_normalisation_is_caught(monkeypatch, pol):
 # A defect (kernel, stage 2): the conical launch
 # ---------------------------------------------------------------------------------------------
 
-@pytest.mark.xfail(strict=True, reason=(
-    'wavebit/fd PlaneWave column (stage 2, _kernel/sources.py / _lower/sources.py): the hard '
-    'source drives the stored E_x and E_y with the continuum polarisation although each sits '
-    'half a cell along its own axis, so a conical (phi not 0 or 90) wave is launched with a '
-    'first-order p part: |t_p| = 4.6e-3 for an s wave at 40 cells per wavelength, RCWA 1e-16'))
-def test_a_conical_plane_wave_is_launched_without_the_other_polarisation():
+@pytest.mark.parametrize('pol', ['s', 'p'])
+def test_a_conical_plane_wave_is_launched_without_the_other_polarisation(pol):
     """A uniform stack is polarisation-preserving at any angle: at theta 25, phi 60 an s wave
-    reflects and transmits no p (RCWA: 1e-16). The grid's own discretisation of a correctly
-    launched wave would leave it second order -- 1e-3 at 40 cells per wavelength is 20x what a
-    fixed drive leaves (3e-5, measured in Build B's scratch probe)."""
-    scene, info = bloch_stack(theta=25.0, phi=60.0, polarization='s', layers=STACK['layers'],
+    reflects and transmits no p, and a p wave no s (RCWA: 1e-16). On the grid too: with the
+    stagger removed its equations are the continuum's with ``k -> K``, so the grid's own s and
+    p waves do not couple in a layered cell, and the PlaneWave launches exactly one of them.
+    Measured at 40 cells per wavelength: 6.4e-16 (s) / 3.9e-16 (p); before the drive carried
+    the stagger phase, 4.7e-3 / 3.9e-3. The co-polarised amplitudes still match RCWA as
+    :func:`test_a_uniform_stack_matches_rcwa_in_amplitude_and_phase` holds them at phi 0."""
+    scene, info = bloch_stack(theta=25.0, phi=60.0, polarization=pol, layers=STACK['layers'],
                               substrate=STACK['substrate'], cells_per_wavelength=40,
                               transverse=(2 / 40, 2 / 40))
     ctx = _quiet()
@@ -743,13 +752,19 @@ def test_a_conical_plane_wave_is_launched_without_the_other_polarisation():
         res = fd.run(scene)
     finally:
         ctx.__exit__(None, None, None)
+    other = 'p' if pol == 's' else 's'
     th = to_numpy(res['r'].theta_at)
+    d = 0.0
     for i in range(3):
         ref = info['rcwa'](i, th[i])
-        assert abs(order_value(ref, 't_p', 0)) < 1e-12
-    leak = max(np.max(np.abs(order_value(res['r'].orders, 'r_p', 0))),
-               np.max(np.abs(order_value(res['t'].orders, 't_p', 0))))
-    assert leak < 1e-3, leak
+        assert abs(order_value(ref, f't_{other}', 0)) < 1e-12
+        for side in ('r', 't'):
+            f = complex(to_numpy(order_value(res[side].orders, f'{side}_{pol}', 0))[i])
+            d = max(d, abs(f - complex(order_value(ref, f'{side}_{pol}', 0))))
+    leak = max(np.max(np.abs(order_value(res['r'].orders, f'r_{other}', 0))),
+               np.max(np.abs(order_value(res['t'].orders, f't_{other}', 0))))
+    assert leak < 1e-13, leak
+    assert d < 1.5e-2, d                                        # measured 6.5e-3 / 9.8e-3
 
 
 # ---------------------------------------------------------------------------------------------

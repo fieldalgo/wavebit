@@ -81,11 +81,14 @@ def _encode(v):
         return ['int', v]
     if isinstance(v, float):
         return ['float', v.hex()]
+    if isinstance(v, complex):
+        # A PlaneWave's drive weights carry their stagger phase (_lower/sources.py).
+        return ['complex', [v.real.hex(), v.imag.hex()]]
     if isinstance(v, str):
         return ['str', v]
     raise TypeError(f'{type(v).__name__} has no place in a static plan, which holds Python '
-                    f'bool, int, float, str, None, tuples and dataclasses of those; a traced '
-                    f'value belongs in Params, and a numpy scalar is normalised at its door.')
+                    f'bool, int, float, complex, str, None, tuples and dataclasses of those; a '
+                    f'traced value belongs in Params, and a numpy scalar is normalised at its door.')
 
 
 def skeleton_of(**static):

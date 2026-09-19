@@ -26,7 +26,17 @@ enough that the source has actually driven the grid (the band centre's pulse pea
     A p-polarised ``PlaneWave`` at 20 degrees, ``phi = 30``, in a Bloch cell whose phases come
     from ``Bloch.from_source`` (both transverse axes Bloch, so the correction pattern is a
     genuine 2-D phase), with a lossless layer across z below the sheet so that a reflected
-    wave crosses it as scattered field. Complex; a complex drive through the column.
+    wave crosses it as scattered field. Complex; a complex drive through the column. **Re-frozen
+    2026-09-19 with ``--rebaseline``**: the first freeze pinned a launch defect -- the column's
+    hard source wrote the continuum polarisation into the stored ``E_x`` and ``E_y`` without
+    the half-cell stagger phase each carries along its own axis, and not transverse to the
+    grid's discrete ``K``, so this conical (``phi = 30``) p wave was launched with an s part
+    first order in ``dx``. The drive now writes the grid's own p wave
+    (``wavebit/fd/_lower/sources.py::plane_wave_drive``). Only this scene moved: its fields,
+    ``Record`` series and reference series by 2.7e-2 to 4.7e-2 of their peaks (the stagger
+    phase ``k_x dx/2`` is 0.048 rad here, and the s part is gone), its energy by 7.9e-6; the
+    lowered rows (pattern, waveform) and the other three scenes reproduced bit for bit, and
+    the skeleton changed because the drive weights are now complex.
 ``tfsf``
     A ``TFSF`` box in vacuum travelling ``+x`` with E along z: all six faces of the box, and a
     column along x, so the propagation axis is not the one every other scene uses.
