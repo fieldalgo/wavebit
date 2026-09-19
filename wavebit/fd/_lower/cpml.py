@@ -294,19 +294,21 @@ def stabilizing_rate(depth, thickness, eps_r, reflection, rho):
     **Why it is not the default.** Measured with it on by default, 71 of the fd suite's default
     tier failed: every frozen golden with a PML (expected), and also oracle gates -- the Airy
     slab at 30 degrees (5.0e-5 against its 2e-6 line), the closed-form PlaneWave at 20-40
-    degrees (1.4e-5 to 2.5e-5 against 2e-6 / 3e-6), the uniform stack against RCWA (energy
-    off by 2.8e-4 against 1e-4, and its second-order convergence falling to 1.5), and the
-    measured verdicts of the grazing rule (``wavebit/fd/_lower/grazing.py``: at ``cos 0.26``
-    the default face returned 3.7e-2 against the ``R_c`` 1.2e-2 the rule is built on, and the
-    rule's ``tau = 1e-3`` is exceeded below ``cos theta ~ 0.7`` on 12 cells). A default that
-    makes a flat stack or a plane wave less accurate to keep a grating from growing is a choice
-    for the owner, not a fix, so the default stays the pure stretch and the growth is reported
-    instead: when the energy of the scene's interior is still rising after every source has
-    ended, the monitors that see it warn ``fd.GrowingFieldWarning`` (``_assemble.decay_report``,
+    degrees (1.4e-5 to 2.5e-5 against 2e-6 / 3e-6), the uniform stack against RCWA (energy off
+    by 2.8e-4 against 1e-4, and its second-order convergence falling to 1.5), and the measured
+    verdicts of the grazing rule (``wavebit/fd/_lower/grazing.py``: at ``cos 0.26`` the default
+    face returned 3.7e-2 against the ``R_c`` 1.2e-2 the rule is built on, and the stabilized
+    face returns more than that ``tau = 1e-3``, and more than its pure stretch, below exit ``cos
+    theta`` 0.660 (TE) / 0.657 (TM) on 12 cells and 0.472 / 0.475 on 24, which the rule now
+    refuses on a stabilized face). A default that makes a flat stack or a plane wave less
+    accurate to keep a grating from growing is a choice for the owner, not a fix, so the default
+    stays the pure stretch and the growth is reported instead: when the energy of the scene's
+    interior is still rising after every source has ended, the monitors that see it warn
+    ``fd.GrowingFieldWarning`` (``_assemble.decay_report``,
     ``res.diagnostics['interior_growth']``), which says a longer run makes it worse and names
     ``PML(stabilize=...)`` with the value :func:`sufficient_stabilize` gives for the face's
-    target (3e-3 at the default). A run that is merely cut off -- unsettled but not rising --
-    is told to run longer and nothing else.
+    target (3e-3 at the default). A run that is merely cut off -- unsettled but not rising -- is
+    told to run longer and nothing else.
     """
     sigma_max = (-(ORDER + 1.0) * math.log(reflection)
                  / (2.0 * math.sqrt(eps_r) * thickness))

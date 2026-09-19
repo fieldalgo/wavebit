@@ -98,7 +98,9 @@ transform of a closed box's DFT surface fields (``_post.py``), for open scenes o
 ``Axis1D`` is a one-cell axis whose derivative is ``i k`` exactly (a user ``Bloch`` phase on a
 one-cell axis is refused, naming it); and a propagating order a PML face cannot absorb to the
 measured tolerance is refused by the grazing rule (``_lower/grazing.py``, which quotes the
-measurement and judges each wavelength with the CFS shift the layer has there). A flux
+measurement, judges each wavelength with the CFS shift the layer has there, and judges a face
+with ``PML(stabilize=)`` by what its loss returns on each order, computed exactly for this
+kernel in ``_lower/layer_return.py``). A flux
 surface -- a Flux or Diffraction plane, a Flux or FarField box -- keeps off every source: one
 that cuts a Dipole's stamp, lies on a PlaneWave's sheet (or a box around part of it) or cuts a
 TFSF surface is refused, because the 2-cell face would read part of the source

@@ -412,6 +412,13 @@ class PML(Absorbing):
         at 60 against 1.1e-4). That is why it is opt-in: on by default it broke the Airy,
         closed-form PlaneWave, RCWA-stack and grazing-rule gates at 20-40 degrees.
         ``wavebit/fd/_lower/cpml.py::stabilizing_rate`` carries the mechanism and the numbers.
+        The grazing rule judges a stabilized face by its exact return on every propagating
+        order (``wavebit/fd/_lower/layer_return.py``) and refuses an order it returns above
+        both 1e-3 and what its pure stretch returns: at 3e-3 in vacuum at 20 cells per
+        wavelength, below exit ``cos theta`` 0.660 (TE) / 0.657 (TM) on 12 cells and 0.472 /
+        0.475 on 24. At normal incidence the loss is inert and the face is judged as its pure
+        stretch. What a refusal offers is judged on every order, medium and wavelength of the
+        faces it replaces.
         When the energy of the scene's interior still rises after every source has ended,
         the run warns ``fd.GrowingFieldWarning``, which names this knob with the value measured
         for the face's target; a run that is merely unsettled is only told to run longer.
