@@ -162,6 +162,47 @@ class Bloch(FaceType):
                 f'byte and every flop, and a phase of zero buys nothing for that price.')
 
 
+    @staticmethod
+    def from_source(source, background=None):
+        """The transverse faces a :class:`~wavebit.fd.PlaneWave` needs, as ``{axis: face}``.
+
+        ``fd.Boundaries(**fd.Bloch.from_source(pw), z=fd.PML(...))`` for a wave along z. The
+        transverse wavevector is taken at the band centre in the medium the sheet sits in,
+        ``k_par = n (2 pi / wavelength) sin(theta)`` split by ``phi`` over the two transverse
+        axes, with ``n = sqrt(eps mu)`` of ``background`` (a material, a bare permittivity,
+        or ``None`` for vacuum -- pass the scene's ``background`` when it is not vacuum). An
+        axis whose component is zero gets ``Periodic()``, because a zero Bloch phase is
+        refused; a concrete ``theta = 0`` therefore returns ``Periodic`` on both.
+
+        The phase is fixed-k: every frequency in the band shares this ``k_par``, so the angle
+        of incidence varies across the band as ``sin(theta(f)) = k_par / (2 pi n f)``, which is
+        what a Bloch-periodic time-domain run can carry. The band centre must be concrete.
+        """
+        import math
+        from .materials import as_material
+        from .sources import PlaneWave
+        if not isinstance(source, PlaneWave):
+            raise TypeError(f'Bloch.from_source({type(source).__name__}): the phases come '
+                            f'from an fd.PlaneWave; a Dipole or a TFSF box needs none.')
+        wavelength = source.band.concrete_wavelength
+        if wavelength is None:
+            raise ValueError('Bloch.from_source(pw): the band centre is traced, and a Bloch '
+                             'phase is fixed by the plan; give the band a concrete '
+                             'wavelength, or write Bloch(k=...) yourself.')
+        n = as_material(background, 'Bloch.from_source(background=)').index_bound()
+        if n is None:
+            raise ValueError('Bloch.from_source(background=<traced>): the index must be '
+                             'concrete to fix a phase.')
+        k, _, _ = source.vectors()
+        k0 = n * 2.0 * math.pi / wavelength
+        out = {}
+        for a, axis in enumerate(AXES):
+            if a == source.axis:
+                continue
+            ka = k0 * k[a]
+            out[axis] = Periodic() if abs(k[a]) < 1e-12 else Bloch(k=ka)
+        return out
+
 @spec
 class PEC(FaceType):
     """Perfect electric conductor: tangential E vanishes on the wall."""

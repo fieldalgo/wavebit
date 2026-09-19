@@ -11,6 +11,7 @@ the executor is eager and autograd follows the tensors; on NumPy it is a loop ov
 preallocated buffers.
 """
 from ._check import report as _report
+from ._kernel.sources import has_sources, waveform_table
 from ._kernel.step import initial_state, step
 from ._lower import lower, plan as _plan
 from ._runtime import runtime
@@ -23,6 +24,11 @@ def execute(plan, params, rt):
     """The final state of ``plan`` driven by ``params`` on ``rt``; jitted once per plan on JAX."""
     def make():
         def go(traced):
+            if has_sources(plan):
+                # Built here, inside the traced function, from traced leaves: one table per
+                # run, so the amplitude, phase, delay and band differentiate.
+                traced = dict(traced, waveform=waveform_table(plan, traced, rt))
+
             def body(state, n):
                 return step(plan, traced, state, n, rt)
             state = initial_state(plan, traced, rt)
@@ -37,8 +43,10 @@ def _results(scene, plan, state, rt, params=None):
     for o in plan.observers:
         series[o.name] = Series(name=o.name, component=f'{o.field}{"xyz"[o.c]}',
                                 t=o.times(plan), values=state['obs'][o.name])
+    sources = {t.name: t.series(plan, state['mem'][t.name], rt)
+               for t in plan.terms if hasattr(t, 'series')}
     return Results(series, Final(E=state['E'], H=state['H']), plan,
-                   _report(scene, plan, params), rt.name)
+                   _report(scene, plan, params), rt.name, sources=sources)
 
 
 def run(scene, backend='numpy', plan=None, device=None):

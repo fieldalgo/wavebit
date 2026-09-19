@@ -528,7 +528,14 @@ class TorchRuntime(_Functional):
         leaves, rebuild = _flatten(carry)
 
         def block(b, *flat):
-            c = rebuild(list(flat))
+            # A block works on copies of the state it is handed. The checkpoint keeps those
+            # inputs to recompute the block in backward, and the step writes in place
+            # wherever nothing is differentiated yet -- a CPML psi before the field is live,
+            # a series accumulator -- so without the copy the first block's own writes (or
+            # the next block's) moved an input the recompute reads, and backward raised a
+            # version-counter error on every source run and on a stage-0 ``fd.Record``. One
+            # copy of the state per block, not per step.
+            c = rebuild([x.clone() if hasattr(x, 'clone') else x for x in flat])
             for i in range(K):
                 c = body(c, b * K + i)
             return tuple(_flatten(c)[0])

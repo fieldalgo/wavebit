@@ -14,6 +14,11 @@ Torch or NumPy. Its leaves are the numbers a gradient may flow through:
     cpml              {psi key: {'b', 'a', 'ik'}} -- the CPML profiles, 1-D along the
                       absorbing axis and reshaped to broadcast, never at slab shape
     poles             {term name: {'step_gain', 'hold', 'drive', 'dx_over_dt'}} per pole
+    sources           {source name: {'amplitude', 'phase', 'delay', 'f0', 'tau', 't0', ...}}
+                      per stage-2 source, with a Dipole's 'stamp', a column's own params
+                      ('column', and 'driver' for a layered TFSF column's uniform drive) and
+                      transverse Bloch 'pattern' (``wavebit/fd/_lower/sources.py``); the
+                      waveform table built from them is added inside the traced function
 
 Whether ``E0`` or ``H0`` is ``None`` is static and recorded on the plan (``has_E0``,
 ``has_H0``); their values are leaves. That is the pytree rule this repository keeps
@@ -40,6 +45,7 @@ from . import checks
 from .coefficients import build as build_coefficients
 from .cpml import face_eps_r, profiles
 from .fields import evaluate
+from .sources import lower_sources
 
 __all__ = ['lower']
 
@@ -56,7 +62,8 @@ def lower(scene, plan, rt='numpy', device=None):
     real = 'float64'
     params = dict(build_coefficients(scene, plan, rt))
     params.update({'bloch': {}, 'amplitude': None, 'E0': None, 'H0': None,
-                   'cpml': _cpml(scene, plan, rt), 'poles': _poles(scene, plan, rt)})
+                   'cpml': _cpml(scene, plan, rt), 'poles': _poles(scene, plan, rt),
+                   'sources': lower_sources(scene, plan, rt)})
     guard = _stability_guard(scene, plan, rt)
     if guard is not None:
         params['be'] = params['be'] * guard

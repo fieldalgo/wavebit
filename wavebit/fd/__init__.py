@@ -53,10 +53,24 @@ face). Slabs are **cell-snapped, not subpixel**, and ``check`` prints the snappe
 the one asked for -- until stage 4 a convergence study in ``dx`` is the only route to a right
 answer for an interface that does not land on a cell boundary.
 
-Out of scope in stage 1, and refused by name rather than silently: sources (stage 2),
-DFT/flux/far-field monitors and ``algebraic`` faces (stage 3), shapes other than ``Slab`` and
-subpixel averaging (stage 4), GPU claims (stage 6), ``Decay`` (stage 7), non-uniform grids
-(not in v1).
+Stage 2 adds sources, each a term in the kernel's additive slot::
+
+    band = fd.Band(wavelength=0.55, df=0.3)            # Gaussian-envelope sine; df in frequency
+    fd.Dipole('d', center=(x, y, z), component='Ey', band=band)          # kind='magnetic': 'Hy'
+    pw = fd.PlaneWave('pw', z=1.0, direction='-z', theta=20, polarization='s', band=band)
+    fd.Boundaries(**fd.Bloch.from_source(pw), z=fd.PML(cells=12))       # the matching cell
+    fd.TFSF('t', box=fd.Box(size=(...), center=(...)), direction='-z', polarization='x',
+            band=band)                                 # axis directions only (measured)
+    scene = fd.Scene(..., sources=(...,), run=fd.Run(periods=40))
+    res.sources['pw'].t, res.sources['pw'].incident    # each source's reference series
+
+A PML with no wavelength takes the sources' band centre; the mesh is checked at
+``band.shortest_wavelength``. ``_kernel/sources.py`` derives every sign and half step.
+
+Out of scope in stage 2, and refused by name rather than silently: DFT/flux/far-field
+monitors and ``algebraic`` faces (stage 3), shapes other than ``Slab`` -- a ``Box`` is a TFSF
+region only -- and subpixel averaging (stage 4), GPU claims (stage 6), ``GaussianBeam``,
+``ModeSource`` and ``Decay`` (stage 7), non-uniform grids (not in v1).
 """
 from ._check import Report, check
 from ._lower import Plan, lower, plan
@@ -64,13 +78,14 @@ from ._run import run
 from .boundaries import (PEC, PMC, Absorber, Absorbing, Bloch, Boundaries, Periodic, PML,
                          Symmetry)
 from .diagnostics import AbsorberProximityWarning, CoarseMeshWarning
-from .geometry import Slab, Structure
+from .geometry import Box, Slab, Structure
 from .materials import (Conductor, Debye, Dispersive, Drude, Lorentz, Material, MaterialBase,
                         Pole, eps_at)
 from .monitors import Record
-from .results import Final, Results, Series
+from .results import Final, Results, Series, SourceSeries
 from .scene import Domain, Resolution, Run, Scene
-from .sources import InitialField, Term
+from .sources import (TFSF, Band, Dipole, GaussianBeam, InitialField, ModeSource, PlaneWave,
+                      Term)
 
 __all__ = [
     'Domain', 'Resolution', 'Run', 'Scene',
@@ -80,6 +95,7 @@ __all__ = [
     'MaterialBase', 'Pole', 'Slab', 'Structure',
     'CoarseMeshWarning', 'AbsorberProximityWarning',
     'InitialField', 'Term', 'Record',
+    'Band', 'Dipole', 'PlaneWave', 'TFSF', 'Box', 'GaussianBeam', 'ModeSource',
     'check', 'plan', 'lower', 'run',
-    'Plan', 'Report', 'Results', 'Series', 'Final',
+    'Plan', 'Report', 'Results', 'Series', 'Final', 'SourceSeries',
 ]

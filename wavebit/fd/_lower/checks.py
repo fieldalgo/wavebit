@@ -12,13 +12,16 @@ is the stage-0 rule for a condition that can only be known at run time.
 The table, and where each row lives:
 
     PML(cells=n) below 12                       boundaries.PML.__post_init__
-    PML with no wavelength                      face_wavelength, here
+    PML with no wavelength                      face_wavelength, here (stage 2: inferred
+                                                  from the sources' band centre if they agree)
     a PML layer that does not fit its axis       check_faces, here
     a dispersive or conductive structure         check_absorbing_layers, here (Absorber)
       reaching a PML face
     a structure that ends inside an absorbing    check_absorbing_layers, here (PML and
       layer (PML or Absorber)                      Absorber alike)
-    cells per wavelength in a material < 8       check_resolution, here (< 12 warns)
+    cells per wavelength in a material < 8       check_resolution, here (< 12 warns); with
+                                                  sources, at band.shortest_wavelength, and in
+                                                  vacuum too
     a structure within half a wavelength of      check_resolution, here (warns)
       an absorbing face
     complex eps                                 materials._value
@@ -37,18 +40,31 @@ __all__ = ['face_wavelength', 'check_faces', 'check_overlaps', 'check_absorbing_
 
 
 def face_wavelength(face, scene, name):
-    """The wavelength a ``PML`` face sets ``alpha_max`` from, or a refusal naming both doors."""
+    """The wavelength a ``PML`` face sets ``alpha_max`` from, or a refusal naming the doors.
+
+    In order: the face's own ``wavelength=``, the scene's ``Resolution(wavelength=)``, and
+    (stage 2) the band centre of the scene's sources when every source has the same concrete
+    one -- the frequency the layer will actually be asked to absorb.
+    """
     if face.wavelength is not None:
         return face.wavelength
     if scene.resolution.wavelength is not None:
         return scene.resolution.wavelength
+    from .sources import source_wavelength
+    inferred = source_wavelength(scene)
+    if inferred is not None:
+        return inferred
+    sources = tuple(getattr(scene, 'sources', ()) or ())
+    why = ('the scene has no source to infer one from' if not sources else
+           'its sources do not share one concrete band centre ('
+           + ', '.join(repr(s.band.wavelength) for s in sources) + ')')
     raise ValueError(
-        f'PML on {name!r} has no wavelength. It sets alpha_max, the complex-frequency shift, '
-        f'which is a frequency and so means nothing without one to be relative to -- and a '
-        f'shift of zero is not the safe default, it is what stops the layer absorbing the '
-        f'evanescent field a structure radiates into it. Stage 1 has no source to infer a '
-        f'wavelength from, so say fd.PML(cells=..., wavelength=...) or give the whole scene '
-        f'one with fd.Resolution(cells_per_wavelength=..., wavelength=...).')
+        f'PML on {name!r} has no wavelength, and {why}. It sets alpha_max, the '
+        f'complex-frequency shift, which is a frequency and so means nothing without one to '
+        f'be relative to -- and a shift of zero is not the safe default, it is what stops the '
+        f'layer absorbing the evanescent field a structure radiates into it. Say '
+        f'fd.PML(cells=..., wavelength=...), or give the whole scene one with '
+        f'fd.Resolution(cells_per_wavelength=..., wavelength=...).')
 
 
 def check_faces(scene, grid, faces):
@@ -311,6 +327,9 @@ def notes(scene, plan):
 
 
 def _wavelength(scene, plan):
+    if getattr(scene, 'sources', ()):
+        from .sources import shortest_wavelength
+        return shortest_wavelength(scene)
     if scene.resolution.wavelength is not None:
         return scene.resolution.wavelength
     lengths = [w for _, w in plan.pml_wavelengths]
@@ -347,10 +366,15 @@ def _resolution_notes(scene, plan):
     materials = [('Scene(background=)', _background(scene))]
     materials += [(f'structures[{i}]', s.material)
                   for i, s in enumerate(getattr(scene, 'structures', ()) or ())]
-    if len(materials) == 1 and not materials[0][1].poles \
+    sources = tuple(getattr(scene, 'sources', ()) or ())
+    if not sources and len(materials) == 1 and not materials[0][1].poles \
             and _index_at(materials[0][1], 1.0)[0] == 1.0:
         return []                     # vacuum: there is nothing for a mesh to be coarse for
     wavelength = _wavelength(scene, plan)
+    if wavelength is None and sources:
+        return [(CoarseMeshWarning,
+                 'a source band is traced, so the cells-per-wavelength check at '
+                 'band.shortest_wavelength did not run')]
     if wavelength is None:
         return [(CoarseMeshWarning,
                  'this scene has a material but no wavelength (no Resolution(wavelength=) and '
@@ -383,7 +407,7 @@ def _resolution_notes(scene, plan):
         if cells < 8.0:
             raise ValueError(
                 f'{where} is sampled at {cells:.2f} cells per wavelength (index {n:.3f}, '
-                f'wavelength {wavelength:g}, dx {plan.dx:g}). The measured convergence behind '
+                f'wavelength {wavelength:g}{_which(sources)}, dx {plan.dx:g}). The measured convergence behind '
                 f'the legacy engine\'s CELLS_PER_WAVELENGTH runs a worst per-order error of '
                 f'1.2e-2 at ~11 cells and 2.8e-3 at 23, so below 8 not even the first digit '
                 f'survives and the run would return a number shaped like an answer. Refine dx '
@@ -393,6 +417,10 @@ def _resolution_notes(scene, plan):
                         f'{where}: {cells:.2f} cells per wavelength (index {n:.3f}); 12 is '
                         f'where the second digit starts to hold and 20 is the usual rule'))
     return out
+
+
+def _which(sources):
+    return ", the sources' band.shortest_wavelength" if sources else ''
 
 
 def _proximity_notes(scene, plan):

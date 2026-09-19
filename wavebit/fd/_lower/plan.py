@@ -27,6 +27,10 @@ The stage-1 refusals run here, in ``wavebit/fd/_lower/checks.py``, because this 
 sees the scene and the grid at once: a layer that does not fit its axis, a structure that
 ends inside a PML, a mesh too coarse for its own material, a pole past the CFL bound. The
 warnings are emitted here too and listed again by ``check``.
+
+**Stage 2 adds the source terms** (``wavebit/fd/_lower/sources.py``) after the stage-1 ones,
+in scene order, and a step count read from ``Run(periods=)``. A scene with no source adds
+nothing to the plan, so its skeleton -- and every stage-0/1 golden -- is unchanged.
 """
 import dataclasses
 import hashlib
@@ -42,6 +46,7 @@ from .._kernel.masks import Region, Slab
 from .._kernel.observe import PointRecord
 from .._kernel.poles import PoleTerm
 from . import checks
+from .sources import run_steps, source_terms
 
 __all__ = ['Plan', 'plan', 'skeleton_of']
 
@@ -190,6 +195,7 @@ def plan(scene):
     """The static plan of ``scene``, with the stage-1 refusals run and its warnings emitted."""
     grid = Grid.from_domain(scene.domain.size, scene.domain.center, scene.resolution.dx)
     dt = scene.run.courant * grid.dx / math.sqrt(3.0)
+    steps = run_steps(scene, dt)
     checks.check_faces(scene, grid, None)
     checks.check_overlaps(scene, grid)
     rules, pads, masks = [], [], []
@@ -208,7 +214,7 @@ def plan(scene):
     spans = tuple((s.shape.axis,) + tuple(s.shape.span) + tuple(s.shape.snapped(grid))
                   for s in (getattr(scene, 'structures', ()) or ()))
     p = Plan(nx=grid.n[0], ny=grid.n[1], nz=grid.n[2], dx=grid.dx, dt=dt,
-             steps=scene.run.steps, courant=scene.run.courant, low=grid.low,
+             steps=steps, courant=scene.run.courant, low=grid.low,
              face_rules=tuple(rules), pads=tuple(pads), masks=tuple(masks),
              terms=_pole_terms(scene, grid),
              observers=tuple(observers), dtype='complex128' if complex_run else 'float64',
@@ -219,6 +225,9 @@ def plan(scene):
     p = _finish(p)
     checks.check_absorbing_layers(scene, p)
     checks.check_stability(scene, p)
+    sources = source_terms(scene, p)
+    if sources:
+        p = p.with_static(terms=tuple(p.terms) + sources)
     # Emitted through the caller's own filters, and deliberately not forced past them: a
     # caller who silenced CoarseMeshWarning silenced it, and the default "once per location"
     # rule is what keeps a sweep of a thousand plans from printing a thousand copies.

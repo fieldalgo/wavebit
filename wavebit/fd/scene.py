@@ -26,7 +26,7 @@ skeleton -- so it is concretised at the door through ``_spec.static_float`` /
 here.
 
 Named refusals. A keyword a later stage will take is refused here by name -- ``Scene(
-sources=...)`` raises ``NotImplementedError`` naming stage 2 -- rather than by the generic
+decay=...)`` raises ``NotImplementedError`` naming stage 7 -- rather than by the generic
 unknown-keyword message, so the reader learns the plan and not only the spelling.
 """
 import math
@@ -56,9 +56,9 @@ _LATER = {
                  "tuple of Scene(structures=(fd.Structure(shape, material), ...))",
     'structure': 'stage 4 (shapes); one structure is still Scene(structures=(...,))',
     'shapes': 'stage 4 (shapes); stage 1 has fd.Slab, inside a Scene(structures=...)',
-    'sources': 'stage 2 (sources)',
-    'source': 'stage 2 (sources)',
     'decay': 'stage 7 (Decay)',
+    'source': "not the stage 2 spelling: sources are a tuple, Scene(sources=(fd.Dipole(...), "
+              "fd.PlaneWave(...), fd.TFSF(...)))",
     'pml': "not the stage 1 spelling: an absorber is a FACE, so it goes in Boundaries -- "
            "fd.Boundaries.open(fd.PML(cells=12, wavelength=...)) or fd.Boundaries(z=fd.PML("
            "...), ...)",
@@ -125,10 +125,13 @@ class Resolution:
 
 @spec
 class Run:
-    """How long: ``steps``, and the Courant number that sets ``dt = courant * dx / sqrt(3)``.
+    """How long: ``steps`` or ``periods``, and the Courant number (``dt = courant dx/sqrt(3)``).
 
-    ``periods=`` counts optical periods and needs a wavelength, which a stage-0 scene has
-    no source to state; it is refused naming stage 2. ``Decay`` is stage 7.
+    ``periods=`` (stage 2) counts optical periods of the sources' band centre: the run takes
+    ``ceil(periods * wavelength / dt)`` steps, which ``fd.plan`` computes once the grid is
+    known. It needs every source to share one concrete band centre, and a scene with no
+    source has nothing to count periods of; both are refused by the plan. Exactly one of
+    ``steps`` and ``periods``. ``Decay`` is stage 7.
     """
 
     steps: int = None
@@ -137,15 +140,24 @@ class Run:
 
     def __post_init__(self):
         if self.periods is not None:
-            raise NotImplementedError(
-                'Run(periods=...) counts optical periods of a source and needs its wavelength; '
-                'that arrives with sources in stage 2. Stage 0 takes Run(steps=...).')
-        if self.steps is None:
-            raise ValueError('Run(steps=...): the step count is required in stage 0.')
-        steps = static_int('Run', 'steps', self.steps)
-        if steps < 1:
-            raise ValueError(f'Run(steps={self.steps!r}): steps is a positive integer.')
-        object.__setattr__(self, 'steps', steps)
+            if self.steps is not None:
+                raise ValueError(f'Run(steps={self.steps!r}, periods={self.periods!r}): one '
+                                 f'or the other -- two lengths for one run would have to '
+                                 f'disagree somewhere.')
+            periods = static_float('Run', 'periods', self.periods)
+            if not (periods > 0 and math.isfinite(periods)):
+                raise ValueError(f'Run(periods={self.periods!r}): a positive number of '
+                                 f'optical periods.')
+            object.__setattr__(self, 'periods', periods)
+        else:
+            if self.steps is None:
+                raise ValueError('Run(steps=...) or Run(periods=...): the length of the run '
+                                 'is required; periods counts optical periods of the '
+                                 "sources' band centre.")
+            steps = static_int('Run', 'steps', self.steps)
+            if steps < 1:
+                raise ValueError(f'Run(steps={self.steps!r}): steps is a positive integer.')
+            object.__setattr__(self, 'steps', steps)
         object.__setattr__(self, 'courant', static_float('Run', 'courant', self.courant))
         if not (0 < self.courant < COURANT_LIMIT):
             raise ValueError(
@@ -175,6 +187,7 @@ class Scene:
     monitors: tuple = ()
     background: object = None
     structures: tuple = ()
+    sources: tuple = ()
 
     def __post_init__(self):
         from .geometry import Structure
@@ -210,6 +223,20 @@ class Scene:
             raise ValueError(f'Scene(monitors=...): monitor names are the keys of the result '
                              f'and must be unique; repeated: {dup}.')
         object.__setattr__(self, 'monitors', monitors)
+        from .sources import SOURCE_TYPES
+        if isinstance(self.sources, SOURCE_TYPES):
+            object.__setattr__(self, 'sources', (self.sources,))
+        sources = tuple(self.sources)
+        for src in sources:
+            if not isinstance(src, SOURCE_TYPES):
+                raise TypeError(f'Scene(sources=...): every entry is an fd.Dipole, '
+                                f'fd.PlaneWave or fd.TFSF; got {type(src).__name__}.')
+        names = [src.name for src in sources]
+        if len(set(names)) != len(names):
+            dup = sorted({n for n in names if names.count(n) > 1})
+            raise ValueError(f'Scene(sources=...): source names are the keys of '
+                             f'res.sources and must be unique; repeated: {dup}.')
+        object.__setattr__(self, 'sources', sources)
         # A monitor outside the box would silently clip to the nearest edge point.
         lo = tuple(c - s / 2 for c, s in zip(self.domain.center, self.domain.size))
         hi = tuple(c + s / 2 for c, s in zip(self.domain.center, self.domain.size))
@@ -219,7 +246,7 @@ class Scene:
                                  f'{lo} .. {hi}.')
 
 
-# ``Scene(sources=...)`` and friends: the spec decorator's generic refusal would suggest the
+# ``Scene(decay=...)`` and friends: the spec decorator's generic refusal would suggest the
 # nearest spelling; these names are right and merely early, so the refusal names the stage.
 _scene_init = Scene.__init__
 

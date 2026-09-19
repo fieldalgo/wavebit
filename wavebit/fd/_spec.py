@@ -19,8 +19,8 @@ one reader and a centre to another, and the constructors here have no natural or
 
 **A static value is concretised here, and a traced one refused by name.** ``Domain.size``,
 ``Resolution.dx``, ``Run.courant``, ``Record.at`` fix the cell counts, the scan length and
-the skeleton, so they cannot be leaves of a gradient; the leaves are ``InitialField.amplitude``,
-the initial fields and the Bloch phase. A bare ``float()`` would not say so: on JAX it raises
+the skeleton, so they cannot be leaves of a gradient; the leaves are listed once, in
+:data:`TRACED_LEAVES`. A bare ``float()`` would not say so: on JAX it raises
 a ``ConcretizationTypeError`` that names the ``float`` function and not the field, and on
 Torch it *succeeds* on a tensor with ``requires_grad`` -- the value is silently detached,
 the run completes, and the gradient is simply absent. ``static_float`` and ``static_int``
@@ -38,11 +38,25 @@ def is_jax_typed(v):
     return type(v).__module__.split('.')[0] in ('jax', 'jaxlib') and hasattr(v, 'aval')
 
 
+#: What *is* a leaf of a gradient, in the order the stages added it. One tuple, read by every
+#: static-door refusal below, so a stage that adds a leaf adds it here and every door names it
+#: (the stage-0 sentence was a fixed string and went stale twice: stage 1's material values
+#: and stage 2's source leaves were missing from it).
+TRACED_LEAVES = (
+    'InitialField.amplitude and the initial fields',                        # stage 0
+    'the Bloch phase or k',                                                 # stage 0
+    'material values (a permittivity, a conductivity, a pole strength)',     # stage 1
+    "each source's amplitude, phase and delay",                             # stage 2
+    'its Band(wavelength=..., df=...)',                                     # stage 2
+    "a Dipole's center, within the range= it declares",                     # stage 2
+)
+
+
 def _refuse_traced(where, name):
     return ValueError(
         f'{where}({name}=...) is static: it fixes the grid, the scan and the skeleton, so a '
         f'traced value is refused -- it is not a leaf. The traced leaves are '
-        f'InitialField.amplitude, the initial fields and the Bloch phase.')
+        f'{"; ".join(TRACED_LEAVES)}.')
 
 
 def static_float(where, name, v):

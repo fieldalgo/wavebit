@@ -34,7 +34,7 @@ got nothing, which is the one snapping outcome a reader cannot see in a result.
 """
 from ._spec import spec, static_float
 
-__all__ = ['Slab', 'Structure', 'AXES']
+__all__ = ['Slab', 'Structure', 'Box', 'AXES']
 
 #: The three axes in the order the public API spells a triple.
 AXES = ('x', 'y', 'z')
@@ -155,9 +155,45 @@ class Structure:
 
     def __post_init__(self):
         from .materials import as_material
+        if isinstance(self.shape, Box):
+            raise NotImplementedError(
+                'Structure(fd.Box(...), ...): in stage 2 a Box is only the region of an '
+                'fd.TFSF source (and later of monitors); a box filled with a material is a '
+                'shape, and shapes other than fd.Slab are stage 4.')
         if not isinstance(self.shape, Slab):
             raise TypeError(
                 f'Structure(shape=...): stage 1 has one shape, fd.Slab(z=(lo, hi)); got '
                 f'{type(self.shape).__name__}. Spheres, cylinders, boxes, polygons and '
                 f'rasters are stage 4 (shapes).')
         object.__setattr__(self, 'material', as_material(self.material, 'Structure(material=)'))
+
+
+@spec
+class Box:
+    """An axis-aligned box, ``fd.Box(size=(sx, sy, sz), center=(cx, cy, cz))``.
+
+    Stage 2 introduces it as the region of an :class:`~wavebit.fd.TFSF` source, and nothing
+    else: as a *structure* it is a stage-4 shape and ``Structure(fd.Box(...), ...)`` is
+    refused naming that stage. Both triples are static lengths in the scene's coordinates
+    (the box's faces pick node planes, so they fix the plan).
+    """
+
+    size: tuple
+    center: tuple = (0.0, 0.0, 0.0)
+
+    def __post_init__(self):
+        for name in ('size', 'center'):
+            value = getattr(self, name)
+            if not (isinstance(value, (tuple, list)) and len(value) == 3):
+                raise ValueError(f'Box({name}={value!r}): a triple (x, y, z).')
+            object.__setattr__(self, name, tuple(static_float('Box', name, v) for v in value))
+        if any(not s > 0 for s in self.size):
+            raise ValueError(f'Box(size={self.size}): every size is a positive length.')
+
+    @property
+    def low(self):
+        return tuple(c - s / 2 for c, s in zip(self.center, self.size))
+
+    @property
+    def high(self):
+        return tuple(c + s / 2 for c, s in zip(self.center, self.size))
