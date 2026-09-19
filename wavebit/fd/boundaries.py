@@ -411,8 +411,10 @@ class PML(Absorbing):
         ``reflection ** cos(theta)`` law (12 cells: 2.1e-4 at 30 degrees against 4.7e-5, 3.7e-3
         at 60 against 1.1e-4). That is why it is opt-in: on by default it broke the Airy,
         closed-form PlaneWave, RCWA-stack and grazing-rule gates at 20-40 degrees.
-        ``wavebit/fd/_lower/cpml.py::stabilizing_rate`` carries the mechanism and the numbers,
-        and an unsettled run under a pure stretch names this knob in its warning.
+        ``wavebit/fd/_lower/cpml.py::stabilizing_rate`` carries the mechanism and the numbers.
+        When the energy of the scene's interior still rises after every source has ended,
+        the run warns ``fd.GrowingFieldWarning``, which names this knob with the value measured
+        for the face's target; a run that is merely unsettled is only told to run longer.
     """
 
     cells: int = PML_CELLS

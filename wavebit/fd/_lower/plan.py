@@ -55,7 +55,7 @@ from .._kernel.cpml import CpmlFace, StabilizedFace
 from .._kernel.faces import lower_face
 from .._kernel.grid import Grid
 from .._kernel.masks import Region, Slab
-from .._kernel.observe import PointRecord
+from .._kernel.observe import ENERGY_STRIDE, InteriorEnergy, PointRecord
 from .._kernel.poles import PoleTerm
 from . import checks, grazing
 from .cpml import DEFAULT_STABILIZE
@@ -141,6 +141,43 @@ class Plan:
     def cells(self):
         return self.nx * self.ny * self.nz
 
+    @property
+    def energy(self):
+        """The interior-energy observer: every cell but the PML faces', read every
+        ``ENERGY_STRIDE`` steps, with the part of each dispersive structure's pole term that
+        lies inside them (``wavebit/fd/_kernel/observe.py::InteriorEnergy``). An ``Absorber``'s
+        cells are judged with the rest: a passive loss backed by a wall, whose energy is
+        physical and returns part of what it holds.
+
+        The cells a ``Symmetry`` plane halves come with it (:func:`_mirror_planes`), and the
+        step count, which says which steps are read.
+
+        Derived, not a field: it is a function of ``pml_cells``, ``face_rules``, ``steps`` and
+        the cell counts, which the skeleton already holds, so it adds nothing to it -- and a
+        field would have moved every frozen skeleton
+        (``tests/references/fd_golden_stage*.npz``) for no change of scene. A source's column
+        plan has one too and never steps it (the column is stepped by its term, not by
+        ``step``).
+        """
+        cells = dict(self.pml_cells)
+        n = {'x': self.nx, 'y': self.ny, 'z': self.nz}
+        lo = tuple(cells.get(f'{a}-', 0) for a in 'zyx')
+        hi = tuple(n[a] - cells.get(f'{a}+', 0) for a in 'zyx')
+        poles = []
+        for term in self.terms:
+            if not isinstance(term, PoleTerm):
+                continue
+            spans = tuple((max(a, l), min(b, h))
+                          for (a, b), l, h in zip((term.region.z, term.region.y, term.region.x),
+                                                  lo, hi))
+            if all(b > a for a, b in spans):
+                offsets = tuple(a - r[0] for (a, _), r in
+                                zip(spans, (term.region.z, term.region.y, term.region.x)))
+                poles.append((term.name, term.n_poles, spans, offsets))
+        return InteriorEnergy(lo=lo, hi=hi, stride=ENERGY_STRIDE, dt=self.dt,
+                              ratio=self.dt / self.dx, steps=self.steps, poles=tuple(poles),
+                              planes=_mirror_planes(self.face_rules, lo, hi))
+
     def pad(self, face, c):
         """The ``Pad`` of component ``c`` of the field ``face`` pads."""
         for name, comp, pad in self.pads:
@@ -156,6 +193,48 @@ class Plan:
 def _finish(p):
     static = {f.name: getattr(p, f.name) for f in dataclasses.fields(p) if f.name != 'skeleton'}
     return dataclasses.replace(p, skeleton=skeleton_of(**static))
+
+
+def _mirror_planes(face_rules, lo, hi):
+    """The judged cells a ``Symmetry`` plane halves: ``((coefficient, field, c, box), ...)``.
+
+    A component that lies on a mirror plane is shared by the half box and its image, so the
+    half box holds half of its energy: the leapfrog's identity (``InteriorEnergy``) sums over
+    the full box, whose energy is twice the half box's off-plane cells plus the plane's once.
+    Counted whole, the plane's term is left in -- measured: the half box's reading then swings
+    with that term (``tests/test_fd_decay.py``). Which components lie on the plane is
+    ``faces.py``'s table: on a low face's node plane those at a node along the axis (tangential
+    E, normal H), on a high face's half plane those half a cell along it (normal E, tangential
+    H); the ones of sign ``-1`` there are masked to zero and need nothing. A component on
+    planes of two or three axes (an edge, a corner) weighs ``1/4`` or ``1/8``: the parts are
+    every nonempty set ``S`` of its planes with coefficient ``(-1/2)^|S|``, which sums to
+    ``(1/2)^m - 1`` over a cell on ``m`` of them (inclusion-exclusion).
+    """
+    from .._kernel.grid import OFFSETS
+    on = {}
+    for name, rule in face_rules:
+        if rule.kind != 'symmetry':
+            continue
+        axis, side = 'xyz'.index(name[0]), name[1]
+        zyx = 2 - axis
+        for field in 'EH':
+            for c in range(3):
+                normal = c == axis
+                sign = rule.parity * (-1 if normal == (field == 'E') else 1)
+                offset = OFFSETS[field][c][axis]
+                if sign < 0 or offset != (0 if side == '-' else 1):
+                    continue
+                layer = lo[zyx] if side == '-' else hi[zyx] - 1
+                on.setdefault((field, c), []).append((zyx, layer))
+    planes = []
+    for (field, c), where in sorted(on.items()):
+        for mask in range(1, 2 ** len(where)):
+            box = list(zip(lo, hi))
+            chosen = [w for i, w in enumerate(where) if mask >> i & 1]
+            for zyx, layer in chosen:
+                box[zyx] = (layer, layer + 1)
+            planes.append(((-0.5) ** len(chosen), field, c, tuple(box)))
+    return tuple(planes)
 
 
 def _absorbing(scene, grid):

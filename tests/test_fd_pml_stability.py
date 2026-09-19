@@ -66,8 +66,25 @@ the third column, and the plan warns (``PMLStabilityWarning``) below a target's 
 here is a measured balance on the sampled families, not passivity: cancelling the stretch's
 active normal component point by point would take about two decades more loss.
 
-**The lamellar grating** that first showed it is :mod:`test_fd_decay`'s: the default layer is
-its strict xfail, ``stabilize=3e-3`` its passing twin.
+**The growth is reported, not silent.** The default stays the pure stretch, so a run that grows
+must say so: when the energy of the scene's interior (every cell but the layers') still
+rises after every source has ended (``wavebit/fd/_assemble.py::decay_report``,
+``res.diagnostics['interior_growth']``), every monitor that sees it warns
+``fd.GrowingFieldWarning`` instead of the plain "run longer", naming ``PML(stabilize=...)`` with
+the value measured for the face's target (the larger one when two faces ask for different
+targets). On the column at t = 200 the interior reads 3.95 (the line is 1.1), a Record in the
+slab and a Flux plane in the gap see it (2.69 and 4.86), and both warn ``PML(stabilize=3e-3)``;
+at ``reflection=1e-4``, 7.41 and ``1e-2``. The stabilized, PEC and slab-less columns read
+0.9985, 1.0000 and 1.0005 and do not warn. NumPy, JAX and Torch read the same statistics; under
+``jax.jit`` they are ``None``; under a bare ``jax.grad`` a Record-only column still warns, for
+the interior, though the Record's own series is on the differentiated path and unread. The
+mutant that reads the span's first two quarters instead of its last two half hides the growth
+under the kick's ring-down (1.39), and the Record, whose own series falls there, no longer
+warns.
+
+**The lamellar grating** that first showed it is :mod:`test_fd_decay`'s (slow): the default
+layer grows there and warns ``GrowingFieldWarning`` naming ``PML(stabilize=3e-3)``;
+``stabilize=3e-3`` is its twin that does not grow.
 """
 import math
 import warnings
@@ -76,6 +93,8 @@ import numpy as np
 import pytest
 
 import wavebit.fd as fd
+from wavebit.fd import _post
+from wavebit.fd._assemble import GROWTH_THRESHOLD, _growth_cause
 from wavebit.fd._lower import lower, plan as make_plan
 from wavebit.fd._lower.cpml import MEASURED_STABILIZE, STABILIZING_LOSS, sufficient_stabilize
 from wavebit.fd.boundaries import PML_REFLECTION
@@ -162,6 +181,190 @@ def test_the_controls_do_not_grow():
     for kwargs in (dict(z=fd.PEC()), dict(eps=1.0, stabilize=None)):
         early, late = _ratio(**kwargs)
         assert late <= 1.01 * early, (kwargs, early, late)        # 0.930 and 0.9999
+
+
+# ---------------------------------------------------------------------------------------------
+# The growth warning: a growing column says so, and names the knob
+# ---------------------------------------------------------------------------------------------
+
+#: A Record in the slab and a Flux plane in the gap above it: the two kinds of series a
+#: growing scene names when they see the growth (``|v|^2``, and a monitor's region energy).
+COLUMN_MONITORS = (fd.Record('rec', at=(0.0, 0.0, -0.04), component='Ez'),
+                   fd.Flux('flux', plane=fd.Plane(z=0.15), wavelengths=(1.0,)))
+
+
+def _monitored(backend='numpy', time=200.0, monitors=COLUMN_MONITORS, **kwargs):
+    """``(res, growing, unsettled)``: the column with ``monitors``, and the texts of the
+    ``GrowingFieldWarning``\\ s and of the plain ``UnsettledFieldWarning``\\ s it raised."""
+    scene = slab_column(time=time, **kwargs).replace(monitors=monitors)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('ignore')
+        warnings.simplefilter('always', fd.UnsettledFieldWarning)
+        res = fd.run(scene, backend=backend)
+    growing = [str(w.message) for w in caught if w.category is fd.GrowingFieldWarning]
+    unsettled = [str(w.message) for w in caught if w.category is fd.UnsettledFieldWarning]
+    return res, growing, unsettled
+
+
+@pytest.mark.parametrize('reflection, knob', [(PML_REFLECTION, 'PML(stabilize=3e-3)'),
+                                              (1e-4, 'PML(stabilize=1e-2)')])
+def test_a_growing_column_warns_growing_and_names_the_value_for_its_target(reflection, knob):
+    """The pure stretch, t = 200: the interior's energy rises 3.95 times from quarter to
+    quarter at the default target and 7.41 at 1e-4; both monitors see it (their own series rise
+    2.69 and 4.86 times, and 5.44 and 7.70) and warn ``GrowingFieldWarning`` -- instead of the
+    plain unsettled warning, not beside it -- naming the stabilized layer with the value
+    measured for the face's own target (``MEASURED_STABILIZE``)."""
+    res, growing, unsettled = _monitored(stabilize=None, reflection=reflection)
+    interior, growth = res.diagnostics['interior_growth'], res.diagnostics['growth']
+    assert interior > GROWTH_THRESHOLD, interior
+    assert all(growth[m.name] > 1.0 for m in COLUMN_MONITORS), growth
+    assert len(growing) == 2 and unsettled == [], (growing, unsettled)
+    for name, message in zip(('rec', 'flux'), growing):
+        assert f"monitor {name!r}" in message and knob in message, message
+        assert "['z-', 'z+']" in message and 'stabilize=0' in message
+        assert f'{interior:.3g} times higher' in message
+        assert f'its own peak rose {growth[name]:.3g} times' in message
+
+
+@pytest.mark.parametrize('kwargs', [dict(), dict(z=fd.PEC()), dict(eps=1.0, stabilize=None)],
+                         ids=['stabilized', 'pec', 'no-slab'])
+def test_the_stabilized_and_the_control_columns_do_not_warn_growing(kwargs):
+    """The same monitors on the stabilized column, the PEC one and the slab-less one: nothing
+    warns growing, and the interior's statistic is concrete and at or under 1 (measured
+    0.9985 stabilized, 1.0000 PEC, 1.0005 without the slab)."""
+    res, growing, _ = _monitored(**kwargs)
+    interior = res.diagnostics['interior_growth']
+    assert growing == [], growing
+    assert interior is not None and interior < 1.001, interior
+
+
+def test_a_growing_scene_whose_only_monitor_is_a_record_warns_under_jax_grad():
+    """Under a bare ``jax.grad`` a Record's values are on the differentiated path and its own
+    series cannot be read (``growth`` is ``None`` for it) -- but the interior's energy is not,
+    so the growing column still warns, once, for the interior. A gradient loop over a scene
+    whose only monitor is a Record is exactly where a silent growth would do its harm."""
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    import wavebit
+    wavebit.enable_x64()
+    scene = slab_column(time=200.0, stabilize=None).replace(monitors=COLUMN_MONITORS[:1])
+    seen = []
+
+    def total(amplitude):
+        res = fd.run(scene.replace(initial=scene.initial.replace(amplitude=amplitude)),
+                     backend='jax')
+        seen.append(res.diagnostics)
+        return jnp.sum(jnp.abs(res['rec'].values) ** 2)
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('ignore')
+        warnings.simplefilter('always', fd.UnsettledFieldWarning)
+        jax.grad(total)(jnp.asarray(1.0, dtype=jnp.float64))
+    growing = [str(w.message) for w in caught if w.category is fd.GrowingFieldWarning]
+    assert seen[-1]['growth'] == {'rec': None}, seen[-1]['growth']
+    assert seen[-1]['interior_growth'] > GROWTH_THRESHOLD, seen[-1]['interior_growth']
+    assert len(growing) == 1 and 'no monitor sees it yet' in growing[0], growing
+    assert 'PML(stabilize=3e-3)' in growing[0]
+
+
+def test_the_backends_agree_on_the_growth():
+    """NumPy, JAX and Torch read the same statistics off the same growing column: the series
+    agree to round-off, and each statistic is a ratio of two of their samples."""
+    values = {}
+    for backend in ('numpy', 'jax', 'torch'):
+        try:
+            __import__(backend)
+        except ImportError:
+            continue
+        if backend == 'jax':
+            import wavebit
+            wavebit.enable_x64()
+        d = _monitored(backend, stabilize=None)[0].diagnostics
+        values[backend] = dict(d['growth'], interior=d['interior_growth'])
+    reference = values.pop('numpy')
+    for backend, growth in values.items():
+        for name, g in growth.items():
+            assert abs(g - reference[name]) <= 1e-9 * reference[name], (backend, name, g,
+                                                                         reference[name])
+
+
+def test_under_jit_the_growth_is_none_and_nothing_warns():
+    """Under ``jax.jit`` the series are tracers: every growth is ``None`` and the growing
+    column does not warn -- the diagnostic reads values, and a trace has none yet. Outside the
+    jit the same column warns (the tests above)."""
+    jax = pytest.importorskip('jax')
+    import wavebit
+    wavebit.enable_x64()
+    scene = slab_column(time=200.0, stabilize=None).replace(monitors=COLUMN_MONITORS)
+    seen = []
+
+    def total(amplitude):
+        res = fd.run(scene.replace(initial=scene.initial.replace(amplitude=amplitude)),
+                     backend='jax')
+        seen.append((res.diagnostics['growth'], res.diagnostics['interior_growth']))
+        return res['rec'].values.sum()
+
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        warnings.simplefilter('error', fd.UnsettledFieldWarning)
+        jax.jit(total)(1.0)
+    assert seen == [({'rec': None, 'flux': None}, None)], seen
+
+
+def _cause(scene):
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        return _growth_cause(scene, make_plan(scene))
+
+
+def test_the_warning_names_each_stabilized_face_or_a_defect():
+    """With every PML face stabilized, the cause names each face's value against the one
+    measured for its target and says the structure is outside the sampled families; with no
+    PML face, that nothing can feed the field and it is a defect to report."""
+    cause = _cause(slab_column(reflection=1e-4, stabilize=4e-3))
+    defect = _cause(slab_column(z=fd.PEC()))
+    assert 'Every PML face is stabilized' in cause and 'Raise stabilize' in cause
+    assert ("'z-' stabilize=4e-3 at reflection=1e-4 (1e-2 was measured to suffice there)"
+            in cause), cause
+    assert 'outside the families' in cause
+    assert 'No face of this scene is a PML' in defect and 'defect' in defect
+
+
+def test_with_two_targets_the_knob_is_the_value_for_the_weaker_one():
+    """Two pure-stretch faces at different targets: the value named is the larger one measured
+    -- the one the weaker target needs (1e-2 at 1e-4, where 3e-3 suffices only at 1e-8)."""
+    layer = dict(cells=12, wavelength=1.0)
+    cause = _cause(slab_column(z=(fd.PML(reflection=1e-8, **layer),
+                                  fd.PML(reflection=1e-4, **layer))))
+    assert "['z-', 'z+']" in cause and 'PML(stabilize=1e-2)' in cause, cause
+
+
+#: The statistic itself, kept for the mutant below to call around.
+_REAL_GROWTH = _post.growth_ratio
+
+
+def _first_quarters(t, energy, start, window, min_windows, floor):
+    """Mutant: the judged span's second quarter against its first, instead of its last against
+    the one before -- the growth read where the kick is still ringing down."""
+    got = _REAL_GROWTH(t, energy, start, window, min_windows, floor)
+    if got is None:
+        return None
+    t, e = np.asarray(t), np.asarray(energy)
+    _, lo, mid, hi, spread = got
+    q = hi - mid
+    first, second = e[(t >= start) & (t < start + q)], e[(t >= start + q) & (t < start + 2 * q)]
+    return float(second.mean() / first.mean()), start, start + q, start + 2 * q, spread
+
+
+def test_mutant_the_first_quarters_are_caught_by_the_growing_gate(monkeypatch):
+    """Read over the first two quarters of the span, the growth is half hidden under the
+    kick's ring-down (measured 1.39 at t = 200, against 3.94 read where it should be), and
+    over those quarters the Record's own series falls (0.93): it no longer warns, and the
+    growing gate above -- both monitors see it and warn -- fails."""
+    monkeypatch.setattr(_post, 'growth_ratio', _first_quarters)
+    res, growing, _ = _monitored(stabilize=None)
+    assert res.diagnostics['growth']['rec'] < 1.0, res.diagnostics['growth']
+    assert len(growing) < len(COLUMN_MONITORS), growing
 
 
 @pytest.mark.parametrize('reflection', [target for target, _ in MEASURED_STABILIZE])
@@ -362,7 +565,7 @@ def _plan_warnings(**pml):
 def test_a_face_below_its_targets_value_warns():
     """``PMLStabilityWarning``, once per stabilized face, when it asks for less than the value
     measured at its target or sets a target weaker than any measured; never for the pure
-    stretch (the decay warning speaks for that) or for enough loss."""
+    stretch (the growth warning speaks for that, when a run grows) or for enough loss."""
     for quiet in (dict(), dict(stabilize=0), dict(reflection=1e-3),
                   dict(stabilize=STABILIZING_LOSS), dict(stabilize=3e-3, reflection=1e-12),
                   dict(stabilize=5e-3, reflection=1e-6), dict(stabilize=1e-2, reflection=1e-4),

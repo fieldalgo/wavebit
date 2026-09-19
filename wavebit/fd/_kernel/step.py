@@ -13,9 +13,11 @@ three slots every later feature plugs into, in this fixed order:
     cE, psi = curl E                  <- the CPML stretches the slab inside the curl
     cE = t.before_H(cE, ...)          <- terms: sources, polarisations, TFSF
     cE = damp(cE, 'lift')             <- the PML's stabilizing loss, on its slabs:
+    energy = plan.energy.observe(...) <- the interior's energy (NumPy: the row, from H and cE)
     H  = ah*H - bh*cE
     H  = damp(H, 'keep')              <- the curl before the update, the field after
     H  = m.after_H(H)                 <- masks: the walls
+    energy = ...observe_magnetic(...) <- (JAX, Torch: its H half, from both H)
     cH, psi = curl H
     cH = t.before_E(cH, ...)
     cH = damp(cH, 'lift')
@@ -24,9 +26,29 @@ three slots every later feature plugs into, in this fixed order:
     E  = m.after_E(E)
     mem = t.advance(...)              <- term memory, once per step
     obs = o.observe(...)              <- observers read, last
+    energy = ...observe_electric(...) <- (JAX, Torch: the E half of the NEXT step's row)
 
-The state is ``dict(E, H, psi, mem, obs)``: the two fields, the CPML memory, one memory entry
-per term, one accumulator per observer. It is a pytree, so the JAX scan carries it whole; on
+The interior's energy reads around the H update because that is the one place the step
+holds everything its exact form needs -- ``E^n``, ``H^(n-1/2)``, ``H^(n+1/2)`` (or the curl
+that makes it) and the pole memory at ``P^(n+1)``, ``P^n`` -- without keeping a field across
+steps (``wavebit/fd/_kernel/observe.py::InteriorEnergy``). ``rt.in_place`` (static per
+runtime) says how: NumPy's update destroys ``H^(n-1/2)`` and scales the curl, so it reads the
+whole row before the update, from ``E``, ``H`` and the curl. JAX and Torch keep both, so they
+read the H half after the update from the two fields -- the compiled step hands the curl to
+nothing but its update, which is what keeps the fields bit-identical
+(``tests/test_fd_stage3_backends.py`` pins them) -- and the E half of the NEXT step's row at
+the end of this one, where ``E^(n+1)`` and the advanced pole memory are the step's own
+outputs, which is what holds the diagnostic to 9% of a JAX step at 62^3 where reading both
+halves at one point costs 43% (``InteriorEnergy.observe_electric``, ``ENERGY_STRIDE``). The
+masks, the stabilizing ``lift`` and the ``keep`` in the gap around the update change nothing
+that reading sums, and whatever the terms add to ``cE`` is in it exactly as the update
+applies it (``InteriorEnergy``). The monitors' observers keep their slot after the E update,
+at the time levels their results carry.
+
+The state is ``dict(E, H, psi, mem, obs, energy)``: the two fields, the CPML memory, one memory
+entry per term, one accumulator per observer, and the interior-energy accumulator
+(``wavebit/fd/_kernel/observe.py::InteriorEnergy``, ``plan.energy``). It is a pytree, so the
+JAX scan carries it whole; on
 NumPy the arrays in it are the preallocated buffers the runtime writes into, and the same
 dict comes back with the same arrays. ``n`` is a Python int on NumPy and Torch and a traced
 int on JAX, so nothing in the step may branch on it.
@@ -71,7 +93,8 @@ def initial_state(plan, params, rt):
     obs = {o.name: o.init(plan, rt) for o in plan.observers}
     psi = {key: rt.zeros(face.region.shape, plan.dtype)
            for face in plan.cpml for key in face.keys()}
-    return dict(E=E, H=H, psi=psi, mem=mem, obs=obs)
+    energy = plan.energy.init(plan, rt)
+    return dict(E=E, H=H, psi=psi, mem=mem, obs=obs, energy=energy)
 
 
 def step(plan, params, state, n, rt):
@@ -82,10 +105,22 @@ def step(plan, params, state, n, rt):
     for t in plan.terms:
         cE = t.before_H(cE, E, mem[t.name], n, params, rt)
     cE = damp(cE, 'lift', 'H', plan, params, rt)
+    energy = state['energy']
+    if rt.in_place:
+        # NumPy's update overwrites H and scales cE in place: read the whole row from them
+        # first (the E half was read into it at the end of the previous step elsewhere).
+        energy = plan.energy.observe(energy, E, H, cE, mem, n, params, rt)
+    old = H
     H = rt.update(H, cE, params['ah'], params['minus_bh'])
     H = damp(H, 'keep', 'H', plan, params, rt)
     for m in plan.masks:
         H = m.after_H(H, rt)
+    if not rt.in_place:
+        # JAX and Torch keep the old H: the H half is the product of the two, and the curl is
+        # handed to nothing but its update -- a compiled step that also reads the curl fuses
+        # the update otherwise and moves the fields by a rounding
+        # (``tests/test_fd_stage3_backends.py`` pins them).
+        energy = plan.energy.observe_magnetic(energy, old, H, n, params, rt)
 
     cH, psi = curl(H, 'H', plan, params, psi, rt)
     for t in plan.terms:
@@ -98,4 +133,7 @@ def step(plan, params, state, n, rt):
 
     mem = {t.name: t.advance(mem[t.name], E, H, n, params, rt) for t in plan.terms}
     obs = {o.name: o.observe(obs[o.name], E, H, n, params, rt) for o in plan.observers}
-    return dict(E=E, H=H, psi=psi, mem=mem, obs=obs)
+    if not rt.in_place:
+        # And the E half of the NEXT step's row, from this step's own outputs: see there.
+        energy = plan.energy.observe_electric(energy, E, mem, n + 1, params, rt)
+    return dict(E=E, H=H, psi=psi, mem=mem, obs=obs, energy=energy)

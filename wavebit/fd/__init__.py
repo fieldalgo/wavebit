@@ -82,23 +82,27 @@ diagnostic, ``Run(time=)`` and the cell-snapped ``Box`` structure::
     res['out'].flux, res['r'].orders.order(1, 0).R, res['r'].theta_at
     res['ff'].intensity(theta, phi), res['ff'].flux              # degrees; (nf, ...)
     res.sources['pw'].incident_amplitude(ws), res.sources['t'].intensity(ws),
-    res.sources['d'].power(ws), res.diagnostics['decay'], res.diagnostics['stable'],
-    res.diagnostics['grazing']
+    res.sources['d'].power(ws), res.diagnostics['decay'], res.diagnostics['interior_growth'],
+    res.diagnostics['growth'], res.diagnostics['stable'], res.diagnostics['grazing']
 
 Every one of those monitors lowers to the kernel's one frequency-domain observer, a running
 DFT over a region with each component at its own time level (``_kernel/observe.py``);
 everything built on it is post-processing in the backend's arrays (``_post.py`` derives the
 2-cell flux collocation, the Yee-kz de-embedding of the orders and the E/H direction split).
 A frequency-domain monitor whose region still holds field at the end warns with
-``fd.UnsettledFieldWarning``. ``FarField`` is the equivalence-principle transform of a closed
-box's DFT surface fields (``_post.py``), for open scenes only; ``Axis1D`` is a one-cell axis
-whose derivative is ``i k`` exactly (a user ``Bloch`` phase on a one-cell axis is refused,
-naming it); and a propagating order a PML face cannot absorb to the measured tolerance is
-refused by the grazing rule (``_lower/grazing.py``, which quotes the measurement and judges
-each wavelength with the CFS shift the layer has there). A flux surface -- a Flux or
-Diffraction plane, a Flux or FarField box -- keeps off every source: one that cuts a Dipole's
-stamp, lies on a PlaneWave's sheet (or a box around part of it) or cuts a TFSF surface is
-refused, because the 2-cell face would read part of the source (``_lower/monitors.py``).
+``fd.UnsettledFieldWarning``; when the energy of the scene's interior still rises after every
+source has ended, every monitor that sees it warns ``fd.GrowingFieldWarning`` (its subclass)
+instead, naming the PML's ``stabilize=`` knob (``res.diagnostics['interior_growth']``, and
+per monitor ``res.diagnostics['growth']``). ``FarField`` is the equivalence-principle
+transform of a closed box's DFT surface fields (``_post.py``), for open scenes only;
+``Axis1D`` is a one-cell axis whose derivative is ``i k`` exactly (a user ``Bloch`` phase on a
+one-cell axis is refused, naming it); and a propagating order a PML face cannot absorb to the
+measured tolerance is refused by the grazing rule (``_lower/grazing.py``, which quotes the
+measurement and judges each wavelength with the CFS shift the layer has there). A flux
+surface -- a Flux or Diffraction plane, a Flux or FarField box -- keeps off every source: one
+that cuts a Dipole's stamp, lies on a PlaneWave's sheet (or a box around part of it) or cuts a
+TFSF surface is refused, because the 2-cell face would read part of the source
+(``_lower/monitors.py``).
 
 Out of scope, and refused by name rather than
 silently: shapes other than ``Slab`` and cell-snapped ``Box``, subpixel averaging and
@@ -111,8 +115,8 @@ from ._lower import Plan, lower, plan
 from ._run import run
 from .boundaries import (PEC, PMC, Absorber, Absorbing, Axis1D, Bloch, Boundaries, Periodic,
                          PML, Symmetry)
-from .diagnostics import (AbsorberProximityWarning, CoarseMeshWarning, PMLStabilityWarning,
-                          UnsettledFieldWarning)
+from .diagnostics import (AbsorberProximityWarning, CoarseMeshWarning, GrowingFieldWarning,
+                          PMLStabilityWarning, UnsettledFieldWarning)
 from .geometry import Box, Plane, Slab, Structure
 from .materials import (Conductor, Debye, Dispersive, Drude, Lorentz, Material, MaterialBase,
                         Pole, eps_at)
@@ -130,7 +134,7 @@ __all__ = [
     'Material', 'Conductor', 'Dispersive', 'Drude', 'Lorentz', 'Debye', 'eps_at',
     'MaterialBase', 'Pole', 'Slab', 'Structure',
     'CoarseMeshWarning', 'AbsorberProximityWarning', 'UnsettledFieldWarning',
-    'PMLStabilityWarning',
+    'GrowingFieldWarning', 'PMLStabilityWarning',
     'InitialField', 'Term', 'Record', 'Flux', 'Field', 'Diffraction', 'FarField', 'Plane',
     'ModeMonitor', 'Decay', 'FluxResult', 'FieldResult', 'FarFieldResult', 'DiffractionResult',
     'Band', 'Dipole', 'PlaneWave', 'TFSF', 'Box', 'GaussianBeam', 'ModeSource',

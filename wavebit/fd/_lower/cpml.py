@@ -273,7 +273,7 @@ def stabilizing_rate(depth, thickness, eps_r, reflection, rho):
     that point by point would take ``rho`` of order ``1/kappa^2``, about two decades above
     these values. The loss outweighs the feed on the slab families that were swept (and on
     32- and 48-cell layers, slab-to-layer gaps 0.02-0.24 and weak slabs, eps 1.01-1.1); a
-    structure outside them can still grow, and the decay warning is what would say so.
+    structure outside them can still grow, and the growth warning is what would say so.
 
     **What it costs**, amplitude reflection at the carrier (``tests/test_fd_pml.py``'s
     doubling probe), pure CPML -> stabilized::
@@ -301,8 +301,12 @@ def stabilizing_rate(depth, thickness, eps_r, reflection, rho):
     rule's ``tau = 1e-3`` is exceeded below ``cos theta ~ 0.7`` on 12 cells). A default that
     makes a flat stack or a plane wave less accurate to keep a grating from growing is a choice
     for the owner, not a fix, so the default stays the pure stretch and the growth is reported
-    instead: the decay warning names ``PML(stabilize=3e-3)`` whenever a pure-stretch scene has
-    not settled (``_assemble.decay_report``).
+    instead: when the energy of the scene's interior is still rising after every source has
+    ended, the monitors that see it warn ``fd.GrowingFieldWarning`` (``_assemble.decay_report``,
+    ``res.diagnostics['interior_growth']``), which says a longer run makes it worse and names
+    ``PML(stabilize=...)`` with the value :func:`sufficient_stabilize` gives for the face's
+    target (3e-3 at the default). A run that is merely cut off -- unsettled but not rising --
+    is told to run longer and nothing else.
     """
     sigma_max = (-(ORDER + 1.0) * math.log(reflection)
                  / (2.0 * math.sqrt(eps_r) * thickness))

@@ -475,6 +475,107 @@ def decay_ratio(energy, window):
     return float((np.max(tail) - np.min(tail)) / peak)
 
 
+def growth_ratio(t, energy, start, window, min_windows, floor):
+    """Whether the interior's energy still **rises** once nothing drives it, and how steadily.
+
+    ``(ratio, lo, mid, hi, spread)`` or ``None``. ``t`` and ``energy`` are the interior-energy
+    series (``wavebit/fd/_kernel/observe.py::InteriorEnergy``), ``start`` the time every source
+    has ended by (``_assemble.sources_end``). The judged span is ``[start, hi]``, ``hi`` the last
+    sample; the ratio is the mean energy over its last quarter ``[mid, hi]`` over the mean over
+    the quarter before ``[lo, mid)``. ``spread`` says whether that rise is an exponential's:
+    the last half ``[lo, hi]`` cut into four eighths, it is the largest of the three
+    eighth-to-eighth rises of the log of their means over the smallest -- ``inf`` unless all
+    three rise. ``_assemble.decay_report`` calls a scene growing when the ratio is over
+    ``GROWTH_THRESHOLD`` **and** the spread is under ``GROWTH_STEADY``.
+
+    **Why the whole interior.** After the sources end, the energy of a passive scene's
+    interior can only hold (closed and lossless) or fall (a loss, or an open face it leaves
+    through): that is Poynting's theorem, and on the grid the leapfrog's own energy identity
+    (``InteriorEnergy``). So for a passive scene the ratio is at most 1 up to what the sampled
+    energy is not -- for any structure, whatever its modes do -- and up to what the PML hands
+    back, which is not in the interior's account. A monitor's own series has no such bound:
+    energy moves through its region, so a later echo of the same pulse (a slab's second
+    reflection, a PEC-backed layer's return) or two modes beating slower than a quarter read as
+    "growth" by any factor; a first version of this diagnostic judged each monitor's series
+    and gave a passive glass slab 1.2e8 and a lossless PEC box with two near-degenerate modes
+    2.8 (2026-09-20).
+
+    **Why the means of two quarters.** Means rather than peaks: what a monitor's or a
+    structure's field does inside a quarter is not the interior's energy, which the observer
+    reads exactly (``InteriorEnergy``), but a mean is what a sampled series of anything else
+    -- a first version's reading, a region's energy -- is read by, and it costs nothing here.
+    Measured over the suite, the passive runs' largest ratio is 1.0006 by means (1.043 by
+    peaks, measured on the first version's reading: a 4^3 box of random grid-scale field, whose
+    sampled energy swung by 12-22% over a run). A growth is the same factor either way,
+    ``exp(g T/4)`` for
+    ``g`` e-folds per unit time over a judged span ``T``. Quarters rather than the span's early
+    energy, because growth seeded under a ring-down starts far below the ring-down's level:
+    the lamellar grating under the default layer grows 2.6x per quarter at 384 periods while
+    its interior is at 1e-5 of the level it had when the source ended.
+
+    **Why the spread.** Energy the PML took and hands back is a rise the interior's account
+    cannot tell from growth by its size: a pulse kicked into a vacuum column under a deep weak
+    layer (``PML(64, 1e-3)``) leaves, and the wall's echo comes back after the layer's round
+    trip into an interior at 1e-8 of its peak -- a last quarter 1.8e4 times the one before. It
+    can by its shape. A linear instability's energy is a sum of exponentials that the fastest
+    comes to dominate, so over the last half of the span its log rises in equal steps: the
+    spread of the growing runs measured is 1.06 .. 1.64 (the slab column at every length from
+    50 to 200, the grating at 384), falling toward 1 as the fastest mode takes over. An echo
+    arrives with its pulse's shape -- a quiet floor, then a leading edge whose log steepens --
+    and its spread is 4.2 .. 18 (the deep-layer echoes). The table is at
+    ``_assemble.GROWTH_STEADY``.
+
+    ``None`` -- nothing judged -- when the span is shorter than ``min_windows`` windows of
+    ``window`` (time units), when a quarter or an eighth holds no sample, when a sample is not
+    finite, and when the last quarter's peak is not above ``floor`` of the run's (a field
+    decayed to round-off, whose last digits wander).
+    """
+    t = np.asarray(t, dtype=np.float64)
+    e = np.asarray(energy, dtype=np.float64)
+    if t.size == 0 or not np.all(np.isfinite(e)):
+        return None
+    hi = float(t[-1])
+    if not hi - start >= min_windows * window:
+        return None
+    q = (hi - start) / 4.0
+    lo, mid = hi - 2.0 * q, hi - q
+    last, before = e[t >= mid], e[(t >= lo) & (t < mid)]
+    if last.size == 0 or before.size == 0:
+        return None
+    top = float(np.max(e))
+    if not (top > 0.0 and float(np.max(last)) > floor * top):
+        return None
+    edges = [lo + i * q / 2.0 for i in range(4)] + [math.inf]
+    eighths = [e[(t >= a) & (t < b)] for a, b in zip(edges[:-1], edges[1:])]
+    if any(x.size == 0 for x in eighths):
+        return None
+    means = [float(np.mean(x)) for x in eighths]
+    spread = math.inf
+    if means[0] > 0.0 and all(b > a for a, b in zip(means[:-1], means[1:])):
+        rises = [math.log(b / a) for a, b in zip(means[:-1], means[1:])]
+        spread = max(rises) / min(rises)
+    last, before = float(np.mean(last)), float(np.mean(before))
+    return (last / before if before > 0.0 else math.inf), lo, mid, hi, spread
+
+
+def quarter_ratio(t, energy, lo, mid, hi):
+    """A monitor's own ``max over [mid, hi] / max over [lo, mid)``: whether it sees a growth.
+
+    Read only once :func:`growth_ratio` has judged the interior growing, over the same two
+    quarters, to name the monitors whose own field rises with it. ``None`` when a quarter holds
+    no sample or both are zero.
+    """
+    t = np.asarray(t, dtype=np.float64)
+    e = np.asarray(energy, dtype=np.float64)
+    last, before = e[(t >= mid) & (t <= hi)], e[(t >= lo) & (t < mid)]
+    if last.size == 0 or before.size == 0:
+        return None
+    last, before = float(np.max(last)), float(np.max(before))
+    if before > 0.0:
+        return last / before
+    return math.inf if last > 0.0 else None
+
+
 # ---------------------------------------------------------------------------------------------
 # Transverse structure of a periodic plane
 # ---------------------------------------------------------------------------------------------

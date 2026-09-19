@@ -17,6 +17,13 @@ of them. What each primitive is on each backend was decided by measurement
                      buffers
     dft_add          multiply into a region        acc + phase * view               acc + phase * view
                      scratch, add in place
+    weighted_energy  einsum over a stride-0        stop_gradient(sum(w |v|^2))      no_grad (w |v|^2).sum()
+                     broadcast of w
+    real_inner       einsum, real and imag parts   stop_gradient(sum w Re(a* b))    no_grad (w (a* b).real).sum()
+    energy_weight    r (1 + a)/(2 b) times t,      stop_gradient(r (1 + a) t/(2 b)) no_grad r (1 + a) t/(2 b)
+                     into one scratch
+    constant         the value itself              lax.stop_gradient                detach
+    when             Python if                     lax.cond                         Python if
     array            np.asarray                    jnp.asarray, x64 lifted first    torch.as_tensor(..., device=)
     jit_for          the function itself           jax.jit, once per plan, kept     the function itself
                                                    on the instance
@@ -138,6 +145,10 @@ def _slice_along(a, ax, lo, hi):
 class _Functional:
     """What JAX and Torch share: out-of-place differences and updates through ``xp``."""
 
+    #: An update returns a new array and leaves the old one as it was (the step reads the
+    #: interior's energy after its H update from both, ``wavebit/fd/_kernel/step.py``).
+    in_place = False
+
     def scratch(self, key, shape, dtype):
         return None
 
@@ -176,6 +187,10 @@ class _Functional:
 
 class NumpyRuntime:
     """NumPy: preallocated buffers, ``out=`` everywhere at full volume, a plain loop."""
+
+    #: An update overwrites its field and scales its curl in place (the step reads the
+    #: interior's energy before its H update, ``wavebit/fd/_kernel/step.py``).
+    in_place = True
 
     name = 'numpy'
     xp = np
@@ -300,6 +315,52 @@ class NumpyRuntime:
             return (np.einsum('ijk,ijk->', view.real, view.real)
                     + np.einsum('ijk,ijk->', view.imag, view.imag))
         return np.einsum('ijk,ijk->', view, view)
+
+    def weighted_energy(self, view, w):
+        """``sum w |view|^2`` over a ``(3, nz, ny, nx)`` view, ``w`` a scalar or broadcasting
+        against it: no view-sized temporary either way (a stride-0 ``broadcast_to`` of an
+        array weight into one einsum)."""
+        parts = (view.real, view.imag) if np.iscomplexobj(view) else (view,)
+        if np.ndim(w) == 0:
+            return float(w) * sum(float(np.einsum('cijk,cijk->', p, p)) for p in parts)
+        w = np.broadcast_to(w, view.shape)
+        return sum(float(np.einsum('cijk,cijk,cijk->', w, p, p)) for p in parts)
+
+    def real_inner(self, a, b, w=1.0):
+        """``Re sum w conj(a) b`` over two ``(3, nz, ny, nx)`` views, ``w`` a scalar or
+        broadcasting against them: no temporary either way (einsum, a stride-0 broadcast of an
+        array weight)."""
+        pairs = [(a.real, b.real)]
+        if np.iscomplexobj(a) and np.iscomplexobj(b):
+            pairs.append((a.imag, b.imag))
+        if np.ndim(w) == 0:
+            return float(w) * sum(float(np.einsum('cijk,cijk->', p, q)) for p, q in pairs)
+        w = np.broadcast_to(w, a.shape)
+        return sum(float(np.einsum('cijk,cijk,cijk->', w, p, q)) for p, q in pairs)
+
+    def energy_weight(self, ratio, a, b, key, times=1.0):
+        """``ratio (1 + a) / (2 b)``, the ``eps`` or ``mu`` an update's ``(a, b)`` pair was built
+        from (``wavebit/fd/_kernel/observe.py::InteriorEnergy``), times ``times``: a float for
+        scalars, else written into one scratch of the coefficients' own (broadcast-compressed)
+        shape, so a sample allocates nothing."""
+        if np.ndim(a) == 0 and np.ndim(b) == 0 and np.ndim(times) == 0:
+            return ratio * (1.0 + float(a)) / (2.0 * float(b)) * float(times)
+        out = self.scratch(key, np.broadcast_shapes(np.shape(a), np.shape(b), np.shape(times)),
+                           np.float64)
+        np.add(a, 1.0, out=out)
+        np.multiply(out, 0.5 * ratio, out=out)
+        np.divide(out, b, out=out)
+        if np.ndim(times) or float(times) != 1.0:
+            np.multiply(out, times, out=out)
+        return out
+
+    def when(self, pred, fn, operand):
+        """``fn(operand)`` if ``pred`` else ``operand``: ``pred`` is a Python bool here."""
+        return fn(operand) if pred else operand
+
+    def constant(self, x):
+        """The value itself: NumPy carries no gradient to stop."""
+        return x
 
     def scan(self, body, carry, steps, schedule=None):
         for n in range(steps):
@@ -427,6 +488,28 @@ class JaxRuntime(_Functional):
 
     def energy(self, view):
         return self.jax.lax.stop_gradient(self.xp.sum(self.xp.abs(view) ** 2))
+
+    def weighted_energy(self, view, w):
+        return self.jax.lax.stop_gradient(self.xp.sum(w * self.xp.abs(view) ** 2))
+
+    def real_inner(self, a, b, w=1.0):
+        return self.jax.lax.stop_gradient(self.xp.sum(w * self.xp.real(self.xp.conj(a) * b)))
+
+    def energy_weight(self, ratio, a, b, key, times=1.0):
+        return self.jax.lax.stop_gradient(ratio * (1.0 + a) / (2.0 * b) * times)
+
+    def constant(self, x):
+        return self.jax.lax.stop_gradient(x)
+
+    def when(self, pred, fn, operand):
+        """``lax.cond``: ``pred`` is traced inside the scan (it is read off the step index).
+
+        The branch is skipped on the steps it is false, but the scan's body carries it at
+        every step, so what it costs is a property of the body and not of how often it fires:
+        the interior-energy reading costs the same at a stride of 16 and at a stride that
+        samples twice in 320 steps (``wavebit/fd/_kernel/observe.py::ENERGY_STRIDE``).
+        """
+        return self.jax.lax.cond(pred, fn, lambda a: a, operand)
 
     def scan(self, body, carry, steps, schedule=None):
         lax, jnp = self.jax.lax, self.xp
@@ -590,6 +673,25 @@ class TorchRuntime(_Functional):
     def energy(self, view):
         with self.torch.no_grad():
             return (view.abs() ** 2).sum()
+
+    def weighted_energy(self, view, w):
+        with self.torch.no_grad():
+            return (w * view.abs() ** 2).sum()
+
+    def real_inner(self, a, b, w=1.0):
+        with self.torch.no_grad():
+            return (w * ((a.conj() * b).real if a.is_complex() else a * b.real)).sum()
+
+    def energy_weight(self, ratio, a, b, key, times=1.0):
+        with self.torch.no_grad():
+            return ratio * (1.0 + a) / (2.0 * b) * times
+
+    def constant(self, x):
+        return x.detach() if isinstance(x, self.torch.Tensor) else x
+
+    def when(self, pred, fn, operand):
+        """``fn(operand)`` if ``pred`` else ``operand``: ``pred`` is a Python bool here."""
+        return fn(operand) if pred else operand
 
     def scan(self, body, carry, steps, schedule=None):
         if schedule is None:

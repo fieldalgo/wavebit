@@ -12,9 +12,10 @@ preallocated buffers.
 
 **Stage 3** turns the finished state into results after the scan (``_assemble.py``): each
 frequency-domain monitor's result, each source's spectral normalisation (methods on its
-``SourceSeries``), and the always-on decay diagnostic. A ``Diffraction(polarizations='both')``
-monitor makes ``run`` solve the scene a second time with the PlaneWave's other polarisation;
-``res.diagnostics['runs']`` says how many solves the result is.
+``SourceSeries``), and the always-on decay and growth diagnostics. A
+``Diffraction(polarizations='both')`` monitor makes ``run`` solve the scene a second time with
+the PlaneWave's other polarisation; ``res.diagnostics['runs']`` says how many solves the
+result is.
 """
 import dataclasses
 
@@ -85,10 +86,14 @@ def _results(scene, plan, state, rt, params=None, grazing=None):
         series.update(monitor_results(scene, plan, state, rt, sources, params))
         # In scene order, so ``for name in res`` reads the monitors as they were declared.
         series = {m.name: series[m.name] for m in scene.monitors}
-    # Always on: every run reports its decay; only a frequency-domain monitor can warn.
-    diagnostics = decay_report(scene, plan, state, rt, sources)
+    # Always on: every run reports its decay and its growth; only a frequency-domain monitor
+    # warns unsettled, and a growth warns for every monitor that sees it (a Record too, where
+    # its values are concrete) or, when none does, for the interior.
+    stable = _stable(params, rt)
+    diagnostics = decay_report(scene, plan, state, rt, sources,
+                               stable=stable if isinstance(stable, bool) else None)
     diagnostics['runs'] = 1
-    diagnostics['stable'] = _stable(params, rt)
+    diagnostics['stable'] = stable
     # The survey the plan's refusal judged (``run`` hands it over), else surveyed here.
     if grazing is None:
         from ._lower.grazing import survey
