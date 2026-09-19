@@ -228,6 +228,59 @@ checkout only, twice in one process, LF-normalised source digests (its own, its 
 and the stage-0 case list it imports its capture from), a content digest the test recomputes,
 a changed shape reported as a moved scene, and `--rebaseline` as the only way to overwrite.
 
+### Its stage-3 twin: `fd_golden_stage3.npz` (2026-09-19)
+
+Stage 3 added one kernel observer -- a running DFT of named components over a region, carried
+in the scan (`DFTRegion`) -- and made everything else post-processing of its accumulators after
+the run: flux over a plane or a box's six faces, `Field` phasors, the near-to-far transform,
+the `Diffraction` orders (index-DFT, direction split, Yee kz de-embedding, s/p frame), and the
+sources' spectra (`power`, `incident_amplitude`, `intensity`). It also added `Box` as a
+structure and the `Axis1D` face. So a fourth archive pins five scenes of its own: two dipoles in
+a PML box with a `Flux` box, a `Flux` plane and a `Field` plane; a 25-degree p `PlaneWave`
+through a glass layer in a Bloch cell with a reflect and a transmit `Diffraction` plane; a
+lamellar `Box` grating at normal incidence with three propagating orders; a magnetic and an
+electric dipole in a `FarField` box; and a conical `Box` grating whose invariant axis is an
+`Axis1D`. `tests/test_fd_stage3_backends.py` holds the three backends to each other and each to
+its own frozen answer at the same 1e-12 (measured: JAX and Torch 1e-15 to 3e-14 off NumPy, the
+worst a dipole's `power()`), and `tests/test_fd_stage3_grad.py` holds `jax.grad` and
+`torch.autograd` to central differences through each new route.
+
+What is frozen is the pipeline end to end, per backend: **every DFT accumulator whole** and its
+energy series (the raw observer output), then **every result built from them** (fluxes and face
+shares, phasors, the ten `Result` arrays of each `Diffraction` monitor and its `theta_at`, the
+far-field intensity and fields at fixed directions), then the sources' spectra. A failure in the
+result rows alone says the post-processing moved under unchanged accumulators, and the gate's
+mutants show that this is not hypothetical: the continuum kz in the de-embedding and the far
+field's magnetic current with its sign flipped both leave every accumulator bit-identical and
+move only the complex amplitudes (1e-2 of their peak) or the far field (O(1)). Not frozen: the
+decay ratios, whose relative round-off on a settled run is 1e-7 of themselves (a difference of
+nearly equal energies), and the stage-2 reference series, which `fd_golden_stage2.npz` pins on
+its own scenes and which would be 60% of this archive; the gate holds the backends to each
+other on those live.
+
+Two traps met on the way are asserted rather than remembered. **A lone `Ez` dipole radiates no
+`Hz`** (its field is TM to z), so the first draft froze four box-face `Hz` accumulators of pure
+round-off -- JAX and Torch 1.0 to 1.8 of their own peaks off NumPy, the stage-2 trap exactly; each
+dipole scene now carries a second dipole, and the gate asserts every frozen array is either an
+exact 0.0 or above 1e-10. **The lamellar grating is TE by symmetry**, so its p arrays and its
+`Ex`/`Hy` accumulators *are* exact zeros on every backend: frozen, and asserted exact, because a
+pin on an exact zero is one any leak of p breaks. The runs are short (300 to 500 steps), so every
+frequency-domain monitor warns `UnsettledFieldWarning`; the gate asserts that it does, naming
+each monitor, rather than silencing it unseen.
+
+The two dipole scenes' boxes are 0.4 on a side, not the first freeze's 0.2: a flux box must
+enclose a dipole's stamp (two cells either side of its centre) with a cell to spare, which
+`wavebit/fd/_lower/monitors.py` now refuses otherwise, and the 0.2 boxes cut both scenes'
+stamps -- the first freeze pinned a flux that missed part of the power. They were re-frozen with
+`--rebaseline` for that reason alone (only those two scenes moved; 582 of 582 arrays reproduce
+since).
+
+`interface/freeze_fd_stage3.py` writes it under exactly the earlier stages' rules: this checkout
+only, twice in one process, LF-normalised source digests (its own, its case list's, the stage-0
+case list its digest and gap come from, and the stage-2 one its sampling rule comes from), a
+content digest the test recomputes, a changed shape reported as a moved scene, and
+`--rebaseline` as the only way to overwrite.
+
 ### Why the field row exists, and what it cost to not have it
 
 Until 2026-08-14 every oracle here checked efficiencies or amplitudes, and **field
@@ -1011,6 +1064,8 @@ Two consequences worth knowing before touching those generators:
 | `fd_golden_stage1.npz` — those answers, committed; `tests/test_fd_stage1_backends.py` holds them | nothing; **run in CI everywhere** |
 | `interface/freeze_fd_stage2.py`, `_fd_stage2_cases.py` — the same for stage 2's sources, with every source's reference series and the lowered stamps, pattern and waveform table | the project env with NumPy, JAX and Torch; run by hand |
 | `fd_golden_stage2.npz` — those answers, committed; `tests/test_fd_stage2_backends.py` holds them | nothing; **run in CI everywhere** |
+| `interface/freeze_fd_stage3.py`, `_fd_stage3_cases.py` — the same for stage 3's monitors, with every DFT accumulator whole, every result built from it and the sources' spectra, plus the lowered DFT frequencies and Axis1D factor | the project env with NumPy, JAX and Torch; run by hand |
+| `fd_golden_stage3.npz` — those answers, committed; `tests/test_fd_stage3_backends.py` holds them | nothing; **run in CI everywhere** |
 ## A golden frozen ahead of its consumer
 
 `golden_fmmax_magnetic.npz` holds rows nothing in this solver can consume — permeability has no

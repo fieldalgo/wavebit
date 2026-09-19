@@ -427,11 +427,15 @@ def test_run_periods_doors():
                              boundaries=fd.Boundaries.open(fd.PML(cells=12, wavelength=1.0))))
 
 
-def test_a_box_is_a_tfsf_region_and_not_yet_a_structure():
+def test_a_box_is_a_tfsf_region_and_since_stage_3_a_structure():
+    # Stage 2 refused Structure(fd.Box(...)) naming stage 4; stage 3 made the cell-snapped Box
+    # a structure (tests/test_fd_monitors_doors.py holds its doors), and the shapes after it
+    # are still stage 4.
     box = fd.Box(size=(0.2, 0.2, 0.2))
-    with pytest.raises(NotImplementedError) as e:
-        fd.Structure(box, fd.Material(eps=2.25))
-    assert 'stage 4' in str(e.value) and 'fd.TFSF' in str(e.value)
+    assert fd.Structure(box, fd.Material(eps=2.25)).shape is box
+    with pytest.raises(TypeError) as e:
+        fd.Structure(fd.Plane(z=0.0), fd.Material(eps=2.25))
+    assert 'stage 4' in str(e.value)
     with pytest.raises(ValueError, match='positive length'):
         fd.Box(size=(0.2, 0.0, 0.2))
     with pytest.raises(TypeError, match="fd.Box"):

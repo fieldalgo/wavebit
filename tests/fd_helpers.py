@@ -35,6 +35,16 @@ Airy, Fresnel and decay gates that come after it.
 a Bloch cell (:func:`bloch_plane_wave`), a TFSF box in vacuum or on a substrate
 (:func:`tfsf_box`), and the readers the source gates share (:func:`scattered_region_peak`,
 :func:`ring_monitors`, :func:`peak_of`).
+
+**Stage 3's scenes** are at the very bottom: a dipole in an open box with three flux boxes
+(:func:`flux_box_dipole` -- around it, beside it, and big), a PlaneWave through a uniform stack
+in a Bloch cell with reflect and transmit ``Diffraction`` monitors and its ``wavebit.rcwa`` twin
+(:func:`bloch_stack`), a lamellar or crossed cell-snapped ``Box`` grating with the same monitors
+and its RCWA twin at matched geometry (:func:`box_grating`), and a PEC cavity with a dipole that
+never settles (:func:`pec_cavity_dipole`). Stage 3's second build adds a dipole in an open box
+with an ``fd.FarField`` box (:func:`farfield_dipole`, with :func:`sphere_integral` to integrate
+its intensity), and a conical 1-D grating whose invariant axis is an ``fd.Axis1D``, with its
+``wavebit.rcwa`` twin (:func:`conical_grating`). Each docstring carries what was measured on it.
 """
 import math
 
@@ -894,3 +904,329 @@ def scattered_region_peak(res, source):
         mask[lo[2] - 1:hi[2] + 2, lo[1] - 1:hi[1] + 2, lo[0] - 1:hi[0] + 2] = False
         peak = max(peak, float(F[:, mask].max()))
     return peak
+
+
+# ---------------------------------------------------------------------------------------------
+# Stage 3: the monitor scenes
+# ---------------------------------------------------------------------------------------------
+
+#: The wavelengths every stage-3 helper's monitors accumulate at unless told otherwise: the
+#: centre of :data:`BAND` and one either side, all well inside its spectrum (the band's
+#: amplitude is 0.47 of its peak at 0.9 and 0.56 at 1.1).
+WAVELENGTHS = (0.9, 1.0, 1.1)
+
+
+def flux_box_dipole(center=(0.013, -0.02, 0.007), component='Ez', kind='electric', size=1.4,
+                    box=0.5, cells_per_wavelength=20, periods=14, wavelengths=WAVELENGTHS,
+                    empty_center=(0.4, 0.35, 0.3), empty_size=0.3, big=None, **kwargs):
+    """A dipole in an open PML box with three ``fd.Flux`` boxes: around it, beside it, and big.
+
+    ``'in'`` is a cube of side ``box`` centred on the origin (the dipole is near its centre),
+    ``'empty'`` a cube of side ``empty_size`` at ``empty_center`` that holds no source, and
+    ``'big'`` a cube of side ``big`` (default: the interior less four cells) around both. With
+    the defaults the run settles by 10 periods (``res.diagnostics['decay']`` at 1e-9 and
+    below) and 14 are given; the flux of ``'in'`` and ``'big'`` equals
+    ``res.sources['d'].power()`` to 1e-8 and ``'empty'`` is 5e-10 of it (measured 2026-09-19,
+    NumPy). Returns the scene.
+    """
+    dx = 1.0 / cells_per_wavelength
+    big = (size - 4 * dx) if big is None else big
+    monitors = (fd.Flux('in', box=fd.Box(size=(box,) * 3), wavelengths=wavelengths),
+                fd.Flux('empty', box=fd.Box(size=(empty_size,) * 3, center=empty_center),
+                        wavelengths=wavelengths),
+                fd.Flux('big', box=fd.Box(size=(big,) * 3), wavelengths=wavelengths))
+    return dipole_box(center=center, component=component, kind=kind, size=size,
+                      cells_per_wavelength=cells_per_wavelength, periods=periods,
+                      monitors=monitors, **kwargs)
+
+
+def _rcwa_layers(layers):
+    """``wavebit.rcwa`` ``structure`` and ``thickness`` of uniform layers ``((eps, d), ...)``."""
+    return ([dict(background=float(eps), shapes=[]) for eps, _ in layers],
+            [float(d) for _, d in layers])
+
+
+def _psi(polarization):
+    return math.pi / 2 if polarization == 's' else 0.0
+
+
+def bloch_stack(theta=25.0, phi=0.0, polarization='s', layers=((2.25, 0.3),), substrate=None,
+                cells_per_wavelength=20, wavelengths=WAVELENGTHS, periods=20, pml=12,
+                transverse=(0.25, 0.2), sheet=0.6, gap=0.5, both=False):
+    """A PlaneWave through a uniform stack in a Bloch cell, with reflect and transmit monitors.
+
+    ``layers`` is ``((eps, thickness), ...)`` from the top down, the top of the first at
+    ``z = 0``; ``substrate`` an ``eps`` that runs from the last layer's bottom out through the
+    ``z-`` PML (``None``: vacuum). The sheet sits ``sheet`` above the stack, the reflect monitor
+    ``'r'`` ``gap`` above the sheet (in the scattered-field region) and the transmit monitor
+    ``'t'`` ``gap`` below the stack. Every thickness is snapped to whole cells, and the monitors
+    are referred to the **tangential-E** interfaces, half a cell below the snapped cell
+    boundaries (``tests/test_fd_airy.py`` derives why: ``eps`` lives on the E nodes and each
+    node's dual cell reaches half a cell down) -- so ``r`` is at the top interface and ``t`` at
+    the bottom one against the incident wave at the top, which are ``wavebit.rcwa``'s
+    references. The s wave converges to RCWA second order in ``dx``; the p wave's normal E sees
+    the interfaces where the cells are, not half a cell low, so it converges first order.
+
+    Returns ``(scene, info)``; ``info['rcwa'](index, theta_deg)`` is the ``wavebit.rcwa``
+    ``Result`` of the same stack at ``wavelengths[index]`` and the angle given (pass the run's
+    ``res['r'].theta_at[index]``: fixed k means the angle moves across the band).
+    """
+    import wavebit
+    b = band()
+    dx = float(b.wavelength) / cells_per_wavelength
+    snapped = [(eps, max(1, round(d / dx)) * dx) for eps, d in layers]
+    depth = sum(d for _, d in snapped)
+    pw = fd.PlaneWave('pw', z=sheet, direction='-z', theta=theta, phi=phi,
+                      polarization=polarization, band=b)
+    structures, z = [], 0.0
+    for eps, d in snapped:
+        structures.append(fd.Structure(fd.Slab(z=(z - d, z)), fd.Material(eps=eps)))
+        z -= d
+    low = -depth - gap - 0.3
+    high = sheet + gap + 0.3
+    if substrate is not None:
+        structures.append(fd.Structure(fd.Slab(z=(low - (pml + 2) * dx, -depth)),
+                                       fd.Material(eps=substrate)))
+    top, bottom = -0.5 * dx, -depth - 0.5 * dx
+    pol = 'both' if both else 'given'
+    monitors = (fd.Diffraction('r', z=sheet + gap, side='reflect', wavelengths=wavelengths,
+                               reference_plane=top, polarizations=pol),
+                fd.Diffraction('t', z=-depth - gap, side='transmit', wavelengths=wavelengths,
+                               reference_plane=bottom, incident_plane=top, polarizations=pol))
+    faces = fd.Bloch.from_source(pw)
+    scene = fd.Scene(domain=fd.Domain(size=(transverse[0], transverse[1],
+                                            (high - low) + 2 * pml * dx),
+                                      center=(0.0, 0.0, 0.5 * (high + low))),
+                     boundaries=fd.Boundaries(**faces, z=fd.PML(cells=pml)),
+                     resolution=fd.Resolution(dx=dx), run=fd.Run(periods=periods),
+                     structures=tuple(structures), sources=(pw,), monitors=monitors)
+
+    def rcwa(index, theta_deg=None, truncation_order=0):
+        th = theta if theta_deg is None else float(theta_deg)
+        structure, thickness = _rcwa_layers(snapped)
+        return wavebit.rcwa(backend=0, top=1.0, bot=1.0 if substrate is None else substrate,
+                            theta=math.radians(th), phi=math.radians(phi),
+                            psi=_psi(polarization),
+                            truncation_order=[truncation_order, truncation_order],
+                            period=[transverse[0], transverse[1]],
+                            wavelength=wavelengths[index], structure=structure,
+                            thickness=thickness).solve()
+    return scene, dict(rcwa=rcwa, top=top, bottom=bottom, dx=dx, layers=tuple(snapped),
+                       depth=depth)
+
+
+def box_grating(kind='lamellar', theta=0.0, phi=0.0, polarization='s', cells_per_wavelength=20,
+                wavelengths=WAVELENGTHS, period=1.6, fill=0.5, height=0.2, eps=2.25,
+                periods=160, pml=12, sheet=0.6, gap=0.5, orders=None, both=False):
+    """A cell-snapped ``fd.Box`` grating under a PlaneWave, with reflect and transmit monitors.
+
+    ``kind='lamellar'``: a tooth of width ``fill * period`` along x that spans y, in a cell one
+    cell deep in y (the Box runs past the domain in y and is clipped there). ``kind='crossed'``:
+    a square pillar ``fill * period`` on a side in a square cell. Vacuum above and below, the
+    tooth's top at ``z = 0``, centred on the cell's origin as ``wavebit.rcwa`` centres its
+    shapes. ``period``, the tooth and ``height`` are whole numbers of cells at 20, 40 and 80
+    cells per wavelength, so the snapped geometry is the geometry asked for and the matched
+    ``wavebit.rcwa`` geometry is exact; what is left is the staircase's half-cell ambiguity
+    (the tangential E sees a face half a cell low, the normal E where the cells are --
+    ``tests/test_fd_airy.py``), first order in ``dx`` until stage 4's subpixel averaging. The
+    monitors refer ``r`` to the tooth's top and ``t`` to its bottom, both as the tangential E
+    sees them (half a cell low).
+
+    **Measured 2026-09-19 (NumPy, 20 cells per wavelength, lamellar, normal incidence, s):** the
+    tooth rings -- a guided resonance of the 0.2-thick layer -- so the reflect monitor's decay
+    ratio is 9.4e-4 at 40 periods, 4.4e-5 at 80 and 3.0e-7 at 160 (the default), and its
+    efficiencies move by 3% between 40 and 80; against ``wavebit.rcwa`` (truncation 12), at 40
+    periods and the band centre, every propagating order's complex ``r`` and ``t`` is within
+    1.9e-2 / 2.5e-2 at 20 cells per wavelength and 8.8e-3 / 1.1e-2 at 40. At ``theta = 20`` the ``(+1, 0)`` order leaves at
+    exit ``cos(theta) = 0.26`` at the band centre -- the grazing case whose PML return the
+    stage-3 grazing rule is to measure -- and a crossed grating at 40 cells per wavelength is a
+    491520-cell, 114 s NumPy run. The s reflection converges first order in ``dx`` here (the
+    staircase), not second as a layer does.
+
+    Returns ``(scene, info)``; ``info['rcwa'](index, theta_deg, truncation_order)`` is the
+    ``wavebit.rcwa`` ``Result`` at ``wavelengths[index]``.
+    """
+    import wavebit
+    b = band()
+    dx = float(b.wavelength) / cells_per_wavelength
+    pw = fd.PlaneWave('pw', z=sheet, direction='-z', theta=theta, phi=phi,
+                      polarization=polarization, band=b)
+    width = fill * period
+    if kind == 'lamellar':
+        Ly = dx
+        box = fd.Box(size=(width, 10.0, height), center=(0.0, 0.0, -height / 2))
+    elif kind == 'crossed':
+        Ly = period
+        box = fd.Box(size=(width, width, height), center=(0.0, 0.0, -height / 2))
+    else:
+        raise ValueError(f'box_grating(kind={kind!r}): lamellar or crossed')
+    low = -height - gap - 0.3
+    high = sheet + gap + 0.3
+    top, bottom = -0.5 * dx, -height - 0.5 * dx
+    pol = 'both' if both else 'given'
+    monitors = (fd.Diffraction('r', z=sheet + gap, side='reflect', wavelengths=wavelengths,
+                               reference_plane=top, orders=orders, polarizations=pol),
+                fd.Diffraction('t', z=-height - gap, side='transmit', wavelengths=wavelengths,
+                               reference_plane=bottom, incident_plane=top, orders=orders,
+                               polarizations=pol))
+    faces = fd.Bloch.from_source(pw)
+    scene = fd.Scene(domain=fd.Domain(size=(period, Ly, (high - low) + 2 * pml * dx),
+                                      center=(0.0, 0.0, 0.5 * (high + low))),
+                     boundaries=fd.Boundaries(**faces, z=fd.PML(cells=pml)),
+                     resolution=fd.Resolution(dx=dx), run=fd.Run(periods=periods),
+                     structures=(fd.Structure(box, fd.Material(eps=eps)),), sources=(pw,),
+                     monitors=monitors)
+
+    def rcwa(index, theta_deg=None, truncation_order=12):
+        th = theta if theta_deg is None else float(theta_deg)
+        if kind == 'lamellar':
+            shape = dict(type='rectangle', cx=0.0, cy=0.0, lx=width, ly=period, material=eps)
+            order = [truncation_order, 0]
+        else:
+            shape = dict(type='rectangle', cx=0.0, cy=0.0, lx=width, ly=width, material=eps)
+            order = [truncation_order, truncation_order]
+        return wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=math.radians(th),
+                            phi=math.radians(phi), psi=_psi(polarization),
+                            truncation_order=order, period=[period, period],
+                            wavelength=wavelengths[index],
+                            structure=[dict(background=1.0, shapes=[shape])],
+                            thickness=[height]).solve()
+    return scene, dict(rcwa=rcwa, top=top, bottom=bottom, dx=dx, period=period, Ly=Ly)
+
+
+def pec_cavity_dipole(periods=6, size=0.8, cells_per_wavelength=20, wavelengths=WAVELENGTHS,
+                      center=(0.013, -0.02, 0.007), box=0.4):
+    """A dipole in a closed PEC box with a ``fd.Flux`` box ``'in'`` around it: it never settles.
+
+    The decay gate's unsettled scene: a lossless cavity keeps its modes ringing forever, so a
+    frequency-domain monitor in it is always cut off and ``fd.UnsettledFieldWarning`` must fire
+    naming ``'in'``. Returns the scene.
+    """
+    b = band()
+    dx = float(b.wavelength) / cells_per_wavelength
+    src = fd.Dipole('d', center=center, component='Ez', band=b)
+    return fd.Scene(domain=fd.Domain(size=(size,) * 3),
+                    boundaries=fd.Boundaries(x=fd.PEC(), y=fd.PEC(), z=fd.PEC()),
+                    resolution=fd.Resolution(dx=dx), run=fd.Run(periods=periods),
+                    sources=(src,),
+                    monitors=(fd.Flux('in', box=fd.Box(size=(box,) * 3),
+                                      wavelengths=wavelengths),))
+
+
+def order_value(result, name, m, n=0):
+    """``result.order(m, n).<name>`` as NumPy: a complex for a plain ``Result``, ``(nf,)`` for fd's."""
+    value = to_numpy(getattr(result.order(m, n), name))
+    return complex(value) if np.ndim(value) == 0 else np.asarray(value)
+
+
+def farfield_dipole(center=(0.013, -0.02, 0.007), component='Ez', kind='electric', size=1.4,
+                    box=0.5, cells_per_wavelength=20, periods=14, wavelengths=WAVELENGTHS,
+                    **kwargs):
+    """A dipole in an open PML box with an ``fd.FarField`` box ``'ff'`` of side ``box`` around it.
+
+    The far-field gate's scene: the same open box as :func:`flux_box_dipole`, settled by 10
+    periods. Measured 2026-09-19 (NumPy, an ``Ez`` dipole): the pattern ``U(theta, 0)`` against
+    ``U(90, 0) sin^2(theta)`` is within 5.0e-3 / 3.3e-3 / 2.1e-3 of the peak at wavelengths 0.9 /
+    1.0 / 1.1 at 20 cells per wavelength and 1.3e-3 / 8.3e-4 / 5.3e-4 at 40 (second order; the
+    grid's anisotropy is the rest -- ``U(90, 45)/U(90, 0)`` is 0.987 at 20 and 0.997 at 40), the
+    intensity integrated over the sphere is the box's flux to 1.1e-3 / 1.3e-3 / 2.7e-3 at 20 and
+    2.7e-4 / 3.3e-4 / 6.5e-4 at 40, and ``res['ff'].flux`` is the dipole's ``power()`` to 2e-8.
+    With the magnetic current's sign flipped (``_post.FARFIELD_M_SIGN = -1``) the sphere integral
+    misses the flux by 30-39% and the pattern by 13%. Returns the scene.
+    """
+    monitors = (fd.FarField('ff', box=fd.Box(size=(box,) * 3), wavelengths=wavelengths),)
+    return dipole_box(center=center, component=component, kind=kind, size=size,
+                      cells_per_wavelength=cells_per_wavelength, periods=periods,
+                      monitors=monitors, **kwargs)
+
+
+def sphere_integral(result, n_theta=48, n_phi=64):
+    """``(nf,)``: a FarField result's intensity integrated over the sphere (Gauss-Legendre in
+    ``cos theta``, uniform in ``phi``), as NumPy."""
+    x, w = np.polynomial.legendre.leggauss(n_theta)
+    theta = np.degrees(np.arccos(x))
+    phi = np.arange(n_phi) * 360.0 / n_phi
+    T, F = np.meshgrid(theta, phi, indexing='ij')
+    U = to_numpy(result.intensity(T, F))
+    return np.sum(U * w[None, :, None], axis=(1, 2)) * (2.0 * np.pi / n_phi)
+
+
+#: The conical grating's wavelengths: clear of its two Rayleigh anomalies (the ``(-2, 0)`` order
+#: turns evanescent at 0.875 and the ``(+1, 0)`` one at 1.27), which the stage-3 set (0.9 is 3%
+#: from the first) is not -- there the grating rings for hundreds of periods.
+CONICAL_WAVELENGTHS = (0.95, 1.0, 1.05)
+
+
+def conical_grating(theta=15.0, phi=60.0, polarization='s', cells_per_wavelength=20,
+                    wavelengths=CONICAL_WAVELENGTHS, period=1.6, fill=0.5, height=0.2, eps=2.25,
+                    periods=160, pml=12, sheet=0.6, gap=0.5, orders=None, both=False):
+    """A conical lamellar grating: a ``Box`` tooth along x, uniform along y, y an ``fd.Axis1D``.
+
+    The x period is ``period`` and the cell is one cell deep in y, where ``fd.Axis1D(k=k_y)``
+    carries the wave's ``k_y = k0 sin(theta) sin(phi)`` exactly (``fd.Bloch.from_source(pw,
+    axis1d='y')``): with ``phi`` off 0 and 90 the plane of incidence is not a symmetry plane of
+    the grating, and every order couples s and p -- the conical case. Everything else is
+    :func:`box_grating`'s lamellar cell (tooth centred on the origin, top at ``z = 0``, monitors
+    referred to the tangential-E interfaces), and ``info['rcwa'](index, theta_deg,
+    truncation_order)`` is its ``wavebit.rcwa`` twin: the same tooth in a period that is only
+    order 0 along y, at ``wavelengths[index]``, ``phi`` and the angle given (pass the run's
+    ``res['r'].theta_at[index]``: fixed k keeps ``phi`` and moves ``theta`` across the band).
+    The defaults keep every propagating order at exit ``cos theta >= 0.5`` over the three
+    wavelengths, clear of the grazing rule.
+
+    **Measured 2026-09-19 (NumPy, 160 periods, RCWA truncation 15)**, the worst ``|fd - rcwa|``
+    over every propagating order's complex ``r_s, r_p, t_s, t_p`` at the three wavelengths:
+
+        cells per wavelength          20        40        80
+        s incidence                1.96e-2   8.19e-3   3.81e-3
+        p incidence                3.60e-2   1.46e-2   6.69e-3
+
+    first order in ``dx`` (the staircase, and the source's own s/p mix below), with ``R + T``
+    within 6e-4 of 1. Two things in that number are not Axis1D's: (1) the PlaneWave column
+    drives the stored ``E_x`` and ``E_y`` with the continuum polarisation, but each sits half a
+    cell along its own axis, so a conical wave is launched with a p part of ``~ (e . k_hat_par)
+    (k_x - k_y) dx/2`` -- 8.9e-3 in ``t_p`` for this cell at 20 cells per wavelength in vacuum
+    (6.5e-3 with a multi-cell Bloch y), 3e-5 with the stagger phase put into the drive; (2) the
+    grating rings: the reflect monitor's decay ratio is 7.2e-5 (s) and 1.7e-3 (p) at 160
+    periods and does not fall with the run's length (the field left is at the ``(+1, 0)`` and
+    ``(-1, 0)`` Rayleigh wavelengths 1.29 and 1.85, inside the band), so
+    ``fd.UnsettledFieldWarning`` fires; the orders move by 8.9e-4 (s) / 3.3e-3 (p) between 160
+    and 480 periods. The same cell with a two-cell Bloch y rings identically (the Axis1D is not
+    the cause). The run is 32 x 1 x 72 cells and 11086 steps at 20 cells per wavelength (6 s).
+    Returns ``(scene, info)``.
+    """
+    import wavebit
+    b = band()
+    dx = float(b.wavelength) / cells_per_wavelength
+    pw = fd.PlaneWave('pw', z=sheet, direction='-z', theta=theta, phi=phi,
+                      polarization=polarization, band=b)
+    width = fill * period
+    box = fd.Box(size=(width, 10.0, height), center=(0.0, 0.0, -height / 2))
+    low = -height - gap - 0.3
+    high = sheet + gap + 0.3
+    top, bottom = -0.5 * dx, -height - 0.5 * dx
+    pol = 'both' if both else 'given'
+    monitors = (fd.Diffraction('r', z=sheet + gap, side='reflect', wavelengths=wavelengths,
+                               reference_plane=top, orders=orders, polarizations=pol),
+                fd.Diffraction('t', z=-height - gap, side='transmit', wavelengths=wavelengths,
+                               reference_plane=bottom, incident_plane=top, orders=orders,
+                               polarizations=pol))
+    faces = fd.Bloch.from_source(pw, axis1d='y')
+    scene = fd.Scene(domain=fd.Domain(size=(period, dx, (high - low) + 2 * pml * dx),
+                                      center=(0.0, 0.0, 0.5 * (high + low))),
+                     boundaries=fd.Boundaries(**faces, z=fd.PML(cells=pml)),
+                     resolution=fd.Resolution(dx=dx), run=fd.Run(periods=periods),
+                     structures=(fd.Structure(box, fd.Material(eps=eps)),), sources=(pw,),
+                     monitors=monitors)
+
+    def rcwa(index, theta_deg=None, truncation_order=12):
+        th = theta if theta_deg is None else float(theta_deg)
+        shape = dict(type='rectangle', cx=0.0, cy=0.0, lx=width, ly=period, material=eps)
+        return wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=math.radians(th),
+                            phi=math.radians(phi), psi=_psi(polarization),
+                            truncation_order=[truncation_order, 0], period=[period, period],
+                            wavelength=wavelengths[index],
+                            structure=[dict(background=1.0, shapes=[shape])],
+                            thickness=[height]).solve()
+    return scene, dict(rcwa=rcwa, top=top, bottom=bottom, dx=dx, period=period,
+                       ky=faces['y'].k)
