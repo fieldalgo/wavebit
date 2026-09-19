@@ -207,18 +207,23 @@ def _pole_terms(scene, grid):
     return tuple(terms)
 
 
-def plan(scene, _column=False):
+def plan(scene, _column=False, _grazing=None):
     """The static plan of ``scene``, with the stage-1 refusals run and its warnings emitted.
 
     ``_column`` is the stage-2 source columns' own door (``sources._column_plan``): a column is
     one cell across and Bloch by construction, which is not a user face, so the one-cell Bloch
-    refusal and the grazing rule are the user's scene's alone.
+    refusal and the grazing rule are the user's scene's alone. ``_grazing`` is ``fd.run``'s
+    own: a list the grazing rule's survey rows are appended to (as one list), so the run's
+    diagnostics report the survey its refusal judged instead of surveying again. They are not
+    a plan field: the survey reads the scene's materials, which the skeleton does not hold,
+    and a plan field would have to stay out of the skeleton, the hash and the equality.
     """
     grid = Grid.from_domain(scene.domain.size, scene.domain.center, scene.resolution.dx)
     dt = scene.run.courant * grid.dx / math.sqrt(3.0)
     steps = run_steps(scene, dt)
     if not _column:
         checks.check_one_cell_bloch(scene, grid)
+        checks.check_wavelength_resolution(scene, grid)
     checks.check_faces(scene, grid, None)
     checks.check_overlaps(scene, grid)
     rules, pads, masks = [], [], []
@@ -257,7 +262,9 @@ def plan(scene, _column=False):
     if sources:
         p = p.with_static(terms=tuple(p.terms) + sources)
     if not _column:
-        grazing.enforce(scene, p)
+        rows = grazing.enforce(scene, p)
+        if _grazing is not None and rows is not None:
+            _grazing.append(rows)
     # Emitted through the caller's own filters, and deliberately not forced past them: a
     # caller who silenced CoarseMeshWarning silenced it, and the default "once per location"
     # rule is what keeps a sweep of a thousand plans from printing a thousand copies.

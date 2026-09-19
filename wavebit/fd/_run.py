@@ -65,7 +65,7 @@ def _shared_wavelengths(scene):
     return lists.pop() if len(lists) == 1 else None
 
 
-def _results(scene, plan, state, rt, params=None):
+def _results(scene, plan, state, rt, params=None, grazing=None):
     series = {}
     for o in plan.observers:
         if not hasattr(o, 'field'):
@@ -89,8 +89,11 @@ def _results(scene, plan, state, rt, params=None):
     diagnostics = decay_report(scene, plan, state, rt, sources)
     diagnostics['runs'] = 1
     diagnostics['stable'] = _stable(params, rt)
-    from ._lower.grazing import survey
-    diagnostics['grazing'] = survey(scene, plan)
+    # The survey the plan's refusal judged (``run`` hands it over), else surveyed here.
+    if grazing is None:
+        from ._lower.grazing import survey
+        grazing = survey(scene, plan)
+    diagnostics['grazing'] = grazing
     return Results(series, Final(E=state['E'], H=state['H']), plan,
                    _report(scene, plan, params), rt.name, sources=sources,
                    diagnostics=diagnostics)
@@ -116,10 +119,17 @@ def _stable(params, rt):
     return bool(value == value)
 
 
-def _solve(scene, p, rt):
+def _solve(scene, p, rt, grazing=None):
     params = lower(scene, p, rt)
     state = execute(p, params, rt)
-    return _results(scene, p, state, rt, params)
+    return _results(scene, p, state, rt, params, grazing)
+
+
+def _planned(scene):
+    """``(plan(scene), its grazing survey or None)``: the rows its refusal judged, once."""
+    rows = []
+    p = _plan(scene, _grazing=rows)
+    return p, (rows[0] if rows else None)
 
 
 def _other_polarization(scene):
@@ -132,7 +142,9 @@ def _other_polarization(scene):
 
 def run(scene, backend='numpy', plan=None, device=None):
     """Run ``scene`` on ``backend`` (``'numpy'`` | ``'jax'`` | ``'torch'`` or ``wavebit.Backend``)."""
-    p = _plan(scene)
+    # The survey is always this scene's: from its own plan, even when the caller passes one
+    # (a plan with the same skeleton may be another scene's, whose materials it does not hold).
+    p, rows = _planned(scene)
     if plan is not None:
         if plan.skeleton != p.skeleton:
             raise ValueError(
@@ -141,14 +153,15 @@ def run(scene, backend='numpy', plan=None, device=None):
                 f'with fd.plan(scene), or pass plan=None.')
         p = plan
     rt = runtime(backend, device)
-    res = _solve(scene, p, rt)
+    res = _solve(scene, p, rt, rows)
     both = [m for m in scene.monitors
             if isinstance(m, Diffraction) and m.polarizations == 'both']
     if both:
         # The second solve: the same scene with the PlaneWave's other polarisation. Its own
         # plan (the column's drive weights are static), its own decay check.
         other = _other_polarization(scene)
-        res2 = _solve(other, _plan(other), rt)
+        p2, rows2 = _planned(other)
+        res2 = _solve(other, p2, rt, rows2)
         for m in both:
             res._series[m.name] = res[m.name].with_both(res2[m.name].orders.given)
         res.diagnostics['runs'] = 2

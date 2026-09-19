@@ -21,9 +21,13 @@ The table, and where each row lives:
       layer (PML or Absorber)                      Absorber alike)
     cells per wavelength in a material < 8       check_resolution, here (< 12 warns); with
                                                   sources, at band.shortest_wavelength, and in
-                                                  vacuum too
+                                                  vacuum too -- but with sources the refusal is
+                                                  check_wavelength_resolution's, which runs
+                                                  before the rules that read the band
     a structure within half a wavelength of      check_resolution, here (warns)
       an absorbing face
+    a wavelength a rule will read at < 8 cells   check_wavelength_resolution, here (stage 3):
+      per wavelength in a material                 a Diffraction monitor's, and the band
     complex eps                                 materials._value
     Slab naming two axes, any other shape       geometry.Slab / Structure
     pole CFL violated, concretely                check_stability, here
@@ -41,7 +45,8 @@ from ..geometry import cell_box, describe, slab_axis
 from ..materials import Conductor, Dispersive, concrete, eps_at
 
 __all__ = ['face_wavelength', 'check_faces', 'check_overlaps', 'check_absorbing_layers',
-           'check_stability', 'notes', 'cfl_bound', 'check_one_cell_bloch', 'cfl_axis_sum']
+           'check_stability', 'notes', 'cfl_bound', 'check_one_cell_bloch', 'cfl_axis_sum',
+           'check_wavelength_resolution']
 
 
 def face_wavelength(face, scene, name):
@@ -499,13 +504,7 @@ def _resolution_notes(scene, plan):
             continue
         cells = wavelength / (n * plan.dx)
         if cells < 8.0:
-            raise ValueError(
-                f'{where} is sampled at {cells:.2f} cells per wavelength (index {n:.3f}, '
-                f'wavelength {wavelength:g}{_which(sources)}, dx {plan.dx:g}). The measured convergence behind '
-                f'the legacy engine\'s CELLS_PER_WAVELENGTH runs a worst per-order error of '
-                f'1.2e-2 at ~11 cells and 2.8e-3 at 23, so below 8 not even the first digit '
-                f'survives and the run would return a number shaped like an answer. Refine dx '
-                f'to at most {wavelength / (8.0 * n):g}, or say a coarser wavelength.')
+            raise _coarse_refusal(where, n, wavelength, plan.dx, sources)
         if cells < 12.0:
             out.append((CoarseMeshWarning,
                         f'{where}: {cells:.2f} cells per wavelength (index {n:.3f}); 12 is '
@@ -515,6 +514,81 @@ def _resolution_notes(scene, plan):
 
 def _which(sources):
     return ", the sources' band.shortest_wavelength" if sources else ''
+
+
+def _coarse_refusal(where, n, wavelength, dx, sources=()):
+    """The refusal a material sampled below 8 cells per wavelength raises, from either door.
+
+    One text, two call sites: :func:`_resolution_notes`, which reads the sources' band at the
+    end of ``plan`` (through ``warn_all``), and :func:`check_wavelength_resolution`, which reads
+    the same band and each ``Diffraction`` wavelength at the start of it, before a rule does.
+    """
+    cells = wavelength / (n * dx)
+    return ValueError(
+        f'{where} is sampled at {cells:.2f} cells per wavelength (index {n:.3f}, '
+        f'wavelength {wavelength:g}{_which(sources)}, dx {dx:g}). The measured convergence behind '
+        f'the legacy engine\'s CELLS_PER_WAVELENGTH runs a worst per-order error of '
+        f'1.2e-2 at ~11 cells and 2.8e-3 at 23, so below 8 not even the first digit '
+        f'survives and the run would return a number shaped like an answer. Refine dx '
+        f'to at most {wavelength / (8.0 * n):g}, or say a coarser wavelength.')
+
+
+def check_wavelength_resolution(scene, grid):
+    """Refuse a wavelength a rule will read at which a material is sampled below 8 cells per
+    wavelength: a ``Diffraction`` monitor's, and the sources' band.
+
+    :func:`_resolution_notes` holds the sources' band to that floor, but it runs from
+    ``warn_all``, at the end of ``plan`` -- after the grazing rule -- and it reads
+    ``band.shortest_wavelength`` only, so nothing held a monitor's own wavelengths to it at
+    all. Both wavelengths reach the grazing rule, whose model rests on the grid carrying every
+    order it judges (8 cells per wavelength keeps ``dx^2 (n^2 W^2 - K^2)`` inside ``[0, 4]``:
+    ``layer_return.py``), and both met an order past the grid's Nyquist along the axis: the
+    review's ``dx = 1/13`` in an ``eps 1.2`` tooth at 0.22 / 0.2 / 0.18 (4.4 .. 3.6 cells per
+    wavelength in the tooth) was a bare 'math domain error' on the incidence row and a silent
+    NaN verdict on the orders, and a stabilized column at 3.0 cells per wavelength -- with no
+    ``Diffraction`` monitor at all, the incidence judged at ``band.concrete_wavelength`` --
+    raised ``layer_return``'s own refusal by name. Below 8 not even the first digit of the
+    orders survives (the table :func:`_resolution_notes` quotes), so the wavelength is refused
+    here, before any rule reads it: the monitors first, shortest first, so the refusal names
+    the worst one, then the band in :func:`_resolution_notes`'s own words (that refusal is the
+    same text, from :func:`_coarse_refusal`; what stays in ``warn_all`` is its warnings, and
+    the scenes with no sources, whose wavelength the plan infers).
+    """
+    from ..monitors import Diffraction
+    materials = [('Scene(background=)', _background(scene))]
+    materials += [(f'structures[{i}]', s.material)
+                  for i, s in enumerate(getattr(scene, 'structures', ()) or ())]
+    asked = {}
+    for m in getattr(scene, 'monitors', ()) or ():
+        if isinstance(m, Diffraction):
+            for w in m.wavelengths:
+                asked.setdefault(w, m.name)
+    for w in sorted(asked):
+        for where, material in materials:
+            n, skin = _index_at(material, w)
+            if n is None or skin is not None:
+                continue                    # traced (not countable), or a metal: its skin
+            cells = w / (n * grid.dx)
+            if cells < 8.0:
+                raise ValueError(
+                    f'Diffraction({asked[w]!r}) asks for wavelength {w:g}, where {where} is '
+                    f'sampled at {cells:.2f} cells per wavelength (index {n:.3f}, dx '
+                    f'{grid.dx:g}): below the 8 the plan holds the sources\' band to, where '
+                    f'not even the first digit of an order survives -- the run would return '
+                    f'numbers shaped like efficiencies. Drop that wavelength (the sources\' '
+                    f'band sets which ones carry power), or refine dx to at most '
+                    f'{w / (8.0 * n):g}.')
+    sources = tuple(getattr(scene, 'sources', ()) or ())
+    if not sources:
+        return                              # no band to read, and no incidence row to judge
+    from .sources import shortest_wavelength
+    band = shortest_wavelength(scene)
+    if band is None:
+        return                              # traced: _resolution_notes says so, in a warning
+    for where, material in materials:
+        n, skin = _index_at(material, band)
+        if n is not None and skin is None and band / (n * grid.dx) < 8.0:
+            raise _coarse_refusal(where, n, band, grid.dx, sources)
 
 
 def _proximity_notes(scene, plan):

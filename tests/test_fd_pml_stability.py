@@ -76,12 +76,11 @@ import numpy as np
 import pytest
 
 import wavebit.fd as fd
-from wavebit.fd._kernel.step import initial_state, step
 from wavebit.fd._lower import lower, plan as make_plan
 from wavebit.fd._lower.cpml import MEASURED_STABILIZE, STABILIZING_LOSS, sufficient_stabilize
 from wavebit.fd.boundaries import PML_REFLECTION
 from wavebit.fd._runtime import runtime
-from fd_helpers import backends, to_numpy
+from fd_helpers import backends, one_step_matrix, to_numpy
 
 #: An eigenvalue at or below this growth rate (e-folds per unit time) is not a growing mode:
 #: the omega = 0 null space of the Yee curl sits at a few 1e-13.
@@ -126,44 +125,6 @@ def _ratio(backend='numpy', **kwargs):
     early = _energy(slab_column(time=100.0, **kwargs), backend)
     late = _energy(slab_column(time=300.0, **kwargs), backend)
     return early, late
-
-
-def one_step_matrix(scene):
-    """``(M, dt)``: the kernel's one-step map of ``scene``'s whole state, as a dense matrix.
-
-    The state is E, H and every psi; each column of ``M`` is one unit state stepped once
-    through ``_kernel.step`` exactly as a run steps it (the scene declares no source, so the
-    map is linear and ``n`` does not enter it).
-    """
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore')     # the slab sits 0.24 from the layer, on purpose
-        p = make_plan(scene.replace(run=fd.Run(steps=1)))
-    rt = runtime('numpy')
-    params = lower(scene, p, rt)
-    zero = initial_state(p, params, rt)
-    keys = sorted(zero['psi'])
-    shapes = [zero['E'].shape, zero['H'].shape] + [zero['psi'][k].shape for k in keys]
-    sizes = [int(np.prod(s)) for s in shapes]
-    dtype = zero['E'].dtype
-
-    def unpack(v):
-        parts, offset = [], 0
-        for shape, size in zip(shapes, sizes):
-            parts.append(v[offset:offset + size].reshape(shape).astype(dtype))
-            offset += size
-        return dict(zero, E=parts[0], H=parts[1], psi=dict(zip(keys, parts[2:])))
-
-    def pack(state):
-        return np.concatenate([np.asarray(state['E']).ravel(), np.asarray(state['H']).ravel()]
-                              + [np.asarray(state['psi'][k]).ravel() for k in keys])
-
-    N = sum(sizes)
-    M = np.zeros((N, N), dtype)
-    for j in range(N):
-        v = np.zeros(N, dtype)
-        v[j] = 1.0
-        M[:, j] = pack(step(p, params, unpack(v), 0, rt))
-    return M, p.dt
 
 
 def growth_rate(scene):
