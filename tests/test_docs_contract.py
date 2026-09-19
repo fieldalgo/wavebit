@@ -50,6 +50,9 @@ CITED_BUT_ABSENT = {
     # A file the script writes rather than reads. `*.json` is ignored on purpose -- the log
     # beside it is the committed record, and a second copy would be a second thing to keep true.
     'studies/results/backends.json',
+    'studies/results/fdtd_cpml_slab_cost.json',
+    'studies/results/fdtd_slab_add_cost.json',
+    'studies/results/fdtd_tfsf_oblique_leak.json',
     # Deliberately named as gone. Each appears in prose that says so ("used to live in",
     # "the legacy", "the deleted"), explaining where a test came from or what it replaced.
     'QA/1d_pattern_in_1dc_and_2d.py',
