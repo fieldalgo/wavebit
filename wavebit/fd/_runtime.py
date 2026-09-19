@@ -257,6 +257,14 @@ class NumpyRuntime:
         np.multiply(view, m, out=view)
         return a
 
+    def slab_scale(self, a, slab, m):
+        """``a[slab] *= m`` with ``m`` broadcasting against the slab (a 1-D profile, reshaped).
+
+        The stabilizing loss's primitive (``_kernel/cpml.py::damp``). On NumPy and Torch it is
+        ``slab_mul``; on JAX it is a different writing, see there.
+        """
+        return self.slab_mul(a, slab, m)
+
     def cpml_stretch(self, d, region, psi, b, a, ik, key):
         """The fused CPML recurrence, four in-place operations on the slab view of ``d``.
 
@@ -374,6 +382,29 @@ class JaxRuntime(_Functional):
             m = m.reshape(-1)
         return self._scatter(a, slab).multiply(m, indices_are_sorted=True, unique_indices=True,
                                                mode='promise_in_bounds')
+
+    def slab_scale(self, a, slab, m):
+        """``a[slab] *= m`` as a full-volume multiply by a broadcast factor that is 1 elsewhere.
+
+        ``slab`` is a CPML slab -- full extent on two axes, contiguous on the third -- so the
+        factor is ``m`` padded with ones along that axis and placed on component ``slab.c``,
+        a ``(3, n, 1, 1)``-like array, and the multiply is elementwise. XLA fuses it into the
+        update around it, so it costs no pass over memory. Measured in the compiled body
+        (``tests/test_fd_pml.py``): ``a.at[slices].multiply(m)`` lowered to a ``scatter-mul``,
+        and a dynamic-update-slice of the scaled slab -- the ``cpml_stretch`` writing -- forced
+        a full-volume copy of the curl or of the masked field per call, four per step.
+        """
+        jnp = self.xp
+        spans = (slab.z, slab.y, slab.x)
+        axis = next((k for k in range(3) if m.shape[k] != 1),
+                    next((k for k, n in enumerate(a.shape[1:]) if spans[k] != (0, n)), 0))
+        n = a.shape[1 + axis]
+        lo, hi = spans[axis]
+        width = [(0, 0)] * 3
+        width[axis] = (lo, n - hi)
+        factor = jnp.pad(m, width, constant_values=1.0)
+        factor = jnp.where(jnp.arange(3).reshape((3, 1, 1, 1)) == slab.c, factor[None], 1.0)
+        return a * factor
 
     def cpml_stretch(self, d, region, psi, b, a, ik, key):
         """The CPML recurrence, functionally, writing ``d`` with a dynamic-update-slice.
@@ -517,6 +548,10 @@ class TorchRuntime(_Functional):
             return self.SlabMul.apply(a, m, slab.slices)
         a[slab.slices].mul_(m)
         return a
+
+    def slab_scale(self, a, slab, m):
+        """``slab_mul`` with a broadcasting ``m``: in place, or through ``SlabMul`` under grad."""
+        return self.slab_mul(a, slab, m)
 
     def cpml_stretch(self, d, region, psi, b, a, ik, key):
         """The CPML recurrence in place -- four operations, no scratch -- or functionally.

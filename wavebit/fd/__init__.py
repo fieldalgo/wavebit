@@ -111,7 +111,8 @@ from ._lower import Plan, lower, plan
 from ._run import run
 from .boundaries import (PEC, PMC, Absorber, Absorbing, Axis1D, Bloch, Boundaries, Periodic,
                          PML, Symmetry)
-from .diagnostics import AbsorberProximityWarning, CoarseMeshWarning, UnsettledFieldWarning
+from .diagnostics import (AbsorberProximityWarning, CoarseMeshWarning, PMLStabilityWarning,
+                          UnsettledFieldWarning)
 from .geometry import Box, Plane, Slab, Structure
 from .materials import (Conductor, Debye, Dispersive, Drude, Lorentz, Material, MaterialBase,
                         Pole, eps_at)
@@ -129,6 +130,7 @@ __all__ = [
     'Material', 'Conductor', 'Dispersive', 'Drude', 'Lorentz', 'Debye', 'eps_at',
     'MaterialBase', 'Pole', 'Slab', 'Structure',
     'CoarseMeshWarning', 'AbsorberProximityWarning', 'UnsettledFieldWarning',
+    'PMLStabilityWarning',
     'InitialField', 'Term', 'Record', 'Flux', 'Field', 'Diffraction', 'FarField', 'Plane',
     'ModeMonitor', 'Decay', 'FluxResult', 'FieldResult', 'FarFieldResult', 'DiffractionResult',
     'Band', 'Dipole', 'PlaneWave', 'TFSF', 'Box', 'GaussianBeam', 'ModeSource',

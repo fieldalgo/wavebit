@@ -13,6 +13,7 @@ import warnings
 import numpy as np
 
 from . import _post
+from ._lower.cpml import MEASURED_STABILIZE, spell, sufficient_stabilize
 from ._lower.monitors import (FACE_SEP, box_faces, diffraction_layout, diffraction_window,
                               farfield_checks, field_points, plane_layout)
 from .diagnostics import UnsettledFieldWarning
@@ -343,6 +344,30 @@ def _np(rt, x):
         return None
 
 
+#: Appended to the unsettled warning when a PML face runs the pure stretch (the default): a
+#: longer run does not settle a field that grows
+#: (``wavebit/fd/_lower/cpml.py::stabilizing_rate``).
+_PURE_PML_NOTE = (
+    ' The PML on {faces} is the pure stretch (the default, stabilize=0), and a PEC-backed '
+    'stretch feeds energy into an evanescent field that reaches its wall: a lossless structure '
+    'with a bound mode just past the light line (the guided resonance of a grating at a '
+    'Rayleigh wavelength) grows under it instead of settling, and then no run is long enough. '
+    'If the ratio rises with the run length, {knob} adds the loss that stopped it on the slab '
+    'families it was measured on, at the price of a reflection at oblique incidence (2.1e-4 at '
+    '30 degrees on 12 cells at 3e-3).')
+
+
+def _knob(scene, faces):
+    """``PML(stabilize=...)`` with the measured value for the weakest target among ``faces``."""
+    targets = [scene.boundaries.face(name).reflection for name in faces]
+    rho = [sufficient_stabilize(r) for r in targets]
+    if any(v is None for v in rho):
+        return (f'PML(stabilize=) (no value was measured at a reflection target weaker than '
+                f'{spell(MEASURED_STABILIZE[-1][0])}; '
+                f'{spell(MEASURED_STABILIZE[-1][1])} sufficed there)')
+    return f'PML(stabilize={spell(max(rho))})'
+
+
 def decay_report(scene, plan, state, rt, sources):
     """``{name: ratio}`` for every frequency-domain monitor, and a warning over the line.
 
@@ -395,6 +420,7 @@ def decay_report(scene, plan, state, rt, sources):
         v = np.abs(v)
         e = v ** 2 if v.ndim == 1 else np.sum(v ** 2, axis=1)
         srcs[name] = _post.decay_ratio(e, tail)
+    pure = [face.name for face in plan.cpml if not face.stabilize]
     for name, ratio in monitors.items():
         if ratio is not None and ratio > UNSETTLED_THRESHOLD:
             warnings.warn(
@@ -403,6 +429,7 @@ def decay_report(scene, plan, state, rt, sources):
                 f'{UNSETTLED_THRESHOLD:.0e}). Its DFT is of a signal cut off before it '
                 f'decayed, so the phasors -- and every flux, order and normalisation built on '
                 f'them -- carry that truncation. Run longer (Run(steps=), Run(periods=), '
-                f'Run(time=)).', UnsettledFieldWarning, stacklevel=4)
+                f'Run(time=)).' + (_PURE_PML_NOTE.format(faces=pure, knob=_knob(scene, pure)) if pure else ''),
+                UnsettledFieldWarning, stacklevel=4)
     return dict(decay=monitors, records=records, sources=srcs,
                 threshold=UNSETTLED_THRESHOLD)

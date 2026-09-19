@@ -6,7 +6,8 @@ that would make the numbers meaningless is a refusal instead, and lives at the d
 owns it (``materials.py``, ``geometry.py``, ``boundaries.py``, ``_lower/plan.py``).
 """
 
-__all__ = ['CoarseMeshWarning', 'AbsorberProximityWarning', 'UnsettledFieldWarning']
+__all__ = ['CoarseMeshWarning', 'AbsorberProximityWarning', 'UnsettledFieldWarning',
+           'PMLStabilityWarning']
 
 
 class CoarseMeshWarning(UserWarning):
@@ -45,4 +46,17 @@ class UnsettledFieldWarning(UserWarning):
     signal cut off before it decayed is not the spectrum of the physics, so every flux, order
     and normalisation built on it carries the truncation. The message names the monitor and
     the ratio; the line is ``fd._assemble.UNSETTLED_THRESHOLD``, measured.
+    """
+
+
+class PMLStabilityWarning(UserWarning):
+    """A stabilized PML asks for less loss than was measured to stop a bound mode growing.
+
+    ``PML(stabilize=rho)`` adds a loss relative to the stretch's own ``sigma_max``, and the
+    ``rho`` that suffices depends on the face's ``reflection=`` target: 3e-3 at the default
+    1e-8, 5e-3 at 1e-6, 1e-2 at 1e-4, 2e-2 at 1e-3, measured on slab families with the
+    one-step-matrix eigen gate (``wavebit/fd/_lower/cpml.py::MEASURED_STABILIZE``). Below it,
+    or at a target weaker than any measured, a lossless structure with a bound mode next to
+    the face may still grow; the plan warns and runs, because a smaller loss is a legitimate
+    trade (it reflects less at an angle) and the growth depends on the structure.
     """

@@ -563,7 +563,8 @@ def packet_layout(cells, angle, wavelength=1.0, cells_per_wavelength=20, courant
                 cells=cells, courant=courant, omega=omega)
 
 
-def doubling_pair(cells=12, angle=0.0, layout=None, allow_thin=True, toward='+', **kwargs):
+def doubling_pair(cells=12, angle=0.0, layout=None, allow_thin=True, toward='+', stabilize=None,
+                  **kwargs):
     """``(test_scene, reference_scene, layout)``: the same packet, the PML at two distances.
 
     The doubling method in the form an initial-field engine can run it: two boxes whose cells
@@ -585,6 +586,9 @@ def doubling_pair(cells=12, angle=0.0, layout=None, allow_thin=True, toward='+',
     The transverse faces are ``Bloch`` (or ``Periodic`` at normal incidence, where a zero
     phase is refused and the run is real). The probe is three cells in front of the layer, so
     the reflection is read as it leaves rather than after another trip.
+
+    ``stabilize`` is the PML's (``None`` is its default loss, ``0`` the pure stretch), so the
+    table and the stretch's own angular law can be measured on the same layer.
     """
     layout = packet_layout(cells, angle, **kwargs) if layout is None else layout
     dx, dt, nz = layout['dx'], layout['dt'], layout['nz']
@@ -595,7 +599,8 @@ def doubling_pair(cells=12, angle=0.0, layout=None, allow_thin=True, toward='+',
                     real=(angle == 0.0), direction=sign)
     phi = packet.kx * dx
     x_face = fd.Periodic() if phi == 0.0 else fd.Bloch(phase=phi)
-    pml = fd.PML(cells=cells, wavelength=layout['wavelength'], allow_thin=allow_thin)
+    pml = fd.PML(cells=cells, wavelength=layout['wavelength'], allow_thin=allow_thin,
+                 stabilize=stabilize)
     probe_z = sign * layout['probe_index'] * dx
     monitors = tuple(fd.Record(f'E{a}', at=(0.0, 0.0, probe_z), component=f'E{a}')
                      for a in 'xyz')

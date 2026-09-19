@@ -12,11 +12,15 @@ three slots every later feature plugs into, in this fixed order:
 
     cE, psi = curl E                  <- the CPML stretches the slab inside the curl
     cE = t.before_H(cE, ...)          <- terms: sources, polarisations, TFSF
+    cE = damp(cE, 'lift')             <- the PML's stabilizing loss, on its slabs:
     H  = ah*H - bh*cE
+    H  = damp(H, 'keep')              <- the curl before the update, the field after
     H  = m.after_H(H)                 <- masks: the walls
     cH, psi = curl H
     cH = t.before_E(cH, ...)
+    cH = damp(cH, 'lift')
     E  = ae*E + be*cH
+    E  = damp(E, 'keep')
     E  = m.after_E(E)
     mem = t.advance(...)              <- term memory, once per step
     obs = o.observe(...)              <- observers read, last
@@ -39,6 +43,7 @@ bought. The H update reads ``minus_bh`` rather than negating ``bh``, because neg
 here is a full-volume temporary per step and the lowering can do it once
 (``wavebit/fd/_lower/coefficients.py``).
 """
+from .cpml import damp
 from .curl import curl
 
 __all__ = ['step', 'initial_state']
@@ -76,14 +81,18 @@ def step(plan, params, state, n, rt):
     cE, psi = curl(E, 'E', plan, params, psi, rt)
     for t in plan.terms:
         cE = t.before_H(cE, E, mem[t.name], n, params, rt)
+    cE = damp(cE, 'lift', 'H', plan, params, rt)
     H = rt.update(H, cE, params['ah'], params['minus_bh'])
+    H = damp(H, 'keep', 'H', plan, params, rt)
     for m in plan.masks:
         H = m.after_H(H, rt)
 
     cH, psi = curl(H, 'H', plan, params, psi, rt)
     for t in plan.terms:
         cH = t.before_E(cH, H, mem[t.name], n, params, rt)
+    cH = damp(cH, 'lift', 'E', plan, params, rt)
     E = rt.update(E, cH, params['ae'], params['be'])
+    E = damp(E, 'keep', 'E', plan, params, rt)
     for m in plan.masks:
         E = m.after_E(E, rt)
 

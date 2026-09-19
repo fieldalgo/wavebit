@@ -55,10 +55,29 @@ half a cell along ``a`` -- the H points -- and reads the *half* profile. ``curl 
 backward difference, so ``D_a H[b]`` lands on the nodes and reads the *node* profile. The two
 are half a cell apart and are built separately (``wavebit/fd/_lower/cpml.py``); sampling one of them
 twice is a mutant the reflection gate sees.
+
+**The stabilizing loss** (:func:`damp`). A stretch backed by a PEC wall feeds energy into an
+evanescent field whose tail reaches the wall, so a lossless structure with a bound mode near
+the light line grows under a pure CPML (``wavebit/fd/_lower/cpml.py::stabilizing_rate`` has the
+mechanism and the numbers). The cure is a small matched loss on the component normal to the
+face, inside the slab. It is written here, as two slab multiplies on that one component
+around each update -- the curl by ``lift = 1/(1 - h)`` before it and the updated field by
+``keep = (1 - h)/(1 + h)`` after it, which is ``keep F + drive cF`` with ``drive = 1/(1 +
+h)`` (:func:`damp`) -- and not folded into ``ae``/``be``/``ah``/``bh`` the way an ``Absorber``
+is: folded, a vacuum box with a PML on every face would turn five scalar coefficients into five
+full-volume arrays (the rates of three axes do not factor into one broadcast), which is 2.5x
+the fields' own memory for a loss that lives in the slabs. Written here it costs four
+one-component slab multiplies per face per step (on JAX a broadcast multiply XLA fuses into the
+update) and no memory beyond two 1-D profiles. Measured 2026-09-19 (CPU, 4 threads, a vacuum
+box with a PML on all six faces, ms per step pure -> stabilized): NumPy 7.0 -> 8.2 at 64^3 and
+22.1 -> 24.9 at 96^3, Torch 6.8 -> 7.8 at 64^3, JAX 1.11 -> 1.34 at 64^3 and 9.0 -> 9.2 at
+96^3 -- the slabs are a larger share of a small box. It is **opt-in** (``PML(stabilize=3e-3)``): a
+plain :class:`CpmlFace` is skipped statically, so the default is the pre-stabilization plan,
+skeleton and arithmetic exactly, and only a :class:`StabilizedFace` pays for the loss.
 """
 import dataclasses
 
-__all__ = ['CpmlFace', 'psi_key', 'stretch']
+__all__ = ['CpmlFace', 'StabilizedFace', 'psi_key', 'stretch', 'damp', 'loss_key']
 
 
 @dataclasses.dataclass(frozen=True)
@@ -76,10 +95,32 @@ class CpmlFace:
     cells: int
     region: object          # masks.Region
 
+    #: The stabilizing loss ``rho``; 0 on a pure stretch. :class:`StabilizedFace` sets it.
+    stabilize = 0.0
+
+    @property
+    def normal_slab(self):
+        """The slab of the component normal to this face -- where the stabilizing loss acts."""
+        from .masks import Slab
+        r = self.region
+        return Slab(c=self.axis, z=r.z, y=r.y, x=r.x)
+
     def keys(self):
         """The four psi keys of this face: two curls times the two transverse components."""
         return tuple(psi_key(self.name, field, c)
                      for field in ('E', 'H') for c in range(3) if c != self.axis)
+
+
+@dataclasses.dataclass(frozen=True)
+class StabilizedFace(CpmlFace):
+    """A PML face that also carries the stabilizing loss ``stabilize = rho > 0`` (:func:`damp`).
+
+    A subclass rather than a field of :class:`CpmlFace`, so that a pure stretch -- the default
+    -- lowers to exactly the plan, and the skeleton, it lowered to before the loss existed: a
+    new field would have moved every PML scene's frozen skeleton for a value that is zero.
+    """
+
+    stabilize: float = 0.0
 
 
 def psi_key(face, field, comp):
@@ -110,3 +151,37 @@ def stretch(d, field, comp, axis_name, plan, params, psi, rt, out=None):
         d, updates[key] = rt.cpml_stretch(d, face.region, psi[key], coefficients['b'],
                                           coefficients['a'], coefficients['ik'], key)
     return d, updates
+
+
+def loss_key(face, field):
+    """The params key of ``face``'s stabilizing factors for the update of ``field``."""
+    return f'{face}:{field}'
+
+
+def damp(F, factor, field, plan, params, rt):
+    """``F`` with every stabilized face's ``factor`` applied to its normal component's slab.
+
+    The matched-loss update of ``wavebit/fd/_lower/coefficients.py`` in product form is
+    ``alpha keep F + beta drive cF`` on the slab, with ``keep = (1 - h)/(1 + h)`` and ``drive =
+    1/(1 + h)``. The step writes it as ``keep * (alpha F + beta lift cF)`` with ``lift = drive
+    / keep = 1/(1 - h)``: the curl is multiplied by ``lift`` before the update
+    (``factor='lift'``, ``F`` is the curl) and the updated field by ``keep`` after it
+    (``factor='keep'``). Same arithmetic up to one rounding, it needs neither ``alpha`` nor
+    ``beta`` (which a material can make arrays), and it never scales the field the step was
+    *handed*. How ``rt.slab_scale`` writes the multiply is per backend: in place on the slab
+    view on NumPy and Torch, a broadcast multiply on JAX, where every slab write tried first
+    cost full-volume copies in the compiled body (``tests/test_fd_pml.py`` pins that it adds
+    none).
+
+    ``field`` is the field being updated, ``'E'`` or ``'H'``; it picks the profile (the normal
+    E component sits half a cell along the axis, the normal H one on the node). Called after
+    the terms, so the loss acts on the whole curl as an ``Absorber``'s ``be`` does. The
+    component is the face's axis, so two faces on different axes never touch the same
+    component and their corner needs no rule.
+    """
+    for face in plan.cpml:
+        if not face.stabilize:
+            continue
+        F = rt.slab_scale(F, face.normal_slab,
+                          params['cpml_loss'][loss_key(face.name, field)][factor])
+    return F

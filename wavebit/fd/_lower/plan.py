@@ -51,13 +51,14 @@ from ..boundaries import FACES, Absorbing, Axis1D, Bloch, PML
 from ..geometry import cell_box, span_rows
 from ..materials import Dispersive
 from ..monitors import Record
-from .._kernel.cpml import CpmlFace
+from .._kernel.cpml import CpmlFace, StabilizedFace
 from .._kernel.faces import lower_face
 from .._kernel.grid import Grid
 from .._kernel.masks import Region, Slab
 from .._kernel.observe import PointRecord
 from .._kernel.poles import PoleTerm
 from . import checks, grazing
+from .cpml import DEFAULT_STABILIZE
 from .monitors import monitor_regions
 from .sources import run_steps, source_terms
 
@@ -169,8 +170,11 @@ def _absorbing(scene, grid):
         if isinstance(face, PML):
             pml.append((name, face.cells))
             wavelengths.append((name, checks.face_wavelength(face, scene, name)))
-            cpml.append(CpmlFace(name=name, axis=axis, side=name[1], cells=face.cells,
-                                 region=Region.face(axis, name[1], face.cells, grid.n)))
+            rho = DEFAULT_STABILIZE if face.stabilize is None else face.stabilize
+            fields = dict(name=name, axis=axis, side=name[1], cells=face.cells,
+                          region=Region.face(axis, name[1], face.cells, grid.n))
+            cpml.append(StabilizedFace(stabilize=float(rho), **fields) if rho > 0
+                        else CpmlFace(**fields))
         else:
             absorber.append((name, face.cells))
     return (tuple(cpml), tuple(absorbing), tuple(pml), tuple(absorber), tuple(wavelengths))

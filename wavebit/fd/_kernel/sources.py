@@ -122,6 +122,7 @@ import dataclasses
 import math
 
 from . import AX
+from .cpml import damp
 from .curl import curl
 from .grid import OFFSETS
 
@@ -487,7 +488,9 @@ def _half_E(sub, sp, col, n, crt, feed=None):
         cH = t.before_E(cH, Hc, cmem[t.name], n, sp, crt)
     if feed is not None:
         cH = feed(cH)
+    cH = damp(cH, 'lift', 'E', sub, sp, crt)
     Ec = crt.update(Ec, cH, sp['ae'], sp['be'])
+    Ec = damp(Ec, 'keep', 'E', sub, sp, crt)
     for m in sub.masks:
         Ec = m.after_E(Ec, crt)
     return Ec, psi
@@ -500,7 +503,9 @@ def _half_H(sub, sp, Ec, Hc, psi, cmem, n, crt, feed=None):
         cE = t.before_H(cE, Ec, cmem[t.name], n, sp, crt)
     if feed is not None:
         cE = feed(cE)
+    cE = damp(cE, 'lift', 'H', sub, sp, crt)
     Hc = crt.update(Hc, cE, sp['ah'], sp['minus_bh'])
+    Hc = damp(Hc, 'keep', 'H', sub, sp, crt)
     for m in sub.masks:
         Hc = m.after_H(Hc, crt)
     return Hc, psi

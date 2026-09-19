@@ -48,6 +48,7 @@ Presets: ``Boundaries.periodic(z=...)`` for a periodic cell with the given z fac
 ``Boundaries.open(fd.PML(cells=12, wavelength=0.55))`` for absorbing faces all round, with
 per-axis overrides (``Boundaries.open(pml, z=fd.Periodic())``).
 """
+import math
 import numbers
 
 from ._spec import is_jax_typed, spec, static_float, static_int, unknown_keyword_message
@@ -391,6 +392,27 @@ class PML(Absorbing):
         table measures.
     ``allow_thin``
         Take fewer than 12 cells anyway. The scene still runs; it just reflects more.
+    ``stabilize``
+        A stabilizing loss ``rho`` (static, ``>= 0``): a matched loss ``rho * sigma(depth)`` on
+        the field component normal to this face. ``None`` (the default) and ``0`` are the pure
+        stretch; ``3e-3`` (``wavebit.fd._lower.cpml.STABILIZING_LOSS``) is the measured value
+        that suffices at the default ``reflection=1e-8`` (and stronger targets). A weaker target
+        needs more -- 5e-3 at 1e-6, 1e-2 at 1e-4, 2e-2 at 1e-3
+        (``wavebit.fd._lower.cpml.MEASURED_STABILIZE``) -- and the plan warns
+        (``PMLStabilityWarning``) when a face asks for less than its target's value, or sets a
+        target weaker than any measured. **Why it exists**: a stretch backed by a PEC wall is an *active*
+        termination for evanescent waves, so a lossless structure with a bound mode just past
+        the light line -- a grating's guided resonance at a Rayleigh wavelength, a slab under
+        an ``Axis1D`` column -- grows exponentially under the pure stretch, whatever its
+        constants; with enough loss it decays on every slab family it was measured on. That is
+        a measured balance, not a guarantee: the loss does not make the layer passive, so a
+        structure unlike the sampled ones can still grow. **What it costs**: nothing at normal
+        incidence and, at an angle, a reflection that replaces the target's
+        ``reflection ** cos(theta)`` law (12 cells: 2.1e-4 at 30 degrees against 4.7e-5, 3.7e-3
+        at 60 against 1.1e-4). That is why it is opt-in: on by default it broke the Airy,
+        closed-form PlaneWave, RCWA-stack and grazing-rule gates at 20-40 degrees.
+        ``wavebit/fd/_lower/cpml.py::stabilizing_rate`` carries the mechanism and the numbers,
+        and an unsettled run under a pure stretch names this knob in its warning.
     """
 
     cells: int = PML_CELLS
@@ -398,6 +420,7 @@ class PML(Absorbing):
     background: object = None
     reflection: float = PML_REFLECTION
     allow_thin: bool = False
+    stabilize: object = None
 
     def __post_init__(self):
         from .materials import as_material
@@ -419,6 +442,15 @@ class PML(Absorbing):
                 f'(0, 1); 1e-8 is the default and the legacy engine\'s.')
         object.__setattr__(self, 'reflection', r)
         object.__setattr__(self, 'allow_thin', bool(self.allow_thin))
+        if self.stabilize is not None:
+            rho = static_float('PML', 'stabilize', self.stabilize)
+            if not (rho >= 0.0 and math.isfinite(rho)):
+                raise ValueError(
+                    f'PML(stabilize={self.stabilize!r}): the stabilizing loss is a finite '
+                    f'factor >= 0 -- 0 (or None, the default) is the pure stretch and 3e-3 the '
+                    f'measured value that stops a bound mode from growing at the default '
+                    f'reflection target (a weaker target needs more).')
+            object.__setattr__(self, 'stabilize', rho)
         if self.background is not None:
             object.__setattr__(self, 'background',
                                as_material(self.background, 'PML(background=)'))

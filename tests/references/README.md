@@ -315,6 +315,18 @@ case list its digest and gap come from, and the stage-2 one its sampling rule co
 content digest the test recomputes, a changed shape reported as a moved scene, and
 `--rebaseline` as the only way to overwrite.
 
+**`PML(stabilize=)` moved nothing in any of the four fd archives (2026-09-19).** The PML's
+stabilizing loss -- a matched loss on the component normal to the face, which stops a bound mode
+near the light line from growing under a PEC-backed stretch (`tests/test_fd_pml_stability.py`)
+-- is opt-in, and a pure-stretch face lowers to the same `CpmlFace`, the same skeleton and the
+same arithmetic as before it existed (the kernel skips the loss on the face's static type, and
+`params['cpml_loss']` is empty). All four freezers in compare mode, after the change: stage 0
+143 of 143, stage 1 288 of 288, stage 2 140 of 140, stage 3 570 of 570 arrays bit for bit, no
+rebaseline. Measured with the loss on by default instead, every PML scene of stages 1-3 moved
+(`final__E` by 2e-2 to 0.34 of its peak on the stage-1 PML scenes) -- and so did oracle gates
+the goldens do not arbitrate, which is why it is not the default
+(`wavebit/fd/_lower/cpml.py::stabilizing_rate`).
+
 ### Why the field row exists, and what it cost to not have it
 
 Until 2026-08-14 every oracle here checked efficiencies or amplitudes, and **field

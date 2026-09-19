@@ -36,7 +36,7 @@ The table, and where each row lives:
 import math
 import warnings
 
-from ..diagnostics import AbsorberProximityWarning, CoarseMeshWarning
+from ..diagnostics import AbsorberProximityWarning, CoarseMeshWarning, PMLStabilityWarning
 from ..geometry import cell_box, describe, slab_axis
 from ..materials import Conductor, Dispersive, concrete, eps_at
 
@@ -388,6 +388,35 @@ def notes(scene, plan):
     out = []
     out += _resolution_notes(scene, plan)
     out += _proximity_notes(scene, plan)
+    out += _stabilize_notes(scene, plan)
+    return out
+
+
+def _stabilize_notes(scene, plan):
+    """A stabilized PML face asking for less than the loss measured to suffice at its target."""
+    from .cpml import MEASURED_STABILIZE, spell, sufficient_stabilize
+    out = []
+    for face in plan.cpml:
+        if not face.stabilize:
+            continue                    # the pure stretch: the decay warning speaks for it
+        reflection = scene.boundaries.face(face.name).reflection
+        need = sufficient_stabilize(reflection)
+        if need is None:
+            out.append((PMLStabilityWarning,
+                        f'PML on {face.name!r}: stabilize={face.stabilize:g} at '
+                        f'reflection={reflection:g}, a target weaker than any the stabilizing '
+                        f'loss was measured at (the weakest is '
+                        f'{spell(MEASURED_STABILIZE[-1][0])}, where {spell(MEASURED_STABILIZE[-1][1])} '
+                        f'sufficed, and a weaker target needs more). A bound mode next to this '
+                        f'face may still grow'))
+        elif face.stabilize < need * (1.0 - 1e-12):
+            out.append((PMLStabilityWarning,
+                        f'PML on {face.name!r}: stabilize={face.stabilize:g} at '
+                        f'reflection={reflection:g}; the measured value that stops a bound mode '
+                        f'growing at this target is {spell(need)} (3e-3 holds only at the default '
+                        f'1e-8 and stronger targets; wavebit/fd/_lower/cpml.py::'
+                        f'MEASURED_STABILIZE). Below it, a lossless structure with a bound '
+                        f'mode next to this face may grow instead of settling'))
     return out
 
 

@@ -67,6 +67,27 @@ profile from the wrong end (0.37-0.59) and swapping the node and half-cell profi
 half-cell error in where the stretch is sampled (5.5e-2 to 9.6e-2, 600 to 840 times the real
 layer). All three are below.
 
+**The opt-in stabilizing loss** (``PML(stabilize=3e-3)``, ``tests/test_fd_pml_stability.py``
+for why it exists) is measured here by the same method, because what it costs is a reflection.
+It sits on the component normal to the face, which a normally incident wave lacks, so **its
+0-degree column is the table's to the bit**
+(:func:`test_at_normal_incidence_the_stabilized_layer_is_the_pure_stretch`). At an angle it
+reflects in proportion to its strength
+(:func:`test_the_stabilizing_loss_reflects_in_proportion_to_its_strength`), and that replaces
+the target's law as the oblique floor. Measured 2026-09-19, :data:`STABILIZED`:
+
+    cells      0 deg     30 deg     60 deg     80 deg
+        6    2.6e-02    2.1e-02    1.8e-02    1.7e-01
+        8    4.6e-03    3.6e-03    6.8e-03    1.4e-01
+       12    9.2e-05    2.1e-04    3.7e-03    1.1e-01
+       16    1.1e-06    8.2e-05    2.3e-03    9.8e-02
+       24    2.2e-08    1.7e-05    9.2e-04    7.9e-02
+
+so more cells lower its oblique columns, and a lower ``reflection=`` does not (the loss is a
+fraction of ``sigma_max`` and grows with it: 24 cells at 60 degrees, 9.2e-4 at 1e-8 and 1.1e-3
+at 1e-12). The table above, re-measured the same day with the loss off, reproduced every entry
+to its printed digits.
+
 **Cost.** The grazing rows are the expensive ones: the packet has to be long enough in z that
 its band stays clear of ``kz = 0``, which at 80 degrees is 7.3 wavelengths and 13 000 steps.
 The full table and the full law sweep are marked ``slow``; a three-by-two corner of the table,
@@ -79,8 +100,8 @@ import numpy as np
 import pytest
 
 import wavebit.fd as fd
-from wavebit.fd._lower.params import _cpml
-from fd_helpers import backends, doubling_reflection
+from wavebit.fd._lower.params import _cpml, _cpml_loss
+from fd_helpers import backends, doubling_reflection, to_numpy
 
 #: What this file measured, at the default ``reflection=1e-8``. Rows are cells, columns are
 #: the nominal angle of incidence, values the amplitude ratio at the carrier.
@@ -91,6 +112,16 @@ TABLE = {
     16: {0: 1.11e-06, 30: 5.87e-07, 60: 1.26e-04, 80: 3.92e-02},
     24: {0: 2.17e-08, 30: 1.36e-07, 60: 1.23e-04, 80: 4.44e-02},
 }
+#: The same doubling table for ``PML(stabilize=3e-3)``, the opt-in stabilizing loss.
+STABILIZED = {
+    6: {0: 2.56e-02, 30: 2.13e-02, 60: 1.78e-02, 80: 1.71e-01},
+    8: {0: 4.64e-03, 30: 3.65e-03, 60: 6.81e-03, 80: 1.43e-01},
+    12: {0: 9.19e-05, 30: 2.10e-04, 60: 3.70e-03, 80: 1.13e-01},
+    16: {0: 1.11e-06, 30: 8.22e-05, 60: 2.35e-03, 80: 9.77e-02},
+    24: {0: 2.17e-08, 30: 1.72e-05, 60: 9.23e-04, 80: 7.86e-02},
+}
+#: The value the stability gate sized (``wavebit/fd/_lower/cpml.py::STABILIZING_LOSS``).
+RHO = 3e-3
 #: How far a re-measurement may drift from the table before this gate calls it a change. A
 #: factor of three: the entries span six decades and a defect moves them by three or more
 #: (the smallest mutant below is 600x), while a libm or a platform moves the smallest entry
@@ -211,13 +242,61 @@ def test_the_low_face_layer_absorbs_what_the_high_face_one_does(cells, angle):
     assert abs(low - high) < 0.1 * high, (cells, angle, low, high)
 
 
+@pytest.mark.parametrize('cells, angle', [
+    pytest.param(n, a, marks=() if (n, a) in ((12, 30),) else pytest.mark.slow)
+    for n in sorted(STABILIZED) for a in (30, 60, 80)])
+def test_the_stabilized_layer_reflects_what_its_table_says(cells, angle):
+    """The opt-in loss's doubling table, re-measured within :data:`DRIFT`."""
+    measured, _, _ = doubling_reflection(cells, float(angle), stabilize=RHO)
+    want = STABILIZED[cells][angle]
+    assert want / DRIFT < measured < want * DRIFT, (cells, angle, measured, want)
+
+
+def test_at_normal_incidence_the_stabilized_layer_is_the_pure_stretch():
+    """The stabilizing loss acts on the normal component, which a normally incident wave lacks.
+
+    So the stabilized layer and the default record the same probe series to the bit -- the loss
+    multiplies zeros -- and the 0-degree column of :data:`STABILIZED` is :data:`TABLE`'s.
+    """
+    from fd_helpers import doubling_pair, run_mutated
+    series = []
+    for stabilize in (RHO, None):
+        res = run_mutated(doubling_pair(12, 0.0, stabilize=stabilize)[0])
+        series.append([to_numpy(res[f'E{a}'].values) for a in 'xyz'])
+    assert np.max(np.abs(series[0][0])) > 0.0
+    for a, b in zip(*series):
+        assert np.array_equal(a, b)
+    assert all(STABILIZED[n][0] == TABLE[n][0] for n in TABLE)
+
+
+@pytest.mark.parametrize('angle', [30, pytest.param(60, marks=pytest.mark.slow)])
+def test_the_stabilizing_loss_reflects_in_proportion_to_its_strength(angle):
+    """The stabilized layer's oblique floor is its loss's, and it is first order in ``rho``.
+
+    Measured at 12 cells: 2.1e-4 / 6.2e-4 at 30 degrees and 3.7e-3 / 1.28e-2 at 60 for
+    ``rho`` = 3e-3 / 1e-2 (x2.95 and x3.46 for x3.33), against 4.7e-5 and 1.1e-4 for the pure
+    stretch.
+    """
+    pure, _, _ = doubling_reflection(12, float(angle))
+    weak, _, _ = doubling_reflection(12, float(angle), stabilize=RHO)
+    strong, _, _ = doubling_reflection(12, float(angle), stabilize=1e-2)
+    assert weak > 3 * pure, (angle, weak, pure)
+    assert 2.5 < strong / weak < 4.0, (angle, weak, strong)
+
+
 def _retarget(reflection):
-    """Rebuild the CPML profiles for a different ``reflection`` target, nothing else moved."""
+    """Rebuild the layer for a different ``reflection`` target, nothing else moved.
+
+    Both halves of a layer read the target -- the stretch's ``sigma_max`` and, on a stabilized
+    face, the loss that is a fraction of it -- so both are rebuilt (the second is empty on the
+    default pure stretch).
+    """
     def mutate(params, scene, plan, rt):
         z = tuple(f.replace(reflection=reflection) for f in scene.boundaries.z)
         moved = scene.replace(boundaries=fd.Boundaries(x=scene.boundaries.x,
                                                        y=scene.boundaries.y, z=z))
-        return {**params, 'cpml': _cpml(moved, plan, rt)}
+        return {**params, 'cpml': _cpml(moved, plan, rt),
+                'cpml_loss': _cpml_loss(moved, plan, rt)}
     return mutate
 
 
@@ -484,6 +563,14 @@ def test_the_jax_cpml_write_is_a_dynamic_update_slice_and_not_the_scatter():
     assert len(re.findall(single, body)) == 8, body.count(' dynamic-update-slice(')
     assert (len(re.findall(full + r'dynamic-update-slice\(', body))
             == len(re.findall(full + r'dynamic-update-slice\(', baseline)))
+    # The opt-in stabilizing loss is a broadcast multiply that fuses into the update around
+    # it: the stabilized body has exactly the pure stretch's scatters, copies, update-slices
+    # and fusions. Written as an update-slice of the scaled slab -- the CPML's own writing --
+    # it cost two to four full-volume copies per step; as ``.at[].multiply``, a scatter-mul.
+    stabilized, _ = _compiled_body(doubling_pair(12, 0.0, stabilize=RHO)[0].replace(
+        monitors=(), run=fd.Run(steps=4)))
+    for op in (' scatter(', ' copy(', ' dynamic-update-slice(', ' fusion('):
+        assert stabilized.count(op) == body.count(op), op
 
 
 def test_a_run_with_a_pml_differentiates_on_jax_and_on_torch():
@@ -502,6 +589,10 @@ def test_a_run_with_a_pml_differentiates_on_jax_and_on_torch():
     scene = doubling_pair(12, 0.0)[0].replace(monitors=(), run=fd.Run(steps=8))
 
     jax = pytest.importorskip('jax')
+    import wavebit
+    # Lifted before ``jax.grad`` traces its argument: when this test ran first in its process
+    # the argument was float32 and the gradient off by 4e-8 relative (seen under -n 6).
+    wavebit.enable_x64()
     from wavebit.fd._run import execute
     from wavebit.fd._runtime import runtime
     plan = fd.plan(scene)

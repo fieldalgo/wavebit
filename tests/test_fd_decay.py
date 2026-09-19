@@ -37,15 +37,19 @@ number. What is pinned here:
 no longer exceeds 1e-2, and the settled box reads 8e-5 to 1.7e-4 and warns -- both gates catch
 it.
 
-**A kernel defect, pinned as ``xfail(strict=True)``** (slow): a lossless lamellar ``Box``
-grating under the default ``PML(cells=12, reflection=1e-8)`` does not settle -- its late field
-*grows* (a probe below the tooth, p at normal incidence: 8.4e-4 at 192 periods, 1.7e-3 at 288,
-2.6e-3 at 384, and Build B's 960-period run reaches 5.9e-2; an e-fold every ~180 periods). The
-late spectrum sits at the ``(+-1, 0)`` Rayleigh wavelengths inside the source band. A passive
-lossless scene cannot gain energy, so this is the CPML's late-time behaviour at a grazing,
-near-zero-group-velocity frequency, not physics; with ``PML(cells=24, reflection=1e-12)`` the
-same probe falls instead (4.8e-4 -> 3.0e-4, the control below). Until the CPML is fixed the
-decay diagnostic reports it as an unsettled monitor, which is right.
+**A kernel defect, pinned as ``xfail(strict=True)``, with an opt-in fix** (slow). A lossless
+lamellar ``Box`` grating under the default ``PML(cells=12, reflection=1e-8)`` does not settle --
+its late field *grows* (a probe below the tooth, p at normal incidence: 8.4e-4 at 192 periods,
+1.7e-3 at 288, 2.6e-3 at 384, and Build B's 960-period run reaches 5.9e-2; an e-fold every ~180
+periods), at the ``(+-1, 0)`` Rayleigh wavelengths, where the tooth's guided resonances sit
+just on the evanescent side of the light line. A stretch backed by a PEC wall is an active
+termination for such a mode, whatever its constants
+(``wavebit/fd/_lower/cpml.py::stabilizing_rate``; ``tests/test_fd_pml_stability.py`` pins it
+on a slab column). ``PML(stabilize=3e-3)`` -- a small matched loss on the normal
+component -- removes it: the same probe falls, 4.4e-4 -> 9.7e-5. It is not the default because
+of what it costs at oblique incidence (``stabilizing_rate``, "Why it is not the default"), so
+the default layer stays the xfail, and the decay warning names the knob. ``PML(24, 1e-12)``,
+the control, falls under the pure stretch (4.8e-4 -> 3.0e-4).
 """
 import functools
 import math
@@ -132,6 +136,27 @@ def _short_box(amplitude=1.0):
     """A dipole cut off at 3 periods in a small open box: its flux box has not settled."""
     return dipole_box(size=0.4, periods=3, amplitude=amplitude, monitors=(
         fd.Flux('in', box=fd.Box(size=(0.3,) * 3), wavelengths=(1.0,)),))
+
+
+def test_the_warning_names_the_knob_only_when_a_pml_runs_the_pure_stretch():
+    """A pure-stretch face -- the default -- can grow instead of settling, and then "run
+    longer" is the wrong advice, so the warning says so; a stabilized one does not need to."""
+    _, pure = _run_collecting(_short_box())
+    stabilized_box = _short_box().replace(boundaries=fd.Boundaries.open(
+        fd.PML(cells=12, wavelength=1.0, stabilize=3e-3)))
+    _, stabilized = _run_collecting(stabilized_box)
+    assert len(pure) == len(stabilized) == 1
+    assert 'stabilize' not in str(stabilized[0].message)
+    message = str(pure[0].message)
+    assert 'stabilize=0' in message and 'PML(stabilize=3e-3)' in message
+    assert "['x-', 'x+', 'y-', 'y+', 'z-', 'z+']" in message
+    # The value it names is the one measured at the face's own target: 3e-3 is enough only at
+    # the default 1e-8 (wavebit/fd/_lower/cpml.py::MEASURED_STABILIZE).
+    for reflection, knob in ((1e-4, 'PML(stabilize=1e-2)'), (1e-2, 'weaker than 1e-3')):
+        weak_box = _short_box().replace(boundaries=fd.Boundaries.open(
+            fd.PML(cells=12, wavelength=1.0, reflection=reflection)))
+        _, weak = _run_collecting(weak_box)
+        assert len(weak) == 1 and knob in str(weak[0].message), (reflection, weak)
 
 
 def test_a_run_under_jax_grad_reads_the_values_and_under_jit_reports_none():
@@ -229,14 +254,15 @@ def test_mutant_the_first_window_is_caught_by_both_sides(monkeypatch):
 # A kernel defect: late-time growth under the default PML at in-band Rayleigh frequencies
 # ---------------------------------------------------------------------------------------------
 
-def _grating_probe(cells, reflection, periods=384):
+def _grating_probe(cells, reflection, periods=384, stabilize=None):
     """``(peak over the period ending at half the run, peak over the last period)`` of a probe
     below a lamellar tooth, p at normal incidence, the z faces ``PML(cells, reflection)``."""
     scene, _ = box_grating('lamellar', polarization='p', periods=periods, wavelengths=(1.0,))
     scene = scene.replace(
         monitors=(fd.Record('b', at=(0.3, 0.0, -0.1), component='Ez'),),
         boundaries=fd.Boundaries(x=scene.boundaries.face('x-'), y=scene.boundaries.face('y-'),
-                                 z=fd.PML(cells=cells, reflection=reflection)))
+                                 z=fd.PML(cells=cells, reflection=reflection,
+                                          stabilize=stabilize)))
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         res = fd.run(scene)
@@ -248,12 +274,20 @@ def _grating_probe(cells, reflection, periods=384):
 
 @pytest.mark.slow
 @pytest.mark.xfail(strict=True, reason=(
-    'kernel defect (wavebit/fd CPML, stage 1): a lossless lamellar Box grating under the '
-    'default PML(12, 1e-8) grows at late time at its in-band (+-1, 0) Rayleigh wavelengths '
-    '(probe 8.4e-4 at 192 periods -> 2.6e-3 at 384); PML(24, 1e-12) decays instead'))
+    'kernel defect (wavebit/fd CPML): a PEC-backed stretch is active for evanescent waves, so '
+    'a lossless lamellar Box grating under the default pure PML(12, 1e-8) grows at its in-band '
+    '(+-1, 0) Rayleigh wavelengths (probe 8.4e-4 at 192 periods -> 2.6e-3 at 384). '
+    'PML(stabilize=3e-3) fixes it (the next test); it is opt-in because of its oblique cost'))
 def test_a_lossless_grating_under_the_default_pml_does_not_grow():
     middle, last = _grating_probe(12, 1e-8)
-    assert last <= middle, (middle, last)
+    assert last <= middle, (middle, last)                   # measured 8.4e-4 -> 2.6e-3
+
+
+@pytest.mark.slow
+def test_the_same_grating_under_a_stabilized_pml_does_not_grow():
+    """``PML(stabilize=3e-3)`` on the same layer: the growth is gone."""
+    middle, last = _grating_probe(12, 1e-8, stabilize=3e-3)
+    assert last <= middle, (middle, last)                   # measured 4.4e-4 -> 9.7e-5
 
 
 @pytest.mark.slow

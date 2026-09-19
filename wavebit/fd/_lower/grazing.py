@@ -62,6 +62,16 @@ absorbing layer it enters (each material filling that layer; the lowest index wh
 is anisotropic), with ``k_par`` from the cell's faces (a Bloch ``k``, ``0`` on a Periodic axis,
 an ``Axis1D`` ``k`` with the single order 0 along it). A medium or a Bloch phase that is traced
 cannot be counted; that face is skipped and ``survey`` says so.
+
+**A stabilized face is judged as the pure stretch it is built on, and it returns more.** The
+opt-in ``PML(stabilize=3e-3)`` (``cpml.py::stabilizing_rate``) adds a return at every oblique
+angle, first order in its strength (12 cells: 2.1e-4 at 30 degrees, 3.7e-3 at 60, 1.1e-1 at
+80; 24 cells: 1.7e-5 / 9.2e-4 / 7.9e-2; ``tests/test_fd_pml.py::STABILIZED``), so it is above
+``tau`` below ``cos theta`` ~ 0.7 on 12 cells and ~ 0.5 on 24, where this rule allows the
+order. Measured with the loss on every face, the verdict gates of ``tests/test_fd_grazing.py``
+fail (at ``cos 0.26`` the 12-cell face returned 3.7e-2 against ``R_c`` 1.2e-2). The rule does
+not model the loss: a scene that asks for it has traded those digits for a field that does not
+grow, and the loss is not the default for that reason.
 """
 import functools
 import math

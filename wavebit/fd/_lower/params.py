@@ -18,6 +18,9 @@ Torch or NumPy. Its leaves are the numbers a gradient may flow through:
     E0, H0            the initial fields as (3, nz, ny, nx) arrays, or None
     cpml              {psi key: {'b', 'a', 'ik'}} -- the CPML profiles, 1-D along the
                       absorbing axis and reshaped to broadcast, never at slab shape
+    cpml_loss         {'<face>:<E|H>': {'keep', 'lift'}} -- the PML's stabilizing loss on
+                      the normal component, shaped like a CPML profile; only faces with
+                      ``stabilize > 0`` (``wavebit/fd/_kernel/cpml.py::damp``)
     poles             {term name: {'step_gain', 'hold', 'drive', 'dx_over_dt'}} per pole
     sources           {source name: {'amplitude', 'phase', 'delay', 'f0', 'tau', 't0', ...}}
                       per stage-2 source, with a Dipole's 'stamp', a column's own params
@@ -48,10 +51,10 @@ from wavebit._core.backend import check_input_precision
 
 from ..boundaries import AXES, Axis1D, Bloch
 from ..materials import as_material
-from .._kernel.cpml import psi_key
+from .._kernel.cpml import loss_key, psi_key
 from . import checks
 from .coefficients import build as build_coefficients
-from .cpml import face_eps_r, profiles
+from .cpml import face_eps_r, profiles, stabilizing_factors
 from .fields import evaluate
 from .sources import lower_sources
 
@@ -70,7 +73,8 @@ def lower(scene, plan, rt='numpy', device=None):
     real = 'float64'
     params = dict(build_coefficients(scene, plan, rt))
     params.update({'bloch': {}, 'axis1d': {}, 'amplitude': None, 'E0': None, 'H0': None,
-                   'cpml': _cpml(scene, plan, rt), 'poles': _poles(scene, plan, rt),
+                   'cpml': _cpml(scene, plan, rt), 'cpml_loss': _cpml_loss(scene, plan, rt),
+                   'poles': _poles(scene, plan, rt),
                    'sources': lower_sources(scene, plan, rt), 'dft': _dft(plan, rt),
                    'stable': None})
     guard = _stability_guard(scene, plan, rt)
@@ -161,6 +165,36 @@ def _cpml(scene, plan, rt):
                     'b': rt.array(b.reshape(shape), 'float64'),
                     'a': rt.array(a.reshape(shape), 'float64'),
                     'ik': rt.array(ik.reshape(shape), 'float64')}
+    return out
+
+
+def _cpml_loss(scene, plan, rt):
+    """``{loss key: {'keep', 'lift'}}``: the stabilizing factors of every stabilized face.
+
+    Only a face whose plan entry has ``stabilize > 0`` gets one, and the kernel skips the
+    others on that static value (``_kernel/cpml.py::damp``). The profile is matched to the
+    ``eps_r`` the stretch is (:func:`_cpml`, which has already refused a traced one). The
+    normal ``E`` component sits half a cell along the axis and reads the ``half`` profile,
+    the normal ``H`` one sits on the node; both are 1-D along the axis, reshaped to broadcast
+    over the slab like a CPML profile.
+    """
+    background = as_material(getattr(scene, 'background', None), 'Scene(background=)')
+    out = {}
+    for face in plan.cpml:
+        if not face.stabilize:
+            continue
+        boundary = scene.boundaries.face(face.name)
+        matched = background if boundary.background is None else boundary.background
+        table = stabilizing_factors(face.cells, plan.dx, plan.dt,
+                                    face_eps_r(matched, face.axis), face.side,
+                                    boundary.reflection, face.stabilize)
+        shape = [1, 1, 1]
+        shape[_COMPONENT_AXIS[face.axis]] = face.cells
+        for field, which in (('E', 'half'), ('H', 'node')):
+            keep, lift = table[which]
+            out[loss_key(face.name, field)] = {
+                'keep': rt.array(keep.reshape(shape), 'float64'),
+                'lift': rt.array(lift.reshape(shape), 'float64')}
     return out
 
 
