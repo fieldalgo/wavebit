@@ -107,10 +107,12 @@ TFSF surface is refused, because the 2-cell face would read part of the source
 (``_lower/monitors.py``).
 
 Out of scope, and refused by name rather than
-silently: shapes other than ``Slab`` and cell-snapped ``Box``, subpixel averaging and
-differentiable ``Box`` edges (stage 4), GPU claims (stage 6), ``GaussianBeam``, ``ModeSource``,
-mode overlaps (``ModeMonitor``) and decay-driven stopping (``Decay``, ``Run(decay=)``) (stage 7),
-non-uniform grids (not in v1).
+silently: the shapes this package ships beyond ``Slab`` and cell-snapped ``Box``, subpixel
+averaging and differentiable ``Box`` edges (stage 4) -- though ``fd.Shape`` is the whole door,
+so a shape written outside the package that answers its protocol runs today, with the
+stage-3 cell-snapped lowering and nothing more; GPU claims (stage 6), ``GaussianBeam``,
+``ModeSource``, mode overlaps (``ModeMonitor``) and decay-driven stopping (``Decay``,
+``Run(decay=)``) (stage 7), non-uniform grids (not in v1).
 """
 from ._check import Report, check
 from ._lower import Plan, lower, plan
@@ -119,7 +121,7 @@ from .boundaries import (PEC, PMC, Absorber, Absorbing, Axis1D, Bloch, Boundarie
                          PML, Symmetry)
 from .diagnostics import (AbsorberProximityWarning, CoarseMeshWarning, GrowingFieldWarning,
                           PMLStabilityWarning, UnsettledFieldWarning)
-from .geometry import Box, Plane, Slab, Structure
+from .geometry import Box, Plane, Shape, Slab, Structure
 from .materials import (Conductor, Debye, Dispersive, Drude, Lorentz, Material, MaterialBase,
                         Pole, eps_at)
 from .monitors import Decay, Diffraction, FarField, Field, Flux, ModeMonitor, Record
@@ -134,7 +136,7 @@ __all__ = [
     'Boundaries', 'Periodic', 'Bloch', 'Axis1D', 'PEC', 'PMC', 'Symmetry', 'PML', 'Absorber',
     'Absorbing',
     'Material', 'Conductor', 'Dispersive', 'Drude', 'Lorentz', 'Debye', 'eps_at',
-    'MaterialBase', 'Pole', 'Slab', 'Structure',
+    'MaterialBase', 'Pole', 'Shape', 'Slab', 'Structure',
     'CoarseMeshWarning', 'AbsorberProximityWarning', 'UnsettledFieldWarning',
     'GrowingFieldWarning', 'PMLStabilityWarning',
     'InitialField', 'Term', 'Record', 'Flux', 'Field', 'Diffraction', 'FarField', 'Plane',

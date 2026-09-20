@@ -405,13 +405,17 @@ def medium_at(scene, grid, P, cells, where):
     A diffraction plane or a source normalisation reads a plane wave in a uniform medium, so
     every cell of each layer must belong to one material -- the background or a structure
     that covers the whole layer -- and the layers must agree. Structures are applied in order,
-    so a partial Box overwritten by a later full layer is fine.
+    so a shape that cuts the layer and is then overwritten by a later full layer is fine.
+
+    The refusal names the structure that cut the layer, in that shape's own words
+    (``Shape.describe``): it used to say "a Box structure cuts it" whatever the shape was,
+    which is a sentence about a box in a message about a ball.
     """
     from .materials import Conductor, Dispersive, as_material, concrete
     background = as_material(scene.background, 'Scene(background=)')
     owners = set()
     for k in cells:
-        owner, partial = None, False
+        owner, partial = None, None
         for index, s in enumerate(scene.structures):
             box = s.shape.support(grid)        # anything that may reach this cell layer
             if not box[P][0] <= k < box[P][1]:
@@ -422,14 +426,16 @@ def medium_at(scene, grid, P, cells, where):
             full = all(s.shape.uniform_along(a, (0, grid.n[a]), grid)
                        for a in range(3) if a != P)
             if full:
-                owner, partial = index, False
+                owner, partial = index, None
             else:
-                partial = True
-        if partial:
+                partial = index
+        if partial is not None:
+            cutter = scene.structures[partial].shape
             raise ValueError(
-                f'{where}: the cell layer {k} across {"xyz"[P]} is not one medium (a Box '
-                f'structure cuts it). A plane wave -- an order, an incident wave -- is defined '
-                f'in a uniform medium; move the plane into one.')
+                f'{where}: the cell layer {k} across {"xyz"[P]} is not one medium '
+                f'(structures[{partial}], {cutter.describe()}, cuts it). A plane wave -- an '
+                f'order, an incident wave -- is defined in a uniform medium; move the plane '
+                f'into one.')
         owners.add(owner)
     if len(owners) != 1:
         raise ValueError(

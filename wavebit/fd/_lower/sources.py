@@ -194,6 +194,11 @@ def _structure_cells(structure, grid):
     faces refusal and :func:`_check_scatterer` -- are asking whether the structure can change
     the medium anywhere on the box's surface, where the incident field came from a 1-D column
     that knows only the background. A cell the shape merely clips is already wrong there.
+
+    The layer's own span is ``support[layer_axis]``, which is why nothing here reads
+    ``shape.axis`` or ``shape.cells(grid)``: neither is on :class:`~wavebit.fd.Shape`, and a
+    shape that answered the whole protocol and declared itself a layer used to die on them
+    with a bare ``AttributeError``.
     """
     return structure.shape.layer_axis(), structure.shape.support(grid)
 
@@ -270,7 +275,7 @@ def _plane_wave_term(scene, plan, src, row):
         if s_axis is not None and s_axis != P:
             raise ValueError(
                 f'PlaneWave({src.name!r}) along {AXES[P]} with structures[{index}], a slab '
-                f'across {structure.shape.axis}: the structure is not uniform across the '
+                f'across {AXES[s_axis]}: the structure is not uniform across the '
                 f'sheet, so the sheet would not be launching into the medium its incident '
                 f'field is computed in. A PlaneWave takes layers across its propagation axis, '
                 f'and (stage 3) cell-snapped fd.Box structures -- a patterned layer of finite '
@@ -416,9 +421,9 @@ def _tfsf_term(scene, plan, src, row):
         c0, c1 = box[s_axis]
         if c0 <= hi[s_axis] and c1 > lo[s_axis] - 1:
             raise ValueError(
-                f'structures[{index}] (a slab across {structure.shape.axis}, cells {c0}..'
+                f'structures[{index}] (a slab across {AXES[s_axis]}, cells {c0}..'
                 f'{c1 - 1}) crosses the faces of TFSF({src.name!r}) (cells {lo[s_axis] - 1}..'
-                f'{hi[s_axis]} along {structure.shape.axis}). The incident field comes from a '
+                f'{hi[s_axis]} along {AXES[s_axis]}). The incident field comes from a '
                 f'1-D grid along {AXES[P]} whose background is the slabs across {AXES[P]} '
                 f'only, so it is wrong wherever this structure changes the medium on the box '
                 f'surface. A slab across {AXES[P]} is part of that background and may cross '
@@ -507,12 +512,16 @@ def _tfsf_driver(scene, src, grid):
     lo, hi = _box_nodes(grid, src.box)
     cells = range(0, lo[P]) if src.sign > 0 else range(hi[P], grid.n[P])
     owners = set()
-    spans = [(i, s, s.shape.cells(grid)) for i, s in enumerate(scene.structures)
-             if s.shape.layer_axis() == P]
+    layers = [(i, s) for i, s in enumerate(scene.structures) if s.shape.layer_axis() == P]
     for j in cells:
         owner = None
-        for i, _, (c0, c1) in spans:                # a later structure overwrites
-            if c0 <= j < c1:
+        for i, s in layers:                         # a later structure overwrites
+            # "Owns cell layer j" is the shape's own ``uniform_along``, not a span read off a
+            # Slab attribute: on a cell-snapped layer it is the identical inequality
+            # (``k0 <= j and k1 >= j + 1``), and on a layer whose face falls inside cell j it
+            # is False, which leaves the cell to whatever was under it and makes ``owners``
+            # hold two -- the refusal below, which is the right answer for a half-filled cell.
+            if s.shape.uniform_along(P, (j, j + 1), grid):
                 owner = i
         owners.add(owner)
     if len(owners) > 1:

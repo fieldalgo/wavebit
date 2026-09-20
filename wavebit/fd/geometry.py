@@ -145,6 +145,16 @@ class Shape:
         ``None`` -- the default, and the answer for everything that is not a :class:`Slab` --
         means "not a layer", and every reader's ``None`` branch is the conservative one: the
         shape is a scatterer, kept out of the column and never waved past a face.
+
+        **A non-``None`` answer needs nothing else.** Its cell span along that axis is
+        ``support(grid)[layer_axis()]``, and whether it fills one cell layer ``j`` outright is
+        ``uniform_along(layer_axis(), (j, j + 1), grid)`` -- both already on this protocol, and
+        both the question the caller means rather than a :class:`Slab` attribute. Until this
+        was written the three readers in ``_lower/sources.py`` reached for ``shape.axis`` and
+        ``shape.cells(grid)`` after branching on this method, so a shape that answered the
+        whole protocol and declared itself a layer died there with a bare ``AttributeError``
+        -- the guess-from-the-type failure this class exists to replace, one method later.
+        ``tests/test_fd_shape_protocol.py`` walks a protocol-only layer through all three.
         """
         return None
 
@@ -178,15 +188,24 @@ class Shape:
 
     # -- what the grid has to resolve ---------------------------------------------------------
 
-    def min_extent(self):
-        """The shortest **bounded** side of this shape, in the scene's length unit.
+    def min_extent(self, grid):
+        """The shortest side this shape **bounds** in ``grid``, or ``None`` if it bounds none.
 
-        The smallest feature the grid has to resolve. Stage 4's "too few cells across" refusal
-        (C5) is the reader; it is on the protocol from the start so that every shape answers
-        it in the same units as its own lengths, rather than the refusal reconstructing it
-        per type.
+        The smallest feature the grid has to resolve. Only the axes :meth:`bounded_axes` names
+        are measured, and each is measured as it reaches into the box: a shape that runs out
+        through a face has no feature size along that axis, and a refusal quoting one would be
+        about a side that is not in the grid. ``fd.Box(size=(0.3, 0.3, 1.0))`` in a box 0.2
+        wide across x and y bounds z alone, and its answer is 1.0, not 0.3.
+
+        That is why it takes ``grid``: "bounded" is a question about the grid, so a signature
+        without one cannot answer the sentence above -- it can only return the shortest side
+        as spelled, clipped sides and all.
+
+        Stage 4's "too few cells across" refusal (C5) is the reader; it is on the protocol
+        from the start so that every shape answers it in the same units as its own lengths,
+        rather than the refusal reconstructing it per type.
         """
-        raise self._unanswered('min_extent', 'its smallest side is unknown.')
+        raise self._unanswered('min_extent', 'its smallest bounded side is unknown.')
 
 
 @spec
@@ -299,10 +318,11 @@ class Slab(Shape):
         """One row, labelled by its axis, exactly as stage 1 printed it."""
         return ((self.axis,) + tuple(self.span) + tuple(self.snapped(grid)),)
 
-    def min_extent(self):
-        """Its thickness: the one side it bounds, and so the only one a grid has to resolve."""
+    def min_extent(self, grid):
+        """Its thickness inside the box: the one side it bounds, so the only one to resolve."""
+        a = AXES.index(self.axis)
         lo, hi = self.span
-        return hi - lo
+        return min(hi, grid.high[a]) - max(lo, grid.low[a])
 
 
 _slab_init = Slab.__init__
@@ -333,12 +353,21 @@ class Structure:
     ``shape`` is an :class:`Slab` (stage 1) or, from stage 3, a :class:`Box`: a cell-snapped
     rectangular block, the minimum lateral patterning a diffraction-order check needs (a
     lamellar grating is a Box spanning one transverse axis, a crossed pillar grating a Box
-    spanning neither). Every other shape is stage 4.
+    spanning neither). The shapes the package will *ship* next -- spheres, cylinders, prisms,
+    rotated boxes and their CSG, each subpixel-smoothed and differentiable -- are stage 4.
 
-    The door is ``isinstance(shape, Shape)``, and :class:`Slab` and :class:`Box` are the only
-    two :class:`Shape` in the package: a stage-4 shape gets in by answering that protocol and
-    nothing else here moves. A :class:`Plane` is a monitor's region and not a shape, so this
-    same door refuses it.
+    **The door is ``isinstance(shape, fd.Shape)``, and that is deliberately a seam.**
+    :class:`Slab` and :class:`Box` are the only two :class:`Shape` in the package, but a shape
+    written outside it that answers the protocol plans, lowers and runs with no other type
+    check anywhere downstream -- that is what makes stage 4's geometry kernel a new file
+    rather than an edit to nine call sites, and it is why :class:`Shape` is exported as
+    ``fd.Shape`` instead of kept private. What such a shape gets **today** is the stage-3
+    lowering: ``coefficients.owner_map`` paints the cells :meth:`Shape.filled_cells` returns,
+    with no fill fraction and no smoothing, so a curved one is a staircase at whatever box it
+    calls filled. A fractional edge is meant to refuse ``filled_cells`` by name until C2
+    replaces that caller. ``fd.Shape()`` itself is refused here: it is the protocol, not a
+    shape. A :class:`Plane` is a monitor's region and not a shape, so this same door refuses
+    it too.
 
     Structures are applied **in the order they are given**, so a later one overwrites an
     earlier one where they overlap -- the layer-stack rule, and the only overlap rule stage 1
@@ -350,12 +379,21 @@ class Structure:
 
     def __post_init__(self):
         from .materials import as_material
+        if type(self.shape) is Shape:
+            raise TypeError(
+                'Structure(shape=fd.Shape()): fd.Shape is the protocol a shape answers, not a '
+                'shape -- it has no extent, and every question below it would refuse. Use '
+                'fd.Slab(z=(lo, hi)) or fd.Box(size=..., center=...), or subclass fd.Shape '
+                'and answer its methods.')
         if not isinstance(self.shape, Shape):
             raise TypeError(
                 f'Structure(shape=...): the shapes are fd.Slab(z=(lo, hi)) and, from stage 3, '
                 f'the cell-snapped fd.Box(size=..., center=...); got '
-                f'{type(self.shape).__name__}. Spheres, cylinders, polygons and rasters, '
-                f'subpixel averaging and differentiable edges are stage 4 (shapes).')
+                f'{type(self.shape).__name__}. Anything else gets in by subclassing fd.Shape '
+                f'and answering its protocol -- this is the only type check, and nothing '
+                f'downstream adds another. The shapes the package itself will ship (spheres, '
+                f'cylinders, polygons and rasters), their subpixel averaging and their '
+                f'differentiable edges are stage 4 (shapes).')
         object.__setattr__(self, 'material', as_material(self.material, 'Structure(material=)'))
 
 
@@ -463,9 +501,15 @@ class Box(Shape):
         return tuple((f'box.{axis}', self.low[a], self.high[a], lo[a], hi[a])
                      for a, axis in enumerate(AXES))
 
-    def min_extent(self):
-        """Its shortest side."""
-        return min(self.size)
+    def min_extent(self, grid):
+        """Its shortest side over the axes it bounds, as each reaches into the box.
+
+        A clipped axis is not one of them -- a lamellar tooth's "runs the whole period" side
+        is the box's width, not a feature -- so a box clipped on every axis answers ``None``.
+        """
+        sides = [min(self.high[a], grid.high[a]) - max(self.low[a], grid.low[a])
+                 for a in self.bounded_axes(grid)]
+        return min(sides) if sides else None
 
 
 @spec
