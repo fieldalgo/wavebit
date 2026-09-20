@@ -51,7 +51,8 @@ Meep-derived FDTDX projection file this repository has already excluded
     sources named: the 1-D overlap, the disc-box clip, the polygon-box clip and the polygon's
     edge moments. Nothing under ``wavebit/fd/`` imports the old engines
     (``wavebit/fd/_lower/cpml.py`` states that rule), and two of the four needed generalising
-    from four vertices to ``n`` anyway, which the originals refuse by name.
+    from four vertices to ``n`` anyway, which the originals refuse by name. The ball-box clip is
+    the one form here that is *not* a port, because there was nothing to port.
 ``_occupancy.py``
     The 3x3x3 periodic image ring, and the one call that puts it all together.
 
@@ -73,9 +74,11 @@ function.
 """
 from ._bodies import AXES, Body, Box, Cylinder, Difference, Intersection, Prism, Sphere, Union
 from ._cut import cut, cut_parts
-from ._exact import clipped_disc_area, clipped_polygon_area, overlap, polygon_edge_moments
+from ._exact import (clip_capacity, clipped_ball_volume, clipped_disc_area, clipped_polygon_area,
+                     overlap, polygon_edge_moments)
 from ._occupancy import image_shifts, occupancy
 
 __all__ = ['AXES', 'Body', 'Box', 'Cylinder', 'Difference', 'Intersection', 'Prism', 'Sphere',
-           'Union', 'cut', 'cut_parts', 'clipped_disc_area', 'clipped_polygon_area', 'overlap',
-           'polygon_edge_moments', 'image_shifts', 'occupancy']
+           'Union', 'cut', 'cut_parts', 'clip_capacity', 'clipped_ball_volume',
+           'clipped_disc_area', 'clipped_polygon_area', 'overlap', 'polygon_edge_moments',
+           'image_shifts', 'occupancy']

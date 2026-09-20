@@ -31,15 +31,18 @@ Every body answers three things:
     body                fill                              moment
     Box, Prism          polygon-box clip x 1-D overlap    edge moments x overlap + cap areas
     Cylinder            disc-box clip x 1-D overlap       *tangent plane*
-    Sphere              *tangent plane*                   *tangent plane*
+    Sphere              ball-box clip                     *tangent plane*
     Union/Intersection/
     Difference          *tangent plane*                   *tangent plane*
 
 A cylinder's exact moment would need the second moment of the arc of a circle clipped to a
 rectangle -- the angular interval set, not the area -- and the repository owns no such form;
 the arc-weighted *area* forms it does own (``_weighted_circle_area``) are a bilinear window for
-a different geometry. Measured cost of using the plane's moment there instead of the truth,
-against 20001-point quadrature over the true circumference
+a different geometry. A sphere's would need the second moment of a spherical patch, which by
+the divergence theorem needs the *volume's* second moments and the clipped disc's; the patch's
+plain area is free that way and the moment is not (see :class:`Sphere`). Measured cost of using
+the plane's moment on a cylinder instead of the truth, against 20001-point quadrature over the
+true circumference
 (``tests/test_fd_shapes.py::test_the_plane_is_the_cylinders_moment_and_this_is_what_that_costs``,
 cut voxels only, worst ``|w - w_exact|`` then rms):
 
@@ -49,33 +52,165 @@ cut voxels only, worst ``|w - w_exact|`` then rms):
      16        7.19e-3   3.50e-3            5.18e-1   1.68e-1
 
 Away from the rim the plane's normal *is* the true normal at the nearest point and the error is
-the arc's own spread, falling. **On the rim it does not converge at all.** A rim is a crease,
-and the plane sees exactly one surface where the voxel holds two. The stage-4 design's section
-3 says a creased two-media interface is "handled exactly by the ``exact_fill``/moment forms";
-for a cylinder's cap rim that is not true as this table stands, and it is C2's to decide
-whether to write the clipped arc's second moment or to record the price beside the rule.
+the arc's own spread. It does **not** fall measurably over this sweep and the first writing of
+this table said it did: the rms falls (9.63e-3, 1.02e-2, 3.50e-3) and the worst does not, and
+an independent surface oracle in the C1 review read 7.6e-3 / 1.8e-2 / 6.9e-3 on the same three
+resolutions -- non-monotone in both datasets. What the table shows is the worst.
+**On the rim it does not converge at all.** A rim is a crease, and the plane sees exactly one
+surface where the voxel holds two. The stage-4 design's section 3 says a creased two-media
+interface is "handled exactly by the ``exact_fill``/moment forms"; for a cylinder's cap rim that
+is not true as this table stands, and it is C2's to decide whether to write the clipped arc's
+second moment or to record the price beside the rule.
 
-**Sphere has no exact fill, and the reason is not the one either side of study S3(a) gave.**
-S3(a) decided stage 4 would not write one, on the grounds that the shapes with exact forms are
-the ones the plane serves worst; its review inverted that to "at equal resolution the sphere is
-the worst of the four". Re-measured here with both sweeps on one length axis, neither survives:
-at equal cells across, the sphere reads ``1.000 (h/D)^2`` and the rotated box, the CSG box and
-the hexagonal prism read 0.81 to 1.16, and only the sphere's constant is stable (three readings
-within 0.0013 against the others' 0.35, because a polyhedron's plane error lives on its edges,
-whose voxel count the sub-cell offset moves). The decision still stands and this file keeps it,
-for the reason that does survive: **the bias is second order and one-signed**, so the
-convergence study that is the gate fits it away, and the alternative is a quadrature per voxel
-where the other three bodies have a closed form. The constant therefore belongs in a docstring
-rather than in the code, which is where it is (``_cut.py``).
+**The crease is also where ``w`` jumps**, and the number to price is the cylinder's, not the
+box's. Sliding a body past one fixed voxel in steps of 0.0025 cell and keeping only the steps
+where *both* ends are cut voxels -- so that the allowed ``w -> 0`` step is excluded -- the
+largest single-step change in ``w`` is
+
+    sphere 0.0000, axis-aligned box 0.0000, rotated box 0.0106 (a slope, not a jump),
+    cylinder cap rim 0.9961
+
+so on a cap rim ``w`` swaps from the side wall's ``(0.5, 0.5, 0)`` to the cap's ``(0, 0, 1)``
+inside one 0.0025-cell move. The design's G4 ("largest single-step change <= 1e-5") was measured
+on a sphere and is out by five orders of magnitude there. The fill is smooth throughout.
 """
+import numpy as _np
+
 from wavebit._core.backend import array_namespace
 
-from ._cut import cut_parts
-from ._exact import clipped_disc_area, clipped_polygon_area, overlap, polygon_edge_moments
+from ._cut import _parts
+from ._exact import (clipped_ball_volume, clipped_disc_area, clipped_polygon_area, overlap,
+                     polygon_edge_moments)
 
 #: The axis names a body may be extruded along, and the index each one is on a typed x-first
 #: triple. Arrays in this package are ``[component, z, y, x]``; the triples here are x-first.
 AXES = {'x': 0, 'y': 1, 'z': 2}
+
+
+def readable(value):
+    """``value`` as a plain NumPy array **for a check**, or ``None`` when there is no value.
+
+    The array twin of ``wavebit._core.backend.checked_float``, and it draws the line in the same
+    place and for the same measured reason: a Torch tensor is detached and read, an un-jitted
+    ``jax.grad`` tracer carries a concrete primal and is read through ``stop_gradient``, and a
+    ``jax.jit`` tracer has no number at all and comes back ``None``. Reading a differentiated
+    value to *check* geometry is the case that most needs checking -- the memory this repository
+    carries is a rod grown by gradient ascent to three times its period with every refusal
+    silently skipped, because the check had been spelled ``float(x)``.
+
+    Every door in this module is therefore skipped, and only skipped, under ``jax.jit``.
+    """
+    detach = getattr(value, 'detach', None)
+    if detach is not None:
+        value = detach()
+    try:
+        return _np.asarray(value, dtype=float)
+    except Exception:                       # noqa: BLE001 - a tracer of some kind
+        pass
+    if type(value).__module__.split('.')[0] == 'jax':
+        import jax                          # local: jax is optional
+        try:
+            return _np.asarray(jax.lax.stop_gradient(value), dtype=float)
+        except Exception:                   # noqa: BLE001 - a jit tracer, as it must
+            return None
+    return None
+
+
+def check_sizes(where, **named):
+    """Refuse a non-positive length by name. ``a length is a size``, and a size is positive.
+
+    The repository's own sentence, and its own scar: a negative ``lx`` on the RCWA path
+    *subtracted* the shape instead of refusing. Measured on this kernel before these doors,
+    from three constructors whose docstrings declare a length: ``Cylinder(radius=-0.2)`` read
+    ``fill = 16.0`` with ``sum_c w_c = 0`` -- both invariants broken at once, because
+    ``clipped_disc_area`` with ``r < 0`` returns sixteen times the box it is clipped to while
+    the plane reports no interface; ``Box(size=(-0.3, 0.2, 0.2))`` read 0.0000 and
+    ``Sphere(radius=-0.2)`` read 0.0000. Three bodies, three different wrong answers, no
+    refusal anywhere.
+    """
+    for what, value in named.items():
+        value = readable(value)
+        if value is None:
+            continue
+        if not _np.all(_np.isfinite(value)):
+            raise ValueError(f'{where}({what}=...): a finite length; got {value.tolist()}.')
+        if _np.any(value <= 0):
+            raise ValueError(f'{where}({what}=...): a length is a size and a size is positive; '
+                             f'got {value.tolist()}. To place the body elsewhere use center=.')
+
+
+def _crossing(p, q, r, s):
+    """Do the closed segments ``pq`` and ``rs`` meet? Orientation test, collinear cases included."""
+    def side(a, b, c):
+        v = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+        return 0 if v == 0 else (1 if v > 0 else -1)
+
+    def between(a, b, c):
+        return (min(a[0], b[0]) <= c[0] <= max(a[0], b[0])
+                and min(a[1], b[1]) <= c[1] <= max(a[1], b[1]))
+
+    d1, d2, d3, d4 = side(r, s, p), side(r, s, q), side(p, q, r), side(p, q, s)
+    if d1 * d2 < 0 and d3 * d4 < 0:
+        return True
+    return ((d1 == 0 and between(r, s, p)) or (d2 == 0 and between(r, s, q))
+            or (d3 == 0 and between(p, q, r)) or (d4 == 0 and between(p, q, s)))
+
+
+def polygon_shape(where, vertices):
+    """``(nv, convex)`` after refusing everything ``clipped_polygon_area`` is not written for.
+
+    Three refusals, each measured on this kernel before it had them:
+
+    * **fewer than three vertices** -- ``clipped_polygon_area``'s own docstring says ``nv >= 3``
+      and a two-vertex ``Prism`` returned 0.0000 rather than saying so.
+    * **clockwise** -- ``clipped_polygon_area`` ends with the source's rounding guard
+      ``where(area < 0, 0, area)``, so a reversed vertex list reads area 0 in every cell while
+      nothing else in the body is orientation-sensitive: the even-odd inside test and
+      ``polygon_edge_moments`` (which returns ``n_c^2``) are both orientation-blind. Measured on
+      ``HEX`` against ``HEX[::-1]`` at ``h = 0.05``: volume 0.030951 (true 0.030951) against
+      **0.000000**, with an identical signed distance and 240 voxels still reporting
+      ``sum_c w_c = 1``. A body that is not there, with a live interface.
+    * **self-intersecting** -- the shoelace sum is a *signed* area, so a figure-eight returns
+      the difference of its lobes and the even-odd test disagrees with it.
+
+    ``convex`` is returned rather than refused: it is a static promise
+    (:func:`_exact.clip_capacity`) that buys the smaller clip buffer, and a simple non-convex
+    cross-section is a legal body -- ``fd.Union`` of convex prisms is not the only spelling.
+    """
+    read = readable(vertices)
+    if read is None:
+        return None, False                  # a jit tracer: no value; take the safe buffer
+    if read.ndim != 2 or read.shape[-1] != 2:
+        raise ValueError(f'{where}(vertices=...): a sequence of (u, v) pairs, shape (nv, 2); '
+                         f'got shape {read.shape}.')
+    nv = read.shape[0]
+    if nv < 3:
+        raise ValueError(f'{where}(vertices=...): a polygon has at least three vertices; '
+                         f'got {nv}.')
+    if not _np.all(_np.isfinite(read)):
+        raise ValueError(f'{where}(vertices=...): every vertex must be finite.')
+    points = [tuple(v) for v in read]
+    for i in range(nv):
+        for j in range(i + 2, nv):
+            if i == 0 and j == nv - 1:
+                continue                    # adjacent round the ring
+            if _crossing(points[i], points[(i + 1) % nv], points[j], points[(j + 1) % nv]):
+                raise ValueError(f'{where}(vertices=...): a simple polygon -- edges {i} and {j} '
+                                 'meet. A self-intersecting outline has no filled fraction to '
+                                 'report (the shoelace sum returns the difference of its lobes '
+                                 'and the even-odd inside test disagrees with it); build it as '
+                                 'an fd.Union of simple pieces instead.')
+    following = _np.roll(read, -1, axis=0)
+    area = .5 * float(_np.sum(read[:, 0] * following[:, 1] - following[:, 0] * read[:, 1]))
+    if area <= 0:
+        raise ValueError(f'{where}(vertices=...): counter-clockwise, in the right-handed (u, v) '
+                         f'pair across the extrusion axis; this list has signed area {area:.6g}. '
+                         'Reverse it (vertices[::-1]) -- the clipped area of a clockwise list is '
+                         'zero in every cell and the body silently disappears.')
+    edge = following - read
+    turn = _np.roll(edge, -1, axis=0)
+    cross = edge[:, 0] * turn[:, 1] - edge[:, 1] * turn[:, 0]
+    return nv, bool(_np.all(cross >= -1e-12 * _np.max(_np.abs(cross), initial=1.0)))
 
 
 def _as(xp, value, like):
@@ -120,21 +255,60 @@ class Body:
         return None
 
     def plane(self, points, dx):
-        """``(fill, area, moment)`` from the tangent plane -- what every body falls back to."""
+        """``(fill, area, moment)`` from the tangent plane -- what every body falls back to.
+
+        Goes to ``_cut._parts`` rather than the exported ``cut_parts``: the bodies here
+        *guarantee* a unit normal, so the door on the public spelling would be a reduction and a
+        host synchronisation per body per image, paid on every voxel of every solve to check a
+        precondition this file establishes by construction.
+        """
         d, n = self.surface(points)
-        return cut_parts(d, n, dx)
+        return _parts(d, n, dx)
 
 
 class Sphere(Body):
-    """``|x - centre| <= radius``. No orientation, and therefore no ``angle``.
+    """``|x - centre| <= radius``, with an **exact** fill and the plane's moment.
 
     At the centre the gradient does not exist and the normal returned is ``+x``. Nothing can
     observe it: the fill there is 1 for any direction whenever ``radius >= dx sqrt(3)/2``, and a
     sphere smaller than a voxel is refused for other reasons (C5's "too few cells across").
+
+    **Why the exact fill is written here after all.** Study S3(a) and the first draft of this
+    package both decided the tangent plane was enough, on the grounds that its ``+0.250 (h/R)^2``
+    over-fill is second order and one-signed, so the convergence study that is the gate fits it
+    away. Two measurements taken by the C1 review overturned that. S2's companion claim -- order
+    1.83 on a curved interface, the number the whole smoothing rule is sold on -- was itself
+    measured with an *exact* fill, so it says nothing about a plane-filled sphere; and the
+    review then measured the tangent plane's bias on top of it at 0.99x to 1.19x S2's own fitted
+    errors at S2's own four resolutions, same sign. Together they read about twice the error at
+    an order that still looks like two. The sphere is stage 4's pass mark (C3, Mie), so the one
+    body the grade is taken on may not be the one body carrying a removable bias.
+
+    The tangent plane stays for :class:`Union`, :class:`Intersection`, :class:`Difference` and
+    anything else with no closed form; what it costs there is measured in ``_cut.py``.
+
+    **The moment is still the plane's**, and that is not an oversight. By the divergence theorem
+    the interface *area* would be free -- ``3V = R S + sum_faces d_f A_f`` with ``A_f`` a clipped
+    disc -- but the second moment needs ``int (x_c - c_c)^2 dS`` over the spherical patch, which
+    by the same theorem needs the volume's own second moments *and* the clipped disc's, neither
+    of which this repository owns. What the plane's moment costs here is
+    ``tests/test_fd_shapes.py::test_w_vanishes_only_where_the_fill_is_already_decided``'s
+    measured sphere row.
     """
 
     def __init__(self, radius, center=(0., 0., 0.)):
+        check_sizes('Sphere', radius=radius)
         self.radius, self.center = radius, center
+
+    def exact_fill(self, points, dx):
+        xp = array_namespace(points)
+        centre = _as(xp, self.center, points)
+        half = dx / 2
+        return clipped_ball_volume(
+            centre[..., 0], centre[..., 1], centre[..., 2], _as(xp, self.radius, points),
+            points[..., 0] - half, points[..., 0] + half,
+            points[..., 1] - half, points[..., 1] + half,
+            points[..., 2] - half, points[..., 2] + half, xp) / dx ** 3
 
     def surface(self, points):
         xp = array_namespace(points)
@@ -166,6 +340,7 @@ class _Extrusion(Body):
     def __init__(self, height, axis, center, angle):
         if axis not in AXES:
             raise ValueError(f"axis must be one of 'x', 'y', 'z'; got {axis!r}.")
+        check_sizes(type(self).__name__, height=height)
         self.height, self.axis, self.center, self.angle = height, axis, center, angle
 
     def _transverse_surface(self, q):
@@ -223,7 +398,16 @@ class _Extrusion(Body):
 
 
 class _Polygonal(_Extrusion):
-    """An extrusion whose cross-section is a simple counter-clockwise polygon."""
+    """An extrusion whose cross-section is a simple counter-clockwise polygon.
+
+    ``self._convex`` is a **static** promise about that polygon, read once at the constructor
+    from concrete vertices and never from a traced value -- it sizes an array, so it could not be
+    otherwise. :func:`_exact.clip_capacity` says what it buys and what the safe answer is when
+    there is no value to read.
+    """
+
+    #: Set by every concrete subclass' constructor; False is always safe (a bigger buffer).
+    _convex = False
 
     def _vertices(self, points):
         """The polygon in the grid's transverse frame, absolute, ``(nv, 2)``."""
@@ -270,7 +454,7 @@ class _Polygonal(_Extrusion):
 
     def _area(self, box, points):
         xp = array_namespace(points)
-        return clipped_polygon_area(self._vertices(points), *box, xp)
+        return clipped_polygon_area(self._vertices(points), *box, xp, convex=self._convex)
 
     def exact_moment(self, points, dx):
         xp, (u, v, k), box, (lo, hi, s) = self._boxes(points, dx)
@@ -293,11 +477,16 @@ class Prism(_Polygonal):
 
     Counter-clockwise, simple, absolute lengths -- not fractions of anything (memory: analytic
     shape coordinates are absolute). ``(u, v)`` is the right-handed pair across ``axis``
-    (:func:`_transverse`), so "counter-clockwise" means one thing on all three axes.
+    (:func:`_transverse`), so "counter-clockwise" means one thing on all three axes. All three
+    of those words are refused by name when they are not true (:func:`polygon_shape`).
+
+    **Non-convex is legal**, and gives the same number on all three backends; it costs the
+    larger clip buffer (:func:`_exact.clip_capacity`) and nothing else.
     """
 
     def __init__(self, vertices, height, axis='z', center=(0., 0., 0.), angle=0.):
         super().__init__(height, axis, center, angle)
+        _, self._convex = polygon_shape('Prism', vertices)
         self.vertices = vertices
 
     def _vertices(self, points):
@@ -322,7 +511,12 @@ class Box(_Polygonal):
     becomes ``fd.Region``). Nothing imports both while the word means two things.
     """
 
+    #: A rectangle, built here from ``size``, so convexity is a property of the constructor.
+    _convex = True
+
     def __init__(self, size, center=(0., 0., 0.), angle=0., axis='z'):
+        if axis in AXES:
+            check_sizes('Box', size=size)
         super().__init__(size[AXES[axis]] if axis in AXES else None, axis, center, angle)
         self.size, self._uv = size, _transverse(axis)
 
@@ -356,6 +550,7 @@ class Cylinder(_Extrusion):
 
     def __init__(self, radius, height, axis='z', center=(0., 0., 0.), angle=0.):
         super().__init__(height, axis, center, angle)
+        check_sizes('Cylinder', radius=radius)
         self.radius = radius
 
     def _transverse_surface(self, q):
@@ -393,6 +588,17 @@ class _Combination(Body):
     the geometry and not an artefact of the spelling. No exact fill and no exact moment: an
     exact clip of a CSG node does not exist, which is the reason the tangent plane is the
     kernel's default and not its fallback.
+
+    **This is the one class whose ``w`` rests entirely on this normal**, and the C1 review found
+    that nothing held it: a mutant returning ``self.bodies[0]``'s normal from every node passed
+    the whole gate while moving ``w`` by 0.88 in 616 voxels. It is now held by
+    ``tests/test_fd_shapes.py::test_the_signed_distance_is_the_distance``, which reads each
+    node's distance a second way (``min`` / ``max`` / ``max`` of the negation over the children's
+    own closed forms) and its normal against a central difference of that distance. The
+    *direction* of a normal is read nowhere else in this package -- ``_cut.cut_parts`` consumes
+    ``n`` only as ``|n| dx`` and ``n n^T`` -- so that test is also the only thing holding
+    :class:`Difference`'s reversal, and without it ``-other_n`` is a line with nothing but a
+    docstring behind it.
     """
 
     def __init__(self, *bodies):

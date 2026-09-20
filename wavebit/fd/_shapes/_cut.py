@@ -28,11 +28,38 @@ one of those resolutions. On the diameter -- the axis the "too few cells across"
 drawn on -- that is ``1.000 (h/D)^2``. Against the other three bodies at the *same* cells
 across (a rotated box, the same box spelled as a CSG max, a hexagonal prism) the four
 constants sit between 0.81 and 1.16, so the body does not decide anything; only the sphere's is
-stable enough to quote. See ``_bodies.Sphere`` for why the sphere is nonetheless the one body
-here with no ``exact_fill``.
+stable enough to quote.
 
 The bias is a bias in the *volume*, so it is a bias in the effective radius: ``dR/R = dV/3V``,
 which is ``+5.2e-3`` at 4 cells of radius and ``+8.3e-4`` at 10.
+
+**Which bodies still pay it.** Every body in ``_bodies.py`` with a closed form now overrides the
+plane's *fill*: ``Box``, ``Prism``, ``Cylinder`` and -- since the C1 review -- ``Sphere``. The
+plane's fill is what ``Union``, ``Intersection`` and ``Difference`` get, and the sphere above is
+its calibration rather than a live cost. That the calibration is *still* taken on a sphere is
+deliberate: it is the one body whose constant is stable enough to quote, and the closed form is
+now there to check it against. The plane's *moment* is what a cylinder, a sphere and every CSG
+node get, and its price is in ``_bodies.py``'s table.
+
+**The constant is a value, not a bound, and it cannot be exposed per body.** The C1 review
+derived the closed form ``C = D^2 int (k1 + k2) dA / (24 V)`` for the same second-order term and
+measured 3.01 for a regular tetrahedron built as a CSG ``max`` -- three times the sphere's --
+against 1.008 for a rotated cube and 1.000 for an octahedron. The sphere's ``C = 1`` is the one
+value that form gives exactly (``int(k1+k2)dA = 8 pi R`` and ``V = 4 pi R^3/3``), and this file
+reproduces it numerically: 0.9989 over six sub-cell offsets at 24 cells across. The tetrahedron
+is the review's number and is quoted as such -- a ``Body`` here cannot be given an arbitrary
+half space, so the shape is not constructible in this package to check.
+
+What *is* settled here is that the constant cannot be handed to C5 per body. It is a surface
+integral of the mean curvature: free for a sphere, a cylinder and a box, and unavailable for the
+one class that needs it most -- a CSG node, whose edges and their turning angles do not exist
+until the geometry is resolved, which is the whole reason that class has no exact fill either.
+A polyhedron's *measured* constant cannot arbitrate it either, because the sub-cell offset
+lottery moves it by +/-0.35 (a polyhedron's plane error lives on its edges, a set whose voxel
+count the offset moves): the same cube reads 0.85 as a rotated ``Box`` and 1.16 as an
+``Intersection`` of three slabs, at the same resolution. So C5's door has to be drawn on a
+*measured worst* over the body classes it admits, and it must be told that a CSG intersection
+can sit at three times the sphere it was calibrated on.
 
 **The closed form, and why it is not written the way it is usually written.** The volume of a
 cube cut by a half space is the inclusion-exclusion sum over the cube's eight corners::
@@ -76,7 +103,7 @@ selection makes inactive are replaced by one **before** they are used, the idiom
 prevent NaN derivatives on parallel edges": a dead branch's value is discarded in forward mode
 but its *cotangent* is not, so ``0/0`` in a branch nothing selects still poisons a gradient.
 """
-from wavebit._core.backend import array_namespace
+from wavebit._core.backend import _concrete, array_namespace
 
 
 def _ramp(t, xp):
@@ -131,19 +158,32 @@ def _second_difference_slope(t, a, b, xp):
                                    6 * xp.ones_like(t)))))
 
 
-def cut_parts(d, n, dx):
-    """``(fill, area, moment)`` for one tangent plane: the pair of :func:`cut`, unnormalised.
+def _unit(n, xp):
+    """Refuse a normal that is not a unit vector, where there is a value to read.
 
-    ``area`` is the area of the plane's cross-section inside the voxel and ``moment`` is
-    ``area * n_c^2``. They are separate from ``w`` because a shape is not always one plane: the
-    periodic image ring and a CSG node add contributions whose normals differ, and a mean of
-    ``n n^T`` over a surface is an **area-weighted** mean. Dividing too early would average the
-    averages. :func:`cut` is this with the division done, for the one-plane case.
+    ``cut`` and ``cut_parts`` are exported, so C2 will call them with a normal this package did
+    not produce, and every line below assumes ``|n| = 1``: the plane is ``n.(x - centre) <= -d``,
+    so a scaled ``n`` silently rescales ``d`` as well. Measured on the exported spelling before
+    this door: ``n`` scaled by two reads ``fill = 0.450`` where the truth is 0.400 and
+    ``w = [0, 0, 4]``, which does not sum to one; a zero ``n`` divides by zero. Neither is
+    caught by anything downstream, because ``w`` is only ever *compared* with one inside this
+    package and is a free input outside it.
 
-    ``n`` must be a unit vector; the bodies in ``_bodies.py`` guarantee it, including at the
-    points where the true gradient is undefined (a sphere's centre, a box's medial axis), so
-    ``max_i |n_i| dx >= dx/sqrt(3)`` and the division below can never be by a small number.
+    The check is a single reduction over the array and one host read, so it is skipped under
+    ``jax.jit`` (there is no value) and paid once per call everywhere else. ``_bodies.Body.plane``
+    goes to :func:`_parts` instead and never pays it: the bodies construct a unit normal.
     """
+    worst = _concrete(xp.max(xp.abs(xp.sum(n * n, axis=-1) - 1)) > 1e-9)
+    if worst:
+        raise ValueError('cut(n=...): n must be the unit outward normal, one per point; the '
+                         'worst |n| here is off one by more than 1e-9. The plane is '
+                         'n.(x - centre) <= -d, so scaling n rescales the offset too and the '
+                         'fill is silently wrong (measured: 0.450 against a true 0.400 at '
+                         '|n| = 2), and w stops summing to one.')
+
+
+def _parts(d, n, dx):
+    """:func:`cut_parts` with the door left off -- the spelling every body in this package uses."""
     xp = array_namespace(d, n)
     a = xp.abs(n) * dx
     ordered = xp.flip(xp.sort(a, axis=-1), axis=-1)
@@ -167,15 +207,39 @@ def cut_parts(d, n, dx):
     return fill, area, area[..., None] * n * n
 
 
+def cut_parts(d, n, dx):
+    """``(fill, area, moment)`` for one tangent plane: the pair of :func:`cut`, unnormalised.
+
+    ``area`` is the area of the plane's cross-section inside the voxel and ``moment`` is
+    ``area * n_c^2``. They are separate from ``w`` because a shape is not always one plane: the
+    periodic image ring and a CSG node add contributions whose normals differ, and a mean of
+    ``n n^T`` over a surface is an **area-weighted** mean. Dividing too early would average the
+    averages. :func:`cut` is this with the division done, for the one-plane case.
+
+    ``n`` must be a unit vector, and :func:`_unit` says so where there is a value to read; the
+    bodies in ``_bodies.py`` guarantee it by construction, including at the points where the true
+    gradient is undefined (a sphere's centre, a box's medial axis), so
+    ``max_i |n_i| dx >= dx/sqrt(3)`` and the division inside can never be by a small number.
+    """
+    _unit(n, array_namespace(d, n))
+    return _parts(d, n, dx)
+
+
 def cut(d, n, dx):
     """``(fill, w)``: the fraction of the voxel the tangent half space fills, and ``<n_c^2>``.
 
     ``w`` is zero where no surface reaches the voxel -- there is no surface to take a mean
-    over -- and sums to one wherever there is. The step from one to the other is invisible to
-    the rule that reads it: where the area is zero the fill is exactly 0 or 1, and
+    over -- and sums to one wherever there is. **For one plane** that step is invisible to the
+    rule that reads it: the plane's own area is zero exactly where its own fill is 0 or 1, and
     ``1/eps = w (f/e_a + (1-f)/e_b) + (1-w)/(f e_a + (1-f) e_b)`` does not depend on ``w`` at
-    either end. ``tests/test_fd_shapes.py::test_w_vanishes_only_where_the_fill_is_already_decided``
-    pins that pairing, because it is the reason the discontinuity is allowed to stand.
+    either end.
+
+    A **body** is not one plane, and there the pairing is only tight, not exact: a body whose
+    fill comes from a closed form and whose moment comes from the plane can have the two
+    disagree about whether a voxel is cut at all. How far, measured over a sweep of placements
+    rather than fitted to one, is in
+    ``tests/test_fd_shapes.py::test_w_vanishes_only_where_the_fill_is_already_decided`` -- that
+    test, and not this docstring, is the number C2 has to price.
     """
     xp = array_namespace(d, n)
     fill, area, moment = cut_parts(d, n, dx)

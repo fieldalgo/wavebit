@@ -1,14 +1,20 @@
-"""Closed forms the repository already owns: the overlap, the clipped disc, the clipped polygon.
+"""Closed forms: the overlap, the clipped disc, the clipped polygon -- and the clipped ball.
 
 Three of the four bodies in ``_bodies.py`` are an extrusion of a plane figure along a grid
 axis, and for those the tangent plane is not the best a voxel can be told. The plane figure's
 area inside the voxel's transverse square, times the extrusion's overlap with the voxel's axial
 interval, is the **exact** filled volume -- no bias, no ``(h/R)^2``, and still one differentiable
 expression. The same walk that clips the polygon gives the exact ``<n n^T>`` over its edges.
+The fourth body, the sphere, is the one this repository owned no form for, and
+:func:`clipped_ball_volume` is written here (see its own docstring for the derivation and for
+why it is written rather than left to the plane).
 
-**These are ported, not imported.** Nothing under ``wavebit/fd/`` imports the old engines
-(``wavebit/fd/_lower/cpml.py`` states the rule and the reason); what is copied here is the
-arithmetic and the guards, with the source named at each one:
+**Four of the five are ported, not imported.** Nothing under ``wavebit/fd/`` imports the old
+engines (``wavebit/fd/_lower/cpml.py`` states the rule and the reason); what is copied here is
+the arithmetic and the guards, with the source named at each one. :func:`clipped_ball_volume` is
+the exception and has no source: it is derived in this file, and it mirrors
+:func:`clipped_disc_area`'s structure (an odd-extended corner primitive summed over the box's
+corners) one dimension up.
 
 * :func:`overlap` <- ``wavebit/_core/fdtd.py::_overlap`` (:334), one line, arrays instead of
   a shared edge vector.
@@ -21,9 +27,9 @@ arithmetic and the guards, with the source named at each one:
   between the two geometries at 0.005933 in amplitude).
 * :func:`clipped_polygon_area` <- ``wavebit/_core/scene_fdtd.py::_clipped_rectangle_area``
   (:306), Sutherland-Hodgman against the four faces with the stable repack that keeps the
-  cyclic order without a host-side geometry plan. **Generalised from four vertices to n**: the
-  original's eight-slot buffer is ``2 * 4``; four half-plane clips of an ``n``-gon produce at
-  most ``n + 4`` vertices, so the buffer is that. Everything else is unchanged.
+  cyclic order without a host-side geometry plan. **Generalised from four vertices to n**, and
+  from convex to any simple polygon; :func:`clip_capacity` carries the two buffer bounds and
+  the proof of the second one.
 * :func:`polygon_edge_moments` <- ``wavebit/_core/scene_fdtd.py::_rectangle_edge_moments``
   (:823), Liang-Barsky parametric clipping per edge (Liang & Barsky, ACM TOG **3**, 1 (1984),
   1-22), with the same guarded normalisation of a zero-length edge. The original **refuses**
@@ -96,21 +102,237 @@ def clipped_disc_area(cx, cy, radius, left, right, bottom, top, xp):
     return xp.where(area < 0, xp.zeros_like(area), area)
 
 
-def clipped_polygon_area(vertices, left, right, bottom, top, xp):
+def clip_capacity(nv, convex):
+    """How many slots the Sutherland-Hodgman buffer needs for an ``nv``-gon, and why.
+
+    One clip against a half plane emits, per edge of the current polygon, the crossing point if
+    the edge crosses and the end point if the end point is inside. So with ``i`` vertices inside
+    the half plane, ``o = n - i`` outside and ``x`` crossings::
+
+        n' = i + x
+
+    and ``x`` is the number of sign changes around a **closed** ring, hence even, hence
+    ``x = 2 r`` where ``r`` is the number of maximal inside runs. Every inside run holds at least
+    one inside vertex and every outside run at least one outside vertex, so ``r <= min(i, o)``
+    and ``n' <= i + 2 min(i, o) <= n + n//2``. That bound uses nothing but the sign sequence, so
+    it holds for **any** simple polygon, convex or not, and four clips give
+    ``n -> n + n//2`` four times over::
+
+        nv          3    4    6    8   12   16
+        convex      7    8   10   12   16   20
+        simple     13   19   28   38   60   81
+
+    For a **convex** polygon the standard ``nv + 4`` holds instead: the clipped figure is convex,
+    its vertices are original vertices or crossings, and each of the four face lines meets a
+    convex boundary at most twice while removing at least one original vertex whenever it meets
+    it twice. That is the bound the RCWA source
+    (``wavebit/_core/scene_fdtd.py::_clipped_rectangle_area``, whose ``2 * 4`` is this bound for
+    a quadrilateral) was written against, and it is **only** a convex bound -- the C1 review
+    measured what happens when it is used anyway: a 12-vertex star overflows the buffer, NumPy
+    raises ``IndexError``, JAX returns ``nan`` (``where(area < 0, 0, area)`` does not catch a
+    NaN) and Torch returns a number wrong by up to 20.8%. One legal input, three answers, which
+    is the one thing "one body of code for three backends" may not do.
+
+    The choice is therefore made **statically**, at the body's constructor, from concrete
+    vertices (``_bodies._Polygonal``); a polygon whose vertices cannot be read -- a ``jax.jit``
+    tracer -- gets the simple bound, which is correct for both. The price of the simple bound is
+    the argsort over ``2 cap`` slots per clip; measured for a hexagonal prism over 110592 voxels
+    it is the difference recorded in ``tests/test_fd_shapes.py``'s module docstring.
+    """
+    if convex:
+        return nv + 4
+    for _ in range(4):
+        nv += nv // 2
+    return nv
+
+
+_PI = 3.141592653589793
+
+
+def _root(v, xp):
+    """``sqrt(max(v, 0))`` with the branch guarded **before** the root, not after.
+
+    ``sqrt(maximum(v, 0))`` is right in forward mode and NaN in reverse: at ``v <= 0`` the
+    ``maximum`` hands ``sqrt`` an exact zero, whose derivative is infinite, and the zero
+    cotangent times that infinity is a NaN -- the same ``0 * inf`` the rest of this package
+    guards with ``where(live, sqrt(where(live, ...)), 0)``. Measured: the first writing of
+    :func:`clipped_ball_volume` spelled it the short way and ``jax.grad`` of a sphere's radius
+    over 4096 voxels returned ``nan`` against a finite difference of 1056.3.
+    """
+    live = v > 0
+    return xp.where(live, xp.sqrt(xp.where(live, v, xp.ones_like(v))), xp.zeros_like(v))
+
+
+def _angle(y, x, xp):
+    """``atan2(y, x)``, with the origin guarded: ``(0, 0)`` is a zero angle and a zero gradient.
+
+    Every ``atan2`` below is an angle between two lengths that vanish together at the end of a
+    regime -- ``a`` and ``sqrt(rho^2 - a^2)`` at ``a = 0, rho = 0``. The value there is
+    multiplied by a coefficient that is also zero, so forward mode is right either way; the
+    reverse-mode derivative of ``atan2`` at the origin is ``0/0``, and on JAX (not on Torch,
+    which returns zero) that NaN survives the multiplication and poisons the whole gradient.
+    Same ``0 * inf`` family as :func:`_root`, found the same way.
+    """
+    live = (y * y + x * x) > 0
+    return xp.where(live, xp.atan2(xp.where(live, y, xp.zeros_like(y)),
+                                   xp.where(live, x, xp.ones_like(x))), xp.zeros_like(y))
+
+
+def _arc_integral(z, k, xp):
+    """``int_0^z sqrt(k^2 - t^2) dt``, with ``z`` clamped to ``k`` so the branch is never left."""
+    t = xp.minimum(z, k)
+    rest = _root(k * k - t * t, xp)
+    return .5 * (t * rest + k * k * _angle(t, rest, xp))
+
+
+def _cubic_integral(z, radius, xp):
+    """``int_0^z (R^2 - t^2) dt`` -- the area of the disc chord swept along the axis."""
+    return radius * radius * z - z ** 3 / 3
+
+
+def _wedge_integral(z, a, radius, xp):
+    """``int_0^z (R^2 - t^2) asin(a / sqrt(R^2 - t^2)) dt``, for ``0 <= z <= sqrt(R^2 - a^2)``.
+
+    Integration by parts against ``R^2 t - t^3/3``; the remaining integral splits into
+    ``int t^2/sqrt(k^2-t^2)``, ``int dt/sqrt(k^2-t^2)`` and
+    ``int dt/((R^2-t^2) sqrt(k^2-t^2))`` with ``k^2 = R^2 - a^2``, the last of which is
+    ``(1/(aR)) atan(t a /(R sqrt(k^2-t^2)))`` because ``k < R``.
+
+    **Every inverse trigonometric argument is written as an ``atan2`` of two lengths, never as
+    an ``asin`` of a ratio.** ``asin(a/rho)`` at the end of the wedge's own range has
+    ``a/rho -> 1``, where ``asin`` loses half of its digits: measured, the first writing of this
+    module put a jump of 5.5e-08 into the volume at the regime boundary -- 2.4e-06 relative --
+    and the same expression as ``atan2(a, sqrt(rho^2 - a^2))`` is exact to 5.6e-16 against
+    quadrature. It is the same defect ``clipped_disc_area``'s series near ``t = r`` exists for,
+    in the place where a series is not needed because the stable spelling is free.
+    """
+    k2 = radius * radius - a * a
+    t = xp.minimum(z, _root(k2, xp))
+    rest = _root(k2 - t * t, xp)
+    return (_cubic_integral(t, radius, xp) * _angle(a, rest, xp)
+            - (a / 6) * (k2 * _angle(t, rest, xp) - t * rest)
+            + (2 * a * radius * radius / 3) * _angle(t, rest, xp)
+            - (2 * radius ** 3 / 3) * _angle(t * a, radius * rest, xp))
+
+
+def _ball_corner(a, b, c, radius, xp):
+    """``vol(ball(R) ∩ [0,a] x [0,b] x [0,c])`` for ``a, b, c >= 0`` -- the cumulative primitive.
+
+    Integrate the **clipped disc** along the axis: at height ``t`` the cross-section is the
+    quarter-plane rectangle ``[0,a] x [0,b]`` against a disc of radius ``rho = sqrt(R^2 - t^2)``,
+    whose area is exactly :func:`clipped_disc_area`'s first-quadrant primitive. That area has
+    four regimes in ``t``, separated by ``rho^2 = a^2 + b^2``, ``rho = a`` and ``rho = b``::
+
+        rho^2 >= a^2 + b^2           a b                            (the rectangle is inside)
+        a, b <= rho < hypot(a, b)    (a t_a + b t_b
+                                      + rho^2 (atan2(a,t_a) + atan2(b,t_b) - pi/2)) / 2
+        min(a,b) <= rho < max(a,b)   (m t_m + rho^2 atan2(m, t_m)) / 2,  m = min(a, b)
+        rho < min(a, b)              pi rho^2 / 4                   (the disc is inside)
+
+    with ``t_a = sqrt(R^2 - a^2 - t^2)``. Each regime's antiderivative in ``t`` is elementary
+    (:func:`_arc_integral`, :func:`_cubic_integral`, :func:`_wedge_integral`), and the four
+    pieces are summed between limits clamped to ``[0, min(c, R)]``, so an empty regime
+    contributes exactly zero rather than being branched away.
+    """
+    a = xp.minimum(a, radius)
+    b = xp.minimum(b, radius)
+    c = xp.minimum(c, radius)
+    ka = _root(radius * radius - a * a, xp)
+    kb = _root(radius * radius - b * b, xp)
+    rect = xp.minimum(_root(radius * radius - a * a - b * b, xp), c)
+    both = xp.minimum(xp.minimum(ka, kb), c)
+    one = xp.minimum(xp.maximum(ka, kb), c)
+    lesser, outer = xp.minimum(a, b), xp.maximum(ka, kb)
+
+    def two_chords(z):
+        return .5 * (a * _arc_integral(z, ka, xp) + b * _arc_integral(z, kb, xp)
+                     + _wedge_integral(z, a, radius, xp) + _wedge_integral(z, b, radius, xp)
+                     - (_PI / 2) * _cubic_integral(z, radius, xp))
+
+    def one_chord(z):
+        return .5 * (lesser * _arc_integral(z, outer, xp)
+                     + _wedge_integral(z, lesser, radius, xp))
+
+    return (a * b * rect
+            + (two_chords(both) - two_chords(rect))
+            + (one_chord(one) - one_chord(both))
+            + (_PI / 4) * (_cubic_integral(c, radius, xp) - _cubic_integral(one, radius, xp)))
+
+
+def clipped_ball_volume(cx, cy, cz, radius, x0, x1, y0, y1, z0, z1, xp):
+    """Exact volume of ``ball(c, R)`` inside the axis-aligned box, differentiably.
+
+    Written here rather than ported: this repository owned no sphere-box clip. The structure is
+    the three-dimensional twin of :func:`clipped_disc_area`'s -- a cumulative primitive in
+    disc-centred (here ball-centred) coordinates, extended oddly in each coordinate by
+    ``sgn(a) sgn(b) sgn(c)``, and summed over the box's eight corners with alternating signs.
+    :func:`_ball_corner` is the primitive and carries the derivation.
+
+    **The two clamps are the function, not an approximation of it.** A box whose farthest corner
+    is inside the ball is full and a box whose nearest point is outside is empty, and in both the
+    true derivative with respect to the radius, the centre and the box is exactly zero -- so the
+    ``where`` costs no accuracy and buys the two invariants. Without them the eight-corner sum
+    differences numbers of order ``R^3`` to produce one of order ``h^3``, and at ``R/h = 16``
+    that reads ``fill = -1.4e-03`` for voxels that are simply outside; with them, measured over
+    the same grid, ``fill.min() == 0.0`` and ``fill.max() == 1.0`` exactly.
+
+    Accuracy on genuinely cut voxels, against adaptive quadrature of
+    :func:`clipped_disc_area` along the axis (300 random ball/box configurations,
+    ``tests/test_fd_shapes.py::test_the_clipped_ball_is_what_quadrature_says_it_is``): worst
+    9.1e-14 absolute, and the primitive itself 5.6e-16. As a fraction of one **voxel** the
+    residual is ``1.5 eps (R/dx)^3`` -- the eight corner primitives are of order ``R^3`` and
+    their alternating sum is of order ``dx^3``, so the cancellation is inherent to any
+    inclusion-exclusion form and no summation order removes it. Measured 8.7e-15 at
+    ``R/dx = 3`` and 8.2e-12 at 32;
+    ``tests/test_fd_shapes.py::test_a_sphere_fills_a_voxel_exactly_and_this_is_what_that_replaced``
+    carries the table.
+    """
+    corners = ((x0 - cx, x1 - cx), (y0 - cy, y1 - cy), (z0 - cz, z1 - cz))
+    total = None
+    for i in (0, 1):
+        for j in (0, 1):
+            for k in (0, 1):
+                a, b, c = corners[0][i], corners[1][j], corners[2][k]
+                sign = 1. if (i + j + k) % 2 == 1 else -1.
+                one = xp.ones_like(a)
+                signs = (xp.where(a >= 0, one, -one) * xp.where(b >= 0, one, -one)
+                         * xp.where(c >= 0, one, -one))
+                term = sign * signs * _ball_corner(xp.abs(a), xp.abs(b), xp.abs(c), radius, xp)
+                total = term if total is None else total + term
+    zero = xp.zeros_like(total)
+
+    def outside(lo, hi):
+        return xp.maximum(xp.maximum(lo, -hi), xp.zeros_like(lo))
+
+    far = sum(xp.maximum(lo * lo, hi * hi) for lo, hi in corners)
+    near = sum(outside(lo, hi) ** 2 for lo, hi in corners)
+    box = (x1 - x0) * (y1 - y0) * (z1 - z0) + zero
+    return xp.where(near >= radius * radius, zero, xp.where(far <= radius * radius, box, total))
+
+
+def clipped_polygon_area(vertices, left, right, bottom, top, xp, convex=False):
     """Exact area of a simple polygon inside the axis-aligned box, differentiably.
 
-    ``vertices`` is ``(..., nv, 2)``, counter-clockwise, broadcasting against the four bounds.
+    ``vertices`` is ``(..., nv, 2)``, counter-clockwise and simple, broadcasting against the four
+    bounds. ``convex`` is a **static** promise about the polygon and buys the smaller buffer;
+    it is not read from the data and never branches on a value. See :func:`clip_capacity`.
 
     Ported from ``wavebit/_core/scene_fdtd.py::_clipped_rectangle_area`` (:306) and generalised
-    from ``nv = 4`` to any ``nv >= 3``: four half-plane clips of an ``nv``-gon produce at most
-    ``nv + 4`` vertices, so the fixed buffer is that rather than the original's ``2 * 4``. The
-    stable packing that keeps the survivors' cyclic order without a host-side plan, and the safe
-    inactive denominators that keep a derivative finite on an edge parallel to a face, are the
-    original's and are unchanged. Combinatorics are piecewise; an edge lying exactly on a face
-    is admitted to both neighbours, as there.
+    from ``nv = 4`` to any ``nv >= 3`` and from convex to simple. The stable packing that keeps
+    the survivors' cyclic order without a host-side plan, and the safe inactive denominators that
+    keep a derivative finite on an edge parallel to a face, are the original's and are unchanged.
+    Combinatorics are piecewise; an edge lying exactly on a face is admitted to both neighbours,
+    as there.
+
+    On a non-convex polygon Sutherland-Hodgman leaves **degenerate bridge edges** running along
+    the clip box's own faces. They carry no area -- each traverses a face line and comes back --
+    so the shoelace sum below is still the exact clipped area, and the final
+    ``where(area < 0, 0, area)`` is the source's rounding guard and nothing more. Measured
+    against an unbounded-list reference clipper in
+    ``tests/test_fd_shapes.py::test_a_non_convex_cross_section_is_the_same_number_on_three_backends``.
     """
     nv = vertices.shape[-2]
-    cap = nv + 4
+    cap = clip_capacity(nv, convex)
     shape = xp.broadcast_shapes(left.shape, right.shape, bottom.shape, top.shape,
                                 vertices.shape[:-2])
     copies = -(-cap // nv)

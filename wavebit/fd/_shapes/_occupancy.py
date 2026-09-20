@@ -49,8 +49,28 @@ def occupancy(body, points, dx, *, period=(None, None, None), rings=None):
     (``wavebit/_core/scene_fdtd.py``:802) and for a body wider than its own period that is a
     silent lie about the geometry: the shape wraps onto itself and a clamp turns the evidence
     into a plausible number. Measured here, a cylinder of diameter 1.4 periods reads
-    ``max fill = 2.0000`` -- two whole images over one voxel -- and a clamp would read 1.0000.
-    C5's refusal is written to fire on the first of those, so this kernel must hand it the first.
+    ``max fill = 2.0000`` -- two whole images over one voxel -- and an ordinary substrate,
+    ``Box((3.0, 3.0, 0.3))`` on ``period=(1, 1, None)``, reads ``max fill = 9.0000`` with
+    ``sum_c w_c = 1.0000``, so the invariant does not flag it either. **9, not 2, is the number
+    C5's refusal has to be written against**: a layer spanning the cell is the common case and
+    the 1.4-period cylinder is the exotic one. A clamp would read 1.0000 for both.
+
+    **Precondition: the body must lie in the cell the period describes.** The ``+/-1`` ring is
+    the legacy engine's rule and is exact while the body's projected extent is smaller than its
+    period *and the body is in the cell*. It is not periodic in the body's own position beyond
+    one period, and the failure is silent. Measured, ``Sphere(0.25)`` at ``(0.11, -0.07, 0.03)``
+    with ``period=(1, 1, 1)`` over a 20^3 cell::
+
+        centre + 0 periods in x     V = 0.06610338
+        centre + 1 period           V = 0.06610338    worst |dfill| 4.3e-15
+        centre + 2 periods          V = 0.00000000    worst |dfill| 1.00
+        centre + 2 periods, rings=(2, 1, 1)   V = 0.06610338
+
+    This function is given a period and an array of points and is never told where the cell's
+    origin is, so it cannot fold a body it also cannot ask for a position (a CSG node has none).
+    C2 owns the cell and therefore owns the fold; what is enforceable here is the statement, and
+    ``tests/test_fd_shapes.py::test_the_ring_is_periodic_in_the_body_for_one_period_only`` pins
+    both halves of it so the precondition cannot be forgotten silently.
     """
     xp = array_namespace(points)
     fill = area = moment = None
