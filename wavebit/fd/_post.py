@@ -407,17 +407,20 @@ def medium_at(scene, grid, P, cells, where):
     that covers the whole layer -- and the layers must agree. Structures are applied in order,
     so a partial Box overwritten by a later full layer is fine.
     """
-    from .geometry import cell_box
     from .materials import Conductor, Dispersive, as_material, concrete
     background = as_material(scene.background, 'Scene(background=)')
     owners = set()
     for k in cells:
         owner, partial = None, False
         for index, s in enumerate(scene.structures):
-            box = cell_box(s.shape, grid)
+            box = s.shape.support(grid)        # anything that may reach this cell layer
             if not box[P][0] <= k < box[P][1]:
                 continue
-            full = all(box[a] == (0, grid.n[a]) for a in range(3) if a != P)
+            # "Fills the layer" is uniformity across both transverse axes, not a bounding
+            # box: a shape whose surface curves through the layer leaves it two media, which
+            # is exactly the ``partial`` branch below.
+            full = all(s.shape.uniform_along(a, (0, grid.n[a]), grid)
+                       for a in range(3) if a != P)
             if full:
                 owner, partial = index, False
             else:

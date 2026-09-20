@@ -41,7 +41,6 @@ import math
 import warnings
 
 from ..diagnostics import AbsorberProximityWarning, CoarseMeshWarning, PMLStabilityWarning
-from ..geometry import cell_box, describe, slab_axis
 from ..materials import Conductor, Dispersive, concrete, eps_at
 
 __all__ = ['face_wavelength', 'check_faces', 'check_overlaps', 'check_absorbing_layers',
@@ -170,7 +169,7 @@ def check_overlaps(scene, grid):
     the two spellings that work.
     """
     structures = tuple(getattr(scene, 'structures', ()) or ())
-    boxes = [cell_box(s.shape, grid) for s in structures]
+    boxes = [s.shape.support(grid) for s in structures]
     for i in range(len(structures)):
         for j in range(i + 1, len(structures)):
             if not _intersects(boxes[i], boxes[j]):
@@ -180,8 +179,8 @@ def check_overlaps(scene, grid):
                 continue
             which = f'structures[{i}]' if kinds[0] else f'structures[{j}]'
             raise ValueError(
-                f'structures[{i}] ({describe(structures[i].shape)}) and '
-                f'structures[{j}] ({describe(structures[j].shape)}) '
+                f'structures[{i}] ({structures[i].shape.describe()}) and '
+                f'structures[{j}] ({structures[j].shape.describe()}) '
                 f'share cells, and {which} is an fd.Dispersive. Where structures overlap a '
                 f'later one overwrites an earlier one, but that rule is carried by the '
                 f'permittivity map alone: a pole term runs over its own structure\'s whole '
@@ -196,9 +195,11 @@ def check_overlaps(scene, grid):
 def _intersects(left, right):
     """Whether two cell boxes ``((i0, i1), (j0, j1), (k0, k1))`` share a cell.
 
-    A Slab's box is full on its two other axes (``geometry.cell_box``), so two slabs on
-    different axes always intersect, as stage 1 said; a Box is snapped on all three. A span
-    that snapped to nothing was already refused where it was snapped.
+    The boxes are supports (``Shape.support``): the cells each shape may touch, which is the
+    right question here because an overlap the refusal misses is the silent outcome. A Slab's
+    support is full on its two other axes, so two slabs on different axes always intersect, as
+    stage 1 said; a Box is snapped on all three. A span that snapped to nothing was already
+    refused where it was snapped.
     """
     return all(a0 < b1 and b0 < a1 for (a0, a1), (b0, b1) in zip(left, right))
 
@@ -239,19 +240,21 @@ def check_absorbing_layers(scene, plan):
         a, side = 'xyz'.index(name[0]), name[1]
         layer = (0, cells) if side == '-' else (grid.n[a] - cells, grid.n[a])
         for index, structure in enumerate(getattr(scene, 'structures', ()) or ()):
-            box = cell_box(structure.shape, grid)
-            k0, k1 = box[a]
+            k0, k1 = structure.shape.support(grid)[a]
             if k1 <= layer[0] or k0 >= layer[1]:
-                continue                          # nowhere near the layer
-            if k0 <= layer[0] and k1 >= layer[1]:
+                continue                          # its support cannot reach the layer
+            if structure.shape.uniform_along(a, layer, grid):
                 # Runs across this layer and is uniform along it (a slab on another axis,
                 # or a box that reaches through the face): no interface inside the layer,
-                # but its material is in there.
+                # but its material is in there.  The question is the shape's, not its
+                # bounding box's: a box spanning the layer says nothing about a shape whose
+                # surface curves through it, and the measured cost of that confusion is the
+                # 317x in this function's own docstring.
                 if kind == 'PML':
                     _refuse_lossy_in_layer(structure.material, name, f'structures[{index}]')
                 continue
             raise ValueError(
-                f'structures[{index}] ({describe(structure.shape)}, cells {k0}..{k1} along '
+                f'structures[{index}] ({structure.shape.describe()}, cells {k0}..{k1} along '
                 f'{name[0]}) ends inside the {kind} on {name!r} (cells '
                 f'{layer[0]}..{layer[1]}). An absorbing layer terminates the box; an '
                 f'interface inside one is a mirror the layer cannot undo, because the '
@@ -602,12 +605,19 @@ def _proximity_notes(scene, plan):
         if n is None or n <= 0:
             continue
         clearance = 0.5 * wavelength / n
-        box = cell_box(structure.shape, grid)
+        box = structure.shape.support(grid)
         for name, cells in plan.absorbing_faces:
             fa, side = 'xyz'.index(name[0]), name[1]
             k0, k1 = box[fa]
-            if (k0, k1) == (0, grid.n[fa]) and slab_axis(structure.shape) != fa:
-                continue                # a transverse face: the structure runs through it
+            if (structure.shape.uniform_along(fa, (0, grid.n[fa]), grid)
+                    and structure.shape.layer_axis() != fa):
+                # A transverse face: the structure runs through it with no face of its own in
+                # the way, so the clearance it would be measured against is its own thickness.
+                # The ``layer_axis`` half keeps a layer *across this very axis* out of the
+                # skip even where its span happens to fill the box -- a scene that meant
+                # ``Scene(background=)``; stage 1 printed the note for it and C0 moves no
+                # number, so it still does.
+                continue
             lo = grid.low[fa] + k0 * grid.dx
             hi = grid.low[fa] + k1 * grid.dx
             inner = (grid.low[fa] + cells * grid.dx if side == '-'

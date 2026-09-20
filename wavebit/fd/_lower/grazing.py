@@ -202,7 +202,6 @@ import math
 import numpy as np
 
 from ..boundaries import AXES, Axis1D, Bloch, PML, Periodic
-from ..geometry import cell_box
 from ..materials import as_material, concrete
 from .cpml import ALPHA_RELATIVE, ORDER, face_eps_r, spell, sufficient_stabilize
 from .layer_return import grid_k, layer_return
@@ -438,11 +437,13 @@ def _layer_media(scene, grid, P, side, cells):
     background = as_material(scene.background, 'Scene(background=)')
     owners = {}
     for index, s in enumerate(scene.structures):
-        box = cell_box(s.shape, grid)
+        box = s.shape.support(grid)                    # anything that may reach this layer
         if box[P][0] <= k < box[P][1]:
             owners[index] = s.material
+    # The background is one of the media unless some structure fills the whole cross-section
+    # of the layer: "fills it" is uniformity across both transverse axes, not a bounding box.
     media = [('the background', background)] if not any(
-        all(cell_box(scene.structures[i].shape, grid)[a] == (0, grid.n[a])
+        all(scene.structures[i].shape.uniform_along(a, (0, grid.n[a]), grid)
             for a in range(3) if a != P) for i in owners) else []
     media += [(f'structures[{i}]', m) for i, m in owners.items()]
     return [(label, m.index_bound()) for label, m in media]

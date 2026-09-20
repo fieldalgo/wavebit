@@ -359,7 +359,6 @@ def farfield_checks(monitor, scene, grid):
     around a TFSF box sees the scattered field alone; one cutting it sees a discontinuity).
     """
     from ..boundaries import Absorbing, Axis1D, Bloch, Periodic
-    from ..geometry import cell_box
     from ..sources import TFSF
     from .. import _post
     where = f'FarField({monitor.name!r})'
@@ -379,7 +378,7 @@ def farfield_checks(monitor, scene, grid):
                     f'a wall or a mirror would need image currents, which are not in this build.')
     lo, hi = _box_nodes(where, grid, monitor.box)
     for index, s in enumerate(scene.structures):
-        box = cell_box(s.shape, grid)
+        box = s.shape.support(grid)            # everything it may touch must be inside
         if not all(lo[a] + 1 <= box[a][0] and box[a][1] <= hi[a] - 1 for a in range(3)):
             raise ValueError(
                 f'{where}: structures[{index}] (cells {tuple(tuple(r) for r in box)}) is not '

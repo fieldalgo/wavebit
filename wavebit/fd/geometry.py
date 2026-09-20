@@ -32,11 +32,37 @@ The snapping rule, written once: with the grid's low corner ``lo`` and cell size
 clipped to ``[0, n]``, and the structure occupies cells ``k0 .. k1 - 1``. A slab whose two
 boundaries snap to the same cell boundary is refused: it asked for a layer and would have
 got nothing, which is the one snapping outcome a reader cannot see in a result.
+
+**What a shape is asked, and by whom.** Until this commit there was one function,
+``cell_box(shape, grid)``, and nine call sites read it. They were not asking one question.
+Sorted by what they do with the answer, they were asking three:
+
+* *which cells does this material fill?* -- the lowering itself
+  (``coefficients.owner_map``), which paints an owner index over them;
+* *which cells may this shape touch?* -- every containment, clearance and overlap test
+  (``check_overlaps``, ``_proximity_notes``, ``_check_scatterer``, ``FarField``'s
+  containment, the pole term's region, ``grazing._layer_media``, ``medium_at``);
+* *is this shape uniform along an axis over these cell layers?* -- i.e. does it put an
+  interface in there (``checks.check_absorbing_layers``, and the "fills the whole cell
+  layer" halves of ``medium_at`` and ``_layer_media``).
+
+On a cell-snapped :class:`Slab` or :class:`Box` all three have the same answer, which is why
+one function served them; on the first shape whose edge is not a cell boundary they differ,
+and a caller reading the wrong one is silent. A sphere whose *bounding box* spans an
+absorbing layer would be waved through the refusal in ``check_absorbing_layers``, and that
+case is measured at 1.9e-1 reflection against 6.0e-4 -- 317x (``tests/test_fd_absorber.py``).
+So :class:`Shape` names the three questions separately, plus the four dispatches that used to
+be written ``isinstance(shape, Slab) ... else assume it is a Box``: :meth:`Shape.layer_axis`,
+:meth:`Shape.bounded_axes`, :meth:`Shape.describe`, :meth:`Shape.span_rows`. Every one of
+them is answered by the shape and none of them has an "else" that guesses.
+
+``cell_box`` is deleted rather than kept beside the protocol: nothing in ``wavebit.fd`` is
+released, so a retired name goes outright (see ``docs/`` and the ``fourier_type``/``combine=``
+precedents) -- a second spelling of "which cells" is exactly the ambiguity this replaces.
 """
 from ._spec import spec, static_float
 
-__all__ = ['Slab', 'Structure', 'Box', 'Plane', 'AXES', 'cell_box', 'slab_axis', 'bounded_axes',
-           'describe', 'span_rows']
+__all__ = ['Shape', 'Slab', 'Structure', 'Box', 'Plane', 'AXES']
 
 #: The three axes in the order the public API spells a triple.
 AXES = ('x', 'y', 'z')
@@ -49,8 +75,122 @@ _LATER_SHAPES = {
 }
 
 
+class Shape:
+    """What a structure's shape is asked, and the only place those questions are named.
+
+    Eight methods, and the module docstring says which caller asks which. Seven of them have
+    no default: a shape that does not answer one is refused **by name**, at the call site, and
+    never silently treated as something else. That is the whole point of the class. The one
+    default is :meth:`layer_axis`, whose honest answer for anything that is not a layer is
+    ``None``, and whose ``None`` makes every reader take the conservative branch.
+
+    ``support``, ``filled_cells``, ``uniform_along``, ``bounded_axes``, ``min_extent`` and
+    ``span_rows`` are **static**: they decide cell ranges, array shapes and report rows, so
+    they are part of the plan and its skeleton and cannot depend on a traced value.
+    """
+
+    def _unanswered(self, method, question):
+        return NotImplementedError(
+            f'{type(self).__name__}.{method}() is not implemented: {question} '
+            f'fd.Shape names one question per method so that no caller has to guess from '
+            f'the type, and a shape that does not answer one is refused here rather than '
+            f'read as a Slab or a Box.')
+
+    # -- the three questions ``cell_box`` used to answer at once ------------------------------
+
+    def support(self, grid):
+        """``((i0, i1), (j0, j1), (k0, k1))``: every cell this shape **may** touch.
+
+        The static integer bounding box, half-open per axis, clipped to the grid. It is an
+        over-estimate for a shape with a fractional edge and exact for a cell-snapped one.
+        Read by every containment, clearance and overlap question -- the ones whose right
+        answer is "no" only when the shape cannot reach at all.
+        """
+        raise self._unanswered('support', 'which cells it may touch is unknown.')
+
+    def filled_cells(self, grid):
+        """``((i0, i1), ...)``: the cells this shape's material fills **wholly**.
+
+        Only a cell-snapped shape has such a box, and it is the one ``coefficients.owner_map``
+        paints. A shape with a fractional edge has no answer in this form -- its answer is a
+        fill fraction per component per cell -- and refuses, which is what makes the caller
+        that must change when such a shape arrives a single, named one.
+        """
+        raise self._unanswered(
+            'filled_cells', 'the cells it fills outright are unknown -- a shape whose edge is '
+            'not a cell boundary fills cells fractionally and has no such box.')
+
+    def uniform_along(self, axis, cells, grid):
+        """Whether this shape puts **no interface** inside cell layers ``range(*cells)``.
+
+        ``axis`` is 0, 1 or 2 and ``cells`` is the half-open ``(lo, hi)`` layer range along it.
+        True means the medium this shape makes does not change anywhere across those layers:
+        it either runs straight through them or is uniform along that axis there.
+
+        This, and not a bounding box, is what ``checks.check_absorbing_layers`` asks -- a
+        structure that *ends* inside an absorbing layer is a mirror the layer cannot undo, and
+        a bounding box that spans the layer says nothing about whether the shape does.
+        """
+        raise self._unanswered(
+            'uniform_along', 'whether it puts an interface inside a range of cell layers is '
+            'unknown.')
+
+    # -- the dispatches that used to be ``isinstance(shape, Slab) ... else assume a Box`` -----
+
+    def layer_axis(self):
+        """The axis index (0, 1, 2) this shape is a **layer** across, or ``None``.
+
+        A layer runs the whole box on its other two axes, so it is part of the one-dimensional
+        background a ``TFSF`` column is built from and it is what ``sources`` selects on.
+        ``None`` -- the default, and the answer for everything that is not a :class:`Slab` --
+        means "not a layer", and every reader's ``None`` branch is the conservative one: the
+        shape is a scatterer, kept out of the column and never waved past a face.
+        """
+        return None
+
+    def bounded_axes(self, grid):
+        """The axes along which this shape varies the medium, as a tuple of indices.
+
+        ``coefficients.varying_axes`` unions these to decide which axes a coefficient array
+        is broadcast along, so this fixes array shapes and therefore the skeleton. It is not
+        derived from :meth:`uniform_along`: a :class:`Slab` names its own axis even where its
+        span happens to cover the whole box, and that difference is a frozen array shape.
+        """
+        raise self._unanswered('bounded_axes', 'which axes it varies the medium along is '
+                                               'unknown.')
+
+    def describe(self):
+        """A short spelling of this shape for a refusal or a warning, e.g. ``z=(-0.2, 0.0)``.
+
+        Every refusal that names a structure prints this. It has no default because a default
+        would print one shape's spelling for another's -- the exact defect this protocol
+        replaces, where a sphere would have been described as ``Box(size=..., center=...)``.
+        """
+        raise self._unanswered('describe', 'it has no spelling for a message.')
+
+    def span_rows(self, grid):
+        """The report's ``(label, lo, hi, snapped lo, snapped hi)`` rows for this shape.
+
+        They go into ``Plan.spans`` and so into the skeleton and every frozen archive, which
+        is why the labels are part of the shape's contract and not the reporter's guess.
+        """
+        raise self._unanswered('span_rows', 'it has no report rows.')
+
+    # -- what the grid has to resolve ---------------------------------------------------------
+
+    def min_extent(self):
+        """The shortest **bounded** side of this shape, in the scene's length unit.
+
+        The smallest feature the grid has to resolve. Stage 4's "too few cells across" refusal
+        (C5) is the reader; it is on the protocol from the start so that every shape answers
+        it in the same units as its own lengths, rather than the refusal reconstructing it
+        per type.
+        """
+        raise self._unanswered('min_extent', 'its smallest side is unknown.')
+
+
 @spec
-class Slab:
+class Slab(Shape):
     """A layer: one axis named as ``(lo, hi)``, the other two running the whole box.
 
     ``fd.Slab(z=(-0.2, 0.0))`` is a layer 0.2 thick whose faces are at ``z = -0.2`` and
@@ -122,6 +262,48 @@ class Slab:
         k0, k1 = self.cells(grid)
         return (grid.low[a] + k0 * grid.dx, grid.low[a] + k1 * grid.dx)
 
+    # -- the protocol (see :class:`Shape`) ----------------------------------------------------
+
+    def support(self, grid):
+        """Its snapped cells on :attr:`axis`, the whole box on the other two."""
+        out = [(0, grid.n[0]), (0, grid.n[1]), (0, grid.n[2])]
+        out[AXES.index(self.axis)] = self.cells(grid)
+        return tuple(out)
+
+    def filled_cells(self, grid):
+        """The same box as :meth:`support`: a slab is cell-snapped, so it fills it outright."""
+        return self.support(grid)
+
+    def uniform_along(self, axis, cells, grid):
+        """True across its own axis only where its snapped cells cover ``cells`` entirely.
+
+        On the other two axes it is uniform everywhere -- it runs the whole box there, so no
+        range of layers along them holds a face of it.
+        """
+        if axis != AXES.index(self.axis):
+            return True
+        k0, k1 = self.cells(grid)
+        return k0 <= cells[0] and k1 >= cells[1]
+
+    def layer_axis(self):
+        return AXES.index(self.axis)
+
+    def bounded_axes(self, grid):
+        """Its own axis, always -- see :meth:`Shape.bounded_axes` for why not the derived set."""
+        return (AXES.index(self.axis),)
+
+    def describe(self):
+        return f'{self.axis}={self.span}'
+
+    def span_rows(self, grid):
+        """One row, labelled by its axis, exactly as stage 1 printed it."""
+        return ((self.axis,) + tuple(self.span) + tuple(self.snapped(grid)),)
+
+    def min_extent(self):
+        """Its thickness: the one side it bounds, and so the only one a grid has to resolve."""
+        lo, hi = self.span
+        return hi - lo
+
 
 _slab_init = Slab.__init__
 
@@ -153,6 +335,11 @@ class Structure:
     lamellar grating is a Box spanning one transverse axis, a crossed pillar grating a Box
     spanning neither). Every other shape is stage 4.
 
+    The door is ``isinstance(shape, Shape)``, and :class:`Slab` and :class:`Box` are the only
+    two :class:`Shape` in the package: a stage-4 shape gets in by answering that protocol and
+    nothing else here moves. A :class:`Plane` is a monitor's region and not a shape, so this
+    same door refuses it.
+
     Structures are applied **in the order they are given**, so a later one overwrites an
     earlier one where they overlap -- the layer-stack rule, and the only overlap rule stage 1
     needs. ``check`` prints the snapped span of each.
@@ -163,7 +350,7 @@ class Structure:
 
     def __post_init__(self):
         from .materials import as_material
-        if not isinstance(self.shape, (Slab, Box)):
+        if not isinstance(self.shape, Shape):
             raise TypeError(
                 f'Structure(shape=...): the shapes are fd.Slab(z=(lo, hi)) and, from stage 3, '
                 f'the cell-snapped fd.Box(size=..., center=...); got '
@@ -173,7 +360,7 @@ class Structure:
 
 
 @spec
-class Box:
+class Box(Shape):
     """An axis-aligned box, ``fd.Box(size=(sx, sy, sz), center=(cx, cy, cz))``.
 
     Three uses, one object: the region of an :class:`~wavebit.fd.TFSF` source (stage 2), the
@@ -243,6 +430,43 @@ class Box:
         return (tuple(grid.low[a] + cells[a][0] * grid.dx for a in range(3)),
                 tuple(grid.low[a] + cells[a][1] * grid.dx for a in range(3)))
 
+    # -- the protocol (see :class:`Shape`) ----------------------------------------------------
+
+    def support(self, grid):
+        """Its snapped cells on all three axes."""
+        return self.cells(grid)
+
+    def filled_cells(self, grid):
+        """The same box as :meth:`support`: a box is cell-snapped, so it fills it outright."""
+        return self.cells(grid)
+
+    def uniform_along(self, axis, cells, grid):
+        """True where its snapped cells on ``axis`` cover ``cells`` entirely.
+
+        A box clipped to the domain on an axis covers every range along it, which is how a
+        lamellar grating's uniform axis reaches through an absorbing face.
+        """
+        k0, k1 = self.cells(grid)[axis]
+        return k0 <= cells[0] and k1 >= cells[1]
+
+    def bounded_axes(self, grid):
+        """The axes it does not span the whole box along -- the ones it actually cuts."""
+        return tuple(a for a, (k0, k1) in enumerate(self.cells(grid))
+                     if (k0, k1) != (0, grid.n[a]))
+
+    def describe(self):
+        return f'Box(size={self.size}, center={self.center})'
+
+    def span_rows(self, grid):
+        """One row per axis, labelled ``box.x``, ``box.y``, ``box.z``."""
+        lo, hi = self.snapped(grid)
+        return tuple((f'box.{axis}', self.low[a], self.high[a], lo[a], hi[a])
+                     for a, axis in enumerate(AXES))
+
+    def min_extent(self):
+        """Its shortest side."""
+        return min(self.size)
+
 
 @spec
 class Plane:
@@ -295,47 +519,3 @@ class Plane:
         return getattr(self, AXES[a])
 
 
-def slab_axis(shape):
-    """The axis index (0 = x, 1 = y, 2 = z) a :class:`Slab` bounds, or ``None`` for a Box."""
-    return AXES.index(shape.axis) if isinstance(shape, Slab) else None
-
-
-def cell_box(shape, grid):
-    """``((i0, i1), (j0, j1), (k0, k1))``: the cells a structure's shape occupies, per axis.
-
-    A :class:`Slab` runs the whole box on its two other axes; a :class:`Box` is snapped on
-    all three. One rule, so every check that asks "which cells" asks it here.
-    """
-    if isinstance(shape, Box):
-        return shape.cells(grid)
-    out = [(0, grid.n[0]), (0, grid.n[1]), (0, grid.n[2])]
-    out[AXES.index(shape.axis)] = shape.cells(grid)
-    return tuple(out)
-
-
-def bounded_axes(shape, grid):
-    """The axes along which ``shape`` varies the medium: a Slab's own; a Box's cut ones."""
-    if isinstance(shape, Slab):
-        return (AXES.index(shape.axis),)
-    return tuple(a for a, (k0, k1) in enumerate(shape.cells(grid)) if (k0, k1) != (0, grid.n[a]))
-
-
-def describe(shape):
-    """A short spelling of ``shape`` for a message: ``z=(lo, hi)`` or ``Box(size, center)``."""
-    if isinstance(shape, Slab):
-        return f'{shape.axis}={shape.span}'
-    return f'Box(size={shape.size}, center={shape.center})'
-
-
-def span_rows(shape, grid):
-    """The report's ``(label, lo, hi, snapped lo, snapped hi)`` rows for one structure.
-
-    A Slab gives one row labelled by its axis, exactly as stage 1 printed it (the rows are in
-    the plan and its skeleton, so a Slab scene's skeleton does not move); a Box gives one row
-    per axis, labelled ``box.x``, ``box.y``, ``box.z``.
-    """
-    if isinstance(shape, Slab):
-        return ((shape.axis,) + tuple(shape.span) + tuple(shape.snapped(grid)),)
-    lo, hi = shape.snapped(grid)
-    return tuple((f'box.{axis}', shape.low[a], shape.high[a], lo[a], hi[a])
-                 for a, axis in enumerate(AXES))

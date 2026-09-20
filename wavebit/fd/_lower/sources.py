@@ -41,7 +41,6 @@ import numpy as np
 from wavebit._core.backend import check_input_precision
 
 from ..boundaries import AXES, PML_CELLS, Absorbing, Axis1D, Bloch, Periodic, PML
-from ..geometry import cell_box, describe, slab_axis
 from ..materials import Dispersive, as_material, concrete
 from ..sources import Dipole, PlaneWave, TFSF, _is_complex
 from .._kernel.grid import OFFSETS
@@ -189,8 +188,14 @@ def _node_index(grid, axis, position):
 
 
 def _structure_cells(structure, grid):
-    """``(slab axis or None, cell box)`` of a structure: its axis if a Slab, and its cells."""
-    return slab_axis(structure.shape), cell_box(structure.shape, grid)
+    """``(layer axis or None, support)``: the axis it is a layer across, and the cells it may touch.
+
+    The support and not the filled cells, because both readers -- the slab-crosses-the-TFSF-
+    faces refusal and :func:`_check_scatterer` -- are asking whether the structure can change
+    the medium anywhere on the box's surface, where the incident field came from a 1-D column
+    that knows only the background. A cell the shape merely clips is already wrong there.
+    """
+    return structure.shape.layer_axis(), structure.shape.support(grid)
 
 
 def _plane_wave_term(scene, plan, src, row):
@@ -419,7 +424,7 @@ def _tfsf_term(scene, plan, src, row):
                 f'surface. A slab across {AXES[P]} is part of that background and may cross '
                 f'the box; a finite scatterer is an fd.Box structure clear of its faces '
                 f'(stage 3; every other shape is a stage-4 shape).')
-    layered = any(slab_axis(s.shape) == P for s in scene.structures)
+    layered = any(s.shape.layer_axis() == P for s in scene.structures)
     driver, sheet = None, ()
     # The one read upstream of the entry plane: the tangential H half a cell outside it,
     # which the E face on the entry side reads. In a layered column that half cell is
@@ -473,7 +478,7 @@ def _check_scatterer(src, index, structure, box, lo, hi):
     if inside or outside:
         return
     raise ValueError(
-        f'structures[{index}] ({describe(structure.shape)}, cells '
+        f'structures[{index}] ({structure.shape.describe()}, cells '
         f'{tuple(tuple(r) for r in box)}) touches the surface of TFSF({src.name!r}) (nodes '
         f'{tuple(lo)}..{tuple(hi)}). The incident field on the box\'s faces comes from a 1-D '
         f'grid whose background is the slabs across the propagation axis, so a scatterer must '
@@ -503,7 +508,7 @@ def _tfsf_driver(scene, src, grid):
     cells = range(0, lo[P]) if src.sign > 0 else range(hi[P], grid.n[P])
     owners = set()
     spans = [(i, s, s.shape.cells(grid)) for i, s in enumerate(scene.structures)
-             if slab_axis(s.shape) == P]
+             if s.shape.layer_axis() == P]
     for j in cells:
         owner = None
         for i, _, (c0, c1) in spans:                # a later structure overwrites
@@ -623,7 +628,7 @@ def column_scene(scene, src, plan, role='column'):
     if role == 'driver':
         background = _tfsf_driver(scene, src, grid)
     elif isinstance(src, TFSF):
-        structures = tuple(s for s in scene.structures if slab_axis(s.shape) == P)
+        structures = tuple(s for s in scene.structures if s.shape.layer_axis() == P)
     return scene_module.Scene(
         domain=scene_module.Domain(size=tuple(size), center=tuple(center)),
         boundaries=Boundaries(**faces), resolution=scene_module.Resolution(dx=grid.dx),

@@ -48,7 +48,6 @@ import json
 import math
 
 from ..boundaries import FACES, Absorbing, Axis1D, Bloch, PML
-from ..geometry import cell_box, span_rows
 from ..materials import Dispersive
 from ..monitors import Record
 from .._kernel.cpml import CpmlFace, StabilizedFace
@@ -271,7 +270,11 @@ def _pole_terms(scene, grid):
     for index, structure in enumerate(getattr(scene, 'structures', ()) or ()):
         if not isinstance(structure.material, Dispersive):
             continue
-        box = cell_box(structure.shape, grid)
+        # The support and not the filled cells: the region is where the pole's own state
+        # array lives and where ``drive`` is applied, so it has to hold every cell the shape
+        # reaches. What fraction of each of those cells the shape actually fills is the
+        # coefficients' business (stage 4, C2), not the region's.
+        box = structure.shape.support(grid)
         region = Region(z=tuple(box[2]), y=tuple(box[1]), x=tuple(box[0]))
         slabs = tuple(Slab(c=c, z=region.z, y=region.y, x=region.x) for c in range(3))
         terms.append(PoleTerm(name=f'poles[{index}]', region=region, slabs=slabs,
@@ -324,7 +327,7 @@ def plan(scene, _column=False, _grazing=None):
     initial = scene.initial
     cpml, absorbing, pml_cells, absorber_cells, wavelengths = _absorbing(scene, grid)
     spans = tuple(row for s in (getattr(scene, 'structures', ()) or ())
-                  for row in span_rows(s.shape, grid))
+                  for row in s.shape.span_rows(grid))
     p = Plan(nx=grid.n[0], ny=grid.n[1], nz=grid.n[2], dx=grid.dx, dt=dt,
              steps=steps, courant=scene.run.courant, low=grid.low,
              face_rules=tuple(rules), pads=tuple(pads), masks=tuple(masks),

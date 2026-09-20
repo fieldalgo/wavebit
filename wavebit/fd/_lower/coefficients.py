@@ -44,7 +44,6 @@ wavelength and ``eps_at`` all read ``eps``.
 import numpy as np
 
 from .._kernel.grid import OFFSETS
-from ..geometry import bounded_axes, cell_box
 from ..materials import as_material
 from .cpml import damping_profile
 
@@ -65,7 +64,7 @@ def varying_axes(scene, plan):
     axes = set()
     _, structures = materials_of(scene)
     for s in structures:
-        axes.update(bounded_axes(s.shape, plan.grid))
+        axes.update(s.shape.bounded_axes(plan.grid))
     for name, cells in plan.absorber_cells:
         axes.add('xyz'.index(name[0]))
     return axes
@@ -83,13 +82,20 @@ def owner_map(scene, plan, axes):
 
     Cell-snapped, so the same cell range serves all six components -- see ``geometry.py`` for
     why that is one rule and not six, and why it is the inaccurate choice it says it is.
+
+    This is the **only** reader of ``Shape.filled_cells``, and that is on purpose: it is the
+    one place where "which cells may this shape touch" is the wrong question, because a cell
+    the shape only partly fills would be painted as if the shape owned all of it. A shape with
+    a fractional edge has no such box and refuses here by name, so the caller that has to
+    change when one arrives is this one and no other (stage 4, C2, which replaces the owner
+    index with a per-component fill).
     """
     _, structures = materials_of(scene)
     shape = _shape(plan, axes)[1:]
     owner = np.full(shape, -1, dtype=np.int32)
     grid = plan.grid
     for k, s in enumerate(structures):
-        box = cell_box(s.shape, grid)
+        box = s.shape.filled_cells(grid)
         index = [slice(None)] * 3
         for a in axes:
             index[ARRAY_AXIS[a] - 1] = slice(*box[a])
