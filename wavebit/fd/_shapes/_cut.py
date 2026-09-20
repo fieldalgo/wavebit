@@ -172,11 +172,20 @@ def _unit(n, xp):
     The check is a single reduction over the array and one host read, so it is skipped under
     ``jax.jit`` (there is no value) and paid once per call everywhere else. ``_bodies.Body.plane``
     goes to :func:`_parts` instead and never pays it: the bodies construct a unit normal.
+
+    **The test is written as the complement on purpose.** ``worst > 1e-9`` is ``False`` for a
+    NaN, so the first writing let a non-finite normal straight through: measured on the exported
+    spelling, ``n = (nan, nan, nan)`` with ``d = 0.01`` read ``fill = nan`` with
+    ``sum_c w_c = 0`` -- which is exactly what a door exists to stop, and exactly what a broken
+    upstream hands one. ``~(worst <= 1e-9)`` refuses it, and the tolerance is dimensionless
+    because ``|n|`` is (memory: a predicate compared against an absolute floor is a predicate
+    about the coordinate unit).
     """
-    worst = _concrete(xp.max(xp.abs(xp.sum(n * n, axis=-1) - 1)) > 1e-9)
+    worst = _concrete(~(xp.max(xp.abs(xp.sum(n * n, axis=-1) - 1)) <= 1e-9))
     if worst:
-        raise ValueError('cut(n=...): n must be the unit outward normal, one per point; the '
-                         'worst |n| here is off one by more than 1e-9. The plane is '
+        raise ValueError('cut(n=...): n must be the unit outward normal, one per point, and '
+                         'finite; the worst |n| here is off one by more than 1e-9 or is not a '
+                         'number. The plane is '
                          'n.(x - centre) <= -d, so scaling n rescales the offset too and the '
                          'fill is silently wrong (measured: 0.450 against a true 0.400 at '
                          '|n| = 2), and w stops summing to one.')

@@ -136,8 +136,16 @@ def clip_capacity(nv, convex):
     The choice is therefore made **statically**, at the body's constructor, from concrete
     vertices (``_bodies._Polygonal``); a polygon whose vertices cannot be read -- a ``jax.jit``
     tracer -- gets the simple bound, which is correct for both. The price of the simple bound is
-    the argsort over ``2 cap`` slots per clip; measured for a hexagonal prism over 110592 voxels
-    it is the difference recorded in ``tests/test_fd_shapes.py``'s module docstring.
+    the argsort over ``2 cap`` slots per clip, in time *and in memory*; measured for a hexagonal
+    prism over 110592 voxels it is the difference recorded in ``tests/test_fd_shapes.py``'s
+    module docstring, where the memory column is the one that decides how C2 must chunk.
+
+    **The promise that sizes this buffer has to be free of the coordinate scale**, and the first
+    writing's was not: the turn test compared a cross product against an absolute floor, so the
+    same star in metres was called convex, took ``nv + 4`` and overflowed it -- the three
+    answers above, from the same body in a different unit. ``_bodies._TURN_SINE`` is now a sine,
+    and ``tests/test_fd_shapes.py::test_every_geometric_predicate_is_free_of_the_coordinate_scale``
+    sweeps fifteen decades.
     """
     if convex:
         return nv + 4

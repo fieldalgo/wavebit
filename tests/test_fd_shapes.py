@@ -55,6 +55,19 @@ fail, and reverted:
     the non-positive-length refusal removed                            1
     the counter-clockwise refusal removed                              1
     `cut`'s unit-normal refusal removed                                1
+    the convexity tolerance written as an ABSOLUTE floor               1
+    `clipped_polygon_area`'s `convex=` default flipped to True         1
+    the cap interval closed at both ends instead of half open          1
+    Liang-Barsky's parallel tolerance loosened to `1e-6 L`             1
+    `isfinite` weakened to `~isnan` (an infinite length passes)        1
+    `_unit`'s test left as `worst > 1e-9` (a NaN normal passes)        1
+    `readable` returning None for a torch.func value                   1
+    a traced parameter on a CSG node accepted                          1
+
+The last eight are this round's, and six of them are mutants that **survived** the previous
+gate. The first of those decided the round: the convexity tolerance as shipped *was* absolute
+below unit scale, so the mutant spelling it that way was behaviourally identical to the code and
+passed all 45 tests -- the gate was holding the classifier at one coordinate scale only.
 
 The second one is worth reading twice: removing the guards leaves ``0/0`` in a branch that
 ``xp.where`` never selects, so **every forward value is still right** and only two tests go
@@ -69,33 +82,42 @@ refuses rather than returning a silently wrong number" is worth: each is one lin
 it takes exactly one test with it, which is the point.
 
 **The cost, measured on this machine** (2026-09-21, CPU, 6 cores, ``OMP_NUM_THREADS=2``), for
-one component of a 48^3 support box at ``dx = 0.0125`` -- 110592 voxels, which is a sphere of
-20 cells of radius with room around it:
+one component of a 48^3 support box at ``dx = 0.0125`` -- 110592 voxels (2.53 MiB of points),
+which is a sphere of 20 cells of radius with room around it. The memory column is the NumPy
+peak from ``tracemalloc``, and it belongs beside the time column because it is the one that
+decides whether C2 may call ``occupancy`` on a whole component at once:
 
-    body                          numpy     jax (jit)     torch
-    Sphere (exact ball)          715.6 ms    35.3 ms    141.0 ms
-    Sphere (plane, for scale)     34.9 ms       --          --
-    Cylinder (exact disc)         57.7 ms     5.1 ms     30.6 ms
-    Difference (CSG, plane)       43.4 ms     4.9 ms     18.0 ms
-    Prism, hexagon (convex cap)  1214.9 ms   145.8 ms   833.6 ms
-    Prism, 6-point star          6778.3 ms  1299.7 ms  6175.8 ms
+    body                          numpy     jax (jit)     torch     numpy peak
+    Sphere (exact ball)          785.8 ms    40.2 ms    266.2 ms      33.0 MiB
+    Sphere (plane, for scale)     53.9 ms       --          --        23.3 MiB
+    Cylinder (exact disc)         83.5 ms     5.8 ms     44.3 ms      24.2 MiB
+    Box                         1260.9 ms   131.0 ms    978.4 ms     191.6 MiB
+    Difference (CSG, plane)       61.4 ms     5.6 ms     25.6 ms      23.3 MiB
+    Prism, hexagon (convex cap) 1564.6 ms   175.5 ms   1158.9 ms     236.7 MiB
+    Prism, 6-point star         8875.2 ms  1706.6 ms   9131.4 ms    1365.3 MiB
 
-Two prices are visible and both were paid deliberately. The exact ball costs **20x** the
+Two prices are visible and both were paid deliberately. The exact ball costs **15x** the
 tangent plane, because the eight corner primitives hold 48 wedge integrals and about 144
 ``atan2`` calls between them, against the disc clip's four; it removes a ``+0.250 (h/R)^2``
 volume bias from the one body stage 4 is graded on, and it is a setup cost paid once per
-component and not per step. The star prism costs **5.6x** the hexagon at the same vertex count
-class, because a simple polygon needs a clip buffer of 60 slots where a convex one needs 16
-(``_exact.clip_capacity``); the alternative measured on the same input is NumPy raising,
-JAX returning NaN and Torch returning a number wrong by 20.8%.
+component and not per step. The star prism costs **5.7x** the hexagon in time and **5.8x** in
+memory at the same vertex-count class, because a simple polygon needs a clip buffer of 60 slots
+where a convex one needs 16 (``_exact.clip_capacity``); the alternative measured on the same
+input is NumPy raising, JAX returning NaN and Torch returning a number wrong by 20.8%.
+
+**The memory is the number C2 has to plan against, not the time.** The clip's working set is
+``(points, 2 cap, 2)`` float64 plus an ``int64`` argsort over the same, i.e. about
+``80 cap`` bytes per voxel per clip step, which at ``cap = 60`` is 4.8 kB of live temporaries
+for every voxel. 48^3 is 1/72 of a 200^3 grid, so a star prism called on a whole component at
+once would need of order **96 GiB** and even a hexagon of order 17 GiB. C2 must chunk
+``points`` -- this repository already carries the memory that a laptop *panics* rather than
+slows when it runs out. The bound ``n + n//2`` per clip is loose (the realised counts are 20 of
+60 and 28 of 81), and a tighter proof buys this back in the same proportion.
 
 The periodic ring multiplies all of it by the image count, as it must: on NumPy the sphere
 reads 33.9 ms with no ring, 289.2 ms over two periodic axes (9 images) and 819.5 ms over three
 (27), on the plane path those numbers were measured on. That is the price of the static
 ``rings=`` prune C2 will make from a declared ``range=``.
-Memory, NumPy, same box: 23.3 MB peak against 2.53 MB of points and 3.38 MB returned, i.e.
-about nine times the points -- roughly 21 live float64 temporaries per voxel, which is what an
-unfused NumPy expression of this length costs and what ``jax.jit`` fuses away.
 """
 import numpy as np
 import pytest
@@ -104,6 +126,8 @@ from wavebit.fd._shapes import (Box, Cylinder, Difference, Intersection, Prism, 
                                 clip_capacity, clipped_ball_volume, clipped_disc_area,
                                 clipped_polygon_area, cut, cut_parts, image_shifts, occupancy,
                                 polygon_edge_moments)
+from wavebit.fd._shapes._bodies import (_loud_if_not_a_size, _loud_if_not_counter_clockwise,
+                                        polygon_shape)
 from wavebit.fd._shapes._cut import _second_difference
 
 from fd_helpers import backends
@@ -375,6 +399,13 @@ def test_the_free_invariants_hold_on_every_body():
         assert live.sum() > 50, name
 
 
+#: The placements this file measures a *worst* over: the first twelve of the Halton cover, plus
+#: the four that read the worst gap in the 24-placement sweep below, named so that the gate runs
+#: the case the number is quoted from. A bound asserted over placements that do not include the
+#: worst one is a bound fitted to a sample.
+W_GAP_PLACEMENTS = np.concatenate([OFFSETS[:12], OFFSETS[[16, 22, 15, 1]]], axis=0)
+
+
 def test_w_vanishes_only_where_the_fill_is_already_decided():
     """The step in ``w`` at a voxel the mixing rule does not read ``w`` in -- and how far it is not.
 
@@ -387,35 +418,44 @@ def test_w_vanishes_only_where_the_fill_is_already_decided():
     where they do not: a body whose fill is a closed form and whose moment is the plane's can
     have the two disagree about whether a voxel is cut, because the plane misses a voxel once
     ``|d| > (sum_i |n_i| dx)/2`` while the true curved surface may still poke into a corner of
-    it. The first writing of this test asserted ``1e-6`` and quoted ``8.1e-08``, both read off
-    **one** cylinder; the C1 review moved that cylinder's centre by 0.012 and got 4.07e-4, and
-    changed its radius and got 1.09e-2. A bound fitted to one instance is a check that cannot
-    fail. So the bound here is measured over a *sweep*: 40 random sub-cell placements per
-    resolution, at 4, 8 and 16 cells of radius, worst gap from 0 or 1 over the ``w = 0`` voxels:
+    it.
 
-        body                                     R/h = 4    8         16
-        box, prism, CSG difference (one route)   1.4e-15  3.0e-15  5.7e-15
-        sphere    (exact ball, plane moment)     2.7e-03  6.9e-04  5.2e-04
-        cylinder  (exact disc, plane moment)     3.9e-02  4.0e-02  3.4e-02
+    **This bound has now been fitted twice and re-derived twice, and this is the sweep it comes
+    from.** The first writing asserted 1e-6 from one cylinder; the C1 review moved that
+    cylinder and read 1.09e-2. The second writing asserted 5e-3 for the sphere from six draws at
+    two resolutions, and the C1 review read 8.41e-3 from four hundred. Measured here over the
+    24-placement Halton cover at five resolutions, worst gap from 0 or 1 over the ``w = 0``
+    voxels (2026-09-21):
 
-    Read that as the honest statement of ``_cut.cut``'s docstring sentence: for a cylinder it is
-    **wrong in the second digit and does not shrink**, because it is the cap rim that lands
-    where it lands relative to the grid; for a sphere it is wrong in the third and does shrink.
-    The sphere's row is a cost this commit *introduced* along with ``Sphere.exact_fill`` -- with
-    the plane's fill it was 6.7e-16 -- and it was worth paying: the fill it replaced was biased
-    by ``+0.250 (h/R)^2`` in **every** voxel, 3.9e-3 of the whole volume at R/h = 8.
+        body         R/h = 4        6         8        12        16
+        box          1.44e-15  2.67e-15  2.44e-15  6.22e-15  5.66e-15
+        prism        1.11e-15  2.00e-15  1.44e-15  4.66e-15  3.33e-15
+        CSG          6.66e-16  8.88e-16  8.88e-16  8.88e-16  8.88e-16
+        sphere       1.16e-02  1.94e-03  2.54e-03  6.44e-04  5.55e-04
+        cylinder     3.26e-02  2.79e-02  2.93e-02  3.08e-02  2.53e-02
 
-    The remedy for both is the exact interface **area**, which the divergence theorem makes free
-    for both bodies (``3V = R S + sum_f d_f A_f`` for a ball, ``2A = R L + sum_e d_e l_e`` for a
-    disc), and which would make the area vanish exactly where the surface is absent without
-    touching the direction the plane supplies. It is not taken here because it costs six more
-    clipped-disc evaluations per voxel on a sphere whose exact fill already costs 20x the plane
-    (see this module's cost table), and because it is C2 that has to weigh a setup cost against
-    a coefficient in the third digit.
+    Three things in that table are not what the previous writing said. The sphere's worst at
+    four cells of radius is **1.16e-02** and not 5e-03, so it is not "a coefficient in the third
+    digit" -- it is the second, and the exact interface area that would remove it is worth more
+    to C2 than the last writing priced it at. The sphere does fall but **not monotonically**
+    (1.94e-03 at 6 against 2.54e-03 at 8), so "does shrink" is a trend and not a property. And
+    the one-route rows are **not** a resolution-free 1e-14: they grow with the grid, because
+    they are accumulated round-off in the clip and the overlap, measured 1.44e-15 / 2.11e-15 /
+    5.66e-15 / 1.30e-14 / 2.04e-14 for the box at R/h = 4, 8, 16, 24, 32. The CSG row, which is
+    one route in the *plane* and takes no clip, stays flat at 8.9e-16 across the same sweep --
+    which is what says the growth is the clip's and not the pairing's. So the bound asserted
+    here for those rows scales with ``R/h`` and the assertion at 32 cells would fail a constant.
+
+    The remedy for the sphere and the cylinder is the exact interface **area**, which the
+    divergence theorem makes free for both (``3V = R S + sum_f d_f A_f`` for a ball,
+    ``2A = R L + sum_e d_e l_e`` for a disc), and which would make the area vanish exactly where
+    the surface is absent without touching the direction the plane supplies. It is still not
+    taken here -- it is six more clipped-disc evaluations per voxel on a body whose exact fill
+    already costs 15x the plane -- but at 1.16e-2 it is C2's decision and not an afterthought.
     """
-    rng = np.random.default_rng(21)
-    bounds = {'box': 1e-14, 'prism': 1e-14, 'csg': 1e-14,
-              'sphere': 5e-3, 'cylinder': 8e-2}
+    bounds = {'box': lambda npr: 1e-15 * npr, 'prism': lambda npr: 1e-15 * npr,
+              'csg': lambda npr: 2e-15, 'sphere': lambda npr: 2e-2,
+              'cylinder': lambda npr: 5e-2}
     bodies = {
         'box': lambda R, c: Box((1.7 * R, 1.3 * R, 1.9 * R), c, 0.37),
         'prism': lambda R, c: Prism(HEX, 1.6 * R, 'z', c, 0.4),
@@ -424,22 +464,27 @@ def test_w_vanishes_only_where_the_fill_is_already_decided():
         'cylinder': lambda R, c: Cylinder(R, 1.6 * R, 'z', c),
     }
     R = 0.21
+    worst_of = {}
     for name, make in bodies.items():
-        for npr in (4, 8):
+        for npr in ((4, 8, 16) if name in ('sphere', 'cylinder') else (4, 8)):
             h = R / npr
             n = int(np.ceil(2.6 * R / h))
             pts = grid(n, -n * h / 2, h)
             worst, dead_total, live_total = 0.0, 0, 0
-            for _ in range(6):
-                fill, w = occupancy(make(R, tuple(rng.uniform(-0.6, 0.6, 3) * h)), pts, h)
+            for offset in W_GAP_PLACEMENTS:
+                fill, w = occupancy(make(R, tuple(offset * 1.2 * h)), pts, h)
                 dead = w.sum(-1) == 0
                 worst = max(worst, float(np.abs(np.minimum(fill[dead], 1 - fill[dead])).max()))
                 dead_total += int(dead.sum())
                 live_total += int((~dead).sum())
+            worst_of[name, npr] = worst
             assert dead_total > 100 and live_total > 100, name
-            assert worst < bounds[name], (name, npr, worst)
+            assert worst < bounds[name](npr), (name, npr, worst)
             if name in ('sphere', 'cylinder'):
                 assert worst > 1e-12, (name, npr, worst)   # the row is real, not a tolerance
+    # the two numbers the last writing got wrong, pinned so they cannot be understated again
+    assert worst_of['sphere', 4] > 5e-3, worst_of          # not "the third digit"
+    assert worst_of['cylinder', 16] > 1e-2, worst_of       # and the cylinder does not fall
 
 
 # ----------------------------------------------------------------------------------------
@@ -590,6 +635,15 @@ def test_a_non_convex_cross_section_is_the_same_number_on_three_backends():
     # and the whole body, through occupancy, on the input that used to raise
     star6 = Prism(star(6, 0.42, 0.10), 0.4, 'z', (0., 0., 0.), 0.)
     assert abs(float(occupancy(star6, np.zeros((1, 1, 3)), 0.5)[0][0, 0]) - 0.34210489) < 1e-7
+    # the exported clip's DEFAULT is the safe one, and a caller who does not think about
+    # `convex=` gets the correct answer. Nothing held that before: every call site in this file
+    # passed `convex=` explicitly, so flipping the default to True passed the whole gate while
+    # a bare call raised `IndexError: index 16 is out of bounds`.
+    verts = np.asarray(star(6, 0.42, 0.10))
+    one_box = (np.asarray([-0.2]), np.asarray([0.3]), np.asarray([-0.25]), np.asarray([0.35]))
+    bare = float(np.ravel(clipped_polygon_area(verts[None], *one_box, np))[0])
+    assert abs(bare - reference_clip(verts, -0.2, 0.3, -0.25, 0.35)[0]) < 1e-15, bare
+    assert bare > 1e-3
 
 
 def test_the_clip_buffer_holds_what_the_bound_says():
@@ -777,6 +831,18 @@ def test_the_ported_closed_forms_reproduce_the_rcwa_paths_own():
     verts = np.stack([ux * co - uy * si + cx[:, None], ux * si + uy * co + cy[:, None]], axis=-1)
     assert np.abs(clipped_polygon_area(verts, left, right, bottom, top, np)
                   - _clipped_rectangle_area(verts, left, right, bottom, top, xp=np)).max() == 0.0
+    # An edge 1e-9 rad from a voxel face, which the port's `32 eps max(L)` tolerance has to
+    # treat as MOVING and not as parallel. Nothing placed one before: a mutant loosening that
+    # tolerance by ten orders of magnitude -- every edge within 1e-6 of parallel then admitted
+    # or dropped whole -- passed the entire gate. Here the edge enters the unit voxel at
+    # t = 1/6 (it crosses u = 0) and leaves at t = 1/3 (it crosses v = 1), and |e| = 3, so the
+    # arclength inside is exactly 0.5; treating the top face as parallel admits the whole
+    # u-span and reads 1.0.
+    near = np.asarray([(-0.5, 1.0 - 1e-9), (2.5, 1.0 + 2e-9), (2.5, 50.0)])
+    unit = (np.asarray([0.0]), np.asarray([1.0]), np.asarray([0.0]), np.asarray([1.0]))
+    grazed = polygon_edge_moments(near[None], *unit, np)
+    assert abs(float(grazed[0][0]) - 3 * (1 / 3 - 1 / 6)) < 1e-9, float(grazed[0][0])
+    assert abs(float(grazed[1][0] + grazed[2][0]) - float(grazed[0][0])) < 1e-15
     step, nx, ny = 0.37, 7, 5
     x, y = (np.arange(nx) + 0.5) * step, (np.arange(ny) + 0.5) * step
     rect = np.array([[0.4, 0.3], [1.9, 0.5], [1.7, 1.6], [0.2, 1.4]])
@@ -836,6 +902,17 @@ def test_the_exact_face_moments_are_the_surfaces_own():
     area, moment = Box((0.03, 0.4, 0.4), (0., 0., 0.), 0.0).exact_moment(origin, h)
     assert abs(area[0] - 0.02) < 1e-15
     assert np.abs(moment[0] / area[0] - np.array([1.0, 0.0, 0.0])).max() < 1e-14
+    # A cap landing EXACTLY on a voxel face belongs to the voxel it enters, once. The interval
+    # is half open for that reason: measured with two open ends (the first writing) the total
+    # cap area of a hexagonal prism whose caps sit on a face read 0.000000 against a truth of
+    # 0.020000 -- the interface left the grid altogether -- and with two closed ends it is
+    # 0.040000, counted by both neighbours. Nothing in the gate held either way.
+    zs = (np.arange(-8, 9) + 0.5) * h
+    column = np.stack([np.zeros_like(zs), np.zeros_like(zs), zs], axis=-1)
+    for centre, where in ((0.0, 'caps exactly on a voxel face'), (0.03, 'caps inside a voxel')):
+        cap = Prism(HEX, 0.4, 'z', (0., 0., centre), 0.).exact_moment(column, h)[1][:, 2]
+        assert abs(float(cap.sum()) - 0.02) < 1e-15, (where, cap.sum())
+        assert int((cap > 0).sum()) == 2, (where, cap)
 
 
 def _sampled_box_moment(size, centre, angle, pts, h, n=1200):
@@ -925,10 +1002,15 @@ def test_a_crease_is_where_w_jumps_and_this_is_how_far():
     too, which no earlier measurement had looked for: the tangent plane's fill depends on the
     **selected** normal, and at a crease the selection swaps between children, so ``fill`` jumps
     although ``d`` is continuous. Bisected to 5.5e-17 in the slide parameter, the fill steps
-    0.96063617 -> 0.99217239, a jump of **3.15e-02**. Every body with an exact fill is immune
-    (their fill never reads a normal); every CSG node has it. That is a term in ``eps`` of a few
-    percent appearing from a geometry change of order 1e-17, and it is the mechanism behind the
-    O(1) finite-difference errors the AD sweep sees at steps of 1e-3.
+    0.96063617 -> 0.99217239, a jump of **3.15e-02**, while ``d`` holds to twelve digits. Every
+    body with an exact fill is immune (their fill never reads a normal); every CSG node has it.
+
+    The consequence is worse than a disagreement between a gradient and a difference: at that
+    slide value a central difference of a loss reads 268.81, 2685.85, 26855.47, 268551.57 and
+    2685512.50 at steps of 1e-3 down to 1e-7 -- it **diverges as 1/step**, because the loss
+    itself steps. That is what makes a CSG node's geometry a refused design variable
+    (:func:`test_a_traced_parameter_on_a_csg_node_is_refused_by_name`), and why
+    ``_bodies._Combination`` prices the fix rather than merely naming it.
     """
     h = 0.1
     point = np.zeros((1, 3))
@@ -1307,7 +1389,6 @@ LEAVES = {
     'angle': (lambda v: Box((0.30, 0.21, 0.26), CENTRE, v), 0.37),
     'size': (lambda v: Box(v, CENTRE, 0.4), np.asarray([0.30, 0.21, 0.26])),
     'vertices': (lambda v: Prism(v, 0.33, 'z', CENTRE, 0.0), np.asarray(HEX)),
-    'csg radius': (lambda v: Difference(Sphere(v, (0., 0., 0.)), Sphere(0.12, (0.06, 0., 0.))), 0.25),
 }
 
 
@@ -1344,15 +1425,20 @@ def test_a_finite_difference_says_what_the_backend_says(backend, leaf):
         angle       3.90e+01  3.5e-06  3.5e-08  3.0e-10  8.4e-11  2.7e-10
         size        1.60e+02  5.6e-04  5.6e-06  5.6e-08  5.8e-10  3.1e-10
         vertices    1.66e+02  3.2e-03  3.1e-05  3.1e-07  3.1e-09  6.1e-10
-        csg radius  1.42e+03  9.2e-01  9.9e-01  1.0e-08  1.1e-10  9.6e-11
 
     Truncation falling as ``h^2`` to a floor near ``1e-6``, so :data:`H_STEP` is ``1e-6`` and
-    the worst reading there is 3.1e-9 -- thirty times inside the budget. Two rows do not
-    follow that shape and both say something: ``height`` is 1e-14 at every step because the
+    the worst reading there is 3.1e-9 -- thirty times inside the budget. One row does not
+    follow that shape and it says something: ``height`` is 1e-14 at every step because the
     axial overlap is *piecewise linear* in the height, so a central difference of it has no
-    truncation at all; and ``radius`` and ``csg radius`` read O(1) at 1e-3 and 1e-4 because a
-    step that large moves whole voxels across a knot, which is the same effect the design's G8
-    note is about seen from the other side.
+    truncation at all; and ``radius`` reads O(1) at 1e-3 and 1e-4 because a step that large
+    moves whole voxels across a knot, which is the same effect the design's G8 note is about
+    seen from the other side.
+
+    **There is no CSG row here any more, and its absence is the finding.** The previous writing
+    carried ``csg radius`` and it passed, because that particular placement put no voxel on the
+    node's crease. Where one does, the loss is *discontinuous* in the leaf and no step converges
+    -- see :func:`test_a_traced_parameter_on_a_csg_node_is_refused_by_name`, which is now what
+    holds that case.
 
     Every gradient here is order 1e1 to 1e3, so none of them is the trap an AD-against-FD gate
     falls into on a staircase, where both sides are exactly zero and the comparison cannot
@@ -1411,6 +1497,19 @@ def test_the_kernel_survives_a_jit_boundary():
 
     A Python branch on a traced value would raise here rather than quietly take the concrete
     path, and a value that is right eagerly and wrong under trace would show as a mismatch.
+
+    **The doors are part of what crosses.** ``jax.jit`` is the one transform with no value to
+    read (``_bodies.readable``'s table), so the size and orientation refusals become array
+    expressions there rather than raises. That the factor is exactly ``1.0`` for a legal body is
+    held bitwise in
+    :func:`test_a_door_holds_under_every_transform_that_carries_a_value` and cannot be held
+    here: XLA reassociates, so a jitted result differs from an eager one in the last bits
+    whatever the guard does.
+
+    The CSG row traces the **points** and not the radius, because a traced parameter on a CSG
+    node is refused (:func:`test_a_traced_parameter_on_a_csg_node_is_refused_by_name`). That is
+    what a forward solve does with any body, and it still makes the whole kernel cross the
+    boundary.
     """
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
@@ -1418,15 +1517,19 @@ def test_the_kernel_survives_a_jit_boundary():
     pts = grid(10, -0.4, 0.08)
     for body_of, value in ((lambda r: Sphere(r, CENTRE), 0.22),
                            (lambda r: Cylinder(r, 0.3, 'z', CENTRE, 0.3), 0.19),
-                           (lambda r: Difference(Sphere(r, (0., 0., 0.)), Box((0.2, 0.2, 0.9),
-                                                                              (0., 0., 0.), 0.5)),
-                            0.3)):
+                           (lambda v: Prism(v, 0.33, 'z', CENTRE, 0.0), np.asarray(HEX))):
         def run(r, p):
             return occupancy(body_of(r), p, 0.08)
         eager = run(jnp.asarray(value), jnp.asarray(pts))
         traced = jax.jit(run)(jnp.asarray(value), jnp.asarray(pts))
         for a, b in zip(eager, traced):
             assert np.abs(np.asarray(a) - np.asarray(b)).max() < 1e-14
+    # a CSG node: concrete geometry, traced points -- what a forward solve does
+    node = Difference(Sphere(0.3), Box((0.2, 0.2, 0.9), (0., 0., 0.), 0.5))
+    eager = occupancy(node, jnp.asarray(pts), 0.08)
+    traced = jax.jit(lambda p: occupancy(node, p, 0.08))(jnp.asarray(pts))
+    for a, b in zip(eager, traced):
+        assert np.abs(np.asarray(a) - np.asarray(b)).max() < 1e-14
 
 
 # ----------------------------------------------------------------------------------------
@@ -1477,6 +1580,12 @@ def test_a_length_is_a_size_and_a_non_positive_one_is_refused_by_name():
         Prism(HEX, -0.3, 'z')
     with pytest.raises(ValueError, match='a finite length'):
         Sphere(float('nan'))
+    with pytest.raises(ValueError, match='a finite length'):
+        Sphere(float('inf'))          # (M) `isfinite` weakened to `~isnan` fails here alone
+    with pytest.raises(ValueError, match='a finite length'):
+        Cylinder(0.2, float('-inf'), 'z')
+    with pytest.raises(ValueError, match='there is none'):
+        Sphere(None)                  # a missing argument, named as one and not as a NaN
     # and the same doors let a traced leaf through, which is the only thing they must not stop
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
@@ -1513,9 +1622,218 @@ def test_an_outline_that_is_not_a_simple_counter_clockwise_polygon_is_refused_by
         Prism(((-0.2, -0.2), (0.2, -0.2), (0.0, -0.2), (0.0, 0.2)), 0.33, 'z')
     with pytest.raises(ValueError, match=r'shape \(nv, 2\)'):
         Prism(((0., 0., 0.), (0.2, 0.1, 0.0), (0.1, 0.3, 0.0)), 0.33, 'z')
+    # a vertex list NumPy cannot read at all -- ragged, or not numbers -- used to skip all four
+    # refusals silently, because "there is no value here" and "this is not a vertex array" were
+    # the same answer. They are told apart by whether the thing has a shape.
+    for rubbish in ([[0., 0.], [1., 0.], [1., 1., 5.]], 'abc', [1.0, 2.0, 3.0], None):
+        with pytest.raises(ValueError, match=r'shape \(nv, 2\)'):
+            Prism(rubbish, 0.33, 'z')
     # every legal outline in this file passes, including the six non-convex ones
     for outline in dict(NON_CONVEX, hexagon=HEX).values():
         Prism(outline, 0.33, 'z')
+
+
+def test_every_geometric_predicate_is_free_of_the_coordinate_scale():
+    """The same body in metres and in micrometres is the same body, or nothing here is safe.
+
+    The C1 blocker came back once already because the convexity test compared a cross product
+    against ``1e-12 * max(|cross|, initial=1.0)``: an **absolute** floor, so every polygon whose
+    coordinates are below about 3e-6 was classified convex, took the ``nv + 4`` clip buffer and
+    overflowed it. ``wavebit/fd/scene.py`` fixes units as "lengths in the user's unit", so a
+    visible-wavelength structure written in SI metres is exactly that input. Measured on the
+    shipped code before this test, the gate's own 6-point
+    star at 1e-6:
+
+        numpy  IndexError: index 16 is out of bounds for axis 2 with size 16
+        jax    fill = nan
+        torch  fill = 0.38101489        against a truth of 0.34210489
+
+    -- the same three answers the previous round existed to abolish, from the same input in a
+    different unit. A mutant that spells the tolerance absolutely passed all 45 tests, because
+    every outline in this file is of order 0.4.
+
+    So this test sweeps the scale rather than the shape: six outlines over fifteen decades. The
+    classification must be identical at every scale, the buffer must hold, and the fill must be
+    the same number on all three backends -- which is scale-*invariant*, because a fill is a
+    ratio of volumes.
+    """
+    import jax
+    import jax.numpy as jnp
+    import torch
+    jax.config.update('jax_enable_x64', True)
+    rng = np.random.default_rng(5)
+    scales = (1e-9, 1e-6, 1e-3, 1e0, 1e3, 1e6)
+    for name, outline in dict(NON_CONVEX, hexagon=HEX).items():
+        verts = np.asarray(outline)
+        at_one = polygon_shape('P', verts)
+        for scale in scales:
+            assert polygon_shape('P', verts * scale) == at_one, (name, scale)
+        # the buffer the classification buys really does hold, at the two ends of the sweep
+        for scale in (1e-9, 1e6):
+            worst = 0
+            for _ in range(200):
+                side = rng.uniform(0.02, 0.6) * scale
+                lo = rng.uniform(-0.6, 0.6, 2) * scale
+                worst = max(worst, reference_clip(verts * scale, lo[0], lo[0] + side,
+                                                  lo[1], lo[1] + side)[1])
+            assert worst <= clip_capacity(len(outline), at_one[1]), (name, scale, worst)
+    # and the whole body, through the public entry point, on the input that used to break
+    star6 = star(6, 0.42, 0.10)
+    truth = float(occupancy(Prism(star6, 0.4, 'z'), np.zeros((1, 1, 3)), 0.5)[0][0, 0])
+    assert abs(truth - 0.34210489) < 1e-7
+    for scale in (1e-9, 1e-6, 1e3, 1e6):
+        body = Prism(tuple((u * scale, v * scale) for u, v in star6), 0.4 * scale, 'z')
+        pts, dx = np.zeros((1, 1, 3)), 0.5 * scale
+        on_numpy = float(occupancy(body, pts, dx)[0][0, 0])
+        on_jax = float(occupancy(body, jnp.asarray(pts), dx)[0][0, 0])
+        on_torch = float(occupancy(body, torch.tensor(pts), dx)[0][0, 0])
+        assert abs(on_numpy - truth) < 1e-12, (scale, on_numpy)
+        assert abs(on_jax - truth) < 1e-12, (scale, on_jax)
+        assert abs(on_torch - truth) < 1e-12, (scale, on_torch)
+
+
+def test_a_door_holds_under_every_transform_that_carries_a_value():
+    """``Sphere(radius=-0.3)`` must be refused wherever there is a number to read.
+
+    ``_bodies.readable``'s docstring carries this as a table and this is the table. The previous
+    writing claimed the doors were "skipped, and only skipped, under ``jax.jit``" and was wrong
+    on three rows: ``torch.func.grad``, ``torch.func.vmap`` and ``jax.vmap`` all came back with
+    no value, and ``Sphere(-0.3)`` was **accepted** under ``torch.func.grad`` with a finite
+    gradient of 135.00000000000014 -- a negative radius differentiated, which is this
+    repository's own gradient-ascent scar in the modern Torch functional API.
+
+    ``jax.jit`` is the one transform that cannot be doored: a ``DynamicJaxprTracer`` carries a
+    ``Var`` and not a value, and a *jitted gradient* is one too, so there is nothing to read and
+    nothing to branch on. What holds there instead is a NaN, which is the other half of this
+    test: a body that is not a size must not come back as a plausible number.
+    """
+    import jax
+    import jax.numpy as jnp
+    import torch
+    jax.config.update('jax_enable_x64', True)
+    pts = np.zeros((2, 3))
+    pts[1] = (0.05, 0.0, 0.0)
+    match = 'a length is a size'
+
+    def fill_of(radius, p):
+        return occupancy(Sphere(radius, (0., 0., 0.)), p, 0.1)[0]
+
+    refusals = {
+        'eager': lambda: fill_of(-0.3, pts),
+        'jax concrete': lambda: fill_of(jnp.asarray(-0.3), jnp.asarray(pts)),
+        'jax.grad': lambda: jax.grad(lambda r: fill_of(-r, jnp.asarray(pts)).sum())(
+            jnp.asarray(0.3)),
+        'jax.vmap': lambda: jax.vmap(lambda r: fill_of(-r, jnp.asarray(pts)))(
+            jnp.asarray([0.3, 0.4])),
+        'jax.vmap(grad)': lambda: jax.vmap(jax.grad(
+            lambda r: fill_of(-r, jnp.asarray(pts)).sum()))(jnp.asarray([0.3, 0.4])),
+        'torch plain': lambda: fill_of(torch.tensor(-0.3), torch.tensor(pts)),
+        'torch autograd': lambda: fill_of(-torch.tensor(0.3, requires_grad=True),
+                                          torch.tensor(pts)),
+        'torch.func.grad': lambda: torch.func.grad(
+            lambda r: fill_of(-r, torch.tensor(pts)).sum())(torch.tensor(0.3)),
+        'torch.func.jacrev': lambda: torch.func.jacrev(
+            lambda r: fill_of(-r, torch.tensor(pts)).sum())(torch.tensor(0.3)),
+        'torch.func.vmap': lambda: torch.func.vmap(
+            lambda r: fill_of(-r, torch.tensor(pts)))(torch.tensor([0.3, 0.4])),
+    }
+    for where, call in refusals.items():
+        with pytest.raises(ValueError, match=match):
+            call()
+    # the one that cannot be a refusal, and what stands there instead
+    under_jit = np.asarray(jax.jit(lambda r: fill_of(-r, jnp.asarray(pts)))(jnp.asarray(0.3)))
+    assert np.isnan(under_jit).all(), under_jit
+    # and a legal body is untouched by the guard, BIT FOR BIT -- which is the property that lets
+    # it be applied unconditionally. Held on the guard itself, because comparing a jitted result
+    # with an eager one cannot say this: XLA reassociates, so those two differ in the last bits
+    # whether the guard is exactly one or not.
+    for legal in (jnp.asarray(0.3), jnp.asarray([0.30, 0.21, 0.26]), torch.tensor(0.3)):
+        guarded = np.asarray(_loud_if_not_a_size(legal))
+        assert np.array_equal(guarded, np.asarray(legal)), guarded
+    assert np.isnan(np.asarray(_loud_if_not_a_size(jnp.asarray(-0.3)))).all()
+    assert np.isnan(np.asarray(_loud_if_not_a_size(jnp.asarray([0.3, -0.1, 0.2])))).all()
+    assert float(_loud_if_not_counter_clockwise(jnp.asarray(HEX))) == 1.0
+    assert np.isnan(float(_loud_if_not_counter_clockwise(jnp.asarray(HEX[::-1]))))
+    # the same two halves for the quietest polygon refusal: a clockwise outline reads area 0 in
+    # every cell, so under jit it is a NaN and not a body that silently is not there
+    with pytest.raises(ValueError, match='counter-clockwise'):
+        Prism(HEX[::-1], 0.33, 'z')
+    turned = np.asarray(jax.jit(lambda v: occupancy(Prism(v, 0.33, 'z'), jnp.asarray(pts),
+                                                    0.1)[0])(jnp.asarray(HEX[::-1])))
+    assert np.isnan(turned).all(), turned
+    straight = np.asarray(jax.jit(lambda v: occupancy(Prism(v, 0.33, 'z'), jnp.asarray(pts),
+                                                      0.1)[0])(jnp.asarray(HEX)))
+    assert np.abs(straight - occupancy(Prism(HEX, 0.33, 'z'), pts, 0.1)[0]).max() < 1e-15
+    # the vertex count and the array's shape are STATIC, so they are refused even under jit
+    with pytest.raises(ValueError, match='at least three vertices'):
+        jax.jit(lambda v: occupancy(Prism(v, 0.33, 'z'), jnp.asarray(pts), 0.1)[0])(
+            jnp.zeros((2, 2)))
+    with pytest.raises(ValueError, match=r'shape \(nv, 2\)'):
+        jax.jit(lambda v: occupancy(Prism(v, 0.33, 'z'), jnp.asarray(pts), 0.1)[0])(
+            jnp.zeros((4, 3)))
+
+
+def test_a_traced_parameter_on_a_csg_node_is_refused_by_name():
+    """A CSG node's fill is discontinuous, so its geometry may not be a design variable.
+
+    The C1 review found, and this file's crease test records, that a CSG node's **fill** steps
+    by 3.15e-02 across a slide of 5.5e-17 -- the tangent plane's fill is a function of the
+    *selected* child's normal, and at a crease the selection swaps. Measured here
+    off-tree with a prototype of the fix, a central difference of a loss in one centre coordinate,
+    at the slide value the jump sits at:
+
+        step      1e-3      1e-4      1e-5      1e-6      1e-7
+        plane    268.81   2685.85  26855.47 268551.57  2685512.50
+
+    It **diverges as 1/step**: the loss itself is discontinuous in the leaf, so refining the
+    step never converges, and ``jax.grad`` reads -5.98 where the one-sided slope is +24.81 --
+    wrong in sign, not merely in the last digits. An optimiser's line search sees a genuine 3e-2
+    cliff in ``eps`` from a geometry change of order 1e-17.
+
+    So the parameter is refused. A forward-only CSG node is honest -- nothing about a *value* is
+    wrong, and this refusal is on the leaf and not on tracing, so a forward solve that traces
+    the **points** is untouched (:func:`test_the_kernel_survives_a_jit_boundary`). Every body
+    with an exact fill is immune and remains differentiable, which is where a design variable
+    belongs. Why the alternative was rejected, with its numbers, is in ``_bodies._Combination``.
+    """
+    import jax
+    import jax.numpy as jnp
+    import torch
+    jax.config.update('jax_enable_x64', True)
+    match = "geometry must be concrete"
+    pts = np.zeros((2, 3))
+
+    def node(radius):
+        return Difference(Sphere(radius, (0., 0., 0.)), Cylinder(0.12, 1.0, 'z'))
+
+    with pytest.raises(ValueError, match=match):
+        jax.grad(lambda r: occupancy(node(r), jnp.asarray(pts), 0.1)[0].sum())(jnp.asarray(0.3))
+    with pytest.raises(ValueError, match=match):
+        jax.jit(lambda r: occupancy(node(r), jnp.asarray(pts), 0.1)[0])(jnp.asarray(0.3))
+    with pytest.raises(ValueError, match=match):
+        jax.vmap(lambda r: occupancy(node(r), jnp.asarray(pts), 0.1)[0])(jnp.asarray([0.3, 0.4]))
+    with pytest.raises(ValueError, match=match):
+        node(torch.tensor(0.3, requires_grad=True))
+    with pytest.raises(ValueError, match=match):
+        torch.func.grad(lambda r: occupancy(node(r), torch.tensor(pts), 0.1)[0].sum())(
+            torch.tensor(0.3))
+    # a centre, a size, an angle and a vertex list are leaves too, at any depth of nesting
+    with pytest.raises(ValueError, match=match):
+        jax.grad(lambda c: occupancy(Union(Sphere(0.2, c), Box((0.2, 0.2, 0.2))),
+                                     jnp.asarray(pts), 0.1)[0].sum())(jnp.zeros(3))
+    with pytest.raises(ValueError, match=match):
+        jax.grad(lambda a: occupancy(Intersection(Sphere(0.3), Union(Box((0.2, 0.2, 0.2),
+                                                                        (0., 0., 0.), a),
+                                                                     Sphere(0.25))),
+                                     jnp.asarray(pts), 0.1)[0].sum())(jnp.asarray(0.4))
+    # concrete geometry is accepted on every backend, including a concrete backend array
+    for radius in (0.3, np.float64(0.3), jnp.asarray(0.3), torch.tensor(0.3)):
+        assert node(radius) is not None
+    # and the body with an exact fill, which is where a design variable belongs, still works
+    got = float(jax.grad(lambda r: occupancy(Sphere(r, (0.01, 0., 0.)),
+                                             jnp.asarray(grid(6, -0.24, 0.08)), 0.08)[0].sum())(
+        jnp.asarray(0.2)))
+    assert abs(got) > 1.0
 
 
 def test_cut_refuses_a_normal_that_is_not_a_unit_vector():
@@ -1532,13 +1850,21 @@ def test_cut_refuses_a_normal_that_is_not_a_unit_vector():
     n = np.asarray([[0.0, 0.0, 1.0]])
     d = np.asarray([0.1])
     assert abs(cut(d, n, 1.0)[0][0] - 0.4) < 1e-15
-    for bad in (2 * n, 0.5 * n, np.zeros((1, 3))):
+    nan_n = np.full((1, 3), np.nan)
+    for bad in (2 * n, 0.5 * n, np.zeros((1, 3)), nan_n, np.full((1, 3), np.inf)):
         with pytest.raises(ValueError, match='unit outward normal'):
             cut(d, bad, 1.0)
         with pytest.raises(ValueError, match='unit outward normal'):
             cut_parts(d, bad, 1.0)
+    # the NaN row is the one the first writing let through: `worst > 1e-9` is False for a NaN,
+    # so the door opened and the answer came back `fill = nan` with `sum_c w_c = 0`. Testing
+    # the complement -- `~(worst <= 1e-9)` -- is what makes a non-finite normal a refusal.
     # one bad row among many is enough
     many = np.broadcast_to(n, (64, 3)).copy()
     many[17] *= 1.5
+    with pytest.raises(ValueError, match='unit outward normal'):
+        cut(np.zeros(64), many, 1.0)
+    many = np.broadcast_to(n, (64, 3)).copy()
+    many[41] = np.nan
     with pytest.raises(ValueError, match='unit outward normal'):
         cut(np.zeros(64), many, 1.0)
