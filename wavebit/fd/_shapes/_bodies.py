@@ -40,8 +40,9 @@ Every body answers four things:
     Cylinder            disc-box clip x 1-D overlap       *tangent plane*
     Sphere              ball-box clip                     *tangent plane*
     Union/Intersection/ the children's own, composed per voxel: a boolean where no child's
-    Difference          surface is in it, one child's own cut where one is, and the exact
-                        two-plane cut of the voxel where two are (``_cut.two_plane``)
+    Difference          surface is in it, one child's own cut where one is, the exact two-plane
+                        cut where two are (``_cut.two_plane``), and elsewhere an INTERVAL whose
+                        safe end for that operation is what ships, counted and reported
 
 A cylinder's exact moment would need the second moment of the arc of a circle clipped to a
 rectangle -- the angular interval set, not the area -- and the repository owns no such form;
@@ -94,11 +95,15 @@ node too**: its worst single step over six node kinds on the same slide is **3.1
 size as a leaf's own, where three previous writings of that paragraph quoted 3.15e-02, 4.29e-02
 and 4.48e-02. What is still discontinuous is a node's ``w``, by **4.91e-01** across a geometry
 change of 2.8e-17, and that -- not the fill -- is now the whole of the reason a CSG node's
-geometry may not be traced. See :class:`_Combination` for the mechanism, the three cases the rule
-decides between, the two theorems that make a hole in solid material unwritable, what the rule
-costs measured on the shipped node, the price of the exact fix, and the one case it refuses.
+geometry may not be traced. See :class:`_Combination` for the mechanism, the cases the rule
+decides between, the sign argument that makes a hole in solid material unwritable for each node
+kind, what the rule costs measured on the shipped node, the price of the exact fix, and the one
+refusal that is left -- which is at **plan time**, from the shapes, and not per voxel. The
+per-voxel refusal the previous round shipped is gone: it fired on a legal T-junction at 16 of 16
+random grid origins and could not fire at all under ``jax.jit``, where the same voxels read 0.75
+against a true 1.0. What a node cannot answer exactly it now brackets, ships the safe end of, and
+**counts** -- see :class:`Approximations`, which is the interface C2 and C5 warn from.
 """
-import warnings
 from collections import namedtuple
 
 import numpy as _np
@@ -163,23 +168,117 @@ _CORNER = 3.0 ** 0.5 / 2
 #: interface, which over-counts a joint and never invents one.
 _FLAT = 1e-12
 
+#: How wide a CSG node's own interval on a voxel's fill may be before the voxel is **counted**
+#: as approximated and reported (:class:`Approximations`). It is a fraction of the voxel, so it
+#: is dimensionless -- the same argument :data:`_TURN_SINE` and :data:`_FLAT` are written on.
+#: The exact cases close the interval to **exactly** 0.0 (the two ends are the same expression
+#: with the same operands), and the one near-exact case -- a pair of children proved flat -- to
+#: at most ``2 _FLAT``, so this margin sits three decades above the only noise there is and
+#: eighteen decades below anything a user would call an approximation.
+_BOUNDED = 1e-9
+
 #: What a CSG node knows about one child in one voxel. ``plane`` is the child's own tangent half
-#: space's ``(fill, area, moment)`` and ``part`` is the child's own answer -- exact where it has
-#: a closed form. They are equal exactly where ``flat`` is true.
-_Child = namedtuple('_Child', 'd n inside outside cross flat plane part')
+#: space's ``(fill, area, moment)`` and ``part`` is the child's own answer -- exact, because a
+#: child with no exact fill is refused at construction. They are equal exactly where ``flat`` is
+#: true. ``tangent`` is the static promise that the child lies **inside** its tangent half space,
+#: which is what the ``outside`` test, the pair test and ``flat`` all rest on.
+_Child = namedtuple('_Child', 'd n inside outside cross flat tangent plane part')
+
+#: The one pair of crossing surfaces the exact two-plane cut is spent on, per voxel.
+_Crease = namedtuple('_Crease', 'least most buried gate chosen')
+
+#: One CSG node's own account of what it could not answer exactly in one call.
+#: ``voxels`` and ``width`` are plain Python numbers, or ``None`` under a transform that carries
+#: no number; ``counted`` and ``widest`` are the same two reductions as the backend's own 0-D
+#: arrays, which is what a caller inside ``jax.jit`` returns from its jitted function to get them.
+Approximation = namedtuple('Approximation', 'node voxels width counted widest')
 
 
-def _count_true(flag, zero, one, xp):
-    """How many voxels ``flag`` is true in, or ``None`` where there is no value to read.
+def _number(value):
+    """``value`` as a plain Python float, or ``None`` where there is no number to read.
 
-    The array twin of ``wavebit._core.backend._concrete`` and it draws the same line in the same
-    place: under ``jax.jit`` there is no number, so the count comes back ``None`` and the caller
-    skips its refusal, exactly as :func:`_cut._unit` skips its own.
+    The scalar twin of :func:`readable` and it draws the line in the same place: under
+    ``jax.jit`` a reduction is a tracer and there is nothing to read, exactly as
+    :func:`_cut._unit` finds nothing to read there.
     """
     try:
-        return int(xp.sum(xp.where(flag, one, zero)))
+        return float(value)
     except Exception:                   # noqa: BLE001 - a tracer has no number, and that is it
         return None
+
+
+class Approximations:
+    """Where a CSG node could not answer a voxel exactly, and by how much.
+
+    A :class:`_Combination` answers **every** voxel -- there is no per-voxel refusal in this
+    package any more -- but not every voxel exactly. Where the rule cannot close its interval on
+    the true filled fraction it ships the end that is safe for its own operation (see
+    :class:`_Combination`) and adds up two numbers here: how many voxels took a bound, and the
+    widest interval it bracketed one with, in fractions of a voxel. Pass one to
+    :func:`_occupancy.occupancy`::
+
+        report = Approximations()
+        fill, w = occupancy(node, points, dx, report=report)
+        if report.voxels:
+            warnings.warn(report.message())
+
+    and it costs two reductions per node per image. Pass nothing -- the default -- and not even
+    those are computed.
+
+    **Why a collector and not a third return value.** ``occupancy`` answers ``(fill, w)`` and
+    that pair is what C2 mixes; a third element would be in every caller's way for the benefit of
+    the one caller that warns. A collector also holds a node's *own* name, which matters once a
+    scene has several: ``entries`` is one row per node per periodic image, in the order they were
+    evaluated, so a caller can say **which** body it could not resolve and not merely that
+    something in the scene could not be.
+
+    **Under ``jax.jit`` there is no number**, so ``voxels`` and ``width`` come back ``None`` --
+    the same line :func:`readable` and :func:`_cut._unit` draw, and for the same reason. The two
+    reductions are still on the entry, as ``counted`` and ``widest``, as the backend's own 0-D
+    arrays; a jitted caller returns them from its own function and reads them outside. That is
+    the difference between "cannot warn under jit" and "can", and it costs two scalars. Appending
+    an entry is a Python side effect, so a **trace** appends one and a cached replay of that trace
+    appends none: a collector handed to a jitted function is filled at trace time only, which is
+    exactly when the arrays it must hold are created. Use a fresh collector per call if the
+    accumulated list matters.
+    """
+
+    def __init__(self):
+        self.entries = []
+
+    def record(self, node, counted, widest):
+        """One node's two reductions, named. Called by :class:`_Combination` alone."""
+        voxels = _number(counted)
+        self.entries.append(Approximation(node, None if voxels is None else int(round(voxels)),
+                                          _number(widest), counted, widest))
+
+    @property
+    def voxels(self):
+        """How many voxels took a bound, over every node and every image; ``None`` under jit."""
+        if any(entry.voxels is None for entry in self.entries):
+            return None
+        return sum(entry.voxels for entry in self.entries)
+
+    @property
+    def width(self):
+        """The widest interval any of them was bracketed with; ``None`` under jit, 0.0 if none."""
+        if any(entry.width is None for entry in self.entries):
+            return None
+        return max((entry.width for entry in self.entries), default=0.0)
+
+    def message(self):
+        """One sentence a caller can warn with, or ``None`` when there is nothing to say."""
+        if not self.voxels:
+            return None
+        worst = max((entry for entry in self.entries if entry.voxels), key=lambda e: e.width)
+        return (f'{self.voxels} voxel(s) of this geometry were answered with a BOUND and not '
+                f'exactly, the widest of them {self.width:.4g} of a voxel, on {worst.node}. A '
+                'CSG node is exact where at most two of its children\'s surfaces share a voxel '
+                'and both of those are flat in it; where three surfaces meet, or a curved wall '
+                'crosses the same voxel as a joint, it brackets the filled fraction and ships '
+                'the end that cannot remove material a Union or a Difference has, or add '
+                'material an Intersection has not. Separating the third body by more than a '
+                'voxel, or refining the grid, closes the interval.')
 
 
 def _no_common_volume(d_a, n_a, d_b, n_b, dx, xp):
@@ -205,10 +304,17 @@ def _no_common_volume(d_a, n_a, d_b, n_b, dx, xp):
     faces are exactly opposite and the pair reads exactly zero here. A margin no gate can make
     fail is a margin this package deletes.
 
-    The boundary itself is held: written ``> 0``, a T-junction of three boxes whose union is one
-    box has three pairs sharing one voxel -- two coincident faces meeting a third -- and the node
-    refuses a case it answers exactly
-    (``tests/test_fd_shapes.py::test_a_union_of_flush_bodies_reads_solid_material_on_the_seam``).
+    **The boundary is no longer observable, and that is a property of the round-6 rule and not a
+    licence to move it.** Written ``> 0`` a flush pair stops being *proved* apart and becomes the
+    pair the exact two-plane cut is spent on instead -- and :func:`_cut.two_plane`'s own parallel
+    branch answers exactly what the split branch would have: shared volume ``max(F_a + F_b - 1,
+    0)`` (zero for a joint) and both faces buried. Measured over 90 scene x grid-origin
+    combinations of the device family, 14^3 voxels each: worst ``|dfill|`` **0.0** and worst
+    ``|dw|`` **0.0**, bit for bit. Under the previous round's rule the same edit turned a
+    T-junction of three boxes into a refusal, because a pair sharing a plane counted as a pair
+    sharing the voxel; there is no refusal to trip now. ``>= 0`` stays because it is the true
+    statement -- a common set of measure zero contributes no volume -- and because it is what
+    keeps the cheap branch cheap: it spends no two-plane cut on a joint that has no volume in it.
     """
     zero, one = xp.zeros_like(d_a), xp.ones_like(d_a)
     knots = [zero, one]
@@ -683,13 +789,15 @@ class Body:
         d, n = self.surface(points)
         return _parts(d, n, dx)
 
-    def parts(self, points, dx, surface=None):
+    def parts(self, points, dx, surface=None, report=None):
         """``(fill, area, moment)``: the exact forms where they exist, the plane where they do not.
 
         The one call :func:`_occupancy.occupancy` makes per body per image, and the one place the
         table at the top of this module is realised. ``surface=`` is the already-computed
         ``(d, n)`` where the caller has it -- :class:`_Combination` needs its children's normals
-        for the seam rule and would otherwise walk every child's distance twice.
+        for the seam rule and would otherwise walk every child's distance twice. ``report=`` is
+        an :class:`Approximations` a node adds its two reductions to; a leaf has nothing to add,
+        because a leaf's answer is its own closed form and not a bound.
         """
         fill = self.exact_fill(points, dx)
         pair = self.exact_moment(points, dx)
@@ -1114,10 +1222,12 @@ class _Combination(Body):
     through solid metal. It is **first** order in ``h`` in a scheme sold at order two (worst
     ``|dfill|`` stays 0.5000 at ``h`` = 0.1, 0.05, 0.025) and both free invariants are satisfied
     by it. ``fd.Union`` is the design's own instruction to a user whose bodies share a material,
-    so this sat on the recommended path.
+    so this sat on the recommended path. The composed plane is not used for a node's fill any
+    more; ``surface`` still composes the distance, because that is what a node *is*.
 
-    **WHAT SHIPS: ONE QUESTION PER CHILD, THEN ONE EXACT CUT.** Per voxel each child is put in
-    exactly one of three boxes, by two predicates that are theorems and not tolerances:
+    **WHAT SHIPS: AN INTERVAL, AND THE END THAT IS SAFE FOR THIS OPERATION.** Per voxel each
+    child is put in exactly one of three boxes, by two predicates that are theorems and not
+    tolerances:
 
         wholly inside    ``d_i <= -dx sqrt(3)/2``     the voxel is inside the ball that ``d_i``
                                                      proves empty of surface, so the child fills it
@@ -1126,73 +1236,144 @@ class _Combination(Body):
         crossing         neither                     the child's surface may reach this voxel
 
     ``|n_i|_1 dx / 2`` is the box's exact support along ``n_i``, so *outside* is exact for the
-    half space and therefore for the body; ``dx sqrt(3)/2`` is the voxel's circumradius, and
-    ``|d_i|`` is at most the true distance for every child this rule admits (exact for a convex
-    leaf; inside a nested :class:`Intersection` of convex leaves it is exact, and outside one it
-    under-estimates, which is the safe side). Then, per voxel:
+    half space and therefore for a **convex** body; for a child that is not convex -- the only
+    one this package admits is a non-convex :class:`Prism` -- the same test is spelled with the
+    circumradius ``dx sqrt(3)/2``, which needs nothing but ``|d_i|`` being at most the true
+    distance and is what the *inside* test already uses.
 
-        crossing children    what the node answers                         exact?
-        none                 a boolean of the children's own fills         exactly
-        one                  that child's own (exact or plane) cut,        exactly, where the
-                             composed with the others' booleans            child's fill is exact
-        two or more, with    inclusion-exclusion, with the one shared      exactly, where the two
-        at most one pair     volume taken from the exact two-plane cut     crossing children are
-        sharing volume       of the voxel (:func:`_cut.two_plane`)         FLAT (below)
-        two or more pairs    **refused by name**                           --
-        sharing volume
+    Then the node builds, per voxel, **an interval** ``[low, high]`` that brackets the true filled
+    fraction, and ships the end that is safe for its own operation. The whole rule is four lines
+    of set arithmetic over one number per child and two per pair:
 
-    The first two rows are what the previous writing of this rule got wrong, and it is worth
-    naming: it used ``max(0, f_i + f_j - 1)`` -- the volume two tangent HALF SPACES share -- as
-    the volume the two BODIES share, for **every** pair, including pairs whose second child's
-    surface was nowhere near the voxel. Measured by the C1 review on the docstring's own
-    recommended remedy (overlap the children by a cell): a voxel lying **entirely** inside a
-    substrate, with a pillar's curved wall passing through it, read ``fill = 0.77`` where the
-    truth is 1.0 -- up to 0.31 over five pillar shapes and hundreds of voxels per sweep, a hole
-    punched in solid material. Under the rule above that voxel has **one** crossing child, the
-    substrate is *wholly inside*, and the answer is the boolean 1.0. The hole is not clamped away:
-    it cannot be written down.
+        F_i                     the child's own **exact** filled fraction -- 1 where it is wholly
+                                inside, 0 where it is wholly outside, its own closed form where
+                                it crosses. A child with no exact fill is refused at construction
+                                (below), so this number is never itself a bound.
+        [lo_ij, hi_ij]          a bracket on ``|A_i n A_j n V| / dx^3``, the volume one pair of
+                                children shares. Three cases, in this order: **0** where the pair
+                                is proved to share no volume at all (:func:`_no_common_volume`,
+                                which is exact); the **exact two-plane cut** where this is the one
+                                pair the node spends it on; and otherwise the two sides any two
+                                sets in one voxel obey, ``max(0, F_i + F_j - 1)`` and
+                                ``min(F_i, F_j)``.
 
-    **Two theorems keep a hole impossible, and they are what the gate asserts.** The shared volume
-    is clamped, once, into the interval the two children's *own* fills force it into::
+    and the arithmetic is in each subclass' ``_resolved``. The sign argument, per operation:
 
-        max(0, F_a + F_b - 1)  <=  shared  <=  min(F_a, F_b)
+        Union            ``|u A_i| <= sum F_i - |A_p n A_q|`` for **any** single pair, so
+                         subtracting a LOWER bound on one pair's shared volume can only leave the
+                         answer at or above the truth. ``high = sum F_i - max_pairs lo``; it
+                         **cannot remove material that is there**, and that is the end Union
+                         ships. The other end is Bonferroni's, ``sum F_i - sum_pairs hi``.
+        Intersection     ``|n A_i| >= |A_p n A_q| + sum_{i != p,q} F_i - (k - 2)``, so a LOWER
+                         bound on the one pair gives a lower bound on the whole intersection.
+                         ``low`` is that; it **cannot add material that is not there**, and that
+                         is the end Intersection ships. The other end is ``min(min_i F_i,
+                         min_pairs hi)``. This is the one place the previous writing had the sign
+                         backwards -- it shipped the upper bound, which invents material.
+        Difference       ``|A_0 \\ u_{j>0} A_j| = F_0 - |A_0 n u_{j>0} A_j|``, so what is
+                         subtracted must be a LOWER bound on that union of intersections:
+                         ``max(max_j lo_0j, sum_j lo_0j - sum_{0<j<m} hi_jm)``, the second term
+                         Bonferroni's again, one dimension in. ``high = F_0 - that``; it
+                         **cannot remove material the head has**, and that is the end Difference
+                         ships. The C2 review measured this one removing **0.0206** of a voxel
+                         over 72 voxels of a slab with two overlapping vias, one-signed, because
+                         the shared volume of the two REMOVED children entered ``1 - F_1 - F_2 +
+                         shared`` with the lower bound where the sign calls for the upper one.
 
-    -- both sides hold for any two sets inside one voxel. From the upper one,
-    ``fill_union = sum F_i - shared >= max_i F_i``: a union is never read below the largest child
-    in the voxel, so a voxel any child fills reads 1. From the lower one,
-    ``fill_union <= min(1, sum F_i)``. :class:`Intersection` and :class:`Difference` inherit both
-    through the same clamp. Measured over 5 scenes x 3 joint offsets x **6 grid origins**, 24^3
-    voxels at ``h`` = 0.05: worst ``max_i F_i - fill`` **4.9e-14**, worst
-    ``fill - min(1, sum F_i)`` **2.2e-14**, on all three backends.
+    **There is no per-voxel refusal, and there was one.** The previous writing raised where two
+    different pairs of crossing children both held volume of one voxel in common. The C2 review
+    measured what that cost: a T-junction of three flush boxes whose union **is** one box -- three
+    pairwise *disjoint* bodies, a case the rule answers exactly -- was refused at 16 of 16 random
+    sub-cell grid origins and answered at the 1 the gate happened to use, and the same 21 voxels
+    under ``jax.jit``, where there is no value to read and the refusal could not fire, fell back
+    to the composed plane and read ``fill = 0.75`` against a true 1.0 with a full ``w = (1, 0, 0)``
+    in solid material. A refusal that depends on where the grid lands, and that turns into a wrong
+    answer under a transform, is not a door. What replaces it: every voxel gets the interval, and
+    the node **reports** how many voxels took a bound and how wide the widest was
+    (:class:`Approximations`), so a caller warns with a number instead of a body failing to solve.
 
-    **And two bodies that touch without overlapping add, exactly.** A pillar standing flush on a
-    substrate shares no volume with it, so the union's fill *is* the sum of the two children's
-    own exact fills -- an identity with no sampling in it. Worst departure over the same product
-    of shapes and origins: **1.1e-14**. The same test spelled as two boxes whose union is one box
-    reads a worst ``|dfill|`` of **2.7e-15** over 3 seam positions x 7 grid origins, where the
-    previous rule read 0.0000 at the one alignment its test used and 0.2500 half a cell away.
+    **The refusals that are left are at plan time, once, from the shapes.** A node's child must
+    answer its own filled fraction **exactly** (:attr:`Body.has_exact_fill`). Two things fail
+    that, and both fail it for one reason: a node's own answer is one end of an interval, and
+    *which* end is safe depends on the operation above it -- a Union needs its children
+    over-stated and an Intersection needs them under-stated, and one number cannot be both. So a
+    node may not be a child of another node, and the constructor says so and names the flat
+    spelling instead. Nesting used to be the remedy this class recommended for three surfaces in
+    one voxel; that case is answered now, so the recommendation is gone and the refusal is free.
+    Measured on the nesting that is now unwritable, against an exact oracle (a ball clipped by two
+    axis-aligned boxes, so every region is a ``clipped_ball_volume``):
+    ``Union(Box, Intersection(Sphere, Box))`` over five sub-cell grid origins read the union up to
+    **0.1156** of a voxel above the truth, with the nested node itself up to 0.0152 above its own
+    exact fill; and in the other direction, three nested families read up to **0.0265** of a voxel
+    *removed* against a membership oracle -- a union falling below the truth, which is the one
+    thing a union's whole sign argument says it cannot do. Both are errors with no bound on them
+    and no test naming them, and the C2 review's own (unquoted) figure for this family was 0.2802.
 
-    **What it costs to be on that side.** Where a child is not flat the shared volume is a bound
-    and not the answer, so the union over-fills rather than under-fills. Against 2744 stratified
-    membership samples per voxel (standard error 9.5e-3), 16^3 voxels, six grid origins:
-    ``max(truth - fill)`` is **0.0091** at worst -- inside the sampling error, i.e. nothing is
-    removed -- and ``max(fill - truth)`` is 0.0927 at worst, on a *box* pillar sunk into a
-    substrate, where the pillar's own edge crosses the voxel. Flush joints, where the children
-    are disjoint, read 0.0048 to 0.0069 on both tails.
+    **What is exact, and what is a bound.** In the exact rows the interval closes to **exactly**
+    0.0 -- both ends are the same expression over the same operands -- so the report's count is 0
+    and not merely small:
+
+        the voxel                                     exact?
+        no child's surface crosses it                 exactly -- a boolean of the children's fills
+        one child's surface crosses it                exactly, because that child's fill is exact
+        two or more cross, every pair proved to       exactly -- disjoint children ADD, and this is
+        share no volume                               the flush device joint and the T-junction
+        exactly one pair shares it, both of that      exactly -- ``_cut.two_plane`` is the volume
+        pair proved FLAT                              of a voxel cut by two half spaces
+        anything else                                 a bound, counted and reported
+
+    **The exact rows, measured** (2026-09-21, ``h`` = 0.05, NumPy/JAX/Torch):
+
+        a three-box T-junction against the single box it is,     3.8e-15   over 36 grid placements
+        the same rotated 90 degrees (seams on x and y)           2.4e-15   over 18
+        the same under ``jax.jit``, against eager and truth      3.8e-15   (0.2500 before)
+        two boxes whose union is one box, 3 seams x 7 origins    2.4e-15
+        worst ``max_i F_i - fill`` (a hole in solid material)    1.3e-14   5 scenes x 3 joints x
+        worst ``fill - min(1, sum F_i)``                         0.0e+00   6 grid origins
+        flush children add exactly, worst departure              1.4e-15
+
+    **The safe side, measured**, against 12^3 = 1728 stratified membership samples per voxel
+    (standard error 1.2e-2; the oracle is the composed distance's SIGN and shares no line with the
+    rule), 14^3 voxels at ``h`` = 0.05, three grid origins, 20 scenes. The worst violation of the
+    safe side over **every** scene is **+0.0103**, i.e. inside the sampling error and consistent
+    with the zero the sign argument proves. What being on that side costs -- the other tail -- is
+    what is worth reading:
+
+        operation      worst cost   on
+        Union            0.3543     a non-convex star prism with a ball through it
+                         0.2119     three pillars in a row, each sunk into a substrate
+                         0.0735     one hexagonal pillar sunk into a substrate
+        Intersection     0.3370     a ball clipped by two slabs
+                         0.2601     two tilted boxes
+                         0.1875     the corner of a cube spelled as three slabs
+        Difference       0.1517     a slab with two overlapping vias
+                         0.1406     an L-shaped groove (two overlapping boxes removed)
+
+    and the widest interval the node reported over the same product is 0.5000, on that L-shaped
+    groove. **The width is a bound on the interval and not an estimate of the error**: on the
+    T-junction it reads 0.2500 where the shipped end is exact to 4e-15, because three bodies that
+    are pairwise disjoint have tangent half spaces that are not, and the node can see only the
+    half spaces. It over-warns and never under-warns, which is the direction a report should err
+    in; a caller that wants the error itself has to refine the grid and watch the answer move.
+
+    The one number this replaces is the C2 review's: the previous writing **removed** 0.0206 of a
+    voxel over 72 voxels of a slab with two overlapping vias, one-signed, against a 128^3
+    quadrature. The same probe now reads 0.0000 on both tails.
 
     **What "FLAT" is, and why it is a theorem and not a fudge.** A child is called flat in a voxel
     when its own exact fill and its tangent half space's agree to :data:`_FLAT` of the voxel. A
     convex body lies inside its own tangent half space, so ``f_i = F_i`` says the two sets differ
     by a volume of at most ``1e-12 dx^3`` -- they are the **same set** in this voxel, and every
     statement :func:`_cut.two_plane` makes about the half spaces is then a statement about the
-    bodies. A child with no exact fill of its own (a nested node) can never be shown flat and
-    never is. Flatness gates every subtraction of *interface*, and that is the second thing the
-    previous writing got wrong: it deleted **both** children's whole face wherever a pair was
-    back to back and flush, so the foot perimeter of a pillar -- where the substrate's top is
-    genuinely exposed and the pillar's side wall is genuinely in the same voxel -- reported
-    ``w = 0`` and ``sum_c w_c = 0``, no interface at all, in 108 of 5360 truly cut voxels of a
-    3x3 pillar array. There the pillar is a box with an **edge** in the voxel, its exact fill is
-    0.21 against its half space's 0.30, it is not flat, and nothing is subtracted.
+    bodies. Where flatness holds for both children of the pair the two ends of the two-plane
+    bracket coincide; where it does not, they differ by ``gap_i = f_i - F_i``, each child's own
+    tangent-plane over-fill, and the containment ``H_a n H_b \\ (A n B) subset (H_a \\ A) u
+    (H_b \\ B)`` is what makes that the right width. Flatness also gates every subtraction of
+    *interface*: that is the second thing an earlier writing got wrong, deleting **both**
+    children's whole face wherever a pair was back to back and flush, so the foot perimeter of a
+    pillar -- where the substrate's top is genuinely exposed and the pillar's side wall is
+    genuinely in the same voxel -- reported ``w = 0`` and ``sum_c w_c = 0``, no interface at all,
+    in 108 of 5360 truly cut voxels of a 3x3 pillar array.
 
     **The interface, term by term.** Every child that crosses contributes its own area and its own
     moment; a pair subtracts only what it can prove is buried, and only where both children are
@@ -1201,90 +1382,73 @@ class _Combination(Body):
         a pair back to back and on each other (``n_i . n_j = -1``, ``d_i + d_j <= 0``) buries both
         faces entirely -- that is the flush device joint, and it is why the rod on the substrate
         reads ``w = 0`` exactly;
-        the one pair that shares volume buries ``area(dH_i n B n H_j)``, which
-        :func:`_cut.two_plane` returns beside the volume.
+        the one pair the two-plane cut is spent on buries ``area(dH_i n B n H_j)``, which
+        :func:`_cut.two_plane` returns beside the volume, and **only for the two children of that
+        pair** -- a third crossing child keeps its whole face, which an earlier writing did not
+        do and which would have reported no interface where there is one.
 
     A :class:`Difference` does not fuse a flush pair between the body it keeps and a body it
     removes -- there the far side of the face is vacuum, and the face is still interface. Where
     nothing can be proved buried the areas are simply summed, which over-counts a joint and never
     reports no interface where there is one; ``sum_c w_c`` is 1 in every such voxel.
 
-    **The one refusal.** Three or more surfaces genuinely sharing one voxel -- two pairs of
-    crossing children both holding volume in common -- is a case this file cannot write down
-    exactly and does not approximate. It raises, names the voxel count, and says what to write
-    instead. Under ``jax.jit`` there is no value to read, and there the node falls back to the
-    composed plane for those voxels; that is the same line :func:`_cut._unit` draws and for the
-    same reason.
-
-    **What it costs, with the shipped column present this time.** :func:`_cut.two_plane` runs
-    **once per voxel**, not once per pair: where the node has an answer at all there is at most
-    one pair sharing volume, and that pair's two faces are selected with ``where`` before the cut
-    is taken. What is O(k^2) is the pair test -- :func:`_no_common_volume`, five evaluations of a
-    piecewise-linear function -- and the previous round's cost sentence hid it behind a two-child
-    measurement. Measured on this machine (2026-09-21, 6 cores, ``OMP_NUM_THREADS=2``, float64,
-    66^3 = 287496 voxels at ``dx`` = 0.0152, the node's own support box, one component, best of
-    three), on a substrate plus ``k - 1`` flush pillars:
-
-        k   pairs  backend   NODE    children alone  composed plane  pair test  two_plane
-        2     1    numpy     4.484 s     2.998 s        0.229 s       0.065 s    0.627 s
-        2     1    torch     3.052 s     2.568 s        0.187 s       0.015 s    0.339 s
-        2     1    jax jit   0.516 s        --             --            --         --
-        4     6    numpy     5.381 s     3.580 s        0.295 s       0.394 s    0.629 s
-        4     6    torch     3.807 s     2.913 s        0.215 s       0.082 s    0.340 s
-       10    45    numpy    12.324 s     5.599 s        0.484 s       3.330 s    0.683 s
-       10    45    torch     6.049 s     3.366 s        0.357 s       0.652 s    0.341 s
-       10    45    jax jit   2.302 s        --             --            --         --
-
-    Read it as a maintainer: on the 3x3 pillar array (10 children, 45 pairs) the **node** costs
-    12.3 s on NumPy, of which 5.6 s is its children's own exact fills, 3.3 s is the O(k^2) pair
-    test and 0.68 s is the one exact two-plane cut -- which is flat in ``k``, as it must be. The
-    "composed plane" column is 0.484 s, reproducing the previous round's 0.483 s for the path
-    this rule replaced, so the node is **25x** the figure that round printed as its price. Over
-    six sub-cell grid origins the node varies between 11.1 s and 12.3 s, i.e. the number is a
-    property of the scene and not of an alignment. The alternative -- Lasserre's recursion over
-    all ``k`` planes (J. B. Lasserre, *An analytical expression and an algorithm for the volume
-    of a convex polyhedron in R^n*, J. Optim. Theory Appl. **39**, 363 (1983)) -- was 440.4 s and
-    22.2 GiB on this scene, so it is still 36x this node on NumPy and out of reach on memory.
-    :func:`_cut.two_plane` is that identity's ``k = 2`` case with the recursion unrolled into
-    arithmetic, and carries its derivation and its validation against an independent ConvexHull
-    oracle. The pair test is the honest place to look for the next factor: it is 27% of the node
-    at ``k`` = 10 and grows as ``k^2``.
-
-    **A CSG node's fill is no longer discontinuous -- ``w`` is, and that is now the whole of the
-    reason its geometry may not be traced.** Three previous writings of this class refused a
-    traced parameter because the *fill* stepped, by 3.15e-02, then 4.29e-02, then 4.48e-02,
-    across a geometry change of 5.5e-17. That step was the composed plane's: its fill reads the
-    **selected** child's normal, and at a crease the selection swaps. A node now answers from its
-    children's own fills and one exact two-plane cut, and neither reads a selected normal. Over
-    the six-node crease family the worst single-step change in the fill is **3.1e-03**, which is
-    the same size as a *leaf*'s 3.3e-03 and is the slide step times the fill's own slope;
-    bisected at the old jump's own location the fill moves 9.1e-15 across 5.6e-17 and a central
-    difference of a loss on it reads 7.62 at every step from 1e-3 to 1e-7 -- convergent.
-
-    What is left is ``w``. At the worst live-to-live step of a ``box minus box`` slide, bisected
-    to 2.8e-17, the fill is identical to ten digits and
+    **A CSG node's fill is continuous; ``w`` is not, and that is the whole of the reason its
+    geometry may not be traced.** Three earlier writings of this class refused a traced parameter
+    because the *fill* stepped, by 3.15e-02, then 4.29e-02, then 4.48e-02, across a geometry
+    change of 5.5e-17. That step was the composed plane's: its fill reads the **selected** child's
+    normal, and at a crease the selection swaps. A node answers from its children's own fills and
+    one exact two-plane cut, and neither reads a selected normal. What is left is ``w``: at the
+    worst live-to-live step of a ``box minus box`` slide, bisected to 2.8e-17, the fill is
+    identical to ten digits and
 
         w  (0.0200, 0.4877, 0.4923)  ->  (0.0395, 0.9605, 0.0000)      |dw| = 4.91e-01
 
     with a central difference of ``w_y`` reading 233, 2361, 23639, 236424, 2364267 at steps 1e-3
     down to 1e-7: ``1/step``, the signature of a jump in the objective. ``occupancy`` returns the
-    pair and C2's mixing rule reads both halves, so a loss through a node still steps. The
-    refusal therefore stands, on the measurement that is true rather than the one that was. It is
-    on the *leaf* and not on tracing, so a forward solve that traces the points keeps working,
+    pair and C2's mixing rule reads both halves, so a loss through a node still steps. The refusal
+    is on the *leaf* and not on tracing, so a forward solve that traces the points keeps working,
     and every body with an exact fill stays differentiable -- which is where a design variable
-    belongs. Making this a stage-5 object, or giving the interface the same treatment the fill
-    has just had, is what would lift it.
+    belongs.
 
-    **Where the rule is switched off.** It needs ``H_i`` to contain body ``i``, so a node with a
-    non-convex child -- a nested :class:`Union` or :class:`Difference`, a non-convex
-    :class:`Prism` -- keeps the composed plane and keeps the seam error. The constructor says so
-    with a warning that names the case.
+    **What it costs.** :func:`_cut.two_plane` runs **once per voxel**, not once per pair: the node
+    spends it on the first pair of crossing children that is not proved disjoint, and every other
+    pair takes the two-line bracket. What is O(k^2) is the pair test
+    (:func:`_no_common_volume`, five evaluations of a piecewise-linear function) and the brackets.
+    Measured on this machine (2026-09-21, ``OMP_NUM_THREADS=2``, float64, 66^3 = 287496 voxels at
+    ``dx`` = 0.0152, the node's own support box, one component, best of three), on a substrate
+    plus ``k - 1`` flush pillars:
+
+        k   pairs  backend   NODE     children alone  composed plane  pair test  two_plane
+        2     1    numpy      4.114 s     2.996 s        0.243 s       0.070 s    0.672 s
+        2     1    jax        2.443 s     1.535 s        0.149 s       0.065 s    0.552 s
+        2     1    torch      3.177 s     2.526 s        0.146 s       0.015 s    0.326 s
+        4     6    numpy      5.418 s     3.671 s        0.291 s       0.391 s    0.614 s
+        4     6    jax        3.150 s     1.847 s        0.179 s       0.371 s    0.547 s
+        4     6    torch      3.384 s     2.552 s        0.169 s       0.079 s    0.291 s
+       10    45    numpy     11.149 s     5.432 s        0.456 s       3.102 s    0.613 s
+       10    45    jax        7.762 s     2.944 s        0.292 s       2.860 s    0.514 s
+       10    45    torch      4.974 s     2.913 s        0.233 s       0.531 s    0.267 s
+
+    Read it as a maintainer: on a 3x3 pillar array (10 children, 45 pairs) the **node** costs
+    11.1 s on NumPy, of which 5.4 s is its children's own exact fills, 3.1 s is the O(k^2) pair
+    test and 0.61 s is the one exact two-plane cut -- flat in ``k``, as it must be. The "composed
+    plane" column is the path this rule replaced and is **not** computed any more (the node has
+    no fallback to fall back to), so 0.456 s is what the node would cost if the answer were that
+    plane, and 11.1 s is 24x it. Over six sub-cell grid origins the node varies between 10.94 s
+    and 11.02 s, i.e. the number is a property of the scene and not of an alignment. The
+    alternative -- Lasserre's recursion over all ``k`` planes (J. B. Lasserre, *An analytical
+    expression and an algorithm for the volume of a convex polyhedron in R^n*, J. Optim. Theory
+    Appl. **39**, 363 (1983)) -- was 440.4 s and 22.2 GiB on this scene, so it is still 40x this
+    node on NumPy and out of reach on memory. :func:`_cut.two_plane` is that identity's ``k = 2``
+    case with the recursion unrolled into arithmetic, and carries its derivation and its
+    validation against an independent ConvexHull oracle. The pair test is the honest place to look
+    for the next factor: 28% of the node at ``k`` = 10, and growing as ``k^2``.
     """
 
-    #: Is a node of this kind convex when every child is? An intersection of convex sets is
-    #: convex and its selected supporting plane contains it, so it may itself be a child of
-    #: another node's seam rule; a union and a difference may not.
-    _convex_when_children_are = False
+    #: Which end of its own interval this node kind ships: the high one where the operation must
+    #: not remove material it has (``Union``, ``Difference``), the low one where it must not add
+    #: material it has not (``Intersection``). See the sign argument in the class docstring.
+    _ships_the_high_end = True
 
     def __init__(self, *bodies):
         if len(bodies) < 2:
@@ -1292,10 +1456,26 @@ class _Combination(Body):
         for body in bodies:
             if not isinstance(body, Body):
                 raise ValueError(
-                    f'{type(self).__name__}(...): every child is a Body -- Sphere, Cylinder, Box, '
-                    f'Prism or another node; got {type(body).__name__} ({body!r}). A CSG node '
-                    'asks each child for its signed distance and its own cut, and a value that '
-                    'is not a body has neither.')
+                    f'{type(self).__name__}(...): every child is a Body -- Sphere, Cylinder, Box '
+                    f'or Prism; got {type(body).__name__} ({body!r}). A CSG node asks each child '
+                    'for its signed distance and its own cut, and a value that is not a body has '
+                    'neither.')
+            if not body.has_exact_fill:
+                raise ValueError(
+                    f'{type(self).__name__}(...): every child must answer its own filled fraction '
+                    f'EXACTLY, and {type(body).__name__} does not. A node\'s own answer is one end '
+                    'of an interval, and which end is safe depends on the operation above it: a '
+                    'Union needs its children over-stated (so that it cannot remove material that '
+                    'is there) and an Intersection needs them under-stated (so that it cannot add '
+                    'material that is not), and one number cannot be both. So a node may not be a '
+                    'child of another node. Write it FLAT -- Union(a, b, c), not '
+                    'Union(Union(a, b), c) -- which this rule answers for any number of children, '
+                    'including three or more surfaces meeting in one voxel. (Measured on the '
+                    'nesting this refuses, against an exact oracle: Union(Box, '
+                    'Intersection(Sphere, Box)) read up to 0.1156 of a voxel above the truth over '
+                    'five sub-cell grid origins, with the nested node itself up to 0.0152 above '
+                    'its own exact fill.) Sphere, Cylinder, Box and Prism all have an exact fill '
+                    'and are all legal children.')
             for leaf in body.leaves():
                 if traced(leaf):
                     raise ValueError(
@@ -1306,7 +1486,7 @@ class _Combination(Body):
                         'both sides, and a central difference of a loss on it DIVERGES as '
                         '1/step (233, 2361, 23639, 236424, 2364267 at 1e-3 down to 1e-7), which '
                         'is a jump in the objective and not a gradient disagreeing with a '
-                        'difference. (The FILL is continuous now -- worst step 3.1e-03 over six '
+                        'difference. (The FILL is continuous -- worst step 3.1e-03 over six '
                         'node kinds, the same as a leaf\'s -- but occupancy returns the pair and '
                         'the mixing rule reads both halves.) A forward-only CSG node is honest '
                         'and a gradient through a jump is not, so the parameter is refused '
@@ -1315,19 +1495,6 @@ class _Combination(Body):
                         'a dimension, use a body with an exact fill (Sphere, Cylinder, Box, '
                         'Prism), whose w is smooth away from its own creases.')
         self.bodies = bodies
-        self._seam_rule = all(body.convex for body in bodies)
-        self.convex = self._seam_rule and self._convex_when_children_are
-        if not self._seam_rule:
-            loose = ', '.join(sorted({type(b).__name__ for b in bodies if not b.convex}))
-            warnings.warn(
-                f'{type(self).__name__}(...): a child is not convex ({loose}), so the flush-seam '
-                'rule is off for this node and two children whose surfaces TOUCH will read half '
-                'the material along the joint (measured: 52 voxels at fill 0.5 where the truth '
-                'is 1.0, first order in h, with a full interface normal in solid material). The '
-                'rule needs a child to lie inside its own tangent half space, which a nested '
-                'Union or Difference and a non-convex Prism do not. Build the node flat over '
-                'convex leaves (Sphere, Cylinder, Box, convex Prism, a nested Intersection of '
-                'them), or separate the touching faces by more than a voxel.', stacklevel=2)
 
     def leaves(self):
         return tuple(leaf for body in self.bodies for leaf in body.leaves())
@@ -1347,6 +1514,10 @@ class _Combination(Body):
         k = len(self.bodies)
         return [(i, j) for i in range(k) for j in range(i + 1, k)]
 
+    def _name(self):
+        """``'Union(Box, Cylinder)'`` -- what a report names when a scene has several nodes."""
+        return f'{type(self).__name__}({", ".join(type(b).__name__ for b in self.bodies)})'
+
     def _fused(self, i, j):
         """Does a flush back-to-back pair of these two children bury both faces?
 
@@ -1360,56 +1531,66 @@ class _Combination(Body):
         out = []
         for body, (d, n), part in zip(self.bodies, faces, child):
             plane = _parts(d, n, dx)
+            tangent = bool(body.convex)
             inside = d <= -_CORNER * dx
-            outside = d >= (dx / 2) * xp.sum(xp.abs(n), axis=-1)
-            flat = (xp.abs(plane[0] - part[0]) <= _FLAT if body.has_exact_fill
+            # A convex body is inside its own tangent half space, so the box's exact support
+            # along n answers `outside` exactly. Without that containment the same question is
+            # answered by the circumradius, which needs only |d| <= the true distance -- the one
+            # thing the `inside` test needs too, and true for every exact signed distance here.
+            outside = (d >= (dx / 2) * xp.sum(xp.abs(n), axis=-1) if tangent
+                       else d >= _CORNER * dx)
+            # Equal volumes prove two sets equal only when one contains the other, so flatness is
+            # a statement a non-convex body cannot make however close the two numbers are.
+            flat = (xp.abs(plane[0] - part[0]) <= _FLAT if tangent
                     else xp.zeros_like(d) > xp.ones_like(d))
-            out.append(_Child(d, n, inside, outside, ~(inside | outside), flat, plane, part))
+            out.append(_Child(d, n, inside, outside, ~(inside | outside), flat, tangent,
+                              plane, part))
         return out
 
     def _pair_state(self, state, dx, xp):
-        """Per pair and per voxel: do they share volume, are their faces on each other, and how
-        many pairs are left for one exact cut to answer."""
+        """Per pair and per voxel: proved to share no volume, flush and back to back, and which
+        one pair (at most) the exact two-plane cut is spent on."""
         zero = xp.zeros_like(state[0].d)
-        one = xp.ones_like(zero)
-        count, seen = zero, zero > one
+        never = zero > xp.ones_like(zero)
         split, flush, first = {}, {}, {}
+        seen = never
         for i, j in self._pairs():
             a, b = state[i], state[j]
             both = a.cross & b.cross
-            apart = _no_common_volume(a.d, a.n, b.d, b.n, dx, xp)
+            # `_no_common_volume` is a question about the two tangent HALF SPACES, and only a
+            # convex body is inside its own. For a pair this file cannot ask it of, nothing is
+            # claimed -- which costs the pair its exact zero and never claims a false one.
+            apart = (_no_common_volume(a.d, a.n, b.d, b.n, dx, xp)
+                     if (a.tangent and b.tangent) else never)
             split[i, j] = both & apart
             on_each_other = ((1 + xp.sum(a.n * b.n, axis=-1) <= _SAME_FACE)
                              & (a.d + b.d <= _SAME_FACE * dx))
             flush[i, j] = (split[i, j] & on_each_other & a.flat & b.flat
-                           if self._fused(i, j) else zero > one)
-            live = both & ~apart
+                           if self._fused(i, j) else never)
+            live = (both & ~apart) if (a.tangent and b.tangent) else never
             first[i, j] = live & ~seen
             seen = seen | live
-            count = count + xp.where(live, one, zero)
-        return count, split, flush, first
+        return split, flush, first
 
     def _crease(self, state, first, dx, xp):
-        """The one pair of surfaces that genuinely shares this voxel, cut exactly.
+        """The one pair of surfaces the exact two-plane cut is spent on, per voxel.
 
-        ``(least, most, buried, gate)``. :func:`_cut.two_plane` answers for the two tangent
-        **half spaces**, and a convex body is inside its own, so ``V`` is an upper bound on what
-        the two bodies share and ``V - gap_a - gap_b`` is a lower one, where ``gap_i = f_i - F_i``
-        is the child's own tangent-plane over-fill of this voxel::
+        :func:`_cut.two_plane` answers exactly for the two tangent **half spaces**, and a convex
+        body is inside its own, so ``V`` is an upper bound on what the two bodies share and
+        ``V - gap_a - gap_b`` a lower one, where ``gap_i = f_i - F_i`` is the child's own
+        tangent-plane over-fill of this voxel::
 
             H_a n H_b  \\  (A n B)  is inside  (H_a \\ A) u (H_b \\ B)
 
         Both are then clamped into ``[max(0, F_a + F_b - 1), min(F_a, F_b)]``, which any two sets
         in one voxel obey. Where both children are **flat** the two gaps are zero and the two
-        bounds are the same number, exactly ``V``; where they are not, each node takes the side
-        that cannot delete material it has -- a union subtracts ``least``, an intersection **is**
-        ``most``, a difference subtracts ``least``. That is the whole of the answer to "an
-        approximation that can remove material that is there is not an option": the union's fill
-        is provably at or above the truth, not approximately so.
+        bounds are the same number, exactly ``V``.
 
         ``buried`` is the area of each child's tangent plane lying inside its partner's half
-        space, and ``gate`` says both children were proved flat -- which is what turns a
-        statement about two half spaces into one about two bodies.
+        space, ``gate`` says both children of the pair were proved flat -- which is what turns a
+        statement about two half spaces into one about two bodies -- and ``chosen[i]`` says child
+        ``i`` is one of the two, so that a third crossing child does not have its own face
+        deleted by a pair it is not in.
         """
         zero = xp.zeros_like(state[0].d)
         one = xp.ones_like(zero)
@@ -1419,6 +1600,7 @@ class _Combination(Body):
         d_a, d_b, n_a, n_b = dx * one, dx * one, axis, axis
         f_a, f_b, pf_a, pf_b, pa_a, pa_b, gap = (zero,) * 7
         gate = zero > one
+        chosen = [zero > one] * len(state)
         for (i, j), take in first.items():
             a, b = state[i], state[j]
             wide = take[..., None]
@@ -1430,6 +1612,7 @@ class _Combination(Body):
             gap = xp.where(take, xp.maximum(a.plane[0] - a.part[0], zero)
                            + xp.maximum(b.plane[0] - b.part[0], zero), gap)
             gate = gate | (take & a.flat & b.flat)
+            chosen[i], chosen[j] = chosen[i] | take, chosen[j] | take
         volume, cut_a, cut_b = two_plane(d_a, n_a, d_b, n_b, dx, (pf_a, pa_a), (pf_b, pa_b))
         floor = xp.maximum(f_a + f_b - one, zero)
         roof = xp.minimum(f_a, f_b)
@@ -1441,13 +1624,47 @@ class _Combination(Body):
             buried[i] = buried[i] + xp.where(take, cut_a, zero)
             buried[j] = buried[j] + xp.where(take, cut_b, zero)
             taken = taken | take
-        return (xp.where(taken, least, zero), xp.where(taken, most, zero), buried, gate)
+        return _Crease(xp.where(taken, least, zero), xp.where(taken, most, zero),
+                       buried, gate, chosen)
+
+    def _pair_bounds(self, state, split, first, crease, xp):
+        """``(i, j, lo, hi)`` per pair: the bracket on ``|A_i n A_j n V| / dx^3``, one at a time.
+
+        Three cases and no fourth: a pair proved to share no volume holds **exactly** zero; the
+        one pair the node spends the exact two-plane cut on holds ``[least, most]``; every other
+        pair holds the two sides any two sets in one voxel obey. Those last two are stated in the
+        children's own **exact** fills, which is why a child without one is refused at
+        construction -- they are what makes a child that is wholly inside the voxel (``F_i = 1``,
+        so ``lo = hi = F_j``) and one that is wholly outside (``F_i = 0``, so ``lo = hi = 0``)
+        come out exact with no case of their own.
+
+        It is a **generator** and not a pair of dicts, because ``k (k - 1)`` full float arrays
+        is not a thing to keep: at ``k = 10`` on a 66^3 grid that is 207 MiB of float64 that
+        every ``_resolved`` reduces away the moment it sees it. Each is consumed once.
+        """
+        zero = xp.zeros_like(state[0].d)
+        one = xp.ones_like(zero)
+        for i, j in self._pairs():
+            f_i, f_j = state[i].part[0], state[j].part[0]
+            take = first[i, j]
+            yield (i, j,
+                   xp.where(split[i, j], zero,
+                            xp.where(take, crease.least,
+                                     xp.maximum(f_i + f_j - one, zero))),
+                   xp.where(split[i, j], zero,
+                            xp.where(take, crease.most, xp.minimum(f_i, f_j))))
 
     def _gone(self, i, state, flush, crease, xp):
-        """How much of child ``i``'s interface this voxel can prove is buried in another child."""
-        gate, buried = crease[3], crease[2]
+        """How much of child ``i``'s interface this voxel can prove is buried in another child.
+
+        ``crease.chosen[i]`` is **not** tested here, and that is not an oversight: ``buried[i]``
+        is a sum over the pairs the cut was spent on, so it is exactly zero in a voxel where
+        child ``i`` is in none of them, and ``where(gate & chosen_i, 0, 0)`` is ``where(gate, 0,
+        0)``. Where it does matter is :meth:`_inside_face`, which *replaces* the child's whole
+        area rather than subtracting from it -- a third crossing child would lose its face there.
+        """
         zero = xp.zeros_like(state[0].d)
-        gone = xp.where(gate, buried[i], zero)
+        gone = xp.where(crease.gate, crease.buried[i], zero)
         for pair, mask in flush.items():
             if i in pair:
                 gone = gone + xp.where(mask, state[i].plane[1], zero)
@@ -1470,85 +1687,78 @@ class _Combination(Body):
         """The part of a child's interface that lies **inside** its partner -- an intersection's
         own boundary, and the wall of the hole a difference cuts.
 
-        Where flatness could not be proved the child's whole area is taken instead: that
-        over-counts a joint, and the alternative is reporting no interface where there is one.
+        Where flatness could not be proved, and for a crossing child that is not one of the two
+        the cut was spent on, the child's whole area is taken instead: that over-counts a joint,
+        and the alternative is reporting no interface where there is one.
         """
         nn = one.n * one.n
         return (xp.where(gate, buried, one.part[1]),
                 xp.where(gate[..., None], buried[..., None] * nn, one.part[2]))
 
-    def _resolved(self, state, split, flush, first, crease, dx, xp):
-        """``(fill, area, moment)`` -- the rule's answer, per voxel, for this node kind."""
+    def _resolved(self, state, split, flush, first, crease, bounds, dx, xp):
+        """``(low, high, area, moment)`` -- the interval and the interface, per node kind.
+
+        ``bounds`` is :meth:`_pair_bounds`' generator and is walked **once**.
+        """
         raise NotImplementedError
 
-    def _loud_if_two_pairs_share_a_voxel(self, count, xp):
-        """Refuse, by name, the case this file cannot write down: two pairs of crossing children
-        both holding volume of one voxel in common."""
-        zero, one = xp.zeros_like(count), xp.ones_like(count)
-        bad = _count_true(count >= 2, zero, one, xp)
-        if bad:
-            raise ValueError(
-                f'{type(self).__name__}(...): in {bad} voxel(s) the surfaces of three or more '
-                'children meet, with two different pairs of them holding volume of the voxel in '
-                'common. A node answers such a voxel exactly only when at most one pair shares '
-                'it -- the shared volume of two half spaces is a closed form '
-                '(_cut.two_plane) and of three is not, at any price this kernel can pay (the '
-                'exact multi-plane cut was measured at 440 s and 22 GiB for one component of a '
-                '3x3 pillar array). It is refused rather than approximated because the only '
-                'approximations available can REMOVE material that is there. Write the node so '
-                'that no three children meet in one voxel: separate the third body by more than '
-                'a voxel, spell the joint flush instead of overlapping, or nest the node -- '
-                'Union(Union(a, b), c) resolves a and b first (and drops to the composed plane, '
-                'with the warning that says so).')
-
-    def parts(self, points, dx, surface=None):
+    def parts(self, points, dx, surface=None, report=None):
         xp = array_namespace(points)
         faces = [body.surface(points) for body in self.bodies]
-        d, n = faces[0]
-        for other in faces[1:]:
-            d, n = self._compose(d, n, *other, xp)
-        plane = _parts(d, n, dx)
-        if not self._seam_rule:
-            return plane
         child = [body.parts(points, dx, surface=face)
                  for body, face in zip(self.bodies, faces)]
         state = self._state(faces, child, dx, xp)
-        count, split, flush, first = self._pair_state(state, dx, xp)
-        self._loud_if_two_pairs_share_a_voxel(count, xp)
+        split, flush, first = self._pair_state(state, dx, xp)
         crease = self._crease(state, first, dx, xp)
-        fill, area, moment = self._resolved(state, split, flush, first, crease, dx, xp)
-        ok = count < 2
-        return (xp.where(ok, fill, plane[0]), xp.where(ok, area, plane[1]),
-                xp.where(ok[..., None], moment, plane[2]))
+        bounds = self._pair_bounds(state, split, first, crease, xp)
+        low, high, area, moment = self._resolved(state, split, flush, first, crease, bounds,
+                                                 dx, xp)
+        if report is not None:
+            width = xp.maximum(high - low, xp.zeros_like(low))
+            one, zero = xp.ones_like(width), xp.zeros_like(width)
+            report.record(self._name(), xp.sum(xp.where(width > _BOUNDED, one, zero)),
+                          xp.max(width))
+        return (high if self._ships_the_high_end else low), area, moment
 
 
 class Union(_Combination):
     """Everything in any of them.
 
     A voxel any child fills reads 1; a voxel no child's surface crosses is a boolean; a voxel one
-    child's surface crosses is that child's own answer; and where two do, the volume they share
-    comes from the exact two-plane cut and their buried faces come out of the interface. See
-    :class:`_Combination` for the measurement that made each of those necessary.
+    child's surface crosses is that child's own answer; children proved to share no volume ADD,
+    exactly; and where a pair does share the voxel, a lower bound on what it shares is subtracted,
+    so the answer is provably at or above the truth. See :class:`_Combination` for the measurement
+    that made each of those necessary.
     """
 
     def _compose(self, d, n, other_d, other_n, xp):
         take = other_d < d
         return xp.where(take, other_d, d), xp.where(take[..., None], other_n, n)
 
-    def _resolved(self, state, split, flush, first, crease, dx, xp):
-        shared = crease[0]                          # the LEAST the pair can share: a union that
-        zero = xp.zeros_like(state[0].d)            # subtracts it is at or above the truth
+    def _resolved(self, state, split, flush, first, crease, bounds, dx, xp):
+        zero = xp.zeros_like(state[0].d)
         one = xp.ones_like(zero)
         moment = xp.zeros_like(state[0].part[2])
-        solid, total, area = None, zero, zero
+        solid, total, biggest, area = None, zero, zero, zero
         for i, one_child in enumerate(state):
             solid = one_child.inside if solid is None else (solid | one_child.inside)
-            total = total + xp.where(one_child.cross, one_child.part[0], zero)
+            total = total + one_child.part[0]
+            biggest = xp.maximum(biggest, one_child.part[0])
             kept, kept_moment = self._kept(one_child, self._gone(i, state, flush, crease, xp), xp)
             area = area + xp.where(one_child.cross, kept, zero)
             moment = moment + xp.where(one_child.cross[..., None], kept_moment,
                                        xp.zeros_like(moment))
-        return (xp.where(solid, one, total - shared), xp.where(solid, zero, area),
+        # |u A_i| <= sum F_i - |A_p n A_q| for ANY single pair, so the LARGEST lower bound over
+        # the pairs is the tightest thing that may be subtracted without falling below the truth;
+        # and |u A_i| >= sum F_i - sum_pairs |A_i n A_j| (Bonferroni) gives the other end.
+        shared_lo, shared_hi = zero, zero
+        for _, _, pair_lo, pair_hi in bounds:
+            shared_lo = xp.maximum(shared_lo, pair_lo)
+            shared_hi = shared_hi + pair_hi
+        roof = xp.minimum(one, total)                       # |u A_i| <= min(1, sum F_i)
+        high = xp.minimum(roof, xp.maximum(total - shared_lo, biggest))
+        low = xp.maximum(biggest, xp.minimum(total - shared_hi, roof))  # |u A_i| >= max_i F_i
+        return (low, high, xp.where(solid, zero, area),
                 xp.where(solid[..., None], xp.zeros_like(moment), moment))
 
 
@@ -1556,38 +1766,56 @@ class Intersection(_Combination):
     """Only what is in all of them.
 
     One child wholly outside the voxel, or one pair of crossing children holding no volume of it
-    in common, empties the voxel whatever the others do -- and with at most one pair sharing the
-    voxel that covers every case with three or more surfaces in it. What is left is: nothing
-    crossing (the voxel is inside all of them), one child crossing (its own answer), or two
-    crossing and sharing, which is the two-plane cut's own volume and its two cut faces.
-    """
+    in common, empties the voxel whatever the others do. What is left is: nothing crossing (the
+    voxel is inside all of them), one child crossing (its own answer), or two or more crossing,
+    where the answer is the one pair's shared volume carried down by the rest through
+    ``|n A_i| >= |A_p n A_q| + sum_{i != p,q} F_i - (k - 2)``.
 
-    #: An intersection of convex bodies is convex.
-    _convex_when_children_are = True
+    **It ships the LOW end of its interval**, which is the sign the previous writing had
+    backwards: an intersection that over-states its fill invents material that is in none of its
+    children, and at a corner where three faces meet that is the whole of the voxel's content.
+    """
 
     def _compose(self, d, n, other_d, other_n, xp):
         take = other_d > d
         return xp.where(take, other_d, d), xp.where(take[..., None], other_n, n)
 
-    def _resolved(self, state, split, flush, first, crease, dx, xp):
-        shared, buried, gate = crease[1], crease[2], crease[3]   # the MOST the pair can share:
-        zero = xp.zeros_like(state[0].d)                         # an intersection IS it, so this
-        one = xp.ones_like(zero)                                 # side is the one that keeps
-        moment = xp.zeros_like(state[0].part[2])                 # material it has
-        empty, crossing, alone, area = None, zero, zero, zero
+    #: An intersection must not add material that is not in every child.
+    _ships_the_high_end = False
+
+    def _resolved(self, state, split, flush, first, crease, bounds, dx, xp):
+        zero = xp.zeros_like(state[0].d)
+        one = xp.ones_like(zero)
+        moment = xp.zeros_like(state[0].part[2])
+        empty, crossing, total, smallest, area = None, zero, zero, one, zero
         for i, one_child in enumerate(state):
             empty = one_child.outside if empty is None else (empty | one_child.outside)
             crossing = crossing + xp.where(one_child.cross, one, zero)
-            alone = alone + xp.where(one_child.cross, one_child.part[0], zero)
-            face, face_moment = self._inside_face(one_child, buried[i], gate, xp)
+            total = total + one_child.part[0]
+            smallest = xp.minimum(smallest, one_child.part[0])
+            face, face_moment = self._inside_face(one_child, crease.buried[i],
+                                                  crease.gate & crease.chosen[i], xp)
             area = area + xp.where(one_child.cross, face, zero)
             moment = moment + xp.where(one_child.cross[..., None], face_moment,
                                        xp.zeros_like(moment))
+        # |n A_i| >= |A_p n A_q| + sum_{i != p,q} F_i - (k - 2), for EVERY pair: everything else
+        # in the node can take at most (1 - F_i) of the voxel away from the pair's shared volume.
+        # The pair the exact cut was spent on is usually the tightest, and is not always -- a
+        # pair of children that nearly fill the voxel beats a sharp cut between two thin ones --
+        # so the max over pairs is taken, which costs three array operations per pair. With the
+        # trivial ``lo`` it reduces to Bonferroni over all k children.
+        floor, roof = None, smallest
+        for i, j, pair_lo, pair_hi in bounds:
+            one_pair = pair_lo - state[i].part[0] - state[j].part[0]
+            floor = one_pair if floor is None else xp.maximum(floor, one_pair)
+            roof = xp.minimum(roof, pair_hi)
+        floor = floor + total - (len(state) - 2)
         for mask in split.values():
             empty = empty | mask
+        low = xp.minimum(xp.maximum(floor, zero), roof)
         gone = empty | (crossing < 0.5)
-        fill = xp.where(crossing < 0.5, one, xp.where(crossing < 1.5, alone, shared))
-        return (xp.where(empty, zero, fill), xp.where(gone, zero, area),
+        return (xp.where(empty, zero, low), xp.where(empty, zero, roof),
+                xp.where(gone, zero, area),
                 xp.where(gone[..., None], xp.zeros_like(moment), moment))
 
 
@@ -1612,31 +1840,43 @@ class Difference(_Combination):
     def _fused(self, i, j):
         return i != 0
 
-    def _resolved(self, state, split, flush, first, crease, dx, xp):
-        shared, buried, gate = crease[0], crease[2], crease[3]   # the LEAST again: what a
-        head = state[0]                                          # difference subtracts
+    def _resolved(self, state, split, flush, first, crease, bounds, dx, xp):
+        head = state[0]
         zero = xp.zeros_like(head.d)
-        one = xp.ones_like(zero)
         flat_moment = xp.zeros_like(head.part[2])
         kept, kept_moment = self._kept(head, self._gone(0, state, flush, crease, xp), xp)
-        empty, touches = head.outside, zero > one
-        taken, wall, wall_moment = zero, zero, flat_moment
+        empty = head.outside
+        wall, wall_moment = zero, flat_moment
         outer, outer_moment = zero, flat_moment
+        # |A_0 n u_{j>0} A_j| -- what the difference takes out of the head. The two ends are
+        # a lower bound (so the head keeps at least what it has) and an upper one.
+        bite_lo, bite_sum, bite_hi = zero, zero, zero
+        # Bonferroni one dimension in: |u_j (A_0 n A_j)| >= sum_j |A_0 n A_j| - sum_{j<m}
+        # |A_j n A_m|, and the removed children's own pairwise upper bounds are what stands
+        # in for those. Getting THAT term's sign wrong is what removed 0.0206 of a voxel.
+        for i, j, pair_lo, pair_hi in bounds:
+            if i == 0:
+                bite_lo = xp.maximum(bite_lo, pair_lo)   # A_0 n A_j is in A_0 n u A_j
+                bite_sum = bite_sum + pair_lo
+                bite_hi = bite_hi + pair_hi
+            else:
+                bite_sum = bite_sum - pair_hi
         for j, one_child in enumerate(state[1:], start=1):
             empty = empty | one_child.inside
-            taken = taken + xp.where(one_child.cross, one_child.part[0], zero)
             met = first[0, j]
-            touches = touches | met
-            face, face_moment = self._inside_face(one_child, buried[j], gate, xp)
+            face, face_moment = self._inside_face(one_child, crease.buried[j],
+                                                  crease.gate & crease.chosen[j], xp)
             wall = wall + xp.where(met, face, zero)
             wall_moment = wall_moment + xp.where(met[..., None], face_moment, flat_moment)
             free, free_moment = self._kept(one_child, self._gone(j, state, flush, crease, xp), xp)
             outer = outer + xp.where(one_child.cross, free, zero)
             outer_moment = outer_moment + xp.where(one_child.cross[..., None], free_moment,
                                                    flat_moment)
-        bite = xp.where(touches, shared, zero)
-        fill = xp.where(head.cross, head.part[0] - bite, one - taken + (shared - bite))
+        taken_hi = xp.minimum(head.part[0], bite_hi)
+        taken_lo = xp.clip(xp.maximum(bite_lo, bite_sum), zero, taken_hi)
+        low, high = head.part[0] - taken_hi, head.part[0] - taken_lo
         area = xp.where(head.cross, kept + wall, outer)
         moment = xp.where(head.cross[..., None], kept_moment + wall_moment, outer_moment)
-        return (xp.where(empty, zero, fill), xp.where(empty, zero, area),
+        return (xp.where(empty, zero, low), xp.where(empty, zero, high),
+                xp.where(empty, zero, area),
                 xp.where(empty[..., None], flat_moment, moment))

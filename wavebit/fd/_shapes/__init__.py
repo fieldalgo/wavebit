@@ -75,13 +75,14 @@ array ``where`` and never a Python ``if`` on a value -- so a traced radius and a
 take the same path, which is what makes ``jax.grad`` and a finite difference compute the same
 function.
 """
-from ._bodies import AXES, Body, Box, Cylinder, Difference, Intersection, Prism, Sphere, Union
+from ._bodies import (AXES, Approximation, Approximations, Body, Box, Cylinder, Difference,
+                      Intersection, Prism, Sphere, Union)
 from ._cut import cut, cut_parts
 from ._exact import (clip_capacity, clipped_ball_volume, clipped_disc_area, clipped_polygon_area,
                      overlap, polygon_edge_moments)
 from ._occupancy import image_shifts, occupancy
 
-__all__ = ['AXES', 'Body', 'Box', 'Cylinder', 'Difference', 'Intersection', 'Prism', 'Sphere',
+__all__ = ['AXES', 'Approximation', 'Approximations', 'Body', 'Box', 'Cylinder', 'Difference', 'Intersection', 'Prism', 'Sphere',
            'Union', 'cut', 'cut_parts', 'clip_capacity', 'clipped_ball_volume',
            'clipped_disc_area', 'clipped_polygon_area', 'overlap', 'polygon_edge_moments',
            'image_shifts', 'occupancy']

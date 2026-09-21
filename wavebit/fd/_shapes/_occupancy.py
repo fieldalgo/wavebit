@@ -8,7 +8,7 @@ import numpy as _np
 
 from wavebit._core.backend import array_namespace
 
-from ._bodies import Body, _as, check_sizes
+from ._bodies import Approximations, Body, _as, check_sizes
 from ._cut import _mean_of_the_moment
 
 
@@ -105,7 +105,7 @@ def image_shifts(period, rings=None):
     return [(sx, sy, sz) for sx in spans[0] for sy in spans[1] for sz in spans[2]]
 
 
-def occupancy(body, points, dx, *, period=(None, None, None), rings=None):
+def occupancy(body, points, dx, *, period=(None, None, None), rings=None, report=None):
     """``(fill, w)`` for a voxel of side ``dx`` centred on each of ``points``.
 
     ``points`` is ``(..., 3)``, x-first; the answer is ``fill`` of that shape and ``w`` of
@@ -141,6 +141,15 @@ def occupancy(body, points, dx, *, period=(None, None, None), rings=None):
     ``tests/test_fd_shapes.py::test_the_ring_is_periodic_in_the_body_for_one_period_only`` pins
     both halves of it so the precondition cannot be forgotten silently.
 
+    **``report=`` is how a caller learns what was approximated.** A CSG node answers every voxel
+    -- there is no per-voxel refusal in this package -- but not every voxel exactly, and where it
+    cannot it brackets the filled fraction and ships the end that is safe for its own operation
+    (:class:`_bodies._Combination`). Hand in an :class:`_bodies.Approximations` and it comes back
+    holding how many voxels took a bound, how wide the widest bracket was, and which body it was,
+    with one entry per node **per periodic image** -- so C2 and C5 can warn with a number instead
+    of a solve quietly reading a bound. Leave it out, which is the default, and the two
+    reductions are not even computed.
+
     **Every argument this function takes now has a door, and each one closed a case that used to
     come back as an incidental exception from inside the kernel.** ``period`` is the other length
     (``period=0`` stacked the three images of the ring on the same point and tripled the fill,
@@ -159,6 +168,11 @@ def occupancy(body, points, dx, *, period=(None, None, None), rings=None):
     silently is not there. Both satisfy this function's advertised contract, so nothing
     downstream could flag them, and on JAX there was not even a RuntimeWarning.
     """
+    if report is not None and not isinstance(report, Approximations):
+        raise ValueError(
+            f'occupancy(report=...): an Approximations, which a CSG node adds two numbers to -- '
+            f'how many voxels it answered with a bound and how wide the widest of them was; got '
+            f'{type(report).__name__} ({report!r}). Leave it out and nothing is counted.')
     if not isinstance(body, Body):
         raise ValueError(f'occupancy(body=...): a Body -- Sphere, Cylinder, Box, Prism or a CSG '
                          f'node; got {type(body).__name__} ({body!r}).')
@@ -174,7 +188,7 @@ def occupancy(body, points, dx, *, period=(None, None, None), rings=None):
     fill = area = moment = None
     for shift in image_shifts(period, rings):
         p = points if shift == (0., 0., 0.) else points - _as(xp, shift, points)
-        one_fill, one_area, one_moment = body.parts(p, dx)
+        one_fill, one_area, one_moment = body.parts(p, dx, report=report)
         fill = one_fill if fill is None else fill + one_fill
         area = one_area if area is None else area + one_area
         moment = one_moment if moment is None else moment + one_moment

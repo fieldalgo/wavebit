@@ -189,10 +189,10 @@ pair test is where the next factor is: 27% of the node at ``k`` = 10, and growin
 import numpy as np
 import pytest
 
-from wavebit.fd._shapes import (Box, Cylinder, Difference, Intersection, Prism, Sphere, Union,
-                                clip_capacity, clipped_ball_volume, clipped_disc_area,
-                                clipped_polygon_area, cut, cut_parts, image_shifts, occupancy,
-                                polygon_edge_moments)
+from wavebit.fd._shapes import (Approximations, Box, Cylinder, Difference, Intersection, Prism,
+                                Sphere, Union, clip_capacity, clipped_ball_volume,
+                                clipped_disc_area, clipped_polygon_area, cut, cut_parts,
+                                image_shifts, occupancy, polygon_edge_moments)
 from wavebit.fd._shapes._bodies import (_loud_if_not_a_size, _loud_if_not_counter_clockwise,
                                         polygon_shape)
 from wavebit.fd._shapes._cut import _parts, _second_difference, two_plane
@@ -1285,16 +1285,38 @@ def test_a_union_of_flush_bodies_reads_solid_material_on_the_seam():
             assert abs(float(got.sum()) * hh ** 3 - 0.128) < 1e-12, (origin, frac)
     # A T-junction: three boxes whose union is one box, with TWO coincident faces meeting in the
     # same voxel. It is the case that says `_bodies._no_common_volume`'s boundary must be `>= 0`
-    # and not `> 0` -- a pair sharing a plane shares no VOLUME, and calling it a sharing pair
-    # makes three of them share the voxel, which this kernel refuses rather than approximates.
-    cc = (np.arange(25) - 12) * hh              # a voxel CENTRE on both seams, x = 0 and z = 0
-    grid3 = np.stack(np.meshgrid(cc, cc, cc, indexing='ij'), axis=-1)
-    exact = occupancy(Box((1.0, 1.0, 0.8)), grid3, hh)[0]
+    # and not `> 0` -- a pair sharing a plane shares no VOLUME -- and it is the case the round-6
+    # review found the per-voxel refusal firing on: the three bodies are pairwise DISJOINT and
+    # the node answers them exactly, but it refused at 16 of 16 random sub-cell grid origins and
+    # answered at the 1 this test used. **The origin is swept now**, both the aligned lattice
+    # (a voxel centre on both seams) and the half-offset one, at 18 placements.
     tee = Union(Box((1.0, 1.0, 0.4), center=(0., 0., -0.2)),
                 Box((0.5, 1.0, 0.4), center=(-0.25, 0., 0.2)),
                 Box((0.5, 1.0, 0.4), center=(0.25, 0., 0.2)))
-    got = occupancy(tee, grid3, hh)[0]
-    assert np.abs(got - exact).max() < 1e-13, np.abs(got - exact).max()
+    rng = np.random.default_rng(4)
+    worst_tee = 0.0
+    for origin in [0.0, 0.5] + list(rng.random(7)):
+        for centred in (0.0, 0.5):
+            cc = (np.arange(25) - 12 + centred + origin) * hh
+            grid3 = np.stack(np.meshgrid(cc, cc, cc, indexing='ij'), axis=-1)
+            exact = np.asarray(occupancy(Box((1.0, 1.0, 0.8)), grid3, hh)[0])
+            got = np.asarray(occupancy(tee, grid3, hh)[0])
+            worst_tee = max(worst_tee, float(np.abs(got - exact).max()))
+    assert worst_tee < 1e-13, worst_tee
+    # and the same union read under jax.jit, which is where the refusal could not fire and the
+    # node fell back to the composed plane: 0.7500 against a true 1.0, with w = (1, 0, 0) in
+    # solid material, in 19 voxels. The two paths are one function now.
+    jax = pytest.importorskip('jax')
+    jax.config.update('jax_enable_x64', True)
+    import jax.numpy as jnp
+    for origin in (0.0, 0.25):
+        cc = (np.arange(25) - 12 + origin) * hh
+        grid3 = np.stack(np.meshgrid(cc, cc, cc, indexing='ij'), axis=-1)
+        exact = np.asarray(occupancy(Box((1.0, 1.0, 0.8)), grid3, hh)[0])
+        jitted = np.asarray(jax.jit(lambda p: occupancy(tee, p, hh)[0])(jnp.asarray(grid3)))
+        assert np.abs(jitted - exact).max() < 1e-13, (origin, np.abs(jitted - exact).max())
+    cc = (np.arange(25) - 12) * hh              # back to a voxel CENTRE on the joint
+    grid3 = np.stack(np.meshgrid(cc, cc, cc, indexing='ij'), axis=-1)
     # And the remedy the constructor's warning names: children OVERLAPPING by a fraction of a
     # cell, so that both faces are in one voxel and the material is solid between them. That is
     # the pair `_cut.two_plane` answers on its anti-parallel branch, and the branch that decides
@@ -1309,18 +1331,32 @@ def test_a_union_of_flush_bodies_reads_solid_material_on_the_seam():
         assert band.sum() > 20
         assert np.abs(np.asarray(fill)[band] - 1.0).max() < 1e-13, fraction
         assert np.abs(np.asarray(w)[band]).max() == 0.0, fraction
-    # and the case the rule CANNOT do says so, by name, at construction
-    with pytest.warns(UserWarning, match='the flush-seam rule is off'):
-        Union(Union(Sphere(0.2), Box((0.2, 0.2, 0.2))), Cylinder(0.1, 0.4, 'z'))
-    with pytest.warns(UserWarning, match='the flush-seam rule is off'):
-        Union(Prism(star(6, 0.42, 0.10), 0.3, 'z'), Sphere(0.2))
-    # a node of convex leaves does not warn -- including an Intersection nested in a Union, which
-    # is convex when its children are
+    # and the case the rule CANNOT do says so, by name, at construction and not per voxel: a
+    # node whose own answer is one end of an interval cannot be a child, because which end is
+    # safe depends on the operation above it.
+    for spelling in (lambda: Union(Union(Sphere(0.2), Box((0.2, 0.2, 0.2))),
+                                   Cylinder(0.1, 0.4, 'z')),
+                     lambda: Intersection(Intersection(Sphere(0.3), Box((0.4, 0.4, 0.4))),
+                                          Cylinder(0.1, 0.4, 'z')),
+                     lambda: Difference(Sphere(0.3), Union(Box((0.2, 0.2, 0.2)),
+                                                           Cylinder(0.1, 0.4, 'z'))),
+                     lambda: Union(Intersection(Sphere(0.3), Box((0.4, 0.4, 0.4))),
+                                   Cylinder(0.1, 0.4, 'z'))):
+        with pytest.raises(ValueError, match='must answer its own filled fraction'):
+            spelling()
+    # a flat node of leaves is legal, and a NON-CONVEX Prism is a legal child: it used to put the
+    # whole node on the composed plane with a warning, i.e. back to the half-a-voxel seam.
     import warnings as _warnings
     with _warnings.catch_warnings():
         _warnings.simplefilter('error')
         Union(Sphere(0.2), Box((0.2, 0.2, 0.2)), Cylinder(0.1, 0.4, 'z'))
-        Union(Intersection(Sphere(0.3), Box((0.4, 0.4, 0.4))), Cylinder(0.1, 0.4, 'z'))
+        loose = Union(Prism(star(6, 0.42, 0.10), 0.3, 'z'), Sphere(0.2))
+    cc = (np.arange(20) - 10 + 0.63) * hh
+    grid3 = np.stack(np.meshgrid(cc, cc, cc, indexing='ij'), axis=-1).reshape(-1, 3)
+    loose_fill = np.asarray(occupancy(loose, grid3, hh)[0])
+    kids = np.stack([np.asarray(b.parts(grid3, hh)[0]) for b in loose.bodies], axis=0)
+    assert float((kids.max(axis=0) - loose_fill).max()) < 1e-12      # no hole
+    assert float((loose_fill - np.minimum(1.0, kids.sum(axis=0))).max()) < 1e-12
 
 
 def test_no_node_kind_steps_at_first_contact():
@@ -1608,9 +1644,9 @@ def test_the_union_of_two_bodies_is_at_or_above_the_truth_and_this_is_how_far_ab
     ``V - gap_a - gap_b`` is a lower one, with ``gap_i = f_i - F_i`` the child's own
     tangent-plane over-fill of this voxel (``H_a n H_b`` minus ``A n B`` is inside
     ``(H_a \\ A) u (H_b \\ B)``). A union subtracts the **lower** bound, so its fill is provably
-    at or above the truth; an intersection takes the upper one, for the same reason read the
-    other way. Where both children are flat the two bounds are the same number and the answer is
-    exact.
+    at or above the truth; an intersection **is** the shared volume, so it takes the lower bound
+    too, and reads at or below the truth, which is the side on which it cannot invent material.
+    Where both children are flat the two bounds are the same number and the answer is exact.
 
     Measured against 14^3 = 2744 stratified membership samples per voxel (standard error 9.5e-3),
     16^3 voxels at ``h`` = 0.06, over 6 grid origins (2026-09-21):
@@ -1646,30 +1682,336 @@ def test_the_union_of_two_bodies_is_at_or_above_the_truth_and_this_is_how_far_ab
     assert worst_removed < 4 * error, (worst_removed, error)
 
 
-def test_three_surfaces_in_one_voxel_are_refused_by_name():
-    """Two pairs of children sharing one voxel is the case this kernel cannot write down.
+def test_three_surfaces_in_one_voxel_are_answered_on_the_safe_side_and_counted():
+    """Two pairs of children sharing one voxel is the case this kernel cannot write down exactly.
 
     The shared volume of two half spaces in a box is a closed form; of three it is Lasserre's
-    recursion, which the previous round measured at 440 s and 22 GiB for one component of one
-    metasurface cell. So a voxel in which two different pairs of crossing children hold volume in
-    common is **refused**, by name, with the count and with the spellings that work -- and not
-    approximated, because every approximation available there can remove material that is
-    present.
+    recursion, which an earlier round measured at 440 s and 22 GiB for one component of one
+    metasurface cell. The round-5 writing **refused** such a voxel, and the round-6 review
+    measured what that cost: the refusal fired on a T-junction of three *pairwise disjoint*
+    boxes at 16 of 16 random sub-cell grid origins and not at the 1 the gate used, and under
+    ``jax.jit`` -- where there is no value to read, so it could not fire at all -- the same
+    voxels silently read 0.7500 against a true 1.0. A door that the grid origin decides, and
+    that becomes a wrong answer under a transform, is not a door.
 
-    Two pillars placed exactly tangent to each other on a substrate is that case. Moving one of
-    them by a fifth of a cell is not, and is answered.
+    What ships instead: the node brackets the fill and returns the end that is safe for its own
+    operation, and **counts** the voxels it had to bracket. Two pillars placed exactly tangent
+    to each other on a substrate is the case; it is answered, it never removes material that is
+    there, and the count comes back through :class:`Approximations`. Moving one of them by a
+    fifth of a cell makes the pairs disjoint again and the answer exact, with a count of zero.
     """
     h = 0.05
     pts = _voxels(16, h, (0.0, 0.0, 0.5))
     sub = Box((3.0, 3.0, 0.4), center=(0.0, 0.0, -0.2))
     touching = Union(sub, Cylinder(0.2, 0.5, 'z', center=(-0.2, 0.0, 0.25)),
                      Cylinder(0.2, 0.5, 'z', center=(0.2, 0.0, 0.25)))
-    with pytest.raises(ValueError, match='three or more children meet'):
-        occupancy(touching, pts, h)
-    clear = Union(sub, Cylinder(0.2, 0.5, 'z', center=(-0.23, 0.0, 0.25)),
-                  Cylinder(0.2, 0.5, 'z', center=(0.23, 0.0, 0.25)))
-    fill = np.asarray(occupancy(clear, pts, h)[0])
+    report = Approximations()
+    fill = np.asarray(occupancy(touching, pts, h, report=report)[0])
     assert -1e-12 <= fill.min() and fill.max() <= 1 + 1e-12
+    kids = np.stack([np.asarray(b.parts(pts, h)[0]) for b in touching.bodies], axis=0)
+    assert float((kids.max(axis=0) - fill).max()) < 1e-12            # no hole in solid material
+    assert report.voxels > 0 and 0.0 < report.width <= 1.0
+    assert 'BOUND' in report.message() and 'Union(Box, Cylinder, Cylinder)' in report.message()
+    # and a scene the rule answers exactly -- two flat boxes meeting flush, whose union IS one
+    # box -- reports a count of exactly zero, so the count is not decoration
+    seam = Union(Box((0.4, 0.4, 0.4), center=(-0.2, 0.0, 0.0)),
+                 Box((0.4, 0.4, 0.4), center=(0.2, 0.0, 0.0)))
+    quiet = Approximations()
+    fill = np.asarray(occupancy(seam, _voxels(20, h, (0.0, 0.0, 0.0)), h, report=quiet)[0])
+    assert -1e-12 <= fill.min() and fill.max() <= 1 + 1e-12
+    assert quiet.voxels == 0 and quiet.width < 1e-9 and quiet.message() is None
+    # and the report is the node's own, not the scene's: it names the body
+    assert quiet.entries and quiet.entries[0].node == 'Union(Box, Box)'
+
+
+def _spiky_prism(h):
+    """A prism whose tangent half space at the NEAREST face does not contain it.
+
+    The voxel is centred on the origin. The body's nearest boundary point is on a face at
+    ``x = 0.51 h`` whose outward normal is exactly ``-x``, so the tangent test
+    ``d >= (h/2)|n|_1`` reads ``0.51 h >= 0.5 h`` and calls the voxel EMPTY -- while a thin
+    spike of the same polygon reaches ``(0.40 h, 0.40 h)``, which is **inside** the voxel. Every
+    point of the spike is further from the centre than the face is (0.57 h against 0.51 h), so
+    the signed distance is the face's and so is its normal. A convex body cannot be written like
+    this, which is the whole of why the tangent test is sound for one and not for the other.
+    """
+    face = 0.51 * h
+    outline = [(face, -0.30), (0.30, -0.30), (0.30, 0.30), (face, 0.30),
+               (face, 0.36 * h), (0.40 * h, 0.40 * h), (face, 0.24 * h)]
+    return Prism(np.asarray(outline), 0.60, 'z')
+
+
+def test_a_non_convex_child_is_classified_on_the_side_that_cannot_lie():
+    """Three promises a CSG node may make about a **convex** child and not about any other,
+    and the bracket on what one pair shares -- each asserted where it is decided.
+
+    A convex body lies inside its own tangent half space. Everything the rule reads off that
+    half space is therefore a statement about the body: that the voxel misses it (``outside``),
+    that the two half spaces share no volume (:func:`_bodies._no_common_volume`), and that equal
+    volumes mean equal sets (``flat``). A non-convex :class:`Prism` -- the one non-convex body
+    this package admits -- has none of that, so each of the three is either re-spelled on
+    something that does hold (the circumradius, which needs only ``|d|`` at most the true
+    distance) or switched off. Each is a gate mutant, and the first one is measurable:
+    ``_spiky_prism``'s tangent test calls a voxel empty that the body fills, and dropping the
+    child there leaves a **cut voxel with no interface at all** -- ``sum_c w_c = 0``, this
+    package's own worst failure mode.
+
+    The fourth assertion is the pair bracket itself: ``_cut.two_plane``'s volume, clamped into
+    ``[max(0, F_a + F_b - 1), min(F_a, F_b)]``, which any two sets in one voxel obey.
+    """
+    h = 0.05
+    spiky = _spiky_prism(h)
+    assert not spiky.convex and spiky.has_exact_fill
+    point = np.zeros((1, 3))
+    d, n = (np.asarray(v) for v in spiky.surface(point))
+    assert float(d[0]) > (h / 2) * float(np.abs(n[0]).sum())    # the tangent test says EMPTY
+    assert float(d[0]) < np.sqrt(3) / 2 * h                     # the circumradius says CROSSING
+    assert float(np.asarray(spiky.parts(point, h)[0])[0]) > 0   # and the body is really in there
+    # so a node that believed the tangent test would report a cut voxel with no interface
+    far = Box((0.2, 0.2, 0.6), center=(-0.6, 0.0, 0.0))
+    fill, w = occupancy(Union(spiky, far), point, h)
+    fill, w = float(np.asarray(fill)[0]), np.asarray(w)[0]
+    assert 0 < fill < 1 and abs(w.sum() - 1.0) < 1e-12, (fill, w)
+
+    # the other three are read where they are decided, over a family of voxels
+    node = Union(spiky, Box((0.25, 0.25, 0.6), center=(0.18, 0.0, 0.0)),
+                 Cylinder(0.12, 0.6, 'z', center=(-0.10, 0.20, 0.0)))
+    pts = _voxels(14, h, (0.13, 0.37, 0.5))
+    faces = [body.surface(pts) for body in node.bodies]
+    child = [body.parts(pts, h, surface=face) for body, face in zip(node.bodies, faces)]
+    state = node._state(faces, child, h, np)
+    split, _, first = node._pair_state(state, h, np)
+    crease = node._crease(state, first, h, np)
+    corner = np.sqrt(3) / 2 * h
+    # (1) the non-convex child's `outside` is the circumradius and not the tangent support
+    assert np.array_equal(np.asarray(state[0].outside), np.asarray(state[0].d) >= corner)
+    assert not np.array_equal(np.asarray(state[1].outside), np.asarray(state[1].d) >= corner)
+    # (2) it is never called flat, however close its two fills come
+    assert not bool(np.asarray(state[0].flat).any())
+    assert bool(np.asarray(state[1].flat).any())            # a convex child is, and often
+    # (3) no pair containing it ever claims to share no volume
+    assert not bool(np.asarray(split[0, 1]).any()) and not bool(np.asarray(split[0, 2]).any())
+    assert bool(np.asarray(split[1, 2]).any())
+    assert crease.least is not None
+    # (4) the pair bracket lies inside what the two children's own fills force, on a pair that
+    # really does share the voxel -- a sunk pillar on a substrate, where the two-plane cut runs
+    seen = 0
+    for gap in (0.0, -1.0):
+        for _, body in _device_scenes(h, gap).items():
+            pts = _voxels(12, h, (0.23, 0.11, 0.5))
+            faces = [one.surface(pts) for one in body.bodies]
+            child = [one.parts(pts, h, surface=face) for one, face in zip(body.bodies, faces)]
+            st = body._state(faces, child, h, np)
+            _, _, first = body._pair_state(st, h, np)
+            cr = body._crease(st, first, h, np)
+            f_a = np.zeros(pts.shape[:-1])
+            f_b = np.zeros(pts.shape[:-1])
+            taken = np.zeros(pts.shape[:-1], dtype=bool)
+            for (i, j), take in first.items():
+                take = np.asarray(take)
+                f_a = np.where(take, np.asarray(st[i].part[0]), f_a)
+                f_b = np.where(take, np.asarray(st[j].part[0]), f_b)
+                taken |= take
+            seen += int(taken.sum())
+            least, most = np.asarray(cr.least), np.asarray(cr.most)
+            floor, roof = np.maximum(f_a + f_b - 1.0, 0.0), np.minimum(f_a, f_b)
+            assert float((floor[taken] - least[taken]).max(initial=0.0)) <= 1e-15
+            assert float((least[taken] - most[taken]).max(initial=0.0)) <= 1e-15
+            assert float((most[taken] - roof[taken]).max(initial=0.0)) <= 1e-15
+    assert seen > 200, seen
+
+
+def test_wholly_inside_is_the_voxels_circumradius_and_not_its_tangent_planes_support():
+    """``d <= -dx sqrt(3)/2`` proves a child fills the voxel; ``d <= -(dx/2)|n|_1`` does not.
+
+    The second is the condition for the voxel to sit inside the child's tangent HALF SPACE, and
+    a convex body is inside that half space, not the other way round -- so it proves nothing
+    about the body. The difference is a real surface: a sphere of radius ``h`` whose centre is
+    ``0.4 h`` below the voxel centre reads ``d = -0.6 h`` with ``n = +z``, so the half-space test
+    (threshold ``-0.5 h``) calls the voxel FULL while the sphere's own surface passes through it
+    at ``(0.5 h, 0, 0.466 h)`` -- on the voxel's own face. A node that believed it would report
+    solid material with **no interface at all**, which is this package's worst failure mode.
+
+    The circumradius needs only ``|d|`` to be at most the true distance to the surface, which is
+    what every body here gives and what a nested node would have given too.
+    """
+    h = 0.05
+    ball = Sphere(h, center=(0.0, 0.0, -0.4 * h))
+    point = np.zeros((1, 3))
+    d, n = (np.asarray(v) for v in ball.surface(point))
+    assert float(d[0]) <= -(h / 2) * float(np.abs(n[0]).sum())     # the half space says FULL
+    assert float(d[0]) > -np.sqrt(3) / 2 * h                       # the circumradius says CROSSING
+    own_fill = float(np.asarray(ball.parts(point, h)[0])[0])
+    assert 0 < own_fill < 1, own_fill              # the sphere does NOT fill the voxel
+    # A child called wholly inside puts the node in its `solid` branch, which zeroes the
+    # interface of EVERY child -- so the face that disappears is the one next to it. Here a box
+    # whose own face runs through the voxel centre reports a full h^2 of it.
+    wall = Box((0.4, 2.0, 2.0), center=(-0.2, 0.0, 0.0))
+    assert float(np.asarray(wall.parts(point, h)[1])[0]) > 0.9 * h * h
+    node = Union(ball, wall)
+    area = float(np.asarray(node.parts(point, h)[1])[0])
+    assert area > 0.9 * h * h, area                  # the wall's face survives, whole
+    w = np.asarray(occupancy(node, point, h)[1])[0]
+    assert abs(w.sum() - 1.0) < 1e-12 and abs(w[0] - 1.0) < 1e-12, w
+
+
+def test_a_third_crossing_child_keeps_its_own_face():
+    """A pair's buried area replaces the face of the two children in that pair and of no other.
+
+    :meth:`_Combination._inside_face` **replaces** a child's whole area with what the two-plane
+    cut proved lies inside its partner, so a crossing child that is in no such pair would be
+    left with the zero that belongs to a child that has one -- no interface where there is one,
+    which is this package's own worst failure mode and the one an earlier writing of this class
+    shipped (108 of 5360 truly cut voxels of a pillar array). The gate is an
+    :class:`Intersection` of three bodies whose surfaces all cross the same voxels.
+    """
+    h = 0.05
+    nodes = [Intersection(Sphere(0.30), Box((0.34, 2.0, 2.0)), Box((2.0, 0.36, 2.0))),
+             # and a UNION of three, which is where a child wrongly called WHOLLY INSIDE the
+             # voxel shows: the node reports solid material and no interface where a surface is
+             Union(Sphere(0.26, (-0.12, 0.0, 0.0)), Cylinder(0.14, 0.5, 'z', (0.14, 0.0, 0.0)),
+                   Box((0.5, 0.18, 0.18), center=(0.0, 0.26, 0.0)))]
+    live = 0
+    for node, origin in [(n, o) for n in nodes for o in GRID_ORIGINS[:4]]:
+        pts = _voxels(16, h, origin)
+        fill, w = occupancy(node, pts, h)
+        fill, w = np.asarray(fill), np.asarray(w)
+        own = np.zeros(fill.shape)
+        for child in node.bodies:
+            own = np.maximum(own, np.asarray(child.parts(pts, h)[1]))
+        # a voxel is TRULY cut when some child reports a live interface of its own, which is the
+        # same criterion `test_a_node_never_deletes_an_interface_its_children_report` uses: a
+        # voxel a surface merely passes near is not one the node owes an interface for
+        cut = (fill > 1e-6) & (fill < 1 - 1e-6) & (own > 1e-12 * h * h)
+        assert cut.sum() > 50, (node, origin)
+        dead = cut & (w.sum(axis=-1) < 0.5)
+        assert not dead.any(), (node, origin, int(dead.sum()))   # every cut voxel keeps a face
+        live += int(cut.sum())
+    assert live > 900, live
+    # and, precisely: where the gate fires on ONE pair and a third child crosses the same voxel
+    # in neither half of it, the node's own area still contains that child's whole face. It is
+    # the same statement the loop above makes, read where the substitution happens, because a
+    # node whose other two children happen to bury nothing would hide it behind a live w.
+    # the two flat boxes first, so that THEY are the pair the cut is spent on and the sphere --
+    # which is never flat, and so could never be half of a gated pair -- is the third child
+    node = Intersection(Box((0.34, 2.0, 2.0)), Box((2.0, 0.36, 2.0)), Sphere(0.30))
+    seen = 0
+    for origin in GRID_ORIGINS[:4]:
+        pts = _voxels(16, h, origin)
+        faces = [one.surface(pts) for one in node.bodies]
+        child = [one.parts(pts, h, surface=face) for one, face in zip(node.bodies, faces)]
+        st = node._state(faces, child, h, np)
+        _, _, first = node._pair_state(st, h, np)
+        cr = node._crease(st, first, h, np)
+        fill, area = (np.asarray(v) for v in node.parts(pts, h)[:2])
+        for k in range(len(node.bodies)):
+            own = np.asarray(child[k][1])
+            pick = (np.asarray(cr.gate) & ~np.asarray(cr.chosen[k]) & np.asarray(st[k].cross)
+                    & (fill > 1e-9) & (own > 1e-12 * h * h))
+            seen += int(pick.sum())
+            assert float((own[pick] - area[pick]).max(initial=0.0)) <= 1e-15, (origin, k)
+    assert seen > 20, seen
+
+
+def test_the_node_reports_what_it_approximated_and_says_nothing_when_it_did_not():
+    """The interface C2 and C5 warn from: a count, a width, and the body's own name.
+
+    It is the half of "no per-voxel refusal" that keeps the package honest -- a node that answers
+    everything with a bound and says nothing about it is worse than one that refuses. Four things
+    are held here: a count of **exactly zero** on a scene the rule answers exactly (so the count
+    is not decoration); a positive count and width on one it does not; one entry per node **per
+    periodic image**, because the ring calls ``parts`` once per image; and the behaviour under
+    ``jax.jit``, where there is no number to read -- ``voxels`` and ``width`` come back ``None``
+    and the two reductions are still on the entry as the backend's own arrays, which is what a
+    jitted caller returns from its own function.
+    """
+    h = 0.05
+    pts = _voxels(14, h, (0.31, 0.11, 0.5))
+    sub = Box((3.0, 3.0, 0.4), center=(0.0, 0.0, -0.2))
+    # lattice-aligned, so every cut voxel holds ONE flat face and the interval is closed
+    exact = Union(Box((0.4, 0.4, 0.4), center=(-0.2, 0.0, 0.0)),
+                  Box((0.4, 0.4, 0.4), center=(0.2, 0.0, 0.0)))
+    bounded = Union(sub, Cylinder(0.16, 0.5, 'z', center=(-0.11, 0.0, 0.22)),
+                    Cylinder(0.16, 0.5, 'z', center=(0.11, 0.0, 0.22)))
+    quiet = Approximations()
+    occupancy(exact, _voxels(20, h, (0.0, 0.0, 0.0)), h, report=quiet)
+    assert quiet.voxels == 0 and quiet.width < 1e-9 and quiet.message() is None
+    loud = Approximations()
+    occupancy(bounded, pts, h, report=loud)
+    assert loud.voxels > 0 and loud.width > 0
+    assert str(loud.voxels) in loud.message()
+    # one entry per image: a 3x3 ring of a periodic axis calls parts nine times
+    ring = Approximations()
+    occupancy(bounded, pts, h, period=(1.0, 1.0, None), report=ring)
+    assert len(ring.entries) == 9 and len(loud.entries) == 1
+    assert ring.voxels >= loud.voxels
+    # a value that is not a collector is refused by name, like every other argument
+    with pytest.raises(ValueError, match='occupancy\\(report=...\\)'):
+        occupancy(bounded, pts, h, report=[])
+    # under jax.jit there is no number; the arrays are still there
+    jax = pytest.importorskip('jax')
+    jax.config.update('jax_enable_x64', True)
+    import jax.numpy as jnp
+    traced = Approximations()
+
+    def run(p):
+        occupancy(bounded, p, h, report=traced)
+        entry = traced.entries[-1]
+        return entry.counted, entry.widest
+
+    counted, widest = jax.jit(run)(jnp.asarray(pts))
+    assert traced.entries[-1].voxels is None and traced.entries[-1].width is None
+    assert int(counted) == loud.voxels and abs(float(widest) - loud.width) < 1e-12
+
+
+def test_each_node_kind_takes_the_side_that_cannot_lie_about_material():
+    """The sign argument, per operation, against a membership oracle that shares no line with it.
+
+    ``Union`` and ``Difference`` must never **remove** material that is there; ``Intersection``
+    must never **add** material that is not. Truth is ``body.surface(points)[0] <= 0``, stratified
+    over the voxel -- the composed signed distance's SIGN, which is exact for every node built
+    from convex leaves, and which touches none of ``parts``, ``_cut`` or ``_resolved``.
+
+    Measured over 12^3 = 1728 stratified samples per voxel (standard error 1.2e-2), 14^3 voxels
+    at ``h`` = 0.05, three grid origins, 20 scenes (2026-09-21). Worst violation of the safe side
+    over every one of them: **2.3e-03**, i.e. inside the sampling error and consistent with
+    exactly zero. The other tail -- what being on that side costs -- runs to 0.19 of a voxel on
+    an ``Intersection`` of three slabs, which is the corner where three faces meet in one voxel
+    and is the widest case in the package. The one this replaces removed **0.0206** of a voxel
+    over 72 voxels of a slab with two overlapping vias, one-signed: the shared volume of the two
+    removed children entered ``1 - F_1 - F_2 + shared`` with the lower bound where the sign calls
+    for the upper one.
+    """
+    h = 0.05
+    m = 8
+    error = 0.5 / m ** 1.5
+    slab = Box((1.6, 1.6, 0.6))
+    sub = Box((3.0, 3.0, 0.4), center=(0.0, 0.0, -0.2))
+    cases = [
+        ('hi', Union(sub, Cylinder(0.16, 0.6, 'z', center=(-0.11, 0.0, 0.22)),
+                     Cylinder(0.16, 0.6, 'z', center=(0.11, 0.0, 0.22)))),
+        ('hi', Union(sub, Box((0.18, 0.18, 0.5), center=(-0.17, 0.0, 0.22)),
+                     Box((0.18, 0.18, 0.5), center=(0.0, 0.0, 0.22)),
+                     Box((0.18, 0.18, 0.5), center=(0.17, 0.0, 0.22)))),
+        ('lo', Intersection(Sphere(0.4), Box((0.5, 2.0, 2.0)), Box((2.0, 0.55, 2.0)))),
+        ('lo', Intersection(Box((0.6, 2.0, 2.0)), Box((2.0, 0.6, 2.0)), Box((2.0, 2.0, 0.6)))),
+        ('lo', Intersection(Cylinder(0.3, 0.6, 'z'), Sphere(0.35, (0.1, 0.0, 0.05)))),
+        # the C2 review's own repro: two overlapping bodies REMOVED from a slab
+        ('hi', Difference(slab, Cylinder(0.18, 1.0, 'z', center=(-0.10, 0.0, 0.0)),
+                          Cylinder(0.18, 1.0, 'z', center=(0.10, 0.0, 0.0)))),
+        ('hi', Difference(slab, Sphere(0.20, (-0.12, 0.0, 0.0)), Sphere(0.20, (0.12, 0.0, 0.0)))),
+        ('hi', Difference(slab, Box((0.6, 0.15, 0.3), center=(0.1, 0.0, 0.1)),
+                          Box((0.15, 0.6, 0.3), center=(-0.1, 0.1, 0.1)))),
+    ]
+    worst = 0.0
+    for side, node in cases:
+        for origin in GRID_ORIGINS[:3]:
+            pts = _voxels(12, h, origin)
+            fill = np.asarray(occupancy(node, pts, h)[0])
+            truth = _sampled_fill(node, pts, h, m=m, seed=11)
+            unsafe = (truth - fill) if side == 'hi' else (fill - truth)
+            worst = max(worst, float(unsafe.max()))
+    assert worst < 3 * error, (worst, error)
 
 
 def test_the_exact_two_plane_cut_is_what_an_independent_oracle_says():
