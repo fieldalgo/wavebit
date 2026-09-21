@@ -106,22 +106,40 @@ that cuts a Dipole's stamp, lies on a PlaneWave's sheet (or a box around part of
 TFSF surface is refused, because the 2-cell face would read part of the source
 (``_lower/monitors.py``).
 
+Stage 4's C2 adds the first shape whose edge is **not** a cell boundary::
+
+    fd.Structure(fd.Sphere(radius=0.2, center=(0, 0, 0)), glass)   # subpixel-smoothed
+
+``Slab`` and ``Box`` do not move and every stage-0..3 number is unchanged to the bit; a
+``Sphere`` is asked, at each of the six components' **own** Yee points, what fraction of that
+voxel it fills and which way its surface faces there, and its material is mixed with whatever
+the cell already held by the Farjadpour/Kottke rule (``_lower/occupancy.py`` produces the
+pair, ``_lower/coefficients.py::mix`` is the rule and carries its citations). The rule is two
+isotropic phases meeting at one interface, and C2 refuses every neighbouring case **by name**
+rather than answering it approximately (``_lower/checks.py::check_smoothed``): a smoothed
+shape may not share cells with an ``fd.Conductor`` or an ``fd.Dispersive`` (``sigma`` and the
+poles are not smoothed yet) or with an anisotropic ``eps``/``mu``; it may not reach a
+``Periodic``, ``Bloch`` or ``Axis1D`` face, nor a face of the box (it would count material
+outside a ``-`` face and lose the last half cell at a ``+`` one -- two arms, two messages);
+and two smoothed shapes may not put their surfaces through one voxel. A smoothed shape over a cell-snapped one
+composes exactly and is not refused. The cylinder, the prism, the rotated body, CSG (which is
+how two smoothed bodies that touch are spelled) and the differentiable ``range=`` edge are the
+commits after it.
+
 Out of scope, and refused by name rather than
-silently: the shapes this package ships beyond ``Slab`` and cell-snapped ``Box``, subpixel
-averaging and differentiable ``Box`` edges (stage 4) -- though ``fd.Shape`` is the whole door,
-so a shape written outside the package that answers its protocol runs today, with the
-stage-3 cell-snapped lowering and nothing more; GPU claims (stage 6), ``GaussianBeam``,
-``ModeSource``, mode overlaps (``ModeMonitor``) and decay-driven stopping (``Decay``,
-``Run(decay=)``) (stage 7), non-uniform grids (not in v1).
+silently: shapes other than ``Slab``, cell-snapped ``Box`` and ``Sphere`` (the rest of stage
+4), GPU claims (stage 6), ``GaussianBeam``, ``ModeSource``,
+mode overlaps (``ModeMonitor``) and decay-driven stopping (``Decay``, ``Run(decay=)``) (stage 7),
+non-uniform grids (not in v1).
 """
 from ._check import Report, check
 from ._lower import Plan, lower, plan
 from ._run import run
 from .boundaries import (PEC, PMC, Absorber, Absorbing, Axis1D, Bloch, Boundaries, Periodic,
                          PML, Symmetry)
-from .diagnostics import (AbsorberProximityWarning, CoarseMeshWarning, GrowingFieldWarning,
-                          PMLStabilityWarning, UnsettledFieldWarning)
-from .geometry import Box, Plane, Shape, Slab, Structure
+from .diagnostics import (AbsorberProximityWarning, BoundedVoxelWarning, CoarseMeshWarning,
+                          GrowingFieldWarning, PMLStabilityWarning, UnsettledFieldWarning)
+from .geometry import Box, Plane, Shape, Slab, Sphere, Structure
 from .materials import (Conductor, Debye, Dispersive, Drude, Lorentz, Material, MaterialBase,
                         Pole, eps_at)
 from .monitors import Decay, Diffraction, FarField, Field, Flux, ModeMonitor, Record
@@ -136,9 +154,9 @@ __all__ = [
     'Boundaries', 'Periodic', 'Bloch', 'Axis1D', 'PEC', 'PMC', 'Symmetry', 'PML', 'Absorber',
     'Absorbing',
     'Material', 'Conductor', 'Dispersive', 'Drude', 'Lorentz', 'Debye', 'eps_at',
-    'MaterialBase', 'Pole', 'Shape', 'Slab', 'Structure',
+    'MaterialBase', 'Pole', 'Shape', 'Slab', 'Sphere', 'Structure',
     'CoarseMeshWarning', 'AbsorberProximityWarning', 'UnsettledFieldWarning',
-    'GrowingFieldWarning', 'PMLStabilityWarning',
+    'GrowingFieldWarning', 'PMLStabilityWarning', 'BoundedVoxelWarning',
     'InitialField', 'Term', 'Record', 'Flux', 'Field', 'Diffraction', 'FarField', 'Plane',
     'ModeMonitor', 'Decay', 'FluxResult', 'FieldResult', 'FarFieldResult', 'DiffractionResult',
     'Band', 'Dipole', 'PlaneWave', 'TFSF', 'Box', 'GaussianBeam', 'ModeSource',

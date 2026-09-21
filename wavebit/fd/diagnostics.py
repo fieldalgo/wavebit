@@ -7,7 +7,7 @@ owns it (``materials.py``, ``geometry.py``, ``boundaries.py``, ``_lower/plan.py`
 """
 
 __all__ = ['CoarseMeshWarning', 'AbsorberProximityWarning', 'UnsettledFieldWarning',
-           'GrowingFieldWarning', 'PMLStabilityWarning']
+           'GrowingFieldWarning', 'PMLStabilityWarning', 'BoundedVoxelWarning']
 
 
 class CoarseMeshWarning(UserWarning):
@@ -79,6 +79,18 @@ class GrowingFieldWarning(UnsettledFieldWarning):
     one, and that the structure lies outside the sampled families, when every face is already
     stabilized; a defect to report when no face is a PML. A subclass of
     :class:`UnsettledFieldWarning`, so a filter on that warning still sees it.
+    """
+
+
+class BoundedVoxelWarning(UserWarning):
+    """Planning found CSG voxels evaluated with volume bounds instead of exact fills.
+
+    One warning covers the static scene's component voxels and names the count, widest
+    interval and responsible node. Union and Difference take an upper bound; Intersection
+    takes a lower bound. The warning reports geometric uncertainty, not a bound on the
+    resulting electromagnetic error. ``fd.check`` includes the same note with or without
+    prebuilt params. Lowering emits no warning inside JIT; cached calls use the geometry
+    that was checked at plan time. See ``_shapes.Approximations`` for the collector.
     """
 
 

@@ -1193,9 +1193,9 @@ class _Combination(Body):
 
     ``Union = min``, ``Intersection = max``, ``Difference(a, b, ...) = max(d_a, -d_b, ...)``.
     Painting order *is* this: structure ``k``'s effective body is the difference of it and
-    everything after it, which on cell-snapped geometry reproduces ``owner_map``'s last-wins
-    exactly and on smoothed geometry makes the overlap exact and differentiable, with no
-    second algebra competing with the first.
+    everything after it, which on cell-snapped geometry reproduces the last-wins rule
+    ``coefficients.painters`` writes, exactly, and on smoothed geometry makes the overlap
+    exact and differentiable, with no second algebra competing with the first.
 
     The normal is the **selected** child's, so it is a unit vector by induction. No exact fill and
     no exact moment: an exact clip of a CSG node does not exist, which is the reason the tangent

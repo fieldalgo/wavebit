@@ -578,7 +578,7 @@ def test_two_structures_sharing_cells_are_refused_when_either_is_dispersive(firs
     """The overlap rule is carried by the permittivity map, and the pole term is not in it.
 
     "A later structure overwrites an earlier one where they overlap" holds for ``eps``, ``mu``
-    and ``sigma``, which go through ``coefficients.owner_map``. It does **not** hold for the
+    and ``sigma``, which go through ``coefficients.painters``. It does **not** hold for the
     polarisation: ``plan._pole_terms`` gives each dispersive structure a term over its own
     whole slab. Measured on a 64-cell line before this door existed, ``(metal, glass)`` on the
     same cells -- which the rule says must equal ``(glass,)`` -- was instead bit-identical to
@@ -611,7 +611,7 @@ def test_the_accepted_spellings_run_and_a_lossless_overlap_still_follows_the_ord
     union = (fd.Structure(fd.Slab(z=(-0.4, 0.0)), METAL),)
     assert len(quiet(fd.plan, scene(structures=union)).terms) == 1
     # Two lossless structures may overlap, and the later one wins where they do: the pole term
-    # is the only thing outside owner_map, so nothing else needed a door.
+    # is the only thing outside the painters, so nothing else needed a door.
     layered = scene(structures=(fd.Structure(fd.Slab(z=(-0.4, 0.4)), fd.Material(eps=4.0)),
                                 fd.Structure(fd.Slab(z=(-0.2, 0.2)), GLASS)))
     single = scene(structures=(fd.Structure(fd.Slab(z=(-0.2, 0.2)), GLASS),))

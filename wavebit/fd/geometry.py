@@ -38,7 +38,7 @@ got nothing, which is the one snapping outcome a reader cannot see in a result.
 Sorted by what they do with the answer, they were asking three:
 
 * *which cells does this material fill?* -- the lowering itself
-  (``coefficients.owner_map``), which paints an owner index over them;
+  (``coefficients.painters``), which paints the material over them;
 * *which cells may this shape touch?* -- every containment, clearance and overlap test
   (``check_overlaps``, ``_proximity_notes``, ``_check_scatterer``, ``FarField``'s
   containment, the pole term's region, ``grazing._layer_media``, ``medium_at``);
@@ -59,15 +59,28 @@ them is answered by the shape and none of them has an "else" that guesses.
 ``cell_box`` is deleted rather than kept beside the protocol: nothing in ``wavebit.fd`` is
 released, so a retired name goes outright (see ``docs/`` and the ``fourier_type``/``combine=``
 precedents) -- a second spelling of "which cells" is exactly the ambiguity this replaces.
+
+**Two discretisations, and the shape is the one that says which.** From stage 4's C2 a shape
+either *fills cells whole* (:class:`Slab`, :class:`Box`) or *fills them fractionally*
+(:class:`Sphere`, and the bodies C4 adds). :meth:`Shape.body` is that answer -- the
+``wavebit/fd/_shapes`` body this shape is smoothed from, or ``None``. It is a method and not a
+``smoothing=`` keyword on :class:`Structure` on purpose: a rule that could be switched, or
+that keyed itself on whether a radius happened to be traced, would make ``jax.grad`` and a
+finite difference compute two different functions, and it is the route-naming knob
+``combine=`` and ``fourier_type=`` were deleted from this repository for. A cell-snapped shape
+answers ``None`` and every number it lowers to is unchanged to the bit.
 """
+import math
+
 from ._spec import spec, static_float
 
-__all__ = ['Shape', 'Slab', 'Structure', 'Box', 'Plane', 'AXES']
+__all__ = ['Shape', 'Slab', 'Sphere', 'Structure', 'Box', 'Plane', 'AXES']
 
 #: The three axes in the order the public API spells a triple.
 AXES = ('x', 'y', 'z')
 
-#: Shape keywords stage 4 will take. Refused here by name, with the stage.
+#: Shape keywords stage 4 will take. Refused here by name, with the stage, except where the
+#: spelling now exists -- ``radius`` names :class:`Sphere` (C2) rather than a stage.
 _LATER_SHAPES = {
     'radius': 'a sphere or a cylinder', 'center': 'a box or a sphere',
     'size': 'a box', 'vertices': 'a polygon', 'raster': 'a raster',
@@ -78,7 +91,7 @@ _LATER_SHAPES = {
 class Shape:
     """What a structure's shape is asked, and the only place those questions are named.
 
-    Eight methods, and the module docstring says which caller asks which. Seven of them have
+    Nine methods, and the module docstring says which caller asks which. Eight of them have
     no default: a shape that does not answer one is refused **by name**, at the call site, and
     never silently treated as something else. That is the whole point of the class. The one
     default is :meth:`layer_axis`, whose honest answer for anything that is not a layer is
@@ -111,14 +124,36 @@ class Shape:
     def filled_cells(self, grid):
         """``((i0, i1), ...)``: the cells this shape's material fills **wholly**.
 
-        Only a cell-snapped shape has such a box, and it is the one ``coefficients.owner_map``
-        paints. A shape with a fractional edge has no answer in this form -- its answer is a
-        fill fraction per component per cell -- and refuses, which is what makes the caller
-        that must change when such a shape arrives a single, named one.
+        Only a cell-snapped shape has such a box, and it is the one
+        ``coefficients.painters`` paints with a ``where``. A shape with a fractional edge has
+        no answer in this form -- its answer is a fill fraction per component per cell -- and
+        refuses, which is what makes the caller that must change when such a shape arrives a
+        single, named one.
         """
         raise self._unanswered(
             'filled_cells', 'the cells it fills outright are unknown -- a shape whose edge is '
             'not a cell boundary fills cells fractionally and has no such box.')
+
+    def body(self):
+        """The ``wavebit/fd/_shapes`` body this shape is **smoothed** from, or ``None``.
+
+        ``None`` means cell-snapped: the shape fills the cells :meth:`filled_cells` names
+        whole, and :func:`wavebit.fd._lower.coefficients.build` paints its material over them
+        with a ``where``, which is what every stage-0..3 golden holds to the bit.
+
+        A body means fractional: the lowering asks it, at **each component's own Yee point**,
+        what fraction of that voxel the shape fills and which way the surface faces there
+        (``wavebit/fd/_lower/occupancy.py``), and mixes the two media by the
+        Farjadpour/Kottke rule rather than choosing one of them.
+
+        There is no default and no third answer. A shape that returns a body must refuse
+        :meth:`filled_cells` -- the two are the same question asked of the two
+        discretisations, and a shape that answered both would have said its edge is a cell
+        boundary and also that it is not.
+        """
+        raise self._unanswered(
+            'body', 'whether it fills cells whole or fractionally is unknown -- a shape is '
+            'cell-snapped (body() is None) or smoothed (body() is a wavebit.fd._shapes body).')
 
     def uniform_along(self, axis, cells, grid):
         """Whether this shape puts **no interface** inside cell layers ``range(*cells)``.
@@ -293,6 +328,16 @@ class Slab(Shape):
         """The same box as :meth:`support`: a slab is cell-snapped, so it fills it outright."""
         return self.support(grid)
 
+    def body(self):
+        """``None``: a layer is cell-snapped, and stage 4 deliberately leaves it that way.
+
+        Every stage-1..3 layered oracle and every frozen golden rests on it, and a layer's
+        interface is the one case where the user can put the boundary on a cell edge and mean
+        it. Whether the layer becomes a smoothed body too is a stage-5 question, and it costs
+        a deliberate re-freeze of all four archives. The smoothed rectangular body is C4's.
+        """
+        return None
+
     def uniform_along(self, axis, cells, grid):
         """True across its own axis only where its snapped cells cover ``cells`` entirely.
 
@@ -333,9 +378,11 @@ def _slab_init_with_stages(self, *args, **kwargs):
     if later:
         k = later[0]
         raise NotImplementedError(
-            f'Slab({k}=...) is {_LATER_SHAPES[k]}, which belongs to stage 4 (shapes) -- except a '
-            f'cell-snapped block, which is fd.Box(size=..., center=...) as of stage 3. A slab '
-            f'is the layer: Slab(x=(lo, hi)), Slab(y=...) or Slab(z=...).')
+            f'Slab({k}=...) is {_LATER_SHAPES[k]}. A slab is the layer: Slab(x=(lo, hi)), '
+            f'Slab(y=...) or Slab(z=...). A ball is fd.Sphere(radius=..., center=...), '
+            f'smoothed at each component\'s own Yee point; a cell-snapped block is '
+            f'fd.Box(size=..., center=...); the cylinder, the prism and the smoothed, '
+            f'rotatable rectangular body are stage 4 C4.')
     _slab_init(self, *args, **kwargs)
 
 
@@ -350,28 +397,32 @@ class Structure:
     would expect. ``material`` takes the scalar shorthand: ``fd.Structure(slab, 2.25)`` is
     ``fd.Material(eps=2.25)``.
 
-    ``shape`` is an :class:`Slab` (stage 1) or, from stage 3, a :class:`Box`: a cell-snapped
+    ``shape`` is an :class:`Slab` (stage 1), a :class:`Box` (stage 3): a cell-snapped
     rectangular block, the minimum lateral patterning a diffraction-order check needs (a
     lamellar grating is a Box spanning one transverse axis, a crossed pillar grating a Box
-    spanning neither). The shapes the package will *ship* next -- spheres, cylinders, prisms,
-    rotated boxes and their CSG, each subpixel-smoothed and differentiable -- are stage 4.
+    spanning neither), or -- from stage 4's C2 -- a :class:`Sphere`, the first shape whose
+    edge is **not** a cell boundary. The cylinder, the prism, the rotated body and CSG of them
+    are C4.
 
-    **The door is ``isinstance(shape, fd.Shape)``, and that is deliberately a seam.**
-    :class:`Slab` and :class:`Box` are the only two :class:`Shape` in the package, but a shape
-    written outside it that answers the protocol plans, lowers and runs with no other type
-    check anywhere downstream -- that is what makes stage 4's geometry kernel a new file
-    rather than an edit to nine call sites, and it is why :class:`Shape` is exported as
-    ``fd.Shape`` instead of kept private. What such a shape gets **today** is the stage-3
-    lowering: ``coefficients.owner_map`` paints the cells :meth:`Shape.filled_cells` returns,
-    with no fill fraction and no smoothing, so a curved one is a staircase at whatever box it
-    calls filled. A fractional edge is meant to refuse ``filled_cells`` by name until C2
-    replaces that caller. ``fd.Shape()`` itself is refused here: it is the protocol, not a
-    shape. A :class:`Plane` is a monitor's region and not a shape, so this same door refuses
-    it too.
+    The door is ``isinstance(shape, fd.Shape)``: external subclasses may answer the
+    protocol too. ``body()`` chooses the fractional or cell-snapped lowering. A bare
+    ``fd.Shape()`` is the protocol rather than a shape and is refused here. A :class:`Plane` is a monitor's region and not a shape, so this
+    same door refuses it.
 
     Structures are applied **in the order they are given**, so a later one overwrites an
-    earlier one where they overlap -- the layer-stack rule, and the only overlap rule stage 1
-    needs. ``check`` prints the snapped span of each.
+    earlier one where they overlap -- the layer-stack rule. ``check`` prints the span of each.
+
+    **How far that carries once a shape has a fractional edge.** The mixing rule's second
+    medium is *whatever the cell already holds*, background or an earlier structure, which is
+    two phases and one interface. So painting order still means exactly what it says wherever
+    the arriving shape fills the voxel **whole** -- a smoothed ball over a cell-snapped
+    :class:`Slab` substrate is right per component to 2.0e-16 against the hand-written
+    two-phase mix, in either order, and so is a core inside a shell -- and it does **not**
+    compose where two *smoothed* surfaces pass through one voxel: the second mix would treat
+    the first mixture as a medium with a second interface across it, measured 73% high on two
+    half spaces of the same material and up to 122% on one ``fd.Sphere`` declared twice. That
+    case is refused by name (``wavebit/fd/_lower/checks.py::check_smoothed``, door 5), which
+    is what keeps the sentence above true for every scene this module accepts.
     """
 
     shape: object
@@ -387,13 +438,12 @@ class Structure:
                 'and answer its methods.')
         if not isinstance(self.shape, Shape):
             raise TypeError(
-                f'Structure(shape=...): the shapes are fd.Slab(z=(lo, hi)) and, from stage 3, '
-                f'the cell-snapped fd.Box(size=..., center=...); got '
-                f'{type(self.shape).__name__}. Anything else gets in by subclassing fd.Shape '
-                f'and answering its protocol -- this is the only type check, and nothing '
-                f'downstream adds another. The shapes the package itself will ship (spheres, '
-                f'cylinders, polygons and rasters), their subpixel averaging and their '
-                f'differentiable edges are stage 4 (shapes).')
+                f'Structure(shape=...): the shapes are fd.Slab(z=(lo, hi)), the cell-snapped '
+                f'fd.Box(size=..., center=...) and the smoothed fd.Sphere(radius=..., '
+                f'center=...); got {type(self.shape).__name__}. External shapes get in by '
+                f'subclassing fd.Shape and answering its protocol. Cylinders, prisms, rotated '
+                f'bodies, polygons and CSG of them are stage 4 C4; a raster shape is refused '
+                f'outright (its interface normal cannot come from the shape).')
         object.__setattr__(self, 'material', as_material(self.material, 'Structure(material=)'))
 
 
@@ -478,6 +528,17 @@ class Box(Shape):
         """The same box as :meth:`support`: a box is cell-snapped, so it fills it outright."""
         return self.cells(grid)
 
+    def body(self):
+        """``None``: this box is the cell-snapped one, and it is also a monitor's region.
+
+        ``fd.Box`` is three things at once -- a ``TFSF`` region, a monitor's surface or
+        volume, and a structure -- and a region has to snap to node planes to pick indices.
+        One name cannot carry two discretisations, so the smoothed, rotatable, differentiable
+        rectangular **body** is a separate class in C4 and this one does not move. Every
+        stage-3 golden holds to the bit because of that.
+        """
+        return None
+
     def uniform_along(self, axis, cells, grid):
         """True where its snapped cells on ``axis`` cover ``cells`` entirely.
 
@@ -510,6 +571,193 @@ class Box(Shape):
         sides = [min(self.high[a], grid.high[a]) - max(self.low[a], grid.low[a])
                  for a in self.bounded_axes(grid)]
         return min(sides) if sides else None
+
+
+@spec
+class Sphere(Shape):
+    """A ball, ``fd.Sphere(radius=0.2, center=(0, 0, 0))`` -- the first **smoothed** shape.
+
+    Unlike :class:`Slab` and :class:`Box` it does not snap to anything. The lowering asks it,
+    at each of the six components' **own** Yee points, what fraction ``f`` of that component's
+    voxel the ball fills and how the surface is oriented there (``w_c``, the mean of ``n_c^2``
+    over the surface inside the voxel), and mixes the ball's material with whatever the cell
+    already held by the Farjadpour/Kottke rule -- see
+    ``wavebit/fd/_lower/coefficients.py::mix`` for the formula and its citations, and
+    ``wavebit/fd/_lower/occupancy.py`` for the stage that produces the pair. Its exact clipped
+    volume changes continuously with the requested position. Electromagnetic convergence
+    is a separate measurement, made by the Mie gate.
+
+    ``radius`` and ``center`` are **static** in C2. They fix :meth:`support`, which fixes the
+    coefficient array shapes and so the plan's skeleton, and the ``range=`` that declares a
+    static support box for a traced value -- the ``fd.Dipole(range=)`` spelling -- is C6's. The
+    lowering chain from the ball's geometry to ``be`` is already differentiable and is gated
+    that way (``tests/test_fd_occupancy.py::test_a_traced_radius_reaches_the_coefficient``);
+    what C6 adds is the public door, not the derivative.
+
+    **What a sphere may not meet, in C2: five doors.** All five are
+    ``wavebit/fd/_lower/checks.py::check_smoothed``, in the order ``wavebit/fd/__init__.py``
+    lists them, and each names the commit that owns the case it turns away.
+
+    1. **No conductivity and no poles where it reaches.** Its own material must not be an
+       ``fd.Conductor`` or an ``fd.Dispersive``, and neither may the background or any
+       structure whose cells it shares: ``sigma`` and the pole coefficients are *not* smoothed
+       here and keep the cell-snapped rule they have today, which a fractional edge has no
+       answer for. (C8 measures the rule before writing it.)
+    2. **No wrapping face.** A sphere that reaches a ``Periodic`` or ``Bloch`` face is refused
+       because resolving its wrapped part means summing the geometry over the image ring, and
+       the cell's origin -- which the ring needs and a body does not carry -- is C4's to
+       thread. An ``fd.Axis1D`` axis is refused too, with its own sentence and for a different
+       reason: that axis stands for one the field is *invariant* along, and a ball is not.
+    3. **No reaching a face of the box.** A cell-snapped ``fd.Box`` is clipped exactly; a ball
+       is not, and the six components disagree about where the box ends -- three of them count
+       material half a cell outside a ``-`` face, and the same three lose the last half cell at
+       a ``+`` face. The two arms carry two different messages.
+    4. **No anisotropic eps or mu.** The mixing rule is the Farjadpour/Kottke diagonal for two
+       *isotropic* phases; blending each component with its own ``eps`` is not the tau-transform
+       the anisotropic construction calls for, and on a ball the normal is almost never along a
+       principal axis. The door covers the same three media as door 1.
+    5. **No second smoothed surface in one voxel.** A painter mixes into what the cell already
+       holds, which is two phases and *one* surface; two smoothed surfaces in one voxel do not
+       compose (73% high on two half spaces, 122% on one ``fd.Sphere`` declared twice). A ball
+       over a cell-snapped shape, or inside another ball it shares no surface voxel with, is
+       fine and is not refused.
+    """
+
+    radius: float
+    center: tuple = (0.0, 0.0, 0.0)
+
+    def __post_init__(self):
+        radius = static_float('Sphere', 'radius', self.radius)
+        if not math.isfinite(radius) or not radius > 0:
+            raise ValueError(
+                f'Sphere(radius={radius}): a radius is a finite positive length. A length is a size '
+                f'here, so a negative one is refused rather than read as subtracting the '
+                f'shape.')
+        object.__setattr__(self, 'radius', radius)
+        center = self.center
+        if not (isinstance(center, (tuple, list)) and len(center) == 3):
+            raise ValueError(f'Sphere(center={center!r}): a triple (x, y, z), absolute, in the '
+                             f'scene\'s coordinates -- not the cell-centre origin the rcwa '
+                             f'path spells as cx=/cy=.')
+        center = tuple(static_float('Sphere', 'center', v) for v in center)
+        if not all(math.isfinite(v) for v in center):
+            raise ValueError(f'Sphere(center={center!r}): every coordinate must be finite.')
+        object.__setattr__(self, 'center', center)
+
+    @property
+    def low(self):
+        return tuple(c - self.radius for c in self.center)
+
+    @property
+    def high(self):
+        return tuple(c + self.radius for c in self.center)
+
+    # -- the protocol (see :class:`Shape`) ----------------------------------------------------
+
+    def body(self):
+        """The ``_shapes`` ball: an exact clipped-ball fill, and the tangent plane's moment."""
+        from ._shapes import Sphere as _Ball
+        return _Ball(radius=self.radius, center=self.center)
+
+    def support(self, grid):
+        """Every cell whose voxels the ball can reach, **with one cell of margin** per side.
+
+        A cell's six component voxels are not the cell: component ``c`` of ``E`` sits half a
+        cell along axis ``c``, so the union of a cell's voxels spans
+        ``[low + (i - 1/2) dx, low + (i + 1) dx]`` along each axis and reaches a whole ``dx``
+        past the node. The margin is one cell rather than the half this needs, because the
+        cost is a shell of voxels whose fill is exactly zero and the alternative is an
+        off-by-one that removes material from a real surface. It is gated on the volume:
+        ``tests/test_fd_occupancy.py::test_the_support_box_holds_the_whole_ball`` sums the
+        lowered fill and compares it with ``4 pi R^3 / 3``, and on that gate's own scene
+        (``R = 0.25`` at ``dx = 0.05``, five cells per radius, centre
+        ``(0.013, -0.007, 0.021)``) the mutant that drops the margin loses **3.79e-3** of the
+        volume against 1.9e-15 with it.
+
+        **The loss is placement dependent, and a ball centred on a node plane is the WORST
+        placement there is.** What the margin protects is the three components whose Yee offset
+        along an axis is zero: their voxels are centred on the *nodes*, so without the margin
+        they cover only ``[k0 - 1/2, k1 - 1/2]`` cells of a box that runs ``k0 .. k1``, and the
+        ball's top surface falls out of that as soon as the centre sits more than half a cell
+        above a node. Measured, ``R = 0.25`` in a PEC box at ``dx = R/k``, the centre on all
+        three axes at once and the cell count **even** so that the box centre really is a node
+        plane -- swept through one whole cell in 41 steps at ``k`` = 5, 8, 10 and 20, and at the
+        node, the cell centre and one generic offset at ``k`` = 16:
+
+            k (cells per radius)          5        8       10       16       20
+            worst, margin dropped   1.45e-2  5.74e-3  3.69e-3  1.45e-3  9.30e-4
+            worst, margin kept      2.1e-15  1.7e-15  3.2e-15  1.5e-15  6.6e-15
+
+        and at every resolution the worst placement is the node-centred one. A ball centred at
+        a **cell centre** loses nothing at all -- 2.1e-16 at five cells per radius and the same
+        at every other -- and between the two the loss is flat at round-off while the centre's
+        fractional cell position is at or below one half and rises monotonically above it:
+        1.50e-4 at 0.55 of a cell, 5.96e-4 at 0.60, 3.69e-3 at 0.75, 1.18e-2 at 0.95 and
+        1.45e-2 at the node, at five cells per radius. The gate's own scene is an off-node
+        centre whose worst axis sits at 0.86 of a cell, and it loses **3.79e-3**.
+
+        The grid condition is one clause, and it is what made an earlier measurement of this
+        irreproducible: ``Grid.from_domain`` puts the low corner at ``centre - n dx / 2``, so
+        the box centre is a node plane only when the cell count ``n`` is **even**. Measured at
+        an odd ``n``, a ball at the origin is a cell-centred ball and loses nothing, which is
+        the opposite scene.
+
+        The loss falls with resolution and never reaches zero, which is why the margin is not
+        traded for the half cell the arithmetic above actually needs.
+        """
+        import math
+        out = []
+        for a in range(3):
+            k0 = math.floor((self.low[a] - grid.low[a]) / grid.dx) - 1
+            k1 = math.ceil((self.high[a] - grid.low[a]) / grid.dx) + 1
+            k0 = min(max(int(k0), 0), grid.n[a])
+            k1 = min(max(int(k1), 0), grid.n[a])
+            out.append((k0, k1))
+        return tuple(out)
+
+    def filled_cells(self, grid):
+        """Refused: a ball's edge is not a cell boundary, so no cell range is "the ball"."""
+        return super().filled_cells(grid)
+
+    def uniform_along(self, axis, cells, grid):
+        """``True`` only where the ball cannot reach the layers at all.
+
+        A sphere's surface curves, so every range of cell layers its support touches holds a
+        piece of that surface. This is the answer ``checks.check_absorbing_layers`` needs and
+        a bounding-box test does not give: a ball whose *box* spans an absorbing layer would
+        be waved through it, and that case is measured at 1.9e-1 reflection against 6.0e-4 --
+        317x (``tests/test_fd_absorber.py``).
+        """
+        k0, k1 = self.support(grid)[axis]
+        return k1 <= cells[0] or k0 >= cells[1]
+
+    def bounded_axes(self, grid):
+        """All three, always -- and not the axes its *box* happens to cut.
+
+        :class:`Box` may leave an axis out because a box clipped to the domain really is
+        uniform along it, so a coefficient array of extent 1 there is exact. A ball is never
+        uniform along an axis it reaches, whatever its support clipped to, so an extent-1 axis
+        would broadcast one plane of fills over the whole grid. The mutant that copies Box's
+        rule here is ``tests/test_fd_occupancy.py::test_a_ball_varies_along_every_axis``.
+        """
+        return (0, 1, 2)
+
+    def describe(self):
+        return f'Sphere(radius={self.radius}, center={self.center})'
+
+    def span_rows(self, grid):
+        """One row per axis, labelled ``sphere.x/y/z``, asked and got the **same**.
+
+        That is the report telling the truth rather than a missing feature: a smoothed shape
+        does not snap, so ``check`` prints no ``<- snapped`` note for one, and the difference
+        from the ``Slab``/``Box`` rows above it is the whole point of the shape.
+        """
+        return tuple((f'sphere.{axis}', self.low[a], self.high[a], self.low[a], self.high[a])
+                     for a, axis in enumerate(AXES))
+
+    def min_extent(self, grid):
+        """Its diameter."""
+        return 2 * self.radius
 
 
 @spec

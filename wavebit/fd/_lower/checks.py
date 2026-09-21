@@ -32,6 +32,18 @@ The table, and where each row lives:
     Slab naming two axes, any other shape       geometry.Slab / Structure
     pole CFL violated, concretely                check_stability, here
     two structures overlap, one dispersive      check_overlaps, here
+    (stage 4 C2) a conductive or dispersive     check_smoothed, here: sigma and the poles
+      material where a smoothed shape reaches     are not smoothed in C2
+    (stage 4 C2) a smoothed shape at a          check_smoothed, here: the periodic image
+      Periodic, Bloch or Axis1D face              ring is C4's to thread
+    (stage 4 C2) a smoothed shape whose         check_smoothed, here: three of the six
+      material reaches a face of the box          components gain material outside a minus
+                                                  face, and lose the last half cell at a
+                                                  plus one -- two arms, two messages
+    (stage 4 C2) an anisotropic eps or mu on    check_smoothed, here: the mixing rule is
+      a smoothed shape                            derived for two isotropic media
+    (stage 4 C2) two smoothed shapes whose      check_smoothed, here: the two-phase rule
+      surfaces pass through one voxel             takes one interface, not two
     (stage 3) a Bloch phase on a one-cell axis    check_one_cell_bloch, here (names Axis1D;
       in a scene with a source                      a source-free kernel study keeps it)
     (stage 3) an Axis1D k past k_max              boundaries.Axis1D (concrete); the params'
@@ -39,6 +51,8 @@ The table, and where each row lives:
 """
 import math
 import warnings
+
+import numpy as np
 
 from ..diagnostics import AbsorberProximityWarning, CoarseMeshWarning, PMLStabilityWarning
 from ..materials import Conductor, Dispersive, concrete, eps_at
@@ -151,18 +165,31 @@ def check_overlaps(scene, grid):
 
     "Structures are applied in the order they are given, so a later one overwrites an earlier
     one where they overlap" is the documented rule, and it is enforced in exactly one place:
-    ``coefficients.owner_map``, which builds ``eps``, ``mu`` and ``sigma``. The **polarisation
-    is not routed through that map**. ``plan._pole_terms`` gives every dispersive structure a
-    term over its own snapped cells, so an overwritten dispersive medium keeps driving ``cH``
-    from cells it no longer owns, and two overlapping dispersive structures add their
-    polarisations twice. Measured on a 64-cell line: layering ``Material(eps=2.25)`` over a
+    ``coefficients.painters``, the one painter per structure that builds ``eps``, ``mu`` and
+    ``sigma``. The **polarisation is not routed through those painters**. ``plan._pole_terms``
+    gives every dispersive structure a term over its own snapped cells, so an overwritten
+    dispersive medium keeps driving ``cH`` from cells it no longer owns, and two overlapping
+    dispersive structures add their polarisations twice. Measured on a 64-cell line: layering ``Material(eps=2.25)`` over a
     ``Dispersive(eps_inf=2.25, ...)`` on the same cells -- a scene the rule says must equal the
     glass alone -- gives a field 64% of the peak away from the glass scene and bit-identical to
     the *metal* scene, and ``(metal, metal)`` differs from ``(metal,)`` by 72% of its peak.
 
     Rather than route the term (a still-owned set is a box minus later boxes, which is not a
-    box), stage 1 refuses the case at the door. Non-dispersive overlaps are untouched: they go
-    through ``owner_map`` and the order rule holds for them exactly.
+    box), stage 1 refuses the case at the door.
+
+    **Does the argument still hold now that a painter may mix rather than replace?** For the
+    overlaps this function decides, yes, and the reason is that the two discretisations do not
+    meet here. A *cell-snapped* painter still replaces the cell outright, so a non-dispersive
+    overlap of ``Slab``s and ``Box``es goes through ``coefficients._blend`` exactly as it
+    went through the owner index, bit for bit, and the order rule holds for it exactly. A
+    *smoothed* painter mixes, and "later overwrites earlier" is then only true where the
+    arriving shape fills the voxel whole -- so the case where it is not, **two smoothed
+    surfaces in one voxel**, is refused by name in :func:`check_smoothed` (73% of ``eps``
+    measured there, on two half spaces of the same material), and a smoothed shape over a
+    cell-snapped one composes exactly, measured 2.0e-16 against the hand two-phase mix over
+    the snapped slab by
+    ``tests/test_fd_occupancy.py::test_a_smoothed_shape_over_a_snapped_one_composes_exactly``.
+    What is left for this function is unchanged.
 
     Note that two slabs on *different* axes always intersect -- each is full-width on the
     other's axis -- so this refuses a dispersive slab crossed by any other structure, and names
@@ -202,6 +229,482 @@ def _intersects(left, right):
     refused where it was snapped.
     """
     return all(a0 < b1 and b0 < a1 for (a0, a1), (b0, b1) in zip(left, right))
+
+
+def check_smoothed(scene, grid):
+    """What a smoothed shape may meet in C2: the five doors subpixel averaging opens.
+
+    Each is a case where the rule C2 writes is exact and the neighbouring case is not, and the
+    principle stage 4 is built on is that the second is refused **by name**, with the spelling
+    that works, rather than answered approximately. Four of the five carry the number the
+    scene reads with the door held open, which is what "silently wrong" means here: the run
+    completes and the answer has the right shape.
+
+    **1. No conductivity and no poles where a smoothed shape reaches.** C2 smooths ``eps`` and
+    ``mu`` and nothing else. ``sigma`` and the pole coefficients keep the cell-snapped rule
+    they have today -- the structure's material over the cells its shape *fills* -- and a
+    shape with a fractional edge has no such set of cells, so there is no rule to keep. The
+    two answers that exist are both measured and both belong to a later commit:
+
+    * ``sigma`` mixed arithmetically on every component, exact for the two tangential ones and
+      first order on the normal one. The analogous legacy inconsistency is priced in
+      ``docs/fdtd-oblique-pulse.md``:84-88 at TM 0.0595 against TE 0.0082 at resolution 40.
+      The exact normal form is the same machinery (harmonically mixing ``eps_r + i sigma/w``
+      with a real medium is exactly ``eps_inf' + one Debye pole``), and it turns a declared
+      non-dispersive structure into one carrying a plan term, which is why it is priced rather
+      than assumed.
+    * a one-pole dispersive medium mixed exactly, as **two** Lorentz poles with the same
+      ``gamma`` and closed-form per-cell roots. Arithmetic-only pole smoothing is
+      qualitatively wrong for a metal: at 0.532 um and ``f = 0.5``, gold reads
+      ``eps = -4.70 + 0.13i`` arithmetically against ``+2.21`` harmonically.
+
+    Neither is guessed at here. The door covers the smoothed structure's **own** material, the
+    background (which fills every cell, so it always meets one) and any structure whose
+    support shares a cell with it -- because in all three cases the unsmoothed quantity would
+    be read over a voxel the smoothed shape only partly fills, and the number that comes back
+    is plausible. Measured with the door held open: a lossless ``Sphere(radius=0.25)`` in a
+    ``Conductor(eps=1, sigma=0.2)`` background lowers ``sigma = 0.2001`` on all 402 voxels the
+    ball fills **outright**, where the truth is 0 -- not a smoothing error at the surface, the
+    whole interior of the ball conducting.
+
+    **2. No smoothed shape at a wrapping face.** A body that straddles a periodic face is only
+    whole if the geometry is summed over the 3x3x3 ring of its images, which
+    ``_shapes.occupancy`` can do but only when the body lies *in* the cell -- and a body
+    carries no position to fold with, so the fold belongs to the caller that owns the cell. C2
+    does not build it. Measured with this door held open: ``Sphere(radius=0.2)`` centred on the
+    ``x-`` face of a 1.2-wide periodic cell lowers **59.3%** of its volume against 1.0000 for
+    the same ball at the centre, and nothing sees the missing 40.7% -- ``sum_c w_c`` still
+    reads 1 to 4.4e-16 on every voxel with any surface in it. The support box is tested with
+    its own one-cell margin, so this refuses a ball that comes within a cell of the face as
+    well as one that crosses it; that is deliberately conservative and the message says how far
+    to move it.
+
+    The wrapping faces are the three ``boundaries._WRAPPING`` names, ``Periodic``, ``Bloch``
+    **and** ``Axis1D``, and the third gets its own sentence rather than the image-ring one. An
+    ``Axis1D`` axis is one cell by its own contract and stands for an axis the field is
+    *invariant* along, so the missing images are not the point: the only structure that axis
+    can carry is one that is uniform along it, whatever the cell count. Measured with the door
+    held open, ``Sphere(radius=0.2)`` on ``Boundaries(x=Periodic, y=Axis1D, z=PEC)`` over a
+    ``(1.2, 0.05, 1.2)`` domain lowers to ``(3, 24, 1, 24)`` holding **18.4%** of the ball's
+    volume -- the slab cross-section, which is neither the ball nor the cylinder a reader would
+    take it for -- while the identical scene with ``y=Periodic()`` is refused by name.
+
+    **3. No smoothed shape whose material reaches a face of the box.** A cell-snapped
+    ``fd.Box`` is clipped to the domain exactly, because its material is a range of cell
+    indices. A smoothed body is not, and the six components do not agree about where the box
+    ends -- three of them have their Yee point on the node plane and three half a cell off it.
+    **That disagreement points opposite ways at the two ends of an axis, and the two arms of
+    this door say so separately.**
+
+    *At a minus face, three components GAIN material that is not in the box.* Their first
+    voxel is centred on the wall and so reaches half a cell outside it. Measured,
+    ``Sphere(radius=0.2)`` centred on the ``x-`` PEC face of a 1.2 box at ``dx = 0.05``: ``Ex``
+    lowers **0.01675516** of volume, exactly half the ball (``2 pi R^3/3 = 0.01675516``), and
+    ``Ey`` and ``Ez`` lower **0.01988039**, **18.7% more** -- the half cell beyond the wall
+    counted in. So a ball half outside the box is neither the ball nor the hemisphere.
+
+    *At a plus face the same three LOSE the last half cell.* Their last point is the last node,
+    so their last voxel stops at ``high - dx/2`` and no voxel of theirs holds anything between
+    that and the wall. Nothing outside the box is counted there -- the probe voxel this door
+    reads at a ``+`` face is itself half inside the domain for those three -- so a body
+    entirely inside the box is refused, for the material it is about to lose rather than for
+    any it would gain. Measured on the same ball at ``dx = 0.05``: with its surface **0.48
+    cells clear** of the ``x+`` wall it lowers 1.87e-5 short of ``4 pi R^3/3`` on ``Ey`` and
+    ``Ez`` and exactly on ``Ex``, rising to **1.11e-2** at tangency, while the mirror image of
+    each of those at the ``x-`` wall loses nothing at all (8e-16). A ball **inscribed** in the
+    domain is therefore refused at its ``+`` faces and accepted at its ``-`` ones, which is not
+    a symmetry the grid has to offer. The spelling that works at a ``+`` face is to keep the
+    surface half a cell clear of the wall, or to enlarge the domain; "say the truncated body
+    with the cell-snapped ``fd.Box``" is the ``-`` arm's remedy and means nothing here, because
+    there is nothing sticking out to truncate.
+
+    The test is on the body and not on the support box, because the support carries a cell of
+    margin: :func:`_reaches_outside` asks the body for its fill over the cell layer just beyond
+    each face the support reaches, at all six components' points, and refuses when any of them
+    is above :data:`_CLIP_ROUNDOFF` -- the tolerance that separates the exact clip's own
+    round-off from a leak worth refusing, measured and stated there. A shape that is **uniform
+    across** the face -- a substrate, a half space -- answers ``Shape.uniform_along`` ``True``
+    in that cell layer and is exempt from both arms, because a body that does not change across
+    the wall neither gains nor loses anything there.
+
+    **4. No anisotropic eps or mu where a smoothed shape reaches.** The rule
+    ``coefficients.mix`` applies is the diagonal of the Farjadpour/Kottke tensor's inverse
+    **for two isotropic phases**, and all three of its citations derive it for that case. The
+    Kottke construction for an anisotropic phase is the tau-transform, which is not a blend of
+    each component with that component's own ``eps`` -- and on a ball the surface normal is
+    almost never along a principal axis, so the case the scalar rule is wrong for is the
+    generic one and not a corner. Held open, ``Sphere(radius=0.2)`` with
+    ``Material(eps=(2.0, 5.0, 9.0))`` lowers with per-component maxima ``[2.0, 5.0, 9.0]`` and
+    no refusal at all. The door covers the same three media as door 1 and reads the triples the
+    trace-safe way (:func:`_isotropic`): a scalar ``eps=`` puts the *same object* in all three
+    slots, which is the reading ``materials._positive`` already uses.
+
+    **5. No two smoothed shapes whose surfaces pass through one voxel.** A painter mixes its
+    material into whatever the cell already holds, and that is exactly the two-phase interface
+    rule -- *two* phases, and *one* surface. It composes exactly where the arriving shape fills
+    the voxel whole (so a core/shell ball pair, or a ball over a cell-snapped substrate, is
+    right and is not refused), and it does not compose where two smoothed surfaces are in the
+    same voxel: the second mix treats the first mixture as a medium with a second interface
+    across it, and the background survives with weight ``(1-f1)(1-f2)`` in a voxel that holds
+    none of it. Measured against a closed form, two half spaces of the **same** material whose
+    faces sit in one cell (tops at 12.5 and 12.5000001 cells, ``eps`` 12 in 1) read
+    ``eps_z = 3.20000`` where the truth is ``1.84615`` -- **73% high**; at 12.45/12.55 cells,
+    3.22364 against 2.01681 (60%); at 12.2/12.8, 4.34783 against 3.75000 (16%); a whole cell
+    apart, 5.2e-13 and the defect is gone. Through the public door, the same
+    ``fd.Sphere(radius=0.2, center=(0.013, -0.007, 0.021))`` with the same ``Material(eps=12)``
+    declared **twice** instead of once moves ``eps`` by up to **122%** (8.144451 against
+    3.666166) on 648 voxels, and 796 voxels move by more than 1%.
+
+    The test is drawn on voxels and not on bounding boxes, which is the design's own stated
+    risk (a bounding-box test falsely refuses a dimer at any gap below 0.414 diameters, because
+    two equal spheres on a 45 degree diagonal have overlapping axis-aligned boxes out to a
+    centre distance of ``2 sqrt(2) R`` -- the canonical plasmonic scene).
+    :func:`_shared_surface_voxels` walks the intersection of the two supports at all six
+    components' points, marks where each body's signed distance is within half a voxel
+    diagonal (a surface inside a voxel is within that of the voxel's own point, and a composed
+    CSG distance under-estimates, so the mark cannot be missed), and only then pays for the
+    exact fill at the marked points, refusing where both are fractional **to within
+    :data:`_CLIP_ROUNDOFF` of the two ends** -- because the exact clip returns neither end
+    exactly and comparing against 0 and 1 themselves refused 740 voxels of a legal scene. It is the
+    narrow case C2's one smoothed shape can reach of the media-counting refusal C5 owns; a
+    creased interface *within* one body (a prism edge, a block corner) is one painter and is
+    handled exactly, not refused.
+    """
+    from ..boundaries import Axis1D, Bloch, Periodic
+    from .occupancy import smoothed_structures
+    structures = tuple(getattr(scene, 'structures', ()) or ())
+    smoothed = smoothed_structures(scene)
+    for index, structure, body in smoothed:
+        box = structure.shape.support(grid)
+        where = f'structures[{index}] ({structure.shape.describe()})'
+        for a, axis in enumerate('xyz'):
+            k0, k1 = box[a]
+            if k1 <= k0:
+                raise ValueError(
+                    f'{where} reaches no cell along {axis}: it lies outside the box '
+                    f'entirely. A smoothed shape is not clipped to the domain the way a '
+                    f'cell-snapped fd.Box is, so it would lower to nothing at all here while '
+                    f'the scene still reported it. (One that reaches the box but crosses a '
+                    f'face is refused too, a few lines below, and for the sharper reason: '
+                    f'three of the six components would count the material beyond the wall.) '
+                    f'Move it inside Domain(size=..., center=...), or enlarge the domain.')
+            face = scene.boundaries.face(axis + '-')
+            if isinstance(face, Axis1D):
+                raise ValueError(
+                    f'{where} is smoothed and {axis} is an fd.Axis1D face. Axis1D stands for '
+                    f'an axis the field is *invariant* along -- its domain is one cell and the '
+                    f'derivative along it is i k exactly -- so the only structure it can carry '
+                    f'is one that is uniform along it, whatever the cell count. A body that '
+                    f'curves is not: measured on a Sphere(radius=0.2) over a domain one '
+                    f'cell thick, the scene lowers to an invariant slab cross-section holding '
+                    f'18.4% of the ball\'s volume -- neither the ball asked for nor the '
+                    f'cylinder a reader would take it for -- and no warning fires. Say the '
+                    f'invariant cross-section with the cell-snapped fd.Box (C4 ships the '
+                    f'smoothed fd.Cylinder and fd.Prism, which declare the axis they are '
+                    f'uniform along), or give {axis} real cells and a face that is not '
+                    f'invariant.')
+            if isinstance(face, (Periodic, Bloch)) and not (k0 > 0 and k1 < grid.n[a]):
+                raise ValueError(
+                    f'{where} reaches the {type(face).__name__} '
+                    f'{axis} face (cells {k0}..{k1} of {grid.n[a]}). A smoothed shape that '
+                    f'crosses a periodic face is only whole if its geometry is summed over the '
+                    f'ring of its own periodic images, and C2 does not do that: the part '
+                    f'outside the cell is simply lost, measured at 40.7% of the volume for a '
+                    f'ball centred on the face, with every invariant the lowering checks still '
+                    f'satisfied. Keep it at least one cell clear of both {axis} faces, or say '
+                    f'the periodic geometry with the cell-snapped fd.Box (which is clipped, '
+                    f'and whose clipping is how a lamellar grating spells "runs the whole '
+                    f'period").')
+        outside = _reaches_outside(structure.shape, body, grid, box)
+        if outside is not None:
+            a, side, fill = outside
+            axis = 'xyz'[a]
+            if side == '-':
+                raise ValueError(
+                    f'{where} reaches past the {axis}- face of the box: its material '
+                    f'fills {fill:.4f} of a voxel that lies outside the domain there. A '
+                    f'smoothed shape is not clipped to the domain the way a cell-snapped '
+                    f'fd.Box is, and the six components do not agree about where the box ends '
+                    f'-- at a MINUS face three of them have their point ON the wall, so their '
+                    f'first voxel reaches half a cell outside it and counts the material '
+                    f'there. Measured, a Sphere(radius=0.2) centred on a PEC x- face at '
+                    f'dx = 0.05 lowers 0.01675516 of volume on Ex, exactly half the ball, and '
+                    f'0.01988039 on Ey and Ez -- 18.7% more. So a ball half outside the box is '
+                    f'neither the ball nor the hemisphere, and it is refused rather than '
+                    f'silently trimmed. Move it inside Domain(size=..., center=...), enlarge '
+                    f'the domain, or say the truncated body with the cell-snapped fd.Box, '
+                    f'which really is clipped. A shape that is uniform ACROSS the face -- a '
+                    f'substrate, a half space -- is not refused: it answers uniform_along() '
+                    f'True in that cell layer and the clip takes nothing from it.')
+            raise ValueError(
+                f'{where} reaches the {axis}+ face of the box: {fill:.4f} of a voxel there '
+                f'holds material the grid has no point to carry. A smoothed shape is not '
+                f'clipped to the domain the way a cell-snapped fd.Box is, and the six '
+                f'components do not agree about where the box ends -- but a PLUS face is the '
+                f'opposite case to a minus one, and nothing outside the box is being counted '
+                f'here. At this face the three components whose Yee offset along {axis} is '
+                f'zero have their last point on the last node, so their last voxel stops half '
+                f'a cell short of the wall and whatever the body puts between there and the '
+                f'wall is simply LOST. The body may be entirely inside the domain and this '
+                f'still happens. Measured, a Sphere(radius=0.2) at dx = 0.05 whose surface is '
+                f'0.48 cells clear of the x+ wall lowers 1.87e-5 short of 4 pi R^3/3 on Ey and '
+                f'Ez and exactly on Ex, and 1.11e-2 short at tangency, while the same ball '
+                f'mirrored to the x- wall loses nothing (8e-16). Keep the surface at least '
+                f'half a cell ({0.5 * grid.dx:g}) clear of the {axis}+ wall, or enlarge the '
+                f'domain with Domain(size=..., center=...) -- a truncated fd.Box is the minus '
+                f'face\'s remedy and is no use here, because there is nothing sticking out to '
+                f'truncate. A shape that is uniform ACROSS the face -- a substrate, a half '
+                f'space -- is not refused: it answers uniform_along() True in that cell layer '
+                f'and a body that does not change across the wall loses nothing there.')
+        media = [(structure.material, where),
+                 (_background(scene), 'Scene(background=)')]
+        for other, s in enumerate(structures):
+            if other != index and _intersects(box, s.shape.support(grid)):
+                media.append((s.material, f'structures[{other}] ({s.shape.describe()})'))
+        for material, name in media:
+            if not isinstance(material, (Conductor, Dispersive)):
+                continue
+            what = ('a conductivity' if isinstance(material, Conductor)
+                    else f'{len(material.poles)} pole(s)')
+            # Door 4 below reads the self case the same way. A structure does not "share cells
+            # with" itself, and saying so was the first door a user met.
+            whose = (f'is smoothed and its own material is an fd.{type(material).__name__} '
+                     f'({what})' if name == where else
+                     f'is an fd.{type(material).__name__} ({what}) and shares cells with '
+                     f'{where}, which is smoothed')
+            raise ValueError(
+                f'{name} {whose}. Stage 4 C2 smooths eps and mu at each '
+                f'component\'s own Yee point and nothing else: sigma and the pole '
+                f'coefficients keep the cell-snapped rule, and a shape whose edge is not a '
+                f'cell boundary has no cells to apply it over -- so a partly filled voxel '
+                f'would carry the full conductivity or the full polarisation, which is a '
+                f'plausible number and a wrong one. Use the cell-snapped fd.Box for the lossy '
+                f'or dispersive part (first order in dx, and the whole of stages 1-3 rests on '
+                f'it), or keep it out of the smoothed shape\'s cells. Smoothing them is C8, '
+                f'which measures the rule before it writes it.')
+        for material, name in media:
+            for what, triple in (('eps', material.eps), ('mu', material.mu_value)):
+                if _isotropic(triple):
+                    continue
+                whose = ('is smoothed and declares' if name == where else
+                         f'declares an anisotropic {what}={tuple(triple)!r} and shares cells '
+                         f'with {where}, which is smoothed. It')
+                raise ValueError(
+                    f'{name} {whose} an anisotropic {what}={tuple(triple)!r}. '
+                    f'The mixing rule C2 applies at a '
+                    f'fractional edge is the diagonal of the Farjadpour/Kottke tensor\'s '
+                    f'inverse for two ISOTROPIC media -- all three of its citations derive it '
+                    f'for that case -- and blending each component separately with that '
+                    f'component\'s own {what} is not the tau-transform the anisotropic '
+                    f'construction calls for. On a ball the surface normal is almost never '
+                    f'along a principal axis, so that is the generic case and not a corner. '
+                    f'Held open, a Sphere with eps=(2.0, 5.0, 9.0) lowers with per-component '
+                    f'maxima [2.0, 5.0, 9.0] and no sign that the rule was never derived for '
+                    f'it. Give the smoothed shape and everything sharing its cells a scalar '
+                    f'{what}=, or say the anisotropic medium with the cell-snapped fd.Box, '
+                    f'whose material is not mixed at all. The tensor form is stage 5 and only '
+                    f'if study S1 says it buys an order.')
+    for i in range(len(smoothed)):
+        for j in range(i + 1, len(smoothed)):
+            (ia, sa, ba), (ib, sb, bb) = smoothed[i], smoothed[j]
+            boxa, boxb = sa.shape.support(grid), sb.shape.support(grid)
+            if not _intersects(boxa, boxb):
+                continue
+            shared = tuple((max(u[0], v[0]), min(u[1], v[1])) for u, v in zip(boxa, boxb))
+            count, worst = _shared_surface_voxels(ba, bb, grid, shared)
+            if not count:
+                continue
+            _, field, c, point, fa, fb = worst
+            raise ValueError(
+                f'structures[{ia}] ({sa.shape.describe()}) and structures[{ib}] '
+                f'({sb.shape.describe()}) are both smoothed and their surfaces pass through '
+                f'the same voxel: {count} of them, worst at the {field}{"xyz"[c]} point '
+                f'{point}, where they fill {fa:.4f} and {fb:.4f} of it -- the voxel the two '
+                f'surfaces cut most evenly of all of them. A smoothed shape mixes '
+                f'its material into whatever the cell already holds, which is the two-phase '
+                f'interface rule -- two phases and ONE surface. Two surfaces in one voxel do '
+                f'not compose: the second mix treats the first mixture as a medium with a '
+                f'second interface across it, and the background survives with weight '
+                f'(1-f1)(1-f2) in a voxel that holds none of it. Measured against a closed '
+                f'form, two half spaces of the same material whose faces sit in one cell read '
+                f'eps 3.20000 where the truth is 1.84615, 73% high, and the same fd.Sphere '
+                f'declared twice instead of once moves eps by up to 122% on 648 voxels. Move '
+                f'them until their SURFACES are a voxel apart (a dimer with a gap is fine and '
+                f'is not refused -- this is drawn on voxels, not on bounding boxes), or say '
+                f'the two as ONE structure so that there is one body, one interface and one '
+                f'exact answer: today that is a single fd.Sphere, or the cell-snapped fd.Box '
+                f'for the part that overlaps (a smoothed body over a snapped one composes '
+                f'exactly, measured 2.0e-16). The CSG spellings that say it properly -- '
+                f'fd.Union, fd.Intersection and fd.Difference, which resolve the two into one '
+                f'surface before any fill is taken -- reach the public door in stage 4 C4 and '
+                f'C5, and C5 owns the general refusal this is the reachable case of.')
+
+
+#: The exact clip's own round-off, and the tolerance **every** door here reads a fill against.
+#:
+#: A fill is a number in ``[0, 1]`` built from coordinates of size ``|x|``, so its round-off is
+#: of order ``|x|/dx`` ulps: it grows with the grid and with how far the body's own description
+#: reaches, not with the body's size. Measured over the two bodies C2 can reach -- the ball, and
+#: the box far wider than the domain that the co-location oracle spells a half space with -- at
+#: ``dx`` from 0.2 down to 0.0125 and at four sub-cell placements each:
+#:
+#:     end                                        worst deviation
+#:     a voxel the body fills WHOLE  (f = 1)          4.0e-13
+#:     a voxel the body MISSES       (f = 0)          1.2e-13
+#:
+#: and ``coefficients._Smoothed`` already carries -2.55e-12 for the second end at twenty cells
+#: per radius. **Neither end is ever reached exactly**: at ``dx = 0.05`` a voxel the half space
+#: fills whole reads 0.99999999999991 -- 8.8e-14 short -- so a condition written ``f < 1`` is
+#: true for it and a door written that way refuses the scene it was meant to let through (740
+#: voxels of two half spaces of one material; the two painting orders agree to 3.8e-14 there).
+#:
+#: The smallest thing worth refusing at either end -- a leak into a voxel outside the domain, a
+#: second surface inside one -- is a fraction of a voxel. This constant sits three orders above
+#: the measured round-off and eight below that, and what reading a fill within it as 0 or 1
+#: costs is bounded by itself: the mixing rule is Lipschitz in ``f``, so the mixed value moves by
+#: order ``tol`` of the two media's contrast and no more.
+_CLIP_ROUNDOFF = 1e-9
+
+#: Half a voxel's diagonal, in cells. A surface inside the voxel centred on a point is within
+#: this of that point, so ``|d| > _VOXEL_REACH * dx`` proves the surface is not in the voxel --
+#: and a composed CSG distance under-estimates, so the proof holds for those too.
+_VOXEL_REACH = math.sqrt(3.0) / 2.0
+
+
+def _isotropic(triple):
+    """Whether a material triple is one number, read the way a traced value allows.
+
+    ``materials._diagonal`` puts the *same object* in all three slots for a scalar ``eps=``,
+    which is the reading ``materials._positive`` already uses to decide whether to name an axis
+    in its refusal. A traced triple of three distinct tracers cannot be shown equal and is
+    therefore not isotropic here -- which is the refusing direction.
+    """
+    if triple[0] is triple[1] and triple[1] is triple[2]:
+        return True
+    values = [concrete(v) for v in triple]
+    return None not in values and values[0] == values[1] == values[2]
+
+
+def _reaches_outside(shape, body, grid, box):
+    """``(axis, '-'/'+', fill)`` where the body's material reaches a face, or ``None``.
+
+    Asked of the **body** and not of the support box, because the support carries a cell of
+    margin. For each face the support reaches, the cell layer one cell beyond it is built at
+    all six components' points (widened by a cell on the two transverse axes, so a body
+    leaving through a corner is seen on whichever axis it leaves by) and the body's own fill
+    is taken there. An axis the shape is **uniform along** in that boundary cell layer is
+    exempt: nothing is gained or lost across the wall by a body that does not change across
+    it, which is what lets a substrate or a half space run out of the box.
+
+    **The two sides are not the same question, and the caller's two messages say so.** At a
+    ``-`` face the probe layer is cell ``-1``, and every one of the six components' voxels
+    there lies wholly outside the domain, so a fill is material the run would gain. At a ``+``
+    face the probe layer is cell ``n``, and for the three components whose Yee offset along
+    that axis is zero the point sits exactly ON the wall, so their probe voxel spans
+    ``[wall - dx/2, wall + dx/2]`` and is half **inside** the domain: what it reads is the
+    material those same three components are about to lose, because their last real voxel
+    stops at ``wall - dx/2``. Measured on the ball inscribed in the 1.2 box at ``dx = 0.05``,
+    the ``+`` probe reads ``Ey`` 0.482619, ``Ez`` 0.482619, ``Hx`` 0.472177 -- all of it at
+    ``x <= 0.6``, i.e. inside -- and ``Ex``, ``Hy``, ``Hz``, whose probe voxels really are
+    outside, read 0.000000. Refusing either way is right; naming the ``-`` cause at a ``+``
+    face is not, which is what a previous writing of the message did.
+
+    Two stages, as in :func:`_shared_surface_voxels` and for the same reason -- the exact fill
+    is 97% of what a smoothed lowering costs, and the answer here is almost always "nothing
+    out there". The first is the signed distance, and it is ``d <= reach`` and **not**
+    ``|d| <= reach``: a voxel the body fills *whole* is deep inside it, where ``d`` is large
+    and negative, so the absolute value would step straight over a half space crossing the
+    wall. Any material in the voxel puts some point ``q`` of the body within it, so
+    ``d(p) <= |p - q| <= reach`` by the Lipschitz bound, and no marked voxel can be missed.
+    Measured on the worst scene in the suite -- a ball whose support clips to the whole 24^3
+    grid, so all six faces are tested over the full transverse extent -- the first stage takes
+    ``plan()`` from **357 ms to 3.4 ms**, and the scene that is refused still pays the fill only
+    where the body really is.
+    """
+    from .._shapes import occupancy as body_occupancy
+    from .occupancy import yee_points
+    reach = _VOXEL_REACH * grid.dx
+    for a in range(3):
+        for side, reached, layer in (('-', box[a][0] == 0, (0, 1)),
+                                     ('+', box[a][1] == grid.n[a], (grid.n[a] - 1, grid.n[a]))):
+            if not reached or shape.uniform_along(a, layer, grid):
+                continue
+            beyond = [(box[b][0] - 1, box[b][1] + 1) for b in range(3)]
+            beyond[a] = (-1, 0) if side == '-' else (grid.n[a], grid.n[a] + 1)
+            worst = 0.0
+            for field in ('E', 'H'):
+                for c in range(3):
+                    points = np.asarray(yee_points(grid, tuple(beyond), field, c))
+                    near = np.asarray(body.surface(points)[0]) <= reach
+                    if not near.any():
+                        continue
+                    fill, _ = body_occupancy(body, points[near], grid.dx)
+                    worst = max(worst, float(np.max(np.asarray(fill))))
+            if worst > _CLIP_ROUNDOFF:
+                return a, side, worst
+    return None
+
+
+def _shared_surface_voxels(body_a, body_b, grid, box):
+    """``(count, worst)`` voxels of ``box`` whose fill is fractional for **both** bodies.
+
+    Two stages, because the exact fill is 97% of what a smoothed lowering costs and the answer
+    is almost always "none". First the two signed distances, which are cheap: a body whose
+    surface is inside a voxel is within half a voxel diagonal of that voxel's own point, and a
+    CSG-composed distance under-estimates the true one, so ``|d| > _VOXEL_REACH * dx`` proves
+    the surface is elsewhere and no marked voxel can be missed. Then, at the marked points
+    only, the exact fill: fractional for **both**, read against :data:`_CLIP_ROUNDOFF` at both
+    ends.
+
+    **The tolerance is the point, not a slackening of the rule.** The two ends carry meaning --
+    ``f = 1`` means the arriving shape fills the voxel whole, which composes exactly, and
+    ``f = 0`` means it is not there at all -- and an earlier writing of this function took that
+    as licence to compare against 0 and 1 themselves. The exact clip never returns either: at
+    ``dx = 0.05`` a voxel a half space fills whole reads 0.99999999999991, so ``f < 1`` was true
+    for it and the door refused two half spaces of the SAME material, faces at 13.0 and 12.5
+    cells, on **740** voxels -- not one of which either body cut, and whose two painting orders
+    agree to 3.8e-14 against a one-painter lowering of the same geometry to 9.3e-14. It also
+    inflated what the refusals it was right to make counted: 736 of the 2464 voxels of the
+    gate's own 12.5/12.5000001 scene, and 68 of the 1883 of the public sphere-twice scene, are
+    voxels one body fills whole or misses.
+
+    ``worst`` is ``(share, field, c, point, fill_a, fill_b)`` for the voxel both surfaces cut
+    most evenly -- the largest ``min(f, 1-f)`` over the two -- which is the one a reader should
+    look at first, because it is where the two-phase rule is furthest from having a whole
+    medium on either side of it. Without the tolerance that pick was meaningless too: on the
+    scene above it named a voxel filled 1.0000 and 0.5000 "the voxel the two surfaces cut most
+    evenly of all of them".
+    """
+    from .._shapes import occupancy as body_occupancy
+    from .occupancy import yee_points
+    reach = _VOXEL_REACH * grid.dx
+    count, worst = 0, None
+    for field in ('E', 'H'):
+        for c in range(3):
+            points = np.asarray(yee_points(grid, box, field, c))
+            near = np.abs(np.asarray(body_a.surface(points)[0])) <= reach
+            if not near.any():
+                continue
+            near &= np.abs(np.asarray(body_b.surface(points)[0])) <= reach
+            if not near.any():
+                continue
+            marked = points[near]
+            fa = np.asarray(body_occupancy(body_a, marked, grid.dx)[0])
+            fb = np.asarray(body_occupancy(body_b, marked, grid.dx)[0])
+            tol = _CLIP_ROUNDOFF
+            both = ((fa > tol) & (fa < 1.0 - tol)
+                    & (fb > tol) & (fb < 1.0 - tol))
+            if not both.any():
+                continue
+            count += int(both.sum())
+            share = np.minimum(np.minimum(fa[both], 1.0 - fa[both]),
+                               np.minimum(fb[both], 1.0 - fb[both]))
+            k = int(np.argmax(share))
+            if worst is None or float(share[k]) > worst[0]:
+                worst = (float(share[k]), field, c,
+                         tuple(round(float(v), 6) for v in marked[both][k]),
+                         float(fa[both][k]), float(fb[both][k]))
+    return count, worst
 
 
 def check_absorbing_layers(scene, plan):
@@ -309,9 +812,9 @@ def _refuse_lossy_in_layer(material, name, where):
 
 
 def cfl_bound(scene, plan):
-    """``(bound, reason)``: the largest stable ``dt``, or ``(None, reason)`` if unreadable.
+    """``(bound, reason)``: a conservative ``dt`` bound, or ``(None, reason)`` if unreadable.
 
-    The vacuum bound is ``n_min dx / sqrt(3)`` -- the *slowest* index, because a medium with
+    The vacuum bound is ``n_min dx / sqrt(3)`` -- the *smallest* index, because a medium with
     ``eps < 1`` is faster than vacuum and the usual spelling that drops ``n_min`` lets a
     perfectly ordinary ``eps = 0.81`` diverge. The poles tighten it further
     (``wavebit/_core/grid_fdtd.py``, a kernel seed):
@@ -341,6 +844,16 @@ def cfl_bound(scene, plan):
             strength_sum += strength
         eps_min = min(concrete(e) for e in material.eps)
         coupling = max(coupling, strength_sum / eps_min)
+    from .occupancy import smoothed_structures
+    if smoothed_structures(scene):
+        # E and H average different voxels: the smallest epsilon and mu need not come
+        # from the same declared phase. For air and (eps=4, mu=0.25), every phase index
+        # is 1 but the independent-extrema bound is sqrt(1*0.25)=0.5. Each positive
+        # two-phase mix stays between its endpoints. This conservative bound is static
+        # and needs no tolerance or change of dt; a tighter scene-specific bound is C5.
+        eps_min = min(concrete(e) for material in materials for e in material.eps)
+        mu_min = min(concrete(m) for material in materials for m in material.mu_value)
+        n_min = min(n_min, math.sqrt(eps_min * mu_min))
     axes = cfl_axis_sum(scene, plan.dx)
     if axes == 3.0 / plan.dx ** 2:
         vacuum = n_min * plan.dx / math.sqrt(3.0)          # the stage-0 float, to the bit
@@ -370,6 +883,11 @@ def check_stability(scene, plan):
         worst += (f' An fd.Axis1D axis adds k_max^2/4 to the sum under the bound in place of the 1/dx^2 a '
                   f'differenced axis adds (its derivative is i k, bounded by nothing but k_max): '
                   f'{", ".join(axis1d)}; a smaller k_max= widens the bound.')
+    from .occupancy import smoothed_structures
+    if smoothed_structures(scene):
+        worst += (' Smoothed media sample E and H at different points; this conservative '
+                  'bound uses sqrt(min(eps) * min(mu)) across the declared phases, which '
+                  'can be below every phase\'s own index. It does not change dt.')
     raise ValueError(
         f'dt = {plan.dt:g} is at or past the stability bound {bound:g} of this scene. The '
         f'vacuum condition dt < n_min dx / sqrt(3) is tightened by every pole to '
@@ -397,7 +915,36 @@ def notes(scene, plan):
     out += _resolution_notes(scene, plan)
     out += _proximity_notes(scene, plan)
     out += _stabilize_notes(scene, plan)
+    out += _smoothed_notes(scene, plan)
     return out
+
+
+def _smoothed_notes(scene, plan):
+    """Read approximation bounds once for the static scene, outside numerical lowering.
+
+    Use the same components the coefficients spend. This also serves ``fd.check`` when
+    params already exist: a report must not depend on whether a byte count required lowering.
+    The collector holds component-voxel counts, summed over structures and CSG nodes.
+    """
+    from .._runtime import runtime
+    from .._shapes import Approximations
+    from ..diagnostics import BoundedVoxelWarning
+    from .occupancy import bound_note, occupancy, smoothed_structures
+    if not smoothed_structures(scene):
+        return []
+    report = Approximations()
+    magnetic = _background(scene).is_magnetic or any(
+        s.material.is_magnetic for s in scene.structures)
+    try:
+        occupancy(scene, plan, runtime('numpy'),
+                  fields=('E', 'H') if magnetic else ('E',), report=report)
+    except (TypeError, ValueError, RuntimeError) as err:
+        raise ValueError('fd.plan requires concrete geometry to measure smoothed voxel '
+                         'bounds before numerical lowering; a geometry value could not be '
+                         f'evaluated on NumPy ({type(err).__name__}: {err}). '
+                         'A traced public shape with range= is stage 4 C6.') from err
+    note = bound_note(report)
+    return [] if note is None else [(BoundedVoxelWarning, note)]
 
 
 def _stabilize_notes(scene, plan):

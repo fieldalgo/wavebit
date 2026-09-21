@@ -19,6 +19,7 @@ compares the code to itself proves continuity, not correctness.
 
 | Oracle | Files | What a pass means |
 | --- | --- | --- |
+| **Smoothed material coefficients** | `test_fd_occupancy.py`, `test_fd_occupancy_integration.py`, `test_fd_subpixel_study.py` | Do component-specific fills obey analytic mixing and derivative controls, report real CSG bounds before JIT, and keep the S1 measuring instrument honest? |
 | **Sphere clipping and JIT composition** | `test_fd_sphere_clip_jit.py` | Sphere, Union, Intersection, and Difference agree on 32 grid origins across NumPy, JAX, jax.jit, and Torch; analytic volume and containment laws hold, and an inactive square-root guard cannot change the result. |
 | **Multiple painted area shapes** | `test_fdtd_painted_shapes.py`, `test_fdtd_painted_optics.py`, `references/test_meep_painted_shapes.py` | Do overlapping rotated rectangles preserve last-shape priority, periodic cell masses and live topology/geometry/material derivatives against independent Cartesian integration and graded optical references? |
 | **Elliptical shape derivatives** | `test_fdtd_ellipses.py`, `test_fdtd_ellipse_optics.py`, `references/test_meep_ellipses.py` | Do independent implicit-conic cells, complete graphs and graded ellipse optics agree under refinement? |

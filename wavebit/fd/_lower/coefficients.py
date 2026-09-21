@@ -28,10 +28,38 @@ done with ``rt.xp.where`` over static boolean masks rather than with NumPy index
 plan's concrete checks (the CFL bound, the cells per wavelength) ask ``materials.concrete``
 first and say in the report when the answer was ``None``.
 
-Structures are applied **in the order given**, so a later one wins where two overlap --
-``owner_map`` is the one place that rule is written, and an overlap that a *dispersive*
-structure is party to is refused at the door instead, because the pole term is not routed
-through this map (``wavebit/fd/_lower/checks.py::check_overlaps``).
+Structures are applied **in the order given**, so a later one wins where two overlap.
+:func:`painters` and :func:`_blend` are the one place that rule is written, and an overlap
+that a *dispersive* structure is party to is refused at the door instead, because the pole
+term is not routed through them (``wavebit/fd/_lower/checks.py::check_overlaps``).
+
+**Two discretisations meet in that loop, and only one of them averages.** A cell-snapped
+shape (``Slab``, ``Box``) *replaces* the cell's material with its own -- one ``where`` over a
+static boolean mask, which is what every stage-0..3 golden holds to the bit. A smoothed shape
+(``Sphere``) *mixes*: it is handed the fraction of each component's own voxel it fills and how
+the surface is oriented there (``wavebit/fd/_lower/occupancy.py``) and combines its material
+with whatever the cell already held, by :func:`mix`. "Whatever the cell already held" is the
+running value, background or an earlier structure.
+
+**How far painting order carries across that seam.** Exactly as far as "one voxel, one
+surface". Where the arriving smoothed shape fills the voxel *whole* the mix returns its own
+material and the order rule is untouched, so a ball on a cell-snapped substrate, or a core
+inside a shell, composes to 2.0e-16 against the hand-written two-phase mix. Where **two**
+smoothed surfaces pass through one voxel it does not compose at all -- the second mix reads
+the first mixture as a medium and puts a second interface across it, leaving the background
+with weight ``(1-f1)(1-f2)`` in a voxel that holds none of it, measured 73% high on two half
+spaces of the same material and up to 122% on one ``fd.Sphere`` declared twice. That is a
+refusal and not an approximation (``checks.check_smoothed``, door 5), which is what keeps the
+sentence above true for every scene that reaches this file.
+
+The two are not one branch of the other, and the reason is bits rather than taste. A
+cell-snapped shape *is* the mixing rule at ``f = 1``, algebraically -- but ``mix`` returns
+``1 / (w/eps_a + (1-w)/eps_a)``, and a double reciprocal is not the identity in binary64.
+Measured over ``w`` on a 1001-point grid: 0 ulp at ``eps`` = 1, 2.25, 4 and 16, **2 ulp** at
+11.68 and at 12 (worst at ``w = 0.193``), and 2 ulp worst over ``eps`` swept through [1, 16].
+``be = (dt/dx)/eps`` would carry that straight into four frozen archives for no change of
+physics. So the snapped path is written as the ``where`` it has always been, and :func:`mix`
+is only ever reached by a shape that really has a fractional edge.
 
 The ``eps`` these four are built from is ``material.eps_for_update(dt)`` and not
 ``material.eps``: a :class:`~wavebit.fd.Debye` pole's trapezoidal recurrence is implicit in
@@ -46,8 +74,9 @@ import numpy as np
 from .._kernel.grid import OFFSETS
 from ..materials import as_material
 from .cpml import damping_profile
+from .occupancy import occupancy
 
-__all__ = ['build', 'varying_axes', 'owner_map', 'materials_of', 'params_bytes']
+__all__ = ['build', 'varying_axes', 'painters', 'mix', 'materials_of', 'params_bytes']
 
 #: Position of each spatial axis (0 = x, 1 = y, 2 = z) in a ``(3, nz, ny, nx)`` array.
 ARRAY_AXIS = {0: 3, 1: 2, 2: 1}
@@ -77,44 +106,237 @@ def _shape(plan, axes):
             plan.nx if 0 in axes else 1)
 
 
-def owner_map(scene, plan, axes):
-    """``(nz|1, ny|1, nx|1)`` of ints: ``-1`` for the background, else the structure's index.
+def mix(xp, held, value, fill, w):
+    """The two-phase effective permittivity of one component's voxel -- the smoothing rule.
 
-    Cell-snapped, so the same cell range serves all six components -- see ``geometry.py`` for
-    why that is one rule and not six, and why it is the inaccurate choice it says it is.
+    ``held`` is what the cell already holds (``eps_b``: the background, or an earlier
+    structure), ``value`` is the arriving shape's (``eps_a``), ``fill`` is the fraction of
+    *this component's own* voxel the shape fills and ``w`` is the mean of ``n_c^2`` over the
+    interface inside it, ``c`` being that component's direction::
 
-    This is the **only** reader of ``Shape.filled_cells``, and that is on purpose: it is the
-    one place where "which cells may this shape touch" is the wrong question, because a cell
-    the shape only partly fills would be painted as if the shape owned all of it. A shape with
-    a fractional edge has no such box and refuses here by name, so the caller that has to
-    change when one arrives is this one and no other (stage 4, C2, which replaces the owner
-    index with a per-component fill).
+        1 / eps_c = w (f/eps_a + (1-f)/eps_b) + (1 - w) / (f eps_a + (1-f) eps_b)
+
+    and the same with ``mu`` at the ``H`` points. This is ``diag(eps~^-1)`` of the
+    Farjadpour/Kottke effective tensor ``eps~^-1 = P <eps^-1> + (I - P) <eps>^-1`` with
+    ``P = <n n^T>``: harmonic in the direction across the interface, arithmetic along it, and
+    the two blended by how much of the component's own direction is normal.
+
+    Farjadpour et al., Opt. Lett. **31**, 2972 (2006); Kottke, Farjadpour & Johnson, Phys.
+    Rev. E **77**, 036611 (2008); Oskooi et al., Comput. Phys. Commun. **181**, 687 (2010).
+    The tensor form is quoted from Meep's **documentation**; no Meep source is read at any
+    point, and the Meep-derived FDTDX projection file this repository has already excluded
+    (``docs/fdtd-layer-smoothing.md``:74, ``docs/fdtd-layer-gradients.md``:72) stays excluded.
+
+    **What this rule is, and therefore what it is not.** *Two* phases, *one* interface, both
+    *isotropic*. All three neighbouring cases are refused rather than approximated, each by
+    name and each with the number the scene reads with its door held open
+    (``checks.check_smoothed``): two smoothed surfaces in one voxel, 73% on two half spaces of
+    the same material and up to 122% on one ``fd.Sphere`` declared twice (door 5); an
+    anisotropic ``eps`` or ``mu``, for which the Kottke construction is the tau-transform and
+    not a per-component blend (door 4); and a conductivity or a pole, which C8 owns (door 1).
+    A smoothed shape arriving over a cell-snapped one is *not* one of them: the snapped
+    material is a whole voxel of one medium, so the mix has its two phases and is exact,
+    measured at 2.0e-16.
+
+    Three properties decide this form over the alternatives, and each is a gate:
+
+    * **It contains the axis-aligned rule exactly.** ``w = 1`` is harmonic, ``w = 0``
+      arithmetic, which is what ``wavebit/_core/fdtd.py``:375 ``component_property`` already
+      does for a flat interface, so stage 4 does not compete with the legacy rule -- it
+      generalises it. Both ends are pinned by
+      ``tests/test_fd_occupancy.py::test_the_rule_is_the_axis_aligned_rule_at_the_two_ends``.
+    * **The inverse's diagonal, not the diagonal's inverse.** ``be = (dt/dx)/eps`` stores
+      inverse permittivity. The tilted-interface study measures the retained diagonal
+      directly; it does not justify interchanging inversion and taking a diagonal.
+    * **It is continuous in the normal**, so it differentiates and has no branch to get
+      wrong. The "harmonic along the component's own axis" spelling has to *pick* an axis and
+      so is discontinuous at 45 degrees; ``wavebit/_core/scene_fdtd.py``:1657-1661 records the
+      patch that cost -- a fixed x-then-y order broke x/y covariance at crossed corners.
+
+    **Why the reciprocal is taken here rather than carried.** ``be`` is ``(dt/dx)/eps``, so a
+    caller could keep ``1/eps_c`` and multiply. It does not, because ``build``'s four frozen
+    archives pin ``(dt/dx)/eps`` for every cell a smoothed shape does not reach, and one
+    expression per array is worth more than the extra rounding, which is 2 ulp at worst
+    (2.2e-16 relative, swept over ``eps`` in [1, 16] and ``w`` in [0, 1]).
+
+    **The truncation has a measured cost, not a universal convergence guarantee.** The
+    corrected S1 sweep at contrast 12, 16/32/48 cells per layer period, reads diagonal
+    fitted orders 0.999 / 1.012 / 0.864 at 14.036 / 26.565 / 45 degrees. Its self-adjoint
+    full-tensor comparator is non-monotone at the last two tilts; the naive comparator is
+    non-Hermitian and has complex modes that the earlier eigensolver silently projected
+    onto the real axis. Neither establishes a general verdict on every possible full-tensor
+    scheme. The kernel keeps this diagonal rule; a sphere's scattering order is the separate
+    Mie gate. See ``docs/fd-subpixel-occupancy.md`` for errors, fit scatter and controls.
+    """
+    harmonic = fill / value + (1.0 - fill) / held
+    arithmetic = fill * value + (1.0 - fill) * held
+    return 1.0 / (w * harmonic + (1.0 - w) / arithmetic)
+
+
+def _box_slices(box):
+    """The ``[z, y, x]`` basic-indexing tuple of an x-first cell box."""
+    return (slice(*box[2]), slice(*box[1]), slice(*box[0]))
+
+
+def _paste(xp, out, box, value):
+    """``out`` with its ``box`` sub-block replaced by ``value``, **out of place**.
+
+    Three concatenations, innermost axis first. Written this way and not as an indexed
+    assignment because ``out`` may hold tracers: ``a[i] = v`` is not available on JAX at all,
+    and on Torch it mutates a tensor an earlier painter may still be holding. ``concat`` is
+    the one Array-API spelling that is out of place, differentiable and the same three lines
+    on all three backends, which is the rule this package is built on -- one body, and an
+    input that reaches it must not give three different answers.
+    """
+    (i0, i1), (j0, j1), (k0, k1) = box
+    band = out[..., k0:k1, j0:j1, :]
+    row = xp.concat([band[..., :i0], value, band[..., i1:]], axis=-1)
+    plane = out[..., k0:k1, :, :]
+    plane = xp.concat([plane[..., :j0, :], row, plane[..., j1:, :]], axis=-2)
+    return xp.concat([out[..., :k0, :, :], plane, out[..., k1:, :, :]], axis=-3)
+
+
+class _Snapped:
+    """A cell-snapped shape: its material **replaces** the cell's, on a static boolean mask.
+
+    One ``xp.where``, exactly the line stage 1 wrote, so a scene of ``Slab``s and ``Box``es
+    lowers to the same bits it always did. The mask is this shape's own filled cells and does
+    not exclude the cells a later structure will claim: a later painter's ``where`` overwrites
+    them, which is the same last-wins answer an owner index gave and is a select rather than
+    an arithmetic, so the result is bit-identical rather than merely equal.
+    """
+
+    def __init__(self, mask):
+        self.mask = mask
+
+    def paint(self, rt, out, value, c, field, rule):
+        return rt.xp.where(rt.array(self.mask), rt.array(value, 'float64'), out)
+
+
+class _Smoothed:
+    """A body: :func:`mix` over its support box, at each component's own Yee point.
+
+    ``occ`` is one structure's entry from ``occupancy.occupancy`` -- the box and, per field
+    and component, the ``(fill, w)`` pair. ``shape`` is the full ``(nz, ny, nx)`` the
+    coefficient array has, which a smoothed shape always forces because it varies along every
+    axis it reaches (``geometry.Sphere.bounded_axes``).
+
+    **What it mixes into is the running value, and that is exact for one surface only.** At
+    ``f = 1`` the mix returns this shape's own material, so an earlier painter's answer is
+    replaced and the order rule is untouched; at ``f = 0`` it returns the earlier one. In
+    between it is the two-phase rule between this material and *one* other, which is right
+    while the voxel holds one surface -- an earlier cell-snapped shape puts none in it
+    (measured 2.0e-16 for a ball on a snapped substrate) and an earlier smoothed shape that
+    fills the voxel whole puts none in it either (a core inside a shell). Two smoothed
+    surfaces in one voxel is the case it cannot do, and ``checks.check_smoothed`` refuses it
+    before the scene reaches here rather than this class approximating it.
+
+    **Only the support box is touched.** The rest of the array is carried through untouched
+    rather than mixed at ``f = 0``, for the same reason the snapped painter is not written as
+    ``f = 1``: ``mix`` at ``f = 0`` returns ``1/(1/eps_b)``, which is the same number to
+    within a double reciprocal and not to within a bit.
+
+    Inside the box, cells the body misses *are* mixed at ``f = 0`` and come back off the
+    background by the double reciprocal plus whatever round-off the body's own fill carries.
+    Measured, ``Sphere(radius=0.25)`` in ``eps = 1`` at 5 / 10 / 20 cells per radius: the
+    worst departure of ``eps`` from the background's 1.0 anywhere outside the ball is
+    3.33e-14 / 3.42e-14 / 1.42e-12, on **two** array entries of 41 472 / 192 000 / 1 119 744.
+    Both are the same two voxels, and the cause is not the reciprocal: the exact clipped-ball
+    volume returns a fill of -6.03e-14 / -6.16e-14 / -2.55e-12 in a voxel the sphere just
+    misses -- accumulated round-off in the clip, which grows with the grid, as
+    ``wavebit/fd/_shapes/_exact.py`` records. It is **not clamped**. A clamp would be a
+    statement about the geometry where the truth is a round-off of order 1e-12, ten orders
+    below the rule's own measured error, and it would flatten the fill's derivative at exactly
+    the voxels the surface is passing through. C5's ``eps <= 0`` guard is where a fill that is
+    negative *enough* to matter is caught, and it fires on a bug rather than on this.
+
+    ``rule`` is ``'mix'`` for a quantity this commit smooths (``eps``, ``mu``) and ``'keep'``
+    for one it does not (``sigma``). ``'keep'`` leaves the cell's value alone, and that is
+    only honest because ``checks.check_smoothed`` refuses a conductive or dispersive material
+    anywhere a smoothed shape can reach -- so "not touched" and "zero" are the same number
+    here. Measured with that door held open: a lossless ``Sphere(radius=0.25)`` in a
+    ``Conductor(eps=1, sigma=0.2)`` background reads ``sigma = 0.2001`` on all 402 voxels the
+    ball fills outright, where the truth is 0. That is the door's mutant, and it is what
+    "silently wrong" means here -- the run completes and the number is the right shape.
+    """
+
+    def __init__(self, occ, shape):
+        self.occ, self.shape = occ, shape
+
+    def paint(self, rt, out, value, c, field, rule):
+        if rule != 'mix':
+            return out
+        if field not in self.occ:
+            raise KeyError(
+                f'occupancy was not asked for the {field} points, so a smoothed shape cannot '
+                f'mix a quantity that lives on them. coefficients.build decides that pair '
+                f'(it skips the H points when nothing in the scene is magnetic, because bh '
+                f'is then the scalar dt/dx); a caller that wants the mix must ask for the '
+                f'field.')
+        xp = rt.xp
+        box = self.occ['box']
+        fill, w = self.occ[field][c]
+        full = out if getattr(out, 'shape', ()) == self.shape else xp.broadcast_to(out,
+                                                                                  self.shape)
+        held = full[_box_slices(box)]
+        mixed = mix(xp, held, rt.array(value, 'float64'), fill, w)
+        return _paste(xp, full, box, mixed)
+
+
+def painters(scene, plan, axes, occ):
+    """One painter per structure, in scene order: how it puts its material into a cell.
+
+    ``occ`` maps a structure's index to its occupancy entry (``occupancy.occupancy``); a
+    structure that is not in it is cell-snapped and gets the static mask its
+    :meth:`~wavebit.fd.geometry.Shape.filled_cells` names. That is the **only** reader of
+    ``filled_cells``, which is why a smoothed shape refuses the method rather than
+    over-answering it: the caller that must change when a fractional edge arrives is this one
+    and no other.
+
+    A smoothed shape must have put **every** axis in its ``bounded_axes``, and that is refused
+    here rather than assumed. A cell-snapped ``Box`` may leave out an axis it spans, because a
+    box clipped to the domain really is uniform along it and an extent-1 coefficient axis is
+    then exact. A body that curves is not, so the same saving would broadcast one plane of
+    fills over the whole grid -- a plausible array of the right shape. C4 opens the saving
+    properly for the bodies that *are* uniform along an axis (a cylinder, a prism), by
+    evaluating the fill on one plane and saying so.
     """
     _, structures = materials_of(scene)
     shape = _shape(plan, axes)[1:]
-    owner = np.full(shape, -1, dtype=np.int32)
+    full = _shape(plan, (0, 1, 2))[1:]
     grid = plan.grid
+    out = []
     for k, s in enumerate(structures):
+        if k in occ:
+            if shape != full:
+                raise ValueError(
+                    f'structures[{k}] ({s.shape.describe()}) is smoothed but the coefficient '
+                    f'arrays are {shape} rather than {full}: some shape in this scene left an '
+                    f'axis out of bounded_axes(). A smoothed shape varies along every axis it '
+                    f'reaches, so an axis of extent 1 would broadcast one plane of fill '
+                    f'fractions over the whole grid. Return (0, 1, 2) from bounded_axes().')
+            out.append(_Smoothed(occ[k], shape))
+            continue
         box = s.shape.filled_cells(grid)
+        mask = np.zeros(shape, dtype=bool)
         index = [slice(None)] * 3
         for a in axes:
             index[ARRAY_AXIS[a] - 1] = slice(*box[a])
-        owner[tuple(index)] = k
-    return owner
+        mask[tuple(index)] = True
+        out.append(_Snapped(mask))
+    return out
 
 
-def _select(rt, owner, background_value, structure_values, component):
-    """``background`` everywhere, overwritten by each structure's value on its cells.
+def _blend(rt, paint_list, background_value, structure_values, component, field, rule):
+    """``background`` everywhere, then each structure in turn -- replacing it or mixed into it.
 
-    ``owner`` is the static map; the values may be traced, so this is a chain of
-    ``xp.where`` and never an assignment into an array.
+    The values may be traced, so this is a chain of ``xp.where`` and ``mix`` and never an
+    assignment into an array. With no structure it returns the background scalar, which is
+    what keeps a vacuum run on the stage-0 Python scalars.
     """
     out = rt.array(background_value[component], 'float64')
-    if owner is None:
-        return out
-    for k, value in enumerate(structure_values):
-        mask = rt.array(owner == k)
-        out = rt.xp.where(mask, rt.array(value[component], 'float64'), out)
+    for painter, value in zip(paint_list, structure_values):
+        out = painter.paint(rt, out, value[component], component, field, rule)
     return out
 
 
@@ -177,11 +399,18 @@ def build(scene, plan, rt):
                                 'ah': rt.array(1.0, 'float64'),
                                 'bh': rt.array(dt / dx, 'float64')})
 
-    owner = owner_map(scene, plan, axes) if structures else None
-    eps = _stack(rt, owner, background.eps_for_update(dt),
-                 [s.material.eps_for_update(dt) for s in structures])
-    mu = _stack(rt, owner, background.mu_value, [s.material.mu_value for s in structures])
-    sigma = _stack(rt, owner, background.sigma, [s.material.sigma for s in structures])
+    # ``mu`` is read at the H points and ``eps`` at the E points -- a smoothed shape's fill
+    # differs between them by half a cell. The H pass is built only when something in the
+    # scene is magnetic, because ``bh`` is the scalar ``dt/dx`` otherwise and the three
+    # H-point evaluations would be discarded.
+    occ = occupancy(scene, plan, rt, fields=('E', 'H') if magnetic else ('E',))
+    paint_list = painters(scene, plan, axes, occ) if structures else []
+    eps = _stack(rt, paint_list, background.eps_for_update(dt),
+                 [s.material.eps_for_update(dt) for s in structures], 'E', 'mix')
+    mu = _stack(rt, paint_list, background.mu_value,
+                [s.material.mu_value for s in structures], 'H', 'mix' if magnetic else 'keep')
+    sigma = _stack(rt, paint_list, background.sigma,
+                   [s.material.sigma for s in structures], 'E', 'keep')
 
     # Each half is built only if something makes it non-trivial: ``ae`` and ``ah`` stay the
     # stage-0 scalar 1.0 unless there is a loss, and ``bh`` stays dt/dx unless a permeability
@@ -212,9 +441,17 @@ def _with_minus(out):
     return out
 
 
-def _stack(rt, owner, background_value, structure_values):
-    """A ``(3, ...)`` array of one material quantity: background, then each structure's cells."""
-    parts = [_select(rt, owner, background_value, structure_values, c) for c in range(3)]
+def _stack(rt, paint_list, background_value, structure_values, field, rule):
+    """A ``(3, ...)`` array of one material quantity: background, then each structure.
+
+    ``field`` says which set of Yee points a smoothed structure is read at -- ``'E'`` for
+    ``eps`` and ``sigma``, ``'H'`` for ``mu`` -- and ``rule`` whether a smoothed structure
+    mixes into the cell or leaves that quantity alone. A cell-snapped structure ignores both:
+    its cells are the same range for all six components, which is what made one owner index
+    serve them in stage 1 and what keeps those scenes bit-identical here.
+    """
+    parts = [_blend(rt, paint_list, background_value, structure_values, c, field, rule)
+             for c in range(3)]
     parts = [rt.xp.broadcast_to(p, _broadcast_shape(parts)) for p in parts]
     return rt.xp.stack(parts, axis=0)
 

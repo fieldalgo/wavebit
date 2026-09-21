@@ -59,10 +59,10 @@ Meep-derived FDTDX projection file this repository has already excluded
 ``_occupancy.py``
     The 3x3x3 periodic image ring, and the one call that puts it all together.
 
-**This package is reachable from no solver file.** Nothing under ``wavebit/fd/`` outside
-``_shapes/`` imports it in the commit that adds it; C2 wires it into a new lowering stage,
-named after this package's one entry point, and into the coefficients. It is built and gated
-first, on its own, because
+**This package was reachable from no solver file in the commit that added it.** C2 wires it
+into ``wavebit/fd/_lower/occupancy.py``, a new lowering stage named after this package's one
+entry point, and through it into the coefficients; ``wavebit/fd/geometry.py`` builds a body
+from a shape and imports nothing else here. It was built and gated first, on its own, because
 every number stage 4 claims stands on it and because a geometry bug found through a scattering
 cross-section costs a 400-second run to see.
 

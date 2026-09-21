@@ -262,7 +262,7 @@ def _pole_terms(scene, grid):
     """One :class:`PoleTerm` per dispersive structure, over that structure's snapped cells.
 
     "That structure's cells" and not "the cells it still owns": the overlap rule lives in
-    ``coefficients.owner_map`` and this does not read it, which is why a scene where a
+    ``coefficients.painters`` and this does not read it, which is why a scene where a
     dispersive structure overlaps another is refused outright
     (``checks.check_overlaps``, which measures what the wrong answer looks like).
     """
@@ -308,6 +308,7 @@ def plan(scene, _column=False, _grazing=None):
         checks.check_wavelength_resolution(scene, grid)
     checks.check_faces(scene, grid, None)
     checks.check_overlaps(scene, grid)
+    checks.check_smoothed(scene, grid)
     rules, pads, masks = [], [], []
     for name in FACES:
         rule, face_pads, face_masks = lower_face(name, scene.boundaries.face(name), grid)

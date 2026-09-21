@@ -30,7 +30,7 @@ disk before the next.
                                                        that case is measured at 1.9e-1
                                                        against 6.0e-4 -- 317x
                                                        (``tests/test_fd_absorber.py``)
-    ``owner_map`` reads ``support`` instead of       1: ..._the_lowering_paints_the_cells_a
+    ``painters`` reads ``support`` instead of       1: ..._the_lowering_paints_the_cells_a
       ``filled_cells``                                 _shape_fills_not_the_ones_it_touches
                                                        -- the pebble's whole bounding box is
                                                        painted with its material, corners
@@ -120,7 +120,7 @@ import pytest
 import wavebit.fd as fd
 from wavebit.fd._kernel.grid import Grid
 from wavebit.fd._lower.checks import check_overlaps
-from wavebit.fd._lower.coefficients import owner_map, varying_axes
+from wavebit.fd._lower.coefficients import painters, varying_axes
 from wavebit.fd._lower.monitors import farfield_checks
 from wavebit.fd._post import medium_at
 from wavebit.fd.geometry import AXES, Box, Shape, Slab
@@ -180,6 +180,16 @@ class _Pebble(Shape):
     def uniform_along(self, axis, cells, grid):
         return False
 
+    def body(self):
+        """``None``: this pebble is cell-snapped, so the lowering paints it with a mask.
+
+        Stage 4's C2 added this question to the protocol, and the pebble's answer keeps it on
+        exactly the path it was written to exercise -- the three questions it separates are
+        the cell-snapped ones, and a fill fraction would replace two of them rather than
+        sharpen them.
+        """
+        return None
+
     def bounded_axes(self, grid):
         return (0, 1, 2)
 
@@ -231,6 +241,9 @@ class _Wafer(Shape):
 
     def filled_cells(self, grid):
         return self.support(grid)                       # cell-snapped: it fills it outright
+
+    def body(self):
+        return None
 
     def uniform_along(self, axis, cells, grid):
         if axis != self.across:
@@ -291,7 +304,7 @@ def _quiet(fn, *args, **kwargs):
 # ---------------------------------------------------------------------------------------------
 
 @pytest.mark.parametrize('method, args', [
-    ('support', ('grid',)), ('filled_cells', ('grid',)),
+    ('support', ('grid',)), ('filled_cells', ('grid',)), ('body', ()),
     ('uniform_along', (0, (0, 4), 'grid')), ('bounded_axes', ('grid',)),
     ('describe', ()), ('span_rows', ('grid',)), ('min_extent', ('grid',)),
 ])
@@ -427,11 +440,14 @@ def test_a_refusal_names_the_shape_it_is_about_in_the_shapes_own_words():
 
 
 def test_the_lowering_paints_the_cells_a_shape_fills_not_the_ones_it_touches():
-    """``owner_map`` is the one reader of ``filled_cells``, and the one C2 replaces.
+    """``painters`` is the one reader of ``filled_cells``, and stage 4's C2 kept it that way.
 
-    Painting an owner index over a cell the shape only clips would give that whole cell the
-    shape's material -- the staircase, but silently and at the shape's *outer* radius. The
-    mutant is ``support`` here; it shows up as the pebble's corner cells owned.
+    Painting a cell-snapped mask over a cell the shape only clips would give that whole cell
+    the shape's material -- the staircase, but silently and at the shape's *outer* radius. The
+    mutant is ``support`` here; it shows up as the pebble's corner cells painted. C2 replaced
+    the owner index with one painter per structure (a mask for a cell-snapped shape, the
+    per-component fill for a smoothed one) and this question did not move: a shape that
+    answers ``body()`` with ``None`` still gets exactly this box and exactly this ``where``.
     """
     pebble = _Pebble(0.18, center=(0.0, 0.0, 0.0))
     scene = _scene((fd.Structure(pebble, fd.Material(eps=2.25)),),
@@ -439,15 +455,17 @@ def test_the_lowering_paints_the_cells_a_shape_fills_not_the_ones_it_touches():
                                             z=fd.Periodic()))
     p = _quiet(fd.plan, scene)
     grid = p.grid
-    owner = owner_map(scene, p, {0, 1, 2})
+    painted = painters(scene, p, {0, 1, 2}, {})
+    assert len(painted) == 1
+    mask = painted[0].mask
     filled, support = pebble.filled_cells(grid), pebble.support(grid)
     assert filled != support, 'the two questions must differ or this test proves nothing'
     (i0, i1), (j0, j1), (k0, k1) = filled
-    assert (owner[k0:k1, j0:j1, i0:i1] == 0).all()
-    # Nothing outside the filled box is owned: in particular not the corner of the support,
+    assert mask[k0:k1, j0:j1, i0:i1].all()
+    # Nothing outside the filled box is painted: in particular not the corner of the support,
     # which is where the ball is not.
-    assert (owner == 0).sum() == (i1 - i0) * (j1 - j0) * (k1 - k0)
-    assert owner[support[2][0], support[1][0], support[0][0]] == -1
+    assert int(mask.sum()) == (i1 - i0) * (j1 - j0) * (k1 - k0)
+    assert not mask[support[2][0], support[1][0], support[0][0]]
 
 
 def test_a_clearance_question_asks_the_support_not_the_filled_cells():
