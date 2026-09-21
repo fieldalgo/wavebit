@@ -106,6 +106,30 @@ but its *cotangent* is not, so ``0/0`` in a branch nothing selects still poisons
 from wavebit._core.backend import _concrete, array_namespace
 
 
+#: A voxel is called **cut** when the interface area inside it clears this fraction of the
+#: voxel's own face ``dx^2``. The first writing tested ``area > 0``, an absolute predicate on a
+#: number that is a *product of coordinates*, so the same scene written in a different unit
+#: landed on opposite sides of it: measured in the C1 review's cross-backend fuzz over 200
+#: random bodies, a
+#: star prism at coordinate scale 3.29e+05 with ``h = 3.23e+04`` gave ``area = 0`` on NumPy and
+#: ``area = 1.80e-09`` on JAX -- a relative 1.7e-18 of the voxel face, 1.04e+09 -- and ``w``
+#: swapped from ``(0, 0, 0)`` to a full ``(1, 0, 0)`` between the two backends on one legal
+#: input. A ratio to ``dx^2`` says the same thing at every scale (memory: a predicate compared
+#: against an absolute floor is a predicate about the coordinate unit, and the same argument
+#: rewrote ``_bodies._TURN_SINE`` last round). The margin is far below anything physical: a
+#: cross-section of ``1e-12 dx^2`` is a corner tetrahedron of volume about ``1e-18 dx^3``, so
+#: the fill there is 0 or 1 to eighteen digits, which is the condition that makes ``w = 0``
+#: allowed in the first place.
+_LIVE_AREA = 1e-12
+
+
+def _mean_of_the_moment(area, moment, dx, xp):
+    """``w = moment / area`` where a surface reaches the voxel, and exactly zero where none does."""
+    live = area > _LIVE_AREA * dx * dx
+    safe = xp.where(live, area, xp.ones_like(area))[..., None]
+    return xp.where(live[..., None], moment / safe, xp.zeros_like(moment))
+
+
 def _ramp(t, xp):
     """``max(t, 0)``, whose square and cube are C1 and C2 at the knot."""
     return xp.where(t > 0, t, xp.zeros_like(t))
@@ -229,7 +253,13 @@ def cut_parts(d, n, dx):
     bodies in ``_bodies.py`` guarantee it by construction, including at the points where the true
     gradient is undefined (a sphere's centre, a box's medial axis), so
     ``max_i |n_i| dx >= dx/sqrt(3)`` and the division inside can never be by a small number.
+
+    ``dx`` is doored here and not in :func:`_parts`, for the same reason ``n`` is: the bodies
+    reach ``_parts`` through ``occupancy``, which doors ``dx`` once per call, and a door inside
+    ``_parts`` would be paid once per body per image instead.
     """
+    from ._bodies import check_sizes       # local: _bodies imports _parts from this module
+    dx, = check_sizes('cut', dx=dx)
     _unit(n, array_namespace(d, n))
     return _parts(d, n, dx)
 
@@ -252,6 +282,4 @@ def cut(d, n, dx):
     """
     xp = array_namespace(d, n)
     fill, area, moment = cut_parts(d, n, dx)
-    live = area > 0
-    return fill, xp.where(live[..., None], moment / xp.where(live, area, xp.ones_like(area))[..., None],
-                          xp.zeros_like(moment))
+    return fill, _mean_of_the_moment(area, moment, dx, xp)

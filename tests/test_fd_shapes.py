@@ -63,9 +63,25 @@ fail, and reverted:
     `_unit`'s test left as `worst > 1e-9` (a NaN normal passes)        1
     `readable` returning None for a torch.func value                   1
     a traced parameter on a CSG node accepted                          1
+    the back-to-back margin widened to a tenth                         1
+    the outline test absolute again (`best > 0`)                       1
+    the nearest EDGE normal back to a fixed `+u`                       2
+    the slab term dropped (the apart branch alone)                     1
+    `occupancy`'s `dx` door removed                                    1
+    a complex value cast instead of refused                            1
+    `_as` back to testing `dtype` and `device`                         1
+    the liveness test absolute again (`area > 0`)                      1
+    a ZERO length accepted under jit                                   1
+    the orientation factor dropped from `exact_moment`                 1
+    a union of flush children composed by the plane                    2
 
-The last eight are this round's, and six of them are mutants that **survived** the previous
-gate. The first of those decided the round: the convexity tolerance as shipped *was* absolute
+The last eleven are this round's. Three of them did not go red on the first sweep and the gate
+was widened rather than the claim: a margin on the separation test that nothing could make fail
+was **deleted** (the case it was written for is answered by the back-to-back branch instead); the
+orientation guard's assertion was taken at a point INSIDE a hexagon, where the interface area is
+zero whatever the guard does, and now runs at a point on its edge; and the slab term produces a
+fill that runs continuously past 1 rather than stepping, so the first-contact test checks the
+range and not only the step. The first of those decided the round: the convexity tolerance as shipped *was* absolute
 below unit scale, so the mutant spelling it that way was behaviourally identical to the code and
 passed all 45 tests -- the gate was holding the classifier at one coordinate scale only.
 
@@ -118,6 +134,22 @@ The periodic ring multiplies all of it by the image count, as it must: on NumPy 
 reads 33.9 ms with no ring, 289.2 ms over two periodic axes (9 images) and 819.5 ms over three
 (27), on the plane path those numbers were measured on. That is the price of the static
 ``rings=`` prune C2 will make from a declared ``range=``.
+
+**What a CSG node costs now that it answers from its children.** A node evaluates each child's
+own route, each child's tangent half space, the composed plane, and one pair test per pair --
+against the composed plane alone before. Same box, same machine:
+
+    body                             numpy     jax (jit)     torch
+    Difference(Sphere, Cylinder)    761.0 ms    39.4 ms    286.3 ms
+    Union(Box, Cylinder), flush    1267.6 ms   124.1 ms    869.6 ms
+    Sphere alone, for scale         786.6 ms    32.8 ms    240.8 ms
+
+The first row is **12x** the 61.4 ms the same node cost on the plane path, and the reason is not
+the rule: it is the same 786.6 ms as its ``Sphere`` child alone, because a node now pays its
+children's **exact** fills (the ball clip is 15x the plane on its own). The pair test, the two
+half spaces and the composed plane together sit inside that one clip's noise. The alternative --
+the exact multi-plane cut, priced in ``_bodies._Combination`` -- is 33.5 to 440 seconds on the
+same class of scene.
 """
 import numpy as np
 import pytest
@@ -376,11 +408,32 @@ def test_a_cut_is_what_a_monte_carlo_says_it_is():
 
 
 def test_the_free_invariants_hold_on_every_body():
-    """``0 <= fill <= 1``, ``|sum_c w_c - 1| < 1e-14`` where there is a surface, ``w = 0`` where not."""
+    """``0 <= fill <= 1``, ``|sum_c w_c - 1| < 1e-14`` where there is a surface, ``w = 0`` where not.
+
+    **The upper bound is 1 + 3.4e-13 and not 1 + 1e-14**, and the number is the exact fills'
+    own round-off rather than a slack. A body centred on the grid's own symmetry is the worst
+    placement, because every one of the eight corner primitives then cancels against its mirror.
+    Measured, the worst ``max(fill) - 1`` over twenty radii from 0.10 to 0.35, per grid:
+
+        grid          sphere     cylinder      box
+        16^3         3.02e-14     6.22e-15   1.78e-15
+        24^3         2.22e-16     1.33e-14   1.78e-15
+        32^3         3.34e-13     4.60e-14   4.66e-15
+
+    It grows with the grid, for the reason
+    :func:`test_w_vanishes_only_where_the_fill_is_already_decided` records for the same clip. The
+    shipped bound was 1e-14 and was met only because the two bodies listed here missed the worst
+    placement: ``Sphere(0.3)`` on this grid reads 1.0000000000000144, and it now has a row.
+    """
     h = 0.05
     pts = grid(16, -0.4, h)
+    joint = float(-0.4 + 8.5 * h)
     bodies = {
         'sphere': Sphere(0.26, (0.013, -0.021, 0.007)),
+        'sphere on the lattice': Sphere(0.3),
+        'cylinder on the lattice': Cylinder(0.25, 0.4, 'z'),
+        'union, flush': Union(Box((0.5, 0.5, 0.2), (0., 0., joint - 0.1)),
+                              Cylinder(0.12, 0.2, 'z', (0., 0., joint + 0.1))),
         'cylinder': Cylinder(0.21, 0.33, 'y', (0.01, -0.02, 0.0), 0.4),
         'prism': Prism(HEX, 0.33, 'x', (0.01, -0.02, 0.0), 0.9),
         'box': Box((0.34, 0.22, 0.29), (0.013, -0.021, 0.007), 0.7),
@@ -391,7 +444,7 @@ def test_the_free_invariants_hold_on_every_body():
     for name, body in bodies.items():
         fill, w = occupancy(body, pts, h)
         assert fill.min() >= 0.0, name
-        assert fill.max() <= 1.0 + 1e-14, name
+        assert fill.max() <= 1.0 + 3.4e-13, name
         total = w.sum(-1)
         live = total > 0
         assert np.abs(total[live] - 1).max() < 1e-14, name
@@ -434,6 +487,16 @@ def test_w_vanishes_only_where_the_fill_is_already_decided():
         sphere       1.16e-02  1.94e-03  2.54e-03  6.44e-04  5.55e-04
         cylinder     3.26e-02  2.79e-02  2.93e-02  3.08e-02  2.53e-02
 
+    **The CSG row is no longer the control it was.** A CSG node used to answer entirely from
+    the tangent plane, one route, and read a flat 8.9e-16; it now answers with its *children's
+    own* routes wherever they hold no volume of the voxel in common (``_bodies._Combination``),
+    so a node built from spheres inherits the sphere's gap exactly -- measured 1.16e-02 at
+    ``R/h = 4``, the sphere's own number. The control is kept by a second CSG row built from
+    **boxes**, whose fill and moment are both exact: it reads 1.1e-15 and 2.4e-15 at ``R/h`` = 4
+    and 8, i.e. the clip's own accumulated round-off and nothing else, and its bound scales with
+    ``R/h`` exactly as the single box's does. What the old flat CSG row said -- that the growth
+    in the box and prism rows is the clip's and not the pairing's -- this row still says.
+
     Three things in that table are not what the previous writing said. The sphere's worst at
     four cells of radius is **1.16e-02** and not 5e-03, so it is not "a coefficient in the third
     digit" -- it is the second, and the exact interface area that would remove it is worth more
@@ -454,11 +517,14 @@ def test_w_vanishes_only_where_the_fill_is_already_decided():
     already costs 15x the plane -- but at 1.16e-2 it is C2's decision and not an afterthought.
     """
     bounds = {'box': lambda npr: 1e-15 * npr, 'prism': lambda npr: 1e-15 * npr,
-              'csg': lambda npr: 2e-15, 'sphere': lambda npr: 2e-2,
+              'csg box': lambda npr: 2e-15 * npr, 'csg': lambda npr: 2e-2,
+              'sphere': lambda npr: 2e-2,
               'cylinder': lambda npr: 5e-2}
     bodies = {
         'box': lambda R, c: Box((1.7 * R, 1.3 * R, 1.9 * R), c, 0.37),
         'prism': lambda R, c: Prism(HEX, 1.6 * R, 'z', c, 0.4),
+        'csg box': lambda R, c: Difference(Box((1.7 * R, 1.3 * R, 1.9 * R), c, 0.37),
+                                           Box((R, R, 4 * R), tuple(np.add(c, 0.6 * R)), 0.2)),
         'csg': lambda R, c: Difference(Sphere(R, c), Sphere(0.5 * R, tuple(np.add(c, 0.6 * R)))),
         'sphere': lambda R, c: Sphere(R, c),
         'cylinder': lambda R, c: Cylinder(R, 1.6 * R, 'z', c),
@@ -991,19 +1057,37 @@ def test_a_crease_is_where_w_jumps_and_this_is_how_far():
         box, rotated             1102    0.3028      3.0e-03
         hexagonal prism edge     1485    0.3222      1.6e-03
         cylinder cap rim         1485    1.0000      2.0e-03
-        CSG (sphere minus rod)   2301    0.5660      3.1e-02
 
-    The cylinder's rim is the worst case and the one C2 has to price: ``w`` swaps from the side
-    wall's ``(0.5, 0.5, 0)`` to the cap's ``(0, 0, 1)`` inside one 0.0025-cell move, a jump of
-    the full range. G4 was measured on a sphere, where this file reads 0.0000, and is out by
-    five orders of magnitude on a rim.
+    The cylinder's rim is the worst *leaf* case: ``w`` swaps from the side wall's
+    ``(0.5, 0.5, 0)`` to the cap's ``(0, 0, 1)`` inside one 0.0025-cell move, a jump of the full
+    range. G4 was measured on a sphere, where this file reads 0.0000, and is out by five orders
+    of magnitude on a rim.
 
-    **The last row is new and it is not a jump in ``w``.** A CSG node's *fill* is discontinuous
-    too, which no earlier measurement had looked for: the tangent plane's fill depends on the
-    **selected** normal, and at a crease the selection swaps between children, so ``fill`` jumps
-    although ``d`` is continuous. Bisected to 5.5e-17 in the slide parameter, the fill steps
-    0.96063617 -> 0.99217239, a jump of **3.15e-02**, while ``d`` holds to twelve digits. Every
-    body with an exact fill is immune (their fill never reads a normal); every CSG node has it.
+    **A CSG node's *fill* is discontinuous too**, which no earlier measurement had looked for:
+    the tangent plane's fill depends on the **selected** normal, and at a crease the selection
+    swaps between children, so ``fill`` jumps although ``d`` is continuous. Bisected to 5.5e-17
+    in the slide parameter, the fill steps 0.96063617 -> 0.99217239, a jump of **3.15e-02**,
+    while ``d`` holds to twelve digits. Every body with an exact fill is immune (their fill never
+    reads a normal); every CSG node has it.
+
+    **That jump has been quoted from one node at one voxel three rounds running, and it is a
+    sample.** Over six node kinds on the same 2400-step slide (2026-09-21, with the seam rule in
+    place):
+
+        node                     max |dfill|   max |dw|
+        sphere minus a rod        3.12e-02      0.566
+        sphere u box              9.98e-03      5.72e-04
+        two spheres, n            1.68e-03      3.57e-04
+        box minus box             4.29e-02      1.000
+        prism u cylinder          4.21e-02      0.864
+        three-way (two cuts)      3.05e-03      2.24e-03
+
+    -- the worst is **4.29e-02** in the fill and a full **1.000** in ``w``, on a node that is not
+    the one the number used to be read off. Two of the rows are the seam rule's doing and are
+    quoted so the improvement is on record too: ``sphere u box`` and the three-way node read
+    4.12e-02 and 3.56e-02 before it, because their children stop overlapping over part of the
+    slide and the sum then answers exactly. The two worst rows are in this test as the last two
+    cases, so the family's worst is held and not merely written down.
 
     The consequence is worse than a disagreement between a gradient and a difference: at that
     slide value a central difference of a loss reads 268.81, 2685.85, 26855.47, 268551.57 and
@@ -1023,6 +1107,13 @@ def test_a_crease_is_where_w_jumps_and_this_is_how_far():
         'cyl rim': (lambda c: Cylinder(0.31, 0.44, 'z', c), (0.31, 0.0, 0.22), 0.9, 1e-2),
         'csg': (lambda c: Difference(Sphere(0.31, c), Cylinder(0.12, 1.0, 'z', c)),
                 (0.12, 0.0, 0.0), 0.4, 5e-2),
+        'csg box minus box': (lambda c: Difference(Box((0.34, 0.26, 0.29), c, 0.2),
+                                                   Box((0.2, 0.2, 0.5), tuple(np.add(c, 0.1)),
+                                                       0.4)),
+                              (0.15, 0.05, 0.05), 0.9, 5e-2),
+        'csg prism u cylinder': (lambda c: Union(Prism(HEX, 0.4, 'z', c),
+                                                 Cylinder(0.14, 0.5, 'z', c)),
+                                 (0.17, 0.05, 0.1), 0.8, 5e-2),
     }
     for name, (make, start, want_w, want_f) in cases.items():
         ws, fills, live = [], [], []
@@ -1043,9 +1134,9 @@ def test_a_crease_is_where_w_jumps_and_this_is_how_far():
         else:
             assert step_w > want_w, (name, step_w)   # a crease, and this is how big
         assert step_f < want_f, (name, step_f)
-        if name == 'csg':
+        if name.startswith('csg'):
             # the fill steps too, which is the new finding and not a matter of resolution
-            assert step_f > 3e-2, step_f
+            assert step_f > 3e-2, (name, step_f)
         else:
             assert step_f < 4e-3, (name, step_f)     # every exact fill is continuous
     # the CSG fill's own jump, bisected rather than sampled
@@ -1065,6 +1156,281 @@ def test_a_crease_is_where_w_jumps_and_this_is_how_far():
             hi = mid
     assert hi - lo < 1e-15
     assert abs(fill_at(hi) - fill_at(lo)) > 3e-2, (fill_at(lo), fill_at(hi))
+
+
+
+def test_a_union_of_flush_bodies_reads_solid_material_on_the_seam():
+    """A rod standing on a substrate of the same material: the joint is solid, not half solid.
+
+    ``min`` of two signed distances is the union's distance *outside* it and not inside, so where
+    two children's surfaces are flush both ``d`` are zero in the middle of solid material and the
+    composed tangent plane cuts the voxel in half. Measured on the kernel before the rule in
+    ``_bodies._Combination`` (``h = 0.02``, 40^3, the joint on a voxel CENTRE):
+
+        60 voxels straddling the joint, well inside the rod's footprint
+          fill    = 0.5        <- the truth is 1.0
+          sum_c w = 1.0        <- the free invariant is satisfied BY the artefact
+          w       = (0, 0, 1)  <- a full z-facing interface through solid material
+
+    It was first order in ``h``, identical on NumPy, JAX and Torch, and invisible to both free
+    invariants -- and ``fd.Union`` is the design's own instruction to a user whose bodies share a
+    material. It now reads ``fill = 1`` to 1.2e-15 and ``w = 0`` **exactly**, on all three.
+
+    The second half is what says the rule is not a special case of one axis: two boxes meeting on
+    a plane, whose union is exactly ``Box((0.8, 0.4, 0.4))``, with the seam placed at 0, 1/4 and
+    **1/2** of a cell.
+
+        seam at     union volume   exact volume   worst |dfill|
+        0.00 cell     0.12800000     0.12800000      0.0000
+        0.25 cell     0.12800000     0.12800000      0.0000
+        0.50 cell     0.12800000     0.12800000      0.0000
+
+    against 0.12606283 / 0.12400000 and worst 0.2500 / 0.5000 before it. The half-cell row is the
+    one that needed two further corrections, and neither is cosmetic: the seam then lands exactly
+    on a voxel centre, where the polygon's offset vector is round-off and its *direction*
+    arbitrary (``_bodies._ON_THE_OUTLINE``), and where ``d_i + d_j`` is zero down the middle of
+    the joint and -1e-18 beside it (``_bodies._SAME_FACE``).
+    """
+    h = 0.02
+    n = 40
+    c = -n * h / 2 + (np.arange(n) + 0.5) * h
+    pts = np.stack(np.meshgrid(c, c, c, indexing='ij'), axis=-1)
+    joint = float(c[n // 2])                      # a voxel CENTRE: the placement that was worst
+    body = Union(Box((0.7, 0.7, 0.3), center=(0., 0., joint - 0.15)),
+                 Cylinder(0.12, 0.3, 'z', center=(0., 0., joint + 0.15)))
+    radius = np.hypot(pts[..., 0], pts[..., 1])
+    band = (np.abs(pts[..., 2] - joint) < h / 4) & (radius < 0.12 - 1.5 * h)
+    assert band.sum() > 50
+    jax = pytest.importorskip('jax')
+    jax.config.update('jax_enable_x64', True)
+    import jax.numpy as jnp
+    for lib, name in ((np, 'numpy'), (jnp, 'jax'), (pytest.importorskip('torch'), 'torch')):
+        fill, w = occupancy(body, lib.asarray(pts, dtype=lib.float64), h)
+        fill, w = np.asarray(fill), np.asarray(w)
+        assert np.abs(fill[band] - 1.0).max() < 1e-14, (name, fill[band].min())
+        assert np.abs(w[band]).max() == 0.0, (name, np.abs(w[band]).max())
+    # the volume, against the analytic truth, on the same scene
+    truth = 0.7 * 0.7 * 0.3 + np.pi * 0.12 ** 2 * 0.3
+    got = float(occupancy(body, pts, h)[0].sum()) * h ** 3
+    assert abs(got - truth) / truth < 3e-4, (got, truth)
+    # two boxes meeting on a plane: the union of them IS a box, at three sub-cell placements
+    hh = 0.05
+    m = 24
+    cc = -m * hh / 2 + (np.arange(m) + 0.5) * hh
+    grid3 = np.stack(np.meshgrid(cc, cc, cc, indexing='ij'), axis=-1)
+    exact = occupancy(Box((0.8, 0.4, 0.4)), grid3, hh)[0]
+    for frac in (0.0, 0.25, 0.5):
+        seam = frac * hh
+        left = Box((0.4 + seam, 0.4, 0.4), center=(-0.4 + (0.4 + seam) / 2, 0., 0.))
+        right = Box((0.4 - seam, 0.4, 0.4), center=(0.4 - (0.4 - seam) / 2, 0., 0.))
+        got = occupancy(Union(left, right), grid3, hh)[0]
+        assert np.abs(got - exact).max() < 1e-13, (frac, np.abs(got - exact).max())
+    # and the case the rule CANNOT do says so, by name, at construction
+    with pytest.warns(UserWarning, match='the flush-seam rule is off'):
+        Union(Union(Sphere(0.2), Box((0.2, 0.2, 0.2))), Cylinder(0.1, 0.4, 'z'))
+    with pytest.warns(UserWarning, match='the flush-seam rule is off'):
+        Union(Prism(star(6, 0.42, 0.10), 0.3, 'z'), Sphere(0.2))
+    # a node of convex leaves does not warn -- including an Intersection nested in a Union, which
+    # is convex when its children are
+    import warnings as _warnings
+    with _warnings.catch_warnings():
+        _warnings.simplefilter('error')
+        Union(Sphere(0.2), Box((0.2, 0.2, 0.2)), Cylinder(0.1, 0.4, 'z'))
+        Union(Intersection(Sphere(0.3), Box((0.4, 0.4, 0.4))), Cylinder(0.1, 0.4, 'z'))
+
+
+def test_the_rule_does_not_pay_for_itself_with_a_step_at_first_contact():
+    """Driving two children head on through each other: the fill must not jump as they touch.
+
+    The rule switches branch where a pair of children stops being apart, and without the slab
+    term (``max(0, f_i + f_j - 1)`` for two faces that are back to back) that switch is the size
+    of the error the rule is fixing. Measured, one voxel, 4000 slide steps of 3e-4 cell:
+
+        pair                                apart branch alone    with the slab term
+        two boxes, faces parallel                4.998e-01           3.0e-04 (= the step itself)
+        two spheres, head on                        -                3.0e-04
+        a cylinder standing on a box                -                3.0e-04
+        a sphere and a box tilted by 0.4 rad        -                3.384e-01
+
+    The last row is the honest cost and it is in this test too: where two surfaces meet at an
+    **angle** and overlap the pair is neither apart nor back to back, the node drops to the
+    composed plane, and the drop is a step. What it steps *between* is an exact value and an
+    already-wrong one -- at that placement the truth is 0.62, the children's own fills sum to
+    0.62, and the composed plane reads 0.28 on both sides of contact before the rule and on one
+    side after it -- so the accuracy improves and the smoothness in a geometry parameter gets
+    worse, in the one quantity ``_Combination`` already declares discontinuous and already
+    refuses as a design variable.
+    """
+    h = 0.1
+    point = np.zeros((1, 3))
+
+    def worst_step(make, start=0.06, step=3e-5, n=4000):
+        previous, worst = None, 0.0
+        for i in range(n):
+            gap = start - i * step
+            fill = float(occupancy(make(gap), point, h)[0][0])
+            # the slab term is what keeps the fill IN RANGE once the two overlap: without it the
+            # sum of the children's fills runs straight past 1 (continuously, so a step test
+            # alone cannot see it) -- 1 + delta/h for two boxes overlapping by delta
+            assert -1e-12 <= fill <= 1 + 1e-12, (gap, fill)
+            if previous is not None:
+                worst = max(worst, abs(fill - previous))
+            previous = fill
+        return worst
+
+    smooth = {
+        'two boxes': lambda g: Union(Box((0.3, 0.4, 0.4), center=(-0.15 - g / 2, 0., 0.)),
+                                     Box((0.3, 0.4, 0.4), center=(0.15 + g / 2, 0., 0.))),
+        'two spheres': lambda g: Union(Sphere(0.25, (-0.25 - g / 2, 0., 0.)),
+                                       Sphere(0.25, (0.25 + g / 2, 0., 0.))),
+        'cylinder on a box': lambda g: Union(
+            Box((0.5, 0.5, 0.3), center=(0., 0., -0.15 - g / 2)),
+            Cylinder(0.12, 0.3, 'z', center=(0., 0., 0.15 + g / 2))),
+    }
+    for name, make in smooth.items():
+        got = worst_step(make)
+        assert got < 1e-3, (name, got)            # 3.0e-04 measured: the slide step, no jump
+    tilted = lambda g: Union(Sphere(0.25, (-0.25 - g / 2, 0., 0.)),                # noqa: E731
+                             Box((0.3, 0.4, 0.4), center=(0.15 + g / 2, 0.02, 0.01), angle=0.4))
+    angled = worst_step(tilted)
+    assert angled > 0.3, angled                   # the cost, held so it cannot be understated
+    assert angled < 0.5, angled
+
+
+def test_a_geometry_value_that_is_not_a_real_number_is_refused_by_name():
+    """A complex parameter was checked on its real part and then used whole.
+
+    ``readable`` asked NumPy for ``dtype=float``, which silently discards a complex value's
+    imaginary part, and ``_as`` then handed the **original** to the kernel -- so the door and the
+    computation saw two different bodies. Measured before this (``h = 0.05``, 16^3):
+
+        Prism(vertices = HEX + 0.03j)      ACCEPTED, volume 0.03417706 against 0.03095088 (+10.4%)
+        Box(size = [0.34+0.2j, .22, .29])  ACCEPTED, fill dtype complex128
+        Cylinder(radius = 0.21+0.3j)       ACCEPTED, fill dtype complex128
+        Sphere(center = [0.01+0.5j, 0, 0]) ACCEPTED, fill dtype complex128
+        Sphere(radius = -0.26+0.9j)        refused -- but only because its REAL part is negative
+
+    The package already refuses a complex eps by name; a length, a coordinate and an angle are
+    real for the same reason. The second half of this test is the same door's other branch: a
+    value that is not a number at all is refused by name rather than deferred to an obscure
+    failure inside ``array_namespace`` (memory: typos are refused on every door).
+    """
+    match = 'a real number, and this is complex'
+    with pytest.raises(ValueError, match=match):
+        Sphere(0.26 + 0.1j)
+    with pytest.raises(ValueError, match=match):
+        Sphere(-0.26 + 0.9j)                  # refused for being complex, not for its real part
+    with pytest.raises(ValueError, match=match):
+        Sphere(0.26, (0.01 + 0.5j, 0., 0.))
+    with pytest.raises(ValueError, match=match):
+        Cylinder(0.21 + 0.3j, 0.3, 'z')
+    with pytest.raises(ValueError, match=match):
+        Cylinder(0.21, 0.3, 'z', (0., 0., 0.), 0.4 + 0.1j)
+    with pytest.raises(ValueError, match=match):
+        Box((0.34 + 0.2j, 0.22, 0.29))
+    with pytest.raises(ValueError, match=match):
+        Prism(tuple((u + 0.03j, v) for u, v in HEX), 0.33, 'z')
+    with pytest.raises(ValueError, match=match):
+        Prism(HEX, 0.33 + 0.01j, 'z')
+    # a complex value with a zero imaginary part is still complex: the dtype is what reaches the
+    # kernel, and `Sphere(0.26+0j)` used to die inside as "ufunc 'arctan2' not supported"
+    with pytest.raises(ValueError, match=match):
+        Sphere(0.26 + 0j)
+    # not a number at all
+    not_a_number = 'a real number, and this is not a number at all'
+    for rubbish in ('abc', {'r': 0.2}, object()):
+        with pytest.raises(ValueError, match=not_a_number):
+            Sphere(rubbish)
+    with pytest.raises(ValueError, match=not_a_number):
+        Cylinder(0.2, 0.3, 'z', ('a', 'b', 'c'))
+    # and every legal spelling still passes, on every backend's own array type
+    import jax
+    import jax.numpy as jnp
+    import torch
+    jax.config.update('jax_enable_x64', True)
+    for radius in (0.2, np.float64(0.2), np.asarray(0.2), jnp.asarray(0.2), torch.tensor(0.2)):
+        assert Sphere(radius) is not None
+
+
+def test_a_numpy_parameter_is_the_same_number_on_every_backend():
+    """``Prism(np.asarray(HEX), ...)`` is what a user writes, and Torch used to raise on it.
+
+    ``_as`` returned a value untouched when it had both ``dtype`` and ``device``, which under
+    numpy 2.5.1 an ``ndarray`` has -- so a NumPy-array parameter was never converted and then met
+    a Torch tensor. Measured before the fix:
+
+        parameter written as     numpy          jax            torch
+        Sphere(radius) python    0.07362218     0.07362218     0.07362218
+        Sphere(radius) numpy     0.07362218     0.07362218     TypeError
+        Box(size) numpy          0.02169200     0.02169200     TypeError
+        Prism(vertices) numpy    0.03095088     0.03095088     TypeError
+        Sphere(center) numpy     0.07362218     0.07362218     0.07362218   <- and this worked
+
+    ``TypeError: unsupported operand type(s) for *: 'numpy.ndarray' and 'Tensor'``, deep inside
+    ``_vertices``, naming no door -- and inconsistent inside one body. Comparing namespaces
+    instead of attributes converts a foreign concrete value and leaves a traced one alone.
+    """
+    import jax
+    import jax.numpy as jnp
+    import torch
+    jax.config.update('jax_enable_x64', True)
+    h = 0.08
+    pts = grid(8, -0.32, h)
+    cases = {
+        'Sphere(radius)': lambda box: Sphere(box(0.22), (0.01, 0., 0.)),
+        'Sphere(center)': lambda box: Sphere(0.22, box((0.01, 0., 0.))),
+        'Box(size)': lambda box: Box(box((0.34, 0.22, 0.29)), (0.01, 0., 0.), 0.3),
+        'Cylinder(radius)': lambda box: Cylinder(box(0.19), 0.3, 'z', (0.01, 0., 0.)),
+        'Prism(vertices)': lambda box: Prism(box(HEX), 0.33, 'z', (0.01, 0., 0.)),
+        'Prism(angle)': lambda box: Prism(HEX, 0.33, 'z', (0.01, 0., 0.), box(0.4)),
+    }
+    for name, make in cases.items():
+        answers = []
+        for plain in (lambda v: v, np.asarray):
+            for lib in (np, jnp, torch):
+                got = occupancy(make(plain), lib.asarray(pts, dtype=lib.float64), h)[0]
+                answers.append(float(np.asarray(got).sum()))
+        assert max(answers) - min(answers) < 1e-12, (name, answers)
+        assert answers[0] > 0.0, name
+
+
+def test_the_liveness_of_w_is_free_of_the_coordinate_scale():
+    """``area > 0`` is a predicate about the coordinate unit; ``area > tiny dx^2`` is not.
+
+    A randomised cross-backend fuzz in the C1 review found one row that split: a star prism at
+    coordinate scale 3.29e+05 with ``h = 3.23e+04`` gave ``area = 0`` on NumPy and
+    ``area = 1.7978064238510632e-09`` on JAX -- a relative 1.7e-18 of the voxel face 1.04e+09 --
+    so ``live = area > 0`` fell on opposite sides and ``w`` swapped from ``(0, 0, 0)`` to a full
+    ``(1, 0, 0)`` between two backends on one legal input. The package's headline rule is that an
+    input that reaches the kernel must never give three different answers, and it carries no
+    carve-out for ``w``.
+
+    The fix is the one ``_TURN_SINE`` had last round: compare against the voxel's own face rather
+    than against zero (``_cut._LIVE_AREA``). Measured here over the same body at four coordinate
+    scales spanning fifteen decades, worst ``|dw|`` between NumPy and each of JAX and Torch:
+    5.6e-16, 2.2e-16, 7.8e-16, 1.1e-16 -- no swap anywhere.
+    """
+    import jax
+    import jax.numpy as jnp
+    import torch
+    jax.config.update('jax_enable_x64', True)
+    outline = star(6, 0.42, 0.10)
+    for scale in (1e-6, 1.0, 3.29e5, 1e9):
+        body = Prism(tuple((u * scale, v * scale) for u, v in outline), 0.5 * scale, 'z',
+                     (0.01 * scale, -0.02 * scale, 0.0))
+        h = 0.11 * scale
+        n = 9
+        c = -n * h / 2 + (np.arange(n) + 0.5) * h
+        pts = np.stack(np.meshgrid(c, c, c, indexing='ij'), axis=-1)
+        answers = [tuple(np.asarray(v) for v in occupancy(body, lib.asarray(pts, dtype=lib.float64),
+                                                          h))
+                   for lib in (np, jnp, torch)]
+        for other in answers[1:]:
+            assert np.abs(answers[0][0] - other[0]).max() < 1e-13, scale
+            assert np.abs(answers[0][1] - other[1]).max() < 1e-13, scale
+        # and the body is really there: a dead w and a live one both occur at every scale
+        total = answers[0][1].sum(-1)
+        assert (total == 0).sum() > 10 and (total > 0).sum() > 10, scale
 
 
 def _sampled_cylinder_moment(cyl, pts, h, nth=20001):
@@ -1301,8 +1667,10 @@ def test_the_image_ring_agrees_with_minimising_the_distance_over_it():
         best = d if best is None else np.minimum(best, d)
     nearest = np.zeros_like(best)
     for shift in shifts:
-        d, n = body.surface(pts - np.asarray(shift))
-        nearest = np.where(d == best, cut_parts(d, n, h)[0], nearest)
+        d, _ = body.surface(pts - np.asarray(shift))
+        # the node's OWN answer for that image, not a bare plane: what this test holds is the
+        # ring's two spellings, and re-deriving the node's composition here would only restate it
+        nearest = np.where(d == best, body.parts(pts - np.asarray(shift), h)[0], nearest)
     assert np.abs(summed - nearest).max() < 1e-14
     assert 0.0 < summed.mean() < 1.0
 
@@ -1529,7 +1897,10 @@ def test_the_kernel_survives_a_jit_boundary():
     eager = occupancy(node, jnp.asarray(pts), 0.08)
     traced = jax.jit(lambda p: occupancy(node, p, 0.08))(jnp.asarray(pts))
     for a, b in zip(eager, traced):
-        assert np.abs(np.asarray(a) - np.asarray(b)).max() < 1e-14
+        # 1e-13 and not the leaves' 1e-14: a node now sums its children's own routes where they
+        # hold no volume of a voxel in common, which is more arithmetic for XLA to reassociate.
+        # Measured worst 2.03e-14; this bounds a REASSOCIATION, not a rule (see the docstring).
+        assert np.abs(np.asarray(a) - np.asarray(b)).max() < 1e-13
 
 
 # ----------------------------------------------------------------------------------------
@@ -1586,6 +1957,22 @@ def test_a_length_is_a_size_and_a_non_positive_one_is_refused_by_name():
         Cylinder(0.2, float('-inf'), 'z')
     with pytest.raises(ValueError, match='there is none'):
         Sphere(None)                  # a missing argument, named as one and not as a NaN
+    # `dx` is a length too, and it was the one length in the package with no door. Measured
+    # before it, on a 10^3 grid at |dx| = 0.05:
+    #     body        dx = +0.05                   dx = -0.05
+    #     Sphere      fill sum 268.0826, live 296  fill sum 136.0000, live 0   <- half a body,
+    #     Box         fill sum 120.0000, live 192  fill sum   0.0000, live 0      no interface
+    #     Cylinder    fill sum 301.5929, live 364  fill sum   0.0000, live 0   <- not there
+    # -- and `occupancy`'s advertised contract (fill in [0, 1], sum_c w_c == 1) is SATISFIED by
+    # both, so nothing downstream could flag them. On JAX there was not even a RuntimeWarning.
+    small = grid(4, -0.16, 0.08)
+    for bad in (-0.05, 0.0, float('nan'), float('inf')):
+        with pytest.raises(ValueError, match='length'):
+            occupancy(Sphere(0.2), small, bad)
+        with pytest.raises(ValueError, match='length'):
+            cut(np.zeros(1), np.asarray([[0., 0., 1.]]), bad)
+        with pytest.raises(ValueError, match='length'):
+            cut_parts(np.zeros(1), np.asarray([[0., 0., 1.]]), bad)
     # and the same doors let a traced leaf through, which is the only thing they must not stop
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
@@ -1625,8 +2012,14 @@ def test_an_outline_that_is_not_a_simple_counter_clockwise_polygon_is_refused_by
     # a vertex list NumPy cannot read at all -- ragged, or not numbers -- used to skip all four
     # refusals silently, because "there is no value here" and "this is not a vertex array" were
     # the same answer. They are told apart by whether the thing has a shape.
-    for rubbish in ([[0., 0.], [1., 0.], [1., 1., 5.]], 'abc', [1.0, 2.0, 3.0], None):
+    for rubbish in ([[0., 0.], [1., 0.], [1., 1., 5.]], [1.0, 2.0, 3.0]):
         with pytest.raises(ValueError, match=r'shape \(nv, 2\)'):
+            Prism(rubbish, 0.33, 'z')
+    # a string and a None are refused one door earlier now, by the branch that refuses a complex
+    # vertex list: they are not numbers at all, and the message names the type rather than the
+    # shape it could not read (:func:`test_a_geometry_value_that_is_not_a_real_number_...`)
+    for rubbish in ('abc', None, {'u': 1}):
+        with pytest.raises(ValueError, match='not a number at all'):
             Prism(rubbish, 0.33, 'z')
     # every legal outline in this file passes, including the six non-convex ones
     for outline in dict(NON_CONVEX, hexagon=HEX).values():
@@ -1734,14 +2127,39 @@ def test_a_door_holds_under_every_transform_that_carries_a_value():
             lambda r: fill_of(-r, torch.tensor(pts)).sum())(torch.tensor(0.3)),
         'torch.func.jacrev': lambda: torch.func.jacrev(
             lambda r: fill_of(-r, torch.tensor(pts)).sum())(torch.tensor(0.3)),
+        'torch.func.jacfwd': lambda: torch.func.jacfwd(
+            lambda r: fill_of(-r, torch.tensor(pts)).sum())(torch.tensor(0.3)),
         'torch.func.vmap': lambda: torch.func.vmap(
             lambda r: fill_of(-r, torch.tensor(pts)))(torch.tensor([0.3, 0.4])),
+        'torch.func.vmap(vmap)': lambda: torch.func.vmap(torch.func.vmap(
+            lambda r: fill_of(-r, torch.tensor(pts))))(torch.tensor([[0.3, 0.4]])),
     }
     for where, call in refusals.items():
         with pytest.raises(ValueError, match=match):
             call()
-    # the one that cannot be a refusal, and what stands there instead
-    under_jit = np.asarray(jax.jit(lambda r: fill_of(-r, jnp.asarray(pts)))(jnp.asarray(0.3)))
+    # the ones that cannot be a refusal, and what stands there instead. The shipped table claimed
+    # `torch.func.vmap(grad)` was READ and it is not: instrumented, `readable` walks three
+    # torch.Tensor layers and the third has no storage, so item(), detach().item(), float() and
+    # unwrap_if_dead().item() all raise `vmap: It looks like you're ... calling .item()` and
+    # detach().cpu().numpy() raises `Cannot access data pointer of Tensor that doesn't have
+    # storage`. `vmap(vmap)` above is the control: the same three layers, and the third READS.
+    dead_ends = {
+        'jax.jit': lambda: jax.jit(lambda r: fill_of(-r, jnp.asarray(pts)))(jnp.asarray(0.3)),
+        'jax.jit(jax.grad)': lambda: jax.jit(jax.grad(
+            lambda r: fill_of(-r, jnp.asarray(pts)).sum()))(jnp.asarray(0.3)),
+        'torch.func.vmap(grad)': lambda: torch.func.vmap(torch.func.grad(
+            lambda r: fill_of(-r, torch.tensor(pts)).sum()))(torch.tensor([0.3, 0.4])),
+        'torch.func.jacrev(vmap)': lambda: torch.func.jacrev(torch.func.vmap(
+            lambda r: fill_of(-r, torch.tensor(pts)).sum()))(torch.tensor([0.3, 0.4])),
+    }
+    for where, call in dead_ends.items():
+        got = np.asarray(call().detach() if hasattr(call(), 'detach') else call())
+        assert np.isnan(got).all(), (where, got)
+    # a length of exactly ZERO under jit: the eager door refuses it by name and the array guard
+    # has to as well, which `value >= 0` would not -- and the -0.3 row above cannot see that.
+    for zero in (jnp.asarray(0.0), jnp.asarray([0.3, 0.0, 0.2])):
+        assert np.isnan(np.asarray(_loud_if_not_a_size(zero))).all(), zero
+    under_jit = np.asarray(jax.jit(lambda r: fill_of(r, jnp.asarray(pts)))(jnp.asarray(0.0)))
     assert np.isnan(under_jit).all(), under_jit
     # and a legal body is untouched by the guard, BIT FOR BIT -- which is the property that lets
     # it be applied unconditionally. Held on the guard itself, because comparing a jitted result
@@ -1758,9 +2176,20 @@ def test_a_door_holds_under_every_transform_that_carries_a_value():
     # every cell, so under jit it is a NaN and not a body that silently is not there
     with pytest.raises(ValueError, match='counter-clockwise'):
         Prism(HEX[::-1], 0.33, 'z')
-    turned = np.asarray(jax.jit(lambda v: occupancy(Prism(v, 0.33, 'z'), jnp.asarray(pts),
-                                                    0.1)[0])(jnp.asarray(HEX[::-1])))
-    assert np.isnan(turned).all(), turned
+    # a point ON the outline's edge, so that the voxel carries a live interface -- inside the
+    # hexagon `area` is zero whatever the guard does, and an assertion taken there says nothing
+    edge_pts = np.concatenate([pts, np.asarray([[0.17, 0.0, 0.0], [0.0, 0.17, 0.0]])], axis=0)
+    assert (occupancy(Prism(HEX, 0.33, 'z'), edge_pts, 0.1)[1][-2:].sum(-1) > 0).all()
+    turned_fill, turned_w = jax.jit(
+        lambda v: occupancy(Prism(v, 0.33, 'z'), jnp.asarray(edge_pts), 0.1))(
+            jnp.asarray(HEX[::-1]))
+    assert np.isnan(np.asarray(turned_fill)).all(), turned_fill
+    # `w` as well as the fill, and DEAD rather than NaN: a NaN area fails the liveness test, so
+    # what a poisoned moment produces is `w = 0`. Asserting on the fill alone left the moment's
+    # own factor free -- with `_turn` dropped from `exact_moment` the area came back finite, `w`
+    # came back live, and the whole gate passed while reporting a live interface on a body that
+    # is not there, which is the exact state this refusal exists to stop.
+    assert (np.asarray(turned_w) == 0.0).all(), turned_w
     straight = np.asarray(jax.jit(lambda v: occupancy(Prism(v, 0.33, 'z'), jnp.asarray(pts),
                                                       0.1)[0])(jnp.asarray(HEX)))
     assert np.abs(straight - occupancy(Prism(HEX, 0.33, 'z'), pts, 0.1)[0]).max() < 1e-15

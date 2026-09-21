@@ -6,7 +6,8 @@ end of the wire, not a second one.
 """
 from wavebit._core.backend import array_namespace
 
-from ._bodies import _as
+from ._bodies import _as, check_sizes
+from ._cut import _mean_of_the_moment
 
 
 def image_shifts(period, rings=None):
@@ -71,21 +72,22 @@ def occupancy(body, points, dx, *, period=(None, None, None), rings=None):
     C2 owns the cell and therefore owns the fold; what is enforceable here is the statement, and
     ``tests/test_fd_shapes.py::test_the_ring_is_periodic_in_the_body_for_one_period_only`` pins
     both halves of it so the precondition cannot be forgotten silently.
+
+    **``dx`` is a length and is doored like every other one.** It was the one length in the
+    package that was not, and the two failures were character for character the ones
+    ``check_sizes`` was written against: at ``dx = -0.05`` a ``Sphere`` read a fill summing to
+    136.0 against a true 268.08 with ``sum_c w_c = 0`` in every voxel -- a body half there with
+    no interface at all -- and a ``Box`` and a ``Cylinder`` read 0.0000 everywhere, a body that
+    silently is not there. Both satisfy this function's advertised contract, so nothing
+    downstream could flag them, and on JAX there was not even a RuntimeWarning.
     """
+    dx, = check_sizes('occupancy', dx=dx)
     xp = array_namespace(points)
     fill = area = moment = None
     for shift in image_shifts(period, rings):
         p = points if shift == (0., 0., 0.) else points - _as(xp, shift, points)
-        one_fill = body.exact_fill(p, dx)
-        pair = body.exact_moment(p, dx)
-        if one_fill is None or pair is None:
-            plane_fill, plane_area, plane_moment = body.plane(p, dx)
-            one_fill = plane_fill if one_fill is None else one_fill
-            pair = (plane_area, plane_moment) if pair is None else pair
-        one_area, one_moment = pair
+        one_fill, one_area, one_moment = body.parts(p, dx)
         fill = one_fill if fill is None else fill + one_fill
         area = one_area if area is None else area + one_area
         moment = one_moment if moment is None else moment + one_moment
-    live = area > 0
-    safe = xp.where(live, area, xp.ones_like(area))[..., None]
-    return fill, xp.where(live[..., None], moment / safe, xp.zeros_like(moment))
+    return fill, _mean_of_the_moment(area, moment, dx, xp)

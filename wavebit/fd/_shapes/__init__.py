@@ -45,7 +45,10 @@ Meep-derived FDTDX projection file this repository has already excluded
 ``_bodies.py``
     ``Sphere``, ``Cylinder``, ``Prism``, ``Box`` as signed distance plus unit gradient, and
     ``Union`` / ``Intersection`` / ``Difference`` composed on the distance, resolved once,
-    before any fill is taken.
+    before any fill is taken -- except where two children's surfaces **touch**, which the
+    composed distance gets wrong by half a voxel and which a per-pair inclusion-exclusion
+    answers exactly. ``_Combination`` carries that rule, what it costs where it does not
+    reach, and the measured price of the exact multi-plane cut that would replace it.
 ``_exact.py``
     The closed forms this repository already owns, **ported** with their guards and their
     sources named: the 1-D overlap, the disc-box clip, the polygon-box clip and the polygon's
