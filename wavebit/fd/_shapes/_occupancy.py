@@ -4,10 +4,78 @@
 component. That stage is named after this function because it is the same question at the other
 end of the wire, not a second one.
 """
+import numpy as _np
+
 from wavebit._core.backend import array_namespace
 
-from ._bodies import _as, check_sizes
+from ._bodies import Body, _as, check_sizes
 from ._cut import _mean_of_the_moment
+
+
+def _checked_points(points):
+    """Refuse a ``points`` array that is not ``(..., 3)`` real, by name.
+
+    Three spellings reached the kernel before this door and each came back as an incidental
+    exception from somewhere inside it: ``(N, 2)`` as ``IndexError: index 2 is out of bounds``,
+    ``(N, 4)`` as a broadcast ``ValueError``, and a complex array as ``TypeError: ufunc
+    'arctan2' not supported``. The shape is read from ``.shape`` and the dtype from ``str()``,
+    so both are static and neither costs a device synchronisation -- the check is free under
+    ``jax.jit`` as well as outside it.
+    """
+    shape = getattr(points, 'shape', None)
+    if shape is None or len(shape) < 1 or shape[-1] != 3:
+        raise ValueError(
+            f'occupancy(points=...): one point per voxel centre, x first, shaped (..., 3); got '
+            f'{"a value with no shape" if shape is None else shape}. A body answers for a POINT '
+            'and the last axis is that point\'s three coordinates.')
+    if 'complex' in str(getattr(points, 'dtype', '')):
+        raise ValueError(
+            f'occupancy(points=...): a real coordinate, and these are complex '
+            f'({points.dtype}). A voxel centre is a place in the scene; the same refusal is on '
+            'every geometry value this package takes, for the same reason -- a check reads the '
+            'real part and the kernel uses the whole number.')
+
+
+def _checked_period(where, period):
+    """Refuse a period that is not a positive length, by name, axis by axis.
+
+    ``period`` is the other length this package takes and the ``dx`` door's round left it open.
+    Measured before it, ``Sphere(0.2)`` at its own centre with ``dx = 0.1``: ``period=(1, 1, 1)``
+    reads ``fill = 1.0`` and ``period=(0, None, None)`` reads **3.0000** -- the three images of
+    the ring stacked on the same point, so the fill is exactly tripled, silently, with
+    ``sum_c w_c = 1`` in every voxel. ``period=(1e-300, ...)`` reads 3.0000 too, and a negative
+    period was accepted and ignored.
+    """
+    if len(period) != 3:
+        raise ValueError(f'{where}(period=...): one entry per axis, x first, each a length or '
+                         f'None; got {period!r}.')
+    named = {f'period[{axis}]': p for axis, p in zip('xyz', period) if p is not None}
+    if named:
+        check_sizes(where, **named)
+
+
+def _checked_ring(rings, period):
+    """Refuse a ring count that is not a non-negative whole number, by name.
+
+    ``rings`` sizes a **static** list, so it is read as a Python integer and there is never a
+    traced value to defer to. Before this door ``rings=(-1, 0, 0)`` raised a bare ``TypeError``
+    from inside ``range`` and ``rings=(1.5, 0, 0)`` another one; the repository's rule is that a
+    typo is refused on every door and by name.
+    """
+    if rings is None:
+        return tuple(0 if p is None else 1 for p in period)
+    if len(rings) != 3:
+        raise ValueError(f'occupancy(rings=...): one count per axis, x first; got {rings!r}.')
+    out = []
+    for axis, ring in zip('xyz', rings):
+        if isinstance(ring, bool) or not isinstance(ring, (int, _np.integer)) or ring < 0:
+            raise ValueError(
+                f'occupancy(rings=...): how many images to look each way along {axis} -- a '
+                f'whole number and not negative; got {ring!r}. rings=0 is the pruning a caller '
+                'uses when it knows the body cannot reach the neighbour, and it sizes a static '
+                'list, so a fraction and a negative count have nothing to mean.')
+        out.append(int(ring))
+    return tuple(out)
 
 
 def image_shifts(period, rings=None):
@@ -26,8 +94,8 @@ def image_shifts(period, rings=None):
     elsewhere cannot regroup a floating-point sum -- the same reason the source named above
     fixes its own.
     """
-    if rings is None:
-        rings = tuple(0 if p is None else 1 for p in period)
+    _checked_period('image_shifts', period)
+    rings = _checked_ring(rings, period)
     spans = []
     for p, ring in zip(period, rings):
         if p is None or ring == 0:
@@ -73,6 +141,16 @@ def occupancy(body, points, dx, *, period=(None, None, None), rings=None):
     ``tests/test_fd_shapes.py::test_the_ring_is_periodic_in_the_body_for_one_period_only`` pins
     both halves of it so the precondition cannot be forgotten silently.
 
+    **Every argument this function takes now has a door, and each one closed a case that used to
+    come back as an incidental exception from inside the kernel.** ``period`` is the other length
+    (``period=0`` stacked the three images of the ring on the same point and tripled the fill,
+    silently, with ``sum_c w_c = 1`` in every voxel); ``rings`` sizes a static list and is a whole
+    non-negative number; ``points`` is ``(..., 3)`` and real; ``body`` is a :class:`Body`; and
+    ``dx`` is one number, not an array that would broadcast against the points. A bool is refused
+    everywhere a length is read, because it passes every test a length has to pass --
+    ``occupancy(..., dx=True)`` used to solve at ``dx = 1.0`` and ``Sphere(radius=True)`` was a
+    unit sphere.
+
     **``dx`` is a length and is doored like every other one.** It was the one length in the
     package that was not, and the two failures were character for character the ones
     ``check_sizes`` was written against: at ``dx = -0.05`` a ``Sphere`` read a fill summing to
@@ -81,7 +159,17 @@ def occupancy(body, points, dx, *, period=(None, None, None), rings=None):
     silently is not there. Both satisfy this function's advertised contract, so nothing
     downstream could flag them, and on JAX there was not even a RuntimeWarning.
     """
+    if not isinstance(body, Body):
+        raise ValueError(f'occupancy(body=...): a Body -- Sphere, Cylinder, Box, Prism or a CSG '
+                         f'node; got {type(body).__name__} ({body!r}).')
+    _checked_points(points)
+    if getattr(dx, 'ndim', 0) != 0:
+        raise ValueError(
+            f'occupancy(dx=...): one number -- the voxel\'s side. A non-uniform grid is not in '
+            f'v1, and an array here does not mean one: it broadcasts against the POINTS and '
+            f'silently reshapes the answer. Got shape {dx.shape}.')
     dx, = check_sizes('occupancy', dx=dx)
+    _checked_period('occupancy', period)
     xp = array_namespace(points)
     fill = area = moment = None
     for shift in image_shifts(period, rings):

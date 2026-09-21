@@ -74,8 +74,34 @@ fail, and reverted:
     a ZERO length accepted under jit                                   1
     the orientation factor dropped from `exact_moment`                 1
     a union of flush children composed by the plane                    2
+    a union subtracting the MOST its pair can share, not the least     1
+    the shared volume not clamped into the two fills' own interval     1
+    every child called flat / no child ever called flat                2
+    "wholly inside" decided on the half space, not the circumradius    1
+    the two-pairs refusal dropped                                      1
+    a `Difference` fusing a flush pair across its own cut              1
+    the back-to-back margin widened to 0.4 of a voxel                  1
+    a shared set of measure zero counted as shared (`> 0` for `>= 0`)  1
+    an `Intersection` taking its children's sum, not the cut           1
+    `two_plane`'s parallel branch never taken                          1
+    two faces lying on each other not buried                           1
+    `_ON_EACH_OTHER` widened to 0.4 of a voxel                         1
+    `two_plane`'s cut faces returned as the whole plane                1
+    the line where the two planes meet dropped from the face areas     1
+    the burial taken whether or not the pair was proved flat           1
+    a bool a length again / `period` undoored / `points` undoored      3
 
-The last eleven are this round's. Three of them did not go red on the first sweep and the gate
+The last nineteen are the round that rebuilt the CSG rule, and four of them are the four of the
+round-5 review's seven that survived the 51-test gate this file then had: the blocker's own fix
+(a union subtracting the most rather than the least its pair can share), the back-to-back margin
+widened to a tenth, `Intersection`'s rule switched off, and `_no_common_volume`'s LP boundary
+flipped from `>= 0` to `> 0`. Each needed a gate written for it and not a claim softened: a voxel
+proved interior to one child with a second child overlapping it; two opposed faces a FRACTION of
+a voxel apart, which must keep their interface; the Intersection rows of the first-contact test;
+and a T-junction of three boxes whose union is one box, where calling a shared plane a shared
+volume makes three pairs share one voxel and the node refuse a case it can answer exactly.
+
+The eleven before them are the round that added the rule. Three of them did not go red on the first sweep and the gate
 was widened rather than the claim: a margin on the separation test that nothing could make fail
 was **deleted** (the case it was written for is answered by the back-to-back branch instead); the
 orientation guard's assertion was taken at a point INSIDE a hexagon, where the interface area is
@@ -135,21 +161,30 @@ reads 33.9 ms with no ring, 289.2 ms over two periodic axes (9 images) and 819.5
 (27), on the plane path those numbers were measured on. That is the price of the static
 ``rings=`` prune C2 will make from a declared ``range=``.
 
-**What a CSG node costs now that it answers from its children.** A node evaluates each child's
-own route, each child's tangent half space, the composed plane, and one pair test per pair --
-against the composed plane alone before. Same box, same machine:
+**What a CSG node costs now that it answers from its children**, with the shipped node's own
+column present -- the round that added the rule priced it with a two-child measurement and a
+column belonging to the path it replaced. A substrate plus ``k - 1`` flush pillars, 66^3 = 287496
+voxels at ``dx`` = 0.0152, float64, ``OMP_NUM_THREADS=2``, best of three:
 
-    body                             numpy     jax (jit)     torch
-    Difference(Sphere, Cylinder)    761.0 ms    39.4 ms    286.3 ms
-    Union(Box, Cylinder), flush    1267.6 ms   124.1 ms    869.6 ms
-    Sphere alone, for scale         786.6 ms    32.8 ms    240.8 ms
+    k   pairs  backend    NODE    children alone  composed plane  pair test  two_plane
+    2     1    numpy     4.484 s     2.998 s         0.229 s       0.065 s    0.627 s
+    2     1    torch     3.052 s     2.568 s         0.187 s       0.015 s    0.339 s
+    2     1    jax jit   0.516 s
+    4     6    numpy     5.381 s     3.580 s         0.295 s       0.394 s    0.629 s
+    4     6    torch     3.807 s     2.913 s         0.215 s       0.082 s    0.340 s
+   10    45    numpy    12.324 s     5.599 s         0.484 s       3.330 s    0.683 s
+   10    45    torch     6.049 s     3.366 s         0.357 s       0.652 s    0.341 s
+   10    45    jax jit   2.302 s
 
-The first row is **12x** the 61.4 ms the same node cost on the plane path, and the reason is not
-the rule: it is the same 786.6 ms as its ``Sphere`` child alone, because a node now pays its
-children's **exact** fills (the ball clip is 15x the plane on its own). The pair test, the two
-half spaces and the composed plane together sit inside that one clip's noise. The alternative --
-the exact multi-plane cut, priced in ``_bodies._Combination`` -- is 33.5 to 440 seconds on the
-same class of scene.
+On the 3x3 pillar array -- ten children, forty-five pairs, an ordinary metasurface cell -- the
+node is **12.3 s** on NumPy: 5.6 s of it its children's own exact fills, 3.3 s the O(k^2) pair
+test, 0.68 s the one exact two-plane cut, which is **flat in k** because it runs once per voxel
+and not once per pair. The "composed plane" column reproduces the previous round's 0.483 s for
+the path this rule replaced, so the node is **25x** the figure that round offered as its price.
+Over six sub-cell grid origins the node reads between 11.1 s and 12.3 s, so it is a property of
+the scene and not of an alignment. The alternative -- the exact multi-plane cut over all ``k``
+planes, priced in ``_bodies._Combination`` -- was 440.4 s and 22.2 GiB on this same scene. The
+pair test is where the next factor is: 27% of the node at ``k`` = 10, and growing as ``k^2``.
 """
 import numpy as np
 import pytest
@@ -160,7 +195,7 @@ from wavebit.fd._shapes import (Box, Cylinder, Difference, Intersection, Prism, 
                                 polygon_edge_moments)
 from wavebit.fd._shapes._bodies import (_loud_if_not_a_size, _loud_if_not_counter_clockwise,
                                         polygon_shape)
-from wavebit.fd._shapes._cut import _second_difference
+from wavebit.fd._shapes._cut import _parts, _second_difference, two_plane
 
 from fd_helpers import backends
 
@@ -1052,49 +1087,49 @@ def test_a_crease_is_where_w_jumps_and_this_is_how_far():
     ``h = 0.1``, 2400 steps per body):
 
         body                    steps   max |dw|   max |dfill|
-        sphere                    668    0.0000      3.3e-03
+        sphere                    668   5.0e-16      3.3e-03
         box, axis aligned         825    0.4455      3.3e-03
-        box, rotated             1102    0.3028      3.0e-03
-        hexagonal prism edge     1485    0.3222      1.6e-03
+        box, rotated             1019    0.3170      2.7e-03
+        hexagonal prism edge     1332    0.4577      2.1e-03
         cylinder cap rim         1485    1.0000      2.0e-03
+        sphere minus a rod       2292   2.08e-02     3.0e-03
+        sphere u box              842   1.69e-03     3.1e-03
+        two spheres, n           1501   6.85e-03     2.7e-03
+        box minus box            1484    0.4909      2.9e-03
+        prism u cylinder         1674    0.1405      2.4e-03
+        three-way (two cuts)     2217    0.5309      3.1e-03
 
     The cylinder's rim is the worst *leaf* case: ``w`` swaps from the side wall's
     ``(0.5, 0.5, 0)`` to the cap's ``(0, 0, 1)`` inside one 0.0025-cell move, a jump of the full
-    range. G4 was measured on a sphere, where this file reads 0.0000, and is out by five orders
-    of magnitude on a rim.
+    range. G4 was measured on a sphere, where this file reads 5e-16, and is out by five orders of
+    magnitude on a rim.
 
-    **A CSG node's *fill* is discontinuous too**, which no earlier measurement had looked for:
-    the tangent plane's fill depends on the **selected** normal, and at a crease the selection
-    swaps between children, so ``fill`` jumps although ``d`` is continuous. Bisected to 5.5e-17
-    in the slide parameter, the fill steps 0.96063617 -> 0.99217239, a jump of **3.15e-02**,
-    while ``d`` holds to twelve digits. Every body with an exact fill is immune (their fill never
-    reads a normal); every CSG node has it.
+    **The last six rows are the news, and they are the rebuilt CSG rule's.** Every one of the
+    ``max |dfill|`` entries is now 3.1e-03 or less -- the same size as a *leaf*'s, which is the
+    slide step times the fill's own slope. The three previous writings of this paragraph said a
+    CSG node's fill was discontinuous and quoted 3.15e-02, then 4.29e-02, then 4.48e-02 with a
+    full 1.000 in ``w``, and built the constructor's refusal of a traced parameter on it. That
+    step came from the composed plane: its fill is a function of the **selected** child's normal,
+    and at a crease the selection swaps. A node now answers from its children's own fills and one
+    exact two-plane cut, neither of which reads a selected normal, so the step is gone. Bisected
+    at the worst point of the ``sphere minus a rod`` slide, over a geometry change of 5.6e-17:
 
-    **That jump has been quoted from one node at one voxel three rounds running, and it is a
-    sample.** Over six node kinds on the same 2400-step slide (2026-09-21, with the seam rule in
-    place):
+        fill   0.9135725164 -> 0.9135725164      |dfill| 9.1e-15   (it was 3.15e-02)
+        a central difference of fill^2 reads 7.62, 7.62, 7.62, 7.62, 7.62 at steps 1e-3..1e-7
 
-        node                     max |dfill|   max |dw|
-        sphere minus a rod        3.12e-02      0.566
-        sphere u box              9.98e-03      5.72e-04
-        two spheres, n            1.68e-03      3.57e-04
-        box minus box             4.29e-02      1.000
-        prism u cylinder          4.21e-02      0.864
-        three-way (two cuts)      3.05e-03      2.24e-03
+    -- convergent, where the same probe diverged as ``1/step`` before.
 
-    -- the worst is **4.29e-02** in the fill and a full **1.000** in ``w``, on a node that is not
-    the one the number used to be read off. Two of the rows are the seam rule's doing and are
-    quoted so the improvement is on record too: ``sphere u box`` and the three-way node read
-    4.12e-02 and 3.56e-02 before it, because their children stop overlapping over part of the
-    slide and the sum then answers exactly. The two worst rows are in this test as the last two
-    cases, so the family's worst is held and not merely written down.
+    **``w`` still jumps, and that is now the whole of the reason a CSG node's geometry may not be
+    traced.** At the worst live-to-live step of the ``box minus box`` slide, bisected to 2.8e-17,
+    the fill is identical to ten digits and
 
-    The consequence is worse than a disagreement between a gradient and a difference: at that
-    slide value a central difference of a loss reads 268.81, 2685.85, 26855.47, 268551.57 and
-    2685512.50 at steps of 1e-3 down to 1e-7 -- it **diverges as 1/step**, because the loss
-    itself steps. That is what makes a CSG node's geometry a refused design variable
-    (:func:`test_a_traced_parameter_on_a_csg_node_is_refused_by_name`), and why
-    ``_bodies._Combination`` prices the fix rather than merely naming it.
+        w  (0.0200, 0.4877, 0.4923)  ->  (0.0395, 0.9605, 0.0000)      |dw| 4.91e-01
+
+    with a central difference of ``w_y`` reading 233, 2361, 23639, 236424, 2364267 at the same
+    five steps: ``1/step``, the signature of a jump in the objective. ``occupancy`` returns the
+    pair, and C2's mixing rule reads both halves of it, so a loss through a node is still
+    discontinuous in a geometry parameter even though its fill is not. See
+    :func:`test_a_traced_parameter_on_a_csg_node_is_refused_by_name`.
     """
     h = 0.1
     point = np.zeros((1, 3))
@@ -1102,20 +1137,20 @@ def test_a_crease_is_where_w_jumps_and_this_is_how_far():
     direction = np.array([0.37, 0.61, 0.70])
     direction = direction / np.linalg.norm(direction)
     cases = {
-        'sphere': (lambda c: Sphere(0.31, c), tuple(0.31 * direction), 1e-12, 1e-2),
-        'box axis': (lambda c: Box((0.34, 0.26, 0.29), c, 0.0), (0.17, 0.13, 0.145), 0.3, 1e-2),
-        'cyl rim': (lambda c: Cylinder(0.31, 0.44, 'z', c), (0.31, 0.0, 0.22), 0.9, 1e-2),
+        'sphere': (lambda c: Sphere(0.31, c), tuple(0.31 * direction), None),
+        'box axis': (lambda c: Box((0.34, 0.26, 0.29), c, 0.0), (0.17, 0.13, 0.145), 0.3),
+        'cyl rim': (lambda c: Cylinder(0.31, 0.44, 'z', c), (0.31, 0.0, 0.22), 0.9),
         'csg': (lambda c: Difference(Sphere(0.31, c), Cylinder(0.12, 1.0, 'z', c)),
-                (0.12, 0.0, 0.0), 0.4, 5e-2),
+                (0.12, 0.0, 0.0), None),
         'csg box minus box': (lambda c: Difference(Box((0.34, 0.26, 0.29), c, 0.2),
                                                    Box((0.2, 0.2, 0.5), tuple(np.add(c, 0.1)),
                                                        0.4)),
-                              (0.15, 0.05, 0.05), 0.9, 5e-2),
+                              (0.15, 0.05, 0.05), 0.4),
         'csg prism u cylinder': (lambda c: Union(Prism(HEX, 0.4, 'z', c),
                                                  Cylinder(0.14, 0.5, 'z', c)),
-                                 (0.17, 0.05, 0.1), 0.8, 5e-2),
+                                 (0.17, 0.05, 0.1), 0.1),
     }
-    for name, (make, start, want_w, want_f) in cases.items():
+    for name, (make, start, want_w) in cases.items():
         ws, fills, live = [], [], []
         for i in range(2400):
             centre = np.asarray(start) + direction * (i - 1200) * step
@@ -1130,20 +1165,16 @@ def test_a_crease_is_where_w_jumps_and_this_is_how_far():
         step_w = np.abs(np.diff(ws, axis=0)).max(-1)[both].max()
         step_f = np.abs(np.diff(fills))[both].max()
         if name == 'sphere':
-            assert step_w < want_w, (name, step_w)   # smooth surface, smooth moment
-        else:
+            assert step_w < 1e-12, (name, step_w)    # smooth surface, smooth moment
+        elif want_w is not None:
             assert step_w > want_w, (name, step_w)   # a crease, and this is how big
-        assert step_f < want_f, (name, step_f)
-        if name.startswith('csg'):
-            # the fill steps too, which is the new finding and not a matter of resolution
-            assert step_f > 3e-2, (name, step_f)
-        else:
-            assert step_f < 4e-3, (name, step_f)     # every exact fill is continuous
-    # the CSG fill's own jump, bisected rather than sampled
-    make = cases['csg'][0]
+        # EVERY row, leaf and node alike: the fill is continuous at the slide's resolution
+        assert step_f < 4e-3, (name, step_f)
+    # the node fill's old jump, bisected rather than sampled: it is not there any more
+    make, start = cases['csg'][0], cases['csg'][1]
 
     def fill_at(s):
-        centre = np.asarray(cases['csg'][1]) + direction * s
+        centre = np.asarray(start) + direction * s
         return float(occupancy(make(tuple(centre)), point, h)[0][0])
 
     lo, hi = -0.2785, -0.27825
@@ -1155,8 +1186,35 @@ def test_a_crease_is_where_w_jumps_and_this_is_how_far():
         else:
             hi = mid
     assert hi - lo < 1e-15
-    assert abs(fill_at(hi) - fill_at(lo)) > 3e-2, (fill_at(lo), fill_at(hi))
+    assert abs(fill_at(hi) - fill_at(lo)) < 1e-12, (fill_at(lo), fill_at(hi))
+    slope = [(fill_at(-0.2785 + s) ** 2 - fill_at(-0.2785 - s) ** 2) / (2 * s)
+             for s in (1e-3, 1e-5, 1e-7)]
+    assert max(slope) - min(slope) < 1e-2, slope     # convergent, not 1/step
 
+    # and what IS still discontinuous: w, at a crease, with both ends cut voxels
+    make, start = cases['csg box minus box'][0], cases['csg box minus box'][1]
+
+    def pair_at(s):
+        centre = np.asarray(start) + direction * s
+        fill, w = occupancy(make(tuple(centre)), point, h)
+        return float(fill[0]), np.asarray(w)[0]
+
+    lo, hi = -0.20725, -0.207
+    f_lo, w_lo = pair_at(lo)
+    f_hi, w_hi = pair_at(hi)
+    for _ in range(55):
+        mid = (lo + hi) / 2
+        f_m, w_m = pair_at(mid)
+        if np.abs(w_m - w_lo).max() < np.abs(w_m - w_hi).max():
+            lo, f_lo, w_lo = mid, f_m, w_m
+        else:
+            hi, f_hi, w_hi = mid, f_m, w_m
+    assert hi - lo < 1e-15
+    assert abs(f_hi - f_lo) < 1e-12, (f_hi, f_lo)            # the fill does not step
+    assert np.abs(w_hi - w_lo).max() > 0.4, np.abs(w_hi - w_lo).max()   # w does, by 4.91e-01
+    rung = [(pair_at((lo + hi) / 2 + s)[1][1] - pair_at((lo + hi) / 2 - s)[1][1]) / (2 * s)
+            for s in (1e-4, 1e-6)]
+    assert abs(rung[1]) > 50 * abs(rung[0]), rung           # 1/step: the loss itself jumps
 
 
 def test_a_union_of_flush_bodies_reads_solid_material_on_the_seam():
@@ -1178,18 +1236,16 @@ def test_a_union_of_flush_bodies_reads_solid_material_on_the_seam():
 
     The second half is what says the rule is not a special case of one axis: two boxes meeting on
     a plane, whose union is exactly ``Box((0.8, 0.4, 0.4))``, with the seam placed at 0, 1/4 and
-    **1/2** of a cell.
+    **1/2** of a cell -- **and the grid origin swept with it**, which is what the round-5 review
+    found missing. The previous rule read "worst |dfill| 0.0000" at the one alignment this test
+    used and 0.0625 / 0.1875 / 0.0625 a quarter of a cell away, 0.2500 at half a cell: the
+    offending voxels were the ones whose centre lies on the union's OUTER face as well as on the
+    seam. Over the product of 3 seam positions and **7 grid origins** (2026-09-21):
 
-        seam at     union volume   exact volume   worst |dfill|
-        0.00 cell     0.12800000     0.12800000      0.0000
-        0.25 cell     0.12800000     0.12800000      0.0000
-        0.50 cell     0.12800000     0.12800000      0.0000
+        grid origin   0.000  0.125  0.250  0.375  0.500  0.625  0.750
+        worst |dfill| 2.7e-15 at every one of the 21 cells, union volume 0.12800000 at every one
 
-    against 0.12606283 / 0.12400000 and worst 0.2500 / 0.5000 before it. The half-cell row is the
-    one that needed two further corrections, and neither is cosmetic: the seam then lands exactly
-    on a voxel centre, where the polygon's offset vector is round-off and its *direction*
-    arbitrary (``_bodies._ON_THE_OUTLINE``), and where ``d_i + d_j`` is zero down the middle of
-    the joint and -1e-18 beside it (``_bodies._SAME_FACE``).
+    so the number is a property of the rule and not of an alignment.
     """
     h = 0.02
     n = 40
@@ -1216,15 +1272,43 @@ def test_a_union_of_flush_bodies_reads_solid_material_on_the_seam():
     # two boxes meeting on a plane: the union of them IS a box, at three sub-cell placements
     hh = 0.05
     m = 24
-    cc = -m * hh / 2 + (np.arange(m) + 0.5) * hh
+    for origin in (0.0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75):
+        cc = -m * hh / 2 + (np.arange(m) + 0.5) * hh + origin * hh
+        grid3 = np.stack(np.meshgrid(cc, cc, cc, indexing='ij'), axis=-1)
+        exact = occupancy(Box((0.8, 0.4, 0.4)), grid3, hh)[0]
+        for frac in (0.0, 0.25, 0.5):
+            seam = frac * hh
+            left = Box((0.4 + seam, 0.4, 0.4), center=(-0.4 + (0.4 + seam) / 2, 0., 0.))
+            right = Box((0.4 - seam, 0.4, 0.4), center=(0.4 - (0.4 - seam) / 2, 0., 0.))
+            got = occupancy(Union(left, right), grid3, hh)[0]
+            assert np.abs(got - exact).max() < 1e-13, (origin, frac, np.abs(got - exact).max())
+            assert abs(float(got.sum()) * hh ** 3 - 0.128) < 1e-12, (origin, frac)
+    # A T-junction: three boxes whose union is one box, with TWO coincident faces meeting in the
+    # same voxel. It is the case that says `_bodies._no_common_volume`'s boundary must be `>= 0`
+    # and not `> 0` -- a pair sharing a plane shares no VOLUME, and calling it a sharing pair
+    # makes three of them share the voxel, which this kernel refuses rather than approximates.
+    cc = (np.arange(25) - 12) * hh              # a voxel CENTRE on both seams, x = 0 and z = 0
     grid3 = np.stack(np.meshgrid(cc, cc, cc, indexing='ij'), axis=-1)
-    exact = occupancy(Box((0.8, 0.4, 0.4)), grid3, hh)[0]
-    for frac in (0.0, 0.25, 0.5):
-        seam = frac * hh
-        left = Box((0.4 + seam, 0.4, 0.4), center=(-0.4 + (0.4 + seam) / 2, 0., 0.))
-        right = Box((0.4 - seam, 0.4, 0.4), center=(0.4 - (0.4 - seam) / 2, 0., 0.))
-        got = occupancy(Union(left, right), grid3, hh)[0]
-        assert np.abs(got - exact).max() < 1e-13, (frac, np.abs(got - exact).max())
+    exact = occupancy(Box((1.0, 1.0, 0.8)), grid3, hh)[0]
+    tee = Union(Box((1.0, 1.0, 0.4), center=(0., 0., -0.2)),
+                Box((0.5, 1.0, 0.4), center=(-0.25, 0., 0.2)),
+                Box((0.5, 1.0, 0.4), center=(0.25, 0., 0.2)))
+    got = occupancy(tee, grid3, hh)[0]
+    assert np.abs(got - exact).max() < 1e-13, np.abs(got - exact).max()
+    # And the remedy the constructor's warning names: children OVERLAPPING by a fraction of a
+    # cell, so that both faces are in one voxel and the material is solid between them. That is
+    # the pair `_cut.two_plane` answers on its anti-parallel branch, and the branch that decides
+    # whether the two faces are buried in each other's material is `_cut._ON_EACH_OTHER`.
+    for fraction in (0.2, 0.4, 0.8):
+        sunk = fraction * hh
+        under = Box((0.5, 0.5, 0.4), center=(0., 0., -0.2 + sunk / 2))
+        over = Box((0.5, 0.5, 0.4), center=(0., 0., 0.2 - sunk / 2))
+        fill, w = occupancy(Union(under, over), grid3, hh)
+        band = (np.abs(grid3[..., 0]) < 0.15) & (np.abs(grid3[..., 1]) < 0.15) \
+            & (np.abs(grid3[..., 2]) < hh / 4)
+        assert band.sum() > 20
+        assert np.abs(np.asarray(fill)[band] - 1.0).max() < 1e-13, fraction
+        assert np.abs(np.asarray(w)[band]).max() == 0.0, fraction
     # and the case the rule CANNOT do says so, by name, at construction
     with pytest.warns(UserWarning, match='the flush-seam rule is off'):
         Union(Union(Sphere(0.2), Box((0.2, 0.2, 0.2))), Cylinder(0.1, 0.4, 'z'))
@@ -1239,62 +1323,563 @@ def test_a_union_of_flush_bodies_reads_solid_material_on_the_seam():
         Union(Intersection(Sphere(0.3), Box((0.4, 0.4, 0.4))), Cylinder(0.1, 0.4, 'z'))
 
 
-def test_the_rule_does_not_pay_for_itself_with_a_step_at_first_contact():
-    """Driving two children head on through each other: the fill must not jump as they touch.
+def test_no_node_kind_steps_at_first_contact():
+    """Drive two children head on through each other: nothing jumps, for any node kind.
 
-    The rule switches branch where a pair of children stops being apart, and without the slab
-    term (``max(0, f_i + f_j - 1)`` for two faces that are back to back) that switch is the size
-    of the error the rule is fixing. Measured, one voxel, 4000 slide steps of 3e-4 cell:
+    The round-5 review found that :class:`Intersection`'s first contact stepped by **0.5002** --
+    the largest step a fill can take -- in a branch the gate's step test never touched, and that
+    :class:`Union`'s angled case stepped by 3.384e-01, which the previous round measured, priced
+    and called "the honest cost". Both came from the same thing: the rule applied to some pairs
+    and not others, and switching between the rule and the composed plane is a jump.
 
-        pair                                apart branch alone    with the slab term
-        two boxes, faces parallel                4.998e-01           3.0e-04 (= the step itself)
-        two spheres, head on                        -                3.0e-04
-        a cylinder standing on a box                -                3.0e-04
-        a sphere and a box tilted by 0.4 rad        -                3.384e-01
+    There is nothing to switch between now. Every voxel is answered by the same three cases --
+    a boolean, one child's own cut, or one exact two-plane cut -- and each agrees with the next
+    at the boundary between them, because a child that is about to stop crossing the voxel
+    contributes a fill of 0 or 1 and an area of 0 either way, and a pair that is about to start
+    sharing volume shares none of it at the moment of contact. Measured, one voxel, 4000 slide
+    steps of 3e-05 cell (2026-09-21):
 
-    The last row is the honest cost and it is in this test too: where two surfaces meet at an
-    **angle** and overlap the pair is neither apart nor back to back, the node drops to the
-    composed plane, and the drop is a step. What it steps *between* is an exact value and an
-    already-wrong one -- at that placement the truth is 0.62, the children's own fills sum to
-    0.62, and the composed plane reads 0.28 on both sides of contact before the rule and on one
-    side after it -- so the accuracy improves and the smoothness in a geometry parameter gets
-    worse, in the one quantity ``_Combination`` already declares discontinuous and already
-    refuses as a design variable.
+        node                                   max |dfill|     before
+        Union(box, box) head on                  3.000e-04     4.998e-01 without the slab term
+        Union(sphere, sphere)                    3.000e-04
+        Union(box, cylinder) standing            3.000e-04
+        Union(sphere, box tilted 0.4)            3.000e-04     3.384e-01
+        Union(prism, cylinder)                   3.000e-04
+        Intersection(box, box) head on           3.000e-04     5.002e-01
+        Intersection(sphere, sphere)             3.000e-04     5.001e-01
+        Intersection(sphere, box tilted)         3.000e-04
+        Difference(box, box)                     3.000e-04
+        Difference(sphere, cylinder)             3.000e-04
+        Difference(box, sphere tilted in)        3.000e-04
+        Difference(box, box) tilted in           3.000e-04
+
+    3.0e-04 **is** the slide step: the fill moves by one slide step per slide step, which is no
+    jump at all. (The table's numbers are 4000 steps from a gap of 0.06; the test runs 1000 from
+    0.015, which straddles contact at the same resolution and reads the same 3.000e-04.) The ``before`` column is the round-5 review's own instrument on the code it
+    reviewed. The fill is also asserted to stay in ``[0, 1]`` through the whole slide, because
+    the failure mode the slab term was originally added for was a fill running continuously past
+    1, which a step test alone cannot see.
     """
     h = 0.1
     point = np.zeros((1, 3))
 
-    def worst_step(make, start=0.06, step=3e-5, n=4000):
+    def worst_step(make, start=0.015, step=3e-5, n=1000):
         previous, worst = None, 0.0
         for i in range(n):
             gap = start - i * step
             fill = float(occupancy(make(gap), point, h)[0][0])
-            # the slab term is what keeps the fill IN RANGE once the two overlap: without it the
-            # sum of the children's fills runs straight past 1 (continuously, so a step test
-            # alone cannot see it) -- 1 + delta/h for two boxes overlapping by delta
             assert -1e-12 <= fill <= 1 + 1e-12, (gap, fill)
             if previous is not None:
                 worst = max(worst, abs(fill - previous))
             previous = fill
         return worst
 
-    smooth = {
-        'two boxes': lambda g: Union(Box((0.3, 0.4, 0.4), center=(-0.15 - g / 2, 0., 0.)),
-                                     Box((0.3, 0.4, 0.4), center=(0.15 + g / 2, 0., 0.))),
-        'two spheres': lambda g: Union(Sphere(0.25, (-0.25 - g / 2, 0., 0.)),
-                                       Sphere(0.25, (0.25 + g / 2, 0., 0.))),
-        'cylinder on a box': lambda g: Union(
+    cases = {
+        'union boxes': lambda g: Union(Box((0.3, 0.4, 0.4), center=(-0.15 - g / 2, 0., 0.)),
+                                       Box((0.3, 0.4, 0.4), center=(0.15 + g / 2, 0., 0.))),
+        'union spheres': lambda g: Union(Sphere(0.25, (-0.25 - g / 2, 0., 0.)),
+                                         Sphere(0.25, (0.25 + g / 2, 0., 0.))),
+        'union cylinder on a box': lambda g: Union(
             Box((0.5, 0.5, 0.3), center=(0., 0., -0.15 - g / 2)),
             Cylinder(0.12, 0.3, 'z', center=(0., 0., 0.15 + g / 2))),
+        'union tilted 0.4': lambda g: Union(
+            Sphere(0.25, (-0.25 - g / 2, 0., 0.)),
+            Box((0.3, 0.4, 0.4), center=(0.15 + g / 2, 0.02, 0.01), angle=0.4)),
+        'intersection boxes': lambda g: Intersection(
+            Box((0.3, 0.4, 0.4), center=(-0.15 + g / 2, 0., 0.)),
+            Box((0.3, 0.4, 0.4), center=(0.15 - g / 2, 0., 0.))),
+        'intersection spheres': lambda g: Intersection(Sphere(0.25, (-0.25 + g / 2, 0., 0.)),
+                                                       Sphere(0.25, (0.25 - g / 2, 0., 0.))),
+        'intersection tilted': lambda g: Intersection(
+            Sphere(0.3, (-0.28 + g / 2, 0., 0.)),
+            Box((0.34, 0.4, 0.4), center=(0.17 - g / 2, 0.02, 0.01), angle=0.4)),
+        'difference boxes': lambda g: Difference(
+            Box((0.4, 0.4, 0.4)), Box((0.3, 0.4, 0.4), center=(g + 0.15, 0., 0.))),
+        'difference sphere minus rod': lambda g: Difference(
+            Sphere(0.3), Cylinder(0.12, 0.6, 'x', center=(0., g + 0.12, 0.02))),
+        'difference tilted in': lambda g: Difference(
+            Box((0.4, 0.4, 0.4)), Box((0.3, 0.4, 0.4), center=(g + 0.16, 0.02, 0.01), angle=0.4)),
     }
-    for name, make in smooth.items():
+    for name, make in cases.items():
         got = worst_step(make)
         assert got < 1e-3, (name, got)            # 3.0e-04 measured: the slide step, no jump
-    tilted = lambda g: Union(Sphere(0.25, (-0.25 - g / 2, 0., 0.)),                # noqa: E731
-                             Box((0.3, 0.4, 0.4), center=(0.15 + g / 2, 0.02, 0.01), angle=0.4))
-    angled = worst_step(tilted)
-    assert angled > 0.3, angled                   # the cost, held so it cannot be understated
-    assert angled < 0.5, angled
+
+
+def _device_scenes(h, gap):
+    """A substrate and one pillar, four pillar shapes, at a given joint offset in cells.
+
+    ``gap = 0`` is flush -- the pillar's foot plane and the substrate's top plane coincide, which
+    is what a device is -- and a negative ``gap`` sinks the pillar into the substrate by that
+    many cells, which is what :class:`Union`'s own warning tells a user to do.
+    """
+    z0 = gap * h
+    sub = Box((3.0, 3.0, 0.6), center=(0.0, 0.0, -0.3))
+    tall = 0.5 - z0
+    high = (0.5 + z0) / 2
+    return {
+        'round pillar': Union(sub, Cylinder(0.24, tall, 'z', center=(0.0, 0.0, high))),
+        'angled pillar': Union(sub, Box((0.34, 0.34, tall), center=(0.0, 0.0, high), angle=0.4)),
+        'hex pillar': Union(sub, Prism(HEX_BIG, tall, 'z', center=(0.0, 0.0, high))),
+        'ball on a substrate': Union(sub, Sphere(0.3, (0.0, 0.0, 0.3 + z0))),
+        'a three-way stack': Union(Box((1.0, 1.0, 0.3), center=(0.0, 0.0, -0.15 + z0)),
+                                   Box((0.4, 0.4, 0.3), center=(0.0, 0.0, 0.15)),
+                                   Box((0.2, 0.2, 0.3), center=(0.0, 0.0, 0.45 - z0))),
+    }
+
+
+#: A hexagon big enough to be a pillar rather than a feature, counter-clockwise.
+HEX_BIG = tuple((0.22 * np.cos(2 * np.pi * k / 6), 0.22 * np.sin(2 * np.pi * k / 6))
+                for k in range(6))
+
+#: Six sub-cell origins for the grid itself. A worst quoted at one alignment is a sample, and
+#: this file has quoted four of those in four rounds; the product with the scene is the claim.
+GRID_ORIGINS = ((0.0, 0.0, 0.0), (0.5, 0.0, 0.0), (0.0, 0.0, 0.5), (0.23, 0.11, 0.5),
+                (0.37, 0.37, 0.37), (0.5, 0.5, 0.5))
+
+
+def _voxels(n, h, origin):
+    c = -n * h / 2 + (np.arange(n) + 0.5) * h
+    return np.stack(np.meshgrid(c, c, c, indexing='ij'), axis=-1) + np.asarray(origin) * h
+
+
+def _sampled_fill(body, pts, h, m, seed):
+    """The Monte-Carlo fill of every voxel, from the body's own MEMBERSHIP and nothing else.
+
+    A node's composed distance has the right sign everywhere -- ``min`` / ``max`` / ``max`` of
+    the negation of exact signed distances -- whatever its magnitude does, so ``d <= 0`` is an
+    exact point-in-body test and stratified sampling of it is an unbiased oracle that shares no
+    line of code with the fill it judges. ``m^3`` samples per voxel, jittered inside their own
+    cells, so the standard error is at most ``0.5 / m^1.5``.
+    """
+    rng = np.random.default_rng(seed)
+    lattice = (np.arange(m) + 0.5) / m - 0.5
+    offsets = np.stack(np.meshgrid(lattice, lattice, lattice, indexing='ij'),
+                       axis=-1).reshape(-1, 3)
+    jitter = (rng.random(offsets.shape) - 0.5) / m
+    total = np.zeros(pts.shape[:-1])
+    for one, extra in zip(offsets, jitter):
+        total = total + (np.asarray(body.surface(pts + (one + extra) * h)[0]) <= 0)
+    return total / len(offsets)
+
+
+def test_a_union_is_never_read_below_the_child_that_fills_the_voxel():
+    """The blocker of the round-5 review, and the two theorems that make it unwritable.
+
+    The rule this replaces used ``max(0, f_i + f_j - 1)`` -- the volume two tangent HALF SPACES
+    share -- as the volume two BODIES share, for every pair, including pairs whose second child's
+    surface was nowhere near the voxel. On the docstring's own recommended remedy (overlap the
+    children by a cell) that subtraction over-fired: a voxel lying **entirely inside** a
+    substrate, with a pillar's curved wall passing through it, read ``fill = 0.77`` where the
+    truth is 1.0, and up to 0.31 over five pillar shapes.
+
+    Two statements make that arithmetic impossible now, and both are theorems about any two sets
+    in one voxel rather than margins::
+
+        max(0, F_a + F_b - 1)  <=  shared  <=  min(F_a, F_b)
+
+    The upper one gives ``fill = sum F_i - shared >= max_i F_i``; the lower one gives
+    ``fill <= min(1, sum F_i)``. Measured over 5 scenes x 3 joint offsets x 6 **grid origins**,
+    24^3 voxels at ``h`` = 0.05 (2026-09-21):
+
+        worst  max_i F_i - fill           4.9e-14
+        worst  fill - min(1, sum F_i)     2.2e-14
+
+    -- round-off, on both sides, and the same numbers on NumPy, JAX and Torch.
+
+    **And where the children are disjoint the node is exactly their sum.** A pillar standing
+    flush on a substrate touches it on a plane and shares no volume with it, so the union's fill
+    *is* ``F_substrate + F_pillar`` -- an identity with no Monte Carlo in it and nothing to
+    tune. Over the same product of shapes and grid origins the worst departure is **1.1e-14**.
+    That is the seam measurement the review asked to be re-quoted over origins: the previous
+    rule's "worst |dfill| 0.0000" held at the one alignment its test used and read 0.2500 half a
+    cell away.
+    """
+    h = 0.05
+    n = 24
+    worst_floor = worst_roof = worst_sum = 0.0
+    for gap in (0.0, -1.0, -2.0):
+        for name, body in _device_scenes(h, gap).items():
+            for origin in GRID_ORIGINS:
+                pts = _voxels(n, h, origin)
+                fill = np.asarray(occupancy(body, pts, h)[0])
+                own = [np.asarray(child.parts(pts, h)[0]) for child in body.bodies]
+                worst_floor = max(worst_floor, float((np.maximum.reduce(own) - fill).max()))
+                worst_roof = max(worst_roof, float((fill - np.minimum(1.0, sum(own))).max()))
+                if gap == 0.0:                   # flush: the children are disjoint
+                    worst_sum = max(worst_sum, float(np.abs(fill - sum(own)).max()))
+    assert worst_floor < 1e-12, worst_floor      # 4.9e-14: no voxel reads below its fullest child
+    assert worst_roof < 1e-12, worst_roof        # 2.2e-14
+    assert worst_sum < 1e-12, worst_sum          # 1.1e-14: disjoint children add, exactly
+
+
+def test_a_union_of_flush_bodies_is_the_same_number_on_three_backends():
+    """One body of code, three backends, on the scene the rule exists for."""
+    h = 0.05
+    pts = _voxels(16, h, (0.23, 0.11, 0.5))
+    body = _device_scenes(h, -1.0)['round pillar']
+    jax = pytest.importorskip('jax')
+    jax.config.update('jax_enable_x64', True)
+    import jax.numpy as jnp
+    base = None
+    for lib, name in ((np, 'numpy'), (jnp, 'jax'), (pytest.importorskip('torch'), 'torch')):
+        fill, w = occupancy(body, lib.asarray(pts, dtype=lib.float64), h)
+        got = (np.asarray(fill), np.asarray(w))
+        if base is None:
+            base = got
+        assert np.abs(got[0] - base[0]).max() < 1e-13, name
+        assert np.abs(got[1] - base[1]).max() < 1e-13, name
+
+
+def test_a_node_never_deletes_an_interface_its_children_report():
+    """The second half of the round-5 review: ``w = 0`` where there is a full interface.
+
+    The rule this replaces deleted **both** children's whole face wherever a pair was back to
+    back and flush. At the foot perimeter of a pillar that is wrong twice over: the substrate's
+    top is still exposed outside the pillar's footprint, and the pillar's side wall is in the
+    same voxel. 108 of 5360 truly cut voxels of a 3x3 pillar array reported ``sum_c w_c = 0`` --
+    no interface at all -- where the answer before that rule was a full z-facing one, and the
+    liveness test could not flag it because it reads the area the rule had just zeroed.
+
+    A subtraction now happens only where both children are proved **flat** in the voxel: their
+    own exact fill equals their own tangent half space's, which for a convex body says the two
+    sets are the same set there. A box with an **edge** in the voxel is not flat -- at the
+    review's own voxel its exact fill is 0.21 against its half space's 0.30 -- so nothing is
+    subtracted and both faces stand.
+
+    What is asserted here is the invariant, not a count: in every voxel the Monte Carlo says is
+    cut **and** in which some crossing child reports a live interface of its own, the node
+    reports one too. Measured over 5 scenes x 3 joint offsets x 6 grid origins: 0 violations of
+    98326 such voxels, against 108 of 5360 on one scene before.
+    """
+    h = 0.06
+    n = 14
+    bad = live_cut = 0
+    for gap in (0.0, -1.0):
+        for name, body in _device_scenes(h, gap).items():
+            for origin in GRID_ORIGINS[:3]:
+                pts = _voxels(n, h, origin)
+                w = np.asarray(occupancy(body, pts, h)[1])
+                child_area = np.zeros(w.shape[:-1])
+                for child in body.bodies:
+                    child_area = np.maximum(child_area, np.asarray(child.parts(pts, h)[1]))
+                exact = _sampled_fill(body, pts, h, m=5, seed=4)
+                cut = (exact > 1e-9) & (exact < 1 - 1e-9) & (child_area > 1e-12 * h * h)
+                live_cut += int(cut.sum())
+                bad += int((cut & (np.abs(w).sum(-1) < 0.5)).sum())
+    assert live_cut > 2000, live_cut
+    assert bad == 0, (bad, live_cut)
+    # A flush pair is fused in a UNION and must not be in a DIFFERENCE: two children of a union
+    # that meet flush have material on both sides and no interface between them, but a removed
+    # body resting flush on the face of the body it is taken from leaves vacuum there, and the
+    # face is still the difference's own boundary. Same geometry, opposite answers.
+    hh = 0.05
+    pts = _voxels(12, hh, (0.0, 0.0, 0.5))
+    kept = Box((0.5, 0.5, 0.4), center=(0.0, 0.0, 0.0))
+    resting = Box((0.5, 0.5, 0.4), center=(0.0, 0.0, 0.4))          # its foot IS kept's top face
+    deep = (np.abs(pts[..., 0]) < 0.15) & (np.abs(pts[..., 1]) < 0.15) \
+        & (np.abs(pts[..., 2] - 0.2) < hh / 4)
+    assert deep.sum() > 20
+    union_w = np.asarray(occupancy(Union(kept, resting), pts, hh)[1])
+    cut_fill, cut_w = occupancy(Difference(kept, resting), pts, hh)
+    assert np.abs(union_w[deep]).max() == 0.0                        # buried: solid on both sides
+    assert np.abs(np.asarray(cut_fill)[deep] - 0.5).max() < 1e-12    # the face is kept's own top
+    assert np.abs(np.asarray(cut_w)[deep] - np.array([0., 0., 1.])).max() < 1e-12
+    # Two opposed faces a FRACTION of a voxel apart are two interfaces and a gap, not a joint.
+    # This is what holds `_bodies._SAME_FACE` at 1e-12: widen it to 0.4 of a voxel and the pair
+    # below is called "on each other", both faces come out of the sum, and a 0.2-cell air gap
+    # reads as solid material with no interface in it.
+    for fraction in (0.2, 0.4, 0.8):
+        space = fraction * hh
+        lower = Box((0.5, 0.5, 0.4), center=(0.0, 0.0, -0.2 - space / 2))
+        upper = Box((0.5, 0.5, 0.4), center=(0.0, 0.0, 0.2 + space / 2))
+        fill, w = occupancy(Union(lower, upper), pts, hh)
+        middle = (np.abs(pts[..., 0]) < 0.15) & (np.abs(pts[..., 1]) < 0.15) \
+            & (np.abs(pts[..., 2]) < hh / 4)
+        assert middle.sum() > 20
+        assert np.abs(np.asarray(fill)[middle] - (1 - fraction)).max() < 1e-12, fraction
+        assert np.abs(np.asarray(w)[middle] - np.array([0., 0., 1.])).max() < 1e-12, fraction
+
+
+def test_the_union_of_two_bodies_is_at_or_above_the_truth_and_this_is_how_far_above():
+    """"An approximation that can remove material that is there is not an option", measured.
+
+    :func:`_cut.two_plane` answers exactly for the two tangent **half spaces**. A convex body is
+    inside its own, so that volume is an upper bound on what the two bodies share, and
+    ``V - gap_a - gap_b`` is a lower one, with ``gap_i = f_i - F_i`` the child's own
+    tangent-plane over-fill of this voxel (``H_a n H_b`` minus ``A n B`` is inside
+    ``(H_a \\ A) u (H_b \\ B)``). A union subtracts the **lower** bound, so its fill is provably
+    at or above the truth; an intersection takes the upper one, for the same reason read the
+    other way. Where both children are flat the two bounds are the same number and the answer is
+    exact.
+
+    Measured against 14^3 = 2744 stratified membership samples per voxel (standard error 9.5e-3),
+    16^3 voxels at ``h`` = 0.06, over 6 grid origins (2026-09-21):
+
+        scene                          max(truth - fill)   max(fill - truth)
+        round pillar, flush                  0.0091             0.0048
+        angled pillar, flush                 0.0086             0.0045
+        hex pillar, flush                    0.0078             0.0058
+        ball on a substrate, flush           0.0070             0.0069
+        round pillar, sunk one cell          0.0091             0.0111
+        angled pillar, sunk one cell         0.0086             0.0927
+        hex pillar, sunk one cell            0.0078             0.0553
+        ball on a substrate, sunk one cell   0.0070             0.0200
+        a three-way stack, flush             0.0047             0.0064
+
+    The left column never clears the sampling error: nothing removes material. The right column
+    is what never removing it costs -- 0.093 of a voxel where a *box* pillar overlaps a
+    substrate, because a box with an edge in the voxel is not its own tangent half space and the
+    bound is then a bound and not the answer. Before this round the same left column read 0.2500
+    (and 0.77 against a true 1.0 in the review's own probe).
+    """
+    h = 0.06
+    n = 12
+    error = 0.5 / 10 ** 1.5
+    worst_removed = 0.0
+    for gap in (0.0, -1.0):
+        for name, body in _device_scenes(h, gap).items():
+            for origin in GRID_ORIGINS[:3]:
+                pts = _voxels(n, h, origin)
+                fill = np.asarray(occupancy(body, pts, h)[0])
+                exact = _sampled_fill(body, pts, h, m=10, seed=5)
+                worst_removed = max(worst_removed, float((exact - fill).max()))
+    assert worst_removed < 4 * error, (worst_removed, error)
+
+
+def test_three_surfaces_in_one_voxel_are_refused_by_name():
+    """Two pairs of children sharing one voxel is the case this kernel cannot write down.
+
+    The shared volume of two half spaces in a box is a closed form; of three it is Lasserre's
+    recursion, which the previous round measured at 440 s and 22 GiB for one component of one
+    metasurface cell. So a voxel in which two different pairs of crossing children hold volume in
+    common is **refused**, by name, with the count and with the spellings that work -- and not
+    approximated, because every approximation available there can remove material that is
+    present.
+
+    Two pillars placed exactly tangent to each other on a substrate is that case. Moving one of
+    them by a fifth of a cell is not, and is answered.
+    """
+    h = 0.05
+    pts = _voxels(16, h, (0.0, 0.0, 0.5))
+    sub = Box((3.0, 3.0, 0.4), center=(0.0, 0.0, -0.2))
+    touching = Union(sub, Cylinder(0.2, 0.5, 'z', center=(-0.2, 0.0, 0.25)),
+                     Cylinder(0.2, 0.5, 'z', center=(0.2, 0.0, 0.25)))
+    with pytest.raises(ValueError, match='three or more children meet'):
+        occupancy(touching, pts, h)
+    clear = Union(sub, Cylinder(0.2, 0.5, 'z', center=(-0.23, 0.0, 0.25)),
+                  Cylinder(0.2, 0.5, 'z', center=(0.23, 0.0, 0.25)))
+    fill = np.asarray(occupancy(clear, pts, h)[0])
+    assert -1e-12 <= fill.min() and fill.max() <= 1 + 1e-12
+
+
+def test_the_exact_two_plane_cut_is_what_an_independent_oracle_says():
+    """``_cut.two_plane`` against brute-force vertex enumeration and a convex hull.
+
+    The oracle shares no line with it: it forms all 56 triples of the eight planes (six box
+    faces and the two cuts), solves each 3x3 system, keeps the feasible vertices and takes
+    ``scipy.spatial.ConvexHull`` of them, then of the subset on each cut plane for that face's
+    area. Four families, and the degenerate ones are the point -- a device joint is exactly
+    anti-parallel and exactly flush, which is where the general form's ``sqrt(1 - mu^2)``
+    denominator goes to zero and a separate closed form takes over.
+
+        family                                        worst |dV|   worst |dA|/dx^2
+        600 random pairs, both cutting the box         4.5e-13        7.8e-13
+        300 axis-aligned pairs (faces, slabs, corners) 9.8e-13        5.0e-13
+        300 nearly anti-parallel, nearly flush joints  4.3e-13        1.3e-09
+        300 with one plane grazing a corner            5.3e-17        1.0e-14
+
+    and, with one plane pushed clear of the voxel, it reproduces :func:`_cut._parts` to 5.6e-16
+    in the fill and 1.1e-16 in the area -- which is what says the two forms are one function.
+    """
+    hull = pytest.importorskip('scipy.spatial').ConvexHull
+    import itertools
+    rng = np.random.default_rng(20260921)
+    dx = 0.37
+    half = dx / 2
+
+    def oracle(d_a, n_a, d_b, n_b):
+        rows = [(np.eye(3)[k] * s, half) for k in range(3) for s in (1.0, -1.0)]
+        rows += [(np.asarray(n_a), -d_a), (np.asarray(n_b), -d_b)]
+        a = np.stack([r[0] for r in rows])
+        c = np.asarray([r[1] for r in rows])
+        pts = []
+        for tri in itertools.combinations(range(8), 3):
+            m = a[list(tri)]
+            if abs(np.linalg.det(m)) < 1e-12:
+                continue
+            x = np.linalg.solve(m, c[list(tri)])
+            if np.all(a @ x <= c + 1e-11 * dx):
+                pts.append(x)
+        pts = np.unique(np.round(np.asarray(pts) / dx, 12), axis=0) * dx if pts else np.zeros((0,))
+        if len(pts) < 4:
+            return 0.0, 0.0, 0.0
+        out = [hull(pts).volume / dx ** 3]
+        for idx in (6, 7):
+            on = pts[np.abs(pts @ a[idx] - c[idx]) < 1e-8 * dx]
+            if len(on) < 3:
+                out.append(0.0)
+                continue
+            e1 = np.cross(a[idx], [1.0, 0.0, 0.0])
+            if np.linalg.norm(e1) < 1e-6:
+                e1 = np.cross(a[idx], [0.0, 1.0, 0.0])
+            e1 = e1 / np.linalg.norm(e1)
+            flat = np.stack([on @ e1, on @ np.cross(a[idx], e1)], axis=-1)
+            out.append(hull(flat).volume)
+        return tuple(out)
+
+    def unit():
+        v = rng.normal(size=3)
+        return v / np.linalg.norm(v)
+
+    families = {}
+    families['random'] = [(rng.uniform(-1.7 * half, 1.7 * half), unit(),
+                           rng.uniform(-1.7 * half, 1.7 * half), unit()) for _ in range(60)]
+    axis = np.eye(3)
+    families['axis aligned'] = [
+        (rng.uniform(-half, half), rng.choice([-1.0, 1.0]) * axis[rng.integers(0, 3)],
+         rng.uniform(-half, half), rng.choice([-1.0, 1.0]) * axis[rng.integers(0, 3)])
+        for _ in range(60)]
+    joints = []
+    for _ in range(60):
+        n_a = unit()
+        perp = np.cross(n_a, unit())
+        perp = perp / np.linalg.norm(perp)
+        theta = rng.uniform(0, 1e-3)
+        d_a = rng.uniform(-half, half)
+        joints.append((d_a, n_a, -d_a + rng.normal(scale=1e-3 * dx),
+                       np.cos(theta) * (-n_a) + np.sin(theta) * perp))
+    families['nearly flush joints'] = joints
+    # EXACTLY anti-parallel and EXACTLY parallel: the pairs the general form cannot answer,
+    # because its 1/sqrt(1 - mu^2) is 1/0 there and a separate closed form takes over. A device
+    # joint is exactly this, and so is every layer stack, so the branch is the common case and
+    # not the corner -- including the part of it that decides whether the two faces are buried
+    # in each other's material (a slab) or are two interfaces with a gap between them.
+    exact_pairs = []
+    for _ in range(60):
+        n_a = unit()
+        d_a = rng.uniform(-half, half)
+        exact_pairs.append((d_a, n_a, -d_a + rng.uniform(-half, half), -n_a))
+    families['exactly anti-parallel'] = exact_pairs
+    families['exactly parallel'] = [(rng.uniform(-half, half), n, rng.uniform(-half, half), n)
+                                    for n in (unit() for _ in range(60))]
+    for name, cases in families.items():
+        worst_v = worst_a = 0.0
+        for d_a, n_a, d_b, n_b in cases:
+            da, db = np.asarray([d_a]), np.asarray([d_b])
+            na, nb = np.asarray([n_a]), np.asarray([n_b])
+            got = two_plane(da, na, db, nb, dx, _parts(da, na, dx), _parts(db, nb, dx))
+            want = oracle(d_a, n_a, d_b, n_b)
+            worst_v = max(worst_v, abs(float(got[0][0]) - want[0]))
+            worst_a = max(worst_a, abs(float(got[1][0]) - want[1]) / dx ** 2,
+                          abs(float(got[2][0]) - want[2]) / dx ** 2)
+        assert worst_v < 1e-11, (name, worst_v)
+        assert worst_a < 1e-8, (name, worst_a)
+    # one plane clear of the voxel: the two-plane form IS the one-plane form
+    worst = 0.0
+    for _ in range(200):
+        n_a, n_b = unit(), unit()
+        d_a = rng.uniform(-1.8 * half, 1.8 * half)
+        da, na, nb = np.asarray([d_a]), np.asarray([n_a]), np.asarray([n_b])
+        one = _parts(da, na, dx)
+        got = two_plane(da, na, np.asarray([-10 * dx]), nb, dx, one, _parts(np.asarray([-10 * dx]),
+                                                                           nb, dx))
+        worst = max(worst, abs(float(got[0][0]) - float(one[0][0])),
+                    abs(float(got[1][0]) - float(one[1][0])) / dx ** 2, abs(float(got[2][0])))
+    assert worst < 1e-14, worst
+
+
+def test_the_two_plane_cut_obeys_its_own_bounds_at_every_coordinate_scale():
+    """``0 <= V <= min(f_a, f_b)``, ``V >= max(0, f_a + f_b - 1)``, ``A_i <= a_i`` -- and scale.
+
+    The three inequalities are what the CSG rule's clamp rests on, so they are asserted on the
+    kernel itself rather than inferred from a node. The scale row is this file's standing
+    question of every predicate: a geometric test compared against an absolute floor is a test
+    about the coordinate unit, and this kernel is bit-identical from a micrometre scene to a
+    metre one.
+    """
+    rng = np.random.default_rng(11)
+    n_a = rng.normal(size=(2000, 3))
+    n_a = n_a / np.linalg.norm(n_a, axis=-1, keepdims=True)
+    n_b = rng.normal(size=(2000, 3))
+    n_b = n_b / np.linalg.norm(n_b, axis=-1, keepdims=True)
+    unit_a, unit_b = rng.uniform(-0.37, 0.37, 2000), rng.uniform(-0.37, 0.37, 2000)
+    reference = None
+    for scale in (1e-6, 1e-3, 1.0, 3.29e5, 1e9):
+        dx = 0.37 * scale
+        d_a, d_b = unit_a * scale, unit_b * scale
+        one_a, one_b = _parts(d_a, n_a, dx), _parts(d_b, n_b, dx)
+        shared, area_a, area_b = two_plane(d_a, n_a, d_b, n_b, dx, one_a, one_b)
+        assert shared.min() > -1e-13, (scale, shared.min())
+        assert float(np.maximum(shared - np.minimum(one_a[0], one_b[0]), 0).max()) < 1e-13, scale
+        assert float(np.maximum(np.maximum(one_a[0] + one_b[0] - 1, 0) - shared, 0).max()) < 1e-13
+        assert float(np.maximum(area_a - one_a[1], 0).max()) / dx ** 2 < 1e-13, scale
+        assert float(np.maximum(area_b - one_b[1], 0).max()) / dx ** 2 < 1e-13, scale
+        if reference is None:
+            reference = np.asarray(shared)
+        else:
+            assert np.abs(np.asarray(shared) - reference).max() < 1e-15, scale
+
+
+def test_the_doors_this_round_adds_refuse_a_typo_by_name():
+    """Four more doors, each closing a case that came back as an incidental exception.
+
+    The repository's rule is that a typo is refused on every door and by name, and the round-5
+    review found the round's own doors had holes in exactly the places the rule names. Measured
+    on the kernel before each of these (2026-09-21):
+
+        spelling                                    was                       is now
+        occupancy(period=(0, None, None))           fill 3.0000, silently     refused
+        occupancy(period=(-1., None, None))         accepted and ignored      refused
+        occupancy(rings=(-1, 0, 0))                 bare TypeError from range refused
+        occupancy(rings=(1.5, 0, 0))                bare TypeError            refused
+        occupancy(..., dx=True)                     solved at dx = 1.0        refused
+        Sphere(radius=True)                         a unit sphere             refused
+        Box(size=(True, True, True))                a unit cube               refused
+        occupancy(points=np.zeros((1, 2)))          IndexError from inside    refused
+        occupancy(points=np.zeros((1, 4)))          broadcast ValueError      refused
+        occupancy(points=complex)                   TypeError from arctan2    refused
+        occupancy(body='x')                         AttributeError .leaves    refused
+        Union(Sphere(0.2), 'x')                     AttributeError .leaves    refused
+        occupancy(..., dx=np.array([h, h]))         broadcast ValueError      refused
+
+    Each refusal names the call the reader made: ``occupancy(period[x]=...)`` and not
+    ``image_shifts(period[x]=...)``, which is what the pattern below holds, because
+    ``image_shifts`` doors the same value one level down and a door that answers in the callee's
+    name leaves the caller's own door untested.
+
+    ``period = 0`` is the one worth reading twice: it stacks all three images of the ring on the
+    same point, so the fill comes back **exactly tripled** with ``sum_c w_c = 1`` in every voxel.
+    Both free invariants are satisfied by the artefact, which is the class of failure every door
+    in this file exists for.
+    """
+    point = np.zeros((1, 3))
+    cases = {
+        'period zero': (lambda: occupancy(Sphere(0.2), point, 0.1, period=(0, None, None)),
+                        r'occupancy\(period\[x\]'),
+        'period negative': (lambda: occupancy(Sphere(0.2), point, 0.1, period=(-1., None, None)),
+                            r'occupancy\(period\[x\]'),
+        'rings negative': (lambda: occupancy(Sphere(0.2), point, 0.1, rings=(-1, 0, 0)), 'rings'),
+        'rings fractional': (lambda: occupancy(Sphere(0.2), point, 0.1, rings=(1.5, 0, 0)),
+                             'rings'),
+        'dx a bool': (lambda: occupancy(Sphere(0.2), point, True), 'this is a bool'),
+        'radius a bool': (lambda: Sphere(radius=True), 'this is a bool'),
+        'size a bool': (lambda: Box(size=(True, True, True)), 'this is a bool'),
+        'height a bool': (lambda: Cylinder(0.2, True), 'this is a bool'),
+        'points too narrow': (lambda: occupancy(Sphere(0.2), np.zeros((1, 2)), 0.1), 'points'),
+        'points too wide': (lambda: occupancy(Sphere(0.2), np.zeros((1, 4)), 0.1), 'points'),
+        'points complex': (lambda: occupancy(Sphere(0.2), np.zeros((1, 3), dtype=complex), 0.1),
+                           'complex'),
+        'body not a body': (lambda: occupancy('x', point, 0.1), 'a Body'),
+        'child not a body': (lambda: Union(Sphere(0.2), 'x'), 'every child is a Body'),
+        'child a number': (lambda: Intersection(Sphere(0.2), 3.0), 'every child is a Body'),
+        'dx an array': (lambda: occupancy(Sphere(0.2), point, np.array([0.05, 0.05])),
+                        'one number'),
+    }
+    for name, (call, pattern) in cases.items():
+        with pytest.raises(ValueError, match=pattern):
+            call()
+    # and the artefact the period door stops, so the number in the docstring is this test's
+    assert float(occupancy(Sphere(0.2), point, 0.1, period=(1., 1., 1.))[0][0]) == 1.0
 
 
 def test_a_geometry_value_that_is_not_a_real_number_is_refused_by_name():

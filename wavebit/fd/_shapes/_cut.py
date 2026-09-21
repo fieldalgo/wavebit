@@ -240,6 +240,217 @@ def _parts(d, n, dx):
     return fill, area, area[..., None] * n * n
 
 
+#: ``1 - (n_a . n_b)^2`` below this and the pair is treated as **parallel**, where the volume and
+#: the two face areas have closed forms of their own. The general form below divides by
+#: ``sqrt(1 - mu^2)``, so its round-off grows as ``eps / sqrt(1 - mu^2)``; the parallel form's own
+#: error at an angle ``theta`` off parallel is the wedge it ignores, about ``theta/2`` of the
+#: voxel. The two cross at ``1 - mu^2 ~ 2e-16``, where both are about 7e-9 -- so the switch is set
+#: a hair above the last bit of a dot product of unit vectors and nowhere near a real angle.
+#: Measured against the ConvexHull oracle over 300 nearly-anti-parallel, nearly-flush joints:
+#: worst ``|dV|`` 4.3e-13 and worst ``|dA|/dx^2`` 1.3e-09 against the oracle named below.
+_PARALLEL = 1e-14
+
+#: How close two tangent faces must be to count as lying **on each other**: ``d_a + d_b`` below
+#: this many voxels, for a pair whose normals are exactly opposite. It decides whether an
+#: anti-parallel pair's two faces are buried in each other's material (a device's flush joint) or
+#: separated by a gap that is real interface. The twin of ``_bodies._SAME_FACE`` and the same
+#: argument: ``(d_a + d_b)/dx`` is a length over a length, and a joint placed flush hits zero to
+#: the last bit.
+_ON_EACH_OTHER = 1e-12
+
+#: The other two axes of a box face whose normal is along axis ``k``, in increasing order.
+_OTHER = {0: (1, 2), 1: (0, 2), 2: (0, 1)}
+
+
+def _half_line(lo, hi, dead, alpha, beta, xp):
+    """``[lo, hi]`` intersected with ``{t : alpha t <= beta}``, branch-free.
+
+    ``alpha = 0`` is the case a ``/`` cannot answer: the constraint is then either vacuous or
+    impossible, and which one is a property of ``beta`` alone. The division is done with a safe
+    denominator first (the idiom this package states in :func:`_second_difference`), so the dead
+    branch's *cotangent* is zero rather than ``nan``.
+    """
+    safe = xp.where(alpha != 0, alpha, xp.ones_like(alpha))
+    reach = beta / safe
+    return (xp.where(alpha < 0, xp.maximum(lo, reach), lo),
+            xp.where(alpha > 0, xp.minimum(hi, reach), hi),
+            dead | ((alpha == 0) & (beta < 0)))
+
+
+def _span(lo, hi, dead, xp, zero):
+    return xp.where(dead, zero, xp.maximum(hi - lo, zero))
+
+
+def _edge_key(m, k, s_k, r, s_r):
+    return (m, s_k, s_r) if k < r else (m, s_r, s_k)
+
+
+def two_plane(d_a, n_a, d_b, n_b, dx, plane_a, plane_b):
+    """The voxel cut by **two** half spaces: the shared fill, and each face's area inside the other.
+
+    ``(shared, area_a, area_b)`` for ``B = [-dx/2, dx/2]^3`` centred on the point and
+    ``H_i = {n_i . x + d_i <= 0}``:
+
+        shared  = vol(B n H_a n H_b) / dx^3
+        area_a  = area(dH_a n B n H_b)      the part of plane a lying inside H_b
+        area_b  = area(dH_b n B n H_a)
+
+    Those three are everything a CSG node needs from a pair of surfaces that share a voxel.
+    ``B n (H_a u H_b)`` is ``f_a + f_b - shared``; the union's interface is
+    ``(a_a - area_a) + (a_b - area_b)``; the intersection's is ``area_a + area_b``; and a
+    difference takes one of each. :func:`_parts` supplies ``f_i`` and ``a_i``.
+
+    **Why this and not the general recursion.** The previous round priced Lasserre's recursion
+    for ``k`` half spaces (J. B. Lasserre, *An analytical expression and an algorithm for the
+    volume of a convex polyhedron in R^n*, J. Optim. Theory Appl. **39**, 363 (1983)) at 33 s to
+    440 s per component per lowering and up to 22 GiB, and rejected it. What is written here is
+    the **k = 2** case of the same divergence-theorem identity, unrolled, with the recursion
+    replaced by arithmetic:
+
+        3 vol(P) = sum_f s_f A_f          over the at most 8 faces of P, s_f the signed
+                                          support of face f from the voxel centre
+        2 A_f    = sum_e b_e L_e          the same identity one dimension down, inside face f
+
+    and the innermost quantity ``L_e`` -- the length of an edge of ``P`` -- is a **line clipped by
+    a handful of half spaces**, which is one pass of :func:`_half_line` and no geometry at all.
+    There are twelve box edges (each clipped by the two planes), twelve traces of a cut plane on
+    a box face (each clipped by the face's four sides and the other half space), and one line
+    where the two cut planes meet (clipped by the six box sides): 25 segments, about 1100 scalar
+    operations per voxel, no branch on a value and nothing allocated per voxel. The cost is in
+    :class:`_bodies._Combination`'s table.
+
+    **Validated against an oracle that shares no line with it** -- brute-force vertex enumeration
+    over all 56 triples of the 8 planes, feasibility, and ``scipy.spatial.ConvexHull``
+    -- it is written out in
+    ``tests/test_fd_shapes.py::test_the_exact_two_plane_cut_is_what_an_independent_oracle_says``,
+    where these numbers are re-run (2026-09-21):
+
+        family                                        worst |dV|   worst |dA|/dx^2
+        600 random pairs, both cutting the box         4.5e-13        7.8e-13
+        300 axis-aligned pairs (faces, slabs, corners) 9.8e-13        5.0e-13
+        300 nearly anti-parallel, nearly flush joints  4.3e-13        1.3e-09
+        300 with one plane grazing a corner            5.3e-17        1.0e-14
+
+    and against 4e5-point Monte Carlo on 60 random configurations, 1.5e-03 at a 1.6e-03 standard
+    error. The identity's own consistency checks hold to round-off over a 4000-configuration
+    sweep: ``V <= min(f_a, f_b)`` to 5.6e-16, ``V >= max(0, f_a + f_b - 1)`` to 1.2e-15,
+    ``area_i <= a_i`` to 1.2e-15. With one plane pushed clear of the voxel it reproduces
+    :func:`_parts` to 5.6e-16 in the fill and 1.1e-16 in the area -- the check that says the two
+    forms are the same function. The answer is bit-identical across five decades of coordinate
+    scale (1e-6 to 1e+9).
+
+    **The parallel branch is a different formula, not a tolerance on this one.** Two parallel
+    planes have no intersection line and ``sqrt(1 - mu^2)`` is the denominator that says so;
+    below :data:`_PARALLEL` the pair is a slab (``max(0, f_a + f_b - 1)``, exact, and the case
+    every device joint is) or a nested pair of half spaces (``min(f_a, f_b)``, exact). Where two
+    *coincident* faces meet, which of them is "inside" the other is a measure-zero question with
+    two defensible answers; it is broken one way (``<=`` for a, ``<`` for b) so that exactly one
+    of them counts, which is what makes a union of two coincident faces report one interface and
+    an intersection of them report one too, rather than two or none.
+    """
+    xp = array_namespace(d_a, n_a)
+    h = dx / 2
+    c = (-d_a, -d_b)
+    n = (n_a, n_b)
+    zero, one = xp.zeros_like(d_a), xp.ones_like(d_a)
+    off = zero > one
+    far = 4 * dx * one                  # any segment of P is inside [-dx sqrt(3)/2, +dx sqrt(3)/2]
+
+    edge = {}                           # the twelve box edges, clipped by both half spaces
+    for m in range(3):
+        p, q = _OTHER[m]
+        for s_p in (1.0, -1.0):
+            for s_q in (1.0, -1.0):
+                lo, hi, dead = -h * one, h * one, off
+                for i in (0, 1):
+                    foot = s_p * h * n[i][..., p] + s_q * h * n[i][..., q]
+                    lo, hi, dead = _half_line(lo, hi, dead, n[i][..., m], c[i] - foot, xp)
+                edge[m, s_p, s_q] = _span(lo, hi, dead, xp, zero)
+
+    trace, offs, norm = {}, {}, {}      # each cut plane's trace on each box face
+    for k in range(3):
+        u, v = _OTHER[k]
+        for s in (1.0, -1.0):
+            for i in (0, 1):
+                j = 1 - i
+                nu, nv = n[i][..., u], n[i][..., v]
+                g = c[i] - s * h * n[i][..., k]
+                q2 = nu * nu + nv * nv
+                live = q2 > 0           # false only where plane i is parallel to this face
+                q2s = xp.where(live, q2, one)
+                root = xp.sqrt(q2s)
+                du, dv = -nv / root, nu / root
+                pu, pv = g * nu / q2s, g * nv / q2s
+                lo, hi, dead = -far, far, ~live
+                lo, hi, dead = _half_line(lo, hi, dead, du, h - pu, xp)
+                lo, hi, dead = _half_line(lo, hi, dead, -du, h + pu, xp)
+                lo, hi, dead = _half_line(lo, hi, dead, dv, h - pv, xp)
+                lo, hi, dead = _half_line(lo, hi, dead, -dv, h + pv, xp)
+                ou, ov = n[j][..., u], n[j][..., v]
+                lo, hi, dead = _half_line(lo, hi, dead, ou * du + ov * dv,
+                                          c[j] - s * h * n[j][..., k] - (ou * pu + ov * pv), xp)
+                trace[k, s, i] = _span(lo, hi, dead, xp, zero)
+                offs[k, s, i] = g
+                norm[k, s, i] = xp.where(live, root, one)
+
+    mu = xp.sum(n_a * n_b, axis=-1)     # the line where the two cut planes meet
+    apart = 1 - mu * mu
+    crossed = apart > _PARALLEL
+    safe = xp.where(crossed, apart, one)
+    base = (((c[0] - mu * c[1]) / safe)[..., None] * n_a
+            + ((c[1] - mu * c[0]) / safe)[..., None] * n_b)
+    along = xp.stack([n_a[..., 1] * n_b[..., 2] - n_a[..., 2] * n_b[..., 1],
+                      n_a[..., 2] * n_b[..., 0] - n_a[..., 0] * n_b[..., 2],
+                      n_a[..., 0] * n_b[..., 1] - n_a[..., 1] * n_b[..., 0]], axis=-1)
+    root = xp.sqrt(safe)
+    along = along / root[..., None]
+    lo, hi, dead = -far, far, ~crossed
+    for k in range(3):
+        lo, hi, dead = _half_line(lo, hi, dead, along[..., k], h - base[..., k], xp)
+        lo, hi, dead = _half_line(lo, hi, dead, -along[..., k], h + base[..., k], xp)
+    ridge = _span(lo, hi, dead, xp, zero)
+
+    total = zero                        # 3 vol(P), face by face
+    for k in range(3):
+        u, v = _OTHER[k]
+        for s in (1.0, -1.0):
+            face = zero
+            for m in (u, v):
+                r = v if m == u else u
+                for s_r in (1.0, -1.0):
+                    face = face + h * edge[_edge_key(m, k, s, r, s_r)]
+            for i in (0, 1):
+                face = face + (offs[k, s, i] / norm[k, s, i]) * trace[k, s, i]
+            total = total + h * 0.5 * face
+
+    cut = []
+    for i in (0, 1):
+        j = 1 - i
+        face = zero
+        for k in range(3):
+            nik = n[i][..., k]
+            rise = xp.sqrt(xp.maximum(1 - nik * nik, zero))
+            live = rise > 0
+            rises = xp.where(live, rise, one)
+            for s in (1.0, -1.0):
+                face = face + xp.where(live, (h - s * c[i] * nik) / rises, zero) * trace[k, s, i]
+        face = face + xp.where(crossed, (c[j] - mu * c[i]) / root, zero) * ridge
+        cut.append(0.5 * face)
+    total = (total + c[0] * cut[0] + c[1] * cut[1]) / 3
+
+    same = mu > 0                       # the parallel branch: a slab, or one inside the other
+    meet = (c[0] + c[1]) >= -_ON_EACH_OTHER * dx
+    flat_vol = xp.where(same, xp.minimum(plane_a[0], plane_b[0]),
+                        xp.maximum(plane_a[0] + plane_b[0] - one, zero)) * dx ** 3
+    flat_a = xp.where(same, xp.where(c[0] <= c[1], plane_a[1], zero),
+                      xp.where(meet, plane_a[1], zero))
+    flat_b = xp.where(same, xp.where(c[1] < c[0], plane_b[1], zero),
+                      xp.where(meet, plane_b[1], zero))
+    return (xp.where(crossed, total, flat_vol) / dx ** 3,
+            xp.where(crossed, cut[0], flat_a),
+            xp.where(crossed, cut[1], flat_b))
+
+
 def cut_parts(d, n, dx):
     """``(fill, area, moment)`` for one tangent plane: the pair of :func:`cut`, unnormalised.
 
