@@ -1201,12 +1201,16 @@ def _tfsf_echo(time, gap=3.5, inside=None):
         structures.append(fd.Structure(fd.Slab(z=inside[0]), fd.Material(eps=inside[1])))
     source = fd.TFSF('t', box=fd.Box(size=(0.5, 0.5, 0.5)), direction='-z', polarization='x',
                      band=fd.Band(wavelength=1.0, df=0.2))
+    # The internal-layer case measures field decay and the source-column echo,
+    # not whole-object power. Its transverse slab cuts the box, so C3 correctly
+    # refuses a closed Flux surface there; a Field volume retains that purpose.
+    monitor_type = fd.Flux if inside is None else fd.Field
     return fd.Scene(domain=fd.Domain(size=size, center=(0, 0, 0.5 * (hi + lo))),
                     boundaries=fd.Boundaries.open(fd.PML(cells=pml)),
                     resolution=fd.Resolution(dx=dx), run=fd.Run(time=time),
                     structures=tuple(structures), sources=(source,),
-                    monitors=(fd.Flux('f', box=fd.Box(size=(0.7, 0.7, 0.7)),
-                                      wavelengths=(1.0,)),))
+                    monitors=(monitor_type('f', box=fd.Box(size=(0.7, 0.7, 0.7)),
+                                           wavelengths=(1.0,)),))
 
 
 def _every_length(scene, res, end=None):

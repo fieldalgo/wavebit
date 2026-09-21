@@ -23,6 +23,45 @@ from test_fd_occupancy import _Ball, _grid_scene, _quiet
 COEFFICIENT_RTOL = 1e-12
 
 
+@pytest.mark.parametrize('backend', ('numpy', 'jax', 'jax.jit', 'torch'))
+def test_unvalidated_curved_accuracy_is_reported_once_before_lowering(backend):
+    name = 'jax' if backend == 'jax.jit' else backend
+    pytest.importorskip(name)
+    rt = runtime(name)
+    shape = fd.Sphere(radius=.2)
+    def scene(eps):
+        return _grid_scene((fd.Structure(shape, eps),))
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        plan = fd.plan(scene(2.25))
+    notes = [str(w.message) for w in caught
+             if issubclass(w.category, fd.SubpixelAccuracyWarning)]
+    assert len(notes) == 1
+    assert '3.09%' in notes[0] and 'TE cylinder' in notes[0]
+    assert 'not an error bound for this scene' in notes[0]
+    assert 'stage-4 Mie gate is incomplete' in notes[0]
+    params = fd.lower(scene(2.25), plan, 'numpy')
+    assert describe(scene(2.25), plan, params).warnings.count(notes[0]) == 1
+    run = lambda eps: fd.lower(scene(eps), plan, name)['be']
+    if backend == 'jax.jit':
+        import jax
+        run = jax.jit(run)
+    with warnings.catch_warnings(record=True) as lowered:
+        warnings.simplefilter('always')
+        for _ in range(2):
+            got = rt.numpy(run(rt.array(2.25, 'float64')))
+            assert np.isfinite(got).all()
+    assert not [w for w in lowered if issubclass(w.category, fd.SubpixelAccuracyWarning)]
+
+
+def test_cell_snapped_scenes_do_not_inherit_the_curved_accuracy_warning():
+    scene = _grid_scene((fd.Structure(fd.Box(size=(.3,)*3), 2.25),))
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        fd.plan(scene)
+    assert not [w for w in caught if issubclass(w.category, fd.SubpixelAccuracyWarning)]
+
+
 class _Composed(_Ball):
     """An external Shape using the public protocol, with a static enclosing support."""
 

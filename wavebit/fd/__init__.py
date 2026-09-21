@@ -126,6 +126,11 @@ composes exactly and is not refused. The cylinder, the prism, the rotated body, 
 how two smoothed bodies that touch are spelled) and the differentiable ``range=`` edge are the
 commits after it.
 
+The curved-scattering accuracy gate is incomplete. Smoothed scenes emit
+``SubpixelAccuracyWarning`` during planning with the independent cylinder benchmark,
+also shown by ``check``. Exact volume and matching backends do not establish a
+second-order electromagnetic result; see ``docs/fd-mie-validation.md``.
+
 Out of scope, and refused by name rather than
 silently: shapes other than ``Slab``, cell-snapped ``Box`` and ``Sphere`` (the rest of stage
 4), GPU claims (stage 6), ``GaussianBeam``, ``ModeSource``,
@@ -138,7 +143,8 @@ from ._run import run
 from .boundaries import (PEC, PMC, Absorber, Absorbing, Axis1D, Bloch, Boundaries, Periodic,
                          PML, Symmetry)
 from .diagnostics import (AbsorberProximityWarning, BoundedVoxelWarning, CoarseMeshWarning,
-                          GrowingFieldWarning, PMLStabilityWarning, UnsettledFieldWarning)
+                          GrowingFieldWarning, PMLStabilityWarning, SubpixelAccuracyWarning,
+                          UnsettledFieldWarning)
 from .geometry import Box, Plane, Shape, Slab, Sphere, Structure
 from .materials import (Conductor, Debye, Dispersive, Drude, Lorentz, Material, MaterialBase,
                         Pole, eps_at)
@@ -156,7 +162,7 @@ __all__ = [
     'Material', 'Conductor', 'Dispersive', 'Drude', 'Lorentz', 'Debye', 'eps_at',
     'MaterialBase', 'Pole', 'Shape', 'Slab', 'Sphere', 'Structure',
     'CoarseMeshWarning', 'AbsorberProximityWarning', 'UnsettledFieldWarning',
-    'GrowingFieldWarning', 'PMLStabilityWarning', 'BoundedVoxelWarning',
+    'GrowingFieldWarning', 'PMLStabilityWarning', 'BoundedVoxelWarning', 'SubpixelAccuracyWarning',
     'InitialField', 'Term', 'Record', 'Flux', 'Field', 'Diffraction', 'FarField', 'Plane',
     'ModeMonitor', 'Decay', 'FluxResult', 'FieldResult', 'FarFieldResult', 'DiffractionResult',
     'Band', 'Dipole', 'PlaneWave', 'TFSF', 'Box', 'GaussianBeam', 'ModeSource',

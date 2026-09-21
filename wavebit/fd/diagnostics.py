@@ -1,4 +1,4 @@
-"""The warnings stage 1 raises, in one place so every door can import them without a cycle.
+"""Planning and runtime warnings, in one place to keep their imports free of cycles.
 
 A warning here is a statement about the *answer*, not about the spelling: the run will
 produce numbers, and the numbers will be worse than the caller probably expects. Anything
@@ -7,7 +7,19 @@ owns it (``materials.py``, ``geometry.py``, ``boundaries.py``, ``_lower/plan.py`
 """
 
 __all__ = ['CoarseMeshWarning', 'AbsorberProximityWarning', 'UnsettledFieldWarning',
-           'GrowingFieldWarning', 'PMLStabilityWarning', 'BoundedVoxelWarning']
+           'GrowingFieldWarning', 'PMLStabilityWarning', 'BoundedVoxelWarning',
+           'SubpixelAccuracyWarning']
+
+
+class SubpixelAccuracyWarning(UserWarning):
+    """The diagonal interface rule has not passed the curved-scattering accuracy gate.
+
+    The independent cylinder study measures a 3.09% scattering error at epsilon 12,
+    radius/wavelength 0.15 and 56 vacuum cells per wavelength for axial magnetic
+    polarization at the origin. This is a benchmark result, not an error estimate
+    for an arbitrary scene. Exact voxel volume does not guarantee second-order
+    electromagnetic convergence. See docs/fd-mie-validation.md.
+    """
 
 
 class CoarseMeshWarning(UserWarning):

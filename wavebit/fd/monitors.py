@@ -127,6 +127,12 @@ class Flux:
     ``wavebit/fd/_post.py``. The phasors carry the DFT's own normalisation
     (``sum_n f(t_n) exp(i w t_n) dt``), so a flux is meaningful divided by a source's spectral
     normalisation from the same run (``res.sources[name].intensity(...)``, ``.power(...)``).
+
+    A closed box must enclose or exclude every structure's entire support, with one cell
+    of clearance for the H half-plane stencil. Planning refuses a box that cuts that
+    support: it cannot be interpreted as the structure's whole absorption or scattering.
+    The support test is conservative for curved bodies. ``Field(box=...)`` may sample
+    the material interior; it records a volume of fields rather than closed-surface power.
     """
 
     name: str

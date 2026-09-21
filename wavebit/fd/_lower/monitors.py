@@ -492,6 +492,35 @@ def _clear_of_sources(where, scene, grid, lo, hi, closed, tfsf=True):
 # The regions
 # ---------------------------------------------------------------------------------------------
 
+def _clear_of_structures(where, scene, grid, lo, hi):
+    """A closed flux box must enclose or exclude each structure's entire support.
+
+    The one-cell clearance follows the face stencil (E at a node, H on both half
+    planes), as in _clear_of_sources. The support includes fractional material
+    voxels and is conservative for nonrectangular bodies. This is a static plan
+    check, never a value-dependent refusal inside numerical lowering.
+
+    Field(box=...) samples a volume, including interior fields; it is not a
+    closed-surface power measurement and must not inherit this restriction.
+    FarField has the stronger all-structures-inside check in farfield_checks.
+    """
+    for index, structure in enumerate(scene.structures):
+        box = structure.shape.support(grid)
+        inside = all(lo[a] + 1 <= box[a][0] and box[a][1] <= hi[a] - 1
+                     for a in range(3))
+        outside = any(box[a][1] <= lo[a] - 1 or hi[a] + 1 <= box[a][0]
+                      for a in range(3))
+        if not (inside or outside):
+            raise ValueError(
+                f'{where}: the closed box (nodes {_nodes_text(lo, hi)}) cuts or '
+                f'touches the support of structures[{index}] ({type(structure.shape).__name__}, '
+                f'cells {box}). Its flux would count only part of that structure, not its '
+                f'whole absorption or scattering. Enclose the entire support with one cell '
+                f'to spare on every side, or keep it one cell outside the box. The support '
+                f'test is conservative for nonrectangular bodies; use fd.Field for interior '
+                f'field samples.')
+
+
 def _clear_of_absorbers(where, scene, grid, P, k_lo, k_hi):
     """Refuse a monitor whose indices ``k_lo..k_hi`` along ``P`` reach an absorbing layer."""
     from ..boundaries import Absorbing
@@ -530,6 +559,7 @@ def monitor_regions(scene, grid, dt):
             if m.box is not None:
                 lo, hi = _box_nodes(where, grid, m.box)
                 _clear_of_sources(where, scene, grid, lo, hi, closed=True)
+                _clear_of_structures(where, scene, grid, lo, hi)
                 for face, _, layout in box_faces(where, grid, m.box):
                     _clear_layout(where, scene, grid, layout)
                     out.append(DFTRegion(name=m.name + FACE_SEP + face, monitor=m.name,

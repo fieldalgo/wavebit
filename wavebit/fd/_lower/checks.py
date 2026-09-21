@@ -928,10 +928,21 @@ def _smoothed_notes(scene, plan):
     """
     from .._runtime import runtime
     from .._shapes import Approximations
-    from ..diagnostics import BoundedVoxelWarning
+    from ..diagnostics import BoundedVoxelWarning, SubpixelAccuracyWarning
     from .occupancy import bound_note, occupancy, smoothed_structures
     if not smoothed_structures(scene):
         return []
+    # S2 measured sigma/Mie - 1 = -0.0308985334626718 for the origin-centred
+    # TE cylinder (eps=12, R/lambda=.15, lambda/dx=56). This is evidence of an
+    # unresolved accuracy gate, not a scene-specific error bound or a threshold.
+    out = [(SubpixelAccuracyWarning,
+            'Smoothed structures use only the diagonal effective inverse material tensor. '
+            'Second-order curved-scattering convergence is not established: the independent '
+            'TE cylinder benchmark (epsilon=12, radius/wavelength=0.15, 56 vacuum cells per '
+            'wavelength) has 3.09% scattering error at its origin placement. This benchmark '
+            'is not an error bound for this scene. Validate its observables under refinement; '
+            'exact voxel volume alone does not guarantee electromagnetic accuracy. '
+            'See docs/fd-mie-validation.md; the stage-4 Mie gate is incomplete.')]
     report = Approximations()
     magnetic = _background(scene).is_magnetic or any(
         s.material.is_magnetic for s in scene.structures)
@@ -944,7 +955,9 @@ def _smoothed_notes(scene, plan):
                          f'evaluated on NumPy ({type(err).__name__}: {err}). '
                          'A traced public shape with range= is stage 4 C6.') from err
     note = bound_note(report)
-    return [] if note is None else [(BoundedVoxelWarning, note)]
+    if note is not None:
+        out.append((BoundedVoxelWarning, note))
+    return out
 
 
 def _stabilize_notes(scene, plan):

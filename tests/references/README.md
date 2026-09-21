@@ -46,6 +46,11 @@ differ are exactly the `__stack` pair above.
 
 ## The oracles
 
+The analytic sphere and cylinder reference in [`mie.py`](mie.py) requires only
+NumPy and SciPy. Its published coefficient pins, independent radial wave equation,
+energy and angular checks are described in [Mie validation](../../docs/fd-mie-validation.md).
+It does not import the FDTD engine or depend on a captured FDTD answer.
+
 | Oracle | Reaches | Generator needs | Golden |
 | --- | --- | --- | --- |
 | **Meep**, **transverse rectangle sensitivities** | three TE diffraction orders, rectangle width/centre derivatives, two grids, averaged-profile controls and independent RCWA/translation checks | documented 2D Blocks or global material function; two durations, perturbation sizes and averaging tolerances | `golden_meep_rectangle.npz`, `golden_meep_rectangle_fine.npz`, `golden_meep_rectangle_smoothed.npz`, `golden_meep_rectangle_smoothed_refined.npz`, `test_meep_rectangle.py`, `interface/meep_rectangle.py`; [measurement](../../docs/fdtd-rectangle-gradients.md) |

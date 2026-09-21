@@ -587,6 +587,11 @@ class Sphere(Shape):
     volume changes continuously with the requested position. Electromagnetic convergence
     is a separate measurement, made by the Mie gate.
 
+    That accuracy gate is incomplete. Planning emits ``fd.SubpixelAccuracyWarning`` with
+    the measured cylinder benchmark: the diagonal interface rule does not yet establish
+    second-order curved-scattering convergence. The benchmark is not this sphere's error
+    bound; refine and validate the observables required by the application.
+
     ``radius`` and ``center`` are **static** in C2. They fix :meth:`support`, which fixes the
     coefficient array shapes and so the plan's skeleton, and the ``range=`` that declares a
     static support box for a traced value -- the ``fd.Dipole(range=)`` spelling -- is C6's. The

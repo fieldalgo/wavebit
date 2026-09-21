@@ -19,6 +19,7 @@ compares the code to itself proves continuity, not correctness.
 
 | Oracle | Files | What a pass means |
 | --- | --- | --- |
+| **Mie reference and measurement controls** | `test_fd_mie_reference.py`, `test_fd_mie_study.py`, `test_fd_monitor_structure.py`, `references/mie.py` | Published complex coefficients, Rayleigh phase, energy conservation and an independent radial ODE validate the analytic reference; manufactured radiation checks the cylinder contour, and planning rejects closed power surfaces cutting a structure. These passes do not assert sphere convergence. |
 | **Smoothed material coefficients** | `test_fd_occupancy.py`, `test_fd_occupancy_integration.py`, `test_fd_subpixel_study.py` | Do component-specific fills obey analytic mixing and derivative controls, report real CSG bounds before JIT, and keep the S1 measuring instrument honest? |
 | **Sphere clipping and JIT composition** | `test_fd_sphere_clip_jit.py` | Sphere, Union, Intersection, and Difference agree on 32 grid origins across NumPy, JAX, jax.jit, and Torch; analytic volume and containment laws hold, and an inactive square-root guard cannot change the result. |
 | **Multiple painted area shapes** | `test_fdtd_painted_shapes.py`, `test_fdtd_painted_optics.py`, `references/test_meep_painted_shapes.py` | Do overlapping rotated rectangles preserve last-shape priority, periodic cell masses and live topology/geometry/material derivatives against independent Cartesian integration and graded optical references? |
