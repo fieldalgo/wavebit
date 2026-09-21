@@ -20,6 +20,7 @@ subtrees:
     - caption: Advanced
       entries:
       - file: guide/specs
+  - file: fd-sphere-clip-jit
   - file: fdtd-directional
   - file: fdtd-pml-strength
   - file: fdtd-ringdown

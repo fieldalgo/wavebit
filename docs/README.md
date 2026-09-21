@@ -70,6 +70,7 @@ comes next. The outward-pointing rule above binds `guide/` too; only the house s
 
 | Document | Question it answers | Decision |
 | --- | --- | --- |
+| [Sphere clipping under JIT](fd-sphere-clip-jit.md) | Why can a sphere's voxel fill change by hundreds when compiled inside CSG? | Factor radial differences of squares so endpoint predicates stay consistent; check 32 origins, four bodies, four execution paths, and inactive-guard invariance. |
 | [Directional diffraction](fdtd-directional.md) | Can returning waves and a nearby long-lived resonance hide in electric-only extraction? | Separate E/H directions using discrete Maxwell admittance, and retain independent temporal and boundary checks. |
 | [CPML strength](fdtd-pml-strength.md) | Can absorption strength and thickness be varied independently near a Rayleigh threshold? | Expose the nominal amplitude target without changing defaults, and recheck time and mesh convergence after boundary changes. |
 | [Ringdown fits](fdtd-ringdown.md) | Does a small exponential-fit residual establish a physical resonance or Q? | Recover known material/Maxwell modes, then identify a window-dependent near-cutoff tail that needs broader convergence checks. |

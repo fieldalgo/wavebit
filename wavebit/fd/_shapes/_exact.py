@@ -166,6 +166,19 @@ def _root(v, xp):
     guards with ``where(live, sqrt(where(live, ...)), 0)``. Measured: the first writing of
     :func:`clipped_ball_volume` spelled it the short way and ``jax.grad`` of a sphere's radius
     over 4096 voxels returned ``nan`` against a finite difference of 1056.3.
+
+    The radicand must also have a stable sign. In particular, callers factor differences of
+    squares BEFORE calling this function. At a wedge endpoint ``t = sqrt(k2)``, the old
+    ``k2 - t*t`` changed sign when XLA contracted or recomputed the arithmetic in different
+    fused kernels. The inner and outer ``where`` then disagreed: the inactive value 1 reached
+    the result. This was a finite wrong answer, not NaN propagation or float32 arithmetic.
+    At R=0.3, dx=0.05, p=(0.00161135212954675, -0.02089849705058622,
+    -0.3005275396021332), a sphere inside a jitted CSG returned -200.9404 instead of 0.4608063.
+    Changing ONLY the inactive radicand from 1 to 4 or 0.25 changed that wrong answer to
+    -186.0971 or -203.4363. With factored radicands all three give the same physical answer.
+    See ``tests/test_fd_sphere_clip_jit.py`` and ``docs/fd-sphere-clip-jit.md`` for the sweep,
+    the causal diagnostic, and the restored-formula mutants. Keep the derivative guard here;
+    replacing its inactive value by zero merely hides the forward defect and restores NaN AD.
     """
     live = v > 0
     return xp.where(live, xp.sqrt(xp.where(live, v, xp.ones_like(v))), xp.zeros_like(v))
@@ -189,7 +202,9 @@ def _angle(y, x, xp):
 def _arc_integral(z, k, xp):
     """``int_0^z sqrt(k^2 - t^2) dt``, with ``z`` clamped to ``k`` so the branch is never left."""
     t = xp.minimum(z, k)
-    rest = _root(k * k - t * t, xp)
+    # t <= k: this is non-negative and EXACTLY zero at the endpoint, without subtracting
+    # independently rounded squares. The same identity is essential in _wedge_integral.
+    rest = _root((k - t) * (k + t), xp)
     return .5 * (t * rest + k * k * _angle(t, rest, xp))
 
 
@@ -214,9 +229,12 @@ def _wedge_integral(z, a, radius, xp):
     quadrature. It is the same defect ``clipped_disc_area``'s series near ``t = r`` exists for,
     in the place where a series is not needed because the stable spelling is free.
     """
-    k2 = radius * radius - a * a
-    t = xp.minimum(z, _root(k2, xp))
-    rest = _root(k2 - t * t, xp)
+    k2 = (radius - a) * (radius + a)
+    k = _root(k2, xp)
+    t = xp.minimum(z, k)
+    # Do not restore k2 - t*t: squaring sqrt(k2) loses the exact endpoint, and the two
+    # evaluations of _root's predicate can disagree under JIT. See _root's measured case.
+    rest = _root((k - t) * (k + t), xp)
     return (_cubic_integral(t, radius, xp) * _angle(a, rest, xp)
             - (a / 6) * (k2 * _angle(t, rest, xp) - t * rest)
             + (2 * a * radius * radius / 3) * _angle(t, rest, xp)
@@ -245,9 +263,11 @@ def _ball_corner(a, b, c, radius, xp):
     a = xp.minimum(a, radius)
     b = xp.minimum(b, radius)
     c = xp.minimum(c, radius)
-    ka = _root(radius * radius - a * a, xp)
-    kb = _root(radius * radius - b * b, xp)
-    rect = xp.minimum(_root(radius * radius - a * a - b * b, xp), c)
+    ka = _root((radius - a) * (radius + a), xp)
+    kb = _root((radius - b) * (radius + b), xp)
+    # sqrt(R^2-a^2-b^2) = sqrt((ka-b)(ka+b)). Carry the same ka into the regime boundary
+    # and its antiderivatives, so their shared endpoint is a subtraction of equal lengths.
+    rect = xp.minimum(_root((ka - b) * (ka + b), xp), c)
     both = xp.minimum(xp.minimum(ka, kb), c)
     one = xp.minimum(xp.maximum(ka, kb), c)
     lesser, outer = xp.minimum(a, b), xp.maximum(ka, kb)
