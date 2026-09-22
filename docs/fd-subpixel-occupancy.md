@@ -10,8 +10,10 @@ Targets: `wavebit/fd/_lower/occupancy.py`, `wavebit/fd/_lower/coefficients.py`,
 `fd.Sphere` now supplies fractional material coefficients at each field component's
 own location. Unsupported mixtures are refused during planning. Approximate CSG
 volumes produce one measured scene warning before compiled lowering. The diagonal
-mixing rule is retained with a measured tilted-interface limitation; the present
-study does not establish second-order sphere scattering or settle every possible
+mixing formula remains one part of the inverse material operator; the later
+[constitutive implementation](fd-mie-validation.md#production-constitutive-coupling-and-energy)
+adds adjoint cross terms and compact D/B memory. The tilted-interface study
+does not establish second-order sphere scattering or settle every possible
 off-diagonal scheme.
 
 ## The coefficient rule

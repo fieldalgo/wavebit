@@ -703,6 +703,8 @@ def test_mutant_numpys_reading_of_the_bare_curl_is_caught(monkeypatch):
     """
     bare = {}
     real_curl, real_magnetic = _kernel_step.curl, InteriorEnergy.magnetic
+    # Populate the reference before patching even when this test runs alone.
+    _, reference = _magnetic_dipole_series()
 
     def spy(F, field, plan, params, psi, rt):
         cF, psi = real_curl(F, field, plan, params, psi, rt)
@@ -710,12 +712,11 @@ def test_mutant_numpys_reading_of_the_bare_curl_is_caught(monkeypatch):
             bare['cE'] = np.array(cF)           # before the terms and the lift write into it
         return cF, psi
 
-    def from_the_bare_curl(self, H, new, cE, params, rt):
-        return real_magnetic(self, H, new, bare['cE'] if new is None else None, params, rt)
+    def from_the_bare_curl(self, H, new, cE, params, rt, mem=None):
+        return real_magnetic(self, H, new, bare['cE'] if new is None else None, params, rt, mem)
 
     monkeypatch.setattr(_kernel_step, 'curl', spy)
     monkeypatch.setattr(InteriorEnergy, 'magnetic', from_the_bare_curl)
-    _, reference = _magnetic_dipole_series()
     _, W = _every_step(_magnetic_dipole())
     out = np.max(np.abs(W - reference)) / np.max(np.abs(reference))
     assert out > 1e-2, out                       # measured 1.2e-1
@@ -743,7 +744,7 @@ def test_mutant_the_first_versions_h_pair_is_caught(monkeypatch):
     aliased into a steady rise (the exact Yee mode (14, 12, 12) of a 16^3 PEC box warned growing
     at 3000 steps; review, 2026-09-20). Read that way, the random box of grid-scale field swings
     by far more than the exact gate allows."""
-    def pair(self, H, new, cE, params, rt):
+    def pair(self, H, new, cE, params, rt, mem=None):
         view = (slice(None),) + tuple(slice(lo, hi) for lo, hi in self.box)
         new = params['ah'] * H + params['minus_bh'] * cE if new is None else new
         mu = self._weight(params, 'H', rt)

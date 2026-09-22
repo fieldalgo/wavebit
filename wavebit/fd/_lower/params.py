@@ -72,6 +72,9 @@ def lower(scene, plan, rt='numpy', device=None):
     grid = plan.grid
     real = 'float64'
     params = dict(build_coefficients(scene, plan, rt))
+    if plan.constitutive:
+        from .constitutive import lower as lower_constitutive
+        params['constitutive'] = lower_constitutive(scene, plan, rt)
     params.update({'bloch': {}, 'axis1d': {}, 'amplitude': None, 'E0': None, 'H0': None,
                    'cpml': _cpml(scene, plan, rt), 'cpml_loss': _cpml_loss(scene, plan, rt),
                    'poles': _poles(scene, plan, rt),
@@ -79,6 +82,11 @@ def lower(scene, plan, rt='numpy', device=None):
                    'stable': None})
     guard = _stability_guard(scene, plan, rt)
     guard = _axis1d_guard(scene, rt, guard)
+    if plan.constitutive:
+        from .constitutive import guard as constitutive_guard
+        coupled_guard = constitutive_guard(scene, plan, params, rt)
+        guard = coupled_guard if guard is None else guard * coupled_guard
+        params['constitutive'] = {k: v * guard for k, v in params['constitutive'].items()}
     params['stable'] = guard
     if guard is not None:
         params['be'] = params['be'] * guard

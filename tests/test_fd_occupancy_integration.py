@@ -37,7 +37,7 @@ def test_unvalidated_curved_accuracy_is_reported_once_before_lowering(backend):
     notes = [str(w.message) for w in caught
              if issubclass(w.category, fd.SubpixelAccuracyWarning)]
     assert len(notes) == 1
-    assert '3.09%' in notes[0] and 'TE cylinder' in notes[0]
+    assert '2.023' in notes[0] and 'glass-sphere' in notes[0]
     assert 'not an error bound for this scene' in notes[0]
     assert 'stage-4 Mie gate is incomplete' in notes[0]
     params = fd.lower(scene(2.25), plan, 'numpy')
@@ -90,16 +90,26 @@ def test_csg_bounds_are_planned_before_compiled_lowering(operation, backend):
         warnings.simplefilter('always')
         plan = fd.plan(scene(3.7))
     notes = [str(w.message) for w in caught if issubclass(w.category, fd.BoundedVoxelWarning)]
-    # Measured on the three actual two-sphere nodes: 284 component voxels take a bound,
-    # widest 0.05377. This exercises the real producer, not just a reporting test double.
-    assert len(notes) == 1 and '284 voxel(s)' in notes[0]
-    assert '0.05377 of a voxel' in notes[0]
+    # C11 also reads the common E nodes: measured 348 total bounded voxels,
+    # widest 0.06124, versus 284 / 0.05377 on the three E components alone.
+    assert len(notes) == 1 and '348 voxel(s)' in notes[0]
+    assert '0.06124 of a voxel' in notes[0]
     assert f'{operation.__name__}(Sphere, Sphere)' in notes[0]
     assert 'cannot remove material a Union or a Difference has' in notes[0]
     assert 'or add material an Intersection has not' in notes[0]
 
+    accuracy = [str(w.message) for w in caught
+                if issubclass(w.category, fd.SubpixelAccuracyWarning)]
+    # Measured common-point squared-normal discrepancies for this fixture:
+    # Union .628253, Intersection/Difference .821168 (six significant digits).
+    gap = '0.628253' if operation is Union else '0.821168'
+    assert len(accuracy) == 1
+    assert f'{operation.__name__}: {gap}' in accuracy[0]
+    assert 'not bounds on electromagnetic error' in accuracy[0]
+
     reference = fd.lower(scene(3.7), plan, 'numpy')
     assert describe(scene(3.7), plan, reference).warnings.count(notes[0]) == 1
+    assert describe(scene(3.7), plan, reference).warnings.count(accuracy[0]) == 1
     run = lambda eps: fd.lower(scene(eps), plan, name)['be']
     if backend == 'jax.jit':
         import jax

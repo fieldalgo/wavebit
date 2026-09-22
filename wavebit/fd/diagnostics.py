@@ -12,13 +12,13 @@ __all__ = ['CoarseMeshWarning', 'AbsorberProximityWarning', 'UnsettledFieldWarni
 
 
 class SubpixelAccuracyWarning(UserWarning):
-    """The diagonal interface rule has not passed the curved-scattering accuracy gate.
+    """The smoothed interface rule has not completed its curved-scattering gate.
 
-    The independent cylinder study measures a 3.09% scattering error at epsilon 12,
-    radius/wavelength 0.15 and 56 vacuum cells per wavelength for axial magnetic
-    polarization at the origin. This is a benchmark result, not an error estimate
-    for an arbitrary scene. Exact voxel volume does not guarantee second-order
-    electromagnetic convergence. See docs/fd-mie-validation.md.
+    The controlled glass-sphere study measured order 2.023 with adjoint cross
+    coupling. Production validation over material contrasts remains separate.
+    A benchmark result is not an error estimate for an arbitrary scene; exact
+    voxel volume alone does not guarantee electromagnetic convergence.
+    See docs/fd-mie-validation.md.
     """
 
 

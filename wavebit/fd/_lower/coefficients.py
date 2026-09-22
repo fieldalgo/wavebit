@@ -165,8 +165,10 @@ def mix(xp, held, value, fill, w):
     full-tensor comparator is non-monotone at the last two tilts; the naive comparator is
     non-Hermitian and has complex modes that the earlier eigensolver silently projected
     onto the real axis. Neither establishes a general verdict on every possible full-tensor
-    scheme. The kernel keeps this diagonal rule; a sphere's scattering order is the separate
-    Mie gate. See ``docs/fd-subpixel-occupancy.md`` for errors, fit scatter and controls.
+    scheme. This function keeps the diagonal part. The constitutive term now adds adjoint
+    cross coefficients from ``wavebit/fd/_lower/constitutive.py``; the controlled sphere study measured
+    order 2.023 with them against 1.714 without them. See ``docs/fd-mie-validation.md`` and
+    ``docs/fd-subpixel-occupancy.md`` for the distinct instruments and their limits.
     """
     harmonic = fill / value + (1.0 - fill) / held
     arithmetic = fill * value + (1.0 - fill) * held

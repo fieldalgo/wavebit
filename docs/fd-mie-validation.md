@@ -10,19 +10,21 @@ Targets: `tests/references/mie.py`, `studies/fdtd_subpixel_mie_cylinder.py`,
 `studies/fdtd_subpixel_mie_sphere.py`, `tests/test_fd_mie_external.py`,
 `tests/references/interface/measure_fd_stage4_meep.py`,
 `tests/references/interface/measure_fd_stage4_fdtdx.py`,
-`studies/fdtd_subpixel_constitutive.py`, `tests/test_fd_constitutive_study.py`.
+`studies/fdtd_subpixel_constitutive.py`, `tests/test_fd_constitutive_study.py`,
+`wavebit/fd/_kernel/constitutive.py`, `wavebit/fd/_lower/constitutive.py`,
+`wavebit/fd/_kernel/observe.py`, `tests/test_fd_constitutive.py`.
 
 ## TL;DR
 
 The analytic reference and the closed-contour instrument have independent checks.
-The current diagonal material rule gives near-second-order fits in the cylinder's axial-electric warm-up,
+The earlier diagonal material rule gives near-second-order fits in the cylinder's axial-electric warm-up,
 but the high-contrast axial-magnetic case does **not** establish second-order
 convergence. C3 is not complete. Exact geometric volume alone does not establish
 electromagnetic accuracy; a successful regression suite must not be reported as
 a successful sphere convergence gate.
 
 The cylinder study preceded the three-dimensional sphere measurements. The
-public glass sphere now also misses the required order: three placements at
+public glass sphere with that diagonal rule misses the required order: three placements at
 20/28/40 cells per wavelength give **1.714**, below the required 1.8, with 1.38%
 fit scatter. A measured failure is retained with its placement spread and fit
 residual. No tolerance is chosen to relabel it as a second-order result.
@@ -31,9 +33,9 @@ A controlled constitutive comparator now identifies the discarded cross terms
 as the cause of the glass fixture's lost order. Exact surface moments alone
 leave the order near 1.72. Restoring shared-node cross terms gives **2.02267**
 over the same three placements, with **0.9744%** scatter. This comparator is
-research code; the public engine still uses the diagonal rule and C3 remains
-incomplete. The energy diagnostic, backend integration and contrast gates
-still need a complete tensor implementation before this can become a solver fix.
+research code. The production engine now includes the same adjoint cross
+coupling and consistent compact D/B memory. Its validation below is separate
+from this comparator; C3 remains incomplete until all its gates pass.
 
 ## Independent analytic reference
 
@@ -579,7 +581,7 @@ this stability evidence.
 
 ### Why this is still a comparator
 
-The public solver still uses the diagonal relation. Its interior-energy
+At the time of this study, the public solver used the diagonal relation. Its interior-energy
 diagnostic assumes that relation, so its energy output is **not an oracle for
 the research tensor arm** and is not reported as one. With a full tensor,
 recovering `D_i` by dividing `E_i` by `K_ii` is incorrect. A production change
@@ -617,3 +619,173 @@ production edit only corrects docstrings: after docstring removal its parsed
 syntax tree is unchanged. The full fast/slow suites and four reference freezes
 were not rerun for this research-only addition; their earlier results above
 are not presented as new runs.
+
+## Production constitutive coupling and energy
+
+The kernel now integrates electric displacement D and magnetic induction B
+in compact lossless regions around smoothed geometry. It reads each
+**source-corrected** curl, advances D/B, and adds the off-diagonal field
+increment after the existing diagonal update. For fixed material and zero
+initial field this maintains `E=K_e D`, `H=K_m B` up to accumulation roundoff.
+Dividing E by `K_ii` does not recover D.
+
+Cross coefficients are sampled at common E nodes and common H cell centres.
+For E, the component-to-node shift is +1 and the return shift -1; H uses the
+opposite pair. Both averages have weight 1/2. They are adjoints, including
+finite ends with zero extension. PEC/PMC field masks also project the flux
+increments. Intersecting support boxes, including one interpolation-cell halo,
+merge before memory allocation; disjoint regions write disjoint cells. Scene
+painting order applies to cross coefficients too.
+
+Within these regions, the interior-energy observer replaces the diagonal
+contribution by the same conserved leapfrog quadratic form:
+
+```text
+W^n = Re(E^n* . D^n) + Re(H^(n-1/2)* . B^(n+1/2)).
+```
+
+NumPy reads before its destructive H update, after B memory advances. JAX
+and Torch read the magnetic half after H updates and the electric half at
+the end of the previous step. This diagnostic carries no gradient.
+
+### Independent instruments
+
+The [kernel measurement record](../studies/results/fdtd_subpixel_coupled_kernel.log)
+retains the numerical probes, actual source mutants and whole-suite validation.
+
+CPU float64, with the numerical thread limits stated above. The closed PEC
+cavity is 16 cubed at dx=.05, with a radius-.15 sphere centred at
+(.012,.007,-.009), epsilon=2.25, mu=1.5, courant=.5, 80 steps and arbitrary
+consistent D/B data from seed 224. The initial state is an internal fixture;
+it does not claim that a public E/H initialization inverse solve exists.
+
+| Instrument | Measurement |
+| --- | ---: |
+| Relative conserved-energy span, NumPy | 2.86e-15 |
+| Same, eager JAX / compiled JAX | 5.05e-16 / 5.05e-16 |
+| Same, Torch | 1.69e-16 |
+| Maximum backend field difference after 80 steps | 3.31e-14 |
+| Energy span with sphere tangent to low PEC face | 2.86e-15 |
+| Energy span with sphere one cell from high PEC face | 3.70e-15 |
+| JAX / Torch material derivative, eight steps | -103.80604302068576 / -103.80604302068565 |
+| Central-difference relative errors at steps 1e-2 / 1e-3 / 1e-4 / 1e-5 | 3.09e-5 / 3.09e-7 / 3.03e-9 / 1.18e-9 |
+| First public 20-cell glass-sphere Qsca | 0.8791374695867283 |
+| Difference from controlled tensor comparator | 1.11e-16 absolute |
+
+The derivative objective is `sum(E**2 + .3*H**2)`; .3 makes both fields
+observable. The selected finite-difference step 1e-4 precedes the subtraction
+noise plateau. Tests cite these measurements beside their tolerances. Fourier
+symbols cover both staggerings on all four execution paths. A dense finite
+operator built from independent neighbour indices checks adjoints, end
+treatment and both spectral bounds against every eigenvalue. A unit electric
+or magnetic dipole sample checks flux memory and its coupled field response,
+independently of pulse timing.
+
+### Preparation-time certificates and limits
+
+The diagonal plus/minus the absolute off-diagonal row sum gives a Gershgorin
+spectral enclosure. A strictly positive lower endpoint certifies positive
+energy. The upper E/H endpoints bound the curl time step, combined with the
+existing pole-rate bound for remote pole regions. A negative lower endpoint
+is **inconclusive**, not proof of a negative eigenvalue: planning refuses it
+with the measured enclosure. This lossless curl certificate is not a PML
+stability proof. All nine epsilon=12 plans at 40/56/80 cells and the three
+stated placements pass the certificate.
+
+A prepared plan lowered under differentiation evaluates the same whole-operator
+certificate on its backend. Failure sets the existing `stable` diagnostic and
+update arrays to NaN. No per-cell exception or warning can disappear under JIT.
+
+The compact region and its interpolation halo must avoid conductivity,
+dispersion and absorbing layers. Cross coupling on a symmetry plane needs a
+mirror-weighted adjoint and is refused. Initial E, and initial H for a magnetic
+smoothed scene, need an inverse constitutive solve not yet provided; planning
+names the missing solve and recommends source excitation. These are explicit
+limits, without diagonal fallbacks.
+
+The overlap check includes the common points. A diagonal dimer with a 1.7-cell
+surface gap has **zero** shared voxels at the six Yee locations but **one** at
+the common E node, where each sphere fills 3.55e-6. Omitting that point admits
+a three-medium mixture. The duplicate-sphere fixture now counts 2422 shared
+voxels, versus 1815 at Yee points alone; the axial .95-cell dimer counts 9,
+versus 8.
+
+CSG approximation reports include these additional points. The two-sphere
+fixture counts 348 bounded voxels with maximum width .06124, versus 284 and
+.05377 at the three E components alone. Custom bodies using a nearest-surface
+cross-moment proxy additionally report the measured discrepancy between that
+normal's squared components and their supplied diagonal surface moments.
+The fixture's measured maxima are .628253 for Union and .821168 for both
+Intersection and Difference; all twelve operation/backend cases assert the
+reported values, and omitting the measurement fails all twelve.
+This is a geometry-proxy measurement, not an electromagnetic error bound.
+Creases and CSG cross moments remain separate C4 validation work.
+
+```bash
+python -m pytest tests/test_fd_constitutive.py -q -p no:cacheprovider
+python studies/fdtd_subpixel_mie_sphere.py --cpw 20 --backend jax public-tensor20.json
+```
+
+### Actual source mutations
+
+All 26 mutations below were applied to production source, executed in separate
+pytest processes, observed to fail, and restored byte for byte. Every final
+run exits 1 with assertion failures, no collection errors and no INTERNALERROR.
+The merge mutation initially stopped at the independent internal-support
+certificate; the test was strengthened to assert the merged support count
+before validation, then the mutation was rerun and failed that assertion.
+
+| Source mutation | Failing cases |
+| --- | ---: |
+| Reverse the return average's adjoint shift | 10 |
+| Use periodic wrapping at finite ends | 2 |
+| Omit the cross field increment | 8 |
+| Omit the current from D/B memory | 8 |
+| Reverse the magnetic increment sign | 4 |
+| Omit wall projection of flux increments | 1 |
+| Stop the cross-coefficient gradient | 2 |
+| Retain diagonal electric energy | 4 |
+| Retain diagonal magnetic energy | 4 |
+| Sample H cross terms at the wrong common point | 4 |
+| Omit the initial-field inverse-solve door | 2 |
+| Omit the positive-energy door | 1 |
+| Omit the coupled CFL door | 1 |
+| Omit the traced positive-energy certificate | 1 |
+| Keep overlapping memory regions separate | 1 |
+| Omit the interpolation halo's absorbing-layer door | 1 |
+| Omit its conductivity/pole door | 1 |
+| Omit the mirror-weighted-adjoint door | 1 |
+| Skip common points in the shared-surface check | 1 |
+| Substitute vacuum for the held background phase | 1 |
+| Use a corner's nearest normal for axis-aligned box cross moments | 1 |
+| Omit the lower enclosure's row radius | 2 |
+| Omit D/B bytes from the state report | 1 |
+| Omit common points from the approximation report | 12 |
+| Omit the incomplete-accuracy warning | 4 |
+| Omit the measured custom-body normal-proxy discrepancy | 12 |
+
+### Whole-engine regression result
+
+Both complete test tiers ran with three workers, the stated numerical thread
+limits, and cache writing disabled. Collected and reported counts agree:
+
+| Verification | Result | Exit |
+| --- | --- | ---: |
+| Fast tier | 1,901 passed, 6 expected NumPy differentiation skips; 1,907 collected/reported | 0 |
+| Slow tier | 65 passed; 65 collected/reported | 0 |
+| Stage 0 reference | 143 arrays reproduce bit for bit | 0 |
+| Stage 1 reference | 288 arrays reproduce bit for bit | 0 |
+| Stage 2 reference | 140 arrays reproduce bit for bit | 0 |
+| Stage 3 reference | 570 arrays reproduce bit for bit | 0 |
+
+There are no INTERNALERROR or collection errors. No reference archive was
+rewritten. The first fast run found two historical energy-mutant signatures
+that needed the new optional memory argument and one unresolved docstring
+path. An isolated rerun also exposed an order-dependent cached reference in
+the bare-curl mutant; its healthy reference now precedes mutation. Both
+mutants pass alone, and the full fast tier above was rerun after these fixes.
+The measurement record retains the failed run and its resolution.
+
+These passes verify the coupled kernel and preserve the earlier engine.
+They do not replace the full production sphere convergence gate and its
+electromagnetic source mutations. C3 remains open.

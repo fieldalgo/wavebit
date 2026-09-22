@@ -150,6 +150,9 @@ def run_case(cpw, eps=2.25, offset=(0., 0., 0.), arm='tensor', periods=24.):
     rt = runtime('jax')
     with warnings.catch_warnings(record=True) as notes:
         p = plan(scene)
+        # Preserve the original controlled comparator after production gains
+        # its own constitutive terms. Each arm below supplies its own update.
+        p = p.with_static(terms=tuple(t for t in p.terms if t not in p.constitutive))
         params = lower(scene, p, rt)
         diag, cross = constitutive_arrays(scene, p, eps, arm in ('moment', 'both'))
         if arm in ('moment', 'both'):

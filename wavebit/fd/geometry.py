@@ -588,9 +588,16 @@ class Sphere(Shape):
     is a separate measurement, made by the Mie gate.
 
     That accuracy gate is incomplete. Planning emits ``fd.SubpixelAccuracyWarning`` with
-    the measured cylinder benchmark: the diagonal interface rule does not yet establish
-    second-order curved-scattering convergence. The benchmark is not this sphere's error
-    bound; refine and validate the observables required by the application.
+    the controlled glass-sphere benchmark (order 2.023). The kernel includes adjoint
+    cross coupling between field directions and stores D/B in compact regions; validation
+    across contrasts remains separate. The benchmark is not this sphere's error bound;
+    refine and validate the observables required by the application.
+
+    The coupled memory adds preparation-time doors: its interpolation support must be
+    lossless and clear of absorbing layers; cross terms at a Symmetry plane need a
+    mirror-weighted operator not yet provided. Initial E (and initial H when magnetic)
+    needs an inverse constitutive solve not yet provided; use a source instead. The
+    positive-energy and time-step certificates are checked before a run starts.
 
     ``radius`` and ``center`` are **static** in C2. They fix :meth:`support`, which fixes the
     coefficient array shapes and so the plan's skeleton, and the ``range=`` that declares a
@@ -617,7 +624,7 @@ class Sphere(Shape):
        is not, and the six components disagree about where the box ends -- three of them count
        material half a cell outside a ``-`` face, and the same three lose the last half cell at
        a ``+`` face. The two arms carry two different messages.
-    4. **No anisotropic eps or mu.** The mixing rule is the Farjadpour/Kottke diagonal for two
+    4. **No anisotropic eps or mu.** The effective tensor is the Farjadpour/Kottke rule for two
        *isotropic* phases; blending each component with its own ``eps`` is not the tau-transform
        the anisotropic construction calls for, and on a ball the normal is almost never along a
        principal axis. The door covers the same three media as door 1.

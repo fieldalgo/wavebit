@@ -511,14 +511,15 @@ def check_smoothed(scene, grid):
             if not _intersects(boxa, boxb):
                 continue
             shared = tuple((max(u[0], v[0]), min(u[1], v[1])) for u, v in zip(boxa, boxb))
-            count, worst = _shared_surface_voxels(ba, bb, grid, shared)
+            count, worst = _shared_surface_voxels(ba, bb, grid, shared, include_common=True)
             if not count:
                 continue
             _, field, c, point, fa, fb = worst
             raise ValueError(
                 f'structures[{ia}] ({sa.shape.describe()}) and structures[{ib}] '
                 f'({sb.shape.describe()}) are both smoothed and their surfaces pass through '
-                f'the same voxel: {count} of them, worst at the {field}{"xyz"[c]} point '
+                f'the same voxel: {count} of them, worst at the '
+                f'{field}{"xyz"[c] if c < 3 else " common"} point '
                 f'{point}, where they fill {fa:.4f} and {fb:.4f} of it -- the voxel the two '
                 f'surfaces cut most evenly of all of them. A smoothed shape mixes '
                 f'its material into whatever the cell already holds, which is the two-phase '
@@ -645,7 +646,7 @@ def _reaches_outside(shape, body, grid, box):
     return None
 
 
-def _shared_surface_voxels(body_a, body_b, grid, box):
+def _shared_surface_voxels(body_a, body_b, grid, box, include_common=False):
     """``(count, worst)`` voxels of ``box`` whose fill is fractional for **both** bodies.
 
     Two stages, because the exact fill is 97% of what a smoothed lowering costs and the answer
@@ -677,11 +678,13 @@ def _shared_surface_voxels(body_a, body_b, grid, box):
     """
     from .._shapes import occupancy as body_occupancy
     from .occupancy import yee_points
+    from .constitutive import common_points
     reach = _VOXEL_REACH * grid.dx
     count, worst = 0, None
     for field in ('E', 'H'):
-        for c in range(3):
-            points = np.asarray(yee_points(grid, box, field, c))
+        for c in range(4 if include_common else 3):
+            points = np.asarray(yee_points(grid, box, field, c) if c < 3
+                                else common_points(grid, box, field))
             near = np.abs(np.asarray(body_a.surface(points)[0])) <= reach
             if not near.any():
                 continue
@@ -932,29 +935,42 @@ def _smoothed_notes(scene, plan):
     from .occupancy import bound_note, occupancy, smoothed_structures
     if not smoothed_structures(scene):
         return []
-    # S2 measured sigma/Mie - 1 = -0.0308985334626718 for the origin-centred
-    # TE cylinder (eps=12, R/lambda=.15, lambda/dx=56). This is evidence of an
-    # unresolved accuracy gate, not a scene-specific error bound or a threshold.
+    # The controlled C3 tensor study measured p=2.02267353134 at eps=2.25,
+    # R/lambda=.25, 20/28/40 cells per wavelength and three grid placements.
+    # It does not certify the production engine across the remaining contrasts.
     out = [(SubpixelAccuracyWarning,
-            'Smoothed structures use only the diagonal effective inverse material tensor. '
-            'Second-order curved-scattering convergence is not established: the independent '
-            'TE cylinder benchmark (epsilon=12, radius/wavelength=0.15, 56 vacuum cells per '
-            'wavelength) has 3.09% scattering error at its origin placement. This benchmark '
+            'Smoothed structures use adjoint inverse-material cross coupling. '
+            'The controlled glass-sphere study measured convergence order 2.023 '
+            '(epsilon=2.25, radius/wavelength=0.25, 20/28/40 vacuum cells per wavelength, '
+            'three placements). Production validation across contrasts is incomplete. This benchmark '
             'is not an error bound for this scene. Validate its observables under refinement; '
             'exact voxel volume alone does not guarantee electromagnetic accuracy. '
             'See docs/fd-mie-validation.md; the stage-4 Mie gate is incomplete.')]
     report = Approximations()
+    proxy_stats = {}
     magnetic = _background(scene).is_magnetic or any(
         s.material.is_magnetic for s in scene.structures)
     try:
         occupancy(scene, plan, runtime('numpy'),
                   fields=('E', 'H') if magnetic else ('E',), report=report)
+        if plan.constitutive:
+            from .constitutive import lower as cross_coefficients
+            cross_coefficients(scene, plan, runtime('numpy'), report=report,
+                               proxy_stats=proxy_stats)
     except (TypeError, ValueError, RuntimeError) as err:
         raise ValueError('fd.plan requires concrete geometry to measure smoothed voxel '
                          'bounds before numerical lowering; a geometry value could not be '
                          f'evaluated on NumPy ({type(err).__name__}: {err}). '
                          'A traced public shape with range= is stage 4 C6.') from err
     note = bound_note(report)
+    if proxy_stats:
+        details = ', '.join(f'{name}: {value:.6g}' for name, value in sorted(proxy_stats.items()))
+        category, message = out[0]
+        out[0] = (category, message + ' Custom-body cross terms use a nearest-surface '
+                  'tangent normal. At their common sampling points its squared components '
+                  'differ from the supplied diagonal normal moment by maxima {' + details +
+                  '}. These are measured geometry-proxy discrepancies, not bounds on '
+                  'electromagnetic error; creases and CSG cross moments await C4 validation.')
     if note is not None:
         out.append((BoundedVoxelWarning, note))
     return out

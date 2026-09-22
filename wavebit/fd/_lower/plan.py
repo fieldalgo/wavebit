@@ -141,6 +141,11 @@ class Plan:
         return self.nx * self.ny * self.nz
 
     @property
+    def constitutive(self):
+        from .._kernel.constitutive import ConstitutiveTerm
+        return tuple(t for t in self.terms if isinstance(t, ConstitutiveTerm))
+
+    @property
     def energy(self):
         """The interior-energy observer: every cell but the PML faces', read every
         ``ENERGY_STRIDE`` steps, with the part of each dispersive structure's pole term that
@@ -175,7 +180,8 @@ class Plan:
                 poles.append((term.name, term.n_poles, spans, offsets))
         return InteriorEnergy(lo=lo, hi=hi, stride=ENERGY_STRIDE, dt=self.dt,
                               ratio=self.dt / self.dx, steps=self.steps, poles=tuple(poles),
-                              planes=_mirror_planes(self.face_rules, lo, hi))
+                              planes=_mirror_planes(self.face_rules, lo, hi),
+                              constitutive=self.constitutive)
 
     def pad(self, face, c):
         """The ``Pad`` of component ``c`` of the field ``face`` pads."""
@@ -341,6 +347,11 @@ def plan(scene, _column=False, _grazing=None):
     p = _finish(p)
     checks.check_absorbing_layers(scene, p)
     checks.check_stability(scene, p)
+    from . import constitutive
+    coupled = constitutive.terms(scene, p)
+    if coupled:
+        p = p.with_static(terms=p.terms + coupled)
+        constitutive.validate(scene, p)
     sources = source_terms(scene, p)
     if sources:
         p = p.with_static(terms=tuple(p.terms) + sources)

@@ -1133,6 +1133,11 @@ def test_the_size_of_the_composition_error_the_door_refuses(monkeypatch):
     """
     from wavebit.fd._lower import checks
     monkeypatch.setattr(checks, '_shared_surface_voxels', lambda *a, **k: (0, None))
+    # This measures the historical DIAGONAL composition defect with its door
+    # held open. The coupled operator now has an independent positivity door;
+    # leave the constitutive terms out of this deliberately invalid comparator.
+    from wavebit.fd._lower import constitutive
+    monkeypatch.setattr(constitutive, 'terms', lambda *a: ())
     lo = -N * DX / 2
     rows = []
     for t1, t2 in ((12.5, 12.5000001), (12.45, 12.55), (12.2, 12.8), (12.1, 13.9)):
@@ -1259,7 +1264,9 @@ def test_a_voxel_one_body_fills_whole_is_not_a_shared_surface():
     # and the door still refuses what it is right about, on the voxels that are really cut
     ball = fd.Sphere(radius=0.2, center=(0.013, -0.007, 0.021))
     twice = _grid_scene((fd.Structure(ball, 12.0), fd.Structure(ball, 12.0)))
-    with pytest.raises(ValueError, match='surfaces pass through the same voxel: 1815'):
+    # C11 adds the E common nodes and H common centres: measured 2422
+    # shared voxels, versus the historical 1815 on the six Yee components.
+    with pytest.raises(ValueError, match='surfaces pass through the same voxel: 2422'):
         _quiet(fd.plan, twice)
 
 
@@ -1306,7 +1313,8 @@ def test_the_shared_surface_mark_reaches_a_voxel_diagonal_and_not_an_edge():
 
     assert count(math.sqrt(3.0) / 2.0) == 8
     assert count(0.5) == 0
-    with pytest.raises(ValueError, match='surfaces pass through the same voxel: 8'):
+    # The common E node at the midpoint adds one more shared voxel in C11.
+    with pytest.raises(ValueError, match='surfaces pass through the same voxel: 9'):
         _quiet(fd.plan, _grid_scene(pair))
 
 
@@ -1575,8 +1583,9 @@ def test_a_body_that_took_bounds_is_reported_once_for_the_scene():
     assert not [w for w in caught if issubclass(w.category, fd.BoundedVoxelWarning)]
 
     for count, shapes in (
-        (21, (_ReportingBall(0.2),)),
-        (42, (_ReportingBall(0.2, center=(-0.25, 0., 0.)),
+        # Three E Yee locations and the common E node: four calls of seven.
+        (28, (_ReportingBall(0.2),)),
+        (56, (_ReportingBall(0.2, center=(-0.25, 0., 0.)),
               _ReportingBall(0.2, center=(0.25, 0., 0.)))),
     ):
         scene = _grid_scene(tuple(fd.Structure(s, 2.25) for s in shapes))

@@ -19,6 +19,7 @@ compares the code to itself proves continuity, not correctness.
 
 | Oracle | Files | What a pass means |
 | --- | --- | --- |
+| **Constitutive coupling** | `test_fd_constitutive.py` | Do independent Fourier symbols, a dense finite operator, closed-cavity energy and finite differences verify electric/magnetic cross terms, flux memory and preparation-time certificates? |
 | **Mie reference and measurement controls** | `test_fd_mie_reference.py`, `test_fd_mie_study.py`, `test_fd_mie_external.py`, `test_fd_constitutive_study.py`, `test_fd_monitor_structure.py`, `references/mie.py` | Published coefficients, Rayleigh phase, energy conservation and an independent radial ODE validate the reference; manufactured radiation checks the measuring instruments. Exact cap integrals, Fourier symbols and boundary continuity check the constitutive comparator. Planning rejects closed power surfaces cutting a structure. These passes do not assert public sphere convergence. |
 | **Smoothed material coefficients** | `test_fd_occupancy.py`, `test_fd_occupancy_integration.py`, `test_fd_subpixel_study.py` | Do component-specific fills obey analytic mixing and derivative controls, report real CSG bounds before JIT, and keep the S1 measuring instrument honest? |
 | **Sphere clipping and JIT composition** | `test_fd_sphere_clip_jit.py` | Sphere, Union, Intersection, and Difference agree on 32 grid origins across NumPy, JAX, jax.jit, and Torch; analytic volume and containment laws hold, and an inactive square-root guard cannot change the result. |

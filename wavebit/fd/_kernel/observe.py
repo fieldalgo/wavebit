@@ -358,6 +358,7 @@ class InteriorEnergy:
     steps: int = 0
     poles: tuple = ()
     planes: tuple = ()
+    constitutive: tuple = ()
 
     def sampled(self, steps):
         """The steps read: every ``stride``-th from step 1, and the run's last."""
@@ -404,9 +405,12 @@ class InteriorEnergy:
             if field == 'E':
                 total = total + coefficient * self._electric(E, mem, params, rt,
                                                              slice(c, c + 1), box, f'{c}{box}')
+        for term in self.constitutive:
+            if term.field == 'E':
+                total = total + self._constitutive(term, E, mem, params, rt)
         return total
 
-    def magnetic(self, H, new, cE, params, rt):
+    def magnetic(self, H, new, cE, params, rt, mem=None):
         """``mu H^(n-1/2) . H^(n+1/2)`` over the judged cells: the H half of ``T^n``, from
         ``new = H^(n+1/2)`` (after the H update) or from the curl ``cE`` the update is about to
         use (before it, ``new`` ``None``)."""
@@ -415,6 +419,39 @@ class InteriorEnergy:
             if field == 'H':
                 total = total + coefficient * self._magnetic(H, new, cE, params, rt,
                                                              slice(c, c + 1), box, f'{c}{box}')
+        for term in self.constitutive:
+            if term.field == 'H':
+                total = total + self._constitutive(term, H, mem, params, rt, new, cE)
+        return total
+
+    def _constitutive(self, term, field, mem, params, rt, new=None, curl=None):
+        """Replace diagonal energy by E.D or H_old.B_new in a lossless region.
+
+        The plan keeps the region outside PML and refuses nonzero cross
+        coefficients on a mirror. Any admitted mirror intersection is diagonal;
+        applying the same mirror weights to this correction preserves that rule.
+        Magnetic flux memory has already advanced before either reading.
+        """
+        parts = [(1., slice(None), term.box)]
+        for coefficient, kind, c, box in self.planes:
+            if kind == term.field:
+                cut = tuple((max(a, u), min(b, v))
+                            for (a, b), (u, v) in zip(term.box, box))
+                if all(b > a for a, b in cut):
+                    parts.append((coefficient, slice(c, c+1), cut))
+        total = 0.
+        for coefficient, comps, box in parts:
+            view = (comps,) + tuple(slice(a, b) for a, b in box)
+            local = (comps,) + tuple(slice(a-base[0], b-base[0])
+                                    for (a, b), base in zip(box, term.box))
+            actual = rt.real_inner(field[view], mem[term.name][local], 1.)
+            if term.field == 'E':
+                diagonal = rt.weighted_energy(field[view], self._weight(
+                    params, 'E', rt, comps, box, key=term.name + str(comps)))
+            else:
+                diagonal = self._magnetic(field, new, curl, params, rt, comps, box,
+                                           term.name + str(comps))
+            total = total + coefficient * (actual-diagonal)
         return total
 
     def _electric(self, E, mem, params, rt, comps, box, key):
@@ -458,7 +495,7 @@ class InteriorEnergy:
             return acc                      # a one-step run has no row
         k, when = self._row(n)
         return rt.when(when, lambda a: rt.record(
-            a, k, self.electric(E, mem, params, rt) + self.magnetic(H, None, cE, params, rt)),
+            a, k, self.electric(E, mem, params, rt) + self.magnetic(H, None, cE, params, rt, mem)),
             acc)
 
     def observe_electric(self, acc, E, mem, n, params, rt):
@@ -475,14 +512,14 @@ class InteriorEnergy:
         return rt.when(when,
                        lambda a: rt.record(a, k, self.electric(E, mem, params, rt)), acc)
 
-    def observe_magnetic(self, acc, H, new, n, params, rt):
+    def observe_magnetic(self, acc, H, new, n, params, rt, mem=None):
         """The H half of row ``ceil((n - 1) / stride)``, added to what
         :meth:`observe_electric` wrote, after the H update of step ``n`` (``step.py``)."""
         if self.steps < 2:
             return acc                      # a one-step run has no row
         k, when = self._row(n)
         return rt.when(when, lambda a: rt.record(
-            a, k, a[k] + self.magnetic(H, new, None, params, rt)), acc)
+            a, k, a[k] + self.magnetic(H, new, None, params, rt, mem)), acc)
 
     @staticmethod
     def _pole(mem, E, coefficients, n_poles, cells, offsets, dt, rt, comps=slice(None)):

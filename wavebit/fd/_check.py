@@ -108,6 +108,7 @@ def report(scene, p=None, params=None):
     # and is already counted there.
     psi = sum(4 * face.cells * (p.cells // p.grid.n['xyz'.index(face.name[0])])
               for face in p.cpml) * itemsize
+    flux_memory = sum(3 * np.prod(t.region.shape) for t in p.constitutive) * itemsize
     absorbers = tuple((name, 'PML' if (name, cells) in p.pml_cells else 'Absorber', cells)
                       for name, cells in p.absorbing_faces)
     if params is None:
@@ -125,7 +126,8 @@ def report(scene, p=None, params=None):
     monitors, solves = _monitor_lines(scene, p)
     return Report(cells=grid.n, requested_size=requested, size=grid.size, dx=p.dx, dt=p.dt,
                   steps=p.steps, duration=p.steps * p.dt, dtype=p.dtype,
-                  bytes_per_state=2 * 3 * p.cells * itemsize + psi, warnings=tuple(warnings),
+                  bytes_per_state=2 * 3 * p.cells * itemsize + psi + flux_memory,
+                  warnings=tuple(warnings),
                   skeleton=p.skeleton, bytes_per_params=params_bytes(params),
                   absorbers=absorbers, spans=p.spans, monitors=monitors, solves=solves)
 

@@ -64,9 +64,15 @@ is unchanged by which -- that is what "a material changes the numbers and not th
 bought. The H update reads ``minus_bh`` rather than negating ``bh``, because negating an array
 here is a full-volume temporary per step and the lowering can do it once
 (``wavebit/fd/_lower/coefficients.py``).
+Coupled smoothed regions additionally read each source-corrected curl before the update,
+integrate compact D/B memory, and add the adjoint cross-material field increment after
+the diagonal update (``constitutive.py``). Energy uses E.D and H_old.B_new there. The
+flux preparation precedes NumPy's destructive update; it is absent from the numerical
+graph of a scene without constitutive terms.
 """
 from .cpml import damp
 from .curl import curl
+from .constitutive import prepare as prepare_constitutive
 
 __all__ = ['step', 'initial_state']
 
@@ -105,6 +111,7 @@ def step(plan, params, state, n, rt):
     for t in plan.terms:
         cE = t.before_H(cE, E, mem[t.name], n, params, rt)
     cE = damp(cE, 'lift', 'H', plan, params, rt)
+    mem, pending = prepare_constitutive(plan.constitutive, 'H', cE, mem, params, rt)
     energy = state['energy']
     if rt.in_place:
         # NumPy's update overwrites H and scales cE in place: read the whole row from them
@@ -112,6 +119,8 @@ def step(plan, params, state, n, rt):
         energy = plan.energy.observe(energy, E, H, cE, mem, n, params, rt)
     old = H
     H = rt.update(H, cE, params['ah'], params['minus_bh'])
+    for term, delta in pending:
+        H = term.add(H, delta, rt)
     H = damp(H, 'keep', 'H', plan, params, rt)
     for m in plan.masks:
         H = m.after_H(H, rt)
@@ -120,13 +129,16 @@ def step(plan, params, state, n, rt):
         # handed to nothing but its update -- a compiled step that also reads the curl fuses
         # the update otherwise and moves the fields by a rounding
         # (``tests/test_fd_stage3_backends.py`` pins them).
-        energy = plan.energy.observe_magnetic(energy, old, H, n, params, rt)
+        energy = plan.energy.observe_magnetic(energy, old, H, n, params, rt, mem=mem)
 
     cH, psi = curl(H, 'H', plan, params, psi, rt)
     for t in plan.terms:
         cH = t.before_E(cH, H, mem[t.name], n, params, rt)
     cH = damp(cH, 'lift', 'E', plan, params, rt)
+    mem, pending = prepare_constitutive(plan.constitutive, 'E', cH, mem, params, rt)
     E = rt.update(E, cH, params['ae'], params['be'])
+    for term, delta in pending:
+        E = term.add(E, delta, rt)
     E = damp(E, 'keep', 'E', plan, params, rt)
     for m in plan.masks:
         E = m.after_E(E, rt)
