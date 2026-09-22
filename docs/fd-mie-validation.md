@@ -6,7 +6,10 @@ Targets: `tests/references/mie.py`, `studies/fdtd_subpixel_mie_cylinder.py`,
 `tests/test_fd_mie_reference.py`, `tests/test_fd_mie_study.py`,
 `tests/test_fd_monitor_structure.py`, `wavebit/fd/_lower/monitors.py`,
 `wavebit/fd/monitors.py`, `wavebit/fd/diagnostics.py`, `wavebit/fd/_lower/checks.py`,
-`tests/test_fd_occupancy_integration.py`, `tests/test_fd_decay.py`.
+`tests/test_fd_occupancy_integration.py`, `tests/test_fd_decay.py`,
+`studies/fdtd_subpixel_mie_sphere.py`, `tests/test_fd_mie_external.py`,
+`tests/references/interface/measure_fd_stage4_meep.py`,
+`tests/references/interface/measure_fd_stage4_fdtdx.py`.
 
 ## TL;DR
 
@@ -17,9 +20,11 @@ convergence. C3 is not complete. Exact geometric volume alone does not establish
 electromagnetic accuracy; a successful regression suite must not be reported as
 a successful sphere convergence gate.
 
-This study is run before the full three-dimensional sphere sweep. A measured
-failure is retained with its placement spread and fit residual. No tolerance is
-chosen to relabel it as a second-order result.
+The cylinder study preceded the three-dimensional sphere measurements. The
+public glass sphere now also misses the required order: three placements at
+20/28/40 cells per wavelength give **1.714**, below the required 1.8, with 1.38%
+fit scatter. A measured failure is retained with its placement spread and fit
+residual. No tolerance is chosen to relabel it as a second-order result.
 
 ## Independent analytic reference
 
@@ -233,7 +238,7 @@ Its physical assertions are retained. The old fixture was refused by the new
 whole-structure door; the replacement passes, and an actual source edit that ends
 the source at its waveform envelope still fails this test.
 
-## Integrated validation
+## Integrated validation of the C3 preparation
 
 The final runs use three pytest workers, two threads per numerical library and
 `PYTHONUTF8=1`, without setting `XLA_FLAGS`. Exit codes, collection counts and XML
@@ -263,3 +268,195 @@ fixture described above. Neither attempt is counted as a pass. After correcting
 the fixture and adding the Torch contour regression, the complete fast suite was
 rerun successfully. The numerical cylinder convergence limitation remains: these
 regression passes do not complete C3 or certify sphere convergence.
+
+## Public sphere: the required order is not reached
+
+The public `fd.Sphere` path, without substituting coefficients, was run for
+radius 0.25, epsilon 2.25 and wavelength 1. The three centre offsets, measured
+in fractions of a voxel, are `(0,0,0)`, `(1/2,1/3,1/5)` and `(1/4,2/3,2/5)`.
+All nine results are retained in
+[`fdtd_subpixel_mie_external.log`](../studies/results/fdtd_subpixel_mie_external.log).
+These are research measurements, not replacement goldens.
+
+| Vacuum cells per wavelength | Mean signed scattering error | Placement range of signed error |
+| --- | ---: | ---: |
+| 20 | +2.13260% | 0.01518 percentage points |
+| 28 | +1.17334% | 0.01769 percentage points |
+| 40 | +0.64978% | 0.00290 percentage points |
+
+The signed-mean fit is **p=1.71401**, with 1.3807% relative fit scatter. The
+placement RMS gives **p=1.71402**, with 1.3796% scatter. Thus the small placement
+spread does not hide the failure of the specified `p >= 1.8` target. No
+first-order fallback is substituted for that sphere requirement. The weak- and
+high-contrast sphere sweeps have not been used to claim a completed gate.
+
+The baseline uses 24 periods and 12-cell absorbing layers. The nested half-widths
+are 0.4 for absorption, 0.55 for TFSF, 0.7 for scattered Flux, and 0.75 for
+FarField, followed by a 0.2 air gap to the layer. At 20 cells this leaves three
+cells from the sphere to absorption, three to the source boundary, and three
+to scattering. The FarField surface is one further cell out. These dimensions
+define the measuring fixture; they are not fitted accuracy tolerances.
+
+Controls at 40 cells and the origin placement compare to its baseline
+`Qsca=0.8691566659595557`:
+
+| Change | Relative change in Qsca |
+| --- | ---: |
+| 24 to 36 periods | -7.705e-8 |
+| 12 to 24 absorbing cells | +2.779e-5 |
+| Air gap 0.2 to 0.5 | +4.958e-5 |
+
+The largest measured control change is more than 130 times smaller than the
+baseline Mie error, 0.00648122. This supports a resolved error in the current
+discretisation rather than a dominant time-tail or absorbing-layer error on this
+fixture. It does not uniquely identify the omitted tensor components as its
+cause. Geometry moments, component coupling and other discretisation choices
+remain distinguishable hypotheses.
+
+Scattered Flux and the larger FarField surface agree to about 2.1e-7 relative
+at 20 cells, and 7.8e-8 at 40 cells. The angular integral's difference from
+scattered Flux decreases from about 7.3e-4 to 1.8e-4. The forward optical theorem,
+with the incident amplitude explicitly referred to `plane=0`, differs from
+`Qsca+Qabs` by 4.924% at 20 cells and 1.236% at 40. These finite-grid closure
+errors are recorded, not silently set to zero. Lossless absorption at the
+baseline origin placements is between -1.16e-6 and +2.57e-7 in efficiency.
+Doubling the angular integration from 24/32 to 48/64 samples at the 20-cell
+glass fixture changes the integral by only 7.78e-15 relative; the stated closure
+residual is not an unresolved angular-quadrature error on that fixture.
+
+The 20-cell origin case was repeated through the public run on NumPy and Torch.
+Against JAX, the largest Qsca difference is 8.89e-16; the largest difference
+among scattering, absorption, FarField flux, angular integral and optical
+efficiencies is 1.45e-15. The two angular cuts differ by at most 1.12e-16 in
+differential cross-section. This is a backend repeat of this case, not a claim
+that every unmeasured scene agrees.
+
+## External runs: Meep and the released FDTDX package
+
+Meep **1.34.0** was run through its documented public `Simulation`, `Sphere`,
+`Cylinder` and flux APIs. Its
+[Mie tutorial](https://meep.readthedocs.io/en/latest/Python_Tutorials/Basics/#mie-scattering-of-a-lossless-dielectric-sphere)
+describes the paired empty-cell subtraction used here. No Meep implementation
+was opened, inspected or copied. The independent Mie series above remains the
+accuracy reference; neither numerical solver is declared exact.
+
+The sphere has the same radius, epsilon, wavelength and linear polarization.
+Meep uses a plane source and subtracts the saved incident fields at all six
+faces, whereas wavebit uses TFSF. Their pulse-width definitions, source end
+times, cell rounding and flux interpolation differ. Meep's retained final
+time is 124 units for this source and duration. At resolution 28 its requested
+cell is rounded differently from wavebit's even-sized cell, so matching a label
+such as "origin" does not establish identical sampling lattices.
+
+| Vacuum cells per wavelength | Wavebit origin Qsca | Meep Qsca | Meep error against Mie |
+| --- | ---: | ---: | ---: |
+| 20 | 0.881963681476 | 0.873713585151 | +1.17581% |
+| 28 | 0.873608033227 | 0.868270025941 | +0.54545% |
+| 40 | 0.869156665960 | 0.866110759456 | +0.29541% |
+
+Meep's one-placement sphere fit is **p=1.99015**, with 6.7178% scatter. This is
+descriptive evidence, not an equally complete placement study or a proof of
+which wavebit term causes the missing order. Meep's measured lossless Qabs is
+-0.0087343, -0.0040824 and -0.0021492 on these grids. Its total-field power
+interpolation therefore also has a visible finite-grid residual. The expanded
+Meep controls below are for the cylinder; they are not a measured 3-D sphere
+uncertainty budget.
+
+FDTDX **0.6.2**, installed from PyPI, was run with its public `Cylinder` and
+`UniformPlaneSource`, a paired empty run and complex-field subtraction. Its
+native cylinder is a **binary voxel mask**; no subpixel projection was invoked
+or inspected. It is a staircase control, not a smoothed reference. The current
+online documentation describes `TFSFPlaneSourceRegion`, `UniformGrid` and a
+closed phasor-flux detector that are absent from this installed release. The
+interface uses its actual API rather than silently substituting wavebit's
+coefficients. A three-dimensional FDTDX sphere has not been measured here.
+
+The released FDTDX plane source initially rejected the one-cell invariant axis
+because it squeezed its transverse amplitude array to one dimension. The run
+instead uses two identical periodic slices along that axis. Its public phasor
+detector collocates E and H in space and averages H in time; the interface then
+integrates the four faces with trapezoidal weights, without interpolating again.
+The periodic transverse span is 50 wavelengths and the duration 45 periods,
+matching the wavebit high-contrast cylinder fixture. No installed package was
+patched to obtain these results.
+
+The following origin-placement comparison uses the same continuum cylinder,
+`R/lambda=0.15`, epsilon 12 and axial magnetic polarization. Entries are signed
+errors relative to the analytic cross-section 0.909413120174101:
+
+| Vacuum cells per wavelength | Wavebit diagonal smoothing | Meep averaging enabled | FDTDX native binary mask |
+| --- | ---: | ---: | ---: |
+| 20 | +0.71970% | +24.94370% | +48.45261% |
+| 28 | -0.87808% | +11.14344% | -14.41871% |
+| 40 | -2.89917% | +6.71731% | -5.28040% |
+| 56 | -3.08985% | +2.40261% | -3.01004% |
+
+A single row would give a misleading ranking. In particular, the smallest
+coarse-grid error is not evidence of the correct convergence order. Meep was
+also run at two shifted cylinder placements on every grid, at 80/112 cells at
+the origin, and with averaging disabled at 40 cells. All results, including
+their placement variation, are retained in the log. Meep's three-placement mean
+errors at 20/28/40/56 are +29.5315%, +9.8602%, +6.5540%, +2.5982%; the large
+coarse error is not hidden by selecting the origin.
+
+At 40 cells, doubling Meep's after-source duration changes the cylinder result
+by -4.02e-9 relative; doubling the layer thickness changes it by +5.35e-6;
+increasing the air gap and moving the source changes it by -4.04e-6. Disabling
+averaging gives cross-section 0.800199826007 instead of 0.970501227658. The
+axial-electric control gives 1.001437616650 against its Mie 1.016762944607.
+For FDTDX the three measuring contours differ by about 1.1e-3 relative at 20
+cells and 3.1e-5 at 56. Its time/period/PML controls have not been expanded into
+an uncertainty budget. These limits prevent treating it as an exact oracle.
+
+Both external solvers ran on CPU in an isolated Ubuntu/WSL environment:
+Python 3.12.14, NumPy 2.4.6, SciPy 1.18.1, JAX/JAXlib 0.11.2. Wavebit uses the
+Windows environment recorded above. OMP, OpenBLAS and MKL each use two threads;
+no XLA flags were set. Elapsed times are retained but are not a performance
+benchmark: some runs overlapped and the environments differ.
+
+### Reproduce the external and sphere measurements
+
+Choose fresh output filenames. Each interpreter containing the named external
+solver is called directly; external packages are not wavebit dependencies.
+
+```shell
+python studies/fdtd_subpixel_mie_sphere.py sphere20.json --cpw 20
+python studies/fdtd_subpixel_mie_sphere.py sphere28.json --cpw 28
+python studies/fdtd_subpixel_mie_sphere.py sphere40.json --cpw 40
+python studies/fdtd_subpixel_mie_sphere.py shifted40.json --cpw 40 --offset 0.5,0.3333333333333333,0.2
+python studies/fdtd_subpixel_mie_sphere.py long40.json --cpw 40 --periods 36
+python studies/fdtd_subpixel_mie_sphere.py thick40.json --cpw 40 --pml 24
+python studies/fdtd_subpixel_mie_sphere.py gap40.json --cpw 40 --gap 0.5
+"$MEEP_PYTHON" tests/references/interface/measure_fd_stage4_meep.py meep-sphere.json --dimension 3 --eps 2.25 --cells 20,28,40
+"$MEEP_PYTHON" tests/references/interface/measure_fd_stage4_meep.py meep-cylinder.json
+"$MEEP_PYTHON" tests/references/interface/measure_fd_stage4_meep.py meep-long.json --cells 40 --after 48
+"$FDTDX_PYTHON" tests/references/interface/measure_fd_stage4_fdtdx.py fdtdx-cylinder.json
+```
+
+### Tests of the new measuring code
+
+A radiating electric dipole with an independent analytic polarizability pins
+the sphere instrument's power normalization, two angular cuts and forward
+phase. Its radiation-reaction correction makes the optical theorem exact.
+The angular integral closes within 6.7e-16 relative; finite-size Mie differs
+from its dipole pattern by 5.4282e-7 of the peak. A manufactured radial field
+independently pins the collocated FDTDX contour: its exact power is pi and
+20/40/80-cell errors are 4.3845e-4, 1.0962e-4 and 2.7403e-5. Isotropic outward
+radiation independently pins Meep's signed-face and incident-area normalization.
+
+The six new tests pass. Seven actual source edits were applied one at a time,
+detected and restored: leave the incident phase at the entry plane (1 failure),
+swap the angular polarizations (1), reverse absorption sign (1), add unsigned
+face powers (2), use the wrong incident-area dimension (2), open the trapezoid
+endpoints (2), and replace complex H conjugation by its real part (2). Every
+mutation run exited 1 through test failures, with no collection or internal
+pytest error.
+
+The combined analytic-reference, measuring-instrument and documentation run
+reports **97 passed**, exit 0; its XML contains exactly 97 test cases, zero
+errors, failures or skips. A fresh execution of the committed Meep interface
+reproduces its 40-cell cylinder cross-section exactly at printed precision.
+This follow-up changes studies, external interfaces, their tests and this
+record. Production solver files and all four frozen archives are unchanged;
+the earlier full-suite and bit-identity results are identified separately above.
+The C3 sphere order gate remains failed.

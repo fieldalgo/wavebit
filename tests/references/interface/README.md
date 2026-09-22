@@ -2,6 +2,7 @@
 
 | Entry | Question |
 | --- | --- |
+| `measure_fd_stage4_meep.py`, `measure_fd_stage4_fdtdx.py` | How do public Meep sphere/cylinder and released FDTDX binary-cylinder scenes approach Mie under refinement, and how large are their measuring and settling errors? These generate new comparison measurements, not replacement goldens. |
 | `meep_multilayer.py` | Do six optimized coating variables give stable independent complex-amplitude derivatives through Meep's public global material-function API? |
 | `meep_rectangle.py` | Do a rectangle's width and translation change three TE diffraction amplitudes consistently under independent Meep perturbations and runtime controls? |
 | `meep_rotation.py` | Do eight complex scattering channels and rotation/axis lengths or disk diameter derivatives agree with independent sharp Blocks/Cylinders and graded rectangle/disk/ellipse or painted-overlap MaterialGrid runs under duration, perturbation and profile-grid controls? |
