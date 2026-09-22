@@ -818,6 +818,7 @@ spatial-order fit. The origin's Mie efficiency is 4.315415843395232.
 | 24 | 3.36067685425 | .31368604163 | .0375576860 |
 | 48 | 3.43571859257 | .14522379924 | .0027553423 |
 | 288 | 3.41818846015 | -.00067742618 | 5.8496611e-7 |
+| 456 | 3.41722828553 | .00030935229 | 2.8138152e-8 |
 
 The 24-period batch was stopped after its first two high-index cases; no
 56- or 80-cell result from that unresolved time window is presented. Source
@@ -847,11 +848,25 @@ At 288 periods, the final interior energy divided by its peak is 8.84262e-6.
 This whole-domain measure differs from the late-monitor energy fraction in
 the table. Fitting times 240..288 gives an energy time constant of 34.0645
 periods and maximum log residual .01110; the late decay is slower than the
-earlier fit. The next extension is 456 periods, from
+earlier fit. The completed extension to 456 periods was chosen from
 `ceil((288 + 34.0645*log(100))/24)*24`: two further decades of energy decay
 would reduce a residual field amplitude by ten. This remains a trial, not a
-certified duration. Its measured Qsca/Qabs changes will decide whether the
-40/56/80-cell spatial sweep can proceed.
+certified duration.
+
+The 456-period process exits 0. Relative to 288 periods, Qsca changes by
+-2.80902e-4, Qsca+Qabs by +7.78457e-6, and the complex forward field by
+7.77038e-4. The largest change in either angular cut, divided by that cut's
+peak intensity, is .00130910. Thus nearly unchanged total extinction alone
+would miss remaining differences in the separate observables.
+
+The final interior energy is 4.011996e-7 of its peak. Fits over successive
+48-period windows give energy time constants 39.18 (288..336), 51.33
+(336..384) and 72.32 (384..432); the final window 408..456 gives 83.96035,
+with maximum log residual .01342. Extrapolating the earlier 34-period time
+constant was too optimistic. The next trial is 864 periods, from
+`ceil((456 + 83.96035*log(100))/24)*24`, again targeting two further energy
+decades before measuring the actual change. The 40/56/80-cell spatial gate
+remains pending this time control.
 
 ### Weak-scattering forward phase
 
@@ -898,5 +913,6 @@ and are restored byte for byte; the six healthy instrument cases pass.
 python studies/fdtd_subpixel_mie_sphere.py --eps 12 --cpw 40 --periods 48 --energy tail48.json
 python studies/fdtd_subpixel_mie_sphere.py --eps 12 --cpw 40 --periods 288 --energy tail288.json
 python studies/fdtd_subpixel_mie_sphere.py --eps 12 --cpw 40 --periods 456 --energy tail456.json
+python studies/fdtd_subpixel_mie_sphere.py --eps 12 --cpw 40 --periods 864 --energy tail864.json
 python studies/fdtd_subpixel_mie_sphere.py --eps 1.1 --cpw 20 --phase-control phase20.json
 ```
