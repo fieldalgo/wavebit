@@ -51,6 +51,11 @@ def test_sphere_instrument_closes_independent_dipole_power_and_phase():
     # At x=.001 the exact Mie angular pattern differs from the radiating dipole
     # by 5.4282e-7 of its peak. Swapping the two polarization cuts gives O(1).
     assert max(v['peak_error'] for v in measured['pattern'].values()) < 6e-7
+    # The same Rayleigh fixture differs from Mie by 2.71406e-7 in complex
+    # amplitude. Unlike optical power alone, this also checks the real-part
+    # sign: -conj(f) keeps Im(f) and every intensity unchanged.
+    assert measured['forward']['relative_error'] < 3e-7
+    assert measured['incident_flux_ratio'] == 1.
 
 
 def test_sphere_instrument_counts_inward_total_power_as_absorption():

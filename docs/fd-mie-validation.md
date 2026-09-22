@@ -789,3 +789,99 @@ The measurement record retains the failed run and its resolution.
 These passes verify the coupled kernel and preserve the earlier engine.
 They do not replace the full production sphere convergence gate and its
 electromagnetic source mutations. C3 remains open.
+
+## Public sphere measurements with the coupled kernel
+
+The [production measurement record](../studies/results/fdtd_subpixel_production_sphere.log)
+uses kernel commit `c2c8d98`. All runs use the public scene and `fd.run`, JAX
+float64, radius .25, wavelength 1, the three stated placements and 24 periods
+unless the time column says otherwise. Every completed process exits 0.
+
+| Epsilon | Mean errors at 20 / 28 / 40 cells | Mean order | Log-fit scatter | RMS order |
+| ---: | --- | ---: | ---: | ---: |
+| 2.25 | .01813193 / .00904683 / .00446104 | 2.02267353 | .974414% | 2.02267636 |
+| 1.1 | .00997457 / .00493858 / .00236727 | 2.07489568 | .318473% | 2.07494199 |
+
+Both families meet the fitted-order and scatter criteria, and their finest
+errors exceed ten times the stated 9.7e-5 open-scene floor. The largest
+late-monitor energy fraction for epsilon 1.1 is 5.28e-9. These eighteen runs
+establish these two families; the epsilon-12 family and the production
+electromagnetic mutations remain outstanding.
+
+### High-index time truncation
+
+The first epsilon-12 runs are visibly unresolved. They are excluded from any
+spatial-order fit. The origin's Mie efficiency is 4.315415843395232.
+
+| Periods, at 40 cells | Qsca | Apparent Qabs | Largest late-monitor energy fraction |
+| ---: | ---: | ---: | ---: |
+| 24 | 3.36067685425 | .31368604163 | .0375576860 |
+| 48 | 3.43571859257 | .14522379924 | .0027553423 |
+
+The 24-period batch was stopped after its first two high-index cases; no
+56- or 80-cell result from that unresolved time window is presented. Source
+hashes still matched the saved sweep when it stopped. The public diagnostics
+issue UnsettledFieldWarning for these cases.
+
+The correct interior-energy history over times 36..48 fits an exponential
+with energy time constant 28.6225 periods and maximum log residual .00414.
+An independent frequency scan of the analytic Mie coefficients finds the
+magnetic n=3 resonance near frequency 1.03717 with power FWHM .0053392,
+corresponding to an estimated energy time constant 29.81 periods. The scan
+has frequency spacing 1.86e-4; these are measured estimates, not exact poles.
+The source's spectral amplitude there is .9333 of its carrier amplitude.
+This long-lived resonance explains why the glass run length is insufficient.
+
+The next trial is 288 periods. Its provenance is
+`48 + 29.81*log(.0027553423/1e-6)`, rounded up to a multiple of the original
+24-period window. Here 1e-6 is one tenth of the existing 1e-5 unsettled-energy
+line. This extrapolation chooses an experiment; its actual decay, Qabs and
+time-extension change must be measured before selecting a production test
+duration or accepting a high-index order.
+
+### Weak-scattering forward phase
+
+The optical theorem remains sensitive even when Qsca converges. At the
+origin, its relative difference from Qsca+Qabs is:
+
+| Epsilon | 20 cells | 28 cells | 40 cells |
+| ---: | ---: | ---: | ---: |
+| 2.25 | 4.92250% | 2.51814% | 1.23656% |
+| 1.1 | 52.0475% | 26.3798% | 12.9138% |
+
+For epsilon 1.1, Mie's normalized complex forward field is
+`.020388555018 + .000731186485 i`. Its magnitude divided by its imaginary
+part is 27.90, so a small phase defect strongly affects the extinction
+inferred from that imaginary part. The study now retains both quadratures
+and the ratio of grid incident flux to `|E0|**2/2`; the latter includes the
+normal-incidence Yee H-plane average. Intensity alone loses the phase sign.
+
+A separate 20-cell run moves only the radiation surfaces. The direct complex
+field measurements, normalized at the same incident phase origin, are:
+
+| Radiation half-width | Forward phase error | Complex-field relative error | Phase error after diagnostic k substitution |
+| ---: | ---: | ---: | ---: |
+| .65 | .74519 degrees | 1.58826% | -.35961 degrees |
+| .75 | 1.06432 degrees | 2.20620% | -.20916 degrees |
+| .85 | 1.46300 degrees | 2.72914% | .05130 degrees |
+
+The substitution uses the exact normal-incidence Yee wavenumber
+`2/dx*asin(dx/dt*sin(pi*dt)) = 6.30713500398`, instead of `2*pi`, in the
+continuum radiation transform. Its remaining surface dependence shows that
+changing that number alone is insufficient. The production transform stays
+unchanged; a discrete transform has not been derived by this experiment.
+This measured weak-scattering limitation must accompany any optical-theorem
+claim. The glass closure meets its stated 1.6% criterion at 40 cells.
+
+The manufactured Rayleigh instrument additionally checks complex phase:
+the finite-size amplitude discrepancy from Mie is 2.71406e-7. An actual source
+mutation `f -> -conj(f)` preserves Im(f) and intensity but fails the new
+phase assertion. A second mutation omitting the intensity factor 1/2 fails
+the flux-ratio assertion. Both exit 1 with one assertion failure, no errors,
+and are restored byte for byte; the six healthy instrument cases pass.
+
+```bash
+python studies/fdtd_subpixel_mie_sphere.py --eps 12 --cpw 40 --periods 48 --energy tail48.json
+python studies/fdtd_subpixel_mie_sphere.py --eps 12 --cpw 40 --periods 288 --energy tail288.json
+python studies/fdtd_subpixel_mie_sphere.py --eps 1.1 --cpw 20 --phase-control phase20.json
+```
