@@ -882,8 +882,40 @@ they do not prove the same temporal error at every resolution or placement.
 Each new run retains its decay, absorption and energy history, and any
 unresolved case requires its own extension. The 40-cell origin still differs
 from Mie by -20.8123%, far above the measured time-extension change. The
-56-cell origin is the next run. The full 40/56/80-cell, three-placement gate
+56-cell origin has now completed. The full 40/56/80-cell, three-placement gate
 and its source mutations remain incomplete.
+
+### High-index spatial refinement
+
+The following origin placements use the same 864-period duration. Every
+completed run exits 0, and the kernel source hashes still match the recorded
+coupled-kernel sweep.
+
+| Cells per wavelength | Qsca | Relative error against Mie | Apparent Qabs | Largest late-monitor energy fraction |
+| ---: | ---: | ---: | ---: | ---: |
+| 40 | 3.41728005839 | -20.8122651% | -6.56556e-11 | 7.08933e-10 |
+| 56 | 3.80237882305 | -11.8884724% | -6.57791e-6 | 5.42638e-10 |
+
+The 56-cell run takes 6351.5 seconds on the stated CPU setup. Its final
+interior energy is 1.08325e-8 of its peak; the 816..864 fit gives an energy
+time constant of 116.78486 periods and maximum log residual 7.42419e-5.
+These residuals permit proceeding to the 80-cell measurement; this is not
+an independent time-extension bound at 56 cells.
+
+At 56 cells, the FarField surface flux differs from the scattered Flux by
+7.81749e-8 relative, the angular intensity integral by -3.91514e-4, and the
+optical-theorem result from Qsca+Qabs by -.209252%. Each angular cut has
+15.2871% peak-normalized error against Mie. The descriptive two-resolution
+Qsca order is 1.66425, below 1.8; two origin placements are insufficient to
+replace the required three-resolution, three-placement fit. The 80-cell
+origin is running. No high-index convergence pass is claimed.
+
+The old epsilon-12 TE cylinder failure also remains unresolved. Its study
+prepares an empty scene and replaces only diagonal coefficients, so it has
+no constitutive terms and cannot test the coupled kernel by simply rerunning
+the old command. A coupled cylinder instrument and new measurements are
+required before claiming that this earlier failure is repaired. Public
+`fd.Cylinder` remains part of C4.
 
 ### Weak-scattering forward phase
 
@@ -932,5 +964,6 @@ python studies/fdtd_subpixel_mie_sphere.py --eps 12 --cpw 40 --periods 288 --ene
 python studies/fdtd_subpixel_mie_sphere.py --eps 12 --cpw 40 --periods 456 --energy tail456.json
 python studies/fdtd_subpixel_mie_sphere.py --eps 12 --cpw 40 --periods 864 --energy tail864.json
 python studies/fdtd_subpixel_mie_sphere.py --eps 12 --cpw 56 --periods 864 --energy high56.json
+python studies/fdtd_subpixel_mie_sphere.py --eps 12 --cpw 80 --periods 864 --energy high80.json
 python studies/fdtd_subpixel_mie_sphere.py --eps 1.1 --cpw 20 --phase-control phase20.json
 ```
