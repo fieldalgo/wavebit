@@ -817,6 +817,7 @@ spatial-order fit. The origin's Mie efficiency is 4.315415843395232.
 | ---: | ---: | ---: | ---: |
 | 24 | 3.36067685425 | .31368604163 | .0375576860 |
 | 48 | 3.43571859257 | .14522379924 | .0027553423 |
+| 288 | 3.41818846015 | -.00067742618 | 5.8496611e-7 |
 
 The 24-period batch was stopped after its first two high-index cases; no
 56- or 80-cell result from that unresolved time window is presented. Source
@@ -832,12 +833,25 @@ has frequency spacing 1.86e-4; these are measured estimates, not exact poles.
 The source's spectral amplitude there is .9333 of its carrier amplitude.
 This long-lived resonance explains why the glass run length is insufficient.
 
-The next trial is 288 periods. Its provenance is
+The completed 288-period trial was chosen from
 `48 + 29.81*log(.0027553423/1e-6)`, rounded up to a multiple of the original
 24-period window. Here 1e-6 is one tenth of the existing 1e-5 unsettled-energy
 line. This extrapolation chooses an experiment; its actual decay, Qabs and
 time-extension change must be measured before selecting a production test
-duration or accepting a high-index order.
+duration or accepting a high-index order. It exits 0, without an
+UnsettledFieldWarning. Its Qsca still differs from the 48-period value by
+-.51023%, and the apparent negative absorption above is retained rather than
+clipped. Absence of the warning does not establish time convergence.
+
+At 288 periods, the final interior energy divided by its peak is 8.84262e-6.
+This whole-domain measure differs from the late-monitor energy fraction in
+the table. Fitting times 240..288 gives an energy time constant of 34.0645
+periods and maximum log residual .01110; the late decay is slower than the
+earlier fit. The next extension is 456 periods, from
+`ceil((288 + 34.0645*log(100))/24)*24`: two further decades of energy decay
+would reduce a residual field amplitude by ten. This remains a trial, not a
+certified duration. Its measured Qsca/Qabs changes will decide whether the
+40/56/80-cell spatial sweep can proceed.
 
 ### Weak-scattering forward phase
 
@@ -883,5 +897,6 @@ and are restored byte for byte; the six healthy instrument cases pass.
 ```bash
 python studies/fdtd_subpixel_mie_sphere.py --eps 12 --cpw 40 --periods 48 --energy tail48.json
 python studies/fdtd_subpixel_mie_sphere.py --eps 12 --cpw 40 --periods 288 --energy tail288.json
+python studies/fdtd_subpixel_mie_sphere.py --eps 12 --cpw 40 --periods 456 --energy tail456.json
 python studies/fdtd_subpixel_mie_sphere.py --eps 1.1 --cpw 20 --phase-control phase20.json
 ```
