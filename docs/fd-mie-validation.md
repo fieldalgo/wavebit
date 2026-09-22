@@ -819,6 +819,7 @@ spatial-order fit. The origin's Mie efficiency is 4.315415843395232.
 | 48 | 3.43571859257 | .14522379924 | .0027553423 |
 | 288 | 3.41818846015 | -.00067742618 | 5.8496611e-7 |
 | 456 | 3.41722828553 | .00030935229 | 2.8138152e-8 |
+| 864 | 3.41728005839 | -6.5655589e-11 | 7.0893296e-10 |
 
 The 24-period batch was stopped after its first two high-index cases; no
 56- or 80-cell result from that unresolved time window is presented. Source
@@ -863,10 +864,26 @@ The final interior energy is 4.011996e-7 of its peak. Fits over successive
 48-period windows give energy time constants 39.18 (288..336), 51.33
 (336..384) and 72.32 (384..432); the final window 408..456 gives 83.96035,
 with maximum log residual .01342. Extrapolating the earlier 34-period time
-constant was too optimistic. The next trial is 864 periods, from
+constant was too optimistic. The completed 864-period trial was chosen from
 `ceil((456 + 83.96035*log(100))/24)*24`, again targeting two further energy
-decades before measuring the actual change. The 40/56/80-cell spatial gate
-remains pending this time control.
+decades before measuring the actual change.
+
+The 864-period process exits 0. Relative to 456 periods, Qsca changes by
++1.51505e-5, Qsca+Qabs by -7.53699e-5, and the complex forward field by
+9.12316e-5. The largest peak-normalized change in the angular cuts is
+1.77691e-4. The Qsca change is below the previously measured 9.7e-5
+open-scene floor; apparent absorption is now -6.56556e-11. The final interior
+energy is 1.10498e-8 of its peak. Its final 48-period fit has time constant
+116.68585 and maximum log residual 9.84217e-5, consistent with the slower
+tail seen in preceding windows.
+
+These controls justify proceeding with 864 periods for the spatial study;
+they do not prove the same temporal error at every resolution or placement.
+Each new run retains its decay, absorption and energy history, and any
+unresolved case requires its own extension. The 40-cell origin still differs
+from Mie by -20.8123%, far above the measured time-extension change. The
+56-cell origin is the next run. The full 40/56/80-cell, three-placement gate
+and its source mutations remain incomplete.
 
 ### Weak-scattering forward phase
 
@@ -914,5 +931,6 @@ python studies/fdtd_subpixel_mie_sphere.py --eps 12 --cpw 40 --periods 48 --ener
 python studies/fdtd_subpixel_mie_sphere.py --eps 12 --cpw 40 --periods 288 --energy tail288.json
 python studies/fdtd_subpixel_mie_sphere.py --eps 12 --cpw 40 --periods 456 --energy tail456.json
 python studies/fdtd_subpixel_mie_sphere.py --eps 12 --cpw 40 --periods 864 --energy tail864.json
+python studies/fdtd_subpixel_mie_sphere.py --eps 12 --cpw 56 --periods 864 --energy high56.json
 python studies/fdtd_subpixel_mie_sphere.py --eps 1.1 --cpw 20 --phase-control phase20.json
 ```
