@@ -9,7 +9,8 @@ Targets: `tests/references/mie.py`, `studies/fdtd_subpixel_mie_cylinder.py`,
 `tests/test_fd_occupancy_integration.py`, `tests/test_fd_decay.py`,
 `studies/fdtd_subpixel_mie_sphere.py`, `tests/test_fd_mie_external.py`,
 `tests/references/interface/measure_fd_stage4_meep.py`,
-`tests/references/interface/measure_fd_stage4_fdtdx.py`.
+`tests/references/interface/measure_fd_stage4_fdtdx.py`,
+`studies/fdtd_subpixel_constitutive.py`, `tests/test_fd_constitutive_study.py`.
 
 ## TL;DR
 
@@ -25,6 +26,14 @@ public glass sphere now also misses the required order: three placements at
 20/28/40 cells per wavelength give **1.714**, below the required 1.8, with 1.38%
 fit scatter. A measured failure is retained with its placement spread and fit
 residual. No tolerance is chosen to relabel it as a second-order result.
+
+A controlled constitutive comparator now identifies the discarded cross terms
+as the cause of the glass fixture's lost order. Exact surface moments alone
+leave the order near 1.72. Restoring shared-node cross terms gives **2.02267**
+over the same three placements, with **0.9744%** scatter. This comparator is
+research code; the public engine still uses the diagonal rule and C3 remains
+incomplete. The energy diagnostic, backend integration and contrast gates
+still need a complete tensor implementation before this can become a solver fix.
 
 ## Independent analytic reference
 
@@ -460,3 +469,151 @@ This follow-up changes studies, external interfaces, their tests and this
 record. Production solver files and all four frozen archives are unchanged;
 the earlier full-suite and bit-identity results are identified separately above.
 The C3 sphere order gate remains failed.
+
+## Isolating the cause: surface moment versus constitutive cross terms
+
+The controlled experiment is
+[`fdtd_subpixel_constitutive.py`](../studies/fdtd_subpixel_constitutive.py).
+Its measurements are in
+[`fdtd_subpixel_constitutive.log`](../studies/results/fdtd_subpixel_constitutive.log).
+It keeps the public sphere, exact fills, incident pulse, grid, time step,
+absorbing layers and measuring surfaces fixed. The substitutions are explicit
+research arms, not an added public smoothing option.
+
+### An incorrect geometric argument, corrected
+
+The geometry docstring previously claimed that a spherical surface's diagonal
+normal moment requires volume second moments. It does not. Let coordinates be
+relative to the sphere centre, let `V` be the clipped volume, and let `A_i-`
+and `A_i+` be the clipped disc areas on the voxel's lower and upper faces.
+The divergence theorem applied to `x_i e_i` gives
+
+```text
+div(x_i e_i) = 1
+x_i n_i = R n_i^2 on the sphere
+M_i = integral_surface(n_i^2 dA) = [V - (u_i A_i+ - l_i A_i-)] / R
+surface area = M_x + M_y + M_z
+```
+
+The research implementation uses this identity and an exact geometric support
+test. It does not infer the presence of a surface from a cancellation residue.
+Independent integration in `(z, azimuth)`, splitting at rectangle-edge
+intersections, measured maximum `|dM|/h^2` of
+`4.44e-15 / 1.62e-14 / 3.08e-14 / 1.33e-13` at `R/h=3/5/10/20`
+(60 seeded random cut voxels per resolution). Closed spherical-cap integrals
+also check the expression on NumPy, JAX, compiled JAX and Torch.
+
+Changing only this moment does **not** repair the glass sphere's order:
+
+| Vacuum cells/wavelength | Current origin Qsca | Exact-moment origin Qsca | Relative change |
+| --- | --- | --- | --- |
+| 20 | 0.881963681476089 | 0.881997458256976 | +3.8297e-5 |
+| 28 | 0.873608033226615 | 0.873623517790378 | +1.7725e-5 |
+| 40 | 0.869156665959556 | 0.869161576771374 | +5.6501e-6 |
+
+The exact-moment origin fit is **1.71793**, with **1.8270%** scatter. The
+production tangent-plane moment therefore remains an identifiable geometric
+approximation, but it does not explain this fixture's failed order.
+Applying the exact moment together with the cross terms at 40 cells gives
+`Qsca=0.867399790510`, only `+6.1890e-6` relative to the cross-only result.
+
+### The discarded term has a local electromagnetic defect
+
+Write `K=epsilon_eff^-1`, `a=<1/epsilon>` and `b=1/<epsilon>`.
+For a flat interface with unit normal `n`, the complete local relation is
+
+```text
+K_ij = b delta_ij + (a-b) n_i n_j
+E_i = K_ii D_i + sum_(j != i) K_ij D_j
+```
+
+`coefficients.mix` retains only `K_ii`, and the kernel's electric update
+multiplies each curl component by its own scalar `be`. The omitted expression
+is **`(a-b) n_i n_j D_j` for `j != i`**. No more accurate fill or diagonal
+normal moment can supply that coupling.
+
+This has an independent, local check: at a half-filled 45-degree interface
+between epsilon 2.25 and 1, continuity of normal `D` and tangential `E` gives
+normal inverse epsilon `a=13/18` and tangential inverse epsilon `b=8/13`.
+The diagonal truncation instead gives their mean in both directions. Its local
+relative errors are **7.3964% normal** and **8.6806% tangential**, despite the
+normal being exact. The complete tensor satisfies both conditions. This local
+calculation is not a bound on the whole sphere's scattering error.
+
+### Restoring that term changes the measured order
+
+The comparator uses a common-node cross coefficient and adjoint interpolation:
+average component `j` to the node, multiply by `K_ij`, then average to component
+`i`. This is the discretization described in
+[Oskooi, Kottke and Johnson (2009), Fig. 1](https://math.mit.edu/~stevenj/papers/OskooiKo09.pdf).
+The diagonal coefficients and production tangent-plane moments are retained.
+No Meep implementation source is used.
+
+The same offsets `(0,0,0)`, `(1/2,1/3,1/5)` and `(1/4,2/3,2/5)` in voxel
+units are retained at every resolution:
+
+| Cells/wavelength | Diagonal mean relative error | With cross terms | Placement spread with cross terms |
+| --- | --- | --- | --- |
+| 20 | 0.0213260 | 0.0181319 | 1.8535e-4 |
+| 28 | 0.0117334 | 0.00904683 | 2.9648e-4 |
+| 40 | 0.00649781 | 0.00446104 | 4.5208e-5 |
+| Fitted order | 1.71401 | **2.02267** | |
+| Fit scatter | 1.38068% | **0.974414%** | |
+
+The placement-RMS fit is **2.02268**, with **0.96736%** scatter. This isolates
+the discarded cross terms as the cause of the observed order loss in this
+glass fixture. It does not prove second order for every contrast or interface.
+The final-script origin runs reproduce the independently constructed in-memory
+prototype's three Qsca values to all reported digits.
+
+For the origin glass fixtures, absolute row sums enclose the symmetric
+constitutive matrix's eigenvalues in `[0.4314,1.0192]`, `[0.4270,1.0232]`
+and `[0.4259,1.0255]`. Positive lower endpoints establish positive definiteness
+for these sampled operators. At the fixture's Courant factor 0.5, the upper
+endpoints also stay within the homogeneous curl-norm time-step bound. These
+are not proofs for arbitrary shapes or for the absorbing-layer update.
+The measured field-decay ratios remain near `1e-11`.
+Across all nine glass operators the eigenvalue enclosures stay inside
+`[0.4250,1.0281]`. The original diagonal energy diagnostic is excluded from
+this stability evidence.
+
+### Why this is still a comparator
+
+The public solver still uses the diagonal relation. Its interior-energy
+diagnostic assumes that relation, so its energy output is **not an oracle for
+the research tensor arm** and is not reported as one. With a full tensor,
+recovering `D_i` by dividing `E_i` by `K_ii` is incorrect. A production change
+must implement the constitutive update and its energy accounting consistently,
+then repeat backend agreement, stability, contrast, pattern and phase gates.
+
+The new fast checks use independent cap integrals, the staggered Fourier
+symbol, an inhomogeneous adjoint identity, the electric-only runtime hook,
+and flat-interface boundary conditions. Six actual source mutations are
+detected: omitted face flux, tangent-plane substitution, reversed adjoint
+shift, applying electric coupling to H as well, dropped cross terms, and
+omitted spectral radius. Each source is restored after its failing run.
+The lower-radius omission initially survived the two-dimensional-normal
+fixture because its uncoupled z row retained the same lower endpoint. A
+body-diagonal normal removes that accidental protection and detects the
+mutation. The corrected normal/tangential enclosure is checked analytically.
+
+```bash
+python studies/fdtd_subpixel_constitutive.py tensor-origin.json --arm tensor
+python studies/fdtd_subpixel_constitutive.py tensor-shift1.json --arm tensor --offset 0.5,0.3333333333333333,0.2
+python studies/fdtd_subpixel_constitutive.py tensor-shift2.json --arm tensor --offset 0.25,0.6666666666666666,0.4
+python studies/fdtd_subpixel_constitutive.py exact-moment.json --arm moment
+python -m pytest tests/test_fd_constitutive_study.py -q -p no:cacheprovider
+```
+
+These are CPU float64 measurements with the numerical thread limits stated
+above. No accuracy threshold was changed, no reference archive was rebaselined,
+and this study does not complete C3.
+
+Validation of this research addition: **109 selected fast tests**, including
+the 12 new cases and the documentation contract; all reported cases match the
+collected count, with exit code 0 and no INTERNALERROR. All six final source
+mutations fail their selected tests with exit code 1 and are restored. The
+production edit only corrects docstrings: after docstring removal its parsed
+syntax tree is unchanged. The full fast/slow suites and four reference freezes
+were not rerun for this research-only addition; their earlier results above
+are not presented as new runs.

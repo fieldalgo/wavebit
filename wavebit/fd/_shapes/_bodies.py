@@ -47,10 +47,10 @@ Every body answers four things:
 A cylinder's exact moment would need the second moment of the arc of a circle clipped to a
 rectangle -- the angular interval set, not the area -- and the repository owns no such form;
 the arc-weighted *area* forms it does own (``_weighted_circle_area``) are a bilinear window for
-a different geometry. A sphere's would need the second moment of a spherical patch, which by
-the divergence theorem needs the *volume's* second moments and the clipped disc's; the patch's
-plain area is free that way and the moment is not (see :class:`Sphere`). Measured cost of using
-the plane's moment on a cylinder instead of the truth, against 20001-point quadrature over the
+a different geometry. A sphere's diagonal surface moment is available from its volume and
+clipped face areas by the divergence theorem (see :class:`Sphere`); the previous claim that
+volume second moments were needed was incorrect. The fallback remains the plane. Measured cost
+of using the plane's moment on a cylinder instead of the truth, against 20001-point quadrature over the
 true circumference
 (``tests/test_fd_shapes.py::test_the_plane_is_the_cylinders_moment_and_this_is_what_that_costs``,
 cut voxels only, worst ``|w - w_exact|`` then rms):
@@ -830,11 +830,14 @@ class Sphere(Body):
     The tangent plane stays for :class:`Union`, :class:`Intersection`, :class:`Difference` and
     anything else with no closed form; what it costs there is measured in ``_cut.py``.
 
-    **The moment is still the plane's**, and that is not an oversight. By the divergence theorem
-    the interface *area* would be free -- ``3V = R S + sum_faces d_f A_f`` with ``A_f`` a clipped
-    disc -- but the second moment needs ``int (x_c - c_c)^2 dS`` over the spherical patch, which
-    by the same theorem needs the volume's own second moments *and* the clipped disc's, neither
-    of which this repository owns. What the plane's moment costs here is
+    **The moment is still the plane's.** The previous explanation that an exact diagonal
+    moment needs volume second moments was incorrect: in sphere-centred coordinates,
+    ``div(x_i e_i)=1`` and ``x_i n_i=R n_i^2`` on the sphere, so
+    ``R M_i=V-(u_i A_i+ - l_i A_i-)``. Only the volume and six clipped face areas are needed.
+    ``studies/fdtd_subpixel_constitutive.py`` implements and independently checks this identity.
+    Replacing only the moment changes the origin glass sphere's 40-cell scattering efficiency
+    by 5.65e-6 relative and does not restore its convergence order. The research expression
+    has not replaced this production fallback. What the plane's moment costs here is
     ``tests/test_fd_shapes.py::test_w_vanishes_only_where_the_fill_is_already_decided``'s
     measured sphere row.
     """

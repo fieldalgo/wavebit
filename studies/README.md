@@ -12,6 +12,7 @@ makes them assertions, not studies.
 
 | Script | Question it answers |
 | --- | --- |
+| `fdtd_subpixel_constitutive.py` | Is the sphere's failed convergence caused by its tangent-plane surface moment or by discarded material cross terms? Controlled substitutions, with independent geometry and adjoint checks. [Measurement](../docs/fd-mie-validation.md). |
 | `fdtd_subpixel_mie_cylinder.py` | Does the actual component-specific diagonal material rule approach independent cylinder scattering across eight placements, and do measuring-contour and settling controls support the fit? [Measurement](../docs/fd-mie-validation.md). |
 | `fdtd_subpixel_mie_sphere.py` | Does the public Sphere approach Mie scattering across resolutions and placements, with independent flux, angular-power and forward-phase closures? [Measurement and external comparisons](../docs/fd-mie-validation.md). |
 | `fdtd_subpixel_tilted_tensor.py` | What accuracy and fit scatter do diagonal and full-tensor interface rules achieve when complex modes, algebraic spectral endpoints and actual grids are retained? [Measurement](../docs/fd-subpixel-occupancy.md). |
