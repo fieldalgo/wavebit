@@ -1725,3 +1725,183 @@ suite counts above are historical, not results from this diagnostic.
 python studies/fdtd_subpixel_mie_transform.py exact-transform.json
 python -m pytest tests/test_fd_mie_transform.py -p no:cacheprovider -q
 ```
+
+## Incident phase and discrete interference controls
+
+This follows the exact-field injection experiment above. The production solver,
+source normalization, radiation transform and C3 acceptance criteria are unchanged.
+The new study is `studies/fdtd_subpixel_phase_control.py`; its record is
+`studies/results/fdtd_subpixel_phase_control.log`. All five paired measurements
+complete with actual exit 0 and unchanged source hashes during each measurement.
+Each pair contains an empty scene and the public epsilon-1.1, radius-.25 sphere.
+The original source, three diagnostic half-widths .65/.75/.85 and Courant .5 are
+retained. The new central Ex/Hy line remains inside the total-field source box.
+
+### Independent phase reference
+
+For unit vacuum wave speed, angular frequency omega, time step dt and grid step h,
+the normal-incidence Yee update equations give
+
+    Omega = 2 sin(omega dt/2) / dt,
+    2 sin(kappa h/2) / h = Omega.
+
+The study transforms the raw source E and H series on their respective clocks,
+including the finite-record endpoint term. It independently separates forward
+and backward waves using their actual plane coordinates, then carries the forward
+amplitude to z=0 with kappa. It does not call the production DFT or direction-split
+helper. The resulting incident amplitude agrees with the public API within
+2.159e-15 relative over the five pairs. Synthetic records with known complex modes,
+nonzero backward waves and nonzero final samples also recover amplitude and power
+on NumPy, JAX eager, JAX compiled and Torch: maximum absolute discrepancies
+1.692e-15 and 4.441e-16 in the preliminary three-grid probe.
+
+The independently derived unit-forward vacuum fields are
+
+    E_x(z) = exp(i kappa z) + B exp(-i kappa z),
+    H_y(z) = exp(i kappa z) - B exp(-i kappa z).
+
+B is measured from the raw incident column, not fitted to the 3D monitor. At each
+actual Yee location these fields match the empty 3D line as follows. All entries
+below are relative to the incident forward amplitude; the continuum comparison
+uses exp(i 2 pi z) without a backward wave.
+
+| Cells/wavelength, 24 periods | kappa | Measured backward amplitude | Max two-wave field discrepancy | Max continuum forward-wave discrepancy |
+| ---: | ---: | ---: | ---: | ---: |
+| 20 | 6.307135004 | 9.8984e-5 | 3.888e-7 | .0108523 |
+| 28 | 6.295337993 | 4.9008e-5 | 2.345e-7 | .00546187 |
+| 40 | 6.289122988 | 2.8488e-5 | 2.064e-7 | .00265580 |
+
+The measured intensity divided by |A0|^2/2 also equals cos(kappa h/2), with
+maximum absolute discrepancy 4.2e-15. This cosine follows from averaging the two
+H half-planes onto an E plane. The empty field outside the total-field source box
+is below 8.65e-17 of incident amplitude. These controls do not support a misplaced
+incident reference phase or appreciable source leakage in this fixture.
+
+### Extinction from the discrete surface power
+
+In continuum electromagnetism, expanding the Poynting product of incident plus
+scattered fields separates incident power, scattering and their interference;
+see [Striebel et al., Scientific Reports 7, 15420 (2017), section "Absorption,
+Scattering and Extinction"](https://pmc.ncbi.nlm.nih.gov/articles/PMC5684246/).
+That paper supplies the physical interpretation, not a discrete-grid theorem.
+For the actual wavebit monitor define its real bilinear flux functional
+
+    Phi_h(E,H) = (1/2) Re sum_faces sum_samples
+                 [E cross conjugate(H_mean)] dot n * weight * h^2.
+
+Use the existing staggered sample positions, the same two-plane H average and
+the same face weights in every term. Direct expansion then gives the exact
+algebraic identity
+
+    Phi_h(Ei+Es, Hi+Hs) = Phi_h(Ei,Hi) + Phi_h(Es,Hs)
+                          + Phi_h(Es,Hi) + Phi_h(Ei,Hs).
+
+Define Pext_h as the negative sum of the last two terms. For a settled solution
+with zero net incident power, Pext_h should equal scattered plus absorbed power.
+Equality additionally needs consistent physical fields and a source-free vacuum
+region between the measuring surfaces; the algebra alone cannot establish those
+conditions. Here absorption is independently read from the inner total-field
+surface. The outer scattered field is paired with a separate empty run, and each
+run is normalized by its own incident amplitude. The large incident power is
+never numerically subtracted from total power to form the interference terms.
+
+An independent analytic check on each z face uses arbitrary counterpropagating
+mode amplitudes Ai/Bi and As/Bs. The exact mixed power is
+
+    sign * area * cos(kappa h/2) * Re(As conjugate(Ai) - Bs conjugate(Bi)).
+
+The diagnostic agrees within 5.90e-17 absolute. This checks both interference
+terms, the backward magnetic sign, staggering, normalization and orientation.
+Replacing kappa by 2 pi changes the incident field to one that does not satisfy
+the discrete update. It is a deliberately inconsistent control, not a candidate
+correction. None of these experiments changes k in the production far-field map.
+
+### Measured closures and controls
+
+Interference closure is Pext_h/(Psca_h+Pabs_h)-1 on each diagnostic surface.
+The standard surface has requested half-width .75. The first column retains the
+original forward-amplitude optical-theorem observable and its original denominator;
+the other columns measure surface interference. They are different finite-grid
+observables and are not interchangeable error budgets.
+
+| Cells/wavelength, 24 periods | Original optical closure | Continuum incident interference, .75 | Grid two-wave interference, .75 | Largest absolute grid two-wave closure across three surfaces |
+| ---: | ---: | ---: | ---: | ---: |
+| 20 | 52.04750% | 62.57161% | .0144693% | .0166438% |
+| 28 | 26.37983% | 31.69403% | -.0036056% | .0059680% |
+| 40 | 12.91384% | 15.50382% | -.0053926% | .0053926% |
+
+Two additional paired controls bound only the changes actually measured:
+
+* At 20 cells, extending 24 to 48 periods changes the original optical closure
+  from 52.04750% to 52.01519%. The three grid two-wave closures become
+  -.0079563/-.0053396/-.0078311%. Their largest change is .0246001 percentage
+  points. The largest late monitor energy ratio falls from 5.202e-9 to 6.651e-10.
+  Duration doubling is an experiment, not a certificate of the infinite-time
+  value. The remaining small surface dependence and finite-record uncertainty
+  must not be described as roundoff or exact energy closure.
+* At 20 cells and 24 periods, lowering the PML reflection *target* from 1e-8 to
+  1e-12 increases the measured backward amplitude from 9.8984e-5 to 3.1827e-4.
+  A smaller target is not evidence of less reflection on a fixed discrete layer.
+  The original optical closure stays at 51.96115%; the largest absolute grid
+  two-wave closure is .0162657%. The measured backward wave must be retained.
+
+Direct comparison of scattered E with exact Mie E adds spatial information.
+At 20 cells, its descriptive complex least-squares gain has phase
+.59289/.68650/.77859 degrees on the three surfaces; at 40 cells this becomes
+.14758/.17002/.19266 degrees. The corresponding relative field differences at
+40 cells are .33075/.36296/.39694%. These gains are never applied to a field or
+used to improve a reported result. The imaginary part of the forward amplitude
+is small for this weak sphere, so small complex-field phase errors can produce
+large relative optical-theorem residuals.
+
+The evidence locates an important inconsistency in comparing computed grid
+fields with the continuum forward-scattering identity: grid propagation and
+interference give a nearly closed energy balance while the existing continuum
+observable remains far from closed. It does not isolate the entire error to a
+single radiation-code line, derive a lattice Green function or validate a new
+far-field amplitude. It also does not remove material-interface error. The
+inclined-interface consistency failure, production cylinder refinement failure,
+and two failed 3D research-candidate accuracy controls remain. C3 has not passed.
+
+### Instrument regression and reproduction
+
+The test budgets were selected after the measurements: 2e-14 for the analytic
+source-mode check (measured at most 1.70e-15), 1e-15 for analytic mixed power
+(5.90e-17), 1e-6 for vacuum two-wave fields (3.89e-7), 2e-15 for empty leakage
+(8.65e-17), and 5e-4 for interference closure (twice the measured 2.46e-4 temporal
+change). These are diagnostic regression budgets. The 5e-4 value is not a new
+C3 gate and is not a bound on continuum scattering accuracy.
+
+Validation results are recorded with collection/report counts, actual process
+exits, mutation details and source restoration in the accompanying measurement log.
+The six new cases pass. Nine actual source defects cause 25 assertion failures:
+wrong reference-carrier sign and H clock in production normalization; omitted
+endpoint correction, continuum carrier and wrong backward sign in the independent
+source audit; an omitted interference term; a wrong backward H sign; a continuum
+incident carrier on the diagnostic surfaces; and a wrong vacuum-line H sign.
+The surface-carrier defect fails both analytic power and fresh physical energy
+checks. Every selected mutant case exits 1 by assertion with matching collection
+and report counts, no incidental errors or INTERNALERROR. The mutation driver
+exits 0 and restores both touched source files byte for byte.
+
+Final targeted checks exit 0 with **106 fast cases and one fresh physical case**,
+all collected/reported counts matching, no skips, failures, errors or INTERNALERROR.
+This research addition does not rerun the complete engine fast/slow tiers; the
+earlier full-suite counts in this document remain historical.
+Stage 0/1/2/3 reference checks each exit 0 with **143/288/140/570 arrays reproduced
+bit for bit**, 1,141 in total. All monitored source hashes are unchanged throughout
+the final verification. No baseline is rewritten.
+
+```bash
+python studies/fdtd_subpixel_phase_control.py phase20.json --cpw 20
+python studies/fdtd_subpixel_phase_control.py phase28.json --cpw 28
+python studies/fdtd_subpixel_phase_control.py phase40.json --cpw 40
+python studies/fdtd_subpixel_phase_control.py phase20-target.json --cpw 20 --reflection 1e-12
+python studies/fdtd_subpixel_phase_control.py phase20-time.json --cpw 20 --periods 48
+python -m pytest tests/test_fd_phase_control.py -p no:cacheprovider --run-slow -q
+```
+
+Use new output names: the study refuses to overwrite an existing JSON/array pair.
+The JSON retains source hashes, warnings, complex amplitudes, line fields, three
+surface observables and residual energies; a companion compressed array file
+preserves raw source records and sampled monitor arrays with a SHA256 digest.
