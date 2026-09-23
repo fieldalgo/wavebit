@@ -12,7 +12,10 @@ Targets: `tests/references/mie.py`, `studies/fdtd_subpixel_mie_cylinder.py`,
 `tests/references/interface/measure_fd_stage4_fdtdx.py`,
 `studies/fdtd_subpixel_constitutive.py`, `tests/test_fd_constitutive_study.py`,
 `wavebit/fd/_kernel/constitutive.py`, `wavebit/fd/_lower/constitutive.py`,
-`wavebit/fd/_kernel/observe.py`, `tests/test_fd_constitutive.py`.
+`wavebit/fd/_kernel/observe.py`, `tests/test_fd_constitutive.py`,
+`studies/fdtd_subpixel_coupled_cylinder.py`,
+`studies/fdtd_subpixel_interface_consistency.py`,
+`tests/test_fd_mie_physics.py`.
 
 ## TL;DR
 
@@ -41,8 +44,11 @@ The production sphere sweeps now have all three resolutions and three
 placements at epsilon 1.1, 2.25 and 12. Their fitted orders are **2.07490,
 2.02267 and 1.82685**, respectively. The high-index sweep finishes with a
 6.18% mean scattering error at 80 cells per wavelength; a fitted order is
-not a claim of small absolute error. Physical source mutations and coupled
-cylinder revalidation remain outstanding. The weak-scattering optical
+not a claim of small absolute error. The coupled cylinder revalidation now
+fails: all eight placements at 40/56/80 cells give mean/RMS orders
+**1.60337/1.58655**, below 1.8. The seven new public physics cases pass and
+eight actual source mutants are caught; that does not waive the cylinder gate.
+The weak-scattering optical
 theorem limitation below is retained.
 
 ## Independent analytic reference
@@ -945,15 +951,231 @@ At 80 cells the largest peak-normalized angular-cut error is 7.98238%,
 and the largest optical-theorem closure error is .0972985%.
 
 The completed measurements establish the stated high-index scattering
-convergence criterion. They do not finish C3: actual physical source
-mutations and the cylinder revalidation are still required.
+convergence criterion. They do not finish C3: the coupled cylinder
+revalidation below fails its predeclared order criterion.
 
-The old epsilon-12 TE cylinder failure also remains unresolved. Its study
-prepares an empty scene and replaces only diagonal coefficients, so it has
-no constitutive terms and cannot test the coupled kernel by simply rerunning
-the old command. A coupled cylinder instrument and new measurements are
-required before claiming that this earlier failure is repaired. Public
-`fd.Cylinder` remains part of C4.
+### Coupled cylinder revalidation
+
+The old cylinder study prepares an empty scene and replaces only diagonal
+coefficients. It has no constitutive terms and cannot test the coupled kernel
+by simply rerunning its command. The new
+`studies/fdtd_subpixel_coupled_cylinder.py` retains the same grid, pulse,
+paired empty run and closed measuring contour, while using the production
+material lowerer, cross terms, compact flux memory and time stepper.
+
+This remains a research instrument. It attaches the invariant cylinder slice
+to the historical empty plan and applies the production whole-operator
+positive-energy and CFL checks. Public periodic-face and declared-material
+resolution checks are not exercised. In particular, the 40-cell epsilon-12
+scene has only 5.99 cells per shortest pulse wavelength and is correctly
+refused by public preparation. A first probe reached that refusal when
+requesting its final public report and exited 1. The comparator's final
+report now explicitly uses the historical empty-scene context. No production
+refusal was weakened, and public `fd.Cylinder` remains C4.
+
+At 40 cells, the prepared diagonal coefficients differ from the historical
+substitution by at most 1.11023e-15. The coupled plan adds one constitutive
+term with 117 nonzero yz cross coefficients, maximum magnitude .20286891.
+The xy and xz pairs vanish. Its inverse-material enclosure is
+`[.03471344, 1.10143445]`.
+
+The [coupled-cylinder record](../studies/results/fdtd_subpixel_coupled_cylinder.log)
+retains paired diagonal/coupled measurements at the origin. These use the
+full transverse period 50 and time gate 45 from the historical experiment;
+the earlier 56/80/112-cell fine study used their .55-scaled counterparts.
+All four new comparisons exit 0 with unchanged engine source hashes.
+
+| Cells per wavelength | Diagonal relative error | Coupled relative error | Coupled cross-section | Coupled late-monitor energy fraction |
+| ---: | ---: | ---: | ---: | ---: |
+| 40 | -2.89917% | +6.84118% | .971627672959 | 9.44687e-9 |
+| 56 | -3.08985% | +3.72573% | .943295410203 | 3.54991e-9 |
+| 80 | -2.85086% | +1.30613% | .921291240609 | 1.30968e-9 |
+| 112 | -2.21760% | +.90022% | .917599801212 | 1.03914e-9 |
+
+The coupled error decreases substantially under refinement. An origin-only
+fit over 40/56/80 gives order 2.39444 but 13.9635% scatter; 56/80/112 gives
+2.05807 but 23.5500% scatter. Neither meets both predeclared criteria. These
+selected origin measurements do not establish a repaired cylinder gate.
+
+The complete 40/56/80-cell sweep at all eight historical placements now
+exits 0 with unchanged source hashes. It retains the full period 50 and
+gate 45 and all per-case decay, absorption and contour controls:
+
+| Cells per wavelength | Mean signed relative error | Placement RMS error | Placement range |
+| ---: | ---: | ---: | ---: |
+| 40 | +6.0280152% | 6.0707757% | 2.0865973 percentage points |
+| 56 | +3.3089053% | 3.3416264% | 1.3761035 percentage points |
+| 80 | +1.9815693% | 2.0189031% | 1.2187415 percentage points |
+
+The mean fit has **order 1.6033652** and **4.06250%** scatter; the RMS fit
+has **order 1.5865547** and **4.26088%** scatter. Both fail the required
+order of 1.8. All 70 four-placement subsets span orders 1.37696 to 1.84300;
+this descriptive spread is not a confidence interval and does not authorize
+selecting a passing subset. Cross coupling repaired the specified glass
+sphere fixture, but did not establish the cylinder convergence gate.
+
+The coupled time and instrument controls have now completed at 40 cells:
+
+| Control | Relative cross-section change |
+| --- | ---: |
+| Period and gate multiplied by 1.4 | -3.38427e-7 |
+| Period alone multiplied by 1.4 | +1.35447e-14 |
+| Period and gate multiplied by .55 | -8.13153e-5 |
+| Gate alone multiplied by .55 | -8.13153e-5 |
+| Source moved by +.2 wavelength | -3.70667e-6 |
+| Absorbing-layer inner face moved out by 1 wavelength | +1.73273e-6 |
+
+The full-duration baseline is reproduced exactly by the committed study
+module. Its contour displacement changes the cross-section by at most
+1.13752e-6 relative. The shortened schedules at 40/56/80/112 cells differ
+from the full runs by -8.13153e-5, -1.22107e-4, -2.68518e-5 and
+-1.20518e-5. The 56-cell difference exceeds the 9.7e-5 open-scene floor,
+so the shortened schedule is not selected for the placement sweep. The
+full period 50 and gate 45 are retained with per-case decay, contour and
+apparent-absorption measurements. The global interior energy still contains
+outgoing waves in the wide periodic cell; it is recorded and is not treated
+as the local monitor's settling measure.
+
+The 40-cell origin has also been rerun with NumPy and Torch, using the same
+full period/gate and paired empty reference as the completed JAX run.
+All three use unchanged production source. The comparison exits 0:
+
+| Backend | Cross-section | Relative difference from JAX | Absolute apparent-absorption difference from JAX |
+| --- | ---: | ---: | ---: |
+| JAX, compiled executor | .9716276729593055 | reference | reference |
+| NumPy | .9716276729593055 | 0 | -4.37391e-17 |
+| Torch | .9716276729593067 | 1.33227e-15 | -2.84307e-16 |
+
+This controls a backend-dependent explanation at this origin; it is not
+an additional eight-placement fit or a public-cylinder validation.
+
+The discretization needs an accuracy audit beyond the surface-volume
+formula. [Oskooi, Kottke and Johnson (2009), Fig. 1](https://math.mit.edu/~stevenj/papers/OskooiKo09.pdf)
+describes diagonal inverse-material entries at component locations and
+off-diagonal entries at a common node, connected by adjoint averages, as in
+the production operator. [Werner, Bauer and Cary (2013), sections 5 and 8](https://arxiv.org/html/1212.4857v2)
+reports eventual first-order convergence for sharp interfaces with this
+family of schemes. That paper also distinguishes accuracy from a positive
+operator certificate. The engine already checks the assembled enclosure at
+plan time. This literature comparison is a reason to investigate interface
+consistency; it does not prove the cause of this scattering result or relax
+the predeclared gate.
+
+A separate static planar-interface diagnostic isolates the field mapping
+from curved geometry and time integration. It uses a unit tangential E or
+unit normal D, integrates E exactly along each Yee edge and D across its
+dual face, then applies the production diagonal mixing and `cross_action`.
+The interface has normal `(0,.6,.8)` and offset `.23*dx`; these are fixed
+experiment coordinates, not optimized parameters. The sampling square has
+fixed physical extent and excludes the interpolation halo.
+
+| Epsilon | Excitation | Largest component error at 16/32/64 cells per unit length | Mean absolute error, 16 / 32 / 64 |
+| ---: | --- | ---: | --- |
+| 2.25 | unit tangential E | .08417033 at each level | .00180625 / .00092324 / .00046680 |
+| 2.25 | unit normal D | .05887511 at each level | .00131555 / .00066994 / .00033809 |
+| 12 | unit tangential E | .64111408 at each level | .01814667 / .00925197 / .00467191 |
+| 12 | unit normal D | .17383109 at each level | .00424308 / .00215755 / .00108800 |
+
+The exact input edge/face integrals satisfy discrete curl(E)=0 and div(D)=0
+to at most 6.026e-12, including the `1/dx` factor. At epsilon 12 the mapped
+field instead has maximum raw circulation 1.74682514 for tangential E and
+.07709699 for normal D, independent of these three spacings. Axis-aligned
+and zero-contrast controls have component error at most 1.111e-16.
+Thus this operator does not exactly preserve the integrated static solution
+at an inclined interface. These are absolute local errors in the stated
+unit fields, not scattering-efficiency errors. Their support narrows as dx
+decreases. This diagnoses a consistency limitation of the discretized map;
+it does not by itself establish the global scattering order or identify a
+stable replacement. No production formula or acceptance threshold is
+changed by the diagnostic.
+
+Exactness of the local static map also does not certify a time-domain
+replacement. [Bauer, Werner and Cary (2011)](https://www.sciencedirect.com/science/article/pii/S0021999110006698)
+derives an accurate edge/face map for a frequency-domain method; its
+accuracy result does not provide the stability guarantee needed here.
+A replacement must address interface consistency together with the
+assembled operator's symmetry, positive energy and time-step bound. The
+current measurements authorize neither an asymmetric update nor a claim
+of universal second-order convergence from the three successful sphere fits.
+
+The diagnostic is reproducible without a time-domain solve:
+
+```bash
+python studies/fdtd_subpixel_interface_consistency.py interface-consistency.json
+```
+
+```bash
+python studies/fdtd_subpixel_coupled_cylinder.py cylinder-origins.json --cells 40,56,80,112 --placements 1 --diagonal-control
+python studies/fdtd_subpixel_coupled_cylinder.py cylinder-placements.json --cells 40,56,80 --placements 8
+python studies/fdtd_subpixel_coupled_cylinder.py cylinder-short.json --cells 40,56,80,112 --placements 1 --period-scale .55 --gate-scale .55
+python studies/fdtd_subpixel_coupled_cylinder.py cylinder-controls.json --cells 40 --placements 1 --controls
+```
+
+### Short high-contrast mutation control
+
+The radius-.25 high-index sweep is retained as the convergence measurement.
+An additional epsilon-12 sphere of radius .1 supplies a shorter physical
+control for arithmetic/harmonic source mutations. It uses the same public
+scene, radiation surfaces and 40-cell vacuum resolution.
+
+| Duration | Qsca | Relative Mie error | Apparent Qabs | Largest late-monitor energy fraction |
+| ---: | ---: | ---: | ---: | ---: |
+| 24 periods | .392783093650 | +2.0580878% | -9.20641e-6 | 2.12093e-9 |
+| 48 periods | .392781513935 | +2.0576774% | 2.70344e-6 | 1.48130e-11 |
+
+Both measurements exit 0 with unchanged source hashes. The relative Qsca
+change is -4.02185e-6, compared with the 9.7e-5 open-scene floor. The test
+uses 48 periods, rounds the measured Mie error upward to 3%, and rounds
+twice the absorption residual upward to 6e-6. This is a material-rule
+regression control, not a substitute for a fitted convergence order.
+Its optical closure is 3.73589%; the main glass fixture remains the optical
+phase gate. The full raw results are in the production-sphere log.
+
+### Fresh public physics regression
+
+`tests/test_fd_mie_physics.py` performs new public `fd.run` solves. The
+recorded measurement log is not its oracle. Seven cases cover glass and
+weak-scattering convergence (three resolutions and three placements each),
+lossless absorption, independent radiation power, optical phase origin,
+angular cuts and the short high-contrast material-rule control. Shared
+in-process results are only cached to avoid repeating the same fresh solve.
+
+The complete slow tier, including these seven cases, collects and reports
+72 cases: **72 passed, zero skips, failures or errors**, exit 0, in 949.99 s.
+No `INTERNALERROR` occurred, and the production/test source hashes were
+unchanged during the run. This is a regression result, not a C3 pass; the
+failed cylinder fit above remains blocking.
+
+All eight actual source mutations below are now detected by assertions.
+Their selected test collections and reports both total nine cases, with
+nine assertion failures, no incidental errors, and exit 1 for each mutated
+pytest invocation. The mutation driver itself exits 0. Every changed file
+is restored byte for byte after its run. Source fragments, original hashes,
+test names and assertion traces are retained in the production-sphere log.
+
+| Actual source mutation | Observed assertion failure |
+| --- | --- |
+| Swap the diagonal arithmetic/harmonic weights | Short high-contrast sphere error 3.16600%, above the premeasured 3% limit |
+| Freeze the sphere normal to z | Angular peak error 3.60681%, above 1% |
+| Double the radiation amplitude gain | Angular-integral relative mismatch 3.000675, above 2e-4 |
+| Read absorption on the outer scattered-field box | Apparent Qabs = -.8673944, instead of magnitude below 6e-7 |
+| Refer the incident amplitude to the entry plane | Optical closure = -2.760918, instead of magnitude below .016 |
+| Turn smoothing off | Glass mean order 1.73505; weak-scattering fit scatter 5.11196, above .1 despite apparent order 2.82345 |
+| Fix diagonal normal weights to 1/3 | Glass mean order 1.65901, below 1.8 |
+| Remove production cross coefficients | Glass mean order 1.71401, below 1.8 |
+
+The last mutation reproduces the earlier diagonal-only failure through the
+public production solver. All seven new test cases have a corresponding
+actual source defect that fails their physical assertion. The diagonal
+weight mutations change that part of the rule; the cross coefficients are
+independently exercised by the final row.
+
+The final fast tier also exits 0: 1,907 collected and reported cases,
+**1,901 passed and six expected NumPy differentiation skips**, with no
+failures, errors or `INTERNALERROR` (762.27 s). Stage 0/1/2/3 reference
+reproduction each exits 0: **143/288/140/570 arrays reproduce bit for bit**,
+1,141 arrays in total. No reference is regenerated. All production source
+hashes remain unchanged through these checks.
 
 ### Weak-scattering forward phase
 
