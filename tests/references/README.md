@@ -46,6 +46,11 @@ differ are exactly the `__stack` pair above.
 
 ## The oracles
 
+[`lattice.py`](lattice.py) supplies pointwise discrete reciprocity, an independent
+Fourier-pole Green integral, and radiation predicted from the actual source's
+analytic cubic stamp and raw drive. It does not call the production surface
+transform. [Derivation and witnesses](../../docs/fd-lattice-radiation.md).
+
 The analytic sphere and cylinder reference in [`mie.py`](mie.py) requires only
 NumPy and SciPy. Its published coefficient pins, independent radial wave equation,
 energy and angular checks are described in [Mie validation](../../docs/fd-mie-validation.md).

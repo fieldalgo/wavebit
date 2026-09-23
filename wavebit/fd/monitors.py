@@ -276,9 +276,15 @@ class FarField:
     intensity per unit solid angle, ``(nf, ...)`` over the broadcast shape of the angles (in
     degrees; ``theta`` from ``+z``, ``phi`` from ``+x`` toward ``+y``), ``res[name].fields(theta,
     phi)`` the ``(E_theta, E_phi)`` of ``r exp(-i k r) E``, and ``res[name].flux`` the same box's
-    net outward flux, which the intensity integrated over the sphere equals. Everything is
-    post-processing in the backend's arrays, so it differentiates. ``_post.py`` derives the
-    currents, the collocation and the signs.
+    net outward flux. The default ``propagation='continuum'`` retains the original
+    continuum approximation; at finite grid spacing its angular power need not
+    equal the discrete flux. ``propagation='yee'`` evaluates the outgoing lattice
+    field, including its dispersion, reciprocal H-plane average, Green curvature
+    and energy weight. Angles then specify rays, and ``res[name].vector(theta, phi)``
+    returns all three Cartesian components. ``intensity`` includes them all.
+    Recorded-field derivatives are preserved on every backend. The Yee background
+    and angles must be concrete; its positive isotropic background and convex
+    frequency band are checked before time stepping. See docs/fd-lattice-radiation.md.
 
     **Open scenes only**: every face absorbing, the box in a uniform background with nothing
     of the scene outside it (the free-space Green's function is the whole model), and no
@@ -289,10 +295,13 @@ class FarField:
     name: str
     box: object = None
     wavelengths: tuple = None
+    propagation: str = 'continuum'
 
     def __post_init__(self):
         from .geometry import Box
         _monitor_name('FarField', self.name)
+        if self.propagation not in ('continuum', 'yee'):
+            raise ValueError("FarFieldPropagationRefused: choose propagation='continuum' or 'yee'")
         if not isinstance(self.box, Box):
             raise TypeError(f'FarField(box=...): the closed surface is an fd.Box(size=..., '
                             f'center=...); got {type(self.box).__name__}. (A plane is not a '

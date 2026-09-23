@@ -22,6 +22,7 @@ def dipole_result():
         def incident_amplitude(self,ws,plane=None):
             return np.array([A if plane==0. else A*np.exp(1j*np.pi/3)])
     class Radiation:
+        propagation = 'continuum'  # This analytic dipole is a continuum oracle.
         flux=np.array([sigma*I])
         def fields(self,theta,phi):
             t,p=np.radians(theta),np.radians(phi)

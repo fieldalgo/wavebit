@@ -152,30 +152,53 @@ class FarFieldResult:
     ``intensity(theta, phi)`` is the radiant intensity per unit solid angle ``(nf, ...)`` over
     the broadcast shape of the angles, in degrees (``theta`` from ``+z``, ``phi`` from ``+x``
     toward ``+y``); ``fields(theta, phi)`` is ``(E_theta, E_phi)`` of ``r exp(-i k r) E``; ``flux``
-    ``(nf,)`` is the net outward flux of the same box, which ``intensity`` integrated over the
-    sphere equals, and ``faces`` its six shares. Arrays of the backend that ran, so all of it
-    differentiates (``wavebit/fd/_post.py::far_field`` derives the transform).
+    ``(nf,)`` is the net outward flux of the same box, and ``faces`` its six shares.
+    ``propagation='continuum'`` retains the original continuum approximation;
+    its angular integral can differ from discrete box power. ``'yee'`` uses
+    the lattice dispersion, reciprocal staggered fields and Green curvature.
+    Then the phase is ``k_star dot r``, angles specify the outgoing ray, and
+    ``vector`` retains all three Cartesian components. ``intensity`` uses
+    the full vector and discrete flux weight. See docs/fd-lattice-radiation.md.
+    Recorded fields remain differentiable; Yee background and angles must be
+    concrete host inputs.
     """
 
-    def __init__(self, name, wavelengths, rt, accs, faces, grid, eps, mu, flux, face_flux):
+    def __init__(self, name, wavelengths, rt, accs, faces, grid, eps, mu, flux, face_flux,
+                 *, dt=None, propagation='continuum'):
         self.name = name
         self.wavelengths = wavelengths
         self.flux = flux
         self.faces = face_flux
+        self.propagation = propagation
+        self._dt = dt
         self._args = (rt, accs, faces, grid, tuple(1.0 / w for w in wavelengths), eps, mu)
 
     def _transform(self, theta, phi):
         from ._post import far_field
         rt, accs, faces, grid, freqs, eps, mu = self._args
+        if self.propagation == 'yee':
+            from ._radiation import modes, transform
+            prepared = modes(grid.dx, self._dt, freqs, eps, mu, theta, phi)
+            return transform(rt, accs, faces, grid, prepared)
         return far_field(rt, accs, faces, grid, freqs, eps, mu, theta, phi)
 
     def fields(self, theta, phi=0.0):
-        """``(E_theta, E_phi)``, each ``(nf, ...)``: ``r exp(-i k r)`` times the far field."""
-        E_t, E_p, _ = self._transform(theta, phi)
-        return E_t, E_p
+        """``(E_theta, E_phi)``, each ``(nf, ...)``: angular projections of the outgoing coefficient."""
+        return self._transform(theta, phi)[:2]
+
+    def vector(self, theta, phi=0.0):
+        """``(nf, ..., 3)`` complex Cartesian amplitude for ``propagation='yee'``.
+
+        The electric field is transverse to the discrete wavevector, which
+        need not follow the observer ray. Keep its radial component when
+        computing power; :meth:`intensity` includes it automatically.
+        """
+        if self.propagation != 'yee':
+            raise ValueError("FarFieldVectorRefused: vector() requires propagation='yee'")
+        return self._transform(theta, phi)[3]
 
     def intensity(self, theta, phi=0.0):
-        """``(nf, ...)``: the radiant intensity per unit solid angle, ``r^2 |E|^2 / (2 eta)``."""
+        """``(nf, ...)``: radiant intensity per ray solid angle for the chosen propagation model."""
         return self._transform(theta, phi)[2]
 
     def __repr__(self):

@@ -546,7 +546,12 @@ def monitor_regions(scene, grid, dt):
         if isinstance(m, FarField):
             freqs = tuple(1.0 / w for w in m.wavelengths)
             where = f'FarField({m.name!r})'
-            farfield_checks(m, scene, grid)
+            eps, mu = farfield_checks(m, scene, grid)
+            if m.propagation == 'yee':
+                from .._radiation import modes
+                # Refuse the entire spectral request before any time steps.
+                # The convex-band condition covers every later ray direction.
+                modes(grid.dx, dt, freqs, eps, mu, 0., 0.)
             lo, hi = _box_nodes(where, grid, m.box)
             _clear_of_sources(where, scene, grid, lo, hi, closed=True, tfsf=False)
             for face, _, layout in box_faces(where, grid, m.box):

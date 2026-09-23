@@ -358,7 +358,7 @@ def monitor_results(scene, plan, state, rt, sources, params=None):
             accs = {face: obs[m.name + FACE_SEP + face] for face, _, _ in faces}
             net, parts = _post.box_flux(rt, accs, faces, grid.dx)
             out[m.name] = FarFieldResult(m.name, m.wavelengths, rt, accs, faces, grid, eps, mu,
-                                         net, parts)
+                                         net, parts, dt=plan.dt, propagation=m.propagation)
         elif isinstance(m, Flux):
             where = f'Flux({m.name!r})'
             if m.box is not None:

@@ -38,6 +38,7 @@ be runnable as written.
 
 | Page | Question it answers |
 | --- | --- |
+| [`fd-radiation.md`](fd-radiation.md) | How do continuum and Yee propagation differ for the general engine's FarField monitor, and which readings and derivatives are supported? |
 | [`scene.md`](scene.md) | What is the stack made of, and what cell does it repeat in? |
 | [`light.md`](light.md) | Which polarization arrives, on which orders, from which side? |
 | [`numerics.md`](numerics.md) | Which factorization and normal field, and what do they cost? |

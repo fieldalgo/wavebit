@@ -919,7 +919,27 @@ def notes(scene, plan):
     out += _proximity_notes(scene, plan)
     out += _stabilize_notes(scene, plan)
     out += _smoothed_notes(scene, plan)
+    out += _radiation_notes(scene)
     return out
+
+
+def _radiation_notes(scene):
+    """One scene-level note for the explicitly retained continuum approximation."""
+    from ..monitors import FarField
+    from ..diagnostics import RadiationApproximationWarning
+    names = [m.name for m in scene.monitors if isinstance(m, FarField) and m.propagation == 'continuum']
+    if not names:
+        return []
+    # Same unchanged epsilon=1.1 sphere records, R/lambda=.25, three grids.
+    # These measured residuals explain the approximation; they are not a
+    # tolerance or a predicted error for another geometry or polarization.
+    return [(RadiationApproximationWarning,
+        f'FarField {names} uses continuum propagation on discrete grid fields. '
+        'A weak sphere (epsilon=1.1, radius/wavelength=0.25) measured optical-theorem '
+        'residuals 52.05%/26.38%/12.91% at 20/28/40 cells per wavelength. '
+        'These are examples, not an error bound for this scene. Use propagation="yee" '
+        'for the validated lattice radiation map within its supported frequency band; '
+        'keep continuum only when its approximation is intended. See docs/fd-lattice-radiation.md.')]
 
 
 def _smoothed_notes(scene, plan):

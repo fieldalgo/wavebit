@@ -8,7 +8,16 @@ owns it (``materials.py``, ``geometry.py``, ``boundaries.py``, ``_lower/plan.py`
 
 __all__ = ['CoarseMeshWarning', 'AbsorberProximityWarning', 'UnsettledFieldWarning',
            'GrowingFieldWarning', 'PMLStabilityWarning', 'BoundedVoxelWarning',
-           'SubpixelAccuracyWarning']
+           'SubpixelAccuracyWarning', 'RadiationApproximationWarning']
+
+
+class RadiationApproximationWarning(UserWarning):
+    """The continuum radiation approximation need not obey discrete energy/phase.
+
+    The weak-sphere optical residual was 52.05/26.38/12.91 percent at
+    20/28/40 cells per wavelength. This is a measured example, not a bound
+    for an arbitrary scene. See docs/fd-lattice-radiation.md.
+    """
 
 
 class SubpixelAccuracyWarning(UserWarning):

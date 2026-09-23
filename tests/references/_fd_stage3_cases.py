@@ -149,7 +149,7 @@ EXPECTED_WARNINGS = {
     'flux_dipole': (),
     'bloch_stack': ('CoarseMeshWarning',),
     'lamellar': ('CoarseMeshWarning',),
-    'farfield': (),
+    'farfield': ('RadiationApproximationWarning',),
     'conical': ('CoarseMeshWarning',),
 }
 
@@ -157,7 +157,7 @@ EXPECTED_WARNINGS = {
 RUN_WARNING = 'UnsettledFieldWarning'
 
 #: The warnings the scenes raise on purpose, silenced where a plan or a run is only a means.
-EXPECTED = (fd.CoarseMeshWarning, fd.UnsettledFieldWarning)
+EXPECTED = (fd.CoarseMeshWarning, fd.UnsettledFieldWarning, fd.RadiationApproximationWarning)
 
 #: Which source series a kind of source fills (the stage-2 set).
 SERIES_FIELDS = ('incident', 'incident_H', 'drive', 'work', 'field')

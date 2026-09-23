@@ -70,6 +70,7 @@ comes next. The outward-pointing rule above binds `guide/` too; only the house s
 
 | Document | Question it answers | Decision |
 | --- | --- | --- |
+| [Yee lattice radiation](fd-lattice-radiation.md) | Can a radiation map satisfy the grid's dispersion, reciprocity and energy instead of imposing continuum phase on discrete fields? | Expose the independently validated lattice transform explicitly, preserve continuum reference outputs, and keep material-boundary error separate. |
 | [Smoothed occupancy](fd-subpixel-occupancy.md) | How does fractional geometry reach material coefficients, and what can a tilted-interface study establish? | Sample each component at its own point, report bounds during planning, and keep convergence claims tied to measured error and scatter. |
 | [Mie validation](fd-mie-validation.md) | Do the analytic reference, public sphere and external Meep/FDTDX runs justify curved-interface convergence, and does adjoint constitutive coupling preserve the correct energy? | Retain placement RMS and fit scatter, isolate discarded cross terms, and validate compact D/B memory separately from the full C3 convergence gate. |
 | [Sphere clipping under JIT](fd-sphere-clip-jit.md) | Why can a sphere's voxel fill change by hundreds when compiled inside CSG? | Factor radial differences of squares so endpoint predicates stay consistent; check 32 origins, four bodies, four execution paths, and inactive-guard invariance. |

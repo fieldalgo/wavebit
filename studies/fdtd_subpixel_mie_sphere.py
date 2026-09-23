@@ -22,7 +22,7 @@ from fd_helpers import sphere_integral, to_numpy
 
 
 def sphere_scene(cpw=20, eps=2.25, periods=24., offset=(0., 0., 0.),
-                 gap=.2, pml=12, reflection=1e-8, radius=.25):
+                 gap=.2, pml=12, reflection=1e-8, radius=.25, propagation='continuum'):
     dx = 1/cpw
     center = tuple(v*dx for v in offset)
     # Nested half-widths: sphere .25, absorption .4, source .55,
@@ -30,7 +30,7 @@ def sphere_scene(cpw=20, eps=2.25, periods=24., offset=(0., 0., 0.),
     size = 2*(.75+gap+pml*dx)
     monitors = (fd.Flux('abs', box=fd.Box(size=(.8,)*3), wavelengths=(1.,)),
                 fd.Flux('sca', box=fd.Box(size=(1.4,)*3), wavelengths=(1.,)),
-                fd.FarField('ff', box=fd.Box(size=(1.5,)*3), wavelengths=(1.,)))
+                fd.FarField('ff', box=fd.Box(size=(1.5,)*3), wavelengths=(1.,), propagation=propagation))
     return fd.Scene(domain=fd.Domain(size=(size,)*3),
                     boundaries=fd.Boundaries.open(fd.PML(cells=pml, reflection=reflection)),
                     resolution=fd.Resolution(dx=dx), run=fd.Run(periods=periods),
@@ -60,7 +60,14 @@ def read_result(res, eps, radius=.25):
     # Keep both quadratures: a small phase error can dominate Im(f) when
     # scattering is weak, although the total complex-field error is small.
     reference_forward = 1j*expected[1][0]/(2*math.pi)
-    optical = 4*math.pi/(2*math.pi)*forward.imag/area
+    optical_denominator = 2*math.pi
+    if res['ff'].propagation == 'yee':
+        # Derived normal-incidence vacuum lattice optical theorem. Omega is
+        # the temporal difference symbol, and cos(k*h/2) the incident flux
+        # weight. This is NOT a substitution of k in the continuum theorem.
+        Omega = 2*math.sin(math.pi*res.plan.dt)/res.plan.dt
+        optical_denominator = Omega*math.sqrt(1-(Omega*res.plan.dx/2)**2)
+    optical = 4*math.pi/optical_denominator*forward.imag/area
     qmie = sphere_efficiencies(math.sqrt(eps),2*math.pi*radius)
     # On the 20-cell glass fixture, doubling both angular orders to 48/64
     # changes the integral by 7.78e-15 relative (recorded in the study log).
@@ -76,7 +83,7 @@ def read_result(res, eps, radius=.25):
                 # from errors in the complex forward-scattering phase.
                 incident_flux_ratio=float(incident/(abs(amplitude)**2/2)),
                 decay={k:float(v) for k,v in res.diagnostics['decay'].items()},
-                pattern=pattern, shape=res.plan.grid.n)
+                pattern=pattern, shape=res.plan.grid.n, propagation=res['ff'].propagation)
 
 
 def forward_controls(res, eps):
@@ -99,7 +106,7 @@ def forward_controls(res, eps):
         rt, accs, faces, grid, _, eps_bg, mu_bg = res[name]._args
         altered = to_numpy(far_field(rt, accs, faces, grid, (kappa/(2*math.pi),),
                                     eps_bg, mu_bg, 0., 0.)[0])[0]/amplitude
-        rows.append(dict(monitor=name, half=half,
+        rows.append(dict(monitor=name, half=half, propagation=res[name].propagation,
             original=[float(value.real), float(value.imag)],
             adjusted_k=[float(altered.real), float(altered.imag)],
             original_complex_error=float(abs(value/exact-1)),
@@ -117,6 +124,7 @@ if __name__ == '__main__':
     p.add_argument('--eps',type=float,default=2.25)
     p.add_argument('--periods',type=float,default=24.)
     p.add_argument('--backend',default='jax')
+    p.add_argument('--propagation', choices=('continuum','yee'), default='continuum')
     p.add_argument('--gap',type=float,default=.2)
     p.add_argument('--pml',type=int,default=12)
     p.add_argument('--offset',default='0,0,0')
@@ -128,9 +136,10 @@ if __name__ == '__main__':
     args=p.parse_args()
     start=time.time()
     s=sphere_scene(args.cpw,args.eps,args.periods,
-                   tuple(map(float,args.offset.split(','))),args.gap,args.pml)
+                   tuple(map(float,args.offset.split(','))),args.gap,args.pml, propagation=args.propagation)
     if args.phase_control:
-        extra = tuple(fd.FarField(name, box=fd.Box(size=(2*half,)*3), wavelengths=(1.,))
+        extra = tuple(fd.FarField(name, box=fd.Box(size=(2*half,)*3), wavelengths=(1.,),
+                                 propagation=args.propagation)
                       for name, half in (('near', .65), ('far', .85)))
         s = s.replace(monitors=s.monitors+extra)
     with warnings.catch_warnings(record=True) as notes:

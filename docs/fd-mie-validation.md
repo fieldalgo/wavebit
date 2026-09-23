@@ -1,6 +1,6 @@
 # Mie reference and the curved-interface accuracy gate
 
-Written: 2026-09-23
+Written: 2026-09-24
 
 Targets: `tests/references/mie.py`, `studies/fdtd_subpixel_mie_cylinder.py`,
 `tests/test_fd_mie_reference.py`, `tests/test_fd_mie_study.py`,
@@ -23,6 +23,15 @@ Targets: `tests/references/mie.py`, `studies/fdtd_subpixel_mie_cylinder.py`,
 `tests/test_fd_mie_transform.py`.
 
 ## TL;DR
+
+Latest radiation result: the separately derived lattice map,
+`FarField(propagation='yee')`, reduces the weak-sphere optical residuals to
+**+.0264028%/-.0433575%/-.00357156%** on the unchanged 20/28/40-cell
+records. A fresh public 20-cell run gives **+.0267422%**. Independent
+reciprocity, Fourier Green and source-current tests validate the map.
+The historical continuum results below remain intact; the production
+cylinder accuracy failure still blocks C3. See
+[the derivation and current validation](fd-lattice-radiation.md).
 
 The analytic reference and the closed-contour instrument have independent checks.
 The earlier diagonal material rule gives near-second-order fits in the cylinder's axial-electric warm-up,
@@ -1905,3 +1914,22 @@ Use new output names: the study refuses to overwrite an existing JSON/array pair
 The JSON retains source hashes, warnings, complex amplitudes, line fields, three
 surface observables and residual energies; a companion compressed array file
 preserves raw source records and sampled monitor arrays with a SHA256 digest.
+
+## Derived lattice radiation
+
+The [Yee radiation derivation and independent validation](fd-lattice-radiation.md)
+now supplies the missing complex far-field map. It includes the reciprocal
+reference wave's H-plane average, the outgoing dispersion curvature and the
+full Cartesian flux weight. Independent Fourier Green and electric/magnetic
+point-current controls validate its amplitude and phase.
+
+On the unchanged weak-sphere records, central optical residuals become
+.0264028%/-.0433575%/-.00357156% at 20/28/40 cells. Historical continuum
+residuals remain 52.04750%/26.37983%/12.91384%. A fresh public 20-cell run
+with `FarField(propagation='yee')` gives .0267422%. No material coefficient,
+recorded phase or acceptance gate is fitted to obtain these values.
+
+This resolves the identified radiation inconsistency. The production cylinder
+refinement failure and the small high-index error of the research 3D material
+candidate remain. C3 has not passed. The new radiation API preserves the
+original continuum path and its frozen reference arrays.
