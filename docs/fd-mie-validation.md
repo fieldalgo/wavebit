@@ -18,7 +18,9 @@ Targets: `tests/references/mie.py`, `studies/fdtd_subpixel_mie_cylinder.py`,
 `studies/fdtd_subpixel_triplet_cylinder.py`,
 `studies/fdtd_subpixel_triplet_sphere.py`, `tests/test_fd_triplet_sphere.py`,
 `studies/fdtd_subpixel_circle_moments.py`,
-`tests/test_fd_triplet_research.py`, `tests/test_fd_mie_physics.py`.
+`tests/test_fd_triplet_research.py`, `tests/test_fd_mie_physics.py`,
+`tests/references/mie_fields.py`, `studies/fdtd_subpixel_mie_transform.py`,
+`tests/test_fd_mie_transform.py`.
 
 ## TL;DR
 
@@ -69,6 +71,16 @@ remain unvalidated. The candidate also misses two existing production
 physical controls: glass peak-normalized angular error **1.164% > 1%**, and
 small high-index sphere scattering error **3.771% > 3%**. It is not ready
 to replace the production operator; neither limit is relaxed.
+
+An exact-near-field diagnostic now separates continuum sampling errors from
+the errors involving computed fields. At the standard radiation surface,
+weak-sphere optical closure is **1.8475%/0.9370%/0.4577%** at 20/28/40 cells
+when exact Mie fields replace the solver output, versus **52.0475%/26.3798%/
+12.9138%** in production. Surface dependence remains even with exact data.
+This rules out continuum sampling alone as an explanation of the standard
+fixture's large residual; it does not distinguish grid dispersion, source
+normalization, material error, or a mismatch between discrete fields and a
+continuum radiation formula. No production correction follows from this test.
 
 ## Independent analytic reference
 
@@ -1561,4 +1573,155 @@ python studies/fdtd_subpixel_mie_sphere.py --eps 12 --cpw 40 --periods 864 --ene
 python studies/fdtd_subpixel_mie_sphere.py --eps 12 --cpw 56 --periods 864 --energy high56.json
 python studies/fdtd_subpixel_mie_sphere.py --eps 12 --cpw 80 --periods 864 --energy high80.json
 python studies/fdtd_subpixel_mie_sphere.py --eps 1.1 --cpw 20 --phase-control phase20.json
+```
+
+## Exact Mie near fields through the radiation transform
+
+### Question and independent reference
+
+Does the large weak-scattering optical residual persist when the production
+transform receives exact continuum near fields instead of a computed field?
+`studies/fdtd_subpixel_mie_transform.py` measures that question without a time
+step, material lowering, incident-source solve, or fitted wave number.
+
+The experimental separation follows the approach described in
+[Zhai et al. (2004)](https://doi.org/10.1364/AO.43.003738).
+The exterior component series is implemented independently from equations
+2.40--2.45, printed page 22 of
+[Zhai's public 2006 dissertation](https://oaktrust.library.tamu.edu/server/api/core/bitstreams/4aa05d10-5f44-4037-ab10-7a42dd8154d8/content).
+The accessible text was checked against Maxwell identities; the PDF image
+fetch was unavailable. No external solver implementation was read.
+
+`tests/references/mie_fields.py` returns Cartesian scattered E and Z0 H for
+unit x-polarized incidence along +z, vacuum wavelength one, and a nonmagnetic
+dielectric sphere. It reuses the separately validated Mie coefficients, with
+outgoing spherical Hankel functions. The recurrence for angular functions
+does not divide by sin(theta), including the forward and backward axes.
+Moving the sphere multiplies the local incident field by exp(i k center_z);
+the corresponding far field also has the outgoing translation phase.
+
+The usual far-field series truncation is insufficient very near the sphere:
+at radii .250001/.3/.625/1.5, epsilon 1.1/2.25/12 and 100 directions,
+adding 0/2/4/8 terms differs from a +16-term control by at most
+2.58603e-7/1.39518e-9/4.65756e-12/7.14100e-17 of peak field. Eight extra
+terms are therefore used, with that provenance beside the constant. This
+measurement covers radius .25 and these dielectric contrasts; it is not a
+general near-field error bound for every size or complex refractive index.
+
+Independent controls establish that the injected fields themselves are sound:
+
+| Control | Measured result |
+| --- | --- |
+| Both vacuum Maxwell curls and divergences, Cartesian fourth-order differences | Maximum normalized residual 1.46423e-12 at difference step 1e-4; the recorded sweep covers 1e-2 to 1e-5 |
+| Outward E cross H power through spheres of radius .3/.65/1.1 | Relative difference from Mie scattering at most 4.56e-15; angular quadrature orders 16/32/64 agree |
+| Far-field limit, extrapolating radii 16/32/64/128 in 1/r | Complex peak discrepancy at most 2.20e-10, consistent with the remaining fourth-order term |
+| Independent Cartesian surface integral on a cube, with Gaussian quadrature | At most 7.49e-15 at order 24 and 1.02e-14 at order 48, versus 7.25e-7 at order 12 |
+| Translation and scalar/vectorized Yee sample checks | Maximum absolute discrepancies 7.85e-17 and 2.80e-17 |
+| NumPy, JAX eager, JAX compiled, Torch radiation outputs at three placements | Maximum absolute backend difference 1.073e-17 |
+
+The independent surface integral uses collocated vectors, explicit Cartesian
+cross products and Gaussian weights. It does not call the production layout,
+half-plane average, cyclic component assembly or surface-transform helper.
+It recovers both complex polarizations at forward, backward and oblique angles,
+including a translated sphere. Agreement of only intensity would not suffice.
+
+### The 162 measurements
+
+The raw record is
+[`fdtd_subpixel_mie_transform.log`](https://github.com/fieldalgo/wavebit/blob/fdtd-general/studies/results/fdtd_subpixel_mie_transform.log).
+All 162 cases complete with exit 0 and unchanged production/study/reference
+hashes in 207.07 s of summed measurement time. Inputs are epsilon 1.1/2.25/12,
+20/28/40 cells per wavelength, the original three sphere placements, radiation
+half-widths .65/.75/.85, and two sampling arms. The record retains actual snapped
+face coordinates; at 28 cells a requested .65 or .85 does not land exactly on
+a node. No time convergence claim is involved in this diagnostic.
+
+The first arm samples E and H at every actual Yee location read by the existing
+monitor and passes the arrays through the unchanged production transform.
+The second replaces each H pair by the exact H on its E plane. This is a
+diagnostic with information unavailable in a normal run, not an interpolation
+fix or a proposed production algorithm.
+
+At the origin and standard half-width .75, weak-scattering results are:
+
+| Cells per wavelength | Exact-input optical closure | Existing production optical closure | Exact-input angular intensity peak error |
+| ---: | ---: | ---: | ---: |
+| 20 | 1.84746% | 52.0475% | .91228% |
+| 28 | .93701% | 26.3798% | .46638% |
+| 40 | .45769% | 12.9138% | .22877% |
+
+Here exact-input closure is Qext inferred from Im(forward field), divided by
+the surface-integrated Qsca, minus one. Production closure uses its separately
+computed Qsca+Qabs. These ratios have different finite-grid denominators and
+must not be subtracted as an exact additive error budget. Neither residual is
+a fraction of energy spuriously absorbed by the sphere.
+
+At 40 cells, the exact-input forward field is
+`.020375906578 + .000733015647 i`, versus exact far field
+`.020388555018 + .000731186485 i`: .062642% complex relative error and
+.00641073 degrees of phase error. The inferred Qext is .250164% above exact
+Mie, while surface power is .206583% below it. With exact collocated H,
+forward complex error falls to .003079%, phase to -.00159908 degrees, and
+closure to -.0730533%. This measures the effect of H averaging in this arm;
+it does not make computed Yee fields satisfy continuum Maxwell equations.
+
+Surface dependence is still material for phase-sensitive weak scattering:
+
+| Half-width, 40 cells, origin | Staggered-input phase error | Staggered optical closure | Exact-collocated-H closure |
+| ---: | ---: | ---: | ---: |
+| .65 | -.0216519 degrees | -.98198% | -.34090% |
+| .75 | .0064107 degrees | .45769% | -.07305% |
+| .85 | .0600854 degrees | 3.02685% | .45612% |
+
+The two displaced spheres also matter: at standard half-width and 40 cells,
+weak closure ranges from .45769% to .69496%. Mean angular peak errors over all
+three placements, for 20/28/40 cells, are .91122/.46610/.22869% (epsilon 1.1),
+.81947/.41598/.20315% (2.25), and 2.30130/1.18763/.58598% (12). Thus there is
+measurable radiation sampling error even with exact input. Choosing a surface
+where one error happens to cancel is not an accuracy certificate.
+
+### What this establishes, and what remains
+
+For a fixed linear radiation map L_h and incident-normalized computed field
+F_h, the complex amplitude error splits exactly as
+
+    L_h(F_h) - f_exact = [L_h(F_exact) - f_exact] + L_h(F_h - F_exact).
+
+The new experiment measures the first bracket. The existing weak-scattering
+standard-surface residual is much larger. Further investigation must therefore
+include the computed field and its incident phase reference. The second term
+includes material discretization, finite-grid propagation, source normalization,
+and their interaction with the continuum radiation map. This experiment does
+not assign that term to one update equation, prove a source bug, or derive a
+discrete Green function. A wave-number substitution remains unjustified.
+
+The next discriminating control is complex incident/reference propagation and
+sampled scattered E/H on the same surfaces, separating vacuum propagation from
+material-boundary error. Repeating a long high-index spatial sweep would not
+answer that question. The existing inclined-interface consistency failure and
+the cylinder/candidate accuracy failures remain open. C3 has not passed, and
+the production solver is unchanged.
+
+### Regression witnesses and reproduction
+
+The eleven new cases pass. Eleven actual source defects produce fourteen
+assertion failures: wrong electric azimuth sign, inadequate near-field series,
+doubled reference amplitude, omitted incident translation phase, reversed
+magnetic surface-current sign, omitted H staggering, doubled production
+radiation gain (all four execution modes), halved power normalization, and
+omitted surface/point/finite-input refusals. Every mutation exits 1 with matching
+collection/report counts, no incidental errors or INTERNALERROR. The driver
+exits 0 and restores all three touched source files byte for byte.
+
+Final targeted verification (the Mie coefficient, measurement and exact-field
+tests plus the documentation contract) exits 0 with **101 collected/reported
+passes**, no skips, failures, errors or INTERNALERROR. Stage 0/1/2/3 reference
+checks each exit 0: **143/288/140/570 arrays reproduce bit for bit**, 1,141 in
+total. Source hashes remain unchanged throughout. The complete engine fast
+and slow tiers are not rerun for this research-only addition; earlier full
+suite counts above are historical, not results from this diagnostic.
+
+```bash
+python studies/fdtd_subpixel_mie_transform.py exact-transform.json
+python -m pytest tests/test_fd_mie_transform.py -p no:cacheprovider -q
 ```

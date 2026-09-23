@@ -49,6 +49,12 @@ differ are exactly the `__stack` pair above.
 The analytic sphere and cylinder reference in [`mie.py`](mie.py) requires only
 NumPy and SciPy. Its published coefficient pins, independent radial wave equation,
 energy and angular checks are described in [Mie validation](../../docs/fd-mie-validation.md).
+
+[`mie_fields.py`](mie_fields.py) adds exact exterior E/H for the diagnostic
+radiation study. Both Maxwell curls, concentric-sphere power, complex far limits,
+translation and an independent surface integral validate its component series.
+Its measured truncation scope and source-mutant witnesses are documented in
+[the exact-near-field section](../../docs/fd-mie-validation.md#exact-mie-near-fields-through-the-radiation-transform).
 It does not import the FDTD engine or depend on a captured FDTD answer.
 
 | Oracle | Reaches | Generator needs | Golden |
