@@ -16,6 +16,7 @@ Targets: `tests/references/mie.py`, `studies/fdtd_subpixel_mie_cylinder.py`,
 `studies/fdtd_subpixel_coupled_cylinder.py`,
 `studies/fdtd_subpixel_interface_consistency.py`,
 `studies/fdtd_subpixel_triplet_cylinder.py`,
+`studies/fdtd_subpixel_triplet_sphere.py`, `tests/test_fd_triplet_sphere.py`,
 `studies/fdtd_subpixel_circle_moments.py`,
 `tests/test_fd_triplet_research.py`, `tests/test_fd_mie_physics.py`.
 
@@ -58,9 +59,16 @@ cylinder comparison: all eight placements at 40/56/80 cells give mean/RMS
 orders **1.82481/1.82899**, with **4.5563%/4.5894%** fit scatter. Its finest
 mean error is **1.00864%**. This is a different research operator; the
 production engine remains unchanged. The result does not combine with the
-earlier production sphere measurements to certify C3. Three-dimensional
-geometry, public preparation, differentiation and sphere physics still need
-validation before this candidate could replace the production map.
+earlier production sphere measurements to certify C3. Its separate 3D
+research extension now gives glass/weak-sphere mean orders **2.03778/2.04781**
+over the original three resolutions and placements, with independent
+geometry, backend and local radius-derivative checks. The weak-scattering
+optical residual remains **12.90%** at 40 cells. High-index convergence with
+the new operator, full physical derivatives and production integration
+remain unvalidated. The candidate also misses two existing production
+physical controls: glass peak-normalized angular error **1.164% > 1%**, and
+small high-index sphere scattering error **3.771% > 3%**. It is not ready
+to replace the production operator; neither limit is relaxed.
 
 ## Independent analytic reference
 
@@ -1208,12 +1216,12 @@ global interior-energy fraction is .00026933; the wide cell still holds
 outgoing radiation, so this is not substituted for the local decay measure.
 
 **This does not repair the production cylinder or complete C3.** Its existing
-operator still has the failed order 1.60337. The candidate has only a
-research invariant-x TE implementation, using the earlier empty-scene
-preparation limits. Public-cylinder support remains C4. A three-dimensional
-extension needs its own edge/face geometry, assembled stability certificate,
-backend and derivative checks, and fresh sphere physics. The old production
-sphere fits cannot be reused to validate a changed operator.
+operator still has the failed order 1.60337. This cylinder instrument uses
+the earlier empty-scene preparation limits. Public-cylinder support remains
+C4. The separate three-dimensional extension below has its own edge/face
+geometry, stability certificate, backend and local derivative checks, and
+fresh sphere measurements. The old production sphere fits cannot be reused
+to validate a changed operator.
 
 For the same static tilted interface as above, the asymmetric local map
 reproduces both exact excitations with maximum component error 1.11023e-15
@@ -1270,6 +1278,172 @@ python studies/fdtd_subpixel_triplet_cylinder.py triplet-static.json --mode stat
 python studies/fdtd_subpixel_triplet_cylinder.py triplet-preflight.json --mode preflight --cells 40 --placements 0
 python studies/fdtd_subpixel_triplet_cylinder.py triplet-scattering.json --cells 40,56,80 --placements 0,1,2,3,4,5,6,7
 python studies/fdtd_subpixel_circle_moments.py circle-moments.json --cells 80 --placement 4
+```
+
+### Three-dimensional edge/face sphere extension
+
+The research construction now has eight oriented xyz triplets. It uses the
+exact intersection of a sphere with each E component's line segment and
+each D component's transverse dual square, at that component's own edge
+midpoint. The normal is radial at the common node. The center's arbitrary
+unit normal affects only homogeneous blocks and cancels from the result.
+No production material operator or public API is replaced.
+
+For edge fractions `ell`, face fractions `a`, material epsilon `e` and a
+unit normal `n`, the local map is `Gamma @ inv(Pi)`. Define
+`d_i = 1 + (e-1)*a_i`, `beta_i = (e-1)*a_i/d_i`, and
+`denom = 1-sum(beta_i*n_i^2)`. The rank-one inverse gives
+
+```
+K_ij = delta_ij/d_i
+     + (beta_i + (1/e-1)*ell_i)*n_i*n_j/(denom*d_j).
+```
+
+The time step uses only `(K+K.T)/2`. The nonsymmetric map is an exact-static
+diagnostic, not a time-domain operator. Eight oriented permutations each
+cover every electric degree of freedom once; averaging their symmetric
+blocks gives a symmetric assembled map. Before execution, the preparation
+checks finite fractions in [0,1], exact vacuum blocks at all six patch ends,
+symmetry, strictly positive local eigenvalues, and the full curl-norm CFL
+bound. The whole scene is refused by name if any check fails. No exception
+or dynamic acceptance branch is hidden in a compiled cell update.
+
+Unlike the historical cylinder fixture, this study first calls the ordinary
+public Sphere scene planner. It retains material-resolution, source,
+monitor, layer, loss and initial-field checks. It then substitutes the
+research electric term in a vacuum background and certifies the expanded
+patch. Magnetic, anisotropic, multiple-body and non-vacuum scenes are outside
+this instrument's scope. The normal public accuracy warning is retained in
+the raw records; its old production fit does not certify this substituted
+operator.
+
+A provisional unguarded disc-area evaluation gave a full face fraction
+`1+2.29e-14`. The extension handles geometrically full/empty squares by
+comparing the circle radius with the nearest/farthest square points before
+evaluating a partial cut. This sets exact full/empty values from geometry,
+without clipping a computed fraction to one. Inactive roots and inverse
+trigonometric inputs are made regular before evaluation. Nine preliminary
+grid/placement combinations give edge and face ranges exactly [0,1].
+Independent adaptive chord integration over 30 placements and all three
+face directions, 5,400 samples in total, differs by at most **9.41425e-12**
+in dimensionless area. This is a measured finite sample, not a universal
+error bound for every grazing cut.
+
+Independent matrix indexing on a 7-cubed compact grid differs from the
+shift implementation by **2.49801e-16**. The diagonal/cross split differs by
+**2.84495e-16**. The indexed matrix is exactly symmetric and its minimum
+eigenvalue is **.08191882**. Dense inversion independently checks the
+rank-one formula within **1.77636e-15**; exact static line/face fields agree
+within **1.22125e-15** in the initial audit. NumPy, eager JAX, compiled JAX
+and Torch small-grid maps differ by at most **5.55112e-15**, and their
+assembled actions by at most **4.21885e-15**. The tests additionally compare
+30 shifted point clouds and all four execution modes at the independently
+measured area-oracle scale.
+
+A local-map radius derivative is nonzero: JAX gives **311.149506244259**,
+Torch **311.149506244267**. A finite-difference step sweep finds topology
+changes at the larger steps; at radius step **3e-7**, the slope is
+**311.149502422540**, differing by **1.23e-8** relative. The test retains the
+predeclared `1e-7*abs(g_fd)+1e-10*abs(observable)` comparison. This checks a
+local radius derivative away from geometry events; a complete physical
+adjoint and all geometric parameter derivatives remain unvalidated.
+
+The glass sphere uses the unchanged physical fixture: epsilon 2.25,
+radius/wavelength .25, 24 periods, 20/28/40 cells per wavelength, and all
+three original placements. All nine rows finish with exit 0 and unchanged
+measured source hashes:
+
+| Cells per wavelength | Mean relative error | Placement RMS error | Placement range |
+| ---: | ---: | ---: | ---: |
+| 20 | 2.76349106% | 2.76355915% | .04399814 percentage points |
+| 28 | 1.38223130% | 1.38223674% | .00895205 percentage points |
+| 40 | .67292166% | .67292201% | .00162337 percentage points |
+
+Mean/RMS fitted orders are **2.03778331/2.03781785**, with
+**.472412%/.473014%** fit scatter. This meets the same finite-comparison
+requirements, including separation from the 9.7e-5 instrument floor.
+It does not improve every observable: the finest glass mean error is
+**.67292%**, larger than the unchanged production operator's **.44610%**.
+The candidate's motivation remains the cylinder improvement. A fit that
+passes must not be described as uniformly smaller error.
+
+The weak sphere repeats the same nine conditions with epsilon 1.1. Every
+case exits 0; mean/RMS orders are **2.04780880/2.04801434** with
+**.381547%/.375413%** scatter. Its errors also exceed the existing
+production weak-sphere measurements:
+
+| Cells per wavelength | Mean relative error | Placement RMS error | Placement range |
+| ---: | ---: | ---: | ---: |
+| 20 | 1.70753179% | 1.70785607% | .08074341 percentage points |
+| 28 | .86224652% | .86227082% | .01474500 percentage points |
+| 40 | .41301434% | .41303319% | .00950983 percentage points |
+
+The weak forward optical-theorem residual at the origin is still
+**51.8192% / 26.3226% / 12.9000%** at 20/28/40 cells. The unchanged
+production measurements remain **52.0475% / 26.3798% / 12.9138%**. This
+compares extinction inferred from the complex forward field with
+`Qsca+Qabs`; it is not a claim that 13% of the time-domain energy is lost.
+No underived wave-number substitution is applied to either result.
+
+Across the glass/weak nine-case groups respectively, maximum apparent
+absorption magnitudes are **1.17370e-6 / 1.22721e-6**, maximum late-monitor
+energy fractions **1.56150e-11 / 5.22515e-9**, minimum local energy
+eigenvalues **.4378716 / .9074754**, and maximum `dt^2*rate`
+**.2559408 / .2505515**. These distinguish settled, certified calculations
+from accurate scattering predictions; they do not waive the physical gates.
+
+At 40 cells, glass peak-normalized angular errors reach **1.1638569%**,
+exceeding the existing public physics test's **1%** limit. The origin's
+optical closure is 1.234959%, the far-field/flux-surface gap 7.60333e-8,
+and the angular integral gap 1.68941e-4. The side-scattering relative error
+at theta=90 degrees remains below 1.368%. Thus it is specifically the
+peak-normalized angular control, not all radiation controls, that fails
+for this candidate. The limit stays unchanged.
+
+The additional small high-index control retains radius/wavelength .1,
+epsilon 12, 40 cells, origin placement and 48 periods. It exits 0 with
+`Qsca=.399374827329122`, relative Mie error **3.7708391%**,
+`Qabs=2.89558e-6`, and largest late-monitor energy fraction **1.57245e-11**.
+Its scattering error exceeds the existing **3%** production control,
+which measured 2.0576774%. This is another measured accuracy failure of
+the candidate. The settled small-sphere run is not a time-convergence
+certificate for the unmeasured radius-.25 high-index problem. No new long
+864-period sweep has been started and no old high-index fit is credited
+to this changed operator.
+
+All twelve new research tests pass. Fourteen actual study-source defects
+produce eighteen assertion-failure witnesses, including every parameterized
+test case. They change the edge chord, face slice, rank-one sign, symmetry,
+radial normal, orientation weight, cross increment, positive-energy check,
+CFL check, vacuum halo, fraction bounds, background scope, radius derivative
+and physical material inclusion. Every selected mutant exits 1, collection
+and report counts agree, and there are no incidental errors or
+`INTERNALERROR`. All source bytes are restored. These passes validate the
+research instrument; they do not turn its two failed production controls
+or weak forward-phase discrepancy into C3 passes.
+
+The complete 19 physical rows, energy histories, source hashes, initial
+geometry/operator measurements and mutation witnesses are retained in the
+[3D research record](../studies/results/fdtd_subpixel_triplet_sphere.log).
+The glass measurement and mutation audit precede an additive CLI radius
+option; their exact source hashes are preserved. The material, geometry,
+assembly and certificate arithmetic is unchanged in the weak and small
+high-index runs. All measurement batches exit 0 with unchanged watched
+source during execution. The production `wavebit/fd/` tree is unchanged.
+
+Final targeted validation exits 0: **86 fast plus two slow cases**, with
+matching collected/reported counts, no skips, errors, failures or
+`INTERNALERROR`. This includes both research instruments and the document
+contracts. The slow physical controls run sequentially. Fresh stage 0/1/2/3
+reference checks each exit 0, reproducing **143/288/140/570 arrays bit for
+bit** (1,141 total); no reference is regenerated. Measured study, test and
+engine sources remain unchanged throughout those checks. The earlier full
+production regression counts are not relabeled as a new full-suite run.
+
+```bash
+python studies/fdtd_subpixel_triplet_sphere.py glass-triplet.json
+python studies/fdtd_subpixel_triplet_sphere.py weak-triplet.json --eps 1.1
+python studies/fdtd_subpixel_triplet_sphere.py small-high-triplet.json --eps 12 --radius .1 --cells 40 --placements 0 --periods 48
 ```
 
 ### Short high-contrast mutation control
