@@ -15,7 +15,9 @@ Targets: `tests/references/mie.py`, `studies/fdtd_subpixel_mie_cylinder.py`,
 `wavebit/fd/_kernel/observe.py`, `tests/test_fd_constitutive.py`,
 `studies/fdtd_subpixel_coupled_cylinder.py`,
 `studies/fdtd_subpixel_interface_consistency.py`,
-`tests/test_fd_mie_physics.py`.
+`studies/fdtd_subpixel_triplet_cylinder.py`,
+`studies/fdtd_subpixel_circle_moments.py`,
+`tests/test_fd_triplet_research.py`, `tests/test_fd_mie_physics.py`.
 
 ## TL;DR
 
@@ -50,6 +52,15 @@ fails: all eight placements at 40/56/80 cells give mean/RMS orders
 eight actual source mutants are caught; that does not waive the cylinder gate.
 The weak-scattering optical
 theorem limitation below is retained.
+
+A separate symmetric edge/face research comparator now meets the finite
+cylinder comparison: all eight placements at 40/56/80 cells give mean/RMS
+orders **1.82481/1.82899**, with **4.5563%/4.5894%** fit scatter. Its finest
+mean error is **1.00864%**. This is a different research operator; the
+production engine remains unchanged. The result does not combine with the
+earlier production sphere measurements to certify C3. Three-dimensional
+geometry, public preparation, differentiation and sphere physics still need
+validation before this candidate could replace the production map.
 
 ## Independent analytic reference
 
@@ -1109,6 +1120,156 @@ python studies/fdtd_subpixel_coupled_cylinder.py cylinder-origins.json --cells 4
 python studies/fdtd_subpixel_coupled_cylinder.py cylinder-placements.json --cells 40,56,80 --placements 8
 python studies/fdtd_subpixel_coupled_cylinder.py cylinder-short.json --cells 40,56,80,112 --placements 1 --period-scale .55 --gate-scale .55
 python studies/fdtd_subpixel_coupled_cylinder.py cylinder-controls.json --cells 40 --placements 1 --controls
+```
+
+### Exact circle moments and a separate edge/face comparator
+
+The exact arc-moment control has completed at the worst placement of the
+existing 80-cell sweep, `(1/8,4/9)` cell offsets. It changes both the
+component diagonal moments and the common-node yz moment, keeping the
+production interpolation and time stepper. The full period 50 and gate 45
+are retained. The control exits 0 with unchanged engine source hashes:
+
+| Moment rule | Cross-section | Relative error | Apparent absorption cross-section |
+| --- | ---: | ---: | ---: |
+| Nearest tangent normal | .932374635914496 | 2.52487184% | 3.83684e-7 |
+| Exact clipped-arc moments | .932237121241328 | 2.50975058% | 1.82820e-7 |
+
+The exact circle is split at its intersections with the four voxel sides.
+On each retained arc of width d and midpoint m, the diagonal integrals use
+`d*(1 +/- cos(2*m)*sinc(d/pi))/2` and the yz integral uses
+`d*sin(2*m)*sinc(d/pi)/2`, multiplied by the radius. An independent
+divergence identity using the clipped disc area and straight face integrals
+differs by at most 1.45717e-14 after division by dx in this displaced case.
+The earlier 40-cell origin is less well conditioned at grazing cuts: its
+largest unweighted identity discrepancy is 1.04292e-8. That discrepancy
+must not be described as machine-precision agreement. The 40-cell scattering
+error changes from 6.84118% to 6.39030% with exact moments. Neither bounded
+control establishes a repaired convergence gate.
+The arithmetic is retained in `studies/fdtd_subpixel_circle_moments.py`,
+with a direct quadrant-integral test for length and diagonal/cross moments.
+
+The separate `fdtd_subpixel_triplet_cylinder.py` research comparator evaluates
+the symmetric edge/dual-face construction of
+[Werner, Bauer and Cary (2013), sections 4 and 7](https://arxiv.org/html/1212.4857v2).
+It uses exact circle/segment intersections for E-edge length fractions and
+D-dual-face fractions. In this invariant-x TE problem, each node has four
+oriented yz pairs. The local map is `Gamma @ inv(Pi)`, with each row of
+Gamma weighted by its edge fraction and each row of Pi by its face fraction.
+Only its symmetric part is used in time stepping. The asymmetric map is
+retained solely as a static consistency control; it is not advanced in time.
+The paper does not promise universal second-order accuracy for this
+symmetric construction, and this experiment makes no such assumption.
+
+All local symmetric blocks are checked before a solve. Their four
+permutations have weight 1/4 and cover every yz degree of freedom once;
+their average is therefore positive definite when every block is positive
+definite. The minimum and maximum local eigenvalues enclose the assembled
+operator. Exact vacuum blocks at the compact region's ends complete this
+argument for zero extension. The uncoupled x diagonal and the existing curl
+norm bound enter the time-step check. Failed scope, halo, symmetry, positive
+energy or CFL checks refuse the whole prepared experiment by name. This
+certificate is derived for this lossless, invariant-x fixture; it is not a
+general public-geometry certificate.
+
+At the 40-cell origin the independent indexed matrix agrees with the shift
+implementation to 1.66534e-16, is exactly symmetric, and has minimum
+eigenvalue .08124190. The local lower bound is .06431980. Before the spatial
+sweep, all 24 preparations have positive lower bounds (minimum .05429109)
+and `dt^2 * rate < 1` (maximum .27589319). These are stability evidence,
+not a scattering-accuracy result.
+
+The full spatial comparison now exits 0 with 24 of 24 rows and unchanged
+source hashes. The same eight placements, period 50, gate 45 and three
+resolutions are used; neither a favorable subset nor a new resolution range
+is selected after seeing these results. The complete measurements and
+energy histories are in the
+[research comparison record](../studies/results/fdtd_subpixel_triplet_cylinder.log).
+
+| Cells per wavelength | Mean relative error | Placement RMS error | Placement range |
+| ---: | ---: | ---: | ---: |
+| 40 | 3.57784224% | 3.59012574% | .91980010 percentage points |
+| 56 | 1.80991510% | 1.81270518% | .31959441 percentage points |
+| 80 | 1.00863719% | 1.00915962% | .09981245 percentage points |
+
+The mean fit gives **order 1.82480894**, with **4.55629%** scatter; the RMS
+fit gives **1.82899317**, with **4.58937%** scatter. Both meet the predeclared
+finite-comparison requirements of order at least 1.8 and scatter below 10%.
+All 70 four-placement subsets span orders 1.72505 to 1.91950 (standard
+deviation .04477); this is descriptive subset sensitivity, not a confidence
+interval and not permission to choose a subset. No claim about an eventual
+second-order asymptote follows from this finite range.
+
+Across all 24 cases the largest late-monitor energy fraction is 6.01283e-9,
+the largest apparent absorption cross-section magnitude is 7.90565e-6, and
+moving the measuring contour by four cells changes the cross-section by at
+most 1.50287e-6 relative. No runtime warning is emitted. The largest final
+global interior-energy fraction is .00026933; the wide cell still holds
+outgoing radiation, so this is not substituted for the local decay measure.
+
+**This does not repair the production cylinder or complete C3.** Its existing
+operator still has the failed order 1.60337. The candidate has only a
+research invariant-x TE implementation, using the earlier empty-scene
+preparation limits. Public-cylinder support remains C4. A three-dimensional
+extension needs its own edge/face geometry, assembled stability certificate,
+backend and derivative checks, and fresh sphere physics. The old production
+sphere fits cannot be reused to validate a changed operator.
+
+For the same static tilted interface as above, the asymmetric local map
+reproduces both exact excitations with maximum component error 1.11023e-15
+across all three contrasts, both normals and three spacings. Symmetrization
+leaves a residual: at epsilon 12 its tangential maximum is .22594325 and
+normal maximum .09082507, compared with .64111408 and .17383109 for the
+production map. Its tangential raw circulation is .62080315, but its normal
+raw circulation is .09200501, larger than the production value .07709699.
+These mixed local results require the scattering comparison; improvement of
+one norm is not proof of a higher convergence order.
+
+The initial nine research tests pass, including NumPy, JAX eager,
+JAX compiled and Torch incremental actions. Eight actual study-source
+mutations produce eleven assertion failures with matching collected and
+reported counts, no incidental errors, and exit 1 for each mutant. They
+replace edge fractions by area fractions, choose the wrong transverse chord,
+change a 1/4 weight to 1/3, reverse the adjoint shift, omit symmetrization,
+reverse the cross increment, permit negative local energy, and remove the
+CFL check. Every mutation is restored byte for byte.
+
+Three further tests cover exact quadrant moments, 90-degree rotation
+covariance of the isotropic circle, and a fresh paired FDTD/Mie physical
+control. The physical control keeps the measured 40-cell origin's 4.09268%
+error below 5%, with its late-monitor fraction below 1e-7. This one-resolution
+limit is a control of the instrument; it is not a substitute for the fit.
+
+The mutation audit exposed a blind spot: a frozen circle normal survived
+that scalar-power control (pytest exit 0, mutation-driver exit 1). This
+unsuccessful witness is retained. The added rotation-covariance test catches
+the same actual source defect: its discrepancy reaches .79469953, against
+the healthy measurement 3.33067e-16 and assertion limit 1e-14. Doubling the
+arc cross moment is caught by the analytic quadrant integral; omitting the
+material from the local blocks is caught by the physical control (scattering
+zero, hence relative error one). In total, **11 distinct source defects**
+have **14 assertion-failure witnesses**, covering all twelve new test cases.
+The successful witnesses have matching collected/reported counts, no
+incidental errors, and exit 1. All mutated files are restored byte for byte.
+These tests validate the research instrument; its convergence evidence is
+the separately retained 24-case experiment.
+
+Final targeted validation exits 0: **76 collected and 76 reported**, all
+passed (the twelve research cases plus 64 documentation contracts), with no
+skips, errors or `INTERNALERROR`. The portable exact-moment study also
+exits 0 and reproduces the earlier 40-cell tangent/exact cross-sections.
+Fresh stage 0/1/2/3 reference checks each exit 0: **143/288/140/570 arrays
+reproduce bit for bit**, 1,141 in total. No reference is regenerated.
+Engine and measured study/test source hashes remain unchanged during these
+checks. The full fast and slow regression counts above belong to the
+previous production validation; they are not relabeled as a new full-suite
+run for these research-only additions.
+
+```bash
+python studies/fdtd_subpixel_triplet_cylinder.py triplet-static.json --mode static
+python studies/fdtd_subpixel_triplet_cylinder.py triplet-preflight.json --mode preflight --cells 40 --placements 0
+python studies/fdtd_subpixel_triplet_cylinder.py triplet-scattering.json --cells 40,56,80 --placements 0,1,2,3,4,5,6,7
+python studies/fdtd_subpixel_circle_moments.py circle-moments.json --cells 80 --placement 4
 ```
 
 ### Short high-contrast mutation control
