@@ -1,6 +1,6 @@
 # Mie reference and the curved-interface accuracy gate
 
-Written: 2026-09-22
+Written: 2026-09-23
 
 Targets: `tests/references/mie.py`, `studies/fdtd_subpixel_mie_cylinder.py`,
 `tests/test_fd_mie_reference.py`, `tests/test_fd_mie_study.py`,
@@ -36,6 +36,14 @@ over the same three placements, with **0.9744%** scatter. This comparator is
 research code. The production engine now includes the same adjoint cross
 coupling and consistent compact D/B memory. Its validation below is separate
 from this comparator; C3 remains incomplete until all its gates pass.
+
+The production sphere sweeps now have all three resolutions and three
+placements at epsilon 1.1, 2.25 and 12. Their fitted orders are **2.07490,
+2.02267 and 1.82685**, respectively. The high-index sweep finishes with a
+6.18% mean scattering error at 80 cells per wavelength; a fitted order is
+not a claim of small absolute error. Physical source mutations and coupled
+cylinder revalidation remain outstanding. The weak-scattering optical
+theorem limitation below is retained.
 
 ## Independent analytic reference
 
@@ -882,8 +890,8 @@ they do not prove the same temporal error at every resolution or placement.
 Each new run retains its decay, absorption and energy history, and any
 unresolved case requires its own extension. The 40-cell origin still differs
 from Mie by -20.8123%, far above the measured time-extension change. The
-56-cell origin has now completed. The full 40/56/80-cell, three-placement gate
-and its source mutations remain incomplete.
+full 40/56/80-cell, three-placement sweep is now complete. Its physical source
+mutations remain incomplete.
 
 ### High-index spatial refinement
 
@@ -895,20 +903,50 @@ coupled-kernel sweep.
 | ---: | ---: | ---: | ---: | ---: |
 | 40 | 3.41728005839 | -20.8122651% | -6.56556e-11 | 7.08933e-10 |
 | 56 | 3.80237882305 | -11.8884724% | -6.57791e-6 | 5.42638e-10 |
+| 80 | 4.05061866133 | -6.1360757% | 6.30685e-6 | 4.12368e-10 |
 
 The 56-cell run takes 6351.5 seconds on the stated CPU setup. Its final
 interior energy is 1.08325e-8 of its peak; the 816..864 fit gives an energy
 time constant of 116.78486 periods and maximum log residual 7.42419e-5.
-These residuals permit proceeding to the 80-cell measurement; this is not
+These residuals permitted proceeding to the 80-cell measurement; this is not
 an independent time-extension bound at 56 cells.
 
 At 56 cells, the FarField surface flux differs from the scattered Flux by
 7.81749e-8 relative, the angular intensity integral by -3.91514e-4, and the
 optical-theorem result from Qsca+Qabs by -.209252%. Each angular cut has
 15.2871% peak-normalized error against Mie. The descriptive two-resolution
-Qsca order is 1.66425, below 1.8; two origin placements are insufficient to
-replace the required three-resolution, three-placement fit. The 80-cell
-origin is running. No high-index convergence pass is claimed.
+Qsca order is 1.66425, below 1.8; two resolutions at one placement cannot
+replace the required three-resolution, three-placement fit.
+
+All nine runs at offsets `(0,0,0)`, `(.5,1/3,.2)` and `(.25,2/3,.4)` have
+now completed with exit code 0. The offsets are fractions of a grid cell.
+The finite batch also exits 0 and verifies unchanged production source
+hashes before and after each run. No unresolved 24- or 48-period result
+enters this fit.
+
+| Cells per wavelength | Mean signed relative error | Placement RMS error | Placement range |
+| ---: | ---: | ---: | ---: |
+| 40 | -21.9223315% | 21.9363882% | 1.6892727 percentage points |
+| 56 | -11.6311266% | 11.6326012% | .4282868 percentage points |
+| 80 | -6.1771641% | 6.1772496% | .0794428 percentage points |
+
+The mean fit gives **order 1.8268534**, with **1.27144%** log-fit scatter;
+the RMS fit gives **1.8277523**, with **1.28560%** scatter. Both meet the
+predeclared order 1.8 and scatter 10% criteria. The finest mean error is
+636.82 times the previously measured 9.7e-5 open-scene floor. Cancellation
+between placements does not explain the fitted order.
+
+Across the nine runs, the largest absolute apparent Qabs is 6.57791e-6,
+the largest late-monitor energy fraction is 7.41356e-10, and the final
+interior energy divided by its peak ranges from 9.30745e-9 to 1.17275e-8.
+These per-case controls accompany the origin's time-extension measurement;
+they are not an independent temporal-error bound for every placement.
+At 80 cells the largest peak-normalized angular-cut error is 7.98238%,
+and the largest optical-theorem closure error is .0972985%.
+
+The completed measurements establish the stated high-index scattering
+convergence criterion. They do not finish C3: actual physical source
+mutations and the cylinder revalidation are still required.
 
 The old epsilon-12 TE cylinder failure also remains unresolved. Its study
 prepares an empty scene and replaces only diagonal coefficients, so it has
