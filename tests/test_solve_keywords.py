@@ -147,6 +147,88 @@ def test_a_real_condition_still_reaches_the_solve_and_moves_the_answer(backend):
     assert float(np.asarray(solver.thickness)[0]) == pytest.approx(3 * H)
 
 
+#: A scene every door can be moved on: three rows, so it is 2D; a raster ``mu``, so
+#: `mu_conv_matrices` has something to build; NVF, so a freeze records a normal field per
+#: quantity; and `answers='field'`, so `solve_field` is open.
+DOOR_EPS = np.array([[[1.0, 1.0, 4.0, 4.0], [4.0, 4.0, 1.0, 1.0], [1.0, 4.0, 4.0, 1.0]]])
+DOOR_MU = np.array([[[1.0, 1.0, 1.6, 1.6], [1.6, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0]]])
+
+#: Per door, a condition its answer depends on and the value it is moved to. `thickness`
+#: changes nothing a convolution matrix or a frozen record holds, so the builders are moved by
+#: the field they build instead.
+MOVES = {
+    'solve_field': ('thickness', [3 * H]),
+    'freeze_geometry': ('structure', DOOR_EPS[:, ::-1]),
+    'eps_conv_matrices': ('structure', DOOR_EPS[:, ::-1]),
+    'mu_conv_matrices': ('mu', DOOR_MU[:, :, ::-1]),
+}
+
+
+def _door_scene(backend, **over):
+    kw = dict(backend=backend, structure=DOOR_EPS, mu=DOOR_MU, period=[P, P],
+              truncation_order=[2, 2], thickness=[H], wavelength=WL, top=1.0, bot=1.0,
+              answers='field', factorization='nvf')
+    kw.update(over)
+    return wavebit.rcwa(**kw)
+
+
+def _leaves(value):
+    """Every array in a door's answer, in a fixed order, as NumPy."""
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        return [leaf for item in value for leaf in _leaves(item)]
+    return [np.asarray(value.detach() if hasattr(value, 'detach') else value)]
+
+
+#: What each door answers with, as arrays. The frozen record is read by its content, since a
+#: record holding arrays compares by identity and two freezes of one scene are never `==`.
+READOUT = {
+    'solve_field': lambda out: _leaves((out[0].incident.R, out[0].incident.T, out[1])),
+    'freeze_geometry': lambda g: _leaves((g.normal_field, g.mu_normal_field)),
+    'eps_conv_matrices': _leaves,
+    'mu_conv_matrices': _leaves,
+}
+
+
+def _gap(a, b):
+    assert len(a) == len(b), (len(a), len(b))
+    return max(float(np.abs(x - y).max()) for x, y in zip(a, b))
+
+
+@pytest.mark.parametrize('door', sorted(MOVES))
+@pytest.mark.parametrize('backend', BACKENDS, ids=lambda b: BACKEND_IDS[b])
+def test_a_real_condition_through_every_other_door_answers_as_the_scene_built_with_it(
+        backend, door):
+    """The accepting half, on the four doors the test above does not open.
+
+    The refusal is crossed over all five doors; the acceptance was asserted on `solve` alone,
+    so a door that took a real keyword and dropped it -- the original defect, one door over --
+    would have passed. Here each door is handed a condition its answer depends on, and the
+    answer must be the one a solver *built* with that condition gives, and must differ from the
+    unmoved scene's, so a door that ignored the keyword cannot pass on a condition that happened
+    to change nothing.
+
+    The builders also keep the condition afterwards, as `solve` does. `solve_field` is left out
+    of that half and pinned on its answer only: on JAX it is jit-compiled over a copy of the
+    solver, and the copy's assignment is not what this test is about.
+    """
+    if backend:
+        pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
+    if backend == 1:
+        wavebit.enable_x64()
+    name, value = MOVES[door]
+    solver = _door_scene(backend)
+    moved = READOUT[door](DOORS[door](solver, **{name: value}))
+    built = READOUT[door](DOORS[door](_door_scene(backend, **{name: value})))
+    unmoved = READOUT[door](DOORS[door](_door_scene(backend)))
+
+    assert _gap(moved, built) < 1e-12, door
+    assert _gap(unmoved, built) > 1e-6, f'{name!r} moved nothing {door} answers with'
+    if door != 'solve_field':
+        assert np.array_equal(_leaves(getattr(solver, name))[0], np.asarray(value)), door
+
+
 @pytest.mark.parametrize('name', ACCEPTED)
 def test_every_keyword_the_suite_passes_is_still_accepted(name):
     """The accepted set is derived, so it can shrink by accident. These five are load-bearing.

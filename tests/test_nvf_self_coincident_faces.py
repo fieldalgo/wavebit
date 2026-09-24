@@ -334,6 +334,38 @@ def test_an_ellipse_inside_its_cell_keeps_the_field_it_always_had():
     assert count > 1000 and mean < 0.3 and over == 0.0, (mean, over)
 
 
+def test_an_ellipse_leaving_its_cell_keeps_its_ring_beside_another_shape():
+    """The same ring, reached through the blend: the ellipse as one piece among several.
+
+    A layer whose only piece is one arc returns that piece's field before any blend is built,
+    and every ellipse above takes that shortcut. Beside a second shape the ellipse's ring is
+    read inside the blend instead, by a separate call that no lone shape reaches. A 160 disc of
+    permittivity 4, 300 above the centre, touches nothing, so the layer's interfaces are the
+    two outlines: the ellipse keeps its eleven instances, the disc its one, and the band reads
+    0.152 deg with nothing past 45 -- no worse than the lone ellipse's 0.194. On the ellipse's
+    own boundary its piece is the nearest at distance zero and the field is that boundary's
+    normal (1.2e-6 deg at worst). Read on the fold rather than the ring, the same layer gives
+    89.9 deg there and 2.3 deg with 2.8% past 45 over the band.
+    """
+    ellipse = dict(L_ELLIPSE, lx=720.0)
+    disc = dict(type='circle', cx=0.0, cy=300.0, lx=160.0, material=4.0)
+    A = as_lattice(lattice=SQUARE)
+    plan = P.plan_gamma([ellipse, disc], A)
+    assert [pc.face for pc in plan.pieces] == ['arc', 'arc'] and not plan.pairs
+    assert len(plan.pieces[0].imgs) == 11 and plan.pieces[1].imgs == ((0, 0),)
+
+    n_x, n_y = P.normal_vector_field_analytical(np, GRID, [ellipse, disc], np.float64, A)
+    mean, over, count = band_error(n_x, n_y, GRID, SQUARE,
+                                   gamma_points([ellipse, disc], SQUARE))
+    assert count > 1000 and mean < 0.3 and over == 0.0, (mean, over)
+
+    gamma = gamma_points([ellipse], SQUARE)[::5]
+    n_x, n_y = P._piece_field(np, gamma[:, 0], gamma[:, 1], [ellipse, disc], plan, None, A,
+                              np.float64)
+    angle = np.degrees(np.arccos(np.clip(np.abs(n_x * gamma[:, 2] + n_y * gamma[:, 3]), 0, 1)))
+    assert angle.max() < 1e-5 and int((np.hypot(n_x, n_y) == 0.0).sum()) == 0
+
+
 def test_what_the_wigner_seitz_threshold_costs_an_ellipse_hugging_its_cell_edge():
     """Just inside the threshold the fold's band is wrong beside the neighbour's tip: the known limit.
 

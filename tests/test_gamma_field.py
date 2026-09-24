@@ -441,6 +441,17 @@ def _l_ellipse_centre_reads_its_own_level_set():
     assert np.abs(n_x * gx + n_y * gy).min() > 1.0 - 1e-12
 
 
+def _l_ellipse_beside_a_disc_reads_its_own_boundary():
+    # The ring read inside the blend: with a second shape in the layer the ellipse is one piece
+    # of several, and the lone-piece shortcut the two instruments above go through is not taken.
+    A = as_lattice(lattice=SQUARE)
+    shapes = [L_ELLIPSE, dict(type='circle', cx=0.0, cy=300.0, lx=160.0, material=4.0)]
+    plan = P.plan_gamma(shapes, A)
+    gamma = gamma_points([L_ELLIPSE], SQUARE)[::5]
+    n_x, n_y = P._piece_field(np, gamma[:, 0], gamma[:, 1], shapes, plan, None, A, np.float64)
+    assert np.abs(n_x * gamma[:, 2] + n_y * gamma[:, 3]).min() > 1.0 - 1e-9
+
+
 def _the_350_golden():
     assert _total(SQUARE, _box(lx=350.0, ly=350.0)) == pytest.approx(0.892284142298975, abs=1e-9)
 
@@ -722,6 +733,10 @@ MUTANTS = [
      '        dist = _ellipse_distance(xp, xr, yr, a, b)',
      '        dist = xp.abs((xr / a) ** 2 + (yr / b) ** 2 - 1.0) / _hypot_safe(xp, gxr, gyr)',
      _l_ellipse_centre_reads_its_own_level_set),
+    ('the blend reads a leaving arc at its own instance only', P,
+     '        if len(pc.imgs) == 1:\n            d[k], gx, gy = _round_field(',
+     '        if True:\n            d[k], gx, gy = _round_field(',
+     _l_ellipse_beside_a_disc_reads_its_own_boundary),
     ('mu = None read as unequal to 1.0', None,
      'return 1.0 if self.mu is None else self.mu',
      'return 1.0 + 1e-9 if self.mu is None else self.mu',

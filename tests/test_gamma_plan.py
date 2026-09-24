@@ -203,6 +203,26 @@ def test_coverage_is_the_union_of_the_runs_not_any_one_of_them():
     assert plan.empty
 
 
+def test_the_union_counts_a_nested_run_once_and_closes_a_gap_only_below_the_tolerance():
+    """:func:`~wavebit._core.overlap.covered_length` on the run layouts no scene above produces.
+
+    Every scene in this file hands it abutting or disjoint runs. A run *nested* in another
+    takes the one branch that adds nothing, and summing it instead would over-count the
+    coverage and call a face dead that has an interface left on it. The tolerance is the
+    plan's rounding-scale one: a gap narrower than it is the same line and is covered, a gap
+    wider is an interface and is not.
+    """
+    tol = 1e-9
+    assert O.covered_length([(0.0, 2.0), (0.5, 1.5)], tol) == 2.0            # nested, once
+    assert O.covered_length([(0.5, 1.5), (0.0, 2.0)], tol) == 2.0            # order-free
+    assert O.covered_length([(0.0, 1.5), (1.0, 2.0)], tol) == 2.0            # overlapping
+    assert O.covered_length([(0.0, 1.0), (0.2, 0.4), (1.5, 2.0)], tol) == 1.5  # a gap stays
+    assert O.covered_length([(0.0, 1.0), (1.0 + tol / 2, 2.0)], tol) == 2.0  # one line
+    assert O.covered_length([(0.0, 1.0), (1.0 + 4 * tol, 2.0)], tol) == pytest.approx(
+        2.0 - 4 * tol, abs=1e-15)
+    assert O.covered_length([], tol) == 0.0
+
+
 def test_the_ring_is_the_size_rule_and_every_contact_lies_inside_it():
     """``r = 1 + ceil(2R / h_min)`` -- the L box needs 3 on an ordinary square cell.
 

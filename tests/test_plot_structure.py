@@ -237,6 +237,36 @@ def test_band_limited_converges_on_the_geometry():
     np.testing.assert_allclose(errors, [0.284, 0.168, 0.102], atol=5e-3)
 
 
+def test_band_limited_reads_a_raster_through_its_own_series():
+    """The raster branch of ``band_limited``, which nothing above reaches, held to the same claims.
+
+    Its mean over the ``n x n`` grid is the zeroth coefficient alone -- every other order sums
+    to zero over a full period of samples -- and for a raster that is the pixel mean, to
+    rounding; a real raster's series is Hermitian, so the picture is real. And rising
+    ``truncation_order`` closes on the raster and on neither of its mirrors: the block is off
+    centre in both axes, so a flipped order sign on either axis reconstructs a structure the
+    raster is not: both mirrors read between 1.13 and 1.27 in relative L2 at every order here,
+    against 26.6% / 13.9% / 4.4% for the raster itself at ``truncation_order`` 3 / 9 / 25,
+    sampled at its own 64 pixel centres.
+    """
+    cell = np.ones((1, 64, 64))
+    cell[0, 6:22, 8:34] = 12.25
+    rel = lambda a, b: np.linalg.norm(a - b) / np.linalg.norm(b)
+
+    errors = []
+    for order in (3, 9, 25):
+        solver = wavebit.rcwa(structure=cell, **dict(COMMON, truncation_order=(order, order)))
+        band = solver.slice_structure(n=64, band_limited=True)
+        assert band.shape == (64, 64)
+        assert band.real.mean() == pytest.approx(cell.mean(), abs=1e-12)
+        assert np.abs(band.imag).max() < 1e-12
+        errors.append(rel(band.real, cell[0]))
+        assert rel(band.real, cell[0][::-1]) > 1.0 and rel(band.real, cell[0][:, ::-1]) > 1.0
+
+    assert errors[0] > errors[1] > errors[2]
+    np.testing.assert_allclose(errors, [0.266, 0.139, 0.044], atol=5e-3)
+
+
 def test_the_truncated_series_leaves_the_material_range():
     """Gibbs, stated as a number: negative permittivity and 13% overshoot at ``truncation_order = 9``.
 

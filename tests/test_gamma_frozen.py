@@ -317,6 +317,38 @@ def test_a_jitted_first_solve_leaves_no_tracer_in_the_projector_cache(name, valu
     assert float(jnp.sum(solver.solve().T).real) == reference
 
 
+@pytest.mark.parametrize('side, value', [('top', 1.0), ('bot', 2.25)])
+def test_a_traced_material_condition_does_not_outlive_its_solve(side, value):
+    """A half-space swept as a ``Material`` is put back whole, not only the index derived from it.
+
+    The setter stores two slots: the index the solve reads, which is itself a tracer and is
+    caught as one, and the ``Material`` the property returns, which is a plain object holding
+    one. Only ``_holds_tracer``'s step into a ``Material`` finds the second. Without that step
+    the eager solve afterwards still agrees -- it reads the restored index -- which is what
+    makes the leak quiet: ``solver.top`` hands back a ``Material`` around a dead tracer.
+    Asserted on the object itself: the one the solver was built with, concrete, and a freeze
+    that records a plan.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    wavebit.enable_x64()
+
+    structure = [dict(background=1.0, shapes=[_box(lx=350.0, ly=350.0, material=12.25)])]
+    solver = wavebit.rcwa(backend=1, lattice=SQUARE, structure=structure, **KW)
+    reference = float(jnp.sum(solver.solve().T).real)
+    before = getattr(solver, side)
+    frozen = solver.freeze_geometry()
+
+    def total(e):
+        return jnp.sum(solver.solve(geometry=frozen, **{side: wavebit.Material(e)}).T).real
+
+    assert float(jax.jit(total)(jnp.asarray(value))) == pytest.approx(reference, abs=1e-12)
+    assert getattr(solver, side) is before
+    assert not isinstance(getattr(solver, side).epsilon, jax.core.Tracer)
+    assert solver.freeze_geometry().gamma_plans[0] is not None
+    assert float(jnp.sum(solver.solve().T).real) == reference
+
+
 def test_a_setter_that_raises_after_a_traced_assignment_still_puts_it_back():
     """The keywords are assigned inside the ``try``, so a bad one cannot leak a good one's tracer.
 
@@ -577,6 +609,59 @@ def test_a_face_that_becomes_dead_or_a_list_that_grows_is_refused_too():
     big = [dict(background=1.0, shapes=[_box(lx=600.0, ly=600.0)])]
     with pytest.raises(StaleGeometryError, match='image'):
         _total(big, SQUARE, geometry=frozen_small)
+
+
+#: Li's checkerboard primitive cell, on which a 2.5-wide bar tiles the plane at ``ly = 1.25``
+#: (each v face covered half by ``a1`` and half by ``-a2``) and does not at ``ly = 0.8``.
+CHECKER = np.array([[1.25, 1.25], [1.25, -1.25]])
+
+
+def test_a_layer_that_starts_or_stops_tiling_the_plane_is_refused_by_that_name():
+    """The record's ``empty`` flag has its own clause in the refusal, and each direction says which.
+
+    Growing the bar to ``ly = 1.25`` also makes two pairs appear and both v faces dead, and the
+    message names those too; what only this clause says is the consequence -- the layer is now
+    uniform, and a record that still describes interfaces would put a normal field where the
+    material runs on. Shrinking it back says the reverse.
+    """
+    span = [dict(background=1.0, shapes=[_box(lx=2.5, ly=0.8)])]
+    bar = [dict(background=1.0, shapes=[_box(lx=2.5, ly=1.25)])]
+    kw = dict(KW, wavelength=1.6)
+    for held, replayed, says in ((span, bar, 'the layer tiles the plane now'),
+                                 (bar, span, 'the layer no longer tiles the plane')):
+        solver = wavebit.rcwa(backend=0, lattice=CHECKER, structure=held, **kw)
+        frozen = solver.freeze_geometry()
+        assert frozen.gamma_plans[0].empty is (held is bar)
+        with pytest.raises(StaleGeometryError, match=says):
+            solver.solve(structure=replayed, geometry=frozen)
+
+
+def test_a_record_replayed_on_another_spelling_of_its_lattice_is_refused_by_the_reduction():
+    """``a2 = (50, 700)`` and ``a2 = 2 a1 + (50, 700)`` are one lattice, and not one record.
+
+    Every offset a plan holds counts cells of the Lagrange-reduced basis, and the plan carries
+    the integers that reduce the basis as given. The two spellings reduce to the same basis by
+    different integers, so the plans agree on every pair, piece and ring -- only the transform
+    differs -- and replayed on the other spelling each recorded offset names a different image.
+    That leaves the reduction as the *only* clause that can say what is wrong; without it the
+    refusal would fall back to "the recorded plan differs from a fresh one". A freeze taken on
+    the spelling in use answers.
+    """
+    near = np.array([[PERIOD, 50.0], [0.0, PERIOD]])
+    far = np.array([[PERIOD, 1450.0], [0.0, PERIOD]])
+    structure = _b_layer(500.0)
+    for held, replayed in ((near, far), (far, near)):
+        frozen = wavebit.rcwa(backend=0, lattice=held, structure=structure,
+                              **KW).freeze_geometry()
+        solver = wavebit.rcwa(backend=0, lattice=replayed, structure=structure, **KW)
+        fresh = solver.freeze_geometry()
+        assert frozen.gamma_plans[0].reduction != fresh.gamma_plans[0].reduction
+        assert (frozen.gamma_plans[0]._replace(reduction=None)
+                == fresh.gamma_plans[0]._replace(reduction=None))
+        with pytest.raises(StaleGeometryError, match='the basis reduces differently now') as e:
+            solver.solve(geometry=frozen)
+        assert 'pair' not in str(e.value).split('. The recorded')[0], str(e.value)
+        assert np.isfinite(float(np.sum(np.asarray(solver.solve(geometry=fresh).T))))
 
 
 # ------------------------------------------------------------------------------ the cache

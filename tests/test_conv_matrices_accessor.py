@@ -10,6 +10,8 @@ legitimate.
 
 These tests pin the public centre frame, the exact round trip into the solver, and the
 common matrix layout across modeling paths. The internal solve uses corner-frame operators.
+The permeability accessor is checked in the same public centre frame, including its duality
+with the permittivity builder.
 """
 import numpy as np
 import pytest
@@ -366,3 +368,100 @@ def test_born_links_the_published_harmonic_to_the_published_amplitude(theta):
     for j in (3, 5):
         expected = c[j, 4]/c[4, 4]*kz[4]/kz[j]
         np.testing.assert_allclose(ey[j]/ey[4], expected, atol=.009*abs(expected), rtol=0)
+
+
+# --------------------------------------------------- the permeability twin, `mu_conv_matrices`
+#
+# The same accessor on the other side of the ``(E, H, eps, mu) -> (H, -E, mu, eps)`` duality.
+# Until these tests its return value was never read in-process anywhere in the suite: the one
+# caller that got past the keyword refusal ran in a subprocess, so a public method that
+# answered the wrong five matrices -- or the permittivity's -- would have passed every test.
+
+#: Three rows, so the scene takes the 2D route and the two fields can put their boundaries in
+#: different places: a builder that read one raster for both quantities cannot pass by accident.
+EPS_RASTER = np.array([[[2.6, 2.6, 1.0, 1.0], [2.6, 1.0, 1.0, 1.0], [1.0, 1.0, 6.0, 6.0]]])
+MU_RASTER = np.array([[[1.7, 1.7, 1.0, 1.0], [1.0, 1.0, 1.0, 1.3], [1.0, 1.0, 1.0, 1.0]]])
+
+#: Oblique and off the plane of incidence, so every order and every slot carries weight.
+MAGNETIC = dict(BASE, theta=0.3, phi=0.2, truncation_order=[3, 3])
+
+FACTORIZATIONS = [None, 'li', 'nvf']
+
+
+def _magnetic_kw(factorization):
+    return MAGNETIC if factorization is None else dict(MAGNETIC, factorization=factorization)
+
+
+def _slot_gap(a, b):
+    """Largest entrywise difference of two slots; two absent slots are the same slot."""
+    if a is None or b is None:
+        assert a is None and b is None, 'one side built a slot the other did not'
+        return 0.0
+    return float(np.abs(np.asarray(a) - np.asarray(b)).max())
+
+
+@pytest.mark.parametrize('factorization', FACTORIZATIONS, ids=lambda f: f or 'default')
+def test_the_permeability_accessor_is_exactly_what_solve_conv_takes_as_mu(factorization):
+    """The permittivity's round trip, through ``solve_conv``'s ``mu=``: feeding both back is solve().
+
+    Exact, as the permittivity's is. The solve builds these same matrices on the same
+    geometry and hands them to the same ``solve_conv``, so a difference in any digit would mean
+    the accessor built something the solve does not.
+    """
+    solver = wavebit.rcwa(structure=EPS_RASTER, mu=MU_RASTER, **_magnetic_kw(factorization))
+    direct = solver.solve().incident
+    relayed = solver.solve_conv(*solver.eps_conv_matrices(),
+                                mu=solver.mu_conv_matrices()).incident
+    for got, want in ((relayed.R, direct.R), (relayed.T, direct.T)):
+        assert np.abs(np.asarray(got) - np.asarray(want)).max() == 0.0
+
+
+@pytest.mark.parametrize('factorization', FACTORIZATIONS, ids=lambda f: f or 'default')
+def test_the_permeability_is_the_permittivity_builder_run_on_the_mu_field(factorization):
+    """``mu_conv_matrices`` of ``(eps=A, mu=B)`` is ``eps_conv_matrices`` of ``eps=B``, to the bit.
+
+    That is the whole content of the method -- the same builder, on the same geometry, under a
+    different name -- and it is checkable without a reference value: a scene whose
+    *permittivity* is the permeability raster must build the same five matrices. The duality
+    is also why the answer is a :class:`~wavebit.ConvMatrices` with the permittivity's field
+    names, so the type is asserted with it.
+    """
+    kw = _magnetic_kw(factorization)
+    magnetic = wavebit.rcwa(structure=EPS_RASTER, mu=MU_RASTER, **kw).mu_conv_matrices()
+    as_eps = wavebit.rcwa(structure=MU_RASTER, **kw).eps_conv_matrices()
+    assert isinstance(magnetic, wavebit.ConvMatrices)
+    assert [_slot_gap(a, b) for a, b in zip(magnetic, as_eps)] == [0.0] * 5
+
+
+def test_a_shape_layers_permeability_is_its_permittivity_builder_too():
+    """The same identity on the shape path, where the magnetic value rides a ``Material``.
+
+    A circle of ``Material(9, mu=2)`` on a non-magnetic background has the permeability
+    distribution of a circle of permittivity 2 on a background of 1, and the closed form must
+    build it as exactly that -- the boundary plans and the normal field are the geometry's,
+    shared by both quantities, and only the slot values differ.
+    """
+    def layer(material):
+        return [dict(background=1.0, shapes=[dict(CIRCLE, material=material)])]
+
+    magnetic = wavebit.rcwa(structure=layer(wavebit.Material(9.0, mu=2.0)),
+                            **MAGNETIC).mu_conv_matrices()
+    as_eps = wavebit.rcwa(structure=layer(2.0), **MAGNETIC).eps_conv_matrices()
+    assert [_slot_gap(a, b) for a, b in zip(magnetic, as_eps)] == [0.0] * 5
+
+
+def test_nothing_magnetic_in_the_layers_answers_none_and_a_magnetic_half_space_still_counts():
+    """``None`` is "take the non-magnetic arithmetic", not "there is no permeability anywhere".
+
+    A magnetic half-space under ordinary layers enters the solve through ``mu_bot``, so the
+    layers' permeability is still ``None`` -- and the half-space must still move the answer,
+    or ``None`` would be a permeability the solve quietly dropped.
+    """
+    plain = wavebit.rcwa(structure=EPS_RASTER, **MAGNETIC)
+    over_magnetic = wavebit.rcwa(structure=EPS_RASTER,
+                                 **dict(MAGNETIC, bot=wavebit.Material(2.25, mu=1.5)))
+    assert plain.mu_conv_matrices() is None
+    assert over_magnetic.mu_conv_matrices() is None
+    moved = np.abs(np.asarray(over_magnetic.solve().incident.R)
+                   - np.asarray(plain.solve().incident.R)).max()
+    assert moved > 1e-3, moved
