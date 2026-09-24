@@ -299,9 +299,45 @@ surface/source cases. They remove the cut-surface or injection-band checks,
 bypass preparation, reject valid enclosed boxes or interior field samples,
 remove named scope checks, or ignore the explicit absorption width. Source
 restoration is byte-exact. Including the earlier audits, 22 mutation variants
-produce 59 assertion failures covering the current 55 research cases; some
+produce 59 assertion failures covering the 55 research cases at `43d5835`; some
 variants exercise related defect classes and are not 22 distinct bugs.
 
 The large epsilon-12 sphere, public integration and the corresponding physical
 source-defect witnesses remain required before a C3 pass. Geometry differentiation
 and general support/rank events are still outside this research implementation.
+
+## Active-row runtime storage
+
+The matrix, constraints and stability checks are unchanged. Only rows with a
+nonzero off-diagonal coefficient need the padded sparse product. The runtime
+now multiplies those rows and gathers them back through a compact output map;
+every inactive row points to one exact zero slot. No small coefficient is
+discarded. A purely diagonal matrix has an empty product and the same zero
+slot on NumPy, JAX eager, JAX compiled and Torch.
+
+Before changing the runtime, isolated JAX product measurements gave:
+
+| Sphere radius in cells | All / active rows | Full / active storage | Product speed ratio |
+| --- | --- | --- | --- |
+| 4 | 10,125 / 3,703 | 12,636,000 / 4,661,844 bytes | 2.129 |
+| 10 | 59,049 / 20,953 | 73,693,152 / 26,385,540 bytes | 2.753 |
+
+The two layouts give exactly equal product values on these inputs. The largest
+difference from an independently indexed sparse product is `1.66534e-16`.
+Three timing blocks retain their spread in the measurement record. These are
+isolated operation timings, not whole-simulation speedups or radius-20 memory
+bounds.
+
+Post-restoration verification collects and reports 128 passing fast cases and
+two passing slow physical controls; both processes exit zero without errors or
+`INTERNALERROR`. All watched numerical source hashes remain unchanged. The
+production reference arrays were verified at `43d5835` immediately before this
+research runtime change; production source files are untouched.
+
+Three actual source mutations cause 26 assertion failures: retaining inactive
+rows violates the storage contract, replacing the zero slot by one corrupts
+both full and purely diagonal increments, and reversing active output indices
+corrupts the product on every backend. The latter two include JAX eager and
+compiled execution. All ten added cases have mutation witnesses, as do the
+eight modified product cases, and restoration is byte-exact. The research
+module now contains 65 test cases, including the two physical controls.

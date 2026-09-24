@@ -48,22 +48,25 @@ def small_geometry(dim):
     return points,components,center,matrix,report
 
 
-def increment_gap(dim,backend):
+def increment_gap(dim,backend,diagonal_only=False):
     points,components,_,matrix,_=small_geometry(dim)
     shape=points.shape[:-1]
-    diagonal,index,value=study.padded(matrix)
+    if diagonal_only:
+        from scipy.sparse import diags
+        matrix=diags(matrix.diagonal()).tocsr()
+    diagonal,index,value,output=study.padded(matrix)
     rt=runtime('jax' if backend=='jax_jit' else backend)
     region=Region(z=(0,shape[0]),y=(0,shape[1]),x=(0,shape[2]))
     # A reproducible nonzero increment and memory are experiment inputs.
     term=study.StencilTerm('s','E',region,.037,(),components)
     local=np.sin(np.arange(3*np.prod(shape))).reshape((3,)+shape)
     memory=np.cos(np.arange(3*np.prod(shape))).reshape((3,)+shape)
-    def step(curl,mem,idx,val):
-        return term.prepare(curl,mem,dict(stencil_index=idx,stencil_value=val),rt)
+    def step(curl,mem,idx,val,rows):
+        return term.prepare(curl,mem,dict(stencil_index=idx,stencil_value=val,stencil_output=rows),rt)
     if backend=='jax_jit':
         import jax
         step=jax.jit(step)
-    args=[rt.array(local,'float64'),rt.array(memory,'float64'),rt.array(index),rt.array(value,'float64')]
+    args=[rt.array(local,'float64'),rt.array(memory,'float64'),rt.array(index),rt.array(value,'float64'),rt.array(output)]
     flux,delta=step(*args);flux=rt.numpy(flux);delta=rt.numpy(delta)
     selected=np.stack(tuple(local[c] for c in components)).ravel()
     actual=diagonal*np.stack(tuple(flux[c]-memory[c] for c in components)).ravel()
@@ -96,6 +99,32 @@ def test_thirty_planar_interface_offsets():
 def test_increment_matches_independent_sparse_product(dim,backend):
     # Eight premeasurements, nonzero flux memory: maximum 1.08421e-16.
     assert increment_gap(dim,backend)<2e-15
+
+
+@pytest.mark.parametrize('dim',(2,3))
+@pytest.mark.parametrize('backend',('numpy','jax','jax_jit','torch'))
+def test_empty_stencil_matches_diagonal_increment(dim,backend):
+    # The same nonzero-memory arithmetic measured <=1.08421e-16 above.
+    assert increment_gap(dim,backend,diagonal_only=True)<2e-15
+
+
+@pytest.mark.parametrize('empty',(False,True))
+def test_padding_keeps_only_nonzero_rows_and_an_exact_zero_slot(empty):
+    from scipy.sparse import diags
+    matrix=diags(np.arange(1.,6.)).tocsr()
+    if not empty:
+        matrix+=csr_matrix(([.125,.125,-.25,-.25],([0,3,1,2],[3,0,2,1])),shape=(5,5))
+    diagonal,index,value,output=study.padded(matrix)
+    cross=matrix-diags(diagonal);cross.eliminate_zeros()
+    active=np.flatnonzero(np.diff(cross.indptr))
+    assert index.shape==value.shape==(len(active),0 if empty else 1)
+    assert np.array_equal(output[active],np.arange(1,len(active)+1))
+    assert np.array_equal(output[np.setdiff1d(np.arange(5),active)],0*np.ones(5-len(active)))
+    vector=np.arange(1.,6.)
+    # All fixture coefficients are binary fractions: the reconstruction
+    # is exact, and no measured floating tolerance is needed here.
+    actual=np.concatenate(([0.],np.sum(vector[index]*value,axis=1)))[output]
+    np.testing.assert_array_equal(actual,cross@vector)
 
 
 def test_rigid_translation_keeps_the_material_operator():
