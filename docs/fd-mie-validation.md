@@ -1933,3 +1933,24 @@ This resolves the identified radiation inconsistency. The production cylinder
 refinement failure and the small high-index error of the research 3D material
 candidate remain. C3 has not passed. The new radiation API preserves the
 original continuum path and its frozen reference arrays.
+
+## Symmetric extended interface stencil experiment
+
+The [extended-stencil derivation and controls](fd-symmetric-stencil.md)
+address the remaining material-interface defect. A symmetric matrix is
+constructed from exact edge/dual-face interface constraints, with a
+two-cell neighbour stencil and a measured whole-operator energy bound.
+It remains a research study rather than the public `fd.run` material map.
+
+With the same operator on every case, the historical cylinder's full
+40/56/80 by eight-placement study now has mean/RMS orders
+**2.137819/2.137121**, scatter **2.128691%/2.093839%**, and finest mean
+error **0.740709%**. All 24 calculations exited normally as one finite
+batch (exit zero), with unchanged numerical sources. The small epsilon-12
+sphere control has error **2.468123%**, below its unchanged 3% limit.
+
+The cylinder control passes. C3 still requires new glass, weak and large
+high-index sphere measurements with this same operator, followed by the
+public preparation/integration review. The earlier public sphere fits
+belong to a different operator and cannot be combined with this cylinder
+result to claim a C3 pass. C4 remains pending.
