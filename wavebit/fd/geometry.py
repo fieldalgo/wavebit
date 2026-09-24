@@ -453,11 +453,14 @@ class Structure:
     compute two different functions. Both objections are kept rather than dodged. This value is
     static, a typo is refused outright, it is in the plan and in the skeleton, and it is never
     read from whether anything is a tracer. A structure that asks for the stencil takes plain
-    numbers only -- Python ``int``/``float`` and NumPy scalars -- and any array or tensor, traced
-    or not, is **refused by name** (``StencilNumberRefused``) rather than quietly given the
-    other rule, which is exactly the failure ``combine=`` and ``fourier_type=`` were deleted
-    for. The door is a type and not a question about tracing because a Torch forward-mode dual
-    reads as a number and passed a tracing test.
+    numbers only in its material values -- Python ``int``/``float`` and NumPy scalars -- and
+    any array or tensor, traced or not, is **refused by name** (``StencilNumberRefused``) rather
+    than quietly given the other rule, which is exactly the failure ``combine=`` and
+    ``fourier_type=`` were deleted for. That door is a type and not a question about tracing
+    because a Torch forward-mode dual reads as a number and passed a tracing test. The ball's
+    radius and centre need no second door: they are :class:`Sphere`'s static fields, and
+    ``static_float`` refuses every traced value there -- forward mode included -- on either
+    discretisation.
 
     It is on the structure and not on the :class:`Shape` or on :class:`~wavebit.fd.Run`
     because that is where its inputs are. The operator is assembled from the body's geometry

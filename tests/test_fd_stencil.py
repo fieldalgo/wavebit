@@ -42,6 +42,8 @@ import wavebit.fd as fd
 from wavebit.fd._kernel.stencil import StencilTerm
 from wavebit.fd._lower import lower as lower_params, plan as build_plan, stencil
 
+from fd_helpers import torch_forward_paths
+
 
 def scene(cpw=18, radius=.14, eps=2.25, pml=6, periods=2., discretisation='stencil',
           center=(0., 0., 0.), background=None, **changes):
@@ -766,6 +768,17 @@ def test_a_non_vacuum_background_is_refused_not_replaced_by_vacuum():
     assert 'StencilBackgroundRefused' in message and 'names a permeability' in message
     assert 'Scene(background=fd.Material(eps=1.))' in message
     assert reaches_assembly(scene(background=fd.Material(eps=1.)))
+    # Two backgrounds the review of b24a708 found only this door's lowering arms stand in front
+    # of, each with a mutant that admitted it silently: vacuum on one axis only (``all`` read as
+    # ``any``) -- fd.plan refuses that one in check_smoothed on either rule, so the lowering is
+    # its only guard -- and vacuum eps under a permeability that is not 1 (the magnetic test
+    # dropped). Both are refused by name at fd.lower against the vacuum plan, and the second at
+    # fd.plan too.
+    _, plan = prepared()
+    for background in (fd.Material(eps=(1., 1., 1.2)), fd.Material(eps=1., mu=1.3)):
+        message = refusal(None, lambda: lower_params(scene(background=background), plan, 'numpy'))
+        assert 'StencilBackgroundRefused' in message, background
+    assert 'StencilBackgroundRefused' in refusal(scene(background=fd.Material(eps=1., mu=1.3)))
 
 
 def test_a_second_structure_anywhere_is_refused():
@@ -1147,6 +1160,63 @@ def test_fd_run_takes_plain_numbers_only_before_it_prepares_anything(monkeypatch
     assert 'StencilNumberRefused' in refusal(background)
     assert not calls
     assert reaches_assembly(with_structure(scene(), material=np.float64(2.25)))
+
+
+def test_a_forward_mode_radius_or_centre_is_refused_by_the_sphere_on_either_rule():
+    """The ball's geometry is static, and a Torch forward-mode value there is refused by name.
+
+    Measured on ``b24a708`` (third review), on this fixture through public
+    ``fd.run(scene, 'torch')``: d(flux)/d(radius) read **0.0** by ``torch.func.jvp`` and had no
+    tangent at all by ``forward_ad``, on the stencil and on the voxel rule alike, where the
+    central differences are 1.967e-7 and 1.841e-7. ``fd.Sphere`` read the dual through
+    ``float()``, which takes its primal, so the stencil's number door was handed a float and its
+    radius and centre arms could never fire; they are gone, and ``_spec.static_float`` asks
+    ``torch_carried`` instead. Every path is refused at construction, before any plan -- the
+    ``calls`` count is the transform reaching the constructor -- and a NumPy scalar radius still
+    reaches the solve.
+    """
+    torch = pytest.importorskip('torch')
+    calls = []
+
+    def flux(leaf, discretisation):
+        def f(v):
+            calls.append(leaf)
+            shape = (fd.Sphere(radius=v) if leaf == 'radius'
+                     else fd.Sphere(radius=.14, center=(v, 0., 0.)))
+            s = with_structure(scene(), shape=shape, discretisation=discretisation)
+            return quiet(fd.run, s, 'torch')['sca'].flux[0]
+        return f
+    paths = torch_forward_paths(torch)
+    for discretisation in ('stencil', 'voxel'):
+        for leaf, x, pattern in (('radius', .14, r'Sphere\(radius=\.\.\.\) is static'),
+                                 ('center', .01, r'Sphere\(center=\.\.\.\) is static')):
+            for name, path in paths.items():
+                with pytest.raises(ValueError, match=pattern) as err:
+                    path(flux(leaf, discretisation), x)
+                assert 'not a leaf' in str(err.value), (discretisation, leaf, name)
+    assert len(calls) == 2 * 2 * len(paths)
+    assert reaches_assembly(with_structure(scene(), shape=fd.Sphere(radius=np.float64(.14))))
+
+
+def test_a_stencil_scene_is_told_its_own_accuracy_and_not_the_voxel_rules():
+    """The accuracy note ``fd.plan`` and ``fd.check`` print names the rule the structure asked for.
+
+    Measured on ``b24a708`` (third review): a stencil scene's report carried the voxel rule's
+    sentence -- adjoint inverse-material cross coupling, order 2.023 -- beside its own
+    ``discretisation=stencil`` line, though its E is the prepared operator's. Only the text was
+    wrong. The stencil's sentence quotes the research sweeps' orders (2.064 glass, 2.057 at
+    epsilon 1.1); the voxel twin keeps the voxel sentence, whose characters this commit did not
+    move.
+    """
+    from wavebit.fd._lower.checks import notes
+    s, plan = prepared()
+    v, voxel_plan = prepared('voxel')
+    said = [m for c, m in notes(s, plan) if c is fd.SubpixelAccuracyWarning]
+    assert len(said) == 1, said
+    assert "discretisation='stencil'" in said[0] and '2.064' in said[0]
+    assert 'adjoint inverse-material' not in said[0] and '2.023' not in said[0]
+    voxel = [m for c, m in notes(v, voxel_plan) if c is fd.SubpixelAccuracyWarning]
+    assert len(voxel) == 1 and 'adjoint inverse-material' in voxel[0] and '2.023' in voxel[0]
 
 
 def test_the_discretisation_door_at_lowering_works_both_ways():

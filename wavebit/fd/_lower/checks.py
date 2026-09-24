@@ -953,19 +953,39 @@ def _smoothed_notes(scene, plan):
     from .._shapes import Approximations
     from ..diagnostics import BoundedVoxelWarning, SubpixelAccuracyWarning
     from .occupancy import bound_note, occupancy, smoothed_structures
-    if not smoothed_structures(scene):
+    from .stencil import STENCIL
+    smoothed = smoothed_structures(scene)
+    if not smoothed:
         return []
-    # The controlled C3 tensor study measured p=2.02267353134 at eps=2.25,
-    # R/lambda=.25, 20/28/40 cells per wavelength and three grid placements.
-    # It does not certify the production engine across the remaining contrasts.
-    out = [(SubpixelAccuracyWarning,
-            'Smoothed structures use adjoint inverse-material cross coupling. '
-            'The controlled glass-sphere study measured convergence order 2.023 '
-            '(epsilon=2.25, radius/wavelength=0.25, 20/28/40 vacuum cells per wavelength, '
-            'three placements). Production validation across contrasts is incomplete. This benchmark '
-            'is not an error bound for this scene. Validate its observables under refinement; '
-            'exact voxel volume alone does not guarantee electromagnetic accuracy. '
-            'See docs/fd-mie-validation.md; the stage-4 Mie gate is incomplete.')]
+    asked = [index for index, structure, _ in smoothed if structure.discretisation == STENCIL]
+    out = []
+    if len(asked) < len(smoothed):
+        # The controlled C3 tensor study measured p=2.02267353134 at eps=2.25,
+        # R/lambda=.25, 20/28/40 cells per wavelength and three grid placements.
+        # It does not certify the production engine across the remaining contrasts.
+        out.append((SubpixelAccuracyWarning,
+                    'Smoothed structures use adjoint inverse-material cross coupling. '
+                    'The controlled glass-sphere study measured convergence order 2.023 '
+                    '(epsilon=2.25, radius/wavelength=0.25, 20/28/40 vacuum cells per '
+                    'wavelength, three placements). Production validation across contrasts is '
+                    'incomplete. This benchmark is not an error bound for this scene. Validate '
+                    'its observables under refinement; exact voxel volume alone does not '
+                    'guarantee electromagnetic accuracy. See docs/fd-mie-validation.md; the '
+                    'stage-4 Mie gate is incomplete.'))
+    if asked:
+        # The voxel rule's sentence above is not this structure's: its E is the prepared
+        # operator's. The orders are the research sweeps' (docs/fd-symmetric-stencil.md,
+        # "Glass and weak sphere refinement"): 2.063617 at eps=2.25 and 2.057240 at eps=1.1.
+        where = ', '.join(f'structures[{index}]' for index in asked)
+        out.append((SubpixelAccuracyWarning,
+                    f'{where} use{"s" if len(asked) == 1 else ""} '
+                    f'discretisation={STENCIL!r}: the symmetric extended-stencil operator on E. '
+                    'Its research sweeps measured convergence order 2.064 on the glass sphere '
+                    '(epsilon=2.25) and 2.057 at epsilon=1.1 (radius/wavelength=0.25, 20/28/40 '
+                    'vacuum cells per wavelength, three placements). Its public validation, the '
+                    'stage-4 C3 Mie gate, is incomplete. This benchmark is not an error bound '
+                    'for this scene. Validate its observables under refinement. See '
+                    'docs/fd-symmetric-stencil.md.'))
     report = Approximations()
     proxy_stats = {}
     magnetic = _background(scene).is_magnetic or any(
@@ -985,7 +1005,7 @@ def _smoothed_notes(scene, plan):
     note = bound_note(report)
     if proxy_stats:
         details = ', '.join(f'{name}: {value:.6g}' for name, value in sorted(proxy_stats.items()))
-        category, message = out[0]
+        category, message = out[0]           # the voxel rule's: a custom body cannot ask
         out[0] = (category, message + ' Custom-body cross terms use a nearest-surface '
                   'tangent normal. At their common sampling points its squared components '
                   'differ from the supplied diagonal normal moment by maxima {' + details +

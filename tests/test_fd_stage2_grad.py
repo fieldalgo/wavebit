@@ -88,6 +88,8 @@ import wavebit.fd as fd
 from wavebit.fd._run import execute
 from wavebit.fd._runtime import runtime
 
+from fd_helpers import torch_forward_paths
+
 DX = 0.05
 PML_CELLS = 8
 STEPS = 140
@@ -416,6 +418,29 @@ def test_a_torch_leaf_in_a_static_door_is_refused_by_name(build, pattern, concre
     live = torch.tensor(float(concrete), dtype=torch.float64, requires_grad=True)
     with pytest.raises(ValueError, match=pattern):
         build(live)
+    assert build(concrete) is not None
+
+
+@pytest.mark.parametrize('build,pattern,concrete', _static_doors())
+def test_a_torch_forward_mode_value_in_a_static_door_is_refused_by_name(build, pattern, concrete):
+    """Forward mode needs the door as much as a leaf does: ``float()`` reads a dual's primal.
+
+    Measured on ``b24a708`` through ``fd.Sphere(radius=)`` and public ``fd.run`` (third review
+    of the stencil's preparation): ``torch.func.jvp`` read a derivative of exactly 0.0 and
+    ``forward_ad`` no tangent at all, where the central difference is 1.97e-7, because the
+    static door asked only for ``requires_grad``. Every static door shares that function, so
+    every one of them is asked here.
+    """
+    torch = pytest.importorskip('torch')
+
+    def through(v):
+        build(v)
+        return v * 2.0
+
+    for name, path in torch_forward_paths(torch).items():
+        with pytest.raises(ValueError, match=pattern) as raised:
+            path(through, float(concrete))
+        assert 'not a leaf' in str(raised.value), name
     assert build(concrete) is not None
 
 

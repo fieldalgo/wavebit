@@ -24,18 +24,50 @@ the skeleton, so they cannot be leaves of a gradient; the leaves are listed once
 a ``ConcretizationTypeError`` that names the ``float`` function and not the field, and on
 Torch it *succeeds* on a tensor with ``requires_grad`` -- the value is silently detached,
 the run completes, and the gradient is simply absent. ``static_float`` and ``static_int``
-refuse both cases with the field's name and the rule.
+refuse both cases with the field's name and the rule -- and Torch's forward mode too
+(:func:`torch_carried`), which sets no ``requires_grad`` and whose primal ``float()`` reads
+just as silently.
 """
 import dataclasses
 import difflib
 import operator
 
-__all__ = ['spec', 'unknown_keyword_message', 'static_float', 'static_int', 'is_jax_typed']
+__all__ = ['spec', 'unknown_keyword_message', 'static_float', 'static_int', 'is_jax_typed',
+           'torch_carried']
 
 
 def is_jax_typed(v):
     """Whether ``v`` is a JAX value (an array or a tracer), without importing JAX."""
     return type(v).__module__.split('.')[0] in ('jax', 'jaxlib') and hasattr(v, 'aval')
+
+
+def torch_carried(v):
+    """Whether a Torch transform carries ``v`` without ``requires_grad`` saying so.
+
+    A forward-mode dual (``torch.autograd.forward_ad.make_dual``) and a ``torch.func`` wrapper
+    (``jvp``, ``jacfwd``, ``vmap``, ``grad``) both leave ``requires_grad`` unset on the value a
+    door sees, and ``float()`` reads the primal -- so the tangent is dropped and the derivative
+    through the field comes back exactly zero, with no refusal. Measured through public
+    ``fd.run(scene, 'torch')`` on Torch 2.13 (2026-09-25), ``fd.Sphere(radius=)``:
+    ``torch.func.jvp`` gave 0.0 and ``forward_ad`` no tangent at all, on either
+    discretisation, where the central difference is of order 1e-7
+    (``docs/fd-symmetric-stencil.md``, third review).
+
+    One question is public (``forward_ad.unpack_dual``) and one is internal
+    (``torch._C._functorch.is_functorch_wrapped_tensor``, the name ``_shapes`` already reads
+    functorch through). Neither is wrapped in a ``try``: if a Torch release renames one, every
+    static door raises rather than opening, and the forward-mode rows of the stage-1 and
+    stage-2 grad tests go red. A value whose type is not Torch's is neither, and Torch is not
+    imported to say so.
+    """
+    if type(v).__module__.split('.')[0] != 'torch':
+        return False
+    import torch                                    # already imported: ``v`` is its value
+    if not isinstance(v, torch.Tensor):
+        return False
+    from torch.autograd import forward_ad
+    return (torch._C._functorch.is_functorch_wrapped_tensor(v)
+            or forward_ad.unpack_dual(v).tangent is not None)
 
 
 #: What *is* a leaf of a gradient, in the order the stages added it. One tuple, read by every
@@ -63,11 +95,12 @@ def _refuse_traced(where, name):
 def static_float(where, name, v):
     """``v`` as a Python float, or a refusal naming ``where(name=...)``.
 
-    A Torch tensor with ``requires_grad`` is refused before ``float()`` reads it (that read
-    succeeds, and silently drops the graph); a JAX tracer is refused when ``float()`` fails
-    on a JAX value. Anything else ``float()`` cannot read is refused as not a number.
+    A Torch tensor with ``requires_grad``, a forward-mode dual or a ``torch.func`` wrapper is
+    refused before ``float()`` reads it (that read succeeds, and silently drops the graph or
+    the tangent); a JAX tracer is refused when ``float()`` fails on a JAX value. Anything else
+    ``float()`` cannot read is refused as not a number.
     """
-    if getattr(v, 'requires_grad', False):
+    if getattr(v, 'requires_grad', False) or torch_carried(v):
         raise _refuse_traced(where, name)
     if isinstance(v, (bool, complex, str)):
         raise ValueError(f'{where}({name}={v!r}): a real number is needed, not a '
@@ -88,7 +121,7 @@ def static_int(where, name, v):
     """
     if isinstance(v, bool):
         raise ValueError(f'{where}({name}={v!r}): an integer is needed, not a bool.')
-    if getattr(v, 'requires_grad', False):
+    if getattr(v, 'requires_grad', False) or torch_carried(v):
         raise _refuse_traced(where, name)
     try:
         return operator.index(v)

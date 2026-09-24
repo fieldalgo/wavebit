@@ -39,14 +39,24 @@ Importing this module costs nothing and pulls no study -- ``tests/test_fd_symmet
 pins that, and pins that the public route runs with ``studies`` blocked.
 
 **Host code, not backend code.** This assembles on SciPy, on the host, in float64. It is not
-the traced, differentiable geometry path and cannot silently stand in for one. So a structure
-that asks for it takes **plain numbers only** -- Python ``int`` and ``float`` and NumPy real
-scalars (:func:`_plain`) -- in every leaf the operator reads, and any array or tensor of any
-library, traced or not, is refused **by name** (``StencilNumberRefused``) at :func:`prepare`'s
-door and again at :func:`lower`'s, not discretised some other way. Deciding by type rather than
-by "is it traced" is what closes the class: a Torch forward-mode dual reads as a plain number
-through ``float()`` and passed a traced-or-not test at both doors, and ``fd.run`` returned a
-tangent of exactly 0.0 where the central difference is 5.64e-9.
+the traced, differentiable geometry path and cannot silently stand in for one. Of the leaves
+the operator reads, two kinds reach it, and each has one door:
+
+* **The ball's radius and centre are static fields of** ``fd.Sphere``, concretised at
+  construction by ``_spec.static_float``, which refuses every traced value by name -- a JAX
+  tracer, a ``requires_grad`` leaf, a forward-mode dual, a ``torch.func`` wrapper
+  (``_spec.torch_carried``). They arrive here as Python floats, on either discretisation,
+  and no door in this module asks about them again: an arm that could never fire was the
+  third review's finding against ``b24a708``.
+* **The material values are gradient leaves** everywhere else, so a structure that asks for
+  the stencil takes **plain numbers only** in its ``eps`` and ``mu`` and the background's --
+  Python ``int`` and ``float`` and NumPy real scalars (:func:`_plain`) -- and any array or
+  tensor of any library, traced or not, is refused **by name** (``StencilNumberRefused``) at
+  :func:`prepare`'s door and again at :func:`lower`'s, not discretised some other way.
+  Deciding by type rather than by "is it traced" is what closed that class: a Torch
+  forward-mode dual reads as a plain number through ``float()`` and passed a traced-or-not
+  test at both doors, and ``fd.run`` returned a tangent of exactly 0.0 where the central
+  difference is 5.64e-9.
 """
 import hashlib
 import importlib
@@ -718,10 +728,9 @@ def _refuse_structure(structure, index, when='plan'):
             f'discretisation={DEFAULT!r}. The commit that measures a body without them is what '
             f'lifts this.')
     material = structure.material
-    shape = structure.shape
-    _refuse_numbers(where, (('radius', shape.radius),)
-                    + tuple((f'center[{a}]', v) for a, v in enumerate(shape.center))
-                    + tuple((f'eps[{a}]', v) for a, v in enumerate(material.eps))
+    # The radius and centre are not asked about here: fd.Sphere's own static door
+    # (_spec.static_float) refused any traced value at construction, so they are floats.
+    _refuse_numbers(where, tuple((f'eps[{a}]', v) for a, v in enumerate(material.eps))
                     + tuple((f'mu[{a}]', v) for a, v in enumerate(material.mu_value)), when)
     if when != 'plan' and isinstance(material, (Conductor, Dispersive)):
         raise ValueError(
@@ -819,9 +828,10 @@ def _refuse_scope(scene, plan, structures, asked):
             f'outside it composes with the operator in a way nothing has measured. The '
             f'research driver every number of this operator came through refused any second '
             f'structure. For this scene as written, use discretisation={DEFAULT!r} on '
-            f'{where}; for the stencil, take the other structures out -- the ball alone in '
-            f'this scene is accepted. The commit that measures a prepared operator beside '
-            f'others, and refuses the ones that meet its region, is what lifts this.')
+            f'{where}; for the stencil, take the other structures out, which removes this '
+            f'refusal (the ball alone still has to pass the stencil\'s other doors). The commit '
+            f'that measures a prepared operator beside others, and refuses the ones that meet '
+            f'its region, is what lifts this.')
     _refuse_background(scene, where)
     if plan.dtype != 'float64':
         raise ValueError(
@@ -830,9 +840,9 @@ def _refuse_scope(scene, plan, structures, asked):
             f'operator has was measured in a real float64 run -- its research driver refused '
             f'any other -- and a Bloch cell\'s periodic images are ones the fit '
             f'(periodic=None) never saw. For this Bloch cell use discretisation={DEFAULT!r}; '
-            f'with the stencil, a real run -- fd.Periodic() in place of fd.Bloch, the zero '
-            f'phase -- is accepted. The commit that measures it in a Bloch cell is what lifts '
-            f'this.')
+            f'for the stencil, a real run -- fd.Periodic() in place of fd.Bloch, the zero '
+            f'phase -- removes this refusal (the scene still has to pass the stencil\'s other '
+            f'doors). The commit that measures it in a Bloch cell is what lifts this.')
     for field, present in (('E', plan.has_E0), ('H', plan.has_H0)):
         if present:
             raise ValueError(
@@ -852,7 +862,8 @@ def _refuse_scope(scene, plan, structures, asked):
     for source in getattr(scene, 'sources', ()) or ():
         if not isinstance(source, (TFSF, PlaneWave)):
             raise ValueError(
-                f'StencilSourceRefused: {source.name} is an {type(source).__name__} and the '
+                f'StencilSourceRefused: source {source.name!r} is an '
+                f'fd.{type(source).__name__}, and the '
                 f'stencil\'s clearance rule reads a TFSF box or a PlaneWave plane. The '
                 f'operator\'s rows are nonlocal, so a source that injects inside them writes '
                 f'into a neighbourhood the fit assumed was vacuum; the check that says how '

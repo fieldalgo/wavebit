@@ -54,6 +54,8 @@ import wavebit.fd as fd
 from wavebit.fd._run import execute
 from wavebit.fd._runtime import runtime
 
+from fd_helpers import torch_forward_paths
+
 #: The differentiated scene: a 1 x 1 x 44 line, a slab in cells 20..26, PML on both z faces.
 #: Small on purpose -- a gradient gate is about the derivative, not about the physics, and
 #: every point below costs one JAX trace, one Torch backward and two NumPy runs. The 44 is
@@ -316,6 +318,29 @@ def test_a_torch_leaf_in_a_static_door_is_refused_by_name(build, pattern, concre
     # ``float(live)`` would have *worked* here -- Torch reads the value and warns once per
     # process, which is not a refusal -- so the door has to be the thing that says no.
     assert float(live.detach()) == float(concrete)
+    assert build(concrete) is not None
+
+
+@pytest.mark.parametrize('build,pattern,concrete', _traced_doors())
+def test_a_torch_forward_mode_value_in_a_static_door_is_refused_by_name(build, pattern, concrete):
+    """Forward mode needs the door as much as a leaf does: ``float()`` reads a dual's primal.
+
+    Measured on ``b24a708`` through ``fd.Sphere(radius=)`` and public ``fd.run`` (third review
+    of the stencil's preparation): ``torch.func.jvp`` read a derivative of exactly 0.0 and
+    ``forward_ad`` no tangent at all, where the central difference is 1.97e-7, because the
+    static door asked only for ``requires_grad``. Every static door shares that function, so
+    every one of them is asked here.
+    """
+    torch = pytest.importorskip('torch')
+
+    def through(v):
+        build(v)
+        return v * 2.0
+
+    for name, path in torch_forward_paths(torch).items():
+        with pytest.raises(ValueError, match=pattern) as raised:
+            path(through, float(concrete))
+        assert 'not a leaf' in str(raised.value), name
     assert build(concrete) is not None
 
 

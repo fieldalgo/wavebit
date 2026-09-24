@@ -86,6 +86,28 @@ def to_numpy(x):
     return np.asarray(x)
 
 
+def torch_forward_paths(torch):
+    """``name -> call(f, x)`` for every Torch transform that carries a value past ``requires_grad``.
+
+    A ``forward_ad`` dual and a ``torch.func`` wrapper leave ``requires_grad`` unset on the value
+    a door sees, and ``float()`` reads their primal; before ``_spec.torch_carried`` every static
+    door here took them and dropped the tangent. ``x`` is a Python float, lifted to a float64
+    tensor, and ``f`` is what the transform is applied to.
+    """
+    import torch.autograd.forward_ad as fwAD
+    t = lambda v: torch.tensor(v, dtype=torch.float64)
+
+    def forward_ad(f, x):
+        with fwAD.dual_level():
+            return fwAD.unpack_dual(f(fwAD.make_dual(t(x), t(1.)))).tangent
+    return {
+        'torch.func.jvp': lambda f, x: torch.func.jvp(f, (t(x),), (t(1.),))[1],
+        'torch.func.jacfwd': lambda f, x: torch.func.jacfwd(f)(t(x)),
+        'torch.func.vmap': lambda f, x: torch.func.vmap(f)(t([x, x])),
+        'torch forward_ad': forward_ad,
+    }
+
+
 def run_plan(scene, plan, backend='numpy'):
     """``fd.run`` on a plan that may have been mutated -- no skeleton check (tests only)."""
     rt = runtime(backend)

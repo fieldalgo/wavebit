@@ -711,7 +711,7 @@ conditions is now a named refusal at plan time, read line by line:
 
 | `validate_scope` condition | public refusal |
 | --- | --- |
-| centre and radius concrete, finite | `StencilNumberRefused` (plan **and** lowering): every leaf the operator reads -- radius, centre, `eps`, `mu`, the background's `eps` and `mu` -- is a plain Python number or a NumPy scalar; any array or tensor is refused, traced or not |
+| centre and radius concrete, finite | `fd.Sphere`'s static door (`_spec.static_float`, on either discretisation): any traced radius or centre -- a JAX tracer, a `requires_grad` leaf, a forward-mode dual, a `torch.func` wrapper -- is refused by name at construction. `StencilNumberRefused` (plan **and** lowering) covers the material leaves: `eps`, `mu`, the background's `eps` and `mu` are plain Python numbers or NumPy scalars; any array or tensor is refused, traced or not |
 | `radius > 0`, `eps > 0` | `fd.Sphere`, `fd.Material` constructors |
 | `components` is `(0, 1, 2)` for a sphere | fixed by the public preparation |
 | `len(scene.structures) == 1` | `StencilStructuresRefused` |
@@ -820,8 +820,8 @@ difference is -14.34871), and plain `fd.run(scene, 'torch')` with a dual `eps` r
 the scattered flux 5.126343269e-09 with a tangent of **exactly 0.0**, against a stencil
 central difference of 5.639678457e-09 (the voxel rule's forward mode read
 5.527620124e-09 against its difference 5.527620120e-09). Rather than add one transform
-at a time to a tracing test, the door is now a **type**: every leaf the operator reads
--- radius, centre, `eps`, `mu`, and the background's `eps` and `mu` -- has to be a
+at a time to a tracing test, the door is now a **type**: every material leaf the operator
+reads -- `eps`, `mu`, and the background's `eps` and `mu` -- has to be a
 Python `int` or `float` or a NumPy real scalar of at most 64 bits, and anything else is
 `StencilNumberRefused` at `fd.plan` and again at `fd.lower`: every `jax.Array`, every
 `torch.Tensor` (a gradient leaf, a dual, a `torch.func` wrapper or a plain tensor), and
@@ -937,7 +937,75 @@ plans all six through the public selector, stopping before the solve.
 Still open. `materials.concrete()` still reads a forward-mode dual as a number, so the
 **voxel** path's other `concrete()` readers (the CFL bound, the cells-per-wavelength
 check) take its primal; they compute no derivative themselves, and the voxel rule's own
-forward-mode tangent is right, but nothing gates that class. And `fd.Sphere`'s radius and
-centre go through `static_float`, which refuses a JAX tracer and a `requires_grad` leaf
-but reads a forward-mode dual's primal: a dual radius becomes a plain float at
-construction on either discretisation, before any stencil door can see it.
+forward-mode tangent is right, but nothing gates that class. (`fd.Sphere`'s radius and
+centre, listed here as open when this section was written, were closed by the third
+review below.)
+
+## Third review of the public preparation (2026-09-25)
+
+Two reviews of `b24a708` confirmed every blocker and major above closed on fixtures of
+their own -- 21 derivative paths on four material leaves refused by name, the lowering
+door refusing every scene/plan pairing, 0 live operators after a JAX sweep, all six
+research placements admitted -- and the default byte-identical to `28f6e49` over 656
+quantities on 7 new scenes. One review still would not land it, over one finding the
+author had disclosed; three minors came with it.
+
+**A forward-mode radius or centre, on either discretisation.** `fd.Sphere` concretises
+its radius and centre through `_spec.static_float`, which refused a JAX tracer and a
+`requires_grad` leaf and read anything else through `float()` -- and `float()` of a
+forward-mode dual or a `torch.func` wrapper is its primal. Reproduced on
+`tests/test_fd_stencil.py`'s fixture through public `fd.run(scene, 'torch')`, on a git
+archive of `b24a708`, d(flux)/d(radius):
+
+| discretisation | `torch.func.jvp` | `forward_ad` tangent | central difference (h = 1e-3) |
+| --- | ---: | ---: | ---: |
+| stencil | **0.0** | **none** | 1.96739e-7 |
+| voxel | **0.0** | **none** | 1.84128e-7 |
+
+Refused by name now. `_spec.torch_carried` asks Torch's own two questions -- is this a
+`torch.func` wrapper (`is_functorch_wrapped_tensor`), does it carry a forward tangent
+(`forward_ad.unpack_dual`) -- and `static_float` and `static_int` refuse either, so the
+fix is in the one function every static field shares: `Box` sizes, `Resolution`, `Run`,
+`PML`, the sources' static fields, not the sphere alone. It refuses and never changes a
+value, so no plain-number input moves by a bit. Neither question is wrapped in a `try`:
+a Torch release that renames one makes every static door raise, not open. The stencil
+number door's radius and centre arms could never fire -- `fd.Sphere` handed them floats
+-- and are deleted rather than kept as dead code; the module docstring and
+`Structure`'s now say which door guards which leaf, instead of claiming the type door
+"closes the class" for leaves it never saw.
+
+Gates: `test_a_torch_forward_mode_value_in_a_static_door_is_refused_by_name` in
+`tests/test_fd_stage1_grad.py` and `tests/test_fd_stage2_grad.py`, over every static door
+those files already list (`torch.func.jvp`, `torch.func.jacfwd`, `torch.func.vmap`,
+`forward_ad`), and `test_a_forward_mode_radius_or_centre_is_refused_by_the_sphere_on_either_rule`
+through `fd.run` on both discretisations. Mutants, each restored and SHA-checked, each
+failing its gate: `static_float` without the new arm; `static_int` without it (the
+`PML(cells=)` and `Run(steps=)` rows); `torch_carried` without the functorch question
+(`jvp`, `jacfwd`, `vmap` pass); without the dual question (`forward_ad` passes).
+
+**The minors.**
+
+- Two arms of the background door survived their tests (the review's mutants D and V):
+  `all` read as `any` admitted `fd.Material(eps=(1., 1., 1.2))` at `fd.lower`, and the
+  magnetic test dropped admitted `fd.Material(eps=1., mu=1.3)`. `fd.plan` refuses the
+  first in `check_smoothed` on either rule, so the lowering arm is its only guard. Both
+  are witnesses in `test_a_non_vacuum_background_is_refused_not_replaced_by_vacuum` now,
+  at `fd.lower` against the vacuum plan (and the second at `fd.plan`), and both mutants
+  fail it.
+- `fd.plan` and `fd.check` printed the voxel rule's accuracy sentence (adjoint
+  inverse-material cross coupling, order 2.023) on a stencil scene. The stencil scene
+  gets its own now -- the research sweeps' 2.064 (glass) and 2.057 (epsilon 1.1), and
+  that its C3 gate is incomplete -- and the voxel sentence is unchanged to the
+  character. Gate: `test_a_stencil_scene_is_told_its_own_accuracy_and_not_the_voxel_rules`;
+  mutants: the stencil never recognised, the voxel sentence always added.
+- `StencilStructuresRefused` and `StencilDtypeRefused` promised that a spelling "is
+  accepted" when the next door could still refuse it; they say it removes this refusal
+  now. `StencilSourceRefused` read "d is an Dipole"; it names the source and its type.
+
+Verified on the committed source: the fast tier (every `tests/test_fd_*.py` and
+`test_docs_contract.py`, `-m "not slow"`, `-n 3`, two BLAS threads) 2098 passed and 8
+skipped, exit 0, 2106 JUnit cases, no INTERNALERROR; the four freezers reproduce
+143/288/140/570 arrays bit for bit with nothing written; the default-unmoved digest (822
+quantities over 9 default scenes, NumPy lowering and runs, JAX and Torch runs on four) is
+byte-identical to the one built from `28f6e49`; and the plan notes and `fd.check` text of
+the same scenes are byte-identical to `b24a708`'s, built twice on each tree.
