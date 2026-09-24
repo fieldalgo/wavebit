@@ -387,3 +387,75 @@ The measurement log retains the unresolved pilot, all three controls, actual
 exit codes, preparation checks, source digests, complex fields and angular
 cuts, plus summaries and digests of the full retained energy records. The
 numerical implementation is unchanged by this report.
+
+## High-index refinement and external comparisons
+
+The same research operator completes the epsilon-12, radius/wavelength `.25`
+origin sphere at 56 cells per vacuum wavelength, 480 periods, `df=.00625`,
+and cutoff `1e-9`. Its actual numerical process exits zero. The original
+resource-report wrapper failed replacing its JSON; a retained Windows process
+handle independently observed the numerical child's exit. The calculation was
+not restarted. All 59 watched numerical source hashes still match the records.
+
+Scattering efficiency becomes **3.935783692815**, or **8.797116% below Mie**,
+compared with 19.53794% at 40 cells. Apparent absorption is `3.72867e-10`,
+the largest final monitor-energy ratio is `3.59066e-18`, and final interior
+energy is `2.81863e-17` of its peak. These are distinct energy diagnostics.
+Preparation takes 493.062 seconds and the complete experiment 4419.203 seconds;
+peak observed process memory is 5,389,631,488 bytes. The 80-cell preparation
+memory is not yet measured. An independent time extension at 56 cells is also
+pending: a small residual alone is not a measured bound on integrated observables.
+
+Two external solvers now measure this same continuum sphere at 40 cells.
+Each uses a paired empty/sphere calculation, normalized by its own incident
+power, and records both 480 and 624 periods. Both actual process exits and the
+finite batch exit are zero. Exact Mie efficiency is `4.315415843395232`.
+
+| Solver and material representation | Cells/wavelength | Scattering efficiency | Relative Mie error |
+| --- | ---: | ---: | ---: |
+| Wavebit research extended stencil, 624 periods | 40 | 3.472272466258 | -19.53794% |
+| FDTDX 0.6.2 native binary sphere, 624 periods | 40 | 3.508191356225 to 3.510442726983 | -18.70560% to -18.65343% |
+| Meep 1.34.0 native sphere with dielectric averaging, 624 periods | 40 | 3.412383060872 to 3.413262530065 | -20.92574% to -20.90536% |
+| Wavebit research extended stencil, 480 periods | 56 | 3.935783692815 | -8.797116% |
+
+External ranges retain all three enclosing cube half-widths `.4/.7/.75`
+wavelengths. The fixtures use a 2.5-wavelength domain, 12 absorbing cells,
+an Ex-polarized source at z = `-.85` wavelengths, and equal physical time
+steps `0.5/(sqrt(3)*40)`. FDTDX records interpolated complex E/H face fields
+and uses trapezoidal surface integration. Meep uses its public flux API,
+including opaque incident-field subtraction records. Native geometry,
+face placement, source pulse conventions and flux quadrature differ; these
+are not identical discrete problems. Meep implementation source was not read.
+
+| Measured control | FDTDX | Meep |
+| --- | ---: | ---: |
+| Maximum relative scattering change, 480 to 624 periods | 1.51901e-11 | 1.26968e-7 |
+| Three-surface scattering range / outer-surface scattering | .0641335% | .0257662% |
+| Final / peak interior energy, 624 periods | 2.07213e-18 | 2.04452e-14 |
+| Maximum absolute empty closed-surface efficiency | 8.34882e-5 | 2.13635e-7 |
+| Maximum relative incident Ex variation on entry faces | .0805132% | 2.09236e-13% |
+
+Apparent absorption at 624 periods remains `.003096` to `.004764` in FDTDX
+and approximately `.002986` in Meep. It is retained as a numerical residual
+for this lossless sphere, not interpreted as physical absorption. The small
+time changes do not certify the absorbing layer or air gap: independent
+layer/gap controls, external refinement and external angular comparisons
+have not been completed.
+
+The external measurement helpers pass 10 independently collected and reported
+tests with exit zero, no errors and no `INTERNALERROR`. Actual source-copy
+mutations cover conjugation, face area, outward orientation, projected area,
+invalid incident power and energy-window selection; every added case has a
+witness. A follow-up guard-bypass mutation makes all four invalid-incident
+cases fail by explicit assertions, avoiding reliance on the first zero-input
+variant's incidental division error. The measured driver and raw-array
+digests are verified. The full records, helper audit and 56-cell preparation
+are retained under `high_index_external_comparison` in the existing study log.
+
+At this coarse resolution all three tested solvers underpredict scattering
+by roughly 19-21%. The 56-cell improvement supports a substantial spatial
+discretization effect. It neither identifies the complete error mechanism nor
+establishes solver ranking or a convergence order. The same-operator
+40/56/80 by three-placement gate, public integration and physical mutation
+review remain incomplete. **C3 has not passed.** No new tolerance, fitted
+correction or numerical-source change is introduced by this report.

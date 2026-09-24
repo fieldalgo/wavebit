@@ -1981,3 +1981,19 @@ This supports the record length for this one grid and placement, not a C3
 pass or a time bound at finer grids. The full retained measurements and
 duration provenance are in the
 [research time-control report](fd-symmetric-stencil.md#large-high-index-sphere-time-and-bandwidth-controls).
+
+The next origin result at 56 cells reduces the research operator's scattering
+error to **8.797116%**, with actual exit zero and unchanged numerical sources.
+The external epsilon-12 sphere comparison is now complete at 40 cells:
+FDTDX 0.6.2 gives **18.65343-18.70560%** underprediction and Meep 1.34.0
+gives **20.90536-20.92574%**, including all three enclosing surfaces. Their
+480-to-624-period relative changes are at most `1.51901e-11` and `1.26968e-7`.
+Both external processes and the finite batch exit zero. This places Wavebit's
+40-cell result in the same error range on this case; the different native
+material/source/measurement representations prevent an exact discrete match
+or a solver ranking. Full measurements, residual absorption and remaining
+controls are in the
+[external comparison report](fd-symmetric-stencil.md#high-index-refinement-and-external-comparisons).
+The research improvement is not yet the public `fd.run` material map, and
+the high-index three-resolution/three-placement gate remains open. C3 and C4
+status are unchanged.
