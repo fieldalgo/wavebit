@@ -191,11 +191,12 @@ import pytest
 
 from wavebit.fd._shapes import (Approximations, Box, Cylinder, Difference, Intersection, Prism,
                                 Sphere, Union, clip_capacity, clipped_ball_volume,
-                                clipped_disc_area, clipped_polygon_area, cut, cut_parts,
-                                image_shifts, occupancy, polygon_edge_moments)
+                                clipped_disc_area, clipped_polygon_area, cut, cut_parts, edge_cut,
+                                face_cut, image_shifts, occupancy, polygon_edge_moments)
 from wavebit.fd._shapes._bodies import (_loud_if_not_a_size, _loud_if_not_counter_clockwise,
                                         polygon_shape)
-from wavebit.fd._shapes._cut import _parts, _second_difference, two_plane
+from wavebit.fd._shapes._cut import (_first_difference, _first_difference_square, _parts,
+                                     _second_difference, two_plane)
 
 from fd_helpers import backends
 
@@ -3224,3 +3225,686 @@ def test_cut_refuses_a_normal_that_is_not_a_unit_vector():
     many[41] = np.nan
     with pytest.raises(ValueError, match='unit outward normal'):
         cut(np.zeros(64), many, 1.0)
+
+
+# ----------------------------------------------------------------------------------------
+# the same cut one and two dimensions down: a component's edge, and its dual face
+# ----------------------------------------------------------------------------------------
+#
+# `_cut.edge_cut` and `_cut.face_cut` answer, for the tangent half space, what fraction of a
+# component's own edge and of its own dual face it holds -- the pair the Werner/Bauer/Cary
+# material operator constrains, and the pair the C3 research operator has been taking from
+# closed forms inside `studies/`. They ship here as a **preparation**: nothing in the package
+# dispatches to them, `Sphere` carries exact forms of the same two quantities itself, and the
+# section below measures how far apart those two answers are, which is the whole reason there
+# is no fallback wiring them together.
+#
+# The oracles, and why each is independent of the thing it judges:
+#
+# * *Exact clipping, written with Python `if`s.* A segment clipped by one inequality, and a
+#   square clipped by a half plane through Sutherland-Hodgman plus a shoelace area. Neither
+#   shares a line with the divided-difference form under test, and both are branch-on-a-value
+#   code, which is exactly what the kernel may not be.
+# * *Quadrature.* The same square area read as an integral of its chord length along one axis,
+#   split at the kinks, `scipy.integrate.quad`.
+# * *The `Sphere` overrides' own two oracles*: the exact chord of a ball for the edge, and the
+#   study gate's adaptive integration of clipped disc chords for the face
+#   (`tests/test_fd_triplet_sphere.py::independent_face`).
+#
+# The mutants, each edited into `wavebit/fd/_shapes/` or into the two study files, run, watched
+# to fail, and reverted (2026-09-24):
+#
+#     mutant                                                            red
+#     both `Sphere` interface overrides deleted (back to `None`)        30
+#     `_first_difference_square`'s own `a = 0` piece dropped             6
+#     the degenerate branches dropped (`where(a > 0, ...)` removed)      2
+#     the face's two steps not sorted (`a1, a2 = a_u, a_v`)              2
+#     `_first_difference`'s safe denominator removed                     2
+#     the face's clip on `c` dropped                                     2
+#     `_decided` reading `d < 0` for `d <= 0`                            1
+#     the `axis` door removed                                            1
+#     `circle_fraction`'s `xp` argument dropped                          1
+#     `circle_fraction`'s lift built with `np.stack` again               1
+#
+# Two of those did not go red on the first sweep, and both of them changed something.
+# `_first_difference`'s safe denominator passed all twelve tests, because the caller pins its
+# `c` to the dead end of a `clip` whose transpose is a `select` and therefore *discards* the
+# NaN cotangent rather than multiplying by it; the guard is right and stays, and what was added
+# is a check of the invariant where it lives
+# (`_each_divided_difference_is_guarded_at_a_zero_step`). Dropping the **edge's** clip passed
+# all twelve too, and that mutant was correct: measured over 2000 normals at depths of 1 to 1e12
+# voxels, clipped and unclipped agree to 0.0 exactly, because `_first_difference` returns the
+# constant 1 rather than differencing two large numbers. The clip was deleted from
+# `_edge_parts`, and the mutant that remains is the **face's** clip, which at those depths is
+# worth 1.9e-3.
+
+
+def _oracle_edge(d, n, dx, k):
+    """The segment clipped by the closed half space, in plain Python with branches."""
+    h = dx / 2
+    a = float(n[k])
+    lo, hi = -h, h
+    if a > 0:
+        hi = min(hi, -d / a)
+    elif a < 0:
+        lo = max(lo, -d / a)
+    else:                                   # the plane is parallel to the edge: all or nothing
+        return 1.0 if d <= 0 else 0.0
+    return max(0.0, hi - lo) / dx
+
+
+def _oracle_face_clip(d, n, dx, k):
+    """The dual square clipped by the half plane -- Sutherland-Hodgman, then a shoelace area."""
+    u, v = (0, 1, 2)[:k] + (0, 1, 2)[k + 1:]
+    nu, nv = float(n[u]), float(n[v])
+    h = dx / 2
+    poly, out = [(-h, -h), (h, -h), (h, h), (-h, h)], []
+    for i, p in enumerate(poly):
+        q = poly[(i + 1) % 4]
+        sp, sq = nu * p[0] + nv * p[1] + d, nu * q[0] + nv * q[1] + d
+        if sp <= 0:
+            out.append(p)
+        if (sp < 0 < sq) or (sq < 0 < sp):
+            t = sp / (sp - sq)
+            out.append((p[0] + t * (q[0] - p[0]), p[1] + t * (q[1] - p[1])))
+    if len(out) < 3:
+        return 0.0
+    area = sum(out[i][0] * out[(i + 1) % len(out)][1] - out[(i + 1) % len(out)][0] * out[i][1]
+               for i in range(len(out)))
+    return abs(area) / 2 / dx ** 2
+
+
+def _oracle_face_quad(d, n, dx, k):
+    """The same area as a quadrature of the chord length, split at its kinks."""
+    from scipy.integrate import quad
+    u, v = (0, 1, 2)[:k] + (0, 1, 2)[k + 1:]
+    nu, nv = float(n[u]), float(n[v])
+    h = dx / 2
+
+    def chord(x):
+        b = -d - nu * x
+        if nv > 0:
+            return max(0.0, min(h, b / nv) + h)
+        if nv < 0:
+            return max(0.0, h - max(-h, b / nv))
+        return 2 * h if b >= 0 else 0.0
+
+    cuts = [-h, h]
+    for s in (1, -1):
+        if nu != 0:
+            x = (-d - s * nv * h) / nu
+            if -h < x < h:
+                cuts.append(x)
+    cuts.sort()
+    return sum(quad(chord, a, b, limit=200)[0] for a, b in zip(cuts[:-1], cuts[1:])) / dx ** 2
+
+
+def _interface_families():
+    """``{name: (normals, offsets)}`` -- random, exactly axis-aligned, exactly diagonal, and
+    the two decided ones. The exact families are the point: an axis-aligned normal is what
+    kills the eight-corner form's lower-dimensional twins, and a diagonal one is where two
+    steps are equal and the sort has nothing to order."""
+    rng = np.random.default_rng(7717)
+    dx = 0.0125
+    out = {}
+    n = rng.normal(size=(400, 3))
+    out['400 random normals'] = (n / np.linalg.norm(n, axis=-1)[:, None],
+                                 rng.uniform(-0.9, 0.9, 400) * dx)
+    ax = np.repeat(np.concatenate([np.eye(3), -np.eye(3)]), 40, axis=0)
+    out['240 exactly axis-aligned normals'] = (ax, rng.uniform(-0.9, 0.9, len(ax)) * dx)
+    body = np.array([[sx, sy, sz] for sx in (1., -1.) for sy in (1., -1.)
+                     for sz in (1., -1.)]) / np.sqrt(3)
+    face = []
+    for i in range(3):
+        j, k = (0, 1, 2)[:i] + (0, 1, 2)[i + 1:]
+        for sj in (1., -1.):
+            for sk in (1., -1.):
+                e = np.zeros(3)
+                e[j], e[k] = sj, sk
+                face.append(e / np.sqrt(2))
+    dg = np.repeat(np.concatenate([body, np.array(face)]), 20, axis=0)
+    out['400 exactly diagonal normals'] = (dg, rng.uniform(-0.9, 0.9, len(dg)) * dx)
+    far = rng.normal(size=(100, 3))
+    far = far / np.linalg.norm(far, axis=-1)[:, None]
+    out['100 cells wholly inside (d = -5 dx)'] = (far, np.full(100, -5 * dx))
+    out['100 cells wholly outside (d = +5 dx)'] = (far, np.full(100, +5 * dx))
+    return dx, out
+
+
+def test_the_edge_and_face_cuts_are_what_an_independent_clip_says():
+    """The two new forms against an exact clip and a quadrature, over five families and a node.
+
+    Measured 2026-09-24 at ``dx = 0.0125``, worst ``|difference|`` over the family and all
+    three axes:
+
+        family                                        edge     face (clip)  face (quad)
+        400 random normals                           2.2e-16     3.3e-16      3.3e-16
+        240 exactly axis-aligned normals             0           2.2e-16      3.3e-16
+        400 exactly diagonal normals                 1.1e-16     2.2e-16      2.2e-16
+        100 cells wholly inside  (d = -5 dx)         0           2.2e-16      2.2e-16
+        100 cells wholly outside (d = +5 dx)         0           0            0
+        500 points on Union(Sphere, Box)             2.2e-16     2.2e-16
+        500 points on Difference(Sphere, Box)        2.2e-16     2.2e-16
+
+    **The two exact families are what the degenerate branches are for.** An exactly
+    axis-aligned normal is the case with no volume at all in the lower-dimensional cell -- the
+    edge parallel to the plane, the dual face parallel to it -- and it is not rare: it is every
+    voxel of a slab, of an axis-aligned box face, and of two of a sphere's three great circles.
+    An exactly diagonal normal is where the two steps of the face are equal and the sort has
+    nothing to order.
+
+    **The CSG rows are the reason these live in ``_cut.py`` and not in a body.** A node has no
+    exact clip of its own -- that is what ``_Combination``'s whole docstring is about -- and
+    these two forms take its composed ``(d, n)`` exactly as they take a leaf's.
+    """
+    dx, families = _interface_families()
+    for name, (n, d) in families.items():
+        for axis in range(3):
+            got_e = np.asarray(edge_cut(d, n, dx, axis))
+            got_f = np.asarray(face_cut(d, n, dx, axis))
+            for i in range(len(d)):
+                assert abs(got_e[i] - _oracle_edge(d[i], n[i], dx, axis)) < 1e-14, (name, i, axis)
+                assert abs(got_f[i] - _oracle_face_clip(d[i], n[i], dx, axis)) < 1e-14, (name, i)
+                assert abs(got_f[i] - _oracle_face_quad(d[i], n[i], dx, axis)) < 1e-13, (name, i)
+    rng = np.random.default_rng(31337)
+    pts = rng.uniform(-0.4, 0.4, size=(500, 3))
+    for node in (Union(Sphere(0.3), Box((0.4, 0.3, 0.5), (0.1, 0., 0.))),
+                 Difference(Sphere(0.3), Box((0.2, 0.2, 0.9), (0., 0., 0.), 0.5))):
+        d, n = node.surface(pts)
+        d, n = np.asarray(d), np.asarray(n)
+        for axis in range(3):
+            got_e = np.asarray(edge_cut(d, n, dx, axis))
+            got_f = np.asarray(face_cut(d, n, dx, axis))
+            for i in range(len(d)):
+                assert abs(got_e[i] - _oracle_edge(d[i], n[i], dx, axis)) < 1e-14, (node, i)
+                assert abs(got_f[i] - _oracle_face_clip(d[i], n[i], dx, axis)) < 1e-14, (node, i)
+
+
+def test_the_face_cut_is_c1_and_the_edge_cut_is_only_c0():
+    """Slide the plane through the cell and read the slope's jumps. Both numbers are the point.
+
+    Measured 2026-09-24, ``dx = 0.1``, ``n = (0.3, 0.48, 0.8246)`` normalised, ``d`` swept
+    across the cell in steps of ``h dx``; the slope is a forward difference and the column is
+    the largest jump between two consecutive slopes:
+
+        h          edge_cut max|df'|   face_cut max|df'|
+        1e-3           32.34              2.527e-2
+        5e-4           31.34              1.264e-2
+        2.5e-4         29.34              6.319e-3
+
+    ``face_cut``'s halves when ``h`` halves -- a Lipschitz derivative, so C1 -- while
+    ``edge_cut``'s stays at the size of the slope itself (``max |f'| = 33.34 = 1/a_1``, with
+    ``a_1 = |n_x| dx = 0.03``). **That is the exact function and not the writing of it.** The
+    length of a segment inside a half space is piecewise linear in the offset, with a corner
+    where an end of the segment crosses the plane; the ``m``-dimensional cut of a box is
+    C^(m-1), so one dimension down from :func:`cut` there is no derivative to be continuous.
+
+    What it costs C4 is written here rather than discovered there: a design loop that
+    differentiates through an edge fraction gets a gradient that exists almost everywhere and
+    jumps on a measure-zero set, and a slope ``1/a_1`` that grows without bound as the plane
+    turns parallel to the edge.
+    """
+    dx = 0.1
+    n = np.asarray([0.3, 0.48, 0.8246])
+    n = n / np.linalg.norm(n)
+    face_jumps = []
+    for h in (1e-3, 5e-4, 2.5e-4):
+        d = np.arange(-0.6, 0.6, h) * dx
+        nn = np.broadcast_to(n, (len(d), 3))
+        edge = np.asarray(edge_cut(d, nn, dx, 0))
+        face = np.asarray(face_cut(d, nn, dx, 0))
+        edge_slope, face_slope = np.diff(edge) / (h * dx), np.diff(face) / (h * dx)
+        assert abs(np.abs(edge_slope).max() - 1 / (n[0] * dx)) < 1e-9, 'the slope is 1/a_1'
+        # C0: the jump stays the size of the slope however fine the sampling gets
+        assert np.abs(np.diff(edge_slope)).max() > 0.5 * np.abs(edge_slope).max()
+        face_jumps.append(float(np.abs(np.diff(face_slope)).max()))
+    # C1: halving the step halves the largest jump, to better than a percent at both halvings
+    for a, b in zip(face_jumps[:-1], face_jumps[1:]):
+        assert abs(a / b - 2.0) < 0.01, face_jumps
+    assert face_jumps[-1] < 1e-2, face_jumps
+
+
+def test_the_exact_sphere_fills_are_what_quadrature_says_and_they_are_c0_too():
+    """``Sphere``'s two overrides against their own oracles -- and where each one has a corner.
+
+    Measured 2026-09-24 over 200 placements about a radius-0.25 sphere at ``dx = 0.025``, all
+    three axes: worst ``|difference|`` **1.1e-16** for the edge against the exact chord, and
+    **3.7e-14** for the face against the adaptive integration of clipped disc chords that
+    ``tests/test_fd_triplet_sphere.py`` holds the study's form to.
+
+    **Both are C0, and the face's corner is not where the edge's is.** On the same slide as
+    :func:`test_the_face_cut_is_c1_and_the_edge_cut_is_only_c0`, at ``dx = 0.1`` with a
+    radius-0.25 sphere: the edge's largest slope jump is 9.72 against a largest slope of 10.0
+    (a corner where an end of the segment leaves the ball), and the face's is 157.05, which is
+    exactly its own largest slope and exactly ``2 pi R / dx^2`` -- the corner where the
+    cross-section disc *appears*, its area ``pi (R^2 - v^2)/dx^2`` starting with a finite slope
+    against the zero it leaves. So the exact form is **less** regular than the tangent-plane
+    ``face_cut`` it would replace, which is C1. That is a real trade for C4 to price, not a
+    defect of either: one is the body and the other is its tangent plane.
+    """
+    quad = pytest.importorskip('scipy.integrate').quad
+    dx, radius = 0.025, 0.25
+    rng = np.random.default_rng(23923)
+    pts = rng.normal(size=(200, 3))
+    pts = pts / np.linalg.norm(pts, axis=-1)[:, None] * radius + rng.uniform(-.5, .5, (200, 3)) * dx
+    body = Sphere(radius)
+    for axis in range(3):
+        got_e = np.asarray(body.exact_edge_fill(pts, dx, axis))
+        got_f = np.asarray(body.exact_face_fill(pts, dx, axis))
+        for i, p in enumerate(pts):
+            t2 = sum(p[j] ** 2 for j in range(3) if j != axis)
+            if radius ** 2 > t2:
+                half = np.sqrt(radius ** 2 - t2)
+                lo, hi = max(-dx / 2, -half - p[axis]), min(dx / 2, half - p[axis])
+                truth = max(0.0, hi - lo) / dx
+            else:
+                truth = 0.0
+            assert abs(got_e[i] - truth) < 1e-14, (axis, i)
+            assert abs(got_f[i] - _disc_chord_quadrature(quad, p, dx, axis, radius)) < 1e-12
+    # the two corners, on the slide the tangent plane's regularity was measured on
+    dx, radius = 0.1, 0.25
+    h = 2.5e-4
+    shift = np.arange(-0.6, 0.6, h) * dx
+    pts = np.stack([shift + 0.231, np.full_like(shift, 0.041),
+                    np.full_like(shift, -0.033)], axis=-1)
+    body = Sphere(radius)
+    for name, f in (('edge', np.asarray(body.exact_edge_fill(pts, dx, 0))),
+                    ('face', np.asarray(body.exact_face_fill(pts, dx, 0)))):
+        slope = np.diff(f) / (h * dx)
+        assert np.abs(np.diff(slope)).max() > 0.5 * np.abs(slope).max(), name
+    face = np.asarray(body.exact_face_fill(pts, dx, 0))
+    # the face's corner is the disc appearing: 2 pi R / dx^2, to a sixth of a percent at this h
+    assert abs(np.abs(np.diff(face)).max() / (h * dx) / (2 * np.pi * radius / dx ** 2) - 1) < 2e-3
+
+
+def _disc_chord_quadrature(quad, point, dx, axis, radius):
+    """The study gate's own face oracle: adaptive integration of clipped chords, split at the
+    four places the disc meets the square's sides. No corner primitive is used."""
+    a, b = (0, 1, 2)[:axis] + (0, 1, 2)[axis + 1:]
+    r2 = radius ** 2 - point[axis] ** 2
+    if r2 <= 0:
+        return 0.
+    r = np.sqrt(r2)
+    lo, hi = max(point[a] - dx / 2, -r), min(point[a] + dx / 2, r)
+    if hi <= lo:
+        return 0.
+    low, high = point[b] - dx / 2, point[b] + dx / 2
+    cuts = [lo, hi]
+    for y in (low, high):
+        if abs(y) < r:
+            x = np.sqrt(r2 - y * y)
+            cuts.extend(t for t in (-x, x) if lo < t < hi)
+    cuts.sort()
+
+    def chord(x):
+        hh = np.sqrt(max(0., r2 - x * x))
+        return max(0., min(high, hh) - max(low, -hh))
+
+    return sum(quad(chord, u, v, epsabs=1e-15, epsrel=1e-12)[0]
+               for u, v in zip(cuts[:-1], cuts[1:])) / dx ** 2
+
+
+def test_the_plane_is_not_a_drop_in_for_the_exact_edge_and_face_fills():
+    """The scope rule, measured: swapping the generic forms in would change every number.
+
+    C3 reaches only the exact ``Sphere`` overrides. The generic tangent-plane forms ship beside
+    them for the bodies that have no closed form -- a CSG node above all -- and this is the
+    test that says the two are **not** interchangeable, which is why no ``parts``-style
+    dispatcher pairs them. 4000 points about a radius-0.25 sphere per row, one sub-cell jitter
+    per point, all three axes, measured 2026-09-24:
+
+        R/h                 3        4        6        8       12       16       32
+        worst |edge gap|  5.8e-1   6.7e-1   4.5e-1   7.5e-1   3.3e-1   1.6e-1   1.7e-1
+        worst |face gap|  4.6e-1   1.6e-1   4.5e-1   2.7e-1   9.8e-2   8.9e-2   4.9e-2
+        mean  |edge gap|  1.0e-2   7.7e-3   5.2e-3   3.9e-3   2.7e-3   1.8e-3   9.2e-4
+        mean  |face gap|  2.0e-2   1.5e-2   9.7e-3   7.4e-3   4.9e-3   3.7e-3   1.8e-3
+
+    The **mean** falls like ``h`` -- first order, not second -- and the **worst** barely falls
+    at all: a cell where the tangent plane misses a corner of the body is wrong by a finite
+    fraction of the cell however fine the grid is. Against that, the research operator's
+    measured convergence orders (2.137819 on the cylinder, 2.063617 and 2.057240 on the glass
+    and weak spheres, 2.468123 percent on the small high-index sphere) were all taken with the
+    exact forms, so a silent substitution would invalidate every one of them while still
+    returning a plausible number -- the failure mode this repository names on every door.
+
+    The other half of the rule is that no body **but** ``Sphere`` answers these at all: a CSG
+    node, a box, a prism and a cylinder all return ``None``, and a caller that wants an answer
+    for them has to reach for the plane in the open.
+    """
+    rng = np.random.default_rng(4242)
+    radius = 0.25
+    worst_seen = 0.0
+    for cells, mean_floor in ((8, 3.0e-3), (16, 1.5e-3), (32, 7.0e-4)):
+        dx = radius / cells
+        pts = rng.normal(size=(4000, 3))
+        pts = pts / np.linalg.norm(pts, axis=-1)[:, None] * radius
+        pts = pts + rng.uniform(-.5, .5, pts.shape) * dx
+        body = Sphere(radius)
+        d, n = body.surface(pts)
+        for axis in range(3):
+            for plane, exact in ((edge_cut(d, n, dx, axis), body.exact_edge_fill(pts, dx, axis)),
+                                 (face_cut(d, n, dx, axis), body.exact_face_fill(pts, dx, axis))):
+                gap = np.abs(np.asarray(plane) - np.asarray(exact))
+                assert gap.mean() > mean_floor, (cells, axis, gap.mean())
+                worst_seen = max(worst_seen, gap.max())
+    assert worst_seen > 0.1, worst_seen
+    pts = grid(4, -0.2, 0.1)
+    for body in (Box((0.2, 0.2, 0.2)), Cylinder(0.2, 0.3), Prism(HEX, 0.3),
+                 Union(Sphere(0.2), Box((0.2, 0.2, 0.2))),
+                 Difference(Sphere(0.2), Box((0.1, 0.1, 0.5)))):
+        assert body.exact_edge_fill(pts, 0.1, 0) is None, body
+        assert body.exact_face_fill(pts, 0.1, 0) is None, body
+    assert Sphere(0.2).exact_edge_fill(pts, 0.1, 0) is not None
+    assert Sphere(0.2).exact_face_fill(pts, 0.1, 0) is not None
+
+
+@pytest.mark.parametrize('backend', backends())
+def test_the_interface_cuts_are_one_number_on_every_backend_and_every_scale(backend):
+    """NumPy, JAX eager, ``jax.jit`` and Torch, at five coordinate scales six decades apart.
+
+    200 placements per scale, all three axes, both generic forms and both ``Sphere``
+    overrides; the column is the worst ``|difference|`` from the NumPy answer, measured
+    2026-09-24:
+
+        form                       jax eager   jax.jit     torch
+        edge_cut                    2.2e-16    2.2e-16    2.2e-16
+        face_cut                    0          0          0
+        Sphere.exact_edge_fill      1.7e-14    1.7e-14    1.7e-14
+        Sphere.exact_face_fill      2.0e-13    2.0e-13    2.0e-13
+
+    The two generic forms are **exact** across the backends -- they are additions, comparisons
+    and one division -- and the two exact ones carry the disc clip's own cross-backend spread,
+    which is this package's known price for an ``asin`` and a guarded root (``_exact.py``).
+    The scales are the other half: every one of these is a function of ``d/dx`` and of ``n``
+    alone, so the same numbers come back at ``1e-6`` and at ``1e+6``, and on NumPy the worst
+    difference between the unit scale and either end is 4.4e-16.
+    """
+    xp, cast, jit = _backend_pieces(backend)
+    rng = np.random.default_rng(555)
+    n = rng.normal(size=(200, 3))
+    n = n / np.linalg.norm(n, axis=-1)[:, None]
+    d0 = rng.uniform(-0.9, 0.9, 200)
+    p0 = rng.normal(size=(200, 3))
+    p0 = p0 / np.linalg.norm(p0, axis=-1)[:, None] * 0.25 + rng.uniform(-.6, .6, (200, 3)) * 0.0125
+    unit_scale = None
+    for scale in (1e-6, 1e-3, 1.0, 1e3, 1e6):
+        dx, d, p = 0.0125 * scale, d0 * 0.0125 * scale, p0 * scale
+        body = Sphere(0.25 * scale)
+        calls = []
+        for axis in range(3):
+            calls.append((1e-15, lambda D, N, P, a=axis: edge_cut(D, N, dx, a)))
+            calls.append((1e-15, lambda D, N, P, a=axis: face_cut(D, N, dx, a)))
+            calls.append((1e-13, lambda D, N, P, a=axis: body.exact_edge_fill(P, dx, a)))
+            calls.append((1e-12, lambda D, N, P, a=axis: body.exact_face_fill(P, dx, a)))
+        reference = [np.asarray(f(d, n, p)) for _, f in calls]
+        if scale == 1.0:
+            unit_scale = reference
+        for wrap in ((lambda f: f),) if jit is None else ((lambda f: f), jit):
+            for (tol, f), want in zip(calls, reference):
+                got = np.asarray(wrap(f)(cast(d), cast(n), cast(p)))
+                assert np.abs(got - want).max() < tol, (backend, scale, tol)
+    # the same function of d/dx and n at every scale, on this backend's own answers
+    dx = 0.0125
+    body = Sphere(0.25)
+    for axis in range(3):
+        for got, want in ((edge_cut(cast(d0 * dx), cast(n), dx, axis), unit_scale[4 * axis]),
+                          (face_cut(cast(d0 * dx), cast(n), dx, axis), unit_scale[4 * axis + 1]),
+                          (body.exact_edge_fill(cast(p0), dx, axis), unit_scale[4 * axis + 2]),
+                          (body.exact_face_fill(cast(p0), dx, axis), unit_scale[4 * axis + 3])):
+            assert np.abs(np.asarray(got) - want).max() < 1e-12, axis
+
+
+def _backend_pieces(backend):
+    """``(xp, cast, jit)`` for a backend name -- ``jit`` is ``None`` where there is no trace."""
+    if backend == 'numpy':
+        return np, np.asarray, None
+    if backend == 'jax':
+        jax = pytest.importorskip('jax')
+        import jax.numpy as jnp
+        jax.config.update('jax_enable_x64', True)
+        return jnp, jnp.asarray, jax.jit
+    torch = pytest.importorskip('torch')
+    return torch, (lambda v: torch.tensor(np.asarray(v, dtype=float))), None
+
+
+@pytest.mark.parametrize('backend', backends())
+def test_a_finite_difference_says_what_the_backend_says_on_the_interface_fills(backend):
+    """``Sphere``'s two overrides differentiate, against NumPy's central difference.
+
+    The loss is ``sum e^2 + 1.7 sum f^2`` over 300 points and all three axes, so both overrides
+    and every one of their guards are in it. Leaves: the radius and the three components of the
+    centre. Measured 2026-09-24 at ``H_STEP``, gradients of order 1e2 to 5e3 -- so this is not
+    the vacuous comparison of two zeros -- and the worst absolute gap is **1.31e-6** on JAX and
+    **1.31e-6** on Torch, against a budget ``RTOL |g_fd| + FTOL |f|`` of 5.5e-4.
+
+    The guards are what is being tested. The edge's root is taken of a value a ``where`` has
+    already replaced where the line misses the ball, and the face's disc clip is fed a unit
+    disc and a centred square wherever it is inactive; without either, the forward values are
+    unchanged and the backward pass is NaN -- the defect family this file already carries three
+    rows of.
+    """
+    dx = 0.05
+    rng = np.random.default_rng(1234)
+    pts = rng.uniform(-0.35, 0.35, size=(300, 3))
+    radius, centre = 0.25, np.asarray([0.011, -0.007, 0.019])
+
+    def loss(points, r, c, xp):
+        body = Sphere(r, c)
+        out = None
+        for axis in range(3):
+            e, f = body.exact_edge_fill(points, dx, axis), body.exact_face_fill(points, dx, axis)
+            piece = xp.sum(e * e) + 1.7 * xp.sum(f * f)
+            out = piece if out is None else out + piece
+        return out
+
+    reference = [(loss(pts, radius + H_STEP, centre, np)
+                  - loss(pts, radius - H_STEP, centre, np)) / (2 * H_STEP)]
+    for i in range(3):
+        up, down = centre.copy(), centre.copy()
+        up[i] += H_STEP
+        down[i] -= H_STEP
+        reference.append((loss(pts, radius, up, np) - loss(pts, radius, down, np)) / (2 * H_STEP))
+    reference = np.asarray(reference)
+    assert np.abs(reference).min() > 1.0, 'a gradient of zero would make this test vacuous'
+    if backend == 'numpy':
+        pytest.skip('numpy is the reference the other two are held to')
+    if backend == 'jax':
+        jax = pytest.importorskip('jax')
+        import jax.numpy as jnp
+        jax.config.update('jax_enable_x64', True)
+        points = jnp.asarray(pts)
+        grad = jax.grad(lambda r, c: loss(points, r, c, jnp), argnums=(0, 1))(
+            jnp.asarray(radius), jnp.asarray(centre))
+        got = np.concatenate([[float(grad[0])], np.asarray(grad[1])])
+        value = float(loss(points, jnp.asarray(radius), jnp.asarray(centre), jnp))
+    else:
+        torch = pytest.importorskip('torch')
+        r = torch.tensor(radius, dtype=torch.float64, requires_grad=True)
+        c = torch.tensor(centre, dtype=torch.float64, requires_grad=True)
+        out = loss(torch.tensor(pts), r, c, torch)
+        out.backward()
+        got = np.concatenate([[float(r.grad)], c.grad.numpy()])
+        value = float(out.detach())
+    assert np.all(np.isfinite(got)), got
+    assert np.all(np.abs(got - reference) <= RTOL * np.abs(reference) + FTOL * abs(value)), (
+        backend, got, reference)
+
+
+def test_the_interface_cuts_refuse_a_typo_by_name():
+    """``axis``, ``dx`` and ``n`` -- the three preconditions, each a door with its own message.
+
+    ``True`` is in the axis row on purpose: ``True == 1`` is how a bool reaches an integer door,
+    and this repository has already paid for a bool arriving where a length was expected.
+    """
+    n = np.asarray([[0.0, 0.0, 1.0]])
+    d = np.asarray([0.1])
+    for call in (edge_cut, face_cut):
+        assert np.isfinite(np.asarray(call(d, n, 1.0, 2))).all()
+        for bad in ('z', 3, -1, True, False, 1.0, None):
+            with pytest.raises(ValueError, match='axis is a component index'):
+                call(d, n, 1.0, bad)
+        for bad in (0.0, -1.0):
+            with pytest.raises(ValueError, match='a length is a size'):
+                call(d, n, bad, 0)
+        for bad in (2 * n, np.zeros((1, 3)), np.full((1, 3), np.nan)):
+            with pytest.raises(ValueError, match='unit outward normal'):
+                call(d, bad, 1.0, 0)
+    for call in ('Sphere.exact_edge_fill', 'Sphere.exact_face_fill'):
+        with pytest.raises(ValueError, match='axis is a component index'):
+            getattr(Sphere(0.2), call.split('.')[1])(grid(2, -0.1, 0.1), 0.1, 'x')
+
+
+#: An exactly axis-aligned normal, an exactly in-face diagonal one, and six general ones --
+#: the batch the guarded denominators are tested on. The first six make a step exactly zero.
+_MIXED_NORMALS = np.concatenate([
+    np.eye(3), -np.eye(3),
+    np.asarray([[1., 1., 0.], [0., 1., 1.], [1., 0., 1.]]) / np.sqrt(2),
+    np.asarray([[0.3, 0.48, 0.8246], [-0.7, 0.2, 0.55], [0.1, -0.9, 0.35],
+                [0.62, -0.31, -0.7], [-0.2, -0.4, 0.88], [0.5, 0.5, 0.5]])
+    / np.linalg.norm([[0.3, 0.48, 0.8246], [-0.7, 0.2, 0.55], [0.1, -0.9, 0.35],
+                      [0.62, -0.31, -0.7], [-0.2, -0.4, 0.88], [0.5, 0.5, 0.5]],
+                     axis=-1)[:, None]])
+
+
+@pytest.mark.parametrize('backend', backends())
+def test_the_interface_cuts_differentiate_where_a_step_is_exactly_zero(backend):
+    """The guarded denominators, tested the only way they can be: backwards.
+
+    An exactly axis-aligned normal makes ``a_1`` exactly zero for the edge and ``a_2`` exactly
+    zero for the face, and every division by a step in these two forms is written with the
+    denominator replaced by one **before** it is used. Take the guards out and nothing changes
+    forwards -- the ``where`` that made the branch dead still discards its value -- while the
+    dead branch's *cotangent* is ``nan``, which poisons the whole sum. This file already
+    carries three rows of that family from the ball clip; these are the fourth and fifth.
+
+    The batch mixes six exactly axis-aligned normals and three exactly in-face diagonal ones
+    with six general ones, so the loss has a real gradient (measured -822.196 against a value
+    of 43.808) rather than the zero a batch of degenerate rows alone would give -- a gradient
+    of zero cannot fail an AD-against-finite-difference comparison. Measured 2026-09-24: the
+    gap to the central difference is 6.49e-8 on JAX and 6.49e-8 on Torch, against a budget of
+    8.2e-5.
+    """
+    dx = 0.1
+    n = _MIXED_NORMALS
+    d = np.linspace(-0.37, 0.41, len(n)) * dx
+
+    def loss(shift, xp, cast):
+        out = None
+        offsets = cast(d) + shift
+        normals = cast(n)
+        for axis in range(3):
+            e = edge_cut(offsets, normals, dx, axis)
+            f = face_cut(offsets, normals, dx, axis)
+            piece = xp.sum(e * e) + 1.7 * xp.sum(f * f)
+            out = piece if out is None else out + piece
+        return out
+
+    reference = float((loss(H_STEP, np, np.asarray) - loss(-H_STEP, np, np.asarray))
+                      / (2 * H_STEP))
+    assert abs(reference) > 1.0, 'a gradient of zero would make this test vacuous'
+    if backend == 'numpy':
+        pytest.skip('numpy is the reference the other two are held to')
+    if backend == 'jax':
+        jax = pytest.importorskip('jax')
+        import jax.numpy as jnp
+        jax.config.update('jax_enable_x64', True)
+        got = float(jax.grad(lambda s: loss(s, jnp, jnp.asarray))(jnp.asarray(0.0)))
+        value = float(loss(jnp.asarray(0.0), jnp, jnp.asarray))
+    else:
+        torch = pytest.importorskip('torch')
+        shift = torch.tensor(0.0, dtype=torch.float64, requires_grad=True)
+        out = loss(shift, torch, lambda v: torch.tensor(np.asarray(v, dtype=float)))
+        out.backward()
+        got, value = float(shift.grad), float(out.detach())
+    assert np.isfinite(got), (backend, got)
+    assert abs(got - reference) <= RTOL * abs(reference) + FTOL * abs(value), (backend, got,
+                                                                              reference)
+    _each_divided_difference_is_guarded_at_a_zero_step(backend)
+
+
+def _each_divided_difference_is_guarded_at_a_zero_step(backend):
+    """The two helpers' own denominators, called directly at ``a = 0``.
+
+    The loss above does **not** reach them: ``_edge_parts`` hands
+    :func:`_cut._first_difference` a ``c`` that a ``clip`` has pinned to the dead end of its
+    range, and a clip's transpose is a ``select`` -- it *discards* a NaN cotangent rather than
+    multiplying it by zero -- so the caller masks its own guard. Measured: the mutant that
+    removes ``_first_difference``'s safe denominator passed all twelve of this section's tests
+    before this check was written. The guard is still right, and it is one line, so what is
+    written here is the invariant where it lives rather than a second argument about the
+    caller: **every division by a step in these two forms is finite in reverse mode at a zero
+    step**, whatever the caller happens to pass.
+    """
+    if backend == 'jax':
+        import jax
+        import jax.numpy as jnp
+        for f in (_first_difference, _first_difference_square):
+            for t in (-0.3, 0.0, 0.7):
+                for a in (0.0, 0.5):
+                    slope = float(jax.grad(lambda x, f=f, a=a: f(x, jnp.asarray(a), jnp))(
+                        jnp.asarray(t)))
+                    assert np.isfinite(slope), (f.__name__, t, a, slope)
+    else:
+        import torch
+        for f in (_first_difference, _first_difference_square):
+            for t in (-0.3, 0.0, 0.7):
+                for a in (0.0, 0.5):
+                    x = torch.tensor(t, dtype=torch.float64, requires_grad=True)
+                    f(x, torch.tensor(a, dtype=torch.float64), torch).backward()
+                    assert np.isfinite(float(x.grad)), (f.__name__, t, a, float(x.grad))
+
+
+def test_an_axis_aligned_normal_is_a_slab_on_the_edge_and_on_its_dual_face():
+    """The degenerate limits, against numbers written out by hand rather than by an oracle.
+
+    A normal along ``+z`` is a slab, and every fraction it produces can be read off without any
+    of this file's machinery. With ``dx = 0.1`` and the plane at ``d``:
+
+        cell                       a_1          fraction
+        x edge,  n = +z            0            1 if d <= 0 else 0
+        z edge,  n = +z            dx           clip(1/2 - d/dx, 0, 1)
+        face _|_ z, n = +z         0            1 if d <= 0 else 0
+        face _|_ x, n = +z         dx (a_2 = 0) clip(1/2 - d/dx, 0, 1)
+
+    The first and third rows are the whole reason ``_decided`` exists: the cell lies *in* a
+    plane parallel to the interface, no divided difference can say which side of it the cell is
+    on, and the measure of the closed half space -- **1 at ``d = 0``** -- answers it. The second
+    and fourth are the other limit: the face's two steps are ``dx`` and exactly zero, and
+    ``_first_difference_square`` has to collapse onto the one-dimensional answer without a
+    tolerance deciding that it should.
+
+    The last row of each block is the deep cell: at ``d = -1e6 dx`` the fraction is **exactly**
+    1.0 and at ``+1e6 dx`` exactly 0.0, which is what the clip on ``c`` buys the face (measured
+    unclipped: 1 +/- 2.3e-9 at that depth, and 1 +/- 1.9e-3 at 1e12 voxels).
+    """
+    dx = 0.1
+    for k in range(3):
+        n = np.zeros((1, 3))
+        for sign in (1.0, -1.0):
+            n[0, k] = sign
+            for d, along in ((-0.3 * dx, 0.8), (0.3 * dx, 0.2), (0.0, 0.5),
+                             (0.5 * dx, 0.0), (-0.5 * dx, 1.0),
+                             (-1e6 * dx, 1.0), (1e6 * dx, 0.0)):
+                offset = np.asarray([d])
+                across = 1.0 if d <= 0 else 0.0
+                for axis in range(3):
+                    # the edge along the normal's own axis sees the slab; the other two are
+                    # parallel to it and are wholly in or wholly out
+                    want = along if axis == k else across
+                    got = float(edge_cut(offset, n, dx, axis)[0])
+                    assert abs(got - want) <= _slab_budget(want), (k, sign, d, axis, got)
+                    # the dual face normal to the normal's axis is the parallel one here
+                    want = across if axis == k else along
+                    got = float(face_cut(offset, n, dx, axis)[0])
+                    assert abs(got - want) <= _slab_budget(want), (k, sign, d, axis, got)
+
+
+def _slab_budget(want):
+    """Exactly 0 and exactly 1 are exact; a fraction of a voxel carries one ulp of ``d/dx``.
+
+    The two ends are the claim -- a cell the interface does not reach is not ``1 - 2e-16`` of a
+    cell, because the rule that reads this divides by ``1 - f``. In between,
+    ``(-d + a/2)/a`` is three roundings of numbers that are not binary fractions, and 0.8 comes
+    back as 0.7999999999999999.
+    """
+    return 0.0 if want in (0.0, 1.0) else 1e-15

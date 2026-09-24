@@ -13,37 +13,32 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 import numpy as np
 from studies.fdtd_subpixel_triplet_cylinder import gather, scatter
-from wavebit.fd._shapes._exact import clipped_disc_area
+from wavebit.fd._shapes import Sphere
 from wavebit.fd._kernel.constitutive import ConstitutiveTerm
 
 ORIENTATIONS = tuple(itertools.product((1, -1), repeat=3))
 
 
 def edge_fraction(point, dx, axis, radius, xp=np):
-    transverse = sum(point[..., j]**2 for j in range(3) if j != axis)
-    live = radius**2 > transverse
-    half = xp.sqrt(xp.where(live, radius**2-transverse, xp.ones_like(transverse)))
-    lo = xp.maximum(xp.zeros_like(half)-.5, (-half-point[..., axis])/dx)
-    hi = xp.minimum(xp.zeros_like(half)+.5, (half-point[..., axis])/dx)
-    return xp.where(live, xp.maximum(xp.zeros_like(lo), hi-lo), xp.zeros_like(lo))
+    """The exact ball chord inside a component's edge, now public.
+
+    This body moved to `wavebit/fd/_shapes/_bodies.py::Sphere.exact_edge_fill`
+    unchanged; what is left here is the study's spelling of it. `point` is
+    relative to the centre, which is a sphere at the origin. The namespace is
+    read off `point` by the public form, so `xp` is kept only because every
+    call site here passes it. Bit-identity against the form this replaces is
+    held in `tests/test_fd_triplet_sphere.py::test_the_study_helpers_are_the_public_forms_to_the_bit`.
+    """
+    return Sphere(radius).exact_edge_fill(point, dx, axis)
 
 
 def face_fraction(point, dx, axis, radius, xp=np):
-    """Exact sphere cut on a component's dual square, with exact full/empty cases."""
-    others = tuple(j for j in range(3) if j != axis)
-    u, v = (point[..., j]/dx for j in others)
-    r2 = (radius/dx)**2-(point[..., axis]/dx)**2
-    nearest = xp.maximum(abs(u)-.5, xp.zeros_like(u))**2+xp.maximum(abs(v)-.5, xp.zeros_like(v))**2
-    farthest = (abs(u)+.5)**2+(abs(v)+.5)**2
-    empty, full = r2 <= nearest, r2 >= farthest
-    partial = (~empty) & (~full)
-    # Inactive inputs describe a unit disc and a centered square. Guard
-    # before roots/inverse trig so AD cannot receive an inactive singularity.
-    rad = xp.sqrt(xp.where(partial, r2, xp.ones_like(r2)))
-    a = xp.where(partial, u, xp.zeros_like(u))
-    b = xp.where(partial, v, xp.zeros_like(v))
-    area = clipped_disc_area(0., 0., rad, a-.5, a+.5, b-.5, b+.5, xp)
-    return xp.where(full, xp.ones_like(area), xp.where(empty, xp.zeros_like(area), area))
+    """Exact sphere cut on a component's dual square, with exact full/empty cases.
+
+    The twin of `edge_fraction`, and the same move: the body is now
+    `wavebit/fd/_shapes/_bodies.py::Sphere.exact_face_fill`.
+    """
+    return Sphere(radius).exact_face_fill(point, dx, axis)
 
 
 def local_map(normal, lengths, areas, eps, xp=np):

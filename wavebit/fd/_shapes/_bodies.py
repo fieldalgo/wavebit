@@ -26,6 +26,15 @@ Every body answers four things:
     ``exact_fill`` because the two are not free together: a cylinder's fill is a closed form
     the repository already owns and its curved side's second moment is not.
 
+``exact_edge_fill(points, dx, axis) -> fill | None``, ``exact_face_fill(...)``
+    The same question on the component's own **edge** and its own **dual face** -- what the
+    Werner/Bauer/Cary material operator constrains rather than the voxel. ``Sphere`` answers
+    both; every other body, and every CSG node, returns ``None``. Nothing assembles these into
+    ``parts``: the tangent-plane forms beside them (``_cut.edge_cut``, ``_cut.face_cut``) are a
+    *different* answer, not a fallback, and ``_cut.py``'s section note and
+    ``tests/test_fd_shapes.py::test_the_plane_is_not_a_drop_in_for_the_exact_edge_and_face_fills``
+    carry how far apart they are.
+
 ``parts(points, dx) -> (fill, area, moment)``
     The three above, assembled: the exact forms where a body has them and the tangent plane
     where it does not. It is the one call :func:`_occupancy.occupancy` makes, and the one a
@@ -110,7 +119,7 @@ import numpy as _np
 
 from wavebit._core.backend import array_namespace
 
-from ._cut import _parts, two_plane
+from ._cut import _axis_index, _parts, two_plane
 from ._exact import (clipped_ball_volume, clipped_disc_area, clipped_polygon_area, overlap,
                      polygon_edge_moments)
 
@@ -778,6 +787,32 @@ class Body:
     def exact_moment(self, points, dx):
         return None
 
+    def exact_edge_fill(self, points, dx, axis):
+        """The exact fraction of the component's own **edge** this body holds, or ``None``.
+
+        The edge is the segment of length ``dx`` along ``axis`` centred on each point -- what a
+        component's line integral of E runs along. ``None`` means "no closed form here", exactly
+        as :meth:`exact_fill` does, and the caller must then decide, **in the open**, to use
+        ``_cut.edge_cut``'s tangent plane instead.
+
+        There is deliberately no dispatcher pairing the two. The plane's answer is not a
+        drop-in for the exact one: it is the plane's, and on a curved body it differs at first
+        order in the curvature (``tests/test_fd_shapes.py::
+        test_the_plane_is_not_a_drop_in_for_the_exact_edge_and_face_fills`` measures how far).
+        A ``parts``-style fallback would let that substitution happen silently, in a routine
+        whose every measured convergence order was taken with the exact form.
+        """
+        return None
+
+    def exact_face_fill(self, points, dx, axis):
+        """The exact fraction of the component's own **dual face** this body holds, or ``None``.
+
+        The dual face is the ``dx`` by ``dx`` square normal to ``axis`` centred on each point --
+        what a component's flux of D crosses. The twin of :meth:`exact_edge_fill`, and its
+        docstring is this one's.
+        """
+        return None
+
     def plane(self, points, dx):
         """``(fill, area, moment)`` from the tangent plane -- what every body falls back to.
 
@@ -840,6 +875,12 @@ class Sphere(Body):
     has not replaced this production fallback. What the plane's moment costs here is
     ``tests/test_fd_shapes.py::test_w_vanishes_only_where_the_fill_is_already_decided``'s
     measured sphere row.
+
+    **It is also the one body that answers for a component's edge and dual face exactly**
+    (:meth:`exact_edge_fill`, :meth:`exact_face_fill`), because a ball's chord along a line and
+    its cross-section in a plane are the two closed forms this package already owns, one
+    dimension down. Every research number the C3 material operator has measured was taken with
+    those two, which is why the tangent-plane forms beside them are not wired in as a fallback.
     """
 
     #: A ball is convex, and its fill is a closed form.
@@ -861,6 +902,75 @@ class Sphere(Body):
             points[..., 0] - half, points[..., 0] + half,
             points[..., 1] - half, points[..., 1] + half,
             points[..., 2] - half, points[..., 2] + half, xp) / dx ** 3
+
+    def exact_edge_fill(self, points, dx, axis):
+        """The chord of the ball inside the segment, clipped to it -- exactly, in cell units.
+
+        ``|x - centre| <= radius`` restricted to a line along ``axis`` is an interval of
+        half-length ``sqrt(radius^2 - transverse^2)`` about the foot of the centre, so the
+        answer is two clips and a subtraction. Ported from
+        ``studies/fdtd_subpixel_triplet_sphere.py::edge_fraction``, which is now a wrapper over
+        this, with both of its guards:
+
+        * the root is taken of a value a :func:`xp.where` has already replaced by one where the
+          line misses the ball, so an inactive ``sqrt`` cannot hand a NaN back through a
+          gradient (this package's own rule, ``_cut._second_difference``'s docstring);
+        * the two ends are clipped **in segment coordinates** -- ``+-1/2`` against
+          ``(+-half - v)/dx`` -- and not in world coordinates. The study measured the world
+          spelling returning ``1 + 8.88178e-16`` for a segment wholly inside a radius-one
+          circle at ``dx = 0.1``; a fraction that exceeds one is not a rounding detail to a
+          rule that divides by ``1 - f``.
+
+        C0 and not C1, like the tangent-plane form it replaces: ``maximum(0, hi - lo)`` and the
+        two clips are its three corners. That is the exact function and not an approximation of
+        it (``_cut.py``'s section note on the two forms).
+        """
+        xp = array_namespace(points)
+        axis = _axis_index('Sphere.exact_edge_fill', axis)
+        v = points - _as(xp, self.center, points)
+        radius = _as(xp, self.radius, points)
+        transverse = sum(v[..., j] ** 2 for j in range(3) if j != axis)
+        live = radius ** 2 > transverse
+        half = xp.sqrt(xp.where(live, radius ** 2 - transverse, xp.ones_like(transverse)))
+        lo = xp.maximum(xp.zeros_like(half) - .5, (-half - v[..., axis]) / dx)
+        hi = xp.minimum(xp.zeros_like(half) + .5, (half - v[..., axis]) / dx)
+        return xp.where(live, xp.maximum(xp.zeros_like(lo), hi - lo), xp.zeros_like(lo))
+
+    def exact_face_fill(self, points, dx, axis):
+        """The ball's cross-section clipped to the dual square -- the disc clip, one plane down.
+
+        A plane ``x_axis = const`` cuts the ball in a disc of radius
+        ``sqrt(radius^2 - offset^2)`` concentric with the centre's foot, so the exact area
+        inside the square is :func:`_exact.clipped_disc_area` -- the form this package already
+        owns and already gates. Ported from
+        ``studies/fdtd_subpixel_triplet_sphere.py::face_fraction``, which is now a wrapper over
+        this, with its guard: the **full** and **empty** cases are settled first, by the square's
+        nearest and farthest corners, and the disc clip is then evaluated on inputs a
+        :func:`xp.where` has already made describe a unit disc and a centred square wherever it
+        is inactive. Without that, an inactive negative radius reaches a square root and an
+        inactive ``asin`` reaches its branch point, and both are finite forwards and NaN
+        backwards -- the defect family ``tests/test_fd_shapes.py`` records three rows of.
+
+        Everything is done in cell units (``u``, ``v``, ``r2`` are all divided by ``dx`` first),
+        so the answer is a fraction of the square and not an area, and full is exactly 1.
+        """
+        xp = array_namespace(points)
+        axis = _axis_index('Sphere.exact_face_fill', axis)
+        v = points - _as(xp, self.center, points)
+        radius = _as(xp, self.radius, points)
+        others = tuple(j for j in range(3) if j != axis)
+        u, w = (v[..., j] / dx for j in others)
+        r2 = (radius / dx) ** 2 - (v[..., axis] / dx) ** 2
+        nearest = (xp.maximum(abs(u) - .5, xp.zeros_like(u)) ** 2
+                   + xp.maximum(abs(w) - .5, xp.zeros_like(w)) ** 2)
+        farthest = (abs(u) + .5) ** 2 + (abs(w) + .5) ** 2
+        empty, full = r2 <= nearest, r2 >= farthest
+        partial = (~empty) & (~full)
+        rad = xp.sqrt(xp.where(partial, r2, xp.ones_like(r2)))
+        a = xp.where(partial, u, xp.zeros_like(u))
+        b = xp.where(partial, w, xp.zeros_like(w))
+        area = clipped_disc_area(0., 0., rad, a - .5, a + .5, b - .5, b + .5, xp)
+        return xp.where(full, xp.ones_like(area), xp.where(empty, xp.zeros_like(area), area))
 
     def surface(self, points):
         xp = array_namespace(points)

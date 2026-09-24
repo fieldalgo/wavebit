@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 import numpy as np
 from wavebit.fd._kernel.constitutive import ConstitutiveTerm
+from wavebit.fd._shapes import Sphere
 from studies.fdtd_subpixel_interface_consistency import fraction
 
 # Four oriented pairs replace the eight 3D triplets when x is invariant.
@@ -74,17 +75,26 @@ def planar_maps(points, dx, normal, offset, eps):
     return np.stack(accurate),np.stack(symmetric)
 
 
-def circle_fraction(point, dx, axis, radius):
-    """Exact length of the circle's intersection with a centered segment."""
-    transverse = point[...,1-axis]
-    live = abs(transverse) < radius
-    half = np.sqrt(np.maximum(0.,radius**2-transverse**2))
-    # Intersect in segment coordinates: a whole segment is exactly one.
-    # Subtracting its world-coordinate endpoints gave 1+8.88179e-16 in the
-    # radius-one, dx=.1 audit. No fitted tolerance or repair clamp is used.
-    lo = np.maximum(-.5,(-half-point[...,axis])/dx)
-    hi = np.minimum(.5,(half-point[...,axis])/dx)
-    return np.where(live,np.maximum(0.,hi-lo),0.)
+def circle_fraction(point, dx, axis, radius, xp=np):
+    """Exact length of the circle's intersection with a centered segment.
+
+    The invariant-x plane of a sphere **is** a circle of the same radius, so
+    this is `wavebit/fd/_shapes/_bodies.py::Sphere.exact_edge_fill` on the
+    (y,z) point lifted to a triple with x exactly zero: the lifted transverse
+    sum is `0*0 + t*t`, which is the `t**2` this used to write. The public form
+    holds the two guards this docstring used to carry -- the segment-coordinate
+    clip that keeps a whole segment exactly one (the world-coordinate spelling
+    gave 1+8.88179e-16 in the radius-one, dx=.1 audit) and the guarded root.
+
+    `xp` is what the lift is built with, and it is why this function has one at
+    all: without it a JAX or Torch point is silently pulled through `np.stack`
+    into NumPy, which loses the trace and the gradient with it. The 2D research
+    path calls this with `axis` 0 for y and 1 for z, so the lifted component
+    index is `axis+1`.
+    """
+    zero = xp.zeros_like(point[...,0])
+    lifted = xp.stack((zero,point[...,0],point[...,1]),axis=-1)
+    return Sphere(radius).exact_edge_fill(lifted,dx,axis+1)
 
 
 def circle_maps(points, dx, center, radius, eps):

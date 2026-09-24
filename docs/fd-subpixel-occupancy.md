@@ -4,8 +4,10 @@ Written: 2026-09-22.
 
 Targets: `wavebit/fd/_lower/occupancy.py`, `wavebit/fd/_lower/coefficients.py`,
 `wavebit/fd/_lower/checks.py`, `wavebit/fd/geometry.py`,
+`wavebit/fd/_shapes/_cut.py`, `wavebit/fd/_shapes/_bodies.py`,
 `studies/fdtd_subpixel_tilted_tensor.py`, `tests/test_fd_occupancy.py`,
-`tests/test_fd_occupancy_integration.py`, `tests/test_fd_subpixel_study.py`.
+`tests/test_fd_occupancy_integration.py`, `tests/test_fd_subpixel_study.py`,
+`tests/test_fd_shapes.py`.
 
 `fd.Sphere` now supplies fractional material coefficients at each field component's
 own location. Unsupported mixtures are refused during planning. Approximate CSG
@@ -160,6 +162,150 @@ in order, and they do not prove that no better off-diagonal discretisation exist
 The 3-D Mie test and the 2-D cylinder study remain necessary before a sphere-scattering
 convergence claim. The separate extreme `R/dx` cumulative-volume precision limitation
 described in the clipping analysis also remains.
+
+## The edge and dual-face cuts
+
+Written: 2026-09-24. This section adds no physics: every measured number, plan skeleton
+and frozen array is unchanged, and the checks below are what says so.
+
+The material operator studied in `studies/fdtd_subpixel_symmetric_stencil.py` does not
+constrain the fraction of a *voxel* a body fills. Following
+[Werner, Bauer and Cary (2013)](https://doi.org/10.1016/j.jcp.2013.08.009), sections 4
+and 7, it constrains the fields on the two objects the Yee grid integrates over: the
+**edge** a component's line integral of E runs along, and the **dual face** its flux of
+D crosses. Until this commit those two fractions existed only as closed forms inside
+`studies/`, for a circle and a sphere, and one of them could not take a backend argument.
+
+`wavebit/fd/_shapes/_cut.py` now carries the same cut one and two dimensions down:
+
+```text
+edge_cut(d, n, dx, axis)   the fraction of the dx-long segment along axis
+face_cut(d, n, dx, axis)   the fraction of the dx-by-dx square normal to axis
+```
+
+both for the tangent half space `n.(x - centre) <= -d`, with `d` and `n` taken at the
+**centre of that edge or face** -- the component's own Yee point, which the two share.
+They are the same inclusion-exclusion sum `cut` already writes, with the corner count
+falling from eight to four and to two: over the live axes, with `a_i = |n_i| dx`,
+`A = sum a_i` and `c = clip(-d + A/2, 0, A)`,
+
+```text
+m = 3   [ <c>^3 - sum <c-a_i>^3 + sum <c-a_i-a_j>^3 - <c-A>^3 ] / (6 a_1 a_2 a_3)
+m = 2   [ <c>^2 - <c-a_1>^2 - <c-a_2>^2 + <c-A>^2 ]            / (2 a_1 a_2)
+m = 1   [ <c>   - <c-a_1> ]                                    / a_1
+```
+
+each written as a divided difference taken in a stable order, so the only division by a
+step is by the largest one. One thing is new below three dimensions: `|n| = 1` no longer
+forces the largest step to be large, because the edge can be exactly parallel to the
+plane (`n_axis = 0`, every voxel of a slab or of an axis-aligned face) and the dual face
+can be parallel to it too. There the cell is wholly inside or wholly outside, and the
+measure of the closed half space -- `d <= 0` -- answers it. That is a branch on an exact
+zero, not a tolerance.
+
+The body behind `fd.Sphere` -- `wavebit/fd/_shapes/_bodies.py::Sphere`, which
+`geometry.py` builds from the public shape -- carries **exact** overrides of both,
+`exact_edge_fill` and `exact_face_fill`,
+ported from the study forms with their autodiff guards; every other body returns `None`,
+including every CSG node. There is deliberately no dispatcher pairing the two, for the
+reason in the next paragraph.
+
+### Scope: the tangent plane is not a drop-in for the exact form
+
+C3 reaches only the exact `Sphere` overrides. The generic forms ship for the bodies that
+have no closed form -- a CSG node above all, which has no exact clip at any dimension --
+and they are a different answer, not a cheaper spelling of the same one. Over 4000 points
+about a radius-0.25 sphere per row, one sub-cell jitter each, all three axes:
+
+| R/h | 3 | 4 | 6 | 8 | 12 | 16 | 32 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| worst \|edge gap\| | 5.8e-1 | 6.7e-1 | 4.5e-1 | 7.5e-1 | 3.3e-1 | 1.6e-1 | 1.7e-1 |
+| worst \|face gap\| | 4.6e-1 | 1.6e-1 | 4.5e-1 | 2.7e-1 | 9.8e-2 | 8.9e-2 | 4.9e-2 |
+| mean \|edge gap\| | 1.0e-2 | 7.7e-3 | 5.2e-3 | 3.9e-3 | 2.7e-3 | 1.8e-3 | 9.2e-4 |
+| mean \|face gap\| | 2.0e-2 | 1.5e-2 | 9.7e-3 | 7.4e-3 | 4.9e-3 | 3.7e-3 | 1.8e-3 |
+
+The mean falls like `h`, first order; the worst barely falls at all, because a cell whose
+corner the plane misses is wrong by a finite fraction of the cell at any resolution. The
+research operator's measured convergence orders -- 2.137819 on the cylinder, 2.063617 and
+2.057240 on the glass and weak spheres, 2.468123 percent on the small high-index sphere --
+were every one of them taken with the exact forms, so substituting the plane silently
+would invalidate all of them while still returning a plausible number.
+
+### Regularity, which is not the same one dimension down
+
+The `m`-dimensional cut of a box is C^(m-1), so `face_cut` is C1 and `edge_cut` is only
+C0: piecewise linear in the offset, with a corner where an end of the segment crosses the
+plane, and a slope `1/a_1` that grows without bound as the plane turns parallel to the
+edge. Measured on a slide of the plane through a cell, largest jump between consecutive
+slopes, `dx = 0.1`:
+
+| step h | `edge_cut` | `face_cut` |
+| ---: | ---: | ---: |
+| 1e-3 | 32.34 | 2.527e-2 |
+| 5e-4 | 31.34 | 1.264e-2 |
+| 2.5e-4 | 29.34 | 6.319e-3 |
+
+`face_cut`'s halves with the step, which is a Lipschitz derivative; `edge_cut`'s stays at
+the size of the slope itself (`max |f'| = 33.34 = 1/a_1`). The exact `Sphere` forms are
+**both** C0: the edge's corner is an end of the segment leaving the ball, and the face's
+is the cross-section disc appearing at all, where its area `pi (R^2 - v^2)/dx^2` starts
+with a finite slope `2 pi R / dx^2 = 157.08` against the zero it leaves. So on this one
+axis the exact form is less regular than the plane it replaces -- a trade for C4 to price,
+not a defect of either.
+
+### What was measured
+
+| check | worst |
+| --- | ---: |
+| `edge_cut` against an exact Python clip, 5 families and 2 CSG nodes | 2.2e-16 |
+| `face_cut` against Sutherland-Hodgman plus a shoelace area | 3.3e-16 |
+| `face_cut` against a quadrature of its chord length | 3.3e-16 |
+| `Sphere.exact_edge_fill` against the exact ball chord | 1.1e-16 |
+| `Sphere.exact_face_fill` against adaptive integration of clipped disc chords | 3.7e-14 |
+| `edge_cut`, `face_cut`: numpy vs jax, jax.jit, torch, scales 1e-6 to 1e+6 | 2.2e-16 |
+| the two `Sphere` overrides, same sweep | 2.0e-13 |
+| the same forms between coordinate scales, on one backend | 4.4e-16 |
+| autodiff against a central difference on the overrides (jax, torch) | 1.31e-6 on gradients of 5.5e+3 |
+| the three study helpers against the code they replaced | bit-identical |
+
+The families are 400 random normals, 240 exactly axis-aligned ones, 400 exactly diagonal
+ones (face and body diagonals), and cells wholly inside and wholly outside; the CSG rows
+are 500 points on a `Union` and on a `Difference`, whose composed `(d, n)` these forms
+take exactly as they take a leaf's. `studies/fdtd_subpixel_triplet_sphere.py`'s
+`edge_fraction` and `face_fraction` and
+`studies/fdtd_subpixel_triplet_cylinder.py`'s `circle_fraction` are now thin wrappers over
+the public forms: the circle is the sphere's central plane, so the 2-D point is lifted to
+a triple with x exactly zero, and `circle_fraction` gained the `xp` argument that lift
+needs.
+
+## Regression mutants of the edge and dual-face cuts
+
+Ten source mutations, each applied alone, run, watched to fail, and restored
+(2026-09-24). Two of them did not go red on the first sweep, and both are kept below
+with what they changed, because a mutant that survives is a measurement of the gate.
+
+| Mutation | Test failures |
+| --- | ---: |
+| Both `Sphere` interface overrides deleted | 30 |
+| `_first_difference_square`'s `a = 0` piece written as the naive difference | 6 |
+| Both degenerate branches dropped | 2 |
+| The dual face's two steps not sorted | 2 |
+| `_first_difference`'s safe denominator removed | 2 |
+| The dual face's clip on `c` dropped | 2 |
+| `_decided` reading `d < 0` for `d <= 0` | 1 |
+| The `axis` door removed | 1 |
+| `circle_fraction`'s `xp` argument dropped | 1 |
+| `circle_fraction`'s lift built with `np.stack` again | 1 |
+
+The safe denominator passed all twelve tests at first, because its caller pins the
+argument to the dead end of a `clip` whose transpose is a `select`, and a `select`
+discards a NaN cotangent instead of multiplying by it. The guard is still correct and
+still there; what was added is a check of the invariant where it lives rather than a
+second argument about the caller. Dropping the **edge's** clip also passed all twelve,
+and that mutant was right: over 2000 normals at depths of 1 to 1e12 voxels, clipped and
+unclipped agree to 0.0 exactly, because the one-dimensional form returns the constant 1
+instead of differencing two large numbers. That clip was deleted; the dual face's, worth
+1.9e-3 at the same depth, is the one the table above mutates.
 
 ## Regression mutants
 

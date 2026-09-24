@@ -163,3 +163,46 @@ def test_research_cylinder_physical_control():
     assert abs(sigma/exact-1) < .05
     # Largest late-monitor fraction in the 24 measured cases: 6.01283e-9.
     assert float(result.diagnostics['decay']['box']) < 1e-7
+
+
+def test_circle_fraction_carries_the_namespace_it_was_given():
+    """`circle_fraction` lifts a 2D point to a triple, and the lift is where a backend is lost.
+
+    The chord is now `fd.Sphere.exact_edge_fill` on `(0, y, z)`, so the function has to build
+    that zero component with the caller's own namespace. With `np.stack` instead -- the
+    spelling this had before it took an `xp` -- a JAX array is pulled through `__array__` into
+    NumPy and a Torch tensor is detached into one: the forward numbers still look right, the
+    gradient is gone, and under `jax.jit` it raises a TracerArrayConversionError instead.
+
+    Measured 2026-09-24 over 400 placements and both axes: JAX eager and `jax.jit` return the
+    NumPy answer bit for bit, and Torch is 1.11e-15 away from it -- four or five ulps of a
+    fraction, from `torch.sqrt`, and the same spread the public `Sphere` overrides carry in
+    `tests/test_fd_shapes.py`. So the gate is 1e-14 for the value and bit equality only where
+    it was measured. The radius gradient is checked on both autodiff backends against a NumPy
+    central difference at 1e-6.
+    """
+    rng=np.random.default_rng(6151)
+    points=rng.normal(size=(400,2))
+    points=points/np.linalg.norm(points,axis=-1)[:,None]*.25+rng.uniform(-.6,.6,(400,2))*.025
+    reference=[np.asarray(circle_fraction(points,.025,axis,.25)) for axis in (0,1)]
+    jax=pytest.importorskip('jax')
+    import jax.numpy as jnp
+    jax.config.update('jax_enable_x64',True)
+    torch=pytest.importorskip('torch')
+    for name,cast,xp,wrap,tol in (('jax',jnp.asarray,jnp,lambda f:f,0.),
+                                  ('jit',jnp.asarray,jnp,jax.jit,0.),
+                                  ('torch',torch.tensor,torch,lambda f:f,1e-14)):
+        for axis in (0,1):
+            got=wrap(lambda p,axis=axis,xp=xp: circle_fraction(p,.025,axis,.25,xp))(cast(points))
+            assert type(got) is not np.ndarray, name
+            np.testing.assert_allclose(np.asarray(got),reference[axis],rtol=0,atol=tol)
+    def loss(radius,p,xp):
+        return sum(xp.sum(circle_fraction(p,.025,axis,radius,xp)**2) for axis in (0,1))
+    step=1e-6
+    difference=(loss(.25+step,points,np)-loss(.25-step,points,np))/(2*step)
+    assert abs(difference)>1.
+    derivative=float(jax.grad(lambda r: loss(r,jnp.asarray(points),jnp))(jnp.asarray(.25)))
+    assert abs(derivative-difference)<=1e-7*abs(difference)+1e-10*abs(loss(.25,points,np))
+    arg=torch.tensor(.25,dtype=torch.float64,requires_grad=True)
+    loss(arg,torch.tensor(points),torch).backward()
+    assert abs(float(arg.grad)-difference)<=1e-7*abs(difference)+1e-10*abs(loss(.25,points,np))

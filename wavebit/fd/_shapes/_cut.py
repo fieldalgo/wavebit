@@ -103,6 +103,8 @@ selection makes inactive are replaced by one **before** they are used, the idiom
 prevent NaN derivatives on parallel edges": a dead branch's value is discarded in forward mode
 but its *cotangent* is not, so ``0/0`` in a branch nothing selects still poisons a gradient.
 """
+from operator import index as _index
+
 from wavebit._core.backend import _concrete, array_namespace
 
 
@@ -182,7 +184,7 @@ def _second_difference_slope(t, a, b, xp):
                                    6 * xp.ones_like(t)))))
 
 
-def _unit(n, xp):
+def _unit(n, xp, where='cut'):
     """Refuse a normal that is not a unit vector, where there is a value to read.
 
     ``cut`` and ``cut_parts`` are exported, so C2 will call them with a normal this package did
@@ -207,7 +209,7 @@ def _unit(n, xp):
     """
     worst = _concrete(~(xp.max(xp.abs(xp.sum(n * n, axis=-1) - 1)) <= 1e-9))
     if worst:
-        raise ValueError('cut(n=...): n must be the unit outward normal, one per point, and '
+        raise ValueError(f'{where}(n=...): n must be the unit outward normal, one per point, and '
                          'finite; the worst |n| here is off one by more than 1e-9 or is not a '
                          'number. The plane is '
                          'n.(x - centre) <= -d, so scaling n rescales the offset too and the '
@@ -494,3 +496,204 @@ def cut(d, n, dx):
     xp = array_namespace(d, n)
     fill, area, moment = cut_parts(d, n, dx)
     return fill, _mean_of_the_moment(area, moment, dx, xp)
+
+
+# ----------------------------------------------------------------------------------------
+# the same cut one and two dimensions down: a component's edge, and its dual face
+# ----------------------------------------------------------------------------------------
+#
+# The material operator C4 is built towards does not ask a body only for the fraction of a
+# *voxel* it fills. Werner, Bauer and Cary, *A more accurate, stable, FDTD algorithm for
+# electromagnetics in anisotropic dielectrics*, J. Comput. Phys. **255**, 436 (2013), sections 4
+# and 7, constrain the fields on the two objects the Yee grid actually integrates over: the
+# **edge** a component's line integral of E runs along, and the **dual face** its flux of D
+# crosses. So the pair each needs is the same question one and two dimensions down --
+#
+#     edge_cut(d, n, dx, axis)   the fraction of that segment the tangent half space holds
+#     face_cut(d, n, dx, axis)   the fraction of that square it holds
+#
+# -- and the reason to write them here, beside :func:`cut`, rather than as a closed form per
+# body is the reason :func:`cut` exists: one form for every shape, **including a CSG node**,
+# which has no exact clip of its own and whose composed distance and normal are all it can offer.
+#
+# ``d`` and ``n`` are the shape's signed distance and unit outward normal **at the centre of
+# that edge or that face** -- not at the voxel centre. A component's edge and its dual face
+# share that centre (the component's own Yee point), which is why one ``(d, n)`` serves both.
+#
+# The forms are the same inclusion-exclusion sum :func:`_parts` writes, with the corner count
+# dropping from eight to four and to two. Over the ``m`` live axes of the cell, with
+# ``a_i = |n_i| dx``, ``A = sum a_i`` and ``c = clip(-d + A/2, 0, A)``::
+#
+#     m = 3   [ <c>^3 - sum <c-a_i>^3 + sum <c-a_i-a_j>^3 - <c-A>^3 ] / (6 a_1 a_2 a_3)
+#     m = 2   [ <c>^2 - <c-a_1>^2 - <c-a_2>^2 + <c-A>^2 ]            / (2 a_1 a_2)
+#     m = 1   [ <c>   - <c-a_1> ]                                    / a_1
+#
+# (the clip on ``c`` is what ``m = 3`` and ``m = 2`` need for a cell deep inside the body and
+# ``m = 1`` provably does not; :func:`_edge_parts` carries the measurement)
+#
+# and each is written the way :func:`_parts` writes the first: as a divided difference taken in
+# a **stable order**, so that the only division by a step is by the largest one, and so that the
+# lower-dimensional limits are regions of the pieces' own definitions rather than branches
+# bolted on with a tolerance. :func:`_first_difference_square` is to ``m = 2`` what
+# :func:`_second_difference` is to ``m = 3``.
+#
+# **What does need a branch, and why it is a limit and not a tolerance.** In three dimensions
+# the largest step can never be small: ``|n| = 1`` forces ``a_1 >= dx/sqrt(3)``. One and two
+# dimensions down that is gone -- the component's edge may be exactly *parallel* to the plane
+# (``n_axis = 0``: every voxel of a slab, of an axis-aligned box face, and of two of a sphere's
+# three great circles), and the dual face may be parallel to it too (``n`` along ``axis``).
+# There the cell is wholly inside or wholly outside and no divided difference can say which;
+# :func:`_decided` reads it off the sign of ``d`` instead. The predicate is an exact ``a > 0``
+# and not a tolerance, because the branch it selects **is** the limit of the one it leaves: as
+# ``a -> 0`` with ``d`` fixed and non-zero, ``c`` saturates at 0 or ``A`` and the general form
+# already returns the same 0 or 1. Only the single point ``a = 0, d = 0`` -- a plane containing
+# the cell -- has no limit to follow (along ``a -> 0`` it is 1/2, along ``d -> 0`` it is 0 or 1),
+# and it is answered by the measure of the closed half space, which is 1; :func:`_decided` says
+# why.
+#
+# **The regularity is not the same one dimension down, and that is geometry and not a defect.**
+# The ``m``-dimensional cut of a box is C^(m-1) in ``(d, n)``: the cube's is C1, the dual face's
+# is C1, and **the edge's is only C0** -- piecewise linear in ``d``, with a corner where an end
+# of the segment crosses the plane. No exact form can do better, the sphere's exact override in
+# ``_bodies.py`` has the same two corners, and
+# ``tests/test_fd_shapes.py::test_the_face_cut_is_c1_and_the_edge_cut_is_only_c0`` measures
+# both. What that costs a design loop is a derivative that exists almost everywhere and jumps
+# on a measure-zero set, with a slope ``1/a_1`` that grows without bound as the plane turns
+# parallel to the edge.
+
+
+def _first_difference(t, a, xp):
+    """``[<t> - <t-a>]/a``, ``a >= 0``: the first divided difference of ``<t>``.
+
+    Three pieces, the middle one written so that the division is of a number in ``[0, a]`` by
+    ``a`` rather than of a difference of two numbers near ``t``:
+
+        t <= 0        0
+        0 < t <= a    t / a
+        t > a         1
+
+    Exact in its degenerate limit without a tolerance: at ``a = 0`` the middle piece's region is
+    empty and what is left is ``<t>``'s own derivative, the step. The value agrees at both knots
+    (0 and 1); the slope does **not** (0, then ``1/a``, then 0), and that is the function -- the
+    length of a segment inside a half space has a corner where an end of it crosses the plane.
+    """
+    one = xp.ones_like(a)
+    a_safe = xp.where(a > 0, a, one)
+    return xp.where(t <= 0, xp.zeros_like(t),
+                    xp.where(t <= a, _ramp(t, xp) / a_safe, one))
+
+
+def _first_difference_square(t, a, xp):
+    """``[<t>^2 - <t-a>^2]/a``, ``a >= 0``: the first divided difference of ``<t>^2``.
+
+    Three pieces, each with the step cancelled algebraically:
+
+        t <= 0        0
+        0 < t <= a    t^2 / a
+        t > a         2t - a
+
+    Value and slope agree at both knots (``a``, and ``2a/a`` against ``2``), so this is C1 in
+    ``t`` -- which is what makes :func:`face_cut` C1. It is exact at ``a = 0``, where the middle
+    region is empty and ``2<t>`` is left: the derivative of ``<t>^2`` itself, which is the
+    one-dimensional cut the face degenerates to when the normal lies along one of its own axes.
+    """
+    one = xp.ones_like(a)
+    a_safe = xp.where(a > 0, a, one)
+    u = _ramp(t, xp)
+    return xp.where(t <= 0, xp.zeros_like(t),
+                    xp.where(t <= a, u * u / a_safe, 2 * t - a))
+
+
+def _decided(d, xp):
+    """1 where the centre is inside: the cut of a cell the plane is parallel to and misses.
+
+    The ``a_1 = 0`` branch of both forms below, and it is the **measure** of the closed half
+    space rather than the limit of the general form. ``d <= 0`` and not ``d < 0``: a cell lying
+    in the boundary plane of ``n.(x - centre) <= -d`` is contained in it, so its fraction is one.
+    The other defensible spelling is the pointwise limit along ``a -> 0+``, which is
+    ``1/2`` at ``d = 0`` because that is what the general form returns for every ``a > 0``
+    there; it is not taken, because the oracle these two forms are held against
+    (``tests/test_fd_shapes.py::test_the_edge_and_face_cuts_are_what_an_independent_clip_says``)
+    computes a measure, and a measure has no say in which limit a degenerate slice ought to
+    follow. Either way the disagreement is one point of a two-parameter family.
+    """
+    return xp.where(d <= 0, xp.ones_like(d), xp.zeros_like(d))
+
+
+def _edge_parts(d, n, dx, axis, xp):
+    """:func:`edge_cut` with the doors left off -- the spelling this package uses internally.
+
+    **No clip on ``c`` here, and that is measured rather than assumed.** ``_parts`` and
+    :func:`_face_parts` clip because their top piece differences two large numbers for a cell
+    deep inside the body; :func:`_first_difference` has no such piece -- it *returns* the
+    constant 1 -- so there is nothing to cancel. Over 2000 normals at depths of 1, 10, 1e3, 1e6
+    and 1e12 voxels, clipped and unclipped agree to 0.0 exactly, while the face at the same
+    depths reads 1 +/- 2.2e-16 clipped against 1 +/- 1.9e-3 unclipped. A clip written here
+    anyway would be arithmetic no input can reach, so it is not written.
+    """
+    a = xp.abs(n[..., axis]) * dx
+    return xp.where(a > 0, _first_difference(-d + a / 2, a, xp), _decided(d, xp))
+
+
+def _face_parts(d, n, dx, axis, xp):
+    """:func:`face_cut` with the doors left off -- the spelling this package uses internally."""
+    u, v = _OTHER[axis]
+    a_u, a_v = xp.abs(n[..., u]) * dx, xp.abs(n[..., v]) * dx
+    a1, a2 = xp.maximum(a_u, a_v), xp.minimum(a_u, a_v)
+    total = a1 + a2
+    # The clip is the function outside [0, total], exactly as in `_parts`, and it is what stops
+    # the top piece (2t - a) from differencing two large numbers for a face deep inside a body.
+    c = xp.clip(-d + total / 2, xp.zeros_like(total), total)
+    a1_safe = xp.where(a1 > 0, a1, xp.ones_like(a1))
+    fill = (_first_difference_square(c, a2, xp)
+            - _first_difference_square(c - a1, a2, xp)) / (2 * a1_safe)
+    return xp.where(a1 > 0, fill, _decided(d, xp))
+
+
+def _axis_index(where, axis):
+    """``axis`` as 0, 1 or 2, refusing anything else by name -- including ``True`` and ``1.0``.
+
+    A component index, not a letter: these two are the low-level spelling :func:`cut` is, and
+    ``_OTHER`` and the ``(..., 3)`` typed triple are indexed by the same integer.
+    ``operator.index`` is what admits a NumPy integer and refuses a float, and ``True`` is
+    refused on top of it because ``bool`` **is** an ``int`` and ``True == 1`` is how a bool
+    reaches an integer door (memory: a bool is not a length, and this repository has paid for
+    that one already).
+    """
+    try:
+        index = -1 if isinstance(axis, bool) else _index(axis)
+    except TypeError:
+        index = -1
+    if index not in (0, 1, 2):
+        raise ValueError(f'{where}(axis=...): axis is a component index -- 0 for x, 1 for y, '
+                         f'2 for z; got {axis!r}.')
+    return index
+
+
+def edge_cut(d, n, dx, axis):
+    """The fraction of a component's own edge the tangent half space holds.
+
+    The segment of length ``dx`` along ``axis``, centred on the point ``(d, n)`` was taken at,
+    intersected with ``n . (x - centre) <= -d``, as a fraction of ``dx``. See the section note
+    above for the form, for what its one branch is, and for the regularity: this is C0 and not
+    C1, because the exact function is.
+    """
+    from ._bodies import check_sizes       # local: _bodies imports _parts from this module
+    xp = array_namespace(d, n)
+    dx, = check_sizes('edge_cut', dx=dx)
+    _unit(n, xp, 'edge_cut')
+    return _edge_parts(d, n, dx, _axis_index('edge_cut', axis), xp)
+
+
+def face_cut(d, n, dx, axis):
+    """The fraction of a component's own dual face the tangent half space holds.
+
+    The ``dx`` by ``dx`` square normal to ``axis``, centred on the point ``(d, n)`` was taken
+    at, intersected with ``n . (x - centre) <= -d``, as a fraction of ``dx^2``. See the section
+    note above.
+    """
+    from ._bodies import check_sizes       # local: _bodies imports _parts from this module
+    xp = array_namespace(d, n)
+    dx, = check_sizes('face_cut', dx=dx)
+    _unit(n, xp, 'face_cut')
+    return _face_parts(d, n, dx, _axis_index('face_cut', axis), xp)

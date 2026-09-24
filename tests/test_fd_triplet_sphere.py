@@ -5,8 +5,10 @@ import numpy as np
 import pytest
 from scipy.integrate import quad
 from studies import fdtd_subpixel_triplet_sphere as study
+from studies.fdtd_subpixel_triplet_cylinder import circle_fraction
 from studies.fdtd_subpixel_mie_sphere import sphere_scene, read_result
 from wavebit.fd._runtime import runtime
+from wavebit.fd._shapes import Sphere
 
 
 def samples():
@@ -218,3 +220,108 @@ def test_research_sphere_physical_control():
     assert abs(row['qabs']) < 2e-6
     # All nine glass runs measured late-monitor fractions <=1.562e-11.
     assert max(row['decay'].values()) < 1e-9
+
+
+def _replaced_edge_fraction(point, dx, axis, radius, xp=np):
+    """`edge_fraction`'s body as it stood at f935a85, copied once so the move can be proved.
+
+    A pure move is provable and this is the proof: not "close", not "to 1e-14", but the same
+    bits from the same inputs. It is deliberately a copy and not an import -- an oracle that
+    changes with the thing it judges is not one -- and it goes when the study's own wrappers do.
+    """
+    transverse = sum(point[..., j]**2 for j in range(3) if j != axis)
+    live = radius**2 > transverse
+    half = xp.sqrt(xp.where(live, radius**2-transverse, xp.ones_like(transverse)))
+    lo = xp.maximum(xp.zeros_like(half)-.5, (-half-point[..., axis])/dx)
+    hi = xp.minimum(xp.zeros_like(half)+.5, (half-point[..., axis])/dx)
+    return xp.where(live, xp.maximum(xp.zeros_like(lo), hi-lo), xp.zeros_like(lo))
+
+
+def _replaced_face_fraction(point, dx, axis, radius, xp=np):
+    """`face_fraction`'s body as it stood at f935a85. The twin of the one above."""
+    from wavebit.fd._shapes import clipped_disc_area
+    others = tuple(j for j in range(3) if j != axis)
+    u, v = (point[..., j]/dx for j in others)
+    r2 = (radius/dx)**2-(point[..., axis]/dx)**2
+    nearest = xp.maximum(abs(u)-.5, xp.zeros_like(u))**2+xp.maximum(abs(v)-.5, xp.zeros_like(v))**2
+    farthest = (abs(u)+.5)**2+(abs(v)+.5)**2
+    empty, full = r2 <= nearest, r2 >= farthest
+    partial = (~empty) & (~full)
+    rad = xp.sqrt(xp.where(partial, r2, xp.ones_like(r2)))
+    a = xp.where(partial, u, xp.zeros_like(u))
+    b = xp.where(partial, v, xp.zeros_like(v))
+    area = clipped_disc_area(0., 0., rad, a-.5, a+.5, b-.5, b+.5, xp)
+    return xp.where(full, xp.ones_like(area), xp.where(empty, xp.zeros_like(area), area))
+
+
+def _replaced_circle_fraction(point, dx, axis, radius):
+    """`circle_fraction`'s body as it stood at f935a85, `np` hard-coded and all."""
+    transverse = point[..., 1-axis]
+    live = abs(transverse) < radius
+    half = np.sqrt(np.maximum(0., radius**2-transverse**2))
+    lo = np.maximum(-.5, (-half-point[..., axis])/dx)
+    hi = np.minimum(.5, (half-point[..., axis])/dx)
+    return np.where(live, np.maximum(0., hi-lo), 0.)
+
+
+def test_the_study_helpers_are_the_public_forms_to_the_bit():
+    """The three study fractions now call `fd.Sphere`; every bit they return is unchanged.
+
+    `edge_fraction` and `face_fraction` moved into `Sphere.exact_edge_fill` and
+    `Sphere.exact_face_fill`, and `circle_fraction` -- the invariant-x cylinder study's chord --
+    became the same sphere edge on the point lifted to a triple with x exactly zero, because a
+    sphere's central plane *is* a circle of the same radius and the lifted transverse sum
+    `0*0 + t*t` is the `t**2` it used to write.
+
+    Every number this study has measured stands on these three, so the gate is bit equality and
+    not a tolerance: 4000 placements about the sphere at each of four (dx, radius) settings,
+    all three axes, plus six points chosen to sit on the degenerate cases (the centre, the two
+    chord ends of the 3/5-4/5 right triangle, a pole, a corner outside, and a radius one ulp
+    short of a pole). Measured 2026-09-24: identical at every one of them, on every axis.
+
+    The mutant: delete both `Sphere` overrides so they fall back to `None`. Five tests go red,
+    two of them here.
+    """
+    rng = np.random.default_rng(23923)
+    for dx, radius in ((.025, .25), (.1, 1.), (1., 10.), (1., .4)):
+        points = rng.normal(size=(4000, 3))
+        points = points/np.linalg.norm(points, axis=-1)[:, None]*radius
+        points = points+rng.uniform(-1.5, 1.5, points.shape)*dx
+        for axis in range(3):
+            assert np.array_equal(study.edge_fraction(points, dx, axis, radius),
+                                  _replaced_edge_fraction(points, dx, axis, radius))
+            assert np.array_equal(study.face_fraction(points, dx, axis, radius),
+                                  _replaced_face_fraction(points, dx, axis, radius))
+        for axis in (0, 1):
+            assert np.array_equal(circle_fraction(points[:, 1:], dx, axis, radius),
+                                  _replaced_circle_fraction(points[:, 1:], dx, axis, radius))
+    special = np.array([[0., 0., 0.], [.6, .8, 0.], [1., 0., 0.], [1., 1., 1.],
+                        [1.-1e-17, 0., 0.], [-1., 0., 0.]])
+    for axis in range(3):
+        assert np.array_equal(study.edge_fraction(special, .1, axis, 1.),
+                              _replaced_edge_fraction(special, .1, axis, 1.))
+        assert np.array_equal(study.face_fraction(special, .1, axis, 1.),
+                              _replaced_face_fraction(special, .1, axis, 1.))
+    for axis in (0, 1):
+        assert np.array_equal(circle_fraction(special[:, 1:], .1, axis, 1.),
+                              _replaced_circle_fraction(special[:, 1:], .1, axis, 1.))
+
+
+def test_the_study_fractions_are_the_public_bodys_own_answer():
+    """The other direction: the wrappers are the `Sphere` methods, not a second implementation.
+
+    A centred sphere is what `edge_fraction(point, ...)` means by a relative `point`, so the
+    public call with the same body has to return the same array -- and an off-centre one has to
+    return the *shifted* array, which is what says the wrapper is passing the centre through
+    rather than quietly assuming the origin.
+    """
+    body = Sphere(.25, (.03, -.02, .01))
+    rng = np.random.default_rng(4871)
+    points = rng.uniform(-.4, .4, size=(500, 3))
+    for axis in range(3):
+        assert np.array_equal(body.exact_edge_fill(points, .025, axis),
+                              study.edge_fraction(points-np.array([.03, -.02, .01]),
+                                                  .025, axis, .25))
+        assert np.array_equal(body.exact_face_fill(points, .025, axis),
+                              study.face_fraction(points-np.array([.03, -.02, .01]),
+                                                  .025, axis, .25))

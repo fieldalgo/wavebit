@@ -41,7 +41,12 @@ Meep-derived FDTDX projection file this repository has already excluded
     ``cut(d, n, dx) -> (fill, w)``: a cube cut by a half space, the C1-continuous closed form,
     written as a divided difference taken in a stable order so that the 2-D, 1-D and 0-D limits
     are exact rather than tolerance-branched. The tangent plane's measured ``+0.250 (h/R)^2``
-    over-fill of a sphere lives in that docstring, beside the table it is fitted from.
+    over-fill of a sphere lives in that docstring, beside the table it is fitted from. The same
+    cut one and two dimensions down -- ``edge_cut(d, n, dx, axis)`` on a component's own edge
+    and ``face_cut`` on its dual face, which is the pair the Werner/Bauer/Cary material operator
+    constrains and which a CSG node can answer where an exact clip cannot exist. They are a
+    **preparation**, reached from no solver file: nothing dispatches to them, and the one body
+    that has closed forms for the same two quantities (``Sphere``) carries them itself.
 ``_bodies.py``
     ``Sphere``, ``Cylinder``, ``Prism``, ``Box`` as signed distance plus unit gradient, and
     ``Union`` / ``Intersection`` / ``Difference`` composed on the distance, resolved once,
@@ -77,12 +82,12 @@ function.
 """
 from ._bodies import (AXES, Approximation, Approximations, Body, Box, Cylinder, Difference,
                       Intersection, Prism, Sphere, Union)
-from ._cut import cut, cut_parts
+from ._cut import cut, cut_parts, edge_cut, face_cut
 from ._exact import (clip_capacity, clipped_ball_volume, clipped_disc_area, clipped_polygon_area,
                      overlap, polygon_edge_moments)
 from ._occupancy import image_shifts, occupancy
 
 __all__ = ['AXES', 'Approximation', 'Approximations', 'Body', 'Box', 'Cylinder', 'Difference', 'Intersection', 'Prism', 'Sphere',
-           'Union', 'cut', 'cut_parts', 'clip_capacity', 'clipped_ball_volume',
+           'Union', 'cut', 'cut_parts', 'edge_cut', 'face_cut', 'clip_capacity', 'clipped_ball_volume',
            'clipped_disc_area', 'clipped_polygon_area', 'overlap', 'polygon_edge_moments',
            'image_shifts', 'occupancy']
