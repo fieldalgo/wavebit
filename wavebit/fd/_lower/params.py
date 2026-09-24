@@ -28,6 +28,13 @@ Torch or NumPy. Its leaves are the numbers a gradient may flow through:
                       transverse Bloch 'pattern' (``wavebit/fd/_lower/sources.py``); the
                       waveform table built from them is added inside the traced function
     dft               {region name: 2 pi f} per stage-3 ``DFTRegion`` observer; ``{}`` without
+    stencil           {term name: {'index', 'value', 'output'}} per structure that asked for
+                      ``discretisation='stencil'`` -- the off-diagonal coefficients of the
+                      operator assembled on the host at plan time, and the integer gather
+                      that reads them. Absent from a scene that asked for none. The
+                      operator's *diagonal* is not here: it is patched into ``be``, because
+                      that is what the step and the interior-energy diagnostic read
+                      (:func:`_stencil`)
 
 Whether ``E0`` or ``H0`` is ``None`` is static and recorded on the plan (``has_E0``,
 ``has_H0``); their values are leaves. That is the pytree rule this repository keeps
@@ -75,6 +82,7 @@ def lower(scene, plan, rt='numpy', device=None):
     if plan.constitutive:
         from .constitutive import lower as lower_constitutive
         params['constitutive'] = lower_constitutive(scene, plan, rt)
+        _stencil(plan, params, rt)
     params.update({'bloch': {}, 'axis1d': {}, 'amplitude': None, 'E0': None, 'H0': None,
                    'cpml': _cpml(scene, plan, rt), 'cpml_loss': _cpml_loss(scene, plan, rt),
                    'poles': _poles(scene, plan, rt),
@@ -125,6 +133,43 @@ def lower(scene, plan, rt='numpy', device=None):
     params['E0'] = evaluate('E', initial.E, grid, 'E', rt, plan.dtype, flat)
     params['H0'] = evaluate('H', initial.H, grid, 'H', rt, plan.dtype, flat)
     return params
+
+
+def _stencil(plan, params, rt):
+    """``params['stencil']`` and the patched ``be``, for every prepared extended-stencil term.
+
+    Two halves of one operator go two places, and both of them are the same arrays the host
+    assembled at plan time -- nothing is solved, fitted or branched on here.
+
+    * the **off-diagonal** coefficients become ``params['stencil'][name]['value']``, beside
+      ``params['constitutive']``, with the integer gather pattern that reads them;
+    * the **diagonal** is written into ``be`` over the term's own region.
+
+    The diagonal has to reach ``be`` and not a private key. ``be`` is what the step multiplies
+    the curl by, and it is also what ``InteriorEnergy._weight`` recovers the medium from --
+    so an effective permittivity that lived only in ``params['stencil']`` would be invisible to
+    the one diagnostic whose job is to see it, and a run that changed the medium would report
+    the energy of the medium it no longer has. The gate is
+    ``tests/test_fd_stencil.py::test_the_prepared_diagonal_reaches_be_and_the_energy_weight``.
+
+    The write is :func:`~wavebit.fd._lower.coefficients._paste` and not an indexed assignment.
+    ``be`` may be the same object an earlier painter still holds, ``a[i] = v`` does not exist
+    on JAX at all and mutates in place on Torch, and the concatenation is the one spelling
+    that is out of place and identical on all three backends.
+    """
+    from .coefficients import _paste
+    from .stencil import lower as lower_stencil
+    tables, patches = lower_stencil(plan, rt)
+    if not tables:
+        return
+    params['stencil'] = tables
+    be = params['be']
+    full = (3, plan.nz, plan.ny, plan.nx)
+    if getattr(be, 'shape', ()) != full:
+        be = rt.xp.broadcast_to(be, full)
+    for box, block in patches:
+        be = _paste(rt.xp, be, box, block)
+    params['be'] = be
 
 
 #: Position of each spatial axis (0 = x, 1 = y, 2 = z) in a single-component ``(nz, ny, nx)``

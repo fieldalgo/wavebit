@@ -41,6 +41,11 @@ class Report:
     spans: tuple = ()
     monitors: tuple = ()         # ((name, kind, bytes), ...) of the DFT monitors (stage 3)
     solves: int = 1
+    #: ((term name, discretisation, active rows, row width, bytes), ...) -- one row per
+    #: structure that asked for a material discretisation other than the default. A scene
+    #: where every structure took the default has none and prints exactly what it printed
+    #: before, which is the point: the selector shows up in the report only where it was used.
+    discretisations: tuple = ()
 
     def __str__(self):
         lines = [
@@ -60,6 +65,9 @@ class Report:
             lines.append(f'structure  {axis}=({lo:g}, {hi:g}) -> ({slo:g}, {shi:g}){snapped}')
         for name, kind, nbytes in self.monitors:
             lines.append(f'monitor    {name}  {kind}, {nbytes / 1e6:.2f} MB (DFT accumulators)')
+        for name, rule, rows, width, nbytes in self.discretisations:
+            lines.append(f'material   {name}  discretisation={rule}, {rows} active rows x '
+                         f'{width}, {nbytes / 1e6:.2f} MB (prepared on the host)')
         if self.solves != 1:
             lines.append(f'solves     {self.solves} (a Diffraction monitor asked for both '
                          f'polarisations: the scene runs once per polarisation)')
@@ -125,11 +133,24 @@ def report(scene, p=None, params=None):
                             f'{type(err).__name__}: {err}; run the scene to see it')
     monitors, solves = _monitor_lines(scene, p)
     return Report(cells=grid.n, requested_size=requested, size=grid.size, dx=p.dx, dt=p.dt,
+                  discretisations=_discretisation_lines(p),
                   steps=p.steps, duration=p.steps * p.dt, dtype=p.dtype,
                   bytes_per_state=2 * 3 * p.cells * itemsize + psi + flux_memory,
                   warnings=tuple(warnings),
                   skeleton=p.skeleton, bytes_per_params=params_bytes(params),
                   absorbers=absorbers, spans=p.spans, monitors=monitors, solves=solves)
+
+
+def _discretisation_lines(p):
+    """One row per prepared material operator; empty for every scene that asked for none.
+
+    Read off the term itself -- the arrays it carries *are* the prepared operator -- so this
+    costs nothing and cannot disagree with what the run will use.
+    """
+    from ._kernel.stencil import StencilTerm
+    return tuple((t.name, t.discretisation, len(t.index), t.index.shape[1],
+                  t.index.nbytes + t.output.nbytes + t.diagonal.nbytes)
+                 for t in p.terms if isinstance(t, StencilTerm))
 
 
 def _monitor_lines(scene, p):

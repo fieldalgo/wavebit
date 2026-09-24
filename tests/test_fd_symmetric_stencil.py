@@ -27,12 +27,18 @@ def test_the_moved_operator_is_an_fd_module_that_imports_with_no_cycle():
     ``geometry`` and ``triplet_baseline`` do reach into ``studies/`` for the exact fraction
     helpers and the triplet orientation maps, deferred to the call. ``fit``, ``energy_bounds``
     and ``padded`` reach into nothing, which the subprocess shows by running two of them.
+
+    ``surface_clearance`` moved the same way in the commit that gave a public scene the
+    selector, because the public preparation has to apply the **same** clearance rule and not
+    a second spelling of it. It is checked here with the other five: what the study exposes
+    under that name has to be the moved function and not a copy.
     """
     from wavebit.fd._lower import stencil
     moved = (study.fit, study.energy_bounds, study.triplet_baseline, study.geometry,
-             study.padded)
-    assert [f.__module__ for f in moved] == ['wavebit.fd._lower.stencil'] * 5
-    assert list(stencil.__all__) == sorted(f.__name__ for f in moved)
+             study.padded, study.surface_clearance)
+    assert [f.__module__ for f in moved] == ['wavebit.fd._lower.stencil'] * 6
+    assert set(f.__name__ for f in moved) <= set(stencil.__all__)
+    assert list(stencil.__all__) == sorted(stencil.__all__)
     code = ('import sys\n'
             'import wavebit.fd._lower.stencil as s\n'
             'leaked = sorted(m for m in sys.modules if m.split(".")[0] == "studies")\n'

@@ -1,14 +1,18 @@
-"""The research symmetric extended-stencil material operator, in preparation but not routed.
+"""The symmetric extended-stencil material operator, and the preparation a scene asks for.
 
-This is the operator ``docs/fd-symmetric-stencil.md`` derives and measures, moved here from
-``studies/fdtd_subpixel_symmetric_stencil.py`` unchanged. **Nothing public reaches it**: no
-``plan()`` call, no ``params`` key, no kernel branch. The study still owns the scene scope
-refusals, the surface clearance rule, the term and ``replace``; it imports these five
-functions from here instead of defining them.
+This is the operator ``docs/fd-symmetric-stencil.md`` derives and measures. A structure asks
+for it by name -- ``fd.Structure(shape, material, discretisation='stencil')`` -- and
+:func:`prepare` assembles it **once, eagerly, on the host**, at plan time, for that structure
+alone. A structure that does not ask, and every scene that holds none that do, is untouched:
+the default is exactly the rule it was, to the bit, and ``tests/test_fd_stencil.py`` proves
+that against a ``git archive`` of the commit before this one.
 
-The move is the groundwork, and it is the whole of this commit: every number the study
-produces is the number it produced before, byte for byte, which is what a move has to be able
-to say for itself (memory ``a-pure-move-is-provable``).
+**Preparation is plan time, never lowering.** ``fit`` is SciPy on the host in float64 -- a
+sparse least-squares solve, a symmetric eigenpair, a sparse factorization -- and none of the
+three has a JAX or a Torch spelling. Assembling in ``plan()`` is what keeps NumPy, JAX eager,
+``jax.jit`` and Torch identical: the solve is upstream of every trace, the way the CPML
+stretch profile already is (``wavebit/fd/_lower/cpml.py``). :func:`lower` only reads the
+prepared arrays, moves them to the backend and patches the coefficients out of place.
 
 **What it does.** At each target edge the interface normal is frozen and the exact constant
 tangential-E / normal-D states are integrated over every nearby edge and dual face. ``fit``
@@ -21,22 +25,28 @@ anywhere: the whole assembled operator is inspected before any field is advanced
 
 **The seam left open.** ``geometry`` and ``triplet_baseline`` still call into ``studies/`` for
 the exact edge and face fraction helpers and for the triplet orientation maps, so those two
-import it where they use it and fail outside a checkout that has ``studies`` importable. That
-is deliberate and temporary: it keeps this commit a move and nothing else. Importing this
-module costs nothing and pulls no study -- ``tests/test_fd_symmetric_stencil.py`` pins that --
-and ``fit``, ``energy_bounds`` and ``padded`` run with no study at all.
+import it where they use it and fail outside a checkout that has ``studies`` importable.
+:func:`prepare` names that seam in a refusal (``StencilSeamRefused``) rather than picking
+another rule behind it. Importing this module still costs nothing and pulls no study --
+``tests/test_fd_symmetric_stencil.py`` pins that -- and ``fit``, ``energy_bounds`` and
+``padded`` run with no study at all.
 
 **Host code, not backend code.** This assembles on SciPy, on the host, in float64. It is not
 the traced, differentiable geometry path and cannot silently stand in for one: an input that
-arrives as a JAX tracer or a Torch tensor is refused at the study's door, not discretised
-some other way.
+arrives as a JAX tracer or a Torch tensor is refused **by name** at :func:`prepare`'s door
+(``StencilTracedRefused``), not discretised some other way.
 """
+import hashlib
+
 import numpy as np
 from scipy.spatial import cKDTree
 from scipy.sparse import coo_matrix, diags
 from scipy.sparse.linalg import lsmr, eigsh
 
-__all__ = ['energy_bounds', 'fit', 'geometry', 'padded', 'triplet_baseline']
+__all__ = ['DEFAULT', 'MEMORY_BOUND_BYTES', 'REACH', 'STENCIL', 'active_rows', 'arguments',
+           'energy_bounds', 'fit', 'geometry', 'lower', 'operator_digest', 'padded',
+           'predicted_bytes', 'prepare', 'prepared_digest', 'surface_clearance',
+           'triplet_baseline']
 
 
 def fit(points, axes, normals, signed, ell, area, eps, reach=2., periodic=None, baseline=None, lattice=None):
@@ -259,3 +269,496 @@ def padded(matrix):
     # isolated JAX product speed, and exactly unchanged product values.
     # Keep every stored nonzero; this is storage compression, not a cutoff.
     return diagonal,index,value,output
+
+
+def surface_clearance(scene,p,matrix,box,components):
+    """Check actual material rows against snapped source/flux surfaces."""
+    import wavebit.fd as fd
+    from wavebit.fd._lower.monitors import _box_nodes,_node
+    delta=matrix-diags(np.ones(matrix.shape[0]));delta.eliminate_zeros()
+    used=np.flatnonzero(np.diff(delta.indptr)>0)
+    if not len(used):return []
+    shape=tuple(hi-lo for lo,hi in box);size=int(np.prod(shape))
+    z,y,x=np.unravel_index(used%size,shape)
+    points=np.column_stack((x+box[2][0],y+box[1][0],z+box[0][0])).astype(float)
+    points[np.arange(len(used)),np.asarray(components)[used//size]]+=.5
+    low=points.min(axis=0);high=points.max(axis=0);reports=[]
+    for monitor in scene.monitors:
+        if not isinstance(monitor,(fd.Flux,fd.FarField)):continue
+        if monitor.box is None:raise ValueError('StencilScopeRefused: research flux monitors need a closed box')
+        lo,hi=_box_nodes(monitor.name,p.grid,monitor.box)
+        inside=np.all((low>lo)&(high<hi))
+        outside=np.any((high<lo)|(low>hi))
+        if not (inside or outside):
+            raise ValueError(f'StencilSurfaceRefused: {monitor.name} cuts nonlocal material support at nodes {low.tolist()}..{high.tolist()}')
+        reports.append(dict(name=monitor.name,relation='encloses' if inside else 'excludes'))
+    for source in scene.sources:
+        if isinstance(source,fd.TFSF):
+            lo,hi=_box_nodes(source.name,p.grid,source.box)
+            # The existing TFSF face correction reads the node and adjacent
+            # half plane. Reserve its one-cell injection band in vacuum.
+            clear=np.all((low>np.asarray(lo)+1)&(high<np.asarray(hi)-1))
+        elif isinstance(source,fd.PlaneWave):
+            axis=source.axis;k=_node(p.grid,axis,source.position)
+            clear=high[axis]<k-1 or low[axis]>k+1
+        else:
+            raise ValueError('StencilScopeRefused: only the research TFSF/PlaneWave sources are supported')
+        if not clear:
+            raise ValueError(f'StencilSourceRefused: {source.name} injection band meets nonlocal material support')
+        reports.append(dict(name=source.name,relation='injection_band_clear'))
+    return reports
+
+
+# -- the public preparation ------------------------------------------------------------------
+
+#: The two spellings of ``fd.Structure(discretisation=)``. ``DEFAULT`` is what every structure
+#: has had until now and is *not* one rule: it is "the rule this structure's shape already
+#: names" -- a whole-cell replace for a cell-snapped :class:`~wavebit.fd.Slab` or
+#: :class:`~wavebit.fd.Box`, the diagonal Farjadpour/Kottke mix plus the constitutive cross
+#: terms for a shape that carries a body. That is why the word is ``'voxel'`` and not the name
+#: of a rule: both of those read one component's **own voxel** and nothing else.
+DEFAULT = 'voxel'
+STENCIL = 'stencil'
+
+#: The stencil radius, in cells, that :func:`fit` screens neighbour pairs at -- its own default
+#: and the value every research number was measured with. Its provenance is in ``fit``: a
+#: one-cell radius read minimum eigenvalue -5.84418e-4 at radius 12 cells, two cells +0.02390
+#: there and a positive spectrum at radii 4/6/8. It is a research stencil, not a universal
+#: bound, and :func:`prepare` does not let a caller vary it.
+REACH = 2.0
+
+#: Pairs of coupled edges per active row -- ``fit``'s unknown count over its ``active_edges``.
+#: It is a lattice-topology number, the count of lattice points within :data:`REACH` of a
+#: point over the three component sublattices, so it depends on the shell's shape and not on
+#: the radius. Measured 2026-09-24 on five ball preparations, 1830 to 7836 active rows:
+#: **41.72, 42.98, 43.43, 44.33, 44.76**, rising with the shell's size and flattening; the
+#: recorded 56-cell research sphere reads 1,826,928 / 40,224 = **45.42**
+#: (``docs/fd-symmetric-stencil.md``). Rounded **up** past all six, because it multiplies a
+#: memory bound and a bound that is occasionally low is not a bound.
+PAIRS_PER_ACTIVE_ROW = 46.0
+
+#: Bytes of peak host working set per unknown that the preparation costs, over the process's
+#: working set just before ``geometry`` is called. Measured 2026-09-24 in five separate
+#: processes at OMP/OPENBLAS/MKL_NUM_THREADS=2, one preparation each, through
+#: ``GetProcessMemoryInfo``'s ``PeakWorkingSetSize``:
+#:
+#:     unknowns    76,353   117,864   135,768   249,462   350,730
+#:     bytes/unknown  749.2     728.2     710.8     658.3     620.9
+#:
+#: It **falls** with size -- the fixed cost of SciPy, NumPy and the imported package amortises
+#: -- so the largest measured value is taken as an upper bound over the measured range and
+#: nothing is extrapolated past it. :data:`MEMORY_BOUND_BYTES` is deliberately set inside that
+#: range so that this number is never quoted at a size it was not measured at.
+BYTES_PER_UNKNOWN = 750.0
+
+#: The declared preparation bound: what one host preparation may be predicted to cost before
+#: it is refused rather than started. A laptop that panics rather than slows is on record in
+#: this repository (memory ``laptop-ram-panics-not-just-slows``), which is why the door is
+#: here at all and why it is shut before the solve rather than after it.
+#:
+#: 256 MiB is 357,913 unknowns at :data:`BYTES_PER_UNKNOWN`, which is just past the largest
+#: preparation the constant was measured on (350,730). That is the whole reason for the value:
+#: a larger bound would be a prediction made with a constant nobody has measured there, and
+#: the number it printed would be the confident part of a guess. Raising it is a deliberate
+#: act and the refusal says so.
+MEMORY_BOUND_BYTES = 256 * 1024 ** 2
+
+
+def operator_digest(matrix):
+    """``sha256`` over a CSR operator's shape and its three stored arrays.
+
+    The bit-identity hook owner decision (C) rests on: the public preparation and the research
+    driver call **one** :func:`geometry`, so showing they hand it the same arguments
+    (:func:`arguments`) and that what comes back digests the same is the whole proof, and it
+    costs one small assembly rather than the 40/56/80 sweep. Content only -- no ``id()``, no
+    ``repr()``, no address (memory ``a-digest-you-did-not-validate``).
+    """
+    h = hashlib.sha256()
+    m = matrix.tocsr()
+    h.update(f'{m.shape}'.encode())
+    for a in (m.data, m.indices, m.indptr):
+        a = np.ascontiguousarray(a)
+        h.update(f'{a.dtype.str}{a.shape}'.encode())
+        h.update(a.tobytes())
+    return h.hexdigest()
+
+
+def prepared_digest(index, value, output, diagonal):
+    """``sha256`` over the four arrays a prepared operator reduces to.
+
+    The other half of the bit-identity hook (:func:`operator_digest` digests the assembled
+    CSR): once ``padded`` has compressed the operator, *this* is what a run actually reads, so
+    two paths that produce the same four arrays produce the same run. It is what lets owner
+    decision (C) rest on a small fixture -- the public preparation and the research driver's
+    ``replace`` are compared here rather than by running the 40/56/80 sweep twice.
+
+    ``diagonal`` is the diagonal **as it reaches** ``be``, already multiplied by the term's
+    ratio, and not the diagonal ``padded`` returned. The two differ: recovering one from the
+    other is a multiply followed by a divide, measured 1.11e-16 apart on the fixture, and a
+    hook that has to insert a round trip to compare is not a bit-identity hook. What the run
+    reads is ``be``, so that is what is digested.
+    """
+    h = hashlib.sha256()
+    for a in (index, value, output, diagonal):
+        a = np.ascontiguousarray(a)
+        h.update(f'{a.dtype.str}{a.shape}'.encode())
+        h.update(a.tobytes())
+    return h.hexdigest()
+
+
+def active_rows(nodes, dx, center, radius, components, reach=REACH):
+    """The number of target edges the operator will carry a correction on.
+
+    The same screen :func:`fit` applies -- an edge is active exactly where its support weight
+    is nonzero, i.e. where ``|signed| < reach + sqrt(dim-1)/2`` -- computed here with no
+    neighbour search and no solve, so that the memory door can be shut **before** the
+    expensive part rather than after it. It is a second spelling of four lines of
+    :func:`geometry`, which is only honest because it is gated against the real thing:
+    ``tests/test_fd_stencil.py::test_the_predicted_active_rows_are_the_ones_the_fit_reports``
+    compares it with ``report['active_edges']`` on a prepared fixture.
+    """
+    dim = len(components)
+    width = reach + np.sqrt(dim - 1) / 2
+    flat = (nodes.reshape(-1, dim) - np.asarray(center)) / dx
+    count = 0
+    for c in range(dim):
+        p = flat.copy()
+        p[:, c] += .5
+        signed = np.linalg.norm(p, axis=-1) - radius / dx
+        count += int(np.count_nonzero(np.abs(signed) < width))
+    return count
+
+
+def predicted_bytes(nodes, dx, center, radius, components, reach=REACH):
+    """``(predicted peak bytes, predicted unknowns, active rows)`` of the host preparation.
+
+    A prediction and not a measurement, and the refusal that reads it says so. Two measured
+    constants multiply: :data:`PAIRS_PER_ACTIVE_ROW` and :data:`BYTES_PER_UNKNOWN`. The row
+    count itself is not a prediction -- it is the same screen ``fit`` applies, and it read the
+    fit's own ``active_edges`` exactly on all five measured fixtures.
+    """
+    rows = active_rows(nodes, dx, center, radius, components, reach)
+    unknowns = int(round(rows * PAIRS_PER_ACTIVE_ROW))
+    return int(unknowns * BYTES_PER_UNKNOWN), unknowns, rows
+
+
+def arguments(scene, plan, index, box=None):
+    """The exact argument tuple :func:`geometry` is called with for ``structures[index]``.
+
+    One function, two callers: this is what the public preparation hands it, and the research
+    driver's ``replace`` builds the same five things the same way. Separating it out is what
+    makes the bit-identity hook a comparison of *inputs* rather than of two reimplementations
+    (see :func:`operator_digest`).
+    """
+    from .constitutive import common_points
+    structure = tuple(getattr(scene, 'structures', ()) or ())[index]
+    components = (0, 1, 2)
+    old, = plan.constitutive
+    box = _stencil_box(old, components, plan) if box is None else box
+    nodes = common_points(plan.grid, tuple(reversed(box)), 'E')[..., components]
+    shape = structure.shape
+    return (nodes, plan.dx, tuple(shape.center), float(shape.radius),
+            float(structure.material.eps[0]), components)
+
+
+def _stencil_box(old, components, plan):
+    """The constitutive region grown by the operator's nonlocal reach, three nodes a side.
+
+    Three and not two: a two-cell reach couples an edge to neighbours two cells away, and the
+    zero extension the compact region uses needs one further vacuum node beyond the last
+    coupled one for the halo check to be able to say the operator ends in the identity. The
+    arithmetic is the research driver's, so that both callers grow the same box.
+    """
+    box = tuple((lo - 3, hi + 3) if 2 - i in components else (lo, hi)
+                for i, (lo, hi) in enumerate(old.box))
+    for a, ((lo, hi), size) in enumerate(zip(box, (plan.nz, plan.ny, plan.nx))):
+        if not 0 <= lo < hi <= size:
+            raise ValueError(
+                f'StencilRegionRefused: the extended stencil needs three nodes of vacuum '
+                f'beyond the smoothed support on every axis, and on {"zyx"[a]} that reaches '
+                f'{lo}..{hi} of a box {size} cells deep. The operator is nonlocal: an edge '
+                f'couples to every edge within {REACH:g} cells, and a support that runs out '
+                f'of the box has no such neighbourhood to be fitted on. Enlarge '
+                f'fd.Domain(size=...) or move the structure inwards.')
+    return box
+
+
+def _materials(scene):
+    from .coefficients import materials_of
+    return materials_of(scene)
+
+
+def _refuse_structure(structure, index):
+    """The doors a single structure has to pass, whatever else the scene holds.
+
+    These come first, and that ordering is the point of the function existing. A
+    cell-snapped shape that asked for the stencil makes no smoothed region at all, so a
+    scene-wide "one region please" count in front of it would answer it with a sentence
+    about regions when what is wrong is the shape.
+    """
+    from ..geometry import Sphere as _SphereShape
+    from ..materials import Conductor, Dispersive, concrete
+    where = f'structures[{index}] ({structure.shape.describe()})'
+    if structure.shape.body() is None:
+        raise ValueError(
+            f'StencilShapeRefused: {where} asked for discretisation={STENCIL!r}, but it is '
+            f'cell-snapped -- its edge IS a cell boundary, so there is no interface inside a '
+            f'voxel for the operator to constrain the edge and dual-face states across. The '
+            f'extended stencil is for a shape with a fractional edge; leave a Slab or a Box '
+            f'on discretisation={DEFAULT!r}.')
+    if not isinstance(structure.shape, _SphereShape):
+        raise ValueError(
+            f'StencilShapeRefused: {where} asked for discretisation={STENCIL!r}. The operator '
+            f'is assembled from the body\'s exact edge and dual-face fills, and fd.Sphere is '
+            f'the one shape that answers both in closed form today '
+            f'(wavebit/fd/_shapes/_bodies.py). The tangent plane\'s forms beside them are not '
+            f'wired in as a fallback: every convergence order this operator has measured was '
+            f'taken with the exact ones, and the plane\'s mean gap to the exact sphere falls '
+            f'only like h. The commit that measures a body without them is what lifts this.')
+    leaves = (structure.shape.radius,) + tuple(structure.shape.center) \
+        + tuple(structure.material.eps) + tuple(structure.material.mu_value)
+    if any(concrete(v) is None for v in leaves):
+        raise ValueError(
+            f'StencilTracedRefused: {where} asked for discretisation={STENCIL!r} with a traced '
+            f'radius, centre or material value. The operator is solved once on the host in '
+            f'SciPy -- a sparse least-squares fit, a symmetric eigenpair and a sparse '
+            f'factorization -- so it is static data of the plan and cannot be a function of a '
+            f'leaf. It is refused rather than quietly discretised the other way, which would '
+            f'make jax.grad and a finite difference compute two different functions. A '
+            f'gradient with respect to a smoothed structure runs on discretisation='
+            f'{DEFAULT!r}; the commit that differentiates through a prepared operator is what '
+            f'lifts this.')
+    if isinstance(structure.material, (Conductor, Dispersive)):
+        raise ValueError(
+            f'StencilScopeRefused: {where} asked for discretisation={STENCIL!r} with a '
+            f'conductivity or poles. The interface states the operator constrains are the '
+            f'lossless constant tangential-E and normal-D ones; sigma and the pole '
+            f'coefficients are not smoothed at all yet (checks.check_smoothed, door 1). C8 '
+            f'owns both.')
+
+
+def _refuse_scope(scene, plan, structures, asked):
+    """What a scene that asks for the stencil must be, once, before anything is assembled."""
+    for index in asked:
+        _refuse_structure(structures[index], index)
+    if len(asked) > 1 or len(plan.constitutive) != 1:
+        raise ValueError(
+            f'StencilScopeRefused: {len(asked)} structure(s) asked for '
+            f'discretisation={STENCIL!r} and the plan carries {len(plan.constitutive)} '
+            f'smoothed region(s). The prepared operator is one symmetric matrix over one '
+            f'region, and two of them sharing an interpolation cell would each fit a '
+            f'neighbourhood the other has already changed. One smoothed structure per scene '
+            f'asks for the stencil today; the commit that measures two regions is what '
+            f'lifts this.')
+    index, = asked
+    structure = structures[index]
+    where = f'structures[{index}] ({structure.shape.describe()})'
+    background, _ = _materials(scene)
+    if background.is_magnetic or any(s.material.is_magnetic for s in structures):
+        raise ValueError(
+            f'StencilScopeRefused: {where} asked for discretisation={STENCIL!r} in a magnetic '
+            f'scene. The operator is assembled over the E edges and their dual faces alone, '
+            f'so a permeability would keep the rule it has today on H while E moved to '
+            f'another one, and the two would no longer be the same discretisation. The '
+            f'magnetic half is the commit that measures it.')
+    old, = plan.constitutive
+    if old.masks:
+        raise ValueError(
+            f'StencilScopeRefused: {where} asked for discretisation={STENCIL!r} and its region '
+            f'meets a PEC or PMC wall. The operator\'s rows reach across the wall, and a wall '
+            f'inside the fitted neighbourhood is a boundary condition the fit was not given. '
+            f'Move the structure clear of the wall.')
+    if plan.has_E0:
+        raise ValueError(
+            f'StencilScopeRefused: {where} asked for discretisation={STENCIL!r} with '
+            f'InitialField.E. The term stores D and not E, so starting from a field means '
+            f'inverting the prepared operator once, which is not implemented. Excite the '
+            f'scene with a source instead; a diagonal division would initialise the wrong '
+            f'energy (the sentence constitutive.validate already says).')
+    for source in getattr(scene, 'sources', ()) or ():
+        from ..sources import PlaneWave, TFSF
+        if not isinstance(source, (TFSF, PlaneWave)):
+            raise ValueError(
+                f'StencilSourceRefused: {source.name} is an {type(source).__name__} and the '
+                f'stencil\'s clearance rule reads a TFSF box or a PlaneWave plane. The '
+                f'operator\'s rows are nonlocal, so a source that injects inside them writes '
+                f'into a neighbourhood the fit assumed was vacuum; the check that says how '
+                f'far away is far enough exists for those two and for no other source yet.')
+    return index, structure
+
+
+def _refuse_layers(plan, box, components, index):
+    """The support against the absorbing layers, once, before anything is assembled."""
+    layers = dict(plan.absorbing_faces)
+    for a, ((lo, hi), size) in enumerate(zip(box, (plan.nz, plan.ny, plan.nx))):
+        if 2 - a not in components:
+            continue
+        axis = 'zyx'[a]
+        low, high = layers.get(axis + '-', 0), layers.get(axis + '+', 0)
+        if lo < low or hi > size - high:
+            raise ValueError(
+                f'StencilLayerRefused: structures[{index}]\'s stencil support reaches '
+                f'{lo}..{hi} on {axis}, and the absorbing layers hold 0..{low} and '
+                f'{size - high}..{size}. The operator is fitted on constant interface states '
+                f'in a lossless medium, and a graded absorber inside the fitted '
+                f'neighbourhood is a material the fit never saw -- so the rows it returns '
+                f'there are not the rows the layer needs. Leave the support clear of the '
+                f'layer, or give the domain more room.')
+
+
+#: The off-diagonal coefficients of every operator prepared in this process, by the prepared
+#: operator's own digest. They are the one part of it that is *not* a plan field: they are
+#: floats the kernel multiplies by, so they belong in ``params`` (:func:`lower`), while the
+#: plan carries the pattern, the diagonal and this key.
+#:
+#: The key is the digest and **not** the term's name. Two scenes in one process name their
+#: terms the same thing -- ``constitutive[E0]`` is a position, not an identity -- so a name
+#: would let the second preparation overwrite the first, and lowering the first plan
+#: afterwards would silently run the second's coefficients under the first's pattern. A digest
+#: over all four arrays cannot do that: two entries collide only when the arrays are equal, in
+#: which case the value is the same one. A plan built in this process finds its entry here;
+#: one that did not is refused by :func:`lower` rather than lowered without the coefficients
+#: that make it the operator it says it is.
+_prepared = {}
+
+
+def prepare(scene, plan):
+    """``plan`` with every structure that asked for the extended stencil prepared into it.
+
+    Called from :func:`wavebit.fd._lower.plan.plan`, once, eagerly, on the host, after the
+    constitutive terms are in and before they are validated. A scene where nothing asks pays
+    one generator expression and gets the plan it was handed, unchanged and identical --
+    which is what keeps all 23 stage-0..3 reference skeletons byte-identical.
+
+    The refusals are here and not per cell, and none of them is a fallback: there is no branch
+    in this function that answers a scene the operator cannot be prepared for with the other
+    rule. That is deliberate. The two discretisations converge at different orders, and a
+    scene that silently got the one it did not ask for would read as a physics result.
+    """
+    from .._kernel.masks import Region
+    from .._kernel.stencil import StencilTerm
+    structures = tuple(getattr(scene, 'structures', ()) or ())
+    asked = tuple(i for i, s in enumerate(structures)
+                  if getattr(s, 'discretisation', DEFAULT) == STENCIL)
+    if not asked:
+        return plan
+    index, _ = _refuse_scope(scene, plan, structures, asked)
+    old, = plan.constitutive
+    components = (0, 1, 2)
+    box = _stencil_box(old, components, plan)
+    _refuse_layers(plan, box, components, index)
+    args = arguments(scene, plan, index, box)
+    nodes, dx, center, radius, eps, components = args
+    predicted, unknowns, rows = predicted_bytes(nodes, dx, center, radius, components)
+    if predicted > MEMORY_BOUND_BYTES:
+        raise ValueError(
+            f'StencilMemoryRefused: preparing structures[{index}] is predicted to need about '
+            f'{predicted / 1024 ** 2:.0f} MiB of host memory ({rows} active rows, about '
+            f'{unknowns} unknowns at {BYTES_PER_UNKNOWN:g} bytes each), above the declared '
+            f'bound of {MEMORY_BOUND_BYTES / 1024 ** 2:.0f} MiB. That count is a prediction '
+            f'from two measured constants and not a measurement of this scene. The solve runs '
+            f'on the host before the run starts, so exceeding the bound is a machine that '
+            f'stops rather than a run that slows. Coarsen fd.Resolution(dx=...) or shrink the '
+            f'structure. Raising wavebit.fd._lower.stencil.MEMORY_BOUND_BYTES is a deliberate '
+            f'act: the bound sits at the top of the range BYTES_PER_UNKNOWN was measured on '
+            f'(350,730 unknowns), so past it the prediction is an extrapolation of a constant '
+            f'that has not been measured there -- measure it at that size first.')
+    try:
+        matrix, report = geometry(*args)
+    except ModuleNotFoundError as err:
+        raise ValueError(
+            f'StencilSeamRefused: the operator\'s triplet baseline and exact fraction helpers '
+            f'still live under studies/ and this checkout cannot import them ({err}). That '
+            f'seam is named in this module\'s docstring and closing it is its own commit; '
+            f'until then discretisation={STENCIL!r} runs from a checkout and not from an '
+            f'installed wheel. It is refused rather than prepared some other way.') from err
+    report['surface_clearance'] = surface_clearance(scene, plan, matrix, box, components)
+    # The static width/size screen measured <=7.673e-14; 1e-11 is over
+    # 100 times that rounding scale. It is not a scattering-accuracy gate.
+    if report['lsmr_stop'] not in (0, 1, 2) or report['residual_max'] > 1e-11:
+        raise ValueError(f'StencilConsistencyRefused: {report}')
+    if report['minimum_eigenvalue'] <= 0:
+        raise ValueError(f'StencilEnergyRefused: {report}')
+    report.update(energy_bounds(matrix))
+    diagonal, idx, value, output = padded(matrix)
+    region = Region(z=box[0], y=box[1], x=box[2])
+    _refuse_halo(matrix, diagonal, box, components, region)
+    _refuse_cfl(scene, plan, report, structures)
+    diagonal = diagonal.reshape((len(components),) + region.shape)
+    key = prepared_digest(idx, value, output, diagonal)
+    term = StencilTerm(old.name, old.field, region, old.ratio, old.masks,
+                       components=components, index=idx, output=output, diagonal=diagonal,
+                       key=key)
+    _prepared[key] = value
+    return plan.with_static(terms=tuple(term if t is old else t for t in plan.terms))
+
+
+def _refuse_halo(matrix, diagonal, box, components, region):
+    """The operator must end in the identity on the outermost node layer of its own box."""
+    shape = region.shape
+    grid = np.arange(len(components) * int(np.prod(shape))).reshape((len(components),) + shape)
+    for a in range(3):
+        if 2 - a not in components:
+            continue
+        for end in (0, -1):
+            halo = np.take(grid, end, axis=a + 1).ravel()
+            expected = coo_matrix((np.ones(len(halo)), (np.arange(len(halo)), halo)),
+                                  shape=(len(halo), len(diagonal))).tocsr()
+            if (matrix[halo] - expected).nnz:
+                raise ValueError(
+                    f'StencilHaloRefused: the prepared operator is not the identity on the '
+                    f'{"zyx"[a]} {"low" if end == 0 else "high"} node layer of its own region '
+                    f'{box}. The kernel extends the region by zero outside it, which is the '
+                    f'exact adjoint only while the operator has already returned to vacuum '
+                    f'there. Give the structure more room.')
+
+
+def _refuse_cfl(scene, plan, report, structures):
+    """The prepared operator's own time-step bound, from its spectral upper bound."""
+    import math
+
+    from .checks import cfl_axis_sum
+    background, _ = _materials(scene)
+    inverse_mu = max(1.0 / float(v)
+                     for m in [background] + [s.material for s in structures]
+                     for v in m.mu_value)
+    rate = plan.dt ** 2 * cfl_axis_sum(scene, plan.dx) \
+        * report['spectral_upper_bound'] * inverse_mu
+    report['dt_squared_rate'] = rate
+    if not math.isfinite(rate) or not 0 < rate < 1:
+        raise ValueError(
+            f'StencilCFLRefused: the prepared operator\'s time step bound reads '
+            f'dt^2 * rate = {rate:.17g}, which is not in (0, 1). The extended stencil\'s '
+            f'spectral upper bound is {report["spectral_upper_bound"]:.17g}, above the '
+            f'diagonal rule\'s, so a courant number the default accepts may not survive it. '
+            f'Lower fd.Run(courant=...).')
+
+
+def lower(plan, rt):
+    """``(tables, patches)``: what the kernel reads, and what ``be`` is patched with.
+
+    ``tables`` goes into ``params['stencil']`` and each patch is ``(box, diagonal * ratio)``
+    for :func:`wavebit.fd._lower.coefficients._paste` to write into ``be`` **out of place**.
+    Nothing is solved here and nothing branches on a value -- which is what makes NumPy, JAX
+    eager, ``jax.jit`` and Torch the same run.
+    """
+    from .._kernel.stencil import StencilTerm
+    tables, patches = {}, []
+    for term in plan.terms:
+        if not isinstance(term, StencilTerm):
+            continue
+        value = _prepared.get(term.key)
+        if value is None:
+            raise ValueError(
+                f'StencilUnpreparedRefused: the plan carries {term.name} with prepared '
+                f'operator {term.key[:12]}, and this process never prepared it. The '
+                f'operator\'s off-diagonal coefficients are assembled on the host by '
+                f'fd.plan(scene) and held beside the plan, not inside it; a plan rebuilt or '
+                f'unpickled elsewhere has the pattern, the diagonal and this key but not the '
+                f'coefficients. Call fd.plan(scene) in this process.')
+        tables[term.name] = {'index': rt.array(term.index),
+                             'value': rt.array(value, 'float64'),
+                             'output': rt.array(term.output)}
+        patches.append(((term.region.x, term.region.y, term.region.z),
+                        rt.array(term.diagonal, 'float64') * term.ratio))
+    return tables, patches

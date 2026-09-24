@@ -69,9 +69,17 @@ def terms(scene, plan):
 def lower(scene, plan, rt, report=None, proxy_stats=None):
     """Paint node coefficients in scene order, preserving the two-phase rule."""
     from .._shapes import Box, Sphere, occupancy
+    from .._kernel.stencil import StencilTerm
     background, structures = materials_of(scene)
     xp, out = rt.xp, {}
     for term in plan.constitutive:
+        if isinstance(term, StencilTerm):
+            # A prepared extended-stencil region has no diagonal-rule cross coefficients:
+            # its whole operator, diagonal and off-diagonal, was assembled on the host at
+            # plan time (``stencil.prepare``) and reaches the kernel through ``be`` and
+            # ``params['stencil']``. Building a cross array here would allocate a
+            # region-sized array of zeros that nothing reads.
+            continue
         box = tuple(reversed(term.box))
         field = term.field
         prop = lambda material: (material.eps if field == 'E' else material.mu_value)[0]
@@ -130,13 +138,22 @@ def enclosure(diagonal, cross, xp, field='E'):
 
 
 def validate(scene, plan):
-    """Refuse unsupported memory regions and uncertified operators once, at plan time."""
-    if not plan.constitutive:
+    """Refuse unsupported memory regions and uncertified operators once, at plan time.
+
+    Only the diagonal rule's terms: a prepared extended-stencil term carries its own
+    certificate, taken on the whole assembled operator before any field is advanced
+    (``stencil.prepare`` -- the consistency residual, the minimum eigenvalue, the LDL energy
+    bound, the identity halo and its own spectral time-step rate), and the enclosure below
+    reads cross coefficients it does not have.
+    """
+    from .._kernel.stencil import StencilTerm
+    coupled = tuple(t for t in plan.constitutive if not isinstance(t, StencilTerm))
+    if not coupled:
         return
     from .._runtime import runtime
     from .._kernel.observe import InteriorEnergy
     background, structures = materials_of(scene)
-    for term in plan.constitutive:
+    for term in coupled:
         if getattr(plan, 'has_' + term.field + '0'):
             raise ValueError(f'InitialField.{term.field} with smoothed constitutive coupling '
                              'needs an inverse material solve to initialize D/B. That solve '
@@ -171,7 +188,7 @@ def validate(scene, plan):
     for s in structures:
         for field, values in (('E', s.material.eps), ('H', s.material.mu_value)):
             upper[field] = max(upper[field], *(1/float(v) for v in values))
-    for term in plan.constitutive:
+    for term in coupled:
         c = cross[term.name]
         # E averages towards the low node, H towards the high cell centre.
         # Zero extension is the exact adjoint on a finite box. Internal region
@@ -245,8 +262,11 @@ def guard(scene, plan, params, rt):
                   for m in [background] + [s.material for s in structures]
                   for v in (m.eps if field == 'E' else m.mu_value)]
         upper[field] = 1 / xp.min(xp.stack(values))
+    from .._kernel.stencil import StencilTerm
     valid = rt.array(True)
     for term in plan.constitutive:
+        if isinstance(term, StencilTerm):
+            continue                      # certified on the host at plan time; see validate
         key = 'be' if term.field == 'E' else 'bh'
         cross = params['constitutive'][term.name]
         diagonal = xp.broadcast_to(InteriorEnergy._cut(params[key], slice(None),

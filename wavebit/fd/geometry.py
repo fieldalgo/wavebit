@@ -69,6 +69,12 @@ that keyed itself on whether a radius happened to be traced, would make ``jax.gr
 finite difference compute two different functions, and it is the route-naming knob
 ``combine=`` and ``fourier_type=`` were deleted from this repository for. A cell-snapped shape
 answers ``None`` and every number it lowers to is unchanged to the bit.
+
+C3's ``Structure(discretisation=)`` is not that keyword and does not undo this paragraph: it
+chooses between two discretisations that converge at different orders rather than between two
+spellings of one rule, and both of the objections above are answered in its own place -- it is
+static, it is in the skeleton, and a traced leaf on a structure that asked for the stencil is
+**refused** rather than quietly given the other rule. See :class:`Structure`.
 """
 import math
 
@@ -423,13 +429,54 @@ class Structure:
     half spaces of the same material and up to 122% on one ``fd.Sphere`` declared twice. That
     case is refused by name (``wavebit/fd/_lower/checks.py::check_smoothed``, door 5), which
     is what keeps the sentence above true for every scene this module accepts.
+
+    **``discretisation=``: which material discretisation this structure gets.** ``'voxel'``,
+    the default and every scene's behaviour until stage 4's C3, is *not* the name of a rule --
+    it is "whatever this shape's :meth:`Shape.body` already says", a whole-cell replace for a
+    cell-snapped shape and the diagonal Farjadpour/Kottke mix plus the constitutive cross terms
+    for a smoothed one. What the two have in common, and what the word names, is that every
+    coefficient is a function of one component's **own voxel**. ``'stencil'`` asks instead for
+    the symmetric extended-stencil operator ``docs/fd-symmetric-stencil.md`` derives: the exact
+    edge and dual-face interface constraints, solved once on the host, whose rows couple each
+    edge to every edge within two cells. It is opt-in, it is prepared at ``fd.plan`` time and
+    never inside a trace, and ``fd.check`` prints it.
+
+    **Why here, and not the ``smoothing=`` the module docstring refuses.** That paragraph turns
+    down a keyword that would *switch a rule* for the same shape, or key itself on whether a
+    radius happened to be traced, because either makes ``jax.grad`` and a finite difference
+    compute two different functions. Both objections are kept rather than dodged. This value is
+    static, a typo is refused outright, it is in the plan and in the skeleton, and it is never
+    read from whether anything is a tracer -- a structure that asks for the stencil with a
+    traced radius or permittivity is **refused by name** (``StencilTracedRefused``) rather than
+    quietly given the other rule, which is exactly the failure ``combine=`` and
+    ``fourier_type=`` were deleted for.
+
+    It is on the structure and not on the :class:`Shape` or on :class:`~wavebit.fd.Run`
+    because that is where its inputs are. The operator is assembled from the body's geometry
+    **and** from the material contrast -- ``eps`` enters the fit's right-hand side -- so a
+    shape cannot answer it: one ``fd.Sphere`` object may be shared by two structures of
+    different materials and would then have to name two operators. And ``Run`` cannot, because
+    a scene may hold one structure the operator can be prepared for and one it cannot; a
+    run-wide switch would have to exempt the second silently, which is the fallback this
+    commit refuses to write.
     """
 
     shape: object
     material: object
+    discretisation: str = 'voxel'
 
     def __post_init__(self):
         from .materials import as_material
+        from ._lower.stencil import DEFAULT, STENCIL
+        if self.discretisation not in (DEFAULT, STENCIL):
+            raise ValueError(
+                f'Structure(discretisation={self.discretisation!r}): the two spellings are '
+                f'{DEFAULT!r} -- the rule this structure\'s shape already names, which is what '
+                f'every scene has had -- and {STENCIL!r}, the symmetric extended-stencil '
+                f'operator of docs/fd-symmetric-stencil.md. A value nobody reads is silently '
+                f'ignored, so a third one is refused here rather than falling back to the '
+                f'default: the two converge at different orders and a scene that got the one '
+                f'it did not ask for would read as a physics result.')
         if type(self.shape) is Shape:
             raise TypeError(
                 'Structure(shape=fd.Shape()): fd.Shape is the protocol a shape answers, not a '

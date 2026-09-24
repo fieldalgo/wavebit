@@ -15,12 +15,14 @@ prepared for one scene must not silently drive another.
 
 **One field may be hashed instead of written out.** A dataclass field declared
 ``metadata={'digest': True}`` encodes as the pair ``['digest', sha256]`` over its arrays
-(:func:`_digest`) rather than as the value itself. Nothing carries the mark yet -- no field
-in the package declares ``metadata=`` at all, so ``f.metadata`` is the empty mapping on every
-one of them -- so no plan built today reaches that branch and every frozen skeleton is the
-one it was, byte for byte. It is here for stage 4's prepared material map,
-whose index and value arrays are static and large: their content must move the skeleton, and
-writing tens of megabytes into the hash input to say so would not.
+(:func:`_digest`) rather than as the value itself. Stage 4's
+:class:`~wavebit.fd._kernel.stencil.StencilTerm` is what carries the mark: its integer gather
+pattern and its diagonal are static -- assembled once on the host by ``fd.plan`` -- and large,
+so their content has to move the skeleton while writing tens of megabytes into the hash input
+to say so does not (50,911,380 bytes of active rows on the 56-cell research sphere). No
+**other** field in the package declares ``metadata=``, so ``f.metadata`` is the empty mapping
+on every one of them and a plan with no prepared operator never reaches the branch: every
+frozen skeleton is the one it was, byte for byte.
 
 **Dtype.** Real (``float64``) unless any face is Bloch or (stage 3) ``Axis1D``; a Bloch phase
 that is concretely 0 was refused at ``Bloch(...)``, so the dtype rule is simply "any Bloch or
@@ -46,6 +48,14 @@ here too, on the user's scene and never on a source's internal column: a ``Bloch
 axis one cell long is refused naming ``Axis1D`` (``checks.check_one_cell_bloch``), and the
 grazing-order rule (``grazing.enforce``) refuses an order a PML face cannot absorb to the
 measured tolerance.
+
+**Stage 4's C3 adds one optional term and no plan field.** A structure that asked for
+``fd.Structure(discretisation='stencil')`` has its constitutive term replaced, here, by a
+:class:`~wavebit.fd._kernel.stencil.StencilTerm` holding the prepared operator
+(``wavebit/fd/_lower/stencil.py::prepare``) -- eagerly, on the host, upstream of every trace.
+The selector's value rides on that term and is **not** a ``Plan`` field: a field would encode
+as ``['tuple', []]`` on every scene that does not use it and would have moved all 23 frozen
+reference skeletons for no change of scene.
 
 **Stage 2 adds the source terms** (``wavebit/fd/_lower/sources.py``) after the stage-1 ones,
 in scene order, and a step count read from ``Run(periods=)``. A scene with no source adds
@@ -392,6 +402,17 @@ def plan(scene, _column=False, _grazing=None):
     coupled = constitutive.terms(scene, p)
     if coupled:
         p = p.with_static(terms=p.terms + coupled)
+    # Stage 4 C3: a structure that asked for ``discretisation='stencil'`` has its constitutive
+    # term replaced by a prepared one, here, eagerly, on the host -- before ``validate`` (which
+    # certifies the diagonal rule's cross coefficients and has nothing to say about a prepared
+    # operator, which carries its own certificate) and long before any trace. It runs whether
+    # or not there are coupled terms, because a *cell-snapped* structure that asked for the
+    # stencil makes none and has to hear a refusal rather than be waved through. A scene where
+    # nothing asks gets this plan object back unchanged and identical, which is what keeps
+    # every stage-0..3 skeleton byte-identical.
+    from . import stencil
+    p = stencil.prepare(scene, p)
+    if coupled:
         constitutive.validate(scene, p)
     sources = source_terms(scene, p)
     if sources:

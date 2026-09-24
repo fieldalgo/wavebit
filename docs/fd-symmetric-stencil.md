@@ -551,3 +551,70 @@ establishes solver ranking or a convergence order. The same-operator
 40/56/80 by three-placement gate, public integration and physical mutation
 review remain incomplete. **C3 has not passed.** No new tolerance, fitted
 correction or numerical-source change is introduced by this report.
+
+## A public scene can ask for this operator (2026-09-24)
+
+`fd.Structure(shape, material, discretisation='stencil')` routes one smoothed
+structure to this operator. The default, `discretisation='voxel'`, is unchanged
+and is what every scene still gets: the four reference archives reproduce
+143/288/140/570 arrays bit for bit, all 23 stage-0..3 skeletons are unmoved, and
+242 digested quantities over four default scenes -- a vacuum box, a `Slab`, a
+`Box` and a *smoothed* `Sphere`, covering the plan skeleton, every lowered
+parameter leaf and the final E and H of a run -- are identical to a `git archive`
+of `28f6e49`. Nothing here changes the physics this document measures, and this
+is not a C3 pass: **C3 has not passed.**
+
+What the routing is. `fd.plan` calls `wavebit/fd/_lower/stencil.py::prepare`
+once, eagerly, on the host, for the structure that asked. It calls the same
+`geometry` the research driver calls, so the operator is the research operator;
+`tests/test_fd_stencil.py` proves that by digest, with no tolerance, on a small
+fixture. Preparation is plan time and never lowering: `fit` is a sparse
+least-squares solve, a symmetric eigenpair and a sparse factorization, and none
+of the three has a JAX or a Torch spelling. Lowering reads the prepared arrays,
+moves them to the backend, patches the operator's diagonal into `be` out of
+place and puts its off-diagonal coefficients in `params['stencil']`.
+
+Measured 2026-09-24 on a ball of radius .14 at 18 cells per wavelength in a
+36-cell box (1830 active rows of width 104), OMP/OPENBLAS/MKL_NUM_THREADS=2,
+best of three runs at 40 and 120 steps with the difference taken per step:
+
+| backend | voxel ms/step | stencil ms/step | added |
+| --- | ---: | ---: | ---: |
+| numpy | 2.010 | 3.020 | +1.010 (+50%) |
+| jax   | .291  | .445  | +.154 (+53%) |
+| torch | 4.061 | 5.734 | +1.673 (+41%) |
+
+Preparation cost, five separate processes, one preparation each, peak working
+set over the process's own working set just before `geometry`:
+
+| unknowns | 76,353 | 117,864 | 135,768 | 249,462 | 350,730 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| bytes per unknown | 749.2 | 728.2 | 710.8 | 658.3 | 620.9 |
+| unknowns per active row | 41.72 | 42.98 | 43.43 | 44.33 | 44.76 |
+
+The per-unknown cost falls with size, so the largest measured value is used as an
+upper bound over the measured range and nothing is extrapolated past it. The
+declared preparation bound is 256 MiB, which is 357,913 unknowns at that constant
+-- just past the largest preparation measured -- so the refusal never quotes the
+constant at a size it was not measured at. The recorded 56-cell research sphere
+reads 45.42 unknowns per active row, above every value in the table and below the
+46.0 the bound rounds up to.
+
+What is refused, once per whole-scene preparation and never per cell: a shape
+with no fractional edge or one that is not `fd.Sphere`; a traced radius, centre
+or material value; a conductivity, poles, a permeability or an initial E; more
+than one smoothed region; a support that reaches an absorbing layer or leaves the
+box; a source or flux surface that cuts the operator's nonlocal rows (the
+research clearance rule, moved rather than rewritten); a predicted preparation
+above the declared bound; and an operator that does not return to the identity on
+its own halo, fails its consistency residual, its minimum eigenvalue, its LDL
+energy bound or its own time-step rate. None of them falls back to the other
+rule.
+
+Two things are open. The operator's skeleton digest is a function of the BLAS
+thread count, because the assembled matrix's data is (commit `c939ed3`); a plan
+prepared at a different thread count is a different plan, and nothing yet says
+so at the door. And `geometry` still reaches into `studies/` for the triplet
+baseline and the exact fraction helpers, so `discretisation='stencil'` runs from
+a checkout and not from an installed wheel; that is named in a refusal
+(`StencilSeamRefused`) rather than worked around.

@@ -126,10 +126,26 @@ composes exactly and is not refused. The cylinder, the prism, the rotated body, 
 how two smoothed bodies that touch are spelled) and the differentiable ``range=`` edge are the
 commits after it.
 
+Stage 4's C3 adds a second material discretisation, **opt in and per structure**::
+
+    fd.Structure(fd.Sphere(radius=0.2), glass, discretisation='stencil')
+
+``'voxel'`` is the default and is every scene's behaviour above, to the bit; ``'stencil'``
+asks instead for the symmetric extended-stencil operator ``docs/fd-symmetric-stencil.md``
+derives -- exact edge and dual-face interface constraints, solved once on the host at
+``fd.plan`` time and never inside a trace, whose rows couple each edge to every edge within
+two cells. ``check`` prints it. It has its own doors and not one of them falls back to the
+other rule: only ``fd.Sphere``, only concrete geometry and material values, no conductivity,
+poles, permeability or initial ``E``, one smoothed region, clear of the absorbing layers and
+of every source and flux surface, under a declared preparation memory bound, and an operator
+that passes its own consistency, energy, halo and time-step certificates
+(``_lower/stencil.py``).
+
 The curved-scattering accuracy gate is incomplete. Smoothed scenes emit
 ``SubpixelAccuracyWarning`` during planning with the independent cylinder benchmark,
 also shown by ``check``. Exact volume and matching backends do not establish a
-second-order electromagnetic result; see ``docs/fd-mie-validation.md``.
+second-order electromagnetic result; see ``docs/fd-mie-validation.md``. Neither
+discretisation has passed C3.
 
 Out of scope, and refused by name rather than
 silently: shapes other than ``Slab``, cell-snapped ``Box`` and ``Sphere`` (the rest of stage

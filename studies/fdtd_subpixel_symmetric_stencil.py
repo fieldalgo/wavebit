@@ -12,14 +12,15 @@ import json
 import sys
 from pathlib import Path
 import numpy as np
-from scipy.sparse import coo_matrix, diags
+from scipy.sparse import coo_matrix
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
-# The five assembly functions moved to wavebit/fd/_lower/stencil.py and are re-exported
-# here under their old names: replace() below calls geometry/padded/energy_bounds, and
+# The five assembly functions and the surface clearance rule live in
+# wavebit/fd/_lower/stencil.py and are re-exported here under their old names: replace()
+# below calls geometry/padded/energy_bounds/surface_clearance, and
 # tests/test_fd_symmetric_stencil.py reaches fit and triplet_baseline through this module.
-from wavebit.fd._lower.stencil import energy_bounds,fit,geometry,padded,triplet_baseline  # noqa: F401
+from wavebit.fd._lower.stencil import energy_bounds,fit,geometry,padded,surface_clearance,triplet_baseline  # noqa: F401
 from wavebit.fd._kernel.constitutive import ConstitutiveTerm
 
 
@@ -64,44 +65,6 @@ def validate_scope(scene,p,center,radius,eps,components):
                and tuple(body.center)==tuple(center))
     if not valid:
         raise ValueError('StencilScopeRefused: a concrete float64 lossless sphere or historical TE cylinder in vacuum is required')
-
-
-def surface_clearance(scene,p,matrix,box,components):
-    """Check actual material rows against snapped source/flux surfaces."""
-    import wavebit.fd as fd
-    from wavebit.fd._lower.monitors import _box_nodes,_node
-    delta=matrix-diags(np.ones(matrix.shape[0]));delta.eliminate_zeros()
-    used=np.flatnonzero(np.diff(delta.indptr)>0)
-    if not len(used):return []
-    shape=tuple(hi-lo for lo,hi in box);size=int(np.prod(shape))
-    z,y,x=np.unravel_index(used%size,shape)
-    points=np.column_stack((x+box[2][0],y+box[1][0],z+box[0][0])).astype(float)
-    points[np.arange(len(used)),np.asarray(components)[used//size]]+=.5
-    low=points.min(axis=0);high=points.max(axis=0);reports=[]
-    for monitor in scene.monitors:
-        if not isinstance(monitor,(fd.Flux,fd.FarField)):continue
-        if monitor.box is None:raise ValueError('StencilScopeRefused: research flux monitors need a closed box')
-        lo,hi=_box_nodes(monitor.name,p.grid,monitor.box)
-        inside=np.all((low>lo)&(high<hi))
-        outside=np.any((high<lo)|(low>hi))
-        if not (inside or outside):
-            raise ValueError(f'StencilSurfaceRefused: {monitor.name} cuts nonlocal material support at nodes {low.tolist()}..{high.tolist()}')
-        reports.append(dict(name=monitor.name,relation='encloses' if inside else 'excludes'))
-    for source in scene.sources:
-        if isinstance(source,fd.TFSF):
-            lo,hi=_box_nodes(source.name,p.grid,source.box)
-            # The existing TFSF face correction reads the node and adjacent
-            # half plane. Reserve its one-cell injection band in vacuum.
-            clear=np.all((low>np.asarray(lo)+1)&(high<np.asarray(hi)-1))
-        elif isinstance(source,fd.PlaneWave):
-            axis=source.axis;k=_node(p.grid,axis,source.position)
-            clear=high[axis]<k-1 or low[axis]>k+1
-        else:
-            raise ValueError('StencilScopeRefused: only the research TFSF/PlaneWave sources are supported')
-        if not clear:
-            raise ValueError(f'StencilSourceRefused: {source.name} injection band meets nonlocal material support')
-        reports.append(dict(name=source.name,relation='injection_band_clear'))
-    return reports
 
 
 def replace(scene,p,params,center,radius,eps,components):
