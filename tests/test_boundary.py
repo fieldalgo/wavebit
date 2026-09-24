@@ -166,7 +166,7 @@ def test_both_shape_paths_draw_the_floor_in_the_same_place(overlapping):
     """The floor is a property of reading a field off a grid, not of which builder read it.
 
     Only the boundary route checked it until 2026-08-27, and the asymmetry was not a decision:
-    at ``truncation_order=10`` the boundary route refused ``normal_grid=8`` while the parametric
+    at ``truncation_order=10`` the boundary route refused ``shape_nvf_grid_size=8`` while the parametric
     path built it -- ``sum(T)`` 4.9e-4 adrift, ``R + T`` exactly 1. Both go through
     ``factorization.check_normal_grid`` now, which is where it had to live because
     :mod:`~wavebit._core.boundary` imports :mod:`~wavebit._core.parametric` and the analytic
@@ -186,7 +186,7 @@ def test_both_shape_paths_draw_the_floor_in_the_same_place(overlapping):
     cfg = dict(backend=0, period=PERIOD, thickness=(0.32,), truncation_order=(order, order),
                top=1.0, bot=1.0, wavelength=1.6, psi=np.pi / 2, theta=0.0, phi=0.0)
     build = lambda ng: wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)],
-                                    normal_grid=ng, **cfg)
+                                    shape_nvf_grid_size=ng, **cfg)
 
     with pytest.raises(ValueError, match='aliases'):
         build(need - 1).solve()
@@ -256,7 +256,7 @@ def test_the_jax_path_is_one_loop_and_not_one_copy_per_chunk():
     This is the whole of `7ff7d0a` and nothing else pins it. The dispatch it depends on is
     `'jax' in xp.__name__`, and its failure mode is silent: fall through to the Python loop
     and every value stays correct while the compiled `jit(grad)` goes from 0.57 GiB back to
-    10.77 at `normal_grid=1024`, which is what took the deselect off this file's suite. A
+    10.77 at `shape_nvf_grid_size=1024`, which is what took the deselect off this file's suite. A
     value test cannot see that. Counting primitives can, and costs nothing -- `make_jaxpr`
     traces without allocating, so this runs at any grid.
 
@@ -358,7 +358,7 @@ def test_permittivity_matches_the_analytic_path_for_one_shape(truncation_order):
     ng = 1024
     (mine, _) = _mats(xnp, [(0.5, 0.5, 0.42, 0.31, 0.4, 4.0)], truncation_order=truncation_order, ng=ng)
     theirs = to_conv_mat_parametric_nvf(xnp, [shape], 1.0, truncation_order, truncation_order,
-                                    CELL, xnp.complex128, normal_grid=ng)
+                                    CELL, xnp.complex128, shape_nvf_grid_size=ng)
     rel = (np.abs(np.asarray(mine.epz_i) - np.asarray(theirs.epz_i)).max()
            / np.abs(np.asarray(theirs.epz_i)).max())
     assert rel < 1e-13, rel
@@ -494,9 +494,9 @@ def test_a_circle_without_ly_is_the_same_circle_on_both_paths(truncation_order):
         period = periods_of(lat)
         mine = _b.to_conv_mat_boundary_layer(xnp, [shape], 1.0, truncation_order,
                                              truncation_order, lat, xnp.complex128,
-                                             normal_grid=ng)
+                                             shape_nvf_grid_size=ng)
         theirs = to_conv_mat_parametric_nvf(xnp, [shape], 1.0, truncation_order,
-                                        truncation_order, lat, xnp.complex128, normal_grid=ng)
+                                        truncation_order, lat, xnp.complex128, shape_nvf_grid_size=ng)
         rel = (np.abs(np.asarray(mine.epz_i) - np.asarray(theirs.epz_i)).max()
                / np.abs(np.asarray(theirs.epz_i)).max())
         # Measured 3.2e-10 (truncation_order 4) and 6.2e-10 (truncation_order 8), square and skew alike. Set just
@@ -652,7 +652,7 @@ def test_a_circle_without_ly_survives_the_polygon_path():
     got = []
     for shapes in ([circle, over], [spelt, over]):
         # This checks equivalent shape spellings, not quadrature convergence.
-        solver = _solve([dict(background=1.0, shapes=shapes)], normal_grid=128)
+        solver = _solve([dict(background=1.0, shapes=shapes)], shape_nvf_grid_size=128)
         assert solver.freeze_geometry().boundary_plans[0] is not None    # it really painted
         got.append(_total(solver.solve()))
     assert got[0] == got[1], got
@@ -664,7 +664,7 @@ def test_a_painted_ellipse_is_polygonised():
               dict(type='circle', cx=0.10, cy=0.08, lx=0.30, angle=0.0, material=9.0)]
     # Exercise polygonization and energy conservation on a resolved grid;
     # high-resolution convergence is covered by the dedicated instruments.
-    r = _solve([dict(background=1.0, shapes=shapes)], normal_grid=128).solve()
+    r = _solve([dict(background=1.0, shapes=shapes)], shape_nvf_grid_size=128).solve()
     t = _total(r)
     assert 0.0 < t < 1.0
     assert abs(t + float(np.asarray(r.R).real.sum()) - 1.0) < 1e-9    # lossless
@@ -735,7 +735,7 @@ def test_an_enclosed_shape_is_cut_out_of_its_host_not_added_to_it(truncation_ord
     wrong = 1.0 + (4.0 - 1.0) * (0.36 + area) + (9.0 - 1.0) * area              # sign dropped
 
     solver = _solve([dict(background=1.0, shapes=ENCLOSED_SHAPES)], truncation_order=truncation_order,
-                    normal_grid=256)
+                    shape_nvf_grid_size=256)
     assert solver.freeze_geometry().boundary_plans[0] is not None      # it really painted
     direct = np.linalg.inv(np.asarray(solver.eps_conv_matrices()[2])[0])
     n_orders = (2 * truncation_order + 1) ** 2
@@ -768,7 +768,7 @@ def test_paint_with_an_enclosed_shape_agrees_with_a_fine_raster():
     against an outside reading of the geometry rather than an internal consistency check.
     """
     painted = _total(_solve([dict(background=1.0, shapes=ENCLOSED_SHAPES)],
-                            normal_grid=256).solve())
+                            shape_nvf_grid_size=256).solve())
     coarse = _total(_solve(_raster_of(ENCLOSED_SHAPES, 800)).solve())
     fine = _total(_solve(_raster_of(ENCLOSED_SHAPES, 1600)).solve())
 
@@ -793,7 +793,7 @@ def test_a_partial_overlap_was_never_affected():
     assert len(areas) == 2 and all(a > 0 for a in areas), areas
 
     painted = _total(_solve([dict(background=1.0, shapes=CLIPPED_SHAPES)],
-                            normal_grid=256).solve())
+                            shape_nvf_grid_size=256).solve())
     fine = _total(_solve(_raster_of(CLIPPED_SHAPES, 1600)).solve())
     assert abs(painted - fine) < 2e-3, (painted, fine)
 
@@ -856,11 +856,11 @@ def test_a_hole_inside_a_hole_is_material_again():
     for region, want in zip(regions, visible):
         assert float(_c.region_area(xnp, region, vals)) == pytest.approx(want, abs=1e-12)
 
-    exact = 1.0 + (4.0 - 1) * visible[0] + (9.0 - 1) * visible[1] \
+    exact = 1.0 + (4.0 - 1) * visible[0] + (9.0 - 1) * visible[1]\
         + (16.0 - 1) * visible[2]
     for truncation_order in (6, 12):
         solver = _solve([dict(background=1.0, shapes=nested)], truncation_order=truncation_order,
-                        normal_grid=256)
+                        shape_nvf_grid_size=256)
         direct = np.linalg.inv(np.asarray(solver.eps_conv_matrices()[2])[0])
         n_orders = (2 * truncation_order + 1) ** 2
         assert complex(direct[n_orders // 2, n_orders // 2]).real == pytest.approx(exact, abs=1e-12), truncation_order
@@ -941,7 +941,7 @@ def _two_painted(w, curved=False):
 
 
 _PAINT_CFG = dict(period=(1.0, 1.0), wavelength=0.94, thickness=(0.32,), truncation_order=(4, 4),
-                  top=1.0, bot=2.1025, theta=0.0, phi=None, psi=np.pi / 2, normal_grid=256)
+                  top=1.0, bot=2.1025, theta=0.0, phi=None, psi=np.pi / 2, shape_nvf_grid_size=256)
 
 
 def _painted_total(backend, w, curved=False, geometry=None):
@@ -1050,7 +1050,7 @@ def test_a_traced_shape_layer_needs_a_freeze_under_jit_and_not_under_grad():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     cfg = dict(period=(1.0, 1.0), wavelength=0.94, truncation_order=(5, 5), top=1.0, bot=2.1025,
-               theta=0.0, phi=None, psi=np.pi / 2, thickness=(0.3,), normal_grid=256)
+               theta=0.0, phi=None, psi=np.pi / 2, thickness=(0.3,), shape_nvf_grid_size=256)
     fixed = dict(type='rectangle', cx=0.20, cy=0.12, lx=0.26, ly=0.30, angle=0.0, material=4.41)
 
     def structure(v):
@@ -1106,7 +1106,7 @@ def test_a_traced_single_shape_layer_is_not_refused():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     cfg = dict(period=(1.0, 1.0), wavelength=0.94, truncation_order=(5, 5), top=1.0, bot=2.1025,
-               theta=0.0, phi=None, psi=np.pi / 2, thickness=(0.3,), normal_grid=256)
+               theta=0.0, phi=None, psi=np.pi / 2, thickness=(0.3,), shape_nvf_grid_size=256)
 
     def total(v):
         u = [dict(background=1.0, shapes=[
@@ -1133,7 +1133,7 @@ def test_a_frozen_geometry_answers_the_overlap_question_for_every_layer():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     cfg = dict(period=(1.0, 1.0), wavelength=0.94, truncation_order=(5, 5), top=1.0, bot=2.1025,
-               theta=0.0, phi=None, psi=np.pi / 2, thickness=(0.3,), normal_grid=256)
+               theta=0.0, phi=None, psi=np.pi / 2, thickness=(0.3,), shape_nvf_grid_size=256)
     fixed = dict(type='rectangle', cx=0.20, cy=0.0, lx=0.26, ly=0.30, angle=0.0, material=4.41)
 
     def structure(cx):
@@ -1177,14 +1177,14 @@ def test_the_polygon_normal_field_folds_to_the_nearest_image():
     moved it.
 
     The residual left in the fractional shifts is the sampling, and it converges: 8.9e-6 / 2.6e-6
-    / 4.2e-7 / 4.7e-8 at ``normal_grid`` 128 / 256 / 512 / 1024. A whole-period shift resamples
+    / 4.2e-7 / 4.7e-8 at ``shape_nvf_grid_size`` 128 / 256 / 512 / 1024. A whole-period shift resamples
     the same points and is exact.
     """
     import wavebit
 
     P = 300.0
     cfg = dict(backend=0, period=[P, P], thickness=(205.0,), truncation_order=(6, 6), top=1.0,
-               bot=1.0, wavelength=900.0, psi=np.pi / 2, theta=0.0, phi=0.0, normal_grid=256)
+               bot=1.0, wavelength=900.0, psi=np.pi / 2, theta=0.0, phi=0.0, shape_nvf_grid_size=256)
 
     def layer(shift):
         return [dict(background=1.0, shapes=[
@@ -1239,7 +1239,7 @@ _TWO_DISJOINT = [_box(lx=250.0, ly=300.0, cx=-160.0), _box(lx=250.0, ly=300.0, c
 #: them (``a1 . b2 = 0`` and ``(a2 + k a1) . b2 = 2 pi`` for any ``k``), so ``u = 0`` keeps
 #: exactly the orders ``n b2``.
 _SPELLING_KW = dict(backend=0, wavelength=900.0, top=1.0, bot=2.25, theta=0.2, phi=0.3, psi=0.4,
-                    thickness=[300.0], normal_grid=64, truncation_order=dict(u=0, v=6))
+                    thickness=[300.0], shape_nvf_grid_size=64, truncation_order=dict(u=0, v=6))
 
 
 def _spelled(k, shapes, **over):
@@ -1293,7 +1293,7 @@ def test_a_painted_layer_on_an_unreduced_basis_builds_its_reduction(monkeypatch)
 
     For one revision this spelling was *refused* by name on a painted layer, because
     ``periodic_segments`` folded and swept on the basis as given and read ``sum(T)``
-    0.810615440141 here against 0.948626126969 on ``k = 0``, unmoved by ``normal_grid``. The
+    0.810615440141 here against 0.948626126969 on ``k = 0``, unmoved by ``shape_nvf_grid_size``. The
     refusal over-reached -- ``test_oblique_lattice.py`` pins that a painted overlap survives
     the ``k = 1`` respelling of the 400 square, an invariance the sweep as given happens to
     satisfy for ``k <= 2`` -- so the reduction is ported instead (``lattice.reduced_basis``, the
@@ -1302,7 +1302,7 @@ def test_a_painted_layer_on_an_unreduced_basis_builds_its_reduction(monkeypatch)
     ``k = 10`` reads the ``k = 0`` value **bitwise**: the structure moves by ``5 a1``, a lattice
     vector, and the sample grid folds onto the same points. ``k = 1`` and ``k = 3`` move it by
     ``a1 / 2`` and their sample grids fold half a pixel off, a sampling difference of the size
-    of the route's own moves between ``normal_grid`` 64 / 128 / 256 (3e-6 to 9e-5) -- and the
+    of the route's own moves between ``shape_nvf_grid_size`` 64 / 128 / 256 (3e-6 to 9e-5) -- and the
     same at every ``k`` of one parity, which is what says it is the grid and not the fold.
     The plan records the transform, a record taken on one spelling is refused on another by
     name, and the disjoint control -- the closed form -- is bitwise the same on every spelling.
@@ -1331,7 +1331,7 @@ def test_a_painted_layer_on_an_unreduced_basis_builds_its_reduction(monkeypatch)
         patch.setattr(_b, 'normal_projector_coeffs', union_projector)
         for k, value in zip((1, 3), odd):
             assert value == pytest.approx(_spelled_total(_spelled(k, _TWO_OVERLAPPING)), rel=0, abs=1e-12)
-    refined = [_spelled_total(_spelled(k, _TWO_OVERLAPPING, normal_grid=128)) for k in (0, 1)]
+    refined = [_spelled_total(_spelled(k, _TWO_OVERLAPPING, shape_nvf_grid_size=128)) for k in (0, 1)]
     assert abs(refined[1] - refined[0]) < abs(odd[0] - reference) / 4
 
     frozen = _spelled(10, _TWO_OVERLAPPING).freeze_geometry()

@@ -40,15 +40,15 @@ def field_builder():
     return build
 
 
-def matrices(xp,shapes,background,hu,hv,lattice,dtype,normal_grid=256,plan=None):
+def matrices(xp,shapes,background,hu,hv,lattice,dtype,shape_nvf_grid_size=256,plan=None):
     # Explicit fixture grid in the same internal Cartesian origin as _piece_field.
     from wavebit._core.lattice import is_axis_aligned
     from wavebit._core.boundary import _k_grids
     if not is_axis_aligned(lattice):
         raise ValueError('the probe grid requires an axis-aligned cell')
     real_dtype=xp.float64 if dtype==xp.complex128 else xp.float32
-    x=(xp.arange(normal_grid,dtype=real_dtype)+.5)*lattice[0][0]/normal_grid
-    y=(xp.arange(normal_grid,dtype=real_dtype)+.5)*lattice[1][1]/normal_grid
+    x=(xp.arange(shape_nvf_grid_size,dtype=real_dtype)+.5)*lattice[0][0]/shape_nvf_grid_size
+    y=(xp.arange(shape_nvf_grid_size,dtype=real_dtype)+.5)*lattice[1][1]/shape_nvf_grid_size
     X,Y=xp.meshgrid(x,y,indexing='xy')
     # Production builds the layer with its first shape at the centre of the cell and carries it
     # by a phase (2026-09-11); the instrument samples the same way, so what the comparison
@@ -84,7 +84,7 @@ def main():
                      dict(type='rectangle',lx=300.,ly=300.,cx=150.+gap/2,material=4.+delta)])
                 s=wavebit.rcwa(backend=0,period=(700.,700.),wavelength=900.,top=1.,bot=2.25,
                     theta=.2,phi=0.,psi=0.,thickness=(300.,),truncation_order=(order,order),
-                    normal_grid=grid,structure=[dict(background=1.,shapes=shapes)])
+                    shape_nvf_grid_size=grid,structure=[dict(background=1.,shapes=shapes)])
                 with patch.object(P,'to_conv_mat_parametric_nvf',matrices):
                     return float(np.sum(s.solve().T))
             for name,one,contrast in [('period',True,0.),('pair',False,5.),('equal',False,0.)]:

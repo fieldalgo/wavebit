@@ -1,6 +1,6 @@
-# The raster normal-field constructions, and the `normal_method` / `projector` options
+# The raster normal-field constructions, and the `raster_normal_method` / `nvf_projector` options
 
-Shape NVF now also accepts `projector='circular'`, using a positive normal-dyad
+Shape NVF now also accepts `nvf_projector='circular'`, using a positive normal-dyad
 Jones construction for rectangles and circles/ellipses, with a polygon-facet
 correction for curved paintings. Its scope and contact derivatives are documented
 in [parametric modeling](parametric-modeling.md#complex-nvf-projection-for-rectangular-contacts).
@@ -74,10 +74,10 @@ Written: 2026-08-17. Measured 2026-08-16/17 on CPU, NumPy backend, float64.
 Targets:
 - `wavebit/_core/normal_methods.py` — the three constructions added beside the original
 - `wavebit/_core/factorization.py::normal_vector_field` — the dispatcher
-- the `normal_method` solver keyword — `'distance'` (default) | `'contour'` | `'spectral'`
+- the `raster_normal_method` solver keyword — `'distance'` (default) | `'contour'` | `'spectral'`
   | `'smooth'`
 - `wavebit/_core/factorization.py::jones_projector_fields` — the complex-basis projector
-- the `projector` solver keyword — `'linear'` (default) | `'circular'`; a second, independent
+- the `nvf_projector` solver keyword — `'linear'` (default) | `'circular'`; a second, independent
   axis over the same field
 
 Companion: [`nvf-upsampling.md`](nvf-upsampling.md) diagnosed the defect this option
@@ -101,7 +101,7 @@ longer of the construction: `339df21` made `'distance'` itself periodic, which m
 — see [the periodicity section](#periodicity-the-cell-is-a-torus).)
 
 ```python
-wavebit.rcwa(structure=raster, factorization='nvf', normal_method='contour', ...)
+wavebit.rcwa(structure=raster, factorization='nvf', raster_normal_method='contour', ...)
 ```
 
 The keyword is read exactly where a raster normal field is built — a raster `structure` under
@@ -109,13 +109,13 @@ The keyword is read exactly where a raster normal field is built — a raster `s
 anywhere else it is refused rather than ignored, for the same reason `enhanced_dfs` was
 removed outright: a knob nothing reads is a lie waiting to be believed.
 
-There is a **second, independent** keyword over the same field, `projector`, and it defaults
+There is a **second, independent** keyword over the same field, `nvf_projector`, and it defaults
 to what has always been done. It chooses how the projector is formed *from* the field rather
 than how the field is built, so it composes with all four constructions above; the short
 version is that `'circular'` removes the medial axis's arbitrariness and costs accuracy,
 mirror symmetry and a handedness to do it, and that you should leave it alone unless you have
 measured a medial-axis problem on your own scene. Its own section is
-[below](#projector--the-circular-polarization-limit-2026-09-01).
+[below](#nvf_projector--the-circular-polarization-limit-2026-09-01).
 
 ## The defect, in one paragraph
 
@@ -458,8 +458,8 @@ Be exact about what that means. The direction on the medial axis is still undefi
 and the answer there is still arbitrary — what is no longer arbitrary is *which* arbitrary
 answer, which is all covariance asks for. The accuracy half is the circular-polarization
 limit S4 and fmmax use — Antos' complex polarization basis, published as Liu & Fan Eq. (52).
-It **landed on 2026-09-01** as `projector='circular'`, opt-in and off by default, and
-[its own section](#projector--the-circular-polarization-limit-2026-09-01) records what it is
+It **landed on 2026-09-01** as `nvf_projector='circular'`, opt-in and off by default, and
+[its own section](#nvf_projector--the-circular-polarization-limit-2026-09-01) records what it is
 worth: it removes this defect completely and costs accuracy, mirror symmetry and a chirality
 to get there. Both papers are cited below and both are owed.
 
@@ -484,27 +484,27 @@ faster**, because the old window handed the kd-tree three periods of every fragm
 | the same, N=512 | 2.47 s | 0.42 s |
 
 
-## `projector` — the circular-polarization limit (2026-09-01)
+## `nvf_projector` — the circular-polarization limit (2026-09-01)
 
 Everything above is about how the normal field is **built**. This is about what is done
 **with** it, and it is a second, independent keyword for that reason:
 
 ```python
 wavebit.rcwa(structure=raster, factorization='nvf',
-             normal_method='contour',      # how the field is built  (4 values)
-             projector='circular', ...)    # how P is formed from it (2 values)
+             raster_normal_method='contour',      # how the field is built  (4 values)
+             nvf_projector='circular', ...)    # how P is formed from it (2 values)
 ```
 
-Folding it into `normal_method` would have made one list of eight where there are two lists of
+Folding it into `raster_normal_method` would have made one list of eight where there are two lists of
 four and two — every construction can be read either way, and the two choices answer different
 questions. Same precedent as `fourier_coefficients` x `factorization`. It is read exactly where
-`normal_method` is read, and refused rather than ignored everywhere else.
+`raster_normal_method` is read, and refused rather than ignored everywhere else.
 
 ### What it is
 
 The projector has always been `P = n n^T`, built from the field's *direction* alone. On the
 medial axis the direction is undefined — not hard to compute, undefined — so both answers
-there are arbitrary. `projector='circular'` builds `P = J J^H` from a Jones vector that carries
+there are arbitrary. `nvf_projector='circular'` builds `P = J J^H` from a Jones vector that carries
 the field's magnitude too:
 
     J   = n_hat cos(phi) + i n_perp sin(phi),   n_perp = (-n_y, n_x)
@@ -532,7 +532,7 @@ have no magnitude of their own to read.
 
 The medial-axis covariance defect, completely — measured with `_CONTOUR_TIE_SHEAR` switched
 off, which is the only configuration in which the instrument can still see it (see below).
-`normal_method='contour'`, N=64, `truncation_order=3`, **all 4095 rolls** of the translation
+`raster_normal_method='contour'`, N=64, `truncation_order=3`, **all 4095 rolls** of the translation
 identity, worst defect and how many rolls exceed 1e-12:
 
 | scene | `linear` | `circular` |
@@ -571,7 +571,7 @@ reproduces the printed table exactly, which is what says it is the same harness)
 | 256 | 6 | 9.64e-03 | 1.11e-02 |
 | 256 | 10 | 2.42e-04 | 1.60e-03 |
 
-(`normal_method='contour'`; `distance` loses by the same 1.1x-3x.) **`linear` wins every one
+(`raster_normal_method='contour'`; `distance` loses by the same 1.1x-3x.) **`linear` wins every one
 of the twelve cells measured**, by 1.1x to 7x. Both converge on the analytic reference —
 `Delta = eps^ - A -> 0` as the truncation rises, so the projector's contribution vanishes and
 they must agree in the limit, and they do — `circular` just converges 3-5x further out.
@@ -629,7 +629,7 @@ pre-change tree.
 
 ## Semantics worth knowing
 
-- **The default is untouched.** `normal_method='distance'` and an unset keyword are
+- **The default is untouched.** `raster_normal_method='distance'` and an unset keyword are
   bit-identical, pinned by test — the two spellings select the same construction. That is a
   statement about the keyword only. The construction it selects was itself changed on
   2026-08-17 (`339df21`, periodicity) and `tests/data/golden_nvf.npz` was re-frozen with it, so
@@ -845,7 +845,7 @@ from **2.22 to 0.39 deg**. `'contour'`'s sigma was already stated this way.
 
 The prototypes were measured by monkeypatching `normal_vector_field`; after integration
 the same 36 cells (3 methods x 2 scenes x 6 grid points) were re-run through the public
-API (`normal_method=`) against the same cached references: **worst relative deviation
+API (`raster_normal_method=`) against the same cached references: **worst relative deviation
 2e-14** — the integration changed the plumbing and nothing else. A review pass then
 hardened the constructions (corner-canonical indicators, spectral's periodic bulk copy
 and its 3+-phase delegation, the phase count in the frozen record); re-running the same
@@ -856,7 +856,7 @@ scratch — the numbers recorded here and the tests in
 `tests/test_nvf_normal_methods.py` are the durable record, consistent with how
 [`nvf-upsampling.md`](nvf-upsampling.md) records its own sweeps.
 
-`projector='circular'` (2026-09-01) was verified on five instruments, listed because each
+`nvf_projector='circular'` (2026-09-01) was verified on five instruments, listed because each
 answers something the others cannot. **The translation identity** over all 4095 rolls, shear
 on and off — the covariance claim, and the reason the shear had to be switched off to make
 it. **A byte comparison against `git archive HEAD`** over 25 MB of convolution matrices (4
@@ -887,7 +887,7 @@ Backends: numpy, jax and torch agree on a circular cell to ~1e-14, and the recor
   polarization basis itself: the projector is built from a Jones vector instead of from
   `n n^T`, so it need not carry a direction at all. This is the origin of the
   circular-polarization limit, and the citation to credit alongside its generalization.
-  **Implemented** as `projector='circular'` — `factorization.jones_projector_fields`.
+  **Implemented** as `nvf_projector='circular'` — `factorization.jones_projector_fields`.
 - V. Liu, S. Fan, *S4: A free electromagnetic solver for layered periodic structures*,
   Comput. Phys. Commun. **183**, 2233 (2012).
   [doi:10.1016/j.cpc.2012.04.026](https://doi.org/10.1016/j.cpc.2012.04.026) — the

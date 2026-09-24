@@ -319,8 +319,12 @@ def _refuse_layer(solver, layer):
     if not (-n_layers <= layer < n_layers):
         raise IndexError(
             f'layer {layer} is out of range for a {n_layers}-layer stack. `layer` indexes the '
-            f'way `structure` does -- 0 is the layer nearest `top`, whichever side the light '
+            f'way `structure` does -- 0 is the layer nearest `bot`, whichever side the light '
             f'arrives from (docs/conventions.md).')
+    if solver._has_tensor_materials():
+        # The tensor sampler validates its own primitives and supports periodic
+        # painting, including overlaps the integrated scalar builder refuses.
+        return
     if solver.modeling_path == ModelingPath.PARAMETRIC:
         # The same refusals the solve makes, so a picture cannot be drawn of a structure the
         # solver will not build. Only the layer asked for: drawing layer 0 should not be
@@ -359,17 +363,21 @@ def _refuse_layer(solver, layer):
                     ) from None
 
 
-def slice_structure(solver, layer=0, n=512, show='eps', band_limited=False):
+def slice_structure(solver, layer=0, n=512, show='eps', band_limited=False, *, component=None):
     """The structure of one layer, as a NumPy array. **Geometry, not the truncated series.**
 
-    ``layer`` indexes the way ``structure`` does: ``0`` is the layer nearest ``top``,
+    ``layer`` indexes the way ``structure`` does: ``0`` is the layer nearest ``bot``,
     whichever side the light arrives from (``docs/conventions.md``). Row 0 of the result is
-    ``y = 0``, so it draws with ``origin='lower'`` -- the same way up ``plot_field``'s top
+    the negative-y edge, so it draws with ``origin='lower'`` -- the same way up ``plot_field``'s top
     view ends at.
 
     Returns complex values -- ``show='eps'`` for the relative permittivity the solve works in,
     ``show='n'`` for the refractive index derived from it. An absorbing layer has a non-zero
     imaginary part and :func:`plot_structure` draws the real part and says so.
+
+    Tensor scenes require ``component='xx'`` (or another xyz component pair).
+    Only physical epsilon components are shown, with ``show='eps'`` and
+    ``band_limited=False``; there is no single scalar index for a tensor.
 
     What ``n`` means depends on the path, and the difference is deliberate:
 
@@ -405,6 +413,21 @@ def slice_structure(solver, layer=0, n=512, show='eps', band_limited=False):
     ``kind`` neither path can draw raises rather than being skipped.
     """
     _refuse_layer(solver, layer)
+    if solver._has_tensor_materials():
+        from . import anisotropy
+        if component not in ('xx','xy','xz','yx','yy','yz','zx','zy','zz'):
+            raise ValueError("tensor structure pictures require component='xx', 'xy', ..., or 'zz'")
+        if show != 'eps' or band_limited:
+            raise NotImplementedError('tensor pictures show individual permittivity components, '
+                                      "with show='eps' and band_limited=False")
+        shaped = isinstance(solver.structure, list)
+        snapshot = anisotropy._shape_snapshot(solver, n=n) if shaped and any(
+            l.get('shapes') for l in solver.structure) else None
+        t = anisotropy._field(solver, solver.structure, 'epsilon', snapshot)[layer]
+        values = _np_complex(t)[..., 'xyz'.index(component[0]), 'xyz'.index(component[1])]
+        return np.broadcast_to(values, (n,n)).copy() if shaped and values.shape == (1,1) else values
+    if component is not None:
+        raise ValueError('component is only used for tensor structure pictures')
     if show not in ('eps', 'n'):
         raise ValueError(f"show must be 'eps' or 'n', not {show!r}.")
 
@@ -437,7 +460,7 @@ def slice_structure(solver, layer=0, n=512, show='eps', band_limited=False):
     return values if show == 'eps' else index_from_eps(_passive(values))
 
 
-def plot_structure(solver, layer=0, n=512, show='eps', ax=None, band_limited=False):
+def plot_structure(solver, layer=0, n=512, show='eps', ax=None, band_limited=False, *, component=None):
     """Draw one layer of the structure. Arguments are :func:`slice_structure`'s; read it first.
 
     Returns the axes. An axis-aligned cell is drawn with ``imshow(origin='lower')`` and a
@@ -453,7 +476,8 @@ def plot_structure(solver, layer=0, n=512, show='eps', ax=None, band_limited=Fal
     except ImportError as e:
         raise ImportError('plot_structure() needs matplotlib installed') from e
 
-    values = slice_structure(solver, layer=layer, n=n, show=show, band_limited=band_limited)
+    values = slice_structure(solver, layer=layer, n=n, show=show, band_limited=band_limited,
+                             component=component)
     complex_valued = bool(np.max(np.abs(values.imag)) > 1e-12 * max(
         1.0, float(np.max(np.abs(values.real)))))
     image = values.real
@@ -481,6 +505,8 @@ def plot_structure(solver, layer=0, n=512, show='eps', ax=None, band_limited=Fal
 
     what = solver.modeling_path.value if solver.modeling_path is not None else '?'
     title = f'layer {layer} ({what}), {show}'
+    if component is not None:
+        title += f'_{component}'
     if band_limited:
         title += f' band-limited to truncation_order={tuple(int(f) for f in solver.truncation_order)}'
     if complex_valued:

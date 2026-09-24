@@ -121,14 +121,14 @@ THREE = [_box(cx=-200.0, lx=200.0, ly=300.0, material=4.0),
 
 
 # ------------------------------------------------------------------------------- solves
-def sum_T(shapes, order=4, normal_grid=N_SOLVE, factorization=None, **incidence):
+def sum_T(shapes, order=4, shape_nvf_grid_size=N_SOLVE, factorization=None, **incidence):
     P._PROJECTOR_CACHE.clear()
     kw = dict(SOLVE_KW, **incidence)
     if factorization is not None:
         # the explicit rule samples no normal field, and a grid it cannot read is refused
         kw['factorization'] = factorization
     else:
-        kw['normal_grid'] = normal_grid
+        kw['shape_nvf_grid_size'] = shape_nvf_grid_size
     res = wavebit.rcwa(lattice=SQUARE, structure=[dict(background=1.0, shapes=shapes)],
                        truncation_order=dict(u=order, v=order), **kw).solve()
     return float(np.sum(np.asarray(res.T)).real)
@@ -352,7 +352,7 @@ def modulus(log):
                                                   2, 2, np.complex128)
                          for shapes in (low, high)]
                 options = dict(order=2, phi=.13, psi=.2)
-                step = sum_T(high, normal_grid=128, **options)-sum_T(low, normal_grid=128,
+                step = sum_T(high, shape_nvf_grid_size=128, **options)-sum_T(low, shape_nvf_grid_size=128,
                                                                                 **options)
                 li_step = li_T(high, **options)-li_T(low, **options)
                 change = max(float(np.max(np.abs(a-b))) for a, b in zip(*coeff))

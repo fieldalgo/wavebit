@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="1210" viewBox="0 0 1040 1210" role="img" aria-labelledby="title desc">
+<title id="title">Two-sided and multiple-beam illumination</title>
+<desc id="desc">Complex fields from different groups retain local interference. Gray: inputs, RCWA solve and field reconstruction. Green: field superposition, power and normalization.</desc>
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="#546878"/></marker></defs>
+<rect width="1040" height="1210" rx="18" fill="#f4f7fa"/>
+<g font-family="Arial, Noto Sans KR, sans-serif" fill="#142c40">
+<text x="520" y="47" font-size="28" font-weight="bold" text-anchor="middle">Two-sided and multiple-beam illumination</text>
+<text x="520" y="78" font-size="19" font-weight="normal" text-anchor="middle">One wavelength · linear materials</text>
+<g id="legend" aria-label="Legend">
+<text x="65" y="123" font-size="20" font-weight="bold">Legend</text>
+<rect x="165" y="103" width="26" height="26" rx="5" fill="#ffffff" stroke="#a4b5c4" stroke-width="2"/>
+<text x="207" y="123" font-size="20">Gray: inputs, RCWA solve and field reconstruction</text>
+<rect x="165" y="145" width="26" height="26" rx="5" fill="#deefed" stroke="#267d78" stroke-width="2"/>
+<text x="207" y="165" font-size="20">Green: field superposition, power and normalization</text>
+</g>
+<g id="flow" transform="translate(0 100)">
+<rect x="140" y="110" width="760" height="84" rx="12" fill="#ffffff" stroke="#a4b5c4" stroke-width="2"/>
+<text x="520.0" y="144.5" font-size="22" font-weight="bold" text-anchor="middle">Layers, materials and lattice</text>
+<text x="520.0" y="173.5" font-size="20" font-weight="normal" text-anchor="middle">Each beam: side, direction, polarization, complex amplitude</text>
+<path d="M520 194 V225" fill="none" stroke="#546878" stroke-width="2.5"  marker-end="url(#arrow)"/>
+<rect x="140" y="225" width="760" height="84" rx="12" fill="#ffffff" stroke="#a4b5c4" stroke-width="2"/>
+<text x="520.0" y="259.5" font-size="22" font-weight="bold" text-anchor="middle">Calculate each beam’s physical kx, ky</text>
+<text x="520.0" y="288.5" font-size="20" font-weight="normal" text-anchor="middle">Group differences equal to integer reciprocal-lattice shifts</text>
+<path d="M520 309 V340" fill="none" stroke="#546878" stroke-width="2.5"  marker-end="url(#arrow)"/>
+<text x="520" y="366" font-size="20" font-weight="bold" text-anchor="middle">Number of groups</text>
+<path d="M450 361 H285 V405" fill="none" stroke="#546878" stroke-width="2.5"  marker-end="url(#arrow)"/>
+<path d="M590 361 H755 V405" fill="none" stroke="#546878" stroke-width="2.5"  marker-end="url(#arrow)"/>
+<rect x="65" y="405" width="440" height="82" rx="12" fill="#ffffff" stroke="#a4b5c4" stroke-width="2"/>
+<text x="285.0" y="438.5" font-size="22" font-weight="bold" text-anchor="middle">One group</text>
+<text x="285.0" y="467.5" font-size="22" font-weight="normal" text-anchor="middle">Build one scattering matrix</text>
+<rect x="535" y="405" width="440" height="82" rx="12" fill="#ffffff" stroke="#a4b5c4" stroke-width="2"/>
+<text x="755.0" y="438.5" font-size="22" font-weight="bold" text-anchor="middle">Multiple groups</text>
+<text x="755.0" y="467.5" font-size="22" font-weight="normal" text-anchor="middle">Build a matrix per group</text>
+<path d="M285 487 V514 H520 V544" fill="none" stroke="#546878" stroke-width="2.5"  marker-end="url(#arrow)"/>
+<path d="M755 487 V514 H520" fill="none" stroke="#546878" stroke-width="2.5"  marker-end="url(#arrow)"/>
+<rect x="140" y="545" width="760" height="84" rx="12" fill="#ffffff" stroke="#a4b5c4" stroke-width="2"/>
+<text x="520.0" y="579.5" font-size="22" font-weight="bold" text-anchor="middle">Retain complex boundary amplitudes</text>
+<text x="520.0" y="608.5" font-size="22" font-weight="normal" text-anchor="middle">Separate incoming and outgoing waves at each boundary</text>
+<path d="M520 629 V650 H417 V669" fill="none" stroke="#546878" stroke-width="2.5"  marker-end="url(#arrow)"/>
+<rect x="65" y="669" width="705" height="90" rx="12" fill="#deefed" stroke="#267d78" stroke-width="2"/>
+<text x="417.5" y="706.5" font-size="20" font-weight="bold" text-anchor="middle">Sum E and H in shared coordinates and phase references</text>
+<text x="417.5" y="735.5" font-size="22" font-weight="normal" text-anchor="middle">E = Σ Eⱼ    ·    H = Σ Hⱼ</text>
+<path d="M900 587 H990 V684 H902 V714" fill="none" stroke="#546878" stroke-width="2.5" stroke-dasharray="6 5" marker-end="url(#arrow)"/>
+<rect x="794" y="714" width="215" height="76" rx="12" fill="#ffffff" stroke="#a4b5c4" stroke-width="2"/>
+<text x="901.5" y="744.5" font-size="22" font-weight="bold" text-anchor="middle">Optional</text>
+<text x="901.5" y="773.5" font-size="22" font-weight="normal" text-anchor="middle">Reconstruct internal E, H</text>
+<path d="M416 759 V804" fill="none" stroke="#546878" stroke-width="2.5"  marker-end="url(#arrow)"/>
+<rect x="65" y="804" width="705" height="84" rx="12" fill="#deefed" stroke="#267d78" stroke-width="2"/>
+<text x="417.5" y="838.5" font-size="22" font-weight="bold" text-anchor="middle">Calculate power flux</text>
+<text x="417.5" y="867.5" font-size="22" font-weight="normal" text-anchor="middle">⟨S⟩ = ½ Re(E × H*)</text>
+<path d="M416 888 V926" fill="none" stroke="#546878" stroke-width="2.5"  marker-end="url(#arrow)"/>
+<rect x="65" y="926" width="910" height="84" rx="12" fill="#deefed" stroke="#267d78" stroke-width="2"/>
+<text x="520.0" y="960.5" font-size="22" font-weight="bold" text-anchor="middle">Average over the observation region and normalize</text>
+<text x="520.0" y="989.5" font-size="22" font-weight="normal" text-anchor="middle">output_top · output_bottom</text>
+<text x="520" y="1046" font-size="19" font-weight="normal" text-anchor="middle">Complex fields from different groups retain local interference.</text>
+<text x="520" y="1076" font-size="19" font-weight="normal" text-anchor="middle">Efficiencies R and T are not summed.</text>
+</g></g></svg>

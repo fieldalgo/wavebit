@@ -50,7 +50,7 @@ the speed of a wrong answer.
 - **Re-freezing every step is free on the shape path and ruinous on the raster path.** A shape
   layer's freeze costs 0-1 ms and its record compares by content; the raster records hold
   arrays, fall back to identity, and recompile every step.
-- **At low `truncation_order` the shape path's cost is `normal_grid`, not the backend.** At
+- **At low `truncation_order` the shape path's cost is `shape_nvf_grid_size`, not the backend.** At
   `truncation_order=3` the default 1024 spends 63 ms building a normal field against a 15 ms
   solve. Dropping to 256 makes it 5 ms. No backend choice is worth as much.
 - **All three strategies now cost the same.** NVF used to grow with the raster — 359 ms of
@@ -65,7 +65,7 @@ the speed of a wrong answer.
 
 An ellipse stack, `d(sum T)/d(lx)`. This is what the closed-form series exists for: the shape's
 outline enters the Fourier transform analytically, so the gradient reaches CD, sidewall angle
-and pitch. `normal_grid` is left at its default of 1024, which matters more than it looks —
+and pitch. `shape_nvf_grid_size` is left at its default of 1024, which matters more than it looks —
 see [the decomposition](#where-the-time-goes-and-what-the-knob-actually-is) below. Times are ms per step.
 
 | config | torch | jax eager | jit (one freeze) | jit (re-freeze) | compile | freeze |
@@ -150,9 +150,9 @@ again for each layer.
 Splitting a *forward* call into the modeling step (`eps_conv_matrices`) and the solve
 (`solve_conv`) locates all of it. The shape moves between calls, which is not a detail: the
 analytic normal field is cached on the shape parameters, so timing the same call twice measures
-a cache hit — 1.1-1.4 ms whatever `normal_grid` is, which is the one number a fit never sees.
+a cache hit — 1.1-1.4 ms whatever `shape_nvf_grid_size` is, which is the one number a fit never sees.
 
-| truncation_order | normal_grid | torch modeling | torch solve | jax modeling | jax solve |
+| truncation_order | shape_nvf_grid_size | torch modeling | torch solve | jax modeling | jax solve |
 |---|---|---|---|---|---|
 | 3 | 256 | 5.3 | 14.0 | 11.0 | 19.8 |
 | 3 | **1024** (default) | **62.6** | 15.2 | **50.2** | 21.0 |
@@ -161,7 +161,7 @@ a cache hit — 1.1-1.4 ms whatever `normal_grid` is, which is the one number a 
 | 11 | 1024 | 151.4 | 3181.6 | 109.4 | 2385.6 |
 
 **1. At low `truncation_order` the shape path is a normal-field benchmark.** At
-`truncation_order=3` the default `normal_grid=1024` spends 63 ms of modeling against a 15 ms
+`truncation_order=3` the default `shape_nvf_grid_size=1024` spends 63 ms of modeling against a 15 ms
 solve — four times the solve it exists to feed. The cost is linear in pixel count (256 → 1024
 is 16x the pixels and 11.7x the time; 1024 → 2048 is 4x and 4.2x), so it is the distance
 transform, and dropping to 256 buys more than any backend choice on this page. It stops
@@ -183,7 +183,7 @@ until it is the whole measurement.
 
 ### Where the recompilation lands — and where none does
 
-Re-freezing at every point of an `lx` sweep, `truncation_order=3`, `normal_grid=256`:
+Re-freezing at every point of an `lx` sweep, `truncation_order=3`, `shape_nvf_grid_size=256`:
 
 | one ellipse | 85 | 90 | 95 | 100 | 103 | 106 | 110 | 115 | 120 | 125 |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -334,7 +334,7 @@ point than at the centre of the search range.
 | situation | use |
 |---|---|
 | OCD fit on shapes, any `truncation_order` | **jax jit, re-freezing every step** |
-| OCD fit on shapes, `truncation_order ≤ 5` | first drop `normal_grid` to 256 — it is worth more than the backend |
+| OCD fit on shapes, `truncation_order ≤ 5` | first drop `shape_nvf_grid_size` to 256 — it is worth more than the backend |
 | OCD fit on shapes, fewer than ~13 steps | torch, and skip the compile |
 | Raster inverse design, pattern moves every step | **`('sampled','li')`**, any backend |
 | Raster, `truncation_order ≤ 5` | **torch** |
@@ -371,7 +371,7 @@ half is exactly that while a raster's is one array already.
   the shape path that is now the ordinary case rather than an assumption — a lone shape has no
   combinatorics at all — but a layer whose shapes cross in and out of each other every step
   pays the compile every step, and no amount of `truncation_order` rescues that.
-- **`normal_grid` is left at its default throughout the shape table**, so those rows carry a
+- **`shape_nvf_grid_size` is left at its default throughout the shape table**, so those rows carry a
   63 ms normal field that a fit is free not to pay. Read the decomposition before reading the
   step times as a property of the backends.
 

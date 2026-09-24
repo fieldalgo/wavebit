@@ -19,7 +19,7 @@ halves of that sentence are the same origin, against a raster, which has no orig
 The one place the two spellings legitimately differ is a layer interface, where ``E_z`` is
 two-valued. A count returns both limits (the interface appears twice, as one layer's bottom and
 the next one's top); explicit coordinates can only return one, and the documented rule picks the
-layer below. :func:`test_an_interface_returns_the_lower_layers_limit` pins that, including the
+layer above. :func:`test_an_interface_returns_the_upper_layers_limit` pins that, including the
 nudge that recovers the other side.
 """
 import numpy as np
@@ -197,11 +197,11 @@ def test_explicit_z_reproduces_the_grid_away_from_interfaces(path):
 
 
 @pytest.mark.parametrize('path', PATHS)
-def test_an_interface_returns_the_lower_layers_limit(path):
+def test_an_interface_returns_the_upper_layers_limit(path):
     """The documented rule, and the nudge that gets the other side.
 
-    Half-open ``[top, bottom)`` means the interface belongs to the layer below; ``z - eps``
-    recovers the upper layer's limit.
+    Half-open ``[bottom, top)`` means the interface belongs to the layer above; ``z - eps``
+    recovers the lower layer's limit.
 
     **Whether the two limits differ at all depends on the path, and that is physics rather
     than bookkeeping.** Only ``E_z`` is discontinuous across a *horizontal* interface. TE's
@@ -213,14 +213,14 @@ def test_an_interface_returns_the_lower_layers_limit(path):
     nz = 5
     grid = _field(path, sample_x=7, sample_y=1, sample_z=nz)
     ax = _zaxis(grid)
-    upper = np.take(grid, [nz - 1], axis=ax)      # layer 0's bottom face
-    lower = np.take(grid, [nz], axis=ax)          # layer 1's top face
+    lower = np.take(grid, [nz - 1], axis=ax)      # layer 0's bottom face
+    upper = np.take(grid, [nz], axis=ax)          # layer 1's top face
 
     at = _field(path, sample_x=7, sample_y=1, sample_z=np.array([THICK[0]]))
-    assert np.array_equal(at, lower)
+    assert np.array_equal(at, upper)
 
     just_above = _field(path, sample_x=7, sample_y=1, sample_z=np.array([THICK[0] - 1e-9]))
-    assert np.allclose(just_above, upper, rtol=0, atol=1e-6)
+    assert np.allclose(just_above, lower, rtol=0, atol=1e-6)
 
     jump = np.max(np.abs(upper - lower)) / np.max(np.abs(grid))
     if path == 'te':

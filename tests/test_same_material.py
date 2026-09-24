@@ -47,9 +47,9 @@ def _airy_R(ns, ds, theta, tetm):
 
 def _solver(ns, ds, *, tetm='te', theta=0.2, path='1d', truncation_order=0, answers='amplitude'):
     """A uniform stack on the requested solve path (see test_lossy_media.solver_r)."""
-    layers = ns[1:-1]
+    layers = ns[1:-1][::-1]  # Oracle cases are top-down; the public API is bottom-up.
     common = dict(backend=0, top=eps_from_index(ns[0]), bot=eps_from_index(ns[-1]),
-                  theta=theta, wavelength=WL, thickness=ds, answers=answers)
+                  theta=theta, wavelength=WL, thickness=list(reversed(ds)), answers=answers)
     if path == '1d':
         return wavebit.rcwa(tetm=tetm, truncation_order=truncation_order, period=[WL * 2],
                               structure=eps_from_index(
@@ -148,7 +148,7 @@ def _field(ns, ds, *, tetm='te', theta=0.2, truncation_order=2):
 
 
 def test_field_below_a_same_material_layer_is_not_zero():
-    """Layers 0 and 1 are both n=1.5 and layer 2 is not; 1 and 2 came back identically zero.
+    """In the original top-down case the last two layers came back identically zero.
 
     A stack that reflected and transmitted normally the whole time, with no field in most
     of it.
@@ -172,4 +172,4 @@ def test_field_matches_the_merged_stack(tetm):
     merged = _field([1.0, 1.5, 2.0, 1.0], [60.0, 40.0], tetm=tetm).reshape(2, RES, -1)
     # Same z sampling per layer, so merged has 2 blocks where this has 3; the bottom (n=2.0)
     # block is the one both describe identically.
-    assert np.allclose(got[2], merged[1], atol=1e-12, rtol=0)
+    assert np.allclose(got[0], merged[0], atol=1e-12, rtol=0)

@@ -41,7 +41,7 @@ def split_nvf_derivative(reference_height, component):
         raise ValueError('component must be material or normal')
 
     def build(xp, shapes, background, hu, hv, lattice, dtype,
-              normal_grid=256, plan=None):
+              shape_nvf_grid_size=256, plan=None):
         from wavebit._core import parametric as P
         if len(shapes) != 1 or shapes[0]['type'] != 'rectangle':
             raise ValueError('the derivative instrument requires one rectangle')
@@ -51,7 +51,7 @@ def split_nvf_derivative(reference_height, component):
         eps, inv_eps = P.assemble_eps_coeffs(
             xp, material_shapes, background, hu, hv, lattice, dtype)
         xx, xy, yy = P.normal_projector_coeffs(
-            xp, normal_shapes, (normal_grid, normal_grid), lattice, hu, hv,
+            xp, normal_shapes, (shape_nvf_grid_size, shape_nvf_grid_size), lattice, hu, hv,
             dtype, plan=plan)
         return P.nvf_from_coeffs(xp, eps, inv_eps, xx, xy, yy, hu, hv)
 

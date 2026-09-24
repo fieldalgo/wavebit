@@ -408,7 +408,7 @@ are independent and multiply.
 | `factorization='nvf'`, sampled or integrated | supported | — |
 | parametric shapes, summed | supported | lengths are absolute Cartesian; nothing deforms |
 | parametric shapes, painted **overlap** | supported | the clipper is Cartesian; only the periodic images and the transform needed the basis |
-| every `normal_method` on a raster | supported | since 2026-08-21; **use `'contour'`** for accuracy, including where a feature overlaps its own images (2026-09-01) — see below |
+| every `raster_normal_method` on a raster | supported | since 2026-08-21; **use `'contour'`** for accuracy, including where a feature overlaps its own images (2026-09-01) — see below |
 | field reconstruction | supported | output grid is indexed by `(v, u)`, not `(y, x)` — see below |
 | `factorization='li'` on a raster | **refused** | see below |
 
@@ -518,7 +518,7 @@ Table 5.4. Parameters: `phi0 = theta0 = 0`, `psi0 = 45 deg`, `dx = dy = 5*lambda
 `h = lambda`, `eps+ = 2.25`, `eps- = 1`.
 
 (Run through the *parametric shape* path, where the geometry is exact. Rasterized instead, the
-same benchmark lands at 3.1e-3 at N=256 whatever the `normal_method` — that is the staircase,
+same benchmark lands at 3.1e-3 at N=256 whatever the `raster_normal_method` — that is the staircase,
 and it is why this table cannot arbitrate a normal field.)
 
 This is the ideal case for the feature, because a checkerboard **is** an oblique-cell problem: on
@@ -799,7 +799,7 @@ factorization learns the cell was skewed. The same correction fixes an orthogona
 also wrong — a raster whose pixels are not square in real space; see
 `tests/test_nvf_non_square_grid.py`.
 
-## Which `normal_method` to use, and what the default costs here
+## Which `raster_normal_method` to use, and what the default costs here
 
 > **`'contour'` used to be the one raster construction that was not fully periodic, and a
 > skewed cell was where that bit hardest. It is periodic now (2026-09-01), and this block is
@@ -837,7 +837,7 @@ also wrong — a raster whose pixels are not square in real space; see
 > which closes every component on the torus and leaves no fragment to prefer: **2.2e-15 on 0 of
 > 63 rolls** on the same scene, and 0 of 1023 on every scene of the wider sweep.
 >
-> **There is no `normal_method` preference left to state for an oblique cell**, and there is
+> **There is no `raster_normal_method` preference left to state for an oblique cell**, and there is
 > none for a feature that overlaps its own periodic images either -- which matters because on a
 > strongly skewed cell that is the ordinary case rather than an exotic one: at 20 degrees with
 > `|a1| = |a2| = 640` any circle of radius over 109 is in it, and the parametric path refuses such
@@ -846,14 +846,14 @@ also wrong — a raster whose pixels are not square in real space; see
 > **What is still open** is not periodicity but *accuracy on the medial axis*: where two points
 > of the level set are exactly equidistant from a pixel the direction is undefined, and
 > `'contour'` now answers with a stable arbitrary choice rather than an unstable one. The
-> circular-polarization limit S4 and fmmax use **has since landed** as `projector='circular'`
+> circular-polarization limit S4 and fmmax use **has since landed** as `nvf_projector='circular'`
 > (2026-09-01) — and it is **off by default and recommended against**: on the shipped
 > configuration it removes nothing measurable and costs accuracy in every cell measured, plus
-> mirror symmetry outright. `docs/nvf-normal-methods.md`, "`projector` — the
+> mirror symmetry outright. `docs/nvf-normal-methods.md`, "`nvf_projector` — the
 > circular-polarization limit", has the tables. See also
 > `tests/test_nvf_lattice_translation.py::test_contour_is_periodic_where_the_medial_axis_is_reachable`.
 
-**Use `normal_method='contour'`.** The paragraph above describes the *default* construction,
+**Use `raster_normal_method='contour'`.** The paragraph above describes the *default* construction,
 `'distance'`, and it is the least accurate of the four the raster path offers. A skew makes it
 worse rather than better: the handful of directions a pair of integer central differences can
 spell stays put while the cell they are read in shears away from them.

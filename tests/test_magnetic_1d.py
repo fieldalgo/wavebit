@@ -119,9 +119,10 @@ def test_te_with_a_permeability_is_tm_with_the_two_tensors_traded():
     def run(tetm, e, m, m_top, m_bot):
         solver = wavebit.rcwa(backend=0, top=n_top ** 2, bot=n_bot ** 2, theta=0.21,
                               tetm=tetm, truncation_order=(TO, 0), period=(PERIOD, PERIOD),
-                              wavelength=WL, thickness=[220.0, 130.0],
+                              wavelength=WL, thickness=[130.0, 220.0],
                               structure=np.ones((2, 1, 32)) * 2.25)
-        return solver.solve_conv(*e, mu=(*m, None, None), mu_top=m_top, mu_bot=m_bot,
+        # Reverse the layer axis of every epsilon and mu slot together.
+        return solver.solve_conv(*(slot[::-1] for slot in e), mu=(*(slot[::-1] for slot in m), None, None), mu_top=m_top, mu_bot=m_bot,
                                  eps_top=n_top ** 2 / m_top, eps_bot=n_bot ** 2 / m_bot)
 
     te = run('te', eps_slots, mu_slots, mu_top, mu_bot)

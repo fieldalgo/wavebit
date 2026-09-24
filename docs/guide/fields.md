@@ -60,9 +60,10 @@ a grid you then throw away.
 | Axis | Frame | Rules |
 | --- | --- | --- |
 | `sample_x`, `sample_y` | lengths in `period`'s units, from the **centre of the cell** | unconstrained: unsorted, non-uniform, and outside the cell all work, the last being the periodic continuation with its Bloch phase. A count spans the cell |
-| `sample_z` | **absolute, from the top of the stack** | must lie inside the stack; an interface belongs to the layer **below** it, so `z - 1e-9` gets the upper layer's limit |
+| `sample_z` | **absolute height, from the bottom interface** | must lie inside the stack; an interface belongs to the layer **above** it, so `z - 1e-9` gets the lower layer's limit |
 
-That interface rule is visible only in `Ez`, the one component genuinely two-valued there.
+That interface rule matters for normal components `Ez` and `Hz`, which can jump across
+material interfaces. Tangential electric and magnetic fields are continuous.
 
 With an explicit `sample_z` the returned z axis is exactly your request, in your order, rather
 than `sample_z * n_layers` with every interface appearing twice.
@@ -77,6 +78,8 @@ An array, whose shape depends on which formulation solved:
 | pure 1D TE/TM (`tetm=`) | `(nz, ny, nx, 3)` | TE is `(Ey, Hx, Hz)`, TM is `(Hy, Ex, Ez)` |
 
 `nz` is `sample_z * n_layers` for a count and `len(sample_z)` for explicit coordinates.
+A count of one samples each layer's lower face. Larger counts include both faces;
+internal interfaces appear twice, with the limiting field in each adjacent layer.
 
 The pure 1D path has **no leading incidence axis**: `tetm` declared the other degree of freedom
 away, so that solve carries one incidence and the cell has no axis to put a second on.
@@ -95,10 +98,11 @@ coupled paths produce for free — the same three the result object calls `given
 rather than ignored, since a reconstruction of the wrong incidence is a complete and plausible
 field cell.
 
-**Axes follow the array**, here as everywhere: row `0` is `y = 0`, and `+z` points down into
-the stack — so a wave travelling into the stack has `H = k x E` and `Sz > 0`. The flip that
-renders a field the conventional way up belongs to plotting (`solver.plot_field`), not to the
-data. On a skewed cell the output grid is indexed by `(v, u)` rather than `(y, x)`.
+**The frame is right-handed and +z points upward.** Count-based samples run from the
+bottom interface (`z=0`) to the top (`z=sum(thickness)`). Raster row 0 is at the negative-y
+edge. In vacuum `H = khat × E`; top incidence has negative net `Sz`, bottom incidence
+positive. Plotting uses upward-positive y and z. On a skewed cell the transverse output
+grid is indexed by `(v,u)` rather than `(y,x)`.
 
 ## The one thing that cannot be traced
 

@@ -74,6 +74,9 @@ def test_unpolarized_delegation_averages_the_two_incidences():
     te, tm = np.asarray(res.s_inc.R), np.asarray(res.p_inc.R)
     avg = wavebit._core.result.Result(None, res.s_inc, res.p_inc, order_window=res.order_window)
     assert np.allclose(np.asarray(avg.R), 0.5 * (te + tm))
+    for name in ('power_entering', 'absorption'):
+        assert getattr(avg, name) == pytest.approx(
+            .5 * (getattr(res.s_inc, name) + getattr(res.p_inc, name)), abs=1e-12)
 
 
 def test_amplitudes_are_lowercase_and_complex():

@@ -560,7 +560,7 @@ finite-order error ladder; neither this comparison nor its improvement establish
 infinite-order equivalence. The strict diagnostic remains an open accuracy target,
 not a newly caused regression that prevents exposing the tested NVF construction.
 
-`factorization='nvf', projector='circular'` is now wired into the production shape
+`factorization='nvf', nvf_projector='circular'` is now wired into the production shape
 solver for rectangles, including rotated/skew-cell geometry, painting, epsilon and
 mu, and all three array backends. Material transforms remain exact. Boundary-resolved
 material coefficients are now explicitly cast to the requested complex dtype;
@@ -646,7 +646,7 @@ they do not certify a converged Maxwell answer at every Fourier order.
 
 ## Curved painting support and local facet correction, 2026-09-08
 
-`projector='circular'` now also accepts overlapping circles/ellipses, including
+`nvf_projector='circular'` now also accepts overlapping circles/ellipses, including
 mixtures with rectangles. The material transform still uses the existing
 polygon painting. The projector follows that same polygon geometry on every
 regular visible interface, rather than applying an analytic ellipse normal to

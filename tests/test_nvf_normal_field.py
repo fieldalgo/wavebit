@@ -72,9 +72,9 @@ def _sobel_normal_field(eps):
     with periodic wrap, normalized where the gradient is non-negligible.
     """
     p = np.pad(eps.real, ((1, 1), (1, 1)), mode='wrap')
-    gx = (p[1:-1, 2:] - p[1:-1, :-2]) * 2 / 8.0 + (p[:-2, 2:] - p[:-2, :-2]) / 8.0 \
+    gx = (p[1:-1, 2:] - p[1:-1, :-2]) * 2 / 8.0 + (p[:-2, 2:] - p[:-2, :-2]) / 8.0\
         + (p[2:, 2:] - p[2:, :-2]) / 8.0
-    gy = (p[2:, 1:-1] - p[:-2, 1:-1]) * 2 / 8.0 + (p[2:, :-2] - p[:-2, :-2]) / 8.0 \
+    gy = (p[2:, 1:-1] - p[:-2, 1:-1]) * 2 / 8.0 + (p[2:, :-2] - p[:-2, :-2]) / 8.0\
         + (p[2:, 2:] - p[:-2, 2:]) / 8.0
     norm = np.hypot(gx, gy)
     mask = norm > 1e-8

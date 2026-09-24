@@ -199,7 +199,7 @@ def test_a_frozen_geometry_makes_a_shape_parameter_traceable(name, make, start):
     # itself is not in question -- it agrees with the difference once the difference is
     # taken below the sawtooth's scale.
     step = 1e-5
-    fd = (float(total(jnp.asarray(start + step))) - float(total(jnp.asarray(start - step)))) \
+    fd = (float(total(jnp.asarray(start + step))) - float(total(jnp.asarray(start - step))))\
         / (2 * step)
     assert grad == pytest.approx(fd, rel=2e-3), (grad, fd)
 
@@ -622,7 +622,7 @@ def test_a_length_that_moves_without_changing_the_overlaps_reuses_the_compilatio
 
 
 PAINT_KW = dict(period=(1., 1.), thickness=(0.32,), wavelength=0.94, top=1., bot=2.1025,
-                theta=0.2, phi=0.3, psi=0.7, truncation_order=(4, 4), normal_grid=256)
+                theta=0.2, phi=0.3, psi=0.7, truncation_order=(4, 4), shape_nvf_grid_size=256)
 
 
 #: 3.4**2 and 2.1**2 -- the materials these two rectangles always had, as permittivity.

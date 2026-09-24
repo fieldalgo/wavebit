@@ -21,13 +21,13 @@ def test_half_fill_projector_survives_translation_and_material_relabeling(percol
     assert inside.sum()*2 == inside.size
     cell = np.where(inside, 4.+.2j, 1.+.05j)
     lattice = as_lattice(lattice=[[1., shear], [0., 1.]])
-    def projector(eps):
+    def nvf_projector(eps):
         nx, ny = normal_vector_field(eps, lattice=lattice, method='contour')
         return np.stack([nx*nx, nx*ny, ny*ny])
-    baseline = projector(cell)
+    baseline = nvf_projector(cell)
     for shift in ((0, 0), (11, 23), (32, 32), (49, 7)):
         rolled = np.roll(cell, shift, axis=(0, 1))
         expected = np.roll(baseline, shift, axis=(1, 2))
-        np.testing.assert_allclose(projector(rolled), expected, rtol=0, atol=2e-10)
+        np.testing.assert_allclose(nvf_projector(rolled), expected, rtol=0, atol=2e-10)
         relabeled = np.where(rolled == 4.+.2j, 1.+.05j, 4.+.2j)
-        np.testing.assert_allclose(projector(relabeled), expected, rtol=0, atol=2e-10)
+        np.testing.assert_allclose(nvf_projector(relabeled), expected, rtol=0, atol=2e-10)

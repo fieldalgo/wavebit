@@ -101,7 +101,7 @@ def _solve(lattice, truncation_order=8, **geom):
     layer = [dict(background=1.0, shapes=[dict(type='rectangle', material=EPS_HI, **geom)])]
     return wavebit.rcwa(lattice=lattice, structure=layer,
                         truncation_order=dict(u=truncation_order, v=truncation_order),
-                        normal_grid=512, **SOLVE_KW).solve()
+                        shape_nvf_grid_size=512, **SOLVE_KW).solve()
 
 
 # ------------------------------------------------------- covered end to end: built, and exact
@@ -377,7 +377,7 @@ def test_the_onset_thresholds_themselves_are_built(name, lattice, geom):
     if name.startswith('a disc'):
         layer = [dict(background=1.0, shapes=[dict(type='circle', cx=0.0, cy=0.0,
                                                    lx=geom['lx'], material=EPS_HI)])]
-        res = wavebit.rcwa(lattice=lattice, structure=layer, normal_grid=512,
+        res = wavebit.rcwa(lattice=lattice, structure=layer, shape_nvf_grid_size=512,
                            truncation_order=dict(u=6, v=6), **SOLVE_KW).solve()
     else:
         res = _solve(lattice, truncation_order=6, cx=0.0, cy=0.0, **geom)
@@ -428,7 +428,7 @@ def test_the_drop_survives_jit_and_grad():
                                                   lx=lx, ly=PERIOD, material=EPS_HI)])]
 
     solver = wavebit.rcwa(backend=1, period=[PERIOD, PERIOD], structure=layer(350.0),
-                          truncation_order=dict(x=4, y=4), normal_grid=128,
+                          truncation_order=dict(x=4, y=4), shape_nvf_grid_size=128,
                           **{k: v for k, v in SOLVE_KW.items() if k != 'backend'})
     frozen = solver.freeze_geometry()
     assert frozen.gamma_plans[0].pairs

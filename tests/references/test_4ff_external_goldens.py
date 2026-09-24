@@ -82,6 +82,10 @@ def public_efficiencies(eps, theta_deg, wl, thick):
     the z row included — ``docs/off-diagonal-slot-convention.md``.
     """
     e = np.asarray(eps, dtype=complex)
+    # These frozen cases use the former downward propagation frame. Express the
+    # same tensor in the public upward-height frame; keep the stored oracle intact.
+    Q = np.diag([1., 1., -1.])
+    e = Q @ e @ Q
     I = np.eye(1, dtype=complex)
     st = lambda v: np.stack([v * I])                                          # noqa: E731
     mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=np.deg2rad(theta_deg),

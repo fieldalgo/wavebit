@@ -42,7 +42,7 @@ from ._core.spec import SPEC_VERSION
 #: Independent of the Wavebit version, which moves whenever the content does.
 #: '2': the ``results`` section — the solve's output contract joined the document when the
 #: result surface was renamed for the first release (2026-08-12).
-#: '3': the ``normal_method`` axis — per-path availability (with the contourpy probe) and
+#: '3': the ``raster_normal_method`` axis — per-path availability (with the contourpy probe) and
 #: reasons, the ``enums`` entry, and ``normal_methods_refused_on_oblique`` in ``lattice``
 #: (2026-08-17).
 #: '4': the ``answers`` axis — the construction-time declaration of what a solve is for, its
@@ -70,12 +70,12 @@ from ._core.spec import SPEC_VERSION
 #: off, and the scene it builds solves and conserves energy. The version is what lets it
 #: refuse rather than quietly answer a different question.
 #:
-#: The ``projector`` axis (2026-09-01) did **not** earn a bump, and the reason is the rule
+#: The ``nvf_projector`` axis (2026-09-01) did **not** earn a bump, and the reason is the rule
 #: above read the other way. It adds a key to ``paths[*]`` and to ``enums`` and changes the
 #: meaning of nothing already published: its default is what the solver has always done, and a
 #: consumer that never learns the key keeps generating exactly the scenes it generated before.
 #: That is the "reading unknown keys degrades gracefully" case the '5' bump was contrasted
-#: with. ``normal_method`` took '3' and ``answers`` took '4' on the same shape of change, but
+#: with. ``raster_normal_method`` took '3' and ``answers`` took '4' on the same shape of change, but
 #: both predate the rule being written down, and a bump a consumer must react to for an
 #: addition it can ignore is the false alarm the rule exists to prevent.
 #: '9': two modeling paths instead of three (2026-09-03). ``smooth`` and ``boundary`` were one
@@ -91,7 +91,10 @@ from ._core.spec import SPEC_VERSION
 #: in its own source now gets ``False``, concludes absolute lengths and a cell-centre origin
 #: do not apply here, and emits fractions or a corner-relative centre. That scene solves and
 #: conserves energy -- the '8' failure exactly, on the convention '8' was about.
-MANIFEST_VERSION = '9'
+# '10': numerical option axes use raster_normal_method / nvf_projector. Renaming
+# keys changes the contract consumers use to construct a solver; old readers must
+# not interpret a missing axis as an unavailable capability. Version 11 adds material dispersion; JobSpec is version 9.
+MANIFEST_VERSION = '11'
 
 
 # --------------------------------------------------------------- how a structure is spelled
@@ -229,18 +232,18 @@ def _options_for(path):
         # read only under factorization='nvf' (explicitly set anywhere it has no reader, it
         # is refused rather than ignored). The parametric path builds its normal field
         # from the geometry itself, so it has no raster construction to select.
-        'normal_method': _raster_normal_methods() if path == ModelingPath.RASTER else [],
-        'normal_method_reason': (
+        'raster_normal_method': _raster_normal_methods() if path == ModelingPath.RASTER else [],
+        'raster_normal_method_reason': (
             "read only under factorization='nvf'" if path == ModelingPath.RASTER
             else 'the parametric path builds its normal field from the geometry itself; '
                  'there is no raster construction to select'),
-        # A fourth axis, and deliberately *not* four more `normal_method` values. That one
+        # A fourth axis, and deliberately *not* four more `raster_normal_method` values. That one
         # says how the field is built; this says how the projector is formed from it, so the
         # two compose -- publishing them as one list of eight would tell a consumer there are
         # eight independent choices where there are two.
-        'projector': [m.value for m in Projector],
-        'projector_reason': (
-            "read only under factorization='nvf', beside normal_method"
+        'nvf_projector': [m.value for m in Projector],
+        'nvf_projector_reason': (
+            "read only under factorization='nvf', beside raster_normal_method"
             if path == ModelingPath.RASTER
             else "shape NVF supports both projectors, including polygon-resolved curved painting"),
         'conditional_options': ([] if path == ModelingPath.RASTER else [
@@ -268,7 +271,7 @@ def _raster_normal_methods():
 #: conserves to 1e-15 either way. Nothing downstream can notice, which is why the refusal is
 #: a fact worth publishing rather than an implementation detail.
 #:
-#: A third refusal used to live here, ``normal_method`` — see the note on the empty tuple
+#: A third refusal used to live here, ``raster_normal_method`` — see the note on the empty tuple
 #: below. It was the one entry that named an *accuracy* limit rather than a wrong answer, and
 #: that is what made it removable.
 LATTICE = {
@@ -319,7 +322,8 @@ MATERIALS = (
     {
         'case': 'uniform_anisotropic',
         'supported': True,
-        'why': 'solve_conv reads nine permittivity slots, so a tensor filling a whole '
+        'why': 'Material accepts diagonal or 3x3 epsilon; solve builds exact uniform blocks. '
+               'solve_conv also reads nine permittivity slots, so a tensor filling a whole '
                'layer works, z row included. Note that every off-diagonal slot holds the '
                'negative of its component: -eps_xy, and equally -eps_xz.',
         'source': 'docs/off-diagonal-slot-convention.md',
@@ -327,51 +331,45 @@ MATERIALS = (
     {
         'case': 'patterned_anisotropic',
         'supported': True,
-        'why': 'the in-plane tensor -- the five slots epx, epy, epz_i, epxy, epyx -- through '
+        'why': 'Tensor rasters and integrated Material shape assignments build the in-plane '
+               'tensor -- the five slots epx, epy, epz_i, epxy, epyx -- through '
                'the Popov-Neviere rearrangement: finish the projector algebra pointwise, '
-               'transform once. Both solvers are unchanged, as it was scoped. A patterned '
+               'integrate once. Shapes default to continuous-region integration of the '
+               'sampled normal extension; an explicit sampled shape route remains available. A patterned '
+               'in-plane tensor also supports explicit Li on an axis-aligned rectangular cell: '
+               'rasters use sampled or integrated coefficients and axis-aligned rectangle '
+               'paintings use exact intervals. See docs/tensor-li-factorization.md. A patterned '
                'layer that also fills the z row is patterned_z_coupled below, not this.',
         'source': 'docs/patterned-anisotropic-factorization.md',
     },
     {
         'case': 'magnetic',
         'supported': True,
-        'why': 'mu is the same five slots on the other side of the (E, H, eps, mu) -> '
-               '(H, -E, mu, eps) duality: layers as the E/H dual, half-spaces as one pair '
-               'of admittances, patterned layers through the same Popov-Neviere '
-               'rearrangement. Written as Material(epsilon, mu) on the three assignment '
-               'paths and as a mu= array beside the raster; the same builders run twice, so '
-               'both quantities land on one geometry. The 1D and conical paths carry it too '
-               'since 2026-09-01, where the same duality maps the TE branch onto the TM one; '
-               'those operators take the diagonal three slots and refuse mu_xy / mu_yx by '
-               'name, having no off-diagonal position for them. The first-order 4ff solve '
-               'takes no mu at all and likewise refuses rather than ignores. Field '
-               'reconstruction carries mu on every path: H_z is Faraday z row, so it divides '
-               'by mu_zz^-1, and on the 2D path it came back scaled by mu_zz until '
-               '2026-08-20 while every other component was exact.',
-        'source': 'docs/magnetic-materials.md',
+        'why': 'Epsilon and mu use the same Fourier factorization, with five slots for '
+               'in-plane tensors and nine for full tensors. Full tensors use the first-order '
+               '4ff solve, including magnetic field reconstruction. Scalar magnetic half-spaces '
+               'enter through their admittances. The separate 1D operators retain diagonal mu.',
+        'source': 'docs/full-tensor-patterns.md',
     },
     {
         'case': 'z_coupled',
         'supported': True,
-        'why': 'with eps_xz or eps_yz the second-order reduction fails, so the solve takes '
-               'the first-order (4ff) formulation instead -- selected automatically by the '
-               'presence of the four z-row slots, or by formulation=4ff, at about 8x. Two '
-               'limits ride with it: layer_algorithm must be ETM, and mu is not implemented '
-               'there. Field reconstruction is (2026-08-14). Uniform layers only; a '
-               'patterned z row is patterned_z_coupled below.',
+        'why': 'Uniform full epsilon and mu tensors use exact convolution blocks. A z '
+               'coupling in either quantity automatically selects the first-order 4ff '
+               'formulation. Public layer_algorithm choices are ETM and SMM; fields and both incidence '
+               'sides are supported. Tensor half-spaces are not implemented.',
         'source': 'wavebit/_core/solve_2d_4ff.py',
     },
     {
         'case': 'patterned_z_coupled',
-        'supported': False,
-        'why': 'patterned *and* z-coupled: the 3x3 closing step. The two halves that exist '
-               'reach this from opposite sides and neither extends to it -- the in-plane '
-               'factorization has no z row, and the 4ff solve takes no pattern. No oracle '
-               'exists for it either, which is the harder half. Refused rather than dropped '
-               'since 2026-08-27: the Popov-Neviere builder used to return matrices '
-               'bit-identical to the same layer with its z row zeroed.',
-        'source': 'docs/anisotropic-materials.md',
+        'supported': True,
+        'why': 'Full 3x3 epsilon and mu fields are factorized together across all three '
+               'components. Cartesian Li supports rasters and rectangle paintings; linear '
+               'NVF supports tensor rasters and integrated or sampled shapes, including '
+               'oblique cells. Nine-slot operators select 4ff. Check Fourier-order and '
+               'normal-field convergence; finite-order PN need not conserve lossless power '
+               'exactly. See independent laminate, Maxwell-transfer and convergence tests.',
+        'source': 'docs/full-tensor-patterns.md',
     },
 )
 
@@ -494,13 +492,26 @@ def manifest() -> dict:
             'tetm': [m.name.lower() for m in Tetm],
             'factorization': [m.value for m in Factorization],
             'fourier_coefficients': [m.value for m in FourierCoefficients],
-            'normal_method': [m.value for m in NormalMethod],
-            'projector': [m.value for m in Projector],
+            'raster_normal_method': [m.value for m in NormalMethod],
+            'nvf_projector': [m.value for m in Projector],
             'answers': [m.value for m in Answers],
         },
         'backends': _backend_capabilities(),
         'shape_coordinates': SHAPE_COORDINATES,
         'material_quantity': _jsonable_material_quantity(),
+        'material_dispersion': {
+            'type': 'TabulatedMaterial',
+            'catalog': 'wavebit.materials.load',
+            'catalog_units': ['nm', 'um', 'mm', 'm'],
+            'evaluation': 'material.at(wavelength): scalar or array',
+            'index_import': 'from_index(wavelengths, index, mu=None): isotropic index**2/mu',
+            'index_permeability': 'constant scalar or scalar samples on the index wavelength grid',
+            'automatic_slots': ['top', 'bot', 'layer.background', 'shape.material'],
+            'backends': ['numpy', 'jax', 'torch'],
+            'raster_arrays': 'evaluated numerical fields; rebuild explicitly per wavelength',
+            'out_of_range': 'error eagerly; NaN for traced material evaluation',
+            'source': 'docs/guide/materials.md',
+        },
         'paths': [
             dict(spelling, **_options_for(ModelingPath(spelling['path'])))
             for spelling in SPELLINGS

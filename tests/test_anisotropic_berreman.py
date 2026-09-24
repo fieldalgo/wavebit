@@ -203,8 +203,10 @@ def solve_tensor_stack(layers, theta, wl=WL, layer_algorithm='ETM', formulation=
     z_coupled = any(is_z_coupled(eps) for eps, _ in layers)
     slots = [[] for _ in range(9)]
     thick = []
-    for eps, d in layers:
-        e = np.asarray(eps, dtype=complex)
+    for eps, d in reversed(layers):
+        # The independent oracle uses a downward-positive frame.
+        mirror = np.diag([1., 1., -1.])
+        e = mirror @ np.asarray(eps, dtype=complex) @ mirror
         for slot, value in zip(slots, (e[0, 0], e[1, 1], None,
                                        -e[0, 1], -e[1, 0],
                                        -e[0, 2], -e[1, 2], -e[2, 0], -e[2, 1])):

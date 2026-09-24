@@ -91,15 +91,15 @@ def _grating_total(shapes, tox, toy, psi):
     P._PROJECTOR_CACHE.clear()
     s = wavebit.rcwa(backend=0, thickness=[300.0], period=dict(x=PERIOD, y=PERIOD),
                      truncation_order=dict(x=tox, y=toy), top=1, bot=1, wavelength=550.0,
-                     psi=psi, normal_grid=256)
+                     psi=psi, shape_nvf_grid_size=256)
     s.structure = [dict(background=1.0, shapes=shapes)]
     return float(np.sum(s.solve().given.T))
 
 
-def _total(shapes, order=6, lattice=SQUARE, normal_grid=512, **incidence):
+def _total(shapes, order=6, lattice=SQUARE, shape_nvf_grid_size=512, **incidence):
     P._PROJECTOR_CACHE.clear()
     res = wavebit.rcwa(lattice=lattice, structure=[dict(background=1.0, shapes=shapes)],
-                       truncation_order=dict(u=order, v=order), normal_grid=normal_grid,
+                       truncation_order=dict(u=order, v=order), shape_nvf_grid_size=shape_nvf_grid_size,
                        **dict(SOLVE_KW, **incidence)).solve()
     return float(np.sum(np.asarray(res.T)))
 
@@ -369,8 +369,8 @@ def test_the_run_end_is_continuous_at_every_grid():
         rows = np.unique(np.round(Y[:, 0] - PERIOD / 2.0, 9))
         ly_star = 2.0 * rows[rows < 150.0].max()
         def difference(h, right=9.0):
-            return abs(_total(layer(ly_star+h,right), order=4, normal_grid=grid)
-                       - _total(layer(ly_star-h,right), order=4, normal_grid=grid))
+            return abs(_total(layer(ly_star+h,right), order=4, shape_nvf_grid_size=grid)
+                       - _total(layer(ly_star-h,right), order=4, shape_nvf_grid_size=grid))
         large, small = difference(1e-4), difference(1e-6)
         assert small < .02*large
         assert small < 2e-9
@@ -436,11 +436,11 @@ def test_a_different_material_contact_has_no_step():
     The 1e-9 bound is three decades above rounding and five below the smaller old step; a box
     slid by 1e-9 also moves the structure, and that is inside it.
     """
-    base = _total(K_SHORT, order=4, normal_grid=128)
-    assert abs(_total(_opened(K_SHORT, 1, 1e-9), order=4, normal_grid=128) - base) < 1e-9
-    base = _total(THREE_TOUCHING, order=4, normal_grid=128)
+    base = _total(K_SHORT, order=4, shape_nvf_grid_size=128)
+    assert abs(_total(_opened(K_SHORT, 1, 1e-9), order=4, shape_nvf_grid_size=128) - base) < 1e-9
+    base = _total(THREE_TOUCHING, order=4, shape_nvf_grid_size=128)
     for i, by in ((0, -1e-9), (2, 1e-9)):
-        step = _total(_opened(THREE_TOUCHING, i, by), order=4, normal_grid=128) - base
+        step = _total(_opened(THREE_TOUCHING, i, by), order=4, shape_nvf_grid_size=128) - base
         assert abs(step) < 1e-9, (i, step)
 
 
@@ -458,7 +458,7 @@ def test_the_material_equality_limit_is_continuous():
     """
     def total(delta):
         return _total([dict(K_SHORT[0], material=9.0 + delta), dict(K_SHORT[1], material=9.0)],
-                      order=4, normal_grid=128)
+                      order=4, shape_nvf_grid_size=128)
 
     base = total(0.0)
     step = {delta: total(delta) - base for delta in (1e-7, 1e-5)}
@@ -477,8 +477,8 @@ def test_the_listing_order_of_a_touching_pair_moves_nothing():
     the two totals differ by 6.4e-15 at order 4; at N = 128 (54.9 pixels) they differ by
     1.7e-4, which is the anchor's sampling offset and not the listing's.
     """
-    ab = _total(K_SHORT, order=4, normal_grid=504)
-    ba = _total(K_SHORT[::-1], order=4, normal_grid=504)
+    ab = _total(K_SHORT, order=4, shape_nvf_grid_size=504)
+    ba = _total(K_SHORT[::-1], order=4, shape_nvf_grid_size=504)
     assert abs(ab - ba) < 1e-12, ab - ba
 
 
@@ -584,8 +584,8 @@ def test_a_rigid_rotation_of_a_two_shape_layer_with_its_frame_is_an_invariance(a
         turned = [dict(s, angle=alpha,
                        cx=s['cx'] * np.cos(alpha) - s['cy'] * np.sin(alpha),
                        cy=s['cx'] * np.sin(alpha) + s['cy'] * np.cos(alpha)) for s in shapes]
-        base = _total(shapes, order=5, normal_grid=256, phi=0.3)
-        same = _total(turned, order=5, lattice=rot @ SQUARE, normal_grid=256, phi=0.3 + alpha)
+        base = _total(shapes, order=5, shape_nvf_grid_size=256, phi=0.3)
+        same = _total(turned, order=5, lattice=rot @ SQUARE, shape_nvf_grid_size=256, phi=0.3 + alpha)
         assert abs(same - base) < 1e-11, (alpha, same - base)
-        left_behind = _total(turned, order=5, lattice=rot @ SQUARE, normal_grid=256, phi=0.3)
+        left_behind = _total(turned, order=5, lattice=rot @ SQUARE, shape_nvf_grid_size=256, phi=0.3)
         assert abs(left_behind - base) > 1e-6, (alpha, left_behind - base)

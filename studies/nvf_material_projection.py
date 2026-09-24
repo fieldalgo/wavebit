@@ -28,10 +28,10 @@ from test_contact_jones_probe import solver,pair  # noqa: E402
 from contact_instruments import rectangular_li  # noqa: E402
 
 
-def build(xp,shapes,background,hu,hv,lattice,dtype,normal_grid=128,plan=None,*,width=8.,lift='jones',**kwargs):
+def build(xp,shapes,background,hu,hv,lattice,dtype,shape_nvf_grid_size=128,plan=None,*,width=8.,lift='jones',**kwargs):
     if xp.__name__ not in ('numpy', 'array_api_compat.numpy'):
         raise ValueError('this research instrument supports NumPy only')
-    N=normal_grid
+    N=shape_nvf_grid_size
     F.check_normal_grid((N,N),hu,hv)
     if width<=0 or lift not in ('real','half','jones'):
         raise ValueError('positive spectral width and a known lift are required')

@@ -61,10 +61,10 @@ EPS_SPACER = 2.25
 # rather than a contrived one, and to populate the orders that reach the spacer.
 _PILLAR = np.ones((1, 1, 20))
 _PILLAR[0, 0, 6:14] = 12.25
-_STACK = np.concatenate([_PILLAR, np.full((1, 1, 20), EPS_SPACER)], axis=0)
+_STACK = np.concatenate([np.full((1, 1, 20), EPS_SPACER), _PILLAR], axis=0)
 
 _KW = dict(period=[PERIOD], top=1.0, bot=EPS_SPACER, theta=0.0, phi=0.0,
-           psi=np.pi / 2, thickness=[200.0, 300.0])
+           psi=np.pi / 2, thickness=[300.0, 200.0])
 
 # truncation_order values that retain the grazing order, and the ones that used to come back
 # quietly wrong (R off by 1 to 600 against 0.215). truncation_order=3 is the first truncation
@@ -214,10 +214,10 @@ def _solve_2d(n_spacer, algo, wavelength=WL, auto_detune=False):
     pillar[0, :, 6:14] = 12.25
     # `n_spacer` names the index, because that is the quantity the graze condition is about;
     # squaring it here is the only conversion, and it is exact for both 2.0 and 1.5.
-    cell = np.concatenate([pillar, np.full((1, 2, 20), n_spacer ** 2)], axis=0)
+    cell = np.concatenate([np.full((1, 2, 20), n_spacer ** 2), pillar], axis=0)
     return wavebit.rcwa(backend=0, wavelength=wavelength, truncation_order=[5, 1], structure=cell,
                         period=[PERIOD, PERIOD], top=1.0, bot=2.25, theta=0.0, phi=0.0,
-                        psi=np.pi / 2, thickness=[200.0, 300.0],
+                        psi=np.pi / 2, thickness=[300.0, 200.0],
                         layer_algorithm=algo).solve(auto_detune=auto_detune)
 
 
@@ -519,7 +519,7 @@ def test_auto_detune_keeps_gradients_flowing_through_the_retry():
 
     def loss(thickness):
         r = wavebit.rcwa(backend=1, wavelength=WL, truncation_order=[3, 0], structure=_STACK,
-                         **_KW).solve(thickness=[200.0, thickness])
+                         **_KW).solve(thickness=[thickness, 200.0])
         return jnp.real(jnp.asarray(r.R)).sum()
 
     with warnings.catch_warnings():

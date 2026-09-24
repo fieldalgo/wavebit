@@ -122,7 +122,8 @@ RES = dict(sample_x=5, sample_y=4, sample_z=6)
 def solved(name, backend=0):
     kw = dict(CASES[name])
     formulation = kw.pop('formulation', None)
-    kw['structure'] = np.asarray(kw['structure'], dtype=float)
+    kw['structure'] = np.asarray(kw['structure'], dtype=float)[::-1]
+    kw['thickness'] = kw['thickness'][::-1]
     solver = wavebit.rcwa(backend=backend, answers='field', **kw)
     if formulation:
         solver.formulation = formulation
@@ -137,8 +138,11 @@ def build():
         for case, tag, which in CASE_VARIANTS:
             if case != name:
                 continue
-            out[f'{name}__{tag}'] = np.asarray(
-                solver.reconstruct_field(incidences=which, **RES))
+            cell = np.asarray(solver.reconstruct_field(incidences=which, **RES))
+            # Preserve this archive's original downward frame, never recapture a new baseline.
+            parity = ((1, 1, -1, -1, -1, 1) if cell.shape[-1] == 6 else
+                      ((1, -1, 1) if solver.tetm_index == 0 else (-1, 1, -1)))
+            out[f'{name}__{tag}'] = np.flip(cell, axis=1 if cell.ndim == 5 else 0) * parity
         out[f'{name}__grating_type'] = np.array(solver.grating_type)
         # `.value`, not the enum: numpy reads a str-Enum's data ('2ff') for the
         # itemsize but its __str__ ('Formulation.TWO_FIELD') for the content, storing

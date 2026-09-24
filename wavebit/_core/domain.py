@@ -31,13 +31,13 @@ be a NumPy / JAX / PyTorch value; stacking goes through the Array-API namespace 
 :class:`Material` is a JAX pytree, so gradients survive both.
 """
 import sys
-from cmath import sqrt as _complex_sqrt
+from cmath import isfinite as _complex_isfinite, sqrt as _complex_sqrt
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from .conventions import (_COMPLEX_CHI, incidence_clashes, reject_complex_angle,
-                          wavelength_problem)
-from .backend import array_namespace
+from .conventions import (_COMPLEX_CHI, _DIRECTION_CLASH, incidence_clashes, reject_complex_angle,
+                          transverse_component_problem, wavelength_problem)
+from .backend import _concrete, array_namespace
 from .enums import Tetm  # noqa: F401  (re-exported for spec's tetm parsing)
 
 
@@ -106,6 +106,13 @@ class Material:
     ``Material(epsilon, mu=None)``. Both are **relative** to vacuum and both are complex in
     general; ``Im(epsilon) > 0`` is loss in this project's ``e^{-iwt}`` convention, which is
     also what refractive-index tables mean by ``n + 1j*k`` (``docs/conventions.md``).
+
+    Each quantity can be scalar, three diagonal entries ``[xx, yy, zz]``, or a
+    physical 3x3 tensor in the public xyz frame. Assign tensors to a layer
+    background or shape and call ``solve()``; internal convolution signs are
+    handled automatically. ``rotated(angle, axis)`` rotates material axes.
+    Uniform full epsilon tensors and in-plane tensor patterns are
+    supported. Patterned z coupling and anisotropic half-spaces are not.
 
     **Why permittivity rather than index.** Everything past the front door already works in
     permittivity -- the Fourier factorizations, the tensor builders and ``solve_conv`` all
@@ -176,9 +183,39 @@ class Material:
 
     epsilon: Any
     mu: Any = None
+    _wavelength_shape: Any = field(default=None, repr=False, compare=False, kw_only=True)
 
     def __post_init__(self):
         _register_pytree_if_jax_loaded()
+
+    def at(self, wavelength):
+        """Return this constant material unchanged at any wavelength.
+
+        For wavelength-dependent values, use :class:`wavebit.TabulatedMaterial`
+        or ``wavebit.materials.load(name)``.
+        """
+        return self
+
+    @property
+    def is_anisotropic(self):
+        """Whether epsilon or mu is supplied as three principal values or a 3x3 tensor.
+
+        This selects tensor arithmetic structurally, including an isotropic diagonal
+        tensor. Scalars retain the ordinary scalar material path.
+        """
+        from .anisotropy import material_is_tensor
+        return material_is_tensor(self)
+
+    def rotated(self, angle, axis='z'):
+        """Return a material actively rotated about x, y or z by radians.
+
+        Tensor components are in Wavebit's xyz axes. Both epsilon and mu rotate
+        as ``R @ tensor @ R.T``; scalars are unchanged. Array backend and material
+        and angle derivatives are retained. This rotates the material axes, not
+        the shape to which the material is assigned.
+        """
+        from .anisotropy import rotated_material
+        return rotated_material(self, angle, axis)
 
     @property
     def is_magnetic(self) -> bool:
@@ -233,11 +270,11 @@ class Material:
     # leaf, so a non-magnetic material flattens to the single number it is -- which is what
     # keeps `is_magnetic` readable on the way back out of a trace.
     def tree_flatten(self):
-        return (self.epsilon, self.mu), None
+        return (self.epsilon, self.mu), self._wavelength_shape
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
-        return cls(*children)
+        return cls(*children, _wavelength_shape=aux_data)
 
 
 def as_material(value, where='material') -> Material:
@@ -266,7 +303,14 @@ def as_material(value, where='material') -> Material:
     was built for.
     """
     if isinstance(value, Material):
+        if value._wavelength_shape is not None:
+            raise ValueError(f'{where}: a material evaluated at an array of wavelengths is a spectrum; '
+                             'evaluate at one wavelength or assign the material model')
         return value
+    from .materials import TabulatedMaterial
+    if isinstance(value, TabulatedMaterial):
+        raise TypeError(f'{where}: evaluate a TabulatedMaterial with .at(wavelength), '
+                        'or assign it directly to an RCWA material slot')
     if value is None:
         return Material(1.0)                    # vacuum, and mu unnamed -- see the docstring
     if isinstance(value, (str, bytes, list, tuple, dict, set)):
@@ -280,22 +324,34 @@ def as_material(value, where='material') -> Material:
     return Material(value)
 
 
-def eps_from_index(n):
-    """Relative permittivity of a non-magnetic medium with refractive index ``n``.
+def eps_from_index(n, *, mu=None):
+    """Convert isotropic refractive index to relative permittivity.
 
-    ``n**2``, and nothing else -- no dtype handling, no namespace, so it passes a NumPy value,
-    a JAX tracer or a Torch tensor straight through and keeps whatever gradient was attached.
+    Return ``n**2`` when ``mu`` is omitted (relative permeability one), or
+    ``n**2 / mu`` when it is supplied. Both quantities may be complex and must
+    describe the same wavelength. Scalars and elementwise array batches are
+    supported; this is not a conversion from an anisotropic index tensor.
+    NumPy/JAX/PyTorch values retain their backend and differentiation graph.
 
-    Public because the flip to permittivity leaves every index-shaped datasheet, every
-    ``n + 1j*k`` table and every existing script holding the other quantity. ``Material(
-    eps_from_index(3.5))`` is the migration, and it is deliberately more to type than ``3.5``
-    was: an index silently reread as a permittivity is a legal, energy-conserving, wrong
-    answer, so the conversion is worth seeing at the call site.
-
-    For a magnetic medium the index is ``sqrt(eps*mu)`` and this is not its inverse; that
-    case is ``Material(eps, mu)`` written directly.
+    Supplied permeability must be finite and nonzero. Invalid values raise
+    ``ValueError`` eagerly; traced JAX arrays produce NaN at invalid entries.
+    Assign the same permeability to the resulting material, for example
+    ``Material(eps_from_index(n, mu=mu), mu=mu)``.
     """
-    return n ** 2
+    if mu is None:
+        return n ** 2
+    message = 'index conversion requires finite, nonzero relative permeability mu'
+    if not hasattr(mu, 'dtype'):
+        if not _complex_isfinite(mu) or mu == 0:
+            raise ValueError(message)
+        return n ** 2 / mu
+    xp = array_namespace(mu)
+    valid = xp.isfinite(mu) & (mu != 0)
+    if _concrete(xp.all(valid)) is False:
+        raise ValueError(message)
+    # Avoid dividing by zero even in unselected traced branches.
+    safe_mu = xp.where(valid, mu, xp.ones_like(mu))
+    return xp.where(valid, n ** 2 / safe_mu, float('nan'))
 
 
 def index_from_eps(eps):
@@ -394,7 +450,7 @@ class Layer:
 class Stack:
     """An ordered list of :class:`Layer` plus the media that bound it.
 
-    Layer order is top-to-bottom, matching ``structure``'s first axis (the same order the
+    Layer order is bottom-to-top, matching ``structure``'s first axis (the same order the
     solver stacks them). ``top`` / ``bot`` are the bounding superstrate / substrate and
     ``period`` is the in-plane period, and ``lattice`` the basis when the cell is not
     axis-aligned -- ``period`` alone cannot describe one, since it reports the two edge lengths
@@ -504,9 +560,12 @@ class Stack:
         solve will succeed; it is a promise that these particular mistakes are not present.
         """
         from .engine import _refuse_shaped_half_space
+        from .materials import TabulatedMaterial
         problems = []
         for where, value in (('top', self.top), ('bot', self.bot)):
             try:
+                if isinstance(value, TabulatedMaterial):
+                    value = value.at(value.wavelengths[0])
                 _refuse_shaped_half_space(as_material(value, where), where)
             except (ValueError, TypeError) as exc:
                 problems.append(str(exc))
@@ -514,7 +573,9 @@ class Stack:
             eps, mu = layer.structure, layer.mu
             if mu is None or not hasattr(eps, 'shape') or not hasattr(mu, 'shape'):
                 continue
-            if tuple(eps.shape) != tuple(mu.shape):
+            def grid_shape(a):
+                return tuple(a.shape[:-2]) if a.ndim == 4 and a.shape[-2:] == (3, 3) else tuple(a.shape)
+            if grid_shape(eps) != grid_shape(mu):
                 problems.append(
                     f'layer {index}: mu is {tuple(mu.shape)} and structure is '
                     f'{tuple(eps.shape)}. They are two fields sampled on one raster, so they '
@@ -583,19 +644,34 @@ class Incidence:
     ``incidence_side`` is ``'top'`` or ``'bottom'`` — illumination is part of the incidence,
     not of the scene, which is why it lives here rather than on :class:`Stack`. ``theta`` /
     ``phi`` are measured in the incidence medium (``bot``'s normal for ``'bottom'``).
+    Real angles specify the phase direction with uniform incident intensity along
+    the surface, including in absorbing media. A nonzero imaginary angle instead
+    specifies the formal complex-angle wavevector ``n*sin(theta)``.
+
+    Alternatively, give real Cartesian ``kx`` and/or ``ky`` in inverse length
+    units (nm**-1 when wavelength is in nm). The omitted component is zero.
+    These replace ``theta``/``phi`` and stay fixed during a wavelength sweep.
+    They are the incident wavevector, before reciprocal-lattice order offsets.
+    At kx=ky=0 the polarization basis uses azimuth zero.
 
     ``polarization`` is the complex amplitude pair ``(a_s, a_p)`` — the general (elliptical)
     polarization ``psi`` cannot spell. It supersedes ``psi``: giving both is an error, and
     ``psi = v`` is exactly ``polarization = (sin(v), cos(v))``. See ``docs/conventions.md``.
     """
     wavelength: Any = 1.0
-    theta: Any = 0.0
+    theta: Any = None
     phi: Optional[Any] = None
     tetm: Optional[Any] = None
     psi: Optional[Any] = None
     chi: Optional[Any] = None
     incidence_side: str = 'top'
     polarization: Optional[Any] = None
+    kx: Optional[Any] = None
+    ky: Optional[Any] = None
+
+    def __post_init__(self):
+        if self.theta is None and self.kx is None and self.ky is None:
+            self.theta = 0.0
 
     def check(self):
         """Every reason this illumination cannot be solved, as messages, or an empty tuple.
@@ -616,6 +692,13 @@ class Incidence:
         knows only the illumination cannot reach them.
         """
         problems = []
+        if (self.kx is not None or self.ky is not None) and (
+                self.theta is not None or self.phi is not None):
+            problems.append(_DIRECTION_CLASH)
+        for name in ('kx', 'ky'):
+            message = transverse_component_problem(getattr(self, name), name)
+            if message is not None:
+                problems.append(message)
         message = wavelength_problem(self.wavelength)
         if message is not None:
             problems.append(message)
@@ -639,4 +722,4 @@ class Incidence:
         return dict(wavelength=self.wavelength, theta=self.theta, phi=self.phi,
                     tetm=self.tetm, psi=self.psi, chi=self.chi,
                     incidence_side=self.incidence_side,
-                    polarization=self.polarization)
+                    polarization=self.polarization, kx=self.kx, ky=self.ky)

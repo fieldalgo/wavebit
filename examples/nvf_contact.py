@@ -10,7 +10,7 @@ def solver(gap, epsilon):
     return wavebit.rcwa(
         backend=1, period=(700., 700.), wavelength=900., top=1., bot=2.25,
         theta=.2, phi=0., psi=0., thickness=(300.,), truncation_order=(3, 3),
-        factorization='nvf', projector='circular', normal_grid=128,
+        factorization='nvf', nvf_projector='circular', shape_nvf_grid_size=128,
         structure=[dict(background=1., shapes=[
             dict(type='rectangle', cx=-150.-gap/2, lx=300., ly=300., material=4.),
             dict(type='rectangle', cx=150.+gap/2, lx=300., ly=300., material=epsilon)])])
@@ -25,7 +25,7 @@ def main():
         return jnp.sum(solver(gap, epsilon).solve(geometry=geometry).T).real
 
     evaluate = jax.jit(jax.value_and_grad(transmission, argnums=(0, 1)))
-    print('factorization=nvf, projector=circular')
+    print('factorization=nvf, nvf_projector=circular')
     print('gap             T             dT/dgap        dT/d epsilon')
     for gap in (1e-2, 1e-4, 1e-6, 1e-8, 0.):
         value, (dg, de) = evaluate(jnp.asarray(gap), jnp.asarray(9.))

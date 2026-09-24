@@ -1,4 +1,4 @@
-"""The ``normal_method`` option — plumbing, and the properties each construction must keep.
+"""The ``raster_normal_method`` option — plumbing, and the properties each construction must keep.
 
 Three constructions were added next to the original ``'distance'`` field because its
 directions quantize: central differences of a distance-to-a-digital-set land on small
@@ -13,7 +13,7 @@ What this file pins, and why each pin is the one that matters:
   periodic; that is a change to what the default selects, not to the selection) — the
   option must be opt-in, not a quiet renumbering of every NVF user's results.
 - **An explicit request nothing would read is refused, not ignored** — the shape paths
-  build normals from geometry and Li builds none, so a ``normal_method`` there would be the
+  build normals from geometry and Li builds none, so a ``raster_normal_method`` there would be the
   ``enhanced_dfs`` pattern again: a knob without a reader.
 - **The frozen-geometry record carries the method** — same raster, same mask, different
   construction is a *different field*, and a replay across methods must be refused by the
@@ -45,7 +45,7 @@ from wavebit._core.factorization import (StaleGeometryError, _interface_mask,
 #: skip its cases, not fail them (the package itself declares contourpy optional).
 needs_contourpy = pytest.mark.skipif(
     find_spec('contourpy') is None,
-    reason="normal_method='contour' needs the optional contourpy dependency")
+    reason="raster_normal_method='contour' needs the optional contourpy dependency")
 
 def _param(name):
     return pytest.param(name, marks=needs_contourpy) if name == 'contour' else name
@@ -95,15 +95,15 @@ def test_explicit_distance_is_bit_identical_to_the_untouched_default():
     structure = circle_raster(32)[None]
     base = wavebit.rcwa(structure=structure, truncation_order=[4, 4], factorization='nvf', **SOLVE_KW).solve()
     named = wavebit.rcwa(structure=structure, truncation_order=[4, 4], factorization='nvf',
-                         normal_method='distance', **SOLVE_KW).solve()
+                         raster_normal_method='distance', **SOLVE_KW).solve()
     assert np.array_equal(np.asarray(base.R), np.asarray(named.R))
     assert np.array_equal(np.asarray(base.T), np.asarray(named.T))
 
 
 def test_an_invalid_method_is_refused_by_name():
-    with pytest.raises(ValueError, match='normal_method'):
+    with pytest.raises(ValueError, match='raster_normal_method'):
         wavebit.rcwa(structure=circle_raster(16)[None], truncation_order=[2, 2],
-                     factorization='nvf', normal_method='sobel', **SOLVE_KW)
+                     factorization='nvf', raster_normal_method='sobel', **SOLVE_KW)
 
 
 @pytest.mark.parametrize('cfg', [
@@ -112,7 +112,7 @@ def test_an_invalid_method_is_refused_by_name():
 ])
 def test_a_method_nothing_reads_is_refused_not_ignored(cfg):
     s = wavebit.rcwa(structure=circle_raster(16)[None], truncation_order=[2, 2],
-                     normal_method='contour', **SOLVE_KW, **cfg)
+                     raster_normal_method='contour', **SOLVE_KW, **cfg)
     with pytest.raises(NotImplementedError, match='no reader'):
         s.solve()
 
@@ -121,7 +121,7 @@ def test_a_method_on_the_smooth_shape_path_is_refused():
     """The shape paths build their normal fields from the geometry itself."""
     smooth = [{'background': 1.0, 'shapes': [{'type': 'circle', 'cx': 0.0, 'cy': 0.0,
                                               'lx': 0.6, 'material': 5.76}]}]
-    s = wavebit.rcwa(structure=smooth, truncation_order=[2, 2], normal_method='contour', **SOLVE_KW)
+    s = wavebit.rcwa(structure=smooth, truncation_order=[2, 2], raster_normal_method='contour', **SOLVE_KW)
     with pytest.raises(NotImplementedError, match='no reader'):
         s.solve()
 
@@ -131,11 +131,11 @@ def test_freeze_replay_is_bit_identical_and_method_mismatch_is_stale(method):
     """The record carries the construction; replaying it under another is refused."""
     structure = circle_raster(32)[None]
     s = wavebit.rcwa(structure=structure, truncation_order=[3, 3], factorization='nvf',
-                     normal_method=method, **SOLVE_KW)
+                     raster_normal_method=method, **SOLVE_KW)
     geo = s.freeze_geometry()
     replayed = s.solve(geometry=geo)
     rebuilt = wavebit.rcwa(structure=structure, truncation_order=[3, 3], factorization='nvf',
-                           normal_method=method, **SOLVE_KW).solve()
+                           raster_normal_method=method, **SOLVE_KW).solve()
     assert np.array_equal(np.asarray(replayed.R), np.asarray(rebuilt.R))
 
     other = wavebit.rcwa(structure=structure, truncation_order=[3, 3], factorization='nvf', **SOLVE_KW)
@@ -146,7 +146,7 @@ def test_freeze_replay_is_bit_identical_and_method_mismatch_is_stale(method):
 @pytest.mark.parametrize('method', NEW_METHODS)
 def test_energy_is_conserved_by_every_construction(method):
     res = wavebit.rcwa(structure=circle_raster(48)[None], truncation_order=[5, 5], factorization='nvf',
-                       normal_method=method, **SOLVE_KW).solve()
+                       raster_normal_method=method, **SOLVE_KW).solve()
     total = float(np.sum(res.R) + np.sum(res.T))
     assert abs(total - 1.0) < 1e-10
 
@@ -221,8 +221,8 @@ def test_mirror_asymmetry_of_the_solve_is_bounded(method, limit):
     eps = circle_raster(48, cx=0.4, cy=0.55)
     cfg = dict(backend=0, period=[1., 1.], wavelength=.55, thickness=[.3], theta=0.,
                phi=0., psi=0., top=1., bot=1., truncation_order=[5, 5], factorization='nvf')
-    r1 = wavebit.rcwa(structure=eps[None], normal_method=method, **cfg).solve()
-    r2 = wavebit.rcwa(structure=eps[:, ::-1].copy()[None], normal_method=method,
+    r1 = wavebit.rcwa(structure=eps[None], raster_normal_method=method, **cfg).solve()
+    r2 = wavebit.rcwa(structure=eps[:, ::-1].copy()[None], raster_normal_method=method,
                       **cfg).solve()
     gap = float(np.abs(np.asarray(r1.R) - np.asarray(r2.R)[:, ::-1]).max())
     assert gap < limit
@@ -510,7 +510,7 @@ def test_the_floor_lift_keeps_the_base_grids_smoothing_scale(method, base_n):
 @pytest.mark.parametrize('method', NEW_METHODS)
 def test_the_lifted_solve_runs_and_conserves_energy(method):
     res = wavebit.rcwa(structure=circle_raster(16)[None], truncation_order=[10, 10],
-                       factorization='nvf', normal_method=method, **SOLVE_KW).solve()
+                       factorization='nvf', raster_normal_method=method, **SOLVE_KW).solve()
     assert abs(float(np.sum(res.R) + np.sum(res.T)) - 1.0) < 1e-10
 
 
@@ -534,7 +534,7 @@ def test_a_tracer_is_told_to_freeze_instead_of_failing_inside_scipy():
 
     def loss(u):
         res = wavebit.rcwa(backend=1, structure=u, truncation_order=[2, 2], factorization='nvf',
-                           normal_method='contour', **{k: v for k, v in SOLVE_KW.items()
+                           raster_normal_method='contour', **{k: v for k, v in SOLVE_KW.items()
                                                        if k != 'backend'}).solve()
         return jax.numpy.sum(res.R)
 
@@ -556,10 +556,10 @@ def test_merging_two_non_adjacent_phases_is_stale_not_silently_replayed():
     assert np.array_equal(_interface_mask(eps), _interface_mask(merged))
 
     s = wavebit.rcwa(structure=eps[None], truncation_order=[3, 3], factorization='nvf',
-                     normal_method='spectral', **SOLVE_KW)
+                     raster_normal_method='spectral', **SOLVE_KW)
     geo = s.freeze_geometry()
     other = wavebit.rcwa(structure=merged[None], truncation_order=[3, 3], factorization='nvf',
-                         normal_method='spectral', **SOLVE_KW)
+                         raster_normal_method='spectral', **SOLVE_KW)
     with pytest.raises(StaleGeometryError, match='distinct phases'):
         other.solve(geometry=geo)
 
@@ -576,12 +576,12 @@ def test_the_jobspec_surface_can_spell_the_option():
     an unset field must stay unset (omitted from kwargs) so the spec never asks for
     anything the caller did not."""
     from wavebit._core.spec import Numerics
-    n = Numerics.from_dict({'normal_method': 'contour', 'factorization': 'nvf'})
-    assert n.normal_method == NormalMethod.CONTOUR
-    assert n.to_dict()['normal_method'] == 'contour'
-    assert Numerics.from_dict(n.to_dict()).normal_method == NormalMethod.CONTOUR
-    assert n.as_kwargs()['normal_method'] == 'contour'
-    assert 'normal_method' not in Numerics.from_dict({}).as_kwargs()
+    n = Numerics.from_dict({'raster_normal_method': 'contour', 'factorization': 'nvf'})
+    assert n.raster_normal_method == NormalMethod.CONTOUR
+    assert n.to_dict()['raster_normal_method'] == 'contour'
+    assert Numerics.from_dict(n.to_dict()).raster_normal_method == NormalMethod.CONTOUR
+    assert n.as_kwargs()['raster_normal_method'] == 'contour'
+    assert 'raster_normal_method' not in Numerics.from_dict({}).as_kwargs()
 
 
 def test_spectral_bulk_copy_is_periodic_at_the_wrap():

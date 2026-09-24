@@ -36,13 +36,13 @@ def _run_and_inputs(structure, thickness, n_top, n_bot, wl, period, truncation_o
     # spelled in the quantity each side actually works in.
     solver = wavebit.rcwa(backend=0, top=n_top ** 2, bot=n_bot ** 2, theta=theta, phi=phi,
                           psi=psi, truncation_order=truncation_order, period=period, wavelength=wl,
-                          thickness=thickness, structure=structure)
+                          thickness=thickness[::-1], structure=structure[::-1])
     via_api = solver.solve()
     assert solver.grating_type == 2, solver.grating_type    # ensure 2D path
     epx, epy, epz, *_ = to_conv_mat_raster_sampled(
         solver.structure, solver.truncation_order[0], solver.truncation_order[1])
     kx, ky = solver.order_kxy()
-    inputs = dict(wavelength=wl, kx=kx, ky=ky, n_top=n_top, n_bot=n_bot,
+    inputs = dict(wavelength=wl, kx=kx, ky=ky, n_top=n_bot, n_bot=n_top, incidence_side=solver._kernel_incidence_side,
                   theta=solver.theta, phi=solver.phi,
                   incidence=solver._incidence_pair(), thickness=solver.thickness,
                   epx_conv_all=epx, epy_conv_all=epy, epz_conv_i_all=epz)
@@ -84,7 +84,7 @@ def test_2d_wiring_matches_direct_core_call(case):
     _, structure, thickness, n_top, n_bot, wl, period, truncation_order, theta, phi, psi = case
     (lri, lti), inp = _run_and_inputs(
         structure, thickness, n_top, n_bot, wl, period, truncation_order, theta, phi, psi)
-    cri, cti = solve_2d(**inp)
+    cri, cti, _ = solve_2d(**inp)
     _assert_same_answer((lri, lti), (cri, cti))
 
 
@@ -103,14 +103,14 @@ def test_2d_cross_backend(case, backend):
     _, structure, thickness, n_top, n_bot, wl, period, truncation_order, theta, phi, psi = case
     (_, _), inp = _run_and_inputs(
         structure, thickness, n_top, n_bot, wl, period, truncation_order, theta, phi, psi)
-    ri0, ti0 = solve_2d(**inp)                               # numpy reference
+    ri0, ti0, _ = solve_2d(**inp)                               # numpy reference
 
     bk = dict(inp)
     for k in ('kx', 'ky', 'epx_conv_all', 'epy_conv_all', 'epz_conv_i_all'):
         bk[k] = _to(backend, inp[k])
     bk['theta'] = _to(backend, complex(inp['theta']))
     bk['incidence'] = tuple(_to(backend, complex(v)) for v in inp['incidence'])
-    ri, ti = solve_2d(**bk)
+    ri, ti, _ = solve_2d(**bk)
 
     assert np.allclose(np.array(ri0), np.asarray(ri), atol=1e-10, rtol=0)
     assert np.allclose(np.array(ti0), np.asarray(ti), atol=1e-10, rtol=0)
@@ -130,7 +130,7 @@ def test_2d_gradient_jax_torch_fd():
     conv_keys = ('kx', 'ky', 'epx_conv_all', 'epy_conv_all', 'epz_conv_i_all')
 
     def out(d):
-        _, ti = solve_2d(**d)
+        _, ti, _ = solve_2d(**d)
         return ti
 
     def f_np(s):
@@ -173,7 +173,7 @@ def test_empty_2d_stack_matches_single_interface_fresnel(polarization):
     kx = np.sin(theta)*np.cos(phi)+2*np.arange(-1, 2)
     ky = np.sin(theta)*np.sin(phi)+2*np.arange(-2, 3)
     empty = np.empty((0, 15, 15), complex)
-    r, t = solve_2d(900., kx, ky, 1., 1.5, theta,
+    r, t, _ = solve_2d(900., kx, ky, 1., 1.5, theta,
                     (0., 1.) if polarization == 'p' else (1., 0.), [],
                     empty, empty, empty, phi=phi)
     kz = np.sqrt(np.array([1., 2.25])-np.sin(theta)**2)
@@ -275,7 +275,7 @@ def test_python_scalar_incidence_keeps_double_precision_on_torch():
     _, structure, thickness, n_top, n_bot, wl, period, truncation_order, theta, phi, psi = CASES[1]
     (_, _), inp = _run_and_inputs(
         structure, thickness, n_top, n_bot, wl, period, truncation_order, theta, phi, psi)
-    ri0, ti0 = solve_2d(**inp)                                   # numpy, double
+    ri0, ti0, _ = solve_2d(**inp)                                   # numpy, double
 
     default_before = torch.get_default_dtype()
     torch.set_default_dtype(torch.float32)                       # the hostile setting
@@ -285,7 +285,7 @@ def test_python_scalar_incidence_keeps_double_precision_on_torch():
             bk[k] = torch.as_tensor(np.asarray(inp[k]))
         bk['theta'] = complex(inp['theta'])                      # raw Python scalars
         bk['incidence'] = tuple(complex(v) for v in inp['incidence'])
-        ri, ti = solve_2d(**bk)
+        ri, ti, _ = solve_2d(**bk)
     finally:
         torch.set_default_dtype(default_before)
 

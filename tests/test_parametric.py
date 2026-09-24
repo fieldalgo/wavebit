@@ -347,14 +347,14 @@ def test_parametric_shape_parameters_are_absolute_lengths():
 # ----------------------------------------------------------------------
 def test_energy_conservation_lossless():
     cfg = dict(top=1.0, bot=1.0, theta=np.deg2rad(5), phi=np.deg2rad(20),
-               period=(1.0, 1.2), wavelength=1.5, thickness=(0.3, 0.2), psi=0.35 * np.pi)
+               period=(1.0, 1.2), wavelength=1.5, thickness=(0.2, 0.3), psi=0.35 * np.pi)
     structure = [
-        dict(background=1.0, shapes=[dict(type='ellipse', cx=0.0, cy=0.0, lx=0.5, ly=0.3,
-                                      angle=np.deg2rad(40), material=5.76)]),
         dict(background=2.25, shapes=[dict(type='rectangle', cx=-0.1, cy=-0.1, lx=0.4, ly=0.5,
                                        angle=np.deg2rad(25), material=1.0),
                                   dict(type='circle', cx=0.3, cy=0.3, lx=0.25,
                                        material=9.0)]),
+        dict(background=1.0, shapes=[dict(type='ellipse', cx=0.0, cy=0.0, lx=0.5, ly=0.3,
+                                      angle=np.deg2rad(40), material=5.76)]),
     ]
     for truncation_order in (5, 8):
         res = wavebit.rcwa(backend=0, structure=structure, truncation_order=(truncation_order, truncation_order), **cfg).solve()
@@ -468,13 +468,13 @@ def test_parametric_beats_staircase_tilted():
 
 
 CIRCLE_P, CIRCLE_EPS = 0.77, 12.25               # eps 12.25 is the old n = 3.5
-#: `normal_grid` is stated, not defaulted. The golden below is an anchor on how a circle is
+#: `shape_nvf_grid_size` is stated, not defaulted. The golden below is an anchor on how a circle is
 #: *spelled*, and it was silently anchoring the default grid too -- when that moved from 1024
 #: to 256 on 2026-08-27 the number moved 2.5e-7 and the 1e-9 tolerance caught it. Correctly:
 #: the grid is a real input. Stating it puts the tolerance back on the thing the test is about.
 CIRCLE_CFG = dict(period=[CIRCLE_P, CIRCLE_P], thickness=[0.25], theta=0.35, phi=0.4, psi=0.0,
                   wavelength=0.777, top=1.0, bot=2.25, truncation_order=[6, 6],
-                  normal_grid=256)
+                  shape_nvf_grid_size=256)
 
 
 def test_a_circle_is_written_with_one_length():
@@ -496,13 +496,13 @@ def test_a_circle_is_written_with_one_length():
                  material=CIRCLE_EPS)
     got = wavebit.rcwa(backend=0, structure=[dict(background=1.0, shapes=[shape])],
                          **CIRCLE_CFG).solve()
-    # Only a regression anchor, and it rides on ``normal_grid`` — it read
+    # Only a regression anchor, and it rides on ``shape_nvf_grid_size`` — it read
     # 0.161262158771 while that default was 256, and moved 1.1e-4 when the default rose to 1024.
     # 0.161153064902 until 2026-08-16, when the sampled transform gained the half-pixel
     # cell-centre phase it had been missing (`_half_pixel_phase`). The analytic normal field is
     # sampled at `(i + 0.5)/N` by `sample_grid`, so its coefficients were half a pixel off the
     # permittivity they multiply; correcting it moves this anchor by 3.6e-5, which is the size an
-    # O(1/N) term has at this `normal_grid`. Self-captured either way -- it says the number has
+    # O(1/N) term has at this `shape_nvf_grid_size`. Self-captured either way -- it says the number has
     # not drifted, not that it is right.
     assert float(np.sum(np.asarray(got.R))) == pytest.approx(0.161117056324, abs=1e-9)
 
@@ -709,7 +709,7 @@ def _solver_mean_eps(shapes=PAINT_RODS):
     from wavebit._core.parametric import to_conv_mat_parametric_layers
     layer = dict(background=1.0, shapes=shapes)
     mats = to_conv_mat_parametric_layers([layer], 6, 6, as_lattice(period=PAINT_PERIOD),
-                                     normal_grid=256,
+                                     shape_nvf_grid_size=256,
                                      complex_dtype=np.complex128, xp=xnp)
     return float(np.real(np.linalg.inv(np.asarray(mats.epz_i[0]))[0, 0]))
 
@@ -907,20 +907,20 @@ def test_the_check_reports_the_exact_geometry_it_should():
     from wavebit._core.overlap import primitive, signed_gap
 
     circle = primitive('circle', 0.0, 0.0, 20.0, 20.0, 0.0)
-    assert signed_gap(circle, primitive('circle', 24.0, 0.0, 20.0, 20.0, 0.0)) \
+    assert signed_gap(circle, primitive('circle', 24.0, 0.0, 20.0, 20.0, 0.0))\
         == pytest.approx(4.0, abs=1e-12)                       # centres 24 apart, radii 10
-    assert signed_gap(circle, primitive('rectangle', 30.0, 0.0, 20.0, 20.0, 0.0)) \
+    assert signed_gap(circle, primitive('rectangle', 30.0, 0.0, 20.0, 20.0, 0.0))\
         == pytest.approx(10.0, abs=1e-12)                      # face at 20, circle ends at 10
     assert signed_gap(primitive('rectangle', 0.0, 0.0, 20.0, 20.0, 0.0),
-                      primitive('rectangle', 16.0, 0.0, 20.0, 20.0, 0.0)) \
+                      primitive('rectangle', 16.0, 0.0, 20.0, 20.0, 0.0))\
         == pytest.approx(-4.0, abs=1e-12)                       # penetration depth, not distance
 
     # The searched path (a genuine ellipse) has to land on the same answers.
     assert signed_gap(primitive('ellipse', 0.0, 0.0, 20.0, 10.0, 0.0),
-                      primitive('ellipse', 45.0, 0.0, 20.0, 10.0, 0.0)) \
+                      primitive('ellipse', 45.0, 0.0, 20.0, 10.0, 0.0))\
         == pytest.approx(25.0, rel=1e-9)                        # semi-axes 10 and 10 along x
     assert signed_gap(primitive('ellipse', 0.0, 0.0, 20.0, 10.0, np.pi / 2),
-                      primitive('circle', 0.0, 30.0, 20.0, 20.0, 0.0)) \
+                      primitive('circle', 0.0, 30.0, 20.0, 20.0, 0.0))\
         == pytest.approx(10.0, rel=1e-9)                        # rotated: semi-axis 10 along y
 
 
@@ -1012,7 +1012,7 @@ def test_only_numpy_takes_the_tiled_path():
 
 
 PROJ_KW = dict(period=(1.0, 1.0), thickness=(0.32,), wavelength=0.94, top=1.0, bot=2.1025,
-               theta=0.2, phi=0.3, psi=0.0, truncation_order=(4, 4), normal_grid=512)
+               theta=0.2, phi=0.3, psi=0.0, truncation_order=(4, 4), shape_nvf_grid_size=512)
 
 #: 3.4**2 and 2.7**2, spelled to the bit rather than tidied. These reach a cache key, and a
 #: rounded literal is a different key from the one the arithmetic produces.
@@ -1036,7 +1036,7 @@ def test_the_projector_cache_never_changes_an_answer(build):
     """A hit and a miss have to return the same bits, or the cache is a second implementation.
 
     ``normal_projector_coeffs`` is the expensive half of the analytic NVF build -- 83% of a
-    five-point sweep at ``normal_grid = 1024, truncation_order = 4`` for one shape, 93% for six -- and none of
+    five-point sweep at ``shape_nvf_grid_size = 1024, truncation_order = 4`` for one shape, 93% for six -- and none of
     it reads a material value, so a material sweep rebuilds a field it already had. What makes
     the reuse safe rather than merely fast is that the *build* is position-free for a single
     shape: it is done at the centre of the cell and carried to ``(cx, cy)`` by a phase computed
@@ -1149,8 +1149,8 @@ def test_the_cache_key_carries_everything_the_build_depends_on():
     import wavebit
     from wavebit._core import parametric as _an
 
-    def total(truncation_order, normal_grid):
-        kw = dict(PROJ_KW, truncation_order=(truncation_order, truncation_order), normal_grid=normal_grid)
+    def total(truncation_order, shape_nvf_grid_size):
+        kw = dict(PROJ_KW, truncation_order=(truncation_order, truncation_order), shape_nvf_grid_size=shape_nvf_grid_size)
         return np.asarray(wavebit.rcwa(backend=0, structure=_one(0.40), **kw).solve().T)
 
     _an._PROJECTOR_CACHE.clear()
@@ -1611,7 +1611,7 @@ def test_an_alias_spelling_gets_the_same_normal_field(first, second):
 
     cfg = dict(backend=0, period=[300.0, 300.0], thickness=[205.0], truncation_order=(6, 6),
                top=1.0, bot=1.0, wavelength=900.0, psi=np.pi / 2, theta=0.0, phi=0.0,
-               normal_grid=256)
+               shape_nvf_grid_size=256)
     totals = [float(np.sum(np.asarray(wavebit.rcwa(
         structure=[dict(background=1.0, shapes=[dict(s, angle=0.0)])], **cfg).solve().T)))
         for s in made]
@@ -1656,7 +1656,7 @@ def test_the_projector_cache_keys_on_what_the_field_depends_on(name, make, entri
 
     cfg = dict(backend=0, period=[300.0, 300.0], thickness=[205.0], truncation_order=(4, 4),
                top=1.0, bot=1.0, wavelength=900.0, psi=np.pi / 2, theta=0.0, phi=0.0,
-               normal_grid=256)
+               shape_nvf_grid_size=256)
     _an._PROJECTOR_CACHE.clear()
     totals = [float(np.sum(np.asarray(wavebit.rcwa(
         structure=[dict(background=1.0, shapes=[make(k)])], **cfg).solve().T)))
@@ -1701,7 +1701,7 @@ def test_longer_than_the_period_is_not_the_same_as_running_into_its_own_image():
 
     P = 1.0
     cfg = dict(backend=0, period=[P, P], thickness=[0.3], truncation_order=(6, 6), top=1.0,
-               bot=1.0, wavelength=0.94, psi=np.pi / 2, theta=0.0, phi=0.0, normal_grid=256)
+               bot=1.0, wavelength=0.94, psi=np.pi / 2, theta=0.0, phi=0.0, shape_nvf_grid_size=256)
     rod = lambda lx, ang: [dict(background=1.0, shapes=[
         dict(type='rectangle', cx=0.0, cy=0.0, lx=lx, ly=0.30, angle=ang, material=4.0)])]
 

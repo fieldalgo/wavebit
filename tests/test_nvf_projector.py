@@ -1,11 +1,11 @@
-"""`projector='circular'` — the direction-free limit of the NVF projector.
+"""`nvf_projector='circular'` — the direction-free limit of the NVF projector.
 
 The NVF projector has always been `P = n n^T`, built from the normal field's *direction*
 alone. On the **medial axis** — the ridge where every boundary point is equidistant — there is
 no direction: the tie is exact, both answers are arbitrary, and which one is reported is an
 accident of where the samples fell. No better direction fixes that, because none exists.
 
-`projector='circular'` stops reading one. It builds `P = J J^H` from a Jones vector that
+`nvf_projector='circular'` stops reading one. It builds `P = J J^H` from a Jones vector that
 carries the field's magnitude as well (Antos 2009; Liu & Fan 2012, Eq. (52)), so that
 
     |t| = 1   ->  phi = 0     ->  P = n n^T, exactly
@@ -14,7 +14,7 @@ carries the field's magnitude as well (Antos 2009; Liu & Fan 2012, Eq. (52)), so
 and the second row does not mention the direction at all. It is reached as a **limit**: no
 threshold, no "is this pixel on the medial axis?" test, nothing to tune.
 
-**A separate axis, not a fifth `normal_method`.** `normal_method` chooses how the field is
+**A separate axis, not a fifth `raster_normal_method`.** `raster_normal_method` chooses how the field is
 *built*; this chooses what is done *with* it. They compose, so a fifth value would have made
 one list of eight where there are two lists of four and two.
 
@@ -141,7 +141,7 @@ def test_a_pixel_with_no_direction_still_gets_a_projector():
 def test_the_magnitude_is_the_same_field_for_every_construction(method):
     """`|grad d|` is a property of the *interface set*, not of a construction.
 
-    The four constructions disagree about the direction — that is what `normal_method` is —
+    The four constructions disagree about the direction — that is what `raster_normal_method` is —
     and agree about where the medial axis is, because all four are looking at the same
     interfaces. So the magnitude comes from a distance transform run beside the construction
     rather than out of it; a unit field has no magnitude of its own to read.
@@ -212,7 +212,7 @@ def test_a_1d_grating_reached_through_the_2d_path_costs_accuracy():
     linear = float(np.sum(np.asarray(
         wavebit.rcwa(**kw, factorization='nvf').solve().T)))
     circular = float(np.sum(np.asarray(
-        wavebit.rcwa(**kw, factorization='nvf', projector='circular').solve().T)))
+        wavebit.rcwa(**kw, factorization='nvf', nvf_projector='circular').solve().T)))
 
     assert abs(linear - exact) < 1e-3, (
         f'the linear projector should be near Li on a 1D grating: {linear:.10f} against '
@@ -230,8 +230,8 @@ def test_a_uniform_layer_stays_exactly_linear():
     maximum. It answers 1 everywhere instead, which keeps this layer on `n n^T`.
     """
     flat = np.full((16, 16), 4.0)
-    lin = to_conv_mat_raster_nvf(flat[None], 3, 3, projector='linear')
-    cir = to_conv_mat_raster_nvf(flat[None], 3, 3, projector='circular')
+    lin = to_conv_mat_raster_nvf(flat[None], 3, 3, nvf_projector='linear')
+    cir = to_conv_mat_raster_nvf(flat[None], 3, 3, nvf_projector='circular')
     for a, b in zip(lin, cir):
         assert np.array_equal(np.asarray(a), np.asarray(b))
 
@@ -246,9 +246,9 @@ def test_the_default_is_bit_identical_to_naming_it(method):
     option that moved it by a last bit would invalidate all of it silently.
     """
     pytest.importorskip('contourpy') if method == 'contour' else None
-    unset = to_conv_mat_raster_nvf(ANNULUS[None], 4, 4, normal_method=method)
-    named = to_conv_mat_raster_nvf(ANNULUS[None], 4, 4, normal_method=method,
-                                   projector='linear')
+    unset = to_conv_mat_raster_nvf(ANNULUS[None], 4, 4, raster_normal_method=method)
+    named = to_conv_mat_raster_nvf(ANNULUS[None], 4, 4, raster_normal_method=method,
+                                   nvf_projector='linear')
     for a, b in zip(unset, named):
         assert np.array_equal(np.asarray(a), np.asarray(b))
 
@@ -280,7 +280,7 @@ def test_the_circular_path_makes_the_two_off_diagonal_slots_differ():
     between the field and the assembly — and every real-valued check in the suite would still
     pass.
     """
-    conv = to_conv_mat_raster_nvf(ANNULUS[None], 4, 4, projector='circular')
+    conv = to_conv_mat_raster_nvf(ANNULUS[None], 4, 4, nvf_projector='circular')
     xy, yx = np.asarray(conv.epxy), np.asarray(conv.epyx)
     assert np.abs(xy - yx).max() > 1e-3, 'the two off-diagonal slots did not actually differ'
     # And they differ the way a Hermitian projector says they must: `P_yx = conj(P_xy)`
@@ -321,7 +321,7 @@ def test_a_circular_solve_conserves_energy(scene, name):
     stays Hermitian under an arbitrary projector, so a *wrong* one conserves energy just as
     exactly. This is a guard against a broken build, not evidence the projector is right.
     """
-    res = wavebit.rcwa(structure=scene[None], **SOLVE_KW, projector='circular').solve()
+    res = wavebit.rcwa(structure=scene[None], **SOLVE_KW, nvf_projector='circular').solve()
     total = float(np.sum(np.asarray(res.R)) + np.sum(np.asarray(res.T)))
     assert abs(total - 1.0) < 1e-11, f'{name}: R + T = {total:.12f}'
 
@@ -369,9 +369,9 @@ def test_both_projectors_converge_to_the_same_physics():
             structure=structure, truncation_order=[to, to], **kw, **over).solve().T)))
 
     ref = total(shapes, 12)
-    nvf = dict(factorization='nvf', normal_method='contour')
+    nvf = dict(factorization='nvf', raster_normal_method='contour')
     linear = abs(total(raster, 10, **nvf) - ref)
-    circular = abs(total(raster, 10, **nvf, projector='circular') - ref)
+    circular = abs(total(raster, 10, **nvf, nvf_projector='circular') - ref)
     assert linear < 5e-3, f'the linear projector missed its own reference by {linear:.2e}'
     assert circular < 1e-2, (
         f'the circular projector is {circular:.2e} from the analytic reference — far enough '
@@ -397,7 +397,7 @@ def test_the_basis_is_chiral_and_that_is_where_the_cost_is():
     annulus*   7.40e-03    8.25e-03    7.46e-03    8.04e-03
     =========  ==========  ==========  ==========  ==========
 
-    (starred rows are `projector='circular'`.) `'distance'` and `'smooth'` mirror **exactly**
+    (starred rows are `nvf_projector='circular'`.) `'distance'` and `'smooth'` mirror **exactly**
     under the linear projector — `test_nvf_normal_methods.test_mirror_asymmetry_of_the_solve_is_bounded`
     pins them at 1e-12 — and the circular projector costs them that outright, by four to
     twelve orders.
@@ -418,7 +418,7 @@ def test_the_basis_is_chiral_and_that_is_where_the_cost_is():
     eps = np.where((rr <= 0.3) & (rr > 0.14), 5.76, 1.0)
     cfg = dict(backend=0, period=[1., 1.], wavelength=.55, thickness=[.3], theta=0.,
                phi=0., psi=0., top=1., bot=1., truncation_order=[5, 5],
-               factorization='nvf', normal_method='distance')
+               factorization='nvf', raster_normal_method='distance')
 
     def mirror_gap(**over):
         a = wavebit.rcwa(structure=eps[None], **cfg, **over).solve()
@@ -426,7 +426,7 @@ def test_the_basis_is_chiral_and_that_is_where_the_cost_is():
         return float(np.abs(np.asarray(a.R) - np.asarray(b.R)[:, ::-1]).max())
 
     assert mirror_gap() < 1e-12, "'distance' must mirror exactly under the linear projector"
-    circular = mirror_gap(projector='circular')
+    circular = mirror_gap(nvf_projector='circular')
     assert circular > 1e-4, (
         f'the circular projector mirrored to {circular:.2e}, where the chirality of the Jones '
         f'basis should show. If this has genuinely become symmetric the construction has '
@@ -439,11 +439,11 @@ def test_the_basis_is_chiral_and_that_is_where_the_cost_is():
         p_xx, p_xy, p_yx, p_yy = original(n_x, n_y, magnitude)
         return p_xx, np.conj(p_xy), np.conj(p_yx), p_yy
 
-    left = wavebit.rcwa(structure=eps[None], **cfg, projector='circular').solve()
+    left = wavebit.rcwa(structure=eps[None], **cfg, nvf_projector='circular').solve()
     _fac.jones_projector_fields = conjugated
     try:
         right = wavebit.rcwa(structure=eps[:, ::-1].copy()[None], **cfg,
-                             projector='circular').solve()
+                             nvf_projector='circular').solve()
     finally:
         _fac.jones_projector_fields = original
     gap = float(np.abs(np.asarray(left.R) - np.asarray(right.R)[:, ::-1]).max())
@@ -463,31 +463,31 @@ def test_it_is_refused_where_nothing_would_read_it():
     """
     with pytest.raises(NotImplementedError, match="factorization='li' builds no normal field"):
         wavebit.rcwa(structure=DISC[None], **{**SOLVE_KW, 'factorization': 'li'},
-                     projector='circular').solve()
+                     nvf_projector='circular').solve()
 
 def test_an_unknown_value_names_the_ones_that_exist():
-    with pytest.raises(ValueError, match=r"projector='bogus'.*'linear', 'circular'"):
-        wavebit.rcwa(structure=DISC[None], **SOLVE_KW, projector='bogus')
+    with pytest.raises(ValueError, match=r"nvf_projector='bogus'.*'linear', 'circular'"):
+        wavebit.rcwa(structure=DISC[None], **SOLVE_KW, nvf_projector='bogus')
 
 
 def test_the_axis_is_not_a_normal_method_value():
     """The API decision, pinned so it cannot be undone by accident.
 
-    `'circular'` describes what is done *with* a field and `normal_method` describes how one
+    `'circular'` describes what is done *with* a field and `raster_normal_method` describes how one
     is *built*, so folding it in would make one keyword of eight values where the two are
-    genuinely independent — and every `normal_method` would then need a circular twin.
+    genuinely independent — and every `raster_normal_method` would then need a circular twin.
     """
     from wavebit import NormalMethod, Projector
     assert {m.value for m in NormalMethod}.isdisjoint({m.value for m in Projector})
-    with pytest.raises(ValueError, match='normal_method'):
-        wavebit.rcwa(structure=DISC[None], **SOLVE_KW, normal_method='circular')
+    with pytest.raises(ValueError, match='raster_normal_method'):
+        wavebit.rcwa(structure=DISC[None], **SOLVE_KW, raster_normal_method='circular')
 
 
 # ------------------------------------------------------------------ frozen geometry
 
 def test_a_frozen_field_carries_the_magnitude_it_was_frozen_for():
     """The record is the field, and under `'circular'` the field includes a magnitude."""
-    solver = wavebit.rcwa(structure=ANNULUS[None], **SOLVE_KW, projector='circular')
+    solver = wavebit.rcwa(structure=ANNULUS[None], **SOLVE_KW, nvf_projector='circular')
     record = solver.freeze_geometry()
     assert len(record.normal_field[0]) == 3, 'the frozen field carried no magnitude'
     replayed = float(np.sum(np.asarray(solver.solve(geometry=record).T)))
@@ -501,12 +501,12 @@ def test_a_linear_record_is_refused_under_the_circular_projector():
 
     The arity is the tell and it is exact: a two-entry record has no magnitude, full stop.
     Serving it under `'circular'` would answer with `n n^T` while the solver reported
-    `projector='circular'` — the unread knob again, one level down.
+    `nvf_projector='circular'` — the unread knob again, one level down.
     """
     solver = wavebit.rcwa(structure=ANNULUS[None], **SOLVE_KW)
     record = solver.freeze_geometry()
-    solver.projector = 'circular'
-    with pytest.raises(StaleGeometryError, match="frozen under projector='linear'"):
+    solver.nvf_projector = 'circular'
+    with pytest.raises(StaleGeometryError, match="frozen under nvf_projector='linear'"):
         solver.solve(geometry=record)
 
 
@@ -516,9 +516,9 @@ def test_a_circular_record_replays_under_the_linear_projector():
     Worth pinning rather than leaving to chance — the natural way to write the arity check is
     an equality, which would refuse this and force a re-freeze for nothing.
     """
-    solver = wavebit.rcwa(structure=ANNULUS[None], **SOLVE_KW, projector='circular')
+    solver = wavebit.rcwa(structure=ANNULUS[None], **SOLVE_KW, nvf_projector='circular')
     record = solver.freeze_geometry()
-    solver.projector = 'linear'
+    solver.nvf_projector = 'linear'
     replayed = float(np.sum(np.asarray(solver.solve(geometry=record).T)))
     direct = float(np.sum(np.asarray(wavebit.rcwa(structure=ANNULUS[None],
                                                   **SOLVE_KW).solve().T)))
@@ -541,7 +541,7 @@ def test_it_crosses_a_jit_boundary_and_carries_a_gradient():
     import jax.numpy as jnp
 
     solver = wavebit.rcwa(structure=ANNULUS[None], **{**SOLVE_KW, 'backend': 1},
-                          projector='circular')
+                          nvf_projector='circular')
     frozen = solver.freeze_geometry()
     eager = float(np.sum(np.asarray(solver.solve(geometry=frozen).T)))
 
@@ -564,7 +564,7 @@ def test_every_backend_builds_the_same_circular_projector(backend, name):
     def total(which):
         return float(np.sum(np.asarray(wavebit.rcwa(
             structure=ANNULUS[None], **{**SOLVE_KW, 'backend': which},
-            projector='circular').solve().T)))
+            nvf_projector='circular').solve().T)))
 
     reference, got = total(0), total(backend)
     assert abs(got - reference) < 1e-12, f'{name} {got:.12f} against numpy {reference:.12f}'
@@ -579,7 +579,7 @@ def _phase_diagonal(to, shift_v, shift_u, n_v, n_u):
     return np.exp(-2j * np.pi * (V.ravel() * shift_v / n_v + U.ravel() * shift_u / n_u))
 
 
-def _translation_defect(cell, shift, method, projector, to=3):
+def _translation_defect(cell, shift, method, nvf_projector, to=3):
     """``max |E(rolled) - D E D^-1|`` over the four slots the normal field reaches.
 
     `test_nvf_lattice_translation._translation_defect`'s harness, with `epyx` added — under
@@ -590,7 +590,7 @@ def _translation_defect(cell, shift, method, projector, to=3):
     """
     n_v, n_u = cell.shape
     rolled = np.roll(np.roll(cell, shift[0], axis=0), shift[1], axis=1)
-    kw = dict(normal_method=method, projector=projector)
+    kw = dict(raster_normal_method=method, nvf_projector=nvf_projector)
     A = to_conv_mat_raster_nvf(cell[None], to, to, **kw)
     B = to_conv_mat_raster_nvf(rolled[None], to, to, **kw)
     d = _phase_diagonal(to, shift[0], shift[1], n_v, n_u)
@@ -626,7 +626,7 @@ def test_the_circular_limit_removes_the_medial_axis_defect(monkeypatch):
     the limit was prototyped against, and is the only way to measure the second claim
     independently of the first.
 
-    Swept over all 4095 rolls with the shear off, `normal_method='contour'`, N=64,
+    Swept over all 4095 rolls with the shear off, `raster_normal_method='contour'`, N=64,
     `truncation_order=3`:
 
     ===================  ==================  ==================
@@ -713,6 +713,6 @@ def test_the_shipped_configuration_is_covariant_under_both_projectors(method):
     """
     pytest.importorskip('contourpy') if method == 'contour' else None
     for shift in ((13, 29), (2, 2), (31, 17)):
-        for projector in ('linear', 'circular'):
-            got = _translation_defect(ANNULUS, shift, method, projector)
-            assert got < 1e-12, f'{method}/{projector} roll {shift}: E moved by {got:.2e}'
+        for nvf_projector in ('linear', 'circular'):
+            got = _translation_defect(ANNULUS, shift, method, nvf_projector)
+            assert got < 1e-12, f'{method}/{nvf_projector} roll {shift}: E moved by {got:.2e}'

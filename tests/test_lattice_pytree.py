@@ -95,7 +95,7 @@ def _analytic_loss(jnp, M, order=3):
                      top=1.0, bot=1.0, theta=0.07, phi=0.31, psi=0.2, thickness=[300.0],
                      structure=[dict(background=1.0, shapes=[
                          dict(type='circle', cx=-50.0, cy=-20.0, lx=140.0, material=5.76)])],
-                     factorization='nvf', normal_grid=64)
+                     factorization='nvf', shape_nvf_grid_size=64)
     return jnp.sum(s.solve().R)
 
 
@@ -183,7 +183,7 @@ def test_a_hand_written_basis_can_join_the_type():
     assert wavebit.Lattice.from_columns(np.diag([700.0, 1100.0])).axis_aligned is True
 
     # the gap it closes: the method is now reachable, and agrees with the free function
-    assert [np.asarray(c).tobytes() for c in A.meshgrid_xy((9, 13))] == \
+    assert [np.asarray(c).tobytes() for c in A.meshgrid_xy((9, 13))] ==\
         [np.asarray(c).tobytes() for c in wavebit.meshgrid_xy((9, 13),
                                                        lattice=np.column_stack((a1, a2)))]
 
@@ -202,7 +202,7 @@ def test_an_orthogonal_cell_still_needs_no_lattice_at_all():
     assert by_period == by_object
 
     # and `rectangular` is the *exact* diagonal, which `oblique(.., pi/2)` is not
-    assert np.asarray(wavebit.Lattice.rectangular(700.0, 1100.0)).tobytes() == \
+    assert np.asarray(wavebit.Lattice.rectangular(700.0, 1100.0)).tobytes() ==\
         np.diag([700.0, 1100.0]).tobytes()
     assert np.asarray(wavebit.Lattice.oblique(700.0, 1100.0, np.pi / 2))[0, 1] != 0.0
 
@@ -220,7 +220,7 @@ def test_a_cell_can_be_given_as_two_lengths_and_an_angle():
 
     assert np.allclose(np.asarray(wavebit.Lattice.hexagonal(400.0)),
                        np.asarray(wavebit.Lattice.oblique(400.0, 400.0, 2 * np.pi / 3)))
-    assert np.asarray(wavebit.Lattice.rectangular(700.0, 1100.0)).tobytes() == \
+    assert np.asarray(wavebit.Lattice.rectangular(700.0, 1100.0)).tobytes() ==\
         np.diag([700.0, 1100.0]).tobytes()
     assert np.asarray(wavebit.Lattice.rectangular(640.0)).tobytes() == np.diag([640.0, 640.0]).tobytes()
 
@@ -388,7 +388,7 @@ def test_the_method_and_the_free_function_are_one_call():
 
     # the keywords ride through rather than being quietly dropped
     A = wavebit.Lattice.hexagonal(400.0)
-    assert [np.asarray(c).tobytes() for c in A.meshgrid_xy((5, 7), dtype=np.float32)] == \
+    assert [np.asarray(c).tobytes() for c in A.meshgrid_xy((5, 7), dtype=np.float32)] ==\
         [np.asarray(c).tobytes() for c in wavebit.meshgrid_xy((5, 7), lattice=A, dtype=np.float32)]
     with pytest.raises(ValueError, match='backend'):
         A.meshgrid_xy((4, 4), backend=9)
@@ -399,7 +399,7 @@ def test_the_method_and_the_free_function_are_one_call():
     # spells a piece of geometry a shape -- but the word is also what says the pair is
     # rows-first, the way an array's shape is; `sample_x` / `sample_y` are the x-first spelling
     # and mean counts per named axis. So the prefix disambiguates rather than the word changing.
-    assert [np.asarray(c).tobytes() for c in A.meshgrid_xy(grid_shape=(9, 13))] == \
+    assert [np.asarray(c).tobytes() for c in A.meshgrid_xy(grid_shape=(9, 13))] ==\
         [np.asarray(c).tobytes() for c in wavebit.meshgrid_xy(grid_shape=(9, 13), lattice=A)]
     with pytest.raises(TypeError):
         A.meshgrid_xy(shape=(9, 13))
@@ -678,7 +678,7 @@ def test_the_parametric_spelling_has_no_frame_to_declare():
     what buys the exact grating and the sheared and tilted boxes). The values were re-pinned
     once in between to a two-stage blend's 0.999282 / 0.999870 and that pin lasted, on a 1e-5
     tolerance, 1.07e-6 short of failing after the one-stage blend replaced it. The rows of the
-    one-stage tree, at ``normal_grid`` 1024, against a raster of the same two shapes on each
+    one-stage tree, at ``shape_nvf_grid_size`` 1024, against a raster of the same two shapes on each
     cell factorized by NVF with the ``'contour'`` field:
 
         square   order 6   fold 0.999232558   pieces 0.999273073   raster N=640 0.999166752
@@ -1168,7 +1168,7 @@ def test_a_period_written_as_two_separate_leaves_still_carries_gradient(backend)
         torch.real(solver.solve().T).sum().backward()
         assert leaf.grad is not None and float(leaf.grad) != 0.0
 
-    got = np.asarray(solver.period, dtype=float) if backend == 1 else \
+    got = np.asarray(solver.period, dtype=float) if backend == 1 else\
         solver.period.detach().numpy()
     assert got.tolist() == [400.0, 800.0], 'the second entry was dropped'
     assert str(np.asarray(got).dtype) == str(np.dtype(np.float64))

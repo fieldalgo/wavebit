@@ -2,6 +2,12 @@
 
 Written: 2026-08-11.
 
+Updated 2026-09-21: manifest version **11** records automatic material dispersion
+evaluation and the numerical axes `raster_normal_method` and `nvf_projector`;
+JobSpec version **10** uses bottom-to-top layers with +z upward, retains material tables and names the
+shape sampling count `shape_nvf_grid_size`. Update consumers of the old option keys
+using the [keyword migration](reference/keywords.md#nvf-names-changed-on-2026-09-21).
+
 Targets:
 - `wavebit/manifest.py` — the document
 - `tests/test_manifest.py` — what keeps it true
@@ -146,8 +152,8 @@ the same path, that a mixed structure resolves one layer and not the other, and 
 option battery the `boundary` entry used to carry still runs against an overlapping layer.
 
 `smooth` also collided with `NormalMethod.SMOOTH`, which the published JSON showed plainly:
-`paths[0].normal_method` (the **raster**'s options) contained `'smooth'` while `paths[1].path`
-*was* `'smooth'`. A caller on the overlapping route asking for `normal_method='smooth'` was
+`paths[0].raster_normal_method` (the **raster**'s options) contained `'smooth'` while `paths[1].path`
+*was* `'smooth'`. A caller on the overlapping route asking for `raster_normal_method='smooth'` was
 told "the smooth shape path builds its normal field from the geometry itself" — one word
 meaning two things in one sentence, naming a path they were not on.
 

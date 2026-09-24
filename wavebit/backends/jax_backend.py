@@ -251,7 +251,7 @@ class OptimizerJax:
 #: there; everything else goes in as a keyword, so this order is a *listing* rather than a
 #: contract with `__init__`'s signature.
 CHILD_NAMES = ('top', 'bot', 'theta', 'phi', 'psi', 'period', 'wavelength', 'structure',
-               'thickness', 'chi', 'polarization', 'mu', 'excitation')
+               'thickness', 'chi', 'polarization', 'mu', 'excitation', 'kx', 'ky')
 
 #: Read through the private slot rather than the property: these three report a *resolved*
 #: value, and a round trip has to carry what was asked for.
@@ -337,6 +337,8 @@ class SolverJax(RCWAJax, OptimizerJax):
         # silence. Two comments below warned about it; now nothing has to.
         children = tuple(getattr(self, '_' + n, None) if n in _PRIVATE else getattr(self, n)
                          for n in CHILD_NAMES)
+        children = tuple(self._material_input(name) if name in ('top', 'bot', 'structure')
+                         else value for name, value in zip(CHILD_NAMES, children))
         if isinstance(self.structure, list):
             children = tuple(_ShapeStructure(value) if name == 'structure' else value
                              for name, value in zip(CHILD_NAMES, children))
@@ -356,13 +358,13 @@ class SolverJax(RCWAJax, OptimizerJax):
             # machinery, rather than at the solve that is actually being refused.
             'fourier_coefficients': self._fourier_coefficients,
             'factorization': self._factorization,
-            'normal_method': self._normal_method,
+            'raster_normal_method': self._normal_method,
             # Beside it, and for the same reason: the *raw* slot, so an unset axis comes back
             # unset. `solve_field` flattens `self` on every call, so a resolved value written
             # here would come back as an explicit request and `_reject_unread_projector` would
             # then refuse a raster solver for a value the library itself put there -- which is
-            # exactly what `normal_grid` did, one entry down.
-            'projector': self._projector,
+            # exactly what `shape_nvf_grid_size` did, one entry down.
+            'nvf_projector': self._projector,
             # A dispatch key like `pol`: the solves branch on it (which cascade blocks are
             # read, which way the stack is walked), so it must come back static, never traced.
             # The cell a `Lattice.drawn(...)` structure declared, if any. A dispatch fact about
@@ -407,7 +409,7 @@ class SolverJax(RCWAJax, OptimizerJax):
             # `lattice_is_axis_aligned` flipped False -> True (taking
             # `_reject_unsupported_lattice`'s guard with it), and the jitted call answered the
             # rectangular-cell problem -- T = 0.6565 against a correct 0.5460, energy conserving
-            # throughout. `normal_grid` fell 4096 -> 1024, which moves a shape gradient's
+            # throughout. `shape_nvf_grid_size` fell 4096 -> 1024, which moves a shape gradient's
             # sawtooth floor by an order of magnitude.
             #
             # The basis rides as a nested tuple because aux_data has to be hashable and this is
@@ -429,13 +431,13 @@ class SolverJax(RCWAJax, OptimizerJax):
             # covered one at a time and never together.
             'lattice': (None if self._lattice_basis is None
                         else tuple(map(tuple, self._lattice_basis.columns.tolist()))),
-            # The **raw** slot, not the property. `normal_grid` reads back resolved --
+            # The **raw** slot, not the property. `shape_nvf_grid_size` reads back resolved --
             # `None` becomes `max(1024, 4*truncation_order+1)` -- and putting that in aux_data
             # makes the round trip rewrite what the caller asked for: an unset grid comes back
             # as an explicit one, and `_reject_unread_normal_grid` then refuses a raster solver
             # for a value the library itself put there. `solve_field` is jitted at class level,
             # so this flattens on every call and it took out 23 tests at once.
-            'normal_grid': self._normal_grid,
+            'shape_nvf_grid_size': self._normal_grid,
         }
 
         return children, aux_data

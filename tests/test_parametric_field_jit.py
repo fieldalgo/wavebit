@@ -19,7 +19,7 @@ def solver(width=230., kind='rectangle', painted=False, skew=False, backend=1, e
     cell = dict(lattice=((700., 170.), (0., 700.))) if skew else dict(period=(700., 700.))
     return wavebit.rcwa(backend=backend, **cell, wavelength=850.,
                        truncation_order=(1, 1), thickness=(150.,), theta=.13,
-                       phi=.21, psi=.37, normal_grid=32, answers='field',
+                       phi=.21, psi=.37, shape_nvf_grid_size=32, answers='field',
                        structure=[dict(background=1., shapes=shapes)])
 
 

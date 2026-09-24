@@ -6,7 +6,7 @@ mean and how they are chosen between.
 
 ## Materials are relative permittivity
 
-`wavebit.Material(epsilon, mu=1.0)` -- **relative** permittivity and the permeability that goes
+`wavebit.Material(epsilon, mu=None)` -- **relative** permittivity and the permeability that goes
 with it, because a medium has both. Anywhere a material is accepted a bare number is the
 shorthand for `Material(epsilon=x)`; non-magnetic is the overwhelming default and costs nothing
 to write.
@@ -30,6 +30,9 @@ the passive root (`Im(n) >= 0`).
 
 `Material` is frozen and a registered JAX pytree whose children are `(epsilon, mu)`, so a
 material is a design variable like any other -- `jax.grad` reaches inside it.
+
+For wavelength-dependent materials, assign `wavebit.materials.load(name)`. RCWA then evaluates the table at each solve wavelength. See
+[Materials and wavelength sweeps](materials.md) for constants, tables and raster inputs.
 
 ## The stack
 The type of `structure` selects the modeling path; there is no separate mode switch. There are
@@ -60,7 +63,7 @@ it** — and `cx` / `cy` are measured from the centre of the cell, so a centred 
 
 ```python
 structure = [dict(background=1.0, shapes=[
-    dict(type='circle', cx=0., cy=0., lx=200., material=wavebit.eps_from_index(3.5)),
+    dict(type='circle', cx=0., cy=0., lx=200., material=12.25),
 ])]
 ```
 
@@ -133,7 +136,7 @@ from wavebit import Layer, Stack, Incidence
 solver = wavebit.rcwa(
     backend=0,
     stack=Stack(layers=[Layer(thickness=300., structure=raster)],
-                top=1.0, bot=wavebit.eps_from_index(1.5), period=(700., 700.)),
+                top=1.0, bot=2.25, period=(700., 700.)),
     incidence=Incidence(wavelength=900., theta=0., phi=0., tetm='te'),
     truncation_order=dict(x=10, y=0),
 )

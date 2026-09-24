@@ -167,12 +167,14 @@ def plan_interfaces(regions, lattice, transform):
     return InterfacePlan(tuple(pieces), tuple(selected), tuple(groups))
 
 
-def replay_interfaces(xp, regions, background, lattice, transform, plan):
+def replay_interfaces(xp, regions, background, lattice, transform, plan, material_values=None):
     """Return starts, vectors, safe squared lengths, and live material-jump flags.
 
     Endpoint projections are recomputed from traced vertices and traced lattice vectors.
     Equality is per current scalar property, including its imaginary part: the magnetic
     pass supplies mu_value in epsilon slots, just as in the parametric builder.
+    ``material_values`` optionally supplies region values followed by background;
+    trailing tensor axes are reduced together, so equal traces do not erase a seam.
     """
     loops = [v for _, polys in regions for v in polys]
     if not loops:
@@ -181,7 +183,7 @@ def replay_interfaces(xp, regions, background, lattice, transform, plan):
     e = xp.concat([xp.roll(v, -1, axis=0) - v for v in loops], axis=0)
     basis = reduced_basis(lattice, transform)
     cdtype = xp.complex128 if a.dtype == xp.float64 else xp.complex64
-    values = xp.stack([xp.asarray(as_material(m).epsilon, dtype=cdtype)
+    values = material_values if material_values is not None else xp.stack([xp.asarray(as_material(m).epsilon, dtype=cdtype)
                        for m, _ in regions] + [xp.asarray(as_material(background).epsilon,
                                                         dtype=cdtype)])
     if not plan.pieces:
@@ -207,6 +209,8 @@ def replay_interfaces(xp, regions, background, lattice, transform, plan):
 
     starts, ends = endpoint(1), endpoint(2)
     live = values[left] != values[right]
+    if live.ndim > 1:
+        live = xp.any(live, axis=tuple(range(1, live.ndim)))
     edge = ends - starts
     l2 = xp.sum(edge * edge, axis=-1)
     live = live & (l2 > 0)

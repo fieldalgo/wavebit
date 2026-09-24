@@ -133,16 +133,16 @@ def bench_energy_and_backends():
     # psi = 0.35*pi is what `pol=0.3` used to mean: the old keyword turned a fraction into a
     # polarization angle as psi = (1 - pol)*pi/2.
     cfg = dict(top=1.0, bot=1.0, theta=np.deg2rad(5), phi=np.deg2rad(20),
-               period=(1.0, 1.2), wavelength=1.5, thickness=(0.3, 0.2), psi=0.35 * np.pi)
+               period=(1.0, 1.2), wavelength=1.5, thickness=(0.2, 0.3), psi=0.35 * np.pi)
     eps = wavebit.eps_from_index
     structure = [
-        dict(background=1.0, shapes=[dict(type='ellipse', cx=0.0, cy=0.0, lx=0.5, ly=0.3,
-                                          angle=np.deg2rad(40), material=eps(2.4))]),
         dict(background=eps(1.5), shapes=[dict(type='rectangle', cx=-0.1, cy=-0.1, lx=0.4,
                                                ly=0.5, angle=np.deg2rad(25),
                                                material=eps(1.0)),
                                           dict(type='circle', cx=0.3, cy=0.3, lx=0.25,
                                                material=eps(3.0))]),
+        dict(background=1.0, shapes=[dict(type='ellipse', cx=0.0, cy=0.0, lx=0.5, ly=0.3,
+                                          angle=np.deg2rad(40), material=eps(2.4))]),
     ]
     print("\n" + "=" * 74)
     print("[3] Lossless multi-shape / multi-layer: energy conservation + cross-backend")

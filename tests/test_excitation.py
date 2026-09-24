@@ -22,7 +22,7 @@ import pytest
 
 import wavebit
 
-WL, PERIOD, THICK = 600.0, 2000.0, [220.0, 130.0]
+WL, PERIOD, THICK = 600.0, 2000.0, [130.0, 220.0]
 #: `lambda/period = 0.3`, so orders -3..+3 are all inside the light line at this angle --
 #: which is what makes a three-beam excitation legal here at all (see the refusal below).
 COMMON = dict(backend=0, truncation_order=(6, 0), period=(PERIOD, PERIOD), wavelength=WL,
@@ -36,8 +36,8 @@ OFF_CENTRE = {0: 1.0, 2: 0.5 - 0.3j}
 
 def _structure():
     eps = np.ones((2, 1, 64), dtype=complex)
-    eps[0, 0, :26] = 6.25
-    eps[1, 0, 20:] = 4.0
+    eps[1, 0, :26] = 6.25
+    eps[0, 0, 20:] = 4.0
     return eps
 
 

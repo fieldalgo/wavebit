@@ -7,12 +7,21 @@ Naming follows the optics convention the rest of the ecosystem reads by sight:
     Per-order diffraction efficiency, shape ``(n_orders_v, n_orders_u)`` with the incident order
     at the centre (``[half_width_v, half_width_u]``); index ``+1`` along the last axis is order
     ``m = +1``. ``R`` is the fraction of incident power returned into the incidence medium,
-    ``T`` the fraction leaving through the far side. For an absorbing superstrate the
-    incident-power normalization is convention-dependent and these are not comparable to ``1`` —
-    use the amplitudes there.
+    ``T`` the fraction crossing the opposite interface. For real transverse wavevectors,
+    each is normalized by the incident wave alone at the illuminated interface, including
+    absorbing incident media. In that case ``1 - sum(R) - sum(T)`` need not be the finite
+    stack's absorption: the net entering flux also includes incident/reflected interference.
+    General complex-transverse-wavevector power integrals are not supported by this definition.
 
 ``R_s``, ``R_p``, ``T_s``, ``T_p``
     The same efficiencies resolved by outgoing polarization (``R = R_s + R_p``).
+
+``power_entering``, ``absorption``
+    Scalar power fractions summed over all orders. ``power_entering`` is the net
+    flux into the finite stack, including incident/reflected interference, divided
+    by incident-only power. ``absorption = power_entering - sum(T)`` covers all
+    finite layers and excludes both half-spaces. Both are available at every
+    answer level and are NaN when the transverse wavevector is complex.
 
 ``r_s``, ``r_p``, ``t_s``, ``t_p``
     Complex **Fresnel amplitudes** — the E-field ratio against a unit incident E-field, in
@@ -26,8 +35,8 @@ Naming follows the optics convention the rest of the ecosystem reads by sight:
     variables at pack time (the p channel's boundary variable is a magnetic amplitude; the
     conversion differs between the pure-1D and the coupled paths and is measured to 6e-16
     against the Airy forms in ``tests/test_lossy_media.py``), so no caller ever needs to
-    know a boundary variable existed. Phase reference: ``r`` at the top interface, ``t`` at
-    the bottom one.
+    know a boundary variable existed. Phase reference: ``r`` at the illuminated interface, ``t`` at
+    the opposite one.
 
 Until 2026-08 the efficiencies were named ``de_ri`` / ``de_ti`` (meent lineage) and
 ``R_s``/``R_p`` named the raw *boundary amplitudes* — the ones needing a ``/(-i n_top)``
@@ -42,9 +51,10 @@ class ResultSub:
     """One incidence's per-order efficiencies and Fresnel amplitudes."""
 
     _FIELDS = ('r_s', 'r_p', 't_s', 't_p',
-               'R', 'R_s', 'R_p', 'T', 'T_s', 'T_p')
+               'R', 'R_s', 'R_p', 'T', 'T_s', 'T_p', 'power_entering')
 
-    def __init__(self, r_s, r_p, t_s, t_p, R, R_s, R_p, T, T_s, T_p):
+    def __init__(self, r_s, r_p, t_s, t_p, R, R_s, R_p, T, T_s, T_p,
+                 power_entering=None):
         self.r_s = r_s
         self.r_p = r_p
         self.t_s = t_s
@@ -55,6 +65,20 @@ class ResultSub:
         self.T = T
         self.T_s = T_s
         self.T_p = T_p
+        self.power_entering = power_entering
+
+    @property
+    def absorption(self):
+        """Net power absorbed in the finite layers, divided by incident power.
+
+        Excludes absorption in either half-space. Negative values describe
+        net generation or numerical error; they are not clipped to zero.
+        NaN for complex transverse wavevectors, whose cell-power integral
+        is not supported. None if no entering power was supplied.
+        """
+        if self.power_entering is None:
+            return None
+        return self.power_entering - self.T.sum()
 
     # pytree protocol (used by the JAX backend's registered subclass; harmless elsewhere)
     def tree_flatten(self):
@@ -173,6 +197,26 @@ class Result:
     def T(self):
         """Transmission efficiency per order (unpolarized average if no ``psi`` was given)."""
         return self._delegate('T')
+
+    @property
+    def power_entering(self):
+        """Net power crossing the illuminated interface into the finite stack.
+
+        Includes incident/reflected interference, summed over orders and
+        divided by incident-only power at that interface. Positive into the
+        structure for either incidence side. NaN for complex transverse
+        wavevectors. Available at every ``answers`` level.
+        """
+        return self._delegate('power_entering')
+
+    @property
+    def absorption(self):
+        """Finite-stack absorption: ``power_entering - T.sum()``.
+
+        Unpolarized average when no given incidence exists. The absorbing
+        half-spaces are excluded. NaN for complex transverse wavevectors.
+        """
+        return self._delegate('absorption')
 
     def order(self, m, n=0):
         """Scalars for diffraction order ``(m, n)`` of the solved (``given``) incidence.

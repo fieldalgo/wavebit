@@ -111,10 +111,10 @@ def test_real_and_complex_coefficient_inputs_promote_together(backend, real_mate
 
 
 @pytest.mark.parametrize('backend', ['jax', 'torch'])
-@pytest.mark.parametrize('projector', ['constant', 'compressed'])
-def test_live_material_and_projector_gradients(backend, projector):
+@pytest.mark.parametrize('nvf_projector', ['constant', 'compressed'])
+def test_live_material_and_projector_gradients(backend, nvf_projector):
     e, a, g0 = inputs()
-    if projector == 'constant':
+    if nvf_projector == 'constant':
         g0 = np.diag([1., 1., 1., 0., 0., 0.]).astype(complex)
     def loss(xp, t):
         e1 = xp.asarray(e)*(1.+.2*t)

@@ -156,7 +156,7 @@ available for reproducing their studies.
 Arbitrary shapes, object edges not aligned with the lattice, sheared
 corrector cells,
 automatic selection through the ordinary
-solver's `projector` setting, and accuracy qualification across use cases
+solver's `nvf_projector` setting, and accuracy qualification across use cases
 remain separate work. The existing circular shape projector remains
 available. This integration does not make the provisional 1e-5 research
 increment a product accuracy requirement.

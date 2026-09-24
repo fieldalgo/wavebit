@@ -1,5 +1,9 @@
 """Scattering-matrix method (SMM) — the second connecting algorithm, single-source.
 
+Private ``top``/``bottom`` names mean start/end ports of the positive-z list, as in
+``solve_1d``. The engine maps physical bottom/top onto them. Directional descriptions
+below use that local propagation frame, not the public upward height.
+
 The *connecting algorithm* is how per-layer eigenmodes are joined into a stack response. ETM
 (:mod:`wavebit._core.solve_1d` / :mod:`wavebit._core.solve_2d`) propagates an enhanced
 transmittance matrix; SMM composes per-layer scattering matrices with the Redheffer star
@@ -57,11 +61,13 @@ import numpy as np
 from .backend import _device_of, array_namespace, as_array, check_finite, check_physical
 from .conventions import boundary_kz, order_azimuth
 from .enums import Answers, answers_of
-from .conventions import incident_column, incident_kz
-from .solve_1d import (_block, _diag, _incident_flux, _is_backside, _layer_mu, _pack,
+from .conventions import incident_column
+from .solve_1d import (_block, _diag, _is_backside, _layer_mu, _pack,
                        layer_modes_1d, layer_modes_1d_conical, sp_efficiencies,
                        sp_modes_1d_conical)
 from .solve_2d import layer_modes_2d, order_grid_kxy, sp_modes_2d
+from .power import (incident_power, net_power, power_for_real_k,
+                    sp_incident_power, wave_power)
 
 _PI = 3.141592653589793
 
@@ -388,9 +394,10 @@ def _port_disagreement(a, b):
     if differ(a.kx, b.kx) or differ(a.ky, b.ky):
         return ('their retained orders are different in-plane wavevectors. `theta` is measured '
                 'in the incidence medium, so the same angle means a different `k_par` on either '
-                'side of an index step: pass the second solve '
-                '`theta_b = arcsin(sin(theta_a) * n_a / n_b)`, and check `order_kxy()` matches '
-                'before composing')
+                'side of a material step. Choose the angles for the same transverse '
+                'wavevector in both media, and check `order_kxy()` matches before composing. '
+                'For lossless positive-index media this is '
+                '`theta_b = arcsin(sin(theta_a) * n_a / n_b)`')
     if differ(a.index, b.index) or differ(a.mu, b.mu):
         return ('they open into different half-spaces. The joint medium is a basis rather than '
                 'a layer -- any index will do, and a zero-thickness one changes nothing -- but '
@@ -515,40 +522,21 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     mu_ref, mu_trn = (mu_bot, mu_top) if backside else (mu_top, mu_bot)
     eps_ref, eps_trn = (eps_bot, eps_top) if backside else (eps_top, eps_bot)
 
-    # The incident order's own kz, read off the vector the reflected orders use rather than
-    # respelled as `n_ref * cos(theta)` -- see `conventions.incident_kz`, whose docstring gives
-    # the rule and whose helper was already applied to the incidence column and not here.
-    kz_inc = incident_kz(kz_ref, n_orders_u // 2)
-    # `n_ref*cos_t` is `Re(kz_inc)` in this function's own spelling; a superposition needs the
-    # sum over its lit orders instead. Branched rather than unified because the two differ by
-    # an ulp, and the ETM twin makes the same split for the same reason.
-    #
-    # Reflection carries no half-space slot and transmission carries two, for the reason the
-    # ETM twin states at the same place: a reflected order is measured against the incident
-    # admittance of its *own* medium, so `mu_ref` (TE) or `eps_ref` (TM) cancels algebraically
-    # inside the `Re`; a transmitted one sits in the far half-space and both survive.
-    denom_r = kz_inc if lit is None else _incident_flux(xp, C, lit, kz_ref)
-    denom_t_te = denom_r / mu_ref
-    denom_t_tm = denom_r / eps_ref
-
-    de_ri = xp.real(R * xp.conj(R) * xp.real(kz_ref / denom_r))
-    if tetm_index == 0:
-        de_ti = xp.real(Tt * xp.conj(Tt) * xp.real(kz_trn / mu_trn / denom_t_te))
-    else:
-        # Re(kz/eps), not Re(conj(kz)/eps): for TM the downward flux is Re(E_x H_y*) with E_x
-        # proportional to (kz/eps) H_y. The two agree for a real exit index, which is why a
-        # stray conjugate here survived every lossless test; against an absorbing substrate it
-        # returned negative transmitted power. See `conventions`: this codebase ran on a
-        # conjugated problem until 2026-08, and this was the last boundary still on the far
-        # side of that seam.
-        de_ti = xp.real(Tt * xp.conj(Tt)
-                        * xp.real(kz_trn / eps_trn / denom_t_tm))
+    # The same per-wave power definition as the ETM pure-1D path.
+    admittance_ref = kz_ref / (mu_ref if tetm_index == 0 else eps_ref)
+    admittance_trn = kz_trn / (mu_trn if tetm_index == 0 else eps_trn)
+    incoming_power = incident_power(xp, C, lit, admittance_ref)
+    de_ri = wave_power(xp, R, admittance_ref) / incoming_power
+    de_ti = wave_power(xp, Tt, admittance_trn) / incoming_power
+    entering = power_for_real_k(
+        xp, xp.sum(net_power(xp, xp.reshape(delta, R.shape), R, admittance_ref))
+        / incoming_power, kx)
 
     check_finite(xp, de_ri=de_ri, de_ti=de_ti)
-    check_physical(xp, de_ri, de_ti, n_ref)
+    check_physical(xp, de_ri, de_ti, n_ref, power_entering=entering)
 
     if not answers.covers(Answers.AMPLITUDE):
-        return de_ri, de_ti
+        return de_ri, de_ti, entering
 
     # `ky` is None: this path carries no out-of-plane order, and saying nothing there is what
     # makes a coupled-path port refuse to join a 1D one. The two permeabilities *are* said,
@@ -563,10 +551,11 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     zeros_amp = xp.zeros_like(R)
     zeros_eff = xp.zeros_like(de_ri)
     if tetm_index == 0:
-        res = _pack(R, zeros_amp, Tt, zeros_amp, de_ri, zeros_eff, de_ti, zeros_eff)
+        res = _pack(R, zeros_amp, Tt, zeros_amp, de_ri, zeros_eff, de_ti, zeros_eff,
+                    power_entering=entering)
     else:
         res = _pack(zeros_amp, R, zeros_amp, Tt * ((n_ref / mu_ref) / (n_trn / mu_trn)),
-                    zeros_eff, de_ri, zeros_eff, de_ti)
+                    zeros_eff, de_ri, zeros_eff, de_ti, power_entering=entering)
 
     if not keep_field:
         return {'given': res, 'scattering': scattering}
@@ -597,6 +586,97 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
 
 # ------------------------------------------------------------------- coupled s/p (conical, 2D)
 
+def _sp_scattering_result(xp, C, S, kx, ky, kz_top, kz_bot, n_top, n_bot,
+                          incidence, backside, answers, mu_top, mu_bot,
+                          eps_top, eps_bot, lit=None):
+    """Public s/p amplitudes and powers from a cascade in scalar half-space bases.
+
+    Shared by the two-field and four-field SMM paths. Also return the incident
+    columns so field reconstruction uses precisely the same normalization.
+    """
+    keep_amplitude = answers_of(answers).covers(Answers.AMPLITUDE)
+    kx_g, _ = order_grid_kxy(xp, kx, ky)
+    n_orders_v, n_orders_u = kx_g.shape
+    n_orders = n_orders_u * n_orders_v
+    kz_ref, kz_trn = (kz_bot, kz_top) if backside else (kz_top, kz_bot)
+    n_ref, n_trn = (n_bot, n_top) if backside else (n_top, n_bot)
+    mu_ref, mu_trn = (mu_bot, mu_top) if backside else (mu_top, mu_bot)
+    eps_ref, eps_trn = (eps_bot, eps_top) if backside else (eps_top, eps_bot)
+
+    # --- incidence ------------------------------------------------------------------------
+    # The scalar half-space basis uses (E_s, H_p), so the incident column is the
+    # incident field itself: E_s = a_s, H_p = -i*n_ref/mu_ref*a_p in the incidence medium — with
+    # (a_s, a_p) as resolved at the boundary — one form arrives here, and it is the same
+    # amplitudes the ETM final matching solves against (see conventions.incident_sp_amplitudes).
+    delta = xp.reshape(incident_column(xp, C, lit, n_orders, n_orders // 2), (n_orders, 1))
+
+    def incident(a_s, a_p):
+        # Convert the electric p coefficient to the magnetic boundary variable.
+        # The actual s/p input powers are evaluated separately below.
+        return xp.concat([a_s * delta, -1j * (n_ref / mu_ref) * a_p * delta], axis=0)
+
+    def incident_psi(psi_v):
+        return incident(xp.sin(xp.asarray(psi_v, dtype=C)),
+                        xp.cos(xp.asarray(psi_v, dtype=C)))
+
+    # The incidence as asked, then the pure-TE / pure-TM variants (free: same scattering
+    # matrix). The variants stay spelled as angles so their columns are bit-identical to the
+    # pre-`polarization` ones.
+    cols = ([incident(as_array(xp, incidence[0], dtype=C),
+                      as_array(xp, incidence[1], dtype=C))]
+            + ([incident_psi(_PI / 2), incident_psi(0.0)] if keep_amplitude else []))
+    c_inc = xp.concat(cols, axis=1)
+
+    c_ref = (S[3] if backside else S[0]) @ c_inc
+    c_trn = (S[1] if backside else S[2]) @ c_inc
+
+    n_inc = len(cols)
+
+    def as_orders(M):
+        """(n_orders, n_inc) amplitude columns -> (n_inc, n_orders_v, n_orders_u)."""
+        return xp.reshape(xp.matrix_transpose(M), (n_inc, n_orders_v, n_orders_u))
+
+    # The reflected p amplitude is reported as its magnetic field, which points the other way
+    # for the upward wave; s and the transmitted pair need no such flip.
+    R_s = as_orders(c_ref[:n_orders, :])
+    R_p = as_orders(-c_ref[n_orders:, :])
+    T_s = as_orders(c_trn[:n_orders, :])
+    T_p = as_orders(c_trn[n_orders:, :])
+
+    kz_ref_2d = xp.reshape(kz_ref, (n_orders_v, n_orders_u))
+    kz_trn_2d = xp.reshape(kz_trn, (n_orders_v, n_orders_u))
+    s_power, p_power = sp_incident_power(xp, C, lit, kz_ref, n_ref, eps_ref, mu_ref)
+    a_s = as_array(xp, incidence[0], dtype=C)
+    a_p = as_array(xp, incidence[1], dtype=C)
+    powers = [xp.abs(a_s)**2 * s_power + xp.abs(a_p)**2 * p_power]
+    if keep_amplitude:
+        powers.extend([s_power, p_power])
+    denom = xp.reshape(xp.stack(powers), (n_inc, 1, 1))
+    eff = sp_efficiencies(xp, kz_ref_2d, kz_trn_2d, denom, n_ref, n_trn, R_s, R_p, T_s, T_p,
+                          mu_top=mu_ref, mu_bot=mu_trn, eps_top=eps_ref, eps_bot=eps_trn)
+    flux = (net_power(xp, as_orders(c_inc[:n_orders]), R_s, kz_ref_2d / mu_ref)
+            + net_power(xp, as_orders(c_inc[n_orders:]), R_p, kz_ref_2d / eps_ref))
+    entering = power_for_real_k(
+        xp, xp.sum(flux, axis=(-2, -1)) / xp.stack(powers), kx, ky)
+
+    check_finite(xp, de_ri=eff[0][0] + eff[1][0], de_ti=eff[2][0] + eff[3][0])
+    check_physical(xp, eff[0][0] + eff[1][0], eff[2][0] + eff[3][0], n_ref,
+                   power_entering=entering[0])
+
+    if not keep_amplitude:
+        return (eff[0][0] + eff[1][0], eff[2][0] + eff[3][0], entering[0]), c_inc
+
+    scattering = _scattering_matrix(S, backside, kx, ky, n_ref, n_trn, mu_ref, mu_trn)
+
+    # Coupled-path Fresnel conversion, identical to the ETM final matching's.
+    amps = (R_s, R_p / (-1j * n_ref / mu_ref), T_s, T_p / (-1j * n_trn / mu_trn))
+    packed = [_pack(*(a[i] for a in amps), *(e[i] for e in eff),
+                    power_entering=entering[i]) for i in range(3)]
+
+    return {'given': packed[0], 's_inc': packed[1], 'p_inc': packed[2],
+            'scattering': scattering}, c_inc
+
+
 def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
             layer_modes, epz_conv_i_all, backside, answers, mu_top=1.0, mu_bot=1.0,
             eps_top=None, eps_bot=None, muz_conv_i_all=None, lit=None):
@@ -620,7 +700,7 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
     with the reflection port — in the mirror's frame the reflected wave is the upward one,
     whichever scene medium it returns into.
 
-    ``incidence`` is the resolved amplitude pair ``(a_s, a_p)`` at unit flux — see
+    ``incidence`` is the resolved electric coefficient pair ``(a_s, a_p)`` of unit norm — see
     :func:`~wavebit._core.conventions.incident_sp_amplitudes`.
 
     ``answers`` is the rung this solve was declared for; it decides how many incidence
@@ -628,7 +708,6 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
     wanted) and whether the per-layer pieces are kept for :func:`_field_state` to walk.
     """
     answers = answers_of(answers)
-    keep_amplitude = answers.covers(Answers.AMPLITUDE)
     keep_field = answers.covers(Answers.FIELD)
     kx_g, ky_g = order_grid_kxy(xp, kx, ky)
     n_orders_v, n_orders_u = kx_g.shape
@@ -689,74 +768,12 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
             muz_conv.append(None if muz_conv_i_all is None else muz_conv_i_all[layer_index])
     S = redheffer_star(xp, big_I, S, S_trn)
 
-    kz_ref, kz_trn = (kz_bot, kz_top) if backside else (kz_top, kz_bot)
-    n_ref, n_trn = (n_bot, n_top) if backside else (n_top, n_bot)
-    mu_ref, mu_trn = (mu_bot, mu_top) if backside else (mu_top, mu_bot)
-
-    # --- incidence ------------------------------------------------------------------------
-    # Amplitudes are (E_s, H_p) by construction of W/V above, so the incident column is the
-    # incident field itself: E_s = a_s, H_p = -i*n_ref*a_p in the incidence medium — with
-    # (a_s, a_p) as resolved at the boundary — one form arrives here, and it is the same
-    # amplitudes the ETM final matching solves against (see conventions.incident_sp_amplitudes).
-    delta = xp.reshape(incident_column(xp, C, lit, n_orders, n_orders // 2), (n_orders, 1))
-
-    def incident(a_s, a_p):
-        # `n_ref/mu_ref`, not `n_ref`: `a_s` and `a_p` are defined at equal incident flux,
-        # and the s flux carries `kz/mu`. Same scale the ETM final matching uses.
-        return xp.concat([a_s * delta, -1j * (n_ref / mu_ref) * a_p * delta], axis=0)
-
-    def incident_psi(psi_v):
-        return incident(xp.sin(xp.asarray(psi_v, dtype=C)),
-                        xp.cos(xp.asarray(psi_v, dtype=C)))
-
-    # The incidence as asked, then the pure-TE / pure-TM variants (free: same scattering
-    # matrix). The variants stay spelled as angles so their columns are bit-identical to the
-    # pre-`polarization` ones.
-    cols = ([incident(as_array(xp, incidence[0], dtype=C),
-                      as_array(xp, incidence[1], dtype=C))]
-            + ([incident_psi(_PI / 2), incident_psi(0.0)] if keep_amplitude else []))
-    c_inc = xp.concat(cols, axis=1)
-
-    c_ref = (S[3] if backside else S[0]) @ c_inc
-    c_trn = (S[1] if backside else S[2]) @ c_inc
-
-    n_inc = len(cols)
-
-    def as_orders(M):
-        """(n_orders, n_inc) amplitude columns -> (n_inc, n_orders_v, n_orders_u)."""
-        return xp.reshape(xp.matrix_transpose(M), (n_inc, n_orders_v, n_orders_u))
-
-    # The reflected p amplitude is reported as its magnetic field, which points the other way
-    # for the upward wave; s and the transmitted pair need no such flip.
-    R_s = as_orders(c_ref[:n_orders, :])
-    R_p = as_orders(-c_ref[n_orders:, :])
-    T_s = as_orders(c_trn[:n_orders, :])
-    T_p = as_orders(c_trn[n_orders:, :])
-
-    kz_ref_2d = xp.reshape(kz_ref, (n_orders_v, n_orders_u))
-    kz_trn_2d = xp.reshape(kz_trn, (n_orders_v, n_orders_u))
-    # `incident_kz(kz_ref, ...)`, not `n_ref * cos(theta)` -- the same quantity, read off the
-    # vector the reflected orders use instead of respelled. See `conventions.incident_kz`.
-    denom = (incident_kz(kz_ref, n_orders // 2) / mu_ref if lit is None
-             else _incident_flux(xp, C, lit, kz_ref) / mu_ref)
-    eff = sp_efficiencies(xp, kz_ref_2d, kz_trn_2d, denom, n_ref, n_trn, R_s, R_p, T_s, T_p,
-                          mu_top=mu_ref, mu_bot=mu_trn)
-
-    check_finite(xp, de_ri=eff[0][0] + eff[1][0], de_ti=eff[2][0] + eff[3][0])
-    check_physical(xp, eff[0][0] + eff[1][0], eff[2][0] + eff[3][0], n_ref)
-
-    if not keep_amplitude:
-        return eff[0][0] + eff[1][0], eff[2][0] + eff[3][0]
-
-    scattering = _scattering_matrix(S, backside, kx, ky, n_ref, n_trn, mu_ref, mu_trn)
-
-    # Coupled-path Fresnel conversion, identical to the ETM final matching's.
-    amps = (R_s, R_p / (-1j * n_ref / mu_ref), T_s, T_p / (-1j * n_trn / mu_trn))
-    packed = [_pack(*(a[i] for a in amps), *(e[i] for e in eff)) for i in range(3)]
-
+    out, c_inc = _sp_scattering_result(
+        xp, C, S, kx, ky, kz_top, kz_bot, n_top, n_bot, incidence, backside,
+        answers, mu_top, mu_bot, eps_top, eps_bot, lit)
     if not keep_field:
-        return {'given': packed[0], 's_inc': packed[1], 'p_inc': packed[2],
-                'scattering': scattering}
+        return out
+    n_inc = c_inc.shape[1]
 
     if backside:
         # Mirrored-scene field state, same construction as `smm_1d`'s backside branch.
@@ -776,8 +793,8 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
     if T1 is not None:
         # One column per incidence variant (psi, TE, TM), as the ETM stacks them.
         T1 = xp.stack([T1[:, i:i + 1] for i in range(n_inc)])
-    return {'given': packed[0], 's_inc': packed[1], 'p_inc': packed[2],
-            'layer_info_list': layer_info_list, 'T1': T1, 'scattering': scattering}
+    out.update(layer_info_list=layer_info_list, T1=T1)
+    return out
 
 
 def smm_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,

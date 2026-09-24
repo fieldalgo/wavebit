@@ -55,7 +55,7 @@ def test_partial_derivatives_reconstruct_the_live_nvf_gradient(monkeypatch):
         return wavebit.rcwa(
             backend=backend, period=(700., 700.), wavelength=900., top=1., bot=2.25,
             theta=.2, phi=0., psi=0., thickness=(300.,), truncation_order=(3, 3),
-            normal_grid=256, structure=[dict(background=1., shapes=[dict(
+            shape_nvf_grid_size=256, structure=[dict(background=1., shapes=[dict(
                 type='rectangle', cx=0., cy=0., lx=350., ly=height,
                 angle=0., material=12.25)])])
 

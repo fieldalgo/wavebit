@@ -204,7 +204,7 @@ normal field from the shape instead of from its raster. It did, however, turn ou
 defect a different construction can fix on the raster itself: the quantization lives in the
 integer-grid differencing, not in the raster, and smoothing the indicator before
 differentiating removes it. Three such constructions were measured and shipped behind the
-`normal_method` keyword (default unchanged) -- see
+`raster_normal_method` keyword (default unchanged) -- see
 [`nvf-normal-methods.md`](nvf-normal-methods.md), which reads this file's tables as its
 baseline.
 
@@ -301,7 +301,7 @@ parametric shape path. Three neighbouring write-ups cover the questions around t
 and staircase representations, [`backend-choice.md`](backend-choice.md) on what the change
 here did to the cost of NVF relative to the other two strategies (it removed the difference),
 and [`nvf-normal-methods.md`](nvf-normal-methods.md) on the raster constructions that remove
-the quantization this file measured (the `normal_method` keyword).
+the quantization this file measured (the `raster_normal_method` keyword).
 
 ### References
 

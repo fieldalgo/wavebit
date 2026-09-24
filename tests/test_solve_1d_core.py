@@ -42,12 +42,12 @@ def _run_and_inputs(tetm, structure, thickness, n_top, n_bot, wl, period, trunca
     # below takes the index, which is what the amplitude ratios in it actually are.
     solver = wavebit.rcwa(backend=0, top=n_top ** 2, bot=n_bot ** 2, theta=theta, phi=None,
                           tetm=tetm, truncation_order=truncation_order, period=period, wavelength=wl,
-                          thickness=thickness, structure=structure)
+                          thickness=thickness[::-1], structure=structure[::-1])
     via_api = solver.solve()
     epx, epy, epz, *_ = to_conv_mat_raster_sampled(
         solver.structure, solver.truncation_order[0], solver.truncation_order[1])
     kx, _ = solver.order_kxy()
-    inputs = dict(tetm_index=0 if tetm == 'te' else 1, wavelength=wl, kx=kx, n_top=n_top, n_bot=n_bot,
+    inputs = dict(tetm_index=0 if tetm == 'te' else 1, wavelength=wl, kx=kx, n_top=n_bot, n_bot=n_top, incidence_side=solver._kernel_incidence_side,
                   theta=solver.theta, thickness=solver.thickness,
                   epx_conv_all=epx, epy_conv_all=epy, epz_conv_i_all=epz)
     return (np.array(via_api.R), np.array(via_api.T)), inputs
@@ -93,7 +93,7 @@ def test_wiring_matches_direct_core_call(case):
     _, tetm, structure, thickness, n_top, n_bot, wl, period, truncation_order, theta = case
     (lri, lti), inputs = _run_and_inputs(
         tetm, np.array(structure), thickness, n_top, n_bot, wl, period, truncation_order, theta)
-    cri, cti = solve_1d(**inputs)
+    cri, cti, _ = solve_1d(**inputs)
     _assert_same_answer((lri, lti), (cri, cti))
 
 
@@ -112,13 +112,13 @@ def test_core_cross_backend(case, backend):
     _, tetm, structure, thickness, n_top, n_bot, wl, period, truncation_order, theta = case
     (_, _), inp = _run_and_inputs(
         tetm, np.array(structure), thickness, n_top, n_bot, wl, period, truncation_order, theta)
-    ri0, ti0 = solve_1d(**inp)                              # numpy reference
+    ri0, ti0, _ = solve_1d(**inp)                              # numpy reference
 
     bk = dict(inp)
     for k in ('kx', 'epx_conv_all', 'epy_conv_all', 'epz_conv_i_all'):
         bk[k] = _to(backend, inp[k])
     bk['theta'] = _to(backend, complex(inp['theta']))
-    ri, ti = solve_1d(**bk)
+    ri, ti, _ = solve_1d(**bk)
 
     assert np.allclose(np.array(ri0), np.asarray(ri), atol=1e-10, rtol=0)
     assert np.allclose(np.array(ti0), np.asarray(ti), atol=1e-10, rtol=0)
@@ -139,7 +139,7 @@ def test_core_gradient_jax_torch_fd(tetm):
     direction = np.real(base).copy()
 
     def out(sub_inputs):
-        _, ti = solve_1d(**sub_inputs)
+        _, ti, _ = solve_1d(**sub_inputs)
         return ti
 
     def f_np(s):
@@ -182,13 +182,13 @@ def _run_and_inputs_conical(structure, thickness, n_top, n_bot, wl, period, trun
     """Same, forced onto the conical path."""
     solver = wavebit.rcwa(backend=0, top=n_top ** 2, bot=n_bot ** 2, theta=theta, phi=phi,
                           psi=psi, truncation_order=truncation_order, period=period, wavelength=wl,
-                          thickness=thickness, structure=structure)
+                          thickness=thickness[::-1], structure=structure[::-1])
     via_api = solver.solve()
     assert solver.grating_type == 1, solver.grating_type   # ensure conical path
     epx, epy, epz, *_ = to_conv_mat_raster_sampled(
         solver.structure, solver.truncation_order[0], solver.truncation_order[1])
     kx, ky = solver.order_kxy()
-    inputs = dict(wavelength=wl, kx=kx, ky=ky, n_top=n_top, n_bot=n_bot,
+    inputs = dict(wavelength=wl, kx=kx, ky=ky, n_top=n_bot, n_bot=n_top, incidence_side=solver._kernel_incidence_side,
                   theta=solver.theta, phi=solver.phi,
                   incidence=solver._incidence_pair(), thickness=solver.thickness,
                   epx_conv_all=epx, epy_conv_all=epy, epz_conv_i_all=epz)
@@ -209,7 +209,7 @@ def test_conical_wiring_matches_direct_core_call(case):
     _, structure, thickness, n_top, n_bot, wl, period, truncation_order, theta, phi, psi = case
     (lri, lti), inp = _run_and_inputs_conical(
         np.array(structure), thickness, n_top, n_bot, wl, period, truncation_order, theta, phi, psi)
-    cri, cti = solve_1d_conical(**inp)
+    cri, cti, _ = solve_1d_conical(**inp)
     _assert_same_answer((lri, lti), (cri, cti))
 
 
@@ -220,14 +220,14 @@ def test_conical_cross_backend(case, backend):
     _, structure, thickness, n_top, n_bot, wl, period, truncation_order, theta, phi, psi = case
     (_, _), inp = _run_and_inputs_conical(
         np.array(structure), thickness, n_top, n_bot, wl, period, truncation_order, theta, phi, psi)
-    ri0, ti0 = solve_1d_conical(**inp)                       # numpy reference
+    ri0, ti0, _ = solve_1d_conical(**inp)                       # numpy reference
 
     bk = dict(inp)
     for k in ('kx', 'ky', 'epx_conv_all', 'epy_conv_all', 'epz_conv_i_all'):
         bk[k] = _to(backend, inp[k])
     bk['theta'] = _to(backend, complex(inp['theta']))
     bk['incidence'] = tuple(_to(backend, complex(v)) for v in inp['incidence'])
-    ri, ti = solve_1d_conical(**bk)
+    ri, ti, _ = solve_1d_conical(**bk)
 
     assert np.allclose(np.array(ri0), np.asarray(ri), atol=1e-10, rtol=0)
     assert np.allclose(np.array(ti0), np.asarray(ti), atol=1e-10, rtol=0)
@@ -248,7 +248,7 @@ def test_conical_gradient_jax_torch_fd():
     conv_keys = ('kx', 'ky', 'epx_conv_all', 'epy_conv_all', 'epz_conv_i_all')
 
     def out(d):
-        _, ti = solve_1d_conical(**d)
+        _, ti, _ = solve_1d_conical(**d)
         return ti
 
     def f_np(s):

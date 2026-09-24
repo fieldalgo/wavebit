@@ -23,3 +23,8 @@ structure without saying so.
 | [`05-oblique-lattice.ipynb`](05-oblique-lattice.ipynb) | How do you solve a hexagonal or otherwise tilted cell? The `lattice` keyword, and the raster convention that goes with it — a raster is read in *lattice* coordinates, and building it on a Cartesian grid instead describes a different structure with no error and no loss of energy conservation. Ends in a worked metalens phase library and the published benchmark the feature was checked against. |
 | [`06-polarization-pair.ipynb`](06-polarization-pair.ipynb) | How do you send in circular or elliptical light, when `psi` can only name a linear state? The `polarization=(a_s, a_p)` pair: what it equals in `psi`, what its magnitude and phase each do, how to read the transmitted state back out, and the four ways it is usually got wrong. |
 | [`07-multimode-incidence.ipynb`](07-multimode-incidence.ipynb) | How do you send light in on more than one diffraction order at once? The `excitation` dict: why a *single* non-specular order is only a relabelling of the angle, what a coherent superposition is actually for, the solve it saves against doing it beam by beam, why every lit order has to propagate, and where to go for a different polarization per order. |
+
+All layer lists and thickness arrays use **bottom-to-top** order. The stack bottom is
+`z=0`, +z points upward, and `incidence_side` chooses illumination without reordering
+the geometry. Notebook outputs were cleared when migrating the coordinate convention;
+run the cells to generate figures and numbers in the current frame.

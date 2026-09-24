@@ -89,33 +89,34 @@ is principled rather than fitted: `epx` carries the inverse rule along `x` becau
 is a continuous quantity written as a product of discontinuous ones, and `exx` sits in exactly
 that product in the first-order form too.
 
-## 4. What it cannot do
+## 4. Full tensor patterns and permeability
 
-**A patterned *and* z-coupled layer** — and this is now a narrower gap than it was.
+The 4ff layer operator consumes full epsilon and mu convolution tensors from
+Li or linear NVF. Patterned xz/yz/zx/zy coupling, scalar magnetic half-spaces,
+both incidence sides and all six reconstructed fields are supported. The public
+layer algorithms are ETM (default) and SMM; anisotropic half-spaces remain unsupported.
 
-The factorization for a patterned anisotropic layer exists as of 2026-08-14
-([`patterned-anisotropic-factorization.md`](patterned-anisotropic-factorization.md)); this
-module takes convolution matrices as *input* and needs no change to use it. What is missing is
-the 3×3 closing step for a layer that is patterned **and** fills the z row, which is exactly the
-geometry this path was built for.
+SMM cascades the distinct forward and backward eigenspaces and reconstructs
+internal fields using decaying propagation factors referenced to opposite layer
+faces. It exposes `solver.scattering` with `answers='amplitude'` or `'field'`,
+using the same scalar half-space port convention as the 2ff solver. Compatible
+2ff and 4ff stacks can therefore be joined with `.cascade()`.
 
-It is held back by evidence rather than by difficulty. fmmax is the only reference solver that
-reaches a patterned complex off-diagonal at all, and it has **no z-row arguments** — so there is
-nothing to check the answer against. Given that the in-plane factorization's first arrangement
-passed energy conservation, rotation covariance *and* an external comparison while being wrong
-by 0.5 on a uniform slab, shipping the harder case with strictly less evidence than that one had
-is not a trade worth taking.
+`tests/test_smm_4ff.py` checks public amplitudes and six-component fields on
+NumPy, JAX and PyTorch, illumination from either side, coherent diffraction
+orders, mixed 2ff/4ff stack composition, and a thick absorbing slab. Independent
+laminate transfer solutions, Maxwell curl residuals and material derivatives
+in `tests/test_full_tensor_patterns.py` cover both ETM and SMM.
 
-Worth stating plainly either way, because "4ff solves z-coupling" and "4ff solves magneto-optic
-gratings" are still not the same claim.
+Longitudinal fields retain the complete constitutive relations:
 
-**`mu`.** Permeability landed on the 2ff path on 2026-08-14
-([`magnetic-materials.md`](magnetic-materials.md)) and this one refuses it rather than dropping
-it — by either route in, a z-coupled `eps` or `formulation='4ff'` asked for directly, and the
-message names which. The refusal covers §4b's field as well: `field_2d_4ff` spells `H_z` as
-`Kx Ey - Ky Ex`, which is Faraday's z row only at `mu = 1`. The 2ff twin has carried the
-general form since 2026-08-20; putting `mu` here means that factor plus the `mu_zx` / `mu_zy`
-terms this formulation would be the one able to express.
+```text
+Ez = inverse(ezz) (Ky Hx - Kx Hy - ezx Ex - ezy Ey)
+Hz = inverse(mzz) (Kx Ey - Ky Ex - mzx Hx - mzy Hy)
+```
+
+See [full tensor patterns](full-tensor-patterns.md) for the factorization,
+mode-direction criterion, independent references and convergence examples.
 
 ## 4b. Field reconstruction, and the three checks that replace the twin (2026-08-14)
 
@@ -153,8 +154,7 @@ phase advanced *with* the cell's `z` index, so the wave travelled that way, whil
 Poynting vector pointed *against* it.
 
 The first reading was that this is the library's convention and the new path should match it,
-which is what shipped for a day. It is not. `docs/conventions.md` declares `+z` **down, into
-the stack**, and measured against that declaration the second-order cell is not a Maxwell field
+which is what shipped for a day. It is not. `docs/conventions.md` declares `+z` **upward**, and measured against that declaration the second-order cell is not a Maxwell field
 at all: the curl residual on a three-layer slab at 33° was 2.8 as shipped and 8.0e-4
 (converging like the step) once `E_z`, `H_x`, `H_y` were flipped — on all four paths, the two
 1D layouts included. The 4ff state vector was already in the declared frame, because

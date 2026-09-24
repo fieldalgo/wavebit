@@ -50,7 +50,7 @@ def test_contact_plan_opens_a_gap_but_refuses_edge_crossing():
 @pytest.mark.parametrize('geometry', [StaticGeometry(), 'nvf'])
 def test_wrong_geometry_route_is_refused(geometry):
     if geometry == 'nvf':
-        geometry=solver([box()],factorization='nvf',normal_grid=16).freeze_geometry()
+        geometry=solver([box()],factorization='nvf',shape_nvf_grid_size=16).freeze_geometry()
     with pytest.raises(F.StaleGeometryError,match='factorization'):
         solver([box()]).solve(geometry=geometry)
 
@@ -58,10 +58,10 @@ def test_wrong_geometry_route_is_refused(geometry):
 def test_li_record_cannot_be_replayed_as_nvf():
     g=solver([box()]).freeze_geometry()
     with pytest.raises(F.StaleGeometryError,match='NVF'):
-        solver([box()],factorization='nvf',normal_grid=16).solve(geometry=g)
+        solver([box()],factorization='nvf',shape_nvf_grid_size=16).solve(geometry=g)
 
 
-@pytest.mark.parametrize('option', [dict(normal_grid=32),dict(normal_method='distance'),dict(projector='linear')])
+@pytest.mark.parametrize('option', [dict(shape_nvf_grid_size=32),dict(raster_normal_method='distance'),dict(nvf_projector='linear')])
 def test_unused_normal_options_are_refused(option):
     with pytest.raises((NotImplementedError,ValueError)):
         solver([box()],**option).solve()

@@ -1,5 +1,8 @@
 """Single-source 2D RCWA solve — Phase 3c of the rewrite.
 
+As in ``solve_1d``, private ``top``/``bottom`` port names mean the start/end of the
+positive-z layer list. The public engine maps physical media and illumination onto them.
+
 Port of the triplicated ``transfer_2d_1..4`` chain into one backend-agnostic solve against the
 Array-API namespace, sharing the boundary/branch conventions and the final s/p matching with
 :mod:`wavebit._core.solve_1d`. The only per-backend primitive is
@@ -390,7 +393,8 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     accepts: 1-D of lengths ``n_orders_u`` / ``n_orders_v`` for an axis-aligned cell, or
     ``(n_orders_v, n_orders_u)`` per-order Cartesian components for any lattice.
 
-    Returns ``(de_ri, de_ti)`` for that incidence, shape ``(n_orders_v, n_orders_u)``.
+    Returns ``(de_ri, de_ti, power_entering)``: two efficiency arrays of shape
+    ``(n_orders_v, n_orders_u)`` and a scalar net entering power fraction.
     """
     xp = array_namespace(epx_conv_all)
     mu_all = (None,) * 5 if mu is None else tuple(mu)
@@ -516,8 +520,8 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
         big_F, big_G, big_T = substrate_state()
     out = final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
                          n_top, n_bot, n_orders_u, n_orders_v, answers=answers,
-                         mu_top=mu_top, mu_bot=mu_bot, eps_top=eps_top,
-                         lit=lit)
+                         mu_top=mu_top, mu_bot=mu_bot, eps_top=eps_top, eps_bot=eps_bot,
+                         lit=lit, kx=kx, ky=ky)
     if keep_field:
         out['layer_info_list'] = layer_info_list
     return out

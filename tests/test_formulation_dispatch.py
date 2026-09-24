@@ -125,8 +125,8 @@ def test_passing_the_z_slots_is_what_selects_the_first_order_path():
 def test_the_default_never_reaches_the_first_order_path_on_a_grating():
     """A raster solve — the ordinary case — must be untouched by any of this."""
     structure = np.ones((2, 20, 20))
-    structure[0, 5:15, 5:15] = 11.559999999999999           # permittivity: 3.4**2
-    mee = solver(truncation_order=(3, 3), thickness=[120.0, 90.0], structure=structure)
+    structure[1, 5:15, 5:15] = 11.559999999999999           # permittivity: 3.4**2
+    mee = solver(truncation_order=(3, 3), thickness=[90.0, 120.0], structure=structure)
     mee.solve()
     assert mee.formulation_assigned == '2ff'
 
@@ -174,8 +174,8 @@ def test_the_result_surface_is_the_same_object_the_other_paths_return():
 
 def test_forcing_the_first_order_path_reproduces_a_uniform_anisotropic_answer():
     """Same scene, both formulations, on a tensor with an in-plane pair and a stack of three."""
-    layers = [IN_PLANE, np.diag([4.0, 4.0, 2.9]).astype(complex), IN_PLANE.conj().T]
-    thickness = [140.0, 75.0, 210.0]
+    layers = [IN_PLANE.conj().T, np.diag([4.0, 4.0, 2.9]).astype(complex), IN_PLANE]
+    thickness = [210.0, 75.0, 140.0]
 
     a = solver(thickness=thickness)
     res_a = a.solve_conv(*uniform_slots(layers, 1, z_row=False))
@@ -201,12 +201,12 @@ def test_forcing_the_first_order_path_reproduces_a_patterned_grating(truncation_
     non-trivial, and that rotation is shared code fed from two different places.
     """
     structure = np.ones((2, 24, 24))
-    structure[0, 6:18, 4:20] = 12.1104                      # 3.48**2
-    structure[1, 10:14, :] = 4.41                           # 2.1**2
+    structure[1, 6:18, 4:20] = 12.1104                      # 3.48**2
+    structure[0, 10:14, :] = 4.41                           # 2.1**2
 
-    a = solver(truncation_order=truncation_order, thickness=[130.0, 85.0], structure=structure)
+    a = solver(truncation_order=truncation_order, thickness=[85.0, 130.0], structure=structure)
     res_a = a.solve()
-    b = solver(truncation_order=truncation_order, thickness=[130.0, 85.0], structure=structure)
+    b = solver(truncation_order=truncation_order, thickness=[85.0, 130.0], structure=structure)
     b.formulation = '4ff'
     res_b = b.solve()
 
@@ -225,8 +225,8 @@ def test_the_transmitted_amplitude_is_not_merely_proportional():
     not itself pinning the scale.
     """
     lossy = np.diag([2.4 + 0.05j, 3.1 + 0.05j, 2.7 + 0.05j]).astype(complex)
-    layers = [IN_PLANE, lossy]
-    thickness = [140.0, 260.0]
+    layers = [lossy, IN_PLANE]
+    thickness = [260.0, 140.0]
 
     a = solver(thickness=thickness)
     res_a = a.solve_conv(*uniform_slots(layers, 1, z_row=False))
@@ -260,8 +260,8 @@ def test_the_two_formulations_agree_across_absorbing_half_spaces(eps_top, eps_bo
     are not comparable to 1 (``docs/conventions.md``); the amplitudes still are, and
     :func:`channels` compares both.
     """
-    layers = [IN_PLANE, np.diag([2.4 + 0.05j, 3.1 + 0.05j, 2.7 + 0.05j]).astype(complex)]
-    kw = dict(top=eps_top, bot=eps_bot, thickness=[140.0, 260.0])
+    layers = [np.diag([2.4 + 0.05j, 3.1 + 0.05j, 2.7 + 0.05j]).astype(complex), IN_PLANE]
+    kw = dict(top=eps_top, bot=eps_bot, thickness=[260.0, 140.0])
 
     a = wavebit.rcwa(backend=0, truncation_order=(0, 0), period=PERIOD, wavelength=WL,
                        theta=np.deg2rad(28.0), phi=np.deg2rad(37.0), psi=0.6, **kw)
@@ -290,17 +290,19 @@ def test_an_unknown_formulation_is_refused_at_the_setter():
         solver(thickness=[180.0]).formulation = '3ff'
 
 
-def test_the_scattering_algorithm_is_refused_on_the_first_order_path():
-    """``layer_algorithm='SMM'`` must say so, not quietly run the enhanced transfer.
-
-    The first-order path needs its stack solve to hand the shared final matching a
-    ``(big_F, big_G, big_T)``; the scattering cascade produces a scattering matrix in the two
-    half-spaces' own mode bases instead, and joining the two is unwritten. Running ETM under an
-    ``'SMM'`` label would make every cross-algorithm check in the suite meaningless.
-    """
-    mee = solver(thickness=[180.0], layer_algorithm='SMM')
-    with pytest.raises(ValueError, match='SMM'):
-        mee.solve_conv(*uniform_slots([VOIGT], 1))
+def test_the_first_order_scattering_path_does_not_run_etm(monkeypatch):
+    """An SMM request must use its cascade, including field reconstruction."""
+    import importlib
+    module = importlib.import_module('wavebit._core.solve_2d_4ff')
+    def unexpected(*args, **kwargs):
+        raise AssertionError('SMM called the ETM recursion')
+    monkeypatch.setattr(module, '_etm_recursion', unexpected)
+    mee = solver(thickness=[180.0], layer_algorithm='SMM', answers='field')
+    result = mee.solve_conv(*uniform_slots([VOIGT], 1))
+    assert mee.formulation_assigned == '4ff'
+    assert np.isfinite(result.R).all()
+    assert np.isfinite(mee.reconstruct_field(sample_x=2, sample_y=2, sample_z=3)).all()
+    assert mee.scattering.S11.shape == (2, 2)
 
 
 @pytest.mark.parametrize('z_row', [True, False], ids=['with a z row', 'without one'])
@@ -310,7 +312,7 @@ def test_the_unstabilised_transfer_cannot_be_reached_from_the_public_path(z_row)
     It is the plain ``Psi exp(...) Psi^-1`` transfer, kept there only to show that the
     stabilisation is load-bearing — it holds the growing and decaying halves in one matrix and
     loses relative precision like ``eps*exp(2x)``. Both routes refuse it, and they refuse it
-    for different reasons (one has no entry in the algorithm table, the other only wires ETM),
+    through their respective algorithm checks,
     which is why both are checked.
     """
     mee = solver(thickness=[180.0], layer_algorithm='TMM')
@@ -320,7 +322,7 @@ def test_the_unstabilised_transfer_cannot_be_reached_from_the_public_path(z_row)
 
 
 def test_the_scattering_algorithm_still_works_without_a_z_row():
-    """The control: nothing about the refusal above touches the ordinary SMM path."""
+    """The control: the ordinary two-field SMM path still works."""
     mee = solver(thickness=[180.0], layer_algorithm='SMM')
     res = mee.solve_conv(*uniform_slots([IN_PLANE], 1, z_row=False))
     assert mee.formulation_assigned == '2ff'

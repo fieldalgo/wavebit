@@ -200,18 +200,19 @@ one and returns amplitudes.
 repo leans on most. The checks in `tests/test_excitation.py` are internal (the SMM cascade
 against the ETM matching) for that reason; fmmax or S4 would have to be the external one.
 
-## 8. The undeclared path is byte-for-byte what it was
+## 8. Incident power and phase angles
 
-Two spellings of one quantity meet here. The incident order's `kz` is `n_top*cos(theta)` in the
-normalisation and `Re(kz_top[specular])` in the general sum, and they **differ by an ulp on
-half of all angles** — 36 of 72 combinations tried. A superposition needs the sum; a single
-wave does not.
+The incident order's normal wavevector is read from its half-space mode. It is
+`n_inc*cos(theta)` for a real angle in a lossless medium. For absorbing real-angle
+incidence, use the [phase-direction construction](conventions.md#phase-incidence);
+the same formula with complex `n_inc` is not its normal wavevector.
 
-So the branch is structural — *was an excitation named* — and the undeclared case keeps every
-expression it had, including the incident-column rows that fold the scalar `kz_inc` into
-`delta`. Same argument `_half_space_index` makes for an unnamed `mu`: no golden moves by a
-rounding step for a feature the scene does not use.
+Each illuminated order is weighted by its own real power admittance: `Re(kz/mu)`
+for electric s amplitudes and `Re(kz/epsilon)` for magnetic p amplitudes, with the
+electric-to-magnetic p scale included. The incident power is the sum of these
+weights times the squared amplitude magnitudes. With no explicit `excitation`,
+the single central order is illuminated.
 
-Pinned by `test_declaring_nothing_leaves_the_solve_byte_for_byte_what_it_was`, and checked
-across revisions on 216 arrays — both connecting algorithms, three formulations, three angles,
-two order counts — by hashing the raw bytes.
+For real transverse wavevectors, finite-stack absorption is
+`power_entering - T.sum()`. Incident/reflected interference is included in
+`power_entering`, so replacing it by `1-R.sum()` requires a lossless incident medium.

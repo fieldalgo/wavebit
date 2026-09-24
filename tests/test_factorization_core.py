@@ -175,7 +175,7 @@ def test_factorization_feeds_solve_bit_exactly():
     kx, _ = solver.order_kxy()
 
     epx, epy, epz, *_ = core_dfs(structure, truncation_order[0], truncation_order[1])
-    ri, ti = solve_1d(0, wl, kx, n_top, n_bot, solver.theta, solver.thickness, epx, epy, epz)
+    ri, ti, _ = solve_1d(0, wl, kx, n_top, n_bot, solver.theta, solver.thickness, epx, epy, epz)
 
     assert np.array_equal(np.array(legacy.R), np.array(ri))
     assert np.array_equal(np.array(legacy.T), np.array(ti))
@@ -185,7 +185,7 @@ def test_factorization_feeds_solve_bit_exactly():
 
 def _chain_1d(fac_kwargs, structure, kx, theta):
     epx, epy, epz, *_ = core_dfs(structure, **fac_kwargs)
-    _, ti = solve_1d(0, 0.777, kx, 2.0, 1.0, theta, [0.15], epx, epy, epz)
+    _, ti, _ = solve_1d(0, 0.777, kx, 2.0, 1.0, theta, [0.15], epx, epy, epz)
     return ti
 
 
@@ -240,7 +240,7 @@ def test_end_to_end_gradient_wrt_structure_2d():
 
     def chain(u, kx_, ky_, th_, inc_):
         epx, epy, epz, *_ = core_dfs(u, truncation_order[0], truncation_order[1])
-        _, ti = solve_2d(wl, kx_, ky_, n_top, n_bot, th_, inc_, [0.15], epx, epy, epz,
+        _, ti, _ = solve_2d(wl, kx_, ky_, n_top, n_bot, th_, inc_, [0.15], epx, epy, epz,
                          phi=solver.phi)
         return ti
 
@@ -350,7 +350,7 @@ def test_nvf_end_to_end_gradient_wrt_structure():
 
     def chain(u, kx_, ky_, th_, inc_):
         epx, epy, epxy, epyx, epz = core_nvf(u, truncation_order[0], truncation_order[1], normal_field=normal_field)
-        _, ti = solve_2d(wl, kx_, ky_, n_top, n_bot, th_, inc_, [d], epx, epy, epz,
+        _, ti, _ = solve_2d(wl, kx_, ky_, n_top, n_bot, th_, inc_, [d], epx, epy, epz,
                          epxy_conv_all=epxy, epyx_conv_all=epyx, phi=solver.phi)
         return ti
 
@@ -478,7 +478,7 @@ def test_cfs_end_to_end_gradient_wrt_structure():
 
     def chain(u, kx_):
         epx, epy, epz, *_ = core_cfs(u, truncation_order[0], truncation_order[1], compression=compression)
-        _, ti = solve_1d(0, wl, kx_, n_top, n_bot, theta, [d], epx, epy, epz)
+        _, ti, _ = solve_1d(0, wl, kx_, n_top, n_bot, theta, [d], epx, epy, epz)
         return ti
 
     def f_np(s):

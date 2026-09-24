@@ -27,11 +27,16 @@ part of the scene; `sweep` declares what varies.
 | Field | Holds |
 | --- | --- |
 | `stack` | `layers` (each a `Layer(thickness, structure, mu)`), `top`, `bot`, `period`, `lattice` |
-| `incidence` | `wavelength`, `theta`, `phi`, `tetm`, `psi`, `chi`, `incidence_side`, `polarization` |
-| `numerics` | `backend`, `truncation_order`, `fourier_coefficients`, `factorization`, `normal_method`, `projector`, `complex_dtype`, `layer_algorithm`, `normal_grid`, `answers` |
+| `incidence` | `wavelength`, `theta`, `phi`, `kx`, `ky`, `tetm`, `psi`, `chi`, `incidence_side`, `polarization` |
+| `numerics` | `backend`, `truncation_order`, `fourier_coefficients`, `factorization`, `raster_normal_method`, `nvf_projector`, `complex_dtype`, `layer_algorithm`, `shape_nvf_grid_size`, `answers` |
 | `sweep` | `axes` — `{field: [values]}` after resolution |
 
 `solver` (`'rcwa'`) and `version` complete it.
+
+The current schema version is **10**. Version 7 used `normal_method`, `normal_grid`
+and `projector` inside `numerics`. Rename those keys to `raster_normal_method`,
+`shape_nvf_grid_size` and `nvf_projector`, respectively, then apply the bottom-to-top coordinate migration below before setting `version='10'`.
+The NVF option values themselves are unchanged.
 
 Two differences from the constructor are deliberate. `numerics.complex_dtype` is the **bit
 width** (`128` / `64`) rather than a dtype object, so the spec stays backend-neutral. And
@@ -44,11 +49,11 @@ the light.
 import numpy as np, wavebit
 from wavebit import JobSpec, Numerics, Sweep, Layer, Stack, Incidence, run
 
-eps_hi = wavebit.eps_from_index(3.5)
+eps_hi = 12.25
 spec = JobSpec(
     stack=Stack(layers=[Layer(thickness=300.,
                               structure=np.array([[1.0, 1.0, eps_hi, eps_hi]]))],
-                top=1.0, bot=wavebit.eps_from_index(1.5), period=(700., 700.)),
+                top=1.0, bot=2.25, period=(700., 700.)),
     incidence=Incidence(wavelength=900., theta=0., phi=0., tetm='te'),
     numerics=Numerics(truncation_order=(10, 0)),
     sweep=Sweep.from_dict({'wavelength': {'linspace': [800., 1000., 3]}}),
@@ -81,7 +86,7 @@ Sweep.from_dict({
 })
 ```
 
-Five fields are sweepable — `wavelength`, `theta`, `phi`, `psi`, `chi` — and anything else is
+Seven fields are sweepable — `wavelength`, `theta`, `phi`, `psi`, `chi`, `kx`, `ky` — and anything else is
 refused by name. Multiple axes form the full **Cartesian product**, an outer product rather
 than a zip, because that is what a parameter sweep means; `len(spec)` is the number of points.
 
@@ -106,7 +111,7 @@ The schema is versioned, and the gate is strict on purpose:
 | Written | Result |
 | --- | --- |
 | no `version` | `SpecError` — a parsed document has to say which schema it is written in. Defaulting the absence to "current" would make the gate a no-op for exactly the documents most likely to be stale |
-| `version: '2'` | `SpecError` — this build understands version `'7'` |
+| `version: '2'` | `SpecError` — this build understands version `'10'` |
 | `outputs: [...]` | `SpecError` — removed in version 4, and refused by name rather than as an unknown field |
 | any unknown field | `SpecError`, listing what is allowed |
 
@@ -122,6 +127,10 @@ it is refused rather than migrated by guess.
 
 A `Material` has a JSON form — `{"epsilon": e}`, plus `"mu"` when one is named — so it survives
 the round trip. A bare number stays a bare number, since respelling it would change the `key()`.
+
+A `TabulatedMaterial` is stored with its full table in a `dispersion` object.
+Wavelength sweeps reevaluate it at each point; numerical `Material` values stay
+constant. The table is included in `key()`. See [Materials](materials.md).
 
 ## Telling a consumer what is possible
 
@@ -140,3 +149,7 @@ answer refuse instead of emitting legal, energy-conserving, wrong scenes.
 
 **Capabilities and constraints only** — the manifest never recommends anything. See
 [`../capability-manifest.md`](../capability-manifest.md).
+
+Version **10** uses bottom-to-top `stack.layers` and upward-positive height from the bottom
+interface. Reverse older layer lists and review z/tensor conventions before changing the
+version. See [coordinate migration](../conventions.md#updating-a-pre-release-downward-positive-scene).

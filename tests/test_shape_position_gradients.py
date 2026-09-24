@@ -223,16 +223,18 @@ def test_the_sampled_field_no_longer_depends_on_where_in_the_cell_a_shape_SITS()
 # Only the first would pass just as well if the phases cancelled globally for a reason that had
 # nothing to do with each layer being right.
 
-STACK = dict(period=[P, P], thickness=[0.25, 0.30], theta=0.35, phi=0.4, psi=0.0,
+STACK = dict(period=[P, P], thickness=[0.30, 0.25], theta=0.35, phi=0.4, psi=0.0,
              wavelength=0.777, top=1.0, bot=2.25, truncation_order=[4, 4])
 CX0, CX1 = -0.15 * P, 0.05 * P
 
 
 def _stack(cx0, cx1):
-    return [dict(background=1.0, shapes=[dict(type='rectangle', cx=cx0, cy=0.0, lx=0.385,
+    return [
+        dict(background=1.0, shapes=[dict(type='circle', cx=cx1, cy=0.077, lx=0.385,
+                                          material=6.25)]),
+        dict(background=1.0, shapes=[dict(type='rectangle', cx=cx0, cy=0.0, lx=0.385,
                                           ly=0.231, angle=0.4, material=12.25)]),
-            dict(background=1.0, shapes=[dict(type='circle', cx=cx1, cy=0.077, lx=0.385,
-                                          material=6.25)])]
+    ]
 
 
 def _stack_total(cx0, cx1):
@@ -381,7 +383,7 @@ def test_two_rectangles_carry_a_correct_relative_gradient_too():
     Until 2026-08-17 a rectangle's normals ended in ``sign()`` and the nearest face was picked
     with a hard ``where``, so the field was piecewise constant: all of its position dependence
     sat on seams that translating the shape slid across, and a grid sample cannot see a seam
-    move. That is not a resolution problem -- the error was flat at 1.8e-2 from normal_grid
+    move. That is not a resolution problem -- the error was flat at 1.8e-2 from shape_nvf_grid_size
     1024 to 4096 while the circle pair converged -- and the only escape on offer was a ``tanh``
     mollification, rejected because no width served both this and
     ``test_analytic_angle_is_smooth_through_normal``.
@@ -433,7 +435,7 @@ def test_a_layer_of_two_shapes_is_translation_invariant_too():
     geometry whatever the shift, and the answer is the same to rounding at every grid.
 
     Until then a fractional-pixel shift resampled the field elsewhere and left a discretization
-    residual (7.3e-6, 5.2e-6, 1.8e-6, 7.6e-7 at normal_grid 256 to 2048 on this fixture), which
+    residual (7.3e-6, 5.2e-6, 1.8e-6, 7.6e-7 at shape_nvf_grid_size 256 to 2048 on this fixture), which
     is what this measured; a shift landing on the grid was exact even then. Both are at
     rounding now and both are asserted there.
     """
@@ -446,7 +448,7 @@ def test_a_layer_of_two_shapes_is_translation_invariant_too():
                   dict(type='circle', cx=0.20 + d, cy=-0.20, lx=0.22, angle=0.0, material=5.76)]
         structure = [dict(background=1.0, shapes=shapes)]
         return float(np.sum(np.asarray(
-            wavebit.rcwa(structure=structure, normal_grid=grid, **cfg).solve().T)).real)
+            wavebit.rcwa(structure=structure, shape_nvf_grid_size=grid, **cfg).solve().T)).real)
 
     on_grid = [total(k / 256) for k in (0, 8, 16, 32, 64)]
     assert np.ptp(on_grid) < 1e-11, np.ptp(on_grid)
@@ -511,7 +513,7 @@ def test_a_multishape_layer_is_periodic_across_the_cell_edge():
                       material=12.1104)
         structure = [dict(background=1.0, shapes=[moving] + shapes_after)]
         return float(np.sum(np.asarray(
-            wavebit.rcwa(structure=structure, normal_grid=256, **cfg).solve().T)).real)
+            wavebit.rcwa(structure=structure, shape_nvf_grid_size=256, **cfg).solve().T)).real)
 
     alone = [total(cx, []) for cx in (-0.40, 0.60, 1.60)]
     assert np.ptp(alone) < 1e-12, alone
@@ -550,7 +552,7 @@ def test_a_common_translation_of_every_shape_leaves_the_answer_alone():
                   dict(type='rectangle', cx=0.22 + shift, cy=0.12, lx=0.26, ly=0.30,
                        angle=0.0, material=4.41)]
         return float(np.sum(np.asarray(wavebit.rcwa(
-            structure=[dict(background=1.0, shapes=shapes)], normal_grid=256, **cfg)
+            structure=[dict(background=1.0, shapes=shapes)], shape_nvf_grid_size=256, **cfg)
             .solve().T)).real)
 
     on_grid = [total(k / 256) for k in (0, 16, 32, 64)]

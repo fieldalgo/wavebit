@@ -42,9 +42,9 @@ STRUCTURE_2D = np.array([[[4.0, 1.0, 2.25, 1.0],
                           [1.0, 9.0, 1.0, 4.0]]] * 2)
 
 CFG_1D = dict(backend=0, top=1.0, bot=1.0, theta=1e-10, truncation_order=[8, 0],
-              wavelength=300.0, period=[700.0, 700.0], thickness=[460.0, 22.0])
+              wavelength=300.0, period=[700.0, 700.0], thickness=[22.0, 460.0])
 CFG_2D = dict(backend=0, top=1.0, bot=2.25, theta=0.3, phi=0.4, truncation_order=[2, 1],
-              wavelength=900.0, period=[700.0, 700.0], thickness=[100.0, 200.0])
+              wavelength=900.0, period=[700.0, 700.0], thickness=[200.0, 100.0])
 
 _AMPLITUDE_FIELDS = ('r_s', 'r_p', 't_s', 't_p')
 _POWER_FIELDS = ('R', 'R_s', 'R_p', 'T', 'T_s', 'T_p')
@@ -533,7 +533,7 @@ def test_incidence_carries_the_pair():
 
 
 _SPEC = {
-    'version': '7',                 # a parsed document states its schema; see tests/test_spec.py
+    'version': '10',                 # a parsed document states its schema; see tests/test_spec.py
     'numerics': {'backend': 'numpy', 'truncation_order': [10, 0]},
     'stack': {
         'top': 1.0, 'bot': 2.25, 'period': [700.0],

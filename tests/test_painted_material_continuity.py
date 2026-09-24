@@ -8,7 +8,7 @@ from wavebit._core import boundary as B
 
 CELL = ((700., 0.), (0., 700.))
 KW = dict(lattice=CELL, wavelength=900., thickness=(300.,), top=1., bot=2.25,
-          theta=.2, phi=.17, psi=0., truncation_order=(2, 2), normal_grid=64)
+          theta=.2, phi=.17, psi=0., truncation_order=(2, 2), shape_nvf_grid_size=64)
 
 
 def shapes(left=9., right=9.):
@@ -28,8 +28,8 @@ def total(left=9., right=9., **kwargs):
 @pytest.mark.parametrize('base,direction', [(9., 1.), (4.+.4j, 1j), (-4.+.3j, 1.)])
 @pytest.mark.parametrize('grid', [64, 127, 128])
 def test_material_equality_has_a_ramp_instead_of_a_fixed_step(base, direction, grid):
-    zero = total(base, base, normal_grid=grid)
-    delta = [abs(total(base+h*direction, base, normal_grid=grid)-zero)
+    zero = total(base, base, shape_nvf_grid_size=grid)
+    delta = [abs(total(base+h*direction, base, shape_nvf_grid_size=grid)-zero)
              for h in (1e-5, 1e-7)]
     assert delta[1] < .02*delta[0] + 2e-12
     assert delta[1] < 1e-7

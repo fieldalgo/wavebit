@@ -19,11 +19,11 @@ properties every one of them carries.
 
 ```{eval-rst}
 .. autoclass:: wavebit._core.engine.CoreFactorizationMixin
-   :members: solve, reconstruct_field, freeze_geometry, solve_conv, eps_conv_matrices, factorization, fourier_coefficients, normal_method, projector, normal_grid
+   :members: solve, reconstruct_field, freeze_geometry, solve_conv, eps_conv_matrices, factorization, fourier_coefficients, raster_normal_method, nvf_projector, shape_nvf_grid_size
 
 
 .. autoclass:: wavebit._core.engine.CoreSolveMixin
-   :members: answers, excitation, scattering, truncation_order, period, lattice
+   :members: answers, theta, kx, ky, excitation, scattering, truncation_order, period, lattice
 
 
 ```
@@ -108,6 +108,9 @@ certify optical convergence. See the [selection guide](../guide/nvf-method-selec
 .. autoclass:: wavebit.ConvMatrices
    :members:
 
+.. autoclass:: wavebit.TensorConvMatrices
+   :members:
+
 .. autoclass:: wavebit.ConformingNVF
    :members:
 
@@ -125,12 +128,15 @@ certify optical convergence. See the [selection guide](../guide/nvf-method-selec
 
 ## Materials data
 
+See [Materials and wavelength sweeps](../guide/materials.md) for assignment and evaluation.
+
 ```{eval-rst}
-.. autofunction:: wavebit.find_material
+.. autoclass:: wavebit.TabulatedMaterial
+   :members:
 
-.. autofunction:: wavebit.find_nk_index
+.. autofunction:: wavebit.materials.load
 
-.. autofunction:: wavebit.read_material_table
+.. autofunction:: wavebit.materials.available
 
 ```
 
@@ -170,4 +176,34 @@ certify optical convergence. See the [selection guide](../guide/nvf-method-selec
 .. autoclass:: wavebit.AxisNameWarning
    :members:
 
+```
+
+## Side-resolved coherent illumination
+
+See [the guide and flowchart](../coherent-illumination.md) for physical conventions.
+
+```{eval-rst}
+.. autoclass:: wavebit.Source
+   :members:
+
+.. autoclass:: wavebit.PlaneWave
+   :members:
+
+.. autoclass:: wavebit.OrderExcitation
+   :members:
+
+.. autoclass:: wavebit.GaussianBeam
+   :members:
+
+.. autoclass:: wavebit.ElectricDipole
+   :members:
+
+.. autoclass:: wavebit.CoherentSolver
+   :members: solve, reconstruct_field
+
+.. autoclass:: wavebit.CoherentResult
+   :members: boundary_fields, boundary_power, reconstruct_field, output_top, output_bottom, absorption
+
+.. autoclass:: wavebit.BoundaryPower
+   :members:
 ```

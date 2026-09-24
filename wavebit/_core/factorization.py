@@ -355,6 +355,21 @@ def fourier2d_pointwise(xp, field, half_width_u, half_width_v):
     return _fourier2d_grid(xp, field, half_width_u, half_width_v, inverse_rule=None, piecewise_constant=False)
 
 
+def _normalized_row_fft(xp, values):
+    """Normalized DFT along rows, without degenerate FFT batch dimensions.
+
+    A one-point transform is the identity; a single row is a 1D transform. Removing
+    that singleton batch dimension also avoids the JAX CPU FFT layout assertion
+    encountered when differentiating a jitted small raster solve.
+    """
+    n = values.shape[1]
+    if n == 1:
+        return values
+    if values.shape[0] == 1:
+        return xp.reshape(xp.fft.fft(xp.reshape(values / n, (n,))), values.shape)
+    return xp.fft.fft(values / n)
+
+
 def _fourier2d_grid(xp, cell, half_width_u, half_width_v, *, inverse_rule, piecewise_constant):
     """2D discrete Fourier series of ``cell`` with Li's factorization rules.
 
@@ -414,7 +429,7 @@ def _fourier2d_grid(xp, cell, half_width_u, half_width_v, *, inverse_rule, piece
     if inv_v:             # v discontinuous: the inverse rule starts from 1/eps
         cell = 1 / cell
 
-    dfs1d = xp.fft.fft(cell / cell.shape[1])
+    dfs1d = _normalized_row_fft(xp, cell)
 
     dev = _device(xp, cell)
     orders_v = list(range(-2 * half_width_v, 2 * half_width_v + 1))
@@ -449,7 +464,7 @@ def _fourier2d_grid(xp, cell, half_width_u, half_width_v, *, inverse_rule, piece
 
     conv1d_t = xp.matrix_transpose(conv1d)
     n_u = conv1d_t.shape[1]
-    dfs_2d = xp.fft.fft(conv1d_t / n_u)
+    dfs_2d = _normalized_row_fft(xp, conv1d_t)
 
     coeff_u = dfs_2d[:, xp.asarray(_wrap(orders_u, n_u), device=dev)]
     # Both kinds of grid carry the half-pixel offset; only a staircase also carries
@@ -509,7 +524,7 @@ def check_normal_grid(grid_shape, half_width_u, half_width_v):
     It lives here rather than beside either caller because both shape paths need it and
     :mod:`.boundary` imports :mod:`.parametric`, so the parametric one could not reach it there.
     Until 2026-08-27 only the boundary route called it, and the asymmetry was not a decision:
-    at ``truncation_order=10`` the boundary route refused ``normal_grid=8`` while the parametric
+    at ``truncation_order=10`` the boundary route refused ``shape_nvf_grid_size=8`` while the parametric
     path built it, 4.9e-4 adrift and conserving energy to twelve digits.
     """
     Ny, Nx = grid_shape
@@ -639,7 +654,7 @@ def _distance_gradient(interface_mask, shape, lattice=None):
     direction is what the ``'distance'`` construction normalises into a normal field; the
     **magnitude** is ``|grad d|``, which is a property of the interface set rather than of any
     construction — 1 almost everywhere, dropping to 0 exactly on the medial axis, and the same
-    array whichever of the four builders drew the directions. ``projector='circular'`` reads
+    array whichever of the four builders drew the directions. ``nvf_projector='circular'`` reads
     it beside every method (see :func:`normal_vector_field`'s ``with_magnitude``).
 
     Returns ``(g_x, g_y)`` **unnormalised**. Everything periodic about the construction lives
@@ -807,7 +822,7 @@ def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=No
     constructions get it from a distance transform run beside them rather than from their own
     output, which is a unit field by construction and carries no magnitude to read.
 
-    Only ``projector='circular'`` asks for it (:class:`~wavebit._core.enums.Projector`), and
+    Only ``nvf_projector='circular'`` asks for it (:class:`~wavebit._core.enums.Projector`), and
     only that reader makes the scaling meaningful: ``phi = (pi/8)(1 + cos(pi|t|))`` is
     monotone in ``|t|`` on ``[0, 1]`` and turns back up outside it, so *unit maximum length*
     is the formula's domain rather than a normalisation anyone chose. A one-cell axis and a
@@ -887,10 +902,10 @@ def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=No
             eps = _to_numpy(eps_matrix)
         except Exception:
             raise TypeError(
-                f"normal_method={method.value!r} reads the layer's values (its indicator "
+                f"raster_normal_method={method.value!r} reads the layer's values (its indicator "
                 f"needs to know which phase is which), and this layer is a tracer without "
                 f"concrete ones. Precompute the field eagerly with freeze_geometry() and "
-                f"hand it to solve(geometry=...), or use normal_method='distance', "
+                f"hand it to solve(geometry=...), or use raster_normal_method='distance', "
                 f"whose mask-only path a trace can take.") from None
         mask = (_interface_mask(eps) if interface_mask is None
                 else np.asarray(interface_mask, dtype=bool))
@@ -950,7 +965,7 @@ def _field_magnitude(gx, gy):
     what the paper states.
 
     A layer with no interface at all has a flat distance map and answers 1 everywhere, which
-    keeps ``projector='circular'`` exactly on ``n n^T`` there — the direction is ``(0, 0)``
+    keeps ``nvf_projector='circular'`` exactly on ``n n^T`` there — the direction is ``(0, 0)``
     on such a layer, so the linear projector is 0 and the factorization is the plain direct
     rule, which is the exact answer for a uniform layer and must not be deformed into
     something else.
@@ -1074,7 +1089,7 @@ def _normal_field_source(eps, lattice=None, method=None):
 
     That is the shape, plus — unless an axis is a single cell, where the field is the constant
     along-axis one whatever the pattern — the interface mask, plus the cell basis, plus the
-    construction (``normal_method``). Two layers with the same source have the same normal
+    construction (``raster_normal_method``). Two layers with the same source have the same normal
     field, bit for bit, which is what makes this the tell: it accepts a replay exactly when
     replaying is the same computation as rebuilding.
 
@@ -1106,7 +1121,7 @@ def _normal_field_source(eps, lattice=None, method=None):
 
 
 def normal_field_for_raster(structure, half_width_u, half_width_v, lattice=None, method=None,
-                            projector=None):
+                            nvf_projector=None):
     """Per-layer ``(normal_x, normal_y)`` normal fields for ``structure``, on the grid the NVF build uses.
 
     Precompute this once from the concrete geometry and hand it to
@@ -1114,13 +1129,13 @@ def normal_field_for_raster(structure, half_width_u, half_width_v, lattice=None,
     JAX transform (none of the constructions can run on tracers).
 
     ``lattice`` is the cell basis and ``method`` the construction; see
-    :func:`normal_vector_field` for what each changes. ``projector='circular'`` makes each
+    :func:`normal_vector_field` for what each changes. ``nvf_projector='circular'`` makes each
     entry a **triple** — the magnitude the complex-basis projector reads is part of the field
     the solve is handed, so it has to be part of what is frozen; a record without it is
     refused rather than served with the other projector (:func:`_unpack_normal_field`).
     """
     xp = array_namespace(structure)
-    want = _wants_magnitude(projector)
+    want = _wants_magnitude(nvf_projector)
     return [normal_vector_field(eps, lattice=lattice, method=method,
                                 base_shape=tuple(base.shape), with_magnitude=want)
             for eps, base, _, _ in _layer_eps_for_normal_field(xp, structure, half_width_u, half_width_v)]
@@ -1132,7 +1147,7 @@ def normal_field_source_for_raster(structure, half_width_u, half_width_v, lattic
     Freeze this alongside the normal field and hand both back to
     :func:`to_conv_mat_raster_nvf`; the replay compares it against the layer actually in front
     of it and refuses a field that was sampled from a different one — a different pattern, a
-    different basis, or a different ``normal_method``.
+    different basis, or a different ``raster_normal_method``.
     """
     xp = array_namespace(structure)
     return [_normal_field_source(_to_numpy(eps), lattice, method)
@@ -1182,8 +1197,8 @@ def _check_normal_field_still_fits(eps_matrix, source, index, lattice=None, meth
         return                            # equal shapes agree on whether a mask exists at all
 
     if meth != now_meth:
-        moved = (f'the normal field was built with normal_method={meth!r} and this solver '
-                 f'is configured normal_method={now_meth!r} — same interfaces, different '
+        moved = (f'the normal field was built with raster_normal_method={meth!r} and this solver '
+                 f'is configured raster_normal_method={now_meth!r} — same interfaces, different '
                  f'construction, different field')
     elif lat != now_lat:
         moved = (f'the cell basis is now {now_lat}, where the normal field was sampled on '
@@ -1291,17 +1306,17 @@ def jones_projector_fields(normal_x, normal_y, magnitude):
     return p_xx, real - 1j * imag, real + 1j * imag, p_yy
 
 
-def _wants_magnitude(projector):
-    """Whether ``projector`` asks the field for a magnitude. ``None`` is the default."""
+def _wants_magnitude(nvf_projector):
+    """Whether ``nvf_projector`` asks the field for a magnitude. ``None`` is the default."""
     from .enums import DEFAULT_PROJECTOR, Projector, projector_of
-    resolved = DEFAULT_PROJECTOR if projector is None else projector_of(projector)
+    resolved = DEFAULT_PROJECTOR if nvf_projector is None else projector_of(nvf_projector)
     return resolved == Projector.CIRCULAR
 
 
 def _unpack_normal_field(entry, want_magnitude, index):
     """``(normal_x, normal_y, magnitude)`` from a field the builder made or a record it replays.
 
-    A frozen record carries a magnitude only if it was taken under ``projector='circular'``, so
+    A frozen record carries a magnitude only if it was taken under ``nvf_projector='circular'``, so
     its *arity* is the tell — and a two-entry record replayed under the circular projector is
     refused rather than quietly served with the linear one. That is the same rule
     :func:`_check_normal_field_still_fits` applies to the construction: a record built under
@@ -1317,8 +1332,8 @@ def _unpack_normal_field(entry, want_magnitude, index):
     if len(entry) < 3:
         raise StaleGeometryError(
             f"the frozen geometry no longer fits this solver: layer {index}'s normal field "
-            f"was frozen under projector='linear', which records a direction and no "
-            f"magnitude, and this solver is configured projector='circular', which needs "
+            f"was frozen under nvf_projector='linear', which records a direction and no "
+            f"magnitude, and this solver is configured nvf_projector='circular', which needs "
             f'one. Call freeze_geometry() again with the projector this solve will use, or '
             f'drop geometry= to rebuild.')
     return entry[0], entry[1], entry[2]
@@ -1368,7 +1383,7 @@ def _nvf_assemble(xp, ep_dir, ep_inv, C_xx, C_xy, C_yy, C_yx=None):
     giving complex ``q^2`` and gross energy-conservation violation on curved boundaries.
 
     ``C_yx`` left ``None`` says the projector is symmetric, which is what ``P = n n^T`` is and
-    what this path assumed outright until ``projector='circular'`` (see
+    what this path assumed outright until ``nvf_projector='circular'`` (see
     :func:`jones_projector_fields`). It is a real statement about the projector rather than a
     convenience: with it, ``eps_yx`` is not merely equal to ``eps_xy`` but *the same object*,
     so the default path does one matmul pair rather than two and cannot drift from itself.
@@ -1459,138 +1474,44 @@ def _pn_fields(xp, eps33, normal_x, normal_y):
     # that silently would bury a real singularity instead of reporting it.
     a = xp.where(normal_x ** 2 + normal_y ** 2 == 0, xp.ones_like(a), a)[..., None, None]
 
-    A = (eps33 - p[..., :, None] * q[..., None, :] / a) @ T_proj \
+    A = (eps33 - p[..., :, None] * q[..., None, :] / a) @ T_proj\
         + p[..., :, None] * n[..., None, :] / a
-    B = (eye - n[..., :, None] * q[..., None, :] / a) @ T_proj \
+    B = (eye - n[..., :, None] * q[..., None, :] / a) @ T_proj\
         + n[..., :, None] * n[..., None, :] / a
     return A, B
 
 
-def _refuse_z_coupling(xp, tensor33):
-    """Raise if a pointwise tensor's z row or column is populated. See :func:`pn_eps_conv_matrices`.
-
-    **Exact zero, no tolerance.** The obvious objection is that a user who builds a tensor by
-    rotating a diagonal one gets rounding into the z slots -- and they do not. An in-plane
-    rotation's third row and column are the literal ``0.0, 0.0, 1.0``, so every path into a z
-    off-diagonal passes through a multiplication by an exact zero, which IEEE 754 keeps exact.
-    Measured at 0.000e+00 over 20000 random angles for eight constructions (written-out
-    ``R_z``, ``einsum``, four SciPy ``Rotation`` spellings, ``expm``, a director outer
-    product), in float32 and float64, on all three backends. What *does* produce a residue is
-    not rounding: ``n_z = sqrt(1 - nx^2 - ny^2)`` gives 6.6e-9 and a genuine 1e-9 rad tilt
-    gives 1.3e-9 -- both real z coupling, and a relative tolerance would swallow them.
-
-    **Skipped under a trace, and that is the softer pole on purpose.** ``bool(any(z != 0))``
-    survives ``jax.grad`` -- a comparison drops the tangent in one whole-array step, where
-    ``float(max(abs(z)))`` stays a tracer -- but not ``jax.jit``. Unlike
-    :func:`~wavebit._core.parametric.layer_needs_resolving`, whose traced answer *routes* a layer
-    and so must raise, this one routes nothing: both answers build the same matrices, and it
-    decides only whether to report. There is also no frozen record that could carry an eager
-    answer forward, so refusing when traced would refuse *every* jitted call on a path that
-    jits today and is published as supported.
-
-    Two ``any`` calls rather than one over a concatenation, because the concatenation copies:
-    490 us against 1091 us on a 256x256 raster, which is 0.06% of that layer's build.
-    """
-    z_row = tensor33[..., 2, :2]
-    z_col = tensor33[..., :2, 2]
-    try:
-        coupled = bool(xp.any(z_row != 0)) or bool(xp.any(z_col != 0))
-    except Exception:                          # noqa: BLE001 - a traced tensor; see above
-        return
-    if not coupled:
-        return
-    raise ValueError(
-        'a patterned tensor with a populated z row or column cannot be built here: the '
-        'Popov-Neviere rearrangement closes over the in-plane 2x2 block, so eps_xz, eps_zx, '
-        'eps_yz and eps_zy are not read and would be dropped without a word -- the matrices '
-        'come back bit-identical to the same layer with that row zeroed, and the solve '
-        'conserves energy. (eps_zz is read, and is not what this refuses.)\n'
-        '  A *uniform* z-coupled layer has a route: hand solve_conv the nine slots directly, '
-        'which selects the first-order (4ff) path. That path holds the z row exactly and '
-        'takes no permeability. A patterned one has no builder yet -- the 3x3 closing step is '
-        'unwritten, and no oracle exists that could say whether it were right.')
-
-
 def pn_eps_conv_matrices(xp, eps33, normal_x, normal_y, half_width_u, half_width_v):
-    """Popov-Neviere convolution matrices for one *patterned anisotropic* layer.
+    """Popov--Neviere factorization of a full constitutive tensor field.
 
-    ``eps33`` is the pointwise permittivity tensor on the layer raster, shape ``(Ny, Nx, 3, 3)``.
-    Returns the same five slots as :func:`nvf_conv_matrices`,
-    ``(epx, epy, epz_i, epxy, epyx)``, so the two are interchangeable at the call site.
-
-    Scope: the **in-plane** tensor, i.e. the five slots. The derivation in :func:`_pn_fields`
-    is written for a full 3x3 and stays valid for one, but the z row and column only decouple
-    from the in-plane block when they are empty (with ``nz = 0`` the projectors are block
-    diagonal, so ``A_zz = eps_zz`` and ``B_zz = 1` exactly). A patterned layer that fills them
-    needs the 3x3 block solved together, and — more to the point — nothing available can say
-    whether the answer is right: fmmax, the one oracle that handles a patterned complex
-    off-diagonal, has no z-row arguments at all. That case is left unimplemented rather than
-    written blind.
-
-    **And refused rather than dropped**, since 2026-08-27. It used to be dropped: ``block``
-    below iterates ``range(2)``, so with ``nz = 0`` the projector is block diagonal and
-    ``q[2]`` cannot reach ``A[i, j]`` for ``i, j < 2`` at all. A tensor carrying
-    ``eps_xz = 0.7j, eps_zx = -0.7j`` came back **bit-identical** to the same tensor with the z
-    row and column zeroed -- all five slots, max|diff| = 0.000e+00 -- and the answer conserved
-    energy. Against the 4ff path, which holds a z row exactly on a uniform layer, the cost is
-    quadratic in the coupling and has no plateau a tolerance could sit on: ``T`` in error by
-    3.3e-9 at ``eps_xz = 1e-6``, 3.4e-5 at 1e-2, and 1.9e-2 at 0.8.
-
-    ``eps_zz`` is **not** part of the refusal, and the distinction is measured rather than
-    assumed: changing it moves ``epz_i`` by 1.4e-1. Only ``[..., 2, :2]`` and ``[..., :2, 2]``
-    are unreachable.
+    Form the continuous mixed field pointwise, Fourier transform A and B, then
+    close all coupled components with [[A]] @ inv([[B]]). Return nine slots
+    when z couples to the transverse field, otherwise the five-slot fast path.
+    Epsilon and permeability use the identical interface continuity algebra.
     """
-    _refuse_z_coupling(xp, eps33)
+    from .anisotropy import full_tensor, tensor_slots
+    size = 3 if full_tensor(xp, eps33) else 2
     A, B = _pn_fields(xp, eps33, normal_x, normal_y)
-
-    def block(field):
-        return xp.concat([xp.concat([fourier2d_pointwise(xp, field[..., i, j], half_width_u, half_width_v)
-                                     for j in range(2)], axis=-1) for i in range(2)], axis=-2)
-
-    eps_t = block(A) @ xp.linalg.inv(block(B))
-    n_orders = eps_t.shape[-1] // 2
-    eps_xx, eps_xy = eps_t[..., :n_orders, :n_orders], eps_t[..., :n_orders, n_orders:]
-    eps_yx, eps_yy = eps_t[..., n_orders:, :n_orders], eps_t[..., n_orders:, n_orders:]
-
-    # z decouples: with nz = 0 the projectors are block diagonal, so A_zz = eps_zz and B_zz = 1
-    # exactly and the slot is the plain direct rule inverted -- the same expression
-    # `_nvf_assemble` closes with, and it must stay the same one: `<1/eps_zz>` is the *inverse*
-    # rule and belongs to a different continuity argument. E_z is TANGENTIAL to a vertical
-    # sidewall (the interface normal is in-plane), hence continuous there, and
-    # continuous-times-discontinuous is precisely the product Laurent handles.
-    #
-    # The closed form, exactly as `nvf_conv_matrices` reads its permittivity -- **not** the plain
-    # DFT that A and B above are stuck with. `eps_zz` alone is a staircase, so
-    # `fourier2d_piecewise_constant` gives its coefficients exactly, and unlike A and B it has no
-    # normal field mixed into it to force the sampled reading.
-    #
-    # A and B do not constrain this slot. Decoupling means it is never multiplied against either
-    # of them, so nothing here has to agree with how they read the grid. What it *does* have to
-    # agree with is the rest of the package: a permittivity raster names the material at each pixel
-    # rather than sampling something that varies inside it, so it is a
-    # staircase wherever it is read (`to_conv_mat_raster_sampled`, and the `ep_dir` / `ep_inv` of
-    # `nvf_conv_matrices`, which mixes the two transforms this same way and for this same reason).
-    #
-    # This line held the DFT until 2026-08-17 on a consistency argument -- that the closed form
-    # described a different layer than A and B, and that mixing the two cost rotation covariance
-    # about z, 1.9e-14 against 5.2e-8. That penalty was a bug, not a description mismatch: the
-    # sampled transform was placing a pixel value at its left edge rather than its centre, and
-    # `_half_pixel_phase` (da4762a) took the closed-form arm to 1.5e-14. Both arms now hold the
-    # quarter turn, so covariance cannot choose between them and neither can energy conservation.
-    #
-    # Measured against the transform's own exact limit instead; the sweeps are in §7 of
-    # `docs/patterned-anisotropic-factorization.md`. What separates the two is the `sinc` alone
-    # -- the box transform of a value held across its pixel, which the point sample never had --
-    # and on a rectangle whose edges are grid lines, where the raster *is* the layer, the closed
-    # form is exact at every N while the DFT converges to it as 1/N**2 (3.0e-2 at N=16, 1.2e-5
-    # at N=512, truncation_order=6). That reaches the answer through `Kx epz_i Kx`, so it grows with
-    # angle: at fixed truncation_order and a frozen geometry the DFT arm's error runs 3.5x to 4.8x the
-    # closed form's across 45 to 55 degrees, and the crossover is near 38 degrees, below which
-    # the DFT leads by 5% of a term 30x smaller.
-    epz_i = xp.linalg.inv(
-        fourier2d_piecewise_constant(xp, eps33[..., 2, 2], half_width_u, half_width_v, inverse_rule=None))
-
-    return ConvMatrices(eps_xx, eps_yy, epz_i, -eps_xy, -eps_yx)
+    def ft(v):
+        return fourier2d_pointwise(xp, v, half_width_u, half_width_v)
+    # The bare material is constant within each raster pixel. Keep the exact
+    # box integral of epsilon_zz; only its projector-dependent correction is
+    # sampled. This agrees continuously with the existing five-slot path.
+    zz = fourier2d_piecewise_constant(
+        xp, eps33[..., 2, 2], half_width_u, half_width_v, inverse_rule=None)
+    def block(field, material=False):
+        return xp.concat([xp.concat([
+            zz + ft(field[..., 2, 2] - eps33[..., 2, 2])
+            if material and i == j == 2 else ft(field[..., i, j])
+            for j in range(size)], axis=-1) for i in range(size)], axis=-2)
+    effective = block(A, material=True) @ xp.linalg.inv(block(B))
+    n = effective.shape[-1] // size
+    blocks = [[effective[i*n:(i+1)*n, j*n:(j+1)*n]
+               for j in range(size)] for i in range(size)]
+    if size == 3:
+        return tensor_slots(xp, blocks)
+    return ConvMatrices(blocks[0][0], blocks[1][1], xp.linalg.inv(zz),
+                        -blocks[0][1], -blocks[1][0])
 
 
 def pn_mu_conv_matrices(xp, mu33, normal_x, normal_y, half_width_u, half_width_v):
@@ -1623,36 +1544,11 @@ def pn_mu_conv_matrices(xp, mu33, normal_x, normal_y, half_width_u, half_width_v
 
 
 def to_conv_mat_raster_pn_mu(tensor_raster, half_width_u, half_width_v, normal_field=None, lattice=None,
-                             normal_method=None):
-    """Per-layer permeability slots for a **tensor** ``mu`` raster — the ``mu`` twin of
-    :func:`to_conv_mat_raster_pn_eps`.
+                             raster_normal_method=None):
+    """Permeability counterpart of :func:`to_conv_mat_raster_pn_eps`.
 
-    Args:
-        tensor_raster: ``(n_layers, Ny, Nx, 3, 3)`` permeability tensors per pixel.
-        half_width_u, half_width_v: Fourier truncation orders.
-        normal_field: optional per-layer ``(normal_x, normal_y)``. Left ``None`` it is computed from the
-            in-plane trace of **``mu``**, not of ``eps``. Reading ``mu_zz`` instead would give
-            the same field for any tensor whose components share a boundary — which is every
-            physical one — because :func:`normal_vector_field` reads where the interface *is*,
-            not what value sits either side (measured: identical to 0 for a uniaxial pillar,
-            and 2.0 apart only if ``mu_zz`` is patterned on a different shape, which this
-            single-field builder could not serve anyway). The in-plane trace is named because
-            it is the part the rearrangement is about, not because the other is wrong here.
-        lattice: cell basis, passed to :func:`normal_vector_field`.
-        normal_method: the raster construction, as in :func:`to_conv_mat_raster_nvf`;
-            read only when ``normal_field`` is not supplied.
-
-    Returns:
-        ``(mux_conv, muy_conv, muz_conv_i, muxy_conv, muyx_conv)``, each
-        ``(n_layers, n_orders, n_orders)`` — ready to hand to ``solve_conv(..., mu=...)``.
-
-    **A layer's two tensors may have different boundaries**, and this is why the normal field is
-    read off ``mu`` here rather than shared with the permittivity build. A magnetic inclusion
-    need not sit where the dielectric one does; the rearrangement is written around *one*
-    interface normal, so each tensor gets the normal of its own. Reusing the permittivity's
-    field would be correct on every case where the two shapes coincide — which is most of them,
-    and is why ``tests/references/_fmmax_patterned_mu_cases.py`` carries a case where they do
-    not.
+    Boundaries read all nine mu components, independently of epsilon.
+    A supplied normal field fixes geometry and allows differentiable replay.
     """
     xp = array_namespace(tensor_raster)
 
@@ -1666,7 +1562,8 @@ def to_conv_mat_raster_pn_mu(tensor_raster, half_width_u, half_width_v, normal_f
             f'the frozen geometry no longer fits this structure: it holds a normal field for '
             f'{len(normal_field)} layers and this one has {tensor_raster.shape[0]}.')
 
-    out = [[], [], [], [], []]
+    from .anisotropy import TensorConvMatrices, _labels
+    out = []
     for i in range(tensor_raster.shape[0]):
         mu33 = tensor_raster[i]
         if normal_field is None:
@@ -1674,18 +1571,22 @@ def to_conv_mat_raster_pn_mu(tensor_raster, half_width_u, half_width_v, normal_f
             # and repeating the tensor under it would pair a fine tensor with a coarse field.
             mu33 = _tensor_at_the_normal_field_floor(xp, mu33, half_width_u, half_width_v)
             normal_x, normal_y = normal_vector_field(
-                0.5 * (mu33[..., 0, 0] + mu33[..., 1, 1]), lattice=lattice,
-                method=normal_method)
+                _labels(mu33).astype(float), lattice=lattice,
+                method=raster_normal_method)
         else:
             normal_x, normal_y = normal_field[i]
-        for slot, mat in zip(out, pn_mu_conv_matrices(xp, mu33, normal_x, normal_y, half_width_u, half_width_v)):
-            slot.append(mat)
+        out.append(list(pn_mu_conv_matrices(xp, mu33, normal_x, normal_y, half_width_u, half_width_v)))
 
-    return ConvMatrices(*(xp.stack(slot) for slot in out))
+    full = any(len(row) == 9 for row in out)
+    if full:
+        for row in out:
+            if len(row) == 5: row.extend([xp.zeros_like(row[0]) for _ in range(4)])
+    cls = TensorConvMatrices if full else ConvMatrices
+    return cls(*(xp.stack([row[j] for row in out]) for j in range(9 if full else 5)))
 
 
 def to_conv_mat_raster_pn_eps(tensor_raster, half_width_u, half_width_v, normal_field=None,
-                              lattice=None, normal_method=None):
+                              lattice=None, raster_normal_method=None):
     """Per-layer Popov-Neviere convolution matrices for a **tensor** raster.
 
     The counterpart of :func:`to_conv_mat_raster_nvf` for a layer stack whose permittivity is a
@@ -1699,18 +1600,16 @@ def to_conv_mat_raster_pn_eps(tensor_raster, half_width_u, half_width_v, normal_
             worth guessing at.
         half_width_u, half_width_v: Fourier truncation orders.
         normal_field: optional per-layer ``(normal_x, normal_y)``. Left ``None`` it is computed from the
-            trace of the in-plane block, which is the isotropic part of the layer and so sees
-            the same geometry a scalar raster would. Supply it to keep the build traceable
-            under JAX, or when the tensor's structure and its *shape* differ — an optic axis
-            that rotates across an otherwise uniform slab has no permittivity interface, and a
-            normal field read off the values would be reading a texture, not a boundary.
+            material phase labels using all nine tensor components. Supply it to keep
+            the geometry fixed under JAX tracing or to distinguish smooth material
+            textures from sharp region boundaries.
         lattice: cell basis, passed through to :func:`normal_vector_field`.
-        normal_method: the raster construction, as in :func:`to_conv_mat_raster_nvf`;
+        raster_normal_method: the raster construction, as in :func:`to_conv_mat_raster_nvf`;
             read only when ``normal_field`` is not supplied.
 
     Returns:
-        ``(epx, epy, epz_i, epxy, epyx)``, each ``(n_layers, n_orders, n_orders)`` — the same
-        slots :func:`to_conv_mat_raster_nvf` returns, in the same convention.
+        Five or nine slots, each ``(n_layers, n_orders, n_orders)``. Full
+        tensors append ``epxz, epyz, epzx, epzy``; all off-diagonals are negated.
     """
     xp = array_namespace(tensor_raster)
 
@@ -1726,24 +1625,28 @@ def to_conv_mat_raster_pn_eps(tensor_raster, half_width_u, half_width_v, normal_
             f'{len(normal_field)} layers and this one has {tensor_raster.shape[0]}. Call '
             f'freeze_geometry() again, or drop geometry= to rebuild by comparison.')
 
-    out = [[], [], [], [], []]
+    from .anisotropy import TensorConvMatrices, _labels
+    out = []
     for i in range(tensor_raster.shape[0]):
         eps33 = tensor_raster[i]
         if normal_field is None:
             # Lifted only when the field is built here. A supplied one fixes the resolution,
             # and repeating the tensor under it would pair a fine tensor with a coarse field.
             eps33 = _tensor_at_the_normal_field_floor(xp, eps33, half_width_u, half_width_v)
-            # The in-plane trace: the layer's isotropic part, which is what carries the shape.
+            # Equal traces can still describe distinct tensor materials.
             normal_x, normal_y = normal_vector_field(
-                0.5 * (eps33[..., 0, 0] + eps33[..., 1, 1]), lattice=lattice,
-                method=normal_method)
+                _labels(eps33).astype(float), lattice=lattice,
+                method=raster_normal_method)
         else:
             normal_x, normal_y = normal_field[i]
-        for slot, mat in zip(
-                out, pn_eps_conv_matrices(xp, eps33, normal_x, normal_y, half_width_u, half_width_v)):
-            slot.append(mat)
+        out.append(list(pn_eps_conv_matrices(xp, eps33, normal_x, normal_y, half_width_u, half_width_v)))
 
-    return ConvMatrices(*(xp.stack(slot) for slot in out))
+    full = any(len(row) == 9 for row in out)
+    if full:
+        for row in out:
+            if len(row) == 5: row.extend([xp.zeros_like(row[0]) for _ in range(4)])
+    cls = TensorConvMatrices if full else ConvMatrices
+    return cls(*(xp.stack([row[j] for row in out]) for j in range(9 if full else 5)))
 
 
 def nvf_conv_matrices(xp, eps_matrix, normal_x, normal_y, half_width_u, half_width_v,
@@ -1789,8 +1692,8 @@ def nvf_conv_matrices_integrated(xp, eps_comp, x, y, normal_x, normal_y, half_wi
 
 
 def to_conv_mat_raster_nvf(structure, half_width_u, half_width_v, normal_field=None,
-                           normal_field_source=None, lattice=None, normal_method=None,
-                           projector=None):
+                           normal_field_source=None, lattice=None, raster_normal_method=None,
+                           nvf_projector=None):
     """Per-layer NVF convolution matrices for a raster ``structure``.
 
     Args:
@@ -1803,13 +1706,13 @@ def to_conv_mat_raster_nvf(structure, half_width_u, half_width_v, normal_field=N
             :func:`normal_field_source_for_raster`. Supply it and an eager replay is checked
             against the layer in front of it (see :func:`_check_normal_field_still_fits`);
             leave it ``None`` and the field is replayed on trust.
-        normal_method: how the normal field is constructed from the raster
+        raster_normal_method: how the normal field is constructed from the raster
             (:class:`~wavebit._core.enums.NormalMethod`; ``None`` means ``'distance'``).
             Ignored when ``normal_field`` is supplied — the record was built under its own
             method, which the source check compares against this one.
         projector: how ``P`` is formed *from* that field
             (:class:`~wavebit._core.enums.Projector`; ``None`` means ``'linear'``, ``n n^T``).
-            A separate axis from ``normal_method`` rather than a fifth value of it: this
+            A separate axis from ``raster_normal_method`` rather than a fifth value of it: this
             chooses what is done with the field, so it composes with all four constructions
             instead of doubling the list.
 
@@ -1823,7 +1726,7 @@ def to_conv_mat_raster_nvf(structure, half_width_u, half_width_v, normal_field=N
         ``(epx, epy, epz_i, epxy, epyx)``, each ``(n_layers, n_orders, n_orders)``.
     """
     xp = array_namespace(structure)
-    want_magnitude = _wants_magnitude(projector)
+    want_magnitude = _wants_magnitude(nvf_projector)
 
     for name, record in (('normal field', normal_field),
                          ('normal-field source', normal_field_source)):
@@ -1840,11 +1743,11 @@ def to_conv_mat_raster_nvf(structure, half_width_u, half_width_v, normal_field=N
         if normal_field is None:
             field = normal_vector_field(
                 eps_matrix, _interface_mask_of(xp, eps_matrix, base_eps, repeat_v, repeat_u),
-                lattice=lattice, method=normal_method, base_shape=tuple(base_eps.shape),
+                lattice=lattice, method=raster_normal_method, base_shape=tuple(base_eps.shape),
                 with_magnitude=want_magnitude)
         else:
             _check_normal_field_still_fits(eps_matrix, normal_field_source, i, lattice,
-                                           normal_method)
+                                           raster_normal_method)
             field = normal_field[i]
         normal_x, normal_y, magnitude = _unpack_normal_field(field, want_magnitude, i)
 
@@ -2082,7 +1985,7 @@ def _check_compression_still_fits(cell, record, index):
             f'geometry= to rebuild by comparison. (Changing the permittivity of a layer '
             f'never trips this on its own; moving its pattern does.)')
 
-    if not len(col_idx) or not len(row_idx) or col_idx[-1] != n_col - 1 \
+    if not len(col_idx) or not len(row_idx) or col_idx[-1] != n_col - 1\
             or row_idx[-1] != n_row - 1:
         refuse(f'is {cell.shape}, which the recorded cut does not span')
 
@@ -2155,7 +2058,7 @@ def to_conv_mat_raster_integrated(structure, half_width_u, half_width_v, compres
 
 def to_conv_mat_raster_integrated_nvf(structure, half_width_u, half_width_v, normal_field=None,
                                       normal_field_source=None, compression=None,
-                                      lattice=None, normal_method=None, projector=None):
+                                      lattice=None, raster_normal_method=None, nvf_projector=None):
     """Per-layer convolution matrices for a raster ``structure`` via closed-form Fourier + NVF.
 
     The pairing that needs both axes named independently. It buys the staircase-free
@@ -2173,7 +2076,7 @@ def to_conv_mat_raster_integrated_nvf(structure, half_width_u, half_width_v, nor
         compression: optional per-layer ``(row_idx, col_idx, x, y)`` from
             :func:`compression_indices`. Replayed eagerly it is checked too.
         lattice: the cell basis, as in :func:`to_conv_mat_raster_nvf`.
-        normal_method: the construction, as in :func:`to_conv_mat_raster_nvf`.
+        raster_normal_method: the construction, as in :func:`to_conv_mat_raster_nvf`.
         projector: how ``P`` is formed from the field, as in :func:`to_conv_mat_raster_nvf`.
 
     Both ``normal_field`` and ``compression`` are static geometry; supply both to keep the
@@ -2189,7 +2092,7 @@ def to_conv_mat_raster_integrated_nvf(structure, half_width_u, half_width_v, nor
         ``(epx, epy, epz_i, epxy, epyx)``, each ``(n_layers, n_orders, n_orders)``.
     """
     xp = array_namespace(structure)
-    want_magnitude = _wants_magnitude(projector)
+    want_magnitude = _wants_magnitude(nvf_projector)
 
     out = [[], [], [], [], []]
     eps_grids = _layer_eps_for_normal_field(xp, structure, half_width_u, half_width_v)
@@ -2198,11 +2101,11 @@ def to_conv_mat_raster_integrated_nvf(structure, half_width_u, half_width_v, nor
         if normal_field is None:
             field = normal_vector_field(
                 eps_grid, _interface_mask_of(xp, eps_grid, base_eps, repeat_v, repeat_u),
-                lattice=lattice, method=normal_method, base_shape=tuple(base_eps.shape),
+                lattice=lattice, method=raster_normal_method, base_shape=tuple(base_eps.shape),
                 with_magnitude=want_magnitude)
         else:
             _check_normal_field_still_fits(eps_grid, normal_field_source, i, lattice,
-                                           normal_method)
+                                           raster_normal_method)
             field = normal_field[i]
         normal_x, normal_y, magnitude = _unpack_normal_field(field, want_magnitude, i)
 

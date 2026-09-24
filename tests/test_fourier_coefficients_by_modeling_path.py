@@ -307,7 +307,7 @@ def test_a_smooth_call_naming_both_unavailable_values_is_told_about_the_rule():
 # --------------------------------------------------------------------------- through the spec
 
 SPEC = {
-    'version': '7',                 # a parsed document states its schema; see tests/test_spec.py
+    'version': '10',                 # a parsed document states its schema; see tests/test_spec.py
     'numerics': {'backend': 'numpy', 'truncation_order': [4, 4]},
     'stack': {'top': 1.0, 'bot': 1.0, 'period': [1.0, 1.0],
               'layers': [{'thickness': 0.3, 'structure': SMOOTH[0]}]},

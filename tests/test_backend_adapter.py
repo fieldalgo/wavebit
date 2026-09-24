@@ -323,13 +323,13 @@ def test_torch_takes_a_reversed_period_and_thickness():
     """
     pytest.importorskip('torch')
     cell = np.ascontiguousarray(STRIDED_CELL)
-    stack = np.concatenate([cell, 1.0 + 0.5 * cell])
+    stack = np.concatenate([1.0 + 0.5 * cell, cell])
     cfg = dict(wavelength=620., truncation_order=(2, 2), theta=0.2, psi=0.3)
 
     reversed_ = wavebit.rcwa(backend=2, structure=stack, period=np.flip(np.array([800., 500.])),
-                             thickness=np.flip(np.array([90., 180.])), **cfg).solve()
+                             thickness=np.flip(np.array([180., 90.])), **cfg).solve()
     plain = wavebit.rcwa(backend=2, structure=stack, period=(500., 800.),
-                         thickness=(180., 90.), **cfg).solve()
+                         thickness=(90., 180.), **cfg).solve()
     assert _totals(reversed_) == _totals(plain)
 
 

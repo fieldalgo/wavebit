@@ -85,9 +85,11 @@ from ._core.enums import (Answers, Backend, Tetm, FourierCoefficients, Factoriza
                           Formulation, NormalMethod, Projector)
 from ._core.domain import (Layer, Stack, Incidence, Material,
                            eps_from_index, index_from_eps)
+from ._core.materials import TabulatedMaterial
 # The type `eps_conv_matrices()` hands back and `solve_conv()` takes: a NamedTuple, so the five
 # slots still splat and unpack, but `conv.epz_i` reaches one by name.
 from ._core.factorization import ConvMatrices
+from ._core.anisotropy import TensorConvMatrices
 from ._core.conforming import ConformingNVF
 from ._core.conforming.affine_profile import AffineProfileNVF
 from ._core.conforming.cartesian_rectangle import CartesianRectangleNVF
@@ -111,11 +113,9 @@ from ._core.geometry import StaticGeometry, StaleGeometryError
 # the caller. `cascade` is a method rather than a function here: the receiver already names
 # the type, the order is directional, and it chains.
 from ._core.scattering import Port, ScatteringMatrix
-# The nk front door. Exported here rather than left importable from `_core.modeler` because
-# the bundled `nk_data` ships in the wheel and these two are its only readers -- data with no
-# public reader is the same dead end as a keyword with no reader. They hand back an *index*,
-# so `eps_from_index` above is the step between them and a Material.
-from ._core.modeler import find_material, find_nk_index, read_material_table
+from ._core.sources import Source, PlaneWave, GaussianBeam, ElectricDipole, OrderExcitation, Beam
+from ._core.illumination import BoundaryPower, CoherentResult, CoherentSolver
+from . import materials
 from ._core.spec import JobSpec, Numerics, Sweep, SpecError, run
 
 # The public surface -- and the reason this file needs no F401 exemption. Every name above is
@@ -141,12 +141,14 @@ __all__ = [
     'plot_structure', 'slice_structure',
     'Answers', 'Backend', 'Tetm', 'FourierCoefficients', 'Factorization', 'Formulation',
     'NormalMethod', 'Projector',
-    'Layer', 'Stack', 'Incidence', 'Material', 'eps_from_index', 'index_from_eps',
-    'ConvMatrices', 'ConformingNVF', 'AffineProfileNVF', 'CartesianRectangleNVF', 'CartesianRectanglePairNVF',
+    'Layer', 'Stack', 'Incidence', 'Material', 'TabulatedMaterial', 'eps_from_index', 'index_from_eps',
+    'ConvMatrices', 'TensorConvMatrices', 'ConformingNVF', 'AffineProfileNVF', 'CartesianRectangleNVF', 'CartesianRectanglePairNVF',
     'CartesianPairOpeningPlan', 'CartesianPairTransmissionGalerkinGapCell',
     'ScatteringMatrix', 'Port',
+    'Source', 'PlaneWave', 'GaussianBeam', 'ElectricDipole', 'OrderExcitation',
+    'Beam', 'BoundaryPower', 'CoherentResult', 'CoherentSolver',
     'StaticGeometry', 'StaleGeometryError',
-    'find_material', 'find_nk_index', 'read_material_table',
+    'materials',
     'JobSpec', 'Numerics', 'Sweep', 'SpecError', 'run',
 ]
 

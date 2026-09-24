@@ -64,7 +64,7 @@ permittivity transform or a claim that off-interface extensions are unique.
 
 The closed form got the same convention on 2026-09-11. A layer of several disjoint shapes
 used to be sampled where it sat, so the un-phased projector coefficients of two 250 x 300
-boxes spread 1.074e-2 / 4.056e-3 / 1.592e-3 over sub-pixel translations at `normal_grid`
+boxes spread 1.074e-2 / 4.056e-3 / 1.592e-3 over sub-pixel translations at `shape_nvf_grid_size`
 64 / 128 / 256 and `sum(T)` by 1.242e-3 / 6.395e-4 / 1.560e-4; `parametric.normal_projector_coeffs`
 now builds the layer with its first shape at the centre of the cell and the others at their
 offsets from it, and carries it by the phase, and both rows are at rounding (3e-17, 3e-13;
@@ -79,8 +79,8 @@ vector or not at all, which the fold and the periodic grid cannot see, so period
 continuity both survive. Moving one shape alone is not made exact by this -- its staircase
 moves against the grid as it always did, and leaves a sampling ripple across a pixel of about
 five times the legitimate change over that pixel: 1.2e-3 / 7.9e-4 / 1.6e-4 in the largest
-coefficient at `normal_grid` 64 / 256 / 1024, against 2.1e-4 / 1.7e-4 / 7.9e-5, which is what
-`normal_grid` is for. In the total at the default grid it is small: moving one of the two boxes
+coefficient at `shape_nvf_grid_size` 64 / 256 / 1024, against 2.1e-4 / 1.7e-4 / 7.9e-5, which is what
+`shape_nvf_grid_size` is for. In the total at the default grid it is small: moving one of the two boxes
 across one 1024-grid pixel changes `sum(T)` by 1.3e-3, monotonically, and the difference
 between the 1024 and 2048 grids varies by 1.5e-5 along the way -- about 1% of the change.
 
@@ -91,7 +91,7 @@ region and radial on each vertex's -- carries a value step at every same-materia
 two 250 x 300 boxes close from a gap of 20 to 0.01, the blend's coefficients approach the
 merged 500 x 300 box's (largest deviation 0.081 -> 0.027, reaching 0.024 at contact, which is
 case D's split-spelling residual), while the nearest-point field's deviation plateaus at 0.086,
-at `normal_grid` 256 and again at 512 so it is not sampling: the gap face's Voronoi cell is a
+at `shape_nvf_grid_size` 256 and again at 512 so it is not sampling: the gap face's Voronoi cell is a
 triangle of a quarter of the box reading `n = +-x` until the face dies. The pair records of
 `_piece_field` exist to remove exactly that step. The Voronoi regions are also not polygons in
 general -- the bisector between a vertex and a non-adjacent edge is a parabola, so the polygon
@@ -645,7 +645,7 @@ test carries its rows. Li's rule on a box with its edges on pixels does not say 
 order: on the 350 box it sits nearer the fold at orders 6 and 9 (6.3e-4 against 1.03e-3, 2.74e-3
 against 3.02e-3) and nearer the *pieces* at order 12, by four times (1.1e-4 against 4.7e-4).
 
-| scene, order 6, `normal_grid` 512 | fold (2026-09-03) | pieces | change |
+| scene, order 6, `shape_nvf_grid_size` 512 | fold (2026-09-03) | pieces | change |
 |---|---|---|---|
 | 350 x 350 box on a 700 square | 0.891888043 | 0.892284142 | +4.0e-4 |
 | L box, 689 x 200 at atan2(117.9, 690) | 0.918790794 | 0.918264766 | -5.3e-4 |
@@ -799,7 +799,7 @@ geometry.
 fold and 3x3 on the basis as given: two overlapping 300 x 300 boxes on the `10 a1` spelling
 read `sum(T)` 0.810615440141 against 0.948626126969 on the reduction at the one window where
 both spellings retain the same order set (`u = 0`, `v = 6`; `b2` is shared), the same at
-`normal_grid` 64 / 128 / 256 -- geometry, not resolution -- while the disjoint control, the
+`shape_nvf_grid_size` 64 / 128 / 256 -- geometry, not resolution -- while the disjoint control, the
 closed form, read bitwise the same on both. For one revision that was *refused* by name on a
 painted layer. The refusal over-reached: `test_oblique_lattice.py` pins that a painted overlap
 survives the `k = 1` respelling `a2 = (400, 400)` of the 400 square, a genuine invariance the
@@ -821,7 +821,7 @@ with the fold is `x - 0.0 * a`, and the field is the field it was, to the bit. P
 **bitwise** (the structure moves by `5 a1`, a lattice vector, and the sample grid folds onto
 the same points); `k = 1` and `k = 3` read one value, within 1.2e-4 of it (their sample grids
 fold half a pixel off -- a sampling difference of the size of the route's own moves between
-`normal_grid` 64 / 128 / 256, 3e-6 to 9e-5, and the same at every `k` of one parity, which is
+`shape_nvf_grid_size` 64 / 128 / 256, 3e-6 to 9e-5, and the same at every `k` of one parity, which is
 what says it is the grid and not the fold); the jitted replay over a traced lattice equals the
 eager one to 1e-12; and three mutants -- the reduction dropped, the point fold dropped, the
 plan recording the identity -- are each killed by the bitwise pin.
@@ -1128,7 +1128,7 @@ NVF findings above or a claim of Fourier-order convergence for every structure.
 
 ## Rectangular contacts with circular NVF
 
-`factorization='nvf', projector='circular'` now provides the non-cancelling normal-
+`factorization='nvf', nvf_projector='circular'` now provides the non-cancelling normal-
 dyad construction for rectangular shapes. It passes the period-gap, unequal-
 material contact, material-equality, and frozen-contact JIT derivative checks.
 See [usage and accuracy limits](parametric-modeling.md#complex-nvf-projection-for-rectangular-contacts).

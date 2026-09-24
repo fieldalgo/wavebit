@@ -54,12 +54,13 @@ import hashlib
 import json
 import math
 
-from .conventions import parse_order_pair
+from .conventions import _DIRECTION_CLASH, parse_order_pair, transverse_component_problem
 from .domain import Layer, Material, Stack, Incidence
+from .materials import TabulatedMaterial
 from .enums import (Answers, Backend, Factorization, FourierCoefficients, NormalMethod,
-                    Projector, Tetm, answers_of)
+                    Projector, Tetm, answers_of, nvf_option_rename_hint)
 
-SPEC_VERSION = '7'   # '2': result fields renamed de_ri/de_ti -> R/T (2026-08-12)
+SPEC_VERSION = '10'   # '2': result fields renamed de_ri/de_ti -> R/T (2026-08-12)
 #                     '3': the material convention. `stack.layers[i].eps` -> `.structure`,
 #                     `stack.n_top` / `.n_bot` -> `.top` / `.bot`, and the *quantity* every
 #                     one of them holds went from refractive index to relative permittivity
@@ -96,6 +97,14 @@ SPEC_VERSION = '7'   # '2': result fields renamed de_ri/de_ti -> R/T (2026-08-12
 #                     conserves energy. Nothing can migrate it by guess either -- `cx = 0`
 #                     is a legal spelling under both readings -- so the version refuses it.
 
+# '8': explicit NVF option names (2026-09-21). Numerics now writes
+# raster_normal_method, shape_nvf_grid_size and nvf_projector. The numerical values
+# and defaults are unchanged; a version-7 document needs these keys renamed.
+# '9': material dispersion tables (2026-09-21). Existing constant values keep
+# their meaning; tagged tables now survive serialization and wavelength sweeps.
+# '10': bottom-to-top layers, bottom-origin height, +z upward (2026-09-21).
+# The same arrays describe a different stack; old documents require explicit migration.
+
 #: Refusal for a document that states no version. Its own justification, because the rule
 #: reads as gratuitous ceremony until you see which case it is for.
 _MISSING_VERSION = (
@@ -115,7 +124,7 @@ _MISSING_VERSION = (
 
 #: Incidence fields a sweep may vary. Geometry sweeps wait for the parametric geometry
 #: layer — sweeping a raster grid point-by-point is not a thing anyone wants to declare.
-SWEEPABLE = ('wavelength', 'theta', 'phi', 'psi', 'chi')
+SWEEPABLE = ('wavelength', 'theta', 'phi', 'psi', 'chi', 'kx', 'ky')
 
 
 class SpecError(ValueError):
@@ -135,7 +144,9 @@ def _reject_unknown(got, allowed, where):
     unknown = sorted(set(got) - set(allowed))
     if unknown:
         raise SpecError(
-            f"{where}: unknown field(s) {unknown}. Allowed: {sorted(allowed)}")
+            f"{where}: unknown field(s) {unknown}."
+            f"{nvf_option_rename_hint(unknown) if where == 'numerics' else ''}"
+            f" Allowed: {sorted(allowed)}")
 
 
 def _enum(value, enum_cls, where):
@@ -175,7 +186,7 @@ def _jsonable(value):
         return value
     if isinstance(value, (Answers, Backend, Tetm, FourierCoefficients, Factorization)):
         return value.name.lower()
-    if isinstance(value, Material):
+    if isinstance(value, (Material, TabulatedMaterial)):
         return _material_to_json(value)
     if isinstance(value, (str, int, float)):
         return value
@@ -215,10 +226,18 @@ def _material_to_json(value):
     complex there is still refused by :func:`_jsonable` rather than written in a spelling
     nothing could read back. Wrapping it in a ``Material`` is the way to put one anywhere.
     """
+    if isinstance(value, TabulatedMaterial):
+        table = {'wavelengths': list(value.wavelengths),
+                 value._quantity: [_constitutive_to_json(v) for v in value.values]}
+        if value.mu is not None:
+            table['mu'] = [_constitutive_to_json(v) for v in value.mu]
+        return {'dispersion': table}
     if isinstance(value, Material):
-        out = {'epsilon': _scalar_to_json(value.epsilon)}
+        if value._wavelength_shape is not None:
+            raise SpecError('assign the material table or evaluate one wavelength, not a spectrum')
+        out = {'epsilon': _constitutive_to_json(value.epsilon)}
         if value.is_magnetic:
-            out['mu'] = _scalar_to_json(value.mu)
+            out['mu'] = _constitutive_to_json(value.mu)
         return out
     return _scalar_to_json(value)
 
@@ -231,9 +250,51 @@ def _scalar_to_json(value):
     imaginary part of ``-0.0`` serialises to ``-0.0``, hashes differently from ``0.0``, and
     would split one run into two :meth:`JobSpec.key` values.
     """
+    if getattr(value, 'shape', None) == ():
+        value = value.item()
     if isinstance(value, complex):
         return [value.real + 0.0, value.imag + 0.0]
     return _jsonable(value)
+
+
+def _constitutive_to_json(value):
+    from .anisotropy import tensor_shape
+    shape = tensor_shape(value)
+    if not shape:
+        return _scalar_to_json(value)
+    if shape not in ((3,), (3, 3)):
+        raise SpecError('a material needs a scalar, three diagonal values, or a 3x3 tensor')
+    return {'tensor': _array_values(value), 'shape': list(shape)}
+
+
+def _array_values(value):
+    import numpy as np
+    if hasattr(value, 'detach'):
+        value = value.detach().cpu().numpy()
+    a = np.asarray(value, dtype=complex)
+    if not np.all(np.isfinite(a)):
+        raise SpecError('material tensors must contain finite values')
+    return [_scalar_to_json(v) for v in a.ravel()]
+
+
+def _constitutive_from_json(value, where):
+    if not isinstance(value, dict):
+        return _scalar_from_json(value, where)
+    _reject_unknown(value, ('tensor', 'shape'), where)
+    if value.get('shape') not in ([3], [3, 3]):
+        raise SpecError(f'{where}: tensor shape must be [3] or [3, 3]')
+    return _array_from_json(value, 'tensor', where)
+
+
+def _array_from_json(value, key, where):
+    import numpy as np
+    try:
+        a = np.asarray([_scalar_from_json(v, where) for v in value[key]], dtype=complex)
+        if a.ndim != 1 or not np.all(np.isfinite(a)):
+            raise ValueError('expected finite scalar entries')
+        return a.reshape(value['shape'])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise SpecError(f'{where}: invalid tensor data: {exc}') from exc
 
 
 def _material_from_json(value, where):
@@ -258,9 +319,27 @@ def _material_from_json(value, where):
     bool -- are refused here rather than left to become ``Material('Si')`` or a medium of
     permittivity ``True``, which is 1 and solves.
     """
-    if isinstance(value, Material):
+    if isinstance(value, (Material, TabulatedMaterial)):
         return value
     if isinstance(value, dict):
+        if 'dispersion' in value:
+            _reject_unknown(value, ('dispersion',), where)
+            table = value['dispersion']
+            if not isinstance(table, dict):
+                raise SpecError(f'{where}.dispersion: expected a table object')
+            _reject_unknown(table, ('wavelengths', 'epsilon', 'index', 'mu'), where + '.dispersion')
+            if ('epsilon' in table) == ('index' in table) or 'wavelengths' not in table:
+                raise SpecError(f'{where}.dispersion: provide wavelengths and exactly one of epsilon/index')
+            quantity = 'index' if 'index' in table else 'epsilon'
+            try:
+                values = [_constitutive_from_json(v, where) for v in table[quantity]]
+                mu = table.get('mu')
+                mu = None if mu is None else [_constitutive_from_json(v, where) for v in mu]
+                if quantity == 'index':
+                    return TabulatedMaterial.from_index(table['wavelengths'], values, mu=mu)
+                return TabulatedMaterial(table['wavelengths'], values, mu)
+            except (TypeError, ValueError) as exc:
+                raise SpecError(f'{where}.dispersion: {exc}') from exc
         _reject_unknown(value, ('epsilon', 'mu'), where)
         if 'epsilon' not in value:
             raise SpecError(
@@ -268,10 +347,10 @@ def _material_from_json(value, where):
                 f"{{'epsilon': e}} for a plain medium and {{'epsilon': e, 'mu': m}} for a "
                 f"magnetic one, both relative and both permittivity/permeability rather than "
                 f"an index. Got {sorted(value)}.")
-        epsilon = _scalar_from_json(value['epsilon'], f'{where}.epsilon')
+        epsilon = _constitutive_from_json(value['epsilon'], f'{where}.epsilon')
         mu = value.get('mu')
         return Material(epsilon) if mu is None else Material(
-            epsilon, _scalar_from_json(mu, f'{where}.mu'))
+            epsilon, _constitutive_from_json(mu, f'{where}.mu'))
     if isinstance(value, (str, bytes)):
         raise SpecError(
             f'{where}: expected a permittivity, [re, im], or {{"epsilon": e}}, got '
@@ -311,6 +390,8 @@ def _revive_materials(value, where='material'):
     :func:`_structure_from_json` has already taken that branch.
     """
     if isinstance(value, dict):
+        if 'dispersion' in value:
+            return _material_from_json(value, where)
         if 'epsilon' in value and set(value) <= {'epsilon', 'mu'}:
             return _material_from_json(value, where)
         return {k: _revive_materials(v, f'{where}.{k}') for k, v in value.items()}
@@ -349,19 +430,19 @@ class Numerics:
     #: default ('distance') is path-independent, but an explicit value is *refused* on any
     #: build that constructs no raster normal field, so a spec that never asked must not be
     #: made to ask.
-    normal_method: Optional[NormalMethod] = None
-    #: ``None`` = unset, for exactly ``normal_method``'s reason: the default ('linear') is
-    #: path-independent, and an explicit value is *refused* on any build that constructs no
-    #: raster normal field. A spec that never asked must not be made to ask.
-    projector: Optional[Projector] = None
+    raster_normal_method: Optional[NormalMethod] = None
+    #: ``None`` = unset, for exactly ``raster_normal_method``'s reason: the default ('linear') is
+    #: path-independent, and an explicit value is *refused* outside raster or shape NVF.
+    #: A spec that never asked must not be made to ask.
+    nvf_projector: Optional[Projector] = None
     complex_dtype: int = 128
     layer_algorithm: str = 'ETM'
-    #: `None` is "resolve it", the same as `rcwa`'s -- max(256, 4*truncation_order+1). Kept
+    #: `None` is "resolve it", the same as `rcwa`'s -- max(1024, 4*truncation_order+1). Kept
     #: in step with the solver deliberately: a spec that omitted it and a call that omitted it
     #: have to mean the same grid, and this defaulted to a literal 1024 while the solver moved
     #: to 256 on 2026-08-27. `to_json` writes the value either way, so no document already
     #: written changes meaning -- every one of them carries an explicit number.
-    normal_grid: Optional[int] = None
+    shape_nvf_grid_size: Optional[int] = None
     #: What the solve keeps the state to answer. Unlike the three above this has a real
     #: default rather than ``None``: it resolves against nothing -- no modeling path, no
     #: geometry -- so ``'amplitude'`` here is the same claim a bare ``rcwa()`` makes, and
@@ -369,8 +450,8 @@ class Numerics:
     #: ``incidence`` because it describes the job, not the light.
     answers: Answers = Answers.AMPLITUDE
 
-    _FIELDS = ('backend', 'truncation_order', 'fourier_coefficients', 'factorization', 'normal_method',
-               'projector', 'complex_dtype', 'layer_algorithm', 'normal_grid', 'answers')
+    _FIELDS = ('backend', 'truncation_order', 'fourier_coefficients', 'factorization', 'raster_normal_method',
+               'nvf_projector', 'complex_dtype', 'layer_algorithm', 'shape_nvf_grid_size', 'answers')
 
     @classmethod
     def from_dict(cls, d) -> 'Numerics':
@@ -384,11 +465,11 @@ class Numerics:
         if d.get('factorization') is not None:
             d['factorization'] = _enum(d['factorization'], Factorization,
                                        'numerics.factorization')
-        if d.get('normal_method') is not None:
-            d['normal_method'] = _enum(d['normal_method'], NormalMethod,
-                                       'numerics.normal_method')
-        if d.get('projector') is not None:
-            d['projector'] = _enum(d['projector'], Projector, 'numerics.projector')
+        if d.get('raster_normal_method') is not None:
+            d['raster_normal_method'] = _enum(d['raster_normal_method'], NormalMethod,
+                                              'numerics.raster_normal_method')
+        if d.get('nvf_projector') is not None:
+            d['nvf_projector'] = _enum(d['nvf_projector'], Projector, 'numerics.nvf_projector')
         if 'answers' in d:
             d['answers'] = _enum(d['answers'], Answers, 'numerics.answers')
         if 'truncation_order' in d:
@@ -430,16 +511,16 @@ class Numerics:
             problems.append(
                 f'complex_dtype: expected 128 or 64, got {self.complex_dtype!r}. It is the '
                 f'width in bits; the solver spells the same choice 0 and 1.')
-        if self.normal_grid is not None:
+        if self.shape_nvf_grid_size is not None:
             try:
-                grid = int(self.normal_grid)
-                bad = grid != self.normal_grid or grid <= 0
+                grid = int(self.shape_nvf_grid_size)
+                bad = grid != self.shape_nvf_grid_size or grid <= 0
             except (TypeError, ValueError):
                 bad = True
             if bad:
                 problems.append(
-                    f'normal_grid: expected a positive whole number of samples, got '
-                    f'{self.normal_grid!r}.')
+                    f'shape_nvf_grid_size: expected a positive whole number of samples, got '
+                    f'{self.shape_nvf_grid_size!r}.')
         return tuple(problems)
 
     def to_dict(self) -> dict:
@@ -457,16 +538,16 @@ class Numerics:
             truncation_order=list(self.truncation_order),
             complex_dtype=0 if self.complex_dtype == 128 else 1,
             layer_algorithm=self.layer_algorithm,
-            normal_grid=self.normal_grid,
+            shape_nvf_grid_size=self.shape_nvf_grid_size,
             answers=answers_of(self.answers).value,
             **({} if self.fourier_coefficients is None
                else {'fourier_coefficients': self.fourier_coefficients.value}),
             **({} if self.factorization is None
                else {'factorization': self.factorization.value}),
-            **({} if self.normal_method is None
-               else {'normal_method': self.normal_method.value}),
-            **({} if self.projector is None
-               else {'projector': self.projector.value}),
+            **({} if self.raster_normal_method is None
+               else {'raster_normal_method': self.raster_normal_method.value}),
+            **({} if self.nvf_projector is None
+               else {'nvf_projector': self.nvf_projector.value}),
         )
 
 
@@ -516,6 +597,11 @@ class Sweep:
                 # check, so the same bound is applied where the values are declared.
                 for v in values:
                     _check_polar_angle(v)
+            if name in ('kx', 'ky'):
+                for v in values:
+                    problem = transverse_component_problem(v, name)
+                    if problem is not None:
+                        raise SpecError(f'sweep.{problem}')
             axes[name] = values
         return cls(axes=axes)
 
@@ -557,7 +643,7 @@ class JobSpec:
     #: declared which result quantities to return and **nothing ever read it** -- `run`
     #: returns the whole `Result` either way -- while `key()` hashed it, so two specs with
     #: byte-identical results got different cache keys whenever one spelled it differently.
-    #: An unread knob is the same defect as an unread `normal_method`, and this library
+    #: An unread knob is the same defect as an unread `raster_normal_method`, and this library
     #: refuses those rather than ignoring them; the difference here is that it was silent
     #: for as long as it existed, so the removal has to say what a caller who wrote it was
     #: promised. A `Result` carries `R`, `T` and the Fresnel amplitudes together; select
@@ -595,9 +681,19 @@ class JobSpec:
             raise SpecError(_MISSING_VERSION)
         version = d['version']
         if str(version) != SPEC_VERSION:
+            migration = (
+                " Version 10 uses bottom-to-top stack.layers and upward height from z=0 "
+                "at the bottom interface. Reverse the old layer list, review z coordinates "
+                "and tensor/frame conventions, then set version='10'. Do not only change "
+                "the version number."
+            )
+            if str(version) == '7':
+                migration += (
+                    " Also rename numerics.normal_method to raster_normal_method, "
+                    "normal_grid to shape_nvf_grid_size, and projector to nvf_projector.")
             raise SpecError(
                 f"spec.version: this build understands version {SPEC_VERSION!r}, "
-                f"got {version!r}")
+                f"got {version!r}.{migration}")
         solver = d.get('solver', 'rcwa')
         if solver != 'rcwa':
             raise SpecError(f"spec.solver: only 'rcwa' exists so far, got {solver!r}")
@@ -729,11 +825,17 @@ def _stack_to_dict(stack: Stack) -> dict:
         'period': _jsonable(stack.period),
         **({} if stack.lattice is None else {'lattice': _jsonable(stack.lattice)}),
         'layers': [{'thickness': _jsonable(l.thickness),
-                    'structure': _jsonable(l.structure),
-                    **({} if l.mu is None else {'mu': _jsonable(l.mu)})}
+                    'structure': _structure_to_json(l.structure),
+                    **({} if l.mu is None else {'mu': _structure_to_json(l.mu)})}
                    for l in stack.layers],
     }
     return out
+
+
+def _structure_to_json(value):
+    if getattr(value, 'ndim', 0) == 4 and tuple(value.shape[-2:]) == (3, 3):
+        return {'tensor_raster': {'shape': list(value.shape), 'values': _array_values(value)}}
+    return _jsonable(value)
 
 
 def _structure_from_json(value, index, key):
@@ -751,6 +853,18 @@ def _structure_from_json(value, index, key):
     megabytes of JSON per layer. Large rasters belong in object storage, referenced rather
     than embedded; that path arrives with the parametric geometry layer.
     """
+    if isinstance(value, dict) and 'tensor_raster' in value:
+        where = f'stack.layers[{index}].{key}'
+        _reject_unknown(value, ('tensor_raster',), where)
+        record = value['tensor_raster']
+        if not isinstance(record, dict):
+            raise SpecError(f'{where}: tensor_raster must be an object')
+        _reject_unknown(record, ('shape', 'values'), where)
+        shape = record.get('shape', [])
+        if (not isinstance(shape, list) or len(shape) != 4 or shape[-2:] != [3, 3]
+                or any(type(n) is not int or n <= 0 for n in shape)):
+            raise SpecError(f'{where}: tensor raster shape must be [Ny, Nx, 3, 3]')
+        return _array_from_json(record, 'values', where)
     if isinstance(value, dict) and 'raster_ref' in value:
         raise SpecError(
             f"stack.layers[{index}].{key}: 'raster_ref' is not resolvable here — "
@@ -765,8 +879,15 @@ def _structure_from_json(value, index, key):
 def _incidence_from_dict(d) -> Incidence:
     d = dict(d or {})
     _reject_unknown(d, ('wavelength', 'theta', 'phi', 'tetm', 'psi', 'chi',
-                        'incidence_side', 'polarization'),
+                        'incidence_side', 'polarization', 'kx', 'ky'),
                     'incidence')
+    if any(d.get(k) is not None for k in ('kx', 'ky')) and any(
+            d.get(k) is not None for k in ('theta', 'phi')):
+        raise SpecError(f'incidence: {_DIRECTION_CLASH}')
+    for name in ('kx', 'ky'):
+        problem = transverse_component_problem(d.get(name), name)
+        if problem is not None:
+            raise SpecError(f'incidence.{problem}')
     if 'tetm' in d:
         d['tetm'] = _normalise_tetm(d['tetm'])
     if 'theta' in d:
@@ -864,6 +985,10 @@ def _incidence_to_dict(inc: Incidence) -> dict:
     d = {'wavelength': _jsonable(inc.wavelength), 'theta': _jsonable(inc.theta),
          'phi': _jsonable(inc.phi), 'psi': _jsonable(inc.psi),
          'incidence_side': _jsonable(inc.incidence_side)}
+    for name in ('kx', 'ky'):
+        if getattr(inc, name) is not None:
+            value = getattr(inc, name)
+            d[name] = _jsonable(value.real if hasattr(value, 'real') else value)
     if inc.chi is not None:
         # Emitted only when named, so a spec that stays on the linear angle keeps its key set.
         d['chi'] = _jsonable(inc.chi)

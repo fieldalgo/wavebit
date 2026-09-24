@@ -20,7 +20,7 @@ def run():
 
     # The silicon underneath is the substrate, so it goes in `bot`. Both half-spaces take a
     # Material too -- `top=1` is the scalar shorthand for Material(epsilon=1), i.e. vacuum.
-    rcwa_options = dict(backend=1, thickness=[205, 305], period=dict(x=300, y=300),
+    rcwa_options = dict(backend=1, thickness=[305, 205], period=dict(x=300, y=300),
                         truncation_order=dict(x=3, y=3),
                         top=1, bot=si,
                         wavelength=900,
@@ -37,20 +37,18 @@ def run():
     # approximated by whatever a grid can resolve -- and `angle` is a design variable like any
     # other, differentiable straight through.
     structure = [
-        # layer 1
+        dict(background=si3n4, shapes=[
+            # obj 1
+            dict(type='rectangle', cx=-100, cy=0, lx=31, ly=300, angle=0, material=si),
+            # obj 2
+            dict(type='rectangle', cx=50, cy=0, lx=49.5, ly=300, angle=0, material=si),
+        ]),
         dict(background=sio2, shapes=[
             # obj 1
             dict(type='ellipse', cx=-75, cy=75, lx=101.5, ly=81.5,
                  angle=20 * np.pi / 180, material=si),
             # obj 2
             dict(type='rectangle', cx=75, cy=-75, lx=98.5, ly=81.5, angle=0, material=si),
-        ]),
-        # layer 2
-        dict(background=si3n4, shapes=[
-            # obj 1
-            dict(type='rectangle', cx=-100, cy=0, lx=31, ly=300, angle=0, material=si),
-            # obj 2
-            dict(type='rectangle', cx=50, cy=0, lx=49.5, ly=300, angle=0, material=si),
         ]),
     ]
 

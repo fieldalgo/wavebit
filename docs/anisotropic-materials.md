@@ -1,5 +1,14 @@
 # Anisotropic and magnetic materials — what the solver already takes, and what each gap costs
 
+**Current input API (2026-09-22):** assign `Material(epsilon=[exx, eyy, ezz])`
+or a 3×3 tensor directly to a layer background or shape and call `solve()`.
+Tensor shapes now default to [continuous geometry integration](tensor-shape-integration.md),
+with analytic primitive indicators and a sampled normal extension.
+Material-axis rotation, tensor tables and tensor rasters are described in the
+[material guide](guide/materials.md#anisotropic-materials). The discussion below
+is the historical derivation and development record, not the current input guide.
+
+
 Written: 2026-08-09, and it was scoping only then. Since 2026-08-11 the z-coupling row is
 implemented, and since 2026-08-13 it is *reachable* — `solve_conv` takes nine slots and the
 solver picks the formulation (§8, no longer conditional). See
@@ -22,7 +31,7 @@ Targets:
 | uniform (unpatterned) anisotropic layer, in-plane tensor | **works today** | a thin wrapper |
 | `eps_xz` / `eps_yz` (z-coupling), uniform | **works today** | done — a different solver, [`first-order-4ff.md`](first-order-4ff.md), dispatched to automatically at ~8x |
 | patterned anisotropic layer, in-plane tensor | **works today** | done — Popov–Nevière, [`patterned-anisotropic-factorization.md`](patterned-anisotropic-factorization.md); both solvers unchanged, as scoped |
-| patterned **and** z-coupled | not supported | the 3×3 closing step — and no oracle exists for it |
+| patterned **and** z-coupled | supported | full Li/NVF closure and 4ff for epsilon and mu; [verification](full-tensor-patterns.md) |
 | `mu != 1`, layers and half-spaces | **works today** | done — [`magnetic-materials.md`](magnetic-materials.md); the layers are the E/H dual of the five slots, the half-spaces one pair of admittances |
 
 Nothing on this list is impossible. Exactly one of them changed the *shape* of the code rather
@@ -152,8 +161,8 @@ from it are worth carrying back here, because both contradict what this section 
   normal field is a unit field extended into the bulk, hence discontinuous itself, so that
   product is Laurent applied across a concurrent jump. It conserves energy, it is rotation
   covariant, it sits plausibly near fmmax, and it is **wrong by 0.5 on a uniform slab**.
-* the scope is the *in-plane* tensor. Patterned z-coupling is a further step, held back for lack
-  of an oracle rather than for difficulty — see the TL;DR table.
+* the full tensor uses all three components in the closing step, as detailed in
+  [full tensor patterns](full-tensor-patterns.md).
 
 ## 4. Uniform anisotropic layers work today
 
@@ -428,43 +437,14 @@ is bit-identical either way, so nothing the library builds moved. Pinned by
 `test_uniform_anisotropic.py`, `test_anisotropic_berreman.py` (a Berreman 4x4 oracle) and
 `tests/references/test_reticolo_anisotropic_golden.py` (RETICOLO, frozen golden).
 
-## 7. Where to start
+## 7. Choosing the construction
 
-```
-  Is the layer patterned in xy?
-    │
-    ├── no ──> uniform: fill the five slots with scaled identities        WORKS TODAY (§4)
-    │
-    └── yes ─> Does the optic axis lie in the xy plane?
-                 │
-                 ├── yes ──> Popov–Nevière factorization                  WORKS TODAY (§3)
-                 │
-                 └── no ───> patterned z-coupling: NOT SUPPORTED, no oracle exists
-```
-
-(The bottom branch used to read "4ff first-order solver". That solver does exist and handles
-z-coupling — but only for a **uniform** layer, §6. Patterned *and* z-coupled needs the 3×3
-closing step of the factorization as well, and that is the one case with nothing to check it
-against.)
-
-The first row is a wrapper. The second is real work and reuses the mode operator unchanged, as
-predicted. The third is a second solver living beside the first.
-
-That caveat used to read "the existing goldens cannot arbitrate any of this", and it no longer
-holds. Four oracles now cover this ground, three of them external, with goldens checked in:
-
-| oracle | reaches | file |
-|---|---|---|
-| Berreman 4x4 (written here) | uniform tensors incl. z-coupling, in-layer fields | `tests/test_anisotropic_berreman.py` |
-| RETICOLO (Li/Lalanne lineage) | uniform **complex** tensors, z-coupling — but only one off-diagonal pair, at `delta0 = 0` | `golden_reticolo_anisotropic.npz` |
-| fmmax (Liu & Fan lineage, MIT) | uniform complex tensors, **patterned**, **`mu`** | `golden_fmmax.npz`, `golden_fmmax_magnetic.npz` |
-| S4 (same lineage, C++) | real tensors, patterned | `golden_s4.npz` |
-
-Two things to know before leaning on them. The magnetic golden was **frozen before anything could
-consume it** — deliberately, since an oracle chosen after the work is an oracle chosen to agree —
-and its `mu = 1` half is gated against the solver today while its magnetic half carries only a
-physical guard. And fmmax and S4 share a formulation lineage, so agreement between *those two* is
-weaker evidence than agreement with RETICOLO or Berreman.
+Uniform material assignments use exact blocks. Patterned material assignments
+use Cartesian Li or linear NVF, depending on the geometry and chosen option.
+A z coupling in epsilon or mu selects the full first-order solver automatically.
+The [material guide](guide/materials.md) describes the input forms; [full tensor
+patterns](full-tensor-patterns.md) gives the supported geometry, validation and
+convergence limits.
 
 ## 8. How the solver chooses
 

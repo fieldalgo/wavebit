@@ -88,9 +88,10 @@ def _in_our_frame(e, pol):
 
 
 def _reconstruct(stack, theta, pol):
+    # STACKS and the comparison archive use downward depth; public Wavebit uses height.
     thickness, structure = STACKS[stack]
     solver = wavebit.rcwa(backend=0, top=1.0, bot=1.0, period=[PERIOD], truncation_order=MAX_ORDER,
-                          wavelength=WL, thickness=thickness, structure=structure,
+                          wavelength=WL, thickness=thickness[::-1], structure=structure[::-1],
                           theta=np.deg2rad(theta), phi=None, tetm=pol,
                           # RETICOLO's texture is analytic piecewise-constant, so the exact
                           # coefficients are the ones that describe the same layer. Without
@@ -98,7 +99,7 @@ def _reconstruct(stack, theta, pol):
                           fourier_coefficients='integrated', answers='field')
     solver.solve()
     cell = np.asarray(solver.reconstruct_field(sample_x=RES_X, sample_y=1, sample_z=RES_Z))
-    return cell[:, 0, :, :]                       # (sample_z*n_layers, sample_x, 3)
+    return cell[::-1, 0, :, :] * Z_PARITY[pol]                       # (sample_z*n_layers, sample_x, 3)
 
 
 def _exact_slots(stack, pol):

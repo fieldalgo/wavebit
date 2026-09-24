@@ -29,7 +29,7 @@ UCELL_1D = np.array([[_ROW], [_ROW]], dtype=float)
 UCELL_2D = np.repeat(UCELL_1D, 2, axis=1)          # same structure, two identical y rows
 
 CFG = dict(backend=0, top=1.0, bot=1.0, theta=1e-10, truncation_order=[20, 0],
-           wavelength=300.0, period=[700.0, 700.0], thickness=[460.0, 22.0])
+           wavelength=300.0, period=[700.0, 700.0], thickness=[22.0, 460.0])
 
 TOL = 1e-11
 

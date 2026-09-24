@@ -6,16 +6,16 @@ A binary grating, solved on the NumPy backend.
 import numpy as np
 import wavebit
 
-# One 300 nm layer, half air and half n = 3.5, on a glass substrate. Materials are relative
-# permittivity, so an index off a datasheet goes through `eps_from_index` first.
-eps_hi = wavebit.eps_from_index(3.5)                     # 12.25
+# One 300 nm layer, half air (epsilon_r = 1) and half dielectric (epsilon_r = 12.25),
+# on a glass substrate (epsilon_r = 2.25). Enter relative permittivity directly.
+eps_hi = 12.25
 structure = np.array([[[1.0, 1.0, eps_hi, eps_hi]]])     # (layer, y, x)
 
 solver = wavebit.rcwa(
     backend=0,                                # 0 = NumPy, 1 = JAX, 2 = PyTorch
     wavelength=900., period=[700.],           # one shared length unit; nm here
     truncation_order=dict(x=10, y=0),         # named, so there is no order to recall
-    top=1., bot=wavebit.eps_from_index(1.5),  # the two half-spaces, as materials
+    top=1., bot=2.25,  # the two half-spaces, as materials
     theta=0., phi=0., tetm='te',
     structure=structure, thickness=[300.],
 )
@@ -30,11 +30,20 @@ print(result.order(0, 0).T)              # 0.3531011230787259 -- the zeroth tran
 `R` and `T` are the reflected and transmitted diffraction efficiencies, **one entry per order**.
 Here they sum to 1 to within a few times 1e-15, as a lossless structure must.
 
+`result.absorption` is the absorbed fraction in all finite layers together;
+it excludes absorption in `top` and `bot`. For a lossless incident medium it
+equals `1 - result.R.sum() - result.T.sum()`. For an absorbing incident medium,
+use `result.absorption`, which includes incident/reflected interference through
+`result.power_entering - result.T.sum()`. These power definitions require a real
+transverse wavevector; `power_entering` and `absorption` are `NaN` otherwise.
+
 ```python
 result.R.shape                  # (n_orders_v, n_orders_u) -- v first
 result.orders_u, result.orders_v    # which order each column and each row is
 result.order(0, 0)              # index by order instead, and skip the layout entirely
-result.r_s, result.t_p          # the complex Fresnel amplitudes
+result.given.r_s, result.given.t_p  # the complex Fresnel amplitudes
+result.power_entering          # net entering power / incident-only power
+result.absorption              # absorption in the finite stack / incident-only power
 ```
 
 **Uppercase is power, lowercase is amplitude.** `R` / `T` are efficiencies; `r_s` / `r_p` /
@@ -42,8 +51,9 @@ result.r_s, result.t_p          # the complex Fresnel amplitudes
 
 Every eager NumPy solve also checks what it hands back: a NaN or infinity raises
 `FloatingPointError` naming the contaminated array, and a finite result that cannot be physical
-warns `UnphysicalResultWarning`. If you are modelling gain (`Im(eps) < 0` here), `R + T` above
-one is correct and the warning is a false positive — filter that category.
+warns `UnphysicalResultWarning`. The power check compares transmission with net entering
+power. If you are modelling gain (`Im(eps) < 0` here), negative absorption is expected
+and that warning can be a false positive — filter that category.
 
 ## What to read next
 

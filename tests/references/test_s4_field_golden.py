@@ -73,7 +73,7 @@ def _reconstruct(path, stack_name, theta, phi, pol):
     :func:`test_the_golden_was_frozen_on_the_stacks_this_file_solves` is what stops the two
     drifting apart, which is the guarantee ``__stack`` used to provide by being the only source.
     """
-    stack = STACKS[stack_name]
+    stack = STACKS[stack_name][::-1]
     eps = np.array([x[1] for x in stack]).reshape(-1, 1, 1)
     d = [float(x[0]) for x in stack]
     kw = dict(backend=0, top=1.0, bot=1.0, wavelength=WL, thickness=d,
@@ -94,7 +94,7 @@ def _reconstruct(path, stack_name, theta, phi, pol):
     cell = np.asarray(solver.reconstruct_field(sample_x=1, sample_y=1, sample_z=RES_Z))
     if cell.ndim == 5:
         cell = cell[0]
-    return _as_six(_interior(cell[:, 0, 0, :]), path)
+    return _as_six(_interior(cell[::-1, 0, 0, :]), path) * np.array([1, 1, -1, -1, -1, 1])
 
 
 def _cases():

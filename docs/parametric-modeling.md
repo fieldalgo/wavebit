@@ -47,7 +47,7 @@ Choose the path by the boundary, not on a general expectation that the parametri
 
 ## Complex NVF projection for rectangular contacts
 
-Rectangular shapes can now use `factorization='nvf', projector='circular'`.
+Rectangular shapes can now use `factorization='nvf', nvf_projector='circular'`.
 This remains normal-vector Fourier factorization with exact material transforms;
 it changes the normal projector, not the factorization to Li. Rotations, skew
 cells, overlapping paintings, and magnetic materials use the same construction.
@@ -56,8 +56,8 @@ Disjoint circles and ellipses also support circular projection, as described bel
 ```python
 solver = wavebit.rcwa(
     backend=1, period=(700., 700.), wavelength=900., thickness=(300.,),
-    truncation_order=(3, 3), normal_grid=128,
-    factorization='nvf', projector='circular',
+    truncation_order=(3, 3), shape_nvf_grid_size=128,
+    factorization='nvf', nvf_projector='circular',
     structure=[dict(background=1., shapes=[
         dict(type='rectangle', cx=-150., lx=300., ly=300., material=4.),
         dict(type='rectangle', cx=150., lx=300., ly=300., material=9.)])])
@@ -82,7 +82,7 @@ cannot enforce those checks, so keep those constraints when optimizing.
 
 See [the runnable NVF contact example](../examples/nvf_contact.py), which evaluates
 both contact and the one-sided opening derivative through the public JAX API.
-`normal_grid` remains an integration-resolution control; it is not a smoothing
+`shape_nvf_grid_size` remains an integration-resolution control; it is not a smoothing
 parameter for a gap. The default projector remains `linear` to preserve existing
 results. Select `circular` explicitly for this NVF construction.
 
@@ -97,7 +97,7 @@ contains the measured order/grid ladders and the remaining representation test.
 
 ### Disjoint circles and ellipses
 
-The same `factorization='nvf', projector='circular'` options support circles,
+The same `factorization='nvf', nvf_projector='circular'` options support circles,
 ellipses, and mixtures with rectangles whose interiors do not overlap. Tangency
 is allowed, including contact with a periodic image. `square` and `disk` aliases
 use their rectangle and circle constructions respectively.
@@ -126,7 +126,7 @@ resonant-convergence investigation.
 
 ### Overlapping circles and ellipses
 
-Curved paintings also accept `factorization='nvf', projector='circular'`.
+Curved paintings also accept `factorization='nvf', nvf_projector='circular'`.
 The existing painting route approximates curves with polygon chords and resolves
 their intersections. Circular NVF now follows those same chords: it retains the
 analytic extension away from curves and blends in positive polygon-edge dyads
@@ -178,7 +178,7 @@ Supported cells are positive, axis-aligned rectangles. Shapes must fit inside th
 cell, including its edges; a rectangle may span a full period. Rotated/curved shapes,
 skew cells, and rectangles crossing a cell edge are refused. Omit `angle` when
 tracing a shape dictionary: this route has a fixed zero angle, not an angle derivative.
-`normal_grid`, `normal_method`, and `projector` are refused because no normal field
+`shape_nvf_grid_size`, `raster_normal_method`, and `nvf_projector` are refused because no normal field
 is sampled. Coefficients are integrated; requesting sampled coefficients is refused.
 
 `freeze_geometry()` stores edge order and painting ownership. Lengths, centers,
@@ -264,13 +264,13 @@ the five matrices is then `D X D⁻¹` for one diagonal
 
 **The centring also makes the field reusable, which is where the wall clock goes.** Sampling and
 transforming it is the expensive half of this build — 83% of a five-point sweep at
-`normal_grid = 1024, truncation_order = 4` for one shape and 93% for six — and none of it reads a material.
+`shape_nvf_grid_size = 1024, truncation_order = 4` for one shape and 93% for six — and none of it reads a material.
 The normal field is a property of where the boundaries are, not of what sits either side of
 them. So `normal_projector_coeffs` keys the sampled coefficients on the geometry it was actually
 built from and reuses them: a **material** sweep hits because the key holds no permittivity, and a
 single-shape **position** sweep hits because the build sits at the centre of the cell whatever
-`(cx, cy)` are. Measured 1.6× to 3.8× on five-point sweeps, largest where `normal_grid` is fine
-and `truncation_order` modest; where there is nothing to win (`normal_grid = 256`, `truncation_order = 8`) it is 1.0×.
+`(cx, cy)` are. Measured 1.6× to 3.8× on five-point sweeps, largest where `shape_nvf_grid_size` is fine
+and `truncation_order` modest; where there is nothing to win (`shape_nvf_grid_size = 256`, `truncation_order = 8`) it is 1.0×.
 
 The key is `None` — no reuse, rebuild — whenever a value it would have to hold is traced or under
 autograd, which is what keeps this from touching a gradient. A JAX tracer cannot be converted, so
@@ -318,8 +318,8 @@ broke the layer's periodicity across the cell edge (3.2e-5 where 1e-9 is promise
 centre shifts by a lattice vector or not at all, which the fold and the grid cannot see. What
 stays sampled is the *relative* geometry: moving one shape alone still leaves a sampling ripple
 across a pixel of about five times the legitimate change over that pixel (1.2e-3 / 7.9e-4 /
-1.6e-4 in the largest coefficient at `normal_grid` 64 / 256 / 1024, against 2.1e-4 / 1.7e-4 /
-7.9e-5), which is what `normal_grid` is for. They are combined by **distance-product
+1.6e-4 in the largest coefficient at `shape_nvf_grid_size` 64 / 256 / 1024, against 2.1e-4 / 1.7e-4 /
+7.9e-5), which is what `shape_nvf_grid_size` is for. They are combined by **distance-product
 weights** rather than the *normalized sum of unit vectors* this used to describe, and that
 difference is not cosmetic: a sum weights a shape ten cells away exactly as heavily as the one
 underfoot, which put the normal 40 deg off at a boundary with two shapes in the layer and 43 with
@@ -365,7 +365,7 @@ structure = [dict(background=1.0, shapes=[
                       angle=np.deg2rad(25), material=1.0),
                  dict(type='ellipse', cx=0.3, cy=0.4, lx=0.3, ly=0.2,
                       angle=0.6, material=9.0)])]
-solver = wavebit.rcwa(backend=0, structure=structure, truncation_order=dict(x=11, y=11), ...)  # normal_grid=256 (default)
+solver = wavebit.rcwa(backend=0, structure=structure, truncation_order=dict(x=11, y=11), ...)  # shape_nvf_grid_size=256 (default)
 res = solver.solve()
 ```
 
@@ -482,7 +482,7 @@ keep passing.
   `tanh` mollification of `sign()`, rejected for breaking smoothness through `angle = 0`; it
   needed no mollifier at all. Treating +x and −x (and +y, −y) as four faces blended the same
   way makes them cancel exactly at the centre line, so `sign()` is not smoothed but gone.
-- The normal projectors still depend on `normal_grid` sampling (default 1024) -- the
+- The normal projectors still depend on `shape_nvf_grid_size` sampling (default 1024) -- the
   coefficients themselves are analytic, and the layer's *position* (one shape or several) is
   carried analytically, but the field's shape (size, rotation, and the relative placement of
   several shapes) retains grid error. Increase the grid if needed.

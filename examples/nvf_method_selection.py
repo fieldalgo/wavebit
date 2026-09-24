@@ -41,7 +41,7 @@ def solve_pair(method='nvf', *, order=1, gap=0., auxiliary_options=None):
         shapes = [dict(type='rectangle', lx=300., ly=300.,
                        cx=sign*(150.+gap/2), cy=0., material=material)
                   for sign, material in zip((-1., 1.), epsilon)]
-        options = dict(projector='circular', normal_grid=64) if method == 'nvf' else {}
+        options = dict(nvf_projector='circular', shape_nvf_grid_size=64) if method == 'nvf' else {}
         answer = wavebit.rcwa(
             **common, structure=[dict(background=1., shapes=shapes)],
             factorization=method, **options).solve()

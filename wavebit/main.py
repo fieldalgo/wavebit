@@ -30,19 +30,28 @@ def rcwa(backend=0, *args, stack=None, incidence=None, **kwargs):
             ``bot`` / ``period`` (and ``mu``, when its layers carry one); adapts in, so do
             not also pass those keywords.
         incidence: optional typed ``Incidence`` supplying ``wavelength`` / ``theta`` /
-            ``phi`` / ``tetm`` / ``psi`` / ``chi`` / ``polarization`` / ``incidence_side``
+            ``phi`` / ``kx`` / ``ky`` / ``tetm`` / ``psi`` / ``chi`` / ``polarization`` / ``incidence_side``
             (adapts in; do not also pass those keywords).
         *args: passed to RCWA instance
         **kwargs: passed to RCWA instance
 
     Returns:
-        RCWA: RCWA solver instance
+        RCWA solver instance, or :class:`wavebit.CoherentSolver` when ``excitation``
+        contains typed sources (``PlaneWave``, ``GaussianBeam``, ``ElectricDipole``),
+        or is keyed by ``'top'`` / ``'bottom'`` for external sources.
+        ``power_region`` selects the averaging area. Internal electric dipoles
+        require ``length_unit``: metres per scene length unit.
 
     """
     if stack is not None:
         kwargs = _merge_domain(kwargs, stack.as_kwargs(), 'stack')
     if incidence is not None:
         kwargs = _merge_domain(kwargs, incidence.as_kwargs(), 'incidence')
+
+    from ._core.illumination import CoherentSolver
+    from ._core.sources import is_source_excitation
+    if is_source_excitation(kwargs.get('excitation')):
+        return CoherentSolver(backend, args, kwargs)
 
     if backend == 0:
         from .backends.numpy_backend import SolverNumpy

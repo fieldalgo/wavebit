@@ -28,7 +28,7 @@ SQUARE = np.array([[PERIOD, 0.0], [0.0, PERIOD]])
 SHEAR = np.array([[PERIOD, 200.0], [0.0, PERIOD]])
 
 KW = dict(wavelength=900.0, top=1.0, bot=2.25, theta=0.2, phi=0.0, psi=0.0,
-          thickness=[300.0], truncation_order=dict(u=4, v=4), normal_grid=128)
+          thickness=[300.0], truncation_order=dict(u=4, v=4), shape_nvf_grid_size=128)
 
 
 def _box(**geom):
@@ -465,7 +465,7 @@ def test_the_gradient_across_a_coverage_breakpoint_is_finite():
     Below 200 the two v faces slide past each other and no pair exists; at 200 the run has
     zero length; above it the plan carries the pair. Under ``jax.grad`` the plan is taken from
     the primal per call, so each value gets the plan of its own geometry, and on either side
-    autograd is the central difference to 1e-6 (``h = 1e-5``, ``normal_grid`` 128):
+    autograd is the central difference to 1e-6 (``h = 1e-5``, ``shape_nvf_grid_size`` 128):
 
         lx      AD              FD h=1e-3 (rel)   h=1e-5 (rel)
         199.9   8.184202e-03    +4.2e-9           +2.6e-7
@@ -743,7 +743,7 @@ def test_a_jitted_ellipse_with_no_record_is_refused_and_a_circle_builds():
     give. Until 2026-09-06 the blind plan answered every round shape with its single
     instance, so the 720 x 200 ellipse under ``jax.jit`` with no record was built on the
     fold's field the ring had replaced: -8.222e-3 / -7.058e-3 in ``sum(T)`` from the eager
-    solve at orders 4 / 6 (``normal_grid`` 128 / 256), the same digits as a NumPy solve with
+    solve at orders 4 / 6 (``shape_nvf_grid_size`` 128 / 256), the same digits as a NumPy solve with
     the plan forced to ``None``, and nothing said so. It is refused now with the message every
     traced decision raises with, naming the freeze; with a record taken outside the trace the
     eleven-instance list replays to 1e-12 of the eager solve. A circle of any accepted size

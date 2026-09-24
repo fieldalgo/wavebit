@@ -152,7 +152,7 @@ class Projector(str, Enum):
     different rearrangement and transform once at the end, because doing it any other way
     costs a uniform slab 0.5 (see :func:`~wavebit._core.factorization._pn_fields`). Carrying
     the limit there is a separate derivation, not this one with an argument threaded through,
-    and no solver path reaches those builders today. So they take no ``projector``, which is
+    and no solver path reaches those builders today. So they take no ``nvf_projector``, which is
     also why nothing has to refuse one.
     """
     LINEAR = 'linear'      # P = n n^T, direction only (the original)
@@ -299,14 +299,28 @@ def formulation_of(value):
     return _one_of(Formulation, value, 'formulation')
 
 
+_NVF_OPTION_RENAMES = {
+    'normal_method': 'raster_normal_method',
+    'normal_grid': 'shape_nvf_grid_size',
+    'projector': 'nvf_projector',
+}
+
+
+def nvf_option_rename_hint(names):
+    """Explain the pre-release NVF rename without accepting an obsolete spelling."""
+    renamed = [f'{name!r} -> {_NVF_OPTION_RENAMES[name]!r}'
+               for name in sorted(names) if name in _NVF_OPTION_RENAMES]
+    return (' Renamed NVF option(s): ' + ', '.join(renamed) + '.') if renamed else ''
+
+
 def normal_method_of(value):
-    """Validate a ``normal_method`` value."""
-    return _one_of(NormalMethod, value, 'normal_method')
+    """Validate a ``raster_normal_method`` value."""
+    return _one_of(NormalMethod, value, 'raster_normal_method')
 
 
 def projector_of(value):
-    """Validate a ``projector`` value."""
-    return _one_of(Projector, value, 'projector')
+    """Validate a ``nvf_projector`` value."""
+    return _one_of(Projector, value, 'nvf_projector')
 
 
 def answers_of(value):

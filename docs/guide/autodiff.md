@@ -109,7 +109,7 @@ passes.
 
 Not a matter of taste, and the answer differs by modeling path — a jitted JAX step wins at
 every size on a shape recipe, while on a raster below `truncation_order ~ 5` eager PyTorch beats
-it outright. Before choosing either on a shape recipe, look at `normal_grid`, which outweighs
+it outright. Before choosing either on a shape recipe, look at `shape_nvf_grid_size`, which outweighs
 both. The table is in [`backends.md`](backends.md); the measurements are in
 [`../backend-choice.md`](../backend-choice.md).
 

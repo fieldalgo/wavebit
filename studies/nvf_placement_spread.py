@@ -217,7 +217,7 @@ CFG = dict(backend=0, period=[PER, PER], thickness=(300.0,), truncation_order=di
 
 def sum_T(shapes, N):
     P._PROJECTOR_CACHE.clear()
-    solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)], normal_grid=N, **CFG)
+    solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)], shape_nvf_grid_size=N, **CFG)
     return float(np.sum(np.asarray(solver.solve().T)).real)
 
 
@@ -258,7 +258,7 @@ def coeff_row(log, route, fixture, protocol, N):
 
 def solve_row(log, fixture, N):
     shapes = FIXTURES[fixture]
-    solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)], normal_grid=64, **CFG)
+    solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)], shape_nvf_grid_size=64, **CFG)
     painted = solver.freeze_geometry().boundary_plans[0] is not None
     px = PER / N
     t0 = time.time()

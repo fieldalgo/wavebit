@@ -58,7 +58,7 @@ Each is legal, energy-conserving and *wrong* when read backwards — no error, n
 | --- | --- |
 | **Materials are relative permittivity** | not refractive index; `eps_from_index` converts |
 | **Time convention is `e^{-iωt}`** | `Im(eps) > 0` is loss |
-| **Layers run top to bottom** | and `+z` points into the stack |
+| **Layers run bottom to top** | `z=0` at the bottom interface; `+z` points upward |
 | **Uppercase is power, lowercase is amplitude** | `R` / `T` against `r_s` / `t_p` |
 | **Arrays run `v` first, written pairs run `x` first** | they meet at `truncation_order` |
 | **The cell is centred at the origin** | and shape lengths are absolute |

@@ -79,7 +79,7 @@ class StaticGeometry:
     Attributes:
         normal_field: per-layer ``(normal_x, normal_y)`` for the NVF factorization.
         normal_field_source: per-layer ``(shape, interface mask, lattice key,
-            normal_method, phase count)`` that ``normal_field`` was derived from — carried
+            raster_normal_method, phase count)`` that ``normal_field`` was derived from — carried
             so a replay can tell whether it still fits, not consumed by the build. Left
             ``None``, the NVF replay is unchecked.
         compression: per-layer ``(row_idx, col_idx, x, y)`` for the integrated path's factorization.
@@ -146,6 +146,9 @@ class StaticGeometry:
     mu_compression: Optional[Any] = None
     gamma_plans: Optional[Any] = None
     rectilinear_plans: Optional[Any] = None
+    #: Tensor geometry: integrated shape topology, or sampled phase interfaces
+    #: and fixed normals. Uses identity hashing because sampled records contain arrays.
+    tensor_geometry: Optional[Any] = None
 
     def _cache_key(self):
         """What ``__eq__``/``__hash__`` compare: the content when that is well defined.
@@ -165,9 +168,10 @@ class StaticGeometry:
         ``mu_normal_field``,
         which serves a cached program compiled for a different structure.
         """
-        if self.normal_field is None and self.normal_field_source is None \
-                and self.compression is None and self.mu_normal_field is None \
-                and self.mu_normal_field_source is None and self.mu_compression is None:
+        if self.normal_field is None and self.normal_field_source is None\
+                and self.compression is None and self.mu_normal_field is None\
+                and self.mu_normal_field_source is None and self.mu_compression is None\
+                and self.tensor_geometry is None:
             try:
                 key = ('content', _hashable(self.boundary_plans), _hashable(self.gamma_plans),
                        _hashable(self.rectilinear_plans))

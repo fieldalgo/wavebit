@@ -189,7 +189,7 @@ def distance_gradient_normal_field(xp, polys, grid_shape, lattice, dtype, chunk=
     ``for`` does not survive tracing: it runs once per chunk while the program is recorded and
     appends its equations each time, so the recorded program holds one copy of the body per
     chunk and no loop at all. Counting ``argmin`` primitives in ``jax.make_jaxpr`` of the old
-    path gives exactly ``ceil(npix / chunk)`` -- 24 copies at ``normal_grid=1024`` on the
+    path gives exactly ``ceil(npix / chunk)`` -- 24 copies at ``shape_nvf_grid_size=1024`` on the
     overlapping-pair scene of ``test_frozen_geometry``, where the fold leaves 90 segments and
     so ``chunk`` is 44444. Each copy holds several ``(44444, 90, 2)`` temporaries and the
     compiler cannot reuse one copy's buffers for the next, so the program grows with the grid
@@ -342,7 +342,7 @@ def distance_gradient_normal_field(xp, polys, grid_shape, lattice, dtype, chunk=
         # derivative comes back NaN. One poisoned pixel is enough, because the loss sums.
         #
         # It is reachable from a plain solve, not just a contrived call. `sample_grid` puts
-        # centres at `(i + 0.5) * P / N`, so at `period=300, normal_grid=300` those are the
+        # centres at `(i + 0.5) * P / N`, so at `period=300, shape_nvf_grid_size=300` those are the
         # half-integers and a rectangle at `cx=0` with an ODD width lands its edges exactly on
         # a column of them. Measured through `rcwa(...).solve()` on two overlapping
         # rectangles: `lx=121` gives `sum(T)=0.9768138981` and `d/dlx = nan`, while `lx=120`
@@ -800,7 +800,7 @@ def normal_projector_coeffs(xp, loops, grid_shape, lattice, half_width_u, half_w
     return out
 
 
-def conv_mats(xp, regions, background, half_width_u, half_width_v, lattice, normal_grid,
+def conv_mats(xp, regions, background, half_width_u, half_width_v, lattice, shape_nvf_grid_size,
               dtype, cdtype, transform=None, interface_plan=None, projector_coeffs=None):
     """``(epx, epy, epz_i, epxy, epyx)`` for one boundary-resolved layer.
 
@@ -877,7 +877,7 @@ def conv_mats(xp, regions, background, half_width_u, half_width_v, lattice, norm
         interface_plan = plan_interfaces(regions, lattice, transform)
     segment_data = replay_interfaces(xp, regions, background, lattice, transform, interface_plan)
     coeffs = normal_projector_coeffs(
-        xp, all_loops, (normal_grid, normal_grid), lattice, half_width_u, half_width_v,
+        xp, all_loops, (shape_nvf_grid_size, shape_nvf_grid_size), lattice, half_width_u, half_width_v,
         dtype, cdtype, transform=transform, segment_data=segment_data,
         images=interface_plan.images, image_groups=interface_plan.groups,
         contrasts=interface_contrasts(xp, regions, background, interface_plan, dtype),
@@ -1083,8 +1083,8 @@ def _what_moved(fresh_key, plan_key):
 
 
 def to_conv_mat_boundary_layer(xp, shapes, background, half_width_u, half_width_v, lattice,
-                               dtype, normal_grid=256, n_poly=POLYGON_VERTICES, plan=None,
-                               projector_coeffs=None, projector=None, projector_plan=None):
+                               dtype, shape_nvf_grid_size=256, n_poly=POLYGON_VERTICES, plan=None,
+                               projector_coeffs=None, nvf_projector=None, projector_plan=None):
     """The five convolution matrices for one layer whose shapes are *painted*.
 
     ``shapes`` is in painting order — a later shape covers an earlier one — which is what a
@@ -1092,11 +1092,11 @@ def to_conv_mat_boundary_layer(xp, shapes, background, half_width_u, half_width_
     ``plan`` from a frozen geometry to keep the call traceable; leave it ``None`` and the
     painting is resolved eagerly, which needs concrete shape parameters.
 
-    ``projector='circular'`` corrects the analytic Jones extension near curved
+    ``nvf_projector='circular'`` corrects the analytic Jones extension near curved
     polygon facets. ``projector_plan`` carries the primitive image ring alongside
     the clipping plan. The default retains the actual-interface linear field.
     """
-    if projector not in (None, 'linear', 'circular'):
+    if nvf_projector not in (None, 'linear', 'circular'):
         raise ValueError("projector must be 'linear' or 'circular'")
     verts = [shape_vertices(xp, s, lattice, n_poly) for s in shapes]
     if plan is None:
@@ -1108,7 +1108,7 @@ def to_conv_mat_boundary_layer(xp, shapes, background, half_width_u, half_width_
     regs = [(s['material'], [_clipper.loop_verts(xp, lp, vals) for lp in region])
             for s, region in zip(shapes, regions)]
     real_dtype = xp.float64 if dtype == xp.complex128 else xp.float32
-    if projector == 'circular':
+    if nvf_projector == 'circular':
         from . import parametric as P
         if projector_coeffs is not None:
             raise ValueError('choose a polygon projector or supplied coefficients, not both')
@@ -1118,8 +1118,8 @@ def to_conv_mat_boundary_layer(xp, shapes, background, half_width_u, half_width_
                 projector_plan = P._blind_plan(shapes, lattice)
         P.check_gamma_plan_still_fits(dict(shapes=shapes), lattice, projector_plan, 0, dyadic=True)
         projector_coeffs = polygon_projector_coeffs(
-            xp, verts, (normal_grid, normal_grid), lattice, half_width_u, half_width_v,
+            xp, verts, (shape_nvf_grid_size, shape_nvf_grid_size), lattice, half_width_u, half_width_v,
             real_dtype, dtype, projector_plan, shapes=shapes)
-    return conv_mats(xp, regs, background, half_width_u, half_width_v, lattice, normal_grid,
+    return conv_mats(xp, regs, background, half_width_u, half_width_v, lattice, shape_nvf_grid_size,
                      real_dtype, dtype, transform=transform, interface_plan=interfaces,
                      projector_coeffs=projector_coeffs)

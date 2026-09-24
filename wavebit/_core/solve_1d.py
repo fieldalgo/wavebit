@@ -9,22 +9,28 @@ comes from :mod:`wavebit._core.conventions`.
 ``solve_1d`` handles the pure TE / TM (no azimuth) path; ``solve_1d_conical`` handles the
 general 1D grating (arbitrary ``psi`` / ``phi``) with its coupled s/p block system.
 
-Boundary contract — each consumes what the matching legacy ``solve_1d`` / ``solve_1d_conical``
-consumes (the per-layer convolution matrices already built by the factorization stage, plus
-the incidence/geometry scalars) and returns the same ``(de_ri, de_ti)`` diffraction
-efficiencies. Feeding the exact inputs the legacy path uses reproduces the legacy result
-bit-for-bit; feeding JAX / PyTorch arrays runs the identical algebra with autodiff intact.
+These are private propagation-frame kernels. Historical ``top``/``bottom`` names mean
+the start/end ports of the positive-z layer list. The public engine binds them to physical
+``bot``/``top`` and maps public incidence sides; see ``CoreSolveMixin._kernel_incidence_side``.
+Directional descriptions below refer to this local frame, not the public upward height.
+
+Each kernel consumes per-layer convolution matrices and incidence/geometry values.
+At the efficiency level it returns ``(de_ri, de_ti, power_entering)``: two per-order
+efficiency arrays and a scalar net entering power fraction. JAX / PyTorch arrays
+run the same algebra with autodiff intact.
 
 Stages (matching the legacy chain, kept as one function each to make bit-parity auditable):
   1. boundary init      — kz for efficiency, substrate admittance G, F = T = I
   2. per-layer eig+couple— Redheffer/transfer propagation from the bottom layer up
   3. final matching      — incident field -> R, T -> diffraction efficiency
 """
-from .backend import (_concrete, array_namespace, as_array, check_finite,
+from .backend import (array_namespace, as_array, check_finite,
                       check_physical, eig)
 from .conventions import (boundary_kz, incident_column, incident_kz, mode_q,
                           order_azimuth)
 from .enums import Answers, answers_of
+from .power import (incident_power, net_power, power_for_real_k,
+                    sp_incident_power, wave_power)
 
 
 def _diag(xp, v):
@@ -284,11 +290,10 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
         kx: in-plane wavevectors of the retained orders (length ``n_orders = 2*truncation_order+1``),
             built
             with the *incidence* medium's index (``n_bot`` for backside illumination).
-        n_top, n_bot: superstrate / substrate refractive indices — scene labels, whichever
-            side the light arrives from.
-        theta: incident polar angle (``None`` -> 0; matches the legacy ``cos(theta)`` factor),
+        n_top, n_bot: start / end refractive indices of the private propagation frame.
+        theta: incident angle metadata (``None`` -> 0); boundary k is taken from ``kx``,
             measured from the incidence medium's normal.
-        thickness: per-layer thicknesses, top-to-bottom (``structure``/first-axis order).
+        thickness: per-layer thicknesses in positive-z list order (public bottom-to-top).
         epx_conv_all, epy_conv_all, epz_conv_i_all: per-layer convolution matrices,
             indexed ``[layer]`` on the first axis, as produced by the factorization stage.
         incidence_side: ``'top'`` (default) or ``'bottom'``. Backside illumination is solved
@@ -323,8 +328,8 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
             :func:`~wavebit._core.solve_2d.solve_2d`'s, which see.
 
     Returns:
-        ``(de_ri, de_ti)`` — reflected / transmitted efficiency per order, shape
-        ``(1, n_orders)``.
+        ``(de_ri, de_ti, power_entering)`` — reflected / transmitted efficiency arrays,
+        shape ``(1, n_orders)``, and scalar net entering power divided by incident power.
         From ``answers='amplitude'`` up, the full result mapping instead (amplitudes and s/p
         split; the pure TE/TM path carries all of one polarization, the other side is zero),
         and from ``'field'`` up that mapping also carries the ``layer_info_list`` / ``T1``
@@ -430,7 +435,7 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     Kz_top = _diag(xp, kz_top)
     delta = incident_column(xp, C, lit, n_orders_u, n_orders_u // 2)
     # The incident wave's own kz, read off the same vector the reflected orders use. It equals
-    # `n_top * cos(theta)` for a real incidence angle, and must be *taken from* `kz_top` rather
+    # `n_top * cos(theta)` for a real angle in a lossless medium, and is taken from `kz_top` rather
     # than recomputed so that a complex angle cannot put the two sides of the match on opposite
     # branches -- see :func:`~wavebit._core.conventions.incident_kz`.
     kz_inc = incident_kz(kz_top, n_orders_u // 2)
@@ -455,36 +460,21 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     R = (F @ T1 - delta)[None, :]
     Tt = (T @ T1)[None, :]
 
-    # The incident flux every efficiency is measured against. Written as the two shapes the
-    # expressions below need rather than as one number, so that the undeclared case keeps the
-    # spelling it has always had: `n_top*cos(theta)` and `Re(kz_top[specular])` are the same
-    # quantity and differ by an ulp on half of all angles, and a golden should not move by a
-    # rounding step for a feature the scene does not use (same argument as
-    # :func:`~wavebit._core.engine._half_space_index`'s unnamed `mu`).
-    #
-    # **Reflection needs no permeability and transmission does**, which is worth stating
-    # because the asymmetry looks like a dropped term. Each efficiency is a ratio of
-    # admittances, `kz/mu` on the electric amplitude (TE) and `kz/eps` on the magnetic one
-    # (TM). A reflected order sits in the *incidence* medium, so it is measured against that
-    # medium's own incident admittance and the slot cancels **algebraically, inside the
-    # `Re`** -- exactly, for a complex `mu_top` as much as a real one. A transmitted order
-    # sits in the far half-space, so its slot and the superstrate's both survive.
-    denom_r = kz_inc if lit is None else _incident_flux(xp, C, lit, kz_top)
-    denom_t_te = denom_r / mu_top
-    denom_t_tm = denom_r / eps_top
-
-    de_ri = xp.real(R * xp.conj(R) * xp.real(kz_top / denom_r))
-    if tetm_index == 0:  # TE
-        de_ti = xp.real(Tt * xp.conj(Tt) * xp.real(kz_bot / mu_bot / denom_t_te))
-    else:         # TM
-        de_ti = xp.real(Tt * xp.conj(Tt)
-                        * xp.real(kz_bot / eps_bot / denom_t_tm))
+    # The pure TE channel carries E; pure TM carries H. Evaluate each wave's
+    # real power before dividing, including each illuminated order's weight.
+    admittance_top = kz_top / (mu_top if tetm_index == 0 else eps_top)
+    admittance_bot = kz_bot / (mu_bot if tetm_index == 0 else eps_bot)
+    incoming_power = incident_power(xp, C, lit, admittance_top)
+    de_ri = wave_power(xp, R, admittance_top) / incoming_power
+    de_ti = wave_power(xp, Tt, admittance_bot) / incoming_power
+    entering = power_for_real_k(
+        xp, xp.sum(net_power(xp, delta[None, :], R, admittance_top)) / incoming_power, kx)
 
     check_finite(xp, de_ri=de_ri, de_ti=de_ti)
-    check_physical(xp, de_ri, de_ti, n_top)
+    check_physical(xp, de_ri, de_ti, n_top, power_entering=entering)
 
     if not answers.covers(Answers.AMPLITUDE):
-        return de_ri, de_ti
+        return de_ri, de_ti, entering
 
     # TE carries everything on s, TM everything on p; the opposite side is identically zero.
     # The pure path's primary amplitude IS the Fresnel amplitude on the reflection side (for
@@ -500,12 +490,13 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     zeros_amp = xp.zeros_like(R)
     zeros_eff = xp.zeros_like(de_ri)
     if tetm_index == 0:
-        res = _pack(R, zeros_amp, Tt, zeros_amp, de_ri, zeros_eff, de_ti, zeros_eff)
+        res = _pack(R, zeros_amp, Tt, zeros_amp, de_ri, zeros_eff, de_ti, zeros_eff,
+                    power_entering=entering)
     else:
         # Parenthesised as one ratio, not `Tt * a / b`: the two associate differently and
         # differ by an ulp, and this spelling is `Tt * (n_top / n_bot)` exactly at mu = 1.
         res = _pack(zeros_amp, R, zeros_amp, Tt * ((n_top / mu_top) / (n_bot / mu_bot)),
-                    zeros_eff, de_ri, zeros_eff, de_ti)
+                    zeros_eff, de_ri, zeros_eff, de_ti, power_entering=entering)
     if not keep_field:
         return {'given': res}
     return {'given': res, 'layer_info_list': layer_info_list, 'T1': T1}
@@ -519,8 +510,9 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickne
 
     The conical case couples the s and p polarizations, so the per-layer modes and the boundary
     system are ``2*n_orders`` block matrices. Port of ``transfer_1d_conical_1..4``; returns the
-    ``(de_ri, de_ti)`` of the ``psi``-specified incidence (shape ``(n_orders_v, n_orders_u)``
-    with ``n_orders_v == 1``). See :func:`solve_1d` for the argument conventions — including
+    ``(de_ri, de_ti, power_entering)`` of the specified incidence: two efficiency arrays
+    of shape ``(1, n_orders_u)`` and a scalar net entering power fraction.
+    See :func:`solve_1d` for the argument conventions — including
     ``incidence_side``, handled by the same mirror; ``ky`` is the single out-of-plane order and
     ``psi`` the polarization angle. ``polarization`` is the complex amplitude pair ``(a_s,
     a_p)`` that supersedes ``psi`` when given — see
@@ -639,45 +631,11 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickne
     # --- stage 3: final matching -> efficiency (transfer_1d_conical_4) ------------------
     out = final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
                          n_top, n_bot, n_orders_u, n_orders_v, answers=answers,
-                         mu_top=mu_top, mu_bot=mu_bot, eps_top=eps_top,
-                         lit=lit)
+                         mu_top=mu_top, mu_bot=mu_bot, eps_top=eps_top, eps_bot=eps_bot,
+                         lit=lit, kx=kx, ky=ky)
     if keep_field:
         out['layer_info_list'] = layer_info_list
     return out
-
-
-def _incident_flux(xp, C, lit, kz_inc_medium):
-    """Total time-averaged z-flux arriving, summed over the lit orders.
-
-    The denominator every efficiency is divided by. For one wave it is that wave's ``Re(kz)``,
-    which is what ``n_top*cos(theta)`` spells today; for a superposition the orders each carry
-    their own, and nothing but the sum is the incident power.
-
-    **A lit order past the light line is refused**, one at a time rather than only when the
-    whole excitation is evanescent. It carries no time-averaged z-flux, so it would drive the
-    structure while contributing nothing to this sum -- and "efficiency" would quietly stop
-    meaning *fraction of incident power* and start meaning *fraction of the propagating part
-    of it*, with ``R + T`` free to exceed one on a passive stack. The answer is not missing;
-    the question is. An evanescent excitation is a near-field source, and this library's
-    incident field is a plane wave (see ``docs/conventions.md`` on ``kz``, and the dipole case
-    that wants an interior source instead).
-    """
-    total = None
-    for one in lit:
-        carries = _concrete(xp.real(kz_inc_medium[one.index]) > 0)
-        if carries is False:
-            raise ValueError(
-                f'the excitation lights order {one.order!r}, which is evanescent in '
-                'the incidence medium -- it carries no time-averaged power, so it cannot be '
-                'part of an incident flux and every efficiency would be measured against the '
-                'rest. An order propagates only while |kx| < n_inc; light one that does, or '
-                'lengthen the period so more orders fall inside the light line. An evanescent '
-                'excitation is a near-field source rather than an incident plane wave, which '
-                'is a different problem than this one.')
-        a = as_array(xp, one.amplitude, dtype=C)
-        term = xp.abs(a) ** 2 * xp.real(kz_inc_medium[one.index])
-        total = term if total is None else total + term
-    return total
 
 
 def _unit(xp, n, i):
@@ -689,7 +647,8 @@ def _unit(xp, n, i):
 
 def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
                    n_top, n_bot, n_orders_u, n_orders_v, answers=Answers.EFFICIENCY,
-                   mu_top=1.0, mu_bot=1.0, eps_top=None, lit=None):
+                   mu_top=1.0, mu_bot=1.0, eps_top=None, lit=None, eps_bot=None,
+                   *, kx, ky):
     """Boundary match the assembled s/p system to the incident field.
 
     Shared boundary equations from ``transfer_1d_conical_4`` / ``transfer_2d_4``;
@@ -713,7 +672,11 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
     ``test_half_space_permittivity_reaches_both_connecting_algorithms`` in
     ``tests/test_scattering_core.py`` is the check that keeps them reading it together.
 
-    Returns ``(de_ri, de_ti)`` for that incidence, shape ``(n_orders_v, n_orders_u)``.
+    ``eps_bot`` supplies the exit-side permittivity to the power conversion.
+    When absent it is recovered from ``n_bot**2/mu_bot``.
+
+    Returns ``(de_ri, de_ti, power_entering)``: two efficiency arrays of shape
+    ``(n_orders_v, n_orders_u)`` and a scalar net entering power fraction.
     From ``answers='amplitude'`` up it returns the full result mapping instead: the reflected
     and transmitted amplitudes and their s/p-resolved efficiencies for the given incidence,
     plus the pure-TE and pure-TM incidence variants. All requested incidence
@@ -766,11 +729,9 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
     # while `eps*mu == n**2`, which is the only way a caller should ever supply them -- made
     # the incident wave and the reflected one see different media the moment they disagreed.
     #
-    # The magnetic scale is `n/mu`, not `n`: `a_s` and `a_p` are defined at *equal* incident
-    # flux, and with the s flux carrying `kz/mu` the p one only matches at that scale. Getting
-    # it wrong leaves s and p normalized to different incident powers, which no energy check
-    # can see -- R + T = 1 still holds within each polarization. It is also the scale the SMM
-    # twin's incident column uses, so the two connecting algorithms share it verbatim.
+    # The magnetic scale is `n/mu`: the input pair holds electric coefficients.
+    # Equal coefficients need not carry equal power in an absorbing medium;
+    # their actual powers are evaluated separately below.
     #
     # `e_p_inc` is the one expression in this function that is *not* bit-identical to its
     # pre-`mu` form. `(n/mu)*kz/eps` and `kz/n` agree exactly whenever `n_top` is a power of
@@ -781,27 +742,19 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
     # which is the shape of the bug this argument was added to close.
     h_p_inc = n_top / mu_top
     e_p_inc = h_p_inc * kz_inc / eps_top
-    if lit is None:
-        final_B = _block(xp, [
-            [-a_s * delta],
-            [a_p * e_p_inc * delta],
-            [1j * a_s * kz_inc / mu_top * delta],
-            [1j * h_p_inc * a_p * delta],
-        ])
-    else:
-        # A superposition has no single incident `kz`: each lit order carries its own, so the
-        # two rows built from it become `Kz_top @ delta` rather than a scalar times `delta`.
-        # The rows are written out twice rather than folded into one expression because the
-        # undeclared case has to stay bit-identical -- `(h*kz/eps)*delta` and `h*(kz*delta)/eps`
-        # associate differently and differ by an ulp, and no golden should move for a feature
-        # the scene does not use.
-        kz_col = Kz_top @ delta
-        final_B = _block(xp, [
-            [-a_s * delta],
-            [a_p * h_p_inc * kz_col / eps_top],
-            [1j * a_s * kz_col / mu_top],
-            [1j * h_p_inc * a_p * delta],
-        ])
+    kz_col = None if lit is None else Kz_top @ delta
+
+    def incident_column_sp(s, p):
+        # All requested polarization columns use the same per-order wavevectors.
+        if lit is None:
+            return _block(xp, [[-s * delta], [p * e_p_inc * delta],
+                               [1j * s * kz_inc / mu_top * delta],
+                               [1j * h_p_inc * p * delta]])
+        return _block(xp, [[-s * delta], [p * h_p_inc * kz_col / eps_top],
+                           [1j * s * kz_col / mu_top],
+                           [1j * h_p_inc * p * delta]])
+
+    final_B = incident_column_sp(a_s, a_p)
 
     if answers.covers(Answers.AMPLITUDE):
         # Keep the given, pure-TE and pure-TM columns in one right-hand side,
@@ -813,10 +766,7 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
         for psi_v in (half_pi, 0.0):
             s_p = xp.sin(xp.asarray(psi_v, dtype=C))
             c_p = xp.cos(xp.asarray(psi_v, dtype=C))
-            cols.append(_block(xp, [[-s_p * delta],
-                                    [c_p * e_p_inc * delta],
-                                    [1j * s_p * kz_inc / mu_top * delta],
-                                    [1j * h_p_inc * c_p * delta]]))
+            cols.append(incident_column_sp(s_p, c_p))
         solved = xp.linalg.solve(final_A, xp.concat(cols, axis=1))
         final_RT, final_RT_tetm = solved[:, :1], solved[:, 1:]
     else:
@@ -831,23 +781,32 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
     T_s = xp.reshape(big_T[:n_orders, :], (n_orders_v, n_orders_u))
     T_p = xp.reshape(big_T[n_orders:, :], (n_orders_v, n_orders_u))
 
-    # incident flux carries kz/mu, see sp_efficiencies. `n_top*cos_t` is `Re(kz_inc)` written
-    # the way this function has always written it; a superposition needs the sum over the lit
-    # orders instead, and the two spellings differ by an ulp on half of all angles.
-    denom = (kz_inc / mu_top if lit is None
-             else _incident_flux(xp, C, lit, kz_top) / mu_top)
+    s_power, p_power = sp_incident_power(xp, C, lit, kz_top, n_top, eps_top, mu_top)
+    denom = xp.abs(a_s)**2 * s_power + xp.abs(a_p)**2 * p_power
 
-    def efficiencies(R_s_, R_p_, T_s_, T_p_):
-        return sp_efficiencies(xp, kz_top_2d, kz_bot_2d, denom, n_top, n_bot,
-                               R_s_, R_p_, T_s_, T_p_, mu_top=mu_top, mu_bot=mu_bot)
+    def efficiencies(R_s_, R_p_, T_s_, T_p_, incoming):
+        return sp_efficiencies(xp, kz_top_2d, kz_bot_2d, incoming, n_top, n_bot,
+                               R_s_, R_p_, T_s_, T_p_, mu_top=mu_top, mu_bot=mu_bot,
+                               eps_top=eps_top, eps_bot=eps_bot)
 
-    de_ri_s, de_ri_p, de_ti_s, de_ti_p = efficiencies(R_s, R_p, T_s, T_p)
+    de_ri_s, de_ri_p, de_ti_s, de_ti_p = efficiencies(R_s, R_p, T_s, T_p, denom)
 
+    delta_2d = xp.reshape(delta, (n_orders_v, n_orders_u))
+
+    def entering_power(R_s_, R_p_, s, p, incoming):
+        flux = (net_power(xp, s * delta_2d, R_s_, kz_top_2d / mu_top)
+                + net_power(xp, -1j * h_p_inc * p * delta_2d, R_p_,
+                            kz_top_2d / eps_top))
+        value = xp.sum(flux, axis=(-2, -1)) / incoming
+        return power_for_real_k(xp, value, kx, ky)
+
+    entering = entering_power(R_s, R_p, a_s, a_p, denom)
     check_finite(xp, de_ri=de_ri_s + de_ri_p, de_ti=de_ti_s + de_ti_p)
-    check_physical(xp, de_ri_s + de_ri_p, de_ti_s + de_ti_p, n_top)
+    check_physical(xp, de_ri_s + de_ri_p, de_ti_s + de_ti_p, n_top,
+                   power_entering=entering)
 
     if not answers.covers(Answers.AMPLITUDE):
-        return de_ri_s + de_ri_p, de_ti_s + de_ti_p
+        return de_ri_s + de_ri_p, de_ti_s + de_ti_p, entering
 
     # The coupled paths' p boundary variable is a magnetic amplitude; ``/(-i*n)`` on its own
     # side is what makes it the Fresnel E-ratio (measured, tests/test_lossy_media).
@@ -855,7 +814,8 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
         return (R_s_, R_p_ / (-1j * n_top / mu_top),
                 T_s_, T_p_ / (-1j * n_bot / mu_bot))
 
-    res = _pack(*fresnel(R_s, R_p, T_s, T_p), de_ri_s, de_ri_p, de_ti_s, de_ti_p)
+    res = _pack(*fresnel(R_s, R_p, T_s, T_p), de_ri_s, de_ri_p, de_ti_s, de_ti_p,
+                power_entering=entering)
 
     def split2(M):
         """Two incidence columns -> (2, n_orders_v, n_orders_u), the legacy ``.T.reshape``."""
@@ -868,9 +828,16 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
     T_s_2 = split2(big_T_tetm[:n_orders, :])
     T_p_2 = split2(big_T_tetm[n_orders:, :])
 
-    eff2 = efficiencies(R_s_2, R_p_2, T_s_2, T_p_2)
+    variant_power = xp.reshape(xp.stack([s_power, p_power]), (2, 1, 1))
+    eff2 = efficiencies(R_s_2, R_p_2, T_s_2, T_p_2, variant_power)
     amps2 = fresnel(R_s_2, R_p_2, T_s_2, T_p_2)
-    variants = [_pack(*(a[i] for a in amps2), *(e[i] for e in eff2)) for i in (0, 1)]
+    variants = []
+    for i, psi_v in enumerate((half_pi, 0.0)):
+        s = xp.sin(xp.asarray(psi_v, dtype=C))
+        p = xp.cos(xp.asarray(psi_v, dtype=C))
+        entry = entering_power(R_s_2[i], R_p_2[i], s, p, (s_power, p_power)[i])
+        variants.append(_pack(*(a[i] for a in amps2), *(e[i] for e in eff2),
+                              power_entering=entry))
 
     out = {'given': res, 's_inc': variants[0], 'p_inc': variants[1]}
     if answers.covers(Answers.FIELD):
@@ -880,12 +847,11 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
 
 
 def sp_efficiencies(xp, kz_top_2d, kz_bot_2d, denom, n_top, n_bot, R_s, R_p, T_s, T_p,
-                    mu_top=1.0, mu_bot=1.0):
+                    mu_top=1.0, mu_bot=1.0, eps_top=None, eps_bot=None):
     """Power-normalized diffraction efficiencies from the s/p boundary amplitudes.
 
-    ``denom`` is the incident-power factor, ``n_top*cos(theta)/mu_top``; the s channel carries
-    the electric amplitude and the p channel the magnetic one, which is what puts a different
-    material factor on each. Shared by the ETM final matching and the SMM connecting algorithm.
+    ``denom`` is the real incident power for each input polarization column.
+    The s channel carries E and the p channel carries H. Shared by ETM and SMM.
 
     A half-space's admittance is ``kz/mu`` for s and ``kz/eps`` for p, and with
     ``eps = n**2/mu`` the second is ``kz*mu/n**2``. That is the *whole* content of a magnetic
@@ -893,15 +859,19 @@ def sp_efficiencies(xp, kz_top_2d, kz_bot_2d, denom, n_top, n_bot, R_s, R_p, T_s
     alone cannot express one — it sees no interface at all between vacuum and an
     impedance-mismatched medium of the same index.
 
-    ``mu_top`` / ``mu_bot`` default to 1, where every expression is the one that was here.
+    ``mu_top`` / ``mu_bot`` default to 1 for non-magnetic half-spaces.
     """
-    return (xp.real(R_s * xp.conj(R_s) * xp.real(kz_top_2d / mu_top / denom)),
-            xp.real(R_p * xp.conj(R_p) * xp.real(kz_top_2d * mu_top / n_top ** 2 / denom)),
-            xp.real(T_s * xp.conj(T_s) * xp.real(kz_bot_2d / mu_bot / denom)),
-            xp.real(T_p * xp.conj(T_p) * xp.real(kz_bot_2d * mu_bot / n_bot ** 2 / denom)))
+    if eps_top is None:
+        eps_top = n_top**2 / mu_top
+    if eps_bot is None:
+        eps_bot = n_bot**2 / mu_bot
+    return (wave_power(xp, R_s, kz_top_2d / mu_top) / denom,
+            wave_power(xp, R_p, kz_top_2d / eps_top) / denom,
+            wave_power(xp, T_s, kz_bot_2d / mu_bot) / denom,
+            wave_power(xp, T_p, kz_bot_2d / eps_bot) / denom)
 
 
-def _pack(r_s, r_p, t_s, t_p, R_s, R_p, T_s, T_p):
+def _pack(r_s, r_p, t_s, t_p, R_s, R_p, T_s, T_p, *, power_entering):
     """Assemble one incidence's results in the ``ResultSub`` field layout.
 
     Amplitudes arrive **already Fresnel-normalized** — each pack site owns the conversion
@@ -912,4 +882,5 @@ def _pack(r_s, r_p, t_s, t_p, R_s, R_p, T_s, T_p):
     """
     return {'r_s': r_s, 'r_p': r_p, 't_s': t_s, 't_p': t_p,
             'R': R_s + R_p, 'R_s': R_s, 'R_p': R_p,
-            'T': T_s + T_p, 'T_s': T_s, 'T_p': T_p}
+            'T': T_s + T_p, 'T_s': T_s, 'T_p': T_p,
+            'power_entering': power_entering}

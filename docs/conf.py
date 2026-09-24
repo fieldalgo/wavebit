@@ -58,7 +58,7 @@ extensions = [
 external_toc_path = '_toc.yml'
 external_toc_exclude_missing = False
 
-myst_enable_extensions = ['colon_fence', 'deflist', 'attrs_inline']
+myst_enable_extensions = ['colon_fence', 'deflist', 'attrs_inline', 'dollarmath']
 
 # A ```mermaid fence becomes the mermaid directive, so the diagrams stay plain fenced blocks
 # that GitHub also draws -- rather than `{mermaid}` directives, which only this build reads.

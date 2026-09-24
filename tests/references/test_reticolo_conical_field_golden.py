@@ -77,9 +77,10 @@ def _in_our_frame(e):
 
 
 def _reconstruct(stack, theta, phi, pol):
+    # STACKS and the comparison archive use downward depth; public Wavebit uses height.
     thickness, structure = STACKS[stack]
     solver = wavebit.rcwa(backend=0, top=1.0, bot=1.0, period=[PERIOD], truncation_order=MAX_ORDER,
-                          wavelength=WL, thickness=thickness, structure=structure,
+                          wavelength=WL, thickness=thickness[::-1], structure=structure[::-1],
                           theta=np.deg2rad(theta), phi=np.deg2rad(phi),
                           psi=np.pi / 2 if pol == 's' else 0.0,
                           # RETICOLO's texture is analytic piecewise-constant, so the exact
@@ -88,7 +89,7 @@ def _reconstruct(stack, theta, phi, pol):
                           fourier_coefficients='integrated', answers='field')
     solver.solve()
     cell = np.asarray(solver.reconstruct_field(sample_x=RES_X, sample_y=1, sample_z=RES_Z))
-    return cell[0]                                 # the one incidence requested
+    return cell[0, ::-1] * Z_PARITY                                 # the one incidence requested
 
 
 def _classify(ref, stack):

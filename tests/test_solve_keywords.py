@@ -67,7 +67,7 @@ REFUSED = {
 ACCEPTED = ('thickness', 'structure', 'mu', 'factorization', 'fourier_coefficients',
             # Plain attributes, not properties -- deriving the set from properties alone
             # refused all three, and a wavelength sweep is the most ordinary call here.
-            'wavelength', 'layer_algorithm', 'normal_grid')
+            'wavelength', 'layer_algorithm', 'shape_nvf_grid_size')
 
 
 def _scene(backend=0, **over):
@@ -166,7 +166,7 @@ def test_the_condition_set_is_derived_not_listed(backend):
 
     Two sources, and the test recomputes both rather than restating an answer. Properties alone
     is what a first version used, and it refused `wavelength`, `layer_algorithm` and
-    `normal_grid` -- plain attributes, and exactly what a sweep moves. Constructor parameters
+    `shape_nvf_grid_size` -- plain attributes, and exactly what a sweep moves. Constructor parameters
     alone would drop the retired spellings, which have no parameter and must stay in so their
     own setters can say what replaced them.
 

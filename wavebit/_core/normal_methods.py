@@ -1,4 +1,4 @@
-"""The raster normal-field constructions behind ``normal_method`` — all but the original.
+"""The raster normal-field constructions behind ``raster_normal_method`` — all but the original.
 
 :func:`wavebit._core.factorization.normal_vector_field` dispatches here for every method
 except ``'distance'``, which stays where it always was. Each construction takes the same
@@ -475,9 +475,9 @@ def _contour_polylines(smoothed):
         import contourpy
     except ImportError:
         raise ImportError(
-            "normal_method='contour' extracts subpixel level sets with contourpy, which "
+            "raster_normal_method='contour' extracts subpixel level sets with contourpy, which "
             "is not installed. `pip install contourpy` (it ships with matplotlib), or use "
-            "normal_method='spectral', which needs nothing beyond NumPy/SciPy.") from None
+            "raster_normal_method='spectral', which needs nothing beyond NumPy/SciPy.") from None
     n_v, n_u = smoothed.shape
     padded = np.pad(smoothed, ((0, 1), (0, 1)), mode='wrap')
     gen = contourpy.contour_generator(z=padded, line_type=contourpy.LineType.Separate)

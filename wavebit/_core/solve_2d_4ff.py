@@ -1,168 +1,30 @@
-"""First-order (4ff) layer solve — the formulation a z-coupled tensor needs.
+"""First-order Maxwell solve for full epsilon and permeability tensors.
 
-**Status: reachable. A z-coupled tensor handed to the public solver arrives here** —
-:func:`solve_2d_4ff` is the entry, and ``formulation='4ff'`` forces it on a problem that does not
-need it. Field reconstruction landed 2026-08-14. **What is still missing is a patterned
-*anisotropic* layer and ``mu``**; see "What is not here" at the bottom before building on it.
+The transverse state is (Ex, Ey, Hx, Hy), and dpsi/dz = i k0 M psi.
+Eliminating the longitudinal fields gives
 
-Pinned by ``tests/test_solve_2d_4ff.py`` against the 2ff path and a Berreman 4x4, and by
-``tests/references/test_4ff_external_goldens.py`` against RETICOLO and fmmax — 21 cases, worst
-gap 2.4e-15, no convention fitting, now run through the public route as well as this module's
-own entry. Note what the goldens do *not* cover: every case in both has an empty z row, because
-both were frozen for a 2ff consumer. The geometry this module exists for is judged by our own
-Berreman — which since dispatch landed judges the public route directly, on stacks, on a tilted
-magnetisation (``xy`` and ``yz`` at once, which RETICOLO cannot arbitrate), and from the back
-side (``tests/test_anisotropic_berreman.py``).
+    Ez = ezz^-1 (Ky Hx - Kx Hy - ezx Ex - ezy Ey)
+    Hz = mzz^-1 (Kx Ey - Ky Ex - mzx Hx - mzy Hy).
 
-Why it exists. :mod:`wavebit._core.solve_2d` reduces a layer to the second-order form
-``d2E_t/dz2 = Omega2 E_t``, which exists only when the permittivity has an empty z row and
-column. With ``eps_xz`` or ``eps_yz`` populated the elimination of ``E_z`` leaves a
-first-derivative term, the reduction fails, and the 2ff mode operator has nothing to be —
-``docs/anisotropic-materials.md`` §6. Physically that is the Voigt geometry: a magnetisation
-lying in the plane rather than along the stack normal, which is what a magnetised film does on
-its own unless it has perpendicular anisotropy or an applied field.
+All coefficients are Fourier convolution operators; products retain their
+order. Uniform tensors and patterned tensors use the same layer solver.
+Both incidence sides, scalar magnetic half-spaces, and all six reconstructed
+field components are supported with ETM or SMM. The unstabilized TMM helper
+below is a diagnostic stack solver.
 
-What the first-order form keeps instead is the full transverse state,
+Forward and backward modes are separate eigenspaces, not generally sign
+pairs. Evanescent propagation factors are referenced to opposite layer faces
+in the stable recursion. Finite-order PN operators can introduce artificial
+loss or gain even for lossless materials, so Fourier convergence must be
+checked; a finite result alone is not an accuracy guarantee.
 
-    d/dz (Ex, Ey, Hx, Hy) = i k0 M (Ex, Ey, Hx, Hy)
+Private top/bottom denote propagation ports. The engine binds them to the
+public bottom/top ports in the right-handed xyz frame (+z up).
 
-with ``M`` of size ``4*n_orders``. It costs about 8x the 2ff path (``eig`` is cubic and the problem
-doubles), measured at 9.5x on RETICOLO, which is why choosing between them belongs to the
-solver and not the caller — ``docs/anisotropic-materials.md`` §8.
-
-The derivation, for ``e^{-iwt}`` with ``d/dx -> i k0 Kx`` and ``d/dy -> i k0 Ky``::
-
-    curl E = i k0 H,   curl H = -i k0 eps E
-
-    z components:   Hz = Kx Ey - Ky Ex,      Dz = Ky Hx - Kx Hy
-    and Dz = ezx Ex + ezy Ey + ezz Ez, so
-                    Ez = ezz^-1 (Ky Hx - Kx Hy - ezx Ex - ezy Ey)
-
-    leaving         Ex' = i k0 (Kx Ez + Hy)
-                    Ey' = i k0 (Ky Ez - Hx)
-                    Hx' = i k0 (Kx Hz - Dy)
-                    Hy' = i k0 (Ky Hz + Dx)
-
-Every product is a convolution-matrix product and ``Kx`` / ``Ky`` are the same diagonals the 2ff
-path uses, so this is the Fourier-space statement rather than a per-order one.
-
-**Forward and backward modes are not a sign apart here.** In 2ff, ``exp(+q z)`` and
-``exp(-q z)`` solve the same second-order equation with the *same* eigenvector, so the pair came
-for free and :func:`wavebit._core.conventions.mode_q` only had to choose a root. A
-first-order system has ``4*n_orders`` eigenvalues that are not ``+-`` pairs in general, and the two
-directions are genuinely different mode sets. Measured: for a tilted magnetisation at 35
-degrees the backward set departs from the negated forward set by 9e-2, while at normal
-incidence the two coincide to 1e-15 — so the pairing survives exactly where nobody would have
-noticed it failing.
-
-**What makes the stack solve stable is the direction split, not the algorithm on top of it.**
-The split is what lets a layer be propagated by ``exp(i k0 lam_f d)`` forward and
-``exp(-i k0 lam_b d)`` backward. **In a passive medium** both have modulus at most one for any
-thickness — a mode carrying energy towards ``+z`` cannot gain amplitude on the way, so
-``Im(lam_f) >= 0``, and the mirrored statement holds backwards. Two of the three connecting
-algorithms are then arrangements that keep only those factors:
-
-==========  ==================================  ====================  ================
-``algo``    form                                thickness             cost, 40 layers
-==========  ==================================  ====================  ================
-``'ETM'``   enhanced transmittance (default)    unbounded             0.94x
-``'SMM'``   scattering matrices, Redheffer      unbounded             1.13x
-``'TMM'``   ``Psi exp(...) Psi^-1``, plain      refuses past x = 9    1.00x
-==========  ==================================  ====================  ================
-
-``'ETM'`` is the same option, under the same name, as the 2ff path's default — the string has
-to mean one thing across both solvers. ``'TMM'`` here is the plain unstabilised transfer,
-which the 2ff path does not offer at all; it exists only to show the stabilisation is
-load-bearing.
-
-The two stable ones agree to 1.2e-15 over eight tensors, three angles and both polarisations,
-and both hold ~1e-13 relative accuracy out to a modal exponent of 2500, where they reproduce the
-closed-form single-interface Fresnel reflectance to 4e-16.
-
-``'TMM'`` is kept as a third opinion whose failure mode is understood: it holds the growing
-and decaying halves in one matrix and inverts it, so its relative error grows like
-``eps*exp(2x)``. Its bound is set by *accuracy*, not by overflow — see ``_MAX_EXPONENT``.
-
-**None of this covers a gain medium**, where a forward mode amplifies by construction
-(``Im(lam_f) < 0``; measured -0.108 for ``n = 1.5 - 0.1j``) and the propagators stop being
-contractions. Measured anyway: the two stable algorithms still track the Airy closed form to
-~1e-13 out to an exponent of 113, and past roughly 700 return NaN. Nothing guards that, because
-there the growth is the physics rather than an artefact — but the stability claim is about
-passive media and should not be read further.
-
-**Field reconstruction landed 2026-08-14** and is no longer on the list below.
-:func:`_etm_recursion` keeps a ``layer_info_list`` — ``[eps_blocks, psi_f, lam_f, psi_b,
-lam_b, d, P_i, QP_i]`` per layer, bottom-to-top, the counterpart of the 2ff path's
-``[epz_conv_i, W, V, q, d, big_A_i, big_B]`` — and
-:func:`wavebit._core.fields.field_2d_4ff` propagates it. Three notes worth keeping:
-
-* the transverse half is *simpler* here, because the state vector already **is**
-  ``(Ex, Ey, Hx, Hy)`` and there is no ``W`` / ``V`` split to reassemble;
-* ``E_z`` is the one formula that could not be copied — with a populated z row the
-  elimination keeps two more terms, ``Ez = ezz^-1 [ (Ky Hx - Kx Hy) - ezx Ex - ezy Ey ]``,
-  and ``fields.py``'s ``Sz = 1j * epz_conv_i @ (Kx @ Uy - Ky @ Ux)`` is that expression at
-  ``ezx = ezy = 0`` (with ``U = i H``), i.e. a special case rather than a shared line;
-* ``reconstruct_field`` now branches on the **formulation**. It had to: this path sets
-  ``_grating_type`` to 2 as well, so the grating type cannot tell the two apart, and
-  the 2ff reconstruction reads the same two state slots — it would have returned a plausible
-  cell built on the wrong ``E_z``.
-
-The oracle was internal and exact, as scoped: forcing ``formulation='4ff'`` on a problem with
-an empty z row makes the two paths solve the same problem, and the reconstructed cells agree to
-1e-11 relative *per component* over four geometries, three angles, both incidence sides and all
-three incidence variants. The z-coupled case has no such twin and is judged by Maxwell (central
-differences down a layer, converging at the second order the step demands), by exact transverse
-continuity at the interfaces, and — because both of those are homogeneous — by tying the cell's
-``z`` flux between lossless spacers to the reported ``T / (1 - R)``.
-See ``tests/test_field_4ff.py``.
-
-What is not here, in the order it will be wanted:
-
-* **``mu`` on this path.** Permeability landed on the 2ff path on 2026-08-14
-  (``docs/magnetic-materials.md``) and this one still refuses it — ``engine.py``'s 2D solve
-  raises when a ``mu`` reaches the first-order formulation, by either route in (a z-coupled
-  ``eps``, or ``formulation='4ff'`` asked for directly), rather than dropping it. That refusal
-  covers the *field* too: :func:`wavebit._core.fields.field_2d_4ff` spells ``H_z`` as
-  ``Kx Ey - Ky Ex``, Faraday's z row at ``mu = 1``, where its 2ff twin carries the general
-  ``muz_conv_i (Kx Ey - Ky Ex)``. Adding ``mu`` here means both — and, this being the formulation
-  that can express a z row at all, the ``mu_zx H_x`` / ``mu_zy H_y`` terms as well, exactly as
-  ``E_z`` already keeps ``ezx`` / ``ezy``.
-* **A patterned *and* z-coupled layer.** The factorization for a patterned anisotropic layer
-  now exists (``factorization.py::pn_eps_conv_matrices``, 2026-08-14) and this module takes
-  convolution matrices, so the in-plane case needs no change here. What is still missing is the
-  3x3 closing step for a patterned layer that also fills the z row — and, more to the point,
-  any way to check it: fmmax was the only solver that reached the patterned case and it has no
-  z-row arguments.
-
-How dispatch is built, kept because the two measurements behind it are why
-:func:`solve_2d_4ff` is shaped the way it is:
-
-**The mode correspondence is exact and simple.** For a layer both formulations can express,
-the 2ff triple is recoverable from the 4ff state with no fitting::
-
-    W = psi_f[:2*n_orders]          the transverse E
-    V = 1j * psi_f[2*n_orders:]     the partner field, i times the transverse H
-    q  = -1j * lam_f
-
-Verified to 1e-15 on biaxial and rotated-uniaxial layers at three incidences; the ``1j`` is a
-clean scalar, identical in every case.
-
-**But the ETM recursion cannot be reused as it stands.** It writes the two directions as
-``big_F = big_W (I + Y)`` and ``big_G = big_V (I - Y)``, which assumes the backward modes are
-the forward ones with the partner field negated. Measured, that assumption holds to 1e-15 for
-a z-decoupled layer *and at normal incidence*, and fails at 6.9e-1 (E) / 1.1 (H) for a Voigt
-tensor at 35 degrees — the same ``+-`` pairing this module exists because of.
-
-So dispatch is not a branch inside :func:`wavebit._core.solve_2d.solve_2d`. The 4ff path
-carries its own stack solve and hands the shared
-:func:`wavebit._core.solve_1d.final_matching` a ``(big_F, big_G, big_T)`` built from its own
-``G`` and ``T_acc`` — rotated into the s/p basis by ``varphi`` and carrying the ``1j`` above.
-
-The normalisation that warning is about is settled by *naming the seed's coordinates*:
-:func:`_half_space_state` writes the substrate wave with its two columns already the 2ff
-path's ``(t_s, t_p)``, so ``big_T`` is ``T_acc`` with nothing applied to it. Eigendecomposing
-the half-space instead — the obvious alternative — leaves ``eig``'s arbitrary column scale
-between ``big_F`` and ``big_T``, and that error is invisible in ``R``.
+Validation: tests/test_full_tensor_patterns.py (independent laminate
+integrals and Maxwell transfer, magnetic duality, fields and gradients),
+tests/test_anisotropic_berreman.py, tests/test_field_4ff.py, and the checked-in
+RETICOLO/fmmax references. No external solver code is included here.
 """
 from cmath import sqrt as _csqrt
 
@@ -185,7 +47,8 @@ _FLAT = 1e-12
 _MAX_EXPONENT = 9.0
 
 
-def layer_matrix_4ff(xp, Kx, Ky, exx, exy, exz, eyx, eyy, eyz, ezx, ezy, ezz_i):
+def layer_matrix_4ff(xp, Kx, Ky, exx, exy, exz, eyx, eyy, eyz, ezx, ezy, ezz_i,
+                     mu_blocks=None):
     """``M`` in ``dpsi/dz = i k0 M psi`` for ``psi = (Ex, Ey, Hx, Hy)``.
 
     All arguments are ``n_orders x n_orders`` convolution matrices except ``Kx`` / ``Ky``, which
@@ -193,22 +56,23 @@ def layer_matrix_4ff(xp, Kx, Ky, exx, exy, exz, eyx, eyy, eyz, ezx, ezy, ezz_i):
     block, matching how :func:`wavebit._core.solve_2d.layer_modes_2d` already carries it.
     """
     n_orders = Kx.shape[0]
-    I = xp.astype(xp.eye(n_orders), Kx.dtype)
-
-    ez_ex, ez_ey = -(ezz_i @ ezx), -(ezz_i @ ezy)      # Ez in terms of the state
-    ez_hx, ez_hy = ezz_i @ Ky, -(ezz_i @ Kx)
-    hz_ex, hz_ey = -Ky, Kx                             # Hz likewise
-
-    dx_ex, dx_ey = exx + exz @ ez_ex, exy + exz @ ez_ey
-    dx_hx, dx_hy = exz @ ez_hx, exz @ ez_hy
-    dy_ex, dy_ey = eyx + eyz @ ez_ex, eyy + eyz @ ez_ey
-    dy_hx, dy_hy = eyz @ ez_hx, eyz @ ez_hy
-
+    I = xp.eye(n_orders, dtype=Kx.dtype, device=getattr(Kx, 'device', None))
+    O = xp.zeros_like(I)
+    m = (dict(exx=I,exy=O,exz=O,eyx=O,eyy=I,eyz=O,ezx=O,ezy=O,ezz_i=I)
+         if mu_blocks is None else mu_blocks)
+    # Longitudinal fields expressed in the transverse state (Ex, Ey, Hx, Hy).
+    ez = [-(ezz_i @ ezx), -(ezz_i @ ezy), ezz_i @ Ky, -(ezz_i @ Kx)]
+    hz = [-(m['ezz_i'] @ Ky), m['ezz_i'] @ Kx,
+          -(m['ezz_i'] @ m['ezx']), -(m['ezz_i'] @ m['ezy'])]
+    dx = [a + exz @ z for a, z in zip((exx, exy, O, O), ez)]
+    dy = [a + eyz @ z for a, z in zip((eyx, eyy, O, O), ez)]
+    bx = [a + m['exz'] @ z for a, z in zip((O, O, m['exx'], m['exy']), hz)]
+    by = [a + m['eyz'] @ z for a, z in zip((O, O, m['eyx'], m['eyy']), hz)]
     return _block(xp, [
-        [Kx @ ez_ex, Kx @ ez_ey, Kx @ ez_hx, Kx @ ez_hy + I],
-        [Ky @ ez_ex, Ky @ ez_ey, Ky @ ez_hx - I, Ky @ ez_hy],
-        [Kx @ hz_ex - dy_ex, Kx @ hz_ey - dy_ey, -dy_hx, -dy_hy],
-        [Ky @ hz_ex + dx_ex, Ky @ hz_ey + dx_ey, dx_hx, dx_hy],
+        [Kx @ z + b for z, b in zip(ez, by)],
+        [Ky @ z - b for z, b in zip(ez, bx)],
+        [Kx @ z - d for z, d in zip(hz, dy)],
+        [Ky @ z + d for z, d in zip(hz, dx)],
     ])
 
 
@@ -225,46 +89,29 @@ def mode_flux_z(xp, psi, n_orders):
 
 
 def split_forward_backward(xp, M, n_orders):
-    """Eigenmodes of ``M`` split by direction: ``(lam_f, psi_f, lam_b, psi_b)``.
+    """Split modes into propagation towards +z and -z.
 
-    Forward means energy flowing towards ``+z``, falling back to decay in ``+z`` where the mode
-    carries no real flux. That is the same rule
-    :func:`wavebit._core.conventions.boundary_kz` applies to a half-space **for a real
-    in-plane wavevector**, which is the only kind this path sees: its half-spaces are vacuum,
-    so ``k_par`` is real and the flux and decay conditions select the same mode (they are
-    separate demands only when ``k_par`` is complex — see ``docs/time-convention-audit.md``
-    §3). ``psi`` goes as ``exp(i k0 lam z)``, so ``lam`` sits exactly where that function's
-    ``kz`` does. If this path ever grows an absorbing superstrate, the correction
-    ``boundary_kz`` carries has to come with it, and this comment is the pointer to that.
+    For decay-dominated eigenvalues (|Im(lambda)| > |Re(lambda)|), attenuation
+    selects the direction. Otherwise normalized real Poynting flux selects it;
+    negligible flux falls back to attenuation. This prevents a small artificial
+    flux in a truncated PN evanescent mode from reversing its radiation branch,
+    while allowing a propagating negative-index mode to have negative phase
+    velocity. Exact grazing, strongly active media and poorly converged
+    operators require care; the split is not a universal gain-medium criterion.
 
-    Flux is the primary test rather than ``Re(lam)`` because an absorbing or gyrotropic layer
-    can put a propagating mode on the wrong side of the real axis; the ``Im`` fallback only
-    decides modes that carry no flux to speak of.
-
-    "No flux to speak of" is measured *per mode*, against its own norm. Scaling instead by the
-    largest flux in the set — the obvious thing — holds up until every mode is evanescent, at
-    which point that scale is itself noise and dust at 1e-17 is promoted to real energy flow.
-    Every order above the light line is that case, so the set-relative version breaks exactly
-    where the multi-order path will live.
-
-    **Selection is a stable sort, not a boolean mask**, and that is what lets this path run
-    under ``jax.jit``. A mask makes the output shape depend on the values being masked, which a
-    tracer cannot answer; sorting on a two-valued key and slicing at ``2*n_orders`` gives the
-    same partition with shapes fixed at trace time. Stability is what makes it *the same*: equal
-    keys keep their original order, so ``lam[forward]`` and ``take(lam, order[:2*n_orders])``
-    are the same vector entry for entry, not merely the same set. Verified bit-identical across
-    every shipped path (``tests/test_formulation_dispatch.py``).
-
-    The count check is the one thing that cannot be traced, so it runs only where the values
-    are concrete — the same rule :func:`wavebit._core.backend.check_finite` and
-    ``check_physical`` follow, and for the same reason. Note that "concrete" is the whole of
-    it: those two once keyed the exemption on the *namespace* instead, which skipped eager JAX
-    and eager PyTorch and cost a silently wrong answer on both. Under ``jit`` a degenerate
-    layer still gets no complaint; see :func:`_forward_count`.
+    A stable sort keeps array sizes static under JAX tracing. Eager evaluation
+    refuses a split with anything other than 2*n_orders modes in each direction.
     """
     lam, psi = eig(M)
     flux = mode_flux_z(xp, psi, n_orders) / xp.sum(xp.abs(psi) ** 2, axis=0)
-    forward = xp.where(xp.abs(flux) > _FLAT, flux > 0, xp.imag(lam) > 0)
+    # Finite-order PN operators need not be Hermitian even for lossless
+    # materials. Their evanescent modes can carry a small truncation-induced
+    # real flux with either sign. For decay-dominated modes use attenuation;
+    # for propagation-dominated modes use energy flow (also allowing negative
+    # phase velocity). The count check below still rejects ambiguous splits.
+    decay_dominated = xp.abs(xp.imag(lam)) > xp.abs(xp.real(lam))
+    forward = xp.where(decay_dominated | (xp.abs(flux) <= _FLAT),
+                       xp.imag(lam) > 0, flux > 0)
 
     # 1.0 forward / 0.0 backward, in `flux`'s own real dtype -- asking for int64 here is what
     # made JAX warn and silently narrow to int32 when x64 is off.
@@ -273,13 +120,21 @@ def split_forward_backward(xp, M, n_orders):
     if n_f is not None and n_f != 2 * n_orders:
         raise ValueError(
             f'mode split found {n_f} forward modes, expected {2 * n_orders}. A degenerate layer can '
-            'leave a mode with no flux and an ambiguous decay; this refuses rather than '
-            'guessing which half it belongs to.')
+            'leave an ambiguous direction; a poorly resolved patterned tensor can also '
+            'introduce spurious modal flux. Increase the Fourier order and NVF resolution '
+            'and check convergence. This refuses rather than guessing a mode partition.')
 
     order = xp.argsort(-key, stable=True)
     fwd, bwd = order[:2 * n_orders], order[2 * n_orders:]
-    return (xp.take(lam, fwd), xp.take(psi, fwd, axis=1),
-            xp.take(lam, bwd), xp.take(psi, bwd, axis=1))
+    modes = (xp.take(lam, fwd), xp.take(psi, fwd, axis=1),
+             xp.take(lam, bwd), xp.take(psi, bwd, axis=1))
+    if n_f is None:
+        # An abstract trace cannot raise on a value-dependent mode count. Mark
+        # the invalid solve, rather than silently taking 2N of 2N+1 forward modes.
+        valid = xp.sum(key) == 2 * n_orders
+        modes = tuple(xp.where(valid, a, as_array(xp, complex('nan'), dtype=a.dtype,
+                                                 device=getattr(a, 'device', None))) for a in modes)
+    return modes
 
 
 def _forward_count(xp, key):
@@ -425,19 +280,53 @@ def _propagate_s(xp, lam_f, lam_b, k0, d, n_orders):
 
 def _solve_smm(xp, k0, Kx, Ky, layers, n_orders, psi_vf, psi_vb):
     """Cascade interface and propagation scattering matrices with the Redheffer star."""
+    S, _, _ = _smm_cascade(xp, k0, Kx, Ky, layers, n_orders,
+                           psi_vf, psi_vb, psi_vf, psi_vb)
+    return S
+
+
+def _smm_cascade(xp, k0, Kx, Ky, layers, n_orders,
+                 entry_f, entry_b, exit_f, exit_b, keep_field=False):
+    """Cascade distinct forward/backward modes, optionally retaining field maps.
+
+    Each backward amplitude is referenced at its layer's exit face. A suffix
+    reflection maps the forward amplitude there to that backward amplitude;
+    the next interface maps it to the next layer's entrance. These are the
+    same two maps consumed by the ETM field reconstruction, recovered here
+    from scattering blocks without an inverse propagation factor.
+    """
     from .scattering import redheffer_star
 
-    I = xp.astype(xp.eye(2 * n_orders), Kx.dtype)
-    S, prev_f, prev_b = None, psi_vf, psi_vb
+    I = xp.eye(2 * n_orders, dtype=Kx.dtype, device=getattr(Kx, 'device', None))
+    S, prev_f, prev_b = None, entry_f, entry_b
+    modes, interfaces, propagators = [], [], []
     for eps_blocks, d in layers:
         lam_f, psi_f, lam_b, psi_b = split_forward_backward(
             xp, layer_matrix_4ff(xp, Kx, Ky, **eps_blocks), n_orders)
-        for part in (_interface_s(xp, prev_f, prev_b, psi_f, psi_b),
-                     _propagate_s(xp, lam_f, lam_b, k0, d, n_orders)):
+        interface = _interface_s(xp, prev_f, prev_b, psi_f, psi_b)
+        propagation = _propagate_s(xp, lam_f, lam_b, k0, d, n_orders)
+        for part in (interface, propagation):
             S = part if S is None else redheffer_star(xp, I, S, part)
+        if keep_field:
+            modes.append([eps_blocks, psi_f, lam_f, psi_b, lam_b, d])
+            interfaces.append(interface)
+            propagators.append(propagation)
         prev_f, prev_b = psi_f, psi_b
-    tail = _interface_s(xp, prev_f, prev_b, psi_vf, psi_vb)
-    return tail if S is None else redheffer_star(xp, I, S, tail)
+    tail = _interface_s(xp, prev_f, prev_b, exit_f, exit_b)
+    S = tail if S is None else redheffer_star(xp, I, S, tail)
+    if not modes:
+        return S, [], None
+
+    reflection, advance = tail[0], tail[2]
+    layer_info_list = []
+    for mode, interface, propagation in reversed(list(zip(modes, interfaces, propagators))):
+        layer_info_list.append(mode + [advance, reflection])
+        # Reflection at the entrance of this layer, including both bounded
+        # propagation factors. Close the loop across its entrance interface.
+        reflected_at_entry = propagation[1] @ reflection @ propagation[2]
+        advance = xp.linalg.solve(I - interface[3] @ reflected_at_entry, interface[2])
+        reflection = interface[0] + interface[1] @ reflected_at_entry @ advance
+    return S, layer_info_list, advance
 
 
 def _forward_amplitudes(xp, incident, psi_vf, psi_vb, n_orders):
@@ -624,7 +513,8 @@ def solve_2d_4ff(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                  epxz_conv_all=None, epyz_conv_all=None,
                  epzx_conv_all=None, epzy_conv_all=None,
                  *, phi, incidence_side='top', answers=Answers.EFFICIENCY, lit=None,
-                 layer_algorithm='ETM'):
+                 layer_algorithm='ETM', mu=None, mu_top=1.0, mu_bot=1.0,
+                 eps_top=None, eps_bot=None):
     """Solve a 2D stack on the first-order formulation — the public 4ff route.
 
     Twin of :func:`wavebit._core.solve_2d.solve_2d`: same arguments, same returns, four more
@@ -666,29 +556,38 @@ def solve_2d_4ff(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     here. Pinned against a Berreman stack illuminated from below with no mirror at all
     (``tests/test_anisotropic_berreman.py``).
 
-    Only ``layer_algorithm='ETM'`` is wired: this route needs its stack solve to hand
-    ``final_matching`` a ``(big_F, big_G, big_T)``, and the SMM cascade in :func:`_solve_smm`
-    produces a scattering matrix in the two half-spaces' own mode bases instead. ``'SMM'``
-    raises here rather than silently running the other algorithm.
+    ``ETM`` uses the shared final matching. ``SMM`` cascades interfaces and
+    propagation in the separate forward/backward mode bases and uses the
+    same s/p amplitude and power conversion as the two-field SMM. Both return
+    the same field reconstruction layout; SMM also retains its scattering
+    matrix from ``answers='amplitude'`` upward.
     """
     xp = array_namespace(epx_conv_all)
-    if layer_algorithm != 'ETM':
+    if layer_algorithm not in ('ETM', 'SMM'):
         raise ValueError(
             f"layer_algorithm={layer_algorithm!r} is not available on the first-order (4ff) "
-            "path, which is what a populated z row selects; only 'ETM' is wired. The 4ff "
-            'stack solve has to hand the shared final matching a (big_F, big_G, big_T), and '
-            'the scattering cascade produces a scattering matrix in the half-spaces\' own '
-            "mode bases instead. Use layer_algorithm='ETM' for a z-coupled tensor.")
+            "path. Use layer_algorithm='ETM' or 'SMM'.")
 
     per_layer = [epx_conv_all, epy_conv_all, epz_conv_i_all, epxy_conv_all, epyx_conv_all,
                  epxz_conv_all, epyz_conv_all, epzx_conv_all, epzy_conv_all]
+    mu_all = [None] * 9 if mu is None else list(mu)
+    if len(mu_all) not in (3, 5, 9):
+        raise ValueError('mu requires three, five or nine convolution slots')
+    mu_all += [None] * (9 - len(mu_all))
     if _is_backside(incidence_side):
-        n_top, n_bot, thickness, *per_layer = _mirrored_scene(n_top, n_bot, thickness,
-                                                              *per_layer)
-        # The mirror is z -> -z, under which the z row and column change sign. The in-plane
-        # block and eps_zz do not, which is why the shared mirror can carry those untouched.
-        per_layer = per_layer[:5] + [None if s is None else [-m for m in s]
-                                     for s in per_layer[5:]]
+        n_top, n_bot, thickness, *stacks = _mirrored_scene(
+            n_top, n_bot, thickness, *per_layer, *mu_all)
+        per_layer, mu_all = stacks[:9], stacks[9:]
+        # Reflection in z changes both epsilon and mu z off-diagonal slots.
+        def mirror_z(slots):
+            return slots[:5] + [None if a is None else [-m for m in a] for a in slots[5:]]
+        per_layer, mu_all = mirror_z(per_layer), mirror_z(mu_all)
+        mu_top, mu_bot = mu_bot, mu_top
+        eps_top, eps_bot = eps_bot, eps_top
+    if eps_top is None:
+        eps_top = n_top ** 2 / mu_top
+    if eps_bot is None:
+        eps_bot = n_bot ** 2 / mu_bot
 
     kx = as_array(xp, kx)
     ky = as_array(xp, ky)
@@ -714,15 +613,42 @@ def solve_2d_4ff(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     F_s = _diag(xp, xp.sin(varphi))
 
     layers = _conv_layers(xp, per_layer, thickness, n_orders, C)
-    seed = _half_space_state(xp, _diag(xp, kz_bot), n_bot ** 2, F_c, F_s, n_orders, C)
+    if any(a is not None for a in mu_all):
+        for (eps, _), (magnetic, _) in zip(layers, _conv_layers(xp, mu_all, thickness, n_orders, C)):
+            eps['mu_blocks'] = magnetic
+    seed = _half_space_state(xp, _diag(xp, kz_bot), eps_bot, F_c, F_s, n_orders, C, mu_bot)
     keep_field = answers_of(answers).covers(Answers.FIELD)
+    if layer_algorithm == 'SMM':
+        from .scattering import _sp_scattering_result
+
+        entry_f = _half_space_state(xp, _diag(xp, kz_top), eps_top,
+                                    F_c, F_s, n_orders, C, mu_top)
+        # In the shared s/p port convention the backward wave keeps its
+        # tangential electric components and reverses its magnetic ones.
+        def backward(state):
+            return xp.concat([state[:2 * n_orders], -state[2 * n_orders:]], axis=0)
+
+        S, layer_info_list, entry_map = _smm_cascade(
+            xp, k0, Kx, Ky, layers, n_orders,
+            entry_f, backward(entry_f), seed, backward(seed), keep_field)
+        # The scene was already mirrored above when needed, including both
+        # material tensors. Its ports are now incidence-relative.
+        out, c_inc = _sp_scattering_result(
+            xp, C, S, kx, ky, kz_top, kz_bot, n_top, n_bot, incidence, False,
+            answers, mu_top, mu_bot, eps_top, eps_bot, lit)
+        if keep_field:
+            T1 = None if entry_map is None else xp.matrix_transpose(entry_map @ c_inc)[..., None]
+            out.update(layer_info_list=layer_info_list, T1=T1)
+        return out
+
     G, big_T, layer_info_list = _etm_recursion(xp, k0, Kx, Ky, layers, n_orders, seed,
                                                keep_field=keep_field)
     big_F, big_G = sp_modes_2d(xp, G[:2 * n_orders], 1j * G[2 * n_orders:], F_c, F_s, n_orders)
 
     out = final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
                          n_top, n_bot, n_orders_u, n_orders_v, answers=answers,
-                         lit=lit)
+                         lit=lit, mu_top=mu_top, mu_bot=mu_bot,
+                         eps_top=eps_top, eps_bot=eps_bot, kx=kx, ky=ky)
     if keep_field:
         # `sp_modes_2d` recombines the *rows* of `G` into the s/p boundary variables and leaves
         # its columns alone, so `final_matching`'s `T1` is the unknown of the `G` above the top
@@ -732,7 +658,7 @@ def solve_2d_4ff(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     return out
 
 
-def _half_space_state(xp, Kz, eps, F_c, F_s, n_orders, C):
+def _half_space_state(xp, Kz, eps, F_c, F_s, n_orders, C, mu=1.0):
     """The downward half-space wave as a ``4ff`` state, columns ``(t_s, t_p)``.
 
     This is the 2ff substrate seed, written in the variables the first-order system carries.
@@ -757,7 +683,7 @@ def _half_space_state(xp, Kz, eps, F_c, F_s, n_orders, C):
     """
     I = xp.astype(xp.eye(n_orders), C)
     E_s, E_p = I, -1j * Kz / eps          # per unit t_s, per unit t_p
-    H_p, H_s = -Kz, -1j * I
+    H_p, H_s = -Kz / mu, -1j * I
     return _block(xp, [
         [-F_s @ E_s, F_c @ E_p],          # Ex = F_c E_p - F_s E_s
         [F_c @ E_s, F_s @ E_p],           # Ey = F_s E_p + F_c E_s
@@ -778,10 +704,13 @@ def _conv_layers(xp, per_layer, thickness, n_orders, C):
     O = xp.astype(xp.zeros((n_orders, n_orders)), C)
     n_layers = len(thickness) if not hasattr(thickness, 'shape') else thickness.shape[0]
 
+    I = xp.eye(n_orders, dtype=C, device=getattr(O, "device", None))
+    def diagonal(stack, i):
+        return I if stack is None else stack[i]
     def slot(stack, i):
         return O if stack is None else -stack[i]
 
-    return [(dict(exx=epx[i], eyy=epy[i], ezz_i=epz_i[i],
+    return [(dict(exx=diagonal(epx, i), eyy=diagonal(epy, i), ezz_i=diagonal(epz_i, i),
                   exy=slot(epxy, i), eyx=slot(epyx, i),
                   exz=slot(epxz, i), eyz=slot(epyz, i),
                   ezx=slot(epzx, i), ezy=slot(epzy, i)),

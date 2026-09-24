@@ -177,7 +177,7 @@ def test_the_solve_is_covariant_on_a_multi_phase_raster(shift, axis):
     """End to end, on the raster that first showed this -- four phases, both roll axes.
 
     Four phases matter to the *reading* of this test rather than to the physics: a raster with
-    more than two distinct values delegates to ``'distance'`` whatever ``normal_method`` says,
+    more than two distinct values delegates to ``'distance'`` whatever ``raster_normal_method`` says,
     so all four methods return bit-identical numbers here. That delegation is what hid the
     defect's location originally -- ``'contour'`` and ``'spectral'`` looked equally broken while
     neither was being exercised.
@@ -253,7 +253,7 @@ def test_contour_is_periodic_under_a_roll_that_lands_on_the_corner():
     """Rolling a raster is the same structure written from a different corner.
 
     Every answer must be identical. Three of the four constructions always were, to 4e-14.
-    `normal_method='contour'` -- the one `docs/nvf-normal-methods.md` and `README.md` recommend
+    `raster_normal_method='contour'` -- the one `docs/nvf-normal-methods.md` and `README.md` recommend
     -- was not, until 2026-08-29: `sum(T)` moved by 3.9e-4 on a square cell and 9.7e-4 on a 2:1
     cell for the disc below, and did not converge with truncation order.
 
@@ -319,7 +319,7 @@ def test_contour_is_periodic_under_a_roll_that_lands_on_the_corner():
     U, V = np.meshgrid(ax, ax)
     cfg = dict(backend=0, thickness=[0.3], truncation_order=(6, 6), top=1.0, bot=1.0,
                wavelength=0.94, psi=np.pi / 2, theta=0.1, phi=0.2, factorization='nvf',
-               period=[1.0, 1.0], normal_method='contour')
+               period=[1.0, 1.0], raster_normal_method='contour')
 
     def spread(cell, rolls):
         got = [float(np.sum(np.asarray(wavebit.rcwa(
@@ -472,7 +472,7 @@ def test_contour_is_periodic_where_the_medial_axis_is_reachable(name, build, rol
     cell = build(U, V)
     cfg = dict(backend=0, thickness=[0.3], truncation_order=(6, 6), top=1.0, bot=1.0,
                wavelength=0.94, psi=np.pi / 2, theta=0.1, phi=0.2, factorization='nvf',
-               normal_method='contour')
+               raster_normal_method='contour')
     cfg['period'] = [1.0, 1.0]
     got = [float(np.sum(np.asarray(wavebit.rcwa(
         structure=np.roll(np.roll(cell, r[0], axis=0), r[1], axis=1)[None],
@@ -516,7 +516,7 @@ def _translation_defect(cell, shift, method, lattice=None, to=3):
     import wavebit
     kw = dict(backend=0, thickness=[0.3], truncation_order=(to, to), top=1.0, bot=1.0,
               wavelength=0.94, psi=np.pi / 2, theta=0.1, phi=0.2,
-              factorization='nvf', normal_method=method)
+              factorization='nvf', raster_normal_method=method)
     kw['lattice' if lattice is not None else 'period'] = (lattice if lattice is not None
                                                           else [1.0, 1.0])
     n_v, n_u = cell.shape
@@ -732,7 +732,7 @@ def test_half_fill_contour_translation_is_invariant():
     cell = np.where(blob, 12.25, 1.0)
     cfg = dict(backend=0, thickness=[0.3], truncation_order=(6, 6), top=1.0, bot=1.0,
                wavelength=0.94, psi=np.pi / 2, theta=0.1, phi=0.2, factorization='nvf',
-               normal_method='contour', period=[1.0, 1.0])
+               raster_normal_method='contour', period=[1.0, 1.0])
     got = [float(np.sum(np.asarray(wavebit.rcwa(
         structure=np.roll(np.roll(cell, a, axis=0), b, axis=1)[None], **cfg).solve().T)))
         for a in range(0, n, 16) for b in range(0, n, 16)]

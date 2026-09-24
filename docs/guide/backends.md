@@ -106,7 +106,7 @@ Not a matter of taste, and not the same answer for a forward solve as for a diff
 | Differentiating a raster, `truncation_order ≲ 5` | **eager PyTorch**, outright; JAX's compilation does not repay itself at that size |
 | Differentiating a raster, `truncation_order ≳ 7`, long run | **jitted JAX**, roughly 1.5x PyTorch, repaying compilation in under a dozen steps |
 
-Before reaching for any of it on a shape recipe, look at `normal_grid`. At
+Before reaching for any of it on a shape recipe, look at `shape_nvf_grid_size`. At
 `truncation_order=3` the default spends far more per step building a normal field than the
 solve itself costs, and lowering it is worth more than any backend choice — bounded by
 accuracy, not by taste, since it is a rectangle's *angle* that sets the grid.

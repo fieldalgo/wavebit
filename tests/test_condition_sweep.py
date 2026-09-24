@@ -154,7 +154,7 @@ def shape_scene(case, basis=None, **over):
                 else medium['eps'])
     kw = dict(backend=0, lattice=basis.tolist(), truncation_order=[6, 6],
               thickness=[H], wavelength=WL, top=medium['top'], bot=medium['bot'],
-              factorization='nvf', incidence_side=case['side'], normal_grid=256,
+              factorization='nvf', incidence_side=case['side'], shape_nvf_grid_size=256,
               structure=[{'background': 1.0,
                           'shapes': [{'type': 'circle', 'cx': 0.0, 'cy': 0.0,
                                       'lx': 2 * ROD, 'material': material}]}],
@@ -222,7 +222,7 @@ def test_the_backends_agree(case):
     for backend in (1, 2):
         got = totals(scene(case, backend=backend).solve())
         for x, y, name in ((ref[0], got[0], 'R'), (ref[1], got[1], 'T')):
-            assert float(np.max(np.abs(np.asarray(x) - np.asarray(y)))) < 1e-9, \
+            assert float(np.max(np.abs(np.asarray(x) - np.asarray(y)))) < 1e-9,\
                 (backend, name, case)
 
 
@@ -560,7 +560,7 @@ def test_the_three_backends_take_one_device_vocabulary_and_answer_in_their_own(b
         solver.device = solver.device
         assert solver.device == before, (backend, before, solver.device)
 
-    assert wavebit.rcwa(backend=backend, device=0, **SCENE).device \
+    assert wavebit.rcwa(backend=backend, device=0, **SCENE).device\
         == wavebit.rcwa(backend=backend, device='cpu', **SCENE).device
 
 

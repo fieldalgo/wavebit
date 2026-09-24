@@ -292,10 +292,10 @@ the shape path replays the same boundary plans. A
 non-magnetic scene builds nothing and takes the arithmetic that existed before `mu` did, bit
 for bit.
 
-A `mu` the chosen path cannot express is refused by name, never dropped: the first-order
-(4ff) solve a z-coupled `eps` routes to implements none, and the 1D and conical operators take
-the diagonal three slots but have no off-diagonal position for `mu_xy` / `mu_yx` (§11). A knob
-the solve silently ignored is the failure this repository refuses elsewhere too.
+Full tensor epsilon and mu use the 4ff path when either has xz/yz/zx/zy
+coupling. Both longitudinal fields are reconstructed from their full z rows.
+The separate 1D operators carry diagonal mu; tensors use the coupled path.
+See [full tensor patterns](full-tensor-patterns.md).
 
 **By hand.** `mu` is also one keyword on `solve_conv`, taking the five stacks in the
 permittivity's convention:
@@ -316,9 +316,9 @@ Each entry is `(n_layers, n_orders, n_orders)`, so a stack with `mu` on some lay
 expressible — the layers without it take the original arithmetic. `mux_conv` / `muy_conv`
 fall back to the identity and the other three to nothing.
 
-A *tensor* `mu` still has no front door, exactly as a tensor `eps` has none: `structure` is a
-scalar quantity per region or per pixel. A patterned magnetic tensor goes through
-`to_conv_mat_raster_pn_mu`; see §7.
+Use `Material(epsilon, mu)` in shape/background assignments, or a tensor `mu`
+raster beside `structure`. Full tensors produce nine slots; pass the returned
+permeability tuple as `mu=solver.mu_conv_matrices()` to `solve_conv`.
 
 ## 9. Field reconstruction
 

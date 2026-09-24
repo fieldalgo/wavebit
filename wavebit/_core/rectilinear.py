@@ -104,7 +104,8 @@ def check_plan(shapes, lattice, plan):
             raise StaleGeometryError('Cartesian Li edge order changed; freeze_geometry() again')
 
 
-def layer_matrices(xp, shapes, background, hu, hv, lattice, dtype, plan=None):
+def layer_partition(xp, shapes, lattice, dtype, plan=None, device=None):
+    """Replay live Cartesian edges and return their material-owner table."""
     if plan is None:
         plan = plan_layer(shapes, lattice)
     else:
@@ -113,10 +114,15 @@ def layer_matrices(xp, shapes, background, hu, hv, lattice, dtype, plan=None):
     edges = []
     for axis, nodes, period in zip(('x', 'y'), (plan.x, plan.y), (lattice[0][0], lattice[1][1])):
         edges.append(xp.stack([as_array(xp, _coordinate(shapes, axis, n, period)/period,
-                                        dtype=real_dtype) for n in nodes[1:]]).reshape((-1, 1)))
+                                        dtype=real_dtype, device=device) for n in nodes[1:]]).reshape((-1, 1)))
+    return edges, plan.owners
+
+
+def layer_matrices(xp, shapes, background, hu, hv, lattice, dtype, plan=None):
+    edges, owners = layer_partition(xp, shapes, lattice, dtype, plan)
     materials = [as_array(xp, as_material(s.get('material', 1.)).epsilon, dtype=dtype) for s in shapes]
     materials.append(as_array(xp, as_material(background).epsilon, dtype=dtype))
-    cell = xp.stack([xp.stack([materials[i] for i in row]) for row in plan.owners])
+    cell = xp.stack([xp.stack([materials[i] for i in row]) for row in owners])
     ex = fourier2d_integrated(xp, cell, *edges, hu, hv, inverse_rule='u')
     ey = fourier2d_integrated(xp, cell, *edges, hu, hv, inverse_rule='v')
     ez = xp.linalg.inv(fourier2d_integrated(xp, cell, *edges, hu, hv, inverse_rule=None))

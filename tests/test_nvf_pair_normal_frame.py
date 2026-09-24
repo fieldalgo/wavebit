@@ -54,9 +54,9 @@ def reference(epsilon, gap, geometry=GEOMETRY, order=(1, 2), quadrature=16, back
     # the candidate is read by this independent pointwise product integration.
     nx, ny = P._piece_field(np, points[:, 0], points[:, 1], shapes, plan, None, lattice, np.float64)
     normal = np.column_stack([nx, ny])
-    projector = normal[:, :, None]*normal[:, None, :].conj()
+    nvf_projector = normal[:, :, None]*normal[:, None, :].conj()
     kappa = sum(epsilon)/2
-    field = np.eye(2)+(kappa/materials-1)[:, None, None]*projector
+    field = np.eye(2)+(kappa/materials-1)[:, None, None]*nvf_projector
     gram = materials[:, None, None]*(field.conj().swapaxes(-1, -2)@field)
     if return_fields:
         return points, weights/(px*py), materials, field

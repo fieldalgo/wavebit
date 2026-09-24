@@ -40,6 +40,14 @@ from gen_goldens_field import CASE_VARIANTS, CASES, COUPLED, RES, solved  # noqa
 GOLDEN = np.load(pathlib.Path(__file__).parent / 'data' / 'golden_field.npz')
 
 
+def upward_reference(name, value):
+    """Restate the unchanged downward-frame archive in the public height frame."""
+    parity = ((1, 1, -1, -1, -1, 1) if value.shape[-1] == 6 else
+              ((1, -1, 1) if CASES[name].get('tetm') == 'te' else (-1, 1, -1)))
+    return np.flip(value, axis=1 if value.ndim == 5 else 0) * parity
+
+
+
 @pytest.mark.parametrize('name,tag,which', CASE_VARIANTS,
                          ids=[f'{n}-{t}' for n, t, _ in CASE_VARIANTS])
 def test_the_reconstruction_has_not_drifted(name, tag, which):
@@ -60,7 +68,7 @@ def test_the_reconstruction_has_not_drifted(name, tag, which):
     # is True whatever the array holds, which made this assertion vacuous once.
     assert solver.formulation_assigned.value == str(GOLDEN[f'{name}__formulation'])
     got = np.asarray(solver.reconstruct_field(incidences=which, **RES))
-    want = GOLDEN[f'{name}__{tag}']
+    want = upward_reference(name, GOLDEN[f'{name}__{tag}'])
     assert got.shape == want.shape, (got.shape, want.shape)
     assert np.allclose(want, got, atol=1e-12, rtol=0), np.max(np.abs(want - got))
 
@@ -126,7 +134,7 @@ def test_the_one_incidence_it_does_carry_is_still_reconstructed(name):
     the default would take field reconstruction off the 1D path entirely, and every other
     assertion here would still pass.
     """
-    want = GOLDEN[f'{name}__default']
+    want = upward_reference(name, GOLDEN[f'{name}__default'])
     got = np.asarray(solved(name).reconstruct_field(incidences=('given',), **RES))
     assert got.shape == want.shape
     # the drift test's tolerance, not equality: these two 1D cases sit ~1e-14 off the freeze
@@ -220,7 +228,7 @@ def _frame_cell(path, sample_z, formulation=None):
 def test_every_path_returns_a_maxwell_field_in_the_declared_frame(path, formulation):
     """The check that was missing, and that a whole convention slipped through the gap in.
 
-    ``docs/conventions.md`` declares ``+z`` down, into the stack. Every path must therefore
+    ``docs/conventions.md`` declares ``+z`` upward from the stack bottom. Every path must therefore
     return six components that satisfy the curl equations **with that ``+z``** — and until
     2026-08-14 none of them did: ``E_z``, ``H_x`` and ``H_y`` came back in the opposite frame,
     which is a perfectly good field that answers a different question.
@@ -280,6 +288,6 @@ def test_field_cross_backend(name, backend):
     """
     pytest.importorskip('jax' if backend == 1 else 'torch')
     got = np.asarray(solved(name, backend=backend).reconstruct_field(**RES))
-    want = GOLDEN[f'{name}__default']
+    want = upward_reference(name, GOLDEN[f'{name}__default'])
     assert got.shape == want.shape, (got.shape, want.shape)
     assert np.allclose(want, got, atol=1e-10, rtol=0), np.max(np.abs(want - got))

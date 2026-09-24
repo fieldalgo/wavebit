@@ -20,7 +20,7 @@ GAPS = (0., .0005, .001, .002, 1e-9)
 
 @lru_cache(None)
 def comparison(order, polarization, gap, factorization):
-    options = dict(normal_grid=256) if factorization == 'nvf' else {}
+    options = dict(shape_nvf_grid_size=256) if factorization == 'nvf' else {}
     obj = solver(order, polarization, factorization=factorization, **options,
                  structure=[dict(background=1., shapes=[dict(
                      type='rectangle', lx=350., ly=700.-gap, material=12.25)])])

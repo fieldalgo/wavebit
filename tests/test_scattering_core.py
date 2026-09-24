@@ -88,6 +88,11 @@ ALL_CASES = ([(n, k, '1d') for n, k in CASES_1D]
              + [(n, k, 'conical') for n, k in CASES_CONICAL]
              + [(n, k, '2d') for n, k in CASES_2D])
 
+# Preserve each historical case while exposing only bottom-up public kwargs.
+for _name, _kwargs, _kind in ALL_CASES:
+    _kwargs['structure'] = _kwargs['structure'][::-1]
+    _kwargs['thickness'] = _kwargs['thickness'][::-1]
+
 AMPLITUDES = ('r_s', 'r_p', 't_s', 't_p')
 EFFICIENCIES = ('R', 'R_s', 'R_p', 'T', 'T_s', 'T_p')
 
@@ -176,8 +181,8 @@ def _core_inputs(kwargs):
     kx, ky = solver.order_kxy()
     # The core solves take an INDEX: `n_top` / `n_bot` are amplitude ratios there, and the
     # solver's read-only properties are exactly the derived roots to hand them.
-    common = dict(wavelength=kwargs['wavelength'], kx=kx, n_top=solver.n_top,
-                  n_bot=solver.n_bot, theta=solver.theta, thickness=solver.thickness,
+    common = dict(wavelength=kwargs['wavelength'], kx=kx, n_top=solver.n_bot,
+                  n_bot=solver.n_top, incidence_side=solver._kernel_incidence_side, theta=solver.theta, thickness=solver.thickness,
                   epx_conv_all=epx, epy_conv_all=epy, epz_conv_i_all=epz)
     if solver.grating_type == 0:
         return solver, dict(common, tetm_index=solver.tetm_index)
@@ -194,7 +199,7 @@ def test_wiring_matches_direct_core_call(name, kwargs, kind):
     smm_fn, _ = CORE_FN[kind]
     solver, inputs = _core_inputs(kwargs)
     via_api = _solve('SMM', kwargs)
-    ri, ti = smm_fn(**inputs)
+    ri, ti, _ = smm_fn(**inputs)
     # To a tolerance, not bit for bit. The property here is that the mixin hands the core the
     # arguments it expects, and every way of getting that wrong -- kx and ky swapped, psi
     # dropped, the layers in the other order -- moves the efficiencies by far more than 1e-12.
@@ -302,8 +307,8 @@ def test_smm_field_state_matches_tmm(name, kwargs, kind):
 # kx = 1.5 = n_bot, so kz_bot = 0 and the substrate's own mode basis is singular. Recovering
 # the amplitudes in that basis is the natural-looking choice and it dies here; the gap basis
 # the recovery actually uses cannot, by construction of eps_gap.
-CUTOFF = dict(structure=np.array([[[9., 9., 1., 1., 9., 1.]], [[4., 4., 4., 1., 1., 1.]]]),
-              thickness=[300.0, 500.0], top=1.0, bot=2.25, theta=0.0,
+CUTOFF = dict(structure=np.array([[[4., 4., 4., 1., 1., 1.]], [[9., 9., 1., 1., 9., 1.]]]),
+              thickness=[500.0, 300.0], top=1.0, bot=2.25, theta=0.0,
               wavelength=500.0, period=[2000.0], truncation_order=[8, 0])
 
 
@@ -394,7 +399,7 @@ def test_frozen_geometry_does_not_change_the_smm_answer():
 # either now, so no solver can skip an interface; kept as what would catch either of them
 # growing one back.
 DEGENERATE_MEAN = dict(
-    structure=np.concat([UC_2D, UC_2D[:, ::-1]]), thickness=[0.2, 0.3], top=1.0, bot=1.0,
+    structure=np.concat([UC_2D[:, ::-1], UC_2D]), thickness=[0.3, 0.2], top=1.0, bot=1.0,
     psi=0.4, wavelength=0.5, period=[0.6, 0.6], truncation_order=[2, 2])
 
 
@@ -420,7 +425,8 @@ def test_smm_2d_matches_conical_on_y_invariant_stack():
     """
     pattern = np.array([[[9., 9., 1., 1., 9., 1., 1., 1.]],
                         [[4., 4., 4., 1., 1., 1., 4., 4.]]])
-    common = dict(thickness=[0.2, 0.3], top=1.0, bot=1.0, psi=0.4, wavelength=0.5,
+    pattern = pattern[::-1]
+    common = dict(thickness=[0.3, 0.2], top=1.0, bot=1.0, psi=0.4, wavelength=0.5,
                   period=[0.6, 0.6], theta=0.1, phi=0.0, truncation_order=[2, 0])
     conical = _solve('SMM', dict(common, structure=pattern))
     two_d = _solve('SMM', dict(common, structure=np.repeat(pattern, 8, axis=1)))
@@ -447,7 +453,7 @@ def test_cross_backend(name, kwargs, kind, backend):
     pytest.importorskip(backend)
     smm_fn, _ = CORE_FN[kind]
     _, inputs = _core_inputs(kwargs)
-    ri0, ti0 = smm_fn(**inputs)                                   # numpy reference
+    ri0, ti0, _ = smm_fn(**inputs)                                   # numpy reference
 
     bk = dict(inputs)
     for key in ('kx', 'ky', 'epx_conv_all', 'epy_conv_all', 'epz_conv_i_all'):
@@ -456,7 +462,7 @@ def test_cross_backend(name, kwargs, kind, backend):
     for key in ('theta', 'psi'):
         if key in bk:
             bk[key] = _to(backend, complex(inputs[key]))
-    ri, ti = smm_fn(**bk)
+    ri, ti, _ = smm_fn(**bk)
 
     assert np.allclose(np.array(ri0), np.asarray(ri), atol=1e-10, rtol=0)
     assert np.allclose(np.array(ti0), np.asarray(ti), atol=1e-10, rtol=0)
@@ -543,9 +549,9 @@ def test_jit_traceable_jax():
     def run(kx, epx, epy, epz):
         return smm_1d(kx=kx, epx_conv_all=epx, epy_conv_all=epy, epz_conv_i_all=epz, **static)
 
-    ri, ti = run(arrays['kx'], arrays['epx_conv_all'], arrays['epy_conv_all'],
+    ri, ti, _ = run(arrays['kx'], arrays['epx_conv_all'], arrays['epy_conv_all'],
                  arrays['epz_conv_i_all'])
-    ri0, ti0 = smm_1d(**inputs)
+    ri0, ti0, _ = smm_1d(**inputs)
     assert np.allclose(np.array(ri0), np.asarray(ri), atol=1e-10, rtol=0)
     assert np.allclose(np.array(ti0), np.asarray(ti), atol=1e-10, rtol=0)
 
@@ -554,7 +560,7 @@ def test_jit_traceable_jax():
 
 #: A z-asymmetric two-layer stack between unequal half-spaces: the two sides genuinely differ,
 #: so a mirrored or block-swapped mapping cannot pass by symmetry.
-S_KW = dict(structure=UC_1D, thickness=[0.15, 0.22], top=4.0, bot=2.25, tetm='te',
+S_KW = dict(structure=UC_1D[::-1], thickness=[0.22, 0.15], top=4.0, bot=2.25, tetm='te',
             wavelength=0.777, period=[0.77], truncation_order=[5, 0], answers='amplitude')
 
 
@@ -675,7 +681,7 @@ def test_the_backside_matrix_is_the_scene_a_caller_would_build_by_hand():
     incidence for the same reason as above.
     """
     lit_from_below, _ = _lit('bottom', theta=0.0)
-    by_hand, _ = _lit('top', theta=0.0, structure=UC_1D[::-1], thickness=[0.22, 0.15],
+    by_hand, _ = _lit('top', theta=0.0, structure=S_KW['structure'][::-1], thickness=S_KW['thickness'][::-1],
                       top=S_KW['bot'], bot=S_KW['top'])
     a, b = lit_from_below.scattering, by_hand.scattering
     assert a._fields[:4] == ('S11', 'S12', 'S21', 'S22')
@@ -694,7 +700,7 @@ JOINT_KW = dict(tetm='te', wavelength=0.777, period=[0.77], truncation_order=[5,
 
 
 def _piece(structure, thickness, top, bot, theta, side='top'):
-    solver = wavebit.rcwa(backend=0, structure=structure, thickness=thickness, top=top,
+    solver = wavebit.rcwa(backend=0, structure=structure[::-1], thickness=thickness[::-1], top=top,
                           bot=bot, theta=theta, incidence_side=side, **JOINT_KW)
     solver.solve()
     return solver.scattering
@@ -821,7 +827,7 @@ CUT_HEX_KW = dict(backend=0, wavelength=900.0, truncation_order=[3, 3], theta=0.
 
 
 def _hex_piece(layers, thickness, top, bot, lattice=HEX):
-    solver = wavebit.rcwa(structure=layers, thickness=thickness, top=top, bot=bot,
+    solver = wavebit.rcwa(structure=layers[::-1], thickness=thickness[::-1], top=top, bot=bot,
                           lattice=lattice, **CUT_HEX_KW)
     solver.solve()
     return solver.scattering

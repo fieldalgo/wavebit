@@ -15,7 +15,7 @@ CELL = as_lattice(period=(700., 700.))
 MATERIALS = (2. + np.sqrt(12.) * 1j, -4., 4j)
 KW = dict(lattice=CELL, wavelength=900., top=1., bot=2.25, theta=.2,
           phi=.13, psi=.2, thickness=(300.,), truncation_order=(2, 2),
-          normal_grid=128, factorization='nvf')
+          shape_nvf_grid_size=128, factorization='nvf')
 
 
 def pair(right, left=4.):
@@ -50,7 +50,7 @@ def test_equal_moduli_are_continuous_in_coefficients_and_transmission(right):
 @pytest.mark.parametrize('right', MATERIALS)
 def test_equal_moduli_do_not_choose_the_listing_order(right):
     # The 300-unit anchor offset is 60 whole pixels at N=140, removing sampling jitter.
-    kw = dict(KW, normal_grid=140)
+    kw = dict(KW, shape_nvf_grid_size=140)
     values = [wavebit.rcwa(backend=0, structure=[dict(background=1., shapes=shapes)],
                            **kw).solve().T for shapes in (pair(right), pair(right)[::-1])]
     np.testing.assert_allclose(*values, rtol=0., atol=2e-11)
@@ -68,10 +68,10 @@ def test_complex_seam_is_the_exact_normal_and_has_a_hermitian_rank_one_projector
     np.testing.assert_allclose(np.abs(ny), 1., atol=1e-14)
     nx, ny = P.normal_vector_field_analytical(np, (65, 71), shapes, np.float64, CELL)
     n = np.stack([nx, ny], axis=-1)
-    projector = n[..., :, None] * n[..., None, :].conj()
-    np.testing.assert_allclose(projector, projector.swapaxes(-1, -2).conj(), atol=1e-14)
-    np.testing.assert_allclose(projector @ projector, projector, atol=1e-14)
-    np.testing.assert_allclose(np.trace(projector, axis1=-2, axis2=-1), 1., atol=1e-14)
+    nvf_projector = n[..., :, None] * n[..., None, :].conj()
+    np.testing.assert_allclose(nvf_projector, nvf_projector.swapaxes(-1, -2).conj(), atol=1e-14)
+    np.testing.assert_allclose(nvf_projector @ nvf_projector, nvf_projector, atol=1e-14)
+    np.testing.assert_allclose(np.trace(nvf_projector, axis1=-2, axis2=-1), 1., atol=1e-14)
 
 
 def test_tiling_keeps_the_complex_seam_and_its_precision(monkeypatch):
@@ -152,7 +152,7 @@ def test_complex_electric_and_magnetic_seams_keep_backend_and_precision(backend,
         pytest.importorskip('jax' if backend == 1 else 'torch')
     shapes = pair(wavebit.Material(MATERIALS[0], mu=.7+.8j),
                   left=wavebit.Material(4., mu=1.1+.1j))
-    kw = dict(KW, normal_grid=64, truncation_order=(1, 1),
+    kw = dict(KW, shape_nvf_grid_size=64, truncation_order=(1, 1),
               structure=[dict(background=1., shapes=shapes)])
     want = wavebit.rcwa(backend=0, **kw).solve()
     solver = wavebit.rcwa(backend=backend, complex_dtype=precision, **kw)

@@ -162,24 +162,24 @@ def test_a_series_the_manifest_withholds_is_refused(path):
 @pytest.mark.parametrize('path', sorted(STRUCTURES))
 def test_a_normal_method_the_manifest_withholds_is_refused(path):
     """The shape paths list no raster construction; naming one there must refuse."""
-    for value in _unavailable(path, 'normal_method', NormalMethod):
+    for value in _unavailable(path, 'raster_normal_method', NormalMethod):
         with pytest.raises(Exception) as excinfo:
-            wavebit.rcwa(structure=STRUCTURES[path], normal_method=value, **KW).solve()
+            wavebit.rcwa(structure=STRUCTURES[path], raster_normal_method=value, **KW).solve()
         assert value in str(excinfo.value), (
-            f'{path}: refused normal_method={value!r} without naming it')
+            f'{path}: refused raster_normal_method={value!r} without naming it')
 
 
 @pytest.mark.parametrize('path', sorted(STRUCTURES))
 def test_a_projector_the_manifest_withholds_is_refused(path):
-    """`normal_method`'s twin, over the axis published beside it since 2026-09-01.
+    """`raster_normal_method`'s twin, over the axis published beside it since 2026-09-01.
 
     Both raster and shape NVF now implement both published projectors.
     """
-    for value in _unavailable(path, 'projector', Projector):
+    for value in _unavailable(path, 'nvf_projector', Projector):
         with pytest.raises(Exception) as excinfo:
-            wavebit.rcwa(structure=STRUCTURES[path], projector=value, **KW).solve()
+            wavebit.rcwa(structure=STRUCTURES[path], nvf_projector=value, **KW).solve()
         assert value in str(excinfo.value), (
-            f'{path}: refused projector={value!r} without naming it')
+            f'{path}: refused nvf_projector={value!r} without naming it')
 
 
 def test_an_option_the_manifest_offers_builds_on_an_overlapping_layer_too():
@@ -194,11 +194,11 @@ def test_an_option_the_manifest_offers_builds_on_an_overlapping_layer_too():
         wavebit.rcwa(structure=_OVERLAPPING, factorization=value, **KW).solve()
     for value in entry['fourier_coefficients']:
         wavebit.rcwa(structure=_OVERLAPPING, fourier_coefficients=value, **KW).solve()
-    for value in entry['projector']:
-        wavebit.rcwa(structure=_OVERLAPPING, projector=value, **KW).solve()
+    for value in entry['nvf_projector']:
+        wavebit.rcwa(structure=_OVERLAPPING, nvf_projector=value, **KW).solve()
     for axis, enum_cls in (('factorization', Factorization),
                            ('fourier_coefficients', FourierCoefficients),
-                           ('normal_method', NormalMethod), ('projector', Projector)):
+                           ('raster_normal_method', NormalMethod), ('nvf_projector', Projector)):
         for value in _unavailable('parametric', axis, enum_cls):
             with pytest.raises(Exception) as excinfo:
                 wavebit.rcwa(structure=_OVERLAPPING, **{axis: value}, **KW).solve()
@@ -213,14 +213,14 @@ def test_an_option_the_manifest_offers_actually_builds(path):
         wavebit.rcwa(structure=STRUCTURES[path], factorization=value, **KW).solve()
     for value in PATHS[path]['fourier_coefficients']:
         wavebit.rcwa(structure=STRUCTURES[path], fourier_coefficients=value, **KW).solve()
-    for value in PATHS[path]['normal_method']:
+    for value in PATHS[path]['raster_normal_method']:
         # The manifest's own caveat: the axis is read only under factorization='nvf'.
         wavebit.rcwa(structure=STRUCTURES[path], factorization='nvf',
-                       normal_method=value, **KW).solve()
-    for value in PATHS[path]['projector']:
+                       raster_normal_method=value, **KW).solve()
+    for value in PATHS[path]['nvf_projector']:
         # Same caveat, same reader -- the two axes are published side by side.
         wavebit.rcwa(structure=STRUCTURES[path], factorization='nvf',
-                       projector=value, **KW).solve()
+                       nvf_projector=value, **KW).solve()
 
 
 # ------------------------------------------------------- the lattice refusals
@@ -240,11 +240,11 @@ def test_the_manifest_lists_every_skewed_refusal():
     assert 'block' not in listed
     assert LATTICE['paths_refused_on_oblique'] == ()
     assert "factorization='li'" in listed
-    # `normal_method` was the third entry here until 2026-08-21, when all four constructions
+    # `raster_normal_method` was the third entry here until 2026-08-21, when all four constructions
     # gained the cell metric. What is asserted now is that it is gone from *both* spellings --
     # a stale entry in either would tell a consumer to avoid the option that is in fact the
     # one to recommend on a skewed cell.
-    assert 'normal_method' not in listed
+    assert 'raster_normal_method' not in listed
     assert LATTICE['normal_methods_refused_on_oblique'] == ()
 
 
@@ -285,15 +285,15 @@ def test_a_smoothing_normal_method_builds_on_a_skewed_cell(method):
     would send a consumer straight into a NotImplementedError it was told could not happen.
 
     ``'contour'`` needs the optional contourpy, and the manifest already probes for it -- the
-    per-path ``normal_method`` list omits it in a minimal install -- so this case follows the
+    per-path ``raster_normal_method`` list omits it in a minimal install -- so this case follows the
     same probe rather than asserting an option that environment does not have.
     """
     if method == 'contour':
         pytest.importorskip('contourpy',
-                            reason="normal_method='contour' needs the optional dependency")
+                            reason="raster_normal_method='contour' needs the optional dependency")
     assert method not in LATTICE['normal_methods_refused_on_oblique']
     result = wavebit.rcwa(structure=STRUCTURES['raster'], lattice=HEX, factorization='nvf',
-                          normal_method=method, **KW_NO_CELL).solve()
+                          raster_normal_method=method, **KW_NO_CELL).solve()
     assert np.isfinite(np.asarray(result.T)).all()
 
 
@@ -316,7 +316,7 @@ def test_enum_lists_match_the_enums():
     assert enums['tetm'] == [m.name.lower() for m in Tetm]
     assert enums['factorization'] == [m.value for m in Factorization]
     assert enums['fourier_coefficients'] == [m.value for m in FourierCoefficients]
-    assert enums['projector'] == [m.value for m in Projector]
+    assert enums['nvf_projector'] == [m.value for m in Projector]
 
 
 def test_every_cited_source_exists():
@@ -439,7 +439,7 @@ def test_incidence_side_claims_match_the_solver():
     for side in m['values']:
         res = wavebit.rcwa(incidence_side=side, **kw).solve()
         got[side] = float(np.sum(np.asarray(res.R)))
-    assert abs(got['top'] - got['bottom']) > 1e-3, \
+    assert abs(got['top'] - got['bottom']) > 1e-3,\
         'the published sides must select genuinely different solves'
 
     solver = wavebit.rcwa(**kw)
@@ -550,6 +550,11 @@ MATERIAL_RUNS = {
     'magnetic': lambda: _run_uniform(_tensor(2.6, 2.6, 2.6), mu=_tensor(1.4, 1.4, 2.2)),
     'z_coupled': lambda: _run_uniform(_tensor(2.6, 2.6, 2.6, xz=0.4, zx=0.4)),
     'patterned_anisotropic': _run_patterned,
+    'patterned_z_coupled': lambda: wavebit.rcwa(
+        truncation_order=(2,1), factorization='li',
+        structure=[dict(background=1.,shapes=[dict(type='rectangle',lx=.4,ly=.5,
+            material=wavebit.Material(_tensor(2.6,3.,2.4,xz=.3,zx=.3)))])],
+        **_MAT_KW).solve(),
 }
 
 
@@ -584,42 +589,19 @@ def _z_coupled_cell(**over):
     return cell
 
 
-def test_a_patterned_z_row_is_refused_by_the_builder_that_cannot_read_it():
-    """``patterned_z_coupled: False`` is a refusal now, not an omission, so it is pinned as one.
-
-    It used to be dropped. The Popov-Neviere rearrangement closes over the in-plane 2x2 block,
-    so a z-coupled tensor came back **bit-identical** to the same tensor with the z row zeroed
-    -- all five slots -- and conserved energy. Against the 4ff path, which holds a z row
-    exactly on a uniform layer, the cost is quadratic in the coupling: ``T`` in error by 3.3e-9
-    at ``eps_xz = 1e-6`` and 1.9e-2 at 0.8.
-
-    Written by name rather than by sweeping ``dir(factorization)``. The sweep this replaced
-    wrapped its call in ``except Exception: continue``, so the moment a builder started
-    *refusing*, the sweep skipped it and went green while asserting nothing about the two
-    builders it was written for.
-    """
+def test_tensor_builders_retain_all_z_coupling_slots():
     from wavebit._core.factorization import (to_conv_mat_raster_pn_eps,
                                              to_conv_mat_raster_pn_mu)
-
-    for build in (to_conv_mat_raster_pn_eps, to_conv_mat_raster_pn_mu):
-        with pytest.raises(ValueError, match='z row or column'):
-            build(_z_coupled_cell(xz=0.4, zx=0.4), 2, 2)
-        with pytest.raises(ValueError, match='z row or column'):
-            build(_z_coupled_cell(yz=0.4, zy=0.4), 2, 2)
-
-        # `zz` is read, and is not what the refusal is about -- changing it moves `epz_i` by
-        # 1.4e-1, so a guard that swept the whole z row would refuse every uniaxial layer.
-        assert len(build(_z_coupled_cell(), 2, 2)) == 5
+    for build in (to_conv_mat_raster_pn_eps,to_conv_mat_raster_pn_mu):
+        for entries,positions in ((dict(xz=.4,zx=.4),(5,7)),(dict(yz=.4,zy=.4),(6,8))):
+            full=build(_z_coupled_cell(**entries),2,2)
+            assert len(full)==9
+            assert all(np.max(abs(full[i]))>1e-3 for i in positions)
+        assert len(build(_z_coupled_cell(),2,2))==5
 
 
-def test_no_builder_emits_the_four_z_row_slots():
-    """The other half, and the one that still has teeth for a builder written later.
-
-    The refusal above is about the builder that exists. This is about the flag: nothing in
-    ``factorization`` returns more than the five in-plane slots from a raster, which is what
-    makes ``patterned_z_coupled: False`` structural rather than a policy. The day something
-    returns nine, this fails -- and that is the day the flag should be revisited.
-    """
+def test_in_plane_tensor_builders_keep_the_five_slot_fast_path():
+    """A z-decoupled concrete tensor does not force the larger eigensystem."""
     from wavebit._core import factorization
     cell = np.zeros((1, 16, 16, 3, 3), dtype=complex)
     for i in range(3):

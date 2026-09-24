@@ -52,5 +52,5 @@ the solver at all. Every floor is commented in
 [`pyproject.toml`](https://github.com/fieldalgo/wavebit/blob/develop/pyproject.toml) with the
 reason it sits where it does. If you need an older one, verify it and the floor can come down.
 
-`contourpy` is optional because only `normal_method='contour'` reads it; it ships with
+`contourpy` is optional because only `raster_normal_method='contour'` reads it; it ships with
 matplotlib, so most environments already have it.

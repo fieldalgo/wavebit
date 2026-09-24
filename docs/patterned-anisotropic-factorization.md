@@ -1,14 +1,28 @@
 # Patterned anisotropic layers — the Popov–Nevière factorization
 
+This page describes the NVF tensor construction. The alternative Cartesian
+`factorization='li'` path is documented in
+[Li factorization for anisotropic materials](tensor-li-factorization.md).
+
+**Current input API (2026-09-22):** assign `Material(epsilon=[exx, eyy, ezz])`
+or a 3×3 tensor directly to a layer background or shape and call `solve()`.
+Tensor shapes now default to [continuous geometry integration](tensor-shape-integration.md),
+with analytic primitive indicators and a sampled normal extension.
+Material-axis rotation, tensor tables and tensor rasters are described in the
+[material guide](guide/materials.md#anisotropic-materials). The discussion below
+is the historical derivation and development record, not the current input guide.
+
+
 Landed 2026-08-14. [`anisotropic-materials.md`](anisotropic-materials.md) §3 scoped this as "the
 actual work item"; this is what it turned into.
 
 Target: `wavebit/_core/factorization.py` — `_pn_fields`, `pn_eps_conv_matrices`,
 `to_conv_mat_raster_pn_eps`.
 
-**Scope.** The **in-plane** tensor — the five slots `epx, epy, epz_i, epxy, epyx`. A patterned
-layer that also fills the z row (`eps_xz`, `eps_yz`) is *not* implemented, and §6 below says why
-that is a deliberate stop rather than an unfinished edge.
+**Scope.** This derivation introduces the in-plane five-slot case. The production
+builder also closes full 3×3 epsilon and mu tensors and emits nine slots when
+z coupling is present. See [full tensor patterns](full-tensor-patterns.md) for
+that extension, its independent tests and convergence limits.
 
 ---
 
@@ -160,22 +174,14 @@ invariant under the axis swap and would have passed while wrong.
   What is forced is the *contrast* limit, and there the gap falls 17x faster than the reflectance
   it lives on.
 
-## 6. What is not implemented
+## 6. Full three-component closure
 
-**Patterned z-coupling.** The derivation in `_pn_fields` is written for a full 3×3 and stays valid
-for one. What stops at the in-plane block is the closing step: with `nz = 0` the projectors are
-block diagonal, so `A_zz = eps_zz` and `B_zz = 1` exactly and the z slot is the plain direct rule
-inverted — but only while the z row is empty. A patterned layer that fills it needs the 3×3 solved
-together.
-
-It is left unwritten rather than written blind, and the reason is §5: **fmmax has no z-row
-arguments at all**, and it was the only solver that reached the patterned case to begin with. There
-is no oracle. Given that this session's central lesson was a formulation that passed energy,
-covariance and an external comparison while being wrong by 50%, shipping the harder case with
-strictly less evidence than that one had is not a trade worth taking.
-
-The uniform z-coupled case is unaffected and works — it goes to the 4ff solver,
-[`first-order-4ff.md`](first-order-4ff.md).
+With xz/yz/zx/zy coupling, the builder Fourier-transforms all nine entries of
+A and B and closes the full operator as `conv(A) @ inv(conv(B))`. The zz block
+then contains the coupling to the transverse fields; it cannot be attached
+independently. Epsilon and mu use the same construction and feed the 4ff solver.
+See [full tensor patterns](full-tensor-patterns.md) for supported geometries,
+independent laminate/Maxwell tests and numerical convergence considerations.
 
 ## 7. The z slot reads the raster as a staircase
 

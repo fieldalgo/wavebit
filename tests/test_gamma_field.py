@@ -49,11 +49,11 @@ def _box(**geom):
     return dict(dict(type='rectangle', cx=0.0, cy=0.0, angle=0.0, material=EPS_HI), **geom)
 
 
-def _total(lattice, shape, order=6, normal_grid=512, **incidence):
+def _total(lattice, shape, order=6, shape_nvf_grid_size=512, **incidence):
     P._PROJECTOR_CACHE.clear()
     kw = dict(SOLVE_KW, **incidence)
     res = wavebit.rcwa(lattice=lattice, structure=[dict(background=1.0, shapes=[shape])],
-                       truncation_order=dict(u=order, v=order), normal_grid=normal_grid,
+                       truncation_order=dict(u=order, v=order), shape_nvf_grid_size=shape_nvf_grid_size,
                        **kw).solve()
     return float(np.sum(np.asarray(res.T)))
 
@@ -123,13 +123,13 @@ def test_the_ladder_through_the_pair_threshold_is_monotone():
     double-covered face was fixed; the unconditional substitution before it read the partner
     off the primary's line beyond the run too, and sat under 1e-12 for that reason alone).
     """
-    at_span = _total(SQUARE, _box(lx=350.0, ly=PERIOD), order=5, normal_grid=256)
+    at_span = _total(SQUARE, _box(lx=350.0, ly=PERIOD), order=5, shape_nvf_grid_size=256)
     A = as_lattice(lattice=SQUARE)
     previous = None
     for gap in RUNGS[:-1]:
         shape = _box(lx=350.0, ly=PERIOD - gap)
         assert bool(P.plan_gamma([shape], A).pairs) is (gap <= 7.0e-10), gap
-        value = abs(_total(SQUARE, shape, order=5, normal_grid=256) - at_span)
+        value = abs(_total(SQUARE, shape, order=5, shape_nvf_grid_size=256) - at_span)
         if previous is not None:
             assert value <= previous, f'square: not approaching the span at gap {gap}'
         previous = value
@@ -140,7 +140,7 @@ def test_the_ladder_through_the_pair_threshold_is_monotone():
     rungs = (1e-1, 1e-2, 7.1e-4, 7.01e-4, 6.99e-4, 6.9e-4, 1e-4, 1e-6, 1e-9,
              tol * (1.0 + 1.0 / 70.0), tol * (1.0 - 1.0 / 70.0))
     spanning = _box(lx=500.0, ly=PERIOD)
-    at_span = _total(SHEAR, spanning, order=5, normal_grid=256)
+    at_span = _total(SHEAR, spanning, order=5, shape_nvf_grid_size=256)
     previous_t = previous_c = None
     for gap in rungs:
         shape = _box(lx=500.0, ly=PERIOD - gap)
@@ -149,7 +149,7 @@ def test_the_ladder_through_the_pair_threshold_is_monotone():
         if previous_c is not None:
             assert distance <= previous_c, f'shear: the field is not approaching at gap {gap}'
         previous_c = distance
-        value = abs(_total(SHEAR, shape, order=5, normal_grid=256) - at_span)
+        value = abs(_total(SHEAR, shape, order=5, shape_nvf_grid_size=256) - at_span)
         if gap <= 7.1e-4 and previous_t is not None:
             assert value <= previous_t, f'shear: not approaching the span at gap {gap}'
         previous_t = value
@@ -167,16 +167,16 @@ def test_closing_gap_has_large_slopes_on_the_documented_grid():
     Grid refinement changes the small-gap ladder; see nvf-contact-followup.md.
     The assertions below still detect the previously recorded solver behavior.
     """
-    at_span = _total(SQUARE, _box(lx=350.0, ly=PERIOD), order=5, normal_grid=256)
+    at_span = _total(SQUARE, _box(lx=350.0, ly=PERIOD), order=5, shape_nvf_grid_size=256)
     slopes = []
     for gap in (1e-2, 1e-4, 1e-6):
         h = gap / 10.0
-        value = _total(SQUARE, _box(lx=350.0, ly=PERIOD - gap), order=5, normal_grid=256)
+        value = _total(SQUARE, _box(lx=350.0, ly=PERIOD - gap), order=5, shape_nvf_grid_size=256)
         assert value < at_span                                   # approaching from below
         assert abs(value - at_span) / gap ** 0.2 == pytest.approx(2.0e-3, rel=0.35)
-        slopes.append((_total(SQUARE, _box(lx=350.0, ly=PERIOD - gap + h), order=5, normal_grid=256)
+        slopes.append((_total(SQUARE, _box(lx=350.0, ly=PERIOD - gap + h), order=5, shape_nvf_grid_size=256)
                        - _total(SQUARE, _box(lx=350.0, ly=PERIOD - gap - h), order=5,
-                                normal_grid=256)) / (2.0 * h))
+                                shape_nvf_grid_size=256)) / (2.0 * h))
     assert slopes[0] == pytest.approx(1.0405e-2, rel=1e-2)
     assert slopes[1] / slopes[0] > 30.0 and slopes[2] / slopes[1] > 30.0, slopes
     assert slopes[2] > 40.0
@@ -202,10 +202,10 @@ def test_a_rigid_rotation_with_the_incidence_frame_is_an_invariance(name, lattic
     """
     rot = np.array([[np.cos(alpha), -np.sin(alpha)], [np.sin(alpha), np.cos(alpha)]])
     turned = dict(shape, angle=shape['angle'] + alpha)
-    base = _total(lattice, shape, order=5, normal_grid=256, phi=0.3)
-    same = _total(rot @ lattice, turned, order=5, normal_grid=256, phi=0.3 + alpha)
+    base = _total(lattice, shape, order=5, shape_nvf_grid_size=256, phi=0.3)
+    same = _total(rot @ lattice, turned, order=5, shape_nvf_grid_size=256, phi=0.3 + alpha)
     assert abs(same - base) < 5e-12, (name, same - base)
-    left_behind = _total(rot @ lattice, turned, order=5, normal_grid=256, phi=0.3)
+    left_behind = _total(rot @ lattice, turned, order=5, shape_nvf_grid_size=256, phi=0.3)
     assert abs(left_behind - base) > 1e-5, (name, left_behind - base)
 
 
@@ -268,8 +268,8 @@ def test_a_face_covered_from_both_ends_cancels_on_both_runs(name, turn):
     lattice, shape = DOUBLE_COVERED[name]
     _both_dead_runs_read_the_live_axis(lattice, shape, turn)
     rot = np.array([[np.cos(turn), -np.sin(turn)], [np.sin(turn), np.cos(turn)]])
-    base = _total(lattice, shape, order=5, normal_grid=256, phi=0.3)
-    same = _total(rot @ lattice, dict(shape, angle=turn), order=5, normal_grid=256,
+    base = _total(lattice, shape, order=5, shape_nvf_grid_size=256, phi=0.3)
+    same = _total(rot @ lattice, dict(shape, angle=turn), order=5, shape_nvf_grid_size=256,
                   phi=0.3 + turn)
     assert abs(same - base) < 1e-11, (name, turn, same - base)
 
@@ -339,7 +339,7 @@ def test_the_350_box_golden_and_what_it_moved_against():
     rule did, so that is a resemblance of extensions; it is stated here as what the
     measurement shows, and the price is accepted for what fixed normals buy.
     """
-    got = _total(SQUARE, _box(lx=350.0, ly=350.0), order=6, normal_grid=512)
+    got = _total(SQUARE, _box(lx=350.0, ly=350.0), order=6, shape_nvf_grid_size=512)
     assert got == pytest.approx(0.892284142298975, abs=1e-9)
     assert abs(got - 0.8918880433497915) < 5e-4          # the class of movement, as booked
 
@@ -445,11 +445,11 @@ def _the_350_golden():
     assert _total(SQUARE, _box(lx=350.0, ly=350.0)) == pytest.approx(0.892284142298975, abs=1e-9)
 
 
-def _layer_total(shapes, order=4, normal_grid=128):
+def _layer_total(shapes, order=4, shape_nvf_grid_size=128):
     """``sum(T)`` of a multi-shape layer on the square cell, at this file's operating point."""
     P._PROJECTOR_CACHE.clear()
     res = wavebit.rcwa(lattice=SQUARE, structure=[dict(background=1.0, shapes=shapes)],
-                       truncation_order=dict(u=order, v=order), normal_grid=normal_grid,
+                       truncation_order=dict(u=order, v=order), shape_nvf_grid_size=shape_nvf_grid_size,
                        **SOLVE_KW).solve()
     return float(np.sum(np.asarray(res.T)))
 
@@ -477,8 +477,8 @@ def _the_seam_is_oriented_by_the_materials():
     # number of pixels (108) and the two listings sample one field: 6e-15. An orientation read
     # off the listing -- the co-oriented vector along the earlier shape's normal, which is
     # what the record's sign did -- puts them 7.7e-4 apart, at N = 504 and at 512 alike.
-    assert abs(_layer_total(_k_short(), normal_grid=504)
-               - _layer_total(list(reversed(_k_short())), normal_grid=504)) < 1e-12
+    assert abs(_layer_total(_k_short(), shape_nvf_grid_size=504)
+               - _layer_total(list(reversed(_k_short())), shape_nvf_grid_size=504)) < 1e-12
 
 
 def _the_seam_contrast_reads_opposed_pairs_only():

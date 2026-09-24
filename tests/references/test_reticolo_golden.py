@@ -66,11 +66,11 @@ CASES = {
                        period=[0.8], wavelength=0.7, structure=_QUARTER, thickness=[0.25]),
     # Two patterned layers: the interface between them is under test, not just the boundary.
     'te_two_layer': dict(tetm='te', theta=0.25, phi=None, top=1.0, bot=4.0, truncation_order=10,
-                         period=[0.7], wavelength=0.85, structure=_TWO_LAYER,
-                         thickness=[0.15, 0.22]),
+                         period=[0.7], wavelength=0.85, structure=_TWO_LAYER[::-1],
+                         thickness=[0.22, 0.15]),
     'tm_two_layer': dict(tetm='tm', theta=0.25, phi=None, top=1.0, bot=4.0, truncation_order=10,
-                         period=[0.7], wavelength=0.85, structure=_TWO_LAYER,
-                         thickness=[0.15, 0.22]),
+                         period=[0.7], wavelength=0.85, structure=_TWO_LAYER[::-1],
+                         thickness=[0.22, 0.15]),
     # Denser truncation, where the two solvers' round-off has the most room to diverge.
     'te_high_order': dict(tetm='te', theta=0.2, phi=None, top=1.0, bot=2.25, truncation_order=30,
                           period=[0.7], wavelength=0.9, structure=_HALF, thickness=[0.15]),

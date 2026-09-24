@@ -43,12 +43,34 @@ from typing import NamedTuple
 
 import numpy as np
 
-from .backend import AxisNameWarning, UnresolvedBranchWarning, as_array
+from .backend import AxisNameWarning, UnresolvedBranchWarning, _concrete, array_namespace, as_array
 
 _FLAT = 1e-12      # below this, a real part counts as zero and the tie-break decides
 
 _PI = 3.141592653589793
 _HALF_PI = 1.5707963267948966
+
+
+def incident_phase_index(xp, epsilon_mu, theta):
+    """Return ``|Re(k)| / k0`` for a real phase angle and real transverse k.
+
+    Write ``epsilon_mu = a + i*b`` and the inward normal wavevector as
+    ``q/k0 = N*cos(theta) + i*alpha``. Dispersion gives
+    ``N**2 - alpha**2 = a`` and ``2*N*cos(theta)*alpha = b``; hence
+    ``N**2 = (a + hypot(a, b/cos(theta))) / 2``.
+
+    Both material components are retained. The rationalized negative-a branch
+    avoids cancellation for a weakly absorbing metal. Inputs are backend arrays;
+    the caller validates the phase angle and masks unused complex-angle inputs.
+    """
+    a, b = xp.real(epsilon_mu), xp.imag(epsilon_mu)
+    loss = b / xp.cos(theta)
+    radius = xp.hypot(a, loss)
+    positive = a >= 0
+    large_root = xp.sqrt((radius + xp.where(positive, a, -a)) / 2)
+    denominator = xp.where(large_root > 0, large_root, xp.ones_like(large_root))
+    small_root = xp.abs(loss) / (2 * denominator)
+    return xp.where(positive, large_root, small_root)
 
 
 @contextlib.contextmanager
@@ -262,9 +284,10 @@ def incident_kz(kz_top, index):
     the reliable way to guarantee that is to take it from the vector the other side already
     uses — ``kz_top[index]`` — instead of writing ``n_top * cos(theta)`` a second time.
 
-    The two spellings agree for a real incidence angle, which is why the duplication survived:
-    it is an identity there and nothing in the suite could see it. They part company as soon
-    as ``theta`` is complex (evanescent illumination), where ``cos(theta)`` is
+    The two spellings agree for a real incidence angle in a lossless medium. In an
+    absorbing medium, a real phase angle instead specifies real transverse k, and
+    ``n*cos(theta)`` is not its normal wavevector. They can also part company when
+    ``theta`` is complex (evanescent illumination), where ``cos(theta)`` is
     negative-imaginary while :func:`boundary_kz` forces ``Im(kz) > 0``. The two sides then
     carry opposite signs at that one order and cancel exactly, and the solve returns
     ``R = -delta`` with ``T = 0`` — a grating that scatters nothing, which plots as a clean
@@ -274,7 +297,7 @@ def incident_kz(kz_top, index):
 
 
 def incident_sp_amplitudes(xp, C, psi, chi=None, polarization=None):
-    """The incident electric amplitudes ``(a_s, a_p)``, at unit flux — the one resolver.
+    """The incident electric coefficients ``(a_s, a_p)``, normalized to unit Euclidean norm.
 
     Three spellings arrive and one leaves, so the solves never learn there was a choice. This
     is called once per solve from :meth:`~wavebit._core.engine.CoreSolveMixin._incidence_pair`,
@@ -295,6 +318,9 @@ def incident_sp_amplitudes(xp, C, psi, chi=None, polarization=None):
     respectively. A written pair has no such guarantee (``(3, 4j)`` is a legitimate way to ask
     for the same incidence), so it is divided, and its overall *phase* survives because the
     norm is real positive.
+
+    This coefficient normalization is not a unit-power normalization. The boundary
+    power calculation accounts for the medium and each polarization separately.
 
     Both entries are E-field amplitudes even though the coupled paths carry the p channel as
     a magnetic boundary variable — the ``-i*n_top`` conversion belongs to the incident-column
@@ -665,6 +691,30 @@ def warn_if_xy_on_a_skewed_cell(spelling, axis_aligned, name='truncation_order')
 
 
 # --- the incidence spellings, and what makes them exclusive -----------------------------
+_DIRECTION_CLASH = (
+    'kx/ky and theta/phi are alternative incident directions. Pass either real '
+    'Cartesian kx/ky in inverse length units, or angles in radians, not both. '
+    'Clear the other direction with None before switching a solver between them.')
+
+
+def transverse_component_problem(value, name):
+    """Validate one dimensional, real scalar wavevector component without detaching AD."""
+    if value is None:
+        return None
+    message = f'{name} must be a finite real scalar in inverse length units'
+    if isinstance(value, (list, tuple, dict, str)) or getattr(value, 'shape', ()) != ():
+        return message
+    try:
+        if hasattr(value, 'dtype'):
+            xp = array_namespace(value)
+            valid = xp.isfinite(value) & (xp.imag(value + 0j) == 0)
+            return message if _concrete(valid) is False else None
+        import cmath
+        number = complex(value)
+        return None if cmath.isfinite(number) and number.imag == 0 else message
+    except (TypeError, ValueError, OverflowError):
+        return message
+
 #
 # `psi`, `chi`, `polarization` and `tetm` are four names for one input, and the rules about
 # which may sit beside which live here rather than in the setters that used to hold them.

@@ -56,11 +56,11 @@ def _scene(g):
     A golden that cannot be regenerated is converted at the *read* rather than rewritten in
     place, so the file on disk stays the one the oracle produced.
 
-    Squaring rather than renaming is the entire content of this function, and it is not
-    cosmetic. ``n_bot = 5`` is ``eps = 25``; handing 5 to ``bot=`` describes a substrate of
+    Convert the stored index to permittivity and its top-down layer axis to bottom-up.
+    The thickness is reversed at each call site as well. This is not cosmetic. ``n_bot = 5`` is ``eps = 25``; handing 5 to ``bot=`` describes a substrate of
     index 2.24 instead — a legal medium, energy-conserving, and not the one RETICOLO swept.
     """
-    return dict(structure=np.asarray(g['ucell']) ** 2,
+    return dict(structure=np.asarray(g['ucell'])[::-1] ** 2,
                 top=float(g['n_top']) ** 2, bot=float(g['n_bot']) ** 2)
 
 
@@ -84,7 +84,7 @@ def _solve(g, i, j):
     res = wavebit.rcwa(backend=0, psi=np.pi / 2, **_scene(g),
                          theta=theta, phi=phi, truncation_order=[MAX_ORDER], wavelength=float(g['wavelength']),
                          period=list(g['period']),
-                         thickness=list(g['thickness']),
+                         thickness=list(g['thickness'])[::-1],
                          fourier_coefficients='integrated',
                          factorization='li').solve()
     return res.s_inc
@@ -171,7 +171,7 @@ def test_double_precision_agrees_across_backends_at_a_complex_angle(backend):
         res = wavebit.rcwa(backend=bk, psi=np.pi / 2, **_scene(g),
                              theta=theta, phi=phi, truncation_order=[40],
                              wavelength=float(g['wavelength']), period=list(g['period']),
-                             thickness=list(g['thickness']),
+                             thickness=list(g['thickness'])[::-1],
                              complex_dtype=0, fourier_coefficients='integrated',
                              factorization='li').solve()
         return complex(np.asarray(res.s_inc.r_s).ravel()[40])
@@ -203,7 +203,7 @@ def test_uniform_stack_does_not_diffract_at_a_complex_angle():
                          theta=np.complex128(0.5 + 0.3j), phi=np.complex128(0.3),
                          truncation_order=[MAX_ORDER], wavelength=float(g['wavelength']),
                          period=list(g['period']),
-                         thickness=list(g['thickness']),
+                         thickness=list(g['thickness'])[::-1],
                          fourier_coefficients='integrated',
                          factorization='li').solve()
     R = np.asarray(res.s_inc.r_s).ravel()

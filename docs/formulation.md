@@ -30,7 +30,7 @@ Conventions, all of them, up front:
 | --- | --- |
 | time factor | `e^{-iωt}`; a field is `Re[E(r) e^{-iωt}]` |
 | loss | `Im(n) > 0`, `Im(eps) > 0` (`n + ik` as databases tabulate) |
-| downward (+z) wave | `exp(+i k0 kz z)`, `Re(kz) > 0` |
+| upward (+z) wave | `exp(+i k0 kz z)`, `Re(kz) > 0` |
 | decay downward | `Im(kz) > 0` |
 | plane-wave phase | `exp(+i k0 (kx x + ky y + kz z))` |
 | Fourier series of `eps` | `eps(x) = Σ_p c_p exp(+i 2π p x / Λ)` |

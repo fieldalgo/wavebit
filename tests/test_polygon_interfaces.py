@@ -55,7 +55,7 @@ def field(regs, lattice=CELL, plan=None, backend=xp, grid=(96, 96)):
                                            images=plan.images)
 
 
-def projector(normals):
+def nvf_projector(normals):
     x, y = map(np.asarray, normals)
     return np.stack((x*x, x*y, y*y))
 
@@ -87,7 +87,7 @@ def test_only_the_shared_interval_disappears_in_the_entire_cell(angle, swap, she
     oracle = (a, e, l2, np.ones(len(a), dtype=bool))
     want = b.distance_gradient_normal_field(xp, [moved(UNION)], (96, 96), lattice, xp.float64,
                                             segment_data=oracle)
-    np.testing.assert_allclose(projector(field(regs, lattice)), projector(want), atol=2e-12, rtol=0)
+    np.testing.assert_allclose(nvf_projector(field(regs, lattice)), nvf_projector(want), atol=2e-12, rtol=0)
 
 
 def test_different_material_shared_interval_is_a_real_interface():
@@ -96,7 +96,7 @@ def test_different_material_shared_interval_is_a_real_interface():
     row, col = 40, 48
     assert abs(different[0][row, col]) > .999999
     assert abs(same[0][row, col]) < 1e-12
-    assert np.max(np.abs(projector(same) - projector(different))) > .9
+    assert np.max(np.abs(nvf_projector(same) - nvf_projector(different))) > .9
 
 
 def test_nested_invisible_seam_has_no_interior_field_effect():
@@ -105,11 +105,11 @@ def test_nested_invisible_seam_has_no_interior_field_effect():
     regs = resolved([outer, inner], [4., 4.])
     want = b.distance_gradient_normal_field(xp, [outer], (128, 128), CELL, xp.float64)
     got = field(regs, grid=(128, 128))
-    np.testing.assert_allclose(projector(got), projector(want), atol=2e-12, rtol=0)
+    np.testing.assert_allclose(nvf_projector(got), nvf_projector(want), atol=2e-12, rtol=0)
     legacy = b.distance_gradient_normal_field(xp, [v for _, vv in regs for v in vv],
                                              (128, 128), CELL, xp.float64)
-    assert np.max(np.abs(projector(legacy) - projector(want))) > .49
-    assert np.mean(np.max(np.abs(projector(legacy) - projector(want)), axis=0) > 1e-8) > .17
+    assert np.max(np.abs(nvf_projector(legacy) - nvf_projector(want))) > .49
+    assert np.mean(np.max(np.abs(nvf_projector(legacy) - nvf_projector(want)), axis=0) > 1e-8) > .17
 
 
 @pytest.mark.parametrize('shear', [200., -200.])
@@ -133,8 +133,8 @@ def test_periodic_partial_abutment_keeps_the_uncovered_ends(shear):
     oracle = (oa, oe, np.sum(oe*oe, axis=1), np.ones(len(oa), dtype=bool))
     want = b.distance_gradient_normal_field(xp, [box], (96, 96), lattice, xp.float64,
                                             segment_data=oracle, images=plan.images)
-    np.testing.assert_allclose(projector(field([(4., [box])], lattice)),
-                               projector(want), atol=2e-12, rtol=0)
+    np.testing.assert_allclose(nvf_projector(field([(4., [box])], lattice)),
+                               nvf_projector(want), atol=2e-12, rtol=0)
 
 
 def test_empty_interface_set_is_a_finite_constant():
@@ -158,7 +158,7 @@ def test_long_segments_use_a_bounded_image_set_not_a_fixed_ring():
     got = field(regs, lattice, plan=plan, grid=(12, 12))
     want = b.distance_gradient_normal_field(xp, [box], (12, 12), lattice, xp.float64,
                                             transform=transform, segment_data=data, images=dense)
-    np.testing.assert_allclose(projector(got), projector(want), atol=2e-12, rtol=0)
+    np.testing.assert_allclose(nvf_projector(got), nvf_projector(want), atol=2e-12, rtol=0)
 
 
 def _shapes(width=500.):
@@ -175,7 +175,7 @@ def test_frozen_interface_replay_jit_and_geometry_gradient():
     def loss(params):
         cell = jnp.array([[700., params[1]], [0., 700.]])
         mats = b.to_conv_mat_boundary_layer(jnp, _shapes(params[0]), 1., 1, 1,
-                                            cell, jnp.complex128, normal_grid=32, plan=plan)
+                                            cell, jnp.complex128, shape_nvf_grid_size=32, plan=plan)
         return jnp.real(jnp.sum(mats[0] * jnp.conj(mats[0])))
     eager = loss(p)
     np.testing.assert_allclose(jax.jit(loss)(p), eager, atol=2e-11, rtol=0)
@@ -205,7 +205,7 @@ def test_frozen_material_equality_is_evaluated_live_under_jit():
     for material in (4.+0j, 4.+.2j, 9.+0j):
         got = compiled(jnp.asarray(material))
         want = field(partial_regions(material), grid=(24, 24))
-        np.testing.assert_allclose(projector(got), projector(want), atol=2e-11, rtol=0)
+        np.testing.assert_allclose(nvf_projector(got), nvf_projector(want), atol=2e-11, rtol=0)
 
 
 def test_frozen_plan_rejects_changed_periodic_contact_topology():
@@ -235,7 +235,7 @@ def test_epsilon_and_mu_build_their_own_actual_interface_sets(monkeypatch):
               dict(type='rectangle', lx=200., ly=200., angle=.3, material=Material(4., mu=2.))]
     solver = wavebit.rcwa(backend=0, lattice=CELL, structure=[dict(background=1., shapes=shapes)],
                          thickness=[100.], wavelength=900., truncation_order=(1, 1),
-                         normal_grid=32)
+                         shape_nvf_grid_size=32)
     result = solver.solve()
     assert np.isfinite(np.asarray(result.T)).all()
     assert active_counts == [4, 8]  # dielectric outer contour, magnetic inner contour
@@ -251,7 +251,7 @@ def test_polygon_grating_matches_li_and_has_no_transverse_order_dependence(order
         solver = wavebit.rcwa(backend=0, period=(700., 700.), structure=structure,
                              thickness=[300.], wavelength=550., psi=.31,
                              truncation_order=orders,
-                             **dict(dict(normal_grid=64) if isinstance(structure, list) else {}, **kwargs))
+                             **dict(dict(shape_nvf_grid_size=64) if isinstance(structure, list) else {}, **kwargs))
         return float(np.sum(np.asarray(solver.solve().T)))
     layer = [dict(background=1., shapes=shapes)]
     one = transmission((order, 0), layer)
@@ -275,7 +275,7 @@ def test_same_material_partial_overlap_is_independent_of_paint_order():
     left = rect_verts(xp, 299., 313., 331., 297., .17)
     right = rect_verts(xp, 429., 391., 273., 331., .43)
     a, z = resolved([left, right], [4., 4.]), resolved([right, left], [4., 4.])
-    np.testing.assert_allclose(projector(field(a)), projector(field(z)), atol=2e-12, rtol=0)
+    np.testing.assert_allclose(nvf_projector(field(a)), nvf_projector(field(z)), atol=2e-12, rtol=0)
     for x, y in zip(mats(a), mats(z)):
         np.testing.assert_allclose(x, y, atol=2e-12, rtol=0)
 
@@ -296,7 +296,7 @@ def test_grouped_image_bound_matches_the_full_bound():
     grouped = b.distance_gradient_normal_field(xp, loops, (31, 33), lattice, xp.float64,
                                                segment_data=data, images=plan.images,
                                                image_groups=plan.groups, transform=transform)
-    np.testing.assert_array_equal(projector(grouped), projector(broad))
+    np.testing.assert_array_equal(nvf_projector(grouped), nvf_projector(broad))
 
 
 def test_a_polygon_grating_has_an_exact_normal_everywhere():
@@ -343,7 +343,7 @@ def test_zero_area_backtracking_spur_cannot_hide_a_real_exterior_interval():
     regs = resolved([left, right], [4., 4.])
     # The clipper's first contour has an out-and-back run on the second box's
     # bottom edge. Pairwise opposed-edge deletion wrongly removes all three.
-    np.testing.assert_allclose(projector(field(regs)), projector(field([(4., [union])])),
+    np.testing.assert_allclose(nvf_projector(field(regs)), nvf_projector(field([(4., [union])])),
                                atol=2e-12, rtol=0)
     for got, want in zip(mats(regs), mats([(4., [union])])):
         np.testing.assert_allclose(got, want, atol=2e-12, rtol=0)

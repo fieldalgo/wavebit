@@ -81,7 +81,7 @@ def _reconstruct(name, theta, pol):
     cell = np.asarray(solver.reconstruct_field(sample_x=fine_res_x(), sample_y=1, sample_z=RES_Z))
     if cell.ndim == 5:
         cell = cell[0]
-    return cell[:, 0, 1::2, :]                      # the only layer, at fmmax's x points
+    return cell[::-1, 0, 1::2, :] * np.array([1, 1, -1, -1, -1, 1])                      # the only layer, at fmmax's x points
 
 
 def _fit(ref, got):

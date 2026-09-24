@@ -15,7 +15,7 @@ def pair(gap=0.,epsilon=9.):
 def solver(shapes,backend=0,grid=128,**kwargs):
     options=dict(backend=backend,period=(700.,700.),wavelength=900.,top=1.,bot=2.25,
         theta=.2,phi=0.,psi=0.,thickness=(300.,),truncation_order=(3,3),
-        normal_grid=grid,projector='circular',factorization='nvf',
+        shape_nvf_grid_size=grid,nvf_projector='circular',factorization='nvf',
         structure=[dict(background=1.,shapes=shapes)])
     options.update(kwargs)
     if 'lattice' in kwargs:
@@ -30,7 +30,7 @@ def test_production_contact_and_material_limits(grid):
             shapes=([dict(type='rectangle',lx=350.,ly=700.-value,material=12.25)]
                     if kind=='period' else pair(epsilon=4.+value) if kind=='material' else pair(value))
             s=solver(shapes,grid=grid)
-            assert s.factorization=='nvf' and s.projector=='circular'
+            assert s.factorization=='nvf' and s.nvf_projector=='circular'
             return s.solve().T.sum()
         base=total(0.)
         large=(total(1e-4)-base)/1e-4
@@ -60,7 +60,7 @@ def test_frozen_jit_derivative_matches_two_finite_differences(kind):
 def test_same_coefficients_as_independent_jones_instrument():
     shapes=pair(1.)
     s=solver(shapes)
-    want=independent_matrices(s.xp,shapes,1.,3,3,s.lattice,s.complex_dtype,normal_grid=128)
+    want=independent_matrices(s.xp,shapes,1.,3,3,s.lattice,s.complex_dtype,shape_nvf_grid_size=128)
     got=s._eps_conv_matrices(s.freeze_geometry())
     for a,b in zip(got,want):
         np.testing.assert_allclose(a[0],b,rtol=0,atol=2e-12)
@@ -68,11 +68,11 @@ def test_same_coefficients_as_independent_jones_instrument():
 
 def test_both_projectors_have_separate_cache_entries_and_default_is_unchanged():
     s=solver(pair(1.));P._PROJECTOR_CACHE.clear()
-    linear=s.solve(projector='linear').T.copy()
-    circular=s.solve(projector='circular').T.copy()
-    np.testing.assert_array_equal(s.solve(projector='linear').T,linear)
-    np.testing.assert_array_equal(s.solve(projector='circular').T,circular)
-    plain=solver(pair(1.),projector=None)
+    linear=s.solve(nvf_projector='linear').T.copy()
+    circular=s.solve(nvf_projector='circular').T.copy()
+    np.testing.assert_array_equal(s.solve(nvf_projector='linear').T,linear)
+    np.testing.assert_array_equal(s.solve(nvf_projector='circular').T,circular)
+    plain=solver(pair(1.),nvf_projector=None)
     np.testing.assert_array_equal(plain.solve().T,linear)
     assert np.max(abs(linear-circular))>1e-6
 

@@ -29,8 +29,9 @@ conjugated formulation, which is what the code ran on when they were found (see
 Real indices were never affected by any of them, which is why all three survived every
 lossless test.
 
-For an absorbing superstrate the *amplitude* is the meaningful check: incident power in an
-absorbing medium is convention-dependent, so ``R`` there is not compared to anything.
+Absorbing-incident power is normalized at the illuminated interface. Real-transverse-k
+reflection is checked here, with transmission and mixed-polarization power in
+``test_half_space_power.py``. Complex-transverse-k cases below check amplitudes only.
 """
 
 import numpy as np
@@ -66,13 +67,38 @@ def _kz(n, k_par):
     return v if v.imag > 0 else -v
 
 
+def _transverse_k(n, theta):
+    """Independent numerical inversion for real phase-angle illumination.
+
+    Complex angles retain their formal Snell parameterization. For absorbing
+    real-angle incidence, bracket the real transverse component using the
+    principal dispersion root and its phase direction, not the solver formula.
+    """
+    if np.imag(theta) != 0 or np.imag(n) == 0 or theta == 0:
+        return n * np.sin(theta)
+    target = abs(float(np.real(theta)))
+    eps = complex(n)**2
+    def phase_angle(beta):
+        return np.arctan2(beta, np.sqrt(eps - beta**2).real)
+    low, high = 0., 1.
+    while phase_angle(high) < target:
+        high *= 2
+    for _ in range(80):
+        mid = (low + high) / 2
+        if phase_angle(mid) < target:
+            low = mid
+        else:
+            high = mid
+    return np.copysign((low + high) / 2, np.real(theta))
+
+
 def analytic_r(ns, thicknesses, wavelength, theta, tetm):
     """Reflection coefficient of a uniform stack: ``ns = [n_top, *layers, n_bot]``.
 
     Airy recursion from the bottom interface up — the standard thin-film result, valid for
     complex (absorbing) indices as written.
     """
-    k_par = ns[0] * np.sin(theta)
+    k_par = _transverse_k(ns[0], theta)
     k = [_kz(n, k_par) for n in ns]
 
     def r_interface(i, j):
@@ -91,12 +117,12 @@ def analytic_r(ns, thicknesses, wavelength, theta, tetm):
 
 def solver_RT(ns, thicknesses, wavelength, theta, tetm, algo='ETM'):
     """Total ``(R, T)`` of the same stack through the solver (uniform layers, truncation_order=0)."""
-    structure = eps_from_index(np.array([[[n, n]] for n in ns[1:-1]]))
+    structure = eps_from_index(np.array([[[n, n]] for n in ns[1:-1][::-1]]))
     solver = wavebit.rcwa(backend=0, layer_algorithm=algo, tetm=tetm,
                            top=eps_from_index(ns[0]), bot=eps_from_index(ns[-1]),
                            theta=theta, truncation_order=0, wavelength=wavelength,
                            period=[wavelength * 2], structure=structure,
-                           thickness=thicknesses)
+                           thickness=thicknesses[::-1])
     res = solver.solve()
     return float(np.sum(res.R).real), float(np.sum(res.T).real)
 
@@ -213,12 +239,12 @@ def solver_R_analytic(ns, thicknesses, wavelength, theta, tetm):
     solve (the parametric path always does), so the polarization comes in as ``psi`` rather than
     ``tetm``, and the period must be 2D.
     """
-    structure = [dict(background=eps_from_index(n), shapes=[]) for n in ns[1:-1]]
+    structure = [dict(background=eps_from_index(n), shapes=[]) for n in ns[1:-1][::-1]]
     solver = wavebit.rcwa(backend=0, top=eps_from_index(ns[0]), bot=eps_from_index(ns[-1]),
                             theta=theta, phi=0.0,
                             psi=(np.pi / 2 if tetm == 'te' else 0.0), truncation_order=0,
                             wavelength=wavelength, period=[wavelength * 2, wavelength * 2],
-                            structure=structure, thickness=thicknesses)
+                            structure=structure, thickness=thicknesses[::-1])
     return float(np.sum(np.asarray(solver.solve().R)).real)
 
 
@@ -327,7 +353,7 @@ def test_complex_n_bot_keeps_full_precision_on_every_backend(backend):
     ns, ds = [1.0, 1.5, AU], [20.0]
     want = solver_R(ns, ds, WL, 0.3, 'te')                  # numpy reference
 
-    structure = eps_from_index(np.array([[[n, n] for n in ns[1:-1]]][0])[None])
+    structure = eps_from_index(np.array([[[n, n] for n in ns[1:-1][::-1]]][0])[None])
     solver = wavebit.rcwa(backend=backend, tetm='te', top=eps_from_index(ns[0]),
                            bot=eps_from_index(ns[-1]), theta=0.3,
                            truncation_order=2, wavelength=WL, period=[WL * 2], structure=structure,
@@ -358,7 +384,7 @@ def analytic_t(ns, thicknesses, wavelength, theta, tetm):
     Same conventions as :func:`analytic_r`; for TM the characteristic transfer works in the
     magnetic variable, so the last line converts its ratio back to an E-field one.
     """
-    k_par = ns[0] * np.sin(theta)
+    k_par = _transverse_k(ns[0], theta)
     k = [_kz(n, k_par) for n in ns]
 
     def eta(i):
@@ -385,10 +411,10 @@ def solver_amps(ns, thicknesses, wavelength, theta, tetm, path, algo='ETM'):
     exposed raw boundary variables instead, and this function carried the ``/(-i*n_top)``
     footnote that conversion now lives without.)
     """
-    layers = ns[1:-1]
+    layers = ns[1:-1][::-1]
     common = dict(backend=0, layer_algorithm=algo, top=eps_from_index(ns[0]),
                   bot=eps_from_index(ns[-1]), theta=theta,
-                  wavelength=wavelength, thickness=thicknesses)
+                  wavelength=wavelength, thickness=thicknesses[::-1])
     if path == '1d':
         solver = wavebit.rcwa(tetm=tetm, truncation_order=0, period=[wavelength * 2],
                                 structure=eps_from_index(
@@ -421,45 +447,36 @@ def test_reflection_amplitude(case, tetm, theta, path, algo):
     assert abs(got - want) < 1e-12, (got, want)
 
 
-def test_absorbing_superstrate_efficiency_is_convention_bound():
-    """With a complex ``n_top`` the TM efficiency differs *between paths* — by a known factor.
-
-    ``docs/conventions.md`` excludes efficiencies under an absorbing superstrate from the
-    contract because incident power there has no privileged definition. This test pins how
-    concretely that is true: the pure-1D path's TM efficiency equals ``|r_p|**2`` while the
-    coupled path weights by ``Re(kz/n**2)``, and at a real angle (where ``kz_inc`` equals
-    ``n_top*cos(theta)`` exactly) the two differ by ``|n_top|**2 * Re(n_top**-2)`` — the TE
-    factor being exactly 1. This spent a day masquerading as a 1.7e-2 solver-vs-reference
-    defect (audit §7, corrected 2026-08-12: 0.2207491559 * 0.9230769231 = 0.2037684516 to
-    all digits); pinning the factor is what keeps it from costing a second day. If a future
-    release *unifies* the normalization, this is the test that decision must consciously
-    rewrite — and the amplitudes, which agree across paths to 1e-15, must not move.
-    """
-    n_top, theta = 1.5 + 0.3j, 0.6
+@pytest.mark.parametrize('beta', [0., .5])
+@pytest.mark.parametrize('algo', ['ETM', 'SMM'])
+def test_absorbing_incident_reflectance_matches_airy(beta, algo):
+    """Each pure-p wave is normalized by its own incident power at the interface."""
+    n_top = 1.5 + 0.3j
+    theta = np.arcsin(beta / n_top)
     ns, ds = [n_top, 2.0, 1.0], [30.0]
 
     def eff(path):
         common = dict(backend=0, top=eps_from_index(ns[0]), bot=eps_from_index(ns[-1]),
-                      theta=theta, wavelength=WL, thickness=ds)
+                      theta=theta, wavelength=WL, thickness=ds, layer_algorithm=algo)
         if path == '1d':
             s = wavebit.rcwa(tetm='tm', truncation_order=0, period=[WL * 2],
                                structure=eps_from_index(
-                                   np.array([[[n, n]] for n in ns[1:-1]])), **common)
+                                   np.array([[[n, n]] for n in ns[1:-1][::-1]])), **common)
         else:
             s = wavebit.rcwa(phi=0.0, psi=0.0, truncation_order=[0, 0],
                                period=[WL * 2, WL * 2],
                                structure=eps_from_index(
-                                   np.array([[[n, n], [n, n]] for n in ns[1:-1]])), **common)
+                                   np.array([[[n, n], [n, n]] for n in ns[1:-1][::-1]])), **common)
         res = s.solve()
         return float(np.sum(np.asarray(res.R))), res
 
     R_1d, res_1d = eff('1d')
     R_2d, res_2d = eff('2d')
-    factor = abs(n_top) ** 2 * (1 / n_top ** 2).real
+    expected = abs(analytic_r(ns, ds, WL, theta, 'tm'))**2
 
     r_1d = complex(np.asarray(res_1d.given.r_p).ravel()[0])
-    assert R_1d == pytest.approx(abs(r_1d) ** 2, abs=1e-12)          # 1d: R == |r_p|^2
-    assert R_2d == pytest.approx(R_1d * factor, abs=1e-12)           # coupled: the factor
+    assert R_1d == pytest.approx(expected, abs=1e-12)
+    assert R_2d == pytest.approx(expected, abs=1e-12)
     r_2d = complex(np.asarray(res_2d.given.r_p).ravel()[0])
     assert abs(r_2d - r_1d) < 1e-12                                  # amplitudes agree
 

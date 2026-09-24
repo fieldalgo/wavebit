@@ -106,7 +106,7 @@ two-stage blend switches extension at the moment of contact, measured as a 1.1e-
 signed distance per shape and a product over the others, and a rectangle adds four blended faces
 on top, so building the field is far dearer than the sum of level-set gradients it replaced:
 31.9 ms to **378.6 ms** on a tilted-rectangle pair and 47.4 ms to **161.6 ms** on a circle pair,
-at the ``normal_grid`` of 1024 the solver defaults to. That is 12x and 3.4x, and it is the price
+at the ``shape_nvf_grid_size`` of 1024 the solver defaults to. That is 12x and 3.4x, and it is the price
 of the boundary exactness and the position gradient above rather than an accident -- but it was
 paid before it was counted, and it moves what is worth optimising: the field now costs 4-5x the
 three FFTs that transform it (0.36 s against 0.08 s at N = 1024), so the transform is not the
@@ -120,7 +120,7 @@ faster.
 **And what the pieces cost on top of that** (2026-09-06, measured after the fact again, by a
 verifier rather than by the commit). Every box layer is 2 to 4.5x the blend it replaced, since
 each face is evaluated at every instance of a size-only ring (13 per face on a lone 350 box, 21
-on the grating), and round shapes are unchanged. NumPy field build, best of 3, ``normal_grid``
+on the grating), and round shapes are unchanged. NumPy field build, best of 3, ``shape_nvf_grid_size``
 1024, against the base commit 8bfc6aa on the same machine: the lone 350 box 101.5 -> **285.8
 ms** (2.8x), the 350 x 700 grating 102.0 -> **463.2** (4.5x), the L box 97.2 -> 424.6, the B
 box on the sheared cell 200.0 -> 513.2 (its previous field was the refused one), two boxes
@@ -1755,7 +1755,7 @@ def check_dyadic_shapes(shapes):
     """Current complex shape projector support, shared by solve and freeze."""
     supported = _overlap._BOX_TYPES + _overlap._ELLIPSE_TYPES
     if any(s.get('type', 'rectangle') not in supported for s in shapes):
-        raise NotImplementedError("projector='circular' requires rectangles, circles or ellipses")
+        raise NotImplementedError("nvf_projector='circular' requires rectangles, circles or ellipses")
 
 
 def _reduced_cell_height(xp, reduced, dtype):
@@ -2233,7 +2233,7 @@ def _projector_cache_key(xp, built, grid_shape, lattice, half_width_u, half_widt
 
 
 def normal_projector_coeffs(xp, shapes, grid_shape, lattice, half_width_u, half_width_v,
-                            dtype, plan=None, projector=None):
+                            dtype, plan=None, nvf_projector=None):
     """Coefficient grids of the normal projector, in ``(xx, xy, yy[, yx])`` order.
 
     A real piece field supplies three symmetric components. Complex material inputs can
@@ -2241,7 +2241,7 @@ def normal_projector_coeffs(xp, shapes, grid_shape, lattice, half_width_u, half_
     with ``xy = normal_x * conj(normal_y)`` and ``yx = conj(xy)`` before Fourier sampling.
     Conjugate in real space, not on the coefficients after applying a translation phase.
 
-    With ``projector='circular'``, rectangular dyads supply four components in
+    With ``nvf_projector='circular'``, rectangular dyads supply four components in
     ``(xx, xy, yy, yx)`` order. Their cache entries are separate from linear
     fields; the same translation phase applies to every component.
 
@@ -2276,7 +2276,7 @@ def normal_projector_coeffs(xp, shapes, grid_shape, lattice, half_width_u, half_
     translation of the layer samples the same field at the same points and is restored exactly
     as ``exp(-i G.d)``. Before this the layer was sampled where it sat, and the un-phased
     coefficients of two disjoint boxes spread 1.074e-2 / 4.056e-3 / 1.592e-3 over sub-pixel
-    translations at ``normal_grid`` 64 / 128 / 256, ``sum(T)`` by 1.242e-3 / 6.395e-4 / 1.560e-4
+    translations at ``shape_nvf_grid_size`` 64 / 128 / 256, ``sum(T)`` by 1.242e-3 / 6.395e-4 / 1.560e-4
     (``studies/nvf_placement_spread.py``); both are at rounding now, as a lone shape's always
     were. The choice of the first shape is the caller's own spelling, like painting order, and
     it is the choice that moves no other invariant: naming any shape a period over shifts the
@@ -2296,8 +2296,8 @@ def normal_projector_coeffs(xp, shapes, grid_shape, lattice, half_width_u, half_
     shape's staircase moves against the grid when it moves, as it always did, and the
     coefficients keep a sampling ripple across a pixel. Measured against a 1024 reference on
     the same two boxes, the second one moved across one pixel: the error varies by 8.6e-3 at
-    ``normal_grid`` 64 and 1.2e-3 at 256, where the legitimate coefficient change over the same
-    move is 2.9e-4 / 2.6e-4. That ripple, and the sampling error itself, are what ``normal_grid``
+    ``shape_nvf_grid_size`` 64 and 1.2e-3 at 256, where the legitimate coefficient change over the same
+    move is 2.9e-4 / 2.6e-4. That ripple, and the sampling error itself, are what ``shape_nvf_grid_size``
     is for, since the field is still read off a grid.
 
     The unsampled alternative was measured and is not taken. Exact coefficients exist for a
@@ -2306,7 +2306,7 @@ def normal_projector_coeffs(xp, shapes, grid_shape, lattice, half_width_u, half_
     value step at every same-material merge. As two 250 x 300 boxes close from a gap of 20 to
     0.01, the blend's coefficients approach the merged box's (largest deviation 0.081 -> 0.027,
     reaching 0.024 at contact, which is case D's split-spelling residual) while the
-    nearest-point field's deviation plateaus at 0.086 at ``normal_grid`` 256 and again at 512:
+    nearest-point field's deviation plateaus at 0.086 at ``shape_nvf_grid_size`` 256 and again at 512:
     the gap face's Voronoi cell is a triangle of a quarter of the box that reads ``n = +-x``
     until the face dies. The pair records of :func:`_piece_field` exist to remove exactly that
     step, so the extension stays and only its sampling origin moved.
@@ -2333,7 +2333,7 @@ def normal_projector_coeffs(xp, shapes, grid_shape, lattice, half_width_u, half_
     ``grid_shape`` is checked against the ``4*truncation_order+1`` floor
     (:func:`~wavebit._core.factorization.check_normal_grid`). The boundary route has done that
     since it was written and this one did not, which was not a decision: at
-    ``truncation_order=10`` the two disagreed about ``normal_grid=8``, one refusing and the
+    ``truncation_order=10`` the two disagreed about ``shape_nvf_grid_size=8``, one refusing and the
     other building it 4.9e-4 adrift with energy conserved to twelve digits. The floor is a
     property of reading a field off a grid, not of which builder put it there.
     """
@@ -2378,17 +2378,17 @@ def normal_projector_coeffs(xp, shapes, grid_shape, lattice, half_width_u, half_
     # multi-shape slide rebuilds.) A lone shape's material sweep reuses it for the other reason:
     # its key holds no material because its build reads none; a multi-shape layer's key holds
     # every material since 2026-09-11 (the seam contrast reads them), so its sweeps rebuild.
-    # Measured on a five-point sweep at ``normal_grid = 1024``, ``truncation_order = 4``: the call
+    # Measured on a five-point sweep at ``shape_nvf_grid_size = 1024``, ``truncation_order = 4``: the call
     # 83% of the wall clock for one shape and 93% for six.
     if plan is None:
         plan = plan_gamma(built, lattice)
     key = _projector_cache_key(xp, built, grid_shape, lattice, half_width_u, half_width_v, dtype,
                                plan)
-    if projector == 'circular' and key is not None:
+    if nvf_projector == 'circular' and key is not None:
         key = ('dyadic-projector', key)
     coeffs = _PROJECTOR_CACHE.pop(key, None) if key is not None else None
     if coeffs is None:
-        if projector == 'circular':
+        if nvf_projector == 'circular':
             fields = dyadic_projector_fields(xp, grid_shape, built, real_dtype, lattice, plan=plan)
         else:
             normal_x, normal_y = normal_vector_field_analytical(xp, grid_shape, built,
@@ -2445,7 +2445,7 @@ def normal_projector_coeffs(xp, shapes, grid_shape, lattice, half_width_u, half_
 
 
 def to_conv_mat_parametric_nvf(xp, shapes, background, half_width_u, half_width_v, lattice, dtype,
-                           normal_grid=256, plan=None, projector=None):
+                           shape_nvf_grid_size=256, plan=None, nvf_projector=None):
     """The five 2D-solve convolution matrices for one parametric layer, via NVF.
 
     ``eps`` / ``1/eps`` come from the exact shape transform (no staircase); the normal
@@ -2463,8 +2463,8 @@ def to_conv_mat_parametric_nvf(xp, shapes, background, half_width_u, half_width_
     eps_c, inv_eps_c = assemble_eps_coeffs(xp, shapes, background, half_width_u,
                                            half_width_v, lattice, dtype)
     coeffs = normal_projector_coeffs(
-        xp, shapes, (normal_grid, normal_grid), lattice, half_width_u, half_width_v, dtype,
-        plan=plan, **({} if projector is None else {'projector': projector}))
+        xp, shapes, (shape_nvf_grid_size, shape_nvf_grid_size), lattice, half_width_u, half_width_v, dtype,
+        plan=plan, **({} if nvf_projector is None else {'nvf_projector': nvf_projector}))
     return nvf_from_coeffs(xp, eps_c, inv_eps_c, *coeffs[:3], half_width_u, half_width_v,
                            c_yx=coeffs[3] if len(coeffs) == 4 else None)
 
@@ -2636,8 +2636,8 @@ def _gamma_moved(held, fresh, shapes):
 
 
 def to_conv_mat_parametric_layers(layer_shapes, half_width_u, half_width_v, lattice,
-                              normal_grid=256, complex_dtype=None, xp=None,
-                              boundary_plans=None, gamma_plans=None, projector=None):
+                              shape_nvf_grid_size=256, complex_dtype=None, xp=None,
+                              boundary_plans=None, gamma_plans=None, nvf_projector=None):
     """Stack the parametric-NVF convolution matrices over layers.
 
     ``layer_shapes`` is one ``dict(background=..., shapes=[...])`` per layer, with the shapes'
@@ -2684,20 +2684,20 @@ def to_conv_mat_parametric_layers(layer_shapes, half_width_u, half_width_v, latt
             # the layer stays here -- exact, and cheaper.
             from .boundary import to_conv_mat_boundary_layer
             options = {}
-            if projector == 'circular':
+            if nvf_projector == 'circular':
                 if gamma_plans is not None:
                     check_gamma_plan_still_fits(layer, lattice, gamma, index,
-                                               dyadic=projector == 'circular')
+                                               dyadic=nvf_projector == 'circular')
                 if any(s.get('type', 'rectangle') in _overlap._ELLIPSE_TYPES
                        for s in layer.get('shapes', [])):
-                    options.update(projector='circular', projector_plan=gamma)
+                    options.update(nvf_projector='circular', projector_plan=gamma)
                 else:
                     options['projector_coeffs'] = normal_projector_coeffs(
-                        xp, layer.get('shapes', []), (normal_grid, normal_grid), lattice,
-                        half_width_u, half_width_v, dtype, plan=gamma, projector=projector)
+                        xp, layer.get('shapes', []), (shape_nvf_grid_size, shape_nvf_grid_size), lattice,
+                        half_width_u, half_width_v, dtype, plan=gamma, nvf_projector=nvf_projector)
             mats = to_conv_mat_boundary_layer(
                 xp, layer.get('shapes', []), background, half_width_u, half_width_v, lattice,
-                dtype, normal_grid=normal_grid, plan=plan, **options)
+                dtype, shape_nvf_grid_size=shape_nvf_grid_size, plan=plan, **options)
         else:
             # Reaching this branch means the shapes are disjoint, so the summing this
             # builder does is the painted structure. `assemble_eps_coeffs` re-checks that --
@@ -2710,11 +2710,11 @@ def to_conv_mat_parametric_layers(layer_shapes, half_width_u, half_width_v, latt
             # a message about this builder rather than about the stale record.
             if gamma_plans is not None:
                 check_gamma_plan_still_fits(layer, lattice, gamma, index,
-                                               dyadic=projector == 'circular')
+                                               dyadic=nvf_projector == 'circular')
             mats = to_conv_mat_parametric_nvf(
                 xp, layer.get('shapes', []), background, half_width_u, half_width_v, lattice,
-                dtype, normal_grid=normal_grid, plan=gamma,
-                **({} if projector is None else {'projector': projector}))
+                dtype, shape_nvf_grid_size=shape_nvf_grid_size, plan=gamma,
+                **({} if nvf_projector is None else {'nvf_projector': nvf_projector}))
         for slot, m in zip(out, mats):
             slot.append(m)
 

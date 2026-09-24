@@ -1,75 +1,27 @@
-"""Single-source near-field reconstruction.
+"""Near-field reconstruction in a propagation frame, restored to public xyz by the engine.
 
-Fields come back in the same ``e^{-iωt}`` convention as everything else (see
-:mod:`wavebit._core.conventions`): a wave travelling in ``+z`` carries ``exp(+i*k0*kz*z)``,
-and the in-plane kernel matches the order-index sign the convolution matrices are built with.
+Public coordinates are right-handed: +z points up, z=0 is the bottom interface, and
+layers and count-based field samples run bottom-to-top. Raster row 0 is the negative-y
+edge; explicit xy samples are measured from the cell centre. The time convention is
+exp(-i omega t), so positive-z propagation has exp(+i k0 kz z).
 
-Axes follow the array, not the picture: row ``0`` of the returned cell is ``y = 0``, the same
-row of ``structure`` that the factorization reads as ``y = 0``. Turning that into a conventional
-image is :func:`plot_field`'s job, and it flips there.
+These private routines traverse the state in the incident propagation frame. Its entry
+face is local z=0. For illumination from the public top, the engine maps explicit heights
+to H-z and restores the returned components with the polar-E/axial-H mirror parity.
+Count-based z samples are then reversed into increasing public height; explicit samples
+remain in the caller's order. Material tensors are mirrored by the solve, including their
+xz/yz/zx/zy entries. Public x and y, raster coordinates and lattice vectors are unchanged.
 
-**The vector components are in the library's own frame, where ``+z`` points down, into the
-stack** (``docs/conventions.md``) — the same ``+z`` the phase, the layer order and the
-``Im(kz) > 0`` decay rule are stated against. Until 2026-08-14 they were not: every path
-returned ``E_z``, ``H_x`` and ``H_y`` with the opposite sign.
+A count includes both faces of each layer, hence both limits of an internal interface.
+Explicit heights choose the upper layer's limit, independent of incidence side. The engine
+passes the corresponding ``interface_side`` to the local bucketing operation. Explicit z
+requires concrete thicknesses; count-based sampling remains differentiable.
 
-It is worth being precise about what that was, because it was not an undeclared convention.
-``docs/formulation.md`` §1 already carried the answer as its sanity anchor — a vacuum wave
-``E = y exp(i k0 z)`` travelling ``+z`` has ``Hx = -exp(i k0 z)``, the pair ``(Ey, Hx) =
-(1, -kz)`` — and ``tests/test_anisotropic_berreman.py::_vacuum_modes`` writes that pair, and
-:mod:`wavebit._core.solve_2d_4ff` derives in it. The formulation, the oracle and the solver
-agreed; **only this module disagreed with them.** Measured on a three-layer slab at 33
-degrees, the curl-equation residual was 2.8 as shipped and 8.0e-4 (converging like the step)
-once the parity was undone, and a vacuum slab returned a Poynting vector pointing back out of
-the stack.
-
-The three signs are applied at each entry point below rather than in the mode algebra, because
-the mode algebra is shared with the solve and the solve was never wrong. Pinned by
-``tests/test_field_core.py::test_every_path_returns_a_maxwell_field_in_the_declared_frame``
-(the curl equations and their convergence rate) and, for the first time on this subsystem, by
-an outside solver: ``tests/references/test_s4_field_golden.py`` agrees with S4 entry for entry
-at ~1e-15 on uniform stacks, on every path.
-
-Three more outside opinions have arrived since, and they divide by path.
-``test_fmmax_field_golden.py`` reaches a *patterned* layer through the coupled 2D route, at
-~1e-4. ``test_reticolo_field_golden.py`` covers :func:`field_1d` specifically — the pure TE/TM
-layouts, which neither of the other two exercises — at 6.3e-14 on gratings, two-layer stacks
-and absorbing ones alike, with no fitted amplitude.
-``test_reticolo_conical_field_golden.py`` does the same for :func:`field_1d_conical` on a
-patterned layer, at 9.8e-14, under the *same* frame transform — which is itself the result, the
-coupled path carrying no frame quirk of its own. Both share one exception: the field component
-normal to the grating's vertical interfaces (TM's ``E_x``, and ``E_x`` again in the conical
-layout) is discontinuous there and resolved differently by any two truncations.
-
-Turns a solved stack back into the field inside it. Each layer's mode amplitudes are
-propagated to a set of z-slices, then inverse-Fourier-transformed onto an (x, y) grid.
-
-**Where it is sampled is the caller's choice.** ``sample_x`` / ``sample_y`` / ``sample_z`` each
-take either a count — the uniform grid this has always used, unchanged and bit-identical — or
-the coordinates themselves, as a 1-D array. Nothing here has grid structure to respect: the
-transverse kernel is a pointwise ``exp(i k.r)`` and each z-slice is an independent propagation,
-so arbitrary points cost the same per point as grid ones and need no interpolation. Refining a
-grid leaves the shared points bit-identical, which is what says the sampling is genuinely
-pointwise rather than merely appearing to be.
-
-Explicit ``sample_x`` / ``sample_y`` are lengths in ``period``'s units, measured from the
-**centre of the cell** (the origin a parametric shape's ``cx`` uses), and are unconstrained —
-unsorted, non-uniform and outside the cell are all fine, the last being a periodic
-continuation. A count spans the cell, which in that frame is ``[-period/2, +period/2]``.
-Explicit ``sample_z`` is absolute, measured from the **top of the stack**, and is
-the one with rules: it must lie within the stack, an interface belongs to the layer below it,
-and the layer thicknesses have to be concrete. :func:`_z_plan` states each of those and why.
-
-Inputs are the ``layer_info_list`` and ``T1`` the solve leaves behind — see
-:mod:`wavebit._core.solve_1d`. Layers arrive bottom-to-top and are walked in reverse, so the
-returned cell runs top-to-bottom in z.
-
-The entry points mirror the solve paths: :func:`field_1d` (pure TE/TM, 3 field components),
-:func:`field_1d_conical` and :func:`field_2d` (coupled s/p, 6 components, with a leading axis
-selecting the incidence variants named by ``incidences``), and
-:func:`field_2d_4ff` for the first-order path, which carries a different per-layer state and a
-different ``E_z``. ``reconstruct_field`` picks between the last two on the *formulation*, not on
-the grating type — the first-order path sets that to 2 as well.
+The pure TE/TM layouts carry three components, coupled layouts six. The first-order path
+already reconstructs a Cartesian Maxwell field; the second-order paths apply the parity
+required by their internal mode variables. This algebraic conversion is separate from the
+propagation-frame restoration in the engine. See tests/test_vertical_coordinates.py for
+independent plane-wave phase, curl and flux checks on every path and backend.
 """
 import numpy as _np
 
@@ -185,37 +137,31 @@ def to_mirrored_z(sample_z, thickness):
     if is_count(sample_z):
         return sample_z
     try:
-        total = float(_np.sum(_np.asarray(thickness, dtype=float)))
+        ds = _np.asarray(thickness, dtype=float)
+        edges = _np.concatenate([[0.0], _np.cumsum(ds)])
+        total = edges[-1]
     except Exception:
         return sample_z
-    return total - _np.asarray(sample_z, dtype=float)
+    z = _np.asarray(sample_z, dtype=float)
+    if z.size and (_np.min(z) < -1e-9 or _np.max(z) > total + 1e-9):
+        raise ValueError(
+            f'z coordinates must lie inside the stack, 0 to {total:g} measured upward '
+            f'from its bottom; got {_np.min(z):g} to {_np.max(z):g}.')
+    mirrored = total - z
+    # A cumulative sum from the other end can differ by one ulp. Preserve the
+    # side of an exact interface instead of assigning its discontinuous Ez/Hz
+    # to a different material because of that rounding.
+    reverse_edges = _np.concatenate([[0.0], _np.cumsum(ds[::-1])])
+    for i, edge in enumerate(edges):
+        mirrored = _np.where(z == edge, reverse_edges[len(ds) - i], mirrored)
+    return mirrored
 
 def to_scene_frame(cell, pure_1d, tetm_index=None, flip_z=True):
-    """A backside cell, put back into scene coordinates -- both axis and components.
+    """Restore a reversed propagation frame to public xyz.
 
-    A backside solve *is* the top-side solve of the z-mirrored scene
-    (:func:`~wavebit._core.solve_1d._mirrored_scene`), so everything it leaves behind is
-    expressed in that mirror. Returning it as-is would make ``incidence_side`` change the frame
-    the answer is written in, which is the one thing the scene labels promise it does not:
-    index 0 of the z axis is the top of ``structure[0]`` whichever side the light came from.
-
-    Two halves, and the second was missing until 2026-08-22. Reversing the z axis is the
-    obvious one. The other is that ``z -> -z`` is *improper*, so the field components do not
-    all follow the coordinates: see :data:`_MIRROR_PARITY`. Without it a backside cell comes
-    back with ``E_z``, ``H_x`` and ``H_y`` negated -- which conserves energy, leaves every
-    efficiency untouched, and reverses the net Poynting vector. Measured on a TE grating lit
-    from below: ``S_z`` came back ``+0.343`` where the light travels upward and it must be
-    negative, bit-identical to the top-side solve rather than its mirror.
-
-    The parity is the same vector the reconstructions already apply once to reach the library's
-    declared frame (``+z`` down, see the module docstring). That is not a coincidence and not a
-    double-application: both are mirrors in ``z``, and this one composes on top of a cell that
-    is already in the declared frame.
-
-    ``flip_z`` is false when the caller asked for explicit coordinates. Those were restated in
-    the mirror's frame on the way in (:func:`to_mirrored_z`) and come back in the caller's own
-    order, so there is no axis left to reverse -- only the components. A count did not move on
-    the way in, and its axis is what carries the reversal.
+    E is polar, H axial under z -> H-z, giving the component parity below. This
+    branch is used for public top incidence. Counts also need their z axis reversed;
+    explicit heights were mapped before reconstruction and retain the requested order.
     """
     xp = array_namespace(cell)
     which = 'coupled' if not pure_1d else ('te' if tetm_index == 0 else 'tm')
@@ -395,7 +341,7 @@ def _z_slices(xp, sample_z, d, C, dev=None):
     return xp.reshape(_z_1d(xp, sample_z, d, C, dev), (-1, 1, 1))
 
 
-def _z_plan(sample_z, layer_info_list, d_index):
+def _z_plan(sample_z, layer_info_list, d_index, interface_side='right'):
     """Turn a z request into per-layer local samples, in the order the layers are walked.
 
     ``d_index`` is where the thickness sits in one layer's entry, which differs by path and is
@@ -409,19 +355,19 @@ def _z_plan(sample_z, layer_info_list, d_index):
     and otherwise the permutation that puts the concatenated layers back into the caller's
     order.
 
-    **A count means what it always did**: every layer gets ``sample_z`` samples inclusive of both
-    faces, and the layers concatenate, so the z axis is ``sample_z * n_layers`` long and every
-    internal interface appears twice — once as one layer's bottom, once as the next layer's
-    top. Nothing about that path changes.
+    A count gives each layer ``sample_z`` samples inclusive of both faces when the count is
+    at least two. Layers concatenate, so internal interfaces appear twice, with each layer's
+    own limiting value. A count of one selects each layer's lower public face on either
+    incidence side.
 
-    **Explicit coordinates are absolute and measured from the top of the stack**, and the
+    **Explicit coordinates are local to the propagation frame, from its entry face**, and the
     returned z axis is exactly as long as the request, in the caller's order. Three rules,
     which are choices rather than consequences:
 
-    * A point is assigned to the layer whose span contains it, half-open ``[top, bottom)``, so
-      an internal interface belongs to the layer *below* it. This only matters for ``E_z``,
-      which is genuinely two-valued there; ask for ``z - eps`` to get the other limit.
-    * The bottom face of the last layer is included, so the closed end of the stack is
+    * A point is assigned to the layer whose span contains it, half-open ``[start, end)`` when ``interface_side="right"``;
+      ``"left"`` chooses the other limit for a reversed propagation frame. The normal fields
+      ``E_z`` and ``H_z`` can have different limiting values across a material interface.
+    * The exit face of the last layer is included, so the closed end of the stack is
       reachable.
     * A point outside the stack is an error, not an extrapolation. The reconstruction only
       knows the layers — the half-spaces above and below carry different mode sets that this
@@ -434,11 +380,21 @@ def _z_plan(sample_z, layer_info_list, d_index):
     """
     _check_spec(sample_z, 'sample_z')
     if is_count(sample_z):
+        if sample_z == 1 and interface_side == 'left':
+            # A reversed frame starts at the upper face. Keep the one-point grid at
+            # the lower public face, including when thickness is traced by AD.
+            per_layer = []
+            for entry in layer_info_list[::-1]:
+                modes = entry[1]  # mode basis in both the 2ff and 4ff layouts
+                xp = array_namespace(modes)
+                d = xp.asarray(entry[d_index], device=_dev(modes))
+                per_layer.append(xp.reshape(d, (1,)))
+            return per_layer, None
         return [sample_z] * len(layer_info_list), None
 
     z_req = _np.asarray(sample_z, dtype=float).reshape(-1)
     ds = []
-    for entry in layer_info_list[::-1]:          # walk order: top of the stack first
+    for entry in layer_info_list[::-1]:          # propagation-frame entry first
         d = entry[d_index]
         try:
             ds.append(float(d))
@@ -453,13 +409,12 @@ def _z_plan(sample_z, layer_info_list, d_index):
     total = edges[-1]
     if z_req.size and (z_req.min() < -1e-9 or z_req.max() > total + 1e-9):
         raise ValueError(
-            f'z coordinates must lie inside the stack, 0 to {total:g} measured from its top; '
+            f'z coordinates must lie inside the stack, 0 to {total:g} measured from the propagation-frame entry; '
             f'got {z_req.min():g} to {z_req.max():g}. The half-spaces outside carry mode sets '
             'this reconstruction does not hold.')
 
-    # `right=False` gives the half-open [top, bottom) rule; the -1 turns a boundary hit into
-    # the layer below it, and the clip puts the stack's closed bottom face on the last layer.
-    owner = _np.clip(_np.searchsorted(edges, z_req, side='right') - 1, 0, len(ds) - 1)
+    # Select the appropriate interface limit and keep the closed outer faces in the stack.
+    owner = _np.clip(_np.searchsorted(edges, z_req, side=interface_side) - 1, 0, len(ds) - 1)
 
     per_layer, order = [], []
     for k in range(len(ds)):
@@ -504,7 +459,7 @@ def refuse_extra_incidences(incidences):
         f'all three for one extra solve.')
 
 def field_1d(wavelength, kx, T1, layer_info_list, lattice, tetm_index,
-             sample_x=20, sample_y=1, sample_z=20, incidences=('given',)):
+             sample_x=20, sample_y=1, sample_z=20, incidences=('given',), interface_side='right'):
     """Field of a pure TE/TM 1D stack.
 
     Returns ``(nz, sample_y, sample_x, 3)``, where ``nz`` is ``sample_z * n_layers`` for a count
@@ -522,7 +477,7 @@ def field_1d(wavelength, kx, T1, layer_info_list, lattice, tetm_index,
     n_orders = kx.shape[0]
     Kx = xp.diag(kx)
 
-    z_per_layer, unshuffle = _z_plan(sample_z, layer_info_list, 4)
+    z_per_layer, unshuffle = _z_plan(sample_z, layer_info_list, 4, interface_side)
 
     T_layer = T1
     cells = []
@@ -588,7 +543,7 @@ def field_1d(wavelength, kx, T1, layer_info_list, lattice, tetm_index,
 
 
 def _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice, sample_x, sample_y,
-                   sample_z, incidences, conical):
+                   sample_z, incidences, conical, interface_side):
     """Shared body of the conical and 2D reconstructions.
 
     They differ only in how the layer's mode matrices assemble into ``(Sx, Sy, Ux, Uy)``; the
@@ -636,7 +591,7 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice, sample_x, s
     T_layer = xp.take(T1, xp.asarray(keep, device=dev), axis=0)
     big_I = xp.eye(T1.shape[1], dtype=C, device=dev)
 
-    z_per_layer, unshuffle = _z_plan(sample_z, layer_info_list, 4)
+    z_per_layer, unshuffle = _z_plan(sample_z, layer_info_list, 4, interface_side)
 
     cells = []
     for spec, (epz_conv_i, W, V, q, d, big_A_i, big_B, muz_conv_i) in zip(
@@ -700,7 +655,7 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice, sample_x, s
 
 
 def field_2d_4ff(wavelength, kx, ky, T1, layer_info_list, lattice,
-                 sample_x=20, sample_y=20, sample_z=20, incidences=('given',)):
+                 sample_x=20, sample_y=20, sample_z=20, incidences=('given',), interface_side='right'):
     """Field of a stack solved on the first-order (4ff) path. Same shape as :func:`field_2d`.
 
     The transverse half is *simpler* than the second-order reconstruction, not harder. There
@@ -734,7 +689,7 @@ def field_2d_4ff(wavelength, kx, ky, T1, layer_info_list, lattice,
 
     The returned components are ``(Ex, Ey, Ez, Hx, Hy, Hz)``, matching :func:`field_2d`. This
     path needs **no** parity at the output, and it is the only one that does not:
-    :mod:`wavebit._core.solve_2d_4ff` already derives everything with ``+z`` down along the
+    :mod:`wavebit._core.solve_2d_4ff` already derives everything with ``+z`` along the
     propagation direction — which is what makes ``Im(lam_f) >= 0`` mean "does not grow" — and
     that is the library's declared frame. The state vector is therefore already in it.
 
@@ -762,7 +717,7 @@ def field_2d_4ff(wavelength, kx, ky, T1, layer_info_list, lattice,
     keep = incidence_indices(incidences)
     T_layer = xp.take(T1, xp.asarray(keep, device=dev), axis=0)
 
-    z_per_layer, unshuffle = _z_plan(sample_z, layer_info_list, 5)
+    z_per_layer, unshuffle = _z_plan(sample_z, layer_info_list, 5, interface_side)
 
     cells = []
     for spec, (eps, psi_f, lam_f, psi_b, lam_b, d, P_i, QP_i) in zip(z_per_layer,
@@ -786,6 +741,9 @@ def field_2d_4ff(wavelength, kx, ky, T1, layer_info_list, lattice,
         Hx, Hy = psi[:, :, 2 * n_orders:3 * n_orders], psi[:, :, 3 * n_orders:]
         Ez = eps['ezz_i'] @ (Ky @ Hx - Kx @ Hy - eps['ezx'] @ Ex - eps['ezy'] @ Ey)
         Hz = Kx @ Ey - Ky @ Ex
+        if eps.get('mu_blocks') is not None:
+            mu = eps['mu_blocks']
+            Hz = mu['ezz_i'] @ (Hz - mu['ezx'] @ Hx - mu['ezy'] @ Hy)
 
         inv_f = _inv_fourier(xp, kx, ky, lattice, sample_x, sample_y, k0, C)[:, :, None, :]
         # No parity here, deliberately: the 4ff state vector is already in the declared frame.
@@ -800,23 +758,23 @@ def field_2d_4ff(wavelength, kx, ky, T1, layer_info_list, lattice,
 
 
 def field_1d_conical(wavelength, kx, ky, T1, layer_info_list, lattice,
-                     sample_x=20, sample_y=20, sample_z=20, incidences=('given',)):
+                     sample_x=20, sample_y=20, sample_z=20, incidences=('given',), interface_side='right'):
     """Field of a general 1D (conical) stack. ``(n_selected, nz, sample_y, sample_x, 6)``.
 
     ``nz`` is ``sample_z * n_layers`` for a count, ``len(sample_z)`` for explicit coordinates.
     """
     return _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice,
-                          sample_x, sample_y, sample_z, incidences, conical=True)
+                          sample_x, sample_y, sample_z, incidences, conical=True, interface_side=interface_side)
 
 
 def field_2d(wavelength, kx, ky, T1, layer_info_list, lattice,
-             sample_x=20, sample_y=20, sample_z=20, incidences=('given',)):
+             sample_x=20, sample_y=20, sample_z=20, incidences=('given',), interface_side='right'):
     """Field of a 2D stack. ``(n_selected, nz, sample_y, sample_x, 6)``.
 
     ``nz`` is ``sample_z * n_layers`` for a count, ``len(sample_z)`` for explicit coordinates.
     """
     return _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice,
-                          sample_x, sample_y, sample_z, incidences, conical=False)
+                          sample_x, sample_y, sample_z, incidences, conical=False, interface_side=interface_side)
 
 
 def plot_field(field_cell, tetm_index=0, plot_indices=(1, 1, 1, 1, 1, 1), y_slice=0, z_slice=-1,
@@ -849,11 +807,8 @@ def plot_field(field_cell, tetm_index=0, plot_indices=(1, 1, 1, 1, 1, 1), y_slic
             if not plot_indices[idx]:
                 continue
             image = abs(field_cell[sl + (slice(None), idx)]) ** 2
-            if ylabel == 'Y':
-                # the cell's y runs with the array index; an image reads top-down, so the
-                # flip that used to live in the reconstruction lives here instead
-                image = image[::-1]
-            plt.imshow(image, cmap='jet', aspect='auto')
+            # Both y and z increase with the returned array index.
+            plt.imshow(image, origin='lower', cmap='jet', aspect='auto')
             plt.colorbar()
             plt.title(f'{name}, {view}')
             plt.xlabel('X')

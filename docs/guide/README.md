@@ -39,6 +39,7 @@ be runnable as written.
 | Page | Question it answers |
 | --- | --- |
 | [`scene.md`](scene.md) | What is the stack made of, and what cell does it repeat in? |
+| [`materials.md`](materials.md) | How do constants and dispersion tables behave in a wavelength sweep? |
 | [`light.md`](light.md) | Which polarization arrives, on which orders, from which side? |
 | [`numerics.md`](numerics.md) | Which factorization and normal field, and what do they cost? |
 | [`nvf-method-selection.md`](nvf-method-selection.md) | How do I explicitly choose ordinary NVF, turn NVF off, or select the experimental auxiliary solver? |

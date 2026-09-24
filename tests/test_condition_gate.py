@@ -92,8 +92,8 @@ def test_the_stack_gate_names_each_violation(over, fragment):
     (dict(truncation_order=-3), 'cannot be negative'),
     (dict(truncation_order=2.7), 'whole number'),
     (dict(complex_dtype=32), '128 or 64'),
-    (dict(normal_grid=-7), 'normal_grid'),
-    (dict(normal_grid=0), 'normal_grid'),
+    (dict(shape_nvf_grid_size=-7), 'shape_nvf_grid_size'),
+    (dict(shape_nvf_grid_size=0), 'shape_nvf_grid_size'),
 ])
 def test_the_numerics_gate_names_each_violation(kw, fragment):
     problems = Numerics(**kw).check()
@@ -202,12 +202,12 @@ def test_the_gate_is_stricter_than_the_solver_here_and_that_is_recorded(name, ov
 
 @pytest.mark.parametrize('factorization', ['li', 'nvf'])
 def test_normal_grid_is_refused_where_nothing_reads_it(factorization):
-    """The sibling of ``normal_method``'s refusal, and the asymmetry was not a decision.
+    """The sibling of ``raster_normal_method``'s refusal, and the asymmetry was not a decision.
 
-    ``normal_grid`` sizes the grid the *shape* paths sample their analytic normal field on. A
+    ``shape_nvf_grid_size`` sizes the grid the *shape* paths sample their analytic normal field on. A
     raster builds its field at the raster's own resolution, lifted to the
     ``4*truncation_order+1`` floor, so the keyword changes nothing there -- measured, 64 and
-    4096 gave ``0.898147036010`` both times, under Li *and* under NVF. ``normal_method`` has
+    4096 gave ``0.898147036010`` both times, under Li *and* under NVF. ``raster_normal_method`` has
     been refused where unread since it was added; this one was accepted and ignored.
 
     More urgently than for its sibling, in fact: this keyword's own comment in the ``rcwa``
@@ -224,13 +224,13 @@ def test_normal_grid_is_refused_where_nothing_reads_it(factorization):
                top=1.0, bot=1.0, wavelength=900.0, psi=np.pi / 2, theta=0.0, phi=0.0,
                factorization=factorization)
 
-    with pytest.raises(NotImplementedError, match='normal_grid'):
-        wavebit.rcwa(structure=raster, normal_grid=256, **cfg).solve()
+    with pytest.raises(NotImplementedError, match='shape_nvf_grid_size'):
+        wavebit.rcwa(structure=raster, shape_nvf_grid_size=256, **cfg).solve()
 
     # the default is not a request, and a shape layer reads it
     assert float(np.sum(np.asarray(wavebit.rcwa(structure=raster, **cfg).solve().T))) > 0.0
     shapes = [dict(background=1.0, shapes=[dict(type='circle', cx=0.0, cy=0.0, lx=140.0,
                                                 material=4.0)])]
     assert float(np.sum(np.asarray(wavebit.rcwa(
-        structure=shapes, normal_grid=256,
+        structure=shapes, shape_nvf_grid_size=256,
         **dict(cfg, factorization='nvf')).solve().T))) > 0.0

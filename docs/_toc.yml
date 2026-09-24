@@ -11,7 +11,9 @@ subtrees:
     - caption: Fundamentals and usage
       entries:
       - file: guide/scene
+      - file: guide/materials
       - file: guide/light
+      - file: coherent-illumination
       - file: guide/numerics
       - file: guide/nvf-method-selection
       - file: guide/conforming-nvf
@@ -51,6 +53,9 @@ subtrees:
       - file: five-slot-limit
       - file: anisotropic-materials
       - file: patterned-anisotropic-factorization
+      - file: tensor-li-factorization
+      - file: full-tensor-patterns
+      - file: tensor-shape-integration
       - file: magnetic-materials
     - caption: NVF construction and validation
       entries:
@@ -128,6 +133,7 @@ subtrees:
       - file: rayleigh-points
       - file: rayleigh-handling-walkthrough
       - file: time-convention-audit
+      - file: half-space-power-audit
     - caption: Performance and tooling
       entries:
       - file: backend-choice

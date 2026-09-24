@@ -60,24 +60,28 @@ IDS = [f'{p}_theta{t}' for p, t in INCIDENCE]
 
 # A 1D grating stack that is asymmetric in z, with an absorbing layer, so nothing about it
 # can hide a side mix-up: two patterned layers of different duty cycle and index.
-_GRATING = eps_from_index(np.array([[[3.0] * 6 + [1.0] * 6],
-                                    [[2.2 + 0.3j] * 8 + [1.0] * 4]]))
+_GRATING = eps_from_index(np.array([
+    [[2.2 + 0.3j] * 8 + [1.0] * 4],
+    [[3.0] * 6 + [1.0] * 6],
+]))
 #: The substrate's index, kept beside its permittivity: the reciprocity angle below is a
 #: Snell relation and needs the index, while the constructor takes the square.
 N_SUB = 2.0
 GRATING_KW = dict(backend=0, top=1.0, bot=eps_from_index(N_SUB), truncation_order=10, period=[0.7],
-                  wavelength=0.85, structure=_GRATING, thickness=[0.15, 0.22])
+                  wavelength=0.85, structure=_GRATING, thickness=[0.22, 0.15])
 
-_GRATING_LOSSLESS = eps_from_index(np.array([[[3.0] * 6 + [1.0] * 6],
-                                             [[2.2] * 8 + [1.0] * 4]]))
+_GRATING_LOSSLESS = eps_from_index(np.array([
+    [[2.2] * 8 + [1.0] * 4],
+    [[3.0] * 6 + [1.0] * 6],
+]))
 
 
 def _solver(ns, ds, theta, tetm, path, algo, side):
     """A solver on the *scene* ``ns`` (top..bottom), illuminated from ``side``."""
-    layers = ns[1:-1]
+    layers = ns[1:-1][::-1]
     common = dict(backend=0, layer_algorithm=algo, top=eps_from_index(ns[0]),
                   bot=eps_from_index(ns[-1]), theta=theta,
-                  wavelength=WL, thickness=ds, incidence_side=side)
+                  wavelength=WL, thickness=ds[::-1], incidence_side=side)
     if path == '1d':
         return wavebit.rcwa(tetm=tetm, truncation_order=0, period=[WL * 2],
                               structure=eps_from_index(
@@ -236,7 +240,7 @@ MIRROR_1D = {'te': np.array([1.0, -1.0, 1.0]),      # (Ey, Hx, Hz)
 
 def _reversed_scene_kw(kw):
     """The same stack written upside down, to be lit from the top."""
-    return dict(kw, structure=GRATING_KW['structure'][::-1], thickness=[0.22, 0.15],
+    return dict(kw, structure=GRATING_KW['structure'][::-1], thickness=GRATING_KW['thickness'][::-1],
                 top=GRATING_KW['bot'], bot=GRATING_KW['top'])
 
 
@@ -264,7 +268,7 @@ def test_field_cell_comes_back_in_scene_coordinates(algo, tetm):
 
 
 @pytest.mark.parametrize('tetm', ['te', 'tm'])
-@pytest.mark.parametrize('side,sign', [('top', +1.0), ('bottom', -1.0)])
+@pytest.mark.parametrize('side,sign', [('top', -1.0), ('bottom', +1.0)])
 def test_net_power_flows_away_from_the_lit_face(side, sign, tetm):
     """``S_z`` points into the stack from whichever face is lit — the sign the mirror decides.
 

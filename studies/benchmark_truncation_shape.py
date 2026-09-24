@@ -237,9 +237,9 @@ def solve_flat(mm, nn, epx, epy, epz_i, epxy, epyx, wavelength, period, thicknes
 
     # n_orders_u = n_orders, n_orders_v = 1: the flat set *is* the layout. The incident delta lands at
     # n_orders // 2, which is the zero order for both shapes (see circular_select).
-    R, T = final_matching(xp, C128, big_F, big_G, big_T, kz_top, kz_bot,
+    R, T, _ = final_matching(xp, C128, big_F, big_G, big_T, kz_top, kz_bot,
                           amplitude_pair(psi), theta,
-                          n_top, n_bot, n_orders, 1, answers='efficiency')
+                          n_top, n_bot, n_orders, 1, answers='efficiency', kx=kx, ky=ky)
 
     return R.flatten(), T.flatten(), kz_top, kz_bot
 
@@ -362,7 +362,7 @@ def selftest():
     # flat solver vs the production NVF path, on a rectangular set
     structure = eps[None, :, :]
     epx, epy, epz_i, epxy, epyx = to_conv_mat_raster_nvf(structure, truncation_order, truncation_order)
-    de_ri_ref, de_ti_ref = _core_solve_2d(truncation_order, epx, epy, epz_i, epxy, epyx)
+    de_ri_ref, de_ti_ref, _ = _core_solve_2d(truncation_order, epx, epy, epz_i, epxy, epyx)
 
     nf = normal_vector_field(eps)
     r = run_one(eps, nf, mm, nn, np.ones(mm.shape, bool), (truncation_order, truncation_order), 'nvf')

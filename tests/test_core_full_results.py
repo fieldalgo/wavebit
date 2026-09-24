@@ -42,8 +42,10 @@ def test_solve_1d_full_result_matches_legacy(tetm):
               period=[0.77], wavelength=0.777, thickness=[0.15],
               structure=np.array([[[9., 9., 9., 1., 1., 1.]]]))
     solver, legacy, conv, kx, _ = _setup(**kw)
-    got = solve_1d(solver.tetm_index, kw['wavelength'], kx, solver.n_top, solver.n_bot, solver.theta,
-                   solver.thickness, *conv, answers='amplitude')
+    got = solve_1d(solver.tetm_index, kw['wavelength'], kx, solver.n_bot, solver.n_top, solver.theta,
+                   solver.thickness, *conv, answers='amplitude',
+                   incidence_side=solver._kernel_incidence_side,
+                   eps_top=kw['bot'], eps_bot=kw['top'])
     _assert_all_fields(legacy.given, got['given'])
 
 
@@ -63,9 +65,11 @@ def test_conical_and_2d_full_result_matches_legacy(case):
     solver, legacy, conv, kx, ky = _setup(**kw)
 
     solve_fn = solve_1d_conical if name == 'conical' else solve_2d
-    args = ([kw['wavelength'], kx, ky, solver.n_top, solver.n_bot, solver.theta, solver._incidence_pair(),
+    args = ([kw['wavelength'], kx, ky, solver.n_bot, solver.n_top, solver.theta, solver._incidence_pair(),
              solver.thickness] + list(conv))
-    got = solve_fn(*args, phi=solver.phi, answers='amplitude')
+    got = solve_fn(*args, phi=solver.phi, answers='amplitude',
+                   incidence_side=solver._kernel_incidence_side,
+                   eps_top=kw['bot'], eps_bot=kw['top'])
 
     # all three incidence variants, every field
     _assert_all_fields(legacy.given, got['given'])
@@ -79,11 +83,13 @@ def test_amplitude_rung_is_consistent_with_efficiency_rung():
               period=[1.0, 1.0], wavelength=0.9, thickness=[0.2],
               structure=np.random.default_rng(2).uniform(1, 4, (1, 5, 5)) ** 2)
     solver, _, conv, kx, ky = _setup(**kw)
-    args = [kw['wavelength'], kx, ky, solver.n_top, solver.n_bot, solver.theta,
+    args = [kw['wavelength'], kx, ky, solver.n_bot, solver.n_top, solver.theta,
             solver._incidence_pair(),
             solver.thickness] + list(conv)
-    R, T = solve_2d(*args, phi=solver.phi)
+    core_kw = dict(phi=solver.phi, incidence_side=solver._kernel_incidence_side,
+                   eps_top=kw['bot'], eps_bot=kw['top'])
+    R, T, _ = solve_2d(*args, **core_kw)
     for rung in ('amplitude', 'field'):
-        up = solve_2d(*args, phi=solver.phi, answers=rung)
+        up = solve_2d(*args, answers=rung, **core_kw)
         assert np.array_equal(np.array(R), np.array(up['given']['R'])), rung
         assert np.array_equal(np.array(T), np.array(up['given']['T'])), rung

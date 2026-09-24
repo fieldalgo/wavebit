@@ -12,7 +12,7 @@ def shapes(height):
             dict(type='rectangle', cx=150., cy=0., lx=300., ly=height, angle=0., material=9.)]
 
 
-def projector(height):
+def nvf_projector(height):
     s = shapes(height)
     plan = P.plan_gamma(s, CELL)
     nx, ny = P._piece_field(np, np.array([340.]), np.array([490.]), s, plan, None,
@@ -21,8 +21,8 @@ def projector(height):
 
 
 def test_moving_a_run_end_has_no_off_interface_value_jump():
-    large = np.max(np.abs(projector(280.+1e-4)-projector(280.-1e-4)))
-    small = np.max(np.abs(projector(280.+1e-6)-projector(280.-1e-6)))
+    large = np.max(np.abs(nvf_projector(280.+1e-4)-nvf_projector(280.-1e-4)))
+    small = np.max(np.abs(nvf_projector(280.+1e-6)-nvf_projector(280.-1e-6)))
     assert small < 0.02*large
     assert small < 1e-6
 
@@ -58,7 +58,7 @@ def test_solve_derivative_matches_the_endpoint_crossing_secant():
     def solver(height, backend):
         return wavebit.rcwa(backend=backend, period=(700.,700.), wavelength=900.,
                            top=1., bot=2.25, theta=.2, phi=.13, psi=.2, thickness=(300.,),
-                           truncation_order=(2,2), normal_grid=grid,
+                           truncation_order=(2,2), shape_nvf_grid_size=grid,
                            structure=[dict(background=1., shapes=shapes(height))])
     frozen = solver(center, 0).freeze_geometry()
     def loss(height):

@@ -93,7 +93,7 @@ Two conversions are exported for callers holding the other quantity:
 
 | function | value |
 | --- | --- |
-| `wavebit.eps_from_index(n)` | `n**2`. Unambiguous, and deliberately more to type than `3.5` was: an index silently reread as a permittivity is a legal wrong answer, so the conversion is worth seeing at the call site |
+| `wavebit.eps_from_index(n, mu=...)` | `n**2 / mu` for isotropic materials; omitting `mu` gives `n**2` (relative permeability one). The index and permeability must describe the same wavelength. Assign the same `mu` to the resulting `Material`. |
 | `wavebit.index_from_eps(eps)` | the **principal** root, always complex. A passive medium has `Im(eps) >= 0`, which is the closed upper half plane, whose principal root has `Im(n) >= 0` — loss again. The hazard is the negative side of zero: `-2 + 0j` gives `+1.414j` (decaying, right) and `-2 - 0j` gives `-1.414j` (gain), and a lossless value that has been through arithmetic can come out as `4 - 1e-18j`. Neither is repaired, because nothing can tell round-off from a deliberately active medium; keep `Im(eps)` non-negative yourself before taking a root |
 
 For a magnetic medium the index is `index_from_eps(eps*mu)`, written out rather than hidden in
@@ -102,8 +102,9 @@ a keyword, because that is where a forgotten `mu` would otherwise hide.
 ### Where the refractive index is still the quantity
 
 The flip is about what a *material slot* holds; it does not rename the physics. The index
-remains the right quantity in Snell's law, in the incident wavevector (`kx_m` below), and in
-the half-space relation `n = sqrt(eps*mu)` itself.
+remains the right quantity in Snell's law and in the half-space relation
+`n = sqrt(eps*mu)`. Real phase angles in absorbing incident media use the full
+complex `eps*mu` as described under [Phase incidence](#phase-incidence).
 
 Concretely, `n_top` and `n_bot` still exist and still mean the refractive index — as
 **derived, read-only** properties. Assigning `top` stores the material and refreshes
@@ -112,20 +113,59 @@ disagree is exactly the state the type exists to remove.
 
 ## Geometry and propagation
 
-Layers are listed **top to bottom**, and `+z` points down, into the stack: `structure[0]` is
-the layer nearest `top`, `structure[-1]` the one nearest `bot`, and `top` / `bot` are the
-half-spaces above and below — which of them the light arrives from is `incidence_side`, not
-the ordering. A wave travelling `+z` carries `exp(+i*k0*kz*z)` with `Re(kz) > 0`; decay
-toward `+z` is `Im(kz) > 0`.
+The public Cartesian frame is **right-handed, with +z upward**. The bottom interface of
+the finite stack is **z=0**; its top interface is **z=h_total**, where `h_total=sum(thickness)`.
+`bot` occupies `z<0`, and `top` occupies `z>h_total`. These half-spaces are not entries in the
+finite-layer list.
 
-"Top/bottom" name the *scene*, not the illumination. `incidence_side` (`'top'` by
-default, `'bottom'` for back-side illumination) selects which medium the light arrives
-from; nothing on this page renames or reorders when it changes — `structure[0]` is the top
-layer whichever way the light travels. Results are **incidence-relative** (the port
-model): `R` is power back into the incidence medium, `T` power through the far side,
-`theta`/`phi` are measured against the incidence medium's normal (`bot`'s, for
-`'bottom'`), and the amplitudes keep the Fresnel contract below — so user
-post-processing is identical for both sides.
+Layers are listed **bottom to top**: `structure[0]` is adjacent to `bot`, and
+`structure[-1]` is adjacent to `top`. `thickness[i]`, raster `mu[i]`, tensor convolution
+stacks and `Stack.layers[i]` all describe the same layer. Its lower and upper heights are
+`sum(thickness[:i])` and `sum(thickness[:i+1])`. Adding a layer to the end builds upward.
+
+`incidence_side='top'` (the default) sends light downward (`kz<0` for a propagating wave);
+`incidence_side='bottom'` sends it upward (`kz>0`). Neither changes the geometry, indexing,
+or returned field axes. `theta` is measured from the inward normal of the selected face:
+`-z` at the top, `+z` at the bottom. `phi` describes the in-plane wavevector from `+x`
+toward `+y` in the fixed public frame. For real incident angles in a lossless positive-index medium,
+`k/k0 = n_inc * (sin(theta)*cos(phi), sin(theta)*sin(phi), sigma*cos(theta))`, with
+`sigma=-1` for top incidence and `+1` for bottom incidence.
+
+Alternatively, specify real `kx`/`ky` directly in inverse length units, without
+`theta`/`phi`. An omitted component is zero. These are Cartesian angular
+wavenumbers of the incident wave, before diffraction-order offsets, and stay
+fixed during a wavelength sweep. The normal component follows from
+`kz² = (2*pi/wavelength)²*epsilon*mu - kx² - ky²` with the incident-side branch.
+Materials remain required. `order_kxy()` reports per-order k divided by k0, so
+its output uses different units from direct input. See [direction inputs](guide/light.md#two-ways-to-specify-direction).
+
+Results remain incidence-relative: `R` returns to the illuminated half-space and `T`
+leaves through the opposite one. Reflection amplitudes are referenced to the illuminated
+interface, transmission amplitudes to the opposite interface.
+
+Field samples specified by count run in increasing height, bottom to top. Explicit
+`sample_z` values are absolute heights from the bottom interface and retain the caller's
+order. Internal interfaces belong to the **upper** layer; use `z-delta` for the lower limit.
+Counts of at least two include both limits; a count of one selects each layer's lower face.
+The top endpoint `h_total` belongs to the last finite
+layer. This rule is independent of illumination side.
+
+For example, `thickness=[100., 200., 50.]` gives layer spans `[0,100]`, `[100,300]`,
+and `[300,350]`. The first layer is at the substrate and the last at the superstrate.
+
+### Updating a pre-release downward-positive scene
+
+This convention replaced top-to-bottom input and downward-positive depth on 2026-09-21.
+Reverse the layer list **and** every matching thickness/material stack. Former depth `d`
+becomes height `h_total-d`; a uniform count grid also reverses along z. Comparing fields in the
+former downward frame uses `E -> (Ex,Ey,-Ez)` and `H -> (-Hx,-Hy,Hz)`. A tensor expressed
+in that frame transforms as `Q @ tensor @ Q`, `Q=diag(1,1,-1)`; its xz/yz/zx/zy entries
+change sign. Scalars and in-plane blocks do not. Do not reflect x/y patterns or change phi
+when using this z-mirror comparison. The low-level propagation kernels retain their own
+start/end orientation; the engine binds those ports to the public bottom/top media.
+
+Serialized `JobSpec` documents use **version 10**. Earlier versions are refused because
+changing only the version number could silently reverse an asymmetric physical stack.
 
 Within a layer the array follows the image convention: row `0` of a raster `structure` is the
 **bottom** of the cell — the `-y` end, at `y = -Py/2 + Py/(2*Ny)` — for every builder and for
@@ -134,42 +174,12 @@ loose in two ways at once: row 0's centre was never at `y = 0` even then, and th
 centred on the origin now.) The flip that renders a
 field the conventional way up belongs to plotting (`plot_field`), not to the data.
 
-**The reconstructed field's vector components use that same `+z`.** `reconstruct_field` returns
-`(Ex, Ey, Ez, Hx, Hy, Hz)` (or the 3-component 1D layouts) in the frame declared above, so
-`H = k̂ × E` for a plane wave travelling into the stack and the Poynting vector of a downward
-wave has `Sz > 0` — the same direction the cell's `z` index runs. This is worth stating
-because it was not true before 2026-08-14: every path returned `Ez`, `Hx` and `Hy` with the
-opposite sign.
-
-**And it holds on both sides**, which took until 2026-08-22. A backside solve *is* the
-top-side solve of the z-mirrored scene, so everything it leaves behind is expressed in that
-mirror; the reconstruction reversed the z axis and stopped there. `z → -z` is improper, so the
-components do not all follow the coordinates — `E` is polar and loses `E_z`, `H` is axial and
-loses `H_x`/`H_y` — and without that parity a cell lit from below came back with `Sz > 0` for
-light travelling *upward*, bit-identical to the top-side answer instead of its mirror. Every
-efficiency was unaffected, which is why nothing saw it: the check that catches it is net
-Poynting, which is answerable from the cell alone against a fact no reconstruction supplies
-(`tests/test_backside_incidence.py::test_net_power_flows_away_from_the_lit_face`).
-
-An explicit `sample_z` is absolute in **scene** coordinates on both sides, for the same reason
-the labels are. A backside request is restated in the mirror before it is bucketed, and comes
-back in the caller's own order; it used to be bucketed against the mirror's thicknesses *and*
-then reversed.
-
-That was a contradiction inside the repo, not a convention nobody had chosen.
-[`formulation.md`](formulation.md) §1 anchors (M1)/(M2) on a vacuum wave travelling `+z` and
-records the pair `(Ey, H̃x) = (1, -kz)`; `tests/test_anisotropic_berreman.py::_vacuum_modes`
-writes that pair; `solve_2d_4ff` derives in it. The reconstruction was the one place that did
-not. Nothing caught it because nothing external pinned it — the only Reticolo field comparison
-is a print-only script that hand-conjugates its reference — and every check that existed
-compared the reconstruction against itself, or looked only at `E_t`, which the sign change
-leaves alone ([`time-convention-audit.md`](time-convention-audit.md) §8). Field reconstruction
-now has an outside opinion for the first time — `tests/references/test_s4_field_golden.py`
-compares against S4 entry for entry at 1e-15 on uniform stacks, which is where frames and
-signs are decided — and it is pinned per path by
-`tests/test_field_core.py::test_every_path_returns_a_maxwell_field_in_the_declared_frame`,
-which asserts the curl equations *and* their convergence rate, since a wrong frame does not
-converge rather than merely scoring worse.
+**The reconstructed field uses this same upward-positive xyz frame.** In vacuum,
+`H = khat × E`; upward power has `Sz>0` and downward power has `Sz<0`. Thus ordinary
+top incidence carries negative net z flux, while bottom incidence carries positive flux.
+The exp(-i omega t) time convention and exp(+i k.r) spatial convention are unchanged.
+The plane-wave and interface tests in `tests/test_vertical_coordinates.py` check these
+statements across NumPy, JAX and PyTorch, both incidence sides and all supported paths.
 
 ## Units and angles
 
@@ -203,11 +213,59 @@ All angles are **radians**.
 
 | angle | meaning |
 | --- | --- |
-| `theta` | polar incidence angle, measured from the stack normal in the incidence medium |
+| `theta` | phase polar angle, measured from the inward normal in the incidence medium; real angles specify uniform incident intensity along the surface |
 | `phi` | azimuth of the plane of incidence, from the `+x` axis |
 | `psi` | polarization: the angle of **E** from the p direction in the plane transverse to **k**. `psi = pi/2` is pure s (TE-like), `psi = 0` pure p (TM-like). **Real** — a complex `psi` is refused, see below |
 | `chi` | ellipticity angle: `tan(chi)` is the polarization ellipse's minor/major axis ratio and its sign is the rotation direction. `chi = 0` is linear (the `psi` spelling), `|chi| = pi/4` circular. Real, like `psi`. Naming it selects the `(psi, chi)` chart — see below |
 | `tetm` (1D only) | `'te'` / `'tm'` — a **declaration**, not an angle: it says this problem has no polarization and no azimuth degree of freedom, which is what makes the pure 1D TE/TM formulation legal (2-4x faster than conical, measured). Refused on a 2D cell, with `truncation_order[1] != 0`, or beside a nonzero `phi` / a `psi` / a `polarization`. `psi` reads back `None` under it — a declared-away degree of freedom is absent, not defaulted |
+
+### Phase incidence
+
+For real `theta` and `phi`, the incident wave has **uniform intensity along the
+structure surface**. Both transverse components `kx`, `ky` are real. `theta`
+specifies the direction of `Re(k)` in the illuminated half-space, not a direction
+in a hypothetical external medium and not the Poynting-vector direction.
+The latter can differ from the phase direction in an absorbing medium.
+This describes a single plane wave. Multiple waves supplied through `excitation`
+can interfere within a cell; with real transverse wavevectors their intensity
+repeats from cell to cell.
+
+For an isotropic incident material, write `epsilon_r * mu_r = a + i*b` and
+`k0 = 2*pi/wavelength`. The phase magnitude `N = |Re(k)|/k0` is
+
+$$
+N^2 = \frac{a + \sqrt{a^2 + b^2/\cos^2\theta}}{2},
+\qquad
+k_x=k_0N\sin\theta\cos\phi,\quad
+k_y=k_0N\sin\theta\sin\phi.
+$$
+
+This follows by writing the inward normal component as
+`q/k0 = N*cos(theta) + i*alpha` and imposing both parts of dispersion:
+`N**2 - alpha**2 = a`, `2*N*cos(theta)*alpha = b`.
+The full complex material is used; this is not `sqrt(real(epsilon_r))`.
+The normal wavevector satisfies `kz**2 = k0**2*epsilon_r*mu_r - kx**2 - ky**2`.
+The public `kz` is negative for ordinary top incidence and positive for bottom
+incidence, with the attenuation sign following that direction.
+
+For a positive-index lossless incident medium, `b=0` and `a>0`, giving
+`N=sqrt(epsilon_r*mu_r)` and the usual angle formula exactly. The absorbing
+phase-angle definition requires `abs(theta) < pi/2`; its wavevector diverges at
+grazing. The formula describes inward phase propagation; negative-index
+half-space branch selection is a separate unsupported case.
+
+An angle with a **nonzero imaginary part** retains the formal
+`kx/k0 = n*sin(theta)*cos(phi)`, `ky/k0 = n*sin(theta)*sin(phi)`
+parameterization for advanced illumination. These complex parameters do not
+have the meaning of real phase angles. A value such as `0.4+0j` is a real
+phase angle. The two interpretations are not an analytic continuation across
+the real-angle boundary in an absorbing medium; use real angle variables
+when differentiating the phase-incidence model.
+
+`order_kxy()` returns wavevectors **divided by `k0`**, including reciprocal
+lattice shifts for each retained order. Multiply by `2*pi/wavelength` for
+physical inverse-length units. See [Light inputs](guide/light.md#phase-direction-and-absorbing-incidence)
+for an example.
 
 ### General (elliptical) polarization
 
@@ -219,10 +277,11 @@ spell — `(1, -1j)/sqrt(2)` and `(1, +1j)/sqrt(2)` are the two circular states.
 
 - `psi` and `polarization` are mutually exclusive. Naming both is an error, not an
   override.
-- The pair's overall magnitude is **not read**: `|a_s|^2 + |a_p|^2 = 1` is not required,
-  because the pair is normalized to unit incident flux on the way in — efficiencies are per
-  unit incident power and amplitudes per unit incident E-field whatever scale you write.
-  The overall *phase* is kept, and carries into the complex amplitudes.
+- The pair is divided by its Euclidean norm, so the user need not supply
+  `|a_s|^2 + |a_p|^2 = 1`. Its overall phase is retained. This coefficient
+  normalization does not set physical power to one: the solver separately evaluates
+  the incident power using the medium, polarization and illuminated orders, then
+  divides reflected and transmitted powers by that value.
 - A 1D structure given a pair is solved on the conical path (the pure 1D TE/TM path is
   single-polarization by construction); the answer is the same physics at conical cost.
 - **A complex `psi` is refused, and is not a shortcut to any of this.** `(sin, cos)` is a
@@ -292,12 +351,15 @@ Derivation, at normal incidence with `phi = 0`: the (s, p) basis maps to Cartesi
 E(t) = Re[(x̂ - i·ŷ)·e^{-iωt}] ∝ x̂·cos(ωt) - ŷ·sin(ωt)
 ```
 
-whose rotation vector is `-ẑ` while the wave travels `+z` (down, into the stack). So:
+whose rotation vector is `-ẑ`. At top incidence the wave travels `-z`, so these are
+parallel; at bottom incidence the wave travels `+z`, so they are antiparallel. The
+Cartesian normal-incidence basis above is the same on both sides; handedness relative to
+propagation therefore depends on the illuminated side. Explicitly:
 
-| pair | rotation vs **k** | optics name (receiver's view) | IEEE name (along propagation) |
+| pair | rotation vector | top incidence (`k` downward) | bottom incidence (`k` upward) |
 | --- | --- | --- | --- |
-| `(1, -1j)/sqrt(2)` | antiparallel | right circular (RCP) | left-hand (LHCP) |
-| `(1, +1j)/sqrt(2)` | parallel | left circular (LCP) | right-hand (RHCP) |
+| `(1, -1j)/sqrt(2)` | `-z` | parallel to k | antiparallel to k |
+| `(1, +1j)/sqrt(2)` | `+z` | antiparallel to k | parallel to k |
 
 Two anchors keep this paragraph honest rather than derived-once-and-drifting: the basis
 calibration above, and the gyrotropic eigenstate test
@@ -309,11 +371,12 @@ the complex conjugate of ours, and its handedness labels flip with it.
 
 ## Diffraction orders
 
-The retained orders are `m = -half_width_u..half_width_u`, `n = -half_width_v..half_width_v`, with in-plane
-wavevectors `kx_m = n_top·sinθ·cosφ + m·λ/Λx` (and correspondingly `ky_n`). This is one of
-the places the **index** is genuinely the quantity: it is `n_top`, the derived
-`sqrt(eps*mu)` of the `top` material, and it is `n_bot`'s under
-`incidence_side='bottom'` — `theta` lives in the incidence medium. Per-order
+The retained orders are `m = -half_width_u..half_width_u`, `n = -half_width_v..half_width_v`, with normalized in-plane
+wavevectors `kx_m/k0 = kx_inc/k0 + m*lambda/period_x` on an axis-aligned cell
+(and correspondingly for `ky_n`). The incident components follow
+[Phase incidence](#phase-incidence) using `top` for top incidence and `bot`
+for bottom incidence. For a lossless incidence medium this is the usual
+`kx_inc/k0 = n_inc*sin(theta)*cos(phi)`. Per-order
 arrays have shape `(n_orders_v, n_orders_u)` — **`y` first, the transpose of the `truncation_order=[x, y]` input
 order** — with the incident order at the centre `[half_width_v, half_width_u]` and `m` increasing along
 the last axis.
@@ -370,11 +433,14 @@ spelling of a cell, and a skewed one arrives as `lattice=` instead.
 | --- | --- |
 | `R`, `T` | per-order diffraction efficiency: power returned to the incidence medium / leaving through the far side, as a fraction of incident power |
 | `R_s`, `R_p`, `T_s`, `T_p` | the same, resolved by outgoing polarization; `R = R_s + R_p` |
+| `power_entering` | scalar net power entering the finite stack, including incident/reflected interference, divided by incident-only power at the illuminated interface |
+| `absorption` | scalar absorbed power in all finite layers divided by incident-only power: `power_entering - T.sum()`; excludes both half-spaces |
 | `r_s`, `r_p`, `t_s`, `t_p` | complex **Fresnel amplitudes**: E-field ratios against a unit incident E-field, directly comparable to the textbook Fresnel/Airy coefficients (pinned to 1e-12 against them, absorbing media included) |
 | `given`, `s_inc`, `p_inc` | the incidence as specified (`psi`, or the `polarization` pair), plus the pure-s and pure-p variants the coupled solves produce for free; top-level `R`/`T` average the two variants when no specified solve exists (unpolarized illumination) |
 
 **Which of these rows exist is what `answers` declares**, and the table above is the default
-(`answers='amplitude'`) in full. `answers='efficiency'` keeps `R` and `T` and leaves every
+(`answers='amplitude'`) in full. `answers='efficiency'` keeps `R`, `T`,
+`power_entering`, and `absorption`, and leaves every
 other slot `None`, including `s_inc` / `p_inc` — so on that rung there is no
 unpolarized average to take and `given` is the only incidence. `answers='field'` adds nothing
 here: what it adds is the per-layer state `reconstruct_field` walks, which is not part of the
@@ -401,11 +467,18 @@ Amplitude fine print, stated once so it never has to be discovered:
   `r_p = (n2 - n1)/(n2 + n1) = -r_s`;
 - phase reference: `r` at the incidence-side interface, `t` at the far one (top and
   bottom respectively for the default illumination);
-- with an absorbing **superstrate**, incident power is convention-dependent, so `R`/`T`
-  are not comparable to 1 — the amplitudes are the meaningful quantities there. Concretely
-  so: the pure-1D and coupled paths normalize that undefined quantity *differently* (TM
-  efficiencies differ by exactly `|n_top|²·Re(n_top⁻²)`; TE by exactly 1), which is pinned
-  as deliberate notice rather than hidden — compare `r`/`t`, never `R`/`T`, in that regime;
+- for real transverse wavevectors, `R` and `T` are the separate reflected/transmitted
+  powers divided by the incident wave's power at the illuminated interface. This also
+  applies to absorbing incident media. `T` refers to power crossing the opposite
+  interface, not power surviving infinitely far into an absorbing exit medium.
+  Incident/reflected interference contributes to `power_entering`. The finite stack's
+  absorption is `result.absorption = result.power_entering - result.T.sum()`.
+  With a lossless incident medium and propagating illumination,
+  `power_entering = 1 - R.sum()`, giving `absorption = 1 - R.sum() - T.sum()`.
+  This absorption is zero only if the finite stack also has no net absorption or gain.
+  General complex-transverse-wavevector cell-integrated powers are outside this
+  definition: `power_entering` and `absorption` return `NaN` in that case;
+  complex-angle amplitude calculations remain separate;
 - there are no raw "boundary variables" in the public surface. (Before the first release
   the p amplitudes were exposed as magnetic-field boundary variables needing a
   `/(-i*n_top)` footnote; they were renamed and normalized outright, with no aliases —

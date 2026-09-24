@@ -27,11 +27,13 @@ def main():
         assert len(matches) == 1, (name, matches)
         assert distribution.locate_file(matches[0]).stat().st_size > 0, name
 
-    tables = wavebit.read_material_table()
-    assert {'SI', 'SIO2', 'SI3N4', 'AL2O3', 'P_SI'} <= set(tables), sorted(tables)
-    for name, values in tables.items():
-        assert values.ndim == 2 and values.shape[1] == 3, (name, values.shape)
-        assert np.isfinite(values).all(), name
+    names = wavebit.materials.available()
+    assert set(names) == {'filmetrics/Si', 'filmetrics/SiO2',
+                          'filmetrics/Si3N4', 'filmetrics/Al2O3'}
+    for name in names:
+        material = wavebit.materials.load(name)
+        assert isinstance(material, wavebit.TabulatedMaterial)
+        assert np.isfinite(material.at(900.).epsilon), name
 
     result = wavebit.rcwa(
         backend=0, tetm='tm', top=1.0, bot=2.25, theta=0.0, phi=0.0,

@@ -358,7 +358,7 @@ def check_input_precision(name, value, target_dtype):
         PrecisionLossWarning, stacklevel=3)
 
 
-def check_physical(xp, de_ri, de_ti, n_top, atol=1e-3):
+def check_physical(xp, de_ri, de_ti, n_top, atol=1e-3, *, power_entering=None):
     """Warn if efficiencies are finite but cannot describe a physical result.
 
     :func:`check_finite` catches contamination that announces itself. This catches the tier
@@ -366,12 +366,13 @@ def check_physical(xp, de_ri, de_ti, n_top, atol=1e-3):
     Two signals, both properties of the result rather than of the arithmetic that produced it:
 
     * a negative efficiency, which is negative power;
-    * ``sum(R) + sum(T) > 1`` for a passive stack, which is gain out of nothing.
+    * transmitted power greater than the net power entering a passive stack.
 
-    Deliberately *not* checked: ``R + T < 1``, which is just absorption. And the whole check is
-    skipped for a complex ``n_top``, where the incident-power normalization is
-    convention-dependent and the efficiencies are not comparable to 1 at all (the same reason
-    ``test_lossy_media`` declines to compare ``de_ri`` there).
+    ``power_entering`` includes incident/reflected interference, so this check
+    also applies to an absorbing incident medium with real transverse k.
+    NaN marks an unsupported cell-power integral and skips the check. When
+    entering power is not supplied, only a real-index incident medium permits
+    the fallback ``power_entering = 1 - sum(R)``.
 
     Known false positive: a gain medium (``Im(n) < 0`` in this codebase's convention) legitimately
     exceeds 1. Filter :class:`UnphysicalResultWarning` if that is what you are modelling.
@@ -383,15 +384,21 @@ def check_physical(xp, de_ri, de_ti, n_top, atol=1e-3):
     Runs wherever the values are concrete — eager NumPy, eager JAX, eager PyTorch, and an
     un-jitted ``jax.grad``. See :func:`_concrete`.
     """
-    n = _readable(n_top, xp)
-    if xp.isdtype(n.dtype, 'complex floating'):
-        lossy = _concrete(xp.any(xp.imag(n) != 0))
-        if lossy is None or lossy:
+    if power_entering is None:
+        n = _readable(n_top, xp)
+        if xp.isdtype(n.dtype, 'complex floating'):
+            lossy = _concrete(xp.any(xp.imag(n) != 0))
+            if lossy is None or lossy:
+                return
+    else:
+        power_entering = _readable(power_entering, xp)
+        if _concrete(xp.all(xp.isfinite(power_entering))) is not True:
             return
 
     r, t = xp.real(_readable(de_ri, xp)), xp.real(_readable(de_ti, xp))
     negative = _concrete(xp.minimum(xp.min(r), xp.min(t)) < -atol)
-    excess = _concrete(xp.sum(r) + xp.sum(t) > 1 + atol)
+    excess = _concrete(xp.sum(r) + xp.sum(t) > 1 + atol if power_entering is None
+                       else xp.sum(t) > power_entering + atol)
     if negative is None or excess is None:
         return                                  # traced — no value to inspect
 
@@ -399,7 +406,9 @@ def check_physical(xp, de_ri, de_ti, n_top, atol=1e-3):
     if negative:
         problems.append('a negative efficiency (negative power)')
     if excess:
-        problems.append('R+T above 1 for a passive stack (gain out of nothing)')
+        problems.append('R+T above 1 for a passive stack (gain out of nothing)'
+                        if power_entering is None else
+                        'transmitted power above net entering power for a passive stack')
     if problems:
         import warnings
         warnings.warn(

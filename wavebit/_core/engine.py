@@ -18,17 +18,19 @@ from . import parametric as _parametric
 from . import rectilinear as _rectilinear
 from . import boundary as _boundary
 from . import factorization as _fac
+from . import anisotropy as _anisotropy
 from . import lattice as _lattice
-from .backend import _device_of, array_namespace, as_array, check_input_precision
-from .conventions import (_CHI_POLARIZATION_CLASH, _COMPLEX_CHI,
+from .backend import _concrete, _device_of, array_namespace, as_array, check_input_precision
+from .conventions import (_CHI_POLARIZATION_CLASH, _COMPLEX_CHI, _DIRECTION_CLASH,
                           _PSI_POLARIZATION_CLASH, _TETM_INCIDENCE_CLASH,
-                          incident_sp_amplitudes, lit_orders, order_window,
-                          parse_order_pair, reject_complex_angle,
+                          incident_phase_index, incident_sp_amplitudes, lit_orders, order_window,
+                          parse_order_pair, reject_complex_angle, transverse_component_problem,
                           warn_if_xy_on_a_skewed_cell)
 from .domain import Material, as_material, index_from_eps
+from .materials import TabulatedMaterial, evaluate_material, evaluate_structure
 from .enums import (Answers, DEFAULT_ANSWERS, DEFAULT_FACTORIZATION, DEFAULT_FORMULATION,
                     DEFAULT_FOURIER_COEFFICIENTS, DEFAULT_NORMAL_METHOD, DEFAULT_PROJECTOR,
-                    answers_of, normal_method_of, projector_of,
+                    answers_of, normal_method_of, projector_of, nvf_option_rename_hint,
                     Factorization, Formulation, FourierCoefficients, ModelingPath, Tetm,
                     coefficients_of,
                     factorization_of, formulation_of, resolve_fourier_options)
@@ -159,7 +161,7 @@ def _refuse_shaped_half_space(material, where):
     (5,)`` -- loud, but naming neither the argument at fault nor what a half-space is.
     """
     for name, value in (('epsilon', material.epsilon), ('mu', material.mu)):
-        shape = tuple(getattr(value, 'shape', ()))
+        shape = _anisotropy.tensor_shape(value)
         size = 1
         for dim in shape:
             size *= int(dim)
@@ -273,7 +275,7 @@ _FIELD_NOT_DECLARED = (
     "amplitudes and never reconstructs a field.")
 
 
-def _efficiency_only(de_ri, de_ti):
+def _efficiency_only(de_ri, de_ti, power_entering):
     """The ``ResultSub`` payload of a solve declared ``answers='efficiency'``.
 
     Every amplitude slot is ``None`` rather than absent, because ``ResultSub`` has a fixed
@@ -282,7 +284,8 @@ def _efficiency_only(de_ri, de_ti):
     split of the efficiencies is ``None`` for a plainer reason: this rung never formed it.
     """
     return {'r_s': None, 'r_p': None, 't_s': None, 't_p': None,
-            'R': de_ri, 'R_s': None, 'R_p': None, 'T': de_ti, 'T_s': None, 'T_p': None}
+            'R': de_ri, 'R_s': None, 'R_p': None, 'T': de_ti, 'T_s': None, 'T_p': None,
+            'power_entering': power_entering}
 
 
 #: ``pol`` was three things at once, and this is the rename. See :attr:`CoreSolveMixin.tetm`.
@@ -315,7 +318,8 @@ def _refuse_unknown_keywords(kwargs):
     """
     if kwargs:
         raise TypeError(
-            f'unexpected keyword argument(s) {sorted(kwargs)!r}')
+            f'unexpected keyword argument(s) {sorted(kwargs)!r}.'
+            f'{nvf_option_rename_hint(kwargs)}')
 
 
 #: ``mu`` is a *field*, and only the raster states a layer as fields. Refused by name on the
@@ -388,11 +392,11 @@ class CoreSolveMixin:
 
     _excitation = None
 
-    def __init__(self, top=1., bot=1., theta=0., phi=None, psi=None, chi=None, tetm=None,
+    def __init__(self, top=1., bot=1., theta=None, phi=None, psi=None, chi=None, tetm=None,
                  truncation_order=(0, 0),
                  period=(1., 1.), wavelength=1.,
                  thickness=(0.,), layer_algorithm='ETM', excitation=None,
-                 device=0, complex_dtype=0, polarization=None):
+                 device=0, complex_dtype=0, polarization=None, kx=None, ky=None):
         """The scene, set once through the setters that maintain it.
 
         One body for three backends. The three it replaced were textually identical apart from
@@ -424,11 +428,14 @@ class CoreSolveMixin:
 
         # Materials in, an index out: the two setters store the Material and derive the
         # `sqrt(eps*mu)` every solve reads. See `CoreSolveMixin.top`.
+        self.wavelength = wavelength
         self.top = top
         self.bot = bot
 
-        self.theta = theta
+        self.theta = 0. if theta is None and kx is None and ky is None else theta
         self.phi = phi
+        self.kx = kx
+        self.ky = ky
         # Order matters: `tetm` refuses to coexist with a named incidence, so it goes first
         # and the two spellings below raise against it rather than silently winning.
         self.tetm = tetm
@@ -440,7 +447,6 @@ class CoreSolveMixin:
 
         self.truncation_order = truncation_order
         self.period = period
-        self.wavelength = wavelength
         self.thickness = thickness
         self.layer_algorithm = layer_algorithm
         self.excitation = excitation
@@ -491,7 +497,12 @@ class CoreSolveMixin:
         arrangement :meth:`_incidence_pair` has for the polarization. The solves never see
         ``excitation`` itself, so they never have to know which window it widened.
         """
-        return lit_orders(self._excitation, *self.order_window)
+        excitation = self._excitation
+        if excitation is None and (self.kx is not None or self.ky is not None):
+            # Direct k can request a zero-power evanescent incident wave. Give the
+            # default order the same positive-power check as explicit excitation.
+            excitation = {(0, 0): 1.0}
+        return lit_orders(excitation, *self.order_window)
 
     @property
     def order_window(self):
@@ -576,6 +587,18 @@ class CoreSolveMixin:
                 f"incidence_side must be 'top' or 'bottom', got {value!r}")
         self._incidence_side = value
 
+    @property
+    def _kernel_incidence_side(self):
+        """Select the entry port of the positive-z propagation kernel.
+
+        Public layers run from the bottom (z=0) upwards. The private kernels' historical
+        ``top``/``bottom`` port names mean start/end of their positive-z list, respectively;
+        they are not scene labels. Bind the lower medium to the start port and the upper
+        medium to the end port at the four call sites below. No geometry or tensor is
+        reflected at this boundary: the kernel and the public Cartesian axes coincide.
+        """
+        return 'top' if self.incidence_side == 'bottom' else 'bottom'
+
     _answers = DEFAULT_ANSWERS
 
     @property
@@ -654,6 +677,8 @@ class CoreSolveMixin:
 
         Takes a ``Material`` or a bare number (the scalar shorthand for
         ``Material(epsilon=x)``) -- relative permittivity, with ``Im(eps) > 0`` for loss.
+        A ``TabulatedMaterial`` is retained and reevaluated when wavelength changes;
+        reading this property returns its evaluated numerical ``Material``.
         Assigning it also refreshes :attr:`n_top`, which is what the solves read.
         """
         return self._top
@@ -671,9 +696,10 @@ class CoreSolveMixin:
         Material it was worse: ``is_magnetic`` flipped, which selects a different arithmetic
         path entirely.
         """
-        material = self._placed(as_material(value, 'top'))
+        material = self._placed(as_material(self._material_at(value, self.wavelength), 'top'))
         self._n_top = _half_space_index(material, 'top')
         self._top = material
+        self._top_dispersion = value if isinstance(value, TabulatedMaterial) else None
 
     @property
     def bot(self):
@@ -683,9 +709,10 @@ class CoreSolveMixin:
     @bot.setter
     def bot(self, value):
         """Both, or neither -- see :attr:`top`, which had the same order and the same defect."""
-        material = self._placed(as_material(value, 'bot'))
+        material = self._placed(as_material(self._material_at(value, self.wavelength), 'bot'))
         self._n_bot = _half_space_index(material, 'bot')
         self._bot = material
+        self._bot_dispersion = value if isinstance(value, TabulatedMaterial) else None
 
     @property
     def n_top(self):
@@ -709,9 +736,9 @@ class CoreSolveMixin:
     def n_inc(self):
         """The incidence medium's index — the one ``theta`` / ``phi`` / ``kx`` live in.
 
-        The in-plane wavevector build (each backend's ``_separable_kxy``) reads this
-        rather than ``n_top``, so ``kx_m = n_inc*sin(theta)*cos(phi) + m*wl/period`` holds
-        for either illumination side with one spelling.
+        Real angles use the phase direction with uniform incident intensity along
+        the surface. In a lossless medium this reduces to ``n_inc*sin(theta)``;
+        absorbing media use the full material in :meth:`_incident_kxy`.
         """
         return self.n_bot if self._incidence_side == 'bottom' else self.n_top
 
@@ -908,6 +935,10 @@ class CoreSolveMixin:
         """
         if self._tetm is None:
             return
+        if self.ky is not None and _concrete(self.ky == 0) is not True:
+            raise ValueError(
+                'tetm requires ky=0; omit ky for a pure 1D TE/TM solve. '
+                'Use polarization for a nonzero or traced ky on the conical path.')
         if not one_dimensional:
             if one_row:
                 raise ValueError(
@@ -981,7 +1012,7 @@ class CoreSolveMixin:
             if complex(pair[0]) == 0 and complex(pair[1]) == 0:
                 raise ValueError(
                     'polarization = (0, 0) carries no incident field; give at least one '
-                    'nonzero amplitude (the pair is normalized to unit flux, so its overall '
+                    'nonzero amplitude (the pair is normalized to unit norm, so its overall '
                     'scale is free)')
         except TypeError:
             pass                      # traced values: concreteness is not theirs to prove
@@ -1181,10 +1212,18 @@ class CoreSolveMixin:
 
     @property
     def theta(self):
+        """Phase polar angle in radians, measured from the inward surface normal.
+
+        Real ``theta`` and ``phi`` specify uniform incident intensity along the
+        surface, including in absorbing media. Complex angles instead retain
+        the formal ``n*sin(theta)`` parameterization for advanced illumination.
+        """
         return self._theta
 
     @theta.setter
     def theta(self, theta):
+        if theta is not None and (self.kx is not None or self.ky is not None):
+            raise ValueError(_DIRECTION_CLASH)
         if theta is None:
             self._theta = None
         else:
@@ -1197,11 +1236,59 @@ class CoreSolveMixin:
 
     @phi.setter
     def phi(self, phi):
+        if phi is not None and (self.kx is not None or self.ky is not None):
+            raise ValueError(_DIRECTION_CLASH)
         if phi is None:
             self._phi = None
         else:
             check_input_precision('phi', phi, self.complex_dtype)
             self._phi = self._as_complex(phi)
+
+    _kx = None
+    _ky = None
+
+    def _set_transverse_component(self, name, value):
+        if value is None:
+            setattr(self, '_' + name, None)
+            return
+        if self.theta is not None or self.phi is not None:
+            raise ValueError(_DIRECTION_CLASH)
+        problem = transverse_component_problem(value, name)
+        if problem is not None:
+            raise ValueError(problem)
+        check_input_precision(name, value, self.complex_dtype)
+        xp = self.xp
+        candidate = self._as_complex(value)
+        valid = xp.isfinite(candidate) & (xp.imag(candidate) == 0)
+        real = xp.real(candidate)
+        # Invalid traced values must not silently become a different real wave.
+        setattr(self, '_' + name, xp.where(valid, real, xp.full_like(real, float('nan'))))
+
+    @property
+    def kx(self):
+        """Incident Cartesian x wavevector in inverse length units, or ``None``.
+
+        Direct ``kx``/``ky`` input replaces ``theta``/``phi``. An omitted component
+        is zero. Components are finite real scalars, expressed in the fixed xyz
+        frame, including on oblique lattices and for bottom incidence. For lengths
+        in nm, these inputs are in nm**-1 (angular wavenumber, not cycles per nm).
+        At kx=ky=0 the s/p basis uses azimuth zero: s along +y and p in xz.
+        ``order_kxy()`` instead returns components normalized by k0=2*pi/wavelength.
+        """
+        return self._kx
+
+    @kx.setter
+    def kx(self, value):
+        self._set_transverse_component('kx', value)
+
+    @property
+    def ky(self):
+        """Incident Cartesian y wavevector in inverse length units; see :attr:`kx`."""
+        return self._ky
+
+    @ky.setter
+    def ky(self, value):
+        self._set_transverse_component('ky', value)
 
     @property
     def psi(self):
@@ -1496,6 +1583,8 @@ class CoreSolveMixin:
         """
         self.theta = self.theta
         self.phi = self.phi
+        self.kx = self.kx
+        self.ky = self.ky
         if self._psi is not None:
             self._psi = self._as_real_angle(self._psi)
         self.truncation_order = self.truncation_order
@@ -1503,7 +1592,10 @@ class CoreSolveMixin:
         self.thickness = self.thickness
         # Guarded because `_structure` is set by the `RCWA*` subclass, after `_BaseRCWA`.
         if getattr(self, '_structure', None) is not None:
-            self.structure = self.structure
+            self.structure = self._material_input('structure')
+        if any(getattr(self, f'_{name}_dispersion', None) is not None
+               for name in ('top', 'bot')):
+            self.wavelength = self.wavelength
 
     # ------------------------------------------------------------- the cell and the stack
     #
@@ -1645,15 +1737,43 @@ class CoreSolveMixin:
         """The vacuum wavelength, in the unit ``period`` and ``thickness`` share.
 
         Stored as given -- no cast, no conversion -- as it was when this was a plain attribute.
-        The setter exists for placement alone: a wavelength the caller built as an array on
-        another device was held there and the scalar arithmetic on it ran there, the one
-        condition no setter placed (see :meth:`_placed`).
+        The setter places a backend array on the solver's device and reevaluates
+        tabulated half-space and shape materials. All table evaluations must succeed
+        before the wavelength or any evaluated material is changed.
         """
         return self._wavelength
 
     @wavelength.setter
     def wavelength(self, wavelength):
-        self._wavelength = self._placed(wavelength)
+        wavelength = self._placed(wavelength)
+        updates = {}
+        for name in ('top', 'bot'):
+            source = getattr(self, f'_{name}_dispersion', None)
+            if source is not None:
+                material = self._placed(self._material_at(source, wavelength))
+                updates[f'_n_{name}'] = _half_space_index(material, name)
+                updates[f'_{name}'] = material
+        source = getattr(self, '_structure_dispersion', None)
+        if source is not None:
+            updates['_structure'] = self._placed_layers(self._structure_at(source, wavelength))
+        # Resolve every table before changing anything: a range error must leave
+        # wavelength, boundary indices and layer values describing the same scene.
+        self._wavelength = wavelength
+        for name, value in updates.items():
+            setattr(self, name, value)
+
+    def _material_at(self, value, wavelength):
+        return evaluate_material(value, wavelength, xp=self.xp,
+                                 dtype=self._complex_dtype, device=self._array_device)
+
+    def _structure_at(self, value, wavelength):
+        return evaluate_structure(value, wavelength, xp=self.xp,
+                                  dtype=self._complex_dtype, device=self._array_device)
+
+    def _material_input(self, name):
+        """Original table-bearing input for a lossless solver pytree round trip."""
+        source = getattr(self, f'_{name}_dispersion', None)
+        return getattr(self, name) if source is None else source
 
     def _device_scope(self):
         """Where this solver's arrays are placed, as a context manager.
@@ -1677,45 +1797,49 @@ class CoreSolveMixin:
     def _incident_kxy(self, wavelength):
         """The incident in-plane wavevector, ``(k_inc_x, k_inc_y)``, normalized by ``k0``.
 
-        One body for all three backends. It was three, under a docstring saying "the
-        ``sin(theta)`` clamp differs between NumPy, JAX and Torch for tracing reasons, and this
-        keeps it the single source" -- a sentence that was in four places and was false. NumPy
-        and Torch branched with `if`, JAX with `jnp.where` on the *result*; putting the `where`
-        on the *argument* instead reproduces each backend's own output byte for byte, checked
-        across nine `theta` values including `pi/2`, `pi/2 + 0.5j` and `float32(pi/2) + 0.5j`.
+        Real angles describe the phase direction and impose real transverse k.
+        ``incident_phase_index`` obtains its magnitude from the full complex
+        epsilon*mu of the illuminated half-space. Complex angles retain the
+        formal n*sin(theta) parameterization; no imaginary component is discarded.
 
-        Three things that are not decoration:
+        The historical grazing clamp remains for lossless and complex-angle
+        inputs. Absorbing real-angle incidence must have abs(theta) < pi/2:
+        at grazing no finite wavevector satisfies uniform surface intensity.
+        Invalid traced inputs yield NaNs when their value cannot be checked eagerly.
 
-        * the dtype is given at creation, not applied after. `xp.asarray(0.4)` is `float32` on
-          Torch, and an `astype` afterwards widens a number that has already lost its digits --
-          measured at 1.5e-07 on 13 of 18 probes, which is exactly the kind of quiet narrowing
-          this repo hunts.
-        * `theta` and `phi` go through `_as_complex`, not `xp.asarray`. They are *user* values
-          and may be optimizer leaves; the constants below are the core's own, and
-          `xp.asarray` is right for those. `as_array`'s docstring has the split.
-        * the clamp and the threshold are Python floats computed once in NumPy. Building them
-          per backend is what made the method look backend-shaped in the first place.
-
-        ``theta >= pi/2`` is clamped one float32 ulp below it because ``sin`` at exactly
-        ``pi/2`` in single precision walks off the branch NumPy documents at
-        numpy/numpy#27306; the imaginary part rides through untouched, so an evanescent
-        incidence keeps its decay.
-
-        Takes ``wavelength`` for the signature it has always had, and does not read it: the
-        incidence direction is a direction. Kept so that the three call sites did not have to
-        change in the same commit that moved the body.
+        Direct kx/ky inputs are physical wavenumbers and are divided by k0 here.
+        In angle mode dispersive materials have already been evaluated at the
+        current wavelength.
         """
         xp, C = self.xp, self.complex_dtype
+        if self.kx is not None or self.ky is not None:
+            scale = wavelength / (2 * _np.pi)
+            return tuple(self._as_complex(0. if value is None else value * scale)
+                         for value in (self.kx, self.ky))
         theta = self._as_complex(0.0 if self.theta is None else self.theta)
-        # `phi is None` is the 1D TE/TM case, where the azimuth is not a degree of freedom.
         phi = self._as_complex(0.0 if self.phi is None else self.phi)
-        # A constant the core builds, so `xp.asarray` is the right spelling here and
-        # `_as_complex` is the right one above -- see `as_array`'s docstring on the split.
+        material = self.bot if self._incidence_side == 'bottom' else self.top
+        epsilon_mu = material.epsilon * material.mu if material.is_magnetic else material.epsilon
+        epsilon_mu = self._as_complex(epsilon_mu)
+        real_angles = (xp.imag(theta) == 0) & (xp.imag(phi) == 0)
+        a, b = xp.real(epsilon_mu), xp.imag(epsilon_mu)
+        invalid = real_angles & (((b != 0) & (xp.abs(xp.real(theta)) >= _np.pi / 2))
+                                 | ((b == 0) & (a <= 0)))
+        if _concrete(xp.any(invalid)):
+            raise ValueError(
+                'phase-angle incidence requires a propagating incident wave; in an '
+                'absorbing half-space, abs(theta) must be less than pi/2 radians')
+        # Mask before arithmetic so an unused branch cannot contaminate AD with NaNs.
+        use_phase = real_angles & ~invalid
+        phase_medium = xp.where(use_phase, epsilon_mu, xp.ones_like(epsilon_mu))
+        phase_theta = xp.where(use_phase, xp.real(theta), xp.zeros_like(xp.real(theta)))
+        phase_index = incident_phase_index(xp, phase_medium, phase_theta)
+        index = xp.where(real_angles, phase_index, self.n_inc)
+        index = xp.where(invalid, xp.full_like(index, float('nan')), index)
         clamped = xp.asarray(_HALF_PI_F32_BELOW, dtype=C) + xp.imag(theta) * 1j
         sin_theta = xp.sin(xp.where(xp.real(theta) >= _HALF_PI_F32, clamped, theta))
-        # n_inc, not n_top: theta lives in the incidence medium, which incidence_side picks.
-        return (xp.astype(self.n_inc * sin_theta * xp.cos(phi), C),
-                xp.astype(self.n_inc * sin_theta * xp.sin(phi), C))
+        return (xp.astype(index * sin_theta * xp.cos(phi), C),
+                xp.astype(index * sin_theta * xp.sin(phi), C))
 
     @device_scoped
     def order_kxy(self):
@@ -1798,9 +1922,8 @@ class CoreSolveMixin:
         All three slots are *reset*, not merely filled: below ``answers='field'`` the core hands
         back a mapping without them, and clearing them here is what stops a later
         reconstruction from walking the state of some earlier, unrelated solve. The
-        ``'efficiency'`` rung returns a bare ``(de_ri, de_ti)`` pair — the core's oldest
-        contract, kept because a caller who wants only power should not have to unpack a
-        mapping — so it is widened into one here, at the boundary, once.
+        The ``'efficiency'`` rung returns ``(R, T, power_entering)`` without retained
+        amplitudes. It is converted into the shared result layout here.
         """
         if not isinstance(out, dict):
             out = {'given': _efficiency_only(*out)}
@@ -1869,7 +1992,7 @@ class CoreSolveMixin:
         """
         return self._formulation_assigned
 
-    def _formulation_for(self, z_row):
+    def _formulation_for(self, z_row, mu=None):
         """Settle :attr:`formulation` against the z-row slots this call was handed.
 
         ``z_row`` is the four ``ep{xz,yz,zx,zy}_conv_all`` arguments. The test is whether a
@@ -1879,12 +2002,15 @@ class CoreSolveMixin:
         cheap path.
         """
         given = [name for name, stack in zip(_Z_ROW_SLOTS, z_row) if stack is not None]
+        if mu is not None:
+            given += [name for name, stack in zip(('muxz', 'muyz', 'muzx', 'muzy'), tuple(mu)[5:])
+                      if stack is not None]
         if self._formulation == Formulation.TWO_FIELD and given:
             raise ValueError(
                 f"formulation='2ff' cannot express the z row, and {', '.join(given)} "
                 f"{'was' if len(given) == 1 else 'were'} given. "
                 'The second-order form d2E/dz2 = Omega2 E exists only while the '
-                'permittivity z row and column are empty; dropping them would answer for the '
+                'epsilon and mu z off-diagonals are absent; dropping them would answer for the '
                 'reduced tensor, which conserves energy to machine precision while the '
                 "efficiencies move by 2e-2 to 6e-2. Use formulation='auto' (the default) or "
                 "'4ff'. See docs/anisotropic-materials.md section 6.")
@@ -1915,6 +2041,10 @@ class CoreSolveMixin:
         if self.structure is None:
             if self._grating_type is None:
                 self._grating_type = 2
+            return
+
+        if self._has_tensor_materials():
+            self._grating_type = 2
             return
 
         if self.modeling_path == ModelingPath.RASTER:
@@ -2021,14 +2151,14 @@ class CoreSolveMixin:
         # structural spelling `solve_conv` explains -- and the numeric default lives at the one
         # place that divides by it, so absence resolves to `1.0` exactly once, here.
         return self._finish(solve(
-            self.tetm_index, wavelength, kx, self.n_top, self.n_bot, self.theta,
+            self.tetm_index, wavelength, kx, self.n_bot, self.n_top, self.theta,
             self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
-            incidence_side=self.incidence_side, answers=self._answers,
+            incidence_side=self._kernel_incidence_side, answers=self._answers,
             lit=self._lit(), mu=self._mu_1d(mu),
-            mu_top=1.0 if mu_top is None else mu_top,
-            mu_bot=1.0 if mu_bot is None else mu_bot,
-            eps_top=eps_top, eps_bot=eps_bot))
+            mu_top=1.0 if mu_bot is None else mu_bot,
+            mu_bot=1.0 if mu_top is None else mu_top,
+            eps_top=eps_bot, eps_bot=eps_top))
 
     def _solve_1d_conical(self, epx_conv_all, epy_conv_all, epz_conv_i_all,
                           mu=None, mu_top=None, mu_bot=None, eps_top=None, eps_bot=None):
@@ -2037,64 +2167,48 @@ class CoreSolveMixin:
         wavelength = self.wavelength
         kx, ky = self._separable_kxy(wavelength)   # 1-D pair; see :meth:`_solve_1d`
         return self._finish(solve(
-            wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self._incidence_pair(), self.thickness,
+            wavelength, kx, ky, self.n_bot, self.n_top, self.theta, self._incidence_pair(), self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
-            phi=self.phi, incidence_side=self.incidence_side,
+            phi=self.phi, incidence_side=self._kernel_incidence_side,
             answers=self._answers, lit=self._lit(), mu=self._mu_1d(mu),
-            mu_top=1.0 if mu_top is None else mu_top,
-            mu_bot=1.0 if mu_bot is None else mu_bot,
-            eps_top=eps_top, eps_bot=eps_bot))
+            mu_top=1.0 if mu_bot is None else mu_bot,
+            mu_bot=1.0 if mu_top is None else mu_top,
+            eps_top=eps_bot, eps_bot=eps_top))
 
     def _solve_2d(self, epx_conv_all, epy_conv_all, epz_conv_i_all,
                  epxy_conv_all=None, epyx_conv_all=None,
                  epxz_conv_all=None, epyz_conv_all=None,
                  epzx_conv_all=None, epzy_conv_all=None, mu=None, mu_top=None, mu_bot=None,
                  eps_top=None, eps_bot=None):
-        # `mu_top` / `mu_bot` are `None` when no half-space permeability was named, the same
-        # spelling `Material.mu` uses and for the same reason: the refusal just below is a
-        # structural question, and `mu_top != 1.0` on a traced permeability is a traced boolean
-        # no `if` can take. The numeric default lives at the one place that multiplies by it,
-        # at the bottom of this method -- absence is resolved to `1.0` exactly once.
+        # None means no explicit magnetic half-space; numeric defaults resolve
+        # only at the kernel boundary, so tracing never branches on mu values.
         wavelength = self.wavelength
         kx, ky = self.order_kxy()
         z_row = (epxz_conv_all, epyz_conv_all, epzx_conv_all, epzy_conv_all)
-        self._formulation_assigned = self._formulation_for(z_row)
+        self._formulation_assigned = self._formulation_for(z_row, mu)
         if self._formulation_assigned == Formulation.FOUR_FIELD:
-            if (mu is not None and any(s is not None for s in mu)) or \
-                    mu_top is not None or mu_bot is not None:
-                # Name the reason this call is on the 4ff path, not a reason it could have
-                # been: `formulation='4ff'` reaches here with an empty z row, and blaming a
-                # z-coupled permittivity then sends the user to look for one that is not
-                # there. This refusal is also what makes
-                # `wavebit._core.fields.field_2d_4ff`'s `H_z = Kx Ey - Ky Ex` correct -- that
-                # line holds only at `mu = 1`, and holds because nothing else can arrive.
-                why = ('a z-coupled permittivity was given, which routes to'
-                       if any(s is not None for s in z_row) else
-                       "formulation='4ff' was asked for, which routes to")
-                raise NotImplementedError(
-                    f'a permeability was given and {why} the first-order (4ff) solve, and mu '
-                    'is not implemented there -- neither in the layer operator nor in the '
-                    'field reconstruction, whose H_z carries no mu_zz. Stay on the 2ff path, '
-                    'which does take mu: drop the z row, or leave formulation at its default.')
             return self._finish(_solve_2d_4ff(
-                wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self._incidence_pair(),
+                wavelength, kx, ky, self.n_bot, self.n_top, self.theta, self._incidence_pair(),
                 self.thickness, epx_conv_all, epy_conv_all, epz_conv_i_all,
                 epxy_conv_all=epxy_conv_all, epyx_conv_all=epyx_conv_all,
                 epxz_conv_all=epxz_conv_all, epyz_conv_all=epyz_conv_all,
                 epzx_conv_all=epzx_conv_all, epzy_conv_all=epzy_conv_all,
-                phi=self.phi, incidence_side=self.incidence_side,
+                phi=self.phi, incidence_side=self._kernel_incidence_side,
                 answers=self._answers, layer_algorithm=self.layer_algorithm,
-                lit=self._lit()))
+                lit=self._lit(), mu=mu,
+                mu_top=1.0 if mu_bot is None else mu_bot,
+                mu_bot=1.0 if mu_top is None else mu_top,
+                eps_top=eps_bot, eps_bot=eps_top))
         solve = self._solve_fn('2d')
         return self._finish(solve(
-            wavelength, kx, ky, self.n_top, self.n_bot, self.theta, self._incidence_pair(), self.thickness,
+            wavelength, kx, ky, self.n_bot, self.n_top, self.theta, self._incidence_pair(), self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
             epxy_conv_all=epxy_conv_all, epyx_conv_all=epyx_conv_all,
-            phi=self.phi, incidence_side=self.incidence_side,
+            phi=self.phi, incidence_side=self._kernel_incidence_side,
             answers=self._answers, lit=self._lit(), mu=mu,
-            mu_top=1.0 if mu_top is None else mu_top,
-            mu_bot=1.0 if mu_bot is None else mu_bot,
-            eps_top=eps_top, eps_bot=eps_bot))
+            mu_top=1.0 if mu_bot is None else mu_bot,
+            mu_bot=1.0 if mu_top is None else mu_top,
+            eps_top=eps_bot, eps_bot=eps_top))
 
 
 # The default rule for shape modeling. Explicit Li validates its Cartesian subset separately.
@@ -2162,7 +2276,7 @@ class CoreFactorizationMixin:
                  # permittivity (the scalar shorthand for Material(epsilon=x)). Was `n_top`
                  # and held a refractive index; both the name and the quantity changed.
                  bot=1.,                     # substrate, same reading as `top`.
-                 theta=0.,
+                 theta=None,
                  phi=None,
                  psi=None,
                  period=_CELL_UNSET,   # (Lx, Ly); the sentinel is 'not named', not a value.
@@ -2196,7 +2310,7 @@ class CoreFactorizationMixin:
                  # default resolves per modeling path -- 'li' on a raster, 'nvf' on
                  # parametric shapes, which is the only rule the shape path implements.
                  # Naming the other one raises.
-                 normal_grid=None,  # normal-field sampling, per axis; None resolves to
+                 shape_nvf_grid_size=None,  # normal-field sampling, per axis; None resolves to
                  # max(_NORMAL_GRID_DEFAULT, 4*half_width+1) -- 1024, lifted to the aliasing
                  # floor. This comment said 256 until 2026-09-02, which is a number that was
                  # tried and reverted: it is a rectangle's *angle* that sets the grid, and 256
@@ -2215,16 +2329,16 @@ class CoreFactorizationMixin:
                  # end, for the reason above.
                  polarization=None,          # complex incident amplitude pair (a_s, a_p);
                  # supersedes psi (naming both raises). See docs/conventions.md.
-                 normal_method=None,         # raster NVF normal-field construction:
+                 raster_normal_method=None,  # raster NVF normal-field construction:
                  # 'distance' (default) | 'contour' | 'spectral' | 'smooth'. Read only
                  # where a raster normal field is built (factorization='nvf' on a raster);
                  # explicitly set anywhere else it is refused rather than ignored.
                  # See docs/nvf-normal-methods.md for the measurements that rank them.
-                 projector=None,             # how P is formed *from* that field:
+                 nvf_projector=None,         # how P is formed for raster or shape NVF:
                  # 'linear' (default, P = n n^T) | 'circular' (Antos' complex polarization
                  # basis, direction-free as |n| -> 0 -- the medial axis). A second axis
-                 # rather than a fifth normal_method: it composes with all four
-                 # constructions. Read and refused exactly where normal_method is.
+                 # rather than a fifth raster_normal_method: it composes with all four
+                 # raster constructions and is also supported by the shape NVF path.
                  answers='amplitude',        # what this solve keeps the state to answer:
                  # 'efficiency' | 'amplitude' (default) | 'field'. A declaration, like tetm --
                  # reconstruct_field is refused below 'field' rather than served, because the
@@ -2236,6 +2350,7 @@ class CoreFactorizationMixin:
                  # permeability belongs to the Material filling each region, so naming it
                  # here is refused rather than ignored. New parameters go at the end -- see
                  # the note on `lattice` above.
+                 kx=None, ky=None,           # real Cartesian components in inverse length
                  **unknown,                  # collected rather than left to Python, so the
                  # refusal comes from `_refuse_unknown_keywords` and a typo cannot be
                  # swallowed by the catch-all itself.
@@ -2269,7 +2384,7 @@ class CoreFactorizationMixin:
                          thickness=thickness, layer_algorithm=layer_algorithm,
                          excitation=excitation,
                          device=device, complex_dtype=complex_dtype,
-                         polarization=polarization)
+                         polarization=polarization, kx=kx, ky=ky)
         self.incidence_side = incidence_side
         self.answers = answers
 
@@ -2284,9 +2399,9 @@ class CoreFactorizationMixin:
 
         self.backend = self._BACKEND_ID if backend is None else backend
         self._set_fourier_options(fourier_coefficients, factorization)
-        self.normal_method = normal_method
-        self.projector = projector
-        self._normal_grid = normal_grid
+        self.raster_normal_method = raster_normal_method
+        self.nvf_projector = nvf_projector
+        self._normal_grid = shape_nvf_grid_size
         self.lattice = lattice      # after period: assigning a basis overwrites period
 
         # Whether a cell was ever *named*. Read by `_refuse_a_structure_with_no_cell`, which
@@ -2316,9 +2431,9 @@ class CoreFactorizationMixin:
     #: built. What the None distinguishes is an explicit request on a build that would never
     #: read it, which :meth:`_reject_unread_normal_method` refuses instead of ignoring.
     _normal_method = None
-    #: And likewise, for the same reason and the same reader. ``normal_method`` and this are
-    #: two independent axes over one field -- how it is *built* and what is *done with it* --
-    #: so they are read together and refused together, and neither is a value of the other.
+    #: Likewise, preserve whether the NVF projector was explicitly requested. On a raster,
+    #: ``raster_normal_method`` and this select how the field is built and projected. The
+    #: shape NVF path also reads this option, but builds its field directly from geometry.
     _projector = None
 
     def _set_fourier_options(self, fourier_coefficients, factorization):
@@ -2456,7 +2571,7 @@ class CoreFactorizationMixin:
         import difflib
         known = sorted(self._condition_names())
         near = difflib.get_close_matches(name, known, n=1, cutoff=0.6)
-        hint = f' Did you mean {near[0]!r}?' if near else ''
+        hint = nvf_option_rename_hint([name]) or (f' Did you mean {near[0]!r}?' if near else '')
         raise AttributeError(
             f'{type(self).__name__} has no attribute {name!r} to set.{hint} Refused rather '
             f'than stored, because storing it is silent: the solve reads the attribute it '
@@ -2510,7 +2625,8 @@ class CoreFactorizationMixin:
                 near = difflib.get_close_matches(name, sorted(legal), n=1, cutoff=0.7)
                 hints.append(f'{name!r}' + (f' (did you mean {near[0]!r}?)' if near else ''))
             raise TypeError(
-                f'unexpected keyword argument(s): {", ".join(hints)}. These entry points take '
+                f'unexpected keyword argument(s): {", ".join(hints)}.'
+                f'{nvf_option_rename_hint(unknown)} These entry points take '
                 f'conditions to set before solving, and a name that is not one used to be '
                 f'stored as an attribute and silently ignored -- the solve then answered the '
                 f'scene you had, not the one you asked for. Settable conditions: '
@@ -2577,6 +2693,11 @@ class CoreFactorizationMixin:
                     was = before.get(slot, absent)
                     if slot not in held and now is not was and _holds_tracer(now):
                         held[slot] = was
+                        if slot in ('_top', '_bot', '_structure'):
+                            # The evaluated value and its static dispersion definition
+                            # are one assignment, even when only the value is traced.
+                            source = slot + '_dispersion'
+                            held.setdefault(source, before.get(source, absent))
             if self._device != device_before:
                 # `solve(device=X)`: the decorator opened the scope of the device this solver
                 # was on, before the keyword was assigned. The new device's opens inside it.
@@ -2644,6 +2765,7 @@ class CoreFactorizationMixin:
         # is the whole reason it is a wrapper rather than an ndarray subclass (a subclass
         # survives only NumPy; jax and torch copy the numbers and drop the attribute).
         drawn_on = None
+        dispersion = None
         if isinstance(structure, _lattice.DrawnOn):
             structure, drawn_on = structure.values, _np.asarray(structure.lattice, dtype=float)
 
@@ -2669,7 +2791,9 @@ class CoreFactorizationMixin:
                     'the same rule on a commensurate 1D grating and behind NVF everywhere '
                     'else. Write the shapes as dicts for the parametric path, or sample them '
                     'onto a raster.')
-            kind, value = ModelingPath.PARAMETRIC, self._placed_layers(structure)
+            resolved = self._structure_at(structure, self.wavelength)
+            dispersion = structure if resolved is not structure else None
+            kind, value = ModelingPath.PARAMETRIC, self._placed_layers(resolved)
         elif structure is None:
             kind, value = None, None
         else:
@@ -2687,6 +2811,7 @@ class CoreFactorizationMixin:
         except Exception:
             self._structure, self._modeling_path = previous
             raise
+        self._structure_dispersion = dispersion
 
     def _coerce_raster(self, where, grid):
         """A raster field on this backend at the solve's precision.
@@ -2770,7 +2895,7 @@ class CoreFactorizationMixin:
 
         self._assign_grating_type()
         z_row = (epxz_conv_all, epyz_conv_all, epzx_conv_all, epzy_conv_all)
-        if self._formulation_for(z_row) == Formulation.FOUR_FIELD:
+        if self._formulation_for(z_row, mu) == Formulation.FOUR_FIELD:
             # The 1D paths have no z-row slots to fill, so a z row is also a choice of path:
             # the first-order solve is written on the 2D layout (a 1D structure is n_orders_v == 1
             # there, the same physics the conical path solves at conical cost).
@@ -2843,11 +2968,17 @@ class CoreFactorizationMixin:
         """
         try:
             lattice = self.lattice
+            def real_component(value):
+                if value is None:
+                    return None
+                return float(value.detach() if hasattr(value, 'detach') else value)
             return (
                 complex(self.wavelength),
                 tuple(complex(v) for v in _np.asarray(self.thickness).reshape(-1)),
-                complex(self.theta),
+                None if self.theta is None else complex(self.theta),
                 None if self.phi is None else complex(self.phi),
+                real_component(self.kx),
+                real_component(self.ky),
                 tuple(complex(v) for v in _np.asarray(self.period).reshape(-1)),
                 None if lattice is None else tuple(
                     complex(v) for v in _np.asarray(lattice).reshape(-1)),
@@ -2927,7 +3058,7 @@ class CoreFactorizationMixin:
         """Reconstruct the field from the state left behind by the last solve.
 
         ``sample_x`` / ``sample_y`` / ``sample_z`` each take either a **count** -- a uniform
-        grid, the long-standing behaviour and unchanged to the bit -- or the **coordinates
+        grid -- or the **coordinates
         themselves**, as a 1-D array. The reconstruction is pointwise in all three, so
         explicit points cost the same per point as grid ones and involve no interpolation.
         They are named for taking either; a count is one way to say where to sample.
@@ -2936,9 +3067,9 @@ class CoreFactorizationMixin:
         **centre of the cell** -- the origin a parametric shape's ``cx`` uses since 2026-08-31 --
         and are otherwise unconstrained; a count spans the cell, which is ``[-period/2,
         +period/2]`` in that frame and the same physical grid it always was.
-        ``sample_z`` is absolute, measured from the top of the stack, must lie inside it, and
-        assigns an interface to the layer below it -- which is visible only in ``E_z``, the one
-        component genuinely two-valued there. With explicit ``sample_z`` the returned z axis is
+        ``sample_z`` is absolute, measured upward from the bottom of the stack, must lie inside it, and
+        assigns an interface to the layer above it. The normal components ``E_z`` and ``H_z``
+        may jump across material interfaces. With explicit ``sample_z`` the returned z axis is
         exactly the request, in the caller's order, rather than ``sample_z * n_layers``.
 
         ``incidences`` names which of the incidences the solve carries to reconstruct, one
@@ -2964,9 +3095,9 @@ class CoreFactorizationMixin:
         """
         self._require_field_declaration()
         self._reject_stale_field_scene()
-        # An explicit z is stated in scene coordinates on both sides, so a backside request is
-        # restated in the mirror the solve walks before anything buckets it.
-        backside = self.incidence_side == 'bottom'
+        # Top illumination walks downward, so restate public heights in that propagation
+        # frame before assigning samples to layers.
+        backside = self._kernel_incidence_side == 'bottom'
         counted_z = is_count(sample_z)
         if backside:
             sample_z = to_mirrored_z(sample_z, self.thickness)
@@ -2977,12 +3108,14 @@ class CoreFactorizationMixin:
             field_cell = field_1d(self.wavelength, kx, self.T1, self.layer_info_list,
                                   self.lattice, self.tetm_index,
                                   sample_x=sample_x, sample_y=sample_y, sample_z=sample_z,
-                                  incidences=incidences)
+                                  incidences=incidences,
+                                  interface_side='left' if backside else 'right')
         elif self._grating_type == 1:
             field_cell = field_1d_conical(self.wavelength, kx, ky, self.T1,
                                           self.layer_info_list, self.lattice,
                                           sample_x=sample_x, sample_y=sample_y,
-                                          sample_z=sample_z, incidences=incidences)
+                                          sample_z=sample_z, incidences=incidences,
+                                          interface_side='left' if backside else 'right')
         elif self._formulation_assigned == Formulation.FOUR_FIELD:
             # The grating type cannot answer this: the first-order path sets it to 2 as well,
             # so branching on it alone would hand a 4ff solve to the 2ff reconstruction, which
@@ -2991,12 +3124,14 @@ class CoreFactorizationMixin:
             field_cell = field_2d_4ff(self.wavelength, kx, ky, self.T1,
                                       self.layer_info_list, self.lattice,
                                       sample_x=sample_x, sample_y=sample_y,
-                                      sample_z=sample_z, incidences=incidences)
+                                      sample_z=sample_z, incidences=incidences,
+                                      interface_side='left' if backside else 'right')
         else:
             field_cell = field_2d(self.wavelength, kx, ky, self.T1,
                                   self.layer_info_list, self.lattice,
                                   sample_x=sample_x, sample_y=sample_y,
-                                  sample_z=sample_z, incidences=incidences)
+                                  sample_z=sample_z, incidences=incidences,
+                                  interface_side='left' if backside else 'right')
 
         if backside:
             # The backside solve is the top-side solve of the z-mirrored scene, so its cell is
@@ -3080,7 +3215,9 @@ class CoreFactorizationMixin:
         # layer by layer against each other, so a mismatch is not a broadcast to resolve --
         # it means the two describe different structures. Left to the builders it surfaces
         # much later as a shape error inside a Fourier transform, naming neither field.
-        if self._structure is not None and tuple(field.shape) != tuple(self._structure.shape):
+        def grid_shape(a):
+            return tuple(a.shape[:3]) if a.ndim == 5 and a.shape[-2:] == (3, 3) else tuple(a.shape)
+        if self._structure is not None and grid_shape(field) != grid_shape(self._structure):
             raise ValueError(
                 f'mu is {tuple(field.shape)} and structure is '
                 f'{tuple(self._structure.shape)}: the permittivity and the permeability are '
@@ -3117,10 +3254,11 @@ class CoreFactorizationMixin:
         """How each layer's Fourier coefficients are obtained: ``'sampled'`` | ``'integrated'``.
 
         Resolved against the modeling path, exactly like :attr:`factorization` and for the same
-        reason. Only the raster path takes both: the two shape paths state a layer as geometry
-        and integrate over it in closed form, so the integrated series is the only one either
-        can form, and the keyword there is a claim about the build rather than a choice within
-        it.
+        reason. Scalar shapes integrate their geometry. Tensor shapes also default to
+        ``'integrated'``: analytic region indicators are combined with a sampled normal
+        extension. Tensor shapes additionally accept ``'sampled'`` to rasterize the material
+        geometry explicitly. Tensor rasters use ``'sampled'`` under NVF and support
+        both coefficient methods under Li; scalar rasters support both.
 
         Raises:
             NotImplementedError: when the series was *explicitly* asked for and this modeling
@@ -3129,6 +3267,11 @@ class CoreFactorizationMixin:
                 touched the keyword is not asking for anything and keeps the closed-form
                 series that path always ran.
         """
+        if self._has_tensor_materials():
+            _anisotropy.validate_options(self)
+            return ((FourierCoefficients.INTEGRATED if isinstance(self.structure,list)
+                     else FourierCoefficients.SAMPLED) if self._fourier_coefficients is None
+                    else self._fourier_coefficients)
         implemented = _COEFFICIENTS_IMPLEMENTED_BY.get(self._modeling_path)
         if implemented is None:                       # raster, or no structure yet: free choice
             return (DEFAULT_FOURIER_COEFFICIENTS if self._fourier_coefficients is None
@@ -3153,8 +3296,12 @@ class CoreFactorizationMixin:
 
         Shapes default to NVF. Explicit Li uses exact Cartesian intervals for
         axis-aligned rectangles in a rectangular cell; other shapes are refused.
-        Raster structures support both rules and default to Li.
+        Scalar rasters default to Li. Tensor inputs default to NVF and accept
+        explicit Li on axis-aligned rectangular cells with no patterned z coupling.
         """
+        if self._has_tensor_materials():
+            _anisotropy.validate_options(self)
+            return Factorization.NVF if self._factorization is None else self._factorization
         if self._modeling_path == ModelingPath.PARAMETRIC and self._factorization == Factorization.LI:
             _rectilinear.validate(self.structure, self.lattice)
             return Factorization.LI
@@ -3175,7 +3322,7 @@ class CoreFactorizationMixin:
         self._factorization = factorization_of(value)
 
     @property
-    def normal_method(self):
+    def raster_normal_method(self):
         """How the raster NVF normal field is constructed: ``'distance'`` | ``'contour'`` |
         ``'spectral'`` | ``'smooth'``.
 
@@ -3189,12 +3336,12 @@ class CoreFactorizationMixin:
         """
         return DEFAULT_NORMAL_METHOD if self._normal_method is None else self._normal_method
 
-    @normal_method.setter
-    def normal_method(self, value):
+    @raster_normal_method.setter
+    def raster_normal_method(self, value):
         self._normal_method = None if value is None else normal_method_of(value)
 
     @property
-    def projector(self):
+    def nvf_projector(self):
         """NVF projection: ``'linear'`` (default) or ``'circular'``.
 
         Raster circular projection uses field magnitude. For shapes,
@@ -3208,11 +3355,11 @@ class CoreFactorizationMixin:
         """
         return DEFAULT_PROJECTOR if self._projector is None else self._projector
 
-    @projector.setter
-    def projector(self, value):
+    @nvf_projector.setter
+    def nvf_projector(self, value):
         self._projector = None if value is None else projector_of(value)
 
-    #: What `normal_grid=None` means, before the `4*truncation_order+1` floor lifts it.
+    #: What `shape_nvf_grid_size=None` means, before the `4*truncation_order+1` floor lifts it.
     #:
     #: **1024, and it survived an attempt to drop it to 256.** On the forward value 1024 is
     #: plainly over-specified: 256 moves `sum(T)` by 1.4e-9 to 7.2e-7 on a circle, a tilted
@@ -3229,8 +3376,8 @@ class CoreFactorizationMixin:
     _NORMAL_GRID_DEFAULT = 1024
 
     @property
-    def normal_grid(self):
-        """The normal field's sampling, per axis -- **resolved**, never ``None``.
+    def shape_nvf_grid_size(self):
+        """Shape NVF projector sampling points per cell axis, resolved rather than ``None``.
 
         Reports the grid the *current* solve will use, the way :attr:`factorization` reports the
         rule it will use: a stated number is returned as stated, and ``None`` resolves against
@@ -3248,12 +3395,12 @@ class CoreFactorizationMixin:
             return self._NORMAL_GRID_DEFAULT
         return self._resolve_normal_grid(hu, hv)
 
-    @normal_grid.setter
-    def normal_grid(self, value):
+    @shape_nvf_grid_size.setter
+    def shape_nvf_grid_size(self, value):
         self._normal_grid = value
 
     def _resolve_normal_grid(self, half_width_u, half_width_v):
-        """`normal_grid`, with `None` meaning "enough, and not more".
+        """`shape_nvf_grid_size`, with `None` meaning "enough, and not more".
 
         A *stated* number is taken as stated and checked against the aliasing floor by
         :func:`~wavebit._core.factorization.check_normal_grid`, which refuses below it. The
@@ -3270,7 +3417,7 @@ class CoreFactorizationMixin:
         since 2026-09-11 several shapes are built with their first shape at the centre and
         carried the same way. Peak-to-peak `sum(T)` over a one-pixel rigid translation, `truncation_order=6`:
 
-            normal_grid        128       256       512      1024
+            shape_nvf_grid_size        128       256       512      1024
             one shape      1.1e-13   7.0e-14   1.3e-13   8.1e-14      flat, machine precision
             two shapes     2.8e-06   6.4e-07   2.6e-07   1.3e-07      converged, until 2026-09-11
             two shapes     1.5e-13   2.9e-13   2.8e-13   9.8e-14      flat since (two 250 x 300
@@ -3290,7 +3437,7 @@ class CoreFactorizationMixin:
         return want
 
     def _reject_unread_normal_method(self, factorization):
-        """Refuse an explicit ``normal_method`` on a build that constructs no raster normal
+        """Refuse an explicit ``raster_normal_method`` on a build that constructs no raster normal
         field — before it silently decides nothing.
 
         The keyword is read exactly when the raster path builds a normal field, which is
@@ -3309,7 +3456,7 @@ class CoreFactorizationMixin:
         else:
             where = "factorization='li' builds no normal field at all"
         raise NotImplementedError(
-            f"normal_method={normal_method_of(self._normal_method).value!r} has no reader "
+            f"raster_normal_method={normal_method_of(self._normal_method).value!r} has no reader "
             f"here: {where}. It selects the raster NVF normal-field construction, so it "
             f"needs a raster structure and factorization='nvf'.")
 
@@ -3320,7 +3467,7 @@ class CoreFactorizationMixin:
         if self._modeling_path == ModelingPath.RASTER and factorization == Factorization.NVF:
             return
         if self._modeling_path == ModelingPath.PARAMETRIC and factorization == Factorization.NVF:
-            if self.projector == 'circular':
+            if self.nvf_projector == 'circular':
                 for layer in self.structure:
                     _parametric.check_dyadic_shapes(layer.get('shapes', []))
             return
@@ -3329,21 +3476,21 @@ class CoreFactorizationMixin:
         else:
             where = "factorization='li' builds no normal field at all"
         raise NotImplementedError(
-            f"projector={projector_of(self._projector).value!r} has no reader here: {where}. "
-            f"It selects how the NVF projector is formed from a raster normal field, so it "
-            f"needs a raster structure and factorization='nvf'.")
+            f"nvf_projector={projector_of(self._projector).value!r} has no reader here: {where}. "
+            f"It selects the NVF projection for raster or shape structures, so it "
+            f"needs factorization='nvf'.")
 
     def _reject_unread_normal_grid(self):
-        """Refuse an explicit ``normal_grid`` on a build that samples no normal field.
+        """Refuse an explicit ``shape_nvf_grid_size`` on a build that samples no normal field.
 
         Exactly the argument :meth:`_reject_unread_normal_method` makes for its sibling, and
-        the asymmetry between them was not a decision. ``normal_grid`` is read by the shape
+        the asymmetry between them was not a decision. ``shape_nvf_grid_size`` is read by the shape
         paths and by nothing else: on a raster the field is built at the raster's own
-        resolution (lifted to the aliasing floor), so ``normal_grid=64`` and
-        ``normal_grid=4096`` return the same answer to the last bit, under Li *and* under NVF.
+        resolution (lifted to the aliasing floor), so ``shape_nvf_grid_size=64`` and
+        ``shape_nvf_grid_size=4096`` return the same answer to the last bit, under Li *and* under NVF.
         Measured before this check: 0.898147036010 for both at 64 and at 4096.
 
-        More urgently than for `normal_method`, in fact: this one's own signature comment
+        More urgently than for `raster_normal_method`, in fact: this one's own signature comment
         promises a raster user something about shape gradients it cannot deliver for them.
 
         The default is exempt for the same reason as everywhere else -- an untouched keyword is
@@ -3354,9 +3501,9 @@ class CoreFactorizationMixin:
         if self._modeling_path == ModelingPath.PARAMETRIC:
             if self.factorization == Factorization.NVF:
                 return
-            raise NotImplementedError("normal_grid has no reader with Cartesian shape factorization='li'")
+            raise NotImplementedError("shape_nvf_grid_size has no reader with Cartesian shape factorization='li'")
         raise NotImplementedError(
-            f'normal_grid={self._normal_grid!r} has no reader here: the raster path builds its '
+            f'shape_nvf_grid_size={self._normal_grid!r} has no reader here: the raster path builds its '
             f"normal field at the raster's own resolution, lifted to the 4*truncation_order+1 "
             f'floor, so this changes nothing. It sizes the grid the *shape* paths sample their '
             f'analytic normal field on, and needs a structure of shape dicts.')
@@ -3386,6 +3533,8 @@ class CoreFactorizationMixin:
 
     def _freeze_geometry(self):
         """:meth:`freeze_geometry` past its conditions."""
+        if self._has_tensor_materials():
+            return _anisotropy.freeze(self)
         # A record of a stack that cannot be solved is a record of nothing, and it would be
         # replayed rather than rebuilt -- so the mismatch would surface later, from the replay,
         # further from the assignment that caused it. Only this one refusal, not all of
@@ -3419,9 +3568,9 @@ class CoreFactorizationMixin:
             if factorization == Factorization.NVF:
                 normal_field = _fac.normal_field_for_raster(
                     self.structure, half_width_u, half_width_v, lattice=basis,
-                    method=self.normal_method, projector=self.projector)
+                    method=self.raster_normal_method, nvf_projector=self.nvf_projector)
                 normal_field_source = _fac.normal_field_source_for_raster(
-                    self.structure, half_width_u, half_width_v, lattice=basis, method=self.normal_method)
+                    self.structure, half_width_u, half_width_v, lattice=basis, method=self.raster_normal_method)
                 if self._mu is not None:
                     # A separate record, off `mu`'s own raster. A magnetic inclusion need not
                     # sit where the dielectric one does, and the NVF rearrangement is written
@@ -3431,9 +3580,9 @@ class CoreFactorizationMixin:
                     # coincide, which is most of them, and silently wrong on the rest.
                     mu_normal_field = _fac.normal_field_for_raster(
                         self._mu, half_width_u, half_width_v, lattice=basis,
-                        method=self.normal_method, projector=self.projector)
+                        method=self.raster_normal_method, nvf_projector=self.nvf_projector)
                     mu_normal_field_source = _fac.normal_field_source_for_raster(
-                        self._mu, half_width_u, half_width_v, lattice=basis, method=self.normal_method)
+                        self._mu, half_width_u, half_width_v, lattice=basis, method=self.raster_normal_method)
             if coefficients == FourierCoefficients.INTEGRATED:
                 compression = [_fac.compression_indices(self.structure[i])
                                for i in range(self.structure.shape[0])]
@@ -3692,6 +3841,11 @@ class CoreFactorizationMixin:
         ``None`` on the paths that produce three rather than five (see
         :func:`~._core.factorization.nvf_conv_matrices`).
 
+        A full material tensor, uniform or patterned, may instead return
+        :class:`wavebit.TensorConvMatrices`, which appends ``epxz, epyz, epzx,
+        epzy`` for the nine-slot ``solve_conv`` interface. Physical tensor inputs
+        use ordinary signs; off-diagonal convolution slots use negative signs.
+
         **This exists because the boundary was one-way.** ``solve_conv`` has always accepted
         these matrices, so a caller could put them *in*; nothing returned them, so anyone who
         wanted to look at what a modeling path actually built had to reach into ``_core`` and
@@ -3711,9 +3865,9 @@ class CoreFactorizationMixin:
         **Permittivity only**, which since 2026-08-20 the name says: this was ``conv_matrices``
         beside a ``mu_matrices``, one named for the operation and one for the quantity, so the
         pair did not read as a pair and the unmarked half had to carry this paragraph instead.
-        A magnetic structure also builds five permeability slots and they are not returned here
+        A magnetic structure also builds permeability slots and they are not returned here
         -- widening the tuple would change what every existing caller unpacks.
-        :meth:`mu_conv_matrices` returns the other five, in the same five-slot layout.
+        :meth:`mu_conv_matrices` returns them in the same five- or nine-slot layout.
 
         ``geometry`` behaves as in :meth:`solve`, and so do the conditions: a traced cell or
         structure serves this call and is put back after it.
@@ -3735,13 +3889,17 @@ class CoreFactorizationMixin:
         magnetic: the solve reads that ``None`` as "take the non-magnetic arithmetic", which
         is bit-identical to the code that existed before ``mu`` did.
 
+        Full tensors append muxz, muyz, muzx and muzy in the same negative
+        off-diagonal convention, returning :class:`wavebit.TensorConvMatrices`.
+        A coupling in either epsilon or mu selects 4ff automatically.
+
         ``geometry`` behaves as in :meth:`solve`, and so do the conditions: a traced cell or
         structure serves this call and is put back after it.
         """
         with self._conditions(kwargs):
             return self._mu_conv_matrices(geometry)
 
-    def slice_structure(self, layer=0, n=512, show='eps', band_limited=False):
+    def slice_structure(self, layer=0, n=512, show='eps', band_limited=False, *, component=None):
         """One layer's structure as an array. See :func:`wavebit._core.draw.slice_structure`.
 
         Verb-first to match :meth:`plot_structure`, which is this call with ``plot()`` around
@@ -3752,9 +3910,10 @@ class CoreFactorizationMixin:
         (:meth:`reconstruct_field` / :meth:`plot_field`).
         """
         from .draw import slice_structure
-        return slice_structure(self, layer=layer, n=n, show=show, band_limited=band_limited)
+        return slice_structure(self, layer=layer, n=n, show=show, band_limited=band_limited,
+                               component=component)
 
-    def plot_structure(self, layer=0, n=512, show='eps', ax=None, band_limited=False):
+    def plot_structure(self, layer=0, n=512, show='eps', ax=None, band_limited=False, *, component=None):
         """Draw one layer of the structure. See :func:`wavebit._core.draw.plot_structure`.
 
         Here rather than on the three backend solvers because the picture is NumPy either way,
@@ -3764,7 +3923,7 @@ class CoreFactorizationMixin:
         """
         from .draw import plot_structure
         return plot_structure(self, layer=layer, n=n, show=show, ax=ax,
-                              band_limited=band_limited)
+                              band_limited=band_limited, component=component)
 
     def _reject_unsupported_lattice(self):
         """Refuse the build paths a skewed cell has no implementation for — before they answer.
@@ -3802,7 +3961,7 @@ class CoreFactorizationMixin:
           :func:`~wavebit._core.overlap.overlapping_pairs`, which decides whether a layer has
           an overlap at all. See ``test_a_painted_overlap_survives_a_unimodular_shear``.
 
-        The third was implemented, on 2026-08-21. Every ``normal_method`` other than
+        The third was implemented, on 2026-08-21. Every ``raster_normal_method`` other than
         ``'distance'`` used to be refused here, on the grounds that only ``'distance'``
         carried the ``J^-T`` pullback that turns an index-space gradient into a Cartesian
         normal. True of the code, and not of the constructions: two of the three never take
@@ -3832,11 +3991,13 @@ class CoreFactorizationMixin:
 
     def _eps_conv_matrices(self, geometry=None):
         """Convolution matrices for the current structure: ``(epx, epy, epz_i, epxy, epyx)``."""
+        if self._has_tensor_materials():
+            return _anisotropy.build(self, geometry)
         self._check_before_building()
         return self._slots_for(self.structure, geometry, quantity='permittivity')
 
     def _mu_conv_matrices(self, geometry=None):
-        """The five permeability slots, or ``None`` when nothing in the scene is magnetic.
+        """The permeability slots, or ``None`` when nothing in the scene is magnetic.
 
         The permeability is built by the *same* builder as the permittivity, on the same
         geometry, and that is the whole content of this method. Maxwell's two curl equations
@@ -3854,8 +4015,8 @@ class CoreFactorizationMixin:
         Where ``mu`` *cannot* be expressed the refusal is by name and lives elsewhere, close
         to what cannot express it: the 1D and conical operators hold the diagonal three of
         these five and have no off-diagonal position for the other two, and ``solve_conv``
-        says so; the first-order (4ff) solve implements none of them --
-        :meth:`CoreSolveMixin._solve_2d` says so. Nothing here drops a ``mu`` quietly,
+        says so. Full tensors in either epsilon or mu select the first-order
+        (4ff) solve, including longitudinal magnetic-field reconstruction. Nothing drops mu,
         which is the whole reason it is wired at all: a material property the solve ignored
         would be the unread knob :meth:`_reject_unread_normal_method` exists to refuse.
 
@@ -3864,6 +4025,8 @@ class CoreFactorizationMixin:
         """
         if not self._layers_are_magnetic():
             return None
+        if self._has_tensor_materials():
+            return _anisotropy.build(self, geometry, quantity='mu')
         self._check_before_building()
         return self._slots_for(self._mu_structure(), geometry, quantity='permeability')
 
@@ -3972,8 +4135,8 @@ class CoreFactorizationMixin:
                         normal_field=normal_field,
                         normal_field_source=normal_field_source,
                         lattice=self._geometry_lattice_for(geometry),
-                        normal_method=self.normal_method,
-                        projector=self.projector)
+                        raster_normal_method=self.raster_normal_method,
+                        nvf_projector=self.nvf_projector)
                 else:
                     conv = _fac.to_conv_mat_raster_integrated_nvf(
                         structure, half_width_u, half_width_v,
@@ -3981,8 +4144,8 @@ class CoreFactorizationMixin:
                         normal_field_source=normal_field_source,
                         compression=compression,
                         lattice=self._geometry_lattice_for(geometry),
-                        normal_method=self.normal_method,
-                        projector=self.projector)
+                        raster_normal_method=self.raster_normal_method,
+                        nvf_projector=self.nvf_projector)
 
         elif self._modeling_path == ModelingPath.PARAMETRIC:
             if factorization == Factorization.LI:
@@ -3999,7 +4162,7 @@ class CoreFactorizationMixin:
                 conv = _parametric.to_conv_mat_parametric_layers(
                     structure, half_width_u, half_width_v,
                     self._geometry_lattice_for(geometry),
-                    normal_grid=self._resolve_normal_grid(half_width_u, half_width_v),
+                    shape_nvf_grid_size=self._resolve_normal_grid(half_width_u, half_width_v),
                     # The declared width, not a literal. This read `xp.complex128` with
                     # `self.complex_dtype` in scope, so a caller asking for single precision on
                     # this path got double: NumPy and JAX returned float64 from a solver that
@@ -4010,7 +4173,7 @@ class CoreFactorizationMixin:
                     # The same record for both quantities: it is geometric, and the permeability
                     # view's own material slots make the seam signs per quantity at build time.
                     gamma_plans=None if geometry is None else geometry.gamma_plans,
-                    **({} if self._projector is None else {'projector': self.projector}))
+                    **({} if self._projector is None else {'nvf_projector': self.nvf_projector}))
 
         else:
             raise ValueError(
@@ -4063,6 +4226,10 @@ class CoreFactorizationMixin:
             for shape in layer.get('shapes', []):
                 out.append(as_material(shape.get('material', 1.0), 'shape material'))
         return out
+
+    def _has_tensor_materials(self):
+        return _anisotropy.scene_is_tensor(getattr(self, '_structure', None),
+                                          getattr(self, '_mu', None))
 
     def _mu_structure(self):
         """The current structure with every material's ``mu`` where its ``epsilon`` was.

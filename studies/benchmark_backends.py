@@ -228,7 +228,7 @@ def shape_builder(truncation_order, layers):
 
     This took a `split` argument until 2026-08-27 -- the block modeller's `n_split`, which set
     how many axis-aligned rectangles a shape was cut into. There is no successor knob on the
-    surviving paths, and `normal_grid` is not one: it samples a normal field rather than
+    surviving paths, and `shape_nvf_grid_size` is not one: it samples a normal field rather than
     approximating the outline. So the sweep's grid lost that axis rather than renaming it.
     """
     cfg = dict(period=[300.0, 300.0], thickness=[205.0] * layers, truncation_order=[truncation_order, truncation_order],
@@ -350,7 +350,7 @@ def sweep_recompile(budget, reps):
     return out
 
 
-def decompose(backend, truncation_order, normal_grid, reps):
+def decompose(backend, truncation_order, shape_nvf_grid_size, reps):
     """Modeling and solve, timed apart, for one backend and one configuration.
 
     `eps_conv_matrices()` is the modeling half -- the shapes' analytic transform and the normal
@@ -361,7 +361,7 @@ def decompose(backend, truncation_order, normal_grid, reps):
     cfg = dict(period=[300.0, 300.0], thickness=[205.0],
                truncation_order=[truncation_order, truncation_order],
                top=1.0, bot=1.0, theta=0.15, phi=0.35, psi=TE_PSI, wavelength=900.0,
-               normal_grid=normal_grid)
+               shape_nvf_grid_size=shape_nvf_grid_size)
 
     def build(lx):
         return wavebit.rcwa(backend=backend, structure=[
@@ -371,7 +371,7 @@ def decompose(backend, truncation_order, normal_grid, reps):
 
     # **The shape moves between calls, and it has to.** `normal_projector_coeffs` is cached on
     # the shape parameters, so timing the same call twice measures a cache hit -- flat in
-    # `normal_grid` at 1.1 ms, which is the one number a fit never sees. A fit moves the design
+    # `shape_nvf_grid_size` at 1.1 ms, which is the one number a fit never sees. A fit moves the design
     # variable every step and misses every time.
     step = [0]
 
@@ -386,25 +386,25 @@ def decompose(backend, truncation_order, normal_grid, reps):
 
 
 def sweep_decomposition(budget, reps):
-    """Where each backend's time goes, and how that moves with `normal_grid`.
+    """Where each backend's time goes, and how that moves with `shape_nvf_grid_size`.
 
     This replaces a table keyed on the removed block path's `n_split`, which set how many small
     array operations that modeller emitted. The shape path emits no such stream; what sets its
-    modeling cost is `normal_grid`, the resolution its analytic normal field is sampled at.
+    modeling cost is `shape_nvf_grid_size`, the resolution its analytic normal field is sampled at.
     """
     out = []
-    for truncation_order, normal_grid in ((3, 256), (3, 1024), (3, 2048),
+    for truncation_order, shape_nvf_grid_size in ((3, 256), (3, 1024), (3, 2048),
                                           (7, 1024), (11, 1024)):
         if not budget.can_afford(90):
             break
-        row = {'truncation_order': truncation_order, 'normal_grid': normal_grid}
+        row = {'truncation_order': truncation_order, 'shape_nvf_grid_size': shape_nvf_grid_size}
         for name, backend in (('torch', 2), ('jax', 1)):
             try:
-                row[name] = decompose(backend, truncation_order, normal_grid, reps)
+                row[name] = decompose(backend, truncation_order, shape_nvf_grid_size, reps)
             except Exception as exc:                   # a backend that cannot run says so
                 row[name] = {'error': f'{type(exc).__name__}: {str(exc)[:80]}'}
         out.append(row)
-        print(f'[decompose] truncation_order={truncation_order}, normal_grid={normal_grid}: '
+        print(f'[decompose] truncation_order={truncation_order}, shape_nvf_grid_size={shape_nvf_grid_size}: '
               + '  '.join(f'{k} {v.get("modeling_ms", float("nan")):.1f}/'
                           f'{v.get("solve_ms", float("nan")):.1f} ms'
                           for k, v in row.items() if isinstance(v, dict)), flush=True)
@@ -423,7 +423,7 @@ def sweep_recompile_shapes(budget, reps):
     import jax
     import jax.numpy as jnp
     cfg = dict(period=[300.0, 300.0], thickness=[205.0], truncation_order=[3, 3], top=1.0,
-               bot=1.0, theta=0.15, phi=0.35, psi=TE_PSI, wavelength=900.0, normal_grid=256)
+               bot=1.0, theta=0.15, phi=0.35, psi=TE_PSI, wavelength=900.0, shape_nvf_grid_size=256)
 
     def one(make, values, label):
         def loss(v, geometry):
@@ -535,9 +535,9 @@ def report(state):
                 m = e.get(who, {})
                 cells += ['—' if 'error' in m else f'{m["modeling_ms"]:.1f}',
                           '—' if 'error' in m else f'{m["solve_ms"]:.1f}']
-            rows.append([str(e['truncation_order']), str(e['normal_grid'])] + cells)
+            rows.append([str(e['truncation_order']), str(e['shape_nvf_grid_size'])] + cells)
         table(rows, 'Where the time goes — one forward call, split in two',
-              ['truncation_order', 'normal_grid', 'torch modeling', 'torch solve',
+              ['truncation_order', 'shape_nvf_grid_size', 'torch modeling', 'torch solve',
                'jax modeling', 'jax solve'])
 
     if 'recompile_shapes' in state:

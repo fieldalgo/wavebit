@@ -3,6 +3,13 @@
 Written: 2026-08-11. Measured on an Apple M4 (Accelerate), NumPy 2.5.1 / SciPy 1.18.0 /
 mpmath 1.3.0, float64 throughout.
 
+**Power-normalization correction (2026-09-22).** The historical interpretation of
+the TM discrepancy in item 3 and §7 below is superseded. Once the reference plane
+and incident-only power are specified, the pure-1D and coupled efficiencies must
+agree. The real-transverse-wavevector power conversion is now shared across paths;
+see [the half-space power audit](half-space-power-audit.md). This does not change
+the amplitude tests or establish general complex-transverse-wavevector powers.
+
 Targets:
 - `wavebit/_core/conventions.py` — `boundary_kz`, `_off_principal_branch`, `mode_q`
 - `wavebit/_core/boundary.py` — `conv_mats`

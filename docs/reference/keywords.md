@@ -25,13 +25,14 @@ Explained in [Saying what the light is](../guide/light.md).
 | Keyword | Default | What it takes |
 | --- | --- | --- |
 | `wavelength` | `1.` | free-space wavelength, in whatever unit `period` and `thickness` share |
-| `theta` | `0.` | polar angle from the normal, radians. May be complex — evanescent incidence, float64 only |
+| `theta` | `0.` in angle mode; `None` with direct k | phase polar angle from the inward normal, radians. Real angles give uniform surface illumination, including in absorbing incident media. A nonzero imaginary part selects the formal complex-angle parameterization; see [phase incidence](../conventions.md#phase-incidence) |
 | `phi` | `None` | azimuth of the plane of incidence, radians. `None` is "not named", which the pure 1D path requires |
+| `kx`, `ky` | `None` | direct real Cartesian transverse angular wavenumbers, in inverse length units; an omitted component is zero. Alternative to `theta`/`phi`; these are physical values, not divided by k0. See [direction inputs](../guide/light.md#two-ways-to-specify-direction) |
 | `tetm` | `None` | `'te'` / `'tm'`. A **declaration** that polarization and azimuth are not degrees of freedom here; 1D structures only, and it is what buys the pure TE/TM formulation |
 | `psi` | `pi/2` (s/TE) | polarization angle, radians. `pi/2` is s/TE, `0` is p/TM |
 | `chi` | `None` | ellipticity angle. With `psi` it is the canonical chart of any state: `0` linear, `±pi/4` circular |
 | `polarization` | `None` | the Jones pair `(a_s, a_p)` itself, complex. The only spelling that carries an overall phase; magnitude is normalized away |
-| `excitation` | `None` | which diffraction *orders* the light arrives on: `{0: 1.0, 1: 0.6-0.8j}` on 1D, `{(m, n): amp}` on 2D. `None` is one plane wave on the specular order |
+| `excitation` | `None` | which diffraction *orders* the light arrives on: `{0: 1.0, 1: 0.6-0.8j}` on 1D, `{(m, n): amp}` on 2D. `None` is one plane wave on the specular order. A side-keyed map, `{"top": wavebit.PlaneWave(...), "bottom": wavebit.PlaneWave(...)}`, selects [coherent illumination](../coherent-illumination.md) |
 | `incidence_side` | `'top'` | `'top'` / `'bottom'` — which half-space the light arrives from. Scene labels never move; results are incidence-relative, and `theta` / `phi` are measured in the incidence medium |
 
 ## The stack
@@ -72,11 +73,31 @@ Explained in [Choosing the numerics](../guide/numerics.md), except
 | `complex_dtype` | `0` (double) | `0` double, `1` single, or any of the three namespaces' complex spellings |
 | `layer_algorithm` | `'ETM'` | `'ETM'` (enhanced transmittance matrix) or `'SMM'` (scattering matrix) |
 | `fourier_coefficients` | resolves | `'sampled'` (series off the pixel grid) or `'integrated'` (closed-form transform of the raster's rectangles) |
-| `factorization` | resolves | `'li'` (Li's rules along x and y) or `'nvf'` (normal vector field, factorizing along the material interfaces) |
-| `normal_method` | `'distance'` | raster NVF only: `'distance'`, `'contour'`, `'spectral'`, `'smooth'` |
-| `projector` | `'linear'` | how `P` is formed from that field: `'linear'` (`P = n n^T`) or `'circular'` |
-| `normal_grid` | `max(1024, 4*to+1)` | normal-field sampling, per axis |
+| `factorization` | resolves | `'li'` (successive rules along v then u, with axes aligned to y and x) or `'nvf'` (normal vector field, factorizing along material interfaces); tensor support is described in [the material guide](../guide/materials.md#anisotropic-materials) |
+| `raster_normal_method` | `'distance'` | raster NVF only: `'distance'`, `'contour'`, `'spectral'`, `'smooth'` |
+| `nvf_projector` | `'linear'` | raster and shape NVF projection: `'linear'` or `'circular'`; independent of incident polarization |
+| `shape_nvf_grid_size` | `max(1024, 4*Nx+1, 4*Ny+1)` | shape NVF only: projector sampling points per cell axis; `128` means a 128×128 grid |
 | `answers` | `'amplitude'` | what the solve keeps the state to answer — see [Near fields](../guide/fields.md) |
+
+### NVF names changed on 2026-09-21
+
+| Previous keyword | Current keyword | Reason |
+| --- | --- | --- |
+| `normal_method` | `raster_normal_method` | Identifies the raster-only field construction. |
+| `normal_grid` | `shape_nvf_grid_size` | Identifies shape NVF and a number of samples, rather than a material raster or a Fourier order. |
+| `projector` | `nvf_projector` | Identifies the NVF projection, separate from the incident polarization. |
+
+Use the current names in `rcwa(...)`, solver attributes, per-call settings such as
+`solve(...)`, and `Numerics`. The previous names are rejected; they are not aliases.
+Defaults, accepted option values and numerical algorithms are unchanged.
+`linear` / `circular` remain projection choices, and are not renamed to `real` / `complex`:
+the linear shape construction can also carry complex material-dependent components.
+
+JobSpec now writes schema version **10**. For a version-7 document, rename these keys in
+`numerics` when present and keep their option values. Also reverse `stack.layers` and
+review the coordinate migration in [Conventions](../conventions.md) before setting version 10. The capability
+manifest is version **11** and uses the new option keys. Earlier JobSpec versions also
+require their own material and coordinate migrations.
 
 ## Two axis-order rules, and where they meet
 
@@ -113,3 +134,13 @@ convolution slots takes `'4ff'`, everything else `'2ff'`. Forcing `'4ff'` on a p
 does not need it is how the two are cross-checked; forcing `'2ff'` on a z-coupled tensor raises
 rather than dropping the row, because dropping it answers a different problem while conserving
 energy to machine precision.
+
+For side-keyed excitation, `power_region` chooses `"cell"`, `"infinite"`, or
+`((xmin, xmax), (ymin, ymax))`. It is required when the beams occupy different
+Bloch sectors. PlaneWave direction and polarization arguments are documented in
+[coherent illumination](../coherent-illumination.md).
+
+Typed source lists use `excitation=[PlaneWave(...), GaussianBeam(...), ElectricDipole(...)]`.
+An internal dipole requires `length_unit`, the metres per scene length.
+Gaussian and isolated-dipole sources require a finite rectangular `power_region`.
+See [source objects and examples](../coherent-illumination.md#source-objects).

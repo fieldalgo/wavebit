@@ -63,7 +63,7 @@ def geos(na, nb):
 
 def scalar(geometry, cx, na, nb, theta, phi, key, backend):
     s = wavebit.rcwa(backend=backend, structure=build(cx, na, nb), truncation_order=[8, 8],
-                     normal_grid=NGRID, theta=theta, phi=phi, **BASE)
+                     shape_nvf_grid_size=NGRID, theta=theta, phi=phi, **BASE)
     r = getattr(s.solve(geometry=geometry), key)
     return jnp.real(jnp.sum(r)) if backend == 1 else float(np.real(np.sum(np.asarray(r))))
 
@@ -117,7 +117,7 @@ PLAN = _boundary.plan_layer(build(CX0, 3.0, 2.2)[0]['shapes'], LATTICE)
 def probe(na, nb, plans, block):
     def loss(cx):
         m = _parametric.to_conv_mat_parametric_layers(
-            build(cx, na, nb), MAX_ORDER, MAX_ORDER, LATTICE, normal_grid=NGRID,
+            build(cx, na, nb), MAX_ORDER, MAX_ORDER, LATTICE, shape_nvf_grid_size=NGRID,
             complex_dtype=jnp.complex128, xp=jnp, boundary_plans=plans)[block]
         return jnp.real(jnp.sum(m * jnp.conj(m)))
     f = jax.jit(jax.value_and_grad(loss))

@@ -21,7 +21,7 @@ def build(scene=None,backend=0,**kwargs):
                   truncation_order=(1,1),phi=.13,psi=.23,**kwargs)
 
 
-def projector(scene,points,cell=CELL,ring_extra=0,chunk=None,corrected=True):
+def nvf_projector(scene,points,cell=CELL,ring_extra=0,chunk=None,corrected=True):
     plan=P.plan_gamma(scene,cell)
     verts=[B.shape_vertices(xp,s,cell) for s in scene]
     options={}
@@ -48,7 +48,7 @@ def test_exact_normals_of_resolved_polygon_interfaces(corrected):
     E=E[live];A=A[live]
     points=A+.413*E  # Avoid segment endpoints and the undefined corner normal.
     n=np.stack([E[:,1],-E[:,0]],axis=-1)/np.linalg.norm(E,axis=1)[:,None]
-    got=projector(scene,points,corrected=corrected)
+    got=nvf_projector(scene,points,corrected=corrected)
     want=np.stack([n[:,0]**2,n[:,0]*n[:,1],n[:,1]**2,n[:,0]*n[:,1]],axis=-1)
     np.testing.assert_allclose(got,want,atol=3e-12,rtol=0)
     # A facet normal differs from the smooth curve normal except at its midpoint.
@@ -57,9 +57,9 @@ def test_exact_normals_of_resolved_polygon_interfaces(corrected):
 
 def test_periodicity_ring_independence_and_chunking():
     pts=np.random.default_rng(8).uniform(-200.,900.,(31,2))
-    base=projector(shapes(),pts)
-    for got in (projector(shapes(),pts+[1400.,-700.]),
-                projector(shapes(),pts,ring_extra=1),projector(shapes(),pts,chunk=3)):
+    base=nvf_projector(shapes(),pts)
+    for got in (nvf_projector(shapes(),pts+[1400.,-700.]),
+                nvf_projector(shapes(),pts,ring_extra=1),nvf_projector(shapes(),pts,chunk=3)):
         np.testing.assert_allclose(got,base,atol=3e-12,rtol=0)
     xx,xy,yy,yx=base.T
     np.testing.assert_allclose(xx+yy,1.,atol=3e-15,rtol=0)
@@ -69,9 +69,9 @@ def test_periodicity_ring_independence_and_chunking():
 
 def test_geometry_projector_does_not_switch_at_material_equality():
     points=np.random.default_rng(12).uniform(0.,700.,(29,2))
-    base=projector(shapes(epsilon=4.),points)
+    base=nvf_projector(shapes(epsilon=4.),points)
     for eps in (4.+1e-12,9.,9.+.2j):
-        np.testing.assert_array_equal(projector(shapes(epsilon=eps),points),base)
+        np.testing.assert_array_equal(nvf_projector(shapes(epsilon=eps),points),base)
     center=build(shapes(epsilon=4.)).solve().T.sum()
     slopes=[(build(shapes(epsilon=4.+h)).solve().T.sum()-center)/h for h in (1e-4,1e-6)]
     assert slopes[1]==pytest.approx(slopes[0],rel=.01,abs=1e-7)
@@ -83,7 +83,7 @@ def test_public_build_uses_the_polygon_projector_coefficients():
     s=build(scene)
     g=s.freeze_geometry()
     expected=B.to_conv_mat_boundary_layer(xp,scene,1.,1,1,CELL,xp.complex128,
-        normal_grid=32,plan=g.boundary_plans[0],projector='circular',
+        shape_nvf_grid_size=32,plan=g.boundary_plans[0],nvf_projector='circular',
         projector_plan=g.gamma_plans[0])
     for a,b in zip(s._eps_conv_matrices(g),expected):
         np.testing.assert_allclose(a[0],b,atol=2e-12,rtol=0)
@@ -158,7 +158,7 @@ def test_polygon_refinement_approaches_the_analytic_contact_solve():
     errors=[]
     for count in (64,128,256,512):
         mats=B.to_conv_mat_boundary_layer(xp,scene,1.,2,2,CELL,xp.complex128,
-            normal_grid=64,n_poly=count,projector='circular')
+            shape_nvf_grid_size=64,n_poly=count,nvf_projector='circular')
         result=s.solve_conv(*[xp.stack([m]) for m in mats])
         errors.append(abs(result.T.sum()-target))
     # Geometry error and sampled-projector error can cancel at an intermediate
@@ -186,8 +186,8 @@ def test_corrected_projector_rotates_covariantly():
     def tensor(values):
         xx,xy,yy,yx=values.T
         return np.array([[xx,xy],[yx,yy]])
-    want=np.einsum('ij,jkn,lk->iln',rotation,tensor(projector(scene,pts)),rotation)
-    got=tensor(projector(moved,pts@rotation.T,cell))
+    want=np.einsum('ij,jkn,lk->iln',rotation,tensor(nvf_projector(scene,pts)),rotation)
+    got=tensor(nvf_projector(moved,pts@rotation.T,cell))
     np.testing.assert_allclose(got,want,atol=3e-12,rtol=0)
 
 

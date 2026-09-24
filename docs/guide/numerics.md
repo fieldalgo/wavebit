@@ -5,38 +5,61 @@ joined. They change how fast the result converges with `truncation_order`, and h
 step costs -- not what it converges to. Defaults, and the values each accepts, are in
 [Keyword reference](../reference/keywords.md#the-numerics).
 
+The NVF options name their scope: `raster_normal_method` builds a direction field from
+pixels, `shape_nvf_grid_size` sets the number of shape-projector samples per cell axis,
+and `nvf_projector` selects the projection construction on either NVF path. See the
+[NVF keyword migration](../reference/keywords.md#nvf-names-changed-on-2026-09-21)
+when updating scripts written with `normal_method`, `normal_grid` or `projector`.
+
 ## How the coefficients are obtained, and how the products are closed
 
-Two independent keywords, which is what makes all four pairings reachable:
+The two keywords describe different stages; supported combinations depend on
+the structure and material:
 
 | `fourier_coefficients` | |
 | --- | --- |
-| `'sampled'` | discrete series straight off the pixel grid, with the raster's coefficients in closed form |
-| `'integrated'` | closed-form transform of the raster's rectangles. The more accurate route, and the one RETICOLO uses |
+| `'sampled'` | Discrete Fourier coefficients from material samples on a grid |
+| `'integrated'` | Integrals over shape regions, or over piecewise-constant pixels for scalar rasters and tensor Li rasters |
 
 | `factorization` | |
 | --- | --- |
-| `'li'` | Li's rules, applied along x and y |
+| `'li'` | Successive Li rules along lattice v then u; requires alignment with Cartesian y and x |
 | `'nvf'` | normal vector field -- factorizes along the material interfaces. Made for curved and tilted boundaries, where a staircase converges slowly |
 
 **`fourier_coefficients` and `factorization` resolve per modeling path**, and reading them back
-reports the *effective* value rather than what you asked. On a raster they resolve to
-`('sampled', 'li')`; shapes default to `('integrated', 'nvf')`. Explicit shape
+reports the *effective* value rather than what you asked.
+
+| Input | Default `fourier_coefficients` | Default `factorization` |
+| --- | --- | --- |
+| Scalar raster | `'sampled'` | `'li'` |
+| Tensor raster | `'sampled'` | `'nvf'` |
+| Shapes with scalar or tensor materials | `'integrated'` | `'nvf'` |
+
+Shape integration applies to both isotropic and anisotropic materials.
+Disjoint circles, ellipses and rectangles use analytic region Fourier
+coefficients. Painting resolves overlaps into polygon regions; curved overlaps
+use polygon approximations. For a scalar raster, integrated coefficients describe
+the supplied piecewise-constant pixels, not a reconstructed smooth boundary.
+
+Explicit scalar or tensor shape
 `factorization='li'` supports axis-aligned rectangles wholly inside a positive
 axis-aligned rectangular cell. General shapes use NVF. Naming a value the path does not implement raises `NotImplementedError`
-rather than quietly running the one it does. All four pairings work on the raster path,
-including `('integrated', 'nvf')` — a staircase-free series *and* a rule that handles
-boundaries not aligned with x or y, which is what a fit of a tilted sidewall wants.
+rather than quietly running the one it does. All four pairings work on a scalar
+raster in an axis-aligned rectangular cell. Tensor rasters support sampled or
+integrated coefficients under Li; NVF uses sampled coefficients and a linear
+projector. Tensor inputs retain NVF as the default. See
+[tensor Li construction](../tensor-li-factorization.md) and
+[material support](materials.md#anisotropic-materials) for tensor restrictions.
 
-**`normal_method` selects a raster normal field** under `factorization='nvf'`.
-On that path, `projector` composes with all four field constructions. Shape NVF
-also accepts `projector='linear'` or `'circular'`: the circular shape construction
+**`raster_normal_method` selects a raster normal field** under `factorization='nvf'`.
+On that path, `nvf_projector` composes with all four field constructions. Shape NVF
+also accepts `nvf_projector='linear'` or `'circular'`: the circular shape construction
 supports rectangles, circles, ellipses and their polygon-resolved painting.
 For disjoint shapes with complex material inputs, the default piece field carries
 the phase of material differences and uses a Hermitian projector. Its phase cancels
 on each interface. Real material inputs keep real arithmetic; this does not select
 the separate `'circular'` dyad construction.
-Projector selections require NVF; `normal_method` remains a raster option.
+Projector selections require NVF; `raster_normal_method` remains a raster option.
 See [shape projector details](../parametric-modeling.md#complex-nvf-projection-for-rectangular-contacts).
 
 `'distance'` is the default and the least accurate of the four — on a 60-degree cell it carries
@@ -52,7 +75,7 @@ the only one that forms a `solver.scattering` matrix. See
 
 ## Sampling the normal field
 
-`normal_grid` is the grid the normal field is read off, per axis, and it is the one number here
+`shape_nvf_grid_size` is the grid the normal field is read off, per axis, and it is the one number here
 that can dominate a differentiated step: at `truncation_order=3` the default spends more per
 step building the field than the solve itself costs. It defaults to
 `max(1024, 4*half_width+1)`, and 1024 is not over-specification -- 256 was tried and reverted,

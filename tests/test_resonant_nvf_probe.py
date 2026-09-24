@@ -39,7 +39,7 @@ def test_direct_comparison_does_not_leave_nvf_disabled():
 
 def test_probe_builds_the_public_circular_nvf_option():
     solver = make_solver(1, 32, 'circular')
-    assert solver.projector == 'circular' and solver.factorization == 'nvf'
+    assert solver.nvf_projector == 'circular' and solver.factorization == 'nvf'
     result = solver.solve()
     assert np.isfinite(result.T).all()
 

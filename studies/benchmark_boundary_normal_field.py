@@ -126,7 +126,7 @@ def geometries(structure):
 
 def total_reflectance(build, geometry, cx, truncation_order, backend=0):
     solver = wavebit.rcwa(backend=backend, structure=build(cx), truncation_order=[truncation_order, truncation_order],
-                          normal_grid=NORMAL_GRID, **CFG)
+                          shape_nvf_grid_size=NORMAL_GRID, **CFG)
     result = solver.solve(geometry=geometry)
     if backend == 1:
         import jax.numpy as jnp
@@ -181,7 +181,7 @@ def main():
         print(text, flush=True)
         lines.append(text)
 
-    say('window: +-%.1f normal-grid pixels (%.3e), %d points, normal_grid = %d'
+    say('window: +-%.1f normal-grid pixels (%.3e), %d points, shape_nvf_grid_size = %d'
         % (HALF_PIXELS, HALF_PIXELS * PIX, N_POINTS, NORMAL_GRID))
     say('a ratio of +1 would mean the gradient accounts for the loss exactly')
     say()
@@ -214,7 +214,7 @@ def main():
             say('%-24s %6d %10.1f %18.1f %8.0fx %10d'
                 % (name, grid, sampled, distance, distance / sampled, segments))
     say()
-    say('1024 is what the solver defaults to (spec.RCWASpec.normal_grid).')
+    say('1024 is what the solver defaults to (spec.RCWASpec.shape_nvf_grid_size).')
 
     RESULTS.mkdir(exist_ok=True)
     (RESULTS / 'boundary_normal_field.log').write_text('\n'.join(lines) + '\n')

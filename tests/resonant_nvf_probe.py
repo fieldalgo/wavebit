@@ -18,9 +18,9 @@ from wavebit._core import boundary as B, factorization as F, parametric as P
 
 
 def polygon_extension(xp, shapes, background, hu, hv, lattice, dtype,
-                      normal_grid=256, plan=None):
+                      shape_nvf_grid_size=256, plan=None):
     return B.to_conv_mat_boundary_layer(xp, shapes, background, hu, hv, lattice,
-                                       dtype, normal_grid=normal_grid)
+                                       dtype, shape_nvf_grid_size=shape_nvf_grid_size)
 
 
 def fixture_shape():
@@ -33,8 +33,8 @@ def make_solver(order, grid, method='pieces', shape=None):
     return wavebit.rcwa(
         backend=0, period=(700., 700.), wavelength=900.,
         top=1., bot=2.25, theta=.2, phi=0., psi=0., thickness=(300.,),
-        truncation_order=(order, order), normal_grid=grid,
-        projector='circular' if method == 'circular' else None,
+        truncation_order=(order, order), shape_nvf_grid_size=grid,
+        nvf_projector='circular' if method == 'circular' else None,
         structure=[dict(background=1., shapes=[fixture_shape() if shape is None else shape])])
 
 

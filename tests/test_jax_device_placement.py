@@ -73,8 +73,8 @@ def _solvers(device_kw, foreign):
                            wavelength=foreign['wavelength'],
                            top=1.0, bot=2.25, theta=0.2, phi=0.0, tetm='te', thickness=[H],
                            **device_kw),
-        'magnetic': wavebit.rcwa(backend=1, structure=eps, mu=mu, period=[P, 0.9 * P],
-                                 truncation_order=[2, 2], thickness=[H, 0.5 * H],
+        'magnetic': wavebit.rcwa(backend=1, structure=eps[::-1], mu=mu[::-1], period=[P, 0.9 * P],
+                                 truncation_order=[2, 2], thickness=[0.5 * H, H],
                                  wavelength=WL, top=wavebit.Material(2.25, mu=1.4),
                                  bot=wavebit.Material(4.0), theta=0.31, phi=0.47, psi=0.29,
                                  layer_algorithm='SMM', answers='field',
@@ -171,7 +171,7 @@ def poisoned(first, second):
             dict(type='circle', cx=-200.0, cy=-250.0, lx=80.0, material=9.0)])]
         return wavebit.rcwa(backend=1, structure=shapes, period=[P, 1.2 * P],
                             truncation_order=[2, 2], thickness=[H], wavelength=WL, top=1.0,
-                            bot=2.25, theta=0.1, phi=0.3, psi=0.4, normal_grid=64,
+                            bot=2.25, theta=0.1, phi=0.3, psi=0.4, shape_nvf_grid_size=64,
                             device=device)
 
     parametric._PROJECTOR_CACHE.clear()

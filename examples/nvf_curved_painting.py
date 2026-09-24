@@ -10,7 +10,7 @@ def solver(width, epsilon):
     return wavebit.rcwa(
         backend=1, period=(700., 700.), wavelength=900., top=1., bot=2.25,
         theta=.2, phi=.13, psi=.23, thickness=(300.,), truncation_order=(2, 2),
-        factorization='nvf', projector='circular', normal_grid=64,
+        factorization='nvf', nvf_projector='circular', shape_nvf_grid_size=64,
         structure=[dict(background=1., shapes=[
             dict(type='ellipse', lx=width, ly=200., angle=.17, material=4.),
             dict(type='circle', cx=130., cy=20., lx=250., material=epsilon)])])
@@ -23,7 +23,7 @@ def main():
         return solver(p[0], p[1]).solve(geometry=geometry).T.sum().real
 
     value, derivative = jax.jit(jax.value_and_grad(transmission))(jnp.array([300., 9.]))
-    print('Overlapping ellipse and circle: factorization=nvf, projector=circular')
+    print('Overlapping ellipse and circle: factorization=nvf, nvf_projector=circular')
     print(f'T={float(value):.12f}')
     print(f'dT/dwidth={float(derivative[0]):+.8e}; dT/d epsilon={float(derivative[1]):+.8e}')
     # Fresh eager solves check the live geometry without replaying its record.

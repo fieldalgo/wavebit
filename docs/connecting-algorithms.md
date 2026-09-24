@@ -69,8 +69,8 @@ The reason it is a choice at all is that the obvious chaining does not work.
 A note on the names, since the literature is looser than this codebase can afford to be: the
 enhanced transmittance recursion is a transfer-matrix method too, so calling it `'ETM'` and
 reserving `'TMM'` for the plain, unstabilised transfer is a distinction made here on purpose. The
-2ff path offers only `'ETM'` and `'SMM'`; `'TMM'` exists on the 4ff path alone, as a diagnostic,
-and passing it to the 2ff solve raises rather than falling through to a default.
+public 2ff and 4ff paths offer `'ETM'` and `'SMM'`, including field reconstruction.
+`'TMM'` exists only in the internal 4ff diagnostic helper; neither public path accepts it.
 
 ## 2. Why the obvious one fails
 

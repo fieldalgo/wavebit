@@ -217,7 +217,7 @@ def test_10_shared_mean_permittivity_keeps_the_interface():
     UC = np.array([[[9., 9., 1., 1.], [1., 9., 9., 1.],
                     [1., 1., 9., 9.], [9., 1., 1., 9.]]])
     option = dict(
-        structure=np.concat([UC, UC[:, ::-1]]), thickness=[0.2, 0.3], top=1.0, bot=1.0,
+        structure=np.concat([UC[:, ::-1], UC]), thickness=[0.3, 0.2], top=1.0, bot=1.0,
         psi=0.4, wavelength=0.5, period=[0.6, 0.6], theta=0.1, phi=0.0, truncation_order=[2, 2])
 
     for algo in ('ETM', 'SMM'):

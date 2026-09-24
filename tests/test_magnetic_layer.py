@@ -186,19 +186,16 @@ def test_a_diagonal_mu_on_a_one_dimensional_structure_now_solves():
     assert abs(magnetic - non_magnetic) > 1e-3
 
 
-def test_mu_with_a_z_coupled_permittivity_is_refused():
-    """A z row routes to the first-order (4ff) solve, which has no ``mu`` in it.
-
-    The two features are independent and both implemented, which is exactly why the
-    *combination* has to say so rather than silently taking whichever path it lands on.
-    """
+def test_mu_with_a_z_coupled_permittivity_is_used():
+    """The full tensor route must retain permeability as well as epsilon."""
     mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                        truncation_order=(0, 0), period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK])
     e = slots(tensor(2.6, 2.6, 2.6))
     z_row = [np.stack([0.2j * I1])] + [np.stack([0.0 * I1])] * 3
     m = tuple(slots(tensor(1.7, 1.7, 1.7)))
-    with pytest.raises(NotImplementedError, match='first-order'):
-        mee.solve_conv(*e, *z_row, mu=m)
+    magnetic=mee.solve_conv(*e, *z_row, mu=m)
+    vacuum=mee.solve_conv(*e, *z_row)
+    assert abs(float(magnetic.R.sum()-vacuum.R.sum()))>1e-3
 
 
 # ------------------------------------------------------- the raster pair, checked both ways
@@ -394,15 +391,15 @@ def _uniform_cell(eps, mu, thick, eps_bot, mu_bot, theta, z_abs, algo='ETM'):
     bot = eps_bot if mu_bot == 1.0 else wavebit.Material(eps_bot, mu=mu_bot)
     solver = wavebit.rcwa(backend=0, top=1.0, bot=bot, theta=theta, phi=0.0,
                           truncation_order=(0, 0), period=(PERIOD, PERIOD), wavelength=FIELD_WL,
-                          thickness=list(thick), layer_algorithm=algo, answers='field')
-    solver.structure = tile(eps)
-    solver.mu = None if all(m == 1.0 for m in mu) else tile(mu)
+                          thickness=list(thick)[::-1], layer_algorithm=algo, answers='field')
+    solver.structure = tile(eps[::-1])
+    solver.mu = None if all(m == 1.0 for m in mu) else tile(mu[::-1])
     solver.solve()
     # `S_INC` names the pure-s incidence: E along the s direction, which is the polarization
     # the closed form is written for and the only one with an `H_z` at all.
     cell = np.asarray(solver.reconstruct_field(
-        sample_x=1, sample_y=1, sample_z=np.asarray(z_abs, dtype=float), incidences=S_INC))
-    return cell[0, :, 0, 0, :]                          # (nz, 6) = Ex Ey Ez Hx Hy Hz
+        sample_x=1, sample_y=1, sample_z=sum(thick)-np.asarray(z_abs, dtype=float), incidences=S_INC))
+    return cell[0, :, 0, 0, :] * np.array([1, 1, -1, -1, -1, 1])                          # (nz, 6) = Ex Ey Ez Hx Hy Hz
 
 
 # (label, eps per layer, mu per layer, thickness per layer, eps_bot, mu_bot, theta degrees).
@@ -507,10 +504,10 @@ TWO_LAYER_MU = np.array([[[1.8, 1.0, 1.0, 1.4], [1.0, 1.0, 1.4, 1.4]],
 def _two_layer_cell(algo, side):
     solver = wavebit.rcwa(backend=0, top=1.0, bot=2.25, theta=np.deg2rad(31.0),
                           phi=np.deg2rad(17.0), truncation_order=(2, 2), period=(PERIOD, PERIOD),
-                          wavelength=FIELD_WL, thickness=[180.0, 120.0], answers='field',
+                          wavelength=FIELD_WL, thickness=[120.0, 180.0], answers='field',
                           layer_algorithm=algo, incidence_side=side)
-    solver.structure = TWO_LAYER_EPS
-    solver.mu = TWO_LAYER_MU
+    solver.structure = TWO_LAYER_EPS[::-1]
+    solver.mu = TWO_LAYER_MU[::-1]
     solver.solve()
     return np.asarray(solver.reconstruct_field(sample_x=5, sample_y=5, sample_z=4,
                                                incidences=S_INC))
@@ -578,8 +575,8 @@ def test_a_patterned_magnetic_cell_obeys_the_field_level_duality():
     swapped = _patterned_cell(MU_PATTERN, EPS_PATTERN, P_INC)
     scale = float(np.abs(straight).max())
 
-    assert np.abs(swapped[..., :3] - straight[..., 3:]).max() < 1e-10 * scale     # E' = H
-    assert np.abs(swapped[..., 3:] + straight[..., :3]).max() < 1e-10 * scale     # H' = -E
+    assert np.abs(swapped[..., :3] + straight[..., 3:]).max() < 1e-10 * scale     # Top-incidence p basis: E' = -H
+    assert np.abs(swapped[..., 3:] - straight[..., :3]).max() < 1e-10 * scale     # H' = E
 
 
 def test_the_field_duality_is_not_vacuous_on_the_longitudinal_components():
@@ -652,26 +649,18 @@ def test_the_permeability_a_reconstructed_hz_depends_on_is_differentiable():
     assert abs(float(grad[idx]) - fd) < 1e-6 * max(abs(fd), 1.0)
 
 
-def test_mu_on_the_first_order_path_is_refused_whichever_way_it_got_there():
-    """``formulation='4ff'`` reaches the 4ff solve with no z row, and must say *that*.
-
-    Companion to :func:`test_mu_with_a_z_coupled_permittivity_is_refused`, which covers the
-    other route in. Both refusals are what make ``fields.field_2d_4ff``'s
-    ``H_z = Kx Ey - Ky Ex`` -- Faraday's z row at ``mu = 1`` -- a correct line rather than an
-    unchecked assumption: that path cannot be handed a permeability, so it never needs the
-    ``muz_conv_i`` its 2ff twin carries.
-
-    The message is asserted, not just the exception type. Naming a z-coupled permittivity that
-    was never given sends the reader to look for one, and the two routes are told apart by
-    nothing else.
-    """
+def test_mu_on_the_forced_first_order_path_matches_second_order():
+    """Forcing 4ff keeps the same magnetic material and half-space conventions."""
     mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                        truncation_order=(0, 0), period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK])
     mee.formulation = '4ff'
     e = slots(tensor(2.6, 2.6, 2.6))
     m = tuple(slots(tensor(1.7, 1.7, 1.7)))
-    with pytest.raises(NotImplementedError, match="formulation='4ff' was asked for"):
-        mee.solve_conv(*e, mu=m)
+    full=mee.solve_conv(*e, mu=m)
+    mee.formulation='2ff'
+    reduced=mee.solve_conv(*e, mu=m)
+    np.testing.assert_allclose(full.R,reduced.R,atol=2e-12)
+    np.testing.assert_allclose(full.T,reduced.T,atol=2e-12)
 
 # ------------------------------------------------- a magnetic layer on a non-orthogonal cell
 #

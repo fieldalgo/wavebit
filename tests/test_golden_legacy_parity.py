@@ -216,7 +216,8 @@ def _run(name):
     # `answers='field'` for every case, not only the two that reconstruct: the goldens pinned
     # here include the per-layer state, so the parity being checked is the state's too.
     kw = dict(CASES[name])
-    kw['structure'] = np.asarray(kw['structure'], dtype=float)
+    kw['structure'] = np.asarray(kw['structure'], dtype=float)[::-1]
+    kw['thickness'] = kw['thickness'][::-1]
     solver = wavebit.rcwa(backend=0, answers='field', **kw)
     return solver, solver.solve()
 
@@ -305,7 +306,8 @@ def test_jax_and_torch_match_the_same_golden(name, backend):
     """
     pytest.importorskip('jax' if backend == 1 else 'torch')
     kw = dict(CASES[name])
-    kw['structure'] = np.asarray(kw['structure'], dtype=float)
+    kw['structure'] = np.asarray(kw['structure'], dtype=float)[::-1]
+    kw['thickness'] = kw['thickness'][::-1]
     result = wavebit.rcwa(backend=backend, **kw).solve()
 
     for sub, attr_name in SUBS:

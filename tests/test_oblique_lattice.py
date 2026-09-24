@@ -368,9 +368,9 @@ def test_the_shear_is_the_same_physics_under_every_normal_method(method):
     """
     if method == 'contour':
         pytest.importorskip('contourpy',
-                            reason="normal_method='contour' needs the optional dependency")
-    r_o, t_o = totals(raster(ORTHO), normal_method=method)
-    r_s, t_s = totals(raster(SHEAR), lattice=SHEAR, normal_method=method)
+                            reason="raster_normal_method='contour' needs the optional dependency")
+    r_o, t_o = totals(raster(ORTHO), raster_normal_method=method)
+    r_s, t_s = totals(raster(SHEAR), lattice=SHEAR, raster_normal_method=method)
     assert t_o == pytest.approx(t_s, abs=1e-3)
     assert r_o == pytest.approx(r_s, abs=1e-3)
 
@@ -581,10 +581,10 @@ def test_the_reconstructed_field_agrees_across_a_unimodular_shear():
         ox, oy = cell_centre(lattice)
         shapes = [{'type': 'circle', 'cx': P / 2 - ox, 'cy': P / 2 - oy, 'lx': 2 * R,
                    'material': EPS_ROD}]
-        structure = [{'background': 1.0, 'shapes': []},
-                     {'background': 1.0, 'shapes': shapes}]
+        structure = [{'background': 1.0, 'shapes': shapes},
+                     {'background': 1.0, 'shapes': []}]
         s = wavebit.rcwa(backend=0, structure=structure, truncation_order=[8, 8],
-                           thickness=[600.0, H], wavelength=WL, top=1.0, bot=1.0,
+                           thickness=[H, 600.0], wavelength=WL, top=1.0, bot=1.0,
                            theta=0.0, phi=0.0, psi=0.0, factorization='nvf', **_cell(lattice),
                            answers='field')
         s.solve()
@@ -597,7 +597,7 @@ def test_the_reconstructed_field_agrees_across_a_unimodular_shear():
             aligned[..., j, i, :] = f_o[..., j, (i + j) % (n - 1), :]
 
     scale = np.abs(f_o).max()
-    top = np.abs(f_s[:, 0, :, :n - 1, :] - aligned[:, 0, :, :n - 1, :]).max() / scale
+    top = np.abs(f_s[:, -1, :, :n - 1, :] - aligned[:, -1, :, :n - 1, :]).max() / scale
     assert top < 1e-3, f'homogeneous region should agree: {top:.2e}'
 
 
@@ -843,7 +843,7 @@ def test_a_frozen_painting_plan_replays_on_a_skewed_cell(lattice, omit_centre):
         return wavebit.rcwa(backend=0, truncation_order=[3, 3], thickness=[H],
                             structure=[{'background': EPS_AIR, 'shapes': [a, b]}],
                             wavelength=WL, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
-                            factorization='nvf', **_cell(lattice), normal_grid=64)
+                            factorization='nvf', **_cell(lattice), shape_nvf_grid_size=64)
 
     eager = np.asarray(build().solve().T)
     replayer = build()
@@ -912,7 +912,7 @@ def test_the_answer_rotates_with_the_cell(degrees, theta, phi, psi, chi):
         assert off < 1e-12, (name, degrees, off)
 
 
-def _circular_dichroism(basis, truncation, normal_grid=512):
+def _circular_dichroism(basis, truncation, shape_nvf_grid_size=512):
     """``sum(R)`` for one handedness minus the other, on a rod of isotropic dielectric.
 
     The *shape* path, not a raster. A pixel grid is itself only mirror-symmetric when the cell
@@ -929,7 +929,7 @@ def _circular_dichroism(basis, truncation, normal_grid=512):
     common = dict(backend=0, structure=shapes, thickness=[H],
                   truncation_order=[truncation, truncation], wavelength=WL, top=1.0, bot=1.0,
                   theta=0.35, phi=0.0, psi=0.0, factorization='nvf', lattice=basis,
-                  normal_grid=normal_grid)
+                  shape_nvf_grid_size=shape_nvf_grid_size)
     lcp = wavebit.rcwa(chi=np.pi / 4, **common).solve()
     rcp = wavebit.rcwa(chi=-np.pi / 4, **common).solve()
     return float(np.sum(np.asarray(lcp.R)) - np.sum(np.asarray(rcp.R)))
@@ -1197,7 +1197,7 @@ def _pn_totals(basis, method, lattice_blind=False):
                                             lattice=None, method=method)]
     slots = to_conv_mat_raster_pn_eps(eps33[None], PN_ORDERS[0], PN_ORDERS[1],
                                       normal_field=normal_field, lattice=basis,
-                                      normal_method=method)
+                                      raster_normal_method=method)
     solver = wavebit.rcwa(backend=0, structure=np.where(inside, PN_EO, 1.0)[None],
                           lattice=basis, truncation_order=PN_ORDERS, thickness=[H],
                           wavelength=WL, top=1.0, bot=1.0, theta=np.deg2rad(25.0),
@@ -1259,7 +1259,7 @@ def test_a_patterned_tensor_is_the_same_physics_under_a_unimodular_shear(method)
     """
     if method == 'contour':
         pytest.importorskip('contourpy',
-                            reason="normal_method='contour' needs the optional dependency")
+                            reason="raster_normal_method='contour' needs the optional dependency")
 
     square, sheared = _pn_disc(ORTHO), _pn_disc(SHEAR_2A1)
     assert abs(square.mean() - np.pi * (PN_RADIUS / P) ** 2) < 2e-3, square.mean()
@@ -1407,7 +1407,7 @@ def test_the_geometry_refusals_read_the_lattice_the_way_they_read_the_shapes():
     import jax.numpy as jnp
 
     cfg = dict(thickness=[0.3], truncation_order=(4, 4), top=1.0, bot=1.0, wavelength=0.94,
-               psi=np.pi / 2, theta=0.0, phi=0.0, normal_grid=256)
+               psi=np.pi / 2, theta=0.0, phi=0.0, shape_nvf_grid_size=256)
     rod = lambda lx: [dict(background=1.0, shapes=[
         dict(type='rectangle', cx=0.0, cy=0.0, lx=lx, ly=0.5, angle=0.0, material=4.0)])]
 

@@ -78,8 +78,8 @@ def _structure_2d():
 
 def _structure_1d():
     u = np.ones((2, 1, 256))
-    u[0, 0, 64:192] = EPS_SI
-    u[1, 0, :] = EPS_MID
+    u[1, 0, 64:192] = EPS_SI
+    u[0, 0, :] = EPS_MID
     return u
 
 
@@ -103,7 +103,7 @@ def test_thick_2d_stack_is_silent_and_conserves_energy(layer_algorithm):
 @pytest.mark.parametrize('layer_algorithm', ['ETM', 'SMM'])
 @pytest.mark.parametrize('psi', [np.pi / 2, 0.0], ids=['te', 'tm'])
 def test_thick_1d_stack_is_silent_and_conserves_energy(layer_algorithm, psi):
-    res, fp = _run(structure=_structure_1d(), thickness=[800, 400], period=[700], truncation_order=[8, 0],
+    res, fp = _run(structure=_structure_1d(), thickness=[400, 800], period=[700], truncation_order=[8, 0],
                    psi=psi, bot=EPS_SI, layer_algorithm=layer_algorithm)
     assert fp == []
     assert abs(_energy(res) - 1.0) < 1e-10
@@ -111,7 +111,7 @@ def test_thick_1d_stack_is_silent_and_conserves_energy(layer_algorithm, psi):
 
 @pytest.mark.parametrize('layer_algorithm', ['ETM', 'SMM'])
 def test_conical_stack_is_silent_and_conserves_energy(layer_algorithm):
-    res, fp = _run(structure=_structure_1d(), thickness=[800, 400], period=[700], truncation_order=[8, 0],
+    res, fp = _run(structure=_structure_1d(), thickness=[400, 800], period=[700], truncation_order=[8, 0],
                    psi=np.pi / 2, phi=0.3, bot=EPS_SI, layer_algorithm=layer_algorithm)
     assert fp == []
     assert abs(_energy(res) - 1.0) < 1e-10
@@ -220,7 +220,8 @@ def test_finiteness_guard_fires_from_the_solve_path():
     with pytest.raises(FloatingPointError, match='non-finite'):
         final_matching(xp, C, big_F, eye.copy(), eye.copy(), kz, kz,
                        incidence=(0.0, 1.0), theta=0.0, n_top=1.0, n_bot=1.0,
-                       n_orders_u=1, n_orders_v=1)
+                       n_orders_u=1, n_orders_v=1, kx=np.zeros(1, dtype=C),
+                       ky=np.zeros(1, dtype=C))
 
 
 # --- tier 2: finite, but not a physical result ----------------------------------------------
@@ -271,9 +272,21 @@ def test_physical_check_tolerates_roundoff():
     assert _physical([0.5 + 1e-14], [0.5]) == []
 
 
-def test_physical_check_skips_an_absorbing_superstrate():
-    """With complex n_top the incident-power normalization makes the comparison meaningless."""
+def test_physical_check_needs_net_entering_power_for_an_absorbing_superstrate():
+    """Without interference, R and T alone cannot determine the absorption balance."""
     assert _physical([0.9, 0.4], [0.5], n_top=1.0 + 0.3j) == []
+
+
+def test_physical_check_uses_net_entering_power_for_an_absorbing_superstrate():
+    xp = array_namespace(np.zeros(1))
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        check_physical(xp, np.array([.054]), np.array([.984]), 1.5 + .3j,
+                       power_entering=np.array(.984))
+    assert not caught  # R+T > 1 does not imply gain at this absorbing interface.
+    with pytest.warns(UnphysicalResultWarning, match='net entering'):
+        check_physical(xp, np.array([.054]), np.array([.99]), 1.5 + .3j,
+                       power_entering=np.array(.984))
 
 
 def test_physical_warning_message_carries_no_numbers():

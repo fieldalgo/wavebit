@@ -15,14 +15,14 @@ that between them nothing is left free:
 
 * **Maxwell.** The reconstructed six components must satisfy ``curl E = i k0 H`` and
   ``curl H = -i k0 D`` for the tensor that was handed in, ``z`` row included. Checked by
-  central differences down a layer, so the *rate* is an assertion too: the field is analytic
+  central differences along increasing height in a layer, so the *rate* is an assertion too: the field is analytic
   inside a layer, so halving the step must quarter the residual, and a residual that is merely
   "small" without converging is a different thing from one that is discretisation error.
   This is the only check that reaches the two terms ``- ezx Ex - ezy Ey`` that the second-order
   path's ``E_z`` line does not have.
 * **Continuity.** The four transverse components are continuous across a layer interface, and
   the sampling lands on it exactly (``linspace(0, sample_z, sample_z)`` is inclusive, so a layer's
-  last slice *is* its bottom face and the next layer's first slice is the same plane). Exact,
+  last slice *is* its top face and the next layer's first slice is the same plane). Exact,
   not asymptotic. ``E_z`` must jump there, which is asserted too — a reconstruction that
   quietly returned a continuous ``E_z`` would be returning something other than ``E_z``.
 * **Absolute scale.** Maxwell and continuity are both homogeneous: multiply the whole cell by a
@@ -31,15 +31,11 @@ that between them nothing is left free:
   ``(1 - R)`` above and ``T`` below. Their ratio is the one number that catches a wrong
   normalisation of ``T1``, which is exactly the failure a plausible-looking field hides.
 
-A note on signs. The vacuum slab in :func:`test_a_vacuum_slab_comes_back_as_the_incident_plane_wave`
-below is what found the convention defect this path briefly inherited: for one day every
-reconstruction returned ``E_z``, ``H_x`` and ``H_y`` in the frame whose ``+z`` points *out* of
-the stack, which ``docs/conventions.md`` explicitly does not declare, and this path applied a
-parity on output to match the other three rather than break a caller who flips
-``formulation``. The parity now lives where it belongs — on the three second-order paths — and
-this one needs none, because :mod:`wavebit._core.solve_2d_4ff` already derives in the declared
-frame. So the checks below read the returned cell directly. The frame itself is pinned for
-every path at once by ``tests/test_field_core.py``.
+The public frame is right-handed, with +z upward and layer 0 at the bottom.
+For top incidence the vacuum wave travels -z, H = khat x E and Sz < 0.
+All residual and continuity checks use increasing public height. The plane-wave
+check below and tests/test_vertical_coordinates.py independently anchor the signs.
+
 """
 import numpy as np
 import pytest
@@ -124,7 +120,7 @@ def z_coupled_cell(eps_list, thickness, theta_deg=28.0, sample_z=64, backend=0):
 
 
 def z_flux(F):
-    """Time-averaged Poynting ``z``, in the declared frame (``+z`` down, into the stack)."""
+    """Time-averaged Poynting ``z``, in the public frame (``+z`` upward from the bottom)."""
     return 0.5 * np.real(F[..., 0] * np.conj(F[..., 4]) - F[..., 1] * np.conj(F[..., 3]))
 
 
@@ -146,7 +142,7 @@ def twin_cell(formulation, name, theta_deg, side, backend=0):
     structure, truncation_order, thickness = TWINS[name]
     mee = wavebit.rcwa(backend=backend, top=1.0, bot=2.3104, truncation_order=truncation_order, period=PERIOD,
                        wavelength=WL, theta=np.deg2rad(theta_deg), phi=np.deg2rad(37.0),
-                       psi=0.6, thickness=thickness, structure=structure, incidence_side=side,
+                       psi=0.6, thickness=thickness[::-1], structure=structure[::-1], incidence_side=side,
                        answers='field')
     mee.formulation = formulation
     mee.solve()
@@ -267,7 +263,7 @@ def test_the_transverse_field_is_continuous_across_a_z_coupled_interface(eps, ta
     _, F, _, _ = z_coupled_cell([VAC, eps, VAC], [90.0, 210.0, 90.0], sample_z=sample_z)
     scale = np.max(np.abs(F))
     for k in (1, 2):
-        above, below = F[k * sample_z - 1], F[k * sample_z]
+        below, above = F[k * sample_z - 1], F[k * sample_z]
         transverse = np.max(np.abs(above[[0, 1, 3, 4]] - below[[0, 1, 3, 4]]))
         assert transverse / scale < 1e-13, f'{tag} interface {k}: {transverse:.3e}'
         assert abs(above[2] - below[2]) / scale > 1e-2, f'{tag} interface {k}: E_z did not jump'
@@ -291,7 +287,7 @@ def test_the_flux_the_cell_carries_is_the_efficiency_the_solve_reported(eps, tag
     res, F, _, _ = z_coupled_cell([VAC, eps, VAC], [90.0, 210.0, 90.0],
                                   theta_deg=theta_deg, sample_z=16)
     S = z_flux(F)
-    above, below = S[:16], S[32:]
+    above, below = S[32:], S[:16]
     for name, band in (('above', above), ('below', below)):
         assert np.ptp(band) / abs(np.mean(band)) < 1e-12, f'{tag} {name} spacer is not flat'
 
@@ -327,10 +323,9 @@ def test_a_vacuum_slab_comes_back_as_the_incident_plane_wave(formulation, psi_v,
     Every entry is known in closed form, which is what made this the check that found the
     convention defect — and now the one that keeps it fixed. Three facts, and they agree:
 
-    * the phase **advances** with the cell's ``z`` index, so the wave travels that way
-      (``e^{-iwt}``, ``exp(+i k0 kz z)``);
-    * ``H = khat x E`` with ``khat`` along the index, so the pair is right-handed about it;
-    * the Poynting vector points **along** the index, i.e. into the stack.
+    * the phase decreases with height: top illumination travels toward -z;
+    * ``H = khat x E`` with ``khat`` toward -z;
+    * the Poynting vector has negative z component, into the stack from above.
 
     Until 2026-08-14 the second fact failed and the third came back reversed, on every path.
     Both formulations are checked here so the claim is about the library rather than one of
@@ -344,22 +339,22 @@ def test_a_vacuum_slab_comes_back_as_the_incident_plane_wave(formulation, psi_v,
     mee.solve()
     cell = np.asarray(mee.reconstruct_field(sample_x=1, sample_y=1, sample_z=8))[0, :, 0, 0, :]
 
-    # khat = +z (the index).  s: E = +y, so H = z x y = -x.  p: E = -x, so H = z x (-x) = -y.
-    (e_idx, e_sign), (h_idx, h_sign) = (((1, 1.0), (3, -1.0)) if tag == 's'
-                                        else ((0, -1.0), (4, -1.0)))
+    # Top incidence travels -z: s has E=+y, H=+x; p has E=-x, H=+y.
+    (e_idx, e_sign), (h_idx, h_sign) = (((1, 1.0), (3, 1.0)) if tag == 's'
+                                        else ((0, -1.0), (4, 1.0)))
     assert abs(cell[0, e_idx] - e_sign) < 1e-12, cell[0]
     assert abs(cell[0, h_idx] - h_sign) < 1e-12, cell[0]
     quiet = [i for i in range(6) if i not in (e_idx, h_idx)]
     assert np.max(np.abs(cell[:, quiet])) < 1e-12, cell[0]
 
-    # the phase advances with the index -- one full wavelength over a slab one wavelength thick,
+    # the phase decreases with height -- one full wavelength over a slab one wavelength thick,
     # sampled inclusively, so slice j sits at j/7 of a period
     for j in (1, 3, 5):
-        want = e_sign * np.exp(2j * np.pi * j / 7)
+        want = e_sign * np.exp(-2j * np.pi * j / 7)
         assert abs(cell[j, e_idx] - want) < 1e-12, (j, cell[j, e_idx], want)
 
     # and the energy flows the way the wave does
-    assert z_flux(cell)[0] > 0
+    assert z_flux(cell)[0] < 0
 
 
 # --------------------------------------------------------------------------------- backends

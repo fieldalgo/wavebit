@@ -3,7 +3,7 @@
 Written: 2026-08. Targets `wavebit/_core/boundary.py`, `_core/clipper.py`, `_core/polygon.py`,
 and the overlap route through `_core/parametric.py::to_conv_mat_parametric_layers`.
 
-Curved paintings now also support `projector='circular'` under NVF. The complex
+Curved paintings now also support `nvf_projector='circular'` under NVF. The complex
 projector retains the analytic extension away from curves and corrects it to the
 polygon facet normal near each chord. Original edge contributions remain in the
 extension when covered, so material equality does not switch the field. Clipped
@@ -216,7 +216,7 @@ so genuinely smooth, agreed to nine digits (2.624456e-02 both ways) — the mech
 itself, since only the shape changed.
 
 That last contrast is what the fix was eventually built on. The seams, not the sampling, were
-the problem — confirmed by refining `normal_grid` from 1024 to 4096 and watching the rectangle
+the problem — confirmed by refining `shape_nvf_grid_size` from 1024 to 4096 and watching the rectangle
 error stay flat at 1.8e-2 while the circle pair converged — so the answer was to remove them
 rather than to mollify them, which the `tanh` route had tried and failed. Treating +x and -x
 (and +y, -y) as four separate faces blended by distance products makes them cancel exactly at

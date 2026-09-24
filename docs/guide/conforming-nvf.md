@@ -16,17 +16,18 @@ import numpy as np
 import wavebit
 
 lattice = np.diag([700., 430.])
+# Layers are listed from the bottom to the top.
 structure = [
-    dict(background=1.7, shapes=[
-        dict(type='rectangle', lx=186., ly=401., cx=-82., material=4.),
-        dict(type='rectangle', lx=124., ly=401., cx=113., material=9.),
-    ]),
-    dict(background=2.3),
-    dict(background=1.7, shapes=[
+                dict(background=1.7, shapes=[
         dict(type='rectangle', lx=671., ly=155., cy=-97.5, material=4.),
         dict(type='rectangle', lx=671., ly=155., cy=97.5, material=9.),
     ]),
-]
+                dict(background=2.3),
+                dict(background=1.7, shapes=[
+        dict(type='rectangle', lx=186., ly=401., cx=-82., material=4.),
+        dict(type='rectangle', lx=124., ly=401., cx=113., material=9.),
+    ]),
+            ]
 builder = wavebit.ConformingNVF((2, 1), rows=4, body_degree=2, gap_degree=4)
 conv = builder.conv_matrices(structure, lattice)
 solver = wavebit.rcwa(

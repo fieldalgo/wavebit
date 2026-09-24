@@ -17,7 +17,7 @@ def pair(gap=0.,epsilon=9.):
 def solver(shapes,grid=128,backend=0,order=3):
     return wavebit.rcwa(backend=backend,period=(700.,700.),wavelength=900.,top=1.,bot=2.25,
         theta=.2,phi=0.,psi=0.,thickness=(300.,),truncation_order=(order,order),
-        normal_grid=grid,structure=[dict(background=1.,shapes=shapes)])
+        shape_nvf_grid_size=grid,structure=[dict(background=1.,shapes=shapes)])
 
 
 def test_projector_is_rank_one_hermitian_and_normal_on_real_interfaces():

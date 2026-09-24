@@ -48,39 +48,39 @@ ROD = dict(lx=200.0, ly=160.0, eps=12.25)
 def test_the_raster_path_is_the_raster():
     """`structure[layer]`, untouched, at its own resolution -- `n` is deliberately ignored.
 
-    Also pins the way up: row 0 is ``y = 0`` (``docs/conventions.md``), which is what makes
+    Also pins the way up: row 0 is at the negative-y edge (``docs/conventions.md``), which is what makes
     ``origin='lower'`` line up with ``plot_field``'s top view.
     """
     N = 64
     cell = np.ones((2, N, N))
-    cell[0, :N // 4, :] = 9.0             # a stripe at small y, in the top layer only
-    cell[1] = 4.0
+    cell[1, :N // 4, :] = 9.0             # a stripe at small y, in the top layer only
+    cell[0] = 4.0
     solver = wavebit.rcwa(structure=cell, **COMMON)
 
-    got = solver.slice_structure(layer=0, n=999)
+    got = solver.slice_structure(layer=1, n=999)
     assert got.shape == (N, N)
-    np.testing.assert_array_equal(got.real, cell[0])
+    np.testing.assert_array_equal(got.real, cell[1])
     assert got[0, 0].real == 9.0 and got[-1, 0].real == 1.0
 
-    assert solver.slice_structure(layer=1).real.mean() == pytest.approx(4.0)
+    assert solver.slice_structure(layer=0).real.mean() == pytest.approx(4.0)
 
 
 @pytest.mark.parametrize('side', ['top', 'bottom'])
 def test_layer_is_indexed_the_way_the_structure_is(side):
-    """0 is the layer nearest ``top``, on every path -- and out of range says so.
+    """0 is the layer nearest ``bot``, on every path -- and out of range says so.
 
     Parametrised over ``incidence_side`` because that is the whole claim: the scene labels do
     not move when the illumination does (``docs/conventions.md``). Lit from below the light
-    meets ``structure[-1]`` first, and ``layer=0`` still has to mean the top one -- "the layer
-    light meets first" was the wording here until 2026-08-22, and it is only true from above.
+    meets ``structure[0]`` first; from above it meets ``structure[-1]`` first.
+    The layer index always increases from the bottom, independently of incidence.
     """
     shapes = [dict(type='circle', cx=0.0, cy=0.0, lx=200.0, material=9.0)]
-    layers = [dict(background=1.0, shapes=[]), dict(background=1.0, shapes=shapes)]
+    layers = [dict(background=1.0, shapes=shapes), dict(background=1.0, shapes=[])]
     solver = wavebit.rcwa(structure=layers, incidence_side=side, **COMMON)
 
-    assert solver.slice_structure(layer=0, n=128).real.mean() == pytest.approx(1.0)
-    assert solver.slice_structure(layer=1, n=128).real.mean() > 1.2
-    assert solver.slice_structure(layer=-1, n=128).real.mean() > 1.2
+    assert solver.slice_structure(layer=0, n=128).real.mean() > 1.2
+    assert solver.slice_structure(layer=1, n=128).real.mean() == pytest.approx(1.0)
+    assert solver.slice_structure(layer=-1, n=128).real.mean() == pytest.approx(1.0)
     with pytest.raises(IndexError, match='nearest'):
         solver.slice_structure(layer=2)
 

@@ -58,7 +58,7 @@ def _derivative(backend, objective, value, rel_step=1e-6):
     """(autograd, central difference) of ``objective`` at ``value``.
 
     ``rel_step`` matters more than it looks on the parametric path: the normal field is sampled
-    on a grid of ``period / normal_grid``, so the objective carries a sawtooth of that
+    on a grid of ``period / shape_nvf_grid_size``, so the objective carries a sawtooth of that
     period. A difference step that straddles one of those steps reports the jump, not the
     derivative — at ``cx = period/2``, which sits exactly on a grid line, ``h = 1e-6`` gives
     3.8 where the derivative is 3.2e-3. Stay well inside one cell.
@@ -225,7 +225,7 @@ def test_translation_leaves_nothing_behind_within_one_normal_field_cell():
 
     The sub-grid-cell sweep is the historical shape of this test: the normal field used to be
     sampled at the shape's place, so its cell size set a noise floor under every shape gradient
-    on this path — 5e-4 at ``normal_grid=256``, which is why the default rose to 1024.
+    on this path — 5e-4 at ``shape_nvf_grid_size=256``, which is why the default rose to 1024.
     A lone shape's field is now translated by a phase instead
     (:func:`wavebit._core.parametric.normal_projector_coeffs`) and the floor is gone: this reads
     5.8e-13, and ``test_shape_position_gradients`` is where the full statement lives. The bound
@@ -234,7 +234,7 @@ def test_translation_leaves_nothing_behind_within_one_normal_field_cell():
     base = dict(period=[300.0, 300.0], thickness=[205.0], truncation_order=[5, 5], top=1.0, bot=1.0,
                 wavelength=900.0, psi=np.pi / 4, theta=0.1, phi=0.3)
     solver = wavebit.rcwa(backend=0, period=[300.0, 300.0])
-    cell = 300.0 / solver.normal_grid
+    cell = 300.0 / solver.shape_nvf_grid_size
 
     def total(cx):
         shape = dict(type='rectangle', cx=cx, cy=0.0, lx=80.0, ly=60.0,
