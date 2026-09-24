@@ -60,7 +60,7 @@ def scene(cpw=18, radius=.14, eps=2.25, pml=6, periods=2., discretisation='stenc
                     background=background,
                     structures=(fd.Structure(fd.Sphere(radius=radius, center=center), eps,
                                              discretisation=discretisation),),
-                    sources=(fd.TFSF('t', box=fd.Box(size=(.9,) * 3), direction='+z',
+                    sources=(fd.TFSF('t', box=fd.Box(size=(1.11,) * 3), direction='+z',
                                      polarization='x', band=fd.Band(wavelength=1., df=.1)),),
                     monitors=(fd.Flux('sca', box=fd.Box(size=(1.2,) * 3),
                                       wavelengths=(1.,)),), **changes)
@@ -98,6 +98,46 @@ def assembled():
     """
     args = stencil.arguments(scene(), prepared('voxel')[1], 0)
     return args, stencil.geometry(*args)
+
+
+class _Reached(Exception):
+    """Raised in place of the solve: every door in front of it has passed."""
+
+
+def reaches_assembly(s):
+    """Whether ``fd.plan(s)`` passes every door and arrives at the solve, without solving.
+
+    The nearest legal scene beside a refusal is asked this rather than prepared, because the
+    doors are the question and the solve is three seconds that answer a different one. The
+    fixture itself is prepared in full by :func:`prepared`, so the solve behind the doors is
+    exercised too.
+    """
+    real = stencil._assemble
+
+    def stop(*args, **kwargs):
+        raise _Reached()
+    stencil._assemble = stop
+    try:
+        quiet(build_plan, s)
+    except _Reached:
+        return True
+    finally:
+        stencil._assemble = real
+    return False
+
+
+def refusal(s, call=None):
+    """The message ``fd.plan(s)`` (or ``call()``) refuses with; fails if it does not refuse."""
+    with pytest.raises(ValueError) as err:
+        quiet(build_plan, s) if call is None else quiet(call)
+    return str(err.value)
+
+
+def with_structure(s, shape=None, material=2.25, **kwargs):
+    """``s`` with its one structure replaced; ``discretisation='stencil'`` unless given."""
+    kwargs.setdefault('discretisation', 'stencil')
+    shape = fd.Sphere(radius=.14) if shape is None else shape
+    return s.replace(structures=(fd.Structure(shape, material, **kwargs),))
 
 
 # -- the selector ----------------------------------------------------------------------------
@@ -183,68 +223,81 @@ def test_the_selector_reaches_the_plan_the_skeleton_and_the_report():
 
 
 def test_the_prepared_arrays_move_the_skeleton_by_their_content():
-    """The operator's pattern and diagonal are hashed, and the hash is a function of content.
+    """The operator's pattern, diagonal and coefficients are hashed, by content.
 
     Both halves matter. An operator that did not move the skeleton would let ``fd.run(scene,
     plan=other)`` drive one scene with another's material; a skeleton that read an address
     would make every freeze disagree with itself (memory ``a-digest-you-did-not-validate``).
 
-    Every variant below carries the **same** ``key``, so what is under test is the
+    Every variant below carries the **same** ``source`` digest, so what is under test is the
     ``metadata={'digest': True}`` path over the arrays themselves and not the string beside
-    them. (That is not a hypothetical distinction: with the key left at its default the
-    variants differed by the key alone and the mutant that makes ``_digest`` ignore array
-    content survived the whole file.)
+    them. (That is not a hypothetical distinction: when the variants differed by a string
+    alone, the mutant that makes ``_digest`` ignore array content survived the whole file.)
+    ``value`` joined the digested fields when the module-level coefficient store was removed,
+    so it is nudged here too.
     """
     _, plan = prepared()
     term = stencil_term(plan)
 
     def variant(**changes):
         fields = dict(components=term.components, index=term.index, output=term.output,
-                      diagonal=term.diagonal, key=term.key)
+                      diagonal=term.diagonal, value=term.value, structure=term.structure,
+                      source=term.source, spectral_upper_bound=term.spectral_upper_bound)
         fields.update(changes)
         return plan.with_static(terms=tuple(
             t.__class__(t.name, t.field, t.region, t.ratio, t.masks, **fields)
             if t is term else t for t in plan.terms))
 
     assert variant().skeleton == plan.skeleton
-    # The diagonal, by value: same dtype, same shape, one number apart.
-    nudged = np.array(term.diagonal, copy=True)
-    nudged[0, 0, 0, 0] = np.nextafter(nudged[0, 0, 0, 0], np.inf)
-    assert variant(diagonal=nudged).skeleton != plan.skeleton
+    # The diagonal and the coefficients, by value: same dtype, same shape, one number apart.
+    for name in ('diagonal', 'value'):
+        nudged = np.array(getattr(term, name), copy=True)
+        nudged.flat[0] = np.nextafter(nudged.flat[0], np.inf)
+        assert variant(**{name: nudged}).skeleton != plan.skeleton
     # The gather pattern, by value, likewise.
     shifted = np.array(term.index, copy=True)
     shifted[0, 0] += 1
     assert variant(index=shifted).skeleton != plan.skeleton
     # And the selector's own word is in it as text.
-    assert variant().skeleton == plan.skeleton
-    assert plan.with_static(terms=tuple(
-        t.__class__(t.name, t.field, t.region, t.ratio, t.masks, components=t.components,
-                    discretisation='voxel', index=t.index, output=t.output,
-                    diagonal=t.diagonal, key=t.key) if t is term else t
-        for t in plan.terms)).skeleton != plan.skeleton
+    assert variant(discretisation='voxel').skeleton != plan.skeleton
 
 
 def test_two_processes_agree_on_a_prepared_skeleton():
-    """A prepared plan's skeleton is the same number in a fresh interpreter.
+    """A prepared plan's skeleton is the same number in two fresh interpreters.
 
-    The freezers' two-freeze check rests on this, and a digest over arrays is exactly where it
-    could stop being true. Thread count is held at the value the rest of the suite runs at:
-    the assembled matrix's data is known to differ between 1, 2 and 4 BLAS threads (commit
-    c939ed3), so this says "the same code and the same threads give the same number", which is
-    what a skeleton has to promise, and not that the operator is thread independent.
+    Both sides of the comparison are **child processes with the same explicit thread
+    environment** -- OMP, OpenBLAS, MKL and NumExpr all pinned to 2 -- and different
+    ``PYTHONHASHSEED`` values. The parent is deliberately not one of them: the assembled matrix's
+    data is known to differ between 1, 2 and 4 BLAS threads (commit c939ed3), and the parent
+    runs at whatever the caller set (CI sets 1), so a comparison with it would test the
+    caller's environment and not the code.
+
+    What this proves: the same code and the same thread count give the same skeleton in two
+    interpreters, whatever the hash seed and the addresses -- which is what the freezers'
+    two-freeze check and ``fd.run``'s skeleton comparison need. What it does **not** prove:
+    that the operator is independent of the thread count. It is not, and a plan prepared at
+    another count is a different plan (``docs/fd-symmetric-stencil.md``).
     """
-    root = str(__import__('pathlib').Path(fd.__file__).resolve().parents[2])
+    import os
+    import pathlib
+    root = str(pathlib.Path(fd.__file__).resolve().parents[2])
+    here = str(pathlib.Path(__file__).parent)
     code = ('import sys, warnings\n'
-            f'sys.path[:0] = [{root!r}, {str(__import__("pathlib").Path(__file__).parent)!r}]\n'
+            f'sys.path[:0] = [{root!r}, {here!r}]\n'
             'warnings.simplefilter("ignore")\n'
             'import test_fd_stencil as t\n'
             'print(t.prepared()[1].skeleton)\n')
-    env = dict(__import__('os').environ, OMP_NUM_THREADS='2', OPENBLAS_NUM_THREADS='2',
-               MKL_NUM_THREADS='2', PYTHONUTF8='1')
-    out = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True,
-                         timeout=900, env=env, cwd=root)
-    assert out.returncode == 0, out.stderr
-    assert out.stdout.strip() == prepared()[1].skeleton
+    threads = dict(OMP_NUM_THREADS='2', OPENBLAS_NUM_THREADS='2', MKL_NUM_THREADS='2',
+                   NUMEXPR_NUM_THREADS='2', PYTHONUTF8='1')
+    children = [subprocess.Popen([sys.executable, '-c', code], stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE, text=True, cwd=root,
+                                 env=dict(os.environ, PYTHONHASHSEED=seed, **threads))
+                for seed in ('0', '1')]
+    out = [child.communicate(timeout=900) for child in children]
+    for child, (_, err) in zip(children, out):
+        assert child.returncode == 0, err
+    first, second = (o.strip() for o, _ in out)
+    assert len(first) == 64 and first == second
 
 
 # -- plan time, not lowering -----------------------------------------------------------------
@@ -268,6 +321,38 @@ def test_the_operator_is_assembled_at_plan_time_and_lowering_only_reads_it():
         for backend in ('numpy', 'jax', 'torch'):
             lower_params(s, plan, backend)
             assert len(calls) == 1
+    finally:
+        stencil.geometry = real
+
+
+def test_run_takes_the_operator_its_plan_already_carries():
+    """``fd.run(scene, plan=p)`` does not solve the operator ``p`` already holds.
+
+    ``run`` plans the scene again to check the caller's plan against it and to take the
+    grazing survey, and until this commit that re-plan re-solved the operator: measured on
+    this fixture, one ``geometry`` call per run, 3.0 of a 4.0 second NumPy run (the 56-cell
+    research sphere's preparation is 493 s). Now the re-plan runs every door and takes the
+    caller's operator when it was prepared from the same arguments. The other side is the
+    one that matters as much: a plan whose operator was prepared for a *different* scene is
+    not reused -- the scene's own is solved, its skeleton differs, and the run is refused.
+    """
+    calls = []
+    real = stencil.geometry
+    stencil.geometry = lambda *a, **k: (calls.append(1), real(*a, **k))[1]
+    try:
+        s = scene(radius=.1415)             # not the cached fixture: this one must assemble
+        plan = quiet(build_plan, s)
+        assert len(calls) == 1
+        quiet(fd.run, s, 'numpy', plan=plan)
+        assert len(calls) == 1
+        # Without a plan there is nothing to reuse, so the run prepares its own.
+        quiet(fd.run, s, 'numpy')
+        assert len(calls) == 2
+        other = with_structure(s, fd.Sphere(radius=.1415), 2.3)
+        with pytest.raises(ValueError) as err:
+            quiet(fd.run, other, 'numpy', plan=plan)
+        assert 'built for a different scene' in str(err.value)
+        assert len(calls) == 3
     finally:
         stencil.geometry = real
 
@@ -456,7 +541,9 @@ def test_a_cell_snapped_shape_cannot_ask_for_the_stencil():
                                                  discretisation='stencil'),))
     with pytest.raises(ValueError) as err:
         quiet(build_plan, s)
-    assert 'StencilShapeRefused' in str(err.value)
+    # Its own sentence and not the not-a-sphere one beside it, which a Box also fails: with
+    # only the shape name asserted, removing this door survived (both arms share the name).
+    assert 'StencilShapeRefused' in str(err.value) and 'cell-snapped' in str(err.value)
     assert isinstance(stencil_term(prepared()[1]), StencilTerm)
 
 
@@ -494,31 +581,51 @@ def test_a_source_or_monitor_surface_that_cuts_the_nonlocal_support_is_refused()
     assert 'StencilSurfaceRefused' in str(err.value)
 
 
-def test_a_predicted_preparation_above_the_declared_bound_is_refused_before_it_starts():
-    """Both sides, and the prediction is shut *before* the solve rather than after it.
+def test_a_predicted_preparation_above_its_bound_is_refused_before_it_starts(monkeypatch):
+    """Both sides, both bounds, and the prediction is shut *before* the solve.
 
     The bound is declared in bytes and the prediction is two measured constants times a row
     count. The refusal has to come first: the solve is what would take the memory, so a door
-    behind it protects nothing (memory ``laptop-ram-panics-not-just-slows``).
+    behind it protects nothing (memory ``laptop-ram-panics-not-just-slows``). The fixture is
+    predicted at about 265 MiB, so a 128 MiB bound refuses it and a 512 MiB one admits it --
+    whether the bound is the default or the one a structure declares with ``memory_bound=``.
     """
-    big = scene(radius=.3, cpw=20)
-    with pytest.raises(ValueError) as err:
-        quiet(build_plan, big)
-    message = str(err.value)
+    calls = []
+    real = stencil.geometry
+    monkeypatch.setattr(stencil, 'geometry',
+                        lambda *a, **k: (calls.append(1), real(*a, **k))[1])
+    tight = with_structure(scene(), memory_bound=128 * 1024 ** 2)
+    message = refusal(tight)
     assert 'StencilMemoryRefused' in message and 'prediction' in message
-    # The bound is what decides it, not the scene: raise it and the same scene passes the door
-    # and goes on to fail somewhere else entirely (or succeed), which is what "this door and
-    # no other" means.
-    original = stencil.MEMORY_BOUND_BYTES
-    stencil.MEMORY_BOUND_BYTES = 8 * 1024 ** 3
-    try:
-        with pytest.raises(ValueError) as later:
-            quiet(build_plan, big)
-        assert 'StencilMemoryRefused' not in str(later.value)
-    finally:
-        stencil.MEMORY_BOUND_BYTES = original
-    # And the fixture is under the bound, which is the other side of the door.
-    assert stencil_term(prepared()[1]) is not None
+    assert 'bound this structure declared' in message and not calls
+    assert reaches_assembly(with_structure(scene(), memory_bound=512 * 1024 ** 2))
+    monkeypatch.setattr(stencil, 'MEMORY_BOUND_BYTES', 128 * 1024 ** 2)
+    message = refusal(scene())
+    assert 'StencilMemoryRefused' in message and 'default bound' in message and not calls
+    assert 'memory_bound=' in message
+    assert reaches_assembly(with_structure(scene(), memory_bound=512 * 1024 ** 2))
+    # The spelling is refused where nobody would read it, and a bound has to be a size.
+    with pytest.raises(ValueError, match='prepares nothing'):
+        fd.Structure(fd.Sphere(radius=.1), 2.25, memory_bound=2 ** 30)
+    for bad in (0, -1., float('inf'), True, '1GB'):
+        with pytest.raises(ValueError, match='positive, finite number of bytes'):
+            fd.Structure(fd.Sphere(radius=.1), 2.25, discretisation='stencil', memory_bound=bad)
+
+
+def test_the_default_bound_admits_the_resolutions_the_orders_were_measured_at():
+    """Owner decision (C)'s public spot check has to be *possible*: the bound admits them.
+
+    The scenes are the research driver's own -- ``studies/fdtd_subpixel_mie_sphere.py``'s
+    ``sphere_scene``, the epsilon-12, radius/wavelength .25 ball -- at the resolutions whose
+    preparation peak was measured (``docs/fd-symmetric-stencil.md``), asked for through the
+    public selector. Every door, the memory door included, has to pass; nothing is solved.
+    """
+    mie = pytest.importorskip('studies.fdtd_subpixel_mie_sphere')
+    for cpw in stencil.MEASURED_RESOLUTIONS:
+        s = mie.sphere_scene(cpw, 12., 48., (0., 0., 0.), radius=.25, propagation='yee')
+        s = s.replace(structures=(fd.Structure(s.structures[0].shape, 12.,
+                                               discretisation='stencil'),))
+        assert reaches_assembly(s), cpw
 
 
 def test_the_predicted_active_rows_are_the_ones_the_fit_reports():
@@ -557,44 +664,340 @@ def test_a_scene_with_no_stencil_structure_is_untouched_by_the_preparation():
 def test_two_prepared_scenes_in_one_process_keep_their_own_coefficients():
     """Preparing a second scene must not make the first one lower the second's operator.
 
-    The off-diagonal coefficients are held beside the plan, so they need a key, and the term's
-    *name* is not one: ``constitutive[E0]`` is a position in a scene, not an identity, and
-    every scene with one smoothed region calls its term that. Keyed by name, the second
-    preparation would overwrite the first and the first plan would then lower the second's
-    numbers under its own pattern -- the same array shapes, a plausible run, a different
-    medium. The key is the prepared operator's own digest instead.
-
-    Both plans are lowered *after* both preparations, which is the order that makes the defect
-    visible at all.
+    The coefficients are a field of the prepared term, so each plan carries its own and there
+    is no store for a second preparation to overwrite. (There was one: a module-level dict,
+    first keyed by the term's *name* -- a position, ``constitutive[E0]`` in every such scene --
+    then by digest, and never released.) Both plans are lowered *after* both preparations,
+    which is the order that made the name-keyed defect visible.
     """
     small, small_plan = prepared()
-    big = scene(radius=.17)
+    big = scene(radius=.145)
     big_plan = quiet(build_plan, big)
     a, b = stencil_term(small_plan), stencil_term(big_plan)
-    assert a.name == b.name and a.key != b.key
+    assert a.name == b.name and a.source != b.source
     first = lower_params(small, small_plan, 'numpy')
     second = lower_params(big, big_plan, 'numpy')
     assert not np.array_equal(np.asarray(first['stencil'][a.name]['value']),
                               np.asarray(second['stencil'][b.name]['value']))
-    assert np.array_equal(np.asarray(first['stencil'][a.name]['value']),
-                          stencil._prepared[a.key])
+    assert np.array_equal(np.asarray(first['stencil'][a.name]['value']), a.value)
 
 
-def test_a_plan_prepared_elsewhere_is_refused_rather_than_lowered_without_its_coefficients():
-    """The off-diagonal coefficients are held beside the plan, and their absence is named.
+def test_a_prepared_operator_is_released_with_its_plan():
+    """Dropping the plan drops the operator: nothing in the module keeps it alive.
 
-    They are floats the kernel multiplies by, so they belong in ``params`` and not in a
-    hashable plan; the plan carries their pattern and its own diagonal by digest instead.
-    What must never happen is a lowering that finds them missing and runs the diagonal alone,
-    which is the extended stencil's diagonal without its coupling -- a third discretisation
-    nobody asked for.
+    The coefficients used to live in a module-level dict that nothing evicted, so every
+    operator prepared in a process lived until the process did -- 0.9 MB here, 51 MB on the
+    56-cell research sphere, per distinct operator, in a sweep. They are a field of the
+    prepared term now. The witness is a weak reference to each of the term's arrays, dead once
+    the plan, the lowered params and the term are.
+    """
+    import gc
+    import weakref
+    s = scene(radius=.1395)
+    plan = quiet(build_plan, s)
+    term = stencil_term(plan)
+    params = lower_params(s, plan, 'numpy')
+    alive = [weakref.ref(a) for a in (term.value, term.index, term.output, term.diagonal)]
+    assert all(r() is not None for r in alive)
+    del plan, term, params
+    gc.collect()
+    assert [r() is None for r in alive] == [True] * 4
+
+
+# -- the scene around the operator: what the research driver refused, refused again ----------
+
+def test_a_non_vacuum_background_is_refused_not_replaced_by_vacuum():
+    """The operator was fitted with vacuum outside the body; another background is refused.
+
+    Measured before this door existed, on this fixture: ``Scene(background=1.44)`` was
+    accepted, and ``be / ratio`` at the grown region's corner read 1.0 on the stencil against
+    0.6944 (1/1.44, the background the scene declared) on the default -- the prepared diagonal
+    had pasted a cube of vacuum round the sphere. The research driver refused this scene by
+    name; the public preparation had dropped the condition. Both sides: a declared vacuum
+    background, spelt as a material, reaches the solve.
+    """
+    for background in (fd.Material(eps=1.44), fd.Material(eps=1., mu=1.)):
+        assert 'StencilBackgroundRefused' in refusal(scene(background=background))
+    assert reaches_assembly(scene(background=fd.Material(eps=1.)))
+
+
+def test_a_second_structure_anywhere_is_refused():
+    """One structure per scene, as the research driver required; no other is erased.
+
+    Measured before this door existed, both accepted with no warning: a cell-snapped
+    ``fd.Box`` beside the ball, inside the operator's grown region, kept 864 cells at 1/1.44
+    on the default and 0 on the stencil; a second smoothed ``fd.Sphere`` beside it left the
+    whole lowered ``be`` ``np.array_equal`` to the scene without it, while ``fd.check`` still
+    listed it. A structure outside the region is refused too: nothing has measured the
+    operator beside another medium. The nearest legal scene is the fixture.
+    """
+    dx = 1 / 18
+    s = scene()
+    box = fd.Structure(fd.Box(size=(2 * dx, 12 * dx, 12 * dx), center=(4 * dx, 0, 0)), 1.44)
+    ball = fd.Structure(fd.Sphere(radius=.045, center=(.27, 0, 0)), 2.25)
+    for extra in (box, ball):
+        assert 'StencilStructuresRefused' in refusal(s.replace(structures=s.structures + (extra,)))
+    assert stencil_term(prepared()[1]) is not None
+    # Far from the region too, in a scene with nothing else in it to object first.
+    bare = s.replace(sources=(), monitors=(), run=fd.Run(steps=4), boundaries=fd.Boundaries.open(
+        fd.PML(cells=6, wavelength=1., allow_thin=True)))
+    far = fd.Structure(fd.Box(size=(2 * dx,) * 3, center=(.5, .5, .5)), 1.44)
+    assert 'StencilStructuresRefused' in refusal(bare.replace(
+        structures=bare.structures + (far,)))
+    assert reaches_assembly(bare)
+
+
+def test_a_complex_run_is_refused_and_a_real_periodic_one_is_not():
+    """A Bloch face makes the run complex128; the operator was measured in float64 only."""
+    bloch = scene().replace(boundaries=fd.Boundaries(
+        x=fd.Bloch(phase=.3), y=fd.Periodic(), z=fd.PML(cells=6, allow_thin=True)))
+    assert 'StencilDtypeRefused' in refusal(bloch)
+    assert reaches_assembly(bloch.replace(boundaries=fd.Boundaries(
+        x=fd.Periodic(), y=fd.Periodic(), z=fd.PML(cells=6, allow_thin=True))))
+
+
+def test_an_initial_field_is_refused_on_either_half():
+    """InitialField.E and InitialField.H are both refused, as the research driver refused them.
+
+    The E half has a reason of its own (the term stores D); the H half is refused because no
+    run of this operator has ever started from a field, not because a failure was measured.
+    """
+    pulse = (None, None, lambda x, y, z: 1e-3 * np.exp(-(x * x + y * y + z * z) / .01))
+    for field in ('E', 'H'):
+        message = refusal(scene(initial=fd.InitialField(**{field: pulse})))
+        assert 'StencilScopeRefused' in message and f'InitialField.{field}' in message
+    assert reaches_assembly(scene())
+
+
+def test_only_fd_sphere_itself_can_ask():
+    """A subclass of fd.Sphere may answer its own fills; the operator uses the closed forms."""
+    class Sphere(fd.Sphere):
+        pass
+    message = refusal(with_structure(scene(), Sphere(radius=.14)))
+    assert 'StencilShapeRefused' in message and 'not a subclass' in message
+    assert reaches_assembly(with_structure(scene(), fd.Sphere(radius=.14)))
+
+
+def test_a_magnetic_structure_is_told_it_is_magnetic():
+    """One magnetic ball makes an E and an H term; the refusal names the permeability.
+
+    Before this commit the region count ran first and told this scene it carried two smoothed
+    regions, while the accurate sentence beside it could not be reached.
+    """
+    message = refusal(with_structure(scene(), material=fd.Material(eps=1.44, mu=1.05)))
+    assert 'StencilScopeRefused' in message and 'permeability' in message
+    assert 'region' not in message.split('.')[0]
+    assert reaches_assembly(with_structure(scene(), material=fd.Material(eps=1.44)))
+
+
+def test_a_wall_or_the_domain_edge_inside_the_region_is_refused():
+    """A PEC wall in the region, and a grown region that leaves the box, are refused by name."""
+    dx = 1 / 18
+
+    def cell(x, boundary):
+        return fd.Scene(domain=fd.Domain(size=(1., 1., 1.)),
+                        boundaries=fd.Boundaries(x=boundary, y=fd.Periodic(), z=fd.Periodic()),
+                        resolution=fd.Resolution(dx=dx), run=fd.Run(steps=4),
+                        structures=(fd.Structure(fd.Sphere(radius=.14, center=(x, 0, 0)), 2.25,
+                                                 discretisation='stencil'),))
+    message = refusal(cell(-.3, fd.PEC()))
+    assert 'StencilScopeRefused' in message and 'PEC or PMC wall' in message
+    assert 'StencilRegionRefused' in refusal(cell(.33, fd.PEC()))
+    assert reaches_assembly(cell(0., fd.PEC()))
+
+
+def test_a_source_the_clearance_rule_cannot_read_is_refused():
+    """Only a TFSF box and a PlaneWave plane have a clearance rule; a Dipole is refused."""
+    dipole = scene().replace(monitors=(), sources=(fd.Dipole(
+        'd', center=(0., 0., .5), component='Ex', band=fd.Band(wavelength=1., df=.1)),))
+    assert 'StencilSourceRefused' in refusal(dipole)
+    assert reaches_assembly(scene())
+
+
+def test_nothing_else_may_occupy_the_grown_region():
+    """No source and no monitor surface in the region the operator owns, including its halo.
+
+    The grown region is the smoothed support plus three nodes a side, and the prepared term
+    owns all of it: its diagonal replaces ``be`` there and its gather reads the curl there.
+    Each case below is refused where the research clearance rule -- which judged only the
+    rows the operator changes -- would have let it through, and each has a nearest legal
+    twin one step further out. The fixture's own TFSF box is 1.11 wide for this reason: the
+    0.9 it had before put its faces on the region's outermost node.
+    """
+    s = scene()
+    tfsf = lambda size: s.replace(sources=(fd.TFSF(
+        't', box=fd.Box(size=(size,) * 3), direction='+z', polarization='x',
+        band=fd.Band(wavelength=1., df=.1)),))
+    assert 'StencilSourceRefused' in refusal(tfsf(.95))
+    assert reaches_assembly(tfsf(1.11))
+    flux = lambda size: s.replace(monitors=(fd.Flux('f', box=fd.Box(size=(size,) * 3),
+                                                    wavelengths=(1.,)),))
+    assert 'StencilSurfaceRefused' in refusal(flux(.8))
+    assert reaches_assembly(flux(1.2))
+    plane = lambda z: s.replace(monitors=(fd.Flux(
+        'f', plane=fd.Plane(z=z, x=(-.3, .3), y=(-.3, .3)), wavelengths=(1.,)),))
+    assert 'StencilSurfaceRefused' in refusal(plane(.38))
+    assert reaches_assembly(plane(.5))
+    periodic = s.replace(boundaries=fd.Boundaries(x=fd.Periodic(), y=fd.Periodic(),
+                                                  z=fd.PML(cells=6, allow_thin=True)))
+    wave = lambda z, monitors=(): periodic.replace(monitors=monitors, sources=(fd.PlaneWave(
+        'p', z=z, direction='+z', polarization='s', band=fd.Band(wavelength=1., df=.1)),))
+    assert 'StencilSourceRefused' in refusal(wave(-.47))
+    assert reaches_assembly(wave(-.6))
+    orders = lambda z: (fd.Diffraction('r', z=z, side='transmit', wavelengths=(1.,)),)
+    assert 'StencilSurfaceRefused' in refusal(wave(-.6, orders(.38)))
+    assert reaches_assembly(wave(-.6, orders(.5)))
+
+
+def test_a_studies_checkout_that_is_missing_is_named():
+    """Where ``studies/`` cannot be imported, the triplet baseline's seam is refused by name."""
+    import contextlib
+
+    class Hide:
+        def find_spec(self, name, path=None, target=None):
+            if name == 'studies' or name.startswith('studies.'):
+                raise ImportError(f'No module named {name!r} (hidden by the test)')
+
+    @contextlib.contextmanager
+    def hidden():
+        saved = {n: m for n, m in sys.modules.items()
+                 if n == 'studies' or n.startswith('studies.')}
+        for n in saved:
+            del sys.modules[n]
+        finder = Hide()
+        sys.meta_path.insert(0, finder)
+        try:
+            yield
+        finally:
+            sys.meta_path.remove(finder)
+            sys.modules.update(saved)
+    with hidden():
+        assert 'StencilSeamRefused' in refusal(scene(radius=.1385))
+
+
+def test_the_operators_own_certificates_refuse_by_name(monkeypatch):
+    """Consistency, energy, halo and time step: each refuses, each by its own name.
+
+    The operator the solve returns is served from the fixture's own assembly, with one
+    thing changed per case, so every case costs no solve; the time-step case is a real scene
+    -- ``courant=0.99``, which the default accepts and this operator's spectral bound
+    (1.027 on the fixture) does not. The fixture's unchanged report is the nearest legal case.
+    """
+    _, (matrix, report) = assembled()
+
+    def serve(served=matrix, **changes):
+        monkeypatch.setattr(stencil, 'geometry',
+                            lambda *a, **k: (served, {**report, **changes}))
+    for changes, name in (({'residual_max': 1e-9}, 'StencilConsistencyRefused'),
+                          ({'lsmr_stop': 7}, 'StencilConsistencyRefused'),
+                          ({'minimum_eigenvalue': -1e-3}, 'StencilEnergyRefused')):
+        serve(**changes)
+        assert name in refusal(scene())
+    moved = matrix.copy()
+    moved[0, 0] = 2.
+    serve(moved)
+    assert 'StencilHaloRefused' in refusal(scene())
+    serve()
+    assert 'StencilCFLRefused' in refusal(scene().replace(run=fd.Run(periods=2., courant=.99)))
+    assert stencil_term(quiet(build_plan, scene())) is not None
+
+
+# -- lowering: where every traced path passes -------------------------------------------------
+
+def test_lowering_refuses_a_traced_leaf_on_every_traced_path():
+    """``jax.grad``, ``jax.jit(jax.grad)`` and Torch autograd all meet the door at lowering.
+
+    The repository's gradient recipe builds the plan from concrete values and lowers a traced
+    scene against it (``tests/test_fd_constitutive.py``), which never passes ``fd.plan``'s
+    door. Measured before this door existed: ``d(sum be)/d(eps)`` was -14.3487 by autodiff and
+    by central difference on the default and **exactly 0** by both on the stencil -- the
+    prepared diagonal had overwritten the permittivity being differentiated. The other side
+    is the same recipe on the default, which the refusal now names, returning the gradient.
+    """
+    jax = pytest.importorskip('jax')
+    torch = pytest.importorskip('torch')
+
+    def loss(rule, plan, backend='jax', background=None):
+        def f(eps):
+            s = with_structure(scene(background=background), material=fd.Material(eps=eps),
+                               discretisation=rule)
+            return lower_params(s, plan, backend)['be'].sum()
+        return f
+    plan = prepared()[1]
+    for path in (jax.grad(loss('stencil', plan)), jax.jit(jax.grad(loss('stencil', plan)))):
+        with pytest.raises(ValueError) as err:
+            path(2.25)
+        assert 'StencilTracedRefused' in str(err.value) and 'fd.lower' in str(err.value)
+    with pytest.raises(ValueError) as err:
+        loss('stencil', plan, 'torch')(torch.tensor(2.25, dtype=torch.float64,
+                                                    requires_grad=True))
+    assert 'StencilTracedRefused' in str(err.value)
+    # A traced background is refused as well: the operator was fitted for vacuum around it.
+    def background_loss(eps):
+        s = scene(background=fd.Material(eps=eps))
+        return lower_params(s, plan, 'jax')['be'].sum()
+    with pytest.raises(ValueError) as err:
+        jax.grad(background_loss)(1.)
+    assert 'StencilTracedRefused' in str(err.value)
+    # The spelling the refusal names works: the same recipe on the default differentiates.
+    voxel = loss('voxel', prepared('voxel')[1])
+    gradient = float(jax.grad(voxel)(2.25))
+    central = float((voxel(2.25 + 1e-6) - voxel(2.25 - 1e-6)) / 2e-6)
+    assert gradient < -1 and abs(central / gradient - 1) < 1e-5
+
+
+def test_lowering_refuses_a_scene_the_operator_was_not_prepared_for():
+    """A concrete scene that is not the prepared one is refused at lowering, by name.
+
+    Lowered, the prepared diagonal would replace whatever the scene now says: a different
+    permittivity or radius, a loss, an anisotropy, a permeability, a background, a second
+    structure. Each is refused; the prepared scene itself lowers.
     """
     s, plan = prepared()
+    lower = lambda other: (lambda: lower_params(other, plan, 'numpy'))
+    cases = ((with_structure(s, material=2.3), 'StencilMismatchRefused'),
+             (with_structure(s, fd.Sphere(radius=.145)), 'StencilMismatchRefused'),
+             (with_structure(s, discretisation='voxel'), 'StencilMismatchRefused'),
+             (s.replace(structures=s.structures + (fd.Structure(
+                 fd.Box(size=(.1,) * 3, center=(.5, .5, .5)), 1.44),)),
+              'StencilMismatchRefused'),
+             (with_structure(s, material=fd.Conductor(eps=2.25, sigma=.1)),
+              'conductivity or poles'),
+             (with_structure(s, material=fd.Material(eps=(2.25, 2.25, 2.4))), 'anisotropic'),
+             (with_structure(s, material=fd.Material(eps=2.25, mu=1.05)), 'permeability'),
+             (scene(background=1.44), 'StencilBackgroundRefused'))
+    for other, name in cases:
+        assert name in refusal(None, lower(other)), name
+    assert 'stencil' in lower_params(s, plan, 'numpy')
+
+
+def test_an_off_centre_sphere_is_patched_where_it_is():
+    """The patch lands on the region's own cells when the region is not the same on every axis.
+
+    Every other fixture here is a ball centred in a cubic box, whose grown region is the same
+    range on z, y and x -- so a patch box written in the wrong axis order could not be told
+    from the right one (review: the transposed-box mutant survived all twenty cases). Here the
+    ball sits off centre along x, so the three ranges differ, and ``be`` has to be exactly the
+    prepared diagonal over the region and exactly the default's everywhere else.
+    """
+    def ball(rule):
+        return fd.Scene(domain=fd.Domain(size=(1.8,) * 3),
+                        boundaries=fd.Boundaries.open(fd.PML(cells=6, wavelength=1.,
+                                                             allow_thin=True)),
+                        resolution=fd.Resolution(dx=1 / 18), run=fd.Run(steps=2),
+                        structures=(fd.Structure(fd.Sphere(radius=.10, center=(.08, 0., 0.)),
+                                                 2.25, discretisation=rule),))
+    s, v = ball('stencil'), ball('voxel')
+    plan, voxel_plan = quiet(build_plan, s), quiet(build_plan, v)
     term = stencil_term(plan)
-    held = stencil._prepared.pop(term.key)
-    try:
-        with pytest.raises(ValueError) as err:
-            lower_params(s, plan, 'numpy')
-        assert 'StencilUnpreparedRefused' in str(err.value)
-    finally:
-        stencil._prepared[term.key] = held
+    assert term.region.x != term.region.y == term.region.z
+    be = np.asarray(lower_params(s, plan, 'numpy')['be'])
+    voxel = np.asarray(lower_params(v, voxel_plan, 'numpy')['be'])
+    view = (slice(None),) + term.region.slices
+    assert np.array_equal(be[view], term.diagonal * term.ratio)
+    outside = np.ones(be.shape, dtype=bool)
+    outside[view] = False
+    assert np.array_equal(be[outside], voxel[outside])
+    # And the ball is where the default puts it: its deepest cell is inside on both.
+    deepest = np.unravel_index(np.argmin(voxel), voxel.shape)
+    assert be[deepest] < .9 * term.ratio

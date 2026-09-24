@@ -55,8 +55,8 @@ from .._shapes import Sphere
 
 __all__ = ['DEFAULT', 'MEMORY_BOUND_BYTES', 'REACH', 'STENCIL', 'active_rows', 'arguments',
            'energy_bounds', 'fit', 'geometry', 'lower', 'operator_digest', 'padded',
-           'predicted_bytes', 'prepare', 'prepared_digest', 'surface_clearance',
-           'triplet_baseline']
+           'predicted_bytes', 'prepare', 'prepared_digest', 'source_digest',
+           'surface_clearance', 'triplet_baseline']
 
 #: The names :func:`fit` reads a complex value out of, and refuses. Each one reaches the
 #: preallocated ``float64`` buffers below through ``gamma``, ``pis`` or ``pi``.
@@ -391,37 +391,56 @@ REACH = 2.0
 #: It is a lattice-topology number, the count of lattice points within :data:`REACH` of a
 #: point over the three component sublattices, so it depends on the shell's shape and not on
 #: the radius. Measured 2026-09-24 on five ball preparations, 1830 to 7836 active rows:
-#: **41.72, 42.98, 43.43, 44.33, 44.76**, rising with the shell's size and flattening; the
-#: recorded 56-cell research sphere reads 1,826,928 / 40,224 = **45.42**
-#: (``docs/fd-symmetric-stencil.md``). Rounded **up** past all six, because it multiplies a
-#: memory bound and a bound that is occasionally low is not a bound.
+#: **41.72, 42.98, 43.43, 44.33, 44.76**, rising with the shell's size and flattening; and
+#: 2026-09-25 through the public ``fd.plan`` on the research epsilon-12 sphere: **45.35** at 40
+#: cells (21,060 rows) and **45.42** at 56 (40,224 rows, the recorded research value).
+#: Rounded **up** past all of them, because it multiplies a memory bound and a bound that is
+#: occasionally low is not a bound.
 PAIRS_PER_ACTIVE_ROW = 46.0
 
-#: Bytes of peak host working set per unknown that the preparation costs, over the process's
-#: working set just before ``geometry`` is called. Measured 2026-09-24 in five separate
-#: processes at OMP/OPENBLAS/MKL_NUM_THREADS=2, one preparation each, through
-#: ``GetProcessMemoryInfo``'s ``PeakWorkingSetSize``:
+#: Bytes of peak host working set per unknown that the **whole** host preparation costs --
+#: the solve, ``energy_bounds``' sparse LDL factorization, the padding and the halo check,
+#: i.e. :func:`_assemble` -- over the process's working set just before it starts. Measured
+#: 2026-09-25, each in its own process through ``fd.plan`` with OMP/OPENBLAS/MKL_NUM_THREADS=2,
+#: from ``GetProcessMemoryInfo``'s ``PeakWorkingSetSize`` (the probe is recorded in
+#: ``docs/fd-symmetric-stencil.md``):
 #:
-#:     unknowns    76,353   117,864   135,768   249,462   350,730
-#:     bytes/unknown  749.2     728.2     710.8     658.3     620.9
+#:     scene                        cells  active rows  unknowns   peak MB   bytes/unknown
+#:     test fixture, ball .14, 2.25    18        1,830     76,353       77         1,009.7
+#:     ball .25, eps 2.25              24        7,836    350,730      613         1,747.6
+#:     ball .25, eps 2.25              28       10,404    467,346      889         1,901.5
+#:     ball .25, eps 2.25              32       13,776    622,560    1,502         2,412.0
+#:     research sphere, eps 12         40       21,060    954,978    2,423         2,537.2
+#:     research sphere, eps 12         56       40,224  1,826,928    5,984         3,275.6
 #:
-#: It **falls** with size -- the fixed cost of SciPy, NumPy and the imported package amortises
-#: -- so the largest measured value is taken as an upper bound over the measured range and
-#: nothing is extrapolated past it. :data:`MEMORY_BOUND_BYTES` is deliberately set inside that
-#: range so that this number is never quoted at a size it was not measured at.
-BYTES_PER_UNKNOWN = 750.0
+#: It **rises** with size: the LDL factorization's fill grows faster than the unknown count,
+#: and past the solve it is the factorization that sets the peak (the solve alone read 605 and
+#: 556 bytes per unknown at 24 and 56 cells -- the value this constant held before, 750, was
+#: measured over the solve alone and under-predicted the preparation by up to 4.4 times). So
+#: the largest value measured, at the largest size, is taken -- an upper bound over the
+#: measured range, and **not** one past it, where the true figure is likely higher still.
+BYTES_PER_UNKNOWN = 3300.0
 
 #: The declared preparation bound: what one host preparation may be predicted to cost before
 #: it is refused rather than started. A laptop that panics rather than slows is on record in
 #: this repository (memory ``laptop-ram-panics-not-just-slows``), which is why the door is
 #: here at all and why it is shut before the solve rather than after it.
 #:
-#: 256 MiB is 357,913 unknowns at :data:`BYTES_PER_UNKNOWN`, which is just past the largest
-#: preparation the constant was measured on (350,730). That is the whole reason for the value:
-#: a larger bound would be a prediction made with a constant nobody has measured there, and
-#: the number it printed would be the confident part of a guess. Raising it is a deliberate
-#: act and the refusal says so.
-MEMORY_BOUND_BYTES = 256 * 1024 ** 2
+#: 5824 MiB is the prediction for the largest preparation measured -- the 56-cell research
+#: sphere, 40,224 rows x 46 x 3300 bytes = 6,106,003,200 bytes -- rounded up to the next MiB
+#: of 64: 1,850,577 unknowns at :data:`BYTES_PER_UNKNOWN`. That admits every resolution the
+#: operator's convergence orders were measured at (40 and 56 cells; the 80-cell preparation
+#: has not been measured) and nothing past them, so the number the refusal prints is never
+#: the constant quoted at a size nobody measured. A structure raises it for itself with
+#: ``fd.Structure(..., discretisation='stencil', memory_bound=<bytes>)``; past this bound that
+#: is a decision to trust an extrapolation, and the refusal says so.
+MEMORY_BOUND_BYTES = 5824 * 1024 ** 2
+
+#: The unknown count of the largest preparation measured, and the resolutions of the research
+#: sphere whose preparation peak was measured -- what the refusal quotes, and what
+#: ``tests/test_fd_stencil.py`` asks the default bound to admit.
+MEASURED_UNKNOWNS = 1826928
+MEASURED_RESOLUTIONS = (40, 56)
 
 
 def operator_digest(matrix):
@@ -466,6 +485,27 @@ def prepared_digest(index, value, output, diagonal):
     return h.hexdigest()
 
 
+def source_digest(nodes, dx, center, radius, eps, components):
+    """``sha256`` over the exact arguments :func:`geometry` is called with.
+
+    The operator is a function of these and of nothing else -- the reach and the baseline are
+    this module's constants, and both are in the hash -- so two preparations with the same
+    source digest are the same solve. That is what lets ``fd.run(scene, plan=...)`` take the
+    operator the plan already carries instead of solving it again (:func:`prepare`'s
+    ``reuse``), and what lets :func:`lower` refuse a scene whose sphere or permittivity is not
+    the one the operator was fitted for. Content only: the node lattice's bytes and the five
+    numbers as float64 bytes, never a ``repr`` or an address.
+    """
+    h = hashlib.sha256()
+    a = np.ascontiguousarray(nodes, dtype=np.float64)
+    h.update(f'{a.dtype.str}{a.shape}'.encode())
+    h.update(a.tobytes())
+    numbers = np.asarray((dx,) + tuple(center) + (radius, eps, REACH), dtype=np.float64)
+    h.update(numbers.tobytes())
+    h.update(repr((tuple(int(c) for c in components), 'triplet')).encode())
+    return h.hexdigest()
+
+
 def active_rows(nodes, dx, center, radius, components, reach=REACH):
     """The number of target edges the operator will carry a correction on.
 
@@ -495,7 +535,7 @@ def predicted_bytes(nodes, dx, center, radius, components, reach=REACH):
     A prediction and not a measurement, and the refusal that reads it says so. Two measured
     constants multiply: :data:`PAIRS_PER_ACTIVE_ROW` and :data:`BYTES_PER_UNKNOWN`. The row
     count itself is not a prediction -- it is the same screen ``fit`` applies, and it read the
-    fit's own ``active_edges`` exactly on all five measured fixtures.
+    fit's own ``active_edges`` exactly on every measured fixture.
     """
     rows = active_rows(nodes, dx, center, radius, components, reach)
     unknowns = int(round(rows * PAIRS_PER_ACTIVE_ROW))
@@ -513,8 +553,9 @@ def arguments(scene, plan, index, box=None):
     from .constitutive import common_points
     structure = tuple(getattr(scene, 'structures', ()) or ())[index]
     components = (0, 1, 2)
-    old, = plan.constitutive
-    box = _stencil_box(old, components, plan) if box is None else box
+    if box is None:
+        old, = plan.constitutive
+        box = _stencil_box(old, components, plan)
     nodes = common_points(plan.grid, tuple(reversed(box)), 'E')[..., components]
     shape = structure.shape
     return (nodes, plan.dx, tuple(shape.center), float(shape.radius),
@@ -528,6 +569,10 @@ def _stencil_box(old, components, plan):
     zero extension the compact region uses needs one further vacuum node beyond the last
     coupled one for the halo check to be able to say the operator ends in the identity. The
     arithmetic is the research driver's, so that both callers grow the same box.
+
+    This grown box is what the prepared term **owns**: its diagonal replaces ``be`` over every
+    cell of it and its gather reads the curl over every cell of it. That is why nothing else
+    may be in it (:func:`_refuse_scope`, :func:`_refuse_occupancy`).
     """
     box = tuple((lo - 3, hi + 3) if 2 - i in components else (lo, hi)
                 for i, (lo, hi) in enumerate(old.box))
@@ -548,13 +593,33 @@ def _materials(scene):
     return materials_of(scene)
 
 
-def _refuse_structure(structure, index):
-    """The doors a single structure has to pass, whatever else the scene holds.
+def _traced(where, when):
+    """The one sentence a traced leaf hears, at plan time or at lowering."""
+    return (f'StencilTracedRefused: {where} asked for discretisation={STENCIL!r} and '
+            f'{"fd.plan" if when == "plan" else "fd.lower"} was handed a traced radius, centre, '
+            f'material value or background. The operator is solved once on the host in SciPy '
+            f'-- a sparse least-squares fit, a symmetric eigenpair and a sparse factorization '
+            f'-- so it is static data of the plan and cannot be a function of a leaf: lowered '
+            f'anyway, the prepared diagonal would overwrite the traced permittivity and the '
+            f'gradient would come back exactly zero where the true one is not. It is refused '
+            f'rather than quietly discretised the other way, which would make jax.grad and a '
+            f'finite difference compute two different functions. To differentiate with '
+            f'respect to this structure, ask for discretisation={DEFAULT!r}, build the plan '
+            f'from concrete values with fd.plan(scene) and lower the traced scene against it '
+            f'with fd.lower(traced_scene, plan, backend) -- the recipe '
+            f'tests/test_fd_constitutive.py uses; fd.plan itself needs concrete values on '
+            f'either discretisation. The commit that differentiates through a prepared '
+            f'operator is what lifts this.')
+
+
+def _refuse_structure(structure, index, when='plan'):
+    """The doors a single structure has to pass, at plan time and again at lowering.
 
     These come first, and that ordering is the point of the function existing. A
     cell-snapped shape that asked for the stencil makes no smoothed region at all, so a
-    scene-wide "one region please" count in front of it would answer it with a sentence
-    about regions when what is wrong is the shape.
+    scene-wide question in front of it would answer it with a sentence about the scene when
+    what is wrong is the shape; and a magnetic structure makes two constitutive terms, so a
+    count in front of the permeability door would tell it it has two regions when it has one.
     """
     from ..geometry import Sphere as _SphereShape
     from ..materials import Conductor, Dispersive, concrete
@@ -566,61 +631,113 @@ def _refuse_structure(structure, index):
             f'voxel for the operator to constrain the edge and dual-face states across. The '
             f'extended stencil is for a shape with a fractional edge; leave a Slab or a Box '
             f'on discretisation={DEFAULT!r}.')
-    if not isinstance(structure.shape, _SphereShape):
+    if type(structure.shape) is not _SphereShape:
         raise ValueError(
             f'StencilShapeRefused: {where} asked for discretisation={STENCIL!r}. The operator '
-            f'is assembled from the body\'s exact edge and dual-face fills, and fd.Sphere is '
+            f'is assembled from a ball\'s exact edge and dual-face fills, and fd.Sphere is '
             f'the one shape that answers both in closed form today '
-            f'(wavebit/fd/_shapes/_bodies.py). The tangent plane\'s forms beside them are not '
-            f'wired in as a fallback: every convergence order this operator has measured was '
-            f'taken with the exact ones, and the plane\'s mean gap to the exact sphere falls '
-            f'only like h. The commit that measures a body without them is what lifts this.')
+            f'(wavebit/fd/_shapes/_bodies.py) -- fd.Sphere itself, not a subclass, whose '
+            f'body may be its own. The tangent plane\'s forms beside them are not wired in as '
+            f'a fallback: every convergence order this operator has measured was taken with '
+            f'the exact ones, and the plane\'s mean gap to the exact sphere falls only like '
+            f'h. The commit that measures a body without them is what lifts this.')
     leaves = (structure.shape.radius,) + tuple(structure.shape.center) \
         + tuple(structure.material.eps) + tuple(structure.material.mu_value)
     if any(concrete(v) is None for v in leaves):
-        raise ValueError(
-            f'StencilTracedRefused: {where} asked for discretisation={STENCIL!r} with a traced '
-            f'radius, centre or material value. The operator is solved once on the host in '
-            f'SciPy -- a sparse least-squares fit, a symmetric eigenpair and a sparse '
-            f'factorization -- so it is static data of the plan and cannot be a function of a '
-            f'leaf. It is refused rather than quietly discretised the other way, which would '
-            f'make jax.grad and a finite difference compute two different functions. A '
-            f'gradient with respect to a smoothed structure runs on discretisation='
-            f'{DEFAULT!r}; the commit that differentiates through a prepared operator is what '
-            f'lifts this.')
+        raise ValueError(_traced(where, when))
     if isinstance(structure.material, (Conductor, Dispersive)):
         raise ValueError(
             f'StencilScopeRefused: {where} asked for discretisation={STENCIL!r} with a '
             f'conductivity or poles. The interface states the operator constrains are the '
-            f'lossless constant tangential-E and normal-D ones; sigma and the pole '
-            f'coefficients are not smoothed at all yet (checks.check_smoothed, door 1). C8 '
-            f'owns both.')
+            f'lossless constant tangential-E and normal-D ones, and it is fitted from the real '
+            f'eps alone, so a loss would be dropped from the region without a word; sigma and '
+            f'the pole coefficients are not smoothed at all yet (checks.check_smoothed, '
+            f'door 1). C8 owns both.')
+    if structure.material.is_magnetic:
+        raise ValueError(
+            f'StencilScopeRefused: {where} asked for discretisation={STENCIL!r} with a '
+            f'permeability (a magnetic material). The operator is assembled over the E edges '
+            f'and their dual faces alone, so a permeability would keep the rule it has today '
+            f'on H while E moved to another one, and the two would no longer be the same '
+            f'discretisation. The magnetic half is the commit that measures it.')
+    eps = tuple(concrete(v) for v in structure.material.eps)
+    if len(set(eps)) != 1:
+        raise ValueError(
+            f'StencilScopeRefused: {where} asked for discretisation={STENCIL!r} with the '
+            f'anisotropic permittivity eps={eps}. The operator is fitted from one scalar '
+            f'contrast -- the research driver refused anything else -- so an anisotropic '
+            f'material would be prepared as isotropic eps={eps[0]!r} and its other two '
+            f'components silently dropped. The commit that fits a tensor contrast is what '
+            f'lifts this; until then use discretisation={DEFAULT!r}.')
+
+
+def _refuse_background(scene, where, when='plan'):
+    """The scene around the body must be vacuum: the operator was fitted for nothing else."""
+    from ..materials import Material, concrete
+    background, _ = _materials(scene)
+    eps = tuple(concrete(v) for v in getattr(background, 'eps', ()))
+    if type(background) is Material and any(v is None for v in eps):
+        raise ValueError(_traced(where, when))
+    if type(background) is not Material or background.is_magnetic \
+            or any(v != 1.0 for v in eps):
+        raise ValueError(
+            f'StencilBackgroundRefused: {where} asked for discretisation={STENCIL!r} in a '
+            f'scene whose background is {background!r}, and the operator is fitted with '
+            f'VACUUM outside the body -- its baseline is 1/eps inside and 1 outside and its '
+            f'constraint rows carry the contrast eps - 1 -- while its diagonal replaces be '
+            f'over the whole grown region. So a non-vacuum background would come back as a '
+            f'cube of vacuum wrapped round the sphere, and the run would complete. Fitting '
+            f'against another background is new physics with no measurement behind it: the '
+            f'commit that carries the background permittivity into the fit\'s baseline and '
+            f'contrast, and measures it, is what lifts this. Until then leave '
+            f'Scene(background=) unset or vacuum, or use discretisation={DEFAULT!r}.')
 
 
 def _refuse_scope(scene, plan, structures, asked):
-    """What a scene that asks for the stencil must be, once, before anything is assembled."""
+    """What a scene that asks for the stencil must be, once, before anything is assembled.
+
+    Every condition of the research driver's ``validate_scope``
+    (``studies/fdtd_subpixel_symmetric_stencil.py``) is here, each by its own name, because
+    every number the operator has is a number of a scene that passed it: a concrete lossless
+    isotropic non-magnetic ``fd.Sphere`` (:func:`_refuse_structure`), the **only** structure,
+    in a **vacuum** background, in a real ``float64`` run with neither an initial E nor an
+    initial H, whose region meets no wall. Its line-by-line map is in
+    ``docs/fd-symmetric-stencil.md``.
+    """
     for index in asked:
         _refuse_structure(structures[index], index)
-    if len(asked) > 1 or len(plan.constitutive) != 1:
-        raise ValueError(
-            f'StencilScopeRefused: {len(asked)} structure(s) asked for '
-            f'discretisation={STENCIL!r} and the plan carries {len(plan.constitutive)} '
-            f'smoothed region(s). The prepared operator is one symmetric matrix over one '
-            f'region, and two of them sharing an interpolation cell would each fit a '
-            f'neighbourhood the other has already changed. One smoothed structure per scene '
-            f'asks for the stencil today; the commit that measures two regions is what '
-            f'lifts this.')
-    index, = asked
+    index = asked[0]
     structure = structures[index]
     where = f'structures[{index}] ({structure.shape.describe()})'
-    background, _ = _materials(scene)
-    if background.is_magnetic or any(s.material.is_magnetic for s in structures):
+    if len(structures) != 1:
         raise ValueError(
-            f'StencilScopeRefused: {where} asked for discretisation={STENCIL!r} in a magnetic '
-            f'scene. The operator is assembled over the E edges and their dual faces alone, '
-            f'so a permeability would keep the rule it has today on H while E moved to '
-            f'another one, and the two would no longer be the same discretisation. The '
-            f'magnetic half is the commit that measures it.')
+            f'StencilStructuresRefused: {where} asked for discretisation={STENCIL!r} in a '
+            f'scene of {len(structures)} structures. The prepared operator owns its whole '
+            f'grown region -- its diagonal replaces be over the smoothed support plus three '
+            f'nodes a side -- and was fitted with vacuum everywhere outside the one body, so '
+            f'another structure inside that region would be erased from the run, and one '
+            f'outside it composes with the operator in a way nothing has measured. The '
+            f'research driver every number of this operator came through refused any second '
+            f'structure. One structure per scene asks for the stencil today; the commit that '
+            f'measures a prepared operator beside others, and refuses the ones that meet its '
+            f'region, is what lifts this.')
+    _refuse_background(scene, where)
+    if plan.dtype != 'float64':
+        raise ValueError(
+            f'StencilDtypeRefused: {where} asked for discretisation={STENCIL!r} in a '
+            f'{plan.dtype} run (a Bloch face makes the fields complex). Every number this '
+            f'operator has was measured in a real float64 run -- its research driver refused '
+            f'any other -- and a Bloch cell\'s periodic images are ones the fit '
+            f'(periodic=None) never saw. The commit that measures it in a Bloch cell is what '
+            f'lifts this.')
+    for field, present in (('E', plan.has_E0), ('H', plan.has_H0)):
+        if present:
+            raise ValueError(
+                f'StencilScopeRefused: {where} asked for discretisation={STENCIL!r} with '
+                f'InitialField.{field}. The term stores D and not E, so an initial E means '
+                f'inverting the prepared operator once, which is not implemented, and the '
+                f'research driver refused an initial H beside it: no run of this operator '
+                f'has started from a field. Excite the scene with a source instead.')
     old, = plan.constitutive
     if old.masks:
         raise ValueError(
@@ -628,15 +745,8 @@ def _refuse_scope(scene, plan, structures, asked):
             f'meets a PEC or PMC wall. The operator\'s rows reach across the wall, and a wall '
             f'inside the fitted neighbourhood is a boundary condition the fit was not given. '
             f'Move the structure clear of the wall.')
-    if plan.has_E0:
-        raise ValueError(
-            f'StencilScopeRefused: {where} asked for discretisation={STENCIL!r} with '
-            f'InitialField.E. The term stores D and not E, so starting from a field means '
-            f'inverting the prepared operator once, which is not implemented. Excite the '
-            f'scene with a source instead; a diagonal division would initialise the wrong '
-            f'energy (the sentence constitutive.validate already says).')
+    from ..sources import PlaneWave, TFSF
     for source in getattr(scene, 'sources', ()) or ():
-        from ..sources import PlaneWave, TFSF
         if not isinstance(source, (TFSF, PlaneWave)):
             raise ValueError(
                 f'StencilSourceRefused: {source.name} is an {type(source).__name__} and the '
@@ -645,6 +755,75 @@ def _refuse_scope(scene, plan, structures, asked):
                 f'into a neighbourhood the fit assumed was vacuum; the check that says how '
                 f'far away is far enough exists for those two and for no other source yet.')
     return index, structure
+
+
+def _refuse_occupancy(scene, plan, box, index):
+    """No source and no monitor surface may be in the grown region the operator owns.
+
+    ``box`` is ``(z, y, x)`` cell ranges; along each axis the term's cells ``lo..hi-1`` carry
+    E at nodes and half nodes up to ``hi - 1/2``, so the closed node span ``lo..hi`` is taken
+    as occupied -- conservatively, by half a node. A TFSF face and a PlaneWave plane inject
+    into one node either side of themselves (the band the research clearance rule reserves),
+    and a TFSF box has to hold the region **inside** it, as every research scene did. A closed
+    ``Flux`` or ``FarField`` surface has to enclose the region or exclude it, and a flux or
+    diffraction plane has to miss it; a plane is judged as if it were infinite, which refuses
+    a finite plane that would in fact pass beside the region. ``Field`` and ``Record`` read
+    fields and assume no medium, so they are not surfaces here.
+
+    This is stricter than the research ``surface_clearance``, which judged the rows the
+    operator actually changes; the grown region contains those rows, so a scene this passes
+    passes that too, and the public preparation no longer calls it.
+    """
+    from ..monitors import Diffraction, FarField, Flux
+    from ..sources import PlaneWave, TFSF
+    from .monitors import _box_nodes, _node
+    span = tuple(box[2 - a] for a in range(3))           # x, y, z node spans
+
+    def encloses(lo, hi, band):
+        return all(lo[a] + band < span[a][0] and hi[a] - band > span[a][1] for a in range(3))
+
+    def excludes(lo, hi):
+        return any(hi[a] < span[a][0] or lo[a] > span[a][1] for a in range(3))
+
+    def misses(a, k, band):
+        return k + band < span[a][0] or k - band > span[a][1]
+
+    region = ', '.join(f'{"xyz"[a]} {span[a][0]}..{span[a][1]}' for a in range(3))
+    owned = (f'the operator for structures[{index}] owns nodes {region} -- its diagonal '
+             f'replaces be over every cell there and its gather reads the curl there')
+    for monitor in getattr(scene, 'monitors', ()) or ():
+        if isinstance(monitor, (Flux, FarField)) and getattr(monitor, 'box', None) is not None:
+            lo, hi = _box_nodes(monitor.name, plan.grid, monitor.box)
+            if not (encloses(lo, hi, 0) or excludes(lo, hi)):
+                raise ValueError(
+                    f'StencilSurfaceRefused: {monitor.name}\'s surface at nodes {lo}..{hi} '
+                    f'passes through the region {owned}. A closed surface has to enclose it '
+                    f'or exclude it, because the surface integral assumes one medium on each '
+                    f'of its sides. Move the surface or the structure.')
+        elif isinstance(monitor, (Flux, Diffraction)):
+            plane = monitor.plane if isinstance(monitor, Flux) else monitor
+            a, k = plane.axis, _node(plan.grid, plane.axis, plane.position)
+            if not misses(a, k, 0):
+                raise ValueError(
+                    f'StencilSurfaceRefused: {monitor.name}\'s plane at node {k} on '
+                    f'{"xyz"[a]} crosses the region {owned}. Move the plane clear of it.')
+    for source in getattr(scene, 'sources', ()) or ():
+        if isinstance(source, TFSF):
+            lo, hi = _box_nodes(source.name, plan.grid, source.box)
+            if not encloses(lo, hi, 1):
+                raise ValueError(
+                    f'StencilSourceRefused: {source.name}\'s injection band (its faces at '
+                    f'nodes {lo}..{hi}, one node either side) meets the region {owned}, or '
+                    f'does not hold it inside. The fit assumed a neighbourhood with no source '
+                    f'in it. Enlarge the TFSF box so that it clears the region by more than '
+                    f'one node on every side.')
+        elif isinstance(source, PlaneWave):
+            a, k = source.axis, _node(plan.grid, source.axis, source.position)
+            if not misses(a, k, 1):
+                raise ValueError(
+                    f'StencilSourceRefused: {source.name}\'s injection band (node {k} on '
+                    f'{"xyz"[a]}, one node either side) meets the region {owned}. Move the '
+                    f'source plane clear of it by more than one node.')
 
 
 def _refuse_layers(plan, box, components, index):
@@ -666,23 +845,31 @@ def _refuse_layers(plan, box, components, index):
                 f'layer, or give the domain more room.')
 
 
-#: The off-diagonal coefficients of every operator prepared in this process, by the prepared
-#: operator's own digest. They are the one part of it that is *not* a plan field: they are
-#: floats the kernel multiplies by, so they belong in ``params`` (:func:`lower`), while the
-#: plan carries the pattern, the diagonal and this key.
-#:
-#: The key is the digest and **not** the term's name. Two scenes in one process name their
-#: terms the same thing -- ``constitutive[E0]`` is a position, not an identity -- so a name
-#: would let the second preparation overwrite the first, and lowering the first plan
-#: afterwards would silently run the second's coefficients under the first's pattern. A digest
-#: over all four arrays cannot do that: two entries collide only when the arrays are equal, in
-#: which case the value is the same one. A plan built in this process finds its entry here;
-#: one that did not is refused by :func:`lower` rather than lowered without the coefficients
-#: that make it the operator it says it is.
-_prepared = {}
+def _refuse_memory(structure, index, args):
+    """The predicted host preparation against the declared bound, before the solve starts."""
+    nodes, dx, center, radius, eps, components = args
+    bound = MEMORY_BOUND_BYTES if structure.memory_bound is None else structure.memory_bound
+    predicted, unknowns, rows = predicted_bytes(nodes, dx, center, radius, components)
+    if predicted > bound:
+        raised = structure.memory_bound is not None
+        raise ValueError(
+            f'StencilMemoryRefused: preparing structures[{index}] is predicted to need about '
+            f'{predicted / 1024 ** 2:.0f} MiB of host memory ({rows} active rows, about '
+            f'{unknowns} unknowns at {BYTES_PER_UNKNOWN:g} bytes each), above the '
+            f'{"bound this structure declared" if raised else "default bound"} of '
+            f'{bound / 1024 ** 2:.0f} MiB. That count is a prediction from two measured '
+            f'constants and not a measurement of this scene. The solve runs on the host '
+            f'before the run starts, so exceeding the bound is a machine that stops rather '
+            f'than a run that slows. Coarsen fd.Resolution(dx=...) or shrink the structure, or '
+            f'raise the bound for this structure with fd.Structure(..., '
+            f'discretisation={STENCIL!r}, memory_bound=<bytes>). The default admits the '
+            f'largest preparation measured ({MEASURED_UNKNOWNS:,} unknowns, the 56-cell '
+            f'research sphere, docs/fd-symmetric-stencil.md); past it the prediction is an '
+            f'extrapolation of a constant nobody has measured there, and one that rose with '
+            f'size across every measurement, so it is more likely low than high.')
 
 
-def prepare(scene, plan):
+def prepare(scene, plan, reuse=None):
     """``plan`` with every structure that asked for the extended stencil prepared into it.
 
     Called from :func:`wavebit.fd._lower.plan.plan`, once, eagerly, on the host, after the
@@ -690,39 +877,59 @@ def prepare(scene, plan):
     one generator expression and gets the plan it was handed, unchanged and identical --
     which is what keeps all 23 stage-0..3 reference skeletons byte-identical.
 
+    Every door runs before the solve, and every one of them runs whether or not the solve is
+    then needed: ``reuse`` is a plan that may already carry this scene's operator
+    (``fd.run(scene, plan=...)`` passes the caller's), and when one of its terms was prepared
+    from the same arguments (:func:`source_digest`) in the same region, that term is taken as
+    it is -- the pattern, the diagonal and the coefficients the caller's plan holds -- and only
+    the time-step door is asked again. The rest of what the solve certified (consistency,
+    energy, the halo) is a function of those arguments alone.
+
     The refusals are here and not per cell, and none of them is a fallback: there is no branch
     in this function that answers a scene the operator cannot be prepared for with the other
     rule. That is deliberate. The two discretisations converge at different orders, and a
     scene that silently got the one it did not ask for would read as a physics result.
     """
     from .._kernel.masks import Region
-    from .._kernel.stencil import StencilTerm
     structures = tuple(getattr(scene, 'structures', ()) or ())
     asked = tuple(i for i, s in enumerate(structures)
                   if getattr(s, 'discretisation', DEFAULT) == STENCIL)
     if not asked:
         return plan
-    index, _ = _refuse_scope(scene, plan, structures, asked)
+    index, structure = _refuse_scope(scene, plan, structures, asked)
     old, = plan.constitutive
     components = (0, 1, 2)
     box = _stencil_box(old, components, plan)
     _refuse_layers(plan, box, components, index)
+    _refuse_occupancy(scene, plan, box, index)
     args = arguments(scene, plan, index, box)
-    nodes, dx, center, radius, eps, components = args
-    predicted, unknowns, rows = predicted_bytes(nodes, dx, center, radius, components)
-    if predicted > MEMORY_BOUND_BYTES:
-        raise ValueError(
-            f'StencilMemoryRefused: preparing structures[{index}] is predicted to need about '
-            f'{predicted / 1024 ** 2:.0f} MiB of host memory ({rows} active rows, about '
-            f'{unknowns} unknowns at {BYTES_PER_UNKNOWN:g} bytes each), above the declared '
-            f'bound of {MEMORY_BOUND_BYTES / 1024 ** 2:.0f} MiB. That count is a prediction '
-            f'from two measured constants and not a measurement of this scene. The solve runs '
-            f'on the host before the run starts, so exceeding the bound is a machine that '
-            f'stops rather than a run that slows. Coarsen fd.Resolution(dx=...) or shrink the '
-            f'structure. Raising wavebit.fd._lower.stencil.MEMORY_BOUND_BYTES is a deliberate '
-            f'act: the bound sits at the top of the range BYTES_PER_UNKNOWN was measured on '
-            f'(350,730 unknowns), so past it the prediction is an extrapolation of a constant '
-            f'that has not been measured there -- measure it at that size first.')
+    _refuse_memory(structure, index, args)
+    region = Region(z=box[0], y=box[1], x=box[2])
+    source = source_digest(*args)
+    term = _reused(reuse, old, region, source)
+    if term is None:
+        term = _assemble(old, region, box, args, source, index)
+    _refuse_cfl(scene, plan, term.spectral_upper_bound)
+    return plan.with_static(terms=tuple(term if t is old else t for t in plan.terms))
+
+
+def _reused(reuse, old, region, source):
+    """The term of ``reuse`` that is this preparation already done, or ``None``."""
+    if reuse is None:
+        return None
+    from .._kernel.stencil import StencilTerm
+    for term in reuse.terms:
+        if (isinstance(term, StencilTerm) and term.source == source and term.name == old.name
+                and term.field == old.field and term.region == region
+                and term.ratio == old.ratio and term.masks == old.masks):
+            return term
+    return None
+
+
+def _assemble(old, region, box, args, source, index):
+    """The solve, its certificates, and the term that carries what it produced."""
+    from .._kernel.stencil import StencilTerm
+    components = args[-1]
     try:
         matrix, report = geometry(*args)
     except ImportError as err:
@@ -732,7 +939,6 @@ def prepare(scene, plan):
             f'module\'s docstring and closing it is its own commit; '
             f'until then discretisation={STENCIL!r} runs from a checkout and not from an '
             f'installed wheel. It is refused rather than prepared some other way.') from err
-    report['surface_clearance'] = surface_clearance(scene, plan, matrix, box, components)
     # The static width/size screen measured <=7.673e-14; 1e-11 is over
     # 100 times that rounding scale. It is not a scattering-accuracy gate.
     if report['lsmr_stop'] not in (0, 1, 2) or report['residual_max'] > 1e-11:
@@ -741,16 +947,12 @@ def prepare(scene, plan):
         raise ValueError(f'StencilEnergyRefused: {report}')
     report.update(energy_bounds(matrix))
     diagonal, idx, value, output = padded(matrix)
-    region = Region(z=box[0], y=box[1], x=box[2])
     _refuse_halo(matrix, diagonal, box, components, region)
-    _refuse_cfl(scene, plan, report, structures)
     diagonal = diagonal.reshape((len(components),) + region.shape)
-    key = prepared_digest(idx, value, output, diagonal)
-    term = StencilTerm(old.name, old.field, region, old.ratio, old.masks,
+    return StencilTerm(old.name, old.field, region, old.ratio, old.masks,
                        components=components, index=idx, output=output, diagonal=diagonal,
-                       key=key)
-    _prepared[key] = value
-    return plan.with_static(terms=tuple(term if t is old else t for t in plan.terms))
+                       value=value, structure=index, source=source,
+                       spectral_upper_bound=float(report['spectral_upper_bound']))
 
 
 def _refuse_halo(matrix, diagonal, box, components, region):
@@ -773,51 +975,78 @@ def _refuse_halo(matrix, diagonal, box, components, region):
                     f'there. Give the structure more room.')
 
 
-def _refuse_cfl(scene, plan, report, structures):
-    """The prepared operator's own time-step bound, from its spectral upper bound."""
+def _refuse_cfl(scene, plan, spectral_upper_bound):
+    """The prepared operator's own time-step bound, from its spectral upper bound.
+
+    Every medium is non-magnetic here (:func:`_refuse_scope`), so the H side contributes one.
+    """
     import math
 
     from .checks import cfl_axis_sum
-    background, _ = _materials(scene)
-    inverse_mu = max(1.0 / float(v)
-                     for m in [background] + [s.material for s in structures]
-                     for v in m.mu_value)
-    rate = plan.dt ** 2 * cfl_axis_sum(scene, plan.dx) \
-        * report['spectral_upper_bound'] * inverse_mu
-    report['dt_squared_rate'] = rate
+    rate = plan.dt ** 2 * cfl_axis_sum(scene, plan.dx) * spectral_upper_bound
     if not math.isfinite(rate) or not 0 < rate < 1:
         raise ValueError(
             f'StencilCFLRefused: the prepared operator\'s time step bound reads '
             f'dt^2 * rate = {rate:.17g}, which is not in (0, 1). The extended stencil\'s '
-            f'spectral upper bound is {report["spectral_upper_bound"]:.17g}, above the '
+            f'spectral upper bound is {spectral_upper_bound:.17g}, above the '
             f'diagonal rule\'s, so a courant number the default accepts may not survive it. '
             f'Lower fd.Run(courant=...).')
 
 
-def lower(plan, rt):
+def _refuse_lowering(scene, plan, term):
+    """The doors again, at lowering, where every traced path passes.
+
+    ``fd.plan`` refuses a traced leaf, but the repository's gradient recipe builds the plan
+    from concrete values and lowers a *traced* scene against it -- and ``jax.grad``,
+    ``jax.jit(jax.grad(...))`` and Torch autograd all arrive here. Lowered, the prepared
+    diagonal would overwrite the traced permittivity and the gradient would be exactly zero,
+    a silently wrong answer. So the structure's doors run again, with the background's and
+    the one-structure rule beside them, and then the operator's own source digest is
+    compared: a concrete scene whose sphere or permittivity is not the one the operator was
+    fitted for is refused rather than run with the other one's operator.
+    """
+    structures = tuple(getattr(scene, 'structures', ()) or ())
+    if len(structures) != 1 or term.structure != 0:
+        raise ValueError(
+            f'StencilMismatchRefused: the plan carries {term.name}, prepared for '
+            f'structures[{term.structure}] of a scene of one structure, and fd.lower was '
+            f'handed a scene of {len(structures)}. A prepared operator owns its grown region, '
+            f'so it is lowered only against the scene it was prepared for.')
+    structure = structures[0]
+    where = f'structures[0] ({structure.shape.describe()})'
+    if getattr(structure, 'discretisation', DEFAULT) != STENCIL:
+        raise ValueError(
+            f'StencilMismatchRefused: the plan carries a prepared operator for {where}, and '
+            f'the scene fd.lower was handed asks for discretisation='
+            f'{structure.discretisation!r} there.')
+    _refuse_structure(structure, 0, when='lower')
+    _refuse_background(scene, where, when='lower')
+    box = (term.region.z, term.region.y, term.region.x)
+    if source_digest(*arguments(scene, plan, 0, box)) != term.source:
+        raise ValueError(
+            f'StencilMismatchRefused: {where} is not the structure the plan\'s operator '
+            f'{term.name} was prepared for -- its centre, radius or permittivity differs, and '
+            f'the operator is a function of exactly those. Build the plan from this scene '
+            f'with fd.plan(scene).')
+
+
+def lower(scene, plan, rt):
     """``(tables, patches)``: what the kernel reads, and what ``be`` is patched with.
 
     ``tables`` goes into ``params['stencil']`` and each patch is ``(box, diagonal * ratio)``
     for :func:`wavebit.fd._lower.coefficients._paste` to write into ``be`` **out of place**.
     Nothing is solved here and nothing branches on a value -- which is what makes NumPy, JAX
-    eager, ``jax.jit`` and Torch the same run.
+    eager, ``jax.jit`` and Torch the same run. What *is* here is the doors
+    (:func:`_refuse_lowering`), because lowering is the one place every traced path passes.
     """
     from .._kernel.stencil import StencilTerm
     tables, patches = {}, []
     for term in plan.terms:
         if not isinstance(term, StencilTerm):
             continue
-        value = _prepared.get(term.key)
-        if value is None:
-            raise ValueError(
-                f'StencilUnpreparedRefused: the plan carries {term.name} with prepared '
-                f'operator {term.key[:12]}, and this process never prepared it. The '
-                f'operator\'s off-diagonal coefficients are assembled on the host by '
-                f'fd.plan(scene) and held beside the plan, not inside it; a plan rebuilt or '
-                f'unpickled elsewhere has the pattern, the diagonal and this key but not the '
-                f'coefficients. Call fd.plan(scene) in this process.')
+        _refuse_lowering(scene, plan, term)
         tables[term.name] = {'index': rt.array(term.index),
-                             'value': rt.array(value, 'float64'),
+                             'value': rt.array(term.value, 'float64'),
                              'output': rt.array(term.output)}
         patches.append(((term.region.x, term.region.y, term.region.z),
                         rt.array(term.diagonal, 'float64') * term.ratio))

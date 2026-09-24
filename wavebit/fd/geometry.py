@@ -441,6 +441,11 @@ class Structure:
     edge to every edge within two cells. It is opt-in, it is prepared at ``fd.plan`` time and
     never inside a trace, and ``fd.check`` prints it.
 
+    **``memory_bound=``** (bytes, only beside ``discretisation='stencil'``) raises the host
+    memory a preparation may be predicted to take before it is refused. The default admits the
+    largest preparation that has been measured (``docs/fd-symmetric-stencil.md``); a larger
+    value is an explicit decision to trust the prediction past the sizes it was measured at.
+
     **Why here, and not the ``smoothing=`` the module docstring refuses.** That paragraph turns
     down a keyword that would *switch a rule* for the same shape, or key itself on whether a
     radius happened to be traced, because either makes ``jax.grad`` and a finite difference
@@ -464,8 +469,12 @@ class Structure:
     shape: object
     material: object
     discretisation: str = 'voxel'
+    memory_bound: object = None
 
     def __post_init__(self):
+        import math
+        from numbers import Real
+
         from .materials import as_material
         from ._lower.stencil import DEFAULT, STENCIL
         if self.discretisation not in (DEFAULT, STENCIL):
@@ -477,6 +486,19 @@ class Structure:
                 f'ignored, so a third one is refused here rather than falling back to the '
                 f'default: the two converge at different orders and a scene that got the one '
                 f'it did not ask for would read as a physics result.')
+        if self.memory_bound is not None:
+            if self.discretisation != STENCIL:
+                raise ValueError(
+                    f'Structure(memory_bound={self.memory_bound!r}) bounds the host memory of '
+                    f'the extended stencil\'s preparation, and this structure asks for '
+                    f'discretisation={self.discretisation!r}, which prepares nothing. A value '
+                    f'nobody reads is refused rather than ignored.')
+            bound = self.memory_bound
+            if isinstance(bound, bool) or not isinstance(bound, Real) \
+                    or not math.isfinite(bound) or bound <= 0:
+                raise ValueError(
+                    f'Structure(memory_bound={bound!r}): a positive, finite number of bytes, '
+                    f'e.g. memory_bound=2 * 1024 ** 3 for 2 GiB.')
         if type(self.shape) is Shape:
             raise TypeError(
                 'Structure(shape=fd.Shape()): fd.Shape is the protocol a shape answers, not a '

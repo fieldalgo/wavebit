@@ -130,10 +130,17 @@ def _solve(scene, p, rt, grazing=None):
     return _results(scene, p, state, rt, params, grazing)
 
 
-def _planned(scene):
-    """``(plan(scene), its grazing survey or None)``: the rows its refusal judged, once."""
+def _planned(scene, reuse=None):
+    """``(plan(scene), its grazing survey or None)``: the rows its refusal judged, once.
+
+    ``reuse`` is a plan the caller already paid for: a prepared extended-stencil operator it
+    carries is taken as it is when this scene would prepare the same one
+    (``wavebit/fd/_lower/stencil.py::prepare``), instead of being solved again on the host --
+    which on the test fixture was 3 of a 4 second run, and 493 s on the 56-cell research
+    sphere. Every door still runs, and the skeleton comparison below still decides.
+    """
     rows = []
-    p = _plan(scene, _grazing=rows)
+    p = _plan(scene, _grazing=rows, _reuse=reuse)
     return p, (rows[0] if rows else None)
 
 
@@ -149,7 +156,7 @@ def run(scene, backend='numpy', plan=None, device=None):
     """Run ``scene`` on ``backend`` (``'numpy'`` | ``'jax'`` | ``'torch'`` or ``wavebit.Backend``)."""
     # The survey is always this scene's: from its own plan, even when the caller passes one
     # (a plan with the same skeleton may be another scene's, whose materials it does not hold).
-    p, rows = _planned(scene)
+    p, rows = _planned(scene, reuse=plan)
     if plan is not None:
         if plan.skeleton != p.skeleton:
             raise ValueError(
@@ -165,7 +172,7 @@ def run(scene, backend='numpy', plan=None, device=None):
         # The second solve: the same scene with the PlaneWave's other polarisation. Its own
         # plan (the column's drive weights are static), its own decay check.
         other = _other_polarization(scene)
-        p2, rows2 = _planned(other)
+        p2, rows2 = _planned(other, reuse=p)
         res2 = _solve(other, p2, rt, rows2)
         for m in both:
             res._series[m.name] = res[m.name].with_both(res2[m.name].orders.given)

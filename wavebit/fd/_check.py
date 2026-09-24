@@ -149,7 +149,7 @@ def _discretisation_lines(p):
     """
     from ._kernel.stencil import StencilTerm
     return tuple((t.name, t.discretisation, len(t.index), t.index.shape[1],
-                  t.index.nbytes + t.output.nbytes + t.diagonal.nbytes)
+                  t.index.nbytes + t.value.nbytes + t.output.nbytes + t.diagonal.nbytes)
                  for t in p.terms if isinstance(t, StencilTerm))
 
 

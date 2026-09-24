@@ -135,11 +135,14 @@ asks instead for the symmetric extended-stencil operator ``docs/fd-symmetric-ste
 derives -- exact edge and dual-face interface constraints, solved once on the host at
 ``fd.plan`` time and never inside a trace, whose rows couple each edge to every edge within
 two cells. ``check`` prints it. It has its own doors and not one of them falls back to the
-other rule: only ``fd.Sphere``, only concrete geometry and material values, no conductivity,
-poles, permeability or initial ``E``, one smoothed region, clear of the absorbing layers and
-of every source and flux surface, under a declared preparation memory bound, and an operator
-that passes its own consistency, energy, halo and time-step certificates
-(``_lower/stencil.py``).
+other rule: only ``fd.Sphere`` itself, isotropic, lossless and non-magnetic, with concrete
+geometry and material values at plan time **and** at lowering; the only structure in the
+scene, in a vacuum background, in a real run with no initial field; no wall, absorbing
+layer, source or monitor surface inside the region the operator owns (its support plus
+three nodes a side); under a declared preparation memory bound (``memory_bound=`` raises
+it); and an operator that passes its own consistency, energy, halo and time-step
+certificates (``_lower/stencil.py``). ``fd.run(scene, plan=p)`` takes the operator ``p``
+already carries rather than solving it again.
 
 The curved-scattering accuracy gate is incomplete. Smoothed scenes emit
 ``SubpixelAccuracyWarning`` during planning with the independent cylinder benchmark,

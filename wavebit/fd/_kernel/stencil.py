@@ -9,14 +9,21 @@ its slot, its flux memory and its energy reading.
 **What it consumes.** Four arrays, prepared once on the host at plan time
 (``wavebit/fd/_lower/stencil.py``) and split the way every other stage splits:
 
-* ``index`` (int32, ``(active rows, width)``), ``output`` (int32, one entry per row) and
-  ``diagonal`` (float64) are **static** -- they are fields of this term, so they are in the
-  plan, and they are declared ``metadata={'digest': True}`` so the skeleton records their
-  content by SHA-256 instead of writing tens of megabytes into the hash input (commit
+* ``index`` (int32, ``(active rows, width)``), ``output`` (int32, one entry per row),
+  ``diagonal`` (float64) and ``value`` (float64, the off-diagonal coefficients) are
+  **static** -- they are fields of this term, so they are in the plan and live exactly as long
+  as it does, and they are declared ``metadata={'digest': True}`` so the skeleton records
+  their content by SHA-256 instead of writing tens of megabytes into the hash input (commit
   95140d8);
-* the off-diagonal coefficients reach the kernel through ``params['stencil'][name]``, beside
-  the existing ``params['constitutive']`` keys, because that is where an array the kernel
-  multiplies by belongs.
+* at lowering, the off-diagonal coefficients are handed to the kernel through
+  ``params['stencil'][name]``, beside the existing ``params['constitutive']`` keys, because
+  that is where an array the kernel multiplies by is read from.
+
+``value`` used to be held beside the plan in a module-level dict keyed by the operator's
+digest, which nothing ever released: every operator prepared in a process lived until the
+process did (0.9 MB on the test fixture, 51 MB on the 56-cell research sphere). It is a field
+now, so dropping the plan drops the coefficients
+(``tests/test_fd_stencil.py::test_a_prepared_operator_is_released_with_its_plan``).
 
 ``diagonal`` is a field here and is **also** patched into ``be`` at lowering. It has to be in
 both: ``be`` is what the step multiplies the curl by and what the interior-energy diagnostic
@@ -58,11 +65,20 @@ class StencilTerm(ConstitutiveTerm):
     index: object = dataclasses.field(default=None, metadata={'digest': True})
     output: object = dataclasses.field(default=None, metadata={'digest': True})
     diagonal: object = dataclasses.field(default=None, metadata={'digest': True})
-    #: The prepared operator's own digest, over all four of its arrays -- the key the
-    #: off-diagonal coefficients are held under beside the plan. It is a plain string, so it
-    #: is in the skeleton the ordinary way, and through it the coefficients move the skeleton
-    #: too. See ``wavebit/fd/_lower/stencil.py::_prepared`` for why it is not the term's name.
-    key: str = ''
+    value: object = dataclasses.field(default=None, metadata={'digest': True})
+    #: Which of the scene's structures the operator was prepared for, so that lowering can ask
+    #: the same doors of the scene it is handed (``wavebit/fd/_lower/stencil.py::lower``).
+    structure: int = 0
+    #: SHA-256 over the exact arguments :func:`~wavebit.fd._lower.stencil.geometry` was
+    #: called with (``stencil.source_digest``). The operator is a function of those and of
+    #: nothing else, so this is what lets ``fd.run(scene, plan=...)`` reuse a prepared
+    #: operator instead of solving it again, and what lets ``fd.lower`` refuse a scene whose
+    #: sphere or permittivity is not the one the operator was fitted for.
+    source: str = ''
+    #: The assembled operator's spectral upper bound (``stencil.energy_bounds``): what the
+    #: time-step door reads, kept so that a reused operator is checked against the run it is
+    #: reused for without the matrix it came from.
+    spectral_upper_bound: float = 0.0
 
     def prepare(self, curl, mem, params, rt):
         """The flux memory and the off-diagonal increment, from the source-corrected curl.

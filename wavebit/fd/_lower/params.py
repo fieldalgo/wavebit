@@ -82,7 +82,7 @@ def lower(scene, plan, rt='numpy', device=None):
     if plan.constitutive:
         from .constitutive import lower as lower_constitutive
         params['constitutive'] = lower_constitutive(scene, plan, rt)
-        _stencil(plan, params, rt)
+        _stencil(scene, plan, params, rt)
     params.update({'bloch': {}, 'axis1d': {}, 'amplitude': None, 'E0': None, 'H0': None,
                    'cpml': _cpml(scene, plan, rt), 'cpml_loss': _cpml_loss(scene, plan, rt),
                    'poles': _poles(scene, plan, rt),
@@ -135,7 +135,7 @@ def lower(scene, plan, rt='numpy', device=None):
     return params
 
 
-def _stencil(plan, params, rt):
+def _stencil(scene, plan, params, rt):
     """``params['stencil']`` and the patched ``be``, for every prepared extended-stencil term.
 
     Two halves of one operator go two places, and both of them are the same arrays the host
@@ -159,7 +159,7 @@ def _stencil(plan, params, rt):
     """
     from .coefficients import _paste
     from .stencil import lower as lower_stencil
-    tables, patches = lower_stencil(plan, rt)
+    tables, patches = lower_stencil(scene, plan, rt)
     if not tables:
         return
     params['stencil'] = tables

@@ -663,6 +663,11 @@ constant at a size it was not measured at. The recorded 56-cell research sphere
 reads 45.42 unknowns per active row, above every value in the table and below the
 46.0 the bound rounds up to.
 
+**Superseded 2026-09-25** (next section): that table measured `geometry` alone,
+while the preparation also runs `energy_bounds`' sparse LDL factorization, whose
+fill sets the real peak -- 1.35 to 4.4 times these figures -- and the 256 MiB
+bound refused every resolution the operator's orders were measured at.
+
 What is refused, once per whole-scene preparation and never per cell: a shape
 with no fractional edge or one that is not `fd.Sphere`; a traced radius, centre
 or material value; a conductivity, poles, a permeability or an initial E; more
@@ -672,7 +677,9 @@ research clearance rule, moved rather than rewritten); a predicted preparation
 above the declared bound; and an operator that does not return to the identity on
 its own halo, fails its consistency residual, its minimum eigenvalue, its LDL
 energy bound or its own time-step rate. None of them falls back to the other
-rule.
+rule. (**Corrected 2026-09-25:** "more than one smoothed region" was a count of
+constitutive terms, which merge, and it never fired; the list the public
+preparation now enforces is in the next section.)
 
 Two things are open. The operator's skeleton digest is a function of the BLAS
 thread count, because the assembled matrix's data is (commit `c939ed3`); a plan
@@ -682,3 +689,119 @@ baseline (its exact fractions are public now, see "Half of the seam, closed"), s
 `discretisation='stencil'` runs from
 a checkout and not from an installed wheel; that is named in a refusal
 (`StencilSeamRefused`) rather than worked around.
+
+## The scene around the operator (2026-09-25, after review)
+
+The prepared term owns its whole **grown region** -- the smoothed support plus three
+nodes a side: its diagonal replaces `be` over every cell of it and its gather reads
+the curl over every cell of it. The operator behind it was fitted with vacuum
+hard-coded outside the one body (`fit`'s baseline is `1/eps` inside and `1` outside,
+and its constraint rows carry `eps - 1`). The public preparation had dropped the
+research driver's scene conditions, so three scenes were accepted and silently
+changed, measured on the test fixture before the fix:
+
+| scene | default (`voxel`) | `stencil`, before the fix |
+| --- | --- | --- |
+| `Scene(background=1.44)` | `be/ratio` 0.6944 at the grown region's corner | 1.0 there: a cube of vacuum round the sphere |
+| a cell-snapped `Box` of 1.44 beside the ball, inside the region | 864 cells at 1/1.44 | 0 |
+| a second smoothed `Sphere` beside the ball | present | `be` `np.array_equal` to the scene without it |
+
+The research driver's `validate_scope` refused every one of these. Each of its
+conditions is now a named refusal at plan time, read line by line:
+
+| `validate_scope` condition | public refusal |
+| --- | --- |
+| centre and radius concrete, finite | `StencilTracedRefused` (plan **and** lowering) |
+| `radius > 0`, `eps > 0` | `fd.Sphere`, `fd.Material` constructors |
+| `components` is `(0, 1, 2)` for a sphere | fixed by the public preparation |
+| `len(scene.structures) == 1` | `StencilStructuresRefused` |
+| `len(p.constitutive) == 1`, `old.field == 'E'` | implied by one isotropic non-magnetic ball in vacuum; `old, = plan.constitutive` |
+| `p.dtype == 'float64'` | `StencilDtypeRefused` (a Bloch face makes it complex) |
+| `not p.has_E0`, `not p.has_H0` | `StencilScopeRefused`, one sentence each |
+| background `fd.Material`, `mu is None`, every `eps == 1` | `StencilBackgroundRefused` |
+| structure `fd.Material`, `mu is None`, every `eps` equal | `StencilScopeRefused` (conductivity or poles; permeability; anisotropic) |
+| `not old.masks` | `StencilScopeRefused` (PEC or PMC wall) |
+| `type(body) is fd.Sphere` | `StencilShapeRefused` (a subclass is refused too) |
+
+The one the research driver never needed, because it only ever had one structure:
+**nothing else may occupy the grown region.** A TFSF box has to hold the region
+inside it with one node of injection band to spare, a PlaneWave plane and its band
+have to miss it, a closed `Flux` or `FarField` surface has to enclose or exclude
+it, and a flux or diffraction plane has to miss it (judged as an infinite plane,
+which is conservative). This is stricter than the research `surface_clearance`,
+which judged only the rows the operator changes; a scene it passes passes that too,
+and the public preparation no longer calls it. The test fixture's TFSF box grew from
+0.9 to 1.11 wavelengths because of it: at 0.9 its faces sat on the region's
+outermost node. The research sphere scenes at 40 and 56 cells pass unchanged.
+
+Not done, and refused instead: fitting the operator against a non-vacuum
+background is new physics with no measurement behind it. The commit that carries the
+background permittivity into `fit`'s baseline and contrast, and measures it, is what
+lifts `StencilBackgroundRefused`.
+
+**Lowering.** `fd.plan` refused a traced leaf, but the repository's gradient recipe
+builds the plan from concrete values and lowers a traced scene against it
+(`tests/test_fd_constitutive.py`). Measured before the fix on the fixture:
+`d(sum be)/d(eps)` was -14.3487 by autodiff and by central difference on the
+default, and **exactly 0** by both on the stencil, on `jax.grad`, `jax.jit(jax.grad)`
+and Torch alike. `fd.lower` now runs the structure's and the background's doors
+again and compares the operator's source digest (the SHA-256 of the exact arguments
+`geometry` was called with) against the scene it is handed: a traced leaf is
+`StencilTracedRefused`, and a concrete scene whose ball, permittivity, material kind
+or structure count is not the prepared one is refused by name
+(`StencilMismatchRefused`, or the plan-time sentence for a loss, an anisotropy, a
+permeability or a background).
+
+**`fd.run(scene, plan=p)` no longer re-solves.** `run` re-plans the scene to check
+the caller's plan and to take the grazing survey, and that re-plan re-solved the
+operator. It now runs every door and takes the operator `p` carries when it was
+prepared from the same arguments in the same region. Measured on the fixture, best
+of three NumPy runs after a warm-up, OMP/OPENBLAS/MKL_NUM_THREADS=2: **2.965 s ->
+0.430 s** per run, `geometry` calls per run 1 -> 0, and the scattered flux
+`5.126343269106948e-09` on both trees, bit for bit.
+
+**The coefficients are a field of the term.** They used to live in a module-level
+dict keyed by the operator's digest that nothing evicted. `StencilTerm.value` is a
+digested field now, beside `index`, `output` and `diagonal`, so they are in the
+skeleton and they die with the plan; `test_a_prepared_operator_is_released_with_its_plan`
+holds weak references to all four arrays and sees them go.
+
+**Preparation memory, remeasured over the whole preparation.** The constant above
+was measured over `geometry` alone. The preparation also runs `energy_bounds`, whose
+sparse LDL factorization of the coupled block takes most of the time and sets the
+peak. Each row below is one `fd.plan` in its own process (OMP/OPENBLAS/MKL=2), peak
+working set (`GetProcessMemoryInfo`) over the working set just before the solve
+(`stencil._assemble`), read by a probe that wraps it (a scratch script, not
+committed; it calls nothing but the public `fd.plan`):
+
+| scene | cells | active rows | unknowns | solve only, MB | whole preparation, MB | bytes/unknown | plan s |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| test fixture, ball .14, eps 2.25 | 18 | 1,830 | 76,353 | 50 | 77 | 1,009.7 | 2.6 |
+| ball .25, eps 2.25 | 24 | 7,836 | 350,730 | 212 | 613 | 1,747.6 | 25.2 |
+| ball .25, eps 2.25 | 28 | 10,404 | 467,346 | 279 | 889 | 1,901.5 | 40.9 |
+| ball .25, eps 2.25 | 32 | 13,776 | 622,560 | 366 | 1,502 | 2,412.0 | 67.2 |
+| research sphere, eps 12 | 40 | 21,060 | 954,978 | 552 | 2,423 | 2,537.2 | 139.0 |
+| research sphere, eps 12 | 56 | 40,224 | 1,826,928 | 1,016 | 5,984 | 3,275.6 | 455.8 |
+
+The cost per unknown **rises** with size -- the factorization's fill grows faster
+than the unknown count -- so the old 750 bytes under-predicted the preparation by up
+to 4.4 times and its 256 MiB bound refused every resolution the orders were
+measured at. `BYTES_PER_UNKNOWN` is now 3300, the largest measured value rounded up,
+which is an upper bound over the measured range and not one past it.
+`PAIRS_PER_ACTIVE_ROW` stays 46.0 (45.35 at 40 cells, 45.42 at 56).
+`MEMORY_BOUND_BYTES` is 5824 MiB: the 56-cell prediction, 40,224 x 46 x 3300 =
+6,106,003,200 bytes, rounded up to the next MiB. So the default admits the 40- and
+56-cell research sphere (owner decision C's public spot check is possible at either)
+and nothing past them; the 80-cell preparation has not been measured.
+`fd.Structure(..., discretisation='stencil', memory_bound=<bytes>)` raises it for one
+structure, and the refusal says that past the measured range the prediction is an
+extrapolation of a constant that rose with size at every measurement.
+
+**Thread count.** The prepared skeleton is still a function of the BLAS thread count.
+`test_two_processes_agree_on_a_prepared_skeleton` now runs both sides of its
+comparison in child processes with the same explicit thread environment and two hash
+seeds, so it proves that the same code and the same threads give the same skeleton in
+two interpreters, and says that it proves nothing about thread independence. A plan
+prepared at another thread count is still a different plan, and nothing at the door
+says so; `fd.run(scene, plan=p)` now runs `p`'s own operator in that case rather than
+re-solving one that would not match it.

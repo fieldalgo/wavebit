@@ -368,7 +368,7 @@ def _pole_terms(scene, grid):
     return tuple(terms)
 
 
-def plan(scene, _column=False, _grazing=None):
+def plan(scene, _column=False, _grazing=None, _reuse=None):
     """The static plan of ``scene``, with the stage-1 refusals run and its warnings emitted.
 
     ``_column`` is the stage-2 source columns' own door (``sources._column_plan``): a column is
@@ -378,6 +378,10 @@ def plan(scene, _column=False, _grazing=None):
     diagnostics report the survey its refusal judged instead of surveying again. They are not
     a plan field: the survey reads the scene's materials, which the skeleton does not hold,
     and a plan field would have to stay out of the skeleton, the hash and the equality.
+
+    ``_reuse`` is ``fd.run``'s too: the plan the caller passed, whose prepared extended-stencil
+    operator :func:`~wavebit.fd._lower.stencil.prepare` takes as it is when it was prepared
+    from the same arguments, instead of solving it again (every door still runs).
     """
     grid = Grid.from_domain(scene.domain.size, scene.domain.center, scene.resolution.dx)
     dt = scene.run.courant * grid.dx / math.sqrt(3.0)
@@ -433,7 +437,7 @@ def plan(scene, _column=False, _grazing=None):
     # nothing asks gets this plan object back unchanged and identical, which is what keeps
     # every stage-0..3 skeleton byte-identical.
     from . import stencil
-    p = stencil.prepare(scene, p)
+    p = stencil.prepare(scene, p, reuse=_reuse)
     if coupled:
         constitutive.validate(scene, p)
     sources = source_terms(scene, p)

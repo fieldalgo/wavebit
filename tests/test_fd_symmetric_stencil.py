@@ -41,7 +41,14 @@ def test_the_moved_operator_is_an_fd_module_that_imports_with_no_cycle():
     moved = (study.fit, study.energy_bounds, study.triplet_baseline, study.geometry,
              study.padded, study.surface_clearance)
     assert [f.__module__ for f in moved] == ['wavebit.fd._lower.stencil'] * 6
-    assert set(f.__name__ for f in moved) <= set(stencil.__all__)
+    # Exactly the moved functions and the public preparation's own names -- an equality, not
+    # a subset, so that a name added to ``__all__`` that is neither has to be added here on
+    # purpose (review: the subset form let ``__all__`` grow unseen).
+    preparation = {'DEFAULT', 'MEMORY_BOUND_BYTES', 'REACH', 'STENCIL', 'active_rows',
+                   'arguments', 'lower', 'operator_digest', 'predicted_bytes', 'prepare',
+                   'prepared_digest', 'source_digest'}
+    assert set(stencil.__all__) == {f.__name__ for f in moved} | preparation
+    assert len(stencil.__all__) == len(set(stencil.__all__))
     assert list(stencil.__all__) == sorted(stencil.__all__)
     code = ('import sys\n'
             'import wavebit.fd._lower.stencil as s\n'
@@ -370,6 +377,52 @@ def test_sparse_certificate_encloses_nonlocal_positive_matrix():
 def test_invalid_energy_is_refused_before_stepping(broken,reason):
     with pytest.raises(ValueError,match=reason):
         study.energy_bounds(csr_matrix(broken))
+
+
+@pytest.mark.parametrize('broken,reason', (
+    ([[1., 2.], [2., 1.]], 'nonpositive LDL pivot'),
+    ([[1., 1.], [1., 1.]], 'sparse factorization failed'),
+))
+def test_an_indefinite_or_singular_coupled_block_is_refused_by_its_factorization(broken, reason):
+    """The LDL of the coupled block: a negative pivot and an exactly singular block.
+
+    Every row of these two is coupled, so the diagonal screen in front of the factorization
+    sees nothing wrong and the refusal has to come from the factorization itself: pivots
+    1 and 1 - 4 = -3 for the first, 1 and 1 - 1 = 0 (singular) for the second. The public
+    preparation calls this same function (``wavebit/fd/_lower/stencil.py::_assemble``).
+    """
+    with pytest.raises(ValueError, match=f'StencilEnergyRefused: {reason}'):
+        study.energy_bounds(csr_matrix(broken))
+    assert study.energy_bounds(csr_matrix([[2., .25], [.25, .5]]))['energy_lower_bound'] > 0
+
+
+def test_the_factorization_certificate_refuses_what_it_cannot_certify(monkeypatch):
+    """The two refusals no matrix reaches honestly, reached by replacing SciPy's answers.
+
+    ``splu`` in symmetric mode with no pivoting threshold orders rows and columns alike, and
+    the comparison-inverse solves of a unit triangular factor are finite -- so a symmetric
+    positive matrix cannot make either door fire. They are guards against SciPy doing
+    otherwise, and the only way to see them is to make it do otherwise.
+    """
+    import scipy.sparse.linalg as linalg
+    good = csr_matrix([[2., .25], [.25, .5]])
+    real = linalg.splu
+
+    class Unordered:
+        def __init__(self, factor):
+            self.factor = factor
+
+        def __getattr__(self, name):
+            if name == 'perm_c':
+                return self.factor.perm_c[::-1].copy()
+            return getattr(self.factor, name)
+    monkeypatch.setattr(linalg, 'splu', lambda *a, **k: Unordered(real(*a, **k)))
+    with pytest.raises(ValueError, match='not symmetrically ordered'):
+        study.energy_bounds(good)
+    monkeypatch.setattr(linalg, 'splu', real)
+    monkeypatch.setattr(linalg, 'spsolve_triangular', lambda *a, **k: np.full(2, np.nan))
+    with pytest.raises(ValueError, match='nonfinite comparison-inverse bound'):
+        study.energy_bounds(good)
 
 
 @pytest.mark.parametrize('factor',(2.,float('nan'),0.))
