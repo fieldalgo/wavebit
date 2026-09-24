@@ -13,6 +13,15 @@ two processes agree on it. It never reads an array or an ``id()``. ``fd.run(scen
 plan=other)`` refuses a plan whose skeleton differs from ``plan(scene).skeleton``: a plan
 prepared for one scene must not silently drive another.
 
+**One field may be hashed instead of written out.** A dataclass field declared
+``metadata={'digest': True}`` encodes as the pair ``['digest', sha256]`` over its arrays
+(:func:`_digest`) rather than as the value itself. Nothing carries the mark yet -- no field
+in the package declares ``metadata=`` at all, so ``f.metadata`` is the empty mapping on every
+one of them -- so no plan built today reaches that branch and every frozen skeleton is the
+one it was, byte for byte. It is here for stage 4's prepared material map,
+whose index and value arrays are static and large: their content must move the skeleton, and
+writing tens of megabytes into the hash input to say so would not.
+
 **Dtype.** Real (``float64``) unless any face is Bloch or (stage 3) ``Axis1D``; a Bloch phase
 that is concretely 0 was refused at ``Bloch(...)``, so the dtype rule is simply "any Bloch or
 Axis1D face means complex" (an Axis1D face is complex even at ``k = 0``).
@@ -47,6 +56,8 @@ import hashlib
 import json
 import math
 
+import numpy as np
+
 from ..boundaries import FACES, Absorbing, Axis1D, Bloch, PML
 from ..materials import Dispersive
 from ..monitors import Record
@@ -64,11 +75,41 @@ from .sources import run_steps, source_terms
 __all__ = ['Plan', 'plan', 'skeleton_of']
 
 
+def _digest(v):
+    """``['digest', sha256]`` over a field's arrays: each one's dtype, shape and C-order bytes.
+
+    A dataclass field declared ``metadata={'digest': True}`` is hashed here instead of being
+    written out by :func:`_encode`. It is for a static field whose *content* has to move the
+    skeleton but whose size makes writing it into the hash input absurd: a prepared material
+    map's index and value arrays are tens of megabytes (measured 50,911,380 bytes of active
+    rows on the 56-cell research sphere, ``docs/fd-symmetric-stencil.md``), and they are
+    static -- assembled once on the host, never traced, never differentiated.
+
+    The dtype and the shape go in beside the bytes, so that two arrays sharing a buffer but
+    not a view are not read as one value, and so that ``int32`` indices and ``float64``
+    values cannot collide. A digest is a function of the content alone: no ``id()``, no
+    ``repr()``, no address (memory ``a-digest-you-did-not-validate``), which is what lets the
+    freezers' two-freeze check still hold.
+
+    The mark belongs on a field of a dataclass the plan *holds* -- a term -- and not on a
+    ``Plan`` field: :func:`_finish` hands :func:`skeleton_of` a plain dict, so a ``Plan``
+    field is reached through the dict branch below, which never reads ``dataclasses.fields``.
+    """
+    h = hashlib.sha256()
+    for a in (v if isinstance(v, (tuple, list)) else (v,)):
+        a = np.ascontiguousarray(a)
+        h.update(f'{a.dtype.str}{a.shape}'.encode())
+        h.update(a.tobytes())
+    return ['digest', h.hexdigest()]
+
+
 def _encode(v):
     """A JSON-able, type-tagged encoding of a static value; refuses anything traced."""
     if dataclasses.is_dataclass(v) and not isinstance(v, type):
-        return [type(v).__name__, [[f.name, _encode(getattr(v, f.name))]
-                                   for f in dataclasses.fields(v)]]
+        return [type(v).__name__,
+                [[f.name, _digest(getattr(v, f.name)) if f.metadata.get('digest')
+                  else _encode(getattr(v, f.name))]
+                 for f in dataclasses.fields(v)]]
     if isinstance(v, (tuple, list)):
         return ['tuple', [_encode(x) for x in v]]
     if isinstance(v, dict):

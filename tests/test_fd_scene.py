@@ -28,6 +28,7 @@ keyword nobody reads, a face nobody chose or a plan built for another scene make
 answer a question the user did not ask, and it does so silently.
 """
 import dataclasses
+import hashlib
 import os
 import pathlib
 import subprocess
@@ -230,6 +231,49 @@ def test_mutant_a_skeleton_blind_to_one_static_field_lets_two_scenes_collide(fie
     del sa[field], sb[field]
     assert sa == sb                             # the only difference was that field
     assert skeleton_of(**sa) == skeleton_of(**sb)
+
+
+def test_a_field_marked_for_a_digest_is_hashed_and_not_written_out():
+    """Gate 9: ``metadata={'digest': True}`` encodes a field as ``['digest', sha256]``.
+
+    The rule is the static half of a prepared material map (stage 4): arrays whose *content*
+    has to move the skeleton but which have no business being written into the hash input.
+    Nothing in the package carries the mark: no field under ``wavebit/`` declares
+    ``metadata=`` at all, so no plan built today can take the branch, and every frozen
+    skeleton in ``tests/references/fd_golden_stage*.npz`` is unchanged by it -- checked by
+    rebuilding all 23 stage 0-3 reference skeletons against a ``git archive`` of this
+    commit's parent, and by the four freezers, which reproduce their arrays bit for bit.
+
+    Three claims, and the third is the one a mutant breaks first: the mark routes the field
+    to its digest, two arrays one entry apart give two different digests, and *without* the
+    mark the same field has no encoding at all. Drop the ``f.metadata`` guard and every
+    metadata-free field -- ``nx``, ``face_rules``, all of them -- takes the branch instead.
+    """
+    from wavebit.fd._lower.plan import _encode
+
+    @dataclasses.dataclass(frozen=True)
+    class Marked:
+        label: str
+        arrays: tuple = dataclasses.field(default=(), metadata={'digest': True})
+
+    @dataclasses.dataclass(frozen=True)
+    class Plain:
+        label: str
+        arrays: tuple = ()
+
+    a = np.arange(6.0).reshape(2, 3)
+    b = a.copy()
+    b[1, 2] += 1.0
+    name, fields = _encode(Marked('m', (a,)))
+    assert name == 'Marked' and fields[0] == ['label', ['str', 'm']]
+    # The contract stated in ``_digest``, restated here: dtype, shape, then the C-order bytes.
+    want = hashlib.sha256(f'{a.dtype.str}{a.shape}'.encode() + a.tobytes()).hexdigest()
+    assert fields[1] == ['arrays', ['digest', want]]
+    assert _encode(Marked('m', (b,)))[1][1] != fields[1]
+    assert skeleton_of(terms=(Marked('m', (a,)),)) != skeleton_of(terms=(Marked('m', (b,)),))
+    # Unmarked, the same content is refused outright: the mark is what routes it.
+    with pytest.raises(TypeError, match='no place in a static plan'):
+        _encode(Plain('m', (a,)))
 
 
 # ---------------------------------------------------------------------------------------------
