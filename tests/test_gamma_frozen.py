@@ -317,6 +317,79 @@ def test_a_jitted_first_solve_leaves_no_tracer_in_the_projector_cache(name, valu
     assert float(jnp.sum(solver.solve().T).real) == reference
 
 
+#: A two-row raster on the square cell, for the companion-slot cases below.
+COMPANION_RASTER = np.array([[[1.0, 4.0, 4.0, 1.0], [4.0, 1.0, 1.0, 4.0]]])
+
+
+#: What a solve writes on the solver, and so what a traced call may leave changed: its state.
+SOLVE_STATE = frozenset({'_formulation_assigned', '_frozen_geometry', '_grating_type',
+                         '_solved_scene', 'layer_info_list', 'T1'})
+
+
+def _companion_raster_solver(**over):
+    kw = dict(backend=1, structure=COMPANION_RASTER, lattice=SQUARE, truncation_order=[1, 1],
+              thickness=[300.0], wavelength=900.0, top=1.0, bot=1.0)
+    kw.update(over)
+    return wavebit.rcwa(**kw)
+
+
+def test_a_traced_setter_is_put_back_whole_with_the_slots_it_wrote_beside_the_tracer():
+    """Three setters write a concrete companion next to the value, and it goes back with it.
+
+    Measured before 2026-09-24, when only the tracer-holding slots were put back:
+
+    * ``psi`` latches ``_psi_given``. After a jitted ``solve(psi=p)`` the angle read its default
+      while the flag said it was given, and ``solver.polarization = (1, 1j)`` was refused as
+      naming the incidence twice.
+    * ``structure`` selects ``_modeling_path``. A ``jax.grad`` of ``solve(structure=shapes)``
+      on a raster solver put the raster back under the parametric path, and every eager
+      ``solve()`` after it raised ``TypeError``.
+    * ``structure`` clears ``_structure_drawn_on`` for a bare raster. A traced raster through a
+      solver whose structure came from ``Lattice.drawn`` came back undeclared, so a moved cell
+      would be answered where it is refused.
+
+    The traced cases compare the whole instance dictionary, less the slots a solve writes,
+    since a companion slot is exactly what a list of names would miss.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    wavebit.enable_x64()
+
+    absent = object()
+
+    def moved_slots(solver, before):
+        now = vars(solver)
+        return sorted(k for k in before.keys() | now.keys() if k not in SOLVE_STATE
+                      and now.get(k, absent) is not before.get(k, absent))
+
+    solver = _companion_raster_solver()
+    frozen = solver.freeze_geometry()
+    before = dict(vars(solver))
+    jax.jit(lambda p: jnp.sum(solver.solve(geometry=frozen, psi=p).T).real)(0.3)
+    assert moved_slots(solver, before) == []
+    solver.polarization = (1, 1j)                        # refused while the flag was latched
+
+    solver = _companion_raster_solver()
+    reference = float(jnp.sum(solver.solve().T).real)
+
+    def total(lx):
+        shapes = [dict(background=1.0, shapes=[_box(lx=lx, ly=300.0)])]
+        return jnp.sum(solver.solve(structure=shapes).T).real
+
+    assert np.isfinite(float(jax.grad(total)(300.0)))
+    assert solver.modeling_path == _companion_raster_solver().modeling_path
+    assert float(jnp.sum(solver.solve().T).real) == reference
+
+    cell = wavebit.Lattice.rectangular(PERIOD, PERIOD)
+    solver = _companion_raster_solver(structure=cell.drawn(COMPANION_RASTER))
+    frozen = solver.freeze_geometry()
+    before = dict(vars(solver))
+    jax.jit(lambda r: jnp.sum(solver.solve(geometry=frozen, structure=r).T).real)(
+        jnp.asarray(COMPANION_RASTER))
+    assert moved_slots(solver, before) == []
+    assert solver.structure_drawn_on is not None
+
+
 @pytest.mark.parametrize('side, value', [('top', 1.0), ('bot', 2.25)])
 def test_a_traced_material_condition_does_not_outlive_its_solve(side, value):
     """A half-space swept as a ``Material`` is put back whole, not only the index derived from it.

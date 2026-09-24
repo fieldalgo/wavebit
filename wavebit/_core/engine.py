@@ -2959,7 +2959,24 @@ class CoreFactorizationMixin:
         ``as_array`` as a staged constant -- a tracer -- when the JAX setter runs inside
         ``jax.jit``, and left the same ``UnexpectedTracerError`` on the next eager solve.
         Slots are keyed by identity, and the first snapshot wins, so a slot two setters touch
-        goes back to what it held before either. The assignment itself runs inside the
+        goes back to what it held before either.
+
+        **What goes back is the setter's whole write, not the tracer alone.** A setter that put
+        a tracer where there was none has every slot it changed put back with it, concrete ones
+        included:
+        the flag ``psi`` latches beside the angle (``_psi_given``), the path a ``structure``
+        selects (``_modeling_path``), the cell a raster declared (``_structure_drawn_on``). The
+        tracer alone used to go back, which left the solver half in each scene. Measured
+        2026-09-24: after a jitted ``solve(psi=p)`` the angle read its default while
+        ``_psi_given`` said it was given, so ``solver.polarization = (1, 1j)`` was refused as
+        naming the incidence twice. A ``jax.grad`` of ``solve(structure=shapes)`` on a raster
+        solver put the raster back under ``_modeling_path = PARAMETRIC``, and every eager
+        ``solve()`` after it raised ``TypeError``. A traced raster through a solver whose
+        structure came from ``Lattice.drawn`` dropped the declaration, so a moved cell was
+        answered where it is refused. A setter that only *moves* a tracer an earlier keyword put
+        there -- ``device``, which carries every slot to the new device -- is not one of these:
+        its own write is concrete and stays, and only the traced slots go back, as before. The
+        assignment itself runs inside the
         ``try``: a setter that raises restores what was assigned before it. Read by the diff
         rather than listed by name because a list goes stale on every new slot -- the first
         fix's two tuples missed ``wavelength`` the day they were written.
@@ -2976,16 +2993,20 @@ class CoreFactorizationMixin:
             for name, value in kwargs.items():
                 before = dict(self.__dict__)
                 setattr(self, name, value)
-                for slot in before.keys() | self.__dict__.keys():
-                    now = self.__dict__.get(slot, absent)
-                    was = before.get(slot, absent)
-                    if slot not in held and now is not was and _holds_tracer(now):
-                        held[slot] = was
-                        if slot in ('_top', '_bot', '_structure'):
-                            # The evaluated value and its static dispersion definition
-                            # are one assignment, even when only the value is traced.
-                            source = slot + '_dispersion'
-                            held.setdefault(source, before.get(source, absent))
+                changed = [slot for slot in before.keys() | self.__dict__.keys()
+                           if self.__dict__.get(slot, absent) is not before.get(slot, absent)]
+                traced = [slot for slot in changed
+                          if _holds_tracer(self.__dict__.get(slot, absent))]
+                # Its whole write when it put a tracer where there was none; only the traced
+                # slots when it moved one an earlier keyword put there -- `device` does that,
+                # and its own write is concrete and stays.
+                introduced = any(not _holds_tracer(before.get(slot, absent)) for slot in traced)
+                for slot in (changed if introduced else traced):
+                    held.setdefault(slot, before.get(slot, absent))
+                    if slot in ('_top', '_bot', '_structure'):
+                        # A traced material and its dispersion definition are one assignment.
+                        source = slot + '_dispersion'
+                        held.setdefault(source, before.get(source, absent))
             if self._device != device_before:
                 # `solve(device=X)`: the decorator opened the scope of the device this solver
                 # was on, before the keyword was assigned. The new device's opens inside it.
