@@ -187,11 +187,11 @@ def test_the_selector_is_never_a_function_of_whether_a_value_is_a_tracer():
         return eps
     with pytest.raises(ValueError) as err:
         jax.jit(build)(2.25)
-    assert 'StencilTracedRefused' in str(err.value) and not seen
+    assert 'StencilNumberRefused' in str(err.value) and not seen
     # A Torch leaf that asked for a gradient, which float() would read and silently detach.
     with pytest.raises(ValueError) as err:
         quiet(build_plan, ask('stencil', torch.tensor(2.25, requires_grad=True)))
-    assert 'StencilTracedRefused' in str(err.value)
+    assert 'StencilNumberRefused' in str(err.value)
     # The other side: the same scene with the leaf concrete prepares, so what the refusal
     # turns away is the tracer and not the scene. (The default rule refuses a traced leaf on a
     # *smoothed* structure too, with its own older sentence from constitutive.validate -- so
@@ -200,7 +200,7 @@ def test_the_selector_is_never_a_function_of_whether_a_value_is_a_tracer():
     assert stencil_term(prepared()[1]) is not None
     with pytest.raises(ValueError) as other:
         quiet(build_plan, ask('voxel', torch.tensor(2.25, requires_grad=True)))
-    assert 'StencilTracedRefused' not in str(other.value)
+    assert 'StencilNumberRefused' not in str(other.value)
 
 
 def test_the_selector_reaches_the_plan_the_skeleton_and_the_report():
@@ -621,11 +621,19 @@ def test_the_default_bound_admits_the_resolutions_the_orders_were_measured_at():
     public selector. Every door, the memory door included, has to pass; nothing is solved.
     """
     mie = pytest.importorskip('studies.fdtd_subpixel_mie_sphere')
+    transform = pytest.importorskip('studies.fdtd_subpixel_mie_transform')
+    # The placements are the research's own tuple, not a copy of it.
+    assert stencil.RESEARCH_PLACEMENTS == transform.PLACEMENTS
     for cpw in stencil.MEASURED_RESOLUTIONS:
-        s = mie.sphere_scene(cpw, 12., 48., (0., 0., 0.), radius=.25, propagation='yee')
-        s = s.replace(structures=(fd.Structure(s.structures[0].shape, 12.,
-                                               discretisation='stencil'),))
-        assert reaches_assembly(s), cpw
+        for placement in stencil.RESEARCH_PLACEMENTS:
+            s = mie.sphere_scene(cpw, 12., 48., placement, radius=.25, propagation='yee')
+            # The research's own .45 absorption half-width: at .4 the placed 40-cell spheres
+            # cut the grown region, which the occupancy door refuses by name.
+            monitors = tuple(m.replace(box=fd.Box(size=(.9,) * 3)) if m.name == 'abs' else m
+                             for m in s.monitors)
+            s = s.replace(monitors=monitors, structures=(fd.Structure(
+                s.structures[0].shape, 12., discretisation='stencil'),))
+            assert reaches_assembly(s), (cpw, placement)
 
 
 def test_the_predicted_active_rows_are_the_ones_the_fit_reports():
@@ -704,6 +712,37 @@ def test_a_prepared_operator_is_released_with_its_plan():
     assert [r() is None for r in alive] == [True] * 4
 
 
+def test_a_prepared_operator_is_released_with_its_plan_after_a_jax_run():
+    """The same on JAX, over a three-radius sweep: the compile cache keeps the program only.
+
+    ``JaxRuntime`` compiles the executor once per plan and keeps it on a runtime that lives as
+    long as the process, and both its key and the compiled closure held the plan -- so the
+    NumPy-only gate above could not see that, after one ``fd.run(scene, 'jax')``, the operator
+    was never released. Measured on ``199463e`` (review 1): a three-radius sweep with the
+    caller keeping nothing left 1, 2 and 3 live operators, 2.4, 4.9 and 7.5 MB on a 20-cell
+    fixture and about 77 MB each at 56 cells. ``_run._program`` strips the digested arrays out
+    of what is keyed and closed over. The other side: a second run of the same plan hits the
+    cache (one entry per plan, not per run), so the program is still compiled once.
+    """
+    import gc
+    import weakref
+    pytest.importorskip('jax')
+    from wavebit.fd._runtime import runtime
+    rt = runtime('jax')
+    for radius in (.1375, .139, .1405):
+        s = scene(radius=radius).replace(run=fd.Run(steps=4))
+        plan = quiet(build_plan, s)
+        term = stencil_term(plan)
+        alive = [weakref.ref(a) for a in (term.value, term.index, term.output, term.diagonal)]
+        before = len(rt._compiled)
+        quiet(fd.run, s, 'jax', plan=plan)
+        quiet(fd.run, s, 'jax', plan=plan)
+        assert len(rt._compiled) == before + 1
+        del plan, term
+        gc.collect()
+        assert [r() is None for r in alive] == [True] * 4, radius
+
+
 # -- the scene around the operator: what the research driver refused, refused again ----------
 
 def test_a_non_vacuum_background_is_refused_not_replaced_by_vacuum():
@@ -716,8 +755,16 @@ def test_a_non_vacuum_background_is_refused_not_replaced_by_vacuum():
     name; the public preparation had dropped the condition. Both sides: a declared vacuum
     background, spelt as a material, reaches the solve.
     """
-    for background in (fd.Material(eps=1.44), fd.Material(eps=1., mu=1.)):
-        assert 'StencilBackgroundRefused' in refusal(scene(background=background))
+    message = refusal(scene(background=fd.Material(eps=1.44)))
+    assert 'StencilBackgroundRefused' in message and "discretisation='voxel'" in message
+    # The spelling it names works: the same scene on the voxel rule plans.
+    assert quiet(build_plan, scene(background=fd.Material(eps=1.44), discretisation='voxel'))
+    # A background that names mu=1 is vacuum's values with a permeability path. The refusal
+    # used to tell this user to use vacuum -- what they had written. It now says what is
+    # different, and names a spelling that is not the one they used, which reaches the solve.
+    message = refusal(scene(background=fd.Material(eps=1., mu=1.)))
+    assert 'StencilBackgroundRefused' in message and 'names a permeability' in message
+    assert 'Scene(background=fd.Material(eps=1.))' in message
     assert reaches_assembly(scene(background=fd.Material(eps=1.)))
 
 
@@ -736,7 +783,11 @@ def test_a_second_structure_anywhere_is_refused():
     box = fd.Structure(fd.Box(size=(2 * dx, 12 * dx, 12 * dx), center=(4 * dx, 0, 0)), 1.44)
     ball = fd.Structure(fd.Sphere(radius=.045, center=(.27, 0, 0)), 2.25)
     for extra in (box, ball):
-        assert 'StencilStructuresRefused' in refusal(s.replace(structures=s.structures + (extra,)))
+        message = refusal(s.replace(structures=s.structures + (extra,)))
+        assert 'StencilStructuresRefused' in message and "discretisation='voxel'" in message
+    # The spelling it names for the scene as written: the ball on the voxel rule plans.
+    voxel = s.structures[0].replace(discretisation='voxel')
+    assert quiet(build_plan, s.replace(structures=(voxel, box)))
     assert stencil_term(prepared()[1]) is not None
     # Far from the region too, in a scene with nothing else in it to object first.
     bare = s.replace(sources=(), monitors=(), run=fd.Run(steps=4), boundaries=fd.Boundaries.open(
@@ -751,7 +802,11 @@ def test_a_complex_run_is_refused_and_a_real_periodic_one_is_not():
     """A Bloch face makes the run complex128; the operator was measured in float64 only."""
     bloch = scene().replace(boundaries=fd.Boundaries(
         x=fd.Bloch(phase=.3), y=fd.Periodic(), z=fd.PML(cells=6, allow_thin=True)))
-    assert 'StencilDtypeRefused' in refusal(bloch)
+    message = refusal(bloch)
+    assert 'StencilDtypeRefused' in message
+    assert "discretisation='voxel'" in message and 'fd.Periodic()' in message
+    voxel = bloch.replace(structures=(bloch.structures[0].replace(discretisation='voxel'),))
+    assert quiet(build_plan, voxel).dtype == 'complex128'
     assert reaches_assembly(bloch.replace(boundaries=fd.Boundaries(
         x=fd.Periodic(), y=fd.Periodic(), z=fd.PML(cells=6, allow_thin=True))))
 
@@ -775,6 +830,8 @@ def test_only_fd_sphere_itself_can_ask():
         pass
     message = refusal(with_structure(scene(), Sphere(radius=.14)))
     assert 'StencilShapeRefused' in message and 'not a subclass' in message
+    assert "discretisation='voxel'" in message
+    assert quiet(build_plan, with_structure(scene(), Sphere(radius=.14), discretisation='voxel'))
     assert reaches_assembly(with_structure(scene(), fd.Sphere(radius=.14)))
 
 
@@ -787,7 +844,13 @@ def test_a_magnetic_structure_is_told_it_is_magnetic():
     message = refusal(with_structure(scene(), material=fd.Material(eps=1.44, mu=1.05)))
     assert 'StencilScopeRefused' in message and 'permeability' in message
     assert 'region' not in message.split('.')[0]
+    assert "discretisation='voxel'" in message and 'Leave mu unnamed' in message
+    assert quiet(build_plan, with_structure(scene(), material=fd.Material(eps=1.44, mu=1.05),
+                                            discretisation='voxel'))
     assert reaches_assembly(with_structure(scene(), material=fd.Material(eps=1.44)))
+    # mu=1 named is refused too, and told why: a named mu is magnetic to these doors.
+    message = refusal(with_structure(scene(), material=fd.Material(eps=1.44, mu=1.)))
+    assert 'whatever its value' in message
 
 
 def test_a_wall_or_the_domain_edge_inside_the_region_is_refused():
@@ -810,7 +873,11 @@ def test_a_source_the_clearance_rule_cannot_read_is_refused():
     """Only a TFSF box and a PlaneWave plane have a clearance rule; a Dipole is refused."""
     dipole = scene().replace(monitors=(), sources=(fd.Dipole(
         'd', center=(0., 0., .5), component='Ex', band=fd.Band(wavelength=1., df=.1)),))
-    assert 'StencilSourceRefused' in refusal(dipole)
+    message = refusal(dipole)
+    assert 'StencilSourceRefused' in message and "discretisation='voxel'" in message
+    assert 'fd.TFSF' in message
+    assert quiet(build_plan, dipole.replace(
+        structures=(dipole.structures[0].replace(discretisation='voxel'),)))
     assert reaches_assembly(scene())
 
 
@@ -843,10 +910,48 @@ def test_nothing_else_may_occupy_the_grown_region():
     wave = lambda z, monitors=(): periodic.replace(monitors=monitors, sources=(fd.PlaneWave(
         'p', z=z, direction='+z', polarization='s', band=fd.Band(wavelength=1., df=.1)),))
     assert 'StencilSourceRefused' in refusal(wave(-.47))
+    # One node outside the region is still inside the injection band: -.5 is node 9 and the
+    # region starts at node 10. The review of 199463e found that -.47 (node 10) and -.6
+    # (node 7) could not tell a band of one node from a band of none; this case can.
+    assert 'StencilSourceRefused' in refusal(wave(-.5))
     assert reaches_assembly(wave(-.6))
     orders = lambda z: (fd.Diffraction('r', z=z, side='transmit', wavelengths=(1.,)),)
     assert 'StencilSurfaceRefused' in refusal(wave(-.6, orders(.38)))
     assert reaches_assembly(wave(-.6, orders(.5)))
+
+
+def test_a_plane_is_judged_against_the_region_on_its_own_axis():
+    """The occupancy span is read along the plane's own axis, not a transposed one.
+
+    Every case above is a centred ball, whose grown region is the same range on x, y and z,
+    so reading the region's z range for an x plane could not be told from the right one: the
+    review of 199463e transposed the span (``box[a]`` for ``box[2 - a]``) and all 105 cases
+    passed. Here the ball is off centre along x, so the region is nodes x 11..27 and y, z
+    8..25, and three planes each sit where the two readings disagree: an x plane at node 26
+    (inside the x range, outside the z range) crosses the region; an x plane at node 10 and
+    a z plane at node 26 (outside their own range, inside the other one) miss it.
+    """
+    def ball(monitors=()):
+        return fd.Scene(domain=fd.Domain(size=(1.8,) * 3),
+                        boundaries=fd.Boundaries.open(fd.PML(cells=6, wavelength=1.,
+                                                             allow_thin=True)),
+                        resolution=fd.Resolution(dx=1 / 18), run=fd.Run(steps=2),
+                        structures=(fd.Structure(fd.Sphere(radius=.14, center=(.15, 0., 0.)),
+                                                 2.25, discretisation='stencil'),),
+                        monitors=monitors)
+    plan = quiet(build_plan, ball().replace(
+        structures=(ball().structures[0].replace(discretisation='voxel'),)))
+    old, = plan.constitutive
+    assert stencil._stencil_box(old, (0, 1, 2), plan) == ((8, 25), (8, 25), (11, 27))
+
+    def plane(axis, node):
+        at = {a: (-.2, .2) for a in 'xyz'}
+        at[axis] = plan.low['xyz'.index(axis)] + node * plan.dx
+        return (fd.Flux('f', plane=fd.Plane(**at), wavelengths=(1.,)),)
+    message = refusal(ball(plane('x', 26)))
+    assert 'StencilSurfaceRefused' in message and 'node 26 on x' in message
+    assert reaches_assembly(ball(plane('x', 10)))
+    assert reaches_assembly(ball(plane('z', 26)))
 
 
 def test_a_studies_checkout_that_is_missing_is_named():
@@ -898,52 +1003,212 @@ def test_the_operators_own_certificates_refuse_by_name(monkeypatch):
     serve(moved)
     assert 'StencilHaloRefused' in refusal(scene())
     serve()
-    assert 'StencilCFLRefused' in refusal(scene().replace(run=fd.Run(periods=2., courant=.99)))
+    message = refusal(scene().replace(run=fd.Run(periods=2., courant=.99)))
+    assert 'StencilCFLRefused' in message and 'after the preparation' in message
+    # The courant number it names is the one that passes, applied as written -- and it is the
+    # largest such to its four places, so one step above it is refused again.
+    limit = float(message.split('fd.Run(courant=...) below ')[1].split(' ')[0])
+    assert .9 < limit < .99
+    assert stencil_term(quiet(build_plan, scene().replace(
+        run=fd.Run(periods=2., courant=limit)))) is not None
+    assert 'StencilCFLRefused' in refusal(scene().replace(
+        run=fd.Run(periods=2., courant=limit + 1e-4)))
     assert stencil_term(quiet(build_plan, scene())) is not None
 
 
 # -- lowering: where every traced path passes -------------------------------------------------
 
-def test_lowering_refuses_a_traced_leaf_on_every_traced_path():
-    """``jax.grad``, ``jax.jit(jax.grad)`` and Torch autograd all meet the door at lowering.
+def _paths(jax, torch):
+    """Every transform this file can build, as ``name -> (backend, call(f, x))``.
 
-    The repository's gradient recipe builds the plan from concrete values and lowers a traced
+    Reverse mode, forward mode and batching, on both libraries. The forward-mode Torch
+    spellings are the ones the review of ``199463e`` found passing both doors -- a dual reads
+    as a plain number through ``float()`` -- and returning exactly 0.0.
+    """
+    t = lambda v: torch.tensor(v, dtype=torch.float64)
+
+    def autograd(f, x):
+        leaf = t(x).requires_grad_()
+        f(leaf).backward()
+        return float(leaf.grad)
+
+    def forward_ad(f, x):
+        import torch.autograd.forward_ad as fwAD
+        with fwAD.dual_level():
+            tangent = fwAD.unpack_dual(f(fwAD.make_dual(t(x), t(1.)))).tangent
+            return None if tangent is None else float(tangent)
+    return {
+        'jax.grad': ('jax', lambda f, x: float(jax.grad(f)(x))),
+        'jax.jit(jax.grad)': ('jax', lambda f, x: float(jax.jit(jax.grad(f))(x))),
+        'jax.vmap': ('jax', lambda f, x: np.asarray(jax.vmap(f)(jax.numpy.asarray([x, x])))),
+        'jax.jvp': ('jax', lambda f, x: float(jax.jvp(f, (x,), (1.,))[1])),
+        'jax.jacfwd': ('jax', lambda f, x: float(jax.jacfwd(f)(x))),
+        'torch autograd': ('torch', autograd),
+        'torch.func.grad': ('torch', lambda f, x: float(torch.func.grad(f)(t(x)))),
+        'torch.func.jvp': ('torch', lambda f, x: float(torch.func.jvp(f, (t(x),), (t(1.),))[1])),
+        'torch.func.jacfwd': ('torch', lambda f, x: float(torch.func.jacfwd(f)(t(x)))),
+        'torch forward_ad': ('torch', forward_ad),
+    }
+
+
+def test_lowering_takes_plain_numbers_only_on_every_path():
+    """Every transform meets the plain-number door at lowering, and the recipe it names works.
+
+    The repository's gradient recipe builds the plan from plain numbers and lowers a traced
     scene against it (``tests/test_fd_constitutive.py``), which never passes ``fd.plan``'s
-    door. Measured before this door existed: ``d(sum be)/d(eps)`` was -14.3487 by autodiff and
-    by central difference on the default and **exactly 0** by both on the stencil -- the
-    prepared diagonal had overwritten the permittivity being differentiated. The other side
-    is the same recipe on the default, which the refusal now names, returning the gradient.
+    door. Measured before the first lowering door existed: ``d(sum be)/d(eps)`` was -14.3487
+    by autodiff and by central difference on the default and **exactly 0** by both on the
+    stencil. The door that replaced it asked "is it traced" and let a Torch forward-mode dual
+    through (``torch.func.jvp``, ``torch.func.jacfwd``, ``forward_ad``: 0.0 again). The door now
+    asks "is it a plain number", so every path below is refused by one name, an untraced array
+    of any library is refused the same way, and a NumPy scalar is not. The other side is the
+    recipe the refusal names, applied as written -- voxel in both scenes -- returning the
+    central difference on every derivative path, forward mode included.
     """
     jax = pytest.importorskip('jax')
     torch = pytest.importorskip('torch')
+    from wavebit.fd._runtime import runtime
+    runtime('jax')                                   # x64 before any tracer is made
 
-    def loss(rule, plan, backend='jax', background=None):
+    def loss(rule, plan, backend):
         def f(eps):
-            s = with_structure(scene(background=background), material=fd.Material(eps=eps),
-                               discretisation=rule)
+            s = with_structure(scene(), material=fd.Material(eps=eps), discretisation=rule)
             return lower_params(s, plan, backend)['be'].sum()
         return f
     plan = prepared()[1]
-    for path in (jax.grad(loss('stencil', plan)), jax.jit(jax.grad(loss('stencil', plan)))):
+    paths = _paths(jax, torch)
+    for name, (backend, path) in paths.items():
         with pytest.raises(ValueError) as err:
-            path(2.25)
-        assert 'StencilTracedRefused' in str(err.value) and 'fd.lower' in str(err.value)
-    with pytest.raises(ValueError) as err:
-        loss('stencil', plan, 'torch')(torch.tensor(2.25, dtype=torch.float64,
-                                                    requires_grad=True))
-    assert 'StencilTracedRefused' in str(err.value)
+            path(loss('stencil', plan, backend), 2.25)
+        message = str(err.value)
+        assert 'StencilNumberRefused' in message and 'fd.lower' in message, name
+        assert "discretisation='voxel'" in message and 'BOTH' in message, name
     # A traced background is refused as well: the operator was fitted for vacuum around it.
     def background_loss(eps):
-        s = scene(background=fd.Material(eps=eps))
-        return lower_params(s, plan, 'jax')['be'].sum()
+        return lower_params(scene(background=fd.Material(eps=eps)), plan, 'jax')['be'].sum()
     with pytest.raises(ValueError) as err:
         jax.grad(background_loss)(1.)
-    assert 'StencilTracedRefused' in str(err.value)
-    # The spelling the refusal names works: the same recipe on the default differentiates.
-    voxel = loss('voxel', prepared('voxel')[1])
-    gradient = float(jax.grad(voxel)(2.25))
-    central = float((voxel(2.25 + 1e-6) - voxel(2.25 - 1e-6)) / 2e-6)
-    assert gradient < -1 and abs(central / gradient - 1) < 1e-5
+    assert 'StencilNumberRefused' in str(err.value) and 'Scene(background=)' in str(err.value)
+    # Not traced at all, and still an array: refused the same way, on any library.
+    for value in (jax.numpy.asarray(2.25), torch.tensor(2.25, dtype=torch.float64),
+                  np.array(2.25)):
+        other = with_structure(scene(), material=value)
+        message = refusal(None, lambda: lower_params(other, plan, 'numpy'))
+        assert 'StencilNumberRefused' in message, type(value)
+    # A NumPy scalar is a plain number: it lowers to the fixture's own arrays, bit for bit.
+    be = np.asarray(lower_params(scene(), plan, 'numpy')['be'])
+    for value in (np.float64(2.25), np.float32(2.25), 2.25):
+        other = lower_params(with_structure(scene(), material=value), plan, 'numpy')
+        assert np.array_equal(np.asarray(other['be']), be), type(value)
+    # The recipe the refusal names, as written: discretisation='voxel' in both scenes, the
+    # plan from plain numbers, fd.lower of the traced scene -- on every derivative path.
+    voxel = prepared('voxel')[1]
+    numpy = loss('voxel', voxel, 'numpy')
+    central = float((numpy(2.25 + 1e-6) - numpy(2.25 - 1e-6)) / 2e-6)
+    assert central < -1
+    for name, (backend, path) in paths.items():
+        if name == 'jax.vmap':
+            continue
+        derivative = path(loss('voxel', voxel, backend), 2.25)
+        assert abs(derivative / central - 1) < 1e-5, (name, derivative, central)
+
+
+def test_fd_run_takes_plain_numbers_only_before_it_prepares_anything(monkeypatch):
+    """The same door at ``fd.plan``, reached through ``fd.run`` itself, before any solve.
+
+    Measured on ``199463e`` (review 2): ``fd.run(scene, 'torch')`` with ``eps`` a forward-mode
+    dual returned the scattered flux with a tangent of **exactly 0.0** on the stencil, where
+    the stencil's own central difference is 5.64e-9 and the voxel rule's forward mode matches
+    its difference to 7e-10. Every path is refused now, by name, with no operator solved; and
+    a plain-array scene that never meets a transform is refused too, because the door is a
+    type and not a question about tracing.
+    """
+    jax = pytest.importorskip('jax')
+    torch = pytest.importorskip('torch')
+    from wavebit.fd._runtime import runtime
+    runtime('jax')
+    calls = []
+    real = stencil.geometry
+    monkeypatch.setattr(stencil, 'geometry', lambda *a, **k: (calls.append(1), real(*a, **k))[1])
+
+    def flux(backend):
+        def f(eps):
+            s = with_structure(scene(), material=fd.Material(eps=eps))
+            return quiet(fd.run, s, backend)['sca'].flux[0]
+        return f
+    for name, (backend, path) in _paths(jax, torch).items():
+        with pytest.raises(ValueError) as err:
+            path(flux(backend), 2.25)
+        assert 'StencilNumberRefused' in str(err.value) and 'fd.plan' in str(err.value), name
+    for value in (jax.numpy.asarray(2.25), torch.tensor(2.25, dtype=torch.float64),
+                  np.array(2.25)):
+        assert 'StencilNumberRefused' in refusal(with_structure(scene(), material=value))
+    background = scene(background=fd.Material(eps=jax.numpy.asarray(1.)))
+    assert 'StencilNumberRefused' in refusal(background)
+    assert not calls
+    assert reaches_assembly(with_structure(scene(), material=np.float64(2.25)))
+
+
+def test_the_discretisation_door_at_lowering_works_both_ways():
+    """A scene and a plan that disagree about the stencil are refused in either direction.
+
+    Measured on ``199463e`` (review 1): a stencil scene lowered against its voxel twin's plan
+    -- the plan the traced-leaf refusal's own recipe builds -- was accepted and painted with
+    the voxel rule, and on the traced path returned the voxel gradient, -12.667 on
+    ``jax.grad``, ``jax.jit(jax.grad)`` and Torch alike: the two-different-functions outcome
+    that refusal exists to prevent. A plan built with no structure at all did the same. Only
+    the other direction (a voxel scene against a stencil plan) was refused. Both are now; the
+    nearest legal lowering is the fixture against its own plan, and the recipe the refusal
+    names (voxel in both scenes) is applied as written in
+    :func:`test_lowering_takes_plain_numbers_only_on_every_path`.
+    """
+    jax = pytest.importorskip('jax')
+    torch = pytest.importorskip('torch')
+    from wavebit.fd._runtime import runtime
+    runtime('jax')
+    s, plan = prepared()
+    v, voxel_plan = prepared('voxel')
+    bare = quiet(build_plan, s.replace(structures=()))
+    for other in (voxel_plan, bare):
+        message = refusal(None, lambda: lower_params(s, other, 'numpy'))
+        assert 'StencilMismatchRefused' in message and 'carries no operator' in message
+        assert "discretisation='voxel' in the scene you lower" in message
+
+    def loss(eps, backend='jax'):
+        traced = with_structure(scene(), material=fd.Material(eps=eps))
+        return lower_params(traced, voxel_plan, backend)['be'].sum()
+    for path in (jax.grad(loss), jax.jit(jax.grad(loss))):
+        with pytest.raises(ValueError) as err:
+            path(2.25)
+        assert 'StencilMismatchRefused' in str(err.value)
+    with pytest.raises(ValueError) as err:
+        loss(torch.tensor(2.25, dtype=torch.float64, requires_grad=True), 'torch')
+    assert 'StencilMismatchRefused' in str(err.value)
+    # The other direction: the plan carries an operator the scene does not ask for.
+    for other, said in ((v, "asks for discretisation='voxel'"),
+                        (s.replace(structures=()), 'has no structures[0]')):
+        message = refusal(None, lambda: lower_params(other, plan, 'numpy'))
+        assert 'StencilMismatchRefused' in message and said in message
+    assert 'stencil' in lower_params(s, plan, 'numpy')
+    assert 'stencil' not in lower_params(v, voxel_plan, 'numpy')
+
+
+def test_loss_and_anisotropy_meet_check_smoothed_at_plan_and_the_stencil_door_at_lowering():
+    """Which door answers a lossy or an anisotropic stencil ball, and where.
+
+    At plan time ``checks.check_smoothed`` refuses both for a smoothed shape on either
+    discretisation (its doors 1 and 4) before the stencil's preparation runs, so the
+    stencil's own arms for them could never fire there -- the review of ``199463e`` found them
+    unreachable from ``fd.plan`` -- and they are the lowering door only. This pins the plan
+    side to ``check_smoothed``'s sentences, so a change that let either past it would show;
+    :func:`test_lowering_refuses_a_scene_the_operator_was_not_prepared_for` pins the lowering
+    side, whose mutants (either arm removed) lower the wrong scene silently.
+    """
+    for material, sentence in ((fd.Conductor(eps=2.25, sigma=.01), 'fd.Conductor'),
+                               (fd.Material(eps=(2.25, 2.25, 2.4)), 'anisotropic eps')):
+        for rule in ('stencil', 'voxel'):
+            message = refusal(with_structure(scene(), material=material, discretisation=rule))
+            assert sentence in message and 'Stencil' not in message, (rule, message[:80])
 
 
 def test_lowering_refuses_a_scene_the_operator_was_not_prepared_for():
@@ -962,8 +1227,9 @@ def test_lowering_refuses_a_scene_the_operator_was_not_prepared_for():
                  fd.Box(size=(.1,) * 3, center=(.5, .5, .5)), 1.44),)),
               'StencilMismatchRefused'),
              (with_structure(s, material=fd.Conductor(eps=2.25, sigma=.1)),
-              'conductivity or poles'),
-             (with_structure(s, material=fd.Material(eps=(2.25, 2.25, 2.4))), 'anisotropic'),
+              'lossless fd.Material(eps=...)'),
+             (with_structure(s, material=fd.Material(eps=(2.25, 2.25, 2.4))),
+              'isotropic fd.Material(eps=...)'),
              (with_structure(s, material=fd.Material(eps=2.25, mu=1.05)), 'permeability'),
              (scene(background=1.44), 'StencilBackgroundRefused'))
     for other, name in cases:

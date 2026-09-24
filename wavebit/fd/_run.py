@@ -32,8 +32,51 @@ from .results import Final, Results, Series
 __all__ = ['run', 'execute']
 
 
+def _program(plan):
+    """``plan`` as the step reads it: every digested array field of every term set to ``None``.
+
+    A field declared ``metadata={'digest': True}`` is static data the skeleton records by
+    content -- a prepared extended-stencil operator's ``index``, ``value``, ``output`` and
+    ``diagonal`` -- and the step never reads it: what the kernel multiplies by reaches it
+    through the params (``params['stencil']``, and the diagonal patched into ``be``). But the
+    executor is compiled once per plan on JAX and kept, by a runtime ``runtime()`` keeps for the
+    life of the process, and both the cache key and the compiled closure held the plan -- so
+    after one ``fd.run(scene, 'jax')`` its operator was never released. Measured on
+    ``199463e`` (review 1): a three-radius JAX sweep with the caller keeping nothing left 1, 2
+    and 3 live operators (2.4, 4.9 and 7.5 MB on a 20-cell fixture; about 77 MB each at 56
+    cells), where NumPy and Torch left none.
+
+    Stripping the arrays here, and keying and closing over what is left, keeps the program
+    and releases the data. Equality is unchanged: the skeleton is kept, and it holds the
+    arrays' digests, so two stripped plans are equal exactly when the plans were -- which is
+    what "equal plans mean equal programs" needs. Holding the plan weakly instead cannot work:
+    the compiled closure has to reference the plan it steps, so a weak-keyed entry keeps its
+    own key alive. A plan whose terms carry no digested field -- every default scene -- is
+    returned as the same object, so its key and its closure are what they were.
+    """
+    terms = tuple(_stripped(t) for t in plan.terms)
+    if all(a is b for a, b in zip(terms, plan.terms)):
+        return plan
+    return dataclasses.replace(plan, terms=terms)
+
+
+def _stripped(term):
+    if not dataclasses.is_dataclass(term):
+        return term
+    marked = {f.name: None for f in dataclasses.fields(term)
+              if f.metadata.get('digest') and getattr(term, f.name) is not None}
+    return dataclasses.replace(term, **marked) if marked else term
+
+
 def execute(plan, params, rt):
-    """The final state of ``plan`` driven by ``params`` on ``rt``; jitted once per plan on JAX."""
+    """The final state of ``plan`` driven by ``params`` on ``rt``; jitted once per plan on JAX.
+
+    The program is :func:`_program` of the plan -- the plan without its digested arrays -- and
+    that is also the compile cache's key, so a prepared operator lives exactly as long as the
+    caller's plan does, on JAX too.
+    """
+    plan = _program(plan)
+
     def make():
         def go(traced):
             if has_sources(plan):

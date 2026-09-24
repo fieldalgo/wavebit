@@ -46,7 +46,7 @@ def test_the_moved_operator_is_an_fd_module_that_imports_with_no_cycle():
     # purpose (review: the subset form let ``__all__`` grow unseen).
     preparation = {'DEFAULT', 'MEMORY_BOUND_BYTES', 'REACH', 'STENCIL', 'active_rows',
                    'arguments', 'lower', 'operator_digest', 'predicted_bytes', 'prepare',
-                   'prepared_digest', 'source_digest'}
+                   'prepared_digest', 'refuse_discretisation', 'source_digest'}
     assert set(stencil.__all__) == {f.__name__ for f in moved} | preparation
     assert len(stencil.__all__) == len(set(stencil.__all__))
     assert list(stencil.__all__) == sorted(stencil.__all__)

@@ -443,18 +443,21 @@ class Structure:
 
     **``memory_bound=``** (bytes, only beside ``discretisation='stencil'``) raises the host
     memory a preparation may be predicted to take before it is refused. The default admits the
-    largest preparation that has been measured (``docs/fd-symmetric-stencil.md``); a larger
-    value is an explicit decision to trust the prediction past the sizes it was measured at.
+    research sphere at its three placements at 40 and 56 cells per wavelength with a stated
+    margin (``docs/fd-symmetric-stencil.md``); a larger value is an explicit decision to trust
+    the prediction past the sizes it was measured at.
 
     **Why here, and not the ``smoothing=`` the module docstring refuses.** That paragraph turns
     down a keyword that would *switch a rule* for the same shape, or key itself on whether a
     radius happened to be traced, because either makes ``jax.grad`` and a finite difference
     compute two different functions. Both objections are kept rather than dodged. This value is
     static, a typo is refused outright, it is in the plan and in the skeleton, and it is never
-    read from whether anything is a tracer -- a structure that asks for the stencil with a
-    traced radius or permittivity is **refused by name** (``StencilTracedRefused``) rather than
-    quietly given the other rule, which is exactly the failure ``combine=`` and
-    ``fourier_type=`` were deleted for.
+    read from whether anything is a tracer. A structure that asks for the stencil takes plain
+    numbers only -- Python ``int``/``float`` and NumPy scalars -- and any array or tensor, traced
+    or not, is **refused by name** (``StencilNumberRefused``) rather than quietly given the
+    other rule, which is exactly the failure ``combine=`` and ``fourier_type=`` were deleted
+    for. The door is a type and not a question about tracing because a Torch forward-mode dual
+    reads as a number and passed a tracing test.
 
     It is on the structure and not on the :class:`Shape` or on :class:`~wavebit.fd.Run`
     because that is where its inputs are. The operator is assembled from the body's geometry

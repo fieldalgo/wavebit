@@ -711,7 +711,7 @@ conditions is now a named refusal at plan time, read line by line:
 
 | `validate_scope` condition | public refusal |
 | --- | --- |
-| centre and radius concrete, finite | `StencilTracedRefused` (plan **and** lowering) |
+| centre and radius concrete, finite | `StencilNumberRefused` (plan **and** lowering): every leaf the operator reads -- radius, centre, `eps`, `mu`, the background's `eps` and `mu` -- is a plain Python number or a NumPy scalar; any array or tensor is refused, traced or not |
 | `radius > 0`, `eps > 0` | `fd.Sphere`, `fd.Material` constructors |
 | `components` is `(0, 1, 2)` for a sphere | fixed by the public preparation |
 | `len(scene.structures) == 1` | `StencilStructuresRefused` |
@@ -719,7 +719,7 @@ conditions is now a named refusal at plan time, read line by line:
 | `p.dtype == 'float64'` | `StencilDtypeRefused` (a Bloch face makes it complex) |
 | `not p.has_E0`, `not p.has_H0` | `StencilScopeRefused`, one sentence each |
 | background `fd.Material`, `mu is None`, every `eps == 1` | `StencilBackgroundRefused` |
-| structure `fd.Material`, `mu is None`, every `eps` equal | `StencilScopeRefused` (conductivity or poles; permeability; anisotropic) |
+| structure `fd.Material`, `mu is None`, every `eps` equal | permeability: `StencilScopeRefused` at plan and lowering. Conductivity or poles, and anisotropy: at plan time `checks.check_smoothed` (doors 1 and 4) refuses both on either discretisation before the preparation runs, so the stencil's own arms are the **lowering** door only (`StencilScopeRefused` there) |
 | `not old.masks` | `StencilScopeRefused` (PEC or PMC wall) |
 | `type(body) is fd.Sphere` | `StencilShapeRefused` (a subclass is refused too) |
 
@@ -746,11 +746,11 @@ builds the plan from concrete values and lowers a traced scene against it
 default, and **exactly 0** by both on the stencil, on `jax.grad`, `jax.jit(jax.grad)`
 and Torch alike. `fd.lower` now runs the structure's and the background's doors
 again and compares the operator's source digest (the SHA-256 of the exact arguments
-`geometry` was called with) against the scene it is handed: a traced leaf is
-`StencilTracedRefused`, and a concrete scene whose ball, permittivity, material kind
-or structure count is not the prepared one is refused by name
-(`StencilMismatchRefused`, or the plan-time sentence for a loss, an anisotropy, a
-permeability or a background).
+`geometry` was called with) against the scene it is handed: a leaf that is not a plain
+number is `StencilNumberRefused` (it was `StencilTracedRefused`, see the next section),
+and a plain scene whose ball, permittivity, material kind or structure count is not
+the prepared one is refused by name (`StencilMismatchRefused`, or the sentence for a
+loss, an anisotropy, a permeability or a background).
 
 **`fd.run(scene, plan=p)` no longer re-solves.** `run` re-plans the scene to check
 the caller's plan and to take the grazing survey, and that re-plan re-solved the
@@ -789,13 +789,10 @@ to 4.4 times and its 256 MiB bound refused every resolution the orders were
 measured at. `BYTES_PER_UNKNOWN` is now 3300, the largest measured value rounded up,
 which is an upper bound over the measured range and not one past it.
 `PAIRS_PER_ACTIVE_ROW` stays 46.0 (45.35 at 40 cells, 45.42 at 56).
-`MEMORY_BOUND_BYTES` is 5824 MiB: the 56-cell prediction, 40,224 x 46 x 3300 =
-6,106,003,200 bytes, rounded up to the next MiB. So the default admits the 40- and
-56-cell research sphere (owner decision C's public spot check is possible at either)
-and nothing past them; the 80-cell preparation has not been measured.
-`fd.Structure(..., discretisation='stencil', memory_bound=<bytes>)` raises it for one
-structure, and the refusal says that past the measured range the prediction is an
-extrapolation of a constant that rose with size at every measurement.
+`MEMORY_BOUND_BYTES` was 5824 MiB, the 56-cell origin prediction rounded up to the
+MiB; that refused two of the three research placements at 56 cells, and it is 6144 MiB
+now (next section). `fd.Structure(..., discretisation='stencil', memory_bound=<bytes>)`
+raises it for one structure.
 
 **Thread count.** The prepared skeleton is still a function of the BLAS thread count.
 `test_two_processes_agree_on_a_prepared_skeleton` now runs both sides of its
@@ -805,3 +802,142 @@ two interpreters, and says that it proves nothing about thread independence. A p
 prepared at another thread count is still a different plan, and nothing at the door
 says so; `fd.run(scene, plan=p)` now runs `p`'s own operator in that case rather than
 re-solving one that would not match it.
+
+## Second review of the public preparation (2026-09-25)
+
+Two reviews of `199463e` found one blocker, three majors and four minors. Each was
+reproduced on `199463e` before it was fixed; the tests named below each have a source
+mutant that fails them.
+
+**A structure that asks for the stencil takes plain numbers only.** The doors decided
+"traced" with `materials.concrete()`, which returns `None` for a JAX tracer and for a
+Torch tensor with `requires_grad`, and reads anything else through `float()`. A Torch
+forward-mode dual has `requires_grad=False` and `float()` reads its primal, so
+`torch.func.jvp`, `torch.func.jacfwd` and `torch.autograd.forward_ad` passed both doors.
+Reproduced on the test fixture: `d(sum be)/d(eps)` at lowering came back **0.0** on all
+three (the voxel rule, and every reverse-mode path, read -14.3487; the central
+difference is -14.34871), and plain `fd.run(scene, 'torch')` with a dual `eps` returned
+the scattered flux 5.126343269e-09 with a tangent of **exactly 0.0**, against a stencil
+central difference of 5.639678457e-09 (the voxel rule's forward mode read
+5.527620124e-09 against its difference 5.527620120e-09). Rather than add one transform
+at a time to a tracing test, the door is now a **type**: every leaf the operator reads
+-- radius, centre, `eps`, `mu`, and the background's `eps` and `mu` -- has to be a
+Python `int` or `float` or a NumPy real scalar of at most 64 bits, and anything else is
+`StencilNumberRefused` at `fd.plan` and again at `fd.lower`: every `jax.Array`, every
+`torch.Tensor` (a gradient leaf, a dual, a `torch.func` wrapper or a plain tensor), and
+every NumPy `ndarray`, a 0-d one included. A NumPy scalar is admitted because it is
+immutable host data no transform can wrap and `float()` of it is exact; a 0-d array is
+not, because it is mutable and is the type every library converts through, and
+`float(x)` is the spelling that works. The refusal names the voxel recipe for a
+derivative -- `discretisation='voxel'` in **both** scenes, the plan from plain numbers,
+`fd.lower` of the traced scene -- and the gate applies it as written on every derivative
+path and gets the central difference back to 1e-5. `concrete()` itself is unchanged: the
+voxel rule's forward mode is correct, and changing what the default reads as concrete
+is not this commit's to do.
+
+| path (fixture, `d(sum be)/d(eps)` at lowering) | `199463e` | now | mutant: door reverted to the tracing test | mutant: number door removed | mutant: every lowering door removed |
+| --- | --- | --- | --- | --- | --- |
+| `jax.grad`, `jax.jit(jax.grad)`, `jax.jvp`, `jax.jacfwd` | refused | refused | refused | unnamed `ConcretizationTypeError` | **0.0** |
+| `jax.vmap` | refused | refused | refused | unnamed `ConcretizationTypeError` | both lanes the prepared value |
+| Torch autograd, `torch.func.grad` | refused | refused | refused | **0.0** | **0.0** |
+| `torch.func.jvp`, `torch.func.jacfwd`, `forward_ad` | **0.0** | refused | **0.0** | **0.0** | **0.0** |
+
+Each mutant fails both gates below. With the number door reverted, plain `fd.run(scene,
+'torch')` with a dual `eps` returns a tangent of 0.0 again.
+
+Gates: `test_lowering_takes_plain_numbers_only_on_every_path`,
+`test_fd_run_takes_plain_numbers_only_before_it_prepares_anything`.
+
+**The lowering door works in both directions.** Only a voxel scene against a stencil
+plan was refused. A stencil scene against its voxel twin's plan -- the plan the
+refusal's own recipe builds -- was accepted, painted with the voxel rule, and on the
+traced path returned the voxel gradient: -12.667396009626980 on `jax.grad`,
+-12.667396009626977 on `jax.jit(jax.grad)`, -12.667396009626978 on Torch (reproduced on
+review 1's off-centre 20-cell fixture). A plan built with no structure did the same.
+`stencil.refuse_discretisation` now runs first in `fd.lower`, whether or not the plan
+has constitutive terms, and refuses either disagreement (`StencilMismatchRefused`).
+Gate: `test_the_discretisation_door_at_lowering_works_both_ways`.
+
+**The operator dies with its plan on JAX too.** `JaxRuntime` compiles the executor once
+per plan and keeps it for the life of the process, and both its key and the compiled
+closure held the plan. Reproduced: a three-radius sweep through plain
+`fd.run(scene, 'jax')`, the caller keeping nothing, left 1, 2 and 3 live operators (2.37,
+4.85 and 7.50 MB; about 77 MB each at 56 cells). The executor now keys and closes over
+`_run._program(plan)`, the plan with its digested arrays set to `None` -- the step never
+reads them; the kernel's coefficients come through the params. The skeleton is kept, and
+it holds the arrays' digests, so equality is unchanged, and a plan with no digested field
+(every default scene) is passed through as the same object. After the fix the same sweep
+leaves 0 operators (3 compile-cache entries, as before). The alternative the brief
+named, holding the plan weakly, was measured and does not work: a `WeakKeyDictionary`
+keyed by the full plan left 1, 2 and 3 operators, because the compiled closure has to
+reference the plan it steps and so keeps its own key alive. Gate:
+`test_a_prepared_operator_is_released_with_its_plan_after_a_jax_run`.
+
+**The default memory bound admits every research placement.** The research sphere's
+three placements are `(0,0,0)`, `(1/2,1/3,1/5)` and `(1/4,2/3,2/5)` voxels
+(`studies/fdtd_subpixel_mie_transform.py::PLACEMENTS`). Their predictions, through the
+public selector with the memory door bypassed and no solve (the 40-cell placed spheres
+use the research's own .45 absorption half-width, which the occupancy door requires --
+at .4 they are `StencilSurfaceRefused`):
+
+| cells | placement | active rows | predicted MiB | measured peak MB | bytes/unknown measured |
+| ---: | --- | ---: | ---: | ---: | ---: |
+| 40 | (0, 0, 0) | 21,060 | 3,048.81 | 2,423 | 2,537.2 |
+| 40 | (1/2, 1/3, 1/5) | 20,916 | 3,027.96 | -- | -- |
+| 40 | (1/4, 2/3, 2/5) | 20,906 | 3,026.51 | -- | -- |
+| 56 | (0, 0, 0) | 40,224 | 5,823.14 | 5,984 | 3,275.6 |
+| 56 | (1/2, 1/3, 1/5) | 40,481 | 5,860.34 | 4,887 (review 2) | 2,654.5 |
+| 56 | (1/4, 2/3, 2/5) | 40,489 | 5,861.50 | -- | -- |
+
+The prediction is not monotone in the true need. It is the active-row count times two
+constants, and at 56 cells the placement with 0.6% more rows (0.8% more unknowns) needed
+18% less memory. The peak is set by `energy_bounds`' sparse factorization, whose fill
+depends on the ordering its heuristic finds for the coupling pattern, and a row count
+does not fix that; why the origin fills more has not been measured. (At 56 cells the
+origin is a cell centre, not a node -- the domain's half width is 65.2 cells, so the
+nodes sit at half-integers -- which is also why it has the fewest rows there and the
+most at 40.) The row count itself moves with sub-cell placement: over 1,006 placements
+at 56 cells (the three above, three symmetric ones and 1,000 seeded uniform ones) it ran
+from 40,224 to 40,610 rows, 5,879.02 MiB at the top; at 40 cells the largest was 21,060.
+`MEMORY_BOUND_BYTES` is 6144 MiB: 4.5% above the largest of those, 4.8% above the largest
+research placement, room for 42,440 rows. `BYTES_PER_UNKNOWN` stays 3300, the largest of
+seven measured values, and its comment no longer says it rises with size or that past
+56 cells it is more likely low than high: at one size it moved by placement, and past
+56 cells nobody has measured it either way. Nothing is claimed at 80 cells, which the
+default refuses. Gate: `test_the_default_bound_admits_the_resolutions_the_orders_were_measured_at`
+plans all six through the public selector, stopping before the solve.
+
+**The minors.**
+
+- The PlaneWave band gate could not fail: -.47 (node 10) and -.6 (node 7) cannot tell a
+  one-node band from none. -.5 (node 9, the region starts at node 10) is refused now, and
+  the band-0 mutant fails the test.
+- The occupancy span's axis order could not fail: every case was a centred ball.
+  `test_a_plane_is_judged_against_the_region_on_its_own_axis` puts the ball off centre
+  along x (region x 11..27, y and z 8..25) with three planes where the two readings
+  disagree; the transposed-span mutant fails it.
+- Refusals now name a spelling that works, and each gate applies it:
+  `StencilStructuresRefused`, `StencilDtypeRefused` (`fd.Periodic()`, or voxel),
+  `StencilShapeRefused` for a subclass, the magnetic `StencilScopeRefused` ("leave mu
+  unnamed", or voxel), `StencilSourceRefused` for a Dipole (a TFSF box or a PlaneWave, or
+  voxel), `StencilBackgroundRefused` (voxel), the lowering-only conductivity and
+  anisotropy arms (the lossless isotropic scene the plan was prepared from -- voxel is not
+  named there, because `check_smoothed` refuses those balls on either discretisation),
+  and `StencilCFLRefused`, which now prints the courant number that passes (the rate
+  goes as its square) and says it comes after the preparation.
+- `Scene(background=fd.Material(eps=1., mu=1.))` was told to use vacuum, which is what
+  its author wrote. It is told now that a named `mu` is a permeability path whatever its
+  value, and to leave `mu` unnamed; a structure with `mu=1` hears the same.
+- The plan-time conductivity and anisotropy arms of `_refuse_structure` could not be
+  reached from `fd.plan`. They are **deleted from the plan-time path** and kept at
+  lowering, where `check_smoothed` never runs and both are live (the source digest reads
+  `eps[0]` only). `test_loss_and_anisotropy_meet_check_smoothed_at_plan_and_the_stencil_door_at_lowering`
+  pins the plan side to `check_smoothed`'s sentences.
+
+Still open. `materials.concrete()` still reads a forward-mode dual as a number, so the
+**voxel** path's other `concrete()` readers (the CFL bound, the cells-per-wavelength
+check) take its primal; they compute no derivative themselves, and the voxel rule's own
+forward-mode tangent is right, but nothing gates that class. And `fd.Sphere`'s radius and
+centre go through `static_float`, which refuses a JAX tracer and a `requires_grad` leaf
+but reads a forward-mode dual's primal: a dual radius becomes a plain float at
+construction on either discretisation, before any stencil door can see it.

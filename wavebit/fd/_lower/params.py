@@ -72,7 +72,15 @@ def lower(scene, plan, rt='numpy', device=None):
     """The traced parameters of ``scene`` under ``plan``, as arrays of runtime ``rt``.
 
     ``rt`` is a runtime object, or a backend name / ``wavebit.Backend`` to build one from.
+
+    The first thing it asks is whether the scene and the plan agree about which structures
+    carry a prepared extended-stencil operator (``stencil.refuse_discretisation``): the plan
+    is the caller's choice here, and a scene lowered against a plan built for its other
+    discretisation would otherwise get that one silently. A scene and a plan with no such
+    structure pass it after one loop over each.
     """
+    from .stencil import refuse_discretisation
+    refuse_discretisation(scene, plan)
     if not hasattr(rt, 'slab_add'):
         from .._runtime import runtime
         rt = runtime(rt, device)
