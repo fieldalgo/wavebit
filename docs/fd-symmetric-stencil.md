@@ -398,6 +398,42 @@ consistency residual from `2.220446e-15` to `.101084`, and moves the matrix,
 right-hand side and solution digests on every fixture. Sixty other cases in the
 module survive it, so the planar states are what holds this line.
 
+## Moved into fd preparation
+
+`fit`, `geometry`, `padded`, `energy_bounds` and `triplet_baseline` now live in
+`wavebit/fd/_lower/stencil.py`; `studies/fdtd_subpixel_symmetric_stencil.py`
+imports them from there and still owns the scene scope refusals, the surface
+clearance rule, the stepping term and `replace`. **Nothing public routes to the
+new module**: no `plan()` call, no `params` key, no kernel branch, and
+`wavebit/fd/_lower/__init__.py` does not export it. The operator is in
+preparation, not in `fd.run`, and this section is not a C3 pass.
+
+The move changes no arithmetic. Apart from four lines at the top of `geometry`
+-- two comments and two deferred imports -- the 216 moved lines are byte
+identical to the ones they replace. Rebuilt on six fixtures from a tar of each
+tracked tree, 138 quantities per tree agree exactly: the assembled matrix's
+data, indices, indptr, shape and nonzero count; the balanced least-squares
+matrix and the right-hand side handed to LSMR; the solution it returned with its
+stop code and iteration count; the four padded arrays; and eleven of the
+thirteen report scalars. The remaining two are the ARPACK pair above, which two
+runs of one unchanged tree already disagree on.
+
+`geometry` and `triplet_baseline` still reach into `studies/` for the exact edge
+and face fraction helpers and the triplet orientation maps, so they import them
+where they use them. That seam is why the module sits in `_lower` and is not
+exported: importing it pulls no study and cannot cycle, and `fit`,
+`energy_bounds` and `padded` need no study at all, but the two that do will not
+run outside a checkout that has `studies` importable. Closing the seam means
+moving those helpers into the package, which is a separate commit with its own
+byte compare.
+
+A sign flipped in one moved constraint -- the normal term of `Gamma_i` -- moves
+the matrix, right-hand side and solution digests on every fixture and reddens
+seven cases in the module: both `test_exact_static_planar_states` normals,
+`test_thirty_planar_interface_offsets`,
+`test_rigid_translation_keeps_the_material_operator`, and all three
+`test_invalid_time_step_is_refused_before_stepping` cases.
+
 ## Large high-index sphere: time and bandwidth controls
 
 The radius/wavelength `.25`, epsilon-12 origin sphere now uses the same

@@ -1,11 +1,51 @@
 """Independent controls of the experimental extended material stencil."""
 from functools import lru_cache
+import pathlib
+import subprocess
+import sys
 import numpy as np
 import pytest
 from scipy.sparse import csr_matrix
 from studies import fdtd_subpixel_symmetric_stencil as study
+import wavebit
 from wavebit.fd._runtime import runtime
 from wavebit.fd._kernel.masks import Region
+
+ROOT = pathlib.Path(wavebit.__file__).resolve().parents[1]
+
+
+def test_the_moved_operator_is_an_fd_module_that_imports_with_no_cycle():
+    """The five assembly functions are ``wavebit.fd._lower.stencil``'s, and it stands alone.
+
+    The move put them in the package while leaving every caller in the study, so two things
+    have to hold at once. The names the study exposes have to be the moved ones and not
+    copies -- ``__module__`` says which -- and the new module has to import on its own, with
+    no study pulled in behind it and no cycle through ``wavebit.fd``. The subprocess runs
+    with the checkout as its working directory, so ``studies`` *is* importable and simply is
+    not imported; that is the claim, not an accident of the path.
+
+    ``geometry`` and ``triplet_baseline`` do reach into ``studies/`` for the exact fraction
+    helpers and the triplet orientation maps, deferred to the call. ``fit``, ``energy_bounds``
+    and ``padded`` reach into nothing, which the subprocess shows by running two of them.
+    """
+    from wavebit.fd._lower import stencil
+    moved = (study.fit, study.energy_bounds, study.triplet_baseline, study.geometry,
+             study.padded)
+    assert [f.__module__ for f in moved] == ['wavebit.fd._lower.stencil'] * 5
+    assert list(stencil.__all__) == sorted(f.__name__ for f in moved)
+    code = ('import sys\n'
+            'import wavebit.fd._lower.stencil as s\n'
+            'leaked = sorted(m for m in sys.modules if m.split(".")[0] == "studies")\n'
+            'assert not leaked, leaked\n'
+            'assert s.fit.__module__ == "wavebit.fd._lower.stencil", s.fit.__module__\n'
+            'import numpy as np\n'
+            'from scipy.sparse import csr_matrix\n'
+            'assert s.energy_bounds(csr_matrix([[2., .25], [.25, .5]]))["energy_lower_bound"] > 0\n'
+            'print(s.padded(csr_matrix(np.eye(3)))[0].tolist())\n')
+    out = subprocess.run([sys.executable, '-c', code], cwd=ROOT, capture_output=True,
+                         text=True, timeout=300)
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.strip() == '[1.0, 1.0, 1.0]'
 
 
 def planar_fixture(size, normal, eps, offset=.23):
