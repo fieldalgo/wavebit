@@ -48,22 +48,34 @@ def fit(points, axes, normals, signed, ell, area, eps, reach=2., periodic=None, 
     positions=lattice[ids] if periodic is None else lattice[ids]%periodic
     pairs.extend((ids[i],ids[j]) for i,j in sorted(cKDTree(positions,boxsize=periodic).query_pairs(reach)))
     rowids={idx:i for i,idx in enumerate(ids)}
-    rhs=[];rr=[];cc=[];vv=[]
-    for i in ids:
+    # Preallocated rather than appended. The entry counts are exact, not estimates: one
+    # dim-block of constraint entries per diagonal pair and two per off-diagonal one, so
+    # stored = 2*len(pairs) - len(ids) and entries = dim*stored. The 56-cell sphere reached
+    # 10,840,896 of them in each of rr/cc/vv (1,826,928 pairs, 40,224 active rows), every one
+    # of which was a boxed Python float or int. The arithmetic below is unchanged: each slice
+    # assignment evaluates the same product in the same order as the scalar append it
+    # replaces, and the order entries reach coo_matrix is the same, so the assembled matrix
+    # is bit identical at a fixed BLAS thread count.
+    stored=2*len(pairs)-len(ids)
+    rhs=np.empty(dim*len(ids))
+    rr=np.empty(dim*stored,dtype=np.int64);cc=np.empty_like(rr);vv=np.empty(dim*stored)
+    span=np.arange(dim)
+    for row,i in enumerate(ids):
         c=axes[i];n=normals[i];nn=np.outer(n,n);pt=np.eye(dim)-nn
         gamma=np.eye(dim)[c]+(1/eps-1)*ell[i]*nn[c]
         a,b=baseline.indptr[i:i+2];js=baseline.indices[a:b]
         pis=np.eye(dim)[axes[js]]+(eps-1)*area[js,None]*pt[axes[js]]
-        rhs.extend(gamma-baseline.data[a:b]@pis)
+        rhs[dim*row:dim*row+dim]=gamma-baseline.data[a:b]@pis
+    at=0
     for k,(i,j) in enumerate(pairs):
         for target,source in ((i,j),) if i==j else ((i,j),(j,i)):
             c=axes[source];n=normals[target];pt=np.eye(dim)-np.outer(n,n)
             pi=np.eye(dim)[c]+(eps-1)*area[source]*pt[c]
-            for a in range(dim):
-                rr.append(dim*rowids[target]+a);cc.append(k)
-                vv.append(pi[a]*weight[i]*weight[j]/(1. if i==j else np.sqrt(2.)))
+            rr[at:at+dim]=dim*rowids[target]+span;cc[at:at+dim]=k
+            vv[at:at+dim]=pi*weight[i]*weight[j]/(1. if i==j else np.sqrt(2.))
+            at+=dim
+    if at!=dim*stored: raise ValueError(f'StencilAssemblyRefused: {at} of {dim*stored} entries')
     constraints=coo_matrix((vv,(rr,cc)),shape=(dim*len(ids),len(pairs))).tocsr()
-    rhs=np.array(rhs)
     # Floating-point solver request; actual residual and stop code retained.
     # The initial static screen needed at most 563/340 = 1.656 iterations
     # per equation. Round that measured iteration cap upward to two.
@@ -75,11 +87,14 @@ def fit(points, axes, normals, signed, ell, area, eps, reach=2., periodic=None, 
     solved=lsmr(balanced,rhs*scale,atol=np.finfo(float).eps,btol=np.finfo(float).eps,
                 conlim=1/np.finfo(float).eps,maxiter=2*len(rhs))
     err=constraints@solved[0]-rhs
-    rows=[];cols=[];values=[]
+    rows=np.empty(stored,dtype=np.int64);cols=np.empty_like(rows);values=np.empty(stored)
+    at=0
     for k,(i,j) in enumerate(pairs):
         v=solved[0][k]*weight[i]*weight[j]/(1. if i==j else np.sqrt(2.))
-        rows.append(i);cols.append(j);values.append(v)
-        if i!=j: rows.append(j);cols.append(i);values.append(v)
+        rows[at]=i;cols[at]=j;values[at]=v;at+=1
+        if i!=j:
+            rows[at]=j;cols[at]=i;values[at]=v;at+=1
+    if at!=stored: raise ValueError(f'StencilAssemblyRefused: {at} of {stored} stored entries')
     matrix=(baseline+coo_matrix((values,(rows,cols)),shape=(count,count))).tocsr()
     low,vec=eigsh(matrix,k=1,which='SA')
     residual=float(np.linalg.norm(matrix@vec[:,0]-low[0]*vec[:,0]))
@@ -158,7 +173,13 @@ def triplet_baseline(nodes,dx,center,radius,eps,components):
     dim=len(components);study=tc if dim==2 else ts
     _,blocks=(study.circle_maps if dim==2 else study.sphere_maps)(nodes,dx,center,radius,eps)
     shape=nodes.shape[:-1];size=int(np.prod(shape));ids=np.arange(size).reshape(shape)
-    rows=[];cols=[];vals=[]
+    # Preallocated at the exact upper bound and sliced to what was written: each of the
+    # len(ORIENTATIONS)*dim*dim blocks covers at most the whole lattice, and covers less
+    # exactly where a rolled component has no source cell. The 56-cell sphere reached
+    # 10.8M appended entries here as well; nothing about the values or their order changes.
+    rows=np.empty(len(study.ORIENTATIONS)*dim*dim*size,dtype=np.int64)
+    cols=np.empty_like(rows);vals=np.empty(len(rows))
+    at=0
     for k,orient in enumerate(study.ORIENTATIONS):
         index=[];valid=[]
         for i,sign in enumerate(orient):
@@ -170,10 +191,11 @@ def triplet_baseline(nodes,dx,center,radius,eps,components):
             index.append(src);valid.append(mask)
         for i in range(dim):
             for j in range(dim):
-                mask=valid[i]&valid[j]
-                rows.extend((i*size+index[i][mask]).ravel());cols.extend((j*size+index[j][mask]).ravel())
-                vals.extend(((blocks[k,...,i,j]-(1 if i==j else 0))/len(study.ORIENTATIONS))[mask].ravel())
-    return (diags(np.ones(dim*size))+coo_matrix((vals,(rows,cols)),shape=(dim*size,dim*size))).tocsr()
+                mask=valid[i]&valid[j];taken=int(mask.sum())
+                rows[at:at+taken]=(i*size+index[i][mask]).ravel();cols[at:at+taken]=(j*size+index[j][mask]).ravel()
+                vals[at:at+taken]=((blocks[k,...,i,j]-(1 if i==j else 0))/len(study.ORIENTATIONS))[mask].ravel()
+                at+=taken
+    return (diags(np.ones(dim*size))+coo_matrix((vals[:at],(rows[:at],cols[:at])),shape=(dim*size,dim*size))).tocsr()
 
 
 def geometry(nodes, dx, center, radius, eps, components, baseline_kind='triplet'):

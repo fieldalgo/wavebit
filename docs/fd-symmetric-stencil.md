@@ -342,6 +342,62 @@ compiled execution. All ten added cases have mutation witnesses, as do the
 eight modified product cases, and restoration is byte-exact. The research
 module now contains 65 test cases, including the two physical controls.
 
+## Preparation assembly storage
+
+`fit` and `triplet_baseline` built their sparse triplets in Python lists. At 56
+cells that is `10,840,896` appended entries in each of the three constraint
+lists -- `3*(2*unknowns - active rows)` at `1,826,928` unknowns and `40,224`
+active rows -- and every one of them a boxed Python float or int. They are now
+preallocated arrays: at exact counts in `fit`, where one `dim`-block of entries
+belongs to each diagonal pair and two to each off-diagonal one, and at the exact
+upper bound with a closing slice in `triplet_baseline`, where a block covers at
+most the whole lattice. No arithmetic, no ordering and no stored value changes.
+
+Measured on six preparation fixtures in one process -- two exact periodic planar
+interfaces and four sphere bands, the largest `23^3` nodes at radius 7 cells,
+`959,383` stored nonzeros and 543 LSMR iterations -- with
+`OMP_NUM_THREADS=OPENBLAS_NUM_THREADS=MKL_NUM_THREADS=2`:
+
+| | Before (two runs) | After |
+| --- | ---: | ---: |
+| Peak working set, whole process | 577,585,152 / 577,556,480 bytes | 396,943,360 bytes |
+| Six-fixture assembly time | 25.189 / 22.808 s | 23.688 s |
+
+That is `-180,641,792` bytes, `-31.28%`, against a before-to-before spread of
+`0.005%`. **No speed claim is made**: the two unchanged runs bracket the changed
+one, which is what "not separable from run-to-run spread" looks like.
+
+Everything that is a function of the code is byte identical across the change on
+all six fixtures: the assembled matrix's data, indices and indptr, the balanced
+least-squares matrix and the right-hand side handed to LSMR, the solution it
+returned with its stop code and iteration count, the four padded arrays, and
+eleven of the thirteen report scalars.
+
+**Two report scalars are not a function of the code.** `minimum_eigenvalue` and
+`eigenpair_residual` come from `eigsh(matrix, k=1, which='SA')` called with no
+starting vector, so ARPACK draws a random one. Two runs of the *unchanged*
+source move `minimum_eigenvalue` by `1.750e-15` to `9.106e-15` relative over
+these six fixtures, and `eigenpair_residual` by up to `66%`; the change moves
+them by `1.592e-15` to `6.524e-15` and up to `114%`, inside and beside that
+control. The comparison above therefore holds the two out and records the
+control next to them rather than calling their agreement a result. This is
+recorded as an open defect, not as a tolerance: `replace` gates on
+`report['minimum_eigenvalue'] > 0`, and every measurement record that carries
+one carries a number a rerun will not reproduce. Nothing here changes it.
+
+The thread count is held fixed on purpose. The assembled matrix data digest
+differs between 1, 2 and 4 BLAS threads -- at most `1.1102230246251565e-16` on
+90 percent of the nonzeros, with identical sparsity and identical iteration
+count -- while two runs at one thread count agree. Every comparison above is at
+two threads, and a comparison across thread counts would say nothing.
+
+Reversing the `dim` constraint rows each pair writes -- an actual source
+mutation of the new code -- reddens `test_exact_static_planar_states` on both
+normals and `test_thirty_planar_interface_offsets`, taking the planar
+consistency residual from `2.220446e-15` to `.101084`, and moves the matrix,
+right-hand side and solution digests on every fixture. Sixty other cases in the
+module survive it, so the planar states are what holds this line.
+
 ## Large high-index sphere: time and bandwidth controls
 
 The radius/wavelength `.25`, epsilon-12 origin sphere now uses the same
