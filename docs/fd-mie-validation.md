@@ -24,6 +24,14 @@ Targets: `tests/references/mie.py`, `studies/fdtd_subpixel_mie_cylinder.py`,
 
 ## TL;DR
 
+Latest material result: the [symmetric extended stencil](fd-symmetric-stencil.md)
+passes the cylinder, glass and weak finite convergence controls with mean
+orders **2.137819, 2.063617 and 2.057240**, using the same construction.
+The small high-index sphere error is **2.468123% < 3%**. This is still research
+code: the large high-index sphere and public integration remain unvalidated.
+The public cylinder failure below is not yet repaired in `fd.run`; C3 remains
+incomplete. The following earlier experiments are retained as history.
+
 Latest radiation result: the separately derived lattice map,
 `FarField(propagation='yee')`, reduces the weak-sphere optical residuals to
 **+.0264028%/-.0433575%/-.00357156%** on the unchanged 20/28/40-cell
@@ -1949,8 +1957,16 @@ error **0.740709%**. All 24 calculations exited normally as one finite
 batch (exit zero), with unchanged numerical sources. The small epsilon-12
 sphere control has error **2.468123%**, below its unchanged 3% limit.
 
-The cylinder control passes. C3 still requires new glass, weak and large
-high-index sphere measurements with this same operator, followed by the
-public preparation/integration review. The earlier public sphere fits
-belong to a different operator and cannot be combined with this cylinder
-result to claim a C3 pass. C4 remains pending.
+The cylinder control passes. New glass and weak sphere studies now use the
+same construction at 20/28/40 cells and all three historical placements.
+Their mean/RMS orders are **2.063617/2.063844** and **2.057240/2.057310**,
+respectively; mean fit scatter is **.625985%/.231425%**. Both finite
+convergence controls pass. A preparation audit also caught the old absorption
+surface cutting the extended material support at the two shifted coarse
+placements. The research API now refuses such a surface and accepts an
+explicitly enlarged enclosing box. The outer scattering surfaces are clear.
+
+C3 still requires a fresh large high-index sphere study with this operator,
+followed by public preparation/integration and physical source-defect review.
+The earlier public sphere fits belong to a different operator and cannot be
+combined with this cylinder result to claim a C3 pass. C4 remains pending.

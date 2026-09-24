@@ -238,3 +238,115 @@ def test_replacement_refuses_scope_before_assembly(monkeypatch):
     monkeypatch.setattr(study,'geometry',forbidden)
     with pytest.raises(ValueError,match='StencilScopeRefused'):
         study.replace(scene.replace(background=2.),p,{},(0.,0.),.15,12.,(1,2))
+
+
+@lru_cache(maxsize=3)
+def sphere_surface_fixture(placement):
+    import warnings
+    from studies.fdtd_subpixel_mie_sphere import sphere_scene
+    from wavebit.fd._lower import plan
+    from wavebit.fd._lower.constitutive import common_points
+    offsets=((0.,0.,0.),(.5,1/3,.2),(.25,2/3,.4))
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        scene=sphere_scene(20,2.25,24.,offsets[placement],propagation='yee')
+        p=plan(scene)
+    box=tuple((lo-3,hi+3) for lo,hi in p.constitutive[0].box)
+    nodes=common_points(p.grid,tuple(reversed(box)),'E')
+    matrix,report=study.geometry(nodes,p.dx,scene.structures[0].shape.center,.25,2.25,(0,1,2))
+    return scene,p,box,matrix,report
+
+
+@pytest.mark.parametrize('placement',(1,2))
+def test_cut_nonlocal_flux_surface_is_refused(placement):
+    scene,p,box,matrix,_=sphere_surface_fixture(placement)
+    # Measured outside coefficients: 1.60439e-8 / 3.88092e-7; exact
+    # nonzero support is checked, with no fitted small-coefficient waiver.
+    with pytest.raises(ValueError,match='StencilSurfaceRefused'):
+        study.surface_clearance(scene,p,matrix,box,(0,1,2))
+
+
+@pytest.mark.parametrize('placement,half',((0,.4),(2,.45)))
+def test_flux_surface_encloses_the_complete_stencil(placement,half):
+    import dataclasses
+    import wavebit.fd as fd
+    scene,p,box,matrix,_=sphere_surface_fixture(placement)
+    scene=scene.replace(monitors=tuple(dataclasses.replace(m,box=fd.Box(size=(2*half,)*3))
+        if m.name=='abs' else m for m in scene.monitors))
+    failure=None
+    try:reports=study.surface_clearance(scene,p,matrix,box,(0,1,2))
+    except ValueError as error:failure=str(error)
+    assert failure is None,failure
+    assert dict((r['name'],r['relation']) for r in reports)['abs']=='encloses'
+
+
+def test_replacement_checks_surfaces_before_energy_certification(monkeypatch):
+    from wavebit.fd._lower import lower
+    scene,p,box,matrix,report=sphere_surface_fixture(2)
+    monkeypatch.setattr(study,'geometry',lambda *a,**k:(matrix,dict(report)))
+    def forbidden(*args):
+        assert False,'Cut surface reached the energy certificate'
+    monkeypatch.setattr(study,'energy_bounds',forbidden)
+    with pytest.raises(ValueError,match='StencilSurfaceRefused'):
+        study.replace(scene,p,lower(scene,p,'numpy'),scene.structures[0].shape.center,.25,2.25,(0,1,2))
+
+
+@pytest.mark.parametrize('kind',('tfsf','plane_wave'))
+def test_source_injection_requires_a_vacuum_band(kind):
+    import dataclasses
+    import wavebit.fd as fd
+    if kind=='tfsf':
+        scene,p,box,matrix,_=sphere_surface_fixture(0);components=(0,1,2)
+        source=dataclasses.replace(scene.sources[0],box=fd.Box(size=(.8,)*3))
+    else:
+        from wavebit.fd._lower.constitutive import common_points
+        scene,p=scope_fixture();components=(1,2)
+        box=tuple((lo-3,hi+3) if axis<2 else (lo,hi)
+                  for axis,(lo,hi) in enumerate(p.constitutive[0].box))
+        nodes=common_points(p.grid,tuple(reversed(box)),'E')[...,components]
+        matrix,_=study.geometry(nodes,p.dx,(0.,0.),.15,12.,components)
+        source=dataclasses.replace(scene.sources[0],z=0.)
+    with pytest.raises(ValueError,match='StencilSourceRefused'):
+        study.surface_clearance(scene.replace(sources=(source,)),p,matrix,box,components)
+
+
+def test_interior_field_samples_are_allowed():
+    import wavebit.fd as fd
+    scene,p,box,matrix,_=sphere_surface_fixture(2)
+    scene=scene.replace(monitors=(fd.Field('interior',box=fd.Box(size=(.3,)*3),wavelengths=(1.,)),))
+    failure=None
+    try:study.surface_clearance(scene,p,matrix,box,(0,1,2))
+    except ValueError as error:failure=str(error)
+    assert failure is None,failure
+
+
+def test_research_source_scope_is_named():
+    import wavebit.fd as fd
+    scene,p,box,matrix,_=sphere_surface_fixture(0)
+    source=fd.Dipole('point',component='Ex',center=(0.,0.,0.),band=fd.Band(wavelength=1.,df=.1))
+    with pytest.raises(ValueError,match='StencilScopeRefused'):
+        study.surface_clearance(scene.replace(sources=(source,)),p,matrix,box,(0,1,2))
+
+
+def test_research_plane_flux_scope_is_named():
+    import wavebit.fd as fd
+    scene,p,box,matrix,_=sphere_surface_fixture(0)
+    scene=scene.replace(monitors=(fd.Flux('plane',plane=fd.Plane(z=.5),wavelengths=(1.,)),))
+    failure=None
+    try:study.surface_clearance(scene,p,matrix,box,(0,1,2))
+    except Exception as error:failure=error
+    assert isinstance(failure,ValueError) and 'StencilScopeRefused' in str(failure)
+
+
+def test_explicit_absorption_surface_reaches_preparation(monkeypatch):
+    scene,p,box,matrix,_=sphere_surface_fixture(2)
+    class PreparationObserved(Exception):pass
+    def inspect(actual,actual_plan,*args):
+        study.surface_clearance(actual,actual_plan,matrix,box,(0,1,2))
+        raise PreparationObserved
+    monkeypatch.setattr(study,'replace',inspect)
+    observed=False
+    try:study.sphere(20,2.25,24.,.25,(.25,2/3,.4),absorption_half=.45)
+    except PreparationObserved:observed=True
+    except ValueError:pass
+    assert observed,'The explicitly enclosing surface never reached preparation'

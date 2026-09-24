@@ -254,6 +254,44 @@ def validate_scope(scene,p,center,radius,eps,components):
         raise ValueError('StencilScopeRefused: a concrete float64 lossless sphere or historical TE cylinder in vacuum is required')
 
 
+def surface_clearance(scene,p,matrix,box,components):
+    """Check actual material rows against snapped source/flux surfaces."""
+    import wavebit.fd as fd
+    from wavebit.fd._lower.monitors import _box_nodes,_node
+    delta=matrix-diags(np.ones(matrix.shape[0]));delta.eliminate_zeros()
+    used=np.flatnonzero(np.diff(delta.indptr)>0)
+    if not len(used):return []
+    shape=tuple(hi-lo for lo,hi in box);size=int(np.prod(shape))
+    z,y,x=np.unravel_index(used%size,shape)
+    points=np.column_stack((x+box[2][0],y+box[1][0],z+box[0][0])).astype(float)
+    points[np.arange(len(used)),np.asarray(components)[used//size]]+=.5
+    low=points.min(axis=0);high=points.max(axis=0);reports=[]
+    for monitor in scene.monitors:
+        if not isinstance(monitor,(fd.Flux,fd.FarField)):continue
+        if monitor.box is None:raise ValueError('StencilScopeRefused: research flux monitors need a closed box')
+        lo,hi=_box_nodes(monitor.name,p.grid,monitor.box)
+        inside=np.all((low>lo)&(high<hi))
+        outside=np.any((high<lo)|(low>hi))
+        if not (inside or outside):
+            raise ValueError(f'StencilSurfaceRefused: {monitor.name} cuts nonlocal material support at nodes {low.tolist()}..{high.tolist()}')
+        reports.append(dict(name=monitor.name,relation='encloses' if inside else 'excludes'))
+    for source in scene.sources:
+        if isinstance(source,fd.TFSF):
+            lo,hi=_box_nodes(source.name,p.grid,source.box)
+            # The existing TFSF face correction reads the node and adjacent
+            # half plane. Reserve its one-cell injection band in vacuum.
+            clear=np.all((low>np.asarray(lo)+1)&(high<np.asarray(hi)-1))
+        elif isinstance(source,fd.PlaneWave):
+            axis=source.axis;k=_node(p.grid,axis,source.position)
+            clear=high[axis]<k-1 or low[axis]>k+1
+        else:
+            raise ValueError('StencilScopeRefused: only the research TFSF/PlaneWave sources are supported')
+        if not clear:
+            raise ValueError(f'StencilSourceRefused: {source.name} injection band meets nonlocal material support')
+        reports.append(dict(name=source.name,relation='injection_band_clear'))
+    return reports
+
+
 def replace(scene,p,params,center,radius,eps,components):
     validate_scope(scene,p,center,radius,eps,components)
     from wavebit.fd._lower.constitutive import common_points
@@ -268,6 +306,7 @@ def replace(scene,p,params,center,radius,eps,components):
     term=StencilTerm(old.name,old.field,Region(z=box[0],y=box[1],x=box[2]),old.ratio,old.masks,components)
     nodes=common_points(p.grid,tuple(reversed(box)),'E')[...,components]
     matrix,report=geometry(nodes,p.dx,center,radius,eps,components)
+    report['surface_clearance']=surface_clearance(scene,p,matrix,box,components)
     # The static width/size screen measured <=7.673e-14; 1e-11 is over
     # 100 times that rounding scale. It is not a scattering-accuracy gate.
     if report['lsmr_stop'] not in (0,1,2) or report['residual_max']>1e-11:
@@ -325,14 +364,21 @@ def cylinder(cpw=40,placement=(0.,0.)):
         interior_energy=dict(time=np.asarray(times).tolist(),value=np.asarray(energies).tolist()))
 
 
-def sphere(cpw=40,eps=12.,periods=48.,radius=.1,placement=(0.,0.,0.)):
+def sphere(cpw=40,eps=12.,periods=48.,radius=.1,placement=(0.,0.,0.),absorption_half=.4):
     import time
+    import wavebit.fd as fd
     from studies.fdtd_subpixel_mie_sphere import sphere_scene,read_result
     from wavebit.fd._lower import plan,lower
     from wavebit.fd._runtime import runtime
     from wavebit.fd._run import execute,_results
     begin=time.perf_counter()
     scene=sphere_scene(cpw,eps,periods,placement,radius=radius,propagation='yee')
+    # The shifted 20-cell radius-.25 audit found 22/45 nonvacuum rows on
+    # the old .4-halfwidth surface; .45 enclosed all of them exactly.
+    # This is an explicit experiment input, never an automatic relocation.
+    if absorption_half!=.4:
+        scene=scene.replace(monitors=tuple(dataclasses.replace(m,box=fd.Box(size=(2*absorption_half,)*3))
+            if m.name=='abs' else m for m in scene.monitors))
     p=plan(scene)
     center=scene.structures[0].shape.center
     p,params,bounds=replace(scene,p,lower(scene,p,'numpy'),center,radius,eps,(0,1,2))
@@ -340,7 +386,7 @@ def sphere(cpw=40,eps=12.,periods=48.,radius=.1,placement=(0.,0.,0.)):
     rt=runtime('jax');res=_results(scene,p,execute(p,params,rt),rt,params)
     row=read_result(res,eps,radius)
     times,energy=res.diagnostics['interior_energy']
-    row.update(cpw=cpw,eps=eps,radius=radius,periods=periods,placement=placement,
+    row.update(cpw=cpw,eps=eps,radius=radius,periods=periods,placement=placement,absorption_half=absorption_half,
         preparation=bounds,interior_energy=dict(time=np.asarray(times).tolist(),value=np.asarray(energy).tolist()),
         seconds=time.perf_counter()-begin)
     return row
@@ -352,8 +398,10 @@ if __name__=='__main__':
     parser.add_argument('output',type=Path)
     parser.add_argument('--shape',choices=('cylinder','sphere'),default='cylinder')
     parser.add_argument('--cpw',type=int,default=40)
+    parser.add_argument('--absorption-half',type=float,default=.4,help='Explicit sphere absorption surface half-width')
     parser.add_argument('--sweep-cylinder',action='store_true',help='All historical 40/56/80 by eight placement cases')
     args=parser.parse_args();out=args.output
+    if args.shape!='sphere' and args.absorption_half!=.4:parser.error('--absorption-half requires --shape sphere')
     if out.exists(): raise ValueError('DuplicateMeasurementRefused')
     watched=list((ROOT/'wavebit/fd').rglob('*.py'))+list((ROOT/'studies').glob('fdtd_subpixel*.py'))+[Path(__file__)]
     def hashes():return {p.relative_to(ROOT).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in watched}
@@ -388,7 +436,7 @@ if __name__=='__main__':
             save();raise
         sys.exit(0)
     with warnings.catch_warnings(record=True) as notes:
-        row=(cylinder if args.shape=='cylinder' else sphere)(args.cpw)
+        row=cylinder(args.cpw) if args.shape=='cylinder' else sphere(args.cpw,absorption_half=args.absorption_half)
     assert before==hashes()
     out.write_text(json.dumps(dict(status='research_control_not_C3_pass',source_sha256=before,
         source_unchanged=True,warnings=[str(w.message) for w in notes],row=row),indent=2)+'\n')

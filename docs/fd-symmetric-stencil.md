@@ -184,12 +184,13 @@ cross section by at most `1.665981e-6` relative. The smallest certified
 energy lower bound is `.01654609`; the largest squared time-step rate
 is `.28466859`. Static constraint residuals are at most `2.296774e-15`.
 There are no captured run warnings. The small-sphere control above still
-uses exactly this material construction, but glass, weak and large
-high-index spheres require fresh spatial and temporal controls.
+uses exactly this material construction. The glass and weak controls below
+extend it; the large high-index sphere still needs fresh temporal and spatial
+controls.
 
 ## Regression and source-defect witnesses
 
-The final fast suite reports **1,997 passed and six expected NumPy
+The `fa82487` checkpoint fast suite reports **1,997 passed and six expected NumPy
 differentiation skips**, exit zero, with **2,003 collected and 2,003
 reported**. The two affected slow physical controls both pass, collected
 and reported as two cases, exit zero. This run does not repeat the
@@ -203,7 +204,7 @@ The original 11 source mutations produce 22 assertion failures. Three
 additional scope/call/time-step mutations produce another 25, including
 all 21 unsupported inputs, bypassing the preparation guard, and excessive,
 NaN and zero time steps. Every injected source is restored byte for byte;
-the combined witnesses cover all 44 current research tests. The first
+the combined witnesses cover all 44 research tests at that checkpoint. The first
 guard implementation mishandled normalized three-component materials and
 the first mask fixture was not serializable. Both failed healthy tests,
 were corrected, and the final suite above was run after restoration.
@@ -223,3 +224,84 @@ Use fresh output filenames. The finite sweep refuses duplicate outputs,
 records progress after each condition and refuses a source change or an
 unresolved late-field control. Its completion status explicitly says
 `completed_measurements_not_C3_pass`.
+
+## Glass and weak sphere refinement
+
+The same material construction, with the independently derived Yee radiation
+map, completed 18 conditions: epsilon 2.25 and 1.1, 20/28/40 cells per wavelength,
+and the three historical offsets `(0,0,0)`, `(.5,1/3,.2)` and `(.25,2/3,.4)`
+in cell units. Radius is .25 wavelengths. Numerical source hashes stayed
+unchanged and the finite batch exited zero. No placements were discarded.
+
+| Epsilon | Mean errors at 20 / 28 / 40 cells | Mean / RMS order | Mean / RMS fit scatter |
+| --- | --- | --- | --- |
+| 2.25 | 2.689504% / 1.330501% / .643254% | 2.063617 / 2.063844 | .625985% / .631509% |
+| 1.1 | 1.713313% / .860472% / .411694% | 2.057240 / 2.057310 | .231425% / .228431% |
+
+Both mean and RMS error series are monotone, their orders exceed the unchanged
+1.8 requirement, and fit scatter is below 10%. The finest errors exceed ten
+times the previously measured `9.7e-5` empty-scene floor. These two finite
+convergence controls pass. They do not complete C3 or certify the public map.
+
+The origin glass temporal control extends 24 to 48 periods at 20 cells.
+Scattering efficiency changes by `3.31443e-7` relative, the complex forward
+field by `4.84350e-7`, and the peak-normalized angular cuts by `7.69836e-7`.
+This measured extension supports using 24 periods for this study with retained
+per-case decay records. It is not a general duration certificate.
+
+At 40 cells the origin glass has apparent absorption `2.46463e-7`, optical
+closure `1.14905e-5`, flux-surface closure `-7.58102e-8`, and angular-integral
+closure `5.22945e-7`. Angular peak errors are .675997%/.726452%. The two
+90-degree errors are +1.07356%/-.459428%. These satisfy the existing central
+glass instrument limits. With the enclosing absorption surfaces described below,
+the weak-sphere 20-cell optical residuals are +.026644%/-.017002%/-.026287%
+across the three placements. The original shifted values through the cut surface
+are retained in the record. The old continuum 52%/26%/13% record remains in the
+historical radiation investigation.
+
+## Nonlocal material support and measurement surfaces
+
+The material matrix couples multiple nearby edges. A flux box surrounding the
+geometric sphere can still cut that coupling. An exact nonzero-row audit of
+`K-I` found 22 and 45 material rows outside the old absorption half-width .4
+at the two shifted 20-cell placements. The largest affected coefficients
+are `1.604388e-8` and `3.880915e-7`. No tolerance discards these coefficients.
+Half-width .45 encloses every material row at all three coarse placements.
+The existing source, scattering and far-field surfaces are already clear.
+
+Preparation now checks snapped surfaces against the actual material rows.
+A cut flux or far-field surface raises `StencilSurfaceRefused`; an intersecting
+source injection band raises `StencilSourceRefused`. Unsupported source or
+open flux geometry raises `StencilScopeRefused`. Interior field samples remain
+allowed. The check happens once before energy certification and time stepping.
+No exception is introduced inside a numerical loop.
+
+The absorption half-width is an explicit research input, never silently moved.
+Four corrected coarse controls repeat both shifted placements at both contrasts
+with half-width .45. The original absorption values are retained as measurements
+through a cut surface and cannot certify enclosed-object absorption. Outer
+scattering and complex forward fields are compared directly in the accompanying
+record. All four corrected calculations exit zero; both observables are exactly
+unchanged in every case. Apparent absorption is `1.18292e-6` through `1.32389e-6`,
+and the largest late-monitor energy fraction is `5.22536e-9`. These finite-record
+absorption values are retained, not described as exact zero. This surface guard
+does not change the material matrix.
+
+After source restoration, the affected fast suite collects and reports **118
+passing cases**, and the two slow physical controls both pass. Every process
+exits zero, with no errors or `INTERNALERROR`; numerical source digests remain
+unchanged. Stage 0/1/2/3 again reproduce **143/288/140/570 arrays bit for bit**.
+The unrelated full-suite result above is historical and was not rerun for this
+research-only surface guard.
+
+Eight new source mutations cause 12 assertion failures, covering all 11 new
+surface/source cases. They remove the cut-surface or injection-band checks,
+bypass preparation, reject valid enclosed boxes or interior field samples,
+remove named scope checks, or ignore the explicit absorption width. Source
+restoration is byte-exact. Including the earlier audits, 22 mutation variants
+produce 59 assertion failures covering the current 55 research cases; some
+variants exercise related defect classes and are not 22 distinct bugs.
+
+The large epsilon-12 sphere, public integration and the corresponding physical
+source-defect witnesses remain required before a C3 pass. Geometry differentiation
+and general support/rank events are still outside this research implementation.
