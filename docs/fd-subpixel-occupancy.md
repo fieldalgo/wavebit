@@ -297,15 +297,88 @@ with what they changed, because a mutant that survives is a measurement of the g
 | `circle_fraction`'s `xp` argument dropped | 1 |
 | `circle_fraction`'s lift built with `np.stack` again | 1 |
 
-The safe denominator passed all twelve tests at first, because its caller pins the
+The safe denominator passed all twelve tests at first, because its caller pinned the
 argument to the dead end of a `clip` whose transpose is a `select`, and a `select`
-discards a NaN cotangent instead of multiplying by it. The guard is still correct and
+discards a NaN cotangent instead of multiplying by it. **That stopped being true one
+paragraph later, and the sentence is corrected here rather than left standing**
+(2026-09-24, re-run): the clip in question is the edge's, which the next paragraph
+deleted, and deleting it took the mask with it. The mutant now drives the loss gradient of
+`test_the_interface_cuts_differentiate_where_a_step_is_exactly_zero` to NaN on both JAX and
+Torch and reddens both of its cases directly, before the helper check is reached. The
+`where(a > 0, ...)` that remains at the end of `_edge_parts` does not mask it: a `where`
+hands its unselected branch a zero cotangent, and zero times the infinity that `u**3 / 0`
+differentiates to is NaN -- which is the reason the safe denominator is written before the
+division rather than after it. The guard is still correct and
 still there; what was added is a check of the invariant where it lives rather than a
 second argument about the caller. Dropping the **edge's** clip also passed all twelve,
 and that mutant was right: over 2000 normals at depths of 1 to 1e12 voxels, clipped and
 unclipped agree to 0.0 exactly, because the one-dimensional form returns the constant 1
 instead of differencing two large numbers. That clip was deleted; the dual face's, worth
 1.9e-3 at the same depth, is the one the table above mutates.
+
+### Two corrections to the forms above
+
+Written: 2026-09-25, after review. No physics moves: `edge_cut` and `face_cut` are
+reached by no scene, no plan and no golden -- nothing in `wavebit/` calls either -- and
+the checks at the end of this section are what says the rest of the package is where it
+was.
+
+**A decided dual face is now exactly 0 or 1.** `face_cut` returned `1 +/- 2.220446e-16`
+for a cell the interface does not reach: the clip on `c` pins it to `[0, total]`, but the
+divided difference then evaluates `(2 a_1 + 2 a_2 - a_2 - a_2) / (2 a_1)`, which is one in
+exact arithmetic and one plus or minus an ulp in three roundings. Over 2000 unit normals
+at depths of 1, 10, 1e3, 1e6 and 1e12 voxels, at every one of those depths, 151 read one
+ulp above and 151 one ulp below; the worst over a slide of the plane across the cell was
+`1.0000000000000002`. A fraction outside `[0, 1]` is not a rounding detail to a rule that
+divides by `f` and by `1 - f`, and this package had already refused the same thing once,
+in `Sphere.exact_edge_fill`, whose world-coordinate spelling was rejected for returning
+`1 + 8.88178e-16`. The two decided cases are now *selected* instead of computed:
+`total/2` is the square's own support in the direction `n`, so the square lies wholly
+inside the half space exactly when `-d >= total/2` and wholly outside exactly when
+`-d <= -total/2`. That is an exact predicate on the same numbers, not a tolerance, and it
+is the argument `_decided` already makes one dimension further down. `edge_cut` needed
+nothing: its top piece is the literal constant and its middle piece divides `t <= a` by
+`a`, so the same sweep measures its worst at exactly 1.0 and its least at exactly 0.0.
+
+The three-dimensional `cut` is **deliberately** not changed, and the measurement is the
+reason it is written down rather than quietly fixed. On the same 2000 normals at the same
+five depths it reads between `0.99999999999999933` and `1.0000000000000007` for a voxel
+the interface does not reach -- **519 of 2000 above one and 1050 of 2000 not exactly 0 or
+1**, at every depth, and `1.0000000000000004` worst over the slide. That is three ulps
+where the dual face had one, and it is a wider defect than the one this section fixes. But
+`cut` is the routed form: every `occupancy` of every scene goes through it, and the same
+select there moves coefficients that the frozen archives pin, which is a measurement and a
+regeneration and not a minor. **Open, with its number, not fixed here.**
+
+**`Sphere`'s two interface methods now door `dx`.** `edge_cut` and `face_cut` have doored
+it since they landed; `Sphere.exact_edge_fill` and `Sphere.exact_face_fill` did not,
+although they are public methods reached directly rather than through `occupancy`, which
+is where `Sphere.exact_fill` gets its door. Everything inside them is written in units of
+`dx`. Measured with the doors removed, three points about a radius-0.25 ball at
+`|dx| = 0.05`: a negative `dx` divides the edge's two clips by it and swaps them, so the
+two segments that read `1.0` at `+0.05` read `0.0` -- a wholly filled edge reported as
+empty. The same input reads exactly the positive answer on the **face**, whose every
+quantity is squared. A `dx` of zero reads `nan` on the face and `1.0` on the edge, through
+a clip of an infinity. One invalid input, three different behaviours, no refusal anywhere:
+the argument for the door rather than for a downstream comparison.
+
+| Mutation | Failures in `tests/test_fd_shapes.py` | The case that went red |
+| --- | ---: | --- |
+| The decided-face select dropped, leaving the clip on `c` | 1 | `test_neither_interface_cut_ever_leaves_the_unit_interval` |
+| `check_sizes` removed from `Sphere.exact_edge_fill` | 1 | `test_the_interface_cuts_refuse_a_typo_by_name` |
+| `check_sizes` removed from `Sphere.exact_face_fill` | 1 | `test_the_interface_cuts_refuse_a_typo_by_name` |
+| `_first_difference`'s safe denominator removed (re-run of the survivor above) | 2 | `test_the_interface_cuts_differentiate_where_a_step_is_exactly_zero[jax]` and `[torch]` |
+
+Each was applied alone, run against the whole file with three workers, and restored from a
+pristine copy; the restored run is 78 passed and 8 skipped with exit 0 every time. The last
+row is the survivor above, re-run: it survives no longer, and the two cases fail on the
+loss's own `assert np.isfinite(got)` rather than on the helper that was added for it --
+which is what the corrected paragraph above says.
+
+Unchanged and checked: every lowered array and plan skeleton of eleven scenes -- the six
+stage-1 reference scenes plus two `Sphere` scenes and the three CSG nodes -- is byte
+identical to a `git archive` of the parent commit, 281 quantities in all; and the four
+frozen archives reproduce 143/288/140/570 arrays bit for bit.
 
 ## Regression mutants
 

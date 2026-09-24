@@ -275,9 +275,17 @@ def test_the_study_helpers_are_the_public_forms_to_the_bit():
 
     Every number this study has measured stands on these three, so the gate is bit equality and
     not a tolerance: 4000 placements about the sphere at each of four (dx, radius) settings,
-    all three axes, plus six points chosen to sit on the degenerate cases (the centre, the two
-    chord ends of the 3/5-4/5 right triangle, a pole, a corner outside, and a radius one ulp
-    short of a pole). Measured 2026-09-24: identical at every one of them, on every axis.
+    all three axes, plus six points chosen to sit on the degenerate cases -- the centre, the
+    surface point of the 3/5-4/5 right triangle, the two opposite poles, a corner outside, and
+    a point one ulp *inside* a pole. Measured 2026-09-24: identical at every one of them, on
+    every axis.
+
+    That last point is spelled `np.nextafter(1., 0.)` and not `1. - 1e-17`, which is how it was
+    first written and is exactly `1.0`: an ulp of one is `2.220446e-16`, so `1e-17` rounds away
+    and the point was a second copy of the pole above it. The degenerate case it is there for
+    -- the chord and the disc a hair inside the surface, where the guarded root is taken of a
+    `radius**2 - transverse` of about `2.2e-16` instead of an exact zero -- was not being
+    tested at all.
 
     The mutant: delete both `Sphere` overrides so they fall back to `None`. Five tests go red,
     two of them here.
@@ -296,7 +304,8 @@ def test_the_study_helpers_are_the_public_forms_to_the_bit():
             assert np.array_equal(circle_fraction(points[:, 1:], dx, axis, radius),
                                   _replaced_circle_fraction(points[:, 1:], dx, axis, radius))
     special = np.array([[0., 0., 0.], [.6, .8, 0.], [1., 0., 0.], [1., 1., 1.],
-                        [1.-1e-17, 0., 0.], [-1., 0., 0.]])
+                        [np.nextafter(1., 0.), 0., 0.], [-1., 0., 0.]])
+    assert special[4, 0] != 1.0, 'the ulp-short point has to be short of the pole'
     for axis in range(3):
         assert np.array_equal(study.edge_fraction(special, .1, axis, 1.),
                               _replaced_edge_fraction(special, .1, axis, 1.))

@@ -23,13 +23,20 @@ three-dimensional cases from a node lattice, ``energy_bounds`` certifies the ass
 operator, and ``padded`` compresses it to its active rows. Positive energy is not assumed
 anywhere: the whole assembled operator is inspected before any field is advanced.
 
-**The seam left open.** ``geometry`` and ``triplet_baseline`` still call into ``studies/`` for
-the exact edge and face fraction helpers and for the triplet orientation maps, so those two
-import it where they use it and fail outside a checkout that has ``studies`` importable.
-:func:`prepare` names that seam in a refusal (``StencilSeamRefused``) rather than picking
-another rule behind it. Importing this module still costs nothing and pulls no study --
-``tests/test_fd_symmetric_stencil.py`` pins that -- and ``fit``, ``energy_bounds`` and
-``padded`` run with no study at all.
+**The seam, half closed.** ``geometry`` took its exact edge and face fractions from
+``studies/``; it takes them from ``wavebit/fd/_shapes``'s :class:`~wavebit.fd._shapes.Sphere`
+now, which is where those closed forms live, and the study helpers that used to own them are
+thin wrappers over the same methods. So ``fit``, ``energy_bounds``, ``padded`` and
+``geometry(..., baseline_kind=None)`` reach no study at all and run from an installed wheel.
+
+What is left is ``triplet_baseline``, which ``geometry`` calls for its default baseline: the
+triplet orientation maps and their ``ORIENTATIONS`` table are research material with no public
+equivalent, and moving them is not this commit. It imports the study where it uses it, through
+:func:`_study_module`, which **refuses by name** where ``studies/`` is not importable rather
+than failing deep inside on a module the caller never named, and :func:`prepare` names the
+same seam for a scene (``StencilSeamRefused``) rather than picking another rule behind it.
+Importing this module costs nothing and pulls no study -- ``tests/test_fd_symmetric_stencil.py``
+pins that, and pins that the public route runs with ``studies`` blocked.
 
 **Host code, not backend code.** This assembles on SciPy, on the host, in float64. It is not
 the traced, differentiable geometry path and cannot silently stand in for one: an input that
@@ -37,19 +44,67 @@ arrives as a JAX tracer or a Torch tensor is refused **by name** at :func:`prepa
 (``StencilTracedRefused``), not discretised some other way.
 """
 import hashlib
+import importlib
 
 import numpy as np
 from scipy.spatial import cKDTree
 from scipy.sparse import coo_matrix, diags
 from scipy.sparse.linalg import lsmr, eigsh
 
+from .._shapes import Sphere
+
 __all__ = ['DEFAULT', 'MEMORY_BOUND_BYTES', 'REACH', 'STENCIL', 'active_rows', 'arguments',
            'energy_bounds', 'fit', 'geometry', 'lower', 'operator_digest', 'padded',
            'predicted_bytes', 'prepare', 'prepared_digest', 'surface_clearance',
            'triplet_baseline']
 
+#: The names :func:`fit` reads a complex value out of, and refuses. Each one reaches the
+#: preallocated ``float64`` buffers below through ``gamma``, ``pis`` or ``pi``.
+_REAL_INPUTS = ('eps', 'ell', 'area', 'normals', 'baseline')
+
+
+def _study_module(name):
+    """A study module by name, refused by name where ``studies/`` is not importable.
+
+    :func:`triplet_baseline` is the one function here that still needs one: the triplet
+    orientation maps and their ``ORIENTATIONS`` table are research material with no public
+    equivalent, unlike the exact edge and face fractions, which :func:`geometry` now takes from
+    ``wavebit/fd/_shapes``. An installed wheel carries no ``studies/``, so the import fails
+    there -- and without this it fails several frames down, naming a module the caller never
+    asked for and saying nothing about the route that does work. Deferred to the call and not
+    written at the top of the file, so that importing this module still pulls no study.
+    """
+    try:
+        return importlib.import_module(f'studies.{name}')
+    except ImportError as error:
+        raise ImportError(
+            f'StencilStudyRefused: triplet_baseline() builds the research triplet baseline out '
+            f'of studies.{name}, which lives in the repository checkout and not in an installed '
+            f'wavebit. Run it from a checkout, or ask geometry(..., baseline_kind=None) for the '
+            f'diagonal baseline, which reaches no study.') from error
+
 
 def fit(points, axes, normals, signed, ell, area, eps, reach=2., periodic=None, baseline=None, lattice=None):
+    # Real inputs only, refused by name once per preparation and never per cell. The buffers
+    # below are preallocated float64, and a complex eps -- a lossy material -- would reach them
+    # through gamma, pis and pi, where numpy casts it down with a ComplexWarning rather than an
+    # error: the imaginary part would be dropped silently and the operator would look fine.
+    # This is a refusal and not a promotion to complex because the whole routine is real
+    # symmetric by construction -- lsmr solves a real least-squares problem, eigsh(which='SA')
+    # asks for a smallest algebraic eigenvalue, and energy_bounds certifies an LDL with positive
+    # pivots -- so a complex eps has no meaning here even in complex buffers. The public route
+    # cannot deliver one today -- fd.Material refuses a complex permittivity and prepare()
+    # refuses a Conductor or a Dispersive by name -- and this says so by name as well, rather
+    # than by the absence of a caller.
+    complex_inputs = [name for name, value in
+                      zip(_REAL_INPUTS, (eps, ell, area, normals,
+                                         None if baseline is None else baseline.data))
+                      if value is not None and np.iscomplexobj(value)]
+    if complex_inputs:
+        raise ValueError(f'StencilComplexRefused: the extended stencil is assembled in real '
+                         f'float64 and is real symmetric throughout; {", ".join(complex_inputs)} '
+                         f'{"is" if len(complex_inputs) == 1 else "are"} complex. A lossy '
+                         f'material has no operator here -- it is not that it is truncated.')
     # The one-cell-radius screen had minimum eigenvalue -5.84418e-4 at
     # radius 12 cells. Two cells gave +.02390 there and positive spectra
     # at radii 4/6/8. This chooses a research stencil, not a universal bound.
@@ -194,9 +249,9 @@ def energy_bounds(matrix):
 
 
 def triplet_baseline(nodes,dx,center,radius,eps,components):
-    from studies import fdtd_subpixel_triplet_cylinder as tc
-    from studies import fdtd_subpixel_triplet_sphere as ts
-    dim=len(components);study=tc if dim==2 else ts
+    dim=len(components)
+    study=_study_module('fdtd_subpixel_triplet_cylinder' if dim==2
+                        else 'fdtd_subpixel_triplet_sphere')
     _,blocks=(study.circle_maps if dim==2 else study.sphere_maps)(nodes,dx,center,radius,eps)
     shape=nodes.shape[:-1];size=int(np.prod(shape));ids=np.arange(size).reshape(shape)
     # Preallocated at the exact upper bound and sliced to what was written: each of the
@@ -225,10 +280,6 @@ def triplet_baseline(nodes,dx,center,radius,eps,components):
 
 
 def geometry(nodes, dx, center, radius, eps, components, baseline_kind='triplet'):
-    # Deferred, not top level: the exact fraction helpers still live under studies/
-    # (see the module docstring), and this module must import without them.
-    from studies.fdtd_subpixel_triplet_cylinder import circle_fraction
-    from studies.fdtd_subpixel_triplet_sphere import edge_fraction,face_fraction
     dim=len(components);shape=nodes.shape[:-1];count=int(np.prod(shape))
     pts=[];axes=[]
     lattice=[]
@@ -243,14 +294,23 @@ def geometry(nodes, dx, center, radius, eps, components, baseline_kind='triplet'
     normals=points/np.where(norm>0,norm,1.)[:,None]
     normals[norm==0]=np.eye(dim)[0]
     ell=np.zeros(len(points));area=ell.copy()
+    # The public closed forms, not the study's wrappers over them: a ball's chord along a
+    # component's edge and its cross-section in the component's dual face. Everything here is
+    # in cell units, so the body is a sphere of radius/dx at the origin and the cell is one
+    # wide. In two dimensions the study's circle is this sphere's central plane -- the lift to
+    # (0, y, z) makes the transverse sum 0*0 + t*t, which is the t**2 the circle form wrote --
+    # so the same edge fraction answers both the length and the transverse area there.
+    ball=Sphere(radius/dx)
     for c in range(dim):
         idx=axes==c
         if dim==2:
-            ell[idx]=circle_fraction(points[idx],1.,c,radius/dx)
-            area[idx]=circle_fraction(points[idx],1.,1-c,radius/dx)
+            plane=points[idx]
+            lifted=np.stack((np.zeros_like(plane[...,0]),plane[...,0],plane[...,1]),axis=-1)
+            ell[idx]=ball.exact_edge_fill(lifted,1.,c+1)
+            area[idx]=ball.exact_edge_fill(lifted,1.,(1-c)+1)
         else:
-            ell[idx]=edge_fraction(points[idx],1.,c,radius/dx)
-            area[idx]=face_fraction(points[idx],1.,c,radius/dx)
+            ell[idx]=ball.exact_edge_fill(points[idx],1.,c)
+            area[idx]=ball.exact_face_fill(points[idx],1.,c)
     baseline=triplet_baseline(nodes,dx,center,radius,eps,components) if baseline_kind=='triplet' else None
     return fit(points,axes,normals,signed,ell,area,eps,baseline=baseline,lattice=np.concatenate(lattice))
 
@@ -665,11 +725,11 @@ def prepare(scene, plan):
             f'that has not been measured there -- measure it at that size first.')
     try:
         matrix, report = geometry(*args)
-    except ModuleNotFoundError as err:
+    except ImportError as err:
         raise ValueError(
-            f'StencilSeamRefused: the operator\'s triplet baseline and exact fraction helpers '
-            f'still live under studies/ and this checkout cannot import them ({err}). That '
-            f'seam is named in this module\'s docstring and closing it is its own commit; '
+            f'StencilSeamRefused: the operator\'s triplet baseline still lives under studies/ '
+            f'and this checkout cannot import it ({err}). That seam is named in this '
+            f'module\'s docstring and closing it is its own commit; '
             f'until then discretisation={STENCIL!r} runs from a checkout and not from an '
             f'installed wheel. It is refused rather than prepared some other way.') from err
     report['surface_clearance'] = surface_clearance(scene, plan, matrix, box, components)

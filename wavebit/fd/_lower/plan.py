@@ -101,6 +101,22 @@ def _digest(v):
     ``repr()``, no address (memory ``a-digest-you-did-not-validate``), which is what lets the
     freezers' two-freeze check still hold.
 
+    **That claim is enforced here and not merely asserted.** ``np.ascontiguousarray`` takes
+    *anything*, and what it makes of a list of Python objects -- or of one object -- is an
+    ``object`` array, whose ``tobytes()`` writes the elements' **pointers**. That digest is an
+    address: it moves between two processes, it moves between two runs in one process, and it
+    is exactly what the docstring above promises does not happen. Only ``bool``, integer,
+    unsigned, float and complex arrays are content, so every other kind is refused by name.
+    That an object array's bytes are addresses is not assumed: the mutant of the commit that
+    added this function -- which routed *every* field here -- made ``freeze_fd_stage0.py``
+    exit 1 with "two freezes of the same code disagree on: metadata", one process, two
+    freezes, because the object arrays it then hashed carried them.
+
+    A ``str`` and a ``datetime64`` array meet the same door although both would in fact
+    digest reproducibly. A field marked for a digest is an array of numbers -- a prepared
+    material map's indices and values -- and admitting the kinds that merely happen to be
+    safe means re-deciding that list at every addition.
+
     The mark belongs on a field of a dataclass the plan *holds* -- a term -- and not on a
     ``Plan`` field: :func:`_finish` hands :func:`skeleton_of` a plain dict, so a ``Plan``
     field is reached through the dict branch below, which never reads ``dataclasses.fields``.
@@ -108,6 +124,12 @@ def _digest(v):
     h = hashlib.sha256()
     for a in (v if isinstance(v, (tuple, list)) else (v,)):
         a = np.ascontiguousarray(a)
+        if a.dtype.kind not in 'biufc':
+            raise TypeError(f"a field marked metadata={{'digest': True}} holds an array of "
+                            f"dtype {a.dtype.str!r}, whose bytes are not its content: only "
+                            f"bool, integer, float and complex arrays are digested here. An "
+                            f"object array writes the addresses of its elements, so its digest "
+                            f"would differ between two processes and between two runs of one.")
         h.update(f'{a.dtype.str}{a.shape}'.encode())
         h.update(a.tobytes())
     return ['digest', h.hexdigest()]

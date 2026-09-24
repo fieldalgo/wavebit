@@ -3731,10 +3731,24 @@ def test_a_finite_difference_says_what_the_backend_says_on_the_interface_fills(b
 
 
 def test_the_interface_cuts_refuse_a_typo_by_name():
-    """``axis``, ``dx`` and ``n`` -- the three preconditions, each a door with its own message.
+    """``axis``, ``dx`` and ``n`` -- the preconditions, each a door with its own message.
 
     ``True`` is in the axis row on purpose: ``True == 1`` is how a bool reaches an integer door,
     and this repository has already paid for a bool arriving where a length was expected.
+
+    The two ``Sphere`` overrides get the ``axis`` and ``dx`` rows and not the ``n`` one, which
+    is the difference between them rather than an omission: they take a *point* and build the
+    normal themselves. ``dx`` is theirs to door because they are public methods reached
+    directly -- not through ``occupancy``, which doors it once for :meth:`Sphere.exact_fill` --
+    and everything inside them is written in units of it. Measured with the doors removed,
+    three points about a radius-0.25 ball at ``|dx| = 0.05``: a negative ``dx`` divides the
+    edge's two clips by it and swaps them, so two segments that read ``1.0`` at ``+0.05`` read
+    ``0.0``; the same input reads exactly the positive answer on the face, whose every quantity
+    is squared; and ``dx = 0`` reads ``nan`` on the face and ``1.0`` on the edge through a clip
+    of an infinity. One invalid input, three behaviours, and only one of them looks wrong.
+
+    Mutant: remove either ``check_sizes`` call. Measured 2026-09-24, over the whole file with
+    three workers: this case is the only one that goes red, for each of the two.
     """
     n = np.asarray([[0.0, 0.0, 1.0]])
     d = np.asarray([0.1])
@@ -3749,9 +3763,19 @@ def test_the_interface_cuts_refuse_a_typo_by_name():
         for bad in (2 * n, np.zeros((1, 3)), np.full((1, 3), np.nan)):
             with pytest.raises(ValueError, match='unit outward normal'):
                 call(d, bad, 1.0, 0)
-    for call in ('Sphere.exact_edge_fill', 'Sphere.exact_face_fill'):
-        with pytest.raises(ValueError, match='axis is a component index'):
-            getattr(Sphere(0.2), call.split('.')[1])(grid(2, -0.1, 0.1), 0.1, 'x')
+    points = grid(2, -0.1, 0.1)
+    for name in ('exact_edge_fill', 'exact_face_fill'):
+        call = getattr(Sphere(0.2), name)
+        assert np.isfinite(np.asarray(call(points, 0.1, 2))).all()
+        for bad in ('z', 3, -1, True, False, 1.0, None):
+            with pytest.raises(ValueError, match='axis is a component index'):
+                call(points, 0.1, bad)
+        for bad in (0.0, -1.0):
+            with pytest.raises(ValueError, match='a length is a size') as caught:
+                call(points, bad, 0)
+            assert str(caught.value).startswith(f'Sphere.{name}(dx=...)')
+        with pytest.raises(ValueError, match='a length, and there is none'):
+            call(points, None, 0)
 
 
 #: An exactly axis-aligned normal, an exactly in-face diagonal one, and six general ones --
@@ -3825,15 +3849,27 @@ def test_the_interface_cuts_differentiate_where_a_step_is_exactly_zero(backend):
 def _each_divided_difference_is_guarded_at_a_zero_step(backend):
     """The two helpers' own denominators, called directly at ``a = 0``.
 
-    The loss above does **not** reach them: ``_edge_parts`` hands
-    :func:`_cut._first_difference` a ``c`` that a ``clip`` has pinned to the dead end of its
-    range, and a clip's transpose is a ``select`` -- it *discards* a NaN cotangent rather than
-    multiplying it by zero -- so the caller masks its own guard. Measured: the mutant that
-    removes ``_first_difference``'s safe denominator passed all twelve of this section's tests
-    before this check was written. The guard is still right, and it is one line, so what is
-    written here is the invariant where it lives rather than a second argument about the
-    caller: **every division by a step in these two forms is finite in reverse mode at a zero
-    step**, whatever the caller happens to pass.
+    **This paragraph is a correction, and the correction is the measurement.** It used to say
+    that the loss above cannot reach these denominators, because ``_edge_parts`` pins their
+    argument to the dead end of a ``clip`` whose transpose is a ``select`` -- a select
+    *discards* a NaN cotangent instead of multiplying it by zero -- so the caller masked its
+    own guard. That was true when it was written and is not true as landed: the same commit
+    deleted ``_edge_parts``' clip, having measured it a no-op at depths from 1 to 1e12 voxels,
+    and deleting it took the mask with it.
+
+    Re-measured 2026-09-24, the mutant that removes ``_first_difference``'s safe denominator:
+    the loss above now returns a **NaN gradient** on both JAX and Torch, and
+    ``assert np.isfinite(got)`` fires before this helper is ever called -- two red cases,
+    ``[jax]`` and ``[torch]``, and nothing else in the file. The remaining ``where(a > 0, ...)``
+    at the end of ``_edge_parts`` does not mask it: a ``where``'s unselected branch is handed a
+    zero cotangent, and zero times the infinity that ``u**3 / 0`` differentiates to is NaN,
+    which is the whole reason the safe denominator is written before the division rather than
+    after it.
+
+    This check is kept anyway, and not as a second argument about the caller: it states the
+    invariant where it lives -- **every division by a step in these two forms is finite in
+    reverse mode at a zero step**, whatever the caller happens to pass -- and it costs
+    milliseconds. It is also what would still fail if some later caller re-introduced a mask.
     """
     if backend == 'jax':
         import jax
@@ -3908,3 +3944,54 @@ def _slab_budget(want):
     back as 0.7999999999999999.
     """
     return 0.0 if want in (0.0, 1.0) else 1e-15
+
+
+def test_neither_interface_cut_ever_leaves_the_unit_interval():
+    """A fraction outside ``[0, 1]`` is not a rounding detail, and one of them used to return one.
+
+    The rule these two feed divides by ``f`` and by ``1 - f``, so a fraction an ulp above one
+    is a sign change in a denominator, not a small error. ``_bodies.Sphere``'s own docstrings
+    say it in as many words -- the world-coordinate spelling of its exact chord was rejected
+    for returning ``1 + 8.88178e-16`` -- and :func:`face_cut` was landed returning
+    ``1 +/- 2.220446e-16`` itself: its divided difference at ``c = total`` evaluates
+    ``(2 a_1 + 2 a_2 - a_2 - a_2) / (2 a_1)``, one in exact arithmetic and one plus or minus an
+    ulp in three roundings. Measured before the fix, over the same 2000 unit normals used
+    below and at each of five depths: **151 of them** read ``1 + 2.220446e-16`` and 151 read
+    ``1 - 2.220446e-16``, and the worst over a slide of the plane across the cell was
+    ``1.0000000000000002``. The edge never did, and that is its form and not luck:
+    :func:`_first_difference`'s top piece is the literal constant and its middle piece divides
+    ``t <= a`` by ``a``.
+
+    The claim is therefore stronger than an interval: a cell the plane does not reach is
+    **exactly** 0 or 1, which is what ``_slab_budget`` below already demands of the
+    axis-aligned family and what this asserts for every normal. Five depths inside and five
+    outside (1 to 1e12 voxels), plus the plane slid across the cell at 500 offsets for each of
+    2000 normals and all three axes -- 3e6 fractions per form -- for the interval itself.
+
+    Mutant: drop the ``offset >= total`` / ``offset <= 0`` select from ``_face_parts``, leaving
+    the clip on ``c`` that was there before. This goes red on the first depth, naming the
+    rows; the oracle comparisons beside it do not, because they are all at 1e-14.
+    """
+    dx = 0.1
+    rng = np.random.default_rng(7)
+    n = rng.normal(size=(2000, 3))
+    n = n / np.linalg.norm(n, axis=-1)[:, None]
+    for depth in (1., 10., 1e3, 1e6, 1e12):
+        for sign in (-1., 1.):
+            d = np.full(len(n), sign * depth * dx)
+            for axis in range(3):
+                for got in (np.asarray(edge_cut(d, n, dx, axis)),
+                            np.asarray(face_cut(d, n, dx, axis))):
+                    assert got.min() >= 0.0 and got.max() <= 1.0, (depth, sign, axis,
+                                                                   got.min(), got.max())
+                    # a cell that deep is decided: nothing in between is allowed either
+                    assert np.isin(got, (0.0, 1.0)).all(), (depth, sign, axis)
+    offsets = np.linspace(-3, 3, 500) * dx
+    worst, least = 0.0, 1.0
+    for row in n:
+        broadcast = np.broadcast_to(row, (len(offsets), 3))
+        for axis in range(3):
+            for got in (np.asarray(edge_cut(offsets, broadcast, dx, axis)),
+                        np.asarray(face_cut(offsets, broadcast, dx, axis))):
+                worst, least = max(worst, got.max()), min(least, got.min())
+    assert worst == 1.0 and least == 0.0, (worst, least)

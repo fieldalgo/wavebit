@@ -276,6 +276,96 @@ def test_a_field_marked_for_a_digest_is_hashed_and_not_written_out():
         _encode(Plain('m', (a,)))
 
 
+@dataclasses.dataclass(frozen=True)
+class _Digested:
+    """A term whose one field is marked for a digest -- the shape stage 4's material map has."""
+
+    label: str
+    arrays: tuple = dataclasses.field(default=(), metadata={'digest': True})
+
+
+class _Addressed:
+    """A value with no array behind it: ``np.ascontiguousarray`` makes it an ``object`` array."""
+
+
+def test_a_value_that_carries_an_address_cannot_be_digested():
+    """Gate 9: the digest's "no ``id()``, no ``repr()``, no address" is enforced, not asserted.
+
+    ``_digest`` calls ``np.ascontiguousarray`` on whatever the field holds, and that takes
+    *anything*: a list of Python objects, or one object, becomes an ``object`` array whose
+    ``tobytes()`` is the array of **pointers**. Hashing those is hashing addresses -- the
+    thing the docstring promises does not happen, the thing this repository has a memory
+    about (``a-digest-you-did-not-validate``: a ``repr()`` carries an address, so run it
+    twice), and the thing that would quietly make a skeleton unreproducible while every
+    single-process test still passed.
+
+    Measured here rather than argued: the refusal is checked first, and then what was behind
+    it -- two objects built one after the other have the same (empty) content and different
+    bytes, because those bytes are their addresses. A ``str`` and a ``datetime64`` array are
+    refused by the same door. Both of those would in fact digest reproducibly; the door
+    admits the kinds that **are** content (``biufc``) rather than the kinds that happen to be
+    safe, because the second list has to be re-decided at every addition.
+
+    The mutant is the guard deleted. Measured 2026-09-24: **this test alone** goes red, on
+    the first ``DID NOT RAISE``, and the other 131 cases in this file pass -- including
+    ``test_a_digest_is_the_same_number_in_two_interpreters``, which digests ``float64`` and
+    ``int32`` arrays and cannot see an address. That is the shape of the defect and the
+    reason the door is here rather than in a comparison downstream: an unguarded digest is
+    wrong only for the values nothing else in the suite hands it, and it is wrong silently.
+    """
+    from wavebit.fd._lower.plan import _digest, _encode
+
+    for bad, kind in ((np.array([_Addressed(), _Addressed()], dtype=object), 'O'),
+                      (_Addressed(), 'O'),
+                      (np.array(['ab', 'cd']), 'U'),
+                      (np.array(['2026-09-24'], dtype='datetime64[D]'), 'M')):
+        assert np.ascontiguousarray(bad).dtype.kind == kind
+        with pytest.raises(TypeError, match='addresses of its elements'):
+            _digest(bad)
+        with pytest.raises(TypeError, match='addresses of its elements'):
+            _encode(_Digested('m', (bad,)))
+        with pytest.raises(TypeError, match='addresses of its elements'):
+            skeleton_of(terms=(_Digested('m', (bad,)),))
+    # What was behind the door: the bytes of an object array are pointers, so two objects
+    # with identical (empty) content do not digest alike.
+    raw = [np.ascontiguousarray(np.array([obj], dtype=object)).tobytes()
+           for obj in (_Addressed(), _Addressed())]
+    assert raw[0] != raw[1], 'an object array would have to carry content for this to tie'
+    # Every kind the door admits still goes through, including a bool and a complex one.
+    for good in (np.arange(6.0), np.arange(4, dtype=np.int32), np.array([True, False]),
+                 np.array([1 + 2j]), np.uint8(3)):
+        assert _digest(good)[0] == 'digest'
+
+
+def _digest_in_a_subprocess(hashseed):
+    """``_digest`` of one fixed pair of arrays, in a fresh interpreter under ``hashseed``."""
+    code = ('import numpy as np\n'
+            'from wavebit.fd._lower.plan import _digest\n'
+            'a = np.arange(6.0).reshape(2, 3)\n'
+            'b = np.arange(4, dtype=np.int32)\n'
+            'print(_digest((a, b))[1])')
+    env = dict(os.environ, PYTHONHASHSEED=str(hashseed))
+    out = subprocess.run([PY, '-c', code], cwd=ROOT, env=env, capture_output=True, text=True,
+                         check=True, timeout=300)
+    return out.stdout.strip()
+
+
+def test_a_digest_is_the_same_number_in_two_interpreters():
+    """Gate 9: a digest is a function of the content, so two processes must agree on it.
+
+    The twin of :func:`test_the_skeleton_is_the_same_in_two_subprocesses`, one level down and
+    for the same reason: a skeleton that holds a digest is compared across processes by
+    ``fd.run(scene, plan=)``, and a digest that read an address would differ on every run
+    while agreeing with itself inside one. Two fresh interpreters under two ``PYTHONHASHSEED``
+    values, digesting the same ``float64`` and ``int32`` arrays, against this process's answer.
+    """
+    from wavebit.fd._lower.plan import _digest
+    here = _digest((np.arange(6.0).reshape(2, 3), np.arange(4, dtype=np.int32)))[1]
+    first, second = _digest_in_a_subprocess(1), _digest_in_a_subprocess(2)
+    assert first == second == here
+    assert len(here) == 64 and int(here, 16) >= 0          # a sha256 hex digest
+
+
 # ---------------------------------------------------------------------------------------------
 # The doors: Boundaries
 # ---------------------------------------------------------------------------------------------

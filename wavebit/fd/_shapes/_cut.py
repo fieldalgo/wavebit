@@ -628,25 +628,68 @@ def _edge_parts(d, n, dx, axis, xp):
     deep inside the body; :func:`_first_difference` has no such piece -- it *returns* the
     constant 1 -- so there is nothing to cancel. Over 2000 normals at depths of 1, 10, 1e3, 1e6
     and 1e12 voxels, clipped and unclipped agree to 0.0 exactly, while the face at the same
-    depths reads 1 +/- 2.2e-16 clipped against 1 +/- 1.9e-3 unclipped. A clip written here
-    anyway would be arithmetic no input can reach, so it is not written.
+    depths read 1 +/- 2.2e-16 with its ``c`` clipped and 1 +/- 1.9e-3 without it. A clip on
+    ``c`` written here anyway would be arithmetic no input can reach, so it is not written.
+
+    **A decided cell needs no select here either, and that is the same sentence one more
+    time.** The face selects its two decided cases (:func:`_face_parts`) because its divided
+    difference lands an ulp either side of one; this one's middle piece divides ``t <= a`` by
+    ``a`` and its top piece is the literal constant, so 0 and 1 come out of the form itself.
+    The same sweep measures its worst at exactly 1.0 and its least at exactly 0.0.
     """
     a = xp.abs(n[..., axis]) * dx
     return xp.where(a > 0, _first_difference(-d + a / 2, a, xp), _decided(d, xp))
 
 
 def _face_parts(d, n, dx, axis, xp):
-    """:func:`face_cut` with the doors left off -- the spelling this package uses internally."""
+    """:func:`face_cut` with the doors left off -- the spelling this package uses internally.
+
+    **A decided square is answered exactly, and that is not the clip on ``c``.** The clip pins
+    ``c`` to ``[0, total]``, but the divided difference then taken at ``c = total`` is still
+    three roundings of ``(2 a_1 + 2 a_2 - a_2 - a_2) / (2 a_1)`` -- one in exact arithmetic and
+    one **plus or minus an ulp** in floating point. Measured over 2000 unit normals at depths of
+    1, 10, 1e3, 1e6 and 1e12 voxels, at every one of those depths: 151 of them read
+    ``1 + 2.220446e-16`` and 151 read ``1 - 2.220446e-16``, and the worst over a slide of the
+    plane across the cell was ``1.0000000000000002``. Neither end of that is a rounding detail
+    to the rule that reads it -- the mixing rule divides by ``f`` and by ``1 - f``, so an ulp
+    above one is a sign change in a denominator -- and this package already refused the same
+    thing once, in ``_bodies.Sphere.exact_edge_fill``, whose world-coordinate spelling was
+    rejected for returning ``1 + 8.88178e-16``.
+
+    So the two decided cases are selected rather than computed: ``total/2`` is the square's own
+    support in the direction ``n``, so it lies wholly inside the half space exactly when
+    ``-d >= total/2`` and wholly outside exactly when ``-d <= -total/2``. That is an exact
+    predicate on the same numbers the difference is taken of, not a tolerance, and it is the
+    same argument :func:`_decided` makes one dimension further down. Strictly between them
+    nothing changes, and the gradient is untouched: where the select bites, the exact
+    function's own derivative is zero.
+
+    The edge needs neither, and that is its form and not luck: :func:`_first_difference`'s top
+    piece *is* the literal constant and its middle piece divides ``t <= a`` by ``a``, so the
+    same sweep measures its worst at exactly 1.0 and its least at exactly 0.0.
+
+    **The three-dimensional :func:`_parts` is deliberately left alone, and it is worse.**
+    Measured on the same 2000 normals at the same five depths, a voxel the interface does not
+    reach reads between ``0.99999999999999933`` and ``1.0000000000000007`` -- 519 of 2000 above
+    one and 1050 of 2000 not exactly 0 or 1 -- three ulps where the face had one. It is not
+    fixed here because it is the *routed* form: every ``occupancy`` of every scene goes through
+    it, and the same select there moves coefficients the frozen archives pin, which is a
+    measurement and a regeneration rather than a minor. Recorded with its number in
+    ``docs/fd-subpixel-occupancy.md``.
+    """
     u, v = _OTHER[axis]
     a_u, a_v = xp.abs(n[..., u]) * dx, xp.abs(n[..., v]) * dx
     a1, a2 = xp.maximum(a_u, a_v), xp.minimum(a_u, a_v)
     total = a1 + a2
+    zero, one = xp.zeros_like(total), xp.ones_like(total)
+    offset = -d + total / 2
     # The clip is the function outside [0, total], exactly as in `_parts`, and it is what stops
     # the top piece (2t - a) from differencing two large numbers for a face deep inside a body.
-    c = xp.clip(-d + total / 2, xp.zeros_like(total), total)
-    a1_safe = xp.where(a1 > 0, a1, xp.ones_like(a1))
+    c = xp.clip(offset, zero, total)
+    a1_safe = xp.where(a1 > 0, a1, one)
     fill = (_first_difference_square(c, a2, xp)
             - _first_difference_square(c - a1, a2, xp)) / (2 * a1_safe)
+    fill = xp.where(offset >= total, one, xp.where(offset <= zero, zero, fill))
     return xp.where(a1 > 0, fill, _decided(d, xp))
 
 

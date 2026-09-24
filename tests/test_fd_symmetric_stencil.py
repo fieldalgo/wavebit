@@ -1,4 +1,5 @@
 """Independent controls of the experimental extended material stencil."""
+import contextlib
 from functools import lru_cache
 import pathlib
 import subprocess
@@ -24,9 +25,12 @@ def test_the_moved_operator_is_an_fd_module_that_imports_with_no_cycle():
     with the checkout as its working directory, so ``studies`` *is* importable and simply is
     not imported; that is the claim, not an accident of the path.
 
-    ``geometry`` and ``triplet_baseline`` do reach into ``studies/`` for the exact fraction
-    helpers and the triplet orientation maps, deferred to the call. ``fit``, ``energy_bounds``
-    and ``padded`` reach into nothing, which the subprocess shows by running two of them.
+    ``triplet_baseline`` still reaches into ``studies/`` for the triplet orientation maps,
+    deferred to the call; ``geometry`` takes its exact edge and face fractions from
+    ``wavebit/fd/_shapes`` instead, so it reaches a study only through that default baseline.
+    ``fit``, ``energy_bounds`` and ``padded`` reach into nothing, which the subprocess shows by
+    running two of them. What happens where ``studies/`` is not importable at all is
+    :func:`test_the_public_route_runs_with_no_study_and_the_research_one_refuses_by_name`.
 
     ``surface_clearance`` moved the same way in the commit that gave a public scene the
     selector, because the public preparation has to apply the **same** clearance rule and not
@@ -52,6 +56,151 @@ def test_the_moved_operator_is_an_fd_module_that_imports_with_no_cycle():
                          text=True, timeout=300)
     assert out.returncode == 0, out.stderr
     assert out.stdout.strip() == '[1.0, 1.0, 1.0]'
+
+
+class _NoStudies:
+    """A finder that hides ``studies`` the way an installed wheel does: it is simply not there.
+
+    A meta-path entry rather than a path edit, because the checkout *is* on ``sys.path`` while
+    the tests run and the thing under test is what happens when the package is installed
+    without it. Raising from ``find_spec`` is how the import machinery is told "no", and it
+    arrives at the caller as the ``ImportError`` an absent module gives.
+    """
+
+    def find_spec(self, name, path=None, target=None):
+        if name == 'studies' or name.startswith('studies.'):
+            raise ImportError(f'No module named {name!r} (hidden by the test)')
+        return None
+
+
+@contextlib.contextmanager
+def no_studies():
+    """``studies`` unimportable, and every study module already imported put back afterwards."""
+    finder = _NoStudies()
+    saved = {name: module for name, module in sys.modules.items()
+             if name == 'studies' or name.startswith('studies.')}
+    for name in saved:
+        del sys.modules[name]
+    sys.meta_path.insert(0, finder)
+    try:
+        yield
+    finally:
+        sys.meta_path.remove(finder)
+        sys.modules.update(saved)
+
+
+def test_the_public_route_runs_with_no_study_and_the_research_one_refuses_by_name():
+    """The seam the move left: which half of this module an installed wheel can run.
+
+    ``geometry`` used to import the exact edge and face fractions from ``studies/`` at call
+    time. They are ``wavebit/fd/_shapes``'s now -- ``Sphere.exact_edge_fill`` and
+    ``exact_face_fill``, which the study helpers are themselves wrappers over -- so the route
+    that asks for no research baseline runs with ``studies`` hidden. It is the same arithmetic
+    and not merely a working one: the operator built with ``studies`` hidden is compared to the
+    one built with it present **bit for bit**, on both the 2-D and the 3-D fixture, which is
+    what says the routing moved no number. (The two ARPACK report scalars are held out for the
+    reason ``docs/fd-symmetric-stencil.md`` records: ``eigsh`` draws its own starting vector,
+    and two runs of one unchanged tree already disagree on them.)
+
+    What cannot be routed is ``triplet_baseline``: the triplet orientation maps and their
+    ``ORIENTATIONS`` table are research material with no public equivalent. So it refuses by
+    name instead of failing several frames down on a module the caller never asked for, and
+    the message carries the route that does work. ``geometry``'s default asks for that
+    baseline, so it refuses with it.
+
+    Mutant: drop the ``except ImportError`` wrapper in ``_study_module`` and let the plain
+    import through. Measured 2026-09-24: this case goes red on the first of its two refusal
+    rows -- ``No module named 'studies'`` where ``StencilStudyRefused`` was asked for -- and
+    it is the only one in the file that moves.
+    """
+    from wavebit.fd._lower import stencil
+    q = np.arange(-3, 4) * .1
+    z, y = np.meshgrid(q, q, indexing='ij')
+    plane = np.stack((y, z), axis=-1)[:, :, None, :]
+    z, y, x = np.meshgrid(q, q, q, indexing='ij')
+    space = np.stack((x, y, z), axis=-1)
+    fixtures = ((plane, (1, 2), (.017, -.023)), (space, (0, 1, 2), (.017, -.023, .009)))
+    held = ('minimum_eigenvalue', 'eigenpair_residual')
+    with_study = [stencil.geometry(points, .1, centre, .16, 12., components,
+                                   baseline_kind=None)
+                  for points, components, centre in fixtures]
+    with no_studies():
+        with pytest.raises(ImportError, match='No module named'):
+            import studies                                                    # noqa: F401
+        for i, (points, components, centre) in enumerate(fixtures):
+            matrix, report = stencil.geometry(points, .1, centre, .16, 12., components,
+                                              baseline_kind=None)
+            want, want_report = with_study[i]
+            assert np.array_equal(matrix.data, want.data)
+            assert np.array_equal(matrix.indices, want.indices)
+            assert np.array_equal(matrix.indptr, want.indptr)
+            assert matrix.nnz and np.isfinite(matrix.data).all()
+            assert ({k: v for k, v in report.items() if k not in held}
+                    == {k: v for k, v in want_report.items() if k not in held})
+        for call in (lambda: stencil.triplet_baseline(space, .1, (.017, -.023, .009), .16,
+                                                      12., (0, 1, 2)),
+                     lambda: stencil.geometry(space, .1, (.017, -.023, .009), .16, 12.,
+                                              (0, 1, 2))):
+            with pytest.raises(ImportError, match='StencilStudyRefused') as caught:
+                call()
+            assert 'baseline_kind=None' in str(caught.value)
+
+
+def test_a_complex_permittivity_is_refused_where_the_buffers_are_real():
+    """A lossy ``eps`` has no operator here, and the refusal says so instead of truncating it.
+
+    ``fit`` assembles into preallocated ``float64`` buffers (``rhs``, ``vv``, ``values``), and a
+    complex ``eps`` reaches every one of them through ``gamma``, ``pis`` and ``pi``. NumPy does
+    not refuse that assignment: it casts, with a ``ComplexWarning`` that a caller filtering
+    warnings never sees. Measured on the fixture below with the guard removed: twenty
+    ``ComplexWarning``s, and the matrix that comes back is ``complex128`` whose **fitted
+    correction is exactly real** -- ``(matrix - baseline).data.imag`` is zero everywhere, at
+    ``eps = 12 + 1e-9j`` and equally at ``eps = 12 + 5j``, where the loss is 40% of the
+    permittivity. All of the loss that survives is the baseline's diagonal ``1/eps``; the
+    interface correction, which is the entire point of this operator, is the lossless one.
+
+    The choice is a refusal and not complex buffers because the routine is real symmetric
+    throughout: ``lsmr`` solves a real least-squares problem, ``eigsh(which='SA')`` asks for a
+    smallest *algebraic* eigenvalue, and ``energy_bounds`` certifies an LDL with positive
+    pivots. Complex buffers would carry the imaginary part into arithmetic that has no meaning
+    for it. The public route cannot deliver a lossy material today -- ``fd.Material`` refuses a
+    complex permittivity and ``prepare`` refuses a Conductor or a Dispersive -- and this says
+    so by name as well, rather than by the absence of a caller.
+
+    All five inputs the buffers read are doored, because ``eps`` is not the only way in -- a
+    complex ``ell``, ``area``, ``normals`` or baseline reaches the same three buffers.
+
+    The mutant is the refusal deleted. Measured 2026-09-24: this case goes red on the first
+    ``DID NOT RAISE`` and the other 67 in this file pass, which is the defect exactly -- a
+    truncation nothing else in the suite is in a position to notice.
+    """
+    points = np.array([[.5, 0.], [0., .5], [1.5, 0.], [1., .5]])
+    axes = np.array([0, 1, 0, 1])
+    normals = np.broadcast_to(np.array([.6, .8]), points.shape)
+    signed = np.array([-.1, .1, .2, -.2])
+    ell = np.array([.3, .7, .4, .6])
+    area = np.array([.7, .3, .6, .4])
+    real = dict(points=points, axes=axes, normals=normals, signed=signed, ell=ell, area=area)
+    matrix, report = study.fit(eps=12., **real)
+    assert matrix.shape == (4, 4) and np.isfinite(matrix.data).all()
+    assert (matrix - matrix.T).nnz == 0 and report['unknowns'] > 0
+    for name, changed in (('eps', dict(eps=12. + 1e-9j)),
+                          ('eps', dict(eps=complex(12.))),
+                          ('ell', dict(eps=12., ell=ell.astype(complex))),
+                          ('area', dict(eps=12., area=area.astype(complex))),
+                          ('normals', dict(eps=12., normals=normals.astype(complex)))):
+        with pytest.raises(ValueError, match='StencilComplexRefused') as caught:
+            study.fit(**{**real, **changed})
+        assert name in str(caught.value)
+    with pytest.raises(ValueError, match='StencilComplexRefused'):
+        study.fit(eps=12., baseline=csr_matrix(np.eye(len(points)) * (1 + 0j)), **real)
+    # The control: the same baseline spelled out in real arithmetic is accepted, and it is
+    # the one the default builds -- so the door refuses the dtype and not the argument.
+    from scipy.sparse import diags
+    spelled = diags(np.where(signed < 0, 1 / 12., 1.)).tocsr()
+    plain, _ = study.fit(eps=12., baseline=spelled, **real)
+    assert np.array_equal(plain.data, matrix.data) and np.array_equal(plain.indices,
+                                                                      matrix.indices)
 
 
 def planar_fixture(size, normal, eps, offset=.23):

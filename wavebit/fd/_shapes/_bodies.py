@@ -924,8 +924,19 @@ class Sphere(Body):
         C0 and not C1, like the tangent-plane form it replaces: ``maximum(0, hi - lo)`` and the
         two clips are its three corners. That is the exact function and not an approximation of
         it (``_cut.py``'s section note on the two forms).
+
+        ``dx`` is doored here, as it is on ``_cut.edge_cut`` beside it: this is a public method
+        anyone may call with a length of their own, it is *not* reached through
+        :func:`~wavebit.fd._shapes.occupancy`'s door the way :meth:`exact_fill` is, and the two
+        clips below are written in units of it. Measured with the door removed, on three points
+        about a radius-0.25 ball at ``|dx| = 0.05``: a **negative** ``dx`` divides both ends by
+        it and swaps them, and the two segments that read ``1.0`` at ``+0.05`` read ``0.0`` --
+        a wholly filled edge reported as empty, which is the failure mode ``check_sizes`` was
+        written for (a length is a size). A ``dx`` of zero divides, and the edge then reads
+        ``1.0`` through a clip of an infinity while the face reads ``nan``.
         """
         xp = array_namespace(points)
+        dx, = check_sizes('Sphere.exact_edge_fill', dx=dx)
         axis = _axis_index('Sphere.exact_edge_fill', axis)
         v = points - _as(xp, self.center, points)
         radius = _as(xp, self.radius, points)
@@ -953,8 +964,17 @@ class Sphere(Body):
 
         Everything is done in cell units (``u``, ``v``, ``r2`` are all divided by ``dx`` first),
         so the answer is a fraction of the square and not an area, and full is exactly 1.
+
+        ``dx`` is doored here for the reason :meth:`exact_edge_fill` gives, and the measurement
+        is the other half of the argument for putting the check at the door rather than
+        trusting the arithmetic. With the door removed, on the same three points: ``dx = 0``
+        reads ``nan`` here (the edge reads ``1.0``), while a **negative** ``dx`` reads exactly
+        what its positive twin reads, because every quantity below is squared -- so the same
+        invalid input is silently wrong on the edge, silently right on the face, and a caller
+        comparing the two would learn nothing. Only a refusal makes those two agree.
         """
         xp = array_namespace(points)
+        dx, = check_sizes('Sphere.exact_face_fill', dx=dx)
         axis = _axis_index('Sphere.exact_face_fill', axis)
         v = points - _as(xp, self.center, points)
         radius = _as(xp, self.radius, points)

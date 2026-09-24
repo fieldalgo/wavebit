@@ -434,6 +434,69 @@ seven cases in the module: both `test_exact_static_planar_states` normals,
 `test_rigid_translation_keeps_the_material_operator`, and all three
 `test_invalid_time_step_is_refused_before_stepping` cases.
 
+### Half of the seam, closed
+
+Written: 2026-09-25, after review. `geometry` no longer reaches into `studies/`
+for its fractions. The exact ball chord and the exact disc cut are
+`Sphere.exact_edge_fill` and `Sphere.exact_face_fill` in
+`wavebit/fd/_shapes/_bodies.py`; the study helpers the old code called are
+themselves wrappers over those two, so this is the same arithmetic reached one
+call earlier. In two dimensions the study's circle is that sphere's central
+plane, and the lift to `(0, y, z)` makes the transverse sum `0*0 + t*t`, which
+is the `t**2` the circle form wrote.
+
+The other half cannot be routed: the triplet orientation maps and their
+`ORIENTATIONS` table are research material with no public equivalent, and
+`geometry`'s default baseline asks for them. So `triplet_baseline` imports the
+study through `_study_module`, which **refuses by name** where `studies/` is not
+importable -- an installed wheel carries none -- instead of failing several
+frames down on a module the caller never asked for, and the message names the
+route that does work, `geometry(..., baseline_kind=None)`.
+
+Measured on the 2-D and 3-D preparation fixtures, against a `git archive` of the
+parent commit: the assembled matrix's data, indices, indptr, shape and nonzero
+count, the four padded arrays, the three energy bounds and eleven of the
+thirteen report scalars are byte identical, 92 of 100 quantities, on both the
+default triplet baseline and the diagonal one. The eight that move are the
+ARPACK pair above on each of the four runs, and the control -- the unchanged
+tree run twice -- moves them by the same amounts: `minimum_eigenvalue` by up to
+5.5e-15 relative against a control spread of up to 8.1e-15, `eigenpair_residual`
+by up to .38 against a control .83.
+
+`fit` also refuses a **complex** input by name. Its three assembly buffers are
+preallocated `float64`, and a lossy `eps` reaches all of them through `gamma`,
+`pis` and `pi`, where NumPy casts rather than raising. Measured with the refusal
+removed, on the four-point planar fixture: twenty `ComplexWarning`s, none of
+which a caller filtering warnings sees, and a `complex128` matrix whose fitted
+correction is **exactly real** -- `(matrix - baseline).data.imag` is zero
+everywhere at `eps = 12 + 1e-9j` and equally at `eps = 12 + 5j`, where the loss
+is 40% of the permittivity. What survives of the loss is the baseline's diagonal
+`1/eps`; the interface correction, which is the whole operator, is the lossless
+one. It is a
+refusal and not a promotion to complex buffers because the routine is real
+symmetric throughout -- `lsmr` solves a real least-squares problem,
+`eigsh(which='SA')` asks for a smallest algebraic eigenvalue, and
+`energy_bounds` certifies an LDL with positive pivots. `ell`, `area`, `normals`
+and a supplied baseline are doored beside `eps`, because each of them reaches
+the same buffers. The public route cannot deliver a lossy material today --
+`fd.Material` refuses a complex permittivity and `prepare` refuses a `Conductor`
+or a `Dispersive` by name -- and this refusal says so as well, rather than by the
+absence of a caller.
+
+Three source mutants, each applied alone and restored from a pristine copy, run
+against `tests/test_fd_symmetric_stencil.py` (68 cases) and, for the third,
+`tests/test_fd_triplet_sphere.py` beside it (82 in all):
+
+| Mutation | Failures | The case that went red |
+| --- | ---: | --- |
+| The complex refusal deleted | 1 | `test_a_complex_permittivity_is_refused_where_the_buffers_are_real` |
+| `_study_module`'s `except ImportError` dropped | 1 | `test_the_public_route_runs_with_no_study_and_the_research_one_refuses_by_name` |
+| `geometry`'s routed edge fraction swapped for the face one | 1 | `test_same_operator_physical_controls[sphere]` |
+
+The third is the one worth reading: the routing this section describes is gated
+by a physical control and not only by a byte compare, so a wrong fraction on the
+edge reaches a scattering number and is caught there.
+
 ## Large high-index sphere: time and bandwidth controls
 
 The radius/wavelength `.25`, epsilon-12 origin sphere now uses the same
@@ -615,6 +678,7 @@ Two things are open. The operator's skeleton digest is a function of the BLAS
 thread count, because the assembled matrix's data is (commit `c939ed3`); a plan
 prepared at a different thread count is a different plan, and nothing yet says
 so at the door. And `geometry` still reaches into `studies/` for the triplet
-baseline and the exact fraction helpers, so `discretisation='stencil'` runs from
+baseline (its exact fractions are public now, see "Half of the seam, closed"), so
+`discretisation='stencil'` runs from
 a checkout and not from an installed wheel; that is named in a refusal
 (`StencilSeamRefused`) rather than worked around.
