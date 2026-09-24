@@ -341,3 +341,49 @@ corrupts the product on every backend. The latter two include JAX eager and
 compiled execution. All ten added cases have mutation witnesses, as do the
 eight modified product cases, and restoration is byte-exact. The research
 module now contains 65 test cases, including the two physical controls.
+
+## Large high-index sphere: time and bandwidth controls
+
+The radius/wavelength `.25`, epsilon-12 origin sphere now uses the same
+research operator at 40 vacuum cells per wavelength. Its initial broad pulse
+(`df=.1`, cutoff `1e-3`) at 48 periods remains unresolved: apparent absorption
+divided by scattering is 4.2766%, and final interior energy is 1.5972% of its
+peak. Its scattering error is not used as spatial-convergence evidence.
+
+The measured source-spectrum study selected `df=.00625`, cutoff `1e-9`.
+Its envelope returns to the cutoff level at 327.87946 periods; the Gaussian
+is not abruptly switched off there. The pilot's final energy-decay fit has
+time constant 28.20397 periods. An exploratory 100-fold energy reduction,
+rounded to the historical 24-period blocks, gives 480 periods. This construction
+only chooses a trial; the following completed controls test it directly.
+An additional 144 periods gives 624. Halving the bandwidth doubles the envelope's
+cutoff-return time to 655.75891 periods and gives the 792-period trial by the same rule.
+
+| Periods | Bandwidth `df` | Scattering efficiency | Apparent absorption | Final / peak interior energy |
+| --- | --- | --- | --- | --- |
+| 480 | .00625 | 3.472272468592 | -3.00605e-9 | 3.90523e-15 |
+| 624 | .00625 | 3.472272466258 | +2.89389e-10 | 3.75098e-17 |
+| 792 | .003125 | 3.472272466464 | -5.70177e-16 | 2.45007e-23 |
+
+Extending 480 to 624 periods changes scattering by `-6.71950e-10` relative,
+the complex forward field by `2.69102e-9`, and peak-normalized angular cuts
+by `4.26165e-9`. The narrower-pulse control changes those observables by
+`5.91560e-11`, `2.30124e-10`, and `3.59704e-10`. Each calculation and the
+finite batch exit zero, with identical numerical source hashes throughout.
+These measurements support 480 periods for this origin case; other grid
+resolutions and placements still require their own residual/time checks.
+
+The common result remains **19.53794% below Mie** (`4.315415843395`). The
+complex forward-field error is 21.48460%, and angular peak error is 25.81477%.
+The optical-theorem residual is only `-1.80629e-5`: agreement between power
+measurements does not imply agreement with continuum Mie scattering.
+Insufficient record length does not explain the remaining error in this case.
+One spatial resolution cannot distinguish bulk-grid and material-interface
+errors or establish a convergence order. No wavenumber substitution or fitted
+coefficient correction is applied. The large-sphere spatial gate and C3 remain
+incomplete.
+
+The measurement log retains the unresolved pilot, all three controls, actual
+exit codes, preparation checks, source digests, complex fields and angular
+cuts, plus summaries and digests of the full retained energy records. The
+numerical implementation is unchanged by this report.

@@ -1970,3 +1970,14 @@ C3 still requires a fresh large high-index sphere study with this operator,
 followed by public preparation/integration and physical source-defect review.
 The earlier public sphere fits belong to a different operator and cannot be
 combined with this cylinder result to claim a C3 pass. C4 remains pending.
+
+The research operator's large epsilon-12 origin sphere now has completed
+40-cell time and bandwidth controls: 480/624 periods at `df=.00625`, and
+792 periods at `df=.003125`, all with pulse cutoff `1e-9`. Every process exits
+zero with unchanged source. Relative scattering changes are `-6.71950e-10`
+and `5.91560e-11`; complex forward and angular comparisons also agree.
+Despite that temporal agreement, scattering remains **19.53794% below Mie**.
+This supports the record length for this one grid and placement, not a C3
+pass or a time bound at finer grids. The full retained measurements and
+duration provenance are in the
+[research time-control report](fd-symmetric-stencil.md#large-high-index-sphere-time-and-bandwidth-controls).
