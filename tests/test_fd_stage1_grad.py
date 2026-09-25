@@ -45,6 +45,7 @@ skeleton, so a tracer or a ``requires_grad`` tensor in one of them is refused by
 name. Torch is the case that makes this necessary rather than tidy: ``float()`` on a tensor
 that requires a gradient *succeeds*, the run completes, and the gradient is simply missing.
 """
+import concurrent.futures
 import math
 
 import numpy as np
@@ -345,7 +346,7 @@ def test_a_torch_forward_mode_value_in_a_static_door_is_refused_by_name(build, p
 
 
 def test_torch_carried_answers_every_transform():
-    """What rides on a Torch value, asked at a real static door, for 52 ways of making one.
+    """What rides on a Torch value, asked at a real static door, for 58 ways of making one.
 
     ``refuse`` where a derivative or a batch rides on the value -- ``float()`` would drop it --
     and ``admit`` where nothing does, which is what ``jax`` does with the same program (a
@@ -355,14 +356,16 @@ def test_torch_carried_answers_every_transform():
     ``fd.PML(wavelength=)``, a float static field; an admitted value must read back as its
     own number.
 
-    Measured on the same rows (2026-09-25, Torch 2.13), a derivative dropped silently:
-    ``b24a708`` (``requires_grad`` only) on 23, ``d46935a`` (every wrapper refused, module-name
-    gate) on 2 -- the subclass dual and a dual captured into ``grad`` -- ``a666d40`` (the walk,
-    with a Grad-level wrapper refused under forward mode) on 11, and ``1300b4e`` (blind only
-    under a Grad interpreter) on 4, all forward over forward: the fifth and sixth rounds'
-    blockers. ``d46935a`` also refused six values that carry nothing, ``a666d40`` two; on the
-    inference-mode row and the vmap-batch-inside-``jvp`` row ``a666d40`` and ``1300b4e``
-    raised Torch's own ``RuntimeError`` from ``unpack_dual`` instead of refusing by name.
+    Measured on the same 58 rows (2026-09-25, Torch 2.13), a derivative dropped silently:
+    ``b24a708`` (``requires_grad`` only) on 26; ``d46935a`` (every wrapper refused, module-name
+    gate) on 2 -- the subclass dual and a dual captured into ``grad``; ``a666d40`` (the walk,
+    with a Grad-level wrapper refused under forward mode) on 14; ``1300b4e`` (blind only under
+    a Grad interpreter) on 7; ``5a95565`` (a Grad or second Jvp interpreter blinds the query)
+    on 3 -- a live ``jvp`` value read in a worker thread or inside an ``autograd.Function``
+    forward, where this thread's stack owns no level for it. Each was a round's blocker or
+    major. ``d46935a`` also refused eight values that carry nothing, ``a666d40`` two; Torch's
+    own ``RuntimeError`` from ``unpack_dual`` came out instead of a named refusal on three rows
+    for ``a666d40`` and ``1300b4e`` and on the ``functionalize`` row for ``5a95565``.
     """
     torch = pytest.importorskip('torch')
     import torch.autograd.forward_ad as fwAD
@@ -407,6 +410,41 @@ def test_torch_carried_answers_every_transform():
                 door(tag)(a)
             return a * 2.
         return f
+
+    pool = concurrent.futures.ThreadPoolExecutor(1)
+
+    def in_worker(tag, value):
+        pool.submit(lambda: door(tag)(value)).result()
+
+    held = {}
+
+    class Lowered(torch.autograd.Function):
+        """functorch runs a Function's forward with the interpreter stack lowered to nothing."""
+        @staticmethod
+        def forward(x):
+            door(held['tag'])(held['value'])
+            return x.clone()
+
+        @staticmethod
+        def setup_context(ctx, inputs, output):
+            pass
+
+        @staticmethod
+        def jvp(ctx, tangent):
+            return tangent
+
+        @staticmethod
+        def backward(ctx, grad_out):
+            return grad_out
+
+    def leaked():
+        box = {}
+        jvp(lambda a: (box.setdefault('w', a), a * 2.)[1], (t(.5),), (t(1.),))
+        return box['w']
+
+    def in_forward(tag, value):
+        held.update(tag=tag, value=value)
+        return Lowered.apply(t(1.))
 
     def dual_run(fn):
         with fwAD.dual_level():
@@ -511,6 +549,20 @@ def test_torch_carried_answers_every_transform():
         # unpack_dual of a batch raises under an open forward level: the batch is asked first.
         'vmap batch inside jvp': (
             'refuse', lambda k: jvp(lambda a: vmap(door(k))(t([.5, .6])).sum() * a, (t(1.),), (t(1.),))),
+        # A live wrapper whose level this thread's stack does not own (the seventh round).
+        'jvp primal read in a worker thread': (
+            'refuse', lambda k: jvp(lambda a: (in_worker(k, a), a * 2.)[1], (t(.5),), (t(1.),))),
+        'jacfwd arg read in a worker thread': (
+            'refuse', lambda k: jacfwd(lambda a: (in_worker(k, a), a * 2.)[1])(t(.5))),
+        'jvp primal read inside an autograd.Function forward': (
+            'refuse', lambda k: jvp(lambda a: in_forward(k, a) * a, (t(.5),), (t(1.),))),
+        # Two wrappers nothing rides on, admitted: one that escaped its jvp, one functionalize's.
+        'dead jvp wrapper read after the jvp': ('admit', lambda k: door(k)(leaked())),
+        'constant under functionalize': ('admit', lambda k: torch.func.functionalize(door(k))(t(.5))),
+        # A batch one layer beneath a functionalize wrapper: asked before any unpack_dual.
+        'vmap batch under functionalize inside jvp': (
+            'refuse', lambda k: jvp(lambda a: vmap(torch.func.functionalize(
+                lambda w: door(k)(w) * a))(t([.5, .6])).sum(), (t(1.),), (t(1.),))),
         # Refused by choice: nothing rides on these, but the stack cannot be seen through.
         'jacfwd(jacfwd) argnums=0, second': (
             'policy', lambda k: jacfwd(jacfwd(door(k, second), argnums=0), argnums=0)(t(1.), t(.5))),
@@ -521,9 +573,12 @@ def test_torch_carried_answers_every_transform():
         'constant captured into jvp > grad': (
             'policy', lambda k: jvp(lambda a: grad(captured(k, t(.5)))(a), (t(1.),), (t(1.),))),
     }
-    assert len(cases) == 52
-    for tag, (_, call) in cases.items():
-        call(tag)
+    assert len(cases) == 58
+    try:
+        for tag, (_, call) in cases.items():
+            call(tag)
+    finally:
+        pool.shutdown()
     got = {tag: seen.get(tag, ('never reached', None)) for tag in cases}
     want = {tag: 'admit' if expect == 'admit' else 'refuse' for tag, (expect, _) in cases.items()}
     wrong = {tag: got[tag] for tag in cases if got[tag][0] != want[tag]}

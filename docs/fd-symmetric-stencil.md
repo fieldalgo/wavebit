@@ -1204,3 +1204,66 @@ Mutants, each alone, restored and SHA-checked, every turned row listed:
 | no `requires_grad` question inside it | 2: `grad` over an inner `grad` / `jacfwd` | 0 |
 | `static_float` without it | 31 | 10 |
 | `static_int` without it | none (the table's door is a float field) | 2, by wording only |
+
+## Seventh round: a stack this thread cannot see (2026-09-25)
+
+A fourth review, of `5a95565`, enumerated every 2- to 4-deep chain of `grad`, `jvp`,
+`vmap`, `jacrev`, `jacfwd`, `vjp` and `hessian` (2,793 chains, each with the value
+captured, passed as an argument, or mixed) with the real door: every carried value was
+refused by name, and constants were refused only in the documented blind state. It also
+ran `torch.compile`, `linearize`, `functional_call`, `functionalize`, the
+`torch.autograd.functional` family, double backward, checkpointing and custom
+`autograd.Function`s: all refused, or Torch itself errors or drops the derivative with or
+without the door.
+
+What it found is a third blind state. The interpreter stack is per thread, and functorch
+lowers it to nothing inside an `autograd.Function`'s `forward`. A live `jvp` primal read in
+a worker thread of a pool, or captured into a custom Function's forward, sits at a level no
+interpreter on this thread owns; its tangent reads as absent and the door admitted it.
+Measured, a `Band` and a `PML` built in a worker from the untouched primal and read back:
+the traced `Band.wavelength` kept its derivative (1.0), the static `PML.wavelength` lost it
+(0.5 against 1.0) -- the door added a drop Torch itself would not have made -- while the
+same build in the calling thread was refused, and jax refused it in the worker too. The
+skeptic graded it minor: narrow, but silent. Now a live, non-functional wrapper whose level
+is not a Grad or Jvp level on this thread's stack is refused; a dead wrapper, one that
+escaped its transform, is still unwrapped. The same review found a batch one layer under a
+`functionalize` wrapper still reaching `unpack_dual` first, raising Torch's error: every
+layer is now asked the two questions that dispatch nothing before any is asked for a
+tangent. And it measured an over-refusal the docs had not named: the forward level is one
+global for the process, so while another thread holds a `dual_level` or is inside a `jvp`,
+this thread's `grad` or inference mode refuses a constant too -- loud, now documented.
+
+The table grew to 58 rows: the two worker-thread rows, the Function-forward row, the
+`functionalize` batch row, and two admits that pin the exceptions -- a dead `jvp` wrapper
+and a constant under `functionalize`.
+
+| design | a derivative dropped silently, of 58 | refused a value that carries nothing | refused or raised without the rule's name |
+| --- | ---: | ---: | ---: |
+| `b24a708` | 26 | 0 | 5 |
+| `d46935a` | 2 | 8 | 0 |
+| `a666d40` | 14 | 2 | 3 |
+| `1300b4e` | 7 | 0 | 3 |
+| `5a95565` | 3 | 0 | 1 |
+| now | 0 | 0 | 0 |
+
+Mutants, each alone, restored and SHA-checked (the rows are listed in the sixth round for
+the unchanged parts):
+
+| mutant | table rows it turns | door tests failed |
+| --- | --- | ---: |
+| no tangent question | 6 | 12 |
+| no batch question | none -- an equivalent mutant: a vmap batch is a wrapper at a Vmap level, which this thread's Grad and Jvp levels never own, so the foreign-level check refuses it anyway; the question is kept because it names why a batch is refused without the level bookkeeping | 0 |
+| tangent asked on each layer during the walk | the `functionalize` batch row (raises) | 0 |
+| no walk | 3: `grad` over an inner `grad` / `jacfwd`, the `functionalize` batch row | 0 |
+| no blind-stack rule | 18 | 0 |
+| blind whenever a Grad or Jvp interpreter is on the stack | 4 admits | 0 |
+| Grad only (`1300b4e`) | 5 | 0 |
+| a user `dual_level` forgotten | 2 | 0 |
+| no inference-mode check | 1 | 0 |
+| module-name gate | 1 | 0 |
+| no `requires_grad` question inside it | 2 | 0 |
+| no foreign-level check (`5a95565`) | 3: the two worker rows and the Function-forward row | 0 |
+| the foreign-level check refusing a dead wrapper | the dead `jvp` wrapper (admit) | 0 |
+| the foreign-level check refusing a `functionalize` wrapper | the constant under `functionalize` (admit) | 0 |
+| `static_float` without it | 35 | 10 |
+| `static_int` without it | none (the table's door is a float field) | 2, by wording only |

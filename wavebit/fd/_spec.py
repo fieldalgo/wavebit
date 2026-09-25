@@ -72,15 +72,32 @@ def torch_carried(v):
     stack it is asking about is not one this door will be.)
 
     **Otherwise, walk the layers.** Each ``torch.func`` wrapper, from the outside in, is asked
-    whether it requires grad, is a ``vmap`` batch or carries a forward tangent -- the batch
-    before the tangent, because ``unpack_dual`` of a batch raises -- and a layer that answers
-    no is unwrapped and the one inside asked. So a wrapper that carries nothing is admitted
-    -- ``torch.func.grad(f, argnums=0)(eps, w)`` wraps ``w`` too, and ``jax.grad`` admits the
-    same program -- and an outer ``grad``'s leaf handed to an inner ``grad`` as an argument it
-    does not differentiate, wrapped again with nothing on the new layer, is not.
+    the two questions that dispatch nothing -- does it require grad, is it a ``vmap`` batch --
+    and a layer that answers no is unwrapped and the one inside asked. Only when every layer
+    has answered no is each asked for a forward tangent: ``unpack_dual`` dispatches, and on a
+    layer over a batch (a ``functionalize`` wrapper over a ``vmap`` one, under an open forward
+    level) it raises Torch's own error instead of letting the door refuse by name. So a
+    wrapper that carries nothing is admitted -- ``torch.func.grad(f, argnums=0)(eps, w)``
+    wraps ``w`` too, and ``jax.grad`` admits the same program -- and an outer ``grad``'s leaf
+    handed to an inner ``grad`` as an argument it does not differentiate, wrapped again with
+    nothing on the new layer, is not.
+
+    **A live wrapper from a stack this thread cannot see.** The interpreter stack is per
+    thread, and functorch lowers it to nothing inside an ``autograd.Function``'s ``forward``.
+    A live ``jvp`` primal read there -- in a worker thread of a pool, or captured into a
+    custom Function -- sits at a level no interpreter here owns, and its tangent reads as
+    absent; measured, a spec built in a worker from such a primal kept a derivative of 0.5
+    where the identity hand-back keeps 1.0, while the same build in the calling thread is
+    refused (and jax refuses it in the worker too). So a live, non-functional wrapper whose
+    level is not a Grad or Jvp level on this thread's stack is refused. A dead wrapper -- one
+    that escaped its transform -- is unwrapped as before.
+
+    The forward level itself is one global for the process, not per thread: while another
+    thread holds a ``dual_level`` or is inside a ``jvp``, this thread's ``grad`` or inference
+    mode counts as blind and refuses a constant too. Loud, and a Python number passes.
 
     ``tests/test_fd_stage1_grad.py::test_torch_carried_answers_every_transform`` asks a real
-    door about 52 ways of making a Torch value; the designs before this one each dropped a
+    door about 58 ways of making a Torch value; the designs before this one each dropped a
     derivative silently on some of them (the counts are in its docstring), this on none.
 
     ``unpack_dual`` is public. ``forward_ad._current_level`` is private -- the module global
@@ -96,23 +113,29 @@ def torch_carried(v):
         return False
     from torch.autograd import forward_ad
     functorch = torch._C._functorch
+    stack = functorch.get_interpreter_stack() or ()
+    kinds = (functorch.TransformType.Grad, functorch.TransformType.Jvp)
     if forward_ad._current_level >= 0:
         if torch.is_inference_mode_enabled():
             return True
-        stack = functorch.get_interpreter_stack() or ()
-        kinds = (functorch.TransformType.Grad, functorch.TransformType.Jvp)
         autograd = [layer.level() for layer in stack if layer.key() in kinds]
         jvps = [layer.level() for layer in stack if layer.key() == functorch.TransformType.Jvp]
         lowest = min(jvps) if jvps else -1
         if any(level > lowest for level in autograd):
             return True
+    here = {layer.level() for layer in stack if layer.key() in kinds}
+    layers = []
     while True:
-        if (v.requires_grad or functorch.is_batchedtensor(v)
-                or forward_ad.unpack_dual(v).tangent is not None):
+        if v.requires_grad or functorch.is_batchedtensor(v):
             return True
+        layers.append(v)
         if not functorch.is_functorch_wrapped_tensor(v):
-            return False
+            break
+        if (not torch._is_functional_tensor(v) and not functorch.is_dead_tensor_wrapper(v)
+                and functorch.maybe_get_level(v) not in here):
+            return True
         v = functorch.get_unwrapped(v)
+    return any(forward_ad.unpack_dual(layer).tangent is not None for layer in layers)
 
 
 #: What *is* a leaf of a gradient, in the order the stages added it. One tuple, read by every
