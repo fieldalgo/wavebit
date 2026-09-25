@@ -345,21 +345,22 @@ def test_a_torch_forward_mode_value_in_a_static_door_is_refused_by_name(build, p
 
 
 def test_torch_carried_answers_every_transform():
-    """What rides on a Torch value, asked at a real static door, for 27 ways of making one.
+    """What rides on a Torch value, asked at a real static door, for 39 ways of making one.
 
     ``refuse`` where a derivative or a batch rides on the value -- ``float()`` would drop it --
     and ``admit`` where nothing does, which is what ``jax`` does with the same program (a
-    non-differentiated argument stays a concrete array). The door is ``fd.PML(wavelength=)``,
-    a float static field; an admitted value must come back as its own number.
+    non-differentiated argument stays a concrete array). ``policy`` rows carry nothing and are
+    refused by choice: they sit where a ``torch.func`` Grad interpreter is above an open
+    forward level, where no tangent can be seen, so nothing is admitted there. The door is
+    ``fd.PML(wavelength=)``, a float static field; an admitted value must read back as its
+    own number.
 
-    Measured before this design (2026-09-25, the same 27 cases on Torch 2.13): ``b24a708``
-    asked only ``requires_grad`` and was wrong on 12, 9 silently (the forward-mode rows, and
-    the five where a derivative sits under another transform's layer); ``d46935a`` refused
-    every ``torch.func`` wrapper and was wrong on 5 -- four wrappers that carry nothing, and a
-    dual of a subclass defined outside ``torch``, admitted silently. One row is a deliberate
-    over-refusal: a ``grad``-wrapped constant inside ``jvp``. From inside a ``grad`` layer a
-    tangent beneath it reads as absent (the two ``grad argnums=0 over ...`` rows are the same
-    shape and do carry one), so that layer is refused while forward mode is open.
+    Measured on the same rows (2026-09-25, Torch 2.13), a derivative dropped silently:
+    ``b24a708`` (``requires_grad`` only) on 16, ``d46935a`` (every wrapper refused, module-name
+    gate) on 2 -- the subclass dual and a dual captured into ``grad`` -- and ``a666d40`` (the
+    walk, with a Grad-level wrapper refused under forward mode) on 7: every value captured by
+    closure beneath a reverse transform, the review's blocker. ``d46935a`` also refused six
+    values that carry nothing, ``a666d40`` two.
     """
     torch = pytest.importorskip('torch')
     import torch.autograd.forward_ad as fwAD
@@ -372,9 +373,9 @@ def test_torch_carried_answers_every_transform():
 
     seen = {}
 
-    def door(tag, second=False):
+    def door(tag, pick=lambda args: args[0]):
         def f(*args):
-            v = args[-1] if second else args[0]
+            v = pick(args)
             try:
                 seen[tag] = ('admit', fd.PML(cells=12, wavelength=v).wavelength)
             except ValueError as err:
@@ -383,21 +384,24 @@ def test_torch_carried_answers_every_transform():
             return args[0] * 2.
         return f
 
+    def captured(tag, value):
+        def f(x):
+            door(tag)(value)
+            return x * value
+        return f
+
     def dual(tag, primal, detach=False):
         with fwAD.dual_level():
             d = fwAD.make_dual(primal, t(1.))
             door(tag)(d.detach() if detach else d)
 
-    def dual_second(tag, how):
+    def dual_run(fn):
         with fwAD.dual_level():
-            d = fwAD.make_dual(t(.5), t(1.))
-            if how == 'grad':
-                torch.func.grad(door(tag, True), argnums=0)(t(1.), d)
-            else:
-                torch.func.vmap(door(tag, True), in_dims=(0, None))(t([1., 1.]), d)
+            fn(fwAD.make_dual(t(.5), t(1.)))
 
-    grad, jvp, vmap = torch.func.grad, torch.func.jvp, torch.func.vmap
-    jacfwd, jacrev = torch.func.jacfwd, torch.func.jacrev
+    second = lambda args: args[-1]
+    grad, jvp, vmap, vjp = torch.func.grad, torch.func.jvp, torch.func.vmap, torch.func.vjp
+    jacfwd, jacrev, hessian = torch.func.jacfwd, torch.func.jacrev, torch.func.hessian
     cases = {
         'plain tensor': ('admit', lambda k: door(k)(t(.5))),
         'plain subclass': ('admit', lambda k: door(k)(t(.5).as_subclass(Sub))),
@@ -411,13 +415,13 @@ def test_torch_carried_answers_every_transform():
         'grad arg': ('refuse', lambda k: grad(door(k))(t(.5))),
         'jacrev arg': ('refuse', lambda k: jacrev(door(k))(t(.5))),
         'vmap batch': ('refuse', lambda k: vmap(door(k))(t([.5, .5]))),
-        'grad argnums=0, second': ('admit', lambda k: grad(door(k, True), argnums=0)(t(1.), t(.5))),
+        'grad argnums=0, second': ('admit', lambda k: grad(door(k, second), argnums=0)(t(1.), t(.5))),
         'jacfwd argnums=0, second': (
-            'admit', lambda k: jacfwd(door(k, True), argnums=0)(t(1.), t(.5))),
+            'admit', lambda k: jacfwd(door(k, second), argnums=0)(t(1.), t(.5))),
         'jacrev argnums=0, second': (
-            'admit', lambda k: jacrev(door(k, True), argnums=0)(t(1.), t(.5))),
+            'admit', lambda k: jacrev(door(k, second), argnums=0)(t(1.), t(.5))),
         'vmap in_dims=None, second': (
-            'admit', lambda k: vmap(door(k, True), in_dims=(0, None))(t([1., 1.]), t(.5))),
+            'admit', lambda k: vmap(door(k, second), in_dims=(0, None))(t([1., 1.]), t(.5))),
         'jvp(grad) arg': ('refuse', lambda k: jvp(grad(door(k)), (t(.5),), (t(1.),))),
         'jacfwd(jacrev) arg': ('refuse', lambda k: jacfwd(jacrev(door(k)))(t(.5))),
         'vmap(grad) arg': ('refuse', lambda k: vmap(grad(door(k)))(t([.5, .5]))),
@@ -425,26 +429,61 @@ def test_torch_carried_answers_every_transform():
         'tensor made inside jvp': (
             'admit', lambda k: jvp(lambda a: (door(k)(t(.5) * 1.), a * 2.)[1], (t(1.),), (t(1.),))),
         'grad-wrapped constant inside jvp': (
-            'refuse', lambda k: grad(lambda a, w: jvp(lambda b: door(k, True)(b, w), (a,),
-                                                      (t(1.),))[1], argnums=0)(t(1.), t(.5))),
+            'admit', lambda k: grad(lambda a, w: jvp(lambda b: door(k, second)(b, w), (a,),
+                                                     (t(1.),))[1], argnums=0)(t(1.), t(.5))),
         'grad argnums=0 over a jvp primal, second': (
-            'refuse', lambda k: jvp(lambda a: grad(door(k, True), argnums=0)(t(1.), a), (t(.5),),
+            'refuse', lambda k: jvp(lambda a: grad(door(k, second), argnums=0)(t(1.), a), (t(.5),),
                                     (t(1.),))),
-        'grad argnums=0 over a forward_ad dual, second': ('refuse', lambda k: dual_second(k, 'grad')),
+        'grad argnums=0 over a forward_ad dual, second': (
+            'refuse', lambda k: dual_run(lambda d: grad(door(k, second), argnums=0)(t(1.), d))),
         'vmap in_dims=None over a forward_ad dual, second': (
-            'refuse', lambda k: dual_second(k, 'vmap')),
+            'refuse', lambda k: dual_run(lambda d: vmap(door(k, second), in_dims=(0, None))(
+                t([1., 1.]), d))),
         # The outer layer carries nothing and the one beneath it does: only the walk sees it.
         'grad over an inner grad argnums=0, second': (
-            'refuse', lambda k: grad(lambda x: grad(door(k, True), argnums=0)(t(1.), x))(t(.5))),
+            'refuse', lambda k: grad(lambda x: grad(door(k, second), argnums=0)(t(1.), x))(t(.5))),
         'grad over jacfwd argnums=0, second': (
-            'refuse', lambda k: grad(lambda x: jacfwd(door(k, True), argnums=0)(t(1.), x))(t(.5))),
+            'refuse', lambda k: grad(lambda x: jacfwd(door(k, second), argnums=0)(t(1.), x))(t(.5))),
+        # Captured by closure beneath a reverse transform (the review of a666d40): no wrapper
+        # at a Grad level, and every tangent below the Grad interpreter reads as absent.
+        'forward_ad dual captured into grad': (
+            'refuse', lambda k: dual_run(lambda d: grad(captured(k, d))(t(1.)))),
+        'jvp primal captured into grad': (
+            'refuse', lambda k: jvp(lambda a: grad(captured(k, a))(t(1.)), (t(.5),), (t(1.),))),
+        'jvp primal captured into vjp': (
+            'refuse', lambda k: jvp(lambda a: vjp(captured(k, a), t(1.))[1](t(1.))[0], (t(.5),),
+                                    (t(1.),))),
+        'jvp primal captured into jacrev': (
+            'refuse', lambda k: jvp(lambda a: jacrev(captured(k, a))(t(1.)), (t(.5),), (t(1.),))),
+        'jacfwd arg captured into jacrev': (
+            'refuse', lambda k: jacfwd(lambda a: jacrev(captured(k, a))(t(1.)))(t(.5))),
+        'jvp > vmap > grad, captured primal': (
+            'refuse', lambda k: jvp(lambda a: vmap(grad(captured(k, a)))(t([1., 1.])), (t(.5),),
+                                    (t(1.),))),
+        'jvp > grad > grad, captured primal': (
+            'refuse', lambda k: jvp(lambda a: grad(grad(captured(k, a)))(t(1.)), (t(.5),),
+                                    (t(1.),))),
+        'grad arg captured into jvp': (
+            'refuse', lambda k: grad(lambda a: jvp(captured(k, a), (t(1.),), (t(1.),))[1])(t(.5))),
+        # Reverse over forward: the Grad interpreter is below the Jvp one, and nothing hides.
+        'jacrev(jacfwd) argnums=0, second': (
+            'admit', lambda k: jacrev(jacfwd(door(k, second), argnums=0), argnums=0)(t(1.), t(.5))),
+        # Refused by choice: nothing rides on these, but the stack cannot be seen through.
+        'hessian argnums=0, second': (
+            'policy', lambda k: hessian(door(k, second), argnums=0)(t(1.), t(.5))),
+        'hessian, constant made inside': (
+            'policy', lambda k: hessian(lambda x: (door(k)(t(.5) * 1.), x * x)[1])(t(1.))),
+        'constant captured into jvp > grad': (
+            'policy', lambda k: jvp(lambda a: grad(captured(k, t(.5)))(a), (t(1.),), (t(1.),))),
     }
-    assert len(cases) == 27
+    assert len(cases) == 39
     for tag, (_, call) in cases.items():
         call(tag)
     got = {tag: seen.get(tag, ('never reached', None)) for tag in cases}
-    wrong = {tag: got[tag] for tag, (expect, _) in cases.items() if got[tag][0] != expect}
-    assert not wrong, wrong
+    want = {tag: 'admit' if expect == 'admit' else 'refuse' for tag, (expect, _) in cases.items()}
+    wrong = {tag: got[tag] for tag in cases if got[tag][0] != want[tag]}
+    # A string, so a failure lists every wrong row: pytest cuts a dict message at four entries.
+    assert not wrong, '\n'.join(f'{tag}: expected {want[tag]}, got {v}' for tag, v in wrong.items())
     for tag, (verdict, value) in got.items():
         if verdict == 'admit':
             assert value == .5, (tag, value)        # read as the number it is

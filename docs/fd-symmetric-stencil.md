@@ -1021,7 +1021,13 @@ fourth round's verification runs on its own committed tree.)
 A read-only review of `d46935a` -- four lenses (the code, every claim against its
 evidence, the sweep's measurement tooling, what C3 still needs), eleven agents, nothing
 executed while the 20-hour sweep held the machine -- found no blocker or major in the
-code. Its findings, and what was done:
+code. The lens on what C3 still needs reported two blockers and three majors; its skeptics
+confirmed all five as real and graded them one major -- the slow tier had not run since
+`21bfcfe` -- and four minors (no written pass rule for C3, a C3 claim that must be scoped
+to `discretisation='stencil'`, the `studies/` seam, a spot check without an acceptance
+rule). The pass rule and the spot check's acceptance rule are now written down before the
+results (the sweep's preregistration, kept outside the repository), and the slow tier is
+queued on the declaring commit. Its findings on the code, and what was done:
 
 **`torch_carried` refused too much and missed one thing.** `d46935a` refused every
 `torch.func` wrapper. `torch.func.grad(f, argnums=0)(eps, w)` wraps `w` too, with nothing
@@ -1037,23 +1043,25 @@ does not differentiate unwraps to a tensor whose `unpack_dual` tangent is `None`
 `grad`'s output still carries the outer tangent (1.0 for `a*w*w` at `w=.5`) -- so
 `float()` there drops it silently. While a forward-mode level is open, a `grad` layer
 that answers no is therefore refused, not unwrapped; that over-refuses one wrapper that
-carries nothing (a `grad`-wrapped constant inside `jvp`), loudly.
+carries nothing (a `grad`-wrapped constant inside `jvp`), loudly. (The fifth round below
+found this mechanism misread -- the blindness belongs to the Grad interpreter on the stack,
+not to the wrapper -- and the design silent on seven captured-value rows.)
 
 `tests/test_fd_stage1_grad.py::test_torch_carried_answers_every_transform` asks a real
 static door (`fd.PML(wavelength=)`) about 27 ways of making a Torch value, and checks an
 admitted one reads back as its own number:
 
-| design | wrong of 27 | silently wrong (`float()` read the primal) |
+| design | differs from the table, of 27 | of which a derivative dropped silently |
 | --- | ---: | ---: |
-| `b24a708` (`requires_grad` only) | 12 | 9 |
+| `b24a708` (`requires_grad` only) | 12 (2 refused loudly as not a number; 1 admitted a value that carries nothing, the row this design over-refused) | 9 |
 | `d46935a` (every wrapper, module-name gate) | 5 | 1 (the subclass dual) |
-| now | 0 | 0 |
+| `a666d40` | 0 | 0 -- on these rows; see the fifth round |
 
 Mutants, each run on its own, restored and SHA-checked, with the rows each one turns:
 
 | mutant | table rows it gets wrong | other gates |
 | --- | --- | --- |
-| no tangent question | `forward_ad` dual, its subclass, `jvp` primal, `jacfwd` argument | 12 door rows |
+| no tangent question | `forward_ad` dual, its subclass, `jvp` primal, `jacfwd` argument, and a bare `forward_ad` dual under `vmap` with `in_dims=None` (the record showed four: pytest cut the dict message at four entries) | 12 door rows |
 | no batch question | the vmap row, refused as "a real number is needed" | 12 door rows |
 | no walk (stop at the outer layer) | `grad` over an inner `grad`/`jacfwd` given the leaf as a non-differentiated argument | none |
 | no `grad`-layer rule under forward mode | `grad` over a `forward_ad` dual or a `jvp` primal as a non-differentiated argument; the `grad`-wrapped constant inside `jvp` | none |
@@ -1062,13 +1070,14 @@ Mutants, each run on its own, restored and SHA-checked, with the rows each one t
 | `static_float` without it | the table fails at the vmap row | 10 door rows |
 | `static_int` without it | none (the table's door is a float field) | the `PML(cells=)` and `Run(steps=)` rows, by wording only |
 
-**The history, corrected.** `vmap` and `torch.func.grad` were never silent at a static
-door: `float()` of a vmap batch raises (it was refused as "a real number is needed"),
-and `grad` marks its argument `requires_grad`. An integer door refused every forward-mode
-value as "an integer is needed". What was silent on `b24a708` is a forward-mode value at
-a float door -- the measured `Sphere(radius=)` zero -- and a derivative carried under
-another transform's layer. The `_spec`, `fd_helpers` and third-review wording now says
-that.
+**The history, corrected.** `vmap` was never silent at a static door: `float()` of a
+vmap batch raises (it was refused as "a real number is needed"). A single
+`torch.func.grad` was never silent either -- it marks its argument `requires_grad` -- but
+a `grad` nested in another `grad` or `jacfwd`, handed the outer leaf as an argument it
+does not differentiate, was: `b24a708` read it and returned an outer derivative of 0.0
+against 1.0. An integer door refused every forward-mode value as "an integer is needed".
+What was silent on `b24a708` is a forward-mode value at a float door -- the measured
+`Sphere(radius=)` zero -- and a derivative carried under another transform's layer.
 
 **The sweep's own tooling.** The preregistration (kept with the sweep records, outside the
 repository) gained, before any 80-cell result existed: the research driver's own temporal
@@ -1077,3 +1086,59 @@ for the public spot check (bit-identical, or investigated before any verdict), a
 owner's two decisions of the day -- the cylinder arm is settled by re-running all 24
 research conditions through the moved preparation code (not `fd.run`: there is no
 `fd.Cylinder` before C4), and the 80-cell origin gets its own 624-period time extension.
+
+## Fifth round: the Grad interpreter, not the wrapper (2026-09-25)
+
+A second review, of `a666d40` and of the queue that runs after the sweep, confirmed one
+blocker. A forward-mode value **captured by closure** beneath a reverse transform --
+`jvp(lambda r: grad(lambda x: x * fd.Sphere(radius=r).radius)(1.))`, the ordinary way to
+write a mixed derivative -- was admitted and its derivative came back 0.0. The mechanism:
+while a `torch.func` Grad interpreter is on the stack, `forward_ad.unpack_dual` reads every
+forward tangent beneath it as absent, on a plain dual that `grad` never wrapped as much as
+on a wrapper; `a666d40` refused only a wrapper sitting at a Grad level, and a captured
+value is not one. Measured on Torch 2.13: `jvp` over `grad` of `x * a`, `a` captured,
+returns 1.0 with no door and 0.0 when the door reads `float(a)`; jax refuses the same
+program by name. For `jacfwd` over `jacrev` -- the pattern `torch.func.hessian` is built
+on -- `a666d40` had turned `d46935a`'s loud refusal into this silent zero.
+
+`torch_carried` now asks the stack before it asks the value: when a forward level is open
+and a Grad interpreter sits above the lowest forward level -- any Grad layer when no `jvp`
+interpreter exists (a user's `dual_level` or `linearize`, beneath every interpreter), else
+one above the lowest `jvp` -- no tangent can be seen, and every Torch tensor is refused.
+Otherwise the walk of the third round runs, without the per-wrapper rule. The review also
+measured that functorch's private `temporarily_pop_interpreter_stack` makes the hidden
+tangents readable; a door that edits the interpreter stack it is asking about was not
+adopted. The price is loud: under `torch.func.hessian`, or a constant captured into a
+`grad` inside a `jvp`, a static field handed a tensor that carries nothing is refused
+where jax admits it, and a Python number is the spelling that passes.
+
+The table grew to 39 rows -- every nested row now also passes its value by closure -- with
+three `policy` rows, refused by choice although nothing rides on them:
+
+| design | a derivative dropped silently | refused a value that carries nothing |
+| --- | ---: | ---: |
+| `b24a708` (`requires_grad` only) | 16 | 0 |
+| `d46935a` (every wrapper, module-name gate) | 2 | 6 |
+| `a666d40` (walk; Grad-level wrapper refused under forward mode) | 7 | 2 |
+| now | 0 | 0 (and the 3 policy rows) |
+
+Mutants, each alone, restored and SHA-checked; the table's failure message is now a
+string, so every row a mutant turns is listed:
+
+| mutant | table rows it turns | door tests failed |
+| --- | --- | ---: |
+| no tangent question | `forward_ad` dual, its subclass, `jvp` primal, `jacfwd` argument, bare dual under `vmap(in_dims=None)` | 12 |
+| no batch question | stops at the vmap row ("a real number is needed") | 12 |
+| no walk | `grad` over an inner `grad` / `jacfwd` given the leaf as a non-differentiated argument | 0 |
+| no blind-stack rule | the seven captured rows, the two `grad(argnums=0)` over a dual or `jvp` primal rows, the three policy rows | 0 |
+| blind whenever any Grad is on the stack | the `grad`-wrapped constant inside `jvp`; `jacrev(jacfwd)` with a non-differentiated argument (both admit) | 0 |
+| blind only above a `jvp` (a user's `dual_level` forgotten) | a `forward_ad` dual captured into `grad`, or handed to it as a non-differentiated argument | 0 |
+| module-name gate for `isinstance` | the subclass dual | 0 |
+| no `requires_grad` question inside it | `grad` over an inner `grad` / `jacfwd` | 0 |
+| `static_float` without it | stops at the vmap row | 10 |
+| `static_int` without it | none (the table's door is a float field) | 2, by wording only |
+
+Also from this review: the fourth round's counts and its T1 row are corrected above; the
+queue that runs after the sweep opens no console windows, keeps running its test tiers if
+a measurement job fails, records collection counts beside the JUnit reports, and judges
+each freezer by its printed "N of N arrays reproduce bit for bit" line.
