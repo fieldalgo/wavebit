@@ -737,9 +737,10 @@ def test_the_declaration_survives_every_backend_and_the_jit_boundary():
     -- the worst shape a guard can have. The wrapper is taken apart at ingest instead, so what
     travels is an ordinary array plus one aux key.
 
-    It has to survive the pytree round trip too: ``solve_field`` is ``jax.jit``-decorated with
-    ``self`` at argnum 0, so every jitted call rebuilds the solver, and a declaration lost
-    there would stop checking without saying so.
+    It has to survive the pytree round trip too: ``_solve_field_compiled``, the body of the
+    jitted ``solve_field``, is ``jax.jit``-decorated with ``self`` at argnum 0, so every jitted
+    call rebuilds the solver, and a declaration lost there would stop checking without saying
+    so.
     """
     sq, hx = wavebit.Lattice.rectangular(640.0, 640.0), wavebit.Lattice.hexagonal(640.0)
     X, Y = (np.asarray(c) for c in sq.meshgrid_xy((24, 24)))
@@ -765,6 +766,188 @@ def test_the_declaration_survives_every_backend_and_the_jit_boundary():
     rebuilt.lattice = hx
     with pytest.raises(ValueError, match='drawn on a different cell'):
         rebuilt.solve()
+
+
+@pytest.mark.parametrize('spelling', ['period', 'lattice'])
+def test_a_declared_structure_crosses_the_jitted_door_and_a_moved_cell_is_refused_there(spelling):
+    """The declaration is checked on the live solver, before the compiled call.
+
+    Inside the compiled ``solve_field`` the cell is a traced child -- the period always was one,
+    and the basis is one since 2026-09-24 -- so the comparison cannot run there: a structure
+    from ``Lattice.drawn`` on a solver given ``period=`` raised ``TracerArrayConversionError``
+    at the check on every call through that door, the cell it was drawn on included; given
+    ``lattice=``, it would have since the basis became a child. The door now makes the
+    check itself on the concrete cell it was handed and the one inside skips a traced cell,
+    so the declared structure answers as the eager door does and a moved cell is refused.
+    """
+    pytest.importorskip('jax')
+    sq = wavebit.Lattice.rectangular(640.0, 640.0)
+    X, Y = (np.asarray(c) for c in sq.meshgrid_xy((12, 12)))
+    layer = np.where(X ** 2 + Y ** 2 < 150.0 ** 2, 12.25, 1.0)[None]
+    cell = dict(period=[640.0, 640.0]) if spelling == 'period' else dict(lattice=sq)
+    solver = wavebit.rcwa(backend=1, structure=sq.drawn(layer), thickness=[300.0],
+                          wavelength=900.0, truncation_order=[2, 2], top=1.0, bot=1.0,
+                          theta=0.1, phi=0.2, psi=0.3, factorization='nvf', answers='field',
+                          **cell)
+    geometry = solver.freeze_geometry()
+    got, _ = solver.solve_field(3, 3, 2, geometry=geometry)
+    want, _ = solver.solve_field_eager(3, 3, 2, geometry=geometry)
+    assert np.abs(np.asarray(got.T) - np.asarray(want.T)).max() < 1e-12
+    moved = (dict(period=[700.0, 640.0]) if spelling == 'period'
+             else dict(lattice=wavebit.Lattice.hexagonal(640.0)))
+    with pytest.raises(ValueError, match='drawn on a different cell'):
+        solver.solve_field(3, 3, 2, geometry=geometry, **moved)
+
+
+def test_a_declared_structure_on_a_traced_cell_is_compared_under_grad_and_refused_under_jit():
+    """The check reads a ``jax.grad`` cell by its primal, and refuses a ``jax.jit`` one by name.
+
+    It read the cell with ``np.asarray``, which a grad tracer refuses as much as a jit one, so
+    any gradient through the cell of a declared structure died in the check with
+    ``TracerArrayConversionError``. Under ``jax.grad`` the cell has a value, and the line every
+    geometry check here draws puts it on the checked side: the cell it was drawn on answers, a
+    moved one is refused. Under ``jax.jit`` there is no value, and outside the jitted
+    ``solve_field`` -- which compares the concrete cell before its compiled call -- nothing has
+    compared it, so a moved cell there would be the silent answer the declaration exists to
+    stop. It is refused, naming the ways that can compare.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    wavebit.enable_x64()
+    sq = wavebit.Lattice.rectangular(640.0, 640.0)
+    X, Y = (np.asarray(c) for c in sq.meshgrid_xy((12, 12)))
+    layer = np.where(X ** 2 + Y ** 2 < 150.0 ** 2, 12.25, 1.0)[None]
+    # Li's rule, not NVF: NVF's own record check reads the cell with `np.asarray` too
+    # (`factorization._lattice_key`), a separate refusal of a grad-traced cell that this does
+    # not reach.
+    solver = wavebit.rcwa(backend=1, lattice=sq, structure=sq.drawn(layer), thickness=[300.0],
+                          wavelength=900.0, truncation_order=[2, 2], top=1.0, bot=1.0,
+                          theta=0.1, phi=0.2, psi=0.3)
+    geometry = solver.freeze_geometry()
+
+    def total(cell):
+        # Declared axis-aligned, as `Lattice.rectangular` would: a bare traced array cannot
+        # say so, and Li's rule refuses a cell it cannot see is rectangular.
+        basis = wavebit.Lattice(cell[:, 0], cell[:, 1], True)
+        return jnp.sum(solver.solve(lattice=basis, geometry=geometry).T).real
+
+    drawn_on = jnp.asarray(np.asarray(sq))
+    assert np.isfinite(np.asarray(jax.grad(total)(drawn_on))).all()
+    with pytest.raises(ValueError, match='drawn on a different cell'):
+        jax.grad(total)(drawn_on + jnp.asarray([[60.0, 0.0], [0.0, 0.0]]))
+    with pytest.raises(ValueError, match='traced, under jax.jit or jax.vmap'):
+        jax.jit(total)(drawn_on)
+    assert np.array_equal(np.asarray(solver.lattice), np.asarray(sq))
+
+
+def test_a_solver_handed_to_jax_jit_whole_still_solves_its_declared_structure():
+    """``jax.jit(lambda s: s.solve(...))(solver)`` on a ``Lattice.drawn`` structure answers.
+
+    The cell basis became a pytree child on 2026-09-24, so inside any jit that takes the solver
+    itself as an argument the cell is a tracer, and the declaration check -- which reads it --
+    refused a solver it had accepted while the basis rode in aux data. The flatten that starts
+    the trace now makes the comparison while the cell is still concrete, and the rebuilt copy
+    trusts it for as long as it holds that same cell. So the whole-solver jit answers what the
+    eager solve does; a cell moved on the live solver is refused at the flatten, by name; a
+    cell reassigned *inside* the trace was compared by nothing, and is refused; and a rebuilt
+    copy flattens again, which it could not while the declaration came back as a tuple.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    wavebit.enable_x64()
+    hx = wavebit.Lattice.hexagonal(640.0)
+    X, Y = (np.asarray(c) for c in hx.meshgrid_xy((12, 12)))
+    layer = np.where(X ** 2 + Y ** 2 < 150.0 ** 2, 12.25, 1.0)[None]
+    solver = wavebit.rcwa(backend=1, lattice=hx, structure=hx.drawn(layer), thickness=[300.0],
+                          wavelength=900.0, truncation_order=[2, 2], top=1.0, bot=1.0,
+                          theta=0.1, phi=0.2, psi=0.3, factorization='nvf', answers='field')
+    geometry = solver.freeze_geometry()
+    eager = float(jnp.sum(solver.solve(geometry=geometry).T).real)
+
+    whole = jax.jit(lambda s: jnp.sum(s.solve(geometry=geometry).T).real)
+    assert float(whole(solver)) == pytest.approx(eager, abs=1e-12)
+
+    def reassigned(s, cell):
+        return jnp.sum(s.solve(lattice=wavebit.Lattice(cell[:, 0], cell[:, 1], False),
+                               geometry=geometry).T).real
+    with pytest.raises(ValueError, match='traced, under jax.jit or jax.vmap'):
+        jax.jit(reassigned)(solver, jnp.asarray(np.asarray(hx)))
+
+    leaves, treedef = jax.tree_util.tree_flatten(solver)
+    rebuilt = jax.tree_util.tree_unflatten(treedef, leaves)
+    jax.tree_util.tree_flatten(rebuilt)                        # a second flatten
+    result, _ = rebuilt.solve_field(3, 3, 2, geometry=geometry)
+    assert float(jnp.sum(result.T).real) == pytest.approx(eager, abs=1e-12)
+
+    solver.lattice = wavebit.Lattice.rectangular(640.0, 640.0)
+    with pytest.raises(ValueError, match='drawn on a different cell'):
+        whole(solver)
+
+
+def test_a_structure_redeclared_inside_the_trace_is_not_trusted():
+    """The flatten's comparison covers the declaration it compared, not a later one.
+
+    Inside a whole-solver ``jax.jit`` the cell is a traced child, and the rebuilt copy trusted
+    the flatten's comparison for as long as it held the same *cell*. A structure redeclared on
+    another cell inside the trace kept that cell, so it was trusted: measured on a hexagonal
+    cell, a raster declared on a square one answered ``0.130064`` where the eager solve refuses.
+    The trust is keyed on the declaration too, which is a child beside the cell.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    wavebit.enable_x64()
+    sq, hx = wavebit.Lattice.rectangular(640.0, 640.0), wavebit.Lattice.hexagonal(640.0)
+    X, Y = (np.asarray(c) for c in hx.meshgrid_xy((8, 8)))
+    layer = np.where(X ** 2 + Y ** 2 < 150.0 ** 2, 12.25, 1.0)[None]
+    solver = wavebit.rcwa(backend=1, lattice=hx, structure=hx.drawn(layer), thickness=[300.0],
+                          wavelength=900.0, truncation_order=[1, 1], top=1.0, bot=1.0,
+                          theta=0.1, phi=0.2, psi=0.3, factorization='nvf', answers='field')
+    geometry = solver.freeze_geometry()
+
+    def redeclared(s):
+        s.structure = sq.drawn(layer)
+        return jnp.sum(s.solve(geometry=geometry).T).real
+    with pytest.raises(ValueError, match='traced, under jax.jit or jax.vmap'):
+        jax.jit(redeclared)(solver)
+
+
+def test_a_basis_built_before_jax_was_imported_crosses_the_jitted_door():
+    """The basis is a pytree child, so its class must be a pytree before the first flatten.
+
+    ``Lattice`` registers itself when one is built with JAX already loaded. A basis built
+    first -- ``Lattice.hexagonal(...)`` ahead of the first ``rcwa(backend=1)``, the order a
+    script naturally has -- is handed on unchanged by the setter, so no later ``Lattice`` is
+    built to register the class, and the jitted door refused the solver's own cell as "not a
+    valid JAX type". The backend registers it on import. A fresh interpreter, because this
+    process imported JAX long ago.
+    """
+    import os
+    import pathlib
+    import subprocess
+    import sys
+    import textwrap
+    pytest.importorskip('jax')
+    child = textwrap.dedent("""
+        import sys
+        import numpy as np
+        import wavebit
+        assert 'jax' not in sys.modules
+        cell = wavebit.Lattice.hexagonal(700.0)
+        eps = np.where(np.random.default_rng(0).random((1, 6, 6)) < 0.4, 5.76, 1.0)
+        solver = wavebit.rcwa(backend=1, lattice=cell, structure=eps, truncation_order=[1, 1],
+                              thickness=[300.0], wavelength=900.0, theta=0.2, phi=0.1, psi=0.3,
+                              answers='field', factorization='nvf')
+        result, _ = solver.solve_field(3, 3, 2, geometry=solver.freeze_geometry())
+        print('OK' if np.isfinite(np.asarray(result.T)).all() else 'not finite')
+    """)
+    root = pathlib.Path(__file__).resolve().parent.parent
+    env = {k: v for k, v in os.environ.items() if not k.startswith('JAX')}
+    env['JAX_PLATFORMS'] = 'cpu'
+    env['PYTHONPATH'] = str(root)
+    out = subprocess.run([sys.executable, '-c', child], capture_output=True, text=True, env=env,
+                         cwd=str(root))
+    assert out.returncode == 0, out.stderr[-3000:]
+    assert out.stdout.strip().splitlines()[-1] == 'OK', out.stdout[-3000:]
 
 
 def test_the_raster_basis_gradient_is_the_shear_along_one():

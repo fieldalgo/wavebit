@@ -240,11 +240,11 @@ there is no indexing left to do.
 it survives only NumPy: `jnp.asarray` and `torch.as_tensor` copy the numbers into their own
 type and the attribute is gone, so the guard would have been live on one backend and *silently
 absent* on the other two. The wrapper never travels — the `structure` setter takes it apart at
-ingest, the array goes on exactly as before, and the basis rides as one aux key so it survives
-the jit round trip. Nothing downstream sees the type. And the tag cannot go on the
-*coordinates* instead, because `np.where` drops it: measured, an attribute survives `X**2`,
-`X**2 + Y**2` and `< R**2` — all ufuncs — and dies at the one call every raster expression on
-this page ends with.
+ingest, the array goes on exactly as before, and the declared cell rides as one pytree child
+beside the solver's own cell so it survives the jit round trip. Nothing downstream sees the
+type. And the tag cannot go on the *coordinates* instead, because `np.where` drops it: measured,
+an attribute survives `X**2`, `X**2 + Y**2` and `< R**2` — all ufuncs — and dies at the one
+call every raster expression on this page ends with.
 
 **A parametric structure is refused rather than wrapped**, because that path has no frame to
 declare: a shape's `lx` and `cx` are absolute lengths, so the same recipe is the same geometry
@@ -255,6 +255,19 @@ guard at all.
 
 **It is opt-in, and that is the ceiling.** A bare array has to keep working, so this guards the
 callers who ask for it and no one else.
+
+**Under JAX the comparison needs a cell with a value.** Under `jax.grad` the cell has one and
+is compared. Under `jax.jit` it does not, so the comparison runs where the cell is still
+concrete: the jitted `solve_field` compares it on the live solver before its compiled call, and
+a solver handed to `jax.jit` whole is compared when it is flattened into the trace. Both the
+declared cell and the solver's cell are pytree values rather than static data, so a sweep that
+redraws and redeclares the raster on each cell — `lattice=L, structure=L.drawn(raster)` — is
+one compiled program, as the same sweep over a bare array is (measured: one compilation for
+three cells where the declaration used to take three, about 4 s each). What is refused is a
+cell or a declaration first assigned *inside* a `jax.jit` trace, which nothing has compared:
+assign it before the trace. And a `tree_map` over every leaf of the solver now reaches the
+declared numbers too: one that moves them apart from the cell has the structure refused as drawn
+on another cell, never answered.
 
 (The name says three things and needs all three. **`meshgrid`**, because that is what it is —
 `numpy.meshgrid` for a unit cell — and because it says the return is two filled 2-D arrays
@@ -279,7 +292,7 @@ as a lattice effect and is not one. It now raises.
 That refusal keys on the keyword being **named**, not on the values disagreeing, and that is
 what made it delicate: three internal paths legitimately hold both and hand them on, and a
 refusal that broke any of them would take jit, the typed container or the document format with
-it. `SolverJax._tree_unflatten` (where `period` is a pytree child and `lattice` is aux data),
+it. `SolverJax._tree_unflatten` (where `period` and `lattice` are both pytree children),
 `Stack.as_kwargs`, and the spec round trip — which writes `period` into every saved stack —
 all drop `period` when a basis is present. That drop is provably a no-op rather than a loss:
 `__init__` assigns `lattice` *after* `period`, and the basis setter overwrites the period slot

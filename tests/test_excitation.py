@@ -336,9 +336,9 @@ def test_a_superposition_survives_the_solver_itself_crossing_the_boundary():
     compile and pass while `_tree_flatten` carries no `excitation` at all.
 
     That is how it was: `excitation` was in neither `CHILD_NAMES` nor `aux_data`. The path that
-    matters is the other direction -- `RCWAJax.solve_field` is `jax.jit`-decorated at class
-    level with `self` at argnum 0 and not static, so every call flattens the solver and rebuilds
-    it through `__init__`. A multimode scene came back with `excitation = None` and answered the
+    matters is the other direction -- `RCWAJax._solve_field_compiled`, the body of the jitted
+    `solve_field`, is `jax.jit`-decorated at class level with `self` at argnum 0 and not static,
+    so every call flattens the solver and rebuilds it through `__init__`. A multimode scene came back with `excitation = None` and answered the
     single-wave problem: on a 1D grating, R read 0.148814934 against eager's 0.164651118, and
     0.148814934 is exactly what that scene answers with no excitation at all.
 

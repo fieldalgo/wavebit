@@ -207,11 +207,12 @@ def test_a_real_condition_through_every_other_door_answers_as_the_scene_built_wi
     would have passed. Here each door is handed a condition its answer depends on, and the
     answer must be the one a solver *built* with that condition gives, and must differ from the
     unmoved scene's, so a door that ignored the keyword cannot pass on a condition that happened
-    to change nothing.
+    to change nothing. And every door keeps the condition afterwards, as `solve` does.
 
-    The builders also keep the condition afterwards, as `solve` does. `solve_field` is left out
-    of that half and pinned on its answer only: on JAX it is jit-compiled over a copy of the
-    solver, and the copy's assignment is not what this test is about.
+    That last half held on every door but one until 2026-09-24. JAX's `solve_field` is
+    jit-compiled over a copy of the solver and took its keywords inside the trace, so it
+    answered for the new thickness and left the live solver at the old one, while NumPy and
+    Torch kept it -- the same sweep loop's next `solve()` answered two different scenes.
     """
     if backend:
         pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
@@ -225,8 +226,64 @@ def test_a_real_condition_through_every_other_door_answers_as_the_scene_built_wi
 
     assert _gap(moved, built) < 1e-12, door
     assert _gap(unmoved, built) > 1e-6, f'{name!r} moved nothing {door} answers with'
-    if door != 'solve_field':
-        assert np.array_equal(_leaves(getattr(solver, name))[0], np.asarray(value)), door
+    assert np.array_equal(_leaves(getattr(solver, name))[0], np.asarray(value)), door
+
+
+#: Conditions that are not arrays: a dispatch string and the integers that size the problem.
+#: JAX's `solve_field` handed its keywords to `jax.jit` as arguments until 2026-09-24, so the
+#: strings were refused as values it cannot trace and `truncation_order` reached its setter as
+#: a tracer, where it needs integers. The device is the third such condition, and it is not
+#: here: `'cpu'` is where every solver in this process already is, so the entry asserted
+#: nothing. It is exercised on two forced host devices, in a subprocess, by
+#: `tests/test_jax_device_placement.py::test_the_jitted_field_door_moves_the_solver_it_is_given`.
+NON_ARRAY = {'layer_algorithm': 'SMM', 'truncation_order': [1, 1]}
+
+
+@pytest.mark.parametrize('name', sorted(NON_ARRAY))
+@pytest.mark.parametrize('backend', BACKENDS, ids=lambda b: BACKEND_IDS[b])
+def test_a_condition_that_is_not_an_array_passes_the_field_door_on_every_backend(backend, name):
+    """``solve_field(layer_algorithm='SMM')`` answers, as the scene built with it, and keeps it.
+
+    A sweep over the connecting algorithm or the truncation is as ordinary as one over a
+    thickness, and on NumPy and Torch it always worked through this door. On JAX's jitted door
+    it raised: ``TypeError`` for the strings, ``ValueError`` for ``truncation_order``. Such a
+    condition is static data of the compiled call now, so a new value compiles once more, the
+    way a new solver would, and is kept like any other.
+
+    JAX's door is handed a freeze of the scene it is moved *to*. A freeze describes one scene,
+    and the NVF record is sampled at a size the truncation sets (12 x 12 at order 2, 6 x 8 at
+    order 1), so the unmoved scene's freeze is stale for ``truncation_order`` -- and the jitted
+    door replays a record on trust, as its docstring says.
+    """
+    if backend:
+        pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
+    if backend == 1:
+        wavebit.enable_x64()
+    value = NON_ARRAY[name]
+    solver = _door_scene(backend)
+    built = _door_scene(backend, **{name: value})
+    geometry = built.freeze_geometry() if backend == 1 else None
+    moved = solver.solve_field(4, 4, 4, geometry=geometry, **{name: value})
+    want = built.solve_field(4, 4, 4, geometry=geometry)
+    assert _gap(READOUT['solve_field'](moved), READOUT['solve_field'](want)) < 1e-12
+    assert getattr(solver, name) == getattr(built, name)
+
+
+@pytest.mark.parametrize('backend', BACKENDS, ids=lambda b: BACKEND_IDS[b])
+def test_a_field_door_refused_for_its_declaration_assigns_nothing(backend):
+    """A solver that did not declare ``answers='field'`` is refused before any keyword lands.
+
+    The refusal was checked first on every backend while the keywords were assigned inside the
+    call. Moving JAX's assignment out of the trace put it ahead of the jitted body, where the
+    declaration used to be read, so the order is pinned here: refused, and the thickness is the
+    one the solver was built with.
+    """
+    if backend:
+        pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
+    solver = _door_scene(backend, answers='amplitude')
+    with pytest.raises(RuntimeError, match='field'):
+        DOORS['solve_field'](solver, thickness=[3 * H])
+    assert float(np.asarray(_leaves(solver.thickness)[0])[0]) == H
 
 
 @pytest.mark.parametrize('name', ACCEPTED)

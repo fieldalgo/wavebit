@@ -20,7 +20,7 @@ from . import boundary as _boundary
 from . import factorization as _fac
 from . import anisotropy as _anisotropy
 from . import lattice as _lattice
-from .backend import _concrete, _device_of, array_namespace, as_array, check_input_precision
+from .backend import _concrete, _device_of, array_namespace, as_array, check_input_precision, checked_float
 from .conventions import (_CHI_POLARIZATION_CLASH, _COMPLEX_CHI, _DIRECTION_CLASH,
                           _PSI_POLARIZATION_CLASH, _TETM_INCIDENCE_CLASH,
                           centre_parity, corner_column, swap_fourier_origin, incident_phase_index,
@@ -125,6 +125,19 @@ def _concrete_period(value):
     if p.size == 1:
         return float(p[0]), float(p[0])
     return float(p[0]), float(p[1])
+
+
+def _concrete_2x2(A):
+    """A ``(2, 2)`` cell as a concrete array for a check, or ``None`` when it has no value.
+
+    Read through :func:`~wavebit._core.backend.checked_float`, so a ``jax.grad`` tracer is read
+    by its primal and a ``jax.jit`` or ``jax.vmap`` one is ``None``. Indexed, so a
+    :class:`Lattice`, an array and a nested tuple read alike.
+    """
+    try:
+        return _np.array([[checked_float(A[i][j]) for j in (0, 1)] for i in (0, 1)])
+    except TypeError:
+        return None
 
 
 def _holds_tracer(value):
@@ -278,6 +291,13 @@ _SCATTERING_NOT_SOLVED = (
     "there is no scattering matrix yet: run solve() -- or solve_conv(), if you built the "
     "convolution matrices yourself -- first. The declaration is right for one "
     "(layer_algorithm='SMM', answers='amplitude' or higher), so a solve will fill it."
+)
+
+_SCATTERING_SOLVED_ELSEWHERE = (
+    "there is no scattering matrix on this solver: the last call that moved its conditions was "
+    "the jitted solve_field(...), which keeps its keywords on the solver but solves inside its "
+    "own jax.jit trace, so this solver holds none for the scene it now reports. Call solve() "
+    "to build this scene's."
 )
 
 _FIELD_NOT_DECLARED = (
@@ -1296,13 +1316,43 @@ class CoreSolveMixin:
         Only a declared structure is checked. A bare array stays accepted on every cell,
         because that is the *lattice* frame rather than an undeclared Cartesian one, and it is
         what every pre-existing caller passes.
+
+        Both sides are read for a value: a ``jax.grad`` cell by its primal, and a ``jax.jit``
+        one not at all. On the JAX solver the cell and the declaration are pytree children, so
+        inside a trace they are traced; the flatten that started the trace compared them while
+        they were concrete (``SolverJax._declaration_checked_for_the_trace``), and a rebuilt copy
+        trusts that for as long as it holds the same objects. A cell or declaration assigned
+        inside a ``jax.jit`` trace was compared by nothing and is refused, by name -- the one
+        case this refuses that answered while the declaration rode as static aux data, when a
+        concrete cell assigned in the trace could still be read (``docs/oblique-lattice.md``).
         """
         if self._structure_drawn_on is None:
             return
-        # Converted here rather than at either producer: the setter stores an array and the
-        # pytree round trip restores the nested tuple it hashed as, and both are the same cell.
-        drawn = _np.asarray(self._structure_drawn_on, dtype=float)
-        here = _np.asarray(self.lattice, dtype=float)
+        # Both sides are read the same way, and both before anything else: on the JAX solver
+        # the declaration is a pytree child beside the cell, so in a rebuilt copy either can be
+        # a tracer, and `np.asarray` on one raises rather than answering `None`.
+        drawn, here = _concrete_2x2(self._structure_drawn_on), self._read_cell()
+        if drawn is None or here is None:
+            # A side with no number -- traced under `jax.jit` or `jax.vmap`. The JAX solver's
+            # cell and declaration are pytree children, so they are traced in every rebuilt
+            # copy; the flatten that built this copy compared them while they were concrete,
+            # and nothing needs asking again while the copy holds those same objects
+            # (`_cell_checked_when_flattened`). Anything else traced has been compared by
+            # nothing, and a moved one here is the silent answer this check exists to stop.
+            if self._cell_checked_when_flattened():
+                return
+            side = ('the cell it is being solved on' if here is None else
+                    'the cell it was drawn on (the solver itself is an argument of the trace, '
+                    'so its declaration is a traced leaf)')
+            raise ValueError(
+                f'this structure was declared with Lattice.drawn(...), and {side} has no value '
+                'here -- it is traced, under jax.jit or jax.vmap -- so the two cannot be '
+                'compared, and the comparison is the only thing that catches a raster solved '
+                'on a cell it was not drawn on. Differentiate the cell under jax.grad, where it '
+                'has a value; or keep the cell concrete and trace the rest, as a jitted '
+                'solve_field(..., geometry=...) on a declared solver does, assigning the cell '
+                'before the trace rather than inside it; or pass the bare array, the lattice '
+                'frame, which declares no cell.')
         if _np.allclose(drawn, here, rtol=1e-10, atol=1e-10):
             return
         raise ValueError(
@@ -1318,6 +1368,35 @@ class CoreSolveMixin:
             'Or, if the pattern is meant as fractions of the cell rather than as lengths, it '
             'is in the lattice frame: build it from `meshgrid_uv` and pass the bare array, '
             'which is portable across cells by definition.')
+
+    def _read_cell(self):
+        """The cell as a concrete ``(2, 2)`` array for a check, or ``None`` when it has no value.
+
+        Read through :func:`~wavebit._core.backend.checked_float`, so a ``jax.grad`` tracer is
+        read by its primal -- the checked side of the line every geometry check here draws --
+        and a ``jax.jit`` or ``jax.vmap`` one is ``None``. ``np.asarray`` refused both, which
+        refused every gradient through the cell of a declared structure.
+        """
+        return _concrete_2x2(self.lattice)
+
+    def _cell_objects(self):
+        """The slots the drawn-cell check compares, as objects: what a rebuilt copy was checked
+        against -- the two a cell is held in, and the declaration beside them."""
+        return (self.__dict__.get('_lattice_basis'), self.__dict__.get('_period'),
+                self.__dict__.get('_structure_drawn_on'))
+
+    def _cell_checked_when_flattened(self):
+        """Whether this is a rebuilt JAX copy still holding the cell and declaration its flatten
+        compared.
+
+        ``SolverJax._tree_flatten`` compares a declared structure against the concrete cell and
+        ``_tree_unflatten`` records the objects it rebuilt; a cell or structure assigned inside
+        the trace replaces one, and then this is ``False`` and the check refuses a traced side.
+        The declaration is in the tuple because it is a child too: with only the cell there, a
+        structure redeclared on another cell inside the trace was trusted and answered.
+        """
+        held = self.__dict__.get('_drawn_checked_against')
+        return held is not None and all(a is b for a, b in zip(held, self._cell_objects()))
 
     def _refuse_a_structure_with_no_cell(self):
         """A structure to solve, and no cell ever stated — refuse rather than assume ``(1, 1)``.
@@ -2131,7 +2210,7 @@ class CoreSolveMixin:
         """The SMM cascade's own :class:`~wavebit._core.scattering.ScatteringMatrix`.
 
         Present from ``answers='amplitude'`` up on an ``'SMM'`` solve, and *absent* otherwise
-        -- which raises, naming which of the three reasons applies, rather than handing back a
+        -- which raises, naming which of the four reasons applies, rather than handing back a
         ``None`` that says all three at once and then fails as an attribute error on it. The
         split is the one :meth:`_require_field_declaration` already makes for
         :meth:`reconstruct_field`, for the same reason: the advice differs, and two of the
@@ -2144,6 +2223,11 @@ class CoreSolveMixin:
                 _SCATTERING_WRONG_ALGORITHM.format(got=self.layer_algorithm))
         if not self._answers.covers(Answers.AMPLITUDE):
             raise RuntimeError(_SCATTERING_NOT_DECLARED.format(got=self._answers.value))
+        # The fourth reason, and a state like the third: JAX's jitted `solve_field` kept a
+        # keyword and dropped the matrix of the scene before it (`_forget_the_solve`). "No
+        # scattering matrix yet" would say no solve had run, when one ran and is gone.
+        if self._solved_scene is getattr(type(self), '_SOLVED_ELSEWHERE', None):
+            raise RuntimeError(_SCATTERING_SOLVED_ELSEWHERE)
         raise RuntimeError(_SCATTERING_NOT_SOLVED)
 
     def _finish(self, out):
@@ -2817,9 +2901,9 @@ class CoreFactorizationMixin:
         the *old* thickness -- bit-identically, so there was nothing to notice. Direct
         assignment is the idiom the tutorials and examples teach, and it was the one door into
         the solver with no check on it: the constructor and the five `**kwargs` entry points
-        have been guarded since 2026-08-26 (`_refuse_unknown_keywords`, `_assign_conditions`),
-        which is what made the gap easy to miss -- the same typo is caught in
-        `rcwa(thicknes=...)` and was not in `solver.thicknes = ...`.
+        have been guarded since 2026-08-26 (`_refuse_unknown_keywords`,
+        `_refuse_unknown_conditions`), which is what made the gap easy to miss -- the same typo
+        is caught in `rcwa(thicknes=...)` and was not in `solver.thicknes = ...`.
 
         Four constraints, each of which a plausible implementation gets wrong:
 
@@ -2834,8 +2918,8 @@ class CoreFactorizationMixin:
           which the first version refused with a message claiming `solve` did not exist.
         * **`AttributeError`, not `TypeError`.** `tests/test_domain.py` asks for
           `AttributeError` on a read-only property, and a caller cannot tell the two refusals
-          apart if the types differ. `TypeError` is what `_assign_conditions` raises at the
-          keyword door; it is the wrong type here.
+          apart if the types differ. `TypeError` is what `_refuse_unknown_conditions` raises at
+          the keyword door; it is the wrong type here.
         * **No instance state may be read.** This fires on `self.device = device`, the first
           statement of `CoreSolveMixin.__init__`, when `__dict__` is still empty.
           `_condition_names()` is a classmethod cached on the class, and `type(self)` reaches
@@ -2869,9 +2953,10 @@ class CoreFactorizationMixin:
 
         raise _unknown_attribute(type(self).__name__, name, self._condition_names())
 
-    def _assign_conditions(self, kwargs):
-        """Set conditions from keywords, refusing a name that is not one.
+    def _refuse_unknown_conditions(self, kwargs):
+        """Refuse a keyword that is not a condition, before anything is assigned.
 
+        The name check of :meth:`_conditions`, which every `**kwargs` entry point goes through.
         These entry points take `**kwargs` so an optimizer can move a design variable and
         re-solve in one call, and every one of them used to end with a bare
 
@@ -2892,14 +2977,11 @@ class CoreFactorizationMixin:
         check that refuses `tetm` beside a named incidence lives in the setter, and writing the
         slot goes around it. A private name is neither a constructor parameter nor a public
         property, so it is now simply unknown.
-        """
-        self._refuse_unknown_conditions(kwargs)
-        for name, value in kwargs.items():
-            setattr(self, name, value)
 
-    def _refuse_unknown_conditions(self, kwargs):
-        """The name check of :meth:`_assign_conditions`, on its own so :meth:`_conditions` can
-        run it before assigning anything and still assign one keyword at a time."""
+        It was one half of `_assign_conditions`, whose other half assigned the keywords and
+        kept every one -- tracers included -- until the last caller, `solve_field`, moved to
+        :meth:`_conditions` on 2026-09-24.
+        """
         if not kwargs:
             return
 
@@ -2975,11 +3057,13 @@ class CoreFactorizationMixin:
         structure came from ``Lattice.drawn`` dropped the declaration, so a moved cell was
         answered where it is refused. A setter that only *moves* a tracer an earlier keyword put
         there -- ``device``, which carries every slot to the new device -- is not one of these:
-        its own write is concrete and stays, and only the traced slots go back, as before. The
-        assignment itself runs inside the
-        ``try``: a setter that raises restores what was assigned before it. Read by the diff
-        rather than listed by name because a list goes stale on every new slot -- the first
-        fix's two tuples missed ``wavelength`` the day they were written.
+        its own write is concrete and stays, and only the traced slots go back, as before.
+
+        The assignment itself runs inside the ``try``: a setter that raises still has every
+        traced write before it put back. A concrete one stays, as it would have had the call
+        gone on -- the call failing does not make it traced. Read by the diff rather than listed
+        by name because a list goes stale on every new slot -- the first fix's two tuples missed
+        ``wavelength`` the day they were written.
 
         A value that is concrete once stored (a float, a NumPy or backend array, a torch leaf
         under autograd; anything at all outside a JAX trace) is assigned and stays, exactly
@@ -3340,6 +3424,26 @@ class CoreFactorizationMixin:
     #: traced or under autograd at the solve, and this sentinel while no solve has run. The
     #: two non-scenes answer differently in `_reject_stale_field_scene`.
     _solved_scene = _UNSOLVED = object()
+    #: The third non-scene: this solver's conditions moved in a call whose solve stayed inside
+    #: it -- JAX's compiled `solve_field`. Set by `_forget_the_solve`.
+    _SOLVED_ELSEWHERE = object()
+
+    def _forget_the_solve(self):
+        """Drop the solve state, because the scene it belonged to is no longer this solver's.
+
+        For JAX's jitted ``solve_field``, which keeps a concrete keyword on the solver, as
+        :meth:`solve` does, but solves on the copy of ``self`` its trace rebuilds -- so the
+        modes, amplitudes and scattering matrix on the live solver are still the last eager
+        solve's while the scene has moved. Walking them would reconstruct a field of neither
+        scene. Clear the obsolete state even though ``_reconstruction_scene`` also guards
+        reconstruction against changed conditions. Emptied rather than refreshed: the compiled
+        call's own state is a traced value inside it, and bringing it out would put it on the
+        live solver under an outer ``jax.jit``.
+        """
+        self.layer_info_list = []
+        self.T1 = None
+        self._scattering = None
+        self._solved_scene = self._SOLVED_ELSEWHERE
 
     def _reconstruction_scene(self):
         """The live conditions a reconstruction reads, as concrete numbers -- or ``None``.
@@ -3434,6 +3538,13 @@ class CoreFactorizationMixin:
         """
         if self._solved_scene is self._UNSOLVED:
             return
+        if self._solved_scene is self._SOLVED_ELSEWHERE:
+            raise RuntimeError(
+                'nothing to reconstruct from: the last call that moved this solver\'s conditions '
+                'was the jitted solve_field(...), which keeps its keywords on the solver but '
+                'solves inside its own jax.jit trace, so this solver holds no modes or '
+                'amplitudes for the scene it now reports. Call solve() to reconstruct from this '
+                'solver, or take the field a solve_field(...) call returns.')
         now = self._reconstruction_scene()
         if self._solved_scene is None:
             if now is None:
@@ -3503,6 +3614,11 @@ class CoreFactorizationMixin:
 
         Explicit ``sample_z`` is the one thing here that cannot be traced: bucketing a z into a
         layer needs the thicknesses as numbers. It raises rather than guessing.
+
+        After JAX's jitted ``solve_field`` kept a keyword, there is no state to reconstruct
+        from: that call solved inside its own trace, and the state before it belonged to the
+        scene before the keyword. This refuses, naming :meth:`solve` and the field that call
+        returned, until a solve runs again.
         """
         self._require_field_declaration()
         self._reject_stale_field_scene()
@@ -3569,12 +3685,17 @@ class CoreFactorizationMixin:
         `jax.default_device` inside itself for no gain.
         """
         self._require_field_declaration()
-        # An optimizer's loop sets a design variable and re-solves in one call. It was a list
-        # comprehension evaluated for its side effects in two of the three copies, which is a
-        # `for` loop written to look like a value.
-        self._assign_conditions(kwargs)
-        result = self.solve(geometry=geometry)
-        return result, self.reconstruct_field(sample_x, sample_y, sample_z, incidences)
+        # An optimizer's loop sets a design variable and re-solves in one call, under the rule
+        # `solve` keeps: a condition that is concrete once stored stays assigned, and every
+        # slot a keyword's setter left holding a tracer is put back when the call returns. This
+        # used to assign and keep everything, tracers included -- `jax.jit` (or `jax.grad`) of
+        # `solver.solve_field_eager(..., wavelength=w)` left a tracer in `solver.wavelength`,
+        # and every eager `solve()` after it raised `UnexpectedTracerError` (measured
+        # 2026-09-24). That is the leak `solve` closed on 2026-09-06, still open one door over.
+        # The reconstruction runs inside the same scope, so it reads the scene that was solved.
+        with self._conditions(kwargs):
+            result = self.solve(geometry=geometry)
+            return result, self.reconstruct_field(sample_x, sample_y, sample_z, incidences)
 
     @device_scoped
     def solve_field(self, sample_x=20, sample_y=20, sample_z=20, incidences=('incident',),
@@ -3595,6 +3716,13 @@ class CoreFactorizationMixin:
         ``kwargs`` are assigned to the solver first, which is how an optimizer moves a design
         variable and re-solves in one call. NumPy did not accept them and the other two did,
         so the same sweep loop ran on two backends and raised ``TypeError`` on the third.
+        They follow :meth:`solve`'s rule, on every backend and on JAX's jitted override too: a
+        condition that is concrete once stored stays on the solver, and nothing traced does
+        (:meth:`_conditions`). The one difference is the solve state. Here it is the call's
+        own, so :meth:`reconstruct_field` afterwards reads the scene just solved; JAX's jitted
+        override solves inside its compiled call, so a keyword it keeps drops the solver's
+        earlier solve state instead, and :meth:`reconstruct_field` refuses until :meth:`solve`
+        runs again (``docs/guide/fields.md``).
         """
         return self._solve_and_field(sample_x, sample_y, sample_z, incidences, geometry,
                                      **kwargs)

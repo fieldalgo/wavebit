@@ -26,7 +26,8 @@ from jax import tree_util                                        # noqa: E402
 from tqdm import tqdm                                            # noqa: E402
 
 from .._core.engine import (CoreFactorizationMixin, CoreSolveMixin,  # noqa: E402
-                            device_scoped)
+                            _concrete_2x2, device_scoped)
+from .._core import lattice as _lattice_module                   # noqa: E402
 from .._core.enums import DIFFERENTIABLE_BACKENDS as _DIFFERENTIABLE_BACKENDS  # noqa: E402
 from .._core.result import Result, ResultSub                     # noqa: E402
 
@@ -147,8 +148,6 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
     _RESULT = ResultJax
     _RESULT_SUB = ResultSubJax
 
-    @partial(jax.jit, static_argnums=(1, 2, 3, 4, 5),
-             static_argnames=('sample_x', 'sample_y', 'sample_z', 'incidences', 'geometry'))
     @device_scoped
     def solve_field(self, sample_x=20, sample_y=20, sample_z=20, incidences=('incident',),
                     geometry=None, **kwargs):
@@ -170,6 +169,50 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
         output shape and select which incidences to reconstruct.
 
         Use :meth:`solve_field_eager` for the eager equivalent that auto-detects.
+
+        ``kwargs`` are conditions, as on :meth:`solve`, and they are assigned *here*, on the
+        live solver, before the compiled call rather than inside it. Inside, they were handed to
+        the copy of ``self`` the trace rebuilds, and that copy is gone when the call returns.
+        Measured 2026-09-24: ``solve_field(thickness=[900.], geometry=g)`` answered for 900 and
+        left ``solver.thickness`` at 300, where NumPy and Torch keep 900, so the same sweep
+        loop's next ``solve()`` answered different scenes on different backends. And a condition
+        that is not an array could not be passed at all: ``tetm='tm'``, ``layer_algorithm``
+        and ``device`` were refused by ``jax.jit`` as arguments it cannot trace, and
+        ``truncation_order`` arrived traced at a setter that reads integers. Assigned out here,
+        a concrete condition stays, as :meth:`solve` keeps one, and reaches the compiled call
+        on ``self`` -- as a traced child, or as static aux data that compiles once more for a
+        new value, the way a new solver would. A traced one -- this call under an outer
+        ``jax.jit`` or ``jax.grad`` -- is put back when the call returns
+        (:meth:`~wavebit._core.engine.CoreFactorizationMixin._conditions`). Both refusals come
+        first, so neither leaves a keyword assigned: the missing freeze, and a solver that did
+        not declare ``answers='field'``.
+
+        **The solve itself stays inside the compiled call.** It runs on the copy of ``self``
+        the trace rebuilds, so the modes and amplitudes it leaves behind are that copy's; the
+        field this returns is their reconstruction. The live solver's own solve state is the
+        last *eager* solve's, and once a kept condition has moved the scene it describes
+        another one. Measured 2026-09-24 on a 2D raster: after an eager ``solve()``,
+        ``solve_field(top=2.25)`` and then ``reconstruct_field()`` returned a field 2.12 away
+        from the moved scene's and 0.83 from the unmoved one's -- neither; after a new
+        ``structure`` it returned the old scene's field to 3e-14 while the solver reported the
+        new raster; and after ``truncation_order=[2, 2]`` it raised a reshape ``TypeError``.
+        When a keyword changes the scene, that state is dropped here and
+        :meth:`reconstruct_field` refuses, naming both ways out
+        (:meth:`~wavebit._core.engine.CoreFactorizationMixin._forget_the_solve`). A call that
+        leaves nothing on the solver -- no keyword, or only traced ones, which go back -- keeps
+        it: the scene it describes is still the one the solver reports.
+
+        A structure declared through ``Lattice.drawn`` is checked against the cell here, before
+        the compiled call, because inside it the cell is a traced child and cannot be compared;
+        the flatten that starts the call records that it was (``_tree_flatten``), and a traced
+        cell anywhere else is refused rather than skipped. Parametric shape declarations
+        cross the compiled call through the static leaves of ``_ShapeStructure``.
+
+        Whether the call moved the scene is decided by the flattened solver before and after --
+        the scene the compiled call itself reads -- not by which objects changed, so a keyword
+        equal to what the solver held keeps the solve state. A call that fails after a concrete
+        keyword was assigned keeps that keyword, as :meth:`solve` does, and so has moved the
+        scene: the state is dropped then too.
         """
         if geometry is None:
             raise ValueError(
@@ -178,8 +221,46 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
                 '    result, field_cell = solver.solve_field(..., geometry=geometry)\n'
                 'Reuse that one geometry across calls to compile only once. '
                 'For the eager, auto-detecting path use solver.solve_field_eager(...).')
-        return self._solve_and_field(sample_x, sample_y, sample_z, incidences, geometry,
-                                     **kwargs)
+        self._require_field_declaration()
+        self._refuse_unknown_conditions(kwargs)
+        before = self._scene_as_the_compiled_call_reads_it()
+        try:
+            with self._conditions(kwargs):
+                self._refuse_a_raster_drawn_on_another_cell()
+                return self._solve_field_compiled(sample_x, sample_y, sample_z, incidences,
+                                                  geometry)
+        finally:
+            after = self._scene_as_the_compiled_call_reads_it()
+            if before is None or after is None or not _same_scene(before, after):
+                self._forget_the_solve()
+
+    def _scene_as_the_compiled_call_reads_it(self):
+        """This solver flattened -- the scene the compiled call would solve -- or ``None``.
+
+        What decides whether a call moved the scene. It was object identity over
+        ``vars(self)``, and every concrete keyword stores a new object, so
+        ``solve_field(top=1.0)`` on a solver already at ``top=1.0`` dropped a solve state that
+        still described its scene, and ``reconstruct_field`` refused where it had answered
+        exactly (measured 2026-09-24). The flattened solver is the scene by construction: it is
+        what the compiled call rebuilds and solves. ``None`` when it cannot be flattened or read,
+        which the caller treats as moved.
+        """
+        try:
+            leaves, treedef = tree_util.tree_flatten(self)
+        except Exception:                                  # noqa: BLE001 - unreadable = moved
+            return None
+        return treedef, leaves
+
+    @partial(jax.jit, static_argnums=(1, 2, 3, 4, 5))
+    @device_scoped
+    def _solve_field_compiled(self, sample_x, sample_y, sample_z, incidences, geometry):
+        """:meth:`solve_field`'s compiled body. The conditions are already on ``self``.
+
+        This, not :meth:`solve_field`, is what ``jax.jit`` wraps with ``self`` at argnum 0: every
+        call flattens the solver (:meth:`SolverJax._tree_flatten`) and runs on the solver
+        :meth:`SolverJax._tree_unflatten` rebuilds inside the trace.
+        """
+        return self._solve_and_field(sample_x, sample_y, sample_z, incidences, geometry)
 
 
 # The eager path, which is `CoreFactorizationMixin.solve_field` under its other name -- one
@@ -188,6 +269,21 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
 # geometry; the other two have nothing to be eager *relative to*. Bound here rather than inside
 # the class because the name it aliases is the one this class overrides.
 RCWAJax.solve_field_eager = CoreFactorizationMixin.solve_field
+
+
+def _same_scene(a, b):
+    """Two flattened solvers describe the same scene: one tree, and equal leaves.
+
+    A leaf that cannot be compared -- a tracer -- counts as a difference, so an unreadable
+    scene is never taken for an unmoved one.
+    """
+    (tree_a, leaves_a), (tree_b, leaves_b) = a, b
+    if tree_a != tree_b or len(leaves_a) != len(leaves_b):
+        return False
+    try:
+        return all(x is y or bool(jnp.array_equal(x, y)) for x, y in zip(leaves_a, leaves_b))
+    except Exception:                                      # noqa: BLE001 - a tracer: moved
+        return False
 
 
 try:
@@ -256,16 +352,19 @@ class OptimizerJax:
         return params
 
 
-#: The flattened children, in order, by the name each takes on `__init__`. `polarization` is
-#: the one that cannot ride through the constructor -- see `_tree_unflatten` -- and is popped
-#: there; everything else goes in as a keyword, so this order is a *listing* rather than a
-#: contract with `__init__`'s signature.
+#: The flattened children, in order, by the name each takes on `__init__`. `polarization` and
+#: `psi` are the two that cannot ride through the constructor -- see `_tree_unflatten` -- and
+#: are popped there; everything else goes in as a keyword, so this order is a *listing* rather
+#: than a contract with `__init__`'s signature.
 CHILD_NAMES = ('top', 'bot', 'theta', 'phi', 'psi', 'period', 'wavelength', 'structure',
-               'thickness', 'chi', 'polarization', 'mu', 'excitation', 'kx', 'ky')
+               'thickness', 'chi', 'polarization', 'mu', 'excitation', 'kx', 'ky', 'lattice',
+               'structure_drawn_on')
 
-#: Read through the private slot rather than the property: these three report a *resolved*
-#: value, and a round trip has to carry what was asked for.
-_PRIVATE = frozenset({'chi', 'polarization', 'mu'})
+#: Read through the private slot rather than the property: these report a *resolved* value,
+#: and a round trip has to carry what was asked for. `lattice` materialises `diag(period)` on
+#: a solver given only a period, which is not a basis anybody named; its slot is `None` there.
+_SLOTS = {'chi': '_chi', 'polarization': '_polarization', 'mu': '_mu',
+          'lattice': '_lattice_basis', 'structure_drawn_on': '_structure_drawn_on'}
 
 
 @tree_util.register_pytree_node_class
@@ -300,6 +399,20 @@ class SolverJax(RCWAJax, OptimizerJax):
     def __init__(self, *args, **kwargs):
         RCWAJax.__init__(self, *args, **kwargs)
         OptimizerJax.__init__(self, *args, **kwargs)
+
+    def _declaration_checked_for_the_trace(self):
+        """Compare a ``Lattice.drawn`` structure with a concrete cell now; ``True`` if it held.
+
+        ``False`` when there is no declaration, or either side has no value to compare -- the
+        declaration is a child too, so a solver flattened inside a trace holds a traced one --
+        and a rebuilt copy then refuses a traced side rather than trusting it. A cell that
+        disagrees with the declaration is refused here, by name, as ``solve`` refuses it.
+        """
+        if (self._structure_drawn_on is None or self._read_cell() is None
+                or _concrete_2x2(self._structure_drawn_on) is None):
+            return False
+        self._refuse_a_raster_drawn_on_another_cell()
+        return True
 
     def _tree_flatten(self):
         # `polarization` is a *value* of the incidence, so it is a child rather than aux data.
@@ -345,7 +458,26 @@ class SolverJax(RCWAJax, OptimizerJax):
         # the two orders one undeclared contract: adding a positional parameter anywhere but
         # the end would have shifted every child by one and rebuilt a different solver, in
         # silence. Two comments below warned about it; now nothing has to.
-        children = tuple(getattr(self, '_' + n, None) if n in _PRIVATE else getattr(self, n)
+        #
+        # `lattice` is a child, last, and the `Lattice` in the slot is itself a registered
+        # pytree: its two vectors are leaves and `axis_aligned` -- the one fact about a cell
+        # that decides a branch -- is its aux data, so it still keys the compile. It rode here
+        # as a nested tuple in aux until 2026-09-24, which made every basis a compile-time
+        # constant: a concrete cell sweep through the jitted `solve_field` compiled once per
+        # value, and a *traced* basis -- `jax.grad` of `solve_field(lattice=L)` -- could not be
+        # flattened at all (`.tolist()` on a tracer, `ConcretizationTypeError`). Nothing inside
+        # the trace needs the numbers concrete: the frozen geometry carries the discrete
+        # decisions, and the one check that compares a basis, `Lattice.drawn`'s, runs here
+        # while the cell is still concrete (`drawn_checked` below).
+        #
+        # `structure_drawn_on` -- the cell a `Lattice.drawn(...)` structure declared -- is a
+        # child beside it, last, for the same reason. It rode in aux as a nested tuple, so a
+        # declared structure's cell sweep compiled once per cell while the same sweep over a
+        # bare array compiled once. Whether a declaration *exists* is still in the treedef --
+        # `None` is an empty subtree -- and so is whether it was compared (`drawn_checked`);
+        # only the numbers are values. `_tree_unflatten` restores it to the slot, not through
+        # the constructor, which has no keyword for it.
+        children = tuple(getattr(self, _SLOTS[n], None) if n in _SLOTS else getattr(self, n)
                          for n in CHILD_NAMES)
         children = tuple(self._material_input(name) if name in ('top', 'bot', 'structure')
                          else value for name, value in zip(CHILD_NAMES, children))
@@ -379,14 +511,14 @@ class SolverJax(RCWAJax, OptimizerJax):
             # unset, so a rebuilt NVF solver is not handed a request `_reject_unread_nesting`
             # would refuse. Aux rather than a child because the builds branch on it.
             'li_nesting': self._nesting,
+            # Whether the `Lattice.drawn` declaration (a child, above) was compared against the
+            # cell here, while both were concrete. Inside the rebuilt copy both are traced
+            # children and cannot be compared, so the copy trusts this answer for as long as it
+            # holds the objects it was rebuilt with (`_cell_checked_when_flattened`). A moved
+            # cell is refused here, by name, before any trace starts.
+            'drawn_checked': self._declaration_checked_for_the_trace(),
             # A dispatch key like `pol`: the solves branch on it (which cascade blocks are
             # read, which way the stack is walked), so it must come back static, never traced.
-            # The cell a `Lattice.drawn(...)` structure declared, if any. A dispatch fact about
-            # the *structure*, not a value in it -- and it must survive, or a jitted solve
-            # would rebuild without the declaration and stop checking it. Carried as the plain
-            # nested list the wrapper stored, so it hashes into the treedef.
-            'structure_drawn_on': (None if self._structure_drawn_on is None
-                                   else tuple(map(tuple, self._structure_drawn_on.tolist()))),
             'incidence_side': self.incidence_side,
             # The last settable condition to reach this dict, 2026-08-30. It is a *declaration*
             # -- `'4ff'` asks for the four-field form where `auto` would have picked two -- and
@@ -416,41 +548,23 @@ class SolverJax(RCWAJax, OptimizerJax):
             # Not the pair itself (that is a child now) but the fact that `psi` was given
             # explicitly, which the always-present psi child would otherwise overwrite.
             'psi_given': self._psi_given,
-            # Both of these were missing, and both are silent when they are. `solve_field` is
-            # `jax.jit`-decorated at class level, so `self` is flattened on every call -- which
-            # means the solve ran on whatever the *rebuilt* solver carries, not on what the
-            # caller configured. Measured on a 60-degree cell: the basis came back `None`,
+            # `normal_grid` was missing beside the cell basis, and both were silent when they
+            # were: the compiled `solve_field` flattens `self` on every call, so the solve ran
+            # on whatever the *rebuilt* solver carries, not on what the caller configured.
+            # Measured on a 60-degree cell: the basis came back `None`,
             # `lattice_is_axis_aligned` flipped False -> True (taking
             # `_reject_unsupported_lattice`'s guard with it), and the jitted call answered the
             # rectangular-cell problem -- T = 0.6565 against a correct 0.5460, energy conserving
             # throughout. `shape_nvf_grid_size` fell 4096 -> 1024, which moves a shape gradient's
-            # sawtooth floor by an order of magnitude.
+            # sawtooth floor by an order of magnitude. The basis is a child now (see
+            # `CHILD_NAMES`); `shape_nvf_grid_size` sizes an array, so it stays here.
             #
-            # The basis rides as a nested tuple because aux_data has to be hashable and this is
-            # a `(2, 2)` ndarray; `lattice.as_lattice` takes it back through `np.asarray`, so
-            # the round trip is exact. It belongs in aux rather than in children for the reason
-            # its own docstring gives -- a basis decides control flow and reaches SciPy, so it
-            # is concrete by construction and can never be a tracer.
-            #
-            # Ordering note for anyone adding to this dict: `__init__` assigns `lattice` after
-            # `period` because the setter derives `period` from the basis. That still holds on
-            # the way back in, and it is correct: with a basis in play `period` is a reported
-            # quantity rather than an independent one.
-            # `.columns`, not `.tolist()` on the basis itself: `_lattice_basis` holds a
-            # `Lattice` since the cell became a design variable, and a `Lattice` has no
-            # `tolist`. Flattening an oblique solver raised `AttributeError` -- and because
-            # `solve_field` is jitted at class level, `self` is flattened on every call, so
-            # the *entire jitted field path* was unreachable on a skewed cell. Nothing caught
-            # it: jax, an oblique cell and a field reconstruction are three features the suite
-            # covered one at a time and never together.
-            'lattice': (None if self._lattice_basis is None
-                        else tuple(map(tuple, self._lattice_basis.columns.tolist()))),
             # The **raw** slot, not the property. `shape_nvf_grid_size` reads back resolved --
             # `None` becomes `max(1024, 4*truncation_order+1)` -- and putting that in aux_data
             # makes the round trip rewrite what the caller asked for: an unset grid comes back
             # as an explicit one, and `_reject_unread_normal_grid` then refuses a raster solver
-            # for a value the library itself put there. `solve_field` is jitted at class level,
-            # so this flattens on every call and it took out 23 tests at once.
+            # for a value the library itself put there. The compiled `solve_field` flattens
+            # `self` on every call, so it took out 23 tests at once.
             'shape_nvf_grid_size': self._normal_grid,
         }
 
@@ -467,22 +581,32 @@ class SolverJax(RCWAJax, OptimizerJax):
         # `formulation` is settable on the instance and on `solve()`, but not on `rcwa()`,
         # so it cannot go through the constructor either. Same treatment as `polarization`.
         formulation = aux_data.pop('formulation')
+        drawn_checked = aux_data.pop('drawn_checked')
+        named = dict(zip(CHILD_NAMES, children))
         # Same treatment, same reason: `structure` is assigned inside `__init__` and would
         # overwrite the slot, so the declaration is restored after the rebuild rather than
         # handed in. `__init__` has no keyword for it either -- it is a fact the structure
         # carried, not a parameter anyone passes.
-        drawn_on = aux_data.pop('structure_drawn_on')
-        named = dict(zip(CHILD_NAMES, children))
+        drawn_on = named.pop('structure_drawn_on')
         if isinstance(named['structure'], _ShapeStructure):
             named['structure'] = named['structure'].value
         polarization = named.pop('polarization')
+        # `psi` too, and for the same kind of reason: the slot holds a value whenever `psi`
+        # was not declared away, and the constructor reads a `psi` keyword as a *given* one.
+        # So a solver whose `tetm` was assigned after it was built -- the slot still holding
+        # the default angle, which is what the setter leaves -- came back through
+        # `cls(psi=..., tetm='te')` and was refused as naming the incidence twice, inside
+        # JAX's tree machinery: `solve_field(tetm='te')` raised there on every 1D solver built
+        # without it (measured 2026-09-24). Restored as the slot it was, beside `_psi_given`.
+        psi = named.pop('psi')
         # `period` and `lattice` are two spellings of one cell and naming both is refused at
-        # the constructor, but this path holds both by construction -- `period` is a child
-        # (it has to be, it is a design variable on a rectangular cell) and `lattice` is aux
-        # data. Dropping it here is provably a no-op rather than a loss: `__init__` assigns
-        # `self.lattice` *after* `self.period`, and that setter overwrites the period slot
-        # with `periods_of(A)`, so a period passed beside a basis has never reached anything.
-        if named.get('lattice') is not None or aux_data.get('lattice') is not None:
+        # the constructor, but this path holds both by construction -- both are children,
+        # `period` because it is a design variable on a rectangular cell and the basis because
+        # it is one on any cell. Dropping it here is provably a no-op rather than a loss:
+        # `__init__` assigns `self.lattice` *after* `self.period`, and that setter overwrites
+        # the period slot with `periods_of(A)`, so a period passed beside a basis has never
+        # reached anything.
+        if named.get('lattice') is not None:
             named.pop('period', None)
         solver = cls(**named, **aux_data)
         solver._formulation = formulation
@@ -491,19 +615,26 @@ class SolverJax(RCWAJax, OptimizerJax):
         # guards that with a try/except, but there is nothing left to validate here anyway --
         # this pair was validated when the solver it came from was built.
         solver._polarization = polarization
+        solver._psi = psi
         solver._psi_given = psi_given
-        # Left as the nested tuple it hashed as; the refusal converts when it compares, so
-        # this module needs no numpy of its own.
         solver._structure_drawn_on = drawn_on
+        if drawn_checked:
+            solver._drawn_checked_against = solver._cell_objects()
 
         return solver
 
 
 # Registered here rather than in a package `__init__`, which is where it lived: the class is
 # defined in this module, so the registration cannot be reached without it and cannot run
-# before it. `SolverJax` is a pytree because `solve_field` is `jax.jit`-decorated at class
-# level with `self` at argnum 0 -- every call flattens the solver and rebuilds it through
-# `__init__`. What that costs when a slot is forgotten is in `_tree_flatten`'s comments.
+# before it. `SolverJax` is a pytree because `_solve_field_compiled`, the body of `solve_field`,
+# is `jax.jit`-decorated at class level with `self` at argnum 0 -- every call flattens the
+# solver and rebuilds it through `__init__`. What that costs when a slot is forgotten is in
+# `_tree_flatten`'s comments.
 tree_util.register_pytree_node(SolverJax,
                                SolverJax._tree_flatten,
                                SolverJax._tree_unflatten)
+# The cell basis is a child of that tree, so its own class has to be a pytree before the first
+# flatten. `Lattice` registers itself lazily when one is built with JAX loaded, and a basis
+# built *before* this module was imported -- `Lattice.hexagonal(400.)` ahead of the first
+# `rcwa(backend=1)` -- is handed on as it is, so nothing would register it in time.
+_lattice_module._register_pytree_if_jax_loaded()

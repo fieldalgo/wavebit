@@ -411,6 +411,36 @@ _MOVE_CHILD = """
 """
 
 
+_FIELD_DOOR_CHILD = """
+    import jax
+    import numpy as np
+    import wavebit
+    wavebit.enable_x64()
+    cpus = jax.devices('cpu')
+    assert len(cpus) == 2, f'the forced second host device did not appear: {{cpus}}'
+    eps = np.where(np.random.default_rng(0).random((1, 6, 6)) < 0.4, 5.76, 1.0)
+    kw = dict(structure=eps, period=[700.0, 700.0], truncation_order=[1, 1], thickness=[300.0],
+              wavelength=900.0, theta=0.2, phi=0.1, psi=0.3, answers='field')
+    bad = []
+    for first, second in ((cpus[0], cpus[1]), (cpus[1], cpus[0])):
+        solver = wavebit.rcwa(backend=1, device=first, **kw)
+        built = wavebit.rcwa(backend=1, device=second, **kw)
+        geometry = built.freeze_geometry()
+        got = solver.solve_field(3, 3, 2, geometry=geometry, device=second)
+        want = built.solve_field(3, 3, 2, geometry=geometry)
+        if solver.device != [second]:
+            bad.append(f'{{first}}->{{second}}: solver.device reads {{solver.device}}')
+        if not all(np.array_equal(np.asarray(a), np.asarray(b)) for a, b in
+                   zip(jax.tree_util.tree_leaves(got), jax.tree_util.tree_leaves(want))):
+            bad.append(f'{{first}}->{{second}}: answer differs from a solver built there')
+        on = {{str(d) for x in jax.tree_util.tree_leaves((got, solver))
+              if isinstance(x, jax.Array) for d in x.devices()}}
+        if on != {{str(second)}}:
+            bad.append(f'{{first}}->{{second}}: arrays on {{sorted(on)}}')
+    print('; '.join(bad) if bad else 'OK')
+"""
+
+
 def _two_host_devices(child):
     """Run ``child`` in a fresh interpreter with two host devices; return its stdout lines."""
     tests = pathlib.Path(__file__).resolve().parent
@@ -503,6 +533,18 @@ def test_a_moved_solver_answers_as_one_built_where_it_was_moved():
     either route. The keyword also opened the old device's scope, before it was assigned.
     """
     lines = _two_host_devices(_MOVE_CHILD)
+    assert lines and lines[-1] == 'OK', '; '.join(lines)[-3000:]
+
+
+def test_the_jitted_field_door_moves_the_solver_it_is_given():
+    """`solve_field(device=X, geometry=...)` answers on X, as a solver built there, and stays.
+
+    The device is a condition like any other at this door: assigned on the live solver before
+    the compiled call, kept after it, and part of the call's static data, so the new device's
+    program is the one that runs. It used to be checked as `device='cpu'` in
+    `tests/test_solve_keywords.py`, on a solver already on the CPU, which asserted nothing.
+    """
+    lines = _two_host_devices(_FIELD_DOOR_CHILD)
     assert lines and lines[-1] == 'OK', '; '.join(lines)[-3000:]
 
 

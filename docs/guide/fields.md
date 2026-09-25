@@ -32,6 +32,16 @@ again integrates the retained complex fields and requires `'amplitude'` or
 `'field'`. An efficiency-only solve uses those fields to compute power, then
 releases them instead of keeping a hidden reconstruction state.
 
+## The jitted solver method
+
+On JAX, `solver.solve_field(..., geometry=g)` returns the result and field from a
+compiled copy of the solver. It does not install that copy's solve state on the
+live solver. Concrete keyword conditions stay on the live solver, following
+`solve()`; when they change its scene, its earlier solve state is dropped and
+`solver.reconstruct_field()` refuses until another `solve()`. Use the returned
+field or result instead. Keywords that are only traced are restored afterwards.
+A saved result continues to own its field state independently of the live solver.
+
 ## Coordinates
 
 Each sampling argument accepts a positive integer count or a nonempty 1-D array of

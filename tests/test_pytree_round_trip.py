@@ -1,7 +1,8 @@
 """One exhaustive check that a flattened solver comes back as the solver it was.
 
-`SolverJax` is a registered pytree, and `solve_field` is `jax.jit`-decorated at class level,
-so `self` is flattened and rebuilt on **every call**. Anything `_tree_flatten` forgets is not
+`SolverJax` is a registered pytree, and `_solve_field_compiled` -- the body of the jitted
+`solve_field` -- is `jax.jit`-decorated at class level with `self` at argnum 0, so `self` is
+flattened and rebuilt on **every call**. Anything `_tree_flatten` forgets is not
 merely lost -- the solve then runs on the rebuilt solver, which is to say on a different scene
 than the caller configured, and it answers.
 
@@ -46,8 +47,11 @@ CARRIED = (
 
 #: Aux keys that are not attributes under the same name. `psi_given` is the *fact* that `psi`
 #: was named rather than derived, and `device` is a per-backend handle that compares by
-#: identity rather than by value -- both are checked separately below.
-AUX_NOT_IN_CARRIED = {'psi_given', 'device'}
+#: identity rather than by value -- both are checked separately below. `drawn_checked` is a
+#: fact about the *flatten* (it compared the `Lattice.drawn` declaration with a concrete cell),
+#: not about the solver; `test_the_declaration_survives_every_backend_and_the_jit_boundary` and
+#: `test_the_flatten_check_is_carried_and_keyed_on_the_objects_it_compared` pin it.
+AUX_NOT_IN_CARRIED = {'psi_given', 'device', 'drawn_checked'}
 
 
 def _scene(**over):
@@ -176,6 +180,84 @@ def test_psi_given_survives_because_the_psi_child_would_overwrite_it():
         assert _round_trip(solver)._psi_given is given, kw
 
 
+def test_a_declaration_assigned_after_construction_comes_back():
+    """`tetm` set on a live 1D solver round-trips, as it does when it was given to `rcwa`.
+
+    Assigned afterwards, the declaration sits beside the default angle the constructor put in
+    the `psi` slot -- the setter leaves it there -- and the rebuild used to hand that angle back
+    through `cls(psi=..., tetm=...)`, where it reads as a *given* one and is refused as naming
+    the incidence twice. So `solve_field(tetm='te')` raised inside JAX's tree machinery on every
+    1D solver built without it, with `tetm` already assigned on the live solver. The `psi` slot
+    now comes back as the slot it was, beside `psi_given`.
+    """
+    solver = _one_row(phi=None)
+    solver.tetm = 'te'
+    rebuilt = _round_trip(solver)
+    assert rebuilt.tetm == 'te'
+    assert rebuilt._psi_given is False
+    assert _same(rebuilt._psi, solver._psi)
+
+
+def test_the_cell_basis_is_a_child_so_a_traced_one_flattens():
+    """The basis rides as leaves, so `jax.grad` over a cell can cross the compiled boundary.
+
+    It rode in aux as a nested tuple, hashed into the treedef: every concrete basis was a new
+    compilation of the jitted `solve_field`, and a traced one raised `ConcretizationTypeError`
+    at `.tolist()` before anything was solved. A period-only solver names no basis, and its
+    slot comes back empty rather than as the `diag(period)` the property materialises.
+    """
+    import jax
+    solver = _scene()
+    leaves = jax.tree_util.tree_leaves(solver)
+    assert any(leaf is solver._lattice_basis.u for leaf in leaves)
+    _, aux = solver._tree_flatten()
+    assert 'lattice' not in aux
+    assert _round_trip(_one_row())._lattice_basis is None
+
+
+def test_the_drawn_on_cell_is_a_child_and_only_its_presence_is_static():
+    """A `Lattice.drawn` declaration's numbers are leaves; that one exists is in the treedef.
+
+    They rode in aux as a nested tuple, so two solvers declared on different cells had
+    different treedefs, and a declared structure's cell sweep through the jitted `solve_field`
+    compiled once per cell where the same sweep over a bare array compiled once. Declared and
+    undeclared still differ in the treedef -- `None` is an empty subtree -- because whether a
+    check exists decides what the compiled call does.
+    """
+    import jax
+    from wavebit.backends.jax_backend import SolverJax
+
+    def declared_on(a):
+        cell = wavebit.Lattice.hexagonal(a)
+        return _scene(lattice=cell, structure=cell.drawn(np.ones((1, 16, 16))))
+
+    solver = declared_on(P)
+    leaves = jax.tree_util.tree_leaves(solver)
+    assert any(leaf is solver._structure_drawn_on for leaf in leaves)
+    _, aux = solver._tree_flatten()
+    assert 'structure_drawn_on' not in aux
+    assert (jax.tree_util.tree_structure(solver)
+            == jax.tree_util.tree_structure(declared_on(1.1 * P)))
+    bare = _scene(lattice=wavebit.Lattice.hexagonal(P), structure=np.ones((1, 16, 16)))
+    assert jax.tree_util.tree_structure(solver) != jax.tree_util.tree_structure(bare)
+    assert isinstance(_round_trip(solver), SolverJax)
+
+
+def test_the_flatten_check_is_carried_and_keyed_on_the_objects_it_compared():
+    """A rebuilt copy trusts the flatten's comparison only while it holds what was compared.
+
+    The cell *and* the declaration are children, so either can be traced in a rebuilt copy.
+    The trust was keyed on the cell alone, and a structure redeclared on another cell inside
+    the trace was trusted and answered -- the silent answer the declaration exists to stop.
+    """
+    rebuilt = _round_trip(_scene())
+    assert rebuilt._cell_checked_when_flattened()
+    again = _round_trip(_scene())
+    again.structure = again.lattice.drawn(np.ones((1, 16, 16)))
+    assert not again._cell_checked_when_flattened()
+    assert not _round_trip(_scene(structure=np.ones((1, 16, 16))))._cell_checked_when_flattened()
+
+
 def test_the_rebuild_names_its_arguments():
     """`_tree_unflatten` may not hand the children to `__init__` by position.
 
@@ -222,9 +304,10 @@ def test_every_constructor_parameter_is_carried_by_the_pytree():
     is no aux key to notice, so the check has nothing to fire on.
 
     That is how `excitation` got here. It is this branch's feature, it went into the signature
-    and into the solve, and the pytree never learned about it. `solve_field` is jit-decorated
-    at class level, so `self` is flattened and rebuilt every call, and the rebuild handed the
-    solve `excitation = None`: a multimode scene silently answered the single-wave problem.
+    and into the solve, and the pytree never learned about it. The jitted `solve_field`'s body
+    is jit-decorated at class level, so `self` is flattened and rebuilt every call, and the
+    rebuild handed the solve `excitation = None`: a multimode scene silently answered the
+    single-wave problem.
     Eager against jitted on a 1D grating, R read 0.148814934 where eager gave 0.164651118 --
     and 0.148814934 is exactly what the same scene answers with no excitation at all.
 
