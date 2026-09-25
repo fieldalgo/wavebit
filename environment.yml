@@ -26,5 +26,6 @@ dependencies:
       # oracle here that validates diffraction orders -- the analytic multilayer
       # reference covers uniform layers only -- so it earns a place in the dev
       # environment. Needs Octave itself on PATH (brew install octave), and the
-      # Reticolo sources, which are not redistributable and live outside this repo.
+      # Reticolo sources, kept outside this repo by choice -- their licence
+      # declarations are recorded in tests/references/README.md.
       - oct2py>=6.0
