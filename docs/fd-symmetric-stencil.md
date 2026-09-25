@@ -1101,7 +1101,8 @@ returns 1.0 with no door and 0.0 when the door reads `float(a)`; jax refuses the
 program by name. For `jacfwd` over `jacrev` -- the pattern `torch.func.hessian` is built
 on -- `a666d40` had turned `d46935a`'s loud refusal into this silent zero.
 
-`torch_carried` now asks the stack before it asks the value: when a forward level is open
+`torch_carried` now asks the stack before it asks the value (the sixth round below found
+a second Jvp interpreter hides as a Grad one does): when a forward level is open
 and a Grad interpreter sits above the lowest forward level -- any Grad layer when no `jvp`
 interpreter exists (a user's `dual_level` or `linearize`, beneath every interpreter), else
 one above the lowest `jvp` -- no tangent can be seen, and every Torch tensor is refused.
@@ -1112,8 +1113,9 @@ adopted. The price is loud: under `torch.func.hessian`, or a constant captured i
 `grad` inside a `jvp`, a static field handed a tensor that carries nothing is refused
 where jax admits it, and a Python number is the spelling that passes.
 
-The table grew to 39 rows -- every nested row now also passes its value by closure -- with
-three `policy` rows, refused by choice although nothing rides on them:
+The table grew to 39 rows -- the nested cases the review found, also by closure (five
+nested argument rows had no closure twin until the sixth round) -- with three `policy`
+rows, refused by choice although nothing rides on them:
 
 | design | a derivative dropped silently | refused a value that carries nothing |
 | --- | ---: | ---: |
@@ -1142,3 +1144,63 @@ Also from this review: the fourth round's counts and its T1 row are corrected ab
 queue that runs after the sweep opens no console windows, keeps running its test tiers if
 a measurement job fails, records collection counts beside the JUnit reports, and judges
 each freezer by its printed "N of N arrays reproduce bit for bit" line.
+
+## Sixth round: a second Jvp interpreter hides too (2026-09-25)
+
+A third review, of `1300b4e`, confirmed one blocker, from two lenses independently:
+forward over forward. `jvp(lambda a: jvp(lambda x: x * fd.PML(cells=12,
+wavelength=a).wavelength, (1.,), (1.,))[1], (.5,), (1.,))` returned 0.0 against a central
+difference of 1.0, admitted without a word; so did `jacfwd(jacfwd(...))` -- a documented
+way to build a Hessian -- and a `jvp` primal handed to an inner `jacfwd(argnums=0)`. A Jvp
+interpreter runs on autograd like a Grad one and lifts a lower-level tensor into a fresh
+wrapper before `unpack_dual` reads it, so a tangent beneath a second Jvp layer reads as
+absent too. Over every 2- and 3-deep chain of `grad`, `jvp`, `vmap`, `jacrev` and `jacfwd`
+with a transform's argument captured at the innermost door (the review's enumeration,
+275 rows), `1300b4e` admitted 40, every one changing the outer number; jax refuses the
+three forms checked -- `jvp` over `jvp`, `jacfwd` over `jacfwd`, `jvp` over
+`jacfwd(argnums=0)` -- by name. The same review found a vmap batch at a door under an open forward level
+raising Torch's own `RuntimeError` from `unpack_dual` (16 chain rows) instead of the
+refusal, and inference mode inside a `jvp` doing the same.
+
+Now a Grad **or** a second Jvp interpreter above the lowest open forward level blinds the
+query and every Torch tensor is refused; inference mode under an open forward level is
+refused with it; the walk asks the batch before the tangent. Re-run on the same
+enumeration: 275 of 275 refused by name, none silent, none raising. The price, measured
+on the review's enumeration of constants (a tensor nothing rides on, made inside, made
+outside, or made in the outermost body, beneath every 1- to 3-deep chain): 240 of 465 are
+refused, loudly, where jax admits them -- every one sits in forward over forward or
+reverse inside forward. A finer rule (refuse only a Jvp-level wrapper with an autograd
+interpreter above it) refuses fewer; after three rounds that each found the finer rule of
+the round before silent somewhere, this one takes the coarse rule. A Python number passes
+everywhere.
+
+The table grew to 52 rows (four `policy`): the forward-over-forward cases, a closure twin
+for each nested argument row that lacked one, the inference-mode row and a vmap batch
+inside a `jvp`. A row that raises, or refuses without the rule's sentence, is now a row
+result rather than an error that stops the table, so a mutant's effect is listed whole.
+
+| design | a derivative dropped silently, of 52 | refused a value that carries nothing | refused or raised without the rule's name |
+| --- | ---: | ---: | ---: |
+| `b24a708` | 23 | 0 | 4 (a batch: "a real number is needed") |
+| `d46935a` | 2 | 6 | 0 |
+| `a666d40` | 11 | 2 | 2 (`unpack_dual` raised) |
+| `1300b4e` | 4 | 0 | 2 (`unpack_dual` raised) |
+| now | 0 | 0 | 0 |
+
+Mutants, each alone, restored and SHA-checked, every turned row listed:
+
+| mutant | table rows it turns | door tests failed |
+| --- | --- | ---: |
+| no tangent question | 6: the `forward_ad` dual, its subclass, captured into `vmap` and under `vmap(in_dims=None)`; the `jvp` primal; the `jacfwd` argument | 12 |
+| no batch question | 3: the vmap batch, captured into `grad`, inside `jvp` | 12 |
+| tangent asked before the batch | the vmap batch inside `jvp` (raises) | 0 |
+| no walk | 2: `grad` over an inner `grad` / `jacfwd` given the leaf as a non-differentiated argument | 0 |
+| no blind-stack rule | 18: thirteen where a tangent sits beneath a Grad or a second Jvp layer, the four policy rows, the inference row | 0 |
+| blind whenever a Grad or Jvp interpreter is on the stack | 4 admits: the `jacfwd(argnums=0)` second argument, `jacrev(jacfwd)`, a tensor made inside `jvp`, a `grad`-wrapped constant inside `jvp` | 0 |
+| Grad only (`1300b4e`) | 5: the forward-over-forward rows | 0 |
+| a user `dual_level` forgotten | 2: a `forward_ad` dual captured into `grad` or handed to it | 0 |
+| no inference-mode check | the inference row (raises) | 0 |
+| module-name gate | the subclass dual | 0 |
+| no `requires_grad` question inside it | 2: `grad` over an inner `grad` / `jacfwd` | 0 |
+| `static_float` without it | 31 | 10 |
+| `static_int` without it | none (the table's door is a float field) | 2, by wording only |

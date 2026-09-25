@@ -53,32 +53,35 @@ def torch_carried(v):
     are 1.97e-7 (stencil) and 1.84e-7 (voxel) (``docs/fd-symmetric-stencil.md``, third
     review).
 
-    **First, can a tangent be seen here at all?** Not while a ``torch.func`` Grad interpreter
-    sits above the lowest open forward-mode level. There, ``forward_ad.unpack_dual`` reads
-    every forward tangent beneath the Grad layer as absent -- on a wrapper and on a plain dual
-    alike -- while the derivative still flows: measured, ``jvp`` over ``grad`` of ``x * a``
-    with ``a`` captured by closure returns 1.0 without a door and 0.0 when a door reads
-    ``float(a)``. So in that state every Torch tensor is refused, whatever it carries: a
-    forward level with no ``jvp`` interpreter is a user's ``dual_level`` (or ``linearize``),
-    beneath every interpreter, and any Grad layer hides it; with ``jvp`` interpreters, a Grad
-    layer above the lowest of them hides it. That refuses some values that carry nothing --
-    under ``torch.func.hessian`` (``jacfwd`` over ``jacrev``), or a constant captured into a
-    ``grad`` inside a ``jvp`` -- which ``jax`` admits. It is loud, and a Python number is the
-    spelling that passes. (Torch can be made to see through -- functorch's private
-    ``temporarily_pop_interpreter_stack`` recovers the tangents, a review measured -- but a
-    check that edits the interpreter stack it is asking about is not one this door will be.)
+    **First, can a tangent be seen here at all?** Not while a ``torch.func`` interpreter that
+    runs on autograd -- Grad or Jvp -- sits above the lowest open forward-mode level. There,
+    ``forward_ad.unpack_dual`` reads every forward tangent beneath it as absent, on a wrapper
+    and on a plain dual alike, while the derivative still flows. Measured on Torch 2.13:
+    ``jvp`` over ``grad`` of ``x * a``, ``a`` captured by closure, is 1.0 without a door and
+    0.0 when a door reads ``float(a)``; ``jvp`` over ``jvp`` the same (a Grad layer was found
+    first, in the fifth round; a second Jvp layer in the sixth). So in that state every Torch
+    tensor is refused, whatever it carries: a forward level with no ``jvp`` interpreter is a
+    user's ``dual_level`` (or ``linearize``), beneath every interpreter, so any Grad layer
+    hides it; with ``jvp`` interpreters, a Grad or a second Jvp layer above the lowest of
+    them hides it. Inference mode under an open forward level is refused the same way --
+    ``unpack_dual`` raises there. That refuses some values that carry nothing -- under
+    ``torch.func.hessian``, forward over forward, or a constant captured into a ``grad``
+    inside a ``jvp`` -- which ``jax`` admits. It is loud, and a Python number is the
+    spelling that passes. (Functorch's private ``temporarily_pop_interpreter_stack``
+    recovers the hidden tangents, a review measured; a check that edits the interpreter
+    stack it is asking about is not one this door will be.)
 
     **Otherwise, walk the layers.** Each ``torch.func`` wrapper, from the outside in, is asked
-    whether it requires grad, carries a forward tangent or is a ``vmap`` batch, and a layer
-    that answers no is unwrapped and the one inside asked. So a wrapper that carries nothing
-    is admitted -- ``torch.func.grad(f, argnums=0)(eps, w)`` wraps ``w`` too, and ``jax.grad``
-    admits the same program -- and an outer ``grad``'s leaf handed to an inner ``grad`` as an
-    argument it does not differentiate, wrapped again with nothing on the new layer, is not.
+    whether it requires grad, is a ``vmap`` batch or carries a forward tangent -- the batch
+    before the tangent, because ``unpack_dual`` of a batch raises -- and a layer that answers
+    no is unwrapped and the one inside asked. So a wrapper that carries nothing is admitted
+    -- ``torch.func.grad(f, argnums=0)(eps, w)`` wraps ``w`` too, and ``jax.grad`` admits the
+    same program -- and an outer ``grad``'s leaf handed to an inner ``grad`` as an argument it
+    does not differentiate, wrapped again with nothing on the new layer, is not.
 
     ``tests/test_fd_stage1_grad.py::test_torch_carried_answers_every_transform`` asks a real
-    door about 39 ways of making a Torch value. On it ``b24a708`` dropped a derivative
-    silently on 16, ``d46935a`` on 2, ``a666d40`` (which asked only the wrapper's own level)
-    on 7 -- every value captured by closure beneath a reverse transform -- and this on none.
+    door about 52 ways of making a Torch value; the designs before this one each dropped a
+    derivative silently on some of them (the counts are in its docstring), this on none.
 
     ``unpack_dual`` is public. ``forward_ad._current_level`` is private -- the module global
     that ``dual_level`` keeps -- and so is everything read from ``torch._C._functorch``, the
@@ -94,14 +97,18 @@ def torch_carried(v):
     from torch.autograd import forward_ad
     functorch = torch._C._functorch
     if forward_ad._current_level >= 0:
+        if torch.is_inference_mode_enabled():
+            return True
         stack = functorch.get_interpreter_stack() or ()
-        grads = [layer.level() for layer in stack if layer.key() == functorch.TransformType.Grad]
+        kinds = (functorch.TransformType.Grad, functorch.TransformType.Jvp)
+        autograd = [layer.level() for layer in stack if layer.key() in kinds]
         jvps = [layer.level() for layer in stack if layer.key() == functorch.TransformType.Jvp]
-        if grads and (not jvps or max(grads) > min(jvps)):
+        lowest = min(jvps) if jvps else -1
+        if any(level > lowest for level in autograd):
             return True
     while True:
-        if (v.requires_grad or forward_ad.unpack_dual(v).tangent is not None
-                or functorch.is_batchedtensor(v)):
+        if (v.requires_grad or functorch.is_batchedtensor(v)
+                or forward_ad.unpack_dual(v).tangent is not None):
             return True
         if not functorch.is_functorch_wrapped_tensor(v):
             return False

@@ -345,22 +345,24 @@ def test_a_torch_forward_mode_value_in_a_static_door_is_refused_by_name(build, p
 
 
 def test_torch_carried_answers_every_transform():
-    """What rides on a Torch value, asked at a real static door, for 39 ways of making one.
+    """What rides on a Torch value, asked at a real static door, for 52 ways of making one.
 
     ``refuse`` where a derivative or a batch rides on the value -- ``float()`` would drop it --
     and ``admit`` where nothing does, which is what ``jax`` does with the same program (a
     non-differentiated argument stays a concrete array). ``policy`` rows carry nothing and are
-    refused by choice: they sit where a ``torch.func`` Grad interpreter is above an open
-    forward level, where no tangent can be seen, so nothing is admitted there. The door is
+    refused by choice: they sit where a ``torch.func`` Grad or Jvp interpreter is above the
+    lowest open forward level, where no tangent can be seen, so nothing is admitted there. The door is
     ``fd.PML(wavelength=)``, a float static field; an admitted value must read back as its
     own number.
 
     Measured on the same rows (2026-09-25, Torch 2.13), a derivative dropped silently:
-    ``b24a708`` (``requires_grad`` only) on 16, ``d46935a`` (every wrapper refused, module-name
-    gate) on 2 -- the subclass dual and a dual captured into ``grad`` -- and ``a666d40`` (the
-    walk, with a Grad-level wrapper refused under forward mode) on 7: every value captured by
-    closure beneath a reverse transform, the review's blocker. ``d46935a`` also refused six
-    values that carry nothing, ``a666d40`` two.
+    ``b24a708`` (``requires_grad`` only) on 23, ``d46935a`` (every wrapper refused, module-name
+    gate) on 2 -- the subclass dual and a dual captured into ``grad`` -- ``a666d40`` (the walk,
+    with a Grad-level wrapper refused under forward mode) on 11, and ``1300b4e`` (blind only
+    under a Grad interpreter) on 4, all forward over forward: the fifth and sixth rounds'
+    blockers. ``d46935a`` also refused six values that carry nothing, ``a666d40`` two; on the
+    inference-mode row and the vmap-batch-inside-``jvp`` row ``a666d40`` and ``1300b4e``
+    raised Torch's own ``RuntimeError`` from ``unpack_dual`` instead of refusing by name.
     """
     torch = pytest.importorskip('torch')
     import torch.autograd.forward_ad as fwAD
@@ -374,13 +376,17 @@ def test_torch_carried_answers_every_transform():
     seen = {}
 
     def door(tag, pick=lambda args: args[0]):
+        """Record what the door did; a refusal without the rule's own sentence, or any other
+        error, is a row result too, so one bad row never hides the rows after it."""
         def f(*args):
             v = pick(args)
             try:
                 seen[tag] = ('admit', fd.PML(cells=12, wavelength=v).wavelength)
             except ValueError as err:
-                assert 'PML(wavelength=...) is static' in str(err), (tag, str(err))
-                seen[tag] = ('refuse', torch_carried(v))
+                named = 'PML(wavelength=...) is static' in str(err)
+                seen[tag] = ('refuse', torch_carried(v)) if named else ('refused unnamed', str(err)[:80])
+            except Exception as err:                    # noqa: BLE001 - the row says which
+                seen[tag] = ('raised', f'{type(err).__name__}: {err}'[:80])
             return args[0] * 2.
         return f
 
@@ -394,6 +400,13 @@ def test_torch_carried_answers_every_transform():
         with fwAD.dual_level():
             d = fwAD.make_dual(primal, t(1.))
             door(tag)(d.detach() if detach else d)
+
+    def inference(tag):
+        def f(a):
+            with torch.inference_mode():
+                door(tag)(a)
+            return a * 2.
+        return f
 
     def dual_run(fn):
         with fwAD.dual_level():
@@ -468,7 +481,39 @@ def test_torch_carried_answers_every_transform():
         # Reverse over forward: the Grad interpreter is below the Jvp one, and nothing hides.
         'jacrev(jacfwd) argnums=0, second': (
             'admit', lambda k: jacrev(jacfwd(door(k, second), argnums=0), argnums=0)(t(1.), t(.5))),
+        # Forward over forward (the review of 1300b4e): a second Jvp layer hides as Grad does.
+        'jvp primal captured into jvp': (
+            'refuse', lambda k: jvp(lambda a: jvp(captured(k, a), (t(1.),), (t(1.),))[1], (t(.5),),
+                                    (t(1.),))),
+        'jacfwd arg captured into jacfwd': (
+            'refuse', lambda k: jacfwd(lambda a: jacfwd(captured(k, a))(t(1.)))(t(.5))),
+        'jacfwd argnums=0 over a jvp primal, second': (
+            'refuse', lambda k: jvp(lambda a: jacfwd(door(k, second), argnums=0)(t(1.), a),
+                                    (t(.5),), (t(1.),))),
+        'jvp > jvp > vmap, captured primal': (
+            'refuse', lambda k: jvp(lambda a: jvp(lambda b: vmap(captured(k, a))(t([1., 1.])).sum(),
+                                                  (t(1.),), (t(1.),))[1], (t(.5),), (t(1.),))),
+        'grad > jvp > jvp, captured middle': (
+            'refuse', lambda k: grad(lambda x: jvp(lambda a: jvp(captured(k, a), (t(1.),),
+                                                                 (t(1.),))[1], (x,), (t(1.),))[1])(t(.5))),
+        # Closure twins of the nested argument rows above.
+        'vmap batch captured into grad': (
+            'refuse', lambda k: vmap(lambda a: grad(captured(k, a))(t(1.)))(t([.5, .5]))),
+        'grad arg captured into vmap': (
+            'refuse', lambda k: grad(lambda a: vmap(captured(k, a))(t([1., 1.])).sum())(t(.5))),
+        'forward_ad dual captured into vmap': (
+            'refuse', lambda k: dual_run(lambda d: vmap(captured(k, d))(t([1., 1.])))),
+        'grad arg captured into grad': (
+            'refuse', lambda k: grad(lambda a: grad(captured(k, a))(t(1.)))(t(.5))),
+        'jacrev arg captured into jacfwd': (
+            'refuse', lambda k: jacrev(lambda a: jacfwd(captured(k, a))(t(1.)))(t(.5))),
+        'jvp primal under inference_mode': ('refuse', lambda k: jvp(inference(k), (t(.5),), (t(1.),))),
+        # unpack_dual of a batch raises under an open forward level: the batch is asked first.
+        'vmap batch inside jvp': (
+            'refuse', lambda k: jvp(lambda a: vmap(door(k))(t([.5, .6])).sum() * a, (t(1.),), (t(1.),))),
         # Refused by choice: nothing rides on these, but the stack cannot be seen through.
+        'jacfwd(jacfwd) argnums=0, second': (
+            'policy', lambda k: jacfwd(jacfwd(door(k, second), argnums=0), argnums=0)(t(1.), t(.5))),
         'hessian argnums=0, second': (
             'policy', lambda k: hessian(door(k, second), argnums=0)(t(1.), t(.5))),
         'hessian, constant made inside': (
@@ -476,7 +521,7 @@ def test_torch_carried_answers_every_transform():
         'constant captured into jvp > grad': (
             'policy', lambda k: jvp(lambda a: grad(captured(k, t(.5)))(a), (t(1.),), (t(1.),))),
     }
-    assert len(cases) == 39
+    assert len(cases) == 52
     for tag, (_, call) in cases.items():
         call(tag)
     got = {tag: seen.get(tag, ('never reached', None)) for tag in cases}
