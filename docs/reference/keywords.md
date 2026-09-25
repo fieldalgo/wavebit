@@ -73,9 +73,10 @@ Explained in [Choosing the numerics](../guide/numerics.md), except
 | `complex_dtype` | `0` (double) | `0` double, `1` single, or any of the three namespaces' complex spellings |
 | `layer_algorithm` | `'ETM'` | `'ETM'` (enhanced transmittance matrix) or `'SMM'` (scattering matrix) |
 | `fourier_coefficients` | resolves | `'sampled'` (series off the pixel grid) or `'integrated'` (closed-form transform of the raster's rectangles) |
-| `factorization` | resolves | `'li'` (successive rules along v then u, with axes aligned to y and x) or `'nvf'` (normal vector field, factorizing along material interfaces); tensor support is described in [the material guide](../guide/materials.md#anisotropic-materials) |
+| `factorization` | resolves | `'li'` (successive rules along v then u, with axes aligned to y and x, in the default `li_nesting`) or `'nvf'` (normal vector field, factorizing along material interfaces); tensor support is described in [the material guide](../guide/materials.md#anisotropic-materials) |
 | `raster_normal_method` | `'distance'` | raster NVF only: `'distance'`, `'contour'`, `'spectral'`, `'smooth'` |
 | `nvf_projector` | `'linear'` | raster and shape NVF projection: `'linear'` or `'circular'`; independent of incident polarization |
+| `li_nesting` | `'fixed'` | Li only: the order Li's rules are nested in. `'fixed'` (`v` inside `u` for every slot) or `'symmetric'` (each slot's inverse-rule axis inside -- covariant under swapping x and y). Read on rasters and on axis-aligned rectangles; tensor Li builds `'fixed'` only |
 | `shape_nvf_grid_size` | `max(1024, 4*Nx+1, 4*Ny+1)` | shape NVF only: projector sampling points per cell axis; `128` means a 128×128 grid |
 | `answers` | `'amplitude'` | what the solve keeps the state to answer — see [Near fields](../guide/fields.md) |
 
@@ -123,12 +124,13 @@ directly and needs none of this.
 The integer and string codes have enum equivalents, if you prefer them to the literals:
 
 ```python
-from wavebit import Answers, Backend, Tetm, FourierCoefficients, Factorization, NormalMethod, Projector
+from wavebit import (Answers, Backend, Tetm, FourierCoefficients, Factorization, NormalMethod,
+                     Projector, Nesting)
 
 solver = wavebit.rcwa(backend=Backend.JAX, tetm=Tetm.TM, factorization=Factorization.NVF, ...)
 ```
 
-`Formulation` is the eighth and is not a constructor keyword: it is a settable attribute
+`Formulation` is the ninth and is not a constructor keyword: it is a settable attribute
 defaulting to `'auto'`, which reads the problem — a solve handed any of the four z-row
 convolution slots takes `'4ff'`, everything else `'2ff'`. Forcing `'4ff'` on a problem that
 does not need it is how the two are cross-checked; forcing `'2ff'` on a z-coupled tensor raises

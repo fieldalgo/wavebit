@@ -263,6 +263,8 @@ def validate_options(solver):
             raise NotImplementedError("tensor factorization='li' requires an axis-aligned rectangular cell; use 'nvf' for oblique cells")
         solver._reject_unread_normal_method(Factorization.LI)
         solver._reject_unread_projector(Factorization.LI)
+        # Tensor Li builds the fixed nesting only: an explicit 'symmetric' is refused by name.
+        solver._reject_unread_nesting(Factorization.LI)
         if solver._normal_grid is not None:
             raise NotImplementedError("shape_nvf_grid_size has no reader with tensor factorization='li'")
         if solver._tetm is not None:
@@ -272,6 +274,8 @@ def validate_options(solver):
             if solver._fourier_coefficients == FourierCoefficients.SAMPLED:
                 raise NotImplementedError("tensor Li shapes use fourier_coefficients='integrated'")
         return
+    # NVF nests no rules, so any explicit nesting is refused here.
+    solver._reject_unread_nesting(Factorization.NVF)
     if solver._projector not in (None, 'linear'):
         raise NotImplementedError("tensor material patterns currently use nvf_projector='linear'")
     if solver._tetm is not None:

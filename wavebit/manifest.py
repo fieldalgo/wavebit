@@ -29,7 +29,8 @@ import json
 
 from ._core.enums import (Answers, Backend, DEFAULT_ANSWERS, DIFFERENTIABLE_BACKENDS,
                           Factorization,
-                          FourierCoefficients, ModelingPath, NormalMethod, Projector, Tetm)
+                          FourierCoefficients, ModelingPath, Nesting, NormalMethod, Projector,
+                          Tetm)
 from ._core.engine import (_COEFFICIENTS_IMPLEMENTED_BY, _COEFFICIENTS_REASON,
                            _FACTORIZATION_IMPLEMENTED_BY, _FACTORIZATION_REASON)
 from ._core.spec import SPEC_VERSION
@@ -78,6 +79,10 @@ from ._core.spec import SPEC_VERSION
 #: with. ``raster_normal_method`` took '3' and ``answers`` took '4' on the same shape of change, but
 #: both predate the rule being written down, and a bump a consumer must react to for an
 #: addition it can ignore is the false alarm the rule exists to prevent.
+#:
+#: The ``li_nesting`` axis (2026-09-25) did not earn one either, for the same reason: a key
+#: added to ``paths[*]``, ``enums`` and the parametric path's ``conditional_options``, whose
+#: default is what every Li build already did.
 #: '9': two modeling paths instead of three (2026-09-03). ``smooth`` and ``boundary`` were one
 #: path published twice -- identical option lists, one ``structure`` spelling, and a choice
 #: taken per layer rather than per solve -- so they became ``parametric`` with an ``overlap``
@@ -248,9 +253,24 @@ def _options_for(path):
             "read only under factorization='nvf', beside raster_normal_method"
             if path == ModelingPath.RASTER
             else "shape NVF supports both projectors, including polygon-resolved curved painting"),
+        # The other rule's axis: how Li's rules are nested, read only under
+        # factorization='li' and refused under 'nvf' -- the mirror image of the two above,
+        # which are read only under 'nvf'. On the parametric path 'li' is itself conditional,
+        # so the nesting is published there as a condition on it rather than as a plain list.
+        'li_nesting': ([m.value for m in Nesting] if path == ModelingPath.RASTER else []),
+        'li_nesting_reason': (
+            "read only under factorization='li'; a tensor raster's Li build is the fixed "
+            "nesting only, so 'symmetric' is refused there"
+            if path == ModelingPath.RASTER
+            else "read only under factorization='li', which this path offers on axis-aligned "
+                 "rectangles (conditional_options); its default factorization='nvf' nests no "
+                 "rules"),
         'conditional_options': ([] if path == ModelingPath.RASTER else [
             dict(option='factorization', value='li',
                  requires='axis-aligned rectangles wholly inside a positive axis-aligned rectangular cell'),
+            *(dict(option='li_nesting', value=m.value,
+                   requires="factorization='li' on scalar materials (tensor Li builds 'fixed' only)")
+              for m in Nesting),
         ]),
     }
 
@@ -340,7 +360,8 @@ MATERIALS = (
                'sampled normal extension; an explicit sampled shape route remains available. A patterned '
                'in-plane tensor also supports explicit Li on an axis-aligned rectangular cell: '
                'rasters use sampled or integrated coefficients and axis-aligned rectangle '
-               'paintings use exact intervals. See docs/tensor-li-factorization.md. A patterned '
+               "paintings use exact intervals, both in the fixed nesting only (li_nesting='symmetric' "
+               'is refused). See docs/tensor-li-factorization.md. A patterned '
                'layer that also fills the z row is patterned_z_coupled below, not this.',
         'source': 'docs/patterned-anisotropic-factorization.md',
     },
@@ -366,7 +387,8 @@ MATERIALS = (
         'case': 'patterned_z_coupled',
         'supported': True,
         'why': 'Full 3x3 epsilon and mu fields are factorized together across all three '
-               'components. Cartesian Li supports rasters and rectangle paintings; linear '
+               'components. Cartesian Li supports rasters and rectangle paintings, in the fixed '
+               'nesting only; linear '
                'NVF supports tensor rasters and integrated or sampled shapes, including '
                'oblique cells. Nine-slot operators select 4ff. Check Fourier-order and '
                'normal-field convergence; finite-order PN need not conserve lossless power '
@@ -500,6 +522,7 @@ def manifest() -> dict:
             'fourier_coefficients': [m.value for m in FourierCoefficients],
             'raster_normal_method': [m.value for m in NormalMethod],
             'nvf_projector': [m.value for m in Projector],
+            'li_nesting': [m.value for m in Nesting],
             'answers': [m.value for m in Answers],
         },
         'backends': _backend_capabilities(),

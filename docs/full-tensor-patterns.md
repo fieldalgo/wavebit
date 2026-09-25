@@ -49,7 +49,8 @@ solver, so compatible stacks can be joined with `.cascade()`.
 
 The three field directions must be factorized together when z coupling exists.
 For Li, the normal-displacement/tangential-field exchange includes both tangent
-components at each interface. Successive transforms run along v and then u.
+components at each interface. Successive transforms run along v and then u: the
+fixed nesting, the only one tensor Li builds (`li_nesting='symmetric'` is refused).
 For NVF, the pointwise continuous mixed-field relation gives full 3×3 blocks
 `A` and `B`; the effective operator is `conv(A) @ inv(conv(B))`.
 Material-region integration precedes this closure for integrated shapes.

@@ -164,7 +164,7 @@ These are selected by default for tensor inputs. NVF uses the material-interface
 normal to construct the material–field products; `linear` chooses the projector
 construction, not the incident polarization. An explicit `factorization='li'`
 supports tensor rasters and axis-aligned rectangle paintings inside an
-axis-aligned rectangular cell. Both rules retain all nine components of epsilon
+axis-aligned rectangular cell, with `li_nesting='fixed'` only. Both rules retain all nine components of epsilon
 and mu. A z coupling selects the first-order solver automatically. See
 [full tensor patterns](../full-tensor-patterns.md) for examples and validation.
 See [tensor Li construction and usage](../tensor-li-factorization.md).

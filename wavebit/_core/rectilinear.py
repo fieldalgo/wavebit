@@ -2,7 +2,9 @@
 
 The grid follows live rectangle edges. Plans contain only edge order and cell
 ownership; materials, lengths and positions are replayed on the active backend.
-No normal field or pixel raster is constructed.
+No normal field or pixel raster is constructed. The rules are nested as
+``nesting`` says (``enums.Nesting``, ``'fixed'`` by default), by the same
+integrated builder the raster path uses, so a plan serves both nestings.
 """
 from collections import namedtuple
 import math
@@ -118,22 +120,23 @@ def layer_partition(xp, shapes, lattice, dtype, plan=None, device=None):
     return edges, plan.owners
 
 
-def layer_matrices(xp, shapes, background, hu, hv, lattice, dtype, plan=None):
+def layer_matrices(xp, shapes, background, hu, hv, lattice, dtype, plan=None, nesting=None):
     edges, owners = layer_partition(xp, shapes, lattice, dtype, plan)
     materials = [as_array(xp, as_material(s.get('material', 1.)).epsilon, dtype=dtype) for s in shapes]
     materials.append(as_array(xp, as_material(background).epsilon, dtype=dtype))
     cell = xp.stack([xp.stack([materials[i] for i in row]) for row in owners])
-    ex = fourier2d_integrated(xp, cell, *edges, hu, hv, inverse_rule='u')
-    ey = fourier2d_integrated(xp, cell, *edges, hu, hv, inverse_rule='v')
+    ex = fourier2d_integrated(xp, cell, *edges, hu, hv, inverse_rule='u', nesting=nesting)
+    ey = fourier2d_integrated(xp, cell, *edges, hu, hv, inverse_rule='v', nesting=nesting)
     ez = xp.linalg.inv(fourier2d_integrated(xp, cell, *edges, hu, hv, inverse_rule=None))
     return ex, ey, ez
 
 
-def layer_stack(xp, layers, hu, hv, lattice, dtype, plans=None):
+def layer_stack(xp, layers, hu, hv, lattice, dtype, plans=None, nesting=None):
     validate(layers, lattice)
     if plans is not None and len(plans) != len(layers):
         raise StaleGeometryError('Cartesian Li layer count changed; freeze_geometry() again')
     matrices = [layer_matrices(xp, layer.get('shapes', []), layer.get('background', 1.),
-                               hu, hv, lattice, dtype, None if plans is None else plans[i])
+                               hu, hv, lattice, dtype, None if plans is None else plans[i],
+                               nesting)
                 for i, layer in enumerate(layers)]
     return ConvMatrices(*(xp.stack([m[i] for m in matrices]) for i in range(3)), None, None)

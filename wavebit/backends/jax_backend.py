@@ -369,6 +369,10 @@ class SolverJax(RCWAJax, OptimizerJax):
             # then refuse a raster solver for a value the library itself put there -- which is
             # exactly what `shape_nvf_grid_size` did, one entry down.
             'nvf_projector': self._projector,
+            # The raw slot again, for the same reason, one rule over: an unset nesting comes back
+            # unset, so a rebuilt NVF solver is not handed a request `_reject_unread_nesting`
+            # would refuse. Aux rather than a child because the builds branch on it.
+            'li_nesting': self._nesting,
             # A dispatch key like `pol`: the solves branch on it (which cascade blocks are
             # read, which way the stack is walked), so it must come back static, never traced.
             # The cell a `Lattice.drawn(...)` structure declared, if any. A dispatch fact about

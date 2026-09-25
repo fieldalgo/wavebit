@@ -29,10 +29,11 @@ from .conventions import (_CHI_POLARIZATION_CLASH, _COMPLEX_CHI, _DIRECTION_CLAS
 from .domain import Material, as_material, index_from_eps
 from .materials import TabulatedMaterial, evaluate_material, evaluate_structure
 from .enums import (Answers, DEFAULT_ANSWERS, DEFAULT_FACTORIZATION, DEFAULT_FORMULATION,
-                    DEFAULT_FOURIER_COEFFICIENTS, DEFAULT_NORMAL_METHOD, DEFAULT_PROJECTOR,
-                    answers_of, normal_method_of, projector_of, nvf_option_rename_hint,
-                    Factorization, Formulation, FourierCoefficients, ModelingPath, Tetm,
-                    coefficients_of,
+                    DEFAULT_FOURIER_COEFFICIENTS, DEFAULT_NESTING, DEFAULT_NORMAL_METHOD,
+                    DEFAULT_PROJECTOR, answers_of, nesting_of, normal_method_of, projector_of,
+                    nvf_option_rename_hint,
+                    Factorization, Formulation, FourierCoefficients, ModelingPath, Nesting,
+                    Tetm, coefficients_of,
                     factorization_of, formulation_of, resolve_fourier_options)
 from .fields import (field_1d, field_1d_conical, field_2d, field_2d_4ff,
                      is_count, to_mirrored_z, to_scene_frame)
@@ -2308,8 +2309,9 @@ class CoreFactorizationMixin:
                  # the only series it can form. Naming the other one raises.
                  factorization=None,         # 'li' | 'nvf' (normal vector field); the
                  # default resolves per modeling path -- 'li' on a raster, 'nvf' on
-                 # parametric shapes, which is the only rule the shape path implements.
-                 # Naming the other one raises.
+                 # parametric shapes. The shape path builds 'li' only on axis-aligned
+                 # rectangles in an axis-aligned rectangular cell (`rectilinear`), and
+                 # refuses it on any other shape.
                  shape_nvf_grid_size=None,  # normal-field sampling, per axis; None resolves to
                  # max(_NORMAL_GRID_DEFAULT, 4*half_width+1) -- 1024, lifted to the aliasing
                  # floor. This comment said 256 until 2026-09-02, which is a number that was
@@ -2351,6 +2353,14 @@ class CoreFactorizationMixin:
                  # here is refused rather than ignored. New parameters go at the end -- see
                  # the note on `lattice` above.
                  kx=None, ky=None,           # real Cartesian components in inverse length
+                 li_nesting=None,            # factorization='li' only: the order Li's rules
+                 # are nested in. 'fixed' (default -- v inside u for every slot, what every
+                 # 'li' number here was measured on) | 'symmetric' (each slot's inverse-rule
+                 # axis inside, Li 1997: covariant under relabelling x and y). Read by scalar
+                 # Li, on a raster and on axis-aligned rectangles; explicitly set where it has
+                 # no reader it is refused rather than ignored -- under 'nvf', and 'symmetric'
+                 # on tensor materials, whose Li build is the fixed nesting only. See
+                 # docs/factorization-terms.md section 6.
                  **unknown,                  # collected rather than left to Python, so the
                  # refusal comes from `_refuse_unknown_keywords` and a typo cannot be
                  # swallowed by the catch-all itself.
@@ -2401,6 +2411,7 @@ class CoreFactorizationMixin:
         self._set_fourier_options(fourier_coefficients, factorization)
         self.raster_normal_method = raster_normal_method
         self.nvf_projector = nvf_projector
+        self.li_nesting = li_nesting
         self._normal_grid = shape_nvf_grid_size
         self.lattice = lattice      # after period: assigning a basis overwrites period
 
@@ -2435,6 +2446,10 @@ class CoreFactorizationMixin:
     #: ``raster_normal_method`` and this select how the field is built and projected. The
     #: shape NVF path also reads this option, but builds its field directly from geometry.
     _projector = None
+    #: The same unset-vs-default slot on the other rule: ``'fixed'`` is the default everywhere,
+    #: and the keyword is read where scalar Li's rules are built (a raster, or axis-aligned
+    #: rectangles). :meth:`_reject_unread_nesting` refuses an explicit value it cannot honour.
+    _nesting = None
 
     def _set_fourier_options(self, fourier_coefficients, factorization):
         """Settle ``fourier_coefficients`` / ``factorization`` from a constructor's arguments."""
@@ -3393,6 +3408,37 @@ class CoreFactorizationMixin:
     def nvf_projector(self, value):
         self._projector = None if value is None else projector_of(value)
 
+    @property
+    def li_nesting(self):
+        """The order Li's rules are nested in: ``'fixed'`` | ``'symmetric'``.
+
+        Named for its scope, as :attr:`nvf_projector` and :attr:`raster_normal_method` are:
+        only Li reads it.
+
+        ``'fixed'`` nests ``v`` inside ``u`` for every slot -- what the raster path built before
+        the choice existed, and the default so that nothing measured on it moves.
+        ``'symmetric'`` puts each slot's own inverse-rule axis inside (Li, JOSA A 14, 2758,
+        1997), which makes the build covariant under relabelling x and y. See
+        :class:`~wavebit._core.enums.Nesting` for the operators and
+        ``docs/factorization-terms.md`` §6 for what separates them, measured.
+
+        Read by scalar Li: the raster path under ``factorization='li'``, and the parametric
+        path's axis-aligned rectangles under it. Like :attr:`raster_normal_method` there is
+        nothing to resolve per path, so this reports the default when nothing was asked; what
+        is refused is an explicit value on a build that would never read it
+        (:meth:`_reject_unread_nesting`) -- any value under NVF, and ``'symmetric'`` on a
+        tensor material, whose Li build is the fixed nesting only. The frozen geometry does
+        not record it: the records a Li build reads -- the raster integrated path's
+        compression, the rectangles' ``rectilinear_plans``, tensor Li's ``tensor_geometry`` --
+        say where the blocks are, and the nesting only how they are combined, so one record
+        serves both.
+        """
+        return DEFAULT_NESTING if self._nesting is None else self._nesting
+
+    @li_nesting.setter
+    def li_nesting(self, value):
+        self._nesting = None if value is None else nesting_of(value)
+
     #: What `shape_nvf_grid_size=None` means, before the `4*truncation_order+1` floor lifts it.
     #:
     #: **1024, and it survived an attempt to drop it to 256.** On the forward value 1024 is
@@ -3514,6 +3560,46 @@ class CoreFactorizationMixin:
             f"It selects the NVF projection for raster or shape structures, so it "
             f"needs factorization='nvf'.")
 
+    def _reject_unread_nesting(self, factorization):
+        """Refuse an explicit ``li_nesting`` on a build that cannot honour it.
+
+        Its readers are the two scalar Li builds: the raster path under ``factorization='li'``,
+        and the parametric path's axis-aligned rectangles under it
+        (:mod:`~wavebit._core.rectilinear`), which run on the same integrated builder. NVF takes
+        the direct rule both ways and closes the discontinuity with the normal-field projector
+        instead, so there is no inner inverse for an order to matter to, and any explicit value
+        is refused there -- :meth:`_reject_unread_normal_method` and
+        :meth:`_reject_unread_projector` read the other way round. Tensor materials are the
+        third case: tensor Li (:mod:`~wavebit._core.tensor_li`) builds the fixed nesting and
+        nothing else, so an explicit ``'fixed'`` is honoured and ``'symmetric'`` refused. A
+        scalar tensor gives exactly the scalar Li operator (``tests/test_tensor_li.py``), and
+        answering a ``'symmetric'`` request with the fixed build would break that silently.
+        Tensor scenes never reach :meth:`_check_before_building`, so
+        :func:`~wavebit._core.anisotropy.validate_options` calls this for them. Separate from the
+        NVF pair rather than folded into it so that a refusal names the keyword the caller
+        wrote. The default is exempt, as everywhere: an untouched keyword is not a request.
+        """
+        if self._nesting is None:
+            return
+        nesting = nesting_of(self._nesting)
+        if factorization == Factorization.LI:
+            if nesting == Nesting.FIXED or not self._has_tensor_materials():
+                return
+            raise NotImplementedError(
+                f"li_nesting={nesting.value!r} has no reader here: tensor factorization='li' "
+                f"nests its rules in the fixed order only (v inside u for every slot). Leave "
+                f"li_nesting unset or 'fixed' on a tensor material; the scalar Li builds read "
+                f"both nestings.")
+        if self._modeling_path == ModelingPath.PARAMETRIC:
+            where = ("the parametric path's factorization='nvf' nests no rules; its "
+                     "factorization='li' on axis-aligned rectangles is what reads it")
+        else:
+            where = ("factorization='nvf' nests no rules -- it takes the direct rule both ways "
+                     "and closes the discontinuity with the normal-field projector")
+        raise NotImplementedError(
+            f"li_nesting={nesting.value!r} has no reader here: {where}. It selects the order Li's "
+            f"rules are nested in, so it needs factorization='li'.")
+
     def _reject_unread_normal_grid(self):
         """Refuse an explicit ``shape_nvf_grid_size`` on a build that samples no normal field.
 
@@ -3584,6 +3670,7 @@ class CoreFactorizationMixin:
         coefficients = self.fourier_coefficients
         self._reject_unread_normal_method(factorization)
         self._reject_unread_projector(factorization)
+        self._reject_unread_nesting(factorization)
         self._reject_unread_normal_grid()
         # The *window's* half-width, not the declared `truncation_order`: an excitation can
         # widen the retained set, and a convolution matrix has to be as wide as the
@@ -4081,6 +4168,7 @@ class CoreFactorizationMixin:
         self.fourier_coefficients   # read for the refusal it may raise, not for its value
         self._reject_unread_normal_method(factorization)
         self._reject_unread_projector(factorization)
+        self._reject_unread_nesting(factorization)
         self._reject_unread_normal_grid()
         self._reject_layer_count_mismatch()
 
@@ -4158,10 +4246,11 @@ class CoreFactorizationMixin:
             if factorization == Factorization.LI:
                 if sampled:
                     conv = _fac.to_conv_mat_raster_sampled(
-                        structure, half_width_u, half_width_v)
+                        structure, half_width_u, half_width_v, nesting=self.li_nesting)
                 else:
                     conv = _fac.to_conv_mat_raster_integrated(
-                        structure, half_width_u, half_width_v, compression=compression)
+                        structure, half_width_u, half_width_v, compression=compression,
+                        nesting=self.li_nesting)
             else:
                 if sampled:
                     conv = _fac.to_conv_mat_raster_nvf(
@@ -4188,7 +4277,8 @@ class CoreFactorizationMixin:
                 conv = _rectilinear.layer_stack(
                     self.xp, structure, half_width_u, half_width_v,
                     self.lattice, self.complex_dtype,
-                    plans=None if geometry is None else geometry.rectilinear_plans)
+                    plans=None if geometry is None else geometry.rectilinear_plans,
+                    nesting=self.li_nesting)
             else:
                 if geometry is not None and geometry.rectilinear_plans is not None:
                     raise _fac.StaleGeometryError("Cartesian Li geometry cannot be replayed with NVF; freeze_geometry() again")

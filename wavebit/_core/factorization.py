@@ -36,7 +36,9 @@ discontinuous functions:
 
 The removed block path's layers were the closed-form series on explicitly
 given segment edges, with Li's rules; the parametric shape path lives in
-:mod:`wavebit._core.parametric` and is always NVF.
+:mod:`wavebit._core.parametric` and is NVF, except that axis-aligned rectangles in an
+axis-aligned rectangular cell also take Li's rules, through :func:`fourier2d_integrated`
+(:mod:`wavebit._core.rectilinear`).
 
 A recurring rule runs through this module: **discrete geometry decisions are computed eagerly
 and passed in as static inputs, while material values flow through differentiably.** Two

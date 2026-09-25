@@ -34,6 +34,24 @@ def test_matrices_match_independent_raster_painting(shapes):
         np.testing.assert_allclose(a,b,rtol=0,atol=2e-12)
 
 
+@pytest.mark.parametrize('nesting', ['fixed', 'symmetric'])
+def test_both_nestings_match_independent_raster_painting(nesting):
+    # The shape build is the raster path's integrated builder on exact edges, so it reads the
+    # nesting the same way: overlapping, complex paintings, nesting for nesting.
+    shapes=[box(400,400,-100,material=4),box(400,300,100,50,9+.1j)]
+    x,y=np.meshgrid((np.arange(28)+.5)*25-350,(np.arange(28)+.5)*25-350)
+    cell=np.full((28,28),1.,dtype=complex)
+    for s in shapes:
+        cell[(abs(x-s['cx'])<s['lx']/2)&(abs(y-s['cy'])<s['ly']/2)]=s['material']
+    want=F.to_conv_mat_raster_integrated(cell[None],2,2,nesting=nesting)
+    s=solver(shapes,li_nesting=nesting); got=s._eps_conv_matrices(s.freeze_geometry())
+    for a,b in zip(got[:3],want[:3]):
+        np.testing.assert_allclose(a,b,rtol=0,atol=2e-12)
+    other=F.to_conv_mat_raster_integrated(cell[None],2,2,
+                                          nesting='fixed' if nesting=='symmetric' else 'symmetric')
+    assert np.abs(np.asarray(got[0])-np.asarray(other[0])).max() > 1e-6
+
+
 def test_contact_plan_opens_a_gap_but_refuses_edge_crossing():
     def shapes(gap):
         return [box(300,300,-150-gap/2),box(300,300,150+gap/2,material=9)]

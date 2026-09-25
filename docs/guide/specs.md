@@ -28,7 +28,7 @@ part of the scene; `sweep` declares what varies.
 | --- | --- |
 | `stack` | `layers` (each a `Layer(thickness, structure, mu)`), `top`, `bot`, `period`, `lattice` |
 | `incidence` | `wavelength`, `theta`, `phi`, `kx`, `ky`, `tetm`, `psi`, `chi`, `incidence_side`, `polarization` |
-| `numerics` | `backend`, `truncation_order`, `fourier_coefficients`, `factorization`, `raster_normal_method`, `nvf_projector`, `complex_dtype`, `layer_algorithm`, `shape_nvf_grid_size`, `answers` |
+| `numerics` | `backend`, `truncation_order`, `fourier_coefficients`, `factorization`, `raster_normal_method`, `nvf_projector`, `li_nesting`, `complex_dtype`, `layer_algorithm`, `shape_nvf_grid_size`, `answers` |
 | `sweep` | `axes` — `{field: [values]}` after resolution |
 
 `solver` (`'rcwa'`) and `version` complete it.

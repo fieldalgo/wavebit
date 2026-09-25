@@ -18,6 +18,8 @@ What is checked here:
   y-invariant layer.
 * **Backends and gradients**: three backends agree, and the raster gradient is the finite
   difference's, in both nestings.
+* **The keyword** (``li_nesting=``): read by scalar Li on a raster and on axis-aligned rectangles,
+  and refused by name where nothing honours it -- NVF, and ``'symmetric'`` on tensor Li.
 
 A fourth kind lived here for one commit and went with its subject: the new builders against
 the old ones, black-box, before the old were deleted. It measured the sampled path bit-identical
@@ -414,3 +416,255 @@ def test_the_raster_builders_pass_the_nesting_through(nesting):
             assert np.array_equal(np.asarray(stacked[k])[i], np.asarray(one[k]))
         assert np.array_equal(np.asarray(F.fourier2d_integrated(
             xnp, comp, x, y, Mu, Mv, inverse_rule='u', nesting=nesting)), np.asarray(one.epx))
+
+
+# ------------------------------------------------------------------------------- the keyword
+
+#: A small crossed grating, and the scene around it. 2.4**2 is spelled to the bit.
+_SCENE = dict(backend=0, top=1.0, bot=2.25, theta=0.21, phi=0.37, psi=0.6, wavelength=0.9,
+              period=[1.0, 0.8], thickness=[0.35], truncation_order=[4, 3])
+
+
+def _crossed(N=24):
+    eps = np.ones((1, N, N))
+    eps[0, N // 6:N // 2, N // 5:3 * N // 4] = 5.76
+    eps[0, N // 2:5 * N // 6, N // 5:N // 3] = 5.76
+    return eps
+
+
+def _totals(**kw):
+    res = wavebit.rcwa(**{**_SCENE, **kw}).solve()
+    return np.asarray(res.R), np.asarray(res.T)
+
+
+def test_the_default_is_fixed_and_naming_it_changes_nothing():
+    """Opt-in: the untouched default *is* ``'fixed'``, to the bit, on both coefficient paths."""
+    for coefficients in ('sampled', 'integrated'):
+        base = _totals(structure=_crossed(), fourier_coefficients=coefficients)
+        named = _totals(structure=_crossed(), fourier_coefficients=coefficients, li_nesting='fixed')
+        assert all(np.array_equal(a, b) for a, b in zip(base, named)), coefficients
+    assert wavebit.rcwa(**_SCENE, structure=_crossed()).li_nesting == wavebit.Nesting.FIXED
+
+
+def test_the_symmetric_nesting_moves_a_crossed_grating_and_conserves_energy():
+    """A different truncation of the same problem: it has to answer differently, and still
+    conserve energy on a lossless layer -- the nesting is a factorization, not a loss."""
+    for coefficients in ('sampled', 'integrated'):
+        R_f, T_f = _totals(structure=_crossed(), fourier_coefficients=coefficients)
+        R_s, T_s = _totals(structure=_crossed(), fourier_coefficients=coefficients,
+                           li_nesting='symmetric')
+        assert np.abs(T_s - T_f).max() > 1e-5, coefficients
+        assert abs(R_s.sum() + T_s.sum() - 1.0) < 1e-10, coefficients
+
+
+def test_on_a_y_invariant_grating_the_two_nestings_agree():
+    """The 1D reduction, through the whole solve: nothing is nested when ``T_v`` is diagonal."""
+    rows = np.repeat(_crossed()[:, 5:6, :], 4, axis=1)
+    kw = dict(structure=rows, truncation_order=[6, 2])
+    for coefficients in ('sampled', 'integrated'):
+        fixed = _totals(fourier_coefficients=coefficients, **kw)
+        sym = _totals(fourier_coefficients=coefficients, li_nesting='symmetric', **kw)
+        for a, b in zip(fixed, sym):
+            assert np.abs(a - b).max() < 1e-12, (coefficients, np.abs(a - b).max())
+
+
+def _tensor(eps):
+    """A scalar raster as an in-plane anisotropic tensor raster ``(L, Ny, Nx, 3, 3)``."""
+    t = np.zeros(eps.shape + (3, 3), dtype=complex)
+    t[..., 0, 0], t[..., 1, 1], t[..., 2, 2] = eps, 1.25 * eps - 0.25, eps
+    return t
+
+
+#: An axis-aligned rectangle, which the parametric path builds with Cartesian Li, and the same
+#: rectangle painted on a commensurate raster: in the (1.0, 0.8) cell its edges sit at
+#: x = 0.3, 0.8 and y = 0.1, 0.5, which are pixel lines of a 40 x 40 grid.
+_RECTANGLE = [dict(background=1.0, shapes=[dict(type='rectangle', cx=0.05, cy=-0.1, lx=0.5,
+                                                ly=0.4, material=5.76)])]
+_TENSOR_RECTANGLE = [dict(background=1.0, shapes=[dict(
+    type='rectangle', cx=0.05, cy=-0.1, lx=0.5, ly=0.4,
+    material=wavebit.Material(np.diag([5.76, 4.0, 5.76])))])]
+
+
+def _painted_rectangle():
+    eps = np.ones((1, 40, 40))
+    eps[0, 5:25, 12:32] = 5.76
+    return eps
+
+
+_UNREAD = {
+    'nvf': (dict(structure=_crossed(), factorization='nvf'),
+            "factorization='nvf' nests no rules"),
+    'parametric-nvf': (dict(structure=[dict(background=1.0, shapes=[dict(
+        type='circle', cx=0.0, cy=0.0, lx=0.4, material=5.76)])]),
+        "parametric path's factorization='nvf' nests no rules"),
+    'tensor-raster-nvf': (dict(structure=_tensor(_crossed())),
+                          "factorization='nvf' nests no rules"),
+    'tensor-raster-li': (dict(structure=_tensor(_crossed()), factorization='li'),
+                         "tensor factorization='li' nests its rules in the fixed order only"),
+    'tensor-rectangle-li': (dict(structure=_TENSOR_RECTANGLE, factorization='li'),
+                            "tensor factorization='li' nests its rules in the fixed order only"),
+}
+
+
+@pytest.mark.parametrize('where', sorted(_UNREAD))
+def test_a_nesting_nothing_honours_is_refused_not_ignored(where):
+    """Every build that would not honour an explicit ``'symmetric'`` refuses it by name, on the
+    solve and on ``freeze_geometry``: NVF on either path nests no rules, and tensor Li -- whose
+    scenes skip the scalar refusals and go through ``anisotropy.validate_options`` -- builds the
+    fixed nesting only. Before these doors a tensor scene built ``'fixed'`` in silence."""
+    kw, match = _UNREAD[where]
+    solver = wavebit.rcwa(**_SCENE, **kw, li_nesting='symmetric')
+    with pytest.raises(NotImplementedError, match=match) as excinfo:
+        solver.solve()
+    assert "li_nesting='symmetric'" in str(excinfo.value)
+    with pytest.raises(NotImplementedError, match='no reader'):
+        solver.freeze_geometry()
+
+
+def test_tensor_li_takes_the_fixed_nesting_it_builds():
+    """The refusal is for what tensor Li cannot build: naming the one it does is honoured, to
+    the bit, on a raster and on rectangles."""
+    for structure in (_tensor(_crossed()), _TENSOR_RECTANGLE):
+        base = wavebit.rcwa(**_SCENE, structure=structure, factorization='li').solve()
+        named = wavebit.rcwa(**_SCENE, structure=structure, factorization='li',
+                             li_nesting='fixed').solve()
+        assert np.array_equal(np.asarray(base.T), np.asarray(named.T))
+
+
+@pytest.mark.parametrize('nesting', NESTINGS)
+def test_rectangles_under_li_read_the_nesting_as_the_raster_does(nesting):
+    """The parametric path's Cartesian Li runs the raster path's integrated builder on exact
+    edges, so it is a reader too: nesting for nesting, its matrices are the painted raster's."""
+    shape = wavebit.rcwa(**_SCENE, structure=_RECTANGLE, factorization='li', li_nesting=nesting)
+    raster = wavebit.rcwa(**_SCENE, structure=_painted_rectangle(),
+                          fourier_coefficients='integrated', li_nesting=nesting)
+    got, want = shape.eps_conv_matrices(), raster.eps_conv_matrices()
+    for a, b in zip(got[:3], want[:3]):
+        assert np.abs(np.asarray(a) - np.asarray(b)).max() < 2e-12, nesting
+    assert np.abs(np.asarray(shape.solve().T) - np.asarray(raster.solve().T)).max() < 1e-11
+
+
+def test_the_nesting_moves_rectangles_and_one_frozen_plan_serves_both():
+    """``'symmetric'`` changes the shape build (so it is read, not dropped), and the frozen
+    plan -- edge order and ownership only -- replays under either nesting."""
+    solver = wavebit.rcwa(**_SCENE, structure=_RECTANGLE, factorization='li')
+    plan = solver.freeze_geometry()
+    fixed = np.asarray(solver.solve().T)
+    solver.li_nesting = 'symmetric'
+    replayed = np.asarray(solver.solve(geometry=plan).T)
+    rebuilt = np.asarray(wavebit.rcwa(**_SCENE, structure=_RECTANGLE, factorization='li',
+                                      li_nesting='symmetric').solve().T)
+    assert np.array_equal(replayed, rebuilt)
+    assert np.abs(rebuilt - fixed).max() > 1e-5
+
+
+def test_an_unknown_nesting_is_refused_at_the_keyword():
+    with pytest.raises(ValueError, match=r"li_nesting='inner'.*'fixed', 'symmetric'"):
+        wavebit.rcwa(**_SCENE, structure=_crossed(), li_nesting='inner')
+
+
+def test_the_nesting_is_a_solve_condition():
+    """``solve(li_nesting=...)`` reaches the build, like every other settable condition."""
+    solver = wavebit.rcwa(**_SCENE, structure=_crossed())
+    via_solve = np.asarray(solver.solve(li_nesting='symmetric').T)
+    direct = _totals(structure=_crossed(), li_nesting='symmetric')[1]
+    assert np.array_equal(via_solve, direct)
+    assert solver.li_nesting == wavebit.Nesting.SYMMETRIC
+
+
+def test_one_frozen_geometry_serves_both_nestings():
+    """The integrated path's compression says where the blocks are, not how they combine."""
+    solver = wavebit.rcwa(**_SCENE, structure=_crossed(), fourier_coefficients='integrated')
+    record = solver.freeze_geometry()
+    solver.li_nesting = 'symmetric'
+    replayed = np.asarray(solver.solve(geometry=record).T)
+    rebuilt = _totals(structure=_crossed(), fourier_coefficients='integrated',
+                      li_nesting='symmetric')[1]
+    assert np.array_equal(replayed, rebuilt)
+
+
+def test_the_permeability_is_nested_the_same_way():
+    """``mu`` goes through the same builders by duality, so it takes the same nesting."""
+    eps = _crossed()
+    mu = np.ones_like(eps)
+    mu[0, 3:9, 2:17] = 2.5
+    solver = wavebit.rcwa(**_SCENE, structure=eps, mu=mu, li_nesting='symmetric')
+    Mu, Mv = _SCENE['truncation_order']
+    want = F.li_conv_matrices(xnp, mu[0], Mu, Mv, nesting='symmetric')
+    got = solver.mu_conv_matrices()
+    assert _rel(np.asarray(got.epx)[0], want.epx) < 1e-14
+    fixed = F.li_conv_matrices(xnp, mu[0], Mu, Mv, nesting='fixed')
+    assert _rel(np.asarray(got.epx)[0], fixed.epx) > 1e-6
+
+
+def test_the_per_call_doors_reach_the_build():
+    """``eps_conv_matrices`` / ``mu_conv_matrices`` take ``li_nesting=`` like ``solve`` does,
+    and ``freeze_geometry(li_nesting=...)`` is refused where the solve would be."""
+    eps = _crossed()
+    mu = np.ones_like(eps)
+    mu[0, 3:9, 2:17] = 2.5
+    Mu, Mv = _SCENE['truncation_order']
+    solver = wavebit.rcwa(**_SCENE, structure=eps, mu=mu)
+    got = solver.eps_conv_matrices(li_nesting='symmetric')
+    assert _rel(np.asarray(got.epx)[0],
+                F.li_conv_matrices(xnp, eps[0], Mu, Mv, nesting='symmetric').epx) < 1e-14
+    got = solver.mu_conv_matrices(li_nesting='symmetric')
+    assert _rel(np.asarray(got.epx)[0],
+                F.li_conv_matrices(xnp, mu[0], Mu, Mv, nesting='symmetric').epx) < 1e-14
+    nvf = wavebit.rcwa(**_SCENE, structure=eps, factorization='nvf')
+    with pytest.raises(NotImplementedError, match="li_nesting='symmetric' has no reader"):
+        nvf.freeze_geometry(li_nesting='symmetric')
+
+
+def test_a_jitted_replay_keeps_the_nesting():
+    """The nesting rides in the JAX treedef, so a compiled solve on a frozen record builds the
+    nesting the solver holds -- not the default."""
+    jax = pytest.importorskip('jax')
+    kw = dict(_SCENE, backend=1, structure=_crossed(), fourier_coefficients='integrated')
+    solver = wavebit.rcwa(**kw, li_nesting='symmetric')
+    geometry = solver.freeze_geometry()
+    direct = np.asarray(solver.solve().T)
+    compiled = np.asarray(jax.jit(lambda s: s.solve(geometry=geometry).T)(solver))
+    np.testing.assert_allclose(compiled, direct, atol=1e-12, rtol=1e-12)
+    fixed = np.asarray(wavebit.rcwa(**kw).solve().T)
+    assert np.abs(compiled - fixed).max() > 1e-5
+
+
+def test_the_spec_carries_the_nesting():
+    from wavebit import Numerics
+    numerics = Numerics.from_dict(dict(truncation_order=[2, 2], li_nesting='symmetric'))
+    assert numerics.li_nesting == wavebit.Nesting.SYMMETRIC
+    assert numerics.as_kwargs()['li_nesting'] == 'symmetric'
+    assert Numerics.from_dict(numerics.to_dict()).li_nesting == wavebit.Nesting.SYMMETRIC
+    assert 'li_nesting' not in Numerics.from_dict(dict(truncation_order=[2, 2])).as_kwargs()
+
+
+def test_the_unscoped_spelling_is_refused_like_any_unknown_option():
+    """The option is ``li_nesting``: option names state their scope, as ``nvf_projector``
+    and ``raster_normal_method`` do. Nothing has been released, so the bare ``nesting`` is no
+    alias -- the constructor, the attribute, the spec and the manifest treat it as a name they
+    have never heard of."""
+    from wavebit import Numerics, SpecError
+    from wavebit.manifest import manifest
+    with pytest.raises(TypeError, match=r"unexpected keyword argument.*'nesting'"):
+        wavebit.rcwa(**_SCENE, structure=_crossed(), nesting='symmetric')
+    solver = wavebit.rcwa(**_SCENE, structure=_crossed())
+    with pytest.raises(AttributeError, match=r"no attribute 'nesting' to set"):
+        solver.nesting = 'symmetric'
+    assert not hasattr(solver, 'nesting')
+    assert solver.li_nesting == wavebit.Nesting.FIXED
+    with pytest.raises(SpecError, match=r"unknown field\(s\) \['nesting'\]"):
+        Numerics.from_dict(dict(truncation_order=[2, 2], nesting='symmetric'))
+    for path in manifest()['paths']:
+        assert 'li_nesting' in path and 'nesting' not in path
+
+
+@pytest.mark.parametrize('door', ['solve', 'freeze_geometry', 'eps_conv_matrices',
+                                  'mu_conv_matrices'])
+def test_the_unscoped_spelling_is_refused_at_every_call_door(door):
+    """The per-call doors refuse it by name too, before any condition moves."""
+    solver = wavebit.rcwa(**_SCENE, structure=_crossed())
+    with pytest.raises(TypeError, match=r"unexpected keyword argument.*'nesting'"):
+        getattr(solver, door)(wavelength=1.3, nesting='symmetric')
+    assert float(solver.wavelength) == _SCENE['wavelength']
+    assert solver.li_nesting == wavebit.Nesting.FIXED

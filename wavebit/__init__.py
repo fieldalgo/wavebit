@@ -83,7 +83,7 @@ from ._core.backend import (AutoDetuneWarning, AxisNameWarning, ComplexIncidence
 from ._core.conventions import branch_tolerance
 from ._core.draw import plot_structure, slice_structure
 from ._core.enums import (Answers, Backend, Tetm, FourierCoefficients, Factorization,
-                          Formulation, NormalMethod, Projector)
+                          Formulation, Nesting, NormalMethod, Projector)
 from ._core.domain import (Layer, Stack, Incidence, Material,
                            eps_from_index, index_from_eps)
 from ._core.materials import TabulatedMaterial
@@ -141,7 +141,7 @@ __all__ = [
     'branch_tolerance',
     'plot_structure', 'slice_structure',
     'Answers', 'Backend', 'Tetm', 'FourierCoefficients', 'Factorization', 'Formulation',
-    'NormalMethod', 'Projector',
+    'NormalMethod', 'Projector', 'Nesting',
     'Layer', 'Stack', 'Incidence', 'Material', 'TabulatedMaterial', 'eps_from_index', 'index_from_eps',
     'ConvMatrices', 'TensorConvMatrices', 'ConformingNVF', 'AffineProfileNVF', 'CartesianRectangleNVF', 'CartesianRectanglePairNVF',
     'CartesianPairOpeningPlan', 'CartesianPairTransmissionGalerkinGapCell',

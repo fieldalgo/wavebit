@@ -193,6 +193,7 @@ class Nesting(str, Enum):
     ``raster_normal_method`` is off raster NVF and ``nvf_projector`` off NVF: under
     ``factorization='nvf'`` any value (NVF nests no rules), and on a tensor material
     ``'symmetric'`` (tensor Li, :mod:`wavebit._core.tensor_li`, builds the fixed nesting only).
+    The solver option that takes it is ``li_nesting``.
     """
     FIXED = 'fixed'          # inner v, outer u for every slot (the original; RETICOLO li=1)
     SYMMETRIC = 'symmetric'  # the inverse-rule axis inside, per slot (Li 1997; RETICOLO li=0)
@@ -368,8 +369,8 @@ def projector_of(value):
 
 
 def nesting_of(value):
-    """Validate a ``nesting`` value."""
-    return _one_of(Nesting, value, 'nesting')
+    """Validate a ``li_nesting`` value."""
+    return _one_of(Nesting, value, 'li_nesting')
 
 
 def answers_of(value):

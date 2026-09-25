@@ -1,6 +1,6 @@
 # Choosing the numerics
 
-Four keywords decide how the permittivity becomes convolution matrices and how the layers are
+A handful of keywords decide how the permittivity becomes convolution matrices and how the layers are
 joined. They change how fast the result converges with `truncation_order`, and how much each
 step costs -- not what it converges to. Defaults, and the values each accepts, are in
 [Keyword reference](../reference/keywords.md#the-numerics).
@@ -23,7 +23,7 @@ the structure and material:
 
 | `factorization` | |
 | --- | --- |
-| `'li'` | Successive Li rules along lattice v then u; requires alignment with Cartesian y and x |
+| `'li'` | Successive Li rules along lattice v then u (the default `li_nesting`; see below); requires alignment with Cartesian y and x |
 | `'nvf'` | normal vector field -- factorizes along the material interfaces. Made for curved and tilted boundaries, where a staircase converges slowly |
 
 **`fourier_coefficients` and `factorization` resolve per modeling path**, and reading them back
@@ -67,6 +67,16 @@ See [shape projector details](../parametric-modeling.md#complex-nvf-projection-f
 because it is a trade rather than a fix: it removes the medial axis's arbitrariness and costs
 accuracy in every cell measured, along with exact mirror symmetry. See
 [`../nvf-normal-methods.md`](../nvf-normal-methods.md).
+
+**`li_nesting` belongs to the other rule: it is read wherever scalar Li's rules are built** -- on a
+raster under `factorization='li'`, and on axis-aligned rectangles under it -- and refused where
+nothing reads it: any value under `'nvf'`, and `'symmetric'` on tensor materials, whose Li build
+is the fixed nesting only. A crossed grating needs Li's rule along both axes, and two
+one-dimensional rules can only be applied one inside the other. `'fixed'`, the default, puts
+`v` inside `u` for both in-plane components -- what every `'li'` result so far was computed
+with, raster, rectangle and tensor alike. `'symmetric'` puts each component's own inverse-rule
+axis inside (Li 1997), so the build treats x and y alike. Both converge to the same answer and
+differ at finite `truncation_order`; the operators are in the `Nesting` docstring.
 
 Both connecting algorithms share the same eigenmodes and boundary conventions and agree to
 ~1e-14. SMM costs ~1.1-1.4x, cascades layer responses that can be reused independently, and is

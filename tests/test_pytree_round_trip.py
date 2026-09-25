@@ -36,7 +36,8 @@ P, WL, H = 400.0, 900.0, 150.0
 #: slots together -- the split between them is `_tree_flatten`'s business, not this test's.
 CARRIED = (
     'backend', 'tetm', 'truncation_order', 'layer_algorithm', 'complex_dtype',
-    'fourier_coefficients', 'factorization', 'raster_normal_method', 'nvf_projector', 'incidence_side',
+    'fourier_coefficients', 'factorization', 'raster_normal_method', 'nvf_projector', 'li_nesting',
+    'incidence_side',
     'answers',
     'shape_nvf_grid_size', 'theta', 'phi', 'psi', 'chi', 'polarization', 'period', 'wavelength',
     'thickness', 'structure', 'mu', 'top', 'bot', 'lattice', 'excitation', 'formulation',
@@ -88,8 +89,11 @@ def _one_row(**over):
     naming two is refused. So no single scene can leave all three off their defaults, and
     "nothing at its default" is a claim about the scenes *together*.
     """
+    # `li_nesting` rides here rather than on `_scene`: this is a raster Li scene, where the
+    # keyword is read, and `_scene` is an NVF one, where naming it would be refused.
     kw = dict(backend=1, structure=np.ones((1, 1, 12)), period=[P, P],
-              truncation_order=[3, 0], thickness=[H], wavelength=WL, top=1.0, bot=1.0)
+              truncation_order=[3, 0], thickness=[H], wavelength=WL, top=1.0, bot=1.0,
+              li_nesting='symmetric')
     kw.update(over)
     return wavebit.rcwa(**kw)
 
@@ -364,3 +368,17 @@ def test_the_formulation_declaration_survives_the_pytree_round_trip():
     assert jax.tree_util.tree_structure(a) != jax.tree_util.tree_structure(b), (
         'a solver declaring 4ff and one declaring auto flatten to the same treedef, so jax '
         'reuses one compilation for both and the declaration cannot take effect')
+
+
+def test_the_nesting_survives_the_round_trip_and_splits_the_treedef():
+    """`_scene` is NVF and so cannot hold a nesting; the one-row Li scene carries it instead.
+
+    Both halves, as for `formulation`: the value comes back, and two solvers differing only in
+    it flatten to different treedefs -- one jit compilation must not serve both nestings.
+    """
+    import jax
+    symmetric = _one_row()
+    assert _round_trip(symmetric).li_nesting == wavebit.Nesting.SYMMETRIC
+    assert _round_trip(_one_row(li_nesting=None))._nesting is None
+    assert (jax.tree_util.tree_structure(symmetric)
+            != jax.tree_util.tree_structure(_one_row(li_nesting='fixed')))

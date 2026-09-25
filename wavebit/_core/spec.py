@@ -57,7 +57,7 @@ import math
 from .conventions import _DIRECTION_CLASH, parse_order_pair, transverse_component_problem
 from .domain import Layer, Material, Stack, Incidence
 from .materials import TabulatedMaterial
-from .enums import (Answers, Backend, Factorization, FourierCoefficients, NormalMethod,
+from .enums import (Answers, Backend, Factorization, FourierCoefficients, Nesting, NormalMethod,
                     Projector, Tetm, answers_of, nvf_option_rename_hint)
 
 SPEC_VERSION = '10'   # '2': result fields renamed de_ri/de_ti -> R/T (2026-08-12)
@@ -435,6 +435,11 @@ class Numerics:
     #: path-independent, and an explicit value is *refused* outside raster or shape NVF.
     #: A spec that never asked must not be made to ask.
     nvf_projector: Optional[Projector] = None
+    #: ``None`` = unset, for the reason the two above give, on the other rule: the default
+    #: ('fixed') is path-independent, and an explicit value is *refused* on any build that
+    #: cannot honour it -- any value under NVF, and 'symmetric' on a tensor material, whose Li
+    #: build is the fixed nesting only. A spec that never asked must not be made to ask.
+    li_nesting: Optional[Nesting] = None
     complex_dtype: int = 128
     layer_algorithm: str = 'ETM'
     #: `None` is "resolve it", the same as `rcwa`'s -- max(1024, 4*truncation_order+1). Kept
@@ -451,7 +456,8 @@ class Numerics:
     answers: Answers = Answers.AMPLITUDE
 
     _FIELDS = ('backend', 'truncation_order', 'fourier_coefficients', 'factorization', 'raster_normal_method',
-               'nvf_projector', 'complex_dtype', 'layer_algorithm', 'shape_nvf_grid_size', 'answers')
+               'nvf_projector', 'li_nesting', 'complex_dtype', 'layer_algorithm', 'shape_nvf_grid_size',
+               'answers')
 
     @classmethod
     def from_dict(cls, d) -> 'Numerics':
@@ -470,6 +476,8 @@ class Numerics:
                                               'numerics.raster_normal_method')
         if d.get('nvf_projector') is not None:
             d['nvf_projector'] = _enum(d['nvf_projector'], Projector, 'numerics.nvf_projector')
+        if d.get('li_nesting') is not None:
+            d['li_nesting'] = _enum(d['li_nesting'], Nesting, 'numerics.li_nesting')
         if 'answers' in d:
             d['answers'] = _enum(d['answers'], Answers, 'numerics.answers')
         if 'truncation_order' in d:
@@ -548,6 +556,8 @@ class Numerics:
                else {'raster_normal_method': self.raster_normal_method.value}),
             **({} if self.nvf_projector is None
                else {'nvf_projector': self.nvf_projector.value}),
+            **({} if self.li_nesting is None
+               else {'li_nesting': self.li_nesting.value}),
         )
 
 

@@ -32,7 +32,8 @@ result = solver.solve()
   either quantity selects the first-order 4ff solver, with ETM or SMM layer connection.
 
 Li does not read NVF normal-field or projector settings; explicit NVF settings
-are rejected. Use NVF for general curved or rotated shapes and oblique cells.
+are rejected. It builds the fixed nesting only (v inside u for every slot):
+`li_nesting='fixed'` is accepted, and `li_nesting='symmetric'` is rejected by name. Use NVF for general curved or rotated shapes and oblique cells.
 Anisotropic half-spaces remain outside the public material interface.
 
 ## Construction
@@ -59,10 +60,12 @@ For a full tensor, the two tangent components participate in each exchange;
 the zz operator includes the coupling through x and y. For a z-decoupled tensor,
 zz reduces to the direct rule because E_z is tangential to vertical walls.
 
-This is Li's successive two-dimensional construction, using the v-then-u order
-of the existing scalar implementation. Reversing that order gives a different
-finite-truncation approximation. Tensor components that reduce to a scalar
-recover the existing scalar Li matrices, including that ordering.
+This is Li's successive two-dimensional construction in the scalar path's fixed
+nesting: v inside, u outside, for every component. Another nesting gives a
+different finite-truncation approximation; the scalar path's `'symmetric'`
+nesting, which puts each slot's own inverse-rule axis inside, has no tensor
+counterpart here. Tensor components that reduce to a scalar recover the scalar
+Li matrices of the fixed nesting.
 See [Li, *Fourier Modal Method*, §§13.3.3.1 and 13.4.3, Eq. (13.132)](https://www.fresnel.fr/files/gratings/Second-Edition/GratingsTheoryandNumericApplicationsSecondEdition.pdf#page=572).
 
 The mathematical reference informed an independently written implementation.

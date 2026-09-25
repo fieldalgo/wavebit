@@ -2,6 +2,11 @@
 
 Written: 2026-08-11.
 
+Updated 2026-09-25: the `li_nesting` axis (Li's rules, `'fixed'` or `'symmetric'`) is published
+without a version bump, as `nvf_projector` was: `paths[raster].li_nesting` with its reason,
+`enums.li_nesting`, and on the parametric path two `conditional_options` entries that ride on
+its conditional `factorization='li'`.
+
 Updated 2026-09-24: manifest version **12** names the specified-incidence result
 `incident` and publishes direct amplitude access through `result.r_s`, `result.r_p`,
 `result.t_s`, and `result.t_p`. The field-reconstruction selector is also `'incident'`.

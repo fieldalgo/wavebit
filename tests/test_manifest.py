@@ -22,7 +22,7 @@ import wavebit
 from wavebit.manifest import (LATTICE, MATERIAL_QUANTITY, MATERIALS, SPELLINGS,
                               cited_sources, manifest)
 from wavebit._core.enums import (Backend, Factorization, FourierCoefficients, ModelingPath,
-                                   NormalMethod, Projector, Tetm)
+                                   Nesting, NormalMethod, Projector, Tetm)
 
 import pathlib
 
@@ -182,6 +182,38 @@ def test_a_projector_the_manifest_withholds_is_refused(path):
             f'{path}: refused nvf_projector={value!r} without naming it')
 
 
+@pytest.mark.parametrize('path', sorted(STRUCTURES))
+def test_a_nesting_the_manifest_withholds_is_refused(path):
+    """The Li-side twin of the two above. The parametric path lists no plain nesting: its
+    default NVF nests no rules, and its Li build is itself a conditional option (next test), so
+    naming one on the circle must refuse rather than be ignored."""
+    for value in _unavailable(path, 'li_nesting', Nesting):
+        with pytest.raises(Exception) as excinfo:
+            wavebit.rcwa(structure=STRUCTURES[path], li_nesting=value, **KW).solve()
+        assert value in str(excinfo.value), (
+            f'{path}: refused li_nesting={value!r} without naming it')
+
+
+#: An axis-aligned rectangle inside the cell: what the parametric path's conditional
+#: `factorization='li'` requires, so the conditional options can be built rather than read.
+_RECTANGLE = [{'background': 1.0,
+               'shapes': [{'type': 'rectangle', 'cx': 0.05, 'cy': -0.1,
+                           'lx': 0.5, 'ly': 0.3, 'material': 6.25}]}]
+
+
+def test_a_conditional_option_builds_where_its_condition_holds():
+    """`conditional_options` is a promise too: each entry builds on a structure that meets its
+    requirement. The nesting entries ride on the Li one, so both are built together."""
+    conditional = PATHS['parametric']['conditional_options']
+    assert {(c['option'], c['value']) for c in conditional} >= (
+        {('factorization', 'li')} | {('li_nesting', m.value) for m in Nesting})
+    for entry in conditional:
+        kw = {entry['option']: entry['value']}
+        if entry['option'] == 'li_nesting':
+            kw['factorization'] = 'li'
+        wavebit.rcwa(structure=_RECTANGLE, **kw, **KW).solve()
+
+
 def test_an_option_the_manifest_offers_builds_on_an_overlapping_layer_too():
     """The `parametric` entry's options are claimed for every layer that spelling accepts.
 
@@ -198,7 +230,8 @@ def test_an_option_the_manifest_offers_builds_on_an_overlapping_layer_too():
         wavebit.rcwa(structure=_OVERLAPPING, nvf_projector=value, **KW).solve()
     for axis, enum_cls in (('factorization', Factorization),
                            ('fourier_coefficients', FourierCoefficients),
-                           ('raster_normal_method', NormalMethod), ('nvf_projector', Projector)):
+                           ('raster_normal_method', NormalMethod), ('nvf_projector', Projector),
+                           ('li_nesting', Nesting)):
         for value in _unavailable('parametric', axis, enum_cls):
             with pytest.raises(Exception) as excinfo:
                 wavebit.rcwa(structure=_OVERLAPPING, **{axis: value}, **KW).solve()
@@ -221,6 +254,10 @@ def test_an_option_the_manifest_offers_actually_builds(path):
         # Same caveat, same reader -- the two axes are published side by side.
         wavebit.rcwa(structure=STRUCTURES[path], factorization='nvf',
                        nvf_projector=value, **KW).solve()
+    for value in PATHS[path]['li_nesting']:
+        # The other rule's axis, and the other caveat: read only under 'li'.
+        wavebit.rcwa(structure=STRUCTURES[path], factorization='li',
+                       li_nesting=value, **KW).solve()
 
 
 # ------------------------------------------------------- the lattice refusals
@@ -317,6 +354,7 @@ def test_enum_lists_match_the_enums():
     assert enums['factorization'] == [m.value for m in Factorization]
     assert enums['fourier_coefficients'] == [m.value for m in FourierCoefficients]
     assert enums['nvf_projector'] == [m.value for m in Projector]
+    assert enums['li_nesting'] == [m.value for m in Nesting]
 
 
 def test_every_cited_source_exists():

@@ -418,11 +418,11 @@ on the same grounds (it rasterised onto a rectangular grid of its own); that who
 removed on 2026-08-26.
 
 **Parametric shapes need no keyword at all.** `factorization` resolves per modeling path, and the
-parametric path implements only `nvf` — it builds `eps` from the shapes' own analytic normal field,
-so there is no raster axis for `li` to run along. Its default is therefore already `nvf`, and the
-`li` refusal above never applied to it. Passing `factorization='li'` with parametric shapes raises
-whether or not the cell is skewed, because that path cannot express it; the `factorization='nvf'`
-in the example at the top of this page is required for the **raster** it uses.
+parametric path defaults to `nvf` — it builds `eps` from the shapes' own analytic normal field.
+Its only Li build, on axis-aligned rectangles, needs an axis-aligned rectangular cell, so on a
+skewed cell `factorization='li'` with parametric shapes raises, as the raster's does. The
+`factorization='nvf'` in the example at the top of this page is required for the **raster** it
+uses.
 
 The two refusals raise rather than answering, and that matters: both of them *run* on a skewed
 cell and return a plausible wrong number, with energy still conserving to 1e-15.

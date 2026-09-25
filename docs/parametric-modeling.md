@@ -180,6 +180,9 @@ skew cells, and rectangles crossing a cell edge are refused. Omit `angle` when
 tracing a shape dictionary: this route has a fixed zero angle, not an angle derivative.
 `shape_nvf_grid_size`, `raster_normal_method`, and `nvf_projector` are refused because no normal field
 is sampled. Coefficients are integrated; requesting sampled coefficients is refused.
+`li_nesting` is read here as on a raster (`'fixed'` by default, or `'symmetric'`): the build is the
+raster path's integrated Li builder on exact edges, so both nestings agree with an
+independently painted commensurate raster, and one frozen plan serves both.
 
 `freeze_geometry()` stores edge order and painting ownership. Lengths, centers,
 permittivity, and permeability remain live. It retains zero-width intervals at
@@ -486,13 +489,15 @@ keep passing.
   coefficients themselves are analytic, and the layer's *position* (one shape or several) is
   carried analytically, but the field's shape (size, rotation, and the relative placement of
   several shapes) retains grid error. Increase the grid if needed.
-- `fourier_coefficients` and `factorization` both have exactly one value here, and this path
-  resolves them to it rather than reading them: `('integrated', 'nvf')`, the closed-form shape
+- `fourier_coefficients` has exactly one value here and `factorization` one default, and this
+  path resolves them rather than reading them: `('integrated', 'nvf')`, the closed-form shape
   Fourier transform in the NVF 5-matrix form. Leaving either unset is not a request and gets
-  that build; naming the *other* value of either — `'sampled'` or `'li'` — raises
-  `NotImplementedError` instead of being silently substituted, which is what both used to be.
-  Neither missing value is merely unbuilt: a parametric shape has no samples to take a
-  discrete series of, and there is no raster axis for Li's nested 1D rule to run along.
+  that build. Naming `'sampled'` raises `NotImplementedError` instead of being silently
+  substituted, which is what it used to be: a parametric shape has no samples to take a
+  discrete series of. `factorization='li'` is built only on axis-aligned rectangles in an
+  axis-aligned rectangular cell, whose edges give Li's nested 1D rules an axis to run along
+  (see *Cartesian rectangles with explicit Li factorization* above); on any other shape it
+  raises `NotImplementedError`.
   For a non-NVF pure-Laurent comparison, call the two builders directly:
   `_core.analytic.assemble_eps_coeffs` returns the coefficient grids for `eps` and `1/eps`, and
   `_core.analytic.conv_matrix_2d` turns either into a block-Toeplitz matrix. That first builder
