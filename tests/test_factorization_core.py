@@ -507,17 +507,18 @@ def _transpose_symmetric_L(N=48):
     return u[None, :, :]
 
 
-def _transmission_map(structure, factorization, truncation_order, psi):
+def _transmission_map(structure, factorization, truncation_order, psi, nesting=None):
     res = wavebit.rcwa(
         backend=0, factorization=factorization, truncation_order=[truncation_order, truncation_order],
         top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=psi,
-        wavelength=1.3, period=[1.0, 1.0], thickness=[0.4], structure=structure).solve()
+        wavelength=1.3, period=[1.0, 1.0], thickness=[0.4], structure=structure,
+        **({} if nesting is None else {'li_nesting': nesting})).solve()
     t = np.asarray(res.T)
     n_orders = int(round(t.size ** 0.5))
     return t.reshape(n_orders, n_orders)
 
 
-def _relabelling_residue(factorization, truncation_order):
+def _relabelling_residue(factorization, truncation_order, nesting=None):
     """``max|T(psi=0) - T(psi=90)^T|`` on a transpose-symmetric structure at normal incidence.
 
     Swapping x and y maps that problem onto itself with the polarisation exchanged, so the
@@ -525,8 +526,8 @@ def _relabelling_residue(factorization, truncation_order):
     apart.
     """
     structure = _transpose_symmetric_L()
-    a = _transmission_map(structure, factorization, truncation_order, 0.0)
-    b = _transmission_map(structure, factorization, truncation_order, np.pi / 2)
+    a = _transmission_map(structure, factorization, truncation_order, 0.0, nesting)
+    b = _transmission_map(structure, factorization, truncation_order, np.pi / 2, nesting)
     return float(np.abs(a - b.T).max())
 
 
@@ -534,8 +535,9 @@ def _relabelling_residue(factorization, truncation_order):
 def test_nvf_does_not_tell_x_and_y_apart(truncation_order):
     """NVF chooses no nesting order, so the relabelling symmetry is exact.
 
-    This is the invariant; the ``li`` test below is the record of what it costs not to have
-    it. Both were unpinned until 2026-08-12 -- see ``docs/factorization-terms.md`` §6.
+    This is the invariant; the fixed-nesting ``li`` test below is the record of what it costs
+    not to have it, and the symmetric one what Li's own nesting gets back. Unpinned until
+    2026-08-12 -- see ``docs/factorization-terms.md`` §6.
     """
     resid = _relabelling_residue('nvf', truncation_order)
     assert resid < 1e-11, f'nvf broke the x<->y relabelling symmetry by {resid:.2e}'
@@ -543,21 +545,37 @@ def test_nvf_does_not_tell_x_and_y_apart(truncation_order):
 
 @pytest.mark.parametrize('truncation_order', [4, 6])
 def test_li_tells_x_and_y_apart_and_this_is_expected(truncation_order):
-    """Li's nested rule fixes one axis inside the other, so it does *not* hold the symmetry.
+    """The *fixed* nesting puts ``v`` inside ``u`` for both slots, so it does not hold the symmetry.
 
-    Intrinsic to the crossed-grating scheme rather than a defect here -- Liu & Fan name it in
-    the S4 paper as the reason vector-field formulations exist, which is what the NVF path is.
+    Not intrinsic to Li's rules, which is what this docstring said until 2026-09-25: it comes
+    from using one nesting order for both slots. Li's own nesting puts each slot's
+    inverse-rule axis inside and holds the symmetry to round-off -- the test below. The fixed
+    one is kept, and is the default, because every raster ``'li'`` number before that date
+    was taken on it. Named explicitly here, so that the default moving would not move this.
 
     Bounded on both sides on purpose. Above, because a regression that worsened the nesting
     would otherwise pass unnoticed; below, because one that *fixed* it should also stop and
     make somebody update ``docs/factorization-terms.md`` §6 rather than quietly invalidating
     it. Energy conservation sees none of this: the whole residue appears as a difference in
-    total transmitted power between two polarisations that ought to agree.
+    total transmitted power between two polarisations that ought to agree. Measured 4.2e-3 at
+    ``truncation_order=4`` and 4.1e-3 at 6.
     """
-    resid = _relabelling_residue('li', truncation_order)
+    resid = _relabelling_residue('li', truncation_order, nesting='fixed')
     assert 1e-4 < resid < 5e-2, (
         f'li relabelling residue {resid:.2e} left the band this test records; if the nesting '
         f'genuinely changed, docs/factorization-terms.md §6 needs the new numbers')
+
+
+@pytest.mark.parametrize('truncation_order', [4, 6])
+def test_li_does_not_tell_x_and_y_apart_in_the_symmetric_nesting(truncation_order):
+    """Each slot's inverse-rule axis inside: ``epx`` is ``epy`` mirrored, so the map transposes.
+
+    The counterpart of the fixed-nesting test above, on the same L. Measured 3.0e-14 at
+    ``truncation_order=4`` and 7.5e-14 at 6 (and 9.7e-13 at 12 on a 96x96 L), against the
+    fixed nesting's 4.2e-3 and 4.1e-3 -- see ``docs/factorization-terms.md`` §6.
+    """
+    resid = _relabelling_residue('li', truncation_order, nesting='symmetric')
+    assert resid < 1e-12, f'symmetric li broke the x<->y relabelling symmetry by {resid:.2e}'
 
 
 # ------------------------------------------------------ the same symmetry, on a scene that can see it
@@ -603,13 +621,13 @@ _TURN_THETA = np.deg2rad(25.0)
 _TURN_PSI = np.deg2rad(37.0)
 
 
-def _turn_scene(structure, period, truncation_order, phi, psi, factorization='nvf'):
+def _turn_scene(structure, period, truncation_order, phi, psi, factorization='nvf', nesting=None):
     """One solve of the turnable scene. Returns ``(R, T, truncation_order)`` -- see :func:`_by_order`."""
     res = wavebit.rcwa(
         backend=0, factorization=factorization, truncation_order=[int(truncation_order[0]), int(truncation_order[1])],
         top=1.0, bot=1.0, theta=_TURN_THETA, phi=phi, psi=psi,
         wavelength=_TURN_WAVELENGTH, period=[period[0], period[1]], thickness=[120.0],
-        structure=structure).solve()
+        structure=structure, **({} if nesting is None else {'li_nesting': nesting})).solve()
     return np.asarray(res.R), np.asarray(res.T), (int(truncation_order[0]), int(truncation_order[1]))
 
 
@@ -752,16 +770,18 @@ def test_every_part_of_the_turn_is_load_bearing():
             f'the covariance test above is correspondingly weaker')
 
 
-@pytest.mark.parametrize('factorization', ['li', 'nvf'])
+@pytest.mark.parametrize('factorization, nesting', [('li', None), ('li', 'symmetric'), ('nvf', None)],
+                         ids=['li', 'li-symmetric', 'nvf'])
 @pytest.mark.parametrize('truncation_order', [[4, 2], [6, 4], [8, 6]])
-def test_a_y_mirror_is_exact_on_both_factorizations(truncation_order, factorization):
+def test_a_y_mirror_is_exact_on_both_factorizations(truncation_order, factorization, nesting):
     """Flip the cell in y and the polarisation with it; at ``phi=0`` the orders must flip too.
 
     ``phi=0`` because the x-z plane of incidence is what a y-mirror leaves invariant. Note this
     is not the same symmetry as the x<->y relabelling higher up, and the two factorizations do
-    not hold them for the same reasons: ``li`` fixes one axis inside the other, so it *breaks*
-    the relabelling (``test_li_tells_x_and_y_apart_and_this_is_expected``) while holding a
-    single-axis mirror exactly, because that axis' nesting is untouched by the flip.
+    not hold them for the same reasons: ``li``'s fixed nesting puts one axis inside the other
+    for both slots, so it *breaks* the relabelling
+    (``test_li_tells_x_and_y_apart_and_this_is_expected``) while holding a single-axis mirror
+    exactly, because no nesting is disturbed by flipping one axis -- in either nesting.
 
     **``nvf`` used to break this, at 7.6e-04 to 8.4e-03, and the defect was real.** The normal
     field is a *pointwise* sample while the permittivity is *piecewise constant*, and only the
@@ -781,9 +801,9 @@ def test_a_y_mirror_is_exact_on_both_factorizations(truncation_order, factorizat
     """
     structure = _chiral_L()
     upright = _turn_scene(structure, _TURN_PERIOD, truncation_order, 0.0, +_TURN_PSI,
-                          factorization=factorization)
+                          factorization=factorization, nesting=nesting)
     mirrored = _turn_scene(np.flip(structure, axis=1), _TURN_PERIOD, truncation_order, 0.0, -_TURN_PSI,
-                           factorization=factorization)
+                           factorization=factorization, nesting=nesting)
     resid = _residue(upright, mirrored, _MIRROR_Y)
     assert resid < 1e-12, f'{factorization} broke a y-mirror by {resid:.2e}'
 
@@ -830,6 +850,37 @@ def test_a_plain_quarter_turn_of_the_whole_scene_is_exact(truncation_order):
     resid = _residue(upright, turned, lambda m, n: (n, -m))
     assert resid < 1e-12, (
         f'a plain quarter turn of the whole scene is not covariant: {resid:.2e}')
+
+
+@pytest.mark.parametrize('truncation_order', [[5, 3], [8, 6], [11, 9]])
+def test_li_is_covariant_when_the_whole_scene_is_turned_in_the_symmetric_nesting(truncation_order):
+    """The two turn theorems above, on Li's rules: exact in the symmetric nesting, not in the fixed.
+
+    Both spellings of the turn -- the transpose with ``psi -> -psi``, and a plain ``np.rot90`` --
+    with every moving part live, as in :func:`test_nvf_is_covariant_when_the_whole_scene_is_turned`.
+    The symmetric nesting is the relabelling-covariant one, and a single-axis mirror is exact in
+    either (:func:`test_a_y_mirror_is_exact_on_both_factorizations`), so both spellings hold.
+    Measured 1.2e-15 to 1.9e-14 across these truncations. The fixed nesting is held *off*
+    round-off on the same scenes (1.1e-2, 1.4e-3, 4.5e-4) so that the two cannot quietly become
+    one another.
+    """
+    structure = _chiral_L()
+    turned_cell = structure.transpose(0, 2, 1)
+    rotated_cell = np.rot90(structure, 1, axes=(1, 2))
+    for nesting in ('symmetric', 'fixed'):
+        kw = dict(factorization='li', nesting=nesting)
+        upright = _turn_scene(structure, _TURN_PERIOD, truncation_order, np.deg2rad(90.0),
+                              _TURN_PSI, **kw)
+        transposed = _residue(upright, _turn_scene(turned_cell, _TURN_PERIOD[::-1],
+                                                   truncation_order[::-1], 0.0, -_TURN_PSI, **kw),
+                              _SWAP)
+        rotated = _residue(upright, _turn_scene(rotated_cell, _TURN_PERIOD[::-1],
+                                                truncation_order[::-1], 0.0, _TURN_PSI, **kw),
+                           lambda m, n: (n, -m))
+        if nesting == 'symmetric':
+            assert max(transposed, rotated) < 1e-12, (transposed, rotated)
+        else:
+            assert min(transposed, rotated) > 1e-4, (transposed, rotated)
 
 
 # ------------------------------------------------- what a self-captured golden cannot claim
