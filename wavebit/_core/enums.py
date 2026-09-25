@@ -22,6 +22,10 @@ of their pairings reachable — see :func:`resolve_fourier_options`.
 NVF normal field: the first says how the field is *built*, the second what is done *with* it.
 Neither is a value of the other, so the eight pairings are reachable and the two lists stay
 four long and two long instead of one list of eight.
+
+``Nesting`` sits one level down on the other side: it is read only under
+``factorization='li'``, where it says in which order Li's one-dimensional rules are nested for
+each field component. See :class:`Nesting`.
 """
 from enum import Enum, IntEnum
 
@@ -159,6 +163,41 @@ class Projector(str, Enum):
     CIRCULAR = 'circular'  # P = J J^H, Antos' complex basis; direction-free as |n| -> 0
 
 
+class Nesting(str, Enum):
+    """The order Li's rules are nested in, per field component — scalar ``factorization='li'``.
+
+    A crossed grating needs a rule along each lattice axis, and applying two one-dimensional
+    rules means transforming along one axis *inside* the other (L. Li, JOSA A 14, 2758, 1997).
+    With ``T_u`` / ``T_v`` the Toeplitz (convolution) matrix along each axis and ``epx`` the slot
+    acting on ``E_x``::
+
+        slot    'fixed'                        'symmetric'
+        epx     ( T_u( [T_v(eps)]^-1 ) )^-1    T_v( [T_u(1/eps)]^-1 )
+        epy     T_u( [T_v(1/eps)]^-1 )         T_u( [T_v(1/eps)]^-1 )     (the same)
+        epz_i   ( T_uv(eps) )^-1               ( T_uv(eps) )^-1           (the same)
+
+    ``'fixed'`` nests ``v`` inside ``u`` for every slot. It is what the raster path has always
+    built, and the order the Cartesian shape and tensor Li builds were written in --
+    RETICOLO's ``parm.res1.li=1`` -- and it is not covariant under relabelling x and y: on a
+    structure with ``eps(x, y) == eps(y, x)`` the two polarizations disagree at finite
+    truncation. ``'symmetric'`` puts the inverse-rule axis inside for each slot (Li's own
+    construction, RETICOLO's ``li=0``), so ``epx`` is the x<->y mirror image of ``epy`` and the
+    relabelling holds to round-off. Both are Li's rules on a staircase and converge to the same
+    answer; they differ in how they get there. On a y-invariant (1D) structure both reduce to
+    Li's 1D inverse rule exactly. See ``docs/factorization-terms.md`` §6 for what separates
+    them, measured.
+
+    Read by the two scalar Li builds: a raster under ``factorization='li'`` (either coefficient
+    path, the permeability included) and the parametric path's axis-aligned rectangles under
+    ``factorization='li'``. Explicitly set anywhere else it is refused rather than ignored, as
+    ``raster_normal_method`` is off raster NVF and ``nvf_projector`` off NVF: under
+    ``factorization='nvf'`` any value (NVF nests no rules), and on a tensor material
+    ``'symmetric'`` (tensor Li, :mod:`wavebit._core.tensor_li`, builds the fixed nesting only).
+    """
+    FIXED = 'fixed'          # inner v, outer u for every slot (the original; RETICOLO li=1)
+    SYMMETRIC = 'symmetric'  # the inverse-rule axis inside, per slot (Li 1997; RETICOLO li=0)
+
+
 class Formulation(str, Enum):
     """Which layer formulation the 2D solve uses — how many fields per order it carries.
 
@@ -267,6 +306,11 @@ DEFAULT_NORMAL_METHOD = NormalMethod.DISTANCE
 #: axis's arbitrariness and costs accuracy against an exact circle (3.18e-5 -> 3.95e-5 at
 #: 512^2). A default that moved would move both.
 DEFAULT_PROJECTOR = Projector.LINEAR
+#: The nesting every raster ``'li'`` number in the repository was measured on, and every golden
+#: was taken with. Kept rather than flipped to ``'symmetric'`` so that nothing moves; which of
+#: the two should be the default is the maintainer's call -- ``docs/factorization-terms.md`` §6
+#: has the measurements it would rest on.
+DEFAULT_NESTING = Nesting.FIXED
 #: Amplitudes, not fields. The field state is three orders of magnitude larger and most
 #: large runs -- an optimization sweep against a fixed objective -- never reconstruct one.
 DEFAULT_ANSWERS = Answers.AMPLITUDE
@@ -321,6 +365,11 @@ def normal_method_of(value):
 def projector_of(value):
     """Validate a ``nvf_projector`` value."""
     return _one_of(Projector, value, 'nvf_projector')
+
+
+def nesting_of(value):
+    """Validate a ``nesting`` value."""
+    return _one_of(Nesting, value, 'nesting')
 
 
 def answers_of(value):

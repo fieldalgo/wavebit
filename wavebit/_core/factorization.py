@@ -100,9 +100,11 @@ worked (``tests/test_conv_matrices_accessor.py``). The builders are what disagre
 
 ``tests/test_slot_order.py`` pins the property directly, for every builder.
 """
+import math
 from typing import NamedTuple
 
 from .backend import array_namespace
+from .enums import DEFAULT_NESTING, Nesting, nesting_of
 from .geometry import StaleGeometryError
 
 
@@ -314,6 +316,278 @@ def _half_pixel_phase(xp, orders, n, dtype, device=None):
     """
     k = xp.astype(xp.asarray(orders, device=device), dtype)
     return xp.exp(-1j * 3.141592653589793 * k / n)
+
+
+# ======================================================================== Li's rules, nested
+#
+# Written from Li, JOSA A 14, 2758 (1997), and Li, JOSA A 13, 1870 (1996).
+#
+# Everything from here to `li_conv_matrices_integrated` was first written on 2026-09-25 from
+# the nested crossed-grating rules of the 1997 paper and the one-dimensional rules they nest
+# from the 1996 one, without reference to RETICOLO's or meent's source or to the bodies of the
+# builders it replaced. Those came from meent, whose Li-rule code was written with reference to
+# RETICOLO's MATLAB source. Later changes are described in their own commit messages.
+#
+# The pieces, bottom up:
+#
+# * a *series* maps values along the last axis to their Fourier coefficients for the orders
+#   ``-2*half_width .. 2*half_width`` -- `_raster_series` for ``n`` equal pixels (the DFT, made
+#   exact by `_pixel_correction`), `_segment_series` for arbitrary segment edges;
+# * `_conv_matrix` is the direct rule both ways: the 2D coefficients laid out as the BTTB
+#   convolution matrix of docs/factorization-terms.md §3;
+# * `_nested_rule` is one nested operator: Toeplitz matrices along the inner axis, inverted,
+#   then transformed entrywise along the outer axis and laid out block-Toeplitz;
+# * `_li_slot` picks the operator for one slot and one `Nesting`, and `li_conv_matrices` /
+#   `li_conv_matrices_integrated` build a layer's three.
+
+def _toeplitz_positions(xp, half_width, dev):
+    """Where order ``r - c`` sits in a ``4*half_width+1`` coefficient vector, for every
+    ``(r, c)`` of an ``(n_orders, n_orders)`` matrix, row-major — (F1) as a gather index.
+
+    The sign is :func:`_circulant_index`'s, which is the order-index convention (see its
+    docstring for what a flipped one costs).
+    """
+    return xp.asarray([d + 2 * half_width for row in _circulant_index(half_width) for d in row],
+                      device=dev)
+
+
+def _raster_series(xp, half_width, correction):
+    """Fourier coefficients along the last axis of values filling ``n`` equal cells of the
+    period.
+
+    Returns ``series(a)``: ``a`` of shape ``(..., n)`` goes to ``(..., 4*half_width+1)``, entry
+    ``k + 2*half_width`` holding order ``k``. The ``n``-point DFT supplies every order -- bin
+    ``k mod n``, which is what makes an order past ``n/2`` legal -- and ``correction`` turns it
+    into the quantity the grid actually describes: :func:`_pixel_correction` for values held
+    across their pixel (the exact box transform), :func:`_half_pixel_phase` for point samples.
+
+    Two choices here are about bits, not values, and both are forced by
+    :func:`fourier2d_pointwise`, whose output the NVF projector consumes and which this rewrite
+    had to leave identical to the last bit on all three backends. The ``1/n`` is applied to the
+    values *before* the transform, not to the spectrum after it (they differ off powers of two);
+    and the transform runs along the **last** axis. NumPy's FFT gives the same bits along any
+    axis, JAX's and PyTorch's do not: measured on 21 grids, taking it along axis 0 instead left
+    15 of them a few 1e-17 off on both.
+    """
+    orders = list(range(-2 * half_width, 2 * half_width + 1))
+
+    def series(a):
+        n = a.shape[-1]
+        dev = _device(xp, a)
+        spectrum = xp.fft.fft(a / n, axis=-1)
+        picked = xp.take(spectrum, xp.asarray([k % n for k in orders], device=dev), axis=-1)
+        return picked * correction(xp, xp.asarray(orders, device=dev), n, picked.dtype, dev)
+
+    return series
+
+
+def _segment_bounds(xp, edges, dtype, dev):
+    """``(left, width)`` of the segments whose right-hand edges are ``edges``, on the unit cell.
+
+    ``edges`` is what :func:`compression_indices` returns -- right-hand edges, increasing, the
+    last one closing the period -- in whatever unit the caller used: dividing by the last edge
+    is what puts them on the unit cell, where the coefficient integral has no ``1/period``
+    left in it. A traced ``edges`` keeps its graph (:func:`_lift`).
+    """
+    right = xp.reshape(_lift(xp, edges, dtype, dev), (-1,))
+    right = right / right[-1]
+    left = xp.concat([xp.zeros((1,), dtype=dtype, device=dev), right[:-1]])
+    return left, right - left
+
+
+def _segment_series(xp, left, width, half_width):
+    """Fourier coefficients along the last axis of a profile constant on arbitrary segments.
+
+    Returns ``series(a)`` like :func:`_raster_series`, for segment ``j`` holding ``a[..., j]``
+    across ``[left_j, left_j + width_j)`` of the unit cell. The coefficient is the segment
+    integral::
+
+        c_k = sum_j a_j (exp(-2 pi i k left_j) - exp(-2 pi i k right_j)) / (2 pi i k),  k != 0
+        c_0 = sum_j a_j width_j
+
+    and it is evaluated in the equivalent **jump** form, regrouped by edge -- segment ``j``'s
+    left edge is segment ``j-1``'s right one, and ``right`` of the last is ``left_0 + 1``::
+
+        c_k = sum_j (a_j - a_{j-1}) exp(-2 pi i k left_j) / (2 pi i k),       a_{-1} = a_{n-1}
+
+    The two are the same number in exact arithmetic. What decides between them is a uniform
+    stretch: its jumps are exactly zero, so it contributes exactly nothing off ``k = 0``,
+    where the segment form leaves ``exp(-2 pi i k)`` of round-off. That is what keeps a
+    uniform layer's matrix *exactly* ``eps * I``
+    (``tests/test_factorization_core.py::test_a_uniform_cell_factorizes_to_exactly_eps_times_identity``),
+    and why ``left_0 = 0`` exactly, so the wrap-around jump's phase is exactly one.
+    """
+    orders = list(range(-2 * half_width, 2 * half_width + 1))
+
+    def series(a):
+        dtype = a.dtype
+        dev = _device(xp, a)
+        k = xp.astype(xp.asarray(orders, device=dev), dtype)
+        scale = xp.asarray([0j if o == 0 else 1.0 / (2j * math.pi * o) for o in orders],
+                           dtype=dtype, device=dev)
+        weights = xp.exp(-2j * math.pi * (xp.astype(left, dtype)[:, None] * k[None, :]))
+        jumps = a - xp.roll(a, 1, axis=-1)
+        ac = jumps @ (weights * scale[None, :])                           # (..., n_k)
+        dc = xp.expand_dims(a @ xp.astype(width, dtype), axis=-1)         # (..., 1)
+        return xp.where(xp.asarray([o == 0 for o in orders], device=dev), dc, ac)
+
+    return series
+
+
+def _conv_matrix(xp, grid, half_width_u, half_width_v, series_u, series_v):
+    """The direct rule both ways: ``M[(n, m), (n', m')] = c(n - n', m - m')``.
+
+    ``grid`` is ``(n_v, n_u)`` -- rows run along ``v`` -- and the 2D coefficients are taken one
+    axis at a time, ``v`` first. With no inverse in between the two transforms commute, so the
+    order decides nothing but rounding; ``v`` first is :func:`fourier2d_pointwise`'s order to the
+    bit. The layout is the BTTB one of ``docs/factorization-terms.md`` §3, rows
+    ``i = n*n_orders_u + m``.
+    """
+    n_u, n_v = 2 * half_width_u + 1, 2 * half_width_v + 1
+    dev = _device(xp, grid)
+    by_column = series_v(xp.permute_dims(grid, (1, 0)))                  # [j_u, k_v]
+    coeffs = series_u(xp.permute_dims(by_column, (1, 0)))                 # [k_v, k_u]
+    blocks = xp.take(xp.take(coeffs, _toeplitz_positions(xp, half_width_v, dev), axis=0),
+                     _toeplitz_positions(xp, half_width_u, dev), axis=1)  # [(n, n'), (m, m')]
+    out = xp.permute_dims(xp.reshape(blocks, (n_v, n_v, n_u, n_u)), (0, 2, 1, 3))
+    return xp.reshape(out, (n_v * n_u, n_v * n_u))
+
+
+def _nested_rule(xp, grid, half_width_u, half_width_v, series_u, series_v, *, inner,
+                 invert_outer):
+    """One of Li's nested operators on a piecewise-constant ``grid`` (rows along ``v``).
+
+    With ``inner='v'``: each column of ``grid`` is transformed along ``v`` and laid out as its
+    Toeplitz matrix ``T_v(g)(u)``, ``[.]_{n, n'} = c_{n - n'}``, which is then **inverted** --
+    a matrix-valued function of ``u``, constant on each column. That function is transformed
+    entrywise along ``u`` and laid out block-Toeplitz,
+    ``out[(n, m), (n', m')] = A_hat_{m - m'}[n, n']``, and ``invert_outer`` inverts the result::
+
+        T_u( [T_v(g)]^-1 )               invert_outer=False
+        ( T_u( [T_v(g)]^-1 ) )^-1        invert_outer=True
+
+    ``inner='u'`` swaps the roles of the two axes. The output is in the BTTB layout of
+    :func:`_conv_matrix` either way -- ``u``-inner builds its blocks along ``v`` and reads them
+    back in that order, so the caller never sees which axis was inside.
+
+    The inner inverse is what makes the order of the two transforms matter, and so what the
+    :class:`~wavebit._core.enums.Nesting` choice is about: without it the operator is
+    :func:`_conv_matrix`, whichever axis goes first.
+    """
+    n_u, n_v = 2 * half_width_u + 1, 2 * half_width_v + 1
+    dev = _device(xp, grid)
+    at_u = _toeplitz_positions(xp, half_width_u, dev)
+    at_v = _toeplitz_positions(xp, half_width_v, dev)
+
+    if inner == 'v':
+        lines = series_v(xp.permute_dims(grid, (1, 0)))                  # [j_u, k_v]
+        inner_t = xp.linalg.inv(
+            xp.reshape(xp.take(lines, at_v, axis=1), (lines.shape[0], n_v, n_v)))
+        entries = xp.permute_dims(xp.reshape(inner_t, (lines.shape[0], n_v * n_v)), (1, 0))
+        outer = xp.take(series_u(entries), at_u, axis=1)                   # [(n, n'), (m, m')]
+        out = xp.permute_dims(xp.reshape(outer, (n_v, n_v, n_u, n_u)), (0, 2, 1, 3))
+    elif inner == 'u':
+        lines = series_u(grid)                                             # [j_v, k_u]
+        inner_t = xp.linalg.inv(
+            xp.reshape(xp.take(lines, at_u, axis=1), (lines.shape[0], n_u, n_u)))
+        entries = xp.permute_dims(xp.reshape(inner_t, (lines.shape[0], n_u * n_u)), (1, 0))
+        outer = xp.take(series_v(entries), at_v, axis=1)                   # [(m, m'), (n, n')]
+        out = xp.permute_dims(xp.reshape(outer, (n_u, n_u, n_v, n_v)), (2, 0, 3, 1))
+    else:
+        raise ValueError(f"inner: expected 'u' or 'v', got {inner!r}")
+
+    out = xp.reshape(out, (n_v * n_u, n_v * n_u))
+    return xp.linalg.inv(out) if invert_outer else out
+
+
+def _nesting(nesting):
+    """``nesting`` as a :class:`~wavebit._core.enums.Nesting`, ``None`` meaning the default."""
+    return DEFAULT_NESTING if nesting is None else nesting_of(nesting)
+
+
+def _li_slot(xp, cell, half_width_u, half_width_v, series_u, series_v, inverse_rule, nesting):
+    """One slot of Li's rules: the operator ``inverse_rule`` names, nested as ``nesting`` says.
+
+    ``inverse_rule`` is the direction whose discontinuity the inverse rule closes
+    (:func:`_inverse_axes`), and ``cell`` the permittivity -- the reciprocal is taken here where
+    a rule needs it. The operators, from Li (1997), with ``T`` as in :func:`_nested_rule`:
+
+    =================  ===================================  ===================================
+    ``inverse_rule``   ``'fixed'``                          ``'symmetric'``
+    =================  ===================================  ===================================
+    ``'u'`` (epx)      ``( T_u( [T_v(eps)]^-1 ) )^-1``      ``T_v( [T_u(1/eps)]^-1 )``
+    ``'v'`` (epy)      ``T_u( [T_v(1/eps)]^-1 )``           the same
+    ``None`` (epz)     ``T_uv(eps)``, the direct rule       the same
+    =================  ===================================  ===================================
+
+    ``'fixed'`` keeps ``v`` inside for both slots, so ``epx``'s inverse rule has to be taken on
+    the *outer* axis -- invert the inner matrices, transform, invert again. ``'symmetric'``
+    puts each slot's inverse-rule axis inside, which makes ``epx`` the x<->y mirror image of
+    ``epy``. On a y-invariant layer the two coincide: ``T_v`` of a function of ``u`` alone is
+    that function times the identity, and both ``epx`` become ``[[1/eps]]_u^-1`` per ``v``
+    order -- Li's 1D inverse rule.
+    """
+    along_u, along_v = _inverse_axes(inverse_rule)
+    nesting = _nesting(nesting)
+    if along_v:
+        return _nested_rule(xp, 1.0 / cell, half_width_u, half_width_v, series_u, series_v,
+                            inner='v', invert_outer=False)
+    if along_u and nesting == Nesting.SYMMETRIC:
+        return _nested_rule(xp, 1.0 / cell, half_width_u, half_width_v, series_u, series_v,
+                            inner='u', invert_outer=False)
+    if along_u:
+        return _nested_rule(xp, cell, half_width_u, half_width_v, series_u, series_v,
+                            inner='v', invert_outer=True)
+    return _conv_matrix(xp, cell, half_width_u, half_width_v, series_u, series_v)
+
+
+def _li_conv(xp, eps, half_width_u, half_width_v, series_u, series_v, nesting):
+    """A layer's three Li slots, in ``solve_conv`` order, the off-diagonal pair ``None``."""
+    def slot(inverse_rule):
+        return _li_slot(xp, eps, half_width_u, half_width_v, series_u, series_v,
+                        inverse_rule, nesting)
+
+    return ConvMatrices(slot('u'), slot('v'), xp.linalg.inv(slot(None)), None, None)
+
+
+def _real_dtype(xp, complex_dtype):
+    """The real dtype of ``complex_dtype``'s precision."""
+    return xp.float32 if complex_dtype == xp.complex64 else xp.float64
+
+
+def li_conv_matrices(xp, eps_matrix, half_width_u, half_width_v, nesting=None):
+    """Li-rule convolution matrices for one layer, with sampled coefficients.
+
+    ``eps_matrix`` is the ``(n_v, n_u)`` permittivity raster; its coefficients are the exact
+    ones of the staircase it describes (:func:`_pixel_correction`), whatever its size.
+    ``nesting`` is a :class:`~wavebit._core.enums.Nesting`, ``None`` meaning ``'fixed'``.
+
+    Returns a :class:`ConvMatrices` ``(epx, epy, epz_i, None, None)`` -- Li's rules do not
+    couple x and y -- each ``(n_orders, n_orders)``.
+    """
+    C = _complex_dtype(xp, eps_matrix)
+    eps_matrix = xp.astype(eps_matrix, C)
+    return _li_conv(xp, eps_matrix, half_width_u, half_width_v,
+                    _raster_series(xp, half_width_u, _pixel_correction),
+                    _raster_series(xp, half_width_v, _pixel_correction), nesting)
+
+
+def li_conv_matrices_integrated(xp, eps_comp, x, y, half_width_u, half_width_v, nesting=None):
+    """Li-rule convolution matrices for one layer, with integrated (closed-form) coefficients.
+
+    ``eps_comp`` is the compressed piecewise-constant layer and ``x`` / ``y`` the right-hand
+    edges of its columns and rows (:func:`compression_indices`); the coefficients are the
+    segment integrals of :func:`_segment_series`. ``nesting`` as in :func:`li_conv_matrices`.
+    """
+    C = _complex_dtype(xp, eps_comp)
+    eps_comp = xp.astype(eps_comp, C)
+    dev = _device(xp, eps_comp)
+    R = _real_dtype(xp, C)
+    left_u, width_u = _segment_bounds(xp, x, R, dev)
+    left_v, width_v = _segment_bounds(xp, y, R, dev)
+    return _li_conv(xp, eps_comp, half_width_u, half_width_v,
+                    _segment_series(xp, left_u, width_u, half_width_u),
+                    _segment_series(xp, left_v, width_v, half_width_v), nesting)
 
 
 def fourier2d_piecewise_constant(xp, cell, half_width_u, half_width_v, *, inverse_rule):
