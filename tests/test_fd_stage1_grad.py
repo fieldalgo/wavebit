@@ -344,6 +344,114 @@ def test_a_torch_forward_mode_value_in_a_static_door_is_refused_by_name(build, p
     assert build(concrete) is not None
 
 
+def test_torch_carried_answers_every_transform():
+    """What rides on a Torch value, asked at a real static door, for 27 ways of making one.
+
+    ``refuse`` where a derivative or a batch rides on the value -- ``float()`` would drop it --
+    and ``admit`` where nothing does, which is what ``jax`` does with the same program (a
+    non-differentiated argument stays a concrete array). The door is ``fd.PML(wavelength=)``,
+    a float static field; an admitted value must come back as its own number.
+
+    Measured before this design (2026-09-25, the same 27 cases on Torch 2.13): ``b24a708``
+    asked only ``requires_grad`` and was wrong on 12, 9 silently (the forward-mode rows, and
+    the five where a derivative sits under another transform's layer); ``d46935a`` refused
+    every ``torch.func`` wrapper and was wrong on 5 -- four wrappers that carry nothing, and a
+    dual of a subclass defined outside ``torch``, admitted silently. One row is a deliberate
+    over-refusal: a ``grad``-wrapped constant inside ``jvp``. From inside a ``grad`` layer a
+    tangent beneath it reads as absent (the two ``grad argnums=0 over ...`` rows are the same
+    shape and do carry one), so that layer is refused while forward mode is open.
+    """
+    torch = pytest.importorskip('torch')
+    import torch.autograd.forward_ad as fwAD
+    from wavebit.fd._spec import torch_carried
+
+    t = lambda v: torch.tensor(v, dtype=torch.float64)
+
+    class Sub(torch.Tensor):
+        pass
+
+    seen = {}
+
+    def door(tag, second=False):
+        def f(*args):
+            v = args[-1] if second else args[0]
+            try:
+                seen[tag] = ('admit', fd.PML(cells=12, wavelength=v).wavelength)
+            except ValueError as err:
+                assert 'PML(wavelength=...) is static' in str(err), (tag, str(err))
+                seen[tag] = ('refuse', torch_carried(v))
+            return args[0] * 2.
+        return f
+
+    def dual(tag, primal, detach=False):
+        with fwAD.dual_level():
+            d = fwAD.make_dual(primal, t(1.))
+            door(tag)(d.detach() if detach else d)
+
+    def dual_second(tag, how):
+        with fwAD.dual_level():
+            d = fwAD.make_dual(t(.5), t(1.))
+            if how == 'grad':
+                torch.func.grad(door(tag, True), argnums=0)(t(1.), d)
+            else:
+                torch.func.vmap(door(tag, True), in_dims=(0, None))(t([1., 1.]), d)
+
+    grad, jvp, vmap = torch.func.grad, torch.func.jvp, torch.func.vmap
+    jacfwd, jacrev = torch.func.jacfwd, torch.func.jacrev
+    cases = {
+        'plain tensor': ('admit', lambda k: door(k)(t(.5))),
+        'plain subclass': ('admit', lambda k: door(k)(t(.5).as_subclass(Sub))),
+        'requires_grad leaf': ('refuse', lambda k: door(k)(t(.5).requires_grad_())),
+        'nn.Parameter': ('refuse', lambda k: door(k)(torch.nn.Parameter(t(.5)))),
+        'detached dual': ('admit', lambda k: dual(k, t(.5), detach=True)),
+        'forward_ad dual': ('refuse', lambda k: dual(k, t(.5))),
+        'forward_ad dual of a subclass': ('refuse', lambda k: dual(k, t(.5).as_subclass(Sub))),
+        'jvp primal': ('refuse', lambda k: jvp(door(k), (t(.5),), (t(1.),))),
+        'jacfwd arg': ('refuse', lambda k: jacfwd(door(k))(t(.5))),
+        'grad arg': ('refuse', lambda k: grad(door(k))(t(.5))),
+        'jacrev arg': ('refuse', lambda k: jacrev(door(k))(t(.5))),
+        'vmap batch': ('refuse', lambda k: vmap(door(k))(t([.5, .5]))),
+        'grad argnums=0, second': ('admit', lambda k: grad(door(k, True), argnums=0)(t(1.), t(.5))),
+        'jacfwd argnums=0, second': (
+            'admit', lambda k: jacfwd(door(k, True), argnums=0)(t(1.), t(.5))),
+        'jacrev argnums=0, second': (
+            'admit', lambda k: jacrev(door(k, True), argnums=0)(t(1.), t(.5))),
+        'vmap in_dims=None, second': (
+            'admit', lambda k: vmap(door(k, True), in_dims=(0, None))(t([1., 1.]), t(.5))),
+        'jvp(grad) arg': ('refuse', lambda k: jvp(grad(door(k)), (t(.5),), (t(1.),))),
+        'jacfwd(jacrev) arg': ('refuse', lambda k: jacfwd(jacrev(door(k)))(t(.5))),
+        'vmap(grad) arg': ('refuse', lambda k: vmap(grad(door(k)))(t([.5, .5]))),
+        'grad(vmap) arg': ('refuse', lambda k: grad(lambda x: vmap(door(k))(x).sum())(t([.5, .5]))),
+        'tensor made inside jvp': (
+            'admit', lambda k: jvp(lambda a: (door(k)(t(.5) * 1.), a * 2.)[1], (t(1.),), (t(1.),))),
+        'grad-wrapped constant inside jvp': (
+            'refuse', lambda k: grad(lambda a, w: jvp(lambda b: door(k, True)(b, w), (a,),
+                                                      (t(1.),))[1], argnums=0)(t(1.), t(.5))),
+        'grad argnums=0 over a jvp primal, second': (
+            'refuse', lambda k: jvp(lambda a: grad(door(k, True), argnums=0)(t(1.), a), (t(.5),),
+                                    (t(1.),))),
+        'grad argnums=0 over a forward_ad dual, second': ('refuse', lambda k: dual_second(k, 'grad')),
+        'vmap in_dims=None over a forward_ad dual, second': (
+            'refuse', lambda k: dual_second(k, 'vmap')),
+        # The outer layer carries nothing and the one beneath it does: only the walk sees it.
+        'grad over an inner grad argnums=0, second': (
+            'refuse', lambda k: grad(lambda x: grad(door(k, True), argnums=0)(t(1.), x))(t(.5))),
+        'grad over jacfwd argnums=0, second': (
+            'refuse', lambda k: grad(lambda x: jacfwd(door(k, True), argnums=0)(t(1.), x))(t(.5))),
+    }
+    assert len(cases) == 27
+    for tag, (_, call) in cases.items():
+        call(tag)
+    got = {tag: seen.get(tag, ('never reached', None)) for tag in cases}
+    wrong = {tag: got[tag] for tag, (expect, _) in cases.items() if got[tag][0] != expect}
+    assert not wrong, wrong
+    for tag, (verdict, value) in got.items():
+        if verdict == 'admit':
+            assert value == .5, (tag, value)        # read as the number it is
+        elif tag not in ('requires_grad leaf', 'nn.Parameter'):
+            assert value is True, tag               # refused by torch_carried, not by chance
+
+
 def test_a_material_value_is_a_leaf_and_passes_the_same_two_doors():
     """The refusals above are a decision about *which* numbers are static, not about tracers.
 

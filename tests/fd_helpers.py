@@ -87,12 +87,15 @@ def to_numpy(x):
 
 
 def torch_forward_paths(torch):
-    """``name -> call(f, x)`` for every Torch transform that carries a value past ``requires_grad``.
+    """``name -> call(f, x)`` for the Torch transforms that carry a value past ``requires_grad``.
 
-    A ``forward_ad`` dual and a ``torch.func`` wrapper leave ``requires_grad`` unset on the value
-    a door sees, and ``float()`` reads their primal; before ``_spec.torch_carried`` every static
-    door here took them and dropped the tangent. ``x`` is a Python float, lifted to a float64
-    tensor, and ``f`` is what the transform is applied to.
+    A ``forward_ad`` dual and a ``torch.func.jvp``/``jacfwd`` value leave ``requires_grad``
+    unset on the value a door sees. Before ``_spec.torch_carried`` a float static door read
+    those three through ``float()`` and dropped the tangent silently; a ``vmap`` batch raised
+    inside ``float()`` and was refused as "a real number is needed", and an integer door
+    refused all four as "an integer is needed". All four now meet the rule's own sentence.
+    ``x`` is a Python float, lifted to a float64 tensor, and ``f`` is what the transform is
+    applied to.
     """
     import torch.autograd.forward_ad as fwAD
     t = lambda v: torch.tensor(v, dtype=torch.float64)

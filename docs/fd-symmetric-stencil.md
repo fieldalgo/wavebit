@@ -1,7 +1,9 @@
 # Research: symmetric interface stencils
 
 This is an experimental material operator for the remaining C3 interface
-problem. It is not part of public `fd.run`, and it does not certify C3.
+problem. Public `fd.run` reaches it only when a structure asks for it
+(`fd.Structure(..., discretisation='stencil')`, since 2026-09-24; the default is
+unchanged), and it does not certify C3.
 The production cylinder has mean/RMS orders 1.60337/1.58655. The older
 three-dimensional symmetric triplet candidate misses the small high-index
 sphere control: 3.77084% error against the unchanged 3% limit.
@@ -979,9 +981,11 @@ Gates: `test_a_torch_forward_mode_value_in_a_static_door_is_refused_by_name` in
 those files already list (`torch.func.jvp`, `torch.func.jacfwd`, `torch.func.vmap`,
 `forward_ad`), and `test_a_forward_mode_radius_or_centre_is_refused_by_the_sphere_on_either_rule`
 through `fd.run` on both discretisations. Mutants, each restored and SHA-checked, each
-failing its gate: `static_float` without the new arm; `static_int` without it (the
-`PML(cells=)` and `Run(steps=)` rows); `torch_carried` without the functorch question
-(`jvp`, `jacfwd`, `vmap` pass); without the dual question (`forward_ad` passes).
+failing its gate: `static_float` without the new arm; `static_int` without it;
+`torch_carried` without either question. (Corrected by the fourth round below: those runs
+stopped at the first failing row, so which rows each mutant let through was not observed,
+and the `static_int` arm only changes a refusal's wording -- a forward-mode float was
+already refused there as not an integer.)
 
 **The minors.**
 
@@ -1008,4 +1012,68 @@ skipped, exit 0, 2106 JUnit cases, no INTERNALERROR; the four freezers reproduce
 143/288/140/570 arrays bit for bit with nothing written; the default-unmoved digest (822
 quantities over 9 default scenes, NumPy lowering and runs, JAX and Torch runs on four) is
 byte-identical to the one built from `28f6e49`; and the plan notes and `fd.check` text of
-the same scenes are byte-identical to `b24a708`'s, built twice on each tree.
+the same scenes are byte-identical to `b24a708`'s, built twice on each tree. (The fourth
+round found `_spec.py` reworded after these runs -- a docstring, but not re-run; the
+fourth round's verification runs on its own committed tree.)
+
+## Fourth round: a static review while the sweep ran (2026-09-25)
+
+A read-only review of `d46935a` -- four lenses (the code, every claim against its
+evidence, the sweep's measurement tooling, what C3 still needs), eleven agents, nothing
+executed while the 20-hour sweep held the machine -- found no blocker or major in the
+code. Its findings, and what was done:
+
+**`torch_carried` refused too much and missed one thing.** `d46935a` refused every
+`torch.func` wrapper. `torch.func.grad(f, argnums=0)(eps, w)` wraps `w` too, with nothing
+on it, and `jax.grad` admits the same program, so a static field given `w` was refused
+on Torch only. And it gated on the value's class being defined in the `torch` package,
+so a forward-mode dual of a `torch.Tensor` subclass defined anywhere else was read
+through `float()` and lost its tangent. The redesign asks each wrapper layer, from the
+outside in, whether it requires grad, carries a forward tangent or is a vmap batch, and
+unwraps a layer that answers no. Writing it turned up a case no one had listed: from
+inside a `torch.func.grad` layer, a forward tangent on the tensor it wraps reads as
+absent. Measured on Torch 2.13: a `forward_ad` dual handed to `grad` as an argument it
+does not differentiate unwraps to a tensor whose `unpack_dual` tangent is `None`, while
+`grad`'s output still carries the outer tangent (1.0 for `a*w*w` at `w=.5`) -- so
+`float()` there drops it silently. While a forward-mode level is open, a `grad` layer
+that answers no is therefore refused, not unwrapped; that over-refuses one wrapper that
+carries nothing (a `grad`-wrapped constant inside `jvp`), loudly.
+
+`tests/test_fd_stage1_grad.py::test_torch_carried_answers_every_transform` asks a real
+static door (`fd.PML(wavelength=)`) about 27 ways of making a Torch value, and checks an
+admitted one reads back as its own number:
+
+| design | wrong of 27 | silently wrong (`float()` read the primal) |
+| --- | ---: | ---: |
+| `b24a708` (`requires_grad` only) | 12 | 9 |
+| `d46935a` (every wrapper, module-name gate) | 5 | 1 (the subclass dual) |
+| now | 0 | 0 |
+
+Mutants, each run on its own, restored and SHA-checked, with the rows each one turns:
+
+| mutant | table rows it gets wrong | other gates |
+| --- | --- | --- |
+| no tangent question | `forward_ad` dual, its subclass, `jvp` primal, `jacfwd` argument | 12 door rows |
+| no batch question | the vmap row, refused as "a real number is needed" | 12 door rows |
+| no walk (stop at the outer layer) | `grad` over an inner `grad`/`jacfwd` given the leaf as a non-differentiated argument | none |
+| no `grad`-layer rule under forward mode | `grad` over a `forward_ad` dual or a `jvp` primal as a non-differentiated argument; the `grad`-wrapped constant inside `jvp` | none |
+| module-name gate for `isinstance` | the subclass dual | none |
+| no `requires_grad` question inside it | `grad` over an inner `grad` (the static door's own `requires_grad` arm still refuses the rest) | none |
+| `static_float` without it | the table fails at the vmap row | 10 door rows |
+| `static_int` without it | none (the table's door is a float field) | the `PML(cells=)` and `Run(steps=)` rows, by wording only |
+
+**The history, corrected.** `vmap` and `torch.func.grad` were never silent at a static
+door: `float()` of a vmap batch raises (it was refused as "a real number is needed"),
+and `grad` marks its argument `requires_grad`. An integer door refused every forward-mode
+value as "an integer is needed". What was silent on `b24a708` is a forward-mode value at
+a float door -- the measured `Sphere(radius=)` zero -- and a derivative carried under
+another transform's layer. The `_spec`, `fd_helpers` and third-review wording now says
+that.
+
+**The sweep's own tooling.** The preregistration (kept with the sweep records, outside the
+repository) gained, before any 80-cell result existed: the research driver's own temporal
+gate (every case's largest monitor decay < 1e-7), the 9.7e-5 floor, an acceptance rule
+for the public spot check (bit-identical, or investigated before any verdict), and the
+owner's two decisions of the day -- the cylinder arm is settled by re-running all 24
+research conditions through the moved preparation code (not `fd.run`: there is no
+`fd.Cylinder` before C4), and the 80-cell origin gets its own 624-period time extension.
