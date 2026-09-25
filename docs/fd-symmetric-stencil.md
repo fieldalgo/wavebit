@@ -1,9 +1,9 @@
 # Research: symmetric interface stencils
 
-This is an experimental material operator for the remaining C3 interface
-problem. Public `fd.run` reaches it only when a structure asks for it
-(`fd.Structure(..., discretisation='stencil')`, since 2026-09-24; the default is
-unchanged), and it does not certify C3.
+This is the material operator that passes C3 (2026-09-26; see the last section). Public
+`fd.run` reaches it only when a structure asks for it (`fd.Structure(...,
+discretisation='stencil')`, since 2026-09-24); the default is unchanged and does not
+pass C3's cylinder arm.
 The production cylinder has mean/RMS orders 1.60337/1.58655. The older
 three-dimensional symmetric triplet candidate misses the small high-index
 sphere control: 3.77084% error against the unchanged 3% limit.
@@ -1267,3 +1267,83 @@ the unchanged parts):
 | the foreign-level check refusing a `functionalize` wrapper | the constant under `functionalize` (admit) | 0 |
 | `static_float` without it | 35 | 10 |
 | `static_int` without it | none (the table's door is a float field) | 2, by wording only |
+
+## C3: the high-index sphere, and the verdict (2026-09-26)
+
+The last C3 measurement is done: the epsilon-12 sphere of radius .25 wavelength at 40, 56
+and 80 cells per wavelength, each at the three historical placements `(0,0,0)`,
+`(1/2,1/3,1/5)` and `(1/4,2/3,2/5)` (cell fractions), on the research path, 480 periods,
+band `df = .00625` with cutoff `1e-9`. It ran once, from a frozen `git archive` of
+`d46935a`, one job at a time with two BLAS threads. Its first job reproduced the earlier
+40-cell record (Qsca 3.47227246859156) bit for bit, so the frozen tree measures what the
+earlier records measured. The criteria it is judged by were written down before any 56-
+or 80-cell result existed, and are the ones this repository already applied (order >= 1.8
+and log-fit scatter < 10% on the signed mean and the RMS; both series monotone; every run
+complete with its source unchanged; every case's largest monitor decay < 1e-7; the finest
+mean |error| above ten times the 9.7e-5 floor).
+
+| Cells per wavelength | Mean signed relative error | RMS error | Placement range |
+| ---: | ---: | ---: | ---: |
+| 40 | -19.350563% | 19.351017% | .283797 percentage points |
+| 56 | -8.892938% | 8.893201% | .155709 percentage points |
+| 80 | -4.082356% | 4.082359% | .011955 percentage points |
+
+The mean fit gives **order 2.2442819** with **1.484964%** log-fit scatter; the RMS fit
+gives **2.2443152** with **1.483800%**. Both series are monotone; the pair orders are
+2.310634 (40-56) and 2.182893 (56-80). The finest mean error is 420.86 times the 9.7e-5
+floor. All nine runs exit 0 with their sources unchanged; the largest monitor decay is
+5.52e-16 at 40 cells, 3.75e-18 at 56 and 2.38e-19 at 80. The largest apparent |Qabs| is
+4.23e-9 and the largest optical-closure residual 1.81e-5. Time: 480 against 624 periods
+changes the origin Qsca by 6.7e-10 relative at 40 cells and 1.88e-11 at 56;
+at 80 cells the origin re-run at 624 periods (owner decision, 2026-09-25) changes it by
+1.50e-12 relative, and substituting it moves the fitted mean order by 1.7e-11 (the
+preregistered limit was .01).
+
+Reported and not gated, the same runs' forward field and angular pattern converge at the
+same rate: the mean complex forward-field error is 21.32% / 10.72% / 5.22% (pair orders
+2.04, 2.02) and the mean peak-normalized angular error 25.55% / 11.76% / 5.40% (2.31, 2.18).
+
+**Against the public default rule on the same sphere** (its own 864-period sweep, above in
+`docs/fd-mie-validation.md`): 40/56/80 mean errors -21.92% / -11.63% / -6.18%, order
+1.8268534. The stencil is the more accurate of the two here, and on the TE cylinder, where
+the default fails (1.6033652) and the stencil passes (2.137819). It is **not** the more
+accurate everywhere: at 40 cells the stencil's glass and weak-sphere errors are .643254% and
+.411694% against the default's .446104% and .236727%, and its small high-index sphere
+2.468123% against 2.0576774%. Its orders are higher; at those grids its constants are not.
+
+**The public path runs the operator this sweep measured.** One public spot check, run after
+the sweep from the same frozen tree with the thread count pinned: the 40-cell origin sphere
+through `fd.run(scene, 'jax')` with `discretisation='stencil'` returned Qsca, Qabs, the
+error, the optical closure, the complex forward field and both angular cuts **bit
+identical** to the research record. Before the run, the operator the public path prepares
+was compared with the research path's at the 40-cell origin and at the `(1/2,1/3,1/5)`
+placement: equal `prepared_digest`, equal `be` over the whole grid, and all 141 lowered
+arrays equal between the JAX and NumPy lowerings.
+
+**The cylinder, by the owner's ruling.** There is no `fd.Cylinder` before C4, so the TE
+epsilon-12 cylinder cannot run through `fd.run`. The owner ruled (2026-09-25) that its arm
+is settled by re-running all 24 research conditions (40/56/80 cells, eight placements)
+through the moved preparation code from the frozen tree: 24 of 24 rows came back bit
+identical to the recorded research log, mean/RMS orders 2.137819/2.137121, scatter
+2.128691%/2.093839%, monotone. The glass and weak-sphere orders (2.063617 / 2.057240) were
+not re-run; they are tied to today's operator by the same code path the 40-cell control and
+the cylinder re-run reproduced bit for bit.
+
+**Verdict.** Every preregistered item passes, and so do the tiers on the declaring
+commit `d7914ed`: the fast tier 2099 passed and 8 skipped (2107 JUnit cases, 2107
+collected, exit 0, no INTERNALERROR), the slow tier 80 passed (80 collected, exit 0) --
+the same-operator sphere and cylinder physical controls among them -- and the four
+freezers 143/288/140/570 arrays bit for bit with nothing written. (The queue first ran
+the tiers under a memory watchdog meant for the sweep; a ten-second spike of one worker
+in the fast tier tripped it, and the tiers were re-run directly with the same commands.)
+**C3 -- one sphere's scattering agrees with exact Mie theory, and converges at second
+order -- passes for `discretisation='stencil'`,** in the scope below. It is the owner's
+to confirm before C4 starts.
+
+Scope: `fd.Structure(..., discretisation='stencil')` on one lossless, isotropic,
+non-magnetic `fd.Sphere` of plain numbers in a vacuum background, in a real float64 run with
+no initial field, every refusal of the earlier sections in force; prepared on the host from
+a repository checkout (`studies/` is still read at plan time); no derivative through the
+prepared operator (the voxel rule is the recipe for one); the default memory bound admits
+40 and 56 cells. The default discretisation is unchanged and still fails the cylinder;
+whether to change the default is a separate decision.

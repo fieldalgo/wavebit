@@ -24,13 +24,21 @@ Targets: `tests/references/mie.py`, `studies/fdtd_subpixel_mie_cylinder.py`,
 
 ## TL;DR
 
-Latest material result: the [symmetric extended stencil](fd-symmetric-stencil.md)
-passes the cylinder, glass and weak finite convergence controls with mean
-orders **2.137819, 2.063617 and 2.057240**, using the same construction.
-The small high-index sphere error is **2.468123% < 3%**. This is still research
-code: the large high-index sphere and public integration remain unvalidated.
-The public cylinder failure below is not yet repaired in `fd.run`; C3 remains
-incomplete. The following earlier experiments are retained as history.
+**C3 passes (2026-09-26) for `fd.Structure(..., discretisation='stencil')`**, the
+[symmetric extended stencil](fd-symmetric-stencil.md). The epsilon-12 sphere of radius .25
+wavelength converges at mean/RMS order **2.2442819 / 2.2443152** (1.48% scatter) over
+40/56/80 cells per wavelength and three placements, to **-4.082356%** at 80 cells; the TE
+epsilon-12 cylinder at **2.137819**, the glass and weak spheres at 2.063617 and 2.057240, and
+the small high-index sphere is 2.468123% < 3%. The sweep ran once on the research path; the
+public path was shown to run the same operator bit for bit, and a full public 40-cell run
+reproduced its Qsca bit for bit. Scope and the full record are in that document's last
+section.
+
+The **default** discretisation is unchanged. It passes every sphere order arm (the
+epsilon-12 sphere below at 1.8268534, -6.18% at 80 cells) but still fails the cylinder
+(1.6033652), and at the same grids it is the more accurate of the two on glass, weak and
+small high-index spheres. The following earlier experiments are retained as history; their
+"C3 remains incomplete" sentences describe the state before 2026-09-26.
 
 Latest radiation result: the separately derived lattice map,
 `FarField(propagation='yee')`, reduces the weak-sphere optical residuals to
