@@ -1,4 +1,4 @@
-"""Li's nested rules, rebuilt from the paper: the definition, the old builders, and the nesting.
+"""Li's nested rules, rebuilt from the paper: the definition, and what the nesting changes.
 
 The raster ``factorization='li'`` builders were replaced on 2026-09-25 by an implementation
 written from the published mathematics -- L. Li, JOSA A 14, 2758 (1997), with JOSA A 13,
@@ -6,17 +6,26 @@ written from the published mathematics -- L. Li, JOSA A 14, 2758 (1997), with JO
 code was written with reference to RETICOLO's MATLAB source. The rewrite also added the second
 of Li's two nestings (:class:`~wavebit._core.enums.Nesting`).
 
-Three kinds of evidence, in decreasing order of how long they are meant to live:
+What is checked here:
 
 * **The definition.** :func:`_literal` below builds every slot by index loops over the
   formulas -- the explicit segment integral for every coefficient, ``[T]_{m,m'} = c_{m-m'}``
-  entry by entry, and the nesting table of the brief -- sharing no code and no shortcut with the
-  builders (no FFT, no jump form, no gather). Both nestings, both coefficient paths, to 1e-12.
-* **The old builders**, black-box. Only possible while they exist, so this section is removed
-  with them; what it established is recorded in the commit that removes it.
+  entry by entry, and the table in :class:`~wavebit._core.enums.Nesting` -- sharing no code and
+  no shortcut with the builders (no FFT, no jump form, no gather). Both nestings, both
+  coefficient paths, to 1e-12.
 * **Properties of the nesting itself**: the symmetric nesting is covariant under relabelling x
-  and y at the matrix level, the fixed one is not, and both reduce to the 1D rule on a
+  and y at the matrix level, the fixed one is not, and both reduce to the 1D rules on a
   y-invariant layer.
+* **Backends and gradients**: three backends agree, and the raster gradient is the finite
+  difference's, in both nestings.
+
+A fourth kind lived here for one commit and went with its subject: the new builders against
+the old ones, black-box, before the old were deleted. It measured the sampled path bit-identical
+on NumPy, JAX and PyTorch, the integrated path within 4.3e-14, the raster gradients within
+2.8e-14, and ``fourier2d_pointwise``'s replacement bit-identical on all three backends -- see
+the commit that added this file. On the machine the rewrite was rebased on, JAX moved the
+pointwise transform by round-off (a few ulps, never on a one-pixel or single-row grid) while
+NumPy and PyTorch stayed bit-identical.
 """
 import numpy as np
 import pytest
@@ -290,18 +299,7 @@ def test_a_y_invariant_layer_reduces_to_the_1d_rules_in_both_nestings(nesting, c
     assert _rel(one_d.epy, _toeplitz(series(values), Mu)) < 1e-12
 
 
-# ----------------------------------------------------------- against the old builders (black box)
-#
-# Everything below compares against the builders the rewrite replaces, called only through their
-# public signatures. It goes with them.
-
-def _old_sampled(structure, Mu, Mv):
-    return F.to_conv_mat_raster_sampled(structure, Mu, Mv)
-
-
-def _old_integrated(structure, Mu, Mv, compression):
-    return F.to_conv_mat_raster_integrated(structure, Mu, Mv, compression=compression)
-
+# --------------------------------------------------------------- backends, gradients, wrappers
 
 def _namespace(backend):
     if backend == 'numpy':
@@ -314,107 +312,30 @@ def _namespace(backend):
     return xt, lambda a: torch.as_tensor(np.asarray(a))
 
 
-BACKENDS = ('numpy', 'jax', 'torch')
-
-
 def _to_numpy(a):
     return a.detach().numpy() if hasattr(a, 'detach') else np.asarray(a)
 
 
-@pytest.mark.parametrize('backend', BACKENDS)
-@pytest.mark.parametrize('name', CASES)
-def test_the_sampled_path_matches_the_old_builders(name, backend):
-    """Fixed nesting against ``to_conv_mat_raster_sampled`` as it was: 1e-12 relative Frobenius.
-
-    Measured when written: 0.0 for every case here on all three backends -- the two perform the
-    same arithmetic in the same order. The integrated twin below lands at 4.3e-14 at worst,
-    because its coefficients are summed in the jump form rather than segment by segment.
-    """
-    if backend != 'numpy':
-        pytest.importorskip(backend)
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
+@pytest.mark.parametrize('nesting', NESTINGS)
+@pytest.mark.parametrize('name', ['four_phase_primes', 'blocks_metal', 'wrapped_orders'])
+def test_every_backend_builds_the_same_slots(name, nesting, backend):
+    """One implementation behind the array-API adapter, so three backends agree to round-off."""
+    pytest.importorskip(backend)
     xp, lift = _namespace(backend)
     eps, Mu, Mv = CASES[name]
-    old = _old_sampled(lift(eps[None]), Mu, Mv)
-    new = F.li_conv_matrices(xp, lift(eps), Mu, Mv)
-    for slot, a, b in zip(('epx', 'epy', 'epz_i'), new, old):
-        assert _rel(_to_numpy(a), _to_numpy(b)[0]) < 1e-12, (name, backend, slot)
-
-
-@pytest.mark.parametrize('backend', BACKENDS)
-@pytest.mark.parametrize('name', CASES)
-def test_the_integrated_path_matches_the_old_builders(name, backend):
-    """Fixed nesting against ``to_conv_mat_raster_integrated`` as it was, on the same record."""
-    if backend != 'numpy':
-        pytest.importorskip(backend)
-    xp, lift = _namespace(backend)
-    eps, Mu, Mv = CASES[name]
-    record = F.compression_indices(eps)
-    row, col, x, y = record
-    old = _old_integrated(lift(eps[None]), Mu, Mv, [record])
-    new = F.li_conv_matrices_integrated(xp, F.compress_cell(xp, lift(eps), row, col),
-                                        x, y, Mu, Mv)
-    for slot, a, b in zip(('epx', 'epy', 'epz_i'), new, old):
-        assert _rel(_to_numpy(a), _to_numpy(b)[0]) < 1e-12, (name, backend, slot)
-
-
-@pytest.mark.parametrize('rule', [None, 'u', 'v'])
-@pytest.mark.parametrize('name', ['four_phase_primes', 'blocks_metal'])
-def test_the_grid_builders_match_the_old_ones_slot_by_slot(name, rule):
-    """``fourier2d_piecewise_constant`` / ``fourier2d_integrated``, one ``inverse_rule`` at a time,
-    including edges that are not on the unit cell."""
-    eps, Mu, Mv = CASES[name]
-    old = F.fourier2d_piecewise_constant(xnp, eps, Mu, Mv, inverse_rule=rule)
-    new = F._li_slot(xnp, eps, Mu, Mv, F._raster_series(xnp, Mu, F._pixel_correction),
-                     F._raster_series(xnp, Mv, F._pixel_correction), rule, None)
-    assert _rel(new, old) < 1e-12
-
     row, col, x, y = F.compression_indices(eps)
-    comp = np.asarray(F.compress_cell(xnp, eps, row, col))
-    for edges in ((x, y), _arbitrary_edges(x, y, seed=3)):
-        old = F.fourier2d_integrated(xnp, comp, *edges, Mu, Mv, inverse_rule=rule)
-        left_u, width_u = F._segment_bounds(xnp, edges[0], xnp.float64, None)
-        left_v, width_v = F._segment_bounds(xnp, edges[1], xnp.float64, None)
-        new = F._li_slot(xnp, comp, Mu, Mv, F._segment_series(xnp, left_u, width_u, Mu),
-                         F._segment_series(xnp, left_v, width_v, Mv), rule, None)
-        assert _rel(new, old) < 1e-12
-
-
-def _new_pointwise(xp, field, Mu, Mv):
-    return F._conv_matrix(xp, field, Mu, Mv, F._raster_series(xp, Mu, F._half_pixel_phase),
-                          F._raster_series(xp, Mv, F._half_pixel_phase))
-
-
-@pytest.mark.parametrize('backend', BACKENDS)
-def test_the_pointwise_transform_is_bit_identical(backend):
-    """``fourier2d_pointwise`` feeds the NVF projector, so its rewrite must not move one bit.
-
-    Complex and real samples, single and double precision, grids above and below the
-    ``4*truncation_order+1`` floor. To the bit on NumPy and PyTorch. JAX does not give the
-    same bits for the same arithmetic composed differently: on macOS arm64 with JAX 0.11.0
-    (CPU), 15 of these 21 cases move by round-off -- at most 3.5e-17 in double precision and
-    1.7e-8 in single, and none of them a one-pixel or single-row grid -- so on JAX the check is
-    a few ulps of the working precision instead.
-    """
-    if backend != 'numpy':
-        pytest.importorskip(backend)
-    xp, lift = _namespace(backend)
-    rng = np.random.default_rng(12)
-    for Nv, Nu, Mu, Mv in ((9, 13, 2, 2), (21, 21, 5, 5), (17, 12, 3, 4), (64, 64, 7, 7),
-                           (13, 9, 3, 1), (1, 16, 3, 0), (7, 1, 0, 2)):
-        for dtype in (np.complex128, np.float64, np.complex64):
-            f = rng.standard_normal((Nv, Nu))
-            if np.issubdtype(dtype, np.complexfloating):
-                f = f + 1j * rng.standard_normal((Nv, Nu))
-            f = lift(f.astype(dtype))
-            old = _to_numpy(F.fourier2d_pointwise(xp, f, Mu, Mv))
-            new = _to_numpy(_new_pointwise(xp, f, Mu, Mv))
-            assert old.dtype == new.dtype, (backend, dtype, old.dtype, new.dtype)
-            where = (backend, (Nv, Nu, Mu, Mv), dtype, np.abs(old - new).max())
-            if backend == 'jax':
-                limit = 4 * np.finfo(old.dtype).eps * np.abs(old).max()
-                assert np.abs(old - new).max() <= limit, where
-            else:
-                assert np.array_equal(old, new), where
+    pairs = (
+        (F.li_conv_matrices(xnp, eps, Mu, Mv, nesting=nesting),
+         F.li_conv_matrices(xp, lift(eps), Mu, Mv, nesting=nesting)),
+        (F.li_conv_matrices_integrated(xnp, F.compress_cell(xnp, eps, row, col), x, y, Mu, Mv,
+                                       nesting=nesting),
+         F.li_conv_matrices_integrated(xp, F.compress_cell(xp, lift(eps), row, col), x, y,
+                                       Mu, Mv, nesting=nesting)),
+    )
+    for want, got in pairs:
+        for slot, a, b in zip(('epx', 'epy', 'epz_i'), want, got):
+            assert _rel(_to_numpy(b), a) < 1e-12, (name, nesting, backend, slot)
 
 
 def _functional(xp, mats, weights):
@@ -422,44 +343,74 @@ def _functional(xp, mats, weights):
     return sum(xp.real(xp.sum(w * m)) for w, m in zip(weights, mats))
 
 
-@pytest.mark.parametrize('backend', ['jax', 'torch'])
+@pytest.mark.parametrize('nesting', NESTINGS)
 @pytest.mark.parametrize('coefficients', ['sampled', 'integrated'])
-def test_the_gradient_through_the_raster_matches_the_old_builders(coefficients, backend):
-    """d(functional)/d(raster), new against old, per cell: the raster is the design variable."""
-    pytest.importorskip(backend)
-    xp, lift = _namespace(backend)
+def test_the_raster_is_a_design_variable_in_both_nestings(coefficients, nesting):
+    """d(functional)/d(raster): JAX == PyTorch per cell, and both == a central difference.
+
+    The raster is what an inverse design moves, so the gradient has to reach it through every
+    inversion and transform here -- the inner ones the nesting adds included.
+    """
+    jax = pytest.importorskip('jax')
+    torch = pytest.importorskip('torch')
     eps, Mu, Mv = CASES['blocks_metal']
     n = (2 * Mu + 1) * (2 * Mv + 1)
     rng = np.random.default_rng(21)
-    weights = [lift(rng.standard_normal((n, n)) + 1j * rng.standard_normal((n, n)))
-               for _ in range(3)]
-    record = F.compression_indices(eps)
-    row, col, x, y = record
-    imag = lift(eps.imag)
+    weights = [rng.standard_normal((n, n)) + 1j * rng.standard_normal((n, n)) for _ in range(3)]
+    row, col, x, y = F.compression_indices(eps)
 
-    def new(s):
+    def slots(xp, s, imag):
         cell = s + 1j * imag
         if coefficients == 'sampled':
-            return F.li_conv_matrices(xp, cell, Mu, Mv)[:3]
+            return F.li_conv_matrices(xp, cell, Mu, Mv, nesting=nesting)[:3]
         return F.li_conv_matrices_integrated(xp, F.compress_cell(xp, cell, row, col),
-                                             x, y, Mu, Mv)[:3]
+                                             x, y, Mu, Mv, nesting=nesting)[:3]
 
-    def old(s):
-        cell = (s + 1j * imag)[None]
-        out = (_old_sampled(cell, Mu, Mv) if coefficients == 'sampled'
-               else _old_integrated(cell, Mu, Mv, [record]))
-        return [m[0] for m in out[:3]]
+    jxp, jlift = _namespace('jax')
+    g_jax = np.asarray(jax.grad(lambda s: _functional(
+        jxp, slots(jxp, s, jlift(eps.imag)), [jlift(w) for w in weights]))(jlift(eps.real)))
 
-    grads = []
-    for builder in (new, old):
-        if backend == 'jax':
-            import jax
-            grads.append(np.asarray(jax.grad(
-                lambda s: _functional(xp, builder(s), weights))(lift(eps.real))))
-        else:
-            import torch
-            s = torch.tensor(eps.real, requires_grad=True)
-            _functional(xp, builder(s), weights).backward()
-            grads.append(s.grad.numpy())
-    assert _rel(*grads) < 1e-12, _rel(*grads)
-    assert np.all(np.isfinite(grads[0])) and np.abs(grads[0]).max() > 0
+    txp, tlift = _namespace('torch')
+    s = torch.tensor(eps.real, requires_grad=True)
+    _functional(txp, slots(txp, s, tlift(eps.imag)), [tlift(w) for w in weights]).backward()
+    g_torch = s.grad.numpy()
+
+    direction = rng.standard_normal(eps.shape)
+    h = 1e-6
+    value = lambda d: float(_functional(np, slots(xnp, eps.real + d, eps.imag), weights))  # noqa: E731
+    fd = (value(h * direction) - value(-h * direction)) / (2 * h)
+
+    assert _rel(g_jax, g_torch) < 1e-12, _rel(g_jax, g_torch)
+    assert abs(float(np.sum(g_jax * direction)) - fd) < 1e-6 * max(1.0, abs(fd))
+    assert np.abs(g_jax).max() > 0
+
+
+@pytest.mark.parametrize('nesting', NESTINGS + (None,))
+def test_the_raster_builders_pass_the_nesting_through(nesting):
+    """The stacked builders and the one-slot grid builders say the same as the per-layer ones.
+
+    ``None`` is the default, and has to be the fixed nesting -- every number measured before
+    the choice existed was taken on it.
+    """
+    eps, Mu, Mv = CASES['five_phase']
+    stack = np.stack([eps, eps[::-1].copy()])
+    per_layer = [F.li_conv_matrices(xnp, layer, Mu, Mv, nesting=nesting or 'fixed')
+                 for layer in stack]
+    stacked = F.to_conv_mat_raster_sampled(stack, Mu, Mv, nesting=nesting)
+    assert stacked.epxy is None and stacked.epyx is None
+    for k in range(3):
+        for i in range(2):
+            assert np.array_equal(np.asarray(stacked[k])[i], np.asarray(per_layer[i][k]))
+    assert np.array_equal(np.asarray(F.fourier2d_piecewise_constant(
+        xnp, eps, Mu, Mv, inverse_rule='u', nesting=nesting)), np.asarray(per_layer[0].epx))
+
+    records = [F.compression_indices(layer) for layer in stack]
+    stacked = F.to_conv_mat_raster_integrated(stack, Mu, Mv, compression=records,
+                                              nesting=nesting)
+    for i, (row, col, x, y) in enumerate(records):
+        comp = F.compress_cell(xnp, stack[i], row, col)
+        one = F.li_conv_matrices_integrated(xnp, comp, x, y, Mu, Mv, nesting=nesting or 'fixed')
+        for k in range(3):
+            assert np.array_equal(np.asarray(stacked[k])[i], np.asarray(one[k]))
+        assert np.array_equal(np.asarray(F.fourier2d_integrated(
+            xnp, comp, x, y, Mu, Mv, inverse_rule='u', nesting=nesting)), np.asarray(one.epx))

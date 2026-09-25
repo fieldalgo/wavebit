@@ -594,7 +594,7 @@ Why not, is worth recording, because the picture the removed block path drew loo
 A 1.3-wide rod of `eps` 5.76 at the centre of a unit cell over a background of 1.0 came out as
 three materials — 5.76 / 10.52 / 20.04, i.e. `1 + n*4.76` for cover counts `n` = 1, 2, 4 — none
 of them in the recipe. Blocks were gridded in *unwrapped* coordinates and `_fourier1d_integrated`
-weights each segment by its **signed** width, which is exactly what draws the wrapped part of a
+(since 2026-09-25 `_segment_series`) weighted each segment by its **signed** width, which is exactly what draws the wrapped part of a
 sub-period shape correctly; past one period the same arithmetic counts the covered strip twice,
 so the image adds to the shape instead of covering it.
 

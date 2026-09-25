@@ -685,8 +685,8 @@ def order_kxy(xp, A, half_width_u, half_width_v, wavelength, k_inc_x, k_inc_y,
 
     Both are normalized by ``k0`` — i.e. these are ``kx/k0``, matching what
     ``order_kxy`` returns — and laid out so that ``reshape(-1)`` gives the
-    flat order list the convolution matrices are indexed by (``m`` fastest, matching
-    ``_fourier2d_grid``'s final ``(n_orders_v, n_orders_u)`` reshape).
+    flat order list the convolution matrices are indexed by (``m`` fastest, matching the
+    ``i = n*n_orders_u + m`` layout every builder in ``_core.factorization`` returns).
 
     The closed form, written out rather than taken from a matrix inverse so it stays one
     expression per component and differentiates cleanly::

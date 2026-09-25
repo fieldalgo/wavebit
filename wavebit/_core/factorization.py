@@ -243,11 +243,6 @@ def _inverse_axes(inverse_rule):
     return inverse_rule == 'u', inverse_rule == 'v'
 
 
-def _wrap(orders, n):
-    """``orders`` reduced mod ``n`` — the DFT bin each Fourier order lands in."""
-    return [k % n for k in orders]
-
-
 def _circulant_index(truncation_order):
     """Circular index matrix selecting Fourier orders ``m - n`` (pure integer, data-free).
 
@@ -259,16 +254,6 @@ def _circulant_index(truncation_order):
     """
     n_orders = 2 * truncation_order + 1
     return [[(r - c) for c in range(n_orders)] for r in range(n_orders)]
-
-
-def _circulant_gather(xp, truncation_order, dev):
-    """Index expanding a ``4*truncation_order+1`` order vector into the ``(n_orders, n_orders)``
-    circulant of ``r - c``.
-
-    The same shape :func:`fourier2d_integrated` builds; ``+ 2*truncation_order`` turns the signed order
-    into a position in that vector.
-    """
-    return xp.asarray([[v + 2 * truncation_order for v in row] for row in _circulant_index(truncation_order)], device=dev)
 
 
 def _pixel_correction(xp, orders, n, dtype, device=None):
@@ -351,6 +336,35 @@ def _toeplitz_positions(xp, half_width, dev):
                       device=dev)
 
 
+def _row_dft(xp, values):
+    """``DFT(values / n)`` along the last axis of ``values`` ``(..., n)``, never as a degenerate
+    FFT.
+
+    A one-point transform is the identity, so none is emitted; a single row is transformed as
+    the 1D vector it is and given its shape back; anything else is the batched transform. The
+    values are those of ``xp.fft.fft(values / n, axis=-1)``. What the two special cases avoid
+    is an operand XLA's CPU FFT refuses: under ``jax.jit`` a ``(1, n)`` or ``(n, 1)`` operand
+    that a transpose or reshape produced can reach the FFT with a transposed layout, and the
+    run aborts (``RET_CHECK failure ... fft_thunk.cc:168
+    LayoutUtil::IsMonotonicWithDim0Major``). A one-pixel axis, or a zero half-width on one
+    axis -- ``truncation_order=0``, a 1D grating -- makes exactly those shapes on a small
+    raster.
+
+    The rule is the one ``_normalized_row_fft`` applied to the builders this module replaced
+    (added 2026-09-24, deleted with them), carried over from its stated contract. The jitted
+    small-raster solves in ``tests/test_direct_wavevector.py``,
+    ``tests/test_phase_incidence.py``, ``tests/test_half_space_power.py`` and
+    ``tests/test_vertical_coordinates.py`` are what pin it.
+    """
+    n = values.shape[-1]
+    if n == 1:
+        return xp.astype(values, _complex_dtype(xp, values))
+    values = values / n
+    if math.prod(values.shape[:-1]) == 1:
+        return xp.reshape(xp.fft.fft(xp.reshape(values, (n,))), values.shape)
+    return xp.fft.fft(values, axis=-1)
+
+
 def _raster_series(xp, half_width, correction):
     """Fourier coefficients along the last axis of values filling ``n`` equal cells of the
     period.
@@ -363,18 +377,20 @@ def _raster_series(xp, half_width, correction):
 
     Two choices here are about bits, not values, and both are forced by
     :func:`fourier2d_pointwise`, whose output the NVF projector consumes and which this rewrite
-    had to leave identical to the last bit on all three backends. The ``1/n`` is applied to the
+    had to leave identical to the last bit (it did on NumPy and PyTorch; see that function for
+    JAX). The ``1/n`` is applied to the
     values *before* the transform, not to the spectrum after it (they differ off powers of two);
     and the transform runs along the **last** axis. NumPy's FFT gives the same bits along any
     axis, JAX's and PyTorch's do not: measured on 21 grids, taking it along axis 0 instead left
-    15 of them a few 1e-17 off on both.
+    15 of them a few 1e-17 off on both. The transform itself is :func:`_row_dft`, which never
+    hands the FFT a one-point or single-row batch.
     """
     orders = list(range(-2 * half_width, 2 * half_width + 1))
 
     def series(a):
         n = a.shape[-1]
         dev = _device(xp, a)
-        spectrum = xp.fft.fft(a / n, axis=-1)
+        spectrum = _row_dft(xp, a)
         picked = xp.take(spectrum, xp.asarray([k % n for k in orders], device=dev), axis=-1)
         return picked * correction(xp, xp.asarray(orders, device=dev), n, picked.dtype, dev)
 
@@ -550,9 +566,17 @@ def _li_conv(xp, eps, half_width_u, half_width_v, series_u, series_v, nesting):
     return ConvMatrices(slot('u'), slot('v'), xp.linalg.inv(slot(None)), None, None)
 
 
-def _real_dtype(xp, complex_dtype):
-    """The real dtype of ``complex_dtype``'s precision."""
-    return xp.float32 if complex_dtype == xp.complex64 else xp.float64
+def _pixel_series_pair(xp, half_width_u, half_width_v, correction):
+    """``(series_u, series_v)`` for a raster: :func:`_raster_series` along each axis."""
+    return (_raster_series(xp, half_width_u, correction),
+            _raster_series(xp, half_width_v, correction))
+
+
+def _segment_series_pair(xp, x, y, half_width_u, half_width_v, complex_dtype, dev):
+    """``(series_u, series_v)`` for segments with right-hand edges ``x`` / ``y``."""
+    real = xp.float32 if complex_dtype == xp.complex64 else xp.float64
+    return (_segment_series(xp, *_segment_bounds(xp, x, real, dev), half_width_u),
+            _segment_series(xp, *_segment_bounds(xp, y, real, dev), half_width_v))
 
 
 def li_conv_matrices(xp, eps_matrix, half_width_u, half_width_v, nesting=None):
@@ -565,11 +589,10 @@ def li_conv_matrices(xp, eps_matrix, half_width_u, half_width_v, nesting=None):
     Returns a :class:`ConvMatrices` ``(epx, epy, epz_i, None, None)`` -- Li's rules do not
     couple x and y -- each ``(n_orders, n_orders)``.
     """
-    C = _complex_dtype(xp, eps_matrix)
-    eps_matrix = xp.astype(eps_matrix, C)
+    eps_matrix = xp.astype(eps_matrix, _complex_dtype(xp, eps_matrix))
     return _li_conv(xp, eps_matrix, half_width_u, half_width_v,
-                    _raster_series(xp, half_width_u, _pixel_correction),
-                    _raster_series(xp, half_width_v, _pixel_correction), nesting)
+                    *_pixel_series_pair(xp, half_width_u, half_width_v, _pixel_correction),
+                    nesting)
 
 
 def li_conv_matrices_integrated(xp, eps_comp, x, y, half_width_u, half_width_v, nesting=None):
@@ -581,17 +604,15 @@ def li_conv_matrices_integrated(xp, eps_comp, x, y, half_width_u, half_width_v, 
     """
     C = _complex_dtype(xp, eps_comp)
     eps_comp = xp.astype(eps_comp, C)
-    dev = _device(xp, eps_comp)
-    R = _real_dtype(xp, C)
-    left_u, width_u = _segment_bounds(xp, x, R, dev)
-    left_v, width_v = _segment_bounds(xp, y, R, dev)
     return _li_conv(xp, eps_comp, half_width_u, half_width_v,
-                    _segment_series(xp, left_u, width_u, half_width_u),
-                    _segment_series(xp, left_v, width_v, half_width_v), nesting)
+                    *_segment_series_pair(xp, x, y, half_width_u, half_width_v, C,
+                                          _device(xp, eps_comp)),
+                    nesting)
 
 
-def fourier2d_piecewise_constant(xp, cell, half_width_u, half_width_v, *, inverse_rule):
-    """2D discrete Fourier series of a grid whose values *hold across* their pixels.
+def fourier2d_piecewise_constant(xp, cell, half_width_u, half_width_v, *, inverse_rule,
+                                 nesting=None):
+    """2D Fourier series of a grid whose values *hold across* their pixels, with Li's rules.
 
     A permittivity raster is this case: ``structure`` names the material occupying each cell, so
     the layer is a staircase and its Fourier coefficients have an exact closed form, which
@@ -600,9 +621,13 @@ def fourier2d_piecewise_constant(xp, cell, half_width_u, half_width_v, *, invers
 
     ``inverse_rule`` names the direction whose discontinuity the inverse rule closes, or
     ``None`` for the direct rule both ways. Those three are Li's three components of one
-    layer: ``None`` builds ``epz``, ``'v'`` builds ``epy``, ``'u'`` builds ``epx``.
+    layer: ``None`` builds ``epz`` (before it is inverted), ``'v'`` builds ``epy``, ``'u'``
+    builds ``epx``. ``nesting`` is the order the rules are nested in
+    (:class:`~wavebit._core.enums.Nesting`, ``None`` meaning ``'fixed'``); it changes ``epx``
+    only. The operators are tabulated in :func:`_li_slot`.
     """
-    return _fourier2d_grid(xp, cell, half_width_u, half_width_v, inverse_rule=inverse_rule, piecewise_constant=True)
+    return _li_slot(xp, cell, half_width_u, half_width_v, *_pixel_series_pair(
+        xp, half_width_u, half_width_v, _pixel_correction), inverse_rule, nesting)
 
 
 def fourier2d_pointwise(xp, field, half_width_u, half_width_v):
@@ -625,135 +650,16 @@ def fourier2d_pointwise(xp, field, half_width_u, half_width_v):
 
     Because there is no closed form, this path *does* need ``4*truncation_order+1`` points — the caller
     lifts the grid to that floor, see :func:`_normal_field_floor`.
+
+    It survived the 2026-09-25 rewrite of the Li builders to the bit on NumPy and PyTorch: the
+    NVF projector is built from it, so :func:`_raster_series` keeps the arithmetic order it
+    always had. JAX does not give the same bits for the same arithmetic composed differently:
+    measured 2026-09-26 against the previous builders on 33 grids (JAX 0.11.0, CPU), 14 moved
+    by round-off -- at most 1.7e-16 relative in double precision and one single-precision ulp
+    in ``complex64`` -- and none of them a one-pixel or single-row grid.
     """
-    return _fourier2d_grid(xp, field, half_width_u, half_width_v, inverse_rule=None, piecewise_constant=False)
-
-
-def _normalized_row_fft(xp, values):
-    """Normalized DFT along rows, without degenerate FFT batch dimensions.
-
-    A one-point transform is the identity; a single row is a 1D transform. Removing
-    that singleton batch dimension also avoids the JAX CPU FFT layout assertion
-    encountered when differentiating a jitted small raster solve.
-    """
-    n = values.shape[1]
-    if n == 1:
-        return values
-    if values.shape[0] == 1:
-        return xp.reshape(xp.fft.fft(xp.reshape(values / n, (n,))), values.shape)
-    return xp.fft.fft(values / n)
-
-
-def _fourier2d_grid(xp, cell, half_width_u, half_width_v, *, inverse_rule, piecewise_constant):
-    """2D discrete Fourier series of ``cell`` with Li's factorization rules.
-
-    Private, and ``piecewise_constant`` has no default, because the two answers are not a
-    preference: they say what kind of data the grid holds, and getting it wrong is silent. Call
-    :func:`fourier2d_piecewise_constant` or :func:`fourier2d_pointwise` instead, which say it in
-    the name.
-
-    ``inverse_rule`` is the direction whose discontinuity the inverse rule closes (``'u'``,
-    ``'v'``, or ``None`` for neither) — see :func:`_inverse_axes`. Port of the legacy
-    ``dfs2d``; the two entry points above are what callers use.
-
-    This is the *only* thing that selects a rule. The other name for the continuous
-    case is Laurent's rule, which this codebase mostly calls ``direct`` — see
-    ``docs/factorization-terms.md``, which also explains why the matrix built from these
-    coefficients is BTTB rather than Toeplitz.
-
-    Applying the rules in 2D means nesting them, and this fixes the order: inner y, outer x.
-    That is Li's construction, so ``epy`` takes the inner inverse and ``epx`` the outer one —
-    the mid-loop ``inv`` below is not movable to the end. It also means the result is not
-    invariant under relabelling x and y: on a transpose-symmetric structure the two
-    polarisations disagree by ~6e-4 at ``truncation_order=12`` where NVF holds the symmetry to 1e-13.
-    Intrinsic to the scheme rather than a defect here, and untested; the measurement is in
-    ``docs/factorization-terms.md`` §6.
-
-    ``piecewise_constant`` says each value of ``cell`` holds across its whole pixel, rather
-    than being a sample of something that varies inside it. When that is true the coefficients
-    have an exact closed form and this computes it (see :func:`_pixel_correction`); when it is
-    false there is no exact value to reach from the grid at all, and the transform is left
-    alone.
-
-    A permittivity raster is the first case — ``structure`` names the material *occupying* each
-    cell, and a coarser or finer spelling of the same structure is the same function. A normal
-    field is the second: it is a continuous vector field this code evaluates on a grid, so
-    refining the grid changes the field itself. Applying the correction there would assert a
-    shape the data does not have.
-
-    **The two directions fail very differently, which is why neither is a default.** Flipping
-    the projector sites to ``True`` (asserting a staircase the field does not have) moves the
-    efficiencies by 1e-5 at normal incidence into an index-matched substrate, and by 2e-4 to
-    2e-3 once there is index contrast or conical incidence — between one decade under the
-    change from doubling the raster and comparable to it. Omitting it on a permittivity raster
-    is the serious one: 1e-4 to 2e-2 per order, growing with ``truncation_order``, and below roughly
-    ``N < 2*truncation_order`` the inverse-rule matrix is singular and the solve raises ``LinAlgError``
-    outright. Energy conservation is undisturbed either way, so nothing downstream notices.
-
-    (An earlier version of this docstring gave the first figure as ``~7e-7``, "four decades
-    under the field's own discretization error". That is reproducible only at normal incidence
-    with no index contrast, and is not a bound.)
-    """
-    inv_u, inv_v = _inverse_axes(inverse_rule)
-    n_orders_u = 2 * half_width_u + 1
-    n_orders_v = 2 * half_width_v + 1
-
-    cell = xp.matrix_transpose(cell)
-
-    if inv_v:             # v discontinuous: the inverse rule starts from 1/eps
-        cell = 1 / cell
-
-    dfs1d = _normalized_row_fft(xp, cell)
-
-    dev = _device(xp, cell)
-    orders_v = list(range(-2 * half_width_v, 2 * half_width_v + 1))
-    orders_u = list(range(-2 * half_width_u, 2 * half_width_u + 1))
-    n_v = cell.shape[1]
-
-    # Read the coefficients on the *order* vector, correct them there, and only then expand
-    # into the circulant -- the shape `fourier2d_integrated` has always had.
-    #
-    # Two reasons it is this way round. It is cheaper: the circulant repeats each of the
-    # 4*truncation_order+1 distinct orders across (2*truncation_order+1)**2 entries, so correcting
-    # the same sin/exp and repeats the same multiply ~21x over at truncation_order=20. And it is the only
-    # order that is *correct* to fold: the correction depends on the order, not on the DFT bin
-    # it wraps to, so it cannot be pushed any earlier into `dfs1d` -- on a short grid distinct
-    # orders share a bin and need different factors.
-    #
-    # `_wrap` states that bin rather than leaning on Python's negative indexing. Identical
-    # wherever the old form worked, and defined where it did not: raw order indices need a grid
-    # of at least 4*truncation_order+1 to stay in range, which is the whole reason the raster used to be
-    # upsampled before anything else was considered.
-    coeff_v = dfs1d[:, xp.asarray(_wrap(orders_v, n_v), device=dev)]
-    # Both kinds of grid carry the half-pixel offset; only a staircase also carries
-    # the box transform. See :func:`_half_pixel_phase`.
-    _correct = _pixel_correction if piecewise_constant else _half_pixel_phase
-    coeff_v = coeff_v * _correct(xp, orders_v, n_v, coeff_v.dtype, dev)
-    conv1d = coeff_v[:, _circulant_gather(xp, half_width_v, dev)]
-
-    if inv_u or inv_v:    # Li's inner step, whichever direction asked for it
-        conv1d = xp.linalg.inv(conv1d)
-
-    conv1d = xp.reshape(conv1d, (-1, n_orders_v ** 2))
-
-    conv1d_t = xp.matrix_transpose(conv1d)
-    n_u = conv1d_t.shape[1]
-    dfs_2d = _normalized_row_fft(xp, conv1d_t)
-
-    coeff_u = dfs_2d[:, xp.asarray(_wrap(orders_u, n_u), device=dev)]
-    # Both kinds of grid carry the half-pixel offset; only a staircase also carries
-    # the box transform. See :func:`_half_pixel_phase`.
-    _correct = _pixel_correction if piecewise_constant else _half_pixel_phase
-    coeff_u = coeff_u * _correct(xp, orders_u, n_u, coeff_u.dtype, dev)
-    conv2d = coeff_u[:, _circulant_gather(xp, half_width_u, dev)]
-    conv2d = xp.reshape(conv2d, (n_orders_v, n_orders_v, n_orders_u, n_orders_u))
-    conv2d = xp.moveaxis(conv2d, 1, 2)
-    conv2d = xp.reshape(conv2d, (n_orders_v * n_orders_u, n_orders_v * n_orders_u))
-
-    if inv_u:             # u discontinuous: Li's outer step closes it
-        conv2d = xp.linalg.inv(conv2d)
-
-    return conv2d
+    return _conv_matrix(xp, field, half_width_u, half_width_v, *_pixel_series_pair(
+        xp, half_width_u, half_width_v, _half_pixel_phase))
 
 
 def _device(xp, x):
@@ -875,7 +781,7 @@ def _layer_eps_for_normal_field(xp, structure, half_width_u, half_width_v):
         yield xp.astype(layer, _complex_dtype(xp, layer)), base, repeat_v, repeat_u
 
 
-def to_conv_mat_raster_sampled(structure, half_width_u, half_width_v):
+def to_conv_mat_raster_sampled(structure, half_width_u, half_width_v, nesting=None):
     """Per-layer convolution matrices for a raster ``structure`` via the sampled path.
 
     Args:
@@ -883,25 +789,20 @@ def to_conv_mat_raster_sampled(structure, half_width_u, half_width_v):
             design variable — gradients flow back to it. Permittivity, not an index: nothing
             here squares it (``docs/conventions.md``).
         half_width_u, half_width_v: Fourier truncation orders.
+        nesting: the order Li's rules are nested in (:class:`~wavebit._core.enums.Nesting`;
+            ``None`` means ``'fixed'``).
 
     Returns:
-        ``(epx_conv_all, epy_conv_all, epz_conv_i_all)``, each ``(n_layers, n_orders, n_orders)``.
+        ``(epx, epy, epz_i, None, None)``, each slot ``(n_layers, n_orders, n_orders)`` — one
+        :func:`li_conv_matrices` per layer.
     """
     xp = array_namespace(structure)
-
-    epx_list, epy_list, epz_i_list = [], [], []
-
+    out = [[], [], []]
     for eps_matrix in _layer_eps(xp, structure):
-        epz_conv = fourier2d_piecewise_constant(xp, eps_matrix, half_width_u, half_width_v, inverse_rule=None)
-        epy_conv = fourier2d_piecewise_constant(xp, eps_matrix, half_width_u, half_width_v, inverse_rule='v')
-        epx_conv = fourier2d_piecewise_constant(xp, eps_matrix, half_width_u, half_width_v, inverse_rule='u')
-
-        epx_list.append(epx_conv)
-        epy_list.append(epy_conv)
-        epz_i_list.append(xp.linalg.inv(epz_conv))
-
-    return ConvMatrices(xp.stack(epx_list), xp.stack(epy_list),
-                        xp.stack(epz_i_list), None, None)
+        for slot, mat in zip(out, li_conv_matrices(xp, eps_matrix, half_width_u, half_width_v,
+                                                   nesting)):
+            slot.append(mat)
+    return ConvMatrices(*(xp.stack(slot) for slot in out), None, None)
 
 
 def _complex_dtype(xp, x):
@@ -2054,54 +1955,14 @@ def _lift(xp, v, dtype, device=None):
     return xp.asarray(v, dtype=dtype, device=device)
 
 
-def _fourier1d_integrated(xp, x, cell, truncation_order, period):
-    """1D continuous Fourier series of a piecewise-constant profile.
-
-    ``x`` holds the right-hand edge of each constant segment (shape ``(n, 1)``) and ``cell`` the
-    segment values (``(m, n)``). Port of the legacy ``_fourier1d_integrated``, with its two
-    in-place assignments rewritten: the non-DC modes divide by ``1j*2*pi*m`` and the DC mode is
-    the length-weighted mean, so both are expressed as one ``where`` over a mode mask.
-    """
-    C = cell.dtype
-    dev = _device(xp, cell)
-
-    cell_next = xp.roll(cell, -1, axis=1)
-    cell_diff = cell_next - cell
-
-    n_modes = 4 * truncation_order + 1
-    modes = xp.asarray([float(m) for m in range(-2 * truncation_order, 2 * truncation_order + 1)], dtype=C, device=dev)
-
-    # ``x`` holds the segment edges, which for a vector-modelled layer *are* the design
-    # variables an OCD fit differentiates -- CD, sidewall angle, pitch all live here. Lift
-    # them through ``_lift``, which keeps a same-namespace value as it is; through torch
-    # 2.11.x a bare ``asarray(..., dtype=)`` would have cut the graph here.
-    period = _lift(xp, period, C, dev)
-    x = _lift(xp, x, C, dev)
-
-    # Segment widths: distance from each edge to the next (last wraps to the period).
-    x_next = xp.concat([xp.roll(x, -1, axis=0)[:-1], xp.reshape(period, (1, 1))], axis=0) - x
-
-    # Scalars fold into `x` *before* the matmul; hoisting them out changes the rounding and
-    # costs bit-parity with the legacy builder.
-    phase = (-1j * 2 * 3.141592653589793 * x) @ xp.reshape(modes, (1, n_modes))
-    f = cell_diff @ xp.exp(phase / period)
-
-    # Divisor for the non-DC modes; 1 at DC so the unused branch of `where` stays finite
-    # (a NaN there would still poison the gradient).
-    is_dc = xp.asarray([m == 2 * truncation_order for m in range(n_modes)], device=dev)
-    divisor = xp.where(is_dc, xp.asarray(1.0, dtype=C, device=dev),
-                       1j * 2 * 3.141592653589793 * modes)
-
-    dc = xp.reshape((cell @ xp.concat([x[0:1], x_next[:-1]], axis=0)) / period, (-1, 1))
-
-    return xp.where(xp.reshape(is_dc, (1, n_modes)), dc, f / xp.reshape(divisor, (1, n_modes)))
-
-
-def fourier2d_integrated(xp, cell, x, y, half_width_u, half_width_v, *, inverse_rule):
+def fourier2d_integrated(xp, cell, x, y, half_width_u, half_width_v, *, inverse_rule,
+                         nesting=None):
     """2D continuous Fourier series with Li's rules — the staircase-free factorization.
 
     ``x`` / ``y`` are the segment edges of the compressed (piecewise-constant) layer, so the
-    permittivity is Fourier-transformed analytically rather than off a raster.
+    permittivity is Fourier-transformed analytically rather than off a raster. They are
+    right-hand edges, the last one closing the period, in any unit: they are divided by the
+    last one (:func:`_segment_bounds`).
 
     **``continuous`` describes the method, not the data.** What arrives here is piecewise
     constant, exactly as in :func:`fourier2d_piecewise_constant`; the coefficients are obtained
@@ -2116,43 +1977,12 @@ def fourier2d_integrated(xp, cell, x, y, half_width_u, half_width_v, *, inverse_
     given. Curved boundaries are still approximated by steps in both;
     :mod:`wavebit._core.parametric` is the path where the staircase itself is gone.
 
-    ``inverse_rule`` is as in :func:`fourier2d_piecewise_constant`.
+    ``inverse_rule`` and ``nesting`` are as in :func:`fourier2d_piecewise_constant`.
     """
-    inv_u, inv_v = _inverse_axes(inverse_rule)
-    n_orders_u = 2 * half_width_u + 1
-    n_orders_v = 2 * half_width_v + 1
-
-    extent_u, extent_v = x[-1], y[-1]
-
-    cell = xp.matrix_transpose(cell)
-
-    if inv_v:             # v discontinuous: the inverse rule starts from 1/eps
-        cell = 1 / cell
-
-    cfs1d = _fourier1d_integrated(xp, y, cell, half_width_v, extent_v)
-
-    dev = _device(xp, cell)
-    idx_v = _circulant_gather(xp, half_width_v, dev)
-    idx_u = _circulant_gather(xp, half_width_u, dev)
-
-    conv1d = cfs1d[:, idx_v]
-
-    if inv_u or inv_v:    # Li's inner step, whichever direction asked for it
-        conv1d = xp.linalg.inv(conv1d)
-
-    conv1d = xp.reshape(conv1d, (-1, n_orders_v ** 2))
-
-    cfs_2d = _fourier1d_integrated(xp, x, xp.matrix_transpose(conv1d), half_width_u, extent_u)
-
-    conv2d = cfs_2d[:, idx_u]
-    conv2d = xp.reshape(conv2d, (n_orders_v, n_orders_v, n_orders_u, n_orders_u))
-    conv2d = xp.moveaxis(conv2d, 1, 2)
-    conv2d = xp.reshape(conv2d, (n_orders_v * n_orders_u, n_orders_v * n_orders_u))
-
-    if inv_u:             # u discontinuous: Li's outer step closes it
-        conv2d = xp.linalg.inv(conv2d)
-
-    return conv2d
+    C = _complex_dtype(xp, cell)
+    cell = xp.astype(cell, C)
+    return _li_slot(xp, cell, half_width_u, half_width_v, *_segment_series_pair(
+        xp, x, y, half_width_u, half_width_v, C, _device(xp, cell)), inverse_rule, nesting)
 
 
 def _as_bools(xp, flags):
@@ -2287,7 +2117,8 @@ def compress_cell(xp, cell, row_idx, col_idx):
     return xp.take(cell, xp.asarray(row_idx, device=dev), axis=0)
 
 
-def to_conv_mat_raster_integrated(structure, half_width_u, half_width_v, compression=None):
+def to_conv_mat_raster_integrated(structure, half_width_u, half_width_v, compression=None,
+                                  nesting=None):
     """Per-layer convolution matrices via the integrated (closed-form) series.
 
     Args:
@@ -2296,21 +2127,23 @@ def to_conv_mat_raster_integrated(structure, half_width_u, half_width_v, compres
         compression: optional per-layer ``(row_idx, col_idx, x, y)`` from
             :func:`compression_indices`. Supply it to stay traceable under JAX; it is static
             geometry either way. Replayed eagerly it is checked against the layer in front of
-            it (see :func:`_check_compression_still_fits`).
+            it (see :func:`_check_compression_still_fits`). The same record serves both
+            nestings: it says where the blocks are, and the nesting only how they are combined.
+        nesting: the order Li's rules are nested in (:class:`~wavebit._core.enums.Nesting`;
+            ``None`` means ``'fixed'``).
 
     Returns:
-        ``(epx_conv_all, epy_conv_all, epz_conv_i_all)``, each ``(n_layers, n_orders, n_orders)``.
+        ``(epx, epy, epz_i, None, None)``, each slot ``(n_layers, n_orders, n_orders)`` — one
+        :func:`li_conv_matrices_integrated` per layer.
     """
     xp = array_namespace(structure)
-
     if compression is not None and len(compression) != structure.shape[0]:
         raise StaleGeometryError(
             f'the frozen geometry no longer fits this structure: it holds a compression for '
             f'{len(compression)} layers and this one has {structure.shape[0]}. Call '
             f'freeze_geometry() again, or drop geometry= to rebuild by comparison.')
 
-    epx_list, epy_list, epz_i_list = [], [], []
-
+    out = [[], [], []]
     for i in range(structure.shape[0]):
         layer = structure[i]
         if compression is None:
@@ -2319,15 +2152,10 @@ def to_conv_mat_raster_integrated(structure, half_width_u, half_width_v, compres
             _check_compression_still_fits(layer, compression[i], i)
             row_idx, col_idx, x, y = compression[i]
         comp = compress_cell(xp, layer, row_idx, col_idx)
-        eps = xp.astype(comp, _complex_dtype(xp, comp))
-
-        epz_list = fourier2d_integrated(xp, eps, x, y, half_width_u, half_width_v, inverse_rule=None)
-        epx_list.append(fourier2d_integrated(xp, eps, x, y, half_width_u, half_width_v, inverse_rule='u'))
-        epy_list.append(fourier2d_integrated(xp, eps, x, y, half_width_u, half_width_v, inverse_rule='v'))
-        epz_i_list.append(xp.linalg.inv(epz_list))
-
-    return ConvMatrices(xp.stack(epx_list), xp.stack(epy_list),
-                        xp.stack(epz_i_list), None, None)
+        for slot, mat in zip(out, li_conv_matrices_integrated(xp, comp, x, y, half_width_u,
+                                                              half_width_v, nesting)):
+            slot.append(mat)
+    return ConvMatrices(*(xp.stack(slot) for slot in out), None, None)
 
 
 def to_conv_mat_raster_integrated_nvf(structure, half_width_u, half_width_v, normal_field=None,

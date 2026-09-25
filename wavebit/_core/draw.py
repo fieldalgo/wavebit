@@ -14,8 +14,9 @@ An earlier version of this module read the removed block modeller's own ``draw()
 where the hazard was that the list is not guaranteed increasing: a 200x160 rod at ``cx = 960``
 in a 1000x1000 cell came back as ``x = [860., 1060., 1000.]``, whose last segment has a
 *negative* width. Painting those bands in order dropped up to 43.8% of the rod while the solver
-integrated it correctly, because :func:`~wavebit._core.factorization._fourier1d_integrated`
-weights each segment by its **signed** width. That path is gone and so is the reader for it.
+integrated it correctly, because the integrated series (``_fourier1d_integrated`` then,
+:func:`~wavebit._core.factorization._segment_series` since 2026-09-25) weights each segment by
+its **signed** width. That path is gone and so is the reader for it.
 """
 import array_api_compat.numpy as xnp
 import numpy as np

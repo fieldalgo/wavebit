@@ -183,24 +183,29 @@ Two things follow for anyone reading a `li` result:
 
 ## 7. One more word that was doing two jobs: the grid builder
 
-`dfs2d(..., piecewise_constant=False)` — now `_fourier2d_grid` — carried the same defect
-as `laurent_conv_2d`, one level
+`dfs2d(..., piecewise_constant=False)` — later `_fourier2d_grid`, gone since the 2026-09-25
+rewrite (§6) — carried the same defect as `laurent_conv_2d`, one level
 down. The flag does not express a preference — it states **what the grid holds**, and there are
 exactly two answers with exactly two consumers:
 
 | Entry point | Grid holds | Callers |
 | --- | --- | --- |
-| `fourier2d_piecewise_constant` | values that hold across their pixel — `eps`, `1/eps` | 7 in `wavebit/` |
-| `fourier2d_pointwise` | point samples of a continuous field — the NVF normal field | 5 in `wavebit/` |
+| `fourier2d_piecewise_constant` | values that hold across their pixel — `eps`, `1/eps` | 5 in `wavebit/` |
+| `fourier2d_pointwise` | point samples of a continuous field — the NVF normal field | 2 in `wavebit/` |
 
 The counts drift as sites are added and are re-checked rather than trusted; they were 5 and 3
-when this was written, and one site moved from pointwise to piecewise on 2026-08-17 (`ee715df`,
-the PN z slot). What does not drift is the split itself.
+when this was written, one site moved from pointwise to piecewise on 2026-08-17 (`ee715df`,
+the PN z slot), they were 7 and 5 when last counted before 2026-09-25, when the Li builders
+stopped going through the one-slot entry point (§6), and tensor Li's `zz` slot (2026-09-24) is
+one of today's five. What does not drift is the split itself.
 
 A value the caller can never be in doubt about should not be a parameter the caller restates,
 and the default made it worse: at the time of the change `False` was the answer 3 of 8 sites
-wanted, so the *majority* case was the one you got by forgetting. `_fourier2d_grid` is now private with the flag keyword-only and
-undefaulted, so even a direct call has to say which it means.
+wanted, so the *majority* case was the one you got by forgetting. `_fourier2d_grid` was then made private with the flag keyword-only and
+undefaulted, so even a direct call had to say which it meant. Since 2026-09-25 there is no flag
+left to pass: each entry point hands `_raster_series` the correction its data needs —
+`_pixel_correction` for a staircase, `_half_pixel_phase` for point samples — and that choice is
+the whole difference between them.
 
 `fourier2d_pointwise` also drops the rule argument rather than defaulting it. Every call in the
 repository asked for the direct rule — not by accident: the inverse rule closes products of
@@ -251,7 +256,7 @@ The public words won, everywhere:
 
 | was | is |
 | --- | --- |
-| `cfs2d`, `_cfs` | `fourier2d_integrated`, `_fourier1d_integrated` |
+| `cfs2d`, `_cfs` | `fourier2d_integrated`, `_fourier1d_integrated` (since 2026-09-25 `_segment_series`) |
 | `to_conv_mat_raster_discrete` | `to_conv_mat_raster_sampled` |
 | `to_conv_mat_raster_continuous`, `..._continuous_nvf` | `..._integrated`, `..._integrated_nvf` |
 | `nvf_conv_matrices_continuous` | `nvf_conv_matrices_integrated` |

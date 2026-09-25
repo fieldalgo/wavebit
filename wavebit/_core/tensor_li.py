@@ -2,12 +2,20 @@
 
 The mixed (normal displacement, tangential field) variables are formed before
 each one-dimensional Fourier transform. The inner transform is v, the outer
-transform u, matching the scalar Li path. No normal field is sampled.
+transform u: the scalar Li path's fixed nesting (``Nesting.FIXED``), the only
+one built here. No normal field is sampled. The one-dimensional series are the
+scalar builders' own (``factorization._raster_series`` for pixels,
+``factorization._segment_series`` for segment edges), so a scalar tensor
+reproduces the scalar operator.
 
 Reference: L. Li, Fourier Modal Method, Gratings: Theory and Numeric
 Applications (2014), sections 13.3.3.1 and 13.4.3, especially (13.132).
 This implementation derives the block elimination independently; it contains
-no third-party source code. See docs/tensor-li-factorization.md.
+no third-party source code. Until the Li builders were rewritten (2026-09-25)
+its row transform went through that module's earlier helpers ``_wrap``,
+``_circulant_gather`` and ``_fourier1d_integrated``, whose history LICENSE
+records, and through the JAX workaround ``_normalized_row_fft``. See
+docs/tensor-li-factorization.md.
 """
 from . import factorization as F, rectilinear
 from .domain import as_material
@@ -34,17 +42,23 @@ def _exchange(xp, blocks, axis, *, pointwise=False):
 
 
 def _rows(xp, values, half_width, edges):
-    """Fourier coefficients of piecewise constant rows, then Toeplitz gather."""
+    """Fourier coefficients of piecewise constant rows, then Toeplitz gather.
+
+    ``values`` is ``(B, N)``; the result is ``(B, 2h+1, 2h+1)`` with ``[b, r, c]`` the order
+    ``r - c`` coefficient of row ``b``. Without ``edges`` the rows fill ``N`` equal pixels (the
+    exact box transform); with them, ``edges`` are the ``(N, 1)`` right-hand segment edges, the
+    last closing the period.
+    """
     dev = F._device(xp, values)
     if edges is None:
-        orders = list(range(-2 * half_width, 2 * half_width + 1))
-        indices = xp.asarray(F._wrap(orders, values.shape[-1]), device=dev)
-        coefficients = F._normalized_row_fft(xp, values)[:, indices]
-        coefficients = coefficients * F._pixel_correction(
-            xp, orders, values.shape[-1], values.dtype, dev)
+        series = F._raster_series(xp, half_width, F._pixel_correction)
     else:
-        coefficients = F._fourier1d_integrated(xp, edges, values, half_width, edges[-1])
-    return coefficients[:, F._circulant_gather(xp, half_width, dev)]
+        real = xp.float32 if values.dtype == xp.complex64 else xp.float64
+        series = F._segment_series(xp, *F._segment_bounds(xp, edges, real, dev), half_width)
+    coefficients = series(values)
+    n = 2 * half_width + 1
+    gathered = xp.take(coefficients, F._toeplitz_positions(xp, half_width, dev), axis=-1)
+    return xp.reshape(gathered, (coefficients.shape[0], n, n))
 
 
 def layer_matrices(xp, tensor, hu, hv, edges=None):

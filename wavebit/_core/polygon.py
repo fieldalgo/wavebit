@@ -10,8 +10,8 @@ handles it and there is no small-denominator regime to approach.
 The result is not new here. S.-W. Lee and R. Mittra, "Fourier transform of a polygonal shape
 function and its application in electromagnetics", *IEEE Trans. Antennas Propag.* **31**(1),
 99-103 (1983), is the standard electromagnetics reference for it; the derivation is repeated
-above because the sign and factor-of-two conventions have to match
-:func:`wavebit._core.factorization._fourier2d_grid` exactly, and getting ``sinc((k.e)/2)`` wrong as
+above because the sign and factor-of-two conventions have to match the raster path's
+:func:`wavebit._core.factorization._pixel_correction` exactly, and getting ``sinc((k.e)/2)`` wrong as
 ``sinc(k.e)`` is invisible on axis-aligned rectangles.
 
 :func:`polygon_area` is the shoelace formula (Gauss's area formula).
