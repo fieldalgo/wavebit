@@ -48,7 +48,11 @@ by `2*pi/wavelength` to recover inverse length units.
 
 Direct components must be finite real scalars. This sets uniform single-wave
 intensity along the surface; a zero-power evanescent incident wave cannot define
-normalized diffraction efficiencies and is refused. With `kx=ky=0`, the s/p basis
+normalized diffraction efficiencies and is refused. A complex component is refused
+too, in absorbing media as well: there a real `theta` is the input, and the phase
+angle keeps `kx` real. A complex transverse wavevector is reachable only through a
+complex `theta`/`phi`, whose `R` and `T` are formal (see
+[Phase incidence](../conventions.md#phase-incidence)). With `kx=ky=0`, the s/p basis
 uses azimuth zero (s along y, p in xz); choose `polarization` to orient the field.
 For pure 1D `tetm` input, omit `ky` (it is zero); use `polarization` for conical incidence.
 

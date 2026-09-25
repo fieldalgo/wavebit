@@ -41,6 +41,7 @@ differ are exactly the `__stack` pair above.
 | --- | --- | --- | --- |
 | **RETICOLO** (Li/Lalanne lineage) | diffraction *orders*; uniform layers with a complex 3x3 tensor — **but only up to one off-diagonal pair, at classical mounting**, see below | Octave + a licensed RETICOLO V10 tree (`RETICOLO_PATH`) | `golden_reticolo.npz`, `golden_reticolo_anisotropic.npz` |
 | **RETICOLO**, swept over `(kx, ky)` | conical incidence across the light line, **including complex (evanescent) angles** | nothing — frozen from a 2024-09-09 study, see its generator | `golden_reticolo_conical_sweep.npz` |
+| **RETICOLO**, at a **complex `kx`** | the formal complex-angle path (`kx/k0 = n*sin(theta)`, `Im(kx) != 0`) on interfaces and a grating -- **only where RETICOLO's root rule and this solver's coincide**, which the test asserts; `R`, `T` per order and `r_0`, 1e-16 .. 4e-15 | Octave + `RETICOLO_PATH` | `golden_reticolo_complex_kx.npz` |
 | **fmmax** (Liu & Fan lineage, MIT) | uniform complex tensors, **patterned** tensors, **permeability** | the `fwref` env — see below | `golden_fmmax.npz`, `golden_fmmax_magnetic.npz` |
 | **S4** (same lineage, C++) | real tensors, patterned | the S4 extension, already in the project env | `golden_s4.npz` |
 | **S4**, the in-cell **field** | the six field components on *uniform* stacks — every reconstruction path, all angles and azimuths, exact at ~1e-15 | same | `golden_s4_field.npz` |

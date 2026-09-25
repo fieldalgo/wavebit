@@ -181,6 +181,31 @@ class Reticolo:
                 bottom_refl_info_te, bottom_tran_info_te, bottom_refl_info_tm, bottom_tran_info_tm,
                 field_cell, z, index_map)
 
+    def run_res2_all_modes(self, period, truncation_order, structure, thickness, theta, pol,
+                           wavelength, top, bot, tolerance=1e6):
+        """1D ``res2`` at a possibly complex ``theta``, with RETICOLO's mode selection opened.
+
+        :meth:`run_res2` reports only the orders RETICOLO counts as propagating, and at a
+        complex in-plane wavevector none is, so its lists come back empty. This sets ``tolh`` /
+        ``tolb`` far past their 1e-6 default and hands the parm to ``res2`` itself, the one
+        place they are read (``reticolo_res2_all_modes.m``). The top-side reflected and
+        transmitted structs come back whole, so a caller reads ``order``, ``amplitude`` and
+        ``efficiency`` from them.
+
+        A method of its own rather than an option on :meth:`run_res2`, so that every existing
+        golden still goes through code this addition did not touch. The texture is built the
+        way :meth:`run_res2`'s 1D branch builds it, and through the same :func:`_index`.
+        """
+        n_cell, n_top, n_bot = _index(structure), _index(top), _index(bot)
+        period = period[0]
+        Nx = n_cell.shape[2]
+        grid_x = np.arange(1, Nx + 1) * (period / Nx)
+        layer_textures = [[grid_x, n_cell[z, 0]] for z in range(n_cell.shape[0])]
+        textures = [n_top, *layer_textures, n_bot]
+        profile = np.array([[0, *thickness, 0], range(1, len(thickness) + 3)])
+        return self.eng.reticolo_res2_all_modes(pol, theta, period, n_top, truncation_order,
+                                                textures, profile, wavelength, tolerance, nout=2)
+
     def _run(self, pol, theta, phi, period, n_top, truncation_order,
              textures, profile, wavelength, grating_type, cal_field=False, matlab_plot_field=0, res3_npts=0):
 

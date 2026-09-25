@@ -2949,8 +2949,39 @@ class CoreFactorizationMixin:
         from .field_result import ordinary_state
         result._field_state = ordinary_state(self, result, eps_top=eps_top, eps_bot=eps_bot,
                                              mu_top=mu_top, mu_bot=mu_bot)
+        self._warn_complex_incidence()
 
         return result
+
+    def _warn_complex_incidence(self):
+        """Say once per solve that a complex incident ``kx`` / ``ky`` made R and T formal.
+
+        Only a complex ``theta`` / ``phi`` gets here -- direct components are refused as
+        non-real -- and :func:`~wavebit._core.power.power_for_real_k` has already set
+        ``power_entering`` and ``absorption`` to NaN on the same test. What it cannot mark is
+        R and T, which stay finite and read like efficiencies; see
+        :class:`~wavebit._core.backend.ComplexIncidenceWarning`. Eager only: a traced solve has
+        no value to test, the line every guard in this class draws.
+        """
+        import warnings
+        from .backend import ComplexIncidenceWarning
+        from .power import transverse_k_is_real
+        k_inc_x, k_inc_y = self._incident_kxy(self.wavelength)
+        xp = array_namespace(k_inc_x)
+        if _concrete(transverse_k_is_real(xp, k_inc_x, k_inc_y)) is not False:
+            return
+        try:
+            where = f' (kx/k0 = {complex(k_inc_x):.6g}, ky/k0 = {complex(k_inc_y):.6g})'
+        except Exception:                      # a value that will not become a Python number
+            where = ''
+        warnings.warn(
+            f'the incident transverse wavevector is complex{where}, from a complex theta/phi. '
+            'Its intensity varies along the surface, so R and T are formal per-order ratios '
+            'rather than fractions of an incident power -- their sum can exceed 1 on a '
+            'lossless stack -- and power_entering and absorption are NaN. For an absorbing '
+            'incident medium, give a real theta: the phase angle keeps kx and ky real. See '
+            'docs/conventions.md#phase-incidence.',
+            ComplexIncidenceWarning, stacklevel=3)
 
     #: The scene of the last solve: a tuple of numbers, ``None`` when a condition it reads was
     #: traced or under autograd at the solve, and this sentinel while no solve has run. The

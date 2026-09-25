@@ -76,7 +76,8 @@ def enable_x64():
     jax.config.update('jax_enable_x64', True)
 
 from .main import rcwa
-from ._core.backend import (AutoDetuneWarning, AxisNameWarning, PrecisionLossWarning, RayleighPointWarning,
+from ._core.backend import (AutoDetuneWarning, AxisNameWarning, ComplexIncidenceWarning,
+                            PrecisionLossWarning, RayleighPointWarning,
                             UnphysicalResultWarning, UnresolvedBranchWarning,
                             get_j1_implementation, set_j1_implementation)
 from ._core.conventions import branch_tolerance
@@ -134,7 +135,7 @@ __all__ = [
     # Defined in this file rather than imported -- see `enable_x64` above.
     'enable_x64',
     'AutoDetuneWarning',
-    'AxisNameWarning', 'PrecisionLossWarning', 'RayleighPointWarning',
+    'AxisNameWarning', 'ComplexIncidenceWarning', 'PrecisionLossWarning', 'RayleighPointWarning',
     'UnphysicalResultWarning', 'UnresolvedBranchWarning',
     'get_j1_implementation', 'set_j1_implementation',
     'branch_tolerance',

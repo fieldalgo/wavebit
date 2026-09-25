@@ -239,6 +239,26 @@ class AxisNameWarning(UserWarning):
     """
 
 
+class ComplexIncidenceWarning(UserWarning):
+    """The incident wave's transverse wavevector is complex, so R and T are formal ratios.
+
+    Only a complex ``theta`` / ``phi`` reaches one -- a direct ``kx`` / ``ky`` must be real --
+    through the formal ``kx/k0 = n*sin(theta)*cos(phi)`` parameterization. Such a wave's
+    intensity varies along the surface, and in the exit medium no root of ``kz`` both carries
+    power away and decays away, so which one a solver takes is a convention: measured on one
+    interface (top 4+3i, bot 2.25), fmmax's ``Im(kz) > 0`` gave ``r = 1.727-1.966i`` where
+    this solver and RETICOLO's Maystre cut (``Re(kz) + Im(kz) > 0``) gave ``0.252+0.287i``;
+    see ``docs/time-convention-audit.md`` section 9. The per-order ``R`` and ``T``
+    are then amplitude-derived ratios rather than fractions of an incident power -- their sum
+    exceeds 1 on a lossless stack -- and ``power_entering`` and ``absorption`` are NaN.
+
+    Evanescent incidence (``theta = pi/2 + 1j*alpha``) keeps ``kx`` real and does not fire.
+    For an absorbing incident medium, a real ``theta`` is the physical input: the phase angle
+    keeps ``kx`` real and puts the loss in ``kz``. Its own category so a study that means the
+    formal parameterization can silence it without silencing anything else.
+    """
+
+
 class AutoDetuneWarning(UserWarning):
     """An ``auto_detune`` retry moved the solve off the requested point — this is the record.
 

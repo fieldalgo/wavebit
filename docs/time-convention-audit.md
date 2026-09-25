@@ -527,6 +527,19 @@ was found and nothing was changed.
 
 * **Anisotropic half-spaces are not covered.** Every argument here is for a scalar `eps`.
 
+* **Other solvers take other roots at a complex `k_par`, and no oracle arbitrates.** Measured
+  2026-09-26 from their sources and runs: RETICOLO takes Maystre's cut (`retsqrt(x, -1)`, the
+  root with `Re(kz) + Im(kz) > 0`), fmmax takes `Im(kz) > 0` without exception. Where every
+  order's `kz**2` lies in the upper half plane all three agree. Below the axis they part: on
+  chapter 13's interface (top `4+3j`, bot `2.25`, `kx/k0 = n*sin(30°)`) fmmax gives
+  `r = 1.727-1.966i` and this solver and RETICOLO `0.252+0.287i`; on a lossless-top grating at
+  `theta = 0.2+0.1j` this solver keeps evanescent orders that *grow* away from the grating
+  (principal root, `Im(kz) < 0`), RETICOLO's cut decays them, and R moves by 0.11. Neither is
+  an error -- such a field is not a member of the real-`k_x` spectrum (§3) -- so the solve
+  says so with `ComplexIncidenceWarning`, and
+  `tests/references/test_reticolo_complex_kx_golden.py` pins agreement with RETICOLO only
+  where the two rules coincide, asserting that its cases stay there.
+
 ---
 
 ## 10. What pins it

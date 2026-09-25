@@ -85,6 +85,54 @@ def test_bad_k_is_not_silently_coerced(backend, value):
     assert wavebit.Incidence(kx=value).check()
 
 
+@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('value', [.01 + .002j, np.complex128(.01 + .002j)])
+def test_complex_k_refusal_points_to_the_angles(backend, value):
+    """A complex kx is refused on purpose, and the refusal says where the door is.
+
+    Every invalid value keeps ``finite real scalar``; only a finite *complex* one gets the rest --
+    that the refusal holds in absorbing media too, that a real theta is the input for absorbing
+    incidence, and that a complex theta is the formal route, inverse included. A Python complex
+    and a NumPy scalar take the two branches of the validator, so both are here.
+    """
+    with pytest.raises(ValueError, match='finite real scalar') as refused:
+        wavebit.rcwa(backend=backend, kx=value)
+    assert 'complex theta' in str(refused.value) and 'arcsin' in str(refused.value)
+    assert any('arcsin' in p for p in wavebit.Incidence(kx=value).check())
+    with pytest.raises(ValueError, match='finite real scalar') as short:
+        wavebit.rcwa(backend=backend, kx=float('nan'))
+    assert 'arcsin' not in str(short.value), 'a NaN is not a complex wavevector'
+
+
+@pytest.mark.parametrize('backend', [0, 1, 2])
+def test_complex_theta_is_the_only_input_that_warns(backend):
+    """``ComplexIncidenceWarning`` fires exactly when the incident kx is complex.
+
+    A real angle in an absorbing medium keeps kx real (the phase angle), evanescent incidence
+    keeps it real (``sin(pi/2 + 1j*a) = cosh(a)``), and a direct kx is real by construction: none
+    of the three warns. A formal complex angle does, once per solve, and its cell powers are NaN
+    -- :func:`~wavebit._core.power.transverse_k_is_real` decides both, so they cannot disagree.
+    """
+    import warnings
+    scene = dict(backend=backend, bot=2.25, wavelength=1000., period=[1200., 1200.],
+                 polarization=(1., 0.), structure=np.full((1, 2, 2), 2.25), thickness=[100.],
+                 truncation_order=0)
+
+    def caught(**kw):
+        with warnings.catch_warnings(record=True) as rec:
+            warnings.simplefilter('always')
+            result = wavebit.rcwa(**scene, **kw).solve()
+        return result, [r for r in rec if issubclass(r.category, wavebit.ComplexIncidenceWarning)]
+
+    for kw in (dict(top=4 + 3j, theta=np.pi / 6, phi=0.),
+               dict(top=4., theta=np.pi / 2 + .3j, phi=0.),
+               dict(top=4 + 3j, kx=.0067)):
+        assert not caught(**kw)[1], kw
+    result, fired = caught(top=4 + 3j, theta=np.pi / 6 + .2j, phi=0.)
+    assert len(fired) == 1, fired
+    assert np.isnan(float(np.real(np.asarray(result.power_entering))))
+
+
 @pytest.mark.parametrize('route', ROUTES, ids=ROUTE_IDS)
 def test_zero_power_evanescent_illumination_is_refused(route):
     s = _solver(route, (1., 1., 1., 1.), .5, 'te')

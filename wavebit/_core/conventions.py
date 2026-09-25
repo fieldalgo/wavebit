@@ -697,6 +697,20 @@ _DIRECTION_CLASH = (
     'Clear the other direction with None before switching a solver between them.')
 
 
+#: Appended when a direct component is finite but complex: the refusal is deliberate, and the
+#: caller who wanted a complex transverse wavevector has a door -- the angles -- to be shown.
+_COMPLEX_TRANSVERSE_K = (
+    '; it was complex. A direct kx/ky states illumination of uniform intensity along the '
+    'surface, which a real transverse wavevector gives and a complex one cannot -- in an '
+    'absorbing medium too, where the loss belongs in kz. For absorbing incidence give a real '
+    'theta/phi instead: the phase angle keeps kx and ky real. A complex transverse wavevector '
+    'is reachable only through a complex theta/phi, which keep the formal '
+    'kx/k0 = n*sin(theta)*cos(phi), ky/k0 = n*sin(theta)*sin(phi) with n the incident '
+    'half-space index (for ky = 0: theta = arcsin(kx/(k0*n)), phi = 0); R and T are then '
+    'formal ratios, power_entering and absorption are NaN, and a ComplexIncidenceWarning says '
+    'so. See docs/conventions.md#phase-incidence.')
+
+
 def transverse_component_problem(value, name):
     """Validate one dimensional, real scalar wavevector component without detaching AD."""
     if value is None:
@@ -707,11 +721,16 @@ def transverse_component_problem(value, name):
     try:
         if hasattr(value, 'dtype'):
             xp = array_namespace(value)
-            valid = xp.isfinite(value) & (xp.imag(value + 0j) == 0)
+            finite = xp.isfinite(value)
+            if _concrete(finite & (xp.imag(value + 0j) != 0)) is True:
+                return message + _COMPLEX_TRANSVERSE_K
+            valid = finite & (xp.imag(value + 0j) == 0)
             return message if _concrete(valid) is False else None
         import cmath
         number = complex(value)
-        return None if cmath.isfinite(number) and number.imag == 0 else message
+        if cmath.isfinite(number) and number.imag != 0:
+            return message + _COMPLEX_TRANSVERSE_K
+        return None if cmath.isfinite(number) else message
     except (TypeError, ValueError, OverflowError):
         return message
 

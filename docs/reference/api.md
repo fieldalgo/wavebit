@@ -176,6 +176,9 @@ See [Materials and wavelength sweeps](../guide/materials.md) for assignment and 
 .. autoclass:: wavebit.AxisNameWarning
    :members:
 
+.. autoclass:: wavebit.ComplexIncidenceWarning
+   :members:
+
 ```
 
 ## Side-resolved coherent illumination

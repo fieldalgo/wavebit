@@ -199,13 +199,15 @@ def test_uniform_stack_does_not_diffract_at_a_complex_angle():
     # 6.25 is the permittivity of the index-2.5 slab this test has always used; the value is
     # arbitrary, but it has to be *a permittivity* or the slab is not the one described.
     scene['structure'] = np.full_like(np.asarray(scene['structure'], dtype=float), 6.25)
-    res = wavebit.rcwa(backend=0, psi=np.pi / 2, **scene,
-                         theta=np.complex128(0.5 + 0.3j), phi=np.complex128(0.3),
-                         truncation_order=[MAX_ORDER], wavelength=float(g['wavelength']),
-                         period=list(g['period']),
-                         thickness=list(g['thickness'])[::-1],
-                         fourier_coefficients='integrated',
-                         factorization='li').solve()
+    # Re(theta) != pi/2 makes kx itself complex, which the solve now says out loud.
+    with pytest.warns(wavebit.ComplexIncidenceWarning):
+        res = wavebit.rcwa(backend=0, psi=np.pi / 2, **scene,
+                             theta=np.complex128(0.5 + 0.3j), phi=np.complex128(0.3),
+                             truncation_order=[MAX_ORDER], wavelength=float(g['wavelength']),
+                             period=list(g['period']),
+                             thickness=list(g['thickness'])[::-1],
+                             fourier_coefficients='integrated',
+                             factorization='li').solve()
     R = np.asarray(res.s_inc.r_s).ravel()
     off_centre = np.abs(np.delete(R, MAX_ORDER)).max()
     assert off_centre < 1e-12, off_centre

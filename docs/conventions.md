@@ -262,6 +262,18 @@ phase angle. The two interpretations are not an analytic continuation across
 the real-angle boundary in an absorbing medium; use real angle variables
 when differentiating the phase-incidence model.
 
+When that parameterization leaves the transverse wavevector with a nonzero
+imaginary part, the incident intensity varies along the surface. Evanescent
+incidence, `theta = pi/2 + 1j*alpha`, is not such a case: its `kx` is real.
+The per-order `R` and `T` are then formal ratios rather than fractions of an
+incident power, and their sum can exceed 1 on a lossless stack. `power_entering`
+and `absorption` are NaN, and each such solve emits `ComplexIncidenceWarning`.
+Which root of `kz` the exit medium takes is a convention at a complex `kx`, and
+other solvers choose differently (`docs/time-convention-audit.md` §9). This is
+the only route to a complex transverse wavevector. A direct `kx`/`ky` must be
+real, and refusing a complex one names this route: for `ky = 0`,
+`theta = arcsin(kx/(k0*n))`, `phi = 0`.
+
 `order_kxy()` returns wavevectors **divided by `k0`**, including reciprocal
 lattice shifts for each retained order. Multiply by `2*pi/wavelength` for
 physical inverse-length units. See [Light inputs](guide/light.md#phase-direction-and-absorbing-incidence)

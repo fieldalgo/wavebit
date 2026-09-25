@@ -34,13 +34,12 @@ def net_power(xp, incident, reflected, admittance):
     return xp.real(primary * xp.conj(partner))
 
 
-def power_for_real_k(xp, value, kx, ky=None):
-    """Mark cell-power results unavailable for complex transverse wavevectors.
+def transverse_k_is_real(xp, kx, ky=None):
+    """Whether the transverse wavevector components are real up to floating-point roundoff.
 
-    A real transverse wavevector makes distinct diffraction orders orthogonal
-    over a unit cell. A complex one needs a different spatial integral; return
-    NaN rather than presenting a sum of diagonal order powers as that integral.
-    Allow only floating-point roundoff in the imaginary components.
+    The one test for "real transverse k": :func:`power_for_real_k` masks the cell powers on
+    it, and the engine's complex-incidence warning fires on it, so the two cannot disagree
+    about which inputs they describe.
     """
     valid = None
     for k in (kx, ky):
@@ -49,6 +48,18 @@ def power_for_real_k(xp, value, kx, ky=None):
         tolerance = 32 * xp.finfo(xp.real(k).dtype).eps * (1 + xp.abs(k))
         real = xp.all(xp.abs(xp.imag(k)) <= tolerance)
         valid = real if valid is None else valid & real
+    return valid
+
+
+def power_for_real_k(xp, value, kx, ky=None):
+    """Mark cell-power results unavailable for complex transverse wavevectors.
+
+    A real transverse wavevector makes distinct diffraction orders orthogonal
+    over a unit cell. A complex one needs a different spatial integral; return
+    NaN rather than presenting a sum of diagonal order powers as that integral.
+    Allow only floating-point roundoff in the imaginary components.
+    """
+    valid = transverse_k_is_real(xp, kx, ky)
     return xp.where(valid, value, xp.full_like(value, float('nan')))
 
 
