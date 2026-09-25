@@ -78,6 +78,15 @@ with, raster, rectangle and tensor alike. `'symmetric'` puts each component's ow
 axis inside (Li 1997), so the build treats x and y alike. Both converge to the same answer and
 differ at finite `truncation_order`; the operators are in the `Nesting` docstring.
 
+What the fixed nesting costs is a polarization split on structures that have none. On a
+C4-symmetric Au nanohole array at `truncation_order=5` it transmits 0.0172 for x-polarized light
+and 0.0728 for y; the symmetric nesting gives 0.0725 for both. On a transpose-symmetric
+dielectric L the split is 1.5e-3 to 4.2e-3, against 1e-13 or less. Each nesting agrees with
+RETICOLO's own run of it to 4.2e-11 (`tests/references/test_reticolo_li_nesting.py`). The
+default stays `'fixed'` so that no earlier number moves. The measurements for choosing, and
+what flipping the default would move, are in
+[`../factorization-terms.md`](../factorization-terms.md) §6.
+
 Both connecting algorithms share the same eigenmodes and boundary conventions and agree to
 ~1e-14. SMM costs ~1.1-1.4x, cascades layer responses that can be reused independently, and is
 the only one that forms a `solver.scattering` matrix. See

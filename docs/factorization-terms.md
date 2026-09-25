@@ -1,7 +1,8 @@
 # Laurent, direct, inverse, Toeplitz: which word names a rule and which names a matrix
 
 Written: 2026-08-12. Structure claims below are measured, not asserted; the check is quoted in
-§3 and reproduces in seconds.
+§3 and reproduces in seconds. §6 rewritten 2026-09-25, when the raster Li builders were
+rebuilt from Li's paper and gained the second nesting.
 
 Targets:
 - `wavebit/_core/parametric.py::conv_matrix_2d` — the builder the collision used to be in; it
@@ -12,6 +13,8 @@ Targets:
   `inverse_rule` chooses the rule
 - `tests/test_parametric.py` — `test_conv_matrix_matches_grid_convention`, which pins the ordering
   the two builders share
+- `wavebit/_core/factorization.py::_li_slot` and `wavebit/_core/enums.py::Nesting` — the two
+  nestings of Li's rules, and the keyword that chooses between them (§6)
 
 ---
 
@@ -30,6 +33,10 @@ Two things are worth knowing before editing any of this:
    and on the three normal-field products. No rule has been chosen when it runs.
 2. The matrix it returns is **not Toeplitz**. It is BTTB — block-Toeplitz with Toeplitz blocks
    — and the distinction is checkable, not pedantic (§3).
+
+And one thing about the rules themselves: in 2D, Li's rules are applied one axis inside the
+other, and there are two ways to nest them. Only Li's own treats x and y alike. The one
+this path always built, and still builds by default, does not (§6).
 
 ## 1. The two rules
 
@@ -141,45 +148,144 @@ is not prose at all: `modes=('nvf', 'laurent')` in
 `studies/benchmark_truncation_shape.py` is a value a user types. A rename that had swept the
 word out of the repository would have broken that and fixed nothing.
 
-## 6. The nested rule is direction-dependent, and nothing tests it
+## 6. The nested rule, and the two ways to nest it
 
-Applying the rules in 2D means nesting them: one axis is transformed inside, the other
-outside. The shared core fixes that order — inner y, outer x — which is Li's own construction and is
-correct. But it means the builder is **not invariant under relabelling x and y**, and that is
-observable in the answer.
+Rewritten 2026-09-25. Until then this section said the `li` builder's x/y asymmetry "is intrinsic
+to Li's crossed-grating scheme". It is not. It comes from using **one nesting order for both
+field components**, and Li's own construction, which picks the order per component, does not
+have it. Both are now built; `li_nesting=` chooses (`wavebit/_core/enums.py::Nesting`).
 
-Take a structure with `eps(x, y) = eps(y, x)` in a square cell at normal incidence. Rotating
-the incident polarisation by 90 degrees maps the problem onto itself, so the diffraction map
-must come back transposed, exactly. Measured on an L-shape (transpose-symmetric, deliberately
-not 4-fold), 96x96 raster, `max|T(psi=0) - T(psi=90)ᵀ|`:
+Applying the rules in 2D means nesting them (L. Li, JOSA A 14, 2758, 1997): one axis is
+transformed inside, one line of cells at a time; the result is a matrix-valued function of the
+other axis, which is transformed outside. With `T_u` / `T_v` the Toeplitz matrix along each
+axis:
 
-| truncation_order | `factorization='li'` | `factorization='nvf'` |
+| slot | `li_nesting='fixed'` (default) | `li_nesting='symmetric'` |
 | --- | --- | --- |
-| 4 | 5.3e-3 | 2.2e-14 |
-| 8 | 1.4e-3 | 3.5e-13 |
-| 12 | 5.9e-4 | 5.1e-13 |
+| `epx` (acts on `E_x`) | `( T_u( [T_v(eps)]^-1 ) )^-1` | `T_v( [T_u(1/eps)]^-1 )` |
+| `epy` (acts on `E_y`) | `T_u( [T_v(1/eps)]^-1 )` | the same |
+| `epz_i` | `( T_uv(eps) )^-1` | the same |
 
-The NVF column is the control: it asks for the direct rule both ways, so no nesting order is
-chosen and
-the symmetry holds to machine precision. On a high-contrast random raster the `li` residue
-reaches 1e-1.
+`'fixed'` keeps `v` inside for both slots. It is what the raster path built until this date,
+the order the Cartesian shape Li and tensor Li builds were written in (tensor Li builds nothing
+else), and RETICOLO's `parm.res1.li=1`. `'symmetric'` puts each slot's own inverse-rule axis inside —
+Li's construction, RETICOLO's `li=0` — so `epx` is the x<->y mirror image of `epy`. On a staircase
+both are Li's rules, exact for the structure they are given, and they converge to the same
+answer. They differ in how they truncate. On a y-invariant layer they coincide, both `epx`
+reducing to Li's 1D inverse rule (`tests/test_li_nesting.py::test_a_y_invariant_layer_reduces_to_the_1d_rules_in_both_nestings`).
 
-**This is not a defect in the implementation.** It is intrinsic to Li's crossed-grating
-scheme, and Liu & Fan name it in the S4 paper as the reason they ship vector-field
-formulations instead — an effective staircasing that comes from taking 1D transforms along the
-principal lattice directions. It is why the NVF path exists.
+What *is* intrinsic to Li's rules, in either nesting, is that they are exact only where the
+boundaries run along the lattice axes. A curved or tilted boundary is a staircase to them —
+Liu & Fan give that as the reason S4 ships vector-field formulations — and that is why the NVF
+path exists. The relabelling asymmetry is a separate defect, and it belongs to the fixed nesting.
+
+**The symmetry.** Take a structure with `eps(x, y) = eps(y, x)` in a square cell at normal
+incidence. Rotating the incident polarisation by 90 degrees maps the problem onto itself, so the
+diffraction map must come back transposed. Measured on the L-shape of
+`tests/test_factorization_core.py` (transpose-symmetric, deliberately not 4-fold) at 96x96,
+`max|T(psi=0) - T(psi=90)ᵀ|`:
+
+| truncation_order | `li`, `'fixed'` | `li`, `'symmetric'` | `nvf` |
+| --- | --- | --- | --- |
+| 4 | 4.2e-3 | 2.8e-14 | 4.4e-14 |
+| 8 | 2.9e-3 | 1.2e-13 | 4.0e-13 |
+| 12 | 1.5e-3 | 9.7e-13 | 1.5e-13 |
+
+The table this section carried before (5.3e-3, 1.4e-3, 5.9e-4 for `li`) predates the exact
+sampled coefficients and the half-pixel phase, and is superseded. The NVF column is the control:
+it takes the direct rule both ways, so no nesting is chosen at all.
+
+The same holds with every moving part live: the chiral L of that file at oblique incidence, with
+unequal periods and unequal truncation, turned a quarter (both spellings — transpose with
+`psi -> -psi`, and a plain `np.rot90`). The symmetric nesting holds it to 1.2e-15 to 1.9e-14 at
+`truncation_order` (5, 3), (8, 6), (11, 9); the fixed one misses by 1.1e-2, 1.4e-3 and 4.5e-4.
+
+**Against RETICOLO**, which implements both nestings: an `eps = 6` rectangle, 200 x 150 nm in a
+325 nm square cell, 600 nm thick, over `eps = 1.46**2` at 532 nm. Each nesting agrees with
+RETICOLO V10's run of the same nesting to 4.2e-11 in total transmission — both polarizations,
+`truncation_order` 3 and 5, both coefficient paths — while the two nestings disagree with each
+other by 1.7e-5 (TE) to 1.7e-3 (TM). Turn the rectangle a quarter and the symmetric nesting's TE
+is its old TM to round-off. The fixed nesting misses it by 1.4e-3 at truncation 3 and 7.1e-4
+at 5 (`tests/references/test_reticolo_li_nesting.py`).
+
+**Where it shows most: metals.** Measured in an earlier session (2026-09), and not pinned by a
+test here. The scenes are given in full so that they can be re-run.
+
+- *Au nanohole array.* Square period 500 nm, a 200 nm air hole in 150 nm of Au (Johnson–Christy
+  at 700 nm, `eps ≈ -16.49 + 1.06i`), glass substrate `eps = 2.25`, normal incidence, raster
+  N = 512. The structure is C4-symmetric, so the two polarizations must transmit the same.
+  The fixed nesting gives T(x-pol) = 0.0172 and T(y-pol) = 0.0728 at `truncation_order` 5, and
+  still 0.0239 against 0.0427 at 15. The symmetric nesting gives one number for both
+  polarizations, which oscillates with truncation: 0.0428 at 13, 0.0488 at 15. For scale, fmmax's
+  Jones-direct formulation gives 0.0432 (1605 terms), and wavebit's NVF on the parametric
+  circle 0.0420 at 15.
+
+  Re-run with the rewritten builders on 2026-09-25, with the hole centred and a pixel counted
+  as air when its centre lies inside. The fixed nesting reproduces all four of its numbers
+  to the digits quoted: 0.0172 and 0.0728 at 5, 0.023885 and 0.042708 at 15. The symmetric
+  nesting gives 0.0725 for both polarizations at 5, 0.042744 at 13 and 0.048913 at 15.
+  That is 5.6e-5 and 1.1e-4 from the earlier session's figures, whose construction was not
+  recorded; the builder here matches RETICOLO's own `li=0` to 4.2e-11 on the rectangle
+  above. Raster NVF gives 0.0597 for both at 5.
+- *Au nanodisk array.* Period 450 nm, disk D = 140 nm, h = 50 nm, in an `n = 1.5` environment.
+  At `truncation_order` 10 the fixed nesting puts the plasmon resonance about 25 nm apart for
+  the two polarizations (near 795 nm and 770 nm). NVF puts it near 780 nm for both.
+
+The symmetric nesting removes the polarization split, which is an artefact. It does not remove
+the staircase: on these curved metal boundaries its answer still moves with truncation, and NVF
+is the formulation built for them.
+
+**What the default would cost to change.** The fixed nesting stays the default, so no golden moves.
+Fixed against symmetric on the scenes the suite pins (2026-09-25, the larger of the per-order
+`|ΔR|` and `|ΔT|`, and the change in total transmission; measured on the code of 2026-09-11,
+before the layers were stacked bottom-to-top -- the `2d_2layer` rows are the same physical
+scenes either way):
+
+| scene | per order | total T |
+| --- | --- | --- |
+| `golden_legacy.npz` `2d_normal` (random 5x5, truncation 2) | 2.0e-1 | 1.5e-1 |
+| `golden_legacy.npz` `2d_oblique` | 5.7e-2 | 2.9e-2 |
+| `golden_legacy.npz` `2d_2layer` | 8.7e-2 | 2.0e-1 |
+| `golden_legacy.npz` `2d_cfs` (integrated) | 5.1e-2 | 4.5e-2 |
+| `golden_field.npz` `2d`, `2d_2layer`, `2d_4ff` | 5.7e-2 to 8.7e-2 | 2.5e-3 to 9.5e-2 |
+| the L-shape at the test's own 48x48, truncation 4 and 6 | 4.8e-3 to 1.2e-2 | 4.8e-3 to 1.2e-2 |
+| the chiral L, truncation (5, 3) to (11, 9) | 4.3e-4 to 1.6e-3 | 1.9e-4 to 2.1e-3 |
+| `test_optimization_smoke.py`'s permittivity ramp | 2.5e-5 | 3.9e-5 |
+
+Energy conserves to 6.8e-14 or better in both nestings on every one of them. The large numbers
+are random rasters at truncation 2, where every factorization choice is a large one. They
+converge: on `2d_normal` the gap in total T is 1.5e-1, 1.4e-2, 6.3e-4, 5.1e-4, 4.4e-4 and 2.6e-4 at
+truncation 2, 4, 8, 12, 16 and 20. Flipping the default therefore moves every 2D `li` golden
+in `golden_legacy.npz` and `golden_field.npz` far past their 1e-12, and the legacy file cannot
+be re-frozen in place — `tests/test_golden_legacy_parity.py` explains the retire-and-refreeze
+route. Nothing in the 1D goldens moves: on the twelve 1D RETICOLO cases the two nestings return
+the same efficiencies to the last bit. Three pins added since those
+measurements are tied to the default too. `tests/test_tensor_li.py::test_scalar_tensor_is_exactly_the_scalar_li_operator`
+holds tensor Li on a scalar tensor to the scalar Li operator at 3e-12, and tensor Li builds the
+fixed nesting only, so a flip breaks it unless tensor Li gains the symmetric one.
+`tests/test_rectilinear_li.py` compares the Cartesian shape Li with a painted raster through
+the default on both sides, so it would still pass while every shape Li number moved -- among
+them the explicit-Li reference (`li_T`) of `studies/nvf_seam_contrast.py` and
+`studies/results/nvf_seam_contrast.log`.
+`tests/references/test_tensor_li_golden.py` does not move: tensor Li does not read the nesting.
+The case for flipping is the covariance, and agreement with RETICOLO's own `li=0`. The case
+against is that every 2D `li` number measured so far was taken on the fixed nesting. That is the
+maintainer's call.
 
 Two things follow for anyone reading a `li` result:
 
-- The residue is *not* energy error. Total power conserves to 1e-14 in both arms, so no
-  conservation check will surface it. In the table above the whole residue shows up as a
-  difference in **total** transmitted power between two polarisations that ought to agree.
-- The suite pins it since 2026-08-12, in both directions.
-  `test_nvf_does_not_tell_x_and_y_apart` is the invariant — NVF chooses no nesting order, so
-  the symmetry is exact — and `test_li_tells_x_and_y_apart_and_this_is_expected` records the
-  cost of not having it, bounded above *and* below: a regression that worsened the nesting
-  would otherwise pass, and so would one that accidentally fixed it and left this section
-  stale. Both are in `tests/test_factorization_core.py` and cost about a second.
+- The residue is *not* energy error. Both nestings conserve to 1e-13, so no conservation check
+  will surface it. It shows up as a difference in **total** transmitted power between two
+  polarisations that ought to agree.
+- The suite pins it in both directions. `test_nvf_does_not_tell_x_and_y_apart` and
+  `test_li_does_not_tell_x_and_y_apart_in_the_symmetric_nesting` are the invariant.
+  `test_li_tells_x_and_y_apart_and_this_is_expected` records the fixed nesting's cost, bounded
+  above *and* below, so a regression that worsened it fails, and so does one that quietly fixed
+  it and left this section stale. `test_li_is_covariant_when_the_whole_scene_is_turned_in_the_symmetric_nesting`
+  holds the turned scene. All four are in `tests/test_factorization_core.py`. The
+  matrix-level statement — `epx` of the transposed layer is `epy` relabelled — is
+  `tests/test_li_nesting.py::test_the_symmetric_nesting_is_covariant_under_relabelling_x_and_y`,
+  and the RETICOLO comparison is `tests/references/test_reticolo_li_nesting.py`.
 
 ## 7. One more word that was doing two jobs: the grid builder
 
