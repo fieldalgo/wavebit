@@ -975,17 +975,19 @@ def _smoothed_notes(scene, plan):
     if asked:
         # The voxel rule's sentence above is not this structure's: its E is the prepared
         # operator's. The orders are the research sweeps' (docs/fd-symmetric-stencil.md,
-        # "Glass and weak sphere refinement"): 2.063617 at eps=2.25 and 2.057240 at eps=1.1.
+        # "Glass and weak sphere refinement": 2.063617 at eps=2.25, 2.057240 at eps=1.1; "C3:
+        # the high-index sphere, and the verdict": 2.2442819 at eps=12, -4.082356% at 80).
         where = ', '.join(f'structures[{index}]' for index in asked)
         out.append((SubpixelAccuracyWarning,
                     f'{where} use{"s" if len(asked) == 1 else ""} '
                     f'discretisation={STENCIL!r}: the symmetric extended-stencil operator on E. '
-                    'Its research sweeps measured convergence order 2.064 on the glass sphere '
-                    '(epsilon=2.25) and 2.057 at epsilon=1.1 (radius/wavelength=0.25, 20/28/40 '
-                    'vacuum cells per wavelength, three placements). Its public validation, the '
-                    'stage-4 C3 Mie gate, is incomplete. This benchmark is not an error bound '
-                    'for this scene. Validate its observables under refinement. See '
-                    'docs/fd-symmetric-stencil.md.'))
+                    'It passes the stage-4 C3 Mie gate: convergence order 2.244 on the '
+                    'epsilon=12 sphere (radius/wavelength=0.25, 40/56/80 vacuum cells per '
+                    'wavelength, three placements; -4.08% at 80), 2.064 on the glass sphere '
+                    '(epsilon=2.25) and 2.057 at epsilon=1.1 (20/28/40). On glass and weak '
+                    'spheres at those grids its error is larger than with the default rule. These '
+                    'benchmarks are not an error bound for this scene. Validate its observables '
+                    'under refinement. See docs/fd-symmetric-stencil.md.'))
     report = Approximations()
     proxy_stats = {}
     magnetic = _background(scene).is_magnetic or any(

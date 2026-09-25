@@ -1204,16 +1204,18 @@ def test_a_stencil_scene_is_told_its_own_accuracy_and_not_the_voxel_rules():
     Measured on ``b24a708`` (third review): a stencil scene's report carried the voxel rule's
     sentence -- adjoint inverse-material cross coupling, order 2.023 -- beside its own
     ``discretisation=stencil`` line, though its E is the prepared operator's. Only the text was
-    wrong. The stencil's sentence quotes the research sweeps' orders (2.064 glass, 2.057 at
-    epsilon 1.1); the voxel twin keeps the voxel sentence, whose characters this commit did not
-    move.
+    wrong. The stencil's sentence quotes the measured orders (2.244 on the epsilon-12 sphere of
+    the C3 verdict, 2.064 glass, 2.057 at epsilon 1.1) and says the default rule is the more
+    accurate on glass and weak spheres at those grids; the voxel twin keeps the voxel sentence,
+    whose characters were not moved.
     """
     from wavebit.fd._lower.checks import notes
     s, plan = prepared()
     v, voxel_plan = prepared('voxel')
     said = [m for c, m in notes(s, plan) if c is fd.SubpixelAccuracyWarning]
     assert len(said) == 1, said
-    assert "discretisation='stencil'" in said[0] and '2.064' in said[0]
+    assert "discretisation='stencil'" in said[0] and '2.064' in said[0] and '2.244' in said[0]
+    assert 'passes the stage-4 C3 Mie gate' in said[0] and 'larger than with the default rule' in said[0]
     assert 'adjoint inverse-material' not in said[0] and '2.023' not in said[0]
     voxel = [m for c, m in notes(v, voxel_plan) if c is fd.SubpixelAccuracyWarning]
     assert len(voxel) == 1 and 'adjoint inverse-material' in voxel[0] and '2.023' in voxel[0]
