@@ -1050,14 +1050,20 @@ def test_a_smoothed_shape_clear_of_a_snapped_face_composes_exactly():
     whose Yee point lies on the face have a voxel half inside the slab that the mask calls
     outside. That scene is refused now, and
     :func:`test_a_smoothed_surface_in_a_voxel_a_snapped_face_cuts_is_refused` measures why.
+
+    The first half reads the mix, ``coefficients.build``'s ``be``: the per-block lift acts on it
+    afterwards (``blocks.lift``), and at ``eps = 12`` in vacuum it moves some of the ball's
+    blocks, by up to 1.6% on this ball -- a different rule, tested in
+    ``tests/test_fd_block_lift.py``. The second half reads ``fd.lower``, lift and all.
     """
     lo = -N * DX / 2
     top = lo + 12 * DX              # exactly on a cell boundary: the snap moves nothing
     slab = fd.Slab(z=(lo, top))
     for centre_z in (top - 0.2 - 2 * DX, top + 0.2 + 2 * DX):
         ball = fd.Sphere(radius=0.2, center=(0.0, 0.0, centre_z))
-        plan, params = _lowered(_grid_scene((fd.Structure(slab, 4.0), fd.Structure(ball, 12.0))))
-        eps = _eps_of(plan, params)
+        scene = _grid_scene((fd.Structure(slab, 4.0), fd.Structure(ball, 12.0)))
+        plan = _quiet(fd.plan, scene)
+        eps = _eps_of(plan, coef.build(scene, plan, runtime('numpy')))
         grid, box = plan.grid, ball.support(plan.grid)
         (i0, i1), (j0, j1), (k0, k1) = box
         truth = np.empty_like(eps)

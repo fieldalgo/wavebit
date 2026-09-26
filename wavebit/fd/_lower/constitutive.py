@@ -85,11 +85,19 @@ def terms(scene, plan):
     return tuple(out)
 
 
-def lower(scene, plan, rt, report=None, proxy_stats=None, proxy_by_index=None):
+def lower(scene, plan, rt, report=None, proxy_stats=None, proxy_by_index=None, nodes=None):
     """Paint node coefficients in scene order, preserving the two-phase rule.
 
     ``proxy_stats`` collects the nearest-surface proxy's worst gap per body type (the plan's
     warning), ``proxy_by_index`` the same per structure index (``fd.check``'s block, C5).
+    ``nodes``, when given, receives per term the node tensor's diagonal ``(3, nz, ny, nx)``
+    and its ``1/<eps>`` ``(nz, ny, nx)``, painted by the same rule as the cross coefficients:
+    ``1/<eps> + (<1/eps> - 1/<eps>) n_a^2`` where the body that last reaches a node has a
+    nonzero fill (the cross coefficients' own test: a fill of ``-6e-14`` counts, and the
+    tensor's smallest eigenvalue is then ``1/<eps>`` to that round-off), ``1/value`` under a
+    cell-snapped shape, ``1/background`` where nothing does.
+    With the cross coefficients off its diagonal it is that node's Kottke tensor, what the
+    per-block lift moves a block toward (``blocks.lift``).
     """
     from .._shapes import Box, Sphere, occupancy
     from .._kernel.stencil import StencilTerm
@@ -108,6 +116,7 @@ def lower(scene, plan, rt, report=None, proxy_stats=None, proxy_by_index=None):
         prop = lambda material: (material.eps if field == 'E' else material.mu_value)[0]
         held = rt.zeros(term.region.shape, 'float64') + rt.array(prop(background), 'float64')
         cross = rt.zeros((3,) + term.region.shape, 'float64')
+        tensor = xp.stack([1.0/held]*3)
         for index, structure in enumerate(structures):
             cut = _intersect(box, structure.shape.support(plan.grid))
             if cut is None:
@@ -121,6 +130,7 @@ def lower(scene, plan, rt, report=None, proxy_stats=None, proxy_by_index=None):
                 # A snapped shape replaces whole cells, including any previous cross term.
                 fresh = xp.zeros_like(old) + value
                 off = rt.zeros((3,) + tuple(hi-lo for lo, hi in reversed(local)), 'float64')
+                diagonal = xp.stack([1.0/fresh]*3)
             else:
                 points = rt.array(common_points(plan.grid, cut, field), 'float64')
                 fill, moment = occupancy(body, points, plan.dx, report=report)
@@ -150,11 +160,68 @@ def lower(scene, plan, rt, report=None, proxy_stats=None, proxy_by_index=None):
                         proxy_by_index[index] = max(proxy_by_index.get(index, 0.), worst)
                 off = xp.where(fill[None] == 0, cross[(slice(None),) + view],
                                contrast[None]*weights)
+                diagonal = xp.where(fill[None] == 0, tensor[(slice(None),) + view],
+                                    xp.stack([1.0/arithmetic + contrast*normal[..., a]**2
+                                              for a in range(3)]))
                 fresh = arithmetic
             held = _paste(xp, held, local, fresh)
             cross = _paste(xp, cross, local, off)
+            tensor = _paste(xp, tensor, local, diagonal)
         out[term.name] = cross
+        if nodes is not None:
+            nodes[term.name] = (tensor, 1.0/held)
     return out
+
+
+def lift(plan, params, nodes, rt, lifted=None):
+    """Patch ``params['be']`` / ``params['bh']`` with the per-block lift of every term.
+
+    Returns whether every block of every term is positive definite at its lift (a Python bool
+    on concrete values, a runtime bool under a transform), the certificate ``validate`` refuses
+    on and ``guard`` turns into NaN. ``nodes`` is what :func:`lower` filled. The diagonal is
+    changed only over a region where some block moves (``blocks.lift``). ``minus_bh`` is not
+    touched here: ``params.lower`` rebuilds it from the final ``bh`` after the guard, which
+    every plan with a coupled term has. ``lifted``, when given, receives each term's
+    ``blocks.Lifted`` by name.
+
+    The change goes into ``be`` and not beside it, for the reason ``params._stencil`` gives: ``be``
+    is what the step multiplies the curl by and what ``InteriorEnergy`` reads the medium from.
+    """
+    from .._kernel.observe import InteriorEnergy
+    from .._kernel.stencil import StencilTerm
+    from .blocks import lift as lift_blocks
+    xp, certified = rt.xp, True
+    for term in plan.constitutive:
+        if isinstance(term, StencilTerm):
+            continue
+        key = 'be' if term.field == 'E' else 'bh'
+        cross = params['constitutive'][term.name]
+        diagonal = xp.broadcast_to(InteriorEnergy._cut(params[key], slice(None), term.box)
+                                   / term.ratio, cross.shape)
+        out = lift_blocks(term.field, diagonal, cross, *nodes[term.name], rt)
+        if lifted is not None:
+            lifted[term.name] = out
+        certified = certified & out.certified
+        if out.delta is None:
+            continue
+        coefficient = params[key]
+        full = (3, plan.nz, plan.ny, plan.nx)
+        if tuple(getattr(coefficient, 'shape', ())) != full:
+            coefficient = xp.broadcast_to(coefficient, full)
+        block = coefficient[term.view] + term.ratio * out.delta
+        params[key] = _paste(xp, coefficient, tuple(reversed(term.box)), block)
+    return certified
+
+
+def lifted_on_host(scene, plan):
+    """``(params, {term name: blocks.Lifted})`` on NumPy: the coefficients with the lift
+    patched in and each term's lift, for ``validate`` and for the plan's notes."""
+    from .._runtime import runtime
+    rt, nodes, lifted = runtime('numpy'), {}, {}
+    params = dict(build(scene, plan, rt))
+    params['constitutive'] = lower(scene, plan, rt, nodes=nodes)
+    lift(plan, params, nodes, rt, lifted)
+    return params, lifted
 
 
 def enclosure(diagonal, cross, xp, field='E'):
@@ -166,6 +233,9 @@ def enclosure(diagonal, cross, xp, field='E'):
 def validate(scene, plan):
     """Refuse unsupported memory regions and uncertified operators once, at plan time.
 
+    Returns ``{term name: blocks.Lifted}``, the lift of every diagonal-rule term, which the
+    plan's notes report (``checks._lift_notes``); ``None`` when there is no such term.
+
     Only the diagonal rule's terms: a prepared extended-stencil term carries its own
     certificate, taken on the whole assembled operator before any field is advanced
     (``stencil.prepare`` -- the consistency residual, the minimum eigenvalue, the LDL energy
@@ -175,7 +245,7 @@ def validate(scene, plan):
     from .._kernel.stencil import StencilTerm
     coupled = tuple(t for t in plan.constitutive if not isinstance(t, StencilTerm))
     if not coupled:
-        return
+        return None
     from .._runtime import runtime
     from .._kernel.observe import InteriorEnergy
     background, structures = materials_of(scene)
@@ -204,7 +274,8 @@ def validate(scene, plan):
                                  'Dispersive smoothing is C8.')
     rt = runtime('numpy')
     try:
-        coefficients, cross = build(scene, plan, rt), lower(scene, plan, rt)
+        coefficients, lifted = lifted_on_host(scene, plan)
+        cross = coefficients['constitutive']
     except (TypeError, ValueError, RuntimeError) as err:
         raise ValueError('fd.plan requires concrete geometry and materials to certify '
                          'constitutive coupling before numerical lowering. Build the plan '
@@ -239,24 +310,17 @@ def validate(scene, plan):
                                      'plans no cross term, and it alone may cross a mirror '
                                      '(symmetric about the plane, checks.check_symmetry).')
         key = 'be' if term.field == 'E' else 'bh'
+        if not lifted[term.name].certified:
+            raise ValueError(f'{term.name}: a block of the lifted inverse-material operator is '
+                             'not positive definite. The lift makes every block positive for '
+                             'positive finite phases, so a value reaching it is not one: a '
+                             'material or a fill that is not a finite positive number.')
         diagonal = np.broadcast_to(InteriorEnergy._cut(coefficients[key], slice(None),
                                                        term.box)/term.ratio, c.shape)
-        lo, hi = (float(v) for v in enclosure(diagonal, c, np, term.field))
-        if not (math.isfinite(lo) and math.isfinite(hi) and lo > 0):
-            raise ValueError(f'{term.name} inverse-material spectrum is enclosed by '
-                             f'[{lo:.17g}, {hi:.17g}]. The positive-energy certificate '
-                             'requires a strictly positive lower bound. A failed bound '
-                             'is inconclusive, not evidence of a negative eigenvalue: the '
-                             'certificate is a Gershgorin enclosure, and loose. Study S2b '
-                             'swept it (studies/fdtd_subpixel_cells_across.py, certificate): '
-                             'every body tried passes at eps 6 from 4 to 32 cells across; at '
-                             'eps 12 a sphere fails at 3 of 5 placements up to 8 cells across '
-                             'and passes from 16; from eps 12.5 the sphere fails more often '
-                             'as the grid is refined (no placement passes at 24 or 32 cells '
-                             'across), and at eps 20 almost every body fails at every '
-                             'resolution. So refining the grid helps up to eps about 12 and '
-                             'not above it; reducing the contrast does. A tighter certificate '
-                             'is an open item of stage 4.')
+        _, hi = (float(v) for v in enclosure(diagonal, c, np, term.field))
+        if not math.isfinite(hi):
+            raise ValueError(f'{term.name} inverse-material spectrum has no finite upper '
+                             f'bound ({hi!r}); a material value is not finite.')
         upper[term.field] = max(upper[term.field], hi)
     from .checks import cfl_axis_sum
     rate = pole_rate(scene, rt)
@@ -266,6 +330,7 @@ def validate(scene, plan):
                          f'dt={plan.dt:.17g}; upper inverse-material eigenvalue bounds '
                          f'are E={upper["E"]:.17g}, H={upper["H"]:.17g}. '
                          f'Lower Run(courant=...) below {bound*math.sqrt(3)/plan.dx:.17g}.')
+    return lifted
 
 
 def pole_rate(scene, rt):
@@ -283,12 +348,15 @@ def pole_rate(scene, rt):
     return resonance + coupling
 
 
-def guard(scene, plan, params, rt):
+def guard(scene, plan, params, rt, certified):
     """Whole-operator certificate for prepared plans lowered under differentiation.
 
     Planning reports concrete failures by name. A transformed leaf has no
     Python truth value; the existing stable=NaN contract makes a failed
     certificate visible in results, without a per-cell exception or warning.
+    ``certified`` is :func:`lift`'s: every block positive definite at its lift, which is the
+    positivity of the operator. The Gershgorin enclosure is read for its upper end only, the
+    time step's bound; its lower end was the certificate before the lift, and a loose one.
     """
     from .._kernel.observe import InteriorEnergy
     from .checks import cfl_axis_sum
@@ -301,7 +369,7 @@ def guard(scene, plan, params, rt):
                   for v in (m.eps if field == 'E' else m.mu_value)]
         upper[field] = 1 / xp.min(xp.stack(values))
     from .._kernel.stencil import StencilTerm
-    valid = rt.array(True)
+    valid = rt.array(True) & certified
     for term in plan.constitutive:
         if isinstance(term, StencilTerm):
             continue                      # certified on the host at plan time; see validate
@@ -309,8 +377,8 @@ def guard(scene, plan, params, rt):
         cross = params['constitutive'][term.name]
         diagonal = xp.broadcast_to(InteriorEnergy._cut(params[key], slice(None),
                                                        term.box)/term.ratio, cross.shape)
-        lo, hi = enclosure(diagonal, cross, xp, term.field)
-        valid = valid & (lo > 0) & xp.isfinite(hi)
+        _, hi = enclosure(diagonal, cross, xp, term.field)
+        valid = valid & xp.isfinite(hi)
         upper[term.field] = xp.maximum(upper[term.field], hi)
     valid = valid & (plan.dt**2 * (cfl_axis_sum(scene, plan.dx)*upper['E']*upper['H']
                                  + pole_rate(scene, rt)/4) < 1)

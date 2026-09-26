@@ -87,10 +87,13 @@ def lower(scene, plan, rt='numpy', device=None):
     grid = plan.grid
     real = 'float64'
     params = dict(build_coefficients(scene, plan, rt))
+    certified = True
     if plan.constitutive:
-        from .constitutive import lower as lower_constitutive
-        params['constitutive'] = lower_constitutive(scene, plan, rt)
+        from .constitutive import lift, lower as lower_constitutive
+        nodes = {}
+        params['constitutive'] = lower_constitutive(scene, plan, rt, nodes=nodes)
         _stencil(scene, plan, params, rt)
+        certified = lift(plan, params, nodes, rt)
     params.update({'bloch': {}, 'axis1d': {}, 'amplitude': None, 'E0': None, 'H0': None,
                    'cpml': _cpml(scene, plan, rt), 'cpml_loss': _cpml_loss(scene, plan, rt),
                    'poles': _poles(scene, plan, rt),
@@ -101,7 +104,7 @@ def lower(scene, plan, rt='numpy', device=None):
     guard = _material_door_guard(scene, rt, guard)
     if plan.constitutive:
         from .constitutive import guard as constitutive_guard
-        coupled_guard = constitutive_guard(scene, plan, params, rt)
+        coupled_guard = constitutive_guard(scene, plan, params, rt, certified)
         guard = coupled_guard if guard is None else guard * coupled_guard
         params['constitutive'] = {k: v * guard for k, v in params['constitutive'].items()}
     params['stable'] = guard

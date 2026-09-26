@@ -1,4 +1,11 @@
-"""Separate tangent-normal error from the production coupling discretization."""
+"""Separate tangent-normal error from the production coupling discretization.
+
+Its logged rows predate the per-block lift (``wavebit/fd/_lower/blocks.py``): the production
+operator it lowered then was the unlifted default rule, and ``guard``'s positivity certificate
+was the Gershgorin lower bound, which this study now takes itself for the candidate operators it
+builds (they have not been through the lift). Rerun, the ``tangent`` variant lowers today's
+lifted operator and the ``exact_both`` variant replaces its diagonal with an unlifted one.
+"""
 import hashlib
 import json
 from pathlib import Path
@@ -152,12 +159,12 @@ def main():
             if variant == 'exact_both':
                 params['be'] = diag
                 params['constitutive'] = dict(original['constitutive'], **{term.name: cross})
-            certificate = float(guard(scene, p, params, host))
+            d = InteriorEnergy._cut(params['be'], slice(None), term.box)/term.ratio
+            bounds = [float(v) for v in enclosure(d, params['constitutive'][term.name], np)]
+            certificate = float(guard(scene, p, params, host, bounds[0] > 0))
             if not np.isfinite(certificate):
                 raise RuntimeError('CandidateOperatorRefused')
             params['stable'] = certificate
-            d = InteriorEnergy._cut(params['be'], slice(None), term.box)/term.ratio
-            bounds = [float(v) for v in enclosure(d, params['constitutive'][term.name], np)]
             res = _results(empty, p, execute(p, params, rt), rt, params)
             sigma = scattered_flux(res, reference, 'TE', CONTOUR, p.grid)[0]/incident
             zero = {'box': SimpleNamespace(fields={c: 0*v for c,v in res['box'].fields.items()},

@@ -115,12 +115,14 @@ def test_every_arm_of_the_fill_contract_refuses(kind, how, words):
     assert words in message and 'fd.Shape contract' in message
 
 
-def test_the_contract_speaks_before_the_energy_certificate():
-    """A turned contract-breaker at eps 12 has cross terms; the certificate used to answer first,
-    calling its real negative ``1/eps`` (-0.375) an inconclusive bound (the C5 review)."""
+def test_the_contract_speaks_before_the_lift():
+    """A turned contract-breaker at eps 12 has cross terms. The Gershgorin certificate that
+    preceded the lift used to answer first, calling its real negative ``1/eps`` (-0.375) an
+    inconclusive bound (the C5 review); the contract is refused by name before any operator
+    is built."""
     message = str(pytest.raises(ValueError, _quiet_plan, _box((fd.Structure(
         _bent('fill', lambda f: 1.5 * f, angle=30.0), 12.0),))).value)
-    assert 'above 1' in message and 'positive-energy' not in message
+    assert 'above 1' in message and 'fd.Shape contract' in message
 
 
 def test_a_correct_body_far_from_the_origin_is_not_refused_by_round_off():

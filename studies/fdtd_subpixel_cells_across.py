@@ -28,7 +28,14 @@ the geometry's answer, not the certificate).
 exact Mie theory, to say whether the static number is the scattering number.
 
 **Instrument 3, the certificate.** Where the energy certificate refuses, by contrast and cells
-across, counted over the placements with ``fd.plan`` alone.
+across, counted over the placements with ``fd.plan`` alone. That certificate was the Gershgorin
+lower bound; the per-block lift (``wavebit/fd/_lower/blocks.py``) replaced it, and ``validate``
+now refuses only an uncertified lift, so a rerun of this instrument records every placement as
+certified. The logged rows are the Gershgorin bound's, at the commit that wrote them.
+
+Instruments 1 and 2 measured the default rule **before the lift**: ``lowered`` reads
+``build``'s diagonal, which the lift patches only later, in ``params.lower``. The door's numbers
+(:data:`wavebit.fd._lower.checks.CELLS_ACROSS_REFUSED`) are that operator's.
 
 Run from the repository root: ``python studies/fdtd_subpixel_cells_across.py [static|bodies|
 dynamic|certificate]``; each row goes to ``studies/results/fdtd_subpixel_cells_across.log`` as

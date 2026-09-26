@@ -1405,9 +1405,9 @@ def check_cells_across(scene, grid):
     on a node and 1.3% centred in a cell. The fill cannot see this: every public body's fill is
     its exact clip at any size. The door reads ``Shape.min_extent`` over the axes the body is
     bounded along and exempts a layer (:func:`_cells_across`); between 4 and 8 cells it warns
-    (:func:`_cells_across_notes`). It runs in ``plan`` ahead of the constitutive energy
-    certificate, which refuses many small high-contrast bodies too, for a reason that is its
-    own slack and with advice that is wrong for them.
+    (:func:`_cells_across_notes`). It is about accuracy and holds at any contrast: the
+    per-block lift that runs after it (``blocks.lift``) would make such a body's operator
+    positive definite, and says nothing about whether its answer is right.
     """
     from .occupancy import smoothed_structures
     mirrors = _mirror_faces(scene)
@@ -1941,8 +1941,9 @@ def _check_fill_contract(scene, occupied, grid=None):
     to ``1 + 2.8e-9`` on a correct sphere, so the tolerance is scaled by the grid's largest
     coordinate over ``dx`` when ``grid`` is given. A NaN passed every comparison; it is
     refused by name. And the guard runs from ``coefficients.build`` as well as from the plan's
-    notes, so that it speaks before the energy certificate, which read a contract-breaking
-    turned box's real negative ``1/eps`` as an inconclusive bound.
+    notes, so that it speaks before the per-block lift reads a fill: the Gershgorin
+    certificate the lift replaced read a contract-breaking turned box's real negative
+    ``1/eps`` as an inconclusive bound.
     """
     tol = _CLIP_ROUNDOFF
     if grid is not None:

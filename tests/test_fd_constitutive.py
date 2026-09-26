@@ -279,11 +279,12 @@ def test_flux_memory_integrates_the_source_current(field, backend):
     np.testing.assert_allclose(to_numpy(result[field]), response, rtol=3e-14, atol=3e-13)
 
 
-def test_uncertified_energy_and_courant_are_refused_and_traced_failure_is_visible():
-    # At this 16^3 placement eps=100 fails the positive Gershgorin lower
-    # certificate; at eps=2.25 courant=.999 fails the coupled curl bound.
-    with pytest.raises(ValueError, match='positive-energy certificate'):
-        quiet(fd.plan, cavity(eps=100.))
+def test_the_lift_plans_eps_100_and_a_traced_failure_is_still_visible():
+    # eps=100 at this 16^3 placement was refused by the Gershgorin lower bound; its
+    # unlifted operator really is indefinite (test_an_unlifted_eps_100_sphere_grows).
+    # The per-block lift plans it. eps=2.25 at courant=.999 still fails the coupled
+    # curl bound, which the lift does not touch.
+    quiet(fd.plan, cavity(eps=100.))
     with pytest.raises(ValueError, match='Constitutive CFL bound'):
         quiet(fd.plan, cavity(mu=None).replace(run=fd.Run(steps=4, courant=.999)))
     plan = quiet(fd.plan, cavity())
@@ -292,10 +293,35 @@ def test_uncertified_energy_and_courant_are_refused_and_traced_failure_is_visibl
     @jax.jit
     def lower(eps):
         return fd.lower(cavity(eps=eps), plan, rt)
-    good, invalid = lower(rt.array(2.25)), lower(rt.array(100.))
-    assert float(good['stable']) == 1.
+    good, lifted, invalid = lower(rt.array(2.25)), lower(rt.array(100.)), lower(rt.array(.1))
+    assert float(good['stable']) == float(lifted['stable']) == 1.
+    np.testing.assert_allclose(to_numpy(lifted['be']),
+                               fd.lower(cavity(eps=100.), plan, runtime('numpy'))['be'],
+                               rtol=1e-12, atol=0)
+    # 1/eps = 10 against mu = 1.5 at courant .5: dt^2 (3/dx^2) (10/1.5) = 1.67 > 1.
     assert np.isnan(float(invalid['stable']))
     assert np.isnan(to_numpy(invalid['be'])).all()
+
+
+@pytest.mark.parametrize('lifted', (True, False))
+def test_an_unlifted_eps_100_sphere_grows(lifted, monkeypatch):
+    # The control the lift is judged by: the same seeded cavity with the lift turned off
+    # (the Gershgorin lower bound refused it before, and nothing else would stop it). Judge
+    # the fields, not the energy: leapfrog conserves the discrete energy exactly, so an
+    # indefinite one stays flat while its positive and negative parts grow together.
+    # Measured (2026-09-27): field norms over 300 steps x1.15 lifted, x1.9e7 unlifted; the
+    # energy read 21498.87 at steps 100 and 300 unlifted, then -3.2e47 at 1000.
+    from wavebit.fd._lower import blocks
+    if not lifted:
+        monkeypatch.setattr(blocks, 'lift', lambda *a, **k: blocks.Lifted(None, True, 0, 0, 0.))
+    size = lambda r: max(np.linalg.norm(r['E']), np.linalg.norm(r['H']))
+    first = solve_cavity('numpy', cavity(eps=100., mu=None, steps=1))
+    last = solve_cavity('numpy', cavity(eps=100., mu=None, steps=300))
+    growth = size(last)/size(first)
+    if lifted:
+        assert growth < 10 and np.ptp(last['energy'])/np.mean(last['energy']) < 3e-13
+    else:
+        assert growth > 1e6
 
 
 def test_disjoint_and_merged_supports_own_flux_once():

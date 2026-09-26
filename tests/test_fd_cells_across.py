@@ -71,18 +71,26 @@ def test_a_layer_is_exempt_at_any_thickness():
     assert _across_warnings(_box(film)) == []
 
 
-def test_the_door_speaks_before_the_certificate():
-    """At eps 20 the certificate fails every placement at every resolution S2b tried; a sphere
-    3 cells across hears this door's reason, not the certificate's."""
+def test_the_door_refuses_a_high_contrast_sphere_three_cells_across():
+    """The door is about accuracy and holds at any contrast: at eps 20 a sphere 3 cells across
+    is refused by name, though the lift would plan it stably."""
     message = _refusal(_box(fd.Sphere(radius=0.075), eps=20.0))
-    assert '3.00 cells across' in message and 'positive-energy' not in message
+    assert '3.00 cells across' in message
 
 
-def test_the_certificate_no_longer_advises_refining_above_its_ceiling():
-    """At eps 20 and 8 cells across the certificate refuses, and says refining does not help."""
-    message = _refusal(_box(fd.Sphere(radius=0.2), eps=20.0))
-    assert 'positive-energy certificate' in message and 'Gershgorin' in message
-    assert 'refining the grid helps up to eps about 12 and not above it' in message
+def test_an_eps_20_sphere_eight_cells_across_plans():
+    """S2b's Gershgorin certificate refused eps 20 at almost every placement and resolution;
+    the per-block lift plans it, moving some of its blocks."""
+    from wavebit.fd._lower import constitutive
+    from wavebit.fd._lower.coefficients import build
+    from wavebit.fd._runtime import runtime
+    scene = _box(fd.Sphere(radius=0.2), eps=20.0)
+    plan = fd.plan(scene)
+    rt, nodes, lifted = runtime('numpy'), {}, {}
+    params = dict(build(scene, plan, rt))
+    params['constitutive'] = constitutive.lower(scene, plan, rt, nodes=nodes)
+    assert constitutive.lift(plan, params, nodes, rt, lifted)
+    assert sum(out.moved for out in lifted.values()) > 0
 
 
 def _hexagon(flat):
