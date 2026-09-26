@@ -940,26 +940,35 @@ fifth occupancy pass (the audit counted four):
 body       structures[0] Sphere(radius=0.25, center=(0.013, -0.007, 0.021)), smoothed
   support  x 6..19  y 5..18  z 6..19  (2197 cells)
   across   10.00 cells at its narrowest (0.5)
-  volume   0.0654498 asked, 0.0654498 in the box; held on Ex Ey Ez to -6.7e-16 of that at worst
+  volume   0.0654498 asked, 0.0654498 in the box; held on Ex Ey Ez to -6.7e-16 of what their voxels cover, at worst
   cut      472 / 468 / 480 voxels (Ex Ey Ez)
   cross    constitutive[E0]: 0.08 MB params + 0.08 MB state
   normals  exact moment (the sphere)
 body       structures[1] Box(size=(1.5, 1.5, 0.2), center=(0.0, 0.0, -0.45)), smoothed
   support  x 0..24  y 0..24  z 0..7  (4032 cells)
   across   a layer (uniform along two axes): no feature size to resolve
-  volume   0.45 asked, 0.288 in the box; held on Ex Ey Ez to +2.7e-15 of that at worst
+  volume   0.45 asked, 0.288 in the box; held on Ex Ey Ez to +2.7e-15 of what their voxels cover, at worst
   outside  36.0% past x-, x+, y-, y+
   cut      1152 / 1152 / 0 voxels (Ex Ey Ez)
   cross    none: its cross coefficients are zero (an unturned box)
 ```
 
-`across` is the number the cells-across door reads; `volume` compares the lowered fill with the
-body's analytic `volume()` (new on `fd.Sphere`, `fd.Box`, `fd.Cylinder`, `fd.Prism`) over every
-lowered component, which is where a support without its cell of margin shows (3.79e-3 on some
-components and not others); `cut` counts fills strictly inside `_CLIP_ROUNDOFF` of 0 and 1;
+`across` is the number the cells-across door reads; `volume` compares each lowered component's
+fill with the body's analytic `volume()` (new on `fd.Sphere`, `fd.Box`, `fd.Cylinder`,
+`fd.Prism`) inside that component's own voxels -- a node component's reach half a cell past a
+minus face and stop half a cell short of a plus one -- which is where a support without its cell
+of margin shows (3.79e-3 on some components and not others); `cut` counts fills strictly inside `_CLIP_ROUNDOFF` of 0 and 1;
 `cross` names the constitutive terms with their bytes (shared where supports merge); `normals`
 is the nearest-surface proxy's worst gap for that structure (the plan's warning keys it by body
-type); and a `mirror` line names each Symmetry plane the scene is reflected in. Two design lines
+type); and a `mirror` line names each Symmetry plane the scene is reflected in. The C5 review
+corrected four of these lines: `volume` was read against the box, so a correct body leaving
+through one face showed 2.9% and one across a mirror 12%; `outside` counted a mirror as a face
+passed (it is measured against the modelled scene now, a wall's image across a mirror
+included); a `discretisation='stencil'` body read "cross none ... (an unturned box)"; and a
+merged term printed its full cost in each block without saying it was shared. A body without
+`volume()` names the faces it passes without a share (it printed `nan%`). Mutants of these --
+held against the box, the cover without its half-cell shift, a mirror counted as a wall, the
+stencil and shared lines dropped -- each fail a case. Two design lines
 were left out on the audit's evidence: "media per cut cell" can only print 2 in a planned scene
 (doors 5 and 6), and a normal trace over cut voxels reads 1 by an invariant already gated.
 

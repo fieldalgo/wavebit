@@ -106,23 +106,31 @@ class Report:
             held = ', '.join(f'{name} {v:.6g}' for name, v in row.held.items())
             out.append(f'  volume   held {held} (the body answers no volume())')
         else:
-            worst = max((v / row.inside - 1.0 for v in row.held.values()), key=abs,
-                        default=0.0) if row.inside else 0.0
+            # Each component against the body's volume inside its own voxels: a node
+            # component's reach half a cell past a minus face and stops half a cell short of a
+            # plus one, so against the box a correct body leaving through one face read 2.9%
+            # off, and one across a mirror 12% (the C5 review).
+            worst = max((row.held[n] / row.cover[n] - 1.0 for n in row.held if row.cover[n]),
+                        key=abs, default=0.0)
             out.append(f'  volume   {row.asked:.6g} asked, {row.inside:.6g} in the box; held on '
-                       f'{names} to {worst:+.1e} of that at worst')
+                       f'{names} to {worst:+.1e} of what their voxels cover, at worst')
         if row.outside:
-            share = 1.0 - row.inside / row.asked if row.asked else float('nan')
-            out.append(f'  outside  {100 * share:.1f}% past {", ".join(row.outside)}')
+            share = '' if row.share is None else f'{100 * row.share:.1f}% '
+            out.append(f'  outside  {share}past {", ".join(row.outside)}')
         out.append(f'  cut      {" / ".join(str(v) for v in row.cut.values())} voxels '
                    f'({names})')
         sizes = dict((name, (p, s)) for name, p, s in self.term_bytes)
-        if row.terms:
-            for name in row.terms:
-                p, s = sizes.get(name, (None, None))
-                cost = ('bytes unknown' if p is None else
-                        f'{p / 1e6:.2f} MB params + {s / 1e6:.2f} MB state')
-                out.append(f'  cross    {name}: {cost}')
-        else:
+        for name in row.terms:
+            p, s = sizes.get(name, (None, None))
+            cost = ('bytes unknown' if p is None else
+                    f'{p / 1e6:.2f} MB params + {s / 1e6:.2f} MB state')
+            others = row.shared.get(name, ())
+            shared = ('' if not others else ', shared with ' + ', '.join(
+                f'structures[{j}]' for j in others))
+            out.append(f'  cross    {name}: {cost}{shared}')
+        for name in row.stencil:
+            out.append(f'  cross    {name}: the prepared stencil operator (its material row)')
+        if row.normals == 'none' and not row.stencil:
             out.append('  cross    none: its cross coefficients are zero (an unturned box)')
         if row.normals == 'exact':
             out.append('  normals  exact moment (the sphere)')

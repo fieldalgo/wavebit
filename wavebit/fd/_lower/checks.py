@@ -1468,14 +1468,18 @@ def _cells_across_notes(scene, plan):
 #: One smoothed structure as ``fd.check`` prints it (stage 4, C5). Lengths in the scene's unit.
 #: ``across`` is ``(cells, extent)`` or ``None`` for a layer; ``asked`` the analytic volume or
 #: ``None`` for a body that does not answer ``volume()``; ``inside`` the part of it the box
-#: holds; ``outside`` the faces its declared extent passes; ``held`` and ``cut`` per lowered
-#: component (``'Ex'`` ...), the fill summed times ``dx^3`` and the voxels it cuts; ``terms``
-#: the constitutive terms its cross coefficients live in (shared when supports merge);
-#: ``normals`` ``'exact'`` (the sphere's moment), ``'none'`` (no cross term) or the measured
-#: proxy gap; ``mirrors`` the ``(face, plane)`` pairs of the Symmetry faces.
+#: holds; ``outside`` the ends of the modelled scene its declared extent passes (a wall, or a
+#: wall's image across a mirror -- a mirror itself is no end) and ``share`` the part past them;
+#: ``held``, ``cover`` and ``cut`` per lowered component (``'Ex'`` ...): the fill summed times
+#: ``dx^3``, the body's volume inside that component's own voxels (a node component's reach
+#: half a cell past a minus face and stop half a cell short of a plus one), and the voxels it
+#: cuts; ``terms`` the constitutive terms its cross coefficients live in and ``shared`` the
+#: other structures in each; ``stencil`` the prepared stencil terms it is in; ``normals``
+#: ``'exact'`` (the sphere's moment), ``'none'`` (no cross term) or the measured proxy gap;
+#: ``mirrors`` the ``(face, plane)`` pairs of the Symmetry faces.
 BodyRow = collections.namedtuple(
-    'BodyRow', 'index describe support across asked inside outside held cut terms normals '
-               'mirrors')
+    'BodyRow', 'index describe support across asked inside outside share held cover cut '
+               'terms shared stencil normals mirrors')
 
 
 def _body_rows(scene, plan, occupied, proxy):
@@ -1485,31 +1489,38 @@ def _body_rows(scene, plan, occupied, proxy):
     what keeps the block from costing a fifth occupancy pass (the C5 audit counted four).
     """
     from ..boundaries import Symmetry
+    from .._kernel.grid import OFFSETS
     from .._kernel.stencil import StencilTerm
     from .._shapes import Sphere as KernelSphere
     from .constitutive import cross_free
     from .occupancy import smoothed_structures
     grid = plan.grid
+    tol = 1e-9 * grid.dx
     mirrors = tuple((axis + side, mirror_plane(grid, a, side))
                     for a, axis in enumerate('xyz') for side in '-+'
                     if isinstance(scene.boundaries.face(axis + side), Symmetry))
+    smoothed = smoothed_structures(scene)
+    crossed = {i: s.shape.support(grid) for i, s, b in smoothed if not cross_free(b)}
     rows = []
-    for index, structure, body in smoothed_structures(scene):
+    for index, structure, body in smoothed:
         shape = structure.shape
         support = shape.support(grid)
         volume = getattr(shape, 'volume', None)
         asked = volume() if callable(volume) else None
-        kept, outside = 1.0, []
-        for a, axis in enumerate('xyz'):
-            span = _declared_span(shape, a)
-            if span is None:
-                continue
-            lo, hi = span
-            tol = 1e-9 * grid.dx
-            outside += ([axis + '-'] if lo < grid.low[a] - tol else []) + \
-                ([axis + '+'] if hi > grid.high[a] + tol else [])
-            kept *= max(min(hi, grid.high[a]) - max(lo, grid.low[a]), 0.0) / (hi - lo)
-        held, cut = {}, {}
+        spans = {a: _declared_span(shape, a) for a in range(3)}
+        spans = {a: s for a, s in spans.items() if s is not None}
+        in_box, kept, outside = 1.0, 1.0, []
+        for a, (lo, hi) in spans.items():
+            axis = 'xyz'[a]
+            in_box *= max(min(hi, grid.high[a]) - max(lo, grid.low[a]), 0.0) / (hi - lo)
+            cut_off = 0.0
+            for side, past, end in _modelled_ends(scene, grid, a, lo, hi):
+                if past > tol:
+                    cut_off += past
+                    outside.append(axis + end + ('' if end == side else
+                                                 f' (mirrored in {axis}{side})'))
+            kept *= max(hi - lo - cut_off, 0.0) / (hi - lo)
+        held, cover, cut = {}, {}, {}
         for field in ('E', 'H'):
             for c, (fill, _) in enumerate(occupied.get(index, {}).get(field, ())):
                 fill = np.asarray(fill, dtype=float)
@@ -1517,18 +1528,31 @@ def _body_rows(scene, plan, occupied, proxy):
                 held[name] = float(fill.sum()) * grid.dx ** 3
                 cut[name] = int(np.count_nonzero((fill > _CLIP_ROUNDOFF)
                                                  & (fill < 1.0 - _CLIP_ROUNDOFF)))
+                if asked is not None:
+                    share = 1.0
+                    for a, (lo, hi) in spans.items():
+                        shift = (0.5 * OFFSETS[field][c][a] - 0.5) * grid.dx
+                        reach = (grid.low[a] + shift, grid.high[a] + shift)
+                        share *= max(min(hi, reach[1]) - max(lo, reach[0]), 0.0) / (hi - lo)
+                    cover[name] = asked * share
+        stencil = tuple(t.name for t in plan.constitutive if isinstance(t, StencilTerm)
+                        and _intersects(tuple(reversed(t.box)), support))
         if cross_free(body):
             terms, normals = (), 'none'
         else:
             terms = tuple(t.name for t in plan.constitutive if not isinstance(t, StencilTerm)
                           and _intersects(tuple(reversed(t.box)), support))
             normals = 'exact' if isinstance(body, KernelSphere) else proxy.get(index, 0.0)
+        shared = {name: tuple(j for j, box in crossed.items() if j != index and any(
+            t.name == name and _intersects(tuple(reversed(t.box)), box)
+            for t in plan.constitutive)) for name in terms}
         rows.append(BodyRow(index=index, describe=shape.describe(), support=support,
                             across=_cells_across(shape, grid, _mirror_faces(scene)),
-                            asked=asked,
-                            inside=None if asked is None else asked * kept,
-                            outside=tuple(outside), held=held, cut=cut, terms=terms,
-                            normals=normals, mirrors=mirrors))
+                            asked=asked, inside=None if asked is None else asked * in_box,
+                            outside=tuple(outside),
+                            share=None if asked is None else 1.0 - kept,
+                            held=held, cover=cover, cut=cut, terms=terms, shared=shared,
+                            stencil=stencil, normals=normals, mirrors=mirrors))
     return rows
 
 

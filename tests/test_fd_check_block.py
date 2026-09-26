@@ -172,3 +172,65 @@ def test_a_jitted_run_of_a_body_with_cross_terms_builds_its_report():
             return jnp.sum(jnp.asarray(fd.run(scene, 'jax').final.E) ** 2)
     eager = float(energy(1.0))
     assert float(jax.jit(energy)(1.0)) == pytest.approx(eager, rel=1e-12)
+
+
+def _cover_holds(row):
+    """Every lowered component holds the body's volume inside its own voxels, to round-off."""
+    for name, value in row.held.items():
+        assert abs(value / row.cover[name] - 1) < 1e-12, (name, value, row.cover[name])
+
+
+@pytest.mark.parametrize('cx', (-1.0, 1.0))
+def test_a_body_leaving_through_one_face_is_held_as_its_voxels_cover_it(cx):
+    """A node component's voxels reach half a cell past a minus face and stop half a cell short
+    of a plus one; against the box the block read +-2.9% on a correct lowering (the C5
+    review), which looked like a missing support margin."""
+    report = _report(_box((fd.Box(size=(3.0, 1.0, 0.5), center=(cx, 0.0, 0.0)),),
+                          size=2.4, dx=0.1))
+    row, = report.bodies
+    _cover_holds(row)
+    assert row.outside == ('x-',) if cx < 0 else ('x+',)
+    line = next(l for l in str(report).splitlines() if l.startswith('  volume'))
+    assert abs(float(line.split(' to ')[1].split(' of what')[0])) < 1e-12, line
+
+
+@pytest.mark.parametrize('side', ('-', '+'))
+def test_a_box_across_a_mirror_is_held_whole_and_nothing_is_outside(side):
+    """At a mirror the scene is the body and its image: no end is passed, and every component
+    holds what its voxels cover (the block read 12% off and '50.0% past x-')."""
+    mirror = fd.Symmetry(parity=1)
+    x = (mirror, fd.PEC()) if side == '-' else (fd.PEC(), mirror)
+    plane = 0.0 if side == '-' else -0.025
+    scene = fd.Scene(domain=fd.Domain(size=(0.6, 1.2, 1.2),
+                                      center=(0.3 if side == '-' else -0.3, 0.0, 0.0)),
+                     boundaries=fd.Boundaries(x=x, y=fd.PEC(), z=fd.PEC()),
+                     resolution=fd.Resolution(dx=DX), run=fd.Run(steps=4),
+                     structures=(fd.Structure(fd.Box(size=(0.4, 0.3, 0.3),
+                                                     center=(plane, 0.0, 0.0)), 2.25),))
+    row, = _report(scene).bodies
+    _cover_holds(row)
+    assert row.outside == ()
+
+
+def test_a_stencil_body_and_a_shared_term_are_named_as_they_are():
+    """A stencil sphere's cross terms are the prepared operator, not 'none (an unturned box)';
+    two bodies in one merged term each say it is shared."""
+    ball = fd.Structure(fd.Sphere(radius=0.15), 2.25, discretisation='stencil')
+    text = str(_report(_box(()).replace(structures=(ball,))))
+    assert 'the prepared stencil operator' in text and 'unturned box' not in text
+    pair = _report(_box((fd.Box(size=(0.3,) * 3, angle=30, center=(-0.27, 0, 0)),
+                         fd.Box(size=(0.3,) * 3, angle=30, center=(0.27, 0, 0)))))
+    first, second = pair.bodies
+    assert first.terms == second.terms and first.shared[first.terms[0]] == (1,)
+    assert 'shared with structures[1]' in str(pair) and 'shared with structures[0]' in str(pair)
+
+
+class _NoVolume(fd.Box):
+    """A body that declares its extent but answers no ``volume()``."""
+
+    volume = None
+
+
+def test_a_body_without_a_volume_names_the_faces_it_passes_without_a_share():
+    text = str(_report(_box((_NoVolume(size=(3.0, 3.0, 0.3)),), size=2.4, dx=0.1)))
+    assert '  outside  past x-, x+, y-, y+' in text and 'nan' not in text
