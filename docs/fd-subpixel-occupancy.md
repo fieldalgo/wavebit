@@ -100,7 +100,10 @@ extrema therefore bounds both staggered coefficient families without assuming th
 their minima belong to the same phase or position. It is conservative, not the exact
 instability threshold of this finite sphere. Planning refuses a time step at or above
 that bound, names `Run(courant=...)`, and never changes `dt`. A tighter scene-specific
-bound remains separate work. Scenes without smoothed bodies retain their previous bound.
+bound remains separate work. Since C5 (46a1c33) every scene, snapped or smoothed, uses
+`sqrt(min eps * min mu)`: a snapped magnetic pair ran to NaN under the per-phase bound. A scene
+where one component of one phase holds both minima -- every scene with `mu = 1`, or with a
+vacuum phase and `eps, mu >= 1` elsewhere -- keeps its old bound to the bit.
 
 ## Correcting the S1 instrument
 

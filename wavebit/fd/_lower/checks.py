@@ -1524,7 +1524,11 @@ def cfl_bound(scene, plan):
     two media meet -- snapped or smoothed -- an E point can hold one phase's ``eps`` while the
     H points around it hold another's ``mu``, and the step is bounded by the norm of
     ``eps^-1/2 C^T mu^-1 C eps^-1/2``, which is at most ``max(1/eps) max(1/mu)`` times the curl's
-    -- the bound below, rigorous for any arrangement (a smoothed mix stays between its phases).
+    -- the bound below, rigorous for any arrangement of **diagonal** coefficients (a smoothed
+    mix stays between its phases). A smoothed body's constitutive cross coefficients can push
+    the inverse-material operator past ``max(1/eps)`` -- the C5 review measured 1.054 against
+    1.0 for an ``eps = 12`` sphere -- and that case is ``constitutive.validate``'s and
+    ``constitutive.guard``'s, whose Gershgorin enclosure tightens this bound further.
     The phase-by-phase index is not: ``Material(eps=4, mu=0.25)`` inside
     ``Material(eps=0.25, mu=4)`` has every phase at ``n = 1``, and as a snapped ``fd.Region``
     in that background at ``dx = 0.05`` it was measured, found in stage 4's C5 audit, to plan at
@@ -1600,17 +1604,30 @@ def check_stability(scene, plan):
     eps_min = min(concrete(e) for m in phases for e in m.eps)
     mu_min = min(concrete(m) for p in phases for m in p.mu_value)
     if math.sqrt(eps_min * mu_min) < own * (1 - 1e-12):
-        worst += (f' E and H sit at different points of the cell, so where two media meet an '
-                  f'E point can hold one phase\'s eps and its H neighbours another\'s mu: the '
-                  f'bound uses sqrt(min(eps) * min(mu)) = {math.sqrt(eps_min * mu_min):g} over '
-                  f'every phase, below each phase\'s own index ({own:g}). It is rigorous and '
-                  f'conservative, and it does not change dt.')
+        worst += (f' E and H sit at different points of the cell, so an E component is '
+                  f'updated with the mu of the H components beside it, which can belong to '
+                  f'another phase or to another axis of the same one: the bound pairs the '
+                  f'smallest eps with the smallest mu, sqrt(min(eps) * min(mu)) = '
+                  f'{math.sqrt(eps_min * mu_min):g}, below each phase\'s own index '
+                  f'({own:g}). It is rigorous for the diagonal coefficients and conservative, '
+                  f'and it does not change dt.')
     raise ValueError(
         f'dt = {plan.dt:g} is at or past the stability bound {bound:g} of this scene. The '
         f'vacuum condition dt < n_min dx / sqrt(3) is tightened by every pole to '
         f'dt < 1/sqrt(1/dt_vac^2 + rate/4) with rate = max(w0^2) + max(sum strength/eps), '
         f'because the coupled E-P system oscillates faster than the grid does.{worst} Lower '
-        f'Run(courant=...) to at most {bound / (plan.dx / math.sqrt(3.0)):.3f}, or refine dx.')
+        f'Run(courant=...) to {_courant_below(bound, plan.dx)} or less, or refine dx.')
+
+
+def _courant_below(bound, dx):
+    """A courant under ``bound`` to three places, which itself plans (the C5 review).
+
+    Rounded to nearest, the limit printed as "at most 0.500" was the refused value itself when
+    the bound fell on it, as it does for every snapped magnetic body with
+    ``sqrt(min eps * min mu) = 0.5`` at the default courant.
+    """
+    limit = bound / (dx / math.sqrt(3.0))
+    return f'{math.floor(limit * (1.0 - 1e-9) * 1000.0) / 1000.0:.3f}'
 
 
 def _all_poles(scene):

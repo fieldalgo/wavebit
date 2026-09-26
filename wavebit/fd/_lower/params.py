@@ -98,6 +98,7 @@ def lower(scene, plan, rt='numpy', device=None):
                    'stable': None})
     guard = _stability_guard(scene, plan, rt)
     guard = _axis1d_guard(scene, rt, guard)
+    guard = _material_door_guard(scene, rt, guard)
     if plan.constitutive:
         from .constitutive import guard as constitutive_guard
         coupled_guard = constitutive_guard(scene, plan, params, rt)
@@ -335,6 +336,50 @@ def _axis1d_guard(scene, rt, guard):
     return guard
 
 
+def _material_door_guard(scene, rt, guard):
+    """``guard`` times ``where(every traced material value passes its door, 1, nan)``.
+
+    The concrete constructors refuse ``eps`` or ``mu`` not positive, ``sigma`` negative and
+    every pole parameter out of range (``materials._positive``, ``_pole_scalar``); a traced
+    value passes them unread. So each traced one is read here, on the backend, and a scene the
+    concrete path would have refused runs to ``nan`` -- built only when some value is traced,
+    so a concrete scene keeps ``stable = None`` and its ``be`` to the bit. Found in the C5
+    review: a traced ``sigma = -200`` built no guard at all (the CFL bound does not read
+    ``sigma``) and grew to 4.6e147 in 200 steps reading stable; a traced Lorentz
+    ``strength = -4000`` read stable and grew to 3.4e64 in 60.
+    """
+    from ..materials import concrete
+    zero = rt.array(0.0, 'float64')
+    checks_ = []
+    background = as_material(getattr(scene, 'background', None), 'Scene(background=)')
+    for material in [background] + [s.material for s in (getattr(scene, 'structures', ())
+                                                          or ())]:
+        leaves = [(v, True) for v in material.eps] + [(v, True) for v in material.mu_value]
+        leaves += [(v, False) for v in getattr(material, 'sigma', ()) or ()]
+        for pole in material.poles:
+            leaves += [(getattr(pole, name), strict)
+                       for name, strict in _POLE_DOORS.get(type(pole).__name__, ())]
+        for value, strict in leaves:
+            if concrete(value) is not None:
+                continue
+            v = rt.array(value, 'float64')
+            checks_.append(v > zero if strict else v >= zero)
+    if not checks_:
+        return guard
+    ok = checks_[0]
+    for c in checks_[1:]:
+        ok = rt.xp.logical_and(ok, c)
+    ok = rt.xp.where(ok, rt.array(1.0, 'float64'), rt.array(float('nan'), 'float64'))
+    return ok if guard is None else guard * ok
+
+
+#: The pole parameters each constructor checks, and whether strictly positive
+#: (``materials._pole_scalar``): what :func:`_material_door_guard` reads when one is traced.
+_POLE_DOORS = {'Drude': (('omega_p', True), ('gamma', False)),
+               'Lorentz': (('omega_0', True), ('gamma', False), ('strength', False)),
+               'Debye': (('tau', True), ('delta_eps', False))}
+
+
 def _traced_guard(scene, plan, rt):
     """The same bound, computed on the backend, as ``where(dt < bound, 1, nan)``.
 
@@ -343,13 +388,18 @@ def _traced_guard(scene, plan, rt):
     traced ``eps = 4, mu = 0.25`` pair at courant 0.9 read stable and ran to NaN. A phase whose
     traced ``eps`` or ``mu`` is not positive reads unstable too -- the concrete path refuses
     one at ``Material``, and a traced ``eps = -2, mu = -1`` pair had multiplied back to a
-    positive index and read stable while the field reached 1.5e290 in 20 steps. The pole loop
-    names a dispersive phase's own permittivity ``own``: it wrote into ``eps_min`` before, and
-    every phase listed ahead of the last dispersive one fell out of the pairing.
+    positive index and read stable (the C5 audit measured the field at 1.5e290 in 20 steps on
+    a smoothed ``fd.Box`` of it, whose mixed voxels take ``eps`` through zero). The pole terms
+    start at zero and take the maximum, as ``cfl_bound``'s do, so that the twin reads the same
+    bound; a traced negative strength could otherwise loosen it (the C5 review), but
+    :func:`_material_door_guard` refuses that value first, so the clamp is not reached today. The pole loop names a phase's own permittivity ``own`` so that it
+    cannot overwrite the scene-wide ``eps_min`` this pairing introduced; the mutant that reuses
+    the name drops every earlier phase from the pairing.
     """
     background = as_material(getattr(scene, 'background', None), 'Scene(background=)')
     materials = [background] + [s.material for s in (getattr(scene, 'structures', ()) or ())]
-    eps_min, mu_min, resonance, coupling = None, None, None, None
+    zero = rt.array(0.0, 'float64')
+    eps_min, mu_min, resonance, coupling = None, None, zero, zero
     for material in materials:
         for c in range(3):
             e = rt.array(material.eps[c], 'float64')
@@ -361,22 +411,18 @@ def _traced_guard(scene, plan, rt):
             w0_squared, strength = pole.rate()
             w0_squared = rt.array(w0_squared, 'float64')
             strength = rt.array(strength, 'float64')
-            resonance = w0_squared if resonance is None else rt.xp.maximum(resonance,
-                                                                          w0_squared)
+            resonance = rt.xp.maximum(resonance, w0_squared)
             total = strength if total is None else total + strength
         if total is not None:
             own = None                                     # this phase's own eps, for its poles
             for c in range(3):
                 e = rt.array(material.eps[c], 'float64')
                 own = e if own is None else rt.xp.minimum(own, e)
-            ratio = total / own
-            coupling = ratio if coupling is None else rt.xp.maximum(coupling, ratio)
-    zero = rt.array(0.0, 'float64')
+            coupling = rt.xp.maximum(coupling, total / own)
     one = rt.array(1.0, 'float64')
     positive = rt.xp.logical_and(eps_min > zero, mu_min > zero)
     n_min = rt.xp.sqrt(rt.xp.where(positive, eps_min * mu_min, one))
-    rate = (resonance if resonance is not None else zero) \
-        + (coupling if coupling is not None else zero)
+    rate = resonance + coupling
     axes = checks.cfl_axis_sum(scene, plan.dx)
     if axes == 3.0 / plan.dx ** 2:
         vacuum = n_min * (plan.dx / math.sqrt(3.0))

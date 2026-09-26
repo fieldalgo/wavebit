@@ -174,8 +174,15 @@ def test_a_snapped_magnetic_pair_is_bounded_by_every_phase_pairing():
     the vacuum courant here, conservative, and ``dt`` is never recomputed. A scene of
     ``eps, mu >= 1`` is untouched, to the bit.
 
-    Mutant, measured 2026-09-26: the pairing applied only to smoothed scenes (as before) fails
-    this case.
+    The pairing crosses axes as well as phases: a single background of
+    ``eps = (0.25, 1, 1), mu = (1, 0.25, 0.25)`` has every component at ``n = 1`` or 0.5 on its
+    own, and E along x beside H along y reads 0.25 -- it diverges at courant 0.3 (2.8e63 in 300
+    steps, the C5 review; the exact Yee limit is 0.2887), which a per-component pairing would
+    accept. And the refusal's suggested courant plans: it printed "at most 0.500" for a bound
+    of exactly 0.5, the refused value itself.
+
+    Mutants, measured 2026-09-26: the pairing applied only to smoothed scenes (as before), and
+    the pairing taken per component, each fail this case.
     """
     def scene(structures, courant, background=None):
         return _grid_scene(structures).replace(run=fd.Run(steps=4, courant=courant),
@@ -194,26 +201,35 @@ def test_a_snapped_magnetic_pair_is_bounded_by_every_phase_pairing():
                                    fd.Material(eps=1.0, mu=2.0))), 0.5)
     plan = _quiet(fd.plan, ordinary)
     assert cfl_bound(ordinary, plan)[0] == plan.dx / np.sqrt(3)
+    crossed = fd.Material(eps=(0.25, 1.0, 1.0), mu=(1.0, 0.25, 0.25))
+    with pytest.raises(ValueError, match=r'Run\(courant=\.\.\.\) to 0\.249 or less') as caught:
+        _quiet(fd.plan, scene((), 0.3, crossed))
+    assert 'another axis of the same one' in str(caught.value)
+    plan = _quiet(fd.plan, scene((), 0.249, crossed))
+    assert cfl_bound(scene((), 0.249, crossed), plan)[0] == 0.25 * plan.dx / np.sqrt(3)
 
 
 def test_the_traced_guard_bounds_every_pairing_and_a_nonpositive_phase():
-    """The traced twin of the bound: ``stable`` is NaN wherever the concrete path would refuse.
+    """The traced twins: ``stable`` is NaN where the concrete bound, or a material door, refuses.
 
     With a traced material the bound cannot be read at plan time, so ``fd.lower`` computes it
     on the backend (``params._traced_guard``) and a violated one poisons ``stable``. It took
     each phase's own index, and the reciprocal pair traced at courant 0.9 read stable and ran
     to NaN after 2000 steps; and a traced ``eps = -2, mu = -1`` phase multiplied back to a
-    positive index and read stable while the field reached 1.5e290 in 20 steps. Now the guard
-    pairs ``min eps`` with ``min mu`` and reads a non-positive phase as unstable.
+    positive index and read stable. Now the guard pairs ``min eps`` with ``min mu``, across
+    axes as well (the crossed background), and reads a non-positive phase as unstable. The
+    reciprocal pair with a weak Lorentz pole on the traced phase pins the pole loop's own name
+    for its phase's permittivity: reusing ``eps_min`` there drops the earlier phases.
 
-    The same audit found the guard's pole loop reusing the name ``eps_min`` for a dispersive
-    phase's own permittivity, so every phase listed before the last dispersive one dropped out
-    of the pairing: the reciprocal pair with a weak Lorentz pole on the traced phase read
-    stable at courant 0.9.
+    Every other traced material value the concrete constructors check is read too
+    (``params._material_door_guard``), found by the C5 review: a traced ``sigma = -200`` built
+    no guard at all and grew to 4.6e147 in 200 steps reading stable; a traced negative Lorentz
+    ``strength`` read stable, and a traced negative ``gamma`` built no guard.
 
     Mutants, measured 2026-09-26: the guard taking each phase's own index, the guard without
-    its positivity condition, and the pole loop writing into ``eps_min`` again, each fail this
-    case.
+    its positivity condition, the pole loop writing into ``eps_min``, and the door guard
+    removed, each fail this case. (The pole terms starting from the first ratio instead of zero
+    survive: the door guard refuses the negative strength that would reach it first.)
     """
     torch = pytest.importorskip('torch')
 
@@ -235,6 +251,19 @@ def test_the_traced_guard_bounds_every_pairing_and_a_nonpositive_phase():
     dispersive = fd.Dispersive(eps_inf=traced(4.0), mu=0.25, poles=(weak,))
     assert stable(dispersive, 0.2, reciprocal) == 1.0
     assert np.isnan(stable(dispersive, 0.9, reciprocal))
+    crossed = fd.Material(eps=(traced(0.25), 1.0, 1.0), mu=(1.0, traced(0.25), 0.25))
+    assert stable(crossed, 0.2) == 1.0
+    assert np.isnan(stable(crossed, 0.3))
+    assert np.isnan(stable(fd.Conductor(eps=1.0, sigma=traced(-200.0)), 0.5))
+    assert stable(fd.Conductor(eps=1.0, sigma=traced(0.2)), 0.5) == 1.0
+    loose = fd.Dispersive(eps_inf=0.25, poles=(fd.Lorentz(omega_0=1.0,
+                                                         strength=traced(-4000.0)),))
+    assert np.isnan(stable(loose, 0.4))
+    damped = fd.Dispersive(eps_inf=2.25, poles=(fd.Lorentz(omega_0=10.0, gamma=traced(-5.0),
+                                                           strength=50.0),))
+    assert np.isnan(stable(damped, 0.5))
+    assert stable(fd.Dispersive(eps_inf=2.25, poles=(fd.Lorentz(
+        omega_0=10.0, gamma=traced(5.0), strength=50.0),)), 0.5) == 1.0
 
 
 @pytest.mark.parametrize('value', (float('inf'), float('-inf'), float('nan')))
