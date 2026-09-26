@@ -165,7 +165,9 @@ normal to construct the material–field products; `linear` chooses the projecto
 construction, not the incident polarization. An explicit `factorization='li'`
 supports tensor rasters and axis-aligned rectangle paintings inside an
 axis-aligned rectangular cell, with `li_nesting='fixed'` only. Both rules retain all nine components of epsilon
-and mu. A z coupling selects the first-order solver automatically. See
+and mu. `factorization='laurent'` is refused on any tensor material, uniform tensors included:
+no tensor Laurent build is written, and a uniform layer is the same under every rule, so leave
+the keyword unset there. A z coupling selects the first-order solver automatically. See
 [full tensor patterns](../full-tensor-patterns.md) for examples and validation.
 See [tensor Li construction and usage](../tensor-li-factorization.md).
 For tensor shapes under NVF, `fourier_coefficients='sampled'` also supports periodic painting

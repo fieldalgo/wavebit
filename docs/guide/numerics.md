@@ -25,6 +25,7 @@ the structure and material:
 | --- | --- |
 | `'li'` | Successive Li rules along lattice v then u (the default `li_nesting`; see below); requires alignment with Cartesian y and x |
 | `'nvf'` | normal vector field -- factorizes along the material interfaces. Made for curved and tilted boundaries, where a staircase converges slowly |
+| `'laurent'` | the direct rule for every product -- `[[eps]]` for both in-plane field components, its inverse for `E_z`. Opt-in and never a default: it converges slowly wherever a field component jumps with the permittivity, and is here to compare with solvers that use it, such as fmmax's `Formulation.FFT` |
 
 **`fourier_coefficients` and `factorization` resolve per modeling path**, and reading them back
 reports the *effective* value rather than what you asked.
@@ -44,7 +45,10 @@ the supplied piecewise-constant pixels, not a reconstructed smooth boundary.
 Explicit scalar or tensor shape
 `factorization='li'` supports axis-aligned rectangles wholly inside a positive
 axis-aligned rectangular cell. General shapes use NVF. Naming a value the path does not implement raises `NotImplementedError`
-rather than quietly running the one it does. All four pairings work on a scalar
+rather than quietly running the one it does.
+`factorization='laurent'` is built on scalar rasters (either series), on any scalar shape
+including painted overlaps, and on skewed cells, where Li is refused -- the rule names no axis.
+Tensor materials refuse it by name. All four pairings work on a scalar
 raster in an axis-aligned rectangular cell. Tensor rasters support sampled or
 integrated coefficients under Li; NVF uses sampled coefficients and a linear
 projector. Tensor inputs retain NVF as the default. See
@@ -70,8 +74,8 @@ accuracy in every cell measured, along with exact mirror symmetry. See
 
 **`li_nesting` belongs to the other rule: it is read wherever scalar Li's rules are built** -- on a
 raster under `factorization='li'`, and on axis-aligned rectangles under it -- and refused where
-nothing reads it: any value under `'nvf'`, and `'symmetric'` on tensor materials, whose Li build
-is the fixed nesting only. A crossed grating needs Li's rule along both axes, and two
+nothing reads it: any value under `'nvf'` or `'laurent'`, and `'symmetric'` on tensor materials,
+whose Li build is the fixed nesting only. A crossed grating needs Li's rule along both axes, and two
 one-dimensional rules can only be applied one inside the other. `'fixed'`, the default, puts
 `v` inside `u` for both in-plane components -- what every `'li'` result so far was computed
 with, raster, rectangle and tensor alike. `'symmetric'` puts each component's own inverse-rule
@@ -86,6 +90,18 @@ RETICOLO's own run of it to 4.2e-11 (`tests/references/test_reticolo_li_nesting.
 default stays `'fixed'` so that no earlier number moves. The measurements for choosing, and
 what flipping the default would move, are in
 [`../factorization-terms.md`](../factorization-terms.md) §6.
+
+**`'laurent'` is for comparison, not for accuracy.** It reproduces a solver that closes every
+product with the direct rule: against fmmax's `Formulation.FFT` it agrees to 1e-12 on a
+dielectric rod and a hexagonal cross, once fmmax's sampled coefficients are extrapolated to the
+exact ones (`tests/references/test_fmmax_laurent_golden.py`). What it costs is convergence. On a
+one-dimensional TM grating of eps 12.25 its error halves per doubling of the orders -- 9.0e-4
+at order 80, where Li is at 4.9e-7 -- and on a 350 x 245 nm rod it is still 4.1e-3 off in p at
+order 14, where Li is at 2.7e-5. TE on a one-dimensional grating is Li's answer to round-off,
+because both rules build the same matrix there. It builds no normal field and nests no rules,
+so `raster_normal_method`, `nvf_projector`, `shape_nvf_grid_size` and `li_nesting` are refused
+beside it, and a frozen geometry taken under another rule is refused under it. The measurements
+and the choice of slots are in [`../factorization-terms.md`](../factorization-terms.md) §9.
 
 Both connecting algorithms share the same eigenmodes and boundary conventions and agree to
 ~1e-14. SMM costs ~1.1-1.4x, cascades layer responses that can be reused independently, and is

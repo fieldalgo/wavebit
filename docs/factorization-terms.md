@@ -2,7 +2,8 @@
 
 Written: 2026-08-12. Structure claims below are measured, not asserted; the check is quoted in
 §3 and reproduces in seconds. §6 rewritten 2026-09-25, when the raster Li builders were
-rebuilt from Li's paper and gained the second nesting.
+rebuilt from Li's paper and gained the second nesting. §9 added 2026-09-27, when Laurent's rule
+became a value of `factorization=`.
 
 Targets:
 - `wavebit/_core/parametric.py::conv_matrix_2d` — the builder the collision used to be in; it
@@ -15,6 +16,9 @@ Targets:
   the two builders share
 - `wavebit/_core/factorization.py::_li_slot` and `wavebit/_core/enums.py::Nesting` — the two
   nestings of Li's rules, and the keyword that chooses between them (§6)
+- `wavebit/_core/factorization.py::laurent_conv_matrices` and
+  `wavebit/_core/parametric.py::laurent_from_coeffs` — Laurent's rule as a factorization
+  option, on the raster and on shapes (§9)
 
 ---
 
@@ -37,6 +41,10 @@ Two things are worth knowing before editing any of this:
 And one thing about the rules themselves: in 2D, Li's rules are applied one axis inside the
 other, and there are two ways to nest them. Only Li's own treats x and y alike. The one
 this path always built, and still builds by default, does not (§6).
+
+Since 2026-09-27 the rule word is also a *value*: `factorization='laurent'` closes every product
+with the direct rule, opt-in, for comparing with solvers that use it. What it builds, where it is
+refused, and what it costs in accuracy are in §9.
 
 ## 1. The two rules
 
@@ -424,3 +432,134 @@ Counting calls on a 32x32 raster and a circular shape layer:
 
 `sample_grid` serves the non-raster builders only; the raster normal field is index-based and
 goes through `factorization.normal_vector_field` without ever asking for cell coordinates.
+
+## 9. Laurent's rule as an option
+
+Added 2026-09-27. `factorization='laurent'` closes **every** product of the permittivity with a
+field component with the direct rule -- the plain convolution matrix `[[eps]]`, whatever is
+continuous across the interfaces. Nothing resolves to it: a raster still defaults to Li and a
+shape to NVF. It is offered because other tools use it -- fmmax's `Formulation.FFT`, and the
+formulation RCWA started from -- and a like-for-like comparison with them needs the same rule on
+this side.
+
+### The slots
+
+With `[[f]]` the BTTB convolution matrix of §3, direct rule both ways:
+
+| slot | `'laurent'` | `'li'`, `li_nesting='fixed'`, for comparison |
+| --- | --- | --- |
+| `epx` (acts on `E_x`) | `[[eps]]` | `( T_u( [T_v(eps)]^-1 ) )^-1` |
+| `epy` (acts on `E_y`) | `[[eps]]` | `T_u( [T_v(1/eps)]^-1 )` |
+| `epz_i` | `[[eps]]^-1` | `[[eps]]^-1`, the same |
+| `epxy`, `epyx` | `None` | `None` |
+
+A magnetic layer takes the same rule by the `(E, H, eps, mu) -> (H, -E, mu, eps)` duality:
+`[[mu]]` in both in-plane slots, `[[mu]]^-1` in the z slot. Both in-plane slots are *one*
+matrix, built once, so they are equal to the bit.
+
+**The z slot is where the two rules agree, and it is `[[eps]]^-1`, not `[[1/eps]]`.** The solve
+needs `E_z` from `D_z`. `E_z` is tangential to every vertical interface and continuous, so
+`D_z = eps E_z` is a product the direct rule closes correctly -- Li's rules take it too -- and
+inverting it gives `[[eps]]^-1`. `[[1/eps]]` would be the direct rule applied to
+`E_z = (1/eps) D_z`, whose two factors jump together: measurably another matrix (more than 1e-2
+apart on the crossed grating of `tests/test_laurent_factorization.py`), and not the one any of
+the sources below uses. Moharam and Gaylord's formulation inverts the Toeplitz matrix of the
+permittivity there, and so does fmmax's eigenproblem, which solves against its
+`z_permittivity_matrix`; its separate `[[1/eps]]` (`inverse_z_permittivity_matrix`) is kept
+for field reconstruction and does not enter the eigenproblem or the scattering matrix.
+
+What that leaves between the rules is the in-plane pair. On a grating that varies along x only,
+TE reads `epy` alone, where both rules build `[[eps]]`: the answers are one to round-off at every
+order. TM reads `epx`, where Li builds `[[1/eps]]^-1` and Laurent `[[eps]]` -- the slowly
+converging case.
+
+Sources: M. G. Moharam and T. K. Gaylord, JOSA **71**, 811 (1981), the formulation;
+M. G. Moharam, E. B. Grann, D. A. Pommet and T. K. Gaylord, JOSA A **12**, 1068 (1995), which
+states it for binary gratings in both polarizations; L. Li, JOSA A **13**, 1870 (1996), for why
+it converges slowly -- where a field component that jumps at an interface meets a permittivity
+that jumps at the same place, the product of the truncated series does not converge to the
+series of the product. The code cites them at `laurent_conv_matrices`.
+
+### Where it is built, and where it is refused
+
+| input | `'laurent'` | why |
+| --- | --- | --- |
+| scalar raster, `'sampled'` | built | the exact staircase coefficients; decides nothing, so it traces without a frozen geometry |
+| scalar raster, `'integrated'` | built | the same block compression Li's integrated build records |
+| shapes, disjoint | built | the closed-form `[[eps]]` NVF starts from, with the normal field dropped |
+| shapes, painted overlap | built | the resolved polygons' `[[eps]]`; curved primitives are polygonised at 256 vertices, as for NVF |
+| a skewed cell | built | the rule names no axis -- one scalar convolution in both slots -- where Li is refused |
+| 1D TE / TM, conical | built | TE equals Li to round-off; TM is Li (1996)'s slow case |
+| `formulation='4ff'` | built | the same five slots; 2ff and 4ff agree to 9e-15 |
+| tensor materials | **refused by name** | tensor Li and Popov-Neviere NVF are the tensor builders; a Laurent tensor build is not written and has no reference checked against it. A uniform tensor is the same under every rule, so leaving `factorization` unset loses nothing there |
+| `li_nesting`, `raster_normal_method`, `nvf_projector`, `shape_nvf_grid_size` | **refused by name** | Laurent nests no rules and builds no normal field, so nothing reads them |
+
+**A frozen geometry is stamped with its rule.** `StaticGeometry.factorization` records the rule a
+record was frozen under, and a replay under another rule is refused by name, eagerly and under
+`jax.jit`. A Laurent record of shapes plans the painting and no interface set, which the NVF
+replay would read as "plan blind"; a Li record of an integrated raster holds no normal field, which
+the NVF build would rebuild eagerly or, under a trace, could not build at all. Records built by
+hand carry no stamp and replay on trust.
+
+### How it converges
+
+`studies/laurent_convergence.py`, logged in `studies/results/laurent_convergence.log`. Wavelength
+900 nm, thickness 250 nm, top 1, bottom 2.25, eps 12.25 in air.
+
+One-dimensional binary grating, 700 nm period, 50% duty, theta 10 degrees; `|T - T_ref|`,
+the reference Li at order 400:
+
+| order | TE, `li` | TE, `laurent` | TM, `li` | TM, `laurent` |
+| --- | --- | --- | --- | --- |
+| 5 | 1.15e-3 | 1.15e-3 | 3.43e-3 | 1.80e-2 |
+| 10 | 3.11e-4 | 3.11e-4 | 4.90e-4 | 7.93e-3 |
+| 20 | 4.11e-5 | 4.11e-5 | 7.57e-5 | 3.78e-3 |
+| 40 | 5.22e-6 | 5.22e-6 | 8.26e-6 | 1.83e-3 |
+| 80 | 6.52e-7 | 6.52e-7 | 4.93e-7 | 9.00e-4 |
+
+TE is Li's answer at every order. TM under Laurent halves per doubling of the orders -- first
+order in the truncation -- while Li falls sevenfold to seventeenfold per doubling. That is Li's
+1996 result, reproduced.
+
+A 350 x 245 nm rod in a 700 nm square cell, drawn on the pixels of a 40 x 40 raster so every
+rule sees the same staircase, theta 10 and phi 20 degrees; `|T - T_ref|` per polarization, the
+reference Li at order 18 (where Li is the exact rule for an axis-aligned rectangle):
+
+| order | `li` s | `li` p | `nvf` s | `nvf` p | `laurent` s | `laurent` p |
+| --- | --- | --- | --- | --- | --- | --- |
+| 4 | 3.3e-4 | 1.0e-3 | 3.7e-4 | 3.6e-4 | 7.6e-4 | 1.1e-2 |
+| 8 | 8.5e-5 | 2.4e-6 | 1.2e-4 | 6.4e-4 | 2.3e-4 | 6.6e-3 |
+| 12 | 1.9e-5 | 1.4e-5 | 3.3e-5 | 2.9e-4 | 3.2e-4 | 4.7e-3 |
+| 14 | 1.3e-5 | 2.7e-5 | 2.6e-5 | 2.7e-4 | 3.1e-4 | 4.1e-3 |
+
+Laurent converges -- and conserves energy on every one of these solves, so the slow
+convergence is not a loss (the log records the largest `|R + T - 1|`) -- but at order 14 it is
+still 150 times further from the answer than Li in p. On a 400 nm disc on the shape route,
+where there is no Li to compare with, Laurent sits below NVF by 7.4e-2 / 5.4e-2 (s / p) at order
+4 and 2.0e-2 / 1.3e-2 at order 12, the gap roughly halving per doubling of the orders, as in the
+TM column above.
+
+**What it saves is nothing measurable.** At order 12 one solve of the rod takes 2.68 s under Li,
+2.74 s under NVF and 2.72 s under Laurent, and of the disc 2.71 s under NVF and 2.70 s under
+Laurent (medians of three, on a machine shared with other work): the eigensolve dominates, and
+the normal field Laurent skips is under 1% of it. Laurent is a rule to compare with, not a
+faster one.
+
+### Against fmmax
+
+`tests/references/test_fmmax_laurent_golden.py`. fmmax's `Formulation.FFT` assembles the same
+operator, so the comparison is one of identity once the coefficients are made to agree: fmmax's
+DFT is the midpoint rule for the Fourier integral Wavebit evaluates exactly on each pixel, and
+the factor between them is `y / sin(y)` per axis, even in the samples per pixel `R`, so a
+Richardson extrapolation over four samplings removes it. On a silicon-like rod in a 700 x 560
+cell, a lossy metal film with a hole, and a cross on a hexagonal cell -- where Li is refused --
+Wavebit's `'laurent'` agrees with the extrapolation to 6.1e-13, 3.2e-11 and 4.8e-13 in total,
+and to the same order by order over four or five propagating orders; the mirrored order index
+misses by 1.3e-2 to 7.4e-2, and Li or NVF by 4e-2 to 2e-1.
+
+That is against fmmax with its pixel-centring phase in double precision. fmmax 1.7.1 computes
+that phase from a single-precision frequency grid (`fmmax.fft._fft2`), which turns an exact
+translation into an order-dependent one and leaves 1e-8 to 1e-7 on these efficiencies; the
+generator freezes the stock run too, and the test holds Wavebit to it within twice the gap
+between the two runs. A comparison with fmmax's FFT formulation that expects better than about
+1e-7 on a patterned layer has to account for that phase first.

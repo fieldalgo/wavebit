@@ -2,6 +2,13 @@
 
 Written: 2026-08-11.
 
+Updated 2026-09-27: `factorization='laurent'` is published without a version bump, as
+`li_nesting` was: the value joins `enums.factorization` and both paths' `factorization` lists
+(the parametric one is now a list of two, its default first), and a new `tensor_materials` key
+names what a tensor material refuses -- `'laurent'` -- which a per-path list cannot say, since a
+raster takes it and a raster of tensors does not. `lattice.factorizations_refused_on_oblique`
+stays `['li']`: Laurent's rule names no axis.
+
 Updated 2026-09-25: the `li_nesting` axis (Li's rules, `'fixed'` or `'symmetric'`) is published
 without a version bump, as `nvf_projector` was: `paths[raster].li_nesting` with its reason,
 `enums.li_nesting`, and on the parametric path two `conditional_options` entries that ride on

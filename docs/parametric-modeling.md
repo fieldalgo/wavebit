@@ -498,14 +498,12 @@ keep passing.
   axis-aligned rectangular cell, whose edges give Li's nested 1D rules an axis to run along
   (see *Cartesian rectangles with explicit Li factorization* above); on any other shape it
   raises `NotImplementedError`.
-  For a non-NVF pure-Laurent comparison, call the two builders directly:
-  `_core.analytic.assemble_eps_coeffs` returns the coefficient grids for `eps` and `1/eps`, and
-  `_core.analytic.conv_matrix_2d` turns either into a block-Toeplitz matrix. That first builder
-  takes a *shape list*, not a layer, and sums — so it refuses shapes that overlap rather than
-  returning the summed structure under the name of the painted one (`<eps>` 1.99 against the
-  1.90 the solver integrates, for two 300x300 rods of permittivity 4 and 9). An overlapping
-  layer's own coefficients come from `_core.boundary`
-  (see [boundary-modeling.md](boundary-modeling.md)).
+  For a pure-Laurent comparison, pass `factorization='laurent'`: it takes the same closed-form
+  `[[eps]]` this path builds for NVF -- a painted layer's from its resolved polygons -- and drops
+  the normal field, so every product is closed with the direct rule
+  ([factorization-terms.md](factorization-terms.md) §9). It replaces a recipe that called
+  `_core.parametric.assemble_eps_coeffs` and `conv_matrix_2d` by hand, which could not reach a
+  painted layer.
 
 ### References
 - L. Li, *Use of Fourier series in the analysis of discontinuous periodic structures*, JOSA A

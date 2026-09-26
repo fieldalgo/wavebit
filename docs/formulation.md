@@ -130,6 +130,10 @@ layer varying in `x`:
 | `Ex` | discontinuous (`Dx` continuous) | inverse rule | `epx_conv` |
 | `Ez` via `Dz = -Kx H̃y`-type eliminations | — | inverse of `eps`-conv | `epz_conv_i` |
 
+`factorization='laurent'` puts the direct rule in the `Ex` row too -- `[[eps]]` in both in-plane
+slots, `epz_conv_i` unchanged -- which is the formulation this table corrects; see
+`docs/factorization-terms.md` §9.
+
 For 2D-patterned layers the same logic produces the five slots
 `(epx, epy, epz_i, epxy, epyx)`; the off-diagonal slot convention (`-eps_xy` in the slot)
 is documented in `docs/off-diagonal-slot-convention.md` and is not re-derived here. The
