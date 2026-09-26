@@ -48,6 +48,7 @@ differ are exactly the `__stack` pair above.
 | **fmmax**, the in-cell **field** | uniform stacks exactly (7.8e-16) **and patterned layers to ~1e-4**, through the coupled 2D path | the `fwref` env | `golden_fmmax_field.npz` |
 | **RETICOLO**, the in-cell **field** | the *pure TE/TM 1D* path (`field_1d`), which the two rows above never reach — **1e-14 on gratings**, five components of six | Octave + `RETICOLO_PATH` | `golden_reticolo_field.npz` |
 | **RETICOLO**, the **conical** field | `field_1d_conical` on a *patterned* layer — an azimuth and a discontinuity at once, which nothing else here reached | same | `golden_reticolo_conical_field.npz` |
+| **fmmax**, `Formulation.FFT` | `factorization='laurent'`, the same operator: **identity** on patterned layers -- 6.1e-13 to 3.2e-11 in total and per order, on a rectangular cell, a lossy metal and a hexagonal one -- once fmmax's sampled coefficients are extrapolated to the exact ones | the `fwref` env | `golden_fmmax_laurent.npz` |
 | **RETICOLO**, a **crossed** grating in both of Li's nestings | the 2D Li build, `li_nesting='fixed'` against `parm.res1.li = 1` and `'symmetric'` against `li = 0` — the one case here that can tell the two apart (a 1D grating cannot) | Octave + RETICOLO V10, with `li` set by hand: the bridge does not expose it | inline in `test_reticolo_li_nesting.py`, totals to ten decimals (2026-09) |
 
 A fourth oracle lives outside this directory: the Berreman 4x4 in
@@ -204,6 +205,25 @@ Two structural facts came free with the oracle and are pinned:
   RETICOLO code paths (`grating_type` 1 and 0) on the same structure, compared without the
   solver involved at all — which checks both harnesses, both row rules and both array shapes
   against something that is not this project.
+
+### fmmax's FFT formulation: identity, after two corrections
+
+Added 2026-09-27 with `factorization='laurent'`. Every other patterned comparison here is one of
+convergence, because the two solvers close the products differently. This one is not: fmmax's
+`Formulation.FFT` puts `[[eps]]` in both transverse slots and solves against `[[eps]]` for the z
+slot, which is exactly what `'laurent'` builds. Two things still separate the numbers, both found
+by measurement and both removed rather than tolerated:
+
+| what | size | how it is removed |
+| --- | --- | --- |
+| **fmmax's DFT is the midpoint rule** for the coefficient integral Wavebit evaluates exactly on each pixel. Per axis the ratio is `y / sin(y)`, `y = pi k / (N R)`, even in the samples per pixel `R` | 1e-4 at `R = 16`, falling fourfold per doubling | the generator freezes `R = 16, 32, 64, 128` and the test extrapolates (Richardson, through `1/R^4`), after checking the fourfold fall at every level |
+| **fmmax 1.7.1 forms its pixel-centring phase in single precision** (`fmmax.fft._fft2` asks `fftfreq` for float32), which turns an exact translation into an order-dependent one | 1e-8 to 1e-7 in the efficiencies; 3.8e-8 in `[[eps]]` entries of size 4 | a second run in which fmmax's `fft` module sees a float64 `fftfreq` -- nothing of fmmax's is rewritten -- and the stock run is still held, within twice the gap between the two |
+
+What is left is round-off: 6.1e-13, 3.2e-11 and 4.8e-13 in total, and the same over every order of
+both polarizations, where the mirrored order index misses by 1.3e-2 to 7.4e-2 and Li or NVF by
+4e-2 to 2e-1. The order set is handed to fmmax as an explicit `Expansion`: its own
+parallelogramic truncation balances the sides in k-space, which on the 700 x 560 cell keeps
+17 x 13 orders where `truncation_order=(7, 7)` keeps 15 x 15.
 
 ### A generator that could not reproduce its own golden
 
@@ -465,6 +485,10 @@ Two consequences worth knowing before touching those generators:
 * **JAX defaults to float32.** Without `jax.config.update('jax_enable_x64', True)` an fmmax
   generator agrees with an analytic slab only to ~3e-8, which reads as a mediocre solver and is
   really a mediocre configuration.
+* **x64 is not enough on a patterned layer.** fmmax 1.7.1 builds its pixel-centring phase from a
+  float32 frequency grid whatever the x64 setting, which costs 1e-8 to 1e-7 in the efficiencies
+  of a high-contrast patterned layer. Invisible at the 1e-4 the vector-formulation comparisons
+  here work to; decisive for an identity comparison -- see the fmmax FFT section above.
 
 ## Which file does what
 

@@ -22,6 +22,9 @@ What is checked here:
   pytree, and ``freeze_geometry`` -- whose records are stamped with their rule and refused under
   another.
 * **Backends and gradients**: three backends agree, and JAX and PyTorch differentiate it.
+
+The comparison with another solver is ``tests/references/test_fmmax_laurent_golden.py``:
+fmmax's ``Formulation.FFT`` assembles the same operator, and agrees to round-off.
 """
 import numpy as np
 import pytest
