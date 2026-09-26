@@ -16,10 +16,9 @@ Setup notes, all of them things that cost an afternoon once:
 * Points at a **version-pinned V10 tree**, given by ``RETICOLO_PATH``. RETICOLO is kept
   outside this repository beside its licence and provenance notes rather than vendored in.
   This used to say "not redistributable", which was an assumption rather than a finding: the
-  V10 Zenodo record is CC BY 4.0 and *does* permit redistribution with attribution, while the
-  package's own documentation says only "freeware" and the V8/V9 records declare nothing at
-  all. The three disagree; keeping the tree out is safe under all of them, and pinning by
-  path is what we wanted anyway. The full check is in ``README.md``, and the citation
+  V10 Zenodo record is CC BY 4.0 and *does* permit redistribution with attribution, V10's
+  documentation calls RETICOLO a "freeware", and the V8, V9 and V9a records declare no licence
+  at all. The tree is kept out by choice, and pinning by path is what we wanted anyway. The full check is in ``README.md``, and the citation
   RETICOLO's terms *do* require is there too.
 
   It used to point at a ``V9_pristine`` tree under an unrelated project directory, chosen

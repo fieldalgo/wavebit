@@ -39,7 +39,7 @@ differ are exactly the `__stack` pair above.
 
 | Oracle | Reaches | Generator needs | Golden |
 | --- | --- | --- | --- |
-| **RETICOLO** (Li/Lalanne lineage) | diffraction *orders*; uniform layers with a complex 3x3 tensor — **but only up to one off-diagonal pair, at classical mounting**, see below | Octave + a licensed RETICOLO V10 tree (`RETICOLO_PATH`) | `golden_reticolo.npz`, `golden_reticolo_anisotropic.npz` |
+| **RETICOLO** (Li/Lalanne lineage) | diffraction *orders*; uniform layers with a complex 3x3 tensor — **but only up to one off-diagonal pair, at classical mounting**, see below | Octave + a RETICOLO V10 tree from its Zenodo record, CC BY 4.0 ([terms below](#what-reticolos-records-and-packages-say-about-its-licence)) (`RETICOLO_PATH`) | `golden_reticolo.npz`, `golden_reticolo_anisotropic.npz` |
 | **RETICOLO**, swept over `(kx, ky)` | conical incidence across the light line, **including complex (evanescent) angles** | nothing — frozen from a 2024-09-09 study, see its generator | `golden_reticolo_conical_sweep.npz` |
 | **RETICOLO**, at a **complex `kx`** | the formal complex-angle path (`kx/k0 = n*sin(theta)`, `Im(kx) != 0`) on interfaces and a grating -- **only where RETICOLO's root rule and this solver's coincide**, which the test asserts; `R`, `T` per order and `r_0`, 1e-16 .. 4e-15 | Octave + `RETICOLO_PATH` | `golden_reticolo_complex_kx.npz` |
 | **fmmax** (Liu & Fan lineage, MIT) | uniform complex tensors, **patterned** tensors, **permeability** | the `fwref` env — see below | `golden_fmmax.npz`, `golden_fmmax_magnetic.npz` |
@@ -366,10 +366,13 @@ tolerance anybody should inherit.
 
 ## Attribution, and what each oracle's terms require
 
-These solvers are not vendored — nothing in this repository contains their implementations,
-none of them is a dependency, and the committed goldens let the suite run without any of them
-installed. What *is* here is our own adapter code plus the numbers they produced. Their terms
-still ask for credit, and RETICOLO's ask is explicit.
+These solvers are not vendored, and none of them is a dependency. Apart from one function
+ported from fmmax, and the earlier Li builders this repository's history keeps, which descend
+through meent from code written with reference to RETICOLO's source (both attributed in
+`LICENSE`), nothing in this repository contains their implementations, and the committed
+goldens let the suite run without any of them installed. What *is* here is our own adapter
+code plus the numbers they produced. Their terms still ask for credit, and RETICOLO's ask is
+explicit.
 
 **RETICOLO.** Its documentation states: *"In publications and reports, acknowledgments have to
 be provided by referencing to"* —
@@ -388,6 +391,10 @@ Two more are asked for "fairly" rather than required, and both are already cited
 `docs/` for the formulation itself: Moharam et al. (1995) for TE efficiencies, and Lalanne &
 Morris (1996) with Granet & Guizal (1996) for TM.
 
+Of the bridge scripts, `interface/reti_aniso.m` lays out its calls to RETICOLO (`res0`, `res1`,
+`res2`) after RETICOLO's own example `exemple_V9_0D_anisotrope.m`, as its header says: a
+texture holding a full 3x3 permittivity tensor, and `nn = 0`.
+
 **S4.**
 
 > V. Liu and S. Fan, *S4: A free electromagnetic solver for layered periodic structures*,
@@ -399,7 +406,7 @@ Morris (1996) with Granet & Guizal (1996) for TM.
 > M.F. Schubert and A.M. Hammond, *Fourier modal method for inverse design of
 > metasurface-enhanced micro-LEDs* (2023). [arXiv:2308.08573](https://arxiv.org/abs/2308.08573)
 
-### What RETICOLO's licence actually says, since the answer is not tidy
+### What RETICOLO's records and packages say about its licence
 
 Checked 2026-08-15, because this file previously asserted "not redistributable" without a
 source. The declarations do not agree with each other:
@@ -407,19 +414,37 @@ source. The declarations do not agree with each other:
 | where | what it says |
 |---|---|
 | the V10 package's own documentation PDF | *"Reticolo is a **freeware** operating under Matlab"*, `copyright © 2005 Institut d'Optique/CNRS`. **No** redistribution clause either way |
+| the V9 and V9a documentation PDFs | `copyright © 2005 Institut d'Optique/CNRS`, and no "freeware" sentence |
 | [Zenodo, V10](https://zenodo.org/records/14631951) — the official download | **CC BY 4.0**, which *does* permit redistribution with attribution |
-| [Zenodo, V9](https://zenodo.org/records/5905381) and [V8](https://zenodo.org/record/3610175/export/json) | no licence declared; the `rights` field is empty |
+| [Zenodo, V9](https://zenodo.org/records/4419063), [V9a](https://zenodo.org/records/5905381) and [V8](https://zenodo.org/record/3610175/export/json) | no licence declared; the `rights` field is empty |
 
-A GPL-2.0+ attribution circulates in search summaries. It is **not** in any record above, and
-the GitHub repository the Zenodo entries are named after (`Light-in-complex-nanostructures/RETICOLO`)
-returns 404, so it cannot be checked. It is not relied on here.
+Re-checked 2026-09-25, with the packages opened as well as the records read. None of V9, V9a
+or V10 carries a licence file or licence text in its source. The record this table used to
+call V9 is V9a (`version` `9a`, created 2022-01-26); V9 itself is 4419063 (2021-01-05). V10's
+record reads `publication_date` 2020-01-16, which is V8's date carried over; it was created
+2025-01-11, and its documentation says V10 was launched in 01/2025. The reason for the second
+look is `LICENSE`'s RETICOLO notice: meent's Li-rule factorization was written with reference to
+V9's MATLAB source, and the files it followed -- `retcouche.m` (its `ret2li`), `retf.m` and
+`rettoeplitz.m`, with `res0.m` for the `li = 1` default -- are byte-identical in V9, V9a and V10.
+Between V9 and V10, `res1.m` (one line) and `retu.m` (a texture addition) changed, and so did the
+documentation. The builders were rewritten from Li's rules the same day, so that notice now covers
+the earlier versions this repository's history still holds. Recorded as `CONTRIBUTING.md`'s
+licensing section asks: the licence relied on is the one the V10 record states (CC BY 4.0); that
+record names itself a new version of V9 (`isNewVersionOf` 10.5281/zenodo.4419063), and its copies
+of the files the earlier versions followed are byte-identical to V9's; the use is the modified,
+earlier Li builders and the RETICOLO-marked meent code kept in this repository's history, with
+no RETICOLO file in the repository (`_circulant_index`, which came with the 2026-08-03 port of
+meent's `dfs2d` and which the rewritten builders still call, was itself rewritten from its
+definition on 2026-09-26); and the obligation is the attribution `LICENSE` gives.
 
-**The policy does not change: RETICOLO stays outside this repository.** That is safe under
-every reading, and vendoring a 184-file MATLAB tree would buy nothing — version pinning is
-what `RETICOLO_PATH` is for. What changed is the *reason*: it is a deliberate choice, not a
-prohibition we had verified. If redistribution ever becomes useful, CC BY 4.0 on the V10
-record is the thing to re-read — noting that Creative Commons itself advises against applying
-CC licences to software.
+The GitHub repository the Zenodo entries are named after (`Light-in-complex-nanostructures/RETICOLO`)
+returned 404 when checked on 2026-08-15 and 2026-09-26, so no licence could be read there. Nothing
+beyond the records and packages above is relied on here.
+
+**The policy does not change: RETICOLO stays outside this repository.** Vendoring a 184-file
+MATLAB tree would buy nothing — version pinning is what `RETICOLO_PATH` is for. What changed
+is the *reason*: it is a deliberate choice, not a prohibition we had verified. If redistribution
+ever becomes useful, the V10 record's CC BY 4.0 is the thing to re-read.
 
 ## The `fwref` environment
 

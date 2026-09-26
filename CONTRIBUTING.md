@@ -41,7 +41,7 @@ Three of them are worth a sentence, because the obvious guess is wrong:
 
 - **`studies/`, not `benchmarks/`.** In this ecosystem "benchmarks" means a continuous performance-regression suite — numpy, scipy, pandas and networkx all run `asv`. These run once, by hand, to settle a question, and end in a `docs/` write-up. Only one of them is even about speed; the others measure convergence and cost at equal accuracy.
 - **`tests/`, not a qualified name.** The suite holds verification (frozen goldens) and validation (an outside solver) alike, so any qualifier would name half of it.
-- **`tests/references/`** exists because external-solver comparison has a known expected answer — so it is a test, not a study — but producing the reference needs Octave and a licensed RETICOLO tree. The directory splits by what each piece needs: the bridge and generator need those, the committed numbers and the assertion need nothing and run in CI everywhere.
+- **`tests/references/`** exists because external-solver comparison has a known expected answer — so it is a test, not a study — but producing the reference needs Octave and a RETICOLO V10 tree from its Zenodo record (CC BY 4.0; see `tests/references/README.md`). The directory splits by what each piece needs: the bridge and generator need those, the committed numbers and the assertion need nothing and run in CI everywhere.
 
 Two things were considered and rejected, so that they are not proposed again: a `src/` layout, which with many worktrees sharing one editable install would make each worktree silently test the main checkout rather than its own edits; and merging `studies/` into `docs/`, which only three of the write-ups could support since the rest have no script behind them.
 

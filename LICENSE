@@ -211,3 +211,82 @@
    kept as the verbatim upstream text and nothing else, so that licence scanners
    identify it as MIT -- a note appended there is 29% of MIT's short body and
    drops the file below the match threshold GitHub's `licensee` uses.
+
+   ---
+   The Li-rule Fourier factorization of rasters in wavebit/_core/factorization.py
+   was rewritten on 2026-09-25 from L. Li's published factorization rules
+   (J. Opt. Soc. Am. A 13, 1870 (1996); 14, 2758 (1997)): li_conv_matrices,
+   li_conv_matrices_integrated and the helpers written with them, the bodies of
+   fourier2d_piecewise_constant, fourier2d_pointwise and fourier2d_integrated,
+   and the Li parts of to_conv_mat_raster_sampled and
+   to_conv_mat_raster_integrated. The implementer of that rewrite did not
+   consult RETICOLO's or meent's source or the bodies of the functions it
+   replaced. compression_indices and compress_cell were then reimplemented by
+   an implementer working from a written specification of what they return, in
+   a copy of this repository without its history or the earlier bodies; the
+   specification's author had seen the earlier functions and RETICOLO's ret2li.
+   The other Li factorizations run on the rewrite as well: the Cartesian shape
+   path (wavebit/_core/rectilinear.py) through fourier2d_integrated, and the
+   tensor path's row transform (wavebit/_core/tensor_li.py, added 2026-09-24),
+   which called the earlier helpers directly until it was moved onto the
+   rewritten series. That move, and _row_dft, which restates the documented
+   rule of _normalized_row_fft (a JAX workaround added beside _fourier2d_grid
+   on 2026-09-24 and deleted with it), were written by an implementer working
+   from written specifications whose authors had seen the earlier bodies. The
+   rewritten code still calls helpers kept from before it, written in this
+   repository in August 2026: _pixel_correction, _half_pixel_phase and
+   _inverse_axes. It also calls _circulant_index, which came with the
+   2026-08-03 single-source port of meent's dfs2d and was rewritten from its
+   definition on 2026-09-26 by an implementer who had not read the earlier
+   body. The commit messages of those dates, and of later changes, record how.
+
+   The rewritten builders' default nesting ('fixed') corresponds to the
+   default, parm.res1.li = 1, of 'RETICOLO', the grating software of J.P.
+   Hugonin and P. Lalanne (Institut d'Optique/CNRS): J.P. Hugonin and P.
+   Lalanne, "RETICOLO software for grating analysis", Institut d'Optique,
+   Orsay, France (2005), arXiv:2101.00901. Their 'symmetric' nesting
+   corresponds to RETICOLO's parm.res1.li = 0.
+
+   Earlier versions of those functions remain in this repository's history, with
+   the helpers deleted alongside them (_fourier2d_grid, _fourier1d_integrated,
+   _wrap and _circulant_gather); that history includes meent's own, from 2022.
+   The Fourier builders descend from meent's dfs2d and cfs2d, written in July
+   2024 with reference to the MATLAB source of RETICOLO V9, following its
+   ret2li (in retcouche.m), retf.m and rettoeplitz.m; compression_indices and
+   compress_cell were split from meent's cell_compression (2022). meent's code
+   names RETICOLO elsewhere in that history too: fft_piecewise_constant was
+   marked "reference: reticolo" from 2023-02 to 2024-06, and a commented-out
+   dfs2d_debug in meent/on_numpy/emsolver/fourier_analysis.py, added on
+   2024-07-19, is described as "algorithm from reticolo", as it still is in
+   meent's own repository (commit bae2802). Checked on 2026-09-25 against
+   RETICOLO's Zenodo records and the packages themselves: retcouche.m, retf.m
+   and rettoeplitz.m are byte-identical in V9
+   (https://zenodo.org/records/4419063, 2021), in its revision V9a
+   (https://zenodo.org/records/5905381, 2022) and in V10
+   (https://doi.org/10.5281/zenodo.14631951, January 2025). The V9 and V9a
+   records declare no licence; the V10 record states CC BY 4.0. No package
+   carries a licence file or licence text in its source. Each package's
+   documentation states "copyright (c) 2005 Institut d'Optique/CNRS" and
+   requires that publications and reports cite the reference above; V10's also
+   calls RETICOLO a freeware. The V10 record also names itself a new version
+   of V9 (isNewVersionOf 10.5281/zenodo.4419063).
+
+   Those earlier versions, and the meent code named above, are used under the
+   Creative Commons Attribution 4.0 International licence (CC BY 4.0) that the
+   V10 record states. They were modified: written in Python, first in meent
+   (https://github.com/kc-ml2/meent) and then in this repository, with
+   reference to RETICOLO's MATLAB source, and the earlier versions have since
+   been replaced by the rewrite described above. Attribution:
+
+       RETICOLO, by J.P. Hugonin and P. Lalanne
+       copyright (c) 2005 Institut d'Optique/CNRS
+       Material: https://doi.org/10.5281/zenodo.14631951
+       Citation: arXiv:2101.00901
+       Licence: CC BY 4.0, https://creativecommons.org/licenses/by/4.0/
+
+   Section 5 of that licence (Disclaimer of Warranties and Limitation of
+   Liability) applies to that material. RETICOLO itself is not part of this
+   software; the comparisons in tests/references/ call a separately installed
+   copy, and one bridge script, tests/references/interface/reti_aniso.m, lays
+   out its calls after RETICOLO's example exemple_V9_0D_anisotrope.m.
+   tests/references/README.md records the check.

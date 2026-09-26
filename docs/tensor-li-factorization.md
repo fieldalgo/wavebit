@@ -69,7 +69,10 @@ Li matrices of the fixed nesting.
 See [Li, *Fourier Modal Method*, §§13.3.3.1 and 13.4.3, Eq. (13.132)](https://www.fresnel.fr/files/gratings/Second-Edition/GratingsTheoryandNumericApplicationsSecondEdition.pdf#page=572).
 
 The mathematical reference informed an independently written implementation.
-No reference software, source code, or additional dependency is included.
+No reference software, source code, or additional dependency is included. Its
+one-dimensional row transform called the scalar module's earlier Fourier helpers
+until the scalar Li builders were rewritten from Li's papers (2026-09-25); it has
+run on the rewritten series since, and `LICENSE` records that history.
 
 ## Differentiation and verification
 

@@ -287,6 +287,25 @@ Two things follow for anyone reading a `li` result:
   `tests/test_li_nesting.py::test_the_symmetric_nesting_is_covariant_under_relabelling_x_and_y`,
   and the RETICOLO comparison is `tests/references/test_reticolo_li_nesting.py`.
 
+**Where the code came from.** Until 2026-09-25 the raster builders here were ports of meent's
+`dfs2d` and `cfs2d`, and meent's two-dimensional Li-rule code was written with reference to the
+MATLAB source of RETICOLO V9 (J.P. Hugonin and P. Lalanne,
+[arXiv:2101.00901](https://arxiv.org/abs/2101.00901)), following its `ret2li` in `retcouche.m`,
+`retf.m` and `rettoeplitz.m`. The builders of this section were then rewritten from Li's papers
+by an implementer who did not consult RETICOLO's or meent's source or the bodies they replaced,
+and `compression_indices` / `compress_cell` were reimplemented from a written specification of
+what they return, by an implementer who had not seen the earlier code (the specification's
+author had seen the earlier functions and `ret2li`). `LICENSE` records how, and gives the
+RETICOLO attribution (CC BY 4.0, from the V10 record) for the earlier versions this repository's
+history still holds. The two Li builds added beside them
+before the rewrite landed run on it too: the Cartesian shape Li (`rectilinear.py`) calls
+`fourier2d_integrated`, and tensor Li's row transform (`tensor_li.py`), which called
+`_fourier1d_integrated`, `_wrap` and `_circulant_gather` directly, was moved onto
+`_raster_series` / `_segment_series` when the rewrite was rebased onto it. The fixed nesting stayed the default
+because every golden here was computed with it, and it is also RETICOLO's default. The rewrite
+reproduces the previous builders to round-off, and is exact on a uniform layer, where the old
+sampled path left 1.3e-16 off the diagonal on grids that are not a power of two.
+
 ## 7. One more word that was doing two jobs: the grid builder
 
 `dfs2d(..., piecewise_constant=False)` — later `_fourier2d_grid`, gone since the 2026-09-25
