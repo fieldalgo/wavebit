@@ -172,8 +172,8 @@ def ellipse_verts(xp, cx, cy, lx, ly, angle, n):
     Measured against the closed-form transform at ``truncation_order`` 11, a circle at ``n = 256``:
     inscribed **2.84e-05**, area-matched **8.43e-10**. Checked at aspect 1:1, 3:1 and 9:1.
 
-    This is what RETICOLO's ellipse texture has always done -- ``retu.m``, "la surface totale de
-    l'inclusion etant celle de l'ellipse".
+    RETICOLO's ellipse texture (``retu.m``) likewise makes the inclusion's total area the
+    ellipse's.
     """
     two_pi = 6.283185307179586
     dt = _vertex_dtype(xp, cx, cy, lx, ly, angle)

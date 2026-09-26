@@ -895,7 +895,7 @@ Backends: numpy, jax and torch agree on a circular cell to ~1e-14, and the recor
   not raster-native, and the reason none of it is adopted here directly. Its **Eq. (52)**
   is the published form of the circular-polarization limit — `phi = (pi/8)(1 + cos pi|t|)`,
   a generalization of Antos above — so that limit can be implemented from the paper,
-  without reading S4 itself (which is GPL, where this project is Apache-2.0). It **was**,
+  without reading S4's source. It **was**,
   on 2026-09-01, from the paper and the paper alone; S4's `fmm_PolBasisJones.cpp` was not
   opened. S4 states `J` in terms of the *tangent* field, which differs from the normal by a
   fixed 90-degree rotation, so building `J` from the normal directly gives the normal

@@ -16,9 +16,8 @@ suite tests. ``fwref`` exists for reference solvers and nothing else:
 to ~3e-8, which looks like a mediocre solver and is really a mediocre configuration. With it,
 1e-17. The line is at the top of this file for that reason.
 
-Why a third oracle, on top of Berreman and RETICOLO. fmmax is MIT, which makes the licence
-question about checked-in goldens go away entirely; it installs with pip, so regenerating needs
-no Octave; and it reaches cases the others cannot — a **patterned** complex off-diagonal tensor,
+Why a third oracle, on top of Berreman and RETICOLO. fmmax (MIT) installs with pip, so
+regenerating needs no Octave; and it reaches cases the others cannot — a **patterned** complex off-diagonal tensor,
 which RETICOLO takes only as diagonal and S4 only as real. None of the cases below are patterned
 yet, because nothing in the solver can express one, but the wiring will be here when that
 changes.

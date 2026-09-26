@@ -2269,9 +2269,9 @@ with error stubs. The FEM environment links OpenBLAS 0.3.34
 and LLVM OpenMP 22.1.8 (Apache-2.0 with LLVM exception); the main test
 environment instead links system Accelerate.
 
-This inspection permits an independently written internal comparison
-using explicit SciPy `splu` ordering without installing dependencies or
-copying solver implementation. It does not establish a performance
+The comparison is independently written internal code that uses explicit
+SciPy `splu` ordering; it installs no dependencies and copies no solver
+implementation. This inspection does not establish a performance
 benefit: the earlier slower and unfinished square SuperLU trials remain
 recorded above. Redistribution retains the components' required notices
 and needs the separate whole-environment review described here.

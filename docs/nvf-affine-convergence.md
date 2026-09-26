@@ -654,8 +654,8 @@ manifests identified both as `LGPL-2.1-only`.
 These are optional reference-generation tools: neither is imported by the
 `wavebit/` runtime or declared as a Wavebit installation dependency, and their
 implementations are not vendored here. The comparison consumes numerical
-projection exports. This internal validation use does not require changing
-Wavebit's Apache-2.0 license; see the running/output provisions in section 0
+projection exports. Wavebit does not
+distribute either package; see the running/output provisions in section 0
 of the [upstream license](https://github.com/NGSolve/ngsolve/blob/master/LICENSE).
 
 This records the scope of the reference use, not clearance to redistribute

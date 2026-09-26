@@ -171,12 +171,12 @@ fixed bugs there (the `kx < 0` half-turn and the origin's `phi`), and the suite 
 per-order amplitude sign by construction. Putting that machinery on the *input* side too needs
 its own external oracle, which is a separate piece of work.
 
-If it is ever added, S4's answer is the one to copy: a fixed Cartesian `'x'` / `'y'` frame
+If it is ever added, S4's choice is the one to follow: a fixed Cartesian `'x'` / `'y'` frame
 rather than per-order s/p, which sidesteps the frame question entirely.
 
 ## 7. What the reference solvers do
 
-Read from local sources: `_reticolo/RETICOLO V10`, `S4/`, `third_party/rcwa/fmmax`.
+Surveyed against local copies of RETICOLO V10, S4 and fmmax.
 
 | | multimode incidence | per-order polarization | how |
 | --- | --- | --- | --- |
