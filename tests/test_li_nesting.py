@@ -203,6 +203,10 @@ def test_a_uniform_layer_is_exactly_eps_times_identity_in_both_nestings():
 
     The integrated path gets this only because its coefficients are taken in the jump form
     (``_segment_series``): the segment form leaves ``exp(-2 pi i k)`` of round-off off ``k = 0``.
+    The sampled path gets it at every grid size only because ``_raster_series`` transforms a
+    staircase as ``a - a_0``: the FFT of a constant is exact on 8x8 but not on 20 pixels, where
+    the matrix carried 1.3e-16 off the diagonal until 2026-09-26. Hence the sizes below, which
+    include grids shorter than ``4*3 + 1``.
 
     Exact is a claim about the series, so it is held exactly where the series decides it: off
     the diagonal every slot is identically zero, for every value. On the diagonal a real
@@ -210,14 +214,15 @@ def test_a_uniform_layer_is_exactly_eps_times_identity_in_both_nestings():
     complex reciprocal its own way -- on macOS arm64 with NumPy 2.5.1, ``inv(inv(z * I))``
     misses ``z = 3.1+0.7j`` by 5.0e-16 -- so there the diagonal is held to a few ulps.
     """
-    for eps in (1.0, 2.25, 7.290000000000001, 3.1 + 0.7j, METAL):
-        cell = np.full((8, 8), eps, dtype=complex)
-        row, col, x, y = F.compression_indices(cell)
-        comp = np.asarray(F.compress_cell(xnp, cell, row, col))
-        for nesting in NESTINGS:
-            for conv in (F.li_conv_matrices(xnp, cell, 3, 3, nesting=nesting),
-                         F.li_conv_matrices_integrated(xnp, comp, x, y, 3, 3, nesting=nesting)):
-                _assert_eps_times_identity(conv, eps, (eps, nesting))
+    for shape in ((8, 8), (7, 5), (1, 20), (13, 14), (5, 3)):
+        for eps in (1.0, 2.25, 7.290000000000001, 3.1 + 0.7j, METAL):
+            cell = np.full(shape, eps, dtype=complex)
+            row, col, x, y = F.compression_indices(cell)
+            comp = np.asarray(F.compress_cell(xnp, cell, row, col))
+            for nesting in NESTINGS:
+                for conv in (F.li_conv_matrices(xnp, cell, 3, 3, nesting=nesting),
+                             F.li_conv_matrices_integrated(xnp, comp, x, y, 3, 3, nesting=nesting)):
+                    _assert_eps_times_identity(conv, eps, (shape, eps, nesting))
 
 
 def test_an_unknown_nesting_is_refused_by_name():

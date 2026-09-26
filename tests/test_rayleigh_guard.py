@@ -139,6 +139,18 @@ def _exact_point_or_refusal(call):
     skipping here — :func:`test_auto_detune_lands_every_band_order` covers these orders
     end to end whichever class the platform puts them in, and a *quietly wrong* answer
     still fails, because it does not raise.
+
+    Since 2026-09-26 the FFT part of that round-off is gone on every platform: the raster
+    factorization transforms a staircase as ``a - a_0``, so a uniform layer is exactly
+    ``eps * I`` at any grid size, where this stack's 20-pixel spacer used to come out 1.3e-16
+    off. What still varies is LAPACK's own eigenvalue. On Linux x86-64 with NumPy 2.5.3 the
+    change moved 6 cases here, and 2 of the graze-cluster cases, from the solves-correctly
+    contract to the refusal one -- counted before the layers were listed bottom-to-top
+    (2026-09-21 on develop), on the same physical stack. On macOS arm64 with NumPy 2.5.1 it
+    moved all 23 cases here and 2 of the graze-cluster cases (45 passed before; 20 passed and
+    25 took the refusal after; 2026-09-26): the macOS residues in the table above were the
+    FFT's, they are now exact zeros, and there too the solves-correctly contract has no cases
+    left.
     """
     try:
         return call()

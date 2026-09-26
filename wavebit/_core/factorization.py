@@ -380,21 +380,34 @@ def _raster_series(xp, half_width, correction):
     Two choices here are about bits, not values, and both are forced by
     :func:`fourier2d_pointwise`, whose output the NVF projector consumes and which this rewrite
     had to leave identical to the last bit (it did on NumPy and PyTorch; see that function for
-    JAX). The ``1/n`` is applied to the
-    values *before* the transform, not to the spectrum after it (they differ off powers of two);
-    and the transform runs along the **last** axis. NumPy's FFT gives the same bits along any
-    axis, JAX's and PyTorch's do not: measured on 21 grids, taking it along axis 0 instead left
-    15 of them a few 1e-17 off on both. The transform itself is :func:`_row_dft`, which never
-    hands the FFT a one-point or single-row batch.
+    JAX). The ``1/n`` is applied to the values *before* the transform, not to the spectrum after
+    it (they differ off powers of two); and the transform runs along the **last** axis. NumPy's
+    FFT gives the same bits along any axis, JAX's and PyTorch's do not: measured on 21 grids,
+    taking it along axis 0 instead left 15 of them a few 1e-17 off on both. The transform itself
+    is :func:`_row_dft`, which never hands the FFT a one-point or single-row batch.
+
+    A staircase (``correction`` :func:`_pixel_correction`) is transformed as ``a - a_0``, with
+    its first value ``a_0`` added back at order 0 only -- where its box transform is exactly 1,
+    and at every other multiple of ``n`` exactly 0. A line of equal values then transforms an
+    exact zero, so a uniform layer comes out as exactly ``eps * I`` at every grid size, not only
+    on the powers of two where the FFT of a constant happens to be exact: a 20-pixel spacer
+    carried 1.3e-16 off the diagonal until 2026-09-26. Point samples keep the plain transform,
+    for :func:`fourier2d_pointwise`'s bits.
     """
     orders = list(range(-2 * half_width, 2 * half_width + 1))
+    staircase = correction is _pixel_correction
 
     def series(a):
         n = a.shape[-1]
         dev = _device(xp, a)
-        spectrum = _row_dft(xp, a)
+        base = a[..., :1] if staircase else None
+        spectrum = _row_dft(xp, a - base if staircase else a)
         picked = xp.take(spectrum, xp.asarray([k % n for k in orders], device=dev), axis=-1)
-        return picked * correction(xp, xp.asarray(orders, device=dev), n, picked.dtype, dev)
+        out = picked * correction(xp, xp.asarray(orders, device=dev), n, picked.dtype, dev)
+        if staircase:
+            at_zero = xp.asarray([k == 0 for k in orders], device=dev)
+            out = out + xp.where(at_zero, base, xp.zeros_like(base))
+        return out
 
     return series
 
