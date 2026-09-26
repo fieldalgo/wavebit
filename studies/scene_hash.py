@@ -42,8 +42,9 @@ Usage::
 To check that a change moved nothing, run it against an extraction of the commit before the
 change rather than against a stash or a checkout::
 
-    git archive <rev> | tar -x -C /tmp/before
-    (cd /tmp/before && python studies/scene_hash.py --quiet)
+    before=$(mktemp -d)
+    git archive <rev> | tar -x -C "$before"
+    (cd "$before" && python studies/scene_hash.py --quiet)
 
 `git archive` touches no shared git state, which matters: several sessions share this repo's
 worktrees and refs (see `.claude/`), and a `git stash` or a `git checkout` in one of them is

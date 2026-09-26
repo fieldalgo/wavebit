@@ -138,7 +138,7 @@ Raw measurements are in
 [`nvf_polynomial_flux_static.log`](../studies/results/nvf_polynomial_flux_static.log),
 [`nvf_polynomial_flux_powers.log`](../studies/results/nvf_polynomial_flux_powers.log)
 and [`nvf_polynomial_flux_jax_static.log`](../studies/results/nvf_polynomial_flux_jax_static.log).
-Projection caches in `/private/tmp` are disposable; the commands regenerate
+Projection caches written outside the repository are disposable; the commands regenerate
 the same physical comparison without depending on those files.
 
 The dedicated tests independently integrate physical flux with nested Gauss

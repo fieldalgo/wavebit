@@ -25,7 +25,7 @@ reference things that arrive with the clone**, plus the published literature:
 
 | May cite | Must not cite |
 | --- | --- |
-| code, tests, studies and other docs in this repository | a path on anyone's machine — `/Users/...`, `~/project/...`, `C:\...` |
+| code, tests, studies and other docs in this repository | a path on anyone's machine — `/Users/...`, `~/project/...`, `/tmp/...`, `/private/...`, `C:\...` |
 | a DOI, an arXiv id, a public URL | a private study, an unpublished draft, an internal note |
 | a released version of another project | a sibling checkout or scratch directory, however stable it feels |
 

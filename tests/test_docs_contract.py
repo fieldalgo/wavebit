@@ -28,20 +28,34 @@ import pytest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 # Directories that ship. `studies/` and `tutorials/` are here because the leak reached both.
+# The files at the top of the tree ship too; `published_files` adds them.
 PUBLISHED = ('wavebit', 'docs', 'tests', 'studies', 'tutorials', 'examples')
-TEXT_SUFFIXES = {'.py', '.md', '.ipynb', '.toml', '.cfg', '.yml', '.yaml', '.txt', '.m'}
+# `.log` because the results logs are committed records, and one carried a build machine's
+# temporary directories.
+TEXT_SUFFIXES = {'.py', '.md', '.ipynb', '.toml', '.cfg', '.yml', '.yaml', '.txt', '.m', '.log'}
 
 # A home directory or a user-rooted absolute path. `~/` alone is not enough to match: it is
 # ordinary in prose ("keep it as a sibling of the checkout"), and what makes a pointer a leak
 # is that it descends into somebody's tree.
+#
+# A scratch directory is a path on one machine too. `docs/half-space-power-audit.md` cited its
+# scripts, logs and licence records under `/private/tmp/...`, and a results log carried a build
+# tool's `/private/var/folders/...`; the pattern read neither until 2026-09-26. So `/Users/`
+# is caught however it continues, and `/private/` or `/tmp/` wherever it starts a path -- not
+# inside a relative one like `tests/tmp/`. A drive letter has to start a word, so the JSON-escaped
+# newlines of a results log (`occurred:\n\n`) do not read as `d:\n\`.
 OUTWARD = re.compile(
-    r'(?:/(?:Users|home)/[A-Za-z0-9._-]+/'          # /Users/someone/... or /home/someone/...
+    r'(?:/Users/'                                   # /Users/someone/..., or /Users/ itself
+    r'|/home/[A-Za-z0-9._-]+/'                      # /home/someone/...
+    r'|(?<![A-Za-z0-9_-])/(?:private|tmp)/'         # /private/tmp/..., /tmp/..., ../private/var/...
     r'|~/[A-Za-z0-9._-]+/'                          # ~/project/..., ~/miniconda3/...
-    r'|[A-Za-z]:\\\\?[A-Za-z0-9._-]+\\)'            # C:\Users\...
+    r'|(?<![A-Za-z0-9_])[A-Za-z]:\\\\?[A-Za-z0-9._-]+\\)'  # C:\Users\..., at a word start
 )
 
 # This file quotes the patterns it forbids, and so does the contract that describes them.
-EXEMPT = {'tests/test_docs_contract.py', 'docs/README.md', 'CONTRIBUTING.md'}
+# CLAUDE.md, the agent instructions of a working checkout, names a local folder; whether it
+# ships is settled when the public mirror is cut, not here.
+EXEMPT = {'tests/test_docs_contract.py', 'docs/README.md', 'CONTRIBUTING.md', 'CLAUDE.md'}
 
 # Paths that do not resolve and are named on purpose. Listed rather than pattern-matched, so
 # that adding one is a decision somebody writes down: the whole failure this file exists to
@@ -59,6 +73,10 @@ CITED_BUT_ABSENT = {
 
 
 def published_files():
+    for p in sorted(ROOT.iterdir()):
+        if p.is_file() and (p.suffix in TEXT_SUFFIXES or p.suffix == '.bib'
+                            or p.name.startswith('LICENSE')):
+            yield p
     for d in PUBLISHED:
         for p in sorted((ROOT / d).rglob('*')):
             if p.is_file() and p.suffix in TEXT_SUFFIXES and '__pycache__' not in p.parts:
@@ -85,6 +103,38 @@ def test_nothing_published_points_outside_the_repository():
         'these point outside the repository, so they are dangling links for anyone who clones '
         'it and a disclosure of the author\'s filesystem:\n  ' + '\n  '.join(bad) +
         '\n\nState the substance instead of the address -- see the contract in docs/README.md.')
+
+
+@pytest.mark.parametrize('line', [
+    'records in /Users/someone/project/notes.md',
+    'logs: `/private/tmp/wavebit-run/regression.log`',
+    'git archive <rev> | tar -x -C /tmp/before',
+    'include directory: ../../../private/var/folders/x/T/build-env/lib',
+    'see ~/project/example/wavebit',
+    r'C:\Users\someone\wavebit',
+    '  path: /private/var/folders/x/T/build-env/bin/python',
+])
+def test_the_outward_pattern_catches_each_form_it_names(line):
+    """A pattern check is a check only if it fires: one line for each form it forbids."""
+    assert OUTWARD.search(line), line
+
+
+@pytest.mark.parametrize('line', [
+    'tests/tmp_cases.py',
+    'studies/results/tmp/run.log',
+    'keep it beside the checkout, ~/ is fine',
+    'https://example.org/privateer/x',
+    r'another exception occurred:\n\nTraceback',
+])
+def test_the_outward_pattern_leaves_inward_paths_alone(line):
+    assert not OUTWARD.search(line), line
+
+
+def test_the_checks_read_the_top_of_the_tree_and_the_results_logs():
+    """The files at the root and the committed `.log` records ship, so the checks read them."""
+    read = {p.relative_to(ROOT).as_posix() for p in published_files()}
+    assert {'README.md', 'LICENSE', 'CITATION.bib', 'pyproject.toml', 'environment.yml'} <= read
+    assert any(r.startswith('studies/results/') and r.endswith('.log') for r in read)
 
 
 # `path.py::symbol` -- how this codebase points at one function inside a file. The path half
