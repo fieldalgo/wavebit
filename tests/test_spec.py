@@ -567,3 +567,149 @@ def test_a_spec_without_a_lattice_is_unchanged():
     assert spec.stack.lattice is None
     assert 'lattice' not in json.loads(spec.to_json())['stack']
     assert 'lattice' not in spec.stack.as_kwargs()
+
+
+# ---------------------------------------------------------------- enum-typed numerics fields
+
+def _numerics_enum_fields():
+    """``{name: (enum class, None allowed)}`` for every enum-annotated field of ``Numerics``.
+
+    Read off the annotations here rather than from a list, so a field added with an enum type
+    is parametrized below without anyone adding it -- which is the point: the defect these
+    tests pin was one field at a time. `test_the_enum_field_list_is_not_vacuous` keeps the
+    derivation honest.
+    """
+    import dataclasses
+    import types
+    import typing
+    from enum import Enum
+
+    hints = typing.get_type_hints(wavebit.Numerics)
+    out = {}
+    for f in dataclasses.fields(wavebit.Numerics):
+        hint = hints[f.name]
+        union = typing.get_origin(hint) in (typing.Union, types.UnionType)
+        args = typing.get_args(hint) if union else (hint,)
+        enums = [a for a in args if isinstance(a, type) and issubclass(a, Enum)]
+        if enums:
+            out[f.name] = (enums[0], type(None) in args)
+    return out
+
+
+ENUM_FIELDS = _numerics_enum_fields()
+ENUM_MEMBERS = [(name, member) for name, (cls, _) in ENUM_FIELDS.items() for member in cls]
+
+
+def _spellings(member):
+    """Every way the JSON door accepts ``member``: itself, its name in either case, its code."""
+    out = [member, member.name.lower(), member.name.upper()]
+    if isinstance(member.value, int):
+        out.append(int(member))
+    return out
+
+
+def test_the_enum_field_list_is_not_vacuous():
+    """A derivation that found nothing would pass every parametrized test below by running none."""
+    assert {'backend', 'fourier_coefficients', 'factorization', 'raster_normal_method',
+            'nvf_projector', 'li_nesting', 'answers'} <= set(ENUM_FIELDS)
+
+
+@pytest.mark.parametrize('name, member', ENUM_MEMBERS,
+                         ids=[f'{n}={m.name.lower()}' for n, m in ENUM_MEMBERS])
+def test_numerics_built_directly_is_the_numerics_from_dict_builds(name, member):
+    """``Numerics(li_nesting='symmetric')`` and the parsed document have to be one object.
+
+    Until 2026-09-27 only ``from_dict`` coerced, one field at a time, so direct construction
+    kept the string: ``as_kwargs`` then raised ``AttributeError: 'str' object has no attribute
+    'value'`` on six of the seven fields (``int('jax')`` on ``backend``), and the two that did
+    not raise wrote ``'FIELD'`` / ``1`` into the document where ``from_dict`` wrote ``'field'``
+    / ``'jax'`` -- one run, two cache keys.
+    """
+    reference = wavebit.Numerics.from_dict({name: member.name.lower()})
+    for spelling in _spellings(member):
+        built = wavebit.Numerics(**{name: spelling})
+        assert getattr(built, name) is member, spelling
+        assert built == reference == wavebit.Numerics.from_dict({name: spelling}), spelling
+
+        # the solver keyword: the plain value, never the member, never dropped
+        kwargs = built.as_kwargs()
+        assert kwargs == reference.as_kwargs(), spelling
+        assert kwargs[name] == member.value and type(kwargs[name]) is type(member.value), (
+            spelling, kwargs.get(name))
+
+        # the document: a plain string, the canonical one, and it reads back as itself
+        written = built.to_dict()[name]
+        assert type(written) is str and written == member.name.lower(), (spelling, written)
+        assert wavebit.Numerics.from_dict(json.loads(json.dumps(built.to_dict()))) == built
+
+        # and the whole spec: one run, one key, whichever spelling built it
+        spec = JobSpec(numerics=built)
+        assert spec.key() == JobSpec(numerics=reference).key(), spelling
+        assert JobSpec.from_json(spec.to_json()).key() == spec.key(), spelling
+
+
+@pytest.mark.parametrize('name', sorted(ENUM_FIELDS))
+def test_numerics_refuses_a_name_that_is_no_member_on_both_doors(name):
+    """Refused at construction, with the message the JSON door gives -- not stored as typed."""
+    with pytest.raises(SpecError) as direct:
+        wavebit.Numerics(**{name: 'bogus'})
+    with pytest.raises(SpecError) as parsed:
+        wavebit.Numerics.from_dict({name: 'bogus'})
+    assert str(direct.value) == str(parsed.value)
+    assert str(direct.value).startswith(f'numerics.{name}: ')
+
+
+@pytest.mark.parametrize('name', sorted(ENUM_FIELDS))
+def test_numerics_reads_none_as_the_json_door_does(name):
+    """``None`` is "unset" where the annotation is ``Optional`` and a refusal where it is not."""
+    _, optional = ENUM_FIELDS[name]
+    if optional:
+        for numerics in (wavebit.Numerics(**{name: None}), wavebit.Numerics.from_dict({name: None})):
+            assert getattr(numerics, name) is None
+            assert name not in numerics.as_kwargs()
+        return
+    with pytest.raises(SpecError) as direct:
+        wavebit.Numerics(**{name: None})
+    with pytest.raises(SpecError) as parsed:
+        wavebit.Numerics.from_dict({name: None})
+    assert str(direct.value) == str(parsed.value)
+
+
+#: What each field needs beside it for a solver to accept it. A field missing here is built
+#: with nothing beside it; if its value is then refused, add the row.
+_SOLVER_COMPANIONS = {
+    'raster_normal_method': {'factorization': 'nvf'},
+    'nvf_projector': {'factorization': 'nvf'},
+    'li_nesting': {'factorization': 'li'},
+}
+#: The pytree exists on the JAX backend only, so `backend` crosses it as 'jax' and nothing else.
+_PYTREE_MEMBERS = [(n, m) for n, m in ENUM_MEMBERS if n != 'backend' or m is Backend.JAX]
+
+
+@pytest.mark.parametrize('name, member', _PYTREE_MEMBERS,
+                         ids=[f'{n}={m.name.lower()}' for n, m in _PYTREE_MEMBERS])
+def test_a_directly_built_numerics_reaches_the_solver_and_crosses_its_pytree(name, member):
+    """The string spelling, through ``run``'s own assembly, into a jitted solve's rebuild.
+
+    `tests/test_pytree_round_trip.py` holds the solver-side round trip for one value per field;
+    this is the spec side of the same seam, for every member.
+    """
+    pytest.importorskip('jax')
+    from jax import tree_util
+
+    eps = np.ones((1, 8, 8))
+    eps[0, 2:5, 1:6] = 6.0
+    spec = JobSpec(
+        stack=wavebit.Stack.from_structure(eps, [120.0], top=1.0, bot=2.25,
+                                           period=(400.0, 400.0)),
+        incidence=wavebit.Incidence(wavelength=900.0, theta=0.2, phi=0.1, psi=0.3),
+        numerics=wavebit.Numerics(truncation_order=(2, 2),
+                                  **{'backend': 'jax', **_SOLVER_COMPANIONS.get(name, {}),
+                                     name: member.name.lower()}))
+    solver = wavebit.rcwa(**spec.numerics.as_kwargs(), **spec.stack.as_kwargs(),
+                          **spec.incidence.as_kwargs())
+    assert getattr(solver, name) == member
+
+    leaves, treedef = tree_util.tree_flatten(solver)
+    rebuilt = tree_util.tree_unflatten(treedef, leaves)
+    assert getattr(rebuilt, name) == member

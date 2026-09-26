@@ -43,6 +43,12 @@ width** (`128` / `64`) rather than a dtype object, so the spec stays backend-neu
 `answers` lives in `numerics` rather than in `incidence`, because it describes the job and not
 the light.
 
+The enum-typed `numerics` fields (`backend`, `factorization`, `li_nesting` and the rest) take
+the enum or its name in any case, as in `Numerics(li_nesting='symmetric')`, and `backend` also
+takes its integer code. Construction normalises them exactly as `Numerics.from_dict` does, so a
+spec built in Python and the same spec parsed from JSON are equal and share one `key()`. A name
+that is no member is refused at construction, with the message the JSON door gives.
+
 ## Running one
 
 ```python

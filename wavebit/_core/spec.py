@@ -47,18 +47,21 @@ sweep-free spec per grid point:
     >>> for point in spec.expand():        # doctest: +SKIP
     ...     result = run(point)
 """
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field, fields, replace
+from enum import Enum
+from functools import cache
 from itertools import product
-from typing import Any, Optional
+from typing import Any, Optional, Union, get_args, get_origin, get_type_hints
 import hashlib
 import json
 import math
+import types
 
 from .conventions import _DIRECTION_CLASH, parse_order_pair, transverse_component_problem
 from .domain import Layer, Material, Stack, Incidence
 from .materials import TabulatedMaterial
 from .enums import (Answers, Backend, Factorization, FourierCoefficients, Nesting, NormalMethod,
-                    Projector, Tetm, answers_of, nvf_option_rename_hint)
+                    Projector, Tetm, nvf_option_rename_hint)
 
 SPEC_VERSION = '10'   # '2': result fields renamed de_ri/de_ti -> R/T (2026-08-12)
 #                     '3': the material convention. `stack.layers[i].eps` -> `.structure`,
@@ -104,6 +107,11 @@ SPEC_VERSION = '10'   # '2': result fields renamed de_ri/de_ti -> R/T (2026-08-1
 # their meaning; tagged tables now survive serialization and wavelength sweeps.
 # '10': bottom-to-top layers, bottom-origin height, +z upward (2026-09-21).
 # The same arrays describe a different stack; old documents require explicit migration.
+# No bump (2026-09-27): `Numerics(...)` normalises its enum fields at construction, as
+# `from_dict` always did. No document changes shape or meaning -- every one was already read
+# through the coercion. What moves is the key of a spec *built in Python* with a non-canonical
+# spelling ('NVF', `backend=1`): it now equals its parsed twin's, the key it always should
+# have had.
 
 #: Refusal for a document that states no version. Its own justification, because the rule
 #: reads as gratuitous ceremony until you see which case it is for.
@@ -171,6 +179,25 @@ def _enum(value, enum_cls, where):
             f"Expected one of {[m.name.lower() for m in enum_cls]}{codes}") from None
 
 
+@cache
+def _enum_fields(cls):
+    """``(name, enum class, None allowed)`` for every dataclass field annotated with an enum.
+
+    Read off the annotations rather than listed, so that a field added later with an enum
+    type is normalised by :meth:`Numerics.__post_init__` without anyone having to remember
+    it there. ``Optional[E]`` and ``E | None`` allow ``None``; a bare ``E`` does not.
+    """
+    hints = get_type_hints(cls)
+    out = []
+    for f in fields(cls):
+        hint = hints[f.name]
+        args = get_args(hint) if get_origin(hint) in (Union, types.UnionType) else (hint,)
+        members = [a for a in args if a is not type(None)]
+        if len(members) == 1 and isinstance(members[0], type) and issubclass(members[0], Enum):
+            out.append((f.name, members[0], type(None) in args))
+    return tuple(out)
+
+
 def _jsonable(value):
     """Plain-Python form of a value, so ``to_dict`` output survives ``json.dumps``.
 
@@ -184,7 +211,10 @@ def _jsonable(value):
     """
     if isinstance(value, bool) or value is None:
         return value
-    if isinstance(value, (Answers, Backend, Tetm, FourierCoefficients, Factorization)):
+    # Every enum, not a list of them: the list named five and missed `NormalMethod`,
+    # `Projector` and `Nesting`, which then fell through to the `str` branch below and came
+    # back as enum members rather than strings. The name is the spelling `_enum` reads back.
+    if isinstance(value, Enum):
         return value.name.lower()
     if isinstance(value, (Material, TabulatedMaterial)):
         return _material_to_json(value)
@@ -459,27 +489,34 @@ class Numerics:
                'nvf_projector', 'li_nesting', 'complex_dtype', 'layer_algorithm', 'shape_nvf_grid_size',
                'answers')
 
+    def __post_init__(self):
+        """Normalise every enum-typed field, so that every door builds the same object.
+
+        ``Numerics(li_nesting='symmetric')`` used to keep the string, and ``as_kwargs`` then
+        died reading ``.value`` off it, while ``from_dict`` -- which coerced field by field --
+        built the enum. Six of the seven enum fields broke that way. ``answers`` survived
+        because ``as_kwargs`` re-validated it, and still wrote ``'FIELD'`` into the document
+        where ``from_dict`` wrote ``'field'``, which splits :meth:`JobSpec.key` for one run;
+        ``backend=1`` did the same against ``'jax'``. ``from_dict`` now leaves the enum fields
+        to this method, so a refusal carries the same message whichever door it came in by.
+
+        A name that is no member is refused here, where ``complex_dtype=32`` is left for
+        :meth:`check`. The difference is that an enum field is *converted* at construction:
+        a spelling with nothing to be converted to could only be kept raw, which is the object
+        this method exists to rule out.
+        """
+        for name, enum_cls, optional in _enum_fields(type(self)):
+            value = getattr(self, name)
+            if value is None and optional:
+                continue
+            setattr(self, name, _enum(value, enum_cls, f'numerics.{name}'))
+
     @classmethod
     def from_dict(cls, d) -> 'Numerics':
         d = dict(d or {})
         _reject_unknown(d, cls._FIELDS, 'numerics')
-        if 'backend' in d:
-            d['backend'] = _enum(d['backend'], Backend, 'numerics.backend')
-        if d.get('fourier_coefficients') is not None:
-            d['fourier_coefficients'] = _enum(d['fourier_coefficients'], FourierCoefficients,
-                                              'numerics.fourier_coefficients')
-        if d.get('factorization') is not None:
-            d['factorization'] = _enum(d['factorization'], Factorization,
-                                       'numerics.factorization')
-        if d.get('raster_normal_method') is not None:
-            d['raster_normal_method'] = _enum(d['raster_normal_method'], NormalMethod,
-                                              'numerics.raster_normal_method')
-        if d.get('nvf_projector') is not None:
-            d['nvf_projector'] = _enum(d['nvf_projector'], Projector, 'numerics.nvf_projector')
-        if d.get('li_nesting') is not None:
-            d['li_nesting'] = _enum(d['li_nesting'], Nesting, 'numerics.li_nesting')
-        if 'answers' in d:
-            d['answers'] = _enum(d['answers'], Answers, 'numerics.answers')
+        # The enum fields are not coerced here: `__post_init__` does it for this door and for
+        # direct construction alike, so the two cannot drift apart again.
         if 'truncation_order' in d:
             # The solver's own parser, not a second one. This was an inline check that refused
             # five spellings `rcwa()` accepts -- `2.0`, `[3]`, both mappings, and a NumPy
@@ -547,7 +584,7 @@ class Numerics:
             complex_dtype=0 if self.complex_dtype == 128 else 1,
             layer_algorithm=self.layer_algorithm,
             shape_nvf_grid_size=self.shape_nvf_grid_size,
-            answers=answers_of(self.answers).value,
+            answers=self.answers.value,
             **({} if self.fourier_coefficients is None
                else {'fourier_coefficients': self.fourier_coefficients.value}),
             **({} if self.factorization is None
