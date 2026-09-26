@@ -646,6 +646,10 @@ the file's 31 cases.
 
 ## S2b: how few cells across a smoothed body may be (2026-09-26)
 
+*The energy certificate this section measures was replaced on 2026-09-27 by the star lift
+(the last section); its refusals are history. The door's numbers are the unlifted rule's, which
+the star lift leaves unchanged on every `eps <= 12` sphere measured.*
+
 Run before the cells-across door (stage 4, C5). The plan first meant to set that number from
 the fill rule's volume error, and that question closed before the study ran: every public body's
 fill is its exact clip, and the lowered volume matches the analytic one to 3.2e-15 relative on
@@ -848,6 +852,9 @@ refused as crossing 1, the exact comparison restored 2, a body's rows claiming a
 
 ## C5: the cells-across door, and where the certificate refuses (2026-09-26)
 
+*The certificate was replaced on 2026-09-27 by the star lift (the last section): the plan no
+longer refuses on it, and its table below is history.*
+
 S2b above set the door: a smoothed body under **4** cells across its smallest extent is refused
 (`checks.check_cells_across`), 4 to 8 warns (`CoarseMeshWarning`), and the messages quote the
 production numbers, not the arithmetic mean's. The door reads `Shape.min_extent` over the axes
@@ -996,3 +1003,110 @@ its height, the mirror line dropped -- each fails one case. A printed plane posi
 to a billionth of a cell (`checks.shown`), because a grid's low corner carries round-off: the
 mirror line first printed `x = -5.55112e-17` for a box centred at 0.3, and the Symmetry door's
 messages read the same plane.
+
+## The star lift: the smoothed operator positive by construction (2026-09-27)
+
+*This replaces the energy certificate that S2b and the C5 sections above describe; they record
+the state at their dates.* The default rule's inverse-material operator on a constitutive region,
+`Xi = diag(e) + C` -- the edge diagonal `build` paints and the node cross coefficients `lower`
+paints, `c/4` for each pair of edges that share a node -- is the operator Werner, Bauer and Cary
+call wc07 (J. Comput. Phys. 247, 2013, Eq. 11). Nothing in the rule keeps it positive definite,
+and at a high-contrast surface it is not: the 16^3 test cavity's `eps = 100` sphere reads
+`lambda_min * eps = -1.55`, and a seeded run with that operator grows x1.9e7 in 300 steps while
+its discrete energy stays flat -- leapfrog conserves the indefinite form exactly, so the energy
+cannot see it (`tests/test_fd_constitutive.py::test_an_unlifted_eps_100_sphere_grows` judges the
+field norms). Until now the plan refused such scenes with a Gershgorin lower bound, which also
+refused most positive ones: every sphere above `eps` about 12.5, at every resolution.
+
+**The construction** (`wavebit/fd/_lower/stars.py`). `Xi` is the sum of one 6x6 matrix per node --
+its star: the six edges that touch the node, each with half its diagonal, and every coupling
+through the node at its full `c/4`. If every star is positive definite, so is `Xi`. A star has a
+closed test: minimising its energy over how each axis's field splits between the axis's two
+edges leaves `diag(H) + offdiag(c)`, `H_a` the harmonic mean of the two `a`-edges' diagonals (a
+lone edge at a region's end reads `2 e_a`). The lift moves both `a`-edges of a star toward the
+node's own Kottke tensor (Kottke, Farjadpour and Johnson, PRE 77, 2008) by the least `t` in
+`[0, 1]` that puts the star above a floor `THETA * min(1/<eps>, its edges)`. At `t = 1` the test
+matrix is that tensor -- positive definite, smallest eigenvalue at least `1/<eps>` -- and the
+star's smallest eigenvalue is concave in `t`, so the least `t` always exists. Each edge's
+diagonal is the sum of its two halves. It is Werner, Bauer and Cary's Sec. 4 argument and step-6
+fallback with a larger piece, made minimal and continuous.
+
+* **It never refuses** a lossless positive scene, for any number of bodies; a star with no cross
+  coefficient never moves, so a region with nothing below the floor lowers to the same bits as
+  before and `be` is not touched.
+* **It is continuous**: a star starts to move from `t = 0` as it reaches the floor (a trigger at
+  zero with a lift to the floor, the first prototype, jumps).
+* **The certificate is checked, not assumed**: every star at its `t` is tested on the numbers the
+  kernel will use; `validate` refuses a failure by name and `guard` turns it into `stable = NaN`
+  under a transform. The Gershgorin enclosure stays for its upper end, the time-step bound.
+* **The test** is the sign of the three `L D L^T` pivots of the test matrix. Leading principal
+  minors misjudged 331 pieces at `eps = 1e10` unscaled and, scaled, resolved `t*` only to about
+  `1e-8` at a double root, where a determinant touches zero quadratically: a finite-difference
+  gradient on a cell-centred sphere scattered by 6%.
+* **The gradient** of `t*` is the implicit one, through the null vector of the floored test
+  matrix. A determinant's derivative was 44% off at the double eigenvalues that a node- or
+  cell-centred sphere has on its body diagonals.
+* **Values and traces**: on the host only the stars below the floor are bisected; under
+  `jax.jit` and the other value-less transforms every star goes through one scan. NumPy, JAX,
+  `jax.jit` and Torch agree to `1e-12` relative; gradients agree with central differences to
+  `4.1e-9` at three placements.
+
+**The first form, and why the star replaced it.** The first form, in the history just before the
+star, used WBC's own pieces, eight 3x3 blocks per node with one edge per axis, whose test binds on the
+smaller of an axis's two edges. A design review (four agents) confirmed its proof and found no
+scene whose lifted operator was indefinite, and found that the block test is much stronger
+than the operator's positivity. `studies/fdtd_subpixel_lift.py` then measured what that costs
+(its rows: `studies/results/fdtd_subpixel_lift_blocks.log`): an `eps = 12` sphere, positive
+definite, moved 1.3-3.3% of its blocks at every resolution, and at `eps = 25` the lifted static
+error settled near -0.2% from 12 to 24 cells across while the unlifted rule's fell +0.96% ->
++0.36% -- an order-one move of a fixed share of the surface, which is an error of first order.
+At `eps = 12` it hid behind cancellation with the rule's own positive error, and the order at
+`eps = 12`, which is all the study's first rule read, went *up*. The star's harmonic mean lies
+between an axis's two edges.
+
+**Choosing `THETA`** -- `studies/fdtd_subpixel_lift.py`, the rule written before the runs: the
+smallest worst static error of the sphere (S2b's instrument) over `eps` 12, 20, 25, 40 and 100 at
+8 and 16 cells across and five placements, among the values that move no star of an `eps <= 6`
+body. No star of any of 126 such bodies moved at any value tried. The static error, the range
+over five placements:
+
+| eps | cells across | unlifted | `THETA` 0.02 | 0.1 | 0.3 |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 12 | 8 | +0.60 .. +1.47% | the same, to the bit | the same | the same |
+| 25 | 8 | +0.89 .. +2.33% | +0.72 .. +2.32% | +0.67 .. +2.32% | +0.61 .. +2.35% |
+| 25 | 16 | +0.56 .. +1.07% | +0.50 .. +0.98% | +0.48 .. +0.97% | +0.46 .. +0.95% |
+| 40 | 16 | +0.92 .. +1.56% | +0.64 .. +1.20% | +0.63 .. +1.20% | +0.64 .. +1.22% |
+| 100 | 8 | +1.02 .. +9.22% | +2.31 .. +5.19% | +2.34 .. +5.21% | +2.48 .. +5.28% |
+| 100 | 16 | unsolvable at 3 of 5 | +1.02 .. +1.68% | +1.03 .. +1.68% | +1.07 .. +1.71% |
+
+The worst errors were 5.189 / 5.196 / 5.207 / 5.239 / 5.279% at 0.02 / 0.05 / 0.1 / 0.2 / 0.3
+(9.217% unlifted), so **`THETA = 0.02`**: accuracy hardly depends on it; the margin does (the
+`eps = 100` sphere's smallest eigenvalue times `eps` 0.343 at 0.02, 0.395 at 0.1). Fitted static
+orders over 8-24 cells across, mean over three placements: 1.808 at `eps = 12` (unlifted, to the
+bit), 1.730 at 25 (1.637 unlifted), 1.770 at 40 (1.506) and 1.767 at 100 (unlifted unsolvable).
+Stars moved at `THETA = 0.02`: none on an `eps <= 12` sphere at 8 and 16 cells across; 6-17% of
+the stars with a cross coefficient at `eps` 20-25, 16-25% at 40, 24-38% at 100; 7-14% of the
+turned box's, the cylinder's and the prism's at 25.
+
+**The C3 Mie evidence stands.** Over all 37 C3 scenes -- the `eps = 12`, glass and weak spheres
+at their three resolutions and three placements, the small high-index control, and the TE
+cylinder at 40/56/80 cells -- no star moves, and `be`/`bh` equal `build`'s bit for bit. The
+orders recorded in `docs/fd-mie-validation.md` are the lifted rule's.
+
+**The plan says so.** Where the lift moves stars, the plan warns (`SubpixelAccuracyWarning`) with
+each term's count and the largest move, and `fd.check` prints a `lift` line under the body.
+
+**Tests and mutants** (`tests/test_fd_star_lift.py`, and two tests each in
+`test_fd_constitutive.py` and `test_fd_cells_across.py`): the star sum against `cross_action`'s
+dense matrix for E and H; the least move against `eigvalsh` of each explicit star; the lifted
+`eps = mu = 100` operator positive definite where the unlifted is not (x100: E -1.549 -> +0.518,
+H -1.831 -> +0.391); no star moved on an `eps = 12` sphere or in the C3 spheres; bit identity on
+glass; continuity; the node tensor from the definitions; every backend and `jax.jit`; the
+gradient against finite differences at three placements; the certificate's wiring; the plan note
+and the check line. 27 mutants, each killed -- among them the star reading an axis's smaller edge
+as the blocks did, the arithmetic mean in place of the harmonic (too weak), the determinant
+pivots, the implicit gradient dropped, and `THETA = 0.3`.
+
+**Open.** Masked (PEC) edges could be treated as absent too -- the operator the kernel runs is
+the submatrix without them -- which would move fewer stars at a wall. The lift does not touch
+the C3 cylinder arm (voxel order 1.60): that is an accuracy question on a now-positive operator.

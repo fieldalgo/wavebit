@@ -34,6 +34,11 @@ public path was shown to run the same operator bit for bit, and a full public 40
 reproduced its Qsca bit for bit. Scope and the full record are in that document's last
 section.
 
+The star lift that keeps the default rule's operator positive definite (2026-09-27,
+[`fd-subpixel-occupancy.md`](fd-subpixel-occupancy.md), "The star lift") moves nothing in any
+of the 37 C3 scenes: their operators are the unlifted rule's bit for bit, and every number
+below stands.
+
 The **default** discretisation is unchanged. It passes every sphere order arm (the
 epsilon-12 sphere below at 1.8268534, -6.18% at 80 cells) but still fails the cylinder
 (1.6033652), and at the same grids it is the more accurate of the two on glass, weak and
