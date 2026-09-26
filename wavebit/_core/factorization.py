@@ -2005,44 +2005,53 @@ def _as_bools(xp, flags):
 
 
 def compression_indices(cell):
-    """Locate the piecewise-constant blocks of a raster layer — **static geometry**.
+    """Where a raster's piecewise-constant blocks end, and the edges that places them at.
 
-    Returns ``(row_idx, col_idx, x, y)``: the rows/columns that end a constant block, plus
-    their normalized right-hand edges. The decision compares neighbouring rows/columns *by
-    value* and its output shape depends on the answer, so it cannot run under ``jax.jit`` —
-    that is what :meth:`~wavebit._core.engine.CoreFactorizationMixin.freeze_geometry`
-    records. It *can* run inside ``jax.grad``: the comparisons are narrowed through
-    :func:`_as_bools`, which a grad tracer permits. So a gradient over a raster whose pattern
-    moves every step — a binary topology optimization, say — needs no frozen geometry and
-    therefore cannot be served a stale one. The gather this implies (:func:`compress_cell`)
-    stays differentiable either way.
+    ``cell`` is ``(N_r, N_c)``, rows along ``v`` and columns along ``u``. Returns
+    ``(row_idx, col_idx, x, y)``:
 
-    Worked in the input's own namespace rather than through NumPy for that reason alone; a
-    concrete array still takes the whole-array path in :func:`_as_bools` and costs the same.
+    - ``col_idx``: ascending Python ints -- every column ``c < N_c - 1`` that differs from column
+      ``c + 1`` in any entry, and ``N_c - 1``. That is the last column of each run of identical
+      neighbouring columns.
+    - ``row_idx``: the same for rows, compared on the column-reduced raster ``cell[:, col_idx]``.
+    - ``x``: NumPy float64, ``(len(col_idx), 1)``, the right-hand edge of each kept column as
+      ``step_u * (c + 1)`` with ``step_u = 1.0 / N_c``; ``y`` likewise from ``row_idx`` and
+      ``N_r``.
+
+    The compressed layer ``cell[row_idx][:, col_idx]`` (:func:`compress_cell`) on those edges is
+    the same staircase as the raster. The comparisons are narrowed to Python booleans with
+    :func:`_as_bools`, so ``cell`` may be a torch tensor that requires grad or a ``jax.grad``
+    tracer. The output's shape depends on the values, so this does not run under ``jax.jit``;
+    a frozen record of its result is what a traced build replays. A gradient over a raster
+    whose pattern moves every step -- a binary topology optimization, say -- therefore needs no
+    frozen geometry and cannot be served a stale one.
+
+    Written with :func:`compress_cell` on 2026-09-25 from a specification of what they return,
+    replacing versions that came from meent; ``LICENSE`` records the history.
     """
     import numpy as np
-
     xp = array_namespace(cell)
     n_row, n_col = cell.shape
 
-    same_col = _as_bools(xp, xp.all(cell == xp.roll(cell, -1, axis=1), axis=0))
-    col_idx = [c for c in range(n_col) if not same_col[c] or c == n_col - 1]
+    col_steps = _as_bools(xp, xp.any(cell[:, :-1] != cell[:, 1:], axis=0))
+    col_idx = np.flatnonzero(col_steps).tolist() + [n_col - 1]
 
-    cell_u = xp.take(cell, xp.asarray(col_idx, device=_device(xp, cell)), axis=1)
-    same_row = _as_bools(xp, xp.all(cell_u == xp.roll(cell_u, -1, axis=0), axis=1))
-    row_idx = [r for r in range(n_row) if not same_row[r] or r == n_row - 1]
+    reduced = xp.take(cell, xp.asarray(col_idx, device=_device(xp, cell)), axis=1)
+    row_steps = _as_bools(xp, xp.any(reduced[:-1, :] != reduced[1:, :], axis=1))
+    row_idx = np.flatnonzero(row_steps).tolist() + [n_row - 1]
 
     step_v, step_u = 1.0 / np.array((n_row, n_col), dtype=np.float64)
-    x = np.array([step_u * (c + 1) for c in col_idx]).reshape((-1, 1))
-    y = np.array([step_v * (r + 1) for r in row_idx]).reshape((-1, 1))
+    x = (step_u * (np.asarray(col_idx, dtype=np.float64) + 1.0)).reshape((-1, 1))
+    y = (step_v * (np.asarray(row_idx, dtype=np.float64) + 1.0)).reshape((-1, 1))
     return row_idx, col_idx, x, y
 
 
 def _steps_along(cell, axis):
     """Indices along ``axis`` where ``cell`` differs from its successor — where it must be cut.
 
-    Cyclic, matching :func:`compression_indices`: the last index compares against the first,
-    and is a required cut regardless since it closes the period.
+    Cyclic: the last index compares against the first, and is a required cut regardless since
+    it closes the period. So it finds the cuts :func:`compression_indices` makes, although that
+    one compares one-sidedly and keeps the last index unconditionally.
     """
     import numpy as np
     nxt = np.roll(cell, -1, axis=axis)
@@ -2113,10 +2122,15 @@ def _check_compression_still_fits(cell, record, index):
 
 
 def compress_cell(xp, cell, row_idx, col_idx):
-    """Gather the compressed layer selected by :func:`compression_indices` (differentiable)."""
+    """``cell[row_idx][:, col_idx]``: the compressed layer, as a differentiable gather.
+
+    The indices come from :func:`compression_indices` or from a frozen record of it, and are
+    placed on ``cell``'s device. The gather is traceable, and the gradient reaches every entry of
+    ``cell`` it reads.
+    """
     dev = _device(xp, cell)
-    cell = xp.take(cell, xp.asarray(col_idx, device=dev), axis=1)
-    return xp.take(cell, xp.asarray(row_idx, device=dev), axis=0)
+    rows = xp.take(cell, xp.asarray(row_idx, device=dev), axis=0)
+    return xp.take(rows, xp.asarray(col_idx, device=dev), axis=1)
 
 
 def to_conv_mat_raster_integrated(structure, half_width_u, half_width_v, compression=None,
