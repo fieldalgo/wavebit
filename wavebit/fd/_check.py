@@ -213,7 +213,9 @@ def report(scene, p=None, params=None):
             warnings.append(f'the params could not be built on NumPy for the byte count: '
                             f'{type(err).__name__}: {err}; run the scene to see it')
     cross = params.get('constitutive', {}) if isinstance(params, dict) else {}
-    term_bytes = tuple((t.name, int(np.asarray(cross[t.name]).nbytes) if t.name in cross
+    # Counted from shape and dtype, as params_bytes counts: under jax.jit(fd.run) the arrays
+    # are tracers, and np.asarray on one raised (the C5 review).
+    term_bytes = tuple((t.name, params_bytes({'term': cross[t.name]}) if t.name in cross
                         else None, int(3 * np.prod(t.region.shape) * itemsize))
                        for t in p.constitutive)
     monitors, solves = _monitor_lines(scene, p)

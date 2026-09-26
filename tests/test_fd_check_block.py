@@ -149,3 +149,26 @@ def test_every_body_reports_its_analytic_volume_and_holds_it():
         assert row.asked == pytest.approx(truth, rel=1e-14), shape.describe()
         for value in row.held.values():
             assert abs(value / truth - 1) < 1e-12, shape.describe()
+
+
+def test_a_jitted_run_of_a_body_with_cross_terms_builds_its_report():
+    """``fd.run`` builds its report from the params it lowered, which are tracers under jit.
+
+    The block's byte count once read them with ``np.asarray`` and every smoothed body with a
+    constitutive term -- a sphere, a turned box -- crashed under ``jax.jit(fd.run)`` (C5 review);
+    it counts from shape and dtype now, as ``params_bytes`` does.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    from fd_helpers import band
+
+    def energy(amplitude):
+        scene = _box((fd.Sphere(radius=0.15),), size=0.8, dx=0.04).replace(
+            run=fd.Run(steps=20),
+            sources=(fd.Dipole('d', center=(0.24, 0.0, 0.0), component='Ey', band=band(),
+                               amplitude=amplitude),))
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            return jnp.sum(jnp.asarray(fd.run(scene, 'jax').final.E) ** 2)
+    eager = float(energy(1.0))
+    assert float(jax.jit(energy)(1.0)) == pytest.approx(eager, rel=1e-12)
