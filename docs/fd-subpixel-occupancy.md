@@ -804,6 +804,16 @@ the commonest placement -- while the fill stays exact. The test's bar sits off e
 boundary. The convention a face on a boundary should follow, and whether it matters for C6's
 differentiable edge, are open.
 
+**A second tie of the same kind, found by the C5 review, also open.** The turned prism's
+nearest-surface proxy normal (`_bodies._Polygonal._transverse_surface`) takes the nearest edge
+with a strict `<`, so a Yee point on the section's medial axis -- equidistant from two faces, as
+for a square turned 45 degrees centred on a node line -- takes whichever face round-off prefers.
+`angle=45` and `angle=405` (vertices 5.6e-17 apart) flipped the proxy normal at 38 points and
+differed by 2.45e-3 of the peak in 300 steps, and a mirrored half box and its full box by
+7.8e-5, against 1e-15 at 30 degrees. The fill is exact either way; the cross coefficients are
+not. A tie rule that does not depend on vertex order (the bisector, say) is the fix to decide
+with the face-on-boundary one, before C6.
+
 ## C5: a structure past a face of the box (2026-09-26)
 
 The box clips geometry, and before C5 the report did not say so. The audit measured, all
