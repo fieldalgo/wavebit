@@ -719,3 +719,68 @@ What it decides:
 * Not measured: the non-sphere bodies at `eps` 2.25 and 4; whether a non-convex prism's error
   follows its arm width or the hull width `min_extent` reads (2.83x apart for the L-shaped
   outline); CSG bodies; `discretisation='stencil'`.
+
+## C5: what a structure may be at a Symmetry face (2026-09-26)
+
+A `Symmetry` face stands for a scene that is its own mirror image: the run carries the domain
+side and reflects the field, so it models every structure's domain part and that part's image.
+The plane is the node plane on the wall at a `-` face and the half plane `dx/2` inside the wall
+at a `+` face. Before C5 nothing compared a structure with that: a smoothed body crossing a
+`-` mirror met door 3's message about material outside the box (untrue at a mirror), an
+unturned `fd.Box` crossed silently whatever its placement, and a snapped `fd.Region` was
+clipped silently. `checks.check_symmetry` now refuses the two readings that are silently wrong
+and accepts the rest -- the symmetric body, and the dimer a mirror exists to halve:
+
+* a structure that **crosses the plane and is not its own mirror image there** -- a smoothed
+  body judged by its exact fill against the fill at the mirrored points, to `_CLIP_ROUNDOFF`,
+  over a band as deep as it reaches past the plane; a snapped shape by its cells, with the
+  edge the mirror makes within the snap's own half cell of the declared one;
+* a smoothed body **within half a cell of the plane without crossing it, where the parity
+  leaves the plane's components free** (`parity=+1` on a `-` face, `-1` on a `+` face). Its
+  plane voxels hold its half and its image's, and read only its own. At the other parity the
+  mirror zeroes those components and a flush half is exact, so it is not refused.
+
+Door 3 no longer answers at a mirror face, and the constitutive plan's own mirror refusal (a
+body's cross terms reaching the plane need a mirror-weighted adjoint) now says that the
+unturned `fd.Box` is the one body that may cross a mirror.
+
+`studies/fdtd_symmetry_mirror.py` measures what each refused case does with the door held
+open: a PEC cavity with an `eps = 4` bar, the `Symmetry(parity=1)` half box against the full
+box holding what was meant, by the fundamental frequency (the bar itself moves it by about
+-10.8%). Rows in `studies/results/fdtd_symmetry_mirror.log`:
+
+| case | shift in the resonance | `eps` on the plane, half / full |
+| --- | ---: | ---: |
+| `-` face, box symmetric about the plane (control) | +1.44e-15 | 4 / 4 |
+| `-` face, box declared flush, `[0, 0.2]` | +5.50e-3 | 2.5 / 4 |
+| `-` face, box shifted one cell, `[-0.15, 0.25]` | -8.74e-3 | 4 / 4 |
+| `-` face, box declared `[-0.1, 0.2]`, against that box | -1.55e-2 | 4 / 4 |
+| `-` face, Region symmetric about the plane (control) | +4.08e-3 | 4 / 4 |
+| `-` face, Region declared `[-0.1, 0.2]`, against that Region | -9.09e-3 | 4 / 4 |
+| `+` face, box symmetric about the plane (control) | +1.99e-15 | 4 / 4 |
+| `+` face, box centred on the wall, not the plane | +6.91e-3 | 4 / 4 |
+| `+` face, box declared flush, `parity=+1` | -3.43e-15 | 1.6 / 4 |
+
+The last row is the parity rule measured: at `parity=+1` a `+` plane's components are zeroed,
+so its plane voxel's `eps` of 1.6 is never used. The Region control is the snap's own half-cell
+rule -- node components are painted at a Region's low face and not its high one -- so the
+Region's asymmetric crossing costs about twice what snapping does; it is refused for its
+geometry, a body a third longer than the one declared. `tests/test_fd_symmetry_door.py` pins
+each case and runs the half box against the full box: 6.2e-16 of the peak for the symmetric
+bar, 6.6e-2 for its flush half with the door held open. Mutants, each alone: the door removed
+fails 9 cases, the parity rule inverted 4, the `+` plane put on the wall 3, the band one layer
+deep 2, the snap's half-cell slack removed 1, door 3 answering at mirrors 1. A variant that
+read the H points on the plane as well as E survived and was removed: the parity frees both
+together and their voxels tile the same slab, so they always see the same material.
+
+**Found on the way, not fixed here: a box face on a voxel boundary.** The half box and the
+full box first disagreed by 4.5e-3 of the peak in 300 steps for the symmetric bar with faces at
+`x = +-0.2`, which are voxel boundaries of `Ex`. The fills agree; the normal moment does not.
+A face lying exactly on a voxel's boundary enters that voxel's moment or not by round-off --
+at an `Ex` rim voxel `w` is `(0, 1, 0)` with the face at the boundary and `(1/3, 2/3, 0)` with
+it 1e-12 inside -- and the two grids' coordinates differ by 1e-17, so the same geometry lowered
+`eps` 2.105 against 2.5 on those voxels. It is a property of the C4 moment, not of the mirror,
+and it breaks translation invariance for a box whose faces sit on node or half-node planes --
+the commonest placement -- while the fill stays exact. The test's bar sits off every voxel
+boundary. The convention a face on a boundary should follow, and whether it matters for C6's
+differentiable edge, are open.

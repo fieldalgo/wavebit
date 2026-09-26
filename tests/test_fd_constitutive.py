@@ -343,8 +343,15 @@ def test_loss_and_mirror_doors_cover_the_interpolation_halo():
     with pytest.raises(ValueError, match='interpolation support meets.*conductivity or poles'):
         quiet(fd.plan, scene.replace(structures=scene.structures+(loss,)))
     mirror = fd.Boundaries(x=(fd.Symmetry(parity=1), fd.PEC()), y=fd.PEC(), z=fd.PEC())
-    with pytest.raises(ValueError, match='mirror-weighted adjoint'):
+    # Tangent to the plane, the ball meets checks.check_symmetry first (its plane voxels hold
+    # its half and not its image's); 0.6 and 1.0 cells clear it passes that door, and its
+    # cross terms still reach the plane -- the halo this door is for. 1.2 cells clear plans.
+    with pytest.raises(ValueError, match='within half a cell of the x- Symmetry plane'):
         quiet(fd.plan, cavity(center=(-.25,0.,0.)).replace(boundaries=mirror))
+    for x in (-.22, -.20):
+        with pytest.raises(ValueError, match='mirror-weighted adjoint'):
+            quiet(fd.plan, cavity(center=(x,0.,0.)).replace(boundaries=mirror))
+    quiet(fd.plan, cavity(center=(-.19,0.,0.)).replace(boundaries=mirror))
 
 
 def test_equal_phases_have_no_cross_coupling_and_box_faces_have_none():

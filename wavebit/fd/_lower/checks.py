@@ -48,6 +48,10 @@ The table, and where each row lives:
     (stage 4 C4) a smoothed surface in a        check_smoothed, here: the snapped cells
       voxel a cell-snapped face cuts              are all or nothing where the geometry
                                                   splits -- three media, and a rule of two
+    (stage 4 C5) a structure crossing a         check_symmetry, here: the run models the
+      Symmetry plane that is not its own          mirror of the domain part; a smoothed body
+      mirror image, or a smoothed body within     flush against a plane whose parity leaves
+      half a cell of one                          the plane's components free reads half
     (stage 3) a Bloch phase on a one-cell axis    check_one_cell_bloch, here (names Axis1D;
       in a scene with a source                      a source-free kernel study keeps it)
     (stage 3) an Axis1D k past k_max              boundaries.Axis1D (concrete); the params'
@@ -331,7 +335,8 @@ def check_smoothed(scene, grid):
     round-off from a leak worth refusing, measured and stated there. A shape that is **uniform
     across** the face -- a substrate, a half space -- answers ``Shape.uniform_along`` ``True``
     in that cell layer and is exempt from both arms, because a body that does not change across
-    the wall neither gains nor loses anything there.
+    the wall neither gains nor loses anything there. A ``Symmetry`` face is not a wall for this
+    door: what a body may be at a mirror plane is :func:`check_symmetry`'s question (C5).
 
     **4. No anisotropic eps or mu where a smoothed shape reaches.** The rule
     ``coefficients.mix`` applies is the diagonal of the Farjadpour/Kottke tensor's inverse
@@ -394,7 +399,7 @@ def check_smoothed(scene, grid):
     face), the body's fill only where that share is fractional and the body's surface within
     reach, both against :data:`_CLIP_ROUNDOFF`.
     """
-    from ..boundaries import Axis1D, Bloch, Periodic
+    from ..boundaries import Axis1D, Bloch, Periodic, Symmetry
     from .occupancy import smoothed_structures
     structures = tuple(getattr(scene, 'structures', ()) or ())
     smoothed = smoothed_structures(scene)
@@ -448,7 +453,9 @@ def check_smoothed(scene, grid):
                     f'every layer holds the same section; or say the periodic geometry with '
                     f'the cell-snapped fd.Region (which is clipped, and whose clipping is how a '
                     f'lamellar grating spells "runs the whole period").')
-        outside = _reaches_outside(structure.shape, body, grid, box)
+        mirrors = tuple((a, side) for a, axis in enumerate('xyz') for side in '-+'
+                        if isinstance(scene.boundaries.face(axis + side), Symmetry))
+        outside = _reaches_outside(structure.shape, body, grid, box, mirrors)
         if outside is not None:
             a, side, fill = outside
             axis = 'xyz'[a]
@@ -647,8 +654,13 @@ def _isotropic(triple):
     return None not in values and values[0] == values[1] == values[2]
 
 
-def _reaches_outside(shape, body, grid, box):
+def _reaches_outside(shape, body, grid, box, mirrors=()):
     """``(axis, '-'/'+', fill)`` where the body's material reaches a face, or ``None``.
+
+    A face in ``mirrors`` (``(axis index, side)`` pairs) is a ``Symmetry`` plane, and what a
+    body may be there is :func:`check_symmetry`'s question, not this one: a body symmetric
+    about the plane is the right way to cross it, and neither of this door's two messages is
+    true of it.
 
     Asked of the **body** and not of the support box, because the support carries a cell of
     margin. For each face the support reaches, the cell layer one cell beyond it is built at
@@ -689,7 +701,7 @@ def _reaches_outside(shape, body, grid, box):
     for a in range(3):
         for side, reached, layer in (('-', box[a][0] == 0, (0, 1)),
                                      ('+', box[a][1] == grid.n[a], (grid.n[a] - 1, grid.n[a]))):
-            if not reached or shape.uniform_along(a, layer, grid):
+            if not reached or (a, side) in mirrors or shape.uniform_along(a, layer, grid):
                 continue
             beyond = [(box[b][0] - 1, box[b][1] + 1) for b in range(3)]
             beyond[a] = (-1, 0) if side == '-' else (grid.n[a], grid.n[a] + 1)
@@ -827,6 +839,259 @@ def _shared_surface_voxels(body_a, body_b, grid, box, include_common=False):
                          tuple(round(float(v), 6) for v in marked[both][k]),
                          float(fa[both][k]), float(fb[both][k]))
     return count, worst
+
+
+def mirror_plane(grid, a, side):
+    """Where a ``Symmetry`` face's plane is along axis ``a``: the node plane on the wall at a
+    ``-`` face, the half plane ``dx/2`` inside the wall at a ``+`` face (``_kernel.faces``)."""
+    if side == '-':
+        return grid.low[a]
+    return grid.low[a] + (grid.n[a] - 0.5) * grid.dx
+
+
+def check_symmetry(scene, grid):
+    """What a structure may be where it meets a ``Symmetry`` face (stage 4, C5).
+
+    A ``Symmetry`` face stands for a scene that is its own mirror image. The run carries the
+    domain side and reflects the field across the plane, so what it models is every
+    structure's domain part **and that part's image**: whatever was declared beyond the plane
+    is never read, and in a voxel the plane cuts, the declared body's fill is read where the
+    scene holds the body and its image. The plane is the node plane on the wall at a ``-``
+    face and the half plane ``dx/2`` **inside** the wall at a ``+`` face (:func:`mirror_plane`).
+
+    A structure wholly on the domain side is a legitimate reading -- it and its image are the
+    scene, the dimer a mirror exists to halve -- and it is not refused. Two readings are
+    silently wrong, and each is refused by name, with the plane's position:
+
+    * **A structure that crosses the plane and is not its own mirror image there.** The run
+      models the mirror of its domain part, a different body. A smoothed body is judged by
+      its exact fill at all six components' points in a band as deep as it reaches past the
+      plane, against the fill at the mirrored points, to :data:`_CLIP_ROUNDOFF`; the audit
+      measured a symmetric body at most 6.6e-13 there, a ball 1e-6 of a length off the plane
+      4.0e-5, and a ball centred on a ``+`` face's wall rather than its plane 0.97. The test
+      reads voxel fills, so a body symmetric voxel by voxel is accepted -- the unturned
+      ``fd.Box``, the one body that may cross a mirror in stage 4, is separable, and for it
+      that is symmetry. A cell-snapped shape crosses only where its snapped cells do, and the
+      edge the mirror makes must lie within half a cell of the declared one -- the contract
+      the snap keeps for every edge anyway (a symmetric declaration with an even cell count on
+      a ``+`` face, whose plane is a cell centre, cannot do better than half a cell). Parity
+      plays no part here: the body is different whatever the field does.
+    * **A smoothed body within half a cell of the plane that does not cross it, where the
+      mirror leaves the components on the plane free.** Their voxels are cut in half by the
+      plane; the declared body fills the domain half and its image the other, and the fill
+      read is the declared body's alone. Where the parity zeroes those components -- the
+      tangential E and normal H on a ``-`` face at ``parity=-1``, the normal E and tangential
+      H on a ``+`` face at ``parity=+1`` (``_kernel.faces``) -- their coefficient is never
+      used and a flush half is exact, so it is not refused. Only E is read: the parity frees
+      E and H on the plane together, and their voxels there tile the same slab half a cell
+      either side of it, so a body in one is in the other. A cell-snapped shape is whole
+      cells, and a flush one is exactly its own half.
+
+    Measured with this door held open (``studies/fdtd_symmetry_mirror.py``: a PEC cavity with
+    an ``eps = 4`` bar along the mirror's axis, the ``Symmetry(parity=1)`` half box against
+    the full box holding what was meant; the bar itself moves the resonance by about -10.8%):
+    a symmetric ``fd.Box`` agrees to round-off; the box declared flush against the plane as
+    ``[0, 0.2]`` lowers ``eps`` 2.5 on the plane at the bar's axis where the scene
+    holds 4, and moves the resonance by +5.50e-03; the box declared
+    ``[-0.1, 0.2]`` across the plane moves it by -1.55e-02 against the same box in the full
+    cavity, and the same ``fd.Region`` by -9.09e-03; a box centred on the ``+`` face's
+    wall instead of its plane, by +6.91e-03. Two controls say what those are not. At the
+    parity that zeroes the plane's components the flush half is exact -- on the ``+`` face at
+    ``parity=+1`` it agrees to -3.43e-15 although its plane voxel lowers ``eps``
+    1.6 -- which is why the second rule reads the parity. And a symmetric
+    ``fd.Region`` already differs from its full box by +4.08e-03, the snap's own half-cell
+    rule (node components are painted at a Region's low face and not its high one), so the
+    Region's asymmetric crossing costs about twice what snapping does; it is refused for its
+    geometry, a body a third longer than the one declared, not for that number.
+
+    A curved body -- ``fd.Sphere``, ``fd.Cylinder``, ``fd.Prism``, a turned ``fd.Box`` --
+    that passes this door and still reaches the plane is refused by the constitutive plan,
+    whose cross terms there would need a mirror-weighted adjoint that is not written.
+    """
+    from ..boundaries import Symmetry
+    structures = tuple(getattr(scene, 'structures', ()) or ())
+    mirrors = []
+    for a, axis in enumerate('xyz'):
+        for side in '-+':
+            face = scene.boundaries.face(axis + side)
+            if isinstance(face, Symmetry):
+                mirrors.append((a, side, face.parity))
+    if not mirrors or not structures:
+        return
+    for index, structure in enumerate(structures):
+        shape = structure.shape
+        body = shape.body()
+        where = f'structures[{index}] ({shape.describe()})'
+        for a, side, parity in mirrors:
+            axis = 'xyz'[a]
+            plane = mirror_plane(grid, a, side)
+            wall = grid.low[a] + (grid.n[a] if side == '+' else 0) * grid.dx
+            plus = (f' On a + face the plane is half a cell INSIDE the wall: {axis} = '
+                    f'{plane:g}, not the wall at {axis} = {wall:g}.' if side == '+' else '')
+            if body is None:
+                found = _snapped_mirror(shape, grid, a, side)
+                if found is None:
+                    continue
+                (lo, hi), (r0, r1), gap = found
+                raise ValueError(
+                    f'{where} crosses the {axis}{side} Symmetry plane at {axis} = {plane:g}: '
+                    f'declared {axis} = ({lo:g}, {hi:g}), it runs as ({r0:g}, {r1:g}) -- its '
+                    f'snapped domain part and that part\'s mirror image, which is what a '
+                    f'Symmetry face models -- and the edge the mirror makes is {gap:.2f} cells '
+                    f'from the declared one, where the snap alone moves an edge by at most '
+                    f'half a cell. Measured with this door held open '
+                    f'(studies/fdtd_symmetry_mirror.py), an fd.Region declared (-0.1, 0.2) '
+                    f'across a mirror at 0 runs as (-0.2, 0.2) and moves a cavity\'s resonance '
+                    f'by -9.09e-03 against the same Region in the full cavity. Centre it '
+                    f'on the plane, or keep it on the domain side: flush against the plane is '
+                    f'exact for a cell-snapped shape, which the mirror joins to its image.'
+                    f'{plus}')
+            found = _smoothed_mirror(body, shape, grid, a, side, parity)
+            if found is None:
+                continue
+            kind, component, point, value, mirrored = found
+            at = '(' + ', '.join(f'{v:.6g}' for v in point) + ')'
+            if kind == 'crosses':
+                raise ValueError(
+                    f'{where} crosses the {axis}{side} Symmetry plane at {axis} = {plane:g} and '
+                    f'is not its own mirror image there: the {component} voxel at {at} holds '
+                    f'{value:.4f} of it and the mirrored voxel {mirrored:.4f}. A Symmetry face '
+                    f'stands for a scene that is its own mirror image; the run carries the '
+                    f'domain side and reflects it, so the body it models is this one\'s domain '
+                    f'part and that part\'s image -- not the one declared. Measured with this '
+                    f'door held open (studies/fdtd_symmetry_mirror.py), an fd.Box declared '
+                    f'(-0.1, 0.2) across a mirror at 0 moves a cavity\'s resonance by '
+                    f'-1.55e-02 against the same box in the full cavity, and a box centred on '
+                    f'a + face\'s wall instead of its plane by +6.91e-03. Centre it on the '
+                    f'plane ({axis} = {plane:g}), or keep it wholly on the domain side and let '
+                    f'the mirror add its image. Only the unturned fd.Box may cross a mirror in '
+                    f'stage 4: a body with constitutive cross terms is refused at the plane '
+                    f'anyway, because its mirror-weighted adjoint is not written.{plus}')
+            raise ValueError(
+                f'{where} reaches within half a cell of the {axis}{side} Symmetry plane at '
+                f'{axis} = {plane:g} without crossing it. The plane cuts the {component} voxel '
+                f'at {at} in half: the body fills {value:.4f} of it on the domain side and its '
+                f'image as much on the other, but the fill read there is the body\'s alone, '
+                f'and at parity={parity:+d} the mirror leaves that component free. Measured '
+                f'with this door held open (studies/fdtd_symmetry_mirror.py), an fd.Box '
+                f'declared flush against a parity=+1 mirror as (0, 0.2) lowers eps '
+                f'2.5 on the plane where the scene holds 4, and '
+                f'moves a cavity\'s resonance by +5.50e-03. Declare the whole body, '
+                f'symmetric about the plane -- the unturned fd.Box may cross a mirror -- or '
+                f'keep its surface at least half a cell ({0.5 * grid.dx:g}) clear of the plane '
+                f'(a whole cell for a body with constitutive cross terms). At '
+                f'parity={-parity:+d} the same body is exact here, because the mirror zeroes '
+                f'that component on the plane.{plus}')
+
+
+def _snapped_mirror(shape, grid, a, side):
+    """``((lo, hi), (r0, r1), gap)`` where a snapped shape crosses a mirror unmirrored, or None.
+
+    ``(lo, hi)`` is the span declared along ``a``, ``(r0, r1)`` the one the run models, and
+    ``gap`` the distance in cells between the declared and the modelled edge beyond the plane.
+    Only ``fd.Region`` and an ``fd.Slab`` across ``a`` have an edge there; a Slab along
+    another axis runs through the mirror unchanged.
+    """
+    from ..geometry import Region, Slab
+    if isinstance(shape, Region):
+        lo, hi = shape.low[a], shape.high[a]
+    elif isinstance(shape, Slab) and shape.axis == 'xyz'[a]:
+        lo, hi = shape.span
+    else:
+        return None
+    n, dx, low = grid.n[a], grid.dx, grid.low[a]
+    alpha, beta = (lo - low) / dx, (hi - low) / dx
+    k0, k1 = int(round(alpha)), int(round(beta))
+    slack = 0.5 * (1.0 + 1e-9)
+    if side == '-':
+        if k0 >= 0:
+            return None
+        made = -min(k1, n)                  # the mirror of its domain part's far edge
+        gap = max(alpha - made, 0.0) if k1 >= n else abs(alpha - made)
+        modelled = (low + made * dx, low + min(k1, n) * dx)
+    else:
+        if k1 <= n:
+            return None
+        made = 2 * n - 1 - max(k0, 0)       # the plane is the centre of cell n - 1
+        gap = max(made - beta, 0.0) if k0 <= 0 else abs(beta - made)
+        modelled = (low + max(k0, 0) * dx, low + made * dx)
+    if gap <= slack:
+        return None
+    return (lo, hi), modelled, gap
+
+
+def _exact_fill(body, points, grid):
+    """The body's exact fill at ``points`` ``(k, 3)``, paying for the clip only near its surface.
+
+    A voxel whose point is more than :data:`_VOXEL_REACH` cells from the surface holds none of
+    it or all of it, by the signed distance's sign (negative inside; a composed distance
+    under-estimates, so the proof holds for those too).
+    """
+    from .._shapes import occupancy as body_occupancy
+    d = np.asarray(body.surface(points)[0], dtype=float)
+    out = np.where(d < 0, 1.0, 0.0)
+    near = np.abs(d) <= _VOXEL_REACH * grid.dx
+    if near.any():
+        values, _ = body_occupancy(body, points[near], grid.dx)
+        out[near] = np.asarray(values, dtype=float)
+    return out
+
+
+def _smoothed_mirror(body, shape, grid, a, side, parity):
+    """``(kind, component, point, fill, mirrored)`` where a smoothed body is not what a mirror
+    carries, or ``None``; ``kind`` is ``'crosses'`` or ``'flush'`` (see :func:`check_symmetry`).
+    """
+    from .._kernel.grid import OFFSETS
+    from .occupancy import yee_points
+    n, dx = grid.n[a], grid.dx
+    plane = mirror_plane(grid, a, side)
+    box = shape.support(grid)
+    wide = [(box[b][0] - 1, box[b][1] + 1) for b in range(3)]
+
+    def points(layers, field, c):
+        cells = list(wide)
+        cells[a] = layers
+        return np.asarray(yee_points(grid, tuple(cells), field, c)).reshape(-1, 3)
+
+    # Material past the plane: the layer beyond it, whose voxels abut the plane on the far
+    # side for one of the two offsets (the half-offset E/H at a - face, the node ones at +).
+    beyond = (-1, 0) if side == '-' else (n, n + 1)
+    crosses = max(float(np.max(_exact_fill(body, points(beyond, f, c), grid)))
+                  for f in 'EH' for c in range(3))
+    if crosses > _CLIP_ROUNDOFF:
+        if hasattr(shape, 'low') and hasattr(shape, 'high'):
+            depth = plane - shape.low[a] if side == '-' else shape.high[a] - plane
+            layers = min(n, int(math.ceil(depth / dx)) + 2)
+        else:
+            layers = n
+        band = (0, layers) if side == '-' else (n - layers, n)
+        worst = (0.0, None)
+        for field in 'EH':
+            for c in range(3):
+                q = points(band, field, c)
+                m = q.copy()
+                m[:, a] = 2.0 * plane - q[:, a]
+                fq, fm = _exact_fill(body, q, grid), _exact_fill(body, m, grid)
+                k = int(np.argmax(np.abs(fq - fm)))
+                if abs(fq[k] - fm[k]) > worst[0]:
+                    worst = (abs(fq[k] - fm[k]),
+                             ('crosses', field + 'xyz'[c], tuple(q[k]), float(fq[k]),
+                              float(fm[k])))
+        return worst[1] if worst[0] > _CLIP_ROUNDOFF else None
+    if parity != (1 if side == '-' else -1):
+        return None                         # the mirror zeroes what sits on the plane
+    on_plane = 0 if side == '-' else 1
+    layer = (0, 1) if side == '-' else (n - 1, n)
+    worst = (0.0, None)
+    for c in range(3):
+        if OFFSETS['E'][c][a] != on_plane:
+            continue
+        q = points(layer, 'E', c)
+        f = _exact_fill(body, q, grid)
+        k = int(np.argmax(f))
+        if f[k] > worst[0]:
+            worst = (float(f[k]), ('flush', 'E' + 'xyz'[c], tuple(q[k]), float(f[k]), None))
+    return worst[1] if worst[0] > _CLIP_ROUNDOFF else None
 
 
 def check_absorbing_layers(scene, plan):
