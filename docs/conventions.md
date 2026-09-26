@@ -472,8 +472,19 @@ different one — pinned bit-for-bit, not to a tolerance.
 Amplitude fine print, stated once so it never has to be discovered:
 
 - each order is quoted in **its own** s/p frame, the standard one: `s_hat = z_hat x k_hat_par`,
-  with `k_par` that order's in-plane wavevector, and `p_hat` completing the right-handed
-  triad. Until 2026-08-16 every order with `Re(kx) < 0` came back in the *reversed* frame
+  with `k_par` that order's in-plane wavevector. `p_hat` is fixed by its in-plane part, which
+  lies along `k_hat_par` with length `cos(theta_m)` in the medium the wave travels in —
+  **`+` for a reflected order, `-` for a transmitted order and for the incident wave**, on
+  either lit side (continued onto the decaying branch for an evanescent order). That is what
+  makes the normal-incidence basis `E = (-a_p, a_s)` on both sides, as the circular-state
+  derivation above uses it. The price is the triad's handedness, which follows the lit side:
+  `p_hat = k_hat x s_hat` (so `(s_hat, p_hat, k_hat)` is right-handed) lit from below, and
+  `p_hat = s_hat x k_hat` lit from above. The amplitudes did not move when `+z` turned upward
+  on 2026-09-21 (byte-identical across that change); this sentence used to say
+  "right-handed" for both sides, which had been true of top incidence in the former downward
+  frame and has been true of bottom incidence since. Pinned against the reconstructed field,
+  both sides and all four amplitudes, in `tests/test_amplitude_sp_frame.py`.
+  Until 2026-08-16 every order with `Re(kx) < 0` came back in the *reversed* frame
   (`-s_hat`, `-p_hat`) on the conical and 2D paths — invisible in `R`/`T`, which are
   `|r|^2`, and in the reconstructed field, and therefore in every golden this project has.
   See [`amplitude-sp-frame.md`](amplitude-sp-frame.md);
