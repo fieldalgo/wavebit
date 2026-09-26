@@ -855,3 +855,28 @@ plane before the body is measured: measured on the box, the symmetric bar of the
 scene's body, conservatively -- and declaring it whole is measured whole. The `_shapes.Sphere`
 docstring's claim that a
 sub-voxel sphere "is refused (C5)" is now true of the public sphere under four cells across.
+
+## C5: messages whose reason had changed, and the body contract (2026-09-26)
+
+The audit listed messages that named a spelling that does not exist or a promise that had
+lapsed. They now say what is true: the skin-depth refusal no longer suggests "fd.PEC-backed
+geometry" (`fd.PEC` is a face, not a material); a self-crossing prism outline is told to be two
+prisms, not an `fd.Union` (not public); the PlaneWave and TFSF structure messages name the
+smoothed bodies as legal patterned structures; door 4 says study S1 found no order the tensor
+form buys; door 5 names C10 as the owner of the three-media case S7 counted rare; the
+absorbing-layer refusal names the bodies that can run through a layer; the voxel rule's
+accuracy note says the default rule has not passed the stage-4 Mie gate that
+`discretisation='stencil'` passed; and the keyword and per-cell messages in `scene.py` and
+`materials.py` no longer promise shapes "in stage 4".
+
+Two doors changed behaviour. **The stage-1 overlap door leaves pairs with a smoothed shape to
+door 1**, whose reason is the true one there: it refused a Drude dimer on the diagonal, gap half
+a diameter, by support box and advised disjoint slabs. And **the `eps <= 0` guard promised in
+`coefficients._stack` is written** as the contract it rests on
+(`checks._check_fill_contract`): a body whose fill or normal moment leaves `[0, 1]` by more
+than `_CLIP_ROUNDOFF` is refused. Public bodies keep `[-2.6e-12, 1 + 3e-14]` (the audit), so it
+fires on a body that breaks the `fd.Shape` contract; one answering 1.5 times its fill against
+`eps = 12` would read the harmonic mean `-2.67` on the component its normal crosses.
+`tests/test_fd_c5_texts.py` pins the dimer, a smoothed body across a PlaneWave sheet (refused;
+a cell clear plans) and the guard; three mutants -- the guard removed, the overlap door seeing
+smoothed pairs, the PEC advice restored -- each fail one case.

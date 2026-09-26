@@ -21,10 +21,12 @@ assignment and nothing is averaged.
 
 It is also, deliberately, the *inaccurate* choice, and the report says so: an interface that
 does not fall on a cell boundary is moved by up to half a cell, which is a first-order error
-in ``dx`` where the rest of the scheme is second order. Until subpixel averaging arrives in
-stage 4, **a convergence study in ``dx`` is the only route to a right answer** for a
-structure whose thickness is not a whole number of cells -- and ``check`` prints the snapped
-span beside the one that was asked for so that the size of the move is never a surprise.
+in ``dx`` where the rest of the scheme is second order. For a cell-snapped structure whose
+thickness is not a whole number of cells, **a convergence study in ``dx`` is the route to a
+right answer** -- or the smoothed spelling of the same geometry (stage 4: the unturned
+``fd.Box`` puts a layer's faces where they were asked, gate G5) -- and ``check`` prints the
+snapped span beside the one that was asked for so that the size of the move is never a
+surprise.
 
 The snapping rule, written once: with the grid's low corner ``lo`` and cell size ``dx``,
 
@@ -556,8 +558,9 @@ class Region(Shape):
     not differentiable**: a size or a centre is static, and a gradient flows through the
     material's values only. ``check`` prints the snapped span beside the one asked for on each
     axis. A face that does not fall on a cell boundary moves by up to half a cell, which is a
-    first-order error in ``dx``; stage 4 brings exact fractional filling and differentiable
-    edges, and until then a convergence study in ``dx`` is the only route to a right answer. A
+    first-order error in ``dx``; the smoothed :class:`Box` fills fractionally and exactly
+    (stage 4's C4), and its edge is to become differentiable with ``range=`` (C6); for this one a
+    convergence study in ``dx`` is the route to a right answer. A
     box that extends past the domain on an axis is clipped there, which is how a lamellar
     grating spells "runs the whole period" along its uniform axis.
     """
@@ -695,7 +698,7 @@ class Sphere(Shape):
     that way (``tests/test_fd_occupancy.py::test_a_traced_radius_reaches_the_coefficient``);
     what C6 adds is the public door, not the derivative.
 
-    **What a sphere may not meet, in C2: five doors.** All five are
+    **What a sphere may not meet: six doors of C2 and C4.** All six are
     ``wavebit/fd/_lower/checks.py::check_smoothed``, in the order ``wavebit/fd/__init__.py``
     lists them, and each names the commit that owns the case it turns away.
 
@@ -1228,8 +1231,12 @@ class Prism(_Extruded):
                 (min(p[1] for p in turned), max(p[1] for p in turned)))
 
     def _feature(self, grid):
-        """The width of the outline's convex hull; a non-convex outline's thinnest arm can be
-        narrower, and C5's cells-across door decides whether that needs a measure of its own."""
+        """The width of the outline's convex hull, which C5's cells-across door reads.
+
+        A non-convex outline's thinnest arm can be narrower -- 2.83x for study S2b's L-shaped
+        outline -- and whether its error follows the arm or the hull was not measured, so the
+        door can pass a prism with an arm under four cells across (an open item of S2b).
+        """
         return _hull_width(self.vertices)
 
     def body(self):

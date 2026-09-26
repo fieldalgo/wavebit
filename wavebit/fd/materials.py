@@ -109,8 +109,10 @@ def _value(where, name, v):
     shape = getattr(v, 'shape', None)
     if shape is not None and tuple(shape) != ():
         raise ValueError(f'{where}({name}=...): one scalar per component; got shape '
-                         f'{tuple(shape)}. A value per cell is stage 4 (shapes), and a '
-                         f'diagonal is the triple {name}=(x, y, z).')
+                         f'{tuple(shape)}. A value per cell is not a material: say the '
+                         f'geometry with shapes -- fd.Slab, fd.Region, fd.Sphere, fd.Box, '
+                         f'fd.Cylinder, fd.Prism -- each with one material; a diagonal is the '
+                         f'triple {name}=(x, y, z).')
     if concrete(v) is None and not (is_jax_typed(v) or getattr(v, 'requires_grad', False)):
         raise ValueError(f'{where}({name}={v!r}): a real number is needed (or a traced scalar '
                          f'of jax or torch).')

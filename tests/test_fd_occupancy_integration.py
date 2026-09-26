@@ -39,7 +39,7 @@ def test_unvalidated_curved_accuracy_is_reported_once_before_lowering(backend):
     assert len(notes) == 1
     assert '2.023' in notes[0] and 'glass-sphere' in notes[0]
     assert 'not an error bound for this scene' in notes[0]
-    assert 'stage-4 Mie gate is incomplete' in notes[0]
+    assert 'has not passed the stage-4 Mie gate' in notes[0]
     params = fd.lower(scene(2.25), plan, 'numpy')
     assert describe(scene(2.25), plan, params).warnings.count(notes[0]) == 1
     run = lambda eps: fd.lower(scene(eps), plan, name)['be']

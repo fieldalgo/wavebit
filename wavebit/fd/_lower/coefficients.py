@@ -255,7 +255,9 @@ class _Smoothed:
     statement about the geometry where the truth is a round-off of order 1e-12, ten orders
     below the rule's own measured error, and it would flatten the fill's derivative at exactly
     the voxels the surface is passing through. C5's ``eps <= 0`` guard is where a fill that is
-    negative *enough* to matter is caught, and it fires on a bug rather than on this.
+    negative *enough* to matter is caught (``checks._check_fill_contract``, which refuses a fill
+    or a normal moment outside ``[0, 1]`` by more than ``checks._CLIP_ROUNDOFF``), and it fires on
+    a bug rather than on this.
 
     ``rule`` is ``'mix'`` for a quantity this commit smooths (``eps``, ``mu``) and ``'keep'``
     for one it does not (``sigma``). ``'keep'`` leaves the cell's value alone, and that is

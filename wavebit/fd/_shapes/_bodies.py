@@ -621,7 +621,7 @@ def polygon_shape(where, vertices):
 
     ``convex`` is returned rather than refused: it is a static promise
     (:func:`_exact.clip_capacity`) that buys the smaller clip buffer, and a simple non-convex
-    cross-section is a legal body -- ``fd.Union`` of convex prisms is not the only spelling.
+    cross-section is a legal body -- a union of convex prisms is not the only spelling.
 
     **Every test here is scale-free**, which the first writing's convexity test was not (see
     :data:`_TURN_SINE`). The orientation and crossing tests are sign tests on exact products, so
@@ -666,8 +666,9 @@ def polygon_shape(where, vertices):
                 raise ValueError(f'{where}(vertices=...): a simple polygon -- edges {i} and {j} '
                                  'meet. A self-intersecting outline has no filled fraction to '
                                  'report (the shoelace sum returns the difference of its lobes '
-                                 'and the even-odd inside test disagrees with it); build it as '
-                                 'an fd.Union of simple pieces instead.')
+                                 'and the even-odd inside test disagrees with it). Give a '
+                                 'simple outline: a figure-eight is two lobes, which are two '
+                                 'prisms.')
     following = _np.roll(read, -1, axis=0)
     area = .5 * float(_np.sum(read[:, 0] * following[:, 1] - following[:, 0] * read[:, 1]))
     if area == 0:

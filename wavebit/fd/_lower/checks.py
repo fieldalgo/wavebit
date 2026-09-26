@@ -205,7 +205,10 @@ def check_overlaps(scene, grid):
     over a snapped one away from its faces composes exactly, measured 2.0e-16 against the
     hand two-phase mix by
     ``tests/test_fd_occupancy.py::test_a_smoothed_shape_clear_of_a_snapped_face_composes_exactly``.
-    What is left for this function is unchanged.
+    What is left for this function is unchanged, and it is **cell-snapped pairs only** since
+    C5: a pair with a smoothed shape in it is door 1's of :func:`check_smoothed`, which refuses a
+    dispersive medium wherever a smoothed shape reaches and says why, where this message's
+    advice -- spell it as disjoint slabs -- is no use for a sphere.
 
     Note that two slabs on *different* axes always intersect -- each is full-width on the
     other's axis -- so this refuses a dispersive slab crossed by any other structure, and names
@@ -213,9 +216,16 @@ def check_overlaps(scene, grid):
     """
     structures = tuple(getattr(scene, 'structures', ()) or ())
     boxes = [s.shape.support(grid) for s in structures]
+    smoothed = [s.shape.body() is not None for s in structures]
     for i in range(len(structures)):
         for j in range(i + 1, len(structures)):
             if not _intersects(boxes[i], boxes[j]):
+                continue
+            if smoothed[i] or smoothed[j]:
+                # check_smoothed's door 1 refuses a dispersive material wherever a smoothed
+                # shape reaches, for the reason that is true there; this door's support-box
+                # test and its advice to spell slabs refused a Drude dimer on the diagonal
+                # with a gap of half a diameter (C5 audit). Lifting door 1 is C8's.
                 continue
             kinds = [isinstance(structures[k].material, Dispersive) for k in (i, j)]
             if not any(kinds):
@@ -548,8 +558,9 @@ def check_smoothed(scene, grid):
                     f'maxima [2.0, 5.0, 9.0] and no sign that the rule was never derived for '
                     f'it. Give the smoothed shape and everything sharing its cells a scalar '
                     f'{what}=, or say the anisotropic medium with the cell-snapped fd.Region, '
-                    f'whose material is not mixed at all. The tensor form is stage 5 and only '
-                    f'if study S1 says it buys an order.')
+                    f'whose material is not mixed at all. The tensor form is stage 5\'s, and '
+                    f'study S1 found no robust order it buys (docs/fd-subpixel-occupancy.md), '
+                    f'so nothing schedules it.')
     for i in range(len(smoothed)):
         for j in range(i + 1, len(smoothed)):
             (ia, sa, ba), (ib, sb, bb) = smoothed[i], smoothed[j]
@@ -583,8 +594,9 @@ def check_smoothed(scene, grid):
                 f'fd.Prism, or the cell-snapped fd.Region for the part that overlaps. The CSG '
                 f'spellings that say it properly -- fd.Union, fd.Intersection and '
                 f'fd.Difference, which resolve the two into one surface before any fill is '
-                f'taken -- reach the public door later in stage 4, and C5 owns the general '
-                f'refusal this is the reachable case of.')
+                f'taken -- are not on the public door. Study S7 counted what this door '
+                f'leaves: no single body and no canonical dimer reaches three media in a '
+                f'voxel; the polytope clip that would answer them is C10, conditional.')
 
     snapped = [(j, s) for j, s in enumerate(structures) if s.shape.body() is None]
     for index, structure, body in smoothed:
@@ -1365,7 +1377,10 @@ def check_absorbing_layers(scene, plan):
                 f'reflection leaves the way it came and only the cells in front of the '
                 f'interface are in its way. (In a PML the stretched coordinate is complex '
                 f'there as well, so nothing matches it at all.) Move the interface out of '
-                f'the layer, or run the structure all the way through it.')
+                f'the layer, or run the structure all the way through it -- which a body '
+                f'uniform along {name[0]} can: the cell-snapped fd.Region or fd.Slab, an '
+                f'unturned fd.Box, or an fd.Cylinder or fd.Prism with axis={name[0]!r}, each '
+                f'reaching past the face. A sphere cannot; keep it out of the layer.')
         if kind == 'PML':
             _refuse_lossy_in_layer(_background(scene), name, 'Scene(background=)')
 
@@ -1594,8 +1609,9 @@ def _smoothed_notes(scene, plan):
                     'wavelength, three placements). Production validation across contrasts is '
                     'incomplete. This benchmark is not an error bound for this scene. Validate '
                     'its observables under refinement; exact voxel volume alone does not '
-                    'guarantee electromagnetic accuracy. See docs/fd-mie-validation.md; the '
-                    'stage-4 Mie gate is incomplete.'))
+                    'guarantee electromagnetic accuracy. See docs/fd-mie-validation.md; this '
+                    'rule has not passed the stage-4 Mie gate, which '
+                    "discretisation='stencil' passed (C3)."))
     if asked:
         # The voxel rule's sentence above is not this structure's: its E is the prepared
         # operator's. The orders are the research sweeps' (docs/fd-symmetric-stencil.md,
@@ -1617,8 +1633,8 @@ def _smoothed_notes(scene, plan):
     magnetic = _background(scene).is_magnetic or any(
         s.material.is_magnetic for s in scene.structures)
     try:
-        occupancy(scene, plan, runtime('numpy'),
-                  fields=('E', 'H') if magnetic else ('E',), report=report)
+        occupied = occupancy(scene, plan, runtime('numpy'),
+                             fields=('E', 'H') if magnetic else ('E',), report=report)
         if plan.constitutive:
             from .constitutive import lower as cross_coefficients
             cross_coefficients(scene, plan, runtime('numpy'), report=report,
@@ -1628,6 +1644,7 @@ def _smoothed_notes(scene, plan):
                          'bounds before numerical lowering; a geometry value could not be '
                          f'evaluated on NumPy ({type(err).__name__}: {err}). '
                          'A traced public shape with range= is stage 4 C6.') from err
+    _check_fill_contract(scene, occupied)
     note = bound_note(report)
     if proxy_stats:
         details = ', '.join(f'{name}: {value:.6g}' for name, value in sorted(proxy_stats.items()))
@@ -1644,6 +1661,39 @@ def _smoothed_notes(scene, plan):
     if note is not None:
         out.append((BoundedVoxelWarning, note))
     return out
+
+
+def _check_fill_contract(scene, occupied):
+    """Refuse a smoothed body whose fill or normal moment leaves ``[0, 1]`` (stage 4, C5).
+
+    The mixing rule stays between its two phases -- so every ``eps`` and ``mu`` it builds is
+    positive -- exactly when ``f`` and ``w_c`` lie in ``[0, 1]``, and every public body keeps
+    that to round-off: the C5 audit measured fills within ``[-2.6e-12, 1 + 3e-14]`` and the
+    lowered ``eps`` inside its phases to 3.2e-13, over the sphere, the turned and unturned box,
+    the cylinder and the prism at contrasts 2.25, 12 and 80. So this is the ``eps <= 0`` guard
+    ``coefficients._stack`` defers to, written as the body contract it rests on and read
+    against :data:`_CLIP_ROUNDOFF`: it fires on a body that breaks the contract -- an external
+    ``fd.Shape`` or a kernel bug -- and not on round-off. With a fill of 1.5 against
+    ``eps = 12`` in vacuum, the component the normal crosses reads the harmonic mean
+    ``1/(1.5/12 - 0.5/1) = -2.67``: a negative permittivity, and a field that grows.
+    """
+    for index, entry in occupied.items():
+        for field in ('E', 'H'):
+            for c, pair in enumerate(entry.get(field, ())):
+                for name, values in zip(('fill', 'w'), pair):
+                    values = np.asarray(values, dtype=float)
+                    low, high = float(values.min()), float(values.max())
+                    if low < -_CLIP_ROUNDOFF or high > 1.0 + _CLIP_ROUNDOFF:
+                        structure = scene.structures[index]
+                        raise ValueError(
+                            f'structures[{index}] ({structure.shape.describe()}) answers a '
+                            f'{name} in [{low:.6g}, {high:.6g}] on {field}{"xyz"[c]}, outside '
+                            f'[0, 1]. The mixing rule keeps every eps and mu between its two '
+                            f'phases only for a fill and a normal moment in [0, 1]; outside it '
+                            f'the lowered eps can be negative and the run grows without bound. '
+                            f'Every public body keeps [0, 1] to round-off, so this is a body '
+                            f'that breaks the fd.Shape contract (a fill is the fraction of the '
+                            f'voxel inside; w is a squared normal component).')
 
 
 def _stabilize_notes(scene, plan):
@@ -1743,9 +1793,10 @@ def _resolution_notes(scene, plan):
                     f'{where} has a skin depth of {skin:g} at wavelength {wavelength:g}, which '
                     f'is {cells:.2f} cells: the field decays to nothing inside one cell, so '
                     f'the grid cannot represent the surface at all and the reflectance it '
-                    f'returns is the grid\'s, not the metal\'s. Refine dx below {skin:g}, or '
-                    f'model the metal as fd.PEC-backed geometry. (This line is stated from the '
-                    f'skin-depth argument, not measured on this kernel.)')
+                    f'returns is the grid\'s, not the metal\'s. Refine dx below {skin:g}. (A '
+                    f'perfectly conducting body is not in this build: fd.PEC is a face of the '
+                    f'box, not a material. This line is stated from the skin-depth argument, '
+                    f'not measured on this kernel.)')
             if cells < 2.0:
                 out.append((CoarseMeshWarning,
                             f'{where}: {cells:.2f} cells per skin depth at wavelength '

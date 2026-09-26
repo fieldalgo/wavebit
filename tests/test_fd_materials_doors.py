@@ -211,6 +211,8 @@ def test_a_metal_is_checked_by_its_skin_depth_and_not_by_a_wavelength():
     with pytest.raises(ValueError, match='skin depth') as e:
         quiet(fd.plan, scene(structures=(thick,)))
     assert 'cells' in str(e.value) and 'Refine dx below' in str(e.value)
+    # It advised "fd.PEC-backed geometry" until C5; there is no PEC body to back.
+    assert 'PEC-backed' not in str(e.value) and 'not a material' in str(e.value)
     fine = scene(structures=(thick,), initial=None,
                  resolution=fd.Resolution(cells_per_wavelength=40, wavelength=1.0))
     with pytest.warns(fd.CoarseMeshWarning, match='cells per skin depth'):
