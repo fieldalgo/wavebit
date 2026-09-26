@@ -571,6 +571,11 @@ class TFSF:
         object.__setattr__(self, 'theta', 0.0)
         direction = _direction('TFSF', self.direction, OBLIQUE_TFSF_MESSAGE.format(
             what=f'direction={self.direction!r}'))
+        from .geometry import Box
+        if isinstance(self.box, Box):
+            raise TypeError('TFSF(box=fd.Box(...)): fd.Box is the smoothed body a structure '
+                            'fills; a TFSF surface picks node planes, and that is the '
+                            'cell-snapped fd.Region(size=(...), center=(...)).')
         if not isinstance(self.box, Region):
             raise TypeError(f'TFSF(box=...): an fd.Region(size=(...), center=(...)); got '
                             f'{type(self.box).__name__}.')

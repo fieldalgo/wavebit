@@ -38,7 +38,11 @@ straddling a ``Periodic`` face needs. It is exact only while the body lies *in* 
 a body carries no position to fold with (a CSG node has none), so the fold belongs to the
 caller that owns the cell -- which is this one. Rather than half-build it,
 ``checks.check_smoothed`` refuses a smoothed shape that reaches a ``Periodic`` or ``Bloch``
-face at all, and C4 threads the fold when it lands the bodies that need it. The third wrapping
+face at all -- unless it is **uniform along** that axis over the whole domain, which an
+extruded body along its own axis or an unturned ``fd.Box`` spanning it is (C4): every layer then
+holds the same section, the wrapped part is the part already there, and no fold is needed. The
+fold itself, for a body that crosses a periodic face and changes across it, is still not
+written. The third wrapping
 face, ``Axis1D``, is refused there too but for a different reason and with its own sentence:
 its axis stands for one the field is *invariant* along, so no fold would make a body that
 curves right on it. Measured, with the door held open:

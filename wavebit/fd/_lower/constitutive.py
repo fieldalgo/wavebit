@@ -1,8 +1,9 @@
 """Plan and lower compact inverse-material cross coefficients.
 
-Public smoothed geometry currently consists of Sphere. Its cross moment is
-the same nearest-surface tangent normal used by the diagonal rule. Curved
-surface moments and additional public bodies have separate accuracy gates.
+Public smoothed geometry is Sphere and, from C4, the extruded Box, Cylinder
+and Prism. Their cross moment is the nearest-surface tangent normal; for an
+unturned Box it is exactly zero. Curved surface moments and each body have
+separate accuracy gates.
 """
 import math
 

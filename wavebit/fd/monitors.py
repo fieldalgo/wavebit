@@ -104,12 +104,22 @@ def _wavelengths(where, value):
     return out
 
 
+def _is_body_box(box):
+    """Whether ``box`` is the smoothed ``fd.Box`` body, which a region door names by name."""
+    from .geometry import Box
+    return isinstance(box, Box)
+
+
 def _region(where, plane, box):
     from .geometry import Plane, Region
     if (plane is None) == (box is None):
         raise ValueError(f'{where}: give plane=fd.Plane(...) or box=fd.Region(...), exactly one.')
     if plane is not None and not isinstance(plane, Plane):
         raise TypeError(f'{where}(plane=...): an fd.Plane(z=...); got {type(plane).__name__}.')
+    if box is not None and _is_body_box(box):
+        raise TypeError(f'{where}(box=fd.Box(...)): fd.Box is the smoothed body a structure '
+                        f'fills; a monitor\'s box picks node planes, and that is the '
+                        f'cell-snapped fd.Region(size=..., center=...).')
     if box is not None and not isinstance(box, Region):
         raise TypeError(f'{where}(box=...): an fd.Region(size=..., center=...); got '
                         f'{type(box).__name__}.')
@@ -302,6 +312,10 @@ class FarField:
         _monitor_name('FarField', self.name)
         if self.propagation not in ('continuum', 'yee'):
             raise ValueError("FarFieldPropagationRefused: choose propagation='continuum' or 'yee'")
+        if _is_body_box(self.box):
+            raise TypeError('FarField(box=fd.Box(...)): fd.Box is the smoothed body a '
+                            'structure fills; the closed surface picks node planes, and that is '
+                            'the cell-snapped fd.Region(size=..., center=...).')
         if not isinstance(self.box, Region):
             raise TypeError(f'FarField(box=...): the closed surface is an fd.Region(size=..., '
                             f'center=...); got {type(self.box).__name__}. (A plane is not a '

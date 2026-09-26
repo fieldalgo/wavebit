@@ -464,3 +464,67 @@ What it decides:
   polytope clip is not C4's. The flush joint is the population that matters next: it is how a
   metasurface pillar meets its substrate, it is two media wherever the materials match, and it
   is refused wholesale. How a pillar joins its substrate is a decision for before C7.
+
+## C4: the extruded bodies (2026-09-26)
+
+Stage 4's C4 puts three more bodies on the public door, smoothed exactly as the sphere is --
+the same `coefficients.mix`, the same doors, the same `(fill, w)` at every component's own
+Yee point:
+
+```python
+fd.Box(size=(0.3, 0.2, 0.1), center=(0, 0, 0), angle=30, axis='z')    # turned 30 degrees
+fd.Cylinder(radius=0.1, height=0.2, axis='z', center=(0, 0, 0))
+fd.Prism(vertices=((0, 0), (0.2, 0), (0.1, 0.17)), height=0.2, axis='z', center=(0, 0, 0))
+```
+
+`angle` is in degrees, as `PlaneWave(theta=)` is, and turns a body counter-clockwise about
+`+axis` through its centre; `vertices` are `(u, v)` offsets in the right-handed pair across the
+axis. A tilted axis is stage 5 and refused by name; a cylinder takes no `angle` (a circle turned
+about its own axis is the same circle, and the kernel measured that key's gradient as exactly
+zero); a prism's outline is checked -- counter-clockwise, simple, three vertices or more -- at
+construction. Every value is static and finite, as the sphere's are; `range=` is C6.
+
+**The rename came first.** The cell-snapped box a monitor or a `TFSF` takes, and that a
+structure may still fill whole cells with, is `fd.Region` since the commit before this one; the
+four archives reproduced 143 / 288 / 140 / 570 arrays bit for bit after it, because the class
+name reaches no stored byte and its report rows keep the `box.*` labels the stage-3 archive
+froze. The body box's rows are `cuboid.*`, so a reader can tell asked-and-got from snapped. A
+monitor or TFSF given the body `fd.Box` is refused with the name that works.
+
+**What an extrusion answers differently is `uniform_along`.** Along its own axis a body spans a
+range of cell layers when its extent covers every voxel of them, a cell beyond each end; across
+the axis only an unturned `Box` does, whose faces are planes of the grid's own axes. The
+periodic and `Axis1D` doors used to refuse any smoothed shape that reached such a face; they now
+read `uniform_along` first, so a pillar that runs the whole period, or the invariant
+cross-section an `Axis1D` axis stands for, is carried -- every layer holds the same section, and
+no image ring is needed. The fold itself, for a body that crosses a periodic face and changes
+across it, is still not written, and that case is still refused.
+
+Gates, in `tests/test_fd_bodies.py`: every component's lowered fill sums to the analytic
+volume to 1e-12 for eight bodies (boxes, a turned one, cylinders on two axes, a turned hexagonal
+prism, a non-convex L and a lopsided sliver); a turned body equals, voxel for voxel, the prism
+whose vertices the test turned by hand; the `uniform_along` truth table; the wrapping-face doors
+both ways; the refusals; three backends' coefficient arrays against NumPy's (1e-13). Mutants,
+each alone, over that file and the five door and occupancy files beside it:
+
+| Mutation | Fast cases failed |
+| --- | ---: |
+| support without its cell of margin | 8 (every volume row) |
+| bounding box turned clockwise | 1 (the L-shaped row) |
+| `fd.Box` hands the kernel degrees | 1 |
+| `fd.Prism` hands the kernel degrees | 3 |
+| uniform along a straight axis without asking whether it spans | 2 |
+| a turned box counted uniform across its axis | 1 |
+| spanning with no margin | 1 |
+| spanning with half a cell of margin | 0 -- equivalent: half a cell is exactly what the voxels need |
+| the periodic door ignoring `uniform_along` | 1 |
+| the `Axis1D` door ignoring it | 1 |
+| the monitor door's body-box sentence removed | 1 |
+| `fd.Prism` without the outline check at construction | 1 |
+| a NaN passing as finite | 1 |
+
+**What C4 does not claim.** No body but the sphere has an electromagnetic convergence gate of
+its own; the planar reference-plane gate for the box is the next commit. The cylinder rim's
+moment is the tangent plane's, and every body's cross terms use the nearest-surface normal (S7
+above prices both). CSG of the bodies, the periodic fold, and a body joining a cell-snapped
+structure at a shared face are not in it.

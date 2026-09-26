@@ -700,9 +700,9 @@ def _refuse_structure(structure, index, when='plan'):
             f'body may be its own. The tangent plane\'s forms beside them are not wired in as '
             f'a fallback: every convergence order this operator has measured was taken with '
             f'the exact ones, and the plane\'s mean gap to the exact sphere falls only like '
-            f'h. Ask with fd.Sphere(radius=..., center=...) itself, or give the subclass '
-            f'discretisation={DEFAULT!r}. The commit that measures a body without them is what '
-            f'lifts this.')
+            f'h. Ask with fd.Sphere(radius=..., center=...) itself, or give this shape -- an '
+            f'fd.Box, fd.Cylinder or fd.Prism, or a subclass -- discretisation={DEFAULT!r}. '
+            f'The commit that measures a body without them is what lifts this.')
     material = structure.material
     # The radius and centre are not asked about here: fd.Sphere's own static door
     # (_spec.static_float) refused any traced value at construction, so they are floats.

@@ -35,7 +35,8 @@ The table, and where each row lives:
     (stage 4 C2) a conductive or dispersive     check_smoothed, here: sigma and the poles
       material where a smoothed shape reaches     are not smoothed in C2
     (stage 4 C2) a smoothed shape at a          check_smoothed, here: the periodic image
-      Periodic, Bloch or Axis1D face              ring is C4's to thread
+      Periodic, Bloch or Axis1D face              ring is not written; a body uniform
+                                                  along the axis is carried (C4)
     (stage 4 C2) a smoothed shape whose         check_smoothed, here: three of the six
       material reaches a face of the box          components gain material outside a minus
                                                   face, and lose the last half cell at a
@@ -389,7 +390,10 @@ def check_smoothed(scene, grid):
                     f'three of the six components would count the material beyond the wall.) '
                     f'Move it inside Domain(size=..., center=...), or enlarge the domain.')
             face = scene.boundaries.face(axis + '-')
-            if isinstance(face, Axis1D):
+            # A body uniform along the axis over the whole domain is the same cross-section
+            # in every layer, wrapped or not: it needs no image ring and is carried.
+            uniform = structure.shape.uniform_along(a, (0, grid.n[a]), grid)
+            if isinstance(face, Axis1D) and not uniform:
                 raise ValueError(
                     f'{where} is smoothed and {axis} is an fd.Axis1D face. Axis1D stands for '
                     f'an axis the field is *invariant* along -- its domain is one cell and the '
@@ -399,11 +403,13 @@ def check_smoothed(scene, grid):
                     f'cell thick, the scene lowers to an invariant slab cross-section holding '
                     f'18.4% of the ball\'s volume -- neither the ball asked for nor the '
                     f'cylinder a reader would take it for -- and no warning fires. Say the '
-                    f'invariant cross-section with the cell-snapped fd.Region (C4 ships the '
-                    f'smoothed fd.Cylinder and fd.Prism, which declare the axis they are '
-                    f'uniform along), or give {axis} real cells and a face that is not '
-                    f'invariant.')
-            if isinstance(face, (Periodic, Bloch)) and not (k0 > 0 and k1 < grid.n[a]):
+                    f'invariant cross-section with a body extruded along {axis} that runs '
+                    f'through the whole domain -- fd.Cylinder(axis={axis!r}), '
+                    f'fd.Prism(axis={axis!r}), or an unturned fd.Box spanning {axis} -- or with '
+                    f'the cell-snapped fd.Region, or give {axis} real cells and a face that is '
+                    f'not invariant.')
+            if (isinstance(face, (Periodic, Bloch)) and not uniform
+                    and not (k0 > 0 and k1 < grid.n[a])):
                 raise ValueError(
                     f'{where} reaches the {type(face).__name__} '
                     f'{axis} face (cells {k0}..{k1} of {grid.n[a]}). A smoothed shape that '
@@ -411,10 +417,13 @@ def check_smoothed(scene, grid):
                     f'ring of its own periodic images, and C2 does not do that: the part '
                     f'outside the cell is simply lost, measured at 40.7% of the volume for a '
                     f'ball centred on the face, with every invariant the lowering checks still '
-                    f'satisfied. Keep it at least one cell clear of both {axis} faces, or say '
-                    f'the periodic geometry with the cell-snapped fd.Region (which is clipped, '
-                    f'and whose clipping is how a lamellar grating spells "runs the whole '
-                    f'period").')
+                    f'satisfied. Keep it at least one cell clear of both {axis} faces; or, if '
+                    f'it is meant to run the whole period, say so with a body uniform along '
+                    f'{axis} over the whole domain -- extruded along {axis}, or an unturned '
+                    f'fd.Box spanning it, a cell beyond each face -- which is carried because '
+                    f'every layer holds the same section; or say the periodic geometry with '
+                    f'the cell-snapped fd.Region (which is clipped, and whose clipping is how a '
+                    f'lamellar grating spells "runs the whole period").')
         outside = _reaches_outside(structure.shape, body, grid, box)
         if outside is not None:
             a, side, fill = outside
@@ -533,12 +542,12 @@ def check_smoothed(scene, grid):
                 f'them until their SURFACES are a voxel apart (a dimer with a gap is fine and '
                 f'is not refused -- this is drawn on voxels, not on bounding boxes), or say '
                 f'the two as ONE structure so that there is one body, one interface and one '
-                f'exact answer: today that is a single fd.Sphere, or the cell-snapped fd.Region '
-                f'for the part that overlaps (a smoothed body over a snapped one composes '
-                f'exactly, measured 2.0e-16). The CSG spellings that say it properly -- '
-                f'fd.Union, fd.Intersection and fd.Difference, which resolve the two into one '
-                f'surface before any fill is taken -- reach the public door in stage 4 C4 and '
-                f'C5, and C5 owns the general refusal this is the reachable case of.')
+                f'exact answer: today that is a single fd.Sphere, fd.Box, fd.Cylinder or '
+                f'fd.Prism, or the cell-snapped fd.Region for the part that overlaps. The CSG '
+                f'spellings that say it properly -- fd.Union, fd.Intersection and '
+                f'fd.Difference, which resolve the two into one surface before any fill is '
+                f'taken -- reach the public door later in stage 4, and C5 owns the general '
+                f'refusal this is the reachable case of.')
 
 
 #: The exact clip's own round-off, and the tolerance **every** door here reads a fill against.
@@ -1008,11 +1017,13 @@ def _smoothed_notes(scene, plan):
     if proxy_stats:
         details = ', '.join(f'{name}: {value:.6g}' for name, value in sorted(proxy_stats.items()))
         category, message = out[0]           # the voxel rule's: a custom body cannot ask
-        out[0] = (category, message + ' Custom-body cross terms use a nearest-surface '
+        out[0] = (category, message + ' The cross terms of a body other than the sphere '
+                  '(fd.Box, fd.Cylinder, fd.Prism, or a custom body) use a nearest-surface '
                   'tangent normal. At their common sampling points its squared components '
                   'differ from the supplied diagonal normal moment by maxima {' + details +
                   '}. These are measured geometry-proxy discrepancies, not bounds on '
-                  'electromagnetic error; creases and CSG cross moments await C4 validation.')
+                  'electromagnetic error; no body but the sphere has a convergence gate of '
+                  'its own yet, and creases and CSG cross moments are unvalidated.')
     if note is not None:
         out.append((BoundedVoxelWarning, note))
     return out

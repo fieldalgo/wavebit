@@ -121,10 +121,21 @@ shape may not share cells with an ``fd.Conductor`` or an ``fd.Dispersive`` (``si
 poles are not smoothed yet) or with an anisotropic ``eps``/``mu``; it may not reach a
 ``Periodic``, ``Bloch`` or ``Axis1D`` face, nor a face of the box (it would count material
 outside a ``-`` face and lose the last half cell at a ``+`` one -- two arms, two messages);
-and two smoothed shapes may not put their surfaces through one voxel. A smoothed shape over a cell-snapped one
-composes exactly and is not refused. The cylinder, the prism, the rotated body, CSG (which is
-how two smoothed bodies that touch are spelled) and the differentiable ``range=`` edge are the
-commits after it.
+and two smoothed shapes may not put their surfaces through one voxel. The differentiable
+``range=`` edge and CSG (which is how two smoothed bodies that touch are spelled) are later
+commits.
+
+Stage 4's C4 adds the extruded bodies, smoothed the same way, and renames the cell-snapped box
+``fd.Region`` so that ``fd.Box`` can be the body (one name per concept)::
+
+    fd.Structure(fd.Box(size=(0.3, 0.2, 0.1), center=(...), angle=30), glass)  # turned 30 deg
+    fd.Structure(fd.Cylinder(radius=0.1, height=0.2, axis='z'), glass)
+    fd.Structure(fd.Prism(vertices=((0, 0), (0.2, 0), (0.1, 0.17)), height=0.2), glass)
+
+``angle`` is in degrees and turns a body about its own axis only; a tilted axis is stage 5 and
+refused by name. A body **uniform along** an axis over the whole domain -- extruded along it,
+or an unturned ``Box`` spanning it -- may run through a ``Periodic``, ``Bloch`` or ``Axis1D``
+face, since every layer holds the same section; any other body there is still refused.
 
 Stage 4's C3 adds a second material discretisation, **opt in and per structure**::
 
@@ -144,15 +155,17 @@ it); and an operator that passes its own consistency, energy, halo and time-step
 certificates (``_lower/stencil.py``). ``fd.run(scene, plan=p)`` takes the operator ``p``
 already carries rather than solving it again.
 
-The curved-scattering accuracy gate is incomplete. Smoothed scenes emit
-``SubpixelAccuracyWarning`` during planning with the independent cylinder benchmark,
-also shown by ``check``. Exact volume and matching backends do not establish a
-second-order electromagnetic result; see ``docs/fd-mie-validation.md``. Neither
-discretisation has passed C3.
+Smoothed scenes emit ``SubpixelAccuracyWarning`` during planning, also shown by ``check``,
+with the benchmark behind the structure's discretisation. ``'stencil'`` passes C3 (the
+epsilon-12 sphere converges at order 2.244; ``docs/fd-symmetric-stencil.md``); the default
+``'voxel'`` rule passes every sphere arm and still fails the C3 cylinder
+(``docs/fd-mie-validation.md``). Exact volume and matching backends do not establish a
+second-order electromagnetic result for any other body.
 
 Out of scope, and refused by name rather than
-silently: shapes other than ``Slab``, cell-snapped ``Region`` and ``Sphere`` (the rest of stage
-4), GPU claims (stage 6), ``GaussianBeam``, ``ModeSource``,
+silently: shapes other than ``Slab``, ``Region``, ``Sphere``, ``Box``, ``Cylinder`` and
+``Prism`` (CSG is later in stage 4, a tilted axis stage 5, a raster never), GPU claims (stage
+6), ``GaussianBeam``, ``ModeSource``,
 mode overlaps (``ModeMonitor``) and decay-driven stopping (``Decay``, ``Run(decay=)``) (stage 7),
 non-uniform grids (not in v1).
 """
@@ -164,7 +177,7 @@ from .boundaries import (PEC, PMC, Absorber, Absorbing, Axis1D, Bloch, Boundarie
 from .diagnostics import (AbsorberProximityWarning, BoundedVoxelWarning, CoarseMeshWarning,
                           GrowingFieldWarning, PMLStabilityWarning, RadiationApproximationWarning, SubpixelAccuracyWarning,
                           UnsettledFieldWarning)
-from .geometry import Plane, Region, Shape, Slab, Sphere, Structure
+from .geometry import Box, Cylinder, Plane, Prism, Region, Shape, Slab, Sphere, Structure
 from .materials import (Conductor, Debye, Dispersive, Drude, Lorentz, Material, MaterialBase,
                         Pole, eps_at)
 from .monitors import Decay, Diffraction, FarField, Field, Flux, ModeMonitor, Record
@@ -179,7 +192,7 @@ __all__ = [
     'Boundaries', 'Periodic', 'Bloch', 'Axis1D', 'PEC', 'PMC', 'Symmetry', 'PML', 'Absorber',
     'Absorbing',
     'Material', 'Conductor', 'Dispersive', 'Drude', 'Lorentz', 'Debye', 'eps_at',
-    'MaterialBase', 'Pole', 'Shape', 'Slab', 'Sphere', 'Structure',
+    'MaterialBase', 'Pole', 'Shape', 'Slab', 'Sphere', 'Box', 'Cylinder', 'Prism', 'Structure',
     'CoarseMeshWarning', 'AbsorberProximityWarning', 'UnsettledFieldWarning',
     'GrowingFieldWarning', 'PMLStabilityWarning', 'BoundedVoxelWarning', 'SubpixelAccuracyWarning',
     'RadiationApproximationWarning',

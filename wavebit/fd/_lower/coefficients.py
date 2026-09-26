@@ -299,9 +299,9 @@ def painters(scene, plan, axes, occ):
     here rather than assumed. A cell-snapped ``Region`` may leave out an axis it spans, because a
     box clipped to the domain really is uniform along it and an extent-1 coefficient axis is
     then exact. A body that curves is not, so the same saving would broadcast one plane of
-    fills over the whole grid -- a plausible array of the right shape. C4 opens the saving
-    properly for the bodies that *are* uniform along an axis (a cylinder, a prism), by
-    evaluating the fill on one plane and saying so.
+    fills over the whole grid -- a plausible array of the right shape. The extruded bodies
+    (C4) answer all three axes as well, though they *are* uniform along the axis they span:
+    one painter rule serves every body, and the one-plane saving is not taken.
     """
     _, structures = materials_of(scene)
     shape = _shape(plan, axes)[1:]

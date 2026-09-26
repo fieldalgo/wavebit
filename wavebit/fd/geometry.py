@@ -7,9 +7,10 @@ cell-snapped :class:`Region`, the same rules on all three axes, and the monitor 
     fd.Structure(fd.Slab(z=(-0.2, 0.0)), glass)
 
 A ``Slab`` names exactly one axis. Two axes would be a box, an ``x``/``y`` extent a
-rectangle, and every other shape -- a sphere, a cylinder, a raster, a polygon -- is stage 4.
-Each is refused by name rather than by the generic keyword message, so the reader learns the
-plan and not only the spelling.
+rectangle, and every other shape is one of stage 4's smoothed bodies -- :class:`Sphere`,
+:class:`Box`, :class:`Cylinder`, :class:`Prism` -- or refused (a raster). Each keyword is
+refused by name rather than by the generic keyword message, so the reader learns the spelling
+that exists.
 
 **Slabs are cell-snapped, not subpixel.** The interface lands on the nearest *cell boundary*
 of the named axis, and everything in the cells between the two snapped boundaries is the
@@ -62,7 +63,8 @@ precedents) -- a second spelling of "which cells" is exactly the ambiguity this 
 
 **Two discretisations, and the shape is the one that says which.** From stage 4's C2 a shape
 either *fills cells whole* (:class:`Slab`, :class:`Region`) or *fills them fractionally*
-(:class:`Sphere`, and the bodies C4 adds). :meth:`Shape.body` is that answer -- the
+(:class:`Sphere`, and from C4 the extruded bodies :class:`Box`, :class:`Cylinder` and
+:class:`Prism`). :meth:`Shape.body` is that answer -- the
 ``wavebit/fd/_shapes`` body this shape is smoothed from, or ``None``. It is a method and not a
 ``smoothing=`` keyword on :class:`Structure` on purpose: a rule that could be switched, or
 that keyed itself on whether a radius happened to be traced, would make ``jax.grad`` and a
@@ -80,7 +82,8 @@ import math
 
 from ._spec import spec, static_float
 
-__all__ = ['Shape', 'Slab', 'Sphere', 'Structure', 'Region', 'Plane', 'AXES']
+__all__ = ['Shape', 'Slab', 'Sphere', 'Box', 'Cylinder', 'Prism', 'Structure', 'Region',
+           'Plane', 'AXES']
 
 #: The three axes in the order the public API spells a triple.
 AXES = ('x', 'y', 'z')
@@ -88,9 +91,9 @@ AXES = ('x', 'y', 'z')
 #: Shape keywords stage 4 will take. Refused here by name, with the stage, except where the
 #: spelling now exists -- ``radius`` names :class:`Sphere` (C2) rather than a stage.
 _LATER_SHAPES = {
-    'radius': 'a sphere or a cylinder', 'center': 'a box or a sphere',
-    'size': 'a box', 'vertices': 'a polygon', 'raster': 'a raster',
-    'angle': 'a rotated shape', 'height': 'a cylinder',
+    'radius': 'a sphere or a cylinder', 'center': 'a positioned body',
+    'size': 'a box', 'vertices': 'a prism', 'raster': 'a raster',
+    'angle': 'a turned body', 'height': 'a cylinder or a prism',
 }
 
 
@@ -274,8 +277,9 @@ class Slab(Shape):
             raise NotImplementedError(
                 f'Slab({", ".join(f"{a}=..." for a in named)}): a slab names exactly ONE axis '
                 f'and runs the whole box across the other two. A rectangular rod or block is '
-                f'fd.Structure(fd.Region(size=..., center=...), material) (stage 3, cell-snapped); '
-                f'spheres, cylinders, polygons and rasters are stage 4 (shapes).')
+                f'fd.Structure(fd.Region(size=..., center=...), material) (stage 3, cell-snapped) '
+                f'or the smoothed fd.Box(size=..., center=...); spheres, cylinders and polygons '
+                f'are stage 4\'s other smoothed bodies, fd.Sphere, fd.Cylinder and fd.Prism.')
         axis = named[0]
         span = getattr(self, axis)
         if not (isinstance(span, (tuple, list)) and len(span) == 2):
@@ -340,7 +344,8 @@ class Slab(Shape):
         Every stage-1..3 layered oracle and every frozen golden rests on it, and a layer's
         interface is the one case where the user can put the boundary on a cell edge and mean
         it. Whether the layer becomes a smoothed body too is a stage-5 question, and it costs
-        a deliberate re-freeze of all four archives. The smoothed rectangular body is C4's.
+        a deliberate re-freeze of all four archives. The smoothed rectangular body is
+        :class:`Box`.
         """
         return None
 
@@ -385,10 +390,12 @@ def _slab_init_with_stages(self, *args, **kwargs):
         k = later[0]
         raise NotImplementedError(
             f'Slab({k}=...) is {_LATER_SHAPES[k]}. A slab is the layer: Slab(x=(lo, hi)), '
-            f'Slab(y=...) or Slab(z=...). A ball is fd.Sphere(radius=..., center=...), '
-            f'smoothed at each component\'s own Yee point; a cell-snapped block is '
-            f'fd.Region(size=..., center=...); the cylinder, the prism and the smoothed, '
-            f'rotatable rectangular body are stage 4 C4.')
+            f'Slab(y=...) or Slab(z=...). The smoothed bodies of stage 4, filled at each '
+            f'component\'s own Yee point, are fd.Sphere(radius=..., center=...), '
+            f'fd.Cylinder(radius=..., height=..., axis=...), fd.Prism(vertices=..., height=..., '
+            f'axis=...) and the rectangular fd.Box(size=..., center=..., angle=...); a '
+            f'cell-snapped block is fd.Region(size=..., center=...). A raster shape is refused '
+            f'outright: its interface normal cannot come from the shape.')
     _slab_init(self, *args, **kwargs)
 
 
@@ -407,8 +414,8 @@ class Structure:
     rectangular block, the minimum lateral patterning a diffraction-order check needs (a
     lamellar grating is a Region spanning one transverse axis, a crossed pillar grating a Region
     spanning neither), or -- from stage 4's C2 -- a :class:`Sphere`, the first shape whose
-    edge is **not** a cell boundary. The cylinder, the prism, the rotated body and CSG of them
-    are C4.
+    edge is **not** a cell boundary, and from C4 the extruded bodies :class:`Box`,
+    :class:`Cylinder` and :class:`Prism`. CSG of them is later in stage 4.
 
     The door is ``isinstance(shape, fd.Shape)``: external subclasses may answer the
     protocol too. ``body()`` chooses the fractional or cell-snapped lowering. A bare
@@ -514,11 +521,13 @@ class Structure:
         if not isinstance(self.shape, Shape):
             raise TypeError(
                 f'Structure(shape=...): the shapes are fd.Slab(z=(lo, hi)), the cell-snapped '
-                f'fd.Region(size=..., center=...) and the smoothed fd.Sphere(radius=..., '
-                f'center=...); got {type(self.shape).__name__}. External shapes get in by '
-                f'subclassing fd.Shape and answering its protocol. Cylinders, prisms, rotated '
-                f'bodies, polygons and CSG of them are stage 4 C4; a raster shape is refused '
-                f'outright (its interface normal cannot come from the shape).')
+                f'fd.Region(size=..., center=...), and stage 4\'s smoothed bodies '
+                f'fd.Sphere(radius=..., center=...), fd.Box(size=..., center=..., angle=...), '
+                f'fd.Cylinder(radius=..., height=..., axis=...) and fd.Prism(vertices=..., '
+                f'height=..., axis=...); got {type(self.shape).__name__}. External shapes get in '
+                f'by subclassing fd.Shape and answering its protocol. CSG of the bodies is later '
+                f'in stage 4; a raster shape is refused outright (its interface normal cannot '
+                f'come from the shape).')
         object.__setattr__(self, 'material', as_material(self.material, 'Structure(material=)'))
 
 
@@ -697,9 +706,12 @@ class Sphere(Shape):
        answer for. (C8 measures the rule before writing it.)
     2. **No wrapping face.** A sphere that reaches a ``Periodic`` or ``Bloch`` face is refused
        because resolving its wrapped part means summing the geometry over the image ring, and
-       the cell's origin -- which the ring needs and a body does not carry -- is C4's to
-       thread. An ``fd.Axis1D`` axis is refused too, with its own sentence and for a different
-       reason: that axis stands for one the field is *invariant* along, and a ball is not.
+       that fold -- which needs the cell's origin, which a body does not carry -- is not
+       written. What is carried without it is a body **uniform along** the periodic axis over
+       the whole domain (an extruded body along its own axis, or an unturned :class:`Box`
+       spanning it), and a ball never is. An ``fd.Axis1D`` axis is refused too, with its own
+       sentence and for a different reason: that axis stands for one the field is *invariant*
+       along, and a ball is not.
     3. **No reaching a face of the box.** A cell-snapped ``fd.Region`` is clipped exactly; a ball
        is not, and the six components disagree about where the box ends -- three of them count
        material half a cell outside a ``-`` face, and the same three lose the last half cell at
@@ -850,6 +862,361 @@ class Sphere(Shape):
     def min_extent(self, grid):
         """Its diameter."""
         return 2 * self.radius
+
+
+def _extrusion_axis(where, axis):
+    """``'x'``, ``'y'`` or ``'z'``; anything else refused by name, a tilted axis as stage 5."""
+    if isinstance(axis, str) and axis in AXES:
+        return axis
+    raise ValueError(
+        f'{where}(axis={axis!r}): the extrusion axis is one of \'x\', \'y\', \'z\'. A body '
+        f'turns only about its own axis (angle=), which keeps it uniform along that axis -- '
+        f'what the absorbing-layer and periodic-face rules read. A tilted axis is stage 5, and '
+        f'is refused here rather than approximated.')
+
+
+def _finite(where, name, value):
+    """A static, finite real: a traced one is refused by ``static_float``, a NaN or inf here."""
+    value = static_float(where, name, value)
+    if not math.isfinite(value):
+        raise ValueError(f'{where}({name}={value!r}): a finite number.')
+    return value
+
+
+def _length(where, name, value):
+    """A static, finite, positive length. A length is a size: a negative one is refused."""
+    value = _finite(where, name, value)
+    if not value > 0:
+        raise ValueError(f'{where}({name}={value!r}): a finite positive length. A length is a '
+                         f'size here, so a negative one is refused rather than read as '
+                         f'subtracting the shape.')
+    return value
+
+
+def _triple(where, name, value, check):
+    if not (isinstance(value, (tuple, list)) and len(value) == 3):
+        raise ValueError(f'{where}({name}={value!r}): a triple (x, y, z), absolute, in the '
+                         f'scene\'s coordinates -- not the cell-centre origin the rcwa path '
+                         f'spells as cx=/cy=.')
+    return tuple(check(where, name, v) for v in value)
+
+
+def _turned(vertices, degrees):
+    """``vertices`` turned counter-clockwise by ``degrees`` -- the kernel bodies' own formula."""
+    t = math.radians(degrees)
+    c, s = math.cos(t), math.sin(t)
+    return tuple((u * c - v * s, u * s + v * c) for u, v in vertices)
+
+
+def _hull_width(points):
+    """The width of the convex hull of ``points``: its narrowest caliper distance."""
+    pts = sorted(set(points))
+
+    def turn(o, a, b):
+        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+    lower, upper = [], []
+    for p in pts:
+        while len(lower) >= 2 and turn(lower[-2], lower[-1], p) <= 0:
+            lower.pop()
+        lower.append(p)
+    for p in reversed(pts):
+        while len(upper) >= 2 and turn(upper[-2], upper[-1], p) <= 0:
+            upper.pop()
+        upper.append(p)
+    hull = lower[:-1] + upper[:-1]
+    best = math.inf
+    for i, a in enumerate(hull):
+        b = hull[(i + 1) % len(hull)]
+        side = math.hypot(b[0] - a[0], b[1] - a[1])
+        best = min(best, max(abs(turn(a, b, p)) for p in hull) / side)
+    return best
+
+
+#: The right-handed pair across each axis -- ``wavebit/fd/_shapes/_bodies.py::_transverse``'s.
+_TRANSVERSE = ((1, 2), (2, 0), (0, 1))
+
+
+class _Extruded(Shape):
+    """What :class:`Box`, :class:`Cylinder` and :class:`Prism` share: a section along an axis.
+
+    Private; the three classes below are the API. Each is a ``wavebit/fd/_shapes`` body with a
+    static cross-section, an extrusion ``axis`` and a ``center``, smoothed at every component's
+    own Yee point exactly as :class:`Sphere` is -- the same ``coefficients.mix``, the same
+    doors. What an extrusion adds is an axis the body is **uniform along**, and that is the one
+    question its protocol answers differently from a ball's: the absorbing-layer rule, the
+    ``Axis1D`` and periodic-face doors and ``_reaches_outside`` all read
+    :meth:`uniform_along`, so a pillar may run the whole height of a periodic cell and a
+    substrate spelled as a body may run out through a face.
+    """
+
+    #: The ``span_rows`` label. ``box`` is :class:`Region`'s, frozen by the stage-3 archive.
+    _label = ''
+
+    def _section(self):
+        """``((u_lo, u_hi), (v_lo, v_hi))``: the cross-section's extent about the centre."""
+        raise NotImplementedError
+
+    def _feature(self, grid):
+        """The narrowest width of the cross-section, for :meth:`min_extent`."""
+        raise NotImplementedError
+
+    def _bounds(self):
+        a = AXES.index(self.axis)
+        low, high = [0.0] * 3, [0.0] * 3
+        low[a] = self.center[a] - self.height / 2
+        high[a] = self.center[a] + self.height / 2
+        for b, (lo, hi) in zip(_TRANSVERSE[a], self._section()):
+            low[b], high[b] = self.center[b] + lo, self.center[b] + hi
+        return tuple(low), tuple(high)
+
+    @property
+    def low(self):
+        return self._bounds()[0]
+
+    @property
+    def high(self):
+        return self._bounds()[1]
+
+    def support(self, grid):
+        """Every cell its voxels can reach, with one cell of margin: :meth:`Sphere.support`'s
+        rule and its measured reason, on the body's axis-aligned bounding box."""
+        out = []
+        for a in range(3):
+            k0 = math.floor((self.low[a] - grid.low[a]) / grid.dx) - 1
+            k1 = math.ceil((self.high[a] - grid.low[a]) / grid.dx) + 1
+            out.append((min(max(int(k0), 0), grid.n[a]), min(max(int(k1), 0), grid.n[a])))
+        return tuple(out)
+
+    def filled_cells(self, grid):
+        """Refused: a body's edge is not a cell boundary, so no cell range is "the body"."""
+        return super().filled_cells(grid)
+
+    def _spans(self, a, cells, grid):
+        """Whether the body's extent along ``a`` covers every voxel of those cell layers.
+
+        The voxels of layers ``c0 .. c1 - 1`` run from ``c0 - 1/2`` to ``c1`` cells -- the three
+        components whose Yee offset along ``a`` is zero are centred on the nodes -- and the test
+        asks a whole cell either side, the margin :meth:`support` keeps too.
+        """
+        lo = grid.low[a] + (cells[0] - 1) * grid.dx
+        hi = grid.low[a] + (cells[1] + 1) * grid.dx
+        return self.low[a] <= lo and self.high[a] >= hi
+
+    def _across(self, a):
+        """Whether the section is made of faces normal to the grid's own axes (Box, unturned)."""
+        return False
+
+    def uniform_along(self, axis, cells, grid):
+        """True where it cannot reach those layers, or where it spans them along a straight axis.
+
+        Along its own axis the section is the same everywhere between the caps, so a body that
+        spans the layers is uniform there. Across it, a bounded section changes wherever it is
+        -- except an unturned :class:`Box`, whose faces are planes of the grid's own axes and
+        which is uniform along any axis it spans. A turned one is not: ``angle=90`` is not
+        exactly a quarter turn in floating point, and a box meant to be axis-aligned is written
+        with its sizes swapped.
+        """
+        k0, k1 = self.support(grid)[axis]
+        if k1 <= cells[0] or k0 >= cells[1]:
+            return True
+        straight = axis == AXES.index(self.axis) or self._across(axis)
+        return straight and self._spans(axis, cells, grid)
+
+    def bounded_axes(self, grid):
+        """All three, always, as :class:`Sphere`: every coefficient array is sampled in full.
+
+        Along an axis it spans an extent-1 array would be exact; the saving is not taken, so
+        that one painter rule serves every body.
+        """
+        return (0, 1, 2)
+
+    def span_rows(self, grid):
+        """One row per axis, asked and got the same (it does not snap), labelled by the body."""
+        return tuple((f'{self._label}.{axis}', self.low[a], self.high[a], self.low[a],
+                      self.high[a]) for a, axis in enumerate(AXES))
+
+    def min_extent(self, grid):
+        """The narrowest section width, and the height unless it runs through the domain.
+
+        An axis the body runs out of the domain through on both sides has no feature size along
+        it (:meth:`Shape.min_extent`); so has the across-axis size of an unturned
+        :class:`Box` that does the same.
+        """
+        a = AXES.index(self.axis)
+        sides = [self._feature(grid)]
+        if not self._spans(a, (0, grid.n[a]), grid):
+            sides.append(self.height)
+        sides = [s for s in sides if s is not None]
+        return min(sides) if sides else None
+
+
+@spec
+class Box(_Extruded):
+    """A smoothed rectangular body: ``fd.Box(size=(sx, sy, sz), center=(cx, cy, cz))``.
+
+    The body a structure fills fractionally, like :class:`Sphere`, turned by ``angle``
+    (degrees, counter-clockwise about ``+axis``) about its own ``axis`` through its centre.
+    Not :class:`Region`, the cell-snapped box a monitor or a ``TFSF`` takes and a structure
+    may still fill whole cells with; that one was ``fd.Box`` until stage 4's C4. One name per
+    concept, and both docstrings point at the other.
+
+    At ``angle=0`` its faces are planes of the grid's own axes, and three things follow that do
+    not for any other body: it is uniform along every axis it spans (so a substrate spelled as
+    a box may run out through the domain and through a periodic cell), its fill in a voxel is
+    the product of three 1-D overlaps, and its constitutive cross terms are exactly zero, so the
+    plan gives it none. ``size``, ``center`` and ``angle`` are static in C4; ``range=`` for a
+    traced one is C6. It is ``wavebit/fd/_shapes``' :class:`~wavebit.fd._shapes.Box`, the
+    four-vertex prism, whose fill and diagonal moment are exact at its faces, edges and corners.
+    """
+
+    size: tuple
+    center: tuple = (0.0, 0.0, 0.0)
+    angle: float = 0.0
+    axis: str = 'z'
+
+    _label = 'cuboid'
+
+    def __post_init__(self):
+        object.__setattr__(self, 'axis', _extrusion_axis('Box', self.axis))
+        object.__setattr__(self, 'size', _triple('Box', 'size', self.size, _length))
+        object.__setattr__(self, 'center', _triple('Box', 'center', self.center, _finite))
+        object.__setattr__(self, 'angle', _finite('Box', 'angle', self.angle))
+
+    @property
+    def height(self):
+        return self.size[AXES.index(self.axis)]
+
+    def _half(self):
+        u, v = _TRANSVERSE[AXES.index(self.axis)]
+        return self.size[u] / 2, self.size[v] / 2
+
+    def _section(self):
+        a, b = self._half()
+        corners = _turned(((-a, -b), (a, -b), (a, b), (-a, b)), self.angle)
+        return ((min(p[0] for p in corners), max(p[0] for p in corners)),
+                (min(p[1] for p in corners), max(p[1] for p in corners)))
+
+    def _across(self, a):
+        return self.angle == 0
+
+    def _feature(self, grid):
+        u, v = _TRANSVERSE[AXES.index(self.axis)]
+        sides = [self.size[b] for b in (u, v)
+                 if not (self.angle == 0 and self._spans(b, (0, grid.n[b]), grid))]
+        return min(sides) if sides else None
+
+    def body(self):
+        """The ``_shapes`` box: the polygon clip times the axial overlap, exact moments."""
+        from ._shapes import Box as _Cuboid
+        return _Cuboid(size=self.size, center=self.center, angle=math.radians(self.angle),
+                       axis=self.axis)
+
+    def describe(self):
+        turn = f', angle={self.angle}, axis={self.axis!r}' if self.angle else ''
+        return f'Box(size={self.size}, center={self.center}{turn})'
+
+
+@spec
+class Cylinder(_Extruded):
+    """A smoothed circular cylinder: ``fd.Cylinder(radius=0.2, height=0.5, axis='z')``.
+
+    A disc of ``radius`` extruded ``height`` along ``axis``, centred on ``center``, filled
+    fractionally at every component's own Yee point as :class:`Sphere` is. There is no
+    ``angle``: a circle turned about its own axis is the same circle, and a key whose gradient
+    can only be zero is refused rather than accepted
+    (``wavebit/fd/_shapes/_bodies.py::Cylinder`` measured it). Its fill is the exact
+    disc-rectangle clip times the axial overlap; its surface moment is the tangent plane's,
+    which on the rim -- where the side meets a cap -- is off by up to half (0.40-0.52 in ``w``
+    at 4 to 16 cells per radius; ``docs/fd-subpixel-occupancy.md``, S7, counts those voxels).
+    Static in C4; ``range=`` is C6.
+    """
+
+    radius: float
+    height: float
+    axis: str = 'z'
+    center: tuple = (0.0, 0.0, 0.0)
+
+    _label = 'cylinder'
+
+    def __post_init__(self):
+        object.__setattr__(self, 'axis', _extrusion_axis('Cylinder', self.axis))
+        object.__setattr__(self, 'radius', _length('Cylinder', 'radius', self.radius))
+        object.__setattr__(self, 'height', _length('Cylinder', 'height', self.height))
+        object.__setattr__(self, 'center', _triple('Cylinder', 'center', self.center, _finite))
+
+    def _section(self):
+        return (-self.radius, self.radius), (-self.radius, self.radius)
+
+    def _feature(self, grid):
+        return 2 * self.radius
+
+    def body(self):
+        """The ``_shapes`` cylinder: the exact disc clip times the axial overlap."""
+        from ._shapes import Cylinder as _Rod
+        return _Rod(radius=self.radius, height=self.height, axis=self.axis, center=self.center)
+
+    def describe(self):
+        return (f'Cylinder(radius={self.radius}, height={self.height}, axis={self.axis!r}, '
+                f'center={self.center})')
+
+
+@spec
+class Prism(_Extruded):
+    """A smoothed polygon extruded along an axis: ``fd.Prism(vertices=..., height=0.5)``.
+
+    ``vertices`` are ``(u, v)`` offsets from ``center`` in the right-handed pair across
+    ``axis`` -- ``(x, y)`` for ``'z'``, ``(y, z)`` for ``'x'``, ``(z, x)`` for ``'y'`` --
+    counter-clockwise, simple, absolute lengths; a clockwise, self-crossing or two-vertex
+    outline is refused here, at construction, by the kernel's own check. A non-convex outline
+    is legal. ``angle`` (degrees) turns the outline counter-clockwise about ``+axis`` through
+    ``center``. Fill and diagonal moment are exact at every edge and corner
+    (``wavebit/fd/_shapes``' :class:`~wavebit.fd._shapes.Prism`). Static in C4; ``range=``
+    is C6.
+    """
+
+    vertices: tuple
+    height: float
+    axis: str = 'z'
+    center: tuple = (0.0, 0.0, 0.0)
+    angle: float = 0.0
+
+    _label = 'prism'
+
+    def __post_init__(self):
+        from ._shapes._bodies import polygon_shape
+        object.__setattr__(self, 'axis', _extrusion_axis('Prism', self.axis))
+        vertices = self.vertices
+        if not (isinstance(vertices, (tuple, list))
+                and all(isinstance(p, (tuple, list)) and len(p) == 2 for p in vertices)):
+            raise ValueError(f'Prism(vertices={vertices!r}): a sequence of (u, v) pairs.')
+        vertices = tuple((_finite('Prism', 'vertices', u), _finite('Prism', 'vertices', v))
+                         for u, v in vertices)
+        polygon_shape('Prism', vertices)
+        object.__setattr__(self, 'vertices', vertices)
+        object.__setattr__(self, 'height', _length('Prism', 'height', self.height))
+        object.__setattr__(self, 'center', _triple('Prism', 'center', self.center, _finite))
+        object.__setattr__(self, 'angle', _finite('Prism', 'angle', self.angle))
+
+    def _section(self):
+        turned = _turned(self.vertices, self.angle)
+        return ((min(p[0] for p in turned), max(p[0] for p in turned)),
+                (min(p[1] for p in turned), max(p[1] for p in turned)))
+
+    def _feature(self, grid):
+        """The width of the outline's convex hull; a non-convex outline's thinnest arm can be
+        narrower, and C5's cells-across door decides whether that needs a measure of its own."""
+        return _hull_width(self.vertices)
+
+    def body(self):
+        """The ``_shapes`` prism: the exact polygon clip times the axial overlap."""
+        from ._shapes import Prism as _Extruded_polygon
+        return _Extruded_polygon(vertices=self.vertices, height=self.height, axis=self.axis,
+                                 center=self.center, angle=math.radians(self.angle))
+
+    def describe(self):
+        turn = f', angle={self.angle}' if self.angle else ''
+        return (f'Prism(vertices={self.vertices}, height={self.height}, axis={self.axis!r}, '
+                f'center={self.center}{turn})')
 
 
 @spec

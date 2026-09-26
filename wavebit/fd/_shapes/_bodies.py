@@ -1244,10 +1244,8 @@ class Box(_Polygonal):
 
     It is the four-vertex :class:`Prism` and shares every line of its machinery; it exists under
     its own name because ``size=(a, b, c)`` is the spelling a user writes for a rectangle and
-    a vertex list is not. **Not** ``wavebit.fd.geometry.Box``, which is the cell-snapped region
-    a monitor or a ``TFSF`` takes -- the two are different discretisations under one word today,
-    and the plan's C4 is where that is resolved (``fd.Box`` becomes this, the snapped one
-    becomes ``fd.Region``). Nothing imports both while the word means two things.
+    a vertex list is not. The public ``fd.Box`` (``wavebit/fd/geometry.py``) is this body; the
+    cell-snapped box a monitor or a ``TFSF`` takes is ``fd.Region`` since stage 4's C4.
     """
 
     #: A rectangle, built here from ``size``, so convexity is a property of the constructor.
@@ -1280,14 +1278,14 @@ class Box(_Polygonal):
 class Cylinder(_Extrusion):
     """A disc extruded along ``axis``.
 
-    ``angle`` is accepted because the stage-4 API names it, and it is a rotation of a circle:
-    measured here, the gradient of a loss over 4096 voxels with respect to it is **exactly
-    0.0** (``tests/test_fd_shapes.py::test_a_circular_cylinders_angle_carries_no_gradient``).
-    That is the same defect the design
-    refuses by name on ``Sphere(angle=)`` -- a key whose gradient cannot be anything but zero,
-    the ``circle``/``ly`` lesson at ``wavebit/_core/parametric.py:348-355``. C5 should either
-    refuse it on key *presence* as it does for a sphere, or the cross-section should become an
-    ellipse, which would give the key something to turn.
+    ``angle`` is accepted here because the kernel's extrusions share one constructor, and it
+    is a rotation of a circle: measured here, the gradient of a loss over 4096 voxels with
+    respect to it is **exactly 0.0**
+    (``tests/test_fd_shapes.py::test_a_circular_cylinders_angle_carries_no_gradient``) -- a
+    key whose gradient cannot be anything but zero, the ``circle``/``ly`` lesson at
+    ``wavebit/_core/parametric.py:348-355``. So the public ``fd.Cylinder`` does not take it
+    (C4), and an elliptical cross-section, which would give it something to turn, is not
+    built.
     """
 
     #: A disc extruded along an axis is convex.
