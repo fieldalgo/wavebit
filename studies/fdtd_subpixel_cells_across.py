@@ -26,8 +26,12 @@ the geometry's answer, not the certificate).
 **Instrument 2, dynamic.** A few public ``fd.run`` solves of a small ``eps = 12`` sphere against
 exact Mie theory, to say whether the static number is the scattering number.
 
+**Instrument 3, the certificate.** Where the energy certificate refuses, by contrast and cells
+across, counted over the placements with ``fd.plan`` alone.
+
 Run from the repository root: ``python studies/fdtd_subpixel_cells_across.py [static|bodies|
-dynamic]``; each row goes to ``studies/results/fdtd_subpixel_cells_across.log`` as JSON lines.
+dynamic|certificate]``; each row goes to ``studies/results/fdtd_subpixel_cells_across.log`` as
+JSON lines (appended; the default runs the first three).
 Single-threaded BLAS; the static sweep takes minutes, the dynamic runs about half a minute each.
 """
 import json
@@ -284,6 +288,31 @@ def bodies():
                            errors={str(k): v / reference - 1 for k, v in values.items()}))
 
 
+def certificate():
+    """Where the energy certificate refuses: contrast by cells across, over the placements.
+
+    Only ``fd.plan`` runs, in a PEC box eight cells wider than the body, and a row counts the
+    placements the certificate passed. It is the evidence behind the certificate's refusal
+    message, which advised refining the grid; this says where refining does not help.
+    """
+    for eps in (6.0, 12.0, 12.5, 13.0, 20.0):
+        for kind in ('sphere', 'box30', 'cylinder', 'hexprism'):
+            placements = PLACEMENTS if kind == 'sphere' else {
+                k: PLACEMENTS[k] for k in ('node', 'mieA', 'c')}
+            for across in (4, 8, 16, 24, 32):
+                n = across * 2 + 8
+                n += n % 2
+                passed = 0
+                for name, placement in placements.items():
+                    shape, _ = body(kind, across, DX, tuple(o * DX for o in placement))
+                    scene = closed_scene((fd.Structure(shape, fd.Material(eps=eps)),), n, DX)
+                    _held_open.clear()
+                    quiet(fd.plan, scene)
+                    passed += bool(_held_open.get('certified'))
+                _emit(dict(study='certificate', body=kind, eps=eps, across=across,
+                           certified=passed, of=len(placements)))
+
+
 def dynamic():
     """Public runs of a small eps-12 sphere against Mie: is the static number the scattering one?"""
     from references.mie import sphere_efficiencies
@@ -336,4 +365,5 @@ if __name__ == '__main__':
     for key in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS'):
         os.environ.setdefault(key, '1')
     for part in (sys.argv[1:] or ['static', 'bodies', 'dynamic']):
-        {'static': static, 'bodies': bodies, 'dynamic': dynamic}[part]()
+        {'static': static, 'bodies': bodies, 'dynamic': dynamic,
+         'certificate': certificate}[part]()

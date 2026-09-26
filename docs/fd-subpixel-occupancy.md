@@ -767,7 +767,8 @@ rule -- node components are painted at a Region's low face and not its high one 
 Region's asymmetric crossing costs about twice what snapping does; it is refused for its
 geometry, a body a third longer than the one declared. `tests/test_fd_symmetry_door.py` pins
 each case and runs the half box against the full box: 6.2e-16 of the peak for the symmetric
-bar, 6.6e-2 for its flush half with the door held open. Mutants, each alone: the door removed
+bar, 6.9e-2 for its flush half with the door held open (a bar 9.4 cells long since C5's
+cells-across door; 6.6e-2 at 7.4). Mutants, each alone: the door removed
 fails 9 cases, the parity rule inverted 4, the `+` plane put on the wall 3, the band one layer
 deep 2, the snap's half-cell slack removed 1, door 3 answering at mirrors 1. A variant that
 read the H points on the plane as well as E survived and was removed: the parity frees both
@@ -816,3 +817,41 @@ losing 50% -- its wrapped half never drawn. What C5 does with each:
 `tests/test_fd_clipping.py` pins each with the lengths by hand. Mutants, each alone: the note
 removed fails 3 cases, every face treated as a wall 1, the seam door removed 2, an exact span
 refused as crossing 1, the exact comparison restored 2, a body's rows claiming asked 1.
+
+## C5: the cells-across door, and where the certificate refuses (2026-09-26)
+
+S2b above set the door: a smoothed body under **4** cells across its smallest extent is refused
+(`checks.check_cells_across`), 4 to 8 warns (`CoarseMeshWarning`), and the messages quote the
+production numbers, not the arithmetic mean's. The door reads `Shape.min_extent` over the axes
+a body is bounded along. A **layer** -- a body uniform along two axes, a film or a half space --
+is exempt, because the rule is exact for a plane at any thickness (G5); a rod through the
+domain is a two-dimensional particle and is judged by its section. It runs in `plan` before the
+constitutive energy certificate, so a small high-contrast body hears the right reason.
+
+The certificate's own message advised refining the grid. `studies/fdtd_subpixel_cells_across.py
+certificate` swept where it refuses -- `fd.plan` alone, the placements counted that pass, in the
+same log:
+
+| eps | sphere (of 5) at 4 / 8 / 16 / 24 / 32 cells across | box turned 30 degrees, cylinder, hexagonal prism (of 3) |
+| --- | --- | --- |
+| 6 | 5 / 5 / 5 / 5 / 5 | all pass |
+| 12 | 2 / 2 / 5 / 5 / 5 | the box fails once at 4, the cylinder once at 32 |
+| 12.5 | 2 / 1 / 1 / 0 / 0 | box and cylinder fail at one placement at some resolutions; prism passes |
+| 13 | 2 / 1 / 0 / 0 / 0 | as at 12.5 |
+| 20 | 0 / 0 / 0 / 0 / 0 | box and prism fail everywhere; cylinder passes one placement at 4 and 8 |
+
+From `eps` 12.5 a sphere fails *more* often as the grid is refined, so the advice was wrong
+there; the message now gives this table's shape and says that refining helps up to about 12 and
+not above it. The operator the certificate judges is positive (the C5 audit's smallest
+eigenvalue was about `0.8/eps` at 12 and `0.6/eps` at 20), so a tighter certificate would admit
+these bodies; whether to build one is an open decision.
+
+`tests/test_fd_cells_across.py` pins the door, the warning, the rod, the turned box, the layer,
+the order against the certificate and the certificate's new sentence. Mutants, each alone:
+refusing under 3 fails 1 case, warning under 4 fails 2, films not exempt 1, rods exempt 1, the
+door removed 4, the old certificate advice 1. At a `Symmetry` face the box is extended past the
+plane before the body is measured: measured on the box, the symmetric bar of the mirror test,
+7.4 cells long, read 3.7 and was refused. A flush half is measured as declared -- half the
+scene's body, conservatively -- and declaring it whole is measured whole. The `_shapes.Sphere`
+docstring's claim that a
+sub-voxel sphere "is refused (C5)" is now true of the public sphere under four cells across.

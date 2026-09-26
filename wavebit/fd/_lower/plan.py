@@ -394,6 +394,7 @@ def plan(scene, _column=False, _grazing=None, _reuse=None):
     checks.check_smoothed(scene, grid)
     checks.check_symmetry(scene, grid)
     checks.check_seams(scene, grid)
+    checks.check_cells_across(scene, grid)
     rules, pads, masks = [], [], []
     for name in FACES:
         rule, face_pads, face_masks = lower_face(name, scene.boundaries.face(name), grid)

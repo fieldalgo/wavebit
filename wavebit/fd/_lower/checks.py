@@ -48,6 +48,8 @@ The table, and where each row lives:
     (stage 4 C4) a smoothed surface in a        check_smoothed, here: the snapped cells
       voxel a cell-snapped face cuts              are all or nothing where the geometry
                                                   splits -- three media, and a rule of two
+    (stage 4 C5) a smoothed body under 4 cells  check_cells_across, here (study S2b); 4 to 8
+      across its smallest extent, not a layer     warns (CoarseMeshWarning)
     (stage 4 C5) a cell-snapped shape across    check_seams, here: clipped, not wrapped --
       one periodic seam, not spanning it          its periodic image is missing
     (stage 4 C5) a structure past a PEC or      _clipping_notes, here (warns, with the share
@@ -1201,6 +1203,111 @@ def _clipping_notes(scene, plan):
     return out
 
 
+#: Cells across a smoothed body's smallest bounded extent below which it is refused, and below
+#: which it warns. Set by study S2b (``studies/fdtd_subpixel_cells_across.py``,
+#: ``docs/fd-subpixel-occupancy.md``): at 2 cells an eps-12 sphere's polarizability is 9.6% to
+#: 43% high over five placements and it scatters 123% too much; at 4 every body tried is within
+#: 9.2% at eps 12 and 2.9% at eps <= 4; at 8, within 2.6%.
+CELLS_ACROSS_REFUSED, CELLS_ACROSS_WARNED = 4, 8
+
+
+def _cells_across(shape, grid, mirrors=()):
+    """``(cells, extent)`` across a smoothed body's smallest bounded extent, or ``None``.
+
+    ``None`` for a **layer** -- a body uniform along two axes over the whole domain, a film or
+    a half space -- because the interface rule is exact for a plane at any thickness: G5, the
+    Airy slab spelled as a smoothed ``fd.Box``, meets the discrete gate to 3.2e-6 relative
+    whatever its cells (``tests/test_fd_airy.py``). What S2b measured is a particle's
+    polarizability, which a body bounded along two or three axes has; a rod uniform along one
+    axis is a two-dimensional particle, judged by its section.
+
+    ``mirrors`` are the ``(axis index, side)`` of the scene's ``Symmetry`` faces. The box is
+    extended past each by its own length before the body is measured, because a body crossing
+    a mirror is the body declared, not the half the box holds: measured on the box, a bar 7.4
+    cells long symmetric about the plane read 3.7 and was refused. A body declared only on the
+    domain side of a mirror (its flush half) is measured as declared, which is half the scene's
+    body -- conservative, and its message's remedy, declaring it whole, is measured whole.
+    """
+    from .._kernel.grid import Grid
+    for a, side in mirrors:
+        n, low = list(grid.n), list(grid.low)
+        if side == '-':
+            low[a] -= grid.n[a] * grid.dx
+        n[a] += grid.n[a]
+        grid = Grid(n=tuple(n), dx=grid.dx, low=tuple(low))
+    bounded = [a for a in range(3) if not shape.uniform_along(a, (0, grid.n[a]), grid)]
+    if len(bounded) < 2:
+        return None
+    extent = shape.min_extent(grid)
+    if extent is None:
+        return None
+    return extent / grid.dx, extent
+
+
+def check_cells_across(scene, grid):
+    """A smoothed body under four cells across its smallest extent is refused (stage 4, C5).
+
+    A body a few cells across is a handful of mixed voxels, and the grid scatters from the
+    effective polarizability of those voxels, which depends on where the grid falls -- not
+    from the body's. Study S2b measured it (the numbers are :data:`CELLS_ACROSS_REFUSED`'s),
+    and a public ``fd.run`` of an eps-12 sphere 4 cells across scatters 13.2% too much centred
+    on a node and 1.3% centred in a cell. The fill cannot see this: every public body's fill is
+    its exact clip at any size. The door reads ``Shape.min_extent`` over the axes the body is
+    bounded along and exempts a layer (:func:`_cells_across`); between 4 and 8 cells it warns
+    (:func:`_cells_across_notes`). It runs in ``plan`` ahead of the constitutive energy
+    certificate, which refuses many small high-contrast bodies too, for a reason that is its
+    own slack and with advice that is wrong for them.
+    """
+    from .occupancy import smoothed_structures
+    mirrors = _mirror_faces(scene)
+    for index, structure, _ in smoothed_structures(scene):
+        found = _cells_across(structure.shape, grid, mirrors)
+        if found is None or found[0] >= CELLS_ACROSS_REFUSED:
+            continue
+        cells, extent = found
+        raise ValueError(
+            f'structures[{index}] ({structure.shape.describe()}) is {cells:.2f} cells across '
+            f'its smallest extent ({extent:g} at dx = {grid.dx:g}), under the '
+            f'{CELLS_ACROSS_REFUSED} a smoothed body needs. A body that small is a handful of '
+            f'mixed voxels, and what the grid scatters from is set by where they fall, not by '
+            f'the body: measured in study S2b (studies/fdtd_subpixel_cells_across.py), an '
+            f'eps-12 sphere 2 cells across has a polarizability 9.6% to 43% high over five '
+            f'placements and scatters 123% too much against Mie theory, and at eps 2.25 it is '
+            f'still up to 9% off; at 4 cells across every body tried is within 9.2% at eps 12 '
+            f'and 2.9% at eps 4. Refine to dx <= {extent / CELLS_ACROSS_REFUSED:g} for 4 cells '
+            f'across, or dx <= {extent / CELLS_ACROSS_WARNED:g} for 8, where every body tried '
+            f'is within 2.6%. A layer -- a body uniform along two axes, like a film -- is '
+            f'exempt: the rule is exact for a plane at any thickness.')
+
+
+def _mirror_faces(scene):
+    """``(axis index, side)`` of every ``Symmetry`` face of ``scene``."""
+    from ..boundaries import Symmetry
+    return tuple((a, side) for a, axis in enumerate('xyz') for side in '-+'
+                 if isinstance(scene.boundaries.face(axis + side), Symmetry))
+
+
+def _cells_across_notes(scene, plan):
+    """A ``CoarseMeshWarning`` per smoothed body 4 to 8 cells across (:func:`check_cells_across`)."""
+    from .occupancy import smoothed_structures
+    out = []
+    mirrors = _mirror_faces(scene)
+    for index, structure, _ in smoothed_structures(scene):
+        found = _cells_across(structure.shape, plan.grid, mirrors)
+        if found is None or not found[0] < CELLS_ACROSS_WARNED:
+            continue
+        cells, extent = found
+        out.append((CoarseMeshWarning,
+                    f'structures[{index}] ({structure.shape.describe()}) is {cells:.1f} cells '
+                    f'across its smallest extent ({extent:g}); between {CELLS_ACROSS_REFUSED} '
+                    f'and {CELLS_ACROSS_WARNED}, study S2b measured an eps-12 body\'s '
+                    f'polarizability within 9.2% -- a sphere\'s between +1.2% and +6.3% by '
+                    f'where the grid falls -- against 2.6% for every body tried at '
+                    f'{CELLS_ACROSS_WARNED}. dx <= {extent / CELLS_ACROSS_WARNED:g} reaches '
+                    f'{CELLS_ACROSS_WARNED}.'))
+    return out
+
+
 def check_absorbing_layers(scene, plan):
     """What may sit inside an absorbing layer: no interface, and (in a PML) no loss or memory.
 
@@ -1435,6 +1542,7 @@ def notes(scene, plan):
     out += _stabilize_notes(scene, plan)
     out += _smoothed_notes(scene, plan)
     out += _clipping_notes(scene, plan)
+    out += _cells_across_notes(scene, plan)
     out += _radiation_notes(scene)
     return out
 

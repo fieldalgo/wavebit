@@ -30,8 +30,9 @@ ELL = ((-0.15, -0.15), (0.15, -0.15), (0.15, -0.05), (-0.05, -0.05), (-0.05, 0.1
        (-0.15, 0.15))
 #: Long, thin and lopsided: turned 50 degrees, its section is where degrees read as radians
 #: would put it nowhere near. (A clockwise turn moves its box by less than the support's cell
-#: of margin, so that mutant is the L-shaped row's to catch, not this one's.)
-SLIVER = ((-0.25, -0.05), (0.25, -0.05), (0.2, 0.06))
+#: of margin, so that mutant is the L-shaped row's to catch, not this one's.) Its smallest
+#: altitude is 0.22, 4.4 cells: thinner, C5's cells-across door refuses it (it was 0.11).
+SLIVER = ((-0.25, -0.1), (0.25, -0.1), (0.2, 0.12))
 
 
 def _area(vertices):

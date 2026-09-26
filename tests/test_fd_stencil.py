@@ -795,12 +795,14 @@ def test_a_second_structure_anywhere_is_refused():
     at ``x = 4 dx`` its face was half a cell from the ball's surface, in voxels the ball also
     cuts, and the voxel rule's own door 6 now refuses that scene first -- three media in one
     voxel -- before the stencil's door is reached. One cell out it is still inside the
-    operator's grown region, and still refused, by the stencil's own name.
+    operator's grown region, and still refused, by the stencil's own name. The second ball was
+    1.6 cells across at ``x = 0.27``; C5's cells-across door refuses that first, so it is 4.1
+    cells across on the diagonal now, 1.8 cells clear of the first.
     """
     dx = 1 / 18
     s = scene()
     box = fd.Structure(fd.Region(size=(2 * dx, 12 * dx, 12 * dx), center=(5 * dx, 0, 0)), 1.44)
-    ball = fd.Structure(fd.Sphere(radius=.045, center=(.27, 0, 0)), 2.25)
+    ball = fd.Structure(fd.Sphere(radius=.115, center=(.25, .25, 0)), 2.25)
     for extra in (box, ball):
         message = refusal(s.replace(structures=s.structures + (extra,)))
         assert 'StencilStructuresRefused' in message and "discretisation='voxel'" in message
@@ -1339,14 +1341,15 @@ def test_an_off_centre_sphere_is_patched_where_it_is():
     range on z, y and x -- so a patch box written in the wrong axis order could not be told
     from the right one (review: the transposed-box mutant survived all twenty cases). Here the
     ball sits off centre along x, so the three ranges differ, and ``be`` has to be exactly the
-    prepared diagonal over the region and exactly the default's everywhere else.
+    prepared diagonal over the region and exactly the default's everywhere else. (Radius 0.12,
+    4.3 cells across: at 0.10 C5's cells-across door refuses it.)
     """
     def ball(rule):
         return fd.Scene(domain=fd.Domain(size=(1.8,) * 3),
                         boundaries=fd.Boundaries.open(fd.PML(cells=6, wavelength=1.,
                                                              allow_thin=True)),
                         resolution=fd.Resolution(dx=1 / 18), run=fd.Run(steps=2),
-                        structures=(fd.Structure(fd.Sphere(radius=.10, center=(.08, 0., 0.)),
+                        structures=(fd.Structure(fd.Sphere(radius=.12, center=(.08, 0., 0.)),
                                                  2.25, discretisation=rule),))
     s, v = ball('stencil'), ball('voxel')
     plan, voxel_plan = quiet(build_plan, s), quiet(build_plan, v)

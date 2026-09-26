@@ -240,8 +240,17 @@ def validate(scene, plan):
             raise ValueError(f'{term.name} inverse-material spectrum is enclosed by '
                              f'[{lo:.17g}, {hi:.17g}]. The positive-energy certificate '
                              'requires a strictly positive lower bound. A failed bound '
-                             'is inconclusive, not evidence of a negative eigenvalue; '
-                             'refine the grid or reduce the material contrast.')
+                             'is inconclusive, not evidence of a negative eigenvalue: the '
+                             'certificate is a Gershgorin enclosure, and loose. Study S2b '
+                             'swept it (studies/fdtd_subpixel_cells_across.py, certificate): '
+                             'every body tried passes at eps 6 from 4 to 32 cells across; at '
+                             'eps 12 a sphere fails at 3 of 5 placements up to 8 cells across '
+                             'and passes from 16; from eps 12.5 the sphere fails more often '
+                             'as the grid is refined (no placement passes at 24 or 32 cells '
+                             'across), and at eps 20 almost every body fails at every '
+                             'resolution. So refining the grid helps up to eps about 12 and '
+                             'not above it; reducing the contrast does. A tighter certificate '
+                             'is an open item of stage 4.')
         upper[term.field] = max(upper[term.field], hi)
     from .checks import cfl_axis_sum
     rate = pole_rate(scene, rt)

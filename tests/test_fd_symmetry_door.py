@@ -161,7 +161,7 @@ def test_a_symmetric_ball_meets_the_mirror_adjoint_refusal_not_the_wall_door():
 #: 1/3 on the rim voxels when the face moves 1e-12 inside), so the half box and the full box --
 #: the same geometry, different floats -- lowered eps 2.105 against 2.5 there and differed by
 #: 4.5e-3 of the peak in 300 steps with faces at +-0.2. That is the C4 moment's, not the mirror's.
-BAR = _box(-0.185, 0.185)
+BAR = _box(-0.235, 0.235)
 
 
 def _series(side_half, box):
@@ -186,10 +186,11 @@ def _series(side_half, box):
 def test_the_accepted_mirror_is_the_full_box_and_the_refused_one_is_not(monkeypatch):
     """What the door protects, run: the symmetric box's half agrees with the full box to
     round-off (6.2e-16 of the peak, measured 2026-09-26); its flush half, with the door held
-    open, does not (6.6e-2: its plane voxels read eps 2.5 where the full box holds 4). See
-    :data:`BAR` for where its faces are, and why."""
+    open, does not (6.9e-2: its plane voxels read eps 2.5 where the full box holds 4). See
+    :data:`BAR` for where its faces are, and why; it is 9.4 cells long so that its flush half
+    clears the cells-across door, which measures a half as declared."""
     full = _series(False, None)
     assert np.max(np.abs(_series(True, BAR) - full)) <= 1e-12 * np.max(np.abs(full))
     monkeypatch.setattr(checks, 'check_symmetry', lambda scene, grid: None)
-    flush = _series(True, _box(0.0, 0.185))             # exactly BAR's domain half
+    flush = _series(True, _box(0.0, 0.235))             # exactly BAR's domain half
     assert np.max(np.abs(flush - full)) >= 1e-2 * np.max(np.abs(full))
