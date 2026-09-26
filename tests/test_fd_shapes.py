@@ -2475,7 +2475,11 @@ def test_the_signed_distance_is_the_distance():
     pts = rng.uniform(-0.6, 0.6, size=(600, 3))
     prism = Prism(HEX, 0.4, 'z', CENTRE_D, 0.2)
     samples = _prism_surface()
-    brute = np.sqrt(((pts[:, None, :] - samples[None, :, :]) ** 2).sum(-1)).min(-1)
+    # Ten points at a time. In one broadcast the (600, 720k, 3) difference and its square are
+    # 10.4 GB each and both alive at once: 21.1 GB peak, measured, which ran the 32 GB desktop
+    # out of memory under ``-n 3``. Each row is the same arithmetic either way (bit-identical).
+    brute = np.concatenate([np.sqrt(((p[:, None, :] - samples[None, :, :]) ** 2).sum(-1)).min(-1)
+                            for p in np.split(pts, 60)])
     ball = _sphere_distance(pts)
     brick = _box_distance(pts)
     rod = _cylinder_distance(pts)
