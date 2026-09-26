@@ -443,7 +443,9 @@ def test_a_slower_courant_takes_the_same_pole():
     structures = (fd.Structure(fd.Slab(z=(-0.2, 0.2)), fast),)
     with pytest.raises(ValueError, match='stability bound') as e:
         quiet(fd.plan, scene(structures=structures))
-    asked = float(str(e.value).split('to at most ')[1].split(',')[0])
+    # The refusal names a courant that itself plans (C5: it said "at most" the refused value).
+    asked = float(str(e.value).split('Run(courant=...) to ')[1].split(' or less')[0])
+    quiet(fd.plan, scene(structures=structures, run=fd.Run(steps=4, courant=asked)))
     ok = quiet(fd.plan, scene(structures=structures, run=fd.Run(steps=4, courant=asked * 0.5)))
     assert ok.terms and ok.terms[0].n_poles == 1
 
