@@ -97,7 +97,7 @@ the linear shape construction can also carry complex material-dependent componen
 JobSpec now writes schema version **10**. For a version-7 document, rename these keys in
 `numerics` when present and keep their option values. Also reverse `stack.layers` and
 review the coordinate migration in [Conventions](../conventions.md) before setting version 10. The capability
-manifest is version **11** and uses the new option keys. Earlier JobSpec versions also
+manifest has used the new option keys since version **10**. Earlier JobSpec versions also
 require their own material and coordinate migrations.
 
 ## Two axis-order rules, and where they meet

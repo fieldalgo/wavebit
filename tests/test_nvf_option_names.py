@@ -99,7 +99,7 @@ def test_version_seven_specs_explain_the_key_only_migration():
     with pytest.raises(SpecError, match="version='10'.*shape_nvf_grid_size"):
         wavebit.JobSpec.from_dict({'version': '7'})
     assert manifest()['results']['jobspec']['spec_version'] == '10'
-    assert manifest()['manifest_version'] == '11'
+    assert int(manifest()['manifest_version']) >= 10   # '10' renamed the keys; later bumps keep them
     for path in manifest()['paths']:
         assert 'normal_method' not in path and 'projector' not in path
         assert 'raster_normal_method' in path and 'nvf_projector' in path

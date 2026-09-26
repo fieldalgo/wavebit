@@ -98,9 +98,12 @@ from ._core.spec import SPEC_VERSION
 #: conserves energy -- the '8' failure exactly, on the convention '8' was about.
 # '10': numerical option axes use raster_normal_method / nvf_projector. Renaming
 # keys changes the contract consumers use to construct a solver; old readers must
-# not interpret a missing axis as an unavailable capability. Version 11 adds material dispersion; JobSpec is version 9.
+# not interpret a missing axis as an unavailable capability.
+# '11': material dispersion, the manifest side of JobSpec '9'. '10' and '11' landed in
+# one change, alongside JobSpec '10': develop went from '9' straight to '11'.
 # '12': the specified-incidence result attribute and field selector are named
 # incident; consumers must use the new attribute published in incidences.fields.
+# Same argument as '6': those names are attributes a consumer indexes a result with.
 MANIFEST_VERSION = '12'
 
 
