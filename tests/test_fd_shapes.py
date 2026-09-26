@@ -2773,9 +2773,9 @@ def test_a_circular_cylinders_angle_carries_no_gradient():
     A circle is its own rotation, so ``angle=`` on a :class:`Cylinder` is the defect the design
     refuses by name on ``Sphere(angle=)``: a keyword whose derivative cannot be anything but
     zero, so a design loop that reaches for it silently optimises nothing (the ``circle``/``ly``
-    lesson, ``wavebit/_core/parametric.py``:348-355). It is accepted here because the stage-4
-    API names it; C5 should refuse it on key *presence* as it does for a sphere, or the
-    cross-section should become an ellipse. The rotation itself is not dead code: the same line
+    lesson, ``wavebit/_core/parametric.py``:348-355). The kernel accepts it because its
+    extrusions share one constructor; the public ``fd.Cylinder`` does not take it (C4). The
+    rotation itself is not dead code: the same line
     turns a :class:`Prism` and a :class:`Box`, and this test's sibling above measures those
     gradients at order 1e1.
     """

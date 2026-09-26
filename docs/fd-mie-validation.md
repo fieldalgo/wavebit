@@ -155,7 +155,7 @@ the same printed cross-sections:
 ## What the cylinder experiment measures
 
 The study uses the actual component positions, geometry occupancy and coefficient
-mixing functions. Until `fd.Cylinder` is public, it substitutes those coefficients
+mixing functions. Written before `fd.Cylinder` was public (C4), it substitutes those coefficients
 after preparing an empty scene on a one-cell invariant x axis. This is a measuring
 instrument, not validation of public scene preparation. In particular, substituting
 the material bypasses the declared-material resolution refusal; low resolutions
@@ -296,7 +296,7 @@ the table reports the number that failed.
 | Square placement errors only after averaging | 1 |
 | Remove explicit host conversion before the NumPy reduction | 2 |
 | Remove the static curved-accuracy warning | 4 |
-| Emit the curved-accuracy warning for a cell-snapped Box | 1 |
+| Emit the curved-accuracy warning for a cell-snapped Box (`fd.Region` since C4) | 1 |
 | Judge the internal-layer echo as ended with the source envelope | 1 |
 
 `SubpixelAccuracyWarning` is emitted once during planning whenever a smoothed
@@ -304,7 +304,8 @@ structure is present, and appears in `check` even when parameters are already
 built. It quotes the measured 3.09% origin-placement cylinder error, explicitly
 states that this is not an error bound for the caller's scene, and says the Mie
 gate is incomplete. Lowering on NumPy, JAX, cached JAX JIT and Torch emits no
-warning. A cell-snapped Box does not inherit this warning.
+warning. A cell-snapped `fd.Region` (`fd.Box` before stage 4's C4) does not inherit this
+warning.
 
 The manufactured contour runs on NumPy, JAX and Torch. An end-to-end Torch probe
 initially raised `TypeError` because NumPy's reduction dispatched its `axis/out`

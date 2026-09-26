@@ -28,14 +28,32 @@ def _intersect(a, b):
     return box if all(hi > lo for lo, hi in box) else None
 
 
+def cross_free(body):
+    """Whether ``body``'s cross coefficients are zero everywhere: an unturned ``fd.Box``.
+
+    Every face of an axis-aligned box has ``n_i n_j = 0`` for ``i != j``, including the voxels
+    that hold more than one face, so :func:`lower` writes zero weights for it and a
+    ``ConstitutiveTerm`` over it would add exactly nothing -- the term adds only the
+    off-diagonal increment. So :func:`terms` plans none for it: no flux memory, no flux work,
+    and nothing for an initial field to be refused over. ``angle`` is a Python float in C4; a
+    traced one (C6) has to decide this statically. A box turned by 90 or 360 degrees answers
+    ``False`` and gets the nearest-surface proxy, as ``fd.Box``'s docstring says.
+    """
+    from .._shapes import Box
+    return isinstance(body, Box) and body.angle == 0
+
+
 def terms(scene, plan):
     """Merge intersecting supports, including one interpolation-cell halo.
 
     One cell is the exact reach of the two adjacent half-cell averages, not
     an empirical cutoff. Disjoint regions own disjoint flux memory and writes.
+    A body whose cross coefficients are zero everywhere (:func:`cross_free`) owns none.
     """
     boxes = []
-    for _, structure, _ in smoothed_structures(scene):
+    for _, structure, body in smoothed_structures(scene):
+        if cross_free(body):
+            continue
         box = tuple((max(0, lo-1), min(n, hi+1))
                     for (lo, hi), n in zip(structure.shape.support(plan.grid), plan.grid.n))
         i = 0
@@ -109,9 +127,10 @@ def lower(scene, plan, rt, report=None, proxy_stats=None):
                 contrast = fill*(1-fill)*(value-old)**2 / (value*old*arithmetic)
                 weights = xp.stack([normal[..., i]*normal[..., j]
                                     for i, j in ((0, 1), (0, 2), (1, 2))])
-                if isinstance(body, Box) and body.angle == 0:
+                if cross_free(body):
                     # Every face of an axis-aligned box has n_i*n_j=0 for i!=j,
-                    # including voxels that contain more than one face.
+                    # including voxels that contain more than one face; this one
+                    # shares a region some other body's term owns.
                     weights = xp.zeros_like(weights)
                 elif proxy_stats is not None and not isinstance(body, Sphere):
                     # This host-only measurement belongs to planning, never a

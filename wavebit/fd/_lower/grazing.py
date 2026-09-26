@@ -435,16 +435,18 @@ def _layer_media(scene, grid, P, side, cells):
     """``[(label, index or None), ...]``: the materials filling the absorbing layer's cells."""
     k = cells - 1 if side == '-' else grid.n[P] - cells
     background = as_material(scene.background, 'Scene(background=)')
-    owners = {}
+    from .._post import layer_share
+    owners, full = {}, False
     for index, s in enumerate(scene.structures):
         box = s.shape.support(grid)                    # anything that may reach this layer
         if box[P][0] <= k < box[P][1]:
-            owners[index] = s.material
+            share = layer_share(s.shape, grid, P, k)
+            if share != 'absent':
+                owners[index] = s.material
+                full = full or share == 'full'
     # The background is one of the media unless some structure fills the whole cross-section
-    # of the layer: "fills it" is uniformity across both transverse axes, not a bounding box.
-    media = [('the background', background)] if not any(
-        all(scene.structures[i].shape.uniform_along(a, (0, grid.n[a]), grid)
-            for a in range(3) if a != P) for i in owners) else []
+    # of the layer -- asked of each shape's own fill (``_post.layer_share``), not of a box.
+    media = [('the background', background)] if not full else []
     media += [(f'structures[{i}]', m) for i, m in owners.items()]
     return [(label, m.index_bound()) for label, m in media]
 

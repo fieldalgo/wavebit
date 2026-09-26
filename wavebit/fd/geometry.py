@@ -879,7 +879,11 @@ def _extrusion_axis(where, axis):
 
 
 def _finite(where, name, value):
-    """A static, finite real: a traced one is refused by ``static_float``, a NaN or inf here."""
+    """A static, finite real: a traced one is refused by ``static_float``, a NaN or inf here.
+
+    ``name`` may carry an index, ``size[1]``, so the refusal names the element and not the
+    whole keyword.
+    """
     value = static_float(where, name, value)
     if not math.isfinite(value):
         raise ValueError(f'{where}({name}={value!r}): a finite number.')
@@ -897,11 +901,15 @@ def _length(where, name, value):
 
 
 def _triple(where, name, value, check):
+    """Three static values, element by element; a NumPy array of three is a triple too."""
+    if hasattr(value, 'tolist') and getattr(value, 'shape', None) == (3,):
+        value = value.tolist()
     if not (isinstance(value, (tuple, list)) and len(value) == 3):
-        raise ValueError(f'{where}({name}={value!r}): a triple (x, y, z), absolute, in the '
-                         f'scene\'s coordinates -- not the cell-centre origin the rcwa path '
-                         f'spells as cx=/cy=.')
-    return tuple(check(where, name, v) for v in value)
+        what = ('a triple (x, y, z), absolute, in the scene\'s coordinates -- not the '
+                'cell-centre origin the rcwa path spells as cx=/cy=' if name == 'center'
+                else 'three lengths (x, y, z)')
+        raise ValueError(f'{where}({name}={value!r}): {what}.')
+    return tuple(check(where, f'{name}[{i}]', v) for i, v in enumerate(value))
 
 
 def _turned(vertices, degrees):
@@ -1038,17 +1046,21 @@ class _Extruded(Shape):
         return tuple((f'{self._label}.{axis}', self.low[a], self.high[a], self.low[a],
                       self.high[a]) for a, axis in enumerate(AXES))
 
+    def _inside(self, a, grid):
+        """Its extent along ``a`` as it reaches into the box (:meth:`Shape.min_extent`)."""
+        return min(self.high[a], grid.high[a]) - max(self.low[a], grid.low[a])
+
     def min_extent(self, grid):
-        """The narrowest section width, and the height unless it runs through the domain.
+        """The narrowest section width, and the height as it reaches into the box.
 
         An axis the body runs out of the domain through on both sides has no feature size along
-        it (:meth:`Shape.min_extent`); so has the across-axis size of an unturned
-        :class:`Box` that does the same.
+        it (:meth:`Shape.min_extent`), and one it leaves through one face is measured inside;
+        so is the across-axis size of an unturned :class:`Box`.
         """
         a = AXES.index(self.axis)
         sides = [self._feature(grid)]
         if not self._spans(a, (0, grid.n[a]), grid):
-            sides.append(self.height)
+            sides.append(self._inside(a, grid))
         sides = [s for s in sides if s is not None]
         return min(sides) if sides else None
 
@@ -1104,8 +1116,9 @@ class Box(_Extruded):
 
     def _feature(self, grid):
         u, v = _TRANSVERSE[AXES.index(self.axis)]
-        sides = [self.size[b] for b in (u, v)
-                 if not (self.angle == 0 and self._spans(b, (0, grid.n[b]), grid))]
+        if self.angle:
+            return min(self.size[u], self.size[v])
+        sides = [self._inside(b, grid) for b in (u, v) if not self._spans(b, (0, grid.n[b]), grid)]
         return min(sides) if sides else None
 
     def body(self):
@@ -1189,11 +1202,15 @@ class Prism(_Extruded):
         from ._shapes._bodies import polygon_shape
         object.__setattr__(self, 'axis', _extrusion_axis('Prism', self.axis))
         vertices = self.vertices
+        if hasattr(vertices, 'tolist') and len(getattr(vertices, 'shape', ())) == 2:
+            vertices = vertices.tolist()             # an (nv, 2) array, as the kernel takes
         if not (isinstance(vertices, (tuple, list))
                 and all(isinstance(p, (tuple, list)) and len(p) == 2 for p in vertices)):
-            raise ValueError(f'Prism(vertices={vertices!r}): a sequence of (u, v) pairs.')
-        vertices = tuple((_finite('Prism', 'vertices', u), _finite('Prism', 'vertices', v))
-                         for u, v in vertices)
+            raise ValueError(f'Prism(vertices={vertices!r}): a tuple or list of (u, v) pairs, '
+                             f'or an (nv, 2) array.')
+        vertices = tuple((_finite('Prism', f'vertices[{i}]', u),
+                          _finite('Prism', f'vertices[{i}]', v))
+                         for i, (u, v) in enumerate(vertices))
         polygon_shape('Prism', vertices)
         object.__setattr__(self, 'vertices', vertices)
         object.__setattr__(self, 'height', _length('Prism', 'height', self.height))

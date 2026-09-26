@@ -355,8 +355,12 @@ def test_equal_phases_have_no_cross_coupling_and_box_faces_have_none():
             return Box(size=(.25,.30,.35))
     sphere = cavity(mu=None).replace(background=2.25)
     box = cavity(mu=None).replace(structures=(fd.Structure(FlatFaces(.3), 2.25),))
-    for scene in (sphere, box):
-        plan = quiet(fd.plan, scene)
-        params = fd.lower(scene, plan)
-        for cross in params['constitutive'].values():
-            assert np.array_equal(cross, np.zeros_like(cross))
+    plan = quiet(fd.plan, sphere)
+    for cross in fd.lower(sphere, plan)['constitutive'].values():
+        assert np.array_equal(cross, np.zeros_like(cross))
+    # An unturned box's cross coefficients are zero everywhere, so since C4 it is planned no
+    # constitutive term at all (constitutive.cross_free) rather than one full of zeros.
+    from wavebit.fd._kernel.constitutive import ConstitutiveTerm
+    plan = quiet(fd.plan, box)
+    assert not [t for t in plan.terms if isinstance(t, ConstitutiveTerm)]
+    assert not fd.lower(box, plan).get('constitutive')

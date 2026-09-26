@@ -426,8 +426,9 @@ def check_smoothed(scene, grid):
                     f'cell thick, the scene lowers to an invariant slab cross-section holding '
                     f'18.4% of the ball\'s volume -- neither the ball asked for nor the '
                     f'cylinder a reader would take it for -- and no warning fires. Say the '
-                    f'invariant cross-section with a body extruded along {axis} that runs '
-                    f'through the whole domain -- fd.Cylinder(axis={axis!r}), '
+                    f'invariant cross-section with a body extruded along {axis} that reaches '
+                    f'a whole cell beyond each {axis} face (its extent at least the domain plus '
+                    f'2 dx = {2 * grid.dx:g}) -- fd.Cylinder(axis={axis!r}), '
                     f'fd.Prism(axis={axis!r}), or an unturned fd.Box spanning {axis} -- or with '
                     f'the cell-snapped fd.Region, or give {axis} real cells and a face that is '
                     f'not invariant.')

@@ -399,6 +399,37 @@ def order_kz(rt, kappa, Ku_c, Kv_c, n_omega, convention=None):
 # The medium at a plane
 # ---------------------------------------------------------------------------------------------
 
+def layer_share(shape, grid, P, k):
+    """``'full'``, ``'partial'`` or ``'absent'``: what ``shape`` is in cell layer ``k`` across ``P``.
+
+    Asked only of a shape whose support reaches the layer. A cell-snapped shape's support *is*
+    its filled cells, so it fills the layer when it is uniform across both transverse axes and
+    cuts it otherwise -- the answer this module always gave. A smoothed shape's support carries
+    a cell of margin and its fractional face cell, so it is asked by its own exact fill at all
+    six components' Yee points in the layer: none anywhere is ``'absent'``, all of it across the
+    whole layer is ``'full'``, anything else two media. Both ends are read against
+    ``checks._CLIP_ROUNDOFF``, the exact clip's own round-off.
+    """
+    body = shape.body()
+    if body is None:
+        full = all(shape.uniform_along(a, (0, grid.n[a]), grid) for a in range(3) if a != P)
+        return 'full' if full else 'partial'
+    import numpy as np
+    from ._lower.checks import _CLIP_ROUNDOFF
+    from ._lower.occupancy import yee_points
+    from ._shapes import occupancy as body_occupancy
+    box = list(shape.support(grid))
+    box[P] = (k, k + 1)
+    fills = [np.asarray(body_occupancy(body, np.asarray(yee_points(grid, tuple(box), field, c))
+                                       .reshape(-1, 3), grid.dx)[0])
+             for field in ('E', 'H') for c in range(3)]
+    fill = np.concatenate(fills)
+    if np.all(fill <= _CLIP_ROUNDOFF):
+        return 'absent'
+    whole = all(box[a] == (0, grid.n[a]) for a in range(3) if a != P)
+    return 'full' if whole and np.all(fill >= 1.0 - _CLIP_ROUNDOFF) else 'partial'
+
+
 def medium_at(scene, grid, P, cells, where):
     """The one plain material filling the cell layers ``cells`` across ``P``, or a refusal.
 
@@ -410,6 +441,12 @@ def medium_at(scene, grid, P, cells, where):
     The refusal names the structure that cut the layer, in that shape's own words
     (``Shape.describe``): it used to say "a Box structure cuts it" whatever the shape was,
     which is a sentence about a box in a message about a ball.
+
+    A **smoothed** shape is asked what it is in the layer by its own fill
+    (:func:`layer_share`), not by its support: the support carries a cell of margin and the
+    fractional face cell, and reading it as "fills the layer" put a plane in the air under a
+    smoothed ``fd.Box`` film into the film (``eps`` 4 where the voxels hold 1, found in the
+    review of C4) and refused a plane a cell and a half clear of it.
     """
     from .materials import Conductor, Dispersive, as_material, concrete
     background = as_material(scene.background, 'Scene(background=)')
@@ -420,12 +457,10 @@ def medium_at(scene, grid, P, cells, where):
             box = s.shape.support(grid)        # anything that may reach this cell layer
             if not box[P][0] <= k < box[P][1]:
                 continue
-            # "Fills the layer" is uniformity across both transverse axes, not a bounding
-            # box: a shape whose surface curves through the layer leaves it two media, which
-            # is exactly the ``partial`` branch below.
-            full = all(s.shape.uniform_along(a, (0, grid.n[a]), grid)
-                       for a in range(3) if a != P)
-            if full:
+            share = layer_share(s.shape, grid, P, k)
+            if share == 'absent':
+                continue
+            if share == 'full':
                 owner, partial = index, None
             else:
                 partial = index

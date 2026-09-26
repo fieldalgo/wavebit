@@ -3,7 +3,7 @@
 The one-cell x axis is invariant. A wide periodic y cell and a finite time gate
 isolate one cylinder before a neighbour can arrive; the control runs vary both.
 A paired empty run removes the incident field before the closed-contour flux.
-Until public fd.Cylinder lands in C4, this study substitutes coefficients after
+Written before public fd.Cylinder landed (C4), this study substitutes coefficients after
 lowering an empty scene. Geometry, component sampling and mixing use the actual
 C2 functions. This is an instrument, not a public scene bypass: in particular,
 the declared-material resolution refusal is not exercised by this substitution.

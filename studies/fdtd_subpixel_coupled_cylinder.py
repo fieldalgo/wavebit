@@ -2,7 +2,7 @@
 
 This retains the historical S2 grid, source, paired empty run and contour.
 Material coefficients, compact flux memory, stepping and positive-energy/CFL
-checks are the production implementations. Until public Cylinder lands in C4,
+checks are the production implementations. Written before public Cylinder landed (C4),
 the custom shape is placed into an empty scene's prepared plan. Its periodic
 invariant axis and declared-material resolution are NOT public-scene checks.
 Result reporting uses that same empty-scene context; public refusals stay intact.

@@ -670,7 +670,10 @@ def polygon_shape(where, vertices):
                                  'an fd.Union of simple pieces instead.')
     following = _np.roll(read, -1, axis=0)
     area = .5 * float(_np.sum(read[:, 0] * following[:, 1] - following[:, 0] * read[:, 1]))
-    if area <= 0:
+    if area == 0:
+        raise ValueError(f'{where}(vertices=...): the outline encloses no area -- its vertices '
+                         f'are collinear or repeated -- so there is no body to fill.')
+    if area < 0:
         raise ValueError(f'{where}(vertices=...): counter-clockwise, in the right-handed (u, v) '
                          f'pair across the extrusion axis; this list has signed area {area:.6g}. '
                          'Reverse it (vertices[::-1]) -- the clipped area of a clockwise list is '

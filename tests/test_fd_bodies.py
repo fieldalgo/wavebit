@@ -28,7 +28,9 @@ HEXAGON = tuple((0.2 * math.cos(math.pi / 3 * i), 0.2 * math.sin(math.pi / 3 * i
 #: A non-convex outline, counter-clockwise.
 ELL = ((-0.15, -0.15), (0.15, -0.15), (0.15, -0.05), (-0.05, -0.05), (-0.05, 0.15),
        (-0.15, 0.15))
-#: Long, thin and lopsided, so a turn the wrong way moves its bounding box.
+#: Long, thin and lopsided: turned 50 degrees, its section is where degrees read as radians
+#: would put it nowhere near. (A clockwise turn moves its box by less than the support's cell
+#: of margin, so that mutant is the L-shaped row's to catch, not this one's.)
 SLIVER = ((-0.25, -0.05), (0.25, -0.05), (0.2, 0.06))
 
 
@@ -160,9 +162,9 @@ def test_a_body_is_uniform_along_its_own_axis_where_it_spans_it_and_nowhere_else
     asking whether the body spans it fails this case and the wrapping-face one; a turned box
     counted uniform across its axis fails this case alone, on the strip; spanning with no
     margin at all fails it alone, on the flush rod. Spanning with half a cell of margin
-    instead of a whole one is an **equivalent** mutant and survives: the voxels of the layers
-    ``c0 .. c1 - 1`` reach from ``c0 - 1/2`` to ``c1``, so half a cell is exactly enough, and
-    the whole cell is the conservative choice :meth:`support` also makes.
+    instead of a whole one fails :func:`test_a_rod_that_spans_a_period_lowers_every_layer_alike`
+    (an earlier writing of this docstring called it equivalent, which it is for the fill and
+    not for the normal -- see that test).
     """
     grid = _grid()
     full = [(0, n) for n in grid.n]
@@ -269,27 +271,38 @@ def test_a_body_is_static_finite_and_straight_or_refused_at_construction():
     every ``body()`` call.
 
     Mutants, each alone, measured 2026-09-26: ``fd.Prism`` without the outline check at
-    construction, and a NaN passing as finite, each fail this case alone.
+    construction, and a NaN passing as finite, each fail this case alone. The traced value is
+    its own test below, so that these run where Torch is not installed.
     """
-    torch = pytest.importorskip('torch')
     for make, match in (
             (lambda: fd.Box(size=(1, 1, 1), axis=(0, 0, 1)), 'stage 5'),
             (lambda: fd.Cylinder(radius=0.1, height=1, axis='w'), 'stage 5'),
             (lambda: fd.Box(size=(1, 1, 1), center=(0, math.nan, 0)), 'finite'),
             (lambda: fd.Box(size=(1, 1, 1), angle=math.inf), 'finite'),
             (lambda: fd.Box(size=(1, -1, 1)), 'positive length'),
-            (lambda: fd.Box(size=(1, 1)), 'triple'),
+            (lambda: fd.Box(size=(1, 1)), 'three lengths'),
             (lambda: fd.Cylinder(radius=0.0, height=1), 'positive length'),
             (lambda: fd.Prism(vertices=HEXAGON, height=1, center=(0, 0)), 'triple'),
             (lambda: fd.Prism(vertices=((0, 0), (1, 0)), height=1), 'three vertices'),
             (lambda: fd.Prism(vertices=((0, 0), (0, 1), (1, 0)), height=1), 'counter-clockwise'),
             (lambda: fd.Prism(vertices=((0, 0), (1, 1), (1, 0), (0, 1)), height=1), 'simple'),
-            (lambda: fd.Cylinder(radius=torch.tensor(0.1, requires_grad=True), height=1),
-             'is static')):
+            (lambda: fd.Prism(vertices=((0, 0), (1, 0), (2, 0)), height=1), 'no area')):
         with pytest.raises(ValueError, match=match):
             make()
     with pytest.raises(TypeError, match="does not take 'angle'"):
         fd.Cylinder(radius=0.1, height=1, angle=10)
+    # An array is a spelling of the same values, not a refusal.
+    assert fd.Box(size=np.array([0.3, 0.2, 0.1])).size == (0.3, 0.2, 0.1)
+    assert fd.Prism(vertices=np.array(((0, 0), (1, 0), (0, 1.0))), height=1).vertices[2] == (0.0, 1.0)
+    with pytest.raises(ValueError, match=r'size\[1\]=0.0'):
+        fd.Box(size=(1, 0, 1))
+
+
+def test_a_traced_value_is_refused_at_construction():
+    """``range=`` is C6; until then a traced radius is static and refused, by name."""
+    torch = pytest.importorskip('torch')
+    with pytest.raises(ValueError, match='is static'):
+        fd.Cylinder(radius=torch.tensor(0.1, requires_grad=True), height=1)
 
 
 def test_each_body_describes_itself_and_labels_its_rows():
@@ -320,15 +333,25 @@ def test_three_backends_lower_a_turned_body_alike(backend):
     """The coefficient arrays of a turned prism and a cylinder, on each backend, against NumPy.
 
     One lowering body serves all three; what differs is only each library's own ``sqrt`` and
-    trigonometry, so the arrays agree to rounding (measured 1.1e-16 and 3.9e-15 in ``be``).
+    trigonometry, so the arrays agree to rounding: ``be`` (measured 1.1e-16 and 3.9e-15), and
+    the constitutive cross array, where the body's own surface normals enter (measured 2.7e-15
+    on JAX and 2.2e-17 on Torch for the prism) -- the one array no other test compares across
+    backends for these bodies.
     """
+    rt = runtime(backend)
     for shape in (fd.Prism(vertices=HEXAGON, height=0.3, axis='x', center=CENTRE, angle=10),
                   fd.Cylinder(radius=0.15, height=0.3, axis='y', center=CENTRE)):
         scene = _scene((fd.Structure(shape, fd.Material(eps=2.25)),))
         plan = _quiet(fd.plan, scene)
-        want = np.asarray(_quiet(fd.lower, scene, plan, 'numpy')['be'])
-        got = np.asarray(runtime(backend).numpy(_quiet(fd.lower, scene, plan, backend)['be']))
-        assert np.max(np.abs(got - want)) <= 1e-13 * np.max(np.abs(want)), shape.describe()
+        want = _quiet(fd.lower, scene, plan, 'numpy')
+        got = _quiet(fd.lower, scene, plan, backend)
+        pairs = [(np.asarray(rt.numpy(got['be'])), np.asarray(want['be']))]
+        assert set(got['constitutive']) == set(want['constitutive']) != set()
+        pairs += [(np.asarray(rt.numpy(got['constitutive'][k])), np.asarray(want['constitutive'][k]))
+                  for k in want['constitutive']]
+        for g, w in pairs:
+            assert np.max(np.abs(w)) > 0
+            assert np.max(np.abs(g - w)) <= 1e-13 * np.max(np.abs(w)), shape.describe()
 
 
 def test_the_stencil_is_the_spheres_and_refuses_a_body_by_name():
@@ -338,3 +361,123 @@ def test_the_stencil_is_the_spheres_and_refuses_a_body_by_name():
                   fd.Prism(vertices=HEXAGON, height=0.3)):
         with pytest.raises(ValueError, match='StencilShapeRefused'):
             _quiet(fd.plan, _scene((fd.Structure(shape, 2.25, discretisation='stencil'),)))
+
+
+def test_a_rod_that_spans_a_period_lowers_every_layer_alike():
+    """Along a periodic axis a spanning rod's face layer is its every other layer, to round-off.
+
+    What ``uniform_along`` promises the periodic door is that no layer along the axis differs,
+    so that no image ring is needed. The fill alone would allow half a cell of margin beyond
+    each face -- the voxels reach half a cell out -- but the moment and the cross terms read the
+    **nearest** surface, and a voxel on the rim can sit up to about 0.71 of a cell inside the
+    side: with a cap nearer than that, the face layer takes the cap's normal. Found in review:
+    with half a cell of margin a rod whose caps sit 0.52 of a cell past each face was carried,
+    and its first layer differed from its middle one by 1.6e-3 in ``be`` and 7.9e-4 in the
+    cross array. So the margin is a whole cell, a rod 0.55 of a cell past each face is refused,
+    and one 1.05 cells past lowers every layer alike.
+
+    Mutant, measured 2026-09-26: the spanning test asking half a cell instead of a whole one
+    fails this case.
+    """
+    side = N * DX
+    periodic = fd.Boundaries(x=fd.Periodic(), y=fd.PEC(), z=fd.PEC())
+
+    def rod(past):
+        return fd.Structure(fd.Cylinder(radius=0.17, height=side + 2 * past * DX, axis='x',
+                                        center=(0.0, 0.013, -0.021)), fd.Material(eps=2.25))
+    with pytest.raises(ValueError, match='reaches the Periodic x face'):
+        _quiet(fd.plan, _scene((rod(0.55),), boundaries=periodic))
+    scene = _scene((rod(1.05),), boundaries=periodic)
+    plan = _quiet(fd.plan, scene)
+    params = _quiet(fd.lower, scene, plan, 'numpy')
+    arrays = [np.asarray(params['be'])] + [np.asarray(v) for v in params['constitutive'].values()]
+    assert len(arrays) == 2
+    for a in arrays:
+        middle = a[..., a.shape[-1] // 2]
+        assert np.max(np.abs(middle - a[..., 0])) < 1e-14 and np.max(np.abs(middle - a[..., -1])) < 1e-14
+        assert np.ptp(middle) > 0.1 * np.max(np.abs(middle))
+
+
+def test_a_plane_beside_a_smoothed_film_reads_the_medium_its_voxels_hold():
+    """A diffraction plane under a smoothed ``fd.Box`` film: air where its layers are air.
+
+    ``medium_at`` read "this structure fills the layer" off the shape's support and its
+    uniformity across the plane -- exact for the snapped shapes, whose support is their filled
+    cells, and wrong for a smoothed one, whose support carries a cell of margin and the
+    fractional face cell. Found in review: a plane 0.6 of a cell under a smoothed film planned
+    with the film's ``eps`` 4 -- its orders de-embedded in glass that is not there -- and a
+    plane 1.6 cells under it was refused as "an interface on the plane". Now a smoothed shape
+    is asked by its own fill (``_post.layer_share``): the plane whose layer holds part of the
+    film's face voxels is refused, the one a cell and a half clear reads air, and a plane inside
+    reads the film.
+
+    Mutant, measured 2026-09-26: a smoothed shape answering "full" wherever its support
+    reaches the layer (the old reading) fails this case.
+    """
+    from wavebit.fd._post import medium_at
+    dx, period = 0.025, 0.8
+
+    def scene(film, z):
+        return fd.Scene(
+            domain=fd.Domain(size=(period, period, 2.0)),
+            boundaries=fd.Boundaries(x=fd.Periodic(), y=fd.Periodic(),
+                                     z=fd.PML(cells=12, wavelength=1.0)),
+            resolution=fd.Resolution(dx=dx), run=fd.Run(steps=4),
+            structures=(fd.Structure(film, 4.0),),
+            sources=(fd.PlaneWave('pw', z=0.5, direction='-z', polarization='s',
+                                  band=fd.Band(wavelength=1.0, df=0.1)),),
+            monitors=(fd.Diffraction('t', z=z, wavelengths=(1.0,)),))
+
+    def medium(film, z):
+        s = scene(film, z)
+        plan = _quiet(fd.plan, s)
+        k = round((z - plan.grid.low[2]) / dx)
+        return medium_at(s, plan.grid, 2, (k - 1, k), 'probe')
+    size = (period + 3 * dx, period + 3 * dx, 0.2)
+    box = fd.Box(size=size, center=(0.0, 0.0, -0.11))
+    region = fd.Region(size=size, center=(0.0, 0.0, -0.11))
+    with pytest.raises(ValueError, match='is not one medium'):
+        medium(box, -0.225)
+    assert medium(box, -0.25) == medium(region, -0.25) == medium(region, -0.225) == (1.0, 1.0)
+    assert medium(box, -0.1) == medium(region, -0.1) == (4.0, 1.0)
+
+
+def test_an_unturned_box_plans_no_cross_term_and_takes_an_initial_field():
+    """Its cross coefficients are zero everywhere, so the plan gives it no constitutive term.
+
+    A ``ConstitutiveTerm`` adds only the off-diagonal increment; over an axis-aligned box it
+    would add exactly nothing and hold a region of flux memory to do it. Without one, an
+    initial field is not refused over it -- the refusal is about a coupled region's flux memory
+    -- which is what lets the Airy gate (G5) spell its slab as a box. A turned box has one.
+
+    Mutant, measured 2026-09-26: ``constitutive.cross_free`` answering False fails this case.
+    """
+    from wavebit.fd._kernel.constitutive import ConstitutiveTerm
+
+    def coupled(shape, initial=None):
+        scene = _scene((fd.Structure(shape, fd.Material(eps=2.25)),))
+        if initial is not None:
+            scene = scene.replace(initial=initial)
+        return [t for t in _quiet(fd.plan, scene).terms if isinstance(t, ConstitutiveTerm)]
+    assert coupled(fd.Box(size=(0.3, 0.2, 0.25), center=CENTRE)) == []
+    assert len(coupled(fd.Box(size=(0.3, 0.2, 0.25), center=CENTRE, angle=30))) == 1
+    grid = _grid()
+    field = np.zeros((3,) + tuple(reversed(grid.n)))
+    field[1, N // 2, N // 2, N // 2] = 1.0
+    initial = fd.InitialField(E=field)
+    assert coupled(fd.Box(size=(0.3, 0.2, 0.25), center=CENTRE), initial) == []
+    with pytest.raises(ValueError, match='InitialField'):
+        coupled(fd.Box(size=(0.3, 0.2, 0.25), center=CENTRE, angle=30), initial)
+
+
+def test_min_extent_measures_what_reaches_into_the_box():
+    """A body leaving through one face is measured inside, as ``fd.Region`` is (the contract)."""
+    grid = _grid()
+    side = N * DX
+    through = fd.Cylinder(radius=0.1, height=side + 3 * DX, axis='x')
+    assert through.min_extent(grid) == pytest.approx(0.2)
+    leaving = fd.Cylinder(radius=0.3, height=0.4, axis='x', center=(side / 2, 0.0, 0.0))
+    assert leaving.min_extent(grid) == pytest.approx(0.2)            # 0.2 of its 0.4 is inside
+    film = fd.Box(size=(side + 3 * DX, side + 3 * DX, 0.1))
+    assert film.min_extent(grid) == pytest.approx(0.1)
+    assert fd.Box(size=(0.3, 0.2, 0.25), angle=30).min_extent(grid) == pytest.approx(0.2)

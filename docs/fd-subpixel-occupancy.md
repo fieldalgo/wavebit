@@ -516,7 +516,7 @@ each alone, over that file and the five door and occupancy files beside it:
 | uniform along a straight axis without asking whether it spans | 2 |
 | a turned box counted uniform across its axis | 1 |
 | spanning with no margin | 1 |
-| spanning with half a cell of margin | 0 -- equivalent: half a cell is exactly what the voxels need |
+| spanning with half a cell of margin | 0 at this commit, recorded then as equivalent, which it is not: see "The review of C4's bodies" below |
 | the periodic door ignoring `uniform_along` | 1 |
 | the `Axis1D` door ignoring it | 1 |
 | the monitor door's body-box sentence removed | 1 |
@@ -561,3 +561,48 @@ ball now places it one cell out, still inside the operator's region.
 So **a pillar standing on a substrate cannot be said exactly yet**, snapped or smoothed: S7's
 flush joint and three-media rim are exactly that scene. How a body joins a substrate is the
 decision C7's metasurface needs.
+
+### The review of C4's bodies (2026-09-26)
+
+An adversarial review of the bodies commit found one major defect and four smaller ones, each
+reproduced before it was fixed.
+
+* **The medium at a plane read a smoothed body's support as its material.** `_post.medium_at`
+  (and the grazing rule's `_layer_media`) decided "this structure fills the cell layer" from
+  the shape's support and its uniformity across the plane -- exact for a snapped shape, whose
+  support is its filled cells, and wrong for a smoothed one, whose support carries a cell of
+  margin and its fractional face cell. C4 made it reachable, by letting an unturned `fd.Box`
+  span a periodic cell. A diffraction plane 0.6 of a cell under a smoothed film planned with the
+  film's `eps` 4 -- its orders de-embedded in glass that is not there, the +-1 orders counted as
+  propagating -- and a plane 1.6 cells under it was refused as "an interface on the plane".
+  A smoothed shape is now asked by its own exact fill at all six components' points in the
+  layer (`_post.layer_share`): none is absent, all of it across the whole layer is the
+  material, anything else is two media. The plane 0.6 of a cell under the film is refused (its
+  `Ez` voxels there hold part of the film), the one 1.6 cells under reads air, one inside reads
+  the film -- as the `fd.Region` film does, where it can.
+* **Half a cell of spanning margin is not equivalent.** Recorded as equivalent above, and it
+  is for the fill; but the moment and the cross terms read the *nearest* surface, and a rim
+  voxel can sit up to about 0.71 of a cell inside the side, so a cap nearer than that gives the
+  face layer the cap's normal. With half a cell, a rod whose caps sat 0.52 of a cell past a
+  periodic face was carried and its first layer differed from its middle one by 1.6e-3 in `be`.
+  The whole cell stays, and `test_a_rod_that_spans_a_period_lowers_every_layer_alike` now pins
+  it (0.55 past is refused; 1.05 past lowers every layer alike to 1e-14).
+* **"The plan gives an unturned box no cross term" was not yet true.** It is now:
+  `constitutive.cross_free` names the one body whose cross coefficients are zero everywhere,
+  `terms` plans it none -- no flux memory, and no refusal of an initial field over it -- and
+  the lowering's zero-weight shortcut asks the same function.
+* `min_extent` measured a body leaving through one face at its full length, against the
+  protocol's "as it reaches into the box"; the `Axis1D` refusal's remedy left out the cell of
+  margin the exemption asks; the three-backend test compared `be` but not the cross array,
+  where the bodies' own normals enter; and messages, a degenerate outline told to "reverse
+  it", and sentences still promising C4 were corrected.
+
+Mutants of the fixes, each alone, over `test_fd_bodies.py`, `test_fd_constitutive.py`,
+`test_fd_diffraction.py` and `test_fd_grazing.py` (fast cases):
+
+| Mutation | Fast cases failed | Which |
+| --- | ---: | --- |
+| a smoothed shape read as filling wherever its support reaches the layer | 1 | the film-and-plane case |
+| `cross_free` answering False | 2 | the no-cross-term case, and the constitutive test's box row |
+| `min_extent` measuring the whole extent, not what is inside | 1 | the `min_extent` case |
+| spanning with half a cell of margin | 1 | the spanning-rod case |

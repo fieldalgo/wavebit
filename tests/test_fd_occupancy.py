@@ -191,7 +191,7 @@ class _HalfSpace(Shape):
     A ``Sphere`` cannot put a flat interface at a named sub-cell position, and that is what the
     co-location gate needs: a fill this file computes by hand from the Yee offsets. So it is
     spelled as a ``_shapes.Box`` far wider than the domain on x and y, reaching below it on z,
-    which is the C4 body doing what C4 will ship it for. The protocol is the public door; this
+    which is the body C4 made public as ``fd.Box``, doing what it ships for. The protocol is the public door; this
     class answers it and nothing here reaches inside the package.
     """
 
