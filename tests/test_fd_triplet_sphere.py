@@ -99,6 +99,48 @@ def test_sphere_rotation_covariance():
         np.testing.assert_allclose(rotated[other], rotation@original[k]@rotation.T, atol=2e-11, rtol=0)
 
 
+def test_sphere_maps_give_each_slot_its_own_fraction():
+    """Each triplet's edge slot holds the edge fraction and its face slot the face fraction.
+
+    Closing the ``studies/`` seam (2026-09-26) measured this unpinned: with ``sphere_maps``
+    filling the face slot from the edge fraction, only the two radius-derivative checks among
+    the fast cases went red (``docs/fd-symmetric-stencil.md``, "The seam, closed"). Here each
+    slot is judged on its own, at all eight triplets and every component, against oracles that
+    share no code with the maps: the chord written out by hand for the edge, and
+    :func:`independent_face`'s adaptive integration for the face. The points sit on the
+    surface, where the two fractions differ -- the fixture is asserted to separate them, so a
+    swap cannot pass by the two agreeing.
+
+    Mutants, each alone, over the 140 fast cases of the four files that gate the operator
+    (measured 2026-09-26): the face slot filled from the edge fraction -- this case and the two
+    radius-derivative checks; the edge slot filled from the face fraction -- this case alone;
+    each triplet shifted the other way -- this case alone.
+    """
+    shifts, nodes = samples()
+    dx, radius, centre = .025, .25, np.array([.003, -.007, .011])
+    points = (nodes[:12]+centre)[None]-shifts[:2, None, :]
+    _, _, edges, faces = study.sphere_maps(points, dx, tuple(centre), radius, 12., geometry=True)
+    assert edges.shape == faces.shape == (8,)+points.shape
+    # The control that the fixture can tell the slots apart at all.
+    assert np.max(np.abs(edges-faces)) > .1
+    assert np.any((faces > .05) & (faces < .95)) and np.any((edges > .05) & (edges < .95))
+    for k, orientation in enumerate(study.ORIENTATIONS):
+        for index in np.ndindex(points.shape[:-1]):
+            relative = points[index]-centre
+            for i, sign in enumerate(orientation):
+                p = relative.copy()
+                p[i] += sign*dx/2
+                transverse = sum(p[j]**2 for j in range(3) if j != i)
+                half = np.sqrt(max(0., radius**2-transverse))
+                chord = max(0., min(p[i]+dx/2, half)-max(p[i]-dx/2, -half))/dx
+                where = (k,)+index+(i,)
+                # Two closed forms of one chord: rounding only.
+                assert abs(edges[where]-chord) <= 1e-12, (orientation, index, i)
+                # The face oracle's own audited limit (test_exact_sphere_edge_and_face_fractions).
+                assert abs(faces[where]-independent_face(p, dx, i, radius)) <= 2e-11, (
+                    orientation, index, i)
+
+
 def test_independent_indexed_sphere_operator():
     q = np.arange(-3, 4)*.1
     z, y, x = np.meshgrid(q, q, q, indexing='ij')

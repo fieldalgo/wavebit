@@ -85,6 +85,53 @@ def test_local_map_is_symmetric_positive():
     assert np.linalg.eigvalsh(matrices).min() > 0.
 
 
+def test_circle_maps_give_each_slot_its_own_fraction():
+    """Each pair's edge slot holds the chord along its edge, its face slot the chord across it.
+
+    Measured 2026-09-26 while pinning the sphere's slots: with ``circle_maps`` reading the edge
+    fraction across the edge axis -- so both slots hold the transverse chord -- none of the fast
+    cases of the four files that gate the operator went red, and with the face read along the
+    edge axis only ``test_rigid_translation_keeps_the_material_operator`` did. The maps do not
+    hand their fractions out, so the oracle rebuilds every pair map from its own: the chord of
+    the circle written out by hand for each slot, and ``Gamma Pi^-1`` by a dense inverse where
+    ``pair_map`` solves. Points on the circle, where the two chords differ; the fixture is
+    asserted to separate the slots, and the map built from swapped slots to be told apart.
+
+    Mutants, each alone, over the 140 fast cases of the four files that gate the operator
+    (measured 2026-09-26): the edge read across its axis -- this case alone; the face read
+    along the edge axis -- this case and the rigid-translation control.
+    """
+    from studies.fdtd_subpixel_triplet_cylinder import ORIENTATIONS
+    rng=np.random.default_rng(926)
+    angle=rng.uniform(0,2*np.pi,40)
+    dx,radius,eps=1/40,.15,12.
+    points=radius*np.stack((np.cos(angle),np.sin(angle)),axis=-1)+rng.uniform(-.5,.5,(40,2))*dx
+    _,maps=circle_maps(points,dx,(0.,0.),radius,eps)
+
+    def chord(p,axis):
+        half=np.sqrt(max(0.,radius**2-p[1-axis]**2))
+        return max(0.,min(p[axis]+dx/2,half)-max(p[axis]-dx/2,-half))/dx
+
+    def pair(normal,ell,area):
+        nn=np.outer(normal,normal)
+        accurate=(np.eye(2)+ell[:,None]*(1/eps-1)*nn)@np.linalg.inv(np.eye(2)+area[:,None]*(eps-1)*(np.eye(2)-nn))
+        return (accurate+accurate.T)/2
+    separated=[0.,0.]
+    for k,signs in enumerate(ORIENTATIONS):
+        for n,point in enumerate(points):
+            normal=point/np.linalg.norm(point)
+            shifted=[point+sign*dx/2*np.eye(2)[i] for i,sign in enumerate(signs)]
+            ell=np.array([chord(shifted[i],i) for i in range(2)])
+            area=np.array([chord(shifted[i],1-i) for i in range(2)])
+            want=pair(normal,ell,area)
+            # Two spellings of one inverse and one chord: rounding only.
+            np.testing.assert_allclose(maps[k,n],want,rtol=0,atol=1e-12,err_msg=f'{signs} {n}')
+            separated=[max(separated[0],np.abs(pair(normal,area,area)-want).max()),
+                       max(separated[1],np.abs(pair(normal,ell,ell)-want).max())]
+    # The control that either slot read as the other would be seen at all.
+    assert min(separated) > 1e-2, separated
+
+
 def test_circle_local_rotation_covariance():
     from studies.fdtd_subpixel_triplet_cylinder import ORIENTATIONS
     # A shifted sampling square cuts every quadrant of the historical

@@ -1429,3 +1429,20 @@ difference rather than pinning the fractions the maps are given. The swap was no
 move -- the move is proved above by bytes -- and the study's own `face_fraction` is pinned
 against an adaptive-integration oracle, but `sphere_maps`'s use of it is not. It is left as it
 was found and named here.
+
+**Pinned the same day.** `test_sphere_maps_give_each_slot_its_own_fraction` judges each of the
+sphere's slots, at all eight triplets and every component, against the chord written out by
+hand and the adaptive-integration face; `test_circle_maps_give_each_slot_its_own_fraction`
+rebuilds every pair map of the circle from hand-written chords and a dense inverse, because
+`circle_maps` does not hand its fractions out. Each fixture is asserted to separate the two
+slots. Looking at the circle turned up a worse gap than the sphere's: its edge read across the
+edge axis, so that both slots hold the transverse chord, went red in **none** of the fast
+cases. Over the 140 fast cases of the four files, each mutant alone:
+
+| Mutation | Fast cases failed | Which |
+| --- | ---: | --- |
+| sphere: face slot filled from the edge fraction | 3 | the new sphere case and the two radius-derivative checks |
+| sphere: edge slot filled from the face fraction | 1 | the new sphere case alone |
+| sphere: each triplet shifted the other way | 1 | the new sphere case alone |
+| circle: face read along the edge axis | 2 | the new circle case and `test_rigid_translation_keeps_the_material_operator` |
+| circle: edge read across the edge axis | 1 | the new circle case alone (none before it) |
