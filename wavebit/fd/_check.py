@@ -137,9 +137,13 @@ class Report:
         """``<- clipped`` where the box's face cut the span, ``<- snapped`` where cells moved it.
 
         Compared to a billionth of a cell, not exactly: the snapped ``-0.2`` of a box that
-        asked ``-0.2`` comes back ``-0.20000000000000004`` from the cell arithmetic, and the
-        exact comparison printed ``<- snapped`` on an axis where nothing moved (C5 audit).
-        The row's axis is its label's last letter (``x``, ``box.x``, ``sphere.x``).
+        asked ``-0.2`` comes back ``-0.20000000000000004`` from the cell arithmetic in a 0.6
+        box at ``dx = 0.05`` (``-0.19999999999999996`` in a 1.0 one), and the exact comparison
+        printed ``<- snapped`` on an axis where nothing moved (C5 audit). The row's axis is
+        read from its label only where the label names one the way every shipped shape does
+        -- ``x`` or ending ``.x`` -- and an external shape's other label is told apart from a
+        clip by its move alone, as ``<- snapped`` (it raised on a label not ending in an axis
+        letter, the C5 review).
         """
         tol = 1e-9 * self.dx
 
@@ -148,8 +152,10 @@ class Report:
         if same((lo, hi), (slo, shi)):
             return ''
         clipped = (lo, hi)
-        if self.box:
-            wall = self.box['xyz'.index(label[-1])]
+        axis = label if label in ('x', 'y', 'z') else (
+            label[-1] if label[-2:] in ('.x', '.y', '.z') else None)
+        if self.box and axis is not None:
+            wall = self.box['xyz'.index(axis)]
             clipped = (max(lo, wall[0]), min(hi, wall[1]))
         notes = [word for word, moved in (('clipped', not same((lo, hi), clipped)),
                                           ('snapped', not same(clipped, (slo, shi)))) if moved]

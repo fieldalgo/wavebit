@@ -750,6 +750,14 @@ and accepts the rest -- the symmetric body, and the dimer a mirror exists to hal
   plane voxels hold its half and its image's, and read only its own. At the other parity the
   mirror zeroes those components and a flush half is exact, so it is not refused.
 
+A cell-snapped face declared exactly on a `+` plane is refused too (the C5 review): that plane is
+the centre of the last cell, so the snap rounds such a face up or down by the cell count's
+parity and by round-off -- the plane's cell full, the body joined to its image, or empty, the two
+a cell apart; at 13 cells a flush `fd.Region` left it empty and was accepted as exact. To the wall,
+or half a cell short of the plane, is unambiguous. A snapped shape that also reaches the far
+wall is judged against the image of that wall, and the clipping warning counts what lies past it
+(a box `[-1, 1]` across a mirror at 0 with a PEC wall at 0.6 warned 20.0% where 40% is not run).
+
 Door 3 no longer answers at a mirror face, and the constitutive plan's own mirror refusal (a
 body's cross terms reaching the plane need a mirror-weighted adjoint) now says that the
 unturned `fd.Box` is the one body that may cross a mirror.
@@ -822,7 +830,7 @@ losing 50% -- its wrapped half never drawn. What C5 does with each:
   holds, and a row's note is `<- clipped` where the box's face cut the span, `<- snapped`
   where the cells moved it, or both -- compared to a billionth of a cell, not exactly, because
   the exact comparison printed `<- snapped` for a Region at `-0.2` whose snapped face came back
-  `-0.20000000000000004`.
+  `-0.20000000000000004` (a 0.6 box at `dx = 0.05`; `-0.19999999999999996` in a 1.0 one).
 
 `tests/test_fd_clipping.py` pins each with the lengths by hand. Mutants, each alone: the note
 removed fails 3 cases, every face treated as a wall 1, the seam door removed 2, an exact span

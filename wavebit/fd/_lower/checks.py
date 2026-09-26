@@ -1202,6 +1202,31 @@ def check_seams(scene, grid):
                     f'check_smoothed.)')
 
 
+def _modelled_ends(scene, grid, a, lo, hi):
+    """``(side, past, face)`` for each end of the span the run models along ``a``.
+
+    The box, except across a Symmetry face, where the scene is the domain and its image: the
+    end there is the mirror image of the opposite face, and a structure past it is cut by that
+    face as surely as by the face itself. Measured before this (the C5 review): a box running
+    past a PEC wall across a mirror warned 20.0% where 40% of it is not in the run.
+    """
+    from ..boundaries import Symmetry
+    axis = 'xyz'[a]
+    out = []
+    for side in '-+':
+        other = '+' if side == '-' else '-'
+        if isinstance(scene.boundaries.face(axis + side), Symmetry):
+            plane = mirror_plane(grid, a, side)
+            wall = grid.high[a] if side == '-' else grid.low[a]
+            end = 2.0 * plane - wall
+            past = (end - lo) if side == '-' else (hi - end)
+            out.append((side, past, other))
+        else:
+            past = (grid.low[a] - lo) if side == '-' else (hi - grid.high[a])
+            out.append((side, past, side))
+    return out
+
+
 def _clipping_notes(scene, plan):
     """A ``GeometryClippedWarning`` per structure losing declared volume to a PEC or PMC face.
 
@@ -1228,11 +1253,12 @@ def _clipping_notes(scene, plan):
                 continue
             lo, hi = span
             cut = 0.0
-            for side, past in (('-', grid.low[a] - lo), ('+', hi - grid.high[a])):
-                face = scene.boundaries.face(axis + side)
+            for side, past, end in _modelled_ends(scene, grid, a, lo, hi):
+                face = scene.boundaries.face(axis + end)
                 if isinstance(face, (PEC, PMC)) and past > 1e-9 * grid.dx:
                     cut += past
-                    faces.append(f"'{axis}{side}' ({type(face).__name__})")
+                    faces.append(f"'{axis}{end}' ({type(face).__name__})"
+                                 + ('' if end == side else f' mirrored in {axis}{side}'))
             kept *= max(hi - lo - cut, 0.0) / (hi - lo)
         if faces:
             out.append((GeometryClippedWarning,

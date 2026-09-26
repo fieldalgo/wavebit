@@ -83,22 +83,28 @@ def test_running_out_through_an_absorbing_face_or_across_a_period_does_not_warn(
     assert _clipping(lamellar) == []
 
 
+@pytest.mark.parametrize('face', (fd.Periodic(), fd.Bloch(phase=0.3)),
+                         ids=('Periodic', 'Bloch'))
 @pytest.mark.parametrize('size, x, lost', (((0.4, 0.2, 0.2), 0.5, '50.0%'),
-                                           ((1.2, 0.2, 0.2), 0.2, '25.0%')))
-def test_a_snapped_shape_across_one_periodic_seam_is_refused(size, x, lost):
-    """Clipped, not wrapped: cells 16..24 of 20 lose 4 of 8; cells 2..26 lose 6 of 24.
+                                           ((1.2, 0.2, 0.2), 0.2, '25.0%'),
+                                           ((0.4, 0.2, 0.2), -0.5, '50.0%'),
+                                           ((0.4, 0.2, 0.2), -0.4, '25.0%')))
+def test_a_snapped_shape_across_one_periodic_seam_is_refused(size, x, lost, face):
+    """Clipped, not wrapped: cells 16..24 of 20 lose 4 of 8; cells 2..26 lose 6 of 24; across
+    the minus seam, cells -4..4 lose 4 of 8 and -2..6 lose 2 of 8. On a Bloch axis alike.
 
     The second is wider than the period, so wrapped it would cover every cell; clipped it
-    misses the first two. Both are refused, naming the share and the spellings that work.
+    misses the first two. All are refused, naming the share and the spellings that work.
     """
     scene = _box((fd.Region(size=size, center=(x, 0.0, 0.0)),),
-                 fd.Boundaries(x=fd.Periodic(), y=fd.PEC(), z=fd.PEC()))
+                 fd.Boundaries(x=face, y=fd.PEC(), z=fd.PEC()))
     with pytest.raises(ValueError) as caught:
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             fd.plan(scene)
     message = str(caught.value)
-    assert 'Periodic x seam without spanning the period' in message and lost in message
+    assert f'{type(face).__name__} x seam without spanning the period' in message
+    assert lost in message
     assert 'two structures' in message and 'span the cell' in message
 
 
@@ -112,7 +118,7 @@ def test_a_snapped_shape_that_spans_the_period_plans(size):
 
 
 def test_the_rows_tell_a_snap_from_a_clip_and_do_not_mistake_round_off_for_either():
-    """``-0.2`` asked comes back ``-0.20000000000000004`` from the cell arithmetic.
+    """``-0.2`` asked comes back ``-0.19999999999999996`` from the cell arithmetic in this box.
 
     The exact comparison printed ``<- snapped`` there (the C5 audit). A face between cells
     snaps; one past the wall clips; one both, both.
@@ -128,3 +134,33 @@ def test_the_rows_tell_a_snap_from_a_clip_and_do_not_mistake_round_off_for_eithe
 def test_the_warning_is_public():
     assert 'GeometryClippedWarning' in fd.__all__
     assert issubclass(fd.GeometryClippedWarning, UserWarning)
+
+
+def _mirrored(structures, parity=1):
+    """``x in [0, 0.6]`` with a mirror on x- and PEC on x+: the scene is ``[-0.6, 0.6]``."""
+    return fd.Scene(domain=fd.Domain(size=(0.6, 1.0, 1.0), center=(0.3, 0.0, 0.0)),
+                    boundaries=fd.Boundaries(x=(fd.Symmetry(parity=parity), fd.PEC()),
+                                             y=fd.PEC(), z=fd.PEC()),
+                    resolution=fd.Resolution(dx=0.05), run=fd.Run(steps=4),
+                    structures=tuple(fd.Structure(s, 2.25) for s in structures))
+
+
+def test_a_mirror_is_not_a_wall_but_the_image_of_one_is():
+    """Across a mirror the scene ends at the image of the far wall, and cuts there too.
+
+    A Region symmetric about the plane loses nothing; a box ``[-1, 1]`` runs as ``[-0.6, 0.6]``
+    and loses 40% -- it warned 20.0%, counting only the real wall (the C5 review).
+    """
+    assert _clipping(_mirrored((fd.Region(size=(0.4, 0.2, 0.2)),))) == []
+    message, = _clipping(_mirrored((fd.Box(size=(2.0, 0.2, 0.2)),)))
+    assert '40.0%' in message and "'x+' (PEC) mirrored in x-" in message
+
+
+def test_a_row_whose_label_names_no_axis_is_told_by_its_move_alone():
+    """An external shape's rows need not end in an axis letter; one that did not raised
+    ``substring not found`` from the report once its snapped span moved (the C5 review)."""
+    from wavebit.fd._check import Report
+    report = describe(_box((fd.Region(size=(0.446, 0.4, 0.4)),)))
+    row = ('block x-span', -0.223, 0.223, -0.2, 0.2)
+    text = str(Report(**{**report.__dict__, 'spans': (row,)}))
+    assert 'block x-span=(-0.223, 0.223) -> (-0.2, 0.2)   <- snapped' in text
