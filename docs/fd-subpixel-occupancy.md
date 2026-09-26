@@ -424,3 +424,43 @@ The six skips are the existing NumPy automatic-differentiation comparisons: NumP
 supplies their reference values. Collection, XML testcase counts and unique test names
 agree at 1807 fast and 65 slow cases. No `INTERNALERROR` occurred. All four reference
 archives retain their original SHA-256 hashes; no rebaseline was performed.
+
+## S7: how often a voxel holds three media, or a crease (2026-09-26)
+
+Run before the extruded bodies ship (stage 4, C4), because two populations had once been
+conflated: a voxel holding **three or more media** has no answer from a two-phase rule, while a
+voxel holding a **creased** two-media interface -- a box corner, a prism edge, a cylinder rim,
+inside one body -- is still two phases, and the kernel's fill is exact there. Refusing the
+second would refuse every prism edge and every turned box corner.
+`studies/fdtd_subpixel_media_census.py` counts both, and flush joints (two structures'
+surfaces in one voxel, two media), over every E-component voxel near a surface; its table is
+`studies/results/fdtd_subpixel_media_census.log` (5.1 s). Percentages are of the cut voxels;
+the bodies are about half a unit across, at 20 / 40 / 80 cells per unit.
+
+| scene | creased | three or more media | flush joint |
+| --- | ---: | ---: | ---: |
+| sphere | 0 | 0 | 0 |
+| cylinder (rims) | 14.3 / 7.2 / 3.6% | 0 | 0 |
+| box, axis-aligned | 24.3 / 12.5 / 6.3% | 0 | 0 |
+| box, turned 30 degrees | 25.3 / 12.0 / 6.0% | 0 | 0 |
+| hexagonal prism | 26.0 / 13.8 / 6.6% | 0 | 0 |
+| cylinder pillar flush on a substrate of another medium | 8.7 / 4.6 / 2.4% | 4.4 / 2.3 / 1.2% | 119 / 549 / 2362 voxels |
+| sphere dimer, gap 0.5 D | 0 | 0 | 0 |
+| dimer of two metals, gap 0.05 D | 0 | 1.15% at 20, then 0 | 0 |
+
+What it decides:
+
+* **Rotation and the creased bodies ship in C4.** Creased voxels are a line population -- each
+  doubling of resolution halves their share of a surface -- and in them the fill is exact for
+  every body and the diagonal moment exact for the box and the prism. Two prices stay and are
+  named, not hidden: the cylinder rim's moment is the tangent plane's (worst 0.40-0.52 in
+  `w`, `wavebit/fd/_shapes/_bodies.py`), and every body's off-diagonal cross terms use the
+  nearest-surface normal as a stand-in, whose gap the plan reports
+  (`wavebit/fd/_lower/constitutive.py`).
+* **The three-media refusal is a usable stopping point for C4.** No single body and no
+  canonical dimer reaches it. The scenes that do -- a pillar standing flush on a substrate
+  spelled as a second body, and a near-touching dimer of two metals -- are refused today, by
+  the two-surfaces-in-one-voxel door, before the three-media question is asked. So C10's
+  polytope clip is not C4's. The flush joint is the population that matters next: it is how a
+  metasurface pillar meets its substrate, it is two media wherever the materials match, and it
+  is refused wholesale. How a pillar joins its substrate is a decision for before C7.
