@@ -1682,7 +1682,7 @@ error is amplified, and is the same Rayleigh line the tilted fixture's
 resonance sits 3.6 nm from.
 
 The K row's ladders predate the 2026-09-07 run-end fix; on the current code
-(c1c210d) they read contact `-2.736e-3 / -8.737e-4 / -2.006e-4 / -7.183e-4 /
+(c1c210d, landed as 4d34937) they read contact `-2.736e-3 / -8.737e-4 / -2.006e-4 / -7.183e-4 /
 -3.444e-4` and material-equality `-5.003e-3 / -4.799e-4 / -5.894e-4 /
 -1.393e-4 / -3.708e-5` at orders 4 / 6 / 8 / 10 / 12. Only `T_touching`
 moved (`T_gap` agrees with the archived commit to 1e-15), consistent with
@@ -1693,7 +1693,7 @@ contact steps are genuine finite-order steps of the factorization at 900 nm
 and may be judged at the fixed wavelength, at the documented order. The
 scan says nothing about their infinite-order limit.
 
-Placement dependence, re-verified the same day on c1c210d with
+Placement dependence, re-verified the same day on c1c210d (landed as 4d34937) with
 `studies/nvf_placement_spread.py` (its rows in
 `studies/results/nvf_placement_spread.log`): the closed
 form's coefficient spread over translations of two disjoint boxes is
@@ -1701,7 +1701,7 @@ form's coefficient spread over translations of two disjoint boxes is
 1.38) and the `sum(T)` spread `1.242e-3 / 6.395e-4 / 1.560e-4`, identical to
 the 2026-09-07 numbers to every printed digit; a single shape is at
 rounding (`2.8e-17`) on every route. The polygon route with its production
-anchor (6f6ca34) is at rounding for the disjoint pair too, but production
+anchor (326ea41) is at rounding for the disjoint pair too, but production
 routes a disjoint layer to the closed form (`painted=False`), so that fix
 reaches only painted layers.
 

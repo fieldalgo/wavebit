@@ -1,7 +1,7 @@
 # Resolving real material interfaces with a differentiable mesh
 
 This page records the independent-jump density used through revision
-`532489b`, including its historical measurements and reproduction commands.
+`532489b` (landed as `908f60b`), including its historical measurements and reproduction commands.
 The current [separated-rectangle construction](nvf-separated-rectangles.md)
 uses a signed log-jump density that merges coincident interfaces. Its finite
 cell results differ from the tables below. The former CDF remains available

@@ -196,7 +196,8 @@ model and storing its output still cost additional memory.
 Each range uses four alternating before/after timing pairs, following one
 warmup of each implementation. The cap-24 median increases by 1.8%, whereas
 the cap-64 median decreases by 1.4%. All nine coefficient arrays agree exactly in every
-comparison. The baseline is the affine implementation at `67cff19`; both
+comparison. The baseline is the affine implementation at `67cff19`
+(landed as `f512bdc`); both
 versions run in the same NumPy process with identical inputs and no
 overlapping numerical task. This observation does not establish zero
 overhead or a universal runtime ratio. The host uses Apple Accelerate;

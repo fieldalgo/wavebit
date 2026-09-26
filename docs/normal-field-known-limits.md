@@ -900,8 +900,9 @@ adds that displacement, and a geometric test checks both edge spacing and unchan
 The separate `three` experiment already moved the outer shapes apart.
 
 All tables below use the corrected instrument `studies/nvf_seam_contrast.py`. The JSON log
-records source digests and run tags: `pre-contrast-positive-gap` imports the `b92e85a` package,
-`modulus-ranking` imports `77cf5dd`, and `material-phase-positive-gap` runs the fixed package.
+records source digests and run tags: `pre-contrast-positive-gap` imports the `b92e85a` package
+(landed as `4cbfa56`), `modulus-ranking` imports `77cf5dd` (landed as `bbb4216`), and
+`material-phase-positive-gap` runs the fixed package.
 The two historical inward-opening runs remain in the log for provenance.
 
 **Crossing equal moduli.** Two touching rectangles of heights 300 and 280, widths 300,
@@ -931,8 +932,8 @@ unit trace, rank one, equal-modulus listing swaps and real/complex material equa
 
 **K order ladder, with an actual positive gap.** Two 300-square boxes, `eps 4 | 9`,
 phi=psi=0; otherwise the same operating point. Contact uses gap `+1e-9`, N=512;
-equality uses `T(9+1e-7 | 9)-T(9 | 9)`, N=128. Before is `b92e85a`, after is the material
-phase. The equal-material control uses `4 | 4` on both trees.
+equality uses `T(9+1e-7 | 9)-T(9 | 9)`, N=128. Before is `b92e85a` (landed as `4cbfa56`),
+after is the material phase. The equal-material control uses `4 | 4` on both trees.
 
 | order | positive-gap step: before -> after | same-material control | equality step: before -> after (Li) | distance to Li at contact: before -> after |
 |---:|---:|---:|---:|---:|

@@ -117,7 +117,8 @@ The construction and metric suite passes 117 checks, the shared-kernel and
 engine regression passes 205 with one historical expected failure, and the
 documentation contract passes 30. Both manual examples and the strict
 Sphinx build pass. A comparison with the
-prior square-cell implementation at `7b52efd` gives bitwise identical
+prior square-cell implementation at `7b52efd` (landed as `c52dbe8`) gives
+bitwise identical
 results for the original 700-unit fixtures. Across 36 square-cell cases,
 the largest slot difference is 2.83e-10 in a degree-4/6 cell with period 2.1.
 The reordered gap calculation moves its normalized input by 2.84e-14;

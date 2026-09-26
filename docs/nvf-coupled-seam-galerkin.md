@@ -176,7 +176,7 @@ checks on the two finer meshes:
 | 3 | 2 | 0.00148214497 | 0.00465156949 |
 | 3 | 3 | 0.00147689623 | 0.00465156944 |
 
-The two records above carry source hashes from `ad907d0`. The subsequent
+The two records above carry source hashes from `ad907d0` (landed as `e991e42`). The subsequent
 exact Fourier energy check affects verification, not their constitutive
 operators or tensor derivatives. Every fine-mesh row also passes the
 original and energy guards. The p slope approaches the finite-order Li

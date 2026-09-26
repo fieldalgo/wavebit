@@ -328,7 +328,7 @@ algebraic guard. No optical convergence criterion has been selected.
 ## Completing the x=28 comparisons
 
 The continuation retains the same cap-64, degree-8, quadrature-40 fitted
-field and physical profile. It uses the production runtime at `ea4c85e`,
+field and physical profile. It uses the production runtime at `ea4c85e` (landed as `3032cdf`),
 including diagonal scaling and the [direct boundary solve](what-a-solve-answers.md#11-solving-only-the-requested-boundary-columns).
 The boundary equations, retained Fourier sets and optical guards are
 unchanged. At order 20, per-order p/s R/T agrees with the saved

@@ -137,7 +137,8 @@ coefficients and optical readouts when grading is enabled. Earlier tables
 remain historical measurements of their original density, not measurements
 of this revision. The former CDF is retained as
 `independent_graded_fractions` for direct comparisons; complete historical
-cell reproduction uses revision `532489b` or the revision named by its log.
+cell reproduction uses revision `532489b` (landed as `908f60b`) or the revision
+named by its log.
 Strength zero still selects the unchanged fixed mesh.
 
 These controls qualify construction, derivatives and integration. They do

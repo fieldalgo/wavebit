@@ -147,7 +147,7 @@ On the fixed degree-8 FEM affine projection at retained order `(24,24)`, two
 fresh processes give the following closure-only observations. The exports,
 coefficient cap 64 and quadrature 40 are identical. Peak RSS includes imports;
 GB denotes `10^9` bytes. The old evaluation is the parent implementation
-`e19fd82`; the new evaluation changes only assembly/storage and the algebraic
+`e19fd82` (landed as `eba4465`); the new evaluation changes only assembly/storage and the algebraic
 evaluation of the same closure.
 
 | Evaluation | Peak process memory | Time |

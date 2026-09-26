@@ -9,9 +9,9 @@ Targets:
 - `tests/test_conforming_nvf.py`
 
 The implementation measured on this page is the common-factor extension at
-revision `6b0a60b`. The later [complex-material extension](nvf-complex-material.md)
-removes the common-ratio restriction. The derivation below remains an exact
-control for that general construction.
+revision `6b0a60b` (landed as `a85ae18`). The later
+[complex-material extension](nvf-complex-material.md) removes the common-ratio restriction.
+The derivation below remains an exact control for that general construction.
 
 At that revision, `ConformingNVF` accepts passive complex permittivities with positive real
 parts when all materials in a patterned layer share

@@ -143,7 +143,7 @@ retained order, not a continuum oracle or an automatic fallback.
 
 ## Recorded optical result
 
-The first committed record carries the `7d199ef` source snapshot and contains
+The first committed record carries the `7d199ef` source snapshot (landed as `d9026e8`) and contains
 the eight completed order-4 rows at mesh
 refinements 0 and 1: equal dielectric and mixed dielectric/metal materials,
 both polarizations, and all four gaps 0, 0.001, 1e-5 and 1e-9. Its header

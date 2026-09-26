@@ -267,7 +267,7 @@ come out identical from both paths (see `connecting-algorithms.md` §8).
 
 ## 9. Releasing transient 2D matrices after their last use
 
-The lifetime change in `9acae35` reduces simultaneous dense storage without changing
+The lifetime change in `e06e419` reduces simultaneous dense storage without changing
 its products, inverses, Fourier modes or field declarations. In the common
 nonmagnetic layer, the right Maxwell factor is built after the eigensolve;
 the left blocks and product matrix are released once their consumers finish.
@@ -288,8 +288,8 @@ required graph references.
 
 For the [fixed affine fixture](nvf-affine-convergence.md), an order-8 direct
 ETM comparison uses the same already-built convolution matrices, exterior
-media, incidence and 300 nm layer. The baseline is `023b03e`'s `solve_2d`
-loaded under a separate module name in the same process. Each measured call
+media, incidence and 300 nm layer. The baseline is the `solve_2d` of `023b03e`
+(landed as `e8f4c2d`), loaded under a separate module name in the same process. Each measured call
 starts a fresh `tracemalloc` trace after garbage collection. MB here denotes
 `10^6` bytes; the input convolution matrices and imports precede the trace.
 
@@ -378,7 +378,7 @@ eigensolves, inverses, cutoff thresholds, modes and field declarations are
 unchanged. Lower operation count does not imply a fixed percentage reduction
 in whole-solve time: the unchanged eigensolves and boundary inverses remain.
 
-The timing comparison uses `9acae35` as the baseline, loaded beside the new
+The timing comparison uses `9acae35` (landed as `e06e419`) as the baseline, loaded beside the new
 core in one process. Both functions receive identical, already-built
 convolution matrices from the fixed affine projection in section 9. One
 300 nm layer and three identical 100 nm layers exercise the same physical

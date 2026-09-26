@@ -958,7 +958,7 @@ ladder or define a stopping criterion. It demonstrates why checking RSS
 only after factorization is insufficient. Even the new callback can
 detect a limit only between completed native calls.
 
-A second attempt uses `recompute_internal=True` from commit `ee47fb4`,
+A second attempt uses `recompute_internal=True` from commit `ee47fb4` (landed as `ecda894`),
 with the same physical problem, mesh settings, global degree, quadrature,
 full/coupling limits and 8-GiB RSS ceiling. It confirms the same mesh and
 space counts. The reporting interval is reduced from 32 to 8 completed
@@ -1954,7 +1954,8 @@ It completes in 818.731 s, including factorization by 252.240 s and
 the boundary stage by 800.012 s. Observed peak RSS is 7,055,966,208 bytes.
 The callback reports every eight completed trace applications, ending
 at 324/324. Counts match preflight and the two numerical source hashes
-match the clean launch at `5bc835e`. These are shared-host costs;
+match the clean launch at `5bc835e` (landed as `ff56d28`). These are
+shared-host costs;
 small independent-oracle arithmetic checks overlap part of this run.
 They are not a general runtime or memory guarantee.
 
@@ -2018,7 +2019,8 @@ The smaller space uses less observed peak RSS but is not faster in
 these two shared-host runs. Small NumPy geometry checks overlap part
 of this run. These observations compare different finite approximations
 and do not establish equal-accuracy performance. The numerical source
-hashes match the clean launch at `747dd25` when checked after completion.
+hashes match the clean launch at `747dd25` (landed as `e9801e2`) when checked
+after completion.
 
 ## Comparing the physical diffraction orders with Wavebit
 
