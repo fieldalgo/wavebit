@@ -5,7 +5,6 @@ scene checks run first; a new compact eight-triplet electric operator then
 needs its own host-side energy/CFL certificate. Production is unchanged.
 """
 import dataclasses
-import itertools
 from pathlib import Path
 import sys
 
@@ -15,8 +14,11 @@ import numpy as np
 from studies.fdtd_subpixel_triplet_cylinder import gather, scatter
 from wavebit.fd._shapes import Sphere
 from wavebit.fd._kernel.constitutive import ConstitutiveTerm
-
-ORIENTATIONS = tuple(itertools.product((1, -1), repeat=3))
+# The eight triplets, their local map and the per-node maps moved into the package unchanged
+# (wavebit/fd/_lower/triplet.py, 2026-09-26), where the public stencil's baseline reads them.
+# These names are the package's own functions, kept for this study and its tests.
+from wavebit.fd._lower.triplet import TRIPLETS as ORIENTATIONS, sphere_maps  # noqa: F401
+from wavebit.fd._lower.triplet import triplet_map as local_map  # noqa: F401
 
 
 def edge_fraction(point, dx, axis, radius, xp=np):
@@ -25,8 +27,10 @@ def edge_fraction(point, dx, axis, radius, xp=np):
     This body moved to `wavebit/fd/_shapes/_bodies.py::Sphere.exact_edge_fill`
     unchanged; what is left here is the study's spelling of it. `point` is
     relative to the centre, which is a sphere at the origin. The namespace is
-    read off `point` by the public form, so `xp` is kept only because every
-    call site here passes it. Bit-identity against the form this replaces is
+    read off `point` by the public form, so `xp` is kept only for the callers
+    that still pass it. Since 2026-09-26 `sphere_maps` (moved to
+    `wavebit/fd/_lower/triplet.py`) calls the public form itself, and nothing in
+    this study calls this one: its tests do. Bit-identity against the form this replaces is
     held in `tests/test_fd_triplet_sphere.py::test_the_study_helpers_are_the_public_forms_to_the_bit`.
     """
     return Sphere(radius).exact_edge_fill(point, dx, axis)
@@ -39,53 +43,6 @@ def face_fraction(point, dx, axis, radius, xp=np):
     `wavebit/fd/_shapes/_bodies.py::Sphere.exact_face_fill`.
     """
     return Sphere(radius).exact_face_fill(point, dx, axis)
-
-
-def local_map(normal, lengths, areas, eps, xp=np):
-    """Gamma Pi^-1 via the rank-one inverse of Pi, then its symmetric part.
-
-    Pi = diag(d) - diag((eps-1)*areas) n n^T, d=1+(eps-1)*areas.
-    Sherman-Morrison gives K_ij=delta_ij/d_i +
-    (beta_i+(1/eps-1)*length_i)*n_i*n_j/(denom*d_j),
-    beta=(d-1)/d and denom=1-sum(beta*n*n). All divisions are
-    regular for a unit normal, positive eps and fractions in [0,1].
-    These preconditions and energy are checked once at preparation.
-    """
-    d = 1+(eps-1)*areas
-    beta = (eps-1)*areas/d
-    denom = 1-xp.sum(beta*normal*normal, axis=-1)
-    coefficient = beta+(1/eps-1)*lengths
-    rows = []
-    for i in range(3):
-        rows.append(xp.stack(tuple((1/d[..., i] if i == j else xp.zeros_like(denom))
-            +coefficient[..., i]*normal[..., i]*normal[..., j]/(denom*d[..., j])
-            for j in range(3)), axis=-1))
-    accurate = xp.stack(rows, axis=-2)
-    symmetric = xp.stack(tuple(xp.stack(tuple((accurate[..., i, j]+accurate[..., j, i])/2
-        for j in range(3)), axis=-1) for i in range(3)), axis=-2)
-    return accurate, symmetric
-
-
-def sphere_maps(points, dx, center, radius, eps, xp=np, geometry=False):
-    relative = xp.stack(tuple(points[..., i]-center[i] for i in range(3)), axis=-1)
-    norm2 = xp.sum(relative*relative, axis=-1)
-    norm = xp.sqrt(xp.where(norm2>0, norm2, xp.ones_like(norm2)))
-    normal = xp.stack(tuple(xp.where(norm2>0, relative[..., i]/norm,
-        xp.ones_like(norm) if i == 0 else xp.zeros_like(norm)) for i in range(3)), axis=-1)
-    accurate, symmetric, edges, faces = [], [], [], []
-    for orientation in ORIENTATIONS:
-        ell, area = [], []
-        for i, sign in enumerate(orientation):
-            p = xp.stack(tuple(relative[..., j]+(sign*dx/2 if i == j else 0.)
-                for j in range(3)), axis=-1)
-            ell.append(edge_fraction(p, dx, i, radius, xp))
-            area.append(face_fraction(p, dx, i, radius, xp))
-        ell, area = xp.stack(ell, axis=-1), xp.stack(area, axis=-1)
-        a, s = local_map(normal, ell, area, eps, xp)
-        accurate.append(a); symmetric.append(s)
-        edges.append(ell); faces.append(area)
-    result = xp.stack(accurate), xp.stack(symmetric)
-    return result+(xp.stack(edges), xp.stack(faces)) if geometry else result
 
 
 def action(vector, matrices, xp=np, cross_only=False):

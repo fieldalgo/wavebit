@@ -15,11 +15,13 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 import numpy as np
 from wavebit.fd._kernel.constitutive import ConstitutiveTerm
-from wavebit.fd._shapes import Sphere
 from studies.fdtd_subpixel_interface_consistency import fraction
-
-# Four oriented pairs replace the eight 3D triplets when x is invariant.
-ORIENTATIONS = ((1,1), (1,-1), (-1,1), (-1,-1))
+# The four oriented pairs, their local map, the lifted chord and the per-node maps moved into
+# the package unchanged (wavebit/fd/_lower/triplet.py, 2026-09-26), where the public stencil's
+# baseline reads them. These names are the package's own functions, kept for this study and
+# its tests.
+from wavebit.fd._lower.triplet import PAIRS as ORIENTATIONS, circle_fraction, circle_maps  # noqa: F401
+from wavebit.fd._lower.triplet import pair_map as local_map
 
 
 def shift(v, direction, axis, xp=np):
@@ -41,24 +43,6 @@ def scatter(v, sign, component, xp=np):
     return v if sign > 0 else shift(v,-1,2-component,xp)
 
 
-def local_map(normal, lengths, areas, eps):
-    """Gamma Pi^-1 from E edge lengths and D dual-face areas, eps2=1.
-
-    Gamma_p = I + (1/eps_p-1) nn^T and Pi_p = eps_p Gamma_p.
-    Fractions left-multiply these matrices row by row (paper Eqs. 15-32).
-    """
-    nn = normal[..., :, None]*normal[..., None, :]
-    eye = np.eye(2)
-    gamma = eye + lengths[..., :, None]*(1/eps-1)*nn
-    pi = eye + areas[..., :, None]*(eps-1)*(eye-nn)
-    determinant = np.linalg.det(pi)
-    if not np.all(np.isfinite(determinant) & (determinant > 0)):
-        raise ValueError('TripletPiRefused: nonpositive or nonfinite determinant at preparation')
-    accurate = np.linalg.solve(np.swapaxes(pi,-1,-2),np.swapaxes(gamma,-1,-2))
-    accurate = np.swapaxes(accurate,-1,-2)
-    return accurate, (accurate+np.swapaxes(accurate,-1,-2))/2
-
-
 def planar_maps(points, dx, normal, offset, eps):
     normal = np.asarray(normal)
     accurate, symmetric = [], []
@@ -70,46 +54,6 @@ def planar_maps(points, dx, normal, offset, eps):
             cut = offset-np.sum(p*normal,axis=-1)
             ell.append(fraction(cut,abs(normal[i])*dx/2))
             area.append(fraction(cut,abs(normal[1-i])*dx/2))
-        a,s = local_map(normal,np.stack(ell,axis=-1),np.stack(area,axis=-1),eps)
-        accurate.append(a); symmetric.append(s)
-    return np.stack(accurate),np.stack(symmetric)
-
-
-def circle_fraction(point, dx, axis, radius, xp=np):
-    """Exact length of the circle's intersection with a centered segment.
-
-    The invariant-x plane of a sphere **is** a circle of the same radius, so
-    this is `wavebit/fd/_shapes/_bodies.py::Sphere.exact_edge_fill` on the
-    (y,z) point lifted to a triple with x exactly zero: the lifted transverse
-    sum is `0*0 + t*t`, which is the `t**2` this used to write. The public form
-    holds the two guards this docstring used to carry -- the segment-coordinate
-    clip that keeps a whole segment exactly one (the world-coordinate spelling
-    gave 1+8.88179e-16 in the radius-one, dx=.1 audit) and the guarded root.
-
-    `xp` is what the lift is built with, and it is why this function has one at
-    all: without it a JAX or Torch point is silently pulled through `np.stack`
-    into NumPy, which loses the trace and the gradient with it. The 2D research
-    path calls this with `axis` 0 for y and 1 for z, so the lifted component
-    index is `axis+1`.
-    """
-    zero = xp.zeros_like(point[...,0])
-    lifted = xp.stack((zero,point[...,0],point[...,1]),axis=-1)
-    return Sphere(radius).exact_edge_fill(lifted,dx,axis+1)
-
-
-def circle_maps(points, dx, center, radius, eps):
-    relative = points-np.asarray(center)
-    norm = np.linalg.norm(relative,axis=-1)
-    normal = relative/np.where(norm>0,norm,1.)[...,None]
-    # The center is uniform material; either normal gives the same inverse.
-    normal = np.where((norm==0)[...,None],np.array((1.,0.)),normal)
-    accurate,symmetric = [],[]
-    for sy,sz in ORIENTATIONS:
-        ell,area = [],[]
-        for i,sign in enumerate((sy,sz)):
-            p = relative.copy(); p[...,i] += sign*dx/2
-            ell.append(circle_fraction(p,dx,i,radius))
-            area.append(circle_fraction(p,dx,1-i,radius))
         a,s = local_map(normal,np.stack(ell,axis=-1),np.stack(area,axis=-1),eps)
         accurate.append(a); symmetric.append(s)
     return np.stack(accurate),np.stack(symmetric)

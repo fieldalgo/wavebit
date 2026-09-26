@@ -967,8 +967,20 @@ def test_a_plane_is_judged_against_the_region_on_its_own_axis():
     assert reaches_assembly(ball(plane('z', 26)))
 
 
-def test_a_studies_checkout_that_is_missing_is_named():
-    """Where ``studies/`` cannot be imported, the triplet baseline's seam is refused by name."""
+def test_a_stencil_scene_prepares_where_studies_cannot_be_imported():
+    """With ``studies`` hidden the way an installed wheel hides it, the fixture prepares, unchanged.
+
+    Until 2026-09-26 the operator's triplet baseline was imported out of ``studies/`` at plan
+    time, and where that import failed a stencil scene was refused by name
+    (``StencilSeamRefused``). The baseline's maps are ``wavebit/fd/_lower/triplet.py``'s now,
+    so the scene prepares -- and what it prepares is the operator the checkout prepares: the
+    four arrays the run reads, compared with ``array_equal`` against :func:`prepared`'s, which
+    was built while ``studies`` was importable.
+
+    Mutant: ``triplet_baseline`` taking ``sphere_maps`` from ``studies`` again through a
+    deferred import. Measured 2026-09-26: this case goes red on the hidden import's
+    ``ImportError``, with the two seam cases of ``tests/test_fd_symmetric_stencil.py``.
+    """
     import contextlib
 
     class Hide:
@@ -989,8 +1001,13 @@ def test_a_studies_checkout_that_is_missing_is_named():
         finally:
             sys.meta_path.remove(finder)
             sys.modules.update(saved)
+    want = stencil_term(prepared()[1])
     with hidden():
-        assert 'StencilSeamRefused' in refusal(scene(radius=.1385))
+        with pytest.raises(ImportError, match='hidden by the test'):
+            import studies                                                    # noqa: F401
+        got = stencil_term(quiet(build_plan, scene()))
+    for name in ('index', 'value', 'output', 'diagonal'):
+        assert np.array_equal(getattr(got, name), getattr(want, name)), name
 
 
 def test_the_operators_own_certificates_refuse_by_name(monkeypatch):

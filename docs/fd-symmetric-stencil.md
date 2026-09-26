@@ -1,9 +1,10 @@
 # Research: symmetric interface stencils
 
-This is the material operator that passes C3 (2026-09-26; see the last section). Public
-`fd.run` reaches it only when a structure asks for it (`fd.Structure(...,
-discretisation='stencil')`, since 2026-09-24); the default is unchanged and does not
-pass C3's cylinder arm.
+This is the material operator that passes C3 (2026-09-26; see "C3: the high-index sphere,
+and the verdict"). Public `fd.run` reaches it only when a structure asks for it
+(`fd.Structure(..., discretisation='stencil')`, since 2026-09-24); the default is unchanged
+and does not pass C3's cylinder arm. Since 2026-09-26 it prepares with no `studies/` behind
+it, from an installed package as from a checkout (see "The seam, closed").
 The production cylinder has mean/RMS orders 1.60337/1.58655. The older
 three-dimensional symmetric triplet candidate misses the small high-index
 sphere control: 3.77084% error against the unchanged 3% limit.
@@ -427,7 +428,8 @@ exported: importing it pulls no study and cannot cycle, and `fit`,
 `energy_bounds` and `padded` need no study at all, but the two that do will not
 run outside a checkout that has `studies` importable. Closing the seam means
 moving those helpers into the package, which is a separate commit with its own
-byte compare.
+byte compare. (**Closed:** the fractions on 2026-09-25, see "Half of the seam, closed"; the
+triplet maps on 2026-09-26, see "The seam, closed".)
 
 A sign flipped in one moved constraint -- the normal term of `Gamma_i` -- moves
 the matrix, right-hand side and solution digests on every fixture and reddens
@@ -453,7 +455,9 @@ The other half cannot be routed: the triplet orientation maps and their
 study through `_study_module`, which **refuses by name** where `studies/` is not
 importable -- an installed wheel carries none -- instead of failing several
 frames down on a module the caller never asked for, and the message names the
-route that does work, `geometry(..., baseline_kind=None)`.
+route that does work, `geometry(..., baseline_kind=None)`. (**Closed 2026-09-26:** those
+maps did have a place in the package after all, `wavebit/fd/_lower/triplet.py`; see "The
+seam, closed".)
 
 Measured on the 2-D and 3-D preparation fixtures, against a `git archive` of the
 parent commit: the assembled matrix's data, indices, indptr, shape and nonzero
@@ -690,7 +694,9 @@ so at the door. And `geometry` still reaches into `studies/` for the triplet
 baseline (its exact fractions are public now, see "Half of the seam, closed"), so
 `discretisation='stencil'` runs from
 a checkout and not from an installed wheel; that is named in a refusal
-(`StencilSeamRefused`) rather than worked around.
+(`StencilSeamRefused`) rather than worked around. (**Closed 2026-09-26:** the
+baseline's maps moved into the package and the refusal went with the seam; see
+"The seam, closed".)
 
 ## The scene around the operator (2026-09-25, after review)
 
@@ -1343,7 +1349,83 @@ to confirm before C4 starts.
 Scope: `fd.Structure(..., discretisation='stencil')` on one lossless, isotropic,
 non-magnetic `fd.Sphere` of plain numbers in a vacuum background, in a real float64 run with
 no initial field, every refusal of the earlier sections in force; prepared on the host from
-a repository checkout (`studies/` is still read at plan time); no derivative through the
+a repository checkout (`studies/` was still read at plan time when this verdict was written;
+"The seam, closed" below removes that, with the same operator bit for bit); no derivative through the
 prepared operator (the voxel rule is the recipe for one); the default memory bound admits
 40 and 56 cells. The default discretisation is unchanged and still fails the cylinder;
 whether to change the default is a separate decision.
+
+## The seam, closed (2026-09-26)
+
+After the verdict, the other half of the seam. The triplet baseline's orientation tables and
+local maps -- `studies/fdtd_subpixel_triplet_sphere.py`'s `ORIENTATIONS`, `local_map` and
+`sphere_maps`, and `studies/fdtd_subpixel_triplet_cylinder.py`'s `ORIENTATIONS`,
+`local_map`, `circle_fraction` and `circle_maps` -- moved into
+`wavebit/fd/_lower/triplet.py` as `TRIPLETS`, `triplet_map`, `sphere_maps`, `PAIRS`,
+`pair_map`, `circle_fraction` and `circle_maps`. `triplet_baseline` imports them from there,
+so nothing in `wavebit/fd` imports a study any more, and `discretisation='stencil'` prepares
+from an installed package as it does from a checkout. `_study_module`, `StencilStudyRefused`
+and `StencilSeamRefused` are deleted with the seam they named. The two studies import the
+moved objects under their old names -- they are the same objects, not copies -- and keep
+everything else: the stepping terms, `action`, `diagonal`, the certificates, `planar_maps`,
+and the `edge_fraction` and `face_fraction` wrappers.
+
+The bodies moved unchanged. Apart from the renames inside them (`ORIENTATIONS` to `TRIPLETS`
+and `PAIRS`, `local_map` to `triplet_map` and `pair_map`) and a one-line docstring each on
+`sphere_maps` and `circle_maps`, which had none, the one edit is that `sphere_maps` calls
+`Sphere(radius).exact_edge_fill` and `exact_face_fill` itself, which is all the study's
+`edge_fraction` and `face_fraction` wrappers did, still once per call, so a traced radius
+enters the graph as it did. Those two wrappers stay in the sphere study, now called only by
+its tests. `xp` stays on `triplet_map`, `sphere_maps` and
+`circle_fraction`, because the research drivers step and differentiate them on JAX and Torch.
+
+**Measured to move nothing**, against a `git archive` of the parent commit `c303755`, at two
+BLAS threads: 700 arrays compared by dtype, shape and bytes. They are the sphere maps with
+their fractions on three point sets and three permittivities; both local maps on 500 and 400
+random inputs, rounded fractions among them; the maps and local maps on JAX eager, `jax.jit`
+and Torch, with the radius gradient on each; `circle_fraction` on both axes on every backend,
+with its radius gradient; `planar_maps`; `triplet_baseline`, `geometry` on both baselines
+(matrix, report, `padded`, `operator_digest`) on the 2-D and 3-D fixtures at epsilon 12 and
+2.25; the research sphere preparation; and the research cylinder preparation's
+`prepared_digest` and whole `be` at all 24 C3 conditions (40/56/80 cells, eight placements).
+**All 700 are byte identical**, and so are two runs of the parent tree (the control). The two
+ARPACK report scalars were recorded beside them and not compared, for the reason above.
+
+**And against the C3 record itself.** With `studies` dropped from `sys.modules` and refused by
+a meta-path finder, `fd.plan` prepared the 40-cell epsilon-12 sphere at the origin and at
+`(1/2, 1/3, 1/5)` exactly as the public spot check had (21060 and 20916 active rows, 143 s
+and 151 s), and `prepared_digest` came back `2293d854...` and `f7b9cc0c...` -- the digests the
+spot check recorded from its frozen `git archive` of `d46935a`, equal in every character, with no study module
+loaded at the end. The same run on the parent tree refused by name (`StencilSeamRefused`),
+which is the control that the hiding hides.
+
+The tests change with the seam. `test_the_public_route_runs_with_no_study_and_the_research_one_refuses_by_name`
+becomes `test_the_operator_builds_with_no_study_and_is_the_same_to_the_bit`: with `studies`
+hidden, both baselines and the triplet baseline alone build on the 2-D and 3-D fixtures and
+equal, bit for bit, what was built with `studies` importable -- so a fallback that answered
+some other way without the checkout would build and fail. `test_a_studies_checkout_that_is_missing_is_named`
+becomes `test_a_stencil_scene_prepares_where_studies_cannot_be_imported`: the public fixture
+prepares with `studies` hidden, and its four prepared arrays equal the checkout's.
+`test_the_moved_operator_is_an_fd_module_that_imports_with_no_cycle` now assembles the default
+operator in its subprocess before looking for a study in `sys.modules`. And
+`test_the_triplet_studies_hand_out_the_packages_maps` holds the studies' names to the
+package's objects by `is`, and `triplet.__all__` to an exact sorted list.
+
+Source mutants, each applied alone, run against `test_fd_symmetric_stencil.py`,
+`test_fd_stencil.py`, `test_fd_triplet_sphere.py` and `test_fd_triplet_research.py` (fast
+cases), restored and SHA-checked:
+
+| Mutation | Fast cases failed, of 138 | Which |
+| --- | ---: | --- |
+| `triplet_baseline` takes `sphere_maps` from `studies` again (deferred import) | 3 | the three seam cases above: the hidden import's `ImportError` twice, and the subprocess finding seven study modules loaded |
+| the sphere study defines its own `sphere_maps` again (a wrapper over the moved one) | 1 | `test_the_triplet_studies_hand_out_the_packages_maps`, alone -- every number is unchanged |
+| `triplet_map`'s `beta` without its `1/d` | 36 | 26 in `test_fd_stencil.py`, where the fixture's operator is now refused by its own energy certificate (`StencilEnergyRefused`), and 10 in `test_fd_triplet_sphere.py` |
+| `pair_map`'s `Gamma` with `1/eps + 1` | 12 | 4 two-dimensional controls in `test_fd_symmetric_stencil.py`, 8 in `test_fd_triplet_research.py` |
+| `sphere_maps` reading the face fraction from the edge | 2 | `test_sphere_radius_derivative[jax]` and `[torch]` only |
+
+The last row is a finding and not a formality: the baseline's face slot is held in the fast
+cases only by the two radius-derivative checks, which compare autodiff with a central
+difference rather than pinning the fractions the maps are given. The swap was not made by the
+move -- the move is proved above by bytes -- and the study's own `face_fraction` is pinned
+against an adaptive-integration oracle, but `sphere_maps`'s use of it is not. It is left as it
+was found and named here.

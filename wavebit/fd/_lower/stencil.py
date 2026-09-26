@@ -23,20 +23,17 @@ three-dimensional cases from a node lattice, ``energy_bounds`` certifies the ass
 operator, and ``padded`` compresses it to its active rows. Positive energy is not assumed
 anywhere: the whole assembled operator is inspected before any field is advanced.
 
-**The seam, half closed.** ``geometry`` took its exact edge and face fractions from
-``studies/``; it takes them from ``wavebit/fd/_shapes``'s :class:`~wavebit.fd._shapes.Sphere`
-now, which is where those closed forms live, and the study helpers that used to own them are
-thin wrappers over the same methods. So ``fit``, ``energy_bounds``, ``padded`` and
-``geometry(..., baseline_kind=None)`` reach no study at all and run from an installed wheel.
-
-What is left is ``triplet_baseline``, which ``geometry`` calls for its default baseline: the
-triplet orientation maps and their ``ORIENTATIONS`` table are research material with no public
-equivalent, and moving them is not this commit. It imports the study where it uses it, through
-:func:`_study_module`, which **refuses by name** where ``studies/`` is not importable rather
-than failing deep inside on a module the caller never named, and :func:`prepare` names the
-same seam for a scene (``StencilSeamRefused``) rather than picking another rule behind it.
-Importing this module costs nothing and pulls no study -- ``tests/test_fd_symmetric_stencil.py``
-pins that, and pins that the public route runs with ``studies`` blocked.
+**No study behind it (2026-09-26).** ``geometry`` takes its exact edge and face fractions
+from ``wavebit/fd/_shapes``'s :class:`~wavebit.fd._shapes.Sphere`, and ``triplet_baseline``
+its orientation table and local maps from :mod:`~wavebit.fd._lower.triplet`. Both used to be
+imported out of ``studies/`` at plan time, so ``discretisation='stencil'`` ran from a
+repository checkout and not from an installed wheel. Both were moved into the package
+unchanged: the fractions onto ``Sphere``, over which the sphere study's ``edge_fraction`` and
+``face_fraction`` stay thin wrappers, and the maps into ``triplet``, whose objects the two
+triplet studies now hand out under their old names.
+``tests/test_fd_symmetric_stencil.py`` pins that importing this module and assembling an
+operator pull no study, and that the operator built with ``studies`` hidden is the one built
+beside it, bit for bit.
 
 **Host code, not backend code.** This assembles on SciPy, on the host, in float64. It is not
 the traced, differentiable geometry path and cannot silently stand in for one. Of the leaves
@@ -59,7 +56,6 @@ the operator reads, two kinds reach it, and each has one door:
   difference is 5.64e-9.
 """
 import hashlib
-import importlib
 
 import numpy as np
 from scipy.spatial import cKDTree
@@ -67,6 +63,7 @@ from scipy.sparse import coo_matrix, diags
 from scipy.sparse.linalg import lsmr, eigsh
 
 from .._shapes import Sphere
+from .triplet import PAIRS, TRIPLETS, circle_maps, sphere_maps
 
 __all__ = ['DEFAULT', 'MEMORY_BOUND_BYTES', 'REACH', 'STENCIL', 'active_rows', 'arguments',
            'energy_bounds', 'fit', 'geometry', 'lower', 'operator_digest', 'padded',
@@ -76,27 +73,6 @@ __all__ = ['DEFAULT', 'MEMORY_BOUND_BYTES', 'REACH', 'STENCIL', 'active_rows', '
 #: The names :func:`fit` reads a complex value out of, and refuses. Each one reaches the
 #: preallocated ``float64`` buffers below through ``gamma``, ``pis`` or ``pi``.
 _REAL_INPUTS = ('eps', 'ell', 'area', 'normals', 'baseline')
-
-
-def _study_module(name):
-    """A study module by name, refused by name where ``studies/`` is not importable.
-
-    :func:`triplet_baseline` is the one function here that still needs one: the triplet
-    orientation maps and their ``ORIENTATIONS`` table are research material with no public
-    equivalent, unlike the exact edge and face fractions, which :func:`geometry` now takes from
-    ``wavebit/fd/_shapes``. An installed wheel carries no ``studies/``, so the import fails
-    there -- and without this it fails several frames down, naming a module the caller never
-    asked for and saying nothing about the route that does work. Deferred to the call and not
-    written at the top of the file, so that importing this module still pulls no study.
-    """
-    try:
-        return importlib.import_module(f'studies.{name}')
-    except ImportError as error:
-        raise ImportError(
-            f'StencilStudyRefused: triplet_baseline() builds the research triplet baseline out '
-            f'of studies.{name}, which lives in the repository checkout and not in an installed '
-            f'wavebit. Run it from a checkout, or ask geometry(..., baseline_kind=None) for the '
-            f'diagonal baseline, which reaches no study.') from error
 
 
 def fit(points, axes, normals, signed, ell, area, eps, reach=2., periodic=None, baseline=None, lattice=None):
@@ -265,18 +241,17 @@ def energy_bounds(matrix):
 
 def triplet_baseline(nodes,dx,center,radius,eps,components):
     dim=len(components)
-    study=_study_module('fdtd_subpixel_triplet_cylinder' if dim==2
-                        else 'fdtd_subpixel_triplet_sphere')
-    _,blocks=(study.circle_maps if dim==2 else study.sphere_maps)(nodes,dx,center,radius,eps)
+    orientations,maps=(PAIRS,circle_maps) if dim==2 else (TRIPLETS,sphere_maps)
+    _,blocks=maps(nodes,dx,center,radius,eps)
     shape=nodes.shape[:-1];size=int(np.prod(shape));ids=np.arange(size).reshape(shape)
     # Preallocated at the exact upper bound and sliced to what was written: each of the
-    # len(ORIENTATIONS)*dim*dim blocks covers at most the whole lattice, and covers less
+    # len(orientations)*dim*dim blocks covers at most the whole lattice, and covers less
     # exactly where a rolled component has no source cell. The 56-cell sphere reached
     # 10.8M appended entries here as well; nothing about the values or their order changes.
-    rows=np.empty(len(study.ORIENTATIONS)*dim*dim*size,dtype=np.int64)
+    rows=np.empty(len(orientations)*dim*dim*size,dtype=np.int64)
     cols=np.empty_like(rows);vals=np.empty(len(rows))
     at=0
-    for k,orient in enumerate(study.ORIENTATIONS):
+    for k,orient in enumerate(orientations):
         index=[];valid=[]
         for i,sign in enumerate(orient):
             axis=2-components[i]
@@ -289,7 +264,7 @@ def triplet_baseline(nodes,dx,center,radius,eps,components):
             for j in range(dim):
                 mask=valid[i]&valid[j];taken=int(mask.sum())
                 rows[at:at+taken]=(i*size+index[i][mask]).ravel();cols[at:at+taken]=(j*size+index[j][mask]).ravel()
-                vals[at:at+taken]=((blocks[k,...,i,j]-(1 if i==j else 0))/len(study.ORIENTATIONS))[mask].ravel()
+                vals[at:at+taken]=((blocks[k,...,i,j]-(1 if i==j else 0))/len(orientations))[mask].ravel()
                 at+=taken
     return (diags(np.ones(dim*size))+coo_matrix((vals[:at],(rows[:at],cols[:at])),shape=(dim*size,dim*size))).tocsr()
 
@@ -309,12 +284,13 @@ def geometry(nodes, dx, center, radius, eps, components, baseline_kind='triplet'
     normals=points/np.where(norm>0,norm,1.)[:,None]
     normals[norm==0]=np.eye(dim)[0]
     ell=np.zeros(len(points));area=ell.copy()
-    # The public closed forms, not the study's wrappers over them: a ball's chord along a
-    # component's edge and its cross-section in the component's dual face. Everything here is
-    # in cell units, so the body is a sphere of radius/dx at the origin and the cell is one
-    # wide. In two dimensions the study's circle is this sphere's central plane -- the lift to
-    # (0, y, z) makes the transverse sum 0*0 + t*t, which is the t**2 the circle form wrote --
-    # so the same edge fraction answers both the length and the transverse area there.
+    # The public closed forms, not the wrappers over them (triplet.circle_fraction, the sphere
+    # study's edge_fraction and face_fraction): a ball's chord along a component's edge and its
+    # cross-section in the component's dual face. Everything here is in cell units, so the body
+    # is a sphere of radius/dx at the origin and the cell is one wide. In two dimensions the
+    # circle is this sphere's central plane -- the lift to (0, y, z) makes the transverse sum
+    # 0*0 + t*t, which is the t**2 the circle form wrote -- so the same edge fraction answers
+    # both the length and the transverse area there.
     ball=Sphere(radius/dx)
     for c in range(dim):
         idx=axes==c
@@ -1049,15 +1025,7 @@ def _assemble(old, region, box, args, source, index):
     """The solve, its certificates, and the term that carries what it produced."""
     from .._kernel.stencil import StencilTerm
     components = args[-1]
-    try:
-        matrix, report = geometry(*args)
-    except ImportError as err:
-        raise ValueError(
-            f'StencilSeamRefused: the operator\'s triplet baseline still lives under studies/ '
-            f'and this checkout cannot import it ({err}). That seam is named in this '
-            f'module\'s docstring and closing it is its own commit; '
-            f'until then discretisation={STENCIL!r} runs from a checkout and not from an '
-            f'installed wheel. It is refused rather than prepared some other way.') from err
+    matrix, report = geometry(*args)
     # The static width/size screen measured <=7.673e-14; 1e-11 is over
     # 100 times that rounding scale. It is not a scattering-accuracy gate.
     if report['lsmr_stop'] not in (0, 1, 2) or report['residual_max'] > 1e-11:

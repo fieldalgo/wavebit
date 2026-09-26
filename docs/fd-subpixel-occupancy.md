@@ -276,7 +276,8 @@ take exactly as they take a leaf's. `studies/fdtd_subpixel_triplet_sphere.py`'s
 `studies/fdtd_subpixel_triplet_cylinder.py`'s `circle_fraction` are now thin wrappers over
 the public forms: the circle is the sphere's central plane, so the 2-D point is lifted to
 a triple with x exactly zero, and `circle_fraction` gained the `xp` argument that lift
-needs.
+needs. (On 2026-09-26 `circle_fraction` itself moved into `wavebit/fd/_lower/triplet.py`
+with the triplet maps that call it, unchanged; the cylinder study imports it from there.)
 
 ## Regression mutants of the edge and dual-face cuts
 

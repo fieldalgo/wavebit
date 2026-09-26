@@ -25,12 +25,13 @@ def test_the_moved_operator_is_an_fd_module_that_imports_with_no_cycle():
     with the checkout as its working directory, so ``studies`` *is* importable and simply is
     not imported; that is the claim, not an accident of the path.
 
-    ``triplet_baseline`` still reaches into ``studies/`` for the triplet orientation maps,
-    deferred to the call; ``geometry`` takes its exact edge and face fractions from
-    ``wavebit/fd/_shapes`` instead, so it reaches a study only through that default baseline.
-    ``fit``, ``energy_bounds`` and ``padded`` reach into nothing, which the subprocess shows by
-    running two of them. What happens where ``studies/`` is not importable at all is
-    :func:`test_the_public_route_runs_with_no_study_and_the_research_one_refuses_by_name`.
+    None of them reaches into ``studies/`` any more: ``geometry`` takes its exact edge and face
+    fractions from ``wavebit/fd/_shapes`` and ``triplet_baseline`` its maps from
+    ``wavebit/fd/_lower/triplet.py`` (2026-09-26). The subprocess shows it by assembling the
+    default operator, triplet baseline and all, on a 2-D and a 3-D fixture and finding no study
+    in ``sys.modules`` afterwards, and by running ``energy_bounds`` and ``padded`` beside it.
+    What happens where ``studies/`` is not importable at all is
+    :func:`test_the_operator_builds_with_no_study_and_is_the_same_to_the_bit`.
 
     ``surface_clearance`` moved the same way in the commit that gave a public scene the
     selector, because the public preparation has to apply the **same** clearance rule and not
@@ -51,14 +52,23 @@ def test_the_moved_operator_is_an_fd_module_that_imports_with_no_cycle():
     assert len(stencil.__all__) == len(set(stencil.__all__))
     assert list(stencil.__all__) == sorted(stencil.__all__)
     code = ('import sys\n'
-            'import wavebit.fd._lower.stencil as s\n'
-            'leaked = sorted(m for m in sys.modules if m.split(".")[0] == "studies")\n'
-            'assert not leaked, leaked\n'
-            'assert s.fit.__module__ == "wavebit.fd._lower.stencil", s.fit.__module__\n'
             'import numpy as np\n'
             'from scipy.sparse import csr_matrix\n'
+            'import wavebit.fd._lower.stencil as s\n'
+            'assert s.fit.__module__ == "wavebit.fd._lower.stencil", s.fit.__module__\n'
+            'q = np.arange(-3, 4) * .1\n'
+            'z, y = np.meshgrid(q, q, indexing="ij")\n'
+            'plane = np.stack((y, z), axis=-1)[:, :, None, :]\n'
+            'z, y, x = np.meshgrid(q, q, q, indexing="ij")\n'
+            'space = np.stack((x, y, z), axis=-1)\n'
+            'for points, parts, centre in ((plane, (1, 2), (.017, -.023)),\n'
+            '                              (space, (0, 1, 2), (.017, -.023, .009))):\n'
+            '    assert s.geometry(points, .1, centre, .16, 12., parts)[0].nnz\n'
             'assert s.energy_bounds(csr_matrix([[2., .25], [.25, .5]]))["energy_lower_bound"] > 0\n'
-            'print(s.padded(csr_matrix(np.eye(3)))[0].tolist())\n')
+            'diagonal = s.padded(csr_matrix(np.eye(3)))[0].tolist()\n'
+            'leaked = sorted(m for m in sys.modules if m.split(".")[0] == "studies")\n'
+            'assert not leaked, leaked\n'
+            'print(diagonal)\n')
     out = subprocess.run([sys.executable, '-c', code], cwd=ROOT, capture_output=True,
                          text=True, timeout=300)
     assert out.returncode == 0, out.stderr
@@ -96,29 +106,32 @@ def no_studies():
         sys.modules.update(saved)
 
 
-def test_the_public_route_runs_with_no_study_and_the_research_one_refuses_by_name():
-    """The seam the move left: which half of this module an installed wheel can run.
+def test_the_operator_builds_with_no_study_and_is_the_same_to_the_bit():
+    """Where ``studies`` cannot be imported, every route of this module builds, and unchanged.
 
-    ``geometry`` used to import the exact edge and face fractions from ``studies/`` at call
-    time. They are ``wavebit/fd/_shapes``'s now -- ``Sphere.exact_edge_fill`` and
-    ``exact_face_fill``, which the study helpers are themselves wrappers over -- so the route
-    that asks for no research baseline runs with ``studies`` hidden. It is the same arithmetic
-    and not merely a working one: the operator built with ``studies`` hidden is compared to the
-    one built with it present **bit for bit**, on both the 2-D and the 3-D fixture, which is
-    what says the routing moved no number. (The two ARPACK report scalars are held out for the
-    reason ``docs/fd-symmetric-stencil.md`` records: ``eigsh`` draws its own starting vector,
-    and two runs of one unchanged tree already disagree on them.)
+    ``geometry``'s exact edge and face fractions are ``wavebit/fd/_shapes``'s -- the
+    ``Sphere.exact_edge_fill`` and ``exact_face_fill`` the study helpers wrap -- and since
+    2026-09-26 so are ``triplet_baseline``'s orientation table and local maps, moved out of the
+    two triplet studies into ``wavebit/fd/_lower/triplet.py`` unchanged. So with ``studies``
+    hidden the way an installed wheel hides it, the default triplet baseline and the diagonal
+    one both build, and each operator is compared with the one built while ``studies`` is
+    importable **bit for bit**, on both the 2-D and the 3-D fixture, as is the triplet baseline
+    alone. The comparison is what says nothing falls back when the checkout is missing: a route
+    that answered some other way there would still build, and would differ. (The two ARPACK
+    report scalars are held out for the reason ``docs/fd-symmetric-stencil.md`` records:
+    ``eigsh`` draws its own starting vector, and two runs of one unchanged tree already
+    disagree on them.)
 
-    What cannot be routed is ``triplet_baseline``: the triplet orientation maps and their
-    ``ORIENTATIONS`` table are research material with no public equivalent. So it refuses by
-    name instead of failing several frames down on a module the caller never asked for, and
-    the message carries the route that does work. ``geometry``'s default asks for that
-    baseline, so it refuses with it.
+    Before that date the triplet baseline refused here by name (``StencilStudyRefused``), and
+    the name went with the seam.
 
-    Mutant: drop the ``except ImportError`` wrapper in ``_study_module`` and let the plain
-    import through. Measured 2026-09-24: this case goes red on the first of its two refusal
-    rows -- ``No module named 'studies'`` where ``StencilStudyRefused`` was asked for -- and
-    it is the only one in the file that moves.
+    Mutant: ``triplet_baseline`` taking ``sphere_maps`` from ``studies`` again through a
+    deferred import. Measured 2026-09-26 over the 138 fast cases of the four files that gate
+    this operator: three go red -- this one on the hidden import's ``ImportError``,
+    :func:`test_the_moved_operator_is_an_fd_module_that_imports_with_no_cycle` on the seven
+    study modules its subprocess then finds loaded, and ``tests/test_fd_stencil.py``'s
+    ``test_a_stencil_scene_prepares_where_studies_cannot_be_imported`` -- and nothing else
+    moves.
     """
     from wavebit.fd._lower import stencil
     q = np.arange(-3, 4) * .1
@@ -128,29 +141,62 @@ def test_the_public_route_runs_with_no_study_and_the_research_one_refuses_by_nam
     space = np.stack((x, y, z), axis=-1)
     fixtures = ((plane, (1, 2), (.017, -.023)), (space, (0, 1, 2), (.017, -.023, .009)))
     held = ('minimum_eigenvalue', 'eigenpair_residual')
-    with_study = [stencil.geometry(points, .1, centre, .16, 12., components,
-                                   baseline_kind=None)
-                  for points, components, centre in fixtures]
+
+    def same(matrix, want):
+        assert matrix.shape == want.shape and matrix.nnz and np.isfinite(matrix.data).all()
+        assert np.array_equal(matrix.data, want.data)
+        assert np.array_equal(matrix.indices, want.indices)
+        assert np.array_equal(matrix.indptr, want.indptr)
+
+    def build(kind):
+        return [stencil.geometry(points, .1, centre, .16, 12., components, baseline_kind=kind)
+                for points, components, centre in fixtures]
+
+    def baselines():
+        return [stencil.triplet_baseline(points, .1, centre, .16, 12., components)
+                for points, components, centre in fixtures]
+    with_study = {kind: build(kind) for kind in ('triplet', None)}
+    with_study_baselines = baselines()
     with no_studies():
         with pytest.raises(ImportError, match='No module named'):
             import studies                                                    # noqa: F401
-        for i, (points, components, centre) in enumerate(fixtures):
-            matrix, report = stencil.geometry(points, .1, centre, .16, 12., components,
-                                              baseline_kind=None)
-            want, want_report = with_study[i]
-            assert np.array_equal(matrix.data, want.data)
-            assert np.array_equal(matrix.indices, want.indices)
-            assert np.array_equal(matrix.indptr, want.indptr)
-            assert matrix.nnz and np.isfinite(matrix.data).all()
-            assert ({k: v for k, v in report.items() if k not in held}
-                    == {k: v for k, v in want_report.items() if k not in held})
-        for call in (lambda: stencil.triplet_baseline(space, .1, (.017, -.023, .009), .16,
-                                                      12., (0, 1, 2)),
-                     lambda: stencil.geometry(space, .1, (.017, -.023, .009), .16, 12.,
-                                              (0, 1, 2))):
-            with pytest.raises(ImportError, match='StencilStudyRefused') as caught:
-                call()
-            assert 'baseline_kind=None' in str(caught.value)
+        for kind, wanted in with_study.items():
+            for (matrix, report), (want, want_report) in zip(build(kind), wanted):
+                same(matrix, want)
+                assert ({k: v for k, v in report.items() if k not in held}
+                        == {k: v for k, v in want_report.items() if k not in held})
+        for got, want in zip(baselines(), with_study_baselines):
+            same(got, want)
+
+
+def test_the_triplet_studies_hand_out_the_packages_maps():
+    """The two triplet studies' maps are ``wavebit/fd/_lower/triplet.py``'s objects, not copies.
+
+    The move left the studies' names in place for their own drivers and tests, which is the same
+    arrangement ``test_the_moved_operator_is_an_fd_module_that_imports_with_no_cycle`` checks
+    for the stencil's assembly, with the same two ways to go wrong: a study growing its own copy
+    again -- its research tests would then judge a body the public baseline no longer reads --
+    and the package module growing a name nobody put there on purpose. ``is`` rules out the
+    first, an exact sorted ``__all__`` the second.
+
+    Mutant: the sphere study defining its own ``sphere_maps`` again, a wrapper over the moved
+    one. Measured 2026-09-26: this case goes red, and it is the only one of the 138 fast cases
+    in the four files that gate the operator to move -- every number is still the same, which
+    is exactly why nothing else can see it.
+    """
+    from studies import fdtd_subpixel_triplet_cylinder as cylinder
+    from studies import fdtd_subpixel_triplet_sphere as sphere
+    from wavebit.fd._lower import triplet
+    pairs = ((sphere.ORIENTATIONS, triplet.TRIPLETS), (sphere.local_map, triplet.triplet_map),
+             (sphere.sphere_maps, triplet.sphere_maps), (cylinder.ORIENTATIONS, triplet.PAIRS),
+             (cylinder.local_map, triplet.pair_map),
+             (cylinder.circle_fraction, triplet.circle_fraction),
+             (cylinder.circle_maps, triplet.circle_maps))
+    assert [a is b for a, b in pairs] == [True] * len(pairs)
+    assert triplet.__all__ == sorted(triplet.__all__)
+    assert set(triplet.__all__) == {'PAIRS', 'TRIPLETS', 'circle_fraction', 'circle_maps',
+                                    'pair_map', 'sphere_maps', 'triplet_map'}
+    assert len(set(triplet.TRIPLETS)) == 8 and len(set(triplet.PAIRS)) == 4
 
 
 def test_a_complex_permittivity_is_refused_where_the_buffers_are_real():
