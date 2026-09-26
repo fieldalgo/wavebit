@@ -276,7 +276,9 @@ def test_net_power_flows_away_from_the_lit_face(side, sign, tetm):
     that share their arithmetic, so it is satisfied by *either* frame as long as both sides use
     the same one — and the returned cell was in the mirrored frame for as long as it existed.
     Net Poynting is answerable from the cell alone, against a fact no reconstruction supplies:
-    light entering from below carries power upward, so ``S_z`` in scene coordinates is negative.
+    light entering from below carries power upward, so ``S_z`` in scene coordinates is positive
+    (``+z`` has pointed up since 2026-09-21; before that it pointed down and the signs were the
+    other way round).
 
     Measured before the fix: ``+0.343`` on both sides, bit-identical, where the two must differ
     in sign.
@@ -302,13 +304,21 @@ def test_explicit_z_on_a_backside_solve_is_read_in_scene_coordinates(tetm):
     request came back backwards. Against the hand-reversed scene the pair was worth O(1) at
     every requested z — 2.86 on this stack.
 
-    The requested z straddle the 0.15 interface deliberately: an interface belongs to the layer
-    below it, and that rule has to be applied once, in scene coordinates, rather than
-    re-derived in the mirror where it inverts.
+    The requested z straddle the internal interface deliberately: an interface belongs to the
+    layer above it, and that rule has to be applied once, in scene coordinates, rather than
+    re-derived in the mirror where it inverts. The interface sits at height 0.22 -- layer 0 is
+    the 0.22-thick one since layers run bottom to top. When the stack was reversed into that
+    order on 2026-09-21 these heights were kept as they were, which put both 0.149 and 0.151
+    inside layer 0, so the check stopped straddling the interface; they are the old depths
+    restated as heights, ``total - depth``, and deliberately not ascending.
     """
     kw = dict(GRATING_KW, tetm=tetm, theta=0.3, answers='field')
     total = sum(kw['thickness'])
-    z = np.array([0.02, 0.149, 0.151, 0.30, 0.36])
+    interface = kw['thickness'][0]
+    z = np.array([0.35, 0.221, 0.219, 0.07, 0.01])
+    gap = z - interface
+    assert ((gap > 0) & (gap < 2e-3)).any() and ((gap < 0) & (gap > -2e-3)).any(), (
+        'the samples no longer straddle the internal interface')
 
     def cell(solver_kw, zs):
         s = wavebit.rcwa(**solver_kw)

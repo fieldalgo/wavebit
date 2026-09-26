@@ -17,8 +17,8 @@ parametric shape's ``cx`` uses since 2026-08-31, so a count spans ``[-period/2, 
 halves of that sentence are the same origin, against a raster, which has no origin to move.
 
 The one place the two spellings legitimately differ is a layer interface, where ``E_z`` is
-two-valued. A count returns both limits (the interface appears twice, as one layer's bottom and
-the next one's top); explicit coordinates can only return one, and the documented rule picks the
+two-valued. A count returns both limits (the interface appears twice, as one layer's top and
+the next one's bottom); explicit coordinates can only return one, and the documented rule picks the
 layer above. :func:`test_an_interface_returns_the_upper_layers_limit` pins that, including the
 nudge that recovers the other side.
 """
@@ -192,7 +192,7 @@ def test_explicit_z_reproduces_the_grid_away_from_interfaces(path):
     assert named.shape == grid.shape
 
     ax = _zaxis(grid)
-    keep = [i for i in range(len(z_abs)) if i != nz - 1]      # drop layer 0's bottom face
+    keep = [i for i in range(len(z_abs)) if i != nz - 1]      # drop layer 0's top face
     assert np.array_equal(np.take(named, keep, axis=ax), np.take(grid, keep, axis=ax))
 
 
@@ -213,14 +213,14 @@ def test_an_interface_returns_the_upper_layers_limit(path):
     nz = 5
     grid = _field(path, sample_x=7, sample_y=1, sample_z=nz)
     ax = _zaxis(grid)
-    lower = np.take(grid, [nz - 1], axis=ax)      # layer 0's bottom face
-    upper = np.take(grid, [nz], axis=ax)          # layer 1's top face
+    lower = np.take(grid, [nz - 1], axis=ax)      # layer 0's top face
+    upper = np.take(grid, [nz], axis=ax)          # layer 1's bottom face
 
     at = _field(path, sample_x=7, sample_y=1, sample_z=np.array([THICK[0]]))
     assert np.array_equal(at, upper)
 
-    just_above = _field(path, sample_x=7, sample_y=1, sample_z=np.array([THICK[0] - 1e-9]))
-    assert np.allclose(just_above, lower, rtol=0, atol=1e-6)
+    just_below = _field(path, sample_x=7, sample_y=1, sample_z=np.array([THICK[0] - 1e-9]))
+    assert np.allclose(just_below, lower, rtol=0, atol=1e-6)
 
     jump = np.max(np.abs(upper - lower)) / np.max(np.abs(grid))
     if path == 'te':
