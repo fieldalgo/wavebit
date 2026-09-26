@@ -8,7 +8,7 @@ interface -- a box corner, a prism edge, a cylinder rim, all inside one body -- 
 phases, and the kernel answers its fill exactly. Refusing the second population would refuse
 every prism edge and every rotated box corner. So they are counted separately, and a third
 population beside them: voxels where **two structures' surfaces** meet but only two media are
-present (a flush joint), which ``_lower/checks.py``'s door 5 refuses today.
+present (a flush joint), which ``wavebit/fd/_lower/checks.py``'s door 5 refuses today.
 
 Method: every E-component voxel within reach of any surface, at 20/40/80 cells per unit
 length, over eight scenes -- a sphere, a cylinder, an axis-aligned and a 30-degree box, a
