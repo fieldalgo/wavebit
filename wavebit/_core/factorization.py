@@ -254,8 +254,8 @@ def _circulant_index(truncation_order):
     a grating comparison. Uniform layers cannot expose it at all -- their convolution matrix
     is ``eps * I``, which is its own transpose.
     """
-    n_orders = 2 * truncation_order + 1
-    return [[(r - c) for c in range(n_orders)] for r in range(n_orders)]
+    size = 2 * truncation_order + 1
+    return [[r - c for c in range(size)] for r in range(size)]
 
 
 def _pixel_correction(xp, orders, n, dtype, device=None):
