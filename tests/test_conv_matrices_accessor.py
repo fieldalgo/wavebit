@@ -31,8 +31,8 @@ def disc_raster(N, r=0.30):
 def test_it_is_exactly_what_solve_conv_takes():
     """The round trip is the contract: feeding the result back reproduces solve()."""
     solver = wavebit.rcwa(structure=[dict(background=1.0, shapes=[CIRCLE])], **BASE)
-    direct = solver.solve().given.T
-    relayed = solver.solve_conv(*solver.eps_conv_matrices()).given.T
+    direct = solver.solve().incident.T
+    relayed = solver.solve_conv(*solver.eps_conv_matrices()).incident.T
     assert np.abs(np.asarray(direct) - np.asarray(relayed)).max() == 0.0
 
 

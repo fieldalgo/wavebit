@@ -181,8 +181,8 @@ def test_a_diagonal_mu_on_a_one_dimensional_structure_now_solves():
                        structure=np.ones((1, 1, 8)) * 2.25)
     e = [np.stack([np.eye(7, dtype=complex) * v]) for v in (2.6, 2.6, 1 / 2.6)]
     m = tuple(np.stack([np.eye(7, dtype=complex) * v]) for v in (1.7, 1.7, 1 / 1.7))
-    non_magnetic = float(np.sum(mee.solve_conv(*e).given.R))
-    magnetic = float(np.sum(mee.solve_conv(*e, mu=(*m, None, None)).given.R))
+    non_magnetic = float(np.sum(mee.solve_conv(*e).incident.R))
+    magnetic = float(np.sum(mee.solve_conv(*e, mu=(*m, None, None)).incident.R))
     assert abs(magnetic - non_magnetic) > 1e-3
 
 
@@ -294,7 +294,7 @@ def test_clearing_the_mu_first_makes_the_swap_legal():
 
 FIELD_WL = 700.0
 
-# The three incidences a coupled solve carries are ('given', 's', 'p'); these name the second
+# The three incidences a coupled solve carries are ('incident', 's', 'p'); these name the second
 # and third. Pure s is E along the s direction -- the only linear polarization with an `H_z`
 # at all, which is why every case below drives with it.
 S_INC, P_INC = ('s',), ('p',)

@@ -461,7 +461,7 @@ SMM, conical / 2D ────────── _smm_sp() → sp_efficiencies()
 |---|---|---|
 | `wavebit/_core/solve_1d.py:474–486`, `solve_1d` | both reflection and transmission form the complex ratio first, then take the real part | compute the true incident power first and divide each outgoing wave's real power by it |
 | `wavebit/_core/solve_1d.py:653–684`, `_incident_flux` | the weight for multiple incident orders is only `Re(kz)`; it takes no polarization, ε or μ | take each incident order's actual s/p amplitudes and ε·μ and sum the power |
-| `wavebit/_core/solve_1d.py:838–875`, `final_matching` | the specified-polarization and pure s/p results share one denominator | compute the denominator from the incident amplitudes of each of `given`, `s_inc`, `p_inc` |
+| `wavebit/_core/solve_1d.py:838–875`, `final_matching` | the specified-polarization and pure s/p results share one denominator | compute the denominator from the incident amplitudes of each of `incident`, `s_inc`, `p_inc` |
 | `wavebit/_core/solve_1d.py:886–905`, `sp_efficiencies` | uses `Re(admittance / complex_denom)` | compute `Re(admittance) / real_incident_power`, taking the power of the actual incident polarization as the denominator |
 | `wavebit/_core/scattering.py:525–549`, `smm_1d` | the pure-1D efficiency formula is duplicated separately | call the same shared power computation as ETM |
 | `wavebit/_core/scattering.py:700–747`, `_smm_sp` | builds three incident columns but uses one efficiency denominator | compute the power for each column of the actual `c_inc` and divide output column by output column |
@@ -508,20 +508,20 @@ place.**
   period 1000 nm, thickness 75 nm. There should be no reflection.
 - Lossless ε=2.25 and absorbing ε=(1.5+0.3i)², TE/TM, conical/2D/4ff and the supported ETM/SMM:
   20 checks in all.
-- In lossless ETM, R of `given` is about `1e-31`, while R of `s_inc`/`p_inc`, which mean the
+- In lossless ETM, R of `incident` is about `1e-31`, while R of `s_inc`/`p_inc`, which mean the
   same pure polarization, is `0.0001754677013`. The complex amplitudes differ by up to about
   `0.0151650`.
 - The same mismatch occurs in absorbing ETM. In the 8 SMM comparisons the amplitude difference
   is 0.
 
-The fix is to build `given` and the pure s/p columns with the same incident-column
+The fix is to build `incident` and the pure s/p columns with the same incident-column
 constructor: apply the per-order wavevectors and the same `delta` to every column, then compute
 each column's true incident power separately. The current multi-incidence comparison in
-`tests/test_excitation.py` mostly checks `given` only, so a regression check is needed that
-`s_inc`/`p_inc` match an `given` with the same polarization specified directly.
+`tests/test_excitation.py` mostly checks `incident` only, so a regression check is needed that
+`s_inc`/`p_inc` match an `incident` with the same polarization specified directly.
 
-The 304-solve amplitude agreement of the previous section is for `given` under single
-incidence, and the 8-solve multi-incidence power check is also for `given`. This finding is
+The 304-solve amplitude agreement of the previous section is for `incident` under single
+incidence, and the 8-solve multi-incidence power check is also for `incident`. This finding is
 an error in result columns those checks did not examine. It occurs even without loss, and must
 not be confused with the efficiency error of absorbing incidence.
 
@@ -721,7 +721,7 @@ copied and no dependency added.
 Scope and return contract:
 
 - Connected in pure 1D ETM/SMM, conical ETM/SMM, 2D ETM/SMM and 4ff ETM.
-- Uses the incident power and interference of each of `given`, `s_inc`, `p_inc`.
+- Uses the incident power and interference of each of `incident`, `s_inc`, `p_inc`.
 - The two scalars are provided under `answers='efficiency'` too. This stage uses the boundary
   amplitudes right after the solve; it does not escalate to a higher answer level or
   reconstruct the internal field to keep them in the result.

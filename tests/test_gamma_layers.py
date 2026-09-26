@@ -93,7 +93,7 @@ def _grating_total(shapes, tox, toy, psi):
                      truncation_order=dict(x=tox, y=toy), top=1, bot=1, wavelength=550.0,
                      psi=psi, shape_nvf_grid_size=256)
     s.structure = [dict(background=1.0, shapes=shapes)]
-    return float(np.sum(s.solve().given.T))
+    return float(np.sum(s.solve().incident.T))
 
 
 def _total(shapes, order=6, lattice=SQUARE, shape_nvf_grid_size=512, **incidence):

@@ -192,7 +192,7 @@ equates is one `k_par` seen from both sides, `n_top sin(th_top) = n_bot sin(th_b
 Two mutants of the incident column survived the first survey, and measuring them showed they
 changed *nothing* — they were not redundant code, they were in the copy of that column the
 tests never reached. Every magnetic assertion at that point read `s_inc` / `p_inc`,
-built from a different block than `given`, the psi-specified incidence. The gap was not subtle:
+built from a different block than `incident`, the psi-specified incidence. The gap was not subtle:
 the psi path returns `R + T = 1.575` with the incident s-flux left non-magnetic. Deleting the
 backside swap survived everything too. With the psi and reciprocity tests added, 15 of 15
 mutants die.

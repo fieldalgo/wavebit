@@ -83,7 +83,7 @@ def test_a_superposition_is_the_scattering_matrix_applied_to_it(algo):
     column = _column(reference, BEAMS)
     for block, reported in (('S11', 'r_s'), ('S21', 't_s')):
         want = (np.asarray(getattr(S, block)) @ column).ravel()
-        assert np.abs(np.asarray(getattr(got.given, reported)).ravel() - want).max() < 1e-12
+        assert np.abs(np.asarray(getattr(got.incident, reported)).ravel() - want).max() < 1e-12
 
 
 @pytest.mark.parametrize('phi, tetm, name', [(None, 'te', '1d_te'), (None, 'tm', '1d_tm'),
@@ -93,8 +93,8 @@ def test_the_two_connecting_algorithms_agree_on_a_superposition(phi, tetm, name)
     _, a = _solve(BEAMS, algo='ETM', phi=phi, tetm=tetm)
     _, b = _solve(BEAMS, algo='SMM', phi=phi, tetm=tetm)
     for field in ('R', 'T', 'r_s', 't_s', 'r_p', 't_p'):
-        assert np.abs(np.asarray(getattr(a.given, field))
-                      - np.asarray(getattr(b.given, field))).max() < 1e-12, (name, field)
+        assert np.abs(np.asarray(getattr(a.incident, field))
+                      - np.asarray(getattr(b.incident, field))).max() < 1e-12, (name, field)
 
 
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
@@ -107,7 +107,7 @@ def test_a_lossless_stack_still_closes_under_a_superposition(algo, phi, tetm):
     like an efficiency and is not; energy is what notices.
     """
     _, r = _solve(BEAMS, algo=algo, phi=phi, tetm=tetm)
-    total = float(np.asarray(r.given.R).sum() + np.asarray(r.given.T).sum())
+    total = float(np.asarray(r.incident.R).sum() + np.asarray(r.incident.T).sum())
     assert total == pytest.approx(1.0, abs=1e-12)
 
 
@@ -122,7 +122,7 @@ def test_lighting_only_the_specular_order_is_the_ordinary_solve():
     _, plain = _solve()
     _, spelled = _solve({0: 1.0})
     for field in ('R', 'T', 'r_s', 't_s'):
-        a, b = np.asarray(getattr(plain.given, field)), np.asarray(getattr(spelled.given, field))
+        a, b = np.asarray(getattr(plain.incident, field)), np.asarray(getattr(spelled.incident, field))
         assert np.abs(a - b).max() < 1e-14, field
 
 
@@ -144,8 +144,8 @@ def test_declaring_nothing_leaves_the_solve_byte_for_byte_what_it_was():
             named.structure = _structure()
             a, b = solver.solve(), named.solve()
             for field in ('R', 'T', 'r_s', 't_s'):
-                assert np.array_equal(np.asarray(getattr(a.given, field)),
-                                      np.asarray(getattr(b.given, field))), (tetm, theta, field)
+                assert np.array_equal(np.asarray(getattr(a.incident, field)),
+                                      np.asarray(getattr(b.incident, field))), (tetm, theta, field)
 
 
 def test_the_result_indexes_by_order_on_a_widened_window():
@@ -163,7 +163,7 @@ def test_the_result_indexes_by_order_on_a_widened_window():
     assert half > COMMON['truncation_order'][0]                 # the window really did widen
     assert centre != 0                                   # ...and it is not centred on 0
 
-    raw = np.asarray(result.given.R).ravel()
+    raw = np.asarray(result.incident.R).ravel()
     for order in range(centre - half, centre + half + 1):
         assert float(result.order(order).R) == pytest.approx(
             float(raw[order - centre + half]), abs=0, rel=0), order
@@ -238,7 +238,7 @@ def test_an_incident_amplitude_carries_a_gradient():
         solver = wavebit.rcwa(**dict(COMMON, backend=1, phi=None, tetm='te',
                                      excitation={0: 1.0, 1: scale * (0.6 - 0.8j)}))
         solver.structure = jnp.asarray(_structure())
-        return jnp.sum(solver.solve().given.R)
+        return jnp.sum(solver.solve().incident.R)
 
     x = jnp.asarray(1.0)
     step = 1e-6
@@ -257,7 +257,7 @@ def test_a_superposition_survives_a_jit_boundary():
         solver = wavebit.rcwa(**dict(COMMON, backend=1, phi=None, tetm='te',
                                      excitation={0: 1.0, 1: a1}))
         solver.structure = jnp.asarray(_structure())
-        return jnp.sum(solver.solve().given.R)
+        return jnp.sum(solver.solve().incident.R)
 
     a1 = jnp.asarray(0.6 - 0.8j)
     assert float(jax.jit(reflectance)(a1)) == pytest.approx(float(reflectance(a1)), rel=1e-10)
@@ -287,14 +287,14 @@ def test_a_superposition_survives_the_solver_itself_crossing_the_boundary():
 
     @jax.jit
     def reflectance(s):                                # `s` is flattened on the way in
-        return jnp.sum(s.solve().given.R)
+        return jnp.sum(s.solve().incident.R)
 
-    assert float(reflectance(solver)) == pytest.approx(float(jnp.sum(eager.given.R)), rel=1e-10)
+    assert float(reflectance(solver)) == pytest.approx(float(jnp.sum(eager.incident.R)), rel=1e-10)
 
     # And the same scene with the excitation dropped must NOT agree -- otherwise the assertion
     # above is satisfied by a solver that ignored the superposition on both sides.
     plain, _ = _solve(None, backend=1, phi=None, tetm='te')
-    assert float(reflectance(plain)) != pytest.approx(float(jnp.sum(eager.given.R)), rel=1e-6), (
+    assert float(reflectance(plain)) != pytest.approx(float(jnp.sum(eager.incident.R)), rel=1e-6), (
         'the lit and unlit scenes answer the same number, so this test cannot see the drop')
 
 

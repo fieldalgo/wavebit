@@ -558,7 +558,7 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
                     zeros_eff, de_ri, zeros_eff, de_ti, power_entering=entering)
 
     if not keep_field:
-        return {'given': res, 'scattering': scattering}
+        return {'incident': res, 'scattering': scattering}
 
     if backside:
         # The mirrored scene's own cascade pieces, assembled from what this pass already
@@ -580,7 +580,7 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
                        for m, b, z in zip(modes, blocks, muzs)][::-1]
     if T1 is not None:
         T1 = xp.reshape(T1, (n_orders_u,))    # the 1D path carries T1 as a plain vector
-    return {'given': res, 'layer_info_list': layer_info_list, 'T1': T1,
+    return {'incident': res, 'layer_info_list': layer_info_list, 'T1': T1,
             'scattering': scattering}
 
 
@@ -673,7 +673,7 @@ def _sp_scattering_result(xp, C, S, kx, ky, kz_top, kz_bot, n_top, n_bot,
     packed = [_pack(*(a[i] for a in amps), *(e[i] for e in eff),
                     power_entering=entering[i]) for i in range(3)]
 
-    return {'given': packed[0], 's_inc': packed[1], 'p_inc': packed[2],
+    return {'incident': packed[0], 's_inc': packed[1], 'p_inc': packed[2],
             'scattering': scattering}, c_inc
 
 

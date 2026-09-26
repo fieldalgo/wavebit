@@ -96,8 +96,8 @@ def _solver(ns, ds, theta, tetm, path, algo, side):
 
 def _amps(res, tetm):
     """The centre-order Fresnel pair ``(r, t)`` for the asked polarization."""
-    r = np.asarray(res.given.r_s if tetm == 'te' else res.given.r_p).ravel()
-    t = np.asarray(res.given.t_s if tetm == 'te' else res.given.t_p).ravel()
+    r = np.asarray(res.incident.r_s if tetm == 'te' else res.incident.r_p).ravel()
+    t = np.asarray(res.incident.t_s if tetm == 'te' else res.incident.t_p).ravel()
     return complex(r[r.size // 2]), complex(t[t.size // 2])
 
 
@@ -215,7 +215,7 @@ def test_backside_etm_and_smm_agree_per_order(tetm):
                        incidence_side='bottom', **GRATING_KW).solve()
     assert np.abs(np.asarray(a.R) - np.asarray(b.R)).max() < 1e-12
     assert np.abs(np.asarray(a.T) - np.asarray(b.T)).max() < 1e-12
-    r_a, r_b = (a.given.r_s, b.given.r_s) if tetm == 'te' else (a.given.r_p, b.given.r_p)
+    r_a, r_b = (a.incident.r_s, b.incident.r_s) if tetm == 'te' else (a.incident.r_p, b.incident.r_p)
     assert np.abs(np.asarray(r_a) - np.asarray(r_b)).max() < 1e-12
 
 

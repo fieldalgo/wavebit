@@ -20,7 +20,7 @@ That is what :class:`StaticGeometry` carries. Freeze it once from a concrete str
 
     solver = wavebit.rcwa(backend=Backend.JAX, structure=eps, ...)
     geometry = solver.freeze_geometry()
-    grad = jax.grad(lambda e: jnp.sum(solver.solve(structure=e, geometry=geometry).given.T))
+    grad = jax.grad(lambda e: jnp.sum(solver.solve(structure=e, geometry=geometry).incident.T))
 
 Without it, ``solve`` still auto-detects — the eager path that reproduces the legacy
 result exactly — but nothing survives ``jax.jit``, and ``fourier_coefficients='sampled'``

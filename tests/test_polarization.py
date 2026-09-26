@@ -51,8 +51,8 @@ _POWER_FIELDS = ('R', 'R_s', 'R_p', 'T', 'T_s', 'T_p')
 
 
 def solved_res(**kw):
-    """The `given` sub-result of one solve — the surface these comparisons read."""
-    return wavebit.rcwa(**kw).solve().given
+    """The `incident` sub-result of one solve — the surface these comparisons read."""
+    return wavebit.rcwa(**kw).solve().incident
 
 
 def pair_of(psi):
@@ -79,7 +79,7 @@ def test_pair_reproduces_psi(path, algo):
         kw = dict(CFG_2D, structure=STRUCTURE_2D, layer_algorithm=algo)
     via_psi = wavebit.rcwa(psi=psi_v, **kw).solve()
     via_pair = wavebit.rcwa(polarization=pair_of(psi_v), **kw).solve()
-    _assert_same_sub(via_psi.given, via_pair.given)
+    _assert_same_sub(via_psi.incident, via_pair.incident)
 
 
 @pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
@@ -89,9 +89,9 @@ def test_pair_reproduces_psi_on_every_backend(backend):
     kw['backend'] = backend
     via_psi = wavebit.rcwa(psi=psi_v, **kw).solve()
     via_pair = wavebit.rcwa(polarization=pair_of(psi_v), **kw).solve()
-    np.testing.assert_allclose(np.asarray(via_psi.given.R), np.asarray(via_pair.given.R),
+    np.testing.assert_allclose(np.asarray(via_psi.incident.R), np.asarray(via_pair.incident.R),
                                atol=1e-14)
-    np.testing.assert_allclose(np.asarray(via_psi.given.t_p), np.asarray(via_pair.given.t_p),
+    np.testing.assert_allclose(np.asarray(via_psi.incident.t_p), np.asarray(via_pair.incident.t_p),
                                atol=1e-14)
 
 
@@ -101,7 +101,7 @@ def test_the_pure_pairs_are_the_pure_angles():
     for pair, psi_v in (((1, 0), np.pi / 2), ((0, 1), 0.0)):
         via_pair = wavebit.rcwa(polarization=pair, **kw).solve()
         via_psi = wavebit.rcwa(psi=psi_v, **kw).solve()
-        _assert_same_sub(via_pair.given, via_psi.given, atol=1e-13)
+        _assert_same_sub(via_pair.incident, via_psi.incident, atol=1e-13)
 
 
 def test_variants_do_not_depend_on_the_pair():
@@ -115,9 +115,9 @@ def test_variants_do_not_depend_on_the_pair():
 
 def test_top_level_efficiencies_delegate_to_the_pair_solve():
     res = wavebit.rcwa(polarization=(1, 1j), structure=STRUCTURE_2D, **CFG_2D).solve()
-    assert res.given is not None
-    np.testing.assert_array_equal(res.R, res.given.R)
-    np.testing.assert_array_equal(res.T, res.given.T)
+    assert res.incident is not None
+    np.testing.assert_array_equal(res.R, res.incident.R)
+    np.testing.assert_array_equal(res.T, res.incident.T)
 
 
 # ------------------------------------------------------------------ normalization
@@ -127,7 +127,7 @@ def test_the_pair_scale_is_normalized_out():
     kw = dict(CFG_2D, structure=STRUCTURE_2D)
     small = wavebit.rcwa(polarization=(0.6, 0.8j), **kw).solve()
     large = wavebit.rcwa(polarization=(3, 4j), **kw).solve()
-    _assert_same_sub(small.given, large.given)
+    _assert_same_sub(small.incident, large.incident)
 
 
 def test_the_pair_phase_is_kept():
@@ -136,9 +136,9 @@ def test_the_pair_phase_is_kept():
     base = wavebit.rcwa(polarization=(1, -1j), **kw).solve()
     phase = np.exp(0.4j)
     rotated = wavebit.rcwa(polarization=(phase, -1j * phase), **kw).solve()
-    np.testing.assert_allclose(np.asarray(rotated.given.t_s),
-                               phase * np.asarray(base.given.t_s), atol=1e-14)
-    np.testing.assert_allclose(np.asarray(rotated.given.R), np.asarray(base.given.R),
+    np.testing.assert_allclose(np.asarray(rotated.incident.t_s),
+                               phase * np.asarray(base.incident.t_s), atol=1e-14)
+    np.testing.assert_allclose(np.asarray(rotated.incident.R), np.asarray(base.incident.R),
                                atol=1e-14)
 
 
@@ -148,7 +148,7 @@ def test_pair_reproduces_psi_under_backside_illumination():
     kw = dict(CFG_2D, structure=STRUCTURE_2D, incidence_side='bottom')
     via_psi = wavebit.rcwa(psi=psi_v, **kw).solve()
     via_pair = wavebit.rcwa(polarization=pair_of(psi_v), **kw).solve()
-    _assert_same_sub(via_psi.given, via_pair.given)
+    _assert_same_sub(via_psi.incident, via_pair.incident)
 
 
 # ------------------------------------------------------------------ energy conservation
@@ -158,7 +158,7 @@ def test_lossless_energy_conservation_at_arbitrary_complex_pairs(algo):
     kw = dict(CFG_2D, structure=STRUCTURE_2D, layer_algorithm=algo)
     for pair in ((0.3 + 0.4j, -1.2 + 0.1j), (2.0, 0.5j), (1e-3, 1 + 1j)):
         res = wavebit.rcwa(polarization=pair, **kw).solve()
-        total = float(np.asarray(res.given.R).sum() + np.asarray(res.given.T).sum())
+        total = float(np.asarray(res.incident.R).sum() + np.asarray(res.incident.T).sum())
         assert total == pytest.approx(1.0, abs=1e-10), pair
 
 
@@ -229,14 +229,14 @@ def test_a_real_angle_written_as_complex_is_accepted(backend):
 
 
 @pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
-@pytest.mark.parametrize('spelling', ['given', 'default'])
+@pytest.mark.parametrize('spelling', ['incident', 'default'])
 def test_psi_is_stored_real(backend, spelling):
     """Real dtype is what lets the refusal read a dtype, and it keeps the AD leaf real.
 
     ``theta`` is deliberately complex (evanescent incidence); ``psi`` has no such meaning,
     and the imaginary direction it used to carry was the unnormalized ``cosh`` path.
     """
-    kw = {'psi': 0.7} if spelling == 'given' else {}
+    kw = {'psi': 0.7} if spelling == 'incident' else {}
     solver = wavebit.rcwa(backend=backend, **kw)
     assert not np.iscomplexobj(np.asarray(solver.psi)), np.asarray(solver.psi).dtype
 
@@ -256,7 +256,7 @@ def test_a_declared_away_angle_is_absent_rather_than_defaulted(backend):
 def test_complex_psi_refusal_does_not_reach_the_pair():
     """The pair is where the imaginary part belongs, so it must stay unrestricted."""
     res = wavebit.rcwa(polarization=(1, -1j), structure=STRUCTURE_2D, **CFG_2D).solve()
-    assert float(np.asarray(res.given.T).sum()) > 0
+    assert float(np.asarray(res.incident.T).sum()) > 0
 
 
 # ------------------------------------------------------------------ the 1D structure routing
@@ -273,9 +273,9 @@ def test_a_1d_structure_with_a_pair_takes_the_conical_path():
         via_pair = solver.solve()
         assert solver.grating_type == 1, 'expected the conical formulation'
         via_pure = wavebit.rcwa(tetm=tetm, **kw).solve()
-        np.testing.assert_allclose(np.asarray(via_pair.given.R), np.asarray(via_pure.given.R),
+        np.testing.assert_allclose(np.asarray(via_pair.incident.R), np.asarray(via_pure.incident.R),
                                    atol=1e-11)
-        np.testing.assert_allclose(np.asarray(via_pair.given.T), np.asarray(via_pure.given.T),
+        np.testing.assert_allclose(np.asarray(via_pair.incident.T), np.asarray(via_pure.incident.T),
                                    atol=1e-11)
 
 
@@ -341,10 +341,10 @@ def test_each_circular_pair_is_one_faraday_eigenstate(sign):
     res = _solve_gyrotropic((a_s, a_p))
     r_ref, t_ref = _scalar_slab(EO + sign * DELTA)
 
-    assert complex(res.given.t_s.sum()) == pytest.approx(t_ref * a_s, abs=1e-12)
-    assert complex(res.given.t_p.sum()) == pytest.approx(t_ref * a_p, abs=1e-12)
-    assert float(np.asarray(res.given.T).sum()) == pytest.approx(abs(t_ref) ** 2, abs=1e-12)
-    assert float(np.asarray(res.given.R).sum()) == pytest.approx(abs(r_ref) ** 2, abs=1e-12)
+    assert complex(res.incident.t_s.sum()) == pytest.approx(t_ref * a_s, abs=1e-12)
+    assert complex(res.incident.t_p.sum()) == pytest.approx(t_ref * a_p, abs=1e-12)
+    assert float(np.asarray(res.incident.T).sum()) == pytest.approx(abs(t_ref) ** 2, abs=1e-12)
+    assert float(np.asarray(res.incident.R).sum()) == pytest.approx(abs(r_ref) ** 2, abs=1e-12)
 
 
 @pytest.mark.parametrize('sign', [+1, -1], ids=['v_plus', 'v_minus'])
@@ -364,8 +364,8 @@ def test_the_chart_reaches_the_same_faraday_eigenstates(sign):
     res = _solve_gyrotropic(psi=0.0, chi=sign * np.pi / 4)
     _, t_ref = _scalar_slab(EO + sign * DELTA)
 
-    assert float(np.asarray(res.given.T).sum()) == pytest.approx(abs(t_ref) ** 2, abs=1e-12)
-    got = np.array([complex(res.given.t_s.sum()), complex(res.given.t_p.sum())])
+    assert float(np.asarray(res.incident.T).sum()) == pytest.approx(abs(t_ref) ** 2, abs=1e-12)
+    got = np.array([complex(res.incident.t_s.sum()), complex(res.incident.t_p.sum())])
     want = t_ref * np.array([1 / np.sqrt(2), -sign * 1j / np.sqrt(2)])
     phase = got[0] / want[0]
     assert abs(abs(phase) - 1) < 1e-12, phase
@@ -529,7 +529,7 @@ def test_incidence_carries_the_pair():
     via_incidence = wavebit.rcwa(incidence=inc, structure=STRUCTURE_2D, **kw).solve()
     via_kwarg = wavebit.rcwa(polarization=(1, -1j), structure=STRUCTURE_2D,
                                **CFG_2D).solve()
-    _assert_same_sub(via_incidence.given, via_kwarg.given)
+    _assert_same_sub(via_incidence.incident, via_kwarg.incident)
 
 
 _SPEC = {
@@ -586,8 +586,8 @@ def test_a_spec_without_the_pair_hashes_as_before():
 def test_chi_zero_is_the_psi_spelling(psi_v):
     """``chi = 0`` is the linear state at ``psi`` — the chart contains the angle it extends."""
     kw = dict(CFG_2D, structure=STRUCTURE_2D)
-    _assert_same_sub(wavebit.rcwa(psi=psi_v, **kw).solve().given,
-                     wavebit.rcwa(psi=psi_v, chi=0.0, **kw).solve().given, atol=1e-13)
+    _assert_same_sub(wavebit.rcwa(psi=psi_v, **kw).solve().incident,
+                     wavebit.rcwa(psi=psi_v, chi=0.0, **kw).solve().incident, atol=1e-13)
 
 
 @pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
@@ -605,14 +605,14 @@ def test_the_chart_is_the_pair_it_names(backend):
 
     chart = wavebit.rcwa(psi=psi_v, chi=chi_v, **kw).solve()
     raw = wavebit.rcwa(polarization=pair, **kw).solve()
-    np.testing.assert_allclose(np.asarray(chart.given.T), np.asarray(raw.given.T), atol=1e-12)
-    np.testing.assert_allclose(np.asarray(chart.given.t_s), np.asarray(raw.given.t_s), atol=1e-12)
+    np.testing.assert_allclose(np.asarray(chart.incident.T), np.asarray(raw.incident.T), atol=1e-12)
+    np.testing.assert_allclose(np.asarray(chart.incident.t_s), np.asarray(raw.incident.t_s), atol=1e-12)
 
 
 def test_the_chart_covers_the_states_the_angle_cannot():
     """The point of the second coordinate: ``chi`` sweeps linear to circular and back."""
     kw = dict(CFG_2D, structure=STRUCTURE_2D)
-    totals = [float(np.asarray(wavebit.rcwa(psi=0.3, chi=c, **kw).solve().given.T).sum())
+    totals = [float(np.asarray(wavebit.rcwa(psi=0.3, chi=c, **kw).solve().incident.T).sum())
               for c in np.linspace(-np.pi / 4, np.pi / 4, 9)]
     assert max(totals) - min(totals) > 1e-3, totals          # not a constant in disguise
     assert totals == sorted(totals) or totals == sorted(totals, reverse=True) or True

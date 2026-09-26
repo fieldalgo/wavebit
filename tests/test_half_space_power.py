@@ -85,8 +85,8 @@ def test_interface_power(route, medium, beta, side, pol):
     assert float(result.power_entering) == pytest.approx(np.sum(power * T) / power.sum(), abs=2e-12)
     assert float(result.absorption) == pytest.approx(0., abs=2e-12)
     for j, suffix in enumerate(('s', 'p')):
-        np.testing.assert_allclose(getattr(result.given, 'r_' + suffix), a[j] * r[j], rtol=0, atol=2e-12)
-        np.testing.assert_allclose(getattr(result.given, 't_' + suffix), a[j] * t[j], rtol=0, atol=2e-12)
+        np.testing.assert_allclose(getattr(result.incident, 'r_' + suffix), a[j] * r[j], rtol=0, atol=2e-12)
+        np.testing.assert_allclose(getattr(result.incident, 't_' + suffix), a[j] * t[j], rtol=0, atol=2e-12)
     if route[0] != '1d':
         for j, variant in enumerate((result.s_inc, result.p_inc)):
             assert float(np.sum(variant.R)) == pytest.approx(R[j], abs=2e-12)
@@ -116,7 +116,7 @@ def test_two_incident_orders_in_the_same_medium(route, pol, side, eps):
     if route[0] != '1d':
         variant = result.s_inc if pol == 'te' else result.p_inc
         for name in ('r_s', 'r_p', 't_s', 't_p', 'R', 'T', 'power_entering', 'absorption'):
-            np.testing.assert_allclose(getattr(variant, name), getattr(result.given, name),
+            np.testing.assert_allclose(getattr(variant, name), getattr(result.incident, name),
                                        rtol=0, atol=2e-12)
 
 

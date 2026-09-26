@@ -121,7 +121,7 @@ def _probe_step():
     def step():
         t = torch.tensor(pattern, requires_grad=True)
         out = wavebit.rcwa(backend=2, structure=t, **STRATEGIES['sampled'], **cfg).solve()
-        out.given.T.real.sum().backward()
+        out.incident.T.real.sum().backward()
 
     return step
 
@@ -167,7 +167,7 @@ def torch_grad(build, seed):
 
     def step():
         v = torch.tensor(np.asarray(seed, dtype=np.float64), requires_grad=True)
-        out = build(2, v).solve().given.T.real.sum()
+        out = build(2, v).solve().incident.T.real.sum()
         out.backward()
         return _fingerprint(v.grad.detach().numpy())
 
@@ -180,7 +180,7 @@ def jax_eager_grad(build, seed):
     import jax.numpy as jnp
 
     def loss(v):
-        return jnp.sum(build(1, v).solve().given.T).real
+        return jnp.sum(build(1, v).solve().incident.T).real
 
     x = jnp.asarray(np.asarray(seed, dtype=np.float64))
     g = jax.grad(loss)
@@ -199,7 +199,7 @@ def jax_jit_grad(build, seed):
     import jax.numpy as jnp
 
     def loss(v, geometry):
-        return jnp.sum(build(1, v).solve(geometry=geometry).given.T).real
+        return jnp.sum(build(1, v).solve(geometry=geometry).incident.T).real
 
     x = jnp.asarray(np.asarray(seed, dtype=np.float64))
     freeze = lambda: build(1, x).freeze_geometry()

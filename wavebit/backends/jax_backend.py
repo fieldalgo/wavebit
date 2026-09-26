@@ -121,6 +121,10 @@ class _BaseRCWA(CoreSolveMixin):
         raise ValueError(f'unsupported jax device: {value!r}')
 
 
+from .._core.field_result import FieldState
+jax.tree_util.register_pytree_node_class(FieldState)
+
+
 @jax.tree_util.register_pytree_node_class
 class ResultJax(Result):
     """Shared container, registered as a pytree so a jitted method can return one."""
@@ -140,7 +144,7 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
     @partial(jax.jit, static_argnums=(1, 2, 3, 4, 5),
              static_argnames=('sample_x', 'sample_y', 'sample_z', 'incidences', 'geometry'))
     @device_scoped
-    def solve_field(self, sample_x=20, sample_y=20, sample_z=20, incidences=('given',),
+    def solve_field(self, sample_x=20, sample_y=20, sample_z=20, incidences=('incident',),
                     geometry=None, **kwargs):
         """Solve and reconstruct the field in one jit-compiled call.
 

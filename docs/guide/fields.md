@@ -1,111 +1,125 @@
 # Near fields
 
-Two steps, and the first one is not optional: **declare** that this solve is for a field, then
-ask for one.
+Read fields from the result of a solve. Ordinary incidence, order excitations,
+`PlaneWave`, `GaussianBeam` and `ElectricDipole` results share these methods:
 
 ```python
-solver = wavebit.rcwa(backend=0, answers='field', ...)
-solver.solve()
-cell = solver.reconstruct_field(sample_x=64, sample_y=64, sample_z=32)
+result = solver.solve(answers='field')
+cell = result.reconstruct_field(sample_x=64, sample_y=64, sample_z=32)
+boundary = result.boundary_fields('top', sample_x=64, sample_y=64, part='total')
 ```
 
-## Declaring what a solve is for
+The result owns its field state. Changing the solver's conditions or solving another
+scene does not change fields read from this result. Resample a solved result without
+solving again; solve again when the physical problem changes.
 
-`answers` says which questions a solve keeps the state to answer. It is a **declaration**, in
-the sense `tetm` is one: not a request to be economical, but a statement that a near field is
-not something this problem asks about — and the state that would answer one is then never
-built, rather than built and thrown away.
+## What to retain
 
-| `answers=` | What you get back |
+| `answers` | Retained results |
 | --- | --- |
-| `'efficiency'` | `R` / `T` per order, and nothing else |
-| `'amplitude'` | **the default** — the Fresnel amplitudes, their s/p split, and the pure-TE / pure-TM variants |
-| `'field'` | all of the above, plus the per-layer state `reconstruct_field` walks |
+| `'efficiency'` | Computed power results |
+| `'amplitude'` (default) | Also complex amplitudes and boundary fields |
+| `'field'` | Also the per-layer state for internal fields |
 
-Each rung answers everything below it, so `'field'` is a superset rather than a mode.
+This rule applies to every input type. Boundary fields require `'amplitude'` or
+`'field'`; internal fields require `'field'`. Missing retained state raises an
+error naming the answer level needed for a new solve. The default is `'amplitude'`.
+`answers` must be static under JAX `jit`.
 
-The default sits where the cost cliff is. The amplitudes are boundary vectors already solved
-for; the field state is 4.25 matrices of side `2*n_orders_u*n_orders_v` **per layer** on the 2D
-path — 21.7 MB at `truncation_order=(8, 8)`, 240 MB at `(15, 15)`, 733 MB at `(20, 20)`, and
-again for every layer. The two differ by three orders of magnitude, and the runs big enough to
-care are optimization sweeps against a fixed objective, which never reconstruct a field at all.
+A source-based result's `power` stores the power evaluated over the solve's
+`power_region`, including at `'efficiency'`. Calling `boundary_power(region)`
+again integrates the retained complex fields and requires `'amplitude'` or
+`'field'`. An efficiency-only solve uses those fields to compute power, then
+releases them instead of keeping a hidden reconstruction state.
 
-**Asking for a field without declaring one is refused rather than served**, and the refusal
-names the keyword to change. It has to be a refusal: the state is kept *while the solve runs*
-or not at all, so there is nothing an argument to `reconstruct_field` could recover afterwards.
+## Coordinates
 
-`answers` must also be static under `jit`, which is why it is a declaration and not a plain
-attribute — see [`../what-a-solve-answers.md`](../what-a-solve-answers.md).
-
-## Sampling where you want it
-
-`reconstruct_field` takes a **count** or the **coordinates themselves**, per axis:
+Each sampling argument accepts a positive integer count or a nonempty 1-D array of
+finite real coordinates. `reconstruct_field` defaults to 20 on each axis;
+`boundary_fields` defaults to the cell centre, `sample_x=[0.]`, `sample_y=[0.]`.
 
 ```python
-cell = solver.reconstruct_field(sample_x=64, sample_y=64, sample_z=32)     # a uniform grid
-
-cell = solver.reconstruct_field(                                  # or name the points
-    sample_x=np.array([0.0, 133.3, 251.7]),                        # a line cut, 3 columns
-    sample_y=1,
-    sample_z=np.linspace(0, 410, 200),                             # z through the whole stack
+cell = result.reconstruct_field(
+    sample_x=[-100., 0., 100.], sample_y=[0.], sample_z=[0., 40., 120.],
 )
 ```
 
-Nothing is interpolated. The transverse kernel is a pointwise `exp(i k.r)` and each z-slice is
-an independent propagation, so a named point costs exactly what a grid point costs and returns
-the identical value — refining a grid leaves the shared points bit-for-bit unchanged, which is
-what makes that a fact rather than a hope. Ask for three columns and you pay for three, not for
-a grid you then throw away.
+Lengths use the same unit as wavelength and thickness. x/y are measured from the
+cell centre. z is height from the bottom of the stack, with +z upward, and must lie
+between 0 and `sum(thickness)`. Explicit coordinates retain the requested order.
 
-| Axis | Frame | Rules |
+- Counts on x/y include both ends of the cell. A count of one selects the negative
+  edge; `[0.]` selects the centre. On a skewed lattice, two counts sample along the
+  lattice vectors, with axes `(v,u)`. Two coordinate arrays sample the Cartesian
+  product of x/y, including on skewed lattices. Mixed count/array inputs require a
+  concrete axis-aligned lattice.
+- A z count is **per finite layer**. Counts of two or more include each layer's
+  two faces, retaining both limiting values at internal interfaces. A count of one
+  reads each layer's bottom face.
+- An explicit z at an internal interface selects the upper layer. At the two
+  outside interfaces, internal reconstruction returns the finite-layer limit.
+- A dipole's source plane is singular and must be excluded from the sample heights.
+
+## Components and shape
+
+Every result returns complex fields in one Cartesian layout:
+
+| Method | Shape | Last axis |
 | --- | --- | --- |
-| `sample_x`, `sample_y` | lengths in `period`'s units, from the **centre of the cell** | unconstrained: unsorted, non-uniform, and outside the cell all work, the last being the periodic continuation with its Bloch phase. A count spans the cell |
-| `sample_z` | **absolute height, from the bottom interface** | must lie inside the stack; an interface belongs to the layer **above** it, so `z - 1e-9` gets the lower layer's limit |
+| `reconstruct_field` | `(nz, ny, nx, 6)` | `(Ex, Ey, Ez, Z0Hx, Z0Hy, Z0Hz)` |
+| `boundary_fields` | `(ny, nx, 6)` | Same |
 
-That interface rule matters for normal components `Ez` and `Hz`, which can jump across
-material interfaces. Tangential electric and magnetic fields are continuous.
-
-With an explicit `sample_z` the returned z axis is exactly your request, in your order, rather
-than `sample_z * n_layers` with every interface appearing twice.
-
-## What comes back
-
-An array, whose shape depends on which formulation solved:
-
-| Path | Shape | Components |
-| --- | --- | --- |
-| coupled (conical, 2D) | `(n_incidences, nz, ny, nx, 6)` | `(Ex, Ey, Ez, Hx, Hy, Hz)` |
-| pure 1D TE/TM (`tetm=`) | `(nz, ny, nx, 3)` | TE is `(Ey, Hx, Hz)`, TM is `(Hy, Ex, Ez)` |
-
-`nz` is `sample_z * n_layers` for a count and `len(sample_z)` for explicit coordinates.
-A count of one samples each layer's lower face. Larger counts include both faces;
-internal interfaces appear twice, with the limiting field in each adjacent layer.
-
-The pure 1D path has **no leading incidence axis**: `tetm` declared the other degree of freedom
-away, so that solve carries one incidence and the cell has no axis to put a second on.
-
-`incidences` names which of them to reconstruct, one leading entry each, **in the order asked
-for**:
+Pure TE/TM includes zero-valued components in the same six slots. y-invariant fields
+are repeated at all requested y coordinates. `nz` is the number of layers times
+the z count, or the length of an explicit z array.
 
 ```python
-cell = solver.reconstruct_field(sample_x=8, sample_y=8, sample_z=4,
-                                incidences=('given', 's', 'p'))       # -> (3, nz, 8, 8, 6)
+E = cell[..., :3]
+H_normalized = cell[..., 3:]
+H = H_normalized / 376.730313668
 ```
 
-`'given'` is the incidence the solve was posed with; `'s'` and `'p'` are the pure variants the
-coupled paths produce for free — the same three the result object calls `given` / `s_inc` /
-`p_inc`. On the pure 1D path only `('given',)` is answerable, and naming another is refused
-rather than ignored, since a reconstruction of the wrong incidence is a complete and plausible
-field cell.
+If the electric field scale is V/m, `H` is in A/m. Wavebit solves for `Z0*H` from
+the outset; the returned magnetic components are not SI H until converted.
+The time convention is `e^{-iωt}`: the instantaneous real field is
+`real(E * exp(-1j*omega*t))`. `abs(E)` and `angle(E)` give each component's magnitude
+and phase. See [conventions](../conventions.md) for the source phase reference.
 
-**The frame is right-handed and +z points upward.** Count-based samples run from the
-bottom interface (`z=0`) to the top (`z=sum(thickness)`). Raster row 0 is at the negative-y
-edge. In vacuum `H = khat × E`; top incidence has negative net `Sz`, bottom incidence
-positive. Plotting uses upward-positive y and z. On a skewed cell the transverse output
-grid is indexed by `(v,u)` rather than `(y,x)`.
+The pure 1D TM solve uses a unit normalized magnetic input, while coupled s/p and
+`PlaneWave` inputs specify electric amplitudes. The result API preserves the solved
+input's scale; it does not rescale the field by incident power.
 
-## The one thing that cannot be traced
+## Boundary waves and polarization variants
 
-An **explicit** `sample_z` cannot be differentiated through with respect to `thickness`.
-Bucketing a `z` into a layer needs the thicknesses as numbers, and it raises rather than
-differentiating the wrong geometry. Counts stay fully traceable.
+`side='top'` or `'bottom'` selects the outside half-space limit at that interface.
+`part='incoming'`, `'outgoing'`, or `'total'` selects the wave content. At the same
+points, total equals incoming plus outgoing. Internal fields always include all
+contributions. Tangential E/H are continuous across an interface without surface
+sources; normal components can jump.
+
+Multiple sources are summed as complex fields. The observation region used for
+power averaging does not change these pointwise fields.
+
+Ordinary coupled solves also retain pure s/p responses. Select one with
+`incidence='s'` or `'p'`; the default `'incident'` returns the specified excitation.
+There is no leading incidence axis. Pure TE/TM and source-based results only accept
+`'incident'`. A missing variant raises an error rather than substituting another.
+
+## Differentiating internal fields
+
+Ordinary result fields support JAX and PyTorch differentiation through the solve and
+reconstruction. A z count follows the relative position in each layer when thickness
+changes. Explicit z arrays hold physical heights fixed and support thickness
+derivatives while each point stays in the same layer. A moving interface crossing a
+point can change its material and normal field discontinuously. Keep sample points
+inside the stack; eager validation is skipped when values are abstract under `jit`.
+
+The source-based solver still uses concrete source grouping and layer segmentation;
+this ordinary-solve differentiation guarantee does not extend to those operations.
+
+## Solver convenience calls
+
+`solver.reconstruct_field` and `solver.solve_field` remain available with their
+existing layout and sampling contracts. Ordinary solver calls use three slots for
+pure TE/TM and an incidence axis for coupled fields. Code using those layouts can
+continue to run; use the result methods above for the common six-component API.

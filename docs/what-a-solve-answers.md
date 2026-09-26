@@ -41,6 +41,15 @@ The two seams are not equally interesting, and it is worth saying which is which
 almost free and exists so a caller can say what they mean; the second is the whole reason the
 keyword exists.
 
+The same retention ladder applies to source objects (`PlaneWave`, `OrderExcitation`,
+`GaussianBeam`, and `ElectricDipole`). Their efficiency-only results keep the power
+computed over the selected observation region. Complex boundary spectra are used
+to compute that power, then released; no field snapshot is built. Boundary field
+queries and `boundary_power(region)` require `'amplitude'` or `'field'`, while
+internal reconstruction requires `'field'`. The computed power remains available
+through `result.power` at every level. `tests/test_source_answers.py` checks the
+contract, numerical agreement, and release of spectra.
+
 ## 2. What the field state costs
 
 A layer's entry is `[epz_conv_i, W, V, q, d, a_i, b]`. With `dim = 2*n_orders_u*n_orders_v` on the coupled

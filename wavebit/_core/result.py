@@ -46,6 +46,8 @@ nothing aliases the old names.
 
 import numpy as np
 
+from .field_result import ResultFields
+
 
 class ResultSub:
     """One incidence's per-order efficiencies and Fresnel amplitudes."""
@@ -104,25 +106,23 @@ class OrderView:
                 f'r_s={self.r_s!r}, r_p={self.r_p!r}, t_s={self.t_s!r}, t_p={self.t_p!r})')
 
 
-class Result:
-    """Solve result: the specified incidence plus the pure-s/p variants.
+class Result(ResultFields):
+    """Solve result: the actual incident state and the pure-s/p variants.
 
-    ``given`` holds the incidence actually asked for — by ``psi``, or by the complex
-    amplitude pair ``polarization=(a_s, a_p)``; ``s_inc`` / ``p_inc`` the pure-s and pure-p
-    variants the coupled solves produce for free. The top-level ``R`` / ``T`` delegate to
-    ``given`` when it exists and otherwise average the two pure incidences — unpolarized
-    illumination.
+    ``incident`` holds the response to the solver's incident state, including the
+    default pure-s state when no polarization was specified. ``s_inc`` / ``p_inc``
+    hold the pure-s and pure-p responses when the solve computes those variants.
+    The top-level ``R``, ``T``, ``r_s``, ``r_p``, ``t_s``, and ``t_p`` read the
+    corresponding arrays from ``incident`` without copying them.
 
-    All three were spelled ``res`` / ``res_te_inc`` / ``res_tm_inc`` until 2026-08-20:
-    ``res`` was a result inside a Result and also the universal local name for the whole
-    object, and the ``te``/``tm`` pair contradicted the prose beside it, which has always
-    called these the pure-s and pure-p variants. ``.s_inc``/``.p_inc`` rather than ``.s``/
-    ``.p`` because ``R_s`` and ``r_s`` on the sub-result are about the *outgoing*
-    polarization; the suffix says this one names the incidence.
+    A manually constructed result with ``incident=None`` averages the available
+    pure-s/p power responses. It has no incident-state amplitude: the amplitude
+    shortcuts raise rather than averaging complex coefficients.
     """
 
-    def __init__(self, given=None, s_inc=None, p_inc=None, order_window=None):
-        self.given = given
+    def __init__(self, incident=None, s_inc=None, p_inc=None, order_window=None, field_state=None):
+        self._field_state = field_state
+        self.incident = incident
         self.s_inc = s_inc
         self.p_inc = p_inc
         #: The orders this result is on: ``((centre_u, half_u), (centre_v, half_v))``, the same
@@ -173,29 +173,56 @@ class Result:
 
     # pytree protocol (see ResultSub)
     def tree_flatten(self):
-        return (self.given, self.s_inc, self.p_inc), self.order_window
+        return (self.incident, self.s_inc, self.p_inc, self._field_state), self.order_window
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
-        return cls(*children, order_window=aux_data)
+        return cls(*children[:3], order_window=aux_data, field_state=children[3])
 
     def _delegate(self, name):
-        if self.given is not None:
-            return getattr(self.given, name)
+        if self.incident is not None:
+            return getattr(self.incident, name)
         te = getattr(self.s_inc, name) if self.s_inc is not None else None
         tm = getattr(self.p_inc, name) if self.p_inc is not None else None
         if te is not None and tm is not None:
             return 0.5 * (te + tm)
         return te if te is not None else tm
 
+    def _incident_amplitude(self, name):
+        if self.incident is None:
+            raise ValueError(
+                'complex amplitudes require an incident result; a power average has '
+                'no single complex amplitude. Read s_inc or p_inc for a pure incidence.')
+        return getattr(self.incident, name)
+
+    @property
+    def r_s(self):
+        """Reflected s amplitudes for the incident state; None at efficiency-only level."""
+        return self._incident_amplitude('r_s')
+
+    @property
+    def r_p(self):
+        """Reflected p amplitudes for the incident state; None at efficiency-only level."""
+        return self._incident_amplitude('r_p')
+
+    @property
+    def t_s(self):
+        """Transmitted s amplitudes for the incident state; None at efficiency-only level."""
+        return self._incident_amplitude('t_s')
+
+    @property
+    def t_p(self):
+        """Transmitted p amplitudes for the incident state; None at efficiency-only level."""
+        return self._incident_amplitude('t_p')
+
     @property
     def R(self):
-        """Reflection efficiency per order (unpolarized average if no ``psi`` was given)."""
+        """Reflection efficiency per order; averages variants only if incident is absent."""
         return self._delegate('R')
 
     @property
     def T(self):
-        """Transmission efficiency per order (unpolarized average if no ``psi`` was given)."""
+        """Transmission efficiency per order; averages variants only if incident is absent."""
         return self._delegate('T')
 
     @property
@@ -213,13 +240,13 @@ class Result:
     def absorption(self):
         """Finite-stack absorption: ``power_entering - T.sum()``.
 
-        Unpolarized average when no given incidence exists. The absorbing
+        Average of the available variants when no incident result exists. The absorbing
         half-spaces are excluded. NaN for complex transverse wavevectors.
         """
         return self._delegate('absorption')
 
     def order(self, m, n=0):
-        """Scalars for diffraction order ``(m, n)`` of the solved (``given``) incidence.
+        """Scalars for diffraction order ``(m, n)`` of the solved (``incident``) incidence.
 
         Spares the caller the array layout: efficiencies and amplitudes are stored as
         ``(n_orders_v, n_orders_u)`` grids — note ``y`` first, the transpose of the
@@ -229,7 +256,7 @@ class Result:
         caller's problem, and it stopped being derivable from the declared ``truncation_order`` the
         moment a window could widen.
         """
-        sub = self.given if self.given is not None else (
+        sub = self.incident if self.incident is not None else (
             self.s_inc if self.s_inc is not None else self.p_inc)
         if sub is None:
             raise ValueError('no solved incidence to index into')

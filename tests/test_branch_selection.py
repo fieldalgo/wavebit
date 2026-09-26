@@ -115,7 +115,7 @@ def _amp(n_top, n_bot, n_layer, d, theta, tetm):
                             thickness=[d])
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        res = solver.solve().given
+        res = solver.solve().incident
     amp = np.asarray(res.r_s if tetm == 'te' else res.r_p).ravel()
     return complex(amp[len(amp) // 2])
 
@@ -214,7 +214,7 @@ def _grating(tetm, thickness, **kw):
 def _run(cfg):
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        res = wavebit.rcwa(**cfg).solve().given
+        res = wavebit.rcwa(**cfg).solve().incident
     return np.asarray(res.r_s if cfg['tetm'] == 0 else res.r_p).ravel()
 
 

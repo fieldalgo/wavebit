@@ -425,7 +425,7 @@ def solver_amps(ns, thicknesses, wavelength, theta, tetm, path, algo='ETM'):
         solver = wavebit.rcwa(phi=0.0, psi=(np.pi / 2 if tetm == 'te' else 0.0), truncation_order=[0, 0],
                                 period=[wavelength * 2, wavelength * 2],
                                 structure=eps_from_index(np.array(cell)), **common)
-    res = solver.solve().given
+    res = solver.solve().incident
     r = np.asarray(res.r_s if tetm == 'te' else res.r_p).ravel()
     t = np.asarray(res.t_s if tetm == 'te' else res.t_p).ravel()
     return complex(r[len(r) // 2]), complex(t[len(t) // 2])
@@ -474,10 +474,10 @@ def test_absorbing_incident_reflectance_matches_airy(beta, algo):
     R_2d, res_2d = eff('2d')
     expected = abs(analytic_r(ns, ds, WL, theta, 'tm'))**2
 
-    r_1d = complex(np.asarray(res_1d.given.r_p).ravel()[0])
+    r_1d = complex(np.asarray(res_1d.incident.r_p).ravel()[0])
     assert R_1d == pytest.approx(expected, abs=1e-12)
     assert R_2d == pytest.approx(expected, abs=1e-12)
-    r_2d = complex(np.asarray(res_2d.given.r_p).ravel()[0])
+    r_2d = complex(np.asarray(res_2d.incident.r_p).ravel()[0])
     assert abs(r_2d - r_1d) < 1e-12                                  # amplitudes agree
 
 

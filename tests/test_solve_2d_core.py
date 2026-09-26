@@ -255,7 +255,7 @@ def test_empty_stack_incidence_columns_match_complex_fresnel_amplitudes(answers,
     result = solve_2d(900., kx, ky, *n, theta, pair, [], empty, empty, empty,
                       phi=phi, answers=answers, mu_top=mu_top, mu_bot=mu_bot,
                       eps_top=eps[0], eps_bot=eps[1])
-    for name, (a_s, a_p) in (('given', pair), ('s_inc', (1., 0.)), ('p_inc', (0., 1.))):
+    for name, (a_s, a_p) in (('incident', pair), ('s_inc', (1., 0.)), ('p_inc', (0., 1.))):
         for key, coefficient in zip(('r_s', 'r_p', 't_s', 't_p'),
                                     (a_s*rs, a_p*rp, a_s*ts, a_p*tp)):
             expected = np.zeros((5, 3), complex)

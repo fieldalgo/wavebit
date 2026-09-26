@@ -25,7 +25,7 @@ def make_solver(algorithm='SMM', backend=0, side='top', **overrides):
 
 
 def compare_results(actual, expected, atol=3e-11):
-    for channel in ('given', 's_inc', 'p_inc'):
+    for channel in ('incident', 's_inc', 'p_inc'):
         for name in ('r_s', 'r_p', 't_s', 't_p', 'R', 'T', 'power_entering', 'absorption'):
             np.testing.assert_allclose(host(getattr(getattr(actual, channel), name)),
                                        host(getattr(getattr(expected, channel), name)),
@@ -41,7 +41,7 @@ def test_tilted_magnetic_pattern_fields_match_etm(side, backend):
     assert smm.formulation_assigned == '4ff'
     # Sample either side of the internal interface and request all incident channels.
     samples = dict(sample_x=3, sample_y=2, sample_z=[0., 36., 73.-1e-7, 73.+1e-7, 124.],
-                   incidences=('given', 's', 'p'))
+                   incidences=('incident', 's', 'p'))
     np.testing.assert_allclose(host(smm.reconstruct_field(**samples)),
                                host(etm.reconstruct_field(**samples)), atol=2e-10, rtol=0)
     assert all(np.isfinite(host(block)).all() for block in smm.scattering.blocks)

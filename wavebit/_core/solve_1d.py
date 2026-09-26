@@ -498,8 +498,8 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
         res = _pack(zeros_amp, R, zeros_amp, Tt * ((n_top / mu_top) / (n_bot / mu_bot)),
                     zeros_eff, de_ri, zeros_eff, de_ti, power_entering=entering)
     if not keep_field:
-        return {'given': res}
-    return {'given': res, 'layer_info_list': layer_info_list, 'T1': T1}
+        return {'incident': res}
+    return {'incident': res, 'layer_info_list': layer_info_list, 'T1': T1}
 
 
 def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
@@ -839,7 +839,7 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
         variants.append(_pack(*(a[i] for a in amps2), *(e[i] for e in eff2),
                               power_entering=entry))
 
-    out = {'given': res, 's_inc': variants[0], 'p_inc': variants[1]}
+    out = {'incident': res, 's_inc': variants[0], 'p_inc': variants[1]}
     if answers.covers(Answers.FIELD):
         # Field reconstruction consumes T1 for the given incidence plus the two variants.
         out['T1'] = xp.stack([big_T1, big_T1_tetm[:, 0:1], big_T1_tetm[:, 1:2]])

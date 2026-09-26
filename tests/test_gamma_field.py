@@ -74,7 +74,7 @@ def test_the_grating_keeps_the_previous_mechanisms_digits():
     s.structure = [dict(background=1.0, shapes=[dict(type='rectangle', cx=0.0, cy=0.0,
                                                      lx=350.0, ly=PERIOD, angle=0.0,
                                                      material=4.0)])]
-    assert abs(float(np.sum(s.solve().given.T)) - 0.9763112427108831) < 1e-13
+    assert abs(float(np.sum(s.solve().incident.T)) - 0.9763112427108831) < 1e-13
 
 
 # ------------------------------------------------------------------- the threshold it has
@@ -290,7 +290,7 @@ def test_x_orders_cannot_change_an_x_invariant_answer():
         s.structure = [dict(background=1.0, shapes=[dict(type='rectangle', cx=0.0, cy=0.0,
                                                          lx=PERIOD, ly=350.0, angle=0.0,
                                                          material=4.0)])]
-        return float(np.sum(s.solve().given.T))
+        return float(np.sum(s.solve().incident.T))
 
     for n in (3, 5, 7):
         assert abs(total(0, n) - total(n, n)) < 1e-12

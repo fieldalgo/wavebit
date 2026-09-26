@@ -46,7 +46,7 @@ def _solve(tetm, phi, structure):
     solver = wavebit.rcwa(**incidence, **CFG)
     solver.phi = phi
     solver.structure = structure
-    res = solver.solve().given
+    res = solver.solve().incident
     return np.squeeze(np.asarray(res.R)), np.squeeze(np.asarray(res.T))
 
 

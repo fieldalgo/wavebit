@@ -1494,7 +1494,7 @@ class CoreSolveMixin:
         return value
 
     def _default_psi(self):
-        """The unstated polarization: 45 degrees, so `s` and `p` arrive with equal amplitude.
+        """The unstated polarization: pure s, represented by ``psi = pi/2``.
 
         Set rather than defaulted-at-read because `psi` is a traced leaf: it has to exist as an
         array before anything differentiates through it, and `_psi_given` -- not its value --
@@ -1926,7 +1926,7 @@ class CoreSolveMixin:
         amplitudes. It is converted into the shared result layout here.
         """
         if not isinstance(out, dict):
-            out = {'given': _efficiency_only(*out)}
+            out = {'incident': _efficiency_only(*out)}
         self.layer_info_list = out.pop('layer_info_list', [])
         self.T1 = out.pop('T1', None)
         #: The scene this solve was posed with, so `reconstruct_field` can tell whether it is
@@ -2941,11 +2941,14 @@ class CoreFactorizationMixin:
                                          mu_top=mu_top, mu_bot=mu_bot,
                                          eps_top=eps_top, eps_bot=eps_bot)
 
-        given = self._RESULT_SUB(**result_dict['given']) if 'given' in result_dict else None
+        incident = self._RESULT_SUB(**result_dict['incident']) if 'incident' in result_dict else None
         s_inc = self._RESULT_SUB(**result_dict['s_inc']) if 's_inc' in result_dict else None
         p_inc = self._RESULT_SUB(**result_dict['p_inc']) if 'p_inc' in result_dict else None
 
-        result = self._RESULT(given, s_inc, p_inc, order_window=self.order_window)
+        result = self._RESULT(incident, s_inc, p_inc, order_window=self.order_window)
+        from .field_result import ordinary_state
+        result._field_state = ordinary_state(self, result, eps_top=eps_top, eps_bot=eps_bot,
+                                             mu_top=mu_top, mu_bot=mu_bot)
 
         return result
 
@@ -3054,7 +3057,7 @@ class CoreFactorizationMixin:
             'the field after re-solving. Call solve() again first.')
 
     @device_scoped
-    def reconstruct_field(self, sample_x=20, sample_y=20, sample_z=20, incidences=('given',)):
+    def reconstruct_field(self, sample_x=20, sample_y=20, sample_z=20, incidences=('incident',)):
         """Reconstruct the field from the state left behind by the last solve.
 
         ``sample_x`` / ``sample_y`` / ``sample_z`` each take either a **count** -- a uniform
@@ -3073,14 +3076,14 @@ class CoreFactorizationMixin:
         exactly the request, in the caller's order, rather than ``sample_z * n_layers``.
 
         ``incidences`` names which of the incidences the solve carries to reconstruct, one
-        leading axis entry each, **in the order asked for**: ``'given'`` is the incidence the
+        leading axis entry each, **in the order asked for**: ``'incident'`` is the incidence the
         solve was posed with (``psi``, or the ``polarization`` pair), and ``'s'`` / ``'p'``
         are the pure variants the coupled paths produce for free -- the same three the result
-        object calls ``given`` / ``s_inc`` / ``p_inc``. It was a positional triple of booleans
+        object calls ``incident`` / ``s_inc`` / ``p_inc``. It was a positional triple of booleans
         (``set_field_input``) until 2026-08-20; booleans are now refused by name, since a
         reconstruction of the wrong incidence is a complete and plausible field cell.
 
-        On the pure 1D TE/TM path only ``('given',)`` is answerable -- ``tetm`` declared the
+        On the pure 1D TE/TM path only ``('incident',)`` is answerable -- ``tetm`` declared the
         other degree of freedom away, so that solve carries one incidence and the cell it
         returns has no axis to put a second on. Naming ``'s'`` or ``'p'`` there is refused
         rather than ignored, which is what it was until 2026-08-20.
@@ -3160,7 +3163,7 @@ class CoreFactorizationMixin:
         return result, self.reconstruct_field(sample_x, sample_y, sample_z, incidences)
 
     @device_scoped
-    def solve_field(self, sample_x=20, sample_y=20, sample_z=20, incidences=('given',),
+    def solve_field(self, sample_x=20, sample_y=20, sample_z=20, incidences=('incident',),
                     geometry=None, **kwargs):
         """Solve and reconstruct the field in one call, eagerly.
 

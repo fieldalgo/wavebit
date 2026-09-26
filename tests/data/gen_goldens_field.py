@@ -99,11 +99,11 @@ CASES = {
                       thickness=[0.18, 0.13], top=1., bot=1.9599999999999997, theta=0.25,
                       truncation_order=[2, 1], period=[0.85, 0.8], wavelength=0.66, formulation='4ff'),
 }
-VARIANTS = (('default', ('given',)), ('all', ('given', 's', 'p')))
+VARIANTS = (('default', ('incident',)), ('all', ('incident', 's', 'p')))
 
 #: The cases whose solve carries three incidences. A ``tetm`` declaration on a one-row raster
 #: routes to the pure 1D TE/TM path, which carries exactly one -- the declaration is what takes
-#: the other degree of freedom away -- so ``('given', 's', 'p')`` is refused there rather than
+#: the other degree of freedom away -- so ``('incident', 's', 'p')`` is refused there rather than
 #: answered (:func:`wavebit._core.fields.refuse_extra_incidences`, 2026-08-20).
 COUPLED = tuple(name for name, kw in CASES.items() if 'tetm' not in kw)
 

@@ -46,7 +46,7 @@ def _solve(structure, period, truncation_order, phi, psi, theta=_THETA, backend=
     return wavebit.rcwa(backend=backend, top=1.0, bot=1.0, thickness=_THICK,
                         wavelength=_WL, theta=theta, phi=phi, psi=psi, factorization='nvf',
                         structure=structure, period=list(period), truncation_order=list(truncation_order),
-                        **kw).solve().given
+                        **kw).solve().incident
 
 
 def _order_kxy(phi, theta=_THETA, px=_PX, py=_PY, fx=_FX, fy=_FY):
@@ -130,7 +130,7 @@ def test_the_amplitudes_are_the_field_projected_on_zhat_cross_k():
     solver = wavebit.rcwa(backend=0, top=1.0, bot=1.0, thickness=_THICK, wavelength=_WL,
                           theta=_THETA, phi=np.pi / 2, psi=_PSI, factorization='nvf',
                           structure=_UC, period=[_PX, _PY], truncation_order=[_FX, _FY], answers='field')
-    res = solver.solve().given
+    res = solver.solve().incident
 
     # More sample points than retained orders, so the decomposition is overdetermined and a
     # missing order would show up as a residual instead of being absorbed.

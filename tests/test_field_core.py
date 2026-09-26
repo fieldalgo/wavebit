@@ -94,7 +94,7 @@ def test_the_1d_all_keys_are_the_ignored_argument_frozen(name):
 
 @pytest.mark.parametrize('bad,match', [
     ((True, False, False), r'tuple of booleans'),      # the retired `set_field_input` triple
-    ('given', r'bare string'),                         # one name is still a tuple
+    ('incident', r'bare string'),                         # one name is still a tuple
     ((), r'nothing requested'),
     (('te',), r'not an incidence this solve carries'),  # the `tetm` vocabulary, not this one
     (('s', 's'), r'repeats an incidence'),
@@ -111,7 +111,7 @@ def test_a_request_that_names_no_incidence_is_refused(bad, match):
         solver.reconstruct_field(incidences=bad, **RES)
 
 
-@pytest.mark.parametrize('which', [('given', 's', 'p'), ('s',), ('p', 'given')])
+@pytest.mark.parametrize('which', [('incident', 's', 'p'), ('s',), ('p', 'incident')])
 @pytest.mark.parametrize('name', [n for n in CASES if n not in COUPLED])
 def test_the_pure_1d_path_refuses_an_incidence_it_never_solved(name, which):
     """``tetm`` declared the other polarization away; asking for it back is refused.
@@ -135,7 +135,7 @@ def test_the_one_incidence_it_does_carry_is_still_reconstructed(name):
     assertion here would still pass.
     """
     want = upward_reference(name, GOLDEN[f'{name}__default'])
-    got = np.asarray(solved(name).reconstruct_field(incidences=('given',), **RES))
+    got = np.asarray(solved(name).reconstruct_field(incidences=('incident',), **RES))
     assert got.shape == want.shape
     # the drift test's tolerance, not equality: these two 1D cases sit ~1e-14 off the freeze
     assert np.allclose(want, got, atol=1e-12, rtol=0), np.max(np.abs(want - got))

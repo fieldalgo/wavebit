@@ -109,7 +109,7 @@ def test_smm_matches_tmm(name, kwargs, kind):
     tmm = _solve('ETM', kwargs)
     smm = _solve('SMM', kwargs)
 
-    for variant in ('given', 's_inc', 'p_inc'):
+    for variant in ('incident', 's_inc', 'p_inc'):
         a, b = getattr(tmm, variant), getattr(smm, variant)
         if a is None:                      # 1D TE/TM reports only the psi incidence
             assert b is None, variant
@@ -236,7 +236,7 @@ def _incidences_of(solver):
     TE/TM path carries one: ``tetm`` declared the other degree of freedom away, and asking it
     for ``'s'`` / ``'p'`` is refused rather than answered.
     """
-    return ('given',) if solver.grating_type == 0 else ('given', 's', 'p')
+    return ('incident',) if solver.grating_type == 0 else ('incident', 's', 'p')
 
 
 def _field(algo, kwargs, **res):
@@ -650,7 +650,7 @@ def test_the_kept_blocks_are_the_amplitudes_the_solve_reported(side, block, repo
     solver, result = _lit(side)
     S = solver.scattering
     got = (np.asarray(getattr(S, block)) @ _delta(S.S11)).ravel()
-    assert np.abs(got - np.asarray(getattr(result.given, reported)).ravel()).max() < 1e-12
+    assert np.abs(got - np.asarray(getattr(result.incident, reported)).ravel()).max() < 1e-12
 
 
 def test_one_solve_carries_both_illumination_directions():
@@ -669,7 +669,7 @@ def test_one_solve_carries_both_illumination_directions():
     delta = _delta(S.S11)
     for block, reported in (('S22', 'r_s'), ('S12', 't_s')):
         got = (np.asarray(getattr(S, block)) @ delta).ravel()
-        want = np.asarray(getattr(from_below.given, reported)).ravel()
+        want = np.asarray(getattr(from_below.incident, reported)).ravel()
         assert np.abs(got - want).max() < 1e-12, block
 
 

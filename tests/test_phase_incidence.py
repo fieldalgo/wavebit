@@ -85,8 +85,8 @@ def test_interface_power_at_the_requested_phase_angle(route, side, pol, mu):
     assert result.T.sum() == pytest.approx(T[j], abs=4e-12)
     assert result.power_entering == pytest.approx(T[j], abs=4e-12)
     assert result.absorption == pytest.approx(0., abs=4e-12)
-    np.testing.assert_allclose(getattr(result.given, 'r_' + 'sp'[j]), r[j], atol=4e-12, rtol=0)
-    np.testing.assert_allclose(getattr(result.given, 't_' + 'sp'[j]), t[j], atol=4e-12, rtol=0)
+    np.testing.assert_allclose(getattr(result.incident, 'r_' + 'sp'[j]), r[j], atol=4e-12, rtol=0)
+    np.testing.assert_allclose(getattr(result.incident, 't_' + 'sp'[j]), t[j], atol=4e-12, rtol=0)
 
 
 @pytest.mark.parametrize('backend', [0, 1, 2])

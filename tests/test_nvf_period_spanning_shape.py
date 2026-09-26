@@ -238,8 +238,8 @@ def test_y_orders_cannot_change_a_y_invariant_answer(tox):
     square = _solver(tox, tox)
     square.structure = _grating_layer()
 
-    assert float(np.sum(flat.solve().given.T)) == pytest.approx(
-        float(np.sum(square.solve().given.T)), abs=1e-12)
+    assert float(np.sum(flat.solve().incident.T)) == pytest.approx(
+        float(np.sum(square.solve().incident.T)), abs=1e-12)
 
 
 @pytest.mark.parametrize('tox', [3, 7, 13])
@@ -260,8 +260,8 @@ def test_the_two_paths_agree_order_for_order(tox):
     raster.structure = (np.where(np.abs(x)[None, :] <= 175.0, 4.0, 1.0)
                         * np.ones((n, 1)))[None]
 
-    assert float(np.sum(shape.solve().given.T)) == pytest.approx(
-        float(np.sum(raster.solve().given.T)), abs=1e-12)
+    assert float(np.sum(shape.solve().incident.T)) == pytest.approx(
+        float(np.sum(raster.solve().incident.T)), abs=1e-12)
 
 
 def test_growing_a_rod_into_a_slab_has_no_cliff_at_the_period():
@@ -275,13 +275,13 @@ def test_growing_a_rod_into_a_slab_has_no_cliff_at_the_period():
     """
     span = _solver(5, 5)
     span.structure = _grating_layer()
-    at_period = float(np.sum(span.solve().given.T))
+    at_period = float(np.sum(span.solve().incident.T))
 
     previous = None
     for gap in (1e-1, 1e-2, 1e-4, 1e-6):
         near = _solver(5, 5)
         near.structure = _grating_layer(ly=PERIOD - gap)
-        value = abs(float(np.sum(near.solve().given.T)) - at_period)
+        value = abs(float(np.sum(near.solve().incident.T)) - at_period)
         if previous is not None:
             assert value < previous, f'not approaching the spanning value at gap {gap}'
         previous = value
@@ -301,7 +301,7 @@ def test_every_backend_spans_the_same_way(backend):
     pytest.importorskip({0: 'numpy', 1: 'jax', 2: 'torch'}[backend])
     solver = _solver(5, 5, backend=backend)
     solver.structure = _grating_layer()
-    assert float(np.sum(np.asarray(solver.solve().given.T))) == pytest.approx(
+    assert float(np.sum(np.asarray(solver.solve().incident.T))) == pytest.approx(
         0.976311242711, abs=1e-9)
 
 
@@ -336,7 +336,7 @@ def test_a_spanning_shape_still_traces_and_differentiates():
     assert frozen.gamma_plans[0].pairs                  # the spanning pair, recorded
 
     def sum_t(ly, geometry=None):
-        return jnp.sum(solver.solve(structure=layer(ly), geometry=geometry).given.T)
+        return jnp.sum(solver.solve(structure=layer(ly), geometry=geometry).incident.T)
 
     eager = float(sum_t(jnp.asarray(PERIOD)))
     replayed = jax.jit(lambda ly: sum_t(ly, frozen))(jnp.asarray(PERIOD))
@@ -345,7 +345,7 @@ def test_a_spanning_shape_still_traces_and_differentiates():
     def built_inside(ly):
         inner = _solver(4, 4, backend=1)
         inner.structure = layer(ly)
-        return jnp.sum(inner.solve().given.T)
+        return jnp.sum(inner.solve().incident.T)
 
     with pytest.raises(ValueError, match='freeze_geometry'):
         jax.jit(built_inside)(jnp.asarray(PERIOD))       # a traced basis and no record
@@ -437,7 +437,7 @@ def test_the_x_fold_carries_its_own_weight():
                          truncation_order=dict(x=5, y=5), top=1, bot=1,
                          wavelength=550.0, psi=psi)
         s.structure = [dict(background=1.0, shapes=[_bar(lx=lx, ly=ly, angle=0.0)])]
-        return float(np.sum(s.solve().given.T))
+        return float(np.sum(s.solve().incident.T))
 
     # 1.3e-14 measured, against 2.7e-4 with the x fold deleted -- six orders either side of
     # this line. Not exact equality: the s/p exchange reaches the same physics through a

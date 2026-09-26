@@ -151,7 +151,7 @@ def main():
     # The golden's key component is the legacy attribute name; today's is beside it.
     # See SUBS in tests/test_golden_legacy_parity.py for why the file keeps the old
     # vocabulary rather than being rewritten.
-    for sub, attr_name in (('res', 'given'), ('res_te_inc', 's_inc'), ('res_tm_inc', 'p_inc')):
+    for sub, attr_name in (('res', 'incident'), ('res_te_inc', 's_inc'), ('res_tm_inc', 'p_inc')):
         s = getattr(result, attr_name)
         if s is None:
             continue
@@ -166,7 +166,7 @@ def main():
         for j, nm in enumerate(('epz_i', 'W', 'V', 'q', 'd', 'A_i', 'B')):
             out[f'{NAME}__layer{i}__{nm}'] = np.asarray(li[j])
 
-    energy = float(np.sum(np.asarray(result.given.R)) + np.sum(np.asarray(result.given.T)))
+    energy = float(np.sum(np.asarray(result.incident.R)) + np.sum(np.asarray(result.incident.T)))
     if abs(energy - 1.0) > 1e-11:
         raise SystemExit(f'R + T = {energy:.12f} on a lossless stack - do not freeze this')
 

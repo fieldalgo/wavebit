@@ -9,6 +9,8 @@ from dataclasses import dataclass
 import numpy as np
 
 from .backend import as_array, check_finite
+from .enums import Answers, answers_of
+from .field_result import ResultFields, source_state
 from .conventions import boundary_kz, parse_excitation
 from .sources import (PlaneWave, OrderExcitation, GaussianBeam, ElectricDipole, source_list, _positive)
 from .source_expansion import resolve_wave, gaussian_waves, dipole_layers
@@ -158,17 +160,32 @@ def _sinc(xp, value):
     return xp.where(small, 1 - value**2/6 + value**4/120, xp.sin(safe)/safe)
 
 
-class CoherentResult:
-    """Coherent boundary spectra and optional internal fields from one wavelength."""
+class CoherentResult(ResultFields):
+    """Power and retained fields from one wavelength.
+
+    ``efficiency`` retains the computed power only; ``amplitude`` also retains
+    boundary fields and supports power integration over another region;
+    ``field`` additionally retains the per-layer reconstruction state.
+    """
 
     def __init__(self, xp, spectra, groups, lattice, wavelength, thickness, region,
-                 has_internal_sources=False, localized_sources=False):
-        self._xp, self._spectra, self._groups = xp, spectra, groups
+                 has_internal_sources=False, localized_sources=False,
+                 answers=Answers.AMPLITUDE):
+        answers = answers_of(answers)
+        self._xp, self._spectra = xp, spectra
         self.lattice, self.wavelength, self.thickness = lattice, wavelength, thickness
         self.has_internal_sources = has_internal_sources
         self.localized_sources = localized_sources
         self.group_count = len(groups)
+        # All rungs use the coherent spectra to evaluate power. Only the higher
+        # rungs retain those spectra after this calculation.
         self.power = self.boundary_power(region)
+        self._groups = groups if answers.covers(Answers.FIELD) else ()
+        self._field_state = None
+        if answers.covers(Answers.AMPLITUDE):
+            self._field_state = source_state(spectra, self._groups, lattice, wavelength, thickness)
+        else:
+            self._spectra = None
 
     @property
     def output_top(self):
@@ -190,35 +207,20 @@ class CoherentResult:
         a, b = (self._spectra[side, p] for p in ('incoming', 'outgoing'))
         return _Spectrum(a.kxy, a.field + b.field)
 
-    def boundary_fields(self, side, sample_x, sample_y=(0.,), part='total'):
-        """Complex boundary fields, shape (Ny,Nx,6), in public xyz coordinates.
-
-        Components are (Ex,Ey,Ez,Z0Hx,Z0Hy,Z0Hz). Sample coordinates use the
-        cell-centred length units of the scene; each boundary is its own phase
-        reference for incoming amplitudes. No intensity or phase is discarded.
-        """
-        s = self._spectrum(side, part)
-        return self._expand(s.kxy, s.field, sample_x, sample_y)
-
-    def _expand(self, kxy, coefficients, sample_x, sample_y):
-        xp = self._xp
-        x = as_array(xp, sample_x, dtype=kxy.dtype, device=getattr(kxy, 'device', None))
-        y = as_array(xp, sample_y, dtype=kxy.dtype, device=getattr(kxy, 'device', None))
-        if (x.ndim != 1 or y.ndim != 1 or not x.shape[0] or not y.shape[0]
-                or not np.all(np.isfinite(_host(x))) or not np.all(np.isfinite(_host(y)))
-                or np.any(_host(x).imag) or np.any(_host(y).imag)):
-            raise ValueError('sample_x and sample_y must be nonempty finite real coordinate arrays')
-        phase = xp.exp(1j * (y[:, None, None]*kxy[None, None, :, 1]
-                            + x[None, :, None]*kxy[None, None, :, 0]))
-        return phase @ coefficients
-
     def boundary_power(self, region=None):
         """Integrate coherently: 'cell', 'infinite', or ((xmin,xmax),(ymin,ymax)).
 
         Return mean fluxes, not watts. The common vacuum-impedance scale cancels
         from output fractions. A finite rectangle's total flux is its mean times
         area. Multiple Bloch sectors require an explicit observation region.
+
+        Reintegrating requires answers='amplitude' or 'field' at solve time.
+        The power computed during an efficiency-only solve remains in ``power``.
         """
+        if self._spectra is None:
+            raise RuntimeError(
+                "Reintegrating boundary power requires solve(answers='amplitude') "
+                "or answers='field'. Read result.power for the power already computed.")
         xp = self._xp
         if self.localized_sources and (region is None or isinstance(region, str)):
             raise ValueError('GaussianBeam and isolated dipoles require a finite rectangle power_region.')
@@ -265,41 +267,6 @@ class CoherentResult:
         return BoundaryPower(it, ib, ot, ob, net, region,
                              net/incident if periodic and not self.has_internal_sources else None,
                              self.has_internal_sources)
-
-    def reconstruct_field(self, sample_x, sample_y, sample_z):
-        """Internal complex fields at explicit xyz points; shape (Nz,Ny,Nx,6)."""
-        xp = self._xp
-        zvals = np.asarray(sample_z, dtype=float)
-        edges = np.r_[0., np.cumsum(_host(self.thickness).real)]
-        if (len(edges) < 2 or zvals.ndim != 1 or not zvals.size
-                or not np.all(np.isfinite(zvals)) or np.any(zvals < 0) or np.any(zvals > edges[-1])):
-            raise ValueError('sample_z must contain finite heights inside the layer stack')
-        if not all(g['internal'] is not None for g in self._groups):
-            raise RuntimeError("Set answers='field' before solving to reconstruct internal fields.")
-        planes = []
-        for z in zvals:
-            summed = None
-            for g in self._groups:
-                ge = g['edges']
-                if any(np.isclose(z, h, rtol=0, atol=1e-12*max(1., edges[-1])) for h in g['source_heights']):
-                    raise ValueError('The point-source plane has a singular field; sample strictly above or below it.')
-                gi = min(int(np.searchsorted(ge, z, side='right'))-1, len(ge)-2)
-                eps, d, lf, pf, lb, pb, af, ab = g['internal'][gi]
-                state = pf @ (xp.exp(1j*g['k0']*lf*(z-ge[gi]))*af)
-                state = state + pb @ (xp.exp(1j*g['k0']*lb*(z-ge[gi+1]))*ab)
-                n, kx, ky = g['n'], g['kx'], g['ky']
-                ex, ey, hx, hy = [state[j*n:(j+1)*n] for j in range(4)]
-                ez = eps['ezz_i'] @ (ky*hx - kx*hy - eps['ezx']@ex - eps['ezy']@ey)
-                mu = eps.get('mu_blocks')
-                hz = kx*ey - ky*ex
-                if mu is not None:
-                    hz = mu['ezz_i'] @ (hz - mu['ezx']@hx - mu['ezy']@hy)
-                coefficients = xp.stack([ex, ey, ez, hx, hy, hz], axis=-1)
-                f = self._expand(g['kxy'], coefficients, sample_x, sample_y)
-                summed = f if summed is None else summed + f
-            planes.append(summed)
-        return xp.stack(planes)
-
 
 class CoherentSolver:
     """Eager, side-resolved illumination using the Cartesian 4ff SMM.
@@ -457,7 +424,7 @@ class CoherentSolver:
                              "'infinite', 'cell', or ((xmin,xmax),(ymin,ymax)).")
         spectra = {(side, part): [] for side in ('top', 'bottom') for part in ('incoming', 'outgoing')}
         solved = []
-        keep = scene.answers == 'field'
+        keep = scene.answers.covers(Answers.FIELD)
         for group in groups:
             offsets = np.array([b[1] for b in group['inputs']] or [[0, 0]])
             low, high = offsets.min(axis=0)-half, offsets.max(axis=0)+half
@@ -533,11 +500,11 @@ class CoherentSolver:
         joined = {key: _Spectrum(xp.concat([s.kxy for s in items]), xp.concat([s.field for s in items]))
                   for key, items in spectra.items()}
         result = CoherentResult(xp, joined, solved, lattice, scene.wavelength, scene.thickness,
-                                self.power_region, bool(dipoles), localized)
+                                self.power_region, bool(dipoles), localized, answers=scene.answers)
         self._result = result
         return result
 
-    def reconstruct_field(self, sample_x, sample_y, sample_z):
+    def reconstruct_field(self, sample_x=20, sample_y=20, sample_z=20):
         if self._result is None:
             raise RuntimeError('Call solve() before reconstruct_field().')
         return self._result.reconstruct_field(sample_x, sample_y, sample_z)

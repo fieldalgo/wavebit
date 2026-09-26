@@ -2,6 +2,10 @@
 
 Written: 2026-08-11.
 
+Updated 2026-09-24: manifest version **12** names the specified-incidence result
+`incident` and publishes direct amplitude access through `result.r_s`, `result.r_p`,
+`result.t_s`, and `result.t_p`. The field-reconstruction selector is also `'incident'`.
+
 Updated 2026-09-21: manifest version **11** records automatic material dispersion
 evaluation and the numerical axes `raster_normal_method` and `nvf_projector`;
 JobSpec version **10** uses bottom-to-top layers with +z upward, retains material tables and names the

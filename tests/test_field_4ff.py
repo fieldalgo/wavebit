@@ -148,7 +148,7 @@ def twin_cell(formulation, name, theta_deg, side, backend=0):
     mee.solve()
     assert mee.formulation_assigned == formulation
     return np.asarray(mee.reconstruct_field(sample_x=7, sample_y=5, sample_z=6,
-                                          incidences=('given', 's', 'p')))
+                                          incidences=('incident', 's', 'p')))
 
 
 @pytest.mark.parametrize('side', ['top', 'bottom'])
@@ -162,7 +162,7 @@ def test_the_two_formulations_reconstruct_the_same_field(name, theta_deg, side):
     the cell's largest entry would come back at 1e-2 and read like a tolerance question rather
     than a broken formula.
 
-    All three incidence variants are compared at once (``incidences=('given', 's', 'p')``):
+    All three incidence variants are compared at once (``incidences=('incident', 's', 'p')``):
     they ride in separate columns of ``T1``, and a reconstruction that dropped the leading axis
     would still reproduce the first of them.
     """
@@ -213,7 +213,7 @@ def test_the_two_formulations_agree_on_the_variants_taken_one_at_a_time():
         cells[formulation] = [
             np.asarray(mee.reconstruct_field(sample_x=4, sample_y=4, sample_z=5,
                                              incidences=which))
-            for which in (('given',), ('s',), ('p',), ('given', 's', 'p'))]
+            for which in (('incident',), ('s',), ('p',), ('incident', 's', 'p'))]
     for k, (want, got) in enumerate(zip(cells['2ff'], cells['4ff'])):
         assert want.shape == got.shape
         assert np.max(np.abs(want - got)) / np.max(np.abs(want)) < 1e-11, k
@@ -291,8 +291,8 @@ def test_the_flux_the_cell_carries_is_the_efficiency_the_solve_reported(eps, tag
     for name, band in (('above', above), ('below', below)):
         assert np.ptp(band) / abs(np.mean(band)) < 1e-12, f'{tag} {name} spacer is not flat'
 
-    R = float(np.sum(np.asarray(res.given.R)))
-    T = float(np.sum(np.asarray(res.given.T)))
+    R = float(np.sum(np.asarray(res.incident.R)))
+    T = float(np.sum(np.asarray(res.incident.T)))
     got = np.mean(below) / np.mean(above)
     assert abs(got - T / (1 - R)) < 1e-12, f'{tag}: {got} vs {T / (1 - R)}'
 

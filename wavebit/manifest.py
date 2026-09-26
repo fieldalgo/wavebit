@@ -94,7 +94,9 @@ from ._core.spec import SPEC_VERSION
 # '10': numerical option axes use raster_normal_method / nvf_projector. Renaming
 # keys changes the contract consumers use to construct a solver; old readers must
 # not interpret a missing axis as an unavailable capability. Version 11 adds material dispersion; JobSpec is version 9.
-MANIFEST_VERSION = '11'
+# '12': the specified-incidence result attribute and field selector are named
+# incident; consumers must use the new attribute published in incidences.fields.
+MANIFEST_VERSION = '12'
 
 
 # --------------------------------------------------------------- how a structure is spelled
@@ -399,6 +401,9 @@ RESULTS = {
     },
     'amplitudes': {
         'fields': ('r_s', 'r_p', 't_s', 't_p'),
+        'access': 'available on result.incident and directly on result; both read the '
+                  'same arrays. None at answers=efficiency. Direct access requires '
+                  'an incident result and never averages complex amplitudes',
         'meaning': 'complex Fresnel amplitudes in e^{-iwt}: E-field ratios against a unit '
                    'incident E-field, comparable to the textbook coefficients',
         'p_sign': 'the convention where a normal-incidence interface gives r_p = -r_s',
@@ -407,11 +412,12 @@ RESULTS = {
                            'direction and phi supplies it',
     },
     'incidences': {
-        'fields': ('given', 's_inc', 'p_inc'),
+        'fields': ('incident', 's_inc', 'p_inc'),
         'meaning': 'the solve for the incidence as specified — psi, or the complex '
                    'amplitude pair polarization=(a_s, a_p) — plus the pure-s and pure-p '
-                   'variants; top-level R/T average the two variants when no specified '
-                   'solve exists',
+                   'variants. Omitting polarization selects pure s and still populates '
+                   'incident. Top-level R/T read incident; only manually constructed '
+                   'results without incident average the available variants',
         'polarization_input': 'polarization=(a_s, a_p) supersedes psi (naming both raises); '
                               'psi = v is exactly (sin(v), cos(v)), and the pair adds the '
                               'relative phase psi cannot spell — (1, -1j)/sqrt(2) and '

@@ -168,7 +168,7 @@ def test_resolution_and_field_selection_are_static():
 
     _, one = solver.solve_field(sample_x=4, sample_y=4, sample_z=4, geometry=geometry)
     _, three = solver.solve_field(sample_x=4, sample_y=4, sample_z=4, geometry=geometry,
-                                       incidences=('given', 's', 'p'))
+                                       incidences=('incident', 's', 'p'))
 
     assert np.asarray(one).shape == (1, 4, 4, 4, 6)
     assert np.asarray(three).shape == (3, 4, 4, 4, 6)

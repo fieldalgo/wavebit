@@ -436,13 +436,22 @@ spelling of a cell, and a skewed one arrives as `lattice=` instead.
 | `power_entering` | scalar net power entering the finite stack, including incident/reflected interference, divided by incident-only power at the illuminated interface |
 | `absorption` | scalar absorbed power in all finite layers divided by incident-only power: `power_entering - T.sum()`; excludes both half-spaces |
 | `r_s`, `r_p`, `t_s`, `t_p` | complex **Fresnel amplitudes**: E-field ratios against a unit incident E-field, directly comparable to the textbook Fresnel/Airy coefficients (pinned to 1e-12 against them, absorbing media included) |
-| `given`, `s_inc`, `p_inc` | the incidence as specified (`psi`, or the `polarization` pair), plus the pure-s and pure-p variants the coupled solves produce for free; top-level `R`/`T` average the two variants when no specified solve exists (unpolarized illumination) |
+| `incident`, `s_inc`, `p_inc` | the response to the actual incident state, plus the pure-s and pure-p variants computed by coupled solves; omitting polarization selects pure s and still populates `incident` |
+
+`result.r_s`, `result.r_p`, `result.t_s`, and `result.t_p` read the corresponding
+arrays on `result.incident`, without copying them. `result.R` and `result.T` also
+read `result.incident`. The suffixes on amplitudes name the outgoing polarization;
+`result.s_inc` and `result.p_inc` name the incident polarization.
+
+Only a manually constructed `Result(incident=None, s_inc=..., p_inc=...)` averages
+the available variants' powers. Its direct amplitude properties raise an error:
+an incoherent power average has no single complex electric-field amplitude.
 
 **Which of these rows exist is what `answers` declares**, and the table above is the default
 (`answers='amplitude'`) in full. `answers='efficiency'` keeps `R`, `T`,
 `power_entering`, and `absorption`, and leaves every
 other slot `None`, including `s_inc` / `p_inc` — so on that rung there is no
-unpolarized average to take and `given` is the only incidence. `answers='field'` adds nothing
+unpolarized average to take and `incident` is the only incidence. `answers='field'` adds nothing
 here: what it adds is the per-layer state `reconstruct_field` walks, which is not part of the
 result surface at all, and below that rung reconstruction is refused by name rather than
 served. The ladder is monotone, so a lower rung is always a *smaller* answer and never a

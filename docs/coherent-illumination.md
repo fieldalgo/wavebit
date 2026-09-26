@@ -279,9 +279,15 @@ print(regional.output_top, regional.net_into_stack)
 
 Fields give the complex electric and magnetic components at each position,
 including the coherent sum of all input beams. They are not power fractions.
-Boundary fields are available after `solve()`. Internal fields require
-`answers="field"` at solve time, which retains the modal data needed for later
-sampling. It does not evaluate a spatial grid in advance.
+Boundary fields require `answers="amplitude"` (the default) or `"field"` at solve
+time. Internal fields require `"field"`, which retains the modal data needed for
+later sampling. It does not evaluate a spatial grid in advance.
+
+`answers="efficiency"` retains the power evaluated over the selected `power_region`
+in `result.power`, together with its output fractions where defined. It does not
+retain complex boundary fields. Reintegrating with `result.boundary_power(region)`
+also requires `"amplitude"` or `"field"`. These are the same answer levels used for
+ordinary incidence.
 
 ### Boundary fields
 
@@ -301,8 +307,7 @@ print(above.shape)  # (1, 61, 6); above = incoming + outgoing
 | Argument | Meaning |
 | --- | --- |
 | `side` | Required: `"top"` or `"bottom"`. Returns the field at that outer interface, approached from the corresponding half-space. |
-| `sample_x` | One-dimensional array of physical x coordinates. |
-| `sample_y` | One-dimensional array of physical y coordinates. Defaults to `(0.,)`. |
+| `sample_x`, `sample_y` | Positive integer sample counts or one-dimensional physical coordinate arrays. Each defaults to `(0.,)`, the cell centre. |
 | `part="incoming"` | Only waves entering the stack from the selected side. |
 | `part="outgoing"` | All waves leaving the stack through that side. In two-sided illumination these combine reflection of inputs on that side and transmission of inputs on the other side. |
 | `part="total"` | Sum of incoming and outgoing fields; the default. |
@@ -325,8 +330,8 @@ middle = inside[1]  # z=50 nm plane, shape (1, 61, 6)
 
 | Argument | Meaning |
 | --- | --- |
-| `sample_x`, `sample_y` | Required one-dimensional coordinate arrays. |
-| `sample_z` | Required array of absolute heights in `[0, sum(thickness)]`, measured upward from the bottom of the first layer. |
+| `sample_x`, `sample_y` | Positive integer sample counts or one-dimensional coordinate arrays. Each defaults to `20`. |
+| `sample_z` | Positive integer count per layer (default `20`), or an array of absolute heights in `[0, sum(thickness)]`, measured upward from the stack bottom. |
 
 Internal fields include both propagation directions and every beam's contribution.
 There is no `part` argument. For `thickness=[100., 200.]`, the layers occupy
@@ -341,8 +346,9 @@ and Hy are continuous in the retained Fourier representation.
 
 ### Coordinates, array axes and components
 
-These two coherent-result methods take explicit coordinate arrays, such as
-`[0.]` or `np.linspace(...)`. Coordinates use the scene's length unit and
+Both methods share the [common field sampling rules](guide/fields.md#coordinates).
+Integer counts sample the cell; a z count samples each layer separately.
+Explicit coordinates, such as `[0.]` or `np.linspace(...)`, use the scene's length unit and
 cell-centred Cartesian x,y, including on an oblique lattice. All combinations
 of the x and y coordinates are evaluated, and internal sampling repeats the
 plane at each supplied z in the requested order.

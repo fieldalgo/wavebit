@@ -128,15 +128,15 @@ def test_te_with_a_permeability_is_tm_with_the_two_tensors_traded():
     te = run('te', eps_slots, mu_slots, mu_top, mu_bot)
     tm_traded = run('tm', mu_slots, eps_slots, eps_top, eps_bot)
     for name in ('R', 'T'):
-        assert np.allclose(np.asarray(getattr(te.given, name)),
-                           np.asarray(getattr(tm_traded.given, name)),
+        assert np.allclose(np.asarray(getattr(te.incident, name)),
+                           np.asarray(getattr(tm_traded.incident, name)),
                            rtol=0, atol=1e-13)
 
     # The control. Without it this test is passed by any solver for which TE and TM happen to
     # agree, including one that drops the permeability from both.
     tm_untraded = run('tm', eps_slots, mu_slots, mu_top, mu_bot)
-    assert np.max(np.abs(np.asarray(te.given.R)
-                         - np.asarray(tm_untraded.given.R))) > 1e-4
+    assert np.max(np.abs(np.asarray(te.incident.R)
+                         - np.asarray(tm_untraded.incident.R))) > 1e-4
 
 
 # ------------------------------------------------------------------------- 2. the closed form
@@ -184,7 +184,7 @@ def test_uniform_magnetic_slab_matches_its_closed_form(eps, mu, theta, tetm):
                           truncation_order=(2, 0), period=(PERIOD, PERIOD), wavelength=WL,
                           thickness=[THICK], structure=np.ones((1, 1, 16)) * eps,
                           mu=np.ones((1, 1, 16)) * mu)
-    got = float(np.sum(solver.solve().given.R))
+    got = float(np.sum(solver.solve().incident.R))
     # After the solve: routing is assigned during it, and the comparison below is only against
     # the pure 1D operator if that is what actually ran.
     assert solver.grating_type == 0
@@ -204,7 +204,7 @@ def test_the_two_cases_an_index_only_solver_cannot_express():
                               wavelength=WL, thickness=[THICK],
                               structure=np.ones((1, 1, 16)) * eps,
                               mu=np.ones((1, 1, 16)) * mu)
-        return float(np.sum(solver.solve().given.R))
+        return float(np.sum(solver.solve().incident.R))
 
     # Index 2, impedance 1: matched to vacuum, so nothing reflects at normal incidence. An
     # index-only solver reflects |(1-2)/(1+2)|**2 = 0.111 off a step that is not there.
@@ -234,18 +234,18 @@ def test_conical_magnetic_solve_agrees_with_the_2d_path():
     _, conical, _ = _solved(1, psi=PSI, phi=PHI)
     _, two_d, _ = _solved(3, psi=PSI, phi=PHI)
     for name in ('R', 'T'):
-        assert np.allclose(np.asarray(getattr(conical.given, name)),
-                           np.asarray(getattr(two_d.given, name)), rtol=0, atol=1e-13)
+        assert np.allclose(np.asarray(getattr(conical.incident, name)),
+                           np.asarray(getattr(two_d.incident, name)), rtol=0, atol=1e-13)
 
 
 def test_pure_te_magnetic_solve_agrees_with_the_2d_path():
     """Same claim for the pure TE/TM operator, whose 2D twin is s-polarized at ``phi = 0``."""
     _, pure, _ = _solved(1, tetm='te', phi=0.0)
     _, two_d, _ = _solved(3, psi=np.pi / 2, phi=0.0)
-    assert float(np.sum(pure.given.R)) == pytest.approx(
-        float(np.sum(two_d.given.R)), abs=1e-13)
-    assert float(np.sum(pure.given.T)) == pytest.approx(
-        float(np.sum(two_d.given.T)), abs=1e-13)
+    assert float(np.sum(pure.incident.R)) == pytest.approx(
+        float(np.sum(two_d.incident.R)), abs=1e-13)
+    assert float(np.sum(pure.incident.T)) == pytest.approx(
+        float(np.sum(two_d.incident.T)), abs=1e-13)
 
 
 # The three components the pure TE path carries, and where the 2D layout keeps each.
@@ -294,7 +294,7 @@ def test_both_connecting_algorithms_carry_the_permeability(label, kw):
     for algorithm in ('ETM', 'SMM'):
         solver = _grating(1, **kw)
         solver.layer_algorithm = algorithm
-        efficiency = np.asarray(solver.solve().given.T)
+        efficiency = np.asarray(solver.solve().incident.T)
         cell = np.asarray(solver.reconstruct_field(sample_x=20, sample_y=1, sample_z=10))
         out.append((efficiency, cell[0] if cell.ndim == 5 else cell))
     assert np.allclose(out[0][0], out[1][0], rtol=0, atol=1e-12)

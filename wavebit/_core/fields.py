@@ -30,10 +30,10 @@ from .lattice import periods_of
 
 
 #: The three incidences a coupled solve leaves stacked in ``T1``, in the order it stacks
-#: them: ``'given'`` is the incidence actually asked for (``psi``, or the ``polarization``
+#: them: ``'incident'`` is the incidence actually asked for (``psi``, or the ``polarization``
 #: pair), and ``'s'`` / ``'p'`` are the pure variants the coupled solves produce for free.
-#: The same three the result object calls ``given`` / ``s_inc`` / ``p_inc``.
-INCIDENCE_NAMES = ('given', 's', 'p')
+#: The same three the result object calls ``incident`` / ``s_inc`` / ``p_inc``.
+INCIDENCE_NAMES = ('incident', 's', 'p')
 
 
 def incidence_indices(incidences):
@@ -341,6 +341,13 @@ def _z_slices(xp, sample_z, d, C, dev=None):
     return xp.reshape(_z_1d(xp, sample_z, d, C, dev), (-1, 1, 1))
 
 
+class LayerSamples:
+    """Private per-layer local coordinates, already planned by the result field API."""
+
+    def __init__(self, values):
+        self.values = values
+
+
 def _z_plan(sample_z, layer_info_list, d_index, interface_side='right'):
     """Turn a z request into per-layer local samples, in the order the layers are walked.
 
@@ -378,6 +385,8 @@ def _z_plan(sample_z, layer_info_list, d_index, interface_side='right'):
     is genuinely data-dependent, and silently picking a layer would differentiate the wrong
     geometry.
     """
+    if isinstance(sample_z, LayerSamples):
+        return sample_z.values, None
     _check_spec(sample_z, 'sample_z')
     if is_count(sample_z):
         if sample_z == 1 and interface_side == 'left':
@@ -433,7 +442,7 @@ def _unshuffle(xp, cell, unshuffle, axis):
 
 
 def refuse_extra_incidences(incidences):
-    """Refuse anything but ``('given',)`` on the path that carries exactly one incidence.
+    """Refuse anything but ``('incident',)`` on the path that carries exactly one incidence.
 
     The pure 1D TE/TM solve is single-polarization by construction: ``tetm`` declares the
     other degree of freedom away, so ``T1`` there is one column rather than the stack of three
@@ -454,12 +463,13 @@ def refuse_extra_incidences(incidences):
         f'carries exactly one incidence -- the one `tetm` declared -- so '
         f"{INCIDENCE_NAMES[1]!r} and {INCIDENCE_NAMES[2]!r} name variants it never computed, "
         f'and the cell it returns has no incidence axis to put them on. Reconstruct with '
-        f"incidences=('given',), or drop `tetm` and name the incidence with `psi` or "
+        f"incidences=('incident',), or drop `tetm` and name the incidence with `psi` or "
         f'`polarization`: the same 1D structure then takes the conical path, which carries '
         f'all three for one extra solve.')
 
 def field_1d(wavelength, kx, T1, layer_info_list, lattice, tetm_index,
-             sample_x=20, sample_y=1, sample_z=20, incidences=('given',), interface_side='right'):
+             sample_x=20, sample_y=1, sample_z=20, incidences=('incident',), interface_side='right',
+             _coefficients=False):
     """Field of a pure TE/TM 1D stack.
 
     Returns ``(nz, sample_y, sample_x, 3)``, where ``nz`` is ``sample_z * n_layers`` for a count
@@ -524,26 +534,37 @@ def field_1d(wavelength, kx, T1, layer_info_list, lattice, tetm_index,
         else:
             Mz = 1j * (muz_conv_i @ Kx @ My)
 
-        inv_f = _inv_fourier(xp, kx, None, lattice, sample_x, sample_y, k0, C)
-        sgn = -1j if tetm_index == 0 else 1j
-        Fy = inv_f[:, :, None, :] @ My[:, None, None, :, :]
-        Fx = sgn * (inv_f[:, :, None, :] @ Mx[:, None, None, :, :])
-        Fz = sgn * (inv_f[:, :, None, :] @ Mz[:, None, None, :, :])
-        # Into the declared frame (module docstring): E_z, H_x, H_y flip, E_t and H_z do not.
-        # The two layouts fill the same three slots with different components, so the pattern
-        # is not the same one twice -- TE is (Ey, Hx, Hz) and only its middle slot is magnetic
-        # and transverse; TM is (Hy, Ex, Ez) and its *outer* two are what the parity moves.
-        par_y, par_x, par_z = (1, -1, 1) if tetm_index == 0 else (-1, 1, -1)
-        cells.append(xp.concat([par_y * Fy[..., 0], par_x * Fx[..., 0],
-                                par_z * Fz[..., 0]], axis=-1))
-
+        if _coefficients:
+            zero = xp.zeros_like(My[..., 0])
+            if tetm_index == 0:
+                components = (zero, My[..., 0], zero,
+                              1j * Mx[..., 0], zero, -1j * Mz[..., 0])
+            else:
+                components = (1j * Mx[..., 0], zero, -1j * Mz[..., 0],
+                              zero, -My[..., 0], zero)
+            cells.append(xp.stack(components, axis=-1)[:, None])
+        else:
+            inv_f = _inv_fourier(xp, kx, None, lattice, sample_x, sample_y, k0, C)
+            sgn = -1j if tetm_index == 0 else 1j
+            Fy = inv_f[:, :, None, :] @ My[:, None, None, :, :]
+            Fx = sgn * (inv_f[:, :, None, :] @ Mx[:, None, None, :, :])
+            Fz = sgn * (inv_f[:, :, None, :] @ Mz[:, None, None, :, :])
+            # Into the declared frame (module docstring): E_z, H_x, H_y flip, E_t and H_z do not.
+            # The two layouts fill the same three slots with different components, so the pattern
+            # is not the same one twice -- TE is (Ey, Hx, Hz) and only its middle slot is magnetic
+            # and transverse; TM is (Hy, Ex, Ez) and its *outer* two are what the parity moves.
+            par_y, par_x, par_z = (1, -1, 1) if tetm_index == 0 else (-1, 1, -1)
+            cells.append(xp.concat([par_y * Fy[..., 0], par_x * Fx[..., 0],
+                                    par_z * Fz[..., 0]], axis=-1))
         T_layer = A_i @ X @ T_layer
 
+    if _coefficients:
+        return cells
     return _unshuffle(xp, xp.concat(cells, axis=0), unshuffle, axis=0)
 
 
 def _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice, sample_x, sample_y,
-                   sample_z, incidences, conical, interface_side):
+                   sample_z, incidences, conical, interface_side, _coefficients=False):
     """Shared body of the conical and 2D reconstructions.
 
     They differ only in how the layer's mode matrices assemble into ``(Sx, Sy, Ux, Uy)``; the
@@ -641,21 +662,27 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice, sample_x, s
         if muz_conv_i is not None:
             Uz = muz_conv_i @ Uz
 
-        inv_f = _inv_fourier(xp, kx, ky, lattice, sample_x, sample_y, k0, C)[:, :, None, :]
-        # `-1j` converts out of `U = i H`; the three minus signs on top of it are the parity
-        # into the declared frame (module docstring), so `H_z` keeps the bare conversion.
-        comps = [inv_f @ M[:, :, None, None, :, :] for M in (Sx, Sy, -Sz)]
-        comps += [-1j * (inv_f @ M[:, :, None, None, :, :]) for M in (-Ux, -Uy, Uz)]
-        val = xp.concat([c[..., 0] for c in comps], axis=-1)
-        cells.append(xp.moveaxis(val, 1, 0))
-
+        if _coefficients:
+            cells.append(xp.stack([M[..., 0] for M in
+                                   (Sx, Sy, -Sz, 1j * Ux, 1j * Uy, -1j * Uz)], axis=-1))
+        else:
+            inv_f = _inv_fourier(xp, kx, ky, lattice, sample_x, sample_y, k0, C)[:, :, None, :]
+            # `-1j` converts out of `U = i H`; the three minus signs on top of it are the parity
+            # into the declared frame (module docstring), so `H_z` keeps the bare conversion.
+            comps = [inv_f @ M[:, :, None, None, :, :] for M in (Sx, Sy, -Sz)]
+            comps += [-1j * (inv_f @ M[:, :, None, None, :, :]) for M in (-Ux, -Uy, Uz)]
+            val = xp.concat([c[..., 0] for c in comps], axis=-1)
+            cells.append(xp.moveaxis(val, 1, 0))
         T_layer = big_A_i @ big_X @ T_layer
 
+    if _coefficients:
+        return cells
     return _unshuffle(xp, xp.concat(cells, axis=1), unshuffle, axis=1)
 
 
 def field_2d_4ff(wavelength, kx, ky, T1, layer_info_list, lattice,
-                 sample_x=20, sample_y=20, sample_z=20, incidences=('given',), interface_side='right'):
+                 sample_x=20, sample_y=20, sample_z=20, incidences=('incident',), interface_side='right',
+                 _coefficients=False):
     """Field of a stack solved on the first-order (4ff) path. Same shape as :func:`field_2d`.
 
     The transverse half is *simpler* than the second-order reconstruction, not harder. There
@@ -745,36 +772,44 @@ def field_2d_4ff(wavelength, kx, ky, T1, layer_info_list, lattice,
             mu = eps['mu_blocks']
             Hz = mu['ezz_i'] @ (Hz - mu['ezx'] @ Hx - mu['ezy'] @ Hy)
 
-        inv_f = _inv_fourier(xp, kx, ky, lattice, sample_x, sample_y, k0, C)[:, :, None, :]
-        # No parity here, deliberately: the 4ff state vector is already in the declared frame.
-        comps = [inv_f @ M[:, :, None, None, :, :]
-                 for M in (Ex, Ey, Ez, Hx, Hy, Hz)]
-        val = xp.concat([c[..., 0] for c in comps], axis=-1)
-        cells.append(xp.moveaxis(val, 1, 0))
-
+        if _coefficients:
+            cells.append(xp.stack([M[..., 0] for M in (Ex, Ey, Ez, Hx, Hy, Hz)], axis=-1))
+        else:
+            inv_f = _inv_fourier(xp, kx, ky, lattice, sample_x, sample_y, k0, C)[:, :, None, :]
+            # No parity here, deliberately: the 4ff state vector is already in the declared frame.
+            comps = [inv_f @ M[:, :, None, None, :, :]
+                     for M in (Ex, Ey, Ez, Hx, Hy, Hz)]
+            val = xp.concat([c[..., 0] for c in comps], axis=-1)
+            cells.append(xp.moveaxis(val, 1, 0))
         T_layer = (P_i @ X_f) @ T_layer
 
+    if _coefficients:
+        return cells
     return _unshuffle(xp, xp.concat(cells, axis=1), unshuffle, axis=1)
 
 
 def field_1d_conical(wavelength, kx, ky, T1, layer_info_list, lattice,
-                     sample_x=20, sample_y=20, sample_z=20, incidences=('given',), interface_side='right'):
+                     sample_x=20, sample_y=20, sample_z=20, incidences=('incident',), interface_side='right',
+                 _coefficients=False):
     """Field of a general 1D (conical) stack. ``(n_selected, nz, sample_y, sample_x, 6)``.
 
     ``nz`` is ``sample_z * n_layers`` for a count, ``len(sample_z)`` for explicit coordinates.
     """
     return _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice,
-                          sample_x, sample_y, sample_z, incidences, conical=True, interface_side=interface_side)
+                          sample_x, sample_y, sample_z, incidences, conical=True,
+                          interface_side=interface_side, _coefficients=_coefficients)
 
 
 def field_2d(wavelength, kx, ky, T1, layer_info_list, lattice,
-             sample_x=20, sample_y=20, sample_z=20, incidences=('given',), interface_side='right'):
+             sample_x=20, sample_y=20, sample_z=20, incidences=('incident',), interface_side='right',
+             _coefficients=False):
     """Field of a 2D stack. ``(n_selected, nz, sample_y, sample_x, 6)``.
 
     ``nz`` is ``sample_z * n_layers`` for a count, ``len(sample_z)`` for explicit coordinates.
     """
     return _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice,
-                          sample_x, sample_y, sample_z, incidences, conical=False, interface_side=interface_side)
+                          sample_x, sample_y, sample_z, incidences, conical=False,
+                          interface_side=interface_side, _coefficients=_coefficients)
 
 
 def plot_field(field_cell, tetm_index=0, plot_indices=(1, 1, 1, 1, 1, 1), y_slice=0, z_slice=-1,

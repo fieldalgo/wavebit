@@ -59,7 +59,7 @@ def _run(**kwargs):
 
 
 def _energy(res):
-    return float(np.sum(res.given.R) + np.sum(res.given.T))
+    return float(np.sum(res.incident.R) + np.sum(res.incident.T))
 
 
 # --- the structures: thick, high-truncation, deeply evanescent -----------------------------

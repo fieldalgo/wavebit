@@ -39,8 +39,8 @@ def test_frozen_geometry_does_not_change_the_answer(strategy):
     solver = wavebit.rcwa(backend=0, structure=STRUCTURE, **strategy, **KW)
     auto = solver.solve()
     frozen = solver.solve(geometry=solver.freeze_geometry())
-    assert np.array_equal(np.asarray(auto.given.R), np.asarray(frozen.given.R))
-    assert np.array_equal(np.asarray(auto.given.T), np.asarray(frozen.given.T))
+    assert np.array_equal(np.asarray(auto.incident.R), np.asarray(frozen.incident.R))
+    assert np.array_equal(np.asarray(auto.incident.T), np.asarray(frozen.incident.T))
 
 
 @pytest.mark.parametrize('strategy', STRATEGIES, ids=IDS)
@@ -53,7 +53,7 @@ def test_jit_and_grad_through_the_public_api(strategy):
     geometry = solver.freeze_geometry()
 
     def loss(u):
-        return jnp.sum(solver.solve(structure=u, geometry=geometry).given.T).real
+        return jnp.sum(solver.solve(structure=u, geometry=geometry).incident.T).real
 
     u = jnp.asarray(STRUCTURE)
     eager = float(loss(u))
@@ -72,7 +72,7 @@ def test_jit_and_grad_through_the_public_api(strategy):
 def _jit_loss(**strategy):
     import jax.numpy as jnp
     solver = wavebit.rcwa(backend=1, structure=STRUCTURE, **strategy, **KW)
-    return lambda u: jnp.sum(solver.solve(structure=u).given.T).real
+    return lambda u: jnp.sum(solver.solve(structure=u).incident.T).real
 
 
 # The default pairing is left out on purpose: it decides nothing, so it traces unfrozen.
@@ -107,7 +107,7 @@ def test_the_default_pairing_needs_no_frozen_geometry_at_all():
     got = float(jax.jit(_jit_loss(**DEFAULT_STRATEGY))(jnp.asarray(STRUCTURE)))
     want = float(np.sum(np.asarray(
         wavebit.rcwa(backend=0, structure=STRUCTURE, **DEFAULT_STRATEGY,
-                       **KW).solve().given.T).real))
+                       **KW).solve().incident.T).real))
     assert got == pytest.approx(want, abs=1e-10)
 
 
@@ -269,7 +269,7 @@ def _rod(width, height=10, eps_rod=12.25, eps_bg=1.0, n=20):
 
 def _de_ti(structure, strategy, geometry=None):
     solver = wavebit.rcwa(backend=0, structure=structure, **strategy, **RASTER_KW)
-    return np.asarray(solver.solve(geometry=geometry).given.T).real
+    return np.asarray(solver.solve(geometry=geometry).incident.T).real
 
 
 @pytest.mark.parametrize('strategy', [dict(factorization='nvf'),
@@ -360,8 +360,8 @@ def test_a_one_cell_axis_makes_every_same_shape_replay_valid():
     for width in (8, 10, 14):
         solvers = [wavebit.rcwa(backend=0, structure=grating(width), factorization='nvf',
                                   **cfg) for _ in range(2)]
-        replayed = np.asarray(solvers[0].solve(geometry=frozen).given.T)
-        assert np.array_equal(replayed, np.asarray(solvers[1].solve().given.T))
+        replayed = np.asarray(solvers[0].solve(geometry=frozen).incident.T)
+        assert np.array_equal(replayed, np.asarray(solvers[1].solve().incident.T))
 
 
 def test_a_traced_replay_carries_no_check():
@@ -382,7 +382,7 @@ def test_a_traced_replay_carries_no_check():
                                 **RASTER_KW)
 
     def total(u):
-        return jnp.sum(jax_solver.solve(structure=u, geometry=frozen).given.T).real
+        return jnp.sum(jax_solver.solve(structure=u, geometry=frozen).incident.T).real
 
     moved = jnp.asarray(_rod(14))
     with pytest.raises(wavebit.StaleGeometryError):
@@ -412,7 +412,7 @@ def test_the_compression_decides_itself_inside_a_gradient():
 
     def total(u):
         return jnp.sum(wavebit.rcwa(backend=1, structure=u, **INTEGRATED_STRATEGY, **KW)
-                       .solve().given.T).real
+                       .solve().incident.T).real
 
     grad = np.asarray(jax.grad(total)(jnp.asarray(STRUCTURE)))
     assert grad.shape == STRUCTURE.shape and np.isfinite(grad).all()
@@ -440,7 +440,7 @@ def test_a_moving_pattern_needs_no_record_on_the_compression_path():
 
     def total(u):
         return jnp.sum(wavebit.rcwa(backend=1, structure=u, **INTEGRATED_STRATEGY, **KW)
-                       .solve().given.T).real
+                       .solve().incident.T).real
 
     for flips in (0, 2, 4):
         pattern = design.copy()
@@ -479,7 +479,7 @@ def test_the_normal_field_decides_itself_inside_a_gradient_too():
                      dict(fourier_coefficients='integrated', factorization='nvf')):
         def total(u):
             return jnp.sum(wavebit.rcwa(backend=1, structure=u, **strategy, **KW)
-                           .solve().given.T).real
+                           .solve().incident.T).real
 
         grad = np.asarray(jax.grad(total)(jnp.asarray(STRUCTURE)))
         assert grad.shape == STRUCTURE.shape and np.isfinite(grad).all()
@@ -491,7 +491,7 @@ def test_the_normal_field_decides_itself_inside_a_gradient_too():
 
         def total_frozen(u):
             return jnp.sum(wavebit.rcwa(backend=1, structure=u, **strategy, **KW)
-                           .solve(geometry=frozen).given.T).real
+                           .solve(geometry=frozen).incident.T).real
 
         assert np.array_equal(grad, np.asarray(jax.grad(total_frozen)(jnp.asarray(STRUCTURE))))
 
@@ -518,7 +518,7 @@ def test_the_nvf_gradient_holds_the_interfaces_fixed():
 
     def total(u):
         return jnp.sum(wavebit.rcwa(backend=1, structure=u, **strategy, **KW)
-                       .solve().given.T).real
+                       .solve().incident.T).real
 
     def mask_size(u):
         return int(_fac.normal_field_source_for_raster(u, KW['truncation_order'][0], KW['truncation_order'][1])[0][1].sum())

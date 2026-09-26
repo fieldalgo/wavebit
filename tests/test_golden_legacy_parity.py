@@ -125,7 +125,7 @@ EFFICIENCIES = (('de_ri', 'R'), ('de_ri_s', 'R_s'), ('de_ri_p', 'R_p'),
                 ('de_ti', 'T'), ('de_ti_s', 'T_s'), ('de_ti_p', 'T_p'))
 
 # The third axis of the same translation, added 2026-08-20 when `Result.res` /
-# `.res_te_inc` / `.res_tm_inc` became `.given` / `.s_inc` / `.p_inc`. The golden's key
+# `.res_te_inc` / `.res_tm_inc` became `.incident` / `.s_inc` / `.p_inc`. The golden's key
 # component is the *legacy* attribute name, and it stays that way for the same reason
 # `de_ri` above does: `golden_legacy.npz` cannot be recaptured -- the implementation that
 # produced it was deleted -- so its keys are a record of what that implementation called
@@ -134,7 +134,7 @@ EFFICIENCIES = (('de_ri', 'R'), ('de_ri_s', 'R_s'), ('de_ri_p', 'R_p'),
 # one key vocabulary.
 #
 #   golden key component   today's attribute
-SUBS = (('res', 'given'), ('res_te_inc', 's_inc'), ('res_tm_inc', 'p_inc'))
+SUBS = (('res', 'incident'), ('res_te_inc', 's_inc'), ('res_tm_inc', 'p_inc'))
 
 
 def _amp_map(grating_type, n_top, n_bot):

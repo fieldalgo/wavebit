@@ -191,7 +191,7 @@ def _solve_psi(top, bot, layer_eps, theta_deg, psi_deg, algo='ETM', side='top'):
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 @pytest.mark.parametrize('psi_deg', [0.0, 30.0, 90.0])
 def test_the_psi_incidence_path_carries_the_ambient_permeability(psi_deg, algo):
-    """``given`` — the psi-specified incidence — as opposed to the pure-s/pure-p variants.
+    """``incident`` — the psi-specified incidence — as opposed to the pure-s/pure-p variants.
 
     Added because a mutation survey said it was uncovered, and the way it said so is worth
     recording: two mutants of the incident column *survived*, and measuring them showed they
@@ -204,7 +204,7 @@ def test_the_psi_incidence_path_carries_the_ambient_permeability(psi_deg, algo):
     """
     top, bot = (1.9, 1.3), (2.6, 1.7)
     res = _solve_psi(top, bot, np.eye(3) * 2.2, 28.0, psi_deg, algo=algo)
-    r, t = float(res.given.R.sum()), float(res.given.T.sum())
+    r, t = float(res.incident.R.sum()), float(res.incident.T.sum())
     assert r + t == pytest.approx(1.0, abs=1e-10), f'psi={psi_deg} [{algo}]: R+T = {r + t}'
 
     # psi = 90 is pure s and psi = 0 pure p, by the definition of (a_s, a_p) = (sin, cos), so
@@ -279,7 +279,7 @@ def test_a_magnetic_ambient_on_a_one_dimensional_structure_now_solves():
                        thickness=[THICK], structure=np.ones((1, 1, 8)))
     e = [np.stack([np.eye(7, dtype=complex) * v]) for v in (1.0, 1.0, 1.0)]
     got = float(np.sum(mee.solve_conv(*e, mu_bot=mu_bot,
-                                      eps_bot=n_bot ** 2 / mu_bot).given.R))
+                                      eps_bot=n_bot ** 2 / mu_bot).incident.R))
     y_inc, y_sub = 1.0, n_bot / mu_bot          # kz/mu at normal incidence, kz = n
     assert got == pytest.approx(abs((y_inc - y_sub) / (y_inc + y_sub)) ** 2, abs=1e-13)
     # And it is not the answer an index-only boundary gives, which is the whole point of the

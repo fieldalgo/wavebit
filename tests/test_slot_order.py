@@ -133,7 +133,7 @@ def test_a_splatted_builder_conserves_energy(name):
     with _no_unphysical_warning():
         res = wavebit.rcwa(truncation_order=[MAX_ORDER, MAX_ORDER], **KW).solve_conv(*slots)
 
-    total = float(np.asarray(res.given.R).sum() + np.asarray(res.given.T).sum())
+    total = float(np.asarray(res.incident.R).sum() + np.asarray(res.incident.T).sum())
     assert abs(total - 1.0) < 1e-6, (
         f'{name}: splatting it into solve_conv gives R + T = {total!r} on a lossless '
         f'passive layer -- its slots are not in solve_conv\'s parameter order')

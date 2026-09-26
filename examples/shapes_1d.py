@@ -50,7 +50,7 @@ def run():
 
     result = solver.solve()
 
-    result_given_pol = result.given
+    result_given_pol = result.incident
     result_te_incidence = result.s_inc
     result_tm_incidence = result.p_inc
 

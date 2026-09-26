@@ -28,8 +28,8 @@ def test_angles_and_direct_k_agree_in_fields_and_power(backend, side, eps, theta
     direct = wavebit.rcwa(**common, kx=x[1].real*k0, ky=y[1].real*k0)
     a, b = angled.solve(), direct.solve()
     for attr in ('R', 'T', 'power_entering', 'absorption', 'r_s', 'r_p', 't_s', 't_p'):
-        np.testing.assert_allclose(_numpy(getattr(a.given, attr)),
-                                   _numpy(getattr(b.given, attr)), atol=2e-12, rtol=0)
+        np.testing.assert_allclose(_numpy(getattr(a.incident, attr)),
+                                   _numpy(getattr(b.incident, attr)), atol=2e-12, rtol=0)
     fa, fb = [s.reconstruct_field(3, 3, 3) for s in (angled, direct)]
     np.testing.assert_allclose(_numpy(fa), _numpy(fb), atol=1e-11, rtol=0)
 
@@ -49,8 +49,8 @@ def test_direct_k_matches_independent_magnetic_lossy_interface(route, side, pol,
     for value, want in [(result.R.sum(), R[j]), (result.T.sum(), T[j]),
                         (result.power_entering, T[j]), (result.absorption, 0.)]:
         assert float(value) == pytest.approx(want, abs=3e-12)
-    np.testing.assert_allclose(getattr(result.given, 'r_' + 'sp'[j]), r[j], atol=3e-12)
-    np.testing.assert_allclose(getattr(result.given, 't_' + 'sp'[j]), t[j], atol=3e-12)
+    np.testing.assert_allclose(getattr(result.incident, 'r_' + 'sp'[j]), r[j], atol=3e-12)
+    np.testing.assert_allclose(getattr(result.incident, 't_' + 'sp'[j]), t[j], atol=3e-12)
 
 
 @pytest.mark.parametrize('backend', [0, 1, 2])

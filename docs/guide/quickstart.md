@@ -41,13 +41,15 @@ transverse wavevector; `power_entering` and `absorption` are `NaN` otherwise.
 result.R.shape                  # (n_orders_v, n_orders_u) -- v first
 result.orders_u, result.orders_v    # which order each column and each row is
 result.order(0, 0)              # index by order instead, and skip the layout entirely
-result.given.r_s, result.given.t_p  # the complex Fresnel amplitudes
+result.r_s, result.t_p         # the complex Fresnel amplitudes
 result.power_entering          # net entering power / incident-only power
 result.absorption              # absorption in the finite stack / incident-only power
 ```
 
 **Uppercase is power, lowercase is amplitude.** `R` / `T` are efficiencies; `r_s` / `r_p` /
 `t_s` / `t_p` are the complex amplitudes, directly comparable to the textbook coefficients.
+The direct amplitude properties read `result.incident`, the response to the actual
+incident state. For example, `result.r_s` is the same array as `result.incident.r_s`.
 
 Every eager NumPy solve also checks what it hands back: a NaN or infinity raises
 `FloatingPointError` naming the contaminated array, and a finite result that cannot be physical
