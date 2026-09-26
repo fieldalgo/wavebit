@@ -19,7 +19,7 @@ def main():
     distribution = metadata.distribution('wavebit')
     assert distribution.version == wavebit.__version__, (
         distribution.version, wavebit.__version__)
-    assert distribution.metadata['License-Expression'] == 'Apache-2.0'
+    assert distribution.metadata['License-Expression'] == 'Apache-2.0 AND MIT'
     shipped = distribution.files
     assert shipped is not None, 'distribution has no installed file record'
     for name in ('LICENSE', 'LICENSE.meent', 'LICENSE.fmmax'):

@@ -7,7 +7,7 @@ name = "wavebit"
 version = "0.1.0"
 description = "Electromagnetic simulation (RCWA) & optimization package in Python"
 readme = "README.md"
-license = "Apache-2.0"
+license = "Apache-2.0 AND MIT"
 classifiers = ["Development Status :: 3 - Alpha"]
 authors = [{ name = "FieldAlgo", email = "dev@fieldalgo.com" }]
 
