@@ -3668,7 +3668,10 @@ class CoreFactorizationMixin:
     def _freeze_geometry(self):
         """:meth:`freeze_geometry` past its conditions."""
         if self._has_tensor_materials():
-            return _anisotropy.freeze(self)
+            geometry = _anisotropy.freeze(self)
+            # Stamped like the scalar records below, so one check covers both kinds of scene.
+            geometry.factorization = self.factorization.value
+            return geometry
         # A record of a stack that cannot be solved is a record of nothing, and it would be
         # replayed rather than rebuilt -- so the mismatch would surface later, from the replay,
         # further from the assignment that caused it. Only this one refusal, not all of
@@ -3729,7 +3732,11 @@ class CoreFactorizationMixin:
                                   normal_field_source=normal_field_source,
                                   mu_normal_field=mu_normal_field,
                                   mu_normal_field_source=mu_normal_field_source,
-                                  mu_compression=mu_compression)
+                                  mu_compression=mu_compression,
+                                  # What this record was taken under, so that a replay under
+                                  # another rule is refused rather than read -- see
+                                  # `_refuse_a_record_of_another_rule`.
+                                  factorization=factorization.value)
         if self._modeling_path == ModelingPath.PARAMETRIC:
             if factorization == Factorization.LI:
                 geometry.rectilinear_plans = [_rectilinear.plan_layer(layer.get('shapes', []), basis)
@@ -4127,9 +4134,49 @@ class CoreFactorizationMixin:
     def _eps_conv_matrices(self, geometry=None):
         """Convolution matrices for the current structure: ``(epx, epy, epz_i, epxy, epyx)``."""
         if self._has_tensor_materials():
+            self._refuse_a_record_of_another_rule(geometry)
             return _anisotropy.build(self, geometry)
         self._check_before_building()
+        self._refuse_a_record_of_another_rule(geometry)
         return self._slots_for(self.structure, geometry, quantity='permittivity')
+
+    #: What each rule's frozen record holds, for the refusal below -- named so that the message
+    #: says what the other build would have found missing, not only that the names differ.
+    _RECORD_HOLDS = {
+        'li': 'the block compression of an integrated raster, or the Cartesian rectangle plans',
+        'nvf': "the normal field or the shapes' interface set, beside the painting's plan",
+    }
+
+    def _refuse_a_record_of_another_rule(self, geometry):
+        """Refuse a frozen geometry taken under a different factorization than this build's.
+
+        A record holds what its own rule's build decides and nothing else, and the builds read
+        an empty slot as an answer rather than as a gap: a raster's missing normal field sends
+        NVF back to the eager construction -- which under ``jax.jit`` has no number to construct
+        from -- and a Li record of rectangles handed to the shape NVF build carries no interface
+        set, so the NVF replay would plan blind. Until this check the parametric path refused
+        the second by testing ``rectilinear_plans`` for ``None``, and the raster path refused
+        neither. The stamp (:attr:`~wavebit._core.geometry.StaticGeometry.factorization`) is a
+        Python string, so this runs the same eagerly and inside a trace. A record built by hand
+        carries no stamp and is replayed on trust, as it always was.
+
+        Called for both quantities and for tensor scenes, before anything is read from the
+        record, so a mismatch is reported as itself rather than as whichever slot the other
+        build happened to find empty first.
+        """
+        held = None if geometry is None else getattr(geometry, 'factorization', None)
+        if held is None:
+            return
+        now = self.factorization
+        if held == now:
+            return
+        raise _fac.StaleGeometryError(
+            f"this frozen geometry was taken under factorization={held!r} and is being replayed "
+            f"under factorization={now.value!r}. A record holds what its own rule's build "
+            f"decides -- under {held!r}, {self._RECORD_HOLDS.get(held, 'its own decisions')} -- "
+            f"and the {now.value!r} build would read what is missing as an answer and replay it "
+            f"blind. Call freeze_geometry() again under factorization={now.value!r} (NVF and Li "
+            f"records are not interchangeable), or drop geometry= to rebuild.")
 
     def _mu_conv_matrices(self, geometry=None):
         """The permeability slots, or ``None`` when nothing in the scene is magnetic.
@@ -4161,8 +4208,10 @@ class CoreFactorizationMixin:
         if not self._layers_are_magnetic():
             return None
         if self._has_tensor_materials():
+            self._refuse_a_record_of_another_rule(geometry)
             return _anisotropy.build(self, geometry, quantity='mu')
         self._check_before_building()
+        self._refuse_a_record_of_another_rule(geometry)
         return self._slots_for(self._mu_structure(), geometry, quantity='permeability')
 
     def _check_before_building(self):

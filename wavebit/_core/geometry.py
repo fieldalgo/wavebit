@@ -114,6 +114,15 @@ class StaticGeometry:
             record per layer. Coordinates and materials stay live. Zero-width contact
             intervals are retained; eager replay refuses crossed edges. Like the other
             index-only plans, these participate in content hashing. Never shared with NVF.
+        factorization: the rule the record was taken under -- ``'li'`` or ``'nvf'`` --
+            written by ``freeze_geometry`` and compared, not consumed: a replay under any other
+            rule is refused by name
+            (``CoreFactorizationMixin._refuse_a_record_of_another_rule``). A record holds what
+            its own rule's build decides and nothing else -- a Li freeze of a raster records no
+            normal field, an NVF freeze of rectangles no Cartesian plan -- so another rule's
+            build would find a slot empty and read the gap as an answer.
+            ``None`` on a record built by hand, which is replayed on trust, as before. A plain
+            string, so the comparison runs the same eagerly and under ``jax.jit``.
 
     A field left ``None`` means "auto-detect", which is what the strategy in use does not need
     (a sampled build never touches ``normal_field``, for instance).
@@ -149,6 +158,7 @@ class StaticGeometry:
     #: Tensor geometry: integrated shape topology, or sampled phase interfaces
     #: and fixed normals. Uses identity hashing because sampled records contain arrays.
     tensor_geometry: Optional[Any] = None
+    factorization: Optional[str] = None
 
     def _cache_key(self):
         """What ``__eq__``/``__hash__`` compare: the content when that is well defined.
@@ -173,8 +183,8 @@ class StaticGeometry:
                 and self.mu_normal_field_source is None and self.mu_compression is None\
                 and self.tensor_geometry is None:
             try:
-                key = ('content', _hashable(self.boundary_plans), _hashable(self.gamma_plans),
-                       _hashable(self.rectilinear_plans))
+                key = ('content', self.factorization, _hashable(self.boundary_plans),
+                       _hashable(self.gamma_plans), _hashable(self.rectilinear_plans))
                 hash(key)
                 return key
             except TypeError:

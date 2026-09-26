@@ -857,3 +857,60 @@ def test_the_renderer_refuses_what_the_solver_refuses():
     assert mixed.slice_structure(layer=0, n=32).real.mean() > 1.0
     with pytest.raises(ValueError, match='larger than the period'):
         mixed.slice_structure(layer=1, n=32)
+
+
+# ------------------------------------------------------- a record belongs to its rule
+
+_BOX = [dict(background=1.0, shapes=[dict(type='rectangle', cx=0.1, cy=-0.05, lx=0.4, ly=0.3,
+                                          material=6.25)])]
+
+
+@pytest.mark.parametrize('coefficients', ['sampled', 'integrated'])
+@pytest.mark.parametrize('held, now', [('li', 'nvf'), ('nvf', 'li')])
+def test_a_raster_record_is_refused_under_another_rule(held, now, coefficients):
+    """A record holds what its own rule decides: Li's integrated one the compression and no
+    normal field, NVF's both. Replayed under the other rule, the build found its slot empty and
+    rebuilt it eagerly -- or, under ``jax.jit``, had nothing to build from. It is stamped with
+    its rule now, and a mismatch is refused by name, on the solve and on the per-call door."""
+    record = wavebit.rcwa(backend=0, structure=STRUCTURE, fourier_coefficients=coefficients,
+                          factorization=held, **KW).freeze_geometry()
+    assert record.factorization == held
+    solver = wavebit.rcwa(backend=0, structure=STRUCTURE, fourier_coefficients=coefficients,
+                          factorization=now, **KW)
+    with pytest.raises(wavebit.StaleGeometryError, match=rf"taken under factorization='{held}' and is "
+                                                 rf"being replayed under factorization='{now}'"):
+        solver.solve(geometry=record)
+    same = wavebit.rcwa(backend=0, structure=STRUCTURE, fourier_coefficients=coefficients,
+                        factorization=held, **KW)
+    with pytest.raises(wavebit.StaleGeometryError, match=f"replayed under factorization='{now}'"):
+        same.eps_conv_matrices(geometry=record, factorization=now)
+
+
+@pytest.mark.parametrize('held, now', [('li', 'nvf'), ('nvf', 'li')])
+def test_a_shape_record_is_refused_under_another_rule(held, now):
+    """The parametric path refused this already, by testing ``rectilinear_plans`` for ``None``;
+    the stamp says it in one place for both paths and names both rules."""
+    record = wavebit.rcwa(backend=0, structure=_BOX, factorization=held,
+                          **KW).freeze_geometry()
+    with pytest.raises(wavebit.StaleGeometryError, match=rf"taken under factorization='{held}'"):
+        wavebit.rcwa(backend=0, structure=_BOX, factorization=now, **KW).solve(geometry=record)
+
+
+def test_the_stamp_is_checked_inside_a_trace_too():
+    """A string, not a value: ``jax.jit`` cannot hide it, so a traced replay is refused as an
+    eager one is -- which the slot tests the stamp replaces could not do."""
+    jax = pytest.importorskip('jax')
+    record = wavebit.rcwa(backend=1, structure=STRUCTURE, fourier_coefficients='integrated',
+                          **KW).freeze_geometry()
+    solver = wavebit.rcwa(backend=1, structure=STRUCTURE, fourier_coefficients='integrated',
+                          factorization='nvf', **KW)
+    with pytest.raises(wavebit.StaleGeometryError, match="factorization='li'"):
+        jax.jit(lambda s: s.solve(geometry=record).T)(solver)
+
+
+def test_a_hand_built_record_carries_no_stamp_and_replays_on_trust():
+    from wavebit._core.geometry import StaticGeometry
+    solver = wavebit.rcwa(backend=0, structure=STRUCTURE, **KW)
+    assert StaticGeometry().factorization is None
+    assert np.array_equal(np.asarray(solver.solve(geometry=StaticGeometry()).incident.T),
+                          np.asarray(solver.solve().incident.T))
