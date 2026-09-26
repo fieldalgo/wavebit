@@ -380,8 +380,19 @@ formulation. Fixed as prose; nothing numerical moved.
 > `Re(kz/n²)`. Both are defensible spellings of "incident power in an absorbing medium",
 > which is precisely the quantity `docs/conventions.md` excludes from the contract — the
 > amplitudes are the comparable surface there, and those agree across every path to 1e-15.
-> The cross-path difference is now pinned as *known and deliberate-not-hidden* by
-> `test_lossy_media.py::test_absorbing_superstrate_efficiency_is_convention_bound`.
+> The cross-path difference was then pinned as *known and deliberate-not-hidden* by
+> `test_absorbing_superstrate_efficiency_is_convention_bound`, which asserted the factor.
+>
+> That reading is superseded by the 2026-09-22 note at the top: once the incident-only
+> power is specified the two efficiencies must agree, and they now do. The test that pinned
+> the factor was replaced by
+> `test_lossy_media.py::test_absorbing_incident_reflectance_matches_airy`, which asserts
+> that the pure-1D and coupled TM reflectances both equal the Airy `|r_p|²` to 1e-12, and
+> that their `r_p` amplitudes agree to 1e-12, at normal incidence and at a real
+> `n_top·sinθ = 0.5`, for ETM and SMM. The measurement above does not rerun as written:
+> it took `k_x/k0 = n_top·sinθ = 0.847+0.169i`, whereas a real `θ` in an absorbing medium
+> is now a phase angle with a real `k_x` (`0.854` here; `docs/conventions.md`, Phase
+> incidence), so the same input names a different incident wave.
 
 What follows is the original investigation, kept because its measurements stand: the solver
 agrees with two independent references to machine precision, and the spelling table remains

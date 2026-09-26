@@ -150,10 +150,13 @@ What this investigation checked:
 - This investigation does not vouch for every diffraction order of a general pattern or for
   every backend.
 
-Why the existing test passes was also checked.
-`tests/test_lossy_media.py::test_absorbing_superstrate_efficiency_is_convention_bound` checks
-the 1D-to-2D TM difference factor as given instead of the correct power. This test has to be
-replaced to match the physical power definition.
+Why the existing test passed was also checked. The then-current
+`test_absorbing_superstrate_efficiency_is_convention_bound` checked the 1D-to-2D TM difference
+factor as given instead of the correct power. In stage 1 it was replaced by
+`tests/test_lossy_media.py::test_absorbing_incident_reflectance_matches_airy`, which checks, at
+normal incidence and at a real transverse wavevector `n_top·sinθ = 0.5`, for both ETM and SMM,
+that the 1D and 2D TM reflectances agree with the Airy `|r_p|²` within `1e-12` and that the two
+paths' `r_p` amplitudes agree within `1e-12`.
 
 ## Causes in the implementation
 
@@ -599,10 +602,12 @@ representation of internal finite layers have to be kept distinct.
 ### 5. Order of the fix and pass criteria
 
 1. Add a regression that catches the existing error with independent boundary-condition/Airy
-   power. The current `test_absorbing_superstrate_efficiency_is_convention_bound` at
-   `tests/test_lossy_media.py:424` pins the wrong inter-path ratio, and the follow-up check
+   power. At the time of the investigation (`a1d23fc`),
+   `test_absorbing_superstrate_efficiency_is_convention_bound` at
+   `tests/test_lossy_media.py:424` pinned the wrong inter-path ratio, and the follow-up check
    also saw **1 passed**. Replace that check with a path-agreement check under the new power
-   definition.
+   definition. (Replaced in stage 1 by
+   `tests/test_lossy_media.py::test_absorbing_incident_reflectance_matches_airy`.)
 2. Fix the shared power function and every efficiency call site. Fix the multi-incidence column
    error of the pure-polarization results with its own regression. Efficiencies for the same
    input must agree across `answers='efficiency'/'amplitude'/'field'`.
