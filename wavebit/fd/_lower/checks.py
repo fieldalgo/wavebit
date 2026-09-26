@@ -63,6 +63,7 @@ The table, and where each row lives:
     (stage 3) an Axis1D k past k_max              boundaries.Axis1D (concrete); the params'
                                                   guard (traced), which makes the run nan
 """
+import collections
 import math
 import warnings
 
@@ -859,6 +860,15 @@ def _shared_surface_voxels(body_a, body_b, grid, box, include_common=False):
     return count, worst
 
 
+def shown(length, dx):
+    """``length`` as a message prints it: rounded to a billionth of a cell, and no ``-0``.
+
+    A grid's low corner is ``center - n dx / 2`` in floating point, so a plane at 0 can come
+    back ``-5.55e-17`` and a refusal would print that (C5).
+    """
+    return round(length / dx, 9) * dx + 0.0
+
+
 def mirror_plane(grid, a, side):
     """Where a ``Symmetry`` face's plane is along axis ``a``: the node plane on the wall at a
     ``-`` face, the half plane ``dx/2`` inside the wall at a ``+`` face (``_kernel.faces``)."""
@@ -942,8 +952,8 @@ def check_symmetry(scene, grid):
         where = f'structures[{index}] ({shape.describe()})'
         for a, side, parity in mirrors:
             axis = 'xyz'[a]
-            plane = mirror_plane(grid, a, side)
-            wall = grid.low[a] + (grid.n[a] if side == '+' else 0) * grid.dx
+            plane = shown(mirror_plane(grid, a, side), grid.dx)
+            wall = shown(grid.low[a] + (grid.n[a] if side == '+' else 0) * grid.dx, grid.dx)
             plus = (f' On a + face the plane is half a cell INSIDE the wall: {axis} = '
                     f'{plane:g}, not the wall at {axis} = {wall:g}.' if side == '+' else '')
             if body is None:
@@ -1320,6 +1330,73 @@ def _cells_across_notes(scene, plan):
     return out
 
 
+#: One smoothed structure as ``fd.check`` prints it (stage 4, C5). Lengths in the scene's unit.
+#: ``across`` is ``(cells, extent)`` or ``None`` for a layer; ``asked`` the analytic volume or
+#: ``None`` for a body that does not answer ``volume()``; ``inside`` the part of it the box
+#: holds; ``outside`` the faces its declared extent passes; ``held`` and ``cut`` per lowered
+#: component (``'Ex'`` ...), the fill summed times ``dx^3`` and the voxels it cuts; ``terms``
+#: the constitutive terms its cross coefficients live in (shared when supports merge);
+#: ``normals`` ``'exact'`` (the sphere's moment), ``'none'`` (no cross term) or the measured
+#: proxy gap; ``mirrors`` the ``(face, plane)`` pairs of the Symmetry faces.
+BodyRow = collections.namedtuple(
+    'BodyRow', 'index describe support across asked inside outside held cut terms normals '
+               'mirrors')
+
+
+def _body_rows(scene, plan, occupied, proxy):
+    """The :data:`BodyRow` of every smoothed structure, from fills ``_smoothed_notes`` has.
+
+    No geometry is evaluated here: the fills are the ones the notes already took, which is
+    what keeps the block from costing a fifth occupancy pass (the C5 audit counted four).
+    """
+    from ..boundaries import Symmetry
+    from .._kernel.stencil import StencilTerm
+    from .._shapes import Sphere as KernelSphere
+    from .constitutive import cross_free
+    from .occupancy import smoothed_structures
+    grid = plan.grid
+    mirrors = tuple((axis + side, mirror_plane(grid, a, side))
+                    for a, axis in enumerate('xyz') for side in '-+'
+                    if isinstance(scene.boundaries.face(axis + side), Symmetry))
+    rows = []
+    for index, structure, body in smoothed_structures(scene):
+        shape = structure.shape
+        support = shape.support(grid)
+        volume = getattr(shape, 'volume', None)
+        asked = volume() if callable(volume) else None
+        kept, outside = 1.0, []
+        for a, axis in enumerate('xyz'):
+            span = _declared_span(shape, a)
+            if span is None:
+                continue
+            lo, hi = span
+            tol = 1e-9 * grid.dx
+            outside += ([axis + '-'] if lo < grid.low[a] - tol else []) + \
+                ([axis + '+'] if hi > grid.high[a] + tol else [])
+            kept *= max(min(hi, grid.high[a]) - max(lo, grid.low[a]), 0.0) / (hi - lo)
+        held, cut = {}, {}
+        for field in ('E', 'H'):
+            for c, (fill, _) in enumerate(occupied.get(index, {}).get(field, ())):
+                fill = np.asarray(fill, dtype=float)
+                name = field + 'xyz'[c]
+                held[name] = float(fill.sum()) * grid.dx ** 3
+                cut[name] = int(np.count_nonzero((fill > _CLIP_ROUNDOFF)
+                                                 & (fill < 1.0 - _CLIP_ROUNDOFF)))
+        if cross_free(body):
+            terms, normals = (), 'none'
+        else:
+            terms = tuple(t.name for t in plan.constitutive if not isinstance(t, StencilTerm)
+                          and _intersects(tuple(reversed(t.box)), support))
+            normals = 'exact' if isinstance(body, KernelSphere) else proxy.get(index, 0.0)
+        rows.append(BodyRow(index=index, describe=shape.describe(), support=support,
+                            across=_cells_across(shape, grid, _mirror_faces(scene)),
+                            asked=asked,
+                            inside=None if asked is None else asked * kept,
+                            outside=tuple(outside), held=held, cut=cut, terms=terms,
+                            normals=normals, mirrors=mirrors))
+    return rows
+
+
 def check_absorbing_layers(scene, plan):
     """What may sit inside an absorbing layer: no interface, and (in a PML) no loss or memory.
 
@@ -1549,13 +1626,17 @@ def _rate_values(pole):
     return [concrete(v) or 0.0 for v in pole.rate()]
 
 
-def notes(scene, plan):
-    """``[(category, message), ...]``: the stage-1 warnings, for ``check`` and for ``plan``."""
+def notes(scene, plan, rows=None):
+    """``[(category, message), ...]``: the stage-1 warnings, for ``check`` and for ``plan``.
+
+    ``rows``, when a list, receives one :data:`BodyRow` per smoothed structure (``check``'s
+    block), from the fills the notes take anyway.
+    """
     out = []
     out += _resolution_notes(scene, plan)
     out += _proximity_notes(scene, plan)
     out += _stabilize_notes(scene, plan)
-    out += _smoothed_notes(scene, plan)
+    out += _smoothed_notes(scene, plan, rows)
     out += _clipping_notes(scene, plan)
     out += _cells_across_notes(scene, plan)
     out += _radiation_notes(scene)
@@ -1581,7 +1662,7 @@ def _radiation_notes(scene):
         'keep continuum only when its approximation is intended. See docs/fd-lattice-radiation.md.')]
 
 
-def _smoothed_notes(scene, plan):
+def _smoothed_notes(scene, plan, rows=None):
     """Read approximation bounds once for the static scene, outside numerical lowering.
 
     Use the same components the coefficients spend. This also serves ``fd.check`` when
@@ -1629,7 +1710,7 @@ def _smoothed_notes(scene, plan):
                     'benchmarks are not an error bound for this scene. Validate its observables '
                     'under refinement. See docs/fd-symmetric-stencil.md.'))
     report = Approximations()
-    proxy_stats = {}
+    proxy_stats, proxy_by_index = {}, {}
     magnetic = _background(scene).is_magnetic or any(
         s.material.is_magnetic for s in scene.structures)
     try:
@@ -1638,13 +1719,15 @@ def _smoothed_notes(scene, plan):
         if plan.constitutive:
             from .constitutive import lower as cross_coefficients
             cross_coefficients(scene, plan, runtime('numpy'), report=report,
-                               proxy_stats=proxy_stats)
+                               proxy_stats=proxy_stats, proxy_by_index=proxy_by_index)
     except (TypeError, ValueError, RuntimeError) as err:
         raise ValueError('fd.plan requires concrete geometry to measure smoothed voxel '
                          'bounds before numerical lowering; a geometry value could not be '
                          f'evaluated on NumPy ({type(err).__name__}: {err}). '
                          'A traced public shape with range= is stage 4 C6.') from err
     _check_fill_contract(scene, occupied)
+    if rows is not None:
+        rows.extend(_body_rows(scene, plan, occupied, proxy_by_index))
     note = bound_note(report)
     if proxy_stats:
         details = ', '.join(f'{name}: {value:.6g}' for name, value in sorted(proxy_stats.items()))

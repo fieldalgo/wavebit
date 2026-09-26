@@ -882,3 +882,51 @@ fires on a body that breaks the `fd.Shape` contract; one answering 1.5 times its
 `tests/test_fd_c5_texts.py` pins the dimer, a smoothed body across a PlaneWave sheet (refused;
 a cell clear plans) and the guard; three mutants -- the guard removed, the overlap door seeing
 smoothed pairs, the PEC advice restored -- each fail one case.
+
+## C5: what `fd.check` says about each smoothed structure (2026-09-26)
+
+Before C5 a smoothed body appeared in the report only as three span rows claiming asked and got
+were the same. Each now has a block, built from the fills the plan's notes take anyway -- no
+fifth occupancy pass (the audit counted four):
+
+```
+body       structures[0] Sphere(radius=0.25, center=(0.013, -0.007, 0.021)), smoothed
+  support  x 6..19  y 5..18  z 6..19  (2197 cells)
+  across   10.00 cells at its narrowest (0.5)
+  volume   0.0654498 asked, 0.0654498 in the box; held on Ex Ey Ez to -6.7e-16 of that at worst
+  cut      472 / 468 / 480 voxels (Ex Ey Ez)
+  cross    constitutive[E0]: 0.08 MB params + 0.08 MB state
+  normals  exact moment (the sphere)
+body       structures[1] Box(size=(1.5, 1.5, 0.2), center=(0.0, 0.0, -0.45)), smoothed
+  support  x 0..24  y 0..24  z 0..7  (4032 cells)
+  across   a layer (uniform along two axes): no feature size to resolve
+  volume   0.45 asked, 0.288 in the box; held on Ex Ey Ez to +2.7e-15 of that at worst
+  outside  36.0% past x-, x+, y-, y+
+  cut      1152 / 1152 / 0 voxels (Ex Ey Ez)
+  cross    none: its cross coefficients are zero (an unturned box)
+```
+
+`across` is the number the cells-across door reads; `volume` compares the lowered fill with the
+body's analytic `volume()` (new on `fd.Sphere`, `fd.Box`, `fd.Cylinder`, `fd.Prism`) over every
+lowered component, which is where a support without its cell of margin shows (3.79e-3 on some
+components and not others); `cut` counts fills strictly inside `_CLIP_ROUNDOFF` of 0 and 1;
+`cross` names the constitutive terms with their bytes (shared where supports merge); `normals`
+is the nearest-surface proxy's worst gap for that structure (the plan's warning keys it by body
+type); and a `mirror` line names each Symmetry plane the scene is reflected in. Two design lines
+were left out on the audit's evidence: "media per cut cell" can only print 2 in a planned scene
+(doors 5 and 6), and a normal trace over cut voxels reads 1 by an invariant already gated.
+
+The params line says `unknown` where the params could not be built on NumPy (a traced
+material), not `0.00 MB`, which a threshold would read as small. S8 recommended **no**
+params-to-state warning: the ratio moves in steps of 0.5 per full-volume coefficient array, so
+a threshold only restates which arrays are full, and a smoothed body costs what a snapped Region
+of the same extent costs. None is added.
+
+`tests/test_fd_check_block.py` checks the block against closed forms: `4 pi r^3/3` held on every
+component at two placements, the substrate's `2.4 * 2.4 * 0.3`, the cut count from the voxel
+boundaries by hand, every body's `volume()`. Mutants, each alone: nothing counted outside,
+whole voxels counted as cut, params always known, no terms named, the prism's volume without
+its height, the mirror line dropped -- each fails one case. A printed plane position is rounded
+to a billionth of a cell (`checks.shown`), because a grid's low corner carries round-off: the
+mirror line first printed `x = -5.55112e-17` for a box centred at 0.3, and the Symmetry door's
+messages read the same plane.

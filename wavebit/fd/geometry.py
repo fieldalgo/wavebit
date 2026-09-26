@@ -870,6 +870,10 @@ class Sphere(Shape):
         """Its diameter."""
         return 2 * self.radius
 
+    def volume(self):
+        """``4 pi r^3 / 3``: what ``fd.check`` compares the lowered fill with (C5)."""
+        return 4.0 * math.pi * self.radius ** 3 / 3.0
+
 
 def _extrusion_axis(where, axis):
     """``'x'``, ``'y'`` or ``'z'``; anything else refused by name, a tilted axis as stage 5."""
@@ -1129,6 +1133,10 @@ class Box(_Extruded):
         sides = [self._inside(b, grid) for b in (u, v) if not self._spans(b, (0, grid.n[b]), grid)]
         return min(sides) if sides else None
 
+    def volume(self):
+        """``sx sy sz``, turned or not (:meth:`Sphere.volume`)."""
+        return math.prod(self.size)
+
     def body(self):
         """The ``_shapes`` box: the polygon clip times the axial overlap, exact moments."""
         from ._shapes import Box as _Cuboid
@@ -1173,6 +1181,10 @@ class Cylinder(_Extruded):
 
     def _feature(self, grid):
         return 2 * self.radius
+
+    def volume(self):
+        """``pi r^2 h`` (:meth:`Sphere.volume`)."""
+        return math.pi * self.radius ** 2 * self.height
 
     def body(self):
         """The ``_shapes`` cylinder: the exact disc clip times the axial overlap."""
@@ -1238,6 +1250,12 @@ class Prism(_Extruded):
         door can pass a prism with an arm under four cells across (an open item of S2b).
         """
         return _hull_width(self.vertices)
+
+    def volume(self):
+        """The shoelace area of the outline times the height (:meth:`Sphere.volume`)."""
+        v = self.vertices
+        area = 0.5 * sum(u0 * v1 - u1 * v0 for (u0, v0), (u1, v1) in zip(v, v[1:] + v[:1]))
+        return abs(area) * self.height
 
     def body(self):
         """The ``_shapes`` prism: the exact polygon clip times the axial overlap."""

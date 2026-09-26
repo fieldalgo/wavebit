@@ -85,8 +85,12 @@ def terms(scene, plan):
     return tuple(out)
 
 
-def lower(scene, plan, rt, report=None, proxy_stats=None):
-    """Paint node coefficients in scene order, preserving the two-phase rule."""
+def lower(scene, plan, rt, report=None, proxy_stats=None, proxy_by_index=None):
+    """Paint node coefficients in scene order, preserving the two-phase rule.
+
+    ``proxy_stats`` collects the nearest-surface proxy's worst gap per body type (the plan's
+    warning), ``proxy_by_index`` the same per structure index (``fd.check``'s block, C5).
+    """
     from .._shapes import Box, Sphere, occupancy
     from .._kernel.stencil import StencilTerm
     background, structures = materials_of(scene)
@@ -104,7 +108,7 @@ def lower(scene, plan, rt, report=None, proxy_stats=None):
         prop = lambda material: (material.eps if field == 'E' else material.mu_value)[0]
         held = rt.zeros(term.region.shape, 'float64') + rt.array(prop(background), 'float64')
         cross = rt.zeros((3,) + term.region.shape, 'float64')
-        for structure in structures:
+        for index, structure in enumerate(structures):
             cut = _intersect(box, structure.shape.support(plan.grid))
             if cut is None:
                 continue
@@ -142,6 +146,8 @@ def lower(scene, plan, rt, report=None, proxy_stats=None):
                     worst = float(gap[np.asarray(active)].max(initial=0.))
                     name = type(body).__name__
                     proxy_stats[name] = max(proxy_stats.get(name, 0.), worst)
+                    if proxy_by_index is not None:
+                        proxy_by_index[index] = max(proxy_by_index.get(index, 0.), worst)
                 off = xp.where(fill[None] == 0, cross[(slice(None),) + view],
                                contrast[None]*weights)
                 fresh = arithmetic

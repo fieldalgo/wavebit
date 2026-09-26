@@ -17,7 +17,7 @@ import dataclasses
 import numpy as np
 
 from ._lower import plan as _plan
-from ._lower.checks import notes as _notes
+from ._lower.checks import notes as _notes, shown
 from ._lower.coefficients import params_bytes
 
 __all__ = ['Report', 'check', 'report']
@@ -49,6 +49,13 @@ class Report:
     #: ((x lo, x hi), (y lo, y hi), (z lo, z hi)) of the grid, so a structure row can say
     #: whether its got differs from its asked by the box's face or by a snap (C5).
     box: tuple = ()
+    #: One ``checks.BodyRow`` per smoothed structure, printed as its block (C5), and the bytes
+    #: of each constitutive term's cross coefficients (params) and flux memory (state).
+    bodies: tuple = ()
+    term_bytes: tuple = ()
+    #: False where the params could not be built on NumPy (a traced material): the params
+    #: line then says so instead of printing 0.00 MB, which a threshold would read as small.
+    params_known: bool = True
 
     def __str__(self):
         lines = [
@@ -59,13 +66,17 @@ class Report:
             f'dt         {self.dt:g}   steps {self.steps}   duration {self.duration:g}',
             f'dtype      {self.dtype}',
             f'state      {self.bytes_per_state / 1e6:.2f} MB (E and H)',
-            f'params     {self.bytes_per_params / 1e6:.2f} MB (coefficients, profiles)',
+            (f'params     {self.bytes_per_params / 1e6:.2f} MB (coefficients, profiles)'
+             if self.params_known else
+             'params     unknown (a traced value: the params could not be built on NumPy)'),
         ]
         for name, kind, cells in self.absorbers:
             lines.append(f'absorber   {name}  {kind}, {cells} cells')
         for axis, lo, hi, slo, shi in self.spans:
             note = self._span_note(axis, lo, hi, slo, shi)
             lines.append(f'structure  {axis}=({lo:g}, {hi:g}) -> ({slo:g}, {shi:g}){note}')
+        for row in self.bodies:
+            lines.extend(self._body_lines(row))
         for name, kind, nbytes in self.monitors:
             lines.append(f'monitor    {name}  {kind}, {nbytes / 1e6:.2f} MB (DFT accumulators)')
         for name, rule, rows, width, nbytes in self.discretisations:
@@ -78,6 +89,49 @@ class Report:
         for w in self.warnings:
             lines.append(f'warning    {w}')
         return '\n'.join(lines)
+
+    def _body_lines(self, row):
+        """The block of one smoothed structure: what the grid holds of it, and what it costs."""
+        (i0, i1), (j0, j1), (k0, k1) = row.support
+        out = [f'body       structures[{row.index}] {row.describe}, smoothed',
+               f'  support  x {i0}..{i1}  y {j0}..{j1}  z {k0}..{k1}  '
+               f'({(i1 - i0) * (j1 - j0) * (k1 - k0)} cells)']
+        if row.across is None:
+            out.append('  across   a layer (uniform along two axes): no feature size to resolve')
+        else:
+            out.append(f'  across   {row.across[0]:.2f} cells at its narrowest '
+                       f'({row.across[1]:g})')
+        names = ' '.join(row.held)
+        if row.asked is None:
+            held = ', '.join(f'{name} {v:.6g}' for name, v in row.held.items())
+            out.append(f'  volume   held {held} (the body answers no volume())')
+        else:
+            worst = max((v / row.inside - 1.0 for v in row.held.values()), key=abs,
+                        default=0.0) if row.inside else 0.0
+            out.append(f'  volume   {row.asked:.6g} asked, {row.inside:.6g} in the box; held on '
+                       f'{names} to {worst:+.1e} of that at worst')
+        if row.outside:
+            share = 1.0 - row.inside / row.asked if row.asked else float('nan')
+            out.append(f'  outside  {100 * share:.1f}% past {", ".join(row.outside)}')
+        out.append(f'  cut      {" / ".join(str(v) for v in row.cut.values())} voxels '
+                   f'({names})')
+        sizes = dict((name, (p, s)) for name, p, s in self.term_bytes)
+        if row.terms:
+            for name in row.terms:
+                p, s = sizes.get(name, (None, None))
+                cost = ('bytes unknown' if p is None else
+                        f'{p / 1e6:.2f} MB params + {s / 1e6:.2f} MB state')
+                out.append(f'  cross    {name}: {cost}')
+        else:
+            out.append('  cross    none: its cross coefficients are zero (an unturned box)')
+        if row.normals == 'exact':
+            out.append('  normals  exact moment (the sphere)')
+        elif row.normals != 'none':
+            out.append(f'  normals  nearest-surface proxy, max |n_c^2 - w_c| {row.normals:.6g}')
+        for face, plane in row.mirrors:
+            out.append(f'  mirror   {face[0]} = {shown(plane, self.dx):g} ({face}): the scene is '
+                       f'this and its image')
+        return out
 
     def _span_note(self, label, lo, hi, slo, shi):
         """``<- clipped`` where the box's face cut the span, ``<- snapped`` where cells moved it.
@@ -131,7 +185,8 @@ def report(scene, p=None, params=None):
     for axis, n in zip('xyz', grid.n):
         if n < 4 and axis not in axis1d:
             warnings.append(f'{n} cell(s) along {axis}: a box this thin is all boundary')
-    for message, _ in ((m, c) for c, m in _notes(scene, p)):
+    bodies = []
+    for message, _ in ((m, c) for c, m in _notes(scene, p, rows=bodies)):
         warnings.append(message)
     itemsize = np.dtype(p.dtype).itemsize
     # The params' bytes are counted by lowering on NumPy -- the coefficient arrays and the
@@ -144,6 +199,7 @@ def report(scene, p=None, params=None):
     flux_memory = sum(3 * np.prod(t.region.shape) for t in p.constitutive) * itemsize
     absorbers = tuple((name, 'PML' if (name, cells) in p.pml_cells else 'Absorber', cells)
                       for name, cells in p.absorbing_faces)
+    params_known = True
     if params is None:
         from ._lower import lower as _lower
         try:
@@ -153,9 +209,13 @@ def report(scene, p=None, params=None):
             # run would be" must not print a complete, healthy-looking report for a scene
             # `run` then refuses outright -- the refusal's own text is what names the fix.
             # This catch is for the one thing it was written for: `np.asarray` on a tracer.
-            params = {}
+            params, params_known = {}, False
             warnings.append(f'the params could not be built on NumPy for the byte count: '
                             f'{type(err).__name__}: {err}; run the scene to see it')
+    cross = params.get('constitutive', {}) if isinstance(params, dict) else {}
+    term_bytes = tuple((t.name, int(np.asarray(cross[t.name]).nbytes) if t.name in cross
+                        else None, int(3 * np.prod(t.region.shape) * itemsize))
+                       for t in p.constitutive)
     monitors, solves = _monitor_lines(scene, p)
     return Report(cells=grid.n, requested_size=requested, size=grid.size, dx=p.dx, dt=p.dt,
                   discretisations=_discretisation_lines(p),
@@ -164,7 +224,8 @@ def report(scene, p=None, params=None):
                   warnings=tuple(warnings),
                   skeleton=p.skeleton, bytes_per_params=params_bytes(params),
                   absorbers=absorbers, spans=p.spans, monitors=monitors, solves=solves,
-                  box=tuple((grid.low[a], grid.high[a]) for a in range(3)))
+                  box=tuple((grid.low[a], grid.high[a]) for a in range(3)),
+                  bodies=tuple(bodies), term_bytes=term_bytes, params_known=params_known)
 
 
 def _discretisation_lines(p):
