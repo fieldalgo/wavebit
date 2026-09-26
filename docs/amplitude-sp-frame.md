@@ -116,8 +116,13 @@ which is exactly what qualifies it to judge: it is right either way, and it is p
 for entry against S4 (1e-15) and fmmax. Transverse `E` is continuous across the top interface,
 so its Fourier coefficient at order `(m, n)` is the superstrate's -- the incident wave, which
 lives only at `(0, 0)`, plus the reflected amplitude at its own phase reference. Decomposing
-the `z = 0` face onto the retained orders (residual 3.1e-15) and projecting onto
-`s_hat = z_hat x k_hat`:
+the top face onto the retained orders (residual 3.1e-15) and projecting onto
+`s_hat = z_hat x k_hat`. (The top face was `z = 0` when this was measured; since the
+upward-positive frame of 2026-09-21 it is `z = sum(thickness)`, and `z = 0` is the bottom one.
+The test kept requesting `z = 0` and from then on decomposed the *transmitted* field, which
+reported a frame error of 0.36 that the amplitudes did not have -- they were byte-identical
+across the change. The test now checks the plane before any order, so a moved plane names
+itself instead of impersonating a sign.)
 
 | | `Re(kx) > 0` orders (41) | `Re(kx) < 0` orders (35) |
 | --- | --- | --- |

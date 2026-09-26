@@ -49,10 +49,13 @@ def _solve(structure, period, truncation_order, phi, psi, theta=_THETA, backend=
                         **kw).solve().incident
 
 
-def _order_kxy(phi, theta=_THETA, px=_PX, py=_PY, fx=_FX, fy=_FY):
-    """The in-plane wavevector of every retained order, on the ``(n_orders_v, n_orders_u)`` grid."""
-    kx = np.sin(theta) * np.cos(phi) + np.arange(-fx, fx + 1) * _WL / px
-    ky = np.sin(theta) * np.sin(phi) + np.arange(-fy, fy + 1) * _WL / py
+def _order_kxy(phi, theta=_THETA, px=_PX, py=_PY, fx=_FX, fy=_FY, n=1.0):
+    """The in-plane wavevector of every retained order, on the ``(n_orders_v, n_orders_u)`` grid.
+
+    ``n`` is the incidence medium's index -- ``theta`` is measured there.
+    """
+    kx = n * np.sin(theta) * np.cos(phi) + np.arange(-fx, fx + 1) * _WL / px
+    ky = n * np.sin(theta) * np.sin(phi) + np.arange(-fy, fy + 1) * _WL / py
     return np.meshgrid(kx, ky)
 
 
@@ -109,8 +112,144 @@ def test_a_grating_and_its_transpose_report_the_same_amplitudes():
 
 # ------------------------------------------------------------------ 2. the field says so
 
-def test_the_amplitudes_are_the_field_projected_on_zhat_cross_k():
-    """The reported ``r_s`` is the top face's field in the ``s_hat = z_hat x k_hat`` frame.
+# A 1D grating lit off its plane, for the conical path: asymmetric in x so no order is saved
+# by a mirror, and phi != 0 so every order has ky != 0 -- its kx = 0 crossings then sit away
+# from the origin, where the frame is defined on both sides of them.
+_UC1D = np.ones((1, 1, 32))
+_UC1D[0, 0, 3:14] = 12.1104
+_UC1D[0, 0, 17:22] = 2.10
+_FX1D, _PHI1D = 7, 0.4
+# Glass below, vacuum above: the two faces open into different media, so the p frame's
+# cos(theta) is a different number on each, and lit from below the incidence medium is not 1.
+_N_BOT = 1.5
+
+
+def _host(value):
+    return value.detach().cpu().numpy() if hasattr(value, 'detach') else np.asarray(value)
+
+
+def _field_scene(grating, side, backend=0):
+    """A solve with the field kept, its amplitudes, and its orders' in-plane wavevectors."""
+    if grating == '2d':
+        phi, fx, fy, kw = np.pi / 2, _FX, _FY, dict(structure=_UC, factorization='nvf')
+    else:
+        phi, fx, fy, kw = _PHI1D, _FX1D, 0, dict(structure=_UC1D)
+    solver = wavebit.rcwa(backend=backend, top=1.0, bot=_N_BOT ** 2, thickness=_THICK,
+                          wavelength=_WL, theta=_THETA, phi=phi, psi=_PSI, incidence_side=side,
+                          period=[_PX, _PY], truncation_order=[fx, fy], answers='field', **kw)
+    res = solver.solve().incident
+    return solver, res, _order_kxy(phi, fx=fx, fy=fy, n=1.0 if side == 'top' else _N_BOT)
+
+
+def _face_orders(solver, z, KX, KY):
+    """``(Ex, Ey)`` of every retained order on the plane at height ``z``, and the fit residual.
+
+    More sample points than retained orders, so the decomposition is overdetermined and a
+    missing order would show up as a residual instead of being absorbed. `xs` / `ys` are
+    absolute Cartesian, because the plane-wave basis below is written in that frame;
+    `sample_x` / `sample_y` are measured from the centre of the cell, so the request carries
+    the half-period back off. The two must name the same points or the decomposition is
+    fitting a shifted field.
+    """
+    fy, fx = (s // 2 for s in KX.shape)
+    xs = np.linspace(0.0, _PX, 4 * fx + 3, endpoint=False)
+    ys = np.linspace(0.0, _PY, 4 * fy + 3, endpoint=False)
+    cell = solver.reconstruct_field(sample_x=xs - 0.5 * _PX, sample_y=ys - 0.5 * _PY,
+                                    sample_z=np.array([z]))
+    cell = _host(cell).astype(np.complex128).reshape(ys.size, xs.size, 6)
+    k0 = 2 * np.pi / _WL
+    basis = (np.exp(1j * k0 * np.outer(ys, KY[:, 0]))[:, None, :, None]
+             * np.exp(1j * k0 * np.outer(xs, KX[0]))[None, :, None, :])
+    basis = basis.reshape(ys.size * xs.size, KX.size)
+    ex, ey = (np.linalg.lstsq(basis, cell[:, :, i].reshape(-1), rcond=None)[0].reshape(KX.shape)
+              for i in (0, 1))
+    return ex, ey, np.abs(basis @ ex.reshape(-1) - cell[:, :, 0].reshape(-1)).max()
+
+
+def _sp_components(ex, ey, KX, KY, n, reflected):
+    """An order's transverse ``E`` read in its s/p frame, as the two amplitudes.
+
+    ``s_hat = z_hat x k_hat_par``. ``p_hat``'s in-plane part lies along ``k_hat_par`` with
+    length ``cos(theta_m) = kz / (n k0)`` in the medium the order travels in: **``+`` for a
+    reflected order, ``-`` for a transmitted one and for the incident wave**, whichever face is
+    lit -- continued onto the decaying branch for an evanescent order. That is what makes
+    normal incidence ``E = (-a_p, a_s)`` on both sides (``docs/conventions.md``). In the public
+    frame it is ``p_hat = k_hat x s_hat`` lit from below and ``s_hat x k_hat`` lit from above:
+    the in-plane rule is the one held fixed, so the handedness of ``(s_hat, p_hat, k_hat)``
+    follows the lit side.
+    """
+    varphi = np.arctan2(KY, KX)
+    c, s = np.cos(varphi), np.sin(varphi)
+    cos_m = np.sqrt(n ** 2 - KX ** 2 - KY ** 2 + 0j) / n
+    return c * ey - s * ex, (c * ex + s * ey) / (cos_m if reflected else -cos_m)
+
+
+def _signs_by_half_plane(E, a, live, KX):
+    """Which sign relates ``E`` to ``a`` on each half of the kx plane -- for a failure message.
+
+    The first report of the 2026-09-24 failure read a half-turn into a moved sample plane,
+    because this message used to print only ``|E + a|`` on ``kx < 0``. Say what was measured.
+    """
+    out = []
+    for name, half in (('kx>0', KX > 0), ('kx<0', KX < 0)):
+        m = live & half
+        if not m.any():
+            continue
+        if np.abs(E - a)[m].max() < 1e-9:
+            out.append(f'{name}: agrees')
+        elif np.abs(E + a)[m].max() < 1e-9:
+            out.append(f'{name}: agrees up to a sign -- a half-turn of the frame')
+        else:
+            out.append(f'{name}: neither sign')
+    return '; '.join(out)
+
+
+def _assert_amplitudes_are_the_field(solver, res, KX, KY, side, tol, min_negative_kx):
+    top = sum(_THICK)                 # z = 0 is the bottom interface, z = sum(thickness) the top
+    lit, far = (top, 0.0) if side == 'top' else (0.0, top)
+    n_lit, n_far = (1.0, _N_BOT) if side == 'top' else (_N_BOT, 1.0)
+    centre = tuple(s // 2 for s in KX.shape)
+
+    for channel, z, n in (('r', lit, n_lit), ('t', far, n_far)):
+        ex, ey, residual = _face_orders(solver, z, KX, KY)
+        assert residual < tol, (
+            f'the field at z = {z} is not a sum of the retained orders, so the projection '
+            f'below is reading something other than the {channel} amplitudes')
+        E_s, E_p = _sp_components(ex, ey, KX, KY, n, reflected=channel == 'r')
+        a_s, a_p = (_host(getattr(res, f'{channel}_{pol}')).astype(np.complex128)
+                    for pol in ('s', 'p'))
+
+        # On the lit face order (0, 0) also carries the incident wave, (a_s, a_p) =
+        # (sin psi, cos psi), whose p_hat leans the opposite way from a reflected order's.
+        # Take it off, and what is left is reflection like every other order.
+        if channel == 'r':
+            E_s[centre] -= np.sin(_PSI)
+            E_p[centre] += np.cos(_PSI)
+
+        # The plane first, because nothing else identifies it: every face of the stack is a
+        # sum of the retained orders, so the residual above passes on any of them. s alone,
+        # so that an error in the p frame is reported as one below and not blamed on the plane.
+        miss = abs(E_s[centre] - a_s[centre])
+        assert miss < tol, (
+            f'z = {z} does not read as the {"lit" if channel == "r" else "far"} face of a '
+            f'{side}-lit stack: order (0, 0) there is not {"incident + " if channel == "r" else ""}'
+            f'{channel}_s (off by {miss:.3e}). z = 0 has been the bottom interface and '
+            'z = sum(thickness) the top one since ee31979 (docs/conventions.md). Settle the '
+            'plane before reading a frame into the orders -- a moved plane reads as a sign.')
+
+        for pol, E, a in (('s', E_s, a_s), ('p', E_p, a_p)):
+            live = np.abs(a) > 1e-3        # the weak orders carry no sign worth reading
+            assert (live & (KX < 0)).sum() >= min_negative_kx, f'too few kx<0 orders in {channel}_{pol}'
+            worst = np.abs(E[live] - a[live]).max()
+            assert worst < tol, (
+                f'{side}-lit {channel}_{pol} is not the field in its documented frame, off by '
+                f'{worst:.3e} ({_signs_by_half_plane(E, a, live, KX)})')
+
+
+@pytest.mark.parametrize('side', ['top', 'bottom'])
+@pytest.mark.parametrize('grating', ['2d', 'conical'])
+def test_the_amplitudes_are_the_field_projected_on_zhat_cross_k(grating, side):
+    """Every reported amplitude is its face's field in the ``s_hat = z_hat x k_hat`` frame.
 
     This is the outside opinion, and it works because the defect *cannot* reach the field:
     reversing an order's frame reverses its basis vectors and its coefficients together, so
@@ -118,57 +257,43 @@ def test_the_amplitudes_are_the_field_projected_on_zhat_cross_k():
     either way. That makes it a valid arbiter for the amplitudes rather than a restatement
     of them.
 
-    Transverse ``E`` is continuous across the top interface, so its Fourier coefficient at
-    order ``(m, n)`` is the superstrate's: the incident wave, which lives only at ``(0, 0)``,
-    plus the reflected amplitude at its own phase reference. Every other order is therefore
-    the reflected field outright, and no phase bookkeeping is needed.
+    Transverse ``E`` is continuous across an interface, so its Fourier coefficient at order
+    ``(m, n)`` on the lit face is the incidence medium's: the incident wave, which lives only
+    at ``(0, 0)``, plus the reflected amplitude at its own phase reference. Every other order
+    is therefore the reflected field outright, and no phase bookkeeping is needed; the far
+    face is the transmitted field outright, ``(0, 0)`` included.
 
     The scale comes out ``1`` rather than fitted, which is a second assertion for free: it
     says ``r_s`` *is* that field amplitude against a unit incident one, the contract
     ``_core/result.py`` states.
+
+    Both lit sides, all four amplitudes, and the conical path beside the 2D one: until
+    2026-09-27 this read ``r_s`` alone, top-lit, 2D, so a change to the p frame or to the
+    backside could not fail it. It also sampled ``z = 0`` as "the top face" -- true when it
+    was written, and not since ee31979 put ``z = 0`` at the bottom interface, after which it
+    decomposed the transmitted field and reported a frame error the amplitudes did not have
+    (they were byte-identical across that commit). Hence the plane check inside, which names
+    that failure before any per-order comparison can impersonate a sign.
     """
-    solver = wavebit.rcwa(backend=0, top=1.0, bot=1.0, thickness=_THICK, wavelength=_WL,
-                          theta=_THETA, phi=np.pi / 2, psi=_PSI, factorization='nvf',
-                          structure=_UC, period=[_PX, _PY], truncation_order=[_FX, _FY], answers='field')
-    res = solver.solve().incident
+    solver, res, (KX, KY) = _field_scene(grating, side)
+    _assert_amplitudes_are_the_field(solver, res, KX, KY, side, tol=1e-12,
+                                     min_negative_kx=10 if grating == '2d' else 4)
 
-    # More sample points than retained orders, so the decomposition is overdetermined and a
-    # missing order would show up as a residual instead of being absorbed.
-    # `xs` / `ys` are absolute Cartesian, because the plane-wave basis below is written in
-    # that frame; `sample_x` / `sample_y` are measured from the centre of the cell, so the
-    # request carries the half-period back off. The two must name the same points or the
-    # decomposition is fitting a shifted field.
-    xs = np.linspace(0.0, _PX, 4 * _FX + 3, endpoint=False)
-    ys = np.linspace(0.0, _PY, 4 * _FY + 3, endpoint=False)
-    cell = np.asarray(solver.reconstruct_field(sample_x=xs - 0.5 * _PX, sample_y=ys - 0.5 * _PY,
-                                               sample_z=np.array([0.0])),
-                      dtype=np.complex128)
-    cell = cell.reshape((-1,) + cell.shape[-3:])[0]           # (ny, nx, 6) at z = 0
 
-    KX, KY = _order_kxy(np.pi / 2)
-    k0 = 2 * np.pi / _WL
-    basis = (np.exp(1j * k0 * np.outer(ys, KY[:, 0]))[:, None, :, None]
-             * np.exp(1j * k0 * np.outer(xs, KX[0]))[None, :, None, :])
-    basis = basis.reshape(ys.size * xs.size, KX.size)
-    cx, cy = (np.linalg.lstsq(basis, cell[:, :, i].reshape(-1), rcond=None)[0].reshape(KX.shape)
-              for i in (0, 1))
-    assert np.abs(basis @ cx.reshape(-1) - cell[:, :, 0].reshape(-1)).max() < 1e-12, (
-        'the top-face field is not a sum of the retained orders, so the projection below '
-        'is reading something other than the reflected amplitudes')
+@pytest.mark.parametrize('side', ['top', 'bottom'])
+@pytest.mark.parametrize('backend, name', [(1, 'jax'), (2, 'torch')])
+def test_the_traced_backends_reconstruct_in_the_same_frame(backend, name, side):
+    """The field arbiter above, on the two traced backends.
 
-    varphi = np.arctan2(KY, KX)                               # s_hat = z_hat x k_hat_par
-    E_s = np.cos(varphi) * cy - np.sin(varphi) * cx
-    r_s = np.asarray(res.r_s, dtype=np.complex128)
-
-    # (0, 0) also carries the incident wave; the weak orders carry no sign worth reading.
-    live = np.abs(r_s) > 1e-3
-    live[_FY, _FX] = False
-    assert (live & (KX < 0)).sum() >= 10, 'too few kx<0 orders to test'
-
-    assert np.abs(E_s[live] - r_s[live]).max() < 1e-12, (
-        'the reported amplitudes are not this field in the z_hat x k_hat frame; '
-        f'the {(live & (KX < 0)).sum()} kx<0 orders are the ones to look at '
-        f'(|E_s + r_s| there = {np.abs(E_s[live & (KX < 0)] + r_s[live & (KX < 0)]).max():.3e})')
+    The twin test below compares these backends' amplitudes with themselves, which a
+    backend-specific error in the amplitudes *and* the field together would pass; this one
+    holds them to the field.
+    """
+    pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
+    if backend == 1:
+        wavebit.enable_x64()
+    solver, res, (KX, KY) = _field_scene('2d', side, backend=backend)
+    _assert_amplitudes_are_the_field(solver, res, KX, KY, side, tol=1e-11, min_negative_kx=10)
 
 
 # ------------------------------------------------------------------ 3. continuity
