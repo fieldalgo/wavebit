@@ -194,3 +194,52 @@ def test_the_accepted_mirror_is_the_full_box_and_the_refused_one_is_not(monkeypa
     monkeypatch.setattr(checks, 'check_symmetry', lambda scene, grid: None)
     flush = _series(True, _box(0.0, 0.235))             # exactly BAR's domain half
     assert np.max(np.abs(flush - full)) >= 1e-2 * np.max(np.abs(full))
+
+
+def _mirror_n(structures, n, side='+', parity=1):
+    """``_mirror`` with ``n`` cells along x, for the cell-count parity of a ``+`` plane."""
+    return _mirror(structures, side, parity).replace(
+        domain=fd.Domain(size=(n * DX, N * DX, N * DX),
+                         center=((n if side == '-' else -n) * DX / 2, 0.0, 0.0)))
+
+
+@pytest.mark.parametrize('n', (12, 13))
+def test_a_snapped_face_declared_on_a_plus_plane_is_refused(n):
+    """A ``+`` plane is the centre of the last cell: a face on it snaps up or down.
+
+    At 13 cells the flush Region ``[-0.2, -0.025]`` snapped short and left the plane's cell
+    empty -- body and image a cell apart, where the scene is one bar -- and was accepted as
+    exact (the C5 review; the lowered eps is checked by hand below with the door held open).
+    Refused at either parity of the count; to the wall, or half a cell short, plans.
+    """
+    plane = -0.025
+    for shape in (_region(-0.2, plane), fd.Slab(x=(-0.2, plane))):
+        _refused(_mirror_n((shape,), n), 'declared on the x+ Symmetry plane',
+                 'to the wall (x = 0)')
+    _plans(_mirror_n((_region(-0.2, 0.0),), n))
+    _plans(_mirror_n((_region(-0.2, plane - 0.025),), n))
+
+
+def test_the_flush_hole_the_plus_door_refuses_is_real(monkeypatch):
+    """With the door held open, 13 cells: the plane's cell holds background, not the bar."""
+    monkeypatch.setattr(checks, 'check_symmetry', lambda scene, grid: None)
+    scene = _mirror_n((_region(-0.2, -0.025),), 13)
+    plan = _plans(scene)
+    eps = (plan.dt / plan.dx) / np.asarray(_quiet(fd.lower, scene, plan, 'numpy')['be'])
+    row = eps[1, N // 2, N // 2, :]
+    assert row[-1] == 1.0 and row[-2] == 4.0, row
+
+
+def test_a_snapped_shape_reaching_the_mirrored_wall_is_judged_against_it():
+    """Past the far wall as well as the plane: the modelled edge is the wall's image.
+
+    ``-`` face, box ``[0, 0.6]``: ``[-0.9, 0.7]`` runs as ``[-0.6, 0.6]``, the declared body
+    cut by the wall and its image, and plans; ``[-0.5, 0.7]`` ends two cells short of the image
+    of the wall and is refused. ``+`` face, box ``[-0.6, 0]``, image to ``0.55``:
+    ``[-0.9, 0.85]`` plans; ``[-0.9, 0.5]`` is refused a cell short.
+    """
+    _plans(_mirror((_region(-0.9, 0.7),)))
+    _plans(_mirror((fd.Slab(x=(-0.9, 0.7)),)))
+    _refused(_mirror((_region(-0.5, 0.7),)), 'crosses the x- Symmetry plane', '2.00 cells')
+    _plans(_mirror((_region(-0.9, 0.85),), '+'))
+    _refused(_mirror((_region(-0.9, 0.5),), '+'), 'crosses the x+ Symmetry plane', '1.00 cells')

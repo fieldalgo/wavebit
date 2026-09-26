@@ -913,7 +913,12 @@ def check_symmetry(scene, grid):
       used and a flush half is exact, so it is not refused. Only E is read: the parity frees
       E and H on the plane together, and their voxels there tile the same slab half a cell
       either side of it, so a body in one is in the other. A cell-snapped shape is whole
-      cells, and a flush one is exactly its own half.
+      cells: flush against a ``-`` plane (the wall) it is exactly its own half. A ``+`` plane
+      is the centre of the last cell, so a snapped face declared ON it rounds up or down by
+      the cell count's parity and by round-off -- the plane's cell full (joined to the image)
+      or empty (a cell apart from it); the C5 review found it empty at 15 of the counts 8 to
+      40. That face is refused, naming the two spellings that are not ambiguous: to the wall,
+      or half a cell short of the plane.
 
     Measured with this door held open (``studies/fdtd_symmetry_mirror.py``: a PEC cavity with
     an ``eps = 4`` bar along the mirror's axis, the ``Symmetry(parity=1)`` half box against
@@ -960,6 +965,17 @@ def check_symmetry(scene, grid):
                 found = _snapped_mirror(shape, grid, a, side)
                 if found is None:
                     continue
+                if found[1] is None:
+                    lo, hi = found[0]
+                    raise ValueError(
+                        f'{where} has its {axis} face declared on the {axis}+ Symmetry plane at '
+                        f'{axis} = {plane:g} (declared {axis} = ({lo:g}, {hi:g})). On a + face '
+                        f'the plane is the centre of the last cell, so a cell-snapped face on it '
+                        f'rounds up or down by the cell count\'s parity and by round-off: the '
+                        f'plane\'s cell full, the body joined to its image, or empty, the two a '
+                        f'cell apart -- and the scene says neither. Declare it to the wall '
+                        f'({axis} = {wall:g}) to join its image, or at least half a cell '
+                        f'({0.5 * grid.dx:g}) short of the plane to keep them apart.')
                 (lo, hi), (r0, r1), gap = found
                 raise ValueError(
                     f'{where} crosses the {axis}{side} Symmetry plane at {axis} = {plane:g}: '
@@ -971,9 +987,9 @@ def check_symmetry(scene, grid):
                     f'(studies/fdtd_symmetry_mirror.py), an fd.Region declared (-0.1, 0.2) '
                     f'across a mirror at 0 runs as (-0.2, 0.2) and moves a cavity\'s resonance '
                     f'by -9.09e-03 against the same Region in the full cavity. Centre it '
-                    f'on the plane, or keep it on the domain side: flush against the plane is '
-                    f'exact for a cell-snapped shape, which the mirror joins to its image.'
-                    f'{plus}')
+                    f'on the plane, or keep it on the domain side: flush against a - plane it '
+                    f'is exact, the mirror joining it to its image; on a + face declare it to '
+                    f'the wall for that.{plus}')
             found = _smoothed_mirror(body, shape, grid, a, side, parity)
             if found is None:
                 continue
@@ -1017,6 +1033,8 @@ def _snapped_mirror(shape, grid, a, side):
 
     ``(lo, hi)`` is the span declared along ``a``, ``(r0, r1)`` the one the run models, and
     ``gap`` the distance in cells between the declared and the modelled edge beyond the plane.
+    ``((lo, hi), None, None)`` for a face declared on a ``+`` plane, which is ambiguous
+    (:func:`check_symmetry`).
     Only ``fd.Region`` and an ``fd.Slab`` across ``a`` have an edge there; a Slab along
     another axis runs through the mirror unchanged.
     """
@@ -1038,6 +1056,8 @@ def _snapped_mirror(shape, grid, a, side):
         gap = max(alpha - made, 0.0) if k1 >= n else abs(alpha - made)
         modelled = (low + made * dx, low + min(k1, n) * dx)
     else:
+        if abs(beta - (n - 0.5)) <= 1e-6 and k0 < n:
+            return (lo, hi), None, None     # a face ON the plane: rounds either way
         if k1 <= n:
             return None
         made = 2 * n - 1 - max(k0, 0)       # the plane is the centre of cell n - 1
