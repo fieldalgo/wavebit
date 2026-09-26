@@ -26,8 +26,8 @@ def scene(cpw, empty=False, eps=1.1, periods=24., reflection=1e-8):
     # at 20 cells/wavelength. The .9-long line stays inside the 1.1 source box;
     # its .1 transverse width samples multiple columns on that same grid.
     s=sphere_scene(cpw,eps,periods,reflection=reflection)
-    extra=(fd.Field('line',box=fd.Box(size=(.1,.1,.9)),components=('Ex','Hy'),wavelengths=(1.,)),)
-    extra+=tuple(fd.FarField(n,box=fd.Box(size=(2*h,)*3),wavelengths=(1.,)) for n,h in (('near',.65),('far',.85)))
+    extra=(fd.Field('line',box=fd.Region(size=(.1,.1,.9)),components=('Ex','Hy'),wavelengths=(1.,)),)
+    extra+=tuple(fd.FarField(n,box=fd.Region(size=(2*h,)*3),wavelengths=(1.,)) for n,h in (('near',.65),('far',.85)))
     return s.replace(monitors=s.monitors+extra,structures=() if empty else s.structures)
 
 def column_audit(res):

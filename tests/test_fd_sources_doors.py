@@ -24,7 +24,7 @@ where each lives):
    refused when they do not;
 10. cells per wavelength, checked at ``band.shortest_wavelength``;
 
-and the doors around them: ``Run(periods=)``, ``Box`` as a structure, the stage-7 sources, the
+and the doors around them: ``Run(periods=)``, ``Region`` as a structure, the stage-7 sources, the
 spelling of ``Band``, ``Dipole``, ``PlaneWave`` and ``TFSF`` and the scene's ``sources=``.
 """
 import math
@@ -123,7 +123,7 @@ def test_a_tfsf_box_touching_an_absorbing_layer_is_refused_and_a_smaller_one_acc
 
 def test_a_tfsf_box_crossing_a_face_of_the_domain_is_refused():
     scene = tfsf_box()
-    big = scene.sources[0].replace(box=fd.Box(size=(5.0, 0.5, 0.5)))
+    big = scene.sources[0].replace(box=fd.Region(size=(5.0, 0.5, 0.5)))
     with pytest.raises(ValueError, match='reaches into the PML'):
         _plans(scene.replace(sources=(big,)))
     periodic = scene.replace(boundaries=fd.Boundaries.open(fd.PML(cells=12), x=fd.Periodic()),
@@ -168,7 +168,7 @@ def test_a_structure_crossing_the_tfsf_surface_outside_the_aux_background_is_ref
 
 def test_an_oblique_tfsf_is_refused_citing_the_measurement():
     b = band()
-    box = fd.Box(size=(0.5, 0.5, 0.5))
+    box = fd.Region(size=(0.5, 0.5, 0.5))
     with pytest.raises(ValueError) as e:
         fd.TFSF('t', box=box, direction='-z', polarization='x', band=b, theta=30)
     message = str(e.value)
@@ -185,7 +185,7 @@ def test_an_oblique_tfsf_is_refused_citing_the_measurement():
 
 def test_a_tfsf_polarisation_along_its_direction_is_refused():
     with pytest.raises(ValueError, match="'x' or 'y'"):
-        fd.TFSF('t', box=fd.Box(size=(0.5, 0.5, 0.5)), direction='-z', polarization='z',
+        fd.TFSF('t', box=fd.Region(size=(0.5, 0.5, 0.5)), direction='-z', polarization='z',
                 band=band())
 
 
@@ -428,17 +428,17 @@ def test_run_periods_doors():
 
 
 def test_a_box_is_a_tfsf_region_and_since_stage_3_a_structure():
-    # Stage 2 refused Structure(fd.Box(...)) naming stage 4; stage 3 made the cell-snapped Box
+    # Stage 2 refused Structure(fd.Region(...)) naming stage 4; stage 3 made the cell-snapped Region
     # a structure (tests/test_fd_monitors_doors.py holds its doors), and the shapes after it
     # are still stage 4.
-    box = fd.Box(size=(0.2, 0.2, 0.2))
+    box = fd.Region(size=(0.2, 0.2, 0.2))
     assert fd.Structure(box, fd.Material(eps=2.25)).shape is box
     with pytest.raises(TypeError) as e:
         fd.Structure(fd.Plane(z=0.0), fd.Material(eps=2.25))
     assert 'stage 4' in str(e.value)
     with pytest.raises(ValueError, match='positive length'):
-        fd.Box(size=(0.2, 0.0, 0.2))
-    with pytest.raises(TypeError, match="fd.Box"):
+        fd.Region(size=(0.2, 0.0, 0.2))
+    with pytest.raises(TypeError, match="fd.Region"):
         fd.TFSF('t', box=(0.2, 0.2, 0.2), direction='-z', band=band())
 
 

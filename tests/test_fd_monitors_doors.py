@@ -1,11 +1,11 @@
-"""Stage 3's doors: every refusal the monitors, ``Run(time=)`` and the ``Box`` structure add.
+"""Stage 3's doors: every refusal the monitors, ``Run(time=)`` and the ``Region`` structure add.
 
 Each refusal is paired with the accepted spelling beside it, so a door that refuses too much
 fails here as surely as one that refuses too little (``tests/test_fd_sources_doors.py`` is the
 stage-2 pattern this follows). Nothing here checks a number the physics produces -- the flux
 closure, the orders against RCWA, the normalisations and the decay line are the gates' -- except
 where a door's whole point is a number: ``Run(time=)``'s step count, the decay warning that must
-fire on a cavity and stay quiet on an open box, and the ``Box`` structure's snapped cells.
+fire on a cavity and stay quiet on an open box, and the ``Region`` structure's snapped cells.
 
 The table, and where each door lives:
 
@@ -25,11 +25,12 @@ The table, and where each door lives:
     Diffraction without one PlaneWave, across another       _lower/monitors.py
       axis, on non-periodic faces, with unresolvable
       orders, in a cut or lossy medium
-    Structure(shape) other than Slab and Box (stage 4)      geometry.Structure
-    Box structure snapping to nothing on an axis            geometry.Box.cells
-    Box ending inside an absorbing layer; lossy Box         _lower/checks.py
-      in a PML; a Box overlapping a Dispersive
-    Box at a PlaneWave sheet; Box touching a TFSF face      _lower/sources.py
+    Structure(shape) other than Slab and Region (stage 4)   geometry.Structure
+    Region structure snapping to nothing on an axis         geometry.Region.cells
+    Region ending inside an absorbing layer; lossy Region   _lower/checks.py
+      in a PML; a Region overlapping a Dispersive
+    Region at a PlaneWave sheet; Region touching a TFSF     _lower/sources.py
+      face
     a Flux / Diffraction plane or a Flux / FarField box     _lower/monitors._clear_of_sources
       cutting a Dipole's stamp, on (or a box around) a
       PlaneWave sheet, or on a TFSF surface
@@ -38,7 +39,7 @@ The table, and where each door lives:
 
 Build B of stage 3 adds three more families, at the bottom of this file:
 
-    FarField: a box that is not a Box; a periodic cell     monitors.FarField,
+    FarField: a box that is not a Region; a periodic cell  monitors.FarField,
       (names Diffraction); a wall or mirror face; a          _lower/monitors.farfield_checks
       structure not strictly inside the box; a box
       cutting a TFSF surface; a box reaching a PML
@@ -119,14 +120,14 @@ def test_a_traced_wavelength_is_refused_as_static():
 
 @pytest.mark.parametrize('cls', [fd.Flux, fd.Field])
 def test_a_region_is_one_plane_or_one_box(cls):
-    plane, box = fd.Plane(z=0.0), fd.Box(size=(0.2, 0.2, 0.2))
+    plane, box = fd.Plane(z=0.0), fd.Region(size=(0.2, 0.2, 0.2))
     with pytest.raises(ValueError, match='exactly one'):
         cls('m', wavelengths=WS)
     with pytest.raises(ValueError, match='exactly one'):
         cls('m', plane=plane, box=box, wavelengths=WS)
     with pytest.raises(TypeError, match='fd.Plane'):
         cls('m', plane=0.0, wavelengths=WS)
-    with pytest.raises(TypeError, match='fd.Box'):
+    with pytest.raises(TypeError, match='fd.Region'):
         cls('m', box=(0.2, 0.2, 0.2), wavelengths=WS)
     cls('m', plane=plane, wavelengths=WS)
     cls('m', box=box, wavelengths=WS)
@@ -219,8 +220,8 @@ def test_the_scene_takes_the_five_monitor_types_and_nothing_else():
     scene = dipole_box(size=0.6, steps=5)
     with pytest.raises(TypeError, match='fd.Record, fd.Flux, fd.Field, fd.FarField or '
                                         'fd.Diffraction'):
-        scene.replace(monitors=(fd.Box(size=(0.1, 0.1, 0.1)),))
-    one = fd.Flux('f', box=fd.Box(size=(0.3, 0.3, 0.3)), wavelengths=WS)
+        scene.replace(monitors=(fd.Region(size=(0.1, 0.1, 0.1)),))
+    one = fd.Flux('f', box=fd.Region(size=(0.3, 0.3, 0.3)), wavelengths=WS)
     assert scene.replace(monitors=one).monitors == (one,)
     with pytest.raises(ValueError, match="repeated: \\['f'\\]"):
         scene.replace(monitors=(one, fd.Record('f', at=(0, 0, 0))))
@@ -232,7 +233,7 @@ def test_a_monitor_region_must_lie_in_the_domain():
         scene.replace(monitors=(fd.Flux('f', plane=fd.Plane(z=5.0, x=(-0.1, 0.1),
                                                             y=(-0.1, 0.1)), wavelengths=WS),))
     with pytest.raises(ValueError, match='outside the domain'):
-        scene.replace(monitors=(fd.Flux('f', box=fd.Box(size=(0.2, 0.2, 0.2),
+        scene.replace(monitors=(fd.Flux('f', box=fd.Region(size=(0.2, 0.2, 0.2),
                                                         center=(2.0, 0, 0)),
                                         wavelengths=WS),))
     with pytest.raises(ValueError, match='outside the domain'):
@@ -270,16 +271,16 @@ def test_a_flux_plane_needs_a_cell_either_side_and_a_finite_extent_in_an_open_bo
 
 def test_a_flux_box_stays_clear_of_the_absorbers_and_the_domain_edge():
     scene = dipole_box(size=0.6, steps=5)
-    big = scene.replace(monitors=(fd.Flux('f', box=fd.Box(size=(0.9, 0.9, 0.9)),
+    big = scene.replace(monitors=(fd.Flux('f', box=fd.Region(size=(0.9, 0.9, 0.9)),
                                           wavelengths=WS),))
     with pytest.raises(ValueError, match='reaches the PML'):
         _plan(big)
     cell = scene.replace(boundaries=fd.Boundaries(x=fd.PEC(), y=fd.PEC(), z=fd.PEC()),
-                         monitors=(fd.Flux('f', box=fd.Box(size=scene.domain.size),
+                         monitors=(fd.Flux('f', box=fd.Region(size=scene.domain.size),
                                            wavelengths=WS),))
     with pytest.raises(ValueError, match='clearance from the domain'):
         _plan(cell)
-    ok = scene.replace(monitors=(fd.Flux('f', box=fd.Box(size=(0.4, 0.4, 0.4)),
+    ok = scene.replace(monitors=(fd.Flux('f', box=fd.Region(size=(0.4, 0.4, 0.4)),
                                          wavelengths=WS),))
     names = [o.name for o in _plan(ok).observers]
     assert names == [f'f::{face}' for face in ('x-', 'x+', 'y-', 'y+', 'z-', 'z+')]
@@ -297,15 +298,15 @@ def test_a_flux_surface_keeps_off_a_dipoles_stamp():
 
     for size in (0.1, 0.2):                          # inside the stamp; through its tail
         with pytest.raises(ValueError, match=r"cuts the stamp of Dipole\('d'\)") as e:
-            _plan(flux(box=fd.Box(size=(size,) * 3)))
+            _plan(flux(box=fd.Region(size=(size,) * 3)))
         assert 'enclose it with one cell to spare' in str(e.value)
         with pytest.raises(ValueError, match='cuts the stamp'):
-            _plan(scene.replace(monitors=(fd.FarField('ff', box=fd.Box(size=(size,) * 3),
+            _plan(scene.replace(monitors=(fd.FarField('ff', box=fd.Region(size=(size,) * 3),
                                                       wavelengths=WS),)))
-    _plan(flux(box=fd.Box(size=(0.3,) * 3)))         # Ez reaches z -1.5..1.5 cells: 3 clear
-    _plan(scene.replace(monitors=(fd.FarField('ff', box=fd.Box(size=(0.3,) * 3),
+    _plan(flux(box=fd.Region(size=(0.3,) * 3)))         # Ez reaches z -1.5..1.5 cells: 3 clear
+    _plan(scene.replace(monitors=(fd.FarField('ff', box=fd.Region(size=(0.3,) * 3),
                                               wavelengths=WS),)))
-    _plan(flux(box=fd.Box(size=(0.1,) * 3, center=(0.0, 0.0, 0.2))))   # beside it, clear
+    _plan(flux(box=fd.Region(size=(0.1,) * 3, center=(0.0, 0.0, 0.2))))   # beside it, clear
     with pytest.raises(ValueError, match='keep the plane one cell clear'):
         _plan(flux(plane=fd.Plane(z=0.05, x=(-0.1, 0.1), y=(-0.1, 0.1))))
     _plan(flux(plane=fd.Plane(z=0.15, x=(-0.1, 0.1), y=(-0.1, 0.1))))
@@ -327,11 +328,11 @@ def test_a_flux_or_diffraction_plane_keeps_off_a_plane_wave_sheet():
     for z in (sheet - 0.05, sheet + 0.05):
         _plan(_pw_scene(monitors=(fd.Diffraction('r', z=z, wavelengths=WS),
                                   fd.Flux('f', plane=fd.Plane(z=z), wavelengths=WS))))
-    around = fd.Flux('f', box=fd.Box(size=(0.1, 0.1, 0.2), center=(0.0, 0.0, sheet)),
+    around = fd.Flux('f', box=fd.Region(size=(0.1, 0.1, 0.2), center=(0.0, 0.0, sheet)),
                      wavelengths=WS)
     with pytest.raises(ValueError, match='encloses part of the sheet'):
         _plan(_pw_scene(monitors=(around,)))
-    _plan(_pw_scene(monitors=(fd.Flux('f', box=fd.Box(size=(0.1, 0.1, 0.2),
+    _plan(_pw_scene(monitors=(fd.Flux('f', box=fd.Region(size=(0.1, 0.1, 0.2),
                                                       center=(0.0, 0.0, sheet - 0.2)),
                                       wavelengths=WS),)))
 
@@ -344,13 +345,13 @@ def test_a_flux_surface_keeps_off_a_tfsf_surface():
         return tfsf_box(steps=5, monitors=(fd.Flux('f', wavelengths=WS, **region),))
 
     with pytest.raises(ValueError, match="cuts or lies on the surface of TFSF"):
-        _plan(with_flux(box=fd.Box(size=(0.5,) * 3)))
+        _plan(with_flux(box=fd.Region(size=(0.5,) * 3)))
     with pytest.raises(ValueError, match="cuts or lies on the surface of TFSF"):
-        _plan(with_flux(box=fd.Box(size=(0.3,) * 3, center=(0.25, 0.0, 0.0))))
+        _plan(with_flux(box=fd.Region(size=(0.3,) * 3, center=(0.25, 0.0, 0.0))))
     with pytest.raises(ValueError, match="cuts or lies on the surface of TFSF"):
         _plan(with_flux(plane=fd.Plane(z=0.25, x=(-0.1, 0.1), y=(-0.1, 0.1))))
-    _plan(with_flux(box=fd.Box(size=(0.4,) * 3)))                   # inside, a cell to spare
-    _plan(with_flux(box=fd.Box(size=(0.6,) * 3)))                   # around, a cell to spare
+    _plan(with_flux(box=fd.Region(size=(0.4,) * 3)))                   # inside, a cell to spare
+    _plan(with_flux(box=fd.Region(size=(0.6,) * 3)))                   # around, a cell to spare
     _plan(with_flux(plane=fd.Plane(z=0.3, x=(-0.1, 0.1), y=(-0.1, 0.1))))   # a cell clear
     _plan(with_flux(plane=fd.Plane(z=0.2, x=(-0.1, 0.1), y=(-0.1, 0.1))))   # a cell inside
 
@@ -444,25 +445,25 @@ def test_a_run_with_no_frequency_domain_monitor_reports_and_never_warns():
 
 
 # ---------------------------------------------------------------------------------------------
-# Box as a structure
+# Region as a structure
 # ---------------------------------------------------------------------------------------------
 
 def test_a_box_is_a_structure_and_other_shapes_are_stage_4():
     glass = fd.Material(eps=2.25)
-    fd.Structure(fd.Box(size=(0.2, 0.2, 0.2)), glass)
+    fd.Structure(fd.Region(size=(0.2, 0.2, 0.2)), glass)
     with pytest.raises(TypeError, match='stage 4'):
         fd.Structure(fd.Plane(z=0.0), glass)
-    with pytest.raises(NotImplementedError, match='fd.Box') as e:
+    with pytest.raises(NotImplementedError, match='fd.Region') as e:
         fd.Slab(z=(0, 1), x=(0, 1))
     assert 'stage 4' in str(e.value)
     with pytest.raises(NotImplementedError, match='stage 4') as e:
         fd.Slab(size=1.0)
-    assert 'fd.Box' in str(e.value)
+    assert 'fd.Region' in str(e.value)
 
 
 def test_a_box_snaps_to_cells_on_every_axis_and_the_report_says_so():
     scene = dipole_box(size=0.6, steps=5)
-    box = fd.Box(size=(0.23, 0.2, 0.11), center=(0.013, 0.0, -0.02))
+    box = fd.Region(size=(0.23, 0.2, 0.11), center=(0.013, 0.0, -0.02))
     p = _plan(scene.replace(structures=(fd.Structure(box, 2.25),)))
     rows = [row for row in p.spans if row[0].startswith('box.')]
     assert [row[0] for row in rows] == ['box.x', 'box.y', 'box.z']
@@ -476,7 +477,7 @@ def test_a_box_snaps_to_cells_on_every_axis_and_the_report_says_so():
     report = str(quiet(fd.check, scene.replace(structures=(fd.Structure(box, 2.25),))))
     assert 'box.x=' in report and 'snapped' in report
     with pytest.raises(ValueError, match='snaps to the empty span'):
-        _plan(scene.replace(structures=(fd.Structure(fd.Box(size=(0.2, 0.2, 0.01)), 2.25),)))
+        _plan(scene.replace(structures=(fd.Structure(fd.Region(size=(0.2, 0.2, 0.01)), 2.25),)))
 
 
 def test_a_box_scene_without_monitors_keeps_the_slab_skeleton_rule():
@@ -490,46 +491,46 @@ def test_a_box_scene_without_monitors_keeps_the_slab_skeleton_rule():
 def test_a_box_obeys_the_absorbing_layer_rules():
     scene = dipole_box(size=0.6, steps=5)
     n = scene.domain.size[0]                  # 0.6 of interior and a 0.6-deep layer each side
-    ends_inside = fd.Structure(fd.Box(size=(0.7, 0.2, 0.2), center=(0.25, 0.0, 0.0)), 2.25)
+    ends_inside = fd.Structure(fd.Region(size=(0.7, 0.2, 0.2), center=(0.25, 0.0, 0.0)), 2.25)
     with pytest.raises(ValueError, match='ends inside the PML'):
         _plan(scene.replace(structures=(ends_inside,)))
-    through = fd.Structure(fd.Box(size=(2 * n, 0.2, 0.2)), fd.Conductor(eps=2.25, sigma=0.1))
+    through = fd.Structure(fd.Region(size=(2 * n, 0.2, 0.2)), fd.Conductor(eps=2.25, sigma=0.1))
     with pytest.raises(ValueError, match='fd.Absorber'):
         _plan(scene.replace(structures=(through,)))
-    _plan(scene.replace(structures=(fd.Structure(fd.Box(size=(2 * n, 0.2, 0.2)), 2.25),)))
-    inside = fd.Structure(fd.Box(size=(0.2, 0.2, 0.2)), fd.Conductor(eps=2.25, sigma=0.1))
+    _plan(scene.replace(structures=(fd.Structure(fd.Region(size=(2 * n, 0.2, 0.2)), 2.25),)))
+    inside = fd.Structure(fd.Region(size=(0.2, 0.2, 0.2)), fd.Conductor(eps=2.25, sigma=0.1))
     _plan(scene.replace(structures=(inside,)))
 
 
 def test_a_box_overlapping_a_dispersive_structure_is_refused():
     scene = dipole_box(size=0.6, steps=5)
     metal = fd.Dispersive(eps_inf=1.0, poles=(fd.Drude(omega_p=5.0, gamma=0.5),))
-    box = fd.Structure(fd.Box(size=(0.2, 0.2, 0.2)), metal)
+    box = fd.Structure(fd.Region(size=(0.2, 0.2, 0.2)), metal)
     with pytest.raises(ValueError, match='share cells'):
         _plan(scene.replace(structures=(box, fd.Structure(fd.Slab(z=(-0.05, 0.05)), 2.25))))
-    apart = fd.Structure(fd.Box(size=(0.1, 0.1, 0.1), center=(0.15, 0.15, 0.15)), 2.25)
+    apart = fd.Structure(fd.Region(size=(0.1, 0.1, 0.1), center=(0.15, 0.15, 0.15)), 2.25)
     quiet(_plan, scene.replace(structures=(box, apart)))
 
 
 def test_a_box_must_stay_clear_of_a_plane_wave_sheet():
     scene = _pw_scene()
-    at_sheet = fd.Structure(fd.Box(size=(0.1, 0.1, 0.2), center=(0.0, 0.0, 0.6)), 2.25)
+    at_sheet = fd.Structure(fd.Region(size=(0.1, 0.1, 0.2), center=(0.0, 0.0, 0.6)), 2.25)
     with pytest.raises(ValueError, match='inside structures\\[0\\]'):
         _plan(scene.replace(structures=(at_sheet,)))
-    below = fd.Structure(fd.Box(size=(0.1, 0.1, 0.2), center=(0.0, 0.0, -0.3)), 2.25)
+    below = fd.Structure(fd.Region(size=(0.1, 0.1, 0.2), center=(0.0, 0.0, -0.3)), 2.25)
     _plan(scene.replace(structures=(below,)))
 
 
 def test_a_box_scatterer_sits_inside_a_tfsf_box_or_clear_of_it():
     scene = tfsf_box(box=(0.5, 0.5, 0.5), steps=5)
-    inside = fd.Structure(fd.Box(size=(0.2, 0.2, 0.2)), 2.25)
+    inside = fd.Structure(fd.Region(size=(0.2, 0.2, 0.2)), 2.25)
     _plan(scene.replace(structures=(inside,)))
-    outside = fd.Structure(fd.Box(size=(0.1, 0.1, 0.1), center=(0.0, 0.0, 0.45)), 2.25)
+    outside = fd.Structure(fd.Region(size=(0.1, 0.1, 0.1), center=(0.0, 0.0, 0.45)), 2.25)
     _plan(scene.replace(structures=(outside,)))
-    across = fd.Structure(fd.Box(size=(0.2, 0.2, 0.4), center=(0.0, 0.0, 0.25)), 2.25)
+    across = fd.Structure(fd.Region(size=(0.2, 0.2, 0.4), center=(0.0, 0.0, 0.25)), 2.25)
     with pytest.raises(ValueError, match='touches the surface of TFSF'):
         _plan(scene.replace(structures=(across,)))
-    flush = fd.Structure(fd.Box(size=(0.2, 0.2, 0.25), center=(0.0, 0.0, 0.125)), 2.25)
+    flush = fd.Structure(fd.Region(size=(0.2, 0.2, 0.25), center=(0.0, 0.0, 0.125)), 2.25)
     with pytest.raises(ValueError, match='one cell to spare'):
         _plan(scene.replace(structures=(flush,)))
 
@@ -573,7 +574,7 @@ def test_a_bare_band_helper_still_builds():
 # ---------------------------------------------------------------------------------------------
 
 def _ff(box=0.4, **kwargs):
-    return fd.FarField('ff', box=fd.Box(size=(box,) * 3, **kwargs), wavelengths=WS)
+    return fd.FarField('ff', box=fd.Region(size=(box,) * 3, **kwargs), wavelengths=WS)
 
 
 def test_a_far_field_is_a_closed_box():
@@ -582,9 +583,9 @@ def test_a_far_field_is_a_closed_box():
     with pytest.raises(TypeError, match='closed surface'):
         fd.FarField('ff', wavelengths=WS)
     with pytest.raises(ValueError, match='needs the wavelengths'):
-        fd.FarField('ff', box=fd.Box(size=(0.4,) * 3))
+        fd.FarField('ff', box=fd.Region(size=(0.4,) * 3))
     with pytest.raises(ValueError, match='reserved'):
-        fd.FarField('f::f', box=fd.Box(size=(0.4,) * 3), wavelengths=WS)
+        fd.FarField('f::f', box=fd.Region(size=(0.4,) * 3), wavelengths=WS)
     assert _ff().wavelengths == WS
     names = [o.name for o in _plan(dipole_box(size=0.6, steps=5, monitors=(_ff(),))).observers]
     assert names == [f'ff::{face}' for face in ('x-', 'x+', 'y-', 'y+', 'z-', 'z+')]
@@ -592,7 +593,7 @@ def test_a_far_field_is_a_closed_box():
 
 def test_a_far_field_in_a_periodic_cell_is_refused_naming_diffraction():
     with pytest.raises(ValueError, match='fd.Diffraction'):
-        _plan(_pw_scene(monitors=(fd.FarField('ff', box=fd.Box(size=(0.1, 0.1, 0.4)),
+        _plan(_pw_scene(monitors=(fd.FarField('ff', box=fd.Region(size=(0.1, 0.1, 0.4)),
                                               wavelengths=WS),)))
     _plan(dipole_box(size=0.6, steps=5, monitors=(_ff(),)))
 
@@ -611,10 +612,10 @@ def test_a_far_field_box_holds_every_structure_strictly_inside():
     slab = fd.Structure(fd.Slab(z=(-0.1, 0.1)), 2.25)
     with pytest.raises(ValueError, match='strictly inside the box'):
         _plan(scene.replace(structures=(slab,)))
-    flush = fd.Structure(fd.Box(size=(0.4, 0.1, 0.1)), 2.25)            # on the x faces
+    flush = fd.Structure(fd.Region(size=(0.4, 0.1, 0.1)), 2.25)            # on the x faces
     with pytest.raises(ValueError, match='strictly inside the box'):
         _plan(scene.replace(structures=(flush,)))
-    _plan(scene.replace(structures=(fd.Structure(fd.Box(size=(0.2, 0.1, 0.1)), 2.25),)))
+    _plan(scene.replace(structures=(fd.Structure(fd.Region(size=(0.2, 0.1, 0.1)), 2.25),)))
 
 
 def test_a_far_field_box_encloses_a_tfsf_box_or_keeps_clear():

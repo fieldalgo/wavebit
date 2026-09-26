@@ -60,7 +60,7 @@ def scene_for(cpw, pol, period, gate, monitor_half=0.8, half_z=HALF_Z, pml=PML,
     pw = fd.PlaneWave('pw', z=source_z, direction='-z', theta=0.0,
                       polarization=POLARIZATION[pol], band=band)
     size = (dx, period, 2.0 * (half_z + pml * dx))
-    mon = fd.Field('box', box=fd.Box(size=(dx, 2 * monitor_half, 2 * monitor_half)),
+    mon = fd.Field('box', box=fd.Region(size=(dx, 2 * monitor_half, 2 * monitor_half)),
                    wavelengths=(WAVELENGTH,))
     face = fd.PML(cells=pml) if reflection is None else fd.PML(cells=pml, reflection=reflection)
     return fd.Scene(domain=fd.Domain(size=size),

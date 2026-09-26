@@ -1,7 +1,7 @@
 """Where a material sits: a cell-snapped slab or box, and the structure that fills it.
 
 Stage 1 has **one** shape, and it is the one a layer stack is made of (stage 3 adds the
-cell-snapped :class:`Box`, the same rules on all three axes, and the monitor :class:`Plane`)::
+cell-snapped :class:`Region`, the same rules on all three axes, and the monitor :class:`Plane`)::
 
     fd.Slab(z=(-0.2, 0.0))                 # one axis named; x and y run the whole box
     fd.Structure(fd.Slab(z=(-0.2, 0.0)), glass)
@@ -46,7 +46,7 @@ Sorted by what they do with the answer, they were asking three:
   interface in there (``checks.check_absorbing_layers``, and the "fills the whole cell
   layer" halves of ``medium_at`` and ``_layer_media``).
 
-On a cell-snapped :class:`Slab` or :class:`Box` all three have the same answer, which is why
+On a cell-snapped :class:`Slab` or :class:`Region` all three have the same answer, which is why
 one function served them; on the first shape whose edge is not a cell boundary they differ,
 and a caller reading the wrong one is silent. A sphere whose *bounding box* spans an
 absorbing layer would be waved through the refusal in ``check_absorbing_layers``, and that
@@ -61,7 +61,7 @@ released, so a retired name goes outright (see ``docs/`` and the ``fourier_type`
 precedents) -- a second spelling of "which cells" is exactly the ambiguity this replaces.
 
 **Two discretisations, and the shape is the one that says which.** From stage 4's C2 a shape
-either *fills cells whole* (:class:`Slab`, :class:`Box`) or *fills them fractionally*
+either *fills cells whole* (:class:`Slab`, :class:`Region`) or *fills them fractionally*
 (:class:`Sphere`, and the bodies C4 adds). :meth:`Shape.body` is that answer -- the
 ``wavebit/fd/_shapes`` body this shape is smoothed from, or ``None``. It is a method and not a
 ``smoothing=`` keyword on :class:`Structure` on purpose: a rule that could be switched, or
@@ -80,7 +80,7 @@ import math
 
 from ._spec import spec, static_float
 
-__all__ = ['Shape', 'Slab', 'Sphere', 'Structure', 'Box', 'Plane', 'AXES']
+__all__ = ['Shape', 'Slab', 'Sphere', 'Structure', 'Region', 'Plane', 'AXES']
 
 #: The three axes in the order the public API spells a triple.
 AXES = ('x', 'y', 'z')
@@ -113,7 +113,7 @@ class Shape:
             f'{type(self).__name__}.{method}() is not implemented: {question} '
             f'fd.Shape names one question per method so that no caller has to guess from '
             f'the type, and a shape that does not answer one is refused here rather than '
-            f'read as a Slab or a Box.')
+            f'read as a Slab or a Region.')
 
     # -- the three questions ``cell_box`` used to answer at once ------------------------------
 
@@ -235,7 +235,7 @@ class Shape:
         The smallest feature the grid has to resolve. Only the axes :meth:`bounded_axes` names
         are measured, and each is measured as it reaches into the box: a shape that runs out
         through a face has no feature size along that axis, and a refusal quoting one would be
-        about a side that is not in the grid. ``fd.Box(size=(0.3, 0.3, 1.0))`` in a box 0.2
+        about a side that is not in the grid. ``fd.Region(size=(0.3, 0.3, 1.0))`` in a box 0.2
         wide across x and y bounds z alone, and its answer is 1.0, not 0.3.
 
         That is why it takes ``grid``: "bounded" is a question about the grid, so a signature
@@ -274,7 +274,7 @@ class Slab(Shape):
             raise NotImplementedError(
                 f'Slab({", ".join(f"{a}=..." for a in named)}): a slab names exactly ONE axis '
                 f'and runs the whole box across the other two. A rectangular rod or block is '
-                f'fd.Structure(fd.Box(size=..., center=...), material) (stage 3, cell-snapped); '
+                f'fd.Structure(fd.Region(size=..., center=...), material) (stage 3, cell-snapped); '
                 f'spheres, cylinders, polygons and rasters are stage 4 (shapes).')
         axis = named[0]
         span = getattr(self, axis)
@@ -387,7 +387,7 @@ def _slab_init_with_stages(self, *args, **kwargs):
             f'Slab({k}=...) is {_LATER_SHAPES[k]}. A slab is the layer: Slab(x=(lo, hi)), '
             f'Slab(y=...) or Slab(z=...). A ball is fd.Sphere(radius=..., center=...), '
             f'smoothed at each component\'s own Yee point; a cell-snapped block is '
-            f'fd.Box(size=..., center=...); the cylinder, the prism and the smoothed, '
+            f'fd.Region(size=..., center=...); the cylinder, the prism and the smoothed, '
             f'rotatable rectangular body are stage 4 C4.')
     _slab_init(self, *args, **kwargs)
 
@@ -403,9 +403,9 @@ class Structure:
     would expect. ``material`` takes the scalar shorthand: ``fd.Structure(slab, 2.25)`` is
     ``fd.Material(eps=2.25)``.
 
-    ``shape`` is an :class:`Slab` (stage 1), a :class:`Box` (stage 3): a cell-snapped
+    ``shape`` is an :class:`Slab` (stage 1), a :class:`Region` (stage 3): a cell-snapped
     rectangular block, the minimum lateral patterning a diffraction-order check needs (a
-    lamellar grating is a Box spanning one transverse axis, a crossed pillar grating a Box
+    lamellar grating is a Region spanning one transverse axis, a crossed pillar grating a Region
     spanning neither), or -- from stage 4's C2 -- a :class:`Sphere`, the first shape whose
     edge is **not** a cell boundary. The cylinder, the prism, the rotated body and CSG of them
     are C4.
@@ -509,12 +509,12 @@ class Structure:
             raise TypeError(
                 'Structure(shape=fd.Shape()): fd.Shape is the protocol a shape answers, not a '
                 'shape -- it has no extent, and every question below it would refuse. Use '
-                'fd.Slab(z=(lo, hi)) or fd.Box(size=..., center=...), or subclass fd.Shape '
+                'fd.Slab(z=(lo, hi)) or fd.Region(size=..., center=...), or subclass fd.Shape '
                 'and answer its methods.')
         if not isinstance(self.shape, Shape):
             raise TypeError(
                 f'Structure(shape=...): the shapes are fd.Slab(z=(lo, hi)), the cell-snapped '
-                f'fd.Box(size=..., center=...) and the smoothed fd.Sphere(radius=..., '
+                f'fd.Region(size=..., center=...) and the smoothed fd.Sphere(radius=..., '
                 f'center=...); got {type(self.shape).__name__}. External shapes get in by '
                 f'subclassing fd.Shape and answering its protocol. Cylinders, prisms, rotated '
                 f'bodies, polygons and CSG of them are stage 4 C4; a raster shape is refused '
@@ -523,14 +523,19 @@ class Structure:
 
 
 @spec
-class Box(Shape):
-    """An axis-aligned box, ``fd.Box(size=(sx, sy, sz), center=(cx, cy, cz))``.
+class Region(Shape):
+    """An axis-aligned box, ``fd.Region(size=(sx, sy, sz), center=(cx, cy, cz))``.
 
     Three uses, one object: the region of an :class:`~wavebit.fd.TFSF` source (stage 2), the
     closed surface of an ``fd.Flux`` or the volume of an ``fd.Field`` monitor (stage 3), and --
-    from stage 3 -- a **structure**, ``fd.Structure(fd.Box(...), material)``. Both triples are
+    from stage 3 -- a **structure**, ``fd.Structure(fd.Region(...), material)``. Both triples are
     static lengths in the scene's coordinates (the box's faces pick node planes or cells, so
     they fix the plan and its skeleton).
+
+    It was ``fd.Box`` until stage 4's C4, which gave that name to the smoothed, rotatable
+    rectangular **body** -- one name per concept, and the snapped box is the one the monitors
+    and ``TFSF`` take. Its report rows keep the labels ``box.x``/``box.y``/``box.z`` the
+    stage-3 archive froze, so the rename moved no skeleton.
 
     **As a structure it is cell-snapped exactly like** :class:`Slab`, on every axis at once:
     each face lands on the nearest cell boundary,
@@ -555,10 +560,10 @@ class Box(Shape):
         for name in ('size', 'center'):
             value = getattr(self, name)
             if not (isinstance(value, (tuple, list)) and len(value) == 3):
-                raise ValueError(f'Box({name}={value!r}): a triple (x, y, z).')
-            object.__setattr__(self, name, tuple(static_float('Box', name, v) for v in value))
+                raise ValueError(f'Region({name}={value!r}): a triple (x, y, z).')
+            object.__setattr__(self, name, tuple(static_float('Region', name, v) for v in value))
         if any(not s > 0 for s in self.size):
-            raise ValueError(f'Box(size={self.size}): every size is a positive length.')
+            raise ValueError(f'Region(size={self.size}): every size is a positive length.')
 
     @property
     def low(self):
@@ -578,7 +583,7 @@ class Box(Shape):
             if k1 <= k0:
                 snapped = (grid.low[a] + k0 * grid.dx, grid.low[a] + k1 * grid.dx)
                 raise ValueError(
-                    f'Box(size={self.size}, center={self.center}) snaps to the empty span '
+                    f'Region(size={self.size}, center={self.center}) snaps to the empty span '
                     f'{snapped} along {axis} on a grid of dx = {grid.dx:g}: it is thinner than '
                     f'a cell there, or it lies outside the box. A structure that snapped to '
                     f'nothing would run as the background and look like a physics result, so '
@@ -606,11 +611,11 @@ class Box(Shape):
     def body(self):
         """``None``: this box is the cell-snapped one, and it is also a monitor's region.
 
-        ``fd.Box`` is three things at once -- a ``TFSF`` region, a monitor's surface or
+        ``fd.Region`` is three things at once -- a ``TFSF`` region, a monitor's surface or
         volume, and a structure -- and a region has to snap to node planes to pick indices.
         One name cannot carry two discretisations, so the smoothed, rotatable, differentiable
-        rectangular **body** is a separate class in C4 and this one does not move. Every
-        stage-3 golden holds to the bit because of that.
+        rectangular **body** is a separate class, ``fd.Box`` since C4, and this one does not
+        move. Every stage-3 golden holds to the bit because of that.
         """
         return None
 
@@ -629,7 +634,7 @@ class Box(Shape):
                      if (k0, k1) != (0, grid.n[a]))
 
     def describe(self):
-        return f'Box(size={self.size}, center={self.center})'
+        return f'Region(size={self.size}, center={self.center})'
 
     def span_rows(self, grid):
         """One row per axis, labelled ``box.x``, ``box.y``, ``box.z``."""
@@ -652,7 +657,7 @@ class Box(Shape):
 class Sphere(Shape):
     """A ball, ``fd.Sphere(radius=0.2, center=(0, 0, 0))`` -- the first **smoothed** shape.
 
-    Unlike :class:`Slab` and :class:`Box` it does not snap to anything. The lowering asks it,
+    Unlike :class:`Slab` and :class:`Region` it does not snap to anything. The lowering asks it,
     at each of the six components' **own** Yee points, what fraction ``f`` of that component's
     voxel the ball fills and how the surface is oriented there (``w_c``, the mean of ``n_c^2``
     over the surface inside the voxel), and mixes the ball's material with whatever the cell
@@ -695,7 +700,7 @@ class Sphere(Shape):
        the cell's origin -- which the ring needs and a body does not carry -- is C4's to
        thread. An ``fd.Axis1D`` axis is refused too, with its own sentence and for a different
        reason: that axis stands for one the field is *invariant* along, and a ball is not.
-    3. **No reaching a face of the box.** A cell-snapped ``fd.Box`` is clipped exactly; a ball
+    3. **No reaching a face of the box.** A cell-snapped ``fd.Region`` is clipped exactly; a ball
        is not, and the six components disagree about where the box ends -- three of them count
        material half a cell outside a ``-`` face, and the same three lose the last half cell at
        a ``+`` face. The two arms carry two different messages.
@@ -821,10 +826,10 @@ class Sphere(Shape):
     def bounded_axes(self, grid):
         """All three, always -- and not the axes its *box* happens to cut.
 
-        :class:`Box` may leave an axis out because a box clipped to the domain really is
+        :class:`Region` may leave an axis out because a box clipped to the domain really is
         uniform along it, so a coefficient array of extent 1 there is exact. A ball is never
         uniform along an axis it reaches, whatever its support clipped to, so an extent-1 axis
-        would broadcast one plane of fills over the whole grid. The mutant that copies Box's
+        would broadcast one plane of fills over the whole grid. The mutant that copies Region's
         rule here is ``tests/test_fd_occupancy.py::test_a_ball_varies_along_every_axis``.
         """
         return (0, 1, 2)
@@ -837,7 +842,7 @@ class Sphere(Shape):
 
         That is the report telling the truth rather than a missing feature: a smoothed shape
         does not snap, so ``check`` prints no ``<- snapped`` note for one, and the difference
-        from the ``Slab``/``Box`` rows above it is the whole point of the shape.
+        from the ``Slab``/``Region`` rows above it is the whole point of the shape.
         """
         return tuple((f'sphere.{axis}', self.low[a], self.high[a], self.low[a], self.high[a])
                      for a, axis in enumerate(AXES))

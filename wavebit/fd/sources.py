@@ -536,7 +536,7 @@ OBLIQUE_TFSF_MESSAGE = (
 class TFSF:
     """A total-field/scattered-field box: the incident plane wave exists only inside ``box``.
 
-    ``fd.TFSF('t', box=fd.Box(size=(...), center=(...)), direction='-z', polarization='x',
+    ``fd.TFSF('t', box=fd.Region(size=(...), center=(...)), direction='-z', polarization='x',
     band=band)``. The box's faces snap to the nearest node planes; inside them the stored
     field is the total field, outside it the scattered field alone. The incident field comes
     from a 1-D auxiliary grid along the propagation axis with the **same** ``dx`` and ``dt``
@@ -562,7 +562,7 @@ class TFSF:
     theta: float = 0.0
 
     def __post_init__(self):
-        from .geometry import Box
+        from .geometry import Region
         _name('TFSF', self.name)
         _band('TFSF', self.band)
         theta = static_float('TFSF', 'theta', self.theta)
@@ -571,8 +571,8 @@ class TFSF:
         object.__setattr__(self, 'theta', 0.0)
         direction = _direction('TFSF', self.direction, OBLIQUE_TFSF_MESSAGE.format(
             what=f'direction={self.direction!r}'))
-        if not isinstance(self.box, Box):
-            raise TypeError(f'TFSF(box=...): an fd.Box(size=(...), center=(...)); got '
+        if not isinstance(self.box, Region):
+            raise TypeError(f'TFSF(box=...): an fd.Region(size=(...), center=(...)); got '
                             f'{type(self.box).__name__}.')
         if self.polarization not in ('x', 'y', 'z') or self.polarization == direction[1]:
             others = [a for a in 'xyz' if a != direction[1]]

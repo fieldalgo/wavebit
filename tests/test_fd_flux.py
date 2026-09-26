@@ -125,11 +125,11 @@ def dipole_scene(cells_per_wavelength=20, kind='electric', size=0.8, periods=12,
     so its faces sit in a near field that changes with it).
     """
     dx = 1.0 / cells_per_wavelength
-    monitors = [fd.Flux('in', box=fd.Box(size=(8 * dx,) * 3), wavelengths=WS)]
+    monitors = [fd.Flux('in', box=fd.Region(size=(8 * dx,) * 3), wavelengths=WS)]
     if fixed:
-        monitors.append(fd.Flux('fixed', box=fd.Box(size=(0.4,) * 3), wavelengths=WS))
+        monitors.append(fd.Flux('fixed', box=fd.Region(size=(0.4,) * 3), wavelengths=WS))
     if empty:
-        monitors.append(fd.Flux('empty', box=fd.Box(size=(0.2,) * 3,
+        monitors.append(fd.Flux('empty', box=fd.Region(size=(0.2,) * 3,
                                                      center=(0.25, 0.25, -0.25)),
                                 wavelengths=WS))
     component = 'Ez' if kind == 'electric' else 'Hz'
@@ -274,7 +274,7 @@ def test_the_incident_amplitude_is_the_empty_cells_zero_order(plane_waves, theta
 @pytest.mark.parametrize('direction,pol', (('-z', 'x'), ('+x', 'y')))
 def test_the_tfsf_intensity_is_an_empty_boxs_entry_face_flux(direction, pol):
     side = 0.3
-    monitors = (fd.Flux('inner', box=fd.Box(size=(side,) * 3), wavelengths=WS),)
+    monitors = (fd.Flux('inner', box=fd.Region(size=(side,) * 3), wavelengths=WS),)
     res = solve(tfsf_box(direction=direction, polarization=pol, margin=0.3, steps=700,
                          monitors=monitors)).read()
     I = to_numpy(res.sources['t'].intensity(WS))

@@ -34,7 +34,7 @@ code paths, not a settled answer.
     couples no s into a p wave, so the four s arrays of each monitor (``r_s``, ``R_s`` and
     ``t_s``, ``T_s``) are round-off and are **not frozen** (:func:`cross_polarised`).
 ``lamellar``
-    A cell-snapped ``Box`` tooth (stage 3's structure) 12 x 4 cells in a 24-cell period, one
+    A cell-snapped ``Region`` tooth (stage 3's structure) 12 x 4 cells in a 24-cell period, one
     cell deep in y, under a normally incident s ``PlaneWave``: three orders propagate (``m = -1,
     0, 1``), so the transverse index-DFT and every order's own kz are exercised, not only the
     zero order. The field is TE (``Ey``, ``Hx``, ``Hz``) by symmetry, so the p arrays and the
@@ -46,7 +46,7 @@ code paths, not a settled answer.
     being ``m x r``), in the same 26^3 PML box, with a ``FarField`` box around them: the
     intensity and ``(E_theta, E_phi)`` at :data:`FAR_ANGLES`, and the box's flux. Real.
 ``conical``
-    A lamellar ``Box`` tooth 16 x 4 cells in a 32-cell period under a 15-degree p
+    A lamellar ``Region`` tooth 16 x 4 cells in a 32-cell period under a 15-degree p
     ``PlaneWave`` at ``phi = 60``, with y an ``fd.Axis1D`` (the exact ``i k`` derivative) and x
     Bloch: the conical path, where every order couples s and p. Complex.
 
@@ -190,7 +190,7 @@ def flux_dipole_scene():
     monitors = (
         # 0.4, the largest box the 10-cell interior holds: it encloses both stamps (two cells
         # either side of each centre) with the one cell to spare a flux box must keep.
-        fd.Flux('box', box=fd.Box(size=(0.4, 0.4, 0.4)), wavelengths=WAVELENGTHS),
+        fd.Flux('box', box=fd.Region(size=(0.4, 0.4, 0.4)), wavelengths=WAVELENGTHS),
         fd.Flux('plane', plane=fd.Plane(z=0.2, x=(-0.2, 0.15), y=(-0.1, 0.2)),
                 wavelengths=WAVELENGTHS),
         fd.Field('field', plane=fd.Plane(z=-0.15, x=(-0.2, 0.2), y=(-0.15, 0.1)),
@@ -232,7 +232,7 @@ def bloch_stack_scene():
 
 def _tooth(width, height):
     # Runs past the one-cell domain in y and is clipped there: a lamellar tooth.
-    return fd.Structure(fd.Box(size=(width, 10.0, height), center=(0.0, 0.0, -height / 2)),
+    return fd.Structure(fd.Region(size=(width, 10.0, height), center=(0.0, 0.0, -height / 2)),
                         fd.Material(eps=GLASS))
 
 
@@ -246,7 +246,7 @@ def _grating_monitors(height):
 
 
 def lamellar_scene():
-    """A Box tooth 12 x 4 cells in a 24-cell period, one cell deep in y, normal incidence, s."""
+    """A Region tooth 12 x 4 cells in a 24-cell period, one cell deep in y, normal incidence, s."""
     pw = fd.PlaneWave('pw', z=0.3, direction='-z', polarization='s', band=band())
     height = 4 * DX
     return fd.Scene(domain=_stack_domain(24, 1, 26, -0.05),
@@ -265,7 +265,7 @@ def farfield_scene():
                   amplitude=0.3, phase=-0.5)
     return fd.Scene(domain=_cube(10), boundaries=fd.Boundaries.open(_layer()),
                     resolution=fd.Resolution(dx=DX), run=fd.Run(steps=300), sources=(m, j),
-                    monitors=(fd.FarField('ff', box=fd.Box(size=(0.4, 0.4, 0.4)),
+                    monitors=(fd.FarField('ff', box=fd.Region(size=(0.4, 0.4, 0.4)),
                                           wavelengths=WAVELENGTHS),))
 
 
@@ -275,7 +275,7 @@ def conical_source():
 
 
 def conical_scene():
-    """A lamellar Box tooth under a conical p PlaneWave: x Bloch, y ``fd.Axis1D``."""
+    """A lamellar Region tooth under a conical p PlaneWave: x Bloch, y ``fd.Axis1D``."""
     pw = conical_source()
     height = 4 * DX
     return fd.Scene(domain=_stack_domain(32, 1, 26, -0.05),
@@ -354,7 +354,7 @@ def capture(res, state, samples):
 
 
 def polarisation_preserving(plan):
-    """Whether every structure of ``plan`` is a slab across one axis (no ``Box``): a layered,
+    """Whether every structure of ``plan`` is a slab across one axis (no ``Region``): a layered,
     isotropic cell, which never couples s and p -- on the grid as in the continuum, because
     with the stagger removed its equations are the continuum's with ``k -> K``."""
     return all(not row[0].startswith('box') for row in plan.spans)

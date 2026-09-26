@@ -14,7 +14,7 @@ changes them and not the code::
 
 **An array is built only where the value is not uniform**, and only along the axes it
 actually varies on. Every stage-1 non-uniformity is axis-aligned -- a ``Slab`` varies along
-one axis, an ``Absorber`` along one axis, and stage 3's cell-snapped ``Box`` along each axis
+one axis, an ``Absorber`` along one axis, and stage 3's cell-snapped ``Region`` along each axis
 it does not span -- so the coefficients are built at shape
 ``(3, nz|1, ny|1, nx|1)`` with a full axis only where something varies along it, and
 broadcasting does the rest. A vacuum run keeps the stage-0 Python scalars, which is what
@@ -34,7 +34,7 @@ that a *dispersive* structure is party to is refused at the door instead, becaus
 term is not routed through them (``wavebit/fd/_lower/checks.py::check_overlaps``).
 
 **Two discretisations meet in that loop, and only one of them averages.** A cell-snapped
-shape (``Slab``, ``Box``) *replaces* the cell's material with its own -- one ``where`` over a
+shape (``Slab``, ``Region``) *replaces* the cell's material with its own -- one ``where`` over a
 static boolean mask, which is what every stage-0..3 golden holds to the bit. A smoothed shape
 (``Sphere``) *mixes*: it is handed the fraction of each component's own voxel it fills and how
 the surface is oriented there (``wavebit/fd/_lower/occupancy.py``) and combines its material
@@ -201,7 +201,7 @@ def _paste(xp, out, box, value):
 class _Snapped:
     """A cell-snapped shape: its material **replaces** the cell's, on a static boolean mask.
 
-    One ``xp.where``, exactly the line stage 1 wrote, so a scene of ``Slab``s and ``Box``es
+    One ``xp.where``, exactly the line stage 1 wrote, so a scene of ``Slab``s and ``Region``s
     lowers to the same bits it always did. The mask is this shape's own filled cells and does
     not exclude the cells a later structure will claim: a later painter's ``where`` overwrites
     them, which is the same last-wins answer an owner index gave and is a select rather than
@@ -296,7 +296,7 @@ def painters(scene, plan, axes, occ):
     and no other.
 
     A smoothed shape must have put **every** axis in its ``bounded_axes``, and that is refused
-    here rather than assumed. A cell-snapped ``Box`` may leave out an axis it spans, because a
+    here rather than assumed. A cell-snapped ``Region`` may leave out an axis it spans, because a
     box clipped to the domain really is uniform along it and an extent-1 coefficient axis is
     then exact. A body that curves is not, so the same saving would broadcast one plane of
     fills over the whole grid -- a plausible array of the right shape. C4 opens the saving

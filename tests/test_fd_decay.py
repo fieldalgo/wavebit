@@ -139,7 +139,7 @@ cavity's energy ripples by 8.2e-2 and the flatness gate fails. (The growing gate
 is in ``tests/test_fd_pml_stability.py``; the source mutants this fixup ran, including the
 reading taken after the update and the sampling started at step 0, are in its commit message.)
 
-**A kernel defect, pinned, and reported** (slow). A lossless lamellar ``Box`` grating under the
+**A kernel defect, pinned, and reported** (slow). A lossless lamellar ``Region`` grating under the
 default ``PML(cells=12, reflection=1e-8)`` does not settle -- its late field *grows* (a probe
 below the tooth, p at normal incidence: 8.4e-4 at 192 periods, 1.7e-3 at 288, 2.6e-3 at 384, and
 Build B's 960-period run reaches 5.9e-2; an e-fold every ~180 periods), at the ``(+-1, 0)``
@@ -248,7 +248,7 @@ def test_the_line_separates_a_cut_off_flux_from_a_settled_one():
 def _short_box(amplitude=1.0):
     """A dipole cut off at 3 periods in a small open box: its flux box has not settled."""
     return dipole_box(size=0.4, periods=3, amplitude=amplitude, monitors=(
-        fd.Flux('in', box=fd.Box(size=(0.3,) * 3), wavelengths=(1.0,)),))
+        fd.Flux('in', box=fd.Region(size=(0.3,) * 3), wavelengths=(1.0,)),))
 
 
 def test_a_run_cut_off_early_is_told_to_run_longer_and_names_no_knob():
@@ -1157,7 +1157,7 @@ def test_mutant_leaving_the_absorber_out_is_caught(monkeypatch):
 def _two_pulses(delay_second=38.0, periods=50):
     """Two dipoles in an open box, the second delayed to fire in the run's last quarter."""
     box = dipole_box(size=0.4, periods=periods, monitors=(
-        fd.Flux('in', box=fd.Box(size=(0.3,) * 3), wavelengths=(1.0,)),
+        fd.Flux('in', box=fd.Region(size=(0.3,) * 3), wavelengths=(1.0,)),
         fd.Record('p', at=(0.1, 0.05, 0.0), component='Ez')))
     first = box.sources[0]
     second = first.replace(name='d2', delay=delay_second)
@@ -1200,7 +1200,7 @@ def _tfsf_echo(time, gap=3.5, inside=None):
                                fd.Material(eps=2.25))]
     if inside is not None:
         structures.append(fd.Structure(fd.Slab(z=inside[0]), fd.Material(eps=inside[1])))
-    source = fd.TFSF('t', box=fd.Box(size=(0.5, 0.5, 0.5)), direction='-z', polarization='x',
+    source = fd.TFSF('t', box=fd.Region(size=(0.5, 0.5, 0.5)), direction='-z', polarization='x',
                      band=fd.Band(wavelength=1.0, df=0.2))
     # The internal-layer case measures field decay and the source-column echo,
     # not whole-object power. Its transverse slab cuts the box, so C3 correctly
@@ -1210,7 +1210,7 @@ def _tfsf_echo(time, gap=3.5, inside=None):
                     boundaries=fd.Boundaries.open(fd.PML(cells=pml)),
                     resolution=fd.Resolution(dx=dx), run=fd.Run(time=time),
                     structures=tuple(structures), sources=(source,),
-                    monitors=(monitor_type('f', box=fd.Box(size=(0.7, 0.7, 0.7)),
+                    monitors=(monitor_type('f', box=fd.Region(size=(0.7, 0.7, 0.7)),
                                            wavelengths=(1.0,)),))
 
 

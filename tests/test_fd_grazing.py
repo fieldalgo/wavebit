@@ -880,7 +880,7 @@ def _grating(cells, reflection=1e-8, rho=RHO, substrate=None, theta=0.0, period=
     scene, _ = box_grating(theta=theta, period=period, wavelengths=wavelengths, periods=periods,
                            pml=cells, **kwargs)
     if substrate is not None:
-        box = fd.Box(size=(20.0, 20.0, 20.0), center=(0.0, 0.0, -0.3 - 10.0))
+        box = fd.Region(size=(20.0, 20.0, 20.0), center=(0.0, 0.0, -0.3 - 10.0))
         scene = scene.replace(structures=scene.structures
                               + (fd.Structure(box, fd.Material(eps=substrate)),))
     if z is None:
@@ -1160,7 +1160,7 @@ def _substrate_column(eps):
     scene = _stabilized(0.7, 12, periods=20)
     dz = scene.resolution.dx
     top = scene.domain.center[2] - scene.domain.size[2] / 2 + 14 * dz
-    box = fd.Box(size=(10.0, 10.0, 20.0), center=(0.0, 0.0, top - 10.0))
+    box = fd.Region(size=(10.0, 10.0, 20.0), center=(0.0, 0.0, top - 10.0))
     monitor = fd.Diffraction('r', z=scene.domain.center[2] + 0.2, side='reflect',
                              wavelengths=(1.0,))
     return scene.replace(structures=(fd.Structure(box, fd.Material(eps=eps)),),

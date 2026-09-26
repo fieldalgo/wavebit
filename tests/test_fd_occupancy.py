@@ -29,7 +29,7 @@ media are mixed by, and what the two together do to a number a user reads.
   painter answers that exactly, so the two-painter lowering is compared with a one-painter
   lowering of the same geometry and no tolerance enters the comparison at all.
 * *The archives.* The four frozen stage-0..3 goldens, byte compared, plus a call counter that
-  says the mixing rule was never reached at all by a scene of ``Slab``s and ``Box``es.
+  says the mixing rule was never reached at all by a scene of ``Slab``s and ``Region``s.
 * *Finite differences, on JAX and on Torch.* For the gradient, central differences of the same
   function the AD is taken of -- the only oracle that is not the AD.
 
@@ -45,7 +45,7 @@ reverted. The count is the number of tests in this file that went red:
     `check_smoothed`'s conductive/dispersive door removed                    1
     `check_smoothed`'s periodic-face door removed                            1
     `Sphere.support`'s one-cell margin dropped                               2
-    `Sphere.bounded_axes` copying `Box`'s "axes it does not span" rule       4
+    `Sphere.bounded_axes` copying `Region`'s "axes it does not span" rule       4
     `Box.body()` returning a `_shapes.Box` instead of None                   2
 
 and the doors the composition round added, each mutated in both directions -- removed, and
@@ -88,7 +88,7 @@ periodic-face gate exist for.
 
 Two mutants of the earlier rounds **survived a first draft**, and both notes are left where
 they were fixed.
-``test_a_ball_varies_along_every_axis``: with only a small ball in the scene `Box`'s
+``test_a_ball_varies_along_every_axis``: with only a small ball in the scene `Region`'s
 `bounded_axes` rule gives the same answer, so the gate had to grow a ball wide enough for its
 support to clip to the whole grid (one cell short of inscribed, so that door 3 does not answer
 first). ``test_two_smoothed_bodies_a_voxel_apart_compose_in_either_order``: the dimer on the
@@ -122,12 +122,12 @@ from fd_helpers import backends
 #: What this stage costs, measured on the machine this commit was written on, for one
 #: ``fd.Sphere(radius=0.3)`` at **12 cells per radius** in a 64^3 box with a 12-cell PML on
 #: every face -- ``fd.lower`` only, best of three, against the same scene with the ball
-#: replaced by a cell-snapped ``fd.Box`` of the same bounding size::
+#: replaced by a cell-snapped ``fd.Region`` of the same bounding size::
 #:
-#:     backend    vacuum    snapped Box    one Sphere    x Box    RSS delta
-#:     numpy     0.0005 s       0.0066 s      0.4211 s      64x       6.2 MB
-#:     jax       0.0040 s       0.0074 s      0.6892 s      93x       6.3 MB
-#:     torch     0.0009 s       0.0050 s      0.3112 s      62x       6.3 MB
+#:     backend    vacuum    snapped Region    one Sphere    x Region    RSS delta
+#:     numpy     0.0005 s          0.0066 s      0.4211 s         64x       6.2 MB
+#:     jax       0.0040 s          0.0074 s      0.6892 s         93x       6.3 MB
+#:     torch     0.0009 s          0.0050 s      0.3112 s         62x       6.3 MB
 #:
 #: Three things a reader should take from it.
 #:
@@ -544,7 +544,7 @@ def test_the_coefficient_moves_continuously_as_a_ball_crosses_a_cell():
 
     The measurement, at R = 0.2 and dx = 0.05 (four cells of radius), over 41 positions
     spanning one cell along x: the smoothed rule's largest single step is **2.46e-4** of the
-    mean, while the cell-snapped ``fd.Box`` of the same volume jumps **1.56e-1** -- **634x**,
+    mean, while the cell-snapped ``fd.Region`` of the same volume jumps **1.56e-1** -- **634x**,
     and the snapped jump arrives in a single step as a face crosses a cell boundary, which is
     what makes a gradient with respect to a position meaningless under it. The mutant that
     rounds the fill to 0/1 inside ``component_occupancy`` returns the smoothed arm to the
@@ -557,7 +557,7 @@ def test_the_coefficient_moves_continuously_as_a_ball_crosses_a_cell():
             (fd.Structure(fd.Sphere(radius=0.2, center=(t, 0.0, 0.0)), fd.Material(eps=4.0)),))))
         side = (4 / 3 * math.pi * 0.2 ** 3) ** (1 / 3)
         snapped.append(_polarizability(_grid_scene(
-            (fd.Structure(fd.Box(size=(side,) * 3, center=(t, 0.0, 0.0)),
+            (fd.Structure(fd.Region(size=(side,) * 3, center=(t, 0.0, 0.0)),
                           fd.Material(eps=4.0)),))))
     step = float(np.max(np.abs(np.diff(smooth)))) / float(np.mean(smooth))
     jump = float(np.max(np.abs(np.diff(snapped)))) / float(np.mean(snapped))
@@ -649,13 +649,13 @@ def test_the_normal_moment_sums_to_one_at_every_yee_point():
 def test_a_ball_varies_along_every_axis():
     """``bounded_axes`` is all three, and the coefficient arrays are full on all three.
 
-    A ``Box`` may leave out an axis it spans, because a box clipped to the domain really is
+    A ``Region`` may leave out an axis it spans, because a box clipped to the domain really is
     uniform along it. A ball is not, and an extent-1 axis would broadcast one plane of fills
     over the grid. ``painters`` refuses a smoothed shape whose array is not full, so the mutant
-    that copies ``Box``'s rule fails loudly here rather than returning that plane.
+    that copies ``Region``'s rule fails loudly here rather than returning that plane.
 
     **The second ball is the one that kills the mutant**, and the first on its own does not:
-    a small ball's support does not span any axis, so ``Box``'s rule would give it (0, 1, 2)
+    a small ball's support does not span any axis, so ``Region``'s rule would give it (0, 1, 2)
     too and the mutant would live. A ball wide enough that its support clips to the whole grid
     on every axis is the case where the two rules differ -- and there the answer that matters
     is still all three, because the ball is not uniform along an axis merely because its box
@@ -692,27 +692,27 @@ def test_a_ball_varies_along_every_axis():
 # ---------------------------------------------------------------------------------------------
 
 def test_a_snapped_scene_never_reaches_the_mixing_rule(monkeypatch):
-    """``Slab`` and ``Box`` take the stage-1 ``where`` and nothing else, and the skeleton holds.
+    """``Slab`` and ``Region`` take the stage-1 ``where`` and nothing else, and the skeleton holds.
 
     The four frozen archives are byte compared by
     ``tests/references/interface/freeze_fd_stage{0,1,2,3}.py`` -- all 1141 arrays (143 + 288 +
     140 + 570) reproduce bit for bit with this commit in place. What this adds is *why*: the
     mixing rule is never called at all, so there is no arithmetic for a rounding to differ in.
 
-    The mutant that gives ``fd.Box`` a body was run against the archives too, and what it did
-    there is worth recording. The stage-1 archive, which has no ``Box`` structure, is
+    The mutant that gives ``fd.Region`` a body was run against the archives too, and what it did
+    there is worth recording. The stage-1 archive, which has no ``Region`` structure, is
     unmoved -- 288 of 288 still bit for bit. The stage-3 archive does not move either: it
-    **refuses to freeze**, because its lamellar grating is a ``Box`` 10 units wide on a
+    **refuses to freeze**, because its lamellar grating is a ``Region`` 10 units wide on a
     one-cell periodic y axis, and a smoothed shape reaching a periodic face is turned away by
     ``check_smoothed``. That is the door doing its job, and it is also the note C4 needs: a
     smoothed rectangular body cannot spell "runs the whole period" by being clipped the way
-    ``fd.Box`` does, so C4 has to land the periodic fold with it.
+    ``fd.Region`` does, so C4 has to land the periodic fold with it.
     """
     calls = []
     real = coef.mix
     monkeypatch.setattr(coef, 'mix', lambda *a, **k: calls.append(1) or real(*a, **k))
     scene = _grid_scene((fd.Structure(fd.Slab(z=(-0.2, 0.0)), fd.Material(eps=2.25)),
-                         fd.Structure(fd.Box(size=(0.2, 0.2, 0.2), center=(0.1, 0.0, 0.3)),
+                         fd.Structure(fd.Region(size=(0.2, 0.2, 0.2), center=(0.1, 0.0, 0.3)),
                                       fd.Material(eps=4.0, mu=1.5))))
     plan, params = _lowered(scene)
     assert calls == []
@@ -720,7 +720,7 @@ def test_a_snapped_scene_never_reaches_the_mixing_rule(monkeypatch):
     want = sorted((plan.dt / plan.dx) / e for e in (1.0, 2.25, 4.0))
     assert len(got) == 3 and all(a == b for a, b in zip(got, want)), (got, want)
     assert fd.Slab(z=(-0.2, 0.0)).body() is None
-    assert fd.Box(size=(0.2,) * 3).body() is None
+    assert fd.Region(size=(0.2,) * 3).body() is None
 
 
 def test_a_smoothed_scene_composes_in_painting_order():
@@ -905,7 +905,7 @@ def test_a_conductive_or_dispersive_material_beside_a_smoothed_shape_is_refused(
             ((fd.Structure(ball, metal),), None, True),
             ((fd.Structure(ball, fd.Material(eps=2.25)),), lossy, False),
             ((fd.Structure(ball, fd.Material(eps=2.25)),
-              fd.Structure(fd.Box(size=(0.5,) * 3), lossy)), None, False)):
+              fd.Structure(fd.Region(size=(0.5,) * 3), lossy)), None, False)):
         scene = fd.Scene(
             domain=fd.Domain(size=(N * DX,) * 3),
             boundaries=fd.Boundaries(x=fd.PEC(), y=fd.PEC(), z=fd.PEC()),
@@ -920,7 +920,7 @@ def test_a_conductive_or_dispersive_material_beside_a_smoothed_shape_is_refused(
         else:
             assert 'shares cells with structures[0]' in message, message
     # the same scene with the smoothed shape replaced by a snapped one is untouched
-    ok = _grid_scene((fd.Structure(fd.Box(size=(0.4,) * 3), lossy),))
+    ok = _grid_scene((fd.Structure(fd.Region(size=(0.4,) * 3), lossy),))
     _quiet(fd.plan, ok)
 
 
@@ -963,7 +963,7 @@ def test_a_smoothed_shape_at_a_periodic_face_is_refused(face):
 
 
 def test_a_ball_outside_the_box_is_refused_rather_than_trimmed():
-    """A smoothed shape is not clipped the way a cell-snapped ``Box`` is, and says so."""
+    """A smoothed shape is not clipped the way a cell-snapped ``Region`` is, and says so."""
     scene = _grid_scene((fd.Structure(fd.Sphere(radius=0.1, center=(4.0, 0.0, 0.0)),
                                       fd.Material(eps=2.25)),))
     with pytest.raises(ValueError, match='lies outside the box'):
@@ -1329,7 +1329,7 @@ def test_a_smoothed_shape_on_a_one_cell_invariant_axis_is_refused():
 
     Its sentence is its own, because the reason is not the missing images: an ``Axis1D`` axis
     stands for one the field is *invariant* along, so no fold over any number of images would
-    make a body that curves right on it. That is why it names ``fd.Box`` and C4's
+    make a body that curves right on it. That is why it names ``fd.Region`` and C4's
     ``fd.Cylinder``/``fd.Prism`` rather than "keep it one cell clear of the face".
     """
     def scene(y, structure):
@@ -1346,7 +1346,7 @@ def test_a_smoothed_shape_on_a_one_cell_invariant_axis_is_refused():
         _quiet(fd.plan, scene(fd.Periodic(), ball))
     # a cell-snapped shape on the same axis is what that axis is for, and is untouched
     _quiet(fd.plan, scene(fd.Axis1D(k=0.3, k_max=1.0),
-                          fd.Structure(fd.Box(size=(0.4, 10.0, 0.4)), 4.0)))
+                          fd.Structure(fd.Region(size=(0.4, 10.0, 0.4)), 4.0)))
 
 
 def test_a_smoothed_shape_reaching_past_a_face_is_refused():
@@ -1419,7 +1419,7 @@ def test_the_plus_face_refusal_names_the_material_it_loses():
     The previous writing said "reaches past the x+ face of the box: its material fills 0.0025
     of a voxel that lies outside the domain there" for exactly this ball, and offered as
     remedies "move it inside" (it is inside) and "say the truncated body with the cell-snapped
-    fd.Box" (there is nothing to truncate).
+    fd.Region" (there is nothing to truncate).
 
     What it costs is in ``test_the_plus_face_loses_the_last_half_cell``.
     """
@@ -1515,7 +1515,7 @@ def test_an_anisotropic_material_beside_a_smoothed_shape_is_refused():
     ball = fd.Sphere(radius=0.2)
     cases = (((fd.Structure(ball, aniso),), None),
              ((fd.Structure(ball, 2.25),), aniso),
-             ((fd.Structure(ball, 2.25), fd.Structure(fd.Box(size=(0.5,) * 3), aniso)), None),
+             ((fd.Structure(ball, 2.25), fd.Structure(fd.Region(size=(0.5,) * 3), aniso)), None),
              ((fd.Structure(ball, fd.Material(eps=2.25, mu=(1.0, 1.0, 2.0))),), None))
     for structures, background in cases:
         scene = fd.Scene(
@@ -1527,7 +1527,7 @@ def test_an_anisotropic_material_beside_a_smoothed_shape_is_refused():
             _quiet(fd.plan, scene)
         assert 'tau-transform' in str(e.value)
     # the same anisotropy on cell-snapped geometry is untouched: nothing is mixed there
-    _quiet(fd.plan, _grid_scene((fd.Structure(fd.Box(size=(0.4,) * 3), aniso),)))
+    _quiet(fd.plan, _grid_scene((fd.Structure(fd.Region(size=(0.4,) * 3), aniso),)))
     # and a scalar eps spelled as a triple of equal numbers is isotropic, not anisotropic
     _quiet(fd.plan, _grid_scene((fd.Structure(ball, fd.Material(eps=(2.25, 2.25, 2.25))),)))
 

@@ -267,12 +267,12 @@ Stage 3 added one kernel observer -- a running DFT of named components over a re
 in the scan (`DFTRegion`) -- and made everything else post-processing of its accumulators after
 the run: flux over a plane or a box's six faces, `Field` phasors, the near-to-far transform,
 the `Diffraction` orders (index-DFT, direction split, Yee kz de-embedding, s/p frame), and the
-sources' spectra (`power`, `incident_amplitude`, `intensity`). It also added `Box` as a
-structure and the `Axis1D` face. So a fourth archive pins five scenes of its own: two dipoles in
+sources' spectra (`power`, `incident_amplitude`, `intensity`). It also added the cell-snapped
+box (`fd.Region` since stage 4 C4, `fd.Box` before) as a structure and the `Axis1D` face. So a fourth archive pins five scenes of its own: two dipoles in
 a PML box with a `Flux` box, a `Flux` plane and a `Field` plane; a 25-degree p `PlaneWave`
 through a glass layer in a Bloch cell with a reflect and a transmit `Diffraction` plane; a
-lamellar `Box` grating at normal incidence with three propagating orders; a magnetic and an
-electric dipole in a `FarField` box; and a conical `Box` grating whose invariant axis is an
+lamellar `Region` grating at normal incidence with three propagating orders; a magnetic and an
+electric dipole in a `FarField` box; and a conical `Region` grating whose invariant axis is an
 `Axis1D`. `tests/test_fd_stage3_backends.py` holds the three backends to each other and each to
 its own frozen answer at the same 1e-12 (measured: JAX and Torch 1e-15 to 3e-14 off NumPy, the
 worst a dipole's `power()`), and `tests/test_fd_stage3_grad.py` holds `jax.grad` and
@@ -322,7 +322,7 @@ for bit (414 arrays). **Four arrays left the archive:** the stack's `r_s`, `R_s`
 smallest array the round-off line was calibrated on) and are round-off now, because a layered
 cell couples none of the grid's own s into its own p. A pin on round-off is the trap this
 archive's round-off line exists to refuse, so `_fd_stage3_cases.cross_polarised` leaves them
-out of the capture of a `Box`-free cell and `tests/test_fd_stage3_backends.py` holds them live
+out of the capture of a `Region`-free cell and `tests/test_fd_stage3_backends.py` holds them live
 under 1e-13 of the co-polarised amplitude on every backend instead; 570 arrays are frozen.
 
 `interface/freeze_fd_stage3.py` writes it under exactly the earlier stages' rules: this checkout

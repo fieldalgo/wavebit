@@ -7,7 +7,7 @@ from a leaf to a number a design loop differentiates, and each is measured here:
 
     flux        d(sum of a Flux plane's flux)/d(eps of a Slab) -- the accumulator carried
                 through the scan, the end correction, the 2-cell pairing and the trapezoid
-    R0          d(sum of the zero order's R)/d(eps of a Box tooth) -- the index-DFT, the
+    R0          d(sum of the zero order's R)/d(eps of a Region tooth) -- the index-DFT, the
                 direction split, the s/p frame and the division by the PlaneWave's own
                 incident spectrum (read from its column, which the tooth's eps does not reach)
     amplitude   d(far-field intensity)/d(dipole amplitude) -- the near-to-far transform
@@ -63,7 +63,7 @@ recompute would give a different gradient (or, on Torch, a version-counter error
 
 **The static doors are not leaves.** A monitor's wavelengths fix the accumulator's shape and the
 phase each step multiplies by; a ``Plane``'s position and a ``Diffraction`` plane's (and its
-reference and incident planes) pick node indices; a ``Box``'s size and centre fix which cells a
+reference and incident planes) pick node indices; a ``Region``'s size and centre fix which cells a
 structure fills; ``Run(time=)`` is a step count; ``Axis1D(k_max=)`` fixes the CFL bound. Each is
 refused by name when a tracer or a ``requires_grad`` tensor arrives, and the concrete spelling
 is taken.
@@ -138,11 +138,11 @@ def stack_scene(eps):
 
 
 def grating_scene(eps):
-    """A cell-snapped Box tooth of ``eps`` (12 x 4 cells in a 24-cell period, one cell in y)
+    """A cell-snapped Region tooth of ``eps`` (12 x 4 cells in a 24-cell period, one cell in y)
     under a normally incident s PlaneWave, with a reflect Diffraction monitor over three orders."""
     pw = fd.PlaneWave('pw', z=0.3, direction='-z', polarization='s', band=_band())
     height = 4 * DX
-    tooth = fd.Box(size=(12 * DX, 10.0, height), center=(0.0, 0.0, -height / 2))
+    tooth = fd.Region(size=(12 * DX, 10.0, height), center=(0.0, 0.0, -height / 2))
     return fd.Scene(domain=fd.Domain(size=(24 * DX, DX, (26 + 2 * PML_CELLS) * DX),
                                      center=(0.0, 0.0, -0.05)),
                     boundaries=fd.Boundaries(**fd.Bloch.from_source(pw), z=_layer()),
@@ -165,7 +165,7 @@ def farfield_scene(amplitude, phase):
                     boundaries=fd.Boundaries.open(_layer()),
                     resolution=fd.Resolution(dx=DX), run=fd.Run(steps=200, courant=0.5),
                     sources=(a, b),
-                    monitors=(fd.FarField('ff', box=fd.Box(size=(0.4,) * 3),
+                    monitors=(fd.FarField('ff', box=fd.Region(size=(0.4,) * 3),
                                           wavelengths=WAVELENGTHS),))
 
 
@@ -360,7 +360,7 @@ def _static_doors():
         pytest.param(lambda v: fd.Field('f', plane=fd.Plane(z=0.0), components=('Ex',),
                                         wavelengths=(v,)),
                      r'Field\(wavelengths=\.\.\.\) is static', 0.9, id='field-wavelengths'),
-        pytest.param(lambda v: fd.FarField('f', box=fd.Box(size=(0.2,) * 3), wavelengths=(v,)),
+        pytest.param(lambda v: fd.FarField('f', box=fd.Region(size=(0.2,) * 3), wavelengths=(v,)),
                      r'FarField\(wavelengths=\.\.\.\) is static', 0.9,
                      id='farfield-wavelengths'),
         pytest.param(lambda v: fd.Diffraction('r', z=0.4, wavelengths=(v,)),
@@ -380,11 +380,11 @@ def _static_doors():
                      id='plane-position'),
         pytest.param(lambda v: fd.Plane(z=0.2, x=(v, 0.3)), r'Plane\(x=\.\.\.\) is static',
                      -0.3, id='plane-extent'),
-        pytest.param(lambda v: fd.Structure(fd.Box(size=(v, 0.2, 0.2)), fd.Material(eps=2.25)),
-                     r'Box\(size=\.\.\.\) is static', 0.3, id='box-structure-size'),
-        pytest.param(lambda v: fd.Structure(fd.Box(size=(0.2, 0.2, 0.2), center=(0.0, 0.0, v)),
+        pytest.param(lambda v: fd.Structure(fd.Region(size=(v, 0.2, 0.2)), fd.Material(eps=2.25)),
+                     r'Region\(size=\.\.\.\) is static', 0.3, id='box-structure-size'),
+        pytest.param(lambda v: fd.Structure(fd.Region(size=(0.2, 0.2, 0.2), center=(0.0, 0.0, v)),
                                             fd.Material(eps=2.25)),
-                     r'Box\(center=\.\.\.\) is static', -0.1, id='box-structure-edge'),
+                     r'Region\(center=\.\.\.\) is static', -0.1, id='box-structure-edge'),
         pytest.param(lambda v: fd.Run(time=v), r'Run\(time=\.\.\.\) is static', 12.0,
                      id='run-time'),
         pytest.param(lambda v: fd.Axis1D(k=1.0, k_max=v), r'Axis1D\(k_max=\.\.\.\) is static',
@@ -419,7 +419,7 @@ def test_a_torch_leaf_in_a_static_door_is_refused_by_name(build, pattern, concre
 
 def test_the_stage_three_leaves_pass_the_same_doors():
     """The refusals above are a decision about *which* numbers are static, not about tracers:
-    the same tracer and the same live tensor go through a Box structure's material, a Slab's
+    the same tracer and the same live tensor go through a Region structure's material, a Slab's
     material and a dipole's amplitude and phase in a monitored scene without a word."""
     jax = pytest.importorskip('jax')
     torch = pytest.importorskip('torch')

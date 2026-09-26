@@ -13,11 +13,11 @@ returns beyond those accumulators -- a flux, an order's amplitude, a normalisati
 post-processing in the backend's array module (``wavebit/fd/_post.py``), so it differentiates.
 
     ws = (0.5, 0.55, 0.6)                                        # wavelengths, the user's unit
-    fd.Flux('out', box=fd.Box(size=(0.5,)*3), wavelengths=ws)    # closed box: net outward flux
+    fd.Flux('out', box=fd.Region(size=(0.5,)*3), wavelengths=ws)    # closed box: net outward flux
     fd.Flux('t', plane=fd.Plane(z=-1.0), wavelengths=ws)         # a plane: flux along +axis
     fd.Field('f', plane=fd.Plane(z=0.2), components=('Ex', 'Ey'), wavelengths=ws)
     fd.Diffraction('r', z=1.2, side='reflect', wavelengths=ws)   # orders in a periodic cell
-    fd.FarField('ff', box=fd.Box(size=(0.5,)*3), wavelengths=ws) # near-to-far, open scenes
+    fd.FarField('ff', box=fd.Region(size=(0.5,)*3), wavelengths=ws) # near-to-far, open scenes
 
 ``wavelengths`` are vacuum wavelengths in the scene's length unit (``f = 1/wavelength``, ``c =
 1``); they are static, because the accumulator's shape and the phase each step multiplies by
@@ -105,13 +105,13 @@ def _wavelengths(where, value):
 
 
 def _region(where, plane, box):
-    from .geometry import Box, Plane
+    from .geometry import Plane, Region
     if (plane is None) == (box is None):
-        raise ValueError(f'{where}: give plane=fd.Plane(...) or box=fd.Box(...), exactly one.')
+        raise ValueError(f'{where}: give plane=fd.Plane(...) or box=fd.Region(...), exactly one.')
     if plane is not None and not isinstance(plane, Plane):
         raise TypeError(f'{where}(plane=...): an fd.Plane(z=...); got {type(plane).__name__}.')
-    if box is not None and not isinstance(box, Box):
-        raise TypeError(f'{where}(box=...): an fd.Box(size=..., center=...); got '
+    if box is not None and not isinstance(box, Region):
+        raise TypeError(f'{where}(box=...): an fd.Region(size=..., center=...); got '
                         f'{type(box).__name__}.')
 
 
@@ -120,7 +120,7 @@ class Flux:
     """The Poynting flux through a plane (along its +normal) or out of a closed box.
 
     ``fd.Flux('t', plane=fd.Plane(z=-1.0), wavelengths=ws)`` or ``fd.Flux('out',
-    box=fd.Box(size=..., center=...), wavelengths=ws)``. ``res[name].flux`` is ``(nf,)``,
+    box=fd.Region(size=..., center=...), wavelengths=ws)``. ``res[name].flux`` is ``(nf,)``,
     ``0.5 Re sum (E x conj(H)) . n dA`` of the DFT phasors, with ``n`` the plane's ``+``
     normal or the box's outward one; a box also returns each face's share in
     ``res[name].faces``. The collocation -- which H is paired with which E -- is derived in
@@ -268,7 +268,7 @@ class Diffraction:
 class FarField:
     """The far field of an open scene: the near-to-far transform of a closed box's surface.
 
-    ``fd.FarField('ff', box=fd.Box(size=(0.5,)*3), wavelengths=ws)``. The box's six faces are
+    ``fd.FarField('ff', box=fd.Region(size=(0.5,)*3), wavelengths=ws)``. The box's six faces are
     read exactly as a ``Flux`` box reads them (the tangential E on each face's node plane, the
     tangential H on the two half planes either side), and after the run the equivalence
     principle turns them into the field at infinity (Taflove & Hagness, *Computational
@@ -298,12 +298,12 @@ class FarField:
     propagation: str = 'continuum'
 
     def __post_init__(self):
-        from .geometry import Box
+        from .geometry import Region
         _monitor_name('FarField', self.name)
         if self.propagation not in ('continuum', 'yee'):
             raise ValueError("FarFieldPropagationRefused: choose propagation='continuum' or 'yee'")
-        if not isinstance(self.box, Box):
-            raise TypeError(f'FarField(box=...): the closed surface is an fd.Box(size=..., '
+        if not isinstance(self.box, Region):
+            raise TypeError(f'FarField(box=...): the closed surface is an fd.Region(size=..., '
                             f'center=...); got {type(self.box).__name__}. (A plane is not a '
                             f'closed surface, and the transform needs one.)')
         object.__setattr__(self, 'wavelengths', _wavelengths('FarField', self.wavelengths))

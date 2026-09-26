@@ -155,7 +155,7 @@ def sphere(cpw=40,eps=12.,periods=48.,radius=.1,placement=(0.,0.,0.),absorption_
     # the old .4-halfwidth surface; .45 enclosed all of them exactly.
     # This is an explicit experiment input, never an automatic relocation.
     if absorption_half!=.4:
-        scene=scene.replace(monitors=tuple(dataclasses.replace(m,box=fd.Box(size=(2*absorption_half,)*3))
+        scene=scene.replace(monitors=tuple(dataclasses.replace(m,box=fd.Region(size=(2*absorption_half,)*3))
             if m.name=='abs' else m for m in scene.monitors))
     p=plan(scene)
     center=scene.structures[0].shape.center

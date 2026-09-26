@@ -28,14 +28,14 @@ def sphere_scene(cpw=20, eps=2.25, periods=24., offset=(0., 0., 0.),
     # Nested half-widths: sphere .25, absorption .4, source .55,
     # scattering .7, far field .75, then gap and the absorbing layer.
     size = 2*(.75+gap+pml*dx)
-    monitors = (fd.Flux('abs', box=fd.Box(size=(.8,)*3), wavelengths=(1.,)),
-                fd.Flux('sca', box=fd.Box(size=(1.4,)*3), wavelengths=(1.,)),
-                fd.FarField('ff', box=fd.Box(size=(1.5,)*3), wavelengths=(1.,), propagation=propagation))
+    monitors = (fd.Flux('abs', box=fd.Region(size=(.8,)*3), wavelengths=(1.,)),
+                fd.Flux('sca', box=fd.Region(size=(1.4,)*3), wavelengths=(1.,)),
+                fd.FarField('ff', box=fd.Region(size=(1.5,)*3), wavelengths=(1.,), propagation=propagation))
     return fd.Scene(domain=fd.Domain(size=(size,)*3),
                     boundaries=fd.Boundaries.open(fd.PML(cells=pml, reflection=reflection)),
                     resolution=fd.Resolution(dx=dx), run=fd.Run(periods=periods),
                     structures=(fd.Structure(fd.Sphere(radius=radius, center=center), eps),),
-                    sources=(fd.TFSF('t', box=fd.Box(size=(1.1,)*3), direction='+z',
+                    sources=(fd.TFSF('t', box=fd.Region(size=(1.1,)*3), direction='+z',
                                      polarization='x', band=fd.Band(wavelength=1., df=.1)),),
                     monitors=monitors)
 
@@ -138,7 +138,7 @@ if __name__ == '__main__':
     s=sphere_scene(args.cpw,args.eps,args.periods,
                    tuple(map(float,args.offset.split(','))),args.gap,args.pml, propagation=args.propagation)
     if args.phase_control:
-        extra = tuple(fd.FarField(name, box=fd.Box(size=(2*half,)*3), wavelengths=(1.,),
+        extra = tuple(fd.FarField(name, box=fd.Region(size=(2*half,)*3), wavelengths=(1.,),
                                  propagation=args.propagation)
                       for name, half in (('near', .65), ('far', .85)))
         s = s.replace(monitors=s.monitors+extra)

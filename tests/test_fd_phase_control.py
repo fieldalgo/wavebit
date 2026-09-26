@@ -64,7 +64,7 @@ def test_source_phase_and_power_recover_independent_modes(backend):
 
 def test_cross_flux_equals_analytic_counterpropagating_mode_power():
     grid = Grid.from_domain((3.1,)*3, (0.,)*3, .05)
-    faces = box_faces('plane modes', grid, study.fd.Box(size=(1.5,)*3))
+    faces = box_faces('plane modes', grid, study.fd.Region(size=(1.5,)*3))
     dt = .5*grid.dx/np.sqrt(3)
     kappa = 2/grid.dx*np.arcsin(grid.dx/dt*np.sin(np.pi*dt))
     # Specified incoming/outgoing amplitudes; no Mie or production transform

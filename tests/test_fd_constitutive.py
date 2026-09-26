@@ -338,7 +338,7 @@ def test_loss_and_mirror_doors_cover_the_interpolation_halo():
     pml = fd.Boundaries.open(fd.PML(cells=3, wavelength=2., allow_thin=True))
     with pytest.raises(ValueError, match='interpolation support meets.*absorbing layer'):
         quiet(fd.plan, scene.replace(boundaries=pml))
-    loss = fd.Structure(fd.Box(size=(.05,.1,.1), center=(.275,0.,0.)),
+    loss = fd.Structure(fd.Region(size=(.05,.1,.1), center=(.275,0.,0.)),
                         fd.Conductor(eps=1., sigma=.2))
     with pytest.raises(ValueError, match='interpolation support meets.*conductivity or poles'):
         quiet(fd.plan, scene.replace(structures=scene.structures+(loss,)))

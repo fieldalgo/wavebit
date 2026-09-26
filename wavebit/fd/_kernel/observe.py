@@ -52,8 +52,8 @@ __all__ = ['PointRecord', 'DFTRegion', 'InteriorEnergy', 'ENERGY_STRIDE']
 #:
 #: **What the always-on diagnostic costs**, measured 2026-09-21 tree against tree: each
 #: checkout timed on its own kernel loop, no stub and no monkeypatch anywhere, since a stub is
-#: what got this wrong before (below). ``fd_helpers.dipole_box`` with an ``eps`` Box and a
-#: Lorentz Box, so ``ae``/``be``/``ah``/``bh`` are ``(3, N, N, N)`` and a pole is stepped;
+#: what got this wrong before (below). ``fd_helpers.dipole_box`` with an ``eps`` Region and a
+#: Lorentz Region, so ``ae``/``be``/``ah``/``bh`` are ``(3, N, N, N)`` and a pole is stepped;
 #: 320 steps, best of seven, ms per step, against the commit before this observer existed:
 #:
 #:                                        NumPy        Torch        JAX (jit)

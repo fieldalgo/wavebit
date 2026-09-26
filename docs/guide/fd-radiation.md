@@ -8,7 +8,7 @@ clear of absorbing layers and source surfaces.
 import wavebit.fd as fd
 
 monitor = fd.FarField(
-    'ff', box=fd.Box(size=(1.5,)*3), wavelengths=(1.,), propagation='yee')
+    'ff', box=fd.Region(size=(1.5,)*3), wavelengths=(1.,), propagation='yee')
 ```
 
 Add the monitor to the scene before calling `fd.run`. `propagation` chooses

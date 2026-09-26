@@ -18,7 +18,7 @@ from wavebit.fd._kernel.grid import Grid, OFFSETS
 from wavebit.fd._lower.monitors import box_faces
 from wavebit.fd._runtime import runtime
 from wavebit.fd._post import far_field, box_flux
-from wavebit.fd.geometry import Box
+from wavebit.fd.geometry import Region
 
 
 # Existing C3 inputs, not acceptance thresholds. The three surface sizes
@@ -35,7 +35,7 @@ def records(cpw, eps=1.1, half=.75, offset=(0., 0., 0.), collocated=False,
     dx = 1/cpw
     # Same grid origin as sphere_scene; no plan or source is constructed.
     grid = Grid.from_domain((2*(.75+.2+12*dx),)*3, (0.,)*3, dx)
-    faces = box_faces('exact Mie', grid, Box(size=(2*half,)*3))
+    faces = box_faces('exact Mie', grid, Region(size=(2*half,)*3))
     center = np.asarray(offset)*dx
     coordinates = []
     for name, sign, layout in faces:

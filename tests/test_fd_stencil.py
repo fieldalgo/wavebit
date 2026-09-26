@@ -62,9 +62,9 @@ def scene(cpw=18, radius=.14, eps=2.25, pml=6, periods=2., discretisation='stenc
                     background=background,
                     structures=(fd.Structure(fd.Sphere(radius=radius, center=center), eps,
                                              discretisation=discretisation),),
-                    sources=(fd.TFSF('t', box=fd.Box(size=(1.11,) * 3), direction='+z',
+                    sources=(fd.TFSF('t', box=fd.Region(size=(1.11,) * 3), direction='+z',
                                      polarization='x', band=fd.Band(wavelength=1., df=.1)),),
-                    monitors=(fd.Flux('sca', box=fd.Box(size=(1.2,) * 3),
+                    monitors=(fd.Flux('sca', box=fd.Region(size=(1.2,) * 3),
                                       wavelengths=(1.,)),), **changes)
 
 
@@ -539,11 +539,11 @@ def test_a_cell_snapped_shape_cannot_ask_for_the_stencil():
     where one existed would wave this scene through on the default and answer the question it
     was not asked.
     """
-    s = scene().replace(structures=(fd.Structure(fd.Box(size=(.28,) * 3), 2.25,
+    s = scene().replace(structures=(fd.Structure(fd.Region(size=(.28,) * 3), 2.25,
                                                  discretisation='stencil'),))
     with pytest.raises(ValueError) as err:
         quiet(build_plan, s)
-    # Its own sentence and not the not-a-sphere one beside it, which a Box also fails: with
+    # Its own sentence and not the not-a-sphere one beside it, which a Region also fails: with
     # only the shape name asserted, removing this door survived (both arms share the name).
     assert 'StencilShapeRefused' in str(err.value) and 'cell-snapped' in str(err.value)
     assert isinstance(stencil_term(prepared()[1]), StencilTerm)
@@ -570,13 +570,13 @@ def test_a_source_or_monitor_surface_that_cuts_the_nonlocal_support_is_refused()
     medium is the same on both of its sides. Moving either onto the support is the mutant the
     scene cannot see for itself.
     """
-    tight = scene().replace(sources=(fd.TFSF('t', box=fd.Box(size=(.42,) * 3), direction='+z',
+    tight = scene().replace(sources=(fd.TFSF('t', box=fd.Region(size=(.42,) * 3), direction='+z',
                                              polarization='x',
                                              band=fd.Band(wavelength=1., df=.1)),))
     with pytest.raises(ValueError) as err:
         quiet(build_plan, tight)
     assert 'StencilSourceRefused' in str(err.value)
-    cut = scene().replace(monitors=(fd.Flux('sca', box=fd.Box(size=(.56,) * 3),
+    cut = scene().replace(monitors=(fd.Flux('sca', box=fd.Region(size=(.56,) * 3),
                                             wavelengths=(1.,)),))
     with pytest.raises(ValueError) as err:
         quiet(build_plan, cut)
@@ -631,7 +631,7 @@ def test_the_default_bound_admits_the_resolutions_the_orders_were_measured_at():
             s = mie.sphere_scene(cpw, 12., 48., placement, radius=.25, propagation='yee')
             # The research's own .45 absorption half-width: at .4 the placed 40-cell spheres
             # cut the grown region, which the occupancy door refuses by name.
-            monitors = tuple(m.replace(box=fd.Box(size=(.9,) * 3)) if m.name == 'abs' else m
+            monitors = tuple(m.replace(box=fd.Region(size=(.9,) * 3)) if m.name == 'abs' else m
                              for m in s.monitors)
             s = s.replace(monitors=monitors, structures=(fd.Structure(
                 s.structures[0].shape, 12., discretisation='stencil'),))
@@ -785,7 +785,7 @@ def test_a_second_structure_anywhere_is_refused():
     """One structure per scene, as the research driver required; no other is erased.
 
     Measured before this door existed, both accepted with no warning: a cell-snapped
-    ``fd.Box`` beside the ball, inside the operator's grown region, kept 864 cells at 1/1.44
+    ``fd.Region`` beside the ball, inside the operator's grown region, kept 864 cells at 1/1.44
     on the default and 0 on the stencil; a second smoothed ``fd.Sphere`` beside it left the
     whole lowered ``be`` ``np.array_equal`` to the scene without it, while ``fd.check`` still
     listed it. A structure outside the region is refused too: nothing has measured the
@@ -793,7 +793,7 @@ def test_a_second_structure_anywhere_is_refused():
     """
     dx = 1 / 18
     s = scene()
-    box = fd.Structure(fd.Box(size=(2 * dx, 12 * dx, 12 * dx), center=(4 * dx, 0, 0)), 1.44)
+    box = fd.Structure(fd.Region(size=(2 * dx, 12 * dx, 12 * dx), center=(4 * dx, 0, 0)), 1.44)
     ball = fd.Structure(fd.Sphere(radius=.045, center=(.27, 0, 0)), 2.25)
     for extra in (box, ball):
         message = refusal(s.replace(structures=s.structures + (extra,)))
@@ -805,7 +805,7 @@ def test_a_second_structure_anywhere_is_refused():
     # Far from the region too, in a scene with nothing else in it to object first.
     bare = s.replace(sources=(), monitors=(), run=fd.Run(steps=4), boundaries=fd.Boundaries.open(
         fd.PML(cells=6, wavelength=1., allow_thin=True)))
-    far = fd.Structure(fd.Box(size=(2 * dx,) * 3, center=(.5, .5, .5)), 1.44)
+    far = fd.Structure(fd.Region(size=(2 * dx,) * 3, center=(.5, .5, .5)), 1.44)
     assert 'StencilStructuresRefused' in refusal(bare.replace(
         structures=bare.structures + (far,)))
     assert reaches_assembly(bare)
@@ -906,11 +906,11 @@ def test_nothing_else_may_occupy_the_grown_region():
     """
     s = scene()
     tfsf = lambda size: s.replace(sources=(fd.TFSF(
-        't', box=fd.Box(size=(size,) * 3), direction='+z', polarization='x',
+        't', box=fd.Region(size=(size,) * 3), direction='+z', polarization='x',
         band=fd.Band(wavelength=1., df=.1)),))
     assert 'StencilSourceRefused' in refusal(tfsf(.95))
     assert reaches_assembly(tfsf(1.11))
-    flux = lambda size: s.replace(monitors=(fd.Flux('f', box=fd.Box(size=(size,) * 3),
+    flux = lambda size: s.replace(monitors=(fd.Flux('f', box=fd.Region(size=(size,) * 3),
                                                     wavelengths=(1.,)),))
     assert 'StencilSurfaceRefused' in refusal(flux(.8))
     assert reaches_assembly(flux(1.2))
@@ -1313,7 +1313,7 @@ def test_lowering_refuses_a_scene_the_operator_was_not_prepared_for():
              (with_structure(s, fd.Sphere(radius=.145)), 'StencilMismatchRefused'),
              (with_structure(s, discretisation='voxel'), 'StencilMismatchRefused'),
              (s.replace(structures=s.structures + (fd.Structure(
-                 fd.Box(size=(.1,) * 3, center=(.5, .5, .5)), 1.44),)),
+                 fd.Region(size=(.1,) * 3, center=(.5, .5, .5)), 1.44),)),
               'StencilMismatchRefused'),
              (with_structure(s, material=fd.Conductor(eps=2.25, sigma=.1)),
               'lossless fd.Material(eps=...)'),

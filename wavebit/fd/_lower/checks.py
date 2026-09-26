@@ -180,7 +180,7 @@ def check_overlaps(scene, grid):
     **Does the argument still hold now that a painter may mix rather than replace?** For the
     overlaps this function decides, yes, and the reason is that the two discretisations do not
     meet here. A *cell-snapped* painter still replaces the cell outright, so a non-dispersive
-    overlap of ``Slab``s and ``Box``es goes through ``coefficients._blend`` exactly as it
+    overlap of ``Slab``s and ``Region``s goes through ``coefficients._blend`` exactly as it
     went through the owner index, bit for bit, and the order rule holds for it exactly. A
     *smoothed* painter mixes, and "later overwrites earlier" is then only true where the
     arriving shape fills the voxel whole -- so the case where it is not, **two smoothed
@@ -225,7 +225,7 @@ def _intersects(left, right):
     The boxes are supports (``Shape.support``): the cells each shape may touch, which is the
     right question here because an overlap the refusal misses is the silent outcome. A Slab's
     support is full on its two other axes, so two slabs on different axes always intersect, as
-    stage 1 said; a Box is snapped on all three. A span that snapped to nothing was already
+    stage 1 said; a Region is snapped on all three. A span that snapped to nothing was already
     refused where it was snapped.
     """
     return all(a0 < b1 and b0 < a1 for (a0, a1), (b0, b1) in zip(left, right))
@@ -290,7 +290,7 @@ def check_smoothed(scene, grid):
     take it for -- while the identical scene with ``y=Periodic()`` is refused by name.
 
     **3. No smoothed shape whose material reaches a face of the box.** A cell-snapped
-    ``fd.Box`` is clipped to the domain exactly, because its material is a range of cell
+    ``fd.Region`` is clipped to the domain exactly, because its material is a range of cell
     indices. A smoothed body is not, and the six components do not agree about where the box
     ends -- three of them have their Yee point on the node plane and three half a cell off it.
     **That disagreement points opposite ways at the two ends of an axis, and the two arms of
@@ -315,7 +315,7 @@ def check_smoothed(scene, grid):
     domain is therefore refused at its ``+`` faces and accepted at its ``-`` ones, which is not
     a symmetry the grid has to offer. The spelling that works at a ``+`` face is to keep the
     surface half a cell clear of the wall, or to enlarge the domain; "say the truncated body
-    with the cell-snapped ``fd.Box``" is the ``-`` arm's remedy and means nothing here, because
+    with the cell-snapped ``fd.Region``" is the ``-`` arm's remedy and means nothing here, because
     there is nothing sticking out to truncate.
 
     The test is on the body and not on the support box, because the support carries a cell of
@@ -383,7 +383,7 @@ def check_smoothed(scene, grid):
                 raise ValueError(
                     f'{where} reaches no cell along {axis}: it lies outside the box '
                     f'entirely. A smoothed shape is not clipped to the domain the way a '
-                    f'cell-snapped fd.Box is, so it would lower to nothing at all here while '
+                    f'cell-snapped fd.Region is, so it would lower to nothing at all here while '
                     f'the scene still reported it. (One that reaches the box but crosses a '
                     f'face is refused too, a few lines below, and for the sharper reason: '
                     f'three of the six components would count the material beyond the wall.) '
@@ -399,7 +399,7 @@ def check_smoothed(scene, grid):
                     f'cell thick, the scene lowers to an invariant slab cross-section holding '
                     f'18.4% of the ball\'s volume -- neither the ball asked for nor the '
                     f'cylinder a reader would take it for -- and no warning fires. Say the '
-                    f'invariant cross-section with the cell-snapped fd.Box (C4 ships the '
+                    f'invariant cross-section with the cell-snapped fd.Region (C4 ships the '
                     f'smoothed fd.Cylinder and fd.Prism, which declare the axis they are '
                     f'uniform along), or give {axis} real cells and a face that is not '
                     f'invariant.')
@@ -412,7 +412,7 @@ def check_smoothed(scene, grid):
                     f'outside the cell is simply lost, measured at 40.7% of the volume for a '
                     f'ball centred on the face, with every invariant the lowering checks still '
                     f'satisfied. Keep it at least one cell clear of both {axis} faces, or say '
-                    f'the periodic geometry with the cell-snapped fd.Box (which is clipped, '
+                    f'the periodic geometry with the cell-snapped fd.Region (which is clipped, '
                     f'and whose clipping is how a lamellar grating spells "runs the whole '
                     f'period").')
         outside = _reaches_outside(structure.shape, body, grid, box)
@@ -424,7 +424,7 @@ def check_smoothed(scene, grid):
                     f'{where} reaches past the {axis}- face of the box: its material '
                     f'fills {fill:.4f} of a voxel that lies outside the domain there. A '
                     f'smoothed shape is not clipped to the domain the way a cell-snapped '
-                    f'fd.Box is, and the six components do not agree about where the box ends '
+                    f'fd.Region is, and the six components do not agree about where the box ends '
                     f'-- at a MINUS face three of them have their point ON the wall, so their '
                     f'first voxel reaches half a cell outside it and counts the material '
                     f'there. Measured, a Sphere(radius=0.2) centred on a PEC x- face at '
@@ -432,14 +432,14 @@ def check_smoothed(scene, grid):
                     f'0.01988039 on Ey and Ez -- 18.7% more. So a ball half outside the box is '
                     f'neither the ball nor the hemisphere, and it is refused rather than '
                     f'silently trimmed. Move it inside Domain(size=..., center=...), enlarge '
-                    f'the domain, or say the truncated body with the cell-snapped fd.Box, '
+                    f'the domain, or say the truncated body with the cell-snapped fd.Region, '
                     f'which really is clipped. A shape that is uniform ACROSS the face -- a '
                     f'substrate, a half space -- is not refused: it answers uniform_along() '
                     f'True in that cell layer and the clip takes nothing from it.')
             raise ValueError(
                 f'{where} reaches the {axis}+ face of the box: {fill:.4f} of a voxel there '
                 f'holds material the grid has no point to carry. A smoothed shape is not '
-                f'clipped to the domain the way a cell-snapped fd.Box is, and the six '
+                f'clipped to the domain the way a cell-snapped fd.Region is, and the six '
                 f'components do not agree about where the box ends -- but a PLUS face is the '
                 f'opposite case to a minus one, and nothing outside the box is being counted '
                 f'here. At this face the three components whose Yee offset along {axis} is '
@@ -451,7 +451,7 @@ def check_smoothed(scene, grid):
                 f'Ez and exactly on Ex, and 1.11e-2 short at tangency, while the same ball '
                 f'mirrored to the x- wall loses nothing (8e-16). Keep the surface at least '
                 f'half a cell ({0.5 * grid.dx:g}) clear of the {axis}+ wall, or enlarge the '
-                f'domain with Domain(size=..., center=...) -- a truncated fd.Box is the minus '
+                f'domain with Domain(size=..., center=...) -- a truncated fd.Region is the minus '
                 f'face\'s remedy and is no use here, because there is nothing sticking out to '
                 f'truncate. A shape that is uniform ACROSS the face -- a substrate, a half '
                 f'space -- is not refused: it answers uniform_along() True in that cell layer '
@@ -478,7 +478,7 @@ def check_smoothed(scene, grid):
                 f'coefficients keep the cell-snapped rule, and a shape whose edge is not a '
                 f'cell boundary has no cells to apply it over -- so a partly filled voxel '
                 f'would carry the full conductivity or the full polarisation, which is a '
-                f'plausible number and a wrong one. Use the cell-snapped fd.Box for the lossy '
+                f'plausible number and a wrong one. Use the cell-snapped fd.Region for the lossy '
                 f'or dispersive part (first order in dx, and the whole of stages 1-3 rests on '
                 f'it), or keep it out of the smoothed shape\'s cells. Smoothing them is C8, '
                 f'which measures the rule before it writes it.')
@@ -501,7 +501,7 @@ def check_smoothed(scene, grid):
                     f'Held open, a Sphere with eps=(2.0, 5.0, 9.0) lowers with per-component '
                     f'maxima [2.0, 5.0, 9.0] and no sign that the rule was never derived for '
                     f'it. Give the smoothed shape and everything sharing its cells a scalar '
-                    f'{what}=, or say the anisotropic medium with the cell-snapped fd.Box, '
+                    f'{what}=, or say the anisotropic medium with the cell-snapped fd.Region, '
                     f'whose material is not mixed at all. The tensor form is stage 5 and only '
                     f'if study S1 says it buys an order.')
     for i in range(len(smoothed)):
@@ -533,7 +533,7 @@ def check_smoothed(scene, grid):
                 f'them until their SURFACES are a voxel apart (a dimer with a gap is fine and '
                 f'is not refused -- this is drawn on voxels, not on bounding boxes), or say '
                 f'the two as ONE structure so that there is one body, one interface and one '
-                f'exact answer: today that is a single fd.Sphere, or the cell-snapped fd.Box '
+                f'exact answer: today that is a single fd.Sphere, or the cell-snapped fd.Region '
                 f'for the part that overlaps (a smoothed body over a snapped one composes '
                 f'exactly, measured 2.0e-16). The CSG spellings that say it properly -- '
                 f'fd.Union, fd.Intersection and fd.Difference, which resolve the two into one '

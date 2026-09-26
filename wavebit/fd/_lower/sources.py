@@ -278,7 +278,7 @@ def _plane_wave_term(scene, plan, src, row):
                 f'across {AXES[s_axis]}: the structure is not uniform across the '
                 f'sheet, so the sheet would not be launching into the medium its incident '
                 f'field is computed in. A PlaneWave takes layers across its propagation axis, '
-                f'and (stage 3) cell-snapped fd.Box structures -- a patterned layer of finite '
+                f'and (stage 3) cell-snapped fd.Region structures -- a patterned layer of finite '
                 f'height -- that stay clear of the sheet; other patterned shapes are stage 4.')
         if c0 <= used[1] and c1 > used[0]:
             raise ValueError(
@@ -427,7 +427,7 @@ def _tfsf_term(scene, plan, src, row):
                 f'1-D grid along {AXES[P]} whose background is the slabs across {AXES[P]} '
                 f'only, so it is wrong wherever this structure changes the medium on the box '
                 f'surface. A slab across {AXES[P]} is part of that background and may cross '
-                f'the box; a finite scatterer is an fd.Box structure clear of its faces '
+                f'the box; a finite scatterer is an fd.Region structure clear of its faces '
                 f'(stage 3; every other shape is a stage-4 shape).')
     layered = any(s.shape.layer_axis() == P for s in scene.structures)
     driver, sheet = None, ()
@@ -470,7 +470,7 @@ def _tfsf_term(scene, plan, src, row):
 
 
 def _check_scatterer(src, index, structure, box, lo, hi):
-    """A cell-snapped Box near a TFSF box: strictly inside it, or clear of its surface.
+    """A cell-snapped Region near a TFSF box: strictly inside it, or clear of its surface.
 
     The corrections read the incident field on the node planes ``lo`` and ``hi`` and write
     the cells one outside them, so a scatterer must keep one cell clear of every face on the

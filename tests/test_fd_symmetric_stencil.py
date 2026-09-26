@@ -594,7 +594,7 @@ def test_flux_surface_encloses_the_complete_stencil(placement,half):
     import dataclasses
     import wavebit.fd as fd
     scene,p,box,matrix,_=sphere_surface_fixture(placement)
-    scene=scene.replace(monitors=tuple(dataclasses.replace(m,box=fd.Box(size=(2*half,)*3))
+    scene=scene.replace(monitors=tuple(dataclasses.replace(m,box=fd.Region(size=(2*half,)*3))
         if m.name=='abs' else m for m in scene.monitors))
     failure=None
     try:reports=study.surface_clearance(scene,p,matrix,box,(0,1,2))
@@ -620,7 +620,7 @@ def test_source_injection_requires_a_vacuum_band(kind):
     import wavebit.fd as fd
     if kind=='tfsf':
         scene,p,box,matrix,_=sphere_surface_fixture(0);components=(0,1,2)
-        source=dataclasses.replace(scene.sources[0],box=fd.Box(size=(.8,)*3))
+        source=dataclasses.replace(scene.sources[0],box=fd.Region(size=(.8,)*3))
     else:
         from wavebit.fd._lower.constitutive import common_points
         scene,p=scope_fixture();components=(1,2)
@@ -636,7 +636,7 @@ def test_source_injection_requires_a_vacuum_band(kind):
 def test_interior_field_samples_are_allowed():
     import wavebit.fd as fd
     scene,p,box,matrix,_=sphere_surface_fixture(2)
-    scene=scene.replace(monitors=(fd.Field('interior',box=fd.Box(size=(.3,)*3),wavelengths=(1.,)),))
+    scene=scene.replace(monitors=(fd.Field('interior',box=fd.Region(size=(.3,)*3),wavelengths=(1.,)),))
     failure=None
     try:study.surface_clearance(scene,p,matrix,box,(0,1,2))
     except ValueError as error:failure=str(error)

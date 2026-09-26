@@ -10,9 +10,9 @@ of ``tests/references/_fd_stage3_cases.py``:
 
     flux_dipole   two dipoles in a 26^3 PML box: a Flux box, a Flux plane, a Field plane
     bloch_stack   a 25-degree p PlaneWave in a Bloch cell over glass: two Diffraction planes
-    lamellar      a cell-snapped Box grating at normal incidence: three orders
+    lamellar      a cell-snapped Region grating at normal incidence: three orders
     farfield      a magnetic and an electric dipole in a FarField box
-    conical       a Box grating under a conical PlaneWave, y an Axis1D axis (complex)
+    conical       a Region grating under a conical PlaneWave, y an Axis1D axis (complex)
 
 **Two halves, and the second is the one that can fail alone.** NumPy, JAX and Torch are held
 to each other at 1e-12 of each array's peak on every DFT accumulator (whole), every result
@@ -179,7 +179,7 @@ def test_the_archive_covers_every_stage_three_path(golden):
         assert s[name]['terms'] == ['ColumnTerm']
         assert s[name]['spans'], 'a structure under the sheet'
     assert s['bloch_stack']['dtype'] == s['conical']['dtype'] == 'complex128'
-    # the Box structures cut x (and the one-cell y), not only z
+    # the Region structures cut x (and the one-cell y), not only z
     for name in ('lamellar', 'conical'):
         assert {row[0] for row in s[name]['spans']} == {'box.x', 'box.y', 'box.z'}, s[name]['spans']
     # three orders at the lamellar grating, both couplings at the conical one

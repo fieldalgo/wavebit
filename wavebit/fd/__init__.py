@@ -59,7 +59,7 @@ Stage 2 adds sources, each a term in the kernel's additive slot::
     fd.Dipole('d', center=(x, y, z), component='Ey', band=band)          # kind='magnetic': 'Hy'
     pw = fd.PlaneWave('pw', z=1.0, direction='-z', theta=20, polarization='s', band=band)
     fd.Boundaries(**fd.Bloch.from_source(pw), z=fd.PML(cells=12))       # the matching cell
-    fd.TFSF('t', box=fd.Box(size=(...), center=(...)), direction='-z', polarization='x',
+    fd.TFSF('t', box=fd.Region(size=(...), center=(...)), direction='-z', polarization='x',
             band=band)                                 # axis directions only (measured)
     scene = fd.Scene(..., sources=(...,), run=fd.Run(periods=40))
     res.sources['pw'].t, res.sources['pw'].incident    # each source's reference series
@@ -68,15 +68,15 @@ A PML with no wavelength takes the sources' band centre; the mesh is checked at
 ``band.shortest_wavelength``. ``_kernel/sources.py`` derives every sign and half step.
 
 Stage 3 adds the frequency-domain monitors, the sources' spectral normalisation, the decay
-diagnostic, ``Run(time=)`` and the cell-snapped ``Box`` structure::
+diagnostic, ``Run(time=)`` and the cell-snapped ``Region`` structure::
 
     ws = (0.5, 0.55, 0.6)                                        # vacuum wavelengths, static
-    fd.Flux('out', box=fd.Box(size=(0.5,)*3), wavelengths=ws)    # net outward flux of a box
+    fd.Flux('out', box=fd.Region(size=(0.5,)*3), wavelengths=ws)    # net outward flux of a box
     fd.Flux('t', plane=fd.Plane(z=-1.0), wavelengths=ws)         # flux along +z through a plane
     fd.Field('f', plane=fd.Plane(z=0.2), components=('Ex', 'Ey'), wavelengths=ws)
     fd.Diffraction('r', z=1.2, side='reflect', wavelengths=ws)   # orders of a periodic cell
-    fd.FarField('ff', box=fd.Box(size=(0.5,)*3), wavelengths=ws) # near-to-far, open scenes
-    fd.Structure(fd.Box(size=(0.2, 1.0, 0.1), center=(...)), glass)   # a lamellar tooth
+    fd.FarField('ff', box=fd.Region(size=(0.5,)*3), wavelengths=ws) # near-to-far, open scenes
+    fd.Structure(fd.Region(size=(0.2, 1.0, 0.1), center=(...)), glass)   # a lamellar tooth
     fd.Boundaries(x=fd.Bloch(k=kx), y=fd.Axis1D(k=ky, k_max=...), z=fd.PML(...))   # conical
     fd.Run(time=12.0)                                            # an end time instead of steps
     res['out'].flux, res['r'].orders.order(1, 0).R, res['r'].theta_at
@@ -110,7 +110,7 @@ Stage 4's C2 adds the first shape whose edge is **not** a cell boundary::
 
     fd.Structure(fd.Sphere(radius=0.2, center=(0, 0, 0)), glass)   # subpixel-smoothed
 
-``Slab`` and ``Box`` do not move and every stage-0..3 number is unchanged to the bit; a
+``Slab`` and ``Region`` do not move and every stage-0..3 number is unchanged to the bit; a
 ``Sphere`` is asked, at each of the six components' **own** Yee points, what fraction of that
 voxel it fills and which way its surface faces there, and its material is mixed with whatever
 the cell already held by the Farjadpour/Kottke rule (``_lower/occupancy.py`` produces the
@@ -151,7 +151,7 @@ second-order electromagnetic result; see ``docs/fd-mie-validation.md``. Neither
 discretisation has passed C3.
 
 Out of scope, and refused by name rather than
-silently: shapes other than ``Slab``, cell-snapped ``Box`` and ``Sphere`` (the rest of stage
+silently: shapes other than ``Slab``, cell-snapped ``Region`` and ``Sphere`` (the rest of stage
 4), GPU claims (stage 6), ``GaussianBeam``, ``ModeSource``,
 mode overlaps (``ModeMonitor``) and decay-driven stopping (``Decay``, ``Run(decay=)``) (stage 7),
 non-uniform grids (not in v1).
@@ -164,7 +164,7 @@ from .boundaries import (PEC, PMC, Absorber, Absorbing, Axis1D, Bloch, Boundarie
 from .diagnostics import (AbsorberProximityWarning, BoundedVoxelWarning, CoarseMeshWarning,
                           GrowingFieldWarning, PMLStabilityWarning, RadiationApproximationWarning, SubpixelAccuracyWarning,
                           UnsettledFieldWarning)
-from .geometry import Box, Plane, Shape, Slab, Sphere, Structure
+from .geometry import Plane, Region, Shape, Slab, Sphere, Structure
 from .materials import (Conductor, Debye, Dispersive, Drude, Lorentz, Material, MaterialBase,
                         Pole, eps_at)
 from .monitors import Decay, Diffraction, FarField, Field, Flux, ModeMonitor, Record
@@ -185,7 +185,7 @@ __all__ = [
     'RadiationApproximationWarning',
     'InitialField', 'Term', 'Record', 'Flux', 'Field', 'Diffraction', 'FarField', 'Plane',
     'ModeMonitor', 'Decay', 'FluxResult', 'FieldResult', 'FarFieldResult', 'DiffractionResult',
-    'Band', 'Dipole', 'PlaneWave', 'TFSF', 'Box', 'GaussianBeam', 'ModeSource',
+    'Band', 'Dipole', 'PlaneWave', 'TFSF', 'Region', 'GaussianBeam', 'ModeSource',
     'check', 'plan', 'lower', 'run',
     'Plan', 'Report', 'Results', 'Series', 'Final', 'SourceSeries',
 ]

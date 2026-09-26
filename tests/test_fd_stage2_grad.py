@@ -77,7 +77,7 @@ checkpointed pieces on JAX and Torch, and the gradient of every family (and of a
 substrate, whose column carries a driver) is the plain scan's to 1e-12.
 
 **The static doors are not leaves**, and the other half of this file is that they still say
-so, naming every leaf that is: a TFSF ``Box``, a dipole's ``range``, the step count (``Run(steps=)``, ``Run(periods=)``, and
+so, naming every leaf that is: a TFSF ``Region``, a dipole's ``range``, the step count (``Run(steps=)``, ``Run(periods=)``, and
 a ``periods`` run whose band centre is traced), a PlaneWave's sheet position and angle and a
 band's ``cutoff`` fix the plan, so a tracer or a ``requires_grad`` tensor in one of them is
 refused by the field's name.
@@ -154,7 +154,7 @@ def dipole_scene(amplitude, phase, delay, center, wavelength):
 
 def tfsf_scene(amplitude, phase, delay, center=None, wavelength=1.0):
     """A 4-cell ``-z`` TFSF box with two cells of scattered region, in a 24^3 PML box."""
-    source = fd.TFSF('t', box=fd.Box(size=(4 * DX,) * 3), direction='-z', polarization='y',
+    source = fd.TFSF('t', box=fd.Region(size=(4 * DX,) * 3), direction='-z', polarization='y',
                      band=_band(wavelength), amplitude=amplitude, phase=phase, delay=delay)
     side = (8 + 2 * PML_CELLS) * DX
     return fd.Scene(domain=fd.Domain(size=(side,) * 3),
@@ -377,10 +377,10 @@ def _static_doors():
         return fd.PlaneWave('pw', z=0.0, direction='-z', theta=v, band=_band(1.0))
 
     return (
-        pytest.param(lambda v: fd.Box(size=(v, 0.3, 0.3)),
-                     r'Box\(size=\.\.\.\) is static', 0.3, id='tfsf-box-size'),
-        pytest.param(lambda v: fd.Box(size=(0.3, 0.3, 0.3), center=(0.0, v, 0.0)),
-                     r'Box\(center=\.\.\.\) is static', 0.05, id='tfsf-box-center'),
+        pytest.param(lambda v: fd.Region(size=(v, 0.3, 0.3)),
+                     r'Region\(size=\.\.\.\) is static', 0.3, id='tfsf-box-size'),
+        pytest.param(lambda v: fd.Region(size=(0.3, 0.3, 0.3), center=(0.0, v, 0.0)),
+                     r'Region\(center=\.\.\.\) is static', 0.05, id='tfsf-box-center'),
         pytest.param(dipole_range, r'Dipole\(range=\.\.\.\) is static', -0.1,
                      id='dipole-range'),
         pytest.param(lambda v: fd.Run(steps=v), r'Run\(steps=\.\.\.\) is static', 140,
@@ -488,7 +488,7 @@ def test_the_static_door_refusal_names_the_source_leaves():
     jax = pytest.importorskip('jax')
 
     def through(v):
-        fd.Box(size=(v, 0.3, 0.3))
+        fd.Region(size=(v, 0.3, 0.3))
         return v
 
     with pytest.raises(ValueError) as raised:

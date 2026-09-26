@@ -140,7 +140,7 @@ def occupancy(scene, plan, rt, fields=('E', 'H'), report=None):
 
     **What the stage costs, and where.** The same scene lowers in 0.4211 s on numpy, 0.6892 s
     on jax and 0.3112 s on torch, against 0.0066 / 0.0074 / 0.0050 s for a cell-snapped
-    ``fd.Box`` of the same bounding size -- 62 to 93 times. Per component array of 17 576
+    ``fd.Region`` of the same bounding size -- 62 to 93 times. Per component array of 17 576
     voxels on numpy: building the points 0.0003 s, the body's ``exact_fill`` **0.1181 s**, the
     tangent plane that carries the moment 0.0032 s. So **97% of it is the exact clipped-ball
     volume**, at 6.7 us a voxel, and neither the moment nor the mixing rule is worth looking at

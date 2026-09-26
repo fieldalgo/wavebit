@@ -16,7 +16,7 @@ from fd_helpers import farfield_dipole, sphere_integral, to_numpy
 
 def fixture():
     grid = Grid.from_domain((3.1,)*3, (0.,)*3, .05)
-    faces = box_faces('oracle', grid, fd.Box(size=(1.3,)*3))
+    faces = box_faces('oracle', grid, fd.Region(size=(1.3,)*3))
     theta = np.array((0., 31., 70., 90., 133., 180.))[:, None]
     phi = np.array((0., 39., 90., 231.))[None, :]
     m = radiation.modes(grid.dx, .5*grid.dx/np.sqrt(3), (.7, 1.1, 1.4), 2.25, 1.3, theta, phi)
@@ -95,7 +95,7 @@ def test_complex_reciprocity_all_faces_frequencies_background_and_power(backend)
 def test_reciprocity_annihilates_regular_discrete_plane_waves():
     for cpw in (20, 28, 40):
         grid = Grid.from_domain((3.1,)*3, (0.,)*3, 1/cpw)
-        faces = box_faces('oracle', grid, fd.Box(size=(1.5,)*3))
+        faces = box_faces('oracle', grid, fd.Region(size=(1.5,)*3))
         m = radiation.modes(grid.dx, .5*grid.dx/np.sqrt(3), (1.,), 1., 1., (0., 39.), (0., 74.))
         k, n = m.k[0], m.unit_K[0]
         E = np.cross(n[0], (1., 0., 0.))
@@ -118,7 +118,7 @@ def test_preparation_refuses_invalid_inputs_and_unresolved_bands():
     with pytest.raises(ValueError, match='RadiationNonconvexBandRefused'):
         radiation.modes(**(base | dict(freqs=(5.,))))
     with pytest.raises(ValueError, match='FarFieldPropagationRefused'):
-        fd.FarField('ff', box=fd.Box(size=(.5,)*3), wavelengths=(1.,), propagation='fitted')
+        fd.FarField('ff', box=fd.Region(size=(.5,)*3), wavelengths=(1.,), propagation='fitted')
 
 
 def test_scene_refuses_all_nonconvex_frequencies_before_time_stepping():
@@ -216,7 +216,7 @@ def test_public_radiation_matches_actual_discrete_current_and_energy(component):
     scene = farfield_dipole(component=component, kind='electric' if component[0] == 'E' else 'magnetic',
                             wavelengths=(1.,), pml=24)
     scene = scene.replace(monitors=(scene.monitors[0].replace(propagation='yee'),
-        fd.FarField('ff2', box=fd.Box(size=(.7,)*3), wavelengths=(1.,), propagation='yee')))
+        fd.FarField('ff2', box=fd.Region(size=(.7,)*3), wavelengths=(1.,), propagation='yee')))
     result = fd.run(scene, backend='jax')
     theta, phi = np.array((30., 60., 90., 120., 150.))[:, None], np.array((0., 70., 200.))[None, :]
     m = radiation.modes(result.plan.dx, result.plan.dt, (1.,), 1., 1., theta, phi)

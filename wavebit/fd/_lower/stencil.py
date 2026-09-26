@@ -365,7 +365,7 @@ def surface_clearance(scene,p,matrix,box,components):
 #: The two spellings of ``fd.Structure(discretisation=)``. ``DEFAULT`` is what every structure
 #: has had until now and is *not* one rule: it is "the rule this structure's shape already
 #: names" -- a whole-cell replace for a cell-snapped :class:`~wavebit.fd.Slab` or
-#: :class:`~wavebit.fd.Box`, the diagonal Farjadpour/Kottke mix plus the constitutive cross
+#: :class:`~wavebit.fd.Region`, the diagonal Farjadpour/Kottke mix plus the constitutive cross
 #: terms for a shape that carries a body. That is why the word is ``'voxel'`` and not the name
 #: of a rule: both of those read one component's **own voxel** and nothing else.
 DEFAULT = 'voxel'
@@ -689,7 +689,7 @@ def _refuse_structure(structure, index, when='plan'):
             f'StencilShapeRefused: {where} asked for discretisation={STENCIL!r}, but it is '
             f'cell-snapped -- its edge IS a cell boundary, so there is no interface inside a '
             f'voxel for the operator to constrain the edge and dual-face states across. The '
-            f'extended stencil is for a shape with a fractional edge; leave a Slab or a Box '
+            f'extended stencil is for a shape with a fractional edge; leave a Slab or a Region '
             f'on discretisation={DEFAULT!r}.')
     if type(structure.shape) is not _SphereShape:
         raise ValueError(

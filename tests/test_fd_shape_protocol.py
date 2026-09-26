@@ -2,7 +2,7 @@
 
 ``geometry.cell_box(shape, grid)`` was one function answering three questions at once (the
 module docstring of ``wavebit/fd/geometry.py`` lists the nine call sites and sorts them). On a
-cell-snapped ``Slab`` or ``Box`` the three answers coincide, so nothing here could have gone
+cell-snapped ``Slab`` or ``Region`` the three answers coincide, so nothing here could have gone
 wrong; on the first shape whose edge is not a cell boundary they part company, and a caller
 reading the wrong one is **silent**. This file makes them part company now, before any such
 shape exists in the package, by handing the callers shapes that answer the protocol and
@@ -123,7 +123,7 @@ from wavebit.fd._lower.checks import check_overlaps
 from wavebit.fd._lower.coefficients import painters, varying_axes
 from wavebit.fd._lower.monitors import farfield_checks
 from wavebit.fd._post import medium_at
-from wavebit.fd.geometry import AXES, Box, Shape, Slab
+from wavebit.fd.geometry import AXES, Region, Shape, Slab
 
 DX = 0.05
 
@@ -333,7 +333,7 @@ def test_layer_axis_is_the_one_question_with_a_default_and_its_default_is_not_a_
     """
     assert _Mute().layer_axis() is None
     assert _Pebble(0.1).layer_axis() is None
-    assert Box(size=(0.2, 0.2, 0.2)).layer_axis() is None
+    assert Region(size=(0.2, 0.2, 0.2)).layer_axis() is None
     assert Slab(z=(-0.1, 0.1)).layer_axis() == 2
     assert Slab(x=(-0.1, 0.1)).layer_axis() == 0
 
@@ -347,7 +347,7 @@ def test_the_cell_box_family_is_gone_from_geometry():
 
 
 # ---------------------------------------------------------------------------------------------
-# Slab and Box: today's answers, pinned
+# Slab and Region: today's answers, pinned
 # ---------------------------------------------------------------------------------------------
 
 def test_a_slab_answers_the_protocol_with_the_layer_rules_it_always_had():
@@ -370,11 +370,11 @@ def test_a_slab_answers_the_protocol_with_the_layer_rules_it_always_had():
 
 def test_a_box_answers_the_protocol_with_the_snapped_rules_it_always_had():
     grid = _grid()
-    box = Box(size=(0.2, 0.2, 40.0), center=(0.0, 0.0, 0.0))   # clipped through z
+    box = Region(size=(0.2, 0.2, 40.0), center=(0.0, 0.0, 0.0))   # clipped through z
     assert box.support(grid) == ((6, 10), (6, 10), (0, 16))
     assert box.filled_cells(grid) == box.support(grid)
     assert box.bounded_axes(grid) == (0, 1)          # z is the whole box, so it cuts nothing
-    assert box.describe() == 'Box(size=(0.2, 0.2, 40.0), center=(0.0, 0.0, 0.0))'
+    assert box.describe() == 'Region(size=(0.2, 0.2, 40.0), center=(0.0, 0.0, 0.0))'
     assert [row[0] for row in box.span_rows(grid)] == ['box.x', 'box.y', 'box.z']
     assert box.min_extent(grid) == pytest.approx(0.2)
     assert box.uniform_along(2, (0, 4), grid)        # reaches through the z faces
@@ -478,7 +478,7 @@ def test_a_clearance_question_asks_the_support_not_the_filled_cells():
     """
     pebble = _Pebble(0.18, center=(0.0, 0.0, 0.0))
     grid = _grid(n=(24, 24, 24))
-    monitor = fd.FarField('ff', box=fd.Box(size=(0.4, 0.4, 0.4)), wavelengths=(1.0,))
+    monitor = fd.FarField('ff', box=fd.Region(size=(0.4, 0.4, 0.4)), wavelengths=(1.0,))
     scene = _scene((fd.Structure(pebble, fd.Material(eps=2.25)),), size=24 * DX)
     # The far-field box's nodes leave the inscribed cube clear but not the support.
     assert pebble.filled_cells(grid) != pebble.support(grid)
@@ -621,7 +621,7 @@ def test_a_tfsf_scatterer_is_judged_by_its_support_not_by_the_cube_inside_it():
     grid = _grid(n=(24, 24, 24))
     pebble = _Pebble(0.18, center=(0.0, 0.0, 0.0))
     assert pebble.support(grid)[2] == (8, 16) and pebble.filled_cells(grid)[2] == (10, 14)
-    tfsf = fd.TFSF('t', box=fd.Box(size=(0.3, 0.3, 0.3)), direction='-z', polarization='x',
+    tfsf = fd.TFSF('t', box=fd.Region(size=(0.3, 0.3, 0.3)), direction='-z', polarization='x',
                    band=_band())
     scene = _scene((fd.Structure(pebble, fd.Material(eps=2.25)),), size=24 * DX,
                    sources=(tfsf,))
@@ -677,7 +677,7 @@ def test_a_layer_shape_needs_no_slab_attribute_to_reach_a_plane_waves_refusal():
 def test_a_layer_shape_needs_no_slab_attribute_to_reach_the_tfsf_crossing_refusal():
     """``sources._tfsf_term``: the same read, in the message about a layer crossing the box."""
     wafer = _Wafer((0.0, 0.6), across=0)                # across x, cells 12..24 of 24
-    tfsf = fd.TFSF('t', box=fd.Box(size=(0.3, 0.3, 0.3)), direction='-z', polarization='x',
+    tfsf = fd.TFSF('t', box=fd.Region(size=(0.3, 0.3, 0.3)), direction='-z', polarization='x',
                    band=_band())
     scene = _scene((fd.Structure(wafer, fd.Material(eps=2.25)),), size=24 * DX,
                    sources=(tfsf,))
@@ -697,7 +697,7 @@ def test_the_tfsf_drivers_owner_scan_asks_uniform_along_not_a_slabs_span():
     for a half-filled cell handed to a plane wave.
     """
     glass = fd.Material(eps=2.25)
-    tfsf = fd.TFSF('t', box=fd.Box(size=(0.3, 0.3, 0.3)), direction='-z', polarization='x',
+    tfsf = fd.TFSF('t', box=fd.Region(size=(0.3, 0.3, 0.3)), direction='-z', polarization='x',
                    band=_band())
     # A wafer over the whole incident side (cells 15..24, the box's entry plane out to the z+
     # face): one medium, so the driver column is glass and the plan is built.
@@ -753,7 +753,7 @@ def test_min_extent_is_the_shortest_side_the_shape_bounds_in_this_grid():
     shortest side as spelled, clipped sides and all, contradicting its own docstring.
     """
     grid = Grid(n=(4, 4, 40), dx=DX, low=(-0.1, -0.1, -1.0))
-    box = Box(size=(0.3, 0.3, 1.0), center=(0.0, 0.0, 0.0))
+    box = Region(size=(0.3, 0.3, 1.0), center=(0.0, 0.0, 0.0))
     assert box.support(grid) == ((0, 4), (0, 4), (10, 30))
     assert box.bounded_axes(grid) == (2,)               # x and y run out through the faces
     assert box.min_extent(grid) == pytest.approx(1.0)   # the bounded side, not the 0.3 stub
@@ -761,7 +761,7 @@ def test_min_extent_is_the_shortest_side_the_shape_bounds_in_this_grid():
     assert slab.min_extent(grid) == pytest.approx(2.0)
     # A box clipped on every axis bounds nothing: it is the background, and there is no
     # feature size to refuse.
-    assert Box(size=(9.0, 9.0, 9.0)).min_extent(grid) is None
+    assert Region(size=(9.0, 9.0, 9.0)).min_extent(grid) is None
 
 
 def test_the_structure_door_is_fd_Shape_and_the_bare_protocol_is_not_a_shape():

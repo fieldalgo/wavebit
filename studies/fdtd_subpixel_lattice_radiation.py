@@ -40,7 +40,7 @@ def evaluate(path):
     with np.load(raw_path) as raw:
         for old in header['surfaces']:
             name, half = old['name'], old['half']
-            faces = box_faces('replay', p.grid, fd.Box(size=(2*half,)*3))
+            faces = box_faces('replay', p.grid, fd.Region(size=(2*half,)*3))
             data = {face: {label: raw[name+'__'+face+'__'+label]-raw['empty__'+name+'__'+face+'__'+label]
                           for label, _, _ in layout.parts()} for face, _, layout in faces}
             net, parts = box_flux(rt, data, faces, p.dx)

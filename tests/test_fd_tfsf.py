@@ -319,7 +319,7 @@ def _airy_scene(kind, eps, steps=1600):
     nz = int(round(3.0 / dx)) + 2 * pml
     b = band()
     if kind == 'tfsf':
-        src = fd.TFSF('t', box=fd.Box(size=(2 * dx, 2 * dx, 2.0), center=(0.0, 0.0, 0.0)),
+        src = fd.TFSF('t', box=fd.Region(size=(2 * dx, 2 * dx, 2.0), center=(0.0, 0.0, 0.0)),
                       direction='-z', polarization='y', band=b)
     else:
         src = fd.PlaneWave('t', z=1.0, direction='-z', polarization='s', band=b)
@@ -507,7 +507,7 @@ def test_a_wave_arriving_from_inside_the_substrate_is_driven_in_the_substrate():
 
 def _bloch_tfsf(amplitude, steps=320):
     dx = band().wavelength / 20
-    src = fd.TFSF('t', box=fd.Box(size=(0.3, 0.3, 0.3)), direction='-z', polarization='x',
+    src = fd.TFSF('t', box=fd.Region(size=(0.3, 0.3, 0.3)), direction='-z', polarization='x',
                   band=band(), amplitude=amplitude)
     return fd.Scene(domain=fd.Domain(size=(0.6, 0.6, 0.5 + 24 * dx)),
                     boundaries=fd.Boundaries(x=fd.Bloch(k=1.0), y=fd.Periodic(),
@@ -536,7 +536,7 @@ def test_a_tfsf_box_in_a_bloch_cell_is_linear_in_a_complex_amplitude(backend):
 
 def test_oblique_tfsf_is_refused_so_there_is_no_leakage_table_to_pin():
     b = band()
-    box = fd.Box(size=(0.3, 0.3, 0.3))
+    box = fd.Region(size=(0.3, 0.3, 0.3))
     for kwargs in (dict(direction='-z', theta=45.0), dict(direction=(0.6, 0.0, -0.8))):
         with pytest.raises(ValueError) as e:
             fd.TFSF('t', box=box, polarization='x', band=b, **kwargs)

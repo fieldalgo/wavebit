@@ -39,7 +39,7 @@ a Bloch cell (:func:`bloch_plane_wave`), a TFSF box in vacuum or on a substrate
 **Stage 3's scenes** are at the very bottom: a dipole in an open box with three flux boxes
 (:func:`flux_box_dipole` -- around it, beside it, and big), a PlaneWave through a uniform stack
 in a Bloch cell with reflect and transmit ``Diffraction`` monitors and its ``wavebit.rcwa`` twin
-(:func:`bloch_stack`), a lamellar or crossed cell-snapped ``Box`` grating with the same monitors
+(:func:`bloch_stack`), a lamellar or crossed cell-snapped ``Region`` grating with the same monitors
 and its RCWA twin at matched geometry (:func:`box_grating`), and a PEC cavity with a dipole that
 never settles (:func:`pec_cavity_dipole`). Stage 3's second build adds a dipole in an open box
 with an ``fd.FarField`` box (:func:`farfield_dipole`, with :func:`sphere_integral` to integrate
@@ -881,7 +881,7 @@ def tfsf_box(direction='-z', polarization='x', box=(0.5, 0.5, 0.5), center=(0.0,
         low = center[P] - size[P] / 2 - dx
         structures = (fd.Structure(fd.Slab(**{direction[1]: (low, top)}),
                                    fd.Material(eps=eps)),)
-    source = fd.TFSF('t', box=fd.Box(size=box, center=center), direction=direction,
+    source = fd.TFSF('t', box=fd.Region(size=box, center=center), direction=direction,
                      polarization=polarization, band=b, amplitude=amplitude, phase=phase,
                      delay=delay)
     return fd.Scene(domain=fd.Domain(size=size, center=center),
@@ -961,10 +961,10 @@ def flux_box_dipole(center=(0.013, -0.02, 0.007), component='Ez', kind='electric
     """
     dx = 1.0 / cells_per_wavelength
     big = (size - 4 * dx) if big is None else big
-    monitors = (fd.Flux('in', box=fd.Box(size=(box,) * 3), wavelengths=wavelengths),
-                fd.Flux('empty', box=fd.Box(size=(empty_size,) * 3, center=empty_center),
+    monitors = (fd.Flux('in', box=fd.Region(size=(box,) * 3), wavelengths=wavelengths),
+                fd.Flux('empty', box=fd.Region(size=(empty_size,) * 3, center=empty_center),
                         wavelengths=wavelengths),
-                fd.Flux('big', box=fd.Box(size=(big,) * 3), wavelengths=wavelengths))
+                fd.Flux('big', box=fd.Region(size=(big,) * 3), wavelengths=wavelengths))
     return dipole_box(center=center, component=component, kind=kind, size=size,
                       cells_per_wavelength=cells_per_wavelength, periods=periods,
                       monitors=monitors, **kwargs)
@@ -1048,10 +1048,10 @@ def bloch_stack(theta=25.0, phi=0.0, polarization='s', layers=((2.25, 0.3),), su
 def box_grating(kind='lamellar', theta=0.0, phi=0.0, polarization='s', cells_per_wavelength=20,
                 wavelengths=WAVELENGTHS, period=1.6, fill=0.5, height=0.2, eps=2.25,
                 periods=160, pml=12, sheet=0.6, gap=0.5, orders=None, both=False):
-    """A cell-snapped ``fd.Box`` grating under a PlaneWave, with reflect and transmit monitors.
+    """A cell-snapped ``fd.Region`` grating under a PlaneWave, with reflect and transmit monitors.
 
     ``kind='lamellar'``: a tooth of width ``fill * period`` along x that spans y, in a cell one
-    cell deep in y (the Box runs past the domain in y and is clipped there). ``kind='crossed'``:
+    cell deep in y (the Region runs past the domain in y and is clipped there). ``kind='crossed'``:
     a square pillar ``fill * period`` on a side in a square cell. Vacuum above and below, the
     tooth's top at ``z = 0``, centred on the cell's origin as ``wavebit.rcwa`` centres its
     shapes. ``period``, the tooth and ``height`` are whole numbers of cells at 20, 40 and 80
@@ -1084,10 +1084,10 @@ def box_grating(kind='lamellar', theta=0.0, phi=0.0, polarization='s', cells_per
     width = fill * period
     if kind == 'lamellar':
         Ly = dx
-        box = fd.Box(size=(width, 10.0, height), center=(0.0, 0.0, -height / 2))
+        box = fd.Region(size=(width, 10.0, height), center=(0.0, 0.0, -height / 2))
     elif kind == 'crossed':
         Ly = period
-        box = fd.Box(size=(width, width, height), center=(0.0, 0.0, -height / 2))
+        box = fd.Region(size=(width, width, height), center=(0.0, 0.0, -height / 2))
     else:
         raise ValueError(f'box_grating(kind={kind!r}): lamellar or crossed')
     low = -height - gap - 0.3
@@ -1139,7 +1139,7 @@ def pec_cavity_dipole(periods=6, size=0.8, cells_per_wavelength=20, wavelengths=
                     boundaries=fd.Boundaries(x=fd.PEC(), y=fd.PEC(), z=fd.PEC()),
                     resolution=fd.Resolution(dx=dx), run=fd.Run(periods=periods),
                     sources=(src,),
-                    monitors=(fd.Flux('in', box=fd.Box(size=(box,) * 3),
+                    monitors=(fd.Flux('in', box=fd.Region(size=(box,) * 3),
                                       wavelengths=wavelengths),))
 
 
@@ -1164,7 +1164,7 @@ def farfield_dipole(center=(0.013, -0.02, 0.007), component='Ez', kind='electric
     With the magnetic current's sign flipped (``_post.FARFIELD_M_SIGN = -1``) the sphere integral
     misses the flux by 30-39% and the pattern by 13%. Returns the scene.
     """
-    monitors = (fd.FarField('ff', box=fd.Box(size=(box,) * 3), wavelengths=wavelengths),)
+    monitors = (fd.FarField('ff', box=fd.Region(size=(box,) * 3), wavelengths=wavelengths),)
     return dipole_box(center=center, component=component, kind=kind, size=size,
                       cells_per_wavelength=cells_per_wavelength, periods=periods,
                       monitors=monitors, **kwargs)
@@ -1190,7 +1190,7 @@ CONICAL_WAVELENGTHS = (0.95, 1.0, 1.05)
 def conical_grating(theta=15.0, phi=60.0, polarization='s', cells_per_wavelength=20,
                     wavelengths=CONICAL_WAVELENGTHS, period=1.6, fill=0.5, height=0.2, eps=2.25,
                     periods=160, pml=12, sheet=0.6, gap=0.5, orders=None, both=False):
-    """A conical lamellar grating: a ``Box`` tooth along x, uniform along y, y an ``fd.Axis1D``.
+    """A conical lamellar grating: a ``Region`` tooth along x, uniform along y, y an ``fd.Axis1D``.
 
     The x period is ``period`` and the cell is one cell deep in y, where ``fd.Axis1D(k=k_y)``
     carries the wave's ``k_y = k0 sin(theta) sin(phi)`` exactly (``fd.Bloch.from_source(pw,
@@ -1234,7 +1234,7 @@ def conical_grating(theta=15.0, phi=60.0, polarization='s', cells_per_wavelength
     pw = fd.PlaneWave('pw', z=sheet, direction='-z', theta=theta, phi=phi,
                       polarization=polarization, band=b)
     width = fill * period
-    box = fd.Box(size=(width, 10.0, height), center=(0.0, 0.0, -height / 2))
+    box = fd.Region(size=(width, 10.0, height), center=(0.0, 0.0, -height / 2))
     low = -height - gap - 0.3
     high = sheet + gap + 0.3
     top, bottom = -0.5 * dx, -height - 0.5 * dx

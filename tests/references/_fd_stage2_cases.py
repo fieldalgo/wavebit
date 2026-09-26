@@ -157,7 +157,7 @@ def plane_wave_scene():
 
 
 def tfsf_box():
-    return fd.Box(size=(0.3, 0.3, 0.3))
+    return fd.Region(size=(0.3, 0.3, 0.3))
 
 
 def tfsf_scene(substrate):

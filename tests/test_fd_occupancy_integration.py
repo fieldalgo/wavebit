@@ -55,7 +55,7 @@ def test_unvalidated_curved_accuracy_is_reported_once_before_lowering(backend):
 
 
 def test_cell_snapped_scenes_do_not_inherit_the_curved_accuracy_warning():
-    scene = _grid_scene((fd.Structure(fd.Box(size=(.3,)*3), 2.25),))
+    scene = _grid_scene((fd.Structure(fd.Region(size=(.3,)*3), 2.25),))
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter('always')
         fd.plan(scene)

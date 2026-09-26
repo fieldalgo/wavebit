@@ -11,7 +11,7 @@ bottom one, the lateral phase origin at the cell's low corner). The scenes:
 
 * **(a) a uniform stack**: a 0.3 slab of ``eps = 2.25`` on an ``eps = 1.44^2`` substrate, theta
   25 degrees, s and p (``fd_helpers.bloch_stack`` in a two-cell transverse cell);
-* **(b) a lamellar grating**: a cell-snapped ``fd.Box`` tooth (``eps = 2.25``, 0.8 wide, 0.2
+* **(b) a lamellar grating**: a cell-snapped ``fd.Region`` tooth (``eps = 2.25``, 0.8 wide, 0.2
   high) that spans y, period 1.6 at normal incidence (s and p) and period 1.2 at 20 degrees
   (s, wavelengths 1.0 and 1.1 -- at 0.9 the ``(+1, 0)`` order sits on the slab's guided
   resonance, where a half-cell of staircase moves ``R_0`` from 0.30 to 0.13);
@@ -44,7 +44,7 @@ The s stack converges second order (both the amplitudes and ``R``, ``T``); every
 an interface a component sees half a cell away from where another component sees it converges
 first order -- the p stack's normal E sees the snapped z interface on the cell boundary and its
 tangential E half a cell lower (``tests/test_fd_airy.py`` derives the half cell), and every
-``Box`` edge across x or y does the same to ``E_y`` or ``E_x``: the grid's cell-snapped tooth is
+``Region`` edge across x or y does the same to ``E_y`` or ``E_x``: the grid's cell-snapped tooth is
 the RCWA tooth moved by ``-dx/2`` for the component parallel to that edge, which shows as the
 ``+-1`` orders' phases leaning opposite ways (``r_s(+1) != -r_s(-1)`` by ``~ 2 k_G dx/2``) while
 their efficiencies stay equal. That is the staircase stage 4's subpixel averaging removes; the

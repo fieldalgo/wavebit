@@ -62,7 +62,7 @@ import math
 import numpy as np
 
 from ..boundaries import AXES, Axis1D, Bloch, Periodic
-from ..geometry import Box, Plane
+from ..geometry import Plane, Region
 from ..monitors import Diffraction, FarField, Field, Flux
 from .._kernel.grid import OFFSETS
 from .._kernel.masks import Slab
@@ -611,14 +611,14 @@ def _clear_layout(where, scene, grid, layout):
                     f'{where} runs the whole {AXES[a]} axis, whose faces absorb: it would add up '
                     f'the stretched field inside the layers, which is not a flux of anything. '
                     f'Give the plane an extent clear of them, fd.Plane(..., {AXES[a]}=(lo, hi)), '
-                    f'or use a closed fd.Box.')
+                    f'or use a closed fd.Region.')
             continue                              # a periodic (or walled) axis, read whole
         lo, hi = layout.nodes[a]
         _clear_of_absorbers(where, scene, grid, a, lo, hi - 1)
 
 
 def is_box(monitor):
-    return isinstance(getattr(monitor, 'box', None), Box)
+    return isinstance(getattr(monitor, 'box', None), Region)
 
 
 def is_plane(monitor):

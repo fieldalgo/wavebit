@@ -18,8 +18,8 @@ to overwrite the committed file.
 
 **What is different in stage 3.** The scenes are the five of ``../_fd_stage3_cases.py`` -- a
 Flux box, plane and Field plane around two dipoles, a Bloch PlaneWave through a glass layer
-with two Diffraction planes, a lamellar ``Box`` grating, a FarField box around two dipoles, and
-a conical ``Box`` grating on an ``Axis1D`` axis -- and what is frozen per backend is the stage-3
+with two Diffraction planes, a lamellar ``Region`` grating, a FarField box around two dipoles, and
+a conical ``Region`` grating on an ``Axis1D`` axis -- and what is frozen per backend is the stage-3
 pipeline end to end: the raw ``DFTRegion`` accumulators (whole) and their energy series, then
 every result built from them after the run (fluxes and face shares, Field phasors, every
 Diffraction ``Result`` array and ``theta_at``, far-field intensity and fields at fixed angles),
