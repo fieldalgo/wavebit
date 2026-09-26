@@ -183,9 +183,10 @@ def test_mandatory_plan_schema_material_and_horizontal_admission():
     for order in (True, -1, .5, (1, -1)):
         with pytest.raises(ValueError):
             wavebit.CartesianRectanglePairNVF(order)
-    for refinement in (True, -1, .5, 2):
+    for refinement in (True, -1, .5, 4):
         with pytest.raises(ValueError):
             wavebit.CartesianRectanglePairNVF(0, refinement=refinement)
+    assert wavebit.CartesianRectanglePairNVF(0, refinement=3).refinement == 3
     with pytest.raises(NotImplementedError):
         builder.conv_matrices(structure, basis, plan=plan, xp=object())
 
