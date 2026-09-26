@@ -2237,17 +2237,25 @@ class CoreSolveMixin:
             eps_top=eps_bot, eps_bot=eps_top))
 
 
-# The default rule for shape modeling. Explicit Li validates its Cartesian subset separately.
-# `ModelingPath.RASTER` is absent because it implements both and so takes the option as
-# given; general shapes default to NVF, with explicit Cartesian Li handled on read.
+# The rules a modeling path builds on every structure it accepts, its default first.
+# `ModelingPath.RASTER` is absent because it implements all of them and so takes the option
+# as given. Shapes default to NVF and take Laurent's rule on any shape -- it reads the same
+# closed-form `[[eps]]` NVF starts from; explicit Cartesian Li is conditional on the shapes
+# and handled on read, so it is not listed.
 _FACTORIZATION_IMPLEMENTED_BY = {
-    ModelingPath.PARAMETRIC: Factorization.NVF,
+    ModelingPath.PARAMETRIC: (Factorization.NVF, Factorization.LAURENT),
 }
 
-# General parametric shapes use NVF; Cartesian rectangles have an explicit Li route.
+# General parametric shapes use NVF or Laurent; Cartesian rectangles have an explicit Li route.
 _FACTORIZATION_REASON = {
-    ModelingPath.PARAMETRIC: "general shapes require factorization='nvf'; explicit Li supports axis-aligned rectangles",
+    ModelingPath.PARAMETRIC: "general shapes take factorization='nvf' (the default) or "
+                             "'laurent'; explicit Li supports axis-aligned rectangles",
 }
+
+# Why every NVF option is refused under Laurent's rule, in one spelling for the four refusals
+# that give it -- raster_normal_method, nvf_projector, shape_nvf_grid_size, and the tensor one.
+_LAURENT_BUILDS_NO_NORMAL = ("factorization='laurent' builds no normal field at all -- it takes "
+                             "the direct rule for every product")
 
 # The other Fourier axis, exactly the same shape of fact. The shape path describes a layer as
 # geometry rather than as samples, and integrates the permittivity over that geometry in
@@ -2332,11 +2340,13 @@ class CoreFactorizationMixin:
                  # (closed-form series); the default resolves per modeling path --
                  # 'sampled' on a raster, 'integrated' on the shape path, which is
                  # the only series it can form. Naming the other one raises.
-                 factorization=None,         # 'li' | 'nvf' (normal vector field); the
-                 # default resolves per modeling path -- 'li' on a raster, 'nvf' on
-                 # parametric shapes. The shape path builds 'li' only on axis-aligned
-                 # rectangles in an axis-aligned rectangular cell (`rectilinear`), and
-                 # refuses it on any other shape.
+                 factorization=None,         # 'li' | 'nvf' (normal vector field) |
+                 # 'laurent' (the direct rule for every product -- opt-in, for comparing with
+                 # solvers that use it, never a default); the default resolves per modeling
+                 # path -- 'li' on a raster, 'nvf' on parametric shapes. The shape path builds
+                 # 'li' only on axis-aligned rectangles in an axis-aligned rectangular cell
+                 # (`rectilinear`), and refuses it on any other shape; tensor materials refuse
+                 # 'laurent'.
                  shape_nvf_grid_size=None,  # normal-field sampling, per axis; None resolves to
                  # max(_NORMAL_GRID_DEFAULT, 4*half_width+1) -- 1024, lifted to the aliasing
                  # floor. This comment said 256 until 2026-09-02, which is a number that was
@@ -2383,8 +2393,8 @@ class CoreFactorizationMixin:
                  # 'li' number here was measured on) | 'symmetric' (each slot's inverse-rule
                  # axis inside, Li 1997: covariant under relabelling x and y). Read by scalar
                  # Li, on a raster and on axis-aligned rectangles; explicitly set where it has
-                 # no reader it is refused rather than ignored -- under 'nvf', and 'symmetric'
-                 # on tensor materials, whose Li build is the fixed nesting only. See
+                 # no reader it is refused rather than ignored -- under 'nvf' or 'laurent', and
+                 # 'symmetric' on tensor materials, whose Li build is the fixed nesting only. See
                  # docs/factorization-terms.md section 6.
                  **unknown,                  # collected rather than left to Python, so the
                  # refusal comes from `_refuse_unknown_keywords` and a typo cannot be
@@ -3355,12 +3365,22 @@ class CoreFactorizationMixin:
 
     @property
     def factorization(self):
-        """Which rule closes the discontinuous products: ``'li'`` | ``'nvf'``.
+        """Which rule closes the discontinuous products: ``'li'`` | ``'nvf'`` | ``'laurent'``.
 
         Shapes default to NVF. Explicit Li uses exact Cartesian intervals for
         axis-aligned rectangles in a rectangular cell; other shapes are refused.
         Scalar rasters default to Li. Tensor inputs default to NVF and accept
         explicit Li on axis-aligned rectangular cells with no patterned z coupling.
+
+        ``'laurent'`` is opt-in and never a default: the direct rule for every product,
+        ``[[eps]]`` in both in-plane slots and ``[[eps]]^-1`` in the z slot -- the original
+        RCWA formulation (Moharam & Gaylord, JOSA 71, 811, 1981), which converges slowly
+        wherever a field component jumps with the permittivity (L. Li, JOSA A 13, 1870, 1996).
+        It is here to compare with solvers that use it, fmmax's ``Formulation.FFT`` among them.
+        Scalar rasters take it with either coefficient series, shapes take it on any shape --
+        painted overlaps included -- and both take it on a skewed cell, since the rule names no
+        axis. Tensor materials refuse it by name. See
+        :func:`~wavebit._core.factorization.laurent_conv_matrices` for the slots.
         """
         if self._has_tensor_materials():
             _anisotropy.validate_options(self)
@@ -3371,14 +3391,17 @@ class CoreFactorizationMixin:
         implemented = _FACTORIZATION_IMPLEMENTED_BY.get(self._modeling_path)
         if implemented is None:                       # raster, or no structure yet: free choice
             return DEFAULT_FACTORIZATION if self._factorization is None else self._factorization
-        if self._factorization is not None and self._factorization != implemented:
-            # `!=`, not `is not`: `Factorization` is a str enum, so a value written straight
-            # onto the private attribute compares equal to the member it spells, and the
-            # formatting below tolerates one rather than dying inside the error path.
+        if self._factorization is None:
+            return implemented[0]
+        if self._factorization not in implemented:
+            # `in` compares by `==`, not identity: `Factorization` is a str enum, so a value
+            # written straight onto the private attribute compares equal to the member it
+            # spells, and the formatting below tolerates one rather than dying inside the
+            # error path.
             raise NotImplementedError(
                 f"factorization={factorization_of(self._factorization).value!r} is not "
                 f"available here: {_FACTORIZATION_REASON[self._modeling_path]}.")
-        return implemented
+        return factorization_of(self._factorization)
 
     @factorization.setter
     def factorization(self, value):
@@ -3440,8 +3463,8 @@ class CoreFactorizationMixin:
         path's axis-aligned rectangles under it. Like :attr:`raster_normal_method` there is
         nothing to resolve per path, so this reports the default when nothing was asked; what
         is refused is an explicit value on a build that would never read it
-        (:meth:`_reject_unread_nesting`) -- any value under NVF, and ``'symmetric'`` on a
-        tensor material, whose Li build is the fixed nesting only. The frozen geometry does
+        (:meth:`_reject_unread_nesting`) -- any value under NVF or Laurent, and ``'symmetric'``
+        on a tensor material, whose Li build is the fixed nesting only. The frozen geometry does
         not record it: the records a Li build reads -- the raster integrated path's
         compression, the rectangles' ``rectilinear_plans``, tensor Li's ``tensor_geometry`` --
         say where the blocks are, and the nesting only how they are combined, so one record
@@ -3545,7 +3568,9 @@ class CoreFactorizationMixin:
             return
         if self._modeling_path == ModelingPath.RASTER and factorization == Factorization.NVF:
             return
-        if self._modeling_path == ModelingPath.PARAMETRIC:
+        if factorization == Factorization.LAURENT:
+            where = _LAURENT_BUILDS_NO_NORMAL
+        elif self._modeling_path == ModelingPath.PARAMETRIC:
             where = 'the parametric path builds its normal field from the geometry itself'
         else:
             where = "factorization='li' builds no normal field at all"
@@ -3565,7 +3590,9 @@ class CoreFactorizationMixin:
                 for layer in self.structure:
                     _parametric.check_dyadic_shapes(layer.get('shapes', []))
             return
-        if self._modeling_path == ModelingPath.PARAMETRIC:
+        if factorization == Factorization.LAURENT:
+            where = _LAURENT_BUILDS_NO_NORMAL
+        elif self._modeling_path == ModelingPath.PARAMETRIC:
             where = "Cartesian shape factorization='li' builds no normal projector"
         else:
             where = "factorization='li' builds no normal field at all"
@@ -3581,8 +3608,9 @@ class CoreFactorizationMixin:
         and the parametric path's axis-aligned rectangles under it
         (:mod:`~wavebit._core.rectilinear`), which run on the same integrated builder. NVF takes
         the direct rule both ways and closes the discontinuity with the normal-field projector
-        instead, so there is no inner inverse for an order to matter to, and any explicit value
-        is refused there -- :meth:`_reject_unread_normal_method` and
+        instead, and Laurent takes the direct rule and stops there, so under either there is no
+        inner inverse for an order to matter to, and any explicit value is refused --
+        :meth:`_reject_unread_normal_method` and
         :meth:`_reject_unread_projector` read the other way round. Tensor materials are the
         third case: tensor Li (:mod:`~wavebit._core.tensor_li`) builds the fixed nesting and
         nothing else, so an explicit ``'fixed'`` is honoured and ``'symmetric'`` refused. A
@@ -3604,7 +3632,10 @@ class CoreFactorizationMixin:
                 f"nests its rules in the fixed order only (v inside u for every slot). Leave "
                 f"li_nesting unset or 'fixed' on a tensor material; the scalar Li builds read "
                 f"both nestings.")
-        if self._modeling_path == ModelingPath.PARAMETRIC:
+        if factorization == Factorization.LAURENT:
+            where = ("factorization='laurent' nests no rules -- it takes the direct rule for "
+                     "every product, so there is no inverse for an order to matter to")
+        elif self._modeling_path == ModelingPath.PARAMETRIC:
             where = ("the parametric path's factorization='nvf' nests no rules; its "
                      "factorization='li' on axis-aligned rectangles is what reads it")
         else:
@@ -3633,8 +3664,14 @@ class CoreFactorizationMixin:
         if self._normal_grid is None:
             return
         if self._modeling_path == ModelingPath.PARAMETRIC:
-            if self.factorization == Factorization.NVF:
+            factorization = self.factorization
+            if factorization == Factorization.NVF:
                 return
+            if factorization == Factorization.LAURENT:
+                raise NotImplementedError(
+                    f'shape_nvf_grid_size={self._normal_grid!r} has no reader here: '
+                    f'{_LAURENT_BUILDS_NO_NORMAL}. It sizes the grid shape NVF samples its '
+                    f"normal field on, so it needs factorization='nvf'.")
             raise NotImplementedError("shape_nvf_grid_size has no reader with Cartesian shape factorization='li'")
         raise NotImplementedError(
             f'shape_nvf_grid_size={self._normal_grid!r} has no reader here: the raster path builds its '
@@ -3699,7 +3736,8 @@ class CoreFactorizationMixin:
 
         # The two axes decide independently what has to be frozen: NVF needs the normal
         # field, the integrated series needs the block compression, and ('integrated', 'nvf')
-        # -- the combination the old integer could not spell -- needs both.
+        # -- the combination the old integer could not spell -- needs both. Li and Laurent
+        # need no normal field; on a raster their records are the compression or nothing.
         normal_field = normal_field_source = compression = None
         mu_normal_field = mu_normal_field_source = mu_compression = None
         if self._modeling_path == ModelingPath.RASTER:
@@ -3773,6 +3811,12 @@ class CoreFactorizationMixin:
             # had to re-take the overlap test it had already passed -- on values that can no
             # longer answer it.
             geometry.boundary_plans = plans
+            if factorization == Factorization.LAURENT:
+                # Laurent's rule reads the painting and nothing else: it builds no normal
+                # field, so there is no interface set to plan. The stamp is what keeps this
+                # record from reaching an NVF build, which would take the missing plans as
+                # "plan blind" rather than as "never asked".
+                return geometry
             # The interface set of every layer -- which faces lie on which image's faces over
             # a run, which are dead, whether anything is left -- by name, with no float in it.
             # Recorded for every layer whether or not the closed form builds it: a plan is
@@ -4120,12 +4164,18 @@ class CoreFactorizationMixin:
         run on the parametric path no longer has to spell ``factorization='nvf'`` out: that
         path resolves to NVF on its own, and demanding the keyword was this refusal reading the
         unresolved default and mistaking it for a request.
+
+        **Laurent's rule is not refused here**, and that is a property of the rule rather than
+        an oversight: it names no axis. Both in-plane slots are the one scalar convolution
+        ``[[eps]]`` on the lattice's own reciprocal grid, so nothing in it is taken along ``a1``
+        or ``a2`` and read back as ``x`` or ``y`` -- the thing this refusal exists for. The
+        coefficients are lattice-general for the reason the integrated ones are (above).
         """
         if self.lattice_is_axis_aligned:
             return
         common = ('The cell basis is non-orthogonal (set via .lattice). ')
         factorization = self.factorization
-        if factorization != Factorization.NVF:
+        if factorization == Factorization.LI:
             raise NotImplementedError(
                 common + f"factorization={factorization.value!r} applies the inverse "
                 f'rule along the raster axes, which are not x and y once the cell is skewed, '
@@ -4145,6 +4195,8 @@ class CoreFactorizationMixin:
     _RECORD_HOLDS = {
         'li': 'the block compression of an integrated raster, or the Cartesian rectangle plans',
         'nvf': "the normal field or the shapes' interface set, beside the painting's plan",
+        'laurent': "the block compression of an integrated raster, or the painting's plan -- "
+                   'no normal field and no interface set',
     }
 
     def _refuse_a_record_of_another_rule(self, geometry):
@@ -4154,9 +4206,10 @@ class CoreFactorizationMixin:
         an empty slot as an answer rather than as a gap: a raster's missing normal field sends
         NVF back to the eager construction -- which under ``jax.jit`` has no number to construct
         from -- and a Li record of rectangles handed to the shape NVF build carries no interface
-        set, so the NVF replay would plan blind. Until this check the parametric path refused
-        the second by testing ``rectilinear_plans`` for ``None``, and the raster path refused
-        neither. The stamp (:attr:`~wavebit._core.geometry.StaticGeometry.factorization`) is a
+        set, so the NVF replay would plan blind. A Laurent record of shapes is the same case: it
+        plans the painting and no interface set. Until this check the parametric path refused the
+        Li/NVF pair by testing ``rectilinear_plans`` for ``None``, and the raster path refused
+        nothing. The stamp (:attr:`~wavebit._core.geometry.StaticGeometry.factorization`) is a
         Python string, so this runs the same eagerly and inside a trace. A record built by hand
         carries no stamp and is replayed on trust, as it always was.
 
@@ -4175,8 +4228,8 @@ class CoreFactorizationMixin:
             f"under factorization={now.value!r}. A record holds what its own rule's build "
             f"decides -- under {held!r}, {self._RECORD_HOLDS.get(held, 'its own decisions')} -- "
             f"and the {now.value!r} build would read what is missing as an answer and replay it "
-            f"blind. Call freeze_geometry() again under factorization={now.value!r} (NVF and Li "
-            f"records are not interchangeable), or drop geometry= to rebuild.")
+            f"blind. Call freeze_geometry() again under factorization={now.value!r} (NVF, Li and "
+            f"Laurent records are not interchangeable), or drop geometry= to rebuild.")
 
     def _mu_conv_matrices(self, geometry=None):
         """The permeability slots, or ``None`` when nothing in the scene is magnetic.
@@ -4314,6 +4367,12 @@ class CoreFactorizationMixin:
                     conv = _fac.to_conv_mat_raster_integrated(
                         structure, half_width_u, half_width_v, compression=compression,
                         nesting=self.li_nesting)
+            elif factorization == Factorization.LAURENT:
+                if sampled:
+                    conv = _fac.to_conv_mat_raster_laurent(structure, half_width_u, half_width_v)
+                else:
+                    conv = _fac.to_conv_mat_raster_integrated_laurent(
+                        structure, half_width_u, half_width_v, compression=compression)
             else:
                 if sampled:
                     conv = _fac.to_conv_mat_raster_nvf(
@@ -4342,6 +4401,15 @@ class CoreFactorizationMixin:
                     self.lattice, self.complex_dtype,
                     plans=None if geometry is None else geometry.rectilinear_plans,
                     nesting=self.li_nesting)
+            elif factorization == Factorization.LAURENT:
+                # The same funnel as NVF -- every layer checked, overlaps painted -- with the
+                # normal field dropped: Laurent reads the painting's plan and nothing else.
+                conv = _parametric.to_conv_mat_parametric_layers(
+                    structure, half_width_u, half_width_v,
+                    self._geometry_lattice_for(geometry),
+                    complex_dtype=self.complex_dtype, xp=self.xp,
+                    boundary_plans=None if geometry is None else geometry.boundary_plans,
+                    factorization=Factorization.LAURENT)
             else:
                 if geometry is not None and geometry.rectilinear_plans is not None:
                     raise _fac.StaleGeometryError("Cartesian Li geometry cannot be replayed with NVF; freeze_geometry() again")

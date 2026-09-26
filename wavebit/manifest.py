@@ -83,6 +83,12 @@ from ._core.spec import SPEC_VERSION
 #: The ``li_nesting`` axis (2026-09-25) did not earn one either, for the same reason: a key
 #: added to ``paths[*]``, ``enums`` and the parametric path's ``conditional_options``, whose
 #: default is what every Li build already did.
+#:
+#: Nor did ``factorization='laurent'`` (2026-09-27): a value added to ``enums.factorization``
+#: and to both paths' ``factorization`` lists, plus the ``tensor_materials`` key that says
+#: where it is refused. Nothing resolves to it -- every default is the rule it was -- so a
+#: consumer that never learns the value generates exactly the scenes it generated before, and
+#: every key it already reads keeps its meaning.
 #: '9': two modeling paths instead of three (2026-09-03). ``smooth`` and ``boundary`` were one
 #: path published twice -- identical option lists, one ``structure`` spelling, and a choice
 #: taken per layer rather than per solve -- so they became ``parametric`` with an ``overlap``
@@ -126,7 +132,7 @@ SPELLINGS = (
         'mu': 'a second array of the same shape, passed as mu=',
         'overlap': None,
         'summary': 'Permittivity as samples. The only path that implements both Fourier '
-                   'series and both factorization rules, and the one topology optimisation '
+                   'series and every factorization rule, and the one topology optimisation '
                    'uses.',
     },
     {
@@ -219,15 +225,15 @@ def _options_for(path):
 
     Read from :mod:`wavebit._core.engine`'s own tables. A path absent from a table
     implements every value of that axis and takes the option as given; a path present in one
-    implements exactly the value it names, and the reason says whether the others are unbuilt
-    or unbuildable.
+    implements exactly the values it names -- the rules as a tuple, its default first, the
+    series as one value -- and the reason says whether the others are unbuilt or unbuildable.
     """
     factorization = _FACTORIZATION_IMPLEMENTED_BY.get(path)
     coefficients = _COEFFICIENTS_IMPLEMENTED_BY.get(path)
     return {
         'factorization': (
             [m.value for m in Factorization] if factorization is None
-            else [factorization.value]),
+            else [rule.value for rule in factorization]),
         'factorization_reason': (
             None if factorization is None else _FACTORIZATION_REASON[path]),
         'fourier_coefficients': (
@@ -319,6 +325,8 @@ LATTICE = {
     #: modeller rasterised shapes onto a rectangular grid of its own. Both surviving paths
     #: take a skewed cell.
     'paths_refused_on_oblique': (),
+    #: ``'laurent'`` is not here and is not an omission: the rule names no axis -- both
+    #: in-plane slots are one scalar convolution -- so it is the same operator on any basis.
     'factorizations_refused_on_oblique': ('li',),
     'normal_methods_refused_on_oblique': (),
     'refused_on_oblique': (
@@ -399,6 +407,21 @@ MATERIALS = (
         'source': 'docs/full-tensor-patterns.md',
     },
 )
+
+
+#: What a tensor material refuses that a scalar one takes, by name, so a consumer can test
+#: membership rather than read prose. The paths' ``factorization`` lists are per modeling
+#: path and cannot say it: a raster lists ``'laurent'``, and a raster of tensors refuses it.
+#: ``tests/test_manifest.py`` builds a tensor raster and a tensor shape under each value, so
+#: the list is held against the refusal the solver actually raises.
+TENSOR_MATERIALS = {
+    'factorizations_refused': ('laurent',),
+    'why': "factorization='laurent' is not built for tensor materials: a tensor layer is "
+           "factorized by tensor Li or the Popov-Neviere NVF rearrangement, and a Laurent "
+           'tensor build would be a third tensor builder with no reference checked against it. '
+           'A uniform tensor layer is the same under every rule, so leaving factorization '
+           'unset loses nothing there.',
+}
 
 
 # ------------------------------------------------------------------ what a solve returns
@@ -560,6 +583,10 @@ def manifest() -> dict:
             'refused_on_oblique': [dict(r) for r in LATTICE['refused_on_oblique']],
         },
         'materials': [dict(m) for m in MATERIALS],
+        'tensor_materials': {
+            'factorizations_refused': list(TENSOR_MATERIALS['factorizations_refused']),
+            'why': TENSOR_MATERIALS['why'],
+        },
         'results': _jsonable_results(),
     }
 

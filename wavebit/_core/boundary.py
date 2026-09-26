@@ -801,8 +801,12 @@ def normal_projector_coeffs(xp, loops, grid_shape, lattice, half_width_u, half_w
 
 
 def conv_mats(xp, regions, background, half_width_u, half_width_v, lattice, shape_nvf_grid_size,
-              dtype, cdtype, transform=None, interface_plan=None, projector_coeffs=None):
+              dtype, cdtype, transform=None, interface_plan=None, projector_coeffs=None,
+              laurent=False):
     """``(epx, epy, epz_i, epxy, epyx)`` for one boundary-resolved layer.
+
+    ``laurent=True`` stops once ``[[eps]]`` is known and returns Laurent's slots
+    (:func:`~wavebit._core.parametric.laurent_from_coeffs`), off-diagonal pair ``None``.
 
     ``regions`` is ``[(material, [loop, ...]), ...]`` -- disjoint, painting already resolved by
     the clipper, each ``material`` a :class:`~wavebit._core.domain.Material` or the bare
@@ -863,6 +867,10 @@ def conv_mats(xp, regions, background, half_width_u, half_width_v, lattice, shap
             ft = ft + xp.astype(polygon_ft(xp, V, KY, KX, lattice), cdtype)
         eps_c = eps_c + (eps_s - eps_bg) * ft
         inv_c = inv_c + (1.0 / eps_s - 1.0 / eps_bg) * ft
+
+    if laurent:
+        from .parametric import laurent_from_coeffs
+        return laurent_from_coeffs(xp, eps_c, half_width_u, half_width_v)
 
     if projector_coeffs is not None:
         if len(projector_coeffs) != 4:
@@ -1084,7 +1092,8 @@ def _what_moved(fresh_key, plan_key):
 
 def to_conv_mat_boundary_layer(xp, shapes, background, half_width_u, half_width_v, lattice,
                                dtype, shape_nvf_grid_size=256, n_poly=POLYGON_VERTICES, plan=None,
-                               projector_coeffs=None, nvf_projector=None, projector_plan=None):
+                               projector_coeffs=None, nvf_projector=None, projector_plan=None,
+                               laurent=False):
     """The five convolution matrices for one layer whose shapes are *painted*.
 
     ``shapes`` is in painting order — a later shape covers an earlier one — which is what a
@@ -1095,9 +1104,16 @@ def to_conv_mat_boundary_layer(xp, shapes, background, half_width_u, half_width_
     ``nvf_projector='circular'`` corrects the analytic Jones extension near curved
     polygon facets. ``projector_plan`` carries the primitive image ring alongside
     the clipping plan. The default retains the actual-interface linear field.
+
+    ``laurent=True`` closes every product with the painted layer's own ``[[eps]]`` instead
+    (:func:`~wavebit._core.parametric.laurent_from_coeffs`): the same polygons and the same
+    transform, and no normal field, so no projector option may come with it.
     """
     if nvf_projector not in (None, 'linear', 'circular'):
         raise ValueError("projector must be 'linear' or 'circular'")
+    if laurent and (nvf_projector is not None or projector_coeffs is not None
+                    or projector_plan is not None):
+        raise ValueError("Laurent's rule builds no normal projector; pass no projector option")
     verts = [shape_vertices(xp, s, lattice, n_poly) for s in shapes]
     if plan is None:
         recs, regions, transform, interfaces = plan_layer(shapes, lattice, n_poly)
@@ -1122,4 +1138,4 @@ def to_conv_mat_boundary_layer(xp, shapes, background, half_width_u, half_width_
             real_dtype, dtype, projector_plan, shapes=shapes)
     return conv_mats(xp, regs, background, half_width_u, half_width_v, lattice, shape_nvf_grid_size,
                      real_dtype, dtype, transform=transform, interface_plan=interfaces,
-                     projector_coeffs=projector_coeffs)
+                     projector_coeffs=projector_coeffs, laurent=laurent)

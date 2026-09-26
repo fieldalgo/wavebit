@@ -257,6 +257,15 @@ def validate_options(solver):
         from .parametric import check_layer_spec
         for i, layer in enumerate(solver.structure):
             check_layer_spec(layer, i)
+    if solver._factorization == Factorization.LAURENT:
+        raise NotImplementedError(
+            "factorization='laurent' is not built for tensor materials. A tensor layer is "
+            "factorized by tensor Li (wavebit._core.tensor_li) or by the Popov-Neviere NVF "
+            "rearrangement; Laurent's rule on a tensor would be a third tensor builder -- "
+            "[[eps_ij]] in all nine slots, the z row included -- with no reference checked "
+            "against it here, so it is refused rather than answered by the scalar build. A "
+            "uniform tensor layer is the same under every rule, so a scene of uniform layers "
+            "loses nothing by leaving factorization unset.")
     if solver._factorization == Factorization.LI:
         from . import rectilinear
         if not solver.lattice_is_axis_aligned:

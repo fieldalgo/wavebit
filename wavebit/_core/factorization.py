@@ -33,12 +33,18 @@ discontinuous functions:
   normal-vector-field factorization.
 - ``('integrated', 'nvf')``   -> :func:`to_conv_mat_raster_integrated_nvf`, closed-form
   Fourier with NVF.
+- ``('sampled', 'laurent')``  -> :func:`to_conv_mat_raster_laurent` and
+  ``('integrated', 'laurent')`` -> :func:`to_conv_mat_raster_integrated_laurent`: the direct
+  rule for every product, opt-in, for comparing with solvers that use it (see
+  :func:`laurent_conv_matrices`). The sampled one reaches every raster cell with a gradient
+  too; it decides nothing.
 
 The removed block path's layers were the closed-form series on explicitly
 given segment edges, with Li's rules; the parametric shape path lives in
 :mod:`wavebit._core.parametric` and is NVF, except that axis-aligned rectangles in an
 axis-aligned rectangular cell also take Li's rules, through :func:`fourier2d_integrated`
-(:mod:`wavebit._core.rectilinear`).
+(:mod:`wavebit._core.rectilinear`), and any shape takes Laurent's through
+:func:`wavebit._core.parametric.laurent_from_coeffs`.
 
 A recurring rule runs through this module: **discrete geometry decisions are computed eagerly
 and passed in as static inputs, while material values flow through differentiably.** Two
@@ -816,6 +822,104 @@ def to_conv_mat_raster_sampled(structure, half_width_u, half_width_v, nesting=No
     for eps_matrix in _layer_eps(xp, structure):
         for slot, mat in zip(out, li_conv_matrices(xp, eps_matrix, half_width_u, half_width_v,
                                                    nesting)):
+            slot.append(mat)
+    return ConvMatrices(*(xp.stack(slot) for slot in out), None, None)
+
+
+# ======================================================================== Laurent's rule
+#
+# The direct rule for every product -- the formulation RCWA started from, offered as an opt-in
+# so that a result can be compared like for like with a solver that uses it. Never a default.
+
+def _laurent_conv(xp, eps, half_width_u, half_width_v, series_u, series_v):
+    """A layer's three Laurent slots, in ``solve_conv`` order, the off-diagonal pair ``None``.
+
+    One convolution matrix serves both in-plane slots: the rule names no direction, so the two
+    are the same operator, and building it once is what makes them equal to the bit rather
+    than to round-off.
+    """
+    direct = _conv_matrix(xp, eps, half_width_u, half_width_v, series_u, series_v)
+    return ConvMatrices(direct, direct, xp.linalg.inv(direct), None, None)
+
+
+def laurent_conv_matrices(xp, eps_matrix, half_width_u, half_width_v):
+    """Laurent's rule for one layer, with sampled coefficients.
+
+    Every product of the permittivity with a field component is closed with the plain
+    convolution matrix ``[[eps]]`` -- the direct rule both ways, the BTTB matrix of
+    ``docs/factorization-terms.md`` §3 -- whatever is continuous across the interfaces::
+
+        slot      'laurent'            'li', for comparison
+        epx       [[eps]]              the inverse rule along u (Li)
+        epy       [[eps]]              the inverse rule along v
+        epz_i     [[eps]]^-1           [[eps]]^-1, the same
+        epxy/yx   None                 None
+
+    This is the formulation of Moharam & Gaylord (JOSA 71, 811, 1981), stated for binary
+    gratings in both polarizations by Moharam, Grann, Pommet & Gaylord (JOSA A 12, 1068,
+    1995), and the transverse matrix of fmmax's ``Formulation.FFT``
+    (``fmmax.fmm_matrices.transverse_permittivity_fft``, MIT). L. Li (JOSA A 13, 1870,
+    1996) showed why it converges slowly: where a field component that jumps at an interface
+    meets a permittivity that jumps at the same place, the product of their truncated series
+    does not converge to the series of the product. ``E_x`` normal to an x-interface is that
+    case, and Li's inverse rule is the cure.
+
+    **The z slot is where the two rules agree**, and it is ``[[eps]]^-1``, not ``[[1/eps]]``.
+    The solve needs ``E_z`` from ``D_z``. ``E_z`` is tangential to every vertical interface and
+    continuous, so ``D_z = eps E_z`` is a product the direct rule closes correctly -- Li's rules
+    take it too -- and inverting it gives ``[[eps]]^-1``. ``[[1/eps]]`` would be the direct rule
+    applied to ``E_z = (1/eps) D_z``, whose two factors jump together. fmmax's eigenproblem
+    solves against ``[[eps]]`` there as well
+    (``fmmax.fmm_matrices.script_k_matrix_patterned``); its separate ``[[1/eps]]`` matrix
+    is not in the eigenproblem.
+
+    What that leaves between the rules is the in-plane pair. On a grating that varies along
+    ``u`` only, TE reads ``epy`` alone, where both rules build ``[[eps]]``, so TE is Li's answer
+    to round-off; TM reads ``epx``, where Li builds ``[[1/eps]]^-1`` and this builds ``[[eps]]``
+    -- the slowly converging case of Li (1996). A uniform layer is ``eps * I`` under every rule.
+
+    **It names no axis.** Li's rules run along the lattice's ``u`` and ``v`` and are refused on
+    a skewed cell for that reason; this is one scalar convolution applied alike to ``E_x`` and
+    ``E_y``, the same operator on any cell basis.
+
+    The same builder serves the permeability by the ``(E, H, eps, mu) -> (H, -E, mu, eps)``
+    duality: ``[[mu]]`` in the two in-plane slots and ``[[mu]]^-1`` in the z slot.
+    """
+    eps_matrix = xp.astype(eps_matrix, _complex_dtype(xp, eps_matrix))
+    return _laurent_conv(xp, eps_matrix, half_width_u, half_width_v,
+                         *_pixel_series_pair(xp, half_width_u, half_width_v, _pixel_correction))
+
+
+def laurent_conv_matrices_integrated(xp, eps_comp, x, y, half_width_u, half_width_v):
+    """Laurent's rule for one layer, with integrated (closed-form) coefficients.
+
+    ``eps_comp``, ``x`` and ``y`` as in :func:`li_conv_matrices_integrated`; the slots as in
+    :func:`laurent_conv_matrices`.
+    """
+    C = _complex_dtype(xp, eps_comp)
+    eps_comp = xp.astype(eps_comp, C)
+    return _laurent_conv(xp, eps_comp, half_width_u, half_width_v,
+                         *_segment_series_pair(xp, x, y, half_width_u, half_width_v, C,
+                                               _device(xp, eps_comp)))
+
+
+def to_conv_mat_raster_laurent(structure, half_width_u, half_width_v):
+    """Per-layer Laurent convolution matrices for a raster ``structure``, sampled coefficients.
+
+    Args:
+        structure: relative-permittivity raster ``(n_layers, Ny, Nx)`` -- the design variable.
+        half_width_u, half_width_v: Fourier truncation orders.
+
+    Returns:
+        ``(epx, epy, epz_i, None, None)``, each slot ``(n_layers, n_orders, n_orders)`` -- one
+        :func:`laurent_conv_matrices` per layer. Nothing is decided from the values, so this is
+        traceable as it stands and needs no frozen geometry.
+    """
+    xp = array_namespace(structure)
+    out = [[], [], []]
+    for eps_matrix in _layer_eps(xp, structure):
+        for slot, mat in zip(out, laurent_conv_matrices(xp, eps_matrix, half_width_u,
+                                                        half_width_v)):
             slot.append(mat)
     return ConvMatrices(*(xp.stack(slot) for slot in out), None, None)
 
@@ -2146,6 +2250,28 @@ def compress_cell(xp, cell, row_idx, col_idx):
     return xp.take(rows, xp.asarray(col_idx, device=dev), axis=1)
 
 
+def _compressed_layers(xp, structure, compression):
+    """Yield each layer's ``(compressed cell, x, y)``, from ``compression`` or computed here.
+
+    The loop both integrated Li and integrated Laurent builds run: a recorded compression is
+    checked against the layer it is replayed onto (:func:`_check_compression_still_fits`), and a
+    record for a different number of layers is refused outright.
+    """
+    if compression is not None and len(compression) != structure.shape[0]:
+        raise StaleGeometryError(
+            f'the frozen geometry no longer fits this structure: it holds a compression for '
+            f'{len(compression)} layers and this one has {structure.shape[0]}. Call '
+            f'freeze_geometry() again, or drop geometry= to rebuild by comparison.')
+    for i in range(structure.shape[0]):
+        layer = structure[i]
+        if compression is None:
+            row_idx, col_idx, x, y = compression_indices(layer)
+        else:
+            _check_compression_still_fits(layer, compression[i], i)
+            row_idx, col_idx, x, y = compression[i]
+        yield compress_cell(xp, layer, row_idx, col_idx), x, y
+
+
 def to_conv_mat_raster_integrated(structure, half_width_u, half_width_v, compression=None,
                                   nesting=None):
     """Per-layer convolution matrices via the integrated (closed-form) series.
@@ -2166,23 +2292,36 @@ def to_conv_mat_raster_integrated(structure, half_width_u, half_width_v, compres
         :func:`li_conv_matrices_integrated` per layer.
     """
     xp = array_namespace(structure)
-    if compression is not None and len(compression) != structure.shape[0]:
-        raise StaleGeometryError(
-            f'the frozen geometry no longer fits this structure: it holds a compression for '
-            f'{len(compression)} layers and this one has {structure.shape[0]}. Call '
-            f'freeze_geometry() again, or drop geometry= to rebuild by comparison.')
-
     out = [[], [], []]
-    for i in range(structure.shape[0]):
-        layer = structure[i]
-        if compression is None:
-            row_idx, col_idx, x, y = compression_indices(layer)
-        else:
-            _check_compression_still_fits(layer, compression[i], i)
-            row_idx, col_idx, x, y = compression[i]
-        comp = compress_cell(xp, layer, row_idx, col_idx)
+    for comp, x, y in _compressed_layers(xp, structure, compression):
         for slot, mat in zip(out, li_conv_matrices_integrated(xp, comp, x, y, half_width_u,
                                                               half_width_v, nesting)):
+            slot.append(mat)
+    return ConvMatrices(*(xp.stack(slot) for slot in out), None, None)
+
+
+def to_conv_mat_raster_integrated_laurent(structure, half_width_u, half_width_v,
+                                          compression=None):
+    """Per-layer Laurent convolution matrices via the integrated (closed-form) series.
+
+    Args:
+        structure: relative-permittivity raster ``(n_layers, Ny, Nx)`` -- the design variable.
+        half_width_u, half_width_v: Fourier truncation orders.
+        compression: optional per-layer ``(row_idx, col_idx, x, y)``, exactly as
+            :func:`to_conv_mat_raster_integrated` takes it and checked the same way. The record
+            says where the blocks are, which is all this build reads from it; the solver still
+            refuses one frozen under another factorization, because that rule's record may hold
+            what this one never looks at.
+
+    Returns:
+        ``(epx, epy, epz_i, None, None)``, each slot ``(n_layers, n_orders, n_orders)`` -- one
+        :func:`laurent_conv_matrices_integrated` per layer.
+    """
+    xp = array_namespace(structure)
+    out = [[], [], []]
+    for comp, x, y in _compressed_layers(xp, structure, compression):
+        for slot, mat in zip(out, laurent_conv_matrices_integrated(xp, comp, x, y, half_width_u,
+                                                                   half_width_v)):
             slot.append(mat)
     return ConvMatrices(*(xp.stack(slot) for slot in out), None, None)
 

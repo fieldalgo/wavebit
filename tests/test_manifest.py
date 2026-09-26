@@ -260,6 +260,27 @@ def test_an_option_the_manifest_offers_actually_builds(path):
                        li_nesting=value, **KW).solve()
 
 
+#: A patterned tensor raster, for the refusals `tensor_materials` publishes: the per-path lists
+#: say what a raster takes, and cannot say what a raster *of tensors* refuses.
+_TENSOR_RASTER = np.ones((1, _N, _N, 3, 3)) * np.eye(3)
+_TENSOR_RASTER[0, _X ** 2 + _Y ** 2 <= 0.3 ** 2] *= np.array([2.0, 3.0, 4.0])
+
+
+def test_a_factorization_tensor_materials_refuse_is_refused_by_name():
+    """Both halves, on a tensor raster: what `tensor_materials` withholds is refused naming the
+    value, and every other factorization builds -- so the list is neither short nor long."""
+    refused = manifest()['tensor_materials']['factorizations_refused']
+    assert set(refused) <= {m.value for m in Factorization}
+    for value in (m.value for m in Factorization):
+        solver = wavebit.rcwa(structure=_TENSOR_RASTER, factorization=value, **KW)
+        if value in refused:
+            with pytest.raises(NotImplementedError) as excinfo:
+                solver.solve()
+            assert value in str(excinfo.value)
+        else:
+            solver.solve()
+
+
 # ------------------------------------------------------- the lattice refusals
 
 def test_li_is_refused_on_a_skewed_cell():

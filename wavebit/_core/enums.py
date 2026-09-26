@@ -91,9 +91,20 @@ class FourierCoefficients(str, Enum):
 
 
 class Factorization(str, Enum):
-    """Which rule closes the products of discontinuous functions."""
+    """Which rule closes the products of discontinuous functions.
+
+    ``'laurent'`` is the direct rule for every product, and it is opt-in: nothing resolves to it.
+    Each ``eps * E`` is closed with the plain convolution matrix ``[[eps]]`` whatever is
+    continuous across the interface -- the formulation RCWA started from (Moharam & Gaylord,
+    JOSA 71, 811, 1981) and the one Li showed converges slowly wherever a discontinuous field
+    component meets a discontinuous permittivity (L. Li, JOSA A 13, 1870, 1996). It is offered
+    so that a result can be compared like for like with a solver that uses it, fmmax's
+    ``Formulation.FFT`` among them; see :func:`wavebit._core.factorization.laurent_conv_matrices`
+    for the slots it fills.
+    """
     LI = 'li'    # Li's rules on the x/y axes
     NVF = 'nvf'  # normal vector field (Schuster et al. 2007); a superset of Li
+    LAURENT = 'laurent'  # the direct rule for every product (Moharam & Gaylord 1981); opt-in
 
 
 class NormalMethod(str, Enum):
@@ -191,7 +202,8 @@ class Nesting(str, Enum):
     path, the permeability included) and the parametric path's axis-aligned rectangles under
     ``factorization='li'``. Explicitly set anywhere else it is refused rather than ignored, as
     ``raster_normal_method`` is off raster NVF and ``nvf_projector`` off NVF: under
-    ``factorization='nvf'`` any value (NVF nests no rules), and on a tensor material
+    ``factorization='nvf'`` or ``'laurent'`` any value (neither nests rules), and on a tensor
+    material
     ``'symmetric'`` (tensor Li, :mod:`wavebit._core.tensor_li`, builds the fixed nesting only).
     The solver option that takes it is ``li_nesting``.
     """
@@ -392,6 +404,8 @@ def resolve_fourier_options(fourier_coefficients=None, factorization=None, keep_
     ``'li'``                    Li's rules on the x/y axes
     ``'nvf'``                   normal vector field (a superset of Li: a constant normal
                                 collapses the NVF projector onto Li's rules exactly)
+    ``'laurent'``               the direct rule for every product -- opt-in, for comparing
+                                with solvers that use it; never a default
     ==========================  ==============================================================
 
     The default is ``('sampled', 'li')`` and must stay there. That is a gradient-safety

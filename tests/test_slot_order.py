@@ -116,7 +116,20 @@ BUILDERS = {
     'parametric_layers': lambda: _parametric.to_conv_mat_parametric_layers(
         _shapes(), MAX_ORDER, MAX_ORDER, as_lattice(period=KW['period']), shape_nvf_grid_size=256,
         complex_dtype=np.complex128, xp=np),
+    'raster_laurent': lambda: _fac.to_conv_mat_raster_laurent(_raster(), MAX_ORDER, MAX_ORDER),
+    'raster_integrated_laurent': lambda: _fac.to_conv_mat_raster_integrated_laurent(
+        _raster(), MAX_ORDER, MAX_ORDER),
+    # Not a function name: the parametric stack under its second rule, which returns the
+    # uncoupled pair where NVF couples x and y.
+    'parametric_layers_laurent': lambda: _parametric.to_conv_mat_parametric_layers(
+        _shapes(), MAX_ORDER, MAX_ORDER, as_lattice(period=KW['period']),
+        complex_dtype=np.complex128, xp=np, factorization='laurent'),
 }
+
+#: The builders whose rule does not couple x and y, so ``epxy`` / ``epyx`` must be ``None``:
+#: Li's rules, and Laurent's, which is one scalar convolution in both in-plane slots.
+_UNCOUPLED = ('raster_sampled', 'raster_integrated', 'raster_laurent',
+              'raster_integrated_laurent', 'parametric_layers_laurent')
 
 
 @pytest.mark.parametrize('name', sorted(BUILDERS), ids=sorted(BUILDERS))
@@ -186,9 +199,10 @@ def test_a_builder_returns_the_named_slot_type(name):
     assert slots._fields == expected, (
         f'{name} returns {slots._fields}, not {expected} -- solve_conv takes epz_i third')
 
-    # A Li-rule builder says so with the pair, not with a shorter tuple. Asserted rather than
-    # left implicit: `None` there is what routes the solve onto the uncoupled arithmetic.
-    couples = name not in ('raster_sampled', 'raster_integrated')
+    # A Li- or Laurent-rule builder says so with the pair, not with a shorter tuple. Asserted
+    # rather than left implicit: `None` there is what routes the solve onto the uncoupled
+    # arithmetic.
+    couples = name not in _UNCOUPLED
     assert (slots.epxy is not None) == couples, (
         f'{name}: epxy is {"unset" if slots.epxy is None else "set"}, which claims the rule '
         f'{"does not couple" if slots.epxy is None else "couples"} x and y')

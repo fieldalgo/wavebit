@@ -114,13 +114,13 @@ class StaticGeometry:
             record per layer. Coordinates and materials stay live. Zero-width contact
             intervals are retained; eager replay refuses crossed edges. Like the other
             index-only plans, these participate in content hashing. Never shared with NVF.
-        factorization: the rule the record was taken under -- ``'li'`` or ``'nvf'`` --
-            written by ``freeze_geometry`` and compared, not consumed: a replay under any other
-            rule is refused by name
+        factorization: the rule the record was taken under -- ``'li'``, ``'nvf'`` or
+            ``'laurent'`` -- written by ``freeze_geometry`` and compared, not consumed: a
+            replay under any other rule is refused by name
             (``CoreFactorizationMixin._refuse_a_record_of_another_rule``). A record holds what
-            its own rule's build decides and nothing else -- a Li freeze of a raster records no
-            normal field, an NVF freeze of rectangles no Cartesian plan -- so another rule's
-            build would find a slot empty and read the gap as an answer.
+            its own rule's build decides and nothing else -- a Laurent freeze of shapes plans
+            the painting and no interface set, a Li freeze of a raster records no normal field
+            -- so another rule's build would find a slot empty and read the gap as an answer.
             ``None`` on a record built by hand, which is replayed on trust, as before. A plain
             string, so the comparison runs the same eagerly and under ``jax.jit``.
 

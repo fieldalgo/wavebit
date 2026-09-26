@@ -2504,6 +2504,20 @@ def nvf_from_coeffs(xp, eps_c, inv_eps_c, c_xx, c_xy, c_yy, half_width_u, half_w
     return ConvMatrices(eps_xx, eps_yy, xp.linalg.inv(ep_dir), -eps_xy, -eps_xy)
 
 
+def laurent_from_coeffs(xp, eps_c, half_width_u, half_width_v):
+    """Laurent's rule from a coefficient grid: ``([[eps]], [[eps]], [[eps]]^-1, None, None)``.
+
+    :func:`nvf_from_coeffs`'s twin for the direct rule, and the last step of both shape routes
+    under ``factorization='laurent'`` -- the closed form and the painted polygons differ only in
+    how ``eps_c`` was obtained. ``ep_dir`` there is exactly this matrix; what Laurent drops is
+    everything NVF builds on top of it, the normal field included. The slots are those of
+    :func:`wavebit._core.factorization.laurent_conv_matrices`, which states the rule and its
+    sources (Moharam & Gaylord, JOSA 71, 811, 1981; L. Li, JOSA A 13, 1870, 1996).
+    """
+    direct = conv_matrix_2d(xp, eps_c, half_width_u, half_width_v)
+    return ConvMatrices(direct, direct, xp.linalg.inv(direct), None, None)
+
+
 def check_no_plan_still_fits(layer, lattice, index):
     """Refuse a frozen *"this layer does not overlap"* that the layer has since outgrown.
 
@@ -2637,8 +2651,9 @@ def _gamma_moved(held, fresh, shapes):
 
 def to_conv_mat_parametric_layers(layer_shapes, half_width_u, half_width_v, lattice,
                               shape_nvf_grid_size=256, complex_dtype=None, xp=None,
-                              boundary_plans=None, gamma_plans=None, nvf_projector=None):
-    """Stack the parametric-NVF convolution matrices over layers.
+                              boundary_plans=None, gamma_plans=None, nvf_projector=None,
+                              factorization=None):
+    """Stack the parametric convolution matrices over layers, under NVF or Laurent's rule.
 
     ``layer_shapes`` is one ``dict(background=..., shapes=[...])`` per layer, with the shapes'
     ``cx`` / ``cy`` / ``lx`` / ``ly`` as absolute lengths in the units of ``period`` (see the
@@ -2657,7 +2672,23 @@ def to_conv_mat_parametric_layers(layer_shapes, half_width_u, half_width_v, latt
     (:class:`~wavebit._core.geometry.StaticGeometry`): the painting's resolution for a layer
     that overlaps, and the interface set the closed form's normal field replays. Both are
     re-asked eagerly and replayed under a trace.
+
+    ``factorization`` is ``'nvf'`` (``None`` means it) or ``'laurent'``. Laurent's rule takes
+    the same ``[[eps]]`` from the same geometry -- the closed-form sum of shape transforms, or
+    the painted polygons where shapes overlap -- and drops the normal field, so it reads the
+    painting's plan and never ``gamma_plans``, ``shape_nvf_grid_size`` or ``nvf_projector``
+    (:func:`laurent_from_coeffs`). Li's rules on shapes are :mod:`.rectilinear`'s, not this
+    function's, and are refused here by name.
     """
+    from .enums import Factorization, factorization_of
+    rule = Factorization.NVF if factorization is None else factorization_of(factorization)
+    if rule == Factorization.LI:
+        raise ValueError("factorization='li' on shapes is built by wavebit._core.rectilinear "
+                         "(axis-aligned rectangles only); this builder takes 'nvf' or 'laurent'")
+    laurent = rule == Factorization.LAURENT
+    if laurent and (nvf_projector is not None or gamma_plans is not None):
+        raise ValueError("factorization='laurent' builds no normal field, so nvf_projector and "
+                         "gamma_plans have no reader here; pass neither")
     if xp is None:
         xp = _infer_namespace(layer_shapes)
     dtype = xp.complex128 if complex_dtype is None else complex_dtype
@@ -2684,7 +2715,9 @@ def to_conv_mat_parametric_layers(layer_shapes, half_width_u, half_width_v, latt
             # the layer stays here -- exact, and cheaper.
             from .boundary import to_conv_mat_boundary_layer
             options = {}
-            if nvf_projector == 'circular':
+            if laurent:
+                options['laurent'] = True
+            elif nvf_projector == 'circular':
                 if gamma_plans is not None:
                     check_gamma_plan_still_fits(layer, lattice, gamma, index,
                                                dyadic=nvf_projector == 'circular')
@@ -2708,17 +2741,23 @@ def to_conv_mat_parametric_layers(layer_shapes, half_width_u, half_width_v, latt
             # frozen while the shapes were disjoint routes by its own answer, not by the two
             # rules, and once the shapes moved together the check below is what fired -- with
             # a message about this builder rather than about the stale record.
-            if gamma_plans is not None:
-                check_gamma_plan_still_fits(layer, lattice, gamma, index,
-                                               dyadic=nvf_projector == 'circular')
-            mats = to_conv_mat_parametric_nvf(
-                xp, layer.get('shapes', []), background, half_width_u, half_width_v, lattice,
-                dtype, shape_nvf_grid_size=shape_nvf_grid_size, plan=gamma,
-                **({} if nvf_projector is None else {'nvf_projector': nvf_projector}))
+            if laurent:
+                eps_c, _ = assemble_eps_coeffs(xp, layer.get('shapes', []), background,
+                                               half_width_u, half_width_v, lattice, dtype)
+                mats = laurent_from_coeffs(xp, eps_c, half_width_u, half_width_v)
+            else:
+                if gamma_plans is not None:
+                    check_gamma_plan_still_fits(layer, lattice, gamma, index,
+                                                dyadic=nvf_projector == 'circular')
+                mats = to_conv_mat_parametric_nvf(
+                    xp, layer.get('shapes', []), background, half_width_u, half_width_v,
+                    lattice, dtype, shape_nvf_grid_size=shape_nvf_grid_size, plan=gamma,
+                    **({} if nvf_projector is None else {'nvf_projector': nvf_projector}))
         for slot, m in zip(out, mats):
             slot.append(m)
 
-    return ConvMatrices(*(xp.stack(slot) for slot in out))
+    # Laurent leaves the off-diagonal pair empty on every layer, as Li's rules do.
+    return ConvMatrices(*(None if slot[0] is None else xp.stack(slot) for slot in out))
 
 
 def _material_value(value):

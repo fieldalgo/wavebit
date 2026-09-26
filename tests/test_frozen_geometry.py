@@ -28,9 +28,12 @@ KW = dict(top=1.0, bot=1.0, theta=0.1, phi=0.2, psi=0.3, truncation_order=[2, 2]
 # that only became reachable once the two axes were named independently. It needs both frozen
 # fields at once, which nothing else exercises.
 STRATEGIES = [dict(fourier_coefficients=c, factorization=f)
-              for c in ('sampled', 'integrated') for f in ('li', 'nvf')]
-IDS = ['sampled-li', 'sampled-nvf', 'integrated-li', 'integrated-nvf']
+              for c in ('sampled', 'integrated') for f in ('li', 'nvf', 'laurent')]
+IDS = [f"{s['fourier_coefficients']}-{s['factorization']}" for s in STRATEGIES]
 DEFAULT_STRATEGY = dict(fourier_coefficients='sampled', factorization='li')
+#: The pairings with no discrete decision to take: the sampled series under a rule that reads
+#: no normal field. They trace straight off the public API, frozen or not.
+DECIDES_NOTHING = [DEFAULT_STRATEGY, dict(fourier_coefficients='sampled', factorization='laurent')]
 
 
 @pytest.mark.parametrize('strategy', STRATEGIES, ids=IDS)
@@ -75,9 +78,9 @@ def _jit_loss(**strategy):
     return lambda u: jnp.sum(solver.solve(structure=u).incident.T).real
 
 
-# The default pairing is left out on purpose: it decides nothing, so it traces unfrozen.
-NEEDS_FREEZE = [s for s in STRATEGIES if s != DEFAULT_STRATEGY]
-NEEDS_FREEZE_IDS = [i for i, s in zip(IDS, STRATEGIES) if s != DEFAULT_STRATEGY]
+# The pairings that decide nothing are left out on purpose: they trace unfrozen.
+NEEDS_FREEZE = [s for s in STRATEGIES if s not in DECIDES_NOTHING]
+NEEDS_FREEZE_IDS = [i for i, s in zip(IDS, STRATEGIES) if s not in DECIDES_NOTHING]
 
 
 @pytest.mark.parametrize('strategy', NEEDS_FREEZE, ids=NEEDS_FREEZE_IDS)
@@ -94,8 +97,11 @@ def test_auto_detection_still_blocks_jit(strategy):
         jax.jit(_jit_loss(**strategy))(jnp.asarray(STRUCTURE))
 
 
-def test_the_default_pairing_needs_no_frozen_geometry_at_all():
-    """('sampled', 'li') decides nothing, so it jits straight off the public API.
+@pytest.mark.parametrize('strategy', DECIDES_NOTHING,
+                         ids=[s['factorization'] for s in DECIDES_NOTHING])
+def test_the_pairings_that_decide_nothing_need_no_frozen_geometry_at_all(strategy):
+    """('sampled', 'li') decides nothing, so it jits straight off the public API -- and so does
+    ('sampled', 'laurent'), which reads the same staircase and builds no normal field.
 
     It used to raise here. The one discrete decision on this path was the same-material
     short-circuit, and removing that left nothing between ``solve`` and a trace --
@@ -104,9 +110,9 @@ def test_the_default_pairing_needs_no_frozen_geometry_at_all():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
 
-    got = float(jax.jit(_jit_loss(**DEFAULT_STRATEGY))(jnp.asarray(STRUCTURE)))
+    got = float(jax.jit(_jit_loss(**strategy))(jnp.asarray(STRUCTURE)))
     want = float(np.sum(np.asarray(
-        wavebit.rcwa(backend=0, structure=STRUCTURE, **DEFAULT_STRATEGY,
+        wavebit.rcwa(backend=0, structure=STRUCTURE, **strategy,
                        **KW).solve().incident.T).real))
     assert got == pytest.approx(want, abs=1e-10)
 
@@ -130,6 +136,12 @@ def test_freeze_geometry_reports_what_the_strategy_needs():
 
     both = geo(fourier_coefficients='integrated', factorization='nvf')
     assert both.normal_field is not None and both.compression is not None
+
+    # Laurent's rule reads the series and no normal field, so it records what the series needs.
+    assert geo(factorization='laurent').normal_field is None
+    assert geo(factorization='laurent').compression is None
+    laurent = geo(fourier_coefficients='integrated', factorization='laurent')
+    assert laurent.normal_field is None and laurent.compression is not None
 
 
 @pytest.mark.parametrize('name,make,start', [
@@ -866,7 +878,9 @@ _BOX = [dict(background=1.0, shapes=[dict(type='rectangle', cx=0.1, cy=-0.05, lx
 
 
 @pytest.mark.parametrize('coefficients', ['sampled', 'integrated'])
-@pytest.mark.parametrize('held, now', [('li', 'nvf'), ('nvf', 'li')])
+@pytest.mark.parametrize('held, now', [('li', 'nvf'), ('nvf', 'li'), ('laurent', 'li'),
+                                       ('laurent', 'nvf'), ('li', 'laurent'),
+                                       ('nvf', 'laurent')])
 def test_a_raster_record_is_refused_under_another_rule(held, now, coefficients):
     """A record holds what its own rule decides: Li's integrated one the compression and no
     normal field, NVF's both. Replayed under the other rule, the build found its slot empty and
@@ -886,7 +900,9 @@ def test_a_raster_record_is_refused_under_another_rule(held, now, coefficients):
         same.eps_conv_matrices(geometry=record, factorization=now)
 
 
-@pytest.mark.parametrize('held, now', [('li', 'nvf'), ('nvf', 'li')])
+@pytest.mark.parametrize('held, now', [('li', 'nvf'), ('nvf', 'li'), ('laurent', 'li'),
+                                       ('laurent', 'nvf'), ('li', 'laurent'),
+                                       ('nvf', 'laurent')])
 def test_a_shape_record_is_refused_under_another_rule(held, now):
     """The parametric path refused this already, by testing ``rectilinear_plans`` for ``None``;
     the stamp says it in one place for both paths and names both rules."""
