@@ -46,6 +46,9 @@ class Report:
     #: where every structure took the default has none and prints exactly what it printed
     #: before, which is the point: the selector shows up in the report only where it was used.
     discretisations: tuple = ()
+    #: ((x lo, x hi), (y lo, y hi), (z lo, z hi)) of the grid, so a structure row can say
+    #: whether its got differs from its asked by the box's face or by a snap (C5).
+    box: tuple = ()
 
     def __str__(self):
         lines = [
@@ -61,8 +64,8 @@ class Report:
         for name, kind, cells in self.absorbers:
             lines.append(f'absorber   {name}  {kind}, {cells} cells')
         for axis, lo, hi, slo, shi in self.spans:
-            snapped = '' if (lo, hi) == (slo, shi) else '   <- snapped'
-            lines.append(f'structure  {axis}=({lo:g}, {hi:g}) -> ({slo:g}, {shi:g}){snapped}')
+            note = self._span_note(axis, lo, hi, slo, shi)
+            lines.append(f'structure  {axis}=({lo:g}, {hi:g}) -> ({slo:g}, {shi:g}){note}')
         for name, kind, nbytes in self.monitors:
             lines.append(f'monitor    {name}  {kind}, {nbytes / 1e6:.2f} MB (DFT accumulators)')
         for name, rule, rows, width, nbytes in self.discretisations:
@@ -75,6 +78,28 @@ class Report:
         for w in self.warnings:
             lines.append(f'warning    {w}')
         return '\n'.join(lines)
+
+    def _span_note(self, label, lo, hi, slo, shi):
+        """``<- clipped`` where the box's face cut the span, ``<- snapped`` where cells moved it.
+
+        Compared to a billionth of a cell, not exactly: the snapped ``-0.2`` of a box that
+        asked ``-0.2`` comes back ``-0.20000000000000004`` from the cell arithmetic, and the
+        exact comparison printed ``<- snapped`` on an axis where nothing moved (C5 audit).
+        The row's axis is its label's last letter (``x``, ``box.x``, ``sphere.x``).
+        """
+        tol = 1e-9 * self.dx
+
+        def same(u, v):
+            return abs(u[0] - v[0]) <= tol and abs(u[1] - v[1]) <= tol
+        if same((lo, hi), (slo, shi)):
+            return ''
+        clipped = (lo, hi)
+        if self.box:
+            wall = self.box['xyz'.index(label[-1])]
+            clipped = (max(lo, wall[0]), min(hi, wall[1]))
+        notes = [word for word, moved in (('clipped', not same((lo, hi), clipped)),
+                                          ('snapped', not same(clipped, (slo, shi)))) if moved]
+        return '   <- ' + ' and '.join(notes)
 
 
 def report(scene, p=None, params=None):
@@ -138,7 +163,8 @@ def report(scene, p=None, params=None):
                   bytes_per_state=2 * 3 * p.cells * itemsize + psi + flux_memory,
                   warnings=tuple(warnings),
                   skeleton=p.skeleton, bytes_per_params=params_bytes(params),
-                  absorbers=absorbers, spans=p.spans, monitors=monitors, solves=solves)
+                  absorbers=absorbers, spans=p.spans, monitors=monitors, solves=solves,
+                  box=tuple((grid.low[a], grid.high[a]) for a in range(3)))
 
 
 def _discretisation_lines(p):

@@ -8,7 +8,8 @@ owns it (``materials.py``, ``geometry.py``, ``boundaries.py``, ``_lower/plan.py`
 
 __all__ = ['CoarseMeshWarning', 'AbsorberProximityWarning', 'UnsettledFieldWarning',
            'GrowingFieldWarning', 'PMLStabilityWarning', 'BoundedVoxelWarning',
-           'SubpixelAccuracyWarning', 'RadiationApproximationWarning']
+           'SubpixelAccuracyWarning', 'RadiationApproximationWarning',
+           'GeometryClippedWarning']
 
 
 class RadiationApproximationWarning(UserWarning):
@@ -112,6 +113,19 @@ class BoundedVoxelWarning(UserWarning):
     resulting electromagnetic error. ``fd.check`` includes the same note with or without
     prebuilt params. Lowering emits no warning inside JIT; cached calls use the geometry
     that was checked at plan time. See ``_shapes.Approximations`` for the collector.
+    """
+
+
+class GeometryClippedWarning(UserWarning):
+    """A structure reaches past a PEC or PMC face of the box, and the part past it is not run.
+
+    The warning names the share of the declared volume lost and the faces that took it (stage
+    4, C5). A structure meant to run on out of the box -- a substrate, a waveguide -- is spelled
+    with ``fd.PML`` or ``fd.Absorber`` on that face, and one meant to fill a periodic axis spans
+    it; neither warns. A cell-snapped shape across one periodic seam without spanning the period
+    is refused instead (``_lower.checks.check_seams``), because its periodic image is missing,
+    and a smoothed body that is not uniform across a face never gets this far
+    (``_lower.checks.check_smoothed``).
     """
 
 

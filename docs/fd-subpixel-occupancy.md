@@ -784,3 +784,35 @@ and it breaks translation invariance for a box whose faces sit on node or half-n
 the commonest placement -- while the fill stays exact. The test's bar sits off every voxel
 boundary. The convention a face on a boundary should follow, and whether it matters for C6's
 differentiable edge, are open.
+
+## C5: a structure past a face of the box (2026-09-26)
+
+The box clips geometry, and before C5 the report did not say so. The audit measured, all
+silent: an `fd.Region` of `(0.4, 0.4, 0.2)` at `x = 0.4` in a box 1.0 wide losing 25.0% at a
+PEC face (printed only as `<- snapped`), an `fd.Slab` `x=(0.2, 0.9)` losing 57.1%, a smoothed
+`fd.Box` at the Region's place and a cylinder out through a face along its axis losing 25%
+each with rows claiming asked and got were the same, and a Region half across a periodic seam
+losing 50% -- its wrapped half never drawn. What C5 does with each:
+
+* **A structure past a PEC or PMC face warns**, `GeometryClippedWarning`, with the share of
+  its declared volume lost and the faces that took it: the length past the wall over the
+  declared length, multiplied over the axes -- exact, because what reaches a wall and plans
+  has a constant section across it (a snapped box or layer, or a smoothed body uniform across
+  the face; door 3 refuses any other). It is a warning because a guide ending on a wall is a
+  real scene. Running out through an absorbing face does not warn (it is how a substrate is
+  spelled), nor does spanning a periodic axis (a lamellar grating), and a mirror is
+  `check_symmetry`'s.
+* **A cell-snapped shape across one periodic seam without spanning the period is refused**
+  (`checks.check_seams`), because it is clipped where it should have wrapped. Judged on its
+  unclipped snapped cells: crossing is `k0 < 0` or `k1 > n`, spanning `k0 <= 0` and
+  `k1 >= n`. One wider than the period but offset is refused too -- wrapped it would cover
+  every cell, clipped it misses some.
+* **The report's rows say what happened.** A smoothed body's row now prints the extent the box
+  holds, and a row's note is `<- clipped` where the box's face cut the span, `<- snapped`
+  where the cells moved it, or both -- compared to a billionth of a cell, not exactly, because
+  the exact comparison printed `<- snapped` for a Region at `-0.2` whose snapped face came back
+  `-0.20000000000000004`.
+
+`tests/test_fd_clipping.py` pins each with the lengths by hand. Mutants, each alone: the note
+removed fails 3 cases, every face treated as a wall 1, the seam door removed 2, an exact span
+refused as crossing 1, the exact comparison restored 2, a body's rows claiming asked 1.

@@ -853,14 +853,15 @@ class Sphere(Shape):
         return f'Sphere(radius={self.radius}, center={self.center})'
 
     def span_rows(self, grid):
-        """One row per axis, labelled ``sphere.x/y/z``, asked and got the **same**.
+        """One row per axis, labelled ``sphere.x/y/z``: asked, and got as the box clips it.
 
-        That is the report telling the truth rather than a missing feature: a smoothed shape
-        does not snap, so ``check`` prints no ``<- snapped`` note for one, and the difference
-        from the ``Slab``/``Region`` rows above it is the whole point of the shape.
+        A smoothed shape does not snap, so ``check`` never prints ``<- snapped`` for one --
+        the difference from the ``Slab``/``Region`` rows is the whole point of the shape -- and
+        where got differs from asked it is the box's face, printed ``<- clipped`` (C5; before,
+        the row claimed asked and got were the same even with a quarter of the body outside).
         """
-        return tuple((f'sphere.{axis}', self.low[a], self.high[a], self.low[a], self.high[a])
-                     for a, axis in enumerate(AXES))
+        return tuple((f'sphere.{axis}', self.low[a], self.high[a], max(self.low[a], grid.low[a]),
+                      min(self.high[a], grid.high[a])) for a, axis in enumerate(AXES))
 
     def min_extent(self, grid):
         """Its diameter."""
@@ -1042,9 +1043,13 @@ class _Extruded(Shape):
         return (0, 1, 2)
 
     def span_rows(self, grid):
-        """One row per axis, asked and got the same (it does not snap), labelled by the body."""
-        return tuple((f'{self._label}.{axis}', self.low[a], self.high[a], self.low[a],
-                      self.high[a]) for a, axis in enumerate(AXES))
+        """One row per axis, labelled by the body: asked, and got as the box clips it.
+
+        It does not snap; a difference is the box's face (:meth:`Sphere.span_rows`).
+        """
+        return tuple((f'{self._label}.{axis}', self.low[a], self.high[a],
+                      max(self.low[a], grid.low[a]), min(self.high[a], grid.high[a]))
+                     for a, axis in enumerate(AXES))
 
     def _inside(self, a, grid):
         """Its extent along ``a`` as it reaches into the box (:meth:`Shape.min_extent`)."""

@@ -177,7 +177,7 @@ from ._run import run
 from .boundaries import (PEC, PMC, Absorber, Absorbing, Axis1D, Bloch, Boundaries, Periodic,
                          PML, Symmetry)
 from .diagnostics import (AbsorberProximityWarning, BoundedVoxelWarning, CoarseMeshWarning,
-                          GrowingFieldWarning, PMLStabilityWarning, RadiationApproximationWarning, SubpixelAccuracyWarning,
+                          GeometryClippedWarning, GrowingFieldWarning, PMLStabilityWarning, RadiationApproximationWarning, SubpixelAccuracyWarning,
                           UnsettledFieldWarning)
 from .geometry import Box, Cylinder, Plane, Prism, Region, Shape, Slab, Sphere, Structure
 from .materials import (Conductor, Debye, Dispersive, Drude, Lorentz, Material, MaterialBase,
@@ -197,7 +197,7 @@ __all__ = [
     'MaterialBase', 'Pole', 'Shape', 'Slab', 'Sphere', 'Box', 'Cylinder', 'Prism', 'Structure',
     'CoarseMeshWarning', 'AbsorberProximityWarning', 'UnsettledFieldWarning',
     'GrowingFieldWarning', 'PMLStabilityWarning', 'BoundedVoxelWarning', 'SubpixelAccuracyWarning',
-    'RadiationApproximationWarning',
+    'RadiationApproximationWarning', 'GeometryClippedWarning',
     'InitialField', 'Term', 'Record', 'Flux', 'Field', 'Diffraction', 'FarField', 'Plane',
     'ModeMonitor', 'Decay', 'FluxResult', 'FieldResult', 'FarFieldResult', 'DiffractionResult',
     'Band', 'Dipole', 'PlaneWave', 'TFSF', 'Region', 'GaussianBeam', 'ModeSource',

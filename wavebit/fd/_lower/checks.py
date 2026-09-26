@@ -48,6 +48,10 @@ The table, and where each row lives:
     (stage 4 C4) a smoothed surface in a        check_smoothed, here: the snapped cells
       voxel a cell-snapped face cuts              are all or nothing where the geometry
                                                   splits -- three media, and a rule of two
+    (stage 4 C5) a cell-snapped shape across    check_seams, here: clipped, not wrapped --
+      one periodic seam, not spanning it          its periodic image is missing
+    (stage 4 C5) a structure past a PEC or      _clipping_notes, here (warns, with the share
+      PMC face                                    lost); absorbing faces and spans do not
     (stage 4 C5) a structure crossing a         check_symmetry, here: the run models the
       Symmetry plane that is not its own          mirror of the domain part; a smoothed body
       mirror image, or a smoothed body within     flush against a plane whose parity leaves
@@ -1094,6 +1098,109 @@ def _smoothed_mirror(body, shape, grid, a, side, parity):
     return worst[1] if worst[0] > _CLIP_ROUNDOFF else None
 
 
+def _declared_span(shape, a):
+    """``(lo, hi)`` a shape declares along axis ``a``, or ``None`` where it runs the whole box.
+
+    ``fd.Region`` and the smoothed bodies declare all three; an ``fd.Slab`` only its own axis.
+    A shape without ``low``/``high`` (a CSG node, a protocol test's shape) declares none here.
+    """
+    from ..geometry import Region, Slab
+    if isinstance(shape, Slab):
+        return shape.span if shape.axis == 'xyz'[a] else None
+    if isinstance(shape, Region) or shape.body() is not None:
+        low, high = getattr(shape, 'low', None), getattr(shape, 'high', None)
+        if low is not None and high is not None:
+            return low[a], high[a]
+    return None
+
+
+def check_seams(scene, grid):
+    """A cell-snapped shape across a periodic seam must span the period (stage 4, C5).
+
+    ``fd.Region`` and ``fd.Slab`` are clipped to the cell, not wrapped: a shape that crosses
+    one seam of a ``Periodic`` or ``Bloch`` axis without spanning the period loses the part past
+    it, and its periodic image never appears at the other end of the cell. Measured in the C5
+    audit, an ``fd.Region`` half across the seam ran with 50% of its cells and no warning. The
+    one clipping that is right there is a shape that spans the period, which is how a lamellar
+    grating spells "runs the whole period" and is not refused; a smoothed body at a seam is
+    ``check_smoothed``'s door 2. Judged on the snapped cells, unclipped: crossing is
+    ``k0 < 0`` or ``k1 > n``, spanning is ``k0 <= 0`` and ``k1 >= n``.
+    """
+    from ..boundaries import Bloch, Periodic
+    structures = tuple(getattr(scene, 'structures', ()) or ())
+    for index, structure in enumerate(structures):
+        shape = structure.shape
+        if shape.body() is not None:
+            continue
+        for a, axis in enumerate('xyz'):
+            face = scene.boundaries.face(axis + '-')
+            if not isinstance(face, (Periodic, Bloch)):
+                continue
+            span = _declared_span(shape, a)
+            if span is None:
+                continue
+            n = grid.n[a]
+            k0 = int(round((span[0] - grid.low[a]) / grid.dx))
+            k1 = int(round((span[1] - grid.low[a]) / grid.dx))
+            if (k0 < 0 or k1 > n) and not (k0 <= 0 and k1 >= n):
+                lost = (max(0, -k0) + max(0, k1 - n)) / (k1 - k0)
+                raise ValueError(
+                    f'structures[{index}] ({shape.describe()}) crosses the '
+                    f'{type(face).__name__} {axis} seam without spanning the period: its '
+                    f'snapped cells are {k0}..{k1} along {axis}, of {n}. A cell-snapped shape is '
+                    f'clipped to the cell, not wrapped, so the part past the seam -- '
+                    f'{100 * lost:.1f}% of its cells -- is not in the run, and its periodic '
+                    f'image does not appear at the other end of the cell. Say the two pieces as '
+                    f'two structures, one at each end of the cell; or move Domain(center=...) '
+                    f'by whole cells so the shape lies inside the cell; or, if it is meant to '
+                    f'run the whole period, let it span the cell -- the lamellar spelling, which '
+                    f'is clipped exactly. (A smoothed body at a seam is refused the same way, by '
+                    f'check_smoothed.)')
+
+
+def _clipping_notes(scene, plan):
+    """A ``GeometryClippedWarning`` per structure losing declared volume to a PEC or PMC face.
+
+    The share lost is the length past the wall over the declared extent, multiplied over the
+    axes -- exact, because what reaches a wall and is planned has a constant section across
+    it: a cell-snapped box or layer, or a smoothed body uniform across the face
+    (``check_smoothed``'s door 3 refuses any other). Only PEC and PMC faces are walls here: a
+    structure through an absorbing face is how a substrate runs on out of the box, one that
+    spans a periodic axis is a lamellar grating, and a Symmetry plane is ``check_symmetry``'s.
+    Measured in the C5 audit, all silent before this note: an ``fd.Region`` of
+    ``(0.4, 0.4, 0.2)`` at ``x = 0.4`` in a box 1.0 wide lost 25.0%, an ``fd.Slab``
+    ``x=(0.2, 0.9)`` 57.1%, a smoothed ``fd.Box`` at the Region's place and a cylinder along
+    x out through the face 25% each.
+    """
+    from ..boundaries import PEC, PMC
+    from ..diagnostics import GeometryClippedWarning
+    grid = plan.grid
+    out = []
+    for index, structure in enumerate(tuple(getattr(scene, 'structures', ()) or ())):
+        kept, faces = 1.0, []
+        for a, axis in enumerate('xyz'):
+            span = _declared_span(structure.shape, a)
+            if span is None:
+                continue
+            lo, hi = span
+            cut = 0.0
+            for side, past in (('-', grid.low[a] - lo), ('+', hi - grid.high[a])):
+                face = scene.boundaries.face(axis + side)
+                if isinstance(face, (PEC, PMC)) and past > 1e-9 * grid.dx:
+                    cut += past
+                    faces.append(f"'{axis}{side}' ({type(face).__name__})")
+            kept *= max(hi - lo - cut, 0.0) / (hi - lo)
+        if faces:
+            out.append((GeometryClippedWarning,
+                        f'structures[{index}] ({structure.shape.describe()}) loses '
+                        f'{100 * (1 - kept):.1f}% of its declared volume to the '
+                        f'{" and ".join(faces)} face{"s" if len(faces) > 1 else ""}: the part '
+                        f'past a PEC or PMC wall is not in the run. A structure meant to run on '
+                        f'out of the box needs fd.PML or fd.Absorber on that face, and one meant '
+                        f'to fill a periodic axis spans it; neither warns.'))
+    return out
+
+
 def check_absorbing_layers(scene, plan):
     """What may sit inside an absorbing layer: no interface, and (in a PML) no loss or memory.
 
@@ -1327,6 +1434,7 @@ def notes(scene, plan):
     out += _proximity_notes(scene, plan)
     out += _stabilize_notes(scene, plan)
     out += _smoothed_notes(scene, plan)
+    out += _clipping_notes(scene, plan)
     out += _radiation_notes(scene)
     return out
 
