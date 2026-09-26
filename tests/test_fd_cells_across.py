@@ -80,7 +80,7 @@ def test_the_door_refuses_a_high_contrast_sphere_three_cells_across():
 
 def test_an_eps_20_sphere_eight_cells_across_plans():
     """S2b's Gershgorin certificate refused eps 20 at almost every placement and resolution;
-    the per-block lift plans it, moving some of its blocks."""
+    the star lift plans it."""
     from wavebit.fd._lower import constitutive
     from wavebit.fd._lower.coefficients import build
     from wavebit.fd._runtime import runtime
@@ -90,7 +90,6 @@ def test_an_eps_20_sphere_eight_cells_across_plans():
     params = dict(build(scene, plan, rt))
     params['constitutive'] = constitutive.lower(scene, plan, rt, nodes=nodes)
     assert constitutive.lift(plan, params, nodes, rt, lifted)
-    assert sum(out.moved for out in lifted.values()) > 0
 
 
 def _hexagon(flat):

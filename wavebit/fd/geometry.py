@@ -690,7 +690,7 @@ class Sphere(Shape):
     lossless and clear of absorbing layers; cross terms at a Symmetry plane need a
     mirror-weighted operator not yet provided. Initial E (and initial H when magnetic)
     needs an inverse constitutive solve not yet provided; use a source instead. The
-    operator is made positive definite by the per-block lift (``_lower/blocks.py``), which is
+    operator is made positive definite by the star lift (``_lower/stars.py``), which is
     checked, with the time-step bound, before a run starts.
 
     ``radius`` and ``center`` are **static** in C2. They fix :meth:`support`, which fixes the

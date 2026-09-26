@@ -56,8 +56,8 @@ class Report:
     #: False where the params could not be built on NumPy (a traced material): the params
     #: line then says so instead of printing 0.00 MB, which a threshold would read as small.
     params_known: bool = True
-    #: ((term name, blocks moved, blocks with a cross coefficient, largest t), ...): the
-    #: per-block lift of each diagonal-rule constitutive term (``blocks.lift``).
+    #: ((term name, stars moved, stars with a cross coefficient, largest t), ...): the
+    #: star lift of each diagonal-rule constitutive term (``stars.lift``).
     lifts: tuple = ()
 
     def __str__(self):
@@ -133,7 +133,7 @@ class Report:
             out.append(f'  cross    {name}: {cost}{shared}')
             lifted = next((row for row in self.lifts if row[0] == name), None)
             if lifted is not None and lifted[1]:
-                out.append(f'  lift     {name}: {lifted[1]} of {lifted[2]} blocks moved toward '
+                out.append(f'  lift     {name}: {lifted[1]} of {lifted[2]} stars moved toward '
                            f'the node tensor, the largest {lifted[3]:.3g} of the way')
         for name in row.stencil:
             out.append(f'  cross    {name}: the prepared stencil operator (its material row)')
@@ -249,7 +249,7 @@ def report(scene, p=None, params=None):
                   absorbers=absorbers, spans=p.spans, monitors=monitors, solves=solves,
                   box=tuple((grid.low[a], grid.high[a]) for a in range(3)),
                   bodies=tuple(bodies), term_bytes=term_bytes, params_known=params_known,
-                  lifts=tuple((name, out.moved, out.blocks, out.largest)
+                  lifts=tuple((name, out.moved, out.stars, out.largest)
                               for name, out in lifted.items()))
 
 

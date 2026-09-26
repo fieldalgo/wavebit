@@ -97,7 +97,7 @@ def lower(scene, plan, rt, report=None, proxy_stats=None, proxy_by_index=None, n
     tensor's smallest eigenvalue is then ``1/<eps>`` to that round-off), ``1/value`` under a
     cell-snapped shape, ``1/background`` where nothing does.
     With the cross coefficients off its diagonal it is that node's Kottke tensor, what the
-    per-block lift moves a block toward (``blocks.lift``).
+    star lift moves each node's star toward (``stars.lift``).
     """
     from .._shapes import Box, Sphere, occupancy
     from .._kernel.stencil import StencilTerm
@@ -174,22 +174,22 @@ def lower(scene, plan, rt, report=None, proxy_stats=None, proxy_by_index=None, n
 
 
 def lift(plan, params, nodes, rt, lifted=None):
-    """Patch ``params['be']`` / ``params['bh']`` with the per-block lift of every term.
+    """Patch ``params['be']`` / ``params['bh']`` with the star lift of every term.
 
-    Returns whether every block of every term is positive definite at its lift (a Python bool
+    Returns whether every star of every term is positive definite at its lift (a Python bool
     on concrete values, a runtime bool under a transform), the certificate ``validate`` refuses
     on and ``guard`` turns into NaN. ``nodes`` is what :func:`lower` filled. The diagonal is
-    changed only over a region where some block moves (``blocks.lift``). ``minus_bh`` is not
+    changed only over a region where some star moves (``stars.lift``). ``minus_bh`` is not
     touched here: ``params.lower`` rebuilds it from the final ``bh`` after the guard, which
     every plan with a coupled term has. ``lifted``, when given, receives each term's
-    ``blocks.Lifted`` by name.
+    ``stars.Lifted`` by name.
 
     The change goes into ``be`` and not beside it, for the reason ``params._stencil`` gives: ``be``
     is what the step multiplies the curl by and what ``InteriorEnergy`` reads the medium from.
     """
     from .._kernel.observe import InteriorEnergy
     from .._kernel.stencil import StencilTerm
-    from .blocks import lift as lift_blocks
+    from .stars import lift as lift_stars
     xp, certified = rt.xp, True
     for term in plan.constitutive:
         if isinstance(term, StencilTerm):
@@ -198,7 +198,7 @@ def lift(plan, params, nodes, rt, lifted=None):
         cross = params['constitutive'][term.name]
         diagonal = xp.broadcast_to(InteriorEnergy._cut(params[key], slice(None), term.box)
                                    / term.ratio, cross.shape)
-        out = lift_blocks(term.field, diagonal, cross, *nodes[term.name], rt)
+        out = lift_stars(term.field, diagonal, cross, *nodes[term.name], rt)
         if lifted is not None:
             lifted[term.name] = out
         certified = certified & out.certified
@@ -214,7 +214,7 @@ def lift(plan, params, nodes, rt, lifted=None):
 
 
 def lifted_on_host(scene, plan):
-    """``(params, {term name: blocks.Lifted})`` on NumPy: the coefficients with the lift
+    """``(params, {term name: stars.Lifted})`` on NumPy: the coefficients with the lift
     patched in and each term's lift, for ``validate`` and for the plan's notes."""
     from .._runtime import runtime
     rt, nodes, lifted = runtime('numpy'), {}, {}
@@ -233,7 +233,7 @@ def enclosure(diagonal, cross, xp, field='E'):
 def validate(scene, plan):
     """Refuse unsupported memory regions and uncertified operators once, at plan time.
 
-    Returns ``{term name: blocks.Lifted}``, the lift of every diagonal-rule term, which the
+    Returns ``{term name: stars.Lifted}``, the lift of every diagonal-rule term, which the
     plan's notes report (``checks._lift_notes``); ``None`` when there is no such term.
 
     Only the diagonal rule's terms: a prepared extended-stencil term carries its own
@@ -311,8 +311,8 @@ def validate(scene, plan):
                                      '(symmetric about the plane, checks.check_symmetry).')
         key = 'be' if term.field == 'E' else 'bh'
         if not lifted[term.name].certified:
-            raise ValueError(f'{term.name}: a block of the lifted inverse-material operator is '
-                             'not positive definite. The lift makes every block positive for '
+            raise ValueError(f'{term.name}: a star of the lifted inverse-material operator is '
+                             'not positive definite. The lift makes every star positive for '
                              'positive finite phases, so a value reaching it is not one: a '
                              'material or a fill that is not a finite positive number.')
         diagonal = np.broadcast_to(InteriorEnergy._cut(coefficients[key], slice(None),
@@ -354,7 +354,7 @@ def guard(scene, plan, params, rt, certified):
     Planning reports concrete failures by name. A transformed leaf has no
     Python truth value; the existing stable=NaN contract makes a failed
     certificate visible in results, without a per-cell exception or warning.
-    ``certified`` is :func:`lift`'s: every block positive definite at its lift, which is the
+    ``certified`` is :func:`lift`'s: every star positive definite at its lift, which is the
     positivity of the operator. The Gershgorin enclosure is read for its upper end only, the
     time step's bound; its lower end was the certificate before the lift, and a loose one.
     """

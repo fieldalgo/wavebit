@@ -1,10 +1,10 @@
-"""The per-block lift (``wavebit/fd/_lower/blocks.py``): the smoothed operator is positive by
+"""The star lift (``wavebit/fd/_lower/stars.py``): the smoothed operator is positive by
 construction, and the lift changes nothing it does not have to.
 
 The references here are written from the definitions and share no code with the module: the
-block sum is enumerated edge by edge against ``cross_action``'s own dense matrix, and the least
-move is found with ``numpy.linalg.eigvalsh`` on the principal sub-block, not with the module's
-leading minors.
+star sum is enumerated edge by edge against ``cross_action``'s own dense matrix, and the least
+move is found with ``numpy.linalg.eigvalsh`` on each star's explicit matrix (up to 6x6), not with
+the module's harmonic-mean test.
 """
 import itertools
 import warnings
@@ -14,10 +14,12 @@ import pytest
 
 import wavebit.fd as fd
 from wavebit.fd._kernel.constitutive import cross_action
-from wavebit.fd._lower import blocks
+from wavebit.fd._lower import stars
 from wavebit.fd._lower.coefficients import build
 from wavebit.fd._runtime import runtime
 from fd_helpers import to_numpy
+
+PAIR = {(0, 1): 0, (0, 2): 1, (1, 2): 2}
 
 
 def quiet(function, *args, **kwargs):
@@ -26,19 +28,37 @@ def quiet(function, *args, **kwargs):
         return function(*args, **kwargs)
 
 
-def _edges(field, p, s, n):
-    """The ``(z, y, x)`` index of each axis's edge in block ``(p, s)``, or ``None`` outside."""
+def _nodes(field, shape):
+    """Every node whose star holds an edge of the region: one layer past the far end (the high
+    end for E, the low end for H), where there is no cross coefficient and no move."""
+    return itertools.product(*[range(0, n + 1) if field == 'E' else range(-1, n) for n in shape])
+
+
+def _star_edges(field, p, shape):
+    """``(axis, (z, y, x))`` of each edge of ``p``'s star inside the region: the own-index edge
+    and the other one, ``p - e_a`` for E and ``p + e_a`` for H."""
     out = []
     for a in range(3):
-        q = list(p)
-        q[2 - a] += s[a] * (-1 if field == 'E' else 1)
-        out.append(tuple(q) if -1 <= q[2 - a] <= n[2 - a] else None)
+        for step in (0, -1 if field == 'E' else 1):
+            q = list(p)
+            q[2 - a] += step
+            if all(0 <= v < n for v, n in zip(q, shape)):
+                out.append((a, tuple(q)))
     return out
 
 
-def _off(cross, p):
-    xy, xz, yz = cross[(slice(None),) + p]
-    return np.array([[0., xy, xz], [xy, 0., yz], [xz, yz, 0.]])
+def _inside(p, shape):
+    return all(0 <= v < n for v, n in zip(p, shape))
+
+
+def _star_matrix(edges, diagonal, cross, node, p, t):
+    """The explicit star: each edge's half at ``t``, every coupling through ``p`` at ``c/4``."""
+    m = np.diag([(diagonal[(a,) + q] + t * (node[(a,) + p] - diagonal[(a,) + q])) / 2
+                 for a, q in edges])
+    for (i, (a, _)), (j, (b, _)) in itertools.combinations(list(enumerate(edges)), 2):
+        if a != b:
+            m[i, j] = m[j, i] = cross[(PAIR[tuple(sorted((a, b)))],) + p] / 4
+    return m
 
 
 def _dense(diagonal, cross, field):
@@ -53,112 +73,81 @@ def _dense(diagonal, cross, field):
     return out
 
 
-def _tensors(rng, shape, contrast=1.):
-    """Node Kottke tensors (``inv I + contrast n n^T``) and edge diagonals that make blocks fail."""
+def _tensors(rng, shape, contrast=1.5):
+    """Node Kottke tensors (``inv I + contrast n n^T``) and edge diagonals that make stars fail."""
     normal = rng.normal(size=(3,) + shape)
     normal /= np.linalg.norm(normal, axis=0)
     inverse = rng.uniform(.05, 1., size=shape)
     strength = rng.uniform(0., contrast, size=shape)
     node = inverse + strength * normal ** 2
-    cross = np.stack([strength * normal[i] * normal[j] for i, j in blocks.PAIRS])
+    cross = np.stack([strength * normal[i] * normal[j] for i, j in stars.PAIRS])
     diagonal = rng.uniform(.02, 1., size=(3,) + shape)
     return diagonal, cross, node, inverse
 
 
 @pytest.mark.parametrize('field', ('E', 'H'))
-def test_the_blocks_average_to_the_operator(field):
-    """The premise of the proof: ``(1/8) sum P^T B(t) P = diag(e + delta) + C`` for any ``t``."""
+def test_the_stars_sum_to_the_operator(field):
+    """The premise of the proof: ``sum_p P^T S_p(t) P = diag(e + delta) + C`` for any ``t``."""
     rng = np.random.default_rng(71)
     shape = (3, 4, 5)
     diagonal, cross, node, inverse = _tensors(rng, shape)
-    rt = runtime('numpy')
-    moves = rng.uniform(size=(8,) + shape)
-    t = dict(zip(blocks.ORIENTATIONS, moves))
-    unit = [np.ones((8,) + shape), np.zeros((8,) + shape), np.zeros((8,) + shape)]
-    delta = blocks._assemble(field, diagonal, cross, node, inverse, rt, blocks.THETA, shape,
-                             np.ones((8,) + shape, bool), moves, unit)
-    size = int(np.prod(diagonal.shape))
+    moves = rng.uniform(size=shape)
+    delta = stars._assemble(field, diagonal, cross, node, inverse, runtime('numpy'), stars.THETA,
+                            shape, np.ones(shape, bool), moves,
+                            [np.ones(shape), np.zeros(shape), np.zeros(shape)], np.ones(shape))
+    size = diagonal.size
     expected = np.zeros((size, size))
-    # Every node whose blocks reach the region's edges: one layer past its high end for E
-    # (the far node of the last edge), before its low end for H. Outside, no cross and t = 0.
-    reach = [range(0, n + 1) if field == 'E' else range(-1, n) for n in shape]
-    for p in itertools.product(*reach):
-        inside = all(0 <= v < n for v, n in zip(p, shape))
-        for s in blocks.ORIENTATIONS:
-            edges = _edges(field, p, s, shape)
-            axes = [a for a in range(3) if edges[a] is not None
-                    and all(0 <= v < n for v, n in zip(edges[a], shape))]
-            rows = [np.ravel_multi_index((a,) + edges[a], diagonal.shape) for a in axes]
-            off = _off(cross, p) if inside else np.zeros((3, 3))
-            block = off[np.ix_(axes, axes)] + np.diag(
-                [diagonal[(a,) + edges[a]] + (t[s][p] * (node[(a,) + p] - diagonal[(a,) + edges[a]])
-                                              if inside else 0.) for a in axes])
-            expected[np.ix_(rows, rows)] += block / 8
+    for p in _nodes(field, shape):
+        edges = _star_edges(field, p, shape)
+        inside = _inside(p, shape)
+        rows = [np.ravel_multi_index((a,) + q, diagonal.shape) for a, q in edges]
+        star = (_star_matrix(edges, diagonal, cross, node, p, moves[p]) if inside else
+                np.diag([diagonal[(a,) + q] / 2 for a, q in edges]))
+        expected[np.ix_(rows, rows)] += star
     np.testing.assert_allclose(_dense(diagonal + delta, cross, field), expected, rtol=0, atol=1e-14)
 
 
-def _least(block, floor):
-    """The least ``t`` in ``[0, 1]`` with ``eigvalsh(block(t))[0] > floor``, by bisection."""
-    if np.linalg.eigvalsh(block(0.))[0] > floor:
+def _least(star, floor):
+    """The least ``t`` in ``[0, 1]`` with ``eigvalsh(star(t))[0] > floor / 2``, by bisection."""
+    if np.linalg.eigvalsh(star(0.))[0] > floor / 2:
         return 0.
     lo, hi = 0., 1.
     for _ in range(60):
         mid = (lo + hi) / 2
-        lo, hi = (lo, mid) if np.linalg.eigvalsh(block(mid))[0] > floor else (mid, hi)
+        lo, hi = (lo, mid) if np.linalg.eigvalsh(star(mid))[0] > floor / 2 else (mid, hi)
     return hi
 
 
 @pytest.mark.parametrize('field', ('E', 'H'))
-def test_the_lift_is_the_least_move_above_the_floor(field):
-    """Each block moves the least ``t`` that puts its principal sub-block above
-    ``THETA * min(1/<eps>, its edges' diagonals)``, and each edge gets the eighth of it."""
+def test_a_star_moves_the_least_t_above_its_floor(field):
+    """Each star moves the least ``t`` that puts its explicit matrix above half the floor
+    ``THETA * min(1/<eps>, its edges' diagonals)``, and each edge gets half of each of its two
+    stars' moves."""
     rng = np.random.default_rng(72)
     shape = (3, 4, 5)
     diagonal, cross, node, inverse = _tensors(rng, shape)
     expected, moved = np.zeros_like(diagonal), 0
     for p in np.ndindex(*shape):
-        for s in blocks.ORIENTATIONS:
-            edges = _edges(field, p, s, shape)
-            axes = [a for a in range(3) if edges[a] is not None
-                    and all(0 <= v < n for v, n in zip(edges[a], shape))]
-            if not axes:
-                continue
-            e = np.array([diagonal[(a,) + edges[a]] for a in axes])
-            k = np.array([node[(a,) + p] for a in axes])
-            off = _off(cross, p)[np.ix_(axes, axes)]
-            floor = blocks.THETA * min([inverse[p]] + list(e))
-            t = _least(lambda t: off + np.diag(e + t * (k - e)), floor)
-            moved += t > 0
-            for i, a in enumerate(axes):
-                expected[(a,) + edges[a]] += t * (k[i] - e[i]) / 8
-    out = blocks.lift(field, diagonal, cross, node, inverse, runtime('numpy'))
-    # The fixture moves some blocks and not others, or the comparison proves little.
-    assert 0 < moved < 8 * np.prod(shape) and out.moved == moved and out.certified
+        edges = _star_edges(field, p, shape)
+        floor = stars.THETA * min([inverse[p]] + [diagonal[(a,) + q] for a, q in edges])
+        t = _least(lambda t: _star_matrix(edges, diagonal, cross, node, p, t), floor)
+        moved += t > 0
+        for a, q in edges:
+            expected[(a,) + q] += t * (node[(a,) + p] - diagonal[(a,) + q]) / 2
+    out = stars.lift(field, diagonal, cross, node, inverse, runtime('numpy'))
+    # The fixture moves some stars and not others, or the comparison proves little.
+    assert 0 < moved < np.prod(shape) and out.moved == moved and out.certified
     np.testing.assert_allclose(out.delta, expected, rtol=0, atol=1e-13)
 
 
-def test_a_block_without_cross_coefficients_never_moves():
+def test_a_star_without_cross_coefficients_never_moves():
     """No cross coefficient, no move: even an edge diagonal far below ``THETA / <eps>``
-    (an ``eps = 20`` edge beside a vacuum node) is the block's own smallest eigenvalue."""
+    (an ``eps = 20`` edge beside a vacuum node) is the star's own smallest eigenvalue."""
     shape = (2, 3, 4)
     diagonal = np.full((3,) + shape, 1 / 20)
-    out = blocks.lift('E', diagonal, np.zeros((3,) + shape), np.ones((3,) + shape),
-                      np.ones(shape), runtime('numpy'))
+    out = stars.lift('E', diagonal, np.zeros((3,) + shape), np.ones((3,) + shape),
+                     np.ones(shape), runtime('numpy'))
     assert out.delta is None and out.moved == 0 and out.certified
-
-
-def test_an_extreme_contrast_is_certified():
-    """``eps = 1e10``: every block lifts to the node tensor almost whole and is certified. The
-    unscaled leading minors, the test's first spelling, refused blocks here (the design review
-    measured 331 at 1e10)."""
-    from wavebit.fd._lower import constitutive
-    scene = _cavity(1e10, None)
-    plan = quiet(fd.plan, scene)
-    rt, nodes, lifted = runtime('numpy'), {}, {}
-    params = dict(build(scene, plan, rt))
-    params['constitutive'] = constitutive.lower(scene, plan, rt, nodes=nodes)
-    assert constitutive.lift(plan, params, nodes, rt, lifted)
-    assert all(out.moved > 0 for out in lifted.values())
 
 
 def _cavity(eps, mu=1.5, center=(.012, .007, -.009)):
@@ -168,9 +157,51 @@ def _cavity(eps, mu=1.5, center=(.012, .007, -.009)):
                         fd.Sphere(radius=.15, center=center), fd.Material(eps=eps, mu=mu)),))
 
 
+def _region(scene, plan, field, lifted):
+    """The term's inverse-material diagonal over its region, with or without the lift."""
+    from wavebit.fd._kernel.observe import InteriorEnergy
+    from wavebit.fd._lower import constitutive
+    rt = runtime('numpy')
+    params = dict(build(scene, plan, rt))
+    nodes = {}
+    params['constitutive'] = constitutive.lower(scene, plan, rt, nodes=nodes)
+    if lifted:
+        assert constitutive.lift(plan, params, nodes, rt)
+    term = next(t for t in plan.constitutive if t.field == field)
+    key = 'be' if field == 'E' else 'bh'
+    cross = params['constitutive'][term.name]
+    return np.array(np.broadcast_to(InteriorEnergy._cut(params[key], slice(None), term.box)
+                                    / term.ratio, cross.shape)), cross
+
+
+@pytest.mark.parametrize('field', ('E', 'H'))
+def test_the_lifted_operator_is_positive_definite(field):
+    """The claim itself, on the kernel's own operator: ``eps = mu = 100`` in the 16^3 cavity is
+    indefinite unlifted and positive definite lifted. Measured 2026-09-27 at THETA 0.1: smallest
+    eigenvalue times 100, E -1.549 -> +0.564 and H -1.831 -> +0.448."""
+    scene = _cavity(100., 100.)
+    plan = quiet(fd.plan, scene)
+    before = np.linalg.eigvalsh(_dense(*_region(scene, plan, field, False), field))[0]
+    after = np.linalg.eigvalsh(_dense(*_region(scene, plan, field, True), field))[0]
+    assert before < 0 < after
+
+
+def test_an_eps_12_sphere_moves_no_star():
+    """Where the operator is comfortably positive the star leaves it alone: an ``eps = 12``
+    sphere lowers to build's bits. WBC's eight blocks per node, the lift's first form, moved
+    1.3-3.3% of such a sphere's blocks and added an error that did not shrink with the cell
+    (the lift's study)."""
+    scene = _cavity(12., 1.)
+    plan = quiet(fd.plan, scene)
+    rt = runtime('numpy')
+    params, built = fd.lower(scene, plan, rt), build(scene, plan, rt)
+    for key in ('be', 'bh', 'minus_bh'):
+        assert np.array_equal(params[key], built[key])
+
+
 @pytest.mark.parametrize('field', ('E', 'H'))
 def test_the_node_tensor_is_the_kottke_tensor_at_each_node(field):
-    """What the lift moves a block toward, from the definitions: ``1/<eps> + (<1/eps> -
+    """What the lift moves a star toward, from the definitions: ``1/<eps> + (<1/eps> -
     1/<eps>) n_a^2`` on the diagonal and ``1/<eps>``, at E nodes and H cell centres, with the
     sphere's exact fill and radial normal."""
     from wavebit.fd._lower import constitutive
@@ -209,14 +240,14 @@ def test_a_glass_sphere_lowers_to_the_same_bits():
         assert np.array_equal(params[key], built[key])
 
 
-def test_the_lift_is_continuous_where_a_block_starts_to_move():
-    """``t*`` grows from zero where a block reaches the floor. A trigger at zero with a lift to
+def test_the_lift_is_continuous_where_a_star_starts_to_move():
+    """``t*`` grows from zero where a star reaches the floor. A trigger at zero with a lift to
     the floor would jump there (the first prototype did)."""
     rng = np.random.default_rng(73)
     shape = (2, 2, 2)
-    diagonal, cross, node, inverse = _tensors(rng, shape, contrast=2.)
+    diagonal, cross, node, inverse = _tensors(rng, shape, contrast=3.)
     rt = runtime('numpy')
-    moves = lambda scale: blocks.lift('E', diagonal, scale * cross, node, inverse, rt)
+    moves = lambda scale: stars.lift('E', diagonal, scale * cross, node, inverse, rt)
     lo, hi = 0., 1.
     assert moves(lo).delta is None and moves(hi).delta is not None
     for _ in range(60):
@@ -225,7 +256,21 @@ def test_the_lift_is_continuous_where_a_block_starts_to_move():
     assert np.max(np.abs(moves(hi).delta)) < 1e-9
 
 
-def test_plan_and_check_say_where_the_lift_moved_blocks():
+def test_an_extreme_contrast_is_certified():
+    """``eps = 1e10``: the stars lift almost to the node tensor and are certified. The unscaled
+    leading minors, the test's first spelling, refused pieces here (the design review measured
+    331 of the first form's blocks at 1e10)."""
+    from wavebit.fd._lower import constitutive
+    scene = _cavity(1e10, None)
+    plan = quiet(fd.plan, scene)
+    rt, nodes, lifted = runtime('numpy'), {}, {}
+    params = dict(build(scene, plan, rt))
+    params['constitutive'] = constitutive.lower(scene, plan, rt, nodes=nodes)
+    assert constitutive.lift(plan, params, nodes, rt, lifted)
+    assert all(out.moved > 0 for out in lifted.values())
+
+
+def test_plan_and_check_say_where_the_lift_moved_stars():
     """A scene the Gershgorin certificate used to refuse now plans with a modified operator; the
     plan says so, with each term's count, and ``fd.check`` prints it under the body. A glass
     sphere, which moves nothing, hears neither."""
@@ -234,17 +279,17 @@ def test_plan_and_check_say_where_the_lift_moved_blocks():
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter('always')
         plan = fd.plan(scene)
-    said = [str(w.message) for w in caught if 'per-block lift moved' in str(w.message)]
+    said = [str(w.message) for w in caught if 'star lift moved' in str(w.message)]
     assert len(said) == 1
     report = str(quiet(fd.check, scene))
     for name, out in lifted_on_host(scene, plan)[1].items():
-        assert out.moved > 0 and f'{name} {out.moved} of {out.blocks}' in said[0]
-        assert f'lift     {name}: {out.moved} of {out.blocks} blocks moved' in report
+        assert out.moved > 0 and f'{name} {out.moved} of {out.stars}' in said[0]
+        assert f'lift     {name}: {out.moved} of {out.stars} stars moved' in report
     glass = _cavity(2.25)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter('always')
         fd.plan(glass)
-    assert not any('per-block lift' in str(w.message) for w in caught)
+    assert not any('star lift' in str(w.message) for w in caught)
     assert 'lift     ' not in str(quiet(fd.check, glass))
 
 
@@ -253,8 +298,8 @@ def _npy(x):
 
 
 def test_every_backend_and_the_traced_path_lift_alike():
-    """NumPy, JAX, ``jax.jit`` (which has no value to read, so it lifts every block in the
-    runtime's own arrays) and Torch, on a sphere whose E and H blocks both move."""
+    """NumPy, JAX, ``jax.jit`` (which has no value to read, so it lifts every star in the
+    runtime's own arrays) and Torch, on a sphere whose E and H stars both move."""
     import jax
     scene = _cavity(40., 30.)
     plan = quiet(fd.plan, scene)
@@ -280,21 +325,22 @@ def test_every_backend_and_the_traced_path_lift_alike():
 
 
 def test_an_uncertified_lift_is_refused_and_poisons_stable(monkeypatch):
-    """The certificate is read, not assumed. A block cannot stay indefinite at its lift for
+    """The certificate is read, not assumed. A star cannot stay indefinite at its lift for
     positive finite phases, so this forces one: the plan refuses by name, and a lowering made
     against an earlier plan reads ``stable = NaN``."""
     scene = _cavity(40., 30.)
     plan = quiet(fd.plan, scene)
-    real = blocks.lift
-    monkeypatch.setattr(blocks, 'lift', lambda *a, **k: real(*a, **k)._replace(certified=False))
+    real = stars.lift
+    monkeypatch.setattr(stars, 'lift', lambda *a, **k: real(*a, **k)._replace(certified=False))
     with pytest.raises(ValueError, match='not positive definite'):
         quiet(fd.plan, scene)
     assert np.isnan(float(fd.lower(scene, plan, runtime('numpy'))['stable']))
 
 
 #: Off a node, on a node (the 16-cell box's origin is node 8) and on a cell centre. The two
-#: symmetric placements put blocks with a double smallest eigenvalue on the body diagonals,
-#: where the determinant's derivative is noise (the design review measured 44% on them).
+#: symmetric placements put stars with a double smallest eigenvalue on the body diagonals,
+#: where a determinant's derivative is noise (the design review measured 44% on the first,
+#: eight-block form).
 PLACEMENTS = {'off-node': (.012, .007, -.009), 'node': (0., 0., 0.), 'cell': (.025, .025, .025)}
 
 
@@ -325,13 +371,13 @@ def test_the_lift_differentiates_through_t(backend, placement):
         grad = jax.grad(loss, argnums=(0, 1))
         grad = jax.jit(grad) if backend == 'jit' else grad
         gradient = [float(v) for v in grad(rt.array(40.), rt.array(30.))]
-    # Central differences against jax.grad, relative, (eps, mu), measured 2026-09-27:
-    #   h 1e-2: off-node 2e-9, 2.8e-4; node 1.9e-8, 5.4e-7; cell 4.0e-7, 6.3e-8
-    #   h 1e-3: off-node 1.7e-10, 5.4e-10; node 4.1e-10, 4.7e-9; cell 1.5e-8, 7.7e-10
-    #   h 1e-4: off-node 7.9e-10, 1.4e-10; node 8.3e-9, 2.9e-8; cell 2.1e-7, 9.7e-10
-    # so 1e-3, below the curvature and above the loss's round-off, cancelled on the cell's
-    # small eps gradient. (A determinant test for the pivots scattered the cell's differences
-    # by 6% at 1e-6 and 8e-5 at 1e-4: its t* was resolved to 1e-8 at a double root.)
+    # Central differences against jax.grad, relative, (eps, mu), measured 2026-09-27 (THETA 0.1):
+    #   h 1e-2: off-node 1.3e-8, 3.4e-8; node 3.3e-9, 1.0e-6; cell 1.5e-7, 6.8e-8
+    #   h 1e-3: off-node 1.3e-10, 6.9e-10; node 2.5e-10, 4.2e-9; cell 3.4e-9, 6.3e-10
+    #   h 1e-4: off-node 1.0e-9, 1.1e-9; node 1.2e-9, 3.3e-8; cell 5.3e-9, 5.4e-10
+    # so 1e-3, below the curvature and above the loss's round-off. (On the first, eight-block
+    # form a determinant test scattered the cell's differences by 6% at 1e-6: its t* was
+    # resolved to 1e-8 at a double root.)
     h, host = 1e-3, runtime('numpy')
     finite = [(loss(40. + h, 30., host) - loss(40. - h, 30., host)) / (2 * h),
               (loss(40., 30. + h, host) - loss(40., 30. - h, host)) / (2 * h)]

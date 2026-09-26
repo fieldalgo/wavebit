@@ -282,7 +282,7 @@ def test_flux_memory_integrates_the_source_current(field, backend):
 def test_the_lift_plans_eps_100_and_a_traced_failure_is_still_visible():
     # eps=100 at this 16^3 placement was refused by the Gershgorin lower bound; its
     # unlifted operator really is indefinite (test_an_unlifted_eps_100_sphere_grows).
-    # The per-block lift plans it. eps=2.25 at courant=.999 still fails the coupled
+    # The star lift plans it. eps=2.25 at courant=.999 still fails the coupled
     # curl bound, which the lift does not touch.
     quiet(fd.plan, cavity(eps=100.))
     with pytest.raises(ValueError, match='Constitutive CFL bound'):
@@ -311,9 +311,9 @@ def test_an_unlifted_eps_100_sphere_grows(lifted, monkeypatch):
     # indefinite one stays flat while its positive and negative parts grow together.
     # Measured (2026-09-27): field norms over 300 steps x1.15 lifted, x1.9e7 unlifted; the
     # energy read 21498.87 at steps 100 and 300 unlifted, then -3.2e47 at 1000.
-    from wavebit.fd._lower import blocks
+    from wavebit.fd._lower import stars
     if not lifted:
-        monkeypatch.setattr(blocks, 'lift', lambda *a, **k: blocks.Lifted(None, True, 0, 0, 0.))
+        monkeypatch.setattr(stars, 'lift', lambda *a, **k: stars.Lifted(None, True, 0, 0, 0.))
     size = lambda r: max(np.linalg.norm(r['E']), np.linalg.norm(r['H']))
     first = solve_cavity('numpy', cavity(eps=100., mu=None, steps=1))
     last = solve_cavity('numpy', cavity(eps=100., mu=None, steps=300))

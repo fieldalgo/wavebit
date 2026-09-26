@@ -1,6 +1,6 @@
 """Separate tangent-normal error from the production coupling discretization.
 
-Its logged rows predate the per-block lift (``wavebit/fd/_lower/blocks.py``): the production
+Its logged rows predate the star lift (``wavebit/fd/_lower/stars.py``): the production
 operator it lowered then was the unlifted default rule, and ``guard``'s positivity certificate
 was the Gershgorin lower bound, which this study now takes itself for the candidate operators it
 builds (they have not been through the lift). Rerun, the ``tangent`` variant lowers today's

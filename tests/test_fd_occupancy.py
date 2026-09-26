@@ -1051,10 +1051,10 @@ def test_a_smoothed_shape_clear_of_a_snapped_face_composes_exactly():
     outside. That scene is refused now, and
     :func:`test_a_smoothed_surface_in_a_voxel_a_snapped_face_cuts_is_refused` measures why.
 
-    The first half reads the mix, ``coefficients.build``'s ``be``: the per-block lift acts on it
-    afterwards (``blocks.lift``), and at ``eps = 12`` in vacuum it moves some of the ball's
-    blocks, by up to 1.6% on this ball -- a different rule, tested in
-    ``tests/test_fd_block_lift.py``. The second half reads ``fd.lower``, lift and all.
+    The first half reads the mix, ``coefficients.build``'s ``be``: the star lift acts on it
+    afterwards (``stars.lift``), a different rule, tested in ``tests/test_fd_star_lift.py`` (the
+    first, eight-block form of the lift moved this ball's ``be`` by up to 1.6%). The second half
+    reads ``fd.lower``, lift and all.
     """
     lo = -N * DX / 2
     top = lo + 12 * DX              # exactly on a cell boundary: the snap moves nothing

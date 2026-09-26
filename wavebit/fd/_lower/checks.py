@@ -1406,7 +1406,7 @@ def check_cells_across(scene, grid):
     its exact clip at any size. The door reads ``Shape.min_extent`` over the axes the body is
     bounded along and exempts a layer (:func:`_cells_across`); between 4 and 8 cells it warns
     (:func:`_cells_across_notes`). It is about accuracy and holds at any contrast: the
-    per-block lift that runs after it (``blocks.lift``) would make such a body's operator
+    star lift that runs after it (``stars.lift``) would make such a body's operator
     positive definite, and says nothing about whether its answer is right.
     """
     from .occupancy import smoothed_structures
@@ -1806,7 +1806,7 @@ def notes(scene, plan, rows=None, lifted=None):
     """``[(category, message), ...]``: the stage-1 warnings, for ``check`` and for ``plan``.
 
     ``rows``, when a list, receives one :data:`BodyRow` per smoothed structure (``check``'s
-    block), from the fills the notes take anyway. ``lifted`` is the per-block lift by term
+    block), from the fills the notes take anyway. ``lifted`` is the star lift by term
     name: ``plan`` passes ``constitutive.validate``'s; an empty dict is filled here, which is
     how ``check`` reads it (:func:`_lift_notes`).
     """
@@ -1823,7 +1823,7 @@ def notes(scene, plan, rows=None, lifted=None):
 
 
 def _lift_notes(scene, plan, lifted=None):
-    """Say where the per-block lift changed the default rule's operator (``blocks.lift``).
+    """Say where the star lift changed the default rule's operator (``stars.lift``).
 
     A scene the Gershgorin certificate used to refuse now plans, with a modified operator; this
     is the note that it was modified, and how much. ``lifted`` as :func:`notes` takes it.
@@ -1840,15 +1840,15 @@ def _lift_notes(scene, plan, lifted=None):
     moved = {name: out for name, out in lifted.items() if out.moved}
     if not moved:
         return []
-    each = ', '.join(f'{name} {out.moved} of {out.blocks}' for name, out in moved.items())
+    each = ', '.join(f'{name} {out.moved} of {out.stars}' for name, out in moved.items())
     largest = max(out.largest for out in moved.values())
     return [(SubpixelAccuracyWarning,
-             f'The per-block lift moved inverse-material blocks toward their node\'s Kottke '
-             f'tensor ({each}; the largest move is {largest:.3g} of the way) so that the '
-             f'smoothed operator is positive definite: at this contrast some blocks of the '
-             f'default rule fall below the floor. The run is stable by construction '
-             f'(wavebit/fd/_lower/blocks.py); the effect on accuracy is measured in '
-             f'docs/fd-subpixel-occupancy.md, "The per-block lift".')]
+             f'The star lift moved the inverse-material diagonal at some nodes toward the '
+             f'node\'s Kottke tensor ({each} stars; the largest move is {largest:.3g} of the '
+             f'way) so that the smoothed operator is positive definite: at this contrast the '
+             f'default rule falls below the floor there. The run is stable by construction '
+             f'(wavebit/fd/_lower/stars.py); the effect on accuracy is measured in '
+             f'docs/fd-subpixel-occupancy.md, "The star lift".')]
 
 
 def _radiation_notes(scene):
@@ -1973,7 +1973,7 @@ def _check_fill_contract(scene, occupied, grid=None):
     to ``1 + 2.8e-9`` on a correct sphere, so the tolerance is scaled by the grid's largest
     coordinate over ``dx`` when ``grid`` is given. A NaN passed every comparison; it is
     refused by name. And the guard runs from ``coefficients.build`` as well as from the plan's
-    notes, so that it speaks before the per-block lift reads a fill: the Gershgorin
+    notes, so that it speaks before the star lift reads a fill: the Gershgorin
     certificate the lift replaced read a contract-breaking turned box's real negative
     ``1/eps`` as an inconclusive bound.
     """

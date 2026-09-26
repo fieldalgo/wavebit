@@ -29,7 +29,7 @@ exact Mie theory, to say whether the static number is the scattering number.
 
 **Instrument 3, the certificate.** Where the energy certificate refuses, by contrast and cells
 across, counted over the placements with ``fd.plan`` alone. That certificate was the Gershgorin
-lower bound; the per-block lift (``wavebit/fd/_lower/blocks.py``) replaced it, and ``validate``
+lower bound; the star lift (``wavebit/fd/_lower/stars.py``) replaced it, and ``validate``
 now refuses only an uncertified lift, so a rerun of this instrument records every placement as
 certified. The logged rows are the Gershgorin bound's, at the commit that wrote them.
 
