@@ -35,7 +35,8 @@ certified. The logged rows are the Gershgorin bound's, at the commit that wrote 
 
 Instruments 1 and 2 measured the default rule **before the lift**: ``lowered`` reads
 ``build``'s diagonal, which the lift patches only later, in ``params.lower``. The door's numbers
-(:data:`wavebit.fd._lower.checks.CELLS_ACROSS_REFUSED`) are that operator's.
+(:data:`wavebit.fd._lower.checks.CELLS_ACROSS_REFUSED`) are that operator's; the lift's own
+static rows are ``studies/fdtd_subpixel_lift.py``'s.
 
 Run from the repository root: ``python studies/fdtd_subpixel_cells_across.py [static|bodies|
 dynamic|certificate]``; each row goes to ``studies/results/fdtd_subpixel_cells_across.log`` as

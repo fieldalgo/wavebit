@@ -104,7 +104,8 @@ def test_the_stars_sum_to_the_operator(field):
         star = (_star_matrix(edges, diagonal, cross, node, p, moves[p]) if inside else
                 np.diag([diagonal[(a,) + q] / 2 for a, q in edges]))
         expected[np.ix_(rows, rows)] += star
-    np.testing.assert_allclose(_dense(diagonal + delta, cross, field), expected, rtol=0, atol=1e-14)
+    np.testing.assert_allclose(_dense(diagonal + delta, cross, field), expected,
+                               rtol=0, atol=1e-14)
 
 
 def _least(star, floor):
@@ -177,8 +178,9 @@ def _region(scene, plan, field, lifted):
 @pytest.mark.parametrize('field', ('E', 'H'))
 def test_the_lifted_operator_is_positive_definite(field):
     """The claim itself, on the kernel's own operator: ``eps = mu = 100`` in the 16^3 cavity is
-    indefinite unlifted and positive definite lifted. Measured 2026-09-27 at THETA 0.1: smallest
-    eigenvalue times 100, E -1.549 -> +0.564 and H -1.831 -> +0.448."""
+    indefinite unlifted and positive definite lifted. Measured 2026-09-27: smallest eigenvalue
+    times 100, E -1.549 -> +0.518 and H -1.831 -> +0.391 at THETA 0.02 (+0.564 and +0.448 at
+    0.1)."""
     scene = _cavity(100., 100.)
     plan = quiet(fd.plan, scene)
     before = np.linalg.eigvalsh(_dense(*_region(scene, plan, field, False), field))[0]
@@ -190,13 +192,32 @@ def test_an_eps_12_sphere_moves_no_star():
     """Where the operator is comfortably positive the star leaves it alone: an ``eps = 12``
     sphere lowers to build's bits. WBC's eight blocks per node, the lift's first form, moved
     1.3-3.3% of such a sphere's blocks and added an error that did not shrink with the cell
-    (the lift's study)."""
+    (``studies/fdtd_subpixel_lift.py``)."""
     scene = _cavity(12., 1.)
     plan = quiet(fd.plan, scene)
     rt = runtime('numpy')
     params, built = fd.lower(scene, plan, rt), build(scene, plan, rt)
     for key in ('be', 'bh', 'minus_bh'):
         assert np.array_equal(params[key], built[key])
+
+
+@pytest.mark.parametrize('radius', (.25, .1))
+def test_the_c3_spheres_move_no_star(radius):
+    """The C3 Mie evidence was measured before the lift, and stands: the epsilon-12 sphere of
+    radius .25 wavelength and the small high-index control of radius .1, at 40 cells per wavelength
+    on their own grid (``studies/fdtd_subpixel_mie_sphere.py``'s box, walled here: the lift reads
+    only the structures and the grid), move no star. Checked 2026-09-27 over all 37 C3 scenes --
+    the three spheres at 20-80 cells per wavelength and three placements, the control, and the TE
+    cylinder at 40/56/80 -- with none moved; these two are the cheapest that bind."""
+    from wavebit.fd._lower.constitutive import lifted_on_host
+    dx = 1 / 40
+    scene = fd.Scene(domain=fd.Domain(size=(2 * (.75 + .2 + 12 * dx),) * 3),
+                     boundaries=fd.Boundaries(x=fd.PEC(), y=fd.PEC(), z=fd.PEC()),
+                     resolution=fd.Resolution(dx=dx), run=fd.Run(steps=4),
+                     structures=(fd.Structure(fd.Sphere(radius=radius), 12.),))
+    plan = quiet(fd.plan, scene)
+    lifted = lifted_on_host(scene, plan)[1]
+    assert lifted and all(out.moved == 0 and out.stars > 0 for out in lifted.values())
 
 
 @pytest.mark.parametrize('field', ('E', 'H'))
@@ -371,10 +392,10 @@ def test_the_lift_differentiates_through_t(backend, placement):
         grad = jax.grad(loss, argnums=(0, 1))
         grad = jax.jit(grad) if backend == 'jit' else grad
         gradient = [float(v) for v in grad(rt.array(40.), rt.array(30.))]
-    # Central differences against jax.grad, relative, (eps, mu), measured 2026-09-27 (THETA 0.1):
-    #   h 1e-2: off-node 1.3e-8, 3.4e-8; node 3.3e-9, 1.0e-6; cell 1.5e-7, 6.8e-8
-    #   h 1e-3: off-node 1.3e-10, 6.9e-10; node 2.5e-10, 4.2e-9; cell 3.4e-9, 6.3e-10
-    #   h 1e-4: off-node 1.0e-9, 1.1e-9; node 1.2e-9, 3.3e-8; cell 5.3e-9, 5.4e-10
+    # Central differences against jax.grad, relative, (eps, mu), measured 2026-09-27 (THETA 0.02):
+    #   h 1e-2: off-node 1.8e-8, 2.8e-8; node 4.0e-8, 9.2e-7; cell 1.8e-7, 6.9e-8
+    #   h 1e-3: off-node 2.3e-10, 2.6e-10; node 1.0e-9, 4.1e-9; cell 2.3e-9, 5.2e-10
+    #   h 1e-4: off-node 4.8e-10, 7.4e-10; node 1.0e-9, 6.3e-8; cell 2.2e-8, 9.0e-13
     # so 1e-3, below the curvature and above the loss's round-off. (On the first, eight-block
     # form a determinant test scattered the cell's differences by 6% at 1e-6: its t* was
     # resolved to 1e-8 at a double root.)

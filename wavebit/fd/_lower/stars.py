@@ -32,14 +32,14 @@ and ``diag(H) + offdiag(c)`` is.
 This is Werner, Bauer and Cary's Sec. 4 argument with a larger piece. Their pieces are the eight
 3x3 blocks of one edge per axis at each node, whose test takes, for each axis, *one* of the two
 edges -- so it binds on the smaller one. The star's harmonic mean lies between the two, and the
-star fires far less: in the lift's study and the design review of 2026-09-27 the
-eight blocks moved 1.3-3.3% of an ``eps = 12`` sphere's blocks, whose operator
-was positive definite, and the error they added did not shrink with the cell (at ``eps = 25``
-the static error settled near -0.2% from 12 to 24 cells across while the unmoved rule's went
-+0.96% -> +0.36%); the star moves none of the ``eps = 12`` sphere's nodes. The star is ours.
+star fires far less: in the lift's study (``studies/fdtd_subpixel_lift.py``) and the design review
+of 2026-09-27 the eight blocks moved 1.3-3.3% of an ``eps = 12`` sphere's blocks, whose operator
+was positive definite, and the error they added did not shrink with the cell (at ``eps = 25`` the
+static error settled near -0.2% from 12 to 24 cells across while the unmoved rule's went from
++0.96% to +0.36%); the star moves none of the ``eps = 12`` sphere's nodes. The star is ours.
 
 **The lift.** Each star moves both edges of each axis toward the node tensor's diagonal,
-``e -> e + t (k - e)`` for ``t`` in ``[0, 1]``, where ``k`` is the diagonal of the node's own Kottke
+``e -> e + t (k - e)`` for ``t`` in ``[0, 1]``, where ``k`` is the diagonal of the node's Kottke
 tensor ``K = (1/<eps>) I + (<1/eps> - 1/<eps>) n n^T`` (Kottke, Farjadpour and Johnson, Phys. Rev.
 E 77, 036611, 2008), whose off-diagonal ``c`` already is. At ``t = 1`` both ``a``-edges read
 ``k_a``, the harmonic mean is ``k_a`` and the test matrix is ``K``: positive definite with smallest
@@ -96,9 +96,14 @@ import collections
 
 import numpy as np
 
-#: The floor as a fraction of the star's physical scale. PROVISIONAL (0.1, the understand
-#: workflow's trial value): to be set by the block-lift study. It must lie in ``(0, 1)``.
-THETA = 0.1
+#: The floor as a fraction of the star's physical scale; it must lie in ``(0, 1)``. Chosen by
+#: ``studies/fdtd_subpixel_lift.py``'s rule, written before its runs: the smallest worst static
+#: error of the sphere over eps 12-100 at 8 and 16 cells across, among the values that move no
+#: star of an eps <= 6 body. Every value tried moved none (0.02-0.3, 126 bodies); the worst
+#: errors were 5.189 / 5.196 / 5.207 / 5.239 / 5.279% at 0.02 / 0.05 / 0.1 / 0.2 / 0.3 (9.217%
+#: unlifted), so accuracy hardly depends on it. What it does set is the margin: the eps-100
+#: sphere's smallest eigenvalue times eps is 0.343 at 0.02 against 0.395 at 0.1.
+THETA = 0.02
 
 #: Bisection steps: ``2**-52`` of the unit interval, the spacing of float64 in ``[0.5, 1]``.
 STEPS = 52
@@ -169,7 +174,8 @@ def _harmonic(xp, x, y, ghost, ok):
 
 def _positive(xp, m, off):
     """The 3x3 matrix's ``L D L^T`` pivots are all positive (see the module): ``m_x``,
-    ``m_y - c_xy^2 / m_x`` and ``m_z - c_xz^2 / m_x - (c_yz - c_xy c_xz / m_x)^2 / (m_y - c_xy^2 / m_x)``.
+    ``m_y - c_xy^2 / m_x`` and
+    ``m_z - c_xz^2 / m_x - (c_yz - c_xy c_xz / m_x)^2 / (m_y - c_xy^2 / m_x)``.
     """
     (mx, my, mz), (cxy, cxz, cyz) = m, off
     one = xp.ones_like(mx)
@@ -325,8 +331,8 @@ def _assemble(field, diagonal, cross, node, inverse, rt, theta, shape, fire, t, 
 
     ``fire``, ``t``, ``vectors`` (three arrays) and ``rate`` are ``(nz, ny, nx)`` runtime arrays
     with no gradient; ``rate`` is ``r = v . (dM/dt) v``. The correction ``(q - sg q) / r`` is zero
-    in value on every backend (``x - x`` is ``0`` for a finite ``x``), so the value is ``t*`` to the
-    bit; the unselected branch divides by one, so it carries no NaN into a gradient.
+    in value on every backend (``x - x`` is ``0`` for a finite ``x``), so the value is ``t*`` to
+    the bit; the unselected branch divides by one, so it carries no NaN into a gradient.
     """
     xp = rt.xp
     step = 1 if field == 'E' else -1
