@@ -358,6 +358,161 @@ def test_an_uncertified_lift_is_refused_and_poisons_stable(monkeypatch):
     assert np.isnan(float(fd.lower(scene, plan, runtime('numpy'))['stable']))
 
 
+def _wall_cavity(eps, mu, center):
+    """A small sphere against the PEC walls: its term's region starts (E) or ends (H) at the
+    domain, so stars there have a ghost edge and cross coefficients."""
+    return fd.Scene(domain=fd.Domain(size=(.8,) * 3), resolution=fd.Resolution(dx=.05),
+                    boundaries=fd.Boundaries(x=fd.PEC(), y=fd.PEC(), z=fd.PEC()),
+                    run=fd.Run(steps=8), structures=(fd.Structure(
+                        fd.Sphere(radius=.12, center=center), fd.Material(eps=eps, mu=mu)),))
+
+
+def _ghost_stars_moved(scene, plan, field):
+    """How many stars with a ghost edge move, read with the module's own test."""
+    from wavebit.fd._kernel.observe import InteriorEnergy
+    from wavebit.fd._lower import constitutive
+    rt = runtime('numpy')
+    params = dict(build(scene, plan, rt))
+    nodes = {}
+    cross = constitutive.lower(scene, plan, rt, nodes=nodes)
+    term = next(t for t in plan.constitutive if t.field == field)
+    c = np.asarray(cross[term.name])
+    shape = c.shape[1:]
+    d = np.broadcast_to(InteriorEnergy._cut(np.asarray(params['be' if field == 'E' else 'bh']),
+                                            slice(None), term.box) / term.ratio, c.shape)
+    k, inv = (np.asarray(v) for v in nodes[term.name])
+    g = [np.broadcast_to(stars._ghost(shape, a, field), shape) for a in range(3)]
+    own, other = stars._star(np, field, d, k, g)
+    floor = stars._floor(np, stars.THETA, inv, own, other, g)
+    fire = ~stars._test(np, own, other, g, k, c, np.zeros(shape), floor)[0]
+    return int((fire & (g[0] | g[1] | g[2])).sum())
+
+
+@pytest.mark.parametrize('field, center', [('E', (-.27,) * 3), ('H', (.255,) * 3)])
+def test_the_lift_differentiates_through_a_star_at_a_wall(field, center):
+    """A star with a ghost edge reads its lone edge as ``2 x``, and its rate as ``2 x'``. The
+    centred cavity moves no such star, so the review of the star found that branch untested:
+    here 12 E stars (and 24 H stars) with a ghost edge move. Central differences against
+    jax.grad at eps = mu = 1000, relative (eps, mu), measured 2026-09-27: E wall h 1 2.3e-8,
+    7.1e-7; h 0.1 2.4e-10, 7.2e-9; h 0.01 5.6e-10, 1.7e-9. H wall h 1 5.4e-7, 4.8e-7; h 0.1
+    6.1e-9, 4.7e-9; h 0.01 1.3e-8, 1.3e-10. So h = 0.1."""
+    import jax
+    scene = _wall_cavity(1000., 1000., center)
+    plan = quiet(fd.plan, scene)
+    assert _ghost_stars_moved(scene, plan, field) > 0
+    full = (3,) + plan.shape[1:]
+    weight = np.random.default_rng(75).normal(size=full)
+    rt, host = runtime('jax'), runtime('numpy')
+
+    def loss(eps, mu, rt):
+        params = fd.lower(_wall_cavity(eps, mu, center), plan, rt)
+        w = rt.array(weight)
+        return sum(rt.xp.sum(w * rt.xp.broadcast_to(params[k], full)) for k in ('be', 'bh'))
+
+    gradient = [float(v) for v in
+                jax.grad(loss, argnums=(0, 1))(rt.array(1000.), rt.array(1000.), rt)]
+    h = .1
+    finite = [(loss(1000. + h, 1000., host) - loss(1000. - h, 1000., host)) / (2 * h),
+              (loss(1000., 1000. + h, host) - loss(1000., 1000. - h, host)) / (2 * h)]
+    np.testing.assert_allclose(gradient, finite, rtol=1e-7)
+
+
+@pytest.mark.parametrize('theta', (0., 1., -.1))
+def test_a_floor_outside_the_unit_interval_is_refused(theta):
+    shape = (2, 2, 2)
+    with pytest.raises(ValueError, match='must lie in'):
+        stars.lift('E', np.ones((3,) + shape), np.zeros((3,) + shape), np.ones((3,) + shape),
+                   np.ones(shape), runtime('numpy'), theta=theta)
+
+
+def test_a_value_read_back_in_another_shape_is_not_a_value():
+    """A batch wrapper can read back with its batch axis; the host path must not take it."""
+    class Batched:
+        def constant(self, x):
+            return x
+
+        def numpy(self, x):
+            return np.stack([x, x])
+    x = np.ones((3, 2, 2, 2))
+    assert stars._read(Batched(), (x,)) is None
+    assert stars._read(runtime('numpy'), (x,))[0].shape == x.shape
+
+
+@pytest.mark.parametrize('eps, said', [(1e16, 'contrast of 1e+16'),
+                                       (1e200, 'could not solve its eigenproblem')])
+def test_past_float64s_reach_the_plan_says_so(eps, said):
+    """Real inputs, not a monkeypatch: past about 1e12 a fill's round-off times the contrast
+    breaks the mix, the lift cannot repair it, and the plan says that -- not that a value is
+    not a finite positive number, nor (at 1e200, where the eigenproblem fails) that the scene
+    is not concrete."""
+    with pytest.raises(ValueError) as caught:
+        quiet(fd.plan, _cavity(eps, None))
+    assert said in str(caught.value) and 'concrete' not in str(caught.value)
+
+
+def test_a_shared_term_says_so_on_its_lift_line():
+    """Two bodies in one merged term print its lift under both; each says it is shared, as the
+    cross line does, so that nobody sums the two."""
+    scene = fd.Scene(domain=fd.Domain(size=(1.0,) * 3), resolution=fd.Resolution(dx=.05),
+                     boundaries=fd.Boundaries(x=fd.PEC(), y=fd.PEC(), z=fd.PEC()),
+                     run=fd.Run(steps=2), structures=tuple(
+                         fd.Structure(fd.Sphere(radius=.15, center=(s * .2, .01, .02)), 40.)
+                         for s in (-1, 1)))
+    lines = [l for l in str(quiet(fd.check, scene)).splitlines() if l.startswith('  lift')]
+    assert len(lines) == 2 and all('shared with structures[' in l for l in lines)
+
+
+def test_a_run_lowers_its_scene_on_the_host_once(monkeypatch):
+    """fd.run plans (which lifts on the host, to certify) and reports; the report reuses the
+    plan's lift for the same scene. It lowered it again, twice per run, before the review of
+    the star."""
+    from wavebit.fd._lower import constitutive
+    calls = []
+    real = constitutive.lifted_on_host
+    monkeypatch.setattr(constitutive, 'lifted_on_host',
+                        lambda *a, **k: calls.append(1) or real(*a, **k))
+    quiet(fd.run, _cavity(40., 30.))
+    assert len(calls) == 1
+
+
+def test_a_floor_is_never_negative():
+    """At eps 1e13 a cell-centred sphere 12 cells across reads a fill of -7e-14 and an edge
+    diagonal of -15 (the review of the star); the floor went negative with it, the test became
+    weaker than positivity, and the plan refused a scene the lift can repair. Clamped at zero,
+    it plans."""
+    dx = .05
+    scene = fd.Scene(domain=fd.Domain(size=(18 * dx,) * 3), resolution=fd.Resolution(dx=dx),
+                     boundaries=fd.Boundaries(x=fd.PEC(), y=fd.PEC(), z=fd.PEC()),
+                     run=fd.Run(steps=2), structures=(fd.Structure(
+                         fd.Sphere(radius=6 * dx, center=(dx / 2,) * 3), 1e13),))
+    quiet(fd.plan, scene)
+
+
+def test_the_plans_lift_is_reused_for_its_own_scene_only():
+    """A plan can lower another scene of the same structure; the notes then read that scene's
+    lift, not the one the plan kept."""
+    from wavebit.fd._lower.checks import notes
+    from wavebit.fd._lower.constitutive import lifted_on_host
+    plan = quiet(fd.plan, _cavity(40., 30.))
+    other = _cavity(100., 30.)
+    lifted = {}
+    quiet(notes, other, plan, lifted=lifted)
+    expected = lifted_on_host(other, plan)[1]
+    assert {k: v.moved for k, v in lifted.items()} == {k: v.moved for k, v in expected.items()}
+    assert lifted['constitutive[E0]'].moved != plan._lifted[1]['constitutive[E0]'].moved
+
+
+def test_torch_lowers_a_lifted_scene_without_a_warning():
+    """The ghost masks went to Torch as read-only broadcast views, and every Torch lowering that
+    moved a star printed "The given NumPy array is not writable" (the review of the star)."""
+    scene = _cavity(40., 30.)
+    plan = quiet(fd.plan, scene)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        fd.lower(scene, plan, runtime('torch'))
+    assert not [w for w in caught if 'not writable' in str(w.message)]
+
+
 #: Off a node, on a node (the 16-cell box's origin is node 8) and on a cell centre. The two
 #: symmetric placements put stars with a double smallest eigenvalue on the body diagonals,
 #: where a determinant's derivative is noise (the design review measured 44% on the first,

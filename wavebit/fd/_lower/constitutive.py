@@ -204,10 +204,7 @@ def lift(plan, params, nodes, rt, lifted=None):
         certified = certified & out.certified
         if out.delta is None:
             continue
-        coefficient = params[key]
-        full = (3, plan.nz, plan.ny, plan.nx)
-        if tuple(getattr(coefficient, 'shape', ())) != full:
-            coefficient = xp.broadcast_to(coefficient, full)
+        coefficient = xp.broadcast_to(params[key], (3, plan.nz, plan.ny, plan.nx))
         block = coefficient[term.view] + term.ratio * out.delta
         params[key] = _paste(xp, coefficient, tuple(reversed(term.box)), block)
     return certified
@@ -276,6 +273,9 @@ def validate(scene, plan):
     try:
         coefficients, lifted = lifted_on_host(scene, plan)
         cross = coefficients['constitutive']
+    except np.linalg.LinAlgError as err:
+        raise ValueError(f'the star lift could not solve its eigenproblem ({err}). '
+                         f'{_reach(background, structures)}') from err
     except (TypeError, ValueError, RuntimeError) as err:
         raise ValueError('fd.plan requires concrete geometry and materials to certify '
                          'constitutive coupling before numerical lowering. Build the plan '
@@ -313,8 +313,10 @@ def validate(scene, plan):
         if not lifted[term.name].certified:
             raise ValueError(f'{term.name}: a star of the lifted inverse-material operator is '
                              'not positive definite. The lift makes every star positive for '
-                             'positive finite phases, so a value reaching it is not one: a '
-                             'material or a fill that is not a finite positive number.')
+                             f'positive finite phases within float64\'s reach. '
+                             f'{_reach(background, structures)} If the contrast is small, a '
+                             'material or a fill reaching the lift is not '
+                             'a finite positive number.')
         diagonal = np.broadcast_to(InteriorEnergy._cut(coefficients[key], slice(None),
                                                        term.box)/term.ratio, c.shape)
         _, hi = (float(v) for v in enclosure(diagonal, c, np, term.field))
@@ -331,6 +333,17 @@ def validate(scene, plan):
                          f'are E={upper["E"]:.17g}, H={upper["H"]:.17g}. '
                          f'Lower Run(courant=...) below {bound*math.sqrt(3)/plan.dx:.17g}.')
     return lifted
+
+
+def _reach(background, structures):
+    """The sentence that says how far the scene's contrast is from float64's reach."""
+    values = [float(v) for m in [background] + [s.material for s in structures]
+              for v in tuple(m.eps) + tuple(m.mu_value)]
+    contrast = max(values) / min(values) if min(values) > 0 else float('inf')
+    return (f'The phases here span a contrast of {contrast:.3g}; from about 1e12 a fill\'s '
+            'round-off (about 1e-13) times the contrast breaks the mix itself, which no lift '
+            'can repair (measured on spheres: every contrast up to 1e11 certified, refusals from '
+            '1e12; wavebit/fd/_lower/stars.py, "Float64\'s reach").')
 
 
 def pole_rate(scene, rt):

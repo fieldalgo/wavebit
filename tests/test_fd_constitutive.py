@@ -309,8 +309,11 @@ def test_an_unlifted_eps_100_sphere_grows(lifted, monkeypatch):
     # (the Gershgorin lower bound refused it before, and nothing else would stop it). Judge
     # the fields, not the energy: leapfrog conserves the discrete energy exactly, so an
     # indefinite one stays flat while its positive and negative parts grow together.
-    # Measured (2026-09-27): field norms over 300 steps x1.15 lifted, x1.9e7 unlifted; the
-    # energy read 21498.87 at steps 100 and 300 unlifted, then -3.2e47 at 1000.
+    # Measured (2026-09-27), this test's max(|E|, |H|) over 300 steps: x0.90 lifted (at every
+    # THETA from 0.02 to 0.3), x1.9e7 unlifted. The unlifted energy read 21498.87 to about
+    # step 160 while the fields grew, then drifted with the round-off of cancelling ~1e9 norms
+    # (25600 at 300) and read -3.2e47 at 1000 (the review of the star corrected the first note,
+    # which read the energy at 300 as flat and the lifted growth off |E| alone).
     from wavebit.fd._lower import stars
     if not lifted:
         monkeypatch.setattr(stars, 'lift', lambda *a, **k: stars.Lifted(None, True, 0, 0, 0.))

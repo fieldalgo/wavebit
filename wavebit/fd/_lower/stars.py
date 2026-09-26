@@ -2,7 +2,7 @@
 
 **The operator.** On one ``ConstitutiveTerm`` region the default rule's inverse-material operator
 (inverse ``eps`` for E, inverse ``mu`` for H) is ``Xi = diag(e) + C``: ``e`` the edge diagonal
-``coefficients.build`` paints (the voxel's own mix, ``coefficients._mix``) and ``C`` the node
+``coefficients.build`` paints (the voxel's own mix, ``coefficients.mix``) and ``C`` the node
 cross coefficients ``constitutive.lower`` paints, applied by ``cross_action`` with ``c/4`` for
 each pair of edges that share a node. It is the operator Werner, Bauer and Cary call wc07
 (J. Comput. Phys. 247, 211, 2013, Eq. 11), after Oskooi, Kottke and Johnson (Opt. Lett. 34,
@@ -12,7 +12,7 @@ each pair of edges that share a node. It is the operator Werner, Bauer and Cary 
 every field, and nothing in the rule makes it so: at a high-contrast surface the node's cross
 coefficient can outweigh the edges' diagonals. Then some field has negative energy and a run
 grows without bound -- while the discrete energy, which leapfrog conserves exactly, stays flat
-(``tests/test_fd_constitutive.py::test_an_unlifted_eps_100_sphere_grows``).
+until round-off shows (``tests/test_fd_constitutive.py::test_an_unlifted_eps_100_sphere_grows``).
 
 **The stars.** ``Xi`` is a sum of one 6x6 matrix per node ``p`` -- its star: the six edges that
 touch ``p``, two along each axis (the one whose array index is ``p``'s own, and the other: ``p -
@@ -32,26 +32,30 @@ and ``diag(H) + offdiag(c)`` is.
 This is Werner, Bauer and Cary's Sec. 4 argument with a larger piece. Their pieces are the eight
 3x3 blocks of one edge per axis at each node, whose test takes, for each axis, *one* of the two
 edges -- so it binds on the smaller one. The star's harmonic mean lies between the two, and the
-star fires far less: in the lift's study (``studies/fdtd_subpixel_lift.py``) and the design review
-of 2026-09-27 the eight blocks moved 1.3-3.3% of an ``eps = 12`` sphere's blocks, whose operator
-was positive definite, and the error they added did not shrink with the cell (at ``eps = 25`` the
-static error settled near -0.2% from 12 to 24 cells across while the unmoved rule's went from
-+0.96% to +0.36%); the star moves none of the ``eps = 12`` sphere's nodes. The star is ours.
+star fires far less. In the lift's study (``studies/fdtd_subpixel_lift.py``) the eight blocks
+moved 3.1% and 2.0% of an ``eps = 12`` sphere's blocks at 8 and 16 cells across (the mean over
+five placements, ``THETA = 0.02``), though its operator was positive definite, and the error they
+added did not shrink with the cell: at ``eps = 25``, placement ``c``, ``THETA = 0.05``, the static
+error read -0.20, -0.26 and -0.20% at 12, 16 and 24 cells across while the unmoved rule's went
++0.96, +0.60 and +0.36%. The star moves none of the ``eps = 12`` sphere's nodes. The star is ours.
 
 **The lift.** Each star moves both edges of each axis toward the node tensor's diagonal,
 ``e -> e + t (k - e)`` for ``t`` in ``[0, 1]``, where ``k`` is the diagonal of the node's Kottke
 tensor ``K = (1/<eps>) I + (<1/eps> - 1/<eps>) n n^T`` (Kottke, Farjadpour and Johnson, Phys. Rev.
 E 77, 036611, 2008), whose off-diagonal ``c`` already is. At ``t = 1`` both ``a``-edges read
-``k_a``, the harmonic mean is ``k_a`` and the test matrix is ``K``: positive definite with smallest
-eigenvalue at least ``1/<eps>`` (to round-off: a fill of ``-6e-14`` is kept by design,
-``coefficients._mix``). ``S_p(t)`` is affine in ``t``, so its smallest eigenvalue is concave in
-``t`` and the ``t`` where the star clears a floor form an interval ``[t*, 1]``. The lift takes
+``k_a``, the harmonic mean is ``k_a`` and the test matrix is ``K`` -- or larger on an axis with a
+single edge, which reads ``2 k_a`` -- positive definite with smallest eigenvalue at least
+``1/<eps>``, to round-off (a fill of ``-6e-14`` is kept by design, ``coefficients._Smoothed``).
+``S_p(t)`` is affine in ``t``, so its smallest eigenvalue is concave in ``t`` and the ``t`` where
+the star clears a floor form an interval ``[t*, 1]``. The lift takes
 ``t*``, the least move, and each edge's diagonal becomes the sum of its two halves:
 ``e + (1/2) sum_p t_p (k_p - e)`` over its two end nodes. That is Werner, Bauer and Cary's step-6
 fallback (a failing piece replaced by the node tensor) made minimal and continuous.
 
 **The floor** is ``S_p - (f/2) I`` positive definite, ``f = THETA * min(1/<eps>, the six edges'
-diagonals)``: the star's physical scale. Two properties follow:
+diagonals)``: the star's physical scale, and never below zero -- a negative ``f``, which only a
+value past float64's reach can give (below), would make the test weaker than positivity. Two
+properties follow:
 
 * a star with no cross coefficient has smallest eigenvalue ``min(e)/2 >= f/2`` and never moves,
   so a region with nothing below the floor lowers to the same bits it did before (the lift
@@ -60,13 +64,23 @@ diagonals)``: the star's physical scale. Two properties follow:
   crossing is from below, and a star that approaches the floor starts to move from ``t = 0``.
   A trigger at zero with a lift to the floor would jump (the understand workflow's correction).
 
-**The certificate** is the construction, checked: every star at its ``t`` is tested on the
-numbers the kernel will use, and ``Xi`` is then positive definite with smallest eigenvalue at
-least the smallest, over edges, of the mean floor of the edge's two end nodes. The check does not
-assume the construction worked -- it is what ``constitutive.validate`` refuses on and what
-``constitutive.guard`` turns into ``stable = NaN`` under a transform. A node one layer past a
-region's far end (the high end for E, the low end for H) holds half of that end's edges and no
-coupling (``validate`` keeps its cross coefficients zero): a diagonal star that needs no test.
+**The certificate** is the construction, checked: every star at its ``t`` is tested positive
+definite, on its two halves ``e + t (k - e)``, whose sum is the kernel's diagonal to round-off.
+That test is at a floor of zero; the bisection's invariant adds the margin, so that ``Xi`` is
+positive definite with smallest eigenvalue at least the smallest, over edges, of the mean floor of
+the edge's two end nodes. The check does not assume the construction worked -- it is what
+``constitutive.validate`` refuses on and what ``constitutive.guard`` turns into ``stable = NaN``
+under a transform. A node one layer past a region's far end (the high end for E, the low end for
+H) holds half of that end's edges and no coupling: it lies outside the cross array, which
+``cross_action`` extends by zero -- a diagonal star that needs no test.
+
+**Float64's reach.** A fill's round-off (up to ``-6e-14``, and ``-7e-14`` at a cell-centred sphere)
+times the contrast breaks the mix itself from ``eps`` about ``1e12``: the design review measured an
+edge diagonal of -15 and a node's ``1/<eps>`` of 3.9 in place of about 1 at ``1e13``. The lift
+cannot repair a diagonal that is not a number of the right sign, the certificate fails, and the
+plan refuses it by name. Measured on spheres: every contrast up to ``1e11`` certified; refusals
+began at ``1e12`` for a cell-centred sphere 40 cells across, while a node-centred one 12 cells
+across held to ``1e15``.
 
 **The test** is the sign of the three pivots of an ``L D L^T`` (Cholesky) factorisation of the
 3x3 test matrix, elementwise on every backend. Spellings with the leading principal minors were
@@ -90,7 +104,15 @@ matrix, which is singular at ``t*``, ``v`` its (constant) null vector and ``q = 
 derivative ``-dq/dp / r``. A determinant in place of ``q`` loses the derivative where the
 smallest eigenvalue is double -- a sphere centred on a node or cell has such pieces on its body
 diagonals, and the determinant's derivative was 44% off on the eight-block form (the design
-review).
+review). Where the smallest eigenvalue is double ``t*`` has a derivative only along directions
+that keep the degeneracy -- a single body's ``eps`` or ``mu`` does -- and none in general (the
+review of the star measured one-sided slopes +1.107 and -1.601 along a random direction).
+
+**First derivatives only.** ``v`` and ``r`` are held constant, which makes the first derivative
+exact and the second wrong: the review of the star measured ``jax.hessian`` of a lowered sum 188%
+off its second differences at ``eps = 40``, and Torch's double backward the same. Where no star
+moves the lift contributes nothing and every order is exact. The plan's note says so where one
+does.
 """
 import collections
 
@@ -154,11 +176,12 @@ def _star(xp, field, diagonal, node, ghosts):
 
 
 def _floor(xp, theta, inverse, own, other, ghosts):
-    """``THETA * min(1/<eps>, the star's edges)``; a ghost's placeholder is ``k_a >= 1/<eps>``."""
+    """``THETA * min(1/<eps>, the star's edges)``, not below zero; a ghost's placeholder is
+    ``k_a >= 1/<eps>``."""
     low = inverse
     for a in range(3):
         low = xp.minimum(low, xp.minimum(own[a], xp.where(ghosts[a], own[a], other[a])))
-    return theta * low
+    return theta * xp.maximum(low, xp.zeros_like(low))
 
 
 def _halves(own, other, node, t, floor):
@@ -201,7 +224,9 @@ def _test(xp, own, other, ghosts, node, off, t, floor):
 def _bisect(xp, scan, own, other, ghosts, node, off, floor):
     """The least ``t`` in ``[0, 1]`` with the star above its floor, to ``2**-52``.
 
-    ``hi`` keeps the property throughout: at ``t = 1`` the star is the node tensor's.
+    ``hi`` keeps the property throughout: at ``t = 1`` the star is the node tensor's, positive
+    definite for finite positive inputs. Past float64's reach it may not be (see the module),
+    and the certificate, not this function, reports it.
     """
     def body(carry, n):
         lo, hi = carry
@@ -306,7 +331,7 @@ def lift(field, diagonal, cross, node, inverse, rt, theta=THETA):
 def _traced(field, diagonal, cross, node, inverse, rt, theta, shape):
     """:func:`lift` on every star in the runtime's arrays, for a transform that has no value."""
     xp = rt.xp
-    ghosts = [rt.array(np.broadcast_to(_ghost(shape, a, field), shape)) for a in range(3)]
+    ghosts = [rt.array(_ghost(shape, a, field)) for a in range(3)]
     fd, fc, fk, fi = (rt.constant(x) for x in (diagonal, cross, node, inverse))
     fd = xp.broadcast_to(fd, (3,) + shape)
     fk = xp.broadcast_to(fk, (3,) + shape)
@@ -336,7 +361,7 @@ def _assemble(field, diagonal, cross, node, inverse, rt, theta, shape, fire, t, 
     """
     xp = rt.xp
     step = 1 if field == 'E' else -1
-    ghosts = [rt.array(np.broadcast_to(_ghost(shape, a, field), shape)) for a in range(3)]
+    ghosts = [rt.array(_ghost(shape, a, field)) for a in range(3)]
     diagonal = xp.broadcast_to(diagonal, (3,) + shape)
     node = xp.broadcast_to(node, (3,) + shape)
     own, other = _star(xp, field, diagonal, node, ghosts)

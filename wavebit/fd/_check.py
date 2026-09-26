@@ -134,7 +134,7 @@ class Report:
             lifted = next((row for row in self.lifts if row[0] == name), None)
             if lifted is not None and lifted[1]:
                 out.append(f'  lift     {name}: {lifted[1]} of {lifted[2]} stars moved toward '
-                           f'the node tensor, the largest {lifted[3]:.3g} of the way')
+                           f'the node tensor, the largest {lifted[3]:.3g} of the way{shared}')
         for name in row.stencil:
             out.append(f'  cross    {name}: the prepared stencil operator (its material row)')
         if row.normals == 'none' and not row.stencil:

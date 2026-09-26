@@ -453,4 +453,9 @@ def plan(scene, _column=False, _grazing=None, _reuse=None):
     # caller who silenced CoarseMeshWarning silenced it, and the default "once per location"
     # rule is what keeps a sweep of a thousand plans from printing a thousand copies.
     checks.warn_all(scene, p, lifted)
+    if lifted:
+        # Not a field: the skeleton and equality never see it, and a replaced plan drops it.
+        # checks._lift_notes reads it for this scene only (identity), so fd.run's report after
+        # the run does not lower the scene a third time.
+        object.__setattr__(p, '_lifted', (scene, lifted))
     return p

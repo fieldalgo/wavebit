@@ -1835,8 +1835,14 @@ def _lift_notes(scene, plan, lifted=None):
     if lifted is None:
         lifted = {}
     if not lifted:
-        from .constitutive import lifted_on_host
-        lifted.update(lifted_on_host(scene, plan)[1])
+        # The plan keeps validate's lift for the scene it was planned from (plan.plan), so a
+        # report on that scene -- fd.run's, after every run -- does not lower it again.
+        planned = getattr(plan, '_lifted', None)
+        if planned is not None and planned[0] is scene:
+            lifted.update(planned[1])
+        else:
+            from .constitutive import lifted_on_host
+            lifted.update(lifted_on_host(scene, plan)[1])
     moved = {name: out for name, out in lifted.items() if out.moved}
     if not moved:
         return []
@@ -1848,7 +1854,9 @@ def _lift_notes(scene, plan, lifted=None):
              f'way) so that the smoothed operator is positive definite: at this contrast the '
              f'default rule falls below the floor there. The run is stable by construction '
              f'(wavebit/fd/_lower/stars.py); the effect on accuracy is measured in '
-             f'docs/fd-subpixel-occupancy.md, "The star lift".')]
+             f'docs/fd-subpixel-occupancy.md, "The star lift". Derivatives through the moved '
+             f'stars are exact to first order only: a Hessian or any second derivative of this '
+             f'scene is not.')]
 
 
 def _radiation_notes(scene):

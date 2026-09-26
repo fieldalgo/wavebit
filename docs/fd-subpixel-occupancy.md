@@ -1014,8 +1014,9 @@ call wc07 (J. Comput. Phys. 247, 2013, Eq. 11). Nothing in the rule keeps it pos
 and at a high-contrast surface it is not: the 16^3 test cavity's `eps = 100` sphere reads
 `lambda_min * eps = -1.55`, and a seeded run with that operator grows x1.9e7 in 300 steps while
 its discrete energy stays flat -- leapfrog conserves the indefinite form exactly, so the energy
-cannot see it (`tests/test_fd_constitutive.py::test_an_unlifted_eps_100_sphere_grows` judges the
-field norms). Until now the plan refused such scenes with a Gershgorin lower bound, which also
+cannot see it until the cancelling parts are large enough for round-off to show (about step 160
+here, at field norms near 1e9); `tests/test_fd_constitutive.py::test_an_unlifted_eps_100_sphere_grows`
+judges the field norms. Until now the plan refused such scenes with a Gershgorin lower bound, which also
 refused most positive ones: every sphere above `eps` about 12.5, at every resolution.
 
 **The construction** (`wavebit/fd/_lower/stars.py`). `Xi` is the sum of one 6x6 matrix per node --
@@ -1031,9 +1032,15 @@ star's smallest eigenvalue is concave in `t`, so the least `t` always exists. Ea
 diagonal is the sum of its two halves. It is Werner, Bauer and Cary's Sec. 4 argument and step-6
 fallback with a larger piece, made minimal and continuous.
 
-* **It never refuses** a lossless positive scene, for any number of bodies; a star with no cross
-  coefficient never moves, so a region with nothing below the floor lowers to the same bits as
-  before and `be` is not touched.
+* **It never refuses** a lossless positive scene within float64's reach, for any number of
+  bodies; a star with no cross coefficient never moves, so a region with nothing below the floor
+  lowers to the same bits as before and `be` is not touched. Float64's reach: a fill's
+  round-off (about `-7e-14`) times the contrast breaks the mix itself from about `1e12` -- the
+  review of the star measured an edge diagonal of -15 at `1e13` -- which no lift repairs; the
+  plan refuses it and says so. Measured on spheres, every contrast up to `1e11` certified,
+  refusals began at `1e12` (cell-centred, 40 cells across), and a node-centred sphere 12 cells
+  across held to `1e15`. The floor is clamped at zero, which a negative edge would otherwise
+  make negative (the test then weaker than positivity).
 * **It is continuous**: a star starts to move from `t = 0` as it reaches the floor (a trigger at
   zero with a lift to the floor, the first prototype, jumps).
 * **The certificate is checked, not assumed**: every star at its `t` is tested on the numbers the
@@ -1057,9 +1064,11 @@ smaller of an axis's two edges. A design review (four agents) confirmed its proo
 scene whose lifted operator was indefinite, and found that the block test is much stronger
 than the operator's positivity. `studies/fdtd_subpixel_lift.py` then measured what that costs
 (its rows: `studies/results/fdtd_subpixel_lift_blocks.log`): an `eps = 12` sphere, positive
-definite, moved 1.3-3.3% of its blocks at every resolution, and at `eps = 25` the lifted static
-error settled near -0.2% from 12 to 24 cells across while the unlifted rule's fell +0.96% ->
-+0.36% -- an order-one move of a fixed share of the surface, which is an error of first order.
+definite, moved 3.1% and 2.0% of its blocks at 8 and 16 cells across (the mean over five
+placements, `THETA = 0.02`), and at `eps = 25` (placement `c`, `THETA = 0.05`) the lifted static
+error read -0.20, -0.26 and -0.20% at 12, 16 and 24 cells across while the unlifted rule's fell
++0.96, +0.60, +0.36% -- an order-one move of a fixed share of the surface, which is an error of
+first order.
 At `eps = 12` it hid behind cancellation with the rule's own positive error, and the order at
 `eps = 12`, which is all the study's first rule read, went *up*. The star's harmonic mean lies
 between an axis's two edges.
@@ -1084,14 +1093,19 @@ The worst errors were 5.189 / 5.196 / 5.207 / 5.239 / 5.279% at 0.02 / 0.05 / 0.
 `eps = 100` sphere's smallest eigenvalue times `eps` 0.343 at 0.02, 0.395 at 0.1). Fitted static
 orders over 8-24 cells across, mean over three placements: 1.808 at `eps = 12` (unlifted, to the
 bit), 1.730 at 25 (1.637 unlifted), 1.770 at 40 (1.506) and 1.767 at 100 (unlifted unsolvable).
-Stars moved at `THETA = 0.02`: none on an `eps <= 12` sphere at 8 and 16 cells across; 6-17% of
-the stars with a cross coefficient at `eps` 20-25, 16-25% at 40, 24-38% at 100; 7-14% of the
-turned box's, the cylinder's and the prism's at 25.
+Stars moved at `THETA = 0.02`, the mean over placements: none on an `eps <= 12` sphere at 8 and
+16 cells across; 6-17% of the stars with a cross coefficient at `eps` 20-25, 16-25% at 40, 24-38%
+at 100; 7-14% of the turned box's, the cylinder's and the prism's at 25. Scene by scene the
+ranges are wider: 0-23.5% at 20-25 (a node-centred `eps = 20` sphere 8 cells across moves
+none), 15.1-27.2% at 40, 22.2-41.1% at 100, 1.2-16.3% for the other bodies.
 
 **The C3 Mie evidence stands.** Over all 37 C3 scenes -- the `eps = 12`, glass and weak spheres
 at their three resolutions and three placements, the small high-index control, and the TE
-cylinder at 40/56/80 cells -- no star moves, and `be`/`bh` equal `build`'s bit for bit. The
-orders recorded in `docs/fd-mie-validation.md` are the lifted rule's.
+cylinder at 40/56/80 cells and three placements, built as
+`studies/fdtd_subpixel_coupled_cylinder.py` builds it (its `CylinderSlice` through the
+production coupling, 117-532 stars with a cross coefficient) -- no star moves, and `be`/`bh`
+equal `build`'s bit for bit. The orders recorded in `docs/fd-mie-validation.md` are the lifted
+rule's.
 
 **The plan says so.** Where the lift moves stars, the plan warns (`SubpixelAccuracyWarning`) with
 each term's count and the largest move, and `fd.check` prints a `lift` line under the body.
@@ -1102,11 +1116,24 @@ dense matrix for E and H; the least move against `eigvalsh` of each explicit sta
 `eps = mu = 100` operator positive definite where the unlifted is not (x100: E -1.549 -> +0.518,
 H -1.831 -> +0.391); no star moved on an `eps = 12` sphere or in the C3 spheres; bit identity on
 glass; continuity; the node tensor from the definitions; every backend and `jax.jit`; the
-gradient against finite differences at three placements; the certificate's wiring; the plan note
-and the check line. 27 mutants, each killed -- among them the star reading an axis's smaller edge
-as the blocks did, the arithmetic mean in place of the harmonic (too weak), the determinant
-pivots, the implicit gradient dropped, and `THETA = 0.3`.
+gradient against finite differences at three placements and at stars with a ghost edge against
+a wall (E and H); the floor never negative (`eps = 1e13` plans); the refusal past float64's reach
+by name (`1e16`, and `1e200` where the eigenproblem fails); the certificate's wiring; the plan
+note, the check line and its shared marker; one host lift per `fd.run`; no Torch warning. 37
+mutants, each killed -- among them the star reading an axis's smaller edge as the blocks did, the
+arithmetic mean in place of the harmonic (too weak), the determinant pivots, the implicit
+gradient dropped, a lone edge's rate halved, and `THETA = 0.3`.
 
-**Open.** Masked (PEC) edges could be treated as absent too -- the operator the kernel runs is
-the submatrix without them -- which would move fewer stars at a wall. The lift does not touch
-the C3 cylinder arm (voxel order 1.60): that is an accuracy question on a now-positive operator.
+**First derivatives only.** The implicit gradient holds the null vector and the rate constant:
+first derivatives are exact, second ones are not. The review of the star measured `jax.hessian`
+of a lowered sum 188% off its second differences at `eps = 40`, and Torch's double backward
+the same. Where no star moves the lift adds nothing and every order is exact; where one does,
+the plan's note says that a Hessian of the scene is not exact. At a double smallest eigenvalue
+`t*` has a derivative only along directions that keep the degeneracy -- a single body's `eps` or
+`mu` does.
+
+**Open.** Exact second derivatives, by an implicit rule that differentiates the null vector
+and the rate as well (`jax.custom_jvp`, and a Torch function with a double backward). Masked
+(PEC) edges could be treated as absent too -- the operator the kernel runs is the submatrix
+without them -- which would move fewer stars at a wall. The lift does not touch the C3 cylinder
+arm (voxel order 1.60): that is an accuracy question on a now-positive operator.

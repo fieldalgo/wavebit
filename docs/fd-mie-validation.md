@@ -759,6 +759,11 @@ independently of pulse timing.
 
 ### Preparation-time certificates and limits
 
+*Since 2026-09-27 positivity is the star lift's, not this enclosure's lower
+endpoint ([`fd-subpixel-occupancy.md`](fd-subpixel-occupancy.md), "The star
+lift"); the enclosure's upper endpoint still bounds the time step. The
+paragraph below is the state before.*
+
 The diagonal plus/minus the absolute off-diagonal row sum gives a Gershgorin
 spectral enclosure. A strictly positive lower endpoint certifies positive
 energy. The upper E/H endpoints bound the curl time step, combined with the
@@ -1118,8 +1123,8 @@ off-diagonal entries at a common node, connected by adjoint averages, as in
 the production operator. [Werner, Bauer and Cary (2013), sections 5 and 8](https://arxiv.org/html/1212.4857v2)
 reports eventual first-order convergence for sharp interfaces with this
 family of schemes. That paper also distinguishes accuracy from a positive
-operator certificate. The engine already checks the assembled enclosure at
-plan time. This literature comparison is a reason to investigate interface
+operator certificate. The engine checks positivity at plan time (the star
+lift since 2026-09-27; the assembled enclosure before). This literature comparison is a reason to investigate interface
 consistency; it does not prove the cause of this scattering result or relax
 the predeclared gate.
 
