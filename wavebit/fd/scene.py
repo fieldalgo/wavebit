@@ -54,9 +54,8 @@ COURANT_LIMIT = 1.0
 _LATER = {
     'materials': "not the stage 1 spelling: a scene has one Scene(background=...) and a "
                  "tuple of Scene(structures=(fd.Structure(shape, material), ...))",
-    'structure': "not a keyword: one structure is still Scene(structures=(...,))",
-    'shapes': "not a keyword: a shape goes inside Scene(structures=(fd.Structure(shape, "
-              "material), ...))",
+    'structure': 'stage 4 (shapes); one structure is still Scene(structures=(...,))',
+    'shapes': 'stage 4 (shapes); stage 1 has fd.Slab, inside a Scene(structures=...)',
     'decay': 'stage 7 (Decay)',
     'source': "not the stage 2 spelling: sources are a tuple, Scene(sources=(fd.Dipole(...), "
               "fd.PlaneWave(...), fd.TFSF(...)))",

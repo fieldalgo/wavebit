@@ -866,8 +866,10 @@ smoothed bodies as legal patterned structures; door 4 says study S1 found no ord
 form buys; door 5 names C10 as the owner of the three-media case S7 counted rare; the
 absorbing-layer refusal names the bodies that can run through a layer; the voxel rule's
 accuracy note says the default rule has not passed the stage-4 Mie gate that
-`discretisation='stencil'` passed; and the keyword and per-cell messages in `scene.py` and
-`materials.py` no longer promise shapes "in stage 4".
+`discretisation='stencil'` passed; and the per-cell message in `materials.py` no longer promises
+shapes "in stage 4". (The `Scene(shapes=)` and `Scene(structure=)` messages still say the
+keyword belongs to stage 4: a gate test requires each to name its stage, and it is a pointer,
+not a promise.)
 
 Two doors changed behaviour. **The stage-1 overlap door leaves pairs with a smoothed shape to
 door 1**, whose reason is the true one there: it refused a Drude dimer on the diagonal, gap half

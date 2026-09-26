@@ -154,7 +154,8 @@ def test_a_structure_crossing_the_tfsf_surface_outside_the_aux_background_is_ref
         _plans(scene.replace(structures=(rod,)))
     message = str(e.value)
     assert 'structures[0]' in message and 'crosses the faces' in message
-    assert 'slabs across z' in message and 'stage-4' in message
+    # It named "a stage-4 shape" until C5; it names the spellings that exist now.
+    assert 'slabs across z' in message and 'a smoothed body' in message
     # a slab across the propagation axis is part of the aux background, box-crossing or not
     _plans(tfsf_box(direction='-z', substrate=(2.25, 0.0)))
     # a slab across x that stays clear of the box and its correction layer is accepted
@@ -269,7 +270,7 @@ def test_a_plane_wave_in_a_structure_or_with_a_patterned_layer_is_refused():
         _plans(scene)
     _plans(scene.replace(structures=(fd.Structure(fd.Slab(z=(-0.6, -0.1)), glass),)))
     rod = scene.replace(structures=(fd.Structure(fd.Slab(x=(-0.05, 0.05)), glass),))
-    with pytest.raises(ValueError, match='stage 4'):
+    with pytest.raises(ValueError, match='smoothed fd.Sphere, fd.Box'):  # "stage 4" before C5
         _plans(rod)
 
 
