@@ -121,7 +121,9 @@ shape may not share cells with an ``fd.Conductor`` or an ``fd.Dispersive`` (``si
 poles are not smoothed yet) or with an anisotropic ``eps``/``mu``; it may not reach a
 ``Periodic``, ``Bloch`` or ``Axis1D`` face, nor a face of the box (it would count material
 outside a ``-`` face and lose the last half cell at a ``+`` one -- two arms, two messages);
-and two smoothed shapes may not put their surfaces through one voxel. The differentiable
+and two smoothed shapes may not put their surfaces through one voxel, nor (from C4) a smoothed
+surface a voxel a cell-snapped structure's face cuts -- which is how a pillar standing flush on
+a ``Slab`` substrate is refused rather than read half a cell off. The differentiable
 ``range=`` edge and CSG (which is how two smoothed bodies that touch are spelled) are later
 commits.
 

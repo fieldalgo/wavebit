@@ -723,8 +723,11 @@ class Sphere(Shape):
     5. **No second smoothed surface in one voxel.** A painter mixes into what the cell already
        holds, which is two phases and *one* surface; two smoothed surfaces in one voxel do not
        compose (73% high on two half spaces, 122% on one ``fd.Sphere`` declared twice). A ball
-       over a cell-snapped shape, or inside another ball it shares no surface voxel with, is
-       fine and is not refused.
+       inside another ball it shares no surface voxel with is fine and is not refused.
+    6. **No surface in a voxel a cell-snapped face cuts** (C4). The snapped cells are all or
+       nothing to the painter where the geometry splits them, so such a voxel holds three
+       media for a rule of two; a ball resting on a ``Slab`` substrate is the case, and a ball
+       over or inside a snapped shape a voxel from its faces is fine.
     """
 
     radius: float

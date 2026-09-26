@@ -790,10 +790,16 @@ def test_a_second_structure_anywhere_is_refused():
     whole lowered ``be`` ``np.array_equal`` to the scene without it, while ``fd.check`` still
     listed it. A structure outside the region is refused too: nothing has measured the
     operator beside another medium. The nearest legal scene is the fixture.
+
+    The Region sits one cell further out than it did for that measurement (C4, 2026-09-26):
+    at ``x = 4 dx`` its face was half a cell from the ball's surface, in voxels the ball also
+    cuts, and the voxel rule's own door 6 now refuses that scene first -- three media in one
+    voxel -- before the stencil's door is reached. One cell out it is still inside the
+    operator's grown region, and still refused, by the stencil's own name.
     """
     dx = 1 / 18
     s = scene()
-    box = fd.Structure(fd.Region(size=(2 * dx, 12 * dx, 12 * dx), center=(4 * dx, 0, 0)), 1.44)
+    box = fd.Structure(fd.Region(size=(2 * dx, 12 * dx, 12 * dx), center=(5 * dx, 0, 0)), 1.44)
     ball = fd.Structure(fd.Sphere(radius=.045, center=(.27, 0, 0)), 2.25)
     for extra in (box, ball):
         message = refusal(s.replace(structures=s.structures + (extra,)))

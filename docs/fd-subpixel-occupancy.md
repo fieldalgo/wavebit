@@ -528,3 +528,36 @@ its own; the planar reference-plane gate for the box is the next commit. The cyl
 moment is the tangent plane's, and every body's cross terms use the nearest-surface normal (S7
 above prices both). CSG of the bodies, the periodic fold, and a body joining a cell-snapped
 structure at a shared face are not in it.
+
+### Door 6: a smoothed surface in a voxel a cell-snapped face cuts
+
+Found while planning C4's gate, not asked for by the plan, and the reason it is a door and
+not a note: it was silent. A cell-snapped shape gives whole cells, so the three components
+whose Yee point sits on one of its faces have a voxel half on each side of it, painted all one
+side or all the other -- on its own, the snapped shape's documented half-cell rule. A smoothed
+body cutting the same voxel mixes its material into what the painter left, so one of the
+voxel's other two media is lost: three media, and a rule of two. Written out by hand from the
+geometry, at `dx = 0.05`, for a pillar `fd.Box` of `eps` 12 on an `fd.Slab` substrate of
+`eps` 2.25, the tangential `eps` at the joint node:
+
+| pillar base, from the substrate face | lowered | the voxel holds | door 6 |
+| --- | ---: | ---: | --- |
+| flush | 6.5000 | 7.1250 (8.8%) | refuses |
+| 0.3 of a cell above | 3.2000 | 3.8250 (16%) | refuses |
+| half a cell sunk in | 12.0000 under the pillar | 12.0000 | refuses: its rim holds three media (24 voxels) |
+| half a cell above | 1.0000 | 1.6250 | admits: the body cuts no voxel the face cuts; that gap is the slab's own snapping |
+| 1.2 cells above | -- | -- | admits |
+
+The previous composition test put a ball's centre on a slab's face and called the result exact
+against an oracle that was the snapped mask; it now places the ball a voxel clear, above and
+inside, and the flush scene is one of the refusals. `_snapped_joint` finds the voxels: the
+snapped cells' exact share of each (three 1-D overlaps; a side that reaches the domain's wall
+is open, not a face) and the body's fill where that share is fractional and the surface is
+within reach, both against `_CLIP_ROUNDOFF`. Three mutants -- the door never refusing, the
+walls read as faces, a straddling voxel refused whether the body cuts it or not -- each fail
+the new door's test alone. A stencil test that had put a snapped box half a cell from its
+ball now places it one cell out, still inside the operator's region.
+
+So **a pillar standing on a substrate cannot be said exactly yet**, snapped or smoothed: S7's
+flush joint and three-media rim are exactly that scene. How a body joins a substrate is the
+decision C7's metasurface needs.

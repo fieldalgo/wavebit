@@ -45,6 +45,9 @@ The table, and where each row lives:
       a smoothed shape                            derived for two isotropic media
     (stage 4 C2) two smoothed shapes whose      check_smoothed, here: the two-phase rule
       surfaces pass through one voxel             takes one interface, not two
+    (stage 4 C4) a smoothed surface in a        check_smoothed, here: the snapped cells
+      voxel a cell-snapped face cuts              are all or nothing where the geometry
+                                                  splits -- three media, and a rule of two
     (stage 3) a Bloch phase on a one-cell axis    check_one_cell_bloch, here (names Axis1D;
       in a scene with a source                      a source-free kernel study keeps it)
     (stage 3) an Axis1D k past k_max              boundaries.Axis1D (concrete); the params'
@@ -186,10 +189,12 @@ def check_overlaps(scene, grid):
     *smoothed* painter mixes, and "later overwrites earlier" is then only true where the
     arriving shape fills the voxel whole -- so the case where it is not, **two smoothed
     surfaces in one voxel**, is refused by name in :func:`check_smoothed` (73% of ``eps``
-    measured there, on two half spaces of the same material), and a smoothed shape over a
-    cell-snapped one composes exactly, measured 2.0e-16 against the hand two-phase mix over
-    the snapped slab by
-    ``tests/test_fd_occupancy.py::test_a_smoothed_shape_over_a_snapped_one_composes_exactly``.
+    measured there, on two half spaces of the same material), and so is a smoothed surface
+    in a voxel a cell-snapped face also cuts (door 6 there: the painter reads the snapped
+    shape as all there or all absent in a voxel the geometry splits). A smoothed shape wholly
+    over a snapped one away from its faces composes exactly, measured 2.0e-16 against the
+    hand two-phase mix by
+    ``tests/test_fd_occupancy.py::test_a_smoothed_shape_clear_of_a_snapped_face_composes_exactly``.
     What is left for this function is unchanged.
 
     Note that two slabs on *different* axes always intersect -- each is full-width on the
@@ -343,9 +348,8 @@ def check_smoothed(scene, grid):
     **5. No two smoothed shapes whose surfaces pass through one voxel.** A painter mixes its
     material into whatever the cell already holds, and that is exactly the two-phase interface
     rule -- *two* phases, and *one* surface. It composes exactly where the arriving shape fills
-    the voxel whole (so a core/shell ball pair, or a ball over a cell-snapped substrate, is
-    right and is not refused), and it does not compose where two smoothed surfaces are in the
-    same voxel: the second mix treats the first mixture as a medium with a second interface
+    the voxel whole (so a core/shell ball pair is right and is not refused), and it does not
+    compose where two smoothed surfaces are in the same voxel: the second mix treats the first mixture as a medium with a second interface
     across it, and the background survives with weight ``(1-f1)(1-f2)`` in a voxel that holds
     none of it. Measured against a closed form, two half spaces of the **same** material whose
     faces sit in one cell (tops at 12.5 and 12.5000001 cells, ``eps`` 12 in 1) read
@@ -370,6 +374,25 @@ def check_smoothed(scene, grid):
     narrow case C2's one smoothed shape can reach of the media-counting refusal C5 owns; a
     creased interface *within* one body (a prism edge, a block corner) is one painter and is
     handled exactly, not refused.
+
+    **6. No smoothed surface in a voxel a cell-snapped face cuts** (C4). A snapped shape gives
+    whole cells, so the three components whose Yee point lies on one of its faces have a voxel
+    half on each side of it, painted all one side or all the other; on its own that is the
+    snapped shape's documented half-cell rule. A smoothed body cutting the same voxel mixes
+    into what the painter left, so the voxel's other two media are read as one: three media
+    where the rule knows two. Measured by hand from the geometry, a pillar ``fd.Box`` of
+    ``eps`` 12 standing flush on an ``fd.Slab`` substrate of ``eps`` 2.25 at ``dx = 0.05``
+    reads tangential ``eps`` 6.5 at the joint where the voxel holds 7.125 (8.8%), and 3.2
+    against 3.825 (16%) with its base 0.3 of a cell above the face. Sinking the base half a
+    cell into the substrate puts the pillar's material over the whole joint voxel under it,
+    but not at its rim: where its sides meet the substrate's face, 24 voxels of that pillar
+    hold the substrate, the pillar and the background at once, and they are refused too (S7
+    counts that rim). A body a voxel clear of every snapped face is right and is not refused.
+    It is the scene a metasurface pillar on its substrate is, which C4's bodies made the
+    ordinary one, and before C4 a ball on a substrate did it silently. :func:`_snapped_joint` finds the voxels: the snapped cells'
+    exact share of each voxel (three 1-D overlaps; a face on the domain's own wall is no
+    face), the body's fill only where that share is fractional and the body's surface within
+    reach, both against :data:`_CLIP_ROUNDOFF`.
     """
     from ..boundaries import Axis1D, Bloch, Periodic
     from .occupancy import smoothed_structures
@@ -549,6 +572,34 @@ def check_smoothed(scene, grid):
                 f'taken -- reach the public door later in stage 4, and C5 owns the general '
                 f'refusal this is the reachable case of.')
 
+    snapped = [(j, s) for j, s in enumerate(structures) if s.shape.body() is None]
+    for index, structure, body in smoothed:
+        for j, other in snapped:
+            joint = _snapped_joint(body, other.shape, grid, structure.shape.support(grid))
+            if joint is None:
+                continue
+            count, field, c, point, fill, share = joint
+            raise ValueError(
+                f'structures[{index}] ({structure.shape.describe()}) is smoothed and its '
+                f'surface cuts {count} voxel(s) that a face of the cell-snapped '
+                f'structures[{j}] ({other.shape.describe()}) cuts too -- worst at the '
+                f'{field}{"xyz"[c]} point {point}, where the body fills {fill:.4f} of the voxel '
+                f'and the snapped structure\'s cells {share:.4f}. A cell-snapped structure '
+                f'owns whole cells, so to the painter such a voxel is all it or all not, while '
+                f'the geometry is split; the smoothed body then mixes its material into '
+                f'whatever the painter left, and the rest of the voxel is read as one medium '
+                f'where it holds two. Measured, a pillar of eps 12 standing flush on a Slab '
+                f'substrate of eps 2.25 at dx = 0.05: the tangential eps at the joint reads '
+                f'6.5 where the voxel holds 7.125 (8.8%), and 3.2 against 3.825 (16%) with '
+                f'the base 0.3 of a cell above the face -- with every invariant the lowering '
+                f'checks still satisfied. Sinking the body into the snapped structure does '
+                f'not cure it: where the body\'s side meets the snapped face, a voxel holds '
+                f'three media (the snapped material, the body\'s and the background) and the '
+                f'rule knows two. Keep the body\'s surface a voxel clear of the snapped '
+                f'structure\'s faces. A pillar standing on a substrate cannot be said exactly '
+                f'yet, with either shape snapped or smoothed; how a body joins a substrate is '
+                f'an open stage-4 decision.')
+
 
 #: The exact clip's own round-off, and the tolerance **every** door here reads a fill against.
 #:
@@ -653,6 +704,64 @@ def _reaches_outside(shape, body, grid, box):
             if worst > _CLIP_ROUNDOFF:
                 return a, side, worst
     return None
+
+
+def _snapped_joint(body, shape, grid, box):
+    """Where a smoothed body's surface cuts a voxel that a snapped shape's face also cuts.
+
+    ``(count, field, c, point, fill, share)`` for the most evenly cut such voxel, or ``None``.
+    A cell-snapped shape gives whole cells: its material is on the Yee points of the cells
+    ``filled_cells(grid)``, all six components alike. So a voxel that straddles one of its
+    faces -- the three components whose Yee point lies on the face have their voxel half on
+    each side -- is painted as all one side or all the other, while the geometry is split. On
+    its own that is the snapped shape's documented half-cell rule. What goes wrong is a
+    smoothed body cutting the *same* voxel: its painter mixes the body's material with
+    whatever the voxel was painted, so one of the voxel's two other media is lost, and three
+    media meet where the rule knows two.
+
+    ``share`` is the snapped cells' exact part of each voxel, a product of three 1-D overlaps;
+    a face on the domain's own wall is no face (the material runs to the wall and a clipped
+    shape is not cut there), so a side that reaches the wall is open. The body's fill is
+    asked only where a voxel straddles and the body's surface is within reach, as in
+    :func:`_reaches_outside`.
+    """
+    from .._shapes import occupancy as body_occupancy
+    from .occupancy import yee_points
+    cells = shape.filled_cells(grid)
+    lo = [-np.inf if cells[a][0] == 0 else grid.low[a] + cells[a][0] * grid.dx for a in range(3)]
+    hi = [np.inf if cells[a][1] == grid.n[a] else grid.low[a] + cells[a][1] * grid.dx
+          for a in range(3)]
+    reach = _VOXEL_REACH * grid.dx
+    half = grid.dx / 2
+    count, worst = 0, None
+    for field in ('E', 'H'):
+        for c in range(3):
+            points = np.asarray(yee_points(grid, box, field, c)).reshape(-1, 3)
+            share = np.ones(len(points))
+            for a in range(3):
+                share = share * np.clip(np.minimum(points[:, a] + half, hi[a])
+                                        - np.maximum(points[:, a] - half, lo[a]),
+                                        0.0, None) / grid.dx
+            straddle = (share > _CLIP_ROUNDOFF) & (share < 1.0 - _CLIP_ROUNDOFF)
+            if not straddle.any():
+                continue
+            near = straddle & (np.abs(np.asarray(body.surface(points)[0])) <= reach)
+            if not near.any():
+                continue
+            fill = np.asarray(body_occupancy(body, points[near], grid.dx)[0])
+            cut = (fill > _CLIP_ROUNDOFF) & (fill < 1.0 - _CLIP_ROUNDOFF)
+            if not cut.any():
+                continue
+            count += int(cut.sum())
+            evenness = np.where(cut, np.minimum(fill, 1.0 - fill), -1.0)
+            k = int(np.argmax(evenness))
+            if worst is None or evenness[k] > worst[0]:
+                worst = (float(evenness[k]), field, c,
+                         tuple(round(float(v), 6) for v in points[near][k]),
+                         float(fill[k]), float(share[near][k]))
+    if worst is None:
+        return None
+    return (count,) + worst[1:]
 
 
 def _shared_surface_voxels(body_a, body_b, grid, box, include_common=False):

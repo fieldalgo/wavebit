@@ -1029,49 +1029,105 @@ def _hand_mix(held, value, fill, w):
     return 1.0 / (w * harmonic + (1.0 - w) / arithmetic)
 
 
-def test_a_smoothed_shape_over_a_snapped_one_composes_exactly():
-    """A ball on a cell-snapped substrate: two phases in every voxel, so the mix is exact.
+def test_a_smoothed_shape_clear_of_a_snapped_face_composes_exactly():
+    """A ball over a cell-snapped substrate, a voxel from its face: two phases, and exact.
 
-    This is the case that looks like the refused one and is not. The slab's material is a
-    range of **cell indices**, so within any one component's voxel it is all slab or all not:
-    the voxel the ball's surface passes through holds exactly two media, the ball's and one
-    other, and the mixing rule has what it needs. The oracle is written out here from the
-    snapped mask and the kernel's ``(fill, w)`` pair -- ``coefficients`` is not consulted --
-    and the lowered ``eps`` matches it to **2.0e-16** on all three components over the whole
-    array, with the ball's centre put exactly on the substrate's top face so that every
-    contact voxel is in the test.
+    Where no voxel the ball's surface cuts is also cut by the slab's face, every such voxel
+    holds exactly two media -- the ball's and whatever the slab's painter left there, which is
+    all slab or all not -- and the mixing rule has what it needs. The oracle is written out
+    here from the snapped mask and the kernel's ``(fill, w)`` pair -- ``coefficients`` is not
+    consulted -- and the lowered ``eps`` matches it to round-off on all three components over
+    the whole array, for a ball wholly inside the slab and for one wholly above it.
 
     In the other order the snapped shape is painted last and **replaces** the cells it fills:
-    measured, every voxel of the slab reads exactly 4.0 (bit for bit, not approximately,
-    because ``_Snapped`` is a ``where``) and nothing above the slab moves by a single bit from
-    the ball-alone scene. Both halves of "a later one overwrites an earlier one" therefore
-    still hold across the seam between the two discretisations.
+    every voxel of the slab reads exactly 4.0 (bit for bit, because ``_Snapped`` is a
+    ``where``) and nothing above it moves by a bit from the ball-alone scene. Both halves of "a
+    later one overwrites an earlier one" hold across the seam between the two discretisations.
+
+    Until C4 this test put the ball's centre ON the slab's face and called the result exact,
+    against an oracle that was the snapped mask and not the geometry: the three components
+    whose Yee point lies on the face have a voxel half inside the slab that the mask calls
+    outside. That scene is refused now, and
+    :func:`test_a_smoothed_surface_in_a_voxel_a_snapped_face_cuts_is_refused` measures why.
     """
     lo = -N * DX / 2
     top = lo + 12 * DX              # exactly on a cell boundary: the snap moves nothing
-    ball = fd.Sphere(radius=0.2, center=(0.0, 0.0, top))
     slab = fd.Slab(z=(lo, top))
-    plan, params = _lowered(_grid_scene((fd.Structure(slab, 4.0), fd.Structure(ball, 12.0))))
-    eps = _eps_of(plan, params)
+    for centre_z in (top - 0.2 - 2 * DX, top + 0.2 + 2 * DX):
+        ball = fd.Sphere(radius=0.2, center=(0.0, 0.0, centre_z))
+        plan, params = _lowered(_grid_scene((fd.Structure(slab, 4.0), fd.Structure(ball, 12.0))))
+        eps = _eps_of(plan, params)
+        grid, box = plan.grid, ball.support(plan.grid)
+        (i0, i1), (j0, j1), (k0, k1) = box
+        truth = np.empty_like(eps)
+        for c in range(3):
+            held = np.ones((plan.nz, plan.ny, plan.nx))
+            held[:12] = 4.0
+            fill, w = body_occupancy(ball.body(), yee_points(grid, box, 'E', c), grid.dx)
+            out = held.copy()
+            out[k0:k1, j0:j1, i0:i1] = _hand_mix(held[k0:k1, j0:j1, i0:i1], 12.0, fill,
+                                                 w[..., c])
+            truth[c] = out
+        worst = float(np.max(np.abs(eps - truth) / np.abs(truth)))
+        assert worst < 1e-15, (centre_z, worst)
 
-    grid, box = plan.grid, ball.support(plan.grid)
-    (i0, i1), (j0, j1), (k0, k1) = box
-    truth = np.empty_like(eps)
-    for c in range(3):
-        held = np.ones((plan.nz, plan.ny, plan.nx))
-        held[:12] = 4.0
-        fill, w = body_occupancy(ball.body(), yee_points(grid, box, 'E', c), grid.dx)
-        out = held.copy()
-        out[k0:k1, j0:j1, i0:i1] = _hand_mix(held[k0:k1, j0:j1, i0:i1], 12.0, fill, w[..., c])
-        truth[c] = out
-    worst = float(np.max(np.abs(eps - truth) / np.abs(truth)))
-    assert worst < 1e-15, worst
-
+    ball = fd.Sphere(radius=0.2, center=(0.0, 0.0, top + 0.2 + 2 * DX))
+    plan, _ = _lowered(_grid_scene((fd.Structure(slab, 4.0), fd.Structure(ball, 12.0))))
     _, reversed_ = _lowered(_grid_scene((fd.Structure(ball, 12.0), fd.Structure(slab, 4.0))))
     back = _eps_of(plan, reversed_)
     assert np.all(back[:, :12] == 4.0), 'the snapped painter replaces, it does not mix'
     _, alone = _lowered(_grid_scene((fd.Structure(ball, 12.0),)))
     assert np.array_equal(back[:, 12:], _eps_of(plan, alone)[:, 12:])
+
+
+def test_a_smoothed_surface_in_a_voxel_a_snapped_face_cuts_is_refused(monkeypatch):
+    """Door 6: a body's surface and a snapped shape's face in one voxel is three media.
+
+    A snapped shape owns whole cells, so the three components whose Yee point sits on one of
+    its faces have a voxel half on each side, painted all one side or the other; a smoothed
+    body cutting that voxel mixes into what the painter left, and one of the voxel's two
+    other media is lost. Held open, the door's own measurement: a pillar ``fd.Box`` of
+    ``eps`` 12 flush on an ``fd.Slab`` substrate of ``eps`` 2.25 reads tangential ``eps``
+    **6.5** at the joint node where the voxel holds 7.125 -- written out here from the
+    geometry, half substrate and half pillar -- and nothing else in the lowering notices.
+
+    Refused: the ball centred on the substrate's face (the scene the previous writing of the
+    composition test called exact), the pillar flush, 0.3 of a cell above, and half a cell
+    sunk into the substrate (its rim, where its sides meet the face, still holds three media).
+    Not refused: the pillar half a cell above the face, whose surface cuts no voxel the face
+    cuts -- the voxel between them is the slab's own documented half-cell rule, which the
+    body does not touch -- the pillar a voxel clear, and a ball inside a full-width slab near
+    the domain's ``x-`` wall, which is the slab reaching the wall and no face at all.
+
+    Mutants, each alone, measured 2026-09-26 over this file and the four beside it that plan
+    smoothed scenes (141 fast cases): the door never refusing, the domain's walls read as
+    faces, and every straddling voxel near the surface refused whether the body cuts it or
+    not -- each fails this case alone.
+    """
+    from wavebit.fd._lower import checks
+    lo = -N * DX / 2
+    substrate = fd.Structure(fd.Slab(z=(lo, 0.0)), 2.25)
+
+    def pillar(base):
+        return fd.Structure(fd.Box(size=(0.3, 0.3, 0.3), center=(0.0, 0.0, base + 0.15)), 12.0)
+    ball = fd.Structure(fd.Sphere(radius=0.2, center=(0.0, 0.0, 0.0)), 12.0)
+    for refused in (ball, pillar(0.0), pillar(0.3 * DX), pillar(-0.5 * DX)):
+        with pytest.raises(ValueError, match='cell-snapped structures\\[0\\]') as e:
+            _quiet(fd.plan, _grid_scene((substrate, refused)))
+        assert 'three media' in str(e.value) and '6.5 where the voxel holds 7.125' in str(e.value)
+    for accepted in (pillar(0.5 * DX), pillar(1.2 * DX)):
+        _quiet(fd.plan, _grid_scene((substrate, accepted)))
+    near_wall = fd.Structure(fd.Sphere(radius=0.2, center=(lo + 0.2 + 0.4 * DX, 0.0, 0.0)), 12.0)
+    _quiet(fd.plan, _grid_scene((fd.Structure(fd.Slab(z=(lo, 0.4)), 2.25), near_wall)))
+
+    monkeypatch.setattr(checks, '_snapped_joint', lambda *a, **k: None)
+    plan, params = _lowered(_grid_scene((substrate, pillar(0.0))))
+    eps = _eps_of(plan, params)
+    joint = N // 2                                  # the node at z = 0, x = y = 0
+    assert eps[0, joint, joint, joint] == pytest.approx(6.5, rel=1e-12)
+    assert 0.5 * 2.25 + 0.5 * 12.0 == 7.125         # the voxel, half substrate, half pillar
+    assert eps[0, joint - 1, joint, joint] == pytest.approx(2.25, rel=1e-12)
+    assert eps[0, joint + 1, joint, joint] == pytest.approx(12.0, rel=1e-12)
 
 
 def test_two_smoothed_surfaces_in_one_voxel_are_refused():
