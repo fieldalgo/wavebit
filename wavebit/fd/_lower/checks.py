@@ -1589,10 +1589,10 @@ def check_absorbing_layers(scene, plan):
                 f'reflection leaves the way it came and only the cells in front of the '
                 f'interface are in its way. (In a PML the stretched coordinate is complex '
                 f'there as well, so nothing matches it at all.) Move the interface out of '
-                f'the layer, or run the structure all the way through it -- which a body '
-                f'uniform along {name[0]} can: the cell-snapped fd.Region or fd.Slab, an '
-                f'unturned fd.Box, or an fd.Cylinder or fd.Prism with axis={name[0]!r}, each '
-                f'reaching past the face. A sphere cannot; keep it out of the layer.')
+                f'the layer, or run the structure all the way through it -- which today '
+                f'the cell-snapped fd.Region or fd.Slab and an unturned fd.Box can, reaching '
+                f'past the face. An fd.Cylinder or fd.Prism along {name[0]!r} is refused in a '
+                f'layer by its cross terms until C9; a sphere cannot run through one.')
         if kind == 'PML':
             _refuse_lossy_in_layer(_background(scene), name, 'Scene(background=)')
 
@@ -1877,7 +1877,7 @@ def _smoothed_notes(scene, plan, rows=None):
                          'bounds before numerical lowering; a geometry value could not be '
                          f'evaluated on NumPy ({type(err).__name__}: {err}). '
                          'A traced public shape with range= is stage 4 C6.') from err
-    _check_fill_contract(scene, occupied)
+    _check_fill_contract(scene, occupied, plan.grid)
     if rows is not None:
         rows.extend(_body_rows(scene, plan, occupied, proxy_by_index))
     note = bound_note(report)
@@ -1898,7 +1898,7 @@ def _smoothed_notes(scene, plan, rows=None):
     return out
 
 
-def _check_fill_contract(scene, occupied):
+def _check_fill_contract(scene, occupied, grid=None):
     """Refuse a smoothed body whose fill or normal moment leaves ``[0, 1]`` (stage 4, C5).
 
     The mixing rule stays between its two phases -- so every ``eps`` and ``mu`` it builds is
@@ -1911,24 +1911,43 @@ def _check_fill_contract(scene, occupied):
     ``fd.Shape`` or a kernel bug -- and not on round-off. With a fill of 1.5 against
     ``eps = 12`` in vacuum, the component the normal crosses reads the harmonic mean
     ``1/(1.5/12 - 0.5/1) = -2.67``: a negative permittivity, and a field that grows.
+
+    Three corrections from the C5 review. The fill's round-off grows with ``|x|/dx`` (the
+    clip works in absolute coordinates), and a domain 3e5 cells from the origin read fills up
+    to ``1 + 2.8e-9`` on a correct sphere, so the tolerance is scaled by the grid's largest
+    coordinate over ``dx`` when ``grid`` is given. A NaN passed every comparison; it is
+    refused by name. And the guard runs from ``coefficients.build`` as well as from the plan's
+    notes, so that it speaks before the energy certificate, which read a contract-breaking
+    turned box's real negative ``1/eps`` as an inconclusive bound.
     """
+    tol = _CLIP_ROUNDOFF
+    if grid is not None:
+        reach = max(abs(v) for v in tuple(grid.low) + tuple(grid.high)) / grid.dx
+        tol = max(tol, 64.0 * np.finfo(float).eps * reach)
     for index, entry in occupied.items():
         for field in ('E', 'H'):
             for c, pair in enumerate(entry.get(field, ())):
                 for name, values in zip(('fill', 'w'), pair):
                     values = np.asarray(values, dtype=float)
+                    structure = scene.structures[index]
+                    where = (f'structures[{index}] ({structure.shape.describe()}) answers a '
+                             f'{name} on {field}{"xyz"[c]}')
+                    if not np.all(np.isfinite(values)):
+                        raise ValueError(f'{where} that is not finite. A fill is the fraction '
+                                         f'of the voxel inside and w a squared normal '
+                                         f'component; this body breaks the fd.Shape contract.')
                     low, high = float(values.min()), float(values.max())
-                    if low < -_CLIP_ROUNDOFF or high > 1.0 + _CLIP_ROUNDOFF:
-                        structure = scene.structures[index]
+                    if low < -tol or high > 1.0 + tol:
+                        off = (f'{-low:.3g} below 0' if low < -tol else
+                               f'{high - 1.0:.3g} above 1')
                         raise ValueError(
-                            f'structures[{index}] ({structure.shape.describe()}) answers a '
-                            f'{name} in [{low:.6g}, {high:.6g}] on {field}{"xyz"[c]}, outside '
-                            f'[0, 1]. The mixing rule keeps every eps and mu between its two '
-                            f'phases only for a fill and a normal moment in [0, 1]; outside it '
-                            f'the lowered eps can be negative and the run grows without bound. '
-                            f'Every public body keeps [0, 1] to round-off, so this is a body '
-                            f'that breaks the fd.Shape contract (a fill is the fraction of the '
-                            f'voxel inside; w is a squared normal component).')
+                            f'{where} reaching {off}, outside [0, 1] (tolerance {tol:.2g}). The '
+                            f'mixing rule keeps every eps and mu between its two phases only '
+                            f'for a fill and a normal moment in [0, 1]; outside it the lowered '
+                            f'eps can be negative and the run grows without bound. Every public '
+                            f'body keeps [0, 1] to round-off, so this is a body that breaks the '
+                            f'fd.Shape contract (a fill is the fraction of the voxel inside; w '
+                            f'is a squared normal component).')
 
 
 def _stabilize_notes(scene, plan):

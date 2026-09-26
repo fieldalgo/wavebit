@@ -23,8 +23,9 @@ It is also, deliberately, the *inaccurate* choice, and the report says so: an in
 does not fall on a cell boundary is moved by up to half a cell, which is a first-order error
 in ``dx`` where the rest of the scheme is second order. For a cell-snapped structure whose
 thickness is not a whole number of cells, **a convergence study in ``dx`` is the route to a
-right answer** -- or the smoothed spelling of the same geometry (stage 4: the unturned
-``fd.Box`` puts a layer's faces where they were asked, gate G5) -- and ``check`` prints the
+right answer** -- or, for a lossless non-dispersive structure, the smoothed spelling of the
+same geometry (stage 4: the unturned ``fd.Box`` puts a layer's faces where they were asked, gate
+G5; a Conductor or Dispersive one is refused smoothed until C8) -- and ``check`` prints the
 snapped span beside the one that was asked for so that the size of the move is never a
 surprise.
 

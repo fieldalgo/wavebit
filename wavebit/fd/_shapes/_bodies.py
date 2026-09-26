@@ -667,8 +667,10 @@ def polygon_shape(where, vertices):
                                  'meet. A self-intersecting outline has no filled fraction to '
                                  'report (the shoelace sum returns the difference of its lobes '
                                  'and the even-odd inside test disagrees with it). Give a '
-                                 'simple outline: a figure-eight is two lobes, which are two '
-                                 'prisms.')
+                                 'simple outline. Two lobes that touch cannot be two prisms '
+                                 'either -- their surfaces share voxels where they meet, which '
+                                 'check_smoothed refuses -- so keep a voxel between them, or '
+                                 'wait for the CSG spellings.')
     following = _np.roll(read, -1, axis=0)
     area = .5 * float(_np.sum(read[:, 0] * following[:, 1] - following[:, 0] * read[:, 1]))
     if area == 0:

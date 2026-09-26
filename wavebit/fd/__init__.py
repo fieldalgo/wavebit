@@ -51,8 +51,10 @@ A ``PML`` face is a PEC wall with a stretched slab in front of it; ``Absorber`` 
 fallback where a stretch cannot be matched (a conductive or dispersive medium crossing the
 face). Slabs are **cell-snapped, not subpixel**, and ``check`` prints the snapped span beside
 the one asked for: for an interface that does not land on a cell boundary, a convergence study
-in ``dx`` is the route to a right answer, or the layer spelled as the smoothed ``fd.Box``
-spanning the other two axes, whose faces are where they were asked (stage 4, gate G5).
+in ``dx`` is the route to a right answer, or, for a lossless non-dispersive layer, the layer
+spelled as the smoothed ``fd.Box`` spanning the other two axes, whose faces are where they were
+asked (stage 4, gate G5); a Conductor or Dispersive layer stays a cell-snapped ``fd.Slab``
+until C8 smooths ``sigma`` and the poles.
 
 Stage 2 adds sources, each a term in the kernel's additive slot::
 

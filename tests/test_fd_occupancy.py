@@ -886,10 +886,11 @@ def test_a_conductive_or_dispersive_material_beside_a_smoothed_shape_is_refused(
     number -- ``_Smoothed`` leaves ``sigma`` alone by design, and the door is what makes "left
     alone" the same as "zero".
 
-    A *dispersive* structure overlapping another was already refused in stage 1
-    (``check_overlaps``, for a different reason -- the pole term is not routed through the
-    permittivity map), so the fourth case here is spelled with a conductor: this door is
-    tested where it is the only one, not where an older one would answer first.
+    A *dispersive* structure overlapping another was refused in stage 1 (``check_overlaps``,
+    for a different reason -- the pole term is not routed through the permittivity map), so the
+    fourth case here is spelled with a conductor. Since C5 ``check_overlaps`` leaves any pair
+    with a smoothed shape to this door, so a dispersive neighbour reaches it too
+    (``tests/test_fd_c5_texts.py`` pins that mixed pair); the conductor case stays as written.
 
     **A structure does not share cells with itself**, and the first of the four cases is the
     smoothed shape's *own* material. The message is asserted for that, because it read

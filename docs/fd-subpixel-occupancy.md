@@ -917,6 +917,19 @@ fires on a body that breaks the `fd.Shape` contract; one answering 1.5 times its
 a cell clear plans) and the guard; three mutants -- the guard removed, the overlap door seeing
 smoothed pairs, the PEC advice restored -- each fail one case.
 
+The C5 review tightened both. The guard refuses a NaN by name (every comparison passed it),
+scales its tolerance with the grid's largest coordinate over `dx` (a correct sphere 3e5 from the
+origin read fills to `1 + 2.8e-9` and was refused), prints how far the value is out rather than a
+range rounded to `[0, 1]`, and runs from `coefficients.build` too, so it speaks before the
+energy certificate, which read a contract-breaking turned box's real negative `1/eps` (-0.375)
+as an inconclusive bound; every arm (negative fill, NaN, a moment above 1) is tested. Two
+remedies named spellings that are refused: a figure-eight's lobes as two prisms meet in voxels
+door 5 refuses, and an `fd.Cylinder` or `fd.Prism` along an absorbing face's axis is refused in
+the layer by its cross terms until C9. The mixed overlap -- a smoothed body in a snapped Drude
+Region -- is tested, and the advice to spell a layer as a smoothed `fd.Box` is limited to
+lossless, non-dispersive layers (door 1 refuses the others until C8). Four mutants of these
+fixes each fail one case.
+
 ## C5: what `fd.check` says about each smoothed structure (2026-09-26)
 
 Before C5 a smoothed body appeared in the report only as three span rows claiming asked and got

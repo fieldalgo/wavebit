@@ -413,6 +413,11 @@ def build(scene, plan, rt):
     # scene is magnetic, because ``bh`` is the scalar ``dt/dx`` otherwise and the three
     # H-point evaluations would be discarded.
     occ = occupancy(scene, plan, rt, fields=('E', 'H') if magnetic else ('E',))
+    if rt.name == 'numpy':
+        # The body contract, before any coefficient is built from it -- and so before
+        # constitutive.validate's certificate reads one (checks._check_fill_contract).
+        from .checks import _check_fill_contract
+        _check_fill_contract(scene, occ, plan.grid)
     paint_list = painters(scene, plan, axes, occ) if structures else []
     eps = _stack(rt, paint_list, background.eps_for_update(dt),
                  [s.material.eps_for_update(dt) for s in structures], 'E', 'mix')
