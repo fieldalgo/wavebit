@@ -323,6 +323,31 @@ def _refuse_unknown_keywords(kwargs):
             f'{nvf_option_rename_hint(kwargs)}')
 
 
+def _unknown_attribute(owner, name, known):
+    """The refusal of an assignment to a public name nothing reads, as an exception to raise.
+
+    One function because there are two attribute doors and they must refuse the same mistake
+    the same way: the solver's own ``__setattr__`` (``CoreFactorizationMixin``) and the
+    source-excitation facade's (``illumination.CoherentSolver``), which forwards the scene's
+    conditions and used to store every other public name on itself in silence --
+    ``s.thicknes = [900.0]`` there was accepted and changed nothing, when the solver had
+    refused it since 2026-08-27. ``owner`` is the class name the caller assigned on; ``known``
+    is what that class can set, and the near-match hint is drawn from it alone.
+    """
+    import difflib
+    known = sorted(known)
+    near = difflib.get_close_matches(name, known, n=1, cutoff=0.6)
+    hint = nvf_option_rename_hint([name]) or (f' Did you mean {near[0]!r}?' if near else '')
+    return AttributeError(
+        f'{owner} has no attribute {name!r} to set.{hint} Refused rather '
+        f'than stored, because storing it is silent: the solve reads the attribute it '
+        f'knows about, so the answer comes back for the value you meant to change and '
+        f'nothing says otherwise.\n'
+        f'  Settable conditions: {", ".join(known)}.\n'
+        f'  To attach state of your own, use a name starting with an underscore, or '
+        f'declare it as a class attribute on a subclass.')
+
+
 #: ``mu`` is a *field*, and only the raster states a layer as fields. Refused by name on the
 #: two shape paths rather than ignored, because a permeability that reached no solve would be
 #: exactly the unread knob ``_reject_unread_normal_method`` exists to refuse one level down.
@@ -2583,18 +2608,7 @@ class CoreFactorizationMixin:
             object.__setattr__(self, name, value)
             return
 
-        import difflib
-        known = sorted(self._condition_names())
-        near = difflib.get_close_matches(name, known, n=1, cutoff=0.6)
-        hint = nvf_option_rename_hint([name]) or (f' Did you mean {near[0]!r}?' if near else '')
-        raise AttributeError(
-            f'{type(self).__name__} has no attribute {name!r} to set.{hint} Refused rather '
-            f'than stored, because storing it is silent: the solve reads the attribute it '
-            f'knows about, so the answer comes back for the value you meant to change and '
-            f'nothing says otherwise.\n'
-            f'  Settable conditions: {", ".join(known)}.\n'
-            f'  To attach state of your own, use a name starting with an underscore, or '
-            f'declare it as a class attribute on a subclass.')
+        raise _unknown_attribute(type(self).__name__, name, self._condition_names())
 
     def _assign_conditions(self, kwargs):
         """Set conditions from keywords, refusing a name that is not one.

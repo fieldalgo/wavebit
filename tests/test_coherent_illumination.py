@@ -241,3 +241,93 @@ def test_common_polarization_angles_and_beam_local_override():
         solver.theta = .2
     with pytest.raises(ValueError, match='SMM'):
         solver.solve(layer_algorithm='ETM')
+
+
+# ------------------------------------------------------ the facade's attribute door
+
+#: The scene conditions each source states for itself, and the facade's own state.
+_SOURCE_INPUTS = {'theta', 'phi', 'incidence_side', 'tetm', 'kx', 'ky', 'polarization', 'psi', 'chi'}
+_FACADE_OWN = {'excitation', 'power_region', 'length_unit'}
+
+
+def _facade(backend):
+    return wavebit.rcwa(**scene(), backend=backend, excitation={'top': wavebit.PlaneWave()})
+
+
+@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('typo, hint', [('thicknes', "Did you mean 'thickness'?"),
+                                        ('perio', "Did you mean 'period'?"),
+                                        ('nesting', "Did you mean 'li_nesting'?"),
+                                        ('normal_method', "'normal_method' -> 'raster_normal_method'"),
+                                        ('label', None)])
+def test_an_unknown_attribute_on_the_facade_is_refused_like_on_the_solver(backend, typo, hint):
+    """``s.thicknes = ...`` used to be stored on the facade, and the solve answered for the old scene.
+
+    The ordinary solver has refused it since 2026-08-27 (``tests/test_solve_keywords.py``) and
+    the retired ``nesting`` since ``li_nesting`` was named (``tests/test_li_nesting.py``), but
+    the facade's last ``__setattr__`` branch stored any public name that was not a scene
+    property on itself, where nothing reads it. The refusal is now the solver's own: the same
+    ``AttributeError`` and the same hint, drawn from what the facade can actually set -- which
+    leaves out the incidence each source states for itself.
+    """
+    facade, plain = _facade(backend), wavebit.rcwa(**scene(), backend=backend)
+    refusal = str(pytest.raises(AttributeError, setattr, facade, typo, [.3]).value)
+    assert f'CoherentSolver has no attribute {typo!r} to set.' in refusal, refusal
+    assert typo not in vars(facade) and not hasattr(facade, typo)
+    solver_refusal = str(pytest.raises(AttributeError, setattr, plain, typo, [.3]).value)
+    for message in (refusal, solver_refusal):
+        assert (hint in message) if hint else ('Did you mean' not in message), message
+    settable = set(refusal.split('Settable conditions: ')[1].split('.\n')[0].split(', '))
+    assert _FACADE_OWN | {'thickness', 'li_nesting', 'layer_algorithm'} <= settable, settable
+    assert not settable & _SOURCE_INPUTS, settable & _SOURCE_INPUTS
+
+    # the two keyword doors of the same facade refuse the same name
+    with pytest.raises(TypeError, match=typo):
+        facade.solve(**{typo: [.3]})
+    with pytest.raises(TypeError, match=typo):
+        wavebit.rcwa(**scene(), backend=backend, excitation={'top': wavebit.PlaneWave()},
+                     **{typo: [.3]})
+
+
+@pytest.mark.parametrize('backend', [0, 1, 2])
+def test_the_facade_door_forwards_every_scene_condition_and_keeps_its_own(backend):
+    """Closing the door must leave every legitimate name through it working.
+
+    The conditions are enumerated from the scene class rather than listed, so one the solver
+    gains is covered the day it lands: each is written through the facade and has to land on
+    the scene, where the solve reads it, never on the facade, where nothing does.
+    """
+    facade = _facade(backend)
+    conditions = type(facade._scene)._condition_names() - _SOURCE_INPUTS - _FACADE_OWN
+    assert {'thickness', 'li_nesting', 'layer_algorithm', 'wavelength'} <= conditions
+    for name in sorted(conditions):
+        setattr(facade, name, getattr(facade, name))
+        assert name not in vars(facade), name
+    facade.li_nesting = 'symmetric'
+    assert facade._scene.li_nesting == wavebit.Nesting.SYMMETRIC == facade.li_nesting
+    assert facade.layer_algorithm == 'SMM'
+
+    # the facade's own state stays on the facade, and the scene never sees it
+    sources = {'bottom': wavebit.PlaneWave(amplitude=.5)}
+    facade.excitation, facade.power_region, facade.length_unit = sources, 'cell', 1e-6
+    assert [vars(facade)[name] for name in ('excitation', 'power_region', 'length_unit')] \
+        == [sources, 'cell', 1e-6]
+    assert facade._scene.excitation is None
+    assert not {'power_region', 'length_unit'} & set(vars(facade._scene))
+    # a private name is the facade's; a class member keeps the descriptor protocol in charge
+    facade._note = 'mine'
+    assert vars(facade)['_note'] == 'mine'
+    facade.solve = lambda *a, **k: 'stubbed'
+    assert facade.solve() == 'stubbed'
+    for name in ('backend', 'formulation_assigned', 'grating_type', 'n_top'):
+        with pytest.raises(AttributeError, match='has no setter'):
+            setattr(facade, name, 1.5)
+    for name in sorted(_SOURCE_INPUTS):
+        with pytest.raises(ValueError, match='excitation source inputs'):
+            setattr(facade, name, getattr(facade, name))
+
+    # and a forwarded value reaches the solve: the spelling the typo above meant moves the answer
+    fresh = _facade(backend)
+    before = host(fresh.solve().output_bottom)
+    fresh.thickness = [.3]
+    assert not np.allclose(host(fresh.solve().output_bottom), before)

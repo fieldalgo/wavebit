@@ -12,6 +12,7 @@ from .backend import as_array, check_finite
 from .enums import Answers, answers_of
 from .field_result import ResultFields, source_state
 from .conventions import boundary_kz, parse_excitation
+from .engine import _unknown_attribute
 from .sources import (PlaneWave, OrderExcitation, GaussianBeam, ElectricDipole, source_list, _positive)
 from .source_expansion import resolve_wave, gaussian_waves, dipole_layers
 from .scattering import redheffer_star
@@ -280,6 +281,13 @@ class CoherentSolver:
     _gaussian_waves = gaussian_waves
     _dipole_layers = dipole_layers
 
+    #: The scene's incidence conditions. Each source states its own, so the facade refuses
+    #: them at the attribute door and at `solve`, by name.
+    _SOURCE_INPUTS = ('theta', 'phi', 'incidence_side', 'tetm', 'kx', 'ky',
+                      'polarization', 'psi', 'chi')
+    #: The facade's own public state. Every other public name is the scene's or is refused.
+    _OWN = ('excitation', 'power_region', 'length_unit')
+
     def __init__(self, backend, args, kwargs):
         from ..main import rcwa
         kwargs = dict(kwargs)
@@ -309,27 +317,53 @@ class CoherentSolver:
         self._result = None
         source_list(self.excitation)
 
+    @staticmethod
+    def _forwards(scene, name):
+        """Whether `name` is read and written on the scene: a condition or a property of it.
+
+        Conditions come from the solver's own `_condition_names`, so an option the solver
+        gains is forwarded here without a second list; the property branch keeps the scene's
+        read-only ones (`grating_type`, `n_top`) raising Python's own message.
+        """
+        return (name in scene._condition_names()
+                or isinstance(getattr(type(scene), name, None), property))
+
     def __getattr__(self, name):
         scene = self.__dict__.get('_scene')
-        if scene is not None and isinstance(getattr(type(scene), name, None), property):
+        if scene is not None and self._forwards(scene, name):
             return getattr(scene, name)
         raise AttributeError(name)
 
     def __setattr__(self, name, value):
+        """Forward a scene condition, keep the facade's own state, refuse any other public name.
+
+        The last branch used to store the name on the facade, where nothing reads it:
+        `s.thicknes = [900.0]` and the retired `s.nesting = 'symmetric'` were accepted and the
+        solve answered for the scene as it was -- the hole the solver's own guard
+        (`CoreFactorizationMixin.__setattr__`) closed on 2026-08-27 and this door kept open.
+        The refusal is the solver's, `engine._unknown_attribute`, so both doors raise the same
+        `AttributeError` with the same near-match hint. A private name and a name on this
+        class still land on the facade: the first is the facade's own slots, the second keeps
+        the descriptor protocol in charge (`backend` has no setter, `solve` can be stubbed).
+        """
         scene = self.__dict__.get('_scene')
-        if scene is not None and name in ('theta', 'phi', 'incidence_side', 'tetm', 'kx', 'ky',
-                                          'polarization', 'psi', 'chi'):
+        if scene is not None and name in self._SOURCE_INPUTS:
             raise ValueError(f'Put {name} in the excitation source inputs.')
         if name == 'layer_algorithm' and value != 'SMM':
             raise ValueError("Side-resolved excitation uses layer_algorithm='SMM'.")
         if name == 'formulation' and value != '4ff':
             raise ValueError("Side-resolved excitation uses formulation='4ff'.")
-        if name in ('excitation', 'power_region', 'length_unit'):
+        if name in self._OWN:
             object.__setattr__(self, name, value)
-        elif scene is not None and isinstance(getattr(type(scene), name, None), property):
+        elif scene is not None and self._forwards(scene, name):
             setattr(scene, name, value)
-        else:
+        elif name.startswith('_') or hasattr(type(self), name):
             object.__setattr__(self, name, value)
+        else:
+            settable = set(self._OWN)
+            if scene is not None:
+                settable |= scene._condition_names() - set(self._SOURCE_INPUTS)
+            raise _unknown_attribute(type(self).__name__, name, settable)
 
     @property
     def formulation_assigned(self):
@@ -344,7 +378,7 @@ class CoherentSolver:
             self.excitation = excitation
         if power_region is not None:
             self.power_region = power_region
-        for name in ('theta', 'phi', 'incidence_side', 'tetm', 'kx', 'ky', 'polarization', 'psi', 'chi'):
+        for name in self._SOURCE_INPUTS:
             if name in conditions:
                 raise ValueError(f'Put {name} in each PlaneWave, or rebuild with common kx/ky.')
         for name, expected in (('formulation', '4ff'), ('layer_algorithm', 'SMM')):
