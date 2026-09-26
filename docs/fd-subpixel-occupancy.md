@@ -640,3 +640,82 @@ for bit, because the exact clip reads a voxel that ends on a face as one to with
 round-off. Three mutants -- the rule mixing a tangential component harmonically, the box handed
 to the kernel 0.04 of a cell high, an unturned box planned a cross term -- fail 11, 12 and 12 of
 the file's 31 cases.
+
+## S2b: how few cells across a smoothed body may be (2026-09-26)
+
+Run before the cells-across door (stage 4, C5). The plan first meant to set that number from
+the fill rule's volume error, and that question closed before the study ran: every public body's
+fill is its exact clip, and the lowered volume matches the analytic one to 3.2e-15 relative on
+all six components -- sphere, box turned 30 degrees, cylinder, hexagonal prism and an L-shaped
+prism, 2 to 24 cells across, five sub-cell placements. What is left is electromagnetic: a body a
+few cells across is a handful of mixed voxels, and the grid scatters from the effective
+polarizability of those voxels, not from the particle's.
+
+`studies/fdtd_subpixel_cells_across.py` measures it two ways; its rows are
+`studies/results/fdtd_subpixel_cells_across.log`. The static instrument solves zero-frequency
+electrostatics on the Yee node lattice with the production inverse-material operator (the
+lowered diagonal plus the constitutive cross action) and reads the dipole moment; the sphere is
+judged against Clausius-Mossotti, the other bodies against an extrapolation from 12/16/24 cells
+across (its spread is at most 0.95%). The dynamic instrument is five public `fd.run` solves of an
+`eps = 12` sphere against Mie theory at 40 cells per wavelength. The energy certificate is held
+open in the static runs only, so that the geometry's answer is what is measured.
+
+The sphere, error in the polarizability, the range over five placements:
+
+| cells across | eps 2.25 | eps 4 | eps 12 | eps 12, no cross terms | eps 12, arithmetic mean |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | -28.7 .. +30.1% | -40.3 .. +63.4% | -50.9 .. +149% | -52.0 .. +176% | +157 .. +237% |
+| 2 | -0.9 .. +8.9% | +1.1 .. +19.4% | +9.6 .. +43.1% | +21.4 .. +56.0% | +89.9 .. +115% |
+| 3 | -0.5 .. +2.1% | -0.1 .. +4.9% | +4.0 .. +15.7% | +16.0 .. +24.5% | +58.7 .. +71.5% |
+| 4 | -0.3 .. +1.35% | -0.3 .. +2.9% | +1.2 .. +6.3% | +12.3 .. +17.3% | +42.2 .. +52.9% |
+| 6 | 0.0 .. +0.44% | +0.27 .. +1.17% | +1.7 .. +4.0% | +10.0 .. +11.7% | +31.1 .. +35.2% |
+| 8 | +0.07 .. +0.25% | +0.26 .. +0.59% | +0.6 .. +1.5% | +7.7 .. +8.2% | +22.5 .. +25.4% |
+| 12 | +0.03 .. +0.12% | +0.11 .. +0.33% | +0.42 .. +0.78% | +5.5 .. +5.7% | +15.7 .. +16.9% |
+| 24 | +0.00 .. +0.01% | +0.01 .. +0.05% | +0.10 .. +0.19% | +2.9 .. +2.9% | +7.8 .. +8.2% |
+
+The two controls are there to say what the numbers are not. Without its cross terms the rule is
+first order (+8% at 8 cells across, +5.6% at 12), and the plain arithmetic mean the design's
+4.67x figure described is +190% at one cell and still +8% at 24. At one and two cells across the
+error also depends on the field's direction, by up to 40 and 10 points; from three it is under
+one.
+
+The other bodies at `eps = 12`, worst over three placements and two field directions:
+
+| cells across | 2 | 3 | 4 | 6 | 8 | 12 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| box turned 30 degrees | 14.9% | 7.4% | 3.6% | 2.5% | 2.0% | 0.97% |
+| cylinder | 34.9% | 11.3% | 9.2% | 2.9% | 2.6% | 1.5% |
+| hexagonal prism | 18.9% | 8.7% | 7.1% | 2.8% | 1.7% | 0.98% |
+
+And the scattering itself, `eps = 12` sphere, 24 periods, against Mie:
+
+| cells across | centred on a node | centred in a cell |
+| ---: | ---: | ---: |
+| 2 | +123% | -- |
+| 4 | +13.2% | +1.28% |
+| 8 | +1.94% | +0.99% |
+
+The static probe predicted about +13% and +2.5% at four cells across and +3% at eight on a node,
+so the placement lottery it shows is real and of the size it says; the remaining point or so is
+not isolated (the probe leaves out grid dispersion and the magnetic dipole).
+
+What it decides:
+
+* **The cells-across door refuses a smoothed body under 4 cells across its smallest extent and
+  warns under 8.** At two cells the answer is a different particle at any contrast (up to 9% at
+  `eps = 2.25`, 43% at 12, and +123% scattered). At four every body is within 9.2% at
+  `eps = 12` and 2.9% at `eps <= 4`; at eight the worst is 2.6%, in line with the 3% the Mie
+  gates allow a small sphere. A contrast-dependent number is defensible -- glass at three cells
+  is within 2.1% -- and was not chosen, so that one number is what a reader has to remember. The
+  refusal quotes these production numbers, not the arithmetic mean's.
+* **The door reads `min_extent`, not a fill-volume budget.** No public body has a volume error
+  to budget; only the CSG tangent-plane fill does, and CSG is not public.
+* **The door runs before the energy certificate,** because the certificate already acts as a
+  door, badly: at `eps = 12` it refuses the sphere at 2 to 4 of the 5 placements from 2 to 12
+  cells across, and none at 24; above `eps` of about 12.5 it refuses at every resolution tried,
+  and its advice to refine the grid is wrong there. The operator it judges is positive -- its
+  smallest eigenvalue is about `0.8/eps` at 12 and `0.6/eps` at 20 -- so the refusal is the
+  certificate's slack, not a negative energy. A tighter certificate is an open decision.
+* Not measured: the non-sphere bodies at `eps` 2.25 and 4; whether a non-convex prism's error
+  follows its arm width or the hull width `min_extent` reads (2.83x apart for the L-shaped
+  outline); CSG bodies; `discretisation='stencil'`.
