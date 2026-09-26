@@ -31,7 +31,7 @@ Conventions, all of them, up front:
 | time factor | `e^{-iωt}`; a field is `Re[E(r) e^{-iωt}]` |
 | loss | `Im(n) > 0`, `Im(eps) > 0` (`n + ik` as databases tabulate) |
 | upward (+z) wave | `exp(+i k0 kz z)`, `Re(kz) > 0` |
-| decay downward | `Im(kz) > 0` |
+| decay along +z | `Im(kz) > 0` |
 | plane-wave phase | `exp(+i k0 (kx x + ky y + kz z))` |
 | Fourier series of `eps` | `eps(x) = Σ_p c_p exp(+i 2π p x / Λ)` |
 | order vectors | `kx_m = n_I sinθ cosφ + m λ/Λx`, `m = -M..M` (same for `ky_n`) |
@@ -40,6 +40,15 @@ Conventions, all of them, up front:
 
 Everything below is unit-free: lengths are normalized by `k0` (`z̃ = k0 z`), so `d/dz̃`
 replaces `d/dz` and wavevectors are in units of `k0`.
+
+**Which way is down.** The derivation keeps the propagation kernels' own words:
+"superstrate" is the kernel's entry medium, `z̃ = 0` its entry face, and "down" is `+z̃`,
+into the stack. Since 2026-09-21 the kernels' axis *is* the public `+z`, which points up,
+and their entry port is bound to the public **bottom** medium
+(`_core/engine.py`, `_kernel_incidence_side`); public top incidence runs the kernels' mirrored
+path. So read "down" as `+z̃` and "superstrate" as the lit medium of that unmirrored solve,
+not as the public words. The algebra did not change with the public frame; only the names
+around it did.
 
 ---
 

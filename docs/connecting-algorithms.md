@@ -287,8 +287,9 @@ An `S` is what lets a stack be used as a *component*. `ScatteringMatrix.cascade`
 them into the matrix their joined stack would have:
 
 ```python
-first  = solve(layers[:2], top=1.0,  bot=joint, theta=theta).scattering
-second = solve(layers[2:], top=joint, bot=1.5,  theta=theta_in_joint).scattering
+# layers run bottom to top, so the upper piece -- the one the light reaches first -- is the tail
+first  = solve(layers[2:], top=1.0,  bot=joint, theta=theta).scattering
+second = solve(layers[:2], top=joint, bot=1.5,  theta=theta_in_joint).scattering
 whole  = first.cascade(second)
 
 whole.S11 @ delta                          # the ordinary answer, back again

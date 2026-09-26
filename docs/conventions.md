@@ -200,7 +200,8 @@ Every coordinate this library takes or hands back is measured from the **centre 
 | the axes `plot_structure` draws | the same point; they run `-P/2` to `+P/2` |
 
 `sample_z` is the exception and deliberately so: `z` is not periodic and the stack *has* a
-distinguished point, so it is absolute from the top (see below).
+distinguished point, so it is an absolute height above the bottom interface (see
+[Geometry and propagation](#geometry-and-propagation)).
 
 This is S4's convention (*"the unit cell is the Wigner-Seitz cell centered at the origin"*) and
 Meep's. It arrived on 2026-08-31; before it the origin was the cell's corner, and both the
