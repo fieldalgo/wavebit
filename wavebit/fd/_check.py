@@ -56,6 +56,9 @@ class Report:
     #: False where the params could not be built on NumPy (a traced material): the params
     #: line then says so instead of printing 0.00 MB, which a threshold would read as small.
     params_known: bool = True
+    #: ((term name, blocks moved, blocks with a cross coefficient, largest t), ...): the
+    #: per-block lift of each diagonal-rule constitutive term (``blocks.lift``).
+    lifts: tuple = ()
 
     def __str__(self):
         lines = [
@@ -128,6 +131,10 @@ class Report:
             shared = ('' if not others else ', shared with ' + ', '.join(
                 f'structures[{j}]' for j in others))
             out.append(f'  cross    {name}: {cost}{shared}')
+            lifted = next((row for row in self.lifts if row[0] == name), None)
+            if lifted is not None and lifted[1]:
+                out.append(f'  lift     {name}: {lifted[1]} of {lifted[2]} blocks moved toward '
+                           f'the node tensor, the largest {lifted[3]:.3g} of the way')
         for name in row.stencil:
             out.append(f'  cross    {name}: the prepared stencil operator (its material row)')
         if row.normals == 'none' and not row.stencil:
@@ -199,8 +206,8 @@ def report(scene, p=None, params=None):
     for axis, n in zip('xyz', grid.n):
         if n < 4 and axis not in axis1d:
             warnings.append(f'{n} cell(s) along {axis}: a box this thin is all boundary')
-    bodies = []
-    for message, _ in ((m, c) for c, m in _notes(scene, p, rows=bodies)):
+    bodies, lifted = [], {}
+    for message, _ in ((m, c) for c, m in _notes(scene, p, rows=bodies, lifted=lifted)):
         warnings.append(message)
     itemsize = np.dtype(p.dtype).itemsize
     # The params' bytes are counted by lowering on NumPy -- the coefficient arrays and the
@@ -241,7 +248,9 @@ def report(scene, p=None, params=None):
                   skeleton=p.skeleton, bytes_per_params=params_bytes(params),
                   absorbers=absorbers, spans=p.spans, monitors=monitors, solves=solves,
                   box=tuple((grid.low[a], grid.high[a]) for a in range(3)),
-                  bodies=tuple(bodies), term_bytes=term_bytes, params_known=params_known)
+                  bodies=tuple(bodies), term_bytes=term_bytes, params_known=params_known,
+                  lifts=tuple((name, out.moved, out.blocks, out.largest)
+                              for name, out in lifted.items()))
 
 
 def _discretisation_lines(p):

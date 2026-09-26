@@ -1802,21 +1802,53 @@ def _rate_values(pole):
     return [concrete(v) or 0.0 for v in pole.rate()]
 
 
-def notes(scene, plan, rows=None):
+def notes(scene, plan, rows=None, lifted=None):
     """``[(category, message), ...]``: the stage-1 warnings, for ``check`` and for ``plan``.
 
     ``rows``, when a list, receives one :data:`BodyRow` per smoothed structure (``check``'s
-    block), from the fills the notes take anyway.
+    block), from the fills the notes take anyway. ``lifted`` is the per-block lift by term
+    name: ``plan`` passes ``constitutive.validate``'s; an empty dict is filled here, which is
+    how ``check`` reads it (:func:`_lift_notes`).
     """
     out = []
     out += _resolution_notes(scene, plan)
     out += _proximity_notes(scene, plan)
     out += _stabilize_notes(scene, plan)
     out += _smoothed_notes(scene, plan, rows)
+    out += _lift_notes(scene, plan, lifted)
     out += _clipping_notes(scene, plan)
     out += _cells_across_notes(scene, plan)
     out += _radiation_notes(scene)
     return out
+
+
+def _lift_notes(scene, plan, lifted=None):
+    """Say where the per-block lift changed the default rule's operator (``blocks.lift``).
+
+    A scene the Gershgorin certificate used to refuse now plans, with a modified operator; this
+    is the note that it was modified, and how much. ``lifted`` as :func:`notes` takes it.
+    """
+    from .._kernel.stencil import StencilTerm
+    from ..diagnostics import SubpixelAccuracyWarning
+    if not any(not isinstance(t, StencilTerm) for t in plan.constitutive):
+        return []
+    if lifted is None:
+        lifted = {}
+    if not lifted:
+        from .constitutive import lifted_on_host
+        lifted.update(lifted_on_host(scene, plan)[1])
+    moved = {name: out for name, out in lifted.items() if out.moved}
+    if not moved:
+        return []
+    each = ', '.join(f'{name} {out.moved} of {out.blocks}' for name, out in moved.items())
+    largest = max(out.largest for out in moved.values())
+    return [(SubpixelAccuracyWarning,
+             f'The per-block lift moved inverse-material blocks toward their node\'s Kottke '
+             f'tensor ({each}; the largest move is {largest:.3g} of the way) so that the '
+             f'smoothed operator is positive definite: at this contrast some blocks of the '
+             f'default rule fall below the floor. The run is stable by construction '
+             f'(wavebit/fd/_lower/blocks.py); the effect on accuracy is measured in '
+             f'docs/fd-subpixel-occupancy.md, "The per-block lift".')]
 
 
 def _radiation_notes(scene):
@@ -2210,7 +2242,7 @@ def _proximity_notes(scene, plan):
     return out
 
 
-def warn_all(scene, plan):
+def warn_all(scene, plan, lifted=None):
     """Emit every note as a real warning; ``plan`` calls this, ``report`` lists them instead."""
-    for category, message in notes(scene, plan):
+    for category, message in notes(scene, plan, lifted=lifted):
         warnings.warn(message, category, stacklevel=3)

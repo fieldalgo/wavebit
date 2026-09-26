@@ -441,8 +441,7 @@ def plan(scene, _column=False, _grazing=None, _reuse=None):
     # every stage-0..3 skeleton byte-identical.
     from . import stencil
     p = stencil.prepare(scene, p, reuse=_reuse)
-    if coupled:
-        constitutive.validate(scene, p)
+    lifted = constitutive.validate(scene, p) if coupled else None
     sources = source_terms(scene, p)
     if sources:
         p = p.with_static(terms=tuple(p.terms) + sources)
@@ -453,5 +452,5 @@ def plan(scene, _column=False, _grazing=None, _reuse=None):
     # Emitted through the caller's own filters, and deliberately not forced past them: a
     # caller who silenced CoarseMeshWarning silenced it, and the default "once per location"
     # rule is what keeps a sweep of a thousand plans from printing a thousand copies.
-    checks.warn_all(scene, p)
+    checks.warn_all(scene, p, lifted)
     return p

@@ -225,6 +225,29 @@ def test_the_lift_is_continuous_where_a_block_starts_to_move():
     assert np.max(np.abs(moves(hi).delta)) < 1e-9
 
 
+def test_plan_and_check_say_where_the_lift_moved_blocks():
+    """A scene the Gershgorin certificate used to refuse now plans with a modified operator; the
+    plan says so, with each term's count, and ``fd.check`` prints it under the body. A glass
+    sphere, which moves nothing, hears neither."""
+    from wavebit.fd._lower.constitutive import lifted_on_host
+    scene = _cavity(40., 30.)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        plan = fd.plan(scene)
+    said = [str(w.message) for w in caught if 'per-block lift moved' in str(w.message)]
+    assert len(said) == 1
+    report = str(quiet(fd.check, scene))
+    for name, out in lifted_on_host(scene, plan)[1].items():
+        assert out.moved > 0 and f'{name} {out.moved} of {out.blocks}' in said[0]
+        assert f'lift     {name}: {out.moved} of {out.blocks} blocks moved' in report
+    glass = _cavity(2.25)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        fd.plan(glass)
+    assert not any('per-block lift' in str(w.message) for w in caught)
+    assert 'lift     ' not in str(quiet(fd.check, glass))
+
+
 def _npy(x):
     return to_numpy(x) if hasattr(x, 'shape') else np.asarray(x)
 
