@@ -1132,8 +1132,10 @@ def _smoothed_notes(scene, plan):
                   'tangent normal. At their common sampling points its squared components '
                   'differ from the supplied diagonal normal moment by maxima {' + details +
                   '}. These are measured geometry-proxy discrepancies, not bounds on '
-                  'electromagnetic error; no body but the sphere has a convergence gate of '
-                  'its own yet, and creases and CSG cross moments are unvalidated.')
+                  'electromagnetic error. Beyond the sphere, only the unturned fd.Box has '
+                  'a convergence gate of its own -- its planar faces, against the exact '
+                  'Airy slab (G5); turned faces, curved sides, creases and CSG cross moments '
+                  'are unvalidated.')
     if note is not None:
         out.append((BoundedVoxelWarning, note))
     return out

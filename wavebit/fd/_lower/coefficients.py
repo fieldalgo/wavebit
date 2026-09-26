@@ -134,9 +134,14 @@ def mix(xp, held, value, fill, w):
     the same material and up to 122% on one ``fd.Sphere`` declared twice (door 5); an
     anisotropic ``eps`` or ``mu``, for which the Kottke construction is the tau-transform and
     not a per-component blend (door 4); and a conductivity or a pole, which C8 owns (door 1).
-    A smoothed shape arriving over a cell-snapped one is *not* one of them: the snapped
-    material is a whole voxel of one medium, so the mix has its two phases and is exact,
-    measured at 2.0e-16.
+    A smoothed shape arriving over a cell-snapped one is one of them only where a snapped face
+    cuts the same voxel (door 6, C4: the snapped cells are all or nothing where the geometry
+    splits them); a voxel clear of the snapped faces is a whole voxel of one medium to the
+    painter, the mix has its two phases and is exact, measured at 2.0e-16. And the rule is
+    gated where it has a closed form to meet: the Airy slab spelled as a smoothed ``fd.Box``
+    (G5, ``tests/test_fd_airy.py``) runs the profile it lowers to within 4.3e-7, needs no
+    reference-plane correction against the continuum formula, and converges at second
+    order.
 
     Three properties decide this form over the alternatives, and each is a gate:
 

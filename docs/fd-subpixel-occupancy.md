@@ -524,7 +524,7 @@ each alone, over that file and the five door and occupancy files beside it:
 | a NaN passing as finite | 1 |
 
 **What C4 does not claim.** No body but the sphere has an electromagnetic convergence gate of
-its own; the planar reference-plane gate for the box is the next commit. The cylinder rim's
+its own beyond G5 below -- the unturned box's planar faces. The cylinder rim's
 moment is the tangent plane's, and every body's cross terms use the nearest-surface normal (S7
 above prices both). CSG of the bodies, the periodic fold, and a body joining a cell-snapped
 structure at a shared face are not in it.
@@ -606,3 +606,37 @@ Mutants of the fixes, each alone, over `test_fd_bodies.py`, `test_fd_constitutiv
 | `cross_free` answering False | 2 | the no-cross-term case, and the constitutive test's box row |
 | `min_extent` measuring the whole extent, not what is inside | 1 | the `min_extent` case |
 | spanning with half a cell of margin | 1 | the spanning-rod case |
+
+### G5: the Airy slab, spelled as a smoothed box
+
+The stage-1 Airy gate (`tests/test_fd_airy.py`) runs a slab under a Gaussian packet in a
+one-cell periodic column and compares `r` and `t` with two closed forms. Spelled as the snapped
+`fd.Slab`, its faces sit half a cell low -- node `k0` takes the slab's `eps` over its whole dual
+cell -- and the continuum formula meets it only with that half-cell reference-plane correction:
+0.005 rad in `arg r` with it, 0.40 without. G5 spells the same slab as the smoothed `fd.Box`,
+ten cells across the one-cell period, faces on the same node planes. An unturned box plans no
+constitutive term (the review above), so the packet's initial field is not refused over it.
+
+The oracle is new and independent of the painters: `airy_profile` marches the scheme's own
+recurrence through any node profile of `eps`, and `box_profile` writes the box's profile by hand
+-- each face gives one node the arithmetic mean over its dual cell, since `Ey` is tangential.
+Predicted from them before the runs, and measured:
+
+| arm | `|r|` | `arg r` (rad) | `|t|` | `arg t` (rad) |
+| --- | ---: | ---: | ---: | ---: |
+| slab, with the half-cell correction | 6.1616% | 0.00508 | 0.5970% | 0.00508 |
+| slab, without it | -- | 0.40013 | -- | -- |
+| **box, no correction** | 6.1931% | **0.00480** | 0.5723% | 0.00480 |
+| box, the slab's correction applied (the gate's mutant) | -- | 0.39985 (83x) | -- | -- |
+
+So the box's faces are where they were asked. Against the exact profile the box meets the
+discrete gate's own tolerance on all five slabs of the file (worst 4.3e-7 absolute, 3.2e-6
+relative) and at faces 0.1, 0.25, 0.3 and 0.7 of a cell off the nodes (1.3e-7), where the
+continuum formula is off by up to 0.018 rad and is not the oracle. Its complex `r` converges to
+the continuum at second order with no correction: 6.21e-2 / 1.47e-2 / 3.63e-3 at 20 / 40 / 80
+cells per wavelength (ratios 4.22, 4.06). With its faces half a cell low the box fills every
+node whole or not at all, and the run is the slab's to 7.0e-15 of the probe's peak -- not bit
+for bit, because the exact clip reads a voxel that ends on a face as one to within its own
+round-off. Three mutants -- the rule mixing a tangential component harmonically, the box handed
+to the kernel 0.04 of a cell high, an unturned box planned a cross term -- fail 11, 12 and 12 of
+the file's 31 cases.

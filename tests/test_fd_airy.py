@@ -245,7 +245,7 @@ def airy_discrete(omega, n, cells, dx, dt, kx=0.0):
 # ---------------------------------------------------------------------------------------------
 
 def slab_pair(cells=4, eps=2.25, magnetic=False, shift=0, cpw=CPW, angle=0.0, pml=24,
-              courant=0.5, probe_offset=0.5, lead_widths=4.0, back_widths=3.0):
+              courant=0.5, probe_offset=0.5, lead_widths=4.0, back_widths=3.0, body=None):
     """``(slab_scene, reference_scene, geometry)``: the same packet, with and without the slab.
 
     ``cells`` is the slab's thickness in cells, so nothing is ever snapped and the gate measures
@@ -253,6 +253,11 @@ def slab_pair(cells=4, eps=2.25, magnetic=False, shift=0, cpw=CPW, angle=0.0, pm
     snapping). ``magnetic=True`` puts ``eps`` on ``mu`` instead -- the second mutant -- and
     ``shift`` moves the slab by that many cells without moving the reference planes, which is
     the first.
+
+    ``body`` (a number of cells, 0.0 for faces on node planes) spells the same slab as the
+    smoothed ``fd.Box`` -- stage 4's C4, gate G5 -- with its faces that far past the node planes
+    the ``Slab`` would take; the box runs ten cells across the one-cell transverse period, so it
+    is uniform along it. ``front`` and ``back`` are then the box's faces.
 
     ``angle`` tilts the packet by putting a Bloch phase ``kx dx`` on a **one-cell** x period,
     which is exact rather than cheap (see :func:`discrete_wavenumber`) and makes the run
@@ -301,8 +306,13 @@ def slab_pair(cells=4, eps=2.25, magnetic=False, shift=0, cpw=CPW, angle=0.0, pm
                         initial=packet.initial(), structures=structures, monitors=monitors)
 
     slab = fd.Structure(fd.Slab(z=(low, low + cells * dx)), material)
+    if body is not None:
+        front, back = front + body * dx, back + body * dx
+        slab = fd.Structure(fd.Box(size=(10 * dx, 10 * dx, cells * dx),
+                                   center=(0.0, 0.0, (front + back) / 2)), material)
     geometry = dict(dx=dx, dt=dt, width=width, nz=nz, steps=steps, front=front, back=back,
-                    cells=cells, eps=eps, index=math.sqrt(eps), kx=packet.kx, angle=angle)
+                    cells=cells, eps=eps, index=math.sqrt(eps), kx=packet.kx, angle=angle,
+                    first=first)
     return scene((slab,)), scene(()), geometry
 
 
@@ -349,15 +359,62 @@ def band_of(angle):
 
 
 @functools.lru_cache(maxsize=None)
-def measured(cells=4, eps=2.25, magnetic=False, shift=0, cpw=CPW, angle=0.0, backend='numpy'):
+def measured(cells=4, eps=2.25, magnetic=False, shift=0, cpw=CPW, angle=0.0, backend='numpy',
+             body=None):
     """``(r, t, geometry)`` over the band for one slab -- both runs, cached by argument."""
     slab, reference, geometry = slab_pair(cells=cells, eps=eps, magnetic=magnetic, shift=shift,
-                                          cpw=cpw, angle=angle)
+                                          cpw=cpw, angle=angle, body=body)
     got = fd.run(slab, backend=backend)
     want = fd.run(reference, backend=backend)
     omega = 2 * math.pi / band_of(angle)
     r, t = extract(got, want, geometry, omega)
     return r, t, geometry
+
+
+def airy_profile(omega, eps_nodes, first, dx, dt, front, back):
+    """``(r, t)`` for ``eps`` given node by node, exactly, on the semi-discrete Yee grid.
+
+    The same recurrence as :func:`airy_discrete`, ``E[j+1] - 2E[j] + E[j-1] + Omega^2 eps[j]
+    dx^2 E[j] = 0`` at normal incidence, with ``eps[j]`` any profile on the nodes ``first ..
+    first + len(eps_nodes) - 1`` and vacuum elsewhere -- which is what a smoothed interface
+    lowers to, one mixed node at each face. It is marched rather than solved: from the
+    transmitted side, where the field is ``u^((j - back)/dx)`` with ``T = 1``, down through the
+    profile to two vacuum nodes in front, where ``A u^(j - front) + B u^-(j - front)`` fits them;
+    ``r = B/A`` and ``t = 1/A``, referenced to ``front`` and ``back`` (lengths on the z axis).
+    On the snapped profile it is :func:`airy_discrete` to 7e-16, and it knows nothing of the
+    engine's painters: the profile is the test's own.
+    """
+    out_r, out_t = [], []
+    last = first + len(eps_nodes) - 1
+    for w in np.atleast_1d(omega):
+        big = 2 * math.sin(w * dt / 2) / dt
+        u = np.exp(1j * float(discrete_wavenumber(w, 1.0, dx, dt)) * dx)
+        field = {j: u ** (j - back / dx) for j in (last + 3, last + 4)}
+        for j in range(last + 3, first - 3, -1):
+            e = eps_nodes[j - first] if first <= j <= last else 1.0
+            field[j - 1] = 2 * field[j] - field[j + 1] - big ** 2 * e * dx ** 2 * field[j]
+        a, b = first - 3, first - 2
+        f = front / dx
+        coefficients = np.linalg.solve(np.array([[u ** (a - f), u ** (f - a)],
+                                                 [u ** (b - f), u ** (f - b)]]),
+                                       np.array([field[a], field[b]]))
+        out_r.append(coefficients[1] / coefficients[0])
+        out_t.append(1 / coefficients[0])
+    return np.array(out_r), np.array(out_t)
+
+
+def box_profile(geometry):
+    """``(eps_nodes, first)``: what the smoothed box's faces give ``Ey`` on its z nodes, by hand.
+
+    ``Ey`` is tangential to both faces, so its normal moment is zero and the Farjadpour/Kottke
+    rule is the arithmetic mean over its dual cell ``[z_j - dx/2, z_j + dx/2]`` -- the overlap of
+    that interval with ``[front, back]``, written out here.
+    """
+    dx, eps = geometry['dx'], geometry['eps']
+    front, back = geometry['front'] / dx, geometry['back'] / dx
+    first, last = math.floor(front - 0.5), math.ceil(back + 0.5)
+    fill = [max(0.0, min(back, j + 0.5) - max(front, j - 0.5)) for j in range(first, last + 1)]
+    return [f * eps + (1 - f) for f in fill], first
 
 
 def reference_of(cells=4, eps=2.25, cpw=CPW, angle=0.0):
@@ -679,3 +736,137 @@ def test_the_transmitted_wave_is_blind_to_both_mutants():
         assert absolute(t, t_want) < DISCRETE_TOL, mutant
         # while the reflection separates every one of them by more than five decades
         assert relative(r, r_want) > 1e5 * relative(measured()[0], r_want), mutant
+
+
+# ---------------------------------------------------------------------------------------------
+# G5 (stage 4, C4): the same slab spelled as the smoothed fd.Box
+# ---------------------------------------------------------------------------------------------
+
+def _continuum(geometry, omega):
+    dx, dt = geometry['dx'], geometry['dt']
+    beta = discrete_wavenumber(omega, geometry['index'], dx, dt) * (geometry['back']
+                                                                    - geometry['front'])
+    return airy_continuum(geometry['index'], 1.0, beta)
+
+
+@pytest.mark.parametrize('cells, eps, cpw', SLABS)
+def test_the_smoothed_box_matches_the_exact_discrete_profile(cells, eps, cpw):
+    """G5: a smoothed box lowers its faces to one mixed node each, and runs that profile exactly.
+
+    Faces on node planes, so the node under each face holds half the slab and half vacuum:
+    ``Ey`` is tangential, the rule is the arithmetic mean, and the node reads ``(eps + 1)/2``
+    -- :func:`box_profile`, by hand. :func:`airy_profile` solves the scheme on that profile,
+    and the run agrees with it to the discrete gate's own tolerance on every slab of
+    :data:`SLABS` (measured worst 4.3e-7 absolute, 3.2e-6 relative): the mixed node is where
+    the lowering put it, with the value the rule gives.
+
+    Mutants, each alone, measured 2026-09-26 over this file: the rule mixing a tangential
+    component harmonically fails every body case but the half-cell control (whose fills are all
+    0 or 1, where both rules agree); the public box handed to the kernel 0.04 of a cell high
+    fails every body case; an unturned box planned a cross term fails every body case (its
+    initial field is then refused).
+    """
+    r, t, geometry = measured(cells=cells, eps=eps, cpw=cpw, body=0.0)
+    profile, first = box_profile(geometry)
+    omega = 2 * math.pi / np.array(BAND)
+    r_want, t_want = airy_profile(omega, profile, first, geometry['dx'], geometry['dt'],
+                                  geometry['front'], geometry['back'])
+    assert absolute(r, r_want) < DISCRETE_TOL, absolute(r, r_want)
+    assert absolute(t, t_want) < DISCRETE_TOL, absolute(t, t_want)
+    assert relative(r, r_want) < DISCRETE_REL, relative(r, r_want)
+    assert relative(t, t_want) < DISCRETE_REL, relative(t, t_want)
+
+
+def test_the_smoothed_box_needs_no_reference_plane_correction():
+    """G5: the box's faces are where they were asked; the slab's sit half a cell low.
+
+    Against the continuum Airy formula with the discrete wavenumber, the snapped slab needs its
+    reference planes moved half a cell (:func:`test_the_half_cell_interface_offset_is_what_carries_the_reflected_phase`:
+    0.005 rad with it, 0.40 without). The same slab spelled as the smoothed box, faces on the
+    same node planes, needs **no** correction: within the same :data:`CONTINUUM_TOL` with none,
+    and the slab's correction applied to it is the wrong answer by far more than 50 times --
+    the gate's mutant, run here. Predicted beforehand from :func:`airy_profile` on
+    :func:`box_profile`: 6.19% in ``|r|``, 0.0048 rad in ``arg r``, 0.57% in ``|t|``, and
+    0.3999 rad with the correction (83x). Measured: 6.1931%, 0.00480 rad, 0.5723%, and
+    0.39985 rad -- the slab, corrected, reads 6.1616%, 0.00508, 0.5970%.
+
+    Mutants: the three of :func:`test_the_smoothed_box_matches_the_exact_discrete_profile`
+    each fail this case too.
+    """
+    r, t, geometry = measured(body=0.0)
+    omega = 2 * math.pi / np.array(BAND)
+    k = discrete_wavenumber(omega, 1.0, geometry['dx'], geometry['dt'])
+    r_want, t_want = _continuum(geometry, omega)
+    assert float(np.max(np.abs(np.abs(r) - np.abs(r_want)) / np.abs(r_want))) \
+        < CONTINUUM_TOL['abs_r']
+    good = float(np.max(np.abs(np.angle(r / r_want))))
+    assert good < CONTINUUM_TOL['arg_r']
+    assert float(np.max(np.abs(np.abs(t) - np.abs(t_want)) / np.abs(t_want))) \
+        < CONTINUUM_TOL['abs_t']
+    assert float(np.max(np.abs(np.angle(t / t_want)))) < CONTINUUM_TOL['arg_t']
+    corrected = r_want * np.exp(-2j * k * geometry['dx'] / 2)
+    assert float(np.max(np.abs(np.angle(r / corrected)))) > 50 * good
+
+
+def test_a_box_with_its_faces_half_a_cell_low_is_the_slab():
+    """The control: faces at ``z_k0 - dx/2`` fill every node whole or not at all -- the slab.
+
+    Every ``Ey`` dual cell is then wholly inside the box or wholly out of it, so the box lowers
+    ``Ey`` as the snapped slab does, node for node; ``Ey`` is the only component the packet
+    drives, so the two runs are the same run to round-off, and both probes record the same
+    series. It is the half-cell reference plane of the snapped slab, pinned from the other
+    side. (The two ``r`` differ by the phase of that half cell only because each is referenced
+    to its own asked-for face.)
+
+    Not bit for bit, and measured rather than assumed: on the four nodes whose dual cell ends
+    exactly on a face the exact clip reads the fill as one to within its own round-off, not one
+    itself (the reason ``checks._CLIP_ROUNDOFF`` exists), so the box's ``Ey`` coefficient there
+    is 1.6e-15 off the slab's, and the two series differ by at most 7.0e-15 of their peak in
+    front and 2.5e-15 behind. The gate is 1e-13 of the peak; a face half a cell out of place
+    moves them by order one.
+    """
+    slab, _, _ = slab_pair()
+    box, _, geometry = slab_pair(body=-0.5)
+    profile, _ = box_profile(geometry)
+    assert set(profile) <= {1.0, geometry['eps']}
+    got, want = fd.run(box, backend='numpy'), fd.run(slab, backend='numpy')
+    for probe in ('front', 'back'):
+        a = np.asarray(to_numpy(got[probe].values))
+        b = np.asarray(to_numpy(want[probe].values))
+        assert np.max(np.abs(a - b)) <= 1e-13 * np.max(np.abs(b)), probe
+
+
+@pytest.mark.parametrize('offset', (0.1, 0.25, 0.3, 0.7))
+def test_a_smoothed_box_off_the_grid_matches_its_profile(offset):
+    """G5 off the node planes: a face anywhere in a cell is one fractionally filled node.
+
+    The continuum formula is not the oracle here -- a face between nodes costs up to 0.019 rad
+    in ``arg r`` at 20 cells per wavelength against it, over the 0.01 its tolerance allows --
+    but the exact discrete profile is, and it is met to the discrete tolerance at every offset.
+    """
+    r, t, geometry = measured(body=offset)
+    profile, first = box_profile(geometry)
+    assert any(0.0 < (value - 1.0) / (geometry['eps'] - 1.0) < 1.0 for value in profile)
+    omega = 2 * math.pi / np.array(BAND)
+    r_want, t_want = airy_profile(omega, profile, first, geometry['dx'], geometry['dt'],
+                                  geometry['front'], geometry['back'])
+    assert absolute(r, r_want) < DISCRETE_TOL, (offset, absolute(r, r_want))
+    assert relative(t, t_want) < DISCRETE_REL, (offset, relative(t, t_want))
+
+
+def test_the_smoothed_box_converges_to_the_continuum_at_second_order():
+    """The box's complex ``r`` against the continuum formula, with no correction, at 20/40/80.
+
+    The same 0.2-wavelength slab at every resolution, faces on node planes: the error falls by
+    about four each time the cell halves, as the snapped slab's does with its correction
+    (:func:`test_the_continuum_airy_error_falls_second_order_in_dx`) -- and without one.
+    """
+    errors = []
+    for cpw in (20, 40, 80):
+        cells = 4 * cpw // CPW
+        r, _, geometry = measured(cells=cells, cpw=cpw, body=0.0)
+        omega = 2 * math.pi / np.array(BAND)
+        errors.append(relative(r, _continuum(geometry, omega)[0]))
+    assert errors[0] > 3e-2, errors
+    for coarse, fine in zip(errors, errors[1:]):
+        assert 3.2 < coarse / fine < 5.0, errors
