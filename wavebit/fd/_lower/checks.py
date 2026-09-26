@@ -1228,41 +1228,124 @@ def _clipping_notes(scene, plan):
 #: Cells across a smoothed body's smallest bounded extent below which it is refused, and below
 #: which it warns. Set by study S2b (``studies/fdtd_subpixel_cells_across.py``,
 #: ``docs/fd-subpixel-occupancy.md``): at 2 cells an eps-12 sphere's polarizability is 9.6% to
-#: 43% high over five placements and it scatters 123% too much; at 4 every body tried is within
-#: 9.2% at eps 12 and 2.9% at eps <= 4; at 8, within 2.6%.
+#: 43% high over five placements and it scatters 123% too much; at 4 every body tried at eps 12
+#: is within 9.2%, and the sphere at eps 4 within 2.90%; at 8, every body within 2.63%.
 CELLS_ACROSS_REFUSED, CELLS_ACROSS_WARNED = 4, 8
 
+#: Relative slack on those thresholds. A body declared exactly 4 cells across can read
+#: 3.9999999999999996 through ``center +- size/2`` or a hull width (the C5 review refused a
+#: 0.2 box at some centres and not others, and S2b's own 4-cell hexagonal prism), and it is 4.
+_ACROSS_SLACK = 1e-9
 
-def _cells_across(shape, grid, mirrors=()):
-    """``(cells, extent)`` across a smoothed body's smallest bounded extent, or ``None``.
 
-    ``None`` for a **layer** -- a body uniform along two axes over the whole domain, a film or
-    a half space -- because the interface rule is exact for a plane at any thickness: G5, the
-    Airy slab spelled as a smoothed ``fd.Box``, meets the discrete gate to 3.2e-6 relative
-    whatever its cells (``tests/test_fd_airy.py``). What S2b measured is a particle's
-    polarizability, which a body bounded along two or three axes has; a rod uniform along one
-    axis is a two-dimensional particle, judged by its section.
+def _straight(shape, a):
+    """Whether ``shape``'s section is the same all along axis ``a``: an unturned ``fd.Box``
+    on any axis, an extruded body (``fd.Box``, ``fd.Cylinder``, ``fd.Prism``) along its own."""
+    from ..geometry import Box, _Extruded
+    if isinstance(shape, Box) and not shape.angle:
+        return True
+    return isinstance(shape, _Extruded) and shape.axis == 'xyz'[a]
 
-    ``mirrors`` are the ``(axis index, side)`` of the scene's ``Symmetry`` faces. The box is
-    extended past each by its own length before the body is measured, because a body crossing
-    a mirror is the body declared, not the half the box holds: measured on the box, a bar 7.4
-    cells long symmetric about the plane read 3.7 and was refused. A body declared only on the
-    domain side of a mirror (its flush half) is measured as declared, which is half the scene's
-    body -- conservative, and its message's remedy, declaring it whole, is measured whole.
+
+def _covers(shape, a, grid, mirrors):
+    """Whether the body runs the whole domain along axis ``a``, as one of a layer's two axes.
+
+    ``uniform_along`` over the whole axis, or -- for a body straight along ``a`` -- a declared
+    span reaching both ends, where an end is a wall or a Symmetry plane (the image continues
+    the body past it). ``uniform_along`` asks a cell of margin past each face, which the
+    nearest-surface normal needs, so a film flush against a PEC wall or a mirror read as
+    bounded and was refused at its thickness (the C5 review).
+    """
+    if shape.uniform_along(a, (0, grid.n[a]), grid):
+        return True
+    span = _declared_span(shape, a)
+    if span is None or not _straight(shape, a):
+        return False
+    ends = [grid.low[a], grid.high[a]]
+    for axis, side in mirrors:
+        if axis == a:
+            ends[0 if side == '-' else 1] = mirror_plane(grid, a, side)
+    tol = 1e-9 * grid.dx
+    return span[0] <= ends[0] + tol and span[1] >= ends[1] - tol
+
+
+def _extended(grid, mirrors):
+    """The box grown past each Symmetry face to the image of the domain.
+
+    Past a ``-`` plane (on the wall) the image is ``n`` cells; past a ``+`` plane, which sits
+    ``dx/2`` inside the wall, it reaches ``n - 1`` cells beyond the wall -- a whole ``n`` made a
+    film symmetric about a ``+`` plane reach a cell further than its image before it read as
+    spanning (the C5 review).
     """
     from .._kernel.grid import Grid
     for a, side in mirrors:
         n, low = list(grid.n), list(grid.low)
         if side == '-':
             low[a] -= grid.n[a] * grid.dx
-        n[a] += grid.n[a]
+            n[a] += grid.n[a]
+        else:
+            n[a] += grid.n[a] - 1
         grid = Grid(n=tuple(n), dx=grid.dx, low=tuple(low))
-    bounded = [a for a in range(3) if not shape.uniform_along(a, (0, grid.n[a]), grid)]
+    return grid
+
+
+def _whole_with_image(shape, grid, mirrors, ext, extent):
+    """An unturned ``fd.Box`` flush against a Symmetry plane, measured with its image.
+
+    At the parity that zeroes the plane's components ``check_symmetry`` accepts a box declared
+    only on the domain side, flush against the plane, as exact: the scene is it and its image,
+    joined. Measured as declared it was half that, and was refused as half-size (the C5
+    review). The box is the one smoothed body this reaches -- any other flush body plans cross
+    terms at the plane, which ``constitutive.validate`` refuses.
+    """
+    from ..geometry import Box
+    if not mirrors or not (isinstance(shape, Box) and not shape.angle):
+        return extent
+    tol = 1e-9 * grid.dx
+    lengths = []
+    for b in range(3):
+        if _covers(shape, b, grid, mirrors):
+            continue
+        lo, hi = shape.low[b], shape.high[b]
+        length = min(hi, ext.high[b]) - max(lo, ext.low[b])
+        for axis, side in mirrors:
+            plane = mirror_plane(grid, b, side) if axis == b else None
+            if plane is not None and side == '-' and abs(lo - plane) <= tol:
+                length = 2.0 * (min(hi, grid.high[b]) - plane)
+            elif plane is not None and side == '+' and abs(hi - plane) <= tol:
+                length = 2.0 * (plane - max(lo, grid.low[b]))
+        lengths.append(length)
+    return min(lengths) if lengths else extent
+
+
+def _cells_across(shape, grid, mirrors=()):
+    """``(cells, extent)`` across a smoothed body's smallest bounded extent, or ``None``.
+
+    ``None`` for a **layer** -- a body running the whole domain along two axes, a film or a half
+    space (:func:`_covers`). Its interfaces are planes, and for a planar interface the rule's
+    two means -- arithmetic along it, harmonic across it -- are the layer's exact effective
+    medium at any thickness; G5 (``tests/test_fd_airy.py``) measured the lowering against the
+    scheme's own recurrence on slabs 4 to 10 cells thick, to 3.2e-6, and no thinner film has
+    been run. What S2b measured is a particle's polarizability, which a body bounded along two
+    or three axes has; a rod through the domain is a two-dimensional particle, judged by its
+    section.
+
+    ``mirrors`` are the ``(axis index, side)`` of the scene's ``Symmetry`` faces. The body is
+    measured on the box grown to the image of the domain (:func:`_extended`), because a body
+    crossing a mirror is the body declared, not the half the box holds: measured on the box, a
+    bar 7.4 cells long symmetric about the plane read 3.7 and was refused. An unturned box
+    flush against the plane is measured with its image (:func:`_whole_with_image`); another
+    body declared only on the domain side is measured as declared, half the scene's body, and
+    its refusal says to declare it whole.
+    """
+    bounded = [a for a in range(3) if not _covers(shape, a, grid, mirrors)]
     if len(bounded) < 2:
         return None
-    extent = shape.min_extent(grid)
+    ext = _extended(grid, mirrors)
+    extent = shape.min_extent(ext)
     if extent is None:
         return None
+    extent = _whole_with_image(shape, grid, mirrors, ext, extent)
     return extent / grid.dx, extent
 
 
@@ -1284,22 +1367,28 @@ def check_cells_across(scene, grid):
     mirrors = _mirror_faces(scene)
     for index, structure, _ in smoothed_structures(scene):
         found = _cells_across(structure.shape, grid, mirrors)
-        if found is None or found[0] >= CELLS_ACROSS_REFUSED:
+        if found is None or found[0] >= CELLS_ACROSS_REFUSED * (1.0 - _ACROSS_SLACK):
             continue
         cells, extent = found
+        mirror = (' At a Symmetry face a body declared only on the domain side is measured as '
+                  'declared; declared whole, symmetric about the plane, it is measured whole.'
+                  if mirrors else '')
         raise ValueError(
             f'structures[{index}] ({structure.shape.describe()}) is {cells:.2f} cells across '
             f'its smallest extent ({extent:g} at dx = {grid.dx:g}), under the '
-            f'{CELLS_ACROSS_REFUSED} a smoothed body needs. A body that small is a handful of '
-            f'mixed voxels, and what the grid scatters from is set by where they fall, not by '
-            f'the body: measured in study S2b (studies/fdtd_subpixel_cells_across.py), an '
+            f'{CELLS_ACROSS_REFUSED} a smoothed body needs. Across so few cells what the grid '
+            f'scatters from is set by where the mixed voxels fall, not by the body: measured '
+            f'in study S2b (studies/fdtd_subpixel_cells_across.py) on compact bodies, an '
             f'eps-12 sphere 2 cells across has a polarizability 9.6% to 43% high over five '
             f'placements and scatters 123% too much against Mie theory, and at eps 2.25 it is '
-            f'still up to 9% off; at 4 cells across every body tried is within 9.2% at eps 12 '
-            f'and 2.9% at eps 4. Refine to dx <= {extent / CELLS_ACROSS_REFUSED:g} for 4 cells '
-            f'across, or dx <= {extent / CELLS_ACROSS_WARNED:g} for 8, where every body tried '
-            f'is within 2.6%. A layer -- a body uniform along two axes, like a film -- is '
-            f'exempt: the rule is exact for a plane at any thickness.')
+            f'still up to 9% off; at 4 cells across every body tried at eps 12 is within 9.2%, '
+            f'and the sphere at eps 4 within 3.0%. Refine to dx <= '
+            f'{extent / CELLS_ACROSS_REFUSED:g} for 4 cells across, or dx <= '
+            f'{extent / CELLS_ACROSS_WARNED:g} for 8, where every body tried is within 2.7%. '
+            f'S2b\'s bodies were compact (aspect at most 1.6): a plate, thin along one axis and '
+            f'wide along two, was not measured, and is judged by its thickness on these '
+            f'numbers. A layer -- a body running the whole domain along two axes, like a film '
+            f'-- is exempt: for a plane the rule is the exact effective medium.{mirror}')
 
 
 def _mirror_faces(scene):
@@ -1316,7 +1405,7 @@ def _cells_across_notes(scene, plan):
     mirrors = _mirror_faces(scene)
     for index, structure, _ in smoothed_structures(scene):
         found = _cells_across(structure.shape, plan.grid, mirrors)
-        if found is None or not found[0] < CELLS_ACROSS_WARNED:
+        if found is None or not found[0] < CELLS_ACROSS_WARNED * (1.0 - _ACROSS_SLACK):
             continue
         cells, extent = found
         out.append((CoarseMeshWarning,
@@ -1324,7 +1413,7 @@ def _cells_across_notes(scene, plan):
                     f'across its smallest extent ({extent:g}); between {CELLS_ACROSS_REFUSED} '
                     f'and {CELLS_ACROSS_WARNED}, study S2b measured an eps-12 body\'s '
                     f'polarizability within 9.2% -- a sphere\'s between +1.2% and +6.3% by '
-                    f'where the grid falls -- against 2.6% for every body tried at '
+                    f'where the grid falls -- against 2.7% for every body tried at '
                     f'{CELLS_ACROSS_WARNED}. dx <= {extent / CELLS_ACROSS_WARNED:g} reaches '
                     f'{CELLS_ACROSS_WARNED}.'))
     return out

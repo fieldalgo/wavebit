@@ -7,6 +7,7 @@ The fill cannot see it -- every public body's fill is exact at any size -- so th
 axes) is exempt, because the rule is exact for a plane at any thickness. It runs ahead of the
 constitutive energy certificate, whose message now says where refining the grid helps.
 """
+import math
 import warnings
 
 import pytest
@@ -82,3 +83,86 @@ def test_the_certificate_no_longer_advises_refining_above_its_ceiling():
     message = _refusal(_box(fd.Sphere(radius=0.2), eps=20.0))
     assert 'positive-energy certificate' in message and 'Gershgorin' in message
     assert 'refining the grid helps up to eps about 12 and not above it' in message
+
+
+def _hexagon(flat):
+    """A regular hexagon ``flat`` across its flats, counter-clockwise."""
+    r = flat / 3 ** 0.5
+    return tuple((r * math.cos(math.pi / 3 * i), r * math.sin(math.pi / 3 * i)) for i in range(6))
+
+
+def _long_box(shape):
+    return fd.Scene(domain=fd.Domain(size=(1.2, 0.6, 0.6)),
+                    boundaries=fd.Boundaries(x=fd.PEC(), y=fd.PEC(), z=fd.PEC()),
+                    resolution=fd.Resolution(dx=DX), run=fd.Run(steps=4),
+                    structures=(fd.Structure(shape, 2.25),))
+
+
+@pytest.mark.parametrize('cx', (0.05, 0.15, 0.2, 0.25, 0.3, 0.35, -0.25))
+def test_a_body_exactly_four_cells_across_plans_wherever_it_sits(cx):
+    """0.2 at dx 0.05 read 3.9999999999999996 cells at some centres and was refused there
+    (the C5 review); it is 4 everywhere, and warns."""
+    message, = _across_warnings(_long_box(fd.Box(size=(0.2, 0.2, 0.3), center=(cx, 0, 0))))
+    assert '4.0 cells across' in message
+
+
+def test_a_prism_is_measured_across_its_hull():
+    """A regular hexagon by its flats: 4 cells warns (its hull width read 3.9999999999999996),
+    8 is quiet, 3.8 is refused; and the width is the smallest altitude of a triangle."""
+    grid = fd.plan(_box(fd.Sphere(radius=0.2))).grid
+    assert fd.Prism(vertices=_hexagon(0.2), height=0.3).min_extent(grid) == pytest.approx(0.2)
+    sliver = ((-0.25, -0.1), (0.25, -0.1), (0.2, 0.12))
+    area = 0.5 * 0.5 * 0.22
+    longest = math.hypot(0.45, 0.22)
+    assert fd.Prism(vertices=sliver, height=0.3).min_extent(grid) == pytest.approx(
+        2 * area / longest)
+    message, = _across_warnings(_box(fd.Prism(vertices=_hexagon(0.2), height=0.3)))
+    assert '4.0 cells across' in message
+    assert _across_warnings(_box(fd.Prism(vertices=_hexagon(0.4), height=0.5))) == []
+    assert '3.80 cells across' in _refusal(_box(fd.Prism(vertices=_hexagon(0.19), height=0.3)))
+
+
+def _mirrored(shape, side='-', parity=-1, other=None):
+    """A 0.6 box with a Symmetry face on x: ``x in [0, 0.6]`` for ``-``, ``[-0.6, 0]`` for ``+``."""
+    mirror = fd.Symmetry(parity=parity)
+    other = other or fd.PEC()
+    x = (mirror, other) if side == '-' else (other, mirror)
+    return fd.Scene(domain=fd.Domain(size=(0.6, 0.6, 0.6),
+                                     center=(0.3 if side == '-' else -0.3, 0.0, 0.0)),
+                    boundaries=fd.Boundaries(x=x, y=fd.PEC(), z=fd.PEC()),
+                    resolution=fd.Resolution(dx=DX), run=fd.Run(steps=4),
+                    structures=(fd.Structure(shape, 2.25),))
+
+
+def test_a_body_at_a_mirror_is_measured_as_the_scene_holds_it():
+    """Across the plane, as declared; flush against it at the zeroing parity, with its image.
+
+    A bar 7.4 cells long symmetric about a ``-`` plane read 3.7 on the box and was refused; a
+    box 2 cells long flush against a ``parity=-1`` plane is 4 with its image and plans (0.09
+    long, 3.6 whole, is refused, and told to declare it whole). A film symmetric about a ``+``
+    plane, running past the image of the far wall, is a layer (the C5 review refused it as
+    2 cells, from an extension a cell too long).
+    """
+    _quiet_plan(_mirrored(fd.Box(size=(0.37, 0.2, 0.2))))
+    message, = _across_warnings(_mirrored(fd.Box(size=(0.1, 0.3, 0.3), center=(0.05, 0, 0))))
+    assert '4.0 cells across' in message
+    refused = _refusal(_mirrored(fd.Box(size=(0.09, 0.3, 0.3), center=(0.045, 0, 0))))
+    assert '3.60 cells across' in refused and 'declared whole, symmetric about the plane' in refused
+    film = fd.Box(size=(1.7, 1.0, 0.1), center=(-0.025, 0.0, 0.0))
+    assert _across_warnings(_mirrored(film, side='+')) == []
+
+
+def test_a_film_flush_against_a_wall_is_a_layer():
+    """Flush against the x- wall, out through x+: still a film, still exempt.
+
+    ``uniform_along`` asks a cell of margin past the x- face, so this read as bounded along x
+    and was refused as 2 cells across (the C5 review). (Flush against a ``+`` wall is door 3's:
+    the nodes' last voxel stops half a cell short of it.)
+    """
+    assert _across_warnings(_box(fd.Box(size=(0.9, 1.0, 0.1), center=(0.05, 0.0, 0.0)))) == []
+
+
+def _quiet_plan(scene):
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        return fd.plan(scene)

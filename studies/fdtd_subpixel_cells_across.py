@@ -17,7 +17,8 @@ the production inverse-material operator: ``phi`` on nodes, ``E = -grad_h phi`` 
 ``p = sum (D - E) dx^3``. The box's image dipoles are removed with a fitted cubic coefficient
 (``KAPPA``; it moved 0.444 -> 0.431 between 4 and 8 cells across, fitted over boxes 3-8
 diameters wide, residual <= 8e-5). The sphere is judged against Clausius-Mossotti; the other
-bodies, which have no closed form, against an extrapolation from 12/16/24 cells across. No
+bodies, which have no closed form, against a Richardson extrapolation from 12 and 24 cells
+across, checked at 16. No
 field is stepped: only ``fd.plan`` and ``fd.lower`` run, with the constitutive energy
 certificate held open (at ``eps = 12`` it refuses some placements and not others at every
 resolution below 16 cells across; the operator it judges is positive -- this study measures
@@ -78,6 +79,10 @@ def _validate(scene, p):
 _real_validate = constitutive.validate
 constitutive.validate = _validate
 plan_module.constitutive = constitutive
+# The cells-across door (C5) is what this study sets; it refuses the small bodies measured
+# here, so it is held open too. Its verdict is the ``across`` of each row.
+import wavebit.fd._lower.checks as _checks                                       # noqa: E402
+_checks.check_cells_across = lambda scene, grid: None
 
 
 def quiet(fn, *args, **kwargs):
@@ -230,8 +235,8 @@ def polarizability(n, dx, eps_edges, terms, field_axis=2, tol=1e-11):
 def alpha(kind, across, eps, placement, box_diameters, field_axis=2, arm='production'):
     """``alpha / V`` along ``field_axis``, the box image removed, and whether it certified."""
     n = int(math.ceil(box_diameters * across))
-    n += n % 2
     n = max(n, int(math.ceil(across)) + 8)
+    n += n % 2                                    # even, so the origin is a node (see the docs)
     shape, volume = body(kind, across, DX, tuple(o * DX for o in placement))
     eps_c, terms, held, scene, plan = lowered(shape, eps, n, DX)
     if arm == 'arithmetic':                        # plain voxel averaging, the design's control
@@ -280,7 +285,10 @@ def bodies():
                 values = {}
                 for across in (2, 3, 4, 6, 8, 12, 16, 24):
                     values[across] = alpha(kind, across, 12.0, placement, 5, field_axis=axis)[0]
-                # Richardson on 12/16/24 at second order: the reference the small ones are read against.
+                # Richardson on 12 and 24 at second order: the reference the small ones are
+                # read against. The 16-cell value, read against it, is the check on the
+                # extrapolation (``reference_spread`` in the log: the 16-cell error, not a
+                # spread of the reference).
                 reference = (values[24] * 24 ** 2 - values[12] * 12 ** 2) / (24 ** 2 - 12 ** 2)
                 spread = abs(values[16] / reference - 1)
                 _emit(dict(study='bodies', body=kind, eps=12.0, axis='xyz'[axis],

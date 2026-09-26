@@ -658,8 +658,11 @@ polarizability of those voxels, not from the particle's.
 `studies/results/fdtd_subpixel_cells_across.log`. The static instrument solves zero-frequency
 electrostatics on the Yee node lattice with the production inverse-material operator (the
 lowered diagonal plus the constitutive cross action) and reads the dipole moment; the sphere is
-judged against Clausius-Mossotti, the other bodies against an extrapolation from 12/16/24 cells
-across (its spread is at most 0.95%). The dynamic instrument is five public `fd.run` solves of an
+judged against Clausius-Mossotti, the other bodies against a second-order Richardson
+extrapolation from 12 and 24 cells across, which the 16-cell value meets to 0.95% at worst. (At
+one cell across the box had an odd cell count, so the origin was a cell centre and those rows'
+`node` and `cell` labels are swapped; the ranges below do not depend on it, and the study now
+makes the count even.) The dynamic instrument is five public `fd.run` solves of an
 `eps = 12` sphere against Mie theory at 40 cells per wavelength. The energy certificate is held
 open in the static runs only, so that the geometry's answer is what is measured.
 
@@ -707,7 +710,8 @@ What it decides:
 * **The cells-across door refuses a smoothed body under 4 cells across its smallest extent and
   warns under 8.** At two cells the answer is a different particle at any contrast (up to 9% at
   `eps = 2.25`, 43% at 12, and +123% scattered). At four every body is within 9.2% at
-  `eps = 12` and 2.9% at `eps <= 4`; at eight the worst is 2.6%, in line with the 3% the Mie
+  `eps = 12`, and the sphere within 2.90% at `eps = 4`; at eight the worst is 2.63%, in line with
+  the 3% the Mie
   gates allow a small sphere. A contrast-dependent number is defensible -- glass at three cells
   is within 2.1% -- and was not chosen, so that one number is what a reader has to remember. The
   refusal quotes these production numbers, not the arithmetic mean's.
@@ -716,9 +720,12 @@ What it decides:
 * **The door runs before the energy certificate,** because the certificate already acts as a
   door, badly: at `eps = 12` it refuses the sphere at 2 to 4 of the 5 placements from 2 to 12
   cells across, and none at 24; above `eps` of about 12.5 it refuses at every resolution tried,
-  and its advice to refine the grid is wrong there. The operator it judges is positive -- its
-  smallest eigenvalue is about `0.8/eps` at 12 and `0.6/eps` at 20 -- so the refusal is the
-  certificate's slack, not a negative energy. A tighter certificate is an open decision.
+  and its advice to refine the grid is wrong there. Up to `eps = 20` the operator it judges was
+  positive on every body measured -- the sphere's smallest eigenvalue about `0.8/eps` at 12 and
+  `0.6/eps` at 20 -- so those refusals are the certificate's slack; but the C5 review measured
+  the cylinder's at `0.031/eps` at 20 and negative at 25 (`-0.33/eps`), a real indefinite
+  energy, so above about 20 a refusal is not only slack. A tighter certificate is an open
+  decision.
 * Not measured: the non-sphere bodies at `eps` 2.25 and 4; whether a non-convex prism's error
   follows its arm width or the hull width `min_extent` reads (2.83x apart for the L-shaped
   outline); CSG bodies; `discretisation='stencil'`.
@@ -840,24 +847,40 @@ same log:
 | 6 | 5 / 5 / 5 / 5 / 5 | all pass |
 | 12 | 2 / 2 / 5 / 5 / 5 | the box fails once at 4, the cylinder once at 32 |
 | 12.5 | 2 / 1 / 1 / 0 / 0 | box and cylinder fail at one placement at some resolutions; prism passes |
-| 13 | 2 / 1 / 0 / 0 / 0 | as at 12.5 |
+| 13 | 2 / 1 / 0 / 0 / 0 | box as at 12.5; the cylinder fails one placement at every resolution (two at 24); prism passes |
 | 20 | 0 / 0 / 0 / 0 / 0 | box and prism fail everywhere; cylinder passes one placement at 4 and 8 |
 
 From `eps` 12.5 a sphere fails *more* often as the grid is refined, so the advice was wrong
 there; the message now gives this table's shape and says that refining helps up to about 12 and
-not above it. The operator the certificate judges is positive (the C5 audit's smallest
-eigenvalue was about `0.8/eps` at 12 and `0.6/eps` at 20), so a tighter certificate would admit
-these bodies; whether to build one is an open decision.
+not above it. On the sphere the operator the certificate judges stays positive (smallest
+eigenvalue about `0.8/eps` at 12, `0.6/eps` at 20), so a tighter certificate would admit it; on
+the cylinder it is `0.031/eps` at 20 and negative from 25 (the C5 review), so no certificate
+should admit that one. Whether to build a tighter one is an open decision.
 
 `tests/test_fd_cells_across.py` pins the door, the warning, the rod, the turned box, the layer,
 the order against the certificate and the certificate's new sentence. Mutants, each alone:
 refusing under 3 fails 1 case, warning under 4 fails 2, films not exempt 1, rods exempt 1, the
-door removed 4, the old certificate advice 1. At a `Symmetry` face the box is extended past the
-plane before the body is measured: measured on the box, the symmetric bar of the mirror test,
-7.4 cells long, read 3.7 and was refused. A flush half is measured as declared -- half the
-scene's body, conservatively -- and declaring it whole is measured whole. The `_shapes.Sphere`
-docstring's claim that a
-sub-voxel sphere "is refused (C5)" is now true of the public sphere under four cells across.
+door removed 4, the old certificate advice 1. At a `Symmetry` face the body is measured on the
+box grown to the image of the domain -- `n` cells past a `-` plane, `n - 1` past a `+` plane,
+which sits half a cell inside the wall: measured on the box, the symmetric bar of the mirror
+test, 7.4 cells long, read 3.7 and was refused. The C5 review found four more holes, each fixed
+and tested: the thresholds compared exactly, so a box declared 4 cells across read
+3.9999999999999996 at some centres and was refused (S2b's own 4-cell hexagonal prism too) -- they
+carry a relative slack of 1e-9 now; a film flush against a wall or a mirror read as bounded,
+because `uniform_along` asks a cell of margin, and was refused at its thickness -- a body
+straight along an axis whose declared span reaches both ends (a wall, or a mirror plane) is a
+layer's axis now; an unturned box flush against a mirror at the zeroing parity, which
+`check_symmetry` accepts as exact, was measured as half the body -- it is measured with its
+image now, and any other body declared on one side is told to declare it whole; and the S2b
+study itself could no longer run, since the door refuses its small bodies -- it holds the door
+open, as it holds the certificate. Mutants of the fixes, each alone: no slack fails 4 cases,
+layers by `uniform_along` only 1, the flush half measured as declared 1, mirrors ignored 1. A
+`+` extension of a whole `n` cells survives: with layers read from the declared span, the extra
+cell is no longer observable, and `n - 1` is kept because it is the image. The refusal says its
+numbers come from compact bodies (aspect at most 1.6): a plate, thin along one axis and wide
+along two, was not measured, and is judged by its thickness. The `_shapes.Sphere` docstring's
+claim that a sub-voxel sphere "is refused (C5)" is now true of the public sphere under four cells
+across.
 
 ## C5: messages whose reason had changed, and the body contract (2026-09-26)
 

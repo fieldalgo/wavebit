@@ -44,7 +44,7 @@ class CoarseMeshWarning(UserWarning):
     refused; between 8 and 12 this warns.
 
     It also warns of a smoothed body 4 to 8 cells across its smallest extent (stage 4, C5):
-    study S2b measured an eps-12 body's polarizability within 9.2% at 4 cells and 2.6% at 8,
+    study S2b measured an eps-12 body's polarizability within 9.2% at 4 cells and 2.7% at 8,
     and under 4 the scene is refused (``_lower.checks.check_cells_across``).
     """
 
