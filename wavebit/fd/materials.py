@@ -198,7 +198,9 @@ class MaterialBase:
     def index_bound(self):
         """``min(sqrt(eps*mu))`` over the diagonal, or ``None`` if any entry is traced.
 
-        The slowest phase velocity the medium supports, which is what the CFL bound needs.
+        The smallest index, i.e. the fastest phase velocity, that one component supports on its
+        own. The CFL bound pairs values across components and phases as well
+        (``_lower.checks.cfl_bound``), because E and H sit at different points.
         For a :class:`Dispersive` material it is built from ``eps_inf``: the poles only add
         permittivity at and below their resonances, so ``eps_inf`` is the smallest the
         permittivity gets and therefore the fastest the medium is.

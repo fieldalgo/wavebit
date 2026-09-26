@@ -336,15 +336,26 @@ def _axis1d_guard(scene, rt, guard):
 
 
 def _traced_guard(scene, plan, rt):
-    """The same bound, computed on the backend, as ``where(dt < bound, 1, nan)``."""
+    """The same bound, computed on the backend, as ``where(dt < bound, 1, nan)``.
+
+    ``n_min`` is ``sqrt(min eps * min mu)`` over every phase, as ``checks.cfl_bound``'s is (its
+    docstring derives it); before stage 4's C5 this guard took each phase's own index, and a
+    traced ``eps = 4, mu = 0.25`` pair at courant 0.9 read stable and ran to NaN. A phase whose
+    traced ``eps`` or ``mu`` is not positive reads unstable too -- the concrete path refuses
+    one at ``Material``, and a traced ``eps = -2, mu = -1`` pair had multiplied back to a
+    positive index and read stable while the field reached 1.5e290 in 20 steps. The pole loop
+    names a dispersive phase's own permittivity ``own``: it wrote into ``eps_min`` before, and
+    every phase listed ahead of the last dispersive one fell out of the pairing.
+    """
     background = as_material(getattr(scene, 'background', None), 'Scene(background=)')
     materials = [background] + [s.material for s in (getattr(scene, 'structures', ()) or ())]
-    n_min, resonance, coupling = None, None, None
+    eps_min, mu_min, resonance, coupling = None, None, None, None
     for material in materials:
         for c in range(3):
-            n = rt.xp.sqrt(rt.array(material.eps[c], 'float64')
-                           * rt.array(material.mu_value[c], 'float64'))
-            n_min = n if n_min is None else rt.xp.minimum(n_min, n)
+            e = rt.array(material.eps[c], 'float64')
+            m = rt.array(material.mu_value[c], 'float64')
+            eps_min = e if eps_min is None else rt.xp.minimum(eps_min, e)
+            mu_min = m if mu_min is None else rt.xp.minimum(mu_min, m)
         total = None
         for pole in material.poles:
             w0_squared, strength = pole.rate()
@@ -354,13 +365,16 @@ def _traced_guard(scene, plan, rt):
                                                                           w0_squared)
             total = strength if total is None else total + strength
         if total is not None:
-            eps_min = None
+            own = None                                     # this phase's own eps, for its poles
             for c in range(3):
                 e = rt.array(material.eps[c], 'float64')
-                eps_min = e if eps_min is None else rt.xp.minimum(eps_min, e)
-            ratio = total / eps_min
+                own = e if own is None else rt.xp.minimum(own, e)
+            ratio = total / own
             coupling = ratio if coupling is None else rt.xp.maximum(coupling, ratio)
     zero = rt.array(0.0, 'float64')
+    one = rt.array(1.0, 'float64')
+    positive = rt.xp.logical_and(eps_min > zero, mu_min > zero)
+    n_min = rt.xp.sqrt(rt.xp.where(positive, eps_min * mu_min, one))
     rate = (resonance if resonance is not None else zero) \
         + (coupling if coupling is not None else zero)
     axes = checks.cfl_axis_sum(scene, plan.dx)
@@ -369,5 +383,5 @@ def _traced_guard(scene, plan, rt):
     else:
         vacuum = n_min / math.sqrt(axes)                   # an Axis1D face (stage 3)
     bound = 1.0 / rt.xp.sqrt(1.0 / vacuum ** 2 + rate / 4.0)
-    return rt.xp.where(rt.array(plan.dt, 'float64') < bound, rt.array(1.0, 'float64'),
-                       rt.array(float('nan'), 'float64'))
+    stable = rt.xp.logical_and(positive, rt.array(plan.dt, 'float64') < bound)
+    return rt.xp.where(stable, one, rt.array(float('nan'), 'float64'))

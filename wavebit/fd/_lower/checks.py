@@ -947,6 +947,28 @@ def cfl_bound(scene, plan):
     which is the pole resonance plus the plasma-like coupling back into E. A Debye pole
     contributes ``delta_eps/tau^2`` for the strength term (``materials.Debye`` derives why
     that is the only combination with the right units, and says it is a bound by analogy).
+
+    **``n_min`` is ``sqrt(min eps * min mu)`` over every value the scene holds**, and not the
+    smallest phase's own index. E and H sit at different points of the Yee cell, so wherever
+    two media meet -- snapped or smoothed -- an E point can hold one phase's ``eps`` while the
+    H points around it hold another's ``mu``, and the step is bounded by the norm of
+    ``eps^-1/2 C^T mu^-1 C eps^-1/2``, which is at most ``max(1/eps) max(1/mu)`` times the curl's
+    -- the bound below, rigorous for any arrangement (a smoothed mix stays between its phases).
+    The phase-by-phase index is not: ``Material(eps=4, mu=0.25)`` inside
+    ``Material(eps=0.25, mu=4)`` has every phase at ``n = 1``, and as a snapped ``fd.Region``
+    in that background at ``dx = 0.05`` it was measured, found in stage 4's C5 audit, to plan at
+    any courant below 1 and to reach NaN within 3000 steps at courant 0.60 to 0.99, while 0.50
+    and 0.55 stayed bounded over 20000. It is conservative, and measured so: that pair smoothed
+    goes unstable between courant 0.84 and 0.86 against this bound's 0.25, and a box of it in
+    vacuum is refused at the default 0.5 against a real limit near 1.0. No cheaper bound found
+    is both safe and tighter -- pairing each E point with its own H neighbours gives ``n = 1``
+    there, which is unsafe, and the extrema of the lowered arrays give 0.25 again, because
+    pure cells of each phase exist. Where one component of one phase holds both the smallest
+    ``eps`` and the smallest ``mu`` -- every scene with ``mu = 1`` throughout, and every scene
+    with a vacuum phase and ``eps, mu >= 1`` elsewhere -- it is the phase-by-phase index, to
+    the bit; elsewhere it is below it (``eps = 1, mu = 2`` beside ``eps = 2, mu = 1`` reads 1,
+    not ``sqrt(2)``, and a background of ``eps = (1, 4, 4), mu = (4, 1, 1)`` alone reads 1, where
+    its own index is 2 -- E along x sees ``eps = 1`` and the H beside it ``mu = 1``).
     """
     background, structures = _background(scene), tuple(getattr(scene, 'structures', ()) or ())
     materials = [background] + [s.material for s in structures]
@@ -966,16 +988,12 @@ def cfl_bound(scene, plan):
             strength_sum += strength
         eps_min = min(concrete(e) for e in material.eps)
         coupling = max(coupling, strength_sum / eps_min)
-    from .occupancy import smoothed_structures
-    if smoothed_structures(scene):
-        # E and H average different voxels: the smallest epsilon and mu need not come
-        # from the same declared phase. For air and (eps=4, mu=0.25), every phase index
-        # is 1 but the independent-extrema bound is sqrt(1*0.25)=0.5. Each positive
-        # two-phase mix stays between its endpoints. This conservative bound is static
-        # and needs no tolerance or change of dt; a tighter scene-specific bound is C5.
-        eps_min = min(concrete(e) for material in materials for e in material.eps)
-        mu_min = min(concrete(m) for material in materials for m in material.mu_value)
-        n_min = min(n_min, math.sqrt(eps_min * mu_min))
+    # E and H sit at different points: the smallest eps and the smallest mu need not come
+    # from one phase, snapped or smoothed (the docstring's operator-norm bound). Static, no
+    # tolerance, and dt is never recomputed.
+    eps_min = min(concrete(e) for material in materials for e in material.eps)
+    mu_min = min(concrete(m) for material in materials for m in material.mu_value)
+    n_min = min(n_min, math.sqrt(eps_min * mu_min))
     axes = cfl_axis_sum(scene, plan.dx)
     if axes == 3.0 / plan.dx ** 2:
         vacuum = n_min * plan.dx / math.sqrt(3.0)          # the stage-0 float, to the bit
@@ -1005,11 +1023,17 @@ def check_stability(scene, plan):
         worst += (f' An fd.Axis1D axis adds k_max^2/4 to the sum under the bound in place of the 1/dx^2 a '
                   f'differenced axis adds (its derivative is i k, bounded by nothing but k_max): '
                   f'{", ".join(axis1d)}; a smaller k_max= widens the bound.')
-    from .occupancy import smoothed_structures
-    if smoothed_structures(scene):
-        worst += (' Smoothed media sample E and H at different points; this conservative '
-                  'bound uses sqrt(min(eps) * min(mu)) across the declared phases, which '
-                  'can be below every phase\'s own index. It does not change dt.')
+    background = _background(scene)
+    phases = [background] + [s.material for s in (getattr(scene, 'structures', ()) or ())]
+    own = min(m.index_bound() for m in phases)
+    eps_min = min(concrete(e) for m in phases for e in m.eps)
+    mu_min = min(concrete(m) for p in phases for m in p.mu_value)
+    if math.sqrt(eps_min * mu_min) < own * (1 - 1e-12):
+        worst += (f' E and H sit at different points of the cell, so where two media meet an '
+                  f'E point can hold one phase\'s eps and its H neighbours another\'s mu: the '
+                  f'bound uses sqrt(min(eps) * min(mu)) = {math.sqrt(eps_min * mu_min):g} over '
+                  f'every phase, below each phase\'s own index ({own:g}). It is rigorous and '
+                  f'conservative, and it does not change dt.')
     raise ValueError(
         f'dt = {plan.dt:g} is at or past the stability bound {bound:g} of this scene. The '
         f'vacuum condition dt < n_min dx / sqrt(3) is tightened by every pole to '

@@ -163,6 +163,80 @@ def test_smoothed_magnetic_phases_use_independent_stability_extrema():
     assert plan.dt == safe.run.courant * plan.dx / np.sqrt(3), 'planning must not change dt'
 
 
+def test_a_snapped_magnetic_pair_is_bounded_by_every_phase_pairing():
+    """E and H sit at different points in any scene, so the bound pairs min eps with min mu.
+
+    Found in stage 4's C5 audit: ``Material(eps=4, mu=0.25)`` as an ``fd.Region`` in a
+    background of ``Material(eps=0.25, mu=4)`` -- every phase at ``n = 1`` -- planned at any
+    courant below 1 while the bound read each phase's own index outside smoothed scenes, and
+    ran to NaN within 3000 steps from courant 0.60 (0.50 and 0.55 stayed bounded over 20000).
+    The bound is ``sqrt(min eps * min mu)`` in every scene now, snapped or smoothed: 0.25 of
+    the vacuum courant here, conservative, and ``dt`` is never recomputed. A scene of
+    ``eps, mu >= 1`` is untouched, to the bit.
+
+    Mutant, measured 2026-09-26: the pairing applied only to smoothed scenes (as before) fails
+    this case.
+    """
+    def scene(structures, courant, background=None):
+        return _grid_scene(structures).replace(run=fd.Run(steps=4, courant=courant),
+                                               background=background)
+    pair = (fd.Structure(fd.Region(size=(0.3, 0.3, 0.3)), fd.Material(eps=4.0, mu=0.25)),)
+    reciprocal = fd.Material(eps=0.25, mu=4.0)
+    with pytest.raises(ValueError, match=r'sqrt\(min\(eps\) \* min\(mu\)\)') as caught:
+        _quiet(fd.plan, scene(pair, 0.3, reciprocal))
+    assert 'Run(courant=' in str(caught.value) and 'rigorous' in str(caught.value)
+    safe = scene(pair, 0.2, reciprocal)
+    plan = _quiet(fd.plan, safe)
+    assert cfl_bound(safe, plan)[0] == 0.25 * plan.dx / np.sqrt(3)
+    assert plan.dt == 0.2 * plan.dx / np.sqrt(3), 'planning must not change dt'
+    ordinary = scene((fd.Structure(fd.Region(size=(0.3, 0.3, 0.3)), 2.25),
+                      fd.Structure(fd.Region(size=(0.2, 0.2, 0.2), center=(0.2, 0.2, 0.2)),
+                                   fd.Material(eps=1.0, mu=2.0))), 0.5)
+    plan = _quiet(fd.plan, ordinary)
+    assert cfl_bound(ordinary, plan)[0] == plan.dx / np.sqrt(3)
+
+
+def test_the_traced_guard_bounds_every_pairing_and_a_nonpositive_phase():
+    """The traced twin of the bound: ``stable`` is NaN wherever the concrete path would refuse.
+
+    With a traced material the bound cannot be read at plan time, so ``fd.lower`` computes it
+    on the backend (``params._traced_guard``) and a violated one poisons ``stable``. It took
+    each phase's own index, and the reciprocal pair traced at courant 0.9 read stable and ran
+    to NaN after 2000 steps; and a traced ``eps = -2, mu = -1`` phase multiplied back to a
+    positive index and read stable while the field reached 1.5e290 in 20 steps. Now the guard
+    pairs ``min eps`` with ``min mu`` and reads a non-positive phase as unstable.
+
+    The same audit found the guard's pole loop reusing the name ``eps_min`` for a dispersive
+    phase's own permittivity, so every phase listed before the last dispersive one dropped out
+    of the pairing: the reciprocal pair with a weak Lorentz pole on the traced phase read
+    stable at courant 0.9.
+
+    Mutants, measured 2026-09-26: the guard taking each phase's own index, the guard without
+    its positivity condition, and the pole loop writing into ``eps_min`` again, each fail this
+    case.
+    """
+    torch = pytest.importorskip('torch')
+
+    def traced(value):
+        return torch.tensor(value, dtype=torch.float64, requires_grad=True)
+
+    def stable(material, courant, background=None):
+        scene = _grid_scene((fd.Structure(fd.Region(size=(0.3, 0.3, 0.3)), material),)).replace(
+            run=fd.Run(steps=4, courant=courant), background=background)
+        plan = _quiet(fd.plan, scene)
+        return float(_quiet(fd.lower, scene, plan, 'torch')['stable'])
+    reciprocal = fd.Material(eps=0.25, mu=4.0)
+    pair = fd.Material(eps=traced(4.0), mu=traced(0.25))
+    assert stable(pair, 0.2, reciprocal) == 1.0
+    assert np.isnan(stable(pair, 0.9, reciprocal))
+    assert stable(fd.Material(eps=traced(2.25), mu=traced(1.0)), 0.5) == 1.0
+    assert np.isnan(stable(fd.Material(eps=traced(-2.0), mu=traced(-1.0)), 0.1))
+    weak = fd.Lorentz(omega_0=1.0, strength=1e-6)
+    dispersive = fd.Dispersive(eps_inf=traced(4.0), mu=0.25, poles=(weak,))
+    assert stable(dispersive, 0.2, reciprocal) == 1.0
+    assert np.isnan(stable(dispersive, 0.9, reciprocal))
+
+
 @pytest.mark.parametrize('value', (float('inf'), float('-inf'), float('nan')))
 @pytest.mark.parametrize('parameter', ('radius', 'center'))
 def test_sphere_rejects_nonfinite_geometry_by_name(parameter, value):
