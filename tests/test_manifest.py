@@ -464,6 +464,14 @@ def test_results_section_matches_a_real_result():
         arr = np.asarray(getattr(sub, name))
         assert np.iscomplexobj(arr), f'{name} is published as an amplitude and must be complex'
         assert getattr(res, name) is getattr(res.incident, name)
+    # The Cartesian vectors sit under a key of their own because their layout is not the
+    # others': the order grid plus a trailing (Ex, Ey, Ez) axis.
+    for name in m['amplitudes']['cartesian']['fields']:
+        arr = np.asarray(getattr(sub, name))
+        assert np.iscomplexobj(arr), f'{name} is published as an amplitude and must be complex'
+        assert arr.shape == np.asarray(res.R).shape + (3,), (name, arr.shape)
+        assert getattr(res, name) is getattr(res.incident, name)
+        assert np.asarray(getattr(res.order(1, -1), name)).shape == (3,)
     for name in m['incidences']['fields']:
         assert hasattr(res, name), name
 

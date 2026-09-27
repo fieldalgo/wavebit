@@ -40,7 +40,13 @@ Naming follows the optics convention the rest of the ecosystem reads by sight:
     conversion differs between the pure-1D and the coupled paths and is measured to 6e-16
     against the Airy forms in ``tests/test_lossy_media.py``), so no caller ever needs to
     know a boundary variable existed. Phase reference: ``r`` at the illuminated interface, ``t`` at
-    the opposite one.
+    the opposite one; laterally, the cell corner (the Fourier origin), not the public centre.
+
+``r_xyz``, ``t_xyz``
+    The same outgoing waves as Cartesian E vectors, ``(Ex, Ey, Ez)`` on a last axis of length
+    3: ``r_s * s_hat + r_p * p_hat`` in the fixed public frame (+z up). No per-order frame, so
+    continuous where an order's ``kx`` crosses zero on the ``ky == 0`` row, where ``r_s`` turns
+    over with ``s_hat``. Same normalisation and phase reference as ``r_s``.
 
 Until 2026-08 the efficiencies were named ``de_ri`` / ``de_ti`` (meent lineage) and
 ``R_s``/``R_p`` named the raw *boundary amplitudes* — the ones needing a ``/(-i n_top)``
@@ -56,11 +62,12 @@ from .field_result import ResultFields
 class ResultSub:
     """One incidence's per-order efficiencies and Fresnel amplitudes."""
 
+    #: Positional: ``tree_unflatten`` rebuilds from this order, so a new field goes last.
     _FIELDS = ('r_s', 'r_p', 't_s', 't_p',
-               'R', 'R_s', 'R_p', 'T', 'T_s', 'T_p', 'power_entering')
+               'R', 'R_s', 'R_p', 'T', 'T_s', 'T_p', 'power_entering', 'r_xyz', 't_xyz')
 
     def __init__(self, r_s, r_p, t_s, t_p, R, R_s, R_p, T, T_s, T_p,
-                 power_entering=None):
+                 power_entering=None, r_xyz=None, t_xyz=None):
         self.r_s = r_s
         self.r_p = r_p
         self.t_s = t_s
@@ -72,6 +79,8 @@ class ResultSub:
         self.T_s = T_s
         self.T_p = T_p
         self.power_entering = power_entering
+        self.r_xyz = r_xyz
+        self.t_xyz = t_xyz
 
     @property
     def absorption(self):
@@ -98,16 +107,19 @@ class ResultSub:
 class OrderView:
     """Everything the solve knows about one diffraction order, as scalars."""
 
-    __slots__ = ('m', 'n', 'R', 'T', 'r_s', 'r_p', 't_s', 't_p')
+    __slots__ = ('m', 'n', 'R', 'T', 'r_s', 'r_p', 't_s', 't_p', 'r_xyz', 't_xyz')
 
-    def __init__(self, m, n, R, T, r_s, r_p, t_s, t_p):
+    def __init__(self, m, n, R, T, r_s, r_p, t_s, t_p, r_xyz=None, t_xyz=None):
         self.m, self.n = m, n
         self.R, self.T = R, T
         self.r_s, self.r_p, self.t_s, self.t_p = r_s, r_p, t_s, t_p
+        #: The order's outgoing E as ``(Ex, Ey, Ez)``, length-3 vectors.
+        self.r_xyz, self.t_xyz = r_xyz, t_xyz
 
     def __repr__(self):
         return (f'OrderView(m={self.m}, n={self.n}, R={self.R!r}, T={self.T!r}, '
-                f'r_s={self.r_s!r}, r_p={self.r_p!r}, t_s={self.t_s!r}, t_p={self.t_p!r})')
+                f'r_s={self.r_s!r}, r_p={self.r_p!r}, t_s={self.t_s!r}, t_p={self.t_p!r}, '
+                f'r_xyz={self.r_xyz!r}, t_xyz={self.t_xyz!r})')
 
 
 class Result(ResultFields):
@@ -220,6 +232,21 @@ class Result(ResultFields):
         return self._incident_amplitude('t_p')
 
     @property
+    def r_xyz(self):
+        """Each reflected order's E as ``(Ex, Ey, Ez)``, shape ``r_s.shape + (3,)``.
+
+        ``r_s * s_hat + r_p * p_hat`` in the fixed public frame: no per-order frame, so it is
+        continuous where an order's ``kx`` crosses zero. Same normalisation and phase
+        reference as ``r_s`` -- laterally the cell corner. None at efficiency-only level.
+        """
+        return self._incident_amplitude('r_xyz')
+
+    @property
+    def t_xyz(self):
+        """Each transmitted order's E as ``(Ex, Ey, Ez)``; see :attr:`r_xyz`."""
+        return self._incident_amplitude('t_xyz')
+
+    @property
     def R(self):
         """Reflection efficiency per order; averages variants only if incident is absent."""
         return self._delegate('R')
@@ -269,12 +296,18 @@ class Result(ResultFields):
                 'this result carries no order_window metadata; index the arrays directly')
         (cx, fx), (cy, fy) = self.order_window
 
-        def pick(a):
-            if a is None:
-                return None
-            flat = a.reshape(-1, a.shape[-1])
+        def at(flat):
+            # One cell rule for both pickers: `flat`'s leading axis is the rows (`v`).
             row = flat[n - cy + fy if flat.shape[0] > 1 else 0]
             return row[m - cx + fx]
+
+        def pick(a):
+            return None if a is None else at(a.reshape(-1, a.shape[-1]))
+
+        def pick_vector(a):
+            # The component axis is last, so the order grid is the two before it: `pick`'s
+            # `a.shape[-1]` would read the 3 as the u axis and index a component.
+            return None if a is None else at(a.reshape(-1, a.shape[-2], a.shape[-1]))
 
         if not (cx - fx <= m <= cx + fx):
             raise IndexError(f'order m={m} outside the retained set [{cx - fx}, {cx + fx}]')
@@ -289,4 +322,5 @@ class Result(ResultFields):
             raise IndexError('this solve retained a single row of orders; only n=0 exists')
 
         return OrderView(m, n, pick(sub.R), pick(sub.T),
-                         pick(sub.r_s), pick(sub.r_p), pick(sub.t_s), pick(sub.t_p))
+                         pick(sub.r_s), pick(sub.r_p), pick(sub.t_s), pick(sub.t_p),
+                         pick_vector(sub.r_xyz), pick_vector(sub.t_xyz))

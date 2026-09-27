@@ -2,6 +2,13 @@
 
 Written: 2026-08-11.
 
+Updated 2026-09-27 (later): the per-order Cartesian amplitudes are published without a version
+bump, as `li_nesting` was: `results.amplitudes.cartesian` names `r_xyz` / `t_xyz`, their
+`(n_orders_v, n_orders_u, 3)` layout and their meaning, under a key of its own so that a
+consumer assuming every `amplitudes.fields` entry is `(n_v, n_u)` never meets a length-3 axis.
+`per_order_frame` now says the frame is every path's, the pure 1D one included, and what that
+means on the `ky = 0` row -- a correction of wording, since it already claimed every path.
+
 Updated 2026-09-27: `factorization='laurent'` is published without a version bump, as
 `li_nesting` was: the value joins `enums.factorization` and both paths' `factorization` lists
 (the parametric one is now a list of two, its default first), and a new `tensor_materials` key

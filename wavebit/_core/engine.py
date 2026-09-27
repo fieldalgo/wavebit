@@ -286,7 +286,7 @@ def _efficiency_only(de_ri, de_ti, power_entering):
     """
     return {'r_s': None, 'r_p': None, 't_s': None, 't_p': None,
             'R': de_ri, 'R_s': None, 'R_p': None, 'T': de_ti, 'T_s': None, 'T_p': None,
-            'power_entering': power_entering}
+            'power_entering': power_entering, 'r_xyz': None, 't_xyz': None}
 
 
 #: ``pol`` was three things at once, and this is the rename. See :attr:`CoreSolveMixin.tetm`.
@@ -3003,14 +3003,26 @@ class CoreFactorizationMixin:
                                          mu_top=mu_top, mu_bot=mu_bot,
                                          eps_top=eps_top, eps_bot=eps_bot)
 
+        # The boundary spectra and the per-order Cartesian vectors are one arithmetic
+        # (`ordinary_spectra`), read off the packed amplitudes before any `ResultSub` exists, so
+        # `r_xyz` / `t_xyz` ride in the result mappings like every other amplitude.
+        from .field_result import cartesian_amplitudes, ordinary_spectra, ordinary_state
+        keys = {'incident': 'incident', 's': 's_inc', 'p': 'p_inc'}
+        spectra = ordinary_spectra(
+            self, {name: result_dict.get(key) for name, key in keys.items()},
+            eps_top=eps_top, eps_bot=eps_bot, mu_top=mu_top, mu_bot=mu_bot)
+        if spectra is not None:
+            for name, key in keys.items():
+                if key in result_dict:
+                    result_dict[key] = dict(result_dict[key], **cartesian_amplitudes(
+                        spectra, name, result_dict[key]['r_s'].shape))
+
         incident = self._RESULT_SUB(**result_dict['incident']) if 'incident' in result_dict else None
         s_inc = self._RESULT_SUB(**result_dict['s_inc']) if 's_inc' in result_dict else None
         p_inc = self._RESULT_SUB(**result_dict['p_inc']) if 'p_inc' in result_dict else None
 
         result = self._RESULT(incident, s_inc, p_inc, order_window=self.order_window)
-        from .field_result import ordinary_state
-        result._field_state = ordinary_state(self, result, eps_top=eps_top, eps_bot=eps_bot,
-                                             mu_top=mu_top, mu_bot=mu_bot)
+        result._field_state = ordinary_state(self, spectra)
         self._warn_complex_incidence()
 
         return result

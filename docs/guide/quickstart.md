@@ -42,6 +42,7 @@ result.R.shape                  # (n_orders_v, n_orders_u) -- v first
 result.orders_u, result.orders_v    # which order each column and each row is
 result.order(0, 0)              # index by order instead, and skip the layout entirely
 result.r_s, result.t_p         # the complex Fresnel amplitudes
+result.r_xyz                   # each order's outgoing E as (Ex, Ey, Ez); no per-order frame
 result.power_entering          # net entering power / incident-only power
 result.absorption              # absorption in the finite stack / incident-only power
 ```

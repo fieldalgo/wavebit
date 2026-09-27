@@ -29,7 +29,7 @@ field at all.
 | rung | adds | costs |
 | --- | --- | --- |
 | `'efficiency'` | `R`, `T` per order | — |
-| `'amplitude'` (default) | `r_s`/`r_p`/`t_s`/`t_p`, their s/p-resolved efficiencies, `s_inc` / `p_inc` | one extra solve against an already-factorized matrix |
+| `'amplitude'` (default) | `r_s`/`r_p`/`t_s`/`t_p`, their s/p-resolved efficiencies, `r_xyz`/`t_xyz` (since 2026-09-27), `s_inc` / `p_inc`, and the boundary spectra `boundary_fields` reads | one extra solve against an already-factorized matrix; the result's size (§5) |
 | `'field'` | the per-layer modes and amplitudes `reconstruct_field` walks | §2 |
 
 It is a ladder and not a menu: each rung answers everything below it, and `Answers.covers`
@@ -172,6 +172,26 @@ caller knows and the library does not: an optimisation loop takes `.T.sum()` and
 so it buys that caller nothing — while a 200-point spectrum sweep that keeps its results is
 0.5 MB against 10.8 MB, and under `vmap` the wider tree is materialised per batch element
 whether anything reads it or not.
+
+**Re-measured 2026-09-27**, when `r_xyz` / `t_xyz` joined the amplitude rung — and the table
+above had already gone stale. Sum of `nbytes` over the result's JAX pytree leaves, float64, one
+patterned 2D layer lit by a mixed pair (so all three incidence variants), before (`6d721d2`)
+and after:
+
+| | `(8, 8)` | `(15, 15)` | JAX pytree |
+| --- | --- | --- | --- |
+| `'efficiency'` | 4.5 KB | 15.0 KB | 3 leaves (`power_entering` joined) |
+| `'amplitude'`, per-order arrays, before | 94.9 KB | 315.4 KB | 33 leaves |
+| `'amplitude'`, per-order arrays, after | **176.1 KB** | **585.6 KB** | **39 leaves** |
+| `'amplitude'`, boundary spectra (unchanged) | 334.2 KB | 1111.2 KB | 16 leaves |
+| `'amplitude'`, whole result, before → after | 429.1 → **510.4 KB** | 1426.6 → **1696.9 KB** | 49 → **55 leaves** |
+
+The vectors cost three complex components per order per direction per variant — 1.86x the
+per-order arrays, 1.19x the whole result — and they are the E half of the boundary spectra
+the same rung already carries, before the lateral phase, so the rung now holds that
+information twice. The larger change since the table above is the boundary spectra
+(`boundary_fields` answers at `'amplitude'`): the amplitude rung is now about 113 times the
+efficiency one, not 21, and the sweep and `vmap` argument above holds with that factor.
 
 So the ladder's bottom rung is a real cut, just not on the axis the rest of this document is
 about. The lesson is worth more than the rung: **"buys nothing" was a measurement of one axis

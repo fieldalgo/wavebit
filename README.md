@@ -105,7 +105,7 @@ worth the two minutes. [`docs/conventions.md`](docs/conventions.md) is the norma
 | **Materials are relative permittivity** | not refractive index. `eps_from_index` / `index_from_eps` convert, and the retired index-shaped keywords (`ucell`, `n_top`, `n_bot`) are refused by name because the quantity moved with them |
 | **Time convention is `e^{-iωt}`** | `Im(eps) > 0` is loss — equivalently `Im(n) > 0`, how nk databases tabulate it — and a wave travelling in `+z` carries `exp(+i*k0*kz*z)` |
 | **Layers run bottom to top; `+z` points upward** | `structure[0]` touches `bot`; the bottom interface is `z=0`. Raster row `0` is at the negative-y edge. Select the light with `incidence_side` |
-| **Uppercase is power, lowercase is amplitude** | `R` / `T` are per-order efficiencies; `r_s` / `r_p` / `t_s` / `t_p` are the complex Fresnel amplitudes |
+| **Uppercase is power, lowercase is amplitude** | `R` / `T` are per-order efficiencies; `r_s` / `r_p` / `t_s` / `t_p` are the complex Fresnel amplitudes, each order in its own s/p frame; `r_xyz` / `t_xyz` are the same waves as Cartesian E vectors, with no frame to turn over |
 | **Arrays run `v` first, written pairs run `x` first** | `truncation_order=[4, 1]` gives `R.shape == (3, 9)`. `result.order(m, n)` indexes by order and sidesteps the layout entirely |
 | **The cell is centred at the origin** | a centred feature is `0` in a shape's `cx` / `cy`, in `reconstruct_field`'s `sample_x` / `sample_y` and in `wavebit.meshgrid_xy` alike. Shape lengths are absolute, not fractions of the period |
 | **Units are yours** | `wavelength`, `period` and `thickness` only have to share one. Angles are radians |

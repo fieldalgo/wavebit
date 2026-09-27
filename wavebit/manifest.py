@@ -89,6 +89,11 @@ from ._core.spec import SPEC_VERSION
 #: where it is refused. Nothing resolves to it -- every default is the rule it was -- so a
 #: consumer that never learns the value generates exactly the scenes it generated before, and
 #: every key it already reads keeps its meaning.
+#:
+#: Nor did ``results.amplitudes.cartesian`` (2026-09-27, ``r_xyz`` / ``t_xyz``): a key added,
+#: which a consumer reading unknown keys ignores, beside a rewording of ``per_order_frame``
+#: that already claimed the frame for every path -- true of the pure 1D path from the same
+#: day. No name changed, which is what earned '6' and '12'.
 #: '9': two modeling paths instead of three (2026-09-03). ``smooth`` and ``boundary`` were one
 #: path published twice -- identical option lists, one ``structure`` spelling, and a choice
 #: taken per layer rather than per solve -- so they became ``parametric`` with an ``overlap``
@@ -463,6 +468,19 @@ RESULTS = {
                            'supplies it. excitation weights multiply each lit order\'s own '
                            's_hat / p_hat; the scattering matrix p block holds port '
                            'variables (S11 @ delta = -r_p)',
+        # A key of its own rather than two more names in `fields`, so a consumer that
+        # assumes every `fields` entry has the (n_orders_v, n_orders_u) layout never meets
+        # a trailing axis of length 3.
+        'cartesian': {
+            'fields': ('r_xyz', 't_xyz'),
+            'layout': '(n_orders_v, n_orders_u, 3); the last axis is (Ex, Ey, Ez) in the '
+                      'public frame, +z up. On result.incident / s_inc / p_inc and directly '
+                      'on result; result.order(m, n) returns them as length-3 vectors',
+            'meaning': "each outgoing order's E vector per unit incident amplitude, "
+                       'r_s*s_hat + r_p*p_hat: no per-order frame, so continuous where an '
+                       "order's kx crosses 0. Same phase reference as r_s -- laterally the "
+                       'cell corner (the Fourier origin), not the public centre',
+        },
     },
     'incidences': {
         'fields': ('incident', 's_inc', 'p_inc'),

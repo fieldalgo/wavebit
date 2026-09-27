@@ -5,7 +5,7 @@ Targets: `wavebit/_core/conventions.py`, `wavebit/_core/result.py`,
 `wavebit/_core/solve_1d.py`, `wavebit/_core/scattering.py`, `wavebit/_core/field_result.py`,
 `tests/test_amplitude_sp_frame.py`, `tests/test_order_azimuth.py`,
 `tests/test_golden_legacy_parity.py`, `tests/test_scattering_core.py`,
-`tests/test_excitation.py`
+`tests/test_excitation.py`, `tests/test_cartesian_amplitudes.py`
 
 **TL;DR.** Every order with `Re(kx) < 0` had its complex amplitudes `r_s` / `r_p` / `t_s` /
 `t_p` reported in a reversed frame -- `-s_hat`, `-p_hat` -- because `order_azimuth` built the
@@ -26,7 +26,8 @@ which is also the record of why it was mistaken for a convention for one round.
 coupled paths; the pure TE/TM path had quoted its Cartesian primary (`E_y` / `H_y`) on every
 order all along, a sign apart from `polarization=(1, 0)` / `(0, 1)` at `phi = 0` on every order
 across `kx = 0` from the incident one. It now uses the same frame for its amplitudes, its
-`excitation` weights, its scattering matrix and its incident wave.
+`excitation` weights, its scattering matrix and its incident wave; and every result carries
+`r_xyz` / `t_xyz`, the same waves as Cartesian E vectors, for a quantity no frame can turn over.
 
 ---
 
@@ -279,10 +280,15 @@ fields by `n/mu`, to 1.3e-15 normwise, and nothing else.
 **The price, stated where a user will look for it.**
 
 * On the `ky == 0` row an amplitude now changes sign where its own `kx` crosses zero, on the pure
-  path as on the conical one: `r_s(-1)` steps by about 0.3 -- twice its magnitude -- across
-  `theta = asin(lambda/P)` on the investigation's grating, while `R(-1)` moves no more across
-  the crossing than across a control step of the same size. That is the frame's singular
-  point, not physics (Sec. 3's qualifier); `test_amplitude_sp_frame.py` §4 pins it as a step.
+  path as on the conical one: across `theta = asin(lambda/P)` on the investigation's grating
+  `r_s(-1)` steps by 0.20 (TE) and `r_p(-1)` by 0.21 (TM), twice their magnitudes. That is the
+  frame's singular point, not physics (Sec. 3's qualifier); `test_amplitude_sp_frame.py` §4
+  pins it as a step. `R(-1)` does not turn over, but on this grating it is not smooth there
+  either: `n_bot * P / lambda = 4`, so at the same angle orders `+3` and `-5` graze the
+  substrate, and that Rayleigh point makes `R(-1)`'s step across the crossing 1.4x (TE) and
+  1.8x (TM) the larger of two equal control steps either side (2e-5 in `theta`). Off the
+  coincidence, at `lambda = 0.62`, it is 1.00 of the control, TE and TM, while `r_s(-1)` /
+  `r_p(-1)` still step by twice their magnitudes (0.18 / 0.16).
 * At `theta = 0` the incident order is on that point: as `theta` crosses zero every amplitude
   and the field change sign together, and on a mirror-symmetric grating at normal incidence
   `r_{-m} = -r_{+m}` where the Cartesian frame gave `+`. A sweep through normal incidence that
@@ -307,6 +313,29 @@ fields by `n/mu`, to 1.3e-15 normwise, and nothing else.
   compares a non-specular 1D amplitude today -- the complex-`kx` golden's `r0` is specular.
   RETICOLO's 1D TM *field* input is the incident `H_y` as well, which the unit-E input matches
   only in air -- every committed case is lit from air.
+
+**The quantity that does not step: `r_xyz` / `t_xyz`.** Every result carries each outgoing
+order's E as `(Ex, Ey, Ez)`, `r_s * s_hat + r_p * p_hat` in the public frame, shape
+`r_s.shape + (3,)`. It is the E half of the boundary spectra `field_result.ordinary_spectra`
+already built for `boundary_fields`, taken before the lateral phase -- one arithmetic, so no
+new copy of the s/p -> xyz rule, and every existing field output byte-identical across its
+arrival. Across the crossing above it steps as far as an equal control step does, where `r_s`
+steps by a sign: at `lambda = 0.62` the ratio is 0.9999 on the pure and conical paths, TE and
+TM, and the step shrinks linearly with the step in `theta` from 1e-3 to 1e-6, while `r_s` /
+`r_p` step by twice their magnitude at every size. On the `lambda = 0.6` grating the Rayleigh
+point above makes it 2.0x (TE) and 1.6x (TM) the control -- the branch point's doing, not the
+frame's. On a pure TE solve its `E_y` is the old Cartesian amplitude
+times `sign(kx_inc)` -- the incidence's own sign, 1 for `theta >= 0` -- so a caller who wanted
+the pre-2026-09-27 continuity reads `r_xyz[..., 1]`. It is also the quantity to read on an
+order at an exact `kx = 0`, whose frame rounding picks (above): with the direct
+`kx = 2*pi/P` there, Torch's `r_s(-1)` is NumPy's negated while its `r_xyz(-1)` agrees to
+8e-10 (TE) and 2e-9 (TM) -- what is left is Torch's ulp in the order offsets, on a scene that
+also puts orders 3 and -5 at grazing in the glass (a Rayleigh point). Pinned
+from outside that arithmetic in `tests/test_cartesian_amplitudes.py` (an independent spelling
+on every path, a 60-degree cell included, and the reconstructed field decomposed at both
+faces). RETICOLO's `res2` returns the same Cartesian quantities per order -- E and H -- which
+is prior art for it and, for a future external check, an oracle that is frame-free on both of
+RETICOLO's paths. H is not shipped: `(k/k0) x E / mu`, and `boundary_fields` has it in space.
 
 **Open, and the maintainer's call: the lateral phase reference.** Every ordinary amplitude, and
 every `excitation` weight, is referenced at the cell **corner** -- the Fourier origin -- while

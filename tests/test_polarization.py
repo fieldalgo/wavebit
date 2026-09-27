@@ -276,7 +276,8 @@ def test_a_1d_structure_with_a_pair_takes_the_conical_path():
         via_pair = solver.solve()
         assert solver.grating_type == 1, 'expected the conical formulation'
         via_pure = wavebit.rcwa(tetm=tetm, **kw).solve()
-        for name in ('R', 'T', 'R_s', 'R_p', 'T_s', 'T_p', 'r_s', 'r_p', 't_s', 't_p'):
+        for name in ('R', 'T', 'R_s', 'R_p', 'T_s', 'T_p', 'r_s', 'r_p', 't_s', 't_p', 'r_xyz',
+                     't_xyz'):
             np.testing.assert_allclose(np.asarray(getattr(via_pair.incident, name)),
                                        np.asarray(getattr(via_pure.incident, name)),
                                        atol=1e-11, err_msg=f'{tetm}: {name}')

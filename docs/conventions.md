@@ -464,6 +464,7 @@ spelling of a cell, and a skewed one arrives as `lattice=` instead.
 | `power_entering` | scalar net power entering the finite stack, including incident/reflected interference, divided by incident-only power at the illuminated interface |
 | `absorption` | scalar absorbed power in all finite layers divided by incident-only power: `power_entering - T.sum()`; excludes both half-spaces |
 | `r_s`, `r_p`, `t_s`, `t_p` | complex **Fresnel amplitudes**: E-field ratios against a unit incident E-field, directly comparable to the textbook Fresnel/Airy coefficients (pinned to 1e-12 against them, absorbing media included) |
+| `r_xyz`, `t_xyz` | the same outgoing waves as **Cartesian E vectors**, shape `(n_orders_v, n_orders_u, 3)` with `(Ex, Ey, Ez)` last: `r_s * s_hat + r_p * p_hat` in the fixed public frame. No per-order frame, so continuous where an order's `kx` crosses zero |
 | `incident`, `s_inc`, `p_inc` | the response to the actual incident state, plus the pure-s and pure-p variants computed by coupled solves; omitting polarization selects pure s and still populates `incident` |
 
 `result.r_s`, `result.r_p`, `result.t_s`, and `result.t_p` read the corresponding
@@ -509,14 +510,16 @@ Amplitude fine print, stated once so it never has to be discovered:
   `sign(Re kx_m) * y_hat` — `+y_hat` at `kx_m == 0`, the origin rule — and `p_hat_m` turns
   over with it. So an order's `r_s` / `r_p` changes sign where its own `kx` crosses zero while
   `R` sails through: `k_par` passes through zero there and `z_hat x k_hat_par` has no limit.
-  That step is the frame's singular point, not physics. An order whose `kx` is zero in exact
-  arithmetic — normal diffraction: a direct `kx = 2*pi/P`, or `theta = asin(lambda/P)`, puts
-  order `-1` there — sits on that point, and which side of it the solve lands on is decided by
-  rounding: the same input gives `kx(-1) = +0.0` on NumPy and JAX and `-5.6e-17` on Torch,
-  and on Torch `theta = asin(lambda/P)` and `theta = asin(0.375)` land on opposite sides
-  (measured on `tests/test_amplitude_sp_frame.py`'s grating). So on such an order `r_s` / `r_p`
-  can differ in sign between backends and between spellings of the same input, on the conical
-  path as on the pure one; `R` / `T` do not. At `theta = 0` it is the incident
+  That step is the frame's singular point, not physics; `r_xyz` is continuous there. An
+  order whose `kx` is zero in exact arithmetic — normal diffraction: a direct `kx = 2*pi/P`,
+  or `theta = asin(lambda/P)`, puts order `-1` there — sits on that point, and which side of
+  it the solve lands on is decided by rounding: the same input gives `kx(-1) = +0.0` on NumPy
+  and JAX and `-5.6e-17` on Torch, and on Torch `theta = asin(lambda/P)` and
+  `theta = asin(0.375)` land on opposite sides (measured on
+  `tests/test_amplitude_sp_frame.py`'s grating). So on such an order `r_s` / `r_p` can differ
+  in sign between backends and between spellings of the same input, on the conical path as on
+  the pure one; `R` / `T` do not, and neither does `r_xyz`, which is the quantity to read
+  there. At `theta = 0` it is the incident
   order that sits on it, and the incident field itself turns over as `theta` crosses zero
   (`s_hat_inc` goes from `-y` to `+y`); a sweep through `theta = 0` that wants a continuous
   field multiplies by `sign(Re kx_inc)`, order 0's `kx` — at index `half - centre` of
@@ -543,6 +546,28 @@ Amplitude fine print, stated once so it never has to be discovered:
   `phi`;
 - the p sign convention is the one where a single interface at normal incidence gives
   `r_p = (n2 - n1)/(n2 + n1) = -r_s`;
+- `r_xyz` / `t_xyz` are the frame-free spelling of the same waves, per unit incident amplitude
+  exactly as `r_s` is, in the public frame (`+z` up):
+
+  ```text
+  r_xyz[m] = r_s[m] * s_hat_m + r_p[m] * p_hat_m^ref     (incidence medium n_i, kz_i)
+  t_xyz[m] = t_s[m] * s_hat_m + t_p[m] * p_hat_m^trn     (exit medium n_t, kz_t)
+
+  s_hat      = (-s, c, 0)                                 (c, s) = the order's azimuth
+  p_hat^ref  = ( kz_i c/n_i,  kz_i s/n_i, d*rho/n_i)      in-plane +cos(theta_m) k_hat_par
+  p_hat^trn  = (-kz_t c/n_t, -kz_t s/n_t, d*rho/n_t)      in-plane -cos(theta_m) k_hat_par
+  rho = kx c + ky s,   d = -1 lit from the top, +1 from the bottom
+  ```
+
+  Each `p_hat` is perpendicular to its own `k = (kx, ky, +-kz)` in the non-conjugated sense,
+  lossy media included. They share `r_s`'s phase reference — in `z` the lit and far
+  interfaces, and laterally the cell **corner** (below) — and they are continuous where an
+  order's `kx` crosses zero on the `ky == 0` row, where `r_s` turns over; the incident order's
+  own crossing (`theta` through 0) still turns them over, because that is the incidence
+  changing, not a quotation frame. The magnetic vector is not shipped: it is
+  `(k/k0) x E / mu` in Z0 units with `k/k0 = (kx, ky, +-kz)` — read `kz` off the solve, never
+  respell it — and `boundary_fields(part='outgoing')` returns it in space. RETICOLO's `res2`
+  returns the same Cartesian quantities per order, E and H;
 - phase reference: `r` at the incidence-side interface, `t` at the far one (top and
   bottom respectively for the default illumination). Laterally, every ordinary amplitude —
   and every `excitation` weight — is referenced at the cell **corner**, the Fourier origin the
@@ -578,6 +603,7 @@ Amplitude fine print, stated once so it never has to be discovered:
 | the `Material` type: the scalar shorthand, both values as pytree children (so a permittivity differentiates), and the two conversions including `index_from_eps`'s branch and its signed-zero hazard | `tests/test_material.py` |
 | which rows exist at all, per `answers` rung | `tests/test_answers_declaration.py` — each rung's surface, the rungs agreeing bit-for-bit on what they share, and the refusal naming the declaration |
 | the per-order s/p frame the amplitudes are quoted in | `tests/test_amplitude_sp_frame.py` — a transposed twin, the reconstructed field as arbiter (all four amplitudes, every path, the pure 1D one included, both lit sides and both angle signs), continuity across `kx = 0` off the `ky == 0` row, and §4: the pure 1D path against the conical one amplitude for amplitude and field for field, and the sign step on the `ky == 0` row pinned as a step. The `excitation` weights' frame: `tests/test_excitation.py`; the p block's reading and the 1D matrix as the conical block: `tests/test_scattering_core.py`. Efficiencies cannot pin this row at all: a reversed frame is `\|r\|^2`-invariant |
+| `r_xyz` / `t_xyz` | `tests/test_cartesian_amplitudes.py` — an independent spelling of the formula on every path (a 60-degree cell included) and for each incidence variant against its own amplitudes, the reconstructed field decomposed at both faces with `E_z` held to transversality, continuity across an order's own `kx = 0`, one vector on every backend at an order's exact `kx = 0`, the three 1D paths agreeing, the power identity, the `answers` rung, `jit` / gradients, and `order(m, n)` on a widened window moved along both axes |
 | order layout, order-index sign | `tests/references/test_reticolo_golden.py` (mirrors orders if wrong, conserving energy) |
 | `incidence_side`, incidence-relative results | `tests/test_backside_incidence.py` (reversed-stack Airy oracle, reciprocity both halves) and the `inc_bottom` cases of `tests/references/test_reticolo_golden.py` |
 | result naming, `order()`, delegation | `tests/test_result_api.py` |

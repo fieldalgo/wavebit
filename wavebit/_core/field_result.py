@@ -245,12 +245,25 @@ class ResultFields:
         return self._require_field_state().boundary(side, sample_x, sample_y, part, incidence)
 
 
-def ordinary_state(solver, result, *, eps_top=None, eps_bot=None, mu_top=None, mu_bot=None):
-    """Adapt one ordinary solve without retaining a reference to the solver."""
+def ordinary_spectra(solver, variants, *, eps_top=None, eps_bot=None, mu_top=None,
+                     mu_bot=None):
+    """Every retained order's six-component plane wave, per incidence, before the lateral phase.
+
+    ``variants`` maps ``'incident'`` / ``'s'`` / ``'p'`` to the solve's result mappings (the
+    ``r_s`` / ``r_p`` / ``t_s`` / ``t_p`` it packed) or ``None``. Returns ``None`` below
+    ``answers='amplitude'``, where there are no amplitudes to expand.
+
+    One arithmetic serves two readers, which is why it is its own function: the boundary spectra
+    :func:`ordinary_state` hands to the field API (these times the phase that moves the corner
+    Fourier origin to the public centre), and the per-order Cartesian vectors ``r_xyz`` /
+    ``t_xyz`` (:func:`cartesian_amplitudes`, these as they are). A second spelling of the s/p ->
+    xyz basis would be one more copy of the rule ``order_azimuth`` / ``order_frame_sign`` state.
+    """
     from .conventions import boundary_kz, order_azimuth, order_frame_sign, incident_column
     from .solve_2d import order_grid_kxy
 
-    if result.incident is None or result.incident.r_s is None:
+    incident = variants.get('incident')
+    if incident is None or incident['r_s'] is None:
         return None
     xp, dtype = solver.xp, solver.complex_dtype
     kx, ky = solver.order_kxy()
@@ -263,7 +276,6 @@ def ordinary_state(solver, result, *, eps_top=None, eps_bot=None, mu_top=None, m
         kind = 'te' if solver.tetm_index == 0 else 'tm'
     else:
         kind = 'conical' if solver._grating_type == 1 else solver._formulation_assigned.value
-    variants = {'incident': result.incident, 's': result.s_inc, 'p': result.p_inc}
     names = tuple(name for name, sub in variants.items() if sub is not None)
     (cx, hx), (cy, hy) = solver.order_window
     specular = (hy-cy)*(2*hx+1) + hx-cx
@@ -297,8 +309,7 @@ def ordinary_state(solver, result, *, eps_top=None, eps_bot=None, mu_top=None, m
     incoming_basis = basis(side, direction)
     reflected_basis = basis(side, -direction)
     transmitted_basis = basis(other, direction)
-    phase = xp.exp(1j*(kxy @ (xp.sum(lattice, axis=1)/2)))[:, None]
-    boundary = {}
+    spectra = {}
     for name in names:
         sub = variants[name]
         if name == 'incident' and kind not in ('te', 'tm'):
@@ -310,21 +321,68 @@ def ordinary_state(solver, result, *, eps_top=None, eps_bot=None, mu_top=None, m
         # spectra carry the amplitudes as they are.
         inc = xp.stack([delta*pair[0], delta*pair[1]], axis=-1)
         # Fresnel reflected p uses the opposite sign to the basis above.
-        ref = xp.stack([xp.reshape(sub.r_s, (-1,)),
-                        -xp.reshape(sub.r_p, (-1,))], axis=-1)
-        trn = xp.stack([xp.reshape(sub.t_s, (-1,)),
-                       xp.reshape(sub.t_p, (-1,))], axis=-1)
-        incoming = xp.sum(incoming_basis*inc[:, None, :], axis=-1)*phase
-        reflected = xp.sum(reflected_basis*ref[:, None, :], axis=-1)*phase
-        transmitted = xp.sum(transmitted_basis*trn[:, None, :], axis=-1)*phase
-        boundary[name] = {side: (incoming, reflected),
+        ref = xp.stack([xp.reshape(sub['r_s'], (-1,)),
+                        -xp.reshape(sub['r_p'], (-1,))], axis=-1)
+        trn = xp.stack([xp.reshape(sub['t_s'], (-1,)),
+                       xp.reshape(sub['t_p'], (-1,))], axis=-1)
+        spectra[name] = (xp.sum(incoming_basis*inc[:, None, :], axis=-1),
+                         xp.sum(reflected_basis*ref[:, None, :], axis=-1),
+                         xp.sum(transmitted_basis*trn[:, None, :], axis=-1))
+    return dict(kind=kind, names=names, side=side, other=other, kx=kx, ky=ky, kxy=kxy,
+                lattice=lattice, spectra=spectra,
+                phase=xp.exp(1j*(kxy @ (xp.sum(lattice, axis=1)/2)))[:, None])
+
+
+def cartesian_amplitudes(spectra, name, shape):
+    """``r_xyz`` / ``t_xyz`` of one incidence: each outgoing order's E, ``(Ex, Ey, Ez)``.
+
+    The E half of :func:`ordinary_spectra`'s reflected and transmitted families, put on the
+    order grid with the component axis last, ``shape + (3,)``. Per unit incident amplitude,
+    exactly as ``r_s`` is -- the same numbers in the fixed public frame, not a new measurement:
+    ``r_xyz = r_s * s_hat + r_p * p_hat_ref`` and ``t_xyz = t_s * s_hat + t_p * p_hat_trn``.
+    With no per-order frame in it, it is continuous where an order's ``kx`` crosses zero on the
+    ``ky == 0`` row, where ``r_s`` turns over with ``s_hat``. Its phase reference is ``r_s``'s:
+    in ``z`` the lit and far interfaces, and laterally the cell **corner** (the Fourier origin)
+    -- it is taken before the phase that moves the boundary spectra to the public centre.
+
+    Prior art: RETICOLO's ``res2`` returns each order's Cartesian ``E`` and ``H`` components at
+    its origin beside the amplitudes -- J. P. Hugonin and P. Lalanne, "RETICOLO software for
+    grating analysis", arXiv:2101.00901. ``H`` is not shipped here: it is
+    ``(k/k0) x E / mu`` in Z0 units with ``k/k0 = (kx, ky, +-kz)``, and
+    ``boundary_fields(part='outgoing')`` already returns it in space.
+    """
+    _, reflected, transmitted = spectra['spectra'][name]
+    xp = array_namespace(reflected)
+    return {'r_xyz': xp.reshape(reflected[:, :3], tuple(shape) + (3,)),
+            't_xyz': xp.reshape(transmitted[:, :3], tuple(shape) + (3,))}
+
+
+def ordinary_state(solver, spectra):
+    """Adapt one ordinary solve without retaining a reference to the solver.
+
+    ``spectra`` is :func:`ordinary_spectra`'s answer -- ``None`` below ``answers='amplitude'``,
+    which has no field state -- and the boundary waves are those spectra moved to the public
+    centre origin.
+    """
+    if spectra is None:
+        return None
+    xp = array_namespace(spectra['kxy'])
+    side, other, phase = spectra['side'], spectra['other'], spectra['phase']
+    boundary = {}
+    for name in spectra['names']:
+        incoming, reflected, transmitted = spectra['spectra'][name]
+        transmitted = transmitted*phase
+        boundary[name] = {side: (incoming*phase, reflected*phase),
                           other: (xp.zeros_like(transmitted), transmitted)}
     groups = ()
     if solver.T1 is not None and solver.layer_info_list:
-        groups = (dict(kx=kx, ky=ky, kxy=kxy, T1=solver.T1, layers=solver.layer_info_list),)
-    data = dict(lattice=lattice, wavelength=solver.wavelength, thickness=solver.thickness,
-                boundary_kxy=kxy, boundary=boundary, groups=groups)
-    return FieldState(_copy(data), kind, solver._kernel_incidence_side == 'bottom', names)
+        groups = (dict(kx=spectra['kx'], ky=spectra['ky'], kxy=spectra['kxy'], T1=solver.T1,
+                       layers=solver.layer_info_list),)
+    data = dict(lattice=spectra['lattice'], wavelength=solver.wavelength,
+                thickness=solver.thickness, boundary_kxy=spectra['kxy'], boundary=boundary,
+                groups=groups)
+    return FieldState(_copy(data), spectra['kind'], solver._kernel_incidence_side == 'bottom',
+                      spectra['names'])
 
 
 def source_state(spectra, groups, lattice, wavelength, thickness):
