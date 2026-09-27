@@ -58,10 +58,10 @@ import math
 import types
 
 from .conventions import _DIRECTION_CLASH, parse_order_pair, transverse_component_problem
-from .domain import Layer, Material, Stack, Incidence
+from .domain import Layer, Material, Stack, Incidence, _DeclaredFieldsOnly
 from .materials import TabulatedMaterial
 from .enums import (Answers, Backend, Factorization, FourierCoefficients, Nesting, NormalMethod,
-                    Projector, Tetm, nvf_option_rename_hint)
+                    Projector, Tetm, near_match_hint)
 
 SPEC_VERSION = '10'   # '2': result fields renamed de_ri/de_ti -> R/T (2026-08-12)
 #                     '3': the material convention. `stack.layers[i].eps` -> `.structure`,
@@ -148,12 +148,27 @@ def _reject_unknown(got, allowed, where):
     said that the *quantity* had changed with each. Gone with the rest of that machinery: the
     reader it addressed cannot exist before a first release, and the renames belong in the
     release notes. A retired spelling is now reported as what it is here -- an unknown field.
+
+    The hint is the attribute door's (:func:`~wavebit._core.enums.near_match_hint`), so a key
+    misspelled in a document and the same name assigned on the object it parses into
+    (``Incidence.thet``, refused by :class:`~wavebit._core.domain._DeclaredFieldsOnly`) name
+    the same field. It replaced an NVF-rename hint that was offered under ``numerics`` only;
+    that restriction is now the helper's general one, a rename offered only where its target
+    is allowed.
+
+    A key that is not a string is refused first, on its own. Every field name is one, so such a
+    key is unknown by construction -- but it cannot be sorted beside the strings or matched
+    against them, and it reached ``difflib`` as a bare ``TypeError`` from inside the hint.
     """
+    odd = [key for key in got if not isinstance(key, str)]
+    if odd:
+        raise SpecError(
+            f"{where}: field names are strings, got {', '.join(map(repr, odd))}."
+            f" Allowed: {sorted(allowed)}")
     unknown = sorted(set(got) - set(allowed))
     if unknown:
         raise SpecError(
-            f"{where}: unknown field(s) {unknown}."
-            f"{nvf_option_rename_hint(unknown) if where == 'numerics' else ''}"
+            f"{where}: unknown field(s) {unknown}.{near_match_hint(unknown, allowed)}"
             f" Allowed: {sorted(allowed)}")
 
 
@@ -184,7 +199,7 @@ def _enum_fields(cls):
     """``(name, enum class, None allowed)`` for every dataclass field annotated with an enum.
 
     Read off the annotations rather than listed, so that a field added later with an enum
-    type is normalised by :meth:`Numerics.__post_init__` without anyone having to remember
+    type is normalised by :meth:`Numerics.__setattr__` without anyone having to remember
     it there. ``Optional[E]`` and ``E | None`` allow ``None``; a bare ``E`` does not.
     """
     hints = get_type_hints(cls)
@@ -435,7 +450,7 @@ def _revive_materials(value, where='material'):
 # ------------------------------------------------------------------ numerics
 
 @dataclass
-class Numerics:
+class Numerics(_DeclaredFieldsOnly):
     """Discretisation and backend choices — everything that is not the physical scene.
 
     ``complex_dtype`` is the bit width (128 / 64) rather than a dtype object, so the spec
@@ -489,34 +504,42 @@ class Numerics:
                'nvf_projector', 'li_nesting', 'complex_dtype', 'layer_algorithm', 'shape_nvf_grid_size',
                'answers')
 
-    def __post_init__(self):
-        """Normalise every enum-typed field, so that every door builds the same object.
+    def __setattr__(self, name, value):
+        """Normalise an enum-typed field on every assignment, so every door builds one object.
 
         ``Numerics(li_nesting='symmetric')`` used to keep the string, and ``as_kwargs`` then
         died reading ``.value`` off it, while ``from_dict`` -- which coerced field by field --
         built the enum. Six of the seven enum fields broke that way. ``answers`` survived
         because ``as_kwargs`` re-validated it, and still wrote ``'FIELD'`` into the document
         where ``from_dict`` wrote ``'field'``, which splits :meth:`JobSpec.key` for one run;
-        ``backend=1`` did the same against ``'jax'``. ``from_dict`` now leaves the enum fields
-        to this method, so a refusal carries the same message whichever door it came in by.
+        ``backend=1`` did the same against ``'jax'``. ``from_dict`` leaves the enum fields to
+        this method, so a refusal carries the same message whichever door it came in by.
+
+        Here rather than in ``__post_init__``, where the rule lived until 2026-09-27, because
+        construction *is* an assignment: the dataclass ``__init__`` writes each field through
+        this method, and so does ``dataclasses.replace``. In ``__post_init__`` it covered those
+        and missed the door left over -- ``n.li_nesting = 'symmetric'`` after construction
+        stored the string and ``as_kwargs`` raised again, and ``n.backend = 1`` wrote ``1``
+        where ``Numerics(backend=1)`` wrote ``'jax'``. One method, one rule, every door.
 
         A name that is no member is refused here, where ``complex_dtype=32`` is left for
-        :meth:`check`. The difference is that an enum field is *converted* at construction:
-        a spelling with nothing to be converted to could only be kept raw, which is the object
-        this method exists to rule out.
+        :meth:`check`. The difference is that an enum field is *converted* on the way in: a
+        spelling with nothing to be converted to could only be kept raw, which is the object
+        this method exists to rule out. It is refused before anything is stored, so the field
+        keeps its value. A name that is no field passes through untouched to the door
+        (:class:`~wavebit._core.domain._DeclaredFieldsOnly`), which refuses it.
         """
-        for name, enum_cls, optional in _enum_fields(type(self)):
-            value = getattr(self, name)
-            if value is None and optional:
-                continue
-            setattr(self, name, _enum(value, enum_cls, f'numerics.{name}'))
+        for field_name, enum_cls, optional in _enum_fields(type(self)):
+            if name == field_name and not (value is None and optional):
+                value = _enum(value, enum_cls, f'numerics.{name}')
+        super().__setattr__(name, value)
 
     @classmethod
     def from_dict(cls, d) -> 'Numerics':
         d = dict(d or {})
         _reject_unknown(d, cls._FIELDS, 'numerics')
-        # The enum fields are not coerced here: `__post_init__` does it for this door and for
-        # direct construction alike, so the two cannot drift apart again.
+        # The enum fields are not coerced here: `__setattr__` does it for this door, direct
+        # construction and a later assignment alike, so the three cannot drift apart again.
         if 'truncation_order' in d:
             # The solver's own parser, not a second one. This was an inline check that refused
             # five spellings `rcwa()` accepts -- `2.0`, `[3]`, both mappings, and a NumPy
@@ -601,7 +624,7 @@ class Numerics:
 # ------------------------------------------------------------------ sweep
 
 @dataclass
-class Sweep:
+class Sweep(_DeclaredFieldsOnly):
     """Declared axes to vary, as ``{field: [values]}`` after resolution.
 
     Each axis is written either as an explicit list or as a ``linspace``; both land here as
@@ -675,7 +698,7 @@ class Sweep:
 # ------------------------------------------------------------------ the spec
 
 @dataclass
-class JobSpec:
+class JobSpec(_DeclaredFieldsOnly):
     """A complete, serialisable description of one run (or one sweep of runs)."""
     stack: Stack = field(default_factory=Stack)
     incidence: Incidence = field(default_factory=Incidence)

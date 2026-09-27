@@ -45,9 +45,11 @@ the light.
 
 The enum-typed `numerics` fields (`backend`, `factorization`, `li_nesting` and the rest) take
 the enum or its name in any case, as in `Numerics(li_nesting='symmetric')`, and `backend` also
-takes its integer code. Construction normalises them exactly as `Numerics.from_dict` does, so a
-spec built in Python and the same spec parsed from JSON are equal and share one `key()`. A name
-that is no member is refused at construction, with the message the JSON door gives.
+takes its integer code. Construction normalises them exactly as `Numerics.from_dict` does, and
+so does a later assignment (`numerics.li_nesting = 'symmetric'`), so a spec built in Python, the
+same spec edited after it was built, and the same spec parsed from JSON are equal and share one
+`key()`. A name that is no member is refused at construction or assignment, with the message the
+JSON door gives, and an assignment refused leaves the field as it was.
 
 ## Running one
 
@@ -119,11 +121,21 @@ The schema is versioned, and the gate is strict on purpose:
 | no `version` | `SpecError` — a parsed document has to say which schema it is written in. Defaulting the absence to "current" would make the gate a no-op for exactly the documents most likely to be stale |
 | `version: '2'` | `SpecError` — this build understands version `'10'` |
 | `outputs: [...]` | `SpecError` — removed in version 4, and refused by name rather than as an unknown field |
-| any unknown field | `SpecError`, listing what is allowed |
+| any unknown field | `SpecError`, naming the nearest field (`thet` -> `theta`) and listing what is allowed |
+| `stack.n_top: 1.5` | `SpecError` *without* a nearest field: a name spelled like a refractive index (`n_top`, `ntop`, `n_sub`, `n1`, `RI_top`, `*_index`, `refractive*`) or a permeability (`mu_*`) is never pointed at a slot that holds another quantity, since `top` would take the `1.5` as a permittivity and solve. It is told instead that the material slots are relative permittivity (eps = n**2) or a `Material`. An `n` reads as an index only alone, numbered, or beside a name a medium goes by (`top`, `sub`, `bg`, ...) or a part of an index (`eff`, `real`): `n_orders` or `n_theta` is a count, and keeps its nearest field |
+| a key that is not a string | `SpecError` — field names are strings |
 
 Building a spec in Python is the unceremonious path: `JobSpec(...)` is versioned by the build
 it is constructed in, because a spec constructed against these classes cannot be stale. Only a
 *parsed* document has to declare itself.
+
+The objects are held to the same vocabulary after construction. Assigning a name that is not a
+field — `spec.incidence.thet = 0.2`, `spec.numerics.nesting = 'symmetric'` — raises
+`AttributeError` with the same near-match hint, exactly as the solver does for
+`solver.thicknes = ...`, and with the same refusal to guess across quantities
+(`stack.n_top = 1.5` is not sent to `top`). Storing it would be silent: the run reads the fields it knows, so it
+would answer for the value you meant to change. A name starting with an underscore is yours to
+use, and the fields themselves assign as before.
 
 The version bumps whenever the meaning of a value moves, not only when a key does. Version 3 is
 the material convention: the keys moved (`eps` to `structure`, `n_top` / `n_bot` to `top` /

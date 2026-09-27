@@ -289,6 +289,40 @@ def test_an_unknown_attribute_on_the_facade_is_refused_like_on_the_solver(backen
                      **{typo: [.3]})
 
 
+def test_the_facade_door_reads_a_quantity_off_the_name_as_the_solver_does():
+    """``facade.n_top`` reaches the scene's read-only property; every other index spelling
+    reaches the refusal, where the plain nearest match pointed ``ntop`` / ``RI_top`` at ``top``
+    -- a refractive index sent to a permittivity slot. Withheld, with the note, as on the
+    solver. And the other direction: a count (``n_wavelength``, ``n_thickness``) is no index,
+    and keeps the guess plain difflib draws from what the facade can set."""
+    import difflib
+    from test_spec import COUNT_SPELLINGS, INDEX_SPELLINGS
+    facade = _facade(0)
+    crossed = []
+    for name in INDEX_SPELLINGS:
+        if hasattr(type(facade._scene), name):             # `n_top`, `n_bot`: "has no setter"
+            continue
+        message = str(pytest.raises(AttributeError, setattr, facade, name, 1.5).value)
+        settable = message.split('Settable conditions: ')[1].split('.\n')[0].split(', ')
+        crossed += difflib.get_close_matches(name, sorted(settable), n=1, cutoff=0.6)
+        assert 'Did you mean' not in message, message
+        assert f"{name!r} is spelled like a refractive index" in message, message
+        assert 'relative permittivity (eps = n**2) or a Material' in message, message
+        assert name not in vars(facade)
+    assert 'top' in crossed, crossed                       # the plain match would have crossed
+    reached = 0
+    for name in COUNT_SPELLINGS:
+        assert not hasattr(type(facade), name) and not hasattr(type(facade._scene), name), name
+        message = str(pytest.raises(AttributeError, setattr, facade, name, 1.5).value)
+        settable = message.split('Settable conditions: ')[1].split('.\n')[0].split(', ')
+        plain = difflib.get_close_matches(name, sorted(settable), n=1, cutoff=0.6)
+        reached += bool(plain)
+        assert 'spelled like' not in message, message
+        assert (f'Did you mean {plain[0]!r}?' in message) if plain \
+            else ('Did you mean' not in message), message
+    assert reached >= 2, reached
+
+
 @pytest.mark.parametrize('backend', [0, 1, 2])
 def test_the_facade_door_forwards_every_scene_condition_and_keeps_its_own(backend):
     """Closing the door must leave every legitimate name through it working.

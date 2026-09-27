@@ -32,7 +32,8 @@ be a NumPy / JAX / PyTorch value; stacking goes through the Array-API namespace 
 """
 import sys
 from cmath import isfinite as _complex_isfinite, sqrt as _complex_sqrt
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
+from functools import cache
 from typing import Any, Optional
 
 from .conventions import (_COMPLEX_CHI, _DIRECTION_CLASH, incidence_clashes, reject_complex_angle,
@@ -404,6 +405,54 @@ def index_from_eps(eps):
     return _complex_sqrt(complex(eps))
 
 
+# --------------------------------------------------------------------------- the attribute door
+
+
+@cache
+def _declared_fields(cls):
+    """The field names of dataclass ``cls``, once per class: the hot path of every assignment."""
+    return frozenset(f.name for f in fields(cls))
+
+
+class _DeclaredFieldsOnly:
+    """Base of the mutable spec dataclasses: an assignment to a name that is no field is refused.
+
+    ``inc = Incidence(...); inc.thet = 0.2`` used to be stored as a new attribute, and
+    ``inc.as_kwargs()`` still wrote ``theta=0`` -- the solve answered for the angle that was
+    *not* changed, with nothing to notice. The solver has refused that since 2026-08-27
+    (``CoreFactorizationMixin.__setattr__``) and the excitation facade since its own door was
+    closed; these six (``Layer``, ``Stack``, ``Incidence`` here, ``Numerics``, ``Sweep``,
+    ``JobSpec`` in ``_core/spec.py``) were the objects a spec is built from and kept the hole.
+    ``Material`` and ``TabulatedMaterial`` are frozen and refuse every assignment already.
+
+    The rule is the solver's, so all three doors predict alike: a declared field, a leading
+    underscore, or a name already on the class (which keeps the descriptor protocol in charge
+    -- ``stack.thickness = ...`` gets Python's own "has no setter", not "did you mean", and a
+    method stays stubbable on an instance). The refusal is the solver's too,
+    :func:`wavebit._core.engine._unknown_attribute`, with its near-match hint drawn from the
+    fields -- so ``Numerics.nesting`` is pointed at ``li_nesting``, as ``solver.nesting`` is.
+
+    **A base class rather than** ``slots=True``. Slots refuse the typo too, but measured on a
+    slotted twin they answer ``'Incidence' object has no attribute 'thet'`` -- no hint, and not
+    the solver's message; they refuse ``_note`` and an instance stub (``object attribute 'check'
+    is read-only``) that the solver allows, so the doors would disagree about which names are
+    checked; and ``vars(inc)`` raises for want of a ``__dict__``. ``__init__``,
+    ``__post_init__`` and ``dataclasses.replace`` assign declared fields, so they pass the first
+    branch; pickle and deepcopy restore ``__dict__`` directly and never come through here.
+
+    Branches on ``name`` and the class only: no instance state is read (``__init__`` assigns
+    into an empty ``__dict__``) and no value is inspected (a tracer passes as any value does).
+    """
+
+    def __setattr__(self, name, value):
+        cls = type(self)
+        if name in _declared_fields(cls) or name.startswith('_') or hasattr(cls, name):
+            super().__setattr__(name, value)
+            return
+        from .engine import _unknown_attribute     # lazily: engine imports this module
+        raise _unknown_attribute(cls.__name__, name, _declared_fields(cls), kind='fields')
+
+
 #: The sentence every retired material spelling has to carry. The rename is the *smaller* half
 #: of what changed, and a message that only said "use X instead of Y" would send a user to a
 #: keyword that accepts their old number and answers a different question with it.
@@ -414,7 +463,7 @@ def index_from_eps(eps):
 #: not need refusing. 0.2053 against 0.1753 is the size of a truncation-order wobble, which is
 #: what a user would take it for. Re-measure them if the quickstart scene ever changes.
 @dataclass
-class Layer:
+class Layer(_DeclaredFieldsOnly):
     """One layer of a :class:`Stack`: a thickness paired with the structure filling it.
 
     ``structure`` is the layer's entry of the stack's ``structure`` in either encoding -- a
@@ -447,7 +496,7 @@ class Layer:
 
 
 @dataclass
-class Stack:
+class Stack(_DeclaredFieldsOnly):
     """An ordered list of :class:`Layer` plus the media that bound it.
 
     Layer order is bottom-to-top, matching ``structure``'s first axis (the same order the
@@ -629,7 +678,7 @@ class Stack:
 
 
 @dataclass
-class Incidence:
+class Incidence(_DeclaredFieldsOnly):
     """The incident illumination: wavelength, angles, polarization, and which side it hits.
 
     The polarization comes in three kinds, and they are not three spellings of one thing.

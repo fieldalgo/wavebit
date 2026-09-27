@@ -660,6 +660,10 @@ def test_the_unscoped_spelling_is_refused_like_any_unknown_option():
     assert solver.li_nesting == wavebit.Nesting.FIXED
     with pytest.raises(SpecError, match=r"unknown field\(s\) \['nesting'\]"):
         Numerics.from_dict(dict(truncation_order=[2, 2], nesting='symmetric'))
+    numerics = Numerics()          # the spec's attribute door stored it until 2026-09-27
+    with pytest.raises(AttributeError, match=r"no attribute 'nesting' to set.*'li_nesting'"):
+        numerics.nesting = 'symmetric'
+    assert 'nesting' not in vars(numerics)
     for path in manifest()['paths']:
         assert 'li_nesting' in path and 'nesting' not in path
 

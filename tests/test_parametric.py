@@ -783,6 +783,70 @@ def test_a_shape_dict_that_says_something_unreadable_is_refused(shape, match):
         solve([shape])
 
 
+def test_a_shape_key_spelled_like_an_index_is_not_pointed_at_material():
+    """``n_material`` is one prefix from ``material`` and names the other quantity: the guess is
+    the package's one ``near_match``, which withholds it and says the slot is permittivity."""
+    import difflib
+    from wavebit._core.parametric import _COMMON_KEYS, _LENGTH_KEYS
+    known = sorted(_COMMON_KEYS | _LENGTH_KEYS['circle'])
+    assert difflib.get_close_matches('n_material', known, n=1, cutoff=0.6) == ['material']
+    with pytest.raises(ValueError) as refusal:
+        solve([_circle(n_material=2.0)])
+    message = str(refusal.value)
+    assert 'did you mean' not in message, message
+    assert 'relative permittivity (eps = n**2) or a Material' in message, message
+
+
+def test_every_index_spelling_and_no_count_is_read_as_an_index_on_the_shape_keys():
+    """The spec tests' spellings, on this door: each index spelling is withheld its guess and
+    told the slot is permittivity; each count (and ``n_angle``, ``n_type``, which count what a
+    shape does take) keeps the guess plain difflib gives, and gets no note."""
+    import difflib
+    from test_spec import COUNT_SPELLINGS, INDEX_SPELLINGS
+    from wavebit._core.parametric import _COMMON_KEYS, _LENGTH_KEYS
+    known = sorted(_COMMON_KEYS | _LENGTH_KEYS['circle'])
+    note = 'relative permittivity (eps = n**2) or a Material'
+    for name in INDEX_SPELLINGS:
+        with pytest.raises(ValueError) as refusal:
+            solve([_circle(**{name: 2.0})])
+        message = str(refusal.value)
+        assert f'does not take {name!r}.' in message and note in message, message
+    reached = 0
+    for name in COUNT_SPELLINGS + ('n_angle', 'n_type'):
+        plain = difflib.get_close_matches(name, known, n=1, cutoff=0.6)
+        reached += bool(plain)
+        with pytest.raises(ValueError) as refusal:
+            solve([_circle(**{name: 2.0})])
+        message = str(refusal.value)
+        assert 'spelled like' not in message, message
+        assert (f'{name!r} (did you mean {plain[0]!r}?)' in message) if plain \
+            else (f'does not take {name!r}.' in message), message
+    assert reached == 2, reached
+
+
+def test_a_shape_key_that_is_not_a_string_is_refused_before_the_guess():
+    """The guess matches strings; an int key beside them was a bare TypeError from inside it."""
+    for shape in ({**_circle(), 1: 2.0}, {**_circle(), None: 1.0, 'angel': 0.1}):
+        with pytest.raises(ValueError, match=r'shape keys are strings, got '):
+            solve([shape])
+
+
+@pytest.mark.parametrize('extra', [{1: 2.0}, {1: 2.0, 'pih': 0.1}, {None: 1.0, 'shape': []}],
+                         ids=['int', 'int-beside-a-typo', 'none-beside-a-typo'])
+def test_a_layer_key_that_is_not_a_string_is_refused_before_the_sort(extra):
+    """One level up from the shape keys, the same hole: ``sorted`` cannot order an int beside a
+    string, so ``{1: 2, 'pih': 0.1}`` beside ``background`` and ``shapes`` was a bare
+    TypeError from inside it, and a lone ``1`` was listed as an unread key as if it were a
+    name. Refused by what it is, with what a layer takes."""
+    layer = dict(background=1.0, shapes=[_circle()]) | extra
+    with pytest.raises(ValueError) as refusal:
+        wavebit.rcwa(backend=0, structure=[layer], **CHECK_CFG).solve()
+    message = str(refusal.value)
+    odd = ', '.join(repr(k) for k in extra if not isinstance(k, str))
+    assert message == (f'Analytic layer 0: layer keys are strings, got {odd}. '
+                       f"A layer takes ['background', 'shapes']."), message
+
+
 @pytest.mark.parametrize('shape', [
     _circle(),                                       # the natural spelling: one diameter
     dict(type='circle', cx=0.0, cy=0.0, l=120.0, material=4.0),       # `l` says the same

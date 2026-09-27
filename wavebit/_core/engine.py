@@ -31,7 +31,7 @@ from .materials import TabulatedMaterial, evaluate_material, evaluate_structure
 from .enums import (Answers, DEFAULT_ANSWERS, DEFAULT_FACTORIZATION, DEFAULT_FORMULATION,
                     DEFAULT_FOURIER_COEFFICIENTS, DEFAULT_NESTING, DEFAULT_NORMAL_METHOD,
                     DEFAULT_PROJECTOR, answers_of, nesting_of, normal_method_of, projector_of,
-                    nvf_option_rename_hint,
+                    near_match, near_match_hint, nvf_option_rename_hint, quantity_note,
                     Factorization, Formulation, FourierCoefficients, ModelingPath, Nesting,
                     Tetm, coefficients_of,
                     factorization_of, formulation_of, resolve_fourier_options)
@@ -323,27 +323,28 @@ def _refuse_unknown_keywords(kwargs):
             f'{nvf_option_rename_hint(kwargs)}')
 
 
-def _unknown_attribute(owner, name, known):
+def _unknown_attribute(owner, name, known, kind='conditions'):
     """The refusal of an assignment to a public name nothing reads, as an exception to raise.
 
-    One function because there are two attribute doors and they must refuse the same mistake
-    the same way: the solver's own ``__setattr__`` (``CoreFactorizationMixin``) and the
+    One function because there are three attribute doors and they must refuse the same
+    mistake the same way: the solver's own ``__setattr__`` (``CoreFactorizationMixin``), the
     source-excitation facade's (``illumination.CoherentSolver``), which forwards the scene's
     conditions and used to store every other public name on itself in silence --
     ``s.thicknes = [900.0]`` there was accepted and changed nothing, when the solver had
-    refused it since 2026-08-27. ``owner`` is the class name the caller assigned on; ``known``
-    is what that class can set, and the near-match hint is drawn from it alone.
+    refused it since 2026-08-27 -- and the spec dataclasses' (``domain._DeclaredFieldsOnly``),
+    where ``inc.thet = 0.2`` was stored and ``as_kwargs`` still wrote ``theta=0``. ``owner`` is
+    the class name the caller assigned on; ``known`` is what that class can set, and the
+    near-match hint (:func:`~wavebit._core.enums.near_match_hint`) is drawn from it alone.
+    ``kind`` names what ``known`` holds: a solver's conditions, a dataclass's fields.
     """
-    import difflib
     known = sorted(known)
-    near = difflib.get_close_matches(name, known, n=1, cutoff=0.6)
-    hint = nvf_option_rename_hint([name]) or (f' Did you mean {near[0]!r}?' if near else '')
+    hint = near_match_hint([name], known)
     return AttributeError(
         f'{owner} has no attribute {name!r} to set.{hint} Refused rather '
         f'than stored, because storing it is silent: the solve reads the attribute it '
         f'knows about, so the answer comes back for the value you meant to change and '
         f'nothing says otherwise.\n'
-        f'  Settable conditions: {", ".join(known)}.\n'
+        f'  Settable {kind}: {", ".join(known)}.\n'
         f'  To attach state of your own, use a name starting with an underscore, or '
         f'declare it as a class attribute on a subclass.')
 
@@ -2657,15 +2658,15 @@ class CoreFactorizationMixin:
         legal = self._condition_names()
         unknown = sorted(name for name in kwargs if name not in legal)
         if unknown:
-            import difflib
-
             hints = []
             for name in unknown:
-                near = difflib.get_close_matches(name, sorted(legal), n=1, cutoff=0.7)
-                hints.append(f'{name!r}' + (f' (did you mean {near[0]!r}?)' if near else ''))
+                # `near_match`, not difflib: `solve(n_top=1.5)` was pointed at `top`.
+                near = near_match(name, legal, cutoff=0.7)
+                hints.append(f'{name!r}' + (f' (did you mean {near!r}?)' if near else ''))
             raise TypeError(
                 f'unexpected keyword argument(s): {", ".join(hints)}.'
-                f'{nvf_option_rename_hint(unknown)} These entry points take '
+                f'{nvf_option_rename_hint(unknown)}{quantity_note(unknown, legal)} '
+                f'These entry points take '
                 f'conditions to set before solving, and a name that is not one used to be '
                 f'stored as an attribute and silently ignored -- the solve then answered the '
                 f'scene you had, not the one you asked for. Settable conditions: '

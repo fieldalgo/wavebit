@@ -11,7 +11,9 @@ Two properties carry the whole design and are gated here:
 Validation is tested for rejection, not just acceptance: a bad spec caught at submission is
 far cheaper than one caught on a worker.
 """
+import dataclasses
 import json
+import re
 
 import numpy as np
 import pytest
@@ -675,6 +677,56 @@ def test_numerics_reads_none_as_the_json_door_does(name):
     assert str(direct.value) == str(parsed.value)
 
 
+def _other_member(name, member):
+    """A member of ``name``'s enum that is not ``member``, so an assignment has to move it."""
+    return next(m for m in ENUM_FIELDS[name][0] if m is not member)
+
+
+@pytest.mark.parametrize('name, member', ENUM_MEMBERS,
+                         ids=[f'{n}={m.name.lower()}' for n, m in ENUM_MEMBERS])
+def test_numerics_assigned_after_construction_is_the_numerics_construction_builds(name, member):
+    """``n = Numerics(); n.li_nesting = 'symmetric'`` is ``Numerics(li_nesting='symmetric')``.
+
+    Until 2026-09-27 construction normalised in ``__post_init__`` and assignment did not, so the
+    door left over stored the string: ``as_kwargs`` raised on it as it had on construction
+    before, and ``n.backend = 1`` wrote ``1`` into the document where ``Numerics(backend=1)``
+    wrote ``'jax'`` -- one run, two cache keys. Each assignment starts from another member, so
+    one that stored nothing fails here rather than matching a default it left behind.
+    """
+    built = wavebit.Numerics(**{name: member.name.lower()})
+    for spelling in _spellings(member):
+        assigned = wavebit.Numerics(**{name: _other_member(name, member)})
+        setattr(assigned, name, spelling)
+        assert getattr(assigned, name) is member, spelling
+        assert assigned == built, spelling
+        assert assigned.as_kwargs() == built.as_kwargs(), spelling
+        assert assigned.to_dict() == built.to_dict(), spelling
+        assert assigned.to_dict()[name] == member.name.lower(), spelling
+        assert JobSpec(numerics=assigned).key() == JobSpec(numerics=built).key(), spelling
+
+
+@pytest.mark.parametrize('name', sorted(ENUM_FIELDS))
+def test_numerics_assignment_refuses_what_from_dict_refuses_and_keeps_the_field(name):
+    """A name that is no member, a code that is none, and ``None`` where the field is not
+    ``Optional``: refused on assignment with the message the JSON door gives, and refused
+    before anything is stored, so the field keeps the member it had."""
+    enum_cls, optional = ENUM_FIELDS[name]
+    held = list(enum_cls)[-1]
+    for value in ('bogus', 99) + (() if optional else (None,)):
+        numerics = wavebit.Numerics(**{name: held})
+        with pytest.raises(SpecError) as assigned:
+            setattr(numerics, name, value)
+        with pytest.raises(SpecError) as parsed:
+            wavebit.Numerics.from_dict({name: value})
+        assert str(assigned.value) == str(parsed.value), value
+        assert getattr(numerics, name) is held, value
+    if optional:                        # and "unset" is assignable where it is constructible
+        numerics = wavebit.Numerics(**{name: held})
+        setattr(numerics, name, None)
+        assert getattr(numerics, name) is None and name not in numerics.as_kwargs()
+        assert numerics == wavebit.Numerics.from_dict({name: None})
+
+
 #: What each field needs beside it for a solver to accept it. A field missing here is built
 #: with nothing beside it; if its value is then refused, add the row.
 _SOLVER_COMPANIONS = {
@@ -713,3 +765,441 @@ def test_a_directly_built_numerics_reaches_the_solver_and_crosses_its_pytree(nam
     leaves, treedef = tree_util.tree_flatten(solver)
     rebuilt = tree_util.tree_unflatten(treedef, leaves)
     assert getattr(rebuilt, name) == member
+
+
+# ---------------------------------------------------------------- the attribute door
+
+def _spec_dataclasses():
+    """Every dataclass the spec module builds a run from, read off its namespace, by name.
+
+    Read rather than listed, so a dataclass the module gains is held to the door the day it
+    lands; `test_the_spec_dataclass_list_is_not_vacuous` keeps the derivation honest.
+    """
+    from wavebit._core import spec as spec_module
+    return {v.__name__: v for v in vars(spec_module).values()
+            if isinstance(v, type) and dataclasses.is_dataclass(v)}
+
+
+SPEC_DATACLASSES = _spec_dataclasses()
+#: The mutable ones -- a frozen dataclass refuses every assignment already.
+MUTABLE = sorted(name for name, cls in SPEC_DATACLASSES.items()
+                 if not cls.__dataclass_params__.frozen)
+MUTABLE_FIELDS = [(name, f.name) for name in MUTABLE
+                  for f in dataclasses.fields(SPEC_DATACLASSES[name])]
+_FIELD_IDS = [f'{c}.{f}' for c, f in MUTABLE_FIELDS]
+#: What a mutable class needs to be built. A class missing here is built bare; if that raises,
+#: add the row.
+_BUILD = {'Layer': lambda: wavebit.Layer(thickness=300.0, structure=np.ones((1, 4)))}
+
+
+def _build(name):
+    return _BUILD.get(name, SPEC_DATACLASSES[name])()
+
+
+def _declared(name):
+    return sorted(f.name for f in dataclasses.fields(SPEC_DATACLASSES[name]))
+
+
+def _typo(field_name):
+    """One letter off: dropped from a long name, doubled on a short one (``kx`` -> ``kxx``)."""
+    return field_name[:-1] if len(field_name) > 4 else field_name + field_name[-1]
+
+
+def test_the_spec_dataclass_list_is_not_vacuous():
+    """And every dataclass in it is either frozen or behind the door -- none is merely mutable."""
+    from wavebit._core.domain import _DeclaredFieldsOnly
+    assert {'Incidence', 'JobSpec', 'Layer', 'Numerics', 'Stack', 'Sweep'} <= set(MUTABLE)
+    assert {'Material', 'TabulatedMaterial'} <= set(SPEC_DATACLASSES) - set(MUTABLE)
+    for name in MUTABLE:
+        assert issubclass(SPEC_DATACLASSES[name], _DeclaredFieldsOnly), name
+
+
+def test_a_typo_on_the_incidence_is_refused_and_the_angle_is_not_left_behind():
+    """The finding: ``inc.thet = 0.2`` was stored, and ``as_kwargs`` still wrote ``theta=0``.
+
+    The solve then answered for normal incidence with nothing to say the angle had not moved --
+    the defect the solver's own door (`CoreFactorizationMixin.__setattr__`) closed on
+    2026-08-27, left open on the objects a spec is built from. The same typo through a spec's
+    own ``incidence`` and through the document door is refused and pointed at ``theta`` alike.
+    """
+    inc = wavebit.Incidence(wavelength=900.0, theta=0.0)
+    with pytest.raises(AttributeError, match=r"Incidence has no attribute 'thet' to set\. "
+                                             r"Did you mean 'theta'\?"):
+        inc.thet = 0.2
+    assert 'thet' not in vars(inc) and not hasattr(inc, 'thet')
+    assert inc.as_kwargs()['theta'] == 0.0
+
+    spec = JobSpec.from_dict(BINARY_GRATING)
+    with pytest.raises(AttributeError, match=r"Did you mean 'theta'\?"):
+        spec.incidence.thet = 0.2
+    with pytest.raises(SpecError, match=r"\['thet'\]\. Did you mean 'theta'\?"):
+        JobSpec.from_dict({**BINARY_GRATING,
+                           'incidence': {**BINARY_GRATING['incidence'], 'thet': 0.2}})
+
+
+@pytest.mark.parametrize('cls_name, field_name', MUTABLE_FIELDS, ids=_FIELD_IDS)
+def test_a_typo_of_every_field_is_refused_with_the_field_it_meant(cls_name, field_name):
+    """One letter off each declared field, on each class: refused, pointed home, not stored."""
+    obj, typo = _build(cls_name), _typo(field_name)
+    assert not hasattr(type(obj), typo), typo            # else it is a class member, not a typo
+    before = {k: id(v) for k, v in vars(obj).items()}
+    with pytest.raises(AttributeError) as refusal:
+        setattr(obj, typo, 0.2)
+    message = str(refusal.value)
+    assert message.startswith(
+        f'{cls_name} has no attribute {typo!r} to set. Did you mean {field_name!r}?'), message
+    assert message.split('Settable fields: ')[1].split('.\n')[0].split(', ') == _declared(cls_name)
+    assert {k: id(v) for k, v in vars(obj).items()} == before
+
+
+@pytest.mark.parametrize('cls_name, field_name', MUTABLE_FIELDS, ids=_FIELD_IDS)
+def test_every_declared_field_still_assigns(cls_name, field_name):
+    """Closing the door must leave every field through it, onto the instance, as given.
+
+    An enum-typed ``Numerics`` field converts what it is given (the assignment tests above), so
+    it is given a member, which it keeps as is; any other field takes any object at all.
+    """
+    enum_field = ENUM_FIELDS.get(field_name) if cls_name == 'Numerics' else None
+    obj = _build(cls_name)
+    value = list(enum_field[0])[-1] if enum_field else object()
+    setattr(obj, field_name, value)
+    assert vars(obj)[field_name] is value and getattr(obj, field_name) is value
+
+
+def test_the_retired_nesting_is_pointed_at_li_nesting_on_both_numerics_doors():
+    """``nesting`` is no alias (`tests/test_li_nesting.py`); on ``Numerics`` it was stored, and
+    the spec then asked the solver for the fixed nesting the caller had meant to leave."""
+    numerics = wavebit.Numerics(li_nesting='fixed')
+    with pytest.raises(AttributeError, match=r"Numerics has no attribute 'nesting' to set\. "
+                                             r"Did you mean 'li_nesting'\?"):
+        numerics.nesting = 'symmetric'
+    assert 'nesting' not in vars(numerics)
+    assert numerics.as_kwargs()['li_nesting'] == 'fixed'
+    with pytest.raises(SpecError, match=r"\['nesting'\]\. Did you mean 'li_nesting'\?"):
+        wavebit.Numerics.from_dict({'nesting': 'symmetric'})
+
+
+#: Where the document door parses each class's keys: the mapping that holds them.
+_DOCUMENT_AT = {
+    'JobSpec': lambda keys: {'version': '10', **keys},
+    'Numerics': lambda keys: {'version': '10', 'numerics': keys},
+    'Stack': lambda keys: {'version': '10', 'stack': keys},
+    'Layer': lambda keys: {'version': '10', 'stack': {'layers': [keys]}},
+    'Incidence': lambda keys: {'version': '10', 'incidence': keys},
+}
+_DOCUMENT_FIELDS = [(c, f) for c, f in MUTABLE_FIELDS if c in _DOCUMENT_AT]
+
+
+def test_every_class_with_a_document_door_is_parametrized():
+    """`Sweep` is the one without: its document keys are axis names, and its field is ``axes``."""
+    assert set(MUTABLE) - set(_DOCUMENT_AT) == {'Sweep'}
+
+
+@pytest.mark.parametrize('cls_name, field_name', _DOCUMENT_FIELDS,
+                         ids=[f'{c}.{f}' for c, f in _DOCUMENT_FIELDS])
+def test_the_document_door_refuses_the_same_typo_with_the_same_hint(cls_name, field_name):
+    """A key misspelled in a document and the same name assigned on the object it parses into
+    name the same field. The document door refused unknown keys already, listing what is
+    allowed, but only a renamed NVF option carried a hint; the near match is the attribute
+    door's now."""
+    typo = _typo(field_name)
+    with pytest.raises(SpecError) as parsed:
+        JobSpec.from_dict(_DOCUMENT_AT[cls_name]({typo: 0.2}))
+    with pytest.raises(AttributeError) as assigned:
+        setattr(_build(cls_name), typo, 0.2)
+    hint = f' Did you mean {field_name!r}?'
+    assert f'unknown field(s) {[typo]}.{hint} Allowed: ' in str(parsed.value), parsed.value
+    assert hint in str(assigned.value)
+    # one vocabulary on both doors: what the document allows is what the class declares
+    assert str(parsed.value).split('Allowed: ')[1] == str(_declared(cls_name))
+
+
+def test_several_unknown_keys_are_each_pointed_home():
+    with pytest.raises(SpecError, match=r"Did you mean 'phi' for 'ph', 'theta' for 'thet'\?"):
+        JobSpec.from_dict({**BINARY_GRATING, 'incidence': {'thet': 0.2, 'ph': 0.1}})
+
+
+def test_the_retired_nvf_spellings_are_renamed_only_where_the_new_name_lives():
+    """``numerics.normal_method`` gets the rename; ``stack.projector`` is not sent to a slot on
+    another class. The document door offered the rename under ``numerics`` only, by checking
+    where it was; the shared hint asks the question that matters -- can the owner take it."""
+    rename = "Renamed NVF option(s): 'normal_method' -> 'raster_normal_method'."
+    for door in (lambda: setattr(wavebit.Numerics(), 'normal_method', 'contour'),
+                 lambda: wavebit.Numerics.from_dict({'normal_method': 'contour'})):
+        with pytest.raises((AttributeError, SpecError), match=re.escape(rename)):
+            door()
+    for door in (lambda: setattr(wavebit.Stack(), 'projector', 'linear'),
+                 lambda: JobSpec.from_dict({'version': '10', 'stack': {'projector': 'linear'}})):
+        with pytest.raises((AttributeError, SpecError)) as refusal:
+            door()
+        assert 'Renamed' not in str(refusal.value), refusal.value
+        assert 'nvf_projector' not in str(refusal.value), refusal.value
+
+
+def test_what_the_door_lets_through_besides_the_fields():
+    """The solver's rule, so the three doors predict alike: a private name is stored, a method
+    can be stubbed on an instance, and a read-only property answers with Python's own message
+    rather than "has no attribute ... did you mean" -- ``Stack.thickness`` exists; it is derived.
+    """
+    readonly = []
+    for name in MUTABLE:
+        obj = _build(name)
+        obj._note = 'mine'
+        assert vars(obj)['_note'] == 'mine'
+        for attr, member in vars(type(obj)).items():
+            if isinstance(member, property) and member.fset is None:
+                readonly.append(f'{name}.{attr}')
+                with pytest.raises(AttributeError, match='has no setter'):
+                    setattr(obj, attr, None)
+    assert {'Stack.thickness', 'Stack.structure', 'Stack.mu', 'Layer.is_raster'} <= set(readonly)
+
+    spec = JobSpec(numerics=wavebit.Numerics())
+    spec.numerics.check = lambda: ('stubbed',)
+    assert spec.check() == ('[numerics] stubbed',)
+    assert dataclasses.replace(wavebit.Incidence(), theta=0.3).theta == 0.3
+
+
+def test_a_copied_spec_keeps_the_door_and_its_key():
+    """Pickle and deepcopy restore ``__dict__`` without coming through the door; the copy is the
+    same run, and it refuses a typo as the original does -- the door is the class's, not state."""
+    import copy
+    import pickle
+    spec = JobSpec.from_dict({**BINARY_GRATING, 'sweep': {'wavelength': [800.0, 900.0]}})
+    spec._note = 'mine'
+    for twin in (pickle.loads(pickle.dumps(spec)), copy.deepcopy(spec)):
+        assert twin.key() == spec.key() and twin._note == 'mine'
+        assert [p.key() for p in twin.expand()] == [p.key() for p in spec.expand()]
+        with pytest.raises(AttributeError, match=r"Did you mean 'truncation_order'\?"):
+            twin.numerics.truncation_ordr = (3, 0)
+
+
+# ---------------------------------------------------------------- never guessed across quantities
+
+#: Spelled like a refractive index. ``n_top`` / ``n_bot`` are the half-spaces' spellings from
+#: before the material slots took permittivity; the rest are the same quantity assembled other
+#: ways -- camel case, glued, numbered, suffixed, abbreviated ``ri``, named ``nr`` / ``nd``,
+#: beside another name for a half-space or a background, or a part of an index -- which is
+#: what makes the refusal a rule.
+INDEX_SPELLINGS = ('n_top', 'n_bot', 'nTop', 'ntop', 'N_bot', 'n1', 'n_1', 'n_structure',
+                   'nk_top', 'top_index', 'refractive_index',
+                   'RI_top', 'ri_top', 'top_ri', 'riTop', 'ritop', 'nr_top', 'nd_top', 'top_n',
+                   'n_sub', 'nsub', 'n_substrate', 'n_bg', 'n_material', 'n_eff',
+                   'n_struct', 'nstruct', 'struct_n')
+#: An ``n`` that is not an index: a count (``n_orders``, ``nG``, ``nr_steps``), a dimension
+#: (``nd_array``), a background glued short (``bgnd``). Each gets the guess plain difflib gives,
+#: which is what a name spelled like no quantity gets. The last five are counts of something a
+#: class does declare, so every class has a count whose plain guess is a real field.
+COUNT_SPELLINGS = ('n_orders', 'n_threads', 'n_grid', 'n_harmonics', 'nG', 'n_theta',
+                   'n_wavelength', 'nr_steps', 'nd_array', 'bgnd',
+                   'n_layers', 'n_thickness', 'n_order', 'n_axes', 'n_sweep')
+_INDEX_NOTE = 'relative permittivity (eps = n**2) or a Material'
+
+
+def _assigned_refusal(cls_name, name):
+    with pytest.raises(AttributeError) as refusal:
+        setattr(_build(cls_name), name, 1.5)
+    return str(refusal.value)
+
+
+def _parsed_refusal(cls_name, name):
+    with pytest.raises(SpecError) as refusal:
+        JobSpec.from_dict(_DOCUMENT_AT[cls_name]({name: 1.5}))
+    return str(refusal.value)
+
+
+def _both_doors(cls_name, name):
+    return [_assigned_refusal(cls_name, name)] + (
+        [_parsed_refusal(cls_name, name)] if cls_name in _DOCUMENT_AT else [])
+
+
+def test_n_top_and_n_bot_are_told_the_slots_are_permittivity_not_pointed_at_them():
+    """The finding: ``Stack().n_top = 1.5`` said "Did you mean 'top'?", and so did the document.
+
+    Following it hands a refractive index to a slot that reads relative permittivity, and 1.5
+    is a fine permittivity: the solve conserves energy and says nothing. The plain nearest match
+    does cross -- asserted first, so this test fails if the rule stops overruling it, rather
+    than passing because difflib happened not to reach.
+    """
+    import difflib
+    for name, slot in (('n_top', 'top'), ('n_bot', 'bot')):
+        assert difflib.get_close_matches(name, _declared('Stack'), n=1, cutoff=0.6) == [slot]
+        stack = wavebit.Stack(top=1.0, bot=2.25)
+        with pytest.raises(AttributeError) as assigned:
+            setattr(stack, name, 1.5)
+        with pytest.raises(SpecError) as parsed:
+            JobSpec.from_dict({'version': '10', 'stack': {name: 1.5}})
+        for message in (str(assigned.value), str(parsed.value)):
+            assert 'Did you mean' not in message, message
+            assert f"{name!r} is spelled like a refractive index" in message, message
+            assert _INDEX_NOTE in message and 'eps_from_index' in message, message
+        assert (stack.top, stack.bot) == (1.0, 2.25) and name not in vars(stack)
+
+
+@pytest.mark.parametrize('cls_name', MUTABLE)
+def test_no_index_spelling_is_guessed_on_any_spec_door(cls_name):
+    """Every index spelling on every class, both doors: no guess, and the note in its place."""
+    for name in INDEX_SPELLINGS:
+        for message in _both_doors(cls_name, name):
+            assert 'Did you mean' not in message, message
+            assert f"{name!r} is spelled like a refractive index" in message, message
+            assert _INDEX_NOTE in message, message
+
+
+@pytest.mark.parametrize('cls_name', MUTABLE)
+def test_a_count_spelled_with_n_is_guessed_as_plain_difflib_would(cls_name):
+    """The other direction: an ``n`` that means "number of" is no index, so it neither gets
+    the note nor loses its guess. Read as an index, ``n_theta`` lost "Did you mean 'theta'?"
+    on ``Incidence`` and was told the material slots take permittivity, which is about nothing
+    it asked; ``n_orders`` was told the same. The guess asserted is difflib's own, and each
+    class has at least one count it reaches, so this cannot pass by every guess being none."""
+    import difflib
+    known = _declared(cls_name)
+    reached = 0
+    for name in COUNT_SPELLINGS:
+        plain = difflib.get_close_matches(name, known, n=1, cutoff=0.6)
+        reached += bool(plain)
+        for message in _both_doors(cls_name, name):
+            assert 'spelled like' not in message, message
+            if plain:
+                assert f'Did you mean {plain[0]!r}?' in message, message
+            else:
+                assert 'Did you mean' not in message, message
+    assert reached, f'no count in COUNT_SPELLINGS is near a field of {cls_name}'
+
+
+def test_a_permeability_spelling_is_not_pointed_at_a_permittivity_slot():
+    """``mu_top`` is as near ``top`` as ``n_top`` is, and crosses the other way."""
+    import difflib
+    assert difflib.get_close_matches('mu_top', _declared('Stack'), n=1, cutoff=0.6) == ['top']
+    assert difflib.get_close_matches('mu_structure', _declared('Layer'), n=1,
+                                     cutoff=0.6) == ['structure']
+    for name in ('mu_top', 'mu_bot', 'mutop', 'mu_structure'):
+        for message in _both_doors('Stack', name):       # no permeability here: told where
+            assert 'Did you mean' not in message, message
+            assert f"{name!r} is spelled like a permeability" in message, message
+            assert 'Material(epsilon, mu)' in message, message
+        for message in _both_doors('Layer', name):       # `mu` is here, and is not near enough
+            assert 'Did you mean' not in message, message
+            assert 'spelled like' not in message, message
+
+
+@pytest.mark.parametrize('cls_name, name, meant', [
+    ('Stack', 'eps_top', 'top'),          # a permittivity spelling, to a permittivity slot
+    ('Stack', 'tpo', 'top'),              # spelled like nothing: matched against everything
+    ('Stack', 'bott', 'bot'),
+    ('Layer', 'mu_', 'mu'),               # a permeability spelling, to the permeability field
+    ('Layer', 'structur', 'structure'),
+    ('Incidence', 'thet', 'theta'),
+])
+def test_a_guess_within_one_quantity_is_still_offered(cls_name, name, meant):
+    """The rule withholds a guess across quantities, not every guess near a material slot."""
+    for message in _both_doors(cls_name, name):
+        assert f'Did you mean {meant!r}?' in message, message
+        assert 'spelled like' not in message, message
+
+
+def test_where_an_index_is_taken_the_note_does_not_say_otherwise():
+    """A dispersion table takes ``index``: an index spelling is matched against it, and no note
+    claims that nothing here takes one. A material object takes ``epsilon`` and ``mu`` only."""
+    def table(**keys):
+        return {'version': '10',
+                'stack': {'top': {'dispersion': {'wavelengths': [800.0, 900.0], **keys}}}}
+
+    with pytest.raises(SpecError) as near:
+        JobSpec.from_dict(table(n_index=[1.5, 1.5]))
+    assert "Did you mean 'index'?" in str(near.value), near.value
+    assert 'spelled like' not in str(near.value), near.value
+    with pytest.raises(SpecError) as far:
+        JobSpec.from_dict(table(n=[1.5, 1.5]))
+    assert 'Did you mean' not in str(far.value) and 'spelled like' not in str(far.value)
+    with pytest.raises(SpecError) as material:
+        JobSpec.from_dict({'version': '10', 'stack': {'top': {'n': 1.5}}})
+    assert "'n' is spelled like a refractive index" in str(material.value), material.value
+    assert "Allowed: ['epsilon', 'mu']" in str(material.value), material.value
+
+
+def test_several_index_spellings_share_one_note_beside_the_guesses():
+    with pytest.raises(SpecError) as refusal:
+        JobSpec.from_dict({'version': '10', 'stack': {'n_top': 1.5, 'n_bot': 1.0, 'perio': [1.0]}})
+    message = str(refusal.value)
+    assert "Did you mean 'period' for 'perio'?" in message, message
+    assert "'n_bot', 'n_top' are spelled like a refractive index" in message, message
+    assert message.count(_INDEX_NOTE) == 1 and "'top' for" not in message, message
+
+
+@pytest.mark.parametrize('name, quantities', [
+    ('n_top', {'index'}), ('nTop', {'index'}), ('ntop', {'index'}), ('NTOP', {'index'}),
+    ('n1', {'index'}), ('top_index', {'index'}), ('refractiveIndex', {'index'}),
+    ('mu_top', {'permeability'}), ('mubot', {'permeability'}), ('permeability', {'permeability'}),
+    ('eps_top', {'permittivity'}), ('epsilon', {'permittivity'}), ('top', {'permittivity'}),
+    ('background', {'permittivity'}), ('eps_from_index', {'permittivity', 'index'}),
+    # an `n` that is not a word of its own, and not glued to a slot, is no index
+    ('nesting', set()), ('normal_method', set()), ('nvf_projector', set()), ('thet', set()),
+    # `ri` is an index wherever it stands; so is `n` / `ri` glued to any name a slot goes by
+    ('RI_top', {'index'}), ('riTop', {'index'}), ('ritop', {'index'}), ('ri', {'index'}),
+    ('nsub', {'index'}), ('bgn', {'index'}), ('ribg', {'index'}),
+    # `n`, `nr`, `nd`: an index alone, numbered, or beside a slot word or a part of an index
+    ('n', {'index'}), ('N', {'index'}), ('nr', {'index'}), ('nd', {'index'}), ('n_1', {'index'}),
+    ('top_n', {'index'}), ('n_sub', {'index'}), ('N_bot', {'index'}), ('n_bg', {'index'}),
+    ('n_material', {'index'}), ('n_cladding', {'index'}), ('n_air', {'index'}),
+    ('n_top2', {'index'}), ('nr_top', {'index'}), ('nd_top', {'index'}), ('n_eff', {'index'}),
+    ('n_real', {'index'}), ('n_im', {'index'}),
+    # nor is one that counts or sizes something, nor `bg` + `nd`; and a bare `k` is never read
+    ('n_orders', set()), ('n_threads', set()), ('n_grid', set()), ('n_harmonics', set()),
+    ('nG', set()), ('n_theta', set()), ('n_wavelength', set()), ('nr_steps', set()),
+    ('nd_array', set()), ('bgnd', set()), ('n_layer', set()), ('n_cores', set()),
+    ('k', set()), ('k_top', set()),
+])
+def test_what_a_name_is_spelled_as(name, quantities):
+    from wavebit._core.enums import name_quantities
+    assert name_quantities(name) == quantities
+
+
+def test_no_settable_name_is_read_as_a_quantity_it_is_not():
+    """The rule reads a quantity off the spelling, so a field spelled like one would have its
+    typos matched against the wrong names. Every name a door can set, on every door, is read
+    as what it holds: the material slots as permittivity, ``mu`` as permeability, the rest as
+    nothing. A field added as ``n_layers`` would fail here before it lost its guesses."""
+    from wavebit._core.enums import name_quantities
+    solver = wavebit.rcwa(structure=np.ones((1, 1, 4)), thickness=[100.0], wavelength=900.0,
+                          period=[1.0, 1.0])
+    names = {f for _, f in MUTABLE_FIELDS} | set(solver._condition_names())
+    expected = {'top': {'permittivity'}, 'bot': {'permittivity'},
+                'structure': {'permittivity'}, 'mu': {'permeability'}}
+    for name in sorted(names):
+        assert name_quantities(name) == expected.get(name, set()), name
+
+
+def test_the_material_slots_are_the_manifests():
+    """``structure`` beside the slots the manifest names for a material, and nothing else."""
+    from wavebit._core.enums import _MATERIAL_SLOTS
+    from wavebit.manifest import manifest
+    named = manifest()['material_dispersion']['automatic_slots']
+    assert _MATERIAL_SLOTS == {slot.split('.')[-1] for slot in named} | {'structure'}
+
+
+# ---------------------------------------------------------------- a key that is not a string
+
+_GRATING_STACK = BINARY_GRATING['stack']
+
+
+@pytest.mark.parametrize('build', [
+    lambda: wavebit.Numerics.from_dict({1: 2}),
+    lambda: wavebit.Numerics.from_dict({1: 2, 'backend': 'numpy', 'x': 3}),
+    lambda: Sweep.from_dict({0: [1.0]}),
+    lambda: Sweep.from_dict({'wavelength': {0: [1.0]}}),
+    lambda: JobSpec.from_dict({**BINARY_GRATING, 'incidence': {None: 1}}),
+    lambda: JobSpec.from_dict({**BINARY_GRATING, (1, 2): 3}),
+    lambda: JobSpec.from_dict({**BINARY_GRATING, 'stack': {**_GRATING_STACK, 1.5: 2}}),
+    lambda: JobSpec.from_dict({**BINARY_GRATING,
+                               'stack': {**_GRATING_STACK, 'layers': [{0: 1}]}}),
+    lambda: JobSpec.from_dict({**BINARY_GRATING,
+                               'stack': {**_GRATING_STACK, 'top': {'epsilon': 2.0, 1: 1}}}),
+], ids=['numerics', 'numerics-mixed', 'sweep', 'sweep-axis', 'incidence', 'spec', 'stack',
+        'layer', 'material'])
+def test_a_key_that_is_not_a_string_is_refused_as_a_spec_error(build):
+    """A parsed mapping with a key that is not a string is no document this schema reads, and
+    ``from_dict``'s contract is ``SpecError``. It was a bare ``TypeError`` from inside the hint:
+    difflib cannot match an int, and ``sorted`` cannot order one beside a string."""
+    with pytest.raises(SpecError, match=r': field names are strings, got .* Allowed: \['):
+        build()

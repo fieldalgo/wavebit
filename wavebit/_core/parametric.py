@@ -159,6 +159,7 @@ from collections import namedtuple
 from . import overlap as _overlap
 from .backend import array_namespace, as_array, checked_float, j1, jinc, sinc
 from .domain import as_material
+from .enums import near_match, quantity_note
 from .factorization import ConvMatrices, check_normal_grid
 from .lattice import periods_of, is_axis_aligned, reduced_basis, reduction_transform, sample_grid
 from .overlap import OVERLAP_TOL_REL
@@ -358,14 +359,21 @@ def check_shape_spec(shape, shape_index=0, layer_index=0):
             f"is the size you meant, or use type={alt!r} to give two lengths.")
 
     unknown = set(shape) - (lengths | _COMMON_KEYS)
+    odd = [key for key in unknown if not isinstance(key, str)]
+    if odd:
+        # Before the guess, which matches strings only: `sorted` cannot order an int beside
+        # them, and the refusal would otherwise be a TypeError from inside the hint.
+        raise ValueError(f'{where}: shape keys are strings, got {", ".join(map(repr, odd))}. '
+                         f'It takes {sorted(lengths | _COMMON_KEYS)}.')
     if unknown:
-        import difflib
         known = sorted(lengths | _COMMON_KEYS)
         bits = []
         for key in sorted(unknown):
-            near = difflib.get_close_matches(key, known, n=1, cutoff=0.6)
-            bits.append(f'{key!r}' + (f" (did you mean {near[0]!r}?)" if near else ''))
-        raise ValueError(f'{where}: {stype!r} does not take {", ".join(bits)}. '
+            # The package's one guess, which never sends `n_material` to `material`.
+            near = near_match(key, known)
+            bits.append(f'{key!r}' + (f" (did you mean {near!r}?)" if near else ''))
+        raise ValueError(f'{where}: {stype!r} does not take {", ".join(bits)}.'
+                         f'{quantity_note(unknown, known)} '
                          f'It takes {known}. A key nobody reads is silently ignored, which is '
                          f'why this is refused rather than dropped.')
 
@@ -384,6 +392,12 @@ def check_layer_spec(layer, layer_index=0):
     uniform slab of ``background``, solves, conserves energy, and is wrong. There is nothing
     downstream that could notice.
     """
+    odd = [key for key in layer if not isinstance(key, str)]
+    if odd:
+        # As in `check_shape_spec`, and before the sort below: `sorted` cannot order an int
+        # beside a string, and the refusal would otherwise be a bare TypeError from inside it.
+        raise ValueError(f'Analytic layer {layer_index}: layer keys are strings, got '
+                         f'{", ".join(map(repr, odd))}. A layer takes {sorted(_LAYER_KEYS)}.')
     unknown = sorted(set(layer) - _LAYER_KEYS)
     if unknown:
         raise ValueError(

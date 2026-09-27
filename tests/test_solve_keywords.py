@@ -254,6 +254,66 @@ def test_a_typoed_attribute_is_refused_rather_than_stored(backend, name, typo, m
             assert float(np.sum(np.asarray(solver.solve().T)).real) != before
 
 
+def test_a_name_spelled_like_another_quantity_is_not_pointed_at_a_material_condition():
+    """``solve(n_top=1.5)`` said "did you mean 'top'?" -- 0.75 against this door's 0.7 cutoff.
+
+    The descriptor branch below keeps ``solver.n_top = 1.5`` off the hint (the solver has a
+    read-only ``n_top``), but the keyword door and every other index spelling reached it: a
+    refractive index pointed at a permittivity slot, the quantity error ``docs/conventions.md``
+    exists to prevent. The guess is ``enums.near_match`` now, which never crosses quantities;
+    the plain match is asserted first so this cannot pass by difflib happening not to reach.
+    """
+    import difflib
+    from test_spec import INDEX_SPELLINGS
+    solver = _guard_solver(0)
+    legal = sorted(solver._condition_names())
+    assert difflib.get_close_matches('n_top', legal, n=1, cutoff=0.7) == ['top']
+    assert difflib.get_close_matches('mu_top', legal, n=1, cutoff=0.6) == ['top']
+    assert {'n_top', 'n_bot', 'ntop', 'n_structure', 'RI_top', 'n_sub'} <= set(INDEX_SPELLINGS)
+    for name in INDEX_SPELLINGS:
+        with pytest.raises(TypeError) as keyword:
+            solver.solve(**{name: 1.5})
+        messages = [str(keyword.value)]
+        if not hasattr(type(solver), name):
+            with pytest.raises(AttributeError) as attribute:
+                setattr(solver, name, 1.5)
+            messages.append(str(attribute.value))
+        for message in messages:
+            assert 'did you mean' not in message.lower(), message
+            assert 'relative permittivity (eps = n**2) or a Material' in message, message
+    with pytest.raises(AttributeError) as permeability:     # `mu` is a condition: no note
+        solver.mu_top = 1.5
+    assert 'did you mean' not in str(permeability.value).lower(), permeability.value
+
+
+def test_a_count_spelled_with_n_keeps_the_guess_plain_difflib_gives():
+    """The other direction on both solver doors: ``n_theta`` counts angles, it is no index. Read
+    as one, ``solve(n_theta=...)`` lost "did you mean 'theta'?" and was told the material slots
+    take permittivity. Each door's own cutoff (0.7 on the keywords, 0.6 on the attribute), and
+    at least one count reaches a condition, so this is not every guess being none."""
+    import difflib
+    from test_spec import COUNT_SPELLINGS
+    solver = _guard_solver(0)
+    legal = sorted(solver._condition_names())
+    reached = 0
+    for name in COUNT_SPELLINGS + ('n_period', 'n_phi'):
+        assert not hasattr(type(solver), name), name
+        with pytest.raises(TypeError) as keyword:
+            solver.solve(**{name: 1.5})
+        with pytest.raises(AttributeError) as attribute:
+            setattr(solver, name, 1.5)
+        for message, cutoff, spelled in ((str(keyword.value), 0.7, '(did you mean {!r}?)'),
+                                         (str(attribute.value), 0.6, 'Did you mean {!r}?')):
+            plain = difflib.get_close_matches(name, legal, n=1, cutoff=cutoff)
+            reached += bool(plain)
+            assert 'spelled like' not in message, message
+            if plain:
+                assert spelled.format(plain[0]) in message, message
+            else:
+                assert 'did you mean' not in message.lower(), message
+    assert reached >= 4, reached
+
+
 @pytest.mark.parametrize('backend, name', _GUARD_BACKENDS, ids=[n for _, n in _GUARD_BACKENDS])
 def test_the_guard_leaves_the_descriptor_protocol_in_charge(backend, name):
     """A read-only property is not a missing attribute, and must not be reported as one.
