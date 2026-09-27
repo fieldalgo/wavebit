@@ -108,7 +108,7 @@ in all finite layers. It excludes absorption in either half-space.
 
 | | write | what it is |
 | --- | --- | --- |
-| **declaration** | `tetm='te'` / `'tm'` | this problem has no polarization and no azimuth degree of freedom. 1D structures only, and it is what buys the pure TE/TM formulation -- 2 to 4 times faster than the conical one, which gives the same amplitudes, fields and efficiencies as `polarization=(1, 0)` / `(0, 1)` at `phi=0`, to 1e-13 (since 2026-09-27; before, the amplitudes differed by a sign on the orders across `kx = 0` from the incident one) |
+| **declaration** | `tetm='te'` / `'tm'` | this problem has no polarization and no azimuth degree of freedom. One-row raster structures only (a shape structure is refused, even one invariant along y; use `polarization=(1, 0)` / `(0, 1)` at `phi=0` there), and it is what buys the pure TE/TM formulation -- 2 to 4 times faster than the conical one, which gives the same amplitudes, fields and efficiencies as `polarization=(1, 0)` / `(0, 1)` at `phi=0`, to 1e-13 (since 2026-09-27; before, the amplitudes differed by a sign on the orders across `kx = 0` from the incident one) |
 | **coordinates** | `psi`, `chi` | the state's two angles: `psi` the ellipse's tilt, `chi` its ellipticity. `chi=0` is linear (and is exactly the `psi` spelling), `chi=+/-pi/4` circular. This is the form to sweep and to optimize |
 | **amplitudes** | `polarization=(a_s, a_p)` | the Jones pair itself, in the same (s, p) basis the results come back in. The only form that carries an overall phase; its magnitude is normalized away, so `(3, 4j)` and `(0.6, 0.8j)` are one incidence |
 

@@ -894,7 +894,11 @@ class CoreSolveMixin:
         none); each is refused by name in :meth:`solve_conv` unless that layout is the pure one
         (:meth:`_refuse_tetm_off_the_pure_path`, since 2026-09-27; until then all but the
         tensor raised a ``TypeError`` from deep in the solve, or -- with ``tetm`` assigned after
-        construction -- answered for s light whichever it named).
+        construction -- answered for s light whichever it named). A kept pure layout re-checks
+        the declaration as the raster that chose it was checked -- ``phi``, ``ky``, the cell's
+        skew and ``truncation_order[1]`` -- since the scene may have moved after that solve;
+        until the same date it asked nothing, and answered the ``phi = 0`` scene for
+        ``phi = 0.4``.
         """
         return self._tetm
 
@@ -2292,6 +2296,16 @@ class CoreSolveMixin:
         if self.structure is None:
             if self._grating_type is None:
                 self._grating_type = 2
+            elif self._grating_type == 0:
+                # The pure layout is kept only from a one-row raster, so what the raster branch
+                # below asked of that raster is asked again: the scene may have moved since.
+                # Asked nothing, a kept pure layout answered for the wrong light -- phi = 0.4
+                # solved as phi = 0, a nonzero ky as ky = 0, a skewed cell as the rectangle --
+                # or crashed on truncation_order[1] != 0 with a bare broadcast error (measured
+                # on 0937b35). The refusals come before any write, so the routing stays put.
+                one_dimensional = self.lattice_is_axis_aligned
+                self._refuse_y_orders_on_a_y_invariant_cell(True)
+                self._refuse_illegal_tetm(one_dimensional, one_row=True)
             return
 
         if self._has_tensor_materials():
@@ -3161,6 +3175,10 @@ class CoreFactorizationMixin:
         have answered one problem while the rest of the object described another.
         """
 
+        # Reject a retained one-row layout's invalid order request before the
+        # centre conversion checks the dimensions of matrices built earlier.
+        if self.structure is None and self._grating_type == 0:
+            self._refuse_y_orders_on_a_y_invariant_cell(True)
         window = self.order_window
         eps = swap_fourier_origin(
             (epx_conv_all, epy_conv_all, epz_conv_i_all, epxy_conv_all, epyx_conv_all,

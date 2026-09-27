@@ -13,7 +13,8 @@ declared. The routes:
   one-row raster to the first-order (4ff) path, which is written on the 2D layout;
 * ``formulation='4ff'``, which forces that same path without a z row;
 * a solver holding **no structure**, whose ``solve_conv`` keeps the layout its last solve took
-  -- 2D if it never solved, conical after a conical solve;
+  -- 2D if it never solved, conical after a conical solve; a kept pure layout is asked again
+  what its raster was (``phi``, ``ky``, the cell's skew, ``truncation_order[1]``);
 * a **shape** structure, which is always solved on the 2D layout;
 * a **tensor** material, refused by name where its convolution matrices are built and reachable
   past that only with matrices built before ``tetm`` was set.
@@ -330,7 +331,8 @@ def test_tetm_on_a_solver_with_no_structure_is_refused():
     The matrices alone cannot say 1D, so a solver that never solved is on the 2D layout, and
     one whose last solve was conical is on the conical one -- which reads the incident pair
     just the same, and on 0937b35 answered for s light when ``tetm`` was assigned afterwards.
-    The one layout it may keep is the pure one: after a pure solve the same call answers.
+    The one layout it may keep is the pure one: after a pure solve the same call answers --
+    re-checked, as the next test shows.
     """
     raster = wavebit.rcwa(structure=RASTER_1D, tetm='te', **KW)
     conv = raster.eps_conv_matrices()
@@ -356,6 +358,45 @@ def test_tetm_on_a_solver_with_no_structure_is_refused():
     conical.tetm = 'te'
     with pytest.raises(ValueError, match=r'holds no structure.* here the conical 1D one'):
         conical.solve_conv(conv.epx, conv.epy, conv.epz_i)
+
+
+#: What can move after the pure solve that chose the layout, and the sentence a one-row
+#: raster is refused with for the same move.
+MOVED = {
+    'phi': (dict(phi=0.4), 'tetm and a nonzero phi'),
+    'ky': (dict(theta=None, kx=0.001, ky=0.0005), 'tetm requires ky=0'),
+    'orders': (dict(truncation_order=[3, 2]), 'asks for y diffraction orders'),
+    'skew': (dict(lattice=wavebit.Lattice.oblique(700.0, 700.0, np.pi / 3)), 'skewed lattice'),
+}
+
+
+@pytest.mark.parametrize('moved', MOVED)
+def test_a_kept_pure_layout_asks_again_what_its_raster_was_asked(moved):
+    """The pure layout kept with no structure is re-checked, with the raster's own sentences.
+
+    The scene can move after the pure solve that chose the layout, and until this was asked
+    the kept layout answered whatever it became, measured on 0937b35: ``phi = 0.4`` returned
+    the ``phi = 0`` solve (TE sum R 0.0162738, where the pair at ``phi = 0.4`` is 0.0363008);
+    a nonzero ``ky`` and a skewed cell answered too, the latter the rectangular problem; and
+    ``truncation_order=[3, 2]`` ended in a bare ``operands could not be broadcast``. The same
+    moves on the raster itself are refused, so they are refused here, before the routing is
+    written -- the layout stays the pure one, and the solve before it stays readable.
+    """
+    raster = wavebit.rcwa(structure=RASTER_1D, tetm='te', **KW)
+    conv = raster.eps_conv_matrices()
+    raster.solve()
+    raster.structure = None
+    change, sentence = MOVED[moved]
+    for name, value in change.items():
+        setattr(raster, name, value)
+    with pytest.raises(ValueError, match=sentence):
+        raster.solve_conv(conv.epx, conv.epy, conv.epz_i)
+    assert raster.grating_type == 0
+    if moved == 'phi':
+        # The premise: phi = 0.4 is another scene, so answering it was wrong, not merely early.
+        pure = float(np.sum(wavebit.rcwa(structure=RASTER_1D, tetm='te', **KW).solve().R))
+        tilted = wavebit.rcwa(structure=RASTER_1D, polarization=(1, 0), phi=0.4, **KW).solve()
+        assert abs(float(np.sum(tilted.R)) - pure) > 1e-2
 
 
 #: The sentence ``tetm`` beside a tensor has always been refused with, where the matrices are built.
