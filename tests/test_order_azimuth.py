@@ -510,3 +510,102 @@ def test_the_denominator_clamp_is_what_saves_the_gradient():
     assert float(unclamped(kx)) == pytest.approx(float(clamped(kx))), 'forward agrees...'
     assert not np.isfinite(np.asarray(jax.grad(unclamped)(kx))[0]), '...backward does not'
     assert np.all(np.isfinite(np.asarray(jax.grad(clamped)(kx))))
+
+
+# ---------------------------------------------------------------- the ky == 0 row, exactly
+
+#: Every kind of kx the pure 1D row can hold: both signed zeros, a subnormal-sized pair that
+#: complex64 flushes to a signed zero, ordinary values either side, the complex-theta corners
+#: (a real part of either sign with a loss term, and a purely imaginary kx of either sign),
+#: and a value that is zero to rounding but positive.
+_ROW = (0.0, -0.0, 1e-300, -1e-300, 0.3, -0.3, -0.3 + 0.2j, -0.3 - 0.2j, 0.2j, -0.2j, 1e-17,
+        complex(-0.0, 0.2), complex(-0.0, -0.2))
+
+
+def _row(backend, dtype):
+    """``_ROW`` on a backend, as the complex dtype named -- the arrays the kernels are handed."""
+    values = np.asarray(_ROW, dtype=dtype)
+    if backend == 1:
+        import jax.numpy as jnp
+        return jnp.asarray(values)
+    if backend == 2:
+        import torch
+        return torch.asarray(values)
+    return values
+
+
+def _expected_row(dtype):
+    """``-1`` where ``Re(kx) < 0``, from the values as ``dtype`` stores them, else ``+1``."""
+    return np.where(np.real(np.asarray(_ROW, dtype=dtype)) < 0, -1.0, 1.0)
+
+
+@pytest.mark.parametrize('dtype', [np.complex128, np.complex64])
+@pytest.mark.parametrize('backend, name', [(0, 'numpy'), (1, 'jax'), (2, 'torch')])
+def test_the_1d_frame_sign_is_exactly_the_azimuths_cosine(backend, name, dtype):
+    """``order_frame_sign`` is ``cos(order_azimuth)`` on the ``ky == 0`` row, to the bit.
+
+    The pure 1D path cannot call ``order_azimuth`` -- it would carry ``sin(pi)`` into a
+    component that is identically zero there -- so the single-source guarantee is this
+    comparison instead. Three claims per entry:
+
+    * the value is exactly ``+-1`` (``==``, not a tolerance), real, in ``Re(kx)``'s precision,
+      so a ``complex64`` amplitude multiplied by it stays ``complex64``;
+    * ``+1`` at both signed zeros and at a purely imaginary ``kx``: the origin rule and the
+      ``Re``-keyed half-turn, which ``sign(kx)`` would get wrong on a complex array;
+    * equal to ``cos(order_azimuth(0*kx, kx, phi))`` for every ``phi`` ``tetm`` admits, with
+      ``|sin|`` no larger than the ``sin(pi)`` it avoids.
+    """
+    from wavebit._core.conventions import order_frame_sign
+    if backend == 1:
+        pytest.importorskip('jax')
+        wavebit.enable_x64()
+    elif backend == 2:
+        pytest.importorskip('torch')
+    kx = _row(backend, dtype)
+    xp = array_namespace(kx)
+    got = order_frame_sign(xp, kx)
+    host = np.asarray(got.cpu() if hasattr(got, 'cpu') else got)
+
+    real = np.float32 if dtype == np.complex64 else np.float64
+    assert host.dtype == real, f'{name}: {host.dtype}, not the real dtype of {np.dtype(dtype)}'
+    want = _expected_row(dtype)
+    assert np.array_equal(host, want), (name, host, want)
+    assert (host[:2] == 1).all() and (host[8:10] == 1).all() and (host[11:] == 1).all(), (
+        'a signed zero or a purely imaginary kx flipped')
+    # -1e-300 is a negative number in double and a signed zero in single precision.
+    assert (want == -1).sum() == (4 if dtype == np.complex128 else 3), 'the row lost a sign'
+
+    for phi in (None, 0.0, -0.0):
+        angle = order_azimuth(xp, 0 * kx, kx, phi)
+        angle = np.asarray(angle.cpu() if hasattr(angle, 'cpu') else angle)
+        assert np.array_equal(np.real(np.cos(angle)), host), (name, phi)
+        assert np.abs(np.sin(angle)).max() <= (2e-16 if dtype == np.complex128 else 1e-7)
+
+
+def test_the_1d_frame_sign_traces_and_differentiates_to_zero():
+    """Traced ``kx`` compiles, and the derivative is a clean zero, including at ``kx == 0``.
+
+    The sign is piecewise constant, so zero is the right derivative everywhere it exists. The
+    thing to rule out is a NaN from a traced branch or from a division somewhere upstream --
+    which ``where`` on a comparison with constant branches cannot produce.
+    """
+    jax = pytest.importorskip('jax')
+    wavebit.enable_x64()
+    import jax.numpy as jnp
+    from wavebit._core.conventions import order_frame_sign
+
+    kx = jnp.asarray(_ROW, dtype=jnp.complex128)
+    eager = np.asarray(order_frame_sign(array_namespace(kx), kx))
+    traced = np.asarray(jax.jit(lambda k: order_frame_sign(array_namespace(k), k))(kx))
+    assert np.array_equal(eager, traced)
+
+    base = jnp.asarray([-0.4, 0.0, 0.25], dtype=jnp.float64)
+
+    def weighted(shift):
+        k = jnp.astype(base + shift, jnp.complex128)
+        return jnp.sum(order_frame_sign(array_namespace(k), k) * (base + shift) ** 2)
+
+    grad = float(jax.grad(weighted)(jnp.asarray(0.0)))
+    # d/ds sum(sigma * (b + s)**2) = sum(2 * sigma * b), with sigma held constant.
+    assert grad == pytest.approx(2 * (-1 * -0.4 + 1 * 0.0 + 1 * 0.25), abs=1e-15)
+    assert np.isfinite(grad)

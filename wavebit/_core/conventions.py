@@ -611,6 +611,31 @@ def order_azimuth(xp, ky, kx, phi):
     return xp.reshape(xp.where(zero_kx & (ky == 0), incident, varphi), (-1,))
 
 
+def order_frame_sign(xp, kx):
+    """``s_hat . y_hat`` of every order on the ``ky == 0`` row: ``-1`` where ``Re(kx) < 0``, else ``+1``.
+
+    The pure 1D path's whole s/p frame. With ``ky == 0`` and the origin azimuth ``0`` -- the only
+    azimuth ``tetm`` admits (``CoreSolveMixin._refuse_illegal_tetm``) -- ``s_hat = z_hat x
+    k_hat_par`` is ``+-y_hat``, and ``p_hat`` lies in the xz plane and turns over with it. This
+    is exactly ``cos(order_azimuth(xp, 0*kx, kx, 0))``, the rule the conical and 2D paths use,
+    spelled without the angle so that ``sin(pi)`` (1.2e-16) never reaches a component that is
+    identically zero; ``tests/test_order_azimuth.py`` pins the two against each other, since a
+    rule that cannot be *called* has to be *compared*.
+
+    * ``kx == 0`` (``-0.0`` included) is ``+1``: the origin rule at ``phi = 0``, which is what
+      ``order_azimuth`` answers there.
+    * A purely imaginary ``kx`` (a complex ``theta``) is ``+1`` too, as there: the half-turn is
+      keyed on ``Re(kx)``, never on ``sign(kx)``, which is complex-valued on a complex array.
+
+    Returned **real**, in the dtype of ``Re(kx)``: exactly ``+-1`` on every backend and
+    precision, so multiplying a complex amplitude by it is an exact sign flip and never widens
+    a ``complex64`` solve. ``where`` on a comparison rather than a Python branch: nothing is
+    traced through a condition, and the derivative is zero rather than a NaN.
+    """
+    one = xp.ones_like(xp.real(kx))
+    return xp.where(xp.real(kx) < 0, -one, one)
+
+
 def _order_count(value, name, which):
     """One order count: a whole number, not negative.
 
