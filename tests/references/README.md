@@ -62,6 +62,14 @@ Its measured truncation scope and source-mutant witnesses are documented in
 [the exact-near-field section](../../docs/fd-mie-validation.md#exact-mie-near-fields-through-the-radiation-transform).
 It does not import the FDTD engine or depend on a captured FDTD answer.
 
+[`gen_star_lift_oracle.py`](gen_star_lift_oracle.py) freezes the FDTD star lift's diagonal
+change, with its first and second derivatives along two directions, on four small regions into
+`star_lift_oracle.npz`. It is written from the definitions in `wavebit/fd/_lower/stars.py`'s
+docstring, imports nothing from wavebit, and works at 50 digits: explicit 6x6 stars, bisection to
+`2**-150`, an eigensolver certificate and central differences. It needs mpmath, which wavebit does
+not depend on; `test_fd_star_lift.py` compares JAX, `jax.jit` and Torch's nested derivatives with
+the committed numbers. [The star lift](../../docs/fd-subpixel-occupancy.md#the-star-lift-the-smoothed-operator-positive-by-construction-2026-09-27).
+
 | Oracle | Reaches | Generator needs | Golden |
 | --- | --- | --- | --- |
 | **Meep**, **transverse rectangle sensitivities** | three TE diffraction orders, rectangle width/centre derivatives, two grids, averaged-profile controls and independent RCWA/translation checks | documented 2D Blocks or global material function; two durations, perturbation sizes and averaging tolerances | `golden_meep_rectangle.npz`, `golden_meep_rectangle_fine.npz`, `golden_meep_rectangle_smoothed.npz`, `golden_meep_rectangle_smoothed_refined.npz`, `test_meep_rectangle.py`, `interface/meep_rectangle.py`; [measurement](../../docs/fdtd-rectangle-gradients.md) |
