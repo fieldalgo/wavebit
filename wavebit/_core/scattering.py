@@ -292,14 +292,17 @@ def _register_pytree_if_jax_loaded():
 
     Lazy, and never importing JAX, for the reason
     :func:`wavebit._core.domain._register_pytree_if_jax_loaded` gives at length. Called from
-    :func:`_scattering_matrix`, the one constructor of a port, and on import of the JAX
-    backend. The one ordering neither covers is a matrix built before ``import jax`` and handed
-    to JAX before any JAX solver or any other matrix is built: there the channel is still a
+    :func:`_scattering_matrix`, the one constructor of a port; on import of the JAX backend;
+    and from :func:`wavebit.enable_x64`, the documented call for JAX arriving after wavebit.
+    The one ordering none covers is a matrix built before ``import jax`` and handed to JAX
+    before any JAX solver, any other matrix or ``enable_x64()``: there the channel is still a
     string leaf, and JAX says so loudly (``TypeError: ... of type <class 'str'> ... at path
-    S.entry_port.channel``) rather than answering wrongly. Building either afterwards registers
-    the class and repairs the matrices already built, since registration is per class and not
-    per instance. Before ports carried a channel no such ordering existed: every field was a
-    number or ``None``, each a valid leaf registered or not.
+    S.entry_port.channel``) rather than answering wrongly. Any of the three afterwards
+    registers the class and repairs the matrices already built, since registration is per
+    class and not per instance. (``import wavebit`` with JAX already loaded needs no call: no
+    port exists yet, and the first one built registers.) Before ports carried a channel no
+    such ordering existed: every field was a number or ``None``, each a valid leaf registered
+    or not.
     """
     global _PYTREE_REGISTERED
     if _PYTREE_REGISTERED:
@@ -503,11 +506,15 @@ def _port_disagreement(a, b):
     The channel is asked first because it is the one answer no conversion can fix: two pieces
     on different channels are different problems, and a pure piece against a coupled one also
     differs in ``ky`` (``None`` on the pure path), where the ``kx`` / ``ky`` clause would send the
-    caller to convert ``theta`` instead.
+    caller to convert ``theta`` instead. ``Port`` is public and ``channel`` a plain string, so a
+    hand-built port may name a channel no solve produces; it is named as that, not looked up
+    into a ``KeyError``.
     """
     if a.channel != b.channel:
-        return (f"they count different polarizations: {a.channel!r} ({_CHANNELS[a.channel]}) "
-                f"against {b.channel!r} ({_CHANNELS[b.channel]}). A pure 1D matrix joins only "
+        def words(channel):
+            return _CHANNELS.get(channel, 'a channel no solve produces')
+        return (f"they count different polarizations: {a.channel!r} ({words(a.channel)}) "
+                f"against {b.channel!r} ({words(b.channel)}). A pure 1D matrix joins only "
                 "one solved with the same tetm; to join across polarizations, or a pure piece to "
                 "a coupled one, solve every piece on the coupled path -- polarization=(a_s, a_p) "
                 'or psi, at phi=0 on a 1D grating, instead of tetm -- whose ports carry both')

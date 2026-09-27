@@ -63,6 +63,10 @@ def enable_x64():
     Idempotent, and it does not import JAX unless JAX is installed -- but it does raise if it
     is not, rather than quietly doing nothing. Asking for double precision and silently not
     getting it is the failure this whole path exists to stop.
+
+    Being the call for JAX arriving after wavebit, it also registers :class:`~wavebit.Port`
+    as a pytree, so a scattering matrix built before ``import jax`` crosses ``jax.jit`` (see
+    ``_core.scattering._register_pytree_if_jax_loaded``).
     """
     import importlib.util
 
@@ -74,6 +78,8 @@ def enable_x64():
 
     import jax
     jax.config.update('jax_enable_x64', True)
+    from ._core import scattering
+    scattering._register_pytree_if_jax_loaded()
 
 from .main import rcwa
 from ._core.backend import (AutoDetuneWarning, AxisNameWarning, ComplexIncidenceWarning,

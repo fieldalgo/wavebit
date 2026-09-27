@@ -1066,6 +1066,21 @@ def test_cascading_a_te_matrix_onto_a_tm_one_is_refused(first, second):
     assert 'polarization=' in str(info.value)          # and what to solve instead
 
 
+def test_a_port_on_a_channel_no_solve_produces_is_refused_by_name():
+    """``Port`` is public and ``channel`` a plain string, so a hand-built port can name any.
+
+    The refusal quotes each channel's meaning, and looked it up by key: a port on ``'TE'``
+    raised ``KeyError: 'TE'`` from inside the message, against a TE piece and a TM one alike.
+    """
+    upper = _piece(WHOLE[:2], WHOLE_TH[:2], 4.0, 1.0, 0.3, tetm='te')
+    odd = upper._replace(exit_port=upper.exit_port._replace(channel='TE'))
+    for tetm in ('te', 'tm'):
+        lower = _piece(WHOLE[2:], WHOLE_TH[2:], 1.0, 2.25, THETA_IN_AIR, tetm=tetm)
+        with pytest.raises(ValueError, match='different polarizations') as info:
+            odd.cascade(lower)
+        assert "'TE' (a channel no solve produces)" in str(info.value), tetm
+
+
 @pytest.mark.parametrize('tetm', ['te', 'tm'])
 def test_a_pure_matrix_and_a_coupled_one_are_refused_by_their_channels(tetm):
     """A pure 1D matrix against a coupled one, either way round -- named for what differs.
@@ -1126,25 +1141,29 @@ def test_the_channel_crosses_a_jit_boundary_as_aux_data(kw, channel):
 
 
 #: What registers ``Port`` once JAX is there: importing the JAX backend, which building a JAX
-#: solver does (no solve needed), and the lazy call where a port is built -- here a NumPy solve,
-#: which must not import that backend, or the second case would be the first one again.
+#: solver does (no solve needed); the lazy call where a port is built -- here a NumPy solve;
+#: and ``wavebit.enable_x64()``, the documented call for JAX arriving after wavebit. The last
+#: two must not import that backend, or they would be the first case again.
 REPAIRS = {
     'a JAX solver built': 'wavebit.rcwa(backend=1, **kw)',
     'another matrix built': ('wavebit.rcwa(backend=0, **kw).solve(); '
+                             "assert 'wavebit.backends.jax_backend' not in sys.modules"),
+    'wavebit.enable_x64()': ('wavebit.enable_x64(); '
                              "assert 'wavebit.backends.jax_backend' not in sys.modules"),
 }
 
 
 @pytest.mark.parametrize('repair', REPAIRS)
 def test_a_matrix_built_before_jax_is_imported_is_repaired(repair):
-    """A NumPy matrix built before ``import jax`` crosses ``jax.jit`` once either registration ran.
+    """A NumPy matrix built before ``import jax`` crosses ``jax.jit`` once any registration ran.
 
     ``Port`` is registered lazily -- the hook reads ``sys.modules`` and never imports JAX -- so
     a matrix built first carries its channel as a string leaf, which ``jax.jit`` refuses. (On
-    0937b35 that matrix crossed: every field was a number.) Registration is per class, so either
+    0937b35 that matrix crossed: every field was a number.) Registration is per class, so each
     of :data:`REPAIRS` repairs a matrix already built. In a subprocess, because a whole-suite
     run has imported JAX, and registered the class, long before this file, and the ordering
-    cannot happen after that.
+    cannot happen after that. x64 is lifted through ``jax.config``, not ``enable_x64()``, which
+    is itself one of the repairs and would mask the other two.
     """
     pytest.importorskip('jax')
     code = textwrap.dedent("""
@@ -1159,7 +1178,7 @@ def test_a_matrix_built_before_jax_is_imported_is_repaired(repair):
         early = solver.scattering
         assert 'jax' not in sys.modules
         import jax
-        wavebit.enable_x64()                            # else the jitted sum is complex64
+        jax.config.update('jax_enable_x64', True)       # else the jitted sum is complex64
         REPAIR
         assert not any(isinstance(leaf, str) for leaf in jax.tree_util.tree_leaves(early))
         total = jax.jit(lambda S: S.S11.sum())(early)
