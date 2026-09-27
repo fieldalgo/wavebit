@@ -319,9 +319,13 @@ def _closed_form_s_field(eps, mu, thick, eps_bot, mu_bot, theta, z_abs):
     it forever. A characteristic-matrix recursion cannot be co-migrated -- the same argument
     ``tests/test_material_convention_anchor.py`` makes for ``R``, made one level deeper.
 
-    Vacuum above, unit incident amplitude, ``z_abs`` measured from the top of the stack -- the
-    same frame the reconstruction returns, and the normalisation it uses, so the comparison is
-    **absolute**: no fitted scale, no fitted phase, no ratio taken to make two curves meet.
+    Vacuum above, unit incident amplitude, layers listed top to bottom and ``z_abs`` a depth
+    measured down from the top of the stack, with ``+z`` pointing into it. That is the frame the
+    reconstruction returned until 2026-09-21; it now returns upward heights from the bottom
+    interface, and :func:`_uniform_cell` converts (``sum(thick) - z``, the layer order reversed,
+    and the mirror parity that flips ``Ez``, ``Hx`` and ``Hy``). The normalisation is the one
+    the reconstruction uses, so the comparison is **absolute**: no fitted scale, no fitted
+    phase, no ratio taken to make two curves meet.
 
     Three ingredients, and only the third is what this file is about:
 
@@ -375,6 +379,11 @@ def _closed_form_s_field(eps, mu, thick, eps_bot, mu_bot, theta, z_abs):
 def _uniform_cell(eps, mu, thick, eps_bot, mu_bot, theta, z_abs, algo='ETM'):
     """The same stack through the public front door, sampled at the same absolute depths.
 
+    The public API is bottom-to-top with upward heights, so the oracle's top-to-bottom lists are
+    reversed on the way in, each depth ``z`` is asked for as the height ``sum(thick) - z``, and
+    the returned components take the mirror parity back into the oracle's downward frame on the
+    way out. Explicit samples come back in the order asked, so no axis needs reversing.
+
     A ``2 x 2`` raster per layer rather than ``1 x 1``: with one row in ``y`` the scene routes
     to a 1D solve, where ``mu`` is refused (and rightly). Every pixel carries the same value,
     so the *scene* is a uniform slab while the *path* is the 2D one that takes a permeability
@@ -403,6 +412,7 @@ def _uniform_cell(eps, mu, thick, eps_bot, mu_bot, theta, z_abs, algo='ETM'):
 
 
 # (label, eps per layer, mu per layer, thickness per layer, eps_bot, mu_bot, theta degrees).
+# The per-layer lists run top to bottom, the closed form's order; `_uniform_cell` reverses them.
 # `mu_zz` differs from 1 by a different amount and in a different way in each magnetic row --
 # above one, below one, complex, and per-layer -- so a fix that happened to divide by the
 # wrong layer's value is separated from one that divides by the right one. The last row makes

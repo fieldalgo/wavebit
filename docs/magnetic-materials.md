@@ -359,8 +359,10 @@ called field reconstruction at all.
 - a **closed form**. A uniform magnetic slab's s-polarized interior field comes out of a
   characteristic-matrix recursion in `(Ey, Hx)` with the admittance `kz/mu` — no wavebit
   anywhere in it, so it cannot be co-migrated the way a regenerated golden can. The comparison
-  is absolute: unit incident amplitude, depths measured from the top of the stack, no fitted
-  scale or phase. It reaches `mu_zz` as a *scalar*.
+  is absolute: unit incident amplitude, no fitted scale or phase. The oracle measures depth down
+  from the top of the stack; the test asks the solver for the matching heights from the bottom,
+  `sum(thickness) - depth`, and applies the z-mirror parity to its cell. It reaches `mu_zz` as a
+  *scalar*.
 - the **duality, on the cell**. A patterned `mu_zz^-1` is a convolution matrix, and omitting it
   is a different mistake from applying it on the wrong side. Exchanging the two patterns and
   trading the incidence maps `E` onto `H` entry for entry with unit scale, which checks the

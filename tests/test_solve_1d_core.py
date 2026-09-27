@@ -72,6 +72,8 @@ CASES = [
     # name, tetm, structure, thickness, n_top, n_bot, wl, period, truncation_order, theta.
     # The rasters are PERMITTIVITY (9 and 4 where the indices 3 and 2 used to be); the
     # half-spaces stay indices and are squared at the constructor -- see _run_and_inputs.
+    # `structure` / `thickness` list the layers TOP TO BOTTOM, the order these cases were
+    # written in; `_run_and_inputs` reverses them into the public bottom-to-top order.
     ('te_1layer', 'te', [[[9., 9., 9., 1., 1., 1.]]], [0.15], 2.0, 1.0, 0.777, [0.77], [6, 0], 0.0),
     ('tm_1layer', 'tm', [[[9., 9., 9., 1., 1., 1.]]], [0.15], 2.0, 1.0, 0.777, [0.77], [6, 0], 0.0),
     ('te_2layer', 'te', [[[9., 9., 1., 1., 9., 1.]], [[4., 4., 4., 1., 1., 1.]]], [0.15, 0.22],
@@ -80,7 +82,8 @@ CASES = [
      1.0, 1.0, 0.9, [0.7], [5, 0], 0.0),
     ('te_oblique_lossy', 'te', [[[9., 9., 9., 1., 1., 1.]]], [0.2], 1.0, 1.5, 0.777, [0.77], [6, 0], 0.3),
     ('tm_oblique_lossy', 'tm', [[[9., 9., 9., 1., 1., 1.]]], [0.2], 1.0, 1.5, 0.777, [0.77], [6, 0], 0.3),
-    # bottom layer uniform and equal to the substrate (bot=1): a matched interface
+    # bottom layer -- listed last here, structure[0] once reversed -- uniform and equal to the
+    # substrate (bot=1): a matched interface
     ('te_same_material', 'te', [[[9., 9., 1., 1., 9., 1.]], [[1., 1., 1., 1., 1., 1.]]], [0.2, 0.1],
      1.0, 1.0, 0.9, [0.7], [5, 0], 0.0),
     ('tm_same_material', 'tm', [[[9., 9., 1., 1., 9., 1.]], [[1., 1., 1., 1., 1., 1.]]], [0.2, 0.1],
@@ -197,6 +200,7 @@ def _run_and_inputs_conical(structure, thickness, n_top, n_bot, wl, period, trun
 
 CONICAL_CASES = [
     # name, structure, thickness, n_top, n_bot, wl, period, truncation_order, theta, phi, psi
+    # (layers top to bottom, as in CASES; `_run_and_inputs_conical` reverses them)
     ('con_1layer', [[[9., 9., 9., 1., 1., 1.]]], [0.15], 2.0, 1.0, 0.777, [0.77], [6, 0], 0.2, 0.3, 0.4),
     ('con_2layer_lossy', [[[9., 9., 1., 1., 9., 1.]], [[4., 4., 4., 1., 1., 1.]]], [0.15, 0.22],
      1.0, 1.5, 0.9, [0.7], [5, 0], 0.3, 0.5, 1.1),

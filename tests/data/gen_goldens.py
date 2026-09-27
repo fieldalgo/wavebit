@@ -19,6 +19,14 @@ The *scene* is unchanged, which is what makes the rewrite honest — ``eps = 9``
 are the same slab, so the frozen numbers still answer for it. What must not happen is the
 half-migration: renaming ``ucell`` to ``structure`` and leaving the ``3.`` alone describes a
 different, perfectly legal, energy-conserving stack, and every array here would move.
+
+**"Today's spelling" covers the keywords and the quantity, not the layer order.** Each
+two-layer ``structure`` / ``thickness`` pair below is still listed **top to bottom**, as the
+capture was, while the public API has read layers bottom to top since 2026-09-21. As written,
+these dicts are therefore *not* what today's API would need to rebuild the captured scenes: the
+twin in ``tests/test_golden_legacy_parity.py`` reverses both lists before every solve, and that
+reversal is what keeps the pair describing one scene. The loop below, which could no longer run
+anyway, does not reverse them.
 """
 # ---------------------------------------------------------------------------------------
 # REFUSES TO RUN, and the refusal is the point.

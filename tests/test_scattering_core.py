@@ -27,7 +27,9 @@ from wavebit._core.solve_2d import solve_2d
 # ---------------------------------------------------------------------------------- cases
 # name, kwargs for wavebit.rcwa (grating type follows from `structure` / phi, as in the
 # solver). Every raster below is PERMITTIVITY: 9 and 4 where the pre-flip file wrote the
-# indices 3 and 2, so each case is the same stack it always was.
+# indices 3 and 2, so each case is the same stack it always was. `structure` / `thickness` are
+# listed TOP TO BOTTOM, as the cases were written; the loop after ALL_CASES reverses them in
+# place into the public bottom-to-top order before any test reads them.
 UC_1D = np.array([[[9., 9., 1., 1., 9., 1.]], [[4., 4., 4., 1., 1., 1.]]])
 UC_1D_SUB = np.array([[[9., 9., 1., 1., 9., 1.]], [[1., 1., 1., 1., 1., 1.]]])
 UC_2D = np.array([[[9., 9., 1., 1.], [1., 9., 9., 1.], [1., 1., 9., 9.], [9., 1., 1., 9.]]])
@@ -45,8 +47,9 @@ CASES_1D = [
     ('tm_2layer_oblique', dict(tetm='tm', structure=UC_1D, thickness=[0.15, 0.22], top=4.0,
                                bot=2.25, theta=0.3, wavelength=0.777, period=[0.77],
                                truncation_order=[5, 0])),
-    # bottom layer uniform and equal to the substrate: ETM short-circuits the interface,
-    # SMM has no short-circuit to take — they must still land on the same answer.
+    # bottom layer (listed last, structure[0] once reversed) uniform and equal to the
+    # substrate: ETM short-circuits the interface, SMM has no short-circuit to take — they
+    # must still land on the same answer.
     ('te_same_material', dict(tetm='te', structure=UC_1D_SUB, thickness=[0.2, 0.1], top=1.0,
                               bot=1.0, theta=0.0, wavelength=0.9, period=[0.7],
                               truncation_order=[5, 0])),
@@ -88,7 +91,8 @@ ALL_CASES = ([(n, k, '1d') for n, k in CASES_1D]
              + [(n, k, 'conical') for n, k in CASES_CONICAL]
              + [(n, k, '2d') for n, k in CASES_2D])
 
-# Preserve each historical case while exposing only bottom-up public kwargs.
+# Preserve each historical case while exposing only bottom-up public kwargs: the tables above
+# are top to bottom, and from here on every `kwargs` in them is bottom to top.
 for _name, _kwargs, _kind in ALL_CASES:
     _kwargs['structure'] = _kwargs['structure'][::-1]
     _kwargs['thickness'] = _kwargs['thickness'][::-1]
@@ -692,7 +696,9 @@ def test_the_backside_matrix_is_the_scene_a_caller_would_build_by_hand():
 # -------------------------------------------------------------------------------- cascading
 
 #: The stack the cascade tests take apart: four layers between unequal half-spaces, cut
-#: between layers 1 and 2. Every piece is solved as an independent problem.
+#: between layers 1 and 2. Every piece is solved as an independent problem. Listed TOP TO
+#: BOTTOM -- ``WHOLE[:2]`` is the upper piece -- and :func:`_piece` reverses each piece into the
+#: public bottom-to-top order.
 WHOLE = np.concatenate([UC_1D, UC_1D[::-1]])
 WHOLE_TH = [0.15, 0.22, 0.31, 0.09]
 JOINT_KW = dict(tetm='te', wavelength=0.777, period=[0.77], truncation_order=[5, 0],
@@ -785,7 +791,7 @@ def test_cascade_joins_in_the_order_the_light_meets_the_pieces():
     a converted `theta`.
     """
     whole = _piece(WHOLE, WHOLE_TH, 4.0, 2.25, 0.0, side='bottom')
-    # from below the light meets layers 2..3 first, then 0..1
+    # from below the light meets WHOLE[2:] (listed last: the lower two) first, then WHOLE[:2]
     first = _piece(WHOLE[2:], WHOLE_TH[2:], 1.0, 2.25, 0.0, side='bottom')
     second = _piece(WHOLE[:2], WHOLE_TH[:2], 4.0, 1.0, 0.0, side='bottom')
     joined = first.cascade(second)
@@ -817,6 +823,9 @@ HEX_RESPELT = np.column_stack((HEX[:, 0], HEX[:, 1] - HEX[:, 0]))
 #: whole stack -- both layers carry it -- and neither half of what this file asserts can see
 #: one: a port is built from the basis and the media, and the cascade below joins two solves on
 #: the *same* spelling.
+#:
+#: Listed TOP TO BOTTOM, like ``WHOLE`` -- ``CUT_HEX[:1]`` is the upper piece -- and
+#: :func:`_hex_piece` reverses it into the public bottom-to-top order.
 CUT_HEX = [dict(background=1.0,
                 shapes=[dict(type='circle', cx=0.0, cy=0.0, lx=180.0, material=12.25)]),
            dict(background=6.25,

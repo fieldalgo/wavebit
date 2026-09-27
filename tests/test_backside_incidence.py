@@ -49,8 +49,10 @@ WL = 500.0
 AU = 0.18 + 3.0j          # gold at 500nm — strongly absorbing
 SI = 4.0 + 0.05j          # weakly absorbing
 
-# name, indices top..bottom, thicknesses. The stacks are deliberately asymmetric in z —
-# a symmetric one cannot tell 'bottom' from 'top' at all.
+# name, indices top..bottom, thicknesses (also top..bottom). The Airy oracles take that order,
+# superstrate first; `_solver` reverses the layers and thicknesses into the public
+# bottom-to-top order. The stacks are deliberately asymmetric in z — a symmetric one cannot
+# tell 'bottom' from 'top' at all.
 STACKS = [
     ('asymmetric_lossless', [1.0, 1.5, 2.2, 1.8], [20.0, 35.0]),
     ('lossy_layer', [1.0, AU, 1.5], [20.0]),

@@ -191,10 +191,11 @@ def _rand(shape, seed):
     return np.random.default_rng(seed).uniform(1.0, 4.0, size=shape) ** 2
 
 
-# Must stay identical to gen_goldens.py -- which states the same scenes in the pre-flip
-# spelling (an index in `ucell`, `n_top` / `n_bot`). Identical *scene*, not identical text:
-# every material below is the square of the generator's, which is exactly the conversion the
-# solver used to do between the two.
+# Must stay identical to gen_goldens.py. That file once stated these scenes in the pre-flip
+# spelling (an index in `ucell`, `n_top` / `n_bot`) and now uses this one, value for value; what
+# has to stay identical is the *scene*, and every material below is the square of the index the
+# capture used. Both lists run **top to bottom**, as the capture did: `_run` and the backend
+# test below reverse `structure` and `thickness` into the public bottom-to-top order.
 CASES = {
     'te_1layer':   dict(tetm='te', phi=None, structure=[[[9., 9., 9., 1., 1., 1.]]], thickness=[0.15], top=4., bot=1., theta=0., truncation_order=[6, 0], period=[0.77], wavelength=0.777),
     'tm_1layer':   dict(tetm='tm', phi=None, structure=[[[9., 9., 9., 1., 1., 1.]]], thickness=[0.15], top=4., bot=1., theta=0., truncation_order=[6, 0], period=[0.77], wavelength=0.777),

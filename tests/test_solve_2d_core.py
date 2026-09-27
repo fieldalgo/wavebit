@@ -72,7 +72,8 @@ def _rand(shape, seed):
 
 CASES = [
     # name, structure, thickness, n_top, n_bot, wl, period, truncation_order, theta, phi, psi
-    # (half-spaces as indices; squared where they enter the constructor)
+    # (half-spaces as indices; squared where they enter the constructor; layers listed top to
+    # bottom, the order these cases were written in -- `_run_and_inputs` reverses them)
     ('normal', _rand((1, 5, 5), 0), [0.2], 1.0, 1.0, 0.9, [1.0, 1.0], [2, 2], 0.0, 0.0, 0.0),
     ('oblique_psi', _rand((1, 6, 6), 1), [0.3], 1.0, 1.5, 0.8, [1.0, 1.2], [2, 2], 0.3, 0.4, 0.9),
     ('two_layer', _rand((2, 4, 4), 2), [0.15, 0.22], 1.2, 1.0, 0.7, [0.9, 0.9], [2, 2], 0.2, 0.5, 1.1),
