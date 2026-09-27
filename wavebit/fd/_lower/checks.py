@@ -1854,9 +1854,7 @@ def _lift_notes(scene, plan, lifted=None):
              f'way) so that the smoothed operator is positive definite: at this contrast the '
              f'default rule falls below the floor there. The run is stable by construction '
              f'(wavebit/fd/_lower/stars.py); the effect on accuracy is measured in '
-             f'docs/fd-subpixel-occupancy.md, "The star lift". Derivatives through the moved '
-             f'stars are exact to first order only: a Hessian or any second derivative of this '
-             f'scene is not.')]
+             f'docs/fd-subpixel-occupancy.md, "The star lift".')]
 
 
 def _radiation_notes(scene):

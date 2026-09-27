@@ -98,21 +98,32 @@ positive definite matrix is positive definite. A star whose other ``a``-edge is 
 **Values and traces.** ``t*`` is found by bisection, on the host where the inputs can be read
 (NumPy, a concrete or ``jax.grad`` JAX array, a Torch tensor under autograd) and only on the
 stars below the floor; under ``jax.jit`` and the other transforms that carry no value, on every
-star in the runtime's own arrays. Its gradient is the implicit one: with ``M(t)`` the floored test
-matrix, which is singular at ``t*``, ``v`` its (constant) null vector and ``q = v . M(t*) v``,
-``t = t* - (q - sg q) / sg r`` with ``r = v . (dM/dt) v`` has the value ``t*`` exactly and the
-derivative ``-dq/dp / r``. A determinant in place of ``q`` loses the derivative where the
-smallest eigenvalue is double -- a sphere centred on a node or cell has such pieces on its body
-diagonals, and the determinant's derivative was 44% off on the eight-block form (the design
-review). Where the smallest eigenvalue is double ``t*`` has a derivative only along directions
-that keep the degeneracy -- a single body's ``eps`` or ``mu`` does -- and none in general (the
-review of the star measured one-sided slopes +1.107 and -1.601 along a random direction).
+star in the runtime's own arrays.
 
-**First derivatives only.** ``v`` and ``r`` are held constant, which makes the first derivative
-exact and the second wrong: the review of the star measured ``jax.hessian`` of a lowered sum 188%
-off its second differences at ``eps = 40``, and Torch's double backward the same. Where no star
-moves the lift contributes nothing and every order is exact. The plan's note says so where one
-does.
+**Derivatives, to second order.** ``t*`` is an implicit function of the inputs: the ``t`` where a
+root function ``F`` of the star's test matrix vanishes. ``F`` is an ``L D L^T`` pivot of that
+matrix, the axes ordered per star by its null vector (:func:`_root`, :func:`_order`). Taken at the
+bisected ``t*`` as a Taylor series in ``t`` on the live inputs, ``F + F_1 s + F_2 s^2``, its
+reversion moves ``t`` by ``-g/F_1 - (F_2/F_1^3) g^2`` with ``g = F - sg F``, which is zero
+(:func:`_assemble`): ``t`` is ``t*`` to the bit, and its first and second derivatives are exact on
+every backend and under nested transforms, since nothing in the differentiated path is more than
+elementwise arithmetic. The third derivative is not. Measured 2026-09-27: against a 50-digit
+oracle of the definition (``tests/references/gen_star_lift_oracle.py``) the value, first and
+second derivatives agree to 6.7e-16 on JAX, ``jax.jit`` and Torch; ``jax.hessian``,
+``jax.jit(jax.hessian)`` and Torch's double backward of a lowered sum agree with central
+differences of its gradient to 4.6e-8 at a step of ``1e-4`` of ``eps``, falling as the step
+squared, on spheres off a node, on a node, on a cell and against the walls. The first form of the
+derivative -- one step along a constant eigenvector -- was exact to first order only, 188% off in
+the Hessian (the review of the star); two Newton steps from the root, exact too, ran ``jax.jit``
+of a Hessian 600 times slower than this.
+
+Where a star's smallest eigenvalue is double -- the stars of a sphere's body diagonals against a
+wall, and of the ``eps = 100`` sphere centred in a cell -- ``t*`` has a derivative only along
+directions that keep the degeneracy (a single body's ``eps`` or ``mu`` does), and none in general:
+the review of the star measured one-sided slopes +1.107 and -1.601 along a random direction. There
+``F`` is ``d2``, smooth along those directions. A determinant as ``F`` loses even the first
+derivative at a double root: it touches zero quadratically there, and on the eight-block form its
+derivative was 44% off (the design review).
 """
 import collections
 
@@ -129,6 +140,21 @@ THETA = 0.02
 
 #: Bisection steps: ``2**-52`` of the unit interval, the spacing of float64 in ``[0.5, 1]``.
 STEPS = 52
+
+#: Where ``|d2| / (|m_1| + |m_2| + |m_3|)`` at ``t*`` is below this, the star's root is taken to be
+#: double and its root function is ``d2`` rather than ``d3`` (see :func:`_root`). Measured
+#: 2026-09-27 over every moved star of 14 scenes (spheres at eps 40 on and off nodes, on cells and
+#: 1e-9 to 1e-3 cells off a node, against PEC walls at eps 1000, eps 100 at 16 cells across; a
+#: turned box and two cylinders at 25): with the axes in :func:`_order`'s order the ratio is either
+#: at most 1.9e-13 (14 stars, all at walls or on the eps-100 sphere's diagonals: double roots in
+#: exact arithmetic, split by rounding) or at least 1.5e-4 -- nothing in between. In the fixed
+#: ``x, y, z`` order it ran continuously from 1e-17 to 3e-6, which is why the order is chosen per
+#: star. The two ways of being wrong are not alike, measured on synthetic stars by the review:
+#: ``d2`` for a simple root misreads even the first derivative, 2 to 440 times over; ``d3`` for a
+#: split double root loses about ``1.6e-15`` over the ratio (2e-3 at 8e-13). ``1e-11`` takes the
+#: largest double measured with a margin of 50, and misreads a simple root only where ``d3``
+#: would itself have lost 1e-4.
+TAU = 1e-11
 
 #: The cross coefficients' order in a term's array: xy, xz, yz (``cross_action``'s).
 PAIRS = ((0, 1), (0, 2), (1, 2))
@@ -210,13 +236,19 @@ def _positive(xp, m, off):
     return ok & (mz - cxz * cxz / first - lower * lower / xp.where(ok, second, one) > 0)
 
 
-def _test(xp, own, other, ghosts, node, off, t, floor):
-    """Whether ``S_p(t) - (f/2) I`` is positive definite, and its 3x3 test matrix's diagonal."""
-    x, y = _halves(own, other, node, t, floor)
+def _above(x, y, ghosts):
+    """Every edge of the star above the floor: where the harmonic means are defined."""
     ok = None
     for a in range(3):
         here = (x[a] > 0) & (ghosts[a] | (y[a] > 0))
         ok = here if ok is None else ok & here
+    return ok
+
+
+def _test(xp, own, other, ghosts, node, off, t, floor):
+    """Whether ``S_p(t) - (f/2) I`` is positive definite, and its 3x3 test matrix's diagonal."""
+    x, y = _halves(own, other, node, t, floor)
+    ok = _above(x, y, ghosts)
     h = [_harmonic(xp, x[a], y[a], ghosts[a], ok) for a in range(3)]
     return ok & _positive(xp, h, off), h
 
@@ -252,23 +284,92 @@ def _lowest(xp, h, off):
     return [vectors[..., a, 0] for a in range(3)]
 
 
-def _form(v, m, off):
-    """``v . M v`` for the 3x3 matrix with diagonal ``m`` and off-diagonal ``off``."""
-    (vx, vy, vz), (cxy, cxz, cyz) = v, off
-    return (vx * vx * m[0] + vy * vy * m[1] + vz * vz * m[2]
-            + 2 * (vx * vy * cxy + vx * vz * cxz + vy * vz * cyz))
+def _pick(xp, values, index):
+    """``values[index]`` elementwise, for a per-star axis index held as a float array."""
+    return xp.where(index == 0, values[0], xp.where(index == 1, values[1], values[2]))
 
 
-def _rate(xp, own, other, ghosts, node, t, floor):
-    """``dH_a/dt`` at ``t``: the harmonic mean's derivative, ``2 x'`` for a lone edge."""
-    x, y = _halves(own, other, node, t, floor)
+def _order(xp, v):
+    """Each star's axes, ``(first, middle, last)``, from the null vector ``v`` of its test matrix:
+    last the largest ``|v_a|``, the other two in axis order. Float arrays of 0, 1, 2.
+
+    With the eigenvalues ``0 = l_1 <= l_2 <= l_3`` at the root, the leading 2x2 minor is
+    ``d1 d2 = l_2 l_3 v_last^2`` (the adjugate's last diagonal entry), ``v_last^2 >= 1/3``, and
+    ``d1 = m_first <= l_3``: so ``|d2| >= l_2 / 3``, small only where the root is nearly double.
+    Which of the other two comes first changes ``d1`` alone, and ``d1 >= l_2 (1 - v_first^2) >=
+    l_2 / 2`` either way.
+    """
+    a = [xp.abs(u) for u in v]
+    zero = xp.zeros_like(a[0])
+    last = xp.where((a[0] >= a[1]) & (a[0] >= a[2]), zero,
+                    xp.where(a[1] >= a[2], zero + 1, zero + 2))
+    first = xp.where(last == 0, zero + 1, zero)
+    return first, 3 - first - last, last
+
+
+def _times(a, b):
+    """The product of two Taylor series in ``t``, truncated at their length."""
+    return [sum(a[i] * b[k - i] for i in range(k + 1)) for k in range(len(a))]
+
+
+def _over(a, b):
+    """``a / b`` for two Taylor series in ``t``, truncated at their length; ``b[0]`` is not 0."""
+    inverse = 1 / b[0]
     out = []
+    for k in range(len(a)):
+        out.append((a[k] - sum(out[i] * b[k - i] for i in range(k))) * inverse)
+    return out
+
+
+def _root(xp, own, other, ghosts, node, off, t, floor, double):
+    """The star's root function at ``t + s`` to ``s^2``, ``[F, F_t, F_tt / 2]``: the binding
+    ``L D L^T`` pivot of the test matrix ``diag(H) + offdiag(off)``, its axes already in the
+    star's own order (:func:`_order`), ``off`` the pairs first-middle, first-last, middle-last.
+
+    ``d3``, the last pivot, is ``det`` over the leading 2x2 minor: at a simple root it crosses zero
+    linearly, and with the null vector's largest component last the leading block stays well away
+    from singular -- in the fixed ``x, y, z`` order a star nearly uncoupled along one axis left
+    ``d2`` as small as ``1e-17`` of the scale and ``d3`` a ratio of two vanishing numbers. At a
+    double root every 2x2 principal minor vanishes; there (``double``) the root function is ``d2``,
+    which for the symmetric ``a I + b J`` of a body diagonal is ``(a - b)(a + b)/a``: smooth, with
+    a simple root along directions that keep the symmetry.
+
+    ``H_a``, the harmonic mean of two edges linear in ``t`` (``x' = k - e``), has a closed series:
+    ``2xy/s``, ``2(x' y^2 + y' x^2)/s^2``, ``-2(x' y - y' x)^2/s^3`` with ``s = x + y``; a lone
+    edge's is ``2x``, ``2x'``, ``0``. The cross coefficients do not move with ``t``.
+    """
+    x, y = _halves(own, other, node, t, floor)
+    ok = _above(x, y, ghosts)
+    one, zero = xp.ones_like(t), xp.zeros_like(t)
+    h = []
     for a in range(3):
         dx, dy = node[a] - own[a], node[a] - other[a]
-        total = xp.where(ghosts[a], xp.ones_like(x[a]), x[a] + y[a])
-        pair = 2 * (dx * y[a] * y[a] + dy * x[a] * x[a]) / (total * total)
-        out.append(xp.where(ghosts[a], 2 * dx, pair))
-    return out
+        q = 1 / xp.where(ok, x[a] + y[a], one)
+        bend = dx * y[a] - dy * x[a]
+        pair = (2 * x[a] * y[a] * q, 2 * (dx * y[a] * y[a] + dy * x[a] * x[a]) * q * q,
+                -2 * bend * bend * q * q * q)
+        h.append([xp.where(ghosts[a], u, v) for u, v in zip((2 * x[a], 2 * dx, zero), pair)])
+    m1, m2, m3 = h
+    c12, c13, c23 = off
+    m1 = [xp.where(m1[0] != 0, m1[0], one)] + m1[1:]
+    reciprocal = _over([one, zero, zero], m1)
+    d2 = [u - c12 * c12 * v for u, v in zip(m2, reciprocal)]
+    lower = [c23 - c12 * c13 * reciprocal[0]] + [-c12 * c13 * v for v in reciprocal[1:]]
+    safe = [xp.where(double | (d2[0] == 0), one, d2[0])] + d2[1:]
+    d3 = [u - c13 * c13 * v - w
+          for u, v, w in zip(m3, reciprocal, _over(_times(lower, lower), safe))]
+    return [xp.where(double, u, v) for u, v in zip(d2, d3)]
+
+
+def _choice(xp, h, off):
+    """A star's axis order and whether its root is double, from its test matrix at ``t*``."""
+    order = _order(xp, _lowest(xp, h, off))
+    first, middle, _ = order
+    m1, m2 = _pick(xp, h, first), _pick(xp, h, middle)
+    c12 = _pick(xp, off, first + middle - 1)
+    d2 = m2 - c12 * c12 / xp.where(m1 != 0, m1, xp.ones_like(m1))
+    scale = xp.abs(h[0]) + xp.abs(h[1]) + xp.abs(h[2])
+    return order, xp.abs(d2) < TAU * scale
 
 
 def _read(rt, arrays):
@@ -316,15 +417,15 @@ def lift(field, diagonal, cross, node, inverse, rt, theta=THETA):
     sf = floor[where]
     t = _bisect(np, _loop, so, sv, sg, sk, sc, sf)
     certified = certified and bool(np.all(_test(np, so, sv, sg, sk, sc, t, 0.0)[0]))
-    vectors = _lowest(np, _test(np, so, sv, sg, sk, sc, t, sf)[1], sc)
-    rate = _form(vectors, _rate(np, so, sv, sg, sk, t, sf), [np.zeros_like(c) for c in sc])
-    full_t, full_r = np.zeros(shape), np.zeros(shape)
-    full_v = [np.zeros(shape) for _ in range(3)]
-    full_t[where], full_r[where] = t, rate
+    order, double = _choice(np, _test(np, so, sv, sg, sk, sc, t, sf)[1], sc)
+    full_t, full_double = np.zeros(shape), np.zeros(shape, dtype=bool)
+    full_order = [np.full(shape, float(a)) for a in range(3)]
+    full_t[where], full_double[where] = t, double
     for a in range(3):
-        full_v[a][where] = vectors[a]
+        full_order[a][where] = order[a]
     delta = _assemble(field, diagonal, cross, node, inverse, rt, theta, shape, rt.array(fire),
-                      rt.array(full_t), [rt.array(v) for v in full_v], rt.array(full_r))
+                      rt.array(full_t), [rt.array(o) for o in full_order],
+                      rt.array(full_double))
     return Lifted(delta, certified, int(t.size), stars, float(t.max()))
 
 
@@ -342,22 +443,27 @@ def _traced(field, diagonal, cross, node, inverse, rt, theta, shape):
     t = _bisect(xp, rt.scan, own, other, ghosts, fk, fc, floor)
     t = xp.where(fire, t, zero)
     certified = xp.all(_test(xp, own, other, ghosts, fk, fc, t, 0.0)[0])
-    vectors = [rt.constant(v)
-               for v in _lowest(xp, _test(xp, own, other, ghosts, fk, fc, t, floor)[1], fc)]
-    rate = rt.constant(_form(vectors, _rate(xp, own, other, ghosts, fk, t, floor),
-                             [xp.zeros_like(c) for c in fc]))
-    delta = _assemble(field, diagonal, cross, node, inverse, rt, theta, shape, fire, t, vectors,
-                      rate)
+    order, double = _choice(xp, _test(xp, own, other, ghosts, fk, fc, t, floor)[1], fc)
+    delta = _assemble(field, diagonal, cross, node, inverse, rt, theta, shape, fire, t,
+                      [rt.constant(o) for o in order], rt.constant(double))
     return Lifted(delta, certified, None, None, None)
 
 
-def _assemble(field, diagonal, cross, node, inverse, rt, theta, shape, fire, t, vectors, rate):
-    """``(1/2) sum_p t_p (k_p - e)`` per edge, on the live inputs, with the implicit gradient.
+def _assemble(field, diagonal, cross, node, inverse, rt, theta, shape, fire, t, order, double):
+    """``(1/2) sum_p t_p (k_p - e)`` per edge, on the live inputs, with ``t*``'s derivatives.
 
-    ``fire``, ``t``, ``vectors`` (three arrays) and ``rate`` are ``(nz, ny, nx)`` runtime arrays
-    with no gradient; ``rate`` is ``r = v . (dM/dt) v``. The correction ``(q - sg q) / r`` is zero
-    in value on every backend (``x - x`` is ``0`` for a finite ``x``), so the value is ``t*`` to
-    the bit; the unselected branch divides by one, so it carries no NaN into a gradient.
+    ``fire``, ``t``, ``order`` (three arrays) and ``double`` are ``(nz, ny, nx)`` runtime arrays
+    with no gradient (:func:`_choice`). The star's root function at ``t*`` is a series in the
+    move ``s``, ``F + F_1 s + F_2 s^2`` (:func:`_root`), on the live inputs; ``g = F - sg F`` is
+    zero in value and the inputs' pull in derivative, and the root moves by the series'
+    reversion, ``s = -g/F_1 - (F_2/F_1^3) g^2 + O(g^3)``. At ``g = 0`` a derivative of order ``k``
+    of ``c g^2`` reads ``c``'s derivatives to order ``k - 2`` only, so the second term may carry
+    ``F_2/F_1`` as a constant, ``-sg(F_2/F_1) (g/F_1)^2``: the first and second derivatives are
+    exact and the third is not. One evaluation at ``t*``, elementwise: two Newton steps from the
+    root were exact too, but the second nests the first, and ``jax.jit`` of their Hessian ran 25 s
+    against 41 ms here (16^3 cavity, measured 2026-09-27). The value is ``t* + (t - sg t)``,
+    ``t*`` to the bit whatever a compiler fuses. The unselected branch divides by one, so it
+    carries no NaN into a derivative.
     """
     xp = rt.xp
     step = 1 if field == 'E' else -1
@@ -366,11 +472,15 @@ def _assemble(field, diagonal, cross, node, inverse, rt, theta, shape, fire, t, 
     node = xp.broadcast_to(node, (3,) + shape)
     own, other = _star(xp, field, diagonal, node, ghosts)
     floor = _floor(xp, theta, inverse, own, other, ghosts)
-    _, h = _test(xp, own, other, ghosts, node, cross, t, floor)
-    q = _form(vectors, h, cross)
-    active = fire & (rate > 0)
-    t = t - xp.where(active, (q - rt.constant(q)) / xp.where(active, rate, xp.ones_like(rate)),
-                     xp.zeros_like(q))
+    first, middle, last = order
+    ordered = [[_pick(xp, arrays, i) for i in order] for arrays in (own, other, ghosts, node)]
+    off = [_pick(xp, cross, i + j - 1) for i, j in ((first, middle), (first, last), (middle, last))]
+    f = _root(xp, *ordered, off, t, floor, double)
+    active = fire & (rt.constant(f[1]) != 0)
+    slope = xp.where(active, f[1], xp.ones_like(t))
+    pull = (f[0] - rt.constant(f[0])) / slope
+    moved = t - xp.where(active, pull + rt.constant(f[2] / slope) * pull * pull, xp.zeros_like(t))
+    t = t + (moved - rt.constant(moved))
     delta = []
     for a in range(3):
         mine = t * (node[a] - own[a]) / 2

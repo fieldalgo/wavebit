@@ -7,6 +7,7 @@ move is found with ``numpy.linalg.eigvalsh`` on each star's explicit matrix (up 
 the module's harmonic-mean test.
 """
 import itertools
+import os
 import warnings
 
 import numpy as np
@@ -94,7 +95,7 @@ def test_the_stars_sum_to_the_operator(field):
     moves = rng.uniform(size=shape)
     delta = stars._assemble(field, diagonal, cross, node, inverse, runtime('numpy'), stars.THETA,
                             shape, np.ones(shape, bool), moves,
-                            [np.ones(shape), np.zeros(shape), np.zeros(shape)], np.ones(shape))
+                            [np.full(shape, float(a)) for a in range(3)], np.zeros(shape, bool))
     size = diagonal.size
     expected = np.zeros((size, size))
     for p in _nodes(field, shape):
@@ -511,6 +512,121 @@ def test_torch_lowers_a_lifted_scene_without_a_warning():
         warnings.simplefilter('always')
         fd.lower(scene, plan, runtime('torch'))
     assert not [w for w in caught if 'not writable' in str(w.message)]
+
+
+#: ``(center, radius, eps, mu)`` of the Hessian scenes: a sphere off a node, on a node, on a cell,
+#: and against the low and high PEC walls -- where 3 E and 3 H stars have a double root, whose
+#: root function is ``d2`` (stars.TAU).
+HESSIAN_SCENES = {'off-node': ((.012, .007, -.009), .15, 40., 30.),
+                  'node': ((0., 0., 0.), .15, 40., 30.),
+                  'cell': ((.025,) * 3, .15, 40., 30.),
+                  'E wall': ((-.27,) * 3, .12, 1000., 1000.),
+                  'H wall': ((.255,) * 3, .12, 1000., 1000.)}
+
+
+def _hessian_loss(name):
+    center, radius, eps, mu = HESSIAN_SCENES[name]
+    scene = lambda e, m: fd.Scene(
+        domain=fd.Domain(size=(.8,) * 3), resolution=fd.Resolution(dx=.05),
+        boundaries=fd.Boundaries(x=fd.PEC(), y=fd.PEC(), z=fd.PEC()), run=fd.Run(steps=8),
+        structures=(fd.Structure(fd.Sphere(radius=radius, center=center),
+                                 fd.Material(eps=e, mu=m)),))
+    plan = quiet(fd.plan, scene(eps, mu))
+    full = (3,) + plan.shape[1:]
+    weight = np.random.default_rng(74).normal(size=full)
+
+    def loss(p, rt):
+        params = fd.lower(scene(p[0], p[1]), plan, rt)
+        w = rt.array(weight)
+        return sum(rt.xp.sum(w * rt.xp.broadcast_to(params[k], full)) for k in ('be', 'bh'))
+    return loss, np.array([eps, mu])
+
+
+@pytest.mark.parametrize('backend, name', [('jax', 'off-node'), ('jit', 'off-node'),
+                                           ('torch', 'off-node'), ('jax', 'node'),
+                                           ('jax', 'cell'), ('jax', 'E wall'), ('jax', 'H wall')])
+def test_the_lift_has_exact_second_derivatives(backend, name):
+    """The root's series reversion at ``t*``: the Hessian of a lowered sum is the derivative of its
+    gradient, on whole scenes where the oracle's fixtures are small. Against central differences
+    of jax.grad (whose values the finite-difference tests above pin) at a step of ``1e-4`` of each
+    input, measured 2026-09-27: 3.8e-8 off a node, 4.6e-8 on a node, 2.6e-8 on a cell, 1.1e-8 at
+    either wall, on JAX, ``jax.jit`` and Torch alike -- and 100 times more at ``1e-3``, the step
+    squared, so the residual is the differences' own. The eigenvector correction it replaced read
+    188% off."""
+    import jax
+    loss, p0 = _hessian_loss(name)
+    rj = runtime('jax')
+    grad = jax.grad(lambda p: loss(p, rj))
+    h = 1e-4 * p0
+    expected = np.stack([(np.asarray(grad(rj.array(p0 + h[i] * np.eye(2)[i])))
+                          - np.asarray(grad(rj.array(p0 - h[i] * np.eye(2)[i])))) / (2 * h[i])
+                         for i in range(2)])
+    if backend == 'torch':
+        import torch
+        rt = runtime('torch')
+        hessian = torch.autograd.functional.hessian(
+            lambda p: loss(p, rt), torch.tensor(p0, dtype=torch.float64)).numpy()
+    else:
+        function = jax.hessian(lambda p: loss(p, rj))
+        function = jax.jit(function) if backend == 'jit' else function
+        hessian = np.asarray(function(rj.array(p0)))
+    assert np.abs(hessian - expected).max() < 1e-6 * np.abs(expected).max()
+
+
+#: The 50-digit oracle, frozen by ``references/gen_star_lift_oracle.py``: four small regions, each
+#: with two directions, and the lift's ``delta`` with its first and second derivatives along them.
+ORACLE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'references',
+                      'star_lift_oracle.npz')
+
+
+def _nested(backend, field, inputs, u, w):
+    """``delta``, its derivatives along ``u`` and ``w``, and along ``u`` then ``w``: forward mode
+    inside forward mode, as a Hessian-vector product takes it."""
+    if backend == 'torch':
+        import torch
+        rt, jvp = runtime('torch'), torch.func.jvp
+        scalar = lambda v: torch.tensor(v, dtype=torch.float64)
+    else:
+        import jax
+        rt, jvp = runtime('jax'), jax.jvp
+        scalar = rt.array
+
+    def run(base, du, dw):
+        def delta(a, b):
+            point = [x + a * p + b * q for x, p, q in zip(base, du, dw)]
+            return stars.lift(field, *point, rt).delta
+        inner = lambda a: jvp(lambda b: delta(a, b), (scalar(0.),), (scalar(1.),))
+        return jvp(inner, (scalar(0.),), (scalar(1.),))
+
+    if backend == 'jit':
+        run = jax.jit(run)
+    (value, along_w), (along_u, second) = run(*([rt.array(x) for x in arrays]
+                                                 for arrays in (inputs, u, w)))
+    return [to_numpy(x) for x in (value, along_u, along_w, second)]
+
+
+@pytest.mark.parametrize('backend', ('jax', 'jit', 'torch'))
+@pytest.mark.parametrize('fixture', ('random', 'ghost', 'symmetric', 'decoupled'))
+def test_the_lift_agrees_with_its_oracle_to_second_order(backend, fixture):
+    """Against 50-digit central differences of the definition (``references/
+    gen_star_lift_oracle.py``, which shares no arithmetic with the module), entry by entry: the
+    value, both first derivatives, and the three second ones. ``random`` and ``ghost`` move stars
+    with and without ghost edges; ``symmetric`` has a double root, along directions that keep it;
+    ``decoupled`` a star nearly uncoupled along z, where a fixed ``x, y, z`` order loses its
+    middle pivot, and whose largest eigenvector points along z, so neither the fixed order nor one
+    read off the wrong eigenvector will do. Measured 2026-09-27: 6.7e-16 at worst, every fixture
+    and backend."""
+    data = np.load(ORACLE)
+    field = str(data[f'{fixture}_field'])
+    inputs = [data[f'{fixture}_input{i}'] for i in range(4)]
+    u, w = ([data[f'{fixture}_dir{tag}{i}'] for i in range(4)] for tag in 'uw')
+    for (a, b), (da, db) in {'uu': (u, u), 'ww': (w, w), 'uw': (u, w)}.items():
+        value, along_a, along_b, second = _nested(backend, field, inputs, da, db)
+        for got, key in ((value, 'delta'), (along_a, f'first_{a}'), (along_b, f'first_{b}'),
+                         (second, f'second_{a}{b}')):
+            expected = data[f'{fixture}_{key}']
+            scale = max(np.abs(expected).max(), 1.)
+            assert np.abs(got - expected).max() < 1e-12 * scale, (key, np.abs(got - expected).max())
 
 
 #: Off a node, on a node (the 16-cell box's origin is node 8) and on a cell centre. The two

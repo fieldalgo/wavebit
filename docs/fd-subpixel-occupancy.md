@@ -1050,9 +1050,9 @@ fallback with a larger piece, made minimal and continuous.
   minors misjudged 331 pieces at `eps = 1e10` unscaled and, scaled, resolved `t*` only to about
   `1e-8` at a double root, where a determinant touches zero quadratically: a finite-difference
   gradient on a cell-centred sphere scattered by 6%.
-* **The gradient** of `t*` is the implicit one, through the null vector of the floored test
-  matrix. A determinant's derivative was 44% off at the double eigenvalues that a node- or
-  cell-centred sphere has on its body diagonals.
+* **Derivatives** of `t*` are the implicit function's, exact to second order (below). A
+  determinant's derivative was 44% off at the double eigenvalues that a node- or cell-centred
+  sphere has on its body diagonals.
 * **Values and traces**: on the host only the stars below the floor are bisected; under
   `jax.jit` and the other value-less transforms every star goes through one scan. NumPy, JAX,
   `jax.jit` and Torch agree to `1e-12` relative; gradients agree with central differences to
@@ -1124,16 +1124,63 @@ mutants, each killed -- among them the star reading an axis's smaller edge as th
 arithmetic mean in place of the harmonic (too weak), the determinant pivots, the implicit
 gradient dropped, a lone edge's rate halved, and `THETA = 0.3`.
 
-**First derivatives only.** The implicit gradient holds the null vector and the rate constant:
-first derivatives are exact, second ones are not. The review of the star measured `jax.hessian`
-of a lowered sum 188% off its second differences at `eps = 40`, and Torch's double backward
-the same. Where no star moves the lift adds nothing and every order is exact; where one does,
-the plan's note says that a Hessian of the scene is not exact. At a double smallest eigenvalue
-`t*` has a derivative only along directions that keep the degeneracy -- a single body's `eps` or
-`mu` does.
+**Exact second derivatives** (2026-09-27, chosen by the owner after the star landed). The first
+form held the null vector and the rate constant: first derivatives exact, `jax.hessian` of a
+lowered sum 188% off its second differences at `eps = 40` (the review of the star). Now the star's
+root function `F` -- the binding `L D L^T` pivot of its test matrix -- is evaluated once, at the
+bisected `t*`, as a Taylor series in `t` on the live inputs, `F + F_1 s + F_2 s^2`, and `t` moves
+by the series' reversion, `-g/F_1 - (F_2/F_1^3) g^2` with `g = F - sg F` (zero in value). At
+`g = 0` a derivative of order `k` of `c g^2` reads `c`'s derivatives to order `k - 2` only, so
+the second term carries `F_2/F_1` as a constant: the first and second derivatives are exact and
+the third is not.
+Everything differentiated is elementwise, so nested transforms and Torch's double backward work.
 
-**Open.** Exact second derivatives, by an implicit rule that differentiates the null vector
-and the rate as well (`jax.custom_jvp`, and a Torch function with a double backward). Masked
-(PEC) edges could be treated as absent too -- the operator the kernel runs is the submatrix
+* *Against a 50-digit oracle.* `tests/references/gen_star_lift_oracle.py` was written from the
+  module's docstring by a reviewer who was not given the design, and shares no arithmetic with
+  it: explicit 6x6 stars, bisection to `2**-150`, an eigensolver certificate, central
+  differences. On four regions -- random stars with and without ghost edges, a double root along
+  directions that keep it, and a star nearly uncoupled along z -- the value, both first and all
+  three second directional derivatives agree to 6.7e-16 on JAX, `jax.jit` and Torch.
+* *On scenes.* `jax.hessian`, `jax.jit(jax.hessian)` and Torch's double backward of a lowered sum
+  in `(eps, mu)`, against central differences of its gradient at `1e-4` of each: 3.8e-8 off a
+  node, 4.6e-8 on a node, 2.6e-8 on a cell and 1.1e-8 against either wall, all three backends
+  alike, and 100 times more at `1e-3` -- the step squared, so the residual is the differences'.
+* *The axes are ordered per star*, the null vector's largest component last. Then the leading
+  2x2 minor is `lambda_2 lambda_3 v_last^2`, so the middle pivot is at least `lambda_2 / 3`:
+  small only near a double root. In the fixed `x, y, z` order a star nearly uncoupled along one
+  axis left that pivot as small as `1e-17` of the scale, and the last pivot a ratio of two
+  vanishing numbers; the oracle's nearly uncoupled star is there to catch it.
+* *Double roots.* At a double smallest eigenvalue every 2x2 principal minor vanishes, and the
+  root function is the middle pivot instead, which for the symmetric `a I + b J` of a body
+  diagonal is smooth along directions that keep the symmetry -- a single body's `eps` or `mu`
+  does; along others `t*` has one-sided slopes only (+1.107 and -1.601 measured). Which stars are
+  double is read from the middle pivot, `|d2| / (|m_1| + |m_2| + |m_3|) < TAU = 1e-11`. Over
+  every moved star of 14 scenes the ratio was at most 1.9e-13 (14 stars at the walls and on the
+  `eps = 100` cell-centred sphere's diagonals: double in exact arithmetic, split by rounding) or
+  at least 1.5e-4, nothing between. The two ways of being wrong are unlike: taking the middle
+  pivot for a simple root misreads even the first derivative, 2 to 440 times over (the review,
+  on synthetic stars); taking the last pivot for a split double loses about `1.6e-15` over the
+  ratio. On the `eps = 100` sphere the Hessian in `eps` agrees with its differences to 1.2e-8 at
+  `TAU = 1e-11` and 1.9e-6 at `1e-16`, where its eight split doubles read as simple.
+* *What it cost, and the first attempt.* Two Newton steps from the root were exact too, to third
+  order, but the second nests the first: `jax.jit` of the 16^3 cavity's Hessian ran 24.8 s a call
+  against 14 ms before (compile 86 s against 18 s). The series runs it in 41 ms (compile 23 s),
+  and `jax.jit(jax.grad)` at 32^3 in 16 ms against 8 ms. The refute review that measured this
+  also found XLA fusing `a * b + c` into one rounding in one copy of an expression and not in
+  another, so the value is taken as `t* + (t - sg t)`: `t*` to the bit whatever a compiler fuses.
+* *Tests and mutants.* The oracle comparison (four regions, JAX, `jax.jit` and Torch) and the
+  scene Hessians (five placements; JAX, and `jax.jit` and Torch off a node) in
+  `tests/test_fd_star_lift.py`. 18 mutants, each killed: the `g^2` term dropped or its sign
+  flipped, no reversion at all, the fixed axis order, the order read off the largest eigenvector,
+  double roots never or always, `TAU` at `1e-16` and at `1e-2`, each term of the harmonic mean's
+  series and the edges of its cross term, a lone edge's rate halved, the reciprocal's and the
+  lower pivot's series, the series product and quotient, and `c13` dropped from the last pivot.
+  The largest-eigenvector order survived the first run: the oracle's nearly uncoupled star then
+  had its stiffest direction in the xy plane too, where the wrong vector happens to pick a safe
+  axis. Its z axis is now the stiffest, and the mutant fails three cases.
+
+**Open.** Exact third derivatives: `F_2` live and `F_3/F_1^5`'s term constant would give them
+at 22 ms against 16 ms for `jax.jit(jax.grad)` at 32^3, measured, and they were not asked for.
+Masked (PEC) edges could be treated as absent too -- the operator the kernel runs is the submatrix
 without them -- which would move fewer stars at a wall. The lift does not touch the C3 cylinder
 arm (voxel order 1.60): that is an accuracy question on a now-positive operator.
