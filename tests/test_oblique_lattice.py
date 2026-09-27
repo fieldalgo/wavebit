@@ -1110,8 +1110,10 @@ def test_backside_illumination_survives_a_unimodular_shear():
     not to the machine. The mutation's effect is 3.1e-1 in ``T`` and 6.1e-2 in ``R``. The 5e-3
     tolerance sits 13x above the residual and 12x below the smaller of the two effects.
 
-    ``layer_algorithm`` is the default ``'ETM'`` (the backside path that solves the z-mirrored
-    scene); ``'SMM'`` returns the same numbers to 9 digits on this scene.
+    ``layer_algorithm`` is the default ``'ETM'``; ``'SMM'`` returns the same numbers to 9
+    digits on this scene. When this was written, bottom incidence was the ETM path that solves
+    the z-mirrored scene; since 2026-09-21 that mirror serves top incidence instead, and this
+    bottom-lit pair runs the kernels' direct branch.
     """
     r_o, t_o = _backside_totals(None, 'bottom')
     r_s, t_s = _backside_totals(_BS_SHEAR, 'bottom')

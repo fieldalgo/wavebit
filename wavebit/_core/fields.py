@@ -7,10 +7,11 @@ exp(-i omega t), so positive-z propagation has exp(+i k0 kz z).
 
 These private routines traverse the state in the incident propagation frame. Its entry
 face is local z=0. For illumination from the public top, the engine maps explicit heights
-to H-z and restores the returned components with the polar-E/axial-H mirror parity.
-Count-based z samples are then reversed into increasing public height; explicit samples
-remain in the caller's order. Material tensors are mirrored by the solve, including their
-xz/yz/zx/zy entries. Public x and y, raster coordinates and lattice vectors are unchanged.
+to h_total - z (h_total = sum(thickness)) and restores the returned components with the
+polar-E/axial-H mirror parity. Count-based z samples are then reversed into increasing public
+height; explicit samples remain in the caller's order. Material tensors are mirrored by the
+solve, including their xz/yz/zx/zy entries. Public x and y, raster coordinates and lattice
+vectors are unchanged.
 
 A count includes both faces of each layer, hence both limits of an internal interface.
 Explicit heights choose the upper layer's limit, independent of incidence side. The engine
@@ -116,13 +117,20 @@ _MIRROR_PARITY = {
 def to_mirrored_z(sample_z, thickness):
     """A caller's ``sample_z`` restated in the frame a backside solve actually walks.
 
+    "Backside" is the propagation kernels' word, as in the name: their ``'bottom'`` port, the
+    far end of the positive-z layer list (:func:`~wavebit._core.solve_1d._is_backside`). Since
+    2026-09-21 the engine binds that port to the public **top** medium, so this serves public
+    *top* incidence (:attr:`~wavebit._core.engine.CoreSolveMixin._kernel_incidence_side`);
+    public bottom incidence walks the scene as given and needs no restating.
+
     Explicit coordinates are absolute in **scene** coordinates -- that is the contract on both
     sides, and it is what makes ``incidence_side`` a statement about the light rather than
     about the axis. A backside solve walks the z-mirror of that scene, so each coordinate
     becomes ``total - z`` before it is bucketed.
 
     Reversing the *output* instead would not do, and that is what was happening until
-    2026-08-22: :func:`_z_plan` hands explicit samples back in the caller's own order, so the
+    2026-08-22, when the backside was still public bottom incidence and ``z`` was measured
+    downward: :func:`_z_plan` hands explicit samples back in the caller's own order, so the
     blind flip that follows returned the request backwards, on top of having bucketed a scene
     coordinate against the mirror's thicknesses. Measured against the hand-reversed scene, both
     together were worth O(1) at every requested z -- 2.86 on a two-layer TE grating.
@@ -159,9 +167,10 @@ def to_mirrored_z(sample_z, thickness):
 def to_scene_frame(cell, pure_1d, tetm_index=None, flip_z=True):
     """Restore a reversed propagation frame to public xyz.
 
-    E is polar, H axial under z -> H-z, giving the component parity below. This
-    branch is used for public top incidence. Counts also need their z axis reversed;
-    explicit heights were mapped before reconstruction and retain the requested order.
+    E is polar, H axial under z -> h_total - z, giving the component parity below. This
+    branch is used for public top incidence (the kernels' backside). Counts also need their
+    z axis reversed; explicit heights were mapped before reconstruction and retain the
+    requested order.
     """
     xp = array_namespace(cell)
     which = 'coupled' if not pure_1d else ('te' if tetm_index == 0 else 'tm')

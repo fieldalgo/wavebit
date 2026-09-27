@@ -141,6 +141,12 @@ def berreman_efficiencies_from_below(layers, theta, wl=WL):
     ``zx``, ``yz``, ``zy`` likewise) while leaving the in-plane block and ``eps_zz`` alone, so
     a solver that reverses the stack and forgets the signs answers for a different medium.
 
+    "Backside" there is the propagation kernels' port, not the public side. When this was
+    written it was public bottom incidence; since 2026-09-21 the engine sends public *top*
+    incidence through the mirror, so it is :func:`berreman_efficiencies` against a top-lit
+    solve that reaches it (a call counter on ``_mirrored_scene`` reads 1 there, 0 bottom-lit).
+    This function still pins the other side, which now runs the kernels' direct branch.
+
     Nothing is reversed or negated here. ``P`` is the same top-to-bottom transfer the function
     above builds; only the matching changes, because now the wave arrives at the bottom
     travelling ``-z`` (a *backward* mode), the reflection leaves downward and the transmission
@@ -417,8 +423,13 @@ def test_backside_illumination_of_a_z_coupled_stack(label, direction):
     """``incidence_side='bottom'`` on a tensor whose z row changes sign under the mirror.
 
     The oracle solves the un-mirrored stack from below directly, so this is a check of the
-    mirror itself rather than a restatement of it. An asymmetric stack, because a symmetric one
-    would pass with the sign flip missing.
+    solver's bottom-lit answer rather than a restatement of it. An asymmetric stack, because a
+    symmetric one would pass with the sign flip missing. Until 2026-09-21 that answer came
+    through the kernels' z-mirror and this was the check of the mirror itself; since then public
+    bottom incidence runs their direct branch, and the mirror's sign flip is reached by the
+    top-lit Voigt comparisons above. Measured by mutation: with the z-row sign flip dropped from
+    the 4ff mirror, five tests in this file that include a top-lit solve fail, and this one
+    still passes.
 
     A magneto-optic medium is also the one place where "the two sides agree" is the wrong
     expectation: non-reciprocity is what the material is for, so the numbers here are not the

@@ -181,7 +181,9 @@ admittance is caught without fmmax being trusted at all.
 `eps = 0.5, mu = 2.0`: index-matched to vacuum, impedance-mismatched. A boundary carrying only
 `n` sees no interface and returns `R = 0`. The answer is 0.111.
 
-**Reciprocity** for the backside mirror, where `mu_top` and `mu_bot` must swap. Transmittance is
+**Reciprocity** for the backside mirror, where `mu_top` and `mu_bot` must swap (the kernels'
+backside: public bottom incidence when this was written, public top incidence since
+2026-09-21; comparing the two sides reaches it either way). Transmittance is
 direction-independent for a lossless reciprocal stack — but the **angle has to be converted**,
 because `theta` is stated against the incidence medium's normal. Comparing top-at-33° with
 bottom-at-33° puts `T` out by 9e-3 and reads exactly like a broken mirror; what reciprocity
@@ -195,7 +197,9 @@ tests never reached. Every magnetic assertion at that point read `s_inc` / `p_in
 built from a different block than `incident`, the psi-specified incidence. The gap was not subtle:
 the psi path returns `R + T = 1.575` with the incident s-flux left non-magnetic. Deleting the
 backside swap survived everything too. With the psi and reciprocity tests added, 15 of 15
-mutants die.
+mutants die. (Since 2026-09-21 the swap sits on the public top-incidence path, where every
+top-lit case reaches it: deleting the 2D ETM swap now fails 16 tests in
+`tests/references/test_fmmax_mu_ambient_golden.py`, not only the reciprocity ones.)
 
 ## 7. Patterned `mu`
 
@@ -372,7 +376,8 @@ algorithms build that list by their own route, so the slot had to be added twice
 non-magnetic under `'SMM'` would have had identical `R` and `T` under both.
 
 Two consequences of it being per-layer state rather than a solver attribute. It has to travel
-with its layer through the **backside** reversal, and the two algorithms reverse by different
+with its layer through the **backside** reversal — the propagation kernels' backside, which
+since 2026-09-21 serves public *top* incidence — and the two algorithms reverse by different
 means — the ETM mirrors the scene before solving, the SMM reverses the state it kept — so a
 `muz_conv_i` left out of either gives each layer the other's `mu_zz`: still magnetic, still
 energy-conserving, `R` and `T` untouched. And the slot is *appended*, not inserted, because

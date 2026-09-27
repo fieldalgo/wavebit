@@ -553,8 +553,11 @@ def solve_2d_4ff(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     flip on all four z-row slots**: ``z -> -z`` sends ``eps_xz -> -eps_xz`` (and likewise
     ``zx``, ``yz``, ``zy``) while leaving the in-plane block and ``eps_zz`` alone, which is why
     the shared :func:`~wavebit._core.solve_1d._mirrored_scene` cannot be the whole of it
-    here. Pinned against a Berreman stack illuminated from below with no mirror at all
-    (``tests/test_anisotropic_berreman.py``).
+    here. Pinned against a Berreman stack with no mirror in it at all
+    (``tests/test_anisotropic_berreman.py``). This kernel ``'bottom'`` is the port, not the
+    public side: since 2026-09-21 the engine sends public *top* incidence here, so the
+    top-lit Berreman comparisons are the ones that reach this branch (measured with a call
+    counter on ``_mirrored_scene``); the bottom-lit one reaches the unmirrored solve.
 
     ``ETM`` uses the shared final matching. ``SMM`` cascades interfaces and
     propagation in the separate forward/backward mode bases and uses the

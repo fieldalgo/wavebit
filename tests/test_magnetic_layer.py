@@ -492,9 +492,12 @@ def test_both_connecting_algorithms_reconstruct_the_magnetic_field(algo):
     assert np.abs(got[:, 5] - want_hz).max() < 1e-11 * float(np.abs(want_hz).max())
 
 
-# The two layers differ in `mu_zz` *and* in pattern, which is what makes the backside case
-# below able to fail: the SMM reverses its per-layer state for a substrate-side solve, and a
-# `muz_conv_i` list left out of that reversal hands each layer the other one's permeability.
+# The two layers differ in `mu_zz` *and* in pattern, which is what makes the reversed case
+# below able to fail: the SMM reverses its per-layer state for a solve on the kernels' backside
+# port -- public *top* incidence since 2026-09-21, public bottom before -- and a `muz_conv_i`
+# list left out of that reversal hands each layer the other one's permeability.
+# TWO_LAYER_EPS / TWO_LAYER_MU list the layers top to bottom; `_two_layer_cell` reverses them,
+# beside a `thickness` it already writes bottom to top.
 TWO_LAYER_EPS = np.array([[[2.6, 2.6, 1.0, 1.0], [2.6, 1.0, 1.0, 1.0]],
                           [[1.0, 4.0, 4.0, 1.0], [1.0, 1.0, 4.0, 4.0]]])
 TWO_LAYER_MU = np.array([[[1.8, 1.0, 1.0, 1.4], [1.0, 1.0, 1.4, 1.4]],
@@ -517,9 +520,12 @@ def _two_layer_cell(algo, side):
 def test_the_two_algorithms_agree_on_a_magnetic_cell_from_either_side(side):
     """A stack of two *different* magnetic layers, illuminated from each side, both algorithms.
 
-    ``incidence_side='bottom'`` is where the per-layer permeability has to travel with its
-    layer through a reversal, and the two connecting algorithms reverse by different means --
-    the ETM mirrors the whole scene before it solves, the SMM reverses the state it kept. A
+    One side is where the per-layer permeability has to travel with its layer through a
+    reversal -- ``incidence_side='top'`` since 2026-09-21, when the engine began solving public
+    top incidence as the kernels' z-mirrored scene (it was ``'bottom'`` before; both sides stay
+    parametrized, so the reversal is reached either way). The two connecting algorithms reverse
+    by different means -- the ETM mirrors the whole scene before it solves, the SMM reverses the
+    state it kept. A
     ``muz_conv_i`` left behind by either reversal gives each layer the other one's ``mu_zz``, which
     is a plausible magnetic cell rather than an obviously broken one: it is still magnetic,
     still energy-conserving, and still identical in ``R`` and ``T``.

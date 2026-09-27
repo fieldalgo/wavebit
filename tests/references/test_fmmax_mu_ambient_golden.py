@@ -221,9 +221,13 @@ def test_the_psi_incidence_path_carries_the_ambient_permeability(psi_deg, algo):
 def test_backside_incidence_is_reciprocal_with_magnetic_ambients(theta_top, algo):
     """Transmittance is direction-independent for a lossless reciprocal stack.
 
-    This is the only check that reaches the ``mu_top`` / ``mu_bot`` swap in the backside
+    This was the only check that reached the ``mu_top`` / ``mu_bot`` swap in the backside
     mirror, and a mutation survey found nothing else did — deleting the swap survived
-    everything else in this file.
+    everything else in this file. That was while the backside, the propagation kernels' port,
+    served public bottom incidence. Since 2026-09-21 it serves public *top* incidence, so every
+    top-lit case here reaches the swap as well: with the 2D ETM swap deleted, 16 tests in this
+    file fail — the three reciprocity cases below and 13 top-lit ETM comparisons. This check
+    solves both sides, so it reaches the swap either way.
 
     **The angle has to be converted.** ``theta`` is stated against the *incidence medium's*
     normal, so top-at-33-degrees and bottom-at-33-degrees are different in-plane wavevectors

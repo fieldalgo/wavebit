@@ -23,7 +23,11 @@ under test:
 * **Two implementations.** The ETM solves the z-mirrored scene; the SMM reads the other two
   blocks of the one cascade it always built. They share the modes but not the backside
   logic, so their per-order agreement (measured 1e-16, 1e-14 on field cells) checks each
-  against the other.
+  against the other. That backside logic belongs to the propagation kernels, and since
+  2026-09-21 the engine sends public *top* incidence through it and public bottom incidence
+  through their direct branch. The ETM/SMM comparisons below therefore check the two
+  algorithms on the direct branch; the top-lit ones elsewhere
+  (``tests/test_scattering_core.py``) are what reach the mirrored one now.
 
 RETICOLO's own bottom-incidence numbers pin the diffraction orders in
 ``tests/references/test_reticolo_golden.py`` — this file covers what the golden cannot:
@@ -208,6 +212,12 @@ def test_backside_etm_and_smm_agree_per_order(tetm):
     ``S12`` off the cascade it already had. Block-swap algebra says those coincide exactly;
     this holds the floating-point realizations to 1e-12 on a stack with diffraction, loss
     and oblique incidence in play at once.
+
+    Written when public bottom incidence was the kernels' backside. Since 2026-09-21 it is
+    their direct branch -- call counters on the ETM's ``_mirrored_scene`` and the SMM's
+    backside flag read 0 for these solves, and 1 for the same solves lit from the top -- so
+    this now compares the two algorithms lit from the bottom on that branch; the mirrored
+    recursion and the backwards read are reached by top incidence.
     """
     a = wavebit.rcwa(layer_algorithm='ETM', tetm=tetm, theta=0.3,
                        incidence_side='bottom', **GRATING_KW).solve()
@@ -230,7 +240,8 @@ def test_backside_etm_and_smm_agree_on_the_conical_path():
 
 # ----------------------------------------------------------------------------------- fields
 
-#: The mirror a backside solve leaves behind is ``diag(1, 1, -1)``, and the field components do
+#: The mirror relating a bottom-lit scene to its hand-reversed, top-lit twin is
+#: ``diag(1, 1, -1)`` (the same one a backside solve leaves behind), and the field components do
 #: not all follow the coordinates through it: ``E`` is polar and loses ``E_z``, ``H`` is axial
 #: and loses ``H_x``/``H_y`` instead. The two 1D layouts fill their three slots with different
 #: components, so the same rule reads as two different vectors.
@@ -252,9 +263,12 @@ def test_field_cell_comes_back_in_scene_coordinates(algo, tetm):
     The backside cell must equal the top-side cell of the hand-reversed scene read upside down
     **and with the mirror's vector parity applied**. Both halves are needed and this test
     carried only the first until 2026-08-22, which is how a wrong frame survived: the two sides
-    were then bit-identical either way, because the ETM backside path *is* the reversed-scene
+    were then bit-identical either way, because the ETM backside path *was* the reversed-scene
     solve and the SMM recovers the same state. It pinned the bookkeeping — which slices, which
     order — and nothing about the frame. What it cannot see, the Poynting sign below can.
+    (Since 2026-09-21 the arithmetic is shared from the other side: the bottom-lit solve takes
+    the kernels' direct branch, and the top-lit reversed scene their mirrored one, which undoes
+    the hand reversal. Measured still bit-identical, ETM and SMM, TE and TM.)
 
     Both polarizations, because the two 1D layouts need different sign vectors and a TM-only
     error is invisible to the ETM/SMM comparison beneath, which is sign-blind.

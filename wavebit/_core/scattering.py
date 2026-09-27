@@ -427,7 +427,10 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     ``_s_reflection``'s blocks in the swapped order, same ``A``/``B``), each layer's matrix is
     symmetric, and reversing a cascade of such factors block-swaps the product. Measured
     against the ETM backside solve at 1e-16 on efficiencies and 1e-14 on field cells
-    (``tests/test_backside_incidence.py``).
+    (``tests/test_backside_incidence.py``), when this branch still served public bottom
+    incidence. Since 2026-09-21 the engine sends public *top* incidence here, so the ETM/SMM
+    comparisons that reach it are the top-lit ones, ``tests/test_scattering_core.py`` among
+    them.
 
     From ``answers='field'`` up the returned mapping also carries the ``layer_info_list`` /
     ``T1`` state field reconstruction consumes, recovered from the cascade by

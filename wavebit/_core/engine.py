@@ -3169,7 +3169,9 @@ class CoreFactorizationMixin:
         self._require_field_declaration()
         self._reject_stale_field_scene()
         # Top illumination walks downward, so restate public heights in that propagation
-        # frame before assigning samples to layers.
+        # frame before assigning samples to layers. `backside` is the kernels' word -- their
+        # 'bottom' port -- and since 2026-09-21 it means public TOP incidence; public bottom
+        # incidence walks the scene as given (see `_kernel_incidence_side`).
         backside = self._kernel_incidence_side == 'bottom'
         counted_z = is_count(sample_z)
         if backside:
@@ -3207,11 +3209,11 @@ class CoreFactorizationMixin:
                                   interface_side='left' if backside else 'right')
 
         if backside:
-            # The backside solve is the top-side solve of the z-mirrored scene, so its cell is
-            # in that mirror -- axis and components both. `to_scene_frame` undoes both; see it
-            # for why the component half is not optional, and `to_scene_frame`'s `flip_z` for
-            # why an explicit z has no axis left to reverse. Static under jit either way:
-            # `incidence_side` is aux data, never a tracer.
+            # The kernels' backside solve -- public top incidence -- is their top-side solve of
+            # the z-mirrored scene, so its cell is in that mirror -- axis and components both.
+            # `to_scene_frame` undoes both; see it for why the component half is not optional,
+            # and `to_scene_frame`'s `flip_z` for why an explicit z has no axis left to
+            # reverse. Static under jit either way: `incidence_side` is aux data, never a tracer.
             field_cell = to_scene_frame(field_cell, pure_1d=self._grating_type == 0,
                                         tetm_index=self.tetm_index, flip_z=counted_z)
 
