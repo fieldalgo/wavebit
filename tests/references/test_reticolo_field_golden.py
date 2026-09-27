@@ -31,7 +31,7 @@ interface, bottom layer first. The comparison is still made in the downward dept
 ``STACKS`` is written in, so :func:`_in_our_frame` reverses RETICOLO's cell into it and
 :func:`_reconstruct` applies the identical reversal and parity to ours. The two transforms
 cancel: what the assertions pin is that RETICOLO's raw cell and the public cell agree entry for
-entry.
+entry on every slot held exactly (TM ``E_x`` on patterned stacks excepted).
 
 With those applied there is **no free amplitude**: not a fitted scale as the fmmax golden
 needs, but exactly 1, to 2.7e-14. That is asserted rather than fitted away, because a scale

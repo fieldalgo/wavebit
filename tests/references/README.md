@@ -147,9 +147,11 @@ Three things had to be measured, each worth O(1) when guessed wrong:
 
 Those were measured against this library's frame of the day, `+z` down into the stack. Since
 2026-09-21 the public frame is RETICOLO's — `+z` up from `z = 0` at the bottom interface, bottom
-layer first — so RETICOLO's raw cell *is* the public cell entry for entry (after the conical
-transpose). The tests still compare in the top-to-bottom depth frame their case lists are
-written in, reversing both cells with the same parity, which cancels.
+layer first — so RETICOLO's raw cell and the public cell agree entry for entry (after the
+conical transpose) on every slot held exactly: `Ex` on patterned stacks is excepted, TM's on
+the pure TE/TM path and both polarizations' on the conical one. The tests still compare in the
+top-to-bottom depth frame their case lists are written in, reversing both cells with the same
+parity, which cancels.
 
 **What unblocked all of this was that the wrapper was throwing away two of `res3`'s three
 outputs.** `[e,z,o]=res3(...)` and only `e` reached Python, which is very likely why this

@@ -20,11 +20,12 @@ Two branch rules, and they are *not* the same rule:
 
 "Down" and ``z`` here are the propagation kernels' local ones, as in
 :mod:`~wavebit._core.solve_1d` and :mod:`~wavebit._core.scattering`: ``z`` runs from the
-kernel's entry face into the stack, the way its incident wave travels. It is not the public
-height. The public ``+z`` points up from the bottom interface, and the engine binds the kernels'
-entry port to the public bottom medium
-(:attr:`~wavebit._core.engine.CoreSolveMixin._kernel_incidence_side`), solving public top
-incidence as their z-mirrored scene. So "down" is public ``+z`` under bottom incidence and
+kernel's entry face into the stack, the way its incident wave travels. It is not, in general,
+the public height: it coincides with it under bottom incidence and is its mirror
+(``h_total - z``, ``h_total = sum(thickness)``) under top incidence. The public ``+z`` points up
+from the bottom interface, and the engine binds the kernels' entry port to the public bottom
+medium (:attr:`~wavebit._core.engine.CoreSolveMixin._kernel_incidence_side`), solving public
+top incidence as their z-mirrored scene. So "down" is public ``+z`` under bottom incidence and
 public ``-z`` under top incidence.
 
 Both pick "downward", but they parametrize it differently, so ``q = -i*kz`` relates them —
@@ -198,10 +199,11 @@ def mode_q(xp, eigenvalue):
     """Modal decay constant ``q`` of a layer mode, from its eigenvalue ``q**2``.
 
     A mode varies as ``exp(-k0*q*z)`` with ``z`` measured downward in the kernels' local frame
-    (from their entry face into the stack; not the public height, see the module docstring), so
-    the root taken is the one that does not grow: ``Re(q) >= 0``. For a lossless propagating
-    mode ``Re(q)`` is zero and the root is imaginary; there the downward wave is
-    ``q = -i*kz``, i.e. ``Im(q) <= 0``.
+    (from their entry face into the stack; not, in general, the public height: it coincides
+    with it under bottom incidence and is its mirror ``h_total - z`` under top incidence, see
+    the module docstring), so the root taken is the one that does not grow: ``Re(q) >= 0``.
+    For a lossless propagating mode ``Re(q)`` is zero and the root is imaginary; there the
+    downward wave is ``q = -i*kz``, i.e. ``Im(q) <= 0``.
 
     Both of those are *conditioning* statements, not physics. A layer's ``±q`` pair is used in
     full by the stack algebra, so the label is free: flipping any subset of a layer's roots
@@ -229,14 +231,15 @@ def boundary_kz(xp, eps, k_par_sq):
     """``kz`` of a homogeneous half-space for the downward-going wave.
 
     ``exp(+i*k0*kz*z)`` travels down -- along the kernels' local ``+z``, from their entry face
-    into the stack, not the public height (see the module docstring) -- so the physical root
-    carries energy that way: ``Re(kz) > 0``. A purely evanescent order has no real part, and
-    there the decaying choice is ``Im(kz) > 0``. That pair is the principal square root, and
-    it is the whole answer for every real ``k_par`` — a passive medium has ``Im(eps) >= 0``,
-    so ``kz**2`` lies in the closed upper half plane and its principal root is in the first
-    quadrant, satisfying *both* conditions at once. The two only become separate demands when
-    ``k_par`` is complex, and then a third thing decides between them; see
-    :func:`_off_principal_branch` and ``docs/time-convention-audit.md``.
+    into the stack, a ``z`` that is not, in general, the public height: it coincides with it
+    under bottom incidence and is its mirror ``h_total - z`` under top incidence (see the
+    module docstring) -- so the physical root carries energy that way: ``Re(kz) > 0``. A purely
+    evanescent order has no real part, and there the decaying choice is ``Im(kz) > 0``. That pair is
+    the principal square root, and it is the whole answer for every real ``k_par`` — a passive
+    medium has ``Im(eps) >= 0``, so ``kz**2`` lies in the closed upper half plane and its
+    principal root is in the first quadrant, satisfying *both* conditions at once. The two only
+    become separate demands when ``k_par`` is complex, and then a third thing decides between
+    them; see :func:`_off_principal_branch` and ``docs/time-convention-audit.md``.
     """
     kz2 = eps - k_par_sq
     # `xp.sqrt`, not `kz2 ** 0.5`. On a negative real `kz2` -- every purely evanescent order --

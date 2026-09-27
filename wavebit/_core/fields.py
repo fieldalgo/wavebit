@@ -117,11 +117,12 @@ _MIRROR_PARITY = {
 def to_mirrored_z(sample_z, thickness):
     """A caller's ``sample_z`` restated in the frame a backside solve actually walks.
 
-    "Backside" is the propagation kernels' word, as in the name: their ``'bottom'`` port, the
-    far end of the positive-z layer list (:func:`~wavebit._core.solve_1d._is_backside`). Since
-    2026-09-21 the engine binds that port to the public **top** medium, so this serves public
-    *top* incidence (:attr:`~wavebit._core.engine.CoreSolveMixin._kernel_incidence_side`);
-    public bottom incidence walks the scene as given and needs no restating.
+    "Backside" is the propagation kernels' word, as in
+    :func:`~wavebit._core.solve_1d._is_backside`: their ``'bottom'`` port, the far end of the
+    positive-z layer list. Since 2026-09-21 the engine binds that port to the public **top**
+    medium, so this serves public *top* incidence
+    (:attr:`~wavebit._core.engine.CoreSolveMixin._kernel_incidence_side`); public bottom
+    incidence walks the scene as given and needs no restating.
 
     Explicit coordinates are absolute in **scene** coordinates -- that is the contract on both
     sides, and it is what makes ``incidence_side`` a statement about the light rather than
@@ -828,14 +829,23 @@ def plot_field(field_cell, tetm_index=0, plot_indices=(1, 1, 1, 1, 1, 1), y_slic
     Presentation rather than physics, but there is no reason for it to exist per backend:
     it only needs the array as NumPy.
 
-    ``y_slice`` and ``z_slice`` are *indices* into the cell's y and z axes, not coordinates.
-    The top view is the xy plane at ``z_slice``, and its default ``-1`` is the last z sample:
-    for a count of two or more, the top face of ``structure[-1]``, at height
-    ``sum(thickness)`` -- the face the superstrate touches; for explicit ``sample_z``, the last
-    coordinate requested. That default changed meaning without changing value on 2026-09-21,
-    when the z axis turned to run bottom to top: before then ``-1`` was the bottom face of the
-    last listed layer, the face the substrate touches. With a count, ``z_slice=0`` now selects
-    the bottom face of ``structure[0]``.
+    ``y_slice`` and ``z_slice`` are *indices* into the cell's y and z axes, not coordinates;
+    the cell indexed is ``(nz, ny, nx, n_components)`` (on the coupled paths, one entry of the
+    reconstruction's leading incidence axis). The side view draws each enabled component over
+    the xz plane at y sample ``y_slice``. The top view is taken at z sample ``z_slice``, and its
+    default ``-1`` is the last z sample: for a count of two or more, the top face of
+    ``structure[-1]``, at height ``sum(thickness)`` -- the face the superstrate touches; for
+    explicit ``sample_z``, the last coordinate requested. That default changed meaning without
+    changing value on 2026-09-21, when the z axis turned to run bottom to top: before then
+    ``-1`` was the bottom face of the last listed layer, the face the substrate touches. With a
+    count, ``z_slice=0`` now selects the bottom face of ``structure[0]``.
+
+    The top view does not draw one component over the xy plane. Its index,
+    ``field_cell[z_slice, :, idx]``, stops one axis short, so the component number ``idx``
+    selects an x sample instead: each top-view figure is the x column ``idx`` at that z, an
+    array of shape ``(ny, n_components)`` with every component laid along the axis labelled
+    "X". This is a known defect in the top view's indexing, tracked separately; the side view
+    indexes correctly.
     """
     try:
         import matplotlib.pyplot as plt

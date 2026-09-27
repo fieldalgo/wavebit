@@ -45,9 +45,9 @@ O(1) residual when guessed wrong:
 
 * ``res3``'s second and third outputs were being discarded by the wrapper. ``z`` alone cannot
   locate a layer -- a single-slab cell has eight rows at ``z == 0``, of which exactly one is
-  the slab's top face -- and ``o``, the refractive index at every sample, says which. The
+  the slab's bottom face -- and ``o``, the refractive index at every sample, says which. The
   wrapper now forwards both. Aligning on the six *nonzero* z values instead, which is the
-  reading ``z`` invites, drops the slab's top face and leaves the whole comparison O(1) out.
+  reading ``z`` invites, drops the slab's bottom face and leaves the whole comparison O(1) out.
 * **RETICOLO's ``+z`` points out of the stack**, so the cell reverses as a whole, layer order
   included. On one layer that is indistinguishable from a per-layer reversal; ``bilayer``
   separates them (1.3e0 the wrong way round, 2.8e-14 the right way). That was measured against

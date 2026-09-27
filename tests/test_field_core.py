@@ -275,9 +275,9 @@ def test_the_declared_frame_is_the_one_that_converges(path, formulation):
     """The control: the frame the library used to ship in must now *fail* the check above.
 
     "Used to ship in" means the pre-2026-08-14 mismatch -- ``E_z``, ``H_x``, ``H_y`` signed for
-    the opposite direction to the one the samples run in -- written here in today's
-    bottom-to-top sample order, i.e. that cell's z-mirror, which disagrees with itself the same
-    way.
+    the opposite direction to the one the samples run in. ``F_old`` below is that cell's
+    z-mirror: its samples run bottom to top and its ``E_z``, ``H_x``, ``H_y`` are signed for
+    downward travel, so it disagrees with itself the same way.
 
     Without this, undoing the fix would leave the test above green if it were ever loosened —
     and "the residual is small" was never the claim. The other frame is not slightly worse,

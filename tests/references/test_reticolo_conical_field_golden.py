@@ -76,7 +76,8 @@ def _in_our_frame(e):
     That depth frame was this library's until 2026-09-21. The public frame is RETICOLO's own
     now (``+z`` up, bottom layer first), and :func:`_reconstruct` brings ours into the depth
     frame by the same reversal and parity, so the two cancel: after the transpose, RETICOLO's
-    raw cell and the public cell agree entry for entry.
+    raw cell and the public cell agree entry for entry on every slot held exactly (``E_x`` on
+    patterned stacks excepted).
     """
     return e.transpose(0, 2, 1, 3)[::-1] * Z_PARITY
 
