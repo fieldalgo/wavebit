@@ -19,9 +19,17 @@ So two checks, matching the two halves of the contract:
 Both are deliberately dumb pattern checks. The failure they catch is not subtle -- it is
 someone pasting a path they can see from where they are sitting -- and a dumb check is one that
 still works when nobody remembers it exists.
+
+What they read is what a clone gets: the files git tracks, not whatever is on the disk they run
+on. See `tree` for the two ways reading the disk went wrong.
 """
+import functools
+import os
 import pathlib
+import posixpath
 import re
+import shutil
+import subprocess
 
 import pytest
 
@@ -72,22 +80,121 @@ CITED_BUT_ABSENT = {
 }
 
 
-def published_files():
-    for p in sorted(ROOT.iterdir()):
-        if p.is_file() and (p.suffix in TEXT_SUFFIXES or p.suffix == '.bib'
-                            or p.name.startswith('LICENSE')):
-            yield p
-    for d in PUBLISHED:
-        for p in sorted((ROOT / d).rglob('*')):
-            if p.is_file() and p.suffix in TEXT_SUFFIXES and '__pycache__' not in p.parts:
-                yield p
+@functools.lru_cache(maxsize=None)
+def tree(root=ROOT):
+    """Every file a clone of `root` contains, as repository-relative POSIX paths.
+
+    Every check below finds its files and resolves its citations here, never on the disk
+    directly, because the disk also holds whatever this machine put there, and that is wrong in
+    both directions. An untracked `AGENTS.md` -- an agent tool's copy of `CLAUDE.md`, which is
+    exempt under its own name -- failed the contract on one machine while a clean checkout
+    passed. The other direction is quieter: an untracked file satisfies a citation as well as a
+    tracked one does, so a reference nobody who clones can follow would pass. `docs/README.md`
+    allows only "things that arrive with the clone", and an untracked file does not arrive.
+
+    In a git checkout that is `git ls-files`, less any tracked file deleted from the disk: the
+    tree `git commit -a` would record, read as it is on disk. Outside one -- an sdist, an
+    unpacked archive -- nothing is tracked and what is on disk is what shipped, so the tree is
+    walked.
+    """
+    tracked = _tracked(root)
+    if tracked is not None:
+        return tracked
+    return frozenset(p.relative_to(root).as_posix() for p in root.rglob('*')
+                     if p.is_file() and '__pycache__' not in p.parts)
 
 
-def test_nothing_published_points_outside_the_repository():
-    """No file that ships names a path on somebody's machine."""
+def _tracked(root):
+    """`git ls-files` at `root`, or None when `root` is not the top of a git checkout."""
+    try:
+        top = subprocess.run(['git', 'rev-parse', '--show-toplevel'], cwd=root, env=_git_env(),
+                             capture_output=True, text=True)
+    except OSError:                                  # no git on this machine
+        return None
+    # The top, not merely inside one: an sdist unpacked in some other project's checkout is not
+    # tracked by it, and `ls-files` there would answer that nothing ships. The same directory,
+    # not the same string: git prints the case the disk stores, so on a case-insensitive disk a
+    # `root` spelled in another case is the top all the same, and compared as strings it would
+    # fall back to the disk walk -- strays and all -- without a word.
+    try:
+        # rstrip the newline only: a directory name may end in whitespace, and `strip()` would
+        # trim it into a path that is not there, falling back to the disk walk silently.
+        at_top = top.returncode == 0 and pathlib.Path(top.stdout.rstrip('\n')).samefile(root)
+    except OSError:                                  # git printed a path that is not there
+        at_top = False
+    if not at_top:
+        return None
+    listed = subprocess.run(['git', 'ls-files', '-z'], cwd=root, env=_git_env(),
+                            capture_output=True, check=True).stdout
+    # Tracked and present: a tracked file deleted from the working tree is leaving with the
+    # next commit, and there is nothing on disk to read.
+    return frozenset(n for n in os.fsdecode(listed).split('\0') if n and (root / n).is_file())
+
+
+# The variables that tell git which repository, index and configuration to use. githooks(5): a
+# hook runs with them exported, and one that runs git somewhere else should clear them. Here the
+# somewhere else is a temporary repository a self-test builds, and inherited from a pre-commit
+# hook, GIT_INDEX_FILE would stage that repository's files into the commit being made. The list
+# is git's own, `git rev-parse --local-env-vars`, so a variable a later git adds is cleared too;
+# this copy of git 2.39's answer is for a git that cannot give one.
+_LOCAL_ENV_VARS = (
+    'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_CONFIG', 'GIT_CONFIG_PARAMETERS', 'GIT_CONFIG_COUNT',
+    'GIT_OBJECT_DIRECTORY', 'GIT_DIR', 'GIT_WORK_TREE', 'GIT_IMPLICIT_WORK_TREE', 'GIT_GRAFT_FILE',
+    'GIT_INDEX_FILE', 'GIT_NO_REPLACE_OBJECTS', 'GIT_REPLACE_REF_BASE', 'GIT_PREFIX',
+    'GIT_INTERNAL_SUPER_PREFIX', 'GIT_SHALLOW_FILE', 'GIT_COMMON_DIR')
+
+
+@functools.lru_cache(maxsize=None)
+def _local_env_vars():
+    env = {k: v for k, v in os.environ.items() if k not in _LOCAL_ENV_VARS}
+    try:
+        asked = subprocess.run(['git', 'rev-parse', '--local-env-vars'], env=env,
+                               capture_output=True, text=True)
+    except OSError:                                  # no git on this machine
+        return frozenset(_LOCAL_ENV_VARS)
+    names = asked.stdout.split()
+    return frozenset(names if asked.returncode == 0 and names else _LOCAL_ENV_VARS)
+
+
+def _git_env():
+    """The environment, less every variable that would point git at another repository."""
+    local = _local_env_vars()
+    return {k: v for k, v in os.environ.items() if k not in local}
+
+
+@functools.lru_cache(maxsize=None)
+def _directories(root=ROOT):
+    return frozenset(str(d) for rel in tree(root) for d in pathlib.PurePosixPath(rel).parents)
+
+
+def in_tree(rel, root=ROOT):
+    """Whether a clone of `root` has `rel`, a repository-relative path, as a file or a directory."""
+    rel = posixpath.normpath(rel)
+    return rel in tree(root) or rel in _directories(root)
+
+
+def published_files(root=ROOT):
+    """The text files that ship: those at the top of the tree, and those under PUBLISHED."""
+    for rel in sorted(tree(root)):
+        if _published(rel):
+            yield root / rel
+
+
+def _published(rel):
+    path = pathlib.PurePosixPath(rel)
+    if '__pycache__' in path.parts:
+        return False
+    if len(path.parts) == 1:
+        return (path.suffix in TEXT_SUFFIXES or path.suffix == '.bib'
+                or path.name.startswith('LICENSE'))
+    return path.parts[0] in PUBLISHED and path.suffix in TEXT_SUFFIXES
+
+
+def outward_lines(root=ROOT):
+    """Each line of a shipped file that names a path on somebody's machine, as `file:line: text`."""
     bad = []
-    for p in published_files():
-        rel = p.relative_to(ROOT).as_posix()
+    for p in published_files(root):
+        rel = p.relative_to(root).as_posix()
         if rel in EXEMPT:
             continue
         try:
@@ -95,10 +202,14 @@ def test_nothing_published_points_outside_the_repository():
         except UnicodeDecodeError:
             continue
         for n, line in enumerate(text.splitlines(), 1):
-            m = OUTWARD.search(line)
-            if m:
+            if OUTWARD.search(line):
                 bad.append(f'{rel}:{n}: {line.strip()[:100]}')
+    return bad
 
+
+def test_nothing_published_points_outside_the_repository():
+    """No file that ships names a path on somebody's machine."""
+    bad = outward_lines()
     assert not bad, (
         'these point outside the repository, so they are dangling links for anyone who clones '
         'it and a disclosure of the author\'s filesystem:\n  ' + '\n  '.join(bad) +
@@ -137,6 +248,178 @@ def test_the_checks_read_the_top_of_the_tree_and_the_results_logs():
     assert any(r.startswith('studies/results/') and r.endswith('.log') for r in read)
 
 
+# The self-tests of `tree` build a small repository, because what they test is what git answers.
+needs_git = pytest.mark.skipif(shutil.which('git') is None, reason='needs git')
+LEAK = 'notes kept in ~/project/elsewhere/notes.md'
+
+
+# The configuration of whoever runs them must not change what `init` and `add` do in such a
+# repository. A global ignore file listing `CLAUDE.md` -- a common one -- would refuse the `add`;
+# so would the `info/exclude` of a template directory, which is how global hooks are installed,
+# and so would `core.safecrlf` beside `core.autocrlf`, for a file with LF endings. So the
+# self-tests' git reads no global or system configuration; is given an empty ignore file, because
+# git reads the default one, `$XDG_CONFIG_HOME/git/ignore`, even then; and initializes from an
+# empty template, because GIT_TEMPLATE_DIR names one from the environment. `_tracked` keeps the
+# user's configuration: a checkout owned by another user is readable only through the
+# `safe.directory` one of them grants.
+_ISOLATED = {'GIT_CONFIG_GLOBAL': os.devnull, 'GIT_CONFIG_NOSYSTEM': '1'}
+
+
+def _git(root, *args):
+    subprocess.run(['git', '-c', f'core.excludesFile={os.devnull}', *args], cwd=root,
+                   env={**_git_env(), **_ISOLATED}, check=True, capture_output=True)
+
+
+def _init(root):
+    """`git init` at `root` from an empty template, whatever GIT_TEMPLATE_DIR names."""
+    _git(root, 'init', '-q', '--template=')
+
+
+def _write(root, files):
+    for rel, text in files.items():
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text(text + '\n', encoding='utf-8')
+
+
+# One outward line, four times: in a tracked file, in an untracked one at the top of the tree
+# the way `AGENTS.md` arrives, in an untracked one inside a published directory, and in the
+# exempt `CLAUDE.md`.
+STRAYS = {'README.md': LEAK, 'AGENTS.md': LEAK, 'docs/stray.md': LEAK, 'CLAUDE.md': LEAK}
+
+
+@needs_git
+def test_an_untracked_file_is_not_read_and_a_tracked_one_is(tmp_path):
+    """The contract judges what a clone gets: the same line fails tracked and passes untracked.
+
+    Both halves are asserted by one equality, so reading too much (the strays) and reading too
+    little (the tracked file) each fail it -- and the tracked `CLAUDE.md` stays exempt.
+    """
+    _write(tmp_path, STRAYS)
+    _init(tmp_path)
+    _git(tmp_path, 'add', 'README.md', 'CLAUDE.md')
+    assert outward_lines(tmp_path) == [f'README.md:1: {LEAK}']
+
+
+@needs_git
+def test_a_checkout_named_in_another_case_is_still_its_own_top(tmp_path):
+    """On a case-insensitive disk, a checkout named in another case is read from git all the same.
+
+    git prints its top in the case the disk stores, so a string compare against a `root` typed
+    in another case says "not the top", and the strays are read from the disk.
+    """
+    root, respelled = tmp_path / 'repo', tmp_path / 'REPO'
+    _write(root, STRAYS)
+    if not respelled.exists():
+        pytest.skip('the disk is case-sensitive')
+    _init(root)
+    _git(root, 'add', 'README.md', 'CLAUDE.md')
+    assert outward_lines(respelled) == [f'README.md:1: {LEAK}']
+
+
+@pytest.mark.parametrize('where', ['outside any checkout', 'untracked inside another checkout'])
+def test_without_a_checkout_of_its_own_the_tree_on_disk_is_read(tmp_path, where):
+    """An sdist has no index to ask, so what is on disk is what shipped, strays and all.
+
+    The second case is an archive unpacked inside some other project's checkout: git answers
+    there, for the wrong tree, and it answers that nothing is tracked.
+    """
+    root = tmp_path
+    if where != 'outside any checkout':
+        if shutil.which('git') is None:
+            pytest.skip('needs git')
+        _init(tmp_path)
+        root = tmp_path / 'unpacked'
+    _write(root, STRAYS)
+    assert outward_lines(root) == [f'{rel}:1: {LEAK}'
+                                   for rel in ('AGENTS.md', 'README.md', 'docs/stray.md')]
+
+
+# One citation of each kind the checks resolve -- a `Targets:` file and glob, a path, a
+# `file.py::name`, a repository URL to a directory, and a navigation entry -- and the files
+# they name.
+CITING = {
+    'docs/a.md': ('Targets: `wavebit/x.py`, `wavebit/*.py`. See `docs/b.md`, `docs/b.py::f` and '
+                  'https://github.com/fieldalgo/wavebit/tree/develop/docs/sub.'),
+    'docs/_toc.yml': '- file: b',
+}
+CITED = {
+    'wavebit/x.py': 'x = 1',
+    'docs/b.md': 'b',
+    'docs/b.py': 'def f():\n    pass',
+    'docs/sub/c.md': 'c',
+}
+
+
+@needs_git
+@pytest.mark.parametrize('state', ['untracked', 'tracked', 'tracked, then deleted'])
+def test_a_citation_resolves_only_to_what_a_clone_gets(tmp_path, state):
+    """Every citation check resolves against tracked files that are present, and only those.
+
+    Untracked, the cited files are on disk and a clone does not get them. Tracked and then
+    deleted, git still lists them and the next commit drops them; the empty `docs/sub/` stays
+    on disk and names nothing.
+    """
+    _write(tmp_path, {**CITING, **CITED})
+    _init(tmp_path)
+    _git(tmp_path, 'add', *CITING)
+    if state != 'untracked':
+        _git(tmp_path, 'add', *CITED)
+    if state == 'tracked, then deleted':
+        for rel in CITED:
+            (tmp_path / rel).unlink()
+    found = (missing_targets(CITING['docs/a.md'], tmp_path), missing_cited_paths(tmp_path),
+             missing_symbols(tmp_path), dangling_repo_urls(tmp_path), missing_toc_pages(tmp_path))
+    assert found == (([],) * 5 if state == 'tracked' else (
+        ['wavebit/*.py', 'wavebit/x.py'],
+        ['docs/a.md: docs/b.md', 'docs/a.md: wavebit/x.py'],
+        ['docs/a.md: no such file: docs/b.py::f'],
+        ['docs/a.md:1: docs/sub'],
+        ['b']))
+
+
+@needs_git
+def test_only_a_tracked_document_has_its_targets_checked(tmp_path):
+    """The documents whose `Targets:` are checked come from the tracked set too.
+
+    `docs_with_targets` decides which documents get a test case at all, so read from the disk
+    it would give an untracked draft in `docs/` a case of its own, failing or passing on a
+    document no clone has.
+    """
+    _write(tmp_path, {**CITING, 'docs/draft.md': CITING['docs/a.md']})
+    _init(tmp_path)
+    _git(tmp_path, 'add', *CITING)
+    assert [p.relative_to(tmp_path).as_posix() for p, _ in docs_with_targets(tmp_path)] == [
+        'docs/a.md']
+
+
+@needs_git
+def test_the_self_tests_neither_reach_nor_read_the_git_running_them(tmp_path, monkeypatch):
+    """What the machine's git carries does not cross into a temporary repository, either way.
+
+    A pre-commit hook exports GIT_INDEX_FILE, which would stage the temporary repository's files
+    into the commit being made. And the user's settings would refuse the `git add`. Of a file
+    they list: an ignore file in its default place, or the `info/exclude` of the template
+    directory GIT_TEMPLATE_DIR names -- how global hooks are installed. Of a file with LF
+    endings: `core.safecrlf` beside `core.autocrlf`, in the global file, in the system file, or
+    in the GIT_CONFIG_PARAMETERS a hook inherits from `git -c ... commit`.
+    """
+    outer_index = tmp_path / 'outer-index'
+    monkeypatch.setenv('GIT_INDEX_FILE', str(outer_index))
+    _write(tmp_path, {'config/git/ignore': '\n'.join(STRAYS),
+                      'config/git/config': '[core]\n\tautocrlf = true\n\tsafecrlf = true',
+                      'template/info/exclude': '\n'.join(STRAYS)})
+    monkeypatch.setenv('XDG_CONFIG_HOME', str(tmp_path / 'config'))
+    monkeypatch.setenv('GIT_CONFIG_SYSTEM', str(tmp_path / 'config' / 'git' / 'config'))
+    monkeypatch.setenv('GIT_CONFIG_PARAMETERS', "'core.autocrlf'='true' 'core.safecrlf'='true'")
+    monkeypatch.setenv('GIT_TEMPLATE_DIR', str(tmp_path / 'template'))
+    root = tmp_path / 'repo'
+    _write(root, STRAYS)
+    _init(root)
+    _git(root, 'add', 'README.md', 'CLAUDE.md')
+    assert outward_lines(root) == [f'README.md:1: {LEAK}']
+    assert not outer_index.exists()
+
+
 # `path.py::symbol` -- how this codebase points at one function inside a file. The path half
 # was already checked by CITED_PATH above; the *symbol* half was not, because that regex stops
 # at `.py`. All 78 of these went stale silently, which is the same shape as the bare-filename
@@ -159,15 +442,11 @@ SYMBOL_EXEMPT = {
 }
 
 
-def test_every_symbol_a_document_names_exists():
-    """`file.py::name` has to name a real definition, not only a real file.
-
-    A stale one reads exactly like a live one and sends the reader looking for a function that
-    was renamed out from under the sentence.
-    """
+def missing_symbols(root=ROOT):
+    """Each `file.py::name` in a shipped file that names no file, or no such definition."""
     bad = []
-    for p in published_files():
-        rel = p.relative_to(ROOT).as_posix()
+    for p in published_files(root):
+        rel = p.relative_to(root).as_posix()
         if rel in EXEMPT:            # this file quotes the shapes it checks for
             continue
         try:
@@ -178,31 +457,42 @@ def test_every_symbol_a_document_names_exists():
             path, symbol = m.group(1), m.group(2)
             if f'{path}::{symbol}' in SYMBOL_EXEMPT:
                 continue
-            sources = _sources_named(path, p)
+            sources = _sources_named(path, rel, root)
             if not sources:
                 bad.append(f'{rel}: no such file: {path}::{symbol}')
                 continue
             if not any(_defines(src, symbol) for src in sources):
                 bad.append(f'{rel}: no such symbol: {path}::{symbol}')
+    return sorted(set(bad))
 
+
+def test_every_symbol_a_document_names_exists():
+    """`file.py::name` has to name a real definition, not only a real file.
+
+    A stale one reads exactly like a live one and sends the reader looking for a function that
+    was renamed out from under the sentence.
+    """
+    bad = missing_symbols()
     assert not bad, (
-        'these name symbols that do not exist:\n  ' + '\n  '.join(sorted(set(bad))) +
+        'these name symbols that do not exist:\n  ' + '\n  '.join(bad) +
         '\n\nA `file.py::name` is a claim about a definition. Renaming the definition without '
         'the sentence leaves prose that typesets perfectly and points nowhere.')
 
 
-def _sources_named(path, citing):
+def _sources_named(path, citing, root=ROOT):
     """Every file the citation could mean, as text. Same three bases as the path check, plus
-    a basename match, because `factorization.py::x` is how this repo writes a `_core` file."""
-    out = []
-    for base in (ROOT, ROOT / 'wavebit', citing.parent):
-        candidate = base / path
-        if candidate.is_file():
-            out.append(candidate)
+    a basename match, because `factorization.py::x` is how this repo writes a `_core` file.
+    `citing` is the repository-relative path of the file that cites it."""
+    files = tree(root)
+    out = [c for c in (posixpath.normpath(posixpath.join(base, path))
+                       for base in ('', 'wavebit', posixpath.dirname(citing)))
+           if c in files]
     if not out:
-        out = [q for q in ROOT.rglob(pathlib.Path(path).name)
-               if q.is_file() and q.as_posix().endswith(path) and '__pycache__' not in q.parts]
-    return [q.read_text(encoding='utf-8', errors='ignore') for q in out]
+        name = posixpath.basename(path)
+        out = [q for q in sorted(files)
+               if posixpath.basename(q) == name and q.endswith(path)
+               and '__pycache__' not in q.split('/')]
+    return [(root / q).read_text(encoding='utf-8', errors='ignore') for q in out]
 
 
 def _defines(src, symbol):
@@ -229,15 +519,11 @@ REPO_URL = re.compile(
     r'([A-Za-z0-9_][A-Za-z0-9._/-]*)')
 
 
-def test_repository_urls_name_something_in_the_tree():
-    """A github.com URL into this repository has to point at a path that exists here.
-
-    The branch in the URL is not checked and cannot be: it names a ref that may not be the one
-    checked out. What is checked is the path after it, which is what goes stale in a rename.
-    """
+def dangling_repo_urls(root=ROOT):
+    """Each github.com URL into this repository, in a shipped file, whose path is not tracked."""
     bad = []
-    for p in published_files():
-        rel = p.relative_to(ROOT).as_posix()
+    for p in published_files(root):
+        rel = p.relative_to(root).as_posix()
         if rel in EXEMPT:
             continue
         try:
@@ -247,19 +533,30 @@ def test_repository_urls_name_something_in_the_tree():
         for n, line in enumerate(text.splitlines(), 1):
             for m in REPO_URL.finditer(line):
                 cited = m.group(1).rstrip('/).,')
-                if not (ROOT / cited).exists():
+                if not in_tree(cited, root):
                     bad.append(f'{rel}:{n}: {cited}')
+    return bad
 
+
+def test_repository_urls_name_something_in_the_tree():
+    """A github.com URL into this repository has to point at a path that exists here.
+
+    The branch in the URL is not checked and cannot be: it names a ref that may not be the one
+    checked out. What is checked is the path after it, which is what goes stale in a rename.
+    """
+    bad = dangling_repo_urls()
     assert not bad, (
         'these URLs point into this repository at paths that are not in it, so they 404 for '
         'every reader and for nobody who can fix them:\n  ' + '\n  '.join(bad))
 
 
-def docs_with_targets():
-    for p in sorted((ROOT / 'docs').glob('*.md')):
-        text = p.read_text(encoding='utf-8')
-        if 'Targets' in text:
-            yield p, text
+def docs_with_targets(root=ROOT):
+    """Each document directly in `docs/` that names its `Targets`, with its text."""
+    for rel in sorted(tree(root)):
+        if posixpath.dirname(rel) == 'docs' and rel.endswith('.md'):
+            text = (root / rel).read_text(encoding='utf-8')
+            if 'Targets' in text:
+                yield root / rel, text
 
 
 # A repo-relative path in backticks. This catches the other half of the same mistake: not
@@ -269,17 +566,11 @@ def docs_with_targets():
 CITED_PATH = re.compile(r'`([A-Za-z0-9_][A-Za-z0-9._/-]*\.(?:md|py|json|npz|toml|yml|cfg))`')
 
 
-def test_paths_cited_anywhere_are_in_the_repository():
-    """Every backticked path in a shipped file resolves.
-
-    Scoped to `docs/` at first, which is how `third_party/rcwa/ANALYSIS.md` survived twice in
-    `tests/references/`: the rule was right and the check was looking in one place. A cited
-    path is a promise the reader can follow it, and that promise is made wherever it is
-    written.
-    """
+def missing_cited_paths(root=ROOT):
+    """Each backticked path in a shipped file that resolves to nothing tracked."""
     bad = []
-    for p in published_files():
-        rel = p.relative_to(ROOT).as_posix()
+    for p in published_files(root):
+        rel = p.relative_to(root).as_posix()
         if rel in EXEMPT:
             continue
         try:
@@ -307,30 +598,56 @@ def test_paths_cited_anywhere_are_in_the_repository():
             # and counting, and there is only one `_core/` for it to mean. Spelling it
             # `wavebit/_core/...` everywhere would be longer and no clearer. The third base
             # accepts a link relative to the citing file, which is how one doc points at another.
-            if any((base / t).exists() for base in (ROOT, ROOT / 'wavebit', p.parent)):
+            if any(in_tree(posixpath.join(base, t), root)
+                   for base in ('', 'wavebit', posixpath.dirname(rel))):
                 continue
             bad.append(f'{rel}: {t}')
+    return sorted(set(bad))
 
+
+def test_paths_cited_anywhere_are_in_the_repository():
+    """Every backticked path in a shipped file resolves.
+
+    Scoped to `docs/` at first, which is how `third_party/rcwa/ANALYSIS.md` survived twice in
+    `tests/references/`: the rule was right and the check was looking in one place. A cited
+    path is a promise the reader can follow it, and that promise is made wherever it is
+    written.
+    """
+    bad = missing_cited_paths()
     assert not bad, (
-        'these cite paths that are not in the repository:\n  ' + '\n  '.join(sorted(set(bad))) +
+        'these cite paths that are not in the repository:\n  ' + '\n  '.join(bad) +
         '\n\nA path that resolves only on the author\'s disk reads as an in-repo reference, '
         'which is the harder half of the same leak -- nothing about it looks wrong. State the '
         'substance instead of the address; see the contract in docs/README.md.')
 
 
-@pytest.mark.parametrize('doc', [p.name for p, _ in docs_with_targets()])
-def test_every_target_a_document_names_exists(doc):
-    """A document explains named code; the names have to be real."""
-    text = (ROOT / 'docs' / doc).read_text(encoding='utf-8')
+def missing_targets(text, root=ROOT):
+    """Each `wavebit/...py` a document's text names that is not in the tree."""
     missing = []
     for m in re.finditer(r'`(wavebit/[A-Za-z0-9_./*-]+\.py)', text):
         target = m.group(1)
-        found = list(ROOT.glob(target)) if '*' in target else [ROOT / target]
-        if not any(f.exists() for f in found):
+        found = ([f.relative_to(root).as_posix() for f in root.glob(target)] if '*' in target
+                 else [target])
+        if not any(in_tree(f, root) for f in found):
             missing.append(target)
+    return sorted(set(missing))
+
+
+@pytest.mark.parametrize('doc', [p.name for p, _ in docs_with_targets()])
+def test_every_target_a_document_names_exists(doc):
+    """A document explains named code; the names have to be real."""
+    missing = missing_targets((ROOT / 'docs' / doc).read_text(encoding='utf-8'))
     assert not missing, (
-        f'docs/{doc} explains files that do not exist: {sorted(set(missing))}. '
+        f'docs/{doc} explains files that do not exist: {missing}. '
         'Either the document is stale or the path is a typo; both make it decorative.')
+
+
+def missing_toc_pages(root=ROOT):
+    """Each `_toc.yml` entry with no page behind it."""
+    toc = (root / 'docs' / '_toc.yml').read_text(encoding='utf-8')
+    return sorted({name for name in re.findall(r'-\s*file:\s*(\S+)', toc)
+                   if not any(in_tree(f'docs/{name}{ext}', root)
+                              for ext in ('.md', '.ipynb', '.rst'))})
 
 
 def test_every_toc_entry_names_a_document_that_exists():
@@ -346,11 +663,8 @@ def test_every_toc_entry_names_a_document_that_exists():
     So the check is on the *extension the sweep did not have*, which is the general form of
     that miss rather than the instance.
     """
-    toc = (ROOT / 'docs' / '_toc.yml').read_text(encoding='utf-8')
-    missing = [name for name in re.findall(r'-\s*file:\s*(\S+)', toc)
-               if not any((ROOT / 'docs' / f'{name}{ext}').exists()
-                          for ext in ('.md', '.ipynb', '.rst'))]
+    missing = missing_toc_pages()
     assert not missing, (
-        f'docs/_toc.yml lists pages that do not exist: {sorted(set(missing))}. '
+        f'docs/_toc.yml lists pages that do not exist: {missing}. '
         'The site build resolves these, so a stale entry is a missing page rather than a '
         'broken link -- add the document, or drop the entry.')
