@@ -917,7 +917,10 @@ class CoreSolveMixin:
         at all and raised a ``TypeError`` from :meth:`_incidence_pair`. So a declaration clears
         the default and a withdrawal restores it: pure s, what a solver built without ``tetm``
         reads. Nothing else can be lost either way -- while ``tetm`` is set, a ``psi``, ``chi``
-        or ``polarization`` is refused rather than stored.
+        or ``polarization`` is refused rather than stored. The routing follows at the next
+        solve: a solver holding no structure keeps its last layout, and a kept pure one is
+        re-routed as its raster would be undeclared (:meth:`_assign_grating_type`) -- the
+        pure kernel cannot run without the declaration.
 
         The restored default is built under :meth:`_eager`. Inside ``jax.jit`` it was otherwise
         staged, a tracer, and :meth:`_conditions` puts a slot left holding a tracer back to what
@@ -2306,6 +2309,13 @@ class CoreSolveMixin:
                 one_dimensional = self.lattice_is_axis_aligned
                 self._refuse_y_orders_on_a_y_invariant_cell(True)
                 self._refuse_illegal_tetm(one_dimensional, one_row=True)
+                if self._tetm is None:
+                    # Withdrawn since: the pure kernel cannot run undeclared (it raised
+                    # "tetm_index must be 0 (TE) or 1 (TM), got None"), so route as the raster
+                    # branch routes that raster undeclared -- conical on an axis-aligned cell,
+                    # the solve a never-declared solver gives bit for bit, and 2D on a skewed
+                    # one, where the conical layout would answer the rectangle.
+                    self._grating_type = 1 if one_dimensional else 2
             return
 
         if self._has_tensor_materials():

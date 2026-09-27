@@ -208,8 +208,9 @@ def test_tetm_assigned_or_withdrawn_is_the_state_the_constructor_makes(backend):
     the default ``psi = pi/2``, which the declaration says is absent, and ``solver.tetm = None``
     left no polarization at all, so the conical solve that followed raised ``TypeError`` from
     ``_incidence_pair``. Checked against the constructor's own state, solve for solve, bit for
-    bit -- and through ``solve(tetm=None)``, the keyword door of the same setter, eagerly and,
-    on JAX, inside ``jax.jit``.
+    bit -- through ``solve(tetm=None)``, the keyword door of the same setter, eagerly and, on
+    JAX, inside ``jax.jit``; and after a pure solve on a solver since left with no structure,
+    whose ``solve_conv`` keeps the pure layout and so must re-route it.
     """
     pytest.importorskip({0: 'numpy', 1: 'jax', 2: 'torch'}[backend])
     kw = dict(CFG_1D, backend=backend, structure=STRUCTURE_1D)
@@ -232,6 +233,18 @@ def test_tetm_assigned_or_withdrawn_is_the_state_the_constructor_makes(backend):
         assert solver.tetm is None and solver.grating_type == plain.grating_type == 1
         for a, b in zip(_bits(result), _bits(want)):
             assert np.array_equal(a, b)
+    # ... and withdrawn after a pure solve on a solver holding no structure, whose solve_conv
+    # keeps the pure layout: the pure kernel cannot run undeclared -- it raised "tetm_index must
+    # be 0 (TE) or 1 (TM), got None" -- so the kept layout routes as the raster would, conical.
+    kept = wavebit.rcwa(tetm='te', **kw)
+    conv = kept.eps_conv_matrices()
+    kept.solve()
+    kept.structure = None
+    kept.tetm = None
+    result = kept.solve_conv(*conv)
+    assert kept.grating_type == 1
+    for a, b in zip(_bits(result), _bits(want)):
+        assert np.array_equal(a, b)
 
     if backend == 1:
         # The keyword door inside `jax.jit`, both ways. A default built there is staged -- a
@@ -258,6 +271,35 @@ def test_tetm_assigned_or_withdrawn_is_the_state_the_constructor_makes(backend):
         assert _same_state(before, (solver.psi, solver.polarization)), spelling
         for a, b in zip(_bits(got), _bits(want)):
             assert np.array_equal(a, b)
+
+
+def test_a_withdrawal_on_a_kept_pure_layout_routes_as_its_raster_would():
+    """``tetm = None`` after a pure solve, structure gone: the raster's own undeclared route.
+
+    Conical on an axis-aligned cell (the test above), and 2D once the cell is skewed -- as the
+    raster branch routes a one-row raster there. Routed conical, it would answer the rectangle:
+    on the raster of ``tests/test_tetm_off_the_pure_path.py``, sum R 0.0110932 where that
+    raster solved on the skewed cell gives 0.0633790. Laurent factorization, whose matrices do
+    not depend on the cell, so the ones taken before the skew are the skewed raster's too.
+    """
+    skew = wavebit.Lattice.oblique(700.0, 700.0, np.pi / 3)
+    kw = dict(CFG_1D, structure=STRUCTURE_1D, factorization='laurent')
+    kept = wavebit.rcwa(tetm='te', **kw)
+    conv = kept.eps_conv_matrices()
+    kept.solve()
+    kept.structure = None
+    kept.tetm = None
+    kept.lattice = skew
+    got = kept.solve_conv(*conv)
+    raster = wavebit.rcwa(**kw)
+    raster.lattice = skew
+    want = raster.solve()
+    assert kept.grating_type == raster.grating_type == 2
+    for a, b in zip(_bits(got), _bits(want)):
+        assert np.array_equal(a, b)
+    rectangle = float(np.sum(np.asarray(wavebit.rcwa(**kw).solve().R)))
+    # The premise: the skew is another scene (8.3e-3 apart here), so a conical route is caught.
+    assert abs(float(np.sum(np.asarray(want.R))) - rectangle) > 1e-3
 
 
 def _same_state(a, b):
