@@ -4,6 +4,8 @@ import pytest
 from wavebit._core.conforming.cartesian_pair_opening import CartesianPairOpeningPlan
 from wavebit._core.conforming.cartesian_pair_corner_galerkin import CartesianPairCornerGalerkinGapCell
 
+pytestmark = pytest.mark.research
+
 
 @pytest.mark.parametrize('gap,degree,order,exponents,oscillatory,epsilon',[
     (0.,3,(2,1),(.6,.8),False,(12.25,-10+1j)),

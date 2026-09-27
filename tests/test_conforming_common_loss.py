@@ -20,6 +20,7 @@ def lossy_scene(p=PARAMETERS, loss=.23, xp=np, axis=0):
     return structure, lattice
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('axis', [0, 1])
 @pytest.mark.parametrize('loss', [0., .17, 1.3])
 def test_common_loss_scales_storage_matrices_and_preserves_passivity(axis, loss):
@@ -39,6 +40,7 @@ def test_common_loss_scales_storage_matrices_and_preserves_passivity(axis, loss)
             assert np.linalg.eigvalsh(dissipation).min() > 0
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('axis', [0, 1])
 @pytest.mark.parametrize('order', [(2, 1), (1, 0), (0, 1)])
 def test_lossy_material_matches_independent_analytic_integrals(axis, order):
@@ -50,6 +52,7 @@ def test_lossy_material_matches_independent_analytic_integrals(axis, order):
                                atol=2e-12, rtol=0)
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('backend', [0, 1, 2])
 def test_different_loss_ratios_across_layers_match_independent_contact_controls(backend):
     if backend == 1:
@@ -79,6 +82,7 @@ def test_different_loss_ratios_across_layers_match_independent_contact_controls(
     assert np.all(absorption > 1e-3)
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('epsilon', [3.+.2j, 1.7+1.2j])
 @pytest.mark.parametrize('backend', [0, 1, 2])
 def test_uniform_lossy_layer_matches_independent_airy_formula(epsilon, backend):
@@ -100,6 +104,7 @@ def test_uniform_lossy_layer_matches_independent_airy_formula(epsilon, backend):
         assert transmission > 0 and reflection >= 0 and transmission+reflection < 1
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('axis', [0, 1])
 def test_geometry_material_and_common_loss_derivatives_remain_live(axis):
     jax = pytest.importorskip('jax')
@@ -125,6 +130,7 @@ def test_geometry_material_and_common_loss_derivatives_remain_live(axis):
     jax.clear_caches()
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('axis', [0, 1])
 def test_loss_derivative_is_live_at_the_lossless_boundary(axis):
     jax = pytest.importorskip('jax')
@@ -147,6 +153,7 @@ def test_loss_derivative_is_live_at_the_lossless_boundary(axis):
     jax.clear_caches()
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('axis', [0, 1])
 def test_lossy_internal_and_perpendicular_contact_derivatives(axis):
     jax = pytest.importorskip('jax')
@@ -207,6 +214,7 @@ def test_material_wrappers_preserve_the_common_factor_and_inputs():
         np.testing.assert_array_equal(got, want)
 
 
+@pytest.mark.research
 def test_real_corrector_refuses_unfactored_loss_instead_of_discarding_it():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp

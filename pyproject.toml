@@ -151,4 +151,9 @@ select = ["F401", "F811", "F821", "F632", "E711", "E712", "E714"]
 
 [tool.pytest.ini_options]
 # Recognize the optional CI timeout plugin marker in base developer installs.
-markers = ["timeout(seconds): per-test deadline enforced by pytest-timeout in CI"]
+# `research` is deselected from a run that names only directories -- `pytest tests`, and
+# so CI -- by `tests/conftest.py`; `-m research` runs that tier alone. See `tests/README.md`.
+markers = [
+    "timeout(seconds): per-test deadline enforced by pytest-timeout in CI",
+    "research: tests of the experimental conforming NVF module and its study instruments",
+]

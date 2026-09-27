@@ -15,6 +15,8 @@ from scipy.linalg import lu_factor, lu_solve
 from scipy.special import eval_legendre
 from wavebit._core.conforming.affine_cell import AffineCellGapModel
 
+pytestmark = pytest.mark.research
+
 
 def x_samples(model, profile, width, quadrature):
     """Integrate periodic flux hats directly across mesh and material cuts."""

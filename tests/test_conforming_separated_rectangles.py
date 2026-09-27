@@ -29,6 +29,7 @@ def scene(p=PARAMETERS, xp=np, axis=0, fill=False):
     return [dict(background=background, shapes=shapes[::-1])], rotation*xp.stack([px, py])[None]
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('axis', [0, 1])
 @pytest.mark.parametrize('order', [(2, 1), (1, 0), (0, 1)])
 def test_internal_background_matches_independent_analytic_material_integrals(axis, order):
@@ -43,6 +44,7 @@ def test_internal_background_matches_independent_analytic_material_integrals(axi
                                atol=2e-12, rtol=0)
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('axis', [0, 1])
 def test_explicit_background_rectangle_preserves_all_five_matrices(axis):
     builder = wavebit.ConformingNVF((2, 1), **SETTINGS)
@@ -52,6 +54,7 @@ def test_explicit_background_rectangle_preserves_all_five_matrices(axis):
         np.testing.assert_allclose(got, want, atol=4e-12, rtol=0)
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('axis', [0, 1])
 def test_closing_equal_material_pieces_recovers_a_single_rectangle_with_the_same_plan(axis):
     p = PARAMETERS.copy()
@@ -79,6 +82,7 @@ def test_closing_equal_material_pieces_recovers_a_single_rectangle_with_the_same
         np.testing.assert_allclose(got, want, atol=4e-12, rtol=0)
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('backend', [0, 1, 2])
 def test_separated_contact_stack_matches_independent_inverse_rules_on_all_backends(backend):
     if backend == 1:
@@ -101,6 +105,7 @@ def test_separated_contact_stack_matches_independent_inverse_rules_on_all_backen
                                solve(expected, lattice, order, scale=.65), atol=2e-10, rtol=0)
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('axis', [0, 1])
 def test_twelve_live_parameters_match_two_independent_secant_steps(axis):
     jax = pytest.importorskip('jax')
@@ -120,6 +125,7 @@ def test_twelve_live_parameters_match_two_independent_secant_steps(axis):
     jax.clear_caches()
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('axis', [0, 1])
 @pytest.mark.parametrize('equal', [False, True])
 def test_gap_opening_derivative_is_live_at_internal_contact(axis, equal):
@@ -165,6 +171,7 @@ def test_opening_and_closing_are_valid_replays_but_overlap_is_not(axis):
     jax.clear_caches()
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('values', [[4., 1., 4.], [4., 1., 9.], [4., 1.7, 9.]])
 def test_coincident_grading_interfaces_merge_without_the_intermediate_material(values):
     targets = np.linspace(0., 1., 31)
@@ -177,6 +184,7 @@ def test_coincident_grading_interfaces_merge_without_the_intermediate_material(v
     assert np.max(np.abs(historical-expected)) > .01
 
 
+@pytest.mark.research
 def test_collapsed_interval_material_has_zero_mesh_derivative():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
@@ -188,6 +196,7 @@ def test_collapsed_interval_material_has_zero_mesh_derivative():
     jax.clear_caches()
 
 
+@pytest.mark.research
 def test_collapsed_interval_material_disappears_from_the_full_field_and_energy():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp

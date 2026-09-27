@@ -1,7 +1,12 @@
 # Four jobs with different purposes.
 #
-#   test     — installs both optional backends and runs the whole suite. This is
-#              where the physics is verified.
+#   test     — installs both optional backends and runs the default suite. This is
+#              where the physics is verified. The `research` tier (tests of the
+#              experimental conforming NVF module and its study instruments) is
+#              left out of a run over `tests` by `tests/conftest.py`, and no job
+#              here runs it: it is a development aid for that research code, run
+#              by hand while the code is worked on, not a gate on other changes.
+#              tests/README.md says how.
 #   minimal  — installs the base package alone and only checks that it imports
 #              and solves. The `test` job cannot catch a stray top-level
 #              `import torch` in the core, because torch is installed there; a

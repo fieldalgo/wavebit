@@ -1,7 +1,8 @@
 # Verification suite
 
-Everything whose expected answer can be stated before the run. CI runs all of it on every push
-(`pytest tests -q`); there is no second, unasserted tier.
+Everything whose expected answer can be stated before the run, in two tiers that are both
+asserted: the default set, which CI runs on every push (`pytest tests -q`), and the
+[research tier](#the-research-tier), which runs when asked for. There is no unasserted tier.
 
 The test for whether something belongs here: **can you write the `assert` line first?** If
 writing it would mean asserting the thing you are trying to find out, it is a study and belongs
@@ -79,6 +80,76 @@ compares the code to itself proves continuity, not correctness.
 | **Frozen goldens** | `test_golden_legacy_parity.py`, `test_modeler_core.py` | Continuity only. These are the previous implementation's own output, so they pin *change*, never correctness. `test_factorization_core.py` left this row on 2026-08-18 — its golden was retired and every check it carried is now definitional (see `data/README.md`). |
 | **Wavelength-dependent material assignments** | `test_dispersive_material.py` | Do table-backed regions update during sweeps, survive serialization and JAX trees, and differentiate consistently with an independent Airy film? |
 | **The solver's own refusals** | `test_manifest.py` | The published capability manifest describes the solver that exists: each `structure` spelling selects the path it claims, the material quantity it declares is the one the front door actually takes and every retired spelling it lists still raises by name, every option the manifest withholds is refused at build time and every option it offers builds, and each claim cites a file that still exists. See [`../docs/capability-manifest.md`](../docs/capability-manifest.md). |
+
+## The research tier
+
+2,715 of the 9,737 tests here are marked `research`. Their subject is NVF research code: the
+experimental conforming module `wavebit/_core/conforming/`, reached directly or through the
+`studies/` models built on it; the NVF study instruments in `studies/` (energy closure, cell
+bounds, the gap, mirror and FEM references); and the passive closure kernel in
+`wavebit/_core/passive_nvf.py`, which nothing in the package calls. They are asserted like
+everything else, which is why they stay in this directory -- the routing rule in
+[`../CONTRIBUTING.md`](../CONTRIBUTING.md) sends anything with an `assert` line here.
+
+They are left out of the default run for two reasons: they study that experimental code rather
+than the ordinary solver, and they are where the suite's time goes. Run one file at a time on
+the development laptop, 14 of these files took just under four hours between them, two of them
+over an hour each. That is not a claim that nothing else can move them. Many drive the ordinary
+engine: the conforming module builds its matrices as `ConvMatrices` (often through
+`ConvMatrices.from_energy`) and checks its layers with `parametric`'s spec checks, and the tests
+and the `studies/nvf_*` models they import build `wavebit.rcwa` solvers and hand those matrices
+to their `solve_conv`.
+
+**When it runs.** The tier is a development aid for the research code, not a gate on the rest
+of the package. It runs while that code is being worked on: `wavebit/_core/conforming/`,
+`wavebit/_core/passive_nvf.py`, a `studies/nvf_*` model, or a research test. A change to the
+product code runs the default set, which is also all CI runs, and lands on that. Because many
+research tests drive the ordinary engine, such a change can break one. That is accepted: the
+test is repaired when research work next runs the tier.
+
+```shell
+pytest tests -q                                  # the default set, 7,022 tests: what CI runs
+pytest -m research tests -q                      # the research tier alone, 2,715 tests
+pytest -m "research or not research" tests -q    # all 9,737
+pytest tests/test_nvf_pair_galerkin.py -q        # a file named on the command line runs whole
+```
+
+The rule is in `tests/conftest.py`, and `pyproject.toml` registers the marker. An explicit `-m`
+always decides on its own; naming a file counts as asking for it, so the reproduction commands
+in the `docs/` write-ups still run what they name.
+
+**What stays in the default set**, although it touches the same code:
+
+- The contract of the public conforming classes -- `ConformingNVF`, `AffineProfileNVF`,
+  `CartesianRectangleNVF`, `CartesianRectanglePairNVF`: refused options and inputs, plan and
+  schema checks, invalid-replay poisoning under `jit`, the export reaching the engine on the
+  optional backends, and the installed package not needing `studies/`. Nine files carry it and
+  mark their numerical tests one by one, with no module-level mark: `test_conforming_nvf.py`,
+  `test_conforming_affine_profile.py`, `test_conforming_common_loss.py`,
+  `test_conforming_lattice_rebasing.py`, `test_conforming_layer_axes.py`,
+  `test_conforming_rectangular_lattice.py`, `test_conforming_separated_rectangles.py`,
+  `test_nvf_cartesian_rectangle_api.py` and `test_nvf_cartesian_rectangle_pair_api.py`. 111 of
+  their tests stay, and they run in about 30 seconds between them. The one exception among the
+  `test_conforming_*` files is `test_conforming_complex_material.py`, which is numerical
+  throughout and marked `research` as a whole.
+- The contract of the two exported auxiliary pieces, `CartesianPairOpeningPlan` and
+  `CartesianPairTransmissionGalerkinGapCell`: the plan's refusals (a `bool` shift, a refinement
+  out of range) and its immutability in `test_nvf_cartesian_pair_opening.py`, the refinement
+  refusals again in `test_nvf_pair_refinement.py`, and the cell's option refusals in
+  `test_nvf_transmission_common_precision.py` and `test_nvf_transmission_cutoff_precision.py`:
+  five unmarked tests, 16 cases in under a second. The rest of those four files is marked test
+  by test.
+- Anything whose claim is about the ordinary solver, even when it borrows a conforming cell to
+  make it: `test_nvf_energy_builder.py` (`ConvMatrices.from_energy` and the engine),
+  `test_cell_shape_gate.py` (every oblique-capable path), and the two tests in
+  `test_nvf_pair_transmission.py` that hold the method-selection example to leaving the
+  auxiliary cell off.
+- The ordinary NVF, whatever its file is called: raster and shape normal fields, projectors,
+  the seam contrast, Gamma, and the contact and resonance probes.
+
+**A new test of research code** carries `pytestmark = pytest.mark.research` after its imports.
+A file that has to run under `python -m unittest` alone, like the NGSolve reference files,
+guards that import the way they do.
 
 ## Goldens
 

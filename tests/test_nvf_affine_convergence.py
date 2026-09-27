@@ -8,6 +8,8 @@ from studies.nvf_affine_convergence import (
     convergence, directional_changes, load_projection, material_coefficients, power_record, real_coefficients,
 )
 
+pytestmark = pytest.mark.research
+
 
 def uniform_coefficients(epsilon=4., cap=4):
     c = np.zeros((8, 2*cap+1, 2*cap+1), complex)

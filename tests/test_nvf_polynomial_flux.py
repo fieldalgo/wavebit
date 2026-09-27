@@ -10,6 +10,8 @@ from studies.nvf_gap_convergence import mean_energy
 from studies.nvf_polynomial_body import PolynomialBodyGapModel
 from studies.nvf_polynomial_flux import PolynomialFluxGapModel, polynomial_flux_integrals
 
+pytestmark = pytest.mark.research
+
 
 @pytest.mark.parametrize('degree', [2, 3])
 def test_flux_packs_match_independent_nested_gauss_integration(degree):

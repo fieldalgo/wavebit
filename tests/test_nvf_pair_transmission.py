@@ -13,6 +13,7 @@ GEOMETRY = dict(basis=np.diag([1.2, .9]), widths=(.3, .4), height=.45,
                 offset=(-.6, -.45))
 
 
+@pytest.mark.research
 def test_common_complex_reference_factor_preserves_the_real_trial_bank():
     cell = CartesianPairTransmissionGalerkinGapCell(CartesianPairOpeningPlan(0), 0,
         reference=(4., 9., 1.), branches=2)
@@ -26,6 +27,7 @@ def test_common_complex_reference_factor_preserves_the_real_trial_bank():
             np.testing.assert_allclose(left, right, atol=3e-10, rtol=0)
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('coefficients', ((12.25, 1., 1.), (-10+1j, 1., 1.), REFERENCE))
 @pytest.mark.parametrize('branch', range(4))
 def test_transmission_laws_and_independent_spatial_derivatives(coefficients, branch):
@@ -57,6 +59,7 @@ def test_transmission_laws_and_independent_spatial_derivatives(coefficients, bra
                 np.testing.assert_allclose(finite, expected, atol=3e-9, rtol=0)
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('degree', (3, 4, 5, 6))
 def test_complete_refined_field_transport_matches_spatial_differences(degree):
     cell = CartesianPairTransmissionGalerkinGapCell(CartesianPairOpeningPlan(0, 1), 0,
@@ -100,6 +103,7 @@ def closure(angular=64, scale=1., epsilon=(12.25, -10+1j), background=1.,
     return tuple(np.asarray(a) for a in result[:2])
 
 
+@pytest.mark.research
 def test_full_joint_contact_reflection_and_quadrature():
     value, tangent = closure()
     modes = [(i, j) for j in range(-1, 2) for i in range(-1, 2)]
@@ -112,6 +116,7 @@ def test_full_joint_contact_reflection_and_quadrature():
     np.testing.assert_allclose(tangent, refined[1], atol=3e-9, rtol=0)
 
 
+@pytest.mark.research
 def test_fixed_reference_preserves_physical_length_units():
     value, tangent = closure()
     scaled = closure(scale=700., gap_tangent=490.)
@@ -119,6 +124,7 @@ def test_fixed_reference_preserves_physical_length_units():
     np.testing.assert_allclose(tangent, scaled[1], atol=3e-9, rtol=0)
 
 
+@pytest.mark.research
 def test_flat_reference_adds_no_noninteger_direction():
     cell = CartesianPairTransmissionGalerkinGapCell(CartesianPairOpeningPlan(0), 0,
         reference=(2., 2., 2.), angular_quadrature=12)
@@ -168,6 +174,7 @@ def test_expert_example_propagates_auxiliary_failure_without_fallback(monkeypatc
         solve_pair('auto')
 
 
+@pytest.mark.research
 def test_positive_gap_and_material_jvp_matches_independent_values():
     cell = CartesianPairTransmissionGalerkinGapCell(CartesianPairOpeningPlan(0), 0,
         reference=REFERENCE, branches=2, angular_quadrature=64, coercivity_angle=1.53)
@@ -186,6 +193,7 @@ def test_positive_gap_and_material_jvp_matches_independent_values():
     np.testing.assert_allclose(tangent, finite, atol=3e-9, rtol=0)
 
 
+@pytest.mark.research
 def test_metal_positive_gap_approaches_the_same_contact_derivative():
     cell = CartesianPairTransmissionGalerkinGapCell(CartesianPairOpeningPlan(0), 0,
         reference=REFERENCE, branches=1, angular_quadrature=64, coercivity_angle=1.53)
@@ -201,6 +209,7 @@ def test_metal_positive_gap_approaches_the_same_contact_derivative():
     assert errors[2] < errors[1] < errors[0]
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('degree', (3,5))
 def test_finite_bulk_mode_with_nonintegrable_opening_trace_is_refused(degree):
     reference=(2.,-.2+.1j,1.)
@@ -215,6 +224,7 @@ def test_finite_bulk_mode_with_nonintegrable_opening_trace_is_refused(degree):
         PairTransmissionFields(cell._base,GEOMETRY,reference,4,24)
 
 
+@pytest.mark.research
 def test_integrable_outer_mode_below_half_power_is_still_retained():
     reference=(12.25,-4+.1j,1.)
     cell=CartesianPairTransmissionGalerkinGapCell(CartesianPairOpeningPlan(0),0,

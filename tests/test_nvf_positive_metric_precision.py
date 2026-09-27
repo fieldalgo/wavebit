@@ -7,6 +7,8 @@ import pytest
 from wavebit._core.conforming.pair_corner_precision import D
 from wavebit._core.conforming.pair_positive_precision import cholesky
 
+pytestmark = pytest.mark.research
+
 
 @pytest.mark.parametrize('size,bound', ((3, '3e-28'), (6, '3e-28'), (10, '3e-25')))
 def test_complete_metric_factor_matches_independent_decimal(size, bound):

@@ -6,6 +6,8 @@ from wavebit._core.conforming import cartesian_pair_seam_galerkin as module
 from wavebit._core.conforming.cartesian_pair_opening import CartesianPairOpeningPlan
 from test_nvf_pair_seam_galerkin import GEOMETRY
 
+pytestmark = pytest.mark.research
+
 
 def cell(degree=3, strategy='auto'):
     return module.CartesianPairSeamGalerkinGapCell(CartesianPairOpeningPlan(0), (1, 1),

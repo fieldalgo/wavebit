@@ -10,6 +10,8 @@ from wavebit._core.conforming.pair_corner_fields import PairCornerFields
 from wavebit._core.conforming.pair_junction_partition import partitions, scalar, point, det
 from wavebit._core.conforming.pair_junction_transport import samples
 
+pytestmark = pytest.mark.research
+
 
 @pytest.mark.parametrize('exponent', (.6, .8))
 @pytest.mark.parametrize('order', (24, 32, 48))

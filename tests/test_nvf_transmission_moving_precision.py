@@ -13,6 +13,8 @@ from wavebit._core.conforming.triangle_polynomials import multi_indices
 from test_nvf_pair_transmission import GEOMETRY, REFERENCE
 import test_nvf_transmission_common_precision as oracle
 
+pytestmark = pytest.mark.research
+
 
 def dec(value):
     return Z.from_float(float(value))

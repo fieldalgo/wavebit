@@ -8,6 +8,8 @@ from test_nvf_pair_galerkin import nodal_reference, tensor, duffy
 from test_nvf_pair_quadratic import nodal_gradients
 from test_nvf_cartesian_pair_opening import _oracle_polynomial_vandermonde
 
+pytestmark = pytest.mark.research
+
 
 SETTINGS = dict(period=(700., 560.), width=310., offset=(21., -14.))
 

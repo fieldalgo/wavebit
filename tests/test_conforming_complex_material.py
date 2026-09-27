@@ -10,6 +10,8 @@ from test_conforming_nvf import SETTINGS, _objective, solve
 from test_conforming_layer_axes import _contact_reference
 from test_conforming_separated_rectangles import PARAMETERS, scene
 
+pytestmark = pytest.mark.research
+
 
 def complex_scene(p=PARAMETERS, losses=(0., .8, 2.1), xp=np, axis=0):
     structure, lattice = scene(p, xp, axis)

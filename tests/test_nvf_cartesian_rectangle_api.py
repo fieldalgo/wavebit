@@ -41,6 +41,7 @@ def closure_variation(value, derivative):
     return slots(effective, ei), slots(variation, z_variation)
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('order', [(0, 0), (0, 1), (2, 0), (1, 2), (2, 1)])
 def test_exact_physical_mapping_labels_and_independent_material_transform(order):
     builder = wavebit.CartesianRectangleNVF(order, refinement=1)
@@ -100,6 +101,7 @@ def test_concrete_planning_is_geometry_only_and_replay_does_not_replan(monkeypat
     assert np.isfinite(builder.conv_matrices(structure, basis, plan=plan).epx).all()
 
 
+@pytest.mark.research
 def test_phase_joint_rotation_scale_and_equivalent_charts():
     builder = wavebit.CartesianRectangleNVF((1, 1), refinement=1)
     structure, basis = scene()
@@ -264,6 +266,7 @@ def test_engine_uniform_airy_and_patterned_slot_layout_only(order):
         np.testing.assert_allclose(np.sum(polarization.T)+np.sum(polarization.R), 1., rtol=0, atol=2e-10)
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('wrapped', [False, True])
 def test_jax_all_thirteen_parameters_and_independent_closure_variation(wrapped):
     jax = pytest.importorskip('jax')

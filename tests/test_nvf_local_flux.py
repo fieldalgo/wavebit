@@ -12,6 +12,8 @@ from studies.nvf_polynomial_body import PolynomialBodyGapModel
 from studies.nvf_polynomial_flux import PolynomialFluxGapModel
 from studies.nvf_posed_gap import PosedGapModel
 
+pytestmark = pytest.mark.research
+
 
 @pytest.mark.parametrize('gap', [0., 17., 400.])
 def test_local_basis_preserves_the_global_space_and_redundant_material_partitions(gap):

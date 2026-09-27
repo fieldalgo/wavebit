@@ -57,6 +57,7 @@ def direct_settings(native):
                 background=native[14]+1j*native[15])
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('order', [(0, 0), (0, 1), (2, 0), (1, 2), (2, 1)])
 @pytest.mark.parametrize('reverse', [False, True])
 def test_physical_mapping_input_order_and_exact_material_transform(order, reverse):
@@ -191,6 +192,7 @@ def test_mandatory_plan_schema_material_and_horizontal_admission():
         builder.conv_matrices(structure, basis, plan=plan, xp=object())
 
 
+@pytest.mark.research
 def test_translation_scale_and_reversed_concrete_plan():
     _, p = case_cell('gap-r1')
     native = native_parameters(p)
@@ -283,6 +285,7 @@ def test_engine_uniform_airy_and_patterned_slot_layout_only(order):
         np.testing.assert_allclose(np.sum(polarization.T)+np.sum(polarization.R), 1., rtol=0, atol=2e-10)
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('case', tuple(CASES))
 def test_jax_native_parameters_against_independent_pair_closure(case):
     jax = pytest.importorskip('jax')

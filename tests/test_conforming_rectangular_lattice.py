@@ -23,6 +23,7 @@ def scene(p=PARAMETERS, xp=np):
     return [dict(background=background, shapes=shapes[::-1])], rotation*xp.stack([px, py])[None]
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('aspect', [.25, .8, 1.7, 4.])
 @pytest.mark.parametrize('gap', [0., 29.])
 def test_unequal_period_material_integrals_and_exact_contact(aspect, gap):
@@ -45,6 +46,7 @@ def test_unequal_period_material_integrals_and_exact_contact(aspect, gap):
             np.testing.assert_allclose(got[0], want, atol=4e-12, rtol=0)
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('order', [(2, 1), (1, 0), (0, 1)])
 def test_rectangular_lattice_rigid_motion_and_uniform_scaling_preserve_engine_powers(order):
     builder = wavebit.ConformingNVF(order, **SETTINGS)
@@ -60,6 +62,7 @@ def test_rectangular_lattice_rigid_motion_and_uniform_scaling_preserve_engine_po
     np.testing.assert_allclose(actual.sum(axis=(-1, -2)).sum(axis=1), 1., atol=2e-10, rtol=0)
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('body_degree,gap_degree', [(1, 1), (1, 4), (3, 1), (3, 4)])
 @pytest.mark.parametrize('aspect', [.6, 1.8])
 def test_cell_solution_is_stationary_for_the_physical_energy_and_has_curl_free_fields(
@@ -104,6 +107,7 @@ def test_cell_solution_is_stationary_for_the_physical_energy_and_has_curl_free_f
     assert np.linalg.norm(variations(recorded[1])) > 1e-3
 
 
+@pytest.mark.research
 def test_independent_periods_remain_live_in_jit_and_in_a_reused_plan():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
@@ -126,6 +130,7 @@ def test_independent_periods_remain_live_in_jit_and_in_a_reused_plan():
     jax.clear_caches()
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('angle', [0., .83])
 @pytest.mark.parametrize('roundoff', [0., -np.spacing(430.)])
 def test_rectangular_contact_retains_the_full_one_sided_gap_derivative(angle, roundoff):

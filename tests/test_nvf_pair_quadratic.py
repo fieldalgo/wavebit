@@ -19,6 +19,8 @@ from wavebit._core.conforming.triangle_moments import quadratic_triangle_weights
 from test_nvf_cartesian_pair_opening import _oracle_geometry, _oracle_differentiated_native_solve_reference
 from test_nvf_cartesian_pair_gap import analytic_material
 
+pytestmark = pytest.mark.research
+
 
 ALPHA = ((2, 0, 0), (0, 2, 0), (0, 0, 2), (1, 1, 0), (0, 1, 1), (1, 0, 1))
 

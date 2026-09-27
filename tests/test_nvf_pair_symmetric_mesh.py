@@ -14,6 +14,8 @@ from wavebit._core.conforming.pair_corner_prefactors import selection
 from wavebit._core.conforming.triangle_polynomials import values_and_tangent,gradient_coefficients
 from wavebit._core.conforming.pair_contact_refinement import refine
 
+pytestmark = pytest.mark.research
+
 
 @pytest.mark.parametrize('refinement',[0,1,2])
 @pytest.mark.parametrize('contact',[False,True])

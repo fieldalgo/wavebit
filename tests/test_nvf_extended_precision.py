@@ -5,6 +5,8 @@ import pytest
 from wavebit._core.conforming.pair_extended_precision import Triple as T,ComplexTriple as C,logarithm,exponential
 from test_nvf_transmission_common_precision import exponential as decimal_exponential
 
+pytestmark = pytest.mark.research
+
 
 def dec(value):return Z.from_float(float(value))
 def scalar(value,index):return sum(dec(word[index]) for word in value.words)

@@ -31,6 +31,8 @@ from test_nvf_cartesian_pair_opening import (
     settings_for,
 )
 
+pytestmark = pytest.mark.research
+
 GAPS = (0.0, 1 / 64, 1 / 16)
 
 

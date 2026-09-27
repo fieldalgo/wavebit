@@ -8,6 +8,8 @@ from wavebit._core.conforming.affine_cell import AffineCellGapModel, project_met
 from wavebit._core.conforming.polynomial_body import ComplexMaterialGapModel
 from test_conforming_nvf import solve
 
+pytestmark = pytest.mark.research
+
 
 SETTINGS = dict(rows=2, body_degree=2, gap_degree=2, grade_y=False, flux_basis='local')
 BASIS = np.array([[1., .45], [0., .7]])

@@ -11,6 +11,9 @@ from wavebit._core.conforming.pair_contact_quadrature import Exact
 from wavebit._core.conforming.pair_corner_precision import D
 from wavebit._core.conforming.pair_positive_fields import builder
 from wavebit._core.conforming.pair_corner_assembly import augment
+
+pytestmark = pytest.mark.research
+
 @pytest.mark.parametrize('gap', (.01,1e-9,1e-13))
 @pytest.mark.parametrize('degree',(6,7,8))
 @pytest.mark.parametrize('exact_points',(False,True))

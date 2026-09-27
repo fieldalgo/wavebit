@@ -7,6 +7,8 @@ from studies.nvf_gap_convergence import profile_li, power_record
 from studies.nvf_mirror_cartesian import cartesian_sector, cartesian_powers
 from test_nvf_mirror_convergence import dense_parity
 
+pytestmark = pytest.mark.research
+
 
 @pytest.mark.parametrize('order,gap', [((0, 3), 17.), ((3, 0), 17.), ((2, 4), 17.), (3, 0.), (3, 400.)])
 def test_cartesian_mirror_matrices_and_powers_match_unreduced_intervals(order, gap):

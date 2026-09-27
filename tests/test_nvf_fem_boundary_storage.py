@@ -9,6 +9,12 @@ from unittest.mock import patch
 
 import numpy as np
 
+try:  # the NGSolve environment runs this file under unittest alone, without pytest
+    import pytest
+    pytestmark = pytest.mark.research
+except ImportError:
+    pass
+
 try:
     import ngsolve as ng
 except ImportError:

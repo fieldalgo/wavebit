@@ -10,6 +10,8 @@ from wavebit._core.conforming.cartesian_pair_corner_galerkin import CartesianPai
 from wavebit._core.conforming.pair_corner_common_precision import CommonCoordinates
 from wavebit._core.conforming.triangle_polynomials import multi_indices
 
+pytestmark = pytest.mark.research
+
 
 def dec(value):
     return Decimal.from_float(float(value))

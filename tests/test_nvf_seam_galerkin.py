@@ -10,6 +10,8 @@ from test_nvf_pair_quadratic import nodal_gradients
 from test_nvf_pair_galerkin import tensor
 from test_nvf_seam_trace import contact_reference
 
+pytestmark = pytest.mark.research
+
 
 SETTINGS = dict(period=(700., 560.), width=310., offset=(21., -14.))
 

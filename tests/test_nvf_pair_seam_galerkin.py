@@ -10,6 +10,8 @@ from test_nvf_pair_quadratic import nodal_gradients
 from test_nvf_pair_galerkin import tensor
 from test_nvf_polynomial_galerkin import cardinal_gradient
 
+pytestmark = pytest.mark.research
+
 GEOMETRY = dict(basis=np.diag([700., 560.]), widths=(170., 230.), height=280., offset=(21., -14.))
 
 

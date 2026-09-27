@@ -23,6 +23,7 @@ def vertical_scene(p=PARAMETERS, xp=np):
     return [dict(background=background, shapes=shapes[::-1])], rotation*xp.stack([px, py])[None]
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('order', [(2, 1), (1, 2), (1, 0), (0, 1), (0, 0)])
 def test_vertical_plan_and_material_match_the_original_lattice_fourier_layout(order):
     structure, lattice = vertical_scene()
@@ -38,6 +39,7 @@ def test_vertical_plan_and_material_match_the_original_lattice_fourier_layout(or
                                atol=2e-12, rtol=0)
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('turns', [(1, 0), (0, -1), (2, 3)])
 @pytest.mark.parametrize('factory', [horizontal_scene, vertical_scene])
 def test_equivalent_quarter_turn_rectangle_spellings_preserve_every_matrix(factory, turns):
@@ -95,6 +97,7 @@ def _contact_reference(layer, lattice, order, axis):
     return (c*c*x+s*s*y, s*s*x+c*c*y, np.linalg.inv(tangent), c*s*(y-x), c*s*(y-x))
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('backend', [0, 1, 2])
 def test_mixed_axis_contact_stack_matches_independent_analytic_matrices_and_engine(backend):
     if backend == 1:
@@ -123,6 +126,7 @@ def test_mixed_axis_contact_stack_matches_independent_analytic_matrices_and_engi
                                solve(expected, lattice, order, scale=.65), atol=2e-10, rtol=0)
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('order', [(2, 1), (1, 0), (0, 1)])
 def test_second_axis_cell_matches_the_same_physical_scene_in_a_respelt_lattice(order):
     structure, lattice = vertical_scene()
@@ -139,6 +143,7 @@ def test_second_axis_cell_matches_the_same_physical_scene_in_a_respelt_lattice(o
     np.testing.assert_allclose(actual, reference, atol=2e-10, rtol=0)
 
 
+@pytest.mark.research
 def test_vertical_geometry_material_periods_and_pose_remain_live_under_jit():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
@@ -157,6 +162,7 @@ def test_vertical_geometry_material_periods_and_pose_remain_live_under_jit():
     jax.clear_caches()
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('roundoff', [0., -np.spacing(700.)])
 def test_first_period_contact_has_a_full_one_sided_derivative(roundoff):
     jax = pytest.importorskip('jax')

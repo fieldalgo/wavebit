@@ -4,6 +4,8 @@ import pytest
 
 from studies import nvf_harmonic_energy as candidate
 
+pytestmark = pytest.mark.research
+
 
 def test_uniform_slab_uses_candidate_matrices_and_matches_analytic():
     shape = [dict(lx=700., ly=700., epsilon=4.)]

@@ -12,6 +12,8 @@ from test_nvf_cartesian_pair_opening import _oracle_geometry
 from test_nvf_pair_galerkin import nodal_reference, tensor
 from test_nvf_pair_quadratic import duffy
 
+pytestmark = pytest.mark.research
+
 GEOMETRY = dict(basis=np.array([[700., 35.], [0., 560.]]), widths=(170., 230.),
                 height=280., offset=(21., -14.))
 

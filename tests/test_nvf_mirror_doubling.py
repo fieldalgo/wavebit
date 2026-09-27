@@ -14,6 +14,8 @@ from studies.nvf_scattering_doubling import canonical_factors, doubling_powers, 
 from test_nvf_mirror_convergence import dense_parity
 from test_nvf_scattering_doubling import uniform_slots
 
+pytestmark = pytest.mark.research
+
 
 def test_z_symmetric_doubling_matches_all_complex_blocks_of_independent_matrix_exponential():
     random = np.random.default_rng(42)

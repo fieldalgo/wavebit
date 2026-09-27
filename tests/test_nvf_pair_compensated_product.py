@@ -3,6 +3,9 @@ from decimal import Decimal as D,localcontext
 import numpy as np
 import pytest
 from wavebit._core.conforming.pair_contact_precision import mat,retained_field
+
+pytestmark = pytest.mark.research
+
 @pytest.mark.parametrize("n", (1,21,64,161,512))
 @pytest.mark.parametrize("complex_values", (False,True,'left','right'))
 def test_complete_cancelling_products_match_independent_decimal(n,complex_values):

@@ -13,6 +13,8 @@ from scipy.linalg import lu_factor, lu_solve
 
 from studies.nvf_cartesian_cell import CartesianRectangleCell, CartesianRectanglePlan
 
+pytestmark = pytest.mark.research
+
 LENGTH = 700.
 PARAMETERS = np.array([1., .45, 0., .7, .5, 3/7, 0., .07, -.03, 4., .8, 1., .1])
 

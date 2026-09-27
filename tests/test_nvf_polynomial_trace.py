@@ -11,6 +11,8 @@ from test_nvf_pair_seam_galerkin import cell, GEOMETRY
 from test_nvf_polynomial_galerkin import cardinal_gradient, indices
 from test_nvf_pair_quadratic import duffy
 
+pytestmark = pytest.mark.research
+
 
 def decimal_even_remainder(order, data, coordinate):
     """Subtract the retained polynomial in 70 digits, using integer binomials.

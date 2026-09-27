@@ -9,6 +9,8 @@ from studies.nvf_continuous_flux import ContinuousFluxGapModel
 from studies.nvf_gap_convergence import mean_energy
 from studies.nvf_interface_resolution import MaterialGradedGapModel, graded_fractions
 
+pytestmark = pytest.mark.research
+
 
 def independent_roots(targets, seams, values, strength=8., radius=.01):
     seams, values = np.asarray(seams), np.asarray(values)

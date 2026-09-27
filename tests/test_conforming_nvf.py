@@ -57,6 +57,7 @@ def test_public_shapes_preserve_the_existing_cell_and_sort_only_at_plan_time():
         np.testing.assert_allclose(got, phase[:, None]*want*phase.conj()[None, :], atol=2e-12, rtol=0)
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('order', [(2, 1), (0, 1), (0, 0)])
 def test_longitudinal_material_matches_independent_analytic_shape_integration(order):
     p = PARAMETERS.copy()
@@ -74,6 +75,7 @@ def test_longitudinal_material_matches_independent_analytic_shape_integration(or
     assert conv.epx.shape == (1, count, count)
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('order', [(2, 1), (1, 0), (0, 1), (0, 0)])
 def test_rigid_rotation_and_translation_preserve_every_engine_diffraction_power(order):
     builder = wavebit.ConformingNVF(order, **SETTINGS)
@@ -88,6 +90,7 @@ def test_rigid_rotation_and_translation_preserve_every_engine_diffraction_power(
     np.testing.assert_allclose(actual.sum(axis=(-1, -2)).sum(axis=1), 1., atol=2e-10, rtol=0)
 
 
+@pytest.mark.research
 def test_uniform_physical_scaling_and_uniform_layers_reach_the_engine():
     builder = wavebit.ConformingNVF(1, **SETTINGS)
     structure, lattice = scene()
@@ -120,6 +123,7 @@ def test_public_export_runs_in_jax_and_torch_engines(backend):
                                solve(conv, lattice, (1, 1)), atol=2e-10, rtol=0)
 
 
+@pytest.mark.research
 def test_equal_material_subdivision_does_not_add_an_interface_constraint():
     p = PARAMETERS.copy()
     p[4] = p[3]
@@ -140,6 +144,7 @@ def _objective(conv, xp):
     return xp.sum(weights*(slots.real+.37*slots.imag))
 
 
+@pytest.mark.research
 def test_frozen_plan_keeps_geometry_material_background_period_and_pose_live_under_jit():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
@@ -158,6 +163,7 @@ def test_frozen_plan_keeps_geometry_material_background_period_and_pose_live_und
     jax.clear_caches()
 
 
+@pytest.mark.research
 def test_contact_has_a_full_one_sided_derivative_and_does_not_snap_positive_gaps():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
@@ -215,6 +221,7 @@ def test_jit_requires_a_concrete_plan_and_x64_precision():
         jax.config.update('jax_enable_x64', True)
 
 
+@pytest.mark.research
 def test_full_height_contact_matches_independent_rotated_cartesian_inverse_rule():
     p = PARAMETERS.copy()
     p[1] = 0.

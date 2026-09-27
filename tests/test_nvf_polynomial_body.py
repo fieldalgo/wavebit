@@ -10,6 +10,8 @@ from studies.nvf_gap_convergence import mean_energy
 from studies.nvf_interface_resolution import MaterialGradedGapModel
 from studies.nvf_polynomial_body import PolynomialBodyGapModel, body_space, project_body_polynomial
 
+pytestmark = pytest.mark.research
+
 
 @pytest.mark.parametrize('degree', [2, 3, 4])
 def test_body_matrices_match_independent_gauss_rule_with_periodic_traces(degree):

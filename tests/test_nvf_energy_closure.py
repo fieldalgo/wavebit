@@ -5,6 +5,8 @@ from scipy.linalg import LinAlgWarning
 
 from studies.nvf_energy_closure import congruence_solve, hermitian_defect
 
+pytestmark = pytest.mark.research
+
 
 @pytest.mark.parametrize('complex_data', [False, True])
 @pytest.mark.parametrize('hermitian', [False, True])

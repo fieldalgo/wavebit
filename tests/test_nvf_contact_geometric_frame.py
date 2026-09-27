@@ -7,6 +7,8 @@ from wavebit._core.conforming.projected_pair_contact import _real_geometry
 from wavebit._core.conforming.cartesian_pair_opening import CartesianPairOpeningPlan
 from wavebit._core.conforming.cartesian_pair_transmission_galerkin import CartesianPairTransmissionGalerkinGapCell
 
+pytestmark = pytest.mark.research
+
 
 @pytest.mark.parametrize('degree,order', ((5, (1, 0)), (6, (0, 0))))
 def test_complete_contact_eliminations_preserve_physical_qr_response(monkeypatch, degree, order):

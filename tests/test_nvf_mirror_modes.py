@@ -9,6 +9,8 @@ from studies.nvf_mirror_convergence import parity_basis, sector_geometry, sector
 from studies.nvf_mirror_doubling import sector_factors
 from studies.nvf_polynomial_body import PolynomialBodyGapModel
 
+pytestmark = pytest.mark.research
+
 
 @pytest.mark.parametrize('order', [0, (0, 3), (3, 0), (2, 4), (6, 5)])
 @pytest.mark.parametrize('parity', [-1, 1])

@@ -6,6 +6,8 @@ from wavebit._core.conforming import pair_corner_contact as contact
 from wavebit._core.conforming.cartesian_pair_opening import CartesianPairOpeningPlan
 from wavebit._core.conforming.cartesian_pair_transmission_galerkin import CartesianPairTransmissionGalerkinGapCell
 
+pytestmark = pytest.mark.research
+
 
 @pytest.mark.parametrize('target,metric',(
     ('value','energy_residual'),

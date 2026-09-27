@@ -6,6 +6,8 @@ import pytest
 from wavebit._core.conforming.pair_contact_normal_mean import moments
 from test_nvf_contact_fourier_precision import decimal_pi,add,mul,times,exponential
 
+pytestmark = pytest.mark.research
+
 
 def dec(value):return Z.from_float(float(value))
 

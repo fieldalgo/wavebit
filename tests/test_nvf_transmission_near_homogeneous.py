@@ -5,6 +5,8 @@ import numpy as np
 import pytest
 from wavebit._core.conforming.pair_transmission_modes import TransmissionMode
 
+pytestmark = pytest.mark.research
+
 
 def atan(value):
     term=total=value

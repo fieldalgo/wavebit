@@ -8,6 +8,8 @@ from studies.nvf_fourier_orders import order_grid, orders_xy, parse_order
 from studies.nvf_gap_convergence import profile_li
 from studies.nvf_harmonic_energy import PERIOD, THETA, THICKNESS, WAVELENGTH, polarized_powers
 
+pytestmark = pytest.mark.research
+
 
 def test_directional_order_domain_and_scalar_backwards_compatibility():
     assert parse_order('3') == 3

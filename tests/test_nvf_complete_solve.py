@@ -6,6 +6,8 @@ from wavebit._core.conforming.pair_complete_solve import factor, apply, solve
 from wavebit._core.conforming.pair_complex_precision import C
 from test_nvf_contact_fourier_precision import add, sub, mul, div, scalar
 
+pytestmark = pytest.mark.research
+
 def dc(value):return add(scalar(value[0]),scalar(value[1]))
 def decimal_solve(a,b):
  n=len(a);a=[list(row)+list(right) for row,right in zip(a,b)];m=len(b[0])

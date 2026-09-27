@@ -109,6 +109,26 @@ pip install -e .[jax]      # or .[pytorch], or plain -e . for NumPy only
 pytest tests/ -q
 ```
 
+That runs the default set, which is also what CI runs. Tests of the NVF research code -- the
+experimental conforming module and the study instruments built on it -- are marked `research`
+and run only when asked for, because they study that experimental code rather than the ordinary
+solver and they are where the suite's time goes:
+
+```shell
+pytest -m research tests/ -q                     # the research tier alone
+pytest -m "research or not research" tests/ -q   # everything
+pytest tests/test_nvf_pair_galerkin.py -q        # a file you name runs whole
+```
+
+Run the tier when you work on the research code itself -- `wavebit/_core/conforming/`,
+`wavebit/_core/passive_nvf.py`, a `studies/nvf_*` model or a research test. A change to the rest
+of the package lands on the default set alone. Many research tests drive the ordinary engine, so
+such a change can break one; that does not hold the change back, and the test is repaired when
+research work next runs the tier.
+
+A new test of research code carries `pytestmark = pytest.mark.research`. What belongs in the
+tier and what stays out of it, with the counts, is in `tests/README.md`.
+
 ### Documentation
 
 `docs/` is the source of a Sphinx site as well as a folder of markdown, and a page has to read

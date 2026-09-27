@@ -6,6 +6,7 @@ from wavebit._core.conforming.cartesian_pair_opening import CartesianPairOpening
 from wavebit._core.conforming.cartesian_pair_transmission_galerkin import CartesianPairTransmissionGalerkinGapCell
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('degree,refinement',((5,0),(6,0),(5,1)))
 @pytest.mark.parametrize('cutoff_order',(1,2))
 @pytest.mark.parametrize('exact_points',(False,True))
@@ -27,12 +28,14 @@ def test_cutoff_order_requires_complete_high_degree_coordinates(degree):
             reference=(12.25,-10+1j,1.),degree=degree,cutoff_order=1)
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('degree,refinement',((7,0),(8,0),(7,1),(8,1)))
 @pytest.mark.parametrize('cutoff_order',(0,1,2))
 def test_higher_degree_moving_potentials_retain_all_complete_directions(degree,refinement,cutoff_order):
     check_moving_potential(degree,refinement,cutoff_order,exact_points=True)
 
 
+@pytest.mark.research
 def test_flat_reference_has_no_spurious_nested_directions():
     from wavebit._core.conforming.pair_transmission_fields import PairTransmissionFields
     from wavebit._core.conforming.pair_transmission_common_precision import CommonCoordinates
@@ -45,6 +48,7 @@ def test_flat_reference_has_no_spurious_nested_directions():
     assert fields.common_coordinate_type is CommonCoordinates
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('cutoff_order',(1,2))
 def test_nested_space_contains_every_original_potential(cutoff_order):
     from wavebit._core.conforming.pair_transmission_fields import PairTransmissionFields
@@ -69,6 +73,7 @@ def test_nested_space_contains_every_original_potential(cutoff_order):
         for a,b in zip(actual,expected):np.testing.assert_array_equal(a[...,original_columns],b)
 
 
+@pytest.mark.research
 def test_nested_cutoff_contact_preserves_original_physical_and_reflection_guards():
     cell=CartesianPairTransmissionGalerkinGapCell(CartesianPairOpeningPlan(0),(1,0),
         reference=(12.25,-10+1j,1.),branches=2,degree=5,cutoff_order=1,
@@ -86,6 +91,7 @@ def test_nested_cutoff_contact_preserves_original_physical_and_reflection_guards
         for slot in response[3:]:np.testing.assert_allclose(slot,0.,atol=tolerance,rtol=0)
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('degree,order',((7,(0,1)),(8,(1,0))))
 def test_higher_degree_contact_preserves_complete_joint_physical_response(degree,order):
     cell=CartesianPairTransmissionGalerkinGapCell(CartesianPairOpeningPlan(0),order,
@@ -108,6 +114,7 @@ def test_higher_degree_contact_preserves_complete_joint_physical_response(degree
 
 # The full positive-gap space retains its 140-point radial rule and all
 # physical fields; allow the same bounded deadline as the nested control.
+@pytest.mark.research
 @pytest.mark.timeout(3600)
 def test_degree_seven_positive_gap_retains_joint_energy_and_fourier_mean():
     from test_nvf_pair_transmission import GEOMETRY,REFERENCE
@@ -127,6 +134,7 @@ def test_degree_seven_positive_gap_retains_joint_energy_and_fourier_mean():
 
 # The full independent three-word positive-gap control took 1,699 seconds
 # before shared-mode sampling. Keep a bounded deadline for slower CI hosts.
+@pytest.mark.research
 @pytest.mark.timeout(3600)
 def test_nested_cutoff_positive_gap_keeps_joint_physical_energy_and_mean():
     from test_nvf_pair_transmission import GEOMETRY,REFERENCE

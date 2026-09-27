@@ -6,6 +6,8 @@ from wavebit._core.conforming.pair_contact_quadrature import contact_maps as map
 from wavebit._core.conforming.cartesian_pair_opening import CartesianPairOpeningPlan
 from wavebit._core.conforming.pair_symmetric_mesh import SymmetricPairPolynomialCell
 
+pytestmark = pytest.mark.research
+
 def dec(v):return Z.from_float(float(v))
 @pytest.mark.parametrize('refinement',(0,1))
 def test_complete_contact_maps_match_decimal_inverses_and_gap_differences(refinement):

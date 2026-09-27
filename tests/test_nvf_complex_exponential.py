@@ -8,6 +8,8 @@ from wavebit._core.conforming.pair_complex_precision import C
 from wavebit._core.conforming.pair_complex_exponential import exponential
 from test_nvf_transmission_common_precision import exponential as decimal_exponential
 
+pytestmark = pytest.mark.research
+
 
 def test_complete_transmission_exponential_matches_decimal_cartesian_series():
     real = np.array([-500., -100., -4., -.125, 0., .125, 4., 100., 500.])[:, None]

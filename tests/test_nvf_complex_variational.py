@@ -7,6 +7,8 @@ from scipy.special import eval_legendre
 from wavebit._core.conforming.continuous_flux import ContinuousFluxGapModel
 from wavebit._core.conforming.affine_cell import AffineCellGapModel
 
+pytestmark = pytest.mark.research
+
 
 @pytest.mark.parametrize('gap_degree', [1, 2, 4])
 @pytest.mark.parametrize('g', [.07, .31])

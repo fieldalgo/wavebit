@@ -4,6 +4,8 @@ import numpy as np
 import pytest
 from wavebit._core.conforming.pair_residual_arithmetic import residual, _product, _real_product
 
+pytestmark = pytest.mark.research
+
 
 @pytest.mark.parametrize('size,span', [(31,40), (100,160), (631,400), (8192,450)])
 @pytest.mark.parametrize('rows', [1,3])

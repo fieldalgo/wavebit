@@ -10,6 +10,8 @@ import jax.numpy as jnp  # noqa: E402
 
 from studies.nvf_harmonic_energy_jax import HarmonicEnergyModel, _implicit_solve  # noqa: E402
 
+pytestmark = pytest.mark.research
+
 jax.config.update('jax_enable_x64', True)
 
 

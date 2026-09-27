@@ -13,6 +13,8 @@ from wavebit._core.conforming.cartesian_pair_normal_frame import CartesianPairNo
 from wavebit._core.conforming import cartesian_pair_normal_frame as normal_frame_module
 from wavebit._core.lattice import as_lattice
 
+pytestmark = pytest.mark.research
+
 
 GEOMETRY = dict(basis=np.diag([700., 560.]), widths=(170., 230.), height=280., offset=(21., -14.))
 MATERIALS = {'equal': (4., 4.), 'lossy': (4.+.8j, 9.+.3j), 'metal': (12.25, -10.+1j)}

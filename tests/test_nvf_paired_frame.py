@@ -8,6 +8,8 @@ from test_nvf_pair_normal_frame import (
     GEOMETRY, MATERIALS, make_cell, reference, rectangle_transforms, gather,
 )
 
+pytestmark = pytest.mark.research
+
 
 def paired_reference(epsilon, gap, *, quadrature=16):
     """Integrate both normalized physical fields; never transpose a closure."""

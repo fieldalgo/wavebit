@@ -4,6 +4,12 @@ import unittest
 
 import numpy as np
 
+try:  # the NGSolve environment runs this file under unittest alone, without pytest
+    import pytest
+    pytestmark = pytest.mark.research
+except ImportError:
+    pass
+
 
 @unittest.skipUnless(importlib.util.find_spec('ngsolve'), 'optional NGSolve environment')
 class MirrorReferenceTests(unittest.TestCase):

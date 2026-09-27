@@ -58,6 +58,7 @@ def independently_qualified(name, gap):
     return cell, settings, length, v24, d24, slots, dslots
 
 
+@pytest.mark.research
 @pytest.mark.parametrize("name", CASES)
 @pytest.mark.parametrize("gap", [0., 7.])
 def test_refined_cells_against_original_nodal_and_laurent_equations(name, gap):
@@ -88,6 +89,7 @@ def test_refined_cells_against_original_nodal_and_laurent_equations(name, gap):
         np.testing.assert_allclose(nv, value, rtol=0, atol=3e-10)
 
 
+@pytest.mark.research
 @pytest.mark.parametrize("refinement", [2, 3])
 @pytest.mark.parametrize("shift", range(4))
 def test_refined_topology_has_exact_collapse_and_expected_counts(refinement, shift):
@@ -136,6 +138,7 @@ def jax_runtime():
     jax.config.update("jax_enable_x64", previous)
 
 
+@pytest.mark.research
 @pytest.mark.parametrize("name", ["skew-metal-r2", "square-metal-r3"])
 @pytest.mark.parametrize("gap", [0., 7.])
 def test_refined_jit_gap_tangents_against_original_equations(name, gap, jax_runtime):
@@ -148,6 +151,7 @@ def test_refined_jit_gap_tangents_against_original_equations(name, gap, jax_runt
         np.testing.assert_allclose(length*np.asarray(got), length*want, rtol=0, atol=3e-9)
 
 
+@pytest.mark.research
 def test_gap_jvp_never_materializes_element_by_unknown_squared_arrays(jax_runtime):
     jax, jnp, program = jax_runtime
     evaluator, tangent, _ = program("square-metal-r3")
@@ -170,6 +174,7 @@ def test_gap_jvp_never_materializes_element_by_unknown_squared_arrays(jax_runtim
     visit(traced)
 
 
+@pytest.mark.research
 @pytest.mark.parametrize("name,gap", [("square-r2", 7.), ("skew-r3", 0.)])
 def test_native_refined_replay_and_contact_preserving_tangent(name, gap, jax_runtime):
     jax, jnp, _ = jax_runtime

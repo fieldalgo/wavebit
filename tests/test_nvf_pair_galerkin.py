@@ -12,6 +12,8 @@ from test_nvf_cartesian_pair_opening import (
     _oracle_geometry, _oracle_original_limit, _oracle_polynomial_vandermonde, POWERS,
 )
 
+pytestmark = pytest.mark.research
+
 GEOMETRY = dict(basis=np.array([[700., 65.], [0., 560.]]), widths=(170., 230.), height=280., offset=(21., -14.))
 MATERIALS = ((4., 4.), (4.+.8j, 9.+.3j), (12.25, -10.+1j))
 

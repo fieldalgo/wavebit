@@ -10,6 +10,8 @@ from wavebit._core.conforming.cartesian_pair_opening import CartesianPairOpening
 from wavebit._core.conforming.cartesian_pair_corner_galerkin import CartesianPairCornerGalerkinGapCell
 from test_nvf_pair_oscillatory_radial import _reference
 
+pytestmark = pytest.mark.research
+
 
 @pytest.fixture(scope='module',params=(3,4),ids=('cubic','quartic'))
 def fields(request):

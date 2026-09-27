@@ -8,6 +8,8 @@ from wavebit._core.conforming.cartesian_pair_seam_galerkin import CartesianPairS
 from wavebit._core.conforming.cartesian_pair_corner_galerkin import CartesianPairCornerGalerkinGapCell
 from wavebit._core.conforming.pair_corner_fields import PairCornerFields
 
+pytestmark = pytest.mark.research
+
 
 PLAN = CartesianPairOpeningPlan(0, 0)
 GEOMETRY = dict(basis=np.eye(2), widths=(.3, .4), height=.45, offset=(.01, -.03))

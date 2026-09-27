@@ -7,6 +7,8 @@ from studies.nvf_cell_bounds import projected_matrices
 from test_nvf_affine_cell import BASIS, SETTINGS
 from test_conforming_nvf import solve
 
+pytestmark = pytest.mark.research
+
 
 @pytest.mark.parametrize('order', [(2, 1), (1, 2), (1, 0), (0, 1), (0, 0)])
 @pytest.mark.parametrize('gap', [0., 17.])

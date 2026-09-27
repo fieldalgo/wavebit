@@ -7,6 +7,8 @@ from wavebit._core.conforming.cartesian_pair_polynomial_galerkin import Cartesia
 from wavebit._core.conforming.cartesian_pair_corner_galerkin import CartesianPairCornerGalerkinGapCell
 from wavebit._core.conforming.pair_corner_fields import PairCornerFields
 
+pytestmark = pytest.mark.research
+
 
 @lru_cache(None)
 def closure(gap=.003, quadrature=32, angular_order=2, epsilon=(4., 9.),

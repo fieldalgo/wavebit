@@ -11,6 +11,8 @@ from test_nvf_periodic_galerkin import oracle_chart
 from test_nvf_pair_quadratic import duffy, nodal_gradients
 from test_nvf_polynomial_galerkin import cardinal_gradient, indices, bernstein
 
+pytestmark = pytest.mark.research
+
 
 def sampled_projection(obj, kind, settings, primal, quadrature):
     """Solve directly from sampled physical columns, with no candidate moments.

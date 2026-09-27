@@ -8,6 +8,8 @@ from studies.nvf_interface_resolution import MaterialGradedGapModel
 from studies.nvf_polynomial_body import PolynomialBodyGapModel
 from studies.nvf_polynomial_flux import PolynomialFluxGapModel
 
+pytestmark = pytest.mark.research
+
 
 def test_degree_four_fourier_moments_match_independent_quadrature():
     nodes, lengths = np.array([-.35, .12, -.5]), np.array([.4, .003, .6])

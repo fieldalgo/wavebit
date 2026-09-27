@@ -5,6 +5,12 @@ import numpy as np
 
 from tests.test_nvf_fem_affine_scattering import airy_slab
 
+try:  # the NGSolve environment runs this file under unittest alone, without pytest
+    import pytest
+    pytestmark = pytest.mark.research
+except ImportError:
+    pass
+
 try:
     import ngsolve as ng
 except ImportError:

@@ -4,6 +4,8 @@ import numpy as np
 import pytest
 from wavebit._core.conforming.pair_balanced_response import solve
 
+pytestmark = pytest.mark.research
+
 
 @pytest.mark.parametrize('gap',('.001','.0000001','.0000000001',
                                 '.000000000001','.000000000000001'))

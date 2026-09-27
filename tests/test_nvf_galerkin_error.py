@@ -12,6 +12,8 @@ from test_nvf_cartesian_pair_opening import _oracle_geometry
 from test_nvf_periodic_galerkin import oracle_chart
 from test_nvf_pair_quadratic import duffy, nodal_gradients
 
+pytestmark = pytest.mark.research
+
 
 PAIR = dict(basis=np.array([[700., 35.], [0., 560.]]), widths=(170., 230.),
             height=280., offset=(21., -14.))

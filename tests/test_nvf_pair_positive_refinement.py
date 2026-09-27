@@ -5,6 +5,8 @@ from wavebit._core.conforming.pair_positive_refinement import correct,physical_c
 from wavebit._core.conforming.cartesian_pair_opening import CartesianPairOpeningPlan
 import wavebit._core.conforming.cartesian_pair_corner_galerkin as corner
 
+pytestmark = pytest.mark.research
+
 
 def _mixed_problem(s,ds):
     rng=np.random.default_rng(137)

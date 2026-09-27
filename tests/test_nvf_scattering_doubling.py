@@ -7,6 +7,8 @@ from studies.nvf_gap_convergence import profile_li
 from studies.nvf_harmonic_energy import THETA, THICKNESS, WAVELENGTH, polarized_powers
 from studies.nvf_scattering_doubling import ScatteringDoublingGapModel, doubling_powers, maxwell_factors
 
+pytestmark = pytest.mark.research
+
 
 def uniform_slots(order, epsilon, xp=np):
     x, y = orders_xy(order)

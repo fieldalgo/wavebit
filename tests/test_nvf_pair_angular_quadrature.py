@@ -7,6 +7,8 @@ from wavebit._core.conforming.cartesian_pair_polynomial_galerkin import Cartesia
 from wavebit._core.conforming.cartesian_pair_corner_galerkin import CartesianPairCornerGalerkinGapCell
 from wavebit._core.conforming.pair_corner_fields import PairCornerFields
 
+pytestmark = pytest.mark.research
+
 
 @pytest.mark.parametrize('option',(True,False,0,11,12.5,'24'))
 def test_angular_quadrature_requires_an_explicit_valid_integer(option):

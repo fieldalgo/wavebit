@@ -9,6 +9,8 @@ from studies.nvf_posed_gap import PosedGapModel, translated_coefficients
 from studies.nvf_scattering_doubling import doubling_powers, doubling_response, incident_orders
 from test_nvf_scattering_doubling import uniform_slots
 
+pytestmark = pytest.mark.research
+
 
 def slab_power(epsilon, theta, polarization):
     eps = np.array([1., epsilon, 2.25])

@@ -665,6 +665,7 @@ def _qualified(name):
     return _qualification(CRITERIA, CASES[name])
 
 
+@pytest.mark.research
 @pytest.mark.parametrize("name", CASES)
 def test_independent_finite_opening(name):
     metadata, _ = _qualified(name)
@@ -673,6 +674,7 @@ def test_independent_finite_opening(name):
         assert metadata["actual_shift"] == 1
 
 
+@pytest.mark.research
 @pytest.mark.parametrize("refinement", (0, 1))
 @pytest.mark.parametrize("power", (1, 2, 3))
 def test_signed_basis_label_covariance(refinement, power):
@@ -702,6 +704,7 @@ def test_signed_basis_label_covariance(refinement, power):
     assert length * maximum(ds - dslots[:, :, indices[:, None], indices]) <= 3e-9
 
 
+@pytest.mark.research
 @pytest.mark.parametrize("name", CRITERIA["unit_scaling"]["cases"])
 def test_derivative_per_caller_unit(name):
     _, (cell, settings, value, derivative, slots, dslots) = _qualified(name)
@@ -722,6 +725,7 @@ def test_derivative_per_caller_unit(name):
     assert length * maximum(alpha * np.stack(cds) - dslots) <= 3e-9
 
 
+@pytest.mark.research
 @pytest.mark.parametrize("order", [(0, 0), (1, 0), (0, 1)])
 def test_zero_direction_orders_before_closure(order):
     _, (previous, settings, *_) = _qualified("main_j0_r0")
@@ -739,17 +743,30 @@ def test_zero_direction_orders_before_closure(order):
     assert maximum(np.stack(cs) - native) <= 3e-10
 
 
-@pytest.mark.parametrize("index", range(14))
+# The exported plan's own contract needs no qualified cell, so it is the part of
+# this file that stays in the default set; the cell's cases below are research.
+@pytest.mark.parametrize("index", range(3))
+def test_plan_invalid_and_immutable(index):
+    plan = CartesianPairOpeningPlan(0)
+    actions = (
+        lambda: setattr(plan, "shift", 2),
+        lambda: CartesianPairOpeningPlan(True, 0),
+        lambda: CartesianPairOpeningPlan(0, 4),
+    )
+    with pytest.raises((ValueError, FrozenInstanceError)):
+        actions[index]()
+    assert (plan.shift, plan.refinement) == (0, 0)
+
+
+@pytest.mark.research
+@pytest.mark.parametrize("index", range(11))
 def test_invalid_and_immutable(index):
     _, (cell, settings, *_) = _qualified("main_j0_r0")
     actions = (
-        lambda: setattr(cell.plan, "shift", 2),
         lambda: cell.data.__setitem__("extras", ()),
         lambda: cell.data["mapping"].__setitem__(0, 3),
         lambda: cell.data["mapping"].setflags(write=True),
         lambda: cell.closure(coefficients=(None,) * 4, **settings),
-        lambda: CartesianPairOpeningPlan(True, 0),
-        lambda: CartesianPairOpeningPlan(0, 4),
         lambda: CartesianPairOpeningCell(cell.plan, True),
         lambda: cell.coefficients(
             **dict(settings, basis=np.asarray(settings["basis"], complex))

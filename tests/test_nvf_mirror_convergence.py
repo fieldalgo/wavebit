@@ -10,6 +10,8 @@ from studies.nvf_harmonic_energy import PERIOD, THETA, WAVELENGTH
 from studies.nvf_mirror_convergence import mirror_powers, mirror_sector, parity_basis, parity_convolution, sector_geometry, validate_mirror
 from studies.nvf_polynomial_body import PolynomialBodyGapModel
 
+pytestmark = pytest.mark.research
+
 
 def dense_parity(order, parity):
     n, m = order_grid(order)

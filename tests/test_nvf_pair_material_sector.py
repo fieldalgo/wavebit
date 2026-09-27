@@ -19,6 +19,8 @@ from test_nvf_cartesian_pair_gap import (
     _oracle_differentiated_native_solve_reference,
 )
 
+pytestmark = pytest.mark.research
+
 
 def scene(name="main_j0_r0"):
     case = CASES[name]

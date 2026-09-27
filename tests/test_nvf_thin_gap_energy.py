@@ -5,6 +5,8 @@ import pytest
 from studies.nvf_harmonic_energy import material_coefficients, powers
 from studies.nvf_thin_gap_energy import PERIOD, ThinGapEnergyModel, _periodic_line
 
+pytestmark = pytest.mark.research
+
 
 def _li(order, gap, epsilon=12.25, width=350.):
     from contact_instruments import rectangular_li

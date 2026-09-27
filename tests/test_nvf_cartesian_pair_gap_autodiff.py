@@ -25,6 +25,8 @@ from test_nvf_cartesian_pair_gap import (
     settings_for,
 )
 
+pytestmark = pytest.mark.research
+
 DETAILS = ("M", "f", "solution", "weights", "fields", "original_flux", "original_load")
 GAPS = (0.0, 1 / 64, 1 / 16)
 UNIT_CASES = ("main_j0_r0", "main_j0_r1", "different_r0", "different_r1")

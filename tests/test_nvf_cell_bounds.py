@@ -4,6 +4,8 @@ import pytest
 
 from studies.nvf_cell_bounds import energy_bounds, fourier_bounds, projected_matrices
 
+pytestmark = pytest.mark.research
+
 
 def test_uniform_cell_bounds_collapse_to_exact_material():
     result = fourier_bounds(3, [dict(lx=700., ly=700., epsilon=4.)])

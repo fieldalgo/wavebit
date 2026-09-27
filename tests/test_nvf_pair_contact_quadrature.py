@@ -7,6 +7,8 @@ from wavebit._core.conforming.pair_corner_precision import D
 from wavebit._core.conforming.cartesian_pair_opening import CartesianPairOpeningPlan
 from wavebit._core.conforming.cartesian_pair_corner_galerkin import CartesianPairCornerGalerkinGapCell
 
+pytestmark = pytest.mark.research
+
 
 @pytest.mark.parametrize('order',(12,24,32,80,96))
 def test_gaussian_rule_retains_every_exact_polynomial_moment(order):

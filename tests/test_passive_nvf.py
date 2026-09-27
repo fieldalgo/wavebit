@@ -4,6 +4,8 @@ import pytest
 
 from wavebit._core.passive_nvf import passive_nvf_assemble
 
+pytestmark = pytest.mark.research
+
 
 def physical(slots):
     return np.block([[np.asarray(slots[0]), -np.asarray(slots[3])],

@@ -50,6 +50,7 @@ def transverse(conv):
     return np.block([[conv.epx[0], -conv.epxy[0]], [-conv.epyx[0], conv.epy[0]]])
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('height', [.91, 1.])
 def test_diagonal_profile_matches_the_physical_rectangle_adapter(height):
     scene, basis, order = layer(height), np.diag([500., 700.]), (1, 1)
@@ -65,6 +66,7 @@ def test_diagonal_profile_matches_the_physical_rectangle_adapter(height):
         np.testing.assert_allclose(got, want, atol=4e-10, rtol=0)
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('order', [(2, 1), (1, 0), (0, 1), (0, 0)])
 @pytest.mark.parametrize('basis', [BASIS, np.array([[700., 1400.], [0., 490.]])])
 def test_original_labels_match_independent_physical_material_fourier(basis, order):
@@ -81,6 +83,7 @@ def test_original_labels_match_independent_physical_material_fourier(basis, orde
     assert np.linalg.eigvalsh((tensor-tensor.conj().T)/(2j))[0] > -1e-11
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('order', [(2, 1), (0, 1), (1, 0)])
 def test_sheared_contact_obeys_reciprocal_normal_inverse_rule(order):
     scene = layer(1.)
@@ -95,6 +98,7 @@ def test_sheared_contact_obeys_reciprocal_normal_inverse_rule(order):
     np.testing.assert_allclose(conv.epz_i[0], np.linalg.inv(tangent), atol=3e-12, rtol=0)
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('height', [1., np.nextafter(1., 2.)])
 def test_single_material_lossless_contact_accepts_only_roundoff_extension(height):
     scene = dict(profile=dict(width=.5, height=height, seams=[], values=[4.]))
@@ -107,6 +111,7 @@ def test_single_material_lossless_contact_accepts_only_roundoff_extension(height
     assert np.linalg.eigvalsh(tensor)[0] > 0
 
 
+@pytest.mark.research
 def test_unequal_orders_are_selected_before_the_energy_inverses(monkeypatch):
     from wavebit._core.factorization import ConvMatrices
 
@@ -130,6 +135,7 @@ def test_unequal_orders_are_selected_before_the_energy_inverses(monkeypatch):
     assert captured[-1][0].shape == (6, 6)
 
 
+@pytest.mark.research
 def test_translation_rotation_common_scale_and_uniform_layers():
     order, scene = (1, 1), layer()
     builder = AffineProfileNVF(order, **SETTINGS)
@@ -160,6 +166,7 @@ def test_translation_rotation_common_scale_and_uniform_layers():
             np.testing.assert_allclose(got[index], value*identity, atol=1e-15, rtol=0)
 
 
+@pytest.mark.research
 def test_lattice_object_and_coincident_seams_preserve_the_full_field():
     scene, order = layer(), (1, 0)
     builder = AffineProfileNVF(order, **SETTINGS)
@@ -219,6 +226,7 @@ def live_scene(p, xp):
     return [scene], basis
 
 
+@pytest.mark.research
 def test_jit_preserves_live_geometry_material_and_affine_basis_values():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
@@ -248,6 +256,7 @@ def test_jit_preserves_live_geometry_material_and_affine_basis_values():
     jax.clear_caches()
 
 
+@pytest.mark.research
 def test_coincident_seams_keep_the_independent_material_opening_derivative():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp

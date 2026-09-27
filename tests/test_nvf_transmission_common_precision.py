@@ -33,6 +33,7 @@ def phase(x,y):
  a=atan(y/x)
  return a if x>0 else a+(PI if y>=0 else -PI)
 
+@pytest.mark.research
 @pytest.mark.parametrize('coefficients', ((12.25,1,1),(-10+1j,1,1),(12.25,-10+1j,1)))
 @pytest.mark.parametrize('branch', range(4))
 @pytest.mark.parametrize('quarter_turn', (0,1,2,-1))
@@ -67,6 +68,7 @@ def test_compensated_mode_matches_independent_cartesian_power(coefficients,branc
                     errors.append(float(error));assert error<Z('3e-28'),(coefficients,branch,sector,radius,error)
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('degree', (5,6,7,8))
 def test_high_degree_flat_reference_retains_uniform_tensor_and_joint_variation(degree):
     from wavebit._core.conforming.cartesian_pair_opening import CartesianPairOpeningPlan
@@ -114,6 +116,7 @@ def test_high_degree_scope_retains_original_family_and_resource_limits():
 # Five complete independently verified states take about 30 minutes on the
 # documented single-BLAS-thread reference run. Keep this one bounded slow
 # integration control without reducing its field bank or quadrature.
+@pytest.mark.research
 @pytest.mark.timeout(3600)
 def test_quintic_positive_gap_joint_jvp_matches_independent_values():
     from test_nvf_pair_transmission import GEOMETRY,REFERENCE
@@ -137,6 +140,7 @@ def test_quintic_positive_gap_joint_jvp_matches_independent_values():
     np.testing.assert_allclose(tangent,finite,atol=3e-9,rtol=0)
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('degree,refinement', ((5,0),(6,0),(5,1)))
 def test_complete_common_gradients_match_independent_potential_differences(degree,refinement):
     from math import factorial,prod
@@ -173,6 +177,7 @@ def test_complete_common_gradients_match_independent_potential_differences(degre
                 np.testing.assert_allclose(value.hi+value.lo,finite,atol=3e-9,rtol=0)
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('degree,background', ((5,1.),(6,1.),(6,1.+.0625j)),
                          ids=('quintic','sextic','sextic_complex_background'))
 def test_high_degree_metal_fourier_projection_retains_original_energy_identity(degree,background):
@@ -199,6 +204,7 @@ def test_high_degree_metal_fourier_projection_retains_original_energy_identity(d
     np.testing.assert_allclose(tangent[3:],0.,atol=3e-9,rtol=0)
 
 
+@pytest.mark.research
 def test_sextic_positive_gap_retains_independent_energy_and_fourier_constraints():
     from wavebit._core.conforming.cartesian_pair_opening import CartesianPairOpeningPlan
     from wavebit._core.conforming.cartesian_pair_transmission_galerkin import CartesianPairTransmissionGalerkinGapCell
@@ -217,6 +223,7 @@ def test_sextic_positive_gap_retains_independent_energy_and_fourier_constraints(
     np.testing.assert_allclose(tangent[3:],0.,atol=3e-9,rtol=0)
 
 
+@pytest.mark.research
 def test_complete_batched_transmission_contact_retains_metal_field_energy():
     from wavebit._core.conforming.cartesian_pair_opening import CartesianPairOpeningPlan
     from wavebit._core.conforming.cartesian_pair_transmission_galerkin import CartesianPairTransmissionGalerkinGapCell
@@ -233,6 +240,7 @@ def test_complete_batched_transmission_contact_retains_metal_field_energy():
     np.testing.assert_allclose(tangent[3:],0.,atol=3e-9,rtol=0)
 
 
+@pytest.mark.research
 def test_complete_positive_gap_retains_transverse_fourier_trace_fields():
     from wavebit._core.conforming.cartesian_pair_opening import CartesianPairOpeningPlan
     from wavebit._core.conforming.cartesian_pair_transmission_galerkin import CartesianPairTransmissionGalerkinGapCell

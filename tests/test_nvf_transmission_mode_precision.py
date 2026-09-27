@@ -8,6 +8,8 @@ from wavebit._core.conforming.pair_corner_precision import D
 from test_nvf_contact_fourier_precision import (add, sub, mul, div, times,
                                                scalar, exponential, decimal_pi)
 
+pytestmark = pytest.mark.research
+
 
 REFERENCES = ((12.25, -10+1j, 1), (4, 9, 1), (1, 1+1e-12, 1),
               (1-1e-12+5e-13j, 1, 1), (-10+1j, 1, 1), (12.25, 1, 1),

@@ -10,6 +10,8 @@ from studies.nvf_interface_resolution import MaterialGradedGapModel
 from studies.nvf_polynomial_body import PolynomialBodyGapModel
 from studies.nvf_polynomial_flux import PolynomialFluxGapModel
 
+pytestmark = pytest.mark.research
+
 MODEL_CLASSES = [HarmonicCoordinateGapModel, ContinuousFluxGapModel, MaterialGradedGapModel,
                  PolynomialBodyGapModel, PolynomialFluxGapModel]
 

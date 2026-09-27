@@ -4,6 +4,9 @@ import numpy as np
 from wavebit._core.conforming.triangle_exponential_precision import moment
 from wavebit._core.conforming.pair_corner_precision import D
 import pytest
+
+pytestmark = pytest.mark.research
+
 def add(a,b):return a[0]+b[0],a[1]+b[1]
 def neg(a):return -a[0],-a[1]
 def mul(a,b):return a[0]*b[0]-a[1]*b[1],a[0]*b[1]+a[1]*b[0]

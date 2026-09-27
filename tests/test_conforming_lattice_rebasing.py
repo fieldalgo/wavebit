@@ -33,6 +33,7 @@ def contact_reference(layer, lattice, order, axis, angle):
             c*s*(tangent-normal), c*s*(tangent-normal))
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('transform', TRANSFORMS)
 @pytest.mark.parametrize('axis', [0, 1])
 @pytest.mark.parametrize('order', [(2, 1), (1, 0), (0, 1)])
@@ -54,6 +55,7 @@ def test_original_cell_origin_and_retained_orders_match_analytic_material_integr
                                atol=3e-12, rtol=0)
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('transform', TRANSFORMS)
 @pytest.mark.parametrize('axis', [0, 1])
 def test_rebased_contact_matches_independent_inverse_rules(transform, axis):
@@ -67,6 +69,7 @@ def test_rebased_contact_matches_independent_inverse_rules(transform, axis):
         np.testing.assert_allclose(got[0], want, atol=4e-12, rtol=0)
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('axis', [0, 1])
 @pytest.mark.parametrize('transform', TRANSFORMS)
 def test_nonrectangular_retained_set_is_selected_before_energy_closure(monkeypatch, axis, transform):
@@ -97,6 +100,7 @@ def test_nonrectangular_retained_set_is_selected_before_energy_closure(monkeypat
         np.testing.assert_allclose(got[0], want, atol=5e-12, rtol=0)
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('axis', [0, 1])
 @pytest.mark.parametrize('transform,order', [(TRANSFORMS[0], (0, 1)), (TRANSFORMS[1], (1, 0))])
 def test_identical_physical_mode_sets_preserve_positive_gap_engine_results(axis, transform, order):
@@ -111,6 +115,7 @@ def test_identical_physical_mode_sets_preserve_positive_gap_engine_results(axis,
                                solve(reference, reference_lattice, order, scale=.65), atol=2e-10, rtol=0)
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('backend', [0, 1, 2])
 def test_rebased_mixed_axis_contact_stack_matches_analytic_controls_on_three_engines(backend):
     if backend == 1:
@@ -135,6 +140,7 @@ def test_rebased_mixed_axis_contact_stack_matches_analytic_controls_on_three_eng
                                solve(expected, lattice, order, scale=.65), atol=2e-10, rtol=0)
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('axis,transform', [(0, TRANSFORMS[0]), (1, TRANSFORMS[1])])
 def test_rebased_geometry_storage_loss_and_period_derivatives_remain_live(axis, transform):
     jax = pytest.importorskip('jax')
@@ -157,6 +163,7 @@ def test_rebased_geometry_storage_loss_and_period_derivatives_remain_live(axis, 
     jax.clear_caches()
 
 
+@pytest.mark.research
 @pytest.mark.parametrize('axis,transform,order', [(0, TRANSFORMS[0], (0, 1)), (1, TRANSFORMS[1], (1, 0))])
 def test_rebasing_preserves_contact_opening_derivatives_for_identical_physical_modes(axis, transform, order):
     jax = pytest.importorskip('jax')

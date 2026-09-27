@@ -10,6 +10,8 @@ from wavebit._core.conforming.cartesian_pair_corner_galerkin import CartesianPai
 from wavebit._core.conforming.pair_corner_fields import PairCornerFields
 from wavebit._core.conforming.pair_oscillatory_radial import normalized_oscillatory_remainder
 
+pytestmark = pytest.mark.research
+
 
 def _mul(a,b):
     return a[0]*b[0]-a[1]*b[1],a[0]*b[1]+a[1]*b[0]

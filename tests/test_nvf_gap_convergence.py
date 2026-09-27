@@ -9,6 +9,8 @@ from studies.nvf_continuous_flux import (ContinuousFluxGapModel, polynomial_mome
 from studies.nvf_gap_convergence import load_projection, mean_energy, profile_li
 from studies.nvf_harmonic_energy import PERIOD, THETA, THICKNESS, WAVELENGTH, polarized_powers, powers
 
+pytestmark = pytest.mark.research
+
 
 def test_batched_polarizations_match_independent_slab_and_preserve_column_order():
     slots = (np.array([[4.]]), np.array([[4.]]), np.array([[.25]]), np.zeros((1, 1)), np.zeros((1, 1)))

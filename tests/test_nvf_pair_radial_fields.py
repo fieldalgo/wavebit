@@ -12,6 +12,8 @@ from wavebit._core.conforming.cartesian_pair_corner_galerkin import CartesianPai
 from wavebit._core.conforming.pair_corner_fields import PairCornerFields
 from wavebit._core.conforming.pair_radial_powers import normalized_power_remainder
 
+pytestmark = pytest.mark.research
+
 
 def test_exact_normalized_radial_remainders():
  maximum=0.;count=0

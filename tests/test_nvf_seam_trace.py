@@ -5,6 +5,8 @@ from numpy.polynomial.legendre import leggauss
 
 from wavebit._core.conforming.periodic_seam_trace import PeriodicSeamTrace
 
+pytestmark = pytest.mark.research
+
 
 SETTINGS = dict(period=(700., 560.), width=310., offset=21.)
 

@@ -13,6 +13,8 @@ import pytest
 
 from studies.nvf_cartesian_pair import CartesianPairCell, CartesianPairPlan
 
+pytestmark = pytest.mark.research
+
 LENGTH = 700.
 PARAMETERS = np.array([1., .45, 0., .7, .2, 193/700, .3, 17/700, .07, -.03,
                        4., .8, 9., .3, 1., .1])
