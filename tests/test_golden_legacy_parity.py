@@ -171,13 +171,21 @@ def _frame_sign(solver, grating_type):
     record unreadable.
 
     A half-turn cancels in ``|r|**2``, so the efficiency comparisons above are untouched and
-    stay a pure legacy check. Pure-1D cases have no s/p rotation at all and get ``1``, which
-    is why six of the thirteen cases needed nothing.
+    stay a pure legacy check.
+
+    **The six pure-1D cases joined on 2026-09-27**, for the same kind of reason. Until then the
+    pure TE/TM path quoted its Cartesian primary (``E_y`` / ``H_y``) on every order and these
+    cases got ``1``; it now quotes each order in its own s/p frame like the coupled paths,
+    which on the ``ky == 0`` row is ``s_hat = sign(Re kx) * y_hat``. So the frozen 1D
+    amplitudes are the new ones times ``sigma_m * sigma_inc`` -- ``sigma_inc`` because a frozen
+    solve lit by ``+y`` answered, on an incident order with ``kx < 0``, the negative of the
+    field today's is lit with. The same spelling serves every case: ``sigma_inc`` is read at
+    the specular index, and it is ``+1`` for all thirteen (every ``theta`` here is ``>= 0``),
+    so the coupled conversion is the one it was, and nothing was re-frozen.
     """
-    if grating_type == 0:
-        return 1.0
-    kx = np.asarray(solver.order_kxy()[0], dtype=np.complex128)
-    return np.where(np.real(np.reshape(kx, (1, -1))) < 0, -1.0, 1.0)
+    kx = np.real(np.asarray(solver.order_kxy()[0], dtype=np.complex128)).ravel()
+    sigma = np.where(kx < 0, -1.0, 1.0)
+    return np.reshape(sigma * sigma[kx.size // 2], (1, -1))
 
 
 def _rand(shape, seed):

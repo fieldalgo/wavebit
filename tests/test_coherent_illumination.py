@@ -33,6 +33,35 @@ def test_one_sided_limit_matches_existing_pattern_solver(side, pol):
     np.testing.assert_allclose(new.reconstruct_field(**points), reference, atol=2e-11)
 
 
+@pytest.mark.parametrize('theta', [.3, -.3])
+@pytest.mark.parametrize('side', ['top', 'bottom'])
+@pytest.mark.parametrize('tetm, pol', [('te', (1., 0.)), ('tm', (0., 1.))])
+def test_the_pure_1d_solve_is_the_coherent_plane_wave(tetm, pol, side, theta):
+    """``tetm`` lights the stack with ``PlaneWave(polarization=(1, 0) | (0, 1))``, exactly.
+
+    An independent route: the coherent door runs the 4ff cascade and builds its incident wave
+    from ``_plane_basis``, sharing nothing with the pure 1D kernels. The two agree since
+    2026-09-27, when the pure path's incidence became the incident order's own s/p wave at
+    unit E; before, it was ``+y`` at any angle (a sign at ``theta < 0``) and TM was a unit
+    ``H_y`` (1.5 lit from the glass below).
+
+    One factor remains and is the lateral phase reference, not the frame: an ordinary solve's
+    plane wave is unit at the cell corner, a ``PlaneWave`` at ``x = y = 0``, the cell centre --
+    the same ``exp(-i k_inc . P/2)`` the test above applies.
+    """
+    options = scene()
+    old = wavebit.rcwa(**options, theta=theta, tetm=tetm, incidence_side=side)
+    new = wavebit.rcwa(**options, excitation={side: wavebit.PlaneWave(theta=theta,
+                                                                      polarization=pol)})
+    a, b = old.solve(auto_detune=False), new.solve()
+    np.testing.assert_allclose(b.output_top if side == 'top' else b.output_bottom, a.R.sum(), atol=2e-12)
+    np.testing.assert_allclose(b.output_bottom if side == 'top' else b.output_top, a.T.sum(), atol=2e-12)
+    points = dict(sample_x=[-.17, .12], sample_y=[0.], sample_z=[.02, .1])
+    q = np.array(old._incident_kxy(old.wavelength))*2*np.pi/old.wavelength
+    reference = a.reconstruct_field(**points)*np.exp(-1j*q@np.array(options['period'])/2)
+    np.testing.assert_allclose(new.reconstruct_field(**points), reference, atol=2e-11)
+
+
 def slab_reference(wavelength, d, eps, mus, kx, polarization, phase):
     """Four tangential continuity equations, independent of RCWA/S matrices."""
     k0 = 2*np.pi/wavelength

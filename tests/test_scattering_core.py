@@ -19,6 +19,7 @@ import numpy as np
 import pytest
 
 import wavebit
+from wavebit import Material
 from wavebit._core.factorization import to_conv_mat_raster_sampled
 from wavebit._core.scattering import smm_1d, smm_1d_conical, smm_2d
 from wavebit._core.solve_1d import solve_1d, solve_1d_conical
@@ -640,9 +641,40 @@ def test_the_unsolved_solver_is_told_to_solve_and_not_to_reconfigure():
         solver.scattering
 
 
+def _admittance(solver, side):
+    """``n/mu`` of the half-space on ``side`` -- the |H| of a unit-E wave there, in Z0 units."""
+    medium = solver.top if side == 'top' else solver.bot
+    n = solver.n_top if side == 'top' else solver.n_bot
+    return complex(np.asarray(n)) / complex(np.asarray(medium.mu_value))
+
+
+def _port_reading(solver, block, tetm, lit):
+    """What ``block @ w`` returns, in terms of the amplitudes a solve lit from ``lit`` reports.
+
+    The s block is the Fresnel amplitude outright. The p block holds port variables -- the p
+    wave's magnetic field -- so reflection comes back as ``-r_p`` (that field turns over for the
+    up-going wave) and transmission as ``t_p`` times the exit medium's ``n/mu`` over the lit
+    medium's. Stated once so every test below applies the same reading; it is the one in
+    ``ScatteringMatrix``'s docstring and ``docs/conventions.md``.
+    """
+    reflection = block in ('S11', 'S22')
+    far = 'bottom' if lit == 'top' else 'top'
+    if tetm == 'te':
+        return ('r_s' if reflection else 't_s'), 1.0
+    if reflection:
+        return 'r_p', -1.0
+    return 't_p', _admittance(solver, far) / _admittance(solver, lit)
+
+
+#: Magnetic half-spaces, one of them lossy, so ``n/mu`` is not ``n`` on either side.
+MAGNETIC_MEDIA = dict(top=Material(1.44, mu=0.8), bot=Material(2.25 + 0.05j, mu=1.3))
+
+
+@pytest.mark.parametrize('media', [{}, MAGNETIC_MEDIA], ids=['nonmagnetic', 'magnetic'])
+@pytest.mark.parametrize('tetm', ['te', 'tm'])
 @pytest.mark.parametrize('side', ['top', 'bottom'])
-@pytest.mark.parametrize('block, reported', [('S11', 'r_s'), ('S21', 't_s')])
-def test_the_kept_blocks_are_the_amplitudes_the_solve_reported(side, block, reported):
+@pytest.mark.parametrize('block', ['S11', 'S21'])
+def test_the_kept_blocks_are_the_amplitudes_the_solve_reported(side, block, tetm, media):
     """The two lit-side blocks, applied to the incident order, reproduce the reported answer.
 
     This is where the orientation claim becomes checkable rather than stated: the solve reads
@@ -650,14 +682,27 @@ def test_the_kept_blocks_are_the_amplitudes_the_solve_reported(side, block, repo
     below, so a matrix handed over unswapped would disagree here on exactly one side -- and
     agree everywhere a symmetric test looks. It is also what says the ports are the two
     half-spaces and not the cascade's internal gap basis, which no numeric tolerance states.
+
+    TM beside TE since 2026-09-27, when the pure 1D matrix moved into the coupled path's port
+    variables: ``S11 @ w`` is ``-r_p`` and ``S21 @ w`` is ``t_p`` in port units there, where it
+    had been ``+r_p`` in the Cartesian ``H_y``. ``theta = 0.3``, so the incident order has
+    ``kx > 0`` and the orders ``m <= -1`` sit at ``kx < 0``, where the frame is what differs.
+
+    ``media='magnetic'`` because every other scene here has ``mu = 1`` half-spaces, where
+    ``n/mu`` is ``n``: there the pure TM path's own ``t_p`` could convert with ``n`` alone and
+    every other assertion in this file would still pass.
     """
-    solver, result = _lit(side)
+    solver, result = _lit(side, tetm=tetm, **media)
     S = solver.scattering
+    reported, factor = _port_reading(solver, block, tetm, side)
     got = (np.asarray(getattr(S, block)) @ _delta(S.S11)).ravel()
-    assert np.abs(got - np.asarray(getattr(result.incident, reported)).ravel()).max() < 1e-12
+    want = factor * np.asarray(getattr(result.incident, reported)).ravel()
+    assert np.abs(want).max() > 1e-2, 'the reported amplitude is empty, so this asserts nothing'
+    assert np.abs(got - want).max() < 1e-12
 
 
-def test_one_solve_carries_both_illumination_directions():
+@pytest.mark.parametrize('tetm', ['te', 'tm'])
+def test_one_solve_carries_both_illumination_directions(tetm):
     """The far-side blocks answer the *other* side's solve — the point of keeping the whole S.
 
     ``S22`` / ``S12`` are the half of the matrix the lit side never reads, so nothing else in
@@ -666,31 +711,83 @@ def test_one_solve_carries_both_illumination_directions():
     incidence-relative, so at an angle the two sides do not share ``kx`` and their cascades
     are built on different order grids -- ``theta = 0`` is where one matrix really does hold
     both answers.
+
+    TM is the only place the p block's minus on ``S22`` and its far-port units are pinned
+    against a solve rather than against the conical matrix, which shares the convention: the
+    readings are those of the bottom-lit solve, whose lit medium is the substrate.
     """
-    top_lit, _ = _lit('top', theta=0.0)
-    bottom_lit, from_below = _lit('bottom', theta=0.0)
+    top_lit, _ = _lit('top', theta=0.0, tetm=tetm)
+    bottom_lit, from_below = _lit('bottom', theta=0.0, tetm=tetm)
     S = top_lit.scattering
     delta = _delta(S.S11)
-    for block, reported in (('S22', 'r_s'), ('S12', 't_s')):
+    for block in ('S22', 'S12'):
+        reported, factor = _port_reading(bottom_lit, 'S11' if block == 'S22' else 'S21',
+                                         tetm, 'bottom')
         got = (np.asarray(getattr(S, block)) @ delta).ravel()
-        want = np.asarray(getattr(from_below.incident, reported)).ravel()
+        want = factor * np.asarray(getattr(from_below.incident, reported)).ravel()
         assert np.abs(got - want).max() < 1e-12, block
 
 
-def test_the_backside_matrix_is_the_scene_a_caller_would_build_by_hand():
+@pytest.mark.parametrize('tetm', ['te', 'tm'])
+def test_the_backside_matrix_is_the_scene_a_caller_would_build_by_hand(tetm):
     """Lit from below, the blocks are the flipped stack's, in the flipped stack's order.
 
     The frame assertion. Each block is an orientation-blind matrix, so the mapping can be
     internally consistent and still be assembled from the wrong end of the scene. Normal
-    incidence for the same reason as above.
+    incidence for the same reason as above -- where every order with ``m < 0`` has ``kx < 0``,
+    so the per-order port map is on (``D != I``) and has to commute with the reversal.
     """
-    lit_from_below, _ = _lit('bottom', theta=0.0)
-    by_hand, _ = _lit('top', theta=0.0, structure=S_KW['structure'][::-1], thickness=S_KW['thickness'][::-1],
-                      top=S_KW['bot'], bot=S_KW['top'])
+    lit_from_below, _ = _lit('bottom', theta=0.0, tetm=tetm)
+    by_hand, _ = _lit('top', theta=0.0, tetm=tetm, structure=S_KW['structure'][::-1],
+                      thickness=S_KW['thickness'][::-1], top=S_KW['bot'], bot=S_KW['top'])
     a, b = lit_from_below.scattering, by_hand.scattering
     assert a._fields[:4] == ('S11', 'S12', 'S21', 'S22')
     for name, x, y in zip(a._fields, a.blocks, b.blocks):
         assert np.abs(np.asarray(x) - np.asarray(y)).max() < 1e-12, name
+
+
+@pytest.mark.parametrize('media', [{}, MAGNETIC_MEDIA], ids=['nonmagnetic', 'magnetic'])
+@pytest.mark.parametrize('theta', [0.3, -0.3])
+@pytest.mark.parametrize('side', ['top', 'bottom'])
+@pytest.mark.parametrize('tetm', ['te', 'tm'])
+def test_the_pure_1d_matrix_is_the_coupled_matrix_block(tetm, side, theta, media):
+    """The pure 1D ``S`` is the conical ``S``'s s-s (TE) or p-p (TM) block at ``phi = 0``.
+
+    One set of ports for every path, since 2026-09-27: until then the 1D matrix was written in
+    the Cartesian ``E_y`` / ``H_y`` on every order, ``D S D`` of this (``D = diag(sign(Re
+    kx))``) with TM's two reflections negated besides. The conical matrix never used a
+    ``tetm`` code path, so this is two constructions meeting -- not a restatement. The premise
+    is asserted: orders on both sides of ``kx = 0`` carry the blocks, so a lost ``D`` could not
+    pass by the matrix happening to vanish there.
+
+    The same test pins, on the **conical** path, the reading every path's p block shares:
+    ``S11 @ delta_p`` is ``-r_p`` of a pure-p solve and ``S21 @ delta_p`` is its ``t_p`` times
+    the exit medium's ``n/mu`` over the lit one's -- the sentence ``ScatteringMatrix``'s
+    docstring and ``docs/what-a-solve-answers.md`` now carry. ``media='magnetic'`` is where the
+    ``mu`` in that reading can be seen: a reading in ``n`` alone is off there by up to 0.55, 62%
+    of the largest entry of ``S21 @ delta_p``, where the reading with ``mu`` holds to 2e-16.
+    """
+    pure, _ = _lit(side, theta=theta, tetm=tetm, **media)
+    coupled, via_psi = _lit(side, theta=theta, tetm=None, psi=0.7, phi=0.0, **media)
+    n = pure.scattering.S11.shape[0]
+    block = slice(0, n) if tetm == 'te' else slice(n, 2 * n)
+    kx = np.real(np.asarray(pure.order_kxy()[0])).ravel()
+    assert (kx < 0).sum() >= 3 and (kx > 0).sum() >= 3, kx
+    for name in ('S11', 'S12', 'S21', 'S22'):
+        a = np.asarray(getattr(pure.scattering, name))
+        b = np.asarray(getattr(coupled.scattering, name))[block, block]
+        assert np.abs(a[np.ix_(kx < 0, kx > 0)]).max() > 1e-3, f'{name} does not couple the halves'
+        assert np.abs(a - b).max() < 1e-13, (name, np.abs(a - b).max())
+
+    # And on the coupled path itself, the p block's reading, against a pure-p solve.
+    S = coupled.scattering
+    delta_p = np.zeros((2 * n, 1), dtype=complex)
+    delta_p[n + n // 2, 0] = 1.0
+    for block_name in ('S11', 'S21'):
+        reported, factor = _port_reading(coupled, block_name, 'tm', side)
+        got = (np.asarray(getattr(S, block_name)) @ delta_p).ravel()[n:]
+        want = factor * np.asarray(getattr(via_psi.p_inc, reported)).ravel()
+        assert np.abs(got - want).max() < 1e-12, block_name
 
 
 # -------------------------------------------------------------------------------- cascading
@@ -705,19 +802,21 @@ JOINT_KW = dict(tetm='te', wavelength=0.777, period=[0.77], truncation_order=[5,
                 answers='amplitude', layer_algorithm='SMM')
 
 
-def _piece(structure, thickness, top, bot, theta, side='top'):
+def _piece(structure, thickness, top, bot, theta, side='top', tetm='te'):
     solver = wavebit.rcwa(backend=0, structure=structure[::-1], thickness=thickness[::-1], top=top,
-                          bot=bot, theta=theta, incidence_side=side, **JOINT_KW)
+                          bot=bot, theta=theta, incidence_side=side,
+                          **dict(JOINT_KW, tetm=tetm))
     solver.solve()
     return solver.scattering
 
 
-def _whole():
-    return _piece(WHOLE, WHOLE_TH, 4.0, 2.25, 0.3)
+def _whole(tetm='te'):
+    return _piece(WHOLE, WHOLE_TH, 4.0, 2.25, 0.3, tetm=tetm)
 
 
+@pytest.mark.parametrize('tetm', ['te', 'tm'])
 @pytest.mark.parametrize('joint', [1.0, 2.25, 9.0])
-def test_two_pieces_cascade_into_the_stack_they_were_cut_from(joint):
+def test_two_pieces_cascade_into_the_stack_they_were_cut_from(joint, tetm):
     """Solve the halves apart, join them, and land on the whole stack's own matrix.
 
     The joint medium is a *basis*, not a layer: it has no thickness, nothing propagates in it,
@@ -725,11 +824,16 @@ def test_two_pieces_cascade_into_the_stack_they_were_cut_from(joint):
     cut. Parametrised over three joint media because which one is chosen must not matter --
     only that both halves name the same one, and that both sit on the same order grid, which
     is what the converted ``theta`` below arranges.
+
+    TM too: its published blocks are the p-port ones, ``-D S D`` on the two reflections and
+    ``D S D`` on the two transmissions of the cascade's own, and the star product has to be
+    covariant under that map -- every term it forms carries the reflection minus an even number
+    of times, or once more on a reflection block.
     """
-    upper = _piece(WHOLE[:2], WHOLE_TH[:2], 4.0, joint, 0.3)
+    upper = _piece(WHOLE[:2], WHOLE_TH[:2], 4.0, joint, 0.3, tetm=tetm)
     theta_lower = float(np.arcsin(np.sin(0.3) * 2.0 / np.sqrt(joint)))   # same k_par, in `joint`
-    lower = _piece(WHOLE[2:], WHOLE_TH[2:], joint, 2.25, theta_lower)
-    joined, whole = upper.cascade(lower), _whole()
+    lower = _piece(WHOLE[2:], WHOLE_TH[2:], joint, 2.25, theta_lower, tetm=tetm)
+    joined, whole = upper.cascade(lower), _whole(tetm)
     for name, got, want in zip(joined._fields, joined.blocks, whole.blocks):
         rel = np.abs(np.asarray(got) - np.asarray(want)).max() / np.abs(np.asarray(want)).max()
         assert rel < 1e-12, (name, joint, rel)

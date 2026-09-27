@@ -28,11 +28,11 @@ Explained in [Saying what the light is](../guide/light.md).
 | `theta` | `0.` in angle mode; `None` with direct k | phase polar angle from the inward normal, radians. Real angles give uniform surface illumination, including in absorbing incident media. A nonzero imaginary part selects the formal complex-angle parameterization; see [phase incidence](../conventions.md#phase-incidence) |
 | `phi` | `None` | azimuth of the plane of incidence, radians. `None` is "not named", which the pure 1D path requires |
 | `kx`, `ky` | `None` | direct real Cartesian transverse angular wavenumbers, in inverse length units; an omitted component is zero. Alternative to `theta`/`phi`; these are physical values, not divided by k0. See [direction inputs](../guide/light.md#two-ways-to-specify-direction) |
-| `tetm` | `None` | `'te'` / `'tm'`. A **declaration** that polarization and azimuth are not degrees of freedom here; 1D structures only, and it is what buys the pure TE/TM formulation |
+| `tetm` | `None` | `'te'` / `'tm'`. A **declaration** that polarization and azimuth are not degrees of freedom here; 1D structures only, and it is what buys the pure TE/TM formulation. The same light and the same per-order amplitudes as `polarization=(1, 0)` / `(0, 1)` at `phi = 0`; its scattering matrix is that solve's s-s / p-p block, and `s_inc` / `p_inc` stay `None` |
 | `psi` | `pi/2` (s/TE) | polarization angle, radians. `pi/2` is s/TE, `0` is p/TM |
 | `chi` | `None` | ellipticity angle. With `psi` it is the canonical chart of any state: `0` linear, `±pi/4` circular |
 | `polarization` | `None` | the Jones pair `(a_s, a_p)` itself, complex. The only spelling that carries an overall phase; magnitude is normalized away |
-| `excitation` | `None` | which diffraction *orders* the light arrives on: `{0: 1.0, 1: 0.6-0.8j}` on 1D, `{(m, n): amp}` on 2D. `None` is one plane wave on the specular order. A side-keyed map, `{"top": wavebit.PlaneWave(...), "bottom": wavebit.PlaneWave(...)}`, selects [coherent illumination](../coherent-illumination.md) |
+| `excitation` | `None` | which diffraction *orders* the light arrives on: `{0: 1.0, 1: 0.6-0.8j}` on 1D, `{(m, n): amp}` on 2D. `None` is one plane wave on the specular order. A weight multiplies its order's own s/p vector, so on the `ky == 0` row an order with `kx < 0` is lit along `-y` for s. A side-keyed map, `{"top": wavebit.PlaneWave(...), "bottom": wavebit.PlaneWave(...)}`, selects [coherent illumination](../coherent-illumination.md) |
 | `incidence_side` | `'top'` | `'top'` / `'bottom'` — which half-space the light arrives from. Scene labels never move; results are incidence-relative, and `theta` / `phi` are measured in the incidence medium |
 
 ## The stack

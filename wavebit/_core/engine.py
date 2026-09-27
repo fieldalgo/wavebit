@@ -494,15 +494,24 @@ class CoreSolveMixin:
         `dtype=` is *not* carried over, and that is measured rather than assumed. It looked
         load-bearing at single precision, where an untyped integer `arange` multiplied by a
         float32 gives a float64 intermediate on NumPy. Torch promotes that product to float32
-        regardless, so its `dtype=` never changed a width -- dropping it leaves all three
-        returning byte-identical arrays at both widths. `device=` is the half that was doing
-        the work, and it stays, spelled `_array_device` (`None` where nothing is placed).
+        regardless, so its `dtype=` never changed a width -- dropping it left each backend's
+        arrays byte-identical to what that backend returned before, at both widths. `device=` is
+        the half that was doing the work, and it stays, spelled `_array_device` (`None` where
+        nothing is placed).
 
         NOTE, separate from this move: at ``complex_dtype=1`` NumPy still computes these offsets
         through a float64 intermediate while JAX and Torch stay in float32, so NumPy's kx/ky
         differ from theirs in the last bits. Pre-existing, and not something a fold should
         decide -- the declared width governs the answer, which
         ``test_the_declared_width_is_the_width_answered_in`` checks, and it is met either way.
+
+        Nor are the three byte-identical at float64. Torch evaluates
+        ``wavelength / self.period[0]`` (a Python float over a tensor) as ``reciprocal()``
+        times the float, which can land one ulp off: ``0.6 / 1.6`` is ``0.375`` on Torch and
+        ``0.37499999999999994`` on NumPy and JAX, and with a direct ``kx = 2*pi/P`` at those
+        numbers order ``-1``'s ``kx``, zero in exact arithmetic, comes out ``-5.55e-17`` on
+        Torch and ``+0.0`` on the other two. What that does to the per-order s/p frame at an
+        exact ``kx = 0`` is the ``ky == 0`` bullet of ``docs/conventions.md``.
         """
         xp = self.xp
         (cx, hx), (cy, hy) = self.order_window
@@ -553,15 +562,22 @@ class CoreSolveMixin:
             rcwa(..., excitation={(0, 0): 1.0, (1, 0): 0.5j})    # 2D: by the pair
 
         The weights are *spatial*: :attr:`psi` / :attr:`polarization` / :attr:`tetm` still say
-        which polarization arrives, and every lit order carries that same one. They may be
-        traced -- an incident field is a legitimate design variable -- while the **keys** may
-        not, because which entries of the incident column are non-zero decides array structure
-        rather than a value.
+        which polarization arrives, and every lit order carries that same one, **in its own
+        s/p frame**: a weight multiplies that order's ``s_hat`` / ``p_hat``, so on a 1D solve at
+        ``phi = 0`` a lit order with ``kx < 0`` arrives polarized along ``-y`` (TE). The pure 1D
+        path means the same since 2026-09-27; before, it multiplied ``+y`` into every lit
+        order. The weights are also referenced at the cell corner, the Fourier origin, where
+        ``PlaneWave`` / ``OrderExcitation`` use the cell centre (``docs/conventions.md``). They
+        may be traced -- an incident field is a legitimate design variable -- while the
+        **keys** may not, because which entries of the incident column are non-zero decides
+        array structure rather than a value.
 
         What it is for is a coherent superposition that a single solve cannot otherwise
         express. A *single* non-specular order is not that: exciting order ``m`` at ``theta``
         is the same plane wave as exciting the specular order at the angle whose ``kx``
-        matches, so it buys nothing but a relabelling. Several at once is different, and the
+        matches, so it buys nothing but a relabelling (on the ``ky == 0`` row, up to the sign
+        of an order whose ``kx`` is exactly zero in one spelling and a rounding away from it in
+        the other -- its frame is ``sign(kx) * y_hat``). Several at once is different, and the
         alternative -- one solve per beam, indices realigned, amplitudes added -- costs a solve
         per beam for the same answer.
 
@@ -812,8 +828,12 @@ class CoreSolveMixin:
         they agree to 1e-13).
 
         The distinction is the reason this is not a second spelling of ``polarization=(1, 0)``.
-        Those two describe the same light and give the same numbers; they differ in what is
-        left free. ``polarization=(1, 0)`` keeps the polarization a live parameter — you can
+        Those two describe the same light and give the same numbers -- amplitude for amplitude
+        in the same per-order s/p frame, field for field, the same ``excitation`` weights, and
+        a scattering matrix that is the conical one's s-s / p-p block -- to ~1e-14 (since
+        2026-09-27; before, the amplitudes differed by ``sign(kx_m) * sign(kx_inc)`` per order,
+        the incident wave was ``+y`` at every angle, and the TM field was ``mu_inc/n_inc`` of
+        the conical p field). They differ in what is left free. ``polarization=(1, 0)`` keeps the polarization a live parameter — you can
         differentiate it, sweep it, optimize it, and you pay conical cost for the privilege.
         ``tetm='te'`` gives that up in exchange for the speed. A declared-away degree of
         freedom is *absent*, so ``psi`` reads back as ``None`` rather than as a number whose
@@ -900,7 +920,9 @@ class CoreSolveMixin:
         place rather than in each of them.
 
         ``tetm`` is the exception, and not by omission: it declares that there is no
-        polarization to resolve, and the pure 1D path it selects takes ``tetm_index`` instead.
+        polarization to resolve, and the pure 1D path it selects takes ``tetm_index`` instead
+        -- and builds the identical ``(1, 0)`` / ``(0, 1)`` incidence in its own variables, each
+        lit order along its own ``s_hat`` / ``p_hat`` (``conventions.order_frame_sign``).
         """
         xp = array_namespace(*(self._polarization if self._polarization is not None
                                else (self._psi,)))

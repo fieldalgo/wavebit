@@ -26,10 +26,14 @@ Naming follows the optics convention the rest of the ecosystem reads by sight:
 ``r_s``, ``r_p``, ``t_s``, ``t_p``
     Complex **Fresnel amplitudes** — the E-field ratio against a unit incident E-field, in
     ``e^{-iωt}``, directly comparable to the textbook Fresnel/Airy coefficients. Each order is
-    resolved in **its own** s/p frame, the standard ``s_hat = zhat x khat_par``; see
-    ``docs/amplitude-sp-frame.md``, which is also where the 2026-08-16 fix to that frame on the
-    ``Re(kx) < 0`` half-plane is recorded — it moved these four and nothing else, since a
-    reversed frame cannot survive ``|r|**2``. The p sign
+    resolved in **its own** s/p frame, the standard ``s_hat = zhat x khat_par``, on every path
+    -- the pure 1D ``tetm`` path included since 2026-09-27; on the ``ky == 0`` row that frame is
+    ``sign(Re kx) * yhat``, so an order's amplitude changes sign where its own ``kx`` crosses
+    zero (the frame's singular point; ``R`` does not move). See ``docs/amplitude-sp-frame.md``,
+    which is also where the 2026-08-16 fix to that frame on the ``Re(kx) < 0`` half-plane is
+    recorded — it moved these four and nothing else, since a reversed frame cannot survive
+    ``|r|**2`` — and the 2026-09-27 move of the pure 1D path, which moved these four and, at
+    ``theta < 0``, the sign of that path's incident field. The p sign
     convention is the one where a single interface at normal incidence gives
     ``r_p = (n2 - n1)/(n2 + n1) = -r_s``. The solves construct these from their boundary
     variables at pack time (the p channel's boundary variable is a magnetic amplitude; the

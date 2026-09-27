@@ -246,7 +246,12 @@ order so `kz_gap == 1`. Re-run a solve with `2.7 + k_par^2` instead of `1 + k_pa
 
 each against its own magnitude. The entry and exit interface factors cancel the gap between
 them, leaving the two half-spaces as the whole-stack matrix's ports — so those blocks are
-directly readable and `S11 @ delta` is exactly the reflected amplitude the solve reported. The
+directly readable. For the **s** block `S11 @ delta` is exactly the reflected `r_s` the solve
+reported. The **p** block holds port variables, the p wave's magnetic field, which turns over for
+the up-going wave: there `S11 @ delta` is `-r_p`, and `S21 @ delta` is `t_p` times
+`(n/mu)_exit / (n/mu)_lit` (port units, not Fresnel units). That holds on every path, the pure
+1D TM one included since 2026-09-27, when its matrix moved into the coupled path's variables
+(`docs/conventions.md`). The
 per-layer ones are not readable without `_ab_matrices`, the gap → half-space conversion, and
 `S_ref` / `S_trn` *are* that conversion: converted to a physical (E, H) transfer, `S_ref` is the
 identity. Exposing gauge numbers while withholding the decoder would document a footgun and

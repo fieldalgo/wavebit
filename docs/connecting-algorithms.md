@@ -273,7 +273,10 @@ therefore *incidence-relative* — `S11` reflects back into the incidence medium
 is lit — matching what the field cell and the `R`/`T` reads already do.
 
 The tests pin the contract rather than the values: `S11` and `S21` times the incident column
-*are* the reported `r_s` and `t_s` on either side; `S22` and `S12` answer the *other* side's
+*are* the reported `r_s` and `t_s` on either side -- and on the p block `-r_p` and
+`t_p * (n/mu)_exit / (n/mu)_lit`, because its port variable is the p wave's magnetic field
+(`docs/conventions.md` states it once for every path; the pure 1D matrix is the s-s or p-p
+block of the conical one since 2026-09-27); `S22` and `S12` answer the *other* side's
 solve, which is the point of keeping the whole matrix and the half of it the lit side never
 reads; and the backside matrix matches the scene a caller would build by hand — flipped stack,
 swapped half-spaces, lit from the top. The last two run at normal incidence on purpose:
@@ -292,7 +295,7 @@ first  = solve(layers[2:], top=1.0,  bot=joint, theta=theta).scattering
 second = solve(layers[:2], top=joint, bot=1.5,  theta=theta_in_joint).scattering
 whole  = first.cascade(second)
 
-whole.S11 @ delta                          # the ordinary answer, back again
+whole.S11 @ delta                          # the ordinary answer again: r_s (-r_p on a p port)
 first.cascade(second).cascade(third)       # chains, for a stack cut into more pieces
 ```
 

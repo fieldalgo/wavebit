@@ -65,25 +65,76 @@ def _column(solver, excitation):
 
 # ------------------------------------------------------------------------------ the oracle
 
+@pytest.mark.parametrize('tetm', ['te', 'tm'])
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
-def test_a_superposition_is_the_scattering_matrix_applied_to_it(algo):
+def test_a_superposition_is_the_scattering_matrix_applied_to_it(algo, tetm):
     """``S11 @ c_inc`` and ``S21 @ c_inc``, which is what an incident column *means*.
 
     The strongest oracle available, and an independent one: the SMM builds ``S`` by cascading
     layer matrices and never performs the ETM's boundary match, so an agreement here is two
     constructions meeting rather than one restated. Parametrised over the algorithm because
     the excitation has to reach both incident-column builders, which are separate code.
+
+    TM as well: excitation x scattering matrix x the p port is the crossing where a lost
+    per-order sign or a lost port minus would live. The p block holds port variables, so it
+    returns ``-r_p`` and ``t_p`` times ``(n/mu)_exit / (n/mu)_lit`` (``docs/conventions.md``).
     """
     # The reference carries the same excitation, so its window -- and therefore its S -- is
     # the one the ETM solve is built on. `S` itself does not depend on the excitation, only on
     # the window it widened to.
-    reference, _ = _solve(BEAMS, algo='SMM')
+    reference, _ = _solve(BEAMS, algo='SMM', tetm=tetm)
     S = reference.scattering
-    _, got = _solve(BEAMS, algo=algo)
+    _, got = _solve(BEAMS, algo=algo, tetm=tetm)
     column = _column(reference, BEAMS)
-    for block, reported in (('S11', 'r_s'), ('S21', 't_s')):
+    # top = 1.0 (lit), bot = 2.25: n/mu = 1 and 1.5.
+    readings = ((('S11', 'r_s', 1.0), ('S21', 't_s', 1.0)) if tetm == 'te' else
+                (('S11', 'r_p', -1.0), ('S21', 't_p', 1.5)))
+    for block, reported, factor in readings:
         want = (np.asarray(getattr(S, block)) @ column).ravel()
-        assert np.abs(np.asarray(getattr(got.incident, reported)).ravel() - want).max() < 1e-12
+        have = factor * np.asarray(getattr(got.incident, reported)).ravel()
+        assert np.abs(have - want).max() < 1e-12, block
+
+
+@pytest.mark.parametrize('side', ['top', 'bottom'])
+@pytest.mark.parametrize('algo', ['ETM', 'SMM'])
+@pytest.mark.parametrize('tetm', ['te', 'tm'])
+def test_tetm_weights_mean_what_the_coupled_weights_mean(tetm, algo, side):
+    """A weight multiplies its order's own ``s_hat`` (TE) or ``p_hat`` (TM), on every path.
+
+    ``BEAMS`` lights order ``-1`` at ``kx < 0`` beside orders ``0`` and ``+1`` at ``kx > 0``
+    (asserted), so the lit set straddles ``kx = 0``: on the pure 1D path that makes the ``-1``
+    beam arrive polarized along ``-y`` (TE), because that is its ``s_hat``. Until 2026-09-27 the
+    pure path multiplied ``+y`` into every lit order instead, which is different light -- the
+    two solves then disagreed in efficiency, not only in phase.
+
+    Held to the conical path at ``phi = 0`` per order and on the field (incoming boundary wave
+    included, where a column signed twice would show), and anchored to a number: the conical
+    top-lit ``sum(R)``, 0.370091 for TE and 0.158687 for TM, measured on the conical path
+    before this change and unchanged by it. The pure path's old answer was 0.493324 and
+    0.217085.
+    """
+    # Lit from the glass below, `theta = 0.25` puts order -1 at kx = +0.071; 0.15 straddles.
+    over = dict(incidence_side=side, answers='field', theta=0.25 if side == 'top' else 0.15)
+    pure, a = _solve(BEAMS, algo=algo, tetm=tetm, **over)
+    _, b = _solve(BEAMS, algo=algo, tetm=None, phi=0.0,
+                  polarization=(1, 0) if tetm == 'te' else (0, 1), **over)
+    kx = np.real(np.asarray(pure.order_kxy()[0])).ravel()
+    (centre, half), _ = pure.order_window
+    assert kx[-1 - centre + half] < 0 < kx[0 - centre + half] < kx[1 - centre + half], kx
+
+    for field in ('R', 'T', 'r_s', 'r_p', 't_s', 't_p', 'power_entering'):
+        x, y = np.asarray(getattr(a.incident, field)), np.asarray(getattr(b.incident, field))
+        assert np.abs(x - y).max() < 1e-12, (field, np.abs(x - y).max())
+    points = dict(sample_x=9, sample_y=1, sample_z=3)
+    x, y = np.asarray(a.reconstruct_field(**points)), np.asarray(b.reconstruct_field(**points))
+    assert np.abs(x - y).max() < 1e-12 * np.abs(y).max(), 'reconstruct_field'
+    for face in ('top', 'bottom'):
+        x = np.asarray(a.boundary_fields(face, sample_x=9, part='incoming'))
+        y = np.asarray(b.boundary_fields(face, sample_x=9, part='incoming'))
+        assert np.abs(x - y).max() < 1e-12, f'incoming at {face}'
+    if side == 'top':
+        anchor = 0.370091 if tetm == 'te' else 0.158687
+        assert float(np.asarray(a.incident.R).sum()) == pytest.approx(anchor, abs=1e-6)
 
 
 @pytest.mark.parametrize('phi, tetm, name', [(None, 'te', '1d_te'), (None, 'tm', '1d_tm'),

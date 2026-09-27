@@ -14,11 +14,19 @@ def scene(**updates):
                 thickness=[.17, .23], truncation_order=(2, 0), answers='field') | updates
 
 
+@pytest.mark.parametrize('theta', [.23, -.23])
 @pytest.mark.parametrize('kind', ['te', 'tm', 'conical', '2ff', '4ff'])
 @pytest.mark.parametrize('side', ['top', 'bottom'])
 @pytest.mark.parametrize('algorithm', ['ETM', 'SMM'])
-def test_all_paths_match_legacy_and_tangential_boundary_continuity(kind, side, algorithm):
-    options = scene(theta=.23, incidence_side=side, layer_algorithm=algorithm)
+def test_all_paths_match_legacy_and_tangential_boundary_continuity(kind, side, algorithm, theta):
+    """The result's field, the solver's cell and the boundary spectra are one field.
+
+    ``theta = -0.23`` puts the incident order at ``kx < 0``, where the pure 1D path's incident
+    wave is ``-y`` (TE) or the turned-over ``p_hat`` (TM): the boundary spectra that
+    ``field_result`` builds from the amplitudes and the interior the kernels walk have to
+    agree on that sign, which no ``kx > 0`` case exercises.
+    """
+    options = scene(theta=theta, incidence_side=side, layer_algorithm=algorithm)
     if kind in ('te', 'tm'):
         options['tetm'] = kind
     else:
@@ -132,15 +140,29 @@ def test_answer_levels_and_invalid_coordinates():
         result.reconstruct_field(incidence='p')
 
 
+#: Two lit sets: one on the ``kx > 0`` side only, and one straddling ``kx = 0``. The second is
+#: the one where a lit order's own s/p frame differs from the incident order's, so a field
+#: built from a column signed once too often (or not at all) moves the incident/outgoing
+#: interference in ``total`` -- the one flux here that is not blind to a per-order sign.
+LIT = {'forward': {0: 1., 1: .3j}, 'straddling': {-1: .4+.2j, 0: 1., 1: .3j}}
+
+
+@pytest.mark.parametrize('lit', list(LIT))
 @pytest.mark.parametrize('polarization', ['te', 'tm', 'coupled'])
 @pytest.mark.parametrize('side', ['top', 'bottom'])
-def test_boundary_flux_matches_efficiencies_with_absorbing_magnetic_ports(polarization, side):
+def test_boundary_flux_matches_efficiencies_with_absorbing_magnetic_ports(polarization, side,
+                                                                         lit):
     options = scene(top=wavebit.Material(1.7+.15j, 1.2),
                     bot=wavebit.Material(2.25+.1j, 1.1), incidence_side=side,
-                    theta=.2, excitation={0:1., 1:.3j})
+                    theta=.2, excitation=LIT[lit])
     options.update({'tetm':polarization} if polarization != 'coupled'
                    else {'phi':.3, 'polarization':(.6,.8j)})
-    result = wavebit.rcwa(**options).solve(auto_detune=False)
+    solver = wavebit.rcwa(**options)
+    result = solver.solve(auto_detune=False)
+    kx = np.real(host(solver.order_kxy()[0])).ravel()
+    (centre, half), _ = solver.order_window
+    signs = {m: np.sign(kx[m - centre + half]) for m in LIT[lit]}
+    assert (signs[-1] < 0) if lit == 'straddling' else all(v > 0 for v in signs.values()), signs
     # Cell integration cancels all different-order cross terms.
     x = np.linspace(-1.05, 1.05, 81, endpoint=False)
     def flux(boundary, part):

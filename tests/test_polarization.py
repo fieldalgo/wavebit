@@ -265,18 +265,26 @@ def test_a_1d_structure_with_a_pair_takes_the_conical_path():
     """The pure 1D TE/TM path cannot carry a mixed incidence; the conical path can.
 
     The endpoints must still agree with the pure path's own answers, which is what makes
-    the routing an implementation detail rather than a behavior change.
+    the routing an implementation detail rather than a behavior change -- on every per-order
+    amplitude and on the field, not only on ``R`` and ``T``. Until 2026-09-27 this compared
+    the efficiencies alone, which a per-order frame difference cannot move, and the two paths
+    did quote amplitudes a sign apart on every ``kx < 0`` order.
     """
-    kw = dict(CFG_1D, structure=STRUCTURE_1D)
+    kw = dict(CFG_1D, structure=STRUCTURE_1D, answers='field')
     for pair, tetm in (((1, 0), 'te'), ((0, 1), 'tm')):
         solver = wavebit.rcwa(polarization=pair, **kw)
         via_pair = solver.solve()
         assert solver.grating_type == 1, 'expected the conical formulation'
         via_pure = wavebit.rcwa(tetm=tetm, **kw).solve()
-        np.testing.assert_allclose(np.asarray(via_pair.incident.R), np.asarray(via_pure.incident.R),
-                                   atol=1e-11)
-        np.testing.assert_allclose(np.asarray(via_pair.incident.T), np.asarray(via_pure.incident.T),
-                                   atol=1e-11)
+        for name in ('R', 'T', 'R_s', 'R_p', 'T_s', 'T_p', 'r_s', 'r_p', 't_s', 't_p'):
+            np.testing.assert_allclose(np.asarray(getattr(via_pair.incident, name)),
+                                       np.asarray(getattr(via_pure.incident, name)),
+                                       atol=1e-11, err_msg=f'{tetm}: {name}')
+        np.testing.assert_allclose(np.asarray(via_pair.reconstruct_field(sample_x=8, sample_y=1,
+                                                                         sample_z=3)),
+                                   np.asarray(via_pure.reconstruct_field(sample_x=8, sample_y=1,
+                                                                         sample_z=3)),
+                                   atol=1e-11, err_msg=f'{tetm}: field')
 
 
 def test_the_pure_1d_solve_refuses_the_pair_in_plain_words():

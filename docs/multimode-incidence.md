@@ -12,7 +12,12 @@ solver = wavebit.rcwa(..., excitation={(0, 0): 1.0, (1, 0): 0.5j})  # 2D: by the
 
 The illumination arrives on more than one diffraction order, coherently, in one solve. The
 weights are *spatial*: `psi` / `polarization` / `tetm` still say which polarization arrives,
-and every lit order carries that same one.
+and every lit order carries that same polarization, **each in its own s/p frame**: a weight
+multiplies its order's `s_hat` / `p_hat`. On a 1D solve at `phi = 0` that is
+`sign(kx) * y_hat` for s, so a TE beam on an order with `kx < 0` is polarized along `-y`. The
+pure 1D `tetm` path has meant the same since 2026-09-27 (before, it multiplied `+y` into every
+lit order, which is different light once the lit set straddles `kx = 0`: `sum(R)` 0.4933
+against 0.3701 on `tests/test_excitation.py`'s scene).
 
 ## 1. What it is for, and what it is not for
 
@@ -24,7 +29,10 @@ specular order agrees to **~1e-9** at every basis size tried, the residue being 
 two solves keeping slightly different finite windows. So a one-order excitation buys a
 relabelling. (It was 9e-1 → 2.5e-4 before §4's widening, which is itself a demonstration of
 what the widening does: lighting order +1 now retains `[-truncation_order, truncation_order + 1]`, all but
-one order of what the shifted-angle solve keeps.)
+one order of what the shifted-angle solve keeps.) One caveat on the `ky == 0` row: amplitudes
+there are quoted in `sign(kx) * y_hat`, so an order whose `kx` is exactly `0` in one spelling
+and `+-1e-17` in the other (a rounding) can come back with the opposite sign in the two, while
+its efficiency agrees.
 
 **For** the coherent superposition, which no single ordinary solve can express. Concretely,
 coherent beam combining: a grating run as an N-to-1 combiner takes N beams at the angles the
@@ -140,27 +148,51 @@ value; the amplitudes beside them are ordinary design variables and carry a grad
 ## 6. Per-order polarization: through the matrix, not through this keyword
 
 `excitation` carries an amplitude per order and **one polarization for all of them** — whatever
-`psi` / `polarization` / `tetm` says. That is a scope decision, not a limitation of the
-formulation, and the capability is already reachable another way.
+`psi` / `polarization` / `tetm` says, each order in its own s/p frame. That is a scope
+decision, not a limitation of the formulation, and the capability is already reachable another
+way.
 
 **Through `solver.scattering`.** On the coupled paths the incident column is
 `[s-block ; p-block]`, each of length `n_orders`, so filling both halves independently *is*
-per-order polarization:
+per-order polarization. The s half is the s amplitude itself; the p half is a **port
+variable**, the p wave's magnetic field `-1j * (n/mu) * a_p` in the lit medium, and the p half
+that comes back is the reflected magnetic field, which turns over for the up-going wave:
 
 ```python
 solver = wavebit.rcwa(layer_algorithm='SMM', answers='amplitude', ...)
 solver.solve()
 S = solver.scattering
+h = n_lit / mu_lit                            # the lit medium's admittance, Z0 units
 
 column = np.zeros((2 * n_orders, 1), dtype=complex)
-column[n_orders // 2] = 1.0                 # order 0, s
-column[n_orders + n_orders // 2 + 1] = 0.5j  # order +1, p
-reflected = S.S11 @ column                   # both halves respond, from one solve
+column[n_orders // 2] = 1.0                   # order 0: s, amplitude 1
+column[n_orders + n_orders // 2 + 1] = -1j * h * 0.5j   # order +1: p, amplitude 0.5j
+reflected = S.S11 @ column                    # both halves respond, from one solve
+r_s = reflected[:n_orders]                    # the s amplitudes
+r_p = reflected[n_orders:] / (1j * h)         # the p amplitudes, out of the port variable
 ```
 
-Checked: with a *common* polarization this route and `excitation` agree to 1.6e-17, so the two
-are one contract seen from two sides. What the matrix route does not give is efficiencies — it
-hands back amplitudes and the caller normalizes — and it is SMM-only.
+Checked: with a *common* polarization this route and `excitation` agree to 6e-17 on the s
+half, and to 4e-17 on the p half once it is read as above (`S11 @ delta_p` is `-r_p` per unit
+of the column's own p variable, `S21 @ delta_p` is `t_p` times `(n/mu)_exit / (n/mu)_lit`;
+`docs/conventions.md` states it once for every path). What the matrix route does not give is
+efficiencies — it hands back amplitudes and the caller normalizes — and it is SMM-only. The pure
+1D path's matrix is the s-s (TE) or p-p (TM) block of this, in the same variables.
+
+**One door still disagrees, and it is the lateral phase reference, not the frame.**
+`excitation`'s weights are referenced at the cell **corner** (the Fourier origin the ordinary
+solves use), while `OrderExcitation` on the coherent-source path, like `PlaneWave`, is
+referenced at `x = y = 0`, the cell **centre** the public API measures from. So one weight
+lights the two doors with light that differs by `exp(-1j * k_m . (a1 + a2) / 2)` on each lit
+order `m` -- on a rectangular cell a relative `(-1)**m` between orders, which is different
+physics once two orders are lit, not a global phase. On `tests/test_excitation.py`'s scene at
+`phi = 0`, `polarization=(1, 0)`, `{0: 1, 1: 0.6-0.8j}` gives `sum(R)` 0.452653 through
+`excitation` and 0.151782 through `OrderExcitation`; negating the order-1 weight on the
+coherent side gives 0.452653 again. The relation is
+pinned in `tests/test_coherent_illumination.py`
+(`test_reciprocal_shift_shares_one_group_and_order_phase_reference`). Whether `excitation`
+should move to the centre is an open decision; it would be a second physics change for the
+same users, and is recorded in `docs/amplitude-sp-frame.md` §6.
 
 **Why not in the keyword.** The s/p basis is *per order*: `order_azimuth` gives each retained
 order its own azimuth, and `s_hat = z_hat x k_hat_par` is built from **that order's**

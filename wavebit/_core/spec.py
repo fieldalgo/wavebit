@@ -112,6 +112,13 @@ SPEC_VERSION = '10'   # '2': result fields renamed de_ri/de_ti -> R/T (2026-08-1
 # through the coercion. What moves is the key of a spec *built in Python* with a non-canonical
 # spelling ('NVF', `backend=1`): it now equals its parsed twin's, the key it always should
 # have had.
+# No bump (2026-09-27): the pure 1D TE/TM path moved into the per-order s/p frame and a
+# unit-E input. No document changes shape, and no input value names a different structure
+# (the '3' / '7' argument): `Incidence` cannot carry `excitation`, the one input whose physics
+# moved, and a single-wave `tetm` changes only the incident field's sign at theta < 0 and its
+# TM scale, which every efficiency divides out, plus the per-order amplitude convention.
+# Precedent: the 2026-08-16 half-turn fix moved coupled amplitudes with no bump. Amplitudes
+# cached under an old key() are stale on the orders across kx = 0 from the incident one.
 
 #: Refusal for a document that states no version. Its own justification, because the rule
 #: reads as gratuitous ceremony until you see which case it is for.

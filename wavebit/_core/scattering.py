@@ -35,9 +35,11 @@ Formulation, in the conventions this codebase already uses (see :func:`solve_1d`
   gap cancels out of the composed result whatever it is, as long as it is used everywhere).
 * Incidence enters as mode amplitudes directly: ``E_s = a_s`` and ``H_p = -i*n_top*a_p``
   for the coupled path — the resolved ``(a_s, a_p)`` pair, whichever spelling the
-  ``polarization`` pair — and unit primary amplitude for 1D TE/TM: ``E_y``, or ``H_y`` in the
-  TM case, whose field state is then rescaled once to unit incident E (``n/mu`` of the
-  incidence medium) so that every path's reconstructed field answers a unit electric input.
+  ``polarization`` pair — and for 1D TE/TM the unit primary amplitude signed into each order's
+  own s/p frame, ``sigma_m`` of ``E_y`` or (TM) ``H_y``
+  (:func:`~wavebit._core.conventions.order_frame_sign`); the TM field state is then rescaled
+  once to unit incident E (``n/mu`` of the incidence medium) so that every path's
+  reconstructed field answers a unit electric input.
   These are the same incident amplitudes the ETM final matching solves against. The sign on
   ``H_p`` is the one ``e^{-iωt}`` requires and the one the code has always carried; this
   sentence said ``+i`` — the conjugate — until 2026-08-11, describing the formulation that
@@ -61,7 +63,7 @@ from typing import NamedTuple
 import numpy as np
 
 from .backend import _device_of, array_namespace, as_array, check_finite, check_physical
-from .conventions import boundary_kz, order_azimuth
+from .conventions import boundary_kz, order_azimuth, order_frame_sign
 from .enums import Answers, answers_of
 from .conventions import incident_column
 from .solve_1d import (_block, _diag, _is_backside, _layer_mu, _pack,
@@ -264,14 +266,21 @@ class ScatteringMatrix(NamedTuple):
     Each block is square of side ``n_orders`` on the pure 1D TE/TM path and ``2*n_orders`` on
     the coupled ones, where the s and p amplitudes are stacked in that order -- the same
     layout the incident column has, so ``S11 @ c_inc`` needs no repacking. Four blocks in
-    total, whatever the stack's depth.
+    total, whatever the stack's depth. The pure 1D matrix is the coupled one's s-s (TE) or
+    p-p (TM) block at ``phi = 0``, in the same port variables (since 2026-09-27; before, it
+    was in the Cartesian ``E_y`` / ``H_y`` on every order, ``D S D`` of this with TM's
+    ``S11`` / ``S22`` negated besides -- see :func:`_coupled_ports_1d`).
 
     **Its ports are the two half-spaces, not the SMM's gap.** The cascade's internal gap basis
     (``eps_gap`` chosen so ``kz_gap == 1``) is a gauge, and it cancels between the entry and
     exit interface factors: re-running a solve with a different ``eps_gap`` moves these blocks
     by ~1e-14 while it moves the per-layer gap-embedded ones by ~0.5. So these numbers are
-    directly readable, and ``S11 @ delta`` is exactly the reflected amplitude the solve
-    reported. The per-layer blocks are deliberately not here; they would need the gap ->
+    directly readable. For the **s** block, ``S11 @ delta`` is exactly the reflected ``r_s``
+    the solve reported and ``S21 @ delta`` its ``t_s``. The **p** block holds port variables,
+    not Fresnel amplitudes: its port variable is the p wave's magnetic field, which turns over
+    for the up-going wave, so ``S11 @ delta`` is ``-r_p``, and ``S21 @ delta`` is ``t_p`` times
+    ``(n_trn/mu_trn) / (n_ref/mu_ref)``. That holds on every path, the pure 1D TM one
+    included. The per-layer blocks are deliberately not here; they would need the gap ->
     half-space conversion shipped beside them to mean anything.
 
     **Orientation is the hazard, not the numbers.** These are orientation-blind matrices, so
@@ -376,6 +385,34 @@ def _scattering_matrix(S, backside, kx, ky, n_ref, n_trn, mu_ref, mu_trn):
         exit_port=Port(kx=kx, ky=ky, index=n_trn, mu=mu_trn))
 
 
+def _coupled_ports_1d(S, sigma, tetm_index):
+    """The pure 1D cascade's blocks in the coupled path's s (TE) or p (TM) port variables.
+
+    Two changes of basis, and after them a 1D matrix *is* the s-s or p-p block of the conical
+    one at ``phi = 0`` -- the same ports, the same incident column, the same readings.
+
+    * Every port amplitude is quoted along its order's own ``s_hat`` / ``p_hat``, which on the
+      ``ky == 0`` row is ``D = diag(sigma)`` of the Cartesian primary, at both ports (the
+      two share one ``kx``).
+    * The coupled p variable is the p wave's magnetic field, and for an up-going wave it points
+      the other way from the down-going one (:func:`_sp_scattering_result`: "the reflected p
+      amplitude is reported as its magnetic field, which points the other way for the upward
+      wave"), while ``H_y`` does not turn. So a TM block that maps a down-going wave onto an
+      up-going one (``S11``) or back (``S22``) takes one more minus.
+
+    Measured on the conical path before this existed, both sides, ``theta = +-0.3``, magnetic
+    half-spaces included: TE ``S_c = D S D`` in all four blocks; TM ``S11, S22 = -D S D`` and
+    ``S12, S21 = +D S D``, to 8e-15. The backside's block reversal commutes with this map --
+    ``D`` is the same at both ports and TM negates ``S11`` and ``S22`` together.
+
+    What follows on either path: ``S11 @ w`` is ``r_s`` for TE and ``-r_p`` for TM, and
+    ``S21 @ w`` is ``t_s`` for TE and ``t_p * (n_trn/mu_trn) / (n_ref/mu_ref)`` for TM (port
+    units, not Fresnel units) -- ``w`` the incident column, in each order's own frame.
+    """
+    flip = (-1.0, 1.0, 1.0, -1.0) if tetm_index == 1 else (1.0, 1.0, 1.0, 1.0)
+    return tuple(f * (sigma[:, None] * block * sigma[None, :]) for f, block in zip(flip, S))
+
+
 def _port_disagreement(a, b):
     """Why ports ``a`` and ``b`` are not the same basis, or ``None`` if they are.
 
@@ -445,6 +482,8 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     backside = _is_backside(incidence_side)
     xp, C, kx, _ = _prepare(epx_conv_all, kx)
     mu_all = (None,) * 3 if mu is None else tuple(mu)
+    # Each order's s/p frame on this row, the ETM twin's `sigma` (see there).
+    sigma = order_frame_sign(xp, kx)
 
     n_orders_u = kx.shape[0]
     k0 = 2 * _PI / wavelength
@@ -516,7 +555,12 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     # leaves through the far side. For the backside these are the substrate-port outputs, so
     # the reads swap to S22 / S12; everything after is the top-side arithmetic with the two
     # half-spaces in incidence-relative roles.
-    delta = xp.reshape(incident_column(xp, C, lit, n_orders_u, n_orders_u // 2), (n_orders_u, 1))
+    # The incident column in the Cartesian primary the cascade is written in, each lit order
+    # along its own s_hat / p_hat: the same two-branch column as :func:`solve_1d`'s, for the
+    # same signed-zero reason.
+    column = incident_column(xp, C, lit, n_orders_u, n_orders_u // 2)
+    delta = xp.reshape(column * (sigma[n_orders_u // 2] if lit is None else sigma),
+                       (n_orders_u, 1))
     R = xp.reshape((S[3] if backside else S[0]) @ delta, (1, n_orders_u))
     Tt = xp.reshape((S[1] if backside else S[2]) @ delta, (1, n_orders_u))
 
@@ -547,19 +591,24 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     # makes a coupled-path port refuse to join a 1D one. The two permeabilities *are* said,
     # in their incidence-relative roles, because a magnetic half-space changes the port's own
     # admittance -- they were literal `1.0` while this path refused a `mu`.
-    scattering = _scattering_matrix(S, backside, kx, None, n_ref, n_trn, mu_ref, mu_trn)
+    # Published in the coupled path's port variables, so a 1D matrix is the s-s (TE) or p-p
+    # (TM) block of the conical one at `phi = 0` -- see :func:`_coupled_ports_1d`.
+    scattering = _scattering_matrix(_coupled_ports_1d(S, sigma, tetm_index), backside, kx,
+                                    None, n_ref, n_trn, mu_ref, mu_trn)
 
     # Same Fresnel conversion as the ETM pure path: reflection primaries are already the
     # amplitude; the TM transmission converts H back to E across the index step -- by
     # impedance `Z = mu/n` once a half-space carries a permeability, which is `n_ref/n_trn`
-    # to the bit when neither does. Parenthesised as one ratio for that reason.
+    # to the bit when neither does. Parenthesised as one ratio for that reason. Then each
+    # order into its own s/p frame, as there.
     zeros_amp = xp.zeros_like(R)
     zeros_eff = xp.zeros_like(de_ri)
     if tetm_index == 0:
-        res = _pack(R, zeros_amp, Tt, zeros_amp, de_ri, zeros_eff, de_ti, zeros_eff,
-                    power_entering=entering)
+        res = _pack(R * sigma, zeros_amp, Tt * sigma, zeros_amp, de_ri, zeros_eff, de_ti,
+                    zeros_eff, power_entering=entering)
     else:
-        res = _pack(zeros_amp, R, zeros_amp, Tt * ((n_ref / mu_ref) / (n_trn / mu_trn)),
+        res = _pack(zeros_amp, R * sigma, zeros_amp,
+                    (Tt * ((n_ref / mu_ref) / (n_trn / mu_trn))) * sigma,
                     zeros_eff, de_ri, zeros_eff, de_ti, power_entering=entering)
 
     if not keep_field:

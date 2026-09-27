@@ -218,7 +218,7 @@ All angles are **radians**.
 | `phi` | azimuth of the plane of incidence, from the `+x` axis |
 | `psi` | polarization: the angle of **E** from the p direction in the plane transverse to **k**. `psi = pi/2` is pure s (TE-like), `psi = 0` pure p (TM-like). **Real** — a complex `psi` is refused, see below |
 | `chi` | ellipticity angle: `tan(chi)` is the polarization ellipse's minor/major axis ratio and its sign is the rotation direction (`chi > 0` turns like `(1, -1j)`; see "Which way the circular states rotate" below). `chi = 0` is linear (the `psi` spelling), `|chi| = pi/4` circular. Real, like `psi`. Naming it selects the `(psi, chi)` chart — see below |
-| `tetm` (1D only) | `'te'` / `'tm'` — a **declaration**, not an angle: it says this problem has no polarization and no azimuth degree of freedom, which is what makes the pure 1D TE/TM formulation legal (2-4x faster than conical, measured). Refused on a 2D cell, with `truncation_order[1] != 0`, or beside a nonzero `phi` / a `psi` / a `polarization`. `psi` reads back `None` under it — a declared-away degree of freedom is absent, not defaulted |
+| `tetm` (1D only) | `'te'` / `'tm'` — a **declaration**, not an angle: it says this problem has no polarization and no azimuth degree of freedom, which is what makes the pure 1D TE/TM formulation legal (2-4x faster than conical, measured). Refused on a 2D cell, with `truncation_order[1] != 0`, or beside a nonzero `phi` / a `psi` / a `polarization`. `psi` reads back `None` under it — a declared-away degree of freedom is absent, not defaulted. It lights and reports exactly what `polarization=(1, 0)` / `(0, 1)` at `phi = 0` does, to ~1e-14: the same amplitudes in the same per-order s/p frame, the same `excitation` weights, the same unit-E incident field; its scattering matrix is the conical one's s-s / p-p *block*, in the same port variables. What it does not carry is the other polarization: `s_inc` / `p_inc` are `None`, and the cross-polarized amplitudes are exact zeros where the conical path has ~1e-16. Since 2026-09-27; before, it quoted `E_y` / `H_y` on every order (a sign apart on every order across `kx = 0` from the incident one), was lit by `+y` at any angle, and its TM input was a unit `H_y` |
 
 ### Phase incidence
 
@@ -487,7 +487,8 @@ different one — pinned bit-for-bit, not to a tolerance.
 
 Amplitude fine print, stated once so it never has to be discovered:
 
-- each order is quoted in **its own** s/p frame, the standard one: `s_hat = z_hat x k_hat_par`,
+- each order is quoted in **its own** s/p frame, on every path — the pure 1D `tetm` path
+  included since 2026-09-27 — the standard one: `s_hat = z_hat x k_hat_par`,
   with `k_par` that order's in-plane wavevector. `p_hat` is fixed by its in-plane part, which
   lies along `k_hat_par` with length `cos(theta_m)` in the medium the wave travels in —
   **`+` for a reflected order, `-` for a transmitted order and for the incident wave**, on
@@ -504,6 +505,35 @@ Amplitude fine print, stated once so it never has to be discovered:
   (`-s_hat`, `-p_hat`) on the conical and 2D paths — invisible in `R`/`T`, which are
   `|r|^2`, and in the reconstructed field, and therefore in every golden this project has.
   See [`amplitude-sp-frame.md`](amplitude-sp-frame.md);
+- **on the `ky == 0` row** (every 1D solve at `phi = 0`, `tetm` or not) `s_hat_m` is
+  `sign(Re kx_m) * y_hat` — `+y_hat` at `kx_m == 0`, the origin rule — and `p_hat_m` turns
+  over with it. So an order's `r_s` / `r_p` changes sign where its own `kx` crosses zero while
+  `R` sails through: `k_par` passes through zero there and `z_hat x k_hat_par` has no limit.
+  That step is the frame's singular point, not physics. An order whose `kx` is zero in exact
+  arithmetic — normal diffraction: a direct `kx = 2*pi/P`, or `theta = asin(lambda/P)`, puts
+  order `-1` there — sits on that point, and which side of it the solve lands on is decided by
+  rounding: the same input gives `kx(-1) = +0.0` on NumPy and JAX and `-5.6e-17` on Torch,
+  and on Torch `theta = asin(lambda/P)` and `theta = asin(0.375)` land on opposite sides
+  (measured on `tests/test_amplitude_sp_frame.py`'s grating). So on such an order `r_s` / `r_p`
+  can differ in sign between backends and between spellings of the same input, on the conical
+  path as on the pure one; `R` / `T` do not. At `theta = 0` it is the incident
+  order that sits on it, and the incident field itself turns over as `theta` crosses zero
+  (`s_hat_inc` goes from `-y` to `+y`); a sweep through `theta = 0` that wants a continuous
+  field multiplies by `sign(Re kx_inc)`, order 0's `kx` — at index `half - centre` of
+  `solver.order_kxy()[0]` for `(centre, half) = result.order_window[0]`, which is `n // 2`
+  only while no `excitation` has moved the window. On a mirror-symmetric grating at
+  `theta = 0` this makes `r_{-m} = -r_{+m}`. The pure 1D path quoted `E_y` / `H_y`
+  on every order until 2026-09-27 (`new = sign(kx_m) * sign(kx_inc) * old`), which RETICOLO's
+  own 1D path still does: its 1D and conical amplitudes differ by exactly that factor;
+- an `excitation` weight multiplies **its own order's** `s_hat` (s) or `p_hat` (p), on every
+  path — so on the `ky == 0` row a lit order with `kx < 0` arrives with its s field along
+  `-y`. The pure 1D path did the same from 2026-09-27; before, it multiplied `+y` into every
+  lit order, which is different light once the lit set straddles `kx = 0`;
+- the scattering matrix's **s** block holds amplitudes: `S11 @ delta` is `r_s`, `S21 @ delta`
+  is `t_s`. Its **p** block holds port variables — the p wave's magnetic field,
+  `-1j * (n/mu) * a_p` in its own medium — so `S11 @ delta` is `-r_p` (that field turns over
+  for the up-going wave) and `S21 @ delta` is `t_p * (n/mu)_exit / (n/mu)_lit`. Same on every
+  path; the pure 1D matrix is the s-s (TE) or p-p (TM) block of the conical one at `phi = 0`;
 - at `theta = 0` the zeroth order has no in-plane wavevector to take a direction from, and
   `phi` supplies one — as a **direction**, not a line. `phi` and `phi + pi` therefore
   describe incident fields of opposite sign for the same `psi`, and the solve returns the
@@ -514,7 +544,14 @@ Amplitude fine print, stated once so it never has to be discovered:
 - the p sign convention is the one where a single interface at normal incidence gives
   `r_p = (n2 - n1)/(n2 + n1) = -r_s`;
 - phase reference: `r` at the incidence-side interface, `t` at the far one (top and
-  bottom respectively for the default illumination);
+  bottom respectively for the default illumination). Laterally, every ordinary amplitude —
+  and every `excitation` weight — is referenced at the cell **corner**, the Fourier origin the
+  solves integrate from, not at the public cell-centre origin: against the centre, order `m`
+  carries `exp(1j * k_m . (a1 + a2) / 2)`, a relative `(-1)**m` between orders on a
+  rectangular cell. `PlaneWave` and `OrderExcitation` are referenced at the centre, so the
+  same weights through `excitation` and through `OrderExcitation` differ by that factor per
+  lit order. Whether the ordinary path should move to the centre is an open decision
+  (`amplitude-sp-frame.md` §6);
 - for real transverse wavevectors, `R` and `T` are the separate reflected/transmitted
   powers divided by the incident wave's power at the illuminated interface. This also
   applies to absorbing incident media. `T` refers to power crossing the opposite
@@ -540,7 +577,7 @@ Amplitude fine print, stated once so it never has to be discovered:
 | **which quantity a material number is** | `tests/test_material_convention_anchor.py` — every expected value there comes from a closed-form Fresnel/Airy recursion written in `eps` and `kz`, so it cannot be co-migrated into agreement with a flip. One function in it, `_api_material`, knows the convention; nothing else in the file may move when the convention does. The rest of the suite cannot pin this row at all: a golden regenerated by a script that imports wavebit agrees with whatever the package now believes, and reading `3.5` as the other quantity conserves energy exactly |
 | the `Material` type: the scalar shorthand, both values as pytree children (so a permittivity differentiates), and the two conversions including `index_from_eps`'s branch and its signed-zero hazard | `tests/test_material.py` |
 | which rows exist at all, per `answers` rung | `tests/test_answers_declaration.py` — each rung's surface, the rungs agreeing bit-for-bit on what they share, and the refusal naming the declaration |
-| the per-order s/p frame the amplitudes are quoted in | `tests/test_amplitude_sp_frame.py` — a transposed twin, the reconstructed field as arbiter, and continuity across `kx = 0`. Efficiencies cannot pin this row at all: a reversed frame is `\|r\|^2`-invariant |
+| the per-order s/p frame the amplitudes are quoted in | `tests/test_amplitude_sp_frame.py` — a transposed twin, the reconstructed field as arbiter (all four amplitudes, every path, the pure 1D one included, both lit sides and both angle signs), continuity across `kx = 0` off the `ky == 0` row, and §4: the pure 1D path against the conical one amplitude for amplitude and field for field, and the sign step on the `ky == 0` row pinned as a step. The `excitation` weights' frame: `tests/test_excitation.py`; the p block's reading and the 1D matrix as the conical block: `tests/test_scattering_core.py`. Efficiencies cannot pin this row at all: a reversed frame is `\|r\|^2`-invariant |
 | order layout, order-index sign | `tests/references/test_reticolo_golden.py` (mirrors orders if wrong, conserving energy) |
 | `incidence_side`, incidence-relative results | `tests/test_backside_incidence.py` (reversed-stack Airy oracle, reciprocity both halves) and the `inc_bottom` cases of `tests/references/test_reticolo_golden.py` |
 | result naming, `order()`, delegation | `tests/test_result_api.py` |

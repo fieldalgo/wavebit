@@ -553,9 +553,13 @@ def order_azimuth(xp, ky, kx, phi):
     orders. Three measurements say it is a defect rather than a convention, and they are what
     ``tests/test_amplitude_sp_frame.py`` now pins:
 
-    * **it is discontinuous.** Sweep ``theta`` so one order's own ``kx`` crosses zero and
-      nothing physical happens — the order stays propagating, ``R`` and ``|r_s|`` sail
-      through — but ``r_s`` changes sign. No convention can do that.
+    * **it is discontinuous.** Sweep ``theta`` so one order's own ``kx`` crosses zero at
+      ``ky != 0`` and nothing physical happens — the order stays propagating, ``R`` and
+      ``|r_s|`` sail through, and ``k_par`` never vanishes, so ``z_hat x k_hat_par`` turns
+      smoothly — but ``r_s`` changes sign. No convention can do that *there*. (On the
+      ``ky == 0`` row ``k_par`` passes through zero, the frame has no limit, and a sign step at
+      an order's own ``kx = 0`` is the frame's singular point rather than a defect; see
+      :func:`order_frame_sign`.)
     * **it disagreed with the ``kx == 0`` column handled just below.** That column takes its
       sign from ``Re(ky)``, which is the ``z_hat x k_hat`` rule; the ``Re(kx) < 0``
       half-plane did not. The function was discontinuous at the very column it special-cases.

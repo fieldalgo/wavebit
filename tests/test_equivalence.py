@@ -16,6 +16,12 @@ round-off.
 Asserted per diffraction order, not on the totals. Totals can agree while individual orders
 are wrong -- that is exactly the defect ``test_reticolo_golden`` exists to catch on the
 absolute scale, and the same trap applies to a self-consistency check.
+
+And on the complex amplitudes, not only on ``R`` and ``T``, since 2026-09-27. Before then the
+pure TE/TM route quoted every order in the Cartesian ``E_y`` / ``H_y`` while the other two
+quote each order in its own s/p frame -- a sign apart on every order with ``kx < 0``, which
+the efficiencies checked here could never see. The three routes now share one frame, and this
+file is where "one answer" includes the phase.
 """
 import numpy as np
 import pytest
@@ -40,6 +46,9 @@ TOL = 1e-11
 _PSI_OF = {'te': np.pi / 2, 'tm': 0.0}
 
 
+_QUANTITIES = ('R', 'T', 'r_s', 'r_p', 't_s', 't_p')
+
+
 def _solve(tetm, phi, structure):
     """``phi is None`` takes the declaration (the pure path); any azimuth takes the angle."""
     incidence = {'tetm': tetm} if phi is None else {'psi': _PSI_OF[tetm]}
@@ -47,7 +56,22 @@ def _solve(tetm, phi, structure):
     solver.phi = phi
     solver.structure = structure
     res = solver.solve().incident
-    return np.squeeze(np.asarray(res.R)), np.squeeze(np.asarray(res.T))
+    return {q: np.squeeze(np.asarray(getattr(res, q))) for q in _QUANTITIES}
+
+
+def _assert_same(a, b, tetm):
+    """Every order of every quantity, and a premise that makes the amplitude half able to fail.
+
+    ``theta = 1e-10`` puts the incident order at ``kx > 0`` and every ``m < 0`` order at
+    ``kx < 0``, which is where a frame difference between two routes would show -- as a sign,
+    so it is required to be a sign on something non-negligible.
+    """
+    kx = np.sin(CFG['theta']) + np.arange(-20, 21) * CFG['wavelength'] / CFG['period'][0]
+    amplitude = a['r_s' if tetm == 'te' else 'r_p']
+    assert (np.abs(amplitude[kx < 0]) > 1e-2).sum() >= 2, 'no kx < 0 order carries a sign'
+    for q in _QUANTITIES:
+        assert a[q].shape == b[q].shape, q
+        assert np.abs(a[q] - b[q]).max() < TOL, (q, np.abs(a[q] - b[q]).max())
 
 
 @pytest.mark.parametrize('tetm', ['te', 'tm'], ids=['TE', 'TM'])
@@ -58,12 +82,7 @@ def test_1d_matches_1d_conical(tetm):
     ``phi=0`` that coupling is empty, so it has to reduce to the TE/TM formulation exactly.
     A failure here means one of the two lost a term that the other kept.
     """
-    ri_1d, ti_1d = _solve(tetm, None, UCELL_1D)
-    ri_1c, ti_1c = _solve(tetm, 0.0, UCELL_1D)
-
-    assert ri_1d.shape == ri_1c.shape
-    assert np.abs(ri_1d - ri_1c).max() < TOL
-    assert np.abs(ti_1d - ti_1c).max() < TOL
+    _assert_same(_solve(tetm, None, UCELL_1D), _solve(tetm, 0.0, UCELL_1D), tetm)
 
 
 @pytest.mark.parametrize('tetm', ['te', 'tm'], ids=['TE', 'TM'])
@@ -75,12 +94,7 @@ def test_1d_conical_matches_2d(tetm):
     the check that the general solver degrades to the special case rather than merely
     resembling it.
     """
-    ri_1c, ti_1c = _solve(tetm, 0.0, UCELL_1D)
-    ri_2d, ti_2d = _solve(tetm, 0.0, UCELL_2D)
-
-    assert ri_1c.shape == ri_2d.shape
-    assert np.abs(ri_1c - ri_2d).max() < TOL
-    assert np.abs(ti_1c - ti_2d).max() < TOL
+    _assert_same(_solve(tetm, 0.0, UCELL_1D), _solve(tetm, 0.0, UCELL_2D), tetm)
 
 
 @pytest.mark.parametrize('tetm', ['te', 'tm'], ids=['TE', 'TM'])
@@ -91,5 +105,5 @@ def test_all_three_conserve_energy(tetm):
     same way -- agreement is not correctness.
     """
     for phi, structure in ((None, UCELL_1D), (0.0, UCELL_1D), (0.0, UCELL_2D)):
-        ri, ti = _solve(tetm, phi, structure)
-        assert abs(ri.sum() + ti.sum() - 1.0) < 1e-9, (phi, structure.shape)
+        out = _solve(tetm, phi, structure)
+        assert abs(out['R'].sum() + out['T'].sum() - 1.0) < 1e-9, (phi, structure.shape)

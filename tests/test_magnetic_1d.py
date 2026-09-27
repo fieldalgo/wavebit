@@ -190,19 +190,22 @@ def test_the_duality_carries_the_field_with_the_traded_admittance(side, theta):
         f'h_B = {h_b:.6f}')
 
 
+@pytest.mark.parametrize('theta', [THETA, -0.3])
 @pytest.mark.parametrize('side', ['top', 'bottom'])
-def test_the_pure_tm_field_is_the_conical_p_field(side):
+def test_the_pure_tm_field_is_the_conical_p_field(side, theta):
     """The pure 1D TM solve and ``psi = 0`` at ``phi = 0`` light the stack with one wave.
 
     Lit from below, the incidence medium is ``Material(2.25, mu=1.3)``: ``n/mu = 1.316``, which
     separates the unit-E input every path takes from the unit-H one the pure TM path took until
     2026-09-27 (their ratio was ``n/mu``) and from a rescale by ``n`` alone (1.710). Lit from
     above it is air, where all three agree -- the control that the comparison itself is sound.
+    At ``theta = -0.3`` the incident order sits at ``kx < 0``, so its ``p_hat`` is the turned-over
+    one on both paths, which the pure path took on with the per-order frame the same day.
     The whole six-component cell, from the result, so the boundary spectra that
     ``field_result`` assembles and the interior the kernels hand over are both in it.
     """
-    pure = _grating(1, tetm='tm', phi=0.0, incidence_side=side).solve()
-    conical = _grating(1, psi=0.0, phi=0.0, incidence_side=side).solve()
+    pure = _grating(1, theta=theta, tetm='tm', phi=0.0, incidence_side=side).solve()
+    conical = _grating(1, theta=theta, psi=0.0, phi=0.0, incidence_side=side).solve()
     a = np.asarray(pure.reconstruct_field(sample_x=20, sample_y=1, sample_z=10))
     b = np.asarray(conical.reconstruct_field(sample_x=20, sample_y=1, sample_z=10))
     gap = np.max(np.abs(a - b)) / np.max(np.abs(b))

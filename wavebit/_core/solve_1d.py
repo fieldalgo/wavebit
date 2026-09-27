@@ -27,7 +27,7 @@ Stages (matching the legacy chain, kept as one function each to make bit-parity 
 from .backend import (array_namespace, as_array, check_finite,
                       check_physical, eig)
 from .conventions import (boundary_kz, incident_column, incident_kz, mode_q,
-                          order_azimuth)
+                          order_azimuth, order_frame_sign)
 from .enums import Answers, answers_of
 from .power import (incident_power, net_power, power_for_real_k,
                     sp_incident_power, wave_power)
@@ -331,8 +331,11 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
         ``(de_ri, de_ti, power_entering)`` — reflected / transmitted efficiency arrays,
         shape ``(1, n_orders)``, and scalar net entering power divided by incident power.
         From ``answers='amplitude'`` up, the full result mapping instead (amplitudes and s/p
-        split; the pure TE/TM path carries all of one polarization, the other side is zero),
-        and from ``'field'`` up that mapping also carries the ``layer_info_list`` / ``T1``
+        split; the pure TE/TM path carries all of one polarization, the other side is zero).
+        Every amplitude is quoted in its order's own s/p frame, as on the coupled paths --
+        ``sigma_m = order_frame_sign(kx_m)`` times the Cartesian primary -- and the incidence
+        (``lit`` included) is that frame's unit s (TE) or p (TM) wave. From ``'field'`` up
+        that mapping also carries the ``layer_info_list`` / ``T1``
         state field reconstruction consumes -- for a unit incident **E** on both
         polarizations: the TM solve is posed in unit ``H_y``, and its ``T1`` is rescaled by the
         incidence medium's ``n/mu`` on the way out.
@@ -358,6 +361,10 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
         # Promote a real kx to the complex working dtype the algebra needs.
         kx = xp.astype(kx, xp.complex128)
     C = kx.dtype
+    # Every order's own s/p frame on this row: `s_hat = sigma * y_hat`, `p_hat` turning over
+    # with it (:func:`~wavebit._core.conventions.order_frame_sign`). `kx` is the incidence
+    # medium's and the mirror above does not touch it, so one `sigma` serves both sides.
+    sigma = order_frame_sign(xp, kx)
 
     n_orders_u = kx.shape[0]
     k0 = 2 * 3.141592653589793 / wavelength
@@ -435,7 +442,14 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
 
     # --- stage 3: final matching -> efficiency (transfer_1d_4) -------------------------
     Kz_top = _diag(xp, kz_top)
-    delta = incident_column(xp, C, lit, n_orders_u, n_orders_u // 2)
+    # The incident column in the primary's own Cartesian component (E_y for TE, H_y for TM),
+    # which is what the matching below is written in. A weight means "this much of that order's
+    # s_hat (TE) / p_hat (TM)", as on the coupled paths, and on this row that is `sigma_m` of
+    # the Cartesian primary. The unlit column takes the scalar `sigma_inc` rather than the
+    # elementwise product, so every other entry stays `+0.0` and a `sigma_inc = +1` solve is
+    # the arithmetic it was, signed zeros included; `lit is None` is structural, so jit-safe.
+    column = incident_column(xp, C, lit, n_orders_u, n_orders_u // 2)
+    delta = column * (sigma[n_orders_u // 2] if lit is None else sigma)
     # The incident wave's own kz, read off the same vector the reflected orders use. It equals
     # `n_top * cos(theta)` for a real angle in a lossless medium, and is taken from `kz_top` rather
     # than recomputed so that a complex angle cannot put the two sides of the match on opposite
@@ -479,10 +493,15 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
         return de_ri, de_ti, entering
 
     # TE carries everything on s, TM everything on p; the opposite side is identically zero.
-    # The pure path's primary amplitude IS the Fresnel amplitude on the reflection side (for
-    # TM the primary is H with unit incident H, and r_H == r_E in the convention where a
-    # normal-incidence interface gives r_p = -r_s); transmission converts H back to E across
-    # the index step, t_E = t_H * n_top/n_bot. Measured at 5.6e-16 (tests/test_lossy_media).
+    # The pure path's primary, taken into each order's own s/p frame by `sigma` (on this row an
+    # order's s_hat, and the axis of its p wave's magnetic field, are `sigma * y_hat`), IS the
+    # Fresnel amplitude on the reflection side: for TM the primary is H with a unit incident H,
+    # and the H ratio is the E ratio in the convention where a normal-incidence interface
+    # gives r_p = -r_s.
+    # Transmission converts H back to E across the index step, t_E = t_H * n_top/n_bot.
+    # Measured at 5.6e-16 (tests/test_lossy_media). Signed *after* that conversion, so the
+    # product is the one it always was and only its sign moves; until 2026-09-27 this path
+    # quoted the Cartesian primary on every order, which is `sigma_m * sigma_inc` of this.
     #
     # With a permeability the step is by **impedance**, `Z = sqrt(mu/eps) = mu/n`, so the
     # ratio is `(n_top/mu_top)/(n_bot/mu_bot)` -- the same `n/mu` per side that
@@ -492,12 +511,13 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     zeros_amp = xp.zeros_like(R)
     zeros_eff = xp.zeros_like(de_ri)
     if tetm_index == 0:
-        res = _pack(R, zeros_amp, Tt, zeros_amp, de_ri, zeros_eff, de_ti, zeros_eff,
-                    power_entering=entering)
+        res = _pack(R * sigma, zeros_amp, Tt * sigma, zeros_amp, de_ri, zeros_eff, de_ti,
+                    zeros_eff, power_entering=entering)
     else:
         # Parenthesised as one ratio, not `Tt * a / b`: the two associate differently and
         # differ by an ulp, and this spelling is `Tt * (n_top / n_bot)` exactly at mu = 1.
-        res = _pack(zeros_amp, R, zeros_amp, Tt * ((n_top / mu_top) / (n_bot / mu_bot)),
+        res = _pack(zeros_amp, R * sigma, zeros_amp,
+                    (Tt * ((n_top / mu_top) / (n_bot / mu_bot))) * sigma,
                     zeros_eff, de_ri, zeros_eff, de_ti, power_entering=entering)
     if not keep_field:
         return {'incident': res}
@@ -886,9 +906,10 @@ def sp_efficiencies(xp, kz_top_2d, kz_bot_2d, denom, n_top, n_bot, R_s, R_p, T_s
 def _pack(r_s, r_p, t_s, t_p, R_s, R_p, T_s, T_p, *, power_entering):
     """Assemble one incidence's results in the ``ResultSub`` field layout.
 
-    Amplitudes arrive **already Fresnel-normalized** — each pack site owns the conversion
-    from its boundary variables, because the factor differs between the pure-1D path (the
-    primary itself is the amplitude; TM transmission needs ``n_top/n_bot``) and the coupled
+    Amplitudes arrive **already Fresnel-normalized** and in each order's own s/p frame — each
+    pack site owns the conversion from its boundary variables, because the factor differs
+    between the pure-1D path (the primary itself is the amplitude, signed into the order's
+    frame by ``order_frame_sign``; TM transmission needs ``n_top/n_bot``) and the coupled
     paths (the p boundary variable is a magnetic amplitude; ``/(-i*n)`` on its own side).
     Both conversions are measured against the Airy forms in ``tests/test_lossy_media.py``.
     """

@@ -247,7 +247,7 @@ class ResultFields:
 
 def ordinary_state(solver, result, *, eps_top=None, eps_bot=None, mu_top=None, mu_bot=None):
     """Adapt one ordinary solve without retaining a reference to the solver."""
-    from .conventions import boundary_kz, order_azimuth, incident_column
+    from .conventions import boundary_kz, order_azimuth, order_frame_sign, incident_column
     from .solve_2d import order_grid_kxy
 
     if result.incident is None or result.incident.r_s is None:
@@ -271,8 +271,9 @@ def ordinary_state(solver, result, *, eps_top=None, eps_bot=None, mu_top=None, m
     angle = order_azimuth(xp, gy, gx, solver.phi)
     c, s = xp.cos(angle), xp.sin(angle)
     if kind in ('te', 'tm'):
-        # Pure 1-D amplitudes use fixed Cartesian Ey/Hy on every order.
-        c, s = xp.ones_like(gx), xp.zeros_like(gx)
+        # The pure 1D path's own per-order frame, exactly: `s_hat = sigma * y_hat` on the
+        # ky == 0 row, spelled without the angle so no `sin(pi)` reaches the zero component.
+        c, s = xp.astype(order_frame_sign(xp, gx), gx.dtype), xp.zeros_like(gx)
     materials = {'top': (solver.n_top, eps_top, mu_top),
                  'bottom': (solver.n_bot, eps_bot, mu_bot)}
 

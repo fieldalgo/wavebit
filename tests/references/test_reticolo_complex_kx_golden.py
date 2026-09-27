@@ -134,6 +134,10 @@ def test_orders_match_reticolo(name):
         np.testing.assert_allclose(np.asarray(values).ravel()[order + n], g[f'{name}__eff_{kind}'],
                                    atol=1e-11, rtol=0, err_msg=f'{name}: {kind}')
     amplitude = result.incident.r_s if kw['tetm'] == 'te' else result.incident.r_p
+    # The specular order only, which is why the pure 1D path moving into the per-order s/p
+    # frame (2026-09-27) left this untouched: RETICOLO's 1D amplitudes are Cartesian like the
+    # old path's, and the two frames differ by sign(Re kx_m) * sign(Re kx_inc) -- 1 here. A
+    # per-order comparison against RETICOLO's 1D path would apply that at the comparison.
     np.testing.assert_allclose(np.asarray(amplitude).ravel()[n], g[f'{name}__r0'],
                                atol=1e-11, rtol=0, err_msg=f'{name}: zeroth-order amplitude')
     assert np.isnan(float(np.real(result.power_entering)))
