@@ -484,7 +484,9 @@ T_order = P_transmitted_order / P_inc
 Applying it to the public p amplitude needs the `|n/μ|²` conversion of the previous section.
 Pure-1D TM sets the incident H amplitude to 1 while the coupled path converts the incident E
 coefficient to H, so each path has to pass **the incident amplitude it actually used** to the
-shared function. Changing only the formula while keeping today's interface, where each path
+shared function. (Still true of the pure TM solve's power arithmetic; since 2026-09-27 the
+field state it hands to reconstruction is rescaled to a unit incident E, as the coupled
+path's is.) Changing only the formula while keeping today's interface, where each path
 passes a different complex denominator, leaves the same problem.
 
 A separate internal module (e.g. `_core/power.py`) is the right home for the shared function.

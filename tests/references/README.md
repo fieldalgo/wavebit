@@ -265,6 +265,26 @@ only way this can be verified: regenerating produces all 72 arrays byte-identica
 committed file. Separately, the `sys.path` line pointed one level *above* the repo root, so the
 invocation in the docstring failed with `ModuleNotFoundError` before reaching any of this.
 
+### RETICOLO's two 1D frames, and which one this solver quotes (2026-09-27)
+
+RETICOLO's own 1D path (`res0(+-1)`) and its conical path at `delta0 = 0` report amplitudes
+that differ by exactly `sign(kx_m) * sign(kx_inc)` per order: the 1D one quotes the Cartesian
+`E_y` / `H_y`, the conical one each order's own s/p frame, `s_hat = sign(kx) * y_hat` on that
+row. Measured on V10 in the 2026-09-27 investigation, whose raw record is not public, TE and
+TM, `r` and `t`, at `theta = +-0.3`, to 3e-14; after dividing out one common phase and
+RETICOLO's power normalisation of `amplitude`, this solver matched RETICOLO path for path.
+
+Since 2026-09-27 this solver's pure 1D `tetm` path quotes the per-order frame too
+(`docs/amplitude-sp-frame.md` §6), so it matches RETICOLO's **conical** amplitudes and differs
+from RETICOLO's 1D ones by that factor. Any per-order comparison against RETICOLO's 1D path
+applies the relation at the comparison, as `test_golden_legacy_parity.py`'s `_frame_sign`
+does for the legacy golden. None needs it today: the only committed 1D amplitude,
+`golden_reticolo_complex_kx.npz`'s `r0`, is the specular order, where the factor is 1. The
+field rows are frame-free and unaffected, apart from the TM input normalisation noted in the
+1D field row above. The frame-free per-order quantity RETICOLO also returns -- each order's
+Cartesian E and H from `res2` -- is what this solver's `r_xyz` / `t_xyz` correspond to, and is
+the natural next per-order golden: it needs no frame relation on either of RETICOLO's paths.
+
 ### Where RETICOLO stops being an oracle
 
 Measured 2026-08-11, not taken from the manual. Feed a **real symmetric** tensor — Hermitian,

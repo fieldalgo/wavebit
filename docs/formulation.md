@@ -358,7 +358,13 @@ S(z̃) = δ e^{+i kz_inc z̃} + R e^{-i Kz_top z̃}
 U(z̃) = -i kz_inc δ e^{+i kz_inc z̃} + i Kz_top R e^{-i Kz_top z̃}
 ```
 
-`δ` is the one-hot incident order. `kz_inc` **must be read off the same vector**
+`δ` is the incident column in the primary's Cartesian component (`E_y` for TE, `H_y` for
+TM): `sigma_inc` on the incident order, or `sigma_j w_j` on each lit order under
+`excitation`, where `sigma = sign(Re kx)` is `s_hat . y_hat` on the `ky == 0` row
+(`order_frame_sign`). The reported amplitudes are `D R` and `D T T1` with `D = diag(sigma)`
+(TM transmission after its impedance ratio), which puts every order in its own s/p frame,
+the coupled paths' (`docs/amplitude-sp-frame.md` §6); the TM field state handed to
+reconstruction is `T1 · n_inc/mu_inc`, a unit incident E. `kz_inc` **must be read off the same vector**
 `Kz_top` is built from (`incident_kz`): the spelling `n_top cosθ` is an identity for real
 `θ` and the wrong branch for complex `θ` (`docs/branch-cuts.md`). Continuity at `z̃ = 0`
 against `(F T1, G T1)`:

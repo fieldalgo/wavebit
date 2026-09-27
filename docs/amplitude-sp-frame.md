@@ -1,6 +1,7 @@
 # The per-order s/p frame the complex amplitudes are quoted in
 
 Written: 2026-08-16.
+Updated: 2026-09-27 (Sec. 6: the pure 1D path joins the frame; `r_xyz` / `t_xyz`).
 Targets: `wavebit/_core/conventions.py`, `wavebit/_core/result.py`,
 `wavebit/_core/solve_1d.py`, `wavebit/_core/scattering.py`, `wavebit/_core/field_result.py`,
 `tests/test_amplitude_sp_frame.py`, `tests/test_order_azimuth.py`,
@@ -275,7 +276,8 @@ conical, 2D and 4ff, each dump taken twice. Every conical, 2D and 4ff array is b
 every 1D efficiency and `power_entering` is byte-identical; every 1D amplitude equals
 `sigma_m * sigma_inc * old` and every field `sigma_inc * old` by `==` (bytes differ only where a
 zero took a sign); every 1D `S` equals `flip * D * old * D`. The TM unit-E step alone moves
-fields by `n/mu`, to 1.3e-15 normwise, and nothing else.
+fields by `n/mu`, to 1.3e-15 normwise, and nothing else. The battery's dumps and the
+investigation's record are not public; what they measured is stated here.
 
 **The price, stated where a user will look for it.**
 
