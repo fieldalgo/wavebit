@@ -66,18 +66,24 @@ def _golden():
 
 
 def _in_our_frame(e):
-    """RETICOLO's raw conical cell, brought into this library's frame. The claim under test.
+    """RETICOLO's raw conical cell, in the depth frame of ``STACKS``. The claim under test.
 
     Three parts, none of them guessed: transpose ``(z, x, y, 6)`` to this project's
     ``(z, y, x, 6)``; reverse the cell as a whole, because RETICOLO's ``+z`` points back out of
-    the stack and its first layer is our last; and apply the z-parity, ``E_z, H_x, H_y`` flip
-    and ``E_t, H_z`` do not. No conjugation and no scale.
+    the stack and its first layer is the last one ``STACKS`` lists; and apply the z-parity,
+    ``E_z, H_x, H_y`` flip and ``E_t, H_z`` do not. No conjugation and no scale.
+
+    That depth frame was this library's until 2026-09-21. The public frame is RETICOLO's own
+    now (``+z`` up, bottom layer first), and :func:`_reconstruct` brings ours into the depth
+    frame by the same reversal and parity, so the two cancel: after the transpose, RETICOLO's
+    raw cell and the public cell agree entry for entry.
     """
     return e.transpose(0, 2, 1, 3)[::-1] * Z_PARITY
 
 
 def _reconstruct(stack, theta, phi, pol):
-    # STACKS and the comparison archive use downward depth; public Wavebit uses height.
+    # STACKS and the comparison use downward depth, top layer first; public Wavebit uses
+    # height, bottom layer first, as RETICOLO's raw archive does.
     thickness, structure = STACKS[stack]
     solver = wavebit.rcwa(backend=0, top=1.0, bot=1.0, period=[PERIOD], truncation_order=MAX_ORDER,
                           wavelength=WL, thickness=thickness[::-1], structure=structure[::-1],

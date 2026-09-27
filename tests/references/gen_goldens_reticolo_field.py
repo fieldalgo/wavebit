@@ -50,7 +50,10 @@ O(1) residual when guessed wrong:
   reading ``z`` invites, drops the slab's top face and leaves the whole comparison O(1) out.
 * **RETICOLO's ``+z`` points out of the stack**, so the cell reverses as a whole, layer order
   included. On one layer that is indistinguishable from a per-layer reversal; ``bilayer``
-  separates them (1.3e0 the wrong way round, 2.8e-14 the right way).
+  separates them (1.3e0 the wrong way round, 2.8e-14 the right way). That was measured against
+  this library's frame of the day, ``+z`` down into the stack. Since 2026-09-21 the public
+  frame points the way RETICOLO's does, and the test reverses *both* cells into the
+  top-to-bottom depth frame of ``STACKS``; the golden itself stays raw.
 * The reversal carries the **component parity** ``E_z, H_x, H_y`` flip / ``E_t, H_z`` do not,
   which is the rule ``_core/fields.py`` already states for its own frame. With the parity and
   the reversal applied there is **no free amplitude at all** -- not a fitted scale, as the

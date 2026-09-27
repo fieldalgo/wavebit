@@ -19,9 +19,13 @@ for how, and ``README.md`` for what each was worth):
   zero-thickness ambients, so a stack of ``L`` layers comes back as ``(L + 2) * npts`` rows of
   which many share ``z == 0``. Rows are located by entry index, not by ``z`` -- see
   ``layer_rows``.
-* **z runs the other way.** RETICOLO's ``+z`` points back out of the stack, so the whole cell
-  reverses, layer order included. That is a frame difference, and it carries the matching
-  component parity: ``Z_PARITY``.
+* **z runs the other way from** ``STACKS``. RETICOLO's ``+z`` points back out of the stack, from
+  ``z = 0`` at its bottom, so against the top-to-bottom depth frame ``STACKS`` is written in the
+  whole cell reverses, layer order included. That is a frame difference, and it carries the
+  matching component parity: ``Z_PARITY``. It was also the frame difference from this
+  library's own cell until 2026-09-21; since then the public frame is RETICOLO's -- ``+z`` up,
+  bottom layer first -- so the tests reverse *both* cells into the depth frame, and the two
+  transforms cancel.
 
 **The stacks are stated in permittivity**, as everywhere in wavebit since 2026-08-20; RETICOLO
 wants a refractive index and ``interface/Reticolo.py`` converts on the way out, in one place.
@@ -66,7 +70,9 @@ def _bar(lo_nm, hi_nm, eps_bg, eps_hi):
 
 
 # name -> (thicknesses, structure). `structure` is (layer, 1, NX) of relative **permittivity**,
-# this project's raster layout.
+# this project's raster layout, with the layers listed **top to bottom** -- the order the bridge
+# hands RETICOLO and the golden was frozen with. The public API lists them bottom to top since
+# 2026-09-21, so the tests reverse both lists before solving.
 #
 # **The scene is exactly the one the golden was frozen against.** Every value here is the square
 # of the refractive index this file carried before 2026-08-20, so the committed RETICOLO numbers
@@ -82,8 +88,9 @@ STACKS = {
     # orders equal, which is exactly the case a wrong Fourier order-index sign survives.
     'grating': ([260.0], _bar(50.0, 230.0, 1.0, 4.0).reshape(1, 1, NX)),
     # Two *different* patterned layers: the interface between them is under test, and so is
-    # the layer walk -- the reconstruction returns layers top-to-bottom and RETICOLO the other
-    # way round, which one layer cannot distinguish from a plain z reversal.
+    # the layer walk -- these lists run top to bottom and RETICOLO's cell (like the public
+    # reconstruction since 2026-09-21) bottom to top, and one layer cannot distinguish that
+    # whole-cell reversal from a per-layer z reversal.
     'bilayer': ([150.0, 260.0], np.stack([_bar(50.0, 230.0, 1.0, 4.0),
                                           _bar(130.0, 330.0, 1.6900000000000002,
                                                2.5600000000000005)])[:, None, :]),
@@ -111,7 +118,10 @@ def n_layers(stack):
 
 
 def layer_rows(n):
-    """Which rows of RETICOLO's cell are the ``n`` layers, top-to-bottom in *its* z direction.
+    """Which rows of RETICOLO's cell are the ``n`` layers, in *its* z direction: bottom to top.
+
+    (``bilayer``'s kept rows run ``z = 0`` to ``410`` through its 260 nm layer first -- the one
+    ``STACKS`` lists last.)
 
     ``res3`` emits ``RES_Z`` rows per profile entry, and the profile this bridge builds is
     ``[0, *thickness, 0]`` -- a zero-thickness ambient at each end. So entry ``k`` owns rows

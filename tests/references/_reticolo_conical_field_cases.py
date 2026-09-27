@@ -14,10 +14,11 @@ was checked by nothing outside this repository.
 What carries over from the pure 1D golden, unchanged and re-verified here rather than assumed:
 the ``.m`` samples the same ``linspace(0, period, 11)``, ``res3`` lays a cell out the same way
 (``RES_Z`` rows per profile entry, ambients included — :func:`layer_rows` is imported rather
-than restated), RETICOLO's ``+z`` still points out of the stack, and the reversal still carries
-the declared frame's z-parity. What is new is the *shape*: ``res3``'s conical branch returns
-``(z, x, y, 6)`` — **x before y**, the transpose of this project's ``(z, y, x, 6)`` — and six
-components instead of three, so the parity has six entries.
+than restated), RETICOLO's ``+z`` still points out of the stack -- the public frame's direction
+too since 2026-09-21 -- and the reversal into the top-to-bottom depth frame of ``STACKS`` still
+carries the declared frame's z-parity. What is new is the *shape*: ``res3``'s conical branch
+returns ``(z, x, y, 6)`` — **x before y**, the transpose of this project's ``(z, y, x, 6)`` —
+and six components instead of three, so the parity has six entries.
 
 **Two slots are identically zero on a uniform slab and must be treated as such.** For pure s
 incidence ``E_z`` vanishes (E is perpendicular to the plane of incidence, which has no z
@@ -57,10 +58,12 @@ def _bar(lo_nm, hi_nm, eps_bg, eps_hi):
 
 
 # name -> (thicknesses, structure), of relative **permittivity** shaped (layer, 1, NX) as this
-# project rasters a 1D cell. The same four shapes the pure 1D golden uses, so a disagreement
-# that appears only here is about the conical coupling rather than about the geometry -- and
-# ``test_at_zero_azimuth_the_two_reticolo_goldens_agree`` asserts the two lists still hold the
-# same arrays, which is what keeps "the same shapes" true rather than merely intended.
+# project rasters a 1D cell, layers listed top to bottom as in the pure 1D list (the tests
+# reverse them into the public bottom-to-top order). The same four shapes the pure 1D golden
+# uses, so a disagreement that appears only here is about the conical coupling rather than
+# about the geometry -- and ``test_at_zero_azimuth_the_two_reticolo_goldens_agree`` asserts the
+# two lists still hold the same arrays, which is what keeps "the same shapes" true rather than
+# merely intended.
 #
 # Permittivity since 2026-08-20, and identical to the pure 1D list value for value: each is the
 # square of the index frozen into the golden, so the scene has not moved. The untidy entries are

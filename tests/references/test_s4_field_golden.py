@@ -73,6 +73,9 @@ def _reconstruct(path, stack_name, theta, phi, pol):
     :func:`test_the_golden_was_frozen_on_the_stacks_this_file_solves` is what stops the two
     drifting apart, which is the guarantee ``__stack`` used to provide by being the only source.
     """
+    # STACKS and the S4 archive run top to bottom with z measured down, S4's own frame; public
+    # Wavebit lists layers bottom to top with upward heights, so the list is reversed here and
+    # the cell is reversed back along z, with the mirror parity, at the return.
     stack = STACKS[stack_name][::-1]
     eps = np.array([x[1] for x in stack]).reshape(-1, 1, 1)
     d = [float(x[0]) for x in stack]

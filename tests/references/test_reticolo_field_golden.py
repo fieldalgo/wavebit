@@ -19,12 +19,19 @@ not independently confirm the formulation, because nothing sharing a formulation
 
 **The frame transform is the claim under test**, so the golden stores RETICOLO's raw cell and
 the conversion lives here, in :func:`_in_our_frame`. Two parts, both measured (see the
-generator):
+generator) when this library's ``+z`` still pointed down into the stack:
 
 * RETICOLO's ``+z`` points back out of the stack, so the cell reverses **as a whole**, layer
   order included -- not per layer. ``bilayer`` is what separates those two readings.
 * The reversal carries the component parity ``E_z, H_x, H_y`` flip, ``E_t, H_z`` do not, which
   is the rule ``_core/fields.py`` already states for its own frame.
+
+Since 2026-09-21 the public frame *is* RETICOLO's: ``+z`` up from ``z = 0`` at the bottom
+interface, bottom layer first. The comparison is still made in the downward depth frame
+``STACKS`` is written in, so :func:`_in_our_frame` reverses RETICOLO's cell into it and
+:func:`_reconstruct` applies the identical reversal and parity to ours. The two transforms
+cancel: what the assertions pin is that RETICOLO's raw cell and the public cell agree entry for
+entry.
 
 With those applied there is **no free amplitude**: not a fitted scale as the fmmax golden
 needs, but exactly 1, to 2.7e-14. That is asserted rather than fitted away, because a scale
@@ -75,10 +82,12 @@ def _golden():
 
 
 def _in_our_frame(e, pol):
-    """RETICOLO's raw cell, brought into this library's frame. The claim under test.
+    """RETICOLO's raw cell, in the depth frame ``STACKS`` is written in. The claim under test.
 
-    Whole-cell reversal (RETICOLO's ``+z`` points out of the stack, so its first layer is our
-    last) plus the z-parity of each slot. Nothing else -- no conjugation, and no scale.
+    Whole-cell reversal (RETICOLO's ``+z`` points out of the stack, so its first layer is the
+    last one ``STACKS`` lists) plus the z-parity of each slot. Nothing else -- no conjugation,
+    and no scale. That depth frame was this library's until 2026-09-21; the public frame is
+    RETICOLO's own now, and :func:`_reconstruct` brings ours into the depth frame the same way.
 
     A ``.conj()`` *was* applied by hand in a script deleted on 2026-08-15, unaudited and
     alongside a per-layer flip. Both were wrong, which is what an unaudited convention patch
@@ -88,7 +97,8 @@ def _in_our_frame(e, pol):
 
 
 def _reconstruct(stack, theta, pol):
-    # STACKS and the comparison archive use downward depth; public Wavebit uses height.
+    # STACKS and the comparison use downward depth, top layer first; public Wavebit uses
+    # height, bottom layer first, as RETICOLO's raw archive does.
     thickness, structure = STACKS[stack]
     solver = wavebit.rcwa(backend=0, top=1.0, bot=1.0, period=[PERIOD], truncation_order=MAX_ORDER,
                           wavelength=WL, thickness=thickness[::-1], structure=structure[::-1],

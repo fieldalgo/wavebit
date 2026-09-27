@@ -145,6 +145,12 @@ Three things had to be measured, each worth O(1) when guessed wrong:
 | **which way z runs** — RETICOLO's `+z` points back *out* of the stack | reverse each layer in place: **1.3e0** | reverse the whole cell, layer order included: **2.8e-14** |
 | **the component parity** the reversal carries | none, or a hand-applied `.conj()` | `Ez, Hx, Hy` flip / `Et, Hz` do not — the rule `_core/fields.py` already states |
 
+Those were measured against this library's frame of the day, `+z` down into the stack. Since
+2026-09-21 the public frame is RETICOLO's — `+z` up from `z = 0` at the bottom interface, bottom
+layer first — so RETICOLO's raw cell *is* the public cell entry for entry (after the conical
+transpose). The tests still compare in the top-to-bottom depth frame their case lists are
+written in, reversing both cells with the same parity, which cancels.
+
 **What unblocked all of this was that the wrapper was throwing away two of `res3`'s three
 outputs.** `[e,z,o]=res3(...)` and only `e` reached Python, which is very likely why this
 comparison had defeated earlier attempts: `z` cannot locate a layer on its own, and `o` — the

@@ -68,7 +68,9 @@ WL = 620.0
 PERIOD = (400.0, 380.0)
 RES_Z = 7                       # per layer, inclusive of both faces; interior is 1..RES_Z-2
 
-# (thickness, relative permittivity) top to bottom. Both start and end in vacuum so the
+# (thickness, relative permittivity) top to bottom -- S4's order, with its z running down from
+# the first layer; the test reverses the list into the public bottom-to-top order and its cell
+# back into this depth frame. Both start and end in vacuum so the
 # incident and transmitted sides are unambiguous, and both put a high-index layer in the middle
 # so the interior samples sit where the field is actually structured.
 #
@@ -84,7 +86,10 @@ POLS = ('s', 'p')
 
 
 def z_samples(stack):
-    """Interior sample points of every layer, in the order ``reconstruct_field`` returns them.
+    """Interior sample points of every layer, as depths from the first layer's front face.
+
+    That is S4's ``z`` and the order ``reconstruct_field`` returned samples in until
+    2026-09-21; it now returns them bottom to top, and the test reverses its cell to match.
 
     Reads only the thicknesses, so it is unaffected by which quantity the second column holds
     — which is what lets ``test_s4_field_golden`` call it on the committed golden's ``__stack``
