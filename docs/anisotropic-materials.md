@@ -473,6 +473,18 @@ answerable on a JAX tracer, where there is nothing to read; and "passed all-zero
 claim about the caller rather than about the tensor. Passing four zero matrices therefore costs
 the 8x, and the cheap path is one omitted argument away.
 
+The z-row axis reaches back into the dimensionality one. The 1D operators have no z-row slots,
+so a z row — the permittivity's `ep{xz,yz,zx,zy}` or the permeability's `mu[5:]` — moves even
+a one-row raster onto the 2D layout the first-order path is written on, and `formulation='4ff'`
+does the same without one. That layout carries both polarizations, so `tetm` beside either is
+refused by name rather than rerouted: the path it would be rerouted to reads an incident
+polarization `tetm` declared absent. Until 2026-09-27 it was rerouted: a `tetm` given at
+construction surfaced as a `TypeError` from deep in the solve, and one assigned afterwards
+answered for s light whichever of the two it named. The message names the pair that describes
+the same light, `polarization=(1, 0)` / `(0, 1)` at `phi = 0`, and
+`tests/test_tetm_off_the_pure_path.py` checks that it does: beside an all-zero z row, and under
+a forced `'4ff'`, the pair reproduces the pure `tetm` solve.
+
 ### Why it has to be automatic
 
 The cost spread is large enough that a wrong default is a real tax, and small enough in the

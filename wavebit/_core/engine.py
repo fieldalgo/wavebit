@@ -49,6 +49,22 @@ from .solve_2d_4ff import solve_2d_4ff as _solve_2d_4ff
 # one was given -- see `CoreSolveMixin._formulation_for`.
 _Z_ROW_SLOTS = ('epxz_conv_all', 'epyz_conv_all', 'epzx_conv_all', 'epzy_conv_all')
 
+
+def _z_row_given(z_row, mu=None):
+    """The z-row slots a ``solve_conv`` call was handed, by name: permittivity, then ``mu``.
+
+    ``z_row`` is the four ``ep{xz,yz,zx,zy}_conv_all`` arguments and ``mu`` the permeability
+    slots, whose z row is ``mu[5:]``. *Given*, not nonzero -- see
+    :meth:`CoreSolveMixin._formulation_for`, which decides the formulation on this list, and
+    :meth:`CoreSolveMixin._refuse_tetm_off_the_pure_path`, which names it.
+    """
+    given = [name for name, stack in zip(_Z_ROW_SLOTS, z_row) if stack is not None]
+    if mu is not None:
+        given += [name for name, stack in zip(('muxz', 'muyz', 'muzx', 'muzy'), tuple(mu)[5:])
+                  if stack is not None]
+    return given
+
+
 # The relative wavelength step an auto_detune retry applies. Measured on the 2D detune
 # ladder (see backend._CUTOFF_REL): the RayleighPointWarning band clears by ~1e-13 relative
 # and the efficiency error is <= ~2e-6 from ~4e-13 out, so 1e-12 stands clear of the band by
@@ -842,7 +858,13 @@ class CoreSolveMixin:
         Legal only where the formulation exists: a 1D structure, ``truncation_order[1] == 0``, no azimuth,
         and no ``psi`` or ``polarization`` beside it. Everywhere else it is refused rather
         than ignored — ``_assign_grating_type`` does that check, and says which condition
-        failed.
+        failed. "A 1D structure" means a one-row raster: a shape structure, a tensor material,
+        a z row handed to :meth:`solve_conv` and ``formulation='4ff'`` all solve on the 2D
+        layout, and a solver holding no structure on the layout its last solve took (2D if
+        none); each is refused by name in :meth:`solve_conv` unless that layout is the pure one
+        (:meth:`_refuse_tetm_off_the_pure_path`, since 2026-09-27; until then all but the
+        tensor raised a ``TypeError`` from deep in the solve, or -- with ``tetm`` assigned after
+        construction -- answered for s light whichever it named).
         """
         return self._tetm
 
@@ -1015,6 +1037,79 @@ class CoreSolveMixin:
                     'not a degree of freedom of this problem, so an off-axis plane of '
                     'incidence contradicts it. Drop tetm for the conical path, which is '
                     'what carries an azimuth.')
+
+    def _refuse_tetm_off_the_pure_path(self, z_row_given, routed):
+        """``tetm`` on a solve that is not taking the pure 1D path: name what sent it away.
+
+        :meth:`_refuse_illegal_tetm` answers for a raster, where the structure alone decides.
+        Five other routes leave the pure path with ``tetm`` still set. A z row handed to
+        :meth:`solve_conv` (the permittivity's or the permeability's) and ``formulation='4ff'``
+        move any structure onto the 2D layout the first-order path is written on; a tensor
+        material and a shape structure are always solved there; and a solver holding no
+        structure solves on the layout its last solve took, or the 2D one if it never solved --
+        so it is refused unless that solve was a pure one. The tensor route is refused by name
+        earlier, where the convolution matrices are built
+        (:func:`~wavebit._core.anisotropy.validate_options`), and is here for matrices built
+        before ``tetm`` was set. The other four reached :meth:`_incidence_pair`, and what they
+        did there depended on the door ``tetm`` came in by. Declared at construction it leaves
+        ``psi`` unset, and the solve raised ``TypeError: array_namespace requires at least one
+        non-scalar array input``, naming neither input. Assigned afterwards it left the
+        constructor's default ``psi = pi/2`` behind, and the solve *answered* -- for s light,
+        whichever of ``'te'`` / ``'tm'`` had been declared (measured on 0937b35: ``tetm='tm'``
+        under ``formulation='4ff'`` returned the TE reflectance).
+
+        ``z_row_given`` is :func:`_z_row_given` of the call, and ``routed`` the layout the
+        structure chose before a z row or ``'4ff'`` moved it. Where two routes meet, the message
+        names the one whose fix is complete: the z row first, since dropping ``tetm`` is the
+        whole fix whatever else holds; ``'4ff'`` only where the structure took the pure path,
+        since only there does "leave formulation at 'auto'" keep it; then the structure's own
+        reason. Asked before the structure, ``'4ff'`` told a shape, and a solver with no
+        structure, that ``'auto'`` would keep a pure path neither has. Every test is structural
+        -- was a slot given, which formulation was set, which type the structure is -- so the
+        refusal holds under ``jax.jit`` and ``jax.grad`` exactly as it does eagerly.
+        """
+        tetm = self._tetm
+        instead = (f"polarization={'(1, 0)' if tetm == 'te' else '(0, 1)'} at phi=0, the "
+                   f'light tetm={tetm!r} describes')
+        if z_row_given:
+            raise ValueError(
+                f"tetm={tetm!r} and a z row ({', '.join(z_row_given)}) were both given. A z "
+                'row couples E_z to the in-plane field, which only the first-order (4ff) path '
+                'expresses, and that path solves on the 2D layout with both polarizations: '
+                'the pure TE/TM formulation tetm selects has no slot for it. Drop tetm and give '
+                f'the incidence as {instead}; the solve then takes the 4ff path. See '
+                'docs/anisotropic-materials.md section 8.')
+        if routed == 0 and self._formulation == Formulation.FOUR_FIELD:
+            raise ValueError(
+                f"tetm={tetm!r} and formulation='4ff' were both given. '4ff' forces the "
+                'first-order path, which solves on the 2D layout with both polarizations, so '
+                'the pure TE/TM solve tetm selects cannot run on it. To cross-check the two '
+                f'formulations on this structure, drop tetm and give the incidence as '
+                f"{instead}; to keep the pure 1D path, leave formulation at 'auto'.")
+        if self.structure is None:
+            layout = 'the conical 1D one' if routed == 1 else 'the 2D one'
+            raise ValueError(
+                f'tetm={tetm!r} was given to a solver that holds no structure. Only a 1D '
+                'raster routes a solve to the pure TE/TM path tetm selects; with no structure, '
+                'solve_conv keeps the layout the last solve took, or the 2D one if there was '
+                f'none -- here {layout}, which carries both polarizations. Assign the raster '
+                'the convolution matrices were built from, or drop tetm and give the incidence '
+                f'as {instead}.')
+        if self._has_tensor_materials():
+            raise ValueError(_anisotropy.TETM_REFUSAL)
+        if self.modeling_path == ModelingPath.PARAMETRIC:
+            raise ValueError(
+                f'tetm={tetm!r} was given with a shape structure. Shapes are always solved on '
+                'the 2D layout, where s and p couple, even when no shape varies along y -- so '
+                'the pure TE/TM formulation tetm selects does not exist there. Drop tetm and '
+                f'give the incidence as {instead}, or draw the grating as a one-row raster to '
+                'keep the pure 1D path.')
+        # Unreachable today: a raster that is not 1D is refused by `_refuse_illegal_tetm`.
+        # Kept so that a sixth route to the 2D layout meets a sentence rather than the
+        # TypeError the five above used to.
+        raise ValueError(
+            f'tetm={tetm!r} cannot be honoured: this solve is not on the pure 1D TE/TM path. '
+            f'Drop tetm and give the incidence as {instead}.')
 
     #: Whether ``psi`` was set explicitly, rather than being the pure-s default a solver
     #: falls back to when no incidence was named. It is what lets ``polarization`` refuse to
@@ -2011,7 +2106,9 @@ class CoreSolveMixin:
 
         * ``'4ff'`` forces the first-order path on a problem that does not need it. This is
           how the two formulations are cross-checked against each other — the same scene run
-          both ways must agree, and no external oracle provides that.
+          both ways must agree, and no external oracle provides that. The first-order path
+          is written on the 2D layout, so ``tetm`` beside it is refused: give the incidence
+          as ``polarization`` for the cross-check.
         * ``'2ff'`` refuses a z row instead of dropping it. Dropping it is the dangerous
           failure: the reduced tensor is a perfectly good medium, so the solve succeeds and
           ``R + T`` stays at 1 to machine precision while the efficiencies have moved by 2e-2
@@ -2050,10 +2147,7 @@ class CoreSolveMixin:
         caller rather than about the tensor. Leave them ``None`` — the default — to stay on the
         cheap path.
         """
-        given = [name for name, stack in zip(_Z_ROW_SLOTS, z_row) if stack is not None]
-        if mu is not None:
-            given += [name for name, stack in zip(('muxz', 'muyz', 'muzx', 'muzy'), tuple(mu)[5:])
-                      if stack is not None]
+        given = _z_row_given(z_row, mu)
         if self._formulation == Formulation.TWO_FIELD and given:
             raise ValueError(
                 f"formulation='2ff' cannot express the z row, and {', '.join(given)} "
@@ -2955,9 +3049,17 @@ class CoreFactorizationMixin:
         have answered one problem while the rest of the object described another.
         """
 
+        before = self._grating_type
         self._assign_grating_type()
         z_row = (epxz_conv_all, epyz_conv_all, epzx_conv_all, epzy_conv_all)
-        if self._formulation_for(z_row, mu) == Formulation.FOUR_FIELD:
+        four_field = self._formulation_for(z_row, mu) == Formulation.FOUR_FIELD
+        if self._tetm is not None and (four_field or self._grating_type != 0):
+            # Every route off the pure path reads an incidence pair `tetm` declared absent. The
+            # routing goes back before the refusal: `reconstruct_field` dispatches on it, and
+            # left at 2 it took the pure solve answered before this one for a 2D one (IndexError).
+            routed, self._grating_type = self._grating_type, before
+            self._refuse_tetm_off_the_pure_path(_z_row_given(z_row, mu), routed)
+        if four_field:
             # The 1D paths have no z-row slots to fill, so a z row is also a choice of path:
             # the first-order solve is written on the 2D layout (a 1D structure is n_orders_v == 1
             # there, the same physics the conical path solves at conical cost).

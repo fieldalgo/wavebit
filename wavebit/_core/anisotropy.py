@@ -16,6 +16,13 @@ from .geometry import StaticGeometry, StaleGeometryError
 from . import factorization as fac
 
 
+#: ``tetm`` beside a tensor material. One sentence for the two places that refuse it:
+#: :func:`validate_options`, where the convolution matrices are built, and
+#: ``CoreSolveMixin._refuse_tetm_off_the_pure_path``, for matrices built before ``tetm`` was set.
+TETM_REFUSAL = ('tensor materials require the coupled polarization solve; use polarization '
+                'instead of tetm')
+
+
 class TensorConvMatrices(NamedTuple):
     """Nine constitutive blocks (epsilon or mu), in ``solve_conv`` slot order."""
     epx: object
@@ -277,7 +284,7 @@ def validate_options(solver):
         if solver._normal_grid is not None:
             raise NotImplementedError("shape_nvf_grid_size has no reader with tensor factorization='li'")
         if solver._tetm is not None:
-            raise ValueError('tensor materials require the coupled polarization solve; use polarization instead of tetm')
+            raise ValueError(TETM_REFUSAL)
         if isinstance(solver.structure, list):
             rectilinear.validate(solver.structure, solver.lattice)
             if solver._fourier_coefficients == FourierCoefficients.SAMPLED:
@@ -288,7 +295,7 @@ def validate_options(solver):
     if solver._projector not in (None, 'linear'):
         raise NotImplementedError("tensor material patterns currently use nvf_projector='linear'")
     if solver._tetm is not None:
-        raise ValueError('tensor materials require the coupled polarization solve; use polarization instead of tetm')
+        raise ValueError(TETM_REFUSAL)
     patterned = not isinstance(solver.structure, list) or any(l.get('shapes') for l in solver.structure)
     if patterned and not integrated_shapes(solver) and any(_geometry_derivative(v) for v in (solver.lattice.u, solver.lattice.v)):
         raise ValueError('sampled tensor patterns do not support lattice derivatives; keep the cell fixed')
