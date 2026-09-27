@@ -3278,9 +3278,10 @@ class CoreFactorizationMixin:
         """The live conditions a reconstruction reads, as concrete numbers -- or ``None``.
 
         `reconstruct_field` walks the modes and amplitudes the last solve left behind, but it
-        re-reads `wavelength`, `thickness`, the cell, the incidence angles and `incidence_side`
-        from the solver as it goes. So a condition changed after the solve and before the
-        reconstruction produces a field that belongs to *neither* scene.
+        re-reads `wavelength`, `thickness`, the cell, the incidence angles, `incidence_side`,
+        the half-space media and the retained order window from the solver as it goes. So a
+        condition changed after the solve and before the reconstruction produces a field that
+        belongs to *neither* scene.
 
         ``None`` when any of it is traced: concreteness is not a tracer's to prove, and a jitted
         reconstruction cannot compare anyway -- the same rule `StaticGeometry`'s staleness
@@ -3315,6 +3316,20 @@ class CoreFactorizationMixin:
                 # solve is the one that answers there. As text, so a device's own equality
                 # (a JAX list, a Torch object) never decides a refusal.
                 str(self._device),
+                # The half-space media. The incident wavevector is read live -- by `order_kxy`
+                # and by the centre phase -- through the lit medium's index, so a `top` changed
+                # after the solve returned a field of neither scene (a 1D TE grating, `top`
+                # 1.0 -> 1.3: 0.19 from the field before and 0.11 from the re-solved one). Both
+                # media and both constants, because either is the scene.
+                tuple(None if value is None else
+                      tuple(complex(v) for v in _np.asarray(value).reshape(-1))
+                      for medium in (self._top, self._bot)
+                      for value in (medium.epsilon, medium.mu)),
+                # The retained window, which `order_kxy` also reads live. An `excitation` whose
+                # keys move its centre keeps its size, so no shape mismatch catches it: the modes
+                # are read one order off (the same grating, `excitation` None -> {1: 1.0}: 1.87
+                # from the field before, 1.76 from the re-solved one).
+                self.order_window,
             )
         except (TypeError, ValueError, RuntimeError):
             # Three ways a condition declines to be a number, and all three mean the same
@@ -3369,7 +3384,8 @@ class CoreFactorizationMixin:
         raise RuntimeError(
             'the scene has changed since the solve whose state this would reconstruct from. '
             'The modes and amplitudes are the old scene\'s while the wavelength, thickness, '
-            'cell and incidence are read live, so the field would belong to neither -- '
+            'cell, incidence, half-space media and retained orders are read live, so the '
+            'field would belong to neither -- '
             'measured at max|d| = 1.105 against the field before the change and 0.582 against '
             'the field after re-solving. Call solve() again first.')
 

@@ -2,8 +2,9 @@
 
 Its own first line promises "the state left behind by the last solve", and it does walk that:
 `T1` and `layer_info_list` are the solve's. But it re-reads `wavelength`, `thickness`, the cell,
-the incidence angles and `incidence_side` from the solver as it goes -- so a condition changed
-between the solve and the reconstruction produced a field belonging to **neither** scene.
+the incidence angles, `incidence_side`, the half-space media and the retained order window from
+the solver as it goes -- so a condition changed between the solve and the reconstruction
+produced a field belonging to **neither** scene.
 
 Measured on a 1D grating before the fix: solve at 900 nm, move `wavelength` to 600 without
 re-solving, reconstruct.
@@ -15,7 +16,12 @@ Both non-zero is the whole finding. Either one alone is explainable -- the first
 the change", the second as "it applied it" -- and it was doing half of each.
 
 Crossed over every condition the reconstruction reads, because the mix is per-condition: a
-check that watched only `wavelength` would leave five other ways in.
+check that watched only `wavelength` would leave eight other ways in. The last three joined on
+2026-09-28, after a review measured the first of them: a 1D grating solved under `top=1.0`,
+reconstructed under `top=1.3`, came back 0.19 from the field before and 0.11 from the re-solved
+one, unrefused. The lit medium's index sets the incident wavevector, which `order_kxy` and the
+centre phase read live. An `excitation` that moves the window's centre keeps its size, so no
+shape mismatch caught that one either: `None -> {1: 1.0}` came back 1.87 and 1.76 away.
 """
 import numpy as np
 import pytest
@@ -35,6 +41,9 @@ MOVES = {
     'phi': 0.2,
     'period': [2 * P, 2 * P],
     'incidence_side': 'bottom',
+    'top': 2.25,
+    'bot': wavebit.Material(1.0, mu=2.25),           # permeability alone: both constants count
+    'excitation': {1: 1.0},                          # the window's centre moves, not its size
 }
 
 
