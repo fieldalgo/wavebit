@@ -397,7 +397,7 @@ def test_the_two_circular_states_differ():
 # Nothing earlier in this file can see that table. The basis calibration and the gyrotropic
 # tensor both live in the xy plane, and relabelling the frame z -> -z leaves them, every
 # amplitude, every efficiency and the curl equations untouched while it reverses every
-# helicity. That is what happened on 2026-09-24, when +z turned upward: the amplitudes stayed
+# helicity. That is what happened on 2026-09-21, when +z turned upward: the amplitudes stayed
 # byte-identical, the top column above swapped, and tutorial 6 went on calling (1, -1j) "RCP"
 # with the suite green. So the table is measured here, from fields, assuming nothing but
 # e^{-i omega t}: trace Re[E e^{-i omega t}] at one point over one period, take the direction
