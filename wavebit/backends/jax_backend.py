@@ -124,6 +124,12 @@ class _BaseRCWA(CoreSolveMixin):
 from .._core.field_result import FieldState
 jax.tree_util.register_pytree_node_class(FieldState)
 
+# `Port` registers itself when a port is built, so a matrix built before JAX arrived kept its
+# channel as a string leaf until another one was built. Registering on this import -- the first
+# use of the backend -- repairs it. See `_core.scattering._register_pytree_if_jax_loaded`.
+from .._core import scattering as _scattering
+_scattering._register_pytree_if_jax_loaded()
+
 
 @jax.tree_util.register_pytree_node_class
 class ResultJax(Result):

@@ -13,6 +13,9 @@ pinned to the legacy results in test_golden_legacy_parity.py. So the properties 
                    it is built from, match the ETM's, on an axis-aligned and a skewed cell;
   * portability  — same numbers on numpy / jax / torch, and gradients still flow.
 """
+import subprocess
+import sys
+import textwrap
 import warnings
 
 import numpy as np
@@ -997,3 +1000,174 @@ def test_cascading_across_a_respelt_oblique_cell_is_refused():
     assert exit_port.index == entry_port.index and exit_port.mu == entry_port.mu
     with pytest.raises(ValueError, match='in-plane wavevectors'):
         upper.cascade(respelt)
+
+
+# ---------------------------------------------------------- cascading across polarization channels
+
+def _coupled_piece(structure, thickness, top, bot, theta, side='top'):
+    """:func:`_piece` on the coupled path: the same scene lit by a pair at ``phi = 0``."""
+    kw = dict(JOINT_KW, tetm=None, psi=0.7, phi=0.0)
+    solver = wavebit.rcwa(backend=0, structure=structure[::-1], thickness=thickness[::-1],
+                          top=top, bot=bot, theta=theta, incidence_side=side, **kw)
+    solver.solve()
+    return solver.scattering
+
+
+#: The upper piece's ``k_par`` again, in the air the cut opens into -- so the order grids agree.
+THETA_IN_AIR = float(np.arcsin(np.sin(0.3) * 2.0))
+
+
+@pytest.mark.parametrize('side', ['top', 'bottom'])
+def test_every_port_says_which_polarization_it_counts(side):
+    """``'te'`` / ``'tm'`` on the pure 1D path, ``'sp'`` on every coupled one, at both ends.
+
+    Lit from below the blocks are handed over reversed (:func:`_scattering_matrix`), and the
+    channel rides through that too: both ends of one matrix count the same waves. The 2D path
+    twice, second- and first-order, because the two build their ports in different modules and
+    must still name one channel -- ``tests/test_smm_4ff.py`` joins them.
+    """
+    for kw, channel in ((dict(tetm='te'), 'te'), (dict(tetm='tm'), 'tm'),
+                        (dict(tetm=None, psi=0.7, phi=0.0), 'sp')):
+        solver, _ = _lit(side, **kw)
+        ports = solver.scattering.entry_port, solver.scattering.exit_port
+        assert tuple(p.channel for p in ports) == (channel, channel), kw
+    for formulation in ('2ff', '4ff'):
+        solver = wavebit.rcwa(backend=0, layer_algorithm='SMM', answers='amplitude',
+                              incidence_side=side, **CASES_2D[0][1])
+        solver.formulation = formulation
+        solver.solve()
+        assert solver.formulation_assigned == formulation
+        ports = solver.scattering.entry_port, solver.scattering.exit_port
+        assert tuple(p.channel for p in ports) == ('sp', 'sp'), formulation
+
+
+@pytest.mark.parametrize('first, second', [('te', 'tm'), ('tm', 'te')])
+def test_cascading_a_te_matrix_onto_a_tm_one_is_refused(first, second):
+    """The two pure polarizations share everything a port recorded before its channel.
+
+    The same retained orders, the same joint medium, the same block size -- so until
+    2026-09-27 ``cascade`` joined a TE matrix to a TM one and handed back a matrix with no NaN
+    and nothing to notice, which is the stack's matrix for neither polarization: on this cut,
+    off by 0.28 to 2.3 of each block's largest entry against either whole-stack matrix. The
+    premise is asserted: every other clause of the port check agrees, and the same two pieces
+    on one channel join, so the channel is the only thing left to refuse them.
+    """
+    upper = _piece(WHOLE[:2], WHOLE_TH[:2], 4.0, 1.0, 0.3, tetm=first)
+    lower = _piece(WHOLE[2:], WHOLE_TH[2:], 1.0, 2.25, THETA_IN_AIR, tetm=second)
+    a, b = upper.exit_port, lower.entry_port
+    assert np.abs(np.asarray(a.kx) - np.asarray(b.kx)).max() < 1e-12
+    assert a.ky is None and b.ky is None and a.index == b.index and a.mu == b.mu
+    assert np.asarray(upper.S22).shape == np.asarray(lower.S11).shape
+    upper.cascade(_piece(WHOLE[2:], WHOLE_TH[2:], 1.0, 2.25, THETA_IN_AIR, tetm=first))
+
+    with pytest.raises(ValueError, match='different polarizations') as info:
+        upper.cascade(lower)
+    assert f"'{first}'" in str(info.value) and f"'{second}'" in str(info.value)
+    assert 'polarization=' in str(info.value)          # and what to solve instead
+
+
+@pytest.mark.parametrize('tetm', ['te', 'tm'])
+def test_a_pure_matrix_and_a_coupled_one_are_refused_by_their_channels(tetm):
+    """A pure 1D matrix against a coupled one, either way round -- named for what differs.
+
+    Refused before the channel existed too, but by the ``ky`` clause (the pure path's ports
+    carry ``ky=None``), whose message sent the caller to convert ``theta`` -- advice that
+    cannot help, since the orders here agree. The control beside it: two coupled pieces of the
+    same cut join into the coupled stack's own matrix, which no other cascade test here builds.
+    """
+    upper, lower = (_piece(WHOLE[:2], WHOLE_TH[:2], 4.0, 1.0, 0.3, tetm=tetm),
+                    _piece(WHOLE[2:], WHOLE_TH[2:], 1.0, 2.25, THETA_IN_AIR, tetm=tetm))
+    c_upper = _coupled_piece(WHOLE[:2], WHOLE_TH[:2], 4.0, 1.0, 0.3)
+    c_lower = _coupled_piece(WHOLE[2:], WHOLE_TH[2:], 1.0, 2.25, THETA_IN_AIR)
+    for this, beyond in ((upper, c_lower), (c_upper, lower)):
+        with pytest.raises(ValueError, match='different polarizations') as info:
+            this.cascade(beyond)
+        assert "'sp'" in str(info.value) and f"'{tetm}'" in str(info.value)
+        assert 'in-plane wavevectors' not in str(info.value)
+
+    joined = c_upper.cascade(c_lower)
+    whole = _coupled_piece(WHOLE, WHOLE_TH, 4.0, 2.25, 0.3)
+    assert (joined.entry_port.channel, joined.exit_port.channel) == ('sp', 'sp')
+    for name, got, want in zip(joined._fields, joined.blocks, whole.blocks):
+        rel = np.abs(np.asarray(got) - np.asarray(want)).max() / np.abs(np.asarray(want)).max()
+        assert rel < 1e-12, (name, rel)
+
+
+@pytest.mark.parametrize('kw, channel', [(dict(tetm='tm'), 'tm'),
+                                         (dict(tetm=None, psi=0.7, phi=0.0), 'sp')],
+                         ids=['tm', 'sp'])
+def test_the_channel_crosses_a_jit_boundary_as_aux_data(kw, channel):
+    """A ``ScatteringMatrix`` returned from ``jax.jit`` comes back with its channel.
+
+    It could be returned before the channel existed -- a ``NamedTuple`` is a pytree, every field
+    a child -- and a string child cannot cross the boundary (``... is not a valid JAX type``).
+    So the channel is aux data: part of the treedef, never a leaf. The leaves keep the paths the
+    unregistered ``NamedTuple`` gave them, ``.entry_port.kx`` and so on, so a JAX message that
+    names a bad leaf names its field rather than a flat index.
+    """
+    jax = pytest.importorskip('jax')
+    solver = wavebit.rcwa(backend=1, **dict(S_KW, theta=0.3, layer_algorithm='SMM', **kw))
+    conv = solver.eps_conv_matrices()
+
+    def matrix(epx):
+        solver.solve_conv(epx, conv.epy, conv.epz_i)
+        return solver.scattering
+
+    eager = matrix(conv.epx)
+    traced = jax.jit(matrix)(conv.epx)
+    assert (traced.entry_port.channel, traced.exit_port.channel) == (channel, channel)
+    assert not any(isinstance(leaf, str) for leaf in jax.tree_util.tree_leaves(traced))
+    for got, want in zip(traced.blocks, eager.blocks):
+        assert np.abs(np.asarray(got) - np.asarray(want)).max() < 1e-12
+    paths = {jax.tree_util.keystr(path)
+             for path, _ in jax.tree_util.tree_flatten_with_path(traced)[0]}
+    fields = ('kx', 'index', 'mu') + (('ky',) if channel == 'sp' else ())
+    assert {f'.{end}.{name}' for end in ('entry_port', 'exit_port') for name in fields} <= paths
+
+
+#: What registers ``Port`` once JAX is there: importing the JAX backend, which building a JAX
+#: solver does (no solve needed), and the lazy call where a port is built -- here a NumPy solve,
+#: which must not import that backend, or the second case would be the first one again.
+REPAIRS = {
+    'a JAX solver built': 'wavebit.rcwa(backend=1, **kw)',
+    'another matrix built': ('wavebit.rcwa(backend=0, **kw).solve(); '
+                             "assert 'wavebit.backends.jax_backend' not in sys.modules"),
+}
+
+
+@pytest.mark.parametrize('repair', REPAIRS)
+def test_a_matrix_built_before_jax_is_imported_is_repaired(repair):
+    """A NumPy matrix built before ``import jax`` crosses ``jax.jit`` once either registration ran.
+
+    ``Port`` is registered lazily -- the hook reads ``sys.modules`` and never imports JAX -- so
+    a matrix built first carries its channel as a string leaf, which ``jax.jit`` refuses. (On
+    0937b35 that matrix crossed: every field was a number.) Registration is per class, so either
+    of :data:`REPAIRS` repairs a matrix already built. In a subprocess, because a whole-suite
+    run has imported JAX, and registered the class, long before this file, and the ordering
+    cannot happen after that.
+    """
+    pytest.importorskip('jax')
+    code = textwrap.dedent("""
+        import sys
+        import numpy as np
+        import wavebit
+        kw = dict(structure=np.array([[[1.0, 12.25, 12.25, 1.0]]]), tetm='te', top=1.0,
+                  bot=2.25, theta=0.2, truncation_order=[2, 0], wavelength=900.0,
+                  period=[700.0], thickness=[300.0], answers='amplitude', layer_algorithm='SMM')
+        solver = wavebit.rcwa(backend=0, **kw)
+        solver.solve()
+        early = solver.scattering
+        assert 'jax' not in sys.modules
+        import jax
+        wavebit.enable_x64()                            # else the jitted sum is complex64
+        REPAIR
+        assert not any(isinstance(leaf, str) for leaf in jax.tree_util.tree_leaves(early))
+        total = jax.jit(lambda S: S.S11.sum())(early)
+        assert abs(complex(total) - complex(early.S11.sum())) < 1e-12
+        back = jax.jit(lambda S: S)(early)
+        assert (back.entry_port.channel, back.exit_port.channel) == ('te', 'te')
+        print('ok')
+    """).replace('REPAIR', REPAIRS[repair])
+    out = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.strip().endswith('ok')

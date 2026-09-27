@@ -536,7 +536,9 @@ Amplitude fine print, stated once so it never has to be discovered:
   is `t_s`. Its **p** block holds port variables — the p wave's magnetic field,
   `-1j * (n/mu) * a_p` in its own medium — so `S11 @ delta` is `-r_p` (that field turns over
   for the up-going wave) and `S21 @ delta` is `t_p * (n/mu)_exit / (n/mu)_lit`. Same on every
-  path; the pure 1D matrix is the s-s (TE) or p-p (TM) block of the conical one at `phi = 0`;
+  path; the pure 1D matrix is the s-s (TE) or p-p (TM) block of the conical one at `phi = 0`,
+  and its ports say which: `Port.channel` is `'te'` / `'tm'` there and `'sp'` on every coupled
+  path, and `cascade` refuses to join two channels;
 - at `theta = 0` the zeroth order has no in-plane wavevector to take a direction from, and
   `phi` supplies one — as a **direction**, not a line. `phi` and `phi + pi` therefore
   describe incident fields of opposite sign for the same `psi`, and the solve returns the

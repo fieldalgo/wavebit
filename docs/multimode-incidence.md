@@ -177,7 +177,8 @@ half, and to 4e-17 on the p half once it is read as above (`S11 @ delta_p` is `-
 of the column's own p variable, `S21 @ delta_p` is `t_p` times `(n/mu)_exit / (n/mu)_lit`;
 `docs/conventions.md` states it once for every path). What the matrix route does not give is
 efficiencies — it hands back amplitudes and the caller normalizes — and it is SMM-only. The pure
-1D path's matrix is the s-s (TE) or p-p (TM) block of this, in the same variables.
+1D path's matrix is the s-s (TE) or p-p (TM) block of this, in the same variables, and its ports
+say which (`S.entry_port.channel` is `'te'` / `'tm'` there, `'sp'` here).
 
 **One door still disagrees, and it is the lateral phase reference, not the frame.**
 `excitation`'s weights are referenced at the cell **corner** (the Fourier origin the ordinary

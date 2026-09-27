@@ -343,12 +343,24 @@ Both pieces must sit on the **same order grid**. This API derives `kx` from
 
 Ten percent out, with no NaN, no negative power, and nothing to notice. It is the same
 "`theta` is measured in the incidence medium" trap as backside illumination, in a new place.
-So `ScatteringMatrix` carries its `Port` at each end — the retained `kx`/`ky` and the
-half-space — and `cascade` refuses a mismatch by name, with the conversion in the message:
+So `ScatteringMatrix` carries its `Port` at each end — the retained `kx`/`ky`, the
+half-space and the polarization channel — and `cascade` refuses a mismatch by name, with the
+conversion in the message:
 
 ```
 sin(theta_next) = sin(theta_this) * n_this / n_joint
 ```
+
+The channel is the mismatch no order grid can show. `Port.channel` is `'te'` or `'tm'` on the
+pure 1D path, whose ports count one polarization, and `'sp'` on the coupled ones (conical, 2D and
+first-order alike, which is why a 2ff piece and a 4ff piece join). A TE and a TM matrix of the
+same cut share every other field — the same orders, the same media, the same size — so until
+2026-09-27 `cascade` joined them, and the result was the stack's matrix for neither: off by 0.28
+to 2.3 of each block's largest entry against either polarization's whole-stack matrix, measured
+on the cut `tests/test_scattering_core.py` takes apart. A pure piece against a coupled one was
+refused already, but by its `ky` (`None` on the pure path), with advice to convert `theta` that
+cannot help; the channel is now asked first. To join across polarizations, solve every piece on
+the coupled path — `polarization` or `psi` at `phi = 0` on a 1D grating, instead of `tetm`.
 
 Multiplying two matrices by hand with `redheffer_star` skips that check. It is internal for
 that reason: it operates on gap-basis per-layer blocks, which carry no ports at all.

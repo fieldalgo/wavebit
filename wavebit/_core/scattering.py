@@ -58,6 +58,7 @@ builders. That recovery is a second pass over the stack, done only from ``answer
 up, so declaring anything lower skips it outright — it is where the extra ~10-20% in the cost
 quoted above goes, and it is the one rung of the ladder that buys time rather than memory.
 """
+import sys
 from typing import NamedTuple
 
 import numpy as np
@@ -234,22 +235,91 @@ def _field_state(xp, I, S_ref, S_trn, S_layers, AB, c_inc):
     return blocks, T1
 
 
+#: What each :attr:`Port.channel` counts, in the words a refused join names it by.
+_CHANNELS = {
+    'te': 'the pure 1D TE path, one s amplitude per order',
+    'tm': 'the pure 1D TM path, one p port variable per order',
+    'sp': 'a coupled path, s amplitudes over p port variables',
+}
+
+
 class Port(NamedTuple):
     """The basis one end of a :class:`ScatteringMatrix` expresses its amplitudes in.
 
     A scattering block is a bare matrix of numbers; what makes those numbers mean anything is
     the set of plane waves its rows and columns count. Two blocks may only be cascaded when the
-    end they meet at counts the *same* waves, and that is what this records so :func:`compose`
-    can check it instead of trusting the caller.
+    end they meet at counts the *same* waves, and that is what this records so
+    :meth:`ScatteringMatrix.cascade` can check it instead of trusting the caller.
 
     ``index`` and ``mu`` are the half-space the port opens into. ``kx`` / ``ky`` are the
     retained orders' in-plane wavevectors, normalised by ``k0`` as everywhere else in the core;
     ``ky`` is ``None`` on the pure 1D TE/TM path, which has no out-of-plane order.
+
+    ``channel`` is the polarization the port's amplitude vector counts: ``'te'`` or ``'tm'`` on
+    the pure 1D path, one entry per order, and ``'sp'`` on the coupled paths -- conical, 2D and
+    first-order alike -- ``n_orders`` s amplitudes over ``n_orders`` p port variables. It is the
+    one field the two pure channels cannot share: a TE and a TM matrix of the same cut have the
+    same orders, the same media and the same size, so until 2026-09-27 they joined, and the
+    result was the stack's matrix for neither polarization.
+
+    On JAX ``channel`` is pytree aux data, not a child (:func:`_register_pytree_if_jax_loaded`):
+    a string cannot cross a ``jax.jit`` boundary as a leaf, and which waves a port counts is
+    fixed by the path, never by a traced value.
     """
     kx: object
     ky: object
     index: object
     mu: object
+    channel: str
+
+
+#: The fields of a :class:`Port` that are pytree children, in order; ``channel`` is aux data.
+_PORT_CHILDREN = ('kx', 'ky', 'index', 'mu')
+
+_PYTREE_REGISTERED = False
+
+
+def _register_pytree_if_jax_loaded():
+    """Register :class:`Port` as a JAX pytree with ``channel`` in the treedef, if JAX is loaded.
+
+    A ``NamedTuple`` is a pytree without registration, every field a child, which is how a
+    ``ScatteringMatrix`` has always crossed a ``jax.jit`` boundary. A string child cannot: the
+    output would be refused as ``not a valid JAX type``. Registered here, ``kx`` / ``ky`` /
+    ``index`` / ``mu`` stay children -- a traced joint medium is still a leaf -- and the channel
+    rides in the treedef, as it has to for a jitted function returning one of these to be
+    rebuilt with it. Registered *with keys*, so a leaf's path still names its field
+    (``.entry_port.kx``) as the unregistered ``NamedTuple``'s did, not a flat index.
+
+    Lazy, and never importing JAX, for the reason
+    :func:`wavebit._core.domain._register_pytree_if_jax_loaded` gives at length. Called from
+    :func:`_scattering_matrix`, the one constructor of a port, and on import of the JAX
+    backend. The one ordering neither covers is a matrix built before ``import jax`` and handed
+    to JAX before any JAX solver or any other matrix is built: there the channel is still a
+    string leaf, and JAX says so loudly (``TypeError: ... of type <class 'str'> ... at path
+    S.entry_port.channel``) rather than answering wrongly. Building either afterwards registers
+    the class and repairs the matrices already built, since registration is per class and not
+    per instance. Before ports carried a channel no such ordering existed: every field was a
+    number or ``None``, each a valid leaf registered or not.
+    """
+    global _PYTREE_REGISTERED
+    if _PYTREE_REGISTERED:
+        return
+    jax = sys.modules.get('jax')
+    if jax is None:
+        return
+    tree_util = getattr(jax, 'tree_util', None)
+    if tree_util is None:
+        return                      # jax is mid-import; the next port will try again
+    try:
+        tree_util.register_pytree_with_keys(
+            Port,
+            lambda port: (tuple((tree_util.GetAttrKey(name), getattr(port, name))
+                                for name in _PORT_CHILDREN), port.channel),
+            lambda channel, children: Port(*children, channel=channel),
+            lambda port: (tuple(getattr(port, name) for name in _PORT_CHILDREN), port.channel))
+    except ValueError:
+        pass                        # already registered; idempotent by design
+    _PYTREE_REGISTERED = True
 
 
 class ScatteringMatrix(NamedTuple):
@@ -290,8 +360,8 @@ class ScatteringMatrix(NamedTuple):
     :attr:`S11` reflects back into the incidence medium whichever side is lit, and
     :attr:`entry_port` is the side that was lit.
 
-    Use :func:`compose` rather than multiplying two of these by hand: the ports are carried so
-    that a mismatch can be refused, and a mismatch is otherwise invisible (see :func:`compose`).
+    Use :meth:`cascade` rather than multiplying two of these by hand: the ports are carried so
+    that a mismatch can be refused, and a mismatch is otherwise invisible (see :meth:`cascade`).
     """
     #: Reflection back into the incidence medium.
     S11: object
@@ -337,7 +407,8 @@ class ScatteringMatrix(NamedTuple):
         zero-thickness air layer into the joined stack moves it by 3.7e-16.
 
         What the two pieces *must* share is the port where they meet -- the same retained
-        orders and the same joint medium -- and this refuses when they do not. That refusal is
+        orders, the same joint medium and the same polarization channel (:class:`Port`) -- and
+        this refuses when they do not. That refusal is
         the reason to call this rather than :func:`redheffer_star` by hand: a join across a
         shifted order grid does not fail loudly, it returns every number plausible and about
         ten percent wrong. ``theta`` is measured in the incidence medium, so a joint medium of
@@ -370,7 +441,7 @@ class ScatteringMatrix(NamedTuple):
                                 entry_port=self.entry_port, exit_port=beyond.exit_port)
 
 
-def _scattering_matrix(S, backside, kx, ky, n_ref, n_trn, mu_ref, mu_trn):
+def _scattering_matrix(S, backside, kx, ky, n_ref, n_trn, mu_ref, mu_trn, channel):
     """Put the cascade's four blocks into incidence-relative order, with their ports.
 
     Reversing the 4-tuple is the whole job for the blocks: a cascade of symmetric layer factors
@@ -378,11 +449,14 @@ def _scattering_matrix(S, backside, kx, ky, n_ref, n_trn, mu_ref, mu_trn):
     efficiency reads above take ``S[3]`` / ``S[1]`` where the top-side ones take ``S[0]`` /
     ``S[2]``. The callers hand in ``n_ref`` / ``n_trn`` and ``mu_ref`` / ``mu_trn``, which are
     already incidence-relative for the same reason, so the ports need no second swap.
+    ``channel`` is the same at both ends -- one matrix counts one set of waves -- and the
+    reversal cannot move it.
     """
+    _register_pytree_if_jax_loaded()
     return ScatteringMatrix(
         *(S[::-1] if backside else S),
-        entry_port=Port(kx=kx, ky=ky, index=n_ref, mu=mu_ref),
-        exit_port=Port(kx=kx, ky=ky, index=n_trn, mu=mu_trn))
+        entry_port=Port(kx=kx, ky=ky, index=n_ref, mu=mu_ref, channel=channel),
+        exit_port=Port(kx=kx, ky=ky, index=n_trn, mu=mu_trn, channel=channel))
 
 
 def _coupled_ports_1d(S, sigma, tetm_index):
@@ -419,7 +493,19 @@ def _port_disagreement(a, b):
     Read eagerly: every comparison here is a value comparison, which a traced array cannot
     answer. That is a property of the question, not a limitation -- "are these the same basis"
     is asked once, when two solves are joined, and never inside a differentiated loop.
+
+    The channel is asked first because it is the one answer no conversion can fix: two pieces
+    on different channels are different problems, and a pure piece against a coupled one also
+    differs in ``ky`` (``None`` on the pure path), where the ``kx`` / ``ky`` clause would send the
+    caller to convert ``theta`` instead.
     """
+    if a.channel != b.channel:
+        return (f"they count different polarizations: {a.channel!r} ({_CHANNELS[a.channel]}) "
+                f"against {b.channel!r} ({_CHANNELS[b.channel]}). A pure 1D matrix joins only "
+                "one solved with the same tetm; to join across polarizations, or a pure piece to "
+                "a coupled one, solve every piece on the coupled path -- polarization=(a_s, a_p) "
+                'or psi, at phi=0 on a 1D grating, instead of tetm -- whose ports carry both')
+
     def differ(x, y, tol=1e-12):
         if (x is None) != (y is None):
             return True
@@ -587,14 +673,16 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     if not answers.covers(Answers.AMPLITUDE):
         return de_ri, de_ti, entering
 
-    # `ky` is None: this path carries no out-of-plane order, and saying nothing there is what
-    # makes a coupled-path port refuse to join a 1D one. The two permeabilities *are* said,
-    # in their incidence-relative roles, because a magnetic half-space changes the port's own
-    # admittance -- they were literal `1.0` while this path refused a `mu`.
+    # `ky` is None: this path carries no out-of-plane order; the channel (`Port`) is what
+    # refuses to join a coupled-path port, or the other polarization's. The two
+    # permeabilities *are* said, in their incidence-relative roles, because a magnetic
+    # half-space changes the port's own admittance -- they were literal `1.0` while this path
+    # refused a `mu`.
     # Published in the coupled path's port variables, so a 1D matrix is the s-s (TE) or p-p
     # (TM) block of the conical one at `phi = 0` -- see :func:`_coupled_ports_1d`.
     scattering = _scattering_matrix(_coupled_ports_1d(S, sigma, tetm_index), backside, kx,
-                                    None, n_ref, n_trn, mu_ref, mu_trn)
+                                    None, n_ref, n_trn, mu_ref, mu_trn,
+                                    channel='tm' if tetm_index == 1 else 'te')
 
     # Same Fresnel conversion as the ETM pure path: reflection primaries are already the
     # amplitude; the TM transmission converts H back to E across the index step -- by
@@ -726,7 +814,8 @@ def _sp_scattering_result(xp, C, S, kx, ky, kz_top, kz_bot, n_top, n_bot,
     if not keep_amplitude:
         return (eff[0][0] + eff[1][0], eff[2][0] + eff[3][0], entering[0]), c_inc
 
-    scattering = _scattering_matrix(S, backside, kx, ky, n_ref, n_trn, mu_ref, mu_trn)
+    scattering = _scattering_matrix(S, backside, kx, ky, n_ref, n_trn, mu_ref, mu_trn,
+                                    channel='sp')
 
     # Coupled-path Fresnel conversion, identical to the ETM final matching's.
     amps = (R_s, R_p / (-1j * n_ref / mu_ref), T_s, T_p / (-1j * n_trn / mu_trn))
