@@ -333,7 +333,9 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
         From ``answers='amplitude'`` up, the full result mapping instead (amplitudes and s/p
         split; the pure TE/TM path carries all of one polarization, the other side is zero),
         and from ``'field'`` up that mapping also carries the ``layer_info_list`` / ``T1``
-        state field reconstruction consumes.
+        state field reconstruction consumes -- for a unit incident **E** on both
+        polarizations: the TM solve is posed in unit ``H_y``, and its ``T1`` is rescaled by the
+        incidence medium's ``n/mu`` on the way out.
     """
     answers = answers_of(answers)
     keep_field = answers.covers(Answers.FIELD)
@@ -499,6 +501,16 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
                     zeros_eff, de_ri, zeros_eff, de_ti, power_entering=entering)
     if not keep_field:
         return {'incident': res}
+    if tetm_index == 1:
+        # The coupled paths' p input is unit **E**; the TM solve above is posed in unit H (its
+        # admittances and powers are written that way, and a Fresnel ratio does not care), so
+        # the state the field walks is rescaled once, here, to the incidence that every other
+        # path lights with. `h = n/mu` is the incidence medium's admittance in Z0 units -- the
+        # |H| of a unit-E wave there -- and after the mirror `n_top` / `mu_top` are that medium
+        # on both sides. Only the reconstruction state moves: `R`, `T` and the amplitudes above
+        # keep their bits. Until 2026-09-27 this path's field was `mu_inc/n_inc` of the
+        # conical p field's.
+        T1 = T1 * (n_top / mu_top)
     return {'incident': res, 'layer_info_list': layer_info_list, 'T1': T1}
 
 

@@ -170,7 +170,11 @@ took the root, and it fails by O(1) before any field is compared if it did not.
 
 With the frame transform applied there is **no free amplitude at all**: not a fitted scale as
 the fmmax golden needs, but exactly 1, to 2.7e-14. The test asserts that rather than fitting it,
-because a scale free to absorb a factor absorbs a defect just as happily.
+because a scale free to absorb a factor absorbs a defect just as happily. For TM that holds
+because every case is lit from air: RETICOLO's 1D TM input (`einc`, `PlaneWave_H(2)` in its
+examples) is the incident `H_y`, while this project's pure TM solve is lit by unit incident
+**E** since 2026-09-27, like every other path. A case lit through glass needs
+`x n_inc/mu_inc` on RETICOLO's side, and that factor is the conversion, not a regression.
 
 The case list is in `_reticolo_field_cases.py` and covers uniform, grating, two-layer and
 absorbing stacks at 0/24/41 degrees in both polarisations. The geometry deliberately keeps

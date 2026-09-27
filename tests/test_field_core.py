@@ -28,6 +28,8 @@ That re-freeze is still in the 2026-08-14 frame, ``z`` measured down from the to
 2026-09-21 the public frame has ``+z`` up from ``z = 0`` at the bottom interface, with samples
 running bottom to top, and :func:`upward_reference` restates the archive in it at the
 comparison — a reversal along ``z`` plus the same parity — instead of re-freezing it.
+Since 2026-09-27 the pure 1D TM solve is lit by unit incident E rather than unit incident
+``H_y``, and :func:`unit_e_input` carries that factor the same way.
 
 The cases are **imported** from the generator rather than restated here. A copy that has to
 "stay identical" to another file is the same failure mode one level down.
@@ -53,6 +55,22 @@ def upward_reference(name, value):
     return np.flip(value, axis=1 if value.ndim == 5 else 0) * parity
 
 
+def unit_e_input(name, solver):
+    """What a pure 1D TM cell is multiplied by since its input became unit E (2026-09-27).
+
+    The archive froze that path lit by a unit incident ``H_y``, which is ``n/mu`` of the
+    incidence medium times smaller than the unit incident E every other path is lit by. The
+    rescale is linear and exact, so the archive is transformed at the comparison -- the
+    ``upward_reference`` arrangement -- rather than re-frozen; the factor is read off the
+    solver's own incidence medium, not restated. ``tm_1d`` is lit from ``top=4.`` (``n = 2``),
+    so its cells double; the TE cases and every coupled case take 1.
+    """
+    if CASES[name].get('tetm') != 'tm':
+        return 1.0
+    medium = solver.top if solver.incidence_side == 'top' else solver.bot
+    return complex(np.asarray(solver.n_inc)) / complex(np.asarray(medium.mu_value))
+
+
 
 @pytest.mark.parametrize('name,tag,which', CASE_VARIANTS,
                          ids=[f'{n}-{t}' for n, t, _ in CASE_VARIANTS])
@@ -74,7 +92,7 @@ def test_the_reconstruction_has_not_drifted(name, tag, which):
     # is True whatever the array holds, which made this assertion vacuous once.
     assert solver.formulation_assigned.value == str(GOLDEN[f'{name}__formulation'])
     got = np.asarray(solver.reconstruct_field(incidences=which, **RES))
-    want = upward_reference(name, GOLDEN[f'{name}__{tag}'])
+    want = upward_reference(name, GOLDEN[f'{name}__{tag}']) * unit_e_input(name, solver)
     assert got.shape == want.shape, (got.shape, want.shape)
     assert np.allclose(want, got, atol=1e-12, rtol=0), np.max(np.abs(want - got))
 
@@ -140,8 +158,9 @@ def test_the_one_incidence_it_does_carry_is_still_reconstructed(name):
     the default would take field reconstruction off the 1D path entirely, and every other
     assertion here would still pass.
     """
-    want = upward_reference(name, GOLDEN[f'{name}__default'])
-    got = np.asarray(solved(name).reconstruct_field(incidences=('incident',), **RES))
+    solver = solved(name)
+    want = upward_reference(name, GOLDEN[f'{name}__default']) * unit_e_input(name, solver)
+    got = np.asarray(solver.reconstruct_field(incidences=('incident',), **RES))
     assert got.shape == want.shape
     # the drift test's tolerance, not equality: these two 1D cases sit ~1e-14 off the freeze
     assert np.allclose(want, got, atol=1e-12, rtol=0), np.max(np.abs(want - got))
@@ -300,7 +319,8 @@ def test_field_cross_backend(name, backend):
     the old golden existed. This is a port check.
     """
     pytest.importorskip('jax' if backend == 1 else 'torch')
-    got = np.asarray(solved(name, backend=backend).reconstruct_field(**RES))
-    want = upward_reference(name, GOLDEN[f'{name}__default'])
+    solver = solved(name, backend=backend)
+    got = np.asarray(solver.reconstruct_field(**RES))
+    want = upward_reference(name, GOLDEN[f'{name}__default']) * unit_e_input(name, solver)
     assert got.shape == want.shape, (got.shape, want.shape)
     assert np.allclose(want, got, atol=1e-10, rtol=0), np.max(np.abs(want - got))

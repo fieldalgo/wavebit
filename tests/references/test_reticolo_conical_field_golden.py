@@ -214,6 +214,13 @@ def test_at_zero_azimuth_the_two_reticolo_goldens_agree(stack, pol):
     checks both harnesses at once — the row rule, the frame transform and the two different
     array shapes — against something other than this project. It is the one comparison here
     that does not involve the solver at all.
+
+    Two things make RETICOLO's two paths the same field here, and neither is general. The
+    angle is positive, so the incident order's ``s_hat`` is ``+y`` and the two paths' incident
+    fields are one field (RETICOLO's 1D and conical *amplitudes* differ by
+    ``sign(kx_m) * sign(kx_inc)`` per order, measured on V10 on 2026-09-27; a field sums over
+    the orders and does not see that). And the stacks are lit from air, where RETICOLO's 1D TM
+    input -- the incident ``H_y`` -- is also a unit incident E.
     """
     import _reticolo_field_cases as flat
 

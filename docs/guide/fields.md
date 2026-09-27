@@ -85,9 +85,11 @@ The time convention is `e^{-iωt}`: the instantaneous real field is
 `real(E * exp(-1j*omega*t))`. `abs(E)` and `angle(E)` give each component's magnitude
 and phase. See [conventions](../conventions.md) for the source phase reference.
 
-The pure 1D TM solve uses a unit normalized magnetic input, while coupled s/p and
-`PlaneWave` inputs specify electric amplitudes. The result API preserves the solved
-input's scale; it does not rescale the field by incident power.
+Every ordinary input is an electric amplitude: coupled s/p, `PlaneWave`, and the pure 1D
+TM solve included. (Until 2026-09-27 the pure 1D TM solve was lit by a unit magnetic
+input, so its field was `mu_inc/n_inc` of the conical p field for the same light.) The
+result API preserves the solved input's scale; it does not rescale the field by incident
+power.
 
 ## Boundary waves and polarization variants
 

@@ -49,7 +49,7 @@ def _raster(rows, background, inclusion):
     return a
 
 
-def _grating(rows, **kw):
+def _grating(rows, theta=THETA, **kw):
     """The same patterned magnetic grating, routed by its row count and declaration.
 
     One row plus a ``tetm`` is the pure TE/TM path, one row plus a ``psi`` the conical one, and
@@ -57,7 +57,7 @@ def _grating(rows, **kw):
     time. The raster front door is the one that reaches these paths at all: a shape structure
     sets ``modeling_path='parametric'``, which routes to the 2D solve whatever its geometry.
     """
-    return wavebit.rcwa(backend=0, top=1.0, bot=Material(2.25, mu=1.3), theta=THETA,
+    return wavebit.rcwa(backend=0, top=1.0, bot=Material(2.25, mu=1.3), theta=theta,
                         truncation_order=(TO, 0), period=(PERIOD, PERIOD), wavelength=WL,
                         thickness=[THICK], answers='field',
                         structure=_raster(rows, 1.0, 6.25),
@@ -137,6 +137,78 @@ def test_te_with_a_permeability_is_tm_with_the_two_tensors_traded():
     tm_untraded = run('tm', eps_slots, mu_slots, mu_top, mu_bot)
     assert np.max(np.abs(np.asarray(te.incident.R)
                          - np.asarray(tm_untraded.incident.R))) > 1e-4
+
+
+@pytest.mark.parametrize('theta', [0.21, -0.21])
+@pytest.mark.parametrize('side', ['top', 'bottom'])
+def test_the_duality_carries_the_field_with_the_traded_admittance(side, theta):
+    """The same trade, on the reconstructed field: ``TM = -+(n/mu)_B * dual(TE)``, entry for entry.
+
+    ``(E, H) -> (H, -E)`` maps the TE solution onto a field of the traded scene, so it must be
+    that scene's TM solution up to the scalar that says how each was lit. Both are lit by a
+    unit incident **E**. The dual of TE's unit-E wave carries ``E' = H = h_A k_hat x y_hat``,
+    with ``h_A = n/mu`` of the original incidence medium; the traded medium's ``h_B = n/eps``
+    (its ``mu`` is the original ``eps``) is ``1/h_A``. So TM equals ``h_B`` times the dual,
+    signed by how ``k_hat x y_hat`` sits against the incident ``p_hat``: ``p_hat = s_hat x k_hat``
+    lit from above, the opposite, and ``k_hat x s_hat`` lit from below, the same
+    (``docs/conventions.md``). A closed form for the one scalar, with ``mu != 1`` on both sides,
+    and nothing fitted.
+
+    It is what pins the pure TM input at ``n/mu`` of the incidence medium: a TM state rescaled
+    by ``n`` instead is off by ``mu`` here (1.3 above, 1.9 below), and one never rescaled --
+    the unit-H input this path had until 2026-09-27 -- is off by ``h_B`` itself. Both angle
+    signs, because the incident wave turns over with ``kx`` on the pure 1D path, TE and TM
+    together.
+    """
+    eps = (_arbitrary(11, 0.20), _arbitrary(12, 0.25))
+    mu = (_arbitrary(13, 0.10), _arbitrary(14, 0.30))
+    eps_slots = (eps[0], eps[1], _inv_stack(eps[1]))
+    mu_slots = (mu[0], mu[1], _inv_stack(mu[1]))
+    mu_top, mu_bot, eps_top, eps_bot = 1.6, 2.2, 1.3, 1.9
+    n_top, n_bot = np.sqrt(eps_top * mu_top), np.sqrt(eps_bot * mu_bot)
+
+    def cell(tetm, e, m, m_top, m_bot):
+        solver = wavebit.rcwa(backend=0, top=n_top ** 2, bot=n_bot ** 2, theta=theta,
+                              tetm=tetm, truncation_order=(TO, 0), period=(PERIOD, PERIOD),
+                              wavelength=WL, thickness=[130.0, 220.0], answers='field',
+                              incidence_side=side, structure=np.ones((2, 1, 32)) * 2.25)
+        result = solver.solve_conv(*(slot[::-1] for slot in e),
+                                   mu=(*(slot[::-1] for slot in m), None, None),
+                                   mu_top=m_top, mu_bot=m_bot,
+                                   eps_top=n_top ** 2 / m_top, eps_bot=n_bot ** 2 / m_bot)
+        return np.asarray(result.reconstruct_field(sample_x=7, sample_y=1, sample_z=5))
+
+    te = cell('te', eps_slots, mu_slots, mu_top, mu_bot)
+    tm = cell('tm', mu_slots, eps_slots, eps_top, eps_bot)
+    dual = np.concatenate([te[..., 3:], -te[..., :3]], axis=-1)
+    h_b = (n_top / eps_top) if side == 'top' else (n_bot / eps_bot)
+    want = (-1.0 if side == 'top' else 1.0) * h_b * dual
+    gap = np.max(np.abs(tm - want)) / np.max(np.abs(want))
+    assert gap < 1e-12, (
+        f'{side}-lit, theta={theta}: TM is not {"-" if side == "top" else "+"}h_B * dual(TE), '
+        f'off by {gap:.2e}; best scalar {np.vdot(dual, tm) / np.vdot(dual, dual):.6f} against '
+        f'h_B = {h_b:.6f}')
+
+
+@pytest.mark.parametrize('side', ['top', 'bottom'])
+def test_the_pure_tm_field_is_the_conical_p_field(side):
+    """The pure 1D TM solve and ``psi = 0`` at ``phi = 0`` light the stack with one wave.
+
+    Lit from below, the incidence medium is ``Material(2.25, mu=1.3)``: ``n/mu = 1.316``, which
+    separates the unit-E input every path takes from the unit-H one the pure TM path took until
+    2026-09-27 (their ratio was ``n/mu``) and from a rescale by ``n`` alone (1.710). Lit from
+    above it is air, where all three agree -- the control that the comparison itself is sound.
+    The whole six-component cell, from the result, so the boundary spectra that
+    ``field_result`` assembles and the interior the kernels hand over are both in it.
+    """
+    pure = _grating(1, tetm='tm', phi=0.0, incidence_side=side).solve()
+    conical = _grating(1, psi=0.0, phi=0.0, incidence_side=side).solve()
+    a = np.asarray(pure.reconstruct_field(sample_x=20, sample_y=1, sample_z=10))
+    b = np.asarray(conical.reconstruct_field(sample_x=20, sample_y=1, sample_z=10))
+    gap = np.max(np.abs(a - b)) / np.max(np.abs(b))
+    assert gap < 1e-12, (
+        f'{side}-lit: the pure TM field is not the conical p field, off by {gap:.2e}; best '
+        f'scalar {np.vdot(a, b) / np.vdot(a, a):.6f}')
 
 
 # ------------------------------------------------------------------------- 2. the closed form

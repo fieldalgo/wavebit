@@ -35,7 +35,9 @@ Formulation, in the conventions this codebase already uses (see :func:`solve_1d`
   gap cancels out of the composed result whatever it is, as long as it is used everywhere).
 * Incidence enters as mode amplitudes directly: ``E_s = a_s`` and ``H_p = -i*n_top*a_p``
   for the coupled path — the resolved ``(a_s, a_p)`` pair, whichever spelling the
-  ``polarization`` pair — and unit primary amplitude for 1D TE/TM.
+  ``polarization`` pair — and unit primary amplitude for 1D TE/TM: ``E_y``, or ``H_y`` in the
+  TM case, whose field state is then rescaled once to unit incident E (``n/mu`` of the
+  incidence medium) so that every path's reconstructed field answers a unit electric input.
   These are the same incident amplitudes the ETM final matching solves against. The sign on
   ``H_p`` is the one ``e^{-iωt}`` requires and the one the code has always carried; this
   sentence said ``+i`` — the conjugate — until 2026-08-11, describing the formulation that
@@ -583,6 +585,12 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
                        for m, b, z in zip(modes, blocks, muzs)][::-1]
     if T1 is not None:
         T1 = xp.reshape(T1, (n_orders_u,))    # the 1D path carries T1 as a plain vector
+        if tetm_index == 1:
+            # Unit incident E, as on every other path -- the same rescale, and the same reason,
+            # as :func:`~wavebit._core.solve_1d.solve_1d`'s. `n_ref` / `mu_ref` are the
+            # incidence medium whichever port is lit. Inside the guard: a stack with no layers
+            # has no state to rescale.
+            T1 = T1 * (n_ref / mu_ref)
     return {'incident': res, 'layer_info_list': layer_info_list, 'T1': T1,
             'scattering': scattering}
 

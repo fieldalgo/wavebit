@@ -58,6 +58,64 @@ def test_plane_wave_phase_maxwell_and_flux(backend, path, algorithm, side, theta
     np.testing.assert_allclose(flux, np.broadcast_to(.5*k, flux.shape), atol=2e-12, rtol=0)
 
 
+#: Two matched media -- the half-spaces and the layer one material, so the solve is one plane
+#: wave -- whose admittance ``h = n/mu`` is not 1: a plain dielectric (``h = n = 1.5``), and a
+#: magnetic one where ``h = n/mu`` (1.155) is neither ``n`` (1.732) nor ``1/n``.
+MATCHED = [('glass', 2.25, None), ('magnetic', 2.0, 1.5)]
+
+
+@pytest.mark.parametrize('path,algorithm', PATHS)
+@pytest.mark.parametrize('side', ['top', 'bottom'])
+@pytest.mark.parametrize('theta', [.53, -.53])
+@pytest.mark.parametrize('medium,eps,mu', MATCHED, ids=[m[0] for m in MATCHED])
+def test_every_input_is_a_unit_electric_field_in_its_own_medium(medium, eps, mu, theta, side,
+                                                               path, algorithm):
+    """``|E| = 1`` in the incidence medium, so ``H = (n/mu) k_hat x E`` and ``S = h k_hat / 2``.
+
+    The air test above cannot tell a unit electric input from a unit magnetic one: in vacuum
+    they are the same wave. Here they differ by ``h = n/mu``, and the flux of the incident
+    wave is ``h/2`` for one and ``1/(2h)`` for the other -- measured 0.75 against 0.333 for the
+    pure 1D TM path in glass on either side of 2026-09-27, when that path's input became unit E
+    like every other one. Nothing but Maxwell is the oracle: the medium's own admittance, the
+    plane wave's direction, and ``|E|``.
+
+    The magnetic medium is what pins ``n/mu`` rather than ``n``, with the layer carrying the
+    same ``mu`` through a raster so the stack stays matched.
+    """
+    phi = 0. if path in ('te', 'tm') else .61
+    shape = (1, 2, 2) if path in ('2ff', '4ff') else (1, 1, 2)
+    medium_value = eps if mu is None else wavebit.Material(eps, mu=mu)
+    kw = dict(backend=0, top=medium_value, bot=medium_value, wavelength=1.3, period=(.8, .7),
+              thickness=[.9], truncation_order=(0, 0), theta=theta,
+              structure=np.full(shape, eps), incidence_side=side, answers='field',
+              layer_algorithm=algorithm)
+    if mu is not None:
+        kw['mu'] = np.full(shape, mu)
+    if path in ('te', 'tm'):
+        kw['tetm'] = path
+    else:
+        kw.update(phi=phi, polarization=(.6, .8j))
+    solver = wavebit.rcwa(**kw)
+    if path in ('2ff', '4ff'):
+        solver.formulation = path
+    solver.solve()
+    x, y, z = np.array([-.13, .07]), np.array([-.11, .04]), np.array([.23, .48])
+    field = six(array(solver.reconstruct_field(sample_x=x, sample_y=y, sample_z=z)), path)
+    electric, magnetic = field[..., :3], field[..., 3:]
+
+    n = np.sqrt(eps * (1. if mu is None else mu))
+    h = n / (1. if mu is None else mu)
+    k = np.array([np.sin(theta)*np.cos(phi), np.sin(theta)*np.sin(phi),
+                  (-1 if side == 'top' else 1)*np.cos(theta)])
+    assert np.allclose(np.sum(np.abs(electric)**2, axis=-1), 1., atol=2e-12, rtol=0), (
+        f'|E|^2 = {np.sum(np.abs(electric)**2, axis=-1).ravel()[0]:.6f}, not 1')
+    np.testing.assert_allclose(h*np.cross(k, electric), magnetic, atol=2e-12, rtol=0)
+    phase = np.exp(2j*np.pi/1.3*n*k[2]*np.diff(z)[0])
+    np.testing.assert_allclose(field[1], field[0]*phase, atol=2e-12, rtol=0)
+    flux = .5*np.real(np.cross(electric, np.conj(magnetic)))
+    np.testing.assert_allclose(flux, np.broadcast_to(.5*h*k, flux.shape), atol=2e-12, rtol=0)
+
+
 @pytest.mark.parametrize('side', ['top', 'bottom'])
 @pytest.mark.parametrize('algorithm', ['ETM', 'SMM'])
 def test_interface_uses_upper_layer_on_both_incidence_sides(side, algorithm):

@@ -152,6 +152,13 @@ def test_the_amplitude_needs_no_fitted_scale(stack, theta, pol):
     is not "unit incident flux". Here the two conventions coincide, so the honest test is that
     the best-fit scale *is* 1. A scale left free to absorb a factor absorbs a defect just as
     happily, and this is the assertion that keeps that door shut.
+
+    **For TM they coincide because every case is lit from air.** The bridge's ``res3`` call
+    passes ``einc = 1``, which RETICOLO's own 1D TM examples fill with ``PlaneWave_H(2)``: its TM
+    input is the incident ``H_y``. This project's pure TM solve is lit by unit incident **E**
+    (since 2026-09-27, as every other path is), and the two are the same number only where the
+    incidence medium's ``n/mu`` is 1. A future case lit through glass needs ``x n_inc/mu_inc``
+    on RETICOLO's side; a scale of ``n_inc`` there is that conversion, not a solver regression.
     """
     g = _golden()
     ref = _in_our_frame(g[key(stack, theta, pol)], pol)

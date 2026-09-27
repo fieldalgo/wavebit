@@ -304,17 +304,15 @@ def ordinary_state(solver, result, *, eps_top=None, eps_bot=None, mu_top=None, m
             pair = solver._incidence_pair()
         else:
             pair = (1., 0.) if name == 's' or kind == 'te' else (0., 1.)
-        scale = 1.
-        if kind == 'tm':
-            # The pure-TM solve has unit normalized H, not unit E.
-            n, _, mu = materials[side]
-            scale = (1. if mu is None else mu)/n
-        inc = xp.stack([delta*pair[0], delta*pair[1]], axis=-1)*scale
+        # Every ordinary input is a unit electric amplitude, the pure 1D TM solve's included
+        # since 2026-09-27 (its kernel rescales the state it hands over), so the boundary
+        # spectra carry the amplitudes as they are.
+        inc = xp.stack([delta*pair[0], delta*pair[1]], axis=-1)
         # Fresnel reflected p uses the opposite sign to the basis above.
         ref = xp.stack([xp.reshape(sub.r_s, (-1,)),
-                        -xp.reshape(sub.r_p, (-1,))], axis=-1)*scale
+                        -xp.reshape(sub.r_p, (-1,))], axis=-1)
         trn = xp.stack([xp.reshape(sub.t_s, (-1,)),
-                       xp.reshape(sub.t_p, (-1,))], axis=-1)*scale
+                       xp.reshape(sub.t_p, (-1,))], axis=-1)
         incoming = xp.sum(incoming_basis*inc[:, None, :], axis=-1)*phase
         reflected = xp.sum(reflected_basis*ref[:, None, :], axis=-1)*phase
         transmitted = xp.sum(transmitted_basis*trn[:, None, :], axis=-1)*phase
