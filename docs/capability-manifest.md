@@ -2,6 +2,14 @@
 
 Written: 2026-08-11.
 
+Updated 2026-09-27 (latest): the lateral phase reference of every per-order quantity moved to
+the cell centre, `x = y = 0` (`amplitude-sp-frame.md` §7), without a version bump.
+`results.amplitudes` gains a `phase_reference` key that says so -- an added key, which a
+consumer reading unknown keys ignores -- and `cartesian.meaning` is reworded. No key is renamed
+or reshaped, and the one input whose physics moved, `excitation`, is not published as an input
+here, so no generator's scene changes meaning. What a consumer that cached amplitudes meets is a
+sign on every order with `m + n` odd; efficiencies of a single wave are the bytes they were.
+
 Updated 2026-09-27 (later): the per-order Cartesian amplitudes are published without a version
 bump, as `li_nesting` was: `results.amplitudes.cartesian` names `r_xyz` / `t_xyz`, their
 `(n_orders_v, n_orders_u, 3)` layout and their meaning, under a key of its own so that a

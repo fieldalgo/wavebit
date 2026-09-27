@@ -359,11 +359,15 @@ U(z̃) = -i kz_inc δ e^{+i kz_inc z̃} + i Kz_top R e^{-i Kz_top z̃}
 ```
 
 `δ` is the incident column in the primary's Cartesian component (`E_y` for TE, `H_y` for
-TM): `sigma_inc` on the incident order, or `sigma_j w_j` on each lit order under
+TM): `sigma_inc` on the incident order, or `sigma_j c_j w_j` on each lit order under
 `excitation`, where `sigma = sign(Re kx)` is `s_hat . y_hat` on the `ky == 0` row
-(`order_frame_sign`). The reported amplitudes are `D R` and `D T T1` with `D = diag(sigma)`
+(`order_frame_sign`) and `c_j = (-1)**(m + n)` restates a public weight -- referenced at the
+cell centre -- about the cell corner, the Fourier origin these operators are built in
+(`corner_column`; the common factor `exp(-1j k_inc . (a1 + a2)/2)` is left to the field). The
+reported amplitudes are `C D R` and `C D T T1` with `D = diag(sigma)` and `C = diag(c)`
 (TM transmission after its impedance ratio), which puts every order in its own s/p frame,
-the coupled paths' (`docs/amplitude-sp-frame.md` §6); the TM field state handed to
+the coupled paths' (`docs/amplitude-sp-frame.md` §6), referenced at the centre (§7 there); the
+engine applies `C` at its doors, so the kernels themselves see only `D`. The TM field state handed to
 reconstruction is `T1 · n_inc/mu_inc`, a unit incident E. `kz_inc` **must be read off the same vector**
 `Kz_top` is built from (`incident_kz`): the spelling `n_top cosθ` is an identity for real
 `θ` and the wrong branch for complex `θ` (`docs/branch-cuts.md`). Continuity at `z̃ = 0`

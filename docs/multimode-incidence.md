@@ -17,7 +17,11 @@ multiplies its order's `s_hat` / `p_hat`. On a 1D solve at `phi = 0` that is
 `sign(kx) * y_hat` for s, so a TE beam on an order with `kx < 0` is polarized along `-y`. The
 pure 1D `tetm` path has meant the same since 2026-09-27 (before, it multiplied `+y` into every
 lit order, which is different light once the lit set straddles `kx = 0`: `sum(R)` 0.4933
-against 0.3701 on `tests/test_excitation.py`'s scene).
+against 0.3701 on `tests/test_excitation.py`'s scene). Each weight is its beam's amplitude at
+`x = y = 0` on the lit face, the cell centre -- the same weights `OrderExcitation(orders=...)`
+takes, and the same light. That too dates from 2026-09-27: until then the weights were
+referenced at the cell corner, which lit every order with `m + n` odd negated relative to the
+rest, and the same scene's `sum(R)` moved a second time, 0.3701 -> 0.1953 (§6).
 
 ## 1. What it is for, and what it is not for
 
@@ -180,20 +184,16 @@ efficiencies — it hands back amplitudes and the caller normalizes — and it i
 1D path's matrix is the s-s (TE) or p-p (TM) block of this, in the same variables, and its ports
 say which (`S.entry_port.channel` is `'te'` / `'tm'` there, `'sp'` here).
 
-**One door still disagrees, and it is the lateral phase reference, not the frame.**
-`excitation`'s weights are referenced at the cell **corner** (the Fourier origin the ordinary
-solves use), while `OrderExcitation` on the coherent-source path, like `PlaneWave`, is
-referenced at `x = y = 0`, the cell **centre** the public API measures from. So one weight
-lights the two doors with light that differs by `exp(-1j * k_m . (a1 + a2) / 2)` on each lit
-order `m` -- on a rectangular cell a relative `(-1)**m` between orders, which is different
-physics once two orders are lit, not a global phase. On `tests/test_excitation.py`'s scene at
-`phi = 0`, `polarization=(1, 0)`, `{0: 1, 1: 0.6-0.8j}` gives `sum(R)` 0.452653 through
-`excitation` and 0.151782 through `OrderExcitation`; negating the order-1 weight on the
-coherent side gives 0.452653 again. The relation is
-pinned in `tests/test_coherent_illumination.py`
-(`test_reciprocal_shift_shares_one_group_and_order_phase_reference`). Whether `excitation`
-should move to the centre is an open decision; it would be a second physics change for the
-same users, and is recorded in `docs/amplitude-sp-frame.md` §6.
+**The two doors agree (since 2026-09-27).** `excitation`'s weights and `OrderExcitation`'s on
+the coherent-source path are both referenced at `x = y = 0`, the cell **centre** the public API
+measures from, so one dict lights both doors with one light. On `tests/test_excitation.py`'s
+scene at `phi = 0`, `polarization=(1, 0)`, `{0: 1, 1: 0.6-0.8j}` gives `sum(R)` 0.151782
+through either, 4.2e-16 apart (0.241294 lit from the glass). Until that day the ordinary door
+referenced its weights at the cell **corner**, the Fourier origin the solves integrate from,
+which lit order `(m, n)` with an extra `(-1)**(m + n)` relative to the rest -- different physics
+once two orders of opposite parity are lit, not a global phase: the same dict gave 0.452653
+there. Pinned in `tests/test_centre_reference.py` (and, as the reciprocal-shift identity, in
+`tests/test_coherent_illumination.py`); the record is `docs/amplitude-sp-frame.md` §7.
 
 **Why not in the keyword.** The s/p basis is *per order*: `order_azimuth` gives each retained
 order its own azimuth, and `s_hat = z_hat x k_hat_par` is built from **that order's**

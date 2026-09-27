@@ -32,7 +32,7 @@ Explained in [Saying what the light is](../guide/light.md).
 | `psi` | `pi/2` (s/TE) | polarization angle, radians. `pi/2` is s/TE, `0` is p/TM |
 | `chi` | `None` | ellipticity angle. With `psi` it is the canonical chart of any state: `0` linear, `±pi/4` circular |
 | `polarization` | `None` | the Jones pair `(a_s, a_p)` itself, complex. The only spelling that carries an overall phase; magnitude is normalized away |
-| `excitation` | `None` | which diffraction *orders* the light arrives on: `{0: 1.0, 1: 0.6-0.8j}` on 1D, `{(m, n): amp}` on 2D. `None` is one plane wave on the specular order. A weight multiplies its order's own s/p vector, so on the `ky == 0` row an order with `kx < 0` is lit along `-y` for s. A side-keyed map, `{"top": wavebit.PlaneWave(...), "bottom": wavebit.PlaneWave(...)}`, selects [coherent illumination](../coherent-illumination.md) |
+| `excitation` | `None` | which diffraction *orders* the light arrives on: `{0: 1.0, 1: 0.6-0.8j}` on 1D, `{(m, n): amp}` on 2D. `None` is one plane wave on the specular order. A weight multiplies its order's own s/p vector, so on the `ky == 0` row an order with `kx < 0` is lit along `-y` for s, and is unit at `x = y = 0` on the lit face -- the weights `OrderExcitation(orders=...)` takes. A side-keyed map, `{"top": wavebit.PlaneWave(...), "bottom": wavebit.PlaneWave(...)}`, selects [coherent illumination](../coherent-illumination.md) |
 | `incidence_side` | `'top'` | `'top'` / `'bottom'` — which half-space the light arrives from. Scene labels never move; results are incidence-relative, and `theta` / `phi` are measured in the incidence medium |
 
 ## The stack

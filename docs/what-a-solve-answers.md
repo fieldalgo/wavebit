@@ -188,8 +188,7 @@ and after:
 
 The vectors cost three complex components per order per direction per variant — 1.86x the
 per-order arrays, 1.19x the whole result — and they are the E half of the boundary spectra
-the same rung already carries, before the lateral phase, so the rung now holds that
-information twice. The larger change since the table above is the boundary spectra
+the same rung already carries, so the rung now holds that information twice. The larger change since the table above is the boundary spectra
 (`boundary_fields` answers at `'amplitude'`): the amplitude rung is now about 113 times the
 efficiency one, not 21, and the sweep and `vmap` argument above holds with that factor.
 

@@ -36,7 +36,9 @@ releases them instead of keeping a hidden reconstruction state.
 
 Each sampling argument accepts a positive integer count or a nonempty 1-D array of
 finite real coordinates. `reconstruct_field` defaults to 20 on each axis;
-`boundary_fields` defaults to the cell centre, `sample_x=[0.]`, `sample_y=[0.]`.
+`boundary_fields` defaults to the cell centre, `sample_x=[0.]`, `sample_y=[0.]` -- the point
+where an ordinary incidence is unit, so `boundary_fields(side, part='incoming')` there is the
+incident polarization itself at any real angle.
 
 ```python
 cell = result.reconstruct_field(

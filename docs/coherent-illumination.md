@@ -438,10 +438,12 @@ This path does not silently detune a wavelength at a Rayleigh singularity; choos
 and verify a nearby common parameter point if the matching becomes singular.
 
 An order-keyed map such as `excitation={0: 1., 1: .5j}` continues to return the
-ordinary single-sided solver. Its complex weights use the Fourier cell-corner
-phase reference. `OrderExcitation.orders` uses the centre reference stated above. For
-relative phases across different orders, reference locations must be accounted
-for when comparing the two forms.
+ordinary single-sided solver. Its complex weights use the centre reference stated
+above, exactly as `OrderExcitation.orders` does, so the two forms take the same
+weights and light the same light (since 2026-09-27; until then the ordinary weights
+were referenced at the cell corner). The ordinary door also answers per-order `R`,
+`T` and amplitudes; its fields and boundary waves equal this path's for the same
+weights on the same side.
 
 Validation covers independent four-equation slab matching for both polarizations,
 unequal magnetic and absorbing half-spaces, phase-dependent slab absorption,

@@ -132,7 +132,9 @@ name. That also caps how many beams can be combined, at roughly `2 * period / wa
 
 An `excitation` weight multiplies *its own order's* `s_hat` or `p_hat`, on every path. On a
 1D solve at `phi = 0` that is `sign(kx) * y_hat` for TE, so a lit order with `kx < 0` arrives
-polarized along `-y`; see [`../conventions.md`](../conventions.md).
+polarized along `-y`; see [`../conventions.md`](../conventions.md). A weight is its beam's
+amplitude at `x = y = 0` on the lit face, the cell centre: the same weights
+`OrderExcitation(orders=...)` takes, and the same light.
 
 See [`../conventions.md`](../conventions.md) for the normative statement,
 [`../multimode-incidence.md`](../multimode-incidence.md) for `excitation`, and tutorials

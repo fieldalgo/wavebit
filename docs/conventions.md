@@ -206,9 +206,25 @@ distinguished point, so it is an absolute height above the bottom interface (see
 This is S4's convention (*"the unit cell is the Wigner-Seitz cell centered at the origin"*) and
 Meep's. It arrived on 2026-08-31; before it the origin was the cell's corner, and both the
 README and `oblique-lattice.md` opened their raster example by computing the cell centre by
-hand. Internally the Fourier machinery still integrates over `u, v` in `[0, 1]` — the offset is
-a relabeling, so no coefficient moves — and `_core.lattice.sample_grid` is that internal frame.
-Reaching for it from user-facing code misplaces a structure by half a period, silently.
+hand. Internally the Fourier machinery still integrates over `u, v` in `[0, 1]` — for the
+structure the offset is a relabeling, so no convolution coefficient moves — and
+`_core.lattice.sample_grid` is that internal frame. Reaching for it from user-facing code
+misplaces a structure by half a period, silently.
+
+Since 2026-09-27 the **phase** of every per-order quantity is referenced here too: the
+amplitudes (`r_s` .. `t_p`, `r_xyz` / `t_xyz`, `order()`), the `excitation` weights, the
+scattering matrix's port variables, and the point where an ordinary incidence is unit,
+`x = y = 0` on the lit face (the phase-reference bullet of
+[the result surface](#the-result-surface)). The convolution matrices are the exception, on
+purpose: `eps_conv_matrices()` / `mu_conv_matrices()` and every builder
+behind them — the `solve_conv` input format, the public NVF helpers included — are the kernels'
+operator about the cell **corner**, not the amplitude frame. And the centre belongs to the basis
+you wrote: a unimodular re-basis `(a1, a2) -> (a1, a1 + a2)` moves `(a1 + a2)/2` by `a1/2`.
+Keeping the same public numbers — shape centres, sample points — translates the whole scene,
+phase reference included, so the field is unchanged; the same physical crystal sampled at the
+same physical points (shapes and samples shifted by `-a1/2`) gives a field that differs by
+`exp(-1j k_inc . a1/2)` at `theta != 0`, and no efficiency does. Both hold as the truncation
+converges: the two bases retain different order sets.
 
 All angles are **radians**.
 
@@ -531,7 +547,10 @@ Amplitude fine print, stated once so it never has to be discovered:
 - an `excitation` weight multiplies **its own order's** `s_hat` (s) or `p_hat` (p), on every
   path — so on the `ky == 0` row a lit order with `kx < 0` arrives with its s field along
   `-y`. The pure 1D path did the same from 2026-09-27; before, it multiplied `+y` into every
-  lit order, which is different light once the lit set straddles `kx = 0`;
+  lit order, which is different light once the lit set straddles `kx = 0`. A weight is the
+  amplitude of its plane wave at `x = y = 0` on the lit face — the weights
+  `OrderExcitation(orders=...)` takes, and the same light (since 2026-09-27; see the phase
+  reference below);
 - the scattering matrix's **s** block holds amplitudes: `S11 @ delta` is `r_s`, `S21 @ delta`
   is `t_s`. Its **p** block holds port variables — the p wave's magnetic field,
   `-1j * (n/mu) * a_p` in its own medium — so `S11 @ delta` is `-r_p` (that field turns over
@@ -563,7 +582,8 @@ Amplitude fine print, stated once so it never has to be discovered:
 
   Each `p_hat` is perpendicular to its own `k = (kx, ky, +-kz)` in the non-conjugated sense,
   lossy media included. They share `r_s`'s phase reference — in `z` the lit and far
-  interfaces, and laterally the cell **corner** (below) — and they are continuous where an
+  interfaces, and laterally the cell **centre** (below): the outgoing E on the lit face is
+  `sum_m r_xyz[m] exp(1j k_m . x)` in public coordinates — and they are continuous where an
   order's `kx` crosses zero on the `ky == 0` row, where `r_s` turns over; the incident order's
   own crossing (`theta` through 0) still turns them over, because that is the incidence
   changing, not a quotation frame. The magnetic vector is not shipped: it is
@@ -571,14 +591,34 @@ Amplitude fine print, stated once so it never has to be discovered:
   respell it — and `boundary_fields(part='outgoing')` returns it in space. RETICOLO's `res2`
   returns the same Cartesian quantities per order, E and H;
 - phase reference: `r` at the incidence-side interface, `t` at the far one (top and
-  bottom respectively for the default illumination). Laterally, every ordinary amplitude —
-  and every `excitation` weight — is referenced at the cell **corner**, the Fourier origin the
-  solves integrate from, not at the public cell-centre origin: against the centre, order `m`
-  carries `exp(1j * k_m . (a1 + a2) / 2)`, a relative `(-1)**m` between orders on a
-  rectangular cell. `PlaneWave` and `OrderExcitation` are referenced at the centre, so the
-  same weights through `excitation` and through `OrderExcitation` differ by that factor per
-  lit order. Whether the ordinary path should move to the centre is an open decision
-  (`amplitude-sp-frame.md` §6);
+  bottom respectively for the default illumination). **Laterally, the cell centre**, `x = y =
+  0`, the origin of every public coordinate, for every ordinary solve — pure 1D TE/TM,
+  conical, 2D in either formulation, ETM and SMM, either side, any cell:
+  - the incident field on the lit face is `sum_m w_m e_m exp(1j k_m . x)`, `w` the
+    `excitation` weights (one unit wave on the specular order by default) and `e_m` the
+    order's own `s_hat` / `p_hat` combination: **unit at the centre**. It is
+    `OrderExcitation(orders=w)`'s field, and by default `PlaneWave`'s;
+  - the outgoing field on the lit face is `sum_m r_xyz[m] exp(1j k_m . x)`, and `t_xyz` the
+    same on the far face: every amplitude is a Fourier coefficient of the public field about
+    the centre;
+  - the scattering matrix maps incoming port amplitudes to outgoing ones in those same
+    variables — its port variables are referenced at the centre too, so the block readings
+    above (`S11 @ delta` is `r_s`, or `-r_p` on the p block) hold on every order;
+  - every field output — `reconstruct_field` on the solver and on the result,
+    `boundary_fields`, `solve_field`, `plot_field` — is the physical field of that
+    incidence.
+
+  Until 2026-09-27 the ordinary path referenced all of it at the cell **corner**, the Fourier
+  origin the solves integrate from: against the centre, order `(m, n)` carries
+  `exp(1j k_mn . (a1 + a2)/2) = exp(1j k_inc . (a1 + a2)/2) (-1)**(m + n)` on any cell, so on a
+  single wave every amplitude with `m + n` odd changed sign that day, `excitation` physics
+  changed wherever the lit orders mix parity, and a field changed by
+  `exp(-1j k_inc . (a1 + a2)/2)`. `R` and `T` of a single wave did not move
+  (`amplitude-sp-frame.md` §7). The kernels still integrate from the corner and
+  `solver.T1` / `layer_info_list` are their own state; the engine converts at its doors. For a
+  complex `theta` the incident wave is not uniform along the surface, and "unit at the centre"
+  fixes its magnitude there — 7.70 times smaller than at the corner on a TE scene at
+  `theta = 0.3 + 0.1j` in a lossy superstrate;
 - for real transverse wavevectors, `R` and `T` are the separate reflected/transmitted
   powers divided by the incident wave's power at the illuminated interface. This also
   applies to absorbing incident media. `T` refers to power crossing the opposite
@@ -606,6 +646,7 @@ Amplitude fine print, stated once so it never has to be discovered:
 | which rows exist at all, per `answers` rung | `tests/test_answers_declaration.py` — each rung's surface, the rungs agreeing bit-for-bit on what they share, and the refusal naming the declaration |
 | the per-order s/p frame the amplitudes are quoted in | `tests/test_amplitude_sp_frame.py` — a transposed twin, the reconstructed field as arbiter (all four amplitudes, every path, the pure 1D one included, both lit sides and both angle signs), continuity across `kx = 0` off the `ky == 0` row, and §4: the pure 1D path against the conical one amplitude for amplitude and field for field, and the sign step on the `ky == 0` row pinned as a step. The `excitation` weights' frame: `tests/test_excitation.py`; the p block's reading and the 1D matrix as the conical block: `tests/test_scattering_core.py`. Efficiencies cannot pin this row at all: a reversed frame is `\|r\|^2`-invariant |
 | `r_xyz` / `t_xyz` | `tests/test_cartesian_amplitudes.py` — an independent spelling of the formula on every path (a 60-degree cell included) and for each incidence variant against its own amplitudes, the reconstructed field decomposed at both faces with `E_z` held to transversality, continuity across an order's own `kx = 0`, one vector on every backend at an order's exact `kx = 0`, the three 1D paths agreeing, the power identity, the `answers` rung, `jit` / gradients, and `order(m, n)` on a widened window moved along both axes |
+| the lateral phase reference (the cell centre) | `tests/test_centre_reference.py` — an ordinary solve against `PlaneWave` on every path and both sides through both field doors and every boundary wave, `excitation` against `OrderExcitation` with the same weights, the reconstructed field decomposed about the centre on both faces, a first-order Born anchor read through `r_xyz`, all four coupled scattering blocks and a cascade across an odd label shift, complex `theta`, gradients and backends. Efficiencies cannot pin this row either: a per-order sign is `\|r\|^2`-invariant |
 | order layout, order-index sign | `tests/references/test_reticolo_golden.py` (mirrors orders if wrong, conserving energy) |
 | `incidence_side`, incidence-relative results | `tests/test_backside_incidence.py` (reversed-stack Airy oracle, reciprocity both halves) and the `inc_bottom` cases of `tests/references/test_reticolo_golden.py` |
 | result naming, `order()`, delegation | `tests/test_result_api.py` |
