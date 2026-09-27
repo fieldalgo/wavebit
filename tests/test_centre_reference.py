@@ -850,8 +850,8 @@ def test_torch_differentiates_the_solver_door_through_the_angle():
 def test_the_backends_agree_on_odd_orders_and_both_doors(backend):
     """JAX and Torch against NumPy: an odd order's ``r_s`` and ``r_xyz``, and both field doors.
 
-    The solver door is sampled by counts: explicit points reach it through a path whose Torch
-    coordinates are single precision (a separate defect).
+    The solver door by counts and at explicit points written as a list, which reached Torch in
+    single precision until the sampling helpers converted at the solve's own.
     """
     pytest.importorskip('jax' if backend == 1 else 'torch')
     if backend == 1:
@@ -863,11 +863,13 @@ def test_the_backends_agree_on_odd_orders_and_both_doors(backend):
                               top=1.0, bot=2.25, thickness=[0.2], structure=_EPS_1D,
                               truncation_order=(3, 0), answers='field', excitation=excitation)
         result = solver.solve()
+        points = dict(sample_x=[-0.3, 0.2], sample_y=[0.0], sample_z=[0.1])
         out.append((_host(result.r_s), _host(result.r_xyz),
-                    _host(result.reconstruct_field(sample_x=[-0.3, 0.2], sample_y=[0.0],
-                                                   sample_z=[0.1])),
-                    _host(solver.reconstruct_field(sample_x=5, sample_y=1, sample_z=3))))
-    for name, want, got in zip(('r_s', 'r_xyz', 'result door', 'solver door'), *out):
+                    _host(result.reconstruct_field(**points)),
+                    _host(solver.reconstruct_field(sample_x=5, sample_y=1, sample_z=3)),
+                    _host(solver.reconstruct_field(**points))))
+    names = ('r_s', 'r_xyz', 'result door', 'solver door, counts', 'solver door, points')
+    for name, want, got in zip(names, *out):
         assert _rel(got, want) < 1e-12, name
 
 

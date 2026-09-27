@@ -302,6 +302,28 @@ def test_every_backend_samples_the_same_points(backend, bid):
     assert np.allclose(got, ref, rtol=0, atol=1e-10 * np.max(np.abs(ref)))
 
 
+@pytest.mark.parametrize('path', ['tm', '2d'])
+@pytest.mark.parametrize('backend,bid', list(zip(BACKENDS, BACKEND_IDS))[1:], ids=BACKEND_IDS[1:])
+def test_a_python_list_of_points_keeps_double_precision(backend, bid, path):
+    """Points written as a plain list are converted at the solve's precision, not the backend's.
+
+    ``torch.asarray`` makes a list of Python floats ``float32`` (Torch's default dtype), and the
+    helpers cast only afterwards: ``x = -130.7`` landed 3.1e-6 off, ``z = 275.1`` 6.1e-6, and the
+    solver-level field at explicit points sat 1.5e-8 (1D TM) and 2.1e-8 (2D) of the cell's
+    largest entry from NumPy's, while every count-sampled cell agreed to 1e-15. The test above
+    hands NumPy arrays, which carry their own float64, so it could not see it. Held here, both
+    in-plane axes on the 2D path, at 1e-11 --
+    above the 1.4e-13 the JAX 2D solve differs from NumPy's by anyway, three orders below the
+    defect.
+    """
+    x, z = [-130.7, 0.0, 91.3], [60.3, 150.0, 275.1]
+    y = [0.0] if path == 'tm' else [-47.9, 120.1]
+    ref = _field(path, backend=0, sample_x=x, sample_y=y, sample_z=z)
+    got = _field(path, backend=backend, sample_x=x, sample_y=y, sample_z=z)
+    assert got.shape == ref.shape
+    assert np.abs(got - ref).max() < 1e-11 * np.abs(ref).max(), np.abs(got - ref).max()
+
+
 def test_traced_thickness_with_explicit_z_says_why_it_cannot():
     """Bucketing a z into a layer is data-dependent, so it refuses instead of guessing.
 

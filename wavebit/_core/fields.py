@@ -26,7 +26,7 @@ independent plane-wave phase, curl and flux checks on every path and backend.
 """
 import numpy as _np
 
-from .backend import array_namespace
+from .backend import array_namespace, as_array
 from .lattice import periods_of
 
 
@@ -240,7 +240,10 @@ def _axis_samples(xp, spec, extent, C, dev):
     _check_spec(spec, 'sample_x/sample_y')
     if is_count(spec):
         return xp.linspace(0, extent, spec, dtype=C, device=dev)
-    return xp.astype(xp.asarray(spec, device=dev), C) + 0.5 * extent
+    # Converted at the solve's own precision in one step. `xp.asarray` of a list of Python
+    # floats takes the backend's default dtype first -- float32 on Torch -- and a cast after
+    # that cannot recover the digits: explicit points landed ~1e-6 off there.
+    return as_array(xp, spec, dtype=C, device=dev) + 0.5 * extent
 
 
 def _inv_fourier(xp, kx, ky, lattice, sample_x, sample_y, k0, C):
@@ -304,7 +307,7 @@ def _inv_fourier(xp, kx, ky, lattice, sample_x, sample_y, k0, C):
                     f'explicit {axis} coordinates need an axis-aligned cell: on a sheared '
                     'lattice an (x, y) does not determine the (u, v) this path samples in. '
                     'Pass a count instead, or describe the cell as a rectangular supercell.')
-            return xp.astype(xp.asarray(spec, device=dev), C) / a_par + 0.5
+            return as_array(xp, spec, dtype=C, device=dev) / a_par + 0.5
 
         _check_spec(sample_x, 'sample_x')
         _check_spec(sample_y, 'sample_y')
@@ -343,7 +346,7 @@ def _z_1d(xp, sample_z, d, C, dev=None):
     """
     if is_count(sample_z):
         return xp.reshape(xp.linspace(0, sample_z, sample_z, dtype=C, device=dev), (-1,)) / sample_z * d
-    return xp.astype(xp.asarray(sample_z, device=dev), C)
+    return as_array(xp, sample_z, dtype=C, device=dev)              # see `_axis_samples`
 
 
 def _z_slices(xp, sample_z, d, C, dev=None):
