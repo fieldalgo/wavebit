@@ -374,13 +374,19 @@ propagation therefore depends on the illuminated side. Explicitly:
 | `(1, -1j)/sqrt(2)` | `-z` | parallel to k | antiparallel to k |
 | `(1, +1j)/sqrt(2)` | `+z` | antiparallel to k | parallel to k |
 
-Two anchors keep this paragraph honest rather than derived-once-and-drifting: the basis
-calibration above, and the gyrotropic eigenstate test
+Three anchors keep this paragraph honest rather than derived-once-and-drifting: the basis
+calibration above, the gyrotropic eigenstate test
 (`tests/test_polarization.py::test_each_circular_pair_is_one_faraday_eigenstate`), which
 pins that `(1, -1j)/sqrt(2)` is the state seeing `ε_d + γ` in a layer with
-`eps = [[ε_d, iγ], [-iγ, ε_d]]`. And the usual seam warning applies to Jones vectors
-exactly as it does to every other amplitude: a pair quoted from an `e^{+jωt}` source is
-the complex conjugate of ours, and its handedness labels flip with it.
+`eps = [[ε_d, iγ], [-iγ, ε_d]]`, and the table itself measured on fields
+(`tests/test_polarization.py::test_a_circular_state_turns_as_the_table_says` and
+`::test_the_solved_field_turns_the_same_way`): `Re[E e^{-iωt}]` traced over one period
+against the Poynting vector, from both sides. Only the third can see a mirrored frame: the
+first two live in the `xy` plane, and relabelling the frame `z -> -z` leaves them alone, as
+it leaves every amplitude, efficiency and curl residual, while it reverses every helicity.
+And the usual seam warning applies to Jones vectors exactly as it does to every other
+amplitude: a pair quoted from an `e^{+jωt}` source is the complex conjugate of ours, and its
+handedness labels flip with it.
 
 ## Diffraction orders
 
@@ -531,7 +537,7 @@ Amplitude fine print, stated once so it never has to be discovered:
 | result naming, `order()`, delegation | `tests/test_result_api.py` |
 | the `polarization` pair: `psi` equivalence, unit-flux normalization, circular states | `tests/test_polarization.py` |
 | `psi` and `chi` are real; the chart reaches the circular states; both coordinates and the pair carry gradients through a pytree | `tests/test_polarization.py` (the refusal on all three backends, and the pair's gradient checked against the `psi` path's rather than a frozen number) |
-| the circular states' rotation sense | derived above from two pinned facts: the (s, p)→(x, y) calibration (`tests/test_uniform_anisotropic.py`) and the gyrotropic eigenstate assignment (`tests/test_polarization.py`) |
+| the circular states' rotation sense | measured on the incident field against its Poynting vector, both sides, pair and chart, conical and 2D (`tests/test_polarization.py`: `test_a_circular_state_turns_as_the_table_says`, `test_the_solved_field_turns_the_same_way`); derived above from the (s, p)→(x, y) calibration (`tests/test_uniform_anisotropic.py`) and the gyrotropic eigenstate assignment (`tests/test_polarization.py`), neither of which can see a mirrored frame |
 | square-root branches behind `kz` | `tests/test_branch_selection.py` |
 | the field cell's `+z` (that `Ez`, `Hx`, `Hy` share the frame the phase and layer order use) | `tests/test_field_core.py` — the curl residual **and its convergence rate**, per path, plus the control that the pre-2026-08-14 frame fails it. Not the legacy golden, which was frozen in that frame and is transformed at the comparison |
 | the whole surface, per backend | `tests/test_golden_legacy_parity.py` |

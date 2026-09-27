@@ -379,6 +379,133 @@ def test_the_two_circular_states_differ():
     assert abs(abs(t_plus) ** 2 - abs(t_minus) ** 2) > 0.05
 
 
+# ------------------------------------------------------------------ rotation sense, measured
+
+# Which way a circular pair turns *relative to its own propagation* is not a property of the
+# pair. The pair is written in the fixed Cartesian frame (at normal incidence
+# `(E_x, E_y) = (-a_p, a_s)` from either side), so the same pair turns the other way relative
+# to k when the light arrives from below. docs/conventions.md, "Which way the circular states
+# rotate", tabulates it:
+#
+#     pair               rotation vector   from the top (k down)       from the bottom (k up)
+#     (1, -1j)/sqrt(2)   -z                parallel: optics LCP        antiparallel: optics RCP
+#     (1, +1j)/sqrt(2)   +z                antiparallel: optics RCP    parallel: optics LCP
+#
+# Optics names handedness looking toward the source, IEEE looking along k, so IEEE's names are
+# the other way round; "parallel" is positive helicity in either camp.
+#
+# Nothing earlier in this file can see that table. The basis calibration and the gyrotropic
+# tensor both live in the xy plane, and relabelling the frame z -> -z leaves them, every
+# amplitude, every efficiency and the curl equations untouched while it reverses every
+# helicity. That is what happened on 2026-09-24, when +z turned upward: the amplitudes stayed
+# byte-identical, the top column above swapped, and tutorial 6 went on calling (1, -1j) "RCP"
+# with the suite green. So the table is measured here, from fields, assuming nothing but
+# e^{-i omega t}: trace Re[E e^{-i omega t}] at one point over one period, take the direction
+# it sweeps, and compare it with the Poynting vector Re(E x H*) / 2.
+
+#: The sign of (rotation . k) for the pair (1, -1j): +1 is optics LCP, IEEE RHCP.
+_TURN_OF_1_MINUS_I = {'top': +1, 'bottom': -1}
+
+#: Every spelling of a circular state, with +1 when it turns like (1, -1j) and -1 when like
+#: (1, +1j). ``chi`` decides the sense on its own; ``psi`` only phases the pair.
+_CIRCULAR_SPELLINGS = {
+    'pair_minus_i': (dict(polarization=(1, -1j)), +1),
+    'pair_plus_i': (dict(polarization=(1, 1j)), -1),
+    'chi_plus': (dict(psi=0.3, chi=np.pi / 4), +1),
+    'chi_minus': (dict(psi=0.3, chi=-np.pi / 4), -1),
+}
+_TURN_CELLS = {
+    '2d': dict(structure=STRUCTURE_2D, thickness=[200.0, 100.0], truncation_order=[2, 1]),
+    'conical': dict(structure=STRUCTURE_1D, thickness=[22.0, 460.0], truncation_order=[4, 0]),
+}
+_TURN_ANGLES = {'normal': (0.0, 0.0), 'oblique': (0.4, 0.3), 'kx_negative': (0.5, 2.4)}
+_TURN_POINT = dict(sample_x=[37.0], sample_y=[-51.0])      # off every symmetry line
+
+
+def _rotation_and_flow(six):
+    """``(rotation, flow)`` of one field sample ``(Ex, Ey, Ez, Z0Hx, Z0Hy, Z0Hz)``.
+
+    ``rotation`` is the area vector ``E(t)`` sweeps over one period, summed as
+    ``E(t_i) x E(t_(i+1))`` over the trace itself -- the literal measurement, not the
+    ``Im(E* x E)`` shortcut it equals -- and ``flow`` the time-averaged Poynting vector.
+    """
+    E, H = np.asarray(six[:3]), np.asarray(six[3:])
+    wt = np.linspace(0.0, 2 * np.pi, 64, endpoint=False)
+    trace = np.real(E[:, None] * np.exp(-1j * wt)[None, :])          # (3, 64): E at each t
+    rotation = np.cross(trace.T, np.roll(trace, -1, axis=1).T).sum(axis=0)
+    flow = 0.5 * np.real(np.cross(E, np.conj(H)))
+    return rotation, flow
+
+
+def _helicity(six):
+    """``cos`` of the angle between the rotation and the flow: ``+-1`` for a circular wave."""
+    rotation, flow = _rotation_and_flow(six)
+    return float(rotation @ flow / (np.linalg.norm(rotation) * np.linalg.norm(flow)))
+
+
+def _k_hat(side, theta, phi):
+    sigma = -1.0 if side == 'top' else 1.0
+    return np.array([np.sin(theta) * np.cos(phi), np.sin(theta) * np.sin(phi),
+                     sigma * np.cos(theta)])
+
+
+@pytest.mark.parametrize('angles', list(_TURN_ANGLES))
+@pytest.mark.parametrize('path', list(_TURN_CELLS))
+@pytest.mark.parametrize('side', ['top', 'bottom'])
+@pytest.mark.parametrize('spelling', list(_CIRCULAR_SPELLINGS))
+def test_a_circular_state_turns_as_the_table_says(spelling, side, path, angles):
+    """The incident wave's rotation against its own flow, on a patterned stack, both sides."""
+    incidence, turns_like = _CIRCULAR_SPELLINGS[spelling]
+    theta, phi = _TURN_ANGLES[angles]
+    solver = wavebit.rcwa(backend=0, top=1.0, bot=2.25, wavelength=900.0, period=[700.0, 700.0],
+                          theta=theta, phi=phi, incidence_side=side, **_TURN_CELLS[path],
+                          **incidence)
+    six = np.asarray(solver.solve().boundary_fields(side, part='incoming', **_TURN_POINT))[0, 0]
+    assert solver.grating_type == {'conical': 1, '2d': 2}[path]
+
+    # The instrument first: the flow is the documented k, so "along k" means what it says.
+    _, flow = _rotation_and_flow(six)
+    np.testing.assert_allclose(flow / np.linalg.norm(flow), _k_hat(side, theta, phi), atol=1e-12)
+    # Circular and transverse, so the rotation is along k exactly; its sign is the table's.
+    assert _helicity(six) == pytest.approx(turns_like * _TURN_OF_1_MINUS_I[side], abs=1e-12)
+
+
+@pytest.mark.parametrize('path', ['conical', '2d'])
+@pytest.mark.parametrize('side', ['top', 'bottom'])
+def test_the_solved_field_turns_the_same_way(side, path):
+    """The same measurement on the field the *solver* reconstructs, not the boundary basis.
+
+    The incoming boundary wave above is the documented (s, p) basis applied to the pair, so on
+    its own it checks the documentation against itself. Inside an index-matched stack the
+    reconstructed field is the incident wave alone, walked through the solve, the propagation
+    frame and its mirror restoration. Its phase has to advance along its own flow (the time
+    convention and a right-handed frame, the two things a helicity means nothing without), it
+    has to *be* the incoming wave carried to that height, and so it has to turn the same way.
+    """
+    theta, phi = _TURN_ANGLES['kx_negative']
+    structure = np.ones((1, 1, 4)) if path == 'conical' else np.ones((1, 2, 2))
+    solver = wavebit.rcwa(backend=0, structure=structure, thickness=[300.0], top=1.0, bot=1.0,
+                          wavelength=600.0, period=[450.0, 450.0],
+                          truncation_order=[2, 0] if path == 'conical' else [1, 1],
+                          theta=theta, phi=phi, polarization=(1, -1j), incidence_side=side,
+                          answers='field')
+    res = solver.solve()
+    heights = [120.0, 121.0]
+    cell = np.asarray(res.reconstruct_field(sample_z=heights, **_TURN_POINT))[:, 0, 0]
+    incoming = np.asarray(res.boundary_fields(side, part='incoming', **_TURN_POINT))[0, 0]
+
+    k = (2 * np.pi / 600.0) * _k_hat(side, theta, phi)
+    advance = np.angle(np.vdot(cell[0, :3], cell[1, :3]))           # = k_z * (1 nm)
+    assert advance == pytest.approx(k[2] * (heights[1] - heights[0]), rel=1e-9)
+    _, flow = _rotation_and_flow(cell[0])
+    np.testing.assert_allclose(flow / np.linalg.norm(flow), k / np.linalg.norm(k), atol=1e-12)
+
+    face = 300.0 if side == 'top' else 0.0
+    for z, six in zip(heights, cell):
+        np.testing.assert_allclose(six, incoming * np.exp(1j * k[2] * (z - face)), atol=1e-12)
+    assert _helicity(cell[0]) == pytest.approx(_TURN_OF_1_MINUS_I[side], abs=1e-12)
+
+
 # ------------------------------------------------------------------ field reconstruction
 
 # The pair reaches the near field only implicitly. The boundary match writes the incident
