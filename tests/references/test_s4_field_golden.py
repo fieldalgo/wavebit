@@ -94,7 +94,12 @@ def _reconstruct(path, stack_name, theta, phi, pol):
     if path == '4ff':
         solver.formulation = '4ff'
     solver.solve()
-    cell = np.asarray(solver.reconstruct_field(sample_x=1, sample_y=1, sample_z=RES_Z))
+    # S4 samples `GetFields(0, 0, z)`, its origin, which is where it references its incidence.
+    # Ours is referenced at the public origin, the cell centre, since 2026-09-27 -- so that is
+    # the point to sample, with no factor. (A count of 1 was the corner, the right point while
+    # the incidence was unit there; on a uniform stack the structure's position is moot, the
+    # incidence's is not.)
+    cell = np.asarray(solver.reconstruct_field(sample_x=[0.], sample_y=[0.], sample_z=RES_Z))
     if cell.ndim == 5:
         cell = cell[0]
     return _as_six(_interior(cell[::-1, 0, 0, :]), path) * np.array([1, 1, -1, -1, -1, 1])

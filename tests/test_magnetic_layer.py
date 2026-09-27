@@ -319,7 +319,8 @@ def _closed_form_s_field(eps, mu, thick, eps_bot, mu_bot, theta, z_abs):
     it forever. A characteristic-matrix recursion cannot be co-migrated -- the same argument
     ``tests/test_material_convention_anchor.py`` makes for ``R``, made one level deeper.
 
-    Vacuum above, unit incident amplitude, layers listed top to bottom and ``z_abs`` a depth
+    Vacuum above, unit incident amplitude at ``x = 0`` (the only lateral dependence is
+    ``exp(1j kx x)``, dropped here), layers listed top to bottom and ``z_abs`` a depth
     measured down from the top of the stack, with ``+z`` pointing into it. That is the frame the
     reconstruction returned until 2026-09-21; it now returns upward heights from the bottom
     interface, and :func:`_uniform_cell` converts (``sum(thick) - z``, the layer order reversed,
@@ -392,6 +393,10 @@ def _uniform_cell(eps, mu, thick, eps_bot, mu_bot, theta, z_abs, algo='ETM'):
     ``truncation_order=(0, 0)``: only the zeroth order exists, so the solver is being asked the multilayer
     question the recursion above answers, and any disagreement is about ``mu`` rather than
     about truncation.
+
+    Sampled at the public origin ``x = y = 0``, where the solve's incidence is unit, so the
+    closed form's ``exp(1j kx x)`` is 1 there. The corner (a count of 1) was that point until
+    2026-09-27, when the incidence moved to the centre with every other per-order phase.
     """
     tile = lambda vals: np.array([[[v] * 2] * 2 for v in vals], dtype=complex)
     # A magnetic substrate is a `Material`, not a number: it enters through `mu_bot` rather
@@ -407,7 +412,8 @@ def _uniform_cell(eps, mu, thick, eps_bot, mu_bot, theta, z_abs, algo='ETM'):
     # `S_INC` names the pure-s incidence: E along the s direction, which is the polarization
     # the closed form is written for and the only one with an `H_z` at all.
     cell = np.asarray(solver.reconstruct_field(
-        sample_x=1, sample_y=1, sample_z=sum(thick)-np.asarray(z_abs, dtype=float), incidences=S_INC))
+        sample_x=[0.], sample_y=[0.], sample_z=sum(thick)-np.asarray(z_abs, dtype=float),
+        incidences=S_INC))
     return cell[0, :, 0, 0, :] * np.array([1, 1, -1, -1, -1, 1])                          # (nz, 6) = Ex Ey Ez Hx Hy Hz
 
 

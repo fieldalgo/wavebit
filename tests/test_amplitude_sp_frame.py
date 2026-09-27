@@ -156,17 +156,16 @@ def _face_orders(result, z, KX, KY):
     """``(Ex, Ey)`` of every retained order on the plane at height ``z``, and the fit residual.
 
     More sample points than retained orders, so the decomposition is overdetermined and a
-    missing order would show up as a residual instead of being absorbed. `xs` / `ys` are
-    absolute Cartesian, because the plane-wave basis below is written in that frame;
-    `sample_x` / `sample_y` are measured from the centre of the cell, so the request carries
-    the half-period back off. The two must name the same points or the decomposition is
-    fitting a shifted field.
+    missing order would show up as a residual instead of being absorbed. `xs` / `ys` are public
+    coordinates, measured from the centre of the cell, and are handed to `sample_x` /
+    `sample_y` and to the plane-wave basis as they are: the amplitudes are Fourier
+    coefficients about the centre, so no half-period appears anywhere. (Until 2026-09-27 they
+    were about the corner, and this sampled from the corner to match.)
     """
     fy, fx = (s // 2 for s in KX.shape)
-    xs = np.linspace(0.0, _PX, 4 * fx + 3, endpoint=False)
-    ys = np.linspace(0.0, _PY, 4 * fy + 3, endpoint=False)
-    cell = result.reconstruct_field(sample_x=xs - 0.5 * _PX, sample_y=ys - 0.5 * _PY,
-                                    sample_z=np.array([z]))
+    xs = np.linspace(-0.5 * _PX, 0.5 * _PX, 4 * fx + 3, endpoint=False)
+    ys = np.linspace(-0.5 * _PY, 0.5 * _PY, 4 * fy + 3, endpoint=False)
+    cell = result.reconstruct_field(sample_x=xs, sample_y=ys, sample_z=np.array([z]))
     cell = _host(cell).astype(np.complex128).reshape(ys.size, xs.size, 6)
     k0 = 2 * np.pi / _WL
     basis = (np.exp(1j * k0 * np.outer(ys, KY[:, 0]))[:, None, :, None]

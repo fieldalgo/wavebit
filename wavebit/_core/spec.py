@@ -119,6 +119,14 @@ SPEC_VERSION = '10'   # '2': result fields renamed de_ri/de_ti -> R/T (2026-08-1
 # TM scale, which every efficiency divides out, plus the per-order amplitude convention.
 # Precedent: the 2026-08-16 half-turn fix moved coupled amplitudes with no bump. Amplitudes
 # cached under an old key() are stale on the orders across kx = 0 from the incident one.
+# No bump (2026-09-27, the centre reference): every per-order phase moved from the cell corner
+# to the cell centre, x = y = 0. No document changes shape and no input value names a
+# different structure (the '3' / '7' argument again): `Incidence` cannot carry `excitation`,
+# the one input whose physics moved, and a single-wave spec changes only its per-order
+# amplitude convention (every order with m + n odd negated) and its field's phase reference
+# (by exp(-1j k_inc . (a1 + a2)/2), 1 at normal incidence). Every efficiency of a single-wave
+# spec is byte-identical. Amplitudes cached under an old key() are stale on every order with
+# m + n odd.
 
 #: Refusal for a document that states no version. Its own justification, because the rule
 #: reads as gratuitous ceremony until you see which case it is for.

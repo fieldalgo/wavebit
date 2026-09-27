@@ -57,7 +57,9 @@ O(1) residual when guessed wrong:
 * The reversal carries the **component parity** ``E_z, H_x, H_y`` flip / ``E_t, H_z`` do not,
   which is the rule ``_core/fields.py`` already states for its own frame. With the parity and
   the reversal applied there is **no free amplitude at all** -- not a fitted scale, as the
-  fmmax golden needs, but exactly 1.
+  fmmax golden needs, but exactly 1. (Since 2026-09-27 that is after one stated lateral phase,
+  which the test applies: RETICOLO's incident wave is unit at the cell corner, this library's
+  at the centre.)
 
 **Citation.** RETICOLO's terms require Hugonin & Lalanne (arXiv:2101.00901), *and* P. Lalanne
 and M.P. Jurek, J. Mod. Opt. **45**, 1357-1374 (1998) whenever near-field distributions are

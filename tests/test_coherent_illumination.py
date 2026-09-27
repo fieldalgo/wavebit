@@ -27,9 +27,9 @@ def test_one_sided_limit_matches_existing_pattern_solver(side, pol):
     np.testing.assert_allclose(b.output_top if side == 'top' else b.output_bottom, a.R.sum(), atol=2e-12)
     np.testing.assert_allclose(b.output_bottom if side == 'top' else b.output_top, a.T.sum(), atol=2e-12)
     points = dict(sample_x=[-.17, .12], sample_y=[-.11, .06], sample_z=[.02, .1])
-    # The legacy field exp uses cell-corner coordinates. Beam amplitudes use x=y=0.
-    q = np.array(old._incident_kxy(old.wavelength))*2*np.pi/old.wavelength
-    reference = old.reconstruct_field(**points)[0]*np.exp(-1j*q@np.array(options['period'])/2)
+    # Both are unit at x = y = 0 on the lit face (the ordinary solve since 2026-09-27), so the
+    # fields are one field, with no factor between them.
+    reference = old.reconstruct_field(**points)[0]
     np.testing.assert_allclose(new.reconstruct_field(**points), reference, atol=2e-11)
 
 
@@ -45,9 +45,9 @@ def test_the_pure_1d_solve_is_the_coherent_plane_wave(tetm, pol, side, theta):
     unit E; before, it was ``+y`` at any angle (a sign at ``theta < 0``) and TM was a unit
     ``H_y`` (1.5 lit from the glass below).
 
-    One factor remains and is the lateral phase reference, not the frame: an ordinary solve's
-    plane wave is unit at the cell corner, a ``PlaneWave`` at ``x = y = 0``, the cell centre --
-    the same ``exp(-i k_inc . P/2)`` the test above applies.
+    With no factor at all: both plane waves are unit at ``x = y = 0``, the cell centre, since
+    the ordinary solve moved its lateral phase reference there on 2026-09-27. Until then it was
+    unit at the cell corner, and this comparison carried ``exp(-1j k_inc . P/2)``.
     """
     options = scene()
     old = wavebit.rcwa(**options, theta=theta, tetm=tetm, incidence_side=side)
@@ -57,9 +57,8 @@ def test_the_pure_1d_solve_is_the_coherent_plane_wave(tetm, pol, side, theta):
     np.testing.assert_allclose(b.output_top if side == 'top' else b.output_bottom, a.R.sum(), atol=2e-12)
     np.testing.assert_allclose(b.output_bottom if side == 'top' else b.output_top, a.T.sum(), atol=2e-12)
     points = dict(sample_x=[-.17, .12], sample_y=[0.], sample_z=[.02, .1])
-    q = np.array(old._incident_kxy(old.wavelength))*2*np.pi/old.wavelength
-    reference = a.reconstruct_field(**points)*np.exp(-1j*q@np.array(options['period'])/2)
-    np.testing.assert_allclose(new.reconstruct_field(**points), reference, atol=2e-11)
+    np.testing.assert_allclose(new.reconstruct_field(**points), a.reconstruct_field(**points),
+                               atol=2e-11)
 
 
 def slab_reference(wavelength, d, eps, mus, kx, polarization, phase):
@@ -177,6 +176,13 @@ def test_different_sectors_preserve_local_interference_and_integrate_rectangle()
 
 
 def test_reciprocal_shift_shares_one_group_and_order_phase_reference():
+    """Two coherent spellings of one input, and the ordinary ``excitation`` door with the SAME weights.
+
+    ``OrderExcitation`` weights and ``excitation=`` weights are both amplitudes at ``x = y = 0``
+    since 2026-09-27, so the one dict lights both doors with one field. Until then the ordinary
+    weights were referenced at the cell corner, and this test lit it with the corner-converted
+    ones -- ``exp(-1j k_m . P/2)`` per order, a relative ``-1`` on order 1.
+    """
     options = scene(top=1., bot=1., thickness=[.23], truncation_order=(1, 0))
     q, g = .2, 2*np.pi/options['period'][0]
     # The same physical inputs expressed as separate Beam directions or orders.
@@ -186,9 +192,8 @@ def test_reciprocal_shift_shares_one_group_and_order_phase_reference():
     for side in ('top', 'bottom'):
         np.testing.assert_allclose(a.boundary_fields(side, [-.3, 0., .2]),
                                    b.boundary_fields(side, [-.3, 0., .2]), atol=2e-12)
-    # Legacy input phase is defined at the Fourier origin (corner).
     old = wavebit.rcwa(**options, kx=q, polarization=(1., 0.), layer_algorithm='SMM',
-                       excitation={0: np.exp(-1j*q), 1: .5j*np.exp(-1j*(q+g))})
+                       excitation={0: 1., 1: .5j})
     old.solve(auto_detune=False)
     args = dict(sample_x=[-.3, 0., .2], sample_y=[0.], sample_z=[.1])
     np.testing.assert_allclose(a.reconstruct_field(**args), old.reconstruct_field(**args)[0], atol=3e-11)
@@ -236,7 +241,7 @@ def test_tilted_tensor_one_sided_matches_etm(side):
     b = wavebit.rcwa(**options, excitation={side: wavebit.PlaneWave(kx=.2, ky=.3, polarization=(.6, .8j))}).solve()
     np.testing.assert_allclose(b.output_top if side == 'top' else b.output_bottom, a.R.sum(), atol=3e-12)
     points = dict(sample_x=[-.1, .2], sample_y=[.08], sample_z=[.01, .11])
-    expected = old.reconstruct_field(**points)[0]*np.exp(-1j*np.array([.2, .3])@np.array(options['period'])/2)
+    expected = old.reconstruct_field(**points)[0]       # both unit at x = y = 0: no factor
     np.testing.assert_allclose(b.reconstruct_field(**points), expected, atol=3e-12)
 
 

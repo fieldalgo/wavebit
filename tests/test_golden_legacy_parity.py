@@ -63,7 +63,9 @@ of all thirteen untouched, since a half-turn cannot survive ``|r|**2``. That is 
 difference between the frozen numbers and today's, exactly like the ``H -> E`` factors already
 in :func:`_amp_map`, so it is applied as one -- see :func:`_frame_sign`. Both ``.npz`` files
 stay byte-identical, including the one frozen days earlier, which is the strongest available
-statement that nothing here was re-frozen to make a test pass.
+statement that nothing here was re-frozen to make a test pass. The move of every amplitude's
+lateral phase reference from the cell corner to its centre (2026-09-27) is a third such
+convention, :func:`_centre_sign`, and was handled the same way.
 
 Compared to ``atol=1e-12``, not bit-for-bit. Bit-exactness was the right test while the port
 was being *proved* equal to the legacy chain; as a standing guard it fails on things that are
@@ -188,6 +190,27 @@ def _frame_sign(solver, grating_type):
     return np.reshape(sigma * sigma[kx.size // 2], (1, -1))
 
 
+def _centre_sign(result):
+    """The third conversion, and also a per-order ``+-1``: the lateral phase reference.
+
+    The legacy solver -- like this one's kernels today -- referenced every amplitude at the cell
+    **corner**, its Fourier origin; since 2026-09-27 every public amplitude is referenced at the
+    cell **centre** ``o = (a1 + a2)/2``, the origin every public coordinate uses. Against the
+    centre, order ``(m, n)`` carries ``exp(1j * k_mn . o)``, which is the specular order's
+    ``exp(1j * k_inc . o)`` times ``(-1)**(m + n)``, because ``b_i . a_j = 2 pi delta_ij``. The
+    common factor cancels between the amplitude and the unit incident wave it is a ratio
+    against, so the frozen amplitudes are today's times ``(-1)**(m + n)``.
+
+    Spelled from the result's own order **labels** (``orders_u`` / ``orders_v``), not from the
+    solver's window arithmetic and not from the engine's helper, so this stays a statement about
+    the golden rather than a restatement of the code under test. Every case here keeps the
+    default window, centred on the specular order. Closed-form, exact, and it cancels in
+    ``|r|**2``, like the two conversions before it: the efficiency comparisons are untouched.
+    """
+    m, n = np.asarray(result.orders_u), np.asarray(result.orders_v)
+    return np.where((n[:, None] + m[None, :]) % 2 == 1, -1.0, 1.0)
+
+
 def _rand(shape, seed):
     """The same raster the generator drew, restated as PERMITTIVITY.
 
@@ -252,7 +275,7 @@ def test_results_match_legacy_golden(name):
             assert np.allclose(want, got, atol=TOL, rtol=0), (
                 sub, key, np.max(np.abs(want - got)))
             checked += 1
-        frame = _frame_sign(solver, solver.grating_type)
+        frame = _frame_sign(solver, solver.grating_type) * _centre_sign(result)
         for key, attr, factor in amp_map:
             want = GOLDEN[f'{name}__{sub}__{key}'] * factor * frame
             got = np.asarray(getattr(got_sub, attr))

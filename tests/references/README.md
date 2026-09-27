@@ -88,7 +88,9 @@ numerical drift is `tests/data/golden_field.npz`'s job.
 
 One further thing fell out of the calibration and is worth having as a statement rather than a
 constant: fmmax's unit **mode** amplitude relates to our unit **flux** incidence by exactly
-`-cos(theta)` for s and `-1` for p. The test asserts that dependence, so a case added at a new
+`-cos(theta)` for s and `-1` for p — times `exp(-1j k0 sin(theta) P/2)` since 2026-09-27, the
+phase between the two codes' unit points: fmmax's incident wave is unit at its cell corner, ours
+at the cell centre. The test asserts that dependence, phase included, so a case added at a new
 angle is checked rather than accommodated.
 
 Two conventions had to be measured rather than assumed, and both are recorded in
@@ -169,12 +171,15 @@ permittivity flip it is also what checks the **quantity**: `o` is an index and o
 took the root, and it fails by O(1) before any field is compared if it did not.
 
 With the frame transform applied there is **no free amplitude at all**: not a fitted scale as
-the fmmax golden needs, but exactly 1, to 2.7e-14. The test asserts that rather than fitting it,
-because a scale free to absorb a factor absorbs a defect just as happily. For TM that holds
-because every case is lit from air: RETICOLO's 1D TM input (`einc`, `PlaneWave_H(2)` in its
-examples) is the incident `H_y`, while this project's pure TM solve is lit by unit incident
-**E** since 2026-09-27, like every other path. A case lit through glass needs
-`x n_inc/mu_inc` on RETICOLO's side, and that factor is the conversion, not a regression.
+the fmmax golden needs, but exactly 1, to 2.7e-14 — after one stated lateral phase between the
+two codes' unit points since 2026-09-27, `exp(-1j k0 sin(theta) P/2)`: RETICOLO's incident wave
+is unit at its `x = 0`, the cell corner (the `o` measurement above), and ours at the cell centre.
+The test asserts that rather than fitting it, because a scale free to absorb a factor absorbs a
+defect just as happily. For TM that holds because every case is lit from air: RETICOLO's 1D TM
+input (`einc`, `PlaneWave_H(2)` in its examples) is the incident `H_y`, while this project's pure
+TM solve is lit by unit incident **E** since 2026-09-27, like every other path. A case lit
+through glass needs `x n_inc/mu_inc` on RETICOLO's side, and that factor is the conversion, not a
+regression.
 
 The case list is in `_reticolo_field_cases.py` and covers uniform, grating, two-layer and
 absorbing stacks at 0/24/41 degrees in both polarisations. The geometry deliberately keeps
@@ -200,7 +205,9 @@ It lands in the same two tiers, measured over 24 cases (4 stacks x 3 angle pairs
 
 **The finding is that nothing conical-specific had to be discovered.** The transform established
 on the pure TE/TM path — whole-cell z reversal plus the declared frame's z-parity, no
-conjugation, no scale — transfers unchanged. A full search over all 720 component permutations x
+conjugation, no scale — transfers unchanged, and so does the one stated lateral phase between
+the two codes' unit points, `exp(-1j k0 sin(theta) (cos(phi) + sin(phi)) P/2)` on the `(P, P)`
+cell at an azimuth. A full search over all 720 component permutations x
 z-flip x conjugation confirms the identity permutation as the unique best fit, which is what
 says there is no hidden frame quirk rather than merely no *observed* one. `Ex` is the slow slot
 again, for the same reason: it is normal to the grating's vertical interfaces and therefore the
@@ -276,14 +283,19 @@ RETICOLO's power normalisation of `amplitude`, this solver matched RETICOLO path
 
 Since 2026-09-27 this solver's pure 1D `tetm` path quotes the per-order frame too
 (`docs/amplitude-sp-frame.md` §6), so it matches RETICOLO's **conical** amplitudes and differs
-from RETICOLO's 1D ones by that factor. Any per-order comparison against RETICOLO's 1D path
-applies the relation at the comparison, as `test_golden_legacy_parity.py`'s `_frame_sign`
-does for the legacy golden. None needs it today: the only committed 1D amplitude,
-`golden_reticolo_complex_kx.npz`'s `r0`, is the specular order, where the factor is 1. The
-field rows are frame-free and unaffected, apart from the TM input normalisation noted in the
-1D field row above. The frame-free per-order quantity RETICOLO also returns -- each order's
-Cartesian E and H from `res2` -- is what this solver's `r_xyz` / `t_xyz` correspond to, and is
-the natural next per-order golden: it needs no frame relation on either of RETICOLO's paths.
+from RETICOLO's 1D ones by that factor. Since §7 of the same record, the same day, it differs
+from both by `(-1)**m` as well: RETICOLO's origin is the cell corner and this solver references
+every per-order phase at the cell centre. That factor is derived from the field rows' measured
+phase, not from a second per-order run. Any per-order comparison against RETICOLO applies both
+relations at the comparison, as `test_golden_legacy_parity.py`'s `_frame_sign` and
+`_centre_sign` do for the legacy golden. None needs them today: the only committed 1D
+amplitude, `golden_reticolo_complex_kx.npz`'s `r0`, is the specular order, where both factors
+are 1. The field rows are frame-free; they carry the lateral phase
+`exp(-1j k0 sin(theta) P/2)` between the two codes' unit points, and the TM input normalisation
+noted in the 1D field row above. The frame-free per-order quantity RETICOLO also returns -- each
+order's Cartesian E and H from `res2` -- is what this solver's `r_xyz` / `t_xyz` correspond to,
+and is the natural next per-order golden: it needs no frame relation on either of RETICOLO's
+paths, only the lateral `(-1)**m`.
 
 ### Where RETICOLO stops being an oracle
 

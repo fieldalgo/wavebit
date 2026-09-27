@@ -86,13 +86,20 @@ def expand_spectrum(xp, kxy, coefficients, grid):
 
 
 class FieldState:
-    """Numeric solve snapshot and a static adapter name; a JAX pytree when registered."""
+    """Numeric solve snapshot and a static adapter name; a JAX pytree when registered.
 
-    def __init__(self, data, kind, mirrored=False, names=('incident',)):
+    ``window`` is an ordinary solve's retained ``order_window``, which names the orders its
+    kernel state is on (see :meth:`_ordinary_coefficients`); ``None`` for a source solve. It is
+    static -- the excitation's keys and ``truncation_order`` fix it, never a traced value -- so
+    it rides in the aux data beside ``kind``, and the leaves are the numbers alone.
+    """
+
+    def __init__(self, data, kind, mirrored=False, names=('incident',), window=None):
         self.data, self.kind, self.mirrored, self.names = data, kind, mirrored, tuple(names)
+        self.window = window
 
     def tree_flatten(self):
-        return (self.data,), (self.kind, self.mirrored, self.names)
+        return (self.data,), (self.kind, self.mirrored, self.names, self.window)
 
     @classmethod
     def tree_unflatten(cls, meta, children):
@@ -180,10 +187,13 @@ class FieldState:
                             for mask, cell in zip(masks, cells)))
         if self.mirrored:
             coefficients = coefficients * _array(xp, [1, 1, -1, -1, -1, 1], coefficients)
-        # Ordinary operators use the corner Fourier origin; public coordinates
-        # use the cell centre. Preserve the solved source's phase convention.
-        origin = xp.sum(self.data['lattice'], axis=1)/2
-        return coefficients * xp.exp(1j*(g['kxy'] @ origin))[None, :, None]
+        # The kernels' state is about their Fourier origin, the cell corner, for their corner
+        # column: order (m, n) of it is the public (centre) coefficient times
+        # exp(-1j k_mn . o) / exp(-1j k_inc . o) = (-1)**(m + n). An exact sign, by label.
+        from .conventions import centre_parity
+        odd = as_array(xp, centre_parity(*self.window).reshape(-1),
+                       device=getattr(coefficients, 'device', None))
+        return xp.where(odd[None, :, None], -coefficients, coefficients)
 
     def _source_coefficients(self, xp, g, z, owner, edges):
         ge = g['edges']
@@ -247,17 +257,21 @@ class ResultFields:
 
 def ordinary_spectra(solver, variants, *, eps_top=None, eps_bot=None, mu_top=None,
                      mu_bot=None):
-    """Every retained order's six-component plane wave, per incidence, before the lateral phase.
+    """Every retained order's six-component plane wave, per incidence, on each face.
 
     ``variants`` maps ``'incident'`` / ``'s'`` / ``'p'`` to the solve's result mappings (the
     ``r_s`` / ``r_p`` / ``t_s`` / ``t_p`` it packed) or ``None``. Returns ``None`` below
     ``answers='amplitude'``, where there are no amplitudes to expand.
 
     One arithmetic serves two readers, which is why it is its own function: the boundary spectra
-    :func:`ordinary_state` hands to the field API (these times the phase that moves the corner
-    Fourier origin to the public centre), and the per-order Cartesian vectors ``r_xyz`` /
-    ``t_xyz`` (:func:`cartesian_amplitudes`, these as they are). A second spelling of the s/p ->
-    xyz basis would be one more copy of the rule ``order_azimuth`` / ``order_frame_sign`` state.
+    :func:`ordinary_state` hands to the field API, and the per-order Cartesian vectors
+    ``r_xyz`` / ``t_xyz`` (:func:`cartesian_amplitudes`). Both take them as they are: the
+    incoming wave is built from the public weights (:meth:`CoreSolveMixin._lit`), unit at
+    ``x = y = 0``, and the outgoing ones from the amplitudes, which are the Fourier
+    coefficients of the public field about the cell centre since 2026-09-27 -- so these
+    already are the public spectra, with no lateral phase to add. A second spelling of the
+    s/p -> xyz basis would be one more copy of the rule ``order_azimuth`` /
+    ``order_frame_sign`` state.
     """
     from .conventions import boundary_kz, order_azimuth, order_frame_sign, incident_column
     from .solve_2d import order_grid_kxy
@@ -329,8 +343,7 @@ def ordinary_spectra(solver, variants, *, eps_top=None, eps_bot=None, mu_top=Non
                          xp.sum(reflected_basis*ref[:, None, :], axis=-1),
                          xp.sum(transmitted_basis*trn[:, None, :], axis=-1))
     return dict(kind=kind, names=names, side=side, other=other, kx=kx, ky=ky, kxy=kxy,
-                lattice=lattice, spectra=spectra,
-                phase=xp.exp(1j*(kxy @ (xp.sum(lattice, axis=1)/2)))[:, None])
+                lattice=lattice, spectra=spectra)
 
 
 def cartesian_amplitudes(spectra, name, shape):
@@ -342,8 +355,9 @@ def cartesian_amplitudes(spectra, name, shape):
     ``r_xyz = r_s * s_hat + r_p * p_hat_ref`` and ``t_xyz = t_s * s_hat + t_p * p_hat_trn``.
     With no per-order frame in it, it is continuous where an order's ``kx`` crosses zero on the
     ``ky == 0`` row, where ``r_s`` turns over with ``s_hat``. Its phase reference is ``r_s``'s:
-    in ``z`` the lit and far interfaces, and laterally the cell **corner** (the Fourier origin)
-    -- it is taken before the phase that moves the boundary spectra to the public centre.
+    in ``z`` the lit and far interfaces, and laterally the cell **centre**, ``x = y = 0`` -- the
+    outgoing field on the lit face is ``sum_m r_xyz[m] exp(1j k_m . x)`` in public coordinates,
+    and ``t_xyz`` the same on the far face.
 
     Prior art: RETICOLO's ``res2`` returns each order's Cartesian ``E`` and ``H`` components at
     its origin beside the amplitudes -- J. P. Hugonin and P. Lalanne, "RETICOLO software for
@@ -361,18 +375,17 @@ def ordinary_state(solver, spectra):
     """Adapt one ordinary solve without retaining a reference to the solver.
 
     ``spectra`` is :func:`ordinary_spectra`'s answer -- ``None`` below ``answers='amplitude'``,
-    which has no field state -- and the boundary waves are those spectra moved to the public
-    centre origin.
+    which has no field state -- and the boundary waves are those spectra as they are: they are
+    referenced at the public centre origin already.
     """
     if spectra is None:
         return None
     xp = array_namespace(spectra['kxy'])
-    side, other, phase = spectra['side'], spectra['other'], spectra['phase']
+    side, other = spectra['side'], spectra['other']
     boundary = {}
     for name in spectra['names']:
         incoming, reflected, transmitted = spectra['spectra'][name]
-        transmitted = transmitted*phase
-        boundary[name] = {side: (incoming*phase, reflected*phase),
+        boundary[name] = {side: (incoming, reflected),
                           other: (xp.zeros_like(transmitted), transmitted)}
     groups = ()
     if solver.T1 is not None and solver.layer_info_list:
@@ -382,7 +395,7 @@ def ordinary_state(solver, spectra):
                 thickness=solver.thickness, boundary_kxy=spectra['kxy'], boundary=boundary,
                 groups=groups)
     return FieldState(_copy(data), spectra['kind'], solver._kernel_incidence_side == 'bottom',
-                      spectra['names'])
+                      spectra['names'], solver.order_window)
 
 
 def source_state(spectra, groups, lattice, wavelength, thickness):

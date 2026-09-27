@@ -3,8 +3,13 @@
 ``Result`` carries reflected/transmitted amplitudes, their s/p split, and — for the conical and
 2D paths — the pure-TE and pure-TM incidence variants. These check that the ``'amplitude'``
 rung of the ``answers`` declaration delivers all of it and that the wiring routes it through
-unchanged; the values themselves are pinned against the frozen legacy reference in
-test_golden_legacy_parity.py.
+unchanged but for the centre sign; the values themselves are pinned against the frozen legacy
+reference in test_golden_legacy_parity.py.
+
+The one conversion the wiring makes: the kernels' amplitudes are referenced at the cell corner,
+their Fourier origin, and the public ones at the centre (2026-09-27), which on a single incident
+wave negates every order with ``m + n`` odd -- an exact sign bit, so the comparison stays by
+bytes.
 """
 import numpy as np
 import pytest
@@ -14,8 +19,8 @@ from wavebit._core.factorization import to_conv_mat_raster_sampled
 from wavebit._core.solve_1d import solve_1d, solve_1d_conical
 from wavebit._core.solve_2d import solve_2d
 
-FIELDS = ('r_s', 'r_p', 't_s', 't_p',
-          'R', 'R_s', 'R_p', 'T', 'T_s', 'T_p')
+AMPLITUDES = ('r_s', 'r_p', 't_s', 't_p')
+FIELDS = AMPLITUDES + ('R', 'R_s', 'R_p', 'T', 'T_s', 'T_p')
 
 
 def _setup(**kw):
@@ -27,11 +32,17 @@ def _setup(**kw):
     return solver, legacy, (epx, epy, epz), kx, ky
 
 
-def _assert_all_fields(legacy_sub, got):
+def _assert_all_fields(result, legacy_sub, got):
+    """Every field by its bytes: efficiencies as the kernel returned them, amplitudes negated
+    on the orders with ``m + n`` odd, read off the result's own labels."""
+    m, n = np.asarray(result.orders_u), np.asarray(result.orders_v)
+    odd = (n[:, None] + m[None, :]) % 2 == 1
     for f in FIELDS:
-        want = np.array(getattr(legacy_sub, f))
-        assert np.array_equal(want, np.array(got[f])), (
-            f, np.max(np.abs(want - np.array(got[f]))))
+        public = np.array(getattr(legacy_sub, f))
+        kernel = np.array(got[f])
+        want = np.where(np.reshape(odd, kernel.shape), -kernel, kernel) if f in AMPLITUDES else kernel
+        assert public.dtype == want.dtype and public.tobytes() == want.tobytes(), (
+            f, np.max(np.abs(want - public)))
 
 
 @pytest.mark.parametrize('tetm', ['te', 'tm'], ids=['te', 'tm'])
@@ -46,7 +57,7 @@ def test_solve_1d_full_result_matches_legacy(tetm):
                    solver.thickness, *conv, answers='amplitude',
                    incidence_side=solver._kernel_incidence_side,
                    eps_top=kw['bot'], eps_bot=kw['top'])
-    _assert_all_fields(legacy.incident, got['incident'])
+    _assert_all_fields(legacy, legacy.incident, got['incident'])
 
 
 CONICAL_2D = [
@@ -72,9 +83,9 @@ def test_conical_and_2d_full_result_matches_legacy(case):
                    eps_top=kw['bot'], eps_bot=kw['top'])
 
     # all three incidence variants, every field
-    _assert_all_fields(legacy.incident, got['incident'])
-    _assert_all_fields(legacy.s_inc, got['s_inc'])
-    _assert_all_fields(legacy.p_inc, got['p_inc'])
+    _assert_all_fields(legacy, legacy.incident, got['incident'])
+    _assert_all_fields(legacy, legacy.s_inc, got['s_inc'])
+    _assert_all_fields(legacy, legacy.p_inc, got['p_inc'])
 
 
 def test_amplitude_rung_is_consistent_with_efficiency_rung():

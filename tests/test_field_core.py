@@ -30,7 +30,8 @@ running bottom to top, and :func:`upward_reference` restates the archive in it a
 comparison — a reversal along ``z`` plus the same parity — instead of re-freezing it.
 Since 2026-09-27 the pure 1D solve is lit by the incident order's own s/p wave at unit E
 rather than by ``+y`` at unit ``E_y`` / ``H_y``, and :func:`pure_1d_input` carries that factor
-the same way.
+the same way; and every ordinary incidence is unit at the cell centre rather than at its corner,
+which :func:`centre_input` carries.
 
 The cases are **imported** from the generator rather than restated here. A copy that has to
 "stay identical" to another file is the same failure mode one level down.
@@ -79,6 +80,27 @@ def pure_1d_input(name, solver):
     return sign * complex(np.asarray(solver.n_inc)) / complex(np.asarray(medium.mu_value))
 
 
+def centre_input(name, solver):
+    """What every cell is multiplied by since the incidence became unit at the centre (2026-09-27).
+
+    The archive froze fields lit by a wave that was unit at the cell **corner**, the kernels'
+    Fourier origin; the public incidence is unit at the centre ``o = (a1 + a2)/2``, the origin
+    of every public coordinate. The same wave unit at the other point is the old one times
+    ``exp(-1j * k_inc . o)`` -- one complex scalar per case, exact and linear, so it is applied
+    at the comparison like the two factors above. Spelled independently of the engine: ``k_inc``
+    from the case dict (``k0 * n_top * sin(theta) * (cos(phi), sin(phi))``, every case lit from
+    the top at a real angle) and ``o`` from ``solver.lattice``. Every case has ``theta > 0``, so
+    none of them is left unmoved.
+    """
+    case = CASES[name]
+    assert case.get('incidence_side', 'top') == 'top'
+    phi = case.get('phi') or 0.0
+    k_inc = (2 * np.pi / case['wavelength'] * np.sqrt(case['top']) * np.sin(case['theta'])
+             * np.array([np.cos(phi), np.sin(phi)]))
+    centre = np.asarray(solver.lattice.columns, dtype=float).sum(axis=1) / 2
+    return np.exp(-1j * k_inc @ centre)
+
+
 
 @pytest.mark.parametrize('name,tag,which', CASE_VARIANTS,
                          ids=[f'{n}-{t}' for n, t, _ in CASE_VARIANTS])
@@ -100,7 +122,8 @@ def test_the_reconstruction_has_not_drifted(name, tag, which):
     # is True whatever the array holds, which made this assertion vacuous once.
     assert solver.formulation_assigned.value == str(GOLDEN[f'{name}__formulation'])
     got = np.asarray(solver.reconstruct_field(incidences=which, **RES))
-    want = upward_reference(name, GOLDEN[f'{name}__{tag}']) * pure_1d_input(name, solver)
+    want = (upward_reference(name, GOLDEN[f'{name}__{tag}']) * pure_1d_input(name, solver)
+            * centre_input(name, solver))
     assert got.shape == want.shape, (got.shape, want.shape)
     assert np.allclose(want, got, atol=1e-12, rtol=0), np.max(np.abs(want - got))
 
@@ -167,7 +190,8 @@ def test_the_one_incidence_it_does_carry_is_still_reconstructed(name):
     assertion here would still pass.
     """
     solver = solved(name)
-    want = upward_reference(name, GOLDEN[f'{name}__default']) * pure_1d_input(name, solver)
+    want = (upward_reference(name, GOLDEN[f'{name}__default']) * pure_1d_input(name, solver)
+            * centre_input(name, solver))
     got = np.asarray(solver.reconstruct_field(incidences=('incident',), **RES))
     assert got.shape == want.shape
     # the drift test's tolerance, not equality: these two 1D cases sit ~1e-14 off the freeze
@@ -329,6 +353,7 @@ def test_field_cross_backend(name, backend):
     pytest.importorskip('jax' if backend == 1 else 'torch')
     solver = solved(name, backend=backend)
     got = np.asarray(solver.reconstruct_field(**RES))
-    want = upward_reference(name, GOLDEN[f'{name}__default']) * pure_1d_input(name, solver)
+    want = (upward_reference(name, GOLDEN[f'{name}__default']) * pure_1d_input(name, solver)
+            * centre_input(name, solver))
     assert got.shape == want.shape, (got.shape, want.shape)
     assert np.allclose(want, got, atol=1e-10, rtol=0), np.max(np.abs(want - got))

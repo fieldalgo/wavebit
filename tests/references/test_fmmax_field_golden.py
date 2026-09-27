@@ -23,7 +23,9 @@ orders above this floor. What 1e-4 cannot see is slow numerical drift — that i
 **The amplitude convention is fitted, and then checked against a closed form.** fmmax's "unit
 mode amplitude" is not this project's "unit incident flux". Each case fits one complex scale by
 least squares — and the fit is then required to equal ``-cos(theta)`` for s and ``-1`` for p,
-which is what that ratio turned out to be. Stating the *dependence* rather than tabulating
+which is what that ratio turned out to be, times the stated phase between the two codes' unit
+incidence points (fmmax's corner, this library's centre; :func:`expected_scale`). Stating the
+*dependence* rather than tabulating
 three constants is deliberate: a table is satisfied by anything that reproduces the numbers,
 whereas a case added at a new angle is genuinely checked by the formula.
 """
@@ -55,8 +57,15 @@ def expected_scale(theta, pol):
     Writing it as a formula rather than three frozen numbers is the point. A table would be
     satisfied by any solver that happened to hit those values; this says the *dependence* is
     right, so a case added at a new angle is checked rather than merely accommodated.
+
+    Times one phase since 2026-09-27, where each code's incident wave is unit. fmmax's is unit
+    at its ``x = 0``, the cell corner -- which is why the ratio came out real while this
+    library's was too -- and this library's at the cell centre since then: the same wave unit
+    half a period further along is ``exp(-1j * k0 * sin(theta) * PERIOD/2)`` times fmmax's (lit
+    from air at ``phi = 0``). Also a closed form, and also checked at every angle.
     """
-    return -np.cos(np.deg2rad(theta)) if pol == 's' else -1.0
+    ratio = -np.cos(np.deg2rad(theta)) if pol == 's' else -1.0
+    return ratio * np.exp(-1j * 2 * np.pi / WL * np.sin(np.deg2rad(theta)) * PERIOD / 2)
 
 
 def _reconstruct(name, theta, pol):

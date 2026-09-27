@@ -35,7 +35,9 @@ entry on every slot held exactly (TM ``E_x`` on patterned stacks excepted).
 
 With those applied there is **no free amplitude**: not a fitted scale as the fmmax golden
 needs, but exactly 1, to 2.7e-14. That is asserted rather than fitted away, because a scale
-free to absorb anything absorbs errors too.
+free to absorb anything absorbs errors too. It is 1 after one stated phase, which is where each
+code puts its unit incident wave: RETICOLO at its ``x = 0``, the cell corner, and this library
+at the cell centre since 2026-09-27 (see :func:`_in_our_frame`).
 
 **One component is excluded, and it is not swept under the rug.** TM's ``E_x`` is discontinuous
 across the grating's vertical interfaces and the two codes resolve it differently at any finite
@@ -81,19 +83,27 @@ def _golden():
     return np.load(GOLDEN_PATH)
 
 
-def _in_our_frame(e, pol):
+def _in_our_frame(e, pol, theta):
     """RETICOLO's raw cell, in the depth frame ``STACKS`` is written in. The claim under test.
 
     Whole-cell reversal (RETICOLO's ``+z`` points out of the stack, so its first layer is the
-    last one ``STACKS`` lists) plus the z-parity of each slot. Nothing else -- no conjugation,
-    and no scale. That depth frame was this library's until 2026-09-21; the public frame is
-    RETICOLO's own now, and :func:`_reconstruct` brings ours into the depth frame the same way.
+    last one ``STACKS`` lists) plus the z-parity of each slot. No conjugation, and no scale.
+    That depth frame was this library's until 2026-09-21; the public frame is RETICOLO's own
+    now, and :func:`_reconstruct` brings ours into the depth frame the same way.
+
+    **One stated phase, the lateral reference.** RETICOLO's ``x = 0`` is the cell's corner --
+    its texture starts there (``o`` settled that) and its incident wave is unit there -- while
+    this library's incidence has been unit at the cell **centre**, ``x = y = 0`` in public
+    coordinates, since 2026-09-27. The same plane wave unit half a period further along is
+    RETICOLO's times ``exp(-1j * k0 * sin(theta) * PERIOD/2)`` (every case is lit from air, so
+    ``n_inc = 1``): a closed form, applied here once, not a fitted scale.
 
     A ``.conj()`` *was* applied by hand in a script deleted on 2026-08-15, unaudited and
     alongside a per-layer flip. Both were wrong, which is what an unaudited convention patch
     tends to be; the measurement that replaced them is in the generator's docstring.
     """
-    return e[::-1] * Z_PARITY[pol]
+    centre = np.exp(-1j * 2 * np.pi / WL * np.sin(np.deg2rad(theta)) * PERIOD / 2)
+    return e[::-1] * Z_PARITY[pol] * centre
 
 
 def _reconstruct(stack, theta, pol):
@@ -127,7 +137,7 @@ def test_the_field_matches_reticolo(stack, theta, pol):
     a small total. That is the shape the 2026-08-14 sign defect had.
     """
     g = _golden()
-    ref = _in_our_frame(g[key(stack, theta, pol)], pol)
+    ref = _in_our_frame(g[key(stack, theta, pol)], pol, theta)
     got = _reconstruct(stack, theta, pol)
     assert got.shape == ref.shape, (got.shape, ref.shape)
 
@@ -161,7 +171,7 @@ def test_the_amplitude_needs_no_fitted_scale(stack, theta, pol):
     on RETICOLO's side; a scale of ``n_inc`` there is that conversion, not a solver regression.
     """
     g = _golden()
-    ref = _in_our_frame(g[key(stack, theta, pol)], pol)
+    ref = _in_our_frame(g[key(stack, theta, pol)], pol, theta)
     got = _reconstruct(stack, theta, pol)
 
     keep = _exact_slots(stack, pol)               # TM `E_x` would bias the fit by ~1e-2
@@ -185,7 +195,7 @@ def test_the_discontinuous_tm_component_is_the_known_exception(stack, theta, pol
     """
     g = _golden()
     c = SLOW_SLOT[pol]
-    ref = _in_our_frame(g[key(stack, theta, pol)], pol)[..., c]
+    ref = _in_our_frame(g[key(stack, theta, pol)], pol, theta)[..., c]
     got = _reconstruct(stack, theta, pol)[..., c]
 
     gap = np.max(np.abs(got - ref)) / np.max(np.abs(ref))

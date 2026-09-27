@@ -601,6 +601,55 @@ def test_the_reconstructed_field_agrees_across_a_unimodular_shear():
     assert top < 1e-3, f'homogeneous region should agree: {top:.2e}'
 
 
+def test_the_phase_reference_moves_with_the_centre_across_a_unimodular_shear():
+    """Off normal incidence the two spellings differ by the phase between their two centres.
+
+    Every per-order phase is referenced at the cell centre ``(a1 + a2)/2`` (2026-09-27), and the
+    centre belongs to the basis: ``SHEAR``'s is half of ``a1`` from ``ORTHO``'s. So the same
+    crystal lit at the same angle is, in the sheared spelling, the wave unit half a cell
+    further along -- ``exp(-1j k_inc . a1/2)`` times the other everywhere. The test above runs at
+    ``theta = 0``, where that factor is 1 and the reference cannot be seen. Compared in the
+    homogeneous cap, for the reason given there, and with the Bloch phase ``exp(1j kx P)``
+    wherever the alignment wraps a point back by ``a1`` -- a field off normal incidence is
+    quasi-periodic, not periodic. The factor is 0.37 away from 1 here, so dropping it fails
+    by three orders more than the truncation leaves.
+    """
+    n = 21
+    theta, phi = 0.3, 0.4
+    k_inc = 2 * np.pi / WL * np.sin(theta) * np.array([np.cos(phi), np.sin(phi)])
+
+    def field(lattice):
+        ox, oy = cell_centre(lattice)
+        shapes = [{'type': 'circle', 'cx': P / 2 - ox, 'cy': P / 2 - oy, 'lx': 2 * R,
+                   'material': EPS_ROD}]
+        structure = [{'background': 1.0, 'shapes': shapes},
+                     {'background': 1.0, 'shapes': []}]
+        s = wavebit.rcwa(backend=0, structure=structure, truncation_order=[8, 8],
+                         thickness=[H, 600.0], wavelength=WL, top=1.0, bot=1.0,
+                         theta=theta, phi=phi, psi=0.0, factorization='nvf', **_cell(lattice),
+                         answers='field')
+        s.solve()
+        return np.asarray(s.reconstruct_field(sample_x=n, sample_y=n, sample_z=12))
+
+    f_o, f_s = field(None), field(SHEAR)
+    aligned = np.empty_like(f_s)
+    for j in range(n):
+        for i in range(n):
+            wraps = (i + j) // (n - 1)
+            aligned[..., j, i, :] = (f_o[..., j, (i + j) % (n - 1), :]
+                                     * np.exp(1j * k_inc[0] * P * wraps))
+    shift = np.subtract(cell_centre(SHEAR), cell_centre(None))
+    assert np.allclose(shift, SHEAR[:, 0] / 2)
+    factor = np.exp(-1j * k_inc @ shift)
+    assert abs(factor - 1) > 0.3
+    scale = np.abs(f_o).max()
+    cap = (slice(None), -1, slice(None), slice(None, n - 1), slice(None))
+    moved = np.abs(f_s[cap] - factor * aligned[cap]).max() / scale
+    assert moved < 1e-3, f'the centre carries the phase: {moved:.2e}'
+    unmoved = np.abs(f_s[cap] - aligned[cap]).max() / scale
+    assert unmoved > 0.1, f'premise: without the factor the two must differ: {unmoved:.2e}'
+
+
 def test_field_reconstruction_still_works_when_axis_aligned():
     s = solver(raster(ORTHO), answers='field')
     s.solve()

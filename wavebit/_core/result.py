@@ -40,13 +40,18 @@ Naming follows the optics convention the rest of the ecosystem reads by sight:
     conversion differs between the pure-1D and the coupled paths and is measured to 6e-16
     against the Airy forms in ``tests/test_lossy_media.py``), so no caller ever needs to
     know a boundary variable existed. Phase reference: ``r`` at the illuminated interface, ``t`` at
-    the opposite one; laterally, the cell corner (the Fourier origin), not the public centre.
+    the opposite one; laterally, the cell centre ``x = y = 0`` -- the origin every public
+    coordinate uses -- so each amplitude is a Fourier coefficient of the public field on its
+    face, and the incidence is unit there. Until 2026-09-27 it was the cell corner (the
+    kernels' Fourier origin): on a single incident wave every order with ``m + n`` odd changed
+    sign that day, and ``R`` and ``T`` did not move.
 
 ``r_xyz``, ``t_xyz``
     The same outgoing waves as Cartesian E vectors, ``(Ex, Ey, Ez)`` on a last axis of length
     3: ``r_s * s_hat + r_p * p_hat`` in the fixed public frame (+z up). No per-order frame, so
     continuous where an order's ``kx`` crosses zero on the ``ky == 0`` row, where ``r_s`` turns
-    over with ``s_hat``. Same normalisation and phase reference as ``r_s``.
+    over with ``s_hat``. Same normalisation and phase reference as ``r_s``: the outgoing E on the
+    lit face is ``sum_m r_xyz[m] exp(1j k_m . x)``, ``x`` measured from the cell centre.
 
 Until 2026-08 the efficiencies were named ``de_ri`` / ``de_ti`` (meent lineage) and
 ``R_s``/``R_p`` named the raw *boundary amplitudes* — the ones needing a ``/(-i n_top)``
@@ -237,7 +242,8 @@ class Result(ResultFields):
 
         ``r_s * s_hat + r_p * p_hat`` in the fixed public frame: no per-order frame, so it is
         continuous where an order's ``kx`` crosses zero. Same normalisation and phase
-        reference as ``r_s`` -- laterally the cell corner. None at efficiency-only level.
+        reference as ``r_s`` -- laterally the cell centre, ``x = y = 0``. None at
+        efficiency-only level.
         """
         return self._incident_amplitude('r_xyz')
 

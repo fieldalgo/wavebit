@@ -166,18 +166,17 @@ def _face_orders(result, solver, z, kx, ky):
     """Every retained order's ``(Ex, Ey)`` on the plane at height ``z``, and the fit residual.
 
     Points on a rectangular Cartesian grid, twice as many as orders each way, so the fit is
-    overdetermined and a missing order shows as a residual. The plane-wave basis is written in
-    corner coordinates -- the Fourier origin, where the amplitudes are referenced -- so each
-    request carries the half-cell ``(a1 + a2)/2`` back off: ``sample_x`` / ``sample_y`` are
-    measured from the centre.
+    overdetermined and a missing order shows as a residual. Both the request and the plane-wave
+    basis are in public coordinates, measured from the centre of the cell -- where the
+    amplitudes are referenced since 2026-09-27 -- so no half-cell appears anywhere. (Until then
+    the basis was written from the corner, the Fourier origin, and each request carried
+    ``(a1 + a2)/2`` back off.)
     """
     lattice = np.real(_host(solver.lattice.columns))
-    corner = lattice.sum(axis=1) / 2
-    span_x, span_y = lattice[0].sum(), lattice[1].sum()
-    xs = np.linspace(0.0, span_x, 2 * kx.shape[1] + 3, endpoint=False)
-    ys = np.linspace(0.0, max(span_y, 1.0), 2 * kx.shape[0] + 3, endpoint=False)
-    cell = _host(result.reconstruct_field(sample_x=xs - corner[0], sample_y=ys - corner[1],
-                                          sample_z=np.array([z])))
+    span_x, span_y = lattice[0].sum(), max(lattice[1].sum(), 1.0)
+    xs = np.linspace(-0.5 * span_x, 0.5 * span_x, 2 * kx.shape[1] + 3, endpoint=False)
+    ys = np.linspace(-0.5 * span_y, 0.5 * span_y, 2 * kx.shape[0] + 3, endpoint=False)
+    cell = _host(result.reconstruct_field(sample_x=xs, sample_y=ys, sample_z=np.array([z])))
     cell = cell.reshape(ys.size, xs.size, 6)
     k0 = 2 * np.pi / solver.wavelength
     X, Y = np.meshgrid(xs, ys)

@@ -42,7 +42,12 @@ class PlaneWave(_ExternalSource):
 
 @dataclass(frozen=True)
 class OrderExcitation(_ExternalSource):
-    """Plane waves specified by order weights around a reference direction."""
+    """Plane waves specified by order weights around a reference direction.
+
+    Each weight is its order's amplitude at x=y=0 on the outside boundary: the same
+    weights the ordinary ``excitation=`` keyword takes, and the same light (since
+    2026-09-27, when the ordinary path moved its phase reference to the cell centre).
+    """
     orders: object = None
 
 

@@ -26,7 +26,9 @@ bounded on its own rather than hidden.
 
 **The calibration is the same one, which is the point of checking it here.** Whole-cell z
 reversal plus the declared frame's z-parity, and **no free amplitude at all** -- the fitted
-scale is 1 to ~1e-15. Nothing new had to be discovered: the transform established on the pure
+scale is 1 to ~1e-15 (after one stated lateral phase since 2026-09-27, which the test applies:
+RETICOLO's incident wave is unit at the cell corner, this library's at the centre). Nothing new
+had to be discovered: the transform established on the pure
 TE/TM path transfers unchanged to the coupled one, and a full search over all 720 component
 permutations x z-flip x conjugation confirms the identity permutation with no conjugation as
 the unique best fit. Had the conical path carried its own frame quirk, that search is what

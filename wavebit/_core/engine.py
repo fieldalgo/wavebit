@@ -23,7 +23,8 @@ from . import lattice as _lattice
 from .backend import _concrete, _device_of, array_namespace, as_array, check_input_precision
 from .conventions import (_CHI_POLARIZATION_CLASH, _COMPLEX_CHI, _DIRECTION_CLASH,
                           _PSI_POLARIZATION_CLASH, _TETM_INCIDENCE_CLASH,
-                          incident_phase_index, incident_sp_amplitudes, lit_orders, order_window,
+                          centre_parity, corner_column, incident_phase_index,
+                          incident_sp_amplitudes, lit_orders, order_window,
                           parse_order_pair, reject_complex_angle, transverse_component_problem,
                           warn_if_xy_on_a_skewed_cell)
 from .domain import Material, as_material, index_from_eps
@@ -292,6 +293,17 @@ _FIELD_NOT_DECLARED = (
     "amplitudes and never reconstructs a field.")
 
 
+def _centred(a, odd):
+    """``a`` with every entry ``odd`` marks negated: an exact sign bit, traced or not.
+
+    ``odd`` is a host ``bool`` array with ``a``'s size -- a parity grid read by label, or the
+    pair grid of a scattering block. See :meth:`CoreSolveMixin._finish`.
+    """
+    xp = array_namespace(a)
+    mask = xp.reshape(as_array(xp, odd, device=_device_of(a)), a.shape)
+    return xp.where(mask, -a, a)
+
+
 def _efficiency_only(de_ri, de_ti, power_entering):
     """The ``ResultSub`` payload of a solve declared ``answers='efficiency'``.
 
@@ -548,6 +560,9 @@ class CoreSolveMixin:
         Resolved here, at the boundary, and handed to the solves already done -- the same
         arrangement :meth:`_incidence_pair` has for the polarization. The solves never see
         ``excitation`` itself, so they never have to know which window it widened.
+
+        These are the **public** weights, unit at ``x = y = 0``: what the boundary spectra's
+        incoming wave is built from. The kernels take :meth:`_kernel_lit` instead.
         """
         excitation = self._excitation
         if excitation is None and (self.kx is not None or self.ky is not None):
@@ -555,6 +570,18 @@ class CoreSolveMixin:
             # default order the same positive-power check as explicit excitation.
             excitation = {(0, 0): 1.0}
         return lit_orders(excitation, *self.order_window)
+
+    def _kernel_lit(self):
+        """:meth:`_lit` restated for the kernels, whose Fourier origin is the cell corner.
+
+        A public weight is referenced at the cell centre; about the corner the same wave carries
+        ``exp(-1j * k_inc . o) * (-1)**(m + n)``, ``o = (a1 + a2)/2``. The kernels are handed the
+        sign (:func:`~wavebit._core.conventions.corner_column`), which is exact, and the scalar
+        -- a normalisation of the whole field, cancelling from every amplitude and efficiency --
+        is put back on the field by :meth:`_centre_phase`. :meth:`_finish` signs the kernels'
+        amplitudes back onto the centre.
+        """
+        return corner_column(self._lit(), *self.order_window)
 
     @property
     def order_window(self):
@@ -582,11 +609,14 @@ class CoreSolveMixin:
         s/p frame**: a weight multiplies that order's ``s_hat`` / ``p_hat``, so on a 1D solve at
         ``phi = 0`` a lit order with ``kx < 0`` arrives polarized along ``-y`` (TE). The pure 1D
         path means the same since 2026-09-27; before, it multiplied ``+y`` into every lit
-        order. The weights are also referenced at the cell corner, the Fourier origin, where
-        ``PlaneWave`` / ``OrderExcitation`` use the cell centre (``docs/conventions.md``). They
-        may be traced -- an incident field is a legitimate design variable -- while the
-        **keys** may not, because which entries of the incident column are non-zero decides
-        array structure rather than a value.
+        order. Each weight is the amplitude of its plane wave **at the public origin**,
+        ``x = y = 0`` on the lit face -- the cell centre every coordinate is measured from --
+        so these are the same weights ``OrderExcitation(orders=...)`` takes, and the same light
+        (``docs/conventions.md``). Until 2026-09-27 they were referenced at the cell corner,
+        which negated every lit order with ``m + n`` odd relative to the rest. They may be
+        traced -- an incident field is a legitimate design variable -- while the **keys** may
+        not, because which entries of the incident column are non-zero decides array
+        structure rather than a value.
 
         What it is for is a coherent superposition that a single solve cannot otherwise
         express. A *single* non-specular order is not that: exciting order ``m`` at ``theta``
@@ -2009,6 +2039,31 @@ class CoreSolveMixin:
         return (xp.astype(index * sin_theta * xp.cos(phi), C),
                 xp.astype(index * sin_theta * xp.sin(phi), C))
 
+    def _centre_phase(self):
+        """``exp(-1j * k_inc . o)``, ``o = (a1 + a2)/2``: the kernels' field to the public one.
+
+        The kernels are handed :meth:`_kernel_lit`'s column, which describes the public incidence
+        divided by this scalar: their incident wave is unit at the cell corner, the public one at
+        the centre. Amplitudes and efficiencies are ratios and never see it; a field does, once,
+        here. One complex number, a pure phase for a real angle. For a complex ``theta`` its
+        magnitude is ``exp(Im(k_inc) . o)`` -- 7.7 on a TE scene at ``theta = 0.3 + 0.1j`` in a
+        lossy superstrate -- because an evanescent wave is not uniform along the surface and the
+        public definition fixes *where* it is unit: at ``x = y = 0``, the one point every public
+        coordinate names, and an expression holomorphic in the angle, the wavelength and the
+        cell, so a gradient through a complex ``theta`` is the continuation of the real one.
+
+        ``k_inc`` comes from :meth:`_incident_kxy`, the backend's own spelling of the incidence,
+        never read back out of an order grid (whose centre entry is the window's, not the
+        specular order's), and ``o`` from the basis, never from ``period``, which drops the
+        angle.
+        """
+        xp = self.xp
+        k_x, k_y = self._incident_kxy(self.wavelength)
+        A = as_array(xp, self.lattice.columns, dtype=xp.real(k_x).dtype, device=_device_of(k_x))
+        k0 = 2 * _np.pi / self.wavelength
+        phase = -0.5j * k0 * (k_x * (A[0, 0] + A[0, 1]) + k_y * (A[1, 0] + A[1, 1]))
+        return xp.astype(xp.exp(phase), self.complex_dtype)
+
     @device_scoped
     def order_kxy(self):
         """Per-order in-plane wavevectors ``(kx, ky)``, normalized by ``k0``.
@@ -2092,6 +2147,19 @@ class CoreSolveMixin:
         reconstruction from walking the state of some earlier, unrelated solve. The
         The ``'efficiency'`` rung returns ``(R, T, power_entering)`` without retained
         amplitudes. It is converted into the shared result layout here.
+
+        It is also the one door every kernel answer passes on its way out -- all three paths,
+        both formulations, both algorithms -- so it is where the kernels' corner-referenced
+        amplitudes and scattering matrix are signed onto the cell centre
+        (:func:`~wavebit._core.conventions.centre_parity`). The kernels were handed the column
+        :meth:`_kernel_lit` built, ``C w`` with ``C = diag((-1)**(m + n))``; what they return is
+        about the corner, so the public amplitude is ``C`` times it, ``C L C w`` in all, and
+        the scattering matrix ``C S C`` block by block: every port amplitude, both ports, takes
+        the same sign, which commutes with the pure 1D path's port change and with the
+        backside's block reversal. ``where`` rather than a multiply by ``-1``: an exact sign bit
+        on every entry, no complex product. ``T1`` and ``layer_info_list`` stay the kernels'
+        own state in their own frame; :meth:`reconstruct_field` and the result's field adapter
+        convert what they describe.
         """
         if not isinstance(out, dict):
             out = {'incident': _efficiency_only(*out)}
@@ -2100,13 +2168,29 @@ class CoreSolveMixin:
         #: The scene this solve was posed with, so `reconstruct_field` can tell whether it is
         #: still being asked about the same one. See `_reconstruction_scene`.
         self._solved_scene = self._reconstruction_scene()
+        odd = centre_parity(*self.order_window)
+        for key in ('incident', 's_inc', 'p_inc'):
+            sub = out.get(key)
+            if sub is not None and sub['r_s'] is not None:
+                out[key] = dict(sub, **{name: _centred(sub[name], odd)
+                                        for name in ('r_s', 'r_p', 't_s', 't_p')})
         #: The stack's scattering matrix -- both sides, every order -- on this shelf rather than in
         #: result: :class:`~wavebit._core.result.Result` is a registered pytree with fixed
         #: children, so carrying matrices there would change its structure and drag them
         #: across every ``jit`` / ``grad`` boundary. ``None`` after an ETM solve -- not empty
         #: but *absent*, because the ETM fixes one illumination's boundary condition and
         #: never forms a both-sides operator at all.
-        self._scattering = out.pop('scattering', None)
+        scattering = out.pop('scattering', None)
+        if scattering is not None:
+            # One sign per port amplitude, s and p halves alike on the coupled layout, so a
+            # block entry takes the product of its row's and its column's.
+            port = odd.reshape(-1)
+            if scattering.S11.shape[-1] == 2 * port.size:
+                port = _np.concatenate([port, port])
+            pair = port[:, None] ^ port[None, :]
+            scattering = scattering._replace(**{name: _centred(getattr(scattering, name), pair)
+                                                for name in ('S11', 'S12', 'S21', 'S22')})
+        self._scattering = scattering
         return out
 
     _formulation = DEFAULT_FORMULATION
@@ -2322,7 +2406,7 @@ class CoreSolveMixin:
             self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
             incidence_side=self._kernel_incidence_side, answers=self._answers,
-            lit=self._lit(), mu=self._mu_1d(mu),
+            lit=self._kernel_lit(), mu=self._mu_1d(mu),
             mu_top=1.0 if mu_bot is None else mu_bot,
             mu_bot=1.0 if mu_top is None else mu_top,
             eps_top=eps_bot, eps_bot=eps_top))
@@ -2337,7 +2421,7 @@ class CoreSolveMixin:
             wavelength, kx, ky, self.n_bot, self.n_top, self.theta, self._incidence_pair(), self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
             phi=self.phi, incidence_side=self._kernel_incidence_side,
-            answers=self._answers, lit=self._lit(), mu=self._mu_1d(mu),
+            answers=self._answers, lit=self._kernel_lit(), mu=self._mu_1d(mu),
             mu_top=1.0 if mu_bot is None else mu_bot,
             mu_bot=1.0 if mu_top is None else mu_top,
             eps_top=eps_bot, eps_bot=eps_top))
@@ -2362,7 +2446,7 @@ class CoreSolveMixin:
                 epzx_conv_all=epzx_conv_all, epzy_conv_all=epzy_conv_all,
                 phi=self.phi, incidence_side=self._kernel_incidence_side,
                 answers=self._answers, layer_algorithm=self.layer_algorithm,
-                lit=self._lit(), mu=mu,
+                lit=self._kernel_lit(), mu=mu,
                 mu_top=1.0 if mu_bot is None else mu_bot,
                 mu_bot=1.0 if mu_top is None else mu_top,
                 eps_top=eps_bot, eps_bot=eps_top))
@@ -2372,7 +2456,7 @@ class CoreSolveMixin:
             epx_conv_all, epy_conv_all, epz_conv_i_all,
             epxy_conv_all=epxy_conv_all, epyx_conv_all=epyx_conv_all,
             phi=self.phi, incidence_side=self._kernel_incidence_side,
-            answers=self._answers, lit=self._lit(), mu=mu,
+            answers=self._answers, lit=self._kernel_lit(), mu=mu,
             mu_top=1.0 if mu_bot is None else mu_bot,
             mu_bot=1.0 if mu_top is None else mu_top,
             eps_top=eps_bot, eps_bot=eps_top))
@@ -3065,7 +3149,9 @@ class CoreFactorizationMixin:
         epy, epz_i, epxy, epyx)``, then the z row ``(epxz, epyz, epzx, epzy)`` -- followed by
         ``mu`` and the half-space terms. ``solver.solve_conv(*solver.eps_conv_matrices())`` is
         ``solver.solve()``; see :mod:`wavebit._core.factorization` for why ``epz_i`` sits third
-        rather than last.
+        rather than last. The matrices are read about the cell corner, the frame
+        :meth:`eps_conv_matrices` returns; the amplitudes and fields this answers are referenced
+        at the centre, like every solve's.
 
         Takes no wavelength. The solver already has one, and a second spelling of it was a
         second thing that could disagree: the k vectors, the field reconstruction and the
@@ -3319,10 +3405,18 @@ class CoreFactorizationMixin:
         returns has no axis to put a second on. Naming ``'s'`` or ``'p'`` there is refused
         rather than ignored, which is what it was until 2026-08-20.
 
+        The field is the one the solve's incidence makes, **unit at ``x = y = 0`` on the lit
+        face**: an ordinary solve's field is the ``PlaneWave`` field of the same angles, and an
+        ``excitation``'s the ``OrderExcitation`` field of the same weights. That has been so
+        since 2026-09-27; before, the incidence was unit at the cell corner, a factor
+        ``exp(1j * k_inc . (a1 + a2)/2)`` away wherever ``k_inc`` is not zero.
+
         Takes no ``geometry``: it never calls ``solve``, and every discrete decision it
         makes -- the grating type, and which incidences ``incidences`` selects -- is
         already concrete by the time it runs. It reads ``self.T1`` / ``self.layer_info_list``,
-        so whichever geometry the preceding solve used is the one in force here.
+        so whichever geometry the preceding solve used is the one in force here. Those two are
+        the kernels' own state, in their own frame -- the cell corner is their Fourier origin --
+        and describe the public field divided by :meth:`_centre_phase`, which is put back here.
 
         Explicit ``sample_z`` is the one thing here that cannot be traced: bucketing a z into a
         layer needs the thicknesses as numbers. It raises rather than guessing.
@@ -3368,6 +3462,10 @@ class CoreFactorizationMixin:
                                   sample_x=sample_x, sample_y=sample_y,
                                   sample_z=sample_z, incidences=incidences,
                                   interface_side='left' if backside else 'right')
+
+        # The kernels' state describes the field of their corner column (`_kernel_lit`), whose
+        # incident wave is unit at the cell corner; the public incidence is unit at the centre.
+        field_cell = field_cell * self._centre_phase()
 
         if backside:
             # The kernels' backside solve -- public top incidence -- is their top-side solve of
@@ -4217,6 +4315,12 @@ class CoreFactorizationMixin:
         A magnetic structure also builds permeability slots and they are not returned here
         -- widening the tuple would change what every existing caller unpacks.
         :meth:`mu_conv_matrices` returns them in the same five- or nine-slot layout.
+
+        **Fourier coefficients about the cell corner**, the kernels' origin -- not the centre,
+        where every amplitude and field a solve answers is referenced since 2026-09-27. A
+        denser feature centred at ``x = y = 0`` reads a negative first harmonic here, and a
+        hand-built :meth:`solve_conv` input is read in this frame while its answers come back
+        about the centre (``docs/conventions.md``, "One origin: the cell is centred on it").
 
         ``geometry`` behaves as in :meth:`solve`, and so do the conditions: a traced cell or
         structure serves this call and is put back after it.

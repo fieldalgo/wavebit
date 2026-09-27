@@ -350,8 +350,14 @@ class ScatteringMatrix(NamedTuple):
     not Fresnel amplitudes: its port variable is the p wave's magnetic field, which turns over
     for the up-going wave, so ``S11 @ delta`` is ``-r_p``, and ``S21 @ delta`` is ``t_p`` times
     ``(n_trn/mu_trn) / (n_ref/mu_ref)``. That holds on every path, the pure 1D TM one
-    included. The per-layer blocks are deliberately not here; they would need the gap ->
-    half-space conversion shipped beside them to mean anything.
+    included. Laterally every port amplitude is referenced at the cell centre, as the
+    amplitudes and the ``excitation`` weights are (since 2026-09-27; the kernels' own cascade
+    inside a solve works about the corner, and the engine signs its blocks over as ``C S C``,
+    ``C = diag((-1)**(m + n))``, before they reach this class), so those readings hold on every
+    order as stated. :meth:`cascade` takes these published blocks as they are: one sign on
+    every port commutes through the Redheffer star product. The per-layer blocks are
+    deliberately not here; they would need the gap -> half-space conversion shipped beside
+    them to mean anything.
 
     **Orientation is the hazard, not the numbers.** These are orientation-blind matrices, so
     handing them over without a stated frame is the same shape of defect as a backside field

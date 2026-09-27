@@ -108,10 +108,15 @@ def test_tetm_weights_mean_what_the_coupled_weights_mean(tetm, algo, side):
     two solves then disagreed in efficiency, not only in phase.
 
     Held to the conical path at ``phi = 0`` per order and on the field (incoming boundary wave
-    included, where a column signed twice would show), and anchored to a number: the conical
-    top-lit ``sum(R)``, 0.370091 for TE and 0.158687 for TM, measured on the conical path
-    before this change and unchanged by it. The pure path's old answer was 0.493324 and
-    0.217085.
+    included, where a column signed twice would show), and anchored top-lit to an independent
+    door: ``OrderExcitation`` with the same weights on the coherent-source path, which shares
+    no kernel with either, and to the number it gives, ``sum(R)`` 0.195292 (TE) / 0.103900
+    (TM). The history of that number is the history of what a weight means: 0.493324 /
+    0.217085 while the pure path multiplied ``+y`` into every lit order; 0.370091 / 0.158687
+    once it took each order's own s/p frame (2026-09-27); and the anchors since the weights
+    moved from the cell corner to the centre ``x = y = 0`` the same day, which lights orders
+    ``-1`` and ``+1`` with the opposite sign relative to order ``0`` -- the two excitation
+    doors agree only from then on.
     """
     # Lit from the glass below, `theta = 0.25` puts order -1 at kx = +0.071; 0.15 straddles.
     over = dict(incidence_side=side, answers='field', theta=0.25 if side == 'top' else 0.15)
@@ -133,8 +138,16 @@ def test_tetm_weights_mean_what_the_coupled_weights_mean(tetm, algo, side):
         y = np.asarray(b.boundary_fields(face, sample_x=9, part='incoming'))
         assert np.abs(x - y).max() < 1e-12, f'incoming at {face}'
     if side == 'top':
-        anchor = 0.370091 if tetm == 'te' else 0.158687
-        assert float(np.asarray(a.incident.R).sum()) == pytest.approx(anchor, abs=1e-6)
+        coherent = wavebit.rcwa(
+            backend=0, truncation_order=COMMON['truncation_order'], period=COMMON['period'],
+            wavelength=WL, thickness=THICK, top=1.0, bot=2.25, structure=_structure(),
+            excitation={'top': wavebit.OrderExcitation(
+                theta=0.25, phi=0.0, polarization=(1, 0) if tetm == 'te' else (0, 1),
+                orders=BEAMS)}).solve()
+        got = float(np.asarray(a.incident.R).sum())
+        assert got == pytest.approx(float(coherent.output_top), abs=1e-12)
+        anchor = 0.195292 if tetm == 'te' else 0.103900
+        assert got == pytest.approx(anchor, abs=1e-6)
 
 
 @pytest.mark.parametrize('phi, tetm, name', [(None, 'te', '1d_te'), (None, 'tm', '1d_tm'),

@@ -94,6 +94,14 @@ from ._core.spec import SPEC_VERSION
 #: which a consumer reading unknown keys ignores, beside a rewording of ``per_order_frame``
 #: that already claimed the frame for every path -- true of the pure 1D path from the same
 #: day. No name changed, which is what earned '6' and '12'.
+#:
+#: Nor did the move of the lateral phase reference to the cell centre (2026-09-27): the
+#: ``phase_reference`` key is added under ``results.amplitudes``, and ``cartesian.meaning`` is
+#: reworded. No key is renamed or reshaped, and the one input whose physics moved --
+#: ``excitation`` -- is not published as an input here, so no generator's scene changes
+#: meaning. A consumer that cached per-order amplitudes reads them negated on
+#: every order with ``m + n`` odd; the efficiencies of a single incident wave are the bytes
+#: they were.
 #: '9': two modeling paths instead of three (2026-09-03). ``smooth`` and ``boundary`` were one
 #: path published twice -- identical option lists, one ``structure`` spelling, and a choice
 #: taken per layer rather than per solve -- so they became ``parametric`` with an ``overlap``
@@ -468,6 +476,14 @@ RESULTS = {
                            'supplies it. excitation weights multiply each lit order\'s own '
                            's_hat / p_hat; the scattering matrix p block holds port '
                            'variables (S11 @ delta = -r_p)',
+        'phase_reference': 'r at the illuminated interface, t at the opposite one; laterally '
+                           'the cell centre x = y = 0, the origin of every public coordinate '
+                           '(since 2026-09-27; the cell corner before, which negated every '
+                           'order with m + n odd). Each amplitude is the Fourier coefficient '
+                           'of the public field on its face about the centre; an ordinary '
+                           'incidence is unit there; excitation weights mean what '
+                           'OrderExcitation(orders=...) weights mean, and the scattering '
+                           'matrix ports use the same variables as the amplitudes',
         # A key of its own rather than two more names in `fields`, so a consumer that
         # assumes every `fields` entry has the (n_orders_v, n_orders_u) layout never meets
         # a trailing axis of length 3.
@@ -479,7 +495,7 @@ RESULTS = {
             'meaning': "each outgoing order's E vector per unit incident amplitude, "
                        'r_s*s_hat + r_p*p_hat: no per-order frame, so continuous where an '
                        "order's kx crosses 0. Same phase reference as r_s -- laterally the "
-                       'cell corner (the Fourier origin), not the public centre',
+                       'cell centre, x = y = 0',
         },
     },
     'incidences': {

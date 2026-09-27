@@ -16,7 +16,9 @@ Two tiers, measured across all 24 cases and kept apart on purpose:
 
 **The calibration is the pure TE/TM golden's, unchanged, and that is the finding.** Whole-cell
 z reversal plus the declared frame's z-parity, and **no fitted amplitude** — the scale is 1 to
-4.2e-14. Nothing conical-specific had to be discovered. The generator records the search that
+4.2e-14, after the one stated phase between the two codes' unit incidence points (RETICOLO's
+corner, this library's centre since 2026-09-27; :func:`_in_our_frame`). Nothing
+conical-specific had to be discovered. The generator records the search that
 established there was nothing to discover: over all 720 component permutations x z-flip x
 conjugation, the identity permutation with no conjugation is the unique best fit.
 
@@ -65,8 +67,8 @@ def _golden():
     return np.load(GOLDEN_PATH)
 
 
-def _in_our_frame(e):
-    """RETICOLO's raw conical cell, in the depth frame of ``STACKS``. The claim under test.
+def _depth_frame(e):
+    """RETICOLO's raw conical cell, in the depth frame of ``STACKS``, laterally untouched.
 
     Three parts, none of them guessed: transpose ``(z, x, y, 6)`` to this project's
     ``(z, y, x, 6)``; reverse the cell as a whole, because RETICOLO's ``+z`` points back out of
@@ -77,9 +79,25 @@ def _in_our_frame(e):
     now (``+z`` up, bottom layer first), and :func:`_reconstruct` brings ours into the depth
     frame by the same reversal and parity, so the two cancel: after the transpose, RETICOLO's
     raw cell and the public cell agree entry for entry on every slot held exactly (``E_x`` on
-    patterned stacks excepted).
+    patterned stacks excepted), once :func:`_in_our_frame` has put the incidence where ours is.
     """
     return e.transpose(0, 2, 1, 3)[::-1] * Z_PARITY
+
+
+def _in_our_frame(e, theta, phi):
+    """:func:`_depth_frame`, and the one stated phase between the two codes. The claim under test.
+
+    RETICOLO's origin is the cell corner: its texture starts there and its incident wave is unit
+    there, while this library's incidence has been unit at the cell **centre** since
+    2026-09-27. The same plane wave unit at ``(P/2, P/2)`` is RETICOLO's times
+    ``exp(-1j * k0 * (kx + ky) * P/2)``, ``(kx, ky) = sin(theta) * (cos(phi), sin(phi))`` --
+    lit from air, and ``P`` for both axes because ``period=[P]`` is the ``(P, P)`` cell. The
+    samples themselves are RETICOLO's: a count spans the cell from its corner, and
+    ``sample_y=1`` is the corner row, RETICOLO's ``y = 0``. A closed form, not a fitted scale.
+    """
+    k = 2 * np.pi / WL * np.sin(np.deg2rad(theta))
+    kx, ky = k * np.cos(np.deg2rad(phi)), k * np.sin(np.deg2rad(phi))
+    return _depth_frame(e) * np.exp(-1j * (kx + ky) * PERIOD / 2)
 
 
 def _reconstruct(stack, theta, phi, pol):
@@ -121,7 +139,7 @@ def test_the_conical_field_matches_reticolo(stack, theta, phi, pol):
     largest slot, so a small component could be wholly wrong and still leave a small total.
     """
     g = _golden()
-    ref = _in_our_frame(g[key(stack, theta, phi, pol)])
+    ref = _in_our_frame(g[key(stack, theta, phi, pol)], theta, phi)
     got = _reconstruct(stack, theta, phi, pol)
     assert got.shape == ref.shape, (got.shape, ref.shape)
 
@@ -145,7 +163,7 @@ def test_the_amplitude_needs_no_fitted_scale(stack, theta, phi, pol):
     best-fit scale *is* 1 — a scale free to absorb a factor absorbs a defect just as happily.
     """
     g = _golden()
-    ref = _in_our_frame(g[key(stack, theta, phi, pol)])
+    ref = _in_our_frame(g[key(stack, theta, phi, pol)], theta, phi)
     got = _reconstruct(stack, theta, phi, pol)
 
     exact, _, _ = _classify(ref, stack)            # `E_x` would bias the fit by ~1e-1
@@ -171,7 +189,7 @@ def test_the_discontinuous_component_is_the_known_exception(stack, theta, phi, p
     than inherit a stale caveat.
     """
     g = _golden()
-    ref = _in_our_frame(g[key(stack, theta, phi, pol)])
+    ref = _in_our_frame(g[key(stack, theta, phi, pol)], theta, phi)
     got = _reconstruct(stack, theta, phi, pol)
     c = SLOW_SLOT
 
@@ -192,7 +210,7 @@ def test_a_zero_azimuth_decouples_into_pure_te_or_tm(stack, pol):
     rotation is right at the one azimuth where the answer is independently known.
     """
     g = _golden()
-    ref = _in_our_frame(g[key(stack, 24.0, 0.0, pol)])
+    ref = _in_our_frame(g[key(stack, 24.0, 0.0, pol)], 24.0, 0.0)
     got = _reconstruct(stack, 24.0, 0.0, pol)
     cell = np.max(np.abs(ref))
 
@@ -238,7 +256,7 @@ def test_at_zero_azimuth_the_two_reticolo_goldens_agree(stack, pol):
 
     tetm = 'te' if pol == 's' else 'tm'
     ref3 = flat_g[flat.key(stack, 24.0, tetm)][::-1] * flat.Z_PARITY[tetm]   # (z, x, 3)
-    ref6 = _in_our_frame(conical[key(stack, 24.0, 0.0, pol)])[:, 0]          # (z, x, 6)
+    ref6 = _depth_frame(conical[key(stack, 24.0, 0.0, pol)])[:, 0]            # (z, x, 6)
 
     # TE is (Ey, Hx, Hz) -> slots 1, 3, 5;  TM is (Hy, Ex, Ez) -> slots 4, 0, 2
     slots = (1, 3, 5) if pol == 's' else (4, 0, 2)
