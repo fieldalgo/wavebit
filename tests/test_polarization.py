@@ -194,6 +194,101 @@ def test_the_default_psi_does_not_block_the_pair():
         wavebit.rcwa(backend=0, tetm='tm', polarization=(1, 0))
 
 
+def _bits(result):
+    """Every number a pure-s or TE solve reports, as host arrays."""
+    return [np.asarray(getattr(result.incident, name)) for name in ('R', 'T', 'r_s', 't_s')]
+
+
+@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+def test_tetm_assigned_or_withdrawn_is_the_state_the_constructor_makes(backend):
+    """Declared on a built solver, ``psi`` is absent; withdrawn, the pure-s default is back.
+
+    The constructor sets ``tetm`` first and falls back to pure s only when nothing was
+    declared. Until 2026-09-27 assignment reached neither state: ``solver.tetm = 'te'`` kept
+    the default ``psi = pi/2``, which the declaration says is absent, and ``solver.tetm = None``
+    left no polarization at all, so the conical solve that followed raised ``TypeError`` from
+    ``_incidence_pair``. Checked against the constructor's own state, solve for solve, bit for
+    bit -- and through ``solve(tetm=None)``, the keyword door of the same setter, eagerly and,
+    on JAX, inside ``jax.jit``.
+    """
+    pytest.importorskip({0: 'numpy', 1: 'jax', 2: 'torch'}[backend])
+    kw = dict(CFG_1D, backend=backend, structure=STRUCTURE_1D)
+    built = wavebit.rcwa(tetm='te', **kw)
+    assigned = wavebit.rcwa(**kw)
+    assigned.tetm = 'te'
+    assert built.psi is None and assigned.psi is None
+    want, got = built.solve(), assigned.solve()
+    assert assigned.grating_type == built.grating_type == 0
+    for a, b in zip(_bits(got), _bits(want)):
+        assert np.array_equal(a, b)
+
+    plain = wavebit.rcwa(**kw)
+    want = plain.solve()
+    withdrawn = wavebit.rcwa(tetm='te', **kw)
+    withdrawn.tetm = None
+    assert float(np.asarray(withdrawn.psi)) == float(np.asarray(plain.psi)) == np.pi / 2
+    by_keyword = wavebit.rcwa(tetm='te', **kw)
+    for solver, result in ((withdrawn, withdrawn.solve()), (by_keyword, by_keyword.solve(tetm=None))):
+        assert solver.tetm is None and solver.grating_type == plain.grating_type == 1
+        for a, b in zip(_bits(result), _bits(want)):
+            assert np.array_equal(a, b)
+
+    if backend == 1:
+        # The keyword door inside `jax.jit`, both ways. A default built there is staged -- a
+        # tracer -- and `_conditions` puts a slot holding one back at the end of the call: a
+        # jitted withdrawal left `psi = None` behind `tetm = None`, and the next eager solve
+        # raised the TypeError this setter exists to prevent.
+        import jax
+        import jax.numpy as jnp
+        for start, keyword, twin in ((dict(tetm='te'), None, plain), (dict(), 'te', built)):
+            traced = wavebit.rcwa(**start, **kw)
+            jax.jit(lambda t: jnp.sum(traced.solve(tetm=keyword, thickness=[22.0, t]).T))(460.0)
+            assert traced.tetm == twin.tetm, keyword
+            assert _same_state((traced.psi, None), (twin.psi, None)), keyword
+            for a, b in zip(_bits(traced.solve()), _bits(twin.solve())):
+                assert np.array_equal(a, b)
+
+    # Only a declaration is withdrawn. `tetm = None` on a solver that never declared -- the
+    # keyword a sweep passes on every point -- must leave a given psi, or a pair, where it is.
+    for spelling in (dict(psi=0.3), dict(polarization=(1, 1j))):
+        solver = wavebit.rcwa(**spelling, **kw)
+        before = (solver.psi, solver.polarization)
+        want = solver.solve()
+        got = solver.solve(tetm=None)
+        assert _same_state(before, (solver.psi, solver.polarization)), spelling
+        for a, b in zip(_bits(got), _bits(want)):
+            assert np.array_equal(a, b)
+
+
+def _same_state(a, b):
+    """``(psi, polarization)`` before and after, compared as values -- ``None`` only to ``None``."""
+    def host(x):
+        return None if x is None else np.asarray(x)
+    pairs = [(host(a[0]), host(b[0]))] + ([] if a[1] is None or b[1] is None else
+                                          [(host(x), host(y)) for x, y in zip(a[1], b[1])])
+    if (a[1] is None) != (b[1] is None):
+        return False
+    return all((x is None and y is None) or (x is not None and y is not None
+                                             and np.array_equal(x, y)) for x, y in pairs)
+
+
+def test_a_tetm_assigned_after_construction_survives_the_pytree_rebuild():
+    """The JAX half: a rebuilt solver is constructed again, from ``tetm`` and the ``psi`` child.
+
+    With the default ``psi`` left behind, that rebuild named two incidences and was refused
+    -- ``tetm and an incidence polarization ... both given`` -- so a solver that had just
+    solved eagerly could not be handed to ``jax.jit`` at all.
+    """
+    jax = pytest.importorskip('jax')
+    solver = wavebit.rcwa(**dict(CFG_1D, backend=1, structure=STRUCTURE_1D))
+    solver.tetm = 'tm'
+    leaves, treedef = jax.tree_util.tree_flatten(solver)
+    rebuilt = jax.tree_util.tree_unflatten(treedef, leaves)
+    assert rebuilt.tetm == 'tm' and rebuilt.psi is None
+    for a, b in zip(_bits(rebuilt.solve())[:2], _bits(solver.solve())[:2]):
+        assert np.array_equal(a, b)
+
+
 def test_degenerate_pairs_are_refused():
     with pytest.raises(ValueError, match='no incident field'):
         wavebit.rcwa(backend=0, polarization=(0, 0))

@@ -870,7 +870,30 @@ class CoreSolveMixin:
 
     @tetm.setter
     def tetm(self, value):
+        """Declare, or withdraw, and leave ``psi`` where the constructor would have.
+
+        The constructor sets ``tetm`` before ``psi`` and falls back to pure s only when nothing
+        was declared, so a solver built with ``tetm`` holds ``psi = None``. Assignment has to
+        reach that same state, and until 2026-09-27 it did not, in either direction (measured
+        on 0937b35). Declaring on a built solver left its default ``psi = pi/2`` behind: ``psi``
+        read back a number the declaration says is absent, and on JAX the solver could no
+        longer cross a ``jit`` boundary -- the rebuild hands the constructor that ``psi`` beside
+        ``tetm`` and is refused for naming two incidences. Withdrawing left ``psi = None`` with
+        nothing in its place, so the next solve, now on the conical path, had no polarization
+        at all and raised a ``TypeError`` from :meth:`_incidence_pair`. So a declaration clears
+        the default and a withdrawal restores it: pure s, what a solver built without ``tetm``
+        reads. Nothing else can be lost either way -- while ``tetm`` is set, a ``psi``, ``chi``
+        or ``polarization`` is refused rather than stored.
+
+        The restored default is built under :meth:`_eager`. Inside ``jax.jit`` it was otherwise
+        staged, a tracer, and :meth:`_conditions` puts a slot left holding a tracer back to what
+        it held before the call -- ``None`` -- while the concrete ``tetm = None`` stayed: after
+        a jitted ``solve(tetm=None)`` the next eager solve raised the same ``TypeError``.
+        """
         if value is None:
+            if self._tetm is not None:
+                with self._eager():
+                    self._default_psi()
             self._tetm = None
             return
         if isinstance(value, str):
@@ -887,6 +910,7 @@ class CoreSolveMixin:
         if self._psi_given or self._polarization is not None or self._chi is not None:
             raise ValueError(_TETM_INCIDENCE_CLASH)
         self._tetm = key
+        self._psi = None
 
     @property
     def chi(self):
