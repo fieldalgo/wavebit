@@ -827,6 +827,15 @@ def plot_field(field_cell, tetm_index=0, plot_indices=(1, 1, 1, 1, 1, 1), y_slic
 
     Presentation rather than physics, but there is no reason for it to exist per backend:
     it only needs the array as NumPy.
+
+    ``y_slice`` and ``z_slice`` are *indices* into the cell's y and z axes, not coordinates.
+    The top view is the xy plane at ``z_slice``, and its default ``-1`` is the last z sample:
+    for a count of two or more, the top face of ``structure[-1]``, at height
+    ``sum(thickness)`` -- the face the superstrate touches; for explicit ``sample_z``, the last
+    coordinate requested. That default changed meaning without changing value on 2026-09-21,
+    when the z axis turned to run bottom to top: before then ``-1`` was the bottom face of the
+    last listed layer, the face the substrate touches. With a count, ``z_slice=0`` now selects
+    the bottom face of ``structure[0]``.
     """
     try:
         import matplotlib.pyplot as plt
