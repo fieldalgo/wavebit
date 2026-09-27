@@ -16,12 +16,18 @@ file's history.
 That second file used to be called ``golden_legacy_field.npz``, was captured from the
 project's own earlier implementation, and was described by its generator as "the first oracle
 it has ever had". It was not an oracle. What it froze was a wrong sign convention — every path
-returned ``E_z``, ``H_x`` and ``H_y`` in the frame whose ``+z`` points out of the stack, which
-``docs/conventions.md``, ``docs/formulation.md``'s sanity anchor and
+returned ``E_z``, ``H_x`` and ``H_y`` in the frame whose ``+z`` points out of the stack while
+sampling ``z`` down into it, which ``docs/conventions.md`` (then ``+z`` down, into the stack),
+``docs/formulation.md``'s sanity anchor and
 ``test_anisotropic_berreman.py::_vacuum_modes`` had all contradicted the whole time — and it
 kept the suite green for as long as it existed, because a self-captured golden agrees with
 whatever produced it. It was retired on 2026-08-14 and re-frozen, once, after the fix; the
 re-freeze was verified to equal the old file times exactly that parity and nothing else.
+
+That re-freeze is still in the 2026-08-14 frame, ``z`` measured down from the top. Since
+2026-09-21 the public frame has ``+z`` up from ``z = 0`` at the bottom interface, with samples
+running bottom to top, and :func:`upward_reference` restates the archive in it at the
+comparison — a reversal along ``z`` plus the same parity — instead of re-freezing it.
 
 The cases are **imported** from the generator rather than restated here. A copy that has to
 "stay identical" to another file is the same failure mode one level down.
@@ -230,8 +236,10 @@ def test_every_path_returns_a_maxwell_field_in_the_declared_frame(path, formulat
 
     ``docs/conventions.md`` declares ``+z`` upward from the stack bottom. Every path must therefore
     return six components that satisfy the curl equations **with that ``+z``** — and until
-    2026-08-14 none of them did: ``E_z``, ``H_x`` and ``H_y`` came back in the opposite frame,
-    which is a perfectly good field that answers a different question.
+    2026-08-14 none of them did in the frame then declared (``+z`` down, into the stack):
+    ``E_z``, ``H_x`` and ``H_y`` came back with the signs of the opposite frame, which is a
+    perfectly good field that answers a different question. The 2026-09-21 turn to ``+z`` up
+    reversed the sample order and those three signs together, so the check reads the same.
 
     The frame was never in doubt anywhere else. ``docs/formulation.md`` §1 anchors its
     ``(M1)/(M2)`` on a vacuum wave travelling ``+z`` and writes the pair ``(Ey, Hx) =
@@ -266,13 +274,18 @@ def test_every_path_returns_a_maxwell_field_in_the_declared_frame(path, formulat
 def test_the_declared_frame_is_the_one_that_converges(path, formulation):
     """The control: the frame the library used to ship in must now *fail* the check above.
 
+    "Used to ship in" means the pre-2026-08-14 mismatch -- ``E_z``, ``H_x``, ``H_y`` signed for
+    the opposite direction to the one the samples run in -- written here in today's
+    bottom-to-top sample order, i.e. that cell's z-mirror, which disagrees with itself the same
+    way.
+
     Without this, undoing the fix would leave the test above green if it were ever loosened —
     and "the residual is small" was never the claim. The other frame is not slightly worse,
     it is O(1) and flat in the step.
     """
     F, kx, ky = _frame_cell(path, 64, formulation)
     F_old = np.asarray(F, dtype=complex).copy()
-    F_old[:, [2, 3, 4]] *= -1                      # back into the pre-2026-08-14 frame
+    F_old[:, [2, 3, 4]] *= -1                      # the pre-2026-08-14 sign mismatch
     r = maxwell_residual(F_old, kx, ky, FRAME_EPS, FRAME_D[1], 64, layer=1)
     assert np.max(r) > 0.5, np.max(r)
 

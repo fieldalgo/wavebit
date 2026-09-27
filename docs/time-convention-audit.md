@@ -500,7 +500,9 @@ is not 1. Neither.
 
 > **Both of those checks were blind to the sign defect found on 2026-08-14**, and the way they
 > were blind is the reusable part. Every path was returning `Ez`, `Hx` and `Hy` in the frame
-> whose `+z` points *out* of the stack (`docs/conventions.md` declares the opposite). The first
+> whose `+z` points *out* of the stack while sampling `z` down into it (`docs/conventions.md`
+> then declared `+z` down, into the stack; since 2026-09-21 it declares `+z` up, with the samples
+> running bottom to top, so the defect was the mismatch and not either direction). The first
 > check is a magnitude, and the second compares `E_t` — and `E_t` is exactly the part the
 > parity leaves alone. So a check aimed at the *time* convention passed a *frame* defect
 > through, because both of its probes happened to live in the intersection where the two

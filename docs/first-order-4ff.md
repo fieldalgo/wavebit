@@ -136,7 +136,7 @@ and the division is the point.** Any two of them accept something wrong:
 
 | check | catches | blind to |
 |---|---|---|
-| Maxwell, by central differences down a layer | a wrong term anywhere, `E_z`'s two extra ones included | any constant factor (it is homogeneous) |
+| Maxwell, by central differences through a layer's height | a wrong term anywhere, `E_z`'s two extra ones included | any constant factor (it is homogeneous) |
 | transverse continuity at an interface, exact | a mis-referenced propagator face | the same constant factor |
 | `z` flux between lossless spacers vs `T / (1 - R)` | exactly that constant — i.e. a mis-normalised `T1` | shape |
 
@@ -145,7 +145,9 @@ layer, so halving the step must quarter the residual; measured 4.03–4.13 per d
 residual that is merely small without converging is a different object from one that is
 discretisation error, and only the rate tells them apart. The continuity check is exact rather
 than asymptotic because the sampling lands on the interface: `linspace(0, sample_z, sample_z)` is
-inclusive, so a layer's last slice *is* its bottom face.
+inclusive, so a layer's last slice *is* its top face and the next layer's first slice is the
+same plane. (Its bottom face until 2026-09-21, while count samples ran downward; they run bottom
+to top now.)
 
 **The sign convention, which the vacuum slab settled — and which turned out to be a defect in
 the other three paths.** A layer of vacuum in vacuum returns the incident plane wave exactly,
@@ -154,11 +156,20 @@ phase advanced *with* the cell's `z` index, so the wave travelled that way, whil
 Poynting vector pointed *against* it.
 
 The first reading was that this is the library's convention and the new path should match it,
-which is what shipped for a day. It is not. `docs/conventions.md` declares `+z` **upward**, and measured against that declaration the second-order cell is not a Maxwell field
+which is what shipped for a day. It is not. `docs/conventions.md` then declared `+z` **down,
+into the stack** — the direction the cell's `z` index ran — and measured against that
+declaration the second-order cell is not a Maxwell field
 at all: the curl residual on a three-layer slab at 33° was 2.8 as shipped and 8.0e-4
 (converging like the step) once `E_z`, `H_x`, `H_y` were flipped — on all four paths, the two
 1D layouts included. The 4ff state vector was already in the declared frame, because
 `Im(lam_f) >= 0` means "does not grow" only with `+z` along propagation.
+
+That paragraph is dated 2026-08-14 and told in that day's frame. Since 2026-09-21
+[`conventions.md`](conventions.md#geometry-and-propagation) declares `+z` **up**, with `z = 0`
+at the bottom interface and the cell's `z` index running bottom to top. Restating a cell in that
+frame reverses the index and flips `E_z`, `H_x`, `H_y` together, so the fix stands unchanged:
+what it removed was a cell whose signs disagreed with the direction its own `z` index ran,
+which is a defect in either frame.
 
 The sharper way to say it: [`formulation.md`](formulation.md) §1 had already written the
 answer down as the sanity anchor for `(M1)/(M2)` — a `+z` vacuum wave has `(Ey, H̃x) =
@@ -169,10 +180,14 @@ opinion in the repo, which is what makes "match the shipped behaviour" a rule wi
 exception rather than a rule.
 
 So the parity moved to where it belongs, onto the three second-order paths, and `field_2d_4ff`
-applies none. The legacy field golden is **not** regenerated for it — the implementation it was
-captured from is deleted, so re-freezing would quietly convert the repo's only legacy-parity
-evidence into a change detector; `test_field_core.legacy_to_declared` transforms the golden at
-the comparison instead, and a companion test asserts that transform is not a no-op. What let
+applies none. The legacy field golden was **not** regenerated for it at first — a helper
+transformed it at the comparison — and later the same day it was retired outright, because a
+golden captured from this project's own earlier implementation is a change detector, not an
+oracle. S4 now answers whether the field is right (`tests/references/test_s4_field_golden.py`),
+and `tests/data/golden_field.npz`, re-frozen once after the fix, answers whether it has moved.
+That archive still holds the 2026-08-14 downward frame: since 2026-09-21
+`test_field_core.upward_reference` restates it in the public frame at the comparison — a
+reversal along `z` plus the same parity — rather than re-freezing it. What let
 this stand for so long is in [`time-convention-audit.md`](time-convention-audit.md) §8: the
 audit that checked fields probed `|E|` and `E_t`, the two things the parity leaves alone.
 

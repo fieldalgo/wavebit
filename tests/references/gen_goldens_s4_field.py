@@ -10,7 +10,9 @@ amplitudes. Field reconstruction had no external check at all — its only refer
 ``golden_legacy_field.npz``, captured from this project's own earlier implementation, which is
 a change detector rather than an oracle: it can say "we have not changed", never "we are
 right". It duly froze a wrong sign convention (``E_z``, ``H_x``, ``H_y`` in the frame whose
-``+z`` points *out* of the stack) and kept the suite green for as long as it existed. That
+``+z`` points *out* of the stack, on samples that ran *into* it -- the declared frame was then
+``+z`` into the stack; since 2026-09-21 it is ``+z`` out of it with samples running bottom to
+top) and kept the suite green for as long as it existed. That
 golden is gone; this one replaces it, and ``tests/data/golden_field.npz`` covers the breadth
 S4 cannot reach.
 

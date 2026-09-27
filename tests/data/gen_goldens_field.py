@@ -7,10 +7,19 @@ the reconstruction is *right* — only that it has not moved. That distinction i
 here. The file this replaced, ``golden_legacy_field.npz``, was captured from the project's own
 earlier implementation and described in its own generator as "the first oracle it has ever
 had". It was not an oracle, and what it actually froze was a **wrong sign convention**: every
-path returned ``E_z``, ``H_x`` and ``H_y`` in the frame whose ``+z`` points out of the stack,
-contradicting ``docs/conventions.md``, ``docs/formulation.md``'s own sanity anchor and the pair
+path returned ``E_z``, ``H_x`` and ``H_y`` in the frame whose ``+z`` points out of the stack
+while sampling ``z`` down into it, contradicting ``docs/conventions.md`` (then ``+z`` down,
+into the stack), ``docs/formulation.md``'s own sanity anchor and the pair
 ``test_anisotropic_berreman.py::_vacuum_modes`` writes. The suite stayed green the whole time,
 because a self-captured golden agrees with whatever produced it.
+
+**The archive keeps that day's frame.** ``CASES`` list their layers top to bottom and
+``golden_field.npz`` stores cells with ``z`` measured down from the top, as frozen on
+2026-08-14. The public API has run bottom to top with ``+z`` up since 2026-09-21, so
+:func:`solved` reverses the layer lists on the way in, :func:`build` mirrors each cell back
+(reversal along ``z`` plus the ``E_z``/``H_x``/``H_y`` parity) before it would store it, and
+``tests/test_field_core.py`` restates the archive the other way (``upward_reference``) at the
+comparison. The turn re-froze nothing.
 
 So this file is deliberately scoped to the job it can do:
 

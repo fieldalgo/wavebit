@@ -60,7 +60,10 @@ own implementation, so it sits a tier below these three.
 Until 2026-08-14 every oracle here checked efficiencies or amplitudes, and **field
 reconstruction had none at all**. Its only reference was a golden captured from this project's
 own earlier implementation — a change detector wearing an oracle's name. What it froze was a
-wrong sign convention (`Ez`, `Hx`, `Hy` in the frame whose `+z` points *out* of the stack), and
+wrong sign convention (`Ez`, `Hx`, `Hy` in the frame whose `+z` points *out* of the stack, on
+samples that ran *into* it; the frame declared then was `+z` into the stack, and the one
+declared since 2026-09-21 is `+z` out of it with the samples running bottom to top — the
+defect was the mismatch, not either direction), and
 the suite stayed green for as long as the file existed, because a self-captured golden agrees
 with whatever produced it. It is gone; `golden_s4_field.npz` replaces the claim it was making,
 and `tests/data/golden_field.npz` keeps the drift-detection job under its own honest name.
