@@ -505,6 +505,58 @@ def incident_column(xp, C, lit, n_orders, specular):
     return xp.stack(column)
 
 
+def centre_parity(window_u, window_v):
+    """Which retained orders the cell centre negates: ``True`` where ``(-1)**(m + n) == -1``.
+
+    The kernels' Fourier origin is the cell **corner** -- every convolution matrix is a set of
+    Fourier coefficients about it -- while every public coordinate, and every per-order phase
+    since 2026-09-27, is referenced at the **centre** ``o = (a1 + a2)/2``. Order ``(m, n)``
+    sits at ``k_inc + m b1 + n b2`` and ``b_i . a_j = 2 pi delta_ij``, so moving a plane wave's
+    phase reference from the corner to the centre multiplies it by
+    ``exp(1j * k_mn . o) = exp(1j * k_inc . o) * (-1)**(m + n)`` on **every** cell, a skewed one
+    included: ``G_mn . o = pi (m + n)`` exactly, whatever the basis. The common factor cancels
+    from every amplitude ratio -- an amplitude, a weight, a scattering-matrix entry -- so what is
+    left per order is this sign, and a sign is exact.
+
+    ``(m, n)`` are the order **labels** (``Result.orders_u`` / ``orders_v``), read from the
+    retained window, never the array index: the two differ by the window's offset, which is
+    odd whenever an ``excitation`` moved the centre by an odd step. A consistent parity by
+    index cancels from the amplitudes and the scattering matrix (a sign on both sides) and
+    survives only in the field, which is why ``tests/test_centre_reference.py`` lights windows
+    with an odd offset.
+
+    ``window_u`` / ``window_v`` are :func:`order_window`'s ``(centre, half_width)`` pairs. A host
+    ``bool`` array of shape ``(n_orders_v, n_orders_u)``: the window is static -- it depends on
+    ``truncation_order`` and the excitation's keys, never on a traced value -- so nothing here is
+    traced and nothing downstream branches on a value.
+    """
+    (centre_u, half_u), (centre_v, half_v) = window_u, window_v
+    m = np.arange(centre_u - half_u, centre_u + half_u + 1)
+    n = np.arange(centre_v - half_v, centre_v + half_v + 1)
+    return (n[:, None] + m[None, :]) % 2 == 1
+
+
+def corner_column(lit, window_u, window_v):
+    """:func:`lit_orders`' public weights restated for the kernels' corner Fourier origin.
+
+    A public weight ``w_mn`` is the amplitude of ``exp(1j * k_mn . x)`` with ``x`` measured from
+    the cell centre, unit at ``x = y = 0`` -- the same thing an ``OrderExcitation`` weight means.
+    About the corner that wave is ``w_mn * exp(-1j * k_inc . o) * (-1)**(m + n)``; the scalar is
+    a normalisation of the whole field, which cancels from every ratio and which a field door
+    puts back, so the kernels are handed ``w`` with each weight on an odd order
+    negated (:func:`centre_parity`). Negation is a sign bit, traced or not, so the column the
+    kernels build is exact.
+
+    ``None`` stays ``None``: an undeclared solve keeps :func:`incident_column`'s unit vector to
+    the bit -- the specular order is ``(0, 0)``, which is even.
+    """
+    if lit is None:
+        return None
+    odd = centre_parity(window_u, window_v).reshape(-1)
+    return tuple(one._replace(amplitude=-one.amplitude) if odd[one.index] else one
+                 for one in lit)
+
+
 def order_azimuth(xp, ky, kx, phi):
     """Azimuth of each retained order's in-plane wavevector, flattened.
 
