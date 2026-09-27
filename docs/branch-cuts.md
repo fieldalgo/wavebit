@@ -57,6 +57,13 @@ So the rule is *ordered*: prefer `Re(kz) > 0` (energy going down); only when the
 what `boundary_kz` implements, and `mode_q` implements its `q = -i*kz` counterpart, which is
 why their tie-breaks come out opposite.
 
+"Down" and "up" here are the propagation kernels' words, as in `_core/conventions.py`: `z` runs
+from the kernel's entry face into the stack, the way its incident wave travels. That was the
+public frame when this page was written. Since 2026-09-21 the public `+z` points up from `z = 0`
+at the bottom interface, and the kernels solve public top incidence as their z-mirrored scene,
+so "down" below is public `-z` under top incidence and public `+z` under bottom incidence
+(see [`conventions.md`](conventions.md#geometry-and-propagation)).
+
 > **Scope of that counterpart claim** (added 2026-08-12, after the time-convention audit
 > measured it): `q = -i*kz` is an identity **only for a real in-plane wavevector**. With a
 > complex `k_par` (an absorbing superstrate at oblique incidence) the two functions return

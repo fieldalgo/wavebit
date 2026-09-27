@@ -1,8 +1,9 @@
 """Which square root a half-space takes, and which one a layer is free to take.
 
-``_core/conventions.py`` holds two selectors that both mean "downward" and are *not* the same
-rule. ``docs/time-convention-audit.md`` derives them; this file pins what the derivation
-decided, in the regime where the two requirements come apart.
+``_core/conventions.py`` holds two selectors that both mean "downward" -- in the propagation
+kernels' local frame, from their entry face into the stack, not the public upward height --
+and are *not* the same rule. ``docs/time-convention-audit.md`` derives them; this file pins
+what the derivation decided, in the regime where the two requirements come apart.
 
 The regime is a **complex in-plane wavevector** — an absorbing superstrate at oblique
 incidence, or a complex incidence angle. For every real ``k_par`` a passive medium has

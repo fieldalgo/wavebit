@@ -10,6 +10,16 @@ agree. The real-transverse-wavevector power conversion is now shared across path
 see [the half-space power audit](half-space-power-audit.md). This does not change
 the amplitude tests or establish general complex-transverse-wavevector powers.
 
+**Frame note (2026-09-21).** This audit is written in the frame of its day: `z` measured down
+into the stack from the top, then the only lit face, so "down" is `+z`. That frame survives as
+the propagation kernels' local one, which is where `boundary_kz` and `mode_q` apply their
+rules. The *public*
+`+z` has pointed **up** since 2026-09-21, with `z = 0` at the bottom interface; the engine binds
+the kernels' entry port to the public bottom medium and solves public top incidence as their
+z-mirrored scene (`_core/engine.py`, `_kernel_incidence_side`). Read "down" below as the
+kernels' `+z` — public `-z` under top incidence — and see
+[`conventions.md`](conventions.md#geometry-and-propagation) for the public frame.
+
 Targets:
 - `wavebit/_core/conventions.py` — `boundary_kz`, `_off_principal_branch`, `mode_q`
 - `wavebit/_core/boundary.py` — `conv_mats`
