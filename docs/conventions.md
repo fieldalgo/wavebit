@@ -217,7 +217,7 @@ All angles are **radians**.
 | `theta` | phase polar angle, measured from the inward normal in the incidence medium; real angles specify uniform incident intensity along the surface |
 | `phi` | azimuth of the plane of incidence, from the `+x` axis |
 | `psi` | polarization: the angle of **E** from the p direction in the plane transverse to **k**. `psi = pi/2` is pure s (TE-like), `psi = 0` pure p (TM-like). **Real** — a complex `psi` is refused, see below |
-| `chi` | ellipticity angle: `tan(chi)` is the polarization ellipse's minor/major axis ratio and its sign is the rotation direction. `chi = 0` is linear (the `psi` spelling), `|chi| = pi/4` circular. Real, like `psi`. Naming it selects the `(psi, chi)` chart — see below |
+| `chi` | ellipticity angle: `tan(chi)` is the polarization ellipse's minor/major axis ratio and its sign is the rotation direction (`chi > 0` turns like `(1, -1j)`; see "Which way the circular states rotate" below). `chi = 0` is linear (the `psi` spelling), `|chi| = pi/4` circular. Real, like `psi`. Naming it selects the `(psi, chi)` chart — see below |
 | `tetm` (1D only) | `'te'` / `'tm'` — a **declaration**, not an angle: it says this problem has no polarization and no azimuth degree of freedom, which is what makes the pure 1D TE/TM formulation legal (2-4x faster than conical, measured). Refused on a 2D cell, with `truncation_order[1] != 0`, or beside a nonzero `phi` / a `psi` / a `polarization`. `psi` reads back `None` under it — a declared-away degree of freedom is absent, not defaulted |
 
 ### Phase incidence
@@ -371,8 +371,17 @@ propagation therefore depends on the illuminated side. Explicitly:
 
 | pair | rotation vector | top incidence (`k` downward) | bottom incidence (`k` upward) |
 | --- | --- | --- | --- |
-| `(1, -1j)/sqrt(2)` | `-z` | parallel to k | antiparallel to k |
-| `(1, +1j)/sqrt(2)` | `+z` | antiparallel to k | parallel to k |
+| `(1, -1j)/sqrt(2)` | `-z` | parallel to k: optics LCP, IEEE RHCP | antiparallel to k: optics RCP, IEEE LHCP |
+| `(1, +1j)/sqrt(2)` | `+z` | antiparallel to k: optics RCP, IEEE LHCP | parallel to k: optics LCP, IEEE RHCP |
+
+`chi` follows the same table, whatever `psi`: `chi > 0` turns like `(1, -1j)/sqrt(2)` and
+`chi < 0` like `(1, +1j)/sqrt(2)` (at normal incidence the chart's rotation vector lies along
+`-sin(2*chi) ẑ`).
+
+Until 2026-09-21 `+z` pointed down into the stack and top incidence travelled `+z`, so the
+top column read the other way round: `(1, -1j)/sqrt(2)` was antiparallel, optics RCP. The
+amplitudes did not change when `+z` turned upward; the frame did, and with it the physical
+field every pair names. Tutorial 6 kept the old names until 2026-09-27, with the suite green.
 
 Three anchors keep this paragraph honest rather than derived-once-and-drifting: the basis
 calibration above, the gyrotropic eigenstate test
