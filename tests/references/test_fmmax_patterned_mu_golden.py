@@ -75,7 +75,7 @@ def solve(case, truncation_order=MAX_ORDER, algo='ETM'):
                        psi=0.0, truncation_order=(truncation_order, truncation_order), period=(PERIOD, PERIOD), wavelength=WL,
                        thickness=[THICK], structure=np.expand_dims(eps, axis=0),
                        layer_algorithm=algo)
-    res = mee.solve_conv(epx, epy, epz_i, epxy, epyx, mu=mu_slots)
+    res = mee._solve_conv(epx, epy, epz_i, epxy, epyx, mu=mu_slots)
     te, tm = res.s_inc, res.p_inc
     return np.array([float(te.R.sum()), float(te.T.sum()),
                      float(tm.R.sum()), float(tm.T.sum())])
@@ -161,7 +161,7 @@ def test_the_two_tensors_get_their_own_normal_fields(golden):
     mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=np.deg2rad(THETA), phi=0.0,
                        psi=0.0, truncation_order=(truncation_order, truncation_order), period=(PERIOD, PERIOD), wavelength=WL,
                        thickness=[THICK], structure=np.expand_dims(eps, axis=0))
-    res = mee.solve_conv(epx, epy, epz_i, epxy, epyx, mu=wrong_mu)
+    res = mee._solve_conv(epx, epy, epz_i, epxy, epyx, mu=wrong_mu)
     wrong = np.array([float(res.s_inc.R.sum()), float(res.s_inc.T.sum()),
                       float(res.p_inc.R.sum()), float(res.p_inc.T.sum())])
 

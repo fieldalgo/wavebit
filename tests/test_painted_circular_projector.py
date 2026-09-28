@@ -159,7 +159,7 @@ def test_polygon_refinement_approaches_the_analytic_contact_solve():
     for count in (64,128,256,512):
         mats=B.to_conv_mat_boundary_layer(xp,scene,1.,2,2,CELL,xp.complex128,
             shape_nvf_grid_size=64,n_poly=count,nvf_projector='circular')
-        result=s.solve_conv(*[xp.stack([m]) for m in mats])
+        result=s._solve_conv(*[xp.stack([m]) for m in mats])
         errors.append(abs(result.T.sum()-target))
     # Geometry error and sampled-projector error can cancel at an intermediate
     # polygon count. Require convergence over the ladder, not monotonic totals.

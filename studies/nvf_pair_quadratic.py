@@ -68,7 +68,7 @@ def main():
                                 diagnostics.update(field_condition=field_condition(value, order),
                                                    minimum_dissipation=float(cm['minimum_dissipation']))
                             for pol in ('p', 's'):
-                                result = solver(order, pol).solve_conv(*slots)
+                                result = solver(order, pol)._solve_conv(*slots)
                                 values[pol, gap] = [float(np.sum(result.T).real), float(np.sum(result.R).real)]
                         for pol in ('p', 's'):
                             observed = [values[pol, g][0] for g in GAPS]

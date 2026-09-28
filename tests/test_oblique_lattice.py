@@ -1253,7 +1253,7 @@ def _pn_totals(basis, method, lattice_blind=False):
                           lattice=basis, truncation_order=PN_ORDERS, thickness=[H],
                           wavelength=WL, top=1.0, bot=1.0, theta=np.deg2rad(25.0),
                           phi=np.deg2rad(37.0), psi=np.deg2rad(20.0))
-    result = solver.solve_conv(*(np.stack([slot[0]]) for slot in slots))
+    result = solver._solve_conv(*(np.stack([slot[0]]) for slot in slots))
     return float(np.sum(np.asarray(result.R))), float(np.sum(np.asarray(result.T)))
 
 

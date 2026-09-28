@@ -55,7 +55,7 @@ def main():
                                 'constant_integral_error', 'minimum_dissipation', 'minimum_rotated_storage',
                                 'inverse_residual', 'z_inverse_residual')}
                         for pol in ('p', 's'):
-                            result = solver(order, pol).solve_conv(*slots)
+                            result = solver(order, pol)._solve_conv(*slots)
                             observed[pol, gap] = float(np.sum(result.T).real)
                             reflected[pol, gap] = float(np.sum(result.R).real)
                     for pol in ('p', 's'):

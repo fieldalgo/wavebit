@@ -29,7 +29,7 @@ def comparison(order, polarization, gap, factorization):
 
 
 def power(order, polarization, slots):
-    result = solver(order, polarization).solve_conv(*slots)
+    result = solver(order, polarization)._solve_conv(*slots)
     t, r = float(result.T.real.sum()), float(result.R.real.sum())
     if not np.isfinite(t+r) or min(t, r) < -1e-9 or abs(t+r-1) > 1e-9:
         raise RuntimeError('lossless physical power guard failed')

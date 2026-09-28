@@ -3159,6 +3159,18 @@ class CoreFactorizationMixin:
         have answered one problem while the rest of the object described another.
         """
 
+        return self._solve_conv(
+            epx_conv_all, epy_conv_all, epz_conv_i_all, epxy_conv_all, epyx_conv_all,
+            epxz_conv_all, epyz_conv_all, epzx_conv_all, epzy_conv_all, mu=mu,
+            mu_top=mu_top, mu_bot=mu_bot, eps_top=eps_top, eps_bot=eps_bot)
+
+    @device_scoped
+    def _solve_conv(self, epx_conv_all, epy_conv_all, epz_conv_i_all,
+                   epxy_conv_all=None, epyx_conv_all=None,
+                   epxz_conv_all=None, epyz_conv_all=None,
+                   epzx_conv_all=None, epzy_conv_all=None, mu=None,
+                   mu_top=None, mu_bot=None, eps_top=None, eps_bot=None):
+        """Solve kernel-frame matrices, as returned by the private Fourier builders."""
         before = self._grating_type
         self._assign_grating_type()
         z_row = (epxz_conv_all, epyz_conv_all, epzx_conv_all, epzy_conv_all)
@@ -4855,7 +4867,7 @@ class CoreFactorizationMixin:
         """
         eps = self._eps_conv_matrices(geometry)
         if not self._is_magnetic():
-            return self.solve_conv(*eps)
-        return self.solve_conv(*eps, mu=self._mu_conv_matrices(geometry),
+            return self._solve_conv(*eps)
+        return self._solve_conv(*eps, mu=self._mu_conv_matrices(geometry),
                                mu_top=self._top.mu, mu_bot=self._bot.mu,
                                eps_top=self._top.epsilon, eps_bot=self._bot.epsilon)

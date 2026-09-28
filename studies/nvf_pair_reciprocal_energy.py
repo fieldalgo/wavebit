@@ -59,7 +59,7 @@ def main():
                                                              relative_pairing_change=float(meta['relative_pairing_change']),
                                                              raw_inverse_residual=float(meta['raw']['inverse_residual']))
                             for pol in ('p', 's'):
-                                result = solver(n, pol).solve_conv(*slots)
+                                result = solver(n, pol)._solve_conv(*slots)
                                 t, r = float(np.sum(result.T).real), float(np.sum(result.R).real)
                                 if not np.isfinite(t+r) or t+r > 1+1e-9:
                                     raise RuntimeError('nonfinite or active optical output is not comparison data')

@@ -53,7 +53,7 @@ def main():
                                                'minimum_rotated_storage', 'minimum_dissipation')}
                             derivative_maximum = float(max(np.max(np.abs(v)) for v in derivative))
                         for pol in ('p', 's'):
-                            result = solver(order, pol).solve_conv(*slots)
+                            result = solver(order, pol)._solve_conv(*slots)
                             t, r = float(result.T.real.sum()), float(result.R.real.sum())
                             if not np.isfinite(t+r) or min(t, r) < -1e-9 or t+r > 1+1e-9:
                                 raise RuntimeError('nonfinite or active optical output')

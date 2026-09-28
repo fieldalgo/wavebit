@@ -36,7 +36,7 @@ def matrices(shapes, order=4, grid=512, closure='passive'):
 def response(shapes, order=4, grid=512, closure='passive', spectrum=False):
     slots = matrices(shapes, order, grid, closure)
     solver = wavebit.rcwa(lattice=CELL, truncation_order=(order, order), **SOLVE_KW)
-    result = solver.solve_conv(*[m[None, :, :] for m in slots])
+    result = solver._solve_conv(*[m[None, :, :] for m in slots])
     row = dict(T=float(np.real(np.sum(result.T))), R=float(np.real(np.sum(result.R))))
     if spectrum:
         tensor = np.block([[slots[0], -slots[3]], [-slots[4], slots[1]]])

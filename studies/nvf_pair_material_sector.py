@@ -81,7 +81,7 @@ def main():
                                 "original_flux_derivative_residual",
                             )}
                         for polarization in ("p", "s"):
-                            result = solver(order, polarization).solve_conv(*slots)
+                            result = solver(order, polarization)._solve_conv(*slots)
                             values[polarization, gap] = dict(T=float(np.sum(result.T).real), R=float(np.sum(result.R).real))
                     for polarization in ("p", "s"):
                         reference = [li_value(order, polarization, material, gap) for gap in GAPS]

@@ -149,7 +149,7 @@ def test_conforming_nvf_export_runs_in_the_real_engine_for_both_polarizations(ba
                           thickness=[300.], theta=.2, phi=.37, top=1., bot=2.25,
                           truncation_order=(1, 1))
     slots = ConvMatrices(*(solver.xp.asarray(a, dtype=solver.xp.complex128) for a in conv))
-    result = solver.solve_conv(*slots)
+    result = solver._solve_conv(*slots)
     for index, polarization in enumerate(('p', 's')):
         answer = getattr(result, polarization+'_inc')
         for key, expected in zip(('T', 'R'), reference[:2]):

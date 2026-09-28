@@ -73,7 +73,7 @@ def test_directional_mixed_cell_powers_match_public_scattering_path(order):
         solver = wavebit.rcwa(backend=0, period=(PERIOD, PERIOD), wavelength=WAVELENGTH,
                               top=1., bot=2.25, theta=THETA, phi=0., psi=psi,
                               thickness=(THICKNESS,), truncation_order=order)
-        result = solver.solve_conv(*(s[None] for s in slots))
+        result = solver._solve_conv(*(s[None] for s in slots))
         assert float(result.T.sum()) == pytest.approx(t[i], abs=2e-12, rel=0)
         assert float(result.R.sum()) == pytest.approx(r[i], abs=2e-12, rel=0)
 

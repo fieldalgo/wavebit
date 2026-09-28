@@ -1,6 +1,6 @@
 """Every builder returns its slots in ``solve_conv``'s parameter order.
 
-That property is what makes ``solve_conv(*build(...))`` correct, and it is asserted
+That property is what makes ``_solve_conv(*build(...))`` correct, and it is asserted
 here rather than left to each builder's docstring because the failure is silent. Until
 2026-08-18 the five-slot builders returned ``(epx, epy, epxy, epyx, epz_i)`` while
 ``solve_conv`` took ``(epx, epy, epz_i, epxy, epyx)``; splatting one into the other put the
@@ -134,7 +134,7 @@ _UNCOUPLED = ('raster_sampled', 'raster_integrated', 'raster_laurent',
 
 @pytest.mark.parametrize('name', sorted(BUILDERS), ids=sorted(BUILDERS))
 def test_a_splatted_builder_conserves_energy(name):
-    """``solve_conv(*build(...))`` on a lossless passive layer must give R + T = 1.
+    """``_solve_conv(*build(...))`` on a lossless passive layer must give R + T = 1.
 
     Not a convergence claim: the layer is lossless and passive, so this holds at any
     truncation. It is the cheapest assertion that fails when the slots arrive in the wrong
@@ -144,7 +144,7 @@ def test_a_splatted_builder_conserves_energy(name):
     assert len(slots) == 5, f'{name} returned {len(slots)} slots'
 
     with _no_unphysical_warning():
-        res = wavebit.rcwa(truncation_order=[MAX_ORDER, MAX_ORDER], **KW).solve_conv(*slots)
+        res = wavebit.rcwa(truncation_order=[MAX_ORDER, MAX_ORDER], **KW)._solve_conv(*slots)
 
     total = float(np.asarray(res.incident.R).sum() + np.asarray(res.incident.T).sum())
     assert abs(total - 1.0) < 1e-6, (

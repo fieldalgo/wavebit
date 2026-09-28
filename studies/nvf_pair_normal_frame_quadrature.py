@@ -96,7 +96,7 @@ def main():
                 tensor = np.block([[slots.epx[0], -slots.epxy[0]], [-slots.epyx[0], slots.epy[0]]])
                 reciprocity = {k: float(v) for k, v in frame._reciprocity_defects(tensor, np).items()}
                 for pol in ('p', 's'):
-                    result = solver(n, pol).solve_conv(*slots)
+                    result = solver(n, pol)._solve_conv(*slots)
                     emit(dict(kind='optical', quadrature=q, order=n, polarization=pol,
                               T=float(np.sum(result.T).real), R=float(np.sum(result.R).real),
                               minimum_dissipation=float(meta['minimum_dissipation']), **reciprocity))

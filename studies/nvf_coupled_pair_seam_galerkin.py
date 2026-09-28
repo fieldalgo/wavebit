@@ -73,7 +73,7 @@ def main():
                     diagnostics = []
                     closure_seconds = []
                     def power(pol, slots):
-                        output = fixture.solver(n,pol).solve_conv(*slots)
+                        output = fixture.solver(n,pol)._solve_conv(*slots)
                         t, r = float(output.T.real.sum()), float(output.R.real.sum())
                         if not np.isfinite(t+r) or min(t,r) < -1e-9 or t+r > 1+1e-9:
                             raise ValueError('nonfinite or active optical output')

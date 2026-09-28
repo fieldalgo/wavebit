@@ -470,9 +470,10 @@ class CoherentSolver:
             basis.theta = basis.phi = None
             q = group['q'] + reciprocal @ as_array(xp, centre, dtype=C, device=scene._array_device)
             basis.kx, basis.ky = xp.real(q[0]), xp.real(q[1])
-            eps = list(basis.eps_conv_matrices(geometry=geometry))
+            with basis._device_scope():
+                eps = list(basis._eps_conv_matrices(geometry))
+                mu = basis._mu_conv_matrices(geometry)
             eps += [None]*(9-len(eps))
-            mu = basis.mu_conv_matrices(geometry=geometry)
             gx, gy = basis.order_kxy()
             from .solve_2d import order_grid_kxy
             gx, gy = order_grid_kxy(xp, gx, gy)

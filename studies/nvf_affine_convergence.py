@@ -82,7 +82,7 @@ def power_record(coefficients, order, transform, *, wavelength=900., thickness=3
     solver = wavebit.rcwa(backend=0, lattice=700*np.asarray(transform), wavelength=wavelength,
                           thickness=[thickness], theta=theta, phi=phi,
                           truncation_order=orders_xy(order), top=1., bot=2.25)
-    result = solver.solve_conv(*(slot[None] for slot in slots))
+    result = solver._solve_conv(*(slot[None] for slot in slots))
     powers = np.asarray([[np.asarray(getattr(getattr(result, pol), key)).sum() for key in ('T', 'R')]
                          for pol in ('p_inc', 's_inc')])
     error = float(np.max(abs(powers.sum(axis=1)-1)))
