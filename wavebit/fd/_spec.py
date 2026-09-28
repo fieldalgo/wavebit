@@ -150,6 +150,7 @@ TRACED_LEAVES = (
     'its Band(wavelength=..., df=...)',                                     # stage 2
     "a Dipole's center, within the range= it declares",                     # stage 2
     'an Axis1D k, within the k_max= it declares',                           # stage 3
+    'an isolated Sphere radius and center within range=, with a concrete plan',  # C6
 )
 
 

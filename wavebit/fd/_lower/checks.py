@@ -1832,6 +1832,16 @@ def notes(scene, plan, rows=None, lifted=None):
     out += _resolution_notes(scene, plan)
     out += _proximity_notes(scene, plan)
     out += _stabilize_notes(scene, plan)
+    from .shape_ranges import traced
+    if traced(scene):
+        from ..diagnostics import SubpixelAccuracyWarning
+        out.append((SubpixelAccuracyWarning,
+                    'Sphere geometry is traced: body volume, cut-cell counts, cells across '
+                    'and star-lift measurements are unavailable in this report. Run the '
+                    'concrete geometry to inspect them. The runtime checks the declared '
+                    'range, four-cell minimum extent and constitutive stability; these '
+                    'checks do not establish physical convergence.'))
+        return out
     out += _smoothed_notes(scene, plan, rows)
     from .junction import notes as junction_notes
     out += junction_notes(scene, plan)

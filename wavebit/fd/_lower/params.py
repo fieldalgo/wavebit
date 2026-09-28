@@ -85,6 +85,8 @@ def lower(scene, plan, rt='numpy', device=None):
     refuse_mismatch(scene, plan)
     from .shape_ranges import refuse_mismatch as refuse_range_mismatch
     refuse_range_mismatch(scene, plan)
+    from .shape_ranges import validate as validate_shapes, guard as shape_guard
+    validate_shapes(scene, plan)
     if not hasattr(rt, 'slab_add'):
         from .._runtime import runtime
         rt = runtime(rt, device)
@@ -106,6 +108,7 @@ def lower(scene, plan, rt='numpy', device=None):
     guard = _stability_guard(scene, plan, rt)
     guard = _axis1d_guard(scene, rt, guard)
     guard = _material_door_guard(scene, rt, guard)
+    guard = shape_guard(scene, plan, rt, guard)
     if plan.constitutive:
         from .constitutive import guard as constitutive_guard
         coupled_guard = constitutive_guard(scene, plan, params, rt, certified)

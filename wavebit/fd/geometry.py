@@ -83,7 +83,7 @@ static, it is in the skeleton, and a traced leaf on a structure that asked for t
 """
 import math
 
-from ._spec import spec, static_float
+from ._spec import spec, static_float, torch_carried, is_jax_typed
 
 __all__ = ['Shape', 'Slab', 'Sphere', 'Box', 'Cylinder', 'Prism', 'Structure', 'Region',
            'Plane', 'AXES']
@@ -736,11 +736,14 @@ class Sphere(Shape):
     use the actual sphere. An oversized range costs memory and may reach a boundary or an
     absorbing layer the coupled operator cannot touch. The prepared stencil is refused.
 
-    This is the allocation part of C6. ``radius`` and ``center`` remain **static**, including
-    when a range is given; ``run`` checks each concrete geometry before reusing the plan.
-    Public shape gradients still need a certificate valid throughout the declared range
-    and a guard for traced values leaving it. The internal lowering derivative is already
-    gated by ``tests/test_fd_occupancy.py::test_a_traced_radius_reaches_the_coefficient``.
+    With a range, radius and centre can be differentiated through ``fd.run`` or ``fd.lower``
+    using a plan built from concrete geometry first. This first C6 door supports one isolated
+    sphere, concrete isotropic lossless materials, Dipole sources and Record/Field monitors,
+    with no initial field. The entire interpolation support must stay inside the domain and
+    clear of absorbing layers. Runtime guards mark out-of-range or under-resolved geometry
+    unstable and return NaN fields. Traced reports leave geometry measurements unavailable.
+    Without a range, radius and centre remain static. The derivative is that of the discrete
+    solver; it is piecewise smooth, not a guarantee of continuum sensitivity or convergence.
 
     **What a sphere may not meet: six doors of C2 and C4.** All six are
     ``wavebit/fd/_lower/checks.py::check_smoothed``, in the order ``wavebit/fd/__init__.py``
@@ -782,8 +785,9 @@ class Sphere(Shape):
     range: object = None
 
     def __post_init__(self):
-        radius = static_float('Sphere', 'radius', self.radius)
-        if not math.isfinite(radius) or not radius > 0:
+        radius = (_sphere_leaf('radius', self.radius) if self.range is not None
+                  else static_float('Sphere', 'radius', self.radius))
+        if not _sphere_traced(radius) and (not math.isfinite(radius) or not radius > 0):
             raise ValueError(
                 f'Sphere(radius={radius}): a radius is a finite positive length. A length is a size '
                 f'here, so a negative one is refused rather than read as subtracting the '
@@ -794,8 +798,9 @@ class Sphere(Shape):
             raise ValueError(f'Sphere(center={center!r}): a triple (x, y, z), absolute, in the '
                              f'scene\'s coordinates -- not the cell-centre origin the rcwa '
                              f'path spells as cx=/cy=.')
-        center = tuple(static_float('Sphere', 'center', v) for v in center)
-        if not all(math.isfinite(v) for v in center):
+        center = tuple(_sphere_leaf('center', v) if self.range is not None
+                       else static_float('Sphere', 'center', v) for v in center)
+        if not all(_sphere_traced(v) or math.isfinite(v) for v in center):
             raise ValueError(f'Sphere(center={center!r}): every coordinate must be finite.')
         object.__setattr__(self, 'center', center)
         if self.range is not None:
@@ -808,7 +813,8 @@ class Sphere(Shape):
             for axis, (lo, hi), c in zip(AXES, pairs, center):
                 if not lo < hi:
                     raise ValueError(f'Sphere(range=...): the {axis} pair must have lo < hi.')
-                if c - radius < lo or c + radius > hi:
+                if (not _sphere_traced(c) and not _sphere_traced(radius)
+                        and (c - radius < lo or c + radius > hi)):
                     raise ValueError(f'Sphere(range=...): the whole sphere must lie inside '
                                      f'the declared {axis} range ({lo}, {hi}), including its '
                                      f'radius; containing only the centre is not enough.')
@@ -954,6 +960,27 @@ def _extrusion_axis(where, axis):
         f'turns only about its own axis (angle=), which keeps it uniform along that axis -- '
         f'what the absorbing-layer and periodic-face rules read. A tilted axis is stage 5, and '
         f'is refused here rather than approximated.')
+
+
+def _sphere_traced(value):
+    """A carried scalar, including Torch forward-mode tangents invisible to float()."""
+    if torch_carried(value):
+        return True
+    if is_jax_typed(value):
+        try:
+            float(value)
+        except (TypeError, ValueError):
+            return True
+    return False
+
+
+def _sphere_leaf(name, value):
+    """Keep ranged sphere leaves intact; normalise ordinary numbers as before."""
+    if (isinstance(value, (bool, str, complex)) or value is None
+            or 'complex' in str(getattr(value, 'dtype', ''))
+            or tuple(getattr(value, 'shape', ())) != ()):
+        raise ValueError(f'Sphere({name}=...): a real scalar is required.')
+    return value if _sphere_traced(value) else static_float('Sphere', name, value)
 
 
 def _finite(where, name, value):

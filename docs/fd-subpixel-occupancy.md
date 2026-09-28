@@ -1656,10 +1656,10 @@ including in nested source-column plans, so scenes without ranges retain
 their previous hashes. The `stencil` discretisation is refused with a range:
 its prepared operator depends on the actual geometry, not just allocation.
 
-This completes the fixed-allocation part of C6 for **concrete spheres only**.
-Radius and centre remain static; passing a JAX tracer or a Torch derivative
-leaf still raises by name. Public shape differentiation needs validation
-throughout the declared range and a numerical guard for leaves outside it.
+At this allocation-only checkpoint, C6 supported **concrete spheres only**.
+Radius and centre were still static. The public derivative door described
+below adds validation throughout the declared range and a numerical guard
+for leaves outside it.
 Box, Cylinder and Prism ranges are not provided by this increment. Large
 ranges cost extra memory and can bring the interpolation support into an
 absorbing layer that it is required to avoid.
@@ -1706,3 +1706,91 @@ The separate slow tier exited 0 with all 80 collected cases passed
 143/288/140/570 arrays bit for bit; no golden was rewritten. The corrected
 targeted run passed all 81 selected cases, including the four legacy schema
 checks and the documentation checks.
+
+
+### Public sphere geometry derivatives (C6, 2026-09-28)
+
+A ranged `fd.Sphere` now preserves radius and centre derivative leaves through
+`fd.lower` and `fd.run`. Build a plan from a concrete scene first, then pass
+that plan into the differentiated call. The range and every structural input
+remain static. A range contains the whole sphere, including its radius.
+
+The first supported scene contains one isolated sphere with the default voxel
+discretisation, concrete isotropic lossless `Material` inside and outside,
+`Dipole` sources, and `Record` or `Field` monitors. Initial fields, additional
+structures, other material families and other source/monitor families are
+refused for traced geometry. Concrete scenes retain their previous support.
+The sphere's reserved support plus its interpolation halo must stay strictly
+inside the domain and clear of absorbing layers. This restriction certifies
+isolation and boundary clearance for the whole range, not only the initial
+sphere. An oversized reservation can therefore be refused even when the
+initial sphere itself is well inside the box.
+
+The plan retains only a concrete numeric geometry seed outside its skeleton.
+Host preflight substitutes that seed while rechecking the current scene's
+other inputs. It does not certify the current geometry from that sample:
+isolation and full-range clearance establish the geometric scope, and runtime
+guards check the actual radius, all three coordinates, containment, the
+existing four-cell minimum diameter, star positivity and the CFL bound.
+A traced invalid value yields NaN fields and a false `diagnostics['stable']`;
+readable invalid sizes may instead raise at the shape constructor. Direct
+`lower` repeats the same preflight and skeleton check. `fd.plan` on a traced
+sphere is refused with instructions to build the plan before differentiation.
+
+A traced result report leaves body volumes, cut-cell counts, cells-across
+measurements and star-lift summaries unavailable. It says so explicitly;
+concrete runs still report actual geometry. Allocation spans continue to
+refer to the fixed range. The derivative is that of the discrete solver,
+which is piecewise smooth at clipping and lift transitions. Agreement with
+finite differences is not a continuum sensitivity or convergence certificate.
+
+The public regression compares all four geometry derivatives of final electric
+field squared norm with independent NumPy central differences. Its fixture
+uses the existing 16-cubed range scene, including magnetic permeability 1.2.
+The measurement script sweeps difference steps from `1e-4` to `1e-6` before
+choosing the test step and tolerance. A second geometry verifies both time
+records and frequency-domain field monitors, and traced reports omit seed
+measurements. Source mutation logs, including restored-byte hashes, are kept
+in `studies/results/fdtd_sphere_grad_controls/`.
+
+The four measured derivatives are approximately `(-91.85684752, 71.12144111,
+-4.10230317, 1.29480474)`, in radius/x/y/z order. At the selected `3e-6`
+central-difference step the largest relative discrepancy is `1.084e-8`;
+JAX and Torch differ by at most `4.264e-14` in absolute derivative. The test
+allows `2e-6` relative error to accommodate cancellation and step sensitivity,
+with zero absolute allowance. The initial Torch probe exposed zero centre
+derivatives: converting a tuple of scalar tensors with `asarray` detached it.
+Stacking typed sequence elements preserves both reverse and forward tangents.
+That failing probe is retained as `fdtd_sphere_grad_detached_center.json`.
+
+A monolithic `jax.jit(jax.value_and_grad(objective))` compilation was stopped
+at 454 seconds after reaching 14911 MiB RSS, with only 6 GiB free on this host.
+It produced no numerical result. The verified derivative path uses ordinary
+`jax.value_and_grad` around public `fd.run`, whose time-step program is already
+compiled internally; the compiled forward guard is checked separately.
+Whole-function compiled gradient performance remains unvalidated. Torch
+reverse mode, `torch.func.jvp` and `forward_ad` are covered independently.
+
+The second sphere's combined Record/Field observable has a largest relative
+gradient discrepancy of `2.48e-10` at the same difference step. All eleven
+source mutations were killed by assertions or missing-refusal assertions,
+including the original tensor-tuple detachment, radius and centre detachment,
+resolution and containment guards, multiple-painter admission, plan mismatch,
+boundary halo, seed retention and the unknown-geometry report. Each mutation
+restored exact source bytes. The initial targeted run's one failure was a test
+expectation: adding a second ranged sphere correctly hit the range-declaration
+mismatch before the isolation refusal. A plain Region as the extra painter
+isolates that latter door; both corrected preflight and monitor tests passed.
+The original failure and correction logs are retained.
+
+Validation used fd source SHA-256
+`f0dd24bf75276d3635ae5c2d2f08db98368f645caf5833c8d82d4e6db1cc9674`.
+The full fd/docs tier collected 2525 cases and exited 0 with 2517 passed and
+8 skipped (1857.56 seconds). The separate slow tier collected and passed all
+80 cases, exit 0 (1151.36 seconds). Neither reported INTERNALERROR or a worker
+crash, and reported totals match collection. Read-only stage-0/1/2/3 freezers
+reproduced all 143/288/140/570 committed arrays bit for bit; no golden was
+rewritten. Timings and counts are in
+`studies/results/fdtd_sphere_grad_validation.json`, with raw logs under
+`studies/results/fdtd_sphere_grad_controls/`. The three study scripts carry
+the probe, mutation controls and required sequential validation procedure.

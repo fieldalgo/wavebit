@@ -276,7 +276,10 @@ class Plan:
 
     def with_static(self, **changes):
         """A plan with ``changes`` and a recomputed skeleton (the test hook uses this)."""
-        return _finish(dataclasses.replace(self, **changes))
+        result = _finish(dataclasses.replace(self, **changes))
+        if hasattr(self, '_shape_seeds'):
+            object.__setattr__(result, '_shape_seeds', self._shape_seeds)
+        return result
 
 
 def _finish(p):
@@ -384,7 +387,7 @@ def _pole_terms(scene, grid):
     return tuple(terms)
 
 
-def plan(scene, _column=False, _grazing=None, _reuse=None):
+def plan(scene, _column=False, _grazing=None, _reuse=None, _shape_trace=False):
     """The static plan of ``scene``, with the stage-1 refusals run and its warnings emitted.
 
     ``_column`` is the stage-2 source columns' own door (``sources._column_plan``): a column is
@@ -399,6 +402,10 @@ def plan(scene, _column=False, _grazing=None, _reuse=None):
     operator :func:`~wavebit.fd._lower.stencil.prepare` takes as it is when it was prepared
     from the same arguments, instead of solving it again (every door still runs).
     """
+    from .shape_ranges import traced, remember
+    if traced(scene):
+        raise ValueError('fd.plan requires concrete Sphere radius and center; build the plan '
+                         'before differentiation and pass plan= to fd.run or fd.lower.')
     grid = Grid.from_domain(scene.domain.size, scene.domain.center, scene.resolution.dx)
     dt = scene.run.courant * grid.dx / math.sqrt(3.0)
     steps = run_steps(scene, dt)
@@ -470,10 +477,12 @@ def plan(scene, _column=False, _grazing=None, _reuse=None):
     # Emitted through the caller's own filters, and deliberately not forced past them: a
     # caller who silenced CoarseMeshWarning silenced it, and the default "once per location"
     # rule is what keeps a sweep of a thousand plans from printing a thousand copies.
-    checks.warn_all(scene, p, lifted)
+    if not _shape_trace:
+        checks.warn_all(scene, p, lifted)
     if lifted:
         # Not a field: the skeleton and equality never see it, and a replaced plan drops it.
         # checks._lift_notes reads it for this scene only (identity), so fd.run's report after
         # the run does not lower the scene a third time.
         object.__setattr__(p, '_lifted', (scene, lifted))
+    remember(scene, p)
     return p

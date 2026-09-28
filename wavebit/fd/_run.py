@@ -185,7 +185,9 @@ def _planned(scene, reuse=None):
     sphere. Every door still runs, and the skeleton comparison below still decides.
     """
     rows = []
-    p = _plan(scene, _grazing=rows, _reuse=reuse)
+    from ._lower.shape_ranges import planning_scene
+    concrete = planning_scene(scene, reuse)
+    p = _plan(concrete, _grazing=rows, _reuse=reuse, _shape_trace=concrete is not scene)
     return p, (rows[0] if rows else None)
 
 

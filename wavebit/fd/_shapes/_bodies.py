@@ -748,6 +748,12 @@ def _as(xp, value, like):
     ``center`` went through ``xp.asarray`` and worked). Comparing namespaces keeps a traced value
     untouched -- a tracer's namespace *is* the backend's -- and converts a foreign concrete one.
     """
+    # torch.asarray(tuple_of_scalar_tensors) reads the values and drops their derivatives.
+    # The public sphere probe measured all three centre gradients as zero through that
+    # path, versus (71.12144, -4.10230, 1.29480) by NumPy differences. Stack typed leaves
+    # instead; ordinary numeric sequences retain their existing conversion and arithmetic.
+    if isinstance(value, (tuple, list)) and any(hasattr(v, 'dtype') for v in value):
+        return xp.stack([_as(xp, v, like) for v in value])
     if hasattr(value, 'dtype') and hasattr(value, 'device'):
         try:
             if array_namespace(value) is xp:

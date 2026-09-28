@@ -151,12 +151,19 @@ def test_range_refuses_a_prepared_stencil():
 @pytest.mark.parametrize('backend', ('jax', 'torch'))
 def test_range_does_not_silently_detach_a_shape_derivative(backend):
     runtime(backend)
+    def identity(r):
+        ball = fd.Sphere(radius=r, center=(r*.1, 0., 0.), range=RANGE)
+        return ball.radius + ball.center[0]
     if backend == 'jax':
         import jax
+        assert float(jax.grad(identity)(.25)) == pytest.approx(1.1)
         with pytest.raises(ValueError, match='Sphere.*radius.*static'):
-            jax.grad(lambda r: fd.Sphere(radius=r, range=RANGE).radius)(.25)
+            jax.grad(lambda r: fd.Sphere(radius=r).radius)(.25)
     else:
         import torch
         r = torch.tensor(.25, dtype=torch.float64, requires_grad=True)
+        assert float(torch.autograd.grad(identity(r), r)[0]) == pytest.approx(1.1)
+        _, tangent = torch.func.jvp(identity, (r.detach(),), (torch.ones_like(r),))
+        assert float(tangent) == pytest.approx(1.1)
         with pytest.raises(ValueError, match='Sphere.*radius.*static'):
-            fd.Sphere(radius=r, range=RANGE)
+            fd.Sphere(radius=r)
