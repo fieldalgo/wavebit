@@ -446,4 +446,3 @@ def test_material_derivatives_survive_forty_coupled_steps(backend, medium):
         loss(parameter).backward()
         actual = parameter.grad
     np.testing.assert_allclose(to_numpy(actual), finite, rtol=1e-7, atol=1e-8)
-
