@@ -24,7 +24,12 @@ TETM_REFUSAL = ('tensor materials require the coupled polarization solve; use po
 
 
 class TensorConvMatrices(NamedTuple):
-    """Nine constitutive blocks (epsilon or mu), in ``solve_conv`` slot order."""
+    """Nine constitutive blocks (epsilon or mu), in ``solve_conv`` slot order.
+
+    Public inputs and outputs use the cell centre. Like ``ConvMatrices``, this
+    container also carries private corner-frame operators and performs no
+    origin conversion itself.
+    """
     epx: object
     epy: object
     epz_i: object
@@ -49,7 +54,7 @@ def full_tensor(xp, tensor):
 
 
 def tensor_slots(xp, blocks):
-    """Physical 3 by 3 operator blocks to the nine public convolution slots."""
+    """Physical 3 by 3 operator blocks to nine slots, preserving their Fourier frame."""
     return TensorConvMatrices(blocks[0][0], blocks[1][1], xp.linalg.inv(blocks[2][2]),
                               -blocks[0][1], -blocks[1][0], -blocks[0][2],
                               -blocks[1][2], -blocks[2][0], -blocks[2][1])

@@ -1,5 +1,9 @@
 # Full-metric conforming cells
 
+Since 2026-09-28 the exported public matrices are restated about the cell centre at the
+API boundary. The private construction described below is unchanged; see
+[the Fourier-origin record](amplitude-sp-frame.md#8-the-fourier-space-doors-move-to-the-centre-2026-09-28).
+
 Written: 2026-09-09
 
 Targets:

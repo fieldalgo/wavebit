@@ -316,37 +316,31 @@ scalar operation and there is no square root of a tensor field worth guessing at
 permittivity too, so the raster below and the tensor beside it are now the same quantity one
 rank apart.
 
-The public `structure` is still a *scalar* raster, so a patterned tensor reaches the solver
-the same way a uniform one does — through `solve_conv` with the slots filled directly, exactly
-as [`anisotropic-materials.md`](anisotropic-materials.md) §4 describes for the uniform case.
-Wiring a tensor `structure` through the front door is a separate piece of work and is not done.
+The public `structure` accepts tensor rasters of shape `(layers, Ny, Nx, 3, 3)` and
+shapes carrying tensor `Material` values. The ordinary door builds the required slots:
 
 ```python
 import numpy as np
 import wavebit
-from wavebit._core.factorization import to_conv_mat_raster_pn_eps
 
 eps = np.where(mask, 2.56, 1.0).astype(complex)          # (Ny, Nx)
-g   = np.where(mask, 0.30j, 0.0).astype(complex)
-
+g = np.where(mask, 0.30j, 0.0).astype(complex)
 t = np.zeros(eps.shape + (3, 3), dtype=complex)
 t[..., 0, 0] = t[..., 1, 1] = t[..., 2, 2] = eps
-t[..., 0, 1], t[..., 1, 0] = g, -g                       # the physical tensor
-
-epx, epy, epz_i, epxy, epyx = to_conv_mat_raster_pn_eps(t[None], truncation_order, truncation_order)
-
-mee = wavebit.rcwa(backend=0, truncation_order=(truncation_order, truncation_order), period=(p, p), wavelength=wl,
-                   thickness=[d], structure=eps[None])     # the scalar stand-in, in eps
-res = mee.solve_conv(epx, epy, epz_i, epxy, epyx)   # epz_i is THIRD
+t[..., 0, 1], t[..., 1, 0] = g, -g
+mee = wavebit.rcwa(truncation_order=(truncation_order, truncation_order),
+                   period=(p, p), wavelength=wl, thickness=[d], structure=t[None])
+res = mee.solve()
+conv = mee.eps_conv_matrices()                       # operators about the cell centre
+relayed = mee.solve_conv(*conv)                      # the same solve; epz_i is third
 ```
 
-Equivalently `mee.solve_conv(*to_conv_mat_raster_pn_eps(t[None], truncation_order, truncation_order))`: since
-2026-08-18 every builder returns its slots in `solve_conv`'s own parameter order, so the
-splat is correct rather than merely shorter. It was not always — the five-slot builders used to
-group the in-plane pair together and put `epz_i` last, and splatting then landed the inverted zz
-matrix in the `epxy` slot. Nothing raised; `R + T` came back 1.61 on a lossless passive pillar
-against 1.0000000000 for the same structure, with only `UnphysicalResultWarning` to show for it.
-`tests/test_slot_order.py` is what stops that returning.
+Private builders such as `to_conv_mat_raster_pn_eps` produce corner-frame matrices for
+`mee._solve_conv(*conv)`. Since 2026-09-28 the public `solve_conv` reads centre-frame
+inputs. The slot order itself is unchanged: since 2026-08-18 `epz_i` sits third. Before
+that correction, splatting a five-slot builder put the inverted zz matrix in `epxy` and
+could return `R + T = 1.61` for a lossless passive pillar. `tests/test_slot_order.py`
+keeps the private-builder route pinned to the corrected order.
 
 The remaining way to get this wrong is silent in the same way: the off-diagonal **slots hold the
 negation**, which `to_conv_mat_raster_pn_eps` has already applied. See

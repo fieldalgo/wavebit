@@ -40,10 +40,9 @@ remaining accuracy limits.
 
 Write the supplied lattice as A, with vectors in columns. A point with
 centered fractional coordinates `(u, v)` has public Cartesian position
-`A @ [u, v] + offset`, measured from the cell center. The internal
-cell-corner Fourier coordinates add `A @ [.5, .5]`; this shift is already
-included by the adapter and must not be added to public field-sample
-coordinates. The profile occupies
+`A @ [u, v] + offset`, measured from the cell center. Returned matrices
+also use that centre, the frame `solve_conv()` reads. Do not add a half-cell
+phase to them or a half-cell shift to public field-sample coordinates. The profile occupies
 `-width/2 < u < width/2` and `-height/2 < v < height/2`.
 Its material intervals run in increasing u, separated by `seams`.
 The rest of the periodic cell contains the layer background.
@@ -81,7 +80,7 @@ geometry raises; invalid traced numerical values produce NaN matrices.
 NumPy construction also uses 64-bit precision. Exported matrices can be
 converted to a Torch solver's array type for `solve_conv()`.
 
-Fourier phases use the cell-corner origin, including the physical offset.
+Returned Fourier matrices use the cell-centre origin, including the physical offset.
 The cell already returns fields in the laboratory frame. The adapter
 restores the physical background in its energy and longitudinal material
 coefficients before closing the matrices. Lossless storage and passive

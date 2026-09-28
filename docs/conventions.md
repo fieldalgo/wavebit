@@ -206,20 +206,28 @@ distinguished point, so it is an absolute height above the bottom interface (see
 This is S4's convention (*"the unit cell is the Wigner-Seitz cell centered at the origin"*) and
 Meep's. It arrived on 2026-08-31; before it the origin was the cell's corner, and both the
 README and `oblique-lattice.md` opened their raster example by computing the cell centre by
-hand. Internally the Fourier machinery still integrates over `u, v` in `[0, 1]` — for the
-structure the offset is a relabeling, so no convolution coefficient moves — and
-`_core.lattice.sample_grid` is that internal frame. Reaching for it from user-facing code
-misplaces a structure by half a period, silently.
+hand. Internally the Fourier machinery still integrates over `u, v` in `[0, 1]`, and
+`_core.lattice.sample_grid` is that internal corner frame. Reaching for it from user-facing
+code misplaces a structure by half a period, silently.
+
+Since 2026-09-28 every published Fourier operator also uses the centre:
+`coeff_g = (1/A) ∫ eps(r) exp(-i g·r) dr`, with `r` measured from this origin.
+`eps_conv_matrices()`, `mu_conv_matrices()`, the public NVF builders and the input to
+`solve_conv()` share that frame. `ConvMatrices.from_energy()` preserves the frame of its
+inputs, so supply centre-frame coefficients to use its output with `solve_conv()`.
+The private builders and `_solve_conv()` use the kernels' corner frame. To restate an
+operator between the two, use `C * np.outer(d, d)`, where `d = (-1.)**(m+n)` in retained
+order-label order. The implementation uses exact sign flips for this `D C D` similarity;
+ordinary `solve()` stays entirely on the private path.
 
 Since 2026-09-27 the **phase** of every per-order quantity is referenced here too: the
 amplitudes (`r_s` .. `t_p`, `r_xyz` / `t_xyz`, `order()`), the `excitation` weights, the
 scattering matrix's port variables, and the point where an ordinary incidence is unit,
 `x = y = 0` on the lit face (the phase-reference bullet of
-[the result surface](#the-result-surface)). The convolution matrices are the exception, on
-purpose: `eps_conv_matrices()` / `mu_conv_matrices()` and every builder
-behind them — the `solve_conv` input format, the public NVF helpers included — are the kernels'
-operator about the cell **corner**, not the amplitude frame. And the centre belongs to the basis
-you wrote: a unimodular re-basis `(a1, a2) -> (a1, a1 + a2)` moves `(a1 + a2)/2` by `a1/2`.
+[the result surface](#the-result-surface)). Public convolution matrices followed on
+2026-09-28, so every public per-order phase and every published Fourier coefficient is
+referenced here. The centre belongs to the basis you wrote: a unimodular re-basis
+`(a1, a2) -> (a1, a1 + a2)` moves `(a1 + a2)/2` by `a1/2`.
 Keeping the same public numbers — shape centres, sample points — translates the whole scene,
 phase reference included, so the field is unchanged; the same physical crystal sampled at the
 same physical points (shapes and samples shifted by `-a1/2`) gives a field that differs by
@@ -615,7 +623,8 @@ Amplitude fine print, stated once so it never has to be discovered:
   changed wherever the lit orders mix parity, and a field changed by
   `exp(-1j k_inc . (a1 + a2)/2)`. `R` and `T` of a single wave did not move
   (`amplitude-sp-frame.md` §7). The kernels still integrate from the corner and
-  `solver.T1` / `layer_info_list` are their own state; the engine converts at its doors. For a
+  `solver.T1` / `layer_info_list` are their own state, including their corner-frame
+  `epz_conv_i`; the engine converts at its doors. For a
   complex `theta` the incident wave is not uniform along the surface, and "unit at the centre"
   fixes its magnitude there — 7.70 times smaller than at the corner on a TE scene at
   `theta = 0.3 + 0.1j` in a lossy superstrate;

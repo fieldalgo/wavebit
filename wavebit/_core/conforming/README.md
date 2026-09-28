@@ -81,6 +81,14 @@
 | `cartesian_pair_gap.py` | How can the finite pair cross exact contact and positive gaps without dividing its weak solve or thin fields by gap? |
 | `cartesian_pair_gap_autodiff.py` | How can a separate value evaluator provide the finite physical gap right-JVP at contact using ordinary JAX x64 operations? |
 
+The five exported matrix constructors publish about the cell centre: `ConformingNVF`,
+`AffineProfileNVF`, `CartesianRectangleNVF`, `CartesianRectanglePairNVF`, and both outputs of
+`CartesianPairTransmissionGalerkinGapCell.closure`. They feed public `solve_conv` directly.
+The other matrix builders keep their existing construction frames; their historical solver
+calls use `_solve_conv`. Some study models are natively centred: preserving their old
+placement is described in `docs/amplitude-sp-frame.md` §8.
+
+
 These kernels build constitutive data. Optical study fixtures and their
 fixed-wavelength propagators remain in `studies/`. The public entry points are
 `wavebit.ConformingNVF` for physical rectangle layers and

@@ -302,7 +302,7 @@ The separate 1D operators carry diagonal mu; tensors use the coupled path.
 See [full tensor patterns](full-tensor-patterns.md).
 
 **By hand.** `mu` is also one keyword on `solve_conv`, taking the five stacks in the
-permittivity's convention:
+permittivity's convention, about the cell centre as `mu_conv_matrices()` returns them:
 
 ```python
 mu = (mux_conv_all, muy_conv_all, muz_conv_i_all,

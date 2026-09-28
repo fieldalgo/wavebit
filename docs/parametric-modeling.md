@@ -202,8 +202,7 @@ blend for the supported geometry; general-shape NVF contact issues remain open.
 
 ## 1. Analytic Fourier coefficients
 
-The coefficient convention matches the `_core/factorization.py::dfs2d_*` builders (checked to machine
-precision):
+The published coefficient convention, measured from the cell centre, is:
 
 ```
 c(ky, kx) = 1/(Px Py) ∫∫_cell f(x,y) exp(-i 2π (ky y/Py + kx x/Px)) dx dy
@@ -212,6 +211,9 @@ c(ky, kx) = 1/(Px Py) ∫∫_cell f(x,y) exp(-i 2π (ky y/Py + kx x/Px)) dx dy
 With `u = 2π kx/Px`, `v = 2π ky/Py` this is the continuous FT of the shape indicator
 evaluated on the reciprocal lattice. For rotation angle `θ` and center `(cx,cy)` we use the
 rotated frequency coordinate `κ = Rot(θ)^T k` and the center phase `e^{-i k·c}`.
+Here `c` is `(cx, cy)` as written in the public shape. Since 2026-09-28 this is the
+coefficient published by `eps_conv_matrices()`. The private builders rebase shape centres
+by `(a1+a2)/2` for their corner-frame integration; the public door restates their operators.
 
 | primitive | `Ŝ(k) / (Px Py)` |
 |---|---|

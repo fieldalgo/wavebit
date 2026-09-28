@@ -60,8 +60,9 @@ offset_y = common cy
 The bounding rectangle must fit strictly inside a fundamental cell centered
 on that pair, with positive finite triangles on the chosen chart. The whole
 cell translates with the pair offset, which can cross the caller's cell
-boundary without changing the containment test. The physical center
-`lattice @ (.5, .5)` is included in the Fourier origin. Do not add another
+boundary without changing the containment test. Returned matrices are about the
+cell centre, the frame `solve_conv()` reads; the offset is the pair's public centre.
+Do not add another
 phase, material normalization or rotation to the returned matrices.
 
 The **computed** gap must be strictly positive or exactly zero. Nothing is

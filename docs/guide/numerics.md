@@ -129,7 +129,8 @@ G = C(B.H epsilon B) with shape `(layers, 2*H, 2*H)`, and C(epsilon_zz)
 with shape `(layers, H, H)`. All inputs must use the solver's Cartesian
 frame and Fourier order layout, with all x-component orders followed by all
 y-component orders in Q and G. Unbatched inputs are also accepted, but
-`solve_conv()` expects a layer axis.
+`solve_conv()` expects a layer axis. Supply Fourier coefficients about the cell centre:
+`from_energy()` preserves its inputs' origin and applies no additional translation.
 This five-slot closure assumes no xz, yz, zx or zy material coupling.
 
 The builder computes `Q^(-H) G Q^(-1)` by solves, inverts the longitudinal

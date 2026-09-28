@@ -362,7 +362,8 @@ U(z̃) = -i kz_inc δ e^{+i kz_inc z̃} + i Kz_top R e^{-i Kz_top z̃}
 TM): `sigma_inc` on the incident order, or `sigma_j c_j w_j` on each lit order under
 `excitation`, where `sigma = sign(Re kx)` is `s_hat . y_hat` on the `ky == 0` row
 (`order_frame_sign`) and `c_j = (-1)**(m + n)` restates a public weight -- referenced at the
-cell centre -- about the cell corner, the Fourier origin these operators are built in
+cell centre -- about the cell corner, the Fourier origin the kernel operators are built in
+(the published convolution matrices restate those operators about the centre as `D C D`)
 (`corner_column`; the common factor `exp(-1j k_inc . (a1 + a2)/2)` is left to the field). The
 reported amplitudes are `C D R` and `C D T T1` with `D = diag(sigma)` and `C = diag(c)`
 (TM transmission after its impedance ratio), which puts every order in its own s/p frame,

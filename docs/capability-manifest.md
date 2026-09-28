@@ -2,7 +2,14 @@
 
 Written: 2026-08-11.
 
-Updated 2026-09-27 (latest): the lateral phase reference of every per-order quantity moved to
+Updated 2026-09-28 (latest): public convolution matrices and the `solve_conv` input use the
+cell centre (`amplitude-sp-frame.md` §8). `lattice.fourier_origin = 'cell_centre'` and
+`lattice.fourier_origin_expression` are additive keys, so the manifest version is unchanged.
+Private builders and ordinary `solve()` keep their arithmetic and outputs. Hand-built
+patterned corner-frame inputs require restatement, but the manifest has never exposed that
+input path to generators.
+
+Updated 2026-09-27: the lateral phase reference of every per-order quantity moved to
 the cell centre, `x = y = 0` (`amplitude-sp-frame.md` §7), without a version bump.
 `results.amplitudes` gains a `phase_reference` key that says so -- an added key, which a
 consumer reading unknown keys ignores -- and `cartesian.meaning` is reworded. No key is renamed

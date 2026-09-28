@@ -472,16 +472,12 @@ set the kernels see `-w`, so there the even orders' amplitudes are the negated o
 3.6e-9 as before: lighting order `+1` at `theta` and the specular order at the matched angle are
 one wave, unit at the same point.
 
-**What stays in the corner frame, on purpose.**
+**The remaining corner-frame state.**
 
-* The convolution matrices -- `eps_conv_matrices()` / `mu_conv_matrices()`, the `solve_conv`
-  input format, and every builder behind them including the public NVF helpers
-  (`ConformingNVF` and the rectangle and affine-profile builders, whose guides state the corner
-  origin). They are the kernels' operator: a centred feature of higher permittivity reads a
-  negative first harmonic there on all fourteen builders checked. Converting them would change
-  the meaning of every hand-built `solve_conv` input, so they are documented rather than moved.
+* The public convolution matrices initially stayed in the corner frame. That exception was
+  superseded on 2026-09-28: the accessors, `solve_conv` and exported NVF builders move in §8.
 * `solver.T1` / `solver.layer_info_list` (above).
-* The coherent-source path's own gauge, which re-bases those convolution matrices to the
+* The coherent-source path's own gauge, which reads the private accessors and re-bases their matrices to the
   centre with `exp(1j (k_m - k_n) . o)` -- `c_m c_n` in exact arithmetic.
 
 **The centre belongs to the basis you wrote.** A unimodular re-basis `(a1, a2) -> (a1, a1 + a2)`
@@ -507,3 +503,68 @@ design. The FDTD module, not on develop at this change, extracts its per-order a
 its grid's corner; when it lands, its extraction has to meet this contract (each order times
 `c_m` at its extraction plane, and `alpha` for its Bloch source at oblique incidence), and the
 `OrderExcitation` comparison above is the oracle to reuse.
+
+
+## 8. The Fourier-space doors move to the centre (2026-09-28)
+
+The public origin now also governs convolution matrices. A shape whose centre is written
+as `(cx, cy)` publishes coefficients about that origin, so the closed form is
+`c_G = (1/A) ∫ eps(r) exp(-i G·r) dr` with public `r`. The first harmonic of a centred
+denser stripe is positive. This removes the temporary matrix exception in §7.
+
+For `o = (a1+a2)/2`, translation in the retained plane-wave basis is diagonal:
+`T_mn = exp(i k_mn·o) = exp(i k_inc·o) (-1)**(m+n)`. Consequently **every operator**
+transforms as `T C inv(T) = D C D`, `D = diag((-1)**(m+n))`; the common incident phase
+cancels. Products and inverses obey the same similarity, so the rule covers Li inverse
+slots, NVF closures, all nine tensor slots, permeability, and derivatives. The code uses
+`where(odd_row != odd_column, -C, C)`. Two swaps restore the exact original bits, including
+signed zeros. A window shift changes D by a global sign and therefore leaves D C D unchanged.
+
+The conversions are confined to public doors:
+
+* `eps_conv_matrices()` and `mu_conv_matrices()` restate each returned slot.
+* `solve_conv()` restates every input slot once before calling the private `_solve_conv()`.
+* `ConformingNVF`, `AffineProfileNVF`, `CartesianRectangleNVF` and
+  `CartesianRectanglePairNVF` restate their `conv_matrices()` output.
+* `CartesianPairTransmissionGalerkinGapCell.closure()` restates both its value and tangent.
+
+`ConvMatrices.from_energy()` is covariant algebra, not a coordinate adapter: it preserves
+the origin supplied in Q, G and the longitudinal matrix. Centre-frame inputs therefore
+produce centre-frame slots ready for `solve_conv()`. The same type also carries private
+corner-frame matrices; constructing the container adds no transformation.
+
+The ordinary `solve()` path goes straight from the private builders to `_solve_conv()`.
+The coherent path reads the private accessors and retains its existing gauge. Private NVF
+cells and study calculations keep their existing arithmetic and placement; their solver
+calls now use `_solve_conv()`. Study models built natively around zero also keep their
+previous placement through that private door; correcting the historical placement of such
+research models is separate from this public-frame change. `T1`, `layer_info_list`, and
+the `epz_conv_i` or full tensor blocks stored inside them remain kernel state.
+
+**This is a breaking change to documented matrix inputs and outputs.** A caller supplying
+patterned corner-frame coefficients unchanged to `solve_conv()` now translates that layer
+by half a cell. A single incident wave's efficiencies cannot detect a translation of an
+entire stack, but its complex amplitudes can, and a mixture with centre-frame layers changes
+relative placement and can change efficiencies. Existing corner-frame data must be restated
+with `C * np.outer(d, d)`, `d = (-1.)**(m+n)`, or routed through the private kernel door in
+internal code. Accessor-to-solver and exported-builder-to-solver round trips keep their
+original results, since the two exact sign operations cancel.
+
+**Verification.** The private-door extraction has an identical calculation AST. Independent
+process snapshots on NumPy cover twelve ordinary scenes, both illumination sides, moved
+windows, full epsilon/mu tensors, coherent fields, all five exported NVF doors, and a solve
+along the transmission tangent: 1,410 answer arrays remain byte-identical, and all 90
+published matrix slots equal the original slots restated by D C D byte for byte. The
+JAX and PyTorch snapshots each preserve all 944 answer arrays and restate all 60 published
+slots exactly. Their public matrix gradients are also the private gradients restated by D C D
+byte for byte; the JAX compiled solve and accessor forward derivatives pass independently.
+The tests also compare public coefficients with sinc rectangle and Bessel disc integrals, including
+an oblique cell; a hand-built centre-frame stack with the shape solver; mixed built/hand
+layers; and a published harmonic with the Born amplitude. Research references are restated
+without changing their tolerances, and their random-entry derivative objectives keep the
+original corner-frame functional.
+
+`SPEC_VERSION` is unchanged: specifications carry no matrix and their `solve()` results do
+not move. `MANIFEST_VERSION` is unchanged under its additive-key rule: `lattice.fourier_origin`
+and its expression describe the public matrix frame without renaming or reshaping an existing
+key. The manifest did not expose hand-built `solve_conv` inputs as a generation path.

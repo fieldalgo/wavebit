@@ -109,8 +109,10 @@ remains available as an independently qualified reference.
 `CartesianPairTransmissionGalerkinGapCell` is a separate experimental
 NumPy family with the complete tensor and its analytical gap/material JVP.
 It requires a shift-zero plan on the symmetric Cartesian pair mesh.
-Its `closure` returns `(value, tangent, metadata)`. Both the cell and
-opening plan are available from `wavebit`. The [selection guide](nvf-method-selection.md)
+Its `closure` returns `(value, tangent, metadata)`. Both matrix sets are about the cell
+centre, the frame `solve_conv()` reads; `offset` places the pair relative to that public
+origin. The private construction described above keeps its existing chart.
+Both the cell and opening plan are available from `wavebit`. The [selection guide](nvf-method-selection.md)
 shows how to choose this construction or leave it off.
 
 ```python

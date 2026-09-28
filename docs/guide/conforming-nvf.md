@@ -165,7 +165,8 @@ integrals. There is no physical 700-unit period restriction. The
 stretching square-cell coefficients alone would give a different result.
 For a second-axis tiling, the cell uses the reduced right-handed frame `(a2, -a1)`
 and the reciprocal aspect ratio. Each layer is exported in the original
-solver's common Cartesian frame and Fourier order layout. The
+solver's common Cartesian frame and Fourier order layout. Its returned matrices are
+about the cell centre, the frame `solve_conv()` reads; do not add a phase. The
 [layer-axis construction](../nvf-layer-axes.md) describes this mapping.
 
 ## JAX planning and replay

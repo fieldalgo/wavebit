@@ -89,7 +89,8 @@ correctly**; see §6.1. The `ezz` entry enters only as its
 inverse because `E_z` is eliminated algebraically as `E_z = ezz⁻¹ D_z`, which is also why field
 reconstruction reads nothing but `epz_conv_i` (`fields.py::214`).
 
-The slots reach the user through `solve_conv`, on every backend:
+The slots reach the user through `solve_conv`, on every backend. Patterned hand-built
+slots use Fourier coordinates measured from the cell centre, like `eps_conv_matrices()`:
 
 ```python
 res = mee.solve_conv(epx_conv_all, epy_conv_all, epz_conv_i_all,

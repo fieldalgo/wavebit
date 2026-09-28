@@ -64,7 +64,7 @@ The 2D mode operator reads five permittivity blocks. They correspond to a tensor
      ·           = assumed zero; there is no slot for it
 ```
 
-and they arrive through the public entry point:
+and they arrive through the public entry point as operators about the cell centre:
 
 ```python
 res = mee.solve_conv(epx_conv_all, epy_conv_all, epz_conv_i_all,
@@ -438,10 +438,12 @@ because it eliminates `E_z`, while the off-diagonal pair defaults to `None`, and
 accept a required parameter after a defaulted one. So
 
 ```python
-res = mee.solve_conv(*to_conv_mat_raster_pn_eps(tensor, truncation_order, truncation_order))
+res = mee._solve_conv(*to_conv_mat_raster_pn_eps(tensor, truncation_order, truncation_order))
 ```
 
-put `epz_i` in the `epxy` slot. Nothing raised. On a lossless passive pillar it returned a full
+put `epz_i` in the `epxy` slot. (The recipe above uses the private door for the private
+builder's corner-frame output; this history concerns the unchanged slot order.) Nothing
+raised. On a lossless passive pillar it returned a full
 set of plausible efficiencies summing to `R + T = 1.61`, against `1.0000000000` for the same
 structure solved properly — only `UnphysicalResultWarning` fired. The same idiom was correct for
 the three-slot isotropic builders throughout, which is what made it a trap rather than a mistake.

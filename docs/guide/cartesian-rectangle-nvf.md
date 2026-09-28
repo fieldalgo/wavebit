@@ -52,7 +52,8 @@ its offset. It must fit strictly inside that rectangle-centered cell and
 have positive finite triangles on the selected mesh. Offsets may translate
 the whole periodic structure freely: crossing the caller's chosen cell
 edge by translation does not enlarge the admitted rectangle dimensions.
-The Fourier origin already includes the cell-center shift and offset.
+The returned matrices are about the cell centre, the frame `solve_conv()` reads;
+the offset is the rectangle's public centre.
 Do not add another phase, material scaling or Cartesian rotation to the
 returned matrices.
 

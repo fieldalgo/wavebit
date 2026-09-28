@@ -16,6 +16,7 @@ compares the code to itself proves continuity, not correctness.
 
 | Oracle | Files | What a pass means |
 | --- | --- | --- |
+| **Public Fourier origin** | `test_conv_matrices_accessor.py`, `_conv_frame.py` (independent test-side translation) | Closed-form coefficients and hand-built stacks use the public centre; round trips preserve every answer. |
 | **Installed distribution records and lossless energy conservation** | `run_installed_smoke.py` | Does a non-editable installation outside the checkout contain matching metadata, all third-party license notices and material tables, and solve without importing an optional backend? |
 | **Separately assembled translated physical equations** | `test_nvf_pair_centered_origin.py` | Centering the same periodic cell preserves every value and joint gap/material derivative slot, unequal Fourier orders and original geometry guards. |
 | **Exact mesh reflection, polynomial identities and physical gap differences** | `test_nvf_pair_symmetric_mesh.py` | The explicit symmetric pair retains its full potential span, original contact quotient, reflection covariance and finite gap variation without projecting its response. |
@@ -71,7 +72,7 @@ compares the code to itself proves continuity, not correctness.
 | **Independent energy-closure variation and public geometry mapping** | `test_nvf_cartesian_rectangle_api.py` | Ordinary rectangle inputs retain physical geometry, scalar materials and live derivatives through an explicitly planned Cartesian NVF builder, including exact unequal/zero Fourier sets. |
 | **Independent pair closure variation and native public geometry mapping** | `test_nvf_cartesian_rectangle_pair_api.py` | Frozen input indices preserve the two physical rectangles and material association; shared height/y/contact tangents, exact Fourier sets, uniform optical controls and package-only optional-backend behavior remain explicit. |
 | **An outside solver** | `test_reticolo_golden.py`, `test_oblique_lattice.py` (published Li 1997 table) | The strongest evidence here: a different group's code, in a different language. RETICOLO is the only reference that validates individual diffraction *orders* rather than totals. |
-| **Physics** | `test_lossy_media.py`, `test_stability.py`, `test_fp_warnings.py`, `test_polarization.py` (circular states against the gyrotropic-slab Airy answer), `test_slot_order.py` (every builder splatted into `solve_conv`), energy checks throughout | R+T = 1 on a lossless stack, Airy recursion on uniform layers. Independent of how we implement it. |
+| **Physics** | `test_lossy_media.py`, `test_stability.py`, `test_fp_warnings.py`, `test_polarization.py` (circular states against the gyrotropic-slab Airy answer), `test_slot_order.py` (every private builder splatted into `_solve_conv`), energy checks throughout | R+T = 1 on a lossless stack, Airy recursion on uniform layers. Independent of how we implement it. |
 | **Exact interface normals and material continuity** | `test_nvf_seam_materials.py` | Distinct equal-modulus materials retain the exact seam normal and a Hermitian rank-one projector; coefficient and optical changes shrink with the material perturbation, listings agree, and JAX/Torch gradients match secants. The study's opening creates a positive geometric gap. This does not certify optical convergence. |
 | **Painted material limits and geometric invariants** | `test_painted_material_continuity.py` | Real, absorbing and metallic equality ramps have no fixed step. Exact straight-interface normals, rank-one projectors, physical rotation/reflection, passivity, chunking, and JAX/Torch material derivatives constrain the contrast envelope independently of its construction. |
 | **Passive constitutive forms and independent spectral normalization** | `test_passive_nvf.py` | An explicit anticommutator counterexample, uniform negative-real/absorbing materials, positive storage, rotated 1D rules, an independent inverse square root, and JAX/Torch derivatives constrain the experimental passive closure. These are not optical convergence gates. |
@@ -98,7 +99,7 @@ over an hour each. That is not a claim that nothing else can move them. Many dri
 engine: the conforming module builds its matrices as `ConvMatrices` (often through
 `ConvMatrices.from_energy`) and checks its layers with `parametric`'s spec checks, and the tests
 and the `studies/nvf_*` models they import build `wavebit.rcwa` solvers and hand those matrices
-to their `solve_conv`.
+to `_solve_conv` on the kernels' side, or through public doors that restate the frame.
 
 **When it runs.** The tier is a development aid for the research code, not a gate on the rest
 of the package. It runs while that code is being worked on: `wavebit/_core/conforming/`,
