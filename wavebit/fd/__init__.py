@@ -129,7 +129,9 @@ junction described below, nor (from C4) a smoothed
 surface a voxel a cell-snapped structure's face cuts -- which is how a pillar standing flush on
 a ``Slab`` substrate is refused rather than read half a cell off. The differentiable
 ``range=`` edge and CSG (which is how two smoothed bodies that touch are spelled) are later
-commits.
+commits. ``Sphere(range=...)`` now reserves a fixed support box for concrete radius/centre
+sweeps and compiled-program reuse; radius and centre are still static. The range contains
+the whole sphere, and each run checks the actual geometry again before using its plan.
 
 A Cylinder or unturned Box standing flush on a smoothed, unturned Box face uses
 ``Structure(junction='split')`` by default: it layers the substrate below the

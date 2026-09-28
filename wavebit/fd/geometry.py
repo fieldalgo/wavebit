@@ -513,6 +513,11 @@ class Structure:
                 f'ignored, so a third one is refused here rather than falling back to the '
                 f'default: the two converge at different orders and a scene that got the one '
                 f'it did not ask for would read as a physics result.')
+        if (self.discretisation == STENCIL and isinstance(self.shape, Sphere)
+                and self.shape.range is not None):
+            raise ValueError("Structure(discretisation='stencil') does not support Sphere(range=): "
+                             'the prepared operator depends on the actual geometry. Use the '
+                             'voxel discretisation for a sweep with a fixed support range.')
         if self.memory_bound is not None:
             if self.discretisation != STENCIL:
                 raise ValueError(
@@ -722,12 +727,20 @@ class Sphere(Shape):
     operator is made positive definite by the star lift (``_lower/stars.py``), which is
     checked, with the time-step bound, before a run starts.
 
-    ``radius`` and ``center`` are **static** in C2. They fix :meth:`support`, which fixes the
-    coefficient array shapes and so the plan's skeleton, and the ``range=`` that declares a
-    static support box for a traced value -- the ``fd.Dipole(range=)`` spelling -- is C6's. The
-    lowering chain from the ball's geometry to ``be`` is already differentiable and is gated
-    that way (``tests/test_fd_occupancy.py::test_a_traced_radius_reaches_the_coefficient``);
-    what C6 adds is the public door, not the derivative.
+    ``range=((x0, x1), (y0, y1), (z0, z1))`` reserves a fixed support box for a sweep.
+    It contains the **whole sphere**, including its radius, rather than just its centre
+    (unlike ``Dipole.range``). Every sphere in the sweep must fit inside it. With the default
+    voxel discretisation, changes of radius and centre inside the same range can reuse a
+    plan and its compiled stepping program, even across cell boundaries. The range fixes
+    allocation, not material: :meth:`body`, the volume report and every planning check still
+    use the actual sphere. An oversized range costs memory and may reach a boundary or an
+    absorbing layer the coupled operator cannot touch. The prepared stencil is refused.
+
+    This is the allocation part of C6. ``radius`` and ``center`` remain **static**, including
+    when a range is given; ``run`` checks each concrete geometry before reusing the plan.
+    Public shape gradients still need a certificate valid throughout the declared range
+    and a guard for traced values leaving it. The internal lowering derivative is already
+    gated by ``tests/test_fd_occupancy.py::test_a_traced_radius_reaches_the_coefficient``.
 
     **What a sphere may not meet: six doors of C2 and C4.** All six are
     ``wavebit/fd/_lower/checks.py::check_smoothed``, in the order ``wavebit/fd/__init__.py``
@@ -766,6 +779,7 @@ class Sphere(Shape):
 
     radius: float
     center: tuple = (0.0, 0.0, 0.0)
+    range: object = None
 
     def __post_init__(self):
         radius = static_float('Sphere', 'radius', self.radius)
@@ -784,6 +798,21 @@ class Sphere(Shape):
         if not all(math.isfinite(v) for v in center):
             raise ValueError(f'Sphere(center={center!r}): every coordinate must be finite.')
         object.__setattr__(self, 'center', center)
+        if self.range is not None:
+            rng = self.range
+            if not (isinstance(rng, (tuple, list)) and len(rng) == 3
+                    and all(isinstance(pair, (tuple, list)) and len(pair) == 2 for pair in rng)):
+                raise ValueError('Sphere(range=...): three finite (lo, hi) pairs, '
+                                 '((x0, x1), (y0, y1), (z0, z1)), containing the whole sphere.')
+            pairs = tuple(tuple(_finite('Sphere', 'range', v) for v in pair) for pair in rng)
+            for axis, (lo, hi), c in zip(AXES, pairs, center):
+                if not lo < hi:
+                    raise ValueError(f'Sphere(range=...): the {axis} pair must have lo < hi.')
+                if c - radius < lo or c + radius > hi:
+                    raise ValueError(f'Sphere(range=...): the whole sphere must lie inside '
+                                     f'the declared {axis} range ({lo}, {hi}), including its '
+                                     f'radius; containing only the centre is not enough.')
+            object.__setattr__(self, 'range', pairs)
 
     @property
     def low(self):
@@ -845,12 +874,16 @@ class Sphere(Shape):
 
         The loss falls with resolution and never reaches zero, which is why the margin is not
         traded for the half cell the arithmetic above actually needs.
+
+        With ``range=`` the declared box supplies these bounds, retaining the same margin.
+        It must contain the whole ball, so the fixed allocation contains every sweep point.
         """
         import math
+        bounds = self.range if self.range is not None else tuple(zip(self.low, self.high))
         out = []
         for a in range(3):
-            k0 = math.floor((self.low[a] - grid.low[a]) / grid.dx) - 1
-            k1 = math.ceil((self.high[a] - grid.low[a]) / grid.dx) + 1
+            k0 = math.floor((bounds[a][0] - grid.low[a]) / grid.dx) - 1
+            k1 = math.ceil((bounds[a][1] - grid.low[a]) / grid.dx) + 1
             k0 = min(max(int(k0), 0), grid.n[a])
             k1 = min(max(int(k1), 0), grid.n[a])
             out.append((k0, k1))
@@ -893,7 +926,13 @@ class Sphere(Shape):
         the difference from the ``Slab``/``Region`` rows is the whole point of the shape -- and
         where got differs from asked it is the box's face, printed ``<- clipped`` (C5; before,
         the row claimed asked and got were the same even with a quarter of the body outside).
+        With ``range=`` the explicitly labelled range rows describe the fixed allocation;
+        the report's body block still measures the actual sphere.
         """
+        if self.range is not None:
+            return tuple((f'sphere.range.{axis}', lo, hi, max(lo, grid.low[a]),
+                          min(hi, grid.high[a]))
+                         for a, (axis, (lo, hi)) in enumerate(zip(AXES, self.range)))
         return tuple((f'sphere.{axis}', self.low[a], self.high[a], max(self.low[a], grid.low[a]),
                       min(self.high[a], grid.high[a])) for a, axis in enumerate(AXES))
 

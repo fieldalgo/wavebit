@@ -12,6 +12,7 @@ makes them assertions, not studies.
 
 | Script | Question it answers |
 | --- | --- |
+| `fdtd_sphere_range_probe.py` | Does a fixed support range let concrete sphere sweeps reuse a compiled program without changing their fields or volume? [Measurements, mutation witnesses and validation](../docs/fd-subpixel-occupancy.md#fixed-support-for-sphere-sweeps-c6-allocation-2026-09-28). |
 | `fdtd_subpixel_lattice_radiation.py` | Does a derived Yee Green function remove the weak-sphere forward-phase inconsistency on unchanged, digest-checked field records? [Derivation, independent current/Green controls and remaining material limits](../docs/fd-lattice-radiation.md). |
 | `fdtd_subpixel_constitutive.py` | Is the sphere's failed convergence caused by its tangent-plane surface moment or by discarded material cross terms? Controlled substitutions, with independent geometry and adjoint checks. [Measurement](../docs/fd-mie-validation.md). |
 | `fdtd_subpixel_mie_cylinder.py` | Does the actual component-specific diagonal material rule approach independent cylinder scattering across eight placements, and do measuring-contour and settling controls support the fit? [Measurement](../docs/fd-mie-validation.md). |

@@ -73,9 +73,10 @@ def _kwargs(scene):
 def _static(plan):
     """The plan's static content, as ``skeleton_of`` receives it."""
     content = {f.name: getattr(plan, f.name) for f in dataclasses.fields(plan) if f.name != 'skeleton'}
-    # Empty junction records are omitted to preserve every pre-junction skeleton.
-    if not plan.junctions:
-        content.pop('junctions')
+    # Absent optional records preserve skeletons from before these fields existed.
+    for name in ('junctions', 'shape_ranges'):
+        if not getattr(plan, name):
+            content.pop(name)
     return content
 
 

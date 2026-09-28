@@ -83,6 +83,8 @@ def lower(scene, plan, rt='numpy', device=None):
     refuse_discretisation(scene, plan)
     from .junction import refuse_mismatch
     refuse_mismatch(scene, plan)
+    from .shape_ranges import refuse_mismatch as refuse_range_mismatch
+    refuse_range_mismatch(scene, plan)
     if not hasattr(rt, 'slab_add'):
         from .._runtime import runtime
         rt = runtime(rt, device)

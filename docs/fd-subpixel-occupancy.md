@@ -1627,3 +1627,82 @@ collected cases passed (1140.18 seconds). Neither had an INTERNALERROR or
 worker crash. The four read-only freezers exited 0 and reproduced
 143/288/140/570 arrays bit for bit. No golden was rewritten. Counts and
 timings are recorded in `studies/results/fdtd_csg_pair_validation.json`.
+
+### Fixed support for sphere sweeps (C6 allocation, 2026-09-28)
+
+`fd.Sphere(radius=r, center=(x, y, z), range=((x0, x1), (y0, y1), (z0, z1)))`
+reserves the same coefficient support and constitutive memory throughout a
+concrete geometry sweep. The **whole sphere** must fit in the declared box:
+each centre coordinate minus/plus the radius must be inside the corresponding
+pair. This differs from `Dipole.range`, which bounds the source centre. Bounds
+must be finite static numbers with `lo < hi`; exact contact is admitted and
+even one representable step outside is refused. The support retains the
+existing one-cell margin on each side, plus the constitutive interpolation
+halo. It is clipped to the computational domain as before.
+
+Build `p = fd.plan(first_scene)`, then call `fd.run(next_scene, 'jax', plan=p)`
+for scenes whose spheres carry the same ranges at the same structure indices.
+The other static inputs must remain compatible too. The actual body supplies
+the fill fractions, normals, feature size and volume. The report's
+`sphere.range.x/y/z` spans describe allocation; its body block describes the
+actual sphere. Every `run` repeats the geometry and material checks, including
+when `plan=` is provided. A wide reservation cannot make a too-small sphere
+resolved, allow conductivity, or remove a surface-intersection refusal.
+
+The exact range declarations are recorded in `Plan.shape_ranges`. Both `run`
+and direct `lower` reject a changed declaration, including one that would
+reserve the same cells. Empty records are omitted from the skeleton encoding,
+including in nested source-column plans, so scenes without ranges retain
+their previous hashes. The `stencil` discretisation is refused with a range:
+its prepared operator depends on the actual geometry, not just allocation.
+
+This completes the fixed-allocation part of C6 for **concrete spheres only**.
+Radius and centre remain static; passing a JAX tracer or a Torch derivative
+leaf still raises by name. Public shape differentiation needs validation
+throughout the declared range and a numerical guard for leaves outside it.
+Box, Cylinder and Prism ranges are not provided by this increment. Large
+ranges cost extra memory and can bring the interpolation support into an
+absorbing layer that it is required to avoid.
+
+`studies/fdtd_sphere_range_probe.py` compares two off-grid spheres, radii
+`.22` and `.27` with different centres, in a 16-cubed cavity with `eps=2.25`
+and `mu=1.2`. Both use one plan and one compiled JAX variant. Compared with
+the same sphere without a range, final E/H arrays were identical on NumPy
+and Torch; the largest JAX absolute difference was `1.388e-17`. Across
+backends the largest difference relative to the maximum field was
+`3.665e-16`. The regression budget is 128 double-precision epsilons of that
+maximum (`2.842e-14`), with no pointwise relative allowance. The independent
+analytic volume check at both range ends on all three axes retains the
+existing `1e-12` relative budget from `test_fd_occupancy.py`.
+
+The probe's raw values are in `studies/results/fdtd_sphere_range_probe.json`.
+`tests/test_fd_sphere_range.py` also checks reuse of the compiled program,
+actual volume reports, changed declarations and preserved refusal paths.
+`studies/fdtd_sphere_range_mutations.py` records real source mutations for
+every new test function, restoring source bytes after each run; its logs
+are in `studies/results/fdtd_sphere_range_controls/`. The required suite and
+read-only freezer runner is `studies/fdtd_sphere_range_validation.py`.
+
+The first full-suite attempt exposed four failures in two existing tests'
+manual reconstruction of the plan hash input. Those helpers knew to omit
+empty junction records but included the new empty range records. They now
+omit both, while the junction regression explicitly checks that both are
+empty. Two additional source mutations include empty ranges in production's
+hash and fail these checks, confirming that they still reject a changed
+legacy skeleton. Together with the eight feature mutations, all ten were
+killed and restored byte for byte. The interrupted run and the isolated
+four-failure reproduction are retained as `full_attempt1_interrupted.log`
+and `legacy_schema_failure.log`; the numerical implementation did not need
+to change for this correction. The runner now stops on the first failure.
+
+Validation used fd source SHA-256
+`b5dedea160f99136ef48864e6aaccbf7c323aee55b464bca7df9f6e3b08c597c`.
+The complete fd/docs tier exited 0 with 2512 passed and 8 skipped out of
+2520 collected (1778.33 seconds). No INTERNALERROR or worker crash was
+reported. Counts, exit codes and timings are retained in
+`studies/results/fdtd_sphere_range_validation.json`.
+The separate slow tier exited 0 with all 80 collected cases passed
+(1145.97 seconds). All four read-only freezers exited 0 and reproduced
+143/288/140/570 arrays bit for bit; no golden was rewritten. The corrected
+targeted run passed all 81 selected cases, including the four legacy schema
+checks and the documentation checks.

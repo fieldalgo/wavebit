@@ -25,7 +25,7 @@ def source_hash():
     return digest.hexdigest()
 
 
-def main(*, base='96311b50', task='polygon_tie'):
+def main(*, base='96311b50', task='polygon_tie', maxfail=None):
     LOGS.mkdir(parents=True, exist_ok=True)
     manifest = LOGS.parent/('fdtd_'+task+'_validation.json')
     record = dict(base=base, source=source_hash(), checks=[])
@@ -60,8 +60,9 @@ def main(*, base='96311b50', task='polygon_tie'):
         assert count > 0, (tier, output[-1000:])
         temp = ROOT/('.'+task+'_work')/('pytest-'+tier+'-'+uuid.uuid4().hex)
         temp.parent.mkdir(parents=True, exist_ok=True)
+        stop = [] if maxfail is None else ['--maxfail', str(maxfail)]
         check, output = run(tier, args+['-vv', '--tb=short', '-n', '5',
-                                       '--durations=15', '--basetemp', str(temp)])
+                                       '--durations=15', '--basetemp', str(temp)]+stop)
         totals = {kind: int(re.findall(r'(\d+) '+kind, output)[-1])
                   if re.search(r'(\d+) '+kind, output) else 0
                   for kind in ('passed', 'skipped', 'xfailed', 'xpassed')}
