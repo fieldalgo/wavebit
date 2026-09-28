@@ -1184,3 +1184,50 @@ at 22 ms against 16 ms for `jax.jit(jax.grad)` at 32^3, measured, and they were 
 Masked (PEC) edges could be treated as absent too -- the operator the kernel runs is the submatrix
 without them -- which would move fewer stars at a wall. The lift does not touch the C3 cylinder
 arm (voxel order 1.60): that is an accuracy question on a now-positive operator.
+
+
+### Round-off fills preserve the preceding node tensor (2026-09-28)
+
+The node painter now reads `abs(fill) <= checks._CLIP_ROUNDOFF` as empty,
+the same `1e-9` clip round-off already used by the planning doors. It keeps
+the preceding tensor, cross coefficients, and arithmetic medium there.
+Previously `fill == 0` let a nominally absent later body replace the
+preceding body's anisotropic node tensor by an almost isotropic one.
+
+The regression is a cylinder lifted half a cell above a smoothed Box
+substrate. Its base is placed `1e-12` of a cell inside the node voxels to
+make the round-off deterministic. Replacing the new empty test by the
+old exact-zero test fails on all 46 affected nodes: the normal inverse
+permittivity is `0.6153846153846` instead of `0.7222222222222`, with maximum
+absolute error `0.10683761`. The tangential entry and arithmetic inverse
+are checked independently by the same regression.
+
+The existing mirror refusal needed a corrected expectation, not a weaker
+door. In its actual magnetic fixture (`eps=2.25`, `mu=1.5`, `dx=.05`,
+x-minus mirror at `-.4`), the E node and H common point are distinct:
+
+| Sphere centre x | Plane-layer E fill | Plane-layer H fill range | Maximum H cross before fix | Result after fix |
+| --- | --- | --- | --- | --- |
+| -.225 | 0 | 0 to .385815030367076 | .005227426745905 | refused |
+| -.22 | 0 | 0 to .285815030367076 | .004563667272660 | refused |
+| -.20 | 0 | -1.4521886630372944e-15 to 0 | 3.322000209562448e-17 | admitted |
+| -.19 | 0 | 0 | 0 | admitted |
+
+These are measurements of HEAD `18139a0` and the corrected painter on the
+same fixture. The H point of the first layer is at x=-.375, half a cell
+inside the E node at x=-.4; the -.22 refusal is real contact. Only the
+-.20 refusal was a round-off artefact. `constitutive.validate`'s strict
+cross-coefficient mirror door is unchanged.
+
+Actual source-mutation witnesses: restoring exact-zero emptiness fails
+both the substrate regression and the mirror test (pytest exit 1, two
+failures); disabling the mirror door fails the reaching case (exit 1,
+one failure, `DID NOT RAISE`). Each mutation was restored byte for byte.
+The corrected constitutive module's 41 tests pass (exit 0).
+
+Validation of this fix: the full fd/docs tier exited 0 with 2354 passed and
+8 skipped (2362 collected); the separate slow tier exited 0 with all 80
+tests passed. Neither run had an INTERNALERROR. The four freezer comparisons
+exited 0 and reproduced 143/143, 288/288, 140/140, and 570/570 committed
+arrays bit for bit; no golden was rewritten. The documentation contract
+passed all 65 tests (exit 0).

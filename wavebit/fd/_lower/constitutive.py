@@ -92,14 +92,15 @@ def lower(scene, plan, rt, report=None, proxy_stats=None, proxy_by_index=None, n
     warning), ``proxy_by_index`` the same per structure index (``fd.check``'s block, C5).
     ``nodes``, when given, receives per term the node tensor's diagonal ``(3, nz, ny, nx)``
     and its ``1/<eps>`` ``(nz, ny, nx)``, painted by the same rule as the cross coefficients:
-    ``1/<eps> + (<1/eps> - 1/<eps>) n_a^2`` where the body that last reaches a node has a
-    nonzero fill (the cross coefficients' own test: a fill of ``-6e-14`` counts, and the
-    tensor's smallest eigenvalue is then ``1/<eps>`` to that round-off), ``1/value`` under a
-    cell-snapped shape, ``1/background`` where nothing does.
+    ``1/<eps> + (<1/eps> - 1/<eps>) n_a^2`` where the body that last reaches a node has a fill
+    beyond the clip's round-off (the cross coefficients' own test, and the doors': a fill within
+    ``checks._CLIP_ROUNDOFF`` of zero, either sign, leaves the node as the earlier bodies left
+    it), ``1/value`` under a cell-snapped shape, ``1/background`` where nothing does.
     With the cross coefficients off its diagonal it is that node's Kottke tensor, what the
     star lift moves each node's star toward (``stars.lift``).
     """
     from .._shapes import Box, Sphere, occupancy
+    from .checks import _CLIP_ROUNDOFF
     from .._kernel.stencil import StencilTerm
     background, structures = materials_of(scene)
     xp, out = rt.xp, {}
@@ -150,7 +151,6 @@ def lower(scene, plan, rt, report=None, proxy_stats=None, proxy_by_index=None, n
                     # This host-only measurement belongs to planning, never a
                     # transformed lowering. It exposes the custom-body proxy
                     # where its supplied moments describe more than one face.
-                    from .checks import _CLIP_ROUNDOFF
                     active = (fill > _CLIP_ROUNDOFF) & (fill < 1-_CLIP_ROUNDOFF)
                     gap = np.abs(np.asarray(moment)-np.asarray(normal)**2)
                     worst = float(gap[np.asarray(active)].max(initial=0.))
@@ -158,12 +158,18 @@ def lower(scene, plan, rt, report=None, proxy_stats=None, proxy_by_index=None, n
                     proxy_stats[name] = max(proxy_stats.get(name, 0.), worst)
                     if proxy_by_index is not None:
                         proxy_by_index[index] = max(proxy_by_index.get(index, 0.), worst)
-                off = xp.where(fill[None] == 0, cross[(slice(None),) + view],
+                # A fill within the clip's round-off of zero does not reach the node: the
+                # doors read it so, and an exact ``fill == 0`` did not. A cylinder raised half
+                # a cell above a smoothed substrate has its base on the plane nodes' voxel
+                # face, fill 4e-15 there, and it overwrote the substrate's node tensor: Xi_zz
+                # 1/<eps> = 0.615 where the substrate's <1/eps> is 0.722.
+                empty = xp.abs(fill) <= _CLIP_ROUNDOFF
+                off = xp.where(empty[None], cross[(slice(None),) + view],
                                contrast[None]*weights)
-                diagonal = xp.where(fill[None] == 0, tensor[(slice(None),) + view],
+                diagonal = xp.where(empty[None], tensor[(slice(None),) + view],
                                     xp.stack([1.0/arithmetic + contrast*normal[..., a]**2
                                               for a in range(3)]))
-                fresh = arithmetic
+                fresh = xp.where(empty, old, arithmetic)
             held = _paste(xp, held, local, fresh)
             cross = _paste(xp, cross, local, off)
             tensor = _paste(xp, tensor, local, diagonal)

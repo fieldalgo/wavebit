@@ -372,15 +372,18 @@ def test_loss_and_mirror_doors_cover_the_interpolation_halo():
     with pytest.raises(ValueError, match='interpolation support meets.*conductivity or poles'):
         quiet(fd.plan, scene.replace(structures=scene.structures+(loss,)))
     mirror = fd.Boundaries(x=(fd.Symmetry(parity=1), fd.PEC()), y=fd.PEC(), z=fd.PEC())
-    # Tangent to the plane, the ball meets checks.check_symmetry first (its plane voxels hold
-    # its half and not its image's); 0.6 and 1.0 cells clear it passes that door, and its
-    # cross terms still reach the plane -- the halo this door is for. 1.2 cells clear plans.
+    # Tangent to the plane, the ball meets checks.check_symmetry first. Measured on
+    # 2026-09-28 at dx=.05: 0.6 cells clear (x=-.22), the H plane-layer fill reaches
+    # .285815030367076 and |cross| .004563667272660, so the adjoint door must remain.
+    # At 1.0 cells clear (x=-.20), E fills are zero and H fills only -1.45219e-15;
+    # the old |cross|=3.32200e-17 refusal was round-off, not a reaching surface.
     with pytest.raises(ValueError, match='within half a cell of the x- Symmetry plane'):
         quiet(fd.plan, cavity(center=(-.25,0.,0.)).replace(boundaries=mirror))
-    for x in (-.22, -.20):
+    for x in (-.225, -.22):
         with pytest.raises(ValueError, match='mirror-weighted adjoint'):
             quiet(fd.plan, cavity(center=(x,0.,0.)).replace(boundaries=mirror))
-    quiet(fd.plan, cavity(center=(-.19,0.,0.)).replace(boundaries=mirror))
+    for x in (-.20, -.19):
+        quiet(fd.plan, cavity(center=(x,0.,0.)).replace(boundaries=mirror))
 
 
 def test_equal_phases_have_no_cross_coupling_and_box_faces_have_none():
@@ -400,3 +403,44 @@ def test_equal_phases_have_no_cross_coupling_and_box_faces_have_none():
     plan = quiet(fd.plan, box)
     assert not [t for t in plan.terms if isinstance(t, ConstitutiveTerm)]
     assert not fd.lower(box, plan).get('constitutive')
+
+
+def test_a_round_off_fill_leaves_the_node_to_the_earlier_body():
+    """A cylinder raised half a cell above a smoothed substrate whose face is a node plane:
+    its base is the top face of the plane nodes' voxels, where coordinate round-off leaves it
+    a fill of about 4e-15 (the junction study's harness grid) instead of zero. The doors read
+    that as empty and admit the scene; the node rule once tested ``fill == 0`` and let the
+    cylinder overwrite the substrate's node tensor there -- Xi_zz 1/<eps> = 0.615 where the
+    substrate's <1/eps> is 0.722. The base is set 1e-12 of a cell into those voxels so the
+    round-off does not depend on how this grid's coordinates happen to round."""
+    from wavebit.fd._lower import constitutive
+    from wavebit.fd._lower.constitutive import common_points
+    from wavebit.fd._shapes import occupancy
+    dx, eps_s = .05, 2.25
+    glass = fd.Material(eps=eps_s)
+    z_lo, z_hi = -1.2, 1.5                        # node planes at multiples of dx: z = 0 is one
+    deep = z_lo - 2*dx                            # the substrate runs through the z- PML
+    base = dx/2 - 1e-12*dx
+    pillar = fd.Cylinder(radius=.15, height=.61, axis='z', center=(0., 0., base + .305))
+    scene = fd.Scene(
+        domain=fd.Domain(size=(.5, .5, z_hi - z_lo), center=(0., 0., (z_hi + z_lo)/2)),
+        boundaries=fd.Boundaries(x=fd.Periodic(), y=fd.Periodic(),
+                                 z=(fd.PML(cells=12, wavelength=1., background=glass),
+                                    fd.PML(cells=12, wavelength=1.))),
+        resolution=fd.Resolution(dx=dx), run=fd.Run(steps=2),
+        structures=(fd.Structure(fd.Box(size=(10., 10., -deep), center=(0., 0., deep/2)), glass),
+                    fd.Structure(pillar, fd.Material(eps=4.))))
+    plan = quiet(fd.plan, scene)
+    nodes = {}
+    quiet(constitutive.lower, scene, plan, runtime('numpy'), nodes=nodes)
+    term = [t for t in plan.constitutive if t.field == 'E'][0]
+    points = common_points(plan.grid, tuple(reversed(term.box)), 'E')
+    fill = np.asarray(occupancy(pillar.body(), points, dx)[0])
+    alpha = np.asarray(occupancy(scene.structures[0].shape.body(), points, dx)[0])
+    touched = (np.abs(fill) > 0) & (np.abs(fill) < 1e-9) & (alpha > 1e-9) & (alpha < 1 - 1e-9)
+    assert touched.sum() >= 20                    # the plane nodes under the pillar's base
+    tensor, inverse = (np.asarray(v) for v in nodes[term.name])
+    a = alpha[touched]
+    np.testing.assert_allclose(tensor[2][touched], a/eps_s + (1 - a), rtol=0, atol=1e-12)
+    np.testing.assert_allclose(tensor[0][touched], 1/(a*eps_s + (1 - a)), rtol=0, atol=1e-12)
+    np.testing.assert_allclose(inverse[touched], 1/(a*eps_s + (1 - a)), rtol=0, atol=1e-12)
