@@ -25,10 +25,10 @@ def source_hash():
     return digest.hexdigest()
 
 
-def main():
+def main(*, base='96311b50', task='polygon_tie'):
     LOGS.mkdir(parents=True, exist_ok=True)
-    manifest = LOGS.parent/'fdtd_polygon_tie_validation.json'
-    record = dict(base='96311b50', source=source_hash(), checks=[])
+    manifest = LOGS.parent/('fdtd_'+task+'_validation.json')
+    record = dict(base=base, source=source_hash(), checks=[])
     def save():
         manifest.write_text(json.dumps(record, indent=2)+'\n', encoding='utf-8')
     def run(name, args):
@@ -58,7 +58,7 @@ def main():
         _, output = run(tier+'_collection', args+['--collect-only'])
         count = sum(line.startswith('tests/') and '::' in line for line in output.splitlines())
         assert count > 0, (tier, output[-1000:])
-        temp = ROOT/'.polygon_tie_work'/('pytest-'+tier+'-'+uuid.uuid4().hex)
+        temp = ROOT/('.'+task+'_work')/('pytest-'+tier+'-'+uuid.uuid4().hex)
         temp.parent.mkdir(parents=True, exist_ok=True)
         check, output = run(tier, args+['-vv', '--tb=short', '-n', '5',
                                        '--durations=15', '--basetemp', str(temp)])

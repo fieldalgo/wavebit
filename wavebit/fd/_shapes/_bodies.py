@@ -335,18 +335,28 @@ def _no_common_volume(d_a, n_a, d_b, n_b, dx, xp):
     keeps the cheap branch cheap: it spends no two-plane cut on a joint that has no volume in it.
     """
     zero, one = xp.zeros_like(d_a), xp.ones_like(d_a)
-    knots = [zero, one]
+    # At the two endpoints, interpolation is just the corresponding plane.
+    # Keep the coordinate-by-coordinate subtraction order: replacing it with
+    # a reduction can move a predicate exactly on zero by a rounding bit.
+    # The 2026-09-28 study fdtd_csg_pair_cost.py measures both spellings and
+    # requires identical predicates and full node parts, without a tolerance.
+    end_a, end_b = d_a, d_b
+    for k in range(3):
+        end_a = end_a - (dx / 2) * xp.abs(n_a[..., k])
+        end_b = end_b - (dx / 2) * xp.abs(n_b[..., k])
+    worst = xp.maximum(end_b, end_a)
+    # Consume each interior knot immediately, so only one interpolation
+    # weight and its complement need to remain live at a time.
     for k in range(3):
         den = n_b[..., k] - n_a[..., k]
         live = den != 0
-        safe = xp.where(live, den, xp.ones_like(den))
-        knots.append(xp.clip(xp.where(live, n_b[..., k] / safe, zero), zero, one))
-    worst = None
-    for t in knots:
-        g = t * d_a + (1 - t) * d_b
-        for k in range(3):
-            g = g - (dx / 2) * xp.abs(t * n_a[..., k] + (1 - t) * n_b[..., k])
-        worst = g if worst is None else xp.maximum(worst, g)
+        safe = xp.where(live, den, one)
+        t = xp.clip(xp.where(live, n_b[..., k] / safe, zero), zero, one)
+        other = 1 - t
+        g = t * d_a + other * d_b
+        for j in range(3):
+            g = g - (dx / 2) * xp.abs(t * n_a[..., j] + other * n_b[..., j])
+        worst = xp.maximum(worst, g)
     return worst >= 0
 
 

@@ -1562,3 +1562,68 @@ gap, the full-turn normal-tensor gap was `9.104e-15`, and the cyclic-vertex
 gap was zero. No golden was rewritten. Exact counts and timings are in
 `studies/results/fdtd_polygon_tie_validation.json`; complete success and
 failed-control logs are in `studies/results/fdtd_polygon_tie_controls/`.
+
+### CSG pair-predicate cost (2026-09-28)
+
+The pair predicate still evaluates the two endpoints and three coordinate
+knots of the same concave piecewise-linear dual problem. Its endpoints now
+use each plane directly, and each interior knot is consumed immediately
+with a reused complementary weight. The coordinate subtraction order,
+zero-volume `>= 0` boundary, supporting planes, pair ordering and volume
+bounds are unchanged. No geometric tolerance or sampling gate was added.
+
+`studies/fdtd_csg_pair_cost.py` retains the pre-change predicate from
+`cd5ea836`, checks that its candidate matches the shipped arithmetic, and
+compares both spellings in alternating order after warmup. The kernel
+probe uses 287496 random, parallel and exactly flush half-space pairs in
+float32 and float64 on NumPy, JAX, Torch and compiled JAX. Every predicate
+must match exactly. The full-node probe compares filled fractions, surface
+areas and moments on a substrate with one or nine flush cylinders, using
+66 cubed samples at `dx=.0152` and two grid origins separated by half a
+cell. It requires exact array equality, not agreement within a tolerance.
+Raw repeat timings are retained in `studies/results/fdtd_csg_pair_kernel.json`
+and `studies/results/fdtd_csg_pair_nodes.json`.
+The recorded node arguments are `nodes --repeats 3 --children 2 10 --origins 0 .5
+--backends numpy jax torch jit`; the kernel run uses `kernel` with its defaults.
+
+With OMP, OpenBLAS and MKL thread counts fixed to one, the median of three
+warm full-node calls was as follows (two origins; seconds before -> after):
+
+| Backend | Two children | Ten children | Ten-child time reduction |
+| --- | --- | --- | --- |
+| NumPy | 3.931 -> 3.917 / 3.934 -> 3.928 | 10.115 -> 9.406 / 10.098 -> 9.430 | 6.6-7.0% |
+| JAX eager | 2.202 -> 2.165 / 2.182 -> 2.159 | 7.009 -> 6.431 / 7.118 -> 6.427 | 8.2-9.7% |
+| Torch CPU | 4.612 -> 4.571 / 4.648 -> 4.564 | 8.420 -> 8.264 / 8.349 -> 8.309 | 0.5-1.8% |
+| JAX compiled | .480 -> .473 / .470 -> .464 | 2.209 -> 1.852 / 2.307 -> 1.963 | 14.9-16.2% |
+
+Compilation and warmup are excluded, and conversion to host arrays is
+included to synchronize every measured call. This is a local CPU result,
+not a GPU claim or a timing gate in the tests. The small Torch difference
+and two-child differences are close to repeat-to-repeat variation. The
+pair algorithm remains quadratic in child count; this change does not
+remove pair enumeration or alter which pair receives an exact volume cut.
+
+The independent regression in `tests/test_fd_csg_pairs.py` solves the
+primal linear program over voxel coordinates for 96 oblique pairs. It also
+checks parallel endpoints and exact contacts along all three axes, together
+with each contact's two neighbouring floating-point values. The smallest
+absolute LP optimum was `.004070378091359254`; the random fixture stays
+well away from the solver's default `1e-7` feasibility tolerance. Exact
+contact checks use analytic expected answers and no tolerance.
+
+Four real source mutations each failed the new regression with an assertion:
+omitting the first endpoint, omitting the third knot, treating contact as
+positive volume, and using the wrong complementary weight. The source was
+restored byte for byte after each run. `studies/fdtd_csg_pair_mutations.py`
+and `studies/results/fdtd_csg_pair_controls/` retain the commands, failure
+logs and source hashes. The provenance record also checks that the study's
+legacy arithmetic matches `cd5ea836` and its candidate matches production.
+
+Validation used fd source SHA-256
+`62ecdb16abe3952abcad67b782a2bc2389d120228341df68f899fcc9bcef32c7`.
+The full fd/docs tier exited 0 with 2500 passed and 8 skipped out of 2508
+collected (1805.54 seconds); the separate slow tier exited 0 with all 80
+collected cases passed (1140.18 seconds). Neither had an INTERNALERROR or
+worker crash. The four read-only freezers exited 0 and reproduced
+143/288/140/570 arrays bit for bit. No golden was rewritten. Counts and
+timings are recorded in `studies/results/fdtd_csg_pair_validation.json`.
