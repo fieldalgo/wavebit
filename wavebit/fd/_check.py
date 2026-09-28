@@ -59,6 +59,7 @@ class Report:
     #: ((term name, stars moved, stars with a cross coefficient, largest t), ...): the
     #: star lift of each diagonal-rule constitutive term (``stars.lift``).
     lifts: tuple = ()
+    junctions: tuple = ()
 
     def __str__(self):
         lines = [
@@ -122,6 +123,13 @@ class Report:
             out.append(f'  outside  {share}past {", ".join(row.outside)}')
         out.append(f'  cut      {" / ".join(str(v) for v in row.cut.values())} voxels '
                    f'({names})')
+        for standing, face, axis, side, plane, rule, count, rim, beside in self.junctions:
+            if standing == row.index:
+                letter = "xyz"[axis]
+                sign = "+" if side == 1 else "-"
+                out.append(f"  junction on structures[{face}] at {letter} = {plane:g} "
+                           f"(its {letter}{sign} face): {rule}, {count} voxels "
+                           f"({rim} on the rim), {beside} beside the base")
         sizes = dict((name, (p, s)) for name, p, s in self.term_bytes)
         for name in row.terms:
             p, s = sizes.get(name, (None, None))
@@ -240,8 +248,9 @@ def report(scene, p=None, params=None):
                         else None, int(3 * np.prod(t.region.shape) * itemsize))
                        for t in p.constitutive)
     monitors, solves = _monitor_lines(scene, p)
+    from ._lower.junction import report_rows as junction_rows
     return Report(cells=grid.n, requested_size=requested, size=grid.size, dx=p.dx, dt=p.dt,
-                  discretisations=_discretisation_lines(p),
+                  discretisations=_discretisation_lines(p), junctions=junction_rows(p),
                   steps=p.steps, duration=p.steps * p.dt, dtype=p.dtype,
                   bytes_per_state=2 * 3 * p.cells * itemsize + psi + flux_memory,
                   warnings=tuple(warnings),

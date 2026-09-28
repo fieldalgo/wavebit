@@ -1,5 +1,10 @@
 """Can a pillar standing flush on its substrate be lowered, and by which junction rule?
 
+Production integration: ``fd.Structure(junction='split')`` now implements the selected
+rule without this harness's patches. ``studies/fdtd_junction_production.py`` validates
+the added exact node-plane ties; see ``docs/fd-subpixel-occupancy.md``, The junction.
+The historical question, registered gates and recorded rows below remain unchanged.
+
 **The question.** Door 5 (``wavebit/fd/_lower/checks.py``) refuses a smoothed pillar standing
 flush on a smoothed substrate: at the base, voxels hold two smoothed surfaces -- the substrate's
 plane and the pillar's wall or base -- and the two-phase mixing rule composes neither. The owner

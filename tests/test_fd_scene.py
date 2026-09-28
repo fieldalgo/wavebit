@@ -72,7 +72,11 @@ def _kwargs(scene):
 
 def _static(plan):
     """The plan's static content, as ``skeleton_of`` receives it."""
-    return {f.name: getattr(plan, f.name) for f in dataclasses.fields(plan) if f.name != 'skeleton'}
+    content = {f.name: getattr(plan, f.name) for f in dataclasses.fields(plan) if f.name != 'skeleton'}
+    # Empty junction records are omitted to preserve every pre-junction skeleton.
+    if not plan.junctions:
+        content.pop('junctions')
+    return content
 
 
 #: A per-component initial field (E_y only) and the four required keywords of ``Scene``.

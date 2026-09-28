@@ -124,11 +124,20 @@ shape may not share cells with an ``fd.Conductor`` or an ``fd.Dispersive`` (``si
 poles are not smoothed yet) or with an anisotropic ``eps``/``mu``; it may not reach a
 ``Periodic``, ``Bloch`` or ``Axis1D`` face, nor a face of the box (it would count material
 outside a ``-`` face and lose the last half cell at a ``+`` one -- two arms, two messages);
-and two smoothed shapes may not put their surfaces through one voxel, nor (from C4) a smoothed
+and two smoothed shapes may not put their surfaces through one voxel except for the flush
+junction described below, nor (from C4) a smoothed
 surface a voxel a cell-snapped structure's face cuts -- which is how a pillar standing flush on
 a ``Slab`` substrate is refused rather than read half a cell off. The differentiable
 ``range=`` edge and CSG (which is how two smoothed bodies that touch are spelled) are later
 commits.
+
+A Cylinder or unturned Box standing flush on a smoothed, unturned Box face uses
+``Structure(junction='split')`` by default: it layers the substrate below the
+pillar/background mixture. The standing body may instead request ``'staircase'``
+(the medium at each point) or ``'refuse'``. Materials must be isotropic, lossless,
+non-dispersive and non-magnetic; the junction rim must clear the substrate's edges.
+``check`` prints the choice, its voxel counts and measured accuracy limitations.
+See ``docs/fd-subpixel-occupancy.md``, The junction.
 
 Stage 4's C4 adds the extruded bodies, smoothed the same way, and renames the cell-snapped box
 ``fd.Region`` so that ``fd.Box`` can be the body (one name per concept)::

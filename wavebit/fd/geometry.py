@@ -437,8 +437,18 @@ class Structure:
     compose where two *smoothed* surfaces pass through one voxel: the second mix would treat
     the first mixture as a medium with a second interface across it, measured 73% high on two
     half spaces of the same material and up to 122% on one ``fd.Sphere`` declared twice. That
-    case is refused by name (``wavebit/fd/_lower/checks.py::check_smoothed``, door 5), which
-    is what keeps the sentence above true for every scene this module accepts.
+    case is refused by name (``wavebit/fd/_lower/checks.py::check_smoothed``, door 5), except
+    for the separately lowered flush junction below.
+
+    **``junction=``: a Cylinder or unturned Box standing flush on a smoothed Box face.**
+    The standing body's ``'split'`` default layers the substrate below the pillar/background
+    mixture. ``'staircase'`` assigns each junction point its owning medium; ``'refuse'``
+    retains the shared-surface refusal. The choice is static in the plan. The substrate
+    must be an unturned :class:`Box`, with its rim clear of the junction; a cell-snapped
+    :class:`Slab` or :class:`Region` remains refused. Junction media must be isotropic,
+    lossless, non-dispersive and non-magnetic. Split measured second order on the flat-film
+    anchor, but the rim order on one pillar scene remains unresolved; the report states
+    this limitation. See ``docs/fd-subpixel-occupancy.md``, The junction.
 
     **``discretisation=``: which material discretisation this structure gets.** ``'voxel'``,
     the default and every scene's behaviour until stage 4's C3, is *not* the name of a rule --
@@ -486,6 +496,7 @@ class Structure:
     material: object
     discretisation: str = 'voxel'
     memory_bound: object = None
+    junction: str = 'split'
 
     def __post_init__(self):
         import math
@@ -531,6 +542,24 @@ class Structure:
                 f'by subclassing fd.Shape and answering its protocol. CSG of the bodies is later '
                 f'in stage 4; a raster shape is refused outright (its interface normal cannot '
                 f'come from the shape).')
+        from ._lower.junction import DEFAULT as JUNCTION_DEFAULT, RULES
+        if not isinstance(self.junction, str) or self.junction not in RULES:
+            import difflib
+            hint = difflib.get_close_matches(str(self.junction), RULES, n=1)
+            message = (f'Structure(junction={self.junction!r}): choose split (the layered '
+                       'interface), staircase (the medium at each point), or refuse.')
+            if str(self.junction).lower() in ('blend', 'mix', 'average', 'fdtdx'):
+                message += (' The FDTDX-style blend is not offered: its junction term '
+                            'is first order and depends on structure listing order.')
+            elif str(self.junction) == 'meep':
+                message += " Did you mean 'staircase'?"
+            elif hint:
+                message += f' Did you mean {hint[0]!r}?'
+            raise ValueError(message)
+        if self.junction != JUNCTION_DEFAULT and (self.shape.body() is None
+                                                   or isinstance(self.shape, Sphere)):
+            raise ValueError(f'Structure(junction={self.junction!r}): this shape cannot '
+                             'stand on a smoothed face; no junction rule reads this value.')
         object.__setattr__(self, 'material', as_material(self.material, 'Structure(material=)'))
 
 

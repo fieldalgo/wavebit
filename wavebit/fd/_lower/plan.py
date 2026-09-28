@@ -13,6 +13,9 @@ two processes agree on it. It never reads an array or an ``id()``. ``fd.run(scen
 plan=other)`` refuses a plan whose skeleton differs from ``plan(scene).skeleton``: a plan
 prepared for one scene must not silently drive another.
 
+Empty ``Plan.junctions`` records are omitted, including in a source's nested column
+plan, so scenes without junctions retain their existing skeletons.
+
 **One field may be hashed instead of written out.** A dataclass field declared
 ``metadata={'digest': True}`` encodes as the pair ``['digest', sha256]`` over its arrays
 (:func:`_digest`) rather than as the value itself. Stage 4's
@@ -141,7 +144,8 @@ def _encode(v):
         return [type(v).__name__,
                 [[f.name, _digest(getattr(v, f.name)) if f.metadata.get('digest')
                   else _encode(getattr(v, f.name))]
-                 for f in dataclasses.fields(v)]]
+                 for f in dataclasses.fields(v)
+                 if not (isinstance(v, Plan) and f.name == 'junctions' and not v.junctions)]]
     if isinstance(v, (tuple, list)):
         return ['tuple', [_encode(x) for x in v]]
     if isinstance(v, dict):
@@ -195,6 +199,7 @@ class Plan:
     pml_wavelengths: tuple = ()  # ((face name, wavelength), ...)
     spans: tuple = ()            # ((axis, asked lo, asked hi, snapped lo, snapped hi), ...)
     schedule: object = None      # checkpoint block size; None is a plain scan
+    junctions: tuple = ()        # static flush-pair geometry and write masks
     skeleton: str = ''
 
     @property
@@ -270,6 +275,9 @@ class Plan:
 
 def _finish(p):
     static = {f.name: getattr(p, f.name) for f in dataclasses.fields(p) if f.name != 'skeleton'}
+    # Empty junctions predate this field: omitting it preserves every old skeleton.
+    if not p.junctions:
+        static.pop('junctions')
     return dataclasses.replace(p, skeleton=skeleton_of(**static))
 
 
@@ -391,7 +399,7 @@ def plan(scene, _column=False, _grazing=None, _reuse=None):
         checks.check_wavelength_resolution(scene, grid)
     checks.check_faces(scene, grid, None)
     checks.check_overlaps(scene, grid)
-    checks.check_smoothed(scene, grid)
+    junctions = checks.check_smoothed(scene, grid)
     checks.check_symmetry(scene, grid)
     checks.check_seams(scene, grid)
     checks.check_cells_across(scene, grid)
@@ -423,7 +431,8 @@ def plan(scene, _column=False, _grazing=None, _reuse=None):
              has_E0=initial is not None and initial.E is not None,
              has_H0=initial is not None and initial.H is not None,
              cpml=cpml, absorbing_faces=absorbing, pml_cells=pml_cells,
-             absorber_cells=absorber_cells, pml_wavelengths=wavelengths, spans=spans)
+             absorber_cells=absorber_cells, pml_wavelengths=wavelengths, spans=spans,
+             junctions=junctions)
     p = _finish(p)
     checks.check_absorbing_layers(scene, p)
     checks.check_stability(scene, p)

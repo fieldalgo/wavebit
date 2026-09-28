@@ -55,9 +55,11 @@ def _program(plan):
     returned as the same object, so its key and its closure are what they were.
     """
     terms = tuple(_stripped(t) for t in plan.terms)
-    if all(a is b for a, b in zip(terms, plan.terms)):
+    junctions = tuple(_stripped(r) for r in plan.junctions)
+    if (all(a is b for a, b in zip(terms, plan.terms))
+            and all(a is b for a, b in zip(junctions, plan.junctions))):
         return plan
-    return dataclasses.replace(plan, terms=terms)
+    return dataclasses.replace(plan, terms=terms, junctions=junctions)
 
 
 def _stripped(term):

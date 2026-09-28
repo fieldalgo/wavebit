@@ -7,7 +7,8 @@ Targets: `wavebit/fd/_lower/occupancy.py`, `wavebit/fd/_lower/coefficients.py`,
 `wavebit/fd/_shapes/_cut.py`, `wavebit/fd/_shapes/_bodies.py`,
 `studies/fdtd_subpixel_tilted_tensor.py`, `tests/test_fd_occupancy.py`,
 `tests/test_fd_occupancy_integration.py`, `tests/test_fd_subpixel_study.py`,
-`tests/test_fd_shapes.py`.
+`tests/test_fd_shapes.py`, `wavebit/fd/_lower/junction.py`,
+`tests/test_fd_junction.py`, `tests/test_fd_junction_physics.py`.
 
 `fd.Sphere` now supplies fractional material coefficients at each field component's
 own location. Unsupported mixtures are refused during planning. Approximate CSG
@@ -1231,3 +1232,221 @@ tests passed. Neither run had an INTERNALERROR. The four freezer comparisons
 exited 0 and reproduced 143/143, 288/288, 140/140, and 570/570 committed
 arrays bit for bit; no golden was rewritten. The documentation contract
 passed all 65 tests (exit 0).
+
+## The junction: a body standing flush on a face
+
+`fd.Structure(shape, material, junction='split')` chooses how a Cylinder or
+unturned Box joins an axis-aligned face of a smoothed, unturned Box. The
+choice belongs to the standing body, including one hanging below a face:
+
+```python
+glass = fd.Structure(fd.Box(size=(10., 10., 1.), center=(0., 0., -.5)), 2.25)
+pillar = fd.Structure(fd.Cylinder(radius=.15, height=.4, center=(0., 0., .2)), 4.)
+# Use these as the scene's structures. The pillar defaults to junction='split'.
+```
+
+The options are:
+
+| Value | Interface rule | Measured limitation |
+| --- | --- | --- |
+| `split` (default) | Layer the substrate below the pillar/background mixture | Second order on the flat-film anchor; unresolved rim order on one pillar scene |
+| `staircase` | Use the medium at each electric sampling point | First-order junction error and jumps when a point changes owner |
+| `refuse` | Retain the shared-surface refusal | No numerical approximation is selected |
+
+The FDTDX-style scene-order blend is not offered. Its junction term was
+first order in the film study and depends on structure listing order.
+
+### Scope
+
+The standing body is exactly `fd.Cylinder` or an unturned `fd.Box`. Its
+base must be flush, its straight walls normal to the supporting face, and
+its rim clear of that Box's own edges. The same construction handles x,
+y, or z faces, either orientation, and laterally uniform film stacks.
+Every written voxel must contain only that face and the standing body's
+walls: the substrate's other face and the standing body's far end must
+be outside it. Two junction write sets cannot overlap.
+
+Spheres, turned Boxes, Prisms, nonflush bases, and magnetic, anisotropic,
+conductive or dispersive junction media remain refused. A named `mu`,
+even `mu=1`, is the existing API's structural magnetic flag and is refused
+here. A cell-snapped `fd.Slab` or `fd.Region` substrate also stays refused;
+spell this substrate as a smoothed, unturned `fd.Box`.
+
+An embedding layer can be listed before both pair members, covering the
+junction voxels whole; it supplies the ground material. A partial earlier
+surface would supply a tensor rather than the assumed isotropic ground and
+is refused. Any unrelated later painter reaching a written voxel is refused.
+The pair's own listing order does not change its junction values.
+
+Non-default choices on shapes that cannot stand on a face are refused at
+construction. A non-default choice on a body standing on no face in its
+scene is refused at planning; this catches setting it on the substrate.
+The existing single-structure restriction for `discretisation='stencil'`
+also applies; this change does not extend the stencil's scope.
+
+### Values and write set
+
+Let `alpha` be the substrate fraction, `f` the standing body's transverse
+fraction, and `es`, `ep`, `eg` the substrate, pillar and ground permittivities.
+Write `a = f ep + (1-f) eg`, `eta = f/ep + (1-f)/eg`,
+`A = (1-alpha) a + alpha es` and `B = (1-alpha)/eta + alpha es`.
+The inverse entry normal to the face is always
+`(1-alpha)/a + alpha/es`. For a cylinder's wall direction `g`, the transverse
+tensor is `(I-P)/A + P/B`, with `P = g g^T` where the wall is active.
+For an unturned Box its diagonal wall moment gives the corresponding
+diagonal two-phase mixture, layered with the substrate.
+
+Edges use the wall-only tangent-plane gate (Cylinder) or exact polygon edge
+moment (Box). Common nodes use the nearest transverse wall direction, with
+the Box cross entries kept zero, matching the existing node rule. In
+particular, a Box sharing another body's constitutive region needs the node
+rule too: using its exact edge moment at those nodes missed the existing
+zero-substrate limit by `0.1005220005782` at four rim corners in the review
+fixture (`dx=.05`, Box size `.28,.32,.4`, centre `.017,-.013,.2`). The corrected
+limit agrees to `1.67e-16` there.
+
+The primary write set is the existing shared-surface door's own marking:
+both exact fills strictly between the clip round-off and one minus that
+round-off. A base-side extension covers rim points whose old single-body
+rule reads the glued base instead of the wall. It includes exact ties where
+a Box base lands on a voxel face, respecting the original body's cap or
+polygon-side inclusion convention. The draft's probe found errors up to
+44.8% without this extension on the D' Box fixture. Round-off-empty nodes
+need no extra write set: the preceding node-fill fix preserves their
+substrate tensor.
+
+The common-node tensor is supplied with arithmetic inverse floor `1/A`.
+Its smallest eigenvalue is at least that floor, which is the condition the
+existing star lift needs. The lift, its concrete plan certificate, and the
+runtime guard continue to see the same coefficients used by the step.
+
+### Static plans and differentiation
+
+`Plan.junctions` stores geometry, masks, owner selection and the rule. Empty
+records are omitted from skeleton encoding, both at the top level and in
+source-column plans, preserving old plans byte for byte. The compiled executor
+strips the digested mask arrays from its cache
+key, as it already does for prepared stencil arrays.
+
+Geometry and rule signatures are checked by `fd.lower` in both directions.
+The signature includes all scene geometry, because moving an unrelated
+third painter can invalidate the ground. Material values remain live backend
+arrays; NumPy, JAX and Torch use the same expressions. Public geometry is
+still static, while the internal value function carries geometry derivatives
+for the future range-aware interface. A plan's discrete membership is fixed;
+changing geometry requires replanning.
+
+### Measurement provenance
+
+The pre-existing study is `studies/fdtd_subpixel_junction.py`, arm `2` for
+split and `1a` for staircase. Its retained logs use provenance
+`cc2ccf8761b414ba`; the anchor report is `anchor|1790518977` and the pillar
+report `report|1790530851`. The 16 film cases measured split orders
+1.999-2.035 and staircase junction orders 0.980-1.024. Split was consistent
+with RCWA on A, B, C', D', T' and R; its total error matched that of each
+junction-free control. The rim order on B (eps 5.8) remains unresolved.
+These measurements are not an error bound for an arbitrary scene.
+
+The production tests compare public solves with copied, provenance-labelled
+study rows and the exact film, and explicitly include node-plane and
+half-plane ties. The corresponding production measurements follow below.
+
+### Production review controls
+
+The first full integration tier reported 2441 passed, 8 skipped and 9
+failed out of 2458 collected, with no worker error. Three failures came
+from a test helper that still included empty junction records; six frozen
+skeleton checks exposed the same omission rule missing in nested source
+plans. Applying the empty-record omission recursively restores the original
+six skeletons. All thirteen focused checks then passed, and removing the
+nested omission again fails the pre-existing plane-wave golden check.
+The failed full log is retained in `fdtd_junction_review_controls/`.
+No golden or numerical acceptance threshold was changed.
+
+The exact-tie height sweep initially found a Box jump of
+`0.0213585371974` at half a cell, against a median step of
+`0.000344296183`; it failed the study's unchanged factor-50 gate. The
+Box's exact moment counted its base cap, but a separately reconstructed
+face distance rounded just above `dx/2` and excluded the same point from
+the base-side write set. The exact moment now decides cap inclusion, and
+the distance guard (which excludes the far cap) uses the already existing
+flush-plane tolerance. Both shapes pass sweeps through zero and half-cell
+ties; no acceptance threshold was fitted to the failure.
+
+The draft's oblique-film pins were obsolete. The immutable report
+`anchor|1790518977`, provenance `cc2ccf8761b414ba`, case FA / 45 degrees /
+zeta .25, actually records errors `0.08316041684012954`,
+`0.02005072445163558`, and `0.004970824005669929` at 20/40/80. Public
+production reproduces these to the original relative tolerance `1e-8`.
+The obsolete draft values differed by up to `3.9441e-7`; no research log,
+reference computation, or golden was rewritten.
+
+The high-contrast floor assertion applies to the junction's node write
+set, as designed. An initial assertion over the entire constitutive term
+also tested unchanged single-body nodes, where the eigensolver's largest
+relative deficit was `1.5233e-13` at eleven nodes; the junction's deficit
+was `2.22e-16`. Restricting that assertion to its intended write set keeps
+the original `1e-13` bound. The complete operator is still advanced for
+300 seeded steps: 101 of 294 stars moved, maximum lift fraction
+`0.7045792972`, and the final/initial field-norm ratio was `0.9740758014`.
+
+### Exact node-plane ties against RCWA
+
+`studies/fdtd_junction_production.py` runs the public solver without the
+study's lowering patches. At zeta zero, C' (Cylinder) and D' (Box), 40/80
+cells per wavelength, both s and p: all eight solves were finite, their
+monitor decay ratios were below `1e-5`, and the coupled C' solves certified
+stability. All 24 complex reflection/transmission comparisons at wavelengths
+.95, 1.0 and 1.05 passed the study's unchanged Richardson-segment rule
+(orders 1.4 to 2, margin `3*u_ref + .1*|fine-coarse|`).
+
+| Scene | RCWA uncertainty | Largest distance from the segment | Smallest allowed margin |
+| --- | --- | --- | --- |
+| C' | .0006994668797492 | .0004896032522472 | .0024089428278894 |
+| D' | .0006507229325448 | .0002476898044381 | .0022404779973807 |
+
+The complete amplitudes, decay ratios, individual comparisons, and source
+SHA-256 (`2b3760f328919ca243d195da26de6261229648a7db7f5dc17141b3b631cfb549`)
+are retained in `studies/results/fdtd_junction_production_ties.log`.
+That source hash precedes the empty nested-plan serialization fix, which
+does not change the numerical expressions. The final release-gate manifest
+records the source hash used for the complete pytest and freezer checks.
+This closes the draft's unmeasured node-plane tie; it does not resolve the
+previously reported rim order on scene B or extend the supported geometry.
+
+### Source-mutation witnesses
+
+All 24 new test functions have actual source-mutation witnesses. The runner
+`studies/fdtd_junction_mutations.py` writes each pytest failure log and an
+exit-code/source-hash manifest under
+`studies/results/fdtd_junction_mutations/`, restoring source bytes in a
+`finally` block and checking the restoration. The witnesses cover the
+public choices, scope refusals, independent laminate, listing order,
+staircase ownership, stale plans, backend agreement, material and internal
+radius derivatives, compiled cache, reporting, the node floor, exact-tie
+continuity, forty coupled steps, film order and archived public solves.
+There are 25 witnesses in total, including the nested-plan mutation checked
+by the pre-existing frozen plane-wave test.
+
+One negative control survived: swapping alpha with 1-alpha did not fail
+the loose `.035` A-scene RCWA sanity gate proposed by the draft. Its passing
+log is retained under `fdtd_junction_review_controls/`; the gate was not
+tightened. A reciprocal-conversion error does fail that sanity test. Small
+junction formula errors are tested by the independent `1e-13` laminate
+oracle and `1e-10` archived complex-amplitude comparisons, not by treating
+this loose sanity gate as a sensitivity certificate.
+
+### Release validation
+
+After the nested-plan fix, the full fd tier collected 2458 tests and exited 0:
+2450 passed, 8 skipped, including all 96 new junction cases. The separate slow
+tier collected 80 tests and exited 0 with all 80 passed. Neither run reported
+an INTERNALERROR or a worker crash. The four freezers exited 0 and reproduced
+143/143, 288/288, 140/140 and 570/570 committed arrays bit for bit, without
+rewriting a golden. Seven additional no-junction scenes retained all 42
+coefficient arrays and report/skeleton byte strings from the node-fill-fix
+baseline `fe3ff20c`.
+
+The source SHA-256 and collected/reported counts are recorded in
+`studies/results/fdtd_junction_validation.json`. Successful full/slow logs and
+the four freezer outputs are retained alongside the failed review controls.

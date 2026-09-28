@@ -118,7 +118,11 @@ def lower(scene, plan, rt, report=None, proxy_stats=None, proxy_by_index=None, n
         held = rt.zeros(term.region.shape, 'float64') + rt.array(prop(background), 'float64')
         cross = rt.zeros((3,) + term.region.shape, 'float64')
         tensor = xp.stack([1.0/held]*3)
+        grounds = {}
         for index, structure in enumerate(structures):
+            for record in plan.junctions:
+                if index == min(record.face, record.standing):
+                    grounds[record] = held
             cut = _intersect(box, structure.shape.support(plan.grid))
             if cut is None:
                 continue
@@ -152,6 +156,9 @@ def lower(scene, plan, rt, report=None, proxy_stats=None, proxy_by_index=None, n
                     # transformed lowering. It exposes the custom-body proxy
                     # where its supplied moments describe more than one face.
                     active = (fill > _CLIP_ROUNDOFF) & (fill < 1-_CLIP_ROUNDOFF)
+                    if plan.junctions and field == "E":
+                        from .junction import proxy_mask
+                        active = active & proxy_mask(plan, index, cut)
                     gap = np.abs(np.asarray(moment)-np.asarray(normal)**2)
                     worst = float(gap[np.asarray(active)].max(initial=0.))
                     name = type(body).__name__
@@ -173,6 +180,11 @@ def lower(scene, plan, rt, report=None, proxy_stats=None, proxy_by_index=None, n
             held = _paste(xp, held, local, fresh)
             cross = _paste(xp, cross, local, off)
             tensor = _paste(xp, tensor, local, diagonal)
+        if plan.junctions:
+            from .junction import paint_nodes
+            for record in plan.junctions:
+                tensor, cross, held = paint_nodes(rt, record, scene, plan, term,
+                                                   tensor, cross, held, grounds[record])
         out[term.name] = cross
         if nodes is not None:
             nodes[term.name] = (tensor, 1.0/held)

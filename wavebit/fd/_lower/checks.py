@@ -395,7 +395,10 @@ def check_smoothed(scene, grid):
     exactly and comparing against 0 and 1 themselves refused 740 voxels of a legal scene. It is the
     narrow case C2's one smoothed shape can reach of the media-counting refusal C5 owns; a
     creased interface *within* one body (a prism edge, a block corner) is one painter and is
-    handled exactly, not refused.
+    handled exactly, not refused. A flush Cylinder or unturned Box on an unturned Box face
+    is the narrow exception: ``junction.classify`` certifies the whole shared set and
+    returns static write masks for a separate split or staircase lowering. Every other
+    shared pair retains this refusal.
 
     **6. No smoothed surface in a voxel a cell-snapped face cuts** (C4). A snapped shape gives
     whole cells, so the three components whose Yee point lies on one of its faces have a voxel
@@ -562,6 +565,8 @@ def check_smoothed(scene, grid):
                     f'whose material is not mixed at all. The tensor form is stage 5\'s, and '
                     f'study S1 found no robust order it buys (docs/fd-subpixel-occupancy.md), '
                     f'so nothing schedules it.')
+    from . import junction
+    junctions = []
     for i in range(len(smoothed)):
         for j in range(i + 1, len(smoothed)):
             (ia, sa, ba), (ib, sb, bb) = smoothed[i], smoothed[j]
@@ -571,6 +576,10 @@ def check_smoothed(scene, grid):
             shared = tuple((max(u[0], v[0]), min(u[1], v[1])) for u, v in zip(boxa, boxb))
             count, worst = _shared_surface_voxels(ba, bb, grid, shared, include_common=True)
             if not count:
+                continue
+            record = junction.classify(scene, grid, ia, ib, count)
+            if isinstance(record, junction.Junction):
+                junctions.append(record)
                 continue
             _, field, c, point, fa, fb = worst
             raise ValueError(
@@ -597,7 +606,10 @@ def check_smoothed(scene, grid):
                 f'fd.Difference, which resolve the two into one surface before any fill is '
                 f'taken -- are not on the public door. Study S7 counted what this door '
                 f'leaves: no single body and no canonical dimer reaches three media in a '
-                f'voxel; the polytope clip that would answer them is C10, conditional.')
+                f'voxel; the polytope clip that would answer them is C10, conditional. '
+                f'No junction rule covers this pair: {record}. The junction rules '
+                f"(Structure(junction=), default 'split') cover a Cylinder or an unturned "
+                f'Box standing flush on a smoothed, unturned Box face.')
 
     snapped = [(j, s) for j, s in enumerate(structures) if s.shape.body() is None]
     for index, structure, body in smoothed:
@@ -623,9 +635,10 @@ def check_smoothed(scene, grid):
                 f'not cure it: where the body\'s side meets the snapped face, a voxel holds '
                 f'three media (the snapped material, the body\'s and the background) and the '
                 f'rule knows two. Keep the body\'s surface a voxel clear of the snapped '
-                f'structure\'s faces. A pillar standing on a substrate cannot be said exactly '
-                f'yet, with either shape snapped or smoothed; how a body joins a substrate is '
-                f'an open stage-4 decision.')
+                f'structure\'s faces. For a flush pillar, spell the substrate as a smoothed, '
+                f"unturned fd.Box: Structure(junction=) uses 'split' by default. A "
+                f'cell-snapped substrate stays refused under a smoothed pillar.')
+    return junction.finish(scene, junctions)
 
 
 #: The exact clip's own round-off, and the tolerance **every** door here reads a fill against.
@@ -796,7 +809,7 @@ def _snapped_joint(body, shape, grid, box):
     return (count,) + worst[1:]
 
 
-def _shared_surface_voxels(body_a, body_b, grid, box, include_common=False):
+def _shared_surface_voxels(body_a, body_b, grid, box, include_common=False, masks=False):
     """``(count, worst)`` voxels of ``box`` whose fill is fractional for **both** bodies.
 
     Two stages, because the exact fill is 97% of what a smoothed lowering costs and the answer
@@ -831,10 +844,13 @@ def _shared_surface_voxels(body_a, body_b, grid, box, include_common=False):
     from .constitutive import common_points
     reach = _VOXEL_REACH * grid.dx
     count, worst = 0, None
+    markings = {}
     for field in ('E', 'H'):
         for c in range(4 if include_common else 3):
             points = np.asarray(yee_points(grid, box, field, c) if c < 3
                                 else common_points(grid, box, field))
+            if masks:
+                markings[field, c] = np.zeros(points.shape[:-1], dtype=bool)
             near = np.abs(np.asarray(body_a.surface(points)[0])) <= reach
             if not near.any():
                 continue
@@ -847,6 +863,8 @@ def _shared_surface_voxels(body_a, body_b, grid, box, include_common=False):
             tol = _CLIP_ROUNDOFF
             both = ((fa > tol) & (fa < 1.0 - tol)
                     & (fb > tol) & (fb < 1.0 - tol))
+            if masks:
+                markings[field, c][near] = both
             if not both.any():
                 continue
             count += int(both.sum())
@@ -857,7 +875,7 @@ def _shared_surface_voxels(body_a, body_b, grid, box, include_common=False):
                 worst = (float(share[k]), field, c,
                          tuple(round(float(v), 6) for v in marked[both][k]),
                          float(fa[both][k]), float(fb[both][k]))
-    return count, worst
+    return (count, worst, markings) if masks else (count, worst)
 
 
 def shown(length, dx):
@@ -1815,6 +1833,8 @@ def notes(scene, plan, rows=None, lifted=None):
     out += _proximity_notes(scene, plan)
     out += _stabilize_notes(scene, plan)
     out += _smoothed_notes(scene, plan, rows)
+    from .junction import notes as junction_notes
+    out += junction_notes(scene, plan)
     out += _lift_notes(scene, plan, lifted)
     out += _clipping_notes(scene, plan)
     out += _cells_across_notes(scene, plan)

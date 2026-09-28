@@ -49,8 +49,9 @@ smoothed surfaces pass through one voxel it does not compose at all -- the secon
 the first mixture as a medium and puts a second interface across it, leaving the background
 with weight ``(1-f1)(1-f2)`` in a voxel that holds none of it, measured 73% high on two half
 spaces of the same material and up to 122% on one ``fd.Sphere`` declared twice. That is a
-refusal and not an approximation (``checks.check_smoothed``, door 5), which is what keeps the
-sentence above true for every scene that reaches this file.
+refusal (``checks.check_smoothed``, door 5), except for a validated flush pair stored in
+``Plan.junctions``. Such a pair captures its ground before either member is painted, then
+replaces only its recorded write set with the separate split or staircase rule.
 
 The two are not one branch of the other, and the reason is bits rather than taste. A
 cell-snapped shape *is* the mixing rule at ``f = 1``, algebraically -- but ``mix`` returns
@@ -336,7 +337,8 @@ def painters(scene, plan, axes, occ):
     return out
 
 
-def _blend(rt, paint_list, background_value, structure_values, component, field, rule):
+def _blend(rt, paint_list, background_value, structure_values, component, field, rule,
+           junctions=(), scene=None, plan=None):
     """``background`` everywhere, then each structure in turn -- replacing it or mixed into it.
 
     The values may be traced, so this is a chain of ``xp.where`` and ``mix`` and never an
@@ -344,8 +346,16 @@ def _blend(rt, paint_list, background_value, structure_values, component, field,
     what keeps a vacuum run on the stage-0 Python scalars.
     """
     out = rt.array(background_value[component], 'float64')
-    for painter, value in zip(paint_list, structure_values):
+    grounds = {}
+    for k, (painter, value) in enumerate(zip(paint_list, structure_values)):
+        for record in junctions:
+            if k == min(record.face, record.standing):
+                grounds[record] = out
         out = painter.paint(rt, out, value[component], component, field, rule)
+    if junctions:
+        from .junction import paint
+        for record in junctions:
+            out = paint(rt, record, scene, plan, out, grounds[record], component)
     return out
 
 
@@ -420,7 +430,8 @@ def build(scene, plan, rt):
         _check_fill_contract(scene, occ, plan.grid)
     paint_list = painters(scene, plan, axes, occ) if structures else []
     eps = _stack(rt, paint_list, background.eps_for_update(dt),
-                 [s.material.eps_for_update(dt) for s in structures], 'E', 'mix')
+                 [s.material.eps_for_update(dt) for s in structures], 'E', 'mix',
+                 junctions=plan.junctions, scene=scene, plan=plan)
     mu = _stack(rt, paint_list, background.mu_value,
                 [s.material.mu_value for s in structures], 'H', 'mix' if magnetic else 'keep')
     sigma = _stack(rt, paint_list, background.sigma,
@@ -455,7 +466,8 @@ def _with_minus(out):
     return out
 
 
-def _stack(rt, paint_list, background_value, structure_values, field, rule):
+def _stack(rt, paint_list, background_value, structure_values, field, rule,
+           junctions=(), scene=None, plan=None):
     """A ``(3, ...)`` array of one material quantity: background, then each structure.
 
     ``field`` says which set of Yee points a smoothed structure is read at -- ``'E'`` for
@@ -464,7 +476,8 @@ def _stack(rt, paint_list, background_value, structure_values, field, rule):
     its cells are the same range for all six components, which is what made one owner index
     serve them in stage 1 and what keeps those scenes bit-identical here.
     """
-    parts = [_blend(rt, paint_list, background_value, structure_values, c, field, rule)
+    parts = [_blend(rt, paint_list, background_value, structure_values, c, field, rule,
+                    junctions=junctions, scene=scene, plan=plan)
              for c in range(3)]
     parts = [rt.xp.broadcast_to(p, _broadcast_shape(parts)) for p in parts]
     return rt.xp.stack(parts, axis=0)
