@@ -205,7 +205,7 @@ class Plan:
     spans: tuple = ()            # ((axis, asked lo, asked hi, snapped lo, snapped hi), ...)
     schedule: object = None      # checkpoint block size; None is a plain scan
     junctions: tuple = ()        # static flush-pair geometry and write masks
-    shape_ranges: tuple = ()     # (index, kind, support bounds[, cylinder axis])
+    shape_ranges: tuple = ()     # (index, kind, support bounds[, axis[, box angle]])
     skeleton: str = ''
 
     @property

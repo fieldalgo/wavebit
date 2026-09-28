@@ -35,9 +35,10 @@ def cross_free(body):
     that hold more than one face, so :func:`lower` writes zero weights for it and a
     ``ConstitutiveTerm`` over it would add exactly nothing -- the term adds only the
     off-diagonal increment. So :func:`terms` plans none for it: no flux memory, no flux work,
-    and nothing for an initial field to be refused over. ``angle`` is a Python float in C4; a
-    traced one (C6) has to decide this statically. A box turned by 90 or 360 degrees answers
-    ``False`` and gets the nearest-surface proxy, as ``fd.Box``'s docstring says.
+    and nothing for an initial field to be refused over. The public ``angle`` stays static,
+    including for ranged size/centre derivatives, so this remains a plan-time decision.
+    A box turned by 90 or 360 degrees answers ``False`` and gets the nearest-surface proxy,
+    as ``fd.Box``'s docstring says.
     """
     from .._shapes import Box
     return isinstance(body, Box) and body.angle == 0

@@ -513,7 +513,7 @@ class Structure:
                 f'ignored, so a third one is refused here rather than falling back to the '
                 f'default: the two converge at different orders and a scene that got the one '
                 f'it did not ask for would read as a physics result.')
-        if (self.discretisation == STENCIL and isinstance(self.shape, (Sphere, Cylinder))
+        if (self.discretisation == STENCIL and isinstance(self.shape, (Sphere, Cylinder, Box))
                 and self.shape.range is not None):
             raise ValueError(f"Structure(discretisation='stencil') does not support "
                              f"{type(self.shape).__name__}(range=): "
@@ -1087,7 +1087,7 @@ class _Extruded(Shape):
     """What :class:`Box`, :class:`Cylinder` and :class:`Prism` share: a section along an axis.
 
     Private; the three classes below are the API. Each is a ``wavebit/fd/_shapes`` body with a
-    static cross-section, an extrusion ``axis`` and a ``center``, smoothed at every component's
+    cross-section, an extrusion ``axis`` and a ``center``, smoothed at every component's
     own Yee point exactly as :class:`Sphere` is -- the same ``coefficients.mix``, the same
     doors. What an extrusion adds is an axis the body is **uniform along**, and that is the one
     question its protocol answers differently from a ball's: the absorbing-layer rule, the
@@ -1168,11 +1168,12 @@ class _Extruded(Shape):
         k0, k1 = self.support(grid)[axis]
         if k1 <= cells[0] or k0 >= cells[1]:
             return True
-        if (isinstance(self, Cylinder) and self.range is not None
-                and any(_shape_traced(v) for v in (self.radius, self.height, *self.center))):
-            # No host truth test on moving cap positions. False is conservative; public
-            # traced cylinders are certified wholly inside the domain before lowering.
-            return False
+        if isinstance(self, (Box, Cylinder)) and self.range is not None:
+            dimensions = self.size if isinstance(self, Box) else (self.radius, self.height)
+            if any(_shape_traced(v) for v in (*dimensions, *self.center)):
+                # No host truth test on moving faces. False is conservative; public
+                # traced bodies are certified wholly inside the domain before lowering.
+                return False
         straight = axis == AXES.index(self.axis) or self._across(axis)
         return straight and self._spans(axis, cells, grid)
 
@@ -1231,23 +1232,44 @@ class Box(_Extruded):
     not for any other body: it is uniform along every axis it spans (so a substrate spelled as
     a box may run out through the domain and through a periodic cell), its fill in a voxel is
     the product of three 1-D overlaps, and its constitutive cross terms are exactly zero, so the
-    plan gives it none. ``size``, ``center`` and ``angle`` are static in C4; ``range=`` for a
-    traced one is C6. It is ``wavebit/fd/_shapes``' :class:`~wavebit.fd._shapes.Box`, the
-    four-vertex prism, whose fill and diagonal moment are exact at its faces, edges and corners.
+    plan gives it none. With ``range=((x0, x1), (y0, y1), (z0, z1))``, size and
+    centre may be differentiated under :class:`Sphere`'s isolated-body restrictions,
+    using a concrete prebuilt plan. The range contains the entire rotated box.
+    The angle and axis remain static and are recorded in the plan, so crossing
+    between the zero-angle and rotated operators requires a new plan.
+    Without a range all geometry stays static. It is ``wavebit/fd/_shapes``'
+    :class:`~wavebit.fd._shapes.Box`, the four-vertex prism, whose fill and diagonal
+    moment are exact at its faces, edges and corners. Rotated constitutive cross
+    terms still use the nearest-surface proxy; derivatives do not certify convergence.
     """
 
     size: tuple
     center: tuple = (0.0, 0.0, 0.0)
     angle: float = 0.0
     axis: str = 'z'
+    range: object = None
 
     _label = 'cuboid'
 
     def __post_init__(self):
         object.__setattr__(self, 'axis', _extrusion_axis('Box', self.axis))
-        object.__setattr__(self, 'size', _triple('Box', 'size', self.size, _length))
-        object.__setattr__(self, 'center', _triple('Box', 'center', self.center, _finite))
+        length = _length if self.range is None else _ranged_length
+        coordinate = _finite if self.range is None else _ranged_coordinate
+        object.__setattr__(self, 'size', _triple('Box', 'size', self.size, length))
+        object.__setattr__(self, 'center', _triple('Box', 'center', self.center, coordinate))
         object.__setattr__(self, 'angle', _finite('Box', 'angle', self.angle))
+        if self.range is not None:
+            object.__setattr__(self, 'range', _contained_range(
+                'Box', self.range, self.center, self._range_halves()))
+
+    def _range_halves(self):
+        """Axis-aligned half extents without host comparisons on traced side lengths."""
+        u, v = _TRANSVERSE[AXES.index(self.axis)]
+        half = [s / 2 for s in self.size]
+        co, si = abs(math.cos(math.radians(self.angle))), abs(math.sin(math.radians(self.angle)))
+        a, b = half[u], half[v]
+        half[u], half[v] = co*a + si*b, si*a + co*b
+        return tuple(half)
 
     @property
     def height(self):

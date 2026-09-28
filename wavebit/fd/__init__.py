@@ -128,9 +128,10 @@ and two smoothed shapes may not put their surfaces through one voxel except for 
 junction described below, nor (from C4) a smoothed
 surface a voxel a cell-snapped structure's face cuts -- which is how a pillar standing flush on
 a ``Slab`` substrate is refused rather than read half a cell off. General CSG remains later
-work. ``Sphere(range=...)`` and ``Cylinder(range=...)`` reserve fixed support boxes for
-sweeps and compiled-program reuse. Radius and centre, plus a cylinder's height, may be
-differentiated with a concrete prebuilt plan. The cylinder's axis remains static. The
+work. ``Sphere(range=...)``, ``Cylinder(range=...)`` and ``Box(range=...)`` reserve fixed
+support boxes for sweeps and compiled-program reuse. Radius and centre, a cylinder's height,
+and a box's three sizes may be differentiated with a concrete prebuilt plan.
+Extrusion axes and a box's rotation angle remain static. The
 range contains the whole body; traced scenes currently require one isolated body,
 concrete isotropic lossless materials, Dipole sources, Record/Field monitors and no
 initial field. The full reserved support and interpolation halo must clear the domain

@@ -522,6 +522,13 @@ def _loud_if_not_a_size(value):
     not hand back a plausible number instead: the measured alternative is ``fill = 16.0`` with
     ``sum_c w_c = 0`` from ``Cylinder(radius=-0.2)``, both free invariants broken at once.
     """
+    # Public Box normalises a size vector into scalar leaves. A tuple of tracers
+    # has no array namespace; stack its elements without reading their values.
+    # Concrete tuples still take check_sizes' existing host-validation path.
+    if isinstance(value, (tuple, list)):
+        typed = tuple(v for v in value if _module_of(v) in ('jax', 'jaxlib', 'torch'))
+        if typed:
+            value = _as(array_namespace(*typed), value, typed[0])
     xp = array_namespace(value)
     fine = xp.all(value > 0) & xp.all(xp.isfinite(value))
     one = xp.ones_like(value)

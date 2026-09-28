@@ -1870,3 +1870,95 @@ golden. Counts, source identity and timings are retained in
 `studies/results/fdtd_cylinder_grad_validation.json`. The sequential runner is
 `studies/fdtd_cylinder_grad_validation.py`; raw outputs remain under
 `studies/results/fdtd_cylinder_grad_controls/`.
+
+
+### Public box geometry derivatives (C6, 2026-09-28)
+
+`fd.Box(size=(sx, sy, sz), center=(x, y, z), axis='z', angle=23, range=bounds)`
+now preserves all six size and centre derivative leaves through public
+`fd.lower` and `fd.run`. Build the plan from a concrete scene first and pass
+it into the differentiated call. The axis and angle stay static. The support
+box contains every corner of the rotated body, not just its centre or its
+unrotated side lengths. Each actual side must satisfy the existing four-cell
+minimum; a large rotated bounding box cannot make a narrow side resolved.
+
+The exact range, extrusion axis and angle are recorded in the plan. Changing
+any of them requires a new plan, even if the allocation does not change.
+This also fixes the operator family: zero-angle boxes have no constitutive
+cross terms, while rotated boxes retain the existing nearest-surface proxy.
+Concrete size/centre sweeps reuse one plan and compiled program. Reports show
+the actual volume and label allocation spans `cuboid.range.x/y/z`; the
+`cuboid` name continues to distinguish a smoothed Box from a cell-snapped
+Region. Traced reports explicitly leave geometry measurements unavailable.
+
+The isolated-body certificate used above for spheres and cylinders also
+applies to Box. The entire reservation and interpolation halo must stay
+inside the domain and clear of absorbers. Only concrete isotropic lossless
+materials, Dipole sources and Record/Field monitors are supported in a
+traced scene, with no initial field or additional structure. Prepared
+stencils remain incompatible with a range. Runtime checks cover all six
+finite values, each side's minimum size, rotated containment and constitutive
+stability. Without a range, size and centre remain static; angle derivatives
+are refused with or without a range.
+
+The first probe exposed a tuple-dispatch failure in the geometry kernel's
+positive-size guard. Public Box normalises its size vector to scalar leaves;
+an unreadable tuple of such leaves has no array namespace. The guard now
+stacks typed leaves without reading or detaching them before applying its
+existing positive/finite rule. Concrete tuples retain their previous host
+validation and arithmetic. The original failure is retained in
+`studies/results/fdtd_box_grad_probe_attempt1.log`; the successful numerical
+measurements are in `fdtd_box_grad_probe_attempt2.log` and
+`fdtd_box_grad_probe.json`.
+
+The fixture measures final electric-field squared norm on a 16-cubed domain
+for 24 steps, with relative permittivity 2.25 and permeability 1.2. Four
+orientations cover an unturned box and 23-degree rotations about x, y and z.
+All 24 measured derivatives are nonzero; the smallest absolute derivative is
+0.570436. Difference steps span `1e-4` through `1e-6`. The `1e-4` step
+crosses a nearest-face transition for the z-rotated case, while the smaller
+steps converge. At the selected `3e-6` step the worst relative discrepancy
+is `4.44e-8`. Tests retain the sphere/cylinder `2e-6` relative budget with
+zero absolute allowance. JAX and Torch gradients differ by at most
+`8.25e-13` in absolute value.
+
+Across orientations and backends, ranged and unranged fields differ by at
+most `4.90e-16` of the largest field. All six component fills recover the
+analytic volume at opposite reservation corners within `1.12e-15` relative
+error; `studies/results/fdtd_box_grad_volumes.json` retains those measurements.
+The transforms checked are ordinary JAX `value_and_grad`, Torch reverse
+mode, `torch.func.jvp` and `forward_ad`. Compiled JAX forward runs check
+invalid geometry without recompilation. Whole-function compiled gradient
+performance remains unvalidated. The derivatives belong to the existing
+piecewise-smooth discrete operator; the rotated cross-term approximation and
+the need for physical convergence checks remain.
+
+The initial targeted box/sphere/cylinder run passed all 81 collected cases.
+Range construction additionally covers negative rotations and the second and
+third quadrants about every axis. Its eight-corner oracle checks all four sign
+combinations of sine and cosine, including exact contact and one-step inward
+bounds. The first full-suite run was interrupted early to add these nine
+cases before final validation; its collection, partial run and manifest are
+retained with the `full_attempt1_interrupted` prefix.
+Seventeen real source mutations were killed by assertions or missing-refusal assertions,
+covering every new test function, and each restored the exact original source
+bytes. The controls cover rotated containment, fixed allocation and reporting,
+size and centre derivatives, tuple-size conversion, all three minimum sizes,
+static orientation, isolation, concrete seeds and static-input refusals.
+Their runner is `studies/fdtd_box_grad_mutations.py`, with raw logs and restored
+source hashes under `studies/results/fdtd_box_grad_controls/`. The added
+signed-sine mutation's separate record is in its `quadrants/` subdirectory
+(run the script with `quadrants` to repeat just that control).
+
+Final validation used fd source SHA-256
+`6e5d6c7a7e13cbdb40ab870682aec38fa07a9cff0c86324a40075258a1f3a11a`.
+The full fd/docs tier collected 2598 cases and exited 0 with 2590 passed and
+8 skipped (1875.57 seconds), including all 43 box cases. The separate slow
+tier collected and passed all 80 cases, exit 0 (1058.32 seconds). Reported
+totals match collection; neither tier reported INTERNALERROR or a worker
+crash. All 143/288/140/570 committed reference arrays reproduced bit for bit
+in the four read-only freezers; no golden was rewritten. Source identity,
+counts and runner timings are retained in
+`studies/results/fdtd_box_grad_validation.json`. The sequential runner is
+`studies/fdtd_box_grad_validation.py`; raw outputs remain under
+`studies/results/fdtd_box_grad_controls/`.

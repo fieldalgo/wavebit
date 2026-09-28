@@ -152,6 +152,7 @@ TRACED_LEAVES = (
     'an Axis1D k, within the k_max= it declares',                           # stage 3
     'an isolated Sphere radius and center within range=, with a concrete plan',  # C6
     'an isolated Cylinder radius, height and center within range=, with a concrete plan',
+    'an isolated Box size and center within range=, with a concrete plan and static orientation',
 )
 
 
