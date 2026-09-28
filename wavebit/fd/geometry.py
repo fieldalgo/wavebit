@@ -513,9 +513,10 @@ class Structure:
                 f'ignored, so a third one is refused here rather than falling back to the '
                 f'default: the two converge at different orders and a scene that got the one '
                 f'it did not ask for would read as a physics result.')
-        if (self.discretisation == STENCIL and isinstance(self.shape, Sphere)
+        if (self.discretisation == STENCIL and isinstance(self.shape, (Sphere, Cylinder))
                 and self.shape.range is not None):
-            raise ValueError("Structure(discretisation='stencil') does not support Sphere(range=): "
+            raise ValueError(f"Structure(discretisation='stencil') does not support "
+                             f"{type(self.shape).__name__}(range=): "
                              'the prepared operator depends on the actual geometry. Use the '
                              'voxel discretisation for a sweep with a fixed support range.')
         if self.memory_bound is not None:
@@ -785,9 +786,9 @@ class Sphere(Shape):
     range: object = None
 
     def __post_init__(self):
-        radius = (_sphere_leaf('radius', self.radius) if self.range is not None
+        radius = (_shape_leaf('Sphere', 'radius', self.radius) if self.range is not None
                   else static_float('Sphere', 'radius', self.radius))
-        if not _sphere_traced(radius) and (not math.isfinite(radius) or not radius > 0):
+        if not _shape_traced(radius) and (not math.isfinite(radius) or not radius > 0):
             raise ValueError(
                 f'Sphere(radius={radius}): a radius is a finite positive length. A length is a size '
                 f'here, so a negative one is refused rather than read as subtracting the '
@@ -798,9 +799,9 @@ class Sphere(Shape):
             raise ValueError(f'Sphere(center={center!r}): a triple (x, y, z), absolute, in the '
                              f'scene\'s coordinates -- not the cell-centre origin the rcwa '
                              f'path spells as cx=/cy=.')
-        center = tuple(_sphere_leaf('center', v) if self.range is not None
+        center = tuple(_shape_leaf('Sphere', 'center', v) if self.range is not None
                        else static_float('Sphere', 'center', v) for v in center)
-        if not all(_sphere_traced(v) or math.isfinite(v) for v in center):
+        if not all(_shape_traced(v) or math.isfinite(v) for v in center):
             raise ValueError(f'Sphere(center={center!r}): every coordinate must be finite.')
         object.__setattr__(self, 'center', center)
         if self.range is not None:
@@ -813,7 +814,7 @@ class Sphere(Shape):
             for axis, (lo, hi), c in zip(AXES, pairs, center):
                 if not lo < hi:
                     raise ValueError(f'Sphere(range=...): the {axis} pair must have lo < hi.')
-                if (not _sphere_traced(c) and not _sphere_traced(radius)
+                if (not _shape_traced(c) and not _shape_traced(radius)
                         and (c - radius < lo or c + radius > hi)):
                     raise ValueError(f'Sphere(range=...): the whole sphere must lie inside '
                                      f'the declared {axis} range ({lo}, {hi}), including its '
@@ -962,7 +963,7 @@ def _extrusion_axis(where, axis):
         f'is refused here rather than approximated.')
 
 
-def _sphere_traced(value):
+def _shape_traced(value):
     """A carried scalar, including Torch forward-mode tangents invisible to float()."""
     if torch_carried(value):
         return True
@@ -974,13 +975,42 @@ def _sphere_traced(value):
     return False
 
 
-def _sphere_leaf(name, value):
-    """Keep ranged sphere leaves intact; normalise ordinary numbers as before."""
+def _shape_leaf(where, name, value):
+    """Keep ranged shape leaves intact; normalise ordinary numbers as before."""
     if (isinstance(value, (bool, str, complex)) or value is None
             or 'complex' in str(getattr(value, 'dtype', ''))
             or tuple(getattr(value, 'shape', ())) != ()):
-        raise ValueError(f'Sphere({name}=...): a real scalar is required.')
-    return value if _sphere_traced(value) else static_float('Sphere', name, value)
+        raise ValueError(f'{where}({name}=...): a real scalar is required.')
+    return value if _shape_traced(value) else static_float(where, name, value)
+
+
+def _ranged_coordinate(where, name, value):
+    value = _shape_leaf(where, name, value)
+    if not _shape_traced(value) and not math.isfinite(value):
+        raise ValueError(f'{where}({name}=...): a finite number is required.')
+    return value
+
+
+def _ranged_length(where, name, value):
+    value = _ranged_coordinate(where, name, value)
+    if not _shape_traced(value) and not value > 0:
+        raise ValueError(f'{where}({name}=...): a finite positive length is required.')
+    return value
+
+
+def _contained_range(where, bounds, center, halves):
+    if not (isinstance(bounds, (tuple, list)) and len(bounds) == 3
+            and all(isinstance(p, (tuple, list)) and len(p) == 2 for p in bounds)):
+        raise ValueError(f'{where}(range=...): three finite (lo, hi) pairs are required.')
+    pairs = tuple(tuple(_finite(where, 'range', v) for v in p) for p in bounds)
+    for axis, (lo, hi), c, half in zip(AXES, pairs, center, halves):
+        if not lo < hi:
+            raise ValueError(f'{where}(range=...): the {axis} pair must have lo < hi.')
+        if (not _shape_traced(c) and not _shape_traced(half)
+                and (c - half < lo or c + half > hi)):
+            raise ValueError(f'{where}(range=...): the whole {where.lower()} must lie inside '
+                             f'the declared {axis} range, including its full extent.')
+    return pairs
 
 
 def _finite(where, name, value):
@@ -1006,9 +1036,10 @@ def _length(where, name, value):
 
 
 def _triple(where, name, value, check):
-    """Three static values, element by element; a NumPy array of three is a triple too."""
+    """Check three values element by element, preserving backend leaves for the check."""
     if hasattr(value, 'tolist') and getattr(value, 'shape', None) == (3,):
-        value = value.tolist()
+        # Indexing preserves backend leaves; tolist() detaches a Torch vector.
+        value = tuple(value[i] for i in range(3))
     if not (isinstance(value, (tuple, list)) and len(value) == 3):
         what = ('a triple (x, y, z), absolute, in the scene\'s coordinates -- not the '
                 'cell-centre origin the rcwa path spells as cx=/cy=' if name == 'center'
@@ -1096,10 +1127,12 @@ class _Extruded(Shape):
     def support(self, grid):
         """Every cell its voxels can reach, with one cell of margin: :meth:`Sphere.support`'s
         rule and its measured reason, on the body's axis-aligned bounding box."""
+        bounds = getattr(self, 'range', None)
+        bounds = bounds if bounds is not None else tuple(zip(self.low, self.high))
         out = []
         for a in range(3):
-            k0 = math.floor((self.low[a] - grid.low[a]) / grid.dx) - 1
-            k1 = math.ceil((self.high[a] - grid.low[a]) / grid.dx) + 1
+            k0 = math.floor((bounds[a][0] - grid.low[a]) / grid.dx) - 1
+            k1 = math.ceil((bounds[a][1] - grid.low[a]) / grid.dx) + 1
             out.append((min(max(int(k0), 0), grid.n[a]), min(max(int(k1), 0), grid.n[a])))
         return tuple(out)
 
@@ -1135,6 +1168,11 @@ class _Extruded(Shape):
         k0, k1 = self.support(grid)[axis]
         if k1 <= cells[0] or k0 >= cells[1]:
             return True
+        if (isinstance(self, Cylinder) and self.range is not None
+                and any(_shape_traced(v) for v in (self.radius, self.height, *self.center))):
+            # No host truth test on moving cap positions. False is conservative; public
+            # traced cylinders are certified wholly inside the domain before lowering.
+            return False
         straight = axis == AXES.index(self.axis) or self._across(axis)
         return straight and self._spans(axis, cells, grid)
 
@@ -1151,6 +1189,11 @@ class _Extruded(Shape):
 
         It does not snap; a difference is the box's face (:meth:`Sphere.span_rows`).
         """
+        bounds = getattr(self, 'range', None)
+        if bounds is not None:
+            return tuple((f'{self._label}.range.{axis}', lo, hi, max(lo, grid.low[a]),
+                          min(hi, grid.high[a]))
+                         for a, (axis, (lo, hi)) in enumerate(zip(AXES, bounds)))
         return tuple((f'{self._label}.{axis}', self.low[a], self.high[a],
                       max(self.low[a], grid.low[a]), min(self.high[a], grid.high[a]))
                      for a, axis in enumerate(AXES))
@@ -1257,21 +1300,34 @@ class Cylinder(_Extruded):
     disc-rectangle clip times the axial overlap; its surface moment is the tangent plane's,
     which on the rim -- where the side meets a cap -- is off by up to half (0.40-0.52 in ``w``
     at 4 to 16 cells per radius; ``docs/fd-subpixel-occupancy.md``, S7, counts those voxels).
-    Static in C4; ``range=`` is C6.
+    With ``range=((x0, x1), (y0, y1), (z0, z1))`` the whole cylinder must stay
+    in a static box. Radius, height and centre may then be differentiated through
+    ``fd.run`` or ``fd.lower`` using a concrete prebuilt plan, under the isolated-body
+    restrictions of :class:`Sphere`. The axis remains static and is recorded in the plan.
+    Without a range all geometry remains static. The derivative is of this discrete
+    solver; the rim approximation and the need for physical convergence checks remain.
     """
 
     radius: float
     height: float
     axis: str = 'z'
     center: tuple = (0.0, 0.0, 0.0)
+    range: object = None
 
     _label = 'cylinder'
 
     def __post_init__(self):
         object.__setattr__(self, 'axis', _extrusion_axis('Cylinder', self.axis))
-        object.__setattr__(self, 'radius', _length('Cylinder', 'radius', self.radius))
-        object.__setattr__(self, 'height', _length('Cylinder', 'height', self.height))
-        object.__setattr__(self, 'center', _triple('Cylinder', 'center', self.center, _finite))
+        length = _length if self.range is None else _ranged_length
+        coordinate = _finite if self.range is None else _ranged_coordinate
+        object.__setattr__(self, 'radius', length('Cylinder', 'radius', self.radius))
+        object.__setattr__(self, 'height', length('Cylinder', 'height', self.height))
+        object.__setattr__(self, 'center', _triple('Cylinder', 'center', self.center, coordinate))
+        if self.range is not None:
+            axis = AXES.index(self.axis)
+            halves = tuple(self.height / 2 if a == axis else self.radius for a in range(3))
+            object.__setattr__(self, 'range', _contained_range(
+                'Cylinder', self.range, self.center, halves))
 
     def _section(self):
         return (-self.radius, self.radius), (-self.radius, self.radius)

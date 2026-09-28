@@ -127,11 +127,16 @@ outside a ``-`` face and lose the last half cell at a ``+`` one -- two arms, two
 and two smoothed shapes may not put their surfaces through one voxel except for the flush
 junction described below, nor (from C4) a smoothed
 surface a voxel a cell-snapped structure's face cuts -- which is how a pillar standing flush on
-a ``Slab`` substrate is refused rather than read half a cell off. The differentiable
-``range=`` edge and CSG (which is how two smoothed bodies that touch are spelled) are later
-commits. ``Sphere(range=...)`` now reserves a fixed support box for concrete radius/centre
-sweeps and compiled-program reuse; radius and centre are still static. The range contains
-the whole sphere, and each run checks the actual geometry again before using its plan.
+a ``Slab`` substrate is refused rather than read half a cell off. General CSG remains later
+work. ``Sphere(range=...)`` and ``Cylinder(range=...)`` reserve fixed support boxes for
+sweeps and compiled-program reuse. Radius and centre, plus a cylinder's height, may be
+differentiated with a concrete prebuilt plan. The cylinder's axis remains static. The
+range contains the whole body; traced scenes currently require one isolated body,
+concrete isotropic lossless materials, Dipole sources, Record/Field monitors and no
+initial field. The full reserved support and interpolation halo must clear the domain
+boundaries and absorbers. Runtime guards check actual sizes, containment and constitutive
+stability; they do not establish continuum convergence. See the C6 sections of
+``docs/fd-subpixel-occupancy.md``.
 
 A Cylinder or unturned Box standing flush on a smoothed, unturned Box face uses
 ``Structure(junction='split')`` by default: it layers the substrate below the

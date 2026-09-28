@@ -1794,3 +1794,79 @@ rewritten. Timings and counts are in
 `studies/results/fdtd_sphere_grad_validation.json`, with raw logs under
 `studies/results/fdtd_sphere_grad_controls/`. The three study scripts carry
 the probe, mutation controls and required sequential validation procedure.
+
+
+### Public cylinder geometry derivatives (C6, 2026-09-28)
+
+`fd.Cylinder(radius=r, height=h, center=(x, y, z), axis='z', range=bounds)`
+now reserves a static box containing the whole cylinder, including both caps.
+Its radius, height and three centre coordinates may carry derivatives into
+`fd.lower` and `fd.run`, using a plan built from concrete geometry. All three
+coordinate axes are supported, but the extrusion axis itself stays static.
+The exact range and axis are recorded in the plan, even when a changed
+declaration would allocate the same cells. Concrete sweeps reuse their plan
+and compiled program while reporting the actual cylinder volume.
+
+The sphere certificate above also applies to cylinders: one isolated ranged
+body, concrete isotropic lossless materials, Dipole sources, Record/Field
+monitors, no initial field, and full-range clearance from boundaries and
+absorbers. Prepared stencils remain incompatible with a range. Both diameter
+and height must satisfy the existing four-cell minimum. The runtime guard
+checks finite radius, height and coordinates and uses half the height on the
+extrusion axis when checking containment. Invalid traced geometry produces
+NaN fields and a false stability diagnostic. A traced report names Cylinder
+and leaves geometry measurements unavailable; it does not report the seed.
+
+Array-valued centres are checked by indexing, preserving derivative leaves.
+The previous `tolist()` conversion detached Torch vector centres. Without a
+range, those vectors are now refused by the existing static-input contract,
+including forward-mode tangents. The shared correction also protects Box and
+Prism centre vectors; it does not add geometry derivatives to those shapes.
+
+The probe uses a 16-cubed domain, 24 steps, relative permittivity 2.25 and
+relative permeability 1.2. It measures the derivatives of final electric-field
+squared norm with respect to radius, height, x, y and z. Central-difference
+steps span `1e-4` through `1e-6`; at the selected `3e-6` step the largest
+relative difference from autodiff is `2.44e-7`. The regression keeps the
+previous sphere budget of `2e-6` relative error with zero absolute allowance.
+All fifteen derivatives are nonzero. Ranged and unranged fields agree within
+`3.25e-16` of the largest field, across NumPy, JAX and Torch. At opposite
+reservation corners, all six component fills recover the analytic cylinder
+volume within `1.12e-15` relative error.
+
+The verified transforms are ordinary JAX `value_and_grad`, Torch reverse mode,
+`torch.func.jvp` and `forward_ad`. JAX compiled forward runs check invalid
+sizes and centres without recompilation. Whole-function compiled gradient
+performance remains unvalidated, as at the sphere checkpoint. These are
+derivatives of the existing discrete cylinder operator: the tangent-plane
+rim approximation and previously measured convergence order near 1.60 have
+not improved. Continuum sensitivities still need separate convergence work.
+
+Measurements are retained in `studies/results/fdtd_cylinder_grad_probe.json`
+and `fdtd_cylinder_grad_volumes.json`, alongside their raw logs. The first
+targeted run correctly accepted height 0.7 on the z-axis, because its caps
+at -0.359 and 0.341 fit the declared range. That invalid-input test fixture
+was corrected to height 0.8; no production threshold changed. The original
+failure is retained in `fdtd_cylinder_grad_controls/targeted_attempt1.log`.
+
+All 47 cylinder and existing sphere cases passed after that correction.
+Fifteen source mutations were killed by assertions or missing-refusal
+assertions, covering every new test function. They remove containment,
+reservation, derivative preservation, height resolution, cap containment,
+static-axis recording, scene isolation, seed height, static-vector refusal
+or honest reporting; each run restores the exact original source bytes.
+The mutation runner and raw logs are retained in
+`studies/fdtd_cylinder_grad_mutations.py` and
+`studies/results/fdtd_cylinder_grad_controls/`.
+
+Validation used fd source SHA-256
+`cf447c4d3ce7b5312f8b7005134b40b863e44ffd6c3eba0e46cbfc6d5c597b70`.
+The full fd/docs tier collected 2555 cases and exited 0 with 2547 passed and
+8 skipped (1826.57 seconds). The separate slow tier collected and passed all
+80 cases, exit 0 (1152.16 seconds). Reported totals match collection; neither
+tier reported INTERNALERROR or a worker crash. The four read-only freezers
+reproduced all 143/288/140/570 committed arrays bit for bit and rewrote no
+golden. Counts, source identity and timings are retained in
+`studies/results/fdtd_cylinder_grad_validation.json`. The sequential runner is
+`studies/fdtd_cylinder_grad_validation.py`; raw outputs remain under
+`studies/results/fdtd_cylinder_grad_controls/`.

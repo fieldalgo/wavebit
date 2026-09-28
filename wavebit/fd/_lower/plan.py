@@ -205,7 +205,7 @@ class Plan:
     spans: tuple = ()            # ((axis, asked lo, asked hi, snapped lo, snapped hi), ...)
     schedule: object = None      # checkpoint block size; None is a plain scan
     junctions: tuple = ()        # static flush-pair geometry and write masks
-    shape_ranges: tuple = ()     # (structure index, shape kind, declared support bounds)
+    shape_ranges: tuple = ()     # (index, kind, support bounds[, cylinder axis])
     skeleton: str = ''
 
     @property
@@ -402,9 +402,9 @@ def plan(scene, _column=False, _grazing=None, _reuse=None, _shape_trace=False):
     operator :func:`~wavebit.fd._lower.stencil.prepare` takes as it is when it was prepared
     from the same arguments, instead of solving it again (every door still runs).
     """
-    from .shape_ranges import traced, remember
+    from .shape_ranges import traced, remember, name as traced_name
     if traced(scene):
-        raise ValueError('fd.plan requires concrete Sphere radius and center; build the plan '
+        raise ValueError(f'fd.plan requires concrete {traced_name(scene)} geometry; build the plan '
                          'before differentiation and pass plan= to fd.run or fd.lower.')
     grid = Grid.from_domain(scene.domain.size, scene.domain.center, scene.resolution.dx)
     dt = scene.run.courant * grid.dx / math.sqrt(3.0)
