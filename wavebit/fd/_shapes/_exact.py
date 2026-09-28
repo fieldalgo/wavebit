@@ -34,7 +34,9 @@ corners) one dimension up.
   (:823), Liang-Barsky parametric clipping per edge (Liang & Barsky, ACM TOG **3**, 1 (1984),
   1-22), with the same guarded normalisation of a zero-length edge. The original **refuses**
   anything but four vertices by name; the generalisation to ``n`` is the whole reason it is
-  ported rather than called. Its docstring also carries the fact this stage is built on --
+  ported rather than called. Boundary-aligned edges additionally share half their length
+  with each adjacent voxel, as axial caps do through :func:`plane_share`.
+  Its docstring also carries the fact this stage is built on --
   that the *second* normal moment is the right object and the first is not -- and that
   paragraph is quoted in ``__init__.py`` where the choice is made.
 
@@ -58,6 +60,21 @@ def overlap(lo, hi, centre, dx, xp):
     """
     return xp.maximum(xp.minimum(hi, centre + dx / 2) - xp.maximum(lo, centre - dx / 2),
                       xp.zeros_like(centre))
+
+
+def plane_share(position, centre, dx, xp):
+    """Share of a plane in a voxel: half on either boundary, one strictly inside.
+
+    Splitting a boundary face between its neighbours preserves total surface area
+    and reflection symmetry. Reuse the polygon clip's 32-epsilon arithmetic margin,
+    scaled by the coordinates involved in the subtraction. Translating the .4 by .2
+    bar by .137 moved a face by one ulp and changed its old moment by 1/3.
+    """
+    scale = xp.maximum(xp.maximum(xp.abs(position), xp.abs(centre)), dx+xp.zeros_like(centre))
+    tol = 32*xp.finfo(centre.dtype).eps*scale
+    distance = xp.abs(position-centre)-dx/2
+    return xp.where(xp.abs(distance) <= tol, .5,
+                    xp.astype(distance < 0, centre.dtype))
 
 
 def clipped_disc_area(cx, cy, radius, left, right, bottom, top, xp):
@@ -435,6 +452,15 @@ def polygon_edge_moments(vertices, left, right, bottom, top, xp):
     enter = xp.zeros_like(start_u + left[..., None])
     leave = xp.ones_like(enter)
     outside = xp.zeros_like(enter, dtype=xp.bool)
+    share = xp.ones_like(enter)
+    coordinate = xp.maximum(xp.max(xp.abs(vertices), axis=-1), length)
+    voxel_scale = xp.maximum(xp.maximum(xp.abs(left), xp.abs(right)),
+                            xp.maximum(xp.abs(bottom), xp.abs(top)))
+    # Use the existing 32-epsilon clipping margin for coordinate cancellation,
+    # separately from the slope test. The .137 translation probe lost a face
+    # under an exact offset comparison; no geometric smoothing width is added.
+    boundary_tol = 32*xp.finfo(vertices.dtype).eps*xp.maximum(coordinate,
+                                                           voxel_scale[..., None])
     for slope, offset in ((-edge_u, start_u - left[..., None]), (edge_u, right[..., None] - start_u),
                           (-edge_v, start_v - bottom[..., None]), (edge_v, top[..., None] - start_v)):
         slope, offset = slope + xp.zeros_like(enter), offset + xp.zeros_like(enter)
@@ -442,10 +468,12 @@ def polygon_edge_moments(vertices, left, right, bottom, top, xp):
         t = offset / xp.where(moving, slope, xp.ones_like(slope))
         enter = xp.where(moving & (slope < 0), xp.maximum(enter, t), enter)
         leave = xp.where(moving & (slope > 0), xp.minimum(leave, t), leave)
-        # A face the edge runs parallel to admits the whole segment or none of it.
-        outside = outside | (~moving & (offset < 0))
+        # A parallel boundary edge is shared equally by the adjacent voxels.
+        # The moving-edge threshold above is unchanged (a 1e-9 slope is resolved).
+        outside = outside | (~moving & (offset < -boundary_tol))
+        share = xp.where(~moving & (xp.abs(offset) <= boundary_tol), .5*share, share)
     span = xp.where(outside, xp.zeros_like(enter), xp.maximum(leave - enter, xp.zeros_like(enter)))
-    arclength = span * length
+    arclength = span * length * share
     return (xp.sum(arclength, axis=-1),
             xp.sum(arclength * normal_u * normal_u, axis=-1),
             xp.sum(arclength * normal_v * normal_v, axis=-1))

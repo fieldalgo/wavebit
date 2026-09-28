@@ -797,7 +797,8 @@ deep 2, the snap's half-cell slack removed 1, door 3 answering at mirrors 1. A v
 read the H points on the plane as well as E survived and was removed: the parity frees both
 together and their voxels tile the same slab, so they always see the same material.
 
-**Found on the way, not fixed here: a box face on a voxel boundary.** The half box and the
+**Historical C5 finding: a box face on a voxel boundary.** The boundary-sharing repair below
+closes this issue; this paragraph preserves the original measurement. The half box and the
 full box first disagreed by 4.5e-3 of the peak in 300 steps for the symmetric bar with faces at
 `x = +-0.2`, which are voxel boundaries of `Ex`. The fills agree; the normal moment does not.
 A face lying exactly on a voxel's boundary enters that voxel's moment or not by round-off --
@@ -806,18 +807,18 @@ it 1e-12 inside -- and the two grids' coordinates differ by 1e-17, so the same g
 `eps` 2.105 against 2.5 on those voxels. It is a property of the C4 moment, not of the mirror,
 and it breaks translation invariance for a box whose faces sit on node or half-node planes --
 the commonest placement -- while the fill stays exact. The test's bar sits off every voxel
-boundary. The convention a face on a boundary should follow, and whether it matters for C6's
-differentiable edge, are open.
+boundary. The 2026-09-28 repair shares a boundary face equally between its neighbours;
+it does not remove the moment's geometric discontinuity as a face crosses the boundary.
 
-**A second tie of the same kind, found by the C5 review, also open.** The turned prism's
+**Historical C5 finding: the equal-distance normal tie.** The turned prism's
 nearest-surface proxy normal (`_bodies._Polygonal._transverse_surface`) takes the nearest edge
 with a strict `<`, so a Yee point on the section's medial axis -- equidistant from two faces, as
 for a square turned 45 degrees centred on a node line -- takes whichever face round-off prefers.
 `angle=45` and `angle=405` (vertices 5.6e-17 apart) flipped the proxy normal at 38 points and
 differed by 2.45e-3 of the peak in 300 steps, and a mirrored half box and its full box by
 7.8e-5, against 1e-15 at 30 degrees. The fill is exact either way; the cross coefficients are
-not. A tie rule that does not depend on vertex order (the bisector, say) is the fix to decide
-with the face-on-boundary one, before C6.
+not. The 2026-09-28 repair below uses the normalized sum of tied directions, with an explicit
+fallback for a cancelling sum. The old measurements remain here as the failed control.
 
 ## C5: a structure past a face of the box (2026-09-26)
 
@@ -1450,3 +1451,114 @@ baseline `fe3ff20c`.
 The source SHA-256 and collected/reported counts are recorded in
 `studies/results/fdtd_junction_validation.json`. Successful full/slow logs and
 the four freezer outputs are retained alongside the failed review controls.
+
+## Polygon boundary and nearest-face ties (2026-09-28)
+
+Two equivalent descriptions of a polygon must not select different material
+tensors merely because a subtraction rounded the other way. The historical
+C5 findings above are addressed by two conventions:
+
+* A polygon face lying on a voxel boundary contributes half its surface area
+  to each neighbour. This applies both to parallel section edges and to axial
+  caps. Interior faces still contribute their full area. The sum across the
+  two voxels is the physical area, so the existing cap-conservation regression
+  still requires `0.02`; an exactly aligned pair of caps now occupies four
+  half-weighted voxels instead of two wholly owned ones.
+* Equal-distance section faces use the normalized sum of their outward offsets,
+  or their edge normals on the outline. The unique nearest face retains its
+  previous arithmetic. If the sum cancels, as at a square's centre, the section's
+  `+u` direction is the declared unit-vector fallback. Cycling the first vertex
+  cannot select a different material proxy. This fallback does not claim rotation
+  covariance at a point where no unique normal exists.
+
+The boundary comparison uses the polygon clip's existing 32-machine-epsilon
+margin, scaled by the absolute coordinates involved in the subtraction. The
+parallel-slope threshold is unchanged; the pre-existing near-parallel `1e-9`
+edge remains resolved. Nearest-face ties reuse `_ON_THE_OUTLINE = 1e-12`
+times the longest section edge. For distance `r` and geometric resolution `a`,
+the squared-distance comparison uses `2*r*a + a*a`; on the outline it uses
+`a*a`. These are arithmetic tie conventions, not fitted field-error gates.
+
+`studies/fdtd_polygon_ties.py` records before/after measurements and the exact
+production-source hash in `studies/results/fdtd_polygon_ties.log`. In its
+axis-aligned bar, jointly translating the geometry and sample by `0.137`
+changed a boundary moment from `(0, 1, 0)` to `(1/3, 2/3, 0)` before the fix.
+With half sharing, all five translations read `(0.2, 0.8, 0)` at that rim.
+The ratio is geometric: half of a `.025*.05` boundary face against an interior
+`.05*.05` face. The initial repaired run measured the following:
+
+| Geometrically equivalent pair | Before | Repaired |
+| --- | ---: | ---: |
+| 45 versus 405 degrees, maximum difference in `n n^T` | 1.0 | 9.10e-15 |
+| Cyclic first-vertex shift, maximum difference in `n n^T` | 1.0 | 0 |
+| Full versus mirrored half box, 300-step peak-relative field difference | 1.477e-3 | 8.986e-16 |
+
+The mirror measurement here uses the public solver and a bar with faces at
+`x = +-0.2`; it is a new fixture, not the historical `4.5e-3` measurement's
+rewritten value. Exact-fill arithmetic is unchanged. The 45/405 moment
+difference was already only `4.44e-16`: the failed quantity was the proxy
+normal used by the coupled tensor.
+
+`tests/test_fd_polygon_ties.py` contains 42 cases in five functions. They
+cover all extrusion axes; NumPy, JAX, Torch and JAX compilation; simultaneous
+shape/sample translations at length scales `1e-6`, `1` and `1e6`; cyclic
+vertex order; an off-tie point that must retain its unique normal; and
+field identity under a full turn and mirror reduction. The full-turn test
+uses the existing seeded-flux cavity fixture and production stepping; the
+mirror test runs through `fd.run` with a public initial field. The geometric
+cases use float64. No claim is made for coordinates so large relative to the
+cell that floating-point arithmetic cannot resolve the cell itself.
+
+Eight actual source mutations were applied separately and restored byte for
+byte by `studies/fdtd_polygon_tie_mutations.py`. Each new test function has
+an assertion-failure witness: whole cap ownership, whole edge ownership,
+first-face selection at the geometry and field levels, and exact boundary
+comparison. A sixth mutation broadens the tie tolerance and fails the
+off-tie unique-normal check. Two further mutations substitute the proxy for
+the supporting plane: one fails the independent vertex-containment check,
+the other fails the existing T-junction integration test. Logs and source hashes are retained under
+`studies/results/fdtd_polygon_tie_mutations/`. The initial Torch scalar
+argument failure and the missing pytest temporary-parent failure are also
+retained as failed controls; neither counted as numerical validation.
+
+These conventions fix equivalent-description dependence. Surface moments
+still jump when a face actually crosses a voxel boundary; nearest-face
+selection is not differentiable on the medial set. The axial-cap versus
+section-distance tie in `_Extrusion.surface` retains its existing rule.
+This change supplies no new derivative guarantee at those points and does
+not address the separate CSG timing or cylinder-convergence work.
+
+The first complete integration run found two issues: 2490 passed, 8 skipped,
+2 failed out of 2500 collected, exit 1. Its log and source hash are retained
+as `initial_full_failures.log` and `initial_full_validation.json` under
+`studies/results/fdtd_polygon_tie_controls/`.
+
+The T-junction failure was a real regression: a bisector paired with the
+nearest-face distance is not a supporting plane of the convex polygon. It
+cuts into the corner, invalidating the containment premise of the CSG volume
+bounds and moving the three-box union's fill by `0.0157179`. CSG now calls
+`support_surface`, which retains an actual nearest face, while material
+lowering reads the symmetric proxy from `surface`. No CSG volume bound or
+acceptance threshold was changed. The normal regression also checks that
+every polygon vertex lies inside each returned supporting half space.
+
+The other failure came from the crease test's 55-step bisection: half sharing
+splits the old jump into two, and the final `2.78e-17` bracket now meets the
+half-area state. Its moment jump is `0.326510`, with a fill difference of
+`5.55e-16`. The whole-crease `>0.4` gate is retained on both pre-existing
+one-sided difference rungs, `1e-4` and `1e-6`: their jumps are `0.491610` and
+`0.492277`, and their slopes remain `2361` and `236424`. The unchanged
+factor-of-50 growth gate still detects a discontinuity. This is not a new
+claim of differentiability inside the arithmetic tie band.
+
+Final validation used source SHA-256
+`2464c83a86e921ab364ca31081373a69b9b582244167a446da26ba21f41cf879`.
+The full fd/docs tier exited 0 with 2492 passed and 8 skipped out of 2500
+collected; the separate slow tier exited 0 with all 80 collected cases
+passed. Neither reported an INTERNALERROR or worker crash. All four
+read-only freezers exited 0 and reproduced 143/288/140/570 arrays bit for
+bit. The final public mirror comparison retained the `8.986e-16` relative
+gap, the full-turn normal-tensor gap was `9.104e-15`, and the cyclic-vertex
+gap was zero. No golden was rewritten. Exact counts and timings are in
+`studies/results/fdtd_polygon_tie_validation.json`; complete success and
+failed-control logs are in `studies/results/fdtd_polygon_tie_controls/`.

@@ -1004,8 +1004,8 @@ def test_the_exact_face_moments_are_the_surfaces_own():
     area, moment = Box((0.03, 0.4, 0.4), (0., 0., 0.), 0.0).exact_moment(origin, h)
     assert abs(area[0] - 0.02) < 1e-15
     assert np.abs(moment[0] / area[0] - np.array([1.0, 0.0, 0.0])).max() < 1e-14
-    # A cap landing EXACTLY on a voxel face belongs to the voxel it enters, once. The interval
-    # is half open for that reason: measured with two open ends (the first writing) the total
+    # A cap landing EXACTLY on a voxel face is split equally between its two neighbours.
+    # Its total area still counts once: measured with two open ends (the first writing) the total
     # cap area of a hexagonal prism whose caps sit on a face read 0.000000 against a truth of
     # 0.020000 -- the interface left the grid altogether -- and with two closed ends it is
     # 0.040000, counted by both neighbours. Nothing in the gate held either way.
@@ -1014,7 +1014,7 @@ def test_the_exact_face_moments_are_the_surfaces_own():
     for centre, where in ((0.0, 'caps exactly on a voxel face'), (0.03, 'caps inside a voxel')):
         cap = Prism(HEX, 0.4, 'z', (0., 0., centre), 0.).exact_moment(column, h)[1][:, 2]
         assert abs(float(cap.sum()) - 0.02) < 1e-15, (where, cap.sum())
-        assert int((cap > 0).sum()) == 2, (where, cap)
+        assert int((cap > 0).sum()) == (4 if centre == 0 else 2), (where, cap)
 
 
 def _sampled_box_moment(size, centre, angle, pts, h, n=1200):
@@ -1212,9 +1212,16 @@ def test_a_crease_is_where_w_jumps_and_this_is_how_far():
             hi, f_hi, w_hi = mid, f_m, w_m
     assert hi - lo < 1e-15
     assert abs(f_hi - f_lo) < 1e-12, (f_hi, f_lo)            # the fill does not step
-    assert np.abs(w_hi - w_lo).max() > 0.4, np.abs(w_hi - w_lo).max()   # w does, by 4.91e-01
-    rung = [(pair_at((lo + hi) / 2 + s)[1][1] - pair_at((lo + hi) / 2 - s)[1][1]) / (2 * s)
-            for s in (1e-4, 1e-6)]
+    # Half-area boundary sharing splits the old jump into two. The final
+    # floating-point bracket now meets the half-area state (gap .326510).
+    # Keep the >.4 whole-crease gate on BOTH existing one-sided ladder rungs:
+    # measured .491610 and .492277, with unchanged slopes 2361 and 236424.
+    rung = []
+    for s in (1e-4, 1e-6):
+        left = pair_at((lo + hi) / 2 - s)[1]
+        right = pair_at((lo + hi) / 2 + s)[1]
+        assert np.abs(right - left).max() > 0.4, np.abs(right - left).max()
+        rung.append((right[1] - left[1]) / (2 * s))
     assert abs(rung[1]) > 50 * abs(rung[0]), rung           # 1/step: the loss itself jumps
 
 

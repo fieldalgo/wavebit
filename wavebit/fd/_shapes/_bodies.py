@@ -7,15 +7,23 @@ is uniform across a layer. A body answers questions about a *point*: how far is 
 from here, which way does it face, and -- where it can do better than a plane -- exactly how
 much of this voxel do you fill. The two meet in C2, which is the only place that will know both.
 
-Every body answers four things:
+Every body provides these operations:
 
 ``surface(points) -> (d, n)``
     ``d`` negative inside, and ``n`` the **unit** outward normal, unit *everywhere* including
     at the points where the true gradient does not exist (a sphere's centre, a box's medial
     axis, a polygon's vertex). That is a contract ``_cut.cut_parts`` depends on: it divides by
     ``max_i |n_i| dx``, which is at least ``dx/sqrt(3)`` for a unit vector and zero for a zero
-    one. Where the gradient is genuinely undefined the body names the direction it returns; the
-    fill there is 0 or 1 whatever the direction is, so the choice cannot be observed.
+    one. Where the gradient is undefined the body names the direction it returns. This choice
+    can affect the constitutive tensor even when an exact fill is available. Polygon faces
+    tied within the outline tolerance use the normalized sum of their outward directions;
+    a cancelling sum uses the section's +u axis. These ties are not differentiable points.
+
+``support_surface(points) -> (d, n)``
+    The nearest supporting face used by convex CSG containment proofs. A bisector at a medial
+    tie and the nearest signed distance do not together define a containing half space.
+    Polygonal bodies therefore retain a real nearest face here, separately from the material
+    proxy returned by ``surface``. Other bodies use their existing surface result.
 
 ``exact_fill(points, dx) -> fill | None``
     The exact filled fraction where a closed form is free, ``None`` otherwise -- and ``None``
@@ -102,9 +110,10 @@ box jumps by more than 0.3; the table above is the test's own.
 **The fill is smooth for every body with an exact fill, and -- since this round -- for a CSG
 node too**: its worst single step over six node kinds on the same slide is **3.1e-03**, the same
 size as a leaf's own, where three previous writings of that paragraph quoted 3.15e-02, 4.29e-02
-and 4.48e-02. What is still discontinuous is a node's ``w``, by **4.91e-01** across a geometry
-change of 2.8e-17, and that -- not the fill -- is now the whole of the reason a CSG node's
-geometry may not be traced. See :class:`_Combination` for the mechanism, the cases the rule
+and 4.48e-02. What is still discontinuous is a node's ``w``: the historical **4.91e-01**
+jump now includes a half-area boundary state, leaving a **3.26510e-01** step across a geometry
+change of 2.8e-17. This is why a CSG node's geometry may not be traced.
+See :class:`_Combination` for the mechanism, the cases the rule
 decides between, the sign argument that makes a hole in solid material unwritable for each node
 kind, what the rule costs measured on the shipped node, the price of the exact fix, and the one
 refusal that is left -- which is at **plan time**, from the shapes, and not per voxel. The
@@ -121,7 +130,7 @@ from wavebit._core.backend import array_namespace
 
 from ._cut import _axis_index, _parts, two_plane
 from ._exact import (clipped_ball_volume, clipped_disc_area, clipped_polygon_area, overlap,
-                     polygon_edge_moments)
+                     plane_share, polygon_edge_moments)
 
 #: The axis names a body may be extruded along, and the index each one is on a typed x-first
 #: triple. Arrays in this package are ``[component, z, y, x]``; the triples here are x-first.
@@ -787,6 +796,14 @@ class Body:
     def surface(self, points):
         raise NotImplementedError
 
+    def support_surface(self, points):
+        """A nearest supporting plane for convex-body containment in CSG.
+
+        A material proxy at a medial tie need not define a supporting plane
+        at the signed distance. Polygonal bodies keep a real nearest face here.
+        """
+        return self.surface(points)
+
     def exact_fill(self, points, dx):
         return None
 
@@ -1060,8 +1077,11 @@ class _Extrusion(Body):
         return xp, (u, v, k), q, s
 
     def surface(self, points):
+        return self._extruded_surface(points, self._transverse_surface)
+
+    def _extruded_surface(self, points, transverse_surface):
         xp, (u, v, k), q, s = self._split(points)
-        dr, g = self._transverse_surface(q)
+        dr, g = transverse_surface(q)
         half = _as(xp, self.height, points) / 2
         da = xp.abs(s) - half
         one = xp.ones_like(s)
@@ -1116,7 +1136,7 @@ class _Polygonal(_Extrusion):
         """The polygon in the grid's transverse frame, absolute, ``(nv, 2)``."""
         raise NotImplementedError
 
-    def _transverse_surface(self, q):
+    def _transverse_surface(self, q, *, bisect=True):
         xp = array_namespace(q)
         vertices = self._vertices(q)
         nv = vertices.shape[-2]
@@ -1134,6 +1154,7 @@ class _Polygonal(_Extrusion):
         edge_n = xp.stack([one_, zero], axis=-1)
         longest = zero
         inside = xp.zeros_like(zero, dtype=xp.bool)
+        candidates = []
         for i in range(nv):
             a, b = vertices[..., i, :], vertices[..., (i + 1) % nv, :]
             e = b - a
@@ -1152,6 +1173,8 @@ class _Polygonal(_Extrusion):
             length = xp.sqrt(xp.where(live, ee, one_))
             longest = xp.maximum(longest, xp.where(live, length, zero) + zero)
             out_n = xp.stack([e[..., 1] / length, -e[..., 0] / length], axis=-1)
+            if bisect:
+                candidates.append((d2, off, out_n, live))
             edge_n = xp.where((take & live)[..., None], out_n + zero[..., None], edge_n)
             # Even-odd crossing count, the same test the RCWA path's membership uses: a ray
             # along +u from q crosses this edge iff the edge straddles q's v and the crossing
@@ -1169,7 +1192,33 @@ class _Polygonal(_Extrusion):
         # nearest edge's own outward normal is what is returned -- which is the true outward
         # normal there, not a placeholder.
         g = xp.where(live[..., None], sign[..., None] * near / norm[..., None], edge_n)
+        if not bisect:
+            return sign * xp.sqrt(best), g
+        # Reuse the outline's geometric resolution for equal-distance faces.
+        # Strict selection flipped n n^T by 1.0 under a cyclic vertex shift or
+        # a 45 -> 405 degree spelling (2026-09-28 polygon-tie probe).
+        tie_slack = on_edge*(2*xp.where(live, norm, zero)+on_edge)
+        tied = xp.stack([valid & (xp.abs(d2-best) <= tie_slack)
+                         for d2, _, _, valid in candidates], axis=-1)
+        count = xp.sum(xp.astype(tied, q.dtype), axis=-1)
+        total = xp.zeros_like(g)
+        for i, (_, off, outward, _) in enumerate(candidates):
+            direction = xp.where(live[..., None], sign[..., None]*off/norm[..., None], outward)
+            total = total + xp.where(tied[..., i, None], direction, xp.zeros_like(direction))
+        squared = xp.sum(total*total, axis=-1)
+        distinct = squared > (_ON_THE_OUTLINE*count)**2
+        magnitude = xp.sqrt(xp.where(distinct, squared, one))
+        fallback = xp.stack([one, zero], axis=-1)
+        bisector = xp.where(distinct[..., None], total/magnitude[..., None], fallback)
+        g = xp.where((count > 1)[..., None], bisector, g)
         return sign * xp.sqrt(best), g
+
+    def support_surface(self, points):
+        # A bisector at the nearest-face distance cuts into a convex corner;
+        # it is not a containing half space. Using it in CSG moved a three-box
+        # T-junction's fill by .0157179 (2026-09-28 full integration control).
+        return self._extruded_surface(points,
+                                      lambda q: self._transverse_surface(q, bisect=False))
 
     def _clipped(self, box, points):
         """The clipped cross-section **without** the orientation factor."""
@@ -1188,16 +1237,11 @@ class _Polygonal(_Extrusion):
         # is the geometry's and not an artefact -- the surface really does leave the voxel --
         # and it is the reason C2 has a choice to make here; see the module docstring.
         #
-        # The interval is HALF OPEN, ``[lo, hi)``, so a cap landing exactly on a voxel face
-        # belongs to the voxel it enters and to that one only. Both of the other spellings are
-        # wrong on that measure-zero set and neither was held: with two open ends (the first
-        # writing) a hexagonal prism whose caps sit exactly on a face reported a total cap area
-        # of **0.000000** where the truth is 0.020000 -- the interface vanished from the grid --
-        # and with two closed ends it is counted twice, 0.040000. Measured in
+        # A cap on a voxel boundary contributes half to each neighbour: the area
+        # is counted once and reflection does not change which voxel gets it.
+        # Two open ends lose the interface; two closed ends double it. Measured in
         # ``tests/test_fd_shapes.py::test_the_exact_face_moments_are_the_surfaces_own``.
-        half = dx / 2
-        caps = xp.astype((lo >= s - half) & (lo < s + half), points.dtype) \
-            + xp.astype((hi >= s - half) & (hi < s + half), points.dtype)
+        caps = plane_share(lo, s, dx, xp) + plane_share(hi, s, dx, xp)
         #
         # The orientation factor multiplies the finished pair ONCE, and not each term. Applied
         # per term it is redundant -- the cap already carries it through ``_area`` and 0 * NaN is
@@ -1536,12 +1580,15 @@ class _Combination(Body):
     change of 5.5e-17. That step was the composed plane's: its fill reads the **selected** child's
     normal, and at a crease the selection swaps. A node answers from its children's own fills and
     one exact two-plane cut, and neither reads a selected normal. What is left is ``w``: at the
-    worst live-to-live step of a ``box minus box`` slide, bisected to 2.8e-17, the fill is
+    historical live-to-live step of a ``box minus box`` slide, bisected to 2.8e-17, the fill is
     identical to ten digits and
 
         w  (0.0200, 0.4877, 0.4923)  ->  (0.0395, 0.9605, 0.0000)      |dw| = 4.91e-01
 
-    with a central difference of ``w_y`` reading 233, 2361, 23639, 236424, 2364267 at steps 1e-3
+    Boundary half sharing now splits that jump into two; the smallest bracket above meets a
+    half-area state and measures 0.326510. The full one-sided jump is still 0.492277 at the
+    existing 1e-6 rung. The historical central difference of ``w_y`` reads
+    233, 2361, 23639, 236424, 2364267 at steps 1e-3
     down to 1e-7: ``1/step``, the signature of a jump in the objective. ``occupancy`` returns the
     pair and C2's mixing rule reads both halves, so a loss through a node still steps. The refusal
     is on the *leaf* and not on tracing, so a forward solve that traces the points keeps working,
@@ -1619,7 +1666,7 @@ class _Combination(Body):
                     raise ValueError(
                         f'{type(self).__name__}(...): a CSG node\'s geometry must be concrete, '
                         'and this child was built from a traced value. A CSG node\'s INTERFACE '
-                        'is discontinuous where two of its surfaces meet: measured, w steps '
+                        'is discontinuous where two of its surfaces meet: historically, w stepped '
                         '4.91e-01 across a geometry change of 2.8e-17 in a voxel that is cut on '
                         'both sides, and a central difference of a loss on it DIVERGES as '
                         '1/step (233, 2361, 23639, 236424, 2364267 at 1e-3 down to 1e-7), which '
@@ -1842,7 +1889,7 @@ class _Combination(Body):
 
     def parts(self, points, dx, surface=None, report=None):
         xp = array_namespace(points)
-        faces = [body.surface(points) for body in self.bodies]
+        faces = [body.support_surface(points) for body in self.bodies]
         child = [body.parts(points, dx, surface=face)
                  for body, face in zip(self.bodies, faces)]
         state = self._state(faces, child, dx, xp)
