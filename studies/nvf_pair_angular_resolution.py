@@ -80,6 +80,10 @@ def main():
             branches=args.transmission_branches,coercivity_angle=1.53,
             angular_quadrature=args.angular_quadrature,cutoff_order=args.transmission_cutoff_order)
     value,tangent,metadata=cell.closure(gap=0.,epsilon=(12.25,-10+1j),**GEOMETRY)
+    if args.transmission_branches is None:
+        from wavebit._core.conventions import swap_fourier_origin
+        window = tuple((0, n) for n in orders)
+        value, tangent = (swap_fourier_origin(a, *window) for a in (value, tangent))
     value,tangent=np.asarray(value),np.asarray(tangent)
     nx,ny=orders
     modes=[(i,j) for j in range(-ny,ny+1) for i in range(-nx,nx+1)]

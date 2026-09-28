@@ -4,6 +4,7 @@ from numbers import Integral
 import numpy as np
 
 from ..factorization import ConvMatrices
+from ..conventions import swap_fourier_origin
 from . import _epsilon, _real, _require
 from .affine_cell import AffineCellGapModel
 from .thin_gap import CONTACT_ROUNDOFF, PERIOD
@@ -115,9 +116,9 @@ class AffineProfileNVF:
         """Return complex128 layer matrices in the caller's original Fourier set.
 
         Use the same lattice and truncation order in the consuming solve_conv.
-        Coefficients are translated from the centered reference profile to the
-        engine's cell-corner origin before closure, in the physical Cartesian
-        frame already returned by the affine cell. No second rotation is used.
+        The internal closure uses the corner frame; its returned matrices are restated
+        about the cell centre, the frame solve_conv reads. No extra phase is needed.
+        The affine cell already supplies the physical Cartesian component frame.
         """
         if getattr(xp, '__name__', '') == 'array_api_compat.numpy':
             xp = np
@@ -167,4 +168,5 @@ class AffineProfileNVF:
                          & xp.all(xp.isfinite(slots.epz_i)))
                 _require(valid, 'affine profile NVF energy closure failed its passivity guard')
             stacks.append(tuple(xp.where(valid, slot, xp.nan) for slot in slots))
-        return ConvMatrices(*(xp.stack([slots[i] for slots in stacks]) for i in range(5)))
+        corner = ConvMatrices(*(xp.stack([slots[i] for slots in stacks]) for i in range(5)))
+        return swap_fourier_origin(corner, *((0, n) for n in self.truncation_order))

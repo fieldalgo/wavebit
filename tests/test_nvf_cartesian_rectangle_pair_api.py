@@ -7,6 +7,7 @@ import subprocess
 import sys
 
 import numpy as np
+from _conv_frame import about_centre
 import pytest
 
 import wavebit
@@ -77,13 +78,13 @@ def test_physical_mapping_input_order_and_exact_material_transform(order, revers
     for value, reference in zip(actual, direct):
         assert value.shape == (3, count, count)
         assert value.dtype == np.complex128
-        np.testing.assert_array_equal(value[1], reference[0])
+        np.testing.assert_array_equal(value[1], about_centre(reference[0], order))
     for layer, epsilon in ((0, 2.3+.4j), (2, 1.)):
         for value, factor in zip(actual, (epsilon, epsilon, 1/epsilon, 0., 0.)):
             np.testing.assert_allclose(value[layer], factor*np.eye(count), rtol=0, atol=1e-15)
     material_coefficients, _ = assemble_eps_coeffs(np, structure[1]['shapes'], structure[1]['background'],
                                                    *order, basis, np.complex128)
-    np.testing.assert_allclose(np.linalg.inv(actual.epz_i[1]), conv_matrix_2d(np, material_coefficients, *order),
+    np.testing.assert_allclose(np.linalg.inv(actual.epz_i[1]), about_centre(conv_matrix_2d(np, material_coefficients, *order), order),
                                rtol=0, atol=3e-12)
 
 
@@ -304,7 +305,8 @@ def test_jax_native_parameters_against_independent_pair_closure(case):
         return jnp.stack(builder.conv_matrices(*scene(parameters, jnp, reverse=reverse, wrapped=wrapped), plan=plan, xp=jnp))
     evaluate = jax.jit(lambda parameters, tangent: jax.jvp(function, (parameters,), (tangent,)))
     for value, dvalue, tangent in zip(expected, derivative, tangents):
-        reference, dslots = closure_oracle(value, dvalue, cell.order)
+        reference, dslots = (about_centre(a, cell.order)
+                             for a in closure_oracle(value, dvalue, cell.order))
         actual, dactual = evaluate(jnp.asarray(native), jnp.asarray(native_tangent(tangent)))
         np.testing.assert_allclose(actual, reference, rtol=0, atol=3e-10)
         np.testing.assert_allclose(dactual, dslots, rtol=0, atol=3e-9)

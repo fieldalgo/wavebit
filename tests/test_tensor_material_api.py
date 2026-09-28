@@ -2,6 +2,7 @@
 import json
 
 import numpy as np
+from _conv_frame import slots_about_centre
 import pytest
 
 import wavebit
@@ -106,7 +107,7 @@ def test_all_components_define_boundaries_and_small_grid_is_repeated():
     repeated = np.repeat(np.repeat(tensor[0], 6, axis=0), 3, axis=1)
     labels = np.tile([0.,0.,0.,1.,1.,1.], (6,1))
     nx,ny = normal_vector_field(labels, lattice=np.diag([600.,600.]))
-    expected = pn_eps_conv_matrices(np, repeated, nx, ny, 1, 1)
+    expected = slots_about_centre(pn_eps_conv_matrices(np, repeated, nx, ny, 1, 1), (1, 1))
     for got, want in zip(solver.eps_conv_matrices(), expected):
         np.testing.assert_allclose(got[0], want, atol=2e-12)
 

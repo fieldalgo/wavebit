@@ -80,11 +80,13 @@ nothing.
 Slot order
 ----------
 
-**Every builder here returns its slots in ``solve_conv``'s parameter order**, so that
+Every builder here returns corner-frame slots for the private ``_solve_conv`` door.
+The public ``solve_conv`` reads centre-frame operators. **Both doors use the same slot
+order**, so that
 
 .. code-block:: python
 
-    res = mee.solve_conv(*to_conv_mat_raster_nvf(structure, half_width_u, half_width_v))
+    res = mee._solve_conv(*to_conv_mat_raster_nvf(structure, half_width_u, half_width_v))
 
 is correct for any of them. Concretely, three slots are ``(epx, epy, epz_i)`` and five are
 ``(epx, epy, epz_i, epxy, epyx)`` — the inverted zz matrix is **third**, not last, because
@@ -121,7 +123,9 @@ class ConvMatrices(NamedTuple):
 
     What :meth:`~wavebit._core.engine.CoreFactorizationMixin.eps_conv_matrices` returns, and what
     ``solve_conv`` takes first — ``solver.solve_conv(*solver.eps_conv_matrices())`` is
-    ``solver.solve()``. See "Slot order" above for why ``epz_i`` sits third rather than last.
+    ``solver.solve()``. Public inputs and outputs are about the cell centre. This container
+    also holds the private builders' corner-frame operators; it applies no conversion itself.
+    See "Slot order" above for why ``epz_i`` sits third rather than last.
 
     **Every builder in this module returns this**, the Li-rule ones included: they do not
     couple ``x`` and ``y``, so they set ``epxy`` and ``epyx`` to ``None``, which is what every
@@ -162,7 +166,10 @@ class ConvMatrices(NamedTuple):
         the xy/yx slots carry the solver's negative off-diagonal convention.
         Inputs are preserved, including their autodiff graph and precision.
 
-        A layer stack can be passed directly to ``solver.solve_conv(*conv)``.
+        This algebra preserves the supplied Fourier origin. Use centre-frame Q, G and
+        longitudinal coefficients to pass the result to ``solver.solve_conv(*conv)``.
+        Private corner-frame inputs produce corner-frame slots for ``solver._solve_conv``;
+        no extra conversion belongs in this algebra.
         This closes supplied constitutive data; it neither constructs B from
         shapes nor certifies its discretization or optical convergence.
         """

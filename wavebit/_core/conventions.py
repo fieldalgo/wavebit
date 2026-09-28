@@ -53,7 +53,7 @@ from typing import NamedTuple
 
 import numpy as np
 
-from .backend import AxisNameWarning, UnresolvedBranchWarning, _concrete, array_namespace, as_array
+from .backend import AxisNameWarning, UnresolvedBranchWarning, _concrete, _device_of, array_namespace, as_array
 
 _FLAT = 1e-12      # below this, a real part counts as zero and the tie-break decides
 
@@ -508,8 +508,8 @@ def incident_column(xp, C, lit, n_orders, specular):
 def centre_parity(window_u, window_v):
     """Which retained orders the cell centre negates: ``True`` where ``(-1)**(m + n) == -1``.
 
-    The kernels' Fourier origin is the cell **corner** -- every convolution matrix is a set of
-    Fourier coefficients about it -- while every public coordinate, and every per-order phase
+    The kernels' Fourier origin is the cell **corner** -- every convolution matrix the kernels read is
+    expressed about it -- while every public coordinate, and every per-order phase
     since 2026-09-27, is referenced at the **centre** ``o = (a1 + a2)/2``. Order ``(m, n)``
     sits at ``k_inc + m b1 + n b2`` and ``b_i . a_j = 2 pi delta_ij``, so moving a plane wave's
     phase reference from the corner to the centre multiplies it by
@@ -534,6 +534,38 @@ def centre_parity(window_u, window_v):
     m = np.arange(centre_u - half_u, centre_u + half_u + 1)
     n = np.arange(centre_v - half_v, centre_v + half_v + 1)
     return (n[:, None] + m[None, :]) % 2 == 1
+
+
+def swap_fourier_origin(slots, window_u, window_v):
+    """Restate Fourier operators between the public centre and the kernels' corner.
+
+    Each slot is ``(..., N, N)`` on the retained order labels. Translation by
+    ``(a1 + a2)/2`` gives ``D A D``, with ``D = diag((-1)**(m+n))``: the common
+    incident phase cancels. This applies to inverse-rule, NVF, tensor and magnetic
+    operators as well as ordinary Fourier coefficients, on any lattice.
+
+    Negation is an exact sign bit, so this is its own inverse even for signed
+    zeros. None slots and named-tuple/list/tuple containers are preserved. The
+    mask is static; only the arrays and their gradients cross a trace.
+    """
+    if slots is None:
+        return None
+    odd = centre_parity(window_u, window_v).reshape(-1)
+    pair = odd[:, None] ^ odd[None, :]
+    converted = []
+    for a in slots:
+        if a is None:
+            converted.append(None)
+            continue
+        if a.shape[-2:] != pair.shape:
+            raise ValueError(f'convolution slots need ({odd.size}, {odd.size}) retained '
+                             f'orders in their last two axes, got {a.shape}')
+        xp = array_namespace(a)
+        mask = as_array(xp, pair, device=_device_of(a))
+        converted.append(xp.where(mask, -a, a))
+    if isinstance(slots, tuple) and hasattr(slots, '_fields'):
+        return type(slots)(*converted)
+    return converted if isinstance(slots, list) else tuple(converted)
 
 
 def corner_column(lit, window_u, window_v):

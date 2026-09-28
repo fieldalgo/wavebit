@@ -1,5 +1,6 @@
 """Independent material loss, complex contact rules, passivity and live replay."""
 import numpy as np
+from _conv_frame import about_centre
 import pytest
 
 import wavebit
@@ -30,7 +31,7 @@ def test_independent_loss_has_analytic_longitudinal_material_and_passive_transve
     actual = wavebit.ConformingNVF(order, **SETTINGS).conv_matrices(structure, lattice)
     layer = structure[0]
     eps, _ = assemble_eps_coeffs(np, layer['shapes'], layer['background'], *order, lattice, np.complex128)
-    np.testing.assert_allclose(np.linalg.inv(actual.epz_i[0]), conv_matrix_2d(np, eps, *order),
+    np.testing.assert_allclose(np.linalg.inv(actual.epz_i[0]), about_centre(conv_matrix_2d(np, eps, *order), order),
                                atol=2e-12, rtol=0)
     tensor = np.block([[actual.epx[0], -actual.epxy[0]], [-actual.epyx[0], actual.epy[0]]])
     assert np.linalg.eigvalsh((tensor+tensor.conj().T)/2).min() > 0

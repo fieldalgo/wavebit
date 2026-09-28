@@ -7,6 +7,7 @@ import subprocess
 import sys
 
 import numpy as np
+from _conv_frame import about_centre
 import pytest
 
 import wavebit
@@ -58,13 +59,13 @@ def test_exact_physical_mapping_labels_and_independent_material_transform(order)
     for value, direct in zip(actual, expected):
         assert value.shape == (3, count, count)
         assert value.dtype == np.complex128
-        np.testing.assert_array_equal(value[1], direct[0])
+        np.testing.assert_array_equal(value[1], about_centre(direct[0], order))
     for layer, epsilon in ((0, 2.3+.4j), (2, 1.)):
         for value, factor in zip(actual, (epsilon, epsilon, 1/epsilon, 0., 0.)):
             np.testing.assert_allclose(value[layer], factor*np.eye(count), rtol=0, atol=1e-15)
     coefficients, _ = assemble_eps_coeffs(np, structure[1]['shapes'], structure[1]['background'],
                                            *order, basis, np.complex128)
-    expected_material = conv_matrix_2d(np, coefficients, *order)
+    expected_material = about_centre(conv_matrix_2d(np, coefficients, *order), order)
     np.testing.assert_allclose(np.linalg.inv(actual.epz_i[1]), expected_material, rtol=0, atol=2e-12)
 
 
@@ -292,7 +293,7 @@ def test_jax_all_thirteen_parameters_and_independent_closure_variation(wrapped):
         high, dhigh, _ = oracle(PARAMETERS, direction, cell, 24)
         np.testing.assert_allclose(high, low, rtol=0, atol=3e-10)
         np.testing.assert_allclose(dhigh, dlow, rtol=0, atol=3e-10)
-        expected, derivative = closure_variation(high, dhigh)
+        expected, derivative = (about_centre(a, (1, 1)) for a in closure_variation(high, dhigh))
         actual, tangent = evaluate(jnp.asarray(PARAMETERS), jnp.asarray(direction))
         np.testing.assert_allclose(actual, expected, rtol=0, atol=3e-10)
         np.testing.assert_allclose(tangent, derivative, rtol=0, atol=3e-9)

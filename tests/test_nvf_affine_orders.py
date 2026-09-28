@@ -22,7 +22,7 @@ def test_directional_export_closes_the_exact_fourier_set_before_inversion(order,
     for got, want in zip(actual, expected):
         assert got.shape == (1, count, count)
         np.testing.assert_allclose(got[0], want, atol=2e-11, rtol=0)
-    powers = solve(actual, 700*BASIS, order)
+    powers = solve(actual, 700*BASIS, order, kernel_frame=True)
     np.testing.assert_allclose(powers.sum(axis=(1, 2, 3)), 1., atol=2e-10, rtol=0)
 
 

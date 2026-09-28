@@ -13,6 +13,7 @@ import numpy as np
 
 from ..backend import _concrete
 from ..factorization import ConvMatrices
+from ..conventions import swap_fourier_origin
 from ..polygon import polygon_ft
 
 __all__ = ['CartesianPairPlan', 'CartesianPairCell', 'CartesianRectanglePairNVF']
@@ -473,7 +474,8 @@ class CartesianRectanglePairNVF:
         Plan is mandatory, including uniform stacks. Pass the same original
         lattice and truncation order to solve_conv. Invalid lattice data poisons
         every layer under tracing; other invalid numerical inputs poison the
-        affected layer. The physical cell already supplies all phases/materials.
+        affected layer. The physical cell supplies the corner-frame operators; the
+        returned slots are about the cell centre, as solve_conv reads them.
         """
         from ..geometry import StaleGeometryError
 
@@ -508,4 +510,5 @@ class CartesianRectanglePairNVF:
                     basis=basis, background=background, xp=xp, **geometry)
                 slots = ConvMatrices(*(slot[0] for slot in layer_slots))
             stacks.append(tuple(xp.where(valid, slot, xp.nan) for slot in slots))
-        return ConvMatrices(*(xp.stack([layer[index] for layer in stacks]) for index in range(5)))
+        corner = ConvMatrices(*(xp.stack([layer[index] for layer in stacks]) for index in range(5)))
+        return swap_fourier_origin(corner, *((0, n) for n in self.truncation_order))

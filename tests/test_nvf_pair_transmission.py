@@ -236,3 +236,20 @@ def test_integrable_outer_mode_below_half_power_is_still_retained():
     for tri,thin in zip(cell._base.data['triangles'],cell._base.data['thin']):
         if thin:
             np.testing.assert_array_equal(fields.hats[tri[:3]][:,low],0.)
+
+
+@pytest.mark.research
+def test_exported_value_and_tangent_are_the_private_operators_about_the_centre():
+    from wavebit._core.conforming.cartesian_pair_corner_galerkin import CartesianPairCornerGalerkinGapCell
+    from _conv_frame import slots_about_centre
+    cell = CartesianPairTransmissionGalerkinGapCell(CartesianPairOpeningPlan(0), (1, 1),
+        reference=(4., 9., 1.), branches=1, angular_quadrature=16)
+    settings = dict(gap=0., basis=np.diag([1.2, .9]), widths=(.3, .4), height=.45,
+                    epsilon=(4., 9.), offset=(.03, -.02), epsilon_tangent=(.1, -.2))
+    exported = cell.closure(**settings)
+    private = CartesianPairCornerGalerkinGapCell.closure(cell, **settings)
+    for actual, original in zip(exported[:2], private[:2]):
+        reference = slots_about_centre(original, (1, 1))
+        assert any(a.tobytes() != b.tobytes() for a, b in zip(actual, original))
+        for a, b in zip(actual, reference):
+            assert a.tobytes() == b.tobytes()

@@ -95,6 +95,12 @@ from ._core.spec import SPEC_VERSION
 #: that already claimed the frame for every path -- true of the pure 1D path from the same
 #: day. No name changed, which is what earned '6' and '12'.
 #:
+#: Nor does the public convolution-matrix origin move (2026-09-28):
+#: ``lattice.fourier_origin`` and its expression are additive keys. No existing key
+#: changes shape. Hand-built patterned corner-frame solve_conv inputs now describe
+#: a half-cell translation, but that input path was never published to generators.
+#: Ordinary solve() answers remain byte-identical.
+#:
 #: Nor did the move of the lateral phase reference to the cell centre (2026-09-27): the
 #: ``phase_reference`` key is added under ``results.amplitudes``, and ``cartesian.meaning`` is
 #: reworded. No key is renamed or reshaped, and the one input whose physics moved --
@@ -323,6 +329,8 @@ LATTICE = {
     'oblique': 'pass the two lattice vectors as the columns of `lattice`; `period` then '
                'reports their lengths',
     'raster_coordinates': 'lattice',
+    'fourier_origin': 'cell_centre',
+    'fourier_origin_expression': SHAPE_COORDINATES['origin_expression'],
     #: The same refusals as ``refused_on_oblique`` below, named rather than described.
     #: A consumer deciding *what to recommend* needs to test membership, and prose is not a
     #: membership test — these are what makes the constraint machine-checkable outside this
@@ -614,6 +622,8 @@ def manifest() -> dict:
             'default': LATTICE['default'],
             'oblique': LATTICE['oblique'],
             'raster_coordinates': LATTICE['raster_coordinates'],
+            'fourier_origin': LATTICE['fourier_origin'],
+            'fourier_origin_expression': LATTICE['fourier_origin_expression'],
             'paths_refused_on_oblique': list(LATTICE['paths_refused_on_oblique']),
             'factorizations_refused_on_oblique': list(
                 LATTICE['factorizations_refused_on_oblique']),

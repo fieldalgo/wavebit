@@ -7,6 +7,7 @@ import numpy as np
 from ..backend import _concrete
 from ..domain import as_material
 from ..factorization import ConvMatrices
+from ..conventions import swap_fourier_origin
 from ..geometry import StaleGeometryError
 from ..lattice import reduction_transform
 from ..parametric import check_layer_spec, check_shape_spec
@@ -262,9 +263,10 @@ class ConformingNVF:
 
         Arrays are complex128. Optical conditions belong to the consuming solver.
         Shape centers are Cartesian offsets from the cell center, matching the
-        ordinary shape API. Fourier coefficients use the engine's cell-corner
-        origin. A fresh solver without a raster structure selects the 2D route,
-        including when a retained axis has order zero.
+        ordinary shape API. Returned Fourier matrices use that same cell-centre
+        origin, the frame solve_conv reads; do not add another phase. A fresh solver
+        without a raster structure selects the 2D route, including when a retained
+        axis has order zero.
         """
         if getattr(xp, '__name__', '') == 'array_api_compat.numpy':
             xp = np
@@ -334,7 +336,8 @@ class ConformingNVF:
                          & xp.all(xp.isfinite(slots.epz_i)))
                 _require(valid, 'conforming NVF energy closure failed its passivity guard')
             stacks.append(tuple(xp.where(valid, slot, xp.nan) for slot in slots))
-        return ConvMatrices(*(xp.stack([s[i] for s in stacks]) for i in range(5)))
+        corner = ConvMatrices(*(xp.stack([s[i] for s in stacks]) for i in range(5)))
+        return swap_fourier_origin(corner, *((0, n) for n in self.truncation_order))
 
 
 __all__ = ['ConformingNVF']

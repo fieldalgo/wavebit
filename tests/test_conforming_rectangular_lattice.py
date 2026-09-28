@@ -1,5 +1,6 @@
 """Physical cell metric, unequal periods, and differentiable rectangular lattices."""
 import numpy as np
+from _conv_frame import about_centre
 import pytest
 
 import wavebit
@@ -35,10 +36,10 @@ def test_unequal_period_material_integrals_and_exact_contact(aspect, gap):
     layer = structure[0]
     eps, inverse = assemble_eps_coeffs(np, layer['shapes'], layer['background'],
                                        *order, lattice, np.complex128)
-    tangent = conv_matrix_2d(np, eps, *order)
+    tangent = about_centre(conv_matrix_2d(np, eps, *order), order)
     np.testing.assert_allclose(actual.epz_i[0], np.linalg.inv(tangent), atol=2e-12, rtol=0)
     if gap == 0:
-        normal = np.linalg.inv(conv_matrix_2d(np, inverse, *order))
+        normal = np.linalg.inv(about_centre(conv_matrix_2d(np, inverse, *order), order))
         c, s = np.cos(p[8]), np.sin(p[8])
         expected = (c*c*normal+s*s*tangent, s*s*normal+c*c*tangent,
                     np.linalg.inv(tangent), c*s*(tangent-normal), c*s*(tangent-normal))

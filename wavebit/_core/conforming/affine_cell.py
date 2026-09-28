@@ -254,7 +254,7 @@ class AffineCellGapModel(ComplexMaterialGapModel):
         return self._matrices_from_coefficients(coefficients, metadata, xp)
 
     def conv_matrices(self, gap, epsilon=12.25, width=350., xp=np, *, basis):
-        """One layer for solve_conv with this basis and truncation_order.
+        """One layer for the internal _solve_conv with this basis and truncation_order.
 
         The profile background is one. Relative materials with a negative
         imaginary part require restoration of their physical background

@@ -100,7 +100,7 @@ def test_affine_matrices_feed_the_engine_with_contact_inverse_rule(backend, gap,
     model = AffineCellGapModel(1, **SETTINGS)
     lattice, epsilon = 700*BASIS, 4.+1j*loss
     actual = model.conv_matrices(gap, epsilon, basis=lattice)
-    powers = solve(actual, lattice, (1, 1), backend=backend)
+    powers = solve(actual, lattice, (1, 1), backend=backend, kernel_frame=True)
     assert powers.min() > -2e-12
     if loss:
         assert np.all(1-powers.sum(axis=(1, 2, 3)) > 1e-3)
@@ -122,13 +122,13 @@ def test_affine_matrices_feed_the_engine_with_contact_inverse_rule(backend, gap,
                                                             np.linalg.inv(eps), -transverse[0][1], -transverse[1][0])))
         for got, want in zip(actual, expected):
             np.testing.assert_allclose(got, want, atol=3e-11, rtol=0)
-        np.testing.assert_allclose(powers, solve(expected, lattice, (1, 1)), atol=2e-10, rtol=0)
+        np.testing.assert_allclose(powers, solve(expected, lattice, (1, 1), kernel_frame=True), atol=2e-10, rtol=0)
     else:
         theta = .37
         rotation = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
         rotated_lattice = rotation@lattice
         rotated = model.conv_matrices(gap, epsilon, basis=rotated_lattice)
-        np.testing.assert_allclose(solve(rotated, rotated_lattice, (1, 1), angle=.31+theta, backend=backend),
+        np.testing.assert_allclose(solve(rotated, rotated_lattice, (1, 1), angle=.31+theta, backend=backend, kernel_frame=True),
                                    powers, atol=2e-10, rtol=0)
 
 

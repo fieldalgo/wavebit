@@ -14,6 +14,7 @@ from numbers import Integral
 import numpy as np
 
 from ..factorization import ConvMatrices
+from ..conventions import swap_fourier_origin
 from ..backend import _concrete
 from ..polygon import polygon_ft, rect_verts
 
@@ -397,8 +398,9 @@ class CartesianRectangleNVF:
         """Return five complex128 layer slots on the caller's exact Fourier set.
 
         Pass the same original lattice and truncation order to solve_conv.
-        The physical cell already applies the Fourier origin and materials;
-        replay adds no reduction, rotation, background factor or phase.
+        The physical cell applies the materials in the corner frame; the returned
+        operators are restated about the cell centre, as solve_conv reads them.
+        Do not add a phase to the returned slots.
         ``plan`` is mandatory, including for uniform stacks.
         """
         from ..geometry import StaleGeometryError
@@ -432,4 +434,5 @@ class CartesianRectangleNVF:
                     basis=basis, background=background, xp=xp, **geometry)
                 slots = ConvMatrices(*(slot[0] for slot in layer_slots))
             stacks.append(tuple(xp.where(valid, slot, xp.nan) for slot in slots))
-        return ConvMatrices(*(xp.stack([layer[i] for layer in stacks]) for i in range(5)))
+        corner = ConvMatrices(*(xp.stack([layer[i] for layer in stacks]) for i in range(5)))
+        return swap_fourier_origin(corner, *((0, n) for n in self.truncation_order))

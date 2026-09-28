@@ -1,5 +1,6 @@
 """Explicit pair NVF with fixed local transmission trial functions."""
 from numbers import Integral
+from ..conventions import swap_fourier_origin
 import numpy as np
 from .cartesian_pair_corner_galerkin import CartesianPairCornerGalerkinGapCell
 from .pair_transmission_fields import PairTransmissionFields
@@ -61,6 +62,24 @@ class CartesianPairTransmissionGalerkinGapCell(CartesianPairCornerGalerkinGapCel
         self.branches = int(branches)
         self.cutoff_order = int(cutoff_order)
         self.root_order = 20
+
+    def closure(self, *, gap, basis, widths, height, epsilon, background=1.,
+                offset=(0., 0.), gap_tangent=1., epsilon_tangent=(0., 0.),
+                background_tangent=0.):
+        """Return centre-frame value and tangent slots for ``solve_conv``.
+
+        ``offset`` places the pair relative to the public cell centre. The
+        private parent computes in its existing chart; both exported operators
+        are restated at this door. ``coordinate_origin`` also names their
+        Fourier origin here, as well as the chart used in the construction.
+        """
+        value, tangent, metadata = super().closure(
+            gap=gap, basis=basis, widths=widths, height=height, epsilon=epsilon,
+            background=background, offset=offset, gap_tangent=gap_tangent,
+            epsilon_tangent=epsilon_tangent, background_tangent=background_tangent)
+        window = tuple((0, n) for n in self.order)
+        return (swap_fourier_origin(value, *window),
+                swap_fourier_origin(tangent, *window), metadata)
 
     def _closure_at_offset(self, settings):
         # Geometry is fixed in a JVP. Construct locally, so separate closure

@@ -1,5 +1,6 @@
 """Exact common-loss scaling, passive stacks, constrained derivatives and refusals."""
 import numpy as np
+from _conv_frame import about_centre
 import pytest
 
 import wavebit
@@ -48,7 +49,7 @@ def test_lossy_material_matches_independent_analytic_integrals(axis, order):
     actual = wavebit.ConformingNVF(order, **SETTINGS).conv_matrices(structure, lattice)
     layer = structure[0]
     eps, _ = assemble_eps_coeffs(np, layer['shapes'], layer['background'], *order, lattice, np.complex128)
-    np.testing.assert_allclose(np.linalg.inv(actual.epz_i[0]), conv_matrix_2d(np, eps, *order),
+    np.testing.assert_allclose(np.linalg.inv(actual.epz_i[0]), about_centre(conv_matrix_2d(np, eps, *order), order),
                                atol=2e-12, rtol=0)
 
 

@@ -791,3 +791,14 @@ def test_the_manifest_does_not_import_an_optional_backend_to_answer():
     assert seen['backends'] == ['jax', 'numpy', 'torch'], seen
     assert not seen['jax'] and not seen['torch'], (
         f'building the manifest imported an optional backend: {seen}')
+
+
+def test_the_published_fourier_origin_matches_a_centred_stripe():
+    claim = manifest()['lattice']
+    assert claim['fourier_origin'] == 'cell_centre'
+    assert claim['fourier_origin_expression'] == '0.5*(a1 + a2)'
+    row = np.ones((1, 1, 100));row[..., 30:70] = 3.
+    solver = wavebit.rcwa(structure=row, period=(1., 1.), thickness=[.2],
+                         truncation_order=(1, 0), tetm='te')
+    coefficient = solver.eps_conv_matrices().epy[0, 2, 1]
+    np.testing.assert_allclose(coefficient, 2*.4*np.sinc(.4), atol=2e-14, rtol=0)

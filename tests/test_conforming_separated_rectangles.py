@@ -1,5 +1,6 @@
 """Background intervals, representation invariance and live gap closure."""
 import numpy as np
+from _conv_frame import about_centre
 import pytest
 
 import wavebit
@@ -40,7 +41,7 @@ def test_internal_background_matches_independent_analytic_material_integrals(axi
     actual = builder.conv_matrices(structure, lattice, plan=plan)
     layer = structure[0]
     eps, _ = assemble_eps_coeffs(np, layer['shapes'], layer['background'], *order, lattice, np.complex128)
-    np.testing.assert_allclose(np.linalg.inv(actual.epz_i[0]), conv_matrix_2d(np, eps, *order),
+    np.testing.assert_allclose(np.linalg.inv(actual.epz_i[0]), about_centre(conv_matrix_2d(np, eps, *order), order),
                                atol=2e-12, rtol=0)
 
 

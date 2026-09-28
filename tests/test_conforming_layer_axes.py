@@ -1,5 +1,6 @@
 """Layer-local tiling frames, rectangle representations, and frozen axis replay."""
 import numpy as np
+from _conv_frame import about_centre
 import pytest
 
 import wavebit
@@ -35,7 +36,7 @@ def test_vertical_plan_and_material_match_the_original_lattice_fourier_layout(or
     layer = structure[0]
     eps, _ = assemble_eps_coeffs(np, layer['shapes'], layer['background'],
                                  *order, lattice, np.complex128)
-    np.testing.assert_allclose(np.linalg.inv(actual.epz_i[0]), conv_matrix_2d(np, eps, *order),
+    np.testing.assert_allclose(np.linalg.inv(actual.epz_i[0]), about_centre(conv_matrix_2d(np, eps, *order), order),
                                atol=2e-12, rtol=0)
 
 
@@ -89,8 +90,8 @@ def _contact_reference(layer, lattice, order, axis):
     # one-dimensional inverse rule in the physical material-normal direction.
     eps, reciprocal = assemble_eps_coeffs(np, layer['shapes'], layer['background'],
                                           *order, lattice, np.complex128)
-    tangent = conv_matrix_2d(np, eps, *order)
-    normal = np.linalg.inv(conv_matrix_2d(np, reciprocal, *order))
+    tangent = about_centre(conv_matrix_2d(np, eps, *order), order)
+    normal = np.linalg.inv(about_centre(conv_matrix_2d(np, reciprocal, *order), order))
     rotation = lattice/np.linalg.norm(lattice, axis=0)
     x, y = (normal, tangent) if axis == 0 else (tangent, normal)
     c, s = rotation[0, 0], rotation[1, 0]

@@ -6,6 +6,7 @@ import subprocess
 import sys
 
 import numpy as np
+from _conv_frame import about_centre, slots_about_centre
 import pytest
 
 import wavebit
@@ -29,11 +30,13 @@ def scene(p=PARAMETERS, xp=np):
     return [dict(background=background, shapes=shapes[::-1])], period*rotation
 
 
-def solve(conv, lattice, order, *, scale=1., angle=.31, backend=0):
+def solve(conv, lattice, order, *, scale=1., angle=.31, backend=0, kernel_frame=False):
     solver = wavebit.rcwa(backend=backend, lattice=lattice, wavelength=900.*scale,
                           theta=.23, phi=.47+angle, thickness=[173.*scale]*len(conv.epx),
                           truncation_order=order, top=1., bot=2.25)
-    answer = solver.solve_conv(*(solver.xp.asarray(a, dtype=solver.xp.complex128) for a in conv))
+    # Public builders and private study models deliberately use different doors.
+    operation = solver._solve_conv if kernel_frame else solver.solve_conv
+    answer = operation(*(solver.xp.asarray(a, dtype=solver.xp.complex128) for a in conv))
     def read(a):
         return a.detach().cpu().numpy() if hasattr(a, 'detach') else np.asarray(a)
     return np.array([[read(getattr(getattr(answer, pol), key)) for key in ('T', 'R')]
@@ -51,10 +54,8 @@ def test_public_shapes_preserve_the_existing_cell_and_sort_only_at_plan_time():
     actual = builder.conv_matrices(structure, lattice, plan=plan)
     expected = PolynomialBodyGapModel(1, flux_basis='local', **SETTINGS).conv_matrices(
         p[1], dict(seams=[p[2]], values=p[3:5]), p[0])
-    n, m = np.meshgrid(np.arange(-1, 2), np.arange(-1, 2), indexing='ij')
-    phase = np.exp(-1j*np.pi*(n+m).ravel())
     for got, want in zip(actual, expected):
-        np.testing.assert_allclose(got, phase[:, None]*want*phase.conj()[None, :], atol=2e-12, rtol=0)
+        np.testing.assert_allclose(got, want, atol=2e-12, rtol=0)
 
 
 @pytest.mark.research
@@ -68,7 +69,7 @@ def test_longitudinal_material_matches_independent_analytic_shape_integration(or
     conv = wavebit.ConformingNVF(order, **SETTINGS).conv_matrices(structure, lattice)
     layer = structure[0]
     c, _ = assemble_eps_coeffs(np, layer['shapes'], layer['background'], *order, lattice, np.complex128)
-    expected = conv_matrix_2d(np, c, *order)
+    expected = about_centre(conv_matrix_2d(np, c, *order), order)
     np.testing.assert_allclose(np.linalg.inv(conv.epz_i[0]), expected, atol=1e-12, rtol=0)
     assert conv.epx.dtype == np.complex128
     count = (2*order[0]+1)*(2*order[1]+1)
@@ -139,6 +140,9 @@ def test_equal_material_subdivision_does_not_add_an_interface_constraint():
 
 
 def _objective(conv, xp):
+    # Keep the established random-entry functional in the kernels' frame.
+    # Changing its weights would change the secant error the tolerances measure.
+    conv = slots_about_centre(conv)
     slots = xp.stack(conv)
     weights = xp.asarray(np.random.default_rng(518).normal(size=slots.shape))
     return xp.sum(weights*(slots.real+.37*slots.imag))
@@ -231,8 +235,8 @@ def test_full_height_contact_matches_independent_rotated_cartesian_inverse_rule(
     layer = structure[0]
     eps, inverse = assemble_eps_coeffs(np, layer['shapes'], layer['background'],
                                        *order, lattice, np.complex128)
-    tangent = conv_matrix_2d(np, eps, *order)
-    normal = np.linalg.inv(conv_matrix_2d(np, inverse, *order))
+    tangent = about_centre(conv_matrix_2d(np, eps, *order), order)
+    normal = np.linalg.inv(about_centre(conv_matrix_2d(np, inverse, *order), order))
     c, s = np.cos(p[7]), np.sin(p[7])
     expected = (c*c*normal+s*s*tangent, s*s*normal+c*c*tangent,
                 np.linalg.inv(tangent), c*s*(tangent-normal), c*s*(tangent-normal))
@@ -321,3 +325,39 @@ assert not any(name == 'studies' or name.startswith('studies.') for name in sys.
     result = subprocess.run([sys.executable, '-c', code], cwd=tmp_path, env=env,
                             capture_output=True, text=True, timeout=60)
     assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.research
+@pytest.mark.parametrize('door', ['conforming', 'rebased', 'affine', 'rectangle', 'pair'])
+def test_each_public_nvf_door_publishes_the_accessor_frame(door):
+    """The longitudinal integral checks the caller's original order labels independently."""
+    order = (1, 1)
+    if door in ('conforming', 'rebased'):
+        structure, lattice = scene()
+        if door == 'rebased': lattice = lattice @ np.array([[1., 1.], [0., 1.]])
+        builder = wavebit.ConformingNVF(order, **SETTINGS)
+        conv = builder.conv_matrices(structure, lattice)
+    elif door == 'affine':
+        from test_conforming_affine_profile import layer
+        profile = layer()
+        lattice = np.diag([500., 700.])
+        p = profile['profile']; edges = [-p['width']/2, *p['seams'], p['width']/2]
+        shapes = [dict(type='rectangle', lx=500*(b-a), ly=700*p['height'],
+                       cx=p['offset'][0]+500*(a+b)/2, cy=p['offset'][1], material=e)
+                  for a, b, e in zip(edges, edges[1:], p['values'])]
+        structure = [dict(background=profile['background'], shapes=shapes)]
+        conv = wavebit.AffineProfileNVF(order, **SETTINGS).conv_matrices([profile], lattice)
+    elif door == 'rectangle':
+        from test_nvf_cartesian_rectangle_api import scene as rectangle_scene
+        structure, lattice = rectangle_scene()
+        builder = wavebit.CartesianRectangleNVF(order, refinement=1)
+        conv = builder.conv_matrices(structure, lattice, plan=builder.plan(structure, lattice))
+    else:
+        from test_nvf_cartesian_rectangle_pair_api import scene as pair_scene, native_parameters, case_cell
+        structure, lattice = pair_scene(native_parameters(case_cell('gap-r1')[1]))
+        builder = wavebit.CartesianRectanglePairNVF(order, refinement=1)
+        conv = builder.conv_matrices(structure, lattice, plan=builder.plan(structure, lattice))
+    s = wavebit.rcwa(structure=structure, lattice=lattice, truncation_order=order,
+                    thickness=[100.], factorization='laurent')
+    np.testing.assert_allclose(np.linalg.inv(conv.epz_i[0]), s.eps_conv_matrices().epx[0],
+                               atol=5e-12, rtol=0)

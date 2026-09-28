@@ -1,7 +1,7 @@
 """One lateral phase reference for every per-order quantity: the cell centre, ``x = y = 0``.
 
 Every public coordinate is measured from the centre of the cell (2026-08-31). The kernels still
-integrate from the corner -- a convolution matrix is a set of Fourier coefficients about it --
+integrate from the corner -- their private convolution matrices use that frame --
 and the corner is also where every per-order phase used to be referenced. Moving a plane wave's
 reference from the corner to the centre ``o = (a1 + a2)/2`` multiplies order ``(m, n)`` by
 ``exp(1j * k_mn . o) = exp(1j * k_inc . o) * (-1)**(m + n)``, on any cell, because

@@ -23,7 +23,7 @@ from . import lattice as _lattice
 from .backend import _concrete, _device_of, array_namespace, as_array, check_input_precision
 from .conventions import (_CHI_POLARIZATION_CLASH, _COMPLEX_CHI, _DIRECTION_CLASH,
                           _PSI_POLARIZATION_CLASH, _TETM_INCIDENCE_CLASH,
-                          centre_parity, corner_column, incident_phase_index,
+                          centre_parity, corner_column, swap_fourier_origin, incident_phase_index,
                           incident_sp_amplitudes, lit_orders, order_window,
                           parse_order_pair, reject_complex_angle, transverse_component_problem,
                           warn_if_xy_on_a_skewed_cell)
@@ -3149,9 +3149,11 @@ class CoreFactorizationMixin:
         epy, epz_i, epxy, epyx)``, then the z row ``(epxz, epyz, epzx, epzy)`` -- followed by
         ``mu`` and the half-space terms. ``solver.solve_conv(*solver.eps_conv_matrices())`` is
         ``solver.solve()``; see :mod:`wavebit._core.factorization` for why ``epz_i`` sits third
-        rather than last. The matrices are read about the cell corner, the frame
-        :meth:`eps_conv_matrices` returns; the amplitudes and fields this answers are referenced
-        at the centre, like every solve's.
+        rather than last. Every input slot is referenced at the cell centre, the frame
+        :meth:`eps_conv_matrices` and :meth:`mu_conv_matrices` publish. Hand-built Fourier
+        coefficients must use coordinates measured from that centre too. Each slot is
+        restated once for the kernels as ``D C D``, ``D = diag((-1)**(m+n))`` by order label.
+        Private builders return corner-frame matrices for :meth:`_solve_conv` instead.
 
         Takes no wavelength. The solver already has one, and a second spelling of it was a
         second thing that could disagree: the k vectors, the field reconstruction and the
@@ -3159,9 +3161,13 @@ class CoreFactorizationMixin:
         have answered one problem while the rest of the object described another.
         """
 
+        window = self.order_window
+        eps = swap_fourier_origin(
+            (epx_conv_all, epy_conv_all, epz_conv_i_all, epxy_conv_all, epyx_conv_all,
+             epxz_conv_all, epyz_conv_all, epzx_conv_all, epzy_conv_all), *window)
+        mu = swap_fourier_origin(mu, *window)
         return self._solve_conv(
-            epx_conv_all, epy_conv_all, epz_conv_i_all, epxy_conv_all, epyx_conv_all,
-            epxz_conv_all, epyz_conv_all, epzx_conv_all, epzy_conv_all, mu=mu,
+            *eps, mu=mu,
             mu_top=mu_top, mu_bot=mu_bot, eps_top=eps_top, eps_bot=eps_bot)
 
     @device_scoped
@@ -4344,17 +4350,19 @@ class CoreFactorizationMixin:
         -- widening the tuple would change what every existing caller unpacks.
         :meth:`mu_conv_matrices` returns them in the same five- or nine-slot layout.
 
-        **Fourier coefficients about the cell corner**, the kernels' origin -- not the centre,
-        where every amplitude and field a solve answers is referenced since 2026-09-27. A
-        denser feature centred at ``x = y = 0`` reads a negative first harmonic here, and a
-        hand-built :meth:`solve_conv` input is read in this frame while its answers come back
-        about the centre (``docs/conventions.md``, "One origin: the cell is centred on it").
+        **Fourier operators about the cell centre**, ``x = y = 0``, as :meth:`solve_conv`
+        reads them. Since 2026-09-28 each kernel-frame slot is restated as ``D C D``, with
+        ``D = diag((-1)**(m+n))`` by order label. A centred denser stripe has a positive first
+        harmonic. See ``docs/conventions.md``, "One origin: the cell is centred on it".
+        This allocates an array per slot and a negated temporary, at quadratic cost in the
+        retained order count. Ordinary :meth:`solve` uses the private builders directly and
+        pays no conversion cost.
 
         ``geometry`` behaves as in :meth:`solve`, and so do the conditions: a traced cell or
         structure serves this call and is put back after it.
         """
         with self._conditions(kwargs):
-            return self._eps_conv_matrices(geometry)
+            return swap_fourier_origin(self._eps_conv_matrices(geometry), *self.order_window)
 
     @device_scoped
     def mu_conv_matrices(self, geometry=None, **kwargs):
@@ -4372,13 +4380,14 @@ class CoreFactorizationMixin:
 
         Full tensors append muxz, muyz, muzx and muzy in the same negative
         off-diagonal convention, returning :class:`wavebit.TensorConvMatrices`.
-        A coupling in either epsilon or mu selects 4ff automatically.
+        A coupling in either epsilon or mu selects 4ff automatically. Every slot is about
+        the cell centre, like :meth:`eps_conv_matrices` and the :meth:`solve_conv` input.
 
         ``geometry`` behaves as in :meth:`solve`, and so do the conditions: a traced cell or
         structure serves this call and is put back after it.
         """
         with self._conditions(kwargs):
-            return self._mu_conv_matrices(geometry)
+            return swap_fourier_origin(self._mu_conv_matrices(geometry), *self.order_window)
 
     def slice_structure(self, layer=0, n=512, show='eps', band_limited=False, *, component=None):
         """One layer's structure as an array. See :func:`wavebit._core.draw.slice_structure`.

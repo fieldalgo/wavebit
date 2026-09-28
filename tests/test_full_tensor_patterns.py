@@ -41,7 +41,7 @@ def laminate_blocks(e, b, axis, h, width=217.3, center=23.1):
     """Exact Fourier integral of D_normal/E_tangent relations on two intervals."""
     delta = np.arange(-h,h+1)[:,None]-np.arange(-h,h+1)[None,:]
     f = width/600.
-    indicator = f*np.sinc(delta*f)*np.exp(-2j*np.pi*delta*(.5+center/600.))
+    indicator = f*np.sinc(delta*f)*np.exp(-2j*np.pi*delta*(center/600.))
     I = np.eye(2*h+1)
     def C(fn): return fn(b)*I+(fn(e)-fn(b))*indicator
     inverse_normal = np.linalg.inv(C(lambda v:1/v[axis,axis]))

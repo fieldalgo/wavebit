@@ -198,7 +198,7 @@ class ThinGapEnergyModel:
         return self._matrices_from_coefficients(coefficients, metadata, xp)
 
     def conv_matrices(self, gap, epsilon=12.25, width=350., xp=np):
-        """One layer for Wavebit solve_conv, in the fixed local square cell.
+        """One layer for Wavebit _solve_conv, in the fixed local square cell.
 
         Use period=(700, 700) and truncation_order=(self.order, self.order)
         on the consuming solver. Its wavelength, incidence, thickness and

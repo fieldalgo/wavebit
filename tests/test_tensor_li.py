@@ -55,7 +55,7 @@ def test_laminate_matches_independent_continuous_field_relations(axis, loss):
     h, width, center = 2, 217.3, 23.1
     delta = np.arange(-h,h+1)[:,None]-np.arange(-h,h+1)[None,:]
     fill = width/600
-    indicator = fill*np.sinc(delta*fill)*np.exp(-2j*np.pi*delta*(.5+center/600))
+    indicator = fill*np.sinc(delta*fill)*np.exp(-2j*np.pi*delta*(center/600))
     I = np.eye(2*h+1)
     def C(f): return f(b)*I+(f(e)-f(b))*indicator
     A = np.linalg.inv(C(lambda t: 1/t[normal,normal]))

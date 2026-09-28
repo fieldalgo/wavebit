@@ -54,7 +54,7 @@ def test_stripe_matches_exact_tensor_pn_series(n):
              structure=[dict(background=wavebit.Material(bg),shapes=[dict(
                  type='rectangle',lx=width,ly=600.,material=wavebit.Material(e))])])
     orders=np.arange(-h,h+1);delta=orders[:,None]-orders[None,:]
-    F=width/600*np.sinc(delta*width/600)*np.exp(-1j*np.pi*delta)
+    F=width/600*np.sinc(delta*width/600)
     I=np.eye(2*h+1)
     def integrate(a,b): return b*I+(a-b)*F
     def ab(t):
@@ -154,7 +154,7 @@ def test_magnetic_tensor_uses_its_own_region_values():
     magnetic=wavebit.Material(1.,mu=dielectric.epsilon)
     a=solver(structure=[dict(background=1.,shapes=[dict(type='circle',lx=217.,material=dielectric)])])
     b=solver(structure=[dict(background=wavebit.Material(1.,1.),shapes=[dict(type='circle',lx=217.,material=magnetic)])])
-    for e,m in zip(a.eps_conv_matrices(),b._mu_conv_matrices()):np.testing.assert_allclose(e,m,atol=2e-12)
+    for e,m in zip(a.eps_conv_matrices(),b.mu_conv_matrices()):np.testing.assert_allclose(e,m,atol=2e-12)
 
 
 @pytest.mark.parametrize('backend',[0,1,2])

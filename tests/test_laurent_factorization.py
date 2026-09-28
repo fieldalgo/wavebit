@@ -27,6 +27,7 @@ The comparison with another solver is ``tests/references/test_fmmax_laurent_gold
 fmmax's ``Formulation.FFT`` assembles the same operator, and agrees to round-off.
 """
 import numpy as np
+from _conv_frame import slots_about_centre
 import pytest
 
 import array_api_compat.numpy as xnp
@@ -339,7 +340,7 @@ def test_the_permeability_takes_the_same_rule():
     mu[0, 2:9, 5:18] = 2.5
     solver = wavebit.rcwa(**_SCENE, structure=eps, mu=mu, factorization='laurent')
     Mu, Mv = _SCENE['truncation_order']
-    want = F.laurent_conv_matrices(xnp, mu[0].astype(complex), Mu, Mv)
+    want = slots_about_centre(F.laurent_conv_matrices(xnp, mu[0].astype(complex), Mu, Mv), (Mu, Mv))
     got = solver.mu_conv_matrices()
     for slot in ('epx', 'epy', 'epz_i'):
         assert np.abs(np.asarray(getattr(got, slot))[0] - getattr(want, slot)).max() < 1e-14

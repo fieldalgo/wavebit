@@ -30,6 +30,7 @@ pointwise transform by round-off (a few ulps, never on a one-pixel or single-row
 NumPy and PyTorch stayed bit-identical.
 """
 import numpy as np
+from _conv_frame import about_centre, slots_about_centre
 import pytest
 
 import array_api_compat.numpy as xnp
@@ -595,10 +596,10 @@ def test_the_permeability_is_nested_the_same_way():
     mu[0, 3:9, 2:17] = 2.5
     solver = wavebit.rcwa(**_SCENE, structure=eps, mu=mu, li_nesting='symmetric')
     Mu, Mv = _SCENE['truncation_order']
-    want = F.li_conv_matrices(xnp, mu[0], Mu, Mv, nesting='symmetric')
+    want = slots_about_centre(F.li_conv_matrices(xnp, mu[0], Mu, Mv, nesting='symmetric'), (Mu, Mv))
     got = solver.mu_conv_matrices()
     assert _rel(np.asarray(got.epx)[0], want.epx) < 1e-14
-    fixed = F.li_conv_matrices(xnp, mu[0], Mu, Mv, nesting='fixed')
+    fixed = slots_about_centre(F.li_conv_matrices(xnp, mu[0], Mu, Mv, nesting='fixed'), (Mu, Mv))
     assert _rel(np.asarray(got.epx)[0], fixed.epx) > 1e-6
 
 
@@ -612,10 +613,10 @@ def test_the_per_call_doors_reach_the_build():
     solver = wavebit.rcwa(**_SCENE, structure=eps, mu=mu)
     got = solver.eps_conv_matrices(li_nesting='symmetric')
     assert _rel(np.asarray(got.epx)[0],
-                F.li_conv_matrices(xnp, eps[0], Mu, Mv, nesting='symmetric').epx) < 1e-14
+                about_centre(F.li_conv_matrices(xnp, eps[0], Mu, Mv, nesting='symmetric').epx, (Mu, Mv))) < 1e-14
     got = solver.mu_conv_matrices(li_nesting='symmetric')
     assert _rel(np.asarray(got.epx)[0],
-                F.li_conv_matrices(xnp, mu[0], Mu, Mv, nesting='symmetric').epx) < 1e-14
+                about_centre(F.li_conv_matrices(xnp, mu[0], Mu, Mv, nesting='symmetric').epx, (Mu, Mv))) < 1e-14
     nvf = wavebit.rcwa(**_SCENE, structure=eps, factorization='nvf')
     with pytest.raises(NotImplementedError, match="li_nesting='symmetric' has no reader"):
         nvf.freeze_geometry(li_nesting='symmetric')

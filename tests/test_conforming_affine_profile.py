@@ -2,6 +2,7 @@
 import copy
 
 import numpy as np
+from _conv_frame import slots_about_centre
 import pytest
 
 from wavebit import AffineProfileNVF, ConformingNVF
@@ -32,7 +33,7 @@ def material_matrix(scene, basis, order, reciprocal=False):
     p = scene['profile']
     modes = labels(order)
     dm, dn = (modes[:, None]-modes[None]).transpose(2, 0, 1)
-    center = np.array([.5, .5])+np.linalg.solve(basis, p.get('offset', (0., 0.)))
+    center = np.linalg.solve(basis, p.get('offset', (0., 0.)))
     background = physical_material(scene.get('background', 1.))
     background = 1/background if reciprocal else background
     result = background*np.eye(len(modes), dtype=complex)
@@ -128,7 +129,8 @@ def test_unequal_orders_are_selected_before_the_energy_inverses(monkeypatch):
     index = np.array([np.flatnonzero(np.all(full == k, axis=1))[0] for k in labels(order)])
     both = np.r_[index, index+len(full)]
     q, g, z = captured[0]
-    expected = close(q[np.ix_(both, both)], g[np.ix_(both, both)], z[np.ix_(index, index)])
+    expected = slots_about_centre(
+        close(q[np.ix_(both, both)], g[np.ix_(both, both)], z[np.ix_(index, index)]), order)
     actual = AffineProfileNVF(order, **SETTINGS).conv_matrices([scene], BASIS)
     for got, want in zip(actual, expected):
         np.testing.assert_allclose(got[0], want, atol=3e-12, rtol=0)
@@ -274,7 +276,7 @@ def test_coincident_seams_keep_the_independent_material_opening_derivative():
     value, derivative = jax.jit(lambda g: jax.jvp(material, (g,), (jnp.ones_like(g),)))(jnp.asarray(0.))
     np.testing.assert_allclose(value, material_matrix(scene, BASIS, order), atol=3e-12, rtol=0)
     dm, dn = (labels(order)[:, None]-labels(order)[None]).transpose(2, 0, 1)
-    center = .5+np.linalg.solve(BASIS, p['offset'])
+    center = np.linalg.solve(BASIS, p['offset'])
     expected = ((middle-(p['values'][0]+p['values'][1])/2)*p['height']*np.sinc(dn*p['height'])
                 *np.exp(-2j*np.pi*(dm*(center[0]+.04)+dn*center[1])))
     np.testing.assert_allclose(derivative, expected, atol=2e-8, rtol=0)

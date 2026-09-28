@@ -1,5 +1,6 @@
 """Exact point-lattice rebasing, original Fourier sets and live physical data."""
 import numpy as np
+from _conv_frame import about_centre, slots_about_centre
 import pytest
 
 import wavebit
@@ -25,8 +26,8 @@ def rebased_scene(p=PARAMETERS, transform=TRANSFORMS[0], losses=(0., .8, 2.1), x
 def contact_reference(layer, lattice, order, axis, angle):
     epsilon, reciprocal = assemble_eps_coeffs(np, layer['shapes'], layer['background'],
                                               *order, lattice, np.complex128)
-    tangent = conv_matrix_2d(np, epsilon, *order)
-    normal = np.linalg.inv(conv_matrix_2d(np, reciprocal, *order))
+    tangent = about_centre(conv_matrix_2d(np, epsilon, *order), order)
+    normal = np.linalg.inv(about_centre(conv_matrix_2d(np, reciprocal, *order), order))
     theta = angle+axis*np.pi/2
     c, s = np.cos(theta), np.sin(theta)
     return (c*c*normal+s*s*tangent, s*s*normal+c*c*tangent, np.linalg.inv(tangent),
@@ -51,7 +52,7 @@ def test_original_cell_origin_and_retained_orders_match_analytic_material_integr
     assert actual.epx.shape == (1, (2*order[0]+1)*(2*order[1]+1), (2*order[0]+1)*(2*order[1]+1))
     layer = structure[0]
     eps, _ = assemble_eps_coeffs(np, layer['shapes'], layer['background'], *order, lattice, np.complex128)
-    np.testing.assert_allclose(np.linalg.inv(actual.epz_i[0]), conv_matrix_2d(np, eps, *order),
+    np.testing.assert_allclose(np.linalg.inv(actual.epz_i[0]), about_centre(conv_matrix_2d(np, eps, *order), order),
                                atol=3e-12, rtol=0)
 
 
@@ -95,7 +96,8 @@ def test_nonrectangular_retained_set_is_selected_before_energy_closure(monkeypat
     wavebit.ConformingNVF(envelope, **SETTINGS).conv_matrices(reference_structure, reference_lattice)
     q, g, z = captured[0]
     both = np.r_[index, index+len(z)]
-    expected = close(q[np.ix_(both, both)], g[np.ix_(both, both)], z[np.ix_(index, index)])
+    expected = slots_about_centre(
+        close(q[np.ix_(both, both)], g[np.ix_(both, both)], z[np.ix_(index, index)]), order)
     for got, want in zip(actual, expected):
         np.testing.assert_allclose(got[0], want, atol=5e-12, rtol=0)
 
