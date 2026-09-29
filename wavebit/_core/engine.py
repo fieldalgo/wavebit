@@ -94,6 +94,19 @@ _SOLVES = {
 _CELL_UNSET = object()
 
 
+def _refuse_cell_spellings(period, lattice):
+    """Choose one cell spelling per call; lattice=None withdraws an existing basis."""
+    if period is not _CELL_UNSET and lattice is not None:
+        raise ValueError(
+            'period and lattice both given. `period=(Lx, Ly)` is the axis-aligned '
+            '*spelling* of a cell, not a second cell -- on a skewed one it is '
+            '(|a1|, |a2|), with the angle already gone, so the two cannot both be '
+            'honoured. Pass one:\n'
+            '    lattice=wavebit.Lattice.hexagonal(400.)      # or oblique(...) / a 2x2\n'
+            '    period=[700., 1100.]                 # the rectangular cell\n'
+            'Until now `lattice` won and `period` was ignored in silence.')
+
+
 def _concrete_period(value):
     """``period`` as two plain floats, or ``None`` if it has none to give.
 
@@ -1280,9 +1293,12 @@ class CoreSolveMixin:
             self._lattice_basis = None
             return
         A = _lattice.as_lattice(lattice=value)
-        self._cell_named = True          # an assignment names it, as a keyword does
+        period = self._as_lengths(_lattice.periods_of(A), pair=True)
+        # A basis and its derived readout form one assignment. A rejected conversion
+        # must not publish a partial cell or turn an implicit default into a declaration.
+        self._period = period
         self._lattice_basis = A
-        self._set_period_slot(_lattice.periods_of(A))   # derived, not chosen
+        self._cell_named = True          # an assignment names it, as a keyword does
 
     #: Whether a cell was ever *named* by the caller. ``True`` here so that anything built
     #: by a route other than the constructor is not accused of omitting one; the constructor
@@ -1924,15 +1940,24 @@ class CoreSolveMixin:
         if type(value) in (int, float):
             value = [value] * (2 if pair else 1)
         elif type(value) in (list, tuple, _np.ndarray) or isinstance(value, self._ARRAY_TYPES):
-            if pair and len(value) == 1:
+            if getattr(value, 'ndim', None) == 0:
+                value = [value] * (2 if pair else 1)
+            elif pair and len(value) == 1:
                 value = [value[0], value[0]]
         else:
             raise ValueError
         if isinstance(value, (list, tuple)) and any(
                 isinstance(v, self._ARRAY_TYPES) for v in value):
-            return xp.stack([as_array(xp, v, dtype=self.float_dtype,
-                                      device=self._array_device) for v in value])
-        return as_array(xp, value, dtype=self.float_dtype, device=self._array_device, copy=True)
+            lengths = xp.stack([as_array(xp, v, dtype=self.float_dtype,
+                                         device=self._array_device) for v in value])
+        else:
+            lengths = as_array(xp, value, dtype=self.float_dtype,
+                               device=self._array_device, copy=True)
+        if lengths.ndim != 1:
+            name = 'period' if pair else 'thickness'
+            raise ValueError(f'{name}: expected a scalar length or a one-dimensional sequence; '
+                             f'got shape {tuple(lengths.shape)}')
+        return lengths
 
     @property
     def truncation_order(self):
@@ -1997,19 +2022,18 @@ class CoreSolveMixin:
                 'or `wavebit.Lattice.hexagonal(a)` / a 2x2 column_stack((a1, a2)); `period` follows '
                 'from it.')
 
-        self._cell_named = True          # an assignment names it, as a keyword does
-        self._set_period_slot(period)
-        if self._lattice_basis is not None:
-            # Axis-aligned, by the guard above: keep the two spellings from drifting apart.
-            self._lattice_basis = _lattice.as_lattice(period=self._period)
+        lengths = self._as_lengths(period, pair=True)
+        if lengths.ndim != 1 or lengths.shape[0] != 2:
+            raise ValueError('period: expected one length or a one-dimensional pair of lengths')
+        basis = (None if self._lattice_basis is None
+                 else _lattice.as_lattice(period=lengths))
+        # Publish the declaration and both spellings only after every conversion succeeds.
+        self._period = lengths
+        self._lattice_basis = basis
+        self._cell_named = True
 
     def _set_period_slot(self, period):
-        """The store, without the cell-basis question -- for the two callers that own it.
-
-        `lattice` derives `period` from a basis it just set, and the precision cascade re-casts
-        the value already there. Neither is a caller *choosing* a period, so neither should meet
-        a refusal about which spelling to use.
-        """
+        """Recast the stored lengths without choosing a new cell or changing its basis."""
         self._period = self._as_lengths(period, pair=True)
 
     @property
@@ -2749,15 +2773,7 @@ class CoreFactorizationMixin:
         # writes `period` on every document. All three now drop `period` when a basis is
         # present -- provably a no-op, since `self.lattice = lattice` below overwrites the
         # period slot with `periods_of(A)` whenever a basis arrives.
-        if period is not _CELL_UNSET and lattice is not None:
-            raise ValueError(
-                'period and lattice both given. `period=(Lx, Ly)` is the axis-aligned '
-                '*spelling* of a cell, not a second cell -- on a skewed one it is '
-                '(|a1|, |a2|), with the angle already gone, so the two cannot both be '
-                'honoured. Pass one:\n'
-                '    lattice=wavebit.Lattice.hexagonal(400.)      # or oblique(...) / a 2x2\n'
-                '    period=[700., 1100.]                 # the rectangular cell\n'
-                'Until now `lattice` won and `period` was ignored in silence.')
+        _refuse_cell_spellings(period, lattice)
 
         super().__init__(top=top, bot=bot, theta=theta, phi=phi, psi=psi, chi=chi, tetm=tetm,
                          truncation_order=truncation_order,
@@ -3082,6 +3098,7 @@ class CoreFactorizationMixin:
         device_before = self._device
         try:
             self._refuse_unknown_conditions(kwargs)
+            _refuse_cell_spellings(kwargs.get('period', _CELL_UNSET), kwargs.get('lattice'))
             for name, value in kwargs.items():
                 before = dict(self.__dict__)
                 setattr(self, name, value)

@@ -154,6 +154,8 @@ SHARED = [
      lambda: Numerics(truncation_order=-3)),
     ('a fractional order count', dict(truncation_order=2.7),
      lambda: Numerics(truncation_order=2.7)),
+    ('period arity', dict(period=[1.0, 2.0, 3.0]),
+     lambda: _stack(period=[1.0, 2.0, 3.0])),
     ('a sound scene', dict(), lambda: Incidence(wavelength=620.0, psi=0.2)),
 ]
 
@@ -176,22 +178,17 @@ KNOWN_ASYMMETRIES = [
     ('wavelength', dict(wavelength=-620.0), lambda: Incidence(wavelength=-620.0),
      'no solver has a `wavelength` property at all -- no getter, no setter, just three '
      'constructor assignments -- so a negative one is accepted and solves'),
-    ('period arity', dict(period=[1.0, 2.0, 3.0]),
-     lambda: _stack(period=[1.0, 2.0, 3.0]),
-     'the setter stores all three and the solve reads the first two, so a third length is '
-     'ignored in silence; `lattice` refuses it later, and `solve` never asks lattice'),
 ]
 
 
 @pytest.mark.parametrize('name, over, carrier, why', KNOWN_ASYMMETRIES,
                          ids=[c[0] for c in KNOWN_ASYMMETRIES])
 def test_the_gate_is_stricter_than_the_solver_here_and_that_is_recorded(name, over, carrier, why):
-    """Two slots where the gate refuses and the solver does not, listed so they are a decision.
+    """Remaining slots where the gate refuses and the solver does not.
 
-    Both are solver gaps rather than gate overreach -- a negative wavelength solves and returns
-    energy-conserving numbers, and a three-length period solves off the first two entries. The
-    rules are written as free functions in `_core.conventions` for exactly this reason: when
-    the setters adopt them, these two rows move up into `SHARED` and this test shrinks.
+    These are solver gaps rather than gate overreach: a negative wavelength solves and
+    returns energy-conserving numbers. As the setters adopt the checks, rows move up into
+    `SHARED`. Period arity is now checked by both doors.
 
     Pinned rather than left implicit so that a later reader finds a stated asymmetry instead of
     concluding the gate and the solver simply disagree.
