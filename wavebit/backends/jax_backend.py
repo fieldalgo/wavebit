@@ -349,7 +349,8 @@ def _temporary_solver_state(solver, *, keep_keywords=False, parameters=()):
         for name in ('_structure', '_structure_dispersion', '_excitation'):
             if name in state:
                 solver.__dict__[name] = _copy_condition_containers(state[name])
-        yield
+        with solver._solve_state_scope():
+            yield
     finally:
         # Direct custom writes are temporary. Concrete keywords passed through a public
         # condition scope keep their existing persistence contract after restoration.

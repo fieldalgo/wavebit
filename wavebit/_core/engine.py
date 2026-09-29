@@ -176,6 +176,15 @@ def _copy_condition_containers(value, *, snapshot_numpy=False):
     return value
 
 
+def _scoped_solve(function):
+    """Keep traced runtime only until the complete solve/field operation returns."""
+    @_functools.wraps(function)
+    def call(self, *args, **kwargs):
+        with self._solve_state_scope():
+            return function(self, *args, **kwargs)
+    return call
+
+
 def _holds_tracer(value):
     """Whether ``value`` is, or carries, a JAX tracer -- a value that cannot outlive its trace.
 
@@ -3517,6 +3526,32 @@ class CoreFactorizationMixin:
     #: it -- JAX's compiled `solve_field`. Set by `_forget_the_solve`.
     _SOLVED_ELSEWHERE = object()
 
+    @_contextlib.contextmanager
+    def _solve_state_scope(self):
+        """Retain runtime through nested field/loss work, then release JAX tracers.
+
+        A returned Result owns its field snapshot. The live solver must not keep
+        those traced modes after the outer operation ends. Nested solve_field
+        and gradient-helper calls need them until their reconstruction/loss ends.
+        """
+        depth = self.__dict__.get('_solve_state_depth', 0)
+        # A solver whose conditions already belong to a trace is itself local to
+        # that trace (including the copy reconstructed by a jitted pytree call).
+        # Its legacy field/scattering access remains usable within that scope.
+        traced_scene = any(_holds_tracer(value) for name, value in self.__dict__.items()
+                           if name not in ('layer_info_list', 'T1', '_scattering'))
+        self.__dict__['_solve_state_depth'] = depth + 1
+        try:
+            yield
+        finally:
+            if depth:
+                self.__dict__['_solve_state_depth'] = depth
+            else:
+                self.__dict__.pop('_solve_state_depth', None)
+                if not traced_scene and any(_holds_tracer(value) for value in
+                                             (self.layer_info_list, self.T1, self._scattering)):
+                    self._forget_the_solve()
+
     def _forget_the_solve(self):
         """Drop the solve state, because the scene it belonged to is no longer this solver's.
 
@@ -3769,6 +3804,7 @@ class CoreFactorizationMixin:
 
         return field_cell
 
+    @_scoped_solve
     def _solve_and_field(self, sample_x, sample_y, sample_z, incidences, geometry, **kwargs):
         """Solve, then reconstruct, sharing nothing with the caller but the arguments.
 
@@ -4440,6 +4476,7 @@ class CoreFactorizationMixin:
             f'a solver holds a tracer here only when it was assigned directly, inside a trace.')
 
     @device_scoped
+    @_scoped_solve
     def solve(self, geometry=None, auto_detune=True, **kwargs):
         """Build the convolution matrices, then solve.
 
@@ -4483,6 +4520,10 @@ class CoreFactorizationMixin:
         tracer -- the cell, the structure, a thickness, a wavelength, an angle -- is put back
         to what it held once the call returns, even when a later keyword's setter raises
         (:meth:`_conditions`); a value that is concrete once stored stays as assigned.
+        For a captured live solver, traced field modes and amplitudes are released
+        after this operation. Reconstruct from the returned Result, or use solve_field
+        to keep solve and reconstruction in one scope. A trace-local solver and the
+        grad/fit helper scopes retain legacy runtime until their field/loss work ends.
 
         Raises:
             StaleGeometryError: eagerly, when ``geometry`` no longer describes the structure it

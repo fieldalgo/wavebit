@@ -4,7 +4,7 @@ The scattering problem is solved once per retained Bloch sector. Physical
 Cartesian fields, including their spatial phases, are combined before power
 is evaluated. H uses the same normalization as reconstruct_field: Z0 H_SI.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 
 import numpy as np
 
@@ -12,14 +12,30 @@ from .backend import as_array, check_finite
 from .enums import Answers, answers_of
 from .field_result import ResultFields, source_state
 from .conventions import boundary_kz, parse_excitation
-from .engine import _unknown_attribute
-from .sources import (PlaneWave, OrderExcitation, GaussianBeam, ElectricDipole, source_list, _positive)
+from .engine import _unknown_attribute, _holds_tracer
+from .sources import (Source, PlaneWave, OrderExcitation, GaussianBeam, ElectricDipole, source_list, _positive)
 from .source_expansion import resolve_wave, gaussian_waves, dipole_layers
 from .scattering import redheffer_star
 from .solve_2d_4ff import (
     _conv_layers, _interface_s, _propagate_s, layer_matrix_4ff,
     split_forward_backward,
 )
+
+
+def _source_holds_tracer(value):
+    """Inspect typed source declarations as well as ordinary condition containers."""
+    stack = [value]
+    while stack:
+        item = stack.pop()
+        if _holds_tracer(item):
+            return True
+        if isinstance(item, Source):
+            stack.extend(getattr(item, field.name) for field in fields(item))
+        elif isinstance(item, dict):
+            stack.extend(item.values())
+        elif isinstance(item, (list, tuple)):
+            stack.extend(item)
+    return False
 
 
 def _host(value):
@@ -374,21 +390,29 @@ class CoherentSolver:
         return self._backend
 
     def solve(self, *, excitation=None, power_region=None, geometry=None, **conditions):
-        if excitation is not None:
-            self.excitation = excitation
-        if power_region is not None:
-            self.power_region = power_region
-        for name in self._SOURCE_INPUTS:
-            if name in conditions:
-                raise ValueError(f'Put {name} in each PlaneWave, or rebuild with common kx/ky.')
-        for name, expected in (('formulation', '4ff'), ('layer_algorithm', 'SMM')):
-            if name in conditions and conditions.pop(name) != expected:
-                raise ValueError(f'Side-resolved excitation uses {name}={expected!r}.')
         scene = self._scene
-        with scene._device_scope(), scene._conditions(conditions):
-            return self._solve(geometry)
+        traced_scene = (any(_holds_tracer(value) for value in scene.__dict__.values())
+                        or _source_holds_tracer(self.excitation))
+        updates = {name: value for name, value in
+                   (('excitation', excitation), ('power_region', power_region)) if value is not None}
+        held = {name: getattr(self, name) for name, value in updates.items()
+                if _source_holds_tracer(value)}
+        try:
+            for name, value in updates.items():
+                setattr(self, name, value)
+            for name in self._SOURCE_INPUTS:
+                if name in conditions:
+                    raise ValueError(f'Put {name} in each PlaneWave, or rebuild with common kx/ky.')
+            for name, expected in (('formulation', '4ff'), ('layer_algorithm', 'SMM')):
+                if name in conditions and conditions.pop(name) != expected:
+                    raise ValueError(f'Side-resolved excitation uses {name}={expected!r}.')
+            with scene._device_scope(), scene._conditions(conditions):
+                return self._solve(geometry, keep_traced=traced_scene)
+        finally:
+            for name, value in held.items():
+                setattr(self, name, value)
 
-    def _solve(self, geometry):
+    def _solve(self, geometry, *, keep_traced=False):
         import copy
         scene = self._scene
         xp, C = scene.xp, scene.complex_dtype
@@ -536,7 +560,11 @@ class CoherentSolver:
                   for key, items in spectra.items()}
         result = CoherentResult(xp, joined, solved, lattice, scene.wavelength, scene.thickness,
                                 self.power_region, bool(dipoles), localized, answers=scene.answers)
-        self._result = result
+        # The returned result owns the traced field. Keeping it on a live facade
+        # would let a later eager reconstruction read an expired JAX trace.
+        self._result = None if not keep_traced and _holds_tracer(
+            [s.field for s in joined.values()] + [solved, lattice, scene.wavelength,
+                                                 scene.thickness]) else result
         return result
 
     def reconstruct_field(self, sample_x=20, sample_y=20, sample_z=20):

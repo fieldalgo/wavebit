@@ -35,6 +35,21 @@ If a call keeps a concrete wavelength while restoring a temporarily replaced mat
 table, the table is reevaluated at that wavelength. If it is outside the restored table's
 range, the call raises and restores the scene from before the call.
 
+For a raw JAX transform that captures an existing solver, reconstruct from the
+returned result (`solver.solve(...).reconstruct_field(...)`), or use `solve_field`
+or `solve_field_eager`. A high-level solve releases traced runtime when the
+complete operation returns. A previously saved result keeps its own fields.
+A trace-local solver and the `grad`/`fit` helper scopes retain legacy solver field
+access until reconstruction or the loss finishes. The low-level `solve_conv`
+API retains its caller-owned state, including `solver.scattering`; construct the
+solver inside the transformed function or use a helper scope when reading that
+mutable low-level state.
+
+A reused source solver follows the same result-owned field rule. Traced source
+keywords, including a `PlaneWave` amplitude nested in a list or side dictionary,
+are temporary assignments and are restored even if the solve raises. Concrete
+source keywords keep their usual effect.
+
 What is differentiable is not only the raster. A **`Material`** is a frozen pytree whose
 children are `(epsilon, mu)`, so `jax.grad` reaches inside one; and a **`Lattice`** stores its
 basis rather than an angle, so building one inside the differentiated function makes the cell's
