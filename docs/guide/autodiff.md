@@ -136,10 +136,22 @@ best = solver.fit(['thickness'], forward, lambda result: -result.T.sum().real,
 ```
 
 The wrapper must consume the supplied geometry rather than capture an initial freeze.
+When `forward` is a `functools.partial`, preparation receives its fixed keyword defaults
+as well, with the current conditions taking precedence and `geometry` excluded. For a
+built-in solver forward, only solver conditions are passed to preparation; sampling sizes
+and call options such as `auto_detune` stay on the forward. A geometry bound by keyword or
+position is replaced with the current record.
+
 Without `prepare_geometry`, an opaque forward is refused before optimization. A custom forward
 with a mapping of design variables returns those variables without assigning them as solver
 attributes; it owns their interpretation. `parameterize`, when supplied, runs before both
 preparation and the forward call.
+
+On integrated raster paths, equal-valued pixels remain independent design variables. The
+Fourier build keeps all pixel edges during differentiation and JAX tracing, because selecting
+one representative per equal block would discard the other pixels' derivatives. Concrete
+evaluations still compress equal blocks. Traced integrated builds can therefore cost more
+than their compressed eager evaluations, especially on large rasters with many repeated values.
 
 If writing a loop directly, follow the same order: apply the **current** design conditions to
 `freeze_geometry`, pass the resulting record as a static argument of the compiled calculation,

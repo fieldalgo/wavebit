@@ -19,6 +19,20 @@ def array_namespace(*xs):
     return ac.array_namespace(*xs)
 
 
+def carries_autodiff(value):
+    """Whether selecting equal entries could discard independent input derivatives.
+
+    Every JAX tracer counts, including a plain JIT input: that compiled function can later
+    be differentiated with grad(jit(f)). Deciding only when a JVP tracer arrives would make
+    the derivative depend on transformation order. Eager arrays need no special treatment.
+    """
+    if getattr(value, 'requires_grad', False):
+        return True
+    import sys
+    jax = sys.modules.get('jax')
+    return jax is not None and isinstance(value, jax.core.Tracer)
+
+
 def _readable(v, xp):
     """``v`` as something ``xp`` can reduce, without disturbing an autograd graph.
 

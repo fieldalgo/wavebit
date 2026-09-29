@@ -25,10 +25,10 @@ choices — how the Fourier coefficients are obtained, and which rule closes the
 discontinuous functions:
 
 - ``('sampled', 'li')``       -> :func:`to_conv_mat_raster_sampled`, discrete Fourier series
-  off the raster with Li's rules. The default, and the only path that carries a gradient to
-  every raster cell.
+  off the raster with Li's rules. The default.
 - ``('integrated', 'li')``    -> :func:`to_conv_mat_raster_integrated`, closed-form
-  (staircase-free) Fourier of the compressed layer with Li's rules.
+  (staircase-free) Fourier with Li's rules. Equal pixels are compressed only outside
+  differentiation/JAX tracing; inside, every original pixel retains its own derivative.
 - ``('sampled', 'nvf')``      -> :func:`to_conv_mat_raster_nvf`, sampled coefficients with the
   normal-vector-field factorization.
 - ``('integrated', 'nvf')``   -> :func:`to_conv_mat_raster_integrated_nvf`, closed-form
@@ -47,35 +47,27 @@ axis-aligned rectangular cell also take Li's rules, through :func:`fourier2d_int
 :func:`wavebit._core.parametric.laurent_from_coeffs`.
 
 A recurring rule runs through this module: **discrete geometry decisions are computed eagerly
-and passed in as static inputs, while material values flow through differentiably.** Two
-decisions here are geometry, not material — the NVF normal field (where the interfaces point) and the integrated block
-compression (where the piecewise-constant blocks start and stop). Both branch on values, and
-the compression's output shape depends on the answer, so neither survives ``jax.jit``. Each is
-therefore split into an eager step that yields a static description
-(:func:`normal_field_for_raster`, :func:`compression_indices`) and a differentiable step that
-consumes it. Pass those precomputed descriptions to stay traceable; the permittivity riding on
-top of them is what gradients see.
+and passed in as static inputs, while material values flow through differentiably.** The NVF
+normal field records where interfaces point; integrated compression records where equal-valued
+blocks end. Both decisions branch on values, so their planning cannot run inside ``jax.jit``.
 
-``jax.grad`` alone is the weaker bar, and both decisions clear it, because a grad tracer
-carries a concrete primal and so permits narrowing one value at a time even though it refuses a
-whole-array NumPy conversion (:func:`_as_bools`). The compression compares neighbouring
-rows and columns that way directly. The normal field cannot — SciPy wants the mask as an array
-— so it derives that mask from the *base* raster rather than reading it off the upsampled one
-(:func:`_upsampled_interface_mask`); the upsample is a block repeat, so the two are the same
-mask, and the base has ``repeat_v * repeat_u`` fewer values to narrow. **Neither raster
-strategy needs a frozen geometry to differentiate**, which is what makes a fit whose pattern
-moves every step safe: with no record there is nothing to go stale.
+Compression is lossless for values but a representative gather is not lossless for independent
+pixel derivatives. Integrated builds therefore use every original pixel edge whenever their
+raster carries differentiation or a JAX trace (:func:`_integrated_cell`). A plain JIT input
+counts too, because a compiled forward can later be differentiated. Concrete builds still use
+compression. Full pixel integration gives the same Fourier coefficients without discarding
+derivatives; it can cost more when many pixels have equal values.
 
-``jax.jit`` is the bar neither clears, and that is what a frozen geometry is for.
+An eager ``jax.grad`` can read the primal for planning, including the normal field through the
+base raster's interface mask (:func:`_upsampled_interface_mask`). Under ``jax.jit`` explicit
+records are still required: the declared geometry is resolved or validated before choosing
+the derivative-safe grid. The normal-field derivative holds its interface decisions fixed.
 
-A precomputed description belongs to the structure it was taken on. Replaying one onto a
-raster whose *pattern* has moved describes a layer that is no longer there, so each of the two
-is checked against the layer it is handed — see :func:`_check_normal_field_still_fits` and
-:func:`_check_compression_still_fits`, and :mod:`wavebit._core.geometry` for the rule they
-share. Material values never move a pattern, so the sweeps this split exists to serve pass
-untouched. A fit whose *pattern* moves every step is a different matter: on the compression it
-should simply drop ``geometry=`` and differentiate, which cannot go stale because it records
-nothing.
+A supplied record belongs to the structure it was taken on. Where values can be read, a stale
+record is refused by :func:`_check_normal_field_still_fits` or
+:func:`_check_compression_still_fits`, including before an uncompressed differentiated build.
+JAX's ``fit`` prepares records from the current design before every compiled step. Explicit
+optimization loops must likewise keep the normal-field record consistent with their pattern.
 
 Slot order
 ----------
@@ -113,7 +105,7 @@ worked (``tests/test_conv_matrices_accessor.py``). The builders are what disagre
 import math
 from typing import NamedTuple
 
-from .backend import array_namespace
+from .backend import array_namespace, carries_autodiff
 from .enums import DEFAULT_NESTING, Nesting, nesting_of
 from .geometry import StaleGeometryError
 
@@ -2257,6 +2249,29 @@ def compress_cell(xp, cell, row_idx, col_idx):
     return xp.take(rows, xp.asarray(col_idx, device=dev), axis=1)
 
 
+def _integrated_cell(xp, layer, record, index):
+    """A lossless grid for both the current values and their independent derivatives.
+
+    Equal neighbouring pixels need not have equal tangents. Gathering one representative
+    preserves their value but drops every other pixel's derivative. Traced/differentiated
+    rasters therefore keep all pixel edges, even when a frozen record permits compression.
+    The full staircase has exactly the same Fourier integral. Concrete evaluations retain
+    compression, and an explicitly supplied stale record is still refused where readable.
+    """
+    if record is None:
+        record = compression_indices(layer)
+    else:
+        _check_compression_still_fits(layer, record, index)
+    if carries_autodiff(layer):
+        import numpy as np
+        ny, nx = layer.shape
+        x = (np.arange(1, nx+1, dtype=np.float64) / nx).reshape((-1, 1))
+        y = (np.arange(1, ny+1, dtype=np.float64) / ny).reshape((-1, 1))
+        return layer, x, y
+    row_idx, col_idx, x, y = record
+    return compress_cell(xp, layer, row_idx, col_idx), x, y
+
+
 def _compressed_layers(xp, structure, compression):
     """Yield each layer's ``(compressed cell, x, y)``, from ``compression`` or computed here.
 
@@ -2270,13 +2285,7 @@ def _compressed_layers(xp, structure, compression):
             f'{len(compression)} layers and this one has {structure.shape[0]}. Call '
             f'freeze_geometry() again, or drop geometry= to rebuild by comparison.')
     for i in range(structure.shape[0]):
-        layer = structure[i]
-        if compression is None:
-            row_idx, col_idx, x, y = compression_indices(layer)
-        else:
-            _check_compression_still_fits(layer, compression[i], i)
-            row_idx, col_idx, x, y = compression[i]
-        yield compress_cell(xp, layer, row_idx, col_idx), x, y
+        yield _integrated_cell(xp, structure[i], None if compression is None else compression[i], i)
 
 
 def to_conv_mat_raster_integrated(structure, half_width_u, half_width_v, compression=None,
@@ -2386,13 +2395,8 @@ def to_conv_mat_raster_integrated_nvf(structure, half_width_u, half_width_v, nor
             field = normal_field[i]
         normal_x, normal_y, magnitude = _unpack_normal_field(field, want_magnitude, i)
 
-        layer = structure[i]
-        if compression is None:
-            row_idx, col_idx, x, y = compression_indices(layer)
-        else:
-            _check_compression_still_fits(layer, compression[i], i)
-            row_idx, col_idx, x, y = compression[i]
-        comp = compress_cell(xp, layer, row_idx, col_idx)
+        comp, x, y = _integrated_cell(xp, structure[i],
+                                     None if compression is None else compression[i], i)
         eps_comp = xp.astype(comp, _complex_dtype(xp, comp))
 
         for slot, mat in zip(out, nvf_conv_matrices_integrated(

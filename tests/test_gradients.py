@@ -126,12 +126,11 @@ def test_raster_scalar_gradients(param, name):
 
 @pytest.mark.parametrize('name', ['torch', 'jax'])
 def test_raster_per_cell_gradient_reaches_every_cell(name):
-    """Sampled coefficients are what topology optimization needs: one gradient per cell.
+    """Both Fourier strategies preserve the independent raster design variables.
 
-    The integrated (closed-form) series legitimately gives 9 of 64 — it compresses the raster
-    into blocks and the other cells genuinely stop being variables — which is why the choice
-    is not an implementation detail, and why ``fourier_coefficients`` defaults to ``'sampled'``.
-    Changing that default silently breaks every topology-optimization user.
+    Integrated compression used to leave only 9 of these 64 gradients nonzero. Equality of
+    the current values does not tie their independent tangents; the per-pixel finite-difference
+    tests in test_integrated_raster_gradients.py establish the derivatives themselves.
     """
     backend, cast = _backend(name)
 
@@ -153,7 +152,7 @@ def test_raster_per_cell_gradient_reaches_every_cell(name):
 
     integrated = dict(fourier_coefficients='integrated')
     solver = wavebit.rcwa(backend=backend, structure=cast(RASTER), **integrated, **BASE)
-    assert cells(solver.freeze_geometry(), **integrated) < RASTER.size
+    assert cells(solver.freeze_geometry(), **integrated) == RASTER.size
 
 
 # ------------------------------------------------------------------------- analytic (shape/OCD)
