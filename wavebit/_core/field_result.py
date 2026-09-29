@@ -70,8 +70,8 @@ def xy_grid(xp, lattice, sample_x, sample_y):
                              'or explicit Cartesian coordinates for both.')
     def axis(spec, size, name):
         if is_count(spec):
-            return xp.linspace(-.5*size, .5*size, _count(spec, name),
-                               dtype=lattice.dtype, device=getattr(lattice, 'device', None))
+            return xp.linspace(-.5, .5, _count(spec, name),
+                               dtype=lattice.dtype, device=getattr(lattice, 'device', None)) * size
         return _coordinates(xp, spec, lattice, name)
     x, y = axis(sample_x, lattice[0, 0], 'sample_x'), axis(sample_y, lattice[1, 1], 'sample_y')
     return xp.broadcast_arrays(x[None, :], y[:, None])

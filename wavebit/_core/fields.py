@@ -26,7 +26,7 @@ independent plane-wave phase, curl and flux checks on every path and backend.
 """
 import numpy as _np
 
-from .backend import array_namespace, as_array
+from .backend import array_namespace, as_array, carries_autodiff
 from .lattice import periods_of
 
 
@@ -239,6 +239,10 @@ def _axis_samples(xp, spec, extent, C, dev):
     """
     _check_spec(spec, 'sample_x/sample_y')
     if is_count(spec):
+        if carries_autodiff(extent):
+            # Torch linspace does not differentiate its endpoints. Build
+            # constant fractions before applying the live cell extent.
+            return xp.linspace(0, 1, spec, dtype=C, device=dev) * extent
         return xp.linspace(0, extent, spec, dtype=C, device=dev)
     # Converted at the solve's own precision in one step. `xp.asarray` of a list of Python
     # floats takes the backend's default dtype first -- float32 on Torch -- and a cast after
