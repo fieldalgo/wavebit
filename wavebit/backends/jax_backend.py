@@ -29,7 +29,8 @@ from jax import tree_util                                        # noqa: E402
 from tqdm import tqdm                                            # noqa: E402
 
 from .._core.engine import (CoreFactorizationMixin, CoreSolveMixin,  # noqa: E402
-                            _concrete_2x2, device_scoped)
+                            _concrete_2x2, _holds_tracer, device_scoped)
+from .._core import fields as _fields                            # noqa: E402
 from .._core import lattice as _lattice_module                   # noqa: E402
 from .._core.enums import DIFFERENTIABLE_BACKENDS as _DIFFERENTIABLE_BACKENDS  # noqa: E402
 from .._core.result import Result, ResultSub                     # noqa: E402
@@ -177,7 +178,11 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
         an earlier traced solve, do not suppress this check on concrete geometry inputs.
 
         ``sample_x`` / ``sample_y`` / ``sample_z`` and ``incidences`` are static too: they set the
-        output shape and select which incidences to reconstruct.
+        output shape and select which incidences to reconstruct. Concrete coordinate lists
+        and arrays are normalized to immutable tuples before compilation, so equivalent
+        containers share a cache entry. Differentiate x/y sample positions through the eager
+        or result-owned reconstruction API. Explicit z heights require concrete layer
+        thicknesses and must also be reconstructed outside this compiled method.
 
         Use :meth:`solve_field_eager` for the eager equivalent that auto-detects.
 
@@ -241,6 +246,11 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
                 # The dispatcher validates scalar/tensor shapes as well as raster records.
                 # Retained traced outputs must not hide readable geometry inputs.
                 self._refuse_a_stale_geometry_record(geometry)
+                sample_x = _static_field_samples(sample_x, 'sample_x')
+                sample_y = _static_field_samples(sample_y, 'sample_y')
+                sample_z = _static_field_samples(sample_z, 'sample_z')
+                incidences = tuple(_fields.INCIDENCE_NAMES[i]
+                                   for i in _fields.incidence_indices(incidences))
                 return self._solve_field_compiled(sample_x, sample_y, sample_z, incidences,
                                                   geometry)
         finally:
@@ -283,6 +293,24 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
 # geometry; the other two have nothing to be eager *relative to*. Bound here rather than inside
 # the class because the name it aliases is the one this class overrides.
 RCWAJax.solve_field_eager = CoreFactorizationMixin.solve_field
+
+
+def _static_field_samples(samples, name):
+    """Keep concrete coordinate spellings equivalent at the compiled cache boundary."""
+    try:
+        _fields._check_spec(samples, name)
+        if _fields.is_count(samples):
+            return int(samples)
+        return tuple(np.asarray(samples).tolist())
+    except (TypeError, ValueError) as error:
+        if _holds_tracer(samples):
+            alternative = ('use a count for sample_z, or reconstruct concrete heights '
+                           'outside the transform' if name == 'sample_z' else
+                           'use solve_field_eager or result.reconstruct_field for traced x/y coordinates')
+            raise ValueError(
+                f'{name}: compiled solve_field requires concrete static sampling points; '
+                f'{alternative}') from error
+        raise
 
 
 def _same_scene(a, b):

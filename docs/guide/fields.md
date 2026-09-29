@@ -50,6 +50,13 @@ that still fit the frozen plan remain valid. Under an outer `jax.jit` or
 from the current concrete scene before differentiating; `fit()` does this for
 each optimization step.
 
+Sampling is static in this compiled method. Concrete coordinate lists, tuples,
+NumPy arrays and JAX arrays are normalized to the same immutable cache key; the
+existing cell-shape restrictions on explicit x/y coordinates still apply. Use an
+integer count for `sample_z`: explicit heights require concrete layer thicknesses,
+so reconstruct those through the eager or result-owned API. To differentiate x/y
+sample positions, use `solve_field_eager` or `result.reconstruct_field`.
+
 ## Coordinates
 
 Each sampling argument accepts a positive integer count or a nonempty 1-D array of
