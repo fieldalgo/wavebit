@@ -1527,9 +1527,17 @@ class CoreSolveMixin:
         out of the record rather than storing it twice keeps the two in step, and is the honest
         answer besides — the field being replayed *is* the one built on that pixel shape,
         whatever ``period`` has since become.
+
+        Parametric shapes instead rebuild their projectors in the live cell metric,
+        retaining derivatives of both periods even when their values are readable.
         """
         if not self.lattice_is_axis_aligned:
             return self._lattice_basis
+        if self._modeling_path == ModelingPath.PARAMETRIC:
+            # Shape Fourier coefficients and sampled normal projectors need
+            # the live cell metric. A concrete check may detach Torch values;
+            # the numerical geometry builder must retain their derivatives.
+            return self.lattice
         period = _concrete_period(self.period)
         if period is not None:
             return _lattice.as_lattice(period=period)
