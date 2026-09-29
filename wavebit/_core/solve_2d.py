@@ -275,8 +275,13 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
     # later if the existing grazing guard requires it; ordinary modes do
     # not retain its four dense blocks or an unused right factor here.
     del B, D, Cc, E
-    w, W = eig(Omega2_LR)
-    del Omega2_LR
+    from .modal_gradient import _stop, _traced
+    differentiated = _traced(Omega2_LR)
+    w, W = eig(_stop(Omega2_LR))
+    if not differentiated:
+        # Only autodiff needs the original operator after the eigensolve.
+        # Preserve the eager forward path's early release of this dense matrix.
+        del Omega2_LR
     if Omega_R is None:
         Omega_R = right_factor()
     q = mode_q(xp, xp.astype(w, C))
@@ -294,7 +299,7 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
     # instead. Traced or otherwise unreadable values keep the old detect-and-warn contract.
     aw = xp.abs(_readable(w, xp))
     grazing = _concrete(xp.min(aw) < _COUPLED_REL * xp.max(aw))
-    if grazing:
+    if grazing and not differentiated:
         B, D, Cc, E = left_blocks()
         Omega_L = _block(xp, [[-Cc, B], [-D, E]])
         del B, D, Cc, E
@@ -310,6 +315,10 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
         if rebuilt is not None:
             return tuple(xp.astype(xp.asarray(a), C) for a in rebuilt)
     check_mode_cutoff(xp, w)
+    if differentiated:
+        from .modal_gradient import generator, inverse
+        q = generator(xp, Omega2_LR, w, W, q, square_root=True)
+        V = Omega_R @ W @ inverse(xp, q)
     return W, V, q
 
 
@@ -484,10 +493,8 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
         big_A_i = xp.linalg.inv(0.5 * (big_W_i @ big_F + big_V_i @ big_G))
         del big_W_i, big_V_i
 
-        X_1 = _diag(xp, xp.exp(-k0 * q[:n_orders] * d))
-        X_2 = _diag(xp, xp.exp(-k0 * q[n_orders:] * d))
-        big_X = _block(xp, [[X_1, O], [O, X_2]])
-        del X_1, X_2
+        from .modal_gradient import exponential
+        big_X = exponential(xp, q, -k0*d)
 
         Y = big_X @ big_B @ big_A_i @ big_X
         big_I = xp.astype(xp.eye(2 * n_orders), C)

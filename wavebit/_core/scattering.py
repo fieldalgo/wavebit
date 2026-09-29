@@ -631,7 +631,8 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
                                  epy_conv_all[layer_index], epz_conv_i_all[layer_index], C,
                                  mu=layer_mu)
         d = thickness[layer_index]
-        X = _diag(xp, xp.exp(-k0 * q * d))
+        from .modal_gradient import exponential
+        X = exponential(xp, q, -k0*d)
         A, B = _ab_matrices(xp, W, V, W_gap, V_gap)
         S_layer = _s_layer(xp, A, B, X)
         S = redheffer_star(xp, I, S, S_layer)
@@ -919,7 +920,8 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
     for layer_index in range(_n_layers(thickness)):
         big_W, big_V, q, W, V = layer_modes(layer_index)
         d = thickness[layer_index]
-        big_X = _diag(xp, xp.exp(-k0 * q * d))
+        from .modal_gradient import exponential
+        big_X = exponential(xp, q, -k0*d)
         A, B = _ab_matrices(xp, big_W, big_V, W_gap, V_gap)
         S_layer = _s_layer(xp, A, B, big_X)
         S = redheffer_star(xp, big_I, S, S_layer)
@@ -1001,7 +1003,8 @@ def smm_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
         big_W, big_V = sp_modes_1d_conical(xp, F_c, F_s, W1, W2, V_11, V_12, V_21, V_22)
         W = _block(xp, [[W1, W2]])
         V = _block(xp, [[V_11, V_12], [V_21, V_22]])
-        return big_W, big_V, xp.concat([q1, q2]), W, V
+        from .modal_gradient import combine
+        return big_W, big_V, combine(xp, q1, q2), W, V
 
     return _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                    layer_modes, epz_conv_i_all, backside, answers,

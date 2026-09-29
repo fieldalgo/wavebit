@@ -201,6 +201,30 @@ This is the derivative at that nearby problem; it does not define a derivative
 at a physical diffraction threshold. Abstract JAX compilation cannot run the
 eager retry policy.
 
+## Repeated optical modes
+
+First material derivatives use the full matrix variation of each layer's modal
+operator. This keeps polarization coupling and interference derivatives when
+modes share an eigenvalue, for example at a uniform or symmetric design. It does
+not change the forward material or perturb the eigenvalues. The retained field
+uses the same variation as the efficiency solve.
+
+This modal rule supports first derivatives. Second derivatives of the modal
+operator are not supported; material Hessians raise rather than returning a
+partial result. PyTorch refuses `create_graph=True` when a backward pass reaches
+the modal operator, including through a nonlinear material parameterization.
+Derivatives also require an invertible modal basis and separated forward
+and backward subspaces. An opposing-direction collision, within 64 machine eps
+of the modal scale, is refused under eager differentiation; under abstract JAX
+compilation its value and gradient are nonfinite. A zero/opposing square-root
+mode is likewise outside that differentiable branch. The ordinary numerical
+retry policy still applies to Rayleigh singularities.
+
+A compiled material or field gradient carries dense modal variation matrices,
+so it can require more work and memory than an eager forward solve. Use the
+first derivatives with a first-order optimizer, and still check Fourier and
+geometry-resolution convergence for the physical problem being optimized.
+
 ## What cannot be traced
 
 | | Why |

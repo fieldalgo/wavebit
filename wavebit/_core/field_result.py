@@ -207,8 +207,13 @@ class FieldState:
             # Dipole planes split a layer into concrete segment thicknesses.
             d = xp.real(_array(xp, d, self.data['thickness']))
             local = xp.minimum(xp.maximum(z-ge[j], xp.zeros_like(z)), d)
-            state = (pf @ (xp.exp(1j*g['k0']*local[:, None]*lf)*af)[..., None]
-                     + pb @ (xp.exp(1j*g['k0']*(local-d)[:, None]*lb)*ab)[..., None])[..., 0]
+            if lf.ndim == 2 or lb.ndim == 2:
+                from .modal_gradient import exponential
+                state = (pf @ (exponential(xp, lf, 1j*g['k0']*local) @ af[..., None])
+                         + pb @ (exponential(xp, lb, 1j*g['k0']*(local-d)) @ ab[..., None]))[..., 0]
+            else:
+                state = (pf @ (xp.exp(1j*g['k0']*local[:, None]*lf)*af)[..., None]
+                         + pb @ (xp.exp(1j*g['k0']*(local-d)[:, None]*lb)*ab)[..., None])[..., 0]
             n, kx, ky = g['n'], g['kx'], g['ky']
             ex, ey, hx, hy = [state[:, k*n:(k+1)*n] for k in range(4)]
             ez = (eps['ezz_i'] @ (ky*hx-kx*hy)[..., None])[..., 0]

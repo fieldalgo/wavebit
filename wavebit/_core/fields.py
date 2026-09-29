@@ -507,16 +507,22 @@ def field_1d(wavelength, kx, T1, layer_info_list, lattice, tetm_index,
     for spec, (epz_conv_i, W, V, q, d, A_i, B, muz_conv_i) in zip(
             z_per_layer, layer_info_list[::-1]):
         nz = _n_samples(spec)
-        X = xp.diag(xp.exp(-k0 * q * d))
+        from .modal_gradient import exponential
+        X = exponential(xp, q, -k0*d)
         c1 = T_layer[:, None]
         c2 = B @ A_i @ X @ T_layer[:, None]
         z = _z_slices(xp, spec, d, C, _dev(T1))
-        Qz = xp.reshape(q, (1, 1, n_orders)) * z       # diagonals of Q*z, (nz, 1, n_orders)
-        Qz = xp.reshape(Qz, (nz, n_orders))
-        Qd = xp.reshape(q, (1, n_orders)) * xp.reshape(xp.reshape(z, (nz,)) - d, (nz, 1))
+        if q.ndim == 2:
+            locations = xp.reshape(z, (nz,))
+            fwd = exponential(xp, q, -k0*locations)
+            bwd = exponential(xp, q, k0*(locations-d))
+        else:
+            Qz = xp.reshape(q, (1, 1, n_orders)) * z       # diagonals of Q*z, (nz, 1, n_orders)
+            Qz = xp.reshape(Qz, (nz, n_orders))
+            Qd = xp.reshape(q, (1, n_orders)) * xp.reshape(xp.reshape(z, (nz,)) - d, (nz, 1))
 
-        fwd = _diag_exp(xp, -k0 * Qz, n_orders)
-        bwd = _diag_exp(xp, k0 * Qd, n_orders)
+            fwd = _diag_exp(xp, -k0 * Qz, n_orders)
+            bwd = _diag_exp(xp, k0 * Qd, n_orders)
         My = W @ (fwd @ c1 + bwd @ c2)
         Mx = V @ (-fwd @ c1 + bwd @ c2)
         # The longitudinal component, and **the whole reason a permeability had to reach this
@@ -632,7 +638,8 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice, sample_x, s
             z_per_layer, layer_info_list[::-1]):
         nz = _n_samples(spec)
         q_1, q_2 = q[:n_orders], q[n_orders:]
-        big_X = xp.diag(xp.exp(-k0 * q * d))
+        from .modal_gradient import exponential
+        big_X = exponential(xp, q, -k0*d)
 
         c = xp.concat([big_I, big_B @ big_A_i @ big_X], axis=0) @ T_layer
         c1p, c2p = c[:, 0:n_orders], c[:, n_orders:2 * n_orders]
@@ -644,10 +651,16 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice, sample_x, s
             bwd = _diag_exp(xp, k0 * xp.reshape(qi, (1, n_orders)) * xp.reshape(z - d, (nz, 1)), n_orders)
             return fwd[:, None, :, :], bwd[:, None, :, :]
 
-        f1, b1 = prop(q_1)
-        f2, b2 = prop(q_2)
-        a1p, a1m = f1 @ c1p, b1 @ c1m          # + / - going, mode family 1
-        a2p, a2m = f2 @ c2p, b2 @ c2m
+        if q.ndim == 2:
+            ap = exponential(xp, q, -k0*z)[:, None] @ c[:, :2*n_orders]
+            am = exponential(xp, q, k0*(z-d))[:, None] @ c[:, 2*n_orders:]
+            a1p, a2p = ap[..., :n_orders, :], ap[..., n_orders:, :]
+            a1m, a2m = am[..., :n_orders, :], am[..., n_orders:, :]
+        else:
+            f1, b1 = prop(q_1)
+            f2, b2 = prop(q_2)
+            a1p, a1m = f1 @ c1p, b1 @ c1m
+            a2p, a2m = f2 @ c2p, b2 @ c2m
 
         if conical:
             W_1, W_2 = W[:, :n_orders], W[:, n_orders:]
@@ -766,15 +779,14 @@ def field_2d_4ff(wavelength, kx, ky, T1, layer_info_list, lattice,
         # The layer's unknown is its forward amplitude at its own top face -- that is what the
         # ETM redefinition `t' = X_f^-1 P t` bought. The backward half is referenced at the
         # bottom face, so `QP_i @ X_f` is the map to it.
-        X_f = _diag_exp(xp, 1j * k0 * lam_f * d, 2 * n_orders)
+        from .modal_gradient import exponential
+        X_f = exponential(xp, lam_f, 1j*k0*d)
         a_f = T_layer
         a_b = (QP_i @ X_f) @ T_layer
 
         z = _z_1d(xp, spec, d, C, dev)
-        fwd = _diag_exp(xp, 1j * k0 * xp.reshape(lam_f, (1, 2 * n_orders))
-                        * xp.reshape(z, (nz, 1)), 2 * n_orders)
-        bwd = _diag_exp(xp, 1j * k0 * xp.reshape(lam_b, (1, 2 * n_orders))
-                        * xp.reshape(z - d, (nz, 1)), 2 * n_orders)
+        fwd = exponential(xp, lam_f, 1j*k0*z)
+        bwd = exponential(xp, lam_b, 1j*k0*(z-d))
         psi = psi_f @ (fwd[:, None] @ a_f) + psi_b @ (bwd[:, None] @ a_b)
 
         Ex, Ey = psi[:, :, :n_orders], psi[:, :, n_orders:2 * n_orders]

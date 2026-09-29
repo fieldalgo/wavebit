@@ -131,20 +131,25 @@ def layer_modes_1d(xp, tetm_index, kx, I, epx_conv, epy_conv, epz_conv_i, C, mu=
         A = KxKx - epy_conv
         if mu is not None:
             A = mux_conv @ A
-        w, W = eig(A)
-        q = mode_q(xp, xp.astype(w, C))
+        from .modal_gradient import _stop, generator
+        w, W = eig(_stop(A))
+        q = generator(xp, A, w, W, mode_q(xp, xp.astype(w, C)), square_root=True)
         # `V = W * q` is the mu = 1 form; the general one divides out the same `mu_x` the
         # operator multiplied in, which is what the TM branch does with `eps_x`. Branched
         # rather than inverting an identity: `inv(I) @ W` is bit-identical but costs an
         # O(n**3) inverse a non-magnetic solve never paid.
-        V = W * q if mu is None else xp.linalg.inv(mux_conv) @ W * q
+        base = W if mu is None else xp.linalg.inv(mux_conv) @ W
+        V = base @ q if q.ndim == 2 else base * q
     elif tetm_index == 1:  # TM
         # `- muy_conv` is `- I` to the bit when non-magnetic: the fallback above binds
         # `muy_conv` to the very `I` this line used to name.
         B = kx[:, None] * epz_conv_i * kx[None, :] - muy_conv
-        w, W = eig(epx_conv @ B)
-        q = mode_q(xp, xp.astype(w, C))
-        V = xp.linalg.inv(epx_conv) @ W * q
+        from .modal_gradient import _stop, generator
+        operator = epx_conv @ B
+        w, W = eig(_stop(operator))
+        q = generator(xp, operator, w, W, mode_q(xp, xp.astype(w, C)), square_root=True)
+        base = xp.linalg.inv(epx_conv) @ W
+        V = base @ q if q.ndim == 2 else base * q
     else:
         raise ValueError(f'tetm_index must be 0 (TE) or 1 (TM), got {tetm_index!r}')
     return W, V, q
@@ -213,10 +218,13 @@ def layer_modes_1d_conical(xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv
     # build where there is no mu_zz so the non-magnetic product is the one it was.
     A = (Kx2 if muz_conv_i is None else Kx @ muz_conv_i @ Kx) - epy_conv
     B = Kx @ epz_conv_i @ Kx - muy_conv
-    w1, W1 = eig(Ky2 + (A if mu is None else A @ mux_conv))
-    w2, W2 = eig(Ky2 + B @ epx_conv)
-    q1 = mode_q(xp, xp.astype(w1, C))
-    q2 = mode_q(xp, xp.astype(w2, C))
+    from .modal_gradient import _stop, generator, inverse
+    operator1 = Ky2 + (A if mu is None else A @ mux_conv)
+    operator2 = Ky2 + B @ epx_conv
+    w1, W1 = eig(_stop(operator1))
+    w2, W2 = eig(_stop(operator2))
+    q1 = generator(xp, operator1, w1, W1, mode_q(xp, xp.astype(w1, C)), square_root=True)
+    q2 = generator(xp, operator2, w2, W2, mode_q(xp, xp.astype(w2, C)), square_root=True)
 
     ky = Ky[0, 0]                    # Ky == ky * I on this path (single y order)
     ky_sq = Ky2[0, 0]
@@ -225,20 +233,38 @@ def layer_modes_1d_conical(xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv
     W1_i = xp.linalg.inv(W1)
     W2_i = xp.linalg.inv(W2)
 
-    # The E-side blocks. `A**-1 = mu_x W1 diag(wA)**-1 W1_i` falls out of the eigenrelation
-    # `A mu_x W1 = W1 diag(wA)`, which is where the leading `mu_x` comes from -- the same
-    # substitution that keeps this function free of `inv(A)` at a Rayleigh point, one slot
-    # richer. `Kx muz_i` inside `V_12` is the dual of the `Kx epz_conv_i` in `V_21`.
-    V_11 = W1 * (q1 / wA)
-    V_12 = W1 @ ((ky / wA)[:, None] * (W1_i @ Kx @ W2 if muz_conv_i is None
-                                       else W1_i @ Kx @ muz_conv_i @ W2))
-    if mu is not None:
-        V_11 = mux_conv @ V_11
-        V_12 = mux_conv @ V_12
-    # The H-side blocks are untouched by a permeability, and that is the duality rather than
-    # an omission: they are built from `B**-1`, whose eigenrelation carries `eps_x`.
-    V_21 = epx_conv @ (W2 * (ky / wB)) @ (W2_i @ Kx @ epz_conv_i @ W1)
-    V_22 = epx_conv @ W2 * (q2 / wB)
+    if q1.ndim == 2 or q2.ndim == 2:
+        Q1 = xp.diag(q1) if q1.ndim == 1 else q1
+        Q2 = xp.diag(q2) if q2.ndim == 1 else q2
+        modal1 = generator(xp, operator1, w1, W1, w1, square_root=False)
+        modal2 = generator(xp, operator2, w2, W2, w2, square_root=False)
+        modal1 = xp.diag(modal1) if modal1.ndim == 1 else modal1
+        modal2 = xp.diag(modal2) if modal2.ndim == 1 else modal2
+        invA = inverse(xp, modal1-ky_sq*I)
+        invB = inverse(xp, modal2-ky_sq*I)
+        V_11 = W1 @ Q1 @ invA
+        middle = W1_i @ Kx @ W2 if muz_conv_i is None else W1_i @ Kx @ muz_conv_i @ W2
+        V_12 = W1 @ (ky*invA) @ middle
+        if mu is not None:
+            V_11 = mux_conv @ V_11
+            V_12 = mux_conv @ V_12
+        V_21 = epx_conv @ W2 @ (ky*invB) @ (W2_i @ Kx @ epz_conv_i @ W1)
+        V_22 = epx_conv @ W2 @ Q2 @ invB
+    else:
+        # The E-side blocks. `A**-1 = mu_x W1 diag(wA)**-1 W1_i` falls out of the eigenrelation
+        # `A mu_x W1 = W1 diag(wA)`, which is where the leading `mu_x` comes from -- the same
+        # substitution that keeps this function free of `inv(A)` at a Rayleigh point, one slot
+        # richer. `Kx muz_i` inside `V_12` is the dual of the `Kx epz_conv_i` in `V_21`.
+        V_11 = W1 * (q1 / wA)
+        V_12 = W1 @ ((ky / wA)[:, None] * (W1_i @ Kx @ W2 if muz_conv_i is None
+                                           else W1_i @ Kx @ muz_conv_i @ W2))
+        if mu is not None:
+            V_11 = mux_conv @ V_11
+            V_12 = mux_conv @ V_12
+        # The H-side blocks are untouched by a permeability, and that is the duality rather than
+        # an omission: they are built from `B**-1`, whose eigenrelation carries `eps_x`.
+        V_21 = epx_conv @ (W2 * (ky / wB)) @ (W2_i @ Kx @ epz_conv_i @ W1)
+        V_22 = epx_conv @ W2 * (q2 / wB)
     return W1, W2, q1, q2, V_11, V_12, V_21, V_22
 
 
@@ -408,7 +434,8 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
         W, V, q = layer_modes_1d(xp, tetm_index, kx, I, epx_conv, epy_conv, epz_conv_i, C,
                                  mu=layer_mu)
 
-        X = _diag(xp, xp.exp(-k0 * q * d))
+        from .modal_gradient import exponential
+        X = exponential(xp, q, -k0*d)
         W_i = xp.linalg.inv(W)
         V_i = xp.linalg.inv(V)
         b = 0.5 * (W_i @ F - V_i @ G)
@@ -623,14 +650,15 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickne
         W1, W2, q1, q2, V_11, V_12, V_21, V_22 = layer_modes_1d_conical(
             xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv_i, C, mu=layer_mu)
 
-        X_1 = _diag(xp, xp.exp(-k0 * q1 * d))
-        X_2 = _diag(xp, xp.exp(-k0 * q2 * d))
+        from .modal_gradient import exponential, combine
+        X_1 = exponential(xp, q1, -k0*d)
+        X_2 = exponential(xp, q2, -k0*d)
         big_I = xp.astype(xp.eye(2 * n_orders), C)
         big_X = _block(xp, [[X_1, O], [O, X_2]])
 
         W = _block(xp, [[W1, W2]])
         V = _block(xp, [[V_11, V_12], [V_21, V_22]])
-        q = xp.concat([q1, q2])
+        q = combine(xp, q1, q2)
 
         big_W, big_V = sp_modes_1d_conical(xp, F_c, F_s, W1, W2,
                                            V_11, V_12, V_21, V_22)

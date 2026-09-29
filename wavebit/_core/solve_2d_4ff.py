@@ -29,6 +29,7 @@ RETICOLO/fmmax references. No external solver code is included here.
 from cmath import sqrt as _csqrt
 
 from .backend import array_namespace, as_array, eig
+from .modal_gradient import _stop, split_generator, exponential, combine
 from .conventions import boundary_kz, order_azimuth
 from .enums import Answers, answers_of
 from .solve_1d import _block, _diag, _is_backside, _mirrored_scene, final_matching
@@ -102,7 +103,7 @@ def split_forward_backward(xp, M, n_orders):
     A stable sort keeps array sizes static under JAX tracing. Eager evaluation
     refuses a split with anything other than 2*n_orders modes in each direction.
     """
-    lam, psi = eig(M)
+    lam, psi = eig(_stop(M))
     flux = mode_flux_z(xp, psi, n_orders) / xp.sum(xp.abs(psi) ** 2, axis=0)
     # Finite-order PN operators need not be Hermitian even for lossless
     # materials. Their evanescent modes can carry a small truncation-induced
@@ -126,8 +127,13 @@ def split_forward_backward(xp, M, n_orders):
 
     order = xp.argsort(-key, stable=True)
     fwd, bwd = order[:2 * n_orders], order[2 * n_orders:]
-    modes = (xp.take(lam, fwd), xp.take(psi, fwd, axis=1),
-             xp.take(lam, bwd), xp.take(psi, bwd, axis=1))
+    modal, psi = split_generator(xp, M, lam, psi, forward)
+    def selected(indices):
+        if modal.ndim == 1:
+            return xp.take(modal, indices)
+        return xp.take(xp.take(modal, indices, axis=0), indices, axis=1)
+    modes = (selected(fwd), xp.take(psi, fwd, axis=1),
+             selected(bwd), xp.take(psi, bwd, axis=1))
     if n_f is None:
         # An abstract trace cannot raise on a value-dependent mode count. Mark
         # the invalid solve, rather than silently taking 2N of 2N+1 forward modes.
@@ -273,8 +279,8 @@ def _propagate_s(xp, lam_f, lam_b, k0, d, n_orders):
     decaying halves in one matrix and inverts it, so the growing half sets the conditioning.
     """
     zero = xp.astype(xp.zeros((2 * n_orders, 2 * n_orders)), lam_f.dtype)
-    X_f = _diag_of(xp, xp.exp(1j * k0 * lam_f * d))
-    X_b = _diag_of(xp, xp.exp(-1j * k0 * lam_b * d))
+    X_f = exponential(xp, lam_f, 1j*k0*d)
+    X_b = exponential(xp, lam_b, -1j*k0*d)
     return zero, X_b, X_f, zero
 
 
@@ -405,8 +411,8 @@ def _etm_recursion(xp, k0, Kx, Ky, layers, n_orders, G, keep_field=True):
     for eps_blocks, d in reversed(list(layers)):
         lam_f, psi_f, lam_b, psi_b = split_forward_backward(
             xp, layer_matrix_4ff(xp, Kx, Ky, **eps_blocks), n_orders)
-        X_f = _diag_of(xp, xp.exp(1j * k0 * lam_f * d))
-        X_b = _diag_of(xp, xp.exp(-1j * k0 * lam_b * d))
+        X_f = exponential(xp, lam_f, 1j*k0*d)
+        X_b = exponential(xp, lam_b, -1j*k0*d)
 
         PQ = xp.linalg.solve(xp.concat([psi_f, psi_b], axis=1), G)
         P_i = xp.linalg.inv(PQ[:2 * n_orders])
@@ -433,7 +439,7 @@ def _solve_naive(xp, k0, Kx, Ky, layers, n_orders, incident, psi_vf, psi_vb):
     for eps_blocks, d in layers:
         lam_f, psi_f, lam_b, psi_b = split_forward_backward(
             xp, layer_matrix_4ff(xp, Kx, Ky, **eps_blocks), n_orders)
-        lam = xp.concat([lam_f, lam_b])
+        lam = combine(xp, lam_f, lam_b)
         exponent = k0 * float(xp.max(xp.abs(xp.imag(lam)))) * float(d)
         if exponent > _MAX_EXPONENT:
             raise ValueError(
@@ -441,7 +447,7 @@ def _solve_naive(xp, k0, Kx, Ky, layers, n_orders, incident, psi_vf, psi_vb):
                 "carry in float64. Use layer_algorithm='ETM' or 'SMM', either of "
                 'which is bounded for any thickness.')
         Psi = xp.concat([psi_f, psi_b], axis=1)
-        E = _diag_of(xp, xp.exp(1j * k0 * lam * d))
+        E = exponential(xp, lam, 1j*k0*d)
         P = (Psi @ E @ xp.linalg.inv(Psi)) @ P
 
     # Matching at both interfaces at once: incident + reflected on the input side must transfer
