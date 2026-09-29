@@ -193,6 +193,14 @@ If writing a loop directly, follow the same order: apply the **current** design 
 then update the parameters. Keep preparation outside JIT. This updates the discrete plan;
 it does not make contact or overlap transitions differentiable at the transition itself.
 
+The sampled NVF extension can also have nonsmooth points while the geometry plan
+stays valid. In particular, tensor layers with several curved shapes use polygonal
+interface normals. A normal-field grid point crossing a polygon vertex can make
+the finite-resolution answer discontinuous, even for disjoint smooth shapes.
+Autodiff then reports the selected branch's derivative; a finite gradient at that
+point does not establish a two-sided derivative. Check nearby parameter values
+and NVF resolution as well as the geometry plan when validating an optimization.
+
 ## Numerical retries during differentiation
 
 A Rayleigh singularity can require the existing `auto_detune` retry. Its default

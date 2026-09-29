@@ -2027,7 +2027,12 @@ def _ellipse_distance(xp, u, v, a, b):
         gp = xp.where(gp < 0.0, gp, -one)                 # G' < 0 at a strict minimum
         t = xp.minimum(xp.maximum(t - g / gp, t_lo), t_hi)
     c, s = xp.cos(t), xp.sin(t)
-    return xp.sqrt((a * c - y0) ** 2 + (b * s - y1) ** 2)
+    distance2 = (a * c - y0) ** 2 + (b * s - y1) ** 2
+    on_boundary = distance2 == 0.0
+    # The unsigned distance has a cusp here, but the normal-field blend can be
+    # smooth. Guard the radicand so its zero cotangent never meets sqrt'(0).
+    return xp.where(on_boundary, zero,
+                    xp.sqrt(xp.where(on_boundary, one, distance2)))
 
 
 def _round_instances(xp, X, Y, shape, lattice, reduced, dtype, imgs):
