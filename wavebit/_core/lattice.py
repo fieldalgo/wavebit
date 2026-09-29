@@ -400,13 +400,27 @@ def _register_pytree_if_jax_loaded():
     _PYTREE_REGISTERED = True
 
 
+def _stack_geometry_entries(values):
+    """Stack entries without detaching derivatives or rounding literals before promotion."""
+    # NumPy constants may sit beside the native arrays carrying the derivative.
+    native = [value for value in values
+              if hasattr(value, 'dtype') and not isinstance(value, (np.ndarray, np.generic))]
+    xp = array_namespace(*(native or values))
+    device = getattr(native[0], 'device', None) if native else None
+    arrays = [as_array(xp, value, device=device)
+              for value in values if hasattr(value, 'dtype')]
+    literals = [value for value in values if not hasattr(value, 'dtype')]
+    dtype = xp.result_type(*arrays, *literals)
+    return xp.stack([as_array(xp, value, dtype=dtype, device=device) for value in values])
+
+
 def as_lattice(period=None, lattice=None):
-    """The ``(2, 2)`` basis for a ``period`` / ``lattice`` pair, as a NumPy array.
+    """The ``(2, 2)`` basis for a ``period`` / ``lattice`` pair, as a :class:`Lattice`.
 
     Exactly one of the two is expected; ``lattice`` wins if both are given, and ``period`` is
-    then only a derived quantity (see :func:`periods_of`). Held eagerly in NumPy because it is
-    a handful of numbers describing the cell, not a design variable — the k-vectors built from
-    it in :func:`order_kxy` are what carry any gradient.
+    then only a derived quantity (see :func:`periods_of`). Concrete inputs are validated
+    eagerly. Traced arrays and sequences retain their derivatives, and their shapes are
+    checked without reading their values.
     """
     if lattice is not None:
         if isinstance(lattice, Lattice):
@@ -418,6 +432,23 @@ def as_lattice(period=None, lattice=None):
             # reason this is a pytree -- but `axis_aligned` cannot be read off a tracer, so it
             # takes the general path. Always correct, merely not the rectangular shortcut.
             cols = lattice
+            if isinstance(cols, (tuple, list)):
+                if len(cols) != 2:
+                    raise ValueError('lattice: expected a 2x2 matrix of basis columns')
+                for row in cols:
+                    shape = getattr(row, 'shape', None)
+                    if shape is None and isinstance(row, (tuple, list)):
+                        shape = (len(row),)
+                    if shape != (2,):
+                        raise ValueError('lattice: expected a 2x2 matrix of basis columns')
+                values = [value for row in cols for value in row]
+                if any(isinstance(value, (tuple, list)) or getattr(value, 'ndim', 0) != 0
+                       for value in values):
+                    raise ValueError('lattice: expected a 2x2 matrix of basis columns')
+                entries = _stack_geometry_entries(values)
+                cols = array_namespace(entries).reshape(entries, (2, 2))
+            if getattr(cols, 'shape', None) != (2, 2):
+                raise ValueError('lattice: expected a 2x2 matrix of basis columns')
             return Lattice(cols[:, 0], cols[:, 1], False)
         if A.shape != (2, 2):
             raise ValueError(
@@ -439,13 +470,28 @@ def as_lattice(period=None, lattice=None):
         # `period` is the variable under differentiation. Its *shape* is still a diagonal, so
         # `axis_aligned` is known without reading a number -- which is the whole reason that
         # flag is aux_data and not a child.
-        # A tuple or list of tracers is a natural spelling -- `period=(P, P)` under
-        # `jax.grad` -- and `array_namespace` cannot read one, so ask its elements.
-        xp = (array_namespace(*period) if isinstance(period, (tuple, list))
-              else array_namespace(period))
-        q = period if getattr(period, 'shape', (1,))[-1] == 2 else xp.stack([period[0], period[0]])
+        # A tuple/list of tracers and a scalar still carry known shapes. Normalize these
+        # spellings before stacking, rather than duplicating the first entry of a pair.
+        if isinstance(period, (tuple, list)):
+            values = period
+        else:
+            shape = period.shape
+            if len(shape) > 1:
+                raise ValueError('period: expected one length or a one-dimensional pair of lengths')
+            values = [period] if not shape else [period[i] for i in range(shape[0])]
+        if len(values) not in (1, 2):
+            raise ValueError(f'period: expected 1 or 2 lengths, got {len(values)}')
+        if any(isinstance(value, (tuple, list)) or getattr(value, 'ndim', 0) != 0
+               for value in values):
+            raise ValueError('period: expected one length or a one-dimensional pair of lengths')
+        if len(values) == 1:
+            values = [values[0], values[0]]
+        q = _stack_geometry_entries(values)
+        xp = array_namespace(q)
         zero = 0.0 * q[0]
         return Lattice(xp.stack([q[0], zero]), xp.stack([zero, q[1]]), True)
+    if p.ndim != 1:
+        raise ValueError('period: expected one length or a one-dimensional pair of lengths')
     if p.size == 1:
         p = np.array([p[0], p[0]])
     if p.size != 2:
@@ -805,5 +851,3 @@ def meshgrid_xy(grid_shape, period=None, lattice=None, backend=0, dtype=None):
     # The one place the public frame is put on. `sample_grid` builds the cell from its corner
     # because that is what the transform integrates over; a caller sees it from the centre.
     return X - 0.5 * (A[0][0] + A[0][1]), Y - 0.5 * (A[1][0] + A[1][1])
-
-
