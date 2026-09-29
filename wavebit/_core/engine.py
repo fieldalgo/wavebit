@@ -708,7 +708,8 @@ class CoreSolveMixin:
                 'Leave it unset for the ordinary single wave on the specular order.')
         # Which orders are legal depends on `truncation_order`, which may still change; that check
         # belongs where the solve reads them (`conventions.lit_orders`). This one is the shape.
-        self._excitation = {order: self._placed(amplitude) for order, amplitude in value.items()}
+        # Weights are complex design values, even when their initial spelling is an integer.
+        self._excitation = {order: self._as_complex(amplitude) for order, amplitude in value.items()}
 
     _incidence_side = 'top'
 
@@ -1910,6 +1911,12 @@ class CoreSolveMixin:
         self.ky = self.ky
         if self._psi is not None:
             self._psi = self._as_real_angle(self._psi)
+        if self._chi is not None:
+            self._chi = self._as_real_angle(self._chi)
+        if self._polarization is not None:
+            self._polarization = tuple(self._as_complex(value) for value in self._polarization)
+        if self._excitation is not None:
+            self.excitation = self.excitation
         self.truncation_order = self.truncation_order
         self._set_period_slot(self._period)            # a re-cast, not a new cell
         self.thickness = self.thickness
