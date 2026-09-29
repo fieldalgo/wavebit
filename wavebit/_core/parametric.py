@@ -2111,6 +2111,11 @@ def _sampled_coeffs(xp, field, half_width_u, half_width_v):
     """
     Ny, Nx = field.shape
     dev = _device(field)
+    if half_width_u == half_width_v == 0:
+        # The sole coefficient is exactly the spatial mean. Avoid an unnecessary FFT and
+        # its reverse transform, which can fail XLA's CPU layout check in a zero-order solve.
+        value = xp.astype(xp.mean(field), xp.result_type(field.dtype, xp.complex64))
+        return xp.reshape(value, (1, 1))
     F = xp.fft.fft2(field) / (Ny * Nx)
     iy = xp.asarray([k % Ny for k in range(-2 * half_width_v, 2 * half_width_v + 1)], device=dev)
     ix = xp.asarray([k % Nx for k in range(-2 * half_width_u, 2 * half_width_u + 1)], device=dev)
