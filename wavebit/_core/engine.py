@@ -1876,7 +1876,11 @@ class CoreSolveMixin:
         self.thickness = self.thickness
         # Guarded because `_structure` is set by the `RCWA*` subclass, after `_BaseRCWA`.
         if getattr(self, '_structure', None) is not None:
+            drawn_on = self._structure_drawn_on
             self.structure = self._material_input('structure')
+            # Recasting the same raster does not change the cell it was drawn on. Keep the
+            # declaration directly: it can itself be a traced child of a rebuilt solver.
+            self._structure_drawn_on = drawn_on
         if any(getattr(self, f'_{name}_dispersion', None) is not None
                for name in ('top', 'bot')):
             self.wavelength = self.wavelength
@@ -3067,10 +3071,14 @@ class CoreFactorizationMixin:
 
         A value that is concrete once stored (a float, a NumPy or backend array, a torch leaf
         under autograd; anything at all outside a JAX trace) is assigned and stays, exactly
-        as before, in the order the keywords were given. Nothing traced outlives the call.
+        as before, in the order the keywords were given. Restored material tables are
+        reevaluated at a kept concrete wavelength. If it lies outside a restored table, the
+        call raises and restores its original scene instead of leaving inconsistent values.
+        Nothing traced outlives the call.
         """
         absent = object()
         held = {}
+        initial_state = dict(self.__dict__)
         device_before = self._device
         try:
             self._refuse_unknown_conditions(kwargs)
@@ -3110,6 +3118,29 @@ class CoreFactorizationMixin:
                         self.__dict__.pop(slot, None)
                     else:
                         object.__setattr__(self, slot, self._moved(value) if moved else value)
+                # A traced material can temporarily replace a table while a concrete
+                # wavelength stays assigned. Restoring its old evaluated value alone then
+                # mixes two wavelengths. Reevaluate the restored definitions at the kept one.
+                restored_table = any(
+                    f'_{name}_dispersion' in held
+                    and getattr(self, f'_{name}_dispersion', None) is not None
+                    for name in ('top', 'bot', 'structure'))
+                if restored_table and self._wavelength is not initial_state.get('_wavelength'):
+                    try:
+                        self.wavelength = self.wavelength
+                    except (TypeError, ValueError) as error:
+                        # The temporarily substituted material may have allowed a wavelength
+                        # outside the original table. Keep a usable original scene on failure.
+                        self.__dict__.clear()
+                        self.__dict__.update(initial_state)
+                        self._forget_the_solve()
+                        raise ValueError(
+                            'cannot restore the material definitions at the kept wavelength; '
+                            'the scene before this call has been restored') from error
+                if held and self._complex_dtype != initial_state.get('_complex_dtype'):
+                    # A concrete precision change can remain after a traced parameter is
+                    # restored. Its saved array must follow the precision that was kept.
+                    self._recast_to_precision()
 
     def _raster_types(self):
         """The array types a raster may arrive as: NumPy's, plus this backend's own.
@@ -3196,7 +3227,6 @@ class CoreFactorizationMixin:
 
         previous = (self._structure, self._modeling_path)
         self._structure, self._modeling_path = value, kind
-        self._structure_drawn_on = drawn_on
         try:
             # `mu` and `structure` are one raster pair and either can be assigned second, so
             # the pair is checked from whichever side completes it -- see `_revalidate_mu`.
@@ -3204,6 +3234,7 @@ class CoreFactorizationMixin:
         except Exception:
             self._structure, self._modeling_path = previous
             raise
+        self._structure_drawn_on = drawn_on
         self._structure_dispersion = dispersion
 
     def _coerce_raster(self, where, grid):

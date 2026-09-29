@@ -248,3 +248,70 @@ def test_permeability_dispersion_reaches_interface_impedance(backend, slot):
         assert scalar(result.R.sum()) == pytest.approx(reflection, abs=1e-12)
         assert scalar(result.T.sum()) == pytest.approx(1-reflection, abs=1e-12)
         assert scalar(getattr(solver, slot).mu) == pytest.approx(mu)
+
+
+@pytest.mark.parametrize('slot', ['top', 'bot', 'structure'])
+@pytest.mark.parametrize('order', ['material_first', 'wavelength_first', 'grad_helper'])
+@pytest.mark.parametrize('door', ['solve', 'solve_field'])
+def test_restored_tables_follow_the_concrete_wavelength_kept_by_a_traced_call(slot, order, door):
+    from functools import partial
+    jax = pytest.importorskip('jax')
+    wavebit.enable_x64()
+    material = TabulatedMaterial([800., 1000.], [2.25, 4.])
+    def declaration(value):
+        return [dict(background=value, shapes=[])] if slot == 'structure' else value
+    cfg = dict(period=(600., 600.), thickness=(170.,), truncation_order=(0, 0),
+               theta=.13, phi=.21, wavelength=900., answers='field',
+               structure=np.full((1, 1, 1), 5.))
+    cfg[slot] = declaration(material)
+    solver = wavebit.rcwa(backend=1, **cfg)
+    geometry = solver.freeze_geometry()
+    forward = getattr(solver, door)
+    if door == 'solve_field':
+        forward = partial(forward, 2, 2, 2)
+    def total(result):
+        return (result[0] if door == 'solve_field' else result).T.sum().real
+    if order == 'grad_helper':
+        solver.grad([slot], partial(forward, geometry=geometry, wavelength=1000.), total)
+    else:
+        def loss(value):
+            options = {slot: declaration(value), 'wavelength': 1000.}
+            if order == 'wavelength_first':
+                options = dict(reversed(tuple(options.items())))
+            return total(forward(geometry=geometry, **options))
+        jax.grad(loss)(3.125)
+    assert scalar(solver.wavelength) == 1000.
+    live = solver.structure[0]['background'] if slot == 'structure' else getattr(solver, slot)
+    assert scalar(live.epsilon) == pytest.approx(4.)
+    if slot != 'structure':
+        assert scalar(getattr(solver, f'n_{slot}')) == pytest.approx(2.)
+    reference = wavebit.rcwa(backend=0, **(cfg | dict(wavelength=1000.))).solve()
+    np.testing.assert_allclose(solver.solve().T, reference.T, atol=2e-12, rtol=0)
+
+
+@pytest.mark.parametrize('slot', ['top', 'bot', 'structure'])
+@pytest.mark.parametrize('fails', [False, True])
+def test_restoration_outside_the_original_table_recovers_a_usable_scene(slot, fails):
+    from functools import partial
+    pytest.importorskip('jax')
+    wavebit.enable_x64()
+    material = TabulatedMaterial([800., 1000.], [2.25, 4.])
+    value = [dict(background=material, shapes=[])] if slot == 'structure' else material
+    cfg = dict(period=600., thickness=(170.,), truncation_order=0, wavelength=900.,
+               structure=np.full((1, 1, 1), 5.), answers='field')
+    cfg[slot] = value
+    solver = wavebit.rcwa(backend=1, **cfg)
+    initial = solver.solve()
+    geometry = solver.freeze_geometry()
+    def loss(result):
+        if fails:
+            raise RuntimeError('intentional loss failure')
+        return result.T.sum().real
+    with pytest.raises(ValueError, match='material definitions.*kept wavelength'):
+        solver.grad([slot], partial(solver.solve, geometry=geometry,
+                                    wavelength=1100., thickness=(190.,)), loss)
+    assert scalar(solver.wavelength) == 900.
+    np.testing.assert_array_equal(solver.thickness, [170.])
+    evaluated = solver.structure[0]['background'] if slot == 'structure' else getattr(solver, slot)
+    assert scalar(evaluated.epsilon) == pytest.approx(3.125)
+    np.testing.assert_allclose(solver.solve().T, initial.T, atol=2e-12, rtol=0)

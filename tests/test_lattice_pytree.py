@@ -22,6 +22,29 @@ HEX = np.column_stack([[400.0, 0.0], [200.0, 400.0 * np.sqrt(3) / 2]])
 SHEAR = np.column_stack([[400.0, 0.0], [350.0, 150.0]])
 
 
+@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('keyword', [False, True])
+def test_failed_structure_assignment_keeps_the_original_drawn_cell(backend, keyword):
+    if backend:
+        pytest.importorskip('jax' if backend == 1 else 'torch')
+    values = np.ones((1, 4, 4))
+    cell = Lattice.rectangular(600., 600.)
+    solver = wavebit.rcwa(backend=backend, period=(600., 600.), thickness=(170.,),
+                         truncation_order=(1, 1), wavelength=900., theta=.13, phi=.21,
+                         structure=cell.drawn(values), mu=values)
+    original_structure = solver.structure
+    original_declaration = solver._structure_drawn_on
+    with pytest.raises(ValueError, match='share a shape'):
+        if keyword:
+            solver.solve(structure=np.ones((1, 3, 3)))
+        else:
+            solver.structure = np.ones((1, 3, 3))
+    assert solver.structure is original_structure
+    assert solver._structure_drawn_on is original_declaration
+    with pytest.raises(ValueError, match='drawn|cell|lattice'):
+        solver.solve(lattice=((610., 0.), (0., 600.)))
+
+
 def test_both_spellings_of_a_cell_arrive_as_one_type():
     for A, aligned in ((as_lattice(period=[700.0, 1100.0]), True),
                        (as_lattice(period=[640.0]), True),

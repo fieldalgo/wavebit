@@ -28,6 +28,9 @@ parameter declarations after evaluation, including tabulated materials and defau
 polarization. It releases the temporary solve state, even if the forward or loss
 raises. Use a saved result for earlier fields, or call `solve()` again before reading
 fields through the solver. The loss itself can still reconstruct the current field.
+If a call keeps a concrete wavelength while restoring a temporarily replaced material
+table, the table is reevaluated at that wavelength. If it is outside the restored
+table's range, the call raises and restores the scene from before the call.
 
 What is differentiable is not only the raster. A **`Material`** is a frozen pytree whose
 children are `(epsilon, mu)`, so `jax.grad` reaches inside one; and a **`Lattice`** stores its
