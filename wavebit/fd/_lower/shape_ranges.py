@@ -49,8 +49,8 @@ def traced(scene):
 
 
 def name(scene):
-    return next(type(s.shape).__name__ for s in scene.structures
-                if any(_shape_traced(v) for v in leaves(s.shape)))
+    return '/'.join(dict.fromkeys(type(s.shape).__name__ for s in scene.structures
+                    if any(_shape_traced(v) for v in leaves(s.shape))))
 
 
 def remember(scene, plan):
@@ -69,11 +69,12 @@ def remember(scene, plan):
 def planning_scene(scene, plan):
     """A concrete preflight of all unchanged inputs, after certifying the full allocation.
 
-    A seed proves nothing about another geometry. Isolation and the fixed, interior support
-    remove overlap, seam and wall cases for the entire range; runtime guards then check the
-    actual sizes, containment, star positivity and CFL bound. Every other scene input is
-    rechecked on the host. Multiple painters and geometry-dependent sources/monitors need
-    their own range certificate and are deliberately outside this first door.
+    A seed proves nothing about another geometry. Fixed, interior supports with disjoint
+    interpolation halos remove overlap, seam and wall cases for every geometry in every
+    range. Runtime guards then check actual sizes, containment, star positivity and CFL.
+    All materials and unchanged scene inputs are rechecked on the host. Each structure
+    needs a range, including concrete partners. Interacting or nested material interfaces
+    and geometry-dependent sources/monitors remain outside this certificate.
     """
     if not traced(scene):
         return scene
@@ -86,40 +87,63 @@ def planning_scene(scene, plan):
     from ..sources import Dipole
     from ..monitors import Record, Field
     from .._spec import static_float
-    if (len(scene.structures) != 1 or len(plan._shape_seeds) != 1
+    if (len(scene.structures) != len(plan._shape_seeds)
+            or any(not isinstance(s.shape, (Sphere, Cylinder, Box, Prism))
+                   or s.shape.range is None for s in scene.structures)
             or scene.initial is not None
             or any(not isinstance(s, Dipole) for s in scene.sources)
             or any(not isinstance(m, (Record, Field)) for m in scene.monitors)):
-        raise ValueError(f'A traced {where} currently supports one isolated ranged '
-                         f'{where.lower()}, '
+        raise ValueError(f'A traced {where} supports one isolated ranged {where.lower()} '
+                         'or multiple ranged Sphere/Cylinder/Box/Prism bodies with disjoint '
+                         'interpolation halos, '
                          'Dipole sources, Record/Field monitors and no initial field.')
-    for material in (as_material(scene.background), scene.structures[0].material):
+    for material in (as_material(scene.background), *(s.material for s in scene.structures)):
         if type(material) is not Material:
             raise ValueError(f'A traced {where} requires concrete isotropic lossless Material.')
         for triple in (material.eps, material.mu_value):
             values = tuple(static_float(f'traced {where} material', 'value', v) for v in triple)
             if not values[0] == values[1] == values[2]:
                 raise ValueError(f'A traced {where} requires concrete isotropic lossless Material.')
-    shape = scene.structures[0].shape
     # support() includes the occupancy margin; constitutive terms add one interpolation
-    # cell. Keep that whole region strictly inside the grid, including its end faces.
-    if any(lo <= 1 or hi >= n - 1
-           for (lo, hi), n in zip(shape.support(plan.grid), plan.grid.n)):
-        raise ValueError(f'A traced {where} range, including its interpolation halo, must '
-                         'stay strictly inside the domain, away from boundary masks.')
-    if isinstance(shape, Prism):
-        index, vertices, height, center = plan._shape_seeds[0]
-        dimensions = dict(vertices=vertices, height=height, center=center)
-    elif isinstance(shape, Box):
-        index, size, center = plan._shape_seeds[0]
-        dimensions = dict(size=size, center=center)
-    else:
-        index, radius, center, *height = plan._shape_seeds[0]
-        dimensions = dict(radius=radius, center=center)
-        if isinstance(shape, Cylinder):
-            dimensions['height'] = height[0]
-    seed = shape.replace(**dimensions)
-    return scene.replace(structures=(scene.structures[index].replace(shape=seed),))
+    # cell (two adjacent half-cell averages). Certify it even for an unturned Box,
+    # whose zero cross terms mean constitutive.validate has no term to inspect.
+    halos = []
+    structures = []
+    for i, structure in enumerate(scene.structures):
+        shape = structure.shape
+        support = shape.support(plan.grid)
+        if any(lo <= 1 or hi >= n - 1 for (lo, hi), n in zip(support, plan.grid.n)):
+            raise ValueError(f'A traced {where} range at structures[{i}], including its '
+                             'interpolation halo, must stay strictly inside the domain, '
+                             'away from boundary masks.')
+        halo = tuple((lo-1, hi+1) for lo, hi in support)
+        for face, cells in plan.absorbing_faces:
+            a = 'xyz'.index(face[0])
+            if (halo[a][0] < cells if face[1] == '-' else halo[a][1] > plan.grid.n[a]-cells):
+                raise ValueError(f'structures[{i}] range interpolation halo meets the '
+                                 f'{face} absorbing layer; keep the whole reservation clear.')
+        for j, other in enumerate(halos):
+            if all(min(hi, b) > max(lo, a) for (lo, hi), (a, b) in zip(halo, other)):
+                raise ValueError(f'structures[{j}] and structures[{i}] range interpolation '
+                                 'halos overlap. Traced bodies require disjoint reserved '
+                                 'halos throughout the sweep, even when their seeds are apart.')
+        halos.append(halo)
+        if any(_shape_traced(v) for v in leaves(shape)):
+            seed = plan._shape_seeds[i]
+            if isinstance(shape, Prism):
+                index, vertices, height, center = seed
+                dimensions = dict(vertices=vertices, height=height, center=center)
+            elif isinstance(shape, Box):
+                index, size, center = seed
+                dimensions = dict(size=size, center=center)
+            else:
+                index, radius, center, *height = seed
+                dimensions = dict(radius=radius, center=center)
+                if isinstance(shape, Cylinder):
+                    dimensions['height'] = height[0]
+            structure = structure.replace(shape=shape.replace(**dimensions))
+        structures.append(structure)
+    return scene.replace(structures=tuple(structures))
 
 
 def validate(scene, plan):
@@ -180,12 +204,9 @@ def _prism_outline_valid(shape, rt, minimum):
     return valid & (width >= minimum)
 
 
-def guard(scene, plan, rt, previous):
-    """Runtime counterpart of containment and the existing four-cell resolution door."""
-    if not traced(scene):
-        return previous
+def _valid(shape, plan, rt):
+    """One body's containment and existing four-cell resolution door, on arrays."""
     from .checks import CELLS_ACROSS_REFUSED, _ACROSS_SLACK
-    shape = scene.structures[0].shape
     xp = rt.xp
     centers = (shape.center,)
     if isinstance(shape, Prism):
@@ -218,5 +239,16 @@ def guard(scene, plan, rt, previous):
             c = rt.array(c, 'float64')
             half = rt.array(halves[axis], 'float64')
             valid = valid & xp.isfinite(c) & (c - half >= lo) & (c + half <= hi)
-    value = rt.constant(xp.where(valid, rt.array(1., 'float64'), rt.array(float('nan'), 'float64')))
+    return valid
+
+
+def guard(scene, plan, rt, previous):
+    """Every body's runtime geometry certificate, combined without host truth tests."""
+    if not traced(scene):
+        return previous
+    valid = None
+    for structure in scene.structures:
+        current = _valid(structure.shape, plan, rt)
+        valid = current if valid is None else valid & current
+    value = rt.constant(rt.xp.where(valid, rt.array(1., 'float64'), rt.array(float('nan'), 'float64')))
     return value if previous is None else previous * value

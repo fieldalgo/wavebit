@@ -2083,3 +2083,115 @@ counts and runner timings are retained in
 `studies/results/fdtd_prism_grad_validation.json`. The sequential runner is
 `studies/fdtd_prism_grad_validation.py`; raw outputs remain under
 `studies/results/fdtd_prism_grad_controls/`.
+
+
+### Simultaneous separated-body geometry derivatives (C6, 2026-09-29)
+
+Multiple ranged Sphere, Cylinder, Box and Prism bodies may now be differentiated
+together with one concrete prebuilt plan. Each structure must declare a range,
+including partners whose geometry is concrete in the current call. Every pair
+of reserved supports, enlarged by one interpolation cell on both ends of every
+axis, must be disjoint. The cell is the exact reach of the two adjacent half-cell
+averages in `constitutive.terms`, not a fitted separation threshold. Half-open
+halos may meet at an index boundary but may not share a cell. This deliberately
+conservative certificate also applies to an unturned Box with zero cross terms.
+It certifies each complete reservation, not just the initial bodies' separation.
+
+All halos must remain strictly inside the domain and clear of absorbing layers.
+The absorber check is explicit even for an unturned Box, whose absent coupled
+term leaves nothing for `constitutive.validate` to inspect. Each pair is checked,
+including nonadjacent entries in scene order. Overlapping, nested and touching
+material interfaces, CSG, non-ranged partners, geometry-dependent sources and
+monitors, and lossy, dispersive or anisotropic materials remain outside this extension.
+The existing Dipole, Record/Field and no-initial-field restrictions remain.
+
+Preflight checks the background and every structure's material. A traced body's
+concrete seed is restored at its original structure index only for planning;
+numerical lowering still receives the actual scene. Concrete partners retain
+their current geometry and receive the usual concrete preparation checks, so an
+old seed cannot hide an under-resolved partner. All static range declarations,
+orientations and vertex counts remain in the plan. Every body's runtime size,
+containment and polygon predicate contributes to the combined geometry guard;
+the first or last body cannot override another one's failure. Traced reports
+name every traced body kind and leave geometry measurements unavailable.
+
+The retained probe places four different bodies in a 60-by-16-by-16 grid at
+`dx=0.1`, with 32 steps and four Dipole drives. The varied leaves are the sphere
+and cylinder radii, the turned box's x size and the concave prism's height.
+The objective is the final electric-field squared norm in the fixed central
+slab `E[:, 5:11, 5:11, :]`, which excludes the drives. All four derivatives are
+nonzero (smallest magnitude 14.1398), and JAX/Torch reverse gradients differ
+by at most `1.24e-12`. Torch forward transforms are checked separately.
+
+The measured central-difference steps are `1e-4`, `1e-5`, `3e-6` and `1e-6`.
+The cylinder dominates the first three discrepancies; their maximum relative
+errors are 1.241, `2.215e-4` and `7.382e-4`. At `1e-6`, the worst relative
+error is `1.414e-9`. A further cylinder sweep at `2e-6`, `1e-6`, `3e-7` and
+`1e-7` consistently recovers the reverse derivative. The regression therefore
+uses `1e-6` and keeps the existing `2e-6` relative budget with zero absolute
+allowance. No tolerance was widened. Node-centred wall/cap distances do not
+switch over the larger perturbations (minimum gaps 0.00183784 and 0.00374486
+for E/H), but the staggered component points must also be checked: the
+cylinder's diagonal moment uses the tangent plane of its nearest face.
+At Hy point `(-0.85, 0.2, -0.15)` the wall/cap switch is only `2.304135e-6`
+away in radius, and one Ez point switches within `2.355876e-5`. The larger
+steps cross those switches. The magnetic update-coefficient discrepancy is
+already present before the star lift; it is not introduced by the multi-body
+certificate or the lift. Steps of `2e-6` and below stay on the same branches.
+The local agreement does not establish a globally smooth or continuum shape
+derivative. Raw values and controls remain in
+`studies/results/fdtd_multi_shape_grad_probe.json`,
+`fdtd_multi_shape_grad_small_steps.json`, `fdtd_multi_shape_grad_controls_probe.json`,
+`fdtd_multi_shape_grad_coefficients.json` and
+`fdtd_multi_shape_grad_component_switches.json`, with their logs.
+
+The four-body NumPy fields are exactly unchanged by removing the ranges or
+reversing structure order. Backend field differences are at most `6.13e-16`
+of the peak. The combined electric and magnetic update coefficients exactly
+equal the background plus the sum of each isolated body's coefficient change,
+including the local star lifts. Tests retain the existing 128-double-epsilon
+field/coefficient budget. These controls exercise separate material regions
+within one shared electromagnetic solve; they do not certify overlapping
+material interfaces or multiple-interface voxel smoothing.
+
+The targeted multi-body and existing single-body/public-body suite collected
+and passed all 181 cases, exit 0 (431.26 seconds), including 22 new cases in
+11 test functions. The initial launcher failed before collection because the
+parent of the requested pytest temporary directory did not exist; its log is
+retained. The next run was stopped on a test-contract mistake: `fd.lower`
+returns a numeric `1`/`NaN` guard, whereas `fd.run` reports a boolean. A focused
+failure confirmed `bool(NaN)` is true even though both the guard and output
+coefficients were correctly NaN. The assertion now checks the numeric guard
+directly. The domain-boundary fixture also uses PEC to distinguish that
+refusal from the independent absorber refusal. Production geometry guards
+were not weakened. All attempts remain under
+`studies/results/fdtd_multi_shape_grad_controls/`.
+
+The first mutation batch detached every geometry leaf and made the objective
+constant. Its subsequent autograd exception was correctly rejected as a
+non-assertion witness. The test now asserts that the objective retains its
+derivative graph before requesting the reverse derivative; its unmodified-code
+baseline passed (32.87 seconds). That rejected attempt's log and source hashes
+remain in `fdtd_multi_shape_grad_controls/mutation_attempt1/`.
+
+All 18 controls in the complete rerun failed by value assertions or missing-refusal
+assertions, covering every new test function, and each restored the original
+production source bytes exactly. They cover derivative connectivity, fixed spans,
+all painters and seeds, concrete partners, every reserved pair and its halo,
+every material, combined runtime guards, range records, domain/absorber clearance,
+report labels and static scene identity. The runner is
+`studies/fdtd_multi_shape_grad_mutations.py`; the accepted records and raw failures
+are in `studies/results/fdtd_multi_shape_grad_controls/witnesses.json` and its directory.
+
+Final validation used fd source SHA-256
+`21c8da796417791295b974880cd6d0962dc1dd18d36f7853f7d9b620dd7c598d`.
+The full fd/docs tier collected 2667 cases and exited 0 with 2659 passed and
+8 skipped (2066.09 seconds), including all 22 multi-body cases with the final
+derivative-connectivity assertion. The separate slow tier collected and passed
+all 80 cases, exit 0 (1142.39 seconds). Reported totals match collection;
+neither tier reported INTERNALERROR or a worker crash. All 143/288/140/570
+committed reference arrays reproduced bit for bit in the four read-only
+freezers; no golden was rewritten. Source identity, counts and runner timings
+are retained in `studies/results/fdtd_multi_shape_grad_validation.json`.
+The sequential runner is `studies/fdtd_multi_shape_grad_validation.py`; raw
+outputs remain under `studies/results/fdtd_multi_shape_grad_controls/`.

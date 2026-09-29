@@ -155,6 +155,7 @@ TRACED_LEAVES = (
     'an isolated Box size and center within range=, with a concrete plan and static orientation',
     'vertices, height and center of an isolated Prism within range=, with a concrete plan, '
     'static vertex count and static orientation',
+    'multiple ranged bodies together when their full interpolation halos are disjoint',
 )
 
 

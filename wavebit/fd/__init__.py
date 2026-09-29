@@ -133,10 +133,11 @@ work. ``Sphere(range=...)``, ``Cylinder(range=...)``, ``Box(range=...)`` and
 Radius and centre, extrusion height, a box's three sizes and a prism's vertices may
 be differentiated with a concrete prebuilt plan. Extrusion axes, rotation angles
 and a prism's vertex count remain static. The
-range contains the whole body; traced scenes currently require one isolated body,
-concrete isotropic lossless materials, Dipole sources, Record/Field monitors and no
-initial field. The full reserved support and interpolation halo must clear the domain
-boundaries and absorbers. Runtime guards check actual sizes, containment, polygon
+range contains the whole body. Traced scenes may contain multiple ranged bodies when
+their reserved supports plus interpolation halos are pairwise disjoint. Every structure
+needs a range and concrete isotropic lossless material, with Dipole sources,
+Record/Field monitors and no initial field. All reserved halos must clear the domain
+boundaries and absorbers. Runtime guards check every body's actual sizes, containment, polygon
 simplicity/orientation and constitutive stability; they do not establish continuum
 convergence. See the C6 sections of
 ``docs/fd-subpixel-occupancy.md``.

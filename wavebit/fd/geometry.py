@@ -738,10 +738,13 @@ class Sphere(Shape):
     absorbing layer the coupled operator cannot touch. The prepared stencil is refused.
 
     With a range, radius and centre can be differentiated through ``fd.run`` or ``fd.lower``
-    using a plan built from concrete geometry first. This first C6 door supports one isolated
-    sphere, concrete isotropic lossless materials, Dipole sources and Record/Field monitors,
-    with no initial field. The entire interpolation support must stay inside the domain and
-    clear of absorbing layers. Runtime guards mark out-of-range or under-resolved geometry
+    using a plan built from concrete geometry first. One or more ranged Sphere, Cylinder,
+    Box and Prism bodies may be differentiated together when all reserved supports,
+    including their interpolation halos, are pairwise disjoint. Every structure needs a
+    range and concrete isotropic lossless material. Sources must be Dipoles, monitors must
+    be Record/Field, and no initial field is allowed. Every full interpolation halo must
+    stay inside the domain and clear of absorbing layers, including for an unturned Box.
+    Runtime guards mark out-of-range or under-resolved geometry
     unstable and return NaN fields. Traced reports leave geometry measurements unavailable.
     Without a range, radius and centre remain static. The derivative is that of the discrete
     solver; it is piecewise smooth, not a guarantee of continuum sensitivity or convergence.
