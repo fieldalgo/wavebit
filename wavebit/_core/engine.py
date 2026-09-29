@@ -3141,7 +3141,11 @@ class CoreFactorizationMixin:
                 # Its whole write when it put a tracer where there was none; only the traced
                 # slots when it moved one an earlier keyword put there -- `device` does that,
                 # and its own write is concrete and stays.
-                introduced = any(not _holds_tracer(before.get(slot, absent)) for slot in traced)
+                # A nested traced assignment still owns its whole declaration even when
+                # the slot already holds an outer tracer. Otherwise a shape temporarily
+                # replacing a traced raster restores the array under the shape-path flag.
+                introduced = (_holds_tracer(value)
+                              or any(not _holds_tracer(before.get(slot, absent)) for slot in traced))
                 if (kept is not None and name not in kept['parameters']
                         and not introduced and not _holds_tracer(value)):
                     kept['values'].append((name, _copy_condition_containers(value, snapshot_numpy=True)))
