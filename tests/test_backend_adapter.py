@@ -269,6 +269,38 @@ def test_j1_derivative_is_right_including_at_zero(lib):
     assert np.allclose(got, exact, atol=1e-11), list(zip(probes, got, exact))
 
 
+@pytest.mark.parametrize('lib', ['jax', 'jit', 'torch'])
+@pytest.mark.parametrize('precision', ['float32', 'float64'])
+def test_hybrid_j1_gradients_at_crossover_and_large_arguments(lib, precision, j1_default):
+    from scipy.special import jvp
+    from wavebit._core.backend import j1
+    wavebit.set_j1_implementation('hybrid')
+    crossover = 7. if precision == 'float32' else 12.5
+    probe = np.array([0., 1., crossover-1e-4, crossover, crossover+1e-4,
+                      32., 48., 64., 80., 100., 200., 1000.], dtype=precision)
+    if lib == 'torch':
+        torch = pytest.importorskip('torch')
+        x = torch.tensor(probe, requires_grad=True)
+        values = j1(x)
+        gradient, = torch.autograd.grad(values.sum(), x)
+        values, gradient = values.detach().numpy(), gradient.detach().numpy()
+    else:
+        jax = pytest.importorskip('jax')
+        import jax.numpy as jnp
+        wavebit.enable_x64()
+        def response(x):
+            values = j1(x)
+            return jnp.sum(values), values
+        calculate = jax.value_and_grad(response, has_aux=True)
+        if lib == 'jit':
+            calculate = jax.jit(calculate)
+        (_, values), gradient = calculate(jnp.asarray(probe))
+        values, gradient = np.asarray(values), np.asarray(gradient)
+    tolerance = 5e-6 if precision == 'float32' else 2e-11
+    np.testing.assert_allclose(values, _j1_reference(probe.astype(float)), atol=tolerance, rtol=0.)
+    np.testing.assert_allclose(gradient, jvp(1, probe.astype(float)), atol=tolerance, rtol=0.)
+
+
 # ------------------------------------------------------------------- reversed NumPy views
 #
 # `np.rot90`, `np.flip` and `a[::-1]` return views with a negative stride. NumPy and JAX take

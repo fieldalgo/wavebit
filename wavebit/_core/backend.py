@@ -763,13 +763,19 @@ def _j1_series(xp, x):
 
 def _j1_asymptotic(xp, x):
     """Hankel asymptotic expansion — takes over where the series loses precision."""
+    # Positive powers of large x overflow in float32, including in derivatives
+    # of a quotient whose value is finite. Horner evaluation in 1/x**2 keeps
+    # every intermediate bounded on this branch's x >= crossover domain.
+    inverse = 1.0 / x
+    inverse2 = inverse * inverse
     P = xp.zeros_like(x)
     Q = xp.zeros_like(x)
-    for k in range(_J1_ASYM_TERMS):
-        P = P + ((-1) ** k) * _J1_A[2 * k] / x ** (2 * k)
-        Q = Q + ((-1) ** k) * _J1_A[2 * k + 1] / x ** (2 * k + 1)
+    for k in reversed(range(_J1_ASYM_TERMS)):
+        P = ((-1) ** k) * _J1_A[2 * k] + inverse2 * P
+        Q = ((-1) ** k) * _J1_A[2 * k + 1] + inverse2 * Q
+    Q = inverse * Q
     omega = x - 3.0 * 3.141592653589793 / 4.0
-    return xp.sqrt(2.0 / (3.141592653589793 * x)) * (P * xp.cos(omega) - Q * xp.sin(omega))
+    return xp.sqrt((2.0 / 3.141592653589793) * inverse) * (P * xp.cos(omega) - Q * xp.sin(omega))
 
 
 _J1_CHOICES = ('auto', 'hybrid', 'native')
@@ -840,9 +846,12 @@ def j1(x):
         thr = xp.full_like(x, _J1_THR_F32 if single else _J1_THR)
         # Clamp each branch's input so the *unselected* branch stays finite: a NaN there
         # would still poison the gradient through `where`.
-        return xp.where(x < thr,
-                        _j1_series(xp, xp.minimum(x, thr)),
-                        _j1_asymptotic(xp, xp.maximum(x, thr)))
+        small = x < thr
+        # A min/max clamp halves the selected derivative at exact equality.
+        # Select safe inputs with the same predicate as the output instead.
+        return xp.where(small,
+                        _j1_series(xp, xp.where(small, x, thr)),
+                        _j1_asymptotic(xp, xp.where(small, thr, x)))
     from scipy.special import j1 as _scipy_j1
     import numpy as np
     return _scipy_j1(np.asarray(x))
