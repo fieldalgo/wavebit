@@ -13,6 +13,12 @@ The result owns its field state. Changing the solver's conditions or solving ano
 scene does not change fields read from this result. Resample a solved result without
 solving again; solve again when the physical problem changes.
 
+For ordinary incidence, the legacy `solver.reconstruct_field()` method reads the
+live solver. It refuses
+when a condition used by reconstruction has changed since the solve, including
+concrete PyTorch autograd tensors and in-place condition updates. Re-solve after
+changing the design, or use the saved result to inspect its original scene.
+
 ## What to retain
 
 | `answers` | Retained results |

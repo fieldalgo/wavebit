@@ -3542,8 +3542,8 @@ class CoreFactorizationMixin:
             'docs/conventions.md#phase-incidence.',
             ComplexIncidenceWarning, stacklevel=3)
 
-    #: The scene of the last solve: a tuple of numbers, ``None`` when a condition it reads was
-    #: traced or under autograd at the solve, and this sentinel while no solve has run. The
+    #: The scene of the last solve: a tuple of numbers, ``None`` when a condition it reads
+    #: had no concrete value at the solve, and this sentinel while no solve has run. The
     #: two non-scenes answer differently in `_reject_stale_field_scene`.
     _solved_scene = _UNSOLVED = object()
     #: The third non-scene: this solver's conditions moved in a call whose solve stayed inside
@@ -3605,26 +3605,31 @@ class CoreFactorizationMixin:
         condition changed after the solve and before the reconstruction produces a field that
         belongs to *neither* scene.
 
-        ``None`` when any of it is traced: concreteness is not a tracer's to prove, and a jitted
-        reconstruction cannot compare anyway -- the same rule `StaticGeometry`'s staleness
-        checks follow, and for the same reason.
+        ``None`` when a traced value cannot be read. A concrete Torch autograd tensor is
+        readable through a detached snapshot; that read must not disable the comparison
+        or detach the live tensor used by the calculation.
         """
         try:
             lattice = self.lattice
+            def readable(value):
+                # Autograd leaves have concrete values. Snapshot only their
+                # numbers for this guard; keep the solver's graph untouched.
+                return value.detach().cpu() if hasattr(value, 'detach') else value
+            def components(value):
+                return tuple(complex(v) for v in _np.asarray(readable(value)).reshape(-1))
             def real_component(value):
                 if value is None:
                     return None
-                return float(value.detach() if hasattr(value, 'detach') else value)
+                return float(readable(value))
             return (
-                complex(self.wavelength),
-                tuple(complex(v) for v in _np.asarray(self.thickness).reshape(-1)),
-                None if self.theta is None else complex(self.theta),
-                None if self.phi is None else complex(self.phi),
+                complex(readable(self.wavelength)),
+                components(self.thickness),
+                None if self.theta is None else complex(readable(self.theta)),
+                None if self.phi is None else complex(readable(self.phi)),
                 real_component(self.kx),
                 real_component(self.ky),
-                tuple(complex(v) for v in _np.asarray(self.period).reshape(-1)),
-                None if lattice is None else tuple(
-                    complex(v) for v in _np.asarray(lattice).reshape(-1)),
+                components(self.period),
+                None if lattice is None else components(lattice.columns),
                 self.incidence_side,
                 self.tetm_index,
                 # The width, because narrowing it re-casts the *conditions* and leaves the
@@ -3644,7 +3649,7 @@ class CoreFactorizationMixin:
                 # 1.0 -> 1.3: 0.19 from the field before and 0.11 from the re-solved one). Both
                 # media and both constants, because either is the scene.
                 tuple(None if value is None else
-                      tuple(complex(v) for v in _np.asarray(value).reshape(-1))
+                      components(value)
                       for medium in (self._top, self._bot)
                       for value in (medium.epsilon, medium.mu)),
                 # The retained window, which `order_kxy` also reads live. An `excitation` whose
@@ -3654,12 +3659,8 @@ class CoreFactorizationMixin:
                 self.order_window,
             )
         except (TypeError, ValueError, RuntimeError):
-            # Three ways a condition declines to be a number, and all three mean the same
-            # thing here. `TypeError` is a JAX tracer refusing `complex()`; `ValueError` an
-            # array that is not a scalar; `RuntimeError` is Torch's "Can't call numpy() on
-            # Tensor that requires grad", which is a *differentiated* leaf rather than a
-            # traced one -- the case the whole optimizer path runs in, and the one that
-            # taught this line its third exception.
+            # Abstract tracers have no comparable values. Concrete Torch tensors,
+            # including autograd leaves, are read through detached snapshots above.
             return None
 
     def _reject_stale_field_scene(self):
@@ -3683,9 +3684,8 @@ class CoreFactorizationMixin:
         reconstruction would have read the put-back cell in silence. Now the record of a
         traced solve against a concrete live scene is a refusal that names the two ways out:
         ``solve_field``, which solves and reconstructs in one traced call and assigns its
-        conditions outside ``solve()``, or an eager solve first. A torch leaf under autograd
-        reads the same way -- its scene is ``None`` at the solve -- and reconstructs as before
-        while it stays on the solver, since the live scene is ``None`` then too.
+        conditions outside ``solve()``, or an eager solve first. Concrete Torch autograd
+        conditions are snapshotted by value, so optimizer updates are checked too.
         """
         if self._solved_scene is self._UNSOLVED:
             return

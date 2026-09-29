@@ -180,17 +180,7 @@ def test_the_field_before_and_after_a_change_were_two_different_wrong_answers():
 
 @pytest.mark.parametrize('name', ['thickness', 'period', 'theta'])
 def test_a_differentiated_condition_is_not_a_scene_change_either(name):
-    """Torch's autograd leaf declines to be a number in its own way, and it is not a tracer.
-
-    `np.asarray` on a tensor with `requires_grad=True` raises `RuntimeError: Can't call numpy()
-    on Tensor that requires grad` -- not the `TypeError` a JAX tracer raises. The key catches
-    all three ways a condition can decline (`TypeError`, `ValueError`, `RuntimeError`) and
-    returns `None`, which skips the comparison.
-
-    A first version caught only the first two, and the full suite caught it: five gradient
-    tests across `test_gradients`, `test_lattice_pytree` and `test_order_azimuth` died inside
-    `_finish` -- on the *solve*, not on a reconstruction, because the key is taken there.
-    """
+    """A value snapshot must neither change nor detach a live autograd condition."""
     torch = pytest.importorskip('torch')
 
     solver = _scene(2)
@@ -202,11 +192,8 @@ def test_a_differentiated_condition_is_not_a_scene_change_either(name):
     torch.sum(result.T).real.backward()
     assert leaf.grad is not None, 'the gradient did not reach the leaf'
 
-    # Not all three decline the same way, and the difference does not matter here. `complex()`
-    # on a 0-d tensor works even when it requires grad, so `theta` yields a comparable key
-    # while `thickness` and `period` -- arrays, reached through `np.asarray` -- do not. Either
-    # is fine; what must hold is that the solve ran and that reconstructing the scene it just
-    # solved is not refused.
+    # Each concrete autograd condition is comparable by value, and reconstructing
+    # the unchanged scene must remain valid with its graph intact.
     solver.answers = 'field'
     solver.solve()
     assert np.isfinite(np.asarray(solver.reconstruct_field(4, 4, 4)[0].detach())).all()
