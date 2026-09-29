@@ -3794,7 +3794,10 @@ class CoreFactorizationMixin:
         ``_modeling_type`` is settled, since that is the thing being checked against.
         """
         if self._mu is not None:
-            self.mu = self._mu
+            # This only revalidates the existing value. Staging its coercion inside an
+            # unrelated structure trace would hide otherwise concrete magnetic interfaces.
+            with self._eager():
+                self.mu = self._mu
 
     @property
     def fourier_coefficients(self):
@@ -4807,6 +4810,91 @@ class CoreFactorizationMixin:
                if layers > thicknesses else
                'The extra thicknesses used to reach past the end of the structure and raise '
                'an IndexError from inside the solve.'))
+
+    def _refuse_a_stale_geometry_record(self, geometry):
+        """Check replayable geometry while the caller's scene is still concrete.
+
+        Compiled field calls hide the live shape coordinates and tensor interfaces from
+        the builders. Use those builders' own validation before entering the trace, without
+        assembling Fourier operators or solving. Scalar shape checks inspect coordinates,
+        so a traced material alone must not suppress their topology validation.
+        """
+        if geometry is None:
+            return
+        self._refuse_a_record_of_another_rule(geometry)
+        if self._has_tensor_materials():
+            with self._eager():
+                _anisotropy.check_geometry(self, geometry)
+            return
+        if self._modeling_path == ModelingPath.RASTER:
+            with self._eager():
+                self._refuse_a_stale_raster_record(geometry)
+            return
+        if self._modeling_path != ModelingPath.PARAMETRIC:
+            return
+        self._reject_layer_count_mismatch()
+        if self.factorization == Factorization.LI:
+            _rectilinear.validate(self.structure, self.lattice)
+            plans = geometry.rectilinear_plans
+            if plans is None or len(plans) != len(self.structure):
+                raise _fac.StaleGeometryError('Cartesian Li layer plans changed; freeze_geometry() again')
+            for layer, plan in zip(self.structure, plans):
+                _rectilinear.check_plan(layer.get('shapes', []), self.lattice, plan)
+            return
+        plans, gammas = geometry.boundary_plans, geometry.gamma_plans
+        for records in (plans, gammas if self.factorization == Factorization.NVF else None):
+            if records is not None and len(records) != len(self.structure):
+                raise _fac.StaleGeometryError('shape layer count changed; freeze_geometry() again')
+        lattice = self._geometry_lattice_for(geometry)
+        for index, layer in enumerate(self.structure):
+            _parametric.check_layer_spec(layer, index)
+            _parametric.check_layer_shapes(layer, lattice, index)
+            plan = None if plans is None else plans[index]
+            if plans is not None:
+                if plan is None:
+                    _parametric.check_no_plan_still_fits(layer, lattice, index)
+                else:
+                    _boundary.check_plan_still_fits(layer.get('shapes', []), lattice, plan)
+            if (self.factorization == Factorization.NVF and gammas is not None
+                    and (plan is None or self.nvf_projector == 'circular')):
+                _parametric.check_gamma_plan_still_fits(
+                    layer, lattice, gammas[index], index, dyadic=self.nvf_projector == 'circular')
+
+    def _refuse_a_stale_raster_record(self, geometry):
+        """Run the raster builders' record checks now, without building -- for a traced build.
+
+        A frozen normal field or compression is compared with the layer in front of it by the
+        builder that replays it, and only eagerly: under a trace the layer has no value. JAX's
+        jitted ``solve_field`` builds only under its trace, so it replayed every record on
+        trust -- a normal field frozen on one oblique cell and replayed on another answered
+        ``sum(T)`` wrong by up to 0.86 (measured 2026-09-25), where ``solve()`` refuses the same
+        record. It calls this on the live solver first. The records and paths mirror
+        :meth:`_slots_for` exactly: a normal-field source on an NVF path, a compression on an
+        integrated one, and the permeability's own records beside the permittivity's. The
+        parametric path does not use raster normal-field or compression records, so it
+        needs no check here.
+        """
+        if geometry is None or self._modeling_path != ModelingPath.RASTER:
+            return
+        nvf = self.factorization != Factorization.LI
+        integrated = self.fourier_coefficients != FourierCoefficients.SAMPLED
+        (_, half_width_u), (_, half_width_v) = self.order_window
+        passes = [(self.structure, geometry.normal_field, geometry.normal_field_source,
+                   geometry.compression)]
+        if self._layers_are_magnetic():
+            passes.append((self._mu_structure(), geometry.mu_normal_field,
+                           geometry.mu_normal_field_source, geometry.mu_compression))
+        concrete_cell = not any(_holds_tracer(v) for v in (self._lattice_basis, self.period))
+        for structure, field, source, compression in passes:
+            # One differentiated material cannot hide the other quantity's concrete pattern.
+            # Compression depends only on pixel cuts; normal fields also need the cell.
+            if _holds_tracer(structure):
+                continue
+            _fac.check_raster_records_still_fit(
+                structure, half_width_u, half_width_v,
+                normal_field_source=source if nvf and field is not None and concrete_cell else None,
+                compression=compression if integrated else None,
+                lattice=self._geometry_lattice_for(geometry), normal_method=self.raster_normal_method)
 
     def _slots_for(self, structure, geometry, quantity):
         """Five convolution slots for one *quantity* of the current structure.

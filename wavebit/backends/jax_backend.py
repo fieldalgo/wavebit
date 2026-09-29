@@ -165,9 +165,16 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
         static data. It is a static argument -- reuse one freeze across calls and you compile
         once.
 
-        Because this method always traces, a stale ``geometry`` is replayed on trust here: the
-        comparison that would catch it is the thing the freeze exists to avoid. ``solve``
-        refuses one eagerly, so check a long fit there, or re-freeze on a schedule.
+        A stale ``geometry`` is refused here as ``solve`` refuses it: raster normal fields,
+        compression records, shape topology and tensor records are checked against the live
+        solver before the compiled call, by the builders' own checks without Fourier assembly
+        (:meth:`~wavebit._core.engine.CoreFactorizationMixin._refuse_a_stale_geometry_record`).
+        They were replayed on trust until 2026-09-25, when keywords that move the cell reached
+        this door: a normal field frozen on one oblique cell and replayed on another answered
+        ``sum(T)`` wrong by up to 0.86 with nothing said. When the geometry inputs are traced
+        under an outer ``jax.jit`` or ``jax.grad``, they cannot be compared, so the record is
+        replayed as frozen. Traced conditions unrelated to geometry, or retained outputs of
+        an earlier traced solve, do not suppress this check on concrete geometry inputs.
 
         ``sample_x`` / ``sample_y`` / ``sample_z`` and ``incidences`` are static too: they set the
         output shape and select which incidences to reconstruct.
@@ -231,6 +238,9 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
         try:
             with self._conditions(kwargs):
                 self._refuse_a_raster_drawn_on_another_cell()
+                # The dispatcher validates scalar/tensor shapes as well as raster records.
+                # Retained traced outputs must not hide readable geometry inputs.
+                self._refuse_a_stale_geometry_record(geometry)
                 return self._solve_field_compiled(sample_x, sample_y, sample_z, incidences,
                                                   geometry)
         finally:

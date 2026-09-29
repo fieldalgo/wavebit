@@ -326,10 +326,10 @@ def test_a_traced_cell_crosses_the_jitted_door(name, basis, value, transform):
     ``period=`` on a solver built with ``lattice=``, whose setter re-derives the basis. The
     basis is a pytree child now. The value under ``jit`` is compared with ``solve_field_eager``'s
     on a second solver over the same frozen geometry (they agreed to 1e-15, measured
-    2026-09-24); the derivative under ``grad`` with a central difference of the same door at
-    concrete cells, which is the function the gradient is of -- the eager door re-checks the
-    frozen record against every perturbed cell and refuses it. Measured: 3e-9 for the shear
-    entry of the basis, 9e-10 for a period.
+    2026-09-24); the derivative under ``grad`` with a central difference of the same door under
+    ``jax.jit``, where the frozen record is replayed as frozen -- the function the gradient is
+    of. Concretely, both doors re-check the record against every perturbed cell and refuse it.
+    Measured: 3e-9 for the shear entry of the basis, 9e-10 for a period.
     """
     import jax
     import jax.numpy as jnp
@@ -354,13 +354,17 @@ def test_a_traced_cell_crosses_the_jitted_door(name, basis, value, transform):
     else:
         got = np.asarray(jax.grad(total)(jnp.asarray(value)))
         assert np.array_equal(np.asarray(solver.lattice), basis), 'a traced cell stayed'
-        # The difference quotient's own calls are concrete, so each keeps its cell -- as it
-        # should; that is the rule `solve` keeps and the reason the check above comes first.
+        # The difference quotient is taken under `jax.jit` too: there the cell is traced and
+        # the frozen record is replayed as frozen, which is the function the gradient is of.
+        # Called concretely, each perturbed cell would be refused as a stale record by the
+        # door's own check, as `solve()` refuses it -- the normal field depends on the cell.
         h, want = 1e-3, np.zeros(value.shape)
+        replayed = jax.jit(total)
         for i in np.ndindex(value.shape):
             step = np.zeros(value.shape)
             step[i] = h
-            want[i] = (float(total(value + step)) - float(total(value - step))) / (2 * h)
+            want[i] = (float(replayed(jnp.asarray(value + step)))
+                       - float(replayed(jnp.asarray(value - step)))) / (2 * h)
         assert np.abs(want).max() > 0
         np.testing.assert_allclose(got, want, rtol=0, atol=1e-6 * np.abs(want).max())
 

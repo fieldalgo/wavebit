@@ -41,7 +41,10 @@ it.* Each path has its own reading of that, because each record depends on somet
 
 All four raise :class:`StaleGeometryError`, and all four run **only eagerly**: under a trace
 the comparison is itself the thing the record exists to avoid, so a jitted call carries no
-check and a long fit should re-freeze on a schedule rather than wait to be told.
+check; JAX's ``fit`` re-freezes the current design before every compiled step. JAX's jitted
+``solve_field`` is the one traced build that still checks: its conditions are assigned on the
+live solver before its compiled call, so it validates raster, scalar shape and tensor records
+there first, without Fourier assembly. Comparisons that need traced geometry cannot run.
 
 ``boundary_plans`` reads that rule differently from the first two, because it holds no
 coordinates at all. A shape *moving* is what it is built to survive -- that is what makes the
@@ -60,9 +63,9 @@ makes it stale (:func:`parametric.check_gamma_plan_still_fits`). A material swep
 equality on a seam is *not* a staleness: the sign is an array op on the slots at build time,
 and the record has nothing to say about it.
 
-On the raster paths the sweep a frozen record serves is over the *material values* — those
-never move an interface, so they are always accepted, exactly. A sweep that moves the pattern
-in the raster has changed the geometry and must re-freeze.
+On raster paths, a material sweep that preserves the recorded interfaces can reuse the record.
+Moving the pattern or merging distinct phases can change those interfaces and require a new
+freeze.
 """
 from dataclasses import dataclass
 from typing import Any, Optional

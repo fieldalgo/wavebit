@@ -67,8 +67,9 @@ to go stale.
 
 ## Let `fit` prepare each design before JIT
 
-A freeze describes the structure it was taken on. Sweeping the *material values* reuses it
-exactly; moving the geometry does not, and a `solve` that can read its values raises
+A freeze describes the structure it was taken on. A material sweep that preserves its phase
+interfaces can reuse it; moving interfaces or merging phases can require a new freeze.
+A `solve` that can read its values raises
 `StaleGeometryError` rather than answering from a record that no longer fits. **Under `jax.jit`
 there is nothing to compare against and that check cannot run**. JAX's `solver.fit` therefore
 prepares the current geometry outside JIT at every iteration, then passes it explicitly to the

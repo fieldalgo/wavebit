@@ -351,14 +351,8 @@ def freeze(solver):
     return StaticGeometry(tensor_geometry=record)
 
 
-def build(solver, geometry=None, quantity='epsilon'):
-    validate_options(solver)
-    if solver._factorization == 'li':
-        from . import tensor_li
-        return tensor_li.build(solver, geometry, quantity)
-    if integrated_shapes(solver):
-        from . import tensor_shapes
-        return tensor_shapes.build(solver,geometry,quantity)
+def _sampled_fields(solver, geometry, quantity):
+    """Validate the sampled record and return its live fields, without Fourier assembly."""
     if geometry is not None and geometry.tensor_geometry is None:
         raise StaleGeometryError('freeze_geometry() for this tensor structure before replay')
     record = None if geometry is None else geometry.tensor_geometry
@@ -385,9 +379,7 @@ def build(solver, geometry=None, quantity='epsilon'):
     if _concrete(same_basis) is False:
         raise StaleGeometryError('tensor lattice changed; freeze_geometry() again')
     same_geometry = same_basis
-    (_, hu), (_, hv) = solver.order_window
-    count = (2*hu+1)*(2*hv+1)
-    layers, any_full = [], False
+    prepared = []
     for i,t in enumerate(fields):
         single = t.shape[:2] == (1,1)
         t = t if single else _at_floor(solver, t)
@@ -408,9 +400,42 @@ def build(solver, geometry=None, quantity='epsilon'):
                                          for a in (0,1)])
             same_geometry = same_geometry & xp.all(live_interfaces == as_array(
                 xp, interfaces(stored[0]), device=dev))
+        prepared.append((t, stored, labels))
+    return shaped, structure, prepared, same_geometry
+
+
+def check_geometry(solver, geometry):
+    """Run the builders' record checks before a compiled call hides concrete inputs."""
+    validate_options(solver)
+    if solver._factorization == 'li':
+        from . import tensor_li
+        tensor_li.check_geometry(solver, geometry)
+    elif integrated_shapes(solver):
+        from . import tensor_shapes
+        list(tensor_shapes.checked_layers(solver, geometry))
+    else:
+        _sampled_fields(solver, geometry, 'epsilon')
+        if solver._layers_are_magnetic():
+            _sampled_fields(solver, geometry, 'mu')
+
+
+def build(solver, geometry=None, quantity='epsilon'):
+    validate_options(solver)
+    if solver._factorization == 'li':
+        from . import tensor_li
+        return tensor_li.build(solver, geometry, quantity)
+    if integrated_shapes(solver):
+        from . import tensor_shapes
+        return tensor_shapes.build(solver,geometry,quantity)
+    shaped, structure, prepared, same_geometry = _sampled_fields(solver, geometry, quantity)
+    xp, dtype, dev = solver.xp, solver.complex_dtype, solver._array_device
+    (_, hu), (_, hv) = solver.order_window
+    count = (2*hu+1)*(2*hv+1)
+    layers, any_full = [], False
+    for i, (t, stored, labels) in enumerate(prepared):
         # A constant-valued multi-pixel raster still has independent pixel
         # derivatives. Collapsing it to t[0,0] would silently discard them.
-        uniform = single
+        uniform = t.shape[:2] == (1,1)
         if uniform:
             value = (as_material(structure[i].get('background',1.)) if shaped else None)
             raw = (value.epsilon if quantity == 'epsilon' else value.mu_value) if shaped else None

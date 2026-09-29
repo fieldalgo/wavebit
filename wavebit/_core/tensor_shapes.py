@@ -208,16 +208,12 @@ def _layer(solver, layer, plan, quantity):
     return A,B,zz
 
 
-def build(solver, geometry=None, quantity='epsilon'):
-    from .anisotropy import _uniform_slots, as_tensor, tensor_shape, TensorConvMatrices, full_tensor, tensor_slots
-    xp,dtype,dev = solver.xp,solver.complex_dtype,solver._array_device
-    (_,hu),(_,hv) = solver.order_window
-    count = (2*hu+1)*(2*hv+1)
+def checked_layers(solver, geometry):
+    """Yield the live layers and validated plans, without Fourier assembly."""
     record = None if geometry is None else geometry.tensor_geometry
     if geometry is not None and (record is None or record.get('mode')!='integrated' or
             record['settings']!=_settings(solver) or len(record['plans'])!=len(solver.structure)):
         raise StaleGeometryError('tensor shape integration settings changed; freeze_geometry() again')
-    output = []
     for index,original in enumerate(solver.structure):
         layer,shift = _shifted(original)
         P.check_layer_shapes(layer,solver.lattice,index)
@@ -226,11 +222,8 @@ def build(solver, geometry=None, quantity='epsilon'):
         if not shapes:
             if plan is not None:
                 raise StaleGeometryError('tensor shapes changed; freeze_geometry() again')
-            m = as_material(layer.get('background',1.))
-            raw = m.epsilon if quantity=='epsilon' else m.mu_value
-            e = as_tensor(xp,raw,dtype,dev)
-            full = tensor_shape(raw)==(3,3) and full_tensor(xp,e)
-            output.append(_uniform_slots(xp,e,count,full));continue
+            yield layer, shift, plan
+            continue
         if plan is None:
             raise StaleGeometryError('tensor shapes changed; freeze_geometry() again')
         if record is not None:
@@ -241,6 +234,22 @@ def build(solver, geometry=None, quantity='epsilon'):
             else:
                 boundary.check_plan_still_fits(shapes,solver.lattice,plan[1])
                 if plan[0]=='disjoint': P.check_no_plan_still_fits(layer,solver.lattice,index)
+        yield layer, shift, plan
+
+
+def build(solver, geometry=None, quantity='epsilon'):
+    from .anisotropy import _uniform_slots, as_tensor, tensor_shape, TensorConvMatrices, full_tensor, tensor_slots
+    xp,dtype,dev = solver.xp,solver.complex_dtype,solver._array_device
+    (_,hu),(_,hv) = solver.order_window
+    count = (2*hu+1)*(2*hv+1)
+    output = []
+    for layer, shift, plan in checked_layers(solver, geometry):
+        if not layer.get('shapes', []):
+            m = as_material(layer.get('background',1.))
+            raw = m.epsilon if quantity=='epsilon' else m.mu_value
+            e = as_tensor(xp,raw,dtype,dev)
+            full = tensor_shape(raw)==(3,3) and full_tensor(xp,e)
+            output.append(_uniform_slots(xp,e,count,full));continue
         A,B,zz = _layer(solver,layer,plan,quantity)
         ky = xp.arange(-2*hv,2*hv+1,dtype=solver.float_dtype,device=dev)[:,None]
         kx = xp.arange(-2*hu,2*hu+1,dtype=solver.float_dtype,device=dev)[None,:]

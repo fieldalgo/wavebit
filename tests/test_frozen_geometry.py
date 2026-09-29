@@ -402,6 +402,130 @@ def test_a_traced_replay_carries_no_check():
     assert np.isfinite(float(jax.jit(total)(moved)))   # traced: answered, unchecked
 
 
+@pytest.mark.parametrize('strategy', [dict(factorization='nvf'),
+                                      dict(fourier_coefficients='integrated'),
+                                      dict(fourier_coefficients='integrated', factorization='nvf')],
+                         ids=['nvf', 'cfs', 'cfs-nvf'])
+def test_the_jitted_field_door_refuses_a_stale_raster_record_too(strategy):
+    """JAX's jitted ``solve_field`` compares the records with the live layer, as ``solve()`` does.
+
+    It builds only under its trace, where a layer has no value, so until 2026-09-25 it replayed
+    every record on trust -- and once keywords that move the pattern or the cell reached it, a
+    frozen normal field replayed on another oblique cell answered ``sum(T)`` wrong by up to
+    0.86 with nothing said. It now runs the builders' own checks on the live solver before its
+    compiled call, without the build. Refused where the record no longer fits; accepted, and
+    the eager answer to 1e-12, where only a material moved; and under an outer ``jax.jit``,
+    where the pattern itself is traced, replayed as frozen -- the limit
+    ``test_a_traced_replay_carries_no_check`` pins for ``solve``.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    wavebit.enable_x64()
+
+    frozen = wavebit.rcwa(backend=1, structure=_rod(6), **strategy,
+                          **RASTER_KW).freeze_geometry()
+    solver = wavebit.rcwa(backend=1, structure=_rod(6), answers='field', **strategy,
+                          **RASTER_KW)
+
+    for width in (8, 14):
+        with pytest.raises(wavebit.StaleGeometryError, match='no longer fits'):
+            solver.solve_field(4, 4, 2, geometry=frozen, structure=_rod(width))
+
+    cell = _rod(6, eps_rod=4.0)
+    got, _ = solver.solve_field(4, 4, 2, geometry=frozen, structure=cell)
+    want = np.asarray(wavebit.rcwa(backend=1, structure=cell, **strategy,
+                                   **RASTER_KW).solve().incident.T)
+    assert np.abs(np.asarray(got.incident.T) - want).max() < 1e-12
+
+    def total(u):
+        result, _ = solver.solve_field(4, 4, 2, geometry=frozen, structure=u)
+        return jnp.sum(result.incident.T).real
+    assert np.isfinite(float(jax.jit(total)(jnp.asarray(_rod(14)))))
+
+
+@pytest.mark.parametrize('transform', ['jit', 'grad'])
+@pytest.mark.parametrize('quantity', ['structure', 'mu'])
+@pytest.mark.parametrize('strategy', [dict(factorization='nvf'),
+                                      dict(fourier_coefficients='integrated'),
+                                      dict(fourier_coefficients='integrated', factorization='nvf')],
+                         ids=['nvf', 'cfs', 'cfs-nvf'])
+def test_retained_solve_tracers_do_not_hide_a_concrete_stale_record(transform, quantity, strategy):
+    """An earlier traced solve cannot exempt the next concrete pattern from validation.
+
+    The conditions are restored after jit/grad, but the retained modes and amplitudes can
+    still hold tracers. Scanning every solver attribute skipped the stale-record check on
+    that history, although the raster and cell being checked were concrete. Both material
+    quantities and both kinds of frozen raster record must still refuse a moved interface.
+    Re-freezing the changed pattern must then recover the fresh eager result and field.
+    """
+    jax = pytest.importorskip('jax')
+    wavebit.enable_x64()
+    kw = dict(RASTER_KW, period=[700.0, 700.0], thickness=[200.0],
+              truncation_order=[1, 1], answers='field', structure=_rod(2, height=4, n=8))
+    material = 12.25 if quantity == 'structure' else 1.7
+    if quantity == 'mu':
+        kw['mu'] = _rod(2, height=4, n=8, eps_rod=material)
+    solver = wavebit.rcwa(backend=1, **kw, **strategy)
+    frozen = solver.freeze_geometry()
+
+    def total(wavelength):
+        return solver.solve(wavelength=wavelength, geometry=frozen).T.sum().real
+
+    assert np.isfinite(float(getattr(jax, transform)(total)(900.0)))
+    moved = {quantity: _rod(5, height=4, n=8, eps_rod=material)}
+    with pytest.raises(wavebit.StaleGeometryError, match='no longer fits'):
+        solver.solve_field(2, 2, 2, geometry=frozen, **moved)
+
+    result, field = solver.solve_field(2, 2, 2, geometry=solver.freeze_geometry())
+    fresh = wavebit.rcwa(backend=1, **(kw | moved), **strategy)
+    expected, expected_field = fresh.solve_field_eager(2, 2, 2)
+    np.testing.assert_allclose(result.T, expected.T, atol=1e-11, rtol=0)
+    np.testing.assert_allclose(field, expected_field, atol=1e-10, rtol=0)
+
+
+def test_the_jitted_field_door_checks_the_permeability_records_beside_the_permittivity():
+    """A raster ``mu`` carries records of its own, and the door compares them too.
+
+    A magnetic pattern need not sit where the dielectric one does, so the freeze keeps a
+    normal field for each; the check mirrors the build, which replays the permeability's own.
+    """
+    pytest.importorskip('jax')
+    wavebit.enable_x64()
+    kw = dict(structure=_rod(6), factorization='nvf', answers='field', **RASTER_KW)
+    mu = _rod(6, eps_rod=1.7)
+    frozen = wavebit.rcwa(backend=1, mu=mu, **kw).freeze_geometry()
+    assert frozen.mu_normal_field_source is not None
+    solver = wavebit.rcwa(backend=1, mu=mu, **kw)
+    with pytest.raises(wavebit.StaleGeometryError, match='no longer fits'):
+        solver.solve_field(4, 4, 2, geometry=frozen, mu=_rod(12, eps_rod=1.7))
+    solver.solve_field(4, 4, 2, geometry=frozen, mu=_rod(6, eps_rod=1.3))
+
+
+def test_a_normal_field_frozen_on_one_size_of_a_cell_replays_on_another():
+    """One cell shape at two sizes is one normal field, and the replay is accepted.
+
+    The record keys the basis scaled to ``|a1| = 1``, because a uniform rescale leaves the
+    field unchanged, and compared that key exactly. The scaling rounds: ``hexagonal(640.)`` and
+    ``hexagonal(700.)`` keyed ``-0.49999999999999983`` and ``-0.4999999999999998`` for the same
+    entry, and the replay was refused as a moved cell (measured 2026-09-25). It is compared to
+    rounding now. The accepted replay is the fresh freeze's answer, and a different shape is
+    still refused.
+    """
+    eps = np.where(np.random.default_rng(0).random((1, 8, 8)) < 0.4, 5.76, 1.0)
+
+    def solver(cell):
+        return wavebit.rcwa(backend=0, lattice=cell, structure=eps, truncation_order=[2, 2],
+                            thickness=[300.0], wavelength=900.0, theta=0.2, phi=0.1, psi=0.3,
+                            factorization='nvf')
+
+    frozen = solver(wavebit.Lattice.hexagonal(640.0)).freeze_geometry()
+    bigger = wavebit.Lattice.hexagonal(700.0)
+    replayed = np.asarray(solver(bigger).solve(geometry=frozen).T)
+    assert np.abs(replayed - np.asarray(solver(bigger).solve().T)).max() < 1e-12
+    with pytest.raises(wavebit.StaleGeometryError, match='cell basis'):
+        solver(wavebit.Lattice.oblique(640.0, 640.0, np.radians(75.0))).solve(geometry=frozen)
+
+
 INTEGRATED_STRATEGY = dict(fourier_coefficients='integrated', factorization='li')
 
 

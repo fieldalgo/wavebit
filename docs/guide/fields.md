@@ -42,6 +42,14 @@ live solver. Concrete keyword conditions stay on the live solver, following
 field or result instead. Keywords that are only traced are restored afterwards.
 A saved result continues to own its field state independently of the live solver.
 
+Before compiling, `solve_field` checks the frozen geometry against the concrete
+scene, including scalar and tensor shape topology and raster interfaces. A changed
+topology requires a new `freeze_geometry()`; material sweeps and shape changes
+that still fit the frozen plan remain valid. Under an outer `jax.jit` or
+`jax.grad`, traced geometry cannot be checked in Python. Prepare the geometry
+from the current concrete scene before differentiating; `fit()` does this for
+each optimization step.
+
 ## Coordinates
 
 Each sampling argument accepts a positive integer count or a nonempty 1-D array of

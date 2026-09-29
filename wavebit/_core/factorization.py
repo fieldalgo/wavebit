@@ -801,6 +801,40 @@ def _layer_eps_for_normal_field(xp, structure, half_width_u, half_width_v):
         yield xp.astype(layer, _complex_dtype(xp, layer)), base, repeat_v, repeat_u
 
 
+def check_raster_records_still_fit(structure, half_width_u, half_width_v,
+                                   normal_field_source=None, compression=None, lattice=None,
+                                   normal_method=None):
+    """The replay checks the raster builders make, without the build.
+
+    Each builder compares a frozen record with the layer in front of it before using it --
+    :func:`_check_normal_field_still_fits` for a normal field, :func:`_check_compression_still_fits`
+    for a compression -- and refuses a record that describes another layer. This runs exactly
+    those comparisons on exactly the grids the builders give them, and nothing else: no
+    transform, no convolution matrix. It is for a caller that will build under a trace, where
+    the builders' own comparisons cannot read the layer -- JAX's jitted ``solve_field``, which
+    runs it on the live, concrete solver before its compiled call. Pass only the records the
+    build will read: ``normal_field_source`` on an NVF path, ``compression`` on an integrated
+    one.
+    """
+    xp = array_namespace(structure)
+    n_layers = structure.shape[0]
+    for name, record in (('normal-field source', normal_field_source),
+                         ('compression', compression)):
+        if record is not None and len(record) != n_layers:
+            raise StaleGeometryError(
+                f'the frozen geometry no longer fits this structure: it holds a {name} for '
+                f'{len(record)} layers and this one has {n_layers}. Call freeze_geometry() '
+                f'again, or drop geometry= to rebuild by comparison.')
+    if normal_field_source is not None:
+        layers = _layer_eps_for_normal_field(xp, structure, half_width_u, half_width_v)
+        for i, (eps_grid, _, _, _) in enumerate(layers):
+            _check_normal_field_still_fits(eps_grid, normal_field_source, i, lattice,
+                                           normal_method)
+    if compression is not None:
+        for i in range(n_layers):
+            _check_compression_still_fits(structure[i], compression[i], i)
+
+
 def to_conv_mat_raster_sampled(structure, half_width_u, half_width_v, nesting=None):
     """Per-layer convolution matrices for a raster ``structure`` via the sampled path.
 
@@ -1377,6 +1411,20 @@ def _lattice_key(lattice):
     return tuple((A / scale).reshape(-1).tolist())
 
 
+def _same_cell_shape(a, b, tol=1e-12):
+    """Whether two :func:`_lattice_key` values name one cell shape, to rounding.
+
+    The key is the basis divided by ``|a1|``, and that division rounds: ``hexagonal(640.)`` and
+    ``hexagonal(700.)`` -- one shape at two sizes, whose normal fields are the same -- keyed
+    ``-0.49999999999999983`` and ``-0.4999999999999998`` for the same entry, one ulp apart, and
+    the exact comparison refused the replay as a moved cell (measured 2026-09-25). A shape that
+    truly differs differs by far more than ``tol`` in these unit-scaled entries.
+    """
+    if a is None or b is None:
+        return a is None and b is None
+    return len(a) == len(b) and all(abs(x - y) <= tol for x, y in zip(a, b))
+
+
 def _normal_field_source(eps, lattice=None, method=None):
     """Everything :func:`normal_vector_field` reads off a layer, and nothing else.
 
@@ -1463,8 +1511,9 @@ def _check_normal_field_still_fits(eps_matrix, source, index, lattice=None, meth
     is used. Re-freezing costs one call.
 
     Only reachable eagerly. Under a trace the layer cannot be read at all, which is the point
-    of having frozen it — so a jitted call carries no check, and a long fit should re-freeze on
-    a schedule rather than rely on being told.
+    of having frozen it — so a jitted call carries no check. JAX's ``fit`` prepares the current
+    geometry before every compiled step; its jitted ``solve_field`` runs this check on the live
+    solver before its compiled call (:func:`check_raster_records_still_fit`).
     """
     import numpy as np
     if source is None:
@@ -1485,7 +1534,8 @@ def _check_normal_field_still_fits(eps_matrix, source, index, lattice=None, meth
     # records carry none — compare it exactly when both sides have one and it matters.
     phases_agree = (phases is None or now_phases is None or meth != now_meth
                     or meth == 'distance' or phases == now_phases)
-    if (shape == now_shape and lat == now_lat and meth == now_meth and phases_agree
+    same_cell = _same_cell_shape(lat, now_lat)
+    if (shape == now_shape and same_cell and meth == now_meth and phases_agree
             and (mask is None or np.array_equal(mask, now_mask))):
         return                            # equal shapes agree on whether a mask exists at all
 
@@ -1493,7 +1543,7 @@ def _check_normal_field_still_fits(eps_matrix, source, index, lattice=None, meth
         moved = (f'the normal field was built with raster_normal_method={meth!r} and this solver '
                  f'is configured raster_normal_method={now_meth!r} — same interfaces, different '
                  f'construction, different field')
-    elif lat != now_lat:
+    elif not same_cell:
         moved = (f'the cell basis is now {now_lat}, where the normal field was sampled on '
                  f'{lat} — the interfaces point the same way in the raster but a different '
                  f'way in space')

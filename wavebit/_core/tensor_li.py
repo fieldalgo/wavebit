@@ -106,9 +106,8 @@ def freeze(solver):
     })
 
 
-def build(solver, geometry=None, quantity='epsilon'):
-    from . import anisotropy as A
-    from .enums import FourierCoefficients
+def check_geometry(solver, geometry):
+    """Validate the Li record without constructing Fourier matrices."""
     shaped = isinstance(solver.structure, list)
     record = None if geometry is None else geometry.tensor_geometry
     mode = 'li-shapes' if shaped else 'li-raster'
@@ -118,6 +117,21 @@ def build(solver, geometry=None, quantity='epsilon'):
         raise StaleGeometryError('tensor Li orders or Fourier coefficients changed; freeze_geometry() again')
     if record is not None and not shaped and record['shape'] != tuple(solver.structure.shape):
         raise StaleGeometryError('tensor Li raster shape changed; freeze_geometry() again')
+    if shaped and record is not None:
+        plans = record['plans']
+        if plans is not None and len(plans) != len(solver.structure):
+            raise StaleGeometryError('tensor Li layer count changed; freeze_geometry() again')
+        if plans is not None:
+            for layer, plan in zip(solver.structure, plans):
+                rectilinear.check_plan(layer.get('shapes', []), solver.lattice, plan)
+    return record
+
+
+def build(solver, geometry=None, quantity='epsilon'):
+    from . import anisotropy as A
+    from .enums import FourierCoefficients
+    shaped = isinstance(solver.structure, list)
+    record = check_geometry(solver, geometry)
     xp, dtype, dev = solver.xp, solver.complex_dtype, solver._array_device
     (_, hu), (_, hv) = solver.order_window
     count = (2 * hu + 1) * (2 * hv + 1)
@@ -126,8 +140,6 @@ def build(solver, geometry=None, quantity='epsilon'):
         return A.as_tensor(xp, material.epsilon if quantity == 'epsilon' else material.mu_value, dtype, dev)
     if shaped:
         plans = None if record is None else record['plans']
-        if plans is not None and len(plans) != len(solver.structure):
-            raise StaleGeometryError('tensor Li layer count changed; freeze_geometry() again')
         fields = []
         for i, layer in enumerate(solver.structure):
             shapes = layer.get('shapes', [])
