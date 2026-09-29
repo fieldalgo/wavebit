@@ -3438,7 +3438,9 @@ class CoreFactorizationMixin:
         scene. Clear the obsolete state even though ``_reconstruction_scene`` also guards
         reconstruction against changed conditions. Emptied rather than refreshed: the compiled
         call's own state is a traced value inside it, and bringing it out would put it on the
-        live solver under an outer ``jax.jit``.
+        live solver under an outer ``jax.jit``. JAX's ``fit`` also discards retained state:
+        its last traced solve precedes the final optimizer update, and cannot be used to
+        reconstruct the final design, including after a failed iteration.
         """
         self.layer_info_list = []
         self.T1 = None
@@ -3541,8 +3543,8 @@ class CoreFactorizationMixin:
         if self._solved_scene is self._SOLVED_ELSEWHERE:
             raise RuntimeError(
                 'nothing to reconstruct from: the last call that moved this solver\'s conditions '
-                'was the jitted solve_field(...), which keeps its keywords on the solver but '
-                'solves inside its own jax.jit trace, so this solver holds no modes or '
+                'was a jitted solve_field(...) or fit(...) call. These compute inside a '
+                'jax.jit trace, so this solver holds no modes or '
                 'amplitudes for the scene it now reports. Call solve() to reconstruct from this '
                 'solver, or take the field a solve_field(...) call returns.')
         now = self._reconstruction_scene()

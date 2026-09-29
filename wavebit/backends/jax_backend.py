@@ -18,10 +18,13 @@ import jax
 # Above the rest, and before anything here can build an array. See the module docstring.
 jax.config.update('jax_enable_x64', True)
 
+from collections.abc import Mapping                              # noqa: E402
 from functools import partial                                    # noqa: E402
+from inspect import signature                                    # noqa: E402
 
 import jax.numpy as jnp                                          # noqa: E402
 import jax.numpy as _xp                                          # noqa: E402
+import numpy as np                                              # noqa: E402
 from jax import tree_util                                        # noqa: E402
 from tqdm import tqdm                                            # noqa: E402
 
@@ -30,6 +33,7 @@ from .._core.engine import (CoreFactorizationMixin, CoreSolveMixin,  # noqa: E40
 from .._core import lattice as _lattice_module                   # noqa: E402
 from .._core.enums import DIFFERENTIABLE_BACKENDS as _DIFFERENTIABLE_BACKENDS  # noqa: E402
 from .._core.result import Result, ResultSub                     # noqa: E402
+from .._core.geometry import StaticGeometry                      # noqa: E402
 
 
 class _BaseRCWA(CoreSolveMixin):
@@ -294,6 +298,37 @@ except (TypeError, ImportError, ModuleNotFoundError) as e:
     warnings.warn('Importing optax failed. You can run RCWA but not optimization on the JAX backend. '
                   'One possible reason is python version: optax support python>=3.9.')
 
+def _same_prepared_geometry(left, right):
+    """Exact, eager equality for the fit's last two records, including array-bearing ones.
+
+    StaticGeometry deliberately hashes raster/tensor arrays by identity. Keep that global
+    cache contract; locally retain the previous object only after comparing every field,
+    array shape, dtype and value. A fresh but identical raster freeze need not compile the
+    optimizer again. Unknown or incomparable records conservatively keep their new identity.
+    """
+    if type(left) is not StaticGeometry or type(right) is not StaticGeometry:
+        return False
+    if left == right:
+        return True
+    leaves_a, tree_a = tree_util.tree_flatten(vars(left))
+    leaves_b, tree_b = tree_util.tree_flatten(vars(right))
+    if tree_a != tree_b:
+        return False
+    try:
+        for a, b in zip(leaves_a, leaves_b):
+            if a is b:
+                continue
+            if isinstance(a, (np.ndarray, jax.Array)) or isinstance(b, (np.ndarray, jax.Array)):
+                a, b = np.asarray(a), np.asarray(b)
+                if a.dtype != b.dtype or not np.array_equal(a, b):
+                    return False
+            elif not bool(a == b):
+                return False
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
 class OptimizerJax:
 
     def __init__(self, *args, **kwargs):
@@ -320,7 +355,7 @@ class OptimizerJax:
         #
         # Real parameters are unaffected -- `conj` of a real array is itself -- which is why a
         # thickness sweep never showed it and why this went out at all.
-        return loss_value, {k: jnp.conj(v) for k, v in grads.items()}
+        return loss_value, tree_util.tree_map(jnp.conj, grads)
 
     # Scoped, so what `forward` and the optimizer build from scalars -- `optimizer.init`'s
     # zeros, a loss's constants -- lands where the solve runs rather than on JAX's default.
@@ -333,21 +368,116 @@ class OptimizerJax:
         return grads
 
     @device_scoped
-    def fit(self, parameters, forward, loss_fn, optimizer, iteration=1):
-        params = {name: (getattr(self, name)) for name in parameters}
+    def fit(self, parameters, forward, loss_fn, optimizer, iteration=1, *,
+            parameterize=None, prepare_geometry=None):
+        """Optimize with a geometry prepared from the current design before every JIT step.
+
+        ``parameters`` is either a sequence of solver attribute names (the original API),
+        or a mapping of initial numeric design parameters. ``parameterize(**params)`` may
+        map those design parameters to solver conditions, for example a width to a shape
+        ``structure``. It runs both eagerly to prepare the geometry and under differentiation
+        to carry the design derivatives; keep it pure and use traceable array operations.
+
+        For this solver's ``solve``, ``solve_field`` or ``solve_field_eager`` (including
+        ``functools.partial``), the loop calls ``freeze_geometry`` on the current conditions
+        outside JIT. Fixed keyword conditions in a partial participate too. A ``geometry``
+        captured by keyword or position in that partial is replaced, so an initial freeze
+        cannot go stale. The record is an explicit static argument of the compiled step.
+        Exactly equal records
+        reuse the previous object (including raster arrays), changed records recompile.
+        Continuous design parameters stay traced.
+
+        An arbitrary ``forward`` cannot reveal which scene it solves. For that case provide
+        ``prepare_geometry(**conditions)``; it runs outside JIT at every step and its return
+        is passed explicitly as ``forward(geometry=..., **conditions)``. The forward must use
+        that record, not a freeze hidden in a closure. Without this preparation contract an
+        opaque forward is refused before optimization, rather than replayed unchecked.
+        Preparation also receives a partial's fixed keyword defaults (except ``geometry``),
+        overridden by the current conditions. For a built-in forward these are restricted
+        to solver conditions, excluding field sampling and other call options.
+
+        Returns the final design parameters. The built-in forward also leaves their mapped
+        conditions on this solver. For a custom forward, the original attribute-name API
+        still writes those attributes back; a mapping of custom design variables is returned
+        without creating arbitrary solver attributes. Retained solve state is discarded.
+        """
+        named_attributes = not isinstance(parameters, Mapping)
+        params = ({name: getattr(self, name) for name in parameters}
+                  if named_attributes else dict(parameters))
+
+        method, fixed, positional = forward, {}, ()
+        while isinstance(method, partial):
+            fixed = {**method.keywords, **fixed}
+            positional = (*method.args, *positional)
+            method = method.func
+        # Inspect the class methods, not unrelated instance attributes: callers may wrap
+        # one entry point for instrumentation while fitting through another. A replaced
+        # forward itself remains a custom callable and needs explicit preparation.
+        automatic = (getattr(method, '__self__', None) is self
+                     and any(getattr(method, '__func__', None) is getattr(type(self), name)
+                             for name in ('solve', 'solve_field', 'solve_field_eager')))
+        if not automatic and prepare_geometry is None:
+            raise TypeError(
+                'fit needs this solver\'s solve, solve_field or solve_field_eager '
+                '(or functools.partial of one) to prepare geometry automatically. '
+                'For a custom forward, provide prepare_geometry(**conditions) and accept '
+                'the resulting geometry= in forward. Use parameterize= to map design '
+                'variables to solver conditions.')
+
+        if positional:
+            # Remove an old record even when it occupied a positional slot. BoundArguments
+            # preserves the other positions/options and moves arguments after the gap to
+            # keywords, so the fresh geometry below cannot collide with the captured one.
+            bound = signature(method).bind_partial(*positional, **fixed)
+            bound.arguments.pop('geometry', None)
+            forward = partial(method, *bound.args, **bound.kwargs)
+
+        def conditions(values):
+            mapped = values if parameterize is None else parameterize(**values)
+            if not isinstance(mapped, Mapping):
+                raise TypeError('parameterize must return a mapping of conditions')
+            if 'geometry' in mapped:
+                raise ValueError('fit prepares geometry each step; it is not a design condition')
+            return dict(mapped)
+
+        fixed_conditions = {name: value for name, value in fixed.items()
+                            if name != 'geometry'
+                            and (not automatic or name in self._condition_names())}
         opt_state = optimizer.init(params)
 
-        @jax.jit
-        def step(params, opt_state):
-            loss_value, grads = self._grad(params, forward, loss_fn)   # already conjugated
+        @partial(jax.jit, static_argnames=('geometry',))
+        def step(params, opt_state, geometry):
+            def evaluate(**values):
+                return forward(**conditions(values), geometry=geometry)
+
+            loss_value, grads = self._grad(params, evaluate, loss_fn)  # already conjugated
             updates, opt_state = optimizer.update(grads, opt_state, params)
             params = optax.apply_updates(params, updates)
             return params, opt_state, loss_value
 
-        for _ in tqdm(range(iteration)):
-            params, opt_state, loss_value = step(params, opt_state)
+        started = False
+        previous_geometry = None
+        try:
+            for _ in tqdm(range(iteration)):
+                started = True
+                current = conditions(params)
+                prepare = self.freeze_geometry if prepare_geometry is None else prepare_geometry
+                geometry = prepare(**(fixed_conditions | current))
+                if _same_prepared_geometry(previous_geometry, geometry):
+                    geometry = previous_geometry
+                previous_geometry = geometry
+                params, opt_state, _ = step(params, opt_state, geometry)
 
-        [setattr(self, name, params[name]) for name in parameters]
+            if started:
+                if automatic:
+                    with self._conditions(fixed_conditions | conditions(params)):
+                        pass
+                elif named_attributes:
+                    for name, value in params.items():
+                        setattr(self, name, value)
+        finally:
+            if started:
+                self._forget_the_solve()
 
         return params
 

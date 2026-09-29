@@ -65,24 +65,52 @@ step = jax.jit(lambda u: jnp.sum(solver.solve(structure=u, geometry=geometry).T)
 You need a freeze only under `jax.jit` and `vmap`. PyTorch has no record to freeze, and so none
 to go stale.
 
-## Re-take the freeze every step
+## Let `fit` prepare each design before JIT
 
 A freeze describes the structure it was taken on. Sweeping the *material values* reuses it
 exactly; moving the geometry does not, and a `solve` that can read its values raises
 `StaleGeometryError` rather than answering from a record that no longer fits. **Under `jax.jit`
-there is nothing to compare against and that check cannot run** — which is the reason to re-take
-the freeze every step rather than hold one:
+there is nothing to compare against and that check cannot run**. JAX's `solver.fit` therefore
+prepares the current geometry outside JIT at every iteration, then passes it explicitly to the
+compiled value/gradient and optimizer step. Pass `solver.solve`, `solver.solve_field` or
+`solver.solve_field_eager` as `forward`, or a `functools.partial` of one of those methods. Fixed
+keyword conditions in a partial are included in preparation; an old `geometry=` in a partial
+is replaced each step.
+
+The existing attribute-name API needs no manual freeze:
 
 ```python
-for _ in range(n_steps):
-    geometry = solver.freeze_geometry()      # 0-1 ms; compares by content, so unchanged is free
-    value, grads = jax.value_and_grad(step)(params, geometry)
+import optax
+
+best = solver.fit(['structure', 'thickness'], solver.solve,
+                  lambda result: -result.T.sum().real,
+                  optax.adam(1e-2), iteration=20)
 ```
 
-The record compares by content, so an unchanged one is free and a jitted step recompiles only
-when the recorded *combinatorics* change — which is the same moment a held record would have
-gone stale. That makes re-freezing both the fastest way to run a moving fit and the only form
-that cannot carry a stale record forward.
+For shape optimization, pass initial numeric design parameters and a pure, differentiable
+`parameterize` function that maps them to solver conditions. Shape type strings and other
+declarations belong in that function, not in the differentiable parameter tree:
+
+```python
+def design(width):
+    return dict(structure=[dict(background=1., shapes=[
+        dict(type='rectangle', cx=0., cy=0., lx=width, ly=190.,
+             angle=0., material=4.)])])
+
+initial = dict(width=jnp.asarray(230., dtype=jnp.float64))
+solver = wavebit.rcwa(backend=1, period=(700., 700.), thickness=(150.,),
+                     wavelength=850., truncation_order=(2, 2), **design(**initial))
+best = solver.fit(initial, solver.solve, lambda result: -result.T.sum().real,
+                  optax.adam(1.), iteration=20, parameterize=design)
+```
+
+`fit` returns the final design parameters and leaves their mapped conditions on the solver.
+It evaluates `design` on concrete parameters to prepare geometry, and again inside the
+differentiated calculation to retain shape derivatives. The record compares by content:
+equal records reuse the compiled step, while a changed record requires recompilation. For
+array-bearing raster/tensor records, `fit` compares every field with the preceding record and
+retains that object only when the array shapes, dtypes and values all match exactly.
+Preparation still has a cost; freezing a record does not freeze the continuous design values.
 
 The painted-shape path reads "moving the geometry" more narrowly, because its record holds
 combinatorics rather than coordinates: a shape sliding is what it replays, bit for bit, and only
@@ -92,6 +120,31 @@ a change in *which shape covers which* makes it stale. See
 A freeze also records the checks the geometry passed. A record taken over a layer that would be
 refused replays the refusal, rather than letting a frozen scene through a door the live one
 cannot pass.
+
+An arbitrary `forward` may construct another scene or perform several calculations. `fit`
+cannot infer that scene from a closure, so it requires an explicit preparation contract:
+`prepare_geometry(**conditions)` runs outside JIT each step, and its return is passed as
+`forward(geometry=..., **conditions)`. For a wrapper over this solver, for example:
+
+```python
+def forward(geometry, **conditions):
+    return solver.solve(geometry=geometry, **conditions)
+
+best = solver.fit(['thickness'], forward, lambda result: -result.T.sum().real,
+                  optax.adam(1.), iteration=20,
+                  prepare_geometry=solver.freeze_geometry)
+```
+
+The wrapper must consume the supplied geometry rather than capture an initial freeze.
+Without `prepare_geometry`, an opaque forward is refused before optimization. A custom forward
+with a mapping of design variables returns those variables without assigning them as solver
+attributes; it owns their interpretation. `parameterize`, when supplied, runs before both
+preparation and the forward call.
+
+If writing a loop directly, follow the same order: apply the **current** design conditions to
+`freeze_geometry`, pass the resulting record as a static argument of the compiled calculation,
+then update the parameters. Keep preparation outside JIT. This updates the discrete plan;
+it does not make contact or overlap transitions differentiable at the transition itself.
 
 ## What cannot be traced
 
