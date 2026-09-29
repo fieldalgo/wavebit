@@ -153,6 +153,8 @@ TRACED_LEAVES = (
     'an isolated Sphere radius and center within range=, with a concrete plan',  # C6
     'an isolated Cylinder radius, height and center within range=, with a concrete plan',
     'an isolated Box size and center within range=, with a concrete plan and static orientation',
+    'vertices, height and center of an isolated Prism within range=, with a concrete plan, '
+    'static vertex count and static orientation',
 )
 
 

@@ -1,5 +1,5 @@
 """Fixed body allocations and the restricted public geometry-gradient certificate."""
-from ..geometry import Sphere, Cylinder, Box, _shape_traced
+from ..geometry import Sphere, Cylinder, Box, Prism, _shape_traced
 
 
 def records(scene):
@@ -12,9 +12,11 @@ def records(scene):
     out = []
     for index, structure in enumerate(scene.structures):
         shape = structure.shape
-        if isinstance(shape, (Sphere, Cylinder, Box)) and shape.range is not None:
+        if isinstance(shape, (Sphere, Cylinder, Box, Prism)) and shape.range is not None:
             row = (index, type(shape).__name__.lower(), shape.range)
-            if isinstance(shape, Box):
+            if isinstance(shape, Prism):
+                row += (shape.axis, shape.angle, len(shape.vertices))
+            elif isinstance(shape, Box):
                 row += (shape.axis, shape.angle)
             elif isinstance(shape, Cylinder):
                 row += (shape.axis,)
@@ -25,12 +27,15 @@ def records(scene):
 def refuse_mismatch(scene, plan):
     """Protect direct ``lower`` callers too; ``run`` additionally checks the whole scene."""
     if records(scene) != plan.shape_ranges:
-        raise ValueError('lower(scene, plan=...): Sphere/Cylinder/Box(range=) declarations differ '
+        raise ValueError('lower(scene, plan=...): Sphere/Cylinder/Box/Prism(range=) declarations differ '
                          'from the plan. Keep each range on the same structure with the same '
-                         'bounds and static orientation, or build a new plan with fd.plan(scene).')
+                         'bounds, static orientation and vertex count, or build a new plan '
+                         'with fd.plan(scene).')
 
 
 def leaves(shape):
+    if isinstance(shape, Prism):
+        return (shape.height, *shape.center, *(v for p in shape.vertices for v in p))
     if isinstance(shape, Box):
         return (*shape.size, *shape.center)
     if isinstance(shape, (Sphere, Cylinder)):
@@ -50,11 +55,13 @@ def name(scene):
 
 def remember(scene, plan):
     """The seed holds only concrete numbers, never backend leaves or a captured scene."""
-    seeds = tuple((i, s.shape.size, s.shape.center) if isinstance(s.shape, Box) else
+    seeds = tuple((i, s.shape.vertices, s.shape.height, s.shape.center)
+                  if isinstance(s.shape, Prism) else
+                  (i, s.shape.size, s.shape.center) if isinstance(s.shape, Box) else
                   (i, s.shape.radius, s.shape.center)
                   + ((s.shape.height,) if isinstance(s.shape, Cylinder) else ())
                   for i, s in enumerate(scene.structures)
-                  if isinstance(s.shape, (Sphere, Cylinder, Box)) and s.shape.range is not None)
+                  if isinstance(s.shape, (Sphere, Cylinder, Box, Prism)) and s.shape.range is not None)
     if seeds:
         object.__setattr__(plan, '_shape_seeds', seeds)
 
@@ -100,7 +107,10 @@ def planning_scene(scene, plan):
            for (lo, hi), n in zip(shape.support(plan.grid), plan.grid.n)):
         raise ValueError(f'A traced {where} range, including its interpolation halo, must '
                          'stay strictly inside the domain, away from boundary masks.')
-    if isinstance(shape, Box):
+    if isinstance(shape, Prism):
+        index, vertices, height, center = plan._shape_seeds[0]
+        dimensions = dict(vertices=vertices, height=height, center=center)
+    elif isinstance(shape, Box):
         index, size, center = plan._shape_seeds[0]
         dimensions = dict(size=size, center=center)
     else:
@@ -124,6 +134,52 @@ def validate(scene, plan):
                          'scene; rebuild fd.plan from concrete geometry.')
 
 
+def _prism_outline_valid(shape, rt, minimum):
+    """The concrete polygon door and hull-width floor, on backend scalar arrays.
+
+    A hull's minimum width occurs perpendicular to one of its edges. Every hull
+    edge joins two input vertices, so testing all distinct pairs includes that
+    minimum without sorting a traced hull. Extra directions cannot undercut the
+    global minimum. Degenerate pairs add infinity, not an unguarded division.
+    The crossing signs and inclusive endpoint tests match polygon_shape; neither
+    validity nor the width check contributes a derivative to the physical operator.
+    """
+    xp = rt.xp
+    vertices = xp.stack([xp.stack([rt.array(v, 'float64') for v in p])
+                         for p in shape.vertices])
+    nv = len(shape.vertices)
+    after = xp.roll(vertices, -1, axis=0)
+    area = xp.sum(vertices[:, 0]*after[:, 1] - after[:, 0]*vertices[:, 1])
+    valid = xp.all(xp.isfinite(vertices)) & (area > 0)
+    width = rt.array(float('inf'), 'float64')
+
+    def side(a, b, c):
+        return (b[0]-a[0])*(c[1]-a[1]) - (b[1]-a[1])*(c[0]-a[0])
+
+    def between(a, b, c):
+        return xp.all((xp.minimum(a, b) <= c) & (c <= xp.maximum(a, b)))
+
+    for i in range(nv):
+        for j in range(i+1, nv):
+            delta = vertices[j]-vertices[i]
+            norm = xp.sqrt(xp.sum(delta*delta))
+            relative = vertices-vertices[i]
+            projection = relative[:, 0]*delta[1] - relative[:, 1]*delta[0]
+            span = (xp.max(projection)-xp.min(projection))/xp.where(norm > 0, norm, 1.)
+            width = xp.minimum(width, xp.where(norm > 0, span, float('inf')))
+            if j == i+1 or (i == 0 and j == nv-1):
+                continue
+            p, q, r, s = vertices[i], after[i], vertices[j], after[j]
+            d1, d2, d3, d4 = side(r, s, p), side(r, s, q), side(p, q, r), side(p, q, s)
+            crossing = ((d1*d2 < 0) & (d3*d4 < 0)
+                        | ((d1 == 0) & between(r, s, p))
+                        | ((d2 == 0) & between(r, s, q))
+                        | ((d3 == 0) & between(p, q, r))
+                        | ((d4 == 0) & between(p, q, s)))
+            valid = valid & ~crossing
+    return valid & (width >= minimum)
+
+
 def guard(scene, plan, rt, previous):
     """Runtime counterpart of containment and the existing four-cell resolution door."""
     if not traced(scene):
@@ -131,7 +187,15 @@ def guard(scene, plan, rt, previous):
     from .checks import CELLS_ACROSS_REFUSED, _ACROSS_SLACK
     shape = scene.structures[0].shape
     xp = rt.xp
-    if isinstance(shape, Box):
+    centers = (shape.center,)
+    if isinstance(shape, Prism):
+        height = rt.array(shape.height, 'float64')
+        minimum = plan.dx * CELLS_ACROSS_REFUSED * (1.0 - _ACROSS_SLACK)
+        valid = xp.isfinite(height) & (height >= minimum)
+        valid = valid & _prism_outline_valid(shape, rt, minimum)
+        halves = tuple(height / 2 if a == 'xyz'.index(shape.axis) else 0. for a in range(3))
+        centers = shape._range_points()
+    elif isinstance(shape, Box):
         sizes = tuple(rt.array(s, 'float64') for s in shape.size)
         valid = xp.ones_like(sizes[0], dtype=xp.bool)
         for size in sizes:
@@ -149,9 +213,10 @@ def guard(scene, plan, rt, previous):
                 height / plan.dx >= CELLS_ACROSS_REFUSED * (1.0 - _ACROSS_SLACK))
         halves = tuple(height / 2 if height is not None and axis == 'xyz'.index(shape.axis)
                        else radius for axis in range(3))
-    for axis, (c, (lo, hi)) in enumerate(zip(shape.center, shape.range)):
-        c = rt.array(c, 'float64')
-        half = rt.array(halves[axis], 'float64')
-        valid = valid & xp.isfinite(c) & (c - half >= lo) & (c + half <= hi)
+    for center in centers:
+        for axis, (c, (lo, hi)) in enumerate(zip(center, shape.range)):
+            c = rt.array(c, 'float64')
+            half = rt.array(halves[axis], 'float64')
+            valid = valid & xp.isfinite(c) & (c - half >= lo) & (c + half <= hi)
     value = rt.constant(xp.where(valid, rt.array(1., 'float64'), rt.array(float('nan'), 'float64')))
     return value if previous is None else previous * value

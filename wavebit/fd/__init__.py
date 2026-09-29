@@ -128,15 +128,17 @@ and two smoothed shapes may not put their surfaces through one voxel except for 
 junction described below, nor (from C4) a smoothed
 surface a voxel a cell-snapped structure's face cuts -- which is how a pillar standing flush on
 a ``Slab`` substrate is refused rather than read half a cell off. General CSG remains later
-work. ``Sphere(range=...)``, ``Cylinder(range=...)`` and ``Box(range=...)`` reserve fixed
-support boxes for sweeps and compiled-program reuse. Radius and centre, a cylinder's height,
-and a box's three sizes may be differentiated with a concrete prebuilt plan.
-Extrusion axes and a box's rotation angle remain static. The
+work. ``Sphere(range=...)``, ``Cylinder(range=...)``, ``Box(range=...)`` and
+``Prism(range=...)`` reserve fixed support boxes for sweeps and compiled-program reuse.
+Radius and centre, extrusion height, a box's three sizes and a prism's vertices may
+be differentiated with a concrete prebuilt plan. Extrusion axes, rotation angles
+and a prism's vertex count remain static. The
 range contains the whole body; traced scenes currently require one isolated body,
 concrete isotropic lossless materials, Dipole sources, Record/Field monitors and no
 initial field. The full reserved support and interpolation halo must clear the domain
-boundaries and absorbers. Runtime guards check actual sizes, containment and constitutive
-stability; they do not establish continuum convergence. See the C6 sections of
+boundaries and absorbers. Runtime guards check actual sizes, containment, polygon
+simplicity/orientation and constitutive stability; they do not establish continuum
+convergence. See the C6 sections of
 ``docs/fd-subpixel-occupancy.md``.
 
 A Cylinder or unturned Box standing flush on a smoothed, unturned Box face uses

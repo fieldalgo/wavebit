@@ -16,9 +16,10 @@ prepared for one scene must not silently drive another.
 Empty ``Plan.junctions`` records are omitted, including in a source's nested column
 plan, so scenes without junctions retain their existing skeletons.
 
-``Plan.shape_ranges`` records optional fixed support boxes for concrete sphere sweeps.
+``Plan.shape_ranges`` records optional fixed support boxes for body sweeps.
 Their exact declarations and structure indices are static; absent records are omitted
-by the same rule. The current sphere's geometry is checked on every planning call.
+by the same rule. Extrusion orientation and prism vertex count are also static. The
+current body's geometry is checked on every concrete planning call.
 
 **One field may be hashed instead of written out.** A dataclass field declared
 ``metadata={'digest': True}`` encodes as the pair ``['digest', sha256]`` over its arrays
@@ -205,7 +206,7 @@ class Plan:
     spans: tuple = ()            # ((axis, asked lo, asked hi, snapped lo, snapped hi), ...)
     schedule: object = None      # checkpoint block size; None is a plain scan
     junctions: tuple = ()        # static flush-pair geometry and write masks
-    shape_ranges: tuple = ()     # (index, kind, support bounds[, axis[, box angle]])
+    shape_ranges: tuple = ()     # index, kind, support bounds, then any orientation/vertex count
     skeleton: str = ''
 
     @property

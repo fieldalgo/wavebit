@@ -513,7 +513,7 @@ class Structure:
                 f'ignored, so a third one is refused here rather than falling back to the '
                 f'default: the two converge at different orders and a scene that got the one '
                 f'it did not ask for would read as a physics result.')
-        if (self.discretisation == STENCIL and isinstance(self.shape, (Sphere, Cylinder, Box))
+        if (self.discretisation == STENCIL and isinstance(self.shape, (Sphere, Cylinder, Box, Prism))
                 and self.shape.range is not None):
             raise ValueError(f"Structure(discretisation='stencil') does not support "
                              f"{type(self.shape).__name__}(range=): "
@@ -1168,8 +1168,13 @@ class _Extruded(Shape):
         k0, k1 = self.support(grid)[axis]
         if k1 <= cells[0] or k0 >= cells[1]:
             return True
-        if isinstance(self, (Box, Cylinder)) and self.range is not None:
-            dimensions = self.size if isinstance(self, Box) else (self.radius, self.height)
+        if isinstance(self, (Box, Cylinder, Prism)) and self.range is not None:
+            if isinstance(self, Prism):
+                dimensions = (self.height, *(v for p in self.vertices for v in p))
+            elif isinstance(self, Box):
+                dimensions = self.size
+            else:
+                dimensions = (self.radius, self.height)
             if any(_shape_traced(v) for v in (*dimensions, *self.center)):
                 # No host truth test on moving faces. False is conservative; public
                 # traced bodies are certified wholly inside the domain before lowering.
@@ -1381,8 +1386,16 @@ class Prism(_Extruded):
     outline is refused here, at construction, by the kernel's own check. A non-convex outline
     is legal. ``angle`` (degrees) turns the outline counter-clockwise about ``+axis`` through
     ``center``. Fill and diagonal moment are exact at every edge and corner
-    (``wavebit/fd/_shapes``' :class:`~wavebit.fd._shapes.Prism`). Static in C4; ``range=``
-    is C6.
+    (``wavebit/fd/_shapes``' :class:`~wavebit.fd._shapes.Prism`). With ``range=`` and a
+    concrete prebuilt plan, vertices, height and centre may be differentiated under
+    :class:`Sphere`'s isolated-body restrictions. The vertex count, axis and angle stay
+    static. The full rotated outline and both caps must stay inside the range.
+    Runtime checks preserve a finite, simple, counter-clockwise outline and the existing
+    convex-hull-width floor; that floor does not resolve a concave outline's thin arms.
+    Both convex and concave ranged outlines use the general clipping capacity so that
+    changing convexity cannot change the compiled allocation. Without a range all
+    geometry stays static. Derivatives belong to the existing discrete operator,
+    including its nearest-surface cross-term approximation and its nondifferentiable ties.
     """
 
     vertices: tuple
@@ -1390,6 +1403,7 @@ class Prism(_Extruded):
     axis: str = 'z'
     center: tuple = (0.0, 0.0, 0.0)
     angle: float = 0.0
+    range: object = None
 
     _label = 'prism'
 
@@ -1398,19 +1412,44 @@ class Prism(_Extruded):
         object.__setattr__(self, 'axis', _extrusion_axis('Prism', self.axis))
         vertices = self.vertices
         if hasattr(vertices, 'tolist') and len(getattr(vertices, 'shape', ())) == 2:
-            vertices = vertices.tolist()             # an (nv, 2) array, as the kernel takes
+            vertices = tuple(tuple(vertices[i, j] for j in range(vertices.shape[1]))
+                             for i in range(vertices.shape[0]))
         if not (isinstance(vertices, (tuple, list))
                 and all(isinstance(p, (tuple, list)) and len(p) == 2 for p in vertices)):
             raise ValueError(f'Prism(vertices={vertices!r}): a tuple or list of (u, v) pairs, '
                              f'or an (nv, 2) array.')
-        vertices = tuple((_finite('Prism', f'vertices[{i}]', u),
-                          _finite('Prism', f'vertices[{i}]', v))
+        # Indexing keeps derivative leaves, unlike tolist(), but also keeps scalar
+        # dtypes: float(np.bool_) or float(a real-valued complex tensor) would pass.
+        if any(kind in str(getattr(v, 'dtype', '')) for p in vertices for v in p
+               for kind in ('bool', 'complex')):
+            raise ValueError('Prism(vertices=...): real coordinates, not boolean or complex values.')
+        coordinate = _finite if self.range is None else _ranged_coordinate
+        vertices = tuple((coordinate('Prism', f'vertices[{i},0]', u),
+                          coordinate('Prism', f'vertices[{i},1]', v))
                          for i, (u, v) in enumerate(vertices))
-        polygon_shape('Prism', vertices)
+        if len(vertices) < 3:
+            raise ValueError('Prism(vertices=...): a polygon has at least three vertices.')
+        if not any(_shape_traced(v) for p in vertices for v in p):
+            polygon_shape('Prism', vertices)
         object.__setattr__(self, 'vertices', vertices)
-        object.__setattr__(self, 'height', _length('Prism', 'height', self.height))
-        object.__setattr__(self, 'center', _triple('Prism', 'center', self.center, _finite))
+        length = _length if self.range is None else _ranged_length
+        object.__setattr__(self, 'height', length('Prism', 'height', self.height))
+        object.__setattr__(self, 'center', _triple('Prism', 'center', self.center, coordinate))
         object.__setattr__(self, 'angle', _finite('Prism', 'angle', self.angle))
+        if self.range is not None:
+            a = AXES.index(self.axis)
+            halves = tuple(self.height / 2 if k == a else 0. for k in range(3))
+            for point in self._range_points():
+                object.__setattr__(self, 'range', _contained_range(
+                    'Prism', self.range, point, halves))
+
+    def _range_points(self):
+        """Rotated section vertices at the axial centre, without host extrema."""
+        u, v = _TRANSVERSE[AXES.index(self.axis)]
+        for x, y in _turned(self.vertices, self.angle):
+            point = list(self.center)
+            point[u], point[v] = point[u] + x, point[v] + y
+            yield tuple(point)
 
     def _section(self):
         turned = _turned(self.vertices, self.angle)
@@ -1435,8 +1474,20 @@ class Prism(_Extruded):
     def body(self):
         """The ``_shapes`` prism: the exact polygon clip times the axial overlap."""
         from ._shapes import Prism as _Extruded_polygon
-        return _Extruded_polygon(vertices=self.vertices, height=self.height, axis=self.axis,
+        vertices = self.vertices
+        typed = tuple(v for p in vertices for v in p if _shape_traced(v))
+        if typed:
+            from wavebit._core.backend import array_namespace
+            from ._shapes._bodies import _as
+            xp = array_namespace(*typed)
+            vertices = xp.stack([_as(xp, p, typed[0]) for p in vertices])
+        body = _Extruded_polygon(vertices=vertices, height=self.height, axis=self.axis,
                                  center=self.center, angle=math.radians(self.angle))
+        if self.range is not None:
+            # The general capacity is safe for every simple outline with this vertex
+            # count, including a sweep that changes between convex and concave.
+            body._convex = body.convex = False
+        return body
 
     def describe(self):
         turn = f', angle={self.angle}' if self.angle else ''

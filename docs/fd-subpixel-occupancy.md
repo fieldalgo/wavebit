@@ -1962,3 +1962,124 @@ counts and runner timings are retained in
 `studies/results/fdtd_box_grad_validation.json`. The sequential runner is
 `studies/fdtd_box_grad_validation.py`; raw outputs remain under
 `studies/results/fdtd_box_grad_controls/`.
+
+
+### Public prism geometry derivatives (C6, 2026-09-29)
+
+`fd.Prism(vertices=outline, height=h, center=(x, y, z), axis='z', angle=23,
+range=bounds)` preserves derivatives of every vertex coordinate, the height
+and the centre through public `fd.lower` and `fd.run`. Build a concrete plan
+first and pass it into the differentiated call. For an N-vertex outline there
+are `2*N + 4` geometry leaves. The vertex count, axis, angle and exact range
+are static plan declarations; changing any of them requires a new plan.
+Without a range, all geometry remains static.
+
+The reservation contains every rotated section vertex and both axial caps,
+including asymmetric outlines whose centre is not their bounding-box centre.
+Allocation and `prism.range.x/y/z` report spans stay fixed while the actual
+outline, height, centre and volume change. Ranged prisms always use the
+general polygon clipping capacity for their vertex count. Thus a concrete
+sweep may change between convex and concave outlines with one plan and one
+compiled time-stepping program. Unranged prisms keep their previous capacity
+selection and arithmetic.
+
+The same isolated-body certificate as the sphere, cylinder and box applies:
+concrete isotropic lossless materials, Dipole sources, Record/Field monitors,
+no initial field or additional structure, and a complete reservation plus
+interpolation halo clear of domain boundaries and absorbers. Prepared
+stencils remain incompatible with `range=`. A traced report leaves geometry
+measurements explicitly unavailable; concrete reports show the current body.
+
+Runtime checks enforce finite coordinates, positive counter-clockwise area,
+no intersections or contacts between nonadjacent edges, containment of all
+rotated vertices and both caps, and the existing four-cell height and
+convex-hull-width floors. The crossing signs and inclusive endpoint tests
+follow the concrete polygon door. The hull width is found without sorting
+traced coordinates: project onto normals of all distinct vertex pairs and
+take the smallest span. A minimum-width direction is normal to a hull edge,
+and every hull edge is among those pairs. Extra directions cannot undercut
+the global minimum. Degenerate pairs contribute infinity through a guarded
+division. This is the existing hull-width criterion; a concave outline's thin
+arms are still not separately resolved or certified by it.
+
+Public vertex arrays are indexed into scalar leaves instead of calling
+`tolist()`, which silently detached Torch vertex derivatives, including an
+unranged array that should have been refused as static. Typed rows are stacked
+without reading their values when making the kernel body. Explicit scalar
+dtype checks preserve the previous refusal of boolean and complex arrays
+after removing `tolist()`; `float()` alone can accept those scalar types.
+
+The retained probe uses a six-vertex asymmetric outline, 23-degree rotations
+about x, y and z, and a concave outline rotated -23 degrees about z. It runs
+24 steps on a 16-cubed domain at `dx=0.1`, with relative permittivity 2.25 and
+permeability 1.2. All 64 measured geometry derivatives are nonzero. The
+initial observation, the entire final electric-field squared norm, was
+source-dominated at about 1070: its smallest sensitivity was 0.001768 and
+central differences lost relative accuracy through cancellation. Those
+measurements remain in `studies/results/fdtd_prism_grad_full_field_probe.json`
+and `fdtd_prism_grad_probe_attempt1.log`; running the probe with `full-field`
+repeats that observation.
+
+Before choosing the regression difference step, the observation was changed
+to the fixed central region `E[:, 5:11, 5:11, 5:11]`, excluding the drive.
+Its squared norm is 15.5 to 17.2. The four measured steps are `1e-4`, `1e-5`,
+`3e-6` and `1e-6`; large steps cross nearest-face transitions. At `3e-6`, the
+worst relative derivative discrepancy is `8.06e-7`; at `1e-6` it is
+`1.06e-6`, as small sensitivities again approach cancellation. Tests retain
+the existing `2e-6` relative derivative budget with zero absolute allowance.
+The smallest absolute sensitivity is `6.641e-4`, and JAX/Torch derivatives
+differ by at most `4.62e-14` in absolute value. The local observation's
+measurements are in `fdtd_prism_grad_probe.json` and
+`fdtd_prism_grad_probe_attempt2.log`.
+
+Ranged and unranged fields agree within `3.66e-16` of the largest field,
+retaining the existing 128-double-epsilon field budget. All six component
+fills recover the analytic volume at opposite reservation corners within
+`1.12e-15` relative error, retaining the existing `1e-12` volume budget;
+`fdtd_prism_grad_volumes.json` records those measurements. The transforms
+covered are ordinary JAX `value_and_grad`, Torch reverse mode,
+`torch.func.jvp` and `forward_ad`, including a single typed vertex coordinate
+among plain numeric coordinates. Compiled JAX forward runs also check invalid
+geometry without recompilation. Whole-function compiled gradient performance
+remains unvalidated. Derivatives belong to the existing piecewise-smooth
+discrete operator; nearest-surface cross terms, nondifferentiable ties and
+the need for physical convergence checks remain.
+
+An initial topology test constructed a contact by averaging decimal
+coordinates. Its signed cross product was `6.0715e-18`, so both the concrete
+and runtime predicates accepted the actual tiny gap. The contact fixture now
+uses exactly representable dyadic coordinates; no predicate tolerance was
+changed. The diagnosis is retained in
+`studies/results/fdtd_prism_grad_controls/touch_predicate_probe.log`. A second
+fixture fix copies the reversed NumPy outline before passing it to Torch,
+which cannot consume a negative-stride NumPy view. The two targeted attempts
+were stopped after these fixture failures, with their partial logs retained;
+the focused topology checks then passed on all three backends.
+
+The targeted prism/box/cylinder/sphere and public-body run passed all 159
+collected cases, exit 0 (276.53 seconds). The 47 prism cases cover all four
+rotation quadrants about all axes, exact range contact and inward bounds,
+convex/concave sweeps, every geometry leaf, invalid compiled inputs, the
+static declarations and seed certificate, and monitors near an absorber.
+Twenty-five real source mutations were killed by value assertions or
+missing-refusal assertions, covering all ten new test functions, with exact
+source-byte restoration. In the first mutation batch, detached vertices
+produced zero reverse sensitivities but a later `jvp` errored before those
+sensitivities were compared. The test now checks the reverse result first;
+its unchanged-code baseline passed before rerunning all controls. The first
+batch's records remain in `fdtd_prism_grad_controls/mutation_attempt1/`, and
+the complete accepted witnesses are in that directory's parent. The runner
+is `studies/fdtd_prism_grad_mutations.py`.
+
+Final validation used fd source SHA-256
+`de4f4d0800749fa44b118ae044e26755c93562b4ff0932158b6a22e8158a6334`.
+The full fd/docs tier collected 2645 cases and exited 0 with 2637 passed and
+8 skipped (2083.76 seconds), including all 47 prism cases. The separate slow
+tier collected and passed all 80 cases, exit 0 (1094.43 seconds). Reported
+totals match collection; neither tier reported INTERNALERROR or a worker
+crash. All 143/288/140/570 committed reference arrays reproduced bit for bit
+in the four read-only freezers; no golden was rewritten. Source identity,
+counts and runner timings are retained in
+`studies/results/fdtd_prism_grad_validation.json`. The sequential runner is
+`studies/fdtd_prism_grad_validation.py`; raw outputs remain under
+`studies/results/fdtd_prism_grad_controls/`.
