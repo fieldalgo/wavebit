@@ -23,6 +23,12 @@ solver.solve().T.sum().backward()          # u.grad
 The two agree: on the quickstart grating both report a gradient of norm `0.0802694256415…`,
 matching to ~1e-15.
 
+JAX's `solver.grad(parameter_names, forward, loss_fn)` also restores the complete
+parameter declarations after evaluation, including tabulated materials and default
+polarization. It releases the temporary solve state, even if the forward or loss
+raises. Use a saved result for earlier fields, or call `solve()` again before reading
+fields through the solver. The loss itself can still reconstruct the current field.
+
 What is differentiable is not only the raster. A **`Material`** is a frozen pytree whose
 children are `(epsilon, mu)`, so `jax.grad` reaches inside one; and a **`Lattice`** stores its
 basis rather than an angle, so building one inside the differentiated function makes the cell's

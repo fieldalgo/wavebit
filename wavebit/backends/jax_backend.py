@@ -371,10 +371,22 @@ class OptimizerJax:
     # zeros, a loss's constants -- lands where the solve runs rather than on JAX's default.
     @device_scoped
     def grad(self, parameters, forward, loss_fn):
-        params = {name: (getattr(self, name)) for name in parameters}
-        _, grads = self._grad(params, forward, loss_fn)
-        [setattr(self, name, params[name]) for name in parameters]
+        """Return gradients while restoring the complete parameter assignments.
 
+        The parameter scope also covers custom forwards that assign attributes directly.
+        Reassigning resolved property values after differentiation loses declarations such
+        as a default polarization, a drawn cell, or a tabulated material definition. Restore
+        the setters' original slots instead, and release traced solve outputs before leaving
+        the differentiation trace, including when the forward or loss raises.
+        """
+        params = {name: (getattr(self, name)) for name in parameters}
+        def evaluate(**values):
+            with self._conditions(values):
+                try:
+                    return loss_fn(forward(**values))
+                finally:
+                    self._forget_the_solve()
+        _, grads = self._grad(params, evaluate, lambda value: value)
         return grads
 
     @device_scoped

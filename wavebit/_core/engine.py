@@ -3440,7 +3440,8 @@ class CoreFactorizationMixin:
         call's own state is a traced value inside it, and bringing it out would put it on the
         live solver under an outer ``jax.jit``. JAX's ``fit`` also discards retained state:
         its last traced solve precedes the final optimizer update, and cannot be used to
-        reconstruct the final design, including after a failed iteration.
+        reconstruct the final design, including after a failed iteration. Its ``grad`` helper
+        releases the traced solve state before leaving differentiation for the same reason.
         """
         self.layer_info_list = []
         self.T1 = None
