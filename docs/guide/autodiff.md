@@ -233,7 +233,7 @@ geometry-resolution convergence for the physical problem being optimized.
 
 | | Why |
 | --- | --- |
-| An **explicit `sample_z`** in `reconstruct_field`, with respect to `thickness` | bucketing a `z` into a layer needs the thicknesses as numbers. It raises rather than differentiating the wrong geometry; counts stay traceable |
+| An **explicit `sample_z`** in the legacy `solver.reconstruct_field`, with respect to `thickness` | this solver method buckets using concrete thicknesses and refuses traced ones; counts stay traceable. The result-owned `result.reconstruct_field` supports explicit heights and thickness derivatives while each point stays in its layer; see [fields](fields.md#differentiating-internal-fields) |
 | `torch.compile` | not a supported path — the solve is almost entirely LAPACK calls the compiler forwards untouched, and below torch 2.13 it does not run at all ([`../torch-compile.md`](../torch-compile.md)) |
 
 One trap worth naming because it passes: **build the solver outside the trace.** A jit test

@@ -149,6 +149,11 @@ derivatives while each point stays in the same layer. A moving interface crossin
 point can change its material and normal field discontinuously. Keep sample points
 inside the stack; eager validation is skipped when values are abstract under `jit`.
 
+At a layer face, coordinate derivatives use the selected finite layer's limiting
+field (the upper layer at an internal interface). They retain the full spatial
+derivative, including at an artificial seam between identical materials. This
+does not define a unique two-sided derivative across a material discontinuity.
+
 The source-based solver still uses concrete source grouping and layer segmentation;
 this ordinary-solve differentiation guarantee does not extend to those operations.
 

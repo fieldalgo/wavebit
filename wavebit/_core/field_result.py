@@ -85,6 +85,15 @@ def expand_spectrum(xp, kxy, coefficients, grid):
     return xp.reshape(flat, coefficients.shape[:-2] + x.shape + (6,))
 
 
+def _local_height(xp, z, start, thickness, selected):
+    """Clip unused evaluations without changing the selected layer's tangent."""
+    local = z-start
+    safe = xp.minimum(xp.maximum(local, xp.zeros_like(local)), thickness)
+    # min/max split derivatives at equality, including an artificial interface
+    # between identical materials. Selected samples need the full local tangent.
+    return xp.where(selected, local, safe)
+
+
 class FieldState:
     """Numeric solve snapshot and a static adapter name; a JAX pytree when registered.
 
@@ -168,9 +177,9 @@ class FieldState:
         nlayer = len(layers)
         # Work at every requested height in each layer, clipping unused samples so
         # an unselected evanescent solution cannot overflow and poison a gradient.
-        local = [xp.minimum(xp.maximum(z-edges[j], xp.zeros_like(z)), edges[j+1]-edges[j])
-                 for j in range(nlayer)]
         masks = [owner == j for j in range(nlayer)]
+        local = [_local_height(xp, z, edges[j], edges[j+1]-edges[j], masks[j])
+                 for j in range(nlayer)]
         if self.mirrored:
             local = [edges[j+1]-edges[j]-local[j] for j in range(nlayer-1, -1, -1)]
             masks.reverse()
@@ -206,7 +215,11 @@ class FieldState:
         for j, (eps, d, lf, pf, lb, pb, af, ab) in enumerate(g['layers']):
             # Dipole planes split a layer into concrete segment thicknesses.
             d = xp.real(_array(xp, d, self.data['thickness']))
-            local = xp.minimum(xp.maximum(z-ge[j], xp.zeros_like(z)), d)
+            # The segment's host layer is static metadata, not a traced choice.
+            mask = owner == g['hosts'][j]
+            if heights:
+                mask = mask & (z >= ge[j]) & (z <= ge[j+1])
+            local = _local_height(xp, z, ge[j], d, mask)
             if lf.ndim == 2 or lb.ndim == 2:
                 from .modal_gradient import exponential
                 state = (pf @ (exponential(xp, lf, 1j*g['k0']*local) @ af[..., None])
@@ -223,11 +236,6 @@ class FieldState:
             if mu is not None:
                 hz = (mu['ezz_i'] @ (hz[..., None]-mu['ezx'] @ hx[..., None]-mu['ezy'] @ hy[..., None]))[..., 0]
             field = xp.stack([ex, ey, ez, hx, hy, hz], axis=-1)
-            # The segment's host layer is static metadata, not a traced choice.
-            host = g['hosts'][j]
-            mask = owner == host
-            if heights:
-                mask = mask & (z >= ge[j]) & (z <= ge[j+1])
             field = xp.where(mask[:, None, None], field, 0)
             coefficient = field if coefficient is None else coefficient + field
         return coefficient
