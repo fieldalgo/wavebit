@@ -72,6 +72,9 @@ def _z_row_given(z_row, mu=None):
 # an order while staying physically negligible (5e-10 nm at 500 nm). Sized for double
 # precision — at complex64 the step vanishes below the dtype's resolution.
 _AUTO_DETUNE_REL = 1e-12
+# Differentiating modes near zero amplifies cancellation in the interface solve.
+# A larger retry offset resolves the derivative as well as the forward value.
+_AUTO_DETUNE_GRAD_REL = 1e-8
 
 # Connecting algorithm -> the core solve for each grating type. ETM propagates an enhanced
 # transmittance matrix (Moharam et al. 1995); SMM cascades per-layer scattering matrices. Same
@@ -218,6 +221,27 @@ def _holds_tracer(value):
             stack.extend((v.values, v.lattice))
         elif isinstance(v, Material):
             stack.extend((v.epsilon, v.mu))
+    return False
+
+
+def _holds_autodiff(value):
+    """Whether a condition tree carries JAX staging or a PyTorch gradient graph."""
+    from .backend import carries_autodiff
+    stack = [value]
+    while stack:
+        item = stack.pop()
+        if carries_autodiff(item):
+            return True
+        if isinstance(item, dict):
+            stack.extend(item.values())
+        elif isinstance(item, (list, tuple)):
+            stack.extend(item)
+        elif isinstance(item, _lattice.Lattice):
+            stack.extend((item.u, item.v))
+        elif isinstance(item, _lattice.DrawnOn):
+            stack.extend((item.values, item.lattice))
+        elif isinstance(item, Material):
+            stack.extend((item.epsilon, item.mu))
     return False
 
 
@@ -4512,6 +4536,12 @@ class CoreFactorizationMixin:
         use ~1e-5 there). A traced solve (``jax.jit``) skips every guard and therefore never
         retries — the same line the guards themselves draw.
 
+        During autodiff a default retry uses a relative step of at least ``1e-8``
+        (64 machine eps for a lower-precision dtype). The smaller forward default can
+        leave cancellation in a material derivative even when the forward value is
+        stable. An explicit numeric step is unchanged. The warning states the actual
+        wavelength/angle used, and the gradient belongs to that nearby problem.
+
         **Nothing traced stays on the solver.** ``solve(lattice=L)`` inside ``jax.jit`` has
         to hold the tracer while it runs; it used to keep it afterwards, so the recipe the
         traced-basis refusal prints -- freeze, then replay -- froze a tracer and recorded no
@@ -4561,6 +4591,11 @@ class CoreFactorizationMixin:
                 raise
             cause = f'the solve refused ({type(exc).__name__})'
             original = exc
+
+        current_conditions = {name: value for name, value in self.__dict__.items()
+                              if name not in ('layer_info_list', 'T1', '_scattering')}
+        if auto_detune is True and _holds_autodiff(current_conditions):
+            step = max(_AUTO_DETUNE_GRAD_REL, 64*self.xp.finfo(self.float_dtype).eps)
 
         # The retry ladder. Wavelength first: it moves every m != 0 order and is the knob a
         # sweep is already varying. It cannot move the m == 0 order — kx_0 = n_top*sin(theta)

@@ -189,6 +189,18 @@ If writing a loop directly, follow the same order: apply the **current** design 
 then update the parameters. Keep preparation outside JIT. This updates the discrete plan;
 it does not make contact or overlap transitions differentiable at the transition itself.
 
+## Numerical retries during differentiation
+
+A Rayleigh singularity can require the existing `auto_detune` retry. Its default
+relative step remains `1e-12` for an ordinary forward solve. During autodiff the
+default retry uses `max(1e-8, 64 * machine_epsilon)` to reduce cancellation in the
+modal derivative. This only changes a solve that already needs a numerical
+retry. An explicit numeric `auto_detune` step is used as given, and `False`
+disables retries. The warning reports the actual wavelength or angle used.
+This is the derivative at that nearby problem; it does not define a derivative
+at a physical diffraction threshold. Abstract JAX compilation cannot run the
+eager retry policy.
+
 ## What cannot be traced
 
 | | Why |
