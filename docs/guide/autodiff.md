@@ -23,14 +23,17 @@ solver.solve().T.sum().backward()          # u.grad
 The two agree: on the quickstart grating both report a gradient of norm `0.0802694256415…`,
 matching to ~1e-15.
 
-JAX's `solver.grad(parameter_names, forward, loss_fn)` also restores the complete
-parameter declarations after evaluation, including tabulated materials and default
-polarization. It releases the temporary solve state, even if the forward or loss
-raises. Use a saved result for earlier fields, or call `solve()` again before reading
-fields through the solver. The loss itself can still reconstruct the current field.
+JAX's `solver.grad(parameter_names, forward, loss_fn)` restores the named parameter
+assignments and declarations, including tabulated materials and default polarization.
+Custom direct assignments and edits to shape recipes or excitation dictionaries use
+temporary state. Concrete condition keywords passed by the forward to a solve keep their
+usual effect; named gradient parameters are still restored. It releases temporary solve
+state even if the forward or loss raises. Use a saved result for earlier fields, or call
+`solve()` again before reading fields through the solver. The loss itself can still
+reconstruct the current field.
 If a call keeps a concrete wavelength while restoring a temporarily replaced material
-table, the table is reevaluated at that wavelength. If it is outside the restored
-table's range, the call raises and restores the scene from before the call.
+table, the table is reevaluated at that wavelength. If it is outside the restored table's
+range, the call raises and restores the scene from before the call.
 
 What is differentiable is not only the raster. A **`Material`** is a frozen pytree whose
 children are `(epsilon, mu)`, so `jax.grad` reaches inside one; and a **`Lattice`** stores its
@@ -121,6 +124,9 @@ equal records reuse the compiled step, while a changed record requires recompila
 array-bearing raster/tensor records, `fit` compares every field with the preceding record and
 retains that object only when the array shapes, dtypes and values all match exactly.
 Preparation still has a cost; freezing a record does not freeze the continuous design values.
+Each compiled forward and loss runs on temporary solver state. Its direct assignments and
+edits to shape recipes or excitation dictionaries are restored before differentiation exits,
+including on failure; the final mapped conditions are applied after optimization.
 
 The painted-shape path reads "moving the geometry" more narrowly, because its record holds
 combinatorics rather than coordinates: a shape sliding is what it replays, bit for bit, and only

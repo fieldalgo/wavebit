@@ -19,6 +19,7 @@ import jax
 jax.config.update('jax_enable_x64', True)
 
 from collections.abc import Mapping                              # noqa: E402
+from contextlib import contextmanager                            # noqa: E402
 from functools import partial                                    # noqa: E402
 from inspect import signature                                    # noqa: E402
 
@@ -29,7 +30,8 @@ from jax import tree_util                                        # noqa: E402
 from tqdm import tqdm                                            # noqa: E402
 
 from .._core.engine import (CoreFactorizationMixin, CoreSolveMixin,  # noqa: E402
-                            _concrete_2x2, _holds_tracer, device_scoped)
+                            _concrete_2x2, _copy_condition_containers, _holds_tracer,
+                            device_scoped)
 from .._core import fields as _fields                            # noqa: E402
 from .._core import lattice as _lattice_module                   # noqa: E402
 from .._core.enums import DIFFERENTIABLE_BACKENDS as _DIFFERENTIABLE_BACKENDS  # noqa: E402
@@ -336,6 +338,39 @@ except (TypeError, ImportError, ModuleNotFoundError) as e:
     warnings.warn('Importing optax failed. You can run RCWA but not optimization on the JAX backend. '
                   'One possible reason is python version: optax support python>=3.9.')
 
+@contextmanager
+def _temporary_solver_state(solver, *, keep_keywords=False, parameters=()):
+    """Release traced evaluations; optionally retain explicitly kept condition keywords."""
+    state = dict(solver.__dict__)
+    kept = {'values': [], 'parameters': frozenset(parameters)} if keep_keywords else None
+    try:
+        if kept is not None:
+            solver.__dict__['_kept_condition_updates'] = kept
+        for name in ('_structure', '_structure_dispersion', '_excitation'):
+            if name in state:
+                solver.__dict__[name] = _copy_condition_containers(state[name])
+        yield
+    finally:
+        # Direct custom writes are temporary. Concrete keywords passed through a public
+        # condition scope keep their existing persistence contract after restoration.
+        solver.__dict__.clear()
+        solver.__dict__.update(state)
+        try:
+            if kept is not None:
+                with solver._eager():
+                    for name, value in kept['values']:
+                        with solver._conditions({name: value}):
+                            pass
+        except (TypeError, ValueError) as error:
+            solver.__dict__.clear()
+            solver.__dict__.update(state)
+            raise ValueError(
+                'cannot restore explicitly kept conditions on the original scene; '
+                'the scene before this gradient call has been restored') from error
+        finally:
+            solver._forget_the_solve()
+
+
 def _same_prepared_geometry(left, right):
     """Exact, eager equality for the fit's last two records, including array-bearing ones.
 
@@ -401,19 +436,18 @@ class OptimizerJax:
     def grad(self, parameters, forward, loss_fn):
         """Return gradients while restoring the complete parameter assignments.
 
-        The parameter scope also covers custom forwards that assign attributes directly.
-        Reassigning resolved property values after differentiation loses declarations such
-        as a default polarization, a drawn cell, or a tabulated material definition. Restore
-        the setters' original slots instead, and release traced solve outputs before leaving
-        the differentiation trace, including when the forward or loss raises.
+        Both the forward and loss evaluate on temporary solver state, including custom
+        assignments to derived conditions and edits to shape recipes or excitation dictionaries. Reassigning resolved
+        property values after differentiation loses declarations such as a default
+        polarization, a drawn cell, or a tabulated material definition. Restore the original
+        scene instead, retaining concrete condition keywords passed by the forward as on
+        a direct solve. Named gradient parameters still return to their original declarations.
+        Release traced outputs before leaving differentiation, including on failure.
         """
         params = {name: (getattr(self, name)) for name in parameters}
         def evaluate(**values):
-            with self._conditions(values):
-                try:
-                    return loss_fn(forward(**values))
-                finally:
-                    self._forget_the_solve()
+            with _temporary_solver_state(self, keep_keywords=True, parameters=params), self._conditions(values):
+                return loss_fn(forward(**values))
         _, grads = self._grad(params, evaluate, lambda value: value)
         return grads
 
@@ -449,7 +483,10 @@ class OptimizerJax:
         Returns the final design parameters. The built-in forward also leaves their mapped
         conditions on this solver. For a custom forward, the original attribute-name API
         still writes those attributes back; a mapping of custom design variables is returned
-        without creating arbitrary solver attributes. Retained solve state is discarded.
+        without creating arbitrary solver attributes. The forward and loss use temporary
+        solver state during each compiled step; their assignments and mutable condition edits are
+        restored to the eagerly prepared scene, including on failure. Retained solve state
+        is discarded before differentiation exits.
         """
         named_attributes = not isinstance(parameters, Mapping)
         params = ({name: getattr(self, name) for name in parameters}
@@ -498,9 +535,10 @@ class OptimizerJax:
         @partial(jax.jit, static_argnames=('geometry',))
         def step(params, opt_state, geometry):
             def evaluate(**values):
-                return forward(**conditions(values), geometry=geometry)
+                with _temporary_solver_state(self):
+                    return loss_fn(forward(**conditions(values), geometry=geometry))
 
-            loss_value, grads = self._grad(params, evaluate, loss_fn)  # already conjugated
+            loss_value, grads = self._grad(params, evaluate, lambda value: value)
             updates, opt_state = optimizer.update(grads, opt_state, params)
             params = optax.apply_updates(params, updates)
             return params, opt_state, loss_value

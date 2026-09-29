@@ -153,6 +153,29 @@ def _concrete_2x2(A):
         return None
 
 
+def _copy_condition_containers(value, *, snapshot_numpy=False):
+    """Isolate containers; optionally snapshot mutable NumPy data for deferred keyword replay."""
+    def copy(item):
+        return _copy_condition_containers(item, snapshot_numpy=snapshot_numpy)
+    if isinstance(value, dict):
+        return {name: copy(item) for name, item in value.items()}
+    if isinstance(value, list):
+        return [copy(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(copy(item) for item in value)
+    if snapshot_numpy:
+        if isinstance(value, _np.ndarray):
+            return value.copy()
+        if isinstance(value, Material):
+            return Material(copy(value.epsilon), copy(value.mu),
+                            _wavelength_shape=value._wavelength_shape)
+        if isinstance(value, _lattice.Lattice):
+            return _lattice.Lattice(copy(value.u), copy(value.v), value.axis_aligned)
+        if isinstance(value, _lattice.DrawnOn):
+            return _lattice.DrawnOn(copy(value.values), copy(value.lattice))
+    return value
+
+
 def _holds_tracer(value):
     """Whether ``value`` is, or carries, a JAX tracer -- a value that cannot outlive its trace.
 
@@ -3096,6 +3119,8 @@ class CoreFactorizationMixin:
         held = {}
         initial_state = dict(self.__dict__)
         device_before = self._device
+        kept = self.__dict__.get('_kept_condition_updates')
+        kept_start = len(kept['values']) if kept is not None else 0
         try:
             self._refuse_unknown_conditions(kwargs)
             _refuse_cell_spellings(kwargs.get('period', _CELL_UNSET), kwargs.get('lattice'))
@@ -3110,6 +3135,9 @@ class CoreFactorizationMixin:
                 # slots when it moved one an earlier keyword put there -- `device` does that,
                 # and its own write is concrete and stays.
                 introduced = any(not _holds_tracer(before.get(slot, absent)) for slot in traced)
+                if (kept is not None and name not in kept['parameters']
+                        and not introduced and not _holds_tracer(value)):
+                    kept['values'].append((name, _copy_condition_containers(value, snapshot_numpy=True)))
                 for slot in (changed if introduced else traced):
                     held.setdefault(slot, before.get(slot, absent))
                     if slot in ('_top', '_bot', '_structure'):
@@ -3148,6 +3176,8 @@ class CoreFactorizationMixin:
                     except (TypeError, ValueError) as error:
                         # The temporarily substituted material may have allowed a wavelength
                         # outside the original table. Keep a usable original scene on failure.
+                        if kept is not None:
+                            del kept['values'][kept_start:]
                         self.__dict__.clear()
                         self.__dict__.update(initial_state)
                         self._forget_the_solve()
