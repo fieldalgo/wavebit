@@ -346,9 +346,14 @@ def _temporary_solver_state(solver, *, keep_keywords=False, parameters=()):
     try:
         if kept is not None:
             solver.__dict__['_kept_condition_updates'] = kept
-        for name in ('_structure', '_structure_dispersion', '_excitation'):
+        cell_checked = solver._cell_checked_when_flattened()
+        for name in ('_structure', '_structure_dispersion', '_excitation',
+                     '_lattice_basis', '_structure_drawn_on', '_top', '_bot'):
             if name in state:
-                solver.__dict__[name] = _copy_condition_containers(state[name])
+                solver.__dict__[name] = _copy_condition_containers(state[name], snapshot_numpy=True)
+        if cell_checked:
+            # Equal-value snapshots preserve the declaration validation at flatten.
+            solver.__dict__['_drawn_checked_against'] = solver._cell_objects()
         with solver._solve_state_scope():
             yield
     finally:

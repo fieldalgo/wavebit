@@ -157,7 +157,7 @@ def _concrete_2x2(A):
 
 
 def _copy_condition_containers(value, *, snapshot_numpy=False):
-    """Isolate containers; optionally snapshot mutable NumPy data for deferred keyword replay."""
+    """Isolate containers, optionally snapshotting mutable NumPy values."""
     def copy(item):
         return _copy_condition_containers(item, snapshot_numpy=snapshot_numpy)
     if isinstance(value, dict):

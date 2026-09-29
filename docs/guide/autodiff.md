@@ -139,6 +139,10 @@ equal records reuse the compiled step, while a changed record requires recompila
 array-bearing raster/tensor records, `fit` compares every field with the preceding record and
 retains that object only when the array shapes, dtypes and values all match exactly.
 Preparation still has a cost; freezing a record does not freeze the continuous design values.
+NumPy arrays in shape recipes, cell bases, drawn-cell declarations and ambient
+`Material` values are copied for these temporary evaluations. In-place edits
+through the temporary conditions therefore leave the original design unchanged.
+
 Each compiled forward and loss runs on temporary solver state. Its direct assignments and
 edits to shape recipes or excitation dictionaries are restored before differentiation exits,
 including on failure; the final mapped conditions are applied after optimization.
