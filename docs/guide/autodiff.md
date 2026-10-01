@@ -241,6 +241,59 @@ the integral with the loss's change over the window.
 [Tensor shape integration](../tensor-shape-integration.md) has the measurements
 behind the direction rule and these windows.
 
+## The inverse-rule floor on a metal
+
+On a layer where `1/eps` changes sign, a metal beside a dielectric, the NVF
+closing raises every singular value of `<1/eps>` below `1/(2 max|eps|)` to that
+floor before inverting it; see
+[the inverse rule on a metal](../nvf-metal-inverse-rule.md). A layer of passive
+dielectrics never reaches the floor; a dielectric layer that mixes gain with
+loss can. A scene with a tensor material is not floored.
+
+Its first derivative is exact. The floored matrix `U max(S, f) V^H` is
+differentiated in closed form, without differentiating the SVD, so the
+degenerate singular values of a uniform layer, or of the two clusters of a
+two-material one, leave it finite. The floor's own dependence on the
+permittivity is included. On gold disks and gold holes, derivatives in a
+diameter and in `Re eps` and `Im eps` match central differences to 1e-8, on JAX
+and PyTorch alike, at normal and at oblique incidence.
+
+Forward mode gets the same derivative: `jax.jvp` and `jax.jacfwd`, and
+`torch.autograd.forward_ad` on PyTorch. `torch.func` transforms (`jvp`, `grad`,
+`jacfwd`, ...) raise `NotImplementedError` where the floor binds, since the
+floor's `torch.autograd.Function` has no functorch rule; use `torch.autograd`
+there. Forward mode through `solve()` is a separate matter, unsupported on both
+backends; see the table below.
+
+It supports first derivatives only. The closed form is linear in the change of
+`<1/eps>`, so a second derivative through it would lack the floor's curvature.
+A second derivative through a layer where the floor binds therefore raises,
+like the modal operator's: `NotImplementedError` on JAX, and `RuntimeError` on
+PyTorch, for `create_graph=True` and for either mixed order (a `forward_ad`
+tangent carried through a backward pass, or a backward pass through one). On a
+passive dielectric layer the floor is the identity and a Hessian of
+`eps_conv_matrices()` stays exact. Under `jax.jit`, whether the floor binds is
+not known when the trace is built, so a second derivative through any NVF layer
+is refused there.
+
+The floor also has a kink. As the design moves, a singular value can cross the
+floor. On a metal with loss the response stays continuous there, but its
+derivative steps: that mode goes from being held at the floor to following the
+design. The step can be several-fold (7x in a diameter derivative of gold disks
+at 121 harmonics), and the clipped set changes every few nanometres of
+diameter. A value exactly
+at the floor counts as unclipped, but at the crossing itself rounding decides
+which side a computed singular value lands on, so either one-sided slope can
+come back. As with the NVF steps above, check a gradient taken across such a
+crossing against the loss over a window, not at one point.
+
+A lossless metal is worse: there the response itself jumps. `<1/eps>` is then
+Hermitian, and where a clipped eigenvalue changes sign the floor carries it
+from `-f` to `+f`. On those disks, made lossless, `R` drops by 0.137 at
+`Re eps = -27.857`.
+Autodiff returns the slope on one side and cannot report the step. Any loss in
+the metal turns the jump into a steep but continuous turn.
+
 ## Numerical retries during differentiation
 
 A Rayleigh singularity can require the existing `auto_detune` retry. Its default
@@ -283,6 +336,7 @@ geometry-resolution convergence for the physical problem being optimized.
 | --- | --- |
 | An **explicit `sample_z`** in the legacy `solver.reconstruct_field`, with respect to `thickness` | this solver method buckets using concrete thicknesses and refuses traced ones; counts stay traceable. The result-owned `result.reconstruct_field` supports explicit heights and thickness derivatives while each point stays in its layer; see [fields](fields.md#differentiating-internal-fields) |
 | `torch.compile` | not a supported path — the solve is almost entirely LAPACK calls the compiler forwards untouched, and below torch 2.13 it does not run at all ([`../torch-compile.md`](../torch-compile.md)) |
+| **Forward mode through `solve()`** (`jax.jvp`, `jax.jacfwd`, `torch.autograd.forward_ad`, `torch.func.jvp`) | not supported; use reverse mode. The modal operator's first-order rule is reverse-only: JAX raises (`can't apply forward-mode autodiff (jvp) to a custom_vjp function`), and so does `torch.func.jvp`, but PyTorch's `forward_ad` does not say so. Its rule is entered only when an input has `requires_grad`, which a forward-mode dual does not set, so the tangent of `R + T` comes back wrong without an error (−5.48e-6 against −7.35e-5 on dielectric disks at 81 harmonics). The inverse-rule floor itself supports forward mode (above), and `eps_conv_matrices()` of a shape layer is exact in it |
 
 One trap worth naming because it passes: **build the solver outside the trace.** A jit test
 that constructs the solver *inside* the traced function never flattens it as a pytree, so a

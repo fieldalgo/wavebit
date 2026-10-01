@@ -428,10 +428,14 @@ Still open, and *not* settled by any of this: which magnetization direction `[[e
 eo]]` denotes under this repo's `e^{-iwt}`, `Im(n) > 0` convention. What is verified is that the
 solver reproduces the tensor it is handed — not what that tensor means physically.
 
-**Nothing shipped can reach this.** `_nvf_assemble`, `boundary.py` and `analytic.py` each return
-`-eps_xy` *twice*, so every tensor the library builds is symmetric, and for a symmetric pair the
-exchange is a no-op — bit-identical. The defect is reachable only by hand through
-`solve_conv`, which is exactly what a gyrotropy experiment would do first.
+**Nothing shipped could reach this when it was found.** `_nvf_assemble` returned `-eps_xy`
+*twice*, and so did both routes beside it — `boundary.py`, and `nvf_from_coeffs`, then in
+`analytic.py` with its own copy of the closing (now `parametric.py`, delegating to
+`_nvf_assemble`) — so every tensor the library built was symmetric, and for a symmetric pair the
+exchange is a no-op — bit-identical. The defect was reachable only by hand through
+`solve_conv`, which is exactly what a gyrotropy experiment would do first. Two routes added since
+do build an asymmetric pair, `nvf_projector='circular'` and tensor materials, and they depend
+on the fix below.
 
 **Fixed.** `Omega_R` now takes `epyx` where it took `epxy` and vice versa; every symmetric tensor
 is bit-identical either way, so nothing the library builds moved. Pinned by

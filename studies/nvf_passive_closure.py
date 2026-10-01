@@ -21,16 +21,25 @@ CELL = as_lattice(period=(700., 700.))
 
 
 def matrices(shapes, order=4, grid=512, closure='passive'):
-    """Single-layer slots, preserving the same field on both closures."""
+    """Single-layer slots, preserving the same field on every closure.
+
+    ``'floored'`` is the closing ordinary solves run: the symmetrized closure with the inverse
+    rule floored at the layer's largest ``|eps|`` (docs/nvf-metal-inverse-rule.md).
+    ``'symmetric'`` is the same closure unfloored, the baseline this study recorded before the
+    floor existed; the two differ only where ``1/eps`` changes sign, here the metal pair.
+    """
     eps, reciprocal = P.assemble_eps_coeffs(np, shapes, 1., order, order, CELL, np.complex128)
     projectors = P.normal_projector_coeffs(np, shapes, (grid, grid), CELL,
                                            order, order, np.complex128)
     convert = lambda values: P.conv_matrix_2d(np, values, order, order)
     coefficients = [convert(values) for values in projectors]
-    if closure not in ('symmetric', 'passive'):
-        raise ValueError('closure must be symmetric or passive')
-    assemble = _nvf_assemble if closure == 'symmetric' else passive.passive_nvf_assemble
-    return assemble(np, convert(eps), convert(reciprocal), *coefficients)
+    if closure not in ('symmetric', 'floored', 'passive'):
+        raise ValueError('closure must be symmetric, floored or passive')
+    if closure == 'passive':
+        return passive.passive_nvf_assemble(np, convert(eps), convert(reciprocal), *coefficients)
+    bound = (P.largest_eps(np, [1.] + [shape['material'] for shape in shapes], np.complex128)
+             if closure == 'floored' else None)
+    return _nvf_assemble(np, convert(eps), convert(reciprocal), *coefficients, eps_bound=bound)
 
 
 def response(shapes, order=4, grid=512, closure='passive', spectrum=False):
@@ -72,7 +81,7 @@ def main():
                     start = time.perf_counter()
                     row = dict(kind='optical', material=label, order=order, grid=512,
                                li_T=li_T(shapes, order))
-                    for closure in ('symmetric', 'passive'):
+                    for closure in ('symmetric', 'floored', 'passive'):
                         row[closure] = response(shapes, order, closure=closure, spectrum=True)
                     row['seconds'] = time.perf_counter()-start
                     emit(sink, row)

@@ -256,8 +256,9 @@ def _lattice_takers(trees):
     """``name -> smallest positional index of ``lattice``, or ``None`` if keyword-only.
 
     Keyed by name because a call site is resolved by name here, and two modules may define the
-    same one with the parameter in different places -- ``normal_projector_coeffs`` does
-    (``boundary.py`` at 6, ``analytic.py`` at 7). The *smallest* index is the conservative
+    same one with the parameter in different places -- ``normal_projector_coeffs`` did
+    (``boundary.py`` at 6, ``analytic.py`` at 7; both take it at 3 now, ``analytic.py`` having
+    become ``parametric.py``). The *smallest* index is the conservative
     reading: a call passing enough positional arguments for any of them is forwarding.
     """
     takers = {}

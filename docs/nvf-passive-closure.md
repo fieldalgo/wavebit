@@ -11,6 +11,11 @@ Targets:
 The existing symmetrized NVF closure can have **negative constitutive dissipation**
 even when every physical material is passive. The experimental closure below
 removes that defect by construction and improves the recorded metal comparison.
+That comparison was made against the symmetrized closure as it was then; ordinary
+solves have since floored its inverse rule on metals
+([the inverse rule on a metal](nvf-metal-inverse-rule.md)), which shrinks the
+negative dissipation and moves the metal rows below, and the study now records
+that floored closure beside the unfloored one.
 It is **not selected by ordinary solves**: the same-material contact control gets
 worse, and low-order dielectric accuracy is not uniformly improved. It is a usable
 matrix-level candidate, not an accepted replacement or a completed convergence fix.
@@ -92,6 +97,20 @@ roundoff. Both closures still give R+T below one for these particular waves;
 that scalar test alone missed the old constitutive defect. The order-12
 metal distance to Li decreases from about 0.07154 to 0.002079, but the finite
 Li sequence is itself unconverged. This is not a validated optical error bar.
+
+**The ordinary closure is floored now.** The table's "ordinary T" is the
+symmetrized closure with an unfloored inverse rule, which is what solves ran on
+2026-09-13. Since the inverse-rule floor
+([the inverse rule on a metal](nvf-metal-inverse-rule.md)), ordinary solves raise
+the singular values of `<1/eps>` below `1/(2 max|eps|)` first. On the dielectric
+and lossy rows the floor never binds and nothing changes, bit for bit. On the
+metal rows it binds on 3, 6 and 17 modes and the floored closure — the study's
+`floored`, and what the front door returns — gives T 0.375907934, 0.508036219
+and 0.474247351 at orders 4, 8 and 12, minimum dissipative eigenvalues −0.710,
+−0.667 and −0.248 (measured 2026-10-02, appended to the result log). The
+passive closure still lands nearer Li at every order (order 12: 0.002079
+against 0.01484), but by less than against the unfloored closure. The passive
+closure itself is not floored.
 
 ## Contact control and integration decision
 

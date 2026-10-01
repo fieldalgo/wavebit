@@ -392,22 +392,34 @@ settled by any of this. What is verified is that the solver reproduces the tenso
 Mapping that tensor onto a real material's Verdet constant and field direction is a separate
 question, and anyone building a Faraday isolator will have to answer it.
 
-## 7. Nothing shipped is affected
+## 7. Nothing shipped was affected
 
-Every producer in the library returns the off-diagonal value **twice**:
+When this was written, every producer in the library returned the off-diagonal value **twice**.
+One function builds the scalar NVF tensor now, and every route reaches it:
 
 ```
-     factorization.py::_nvf_assemble    return eps_xx, eps_yy, inv(ep_dir), -eps_xy, -eps_xy
-     analytic.py::nvf_from_coeffs       return eps_xx, eps_yy, inv(ep_dir), -eps_xy, -eps_xy
-     boundary.py                        (funnels into nvf_from_coeffs)
-                                                                          └────┬────┘
-                                                                 the same value, so the
-                                                                 ordering cannot matter
+     factorization.py::_nvf_assemble       return eps_xx, eps_yy, inv(ep_dir), -eps_xy, -eps_yx
+     factorization.py::nvf_conv_matrices   (raster: calls _nvf_assemble; so does
+                                            nvf_conv_matrices_integrated)
+     parametric.py::nvf_from_coeffs        (shapes: delegates to _nvf_assemble)
+     boundary.py                           (painted overlaps: funnels into nvf_from_coeffs)
+                                                                         └────┬─────┘
+                                                        one object unless the projector is
+                                                        asymmetric, so the ordering cannot matter
 ```
 
 and the Li path passes `None`, which `solve_2d` turns into zeros. The symmetry is not a
 coincidence: it comes from the ½-symmetrization inside `_nvf_assemble`, which exists because the
-un-symmetrized product is not Hermitian.
+un-symmetrized product is not Hermitian. (The shape path's module was `analytic.py` when this was
+written; it became `parametric.py` on 2026-09-03, and its `nvf_from_coeffs` carried its own copy of
+the closing until the inverse-rule floor made it delegate, see
+[`nvf-metal-inverse-rule.md`](nvf-metal-inverse-rule.md).)
+
+Two routes added since do put two different values in the pair, and both depend on the §4 repair.
+`nvf_projector='circular'` (2026-09-02) hands `_nvf_assemble` a `C_yx = C_xy^H` — the
+convolution matrix of `conj(p_xy)`, the conjugate *transpose* of `C_xy` — so `eps_yx` is built
+separately. A tensor material closes through the Popov–Nevière route, whose
+`eps_xy` and `eps_yx` are two blocks of the tensor's own.
 
 Verified rather than argued — a real 2D crossed grating (Si pillar, 400 nm pitch, 300 nm tall,
 lambda 900 nm, `theta = 12°`, `phi = 33°`, `psi = 21°`, `truncation_order = (6, 6)`, 169 retained orders),
@@ -420,8 +432,9 @@ solved with the shipped and exchanged operators:
 
 Not "agrees to 1e-15" — identical. The full verification suite (1066 tests) is likewise unmoved.
 
-**So: this is reachable only by hand, through `solve_conv`, with a deliberately asymmetric
-tensor.** The first person to do that will be someone trying gyrotropy — and if their
+**So: when this was written it was reachable only by hand, through `solve_conv`, with a
+deliberately asymmetric tensor;** the two routes above reach it now, after the §4 repair. The
+first person to reach it by hand will be someone trying gyrotropy — and if their
 magnetisation lies in the plane rather than along the stack normal, they will be filling the four
 z-row slots of §2.1 at the same time.
 

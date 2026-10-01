@@ -230,20 +230,24 @@ def test_off_diagonal_sign_shows_up_in_the_amplitude_only():
 
 # ------------------------------------------------------------------ asymmetric tensors
 #
-# Everything above uses eps_xy == eps_yx, which is all any shipped path can produce:
-# `_nvf_assemble`, `boundary.py` and `analytic.py` each return ``-eps_xy`` *twice*. The two
-# blocks in ``layer_modes_2d`` disagree on the order of that pair, and equal entries hide it.
+# Everything above uses eps_xy == eps_yx, which is what the scalar NVF tensor is by default:
+# `_nvf_assemble` -- called by the raster builders, and delegated to by
+# `parametric.nvf_from_coeffs` (shapes) and through it by `boundary.py` (painted overlaps) --
+# returns ``-eps_xy`` *twice*, one object, unless `nvf_projector='circular'` hands it an
+# asymmetric projector. Equal entries hide the order of the pair, and the two blocks in
+# ``layer_modes_2d`` used to disagree on it:
 #
 #     Omega2_LR carries  (epxy, epyx)
 #     Omega_R   carries  (epyx, epxy)      <- the other way round
 #
 # A factorization ``Omega2_LR = Omega_L @ Omega_R`` must have an ``Omega_L`` built from the
-# geometry alone. Symbolically it is not: with the shipped ordering ``Omega_L`` depends on
+# geometry alone. Symbolically it was not: with that ordering ``Omega_L`` depended on
 # ``epx, epy, epxy, epyx``, and exchanging the pair inside ``Omega_R`` alone reduces it to
 # ``[[-Kx Ky epz_i, Kx^2 epz_i - 1], [-Ky^2 epz_i + 1, Kx Ky epz_i]]`` for any tensor.
 #
-# So the eigenvalues come from one tensor and the H-field from its transpose. No shipped path
-# can reach it, which is why this is xfail rather than a bug report against a released number.
+# So the eigenvalues came from one tensor and the H-field from its transpose. No path shipped
+# then could reach it; the tests below hand the solver an asymmetric pair directly, and the
+# Faraday one was xfail until ``Omega_R`` was corrected (docs/off-diagonal-slot-convention.md).
 
 DELTA = 0.45          # gyrotropy strength
 
