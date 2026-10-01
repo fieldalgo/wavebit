@@ -2376,3 +2376,138 @@ golden was rewritten. Counts and timings are in
 `studies/results/fdtd_traced_illumination_validation.json`; the runner is
 `studies/fdtd_traced_illumination_validation.py` and the raw logs are under
 `studies/results/fdtd_traced_illumination_controls/`.
+
+
+### Concrete partners beside traced bodies (C6, 2026-10-01)
+
+A traced scene no longer needs a range on every structure. A partner
+**without** a range -- a cell-snapped `fd.Slab` substrate running into a
+PML, an `fd.Region`, an unranged smoothed body, a conductive or dispersive
+layer -- may stand beside traced ranged bodies. A shape without a range is
+concrete by construction (its constructor refuses a traced length), so the
+partner is planned and lowered at its own geometry like any concrete
+scene's structure, with any material such a scene admits. What it must not
+do is reach a cell whose coefficients move: its support, widened by the
+same interpolation cell the ranged halos use, may not share a cell with any
+traced body's halo (`shape_ranges.planning_scene`). Half-open boxes may
+meet at an index boundary. Its material values must be concrete; a traced
+partner permittivity or pole parameter is refused rather than left
+uncertified. Ranged bodies, traced or concrete, keep every earlier rule:
+concrete isotropic lossless `Material`, halos inside the domain and clear
+of absorbers, pairwise disjoint halos.
+
+Two places read a traced body on the host, and both were reached for the
+first time by a partner that is an unturned `fd.Box`. The flush-pair search
+in `junction.refuse_mismatch` compares faces with Python truth tests, which
+a `jax.jit` tracer refuses; a traced body is certified clear of every other
+structure, so its pairs are no longer asked. The runtime geometry guard
+`shape_ranges.guard` now asks only ranged bodies; a partner has no range to
+be contained in. Under plain `jax.grad` the face comparison had worked,
+because a JVP tracer carries a concrete primal; under `jax.jit(fd.lower)` it
+raised. Codex's multi-body regression jits `fd.lower` too, but its only Box
+is turned and `_roles` returns before comparing a turned Box's faces.
+
+A flush junction between two concrete partners (a pillar standing on a
+smoothed Box substrate) beside a traced body is refused by name in
+`junction.refuse_mismatch`: the junction's signature covers all scene
+geometry and this certificate has not been extended to it. The refusal
+fires in `fd.lower` and so before any step of `fd.run`.
+
+Four existing tests (`test_fd_sphere_grad.py`, `test_fd_cylinder_grad.py`,
+`test_fd_box_grad.py`, `test_fd_prism_grad.py`) refused an extra Region
+painter with the old "supports one isolated ranged body" message. That
+Region lies within a cell of the traced halo, so it is still refused, now
+by the partner rule's message, which the tests match.
+
+**Measurements** (`studies/fdtd_traced_partner_probe.py`, results in
+`studies/results/fdtd_traced_partner_probe.json`). Two families in the
+12 x 12 x 42-cell Bloch cell of the illumination probe, 600 steps:
+
+| Family | Partner | Traced body and leaves | Incidence | Objectives |
+| --- | --- | --- | --- | --- |
+| `substrate` | glass `Slab(z=(-1.5, -.25))`, eps 2.1, through the bottom PML | Cylinder radius `.12`, height `.3`, three cells above | normal s (real run) | zero order transmitted into the glass, reflected zero order |
+| `mirror` | Drude `Slab(z=(-.4, -.25))`, `omega_p = 20`, `gamma = .5` | Sphere radius `.12`, centre height `.103` | 25 degrees p at `phi = 30` (complex run) | reflected zero order, flux leaking through the film over the incident intensity |
+
+Largest relative Jacobian error of NumPy central differences against JAX
+reverse mode:
+
+| Step | `substrate` | `mirror` |
+| --- | --- | --- |
+| `1e-4` | `2.633e-7` | `2.579e-5` |
+| `1e-5` | `2.629e-9` | `3.488e-7` |
+| `3e-6` | `5.711e-10` | `3.372e-8` |
+| `1e-6` | `8.731e-10` | `4.757e-8` |
+
+Both valleys are at `3e-6`, which the regression uses with the existing
+`2e-6` relative budget and zero absolute allowance. JAX and Torch Jacobians
+differ by at most `2.22e-16` and `3.61e-16`; the smallest entry is
+`0.00797`. A traced Torch run's final fields differ from the concrete NumPy
+run by at most `9.5e-14` of the peak, and removing the ranges changes the
+NumPy fields by exactly zero in both families
+(`fdtd_traced_partner_fields.json`). In a 32 x 16 x 16 PEC box, a ranged
+ball beside an unranged Sphere, a Region and a Slab lowers to coefficients
+equal to the background plus each structure's own change, to `4.8e-17`
+relative for `be` and exactly for `bh`
+(`fdtd_traced_partner_coefficients.json`).
+
+**A defect this measurement found, outside this change.** The `mirror`
+family was first measured with the ball's centre at `z = .1`, exactly on a
+node plane. There the centre-height derivative of `R0` was `.1196` by JAX
+and `.1641` by Torch, against a central difference of `.1267` that was the
+same at every step from `1e-4` to `1e-6`; the radius column agreed to
+`2e-10` (`probe_measure_tie.json` and `.log`). At `.1013` and `.0987` all
+three agree to eight digits
+(`studies/results/fdtd_traced_partner_controls/center_tie_diagnostic.py`
+and its log). The function is smooth through the tie and reverse mode is wrong at it,
+differently on each backend. The defect predates this change: on the
+committed bd149464, a lone ranged sphere in a PEC box
+(`studies/results/fdtd_traced_partner_controls/center_tie_at_d9b4311f.py`
+and its log, whose first line, a scratch import path, was replaced by a
+note) gives a centre-z derivative of `20.468` by central differences against
+`-20.522` (Torch) and `28.671` (JAX) with the centre at `z = .05`, a half-node
+plane where Ez, Hx and Hy sit, while at `z = 0` and `.0013` all three agree to
+ten digits. A sphere centred on a symmetry plane of its grid is the common
+case, so this is the next defect to fix. The probe moved the mirror ball's
+centre to `.103`.
+
+**Regressions** (`tests/test_fd_traced_partner_grad.py`, 7 functions, 9
+cases): both families against central differences on JAX and Torch, with
+the graph assertion; the traced ball beside three partners lowering to the
+sum of their changes (a refusal or an error there is the failed
+assertion); the partner halo rule at its exact boundary in both directions,
+the substrate running into the PML, and an unranged Sphere moved next to the
+ball; traced partner permittivity and pole parameters refused; the flush
+junction beside a traced body refused in `fd.lower` and `fd.run`; and
+`jax.jit(fd.lower)` of a traced Cylinder beside an unranged unturned Box,
+including the guard's NaN for a two-cell radius.
+
+**Source-mutation witnesses** (`studies/fdtd_traced_partner_mutations.py`,
+records in `studies/results/fdtd_traced_partner_controls/witnesses.json`).
+All twelve failed by assertion or a missing refusal and restored the source
+bytes exactly: detaching the order power (substrate) and the Drude pole's
+drive field (mirror; the values stay equal and the Jacobian moves), dropping
+partners from the planning scene, asking the guard about partners, asking
+`_roles` about traced pairs (the `jax.jit` failure), an unwidened partner
+reach, an overlap test that counts a shared boundary, skipping the partner
+check, putting partners under the range rules, skipping the partner material
+check or its walk into dataclasses, and admitting the junction beside a
+traced body. A first complete witness run preceded a docstring-only edit of
+`shape_ranges.py`; it is kept under `first_witnesses/`, and the run at the
+final source is the one recorded beside it.
+
+**Validation.** The probe, its controls and the twelve witnesses were rerun
+at the final fd source (SHA-256
+`3cba03543556b3a88c3498314ad061d58523e6da5ecba799ef2c8821eff08796`) and
+reproduced every earlier value, difference, Jacobian and field comparison bit
+for bit. A targeted run of the new file with the illumination, sphere,
+range, multi-body, cylinder, box, prism and both junction test files and the
+documentation contract passed all 336 cases (562.37 seconds). The full
+fd/docs tier collected 2683 cases and exited 0 with 2675 passed and 8 skipped
+(2084.10 seconds). The separate slow tier collected and passed all 80 cases,
+exit 0 (1137.90 seconds). Reported totals match collection, and neither tier
+reported INTERNALERROR or a worker crash. The four read-only freezers
+reproduced all 143/288/140/570 committed arrays bit for bit; no golden was
+rewritten. Counts and timings are in
+`studies/results/fdtd_traced_partner_validation.json`; the runner is
+`studies/fdtd_traced_partner_validation.py` and the raw logs are under
+`studies/results/fdtd_traced_partner_controls/`.

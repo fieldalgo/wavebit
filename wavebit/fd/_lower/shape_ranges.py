@@ -48,6 +48,26 @@ def traced(scene):
     return any(_shape_traced(v) for s in scene.structures for v in leaves(s.shape))
 
 
+def ranged_body(shape):
+    """A Sphere, Cylinder, Box or Prism that reserves a range: the only shape that may move."""
+    return isinstance(shape, (Sphere, Cylinder, Box, Prism)) and shape.range is not None
+
+
+def _overlap(a, b):
+    """Whether two half-open index boxes share a cell (they may meet at an index boundary)."""
+    return all(min(hi, d) > max(lo, c) for (lo, hi), (c, d) in zip(a, b))
+
+
+def _carries(value):
+    """Whether a material, a pole or any value inside them carries a derivative."""
+    import dataclasses
+    if isinstance(value, (tuple, list)):
+        return any(_carries(v) for v in value)
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        return any(_carries(getattr(value, f.name)) for f in dataclasses.fields(value))
+    return _shape_traced(value)
+
+
 def name(scene):
     return '/'.join(dict.fromkeys(type(s.shape).__name__ for s in scene.structures
                     if any(_shape_traced(v) for v in leaves(s.shape))))
@@ -72,9 +92,21 @@ def planning_scene(scene, plan):
     A seed proves nothing about another geometry. Fixed, interior supports with disjoint
     interpolation halos remove overlap, seam and wall cases for every geometry in every
     range. Runtime guards then check actual sizes, containment, star positivity and CFL.
-    All materials and unchanged scene inputs are rechecked on the host. Each structure
-    needs a range, including concrete partners. Interacting or nested material interfaces
-    and geometry-dependent sources/monitors remain outside this certificate.
+    All materials and unchanged scene inputs are rechecked on the host. Interacting or
+    nested material interfaces and geometry-dependent sources/monitors remain outside this
+    certificate.
+
+    Every ranged body, traced or concrete, keeps the full certificate: an isotropic lossless
+    Material, a halo strictly inside the domain and clear of absorbers, and pairwise disjoint
+    halos. A structure **without** a range is concrete by construction (its shape refuses a
+    traced length) and is planned and lowered at its own geometry like any concrete scene's,
+    with any material such a scene admits -- a cell-snapped substrate running into a PML, a
+    conductive or dispersive layer. It needs only to stay off every traced body's halo: its
+    support widened by the same interpolation cell must not share a cell with a traced
+    body's halo, so nothing it paints or mixes reaches a cell whose coefficients move. Its
+    material values must be concrete; a traced partner material is not certified here. A
+    flush junction between two partners is refused beside a traced body, by
+    ``junction.refuse_mismatch``, whose signature covers all scene geometry.
 
     Every source and monitor family a Scene admits has static placement. Plane-wave
     illumination (PlaneWave, TFSF) and the frequency-domain readouts (Flux, Diffraction,
@@ -94,46 +126,54 @@ def planning_scene(scene, plan):
     refuse_mismatch(scene, plan)
     from ..materials import Material, as_material
     from .._spec import static_float
-    if (len(scene.structures) != len(plan._shape_seeds)
-            or any(not isinstance(s.shape, (Sphere, Cylinder, Box, Prism))
-                   or s.shape.range is None for s in scene.structures)
-            or scene.initial is not None):
-        raise ValueError(f'A traced {where} supports one isolated ranged {where.lower()} '
-                         'or multiple ranged Sphere/Cylinder/Box/Prism bodies with disjoint '
-                         'interpolation halos, and no initial field.')
-    for material in (as_material(scene.background), *(s.material for s in scene.structures)):
+    if scene.initial is not None:
+        raise ValueError(f'A traced {where} supports ranged Sphere/Cylinder/Box/Prism bodies '
+                         'with disjoint interpolation halos, beside concrete partners clear of '
+                         'them, and no initial field.')
+    ranged = [ranged_body(s.shape) for s in scene.structures]
+    for material in (as_material(scene.background),
+                     *(s.material for s, r in zip(scene.structures, ranged) if r)):
         if type(material) is not Material:
             raise ValueError(f'A traced {where} requires concrete isotropic lossless Material.')
         for triple in (material.eps, material.mu_value):
             values = tuple(static_float(f'traced {where} material', 'value', v) for v in triple)
             if not values[0] == values[1] == values[2]:
                 raise ValueError(f'A traced {where} requires concrete isotropic lossless Material.')
+    for i, (structure, r) in enumerate(zip(scene.structures, ranged)):
+        if not r and _carries(as_material(structure.material)):
+            raise ValueError(f'structures[{i}], a concrete partner without a range beside the '
+                             f'traced {where}, has a traced material value; partner materials '
+                             'must be concrete here.')
+    seeds = {row[0]: row for row in plan._shape_seeds}
     # support() includes the occupancy margin; constitutive terms add one interpolation
     # cell (two adjacent half-cell averages). Certify it even for an unturned Box,
     # whose zero cross terms mean constitutive.validate has no term to inspect.
-    halos = []
+    halos = {}
     structures = []
     for i, structure in enumerate(scene.structures):
         shape = structure.shape
         support = shape.support(plan.grid)
+        halo = tuple((lo-1, hi+1) for lo, hi in support)
+        if not ranged[i]:
+            structures.append(structure)        # checked against traced halos below
+            continue
         if any(lo <= 1 or hi >= n - 1 for (lo, hi), n in zip(support, plan.grid.n)):
             raise ValueError(f'A traced {where} range at structures[{i}], including its '
                              'interpolation halo, must stay strictly inside the domain, '
                              'away from boundary masks.')
-        halo = tuple((lo-1, hi+1) for lo, hi in support)
         for face, cells in plan.absorbing_faces:
             a = 'xyz'.index(face[0])
             if (halo[a][0] < cells if face[1] == '-' else halo[a][1] > plan.grid.n[a]-cells):
                 raise ValueError(f'structures[{i}] range interpolation halo meets the '
                                  f'{face} absorbing layer; keep the whole reservation clear.')
-        for j, other in enumerate(halos):
-            if all(min(hi, b) > max(lo, a) for (lo, hi), (a, b) in zip(halo, other)):
+        for j, other in halos.items():
+            if _overlap(halo, other):
                 raise ValueError(f'structures[{j}] and structures[{i}] range interpolation '
                                  'halos overlap. Traced bodies require disjoint reserved '
                                  'halos throughout the sweep, even when their seeds are apart.')
-        halos.append(halo)
+        halos[i] = halo
         if any(_shape_traced(v) for v in leaves(shape)):
-            seed = plan._shape_seeds[i]
+            seed = seeds[i]
             if isinstance(shape, Prism):
                 index, vertices, height, center = seed
                 dimensions = dict(vertices=vertices, height=height, center=center)
@@ -147,6 +187,21 @@ def planning_scene(scene, plan):
                     dimensions['height'] = height[0]
             structure = structure.replace(shape=shape.replace(**dimensions))
         structures.append(structure)
+    moving = {j: halo for j, halo in halos.items()
+              if any(_shape_traced(v) for v in leaves(scene.structures[j].shape))}
+    for i, structure in enumerate(scene.structures):
+        if ranged[i]:
+            continue
+        reach = tuple((lo-1, hi+1) for lo, hi in structure.shape.support(plan.grid))
+        for j, halo in moving.items():
+            if _overlap(reach, halo):
+                raise ValueError(
+                    f'structures[{i}] ({structure.shape.describe()}), a concrete partner '
+                    f'without a range, reaches the interpolation halo of the traced '
+                    f'structures[{j}]: its support widened by one cell shares a cell with '
+                    f'that halo (cells {tuple(halo)}), where the coefficients move with the '
+                    'geometry. Keep every concrete partner one cell clear of each traced '
+                    'reservation and its margin.')
     for axis, cells, label in plane_media(scene, plan):
         for i, structure in enumerate(scene.structures):
             if not any(_shape_traced(v) for v in leaves(structure.shape)):
@@ -289,11 +344,17 @@ def _valid(shape, plan, rt):
 
 
 def guard(scene, plan, rt, previous):
-    """Every body's runtime geometry certificate, combined without host truth tests."""
+    """Every ranged body's runtime geometry certificate, combined without host truth tests.
+
+    A partner without a range is concrete and was checked on the host like any concrete
+    scene's structure; it has no range to be contained in.
+    """
     if not traced(scene):
         return previous
     valid = None
     for structure in scene.structures:
+        if not ranged_body(structure.shape):
+            continue
         current = _valid(structure.shape, plan, rt)
         valid = current if valid is None else valid & current
     value = rt.constant(rt.xp.where(valid, rt.array(1., 'float64'), rt.array(float('nan'), 'float64')))

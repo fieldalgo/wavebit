@@ -99,14 +99,14 @@ def test_traced_preflight_requires_a_certified_scene_and_plan():
     with pytest.raises(ValueError, match='declarations differ'):
         fd.lower(scene(radius=r, bounds=((-.361, .361),)*3), p, 'torch')
     s = current.structures[0]
-    invalid = [current.replace(structures=(s, fd.Structure(
-                   fd.Region(size=(.1,)*3, center=(.6, .6, .6)), fd.Material(eps=2.)))),
-               current.replace(initial=fd.InitialField(E=lambda x,y,z: (x*0,y*0,z*0)))]
-    # A Flux monitor was the third case until plane-wave sources and frequency-domain
-    # readouts were admitted (tests/test_fd_traced_illumination_grad.py).
-    for bad in invalid:
-        with pytest.raises(ValueError, match='one isolated ranged sphere'):
-            planning_scene(bad, p)
+    # A Flux monitor was refused here until plane-wave sources and frequency-domain readouts
+    # were admitted (tests/test_fd_traced_illumination_grad.py); an unranged partner is
+    # refused only within a cell of the traced halo (tests/test_fd_traced_partner_grad.py).
+    with pytest.raises(ValueError, match='reaches the interpolation halo'):
+        planning_scene(current.replace(structures=(s, fd.Structure(
+            fd.Region(size=(.1,)*3, center=(.6, .6, .6)), fd.Material(eps=2.)))), p)
+    with pytest.raises(ValueError, match='no initial field'):
+        planning_scene(current.replace(initial=fd.InitialField(E=lambda x,y,z: (x*0,y*0,z*0))), p)
     for material in (fd.Conductor(eps=2.25, sigma=.1), fd.Material(eps=(2., 2.25, 2.)),
                      fd.Material(eps=r+2)):
         with pytest.raises(ValueError, match='isotropic lossless|static'):

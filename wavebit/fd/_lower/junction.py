@@ -327,8 +327,26 @@ def finish(scene, records):
 
 
 def refuse_mismatch(scene, plan):
+    """The scene's flush pairs and rule are the plan's, checked in both directions.
+
+    A body whose geometry is traced (a ranged body under differentiation) is certified by
+    ``shape_ranges.planning_scene`` to keep its whole interpolation halo off every other
+    structure, so it is never one of a flush pair, and its pairs are not asked: ``_roles``
+    compares faces on the host, which a ``jax.jit`` tracer refuses. A flush junction between
+    concrete partners beside a traced body is refused outright: its signature covers all
+    scene geometry, and this certificate has not been extended to it.
+    """
     from .coefficients import materials_of
+    from .shape_ranges import leaves
+    from ..geometry import _shape_traced
+    moving = {i for i, s in enumerate(scene.structures)
+              if any(_shape_traced(v) for v in leaves(s.shape))}
     records = plan.junctions
+    if records and moving:
+        raise ValueError(f'structures{sorted(moving)} carry traced geometry beside a flush '
+                         'junction between concrete partners; that combination is not '
+                         'certified. Differentiate in a scene without the junction, or keep '
+                         'the junction scene concrete.')
     if records:
         signature = _signature(scene, plan.grid)
         if any(r.source != signature for r in records):
@@ -344,7 +362,7 @@ def refuse_mismatch(scene, plan):
             raise ValueError('JunctionMismatchRefused: the requested junction rule is absent '
                              'from the plan; rebuild it with fd.plan(scene).')
         for j in range(i):
-            if frozenset((i, j)) in recorded:
+            if frozenset((i, j)) in recorded or i in moving or j in moving:
                 continue
             if not isinstance(_roles(scene, plan.grid, i, j), str):
                 raise ValueError('JunctionMismatchRefused: a flush pair is absent from the '

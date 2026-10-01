@@ -740,8 +740,11 @@ class Sphere(Shape):
     With a range, radius and centre can be differentiated through ``fd.run`` or ``fd.lower``
     using a plan built from concrete geometry first. One or more ranged Sphere, Cylinder,
     Box and Prism bodies may be differentiated together when all reserved supports,
-    including their interpolation halos, are pairwise disjoint. Every structure needs a
-    range and concrete isotropic lossless material, and no initial field is allowed. Every
+    including their interpolation halos, are pairwise disjoint. Every ranged body needs
+    concrete isotropic lossless material, and no initial field is allowed. Concrete partners
+    without a range (a substrate Slab, a Region, an unranged body, a lossy or dispersive
+    layer) may join them when each, widened by one cell, stays off every traced halo and
+    its material values are concrete; a flush junction among them is refused there. Every
     source and monitor family is admitted, provided the cell layers where a PlaneWave or TFSF
     normalisation or a Diffraction plane reads its plain medium stay outside every traced
     body's reserved support. Every full interpolation halo must stay inside the domain and

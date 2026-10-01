@@ -134,8 +134,12 @@ Radius and centre, extrusion height, a box's three sizes and a prism's vertices 
 be differentiated with a concrete prebuilt plan. Extrusion axes, rotation angles
 and a prism's vertex count remain static. The
 range contains the whole body. Traced scenes may contain multiple ranged bodies when
-their reserved supports plus interpolation halos are pairwise disjoint. Every structure
-needs a range and concrete isotropic lossless material, and there is no initial field.
+their reserved supports plus interpolation halos are pairwise disjoint; every ranged body
+needs concrete isotropic lossless material, and there is no initial field. Concrete
+partners without a range -- a cell-snapped Slab substrate running into a PML, a Region, an
+unranged body, a conductive or dispersive layer -- may stand beside them when each,
+widened by one cell, shares no cell with a traced body's halo and its material values are
+concrete; a flush junction among such partners is refused beside a traced body.
 Every source (Dipole, PlaneWave, TFSF) and monitor (Record, Field, Flux, Diffraction,
 FarField) is admitted; the two cell layers where a PlaneWave or TFSF normalisation or a
 Diffraction plane reads its one plain medium must lie outside every traced body's reserved

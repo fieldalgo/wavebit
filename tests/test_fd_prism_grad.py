@@ -336,7 +336,7 @@ def test_traced_prisms_need_a_concrete_isolated_seed_and_full_range_clearance():
     with pytest.raises(ValueError, match='different scene'):
         fd.lower(current.replace(run=fd.Run(steps=25)), p, 'torch')
     extra = fd.Structure(fd.Region(size=(.1,)*3, center=(.6,)*3), fd.Material(eps=1.))
-    with pytest.raises(ValueError, match='one isolated ranged prism'):
+    with pytest.raises(ValueError, match='reaches the interpolation halo'):
         planning_scene(current.replace(structures=current.structures+(extra,)), p)
     wide = ((-.61, .61),)*3
     wp = quiet(fd.plan, scene(bounds=wide))

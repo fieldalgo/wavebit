@@ -216,7 +216,7 @@ def test_traced_cylinder_requires_a_certified_scene_and_concrete_seed():
         fd.lower(current.replace(run=fd.Run(steps=25)), p, 'torch')
     s = current.structures[0]
     extra = fd.Structure(fd.Region(size=(.1,)*3, center=(.6,)*3), fd.Material(eps=1.))
-    with pytest.raises(ValueError, match='one isolated ranged cylinder'):
+    with pytest.raises(ValueError, match='reaches the interpolation halo'):
         planning_scene(current.replace(structures=(s, extra)), p)
     wide = ((-.61, .61),)*3
     wp = quiet(fd.plan, scene(bounds=wide))
