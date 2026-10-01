@@ -156,6 +156,8 @@ different spelling is a different set of retained orders.
 import math
 from collections import namedtuple
 
+import numpy as _np
+
 from . import overlap as _overlap
 from .backend import array_namespace, as_array, checked_float, j1, jinc, sinc
 from .domain import as_material
@@ -250,12 +252,27 @@ def shape_geometry(shape, lattice):
     # Two reads, not four: `Lattice.__getitem__` stacks its two vectors on every access, and
     # this now runs for every shape rather than only for a defaulted one.
     row_x, row_y = lattice[0], lattice[1]
-    cx = shape.get('cx', 0.0) + 0.5 * (row_x[0] + row_x[1])
-    cy = shape.get('cy', 0.0) + 0.5 * (row_y[0] + row_y[1])
-    lx = shape.get('lx', shape.get('l', 0.0))
+    cx = _held(shape.get('cx', 0.0)) + 0.5 * (row_x[0] + row_x[1])
+    cy = _held(shape.get('cy', 0.0)) + 0.5 * (row_y[0] + row_y[1])
+    lx = _held(shape.get('lx', shape.get('l', 0.0)))
     round_ = stype in ('circle', 'disk', 'square')
-    ly = lx if round_ else shape.get('ly', shape.get('l', 0.0))
-    return stype, cx, cy, lx, ly, shape.get('angle', 0.0)
+    ly = lx if round_ else _held(shape.get('ly', shape.get('l', 0.0)))
+    return stype, cx, cy, lx, ly, _held(shape.get('angle', 0.0))
+
+
+def _held(v):
+    """A 0-d NumPy array as the NumPy scalar it holds; any other value as it is.
+
+    A NumPy float64 or float32 scalar for any value of a box or an ellipse solves on Torch, on
+    a scalar or a tensor layer, painted or not (``polygon._scalar`` converts what is not of the
+    solver's namespace), but a 0-d *array* on the left of a tensor is refused --
+    ``np.asarray(80.0) * tensor`` raises ``TypeError`` -- and a box's transform writes
+    ``lx * sinc(...)``: a box whose ``lx`` was ``np.asarray(80.0)`` solved on NumPy and JAX and
+    raised on Torch. Indexing with ``()`` keeps the dtype, so a float32 value stays one, and
+    reads no value: a JAX array or a tensor is no NumPy array and passes untouched, its graph
+    with it.
+    """
+    return v[()] if isinstance(v, _np.ndarray) and v.ndim == 0 else v
 
 
 def _primitives(shapes, lattice):

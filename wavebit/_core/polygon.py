@@ -26,6 +26,7 @@ left standing and :func:`.boundary.conv_mats` kept believing it, which silently 
 wrong structure for any shape painted entirely inside another. See
 :func:`.clipper.subtract_loop` for where the convention is established.
 """
+from .backend import in_namespace
 
 
 def _sinc(xp, x):
@@ -139,9 +140,28 @@ def _scalar(xp, v, dtype):
     passes scalars straight to a ufunc works on NumPy and JAX and raises on PyTorch, for every
     input including ``angle = 0.0``. Promoting here is what makes the three namespaces
     interchangeable.
+
+    An array of ``xp`` itself passes through untouched, since it may carry a graph (a JAX
+    tracer, a Torch tensor that requires grad) and nothing here reads its value; everything
+    else is a constant. The test is the namespace (:func:`~wavebit._core.backend.in_namespace`),
+    not the presence of a ``dtype``: a NumPy scalar has one, and passing it through on that
+    reading is what made every Torch build of an ellipse whose ``angle`` was
+    ``numpy.float64(0.3)``, a 0-d array or an element read back out of a NumPy array raise
+    ``TypeError`` from ``torch.cos`` -- a tensor shape layer, or a scalar one painted through
+    the polygons, while NumPy and JAX solved it. A foreign value with a floating dtype keeps
+    it, as NumPy itself keeps it: a ``numpy.float32`` angle takes its cosine in single
+    precision on every backend, as it did on NumPy and JAX before, rather than being widened
+    on two of the three. Any other foreign value -- a Python number, or a NumPy integer -- is
+    built in ``dtype``. An integer dtype is not one to keep: Torch takes the cosine of an
+    int64 tensor in float32, so a painted ellipse whose ``angle`` was ``numpy.int64(1)`` sat
+    3.49e-10 from ``angle=1`` on Torch alone, where NumPy and JAX agreed to the bit.
     """
-    if getattr(v, 'dtype', None) is not None:
+    if in_namespace(xp, v):
         return v
+    if getattr(v, 'dtype', None) is not None:
+        out = xp.asarray(v)
+        if xp.isdtype(out.dtype, 'real floating'):
+            return out
     return xp.asarray(v, dtype=dtype)
 
 

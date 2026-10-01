@@ -1009,6 +1009,125 @@ def test_painted_geometry_follows_the_dtype_it_was_given():
     assert single == pytest.approx(reference, abs=1e-6)
 
 
+# ------------------------------------------------ a NumPy scalar is a constant on every backend
+
+_TENSOR = wavebit.Material([3.8 + 0.04j, 4.2 + 0.06j, 4.5 + 0.08j]).rotated(0.2, 'y')
+
+
+def _ellipse_and_box(w, scene, angle=0.3):
+    """An ellipse and a turned box on a 600 square, every geometry value wrapped by ``w``.
+
+    ``scene`` picks the route: the box painted over the ellipse's flank (scalar or tensor
+    materials), or beside it, clear of the ellipse -- on a scalar layer through the
+    closed-form transforms, a box's ``lx * sinc(...)`` among them, and on a tensor layer where
+    the curve enters the normal blend as a candidate and its polygon still feeds the planner.
+    """
+    painted = scene.endswith('painted')
+    ellipse = dict(type='ellipse', cx=w(-80.0), cy=w(0.0), lx=w(300.0), ly=w(140.0),
+                   angle=w(angle), material=4.0 if scene.startswith('scalar') else _TENSOR)
+    box = dict(type='rectangle', cx=w(40.0 if painted else 200.0), cy=w(0.0),
+               lx=w(200.0 if painted else 80.0), ly=w(200.0), angle=w(angle), material=2.25)
+    return [dict(background=1.0, shapes=[ellipse, box])]
+
+
+def _ellipse_and_box_total(backend, w, scene, angle=0.3):
+    solver = wavebit.rcwa(backend=backend, lattice=np.diag([600.0, 600.0]), wavelength=900.0,
+                          thickness=[170.0], truncation_order=(2, 2), factorization='nvf',
+                          shape_nvf_grid_size=32, structure=_ellipse_and_box(w, scene, angle))
+    return solver.solve(auto_detune=False).T.sum().real
+
+
+_SCENES = ['scalar painted', 'scalar beside a box', 'tensor painted', 'tensor beside a box']
+
+
+@pytest.mark.parametrize('scene', _SCENES)
+@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+def test_a_numpy_scalar_shape_parameter_is_the_constant_a_float_is(backend, scene):
+    """``angle=np.float64(0.3)`` solves as ``angle=0.3`` does, bit for bit, on every backend.
+
+    ``polygon._scalar`` passed through anything with a ``dtype``, which a NumPy scalar has,
+    so ``ellipse_verts`` handed it to ``torch.cos`` and every Torch build of a painted
+    ellipse or a tensor-layer ellipse raised ``TypeError`` -- for a NumPy float64, a 0-d
+    array and an element read out of an array alike -- while NumPy and JAX solved it. The
+    test is now the namespace (``backend.in_namespace``): an array of the solver's own
+    namespace passes through, carrying its graph, and anything else is converted. Every value
+    of both shapes is spelled here, which is what reached the second door: a box whose ``lx``
+    was a 0-d array raised on Torch from ``lx * sinc(...)`` in its transform, on a scalar
+    layer beside the ellipse as on a tensor one, until ``parametric.shape_geometry`` began
+    handing on the NumPy scalar such an array holds. On every backend each spelling below is
+    the float it holds.
+    """
+    if backend:
+        pytest.importorskip(('jax', 'torch')[backend - 1])
+    reference = _ellipse_and_box_total(backend, float, scene)
+    for spell in (np.float64, np.asarray, lambda v: np.asarray([v])[0]):
+        value = _ellipse_and_box_total(backend, spell, scene)
+        assert float(value) == float(reference)
+
+
+@pytest.mark.parametrize('scene', _SCENES)
+def test_a_numpy_float32_shape_parameter_keeps_its_precision_on_every_backend(scene):
+    """A NumPy value that is converted keeps its own dtype, as NumPy keeps it.
+
+    With every value a ``numpy.float32``, the three backends agree to 1e-12 (measured 9.4e-15
+    at most), and all of them sit 1e-10 to 5e-10 from the same values given as Python floats,
+    since the geometry is taken in single precision where NumPy takes it so. Converting the
+    value into the solver's own dtype instead, on the two backends that convert, puts them
+    that far from NumPy.
+    """
+    pytest.importorskip('jax')
+    pytest.importorskip('torch')
+    values = [float(_ellipse_and_box_total(backend, np.float32, scene)) for backend in (0, 1, 2)]
+    assert max(values) - min(values) < 1e-12, values
+
+
+@pytest.mark.parametrize('scene', _SCENES)
+@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+def test_a_numpy_integer_shape_parameter_is_built_in_the_solver_dtype(backend, scene):
+    """``angle=np.int64(1)`` solves as ``angle=1.0`` does, bit for bit, on every backend.
+
+    Only a floating dtype is kept (``polygon._scalar``). Torch takes the cosine of an int64
+    tensor in float32, so a painted ellipse whose angle was ``numpy.int64(1)`` sat 3.49e-10
+    from ``angle=1`` on Torch alone (order 1, ``N = 16``), where NumPy and JAX agreed to the
+    bit. An integer is built in the vertex dtype, as a Python number is.
+    """
+    if backend:
+        pytest.importorskip(('jax', 'torch')[backend - 1])
+    reference = _ellipse_and_box_total(backend, float, scene, angle=1.0)
+    for spell in (int, np.int64, np.int32, lambda v: np.asarray(int(v))):
+        value = _ellipse_and_box_total(backend, spell, scene, angle=1.0)
+        assert float(value) == float(reference), spell
+
+
+@pytest.mark.parametrize('scene', _SCENES)
+def test_a_numpy_scalar_beside_a_traced_parameter_keeps_its_gradient(scene):
+    """The other half: a traced parameter beside NumPy scalars still differentiates.
+
+    ``jax.grad`` and Torch autograd in the angle with every other value a NumPy float64, and in
+    ``lx`` with the angle one, agree with each other to rounding and with a NumPy central
+    difference (7e-6 relative at worst, measured on these scenes): the namespace test passes
+    a tracer and a tensor that requires grad through untouched, and reads no value with
+    ``float()``.
+    """
+    jax = pytest.importorskip('jax')
+    torch = pytest.importorskip('torch')
+
+    def wrap(key, traced):
+        def w(v):
+            return traced if v == {'angle': 0.3, 'lx': 300.0}[key] else np.float64(v)
+        return w
+
+    for key, x0, h in (('angle', 0.3, 1e-6), ('lx', 300.0, 1e-4)):
+        fd = (float(_ellipse_and_box_total(0, wrap(key, x0 + h), scene))
+              - float(_ellipse_and_box_total(0, wrap(key, x0 - h), scene))) / (2 * h)
+        g_jax = float(jax.grad(lambda x: _ellipse_and_box_total(1, wrap(key, x), scene))(x0))
+        x = torch.tensor(x0, dtype=torch.float64, requires_grad=True)
+        _ellipse_and_box_total(2, wrap(key, x), scene).backward()
+        g_torch = float(x.grad)
+        assert g_jax == pytest.approx(g_torch, rel=1e-9), (key, g_jax, g_torch)
+        assert g_jax == pytest.approx(fd, rel=1e-4), (key, g_jax, fd)
+
+
 def test_freezing_a_painted_layer_works_on_torch():
     """``freeze_geometry()`` is what the docstring points at, and it raised in the same frame.
 

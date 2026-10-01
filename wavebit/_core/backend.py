@@ -33,6 +33,22 @@ def carries_autodiff(value):
     return jax is not None and isinstance(value, jax.core.Tracer)
 
 
+def in_namespace(xp, v):
+    """Whether ``v`` is an array of ``xp`` itself -- an array, a tensor or a tracer of it.
+
+    The one test for "may carry a graph, pass it through" against "a constant from elsewhere,
+    convert it", read by :func:`as_array`, :func:`_readable` and the vertex builders'
+    ``polygon._scalar``. Having a ``dtype`` is not the test: a NumPy scalar has one, and on
+    JAX or Torch it is as much a constant as a Python float -- ``torch.cos`` refuses both.
+    """
+    if not (hasattr(v, 'dtype') and hasattr(v, 'shape')):
+        return False
+    try:
+        return ac.array_namespace(v) is xp
+    except Exception:                          # noqa: BLE001 - no namespace recognises it
+        return False
+
+
 def _readable(v, xp):
     """``v`` as something ``xp`` can reduce, without disturbing an autograd graph.
 
@@ -46,12 +62,8 @@ def _readable(v, xp):
     ``n_top`` can arrive as either — has no graph to lose and is converted, which is also what
     gives ``xp.isdtype`` below a dtype it recognizes.
     """
-    if hasattr(v, 'dtype') and hasattr(v, 'shape'):
-        try:
-            if ac.array_namespace(v) is xp:
-                return v
-        except Exception:
-            pass
+    if in_namespace(xp, v):
+        return v
     return xp.asarray(v)
 
 
@@ -532,14 +544,9 @@ def as_array(xp, v, dtype=None, device=None, copy=False):
     """
     if copy and isinstance(v, _np.ndarray):
         v = v.copy()                          # a NumPy array carries no graph to lose
-    if hasattr(v, 'dtype') and hasattr(v, 'shape'):
-        try:
-            same_ns = ac.array_namespace(v) is xp
-        except Exception:
-            same_ns = False
-        if same_ns:
-            out = v if dtype is None or v.dtype == dtype else xp.astype(v, dtype)
-            return out if device is None else ac.to_device(out, device)
+    if in_namespace(xp, v):
+        out = v if dtype is None or v.dtype == dtype else xp.astype(v, dtype)
+        return out if device is None else ac.to_device(out, device)
     v = forward_strided(v)
     if dtype is None:
         return xp.asarray(v, device=device)
