@@ -22,7 +22,12 @@ which binds only where the hull of ``1/eps`` passes the origin. What these tests
 * on a lossless metal at the pole itself, where ``<1/eps>`` is singular, the floored tensor is
   finite and the unfloored one is not;
 * the floored closing's anti-Hermitian part is bounded where it was not -- measured, not proved,
-  which is why the bound asserted is the measured one with room, not zero.
+  which is why the bound asserted is the measured one with room, not zero;
+* the floor is differentiated exactly, in a shape length and in the metal's permittivity, on
+  JAX and Torch alike, in reverse and in forward mode, where it binds on modes that reach the
+  far field and through degenerate singular values; ``torch.func``, which it has no rule for,
+  is refused by name; and a second derivative through it, mixed orders included, is refused
+  where it binds, rather than returned without the floor's curvature.
 
 The metal permittivities are Johnson & Christy gold, interpolated linearly in ``n`` and ``k``.
 """
@@ -34,6 +39,7 @@ import pytest
 import wavebit
 from wavebit._core import factorization as F
 from wavebit._core import parametric as P
+from wavebit._core.backend import array_namespace
 from wavebit._core.factorization import (INVERSE_RULE_BOUND, _floor_singular_values,
                                          _nvf_assemble)
 from wavebit._core.lattice import Lattice
@@ -273,6 +279,542 @@ def test_the_anti_hermitian_residual_is_bounded_where_it_was_not():
     E, B, C = matrices(par, cfg, 5)
     assert anti_hermitian_minimum(_nvf_assemble(np, E, B, *C)) < -10.0
     assert anti_hermitian_minimum(_nvf_assemble(np, E, B, *C, eps_bound=largest_eps(par))) > -4.0
+
+
+# ------------------------------------------------------------------ what it does to a gradient
+#
+# The floor is the one piece of the closing that is new to every backend at once: an SVD, a
+# ``where`` on a scalar condition, and a lift whose derivative is supplied in closed form rather
+# than taken through the SVD. These tests are placed where the floor binds *and* the clipped
+# modes reach the far field. At truncation order 4 on the disks two modes are clipped, and at
+# normal incidence, where symmetry keeps them dark, ``R + T`` does not see them: there, the lift
+# held as a detached constant -- which returns the unfloored closing's derivative -- agreed with
+# a finite difference to 4e-9, and a check placed there could not have failed. At oblique
+# incidence the same two modes are lit and the detached lift is 20% off, which is why one case
+# below is oblique.
+
+#: Relative tolerance of an autodiff derivative against the extrapolated central difference.
+#: The worst agreement measured on 2026-10-02 in the tests below is 1.2e-8 (the dielectric's
+#: diameter derivative), so this leaves 80x. The smallest error of a defect these tests catch is
+#: 1.5e-4 -- the floor's own derivative dropped, on the uniform, all-clipped, rotated case --
+#: 150x over it.
+RELATIVE = 1e-6
+
+#: The oblique incidence of the cases that light what normal incidence leaves dark.
+OBLIQUE = dict(theta=0.3, phi=0.4, psi=0.7)
+
+
+GRADIENT_CASES = [
+    pytest.param(disks, AU_852, 852.0, 5, 140.0, id='gold disks, 121 harmonics, 1 mode clipped'),
+    pytest.param(holes, AU_807, 807.0, 6, 200.0, id='gold holes, 169 harmonics, 6 modes clipped'),
+]
+
+
+def _scene(geometry, eps, wl, lx, order, angles=None):
+    """``geometry``'s layer with its metal (the disk, or the film the holes are cut in) at ``eps``
+    and its circle ``lx`` across, at truncation ``order``; at normal incidence unless ``angles``
+    says otherwise."""
+    par, cfg = geometry(eps, wl)
+    par[0]['shapes'][0]['lx'] = lx
+    cfg.update(angles or {})
+    return dict(structure=par, truncation_order=(order, order), **cfg)
+
+
+def _power(backend, scene):
+    """``R + T`` summed over orders: a float on NumPy, the backend's own scalar on JAX / Torch."""
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        r = wavebit.rcwa(backend=backend, **scene).solve()
+    if backend == 0:
+        return float(np.sum(r.R).real + np.sum(r.T).real)
+    return (r.R.sum() + r.T.sum()).real
+
+
+def _difference(f, x, h):
+    """Central difference of ``f`` at ``x``, Richardson-extrapolated in the step: error O(h^4).
+
+    A plain central difference is not enough here. ``R + T`` curves sharply on the disks, and
+    at ``h = 1e-3`` its O(h^2) error is 1.2e-4 of the slope -- more than what is checked.
+    """
+    near = (f(x + h) - f(x - h)) / (2 * h)
+    far = (f(x + 2 * h) - f(x - 2 * h)) / (4 * h)
+    return (4 * near - far) / 3
+
+
+def _diameter_derivatives(geometry, eps, wl, order, lx, angles=None):
+    """``R + T`` on three backends and its derivative in the circle's diameter on JAX, Torch and
+    by finite difference on NumPy."""
+    jax = pytest.importorskip('jax')
+    torch = pytest.importorskip('torch')
+    jax.config.update('jax_enable_x64', True)
+    import jax.numpy as jnp
+
+    want = _power(0, _scene(geometry, eps, wl, lx, order, angles))
+    value_jax, grad_jax = jax.value_and_grad(
+        lambda x: _power(1, _scene(geometry, eps, wl, x, order, angles)))(jnp.asarray(lx))
+    lx_t = torch.tensor(lx, dtype=torch.float64, requires_grad=True)
+    value_torch = _power(2, _scene(geometry, eps, wl, lx_t, order, angles))
+    grad_torch, = torch.autograd.grad(value_torch, lx_t)
+    finite = _difference(lambda x: _power(0, _scene(geometry, eps, wl, x, order, angles)), lx, 1e-3)
+    return dict(want=want, value_jax=float(value_jax), value_torch=float(value_torch.detach()),
+                jax=float(grad_jax), torch=float(grad_torch), finite=finite)
+
+
+def _permittivity_derivatives(geometry, eps, wl, order, lx):
+    """``d(R + T) / d Re eps`` and ``d / d Im eps`` of the metal, on JAX, Torch and by finite
+    difference on NumPy, each as a ``(Re, Im)`` pair."""
+    jax = pytest.importorskip('jax')
+    torch = pytest.importorskip('torch')
+    jax.config.update('jax_enable_x64', True)
+    import jax.numpy as jnp
+
+    a, b = eps.real, eps.imag
+    grad_jax = jax.grad(lambda x, y: _power(1, _scene(geometry, x + 1j * y, wl, lx, order)),
+                        argnums=(0, 1))(jnp.asarray(a), jnp.asarray(b))
+    a_t = torch.tensor(a, dtype=torch.float64, requires_grad=True)
+    b_t = torch.tensor(b, dtype=torch.float64, requires_grad=True)
+    grad_torch = torch.autograd.grad(
+        _power(2, _scene(geometry, torch.complex(a_t, b_t), wl, lx, order)), (a_t, b_t))
+    power = lambda x, y: _power(0, _scene(geometry, complex(x, y), wl, lx, order))
+    finite = (_difference(lambda x: power(x, b), a, 1e-4), _difference(lambda y: power(a, y), b, 1e-4))
+    return dict(jax=tuple(float(g) for g in grad_jax), torch=tuple(float(g) for g in grad_torch),
+                finite=finite)
+
+
+@pytest.mark.parametrize('geometry, eps, wl, order, lx, angles', [
+    pytest.param(*case.values, None, id=case.id) for case in GRADIENT_CASES] + [
+    pytest.param(disks, AU_852, 852.0, 4, 140.0, OBLIQUE,
+                 id='gold disks, 81 harmonics, 2 modes clipped, oblique'),
+    pytest.param(disks, 4.0 + 0.3j, 852.0, 5, 140.0, None, id='lossy dielectric disks, floor inactive')])
+def test_the_floor_is_the_same_on_every_backend_and_differentiates_exactly(geometry, eps, wl, order, lx,
+                                                                           angles):
+    """Forward, the three backends agree to the last digits they share; backward, the derivative
+    of ``R + T`` in the diameter matches a central difference where the floor binds as well as
+    where it does not.
+
+    Measured 2026-10-01, JAX / Torch against the extrapolated difference: gold disks 2.969526e-04,
+    gold holes 3.065110e-04, dielectric -7.436556e-05, relative errors 1.2e-8 or below, and JAX
+    against Torch 4e-12 or below. The lift held as a detached constant gave -1.142507e-02 on the
+    disks (39x, the wrong sign) and -1.842889e-03 on the holes; holding the clipped modes at the
+    floor with the singular vectors frozen -- the lift's magnitude differentiated, its rotation
+    not -- gave -7.105029e-03 (24x) and 1.130864e-04 (0.37x), so the rotation of the singular
+    vectors is not a correction but most of the answer.
+
+    The oblique case, measured 2026-10-02: -4.314524e-03, where the detached lift gives
+    -5.198912e-03, 20% off. The same disks at normal incidence cannot tell the two apart.
+    """
+    got = _diameter_derivatives(geometry, eps, wl, order, lx, angles)
+    assert got['value_jax'] == pytest.approx(got['want'], abs=1e-9)
+    assert got['value_torch'] == pytest.approx(got['want'], abs=1e-9)
+    for backend in ('jax', 'torch'):
+        assert np.isfinite(got[backend]), backend
+        assert got[backend] == pytest.approx(got['finite'], rel=RELATIVE), (backend, got)
+    assert got['jax'] == pytest.approx(got['torch'], rel=1e-9), got
+
+
+@pytest.mark.parametrize('geometry, eps, wl, order, lx', GRADIENT_CASES)
+def test_a_metal_permittivity_differentiates_exactly_through_the_floor(geometry, eps, wl, order, lx):
+    """The floor ``1 / (INVERSE_RULE_BOUND * max|eps|)`` is itself a function of the metal's
+    permittivity, and every clipped mode sits on it: a derivative in ``eps`` has to carry the
+    floor's own derivative on those modes as well as ``<1/eps>``'s.
+
+    Measured 2026-10-01, JAX and Torch alike, against the extrapolated difference: on the disks
+    ``(d/d Re, d/d Im) = (1.073187e-02, -1.061561e-02)``, on the holes
+    ``(1.253546e-03, -2.128232e-02)``, relative errors 8e-9 or below. Without the floor's term the
+    disks read ``(6.054986e-03, -1.032721e-02)``, 44% off in ``Re``, and the holes
+    ``(1.347759e-03, -2.128823e-02)``, 7.5%; the lift held as a detached constant,
+    ``(-2.995603e-04, -3.050163e-03)`` and ``(2.658234e-03, -2.145442e-02)``.
+    """
+    got = _permittivity_derivatives(geometry, eps, wl, order, lx)
+    for backend in ('jax', 'torch'):
+        for part, value, finite in zip(('Re', 'Im'), got[backend], got['finite']):
+            assert np.isfinite(value), (backend, part)
+            assert value == pytest.approx(finite, rel=RELATIVE), (backend, part, got)
+
+
+def _unitary(rng, n):
+    q, r = np.linalg.qr(rng.standard_normal((n, n)) + 1j * rng.standard_normal((n, n)))
+    return q * (np.diag(r) / np.abs(np.diag(r)))
+
+
+def _degenerate_derivative(backend, rotated, values):
+    """``d/dt`` of a fixed linear read-out of ``B(t)`` floored at ``floor(t)``, on ``backend`` and
+    by central difference on NumPy, with ``B(0) = U diag(values) V^H``. ``backend`` is ``jax`` or
+    ``torch`` in reverse mode, or ``jax jvp`` or ``torch forward_ad`` in forward mode."""
+    pytest.importorskip(backend.split()[0])
+    rng = np.random.default_rng(7)
+    n = len(values)
+    if rotated:
+        U, V = _unitary(rng, n), _unitary(rng, n)
+    else:
+        U, V = np.diag(np.exp(2j * np.pi * rng.random(n))), np.eye(n)
+    B0 = (U * np.asarray(values)) @ V.conj().T
+    direction = rng.standard_normal((n, n)) + 1j * rng.standard_normal((n, n))
+    read_out = rng.standard_normal((n, n)) + 1j * rng.standard_normal((n, n))
+
+    def loss(t):
+        xp = array_namespace(t)
+        B = xp.asarray(B0) + t * xp.asarray(direction)
+        lifted = _floor_singular_values(xp, B, 0.02 + 0.006 * t)
+        return xp.sum(xp.real(xp.conj(xp.asarray(read_out)) * lifted))
+
+    if backend.startswith('jax'):
+        import jax
+        import jax.numpy as jnp
+        jax.config.update('jax_enable_x64', True)
+        if backend == 'jax':
+            got = float(jax.grad(loss)(jnp.asarray(0.0)))
+        else:
+            got = float(jax.jvp(loss, (jnp.asarray(0.0),), (jnp.asarray(1.0),))[1])
+    elif backend == 'torch':
+        import torch
+        t = torch.tensor(0.0, dtype=torch.float64, requires_grad=True)
+        got = float(torch.autograd.grad(loss(t), t)[0])
+    else:
+        import torch
+        from torch.autograd import forward_ad
+        with forward_ad.dual_level():
+            t = forward_ad.make_dual(torch.tensor(0.0, dtype=torch.float64),
+                                     torch.tensor(1.0, dtype=torch.float64))
+            got = float(forward_ad.unpack_dual(loss(t)).tangent)
+    return got, _difference(lambda t: float(loss(np.asarray(t))), 0.0, 1e-5)
+
+
+@pytest.mark.parametrize('backend', ['jax', 'jax jvp', 'torch', 'torch forward_ad'])
+@pytest.mark.parametrize('rotated', [False, True], ids=['diagonal', 'rotated'])
+@pytest.mark.parametrize('values', [
+    pytest.param([0.004, 0.004, 0.01, 0.3, 0.3, 0.3, 1.0], id='clipped pair, a third clipped, unclipped triple'),
+    pytest.param([0.5] * 6, id='uniform, floor inactive'),
+    pytest.param([0.01] * 6, id='uniform, every value clipped'),
+])
+def test_the_floor_differentiates_through_degenerate_singular_values(backend, rotated, values):
+    """Repeated singular values are the ordinary case, not an edge: a uniform layer has nothing
+    else, and a two-material layer two clusters of them. The SVD's derivative divides by their
+    differences and is NaN there, and a divided difference written naively is 0/0. This floors
+    ``B = U diag(values) V^H`` at 0.02 -- exactly degenerate when ``U`` and ``V`` are diagonal
+    phases, degenerate to rounding when they are random unitaries -- and moves both ``B`` and the
+    floor along a fixed direction ``t``: the derivative of a fixed linear read-out must be finite
+    and equal to a central difference of the forward on NumPy, in reverse mode and in forward
+    mode alike.
+
+    Measured 2026-10-01: relative error 1.8e-9 or below in every case, JAX and Torch alike, and
+    on 2026-10-02 the same in forward mode, where without the PyTorch ``jvp`` every case with a
+    clipped value fails. On
+    every case with a clipped value the lift held as a detached constant is 18% to 180% off, and
+    the floor's own derivative dropped 1.5e-4 to 2e-3. Divided differences written for every
+    pair return NaN wherever two computed singular values come out equal (2026-10-02): five of
+    these six cases on JAX, where the NaN reaches the gradient through the ``where`` even with
+    the floor inactive, and three on Torch, which hands a layer the floor does not touch back
+    as it was.
+    """
+    got, finite = _degenerate_derivative(backend, rotated, values)
+    assert np.isfinite(got)
+    assert got == pytest.approx(finite, rel=RELATIVE)
+
+
+def _floor_test_matrices(rotated, values):
+    """``B0 = U diag(values) V^H`` (diagonal phases, or random unitaries), a direction ``D`` and a
+    read-out ``R``, from one seed."""
+    rng = np.random.default_rng(11)
+    n = len(values)
+    if rotated:
+        U, V = _unitary(rng, n), _unitary(rng, n)
+    else:
+        U, V = np.diag(np.exp(2j * np.pi * rng.random(n))), np.eye(n)
+    B0 = (U * np.asarray(values)) @ V.conj().T
+    D = rng.standard_normal((n, n)) + 1j * rng.standard_normal((n, n))
+    R = rng.standard_normal((n, n)) + 1j * rng.standard_normal((n, n))
+    return B0, D, R
+
+
+def _namespace(backend):
+    if backend == 'jax':
+        jax = pytest.importorskip('jax')
+        jax.config.update('jax_enable_x64', True)
+        import jax.numpy as jnp
+        return array_namespace(jnp.asarray(0.0))
+    torch = pytest.importorskip('torch')
+    return array_namespace(torch.tensor(0.0, dtype=torch.float64))
+
+
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
+@pytest.mark.parametrize('rotated', [False, True], ids=['diagonal', 'rotated'])
+def test_a_singular_value_exactly_at_the_floor_is_not_clipped(backend, rotated):
+    """``s < floor`` clips; ``s == floor`` does not, so there the floored matrix is ``B`` and its
+    derivative ``dB``'s. Pinned with the floor set to the smallest singular value itself, as the
+    backend that floors computes it: the derivative of ``<R, floored(B0 + t D)>`` must be
+    ``<R, D>``. Counting the value at the floor as clipped (``s <= floor``) holds that mode's
+    magnitude and drops the Hermitian part of its diagonal entry; measured 2026-10-02, that
+    moves the derivative here by 24% (rotated) and 75% (diagonal).
+
+    In a solve the computed singular value lands on one side of the floor or the other by
+    rounding, so either one-sided slope can come back at a crossing; this pins only the rule.
+    """
+    xp = _namespace(backend)
+    B0, D, R = _floor_test_matrices(rotated, [0.004, 0.01, 0.3, 1.0])
+    floor = float(xp.linalg.svd(xp.asarray(B0))[1][-1])
+
+    def loss(t):
+        floored = _floor_singular_values(xp, xp.asarray(B0) + t * xp.asarray(D), floor)
+        return xp.sum(xp.real(xp.conj(xp.asarray(R)) * floored))
+
+    if backend == 'jax':
+        import jax
+        got = float(jax.grad(loss)(xp.asarray(0.0)))
+    else:
+        import torch
+        t = torch.tensor(0.0, dtype=torch.float64, requires_grad=True)
+        got = float(torch.autograd.grad(loss(t), t)[0])
+    assert got == pytest.approx(float(np.sum(np.real(np.conj(R) * D))), rel=1e-12)
+
+
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
+def test_an_exactly_singular_matrix_floors_finitely_and_has_no_derivative(backend):
+    """Two exact zeros among the singular values: a lossless metal at its pole, in miniature.
+
+    The floored matrix is finite, and traced it is the NumPy one: the forward pass does not read
+    the derivative term. The derivative is NaN -- not an invented finite value. Between the two
+    zeros ``D2 = (g_i + g_j) / (s_i + s_j)`` is ``2 floor / 0``; on the way in it grows as
+    ``floor / s``, and at zero the clipped modes' left and right vectors have no relative phase.
+    """
+    xp = _namespace(backend)
+    B0, D, R = _floor_test_matrices(False, [0.0, 0.0, 0.01, 0.3, 1.0])
+    want = _floor_singular_values(np, B0, 0.02)
+    assert np.linalg.svd(want, compute_uv=False).min() == pytest.approx(0.02, rel=1e-12)
+
+    def floored(t):
+        return _floor_singular_values(xp, xp.asarray(B0) + t * xp.asarray(D), 0.02 + 0.006 * t)
+
+    if backend == 'jax':
+        import jax
+        value, pullback = jax.vjp(floored, xp.asarray(0.0))
+        derivative, = pullback(xp.asarray(R))
+    else:
+        import torch
+        t = torch.tensor(0.0, dtype=torch.float64, requires_grad=True)
+        value = floored(t)
+        derivative, = torch.autograd.grad(xp.sum(xp.real(xp.conj(xp.asarray(R)) * value)), t)
+        value = value.detach()
+    assert np.all(np.isfinite(np.asarray(value)))
+    np.testing.assert_allclose(np.asarray(value), want, rtol=0, atol=1e-14)
+    assert not np.isfinite(float(derivative))
+
+
+@pytest.mark.parametrize('mode', ['reverse over forward_ad', 'forward_ad over reverse'])
+def test_the_floor_alone_refuses_a_mixed_second_order_on_torch(mode):
+    """PyTorch can differentiate a ``forward_ad`` tangent in reverse mode, and carry a tangent
+    through a backward pass; either differentiates the floor's derivative, a linear map with
+    coefficients from the detached SVD, and comes back without the floor's curvature. Both pass
+    through the floor's own backward, which refuses any backward pass through a floor built from
+    a dual -- here on the floor alone, with a read-out linear in the floored matrix, as through
+    ``eps_conv_matrices()`` below.
+
+    The path is nonlinear, ``B0 + 0.002 sin(t) D`` floored at ``0.02 + 0.006 t^2`` with two modes
+    clipped at ``t = 0.3``, so its second derivative is not the linear map's. Measured
+    2026-10-02 with the refusal removed: -0.007473 in either order, where a central difference
+    of the exact first derivative reads +0.036047.
+    """
+    torch = pytest.importorskip('torch')
+    from torch.autograd import forward_ad
+    xp = _namespace('torch')
+    B0, D, R = _floor_test_matrices(True, [0.004, 0.01, 0.3, 1.0])
+
+    def loss(t):
+        B = xp.asarray(B0) + 0.002 * xp.sin(t) * xp.asarray(D)
+        floored = _floor_singular_values(xp, B, 0.02 + 0.006 * t * t)
+        return xp.sum(xp.real(xp.conj(xp.asarray(R)) * floored))
+
+    x = torch.tensor(0.3, dtype=torch.float64, requires_grad=True)
+    with forward_ad.dual_level(), pytest.raises(RuntimeError, match='first order'):
+        dual = forward_ad.make_dual(x, torch.tensor(1.0, dtype=torch.float64))
+        if mode == 'reverse over forward_ad':
+            torch.autograd.grad(forward_ad.unpack_dual(loss(dual)).tangent, x)
+        else:
+            torch.autograd.grad(loss(dual), x)
+
+
+#: The conv-matrix read-out of the tests below, ``Re sum(conj(W) * eps_xx)`` of
+#: ``eps_conv_matrices()`` on the disks at 81 harmonics: the floor binds on 2 modes on gold and
+#: on none on the dielectric. ``solve()`` refuses a second derivative at the modal operator
+#: whatever the floor does, so this is the route on which the floor's own rules show.
+CONV_ORDER = 4
+GOLD, DIELECTRIC = AU_852, 4.0 + 0.3j
+
+
+def _conv_solver(backend, material, lx=140.0):
+    par, cfg = disks(material, 852.0)
+    par[0]['shapes'][0]['lx'] = lx
+    return wavebit.rcwa(backend=backend, structure=par, truncation_order=(CONV_ORDER, CONV_ORDER),
+                        **cfg)
+
+
+def _conv_read_out(backend, material, parameter='diameter', geometry=None):
+    """``x -> Re sum(conj(W) * eps_xx)`` on ``backend`` (0, 1 or 2), with ``x`` the disk's
+    diameter or the real part of its permittivity (``parameter``), the other held."""
+    n = (2 * CONV_ORDER + 1) ** 2
+    rng = np.random.default_rng(3)
+    W = rng.standard_normal((1, n, n)) + 1j * rng.standard_normal((1, n, n))
+
+    def read_out(x):
+        if parameter == 'diameter':
+            solver = _conv_solver(backend, material, x)
+        elif backend == 2:
+            import torch
+            solver = _conv_solver(backend, torch.complex(x, torch.tensor(material.imag, dtype=x.dtype)))
+        else:
+            solver = _conv_solver(backend, x + 1j * material.imag)
+        epx = solver.eps_conv_matrices(**({} if geometry is None else dict(geometry=geometry)))[0]
+        xp = array_namespace(epx)
+        return xp.sum(xp.real(xp.conj(xp.asarray(W)) * epx))
+    return read_out
+
+
+def _conv_difference(material, parameter='diameter'):
+    """The read-out's central difference on NumPy, extrapolated in the step."""
+    read_out = _conv_read_out(0, material, parameter)
+    at, step = (140.0, 1e-3) if parameter == 'diameter' else (material.real, 1e-4)
+    return _difference(lambda x: float(read_out(x)), at, step)
+
+
+@pytest.mark.parametrize('mode', ['torch forward_ad', 'jax jvp'])
+@pytest.mark.parametrize('parameter', ['diameter', 'Re eps'])
+def test_forward_mode_through_the_floor_is_the_exact_derivative(mode, parameter):
+    """Forward mode gets the floor's exact derivative, as reverse mode does: ``jax.jvp`` goes
+    through the same ``custom_jvp`` rule as ``jax.grad``, and on PyTorch the floor's
+    ``autograd.Function`` carries a ``jvp``. ``Re eps`` moves the floor itself, so that case
+    needs the floor's own derivative as well.
+
+    A ``torch.autograd.forward_ad`` dual has ``requires_grad`` False, which is all the floor
+    used to ask about, so it went down the plain branch, where the floored part is a constant
+    and its tangent ``dB - dB = 0``. Measured 2026-10-02 on this read-out, forward mode gave
+    -0.538854 in the diameter and +3.423643 in ``Re eps``, where reverse mode and a central
+    difference read -27.626431 and -17.338962, with no error.
+    """
+    at = 140.0 if parameter == 'diameter' else GOLD.real
+    finite = _conv_difference(GOLD, parameter)
+    if mode == 'jax jvp':
+        jax = pytest.importorskip('jax')
+        jax.config.update('jax_enable_x64', True)
+        import jax.numpy as jnp
+        read_out = _conv_read_out(1, GOLD, parameter)
+        forward = float(jax.jvp(read_out, (jnp.asarray(at),), (jnp.asarray(1.0),))[1])
+        reverse = float(jax.grad(read_out)(jnp.asarray(at)))
+    else:
+        torch = pytest.importorskip('torch')
+        from torch.autograd import forward_ad
+        read_out = _conv_read_out(2, GOLD, parameter)
+        with forward_ad.dual_level():
+            x = forward_ad.make_dual(torch.tensor(at, dtype=torch.float64),
+                                     torch.tensor(1.0, dtype=torch.float64))
+            forward = float(forward_ad.unpack_dual(read_out(x)).tangent)
+        x = torch.tensor(at, dtype=torch.float64, requires_grad=True)
+        reverse = float(torch.autograd.grad(read_out(x), x)[0])
+    assert forward == pytest.approx(finite, rel=RELATIVE)
+    assert forward == pytest.approx(reverse, rel=1e-12)
+
+
+@pytest.mark.parametrize('transform', ['jvp', 'grad'])
+@pytest.mark.parametrize('metal', [True, False], ids=['gold, floor binds', 'dielectric'])
+def test_torch_func_is_refused_by_name_where_the_floor_binds(transform, metal):
+    """``torch.func`` needs a functorch rule the floor's ``autograd.Function`` does not have, so
+    where the floor binds it refuses by name and points at ``torch.autograd``, which it supports.
+    Before, ``torch.func.jvp`` took the plain branch and returned -0.538854 where the derivative
+    is -27.626431, and ``torch.func.grad`` raised PyTorch's own error about ``setup_context``.
+    Where the floor does not bind it is never reached, and ``torch.func`` stays exact.
+    """
+    torch = pytest.importorskip('torch')
+    material = GOLD if metal else DIELECTRIC
+    read_out = _conv_read_out(2, material)
+    x = torch.tensor(140.0, dtype=torch.float64)
+    if transform == 'jvp':
+        def run():
+            return torch.func.jvp(read_out, (x,), (torch.ones_like(x),))[1]
+    else:
+        def run():
+            return torch.func.grad(read_out)(x)
+    if metal:
+        with pytest.raises(NotImplementedError, match='torch.func'):
+            run()
+    else:
+        assert float(run()) == pytest.approx(_conv_difference(material), rel=RELATIVE)
+
+
+@pytest.mark.parametrize('backend', ['jax', 'jit', 'torch', 'torch, reverse over forward_ad',
+                                     'torch, forward_ad over reverse'])
+@pytest.mark.parametrize('metal', [True, False], ids=['gold, floor binds', 'dielectric'])
+def test_a_second_derivative_through_the_floor_is_refused_where_it_binds(backend, metal):
+    """The floor's derivative is linear in ``dB`` with coefficients from the detached SVD, so a
+    second derivative taken through it would lack the floor's curvature: on the gold disks at 81
+    harmonics (2 modes clipped), with the read-out ``Re sum(conj(W) * eps_xx)`` of
+    ``eps_conv_matrices()``, it read +4.193117 on JAX and Torch alike where a central difference
+    of the exact first derivative reads -17.546 -- the wrong sign, and no error. Refused instead,
+    as the modal operator's second derivative is: ``NotImplementedError`` on JAX,
+    ``RuntimeError`` for ``create_graph=True`` on Torch, and ``RuntimeError`` for PyTorch's two
+    mixed orders -- a backward pass through a ``forward_ad`` tangent, and a ``forward_ad``
+    tangent carried through a backward pass -- which, unrefused, read the same +4.193117.
+
+    Where the floor does not bind the map is the identity and the Hessian stays exact (-2.1e-3
+    on the dielectric), in every mode. Under ``jax.jit`` whether it binds is not known when the
+    trace is built, so a second derivative through any NVF layer is refused there.
+    """
+    material = GOLD if metal else DIELECTRIC
+    if backend.startswith('torch'):
+        torch = pytest.importorskip('torch')
+        from torch.autograd import forward_ad
+        read_out = _conv_read_out(2, material)
+
+        def tangent(at, requires_grad=False):
+            x = torch.tensor(at, dtype=torch.float64, requires_grad=requires_grad)
+            with forward_ad.dual_level():
+                dual = forward_ad.make_dual(x, torch.tensor(1.0, dtype=torch.float64))
+                return forward_ad.unpack_dual(read_out(dual)).tangent, x
+
+        def first(at, create_graph=False):
+            if backend == 'torch, reverse over forward_ad':
+                return float(tangent(at)[0])
+            x = torch.tensor(at, dtype=torch.float64, requires_grad=True)
+            g, = torch.autograd.grad(read_out(x), x, create_graph=create_graph)
+            return (g, x) if create_graph else float(g)
+
+        def second(at):
+            if backend == 'torch, reverse over forward_ad':
+                t, x = tangent(at, requires_grad=True)
+                return float(torch.autograd.grad(t, x)[0])
+            if backend == 'torch, forward_ad over reverse':
+                x = torch.tensor(at, dtype=torch.float64, requires_grad=True)
+                with forward_ad.dual_level():
+                    dual = forward_ad.make_dual(x, torch.tensor(1.0, dtype=torch.float64))
+                    g, = torch.autograd.grad(read_out(dual), x)
+                    return float(forward_ad.unpack_dual(g).tangent)
+            g, x = first(at, create_graph=True)
+            return float(torch.autograd.grad(g, x)[0])
+        refusal = RuntimeError
+    else:
+        jax = pytest.importorskip('jax')
+        jax.config.update('jax_enable_x64', True)
+        import jax.numpy as jnp
+        geometry = _conv_solver(1, material).freeze_geometry() if backend == 'jit' else None
+        read_out = _conv_read_out(1, material, geometry=geometry)
+        gradient = jax.grad(read_out)
+        hessian = jax.grad(gradient)
+        first = lambda x: float(gradient(jnp.asarray(x)))
+        second = lambda x: float(hessian(jnp.asarray(x)))
+        refusal = NotImplementedError
+
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        if backend == 'jit':                  # the frozen geometry holds at 140 nm only
+            compiled = jax.jit(gradient)(jnp.asarray(140.0))
+            assert float(compiled) == pytest.approx(first(140.0), rel=1e-12)
+            with pytest.raises(refusal, match='first order'):
+                jax.jit(hessian)(jnp.asarray(140.0))
+            return
+        assert first(140.0) == pytest.approx(_conv_difference(material), rel=RELATIVE)
+        if metal:
+            with pytest.raises(refusal, match='first order'):
+                second(140.0)
+        else:
+            assert second(140.0) == pytest.approx(_difference(first, 140.0, 1e-3), rel=RELATIVE)
 
 
 def test_a_lossless_metal_no_longer_divides_by_zero():
