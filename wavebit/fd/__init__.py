@@ -135,12 +135,14 @@ be differentiated with a concrete prebuilt plan. Extrusion axes, rotation angles
 and a prism's vertex count remain static. The
 range contains the whole body. Traced scenes may contain multiple ranged bodies when
 their reserved supports plus interpolation halos are pairwise disjoint. Every structure
-needs a range and concrete isotropic lossless material, with Dipole sources,
-Record/Field monitors and no initial field. All reserved halos must clear the domain
-boundaries and absorbers. Runtime guards check every body's actual sizes, containment, polygon
-simplicity/orientation and constitutive stability; they do not establish continuum
-convergence. See the C6 sections of
-``docs/fd-subpixel-occupancy.md``.
+needs a range and concrete isotropic lossless material, and there is no initial field.
+Every source (Dipole, PlaneWave, TFSF) and monitor (Record, Field, Flux, Diffraction,
+FarField) is admitted; the two cell layers where a PlaneWave or TFSF normalisation or a
+Diffraction plane reads its one plain medium must lie outside every traced body's reserved
+support. All reserved halos must clear the domain boundaries and absorbers. Runtime guards
+check every body's actual sizes, containment, polygon simplicity/orientation and
+constitutive stability; they do not establish continuum convergence. See the C6 sections
+of ``docs/fd-subpixel-occupancy.md``.
 
 A Cylinder or unturned Box standing flush on a smoothed, unturned Box face uses
 ``Structure(junction='split')`` by default: it layers the substrate below the

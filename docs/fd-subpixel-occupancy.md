@@ -2195,3 +2195,184 @@ freezers; no golden was rewritten. Source identity, counts and runner timings
 are retained in `studies/results/fdtd_multi_shape_grad_validation.json`.
 The sequential runner is `studies/fdtd_multi_shape_grad_validation.py`; raw
 outputs remain under `studies/results/fdtd_multi_shape_grad_controls/`.
+
+### Geometry derivatives under plane-wave illumination (C6, 2026-10-01)
+
+Traced ranged bodies now accept every source and monitor family a `Scene`
+admits: `PlaneWave` and axis-aligned `TFSF` illumination beside `Dipole`,
+and `Flux`, `Diffraction` and `FarField` readouts beside `Record` and
+`Field`. A metasurface cell is the motivating case: a ranged pillar under
+a Bloch plane wave, optimised for its transmitted flux or a diffraction
+order, or a ranged scatterer inside a TFSF box, optimised for its
+scattering cross-section or far field. All earlier conditions remain:
+every structure is a ranged Sphere, Cylinder, Box or Prism with concrete
+isotropic lossless material, reserved halos are pairwise disjoint and
+clear of the domain faces and absorbers, there is no initial field, and
+the plan is built from concrete geometry first.
+
+**Why the families are admissible.** Every source sheet, TFSF surface,
+closed flux box and far-field box already keeps clear of each structure's
+*support* (`sources._plane_wave_term`, `_check_scatterer`,
+`monitors._clear_of_structures`, `farfield_checks`), and a ranged body's
+support is its whole reservation, so these refusals hold for every
+geometry in the range rather than just the seed. A Flux plane and a Field
+sample read the fields alone; a plane through a body is as valid traced as
+it is concrete. Every result is post-processing in the backend's arrays
+after the scan; stage 3's gate 8 already differentiates those routes with
+respect to material leaves.
+
+**What remained geometry-dependent, and the new certificate.** The
+plane-wave algebra reads one plain medium on two cell layers
+(`_post.medium_at`): a PlaneWave or TFSF normalisation either side of its
+column's entry plane (`_assemble._incident_split`; for a PlaneWave the same
+pair a Diffraction monitor checks at its sheet), and a Diffraction plane at
+its own pair. `medium_at` asks a shape's own fill of a layer only where the
+shape's support reaches it. `shape_ranges.plane_media` lists those pairs
+from the plan's column terms and the scene's Diffraction monitors, and
+`planning_scene` refuses a traced scene in which any traced body's support
+reaches one, naming the reader, the layers and the support. Concrete
+partners are not refused: they are read at their current geometry on both
+sides of the solve. The existing PlaneWave sheet door tests the sheet's
+cells `(k, k + 1)` for a `-z` wave, while its normalisation reads
+`(k - 1, k)`; a support ending at `k - 1` therefore passed the sheet door
+and is now refused for a traced body. A TFSF box with a body outside its
+shell but level with its entry face is the TFSF analogue: the concrete scene
+plans and its normalisation refuses only when asked after the run, whereas
+the traced one is refused before any step. A FarField box reads the pair at
+its low x face, but its own door already requires every support strictly
+inside the box with a cell to spare, so that pair is never in a support and
+is not listed. As defence in depth `_post.layer_share`, the only place fills
+are read on the host for a medium, refuses a shape with traced leaves
+instead of converting them with `numpy`, which would drop a Torch forward
+tangent silently.
+
+The source and monitor allowlist in `planning_scene` was removed rather
+than widened: `Scene` itself admits only these families, so a widened list
+could not refuse anything and a mutation of it would survive. The
+`test_fd_sphere_grad.py` preflight test no longer lists a Flux monitor among
+its refused cases.
+
+**Measurements** (`studies/fdtd_traced_illumination_probe.py`, results in
+`studies/results/fdtd_traced_illumination_probe.json`). Two families, each
+objective normalised by the source's own incident intensity so that the
+certified medium reads are on every route:
+
+| Family | Scene | Leaves | Objectives |
+| --- | --- | --- | --- |
+| `pw` | 12 x 12 x 42 cells, `dx = .05`, Bloch cell, 25 degree p PlaneWave at `phi = 30` (complex run), eight-cell PMLs, 600 steps | Cylinder radius `.12`, height `.3` | transmitted Flux plane / incident intensity, transmitted zero order, reflected zero order (sums over three wavelengths) |
+| `tfsf` | 38-cubed open scene, 12-cell TFSF box, `-z` x-polarised, 500 steps | turned Box sizes `.26, .22, .24` | scattered Flux box / incident intensity (a cross-section), FarField intensity at three directions |
+
+A lone body's centre is not a leaf: every objective is a power, invariant
+under translation in the continuum, and an initial smoke run measured the
+pillar's centre-x derivative at about `1e-4` against `0.13` for its radius.
+A relative budget cannot judge such a residue. That smoke run was not
+logged.
+
+Central differences on NumPy against JAX reverse mode, largest relative
+Jacobian error:
+
+| Step | `pw` | `tfsf` |
+| --- | --- | --- |
+| `1e-4` | `2.020e-6` | `5.819e-7` |
+| `1e-5` | `2.020e-8` | `5.822e-9` |
+| `3e-6` | `1.820e-9` | `5.162e-10` |
+| `1e-6` | `1.221e-8` | `4.419e-11` |
+
+The `pw` valley is at `3e-6` (cancellation below it); `tfsf` still falls as
+`h^2` at `1e-6`. The regression uses those steps and keeps the existing
+`2e-6` relative budget with zero absolute allowance. JAX and Torch reverse
+Jacobians differ by at most `1.11e-15` (`pw`) and `5.55e-17` (`tfsf`); the
+smallest Jacobian entry is `0.0285`. A traced Torch run's final fields
+differ from the concrete NumPy run by at most `6.47e-14` of the peak
+(`fdtd_traced_illumination_fields.json`).
+
+**Physical consistency is a separate question.** A lossless cell conserves
+energy per wavelength, `T + R = 1`, and its derivatives must then satisfy
+`dT + dR = 0`. The regression scenes are deliberately short and use thin
+(eight-cell, `allow_thin`) PMLs, so they test the derivative route, not the
+physics: summed over the three wavelengths, `T + R` is `2.9972` there. The
+`settled` mode reruns the pillar for 6000 or 20000 steps and differentiates
+the zero orders by NumPy central differences at the regression step:
+
+| Incidence | PML cells | Band `df` | Steps | Reflect-side decay | max `|T + R - 1|` | max `|dT + dR| / |dT|` |
+| --- | --- | --- | --- | --- | --- | --- |
+| oblique | 8 | .15 | 6000 | `1.58e-2` | `3.72e-4` | 2.66 |
+| oblique | 8 | .15 | 20000 | `5.14e-3` | `4.87e-4` | 1.9 |
+| oblique | 24 | .15 | 6000 | `1.76e-2` | `2.20e-4` | 7.19 |
+| oblique | 8 | .05 | 6000 | `1.81e-7` | `4.59e-4` | 0.214 |
+| oblique, planes and PMLs `.5` further out | 8 | .05 | 6000 | `1.03e-7` | `4.11e-4` | 0.173 |
+| oblique | 24 | .05 | 6000 | `1.75e-7` | `8.92e-7` | `1.01e-3` |
+| normal | 16 | .15 | 6000 | `3.59e-8` | `5.25e-7` | `3.36e-3` |
+
+Two effects account for the failures. First, the `df = .15` band at fixed
+Bloch `k_par` keeps the oblique reflect side ringing (decay `1.6e-2` after
+6000 steps with either PML); narrowing the band to `.05` settles it to
+`1.8e-7`. That the cause is the band's content near the light line is a
+hypothesis the change supports; it was not isolated further. Second, the
+eight-cell PML: settled, the energy residual stays near `4e-4` and is
+unchanged by moving the planes and absorbers half a wavelength further out,
+while the default 24-cell PML brings it to `8.9e-7` and closes `dT + dR` to
+0.1 per cent of `dT`. The diagnostic
+`studies/results/fdtd_traced_illumination_controls/reflux_diagnostic.py`
+(log beside it) shows residuals up to `5.9e-4` at normal incidence with
+eight cells, and the zero orders agree with independent flux planes to
+`2e-5` in every case, so the residual is the solve's own balance with that
+absorber, not the order algebra. With no pillar,
+an oblique or a normal cell reads `R0` below `1e-32` and `|T0 - 1|` below
+`1.7e-7` (`fdtd_traced_illumination_empty_6000_df0.05.json`): the sheet
+itself is exact, and the column carries the PML's return of the incident
+wave. A design objective needs a settled run with an adequate absorber; the
+derivative is exact for whatever discrete run is asked.
+
+**Regressions** (`tests/test_fd_traced_illumination_grad.py`, 5 functions,
+7 cases). Both families compare the JAX and Torch reverse Jacobians and the
+values with NumPy central differences; the Torch case also asserts that
+every objective keeps its graph and checks `torch.func.jvp`. The certificate
+tests plan concrete scenes and refuse the traced ones: a PlaneWave
+normalisation pair `(40, 41)` reached by a pillar support ending at 40, a
+Diffraction pair `(18, 19)` reached by a ball support starting at 19, the
+TFSF entry pair `(25, 26)` reached by a body beside the box, and admit a
+concrete partner reaching a pair and supports ending exactly at a read
+layer. The last test refuses a forward-mode dual radius in `layer_share`.
+
+**Source-mutation witnesses** (`studies/fdtd_traced_illumination_mutations.py`,
+records in `studies/results/fdtd_traced_illumination_controls/witnesses.json`).
+All ten failed by assertion or a missing refusal, and each restored the
+source bytes exactly: detaching the diffraction order power and the closed
+flux box (both caught by the graph assertion), dropping Torch forward
+tangents in `_spec.torch_carried` (caught by the `jvp` comparison while
+reverse mode still passes), skipping the column, TFSF and Diffraction
+media, checking concrete partners, the two off-by-one boundaries of the
+support test, and removing the `layer_share` guard.
+
+**Attempts kept and lost.** The first `measure` run computed every number
+above but wrote its JSON to a path relative to the wrong working directory
+and failed at the end; its log was deleted before it was examined for
+retention, and the run was repeated from the repository root. That second
+run (`probe_measure_first.log` and `.json`) used the source before the
+allowlist was removed. The `measure` and `fields` modes were then run again
+at the final fd source (SHA-256
+`6656a663f267b5d811f0935fe74febb45fa20fa0910c4bd5c8b5d2c5071a25a2`, by the
+validation helper's hash) and reproduced every value, difference and
+Jacobian bit for bit (`probe_measure.log`, `probe_fields.log`). The first
+`settled` launch failed on a syntax error in an edited newline literal; its
+log is `probe_settled_attempt1_syntax.log`. The settled and empty-cell runs
+are concrete NumPy solves, which this change does not reach.
+
+**Validation.** A targeted run of the new file with the sphere, cylinder,
+box, prism and multi-body gradient files, the PlaneWave, Diffraction,
+FarField, monitor-door and stage-3 gradient files and the documentation
+contract passed 490 of 491 cases (653.16 seconds); the one failure was this
+section citing the diagnostic by a partial path, which the documentation
+contract refuses. The full path is cited now and the contract passed all 65
+checks (`docs_check.log`). Final validation used fd source SHA-256
+`6656a663f267b5d811f0935fe74febb45fa20fa0910c4bd5c8b5d2c5071a25a2`. The
+full fd/docs tier collected 2674 cases and exited 0 with 2666 passed and 8
+skipped (2136.16 seconds). The separate slow tier collected and passed all
+80 cases, exit 0 (1132.23 seconds). Reported totals match collection, and
+neither tier reported INTERNALERROR or a worker crash. The four read-only
+freezers reproduced all 143/288/140/570 committed arrays bit for bit; no
+golden was rewritten. Counts and timings are in
+`studies/results/fdtd_traced_illumination_validation.json`; the runner is
+`studies/fdtd_traced_illumination_validation.py` and the raw logs are under
+`studies/results/fdtd_traced_illumination_controls/`.

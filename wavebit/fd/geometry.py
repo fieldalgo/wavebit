@@ -741,13 +741,15 @@ class Sphere(Shape):
     using a plan built from concrete geometry first. One or more ranged Sphere, Cylinder,
     Box and Prism bodies may be differentiated together when all reserved supports,
     including their interpolation halos, are pairwise disjoint. Every structure needs a
-    range and concrete isotropic lossless material. Sources must be Dipoles, monitors must
-    be Record/Field, and no initial field is allowed. Every full interpolation halo must
-    stay inside the domain and clear of absorbing layers, including for an unturned Box.
-    Runtime guards mark out-of-range or under-resolved geometry
-    unstable and return NaN fields. Traced reports leave geometry measurements unavailable.
-    Without a range, radius and centre remain static. The derivative is that of the discrete
-    solver; it is piecewise smooth, not a guarantee of continuum sensitivity or convergence.
+    range and concrete isotropic lossless material, and no initial field is allowed. Every
+    source and monitor family is admitted, provided the cell layers where a PlaneWave or TFSF
+    normalisation or a Diffraction plane reads its plain medium stay outside every traced
+    body's reserved support. Every full interpolation halo must stay inside the domain and
+    clear of absorbing layers, including for an unturned Box. Runtime guards mark
+    out-of-range or under-resolved geometry unstable and return NaN fields. Traced reports
+    leave geometry measurements unavailable. Without a range, radius and centre remain
+    static. The derivative is that of the discrete solver; it is piecewise smooth, not a
+    guarantee of continuum sensitivity or convergence.
 
     **What a sphere may not meet: six doors of C2 and C4.** All six are
     ``wavebit/fd/_lower/checks.py::check_smoothed``, in the order ``wavebit/fd/__init__.py``

@@ -101,8 +101,9 @@ def test_traced_preflight_requires_a_certified_scene_and_plan():
     s = current.structures[0]
     invalid = [current.replace(structures=(s, fd.Structure(
                    fd.Region(size=(.1,)*3, center=(.6, .6, .6)), fd.Material(eps=2.)))),
-               current.replace(initial=fd.InitialField(E=lambda x,y,z: (x*0,y*0,z*0))),
-               current.replace(monitors=(fd.Flux('f', plane=fd.Plane(z=.4), wavelengths=(3.,)),))]
+               current.replace(initial=fd.InitialField(E=lambda x,y,z: (x*0,y*0,z*0)))]
+    # A Flux monitor was the third case until plane-wave sources and frequency-domain
+    # readouts were admitted (tests/test_fd_traced_illumination_grad.py).
     for bad in invalid:
         with pytest.raises(ValueError, match='one isolated ranged sphere'):
             planning_scene(bad, p)

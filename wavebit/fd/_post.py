@@ -409,7 +409,19 @@ def layer_share(shape, grid, P, k):
     six components' Yee points in the layer: none anywhere is ``'absent'``, all of it across the
     whole layer is ``'full'``, anything else two media. Both ends are read against
     ``checks._CLIP_ROUNDOFF``, the exact clip's own round-off.
+
+    The fill is read on the host, so a shape whose geometry carries a derivative is refused
+    rather than read through ``numpy``, which would drop a Torch forward tangent silently.
+    ``shape_ranges.plane_media`` keeps every layer a traced run reads outside such a shape's
+    support, so the public paths never arrive here with one.
     """
+    from ._lower.shape_ranges import leaves
+    from .geometry import _shape_traced
+    if any(_shape_traced(v) for v in leaves(shape)):
+        raise ValueError(
+            f'The medium of cell layer {k} across {"xyz"[P]} depends on a traced '
+            f'{type(shape).__name__}; a plane-wave medium is read from concrete geometry '
+            'only. Keep the plane outside the body\'s range and its one-cell margin.')
     body = shape.body()
     if body is None:
         full = all(shape.uniform_along(a, (0, grid.n[a]), grid) for a in range(3) if a != P)

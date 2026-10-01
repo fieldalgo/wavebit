@@ -75,6 +75,15 @@ def planning_scene(scene, plan):
     All materials and unchanged scene inputs are rechecked on the host. Each structure
     needs a range, including concrete partners. Interacting or nested material interfaces
     and geometry-dependent sources/monitors remain outside this certificate.
+
+    Every source and monitor family a Scene admits has static placement. Plane-wave
+    illumination (PlaneWave, TFSF) and the frequency-domain readouts (Flux, Diffraction,
+    FarField) are admitted beside Dipole, Record and Field because their own doors already
+    keep each sheet, box face and closed surface clear of every structure's support, which
+    for a ranged body is its whole reservation, and a Flux plane or Field sample reads the
+    fields alone. What remains geometry-dependent is the one plain medium the plane-wave
+    algebra reads at a source's entry plane and a Diffraction plane (``_post.medium_at``);
+    those cell layers must lie outside every traced body's support (:func:`plane_media`).
     """
     if not traced(scene):
         return scene
@@ -84,19 +93,14 @@ def planning_scene(scene, plan):
                          'concrete geometry before differentiation.')
     refuse_mismatch(scene, plan)
     from ..materials import Material, as_material
-    from ..sources import Dipole
-    from ..monitors import Record, Field
     from .._spec import static_float
     if (len(scene.structures) != len(plan._shape_seeds)
             or any(not isinstance(s.shape, (Sphere, Cylinder, Box, Prism))
                    or s.shape.range is None for s in scene.structures)
-            or scene.initial is not None
-            or any(not isinstance(s, Dipole) for s in scene.sources)
-            or any(not isinstance(m, (Record, Field)) for m in scene.monitors)):
+            or scene.initial is not None):
         raise ValueError(f'A traced {where} supports one isolated ranged {where.lower()} '
                          'or multiple ranged Sphere/Cylinder/Box/Prism bodies with disjoint '
-                         'interpolation halos, '
-                         'Dipole sources, Record/Field monitors and no initial field.')
+                         'interpolation halos, and no initial field.')
     for material in (as_material(scene.background), *(s.material for s in scene.structures)):
         if type(material) is not Material:
             raise ValueError(f'A traced {where} requires concrete isotropic lossless Material.')
@@ -143,7 +147,49 @@ def planning_scene(scene, plan):
                     dimensions['height'] = height[0]
             structure = structure.replace(shape=shape.replace(**dimensions))
         structures.append(structure)
+    for axis, cells, label in plane_media(scene, plan):
+        for i, structure in enumerate(scene.structures):
+            if not any(_shape_traced(v) for v in leaves(structure.shape)):
+                continue                    # concrete partners are read at their current values
+            lo, hi = structure.shape.support(plan.grid)[axis]
+            if any(lo <= k < hi for k in cells):
+                raise ValueError(
+                    f'{label} reads one plain medium in the cell layers {cells} across '
+                    f'{"xyz"[axis]}, and the reserved support of the traced structures[{i}] '
+                    f'(cells {lo}..{hi - 1}) reaches them: the medium there would move with '
+                    'the geometry. Keep that plane outside every traced body\'s range and '
+                    'its one-cell margin.')
     return scene.replace(structures=tuple(structures))
+
+
+def plane_media(scene, plan):
+    """``[(axis, cells, label), ...]``: each cell-layer pair ``_post.medium_at`` will read.
+
+    A PlaneWave or TFSF normalisation reads the two layers either side of its column's entry
+    plane (``_assemble._incident_split``), which for a PlaneWave is also the sheet layer pair
+    a Diffraction monitor checks; a Diffraction monitor reads its own plane's pair.
+    ``medium_at`` asks a shape's own fill of a layer only where that shape's support reaches
+    it, so a layer outside every traced support is decided by concrete geometry alone.
+
+    A FarField box also reads the pair at its low x face (``monitors.farfield_checks``), but
+    the same check requires every structure's support strictly inside the box with a cell to
+    spare, so that pair is never in a support and is not listed here. ``_post.layer_share``
+    still refuses a traced shape if a later rule ever lets one reach a read layer.
+    """
+    from ..monitors import Diffraction
+    from .monitors import diffraction_layout
+    grid = plan.grid
+    out = []
+    for term in plan.terms:
+        if getattr(term, 'kind', None) in ('PlaneWave', 'TFSF'):
+            entry = int(round((term.plane_E - grid.low[term.axis]) / grid.dx))
+            out.append((term.axis, (entry - 1, entry),
+                        f'{term.kind}({term.name!r}) normalisation'))
+    for m in scene.monitors:
+        if isinstance(m, Diffraction):
+            layout, _ = diffraction_layout(m, scene, grid)
+            out.append((layout.P, (layout.k - 1, layout.k), f'Diffraction({m.name!r})'))
+    return out
 
 
 def validate(scene, plan):
