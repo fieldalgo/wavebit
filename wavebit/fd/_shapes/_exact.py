@@ -276,18 +276,32 @@ def _ball_corner(a, b, c, radius, xp):
     (:func:`_arc_integral`, :func:`_cubic_integral`, :func:`_wedge_integral`), and the four
     pieces are summed between limits clamped to ``[0, min(c, R)]``, so an empty regime
     contributes exactly zero rather than being branched away.
+
+    **An empty regime's limit is a constant zero, not ``min(0, c)``.** The value is the same,
+    but at ``c = 0`` -- a box face through the centre plane on the integration axis -- the
+    clamp ties two zeros, and ``minimum`` hands half the derivative to each side on JAX and
+    on Torch. ``F_c(a, b, 0)`` is the cross-section's area at ``t = 0``; with the tie, every
+    regime that is empty there contributed half of a derivative it does not have. Measured on
+    a ball of radius .22 at ``dx = .1``: per-voxel centre derivatives up to 2.2 against a
+    central difference of 0.41, and the energy derivative of a sphere centred on a half-node
+    plane read 28.7 (JAX) against 20.5 (``docs/fd-subpixel-occupancy.md``, the centre tie).
+    A regime that is present has a positive limit, so ``min(limit, 0)`` picks ``c`` without a
+    tie and its derivative, one, is the true one.
     """
     a = xp.minimum(a, radius)
     b = xp.minimum(b, radius)
     c = xp.minimum(c, radius)
     ka = _root((radius - a) * (radius + a), xp)
     kb = _root((radius - b) * (radius + b), xp)
+    zero = xp.zeros_like(c)
     # sqrt(R^2-a^2-b^2) = sqrt((ka-b)(ka+b)). Carry the same ka into the regime boundary
     # and its antiderivatives, so their shared endpoint is a subtraction of equal lengths.
-    rect = xp.minimum(_root((ka - b) * (ka + b), xp), c)
-    both = xp.minimum(xp.minimum(ka, kb), c)
-    one = xp.minimum(xp.maximum(ka, kb), c)
+    corner = _root((ka - b) * (ka + b), xp)
+    rect = xp.where(corner > 0, xp.minimum(corner, c), zero)
+    shorter = xp.minimum(ka, kb)
+    both = xp.where(shorter > 0, xp.minimum(shorter, c), zero)
     lesser, outer = xp.minimum(a, b), xp.maximum(ka, kb)
+    one = xp.where(outer > 0, xp.minimum(outer, c), zero)
 
     def two_chords(z):
         return .5 * (a * _arc_integral(z, ka, xp) + b * _arc_integral(z, kb, xp)
@@ -302,6 +316,19 @@ def _ball_corner(a, b, c, radius, xp):
             + (two_chords(both) - two_chords(rect))
             + (one_chord(one) - one_chord(both))
             + (_PI / 4) * (_cubic_integral(c, radius, xp) - _cubic_integral(one, radius, xp)))
+
+
+def _fold(v, xp):
+    """``(s, |v|)`` with ``s = +1`` where ``v >= 0``, spelt ``s v + 0`` rather than ``abs(v)``.
+
+    The same number to the bit: ``s v`` is ``|v|`` exactly, and ``+ 0.`` turns the ``-0.0`` a
+    ``v = -0.0`` leaves into ``+0.0``. The derivative differs at ``v = 0``, the only place it
+    can: ``abs`` gives 0 on Torch (1 on JAX), ``s v`` gives ``s = +1`` on both. An odd extension
+    ``s F(|v|)`` has the even derivative ``F'(|v|)``, which is ``F'(0)`` at zero, not zero.
+    """
+    one = xp.ones_like(v)
+    s = xp.where(v >= 0, one, -one)
+    return s, s * v + 0.
 
 
 def clipped_ball_volume(cx, cy, cz, radius, x0, x1, y0, y1, z0, z1, xp):
@@ -331,18 +358,20 @@ def clipped_ball_volume(cx, cy, cz, radius, x0, x1, y0, y1, z0, z1, xp):
     ``R/dx = 3`` and 8.2e-12 at 32;
     ``tests/test_fd_shapes.py::test_a_sphere_fills_a_voxel_exactly_and_this_is_what_that_replaced``
     carries the table.
+
+    **The fold is** :func:`_fold`, not ``xp.abs`` -- :func:`clipped_disc_area`'s "signed branch
+    chosen at zero so a centre derivative survives on the axes", which this function first
+    missed.
     """
     corners = ((x0 - cx, x1 - cx), (y0 - cy, y1 - cy), (z0 - cz, z1 - cz))
     total = None
     for i in (0, 1):
         for j in (0, 1):
             for k in (0, 1):
-                a, b, c = corners[0][i], corners[1][j], corners[2][k]
+                (sa, a), (sb, b), (sc, c) = (_fold(v, xp) for v in (
+                    corners[0][i], corners[1][j], corners[2][k]))
                 sign = 1. if (i + j + k) % 2 == 1 else -1.
-                one = xp.ones_like(a)
-                signs = (xp.where(a >= 0, one, -one) * xp.where(b >= 0, one, -one)
-                         * xp.where(c >= 0, one, -one))
-                term = sign * signs * _ball_corner(xp.abs(a), xp.abs(b), xp.abs(c), radius, xp)
+                term = sign * (sa * sb * sc) * _ball_corner(a, b, c, radius, xp)
                 total = term if total is None else total + term
     zero = xp.zeros_like(total)
 

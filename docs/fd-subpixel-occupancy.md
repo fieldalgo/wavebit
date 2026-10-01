@@ -2511,3 +2511,92 @@ rewritten. Counts and timings are in
 `studies/results/fdtd_traced_partner_validation.json`; the runner is
 `studies/fdtd_traced_partner_validation.py` and the raw logs are under
 `studies/results/fdtd_traced_partner_controls/`.
+
+
+### The sphere's centre tie (C6 fix, 2026-10-01)
+
+The defect recorded in the previous section is fixed. A sphere's fill is
+`_exact.clipped_ball_volume`, an odd extension `sgn(a) sgn(b) sgn(c)
+F(|a|, |b|, |c|)` of the corner primitive summed over a voxel's eight
+corners, `a, b, c` a corner's offsets from the centre. The fill is a smooth
+function of the centre even where a voxel face contains a centre plane
+(`a = 0`): the extension's derivative `F_a(|a|)` is even and continuous.
+Reverse mode broke it there twice.
+
+* **The fold.** `xp.abs(a)` has derivative 0 at zero on Torch (1 on JAX), so
+  Torch dropped `F_a(0)`. `_exact._fold` now returns `s a + 0` with
+  `s = +1` at zero, the "signed branch chosen at zero" `clipped_disc_area`
+  has always used for the same reason. The number is `|a|` to the bit;
+  `+ 0` turns a `-0.0` into `+0.0`.
+* **The empty regimes' limits.** `_ball_corner` integrates four regimes
+  along the third axis between limits clamped by `min(limit, c)`. At
+  `c = 0` an empty regime's zero limit tied `c = 0`, and `minimum` gave
+  half the derivative to each side on both backends, adding half of a
+  derivative the regime does not have. An empty regime's limit is now a
+  constant zero (`where(limit > 0, min(limit, c), 0)`), the same number; a
+  present regime has a positive limit and picks `c` without a tie.
+
+Measured (`studies/fdtd_sphere_center_tie_probe.py`, before on a git
+archive of a8eda4e0, after on the fix; `fdtd_sphere_center_tie_{fill,run}_
+{before,after}.json`):
+
+| Check | Before: Torch / JAX | After: Torch / JAX |
+| --- | --- | --- |
+| weighted fills of voxels whose faces hold the centre plane (x, y, z, all three, and the two-axis corner case), largest relative error over radius and centre | `12.4` / `4.09` | `7.4e-10` / `7.4e-10` |
+| lone sphere in a PEC box, centre on half-node planes in x, y and z | `176` / `0.635` | `3.5e-8` / `3.5e-8` |
+| the same, centre on a half-node plane in z only | `2.00` / `0.401` | `2.5e-10` / `2.5e-10` |
+| centre off every plane; on node planes | `1.5e-9` / `1.5e-9` | unchanged |
+
+At the node-plane centres the fix changes nothing measurable in this scene;
+the error appeared where Ex, Ey and Hz voxels (node points) have faces
+through the centre. The fill check's first point set placed a face at
+exactly the radius from the centre, a true jump of the second derivative:
+there the central difference converged to reverse mode only linearly in the
+step, from both one-sided slopes
+(`studies/results/fdtd_sphere_center_tie_controls/first_offsets_fd_steps.py`
+and its log), so the points moved to `.37` and `.41` cell offsets. A ranged
+Cylinder with its axis on half-node or node planes already agreed to
+`3.6e-8` (`cylinder_tie_check.py` and its log): its disc clip carries the
+signed branch.
+
+Every volume is unchanged to the bit: the regression compares
+`clipped_ball_volume` with the pre-fix formula, kept verbatim in the test, on
+300 random ball/box pairs and the tie configurations (faces through each
+centre plane and all three, offsets of exactly the radius, `-0.0`), on NumPy,
+JAX and Torch.
+
+**Regressions** (`tests/test_fd_sphere_center_tie.py`, 4 functions, 19
+cases): volumes to the bit on three backends; `_fold` against `abs` to the
+bit, with derivative `+1` at zero on JAX and Torch; the fill derivatives in
+five tie configurations on both backends; and the lone sphere centred on
+half-node planes, all three or z alone, on both backends, with the existing
+`2e-6` budget against central differences.
+
+**Witnesses** (`studies/fdtd_sphere_center_tie_mutations.py`). Nine
+mutations, all failed by assertion and restored byte for byte: folding with
+`abs` (caught by the fold test, a fill case and the lone sphere), keeping
+`-0.0`, tying each of the three regime limits again (two caught by the `z`
+fill case, the lone sphere for the first), and an empty rectangle limit that
+reads `c` (the bit test). The first witness run ended on a survivor: tying
+the one-chord limit passed the `z` case, because the regime with both chords
+gone is cut only by a voxel whose far corner passes the radius on two axes
+at once, and every such voxel of the first point sets is empty. The `corner`
+case was added for it (before: `1.03` Torch, `4.09` JAX), and the runner's
+logs from that attempt are under `attempt1/`.
+
+**Validation.** Final fd source SHA-256
+`2b2ed31683618f986dda84fd07ddd57a4c41d1bdee6d52e9571090d2038843a0`; the
+`run` measurement after the fix was repeated at it and reproduced its
+earlier values exactly. A targeted run of the new file with the shapes,
+occupancy, sphere-clip, sphere, multi-body, partner, illumination, stencil,
+symmetric-stencil, triplet, constitutive and star-lift files and the
+documentation contract passed 520 cases and skipped 8 (806.37 seconds). The
+full fd/docs tier collected 2702 cases and exited 0 with 2694 passed and 8
+skipped (2121.25 seconds); the separate slow tier collected and passed all 80
+cases, exit 0 (1110.58 seconds). Reported totals match collection, with no
+INTERNALERROR or worker crash. The four read-only freezers reproduced all
+143/288/140/570 committed arrays bit for bit; no golden was rewritten.
+Counts and timings are in
+`studies/results/fdtd_sphere_center_tie_validation.json`, the runner is
+`studies/fdtd_sphere_center_tie_validation.py`, and the raw logs are under
+`studies/results/fdtd_sphere_center_tie_controls/`.
