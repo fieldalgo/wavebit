@@ -260,6 +260,17 @@ wavebit at `6fe4b7b` (`rough` is the largest second difference of `T`, the signa
 fmmax's own second difference on the same window is 0.0045 (square) and 0.0104 (circle): the
 floored closing is smoother than either reference at equal truncation.
 
+The disks at the two truncations where the pole was worst, floored against unfloored, with wavebit
+at `6fe4b7b`:
+
+| Harmonics | Window (nm) | max `R + T` before | after | rough before | after | RMS `T` vs fmmax circle, before | after |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 441 | 740–830, 2 nm | 0.9318 (absorption bump 748–764) | 0.8701 | 0.0563 | 0.0053 | 0.111 | 0.056 |
+| 625 | 745–775, 1 nm | 45.26 | 0.8652 | 31.3 | 0.0016 | — | — |
+
+(fmmax's square truncation at 441 has `R + T = 16` on this window and is no reference; the
+circle at 437 is the one that settled, and the floored closing halves the distance to it.)
+
 ## The passive closings, and why they were not taken
 
 Each of the last three rows is passive by theorem — its anti-Hermitian part is a sum of
