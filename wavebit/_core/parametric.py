@@ -162,7 +162,7 @@ from . import overlap as _overlap
 from .backend import array_namespace, as_array, checked_float, j1, jinc, sinc
 from .domain import as_material
 from .enums import near_match, quantity_note
-from .factorization import ConvMatrices, check_normal_grid
+from .factorization import ConvMatrices, check_normal_grid, _nvf_assemble
 from .lattice import periods_of, is_axis_aligned, reduced_basis, reduction_transform, sample_grid
 from .overlap import OVERLAP_TOL_REL
 from .geometry import StaleGeometryError
@@ -2611,42 +2611,56 @@ def to_conv_mat_parametric_nvf(xp, shapes, background, half_width_u, half_width_
         xp, shapes, (shape_nvf_grid_size, shape_nvf_grid_size), lattice, half_width_u, half_width_v, dtype,
         plan=plan, **({} if nvf_projector is None else {'nvf_projector': nvf_projector}))
     return nvf_from_coeffs(xp, eps_c, inv_eps_c, *coeffs[:3], half_width_u, half_width_v,
-                           c_yx=coeffs[3] if len(coeffs) == 4 else None)
+                           c_yx=coeffs[3] if len(coeffs) == 4 else None,
+                           eps_bound=largest_eps(xp, [background] + [s['material'] for s in shapes],
+                                                 dtype))
 
 
-def nvf_from_coeffs(xp, eps_c, inv_eps_c, c_xx, c_xy, c_yy, half_width_u, half_width_v, c_yx=None):
+def largest_eps(xp, materials, dtype):
+    """``max |eps|`` over ``materials`` (numbers or :class:`Material`), as an ``xp`` scalar.
+
+    The bound :func:`~wavebit._core.factorization._nvf_assemble` keeps the inverse rule under.
+    Read through :func:`~wavebit._core.domain.as_material` like every other material here, so
+    a bare number and a ``Material`` agree, and through :func:`as_array` so a traced or
+    grad-tracking permittivity keeps its graph.
+    """
+    mags = [xp.abs(as_array(xp, as_material(m, 'layer material').epsilon, dtype=dtype))
+            for m in materials]
+    out = mags[0]
+    for m in mags[1:]:
+        out = xp.maximum(out, m)
+    return out
+
+
+def nvf_from_coeffs(xp, eps_c, inv_eps_c, c_xx, c_xy, c_yy, half_width_u, half_width_v,
+                    c_yx=None, eps_bound=None):
     """Assemble the five convolution matrices from coefficient grids — the NVF tensor itself.
 
     The last step of every non-raster NVF path, and the same step for all of them: what differs
     between the parametric, boundary and level-set routes is *how* the five coefficient grids were
-    obtained, never what is done with them. Kept in one place so a change to the tensor cannot
-    reach one path and miss another — the raster path's equivalent is
-    :func:`wavebit._core.factorization.nvf_conv_matrices`.
+    obtained, never what is done with them. The closing itself is
+    :func:`wavebit._core.factorization._nvf_assemble`, shared with the raster path
+    (:func:`wavebit._core.factorization.nvf_conv_matrices`), so a change to the tensor cannot
+    reach one path and miss another -- until the inverse-rule floor this function carried its own
+    copy of the formula, and the two had to be changed in step.
 
     ``eps_c`` / ``inv_eps_c`` are the ``eps`` and ``1/eps`` coefficients on the doubled
     reciprocal grid; ``c_xx`` / ``c_xy`` / ``c_yy`` those of ``normal_x**2``, ``normal_x*normal_y``, ``normal_y**2``.
+    ``eps_bound`` is the layer's largest ``|eps|`` (see :func:`largest_eps`); ``None`` leaves the
+    inverse rule unfloored, which is the floored closing bit for bit only on a layer of passive
+    materials with every ``Re eps > 0`` (see ``INVERSE_RULE_BOUND``).
     Returns ``(eps_xx, eps_yy, epz_i, eps_xy, eps_yx)`` — ``solve_conv``'s parameter order,
     as every builder does; see "Slot order" in :mod:`wavebit._core.factorization`.
     """
     ep_dir = conv_matrix_2d(xp, eps_c, half_width_u, half_width_v)
     ep_inv = conv_matrix_2d(xp, inv_eps_c, half_width_u, half_width_v)
 
-    if c_yx is not None:
-        from .factorization import _nvf_assemble
-        matrices = [conv_matrix_2d(xp, f, half_width_u, half_width_v)
-                    for f in (c_xx, c_xy, c_yy, c_yx)]
-        return _nvf_assemble(xp, ep_dir, ep_inv, *matrices)
-    delta_ep = ep_dir - xp.linalg.inv(ep_inv)
-
     C_xx = conv_matrix_2d(xp, c_xx, half_width_u, half_width_v)
     C_xy = conv_matrix_2d(xp, c_xy, half_width_u, half_width_v)
     C_yy = conv_matrix_2d(xp, c_yy, half_width_u, half_width_v)
 
-    eps_xx = ep_dir - 0.5 * (delta_ep @ C_xx + C_xx @ delta_ep)
-    eps_yy = ep_dir - 0.5 * (delta_ep @ C_yy + C_yy @ delta_ep)
-    eps_xy = -0.5 * (delta_ep @ C_xy + C_xy @ delta_ep)          # == eps_yx (symmetric)
-
-    return ConvMatrices(eps_xx, eps_yy, xp.linalg.inv(ep_dir), -eps_xy, -eps_xy)
+    C_yx = None if c_yx is None else conv_matrix_2d(xp, c_yx, half_width_u, half_width_v)
+    return _nvf_assemble(xp, ep_dir, ep_inv, C_xx, C_xy, C_yy, C_yx, eps_bound=eps_bound)
 
 
 def laurent_from_coeffs(xp, eps_c, half_width_u, half_width_v):

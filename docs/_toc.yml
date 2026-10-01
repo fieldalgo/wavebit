@@ -44,6 +44,7 @@ subtrees:
       - file: oblique-lattice
       - file: nvf-normal-methods
       - file: nvf-upsampling
+      - file: nvf-metal-inverse-rule
       - file: normal-field-known-limits
       - file: fourier-truncation-shape
     - caption: Factorization and materials

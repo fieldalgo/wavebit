@@ -913,6 +913,7 @@ def conv_mats(xp, regions, background, half_width_u, half_width_v, lattice, shap
                                   dtype=cdtype), cdtype)
     eps_c = xp.where(is_dc, eps_bg, zero)
     inv_c = xp.where(is_dc, 1.0 / eps_bg, zero)
+    eps_bound = xp.abs(eps_bg)
 
     for material, polys in regions:
         eps_s = xp.astype(xp.asarray(as_material(material, 'shape material').epsilon,
@@ -922,6 +923,7 @@ def conv_mats(xp, regions, background, half_width_u, half_width_v, lattice, shap
             ft = ft + xp.astype(polygon_ft(xp, V, KY, KX, lattice), cdtype)
         eps_c = eps_c + (eps_s - eps_bg) * ft
         inv_c = inv_c + (1.0 / eps_s - 1.0 / eps_bg) * ft
+        eps_bound = xp.maximum(eps_bound, xp.abs(eps_s))
 
     if laurent:
         from .parametric import laurent_from_coeffs
@@ -931,7 +933,7 @@ def conv_mats(xp, regions, background, half_width_u, half_width_v, lattice, shap
         if len(projector_coeffs) != 4:
             raise ValueError('the complex shape projector needs xx, xy, yy, yx coefficients')
         return nvf_from_coeffs(xp, eps_c, inv_c, *projector_coeffs[:3],
-                               half_width_u, half_width_v, c_yx=projector_coeffs[3])
+                               half_width_u, half_width_v, c_yx=projector_coeffs[3], eps_bound=eps_bound)
 
     all_loops = [V for _, polys in regions for V in polys]
     if transform is None:
@@ -947,7 +949,8 @@ def conv_mats(xp, regions, background, half_width_u, half_width_v, lattice, shap
         interface_plan=interface_plan,
         anchor=_paint_centroid(xp, segment_data, interface_plan) if segment_data is not None else None)
     return nvf_from_coeffs(xp, eps_c, inv_c, *coeffs[:3], half_width_u, half_width_v,
-                           c_yx=coeffs[3] if len(coeffs) == 4 else None)
+                           c_yx=coeffs[3] if len(coeffs) == 4 else None,
+                           eps_bound=eps_bound)
 
 
 # ================================================== one painted layer, end to end

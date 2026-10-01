@@ -82,8 +82,11 @@ def s4_direct(order, shape=None):
 
 
 def direct_from_coeffs(xp, eps_c, inv_eps_c, c_xx, c_xy, c_yy,
-                       half_width_u, half_width_v, c_yx=None):
-    """Keep the exact material series, with Laurent's rule in both transverse slots."""
+                       half_width_u, half_width_v, c_yx=None, eps_bound=None):
+    """Keep the exact material series, with Laurent's rule in both transverse slots.
+
+    ``eps_bound`` is accepted to match :func:`wavebit._core.parametric.nvf_from_coeffs` and
+    ignored: the inverse rule it bounds is not used here."""
     ep_dir = P.conv_matrix_2d(xp, eps_c, half_width_u, half_width_v)
     zero = xp.zeros_like(ep_dir)
     return F.ConvMatrices(ep_dir, ep_dir, xp.linalg.inv(ep_dir), zero, zero)

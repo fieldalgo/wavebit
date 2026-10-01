@@ -105,7 +105,7 @@ worked (``tests/test_conv_matrices_accessor.py``). The builders are what disagre
 import math
 from typing import NamedTuple
 
-from .backend import array_namespace, carries_autodiff
+from .backend import array_namespace, as_array, carries_autodiff
 from .enums import DEFAULT_NESTING, Nesting, nesting_of
 from .geometry import StaleGeometryError
 
@@ -1713,7 +1713,308 @@ def _nvf_projector(xp, normal_x, normal_y, half_width_u, half_width_v, dtype, de
     return series(p_xx), series(p_xy), series(p_yy), series(p_yx)
 
 
-def _nvf_assemble(xp, ep_dir, ep_inv, C_xx, C_xy, C_yy, C_yx=None):
+#: Ceiling on the inverse-rule matrix ``<1/eps>^-1``, as a multiple of the layer's largest
+#: ``|eps|``: no singular value of ``<1/eps>`` is allowed below ``1 / (INVERSE_RULE_BOUND * max|eps|)``.
+#:
+#: **Never binds on a layer of passive dielectrics**, lossy or not. The numerical range of
+#: ``<1/eps>`` lies in the convex hull of the values ``1/eps`` takes, so its smallest singular
+#: value is at least the hull's distance from the origin. For passive materials (``Im eps >= 0``)
+#: with every ``Re eps > 0``, each ``1/eps`` lies at least ``1 / max|eps|`` from the origin, at
+#: minus its loss angle, so within a sector at most 90 degrees wide: the hull stays at least
+#: ``cos(45 deg) / max|eps| = 0.71 / max|eps|`` from it whatever the losses, and at least
+#: ``cos(22.5 deg) / max|eps| = 0.92 / max|eps|`` while no loss angle exceeds 45 degrees. The
+#: floor sits at ``0.5 / max|eps|``. A layer that mixes gain (``Im eps < 0``) with loss is not
+#: covered: its sector can open towards 180 degrees, and a disk of ``0.2 + 2i`` in ``0.2 - 2i``
+#: brings the smallest singular value down to ``0.21 / max|eps|`` and clips 6 of 121 modes. A
+#: layer whose ``1/eps`` changes sign -- a metal beside a dielectric -- is the one where the
+#: hull passes the origin, and there the floor is what keeps the tensor finite and honest; see
+#: :func:`_nvf_assemble` for what it does to gold. 2 rather than 1 because the inverse rule's
+#: effective permittivity legitimately exceeds ``max|eps|`` a little for modes almost entirely
+#: inside the metal (a thin dielectric gap in series with a metal reads *more* negative than the
+#: metal): on the gold hole array at 807 nm and 441 harmonics a bound of 1 clips 356 of the 441
+#: singular values, 2 clips 6 and 3 clips 4.
+INVERSE_RULE_BOUND = 2.0
+
+
+def _floor_singular_values(xp, B, floor):
+    """``B`` with every singular value below ``floor`` raised to it; left and right vectors kept.
+
+    On a two-material layer ``<1/eps>`` is a normal matrix, so this is exactly a clip on the
+    *magnitude* of each eigenvalue with its phase untouched -- the inverse's effective
+    permittivity for that mode keeps its loss angle and loses only its excursion.
+
+    **Bit-transparent when nothing is below the floor.** A matrix rebuilt from its own SVD is
+    not the matrix it was -- for ``eps * I`` the factors are an arbitrary unitary pair, and the
+    product comes back with 1e-16 of noise -- and a uniform layer must factorize to *exactly*
+    ``eps * I`` (``test_a_uniform_cell_factorizes_to_exactly_eps_times_identity``). So ``B``
+    itself is returned where the floor did not bind; ``xp.where`` on a scalar condition keeps
+    this traceable.
+
+    **The derivative is the floored matrix's own, without the SVD's.** The SVD's derivative has
+    ``1 / (s_i - s_j)`` in it, and the singular values of ``<1/eps>`` are as degenerate as the
+    layer is uniform -- exactly so on ``eps * I``, exponentially close on the two clusters of a
+    two-material layer -- so a tangent through the factors is NaN or noise. The factors are
+    therefore taken from a detached ``B``, and the derivative of ``U max(S, floor) V^H`` is
+    supplied by :func:`_floor_derivative` in closed form, with no division by the difference of
+    two singular values on the same side of the floor: as a JAX ``custom_jvp`` rule (forward and
+    reverse mode alike) and as a PyTorch ``autograd.Function`` with a ``backward`` and a ``jvp``
+    (reverse mode and ``torch.autograd.forward_ad`` alike). A PyTorch dual has ``requires_grad``
+    False, so :func:`_forward_tangent` is asked as well as :func:`carries_autodiff`; without it a
+    forward-mode derivative went down the plain branch and came back with the floored part's
+    tangent zero, silently. ``torch.func`` transforms, for which the Function has no rule, are
+    refused by name (:data:`_FUNCTORCH`) where the floor binds. Where the floor does not bind,
+    the ``where`` returns ``B`` and the derivative is precisely what it was before the floor
+    existed. Where it binds the derivative is exact. The lift held as a bare constant instead
+    would return the *unfloored* closing's derivative at the floored point: measured 39x too
+    large and of the wrong sign in ``d(R + T)/d(diameter)`` on the gold disks at 121 harmonics.
+
+    **First derivatives only, where it binds.** :func:`_floor_derivative` is linear in ``dB`` with
+    coefficients from the detached factors, so differentiating it again would drop the floor's
+    curvature and return a partial Hessian, with no error. So a second derivative through a
+    layer where the floor binds raises, as the modal operator's does (``modal_gradient``):
+    ``NotImplementedError`` on JAX, ``RuntimeError`` on PyTorch for ``create_graph=True`` and for
+    either mixed order (a ``forward_ad`` tangent carried through a backward pass, or a backward
+    pass through one). Where the floor does not bind -- every passive dielectric layer -- the map
+    is the identity and its Hessian is exact. Under ``jax.jit`` whether the floor binds is not
+    known when the trace is built, so there a second derivative through any NVF layer is refused.
+
+    **A kink where a singular value crosses the floor.** The matrix is continuous there, its
+    derivative is not: that mode's gain steps from 0 (held at the floor) to 1 (its own). A
+    singular value exactly at the floor counts as unclipped, but which side of the floor a
+    computed singular value lands on at a crossing is decided by rounding, so either one-sided
+    slope can come back there. **On a lossless metal the matrix itself jumps** where a clipped
+    eigenvalue of ``<1/eps>`` -- real, ``<1/eps>`` being Hermitian -- changes sign: its magnitude
+    is held at the floor and its sign follows the eigenvalue's, from ``-floor`` to ``+floor``. A
+    magnitude floor on a real eigenvalue cannot be continuous through zero; any loss turns the
+    jump into a steep but continuous turn.
+    """
+    U, s, Vh = xp.linalg.svd(_no_gradient(B))
+    floor = as_array(xp, floor, dtype=s.dtype, device=_device(xp, s))
+    clip = s < _no_gradient(floor)
+    lifted = (U * xp.astype(xp.maximum(s, _no_gradient(floor)), U.dtype)[..., None, :]) @ Vh
+    if not (carries_autodiff(B) or carries_autodiff(floor)
+            or _forward_tangent(B) or _forward_tangent(floor)):
+        return xp.where(xp.any(clip), B + (lifted - B), B)
+    if 'torch' in xp.__name__:
+        # Eager, so whether the floor binds is known here, and a layer where it does not is
+        # handed back untouched: its derivatives, of any order, are the identity's.
+        if not bool(xp.any(clip)):
+            return B
+        dual = _forward_tangent(B) or _forward_tangent(floor)
+        try:
+            return _torch_floor()(B, floor, U, s, Vh, lifted, clip, dual)
+        except RuntimeError as error:
+            if 'setup_context' not in str(error):
+                raise
+            raise NotImplementedError(_FUNCTORCH) from error
+    return xp.where(xp.any(clip), _jax_floor()(B, floor, U, s, Vh, lifted, clip), B)
+
+
+def _forward_tangent(x):
+    """Whether ``x`` is a PyTorch forward-mode dual: ``torch.autograd.forward_ad``'s, which
+    ``torch.func.jvp`` and ``jacfwd`` make too. A dual has ``requires_grad`` False, so
+    :func:`carries_autodiff` -- which asks about reverse mode -- does not see it, and the plain
+    branch would hand the floored part a zero tangent: on the gold disks at 81 harmonics a
+    directional derivative of a read-out of ``eps_conv_matrices()`` read -0.538854 where reverse
+    mode and a central difference read -27.626431, with no error."""
+    if not type(x).__module__.startswith('torch'):
+        return False
+    from torch.autograd import forward_ad
+    return forward_ad.unpack_dual(x).tangent is not None
+
+
+#: What a second derivative through a floored layer raises with.
+_SECOND_ORDER = ('the NVF inverse-rule floor supports first order only where it binds (a metal '
+                 'beside a dielectric; under jax.jit, every NVF layer, since whether it binds is '
+                 'not known when the trace is built): its curvature is not implemented')
+
+#: What a ``torch.func`` transform through a floored layer raises with.
+_FUNCTORCH = ('the NVF inverse-rule floor is not differentiable under torch.func transforms '
+              '(grad, jvp, jacrev, jacfwd, vmap of a derivative) where it binds, a metal beside a '
+              'dielectric: its torch.autograd.Function has no functorch rule. Use torch.autograd '
+              'instead -- backward(), torch.autograd.grad or torch.autograd.forward_ad -- which '
+              'it supports to first order')
+
+_JAX_FLOOR = None
+_TORCH_FLOOR = None
+
+
+def _jax_floor():
+    """The floored matrix ``B + (lifted - B)`` as a ``jax.custom_jvp`` whose tangent is ``dB``
+    plus :func:`_floor_derivative`, and which refuses to be differentiated twice where the floor
+    binds. ``custom_jvp`` rather than ``custom_vjp`` so that forward mode (``jax.jvp``,
+    ``jax.jacfwd``) keeps working; reverse mode transposes the same linear tangent."""
+    global _JAX_FLOOR
+    if _JAX_FLOOR is None:
+        import jax
+        import jax.numpy as jnp
+
+        @jax.custom_jvp
+        def first_order_only(value, binds):
+            return value
+
+        @first_order_only.defjvp
+        def _refuse(primals, tangents):
+            value, binds = primals
+            try:
+                binds = bool(binds)
+            except Exception:       # an abstract trace: whether it binds is not known
+                binds = True
+            if binds:
+                raise NotImplementedError(_SECOND_ORDER)
+            return value, tangents[0]
+
+        @jax.custom_jvp
+        def floored(B, floor, U, s, Vh, lifted, clip):
+            return B + (lifted - B)
+
+        @floored.defjvp
+        def _tangent(primals, tangents):
+            B, floor, U, s, Vh, lifted, clip = primals
+            dB, dfloor = tangents[:2]
+            # Called for what its own derivative does: it is differentiated only when this rule
+            # is, which is a second derivative of the floored matrix.
+            binds = jnp.any(clip)
+            first_order_only(B, binds)
+            first_order_only(floor, binds)
+            return (B + jax.lax.stop_gradient(lifted - B),
+                    dB + _floor_derivative(jnp, dB, dfloor, U, s, Vh, floor, clip))
+
+        _JAX_FLOOR = floored
+    return _JAX_FLOOR
+
+
+def _torch_floor():
+    """The floored matrix as a ``torch.autograd.Function``: ``B + (lifted - B)`` forward;
+    backward the vector-Jacobian product of ``dB`` plus :func:`_floor_derivative`, taken by
+    autograd on that linear map itself so that it follows PyTorch's complex convention exactly;
+    and ``jvp`` that linear map, so ``torch.autograd.forward_ad`` gets the same exact first
+    derivative as reverse mode. Refuses ``create_graph=True``, as ``modal_gradient``'s
+    ``Variation`` does, and any backward pass through a node built from a forward-mode dual
+    (``dual``): that is PyTorch's two mixed second orders, a tangent carried through the backward
+    and a backward pass through the tangent, each of which reaches this backward and would
+    differentiate the linear map above with its detached factors -- a partial Hessian. Under
+    ``torch.func`` it raises, having no functorch rule; the caller turns that into
+    :data:`_FUNCTORCH`."""
+    global _TORCH_FLOOR
+    if _TORCH_FLOOR is None:
+        import torch
+
+        class Floored(torch.autograd.Function):
+            @staticmethod
+            def forward(ctx, B, floor, U, s, Vh, lifted, clip, dual):
+                ctx.save_for_backward(U, s, Vh, floor, clip)
+                ctx.save_for_forward(U, s, Vh, floor, clip)
+                ctx.dual = dual
+                return B + (lifted - B)
+
+            @staticmethod
+            def jvp(ctx, dB, dfloor, *constants):
+                U, s, Vh, floor, clip = ctx.saved_tensors
+                floor = floor.detach()
+                if dB is None:
+                    dB = torch.zeros_like(U)
+                if dfloor is None:
+                    dfloor = torch.zeros_like(floor)
+                return dB + _floor_derivative(array_namespace(U), dB, dfloor, U, s, Vh, floor, clip)
+
+            @staticmethod
+            def backward(ctx, cotangent):
+                if torch.is_grad_enabled():
+                    raise RuntimeError(_SECOND_ORDER + '; create_graph=True is not supported')
+                if ctx.dual:
+                    raise RuntimeError(_SECOND_ORDER + '; a backward pass through a floor built '
+                                                       'from a forward-mode dual (a mixed second '
+                                                       'order) is not supported')
+                U, s, Vh, floor, clip = ctx.saved_tensors
+                floor = floor.detach()
+                xp = array_namespace(U)
+                with torch.enable_grad():
+                    dB = torch.zeros_like(cotangent, requires_grad=True)
+                    dfloor = torch.zeros_like(floor, requires_grad=True)
+                    tangent = dB + _floor_derivative(xp, dB, dfloor, U, s, Vh, floor, clip)
+                    grad_B, grad_floor = torch.autograd.grad(tangent, (dB, dfloor), cotangent,
+                                                             allow_unused=True)
+                if grad_floor is None:
+                    grad_floor = torch.zeros_like(floor)
+                return (grad_B if ctx.needs_input_grad[0] else None,
+                        grad_floor if ctx.needs_input_grad[1] else None,
+                        None, None, None, None, None, None)
+
+        _TORCH_FLOOR = Floored.apply
+    return _TORCH_FLOOR
+
+
+def _floor_derivative(xp, dB, dfloor, U, s, Vh, floor, clip):
+    """``d(U max(S, floor) V^H) - dB`` for the tangents ``dB`` and ``dfloor``, the factors fixed.
+
+    Linear in ``dB`` and ``dfloor``, with coefficients from the SVD ``U, s, Vh`` of ``B`` (and
+    ``clip = s < floor``). With ``X = U^H dB V`` and ``g = max(s, floor)``, the derivative of the
+    floored matrix is ``U Y V^H`` with
+
+    .. code-block:: text
+
+        Y   = 1/2 [ D1 o (X + X^H) + D2 o (X - X^H) ] + diag(clip) dfloor
+        D1_ij = (g_i - g_j) / (s_i - s_j)       g'(s_i) on the diagonal: 1, or 0 where clipped
+        D2_ij = (g_i + g_j) / (s_i + s_j)
+
+    The SVD's first-order perturbation (Townsend 2016, real case; Wan & Zhang 2019 for the
+    complex phase term on the diagonal) splits ``X``: its Hermitian part moves the singular
+    values and the *difference* of the left and right rotations, scaled by ``1 / (s_i - s_j)``;
+    its anti-Hermitian part the *sum*, scaled by ``1 / (s_i + s_j)``. Rebuilding with ``g(s)``
+    in place of ``s`` multiplies those back by ``g_i - g_j`` and ``g_i + g_j``, which is all
+    ``D1`` and ``D2`` are. With ``g(s) = s`` both are 1 and ``Y = X``.
+
+    **Finite at degenerate singular values.** ``D1`` is the constant 1 between two unclipped
+    values and 0 between two clipped ones, so no difference of two singular values on the same
+    side of the floor is ever divided by; a pair straddling the floor is separated by it, and
+    its ``D1`` lies in ``[0, 1]``. ``D2`` divides by ``s_i + s_j``, which vanishes only between
+    two zero singular values of an exactly singular ``B`` -- a lossless metal at its pole. There
+    the floored matrix has no derivative: the clipped mode's left and right vectors have no
+    relative phase, and ``D2`` grows as ``floor / s`` on the way in. The entry is NaN rather than
+    an invented finite value, the rule ``modal_gradient`` keeps at a collision; the forward pass
+    does not read this term, so it stays finite.
+
+    **The floor moves with the permittivity.** ``floor = 1 / (INVERSE_RULE_BOUND * max|eps|)``,
+    and each clipped mode carries it: that is the ``diag(clip) dfloor`` term, the whole of a
+    material derivative's route through the floor.
+
+    References: J. Townsend, *Differentiating the Singular Value Decomposition* (2016);
+    Z.-Q. Wan and S.-X. Zhang, *Automatic Differentiation for Complex Valued SVD*,
+    arXiv:1909.02659 (2019).
+    """
+    g = xp.maximum(s, _no_gradient(floor))
+    s_i, s_j = s[..., :, None], s[..., None, :]
+    g_i, g_j = g[..., :, None], g[..., None, :]
+    clip_i, clip_j = clip[..., :, None], clip[..., None, :]
+    ones = xp.ones_like(s_i - s_j)
+    straddle = clip_i != clip_j
+    d1 = xp.where(straddle, (g_i - g_j) / xp.where(straddle, s_i - s_j, ones),
+                  xp.where(clip_i & clip_j, ones - ones, ones))
+    s_sum = s_i + s_j
+    d2 = xp.where(clip_i | clip_j, (g_i + g_j) / xp.where(s_sum > 0, s_sum, ones), ones)
+    d2 = xp.where(s_sum > 0, d2, ones * math.nan)
+
+    X = xp.conj(xp.matrix_transpose(U)) @ dB @ xp.conj(xp.matrix_transpose(Vh))
+    Xh = xp.conj(xp.matrix_transpose(X))
+    d1, d2 = xp.astype(d1, X.dtype), xp.astype(d2, X.dtype)
+    rotation = 0.5 * ((d1 - 1) * (X + Xh) + (d2 - 1) * (X - Xh))
+    raised = xp.where(clip, dfloor, xp.zeros_like(s))
+    return U @ rotation @ Vh + (U * xp.astype(raised, U.dtype)[..., None, :]) @ Vh
+
+
+def _no_gradient(x):
+    """``x`` with autodiff cut: ``detach`` where it exists, ``stop_gradient`` on JAX, else ``x``."""
+    detach = getattr(x, 'detach', None)
+    if detach is not None:
+        return detach()
+    if type(x).__module__.startswith('jax'):
+        import jax
+        return jax.lax.stop_gradient(x)
+    return x
+
+
+def _nvf_assemble(xp, ep_dir, ep_inv, C_xx, C_xy, C_yy, C_yx=None, eps_bound=None):
     """Close the NVF factorization from the direct/inverse-rule matrices and the projector.
 
     With ``E = <eps>`` (direct rule), ``A = <1/eps>^-1`` (inverse rule) and ``Delta = E - A``::
@@ -1722,8 +2023,58 @@ def _nvf_assemble(xp, ep_dir, ep_inv, C_xx, C_xy, C_yy, C_yx=None):
         eps_yy = E - 1/2 (Delta @ C_yy + C_yy @ Delta)
         eps_xy = eps_yx = -1/2 (Delta @ C_xy + C_xy @ Delta)
 
-    The 1/2-symmetrization is essential: the plain product ``Delta @ C`` is not Hermitian,
-    giving complex ``q^2`` and gross energy-conservation violation on curved boundaries.
+    The 1/2-symmetrization keeps the tensor Hermitian on a lossless layer, which is what makes
+    energy conservation exact there (1e-12) rather than asymptotic: the plain product
+    ``Delta @ C`` that S4 and fmmax write is not Hermitian, and on a TiO2 nanofin at 121
+    harmonics it gives ``R + T = 0.998799`` where this gives ``0.999999``.
+
+    **On a metal the inverse rule has a pole, and ``eps_bound`` is what closes it.** Where
+    ``1/eps`` changes sign across a boundary, ``<1/eps> = (1/eps_m) I + (1/eps_d - 1/eps_m) K``
+    with ``K = <chi_d>`` the compression of the dielectric's indicator, whose eigenvalues
+    ``kappa`` fill ``[0, 1]`` at any finite truncation. The eigenvalue
+    ``1/eps_m + (1/eps_d - 1/eps_m) kappa`` passes the origin at
+    ``kappa* = eps_d / (eps_d - eps_m)`` (0.039 for gold in air at 807 nm), and there the inverse
+    rule answers with ``1 / Im(1/eps_m)`` -- about 400 for gold, whose ``|eps|`` is 25. That is
+    the series-capacitor pole of a laminate with that filling: a plasmon of the *smeared*
+    interface which the sharp one does not have. It moves with truncation, and it sits where
+    ``Re eps_m(wavelength) = eps_d (1 - 1/kappa_j)`` for some eigenvalue ``kappa_j`` of ``K`` --
+    on a gold disk array those wavelengths are 845 / 755 / 783 nm at 121 / 625 / 1225 harmonics,
+    against spurious features that had been measured at 852 / 760 / 790 nm. Through the Jordan
+    product above a term of size ``x`` on a mode with ``<v|C|v> = c`` contributes as little as
+    ``-x (sqrt(c) - c) / 2`` to the tensor's anti-Hermitian part, so the pole was also gain: the
+    most negative eigenvalue of that part was -16.94 on the gold hole array and -25.4 on the
+    disks, and ``R + T`` reached 1.27 and 1.13. ``eps_bound`` -- the layer's largest ``|eps|`` --
+    lets :func:`_floor_singular_values` keep ``||A||`` below ``INVERSE_RULE_BOUND * eps_bound``,
+    which touches the modes at that pole (6 of 441 on the hole array), nothing else on a metal,
+    and nothing at all on a passive dielectric, where the tensor is bit-identical to what it was
+    (a dielectric layer that mixes gain with loss is not covered; see ``INVERSE_RULE_BOUND``).
+
+    Measured on the same matrices through ``solve_conv``. Gold nanohole array in air over glass,
+    807 nm, 441 harmonics: ``R + T`` 1.0017 -> 0.9404 and the anti-Hermitian part's most
+    negative eigenvalue -16.94 -> -1.76 (2026-10-01; 1.0019 and -16.95 at ``6fe4b7b``, where the
+    spectra were taken on 2026-09-27); over 796-840 nm the RMS distance of
+    ``T`` from fmmax's Jones-direct at the same square truncation 0.0094 -> 0.0015, the spike
+    at 806-808 nm gone (second difference of ``T`` 0.0084 -> 0.0011, fmmax's own 0.0045). Gold
+    disks in n = 1.5, 121 harmonics, 820-870 nm: 43 of 51 points above ``R + T = 1`` -> none,
+    maximum 1.1259 -> 0.8746; at 625 harmonics the same closing without the floor reached
+    45.26. Same disks at 776 nm / 441: 0.6745 -> 0.5719.
+
+    **What is left, and what was tried instead.** The floored tensor is not passive by theorem:
+    the residual -1.76 above is the Jordan product's, and ``R + T <= 1`` on a metal is measured
+    (0.958 at most over those windows), not proved. Three closings that *are* passive by
+    construction were measured against it on the same matrices and rejected. The congruence
+    closing ``T E T + C A C`` (``T = I - C``; its anti-Hermitian part is a sum of congruences of
+    two positive semidefinite matrices) needs ``C^2 = C`` to be consistent, which a truncated
+    projector series is not (``||C^2 - C|| = 0.25`` at every truncation tried): the a-Si
+    ellipse's ``P_yx`` went 0.28 -> 0.44 at 121 harmonics. Its dissipative part grafted onto
+    this closing's Hermitian part keeps the accuracy (0.0022 against fmmax above) but mis-scales
+    the loss wherever ``C`` is not a projector -- 1% of ``R`` on a painted *uniform* gold slab.
+    Laurent's ``<Im eps>`` as the dissipative part is exact on that slab and passive, and costs
+    4x on the metal (0.0058 against fmmax): the inverse rule's imaginary part is part of the
+    jump condition on gold, not decoration. The floor is what all four had in common wherever
+    they were smooth; the closing above is the most accurate of them. The experimental passive
+    closure in :mod:`wavebit._core.passive_nvf`, selected by no solve, was not among the four; it
+    inverts ``<1/eps>`` unfloored (see ``docs/nvf-metal-inverse-rule.md``).
 
     ``C_yx`` left ``None`` says the projector is symmetric, which is what ``P = n n^T`` is and
     what this path assumed outright until ``nvf_projector='circular'`` (see
@@ -1732,12 +2083,15 @@ def _nvf_assemble(xp, ep_dir, ep_inv, C_xx, C_xy, C_yy, C_yx=None):
     so the default path does one matmul pair rather than two and cannot drift from itself.
 
     ``ep_dir`` / ``ep_inv`` are the only inputs that depend on how the coefficients are
-    obtained, which is what lets the sampled and integrated builders share this step.
+    obtained, which is what lets the sampled, integrated and shape builders share this step.
 
     Returns the five matrices in the slot convention the 2D solve expects:
     ``(epx, epy, epz_i, epxy, epyx) = (eps_xx, eps_yy, inv(<eps>), -eps_xy, -eps_yx)`` --
     ``solve_conv``'s parameter order; see "Slot order" in this module's docstring.
     """
+    if eps_bound is not None:
+        ep_inv = _floor_singular_values(xp, ep_inv, 1.0 / (INVERSE_RULE_BOUND * eps_bound))
+
     delta_ep = ep_dir - xp.linalg.inv(ep_inv)
 
     eps_xx = ep_dir - 0.5 * (delta_ep @ C_xx + C_xx @ delta_ep)
@@ -2010,7 +2364,8 @@ def nvf_conv_matrices(xp, eps_matrix, normal_x, normal_y, half_width_u, half_wid
 
     return _nvf_assemble(xp, ep_dir, ep_inv,
                          *_nvf_projector(xp, normal_x, normal_y, half_width_u, half_width_v, C, dev,
-                                         magnitude=magnitude))
+                                         magnitude=magnitude),
+                         eps_bound=xp.max(xp.abs(eps_matrix)))
 
 
 def nvf_conv_matrices_integrated(xp, eps_comp, x, y, normal_x, normal_y, half_width_u, half_width_v,
@@ -2031,7 +2386,8 @@ def nvf_conv_matrices_integrated(xp, eps_comp, x, y, normal_x, normal_y, half_wi
 
     return _nvf_assemble(xp, ep_dir, ep_inv,
                          *_nvf_projector(xp, normal_x, normal_y, half_width_u, half_width_v, C, dev,
-                                         magnitude=magnitude))
+                                         magnitude=magnitude),
+                         eps_bound=xp.max(xp.abs(eps_comp)))
 
 
 def to_conv_mat_raster_nvf(structure, half_width_u, half_width_v, normal_field=None,
