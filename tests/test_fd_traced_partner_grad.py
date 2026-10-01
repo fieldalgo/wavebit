@@ -176,19 +176,22 @@ def junction_scene(radius=.2):
                                 fd.Structure(ball, fd.Material(eps=2.25))))
 
 
-def test_a_flush_junction_beside_a_traced_body_is_refused():
-    """The ball is certified clear of both junction partners, but the junction's signature
-    covers all scene geometry; the combination is refused before any step, by name."""
+def test_a_flush_junction_beside_a_traced_body_lowers_as_its_concrete_scene():
+    """The ball is certified clear of both junction partners. The junction's signature covers
+    all scene geometry, so it is compared through the concrete planning scene the plan was
+    built from (it was refused outright before tests/test_fd_traced_junction.py); the traced
+    lowering at another radius equals the concrete scene planned at that radius."""
     import torch
     p = quiet(fd.plan, junction_scene())
     assert len(p.junctions) == 1
-    traced = junction_scene(torch.tensor(.2, dtype=torch.float64, requires_grad=True))
+    traced = junction_scene(torch.tensor(.21, dtype=torch.float64, requires_grad=True))
     assert planning_scene(traced, p).structures[:2] == traced.structures[:2]
-    for call in (lambda: fd.lower(traced, p, 'torch'),
-                 lambda: quiet(fd.run, traced, 'torch', plan=p)):
-        with pytest.raises(ValueError, match=r'traced geometry beside a flush junction '
-                                             r'between concrete partners'):
-            call()
+    got = _lowered(traced, p, 'torch')
+    assert got['be'].requires_grad
+    concrete = junction_scene(.21)
+    want = quiet(fd.lower, concrete, quiet(fd.plan, concrete))
+    np.testing.assert_allclose(got['be'].detach().numpy(), want['be'], rtol=0,
+                               atol=128 * np.finfo(float).eps * np.max(abs(want['be'])))
 
 
 def beside_box(v=.2):

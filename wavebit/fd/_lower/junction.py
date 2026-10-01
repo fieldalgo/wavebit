@@ -329,24 +329,20 @@ def finish(scene, records):
 def refuse_mismatch(scene, plan):
     """The scene's flush pairs and rule are the plan's, checked in both directions.
 
-    A body whose geometry is traced (a ranged body under differentiation) is certified by
-    ``shape_ranges.planning_scene`` to keep its whole interpolation halo off every other
-    structure, so it is never one of a flush pair, and its pairs are not asked: ``_roles``
-    compares faces on the host, which a ``jax.jit`` tracer refuses. A flush junction between
-    concrete partners beside a traced body is refused outright: its signature covers all
-    scene geometry, and this certificate has not been extended to it.
+    A scene with traced geometry is compared through its concrete planning scene
+    (``shape_ranges.planning_scene``): each traced body at the plan's seed, every other input
+    as it is -- the scene the plan was built from -- so the signature and the flush pairs are
+    compared like for like, and no host test reads a traced length (``_roles`` compares faces
+    on the host, which a ``jax.jit`` tracer refuses). What the seed proves about the other
+    geometries in a range is the planning scene's certificate: a traced body keeps clear of
+    every other structure, or stands as the member of a recorded split junction whose rim,
+    far face and flush base it certifies throughout the range.
     """
     from .coefficients import materials_of
-    from .shape_ranges import leaves
-    from ..geometry import _shape_traced
-    moving = {i for i, s in enumerate(scene.structures)
-              if any(_shape_traced(v) for v in leaves(s.shape))}
+    from .shape_ranges import planning_scene, traced
+    if traced(scene):
+        scene = planning_scene(scene, plan)
     records = plan.junctions
-    if records and moving:
-        raise ValueError(f'structures{sorted(moving)} carry traced geometry beside a flush '
-                         'junction between concrete partners; that combination is not '
-                         'certified. Differentiate in a scene without the junction, or keep '
-                         'the junction scene concrete.')
     if records:
         signature = _signature(scene, plan.grid)
         if any(r.source != signature for r in records):
@@ -362,11 +358,56 @@ def refuse_mismatch(scene, plan):
             raise ValueError('JunctionMismatchRefused: the requested junction rule is absent '
                              'from the plan; rebuild it with fd.plan(scene).')
         for j in range(i):
-            if frozenset((i, j)) in recorded or i in moving or j in moving:
+            if frozenset((i, j)) in recorded:
                 continue
             if not isinstance(_roles(scene, plan.grid, i, j), str):
                 raise ValueError('JunctionMismatchRefused: a flush pair is absent from the '
                                  'plan; rebuild it with fd.plan(scene).')
+
+
+def moving(scene, record):
+    """Whether the record's standing body carries traced geometry in ``scene``."""
+    from .shape_ranges import leaves
+    from ..geometry import _shape_traced
+    return any(_shape_traced(v) for v in leaves(scene.structures[record.standing].shape))
+
+
+def live_write(rt, record, scene, grid, points):
+    """The record's write set, recomputed from the current geometry on backend arrays.
+
+    A traced pillar moves its rim through the reserved rows, so the plan's masks (taken from
+    the planning seed) are the wrong set for any other geometry. These are :func:`classify`'s
+    own predicates, read at every point of the rows instead of its pre-filtered ones: both
+    fills fractional (door 5's marking, whose distance pre-filter only skips points where a
+    fill cannot be fractional), or a base-side rim point -- above the face, outside the
+    substrate, cut by the pillar, nearest the base. ``shape_ranges.planning_scene`` certifies
+    the flush pair, the rim's clearance of the substrate's edges and the substrate's far
+    face for the whole range, and the runtime guard keeps the base on the face, so the other
+    tests :func:`classify` makes cannot change. For the planning seed this is the record's
+    own write mask (``tests/test_fd_traced_junction.py``).
+
+    One of those tests is left out. :func:`classify` keeps a Box's base points within half a
+    cell of the plane, to exclude the far cap, whose moment also points along the axis. The
+    rows reach at most three and a half cells past the plane, and the four-cell height floor
+    the runtime guard enforces keeps the far cap beyond them: a mutant widening that half
+    cell to one and a half survived every mask comparison (``fdtd_traced_junction_controls/
+    attempt1``), so the test cannot change a written point here.
+    """
+    from .._shapes import occupancy
+    from ..geometry import Cylinder
+    from .checks import _CLIP_ROUNDOFF as tol
+    face, pillar = scene.structures[record.face], scene.structures[record.standing]
+    fb, pb = face.shape.body(), pillar.shape.body()
+    alpha = occupancy(fb, points, grid.dx)[0]
+    fill = occupancy(pb, points, grid.dx)[0]
+    inside = _fractional(alpha) & _fractional(fill)
+    height = record.side*(points[..., record.axis]-record.plane)
+    if type(pillar.shape) is Cylinder:
+        base = record.side*pb.surface(points)[1][..., record.axis] < 0
+    else:
+        base = pb.exact_moment(points, grid.dx)[1][..., record.axis] > 0
+    base = base & (height > 0) & (alpha <= tol) & _fractional(fill) & ~inside
+    return inside | base
 
 
 def tables(rt, record, scene, points, ground, inside, owner, node=False):
@@ -397,7 +438,8 @@ def paint(rt, record, scene, plan, out, ground, component):
     points = rt.array(_points(plan.grid, box, 'E', component), 'float64')
     diagonal, _, _ = tables(rt, record, scene, points, ground,
                              record.inside[component], record.owner[component])
-    write = rt.array(np.array(record.write[component], copy=True))
+    write = (live_write(rt, record, scene, plan.grid, points) if moving(scene, record)
+             else rt.array(np.array(record.write[component], copy=True)))
     return _paste(xp, full, box, xp.where(write, 1/diagonal[component], full[view]))
 
 
@@ -410,13 +452,15 @@ def paint_nodes(rt, record, scene, plan, term, tensor, cross, held, ground):
         return tensor, cross, held
     record_view, view = _view(cut, record.rows), _view(cut, box)
     mask = record.write[(3,)+record_view]
-    if not mask.any():
+    traced = moving(scene, record)
+    if not traced and not mask.any():
         return tensor, cross, held
     points = rt.array(_points(plan.grid, cut, 'E', 3), 'float64')
     diagonal, off, inverse = tables(rt, record, scene, points, ground[view],
         record.inside[(3,)+record_view], record.owner[(3,)+record_view], node=True)
     local = tuple((lo-origin[0], hi-origin[0]) for (lo, hi), origin in zip(cut, box))
-    write = rt.array(np.array(mask, copy=True))
+    write = (live_write(rt, record, scene, plan.grid, points) if traced
+             else rt.array(np.array(mask, copy=True)))
     tensor = _paste(rt.xp, tensor, local,
                     rt.xp.where(write[None], diagonal, tensor[(slice(None),)+view]))
     cross = _paste(rt.xp, cross, local,

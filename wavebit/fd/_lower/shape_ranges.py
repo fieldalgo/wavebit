@@ -105,8 +105,16 @@ def planning_scene(scene, plan):
     support widened by the same interpolation cell must not share a cell with a traced
     body's halo, so nothing it paints or mixes reaches a cell whose coefficients move. Its
     material values must be concrete; a traced partner material is not certified here. A
-    flush junction between two partners is refused beside a traced body, by
-    ``junction.refuse_mismatch``, whose signature covers all scene geometry.
+    flush junction between two concrete partners beside a traced body is planned and lowered
+    as in a concrete scene; ``junction.refuse_mismatch`` compares it through this function's
+    concrete scene, the one the plan was built from.
+
+    **The one partner a traced body may touch** is the face it stands on in a recorded
+    junction (:func:`_certify_junction`): an unranged, concrete, unturned smoothed Box, under
+    the ``'split'`` rule. The junction's write set then moves with the rim, so it is
+    recomputed from the live geometry inside the record's static rows
+    (``junction.live_write``), and ``guard`` keeps the base on the face. A traced body is
+    never the face of a junction.
 
     Every source and monitor family a Scene admits has static placement. Plane-wave
     illumination (PlaneWave, TFSF) and the frequency-domain readouts (Flux, Diffraction,
@@ -189,11 +197,23 @@ def planning_scene(scene, plan):
         structures.append(structure)
     moving = {j: halo for j, halo in halos.items()
               if any(_shape_traced(v) for v in leaves(scene.structures[j].shape))}
+    standing = {}
+    for record in plan.junctions:
+        if record.face in moving:
+            raise ValueError(f'structures[{record.face}] carries traced geometry and is the '
+                             f'face structures[{record.standing}] stands on; a junction is '
+                             'differentiated through its standing body only. Keep the face '
+                             'concrete.')
+        if record.standing in moving:
+            _certify_junction(scene, plan, record, moving[record.standing])
+            standing[record.standing] = record.face
     for i, structure in enumerate(scene.structures):
         if ranged[i]:
             continue
         reach = tuple((lo-1, hi+1) for lo, hi in structure.shape.support(plan.grid))
         for j, halo in moving.items():
+            if standing.get(j) == i:
+                continue                    # the certified face of j's own junction
             if _overlap(reach, halo):
                 raise ValueError(
                     f'structures[{i}] ({structure.shape.describe()}), a concrete partner '
@@ -215,6 +235,49 @@ def planning_scene(scene, plan):
                     'the geometry. Keep that plane outside every traced body\'s range and '
                     'its one-cell margin.')
     return scene.replace(structures=tuple(structures))
+
+
+def _certify_junction(scene, plan, record, halo):
+    """What ``junction.classify`` proved of the seed, made to hold for the whole range.
+
+    The traced body stands on the face of an unranged, concrete, unturned smoothed Box (the
+    record says so for the seed; the shapes and the plane are static). Its rule must be
+    ``'split'``: a staircase owner is a static per-point choice. Its reserved halo and the
+    record's rows, together, must lie over the face's extent on both transverse axes with
+    every voxel's half cell -- so the rim never meets the substrate's edge -- and the face's
+    far side must lie a cell beyond both along the face normal, so no written or mixed voxel
+    reaches it. The base stays on the plane through ``guard``; with the four-cell height
+    floor, the pillar's far end stays outside the rows (at most 3.5 cells from the plane).
+    """
+    from .junction import SPLIT, TRANSVERSE
+    grid = plan.grid
+    face_index, j = record.face, record.standing
+    if record.rule != SPLIT:
+        raise ValueError(f'structures[{j}] carries traced geometry and stands flush with '
+                         f"junction={record.rule!r}; a traced standing body takes 'split' "
+                         'only, whose values are smooth in the geometry. Leave junction= out.')
+    # A ranged face never arrives here: two ranged bodies that touch share halo cells, which
+    # the pairwise rule above has already refused.
+    face = scene.structures[face_index].shape
+    lo = [min(a[0], b[0]) for a, b in zip(halo, record.rows)]
+    hi = [max(a[1], b[1]) for a, b in zip(halo, record.rows)]
+    for b in TRANSVERSE[record.axis]:
+        if not (face.low[b] <= grid.low[b] + (lo[b]-.5)*grid.dx
+                and face.high[b] >= grid.low[b] + (hi[b]+.5)*grid.dx):
+            raise ValueError(
+                f'The traced structures[{j}] stands on structures[{face_index}], but its '
+                f'reserved halo and junction rows (cells {lo[b]}..{hi[b]-1} along '
+                f'{"xyz"[b]}) reach past that face\'s edge: the rim could meet the edge '
+                'somewhere in the range. Widen the substrate or narrow the range.')
+    a = record.axis
+    far = face.low[a] if record.side == 1 else face.high[a]
+    cell = (far - grid.low[a]) / grid.dx
+    if lo[a] - 1 <= cell <= hi[a] + 1:
+        raise ValueError(
+            f'The traced structures[{j}] stands on structures[{face_index}], whose far face '
+            f'at {"xyz"[a]} = {far:g} lies within a cell of the reserved halo and junction '
+            f'rows (cells {lo[a]}..{hi[a]-1}); a voxel there would hold that face too. '
+            'Thicken the substrate.')
 
 
 def plane_media(scene, plan):
@@ -347,15 +410,27 @@ def guard(scene, plan, rt, previous):
     """Every ranged body's runtime geometry certificate, combined without host truth tests.
 
     A partner without a range is concrete and was checked on the host like any concrete
-    scene's structure; it has no range to be contained in.
+    scene's structure; it has no range to be contained in. A body standing in a recorded
+    junction must keep its base on the face's plane, to the flush test's own tolerance
+    (``junction._roles``): the junction's rows, rule and certificate assume it.
     """
     if not traced(scene):
         return previous
+    from .checks import _CLIP_ROUNDOFF
     valid = None
     for structure in scene.structures:
         if not ranged_body(structure.shape):
             continue
         current = _valid(structure.shape, plan, rt)
         valid = current if valid is None else valid & current
+    for record in plan.junctions:
+        shape = scene.structures[record.standing].shape
+        if not any(_shape_traced(v) for v in leaves(shape)):
+            continue
+        a = record.axis
+        extent = shape.height if isinstance(shape, Cylinder) else shape.size[a]
+        base = (rt.array(shape.center[a], 'float64')
+                - record.side * rt.array(extent, 'float64') / 2)
+        valid = valid & (rt.xp.abs(base - record.plane) <= _CLIP_ROUNDOFF * plan.dx)
     value = rt.constant(rt.xp.where(valid, rt.array(1., 'float64'), rt.array(float('nan'), 'float64')))
     return value if previous is None else previous * value

@@ -139,7 +139,7 @@ needs concrete isotropic lossless material, and there is no initial field. Concr
 partners without a range -- a cell-snapped Slab substrate running into a PML, a Region, an
 unranged body, a conductive or dispersive layer -- may stand beside them when each,
 widened by one cell, shares no cell with a traced body's halo and its material values are
-concrete; a flush junction among such partners is refused beside a traced body.
+concrete; a flush junction among such partners lowers as in a concrete scene.
 Every source (Dipole, PlaneWave, TFSF) and monitor (Record, Field, Flux, Diffraction,
 FarField) is admitted; the two cell layers where a PlaneWave or TFSF normalisation or a
 Diffraction plane reads its one plain medium must lie outside every traced body's reserved
@@ -154,7 +154,14 @@ pillar/background mixture. The standing body may instead request ``'staircase'``
 (the medium at each point) or ``'refuse'``. Materials must be isotropic, lossless,
 non-dispersive and non-magnetic; the junction rim must clear the substrate's edges.
 ``check`` prints the choice, its voxel counts and measured accuracy limitations.
-See ``docs/fd-subpixel-occupancy.md``, The junction.
+See ``docs/fd-subpixel-occupancy.md``, The junction. A ranged standing body may be traced
+under ``'split'`` -- the metasurface pillar's radius, sizes, height and transverse centre --
+while its substrate stays concrete and unranged: the junction's points are recomputed from
+the live geometry, the substrate's face must cover the reserved halo and junction rows to
+every voxel's edge, its far face must lie more than a cell beyond them, and the runtime
+guard keeps the base on the face (vary the height with the centre at ``plane + height/2``).
+A concrete ranged pillar's plan belongs to its geometry; differentiation reuses the seed
+plan, a concrete sweep plans each geometry.
 
 Stage 4's C4 adds the extruded bodies, smoothed the same way, and renames the cell-snapped box
 ``fd.Region`` so that ``fd.Box`` can be the body (one name per concept)::

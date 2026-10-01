@@ -2600,3 +2600,146 @@ Counts and timings are in
 `studies/results/fdtd_sphere_center_tie_validation.json`, the runner is
 `studies/fdtd_sphere_center_tie_validation.py`, and the raw logs are under
 `studies/results/fdtd_sphere_center_tie_controls/`.
+
+
+### A traced pillar standing on its substrate (C6, 2026-10-01)
+
+The metasurface case is now differentiable: a ranged `fd.Cylinder` or unturned
+`fd.Box` standing flush on the face of an unranged, concrete, unturned smoothed
+`fd.Box` substrate, under the default `junction='split'`. Its radius or sizes,
+its transverse centre and its height may be traced; the height is varied with
+the centre at `plane + height/2`, so that the base stays on the face. The
+substrate stays concrete.
+
+**The write set follows the rim.** The plan's junction record (`Plan.junctions`)
+holds masks taken from the planning seed, and a different radius moves rim
+points into and out of the junction. For a traced standing body,
+`junction.paint` and `junction.paint_nodes` replace the stored mask with
+`junction.live_write`: `classify`'s own predicates, read on backend arrays at
+every point of the record's static rows -- both fills fractional (door 5's
+marking, whose distance pre-filter skips only points where a fill cannot be
+fractional), or a base-side rim point. The values were already live
+(`junction.values`). The rows come from the range's support and do not move.
+One of `classify`'s tests is not repeated: it keeps a Box's base points within
+half a cell of the plane to exclude the far cap, and with the four-cell height
+floor the far cap never reaches the rows (at most 3.5 cells past the plane). A
+mutant widening that half cell to one and a half survived every mask
+comparison in the first witness run, so the test was removed from the live
+predicate rather than kept unreachable (`fdtd_traced_junction_controls/
+attempt1`).
+
+**The certificate for the range** (`shape_ranges._certify_junction`, called by
+`planning_scene` for each recorded junction whose standing body is traced):
+the rule must be `'split'` (a staircase owner is a per-point static choice);
+the substrate's face must cover the reserved halo and the junction rows to
+every voxel's edge on both transverse axes, so the rim cannot meet its edge
+anywhere in the range; and its far face must lie more than a cell beyond them
+along the face normal. The substrate is the one concrete partner the traced
+halo may then touch; every other partner keeps the one-cell rule. A traced
+body that is the *face* of a junction is refused, and a ranged face never gets
+that far, because two touching ranged bodies share halo cells. The runtime
+guard (`shape_ranges.guard`) adds the flush test's own tolerance,
+`|base - plane| <= _CLIP_ROUNDOFF dx`, to the geometry certificate: a centre
+moved 1e-6 off `plane + height/2` returns NaN coefficients and an unstable
+run, 1e-12 does not.
+
+`junction.refuse_mismatch` now compares a traced scene through
+`planning_scene`'s concrete scene, the one the plan was built from, so its
+signature and flush-pair search never read a traced length (`_roles` compares
+faces with host truth tests). That also admits a flush junction between two
+concrete partners beside a separate traced body, which the previous section
+refused; `tests/test_fd_traced_partner_grad.py` now checks that its traced
+lowering equals the concrete scene planned at the new radius.
+
+**A concrete sweep plans each geometry.** A ranged pillar's junction record
+carries its own geometry's counts, masks and signature, so `fd.run(scene,
+plan=p)` with concrete values at another geometry is refused by the skeleton,
+as before this change. Differentiation reuses the seed's plan; `jax.jit` of
+`fd.lower` compiled once for two geometries.
+
+**Measurements** (`studies/fdtd_traced_junction_probe.py`). The cell is the
+12 x 12 x 42 Bloch cell at `dx = .05` with eight-cell PMLs, a glass (2.1)
+substrate spanning the cell through the bottom PML, and an eps 2.25 pillar
+(Cylinder radius .12, height .3, centre x .011; or Box .23 x .21 x .3), under a
+normal s PlaneWave; the objectives are the transmitted zero order in the glass
+and the reflected one.
+
+* The live write set equals the plan's masks at the seed for both kinds with
+  the face a quarter cell above a node plane, on a node plane and on a
+  half-node plane -- the two ties are where `classify` writes base-side points
+  (up to 18 per family) -- in all four electric families
+  (`fdtd_traced_junction_masks_*.json`).
+* A traced Torch lowering and a 40-step run from the seed's plan equal the
+  concrete NumPy scene planned and classified at each of four geometries per
+  case, whose junction writes 26 to 146 electric points (up to 72 base-side):
+  update coefficients within `1.5e-15` of their peak, cross coefficients
+  `4.5e-15`, fields `5.4e-16` (`fdtd_traced_junction_equal_*.json`).
+* Reverse mode against NumPy central differences, each perturbed geometry
+  planned on its own, largest relative Jacobian error:
+
+| Step | Cylinder | Box | Cylinder, face on a node plane, height .31 |
+| --- | --- | --- | --- |
+| `1e-4` | `0.268` | `3.87e-7` | `2.31e-4` |
+| `1e-5` | `1.27e-6` | `3.86e-9` | `2.29e-6` |
+| `3e-6` | `9.20e-8` | `1.23e-9` | `2.16e-7` |
+| `1e-6` | `6.41e-8` | `1.01e-9` | `3.43e-7` |
+
+  JAX and Torch Jacobians differ by at most `1.6e-15`. The regression uses
+  `3e-6` with the existing `2e-6` budget.
+* The cylinder's `1e-4` row crosses a value jump of its own default rule, not
+  of the junction. Sweeping the radius in steps of `1e-5`, T jumps by about
+  `1.3e-5` between .12006 and .12007, and sweeping the height, between .29993
+  and .29994, with the junction's write count 118 throughout
+  (`sweep_near_point.py` and its log). Both are the same common node,
+  `(0, .1, .05)`, a cell below the top rim, whose nearest face changes between
+  the wall and the top cap; its cross coefficient jumps by `0.0104`
+  (`jump_locator.py`, `jump_locator_height.py`, `wall_cap_switches.py` and their
+  logs). The derivative is the local one on either side.
+* With the face on a node plane, height .3 puts the top cap on a node plane as
+  well. There the cap's moment shares the voxel face half and half
+  (`_exact.plane_share`), the value at the tie is the mean of its two one-sided
+  limits, and the height's central difference grows as the step shrinks
+  (`0.024` at `1e-4` to `0.27` at `1e-6`): a point discontinuity of the
+  concrete rule, kept as `measure_cylinder_ztie_top_on_node_plane.json` and
+  its log. The table's third column moves the top off the planes.
+* Physics: with 24-cell PMLs at the default reflection, a `.05` band and 6000
+  steps, the cylinder cell conserves energy to `1.1e-6` at every wavelength,
+  and the radius and height derivatives of T and R cancel to `1.1e-5` and
+  `2.8e-6` -- at most `5.7e-5` of `dT` (`fdtd_traced_junction_settled.json`).
+
+**Regressions** (`tests/test_fd_traced_junction.py`, 7 functions, 20 cases): the
+live write set against the plan's masks (6 cases); traced lowering and runs
+against the concrete scene of each geometry (6 cases); the Jacobian on JAX and
+Torch for the cylinder, Torch for the Box and JAX on a node-plane face; the
+certificate (a narrow substrate, a far face at cell 12.5 refused and 11.9
+admitted against rows from cell 13, a staircase rule, another partner in the
+halo); a traced face; the base guard; and `jax.jit` lowering at two
+geometries with one compile.
+
+**Witnesses** (`studies/fdtd_traced_junction_mutations.py`). Fifteen
+mutations, all failed by assertion or a missing refusal and restored byte for
+byte: the live set without its interior or its base points, each kind's base
+predicate, painting cells and nodes with the seed's mask, comparing the plan
+on the traced scene (caught by `jax.jit` and by the partner test), detaching
+the section fraction, each part of the certificate, the partner exception
+widened to every partner, a traced face admitted, and the base guard dropped.
+The first run ended on the survivor described above; its logs are under
+`attempt1/`.
+
+Every probe mode was rerun at the final fd source (SHA-256 in
+`fdtd_traced_junction_controls/final_source.txt`) and reproduced the earlier
+values bit for bit; the earlier files are under `before_final/`.
+
+**Validation.** Final fd source SHA-256
+`09bf4bedc88ed35ff206dd3a146ab09bd3fea4fac8b20b4e2089fc2b3cab5b2d`. A targeted
+run of the new file with the partner, illumination, junction, junction-physics,
+sphere, range, multi-body, cylinder, box, prism, centre-tie and constitutive
+files and the documentation contract passed all 416 cases (631.46 seconds).
+The full fd/docs tier collected 2722 cases and exited 0 with 2714 passed and 8
+skipped (2134.11 seconds); the separate slow tier collected and passed all 80
+cases, exit 0 (1127.48 seconds). Reported totals match collection, with no
+INTERNALERROR or worker crash. The four read-only freezers reproduced all
+143/288/140/570 committed arrays bit for bit; no golden was rewritten. Counts
+and timings are in `studies/results/fdtd_traced_junction_validation.json`, the
+runner is `studies/fdtd_traced_junction_validation.py`, and the raw logs are
+under `studies/results/fdtd_traced_junction_controls/`.
