@@ -673,6 +673,15 @@ def material_projector_fields(xp, grid_shape, lattice, dtype, segment_data, cont
     scale = xp.max(xp.abs(xp.stack([xp.asarray(lattice[i][j], dtype=dtype)
                                    for i in (0, 1) for j in (0, 1)])))
     threshold2 = (64*xp.finfo(dtype).eps*scale)**2
+    # The ratio weights below are formed in units of the cell: the power of two nearest the
+    # squared scale, which divides without rounding, so float64 is unchanged. JAX
+    # differentiates minimum / d2 through 1 / d2**2, and on its CPU backend a float32 square
+    # below the smallest normal number is flushed to zero: a sample nearer an interface than
+    # about 3.3e-10, in whatever unit lengths are given, read an infinite cotangent (0.33 nm
+    # with lengths in metres). In units of the cell every kept d2 exceeds half the
+    # on-interface threshold's (64 eps)**2, and its square stays normal at any length unit.
+    # Spelled as pow: JAX's exp2 is not exact at integers (127 of 160 powers off in float32).
+    unit2 = xp.pow(xp.asarray(2., dtype=dtype), 2*xp.round(xp.log2(scale)))
     contrast = xp.stack([item[3] for item in candidates])
     strengths = contrast**_BLEND_EXPONENT*xp.stack([
         xp.astype(xp.any(item[4]), dtype) for item in candidates])
@@ -704,8 +713,15 @@ def material_projector_fields(xp, grid_shape, lattice, dtype, segment_data, cont
                                   xp.asarray(float('inf'), dtype=dtype)), axis=1)
         minimum = xp.where(xp.any(strengths > 0.), minimum, xp.ones_like(minimum))
         on = minimum <= threshold2
-        ratio = xp.where(on, xp.ones_like(minimum), minimum)[:, None] / xp.where(
-            d2 > 0., d2, xp.ones_like(d2))
+        # On an interface only the exact-interface weights below are used, and
+        # a zero-strength candidate (an interval whose two materials agree in
+        # this pass, as a magnetic-only shape's do for epsilon) is discarded
+        # everywhere -- `on` never looks at it. Form neither's inverse distance:
+        # its squared distance has no lower bound, in float32 a tiny one squares
+        # to zero, and the discarded 0 * inf poisons the cotangent. The kept
+        # ones are bounded below and formed in units of the cell (`unit2`).
+        ratio = xp.where(on, xp.ones_like(minimum), minimum/unit2)[:, None] / xp.where(
+            (d2 > 0.) & ~on[:, None] & (strengths[None, :] > 0.), d2/unit2, xp.ones_like(d2))
         influence = strengths[None, :] * xp.where(on[:, None], xp.astype(d2 <= threshold2, dtype),
                                                    ratio**(_BLEND_EXPONENT/2))
         order = xp.argsort(d2, axis=1, stable=True)

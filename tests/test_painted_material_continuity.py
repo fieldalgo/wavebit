@@ -127,3 +127,72 @@ def test_torch_material_gradient_and_cross_backend_value():
     assert float(result.detach()) == pytest.approx(total(), abs=2e-11)
     secant = (total(9.+1e-5)-total(9.-1e-5))/2e-5
     assert float(d.grad) == pytest.approx(secant, rel=2e-5, abs=1e-8)
+
+
+_TENSOR = wavebit.Material([3.8+.04j, 4.2+.06j, 4.5+.08j]).rotated(.2, 'y')
+_MAGNETIC = wavebit.Material(1., 2.25)
+BLEND_SCENES = {
+    # A magnetic-only box has no permittivity contrast and the tensor box no permeability
+    # contrast, so each pass holds a candidate of zero strength.
+    'tensor disjoint': lambda p: [
+        dict(type='rectangle', lx=p[0], ly=160., material=_MAGNETIC),
+        dict(type='rectangle', cx=220., lx=p[1], ly=100., material=_TENSOR)],
+    # The first box's two side edges pass 0.025 nm outside two columns of samples rather than
+    # through them: off the interface, so their inverse distances are kept, from a squared
+    # distance of 6.25e-22 at a length unit of 1e-9.
+    'tensor disjoint, edges beside samples': lambda p: [
+        dict(type='rectangle', lx=p[0] + .05, ly=160., material=_MAGNETIC),
+        dict(type='rectangle', cx=220., lx=p[1], ly=100., material=_TENSOR)],
+    'tensor painted': lambda p: [
+        dict(type='rectangle', lx=p[0], ly=160., material=_MAGNETIC),
+        dict(type='rectangle', cx=60., lx=p[1], ly=100., material=_TENSOR)],
+    # The scalar resolved route reaches the same blend through normal_projector_coeffs; its
+    # third box is the background's own material.
+    'scalar painted': lambda p: [
+        dict(type='rectangle', lx=p[0], ly=160., material=3.),
+        dict(type='rectangle', cx=60., lx=p[1], ly=100., material=2.25),
+        dict(type='rectangle', cx=-200., lx=80., ly=100., material=1.)],
+}
+
+
+def blend_solver(backend, xp, scene, p, scale, precision):
+    shapes = [{k: (v*scale if k in ('lx', 'ly', 'cx', 'cy') else v) for k, v in s.items()}
+              for s in BLEND_SCENES[scene](p)]
+    dtype = xp.float32 if precision else xp.float64
+    return wavebit.rcwa(backend=backend, lattice=xp.asarray(np.diag([600., 600.]), dtype=dtype)*scale,
+                        wavelength=900.*scale, thickness=[170.*scale], truncation_order=(1, 1),
+                        theta=.17, phi=.3, polarization=(.8, .6j), factorization='nvf',
+                        shape_nvf_grid_size=15, complex_dtype=precision,
+                        structure=[dict(background=1., shapes=shapes)])
+
+
+@pytest.mark.parametrize('scene', list(BLEND_SCENES))
+def test_float32_blend_gradients_are_finite_in_any_length_unit(scene):
+    # On an interface the blend keeps only the exact-interface weights, and a zero-strength
+    # candidate keeps no weight anywhere, yet both formed their inverse distances. In float32
+    # at a small length unit a tiny nonzero squared distance squares to zero and the discarded
+    # 0 * inf reached the cotangent: every scene here but the edges beside samples gave a NaN
+    # jitted gradient at 1e-9, the scalar one at 1e-6 as well. The kept inverse distances
+    # meet the same underflow off the interface unless they are formed in units of the cell:
+    # without that, the edges beside samples read NaN at 1e-9 and 1e-10 with both masks in
+    # place. Design variables are unscaled, so the units must cancel.
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    wavebit.enable_x64()
+    point = np.array([160., 100.])
+    geometry = blend_solver(0, np, scene, point, 1., 0).freeze_geometry()
+
+    def transmission(p, scale, precision):
+        s = blend_solver(1, jnp, scene, p, scale, precision)
+        return jnp.real(s.solve(geometry=geometry, auto_detune=False).T.sum())
+
+    expected, slope = jax.jit(jax.value_and_grad(lambda p: transmission(p, 1., 0)))(
+        jnp.asarray(point))
+    calculate = jax.jit(jax.value_and_grad(lambda p, scale: transmission(p, scale, 1)))
+    for scale in (1., 1e-3, 1e-6, 1e-9, 1e-10):
+        value, gradient = calculate(jnp.asarray(point, dtype=jnp.float32),
+                                    jnp.asarray(scale, dtype=jnp.float32))
+        assert np.all(np.isfinite(np.asarray(gradient))), scale
+        assert float(value) == pytest.approx(float(expected), abs=5e-5)
+        np.testing.assert_allclose(np.asarray(gradient), np.asarray(slope), rtol=0., atol=2e-6,
+                                   err_msg=str(scale))
