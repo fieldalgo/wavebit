@@ -296,6 +296,38 @@ def test_x_orders_cannot_change_an_x_invariant_answer():
         assert abs(total(0, n) - total(n, n)) < 1e-12
 
 
+# ------------------------------------------------- the threshold a blended ellipse crosses
+
+#: ``test_nvf_self_coincident_faces.py``'s ellipse: 720 x 200 at 10 deg leaves its
+#: Wigner-Seitz cell on the 700 square between ``lx = 709.90`` and ``709.95``.
+L_ELLIPSE = dict(type='ellipse', material=EPS_HI, cx=0.0, cy=0.0, ly=200.0,
+                 angle=np.deg2rad(10.0))
+DISC = dict(type='circle', cx=0.0, cy=300.0, lx=160.0, material=4.0)
+
+
+def test_a_blended_ellipse_steps_where_its_support_leaves_its_cell():
+    """The known limit (case L) beside another shape: ``sum(T)`` steps at the threshold.
+
+    Inside its cell the ellipse's single-image piece reads its nearest *centre*, with the
+    algebraic distance ``|f| / |grad f|`` (``parametric._round_field``); past the edge its
+    ring reads the nearest boundary with the exact distance. Beside the disc the distance is
+    the piece's weight in the blend, so the two sides disagree off the curve and, at order 6
+    and ``N = 256``, the step of 0.05 across the threshold reads +3.879e-3 between steps of
+    -2.888e-5 and -2.191e-5 (alone the same ellipse steps +4.759e-3). Reading the single
+    image's nearest boundary exactly, over the 3x3 around its fold, removes this step and was
+    not taken: it biases the gradient over translation and rotation windows of a blended
+    ellipse (``docs/normal-field-known-limits.md``). A change that removes the step must
+    update that record.
+    """
+    A = as_lattice(lattice=SQUARE)
+    assert [len(P.plan_gamma([dict(L_ELLIPSE, lx=lx), DISC], A).pieces[0].imgs)
+            for lx in (709.90, 709.95)] == [1, 11]
+    totals = [_layer_total([dict(L_ELLIPSE, lx=lx), DISC], order=6, shape_nvf_grid_size=256)
+              for lx in (709.85, 709.90, 709.95, 710.00)]
+    before, across, after = np.diff(totals)
+    assert max(abs(before), abs(after)) < 1e-4 and across > 1e-3, (before, across, after)
+
+
 # ------------------------------------------------------------------ the golden that moved
 
 def test_the_350_box_golden_and_what_it_moved_against():

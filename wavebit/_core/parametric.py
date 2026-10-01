@@ -1058,8 +1058,13 @@ def _arc_offsets(prim, a1x, a1y, a2x, a2y, diam, tol):
     127 of 129 random single-image ellipses on a 600 nm square read a farther boundary, by
     up to 280 nm. This piece reads its own instance's level set there by design, a choice of
     extension; the tensor curve candidates, which carry the nearest boundary, search the 3x3
-    around the fold instead (:func:`~wavebit._core.tensor_shapes._curve_candidate`). The
-    condition is the support function against every lattice vector, ``h(t) <= |t| / 2`` with
+    around the fold instead (:func:`~wavebit._core.tensor_shapes._curve_candidate`). Beside
+    other pieces the piece's distance is also its weight in the blend: the single image's is
+    the algebraic one at the nearest centre (:func:`_round_field`), the ring's past the
+    threshold below the exact one, so ``sum(T)`` steps where the support crosses it, beside
+    another shape as alone. ``docs/normal-field-known-limits.md`` (case L) records both
+    steps, and why the exact distance over the 3x3, which removes the blended one, is not
+    taken. The condition is the support function against every lattice vector, ``h(t) <= |t| / 2`` with
     ``h(t) = sqrt((a t.e1)^2 + (b t.e2)^2)`` -- which only a vector shorter than ``2 R`` can
     fail, so that is the ring swept. A shape that leaves the cell (an ellipse 720 x 200 at 10
     deg on a 700 square: ``h = 354.9 > 350`` along ``a1``) has part of a neighbour's boundary
@@ -1941,8 +1946,14 @@ def _round_field(xp, X, Y, shape, lattice, reduced, dtype):
     """``(distance, normal_x, normal_y)`` of one round shape -- the ``'arc'`` piece.
 
     The displacement is folded to the nearest image and the level set's gradient is the
-    normal: exact for a circle, and for an ellipse the first-order distance to the level set,
-    which is all a nearest-surface pick needs. The nearest *centre* is the nearest instance
+    normal -- for a circle, the radial direction exactly. The distance is the algebraic
+    ``|f| / |grad f|``, first order at the interface and nowhere else: ``(R**2 - r**2) / (2 r)``
+    for a circle at radius ``r``, three halves of the true distance at ``r = R / 2`` and
+    unbounded at the centre. A lone piece never reads it; beside other pieces it is this
+    piece's weight in the blend, for a circle and a single-image ellipse alike, and it stays
+    so because every result since 2026-08-17 rests on it. For an ellipse it is why the blend
+    steps where the support leaves its cell and the piece takes the exact distance over its
+    ring (:func:`_arc_offsets`). The nearest *centre* is the nearest instance
     for any circle that does not overlap its own images (a boundary point nearer another
     instance would put two centres closer than two radii). For any shape that stays inside
     the Wigner-Seitz cell of its centre it is the instance whose interface the cell holds
@@ -1979,8 +1990,8 @@ def _round_field(xp, X, Y, shape, lattice, reduced, dtype):
 
     gxr = 2.0 * xr / (a ** 2)
     gyr = 2.0 * yr / (b ** 2)
-    # The algebraic distance |f| / |grad f| -- exact for a circle, and for an ellipse the
-    # first-order distance to the level set, which is all the nearest-surface pick needs.
+    # The algebraic distance |f| / |grad f| -- first order at the level set, for a circle as
+    # for an ellipse; the exact one is _ellipse_distance's (see the docstring).
     f = (xr / a) ** 2 + (yr / b) ** 2 - 1.0
     dist = xp.abs(f) / _hypot_safe(xp, gxr, gyr)
 
@@ -2146,11 +2157,11 @@ def _round_instances(xp, X, Y, shape, lattice, reduced, dtype, imgs):
     distance to its boundary (:func:`_ellipse_distance`) -- bounded, ``min(a, b)`` at the
     centre, so the minimum over instances is the nearest interface and nothing hands a
     shape's centre to its neighbour -- and the piece's direction is the level-set normal of
-    the nearest instance at the sample, the same direction :func:`_round_field` reads. Away
-    from the cell's edge, where the nearest centre is the nearest boundary, this is that
-    function's field bitwise; the two differ only in the sliver beside the edge where the
-    fold read a far instance's level set, and on the neighbour's boundary inside the cell,
-    where the fold was wrong. A hard minimum, as a face takes over its instances: the fold
+    the nearest instance at the sample, the same direction :func:`_round_field` reads. The
+    two fields are not the same away from the cell's edge: :func:`_round_field` weighs a
+    piece by the algebraic distance ``|f| / |grad f|``, not this exact one, and for an
+    ellipse its nearest centre is often not the instance whose boundary is nearest, well
+    inside the cell too (:func:`_arc_offsets`). A hard minimum, as a face takes over its instances: the fold
     already switches instance across the cell's edge, and this moves that switch to the
     Voronoi boundary between the two boundaries, which is where the geometry has it. The
     fold and the offsets count cells of ``reduced``, as everywhere; ``lattice`` is the origin.
