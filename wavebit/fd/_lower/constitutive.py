@@ -298,7 +298,8 @@ def validate(scene, plan):
     except (TypeError, ValueError, RuntimeError) as err:
         raise ValueError('fd.plan requires concrete geometry and materials to certify '
                          'constitutive coupling before numerical lowering. Build the plan '
-                         f'from concrete values ({type(err).__name__}: {err}).') from err
+                         'from concrete values and pass it as plan= to fd.run or fd.lower '
+                         f'with the traced ones ({type(err).__name__}: {err}).') from err
     upper = {'E': max(1/float(v) for v in background.eps),
              'H': max(1/float(v) for v in background.mu_value)}
     for s in structures:

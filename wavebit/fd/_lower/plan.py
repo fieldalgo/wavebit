@@ -278,8 +278,9 @@ class Plan:
     def with_static(self, **changes):
         """A plan with ``changes`` and a recomputed skeleton (the test hook uses this)."""
         result = _finish(dataclasses.replace(self, **changes))
-        if hasattr(self, '_shape_seeds'):
-            object.__setattr__(result, '_shape_seeds', self._shape_seeds)
+        for seed in ('_shape_seeds', '_material_seeds'):
+            if hasattr(self, seed):
+                object.__setattr__(result, seed, getattr(self, seed))
         return result
 
 

@@ -188,6 +188,13 @@ def _planned(scene, reuse=None):
     from ._lower.shape_ranges import planning_scene
     concrete = planning_scene(scene, reuse)
     p = _plan(concrete, _grazing=rows, _reuse=reuse, _shape_trace=concrete is not scene)
+    if concrete is not scene:
+        # A seeded rebuild emits no warnings, but two refusals live among them -- a skin
+        # depth under one cell, and a sourceless scene's medium under 8 cells per
+        # wavelength (checks._resolution_notes) -- and a concrete value beside the traced
+        # ones is held to them as it is anywhere else; the traced ones are the plan's seeds.
+        from ._lower.checks import _resolution_notes
+        _resolution_notes(concrete, p)
     return p, (rows[0] if rows else None)
 
 

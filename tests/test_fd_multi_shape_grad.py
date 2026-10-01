@@ -160,14 +160,16 @@ def test_every_reserved_pair_checks_the_interpolation_halo_in_all_axes(axis):
 
 
 @pytest.mark.parametrize('index', range(4))
-def test_every_partner_material_is_concrete_isotropic_and_lossless(index):
+def test_every_partner_material_is_isotropic_and_lossless(index):
+    """A traced scalar eps is admitted with the geometry (tests/test_fd_traced_material.py);
+    a traced eps given per axis is not one number and is refused like an anisotropic one."""
     import torch
     values = list(POINT)
     values[0] = torch.tensor(POINT[0], dtype=torch.float64, requires_grad=True)
     current = scene(values)
     p = quiet(fd.plan, scene())
     for material in (fd.Conductor(eps=2., sigma=.1), fd.Material(eps=(2., 2.1, 2.)),
-                     fd.Material(eps=values[0]+2.)):
+                     fd.Material(eps=(values[0]+2., values[0]+2.1, values[0]+2.))):
         structures = list(current.structures)
         structures[index] = structures[index].replace(material=material)
         with pytest.raises(ValueError, match='isotropic lossless|static'):

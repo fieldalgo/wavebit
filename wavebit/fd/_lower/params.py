@@ -85,7 +85,8 @@ def lower(scene, plan, rt='numpy', device=None):
     refuse_mismatch(scene, plan)
     from .shape_ranges import refuse_mismatch as refuse_range_mismatch
     refuse_range_mismatch(scene, plan)
-    from .shape_ranges import validate as validate_shapes, guard as shape_guard
+    from .shape_ranges import (validate as validate_shapes, guard as shape_guard,
+                               resolution_guard)
     validate_shapes(scene, plan)
     if not hasattr(rt, 'slab_add'):
         from .._runtime import runtime
@@ -99,7 +100,16 @@ def lower(scene, plan, rt='numpy', device=None):
         nodes = {}
         params['constitutive'] = lower_constitutive(scene, plan, rt, nodes=nodes)
         _stencil(scene, plan, params, rt)
-        certified = lift(plan, params, nodes, rt)
+        try:
+            certified = lift(plan, params, nodes, rt)
+        except np.linalg.LinAlgError:
+            # A traced eps of 0, nan or inf -- an optimizer's step -- reaches the lift's host
+            # eigensolver before any guard, and NumPy's eigh raises on it where the traced
+            # path's returns nan. Nothing is certified, so constitutive.guard makes the run
+            # nan, as every other traced failure does; the concrete value is refused by name
+            # before any of this (materials._positive), and a finite contrast past float64's
+            # reach by fd.plan (constitutive.validate).
+            certified = False
     params.update({'bloch': {}, 'axis1d': {}, 'amplitude': None, 'E0': None, 'H0': None,
                    'cpml': _cpml(scene, plan, rt), 'cpml_loss': _cpml_loss(scene, plan, rt),
                    'poles': _poles(scene, plan, rt),
@@ -108,6 +118,7 @@ def lower(scene, plan, rt='numpy', device=None):
     guard = _stability_guard(scene, plan, rt)
     guard = _axis1d_guard(scene, rt, guard)
     guard = _material_door_guard(scene, rt, guard)
+    guard = resolution_guard(scene, plan, rt, guard)
     guard = shape_guard(scene, plan, rt, guard)
     if plan.constitutive:
         from .constitutive import guard as constitutive_guard
@@ -322,8 +333,12 @@ def _stability_guard(scene, plan, rt):
     whole state into ``nan`` and the result is unmistakably not a field.
     """
     bound, _ = checks.cfl_bound(scene, plan)
-    if bound is not None:
+    from .shape_ranges import materials_traced
+    if bound is not None and not materials_traced(scene):
         return None
+    # A Torch forward-mode dual reads as its primal through ``materials.concrete``, so the
+    # bound above can be readable for a value that carries a tangent; with material seeds the
+    # plan was certified at the seed, not there, so such a value is guarded like any other.
     return _traced_guard(scene, plan, rt)
 
 

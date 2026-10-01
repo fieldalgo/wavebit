@@ -107,8 +107,10 @@ def test_traced_preflight_requires_a_certified_scene_and_plan():
             fd.Region(size=(.1,)*3, center=(.6, .6, .6)), fd.Material(eps=2.)))), p)
     with pytest.raises(ValueError, match='no initial field'):
         planning_scene(current.replace(initial=fd.InitialField(E=lambda x,y,z: (x*0,y*0,z*0))), p)
+    # A traced scalar eps is admitted with the geometry (tests/test_fd_traced_material.py);
+    # a traced eps given per axis is not one number and is refused with the anisotropic one.
     for material in (fd.Conductor(eps=2.25, sigma=.1), fd.Material(eps=(2., 2.25, 2.)),
-                     fd.Material(eps=r+2)):
+                     fd.Material(eps=(r+2, r+2.1, r+2))):
         with pytest.raises(ValueError, match='isotropic lossless|static'):
             planning_scene(current.replace(structures=(s.replace(material=material),)), p)
     wide = ((-.61, .61),)*3

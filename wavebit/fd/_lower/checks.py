@@ -1832,7 +1832,8 @@ def notes(scene, plan, rows=None, lifted=None):
     out += _resolution_notes(scene, plan)
     out += _proximity_notes(scene, plan)
     out += _stabilize_notes(scene, plan)
-    from .shape_ranges import traced, name
+    from .shape_ranges import traced, name, materials_traced, seeded
+    material = materials_traced(scene) and seeded(scene, plan)
     if traced(scene):
         from ..diagnostics import SubpixelAccuracyWarning
         out.append((SubpixelAccuracyWarning,
@@ -1841,7 +1842,10 @@ def notes(scene, plan, rows=None, lifted=None):
                     'concrete geometry to inspect them. The runtime checks the declared '
                     'range, four-cell minimum extent and constitutive stability; these '
                     'checks do not establish physical convergence.'))
+        out += _traced_material_notes(material)
         return out
+    if material:
+        return out + _traced_material_notes(material)
     out += _smoothed_notes(scene, plan, rows)
     from .junction import notes as junction_notes
     out += junction_notes(scene, plan)
@@ -1850,6 +1854,26 @@ def notes(scene, plan, rows=None, lifted=None):
     out += _cells_across_notes(scene, plan)
     out += _radiation_notes(scene)
     return out
+
+
+def _traced_material_notes(material):
+    """The note for a traced material value beside smoothed coupling, or nothing.
+
+    The smoothed notes lower the cross coefficients on NumPy, which a traced value cannot
+    enter; the host planned the plan's own values (``shape_ranges._seeded_materials``), so
+    nothing measured there is this run's.
+    """
+    if not material:
+        return []
+    from ..diagnostics import SubpixelAccuracyWarning
+    return [(SubpixelAccuracyWarning,
+             'A material value is traced: the cross coefficients, star-lift measurements and '
+             'the cells per wavelength of the traced medium are unavailable in this report, '
+             'and the plan was certified at the values it was built with. Run the concrete '
+             'values to inspect them. The runtime checks positivity, the time-step bound, '
+             'the lifted operator\'s stability and 8 cells per wavelength in a traced plain '
+             'Material (at the band\'s shortest and every Diffraction wavelength) at the '
+             'traced values; these checks do not establish physical convergence.')]
 
 
 def _lift_notes(scene, plan, lifted=None):

@@ -46,6 +46,7 @@ be runnable as written.
 | [`autodiff.md`](autodiff.md) | How do I differentiate a solve, and what does `jax.jit` need that `jax.grad` does not? |
 | [`backends.md`](backends.md) | What can NumPy, JAX and PyTorch each do here, which should I run, and how do I ask for a device or a precision? |
 | [`time-domain.md`](time-domain.md) | When is the *other* solver the right one, and what does a run in the time domain need that a harmonic one does not? |
+| [`fd-differentiation.md`](fd-differentiation.md) | How do I differentiate the general FDTD engine -- material values, a ranged body's shape, both together -- and why might a traced run return NaN? |
 
 ### Advanced
 

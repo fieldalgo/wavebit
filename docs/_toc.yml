@@ -17,6 +17,7 @@ subtrees:
       - file: guide/autodiff
       - file: guide/backends
       - file: guide/time-domain
+      - file: guide/fd-differentiation
     - caption: Advanced
       entries:
       - file: guide/specs

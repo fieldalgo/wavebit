@@ -741,10 +741,13 @@ class Sphere(Shape):
     using a plan built from concrete geometry first. One or more ranged Sphere, Cylinder,
     Box and Prism bodies may be differentiated together when all reserved supports,
     including their interpolation halos, are pairwise disjoint. Every ranged body needs
-    concrete isotropic lossless material, and no initial field is allowed. Concrete partners
+    isotropic lossless material, and no initial field is allowed. Concrete partners
     without a range (a substrate Slab, a Region, an unranged body, a lossy or dispersive
-    layer) may join them when each, widened by one cell, stays off every traced halo and
-    its material values are concrete; a flush junction among them lowers as usual. A traced
+    layer) may join them when each, widened by one cell, stays off every traced halo; a
+    flush junction among them lowers as usual. A body's or partner's ``eps`` and ``mu`` may be
+    traced with the geometry, each as one scalar of a plain Material; a medium filling a PML
+    layer, the background of a scene with a PML or plane-wave source, conductivities and
+    pole parameters stay concrete. A traced
     Cylinder or unturned Box may stand flush on an unranged smoothed Box face under
     ``junction='split'``, with its base held on the face. Every
     source and monitor family is admitted, provided the cell layers where a PlaneWave or TFSF

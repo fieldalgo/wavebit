@@ -2392,7 +2392,9 @@ same interpolation cell the ranged halos use, may not share a cell with any
 traced body's halo (`shape_ranges.planning_scene`). Half-open boxes may
 meet at an index boundary. Its material values must be concrete; a traced
 partner permittivity or pole parameter is refused rather than left
-uncertified. Ranged bodies, traced or concrete, keep every earlier rule:
+uncertified. (Superseded for a plain `Material`'s `eps` and `mu`, a ranged
+body's included, by "Traced material values beside traced geometry" below;
+a traced pole parameter is still refused.) Ranged bodies, traced or concrete, keep every earlier rule:
 concrete isotropic lossless `Material`, halos inside the domain and clear
 of absorbers, pairwise disjoint halos.
 
@@ -2743,3 +2745,181 @@ INTERNALERROR or worker crash. The four read-only freezers reproduced all
 and timings are in `studies/results/fdtd_traced_junction_validation.json`, the
 runner is `studies/fdtd_traced_junction_validation.py`, and the raw logs are
 under `studies/results/fdtd_traced_junction_controls/`.
+
+### Traced material values beside traced geometry (C6, 2026-10-01)
+
+A structure's `eps` and `mu` may now be traced together with ranged geometry -- a
+metasurface pillar's index with its radius, height and position -- and a smoothed
+structure's with concrete geometry, through `fd.run` as well as `fd.lower`. Before this,
+a ranged body needed concrete material, a partner's traced material was refused (the
+previous sections), and `fd.run` refused a traced material on any Sphere, Cylinder, Prism
+or turned Box, because the plan it rebuilds certifies the star lift on NumPy
+(`constitutive.validate`); only a direct `fd.lower` against a prebuilt plan carried such a
+derivative. The user-facing account is
+[`guide/fd-differentiation.md`](guide/fd-differentiation.md).
+
+**Material seeds.** `fd.plan` records the values of every plain `fd.Material` it was built
+with (`shape_ranges.remember`, `Plan._material_seeds`, kept by `with_static` like the
+shape seeds). When host planning needs numbers -- the scene's geometry is traced, or the
+plan has a diagonal-rule constitutive term (`shape_ranges._coupled`) -- each traced `eps`
+or `mu` leaf is replaced by its seed for planning only (`shape_ranges._seeded_materials`,
+the last step of `planning_scene`); a concrete value beside it is planned as it is, and the
+run lowers the live values. A junction alone does not count as coupling: its
+classification asks the materials structural questions, so a flush pair of cross-free
+Boxes plans a traced value live, as before, and records no seed for it.
+
+**An audit before the design was fixed.** Every read of a material number in
+`wavebit/fd` (about 140 sites in 20 files) was classified by when it runs and what a
+traced value does there, by five read-only readers and five verifiers. Nothing the run
+uses is baked from a material number on the host, except two things this change keeps out
+of reach: the prepared extended stencil (refused at lowering for any non-plain value, as
+before) and an oblique PlaneWave's drive, built from the background's index. Every
+certificate taken on the host has one of three fates:
+
+* a **runtime twin** that already existed: positivity (`params._material_door_guard`), the
+  lift's positivity and the coupled bound (`constitutive.lift`, `constitutive.guard`), and
+  the time-step bound (`params._traced_guard`), which is now built for every scene with a
+  traced material: a Torch forward-mode dual reads as its primal through
+  `materials.concrete`, so the bound was readable and, with the plan certified at the seed,
+  nothing compared the dual's own value with it;
+* a **new runtime twin**, `shape_ranges.resolution_guard`: `check_wavelength_resolution`
+  refuses a medium under 8 cells per wavelength at the band's shortest wavelength and every
+  Diffraction wavelength, and a traced plain Material in a seeded scene is now held to
+  `max_c eps_c mu_c <= (w / 8 dx)^2` on the backend (a medium with poles or loss keeps the
+  plan's skin-depth reading and is not held to it);
+* a **refusal by name**, where only a host rule reads the value: a traced conductivity or
+  pole parameter (no seed); a traced `eps` or `mu` given per axis on a medium lowering reads
+  as one number -- the background, a smoothed shape, a junction medium, anything within a
+  cell of a smoothed support (`constitutive.lower` and `junction.tables` read component 0);
+  a traced background where a PML is matched to it, a PlaneWave or TFSF source reads it or
+  a lattice FarField maps it; a traced medium filling a PML layer the grazing survey judges
+  (one PlaneWave, a Diffraction monitor, a face along the wave's axis:
+  `shape_ranges._surveyed_media`, from `grazing._layer_media`); a traced material in a
+  smoothed region where a fractional fill reaches a Symmetry plane
+  (`shape_ranges._mirror_could_couple`: the plan's mirror check reads cross coefficients
+  that vanish where the seed has no contrast); and a traced medium at a Diffraction plane
+  without `orders=`.
+
+A direct `fd.lower` of concrete geometry still plans nothing (`shape_ranges.validate`) but
+now hears the same refusals beside smoothed coupling, except the conductivity one: it reads
+a seed only to compare how `mu` was named, so a traced conductivity or pole parameter lowers
+as it always has.
+
+**Defects found on the way.** (1) `fd.run`'s report lowered the live scene's cross
+coefficients on NumPy (`checks._smoothed_notes`) and raised after the scan; a traced
+material in a seeded scene now gets a note of its own (`checks._traced_material_notes`),
+which names the checks it is held to. (2) A seeded rebuild skips `warn_all`, and with it
+the two refusals that live among the warnings (a skin depth under one cell, a sourceless
+medium under 8 cells per wavelength); for a concrete partner beside traced geometry they
+fired only in the report after the whole run. `_run._planned` now runs
+`checks._resolution_notes` on the planning scene, before the run (a first witness run
+showed the test could not tell the two apart; it now fails if the run starts). (3) A traced
+`eps` of 0, `nan` or `inf` raised `LinAlgError` from NumPy's `eigh` in the star lift's host
+path before any guard ran; `params.lower` now takes that as an uncertified lift, and the
+run is `nan`.
+
+**An adversarial review** of the change (four lenses -- correctness, regressions, tests,
+documentation -- each finding checked by a skeptic) confirmed four over-wide doors that
+would have refused scenes `fd.lower` lowered before: the PML door had refused any traced
+medium reaching a PML, though the grazing survey reads none in a Dipole or TFSF scene; the
+background door had refused any scene with a PML, including PMLs matched to concrete media
+of their own, which is the remedy `params._cpml`'s refusal names; the mirror door had
+refused any term box touching a Symmetry face, including the dimer a cell clear of it that
+the plan certifies for every value; and the per-axis door had refused a snapped crystal far
+from any smoothed body. Each is narrowed to what the host reads, with the admitted
+neighbour beside it in the regressions. It also found the resolution guard applied to
+Dispersive and Conductor media (now plain Material only; the probe of the conductivity case
+then found the guard building `where(None, ...)` when no plain medium was traced, fixed),
+the forward-mode time step above, a jitted-run test that could not fail (4 steps never
+reached the pillar), and the manual's over-wide claims.
+
+**Measurements** (`studies/fdtd_traced_material_probe.py`, the junction probe's cell with
+the pillar's permittivity a leaf; results in `studies/results/fdtd_traced_material_*.json`).
+
+* A traced Torch lowering and a 40-step run from the seed's plan equal the concrete NumPy
+  scene planned at each of four points per case -- both pillar kinds, with the geometry
+  traced too (eps 1.3 to 2.5, junctions writing 87 to 146 electric points) or concrete and
+  unranged with eps alone traced: update coefficients within `1.9e-15` of their peak, cross
+  coefficients `9.2e-15`, fields `5.4e-16` (`fdtd_traced_material_equal.json`).
+* Reverse mode against NumPy central differences, each perturbed point planned on its own,
+  largest relative error over (radius, height, centre x, eps) -- (x size, y size, height,
+  eps) for the Box -- and over the eps column alone:
+
+| Step | Cylinder | eps column | Box | eps column |
+| --- | --- | --- | --- | --- |
+| `1e-4` | `0.268` | `1.58e-9` | `3.87e-7` | `1.60e-9` |
+| `1e-5` | `1.27e-6` | `9.23e-10` | `3.86e-9` | `2.31e-10` |
+| `3e-6` | `9.20e-8` | `3.81e-9` | `2.52e-9` | `2.52e-9` |
+| `1e-6` | `6.41e-8` | `3.12e-10` | `1.32e-8` | `1.32e-8` |
+
+  The geometry columns reproduce the junction's record (the cylinder's `1e-4` row crosses
+  its own wall/cap switch); JAX and Torch differ by at most `3.1e-15`. `dT/d eps` is `0.0180`
+  and `dR/d eps` `-0.0169` (summed over the three wavelengths).
+* The four separated magnetic bodies of `fdtd_multi_shape_grad_probe`, each one's size,
+  eps and mu traced together (12 leaves): every material leaf within `3.8e-7` of central
+  differences at every step from `1e-4` to `1e-6` (the largest is the sphere's mu, whose
+  derivative is `-0.0144`); the geometry leaves reproduce the multi-shape record bit for
+  bit, including the cylinder radius's switch within `1e-5` (`fdtd_traced_material_multi.json`).
+* An unranged sphere's eps and mu alone through `fd.run`: `9.9e-9`, `2.4e-9`, `5.7e-9`,
+  `5.7e-9` at the four steps; JAX and Torch `1.7e-14` (`fdtd_traced_material_sphere.json`).
+* The partners of a concrete junction beside a traced ball (`tests/test_fd_traced_partner_grad.py`'s
+  scene): ball radius, substrate eps (the junction's face) and pillar eps traced together
+  lower as the concrete scene to `3.9e-15` (`be`) and `5.5e-15` (cross); the derivative of
+  every coefficient they move agrees with central differences to `3.4e-7`, `3.5e-9`,
+  `3.1e-8`, `4.8e-10`. The admitted neighbours of the doors -- a traced background in a
+  closed cell and beside PMLs with media of their own, the dimer, a traced film in a Dipole
+  scene's PML, a traced diagonal on a snapped block, a traced conductivity lowered directly
+  -- equal their concrete scenes within `8.9e-15`; a jitted `fd.run` equals the concrete runs
+  at two indices to `6.3e-16`, the two differing by `5.1e-2`, with one compile
+  (`fdtd_traced_material_extras.json`).
+* Guards (`fdtd_traced_material_guards.json`): a traced pillar index of `2.7` (resolution
+  floor `2.576`), `0.2` (the time-step bound) and `-1` (positivity) runs to NaN with
+  `stable` False, where the concrete scene at the same value is refused by name; `2.25`
+  runs. `0`, `nan` and `inf` raised `LinAlgError` before this change and now run to NaN.
+* Physics: with 24-cell PMLs at the default reflection, a `.05` band and 6000 steps
+  (decay `1.4e-9`), the cylinder cell conserves energy to `1.1e-6` at every wavelength, and
+  the eps derivatives of T and R cancel to `3.3e-7` -- at most `5.3e-5` of `dT` (`dT/d eps`
+  is `0.0051` to `0.0062` per wavelength) -- while the radius derivatives cancel to `1.1e-5`
+  (`5.7e-5` of `dT`), the junction record's value (`fdtd_traced_material_settled.json`).
+
+**Regressions** (`tests/test_fd_traced_material.py`, 12 functions, 23 cases): traced
+against concrete for both kinds with and without traced geometry; the Jacobian on JAX and
+Torch for the cylinder and Torch for the Box; the twelve-leaf magnetic gradient; the
+sphere's material-only gradient through `fd.run`; seven guard cases; the floor's `mu` and
+Diffraction wavelengths; the forward-mode time step; the refusals, each reader of the
+background alone; the admitted neighbours; the partners' lowering and gradient; the seeds;
+and `jax.jit` of a whole `fd.run` at two indices. Three earlier tests that asserted the old
+refusals now assert what is still refused: a traced eps given per axis
+(`test_fd_sphere_grad.py`, `test_fd_multi_shape_grad.py`) and a traced substrate filling a
+surveyed PML or a traced pole parameter (`test_fd_traced_partner_grad.py`).
+
+**Witnesses** (`studies/fdtd_traced_material_mutations.py`). Thirty-eight mutations of the
+production source, each failed by an assertion or a missing refusal and restored byte for
+byte: planning without the seeds or with the tracer, the report lowering a traced material,
+a junction counted as coupling, the run lowering the planning scene, a JAX tracer unseen,
+the seeds dropped by `with_static` or missing the background; the junction's pillar and face
+indices and the coupling's material detached; the resolution guard dropped, at seven cells,
+on `eps` alone, blind to Diffraction wavelengths, applied to every carried medium or
+building on no plain one; the lift's `LinAlgError` raised; the forward-mode time step
+unguarded; each reader of the background door removed, the PML door dropped or blind to
+the Diffraction condition, the mirror door dropped or applied to any touching term, the
+Diffraction, per-axis, type, `mu`-naming and direct-lowering doors dropped, the per-axis
+reading applied to every partner, a conductivity refused on `fd.lower`, and the skin-depth
+re-run skipped. The first run (`attempt1/`) ended on that last survivor -- the report after
+the run caught the same partner, so the test could not tell before from after; it now fails
+if the run starts. The second (`attempt2/`, after the review's changes) ended on the
+`mu`-naming mutation, which failed with a `TypeError` rather than an assertion; the refusal
+test now asserts a refusal by name whatever else happens.
+
+**Validation.** Final fd source SHA-256
+`2865da7c206461604c0169c63a3844259489a4aa8de55f209b28a9bb262d8ce1`. The full fd/docs tier
+collected 2745 cases and exited 0 with 2737 passed and 8 skipped (2287.32 seconds); the
+separate slow tier collected and passed all 80 cases, exit 0 (1211.22 seconds). Reported
+totals match collection, with no INTERNALERROR or worker crash. The four read-only freezers
+reproduced all 143/288/140/570 committed arrays bit for bit; no golden was rewritten.
+Every probe mode was then rerun at the final source and reproduced its earlier JSON bit for
+bit, timings aside (`studies/results/fdtd_traced_material_controls/rerun_at_final_source.json`; the earlier
+files are under `before_final/`). Counts and timings are in
+`studies/results/fdtd_traced_material_validation.json`, the runner is
+`studies/fdtd_traced_material_validation.py`, and the raw logs are under
+`studies/results/fdtd_traced_material_controls/`.

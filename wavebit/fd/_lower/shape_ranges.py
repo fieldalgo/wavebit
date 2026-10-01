@@ -74,7 +74,13 @@ def name(scene):
 
 
 def remember(scene, plan):
-    """The seed holds only concrete numbers, never backend leaves or a captured scene."""
+    """The seed holds only concrete numbers, never backend leaves or a captured scene.
+
+    Two seeds: each ranged body's dimensions (``_shape_seeds``), and the values of every
+    plain ``fd.Material`` the plan was built with (``_material_seeds``, keyed by structure
+    index, ``-1`` for the background), which :func:`_seeded_materials` puts back in place of
+    a traced permittivity or permeability for host planning.
+    """
     seeds = tuple((i, s.shape.vertices, s.shape.height, s.shape.center)
                   if isinstance(s.shape, Prism) else
                   (i, s.shape.size, s.shape.center) if isinstance(s.shape, Box) else
@@ -84,6 +90,281 @@ def remember(scene, plan):
                   if isinstance(s.shape, (Sphere, Cylinder, Box, Prism)) and s.shape.range is not None)
     if seeds:
         object.__setattr__(plan, '_shape_seeds', seeds)
+    from ..materials import as_material
+    materials = tuple((key, *seed) for key, material in _materials(scene)
+                      for seed in (_material_seed(as_material(material)),) if seed is not None)
+    if materials:
+        object.__setattr__(plan, '_material_seeds', materials)
+
+
+def _materials(scene):
+    """``(key, material)`` for the background (key ``-1``) and every structure, in order."""
+    return ((-1, scene.background),
+            *((i, s.material) for i, s in enumerate(scene.structures)))
+
+
+def _material_seed(material):
+    """``(eps, mu)`` of a plain concrete ``fd.Material`` as host floats (``mu`` None when it
+    was not named), or None for any other material or one ``materials.concrete`` cannot
+    read -- a JAX tracer or a Torch tensor that asks for a gradient."""
+    from ..materials import Material, concrete
+    if type(material) is not Material:
+        return None
+    eps = tuple(concrete(v) for v in material.eps)
+    mu = None if material.mu is None else tuple(concrete(v) for v in material.mu)
+    if None in eps or (mu is not None and None in mu):
+        return None
+    return eps, mu
+
+
+def materials_traced(scene):
+    """Whether the background or any structure's material carries a derivative."""
+    from ..materials import as_material
+    return any(_carries(as_material(m)) for _, m in _materials(scene))
+
+
+def _coupled(plan):
+    """Whether host planning certifies smoothed coupling from material numbers: a
+    diagonal-rule constitutive term (``constitutive.validate``'s star lift and bound).
+
+    A junction alone is not: ``junction.classify`` asks the materials structural questions
+    only, so a flush pair of cross-free unturned Boxes plans a traced value live, as it did
+    before material seeds existed (and records no seed for it)."""
+    from .._kernel.stencil import StencilTerm
+    return any(not isinstance(t, StencilTerm) for t in plan.constitutive)
+
+
+def _one_number(triple):
+    """A triple given as one scalar (the same object three times, traced or not) or three
+    equal concrete numbers: the isotropic reading a traced value allows."""
+    from ..materials import concrete
+    if triple[0] is triple[1] is triple[2]:
+        return True
+    values = [concrete(v) for v in triple]
+    return None not in values and values[0] == values[1] == values[2]
+
+
+def _read_as_one_number(scene, plan, key):
+    """Whether lowering reads medium ``key`` as one number: the background, a smoothed shape,
+    a junction's medium, or a structure within a cell of a smoothed shape's support -- where
+    ``constitutive.lower`` and ``junction.tables`` read component 0 and ``check_smoothed``'s
+    isotropy door was asked of the plan's values only."""
+    from .constitutive import _intersect
+    if key < 0:
+        return True
+    shape = scene.structures[key].shape
+    if shape.body() is not None or any(key in r.media for r in plan.junctions):
+        return True
+    support = shape.support(plan.grid)
+    return any(_intersect(support, tuple((lo - 1, hi + 1)
+                                         for lo, hi in s.shape.support(plan.grid))) is not None
+               for s in scene.structures if s.shape.body() is not None)
+
+
+def _surveyed_media(scene, plan):
+    """``{'structures[i]', ...}``: the media the grazing survey judges orders in.
+
+    ``grazing._survey`` judges orders only for a scene with exactly one PlaneWave and a
+    Diffraction monitor, on the PML faces along that wave's axis, in each medium filling the
+    layer (``grazing._layer_media``, whose labels these are); a medium elsewhere, or in a
+    Dipole or TFSF scene, is read by no host rule.
+    """
+    from ..boundaries import PML
+    from ..monitors import Diffraction
+    from .grazing import _layer_media
+    from .monitors import plane_waves
+    waves = plane_waves(scene)
+    if len(waves) != 1 or not any(isinstance(m, Diffraction) for m in scene.monitors):
+        return set()
+    P = waves[0].axis
+    out = set()
+    for side in ('-', '+'):
+        face = scene.boundaries.face('xyz'[P] + side)
+        if isinstance(face, PML):
+            out |= {label for label, _ in _layer_media(scene, plan.grid, P, side, face.cells)}
+    return out
+
+
+def _mirror_could_couple(scene, plan, term, a, side):
+    """Whether ``term``'s cross coefficients in its end layer on the ``side`` face of axis
+    ``a`` can be nonzero beside a traced medium: a smoothed body in the term has a fractional
+    fill there, and a traced material paints into the term.
+
+    ``constitutive.validate`` refuses cross coefficients on a Symmetry plane, and they are
+    ``fill (1 - fill)`` times the contrast: zero where no fill is fractional, whatever the
+    values, and zero where the plan's values have no contrast. Only the second can hide a
+    coupling a traced value then makes. The fill is asked at all six components' Yee points
+    of the layer (``_post.layer_share``'s reading), with the exact clip's round-off.
+    """
+    import numpy as np
+    from ..materials import as_material
+    from .._shapes import occupancy as body_occupancy
+    from .checks import _CLIP_ROUNDOFF
+    from .constitutive import _intersect
+    from .occupancy import yee_points
+    grid = plan.grid
+    box = list(reversed(term.box))
+    box[a] = (box[a][0], box[a][0] + 1) if side == '-' else (box[a][1] - 1, box[a][1])
+    box = tuple(box)
+    inside = [s for s in scene.structures if _intersect(s.shape.support(grid), box)]
+    if not (_carries(as_material(scene.background))
+            or any(_carries(as_material(s.material)) for s in inside)):
+        return False
+    for s in inside:
+        body = s.shape.body()
+        if body is None:
+            continue
+        for field in ('E', 'H'):
+            for c in range(3):
+                points = np.asarray(yee_points(grid, box, field, c)).reshape(-1, 3)
+                fill = np.asarray(body_occupancy(body, points, grid.dx)[0])
+                if np.any((fill > _CLIP_ROUNDOFF) & (fill < 1.0 - _CLIP_ROUNDOFF)):
+                    return True
+    return False
+
+
+def _seeded_materials(scene, plan, where, substitute=True):
+    """``scene`` with every traced material value replaced by the plan's own seed value.
+
+    Host planning certifies the plan's materials -- the star lift and the coupled CFL bound
+    (``constitutive.validate``), the junction's material scope, the resolution floor, the
+    survey of grazing orders -- and those certificates need numbers. The values the plan
+    was built with passed them once, so restoring them makes host planning reproduce that
+    plan from the unchanged inputs around them, while lowering reads the live values and
+    the runtime guards judge those: the time-step bound with the lifted operator
+    (``constitutive.guard``, ``params._traced_guard``), positivity
+    (``params._material_door_guard``), every star's positivity at its lift
+    (``constitutive.lift``) and the resolution floor (:func:`resolution_guard`). Only the
+    traced leaves are restored; a concrete value beside them is checked as it is.
+
+    What has no runtime twin is refused instead, by name:
+
+    * a traced value outside a plain ``fd.Material``'s ``eps`` and ``mu``;
+    * a traced ``eps`` or ``mu`` given per axis on a medium lowering reads as one number
+      (:func:`_read_as_one_number`) -- a scalar keeps the triple one object, the isotropy a
+      traced value can show; a snapped partner clear of every smoothed body keeps a traced
+      diagonal, its slots restored one by one;
+    * a traced background in a scene with a PML matched to it (no ``background=`` of its
+      own), a PlaneWave or TFSF source, or a ``FarField(propagation='yee')``: it fixes the
+      PML's match (``params._cpml``), the plane-wave column's transverse wavevector and drive
+      (``sources.plane_wave_drive``), the grazing survey's rows and the lattice far-field map
+      (``results`` refuses a traced one after the run), all built on the host (a cell driven
+      by Dipoles, with any PML matched to a concrete medium of its own, reads it nowhere
+      else);
+    * a traced structure filling a PML layer the grazing survey reads (:func:`_surveyed_media`):
+      the rule judges the orders in each medium filling that layer on the host only, so a
+      moved index could make an order the layer cannot absorb;
+    * a traced material in a smoothed region where a fractional fill reaches a ``Symmetry``
+      plane (:func:`_mirror_could_couple`): the mirror check reads the cross coefficients,
+      which vanish where the plan's own values have no contrast, so a seed equal to its
+      surroundings would pass it vacuously;
+    * a traced medium at a ``Diffraction`` plane whose ``orders=`` is not given: the window of
+      propagating orders is counted at the plan's value on the host, and again from the live
+      medium after the run, where a traced one cannot be counted (``monitors.
+      diffraction_window``); refused here rather than after the whole run;
+    * a material the plan was built without, or whose permeability it named differently.
+
+    ``substitute=False`` runs the refusals alone and returns ``scene``, for a direct
+    ``fd.lower`` of concrete geometry, which plans nothing (:func:`validate`); the seed is
+    then needed only to compare how ``mu`` was named, and a non-plain traced value -- a
+    snapped partner's conductivity, say -- lowers as it always has.
+    """
+    from ..materials import Material, as_material
+    from .._kernel.stencil import StencilTerm
+    from ..monitors import FarField
+    from ..sources import PlaneWave, TFSF
+    seeds = {row[0]: row[1:] for row in getattr(plan, '_material_seeds', ())}
+    background, structures = None, list(scene.structures)
+    grid = plan.grid
+    pml = dict(plan.pml_cells)
+    surveyed = _surveyed_media(scene, plan) if materials_traced(scene) else set()
+    for key, material in _materials(scene):
+        material = as_material(material)
+        if not _carries(material):
+            continue
+        label = 'Scene(background=)' if key < 0 else f'structures[{key}]'
+        if type(material) is not Material:
+            if not substitute:
+                continue
+            raise ValueError(
+                f'{label} has a traced value in an fd.{type(material).__name__}; in a scene '
+                f'{where}, only a plain fd.Material\'s eps and mu may be traced. Keep '
+                'conductivities and pole parameters concrete.')
+        for name, triple in (('eps', material.eps), ('mu', material.mu_value)):
+            if (_carries(triple) and not triple[0] is triple[1] is triple[2]
+                    and _read_as_one_number(scene, plan, key)):
+                raise ValueError(
+                    f'{label} has a traced {name} given per axis; in a scene {where}, a '
+                    f'traced {name} is one scalar, {name}=value, the same on all three axes.')
+        if key < 0:
+            matched = any(scene.boundaries.face(face).background is None for face in pml)
+            if (matched or any(isinstance(s, (PlaneWave, TFSF)) for s in scene.sources)
+                    or any(isinstance(m, FarField) and m.propagation == 'yee'
+                           for m in scene.monitors)):
+                raise ValueError(
+                    f'Scene(background=) has a traced value in a scene {where}, and a PML '
+                    'matched to the background, a PlaneWave or TFSF source or a '
+                    'FarField(propagation=\'yee\') reads it: the PML match, the plane-wave '
+                    'column\'s transverse wavevector and drive, the grazing survey and the '
+                    'lattice far-field map are built from it on the host. Give each PML a '
+                    'concrete background=, or differentiate a structure\'s material instead.')
+        elif label in surveyed:
+            raise ValueError(
+                f'{label} has a traced material value and fills a PML layer along the '
+                f'PlaneWave\'s axis; in a scene {where}, the grazing rule judges the orders a '
+                'Diffraction monitor asks for in each medium filling that layer, on the host '
+                'only, at the values the plan was built with, so a traced one could move an '
+                'order past what the layer absorbs. Keep that material concrete.')
+        seed = seeds.get(key)
+        if not substitute and seed is None:
+            continue
+        if seed is None or (seed[1] is None) != (material.mu is None):
+            raise ValueError(
+                f'{label}\'s material carries a traced value, and plan= was not built with a '
+                'plain concrete fd.Material there'
+                + ('' if seed is None else ' naming mu the same way')
+                + '. Build the plan with fd.plan(scene) from the same scene at concrete values.')
+        eps = tuple(s if _carries(v) else v for v, s in zip(material.eps, seed[0]))
+        mu = None if material.mu is None else tuple(
+            s if _carries(v) else v for v, s in zip(material.mu, seed[1]))
+        if key < 0:
+            background = Material(eps=eps, mu=mu)
+        else:
+            structures[key] = structures[key].replace(material=Material(eps=eps, mu=mu))
+    if any(_carries(as_material(m)) for _, m in _materials(scene)):
+        for term in plan.constitutive:
+            if isinstance(term, StencilTerm):
+                continue
+            for a, (lo, hi) in enumerate(reversed(term.box)):
+                for side, touches in (('-', lo == 0), ('+', hi == grid.n[a])):
+                    if (touches and plan.faces['xyz'[a] + side].kind == 'symmetry'
+                            and _mirror_could_couple(scene, plan, term, a, side)):
+                        raise ValueError(
+                            f'{term.name} reaches the Symmetry plane on {"xyz"[a] + side!r} '
+                            f'and a material value is traced; in a scene {where}, the mirror '
+                            'check reads cross coefficients that vanish where the plan\'s own '
+                            'values have no contrast, and a smoothed surface reaches the '
+                            'mirror\'s cell layer here. Keep the surface a cell clear of the '
+                            'mirror, or the materials concrete.')
+        from .. import _post
+        from ..monitors import Diffraction
+        from .monitors import diffraction_layout
+        for m in scene.monitors:
+            if not isinstance(m, Diffraction) or m.orders is not None:
+                continue
+            layout, _ = diffraction_layout(m, scene, grid)
+            eps, mu = _post.medium_at(scene, grid, layout.P, (layout.k - 1, layout.k),
+                                      f'Diffraction({m.name!r})')
+            if _carries((eps, mu)):
+                raise ValueError(
+                    f'Diffraction({m.name!r}) counts its propagating orders in a medium whose '
+                    f'material value is traced; in a scene {where}, give orders=(M_u, M_v): '
+                    'the window is a static choice, and a traced index cannot be counted '
+                    'after the run.')
+    if not substitute:
+        return scene
+    out = scene.replace(structures=tuple(structures))
+    return out if background is None else out.replace(background=background)
 
 
 def planning_scene(scene, plan):
@@ -97,17 +378,24 @@ def planning_scene(scene, plan):
     certificate.
 
     Every ranged body, traced or concrete, keeps the full certificate: an isotropic lossless
-    Material, a halo strictly inside the domain and clear of absorbers, and pairwise disjoint
-    halos. A structure **without** a range is concrete by construction (its shape refuses a
-    traced length) and is planned and lowered at its own geometry like any concrete scene's,
-    with any material such a scene admits -- a cell-snapped substrate running into a PML, a
-    conductive or dispersive layer. It needs only to stay off every traced body's halo: its
-    support widened by the same interpolation cell must not share a cell with a traced
-    body's halo, so nothing it paints or mixes reaches a cell whose coefficients move. Its
-    material values must be concrete; a traced partner material is not certified here. A
-    flush junction between two concrete partners beside a traced body is planned and lowered
-    as in a concrete scene; ``junction.refuse_mismatch`` compares it through this function's
-    concrete scene, the one the plan was built from.
+    Material (each of eps and mu one number, a traced one given as a scalar), a halo strictly
+    inside the domain and clear of absorbers, and pairwise disjoint halos. A structure
+    **without** a range is concrete by construction (its shape refuses a traced length) and is
+    planned and lowered at its own geometry like any concrete scene's, with any material such
+    a scene admits -- a cell-snapped substrate running into a PML, a conductive or dispersive
+    layer. It needs only to stay off every traced body's halo: its support widened by the
+    same interpolation cell must not share a cell with a traced body's halo, so nothing it
+    paints or mixes reaches a cell whose coefficients move. A flush junction between two
+    concrete partners beside a traced body is planned and lowered as in a concrete scene;
+    ``junction.refuse_mismatch`` compares it through this function's concrete scene, the one
+    the plan was built from.
+
+    **Traced material values** -- a body's, a partner's or the background's ``eps`` or ``mu``
+    -- are planned at the plan's own values and lowered live (:func:`_seeded_materials`,
+    which also lists what a host rule reads and so stays concrete). The same substitution
+    serves a scene whose geometry is concrete when its plan certifies smoothed coupling from
+    material numbers (:func:`_coupled`); every other scene plans its traced values live, as
+    it always has.
 
     **The one partner a traced body may touch** is the face it stands on in a recorded
     junction (:func:`_certify_junction`): an unranged, concrete, unturned smoothed Box, under
@@ -126,14 +414,15 @@ def planning_scene(scene, plan):
     those cell layers must lie outside every traced body's support (:func:`plane_media`).
     """
     if not traced(scene):
-        return scene
+        if plan is None or not materials_traced(scene) or not _coupled(plan):
+            return scene
+        return _seeded_materials(scene, plan, 'with smoothed structures')
     where = name(scene)
     if plan is None or not getattr(plan, '_shape_seeds', ()):
         raise ValueError(f'A traced {where} requires plan= built by fd.plan(scene) from '
                          'concrete geometry before differentiation.')
     refuse_mismatch(scene, plan)
     from ..materials import Material, as_material
-    from .._spec import static_float
     if scene.initial is not None:
         raise ValueError(f'A traced {where} supports ranged Sphere/Cylinder/Box/Prism bodies '
                          'with disjoint interpolation halos, beside concrete partners clear of '
@@ -141,17 +430,11 @@ def planning_scene(scene, plan):
     ranged = [ranged_body(s.shape) for s in scene.structures]
     for material in (as_material(scene.background),
                      *(s.material for s, r in zip(scene.structures, ranged) if r)):
-        if type(material) is not Material:
-            raise ValueError(f'A traced {where} requires concrete isotropic lossless Material.')
-        for triple in (material.eps, material.mu_value):
-            values = tuple(static_float(f'traced {where} material', 'value', v) for v in triple)
-            if not values[0] == values[1] == values[2]:
-                raise ValueError(f'A traced {where} requires concrete isotropic lossless Material.')
-    for i, (structure, r) in enumerate(zip(scene.structures, ranged)):
-        if not r and _carries(as_material(structure.material)):
-            raise ValueError(f'structures[{i}], a concrete partner without a range beside the '
-                             f'traced {where}, has a traced material value; partner materials '
-                             'must be concrete here.')
+        if (type(material) is not Material
+                or not all(_one_number(t) for t in (material.eps, material.mu_value))):
+            raise ValueError(f'A traced {where} requires isotropic lossless Material: a plain '
+                             'fd.Material whose eps and mu are each one number (a traced '
+                             'value given as one scalar).')
     seeds = {row[0]: row for row in plan._shape_seeds}
     # support() includes the occupancy margin; constitutive terms add one interpolation
     # cell (two adjacent half-cell averages). Certify it even for an unturned Box,
@@ -234,7 +517,8 @@ def planning_scene(scene, plan):
                     f'(cells {lo}..{hi - 1}) reaches them: the medium there would move with '
                     'the geometry. Keep that plane outside every traced body\'s range and '
                     'its one-cell margin.')
-    return scene.replace(structures=tuple(structures))
+    return _seeded_materials(scene.replace(structures=tuple(structures)), plan,
+                             f'with a traced {where}')
 
 
 def _certify_junction(scene, plan, record, halo):
@@ -311,10 +595,18 @@ def plane_media(scene, plan):
 
 
 def validate(scene, plan):
-    """Direct lower() has the same preflight as run(), not just a matching allocation."""
-    concrete = planning_scene(scene, plan)
-    if concrete is scene:
+    """Direct lower() has the same preflight as run(), not just a matching allocation.
+
+    A scene whose geometry is concrete lowers its traced material values against the
+    caller's plan without a host plan rebuilt here, as it always has; beside smoothed
+    coupling it first hears the refusals of what no runtime guard checks
+    (:func:`_seeded_materials` with ``substitute=False``), which ``fd.run`` asks too.
+    """
+    if not traced(scene):
+        if seeded(scene, plan):
+            _seeded_materials(scene, plan, 'with smoothed structures', substitute=False)
         return
+    concrete = planning_scene(scene, plan)
     from .plan import plan as make_plan
     checked = make_plan(concrete, _shape_trace=True)
     if checked.skeleton != plan.skeleton:
@@ -404,6 +696,50 @@ def _valid(shape, plan, rt):
             half = rt.array(halves[axis], 'float64')
             valid = valid & xp.isfinite(c) & (c - half >= lo) & (c + half <= hi)
     return valid
+
+
+def seeded(scene, plan):
+    """Whether host planning reads ``scene`` through :func:`planning_scene`'s seeds."""
+    return traced(scene) or (plan is not None and materials_traced(scene) and _coupled(plan))
+
+
+def resolution_guard(scene, plan, rt, previous):
+    """The plan's resolution door, asked of every traced medium at run time.
+
+    ``checks.check_wavelength_resolution`` refuses a material sampled below 8 cells per
+    wavelength at the sources' ``band.shortest_wavelength`` and at each ``Diffraction``
+    wavelength: there not even the first digit of an order survives. Host planning read a
+    traced value at the plan's seed (:func:`_seeded_materials`), so the live value is held
+    to the same floor here: ``max_c eps_c mu_c <= (w / 8 dx)^2`` at the shortest such
+    concrete wavelength ``w``, or the run's coefficients are ``nan``. Built only for a
+    seeded scene with a traced material, so every other run's ``stable`` is unchanged.
+    """
+    if not (materials_traced(scene) and seeded(scene, plan)):
+        return previous
+    from ..materials import Material, as_material
+    from ..monitors import Diffraction
+    from .sources import shortest_wavelength
+    wavelengths = [w for m in scene.monitors if isinstance(m, Diffraction)
+                   for w in m.wavelengths]
+    band = shortest_wavelength(scene)
+    if band is not None:
+        wavelengths.append(band)
+    if not wavelengths:
+        return previous
+    limit = rt.array((min(wavelengths) / (8.0 * plan.dx)) ** 2, 'float64')
+    valid = None
+    for _, material in _materials(scene):
+        material = as_material(material)
+        if type(material) is not Material or not _carries(material):
+            continue                    # a medium with poles or loss has its own index
+        for e, m in zip(material.eps, material.mu_value):
+            ok = rt.array(e, 'float64') * rt.array(m, 'float64') <= limit
+            valid = ok if valid is None else valid & ok
+    if valid is None:
+        return previous                 # only a conductivity or a pole parameter is traced
+    value = rt.constant(rt.xp.where(valid, rt.array(1., 'float64'),
+                                    rt.array(float('nan'), 'float64')))
+    return value if previous is None else previous * value
 
 
 def guard(scene, plan, rt, previous):

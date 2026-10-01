@@ -144,20 +144,23 @@ def test_a_concrete_partner_must_stay_a_cell_off_every_traced_halo():
         planning_scene(traced, quiet(fd.plan, concrete))
 
 
-def test_a_partner_material_must_be_concrete():
-    """A partner's material values are lowered as concrete numbers beside a traced body; a
-    traced partner permittivity or pole parameter is refused rather than half-certified."""
+def test_a_traced_partner_material_in_a_pml_or_with_poles_is_refused():
+    """A partner's traced eps is planned at the plan's value and lowered live
+    (tests/test_fd_traced_material.py), but not this substrate's: it fills the bottom PML,
+    whose grazing survey is judged on the host only. A traced pole parameter has no seed."""
     import torch
     p = quiet(fd.plan, scene('substrate'))
     eps = torch.tensor(2.1, dtype=torch.float64, requires_grad=True)
     omega = torch.tensor(20., dtype=torch.float64, requires_grad=True)
-    for material in (fd.Material(eps=eps), fd.Dispersive(eps_inf=1., poles=(
-            fd.Drude(omega_p=omega, gamma=.5),))):
+    for material, message in ((fd.Material(eps=eps), r'structures\[0\] has a traced material '
+                                                     r'value and fills a PML layer'),
+                              (fd.Dispersive(eps_inf=1., poles=(fd.Drude(omega_p=omega,
+                                                                         gamma=.5),)),
+                               r'structures\[0\] has a traced value in an fd.Dispersive')):
         current = _traced_pillar()
         current = current.replace(structures=(current.structures[0].replace(
             material=material),) + current.structures[1:])
-        with pytest.raises(ValueError, match=r'structures\[0\], a concrete partner.*traced '
-                                             r'material value'):
+        with pytest.raises(ValueError, match=message):
             planning_scene(current, p)
 
 

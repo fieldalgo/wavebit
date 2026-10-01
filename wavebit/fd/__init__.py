@@ -135,11 +135,18 @@ be differentiated with a concrete prebuilt plan. Extrusion axes, rotation angles
 and a prism's vertex count remain static. The
 range contains the whole body. Traced scenes may contain multiple ranged bodies when
 their reserved supports plus interpolation halos are pairwise disjoint; every ranged body
-needs concrete isotropic lossless material, and there is no initial field. Concrete
+needs isotropic lossless material, and there is no initial field. Concrete
 partners without a range -- a cell-snapped Slab substrate running into a PML, a Region, an
 unranged body, a conductive or dispersive layer -- may stand beside them when each,
-widened by one cell, shares no cell with a traced body's halo and its material values are
-concrete; a flush junction among such partners lowers as in a concrete scene.
+widened by one cell, shares no cell with a traced body's halo; a flush junction among such
+partners lowers as in a concrete scene. A structure's ``eps`` and ``mu`` may be traced
+together with the geometry, each as one scalar of a plain ``Material``, and so may a
+smoothed structure's with concrete geometry: the plan is built from concrete values and
+the run reads the traced ones, held at run time to positivity, the time-step bound, the
+lifted operator's stability and 8 cells per wavelength. A medium filling a PML layer, the
+background of a scene with a PML, a PlaneWave or TFSF source or a lattice FarField,
+conductivities and pole parameters stay concrete there. See
+``docs/guide/fd-differentiation.md``.
 Every source (Dipole, PlaneWave, TFSF) and monitor (Record, Field, Flux, Diffraction,
 FarField) is admitted; the two cell layers where a PlaneWave or TFSF normalisation or a
 Diffraction plane reads its one plain medium must lie outside every traced body's reserved
