@@ -318,8 +318,10 @@ def test_a_round_shape_takes_the_ring_iff_its_support_leaves_its_wigner_seitz_ce
         name, lattice, shape, leaves):
     """``h(t) > |t| / 2`` for some lattice vector ``t``: then, and only then, an instance list.
 
-    Inside the cell the nearest centre's level set is the nearest interface and the arc keeps
-    the single instance it always had; outside it a neighbour's boundary enters the cell and
+    Inside the cell the nearest centre's level set is the only one whose interface enters the
+    cell, and the arc keeps the single instance it always had (off the curve a neighbour's tip
+    can be nearer, and the arc reads its own level set there by design); outside it a
+    neighbour's boundary enters the cell and
     the piece is carried over the ring with the exact distance. The ring is bounded by
     ``|A s| <= diam + min(a, b) + h(s)`` and is checked against a brute-force enumeration of
     that bound, so the search box cannot silently clip it. A disc filling its cell and an

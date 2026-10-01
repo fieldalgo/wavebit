@@ -295,8 +295,10 @@ def test_an_ellipse_leaving_its_cell_reads_the_nearest_boundary_not_the_nearest_
     """The ``'arc'`` piece over its ring, with the exact distance: exact on Gamma, 0.19 deg over the band.
 
     The round piece folds the sample to the nearest *centre* and reads that instance's level
-    set, which is the nearest interface only while the shape stays inside the Wigner-Seitz
-    cell of its centre. The 720 ellipse leaves it, a neighbour's tip crosses the cell edge,
+    set. While the shape stays inside the Wigner-Seitz cell of its centre, that is the only
+    level set whose interface enters the cell (off the curve a neighbour's tip can be nearer
+    even then, and the piece reads its own level set there by design). The 720 ellipse leaves
+    it, a neighbour's tip crosses the cell edge,
     and the fold read the wrong level set on that part of Gamma: 7.0 deg mean and 89.9 max
     on the interface itself, 3.09 deg over the band with 3.73% of samples past 45 deg. Planned
     over eleven instances with the exact Euclidean distance to each, the piece takes the

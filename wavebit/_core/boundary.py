@@ -620,8 +620,27 @@ def _paint_centroid(xp, segment_data, plan):
                      xp.sum((a[:, 1] + z[:, 1]) * cross)]) / (3 * xp.sum(cross))
 
 
+def _cell_scale(xp, lattice, dtype):
+    """The largest basis entry's magnitude: the length :func:`material_projector_fields`
+    measures its distances against."""
+    return xp.max(xp.abs(xp.stack([xp.asarray(lattice[i][j], dtype=dtype)
+                                   for i in (0, 1) for j in (0, 1)])))
+
+
+def _on_interface_threshold2(xp, lattice, dtype):
+    """The squared distance within which :func:`material_projector_fields` reads a sample as
+    on an interface: 64 rounding units of the largest basis entry, squared.
+
+    One definition, read by the blend and by the analytic curve candidates it is handed
+    (:func:`~wavebit._core.tensor_shapes._curve_fields`), which switch to the interface
+    normal inside it exactly as the segments do.
+    """
+    return (64*xp.finfo(dtype).eps*_cell_scale(xp, lattice, dtype))**2
+
+
 def material_projector_fields(xp, grid_shape, lattice, dtype, segment_data, contrasts,
-                               interface_plan, transform=None, chunk=None):
+                               interface_plan, transform=None, chunk=None,
+                               candidate_fields=None):
     """A contrast-weighted extension of the nearest-interface normal projector.
 
     Keep only the nearest point per unordered pair of region labels: all its intervals
@@ -640,6 +659,21 @@ def material_projector_fields(xp, grid_shape, lattice, dtype, segment_data, cont
 
     This retains nearest-point spatial switches and the usual zero-vector tie;
     it does not promise global smoothness at medial axes or disappearing interfaces.
+
+    ``candidate_fields`` optionally supplies analytic candidates for uncut curved
+    interfaces, keyed by their unordered region pair. Each callable returns, at the
+    supplied Cartesian points, the squared distance to its exact curve and a unit vector
+    oriented as a segment candidate's: from the interface toward the sample on both sides,
+    as ``(p - foot) / |p - foot|`` is, and on the interface itself -- a squared distance
+    within :func:`_on_interface_threshold2` -- the normal a segment's ``n_edge`` carries,
+    which leaves the region on the interval's left (for a shape on the background, its
+    outward normal). Off the interface the vector need not be the nearest-point one: the
+    tensor curve candidates carry the level-set direction
+    (:func:`~wavebit._core.tensor_shapes._curve_direction`). Signed vectors are summed below
+    before the dyad is formed, so a candidate that points another way changes the blend
+    wherever a second candidate carries mass. Their exact curves replace the polygon's
+    facets and corners without changing material contrasts or the actual-interface plan for
+    contacts and painted regions.
     """
     from .parametric import _BLEND_EXPONENT
     A, E, L2, active = segment_data
@@ -659,10 +693,11 @@ def material_projector_fields(xp, grid_shape, lattice, dtype, segment_data, cont
     extended = xp.asarray(ids, dtype=xp.int64)
     active, contrasts = active[extended], contrasts[extended]
     candidates = []
-    for indices in groups.values():
+    for key, indices in groups.items():
         index = xp.asarray(indices, dtype=xp.int64)
         valid = xp.sum(E[index]*E[index], axis=1) > 0.
-        candidates.append((A[index], E[index], L2[index], contrasts[indices[0]], valid))
+        field = None if candidate_fields is None else candidate_fields.get(key)
+        candidates.append((A[index], E[index], L2[index], contrasts[indices[0]], valid, field))
     pts = _folded_sample_points(xp, grid_shape, lattice, dtype, transform)
     reference = E[xp.argmax(xp.astype(active, xp.int32))]
     cross = E[:, 0]*reference[1] - E[:, 1]*reference[0]
@@ -670,9 +705,8 @@ def material_projector_fields(xp, grid_shape, lattice, dtype, segment_data, cont
     reference2 = xp.sum(reference*reference)
     normal = xp.stack([reference[1], -reference[0]]) / xp.sqrt(
         xp.where(reference2 > 0., reference2, xp.ones_like(reference2)))
-    scale = xp.max(xp.abs(xp.stack([xp.asarray(lattice[i][j], dtype=dtype)
-                                   for i in (0, 1) for j in (0, 1)])))
-    threshold2 = (64*xp.finfo(dtype).eps*scale)**2
+    scale = _cell_scale(xp, lattice, dtype)
+    threshold2 = _on_interface_threshold2(xp, lattice, dtype)
     # The ratio weights below are formed in units of the cell: the power of two nearest the
     # squared scale, which divides without rounding, so float64 is unchanged. JAX
     # differentiates minimum / d2 through 1 / d2**2, and on its CPU backend a float32 square
@@ -692,7 +726,12 @@ def material_projector_fields(xp, grid_shape, lattice, dtype, segment_data, cont
     def evaluate(p):
         rows = xp.arange(p.shape[0])
         distances, normals = [], []
-        for a, e, l2, _, valid in candidates:
+        for a, e, l2, _, valid, field in candidates:
+            if field is not None:
+                distance, direction = field(p)
+                distances.append(distance)
+                normals.append(direction)
+                continue
             dist2, foot = _seg_dist(xp, p, a, e, l2)
             dist2 = xp.where(valid[None, :], dist2, xp.asarray(float('inf'), dtype=dtype))
             nearest = xp.argmin(dist2, axis=1)

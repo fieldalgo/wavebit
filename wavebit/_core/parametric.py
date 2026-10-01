@@ -960,8 +960,9 @@ class GammaPlan(namedtuple('GammaPlan', 'ring pieces pairs empty reduction')):
         never reads it, cancelling a covered face through its pair records run by run,
         whether or not the union of the runs is the whole face. An arc's ``imgs`` is
         ``((0, 0),)`` while the shape stays inside the Wigner-Seitz cell of its centre, where
-        the nearest centre's level set is the nearest interface, and the size ring once it
-        leaves (:func:`_arc_offsets`); the replay then reads one piece whose distance and
+        the nearest centre's level set is the only one whose interface enters the cell (not,
+        for an ellipse, the nearest boundary off it: see :func:`_arc_offsets`), and the size
+        ring once it leaves; the replay then reads one piece whose distance and
         direction are the nearest instance's, by a hard minimum (:func:`_round_instances`).
     ``pairs``
         One :class:`Pair` per coincidence: piece ``q`` at lattice offset ``(m, n)`` -- relative
@@ -1047,11 +1048,18 @@ def _arc_offsets(prim, a1x, a1y, a2x, a2y, diam, tol):
     """A round shape's instance list: its own alone inside its Wigner-Seitz cell, the ring outside.
 
     The ``'arc'`` piece reads the level set of the nearest *centre*
-    (:func:`_round_field`), and that is the nearest interface wherever the shape stays inside
-    the Wigner-Seitz cell of its centre: then it and every image lie on opposite sides of
-    the cell's bounding planes, so an image's boundary never enters the cell and no point of
-    the cell is nearer an image's boundary than the plane between them is. The condition is
-    the support function against every lattice vector, ``h(t) <= |t| / 2`` with
+    (:func:`_round_field`), and that is the only level set whose interface enters the cell
+    wherever the shape stays inside the Wigner-Seitz cell of its centre: then it and every
+    image lie on opposite sides of the cell's bounding planes, so an image's boundary never
+    enters the cell, and on every interface point in the cell the fold reads that interface's
+    own instance. It does not make the nearest centre the nearest *boundary* off the
+    interface. For a circle it is (see :func:`_round_field`); for an ellipse a neighbour's tip
+    just across a bounding plane is often nearer a sample than the shape's own boundary --
+    127 of 129 random single-image ellipses on a 600 nm square read a farther boundary, by
+    up to 280 nm. This piece reads its own instance's level set there by design, a choice of
+    extension; the tensor curve candidates, which carry the nearest boundary, search the 3x3
+    around the fold instead (:func:`~wavebit._core.tensor_shapes._curve_candidate`). The
+    condition is the support function against every lattice vector, ``h(t) <= |t| / 2`` with
     ``h(t) = sqrt((a t.e1)^2 + (b t.e2)^2)`` -- which only a vector shorter than ``2 R`` can
     fail, so that is the ring swept. A shape that leaves the cell (an ellipse 720 x 200 at 10
     deg on a 700 square: ``h = 354.9 > 350`` along ``a1``) has part of a neighbour's boundary
@@ -1912,6 +1920,23 @@ def _fold_to_nearest_image(xp, dx, dy, reduced):
     return best_x, best_y
 
 
+def _nearest_centre_displacement(xp, X, Y, cx, cy, reduced):
+    """``(X - cx, Y - cy)`` carried to the nearest periodic image of the centre ``(cx, cy)``.
+
+    :func:`_round_field`'s fold, shared with the tensor curve candidates
+    (:func:`~wavebit._core.tensor_shapes._curve_candidate`) so the two cannot drift apart: the
+    rectangular fold on ``diag(Lx, Ly)``, where it and the lattice fold are the same fold, and
+    :func:`_fold_to_nearest_image` on every other basis. ``reduced`` must be the
+    Lagrange-reduced basis (see there for why).
+    """
+    if is_axis_aligned(reduced):
+        Px, Py = periods_of(reduced)
+        dx = (X - cx + Px / 2.0) % Px - Px / 2.0
+        dy = (Y - cy + Py / 2.0) % Py - Py / 2.0
+        return dx, dy
+    return _fold_to_nearest_image(xp, X - cx, Y - cy, reduced)
+
+
 def _round_field(xp, X, Y, shape, lattice, reduced, dtype):
     """``(distance, normal_x, normal_y)`` of one round shape -- the ``'arc'`` piece.
 
@@ -1919,10 +1944,16 @@ def _round_field(xp, X, Y, shape, lattice, reduced, dtype):
     normal: exact for a circle, and for an ellipse the first-order distance to the level set,
     which is all a nearest-surface pick needs. The nearest *centre* is the nearest instance
     for any circle that does not overlap its own images (a boundary point nearer another
-    instance would put two centres closer than two radii), and for any shape that stays
-    inside the Wigner-Seitz cell of its centre (:func:`_arc_offsets`), which is why the
-    ``'arc'`` piece has a single instance there and this arithmetic is the one the round
-    branch always had -- bit-identical to every result since 2026-08-17 on a reduced basis.
+    instance would put two centres closer than two radii). For any shape that stays inside
+    the Wigner-Seitz cell of its centre it is the instance whose interface the cell holds
+    (:func:`_arc_offsets`), which is why the ``'arc'`` piece has a single instance there and
+    this arithmetic is the one the round branch always had -- bit-identical to every result
+    since 2026-08-17 on a reduced basis. For an ellipse that is not always the nearest
+    *boundary* off the interface -- a neighbour's tip can be nearer
+    (:func:`~wavebit._core.tensor_shapes._curve_candidate`) -- and this field reads its own
+    instance's level set there by design. The tensor curve candidates take the same
+    level-set direction from the nearest boundary's instance instead, so a lone ellipse and
+    the same ellipse in a disjoint layer agree wherever the two instances are one.
     *Finding* that nearest centre is the fold's job, and it does it on ``reduced``, the
     Lagrange-reduced basis (:func:`_fold_to_nearest_image` for why one cell a side is enough
     there and was not on ``a2 = 3 a1 + (50, 700)``); ``lattice`` is the basis as given, which
@@ -1941,12 +1972,7 @@ def _round_field(xp, X, Y, shape, lattice, reduced, dtype):
     cos_a = xp.cos(as_array(xp, angle, dtype=dtype))
     sin_a = xp.sin(as_array(xp, angle, dtype=dtype))
 
-    if is_axis_aligned(reduced):
-        Px, Py = periods_of(reduced)
-        dx = (X - cx + Px / 2.0) % Px - Px / 2.0
-        dy = (Y - cy + Py / 2.0) % Py - Py / 2.0
-    else:
-        dx, dy = _fold_to_nearest_image(xp, X - cx, Y - cy, reduced)
+    dx, dy = _nearest_centre_displacement(xp, X, Y, cx, cy, reduced)
     xr = dx * cos_a + dy * sin_a
     yr = -dx * sin_a + dy * cos_a
     a, b = lx / 2.0, ly / 2.0
@@ -2004,7 +2030,17 @@ def _ellipse_distance(xp, u, v, a, b):
     makes ``G = b (v cos t - u sin t)``, whose root is the ray through the point, and the
     distance the radial one. Every discarded ``where`` branch is finite, so autograd never
     meets ``0 * inf`` (the :func:`_hypot_safe` lesson).
+
+    The arithmetic is :func:`_ellipse_root`'s, which :func:`_ellipse_nearest_point` reads
+    too: one copy, so the distance and the normal the tensor curve candidates take from the
+    same nearest point -- around a circle, and at an ellipse's centre -- cannot drift apart.
     """
+    return _ellipse_root(xp, u, v, a, b)[0]
+
+
+def _ellipse_root(xp, u, v, a, b):
+    """``(distance, t, t_lo, t_hi)``: :func:`_ellipse_distance`, the root ``t`` it found in
+    the first quadrant and the bisection's final bracket around it."""
     one, zero = xp.ones_like(u), xp.zeros_like(u)
     y0, y1 = xp.abs(u), xp.abs(v)
     k = a * a - b * b
@@ -2032,7 +2068,72 @@ def _ellipse_distance(xp, u, v, a, b):
     # The unsigned distance has a cusp here, but the normal-field blend can be
     # smooth. Guard the radicand so its zero cotangent never meets sqrt'(0).
     return xp.where(on_boundary, zero,
-                    xp.sqrt(xp.where(on_boundary, one, distance2)))
+                    xp.sqrt(xp.where(on_boundary, one, distance2))), t, t_lo, t_hi
+
+
+def _ellipse_nearest_point(xp, u, v, a, b):
+    """``(distance, c, s)``: :func:`_ellipse_distance`, and where its nearest point is.
+
+    The nearest point of ``(u/a)^2 + (v/b)^2 = 1`` to ``(u, v)`` is ``(a c su, b s sv)``,
+    with ``c = cos t`` and ``s = sin t`` for the root ``t`` in ``[0, pi / 2]`` of the folded
+    problem (:func:`_ellipse_distance`) and ``su``, ``sv`` the signs of ``u`` and ``v``, a
+    zero counting as positive. The outward normal there is along ``(b c su, a s sv)``, never
+    shorter than ``min(a, b)``. Where the nearest point is not unique -- the medial axis, the
+    segment of the major axis between the evolute's cusps, and so the centre -- this is the
+    one the fold picks, ``v = 0`` taking the ``+v`` side. ``t`` is exact to rounding wherever
+    the Newton polish converges quadratically; at the cusps, where ``G`` has a multiple root,
+    it converges linearly and ``t`` stays inside the bisection's 2e-5 rad bracket.
+
+    The fold is the distance's and not the point's: the distance is even in ``u`` and in
+    ``v``, the nearest point odd, and ``abs()`` differentiates to zero at zero. So on an axis
+    the root :func:`_ellipse_root` returns carries ``dt/du = 0`` (``dt/dv``), which the
+    distance never reads -- its slope across an axis is zero, or a ridge on the medial axis
+    -- and a direction does: ``s`` moves off ``0`` linearly in ``v`` across the ``u`` axis
+    beyond the medial segment, which for a circle, whose candidate carries this normal at
+    every sample, is the whole axis but its centre. Autodiff read the normal's ``v``
+    component as constant there. One more Newton step on the signed fold ``su u``, ``sv v``
+    -- the same values, whose derivative is ``+-1`` rather than ``0`` -- leaves ``t`` where
+    it is to rounding, since ``G(t) = 0``, and gives it the implicit derivative
+    ``-dG / G'`` everywhere the polish converged, the axes included. A step that would leave
+    the bracket (a double root) is not taken, but one that leaves it by rounding is: where the
+    bisection meets the root exactly -- its first midpoint is the root on a circle's diagonals
+    -- the root is the bracket's end, the step can land an ulp past it, and refusing that step
+    dropped the normal's derivative to zero (at a sample on a circle's diagonal in the odd-grid
+    test of ``tests/test_tensor_curve_normals.py``, where the dyad's ``xx`` slope is ``1/240``
+    per nm both ways).
+    """
+    distance, t, t_lo, t_hi = _ellipse_root(xp, u, v, a, b)
+    one = xp.ones_like(u)
+    k = a * a - b * b
+    au = a * (xp.where(u < 0.0, -one, one) * u)
+    bv = b * (xp.where(v < 0.0, -one, one) * v)
+    c, s = xp.cos(t), xp.sin(t)
+    g = k * c * s - au * s + bv * c
+    gp = k * (c * c - s * s) - au * c - bv * s
+    step = t - g / xp.where(gp < 0.0, gp, -one)
+    slack = 4.0 * xp.finfo(t.dtype).eps
+    t = xp.where((step >= t_lo - slack) & (step <= t_hi + slack), step, t)
+    return distance, xp.cos(t), xp.sin(t)
+
+
+def _instance_displacements(xp, X, Y, cx, cy, reduced, imgs):
+    """``(X, Y)`` relative to each instance ``imgs`` of the centre ``(cx, cy)``, one pair at a time.
+
+    The offsets count cells of ``reduced`` from the centre's image nearest the sample *in the
+    lattice metric*: rounding the fractional coordinates, a parallelogram fold, which is what
+    the ring of :func:`_arc_offsets` is bounded around. :func:`_round_instances`' arithmetic,
+    shared with the tensor curve candidates
+    (:func:`~wavebit._core.tensor_shapes._curve_candidate`). A generator, so a long ring holds
+    one instance's displacement at a time.
+    """
+    a1x, a2x = reduced[0][0], reduced[0][1]
+    a1y, a2y = reduced[1][0], reduced[1][1]
+    det = a1x * a2y - a2x * a1y
+    dx0, dy0 = X - cx, Y - cy
+    km = xp.round((a2y * dx0 - a2x * dy0) / det)
+    kn = xp.round((-a1y * dx0 + a1x * dy0) / det)
+    for m, n in imgs:
+        yield dx0 - (km + m) * a1x - (kn + n) * a2x, dy0 - (km + m) * a1y - (kn + n) * a2y
 
 
 def _round_instances(xp, X, Y, shape, lattice, reduced, dtype, imgs):
@@ -2057,17 +2158,9 @@ def _round_instances(xp, X, Y, shape, lattice, reduced, dtype, imgs):
     _stype, cx, cy, lx, ly, angle = shape_geometry(shape, lattice)
     cos_a = xp.cos(as_array(xp, angle, dtype=dtype))
     sin_a = xp.sin(as_array(xp, angle, dtype=dtype))
-    a1x, a2x = reduced[0][0], reduced[0][1]
-    a1y, a2y = reduced[1][0], reduced[1][1]
-    det = a1x * a2y - a2x * a1y
-    dx0, dy0 = X - cx, Y - cy
-    km = xp.round((a2y * dx0 - a2x * dy0) / det)
-    kn = xp.round((-a1y * dx0 + a1x * dy0) / det)
     a, b = lx / 2.0, ly / 2.0
     best = gx_best = gy_best = None
-    for m, n in imgs:
-        dx = dx0 - (km + m) * a1x - (kn + n) * a2x
-        dy = dy0 - (km + m) * a1y - (kn + n) * a2y
+    for dx, dy in _instance_displacements(xp, X, Y, cx, cy, reduced, imgs):
         xr = dx * cos_a + dy * sin_a
         yr = -dx * sin_a + dy * cos_a
         gxr, gyr = 2.0 * xr / (a ** 2), 2.0 * yr / (b ** 2)

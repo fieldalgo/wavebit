@@ -193,13 +193,53 @@ If writing a loop directly, follow the same order: apply the **current** design 
 then update the parameters. Keep preparation outside JIT. This updates the discrete plan;
 it does not make contact or overlap transitions differentiable at the transition itself.
 
-The sampled NVF extension can also have nonsmooth points while the geometry plan
-stays valid. In particular, tensor layers with several curved shapes use polygonal
-interface normals. A normal-field grid point crossing a polygon vertex can make
-the finite-resolution answer discontinuous, even for disjoint smooth shapes.
-Autodiff then reports the selected branch's derivative; a finite gradient at that
-point does not establish a two-sided derivative. Check nearby parameter values
-and NVF resolution as well as the geometry plan when validating an optimization.
+Disjoint tensor circles and ellipses enter the normal field through their
+analytic boundaries rather than their interface-planning polygons, so a
+normal-field sample crossing a point that was a polygon vertex no longer makes
+the answer jump. Each sample reads the distance to the boundary of the curve's
+nearest periodic instance, on any lattice, and that instance's level-set
+direction: the gradient of the shape's implicit function, oriented from the
+curve toward the sample as the polygon segments' vectors are, and the outward
+normal on the curve itself. The frozen geometry records which instances each
+curve is searched over: the neighbours of its own cell while it stays inside
+the Wigner-Seitz cell of its centre, a wider ring once it leaves. An eager
+replay is refused by name when a fresh plan would search an instance the
+record does not, as for a curve grown out of its cell into a ring wider than
+those neighbours; a curve shrunk back into its cell replays as a fresh solve
+does, since the recorded ring holds the neighbours. Under JIT, re-freeze before
+a curve leaves its cell.
+
+The sampled NVF extension can still have nonsmooth points while the geometry
+plan stays valid: ties between two periodic instances of a curve, switches of
+the contrast-weighted blend where two shapes' interfaces are equidistant, and
+genuine corners, such as a rectangle's, whose nearest face changes across its
+diagonals. A normal-field sample carried across one of them makes the answer
+step. Painted overlaps retain their polygonal interface approximation.
+Autodiff reports the selected branch's derivative at a switch; a finite
+gradient alone does not establish a two-sided derivative, and a central
+difference whose step is smaller than the grid spacing stays on one smooth
+piece, so it agrees with autodiff without testing it.
+
+The steps also bias a gradient over an interval, and refining
+`shape_nvf_grid_size` does not reliably remove the bias: each step shrinks as
+the grid refines, while more samples cross. An ellipse's direction is chosen to
+have no switch across its medial axis, the stretch of its major axis between
+the centres of curvature of its two tips, which the nearest-point vector -- the
+limit of the polygon route -- has. Its one singular point, the ellipse's
+centre, does not step, but a sample carried past the centre at a distance `d`
+turns its direction through a half-turn over a stretch of the motion of about
+`d (b/a)**2` along the minor axis (`d (a/b)**2` along the major), for semi-axes
+`a > b`, and the gradient there grows roughly as `1/d`: without bound as the
+pass nears the centre, so an optimiser step taken beside such a pass can be
+arbitrarily large.
+
+Refining the NVF grid therefore does not validate such a gradient. Validate it
+against the loss itself: integrate the gradient across a window of several grid
+spacings, sampled at the same parameter values as the loss and more finely than
+the stretch over which a sample passing an ellipse's centre turns, and compare
+the integral with the loss's change over the window.
+[Tensor shape integration](../tensor-shape-integration.md) has the measurements
+behind the direction rule and these windows.
 
 ## Numerical retries during differentiation
 

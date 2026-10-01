@@ -189,8 +189,12 @@ and reuse that record through `solve(geometry=...)`. Integrated NVF shapes suppo
 material, position, size, angle and lattice derivatives while the stored
 intersection and periodic-interface topology remains valid. Eager replay checks
 that topology; JIT cannot replan it, so re-freeze outside a trace when moving
-through a contact or overlap change. Gradients of the sampled normal extension
-still require grid convergence, especially near its distance ties.
+through a contact or overlap change, or when an ellipse grows out of the
+Wigner-Seitz cell of its centre. The sampled normal extension still steps where
+it switches -- at ties between periodic instances of a curve, between shapes in
+the contrast-weighted blend, and at corners -- and those steps bias a gradient
+by an amount grid refinement does not reliably remove. Check a gradient against
+the loss over a window of the design parameter: see [autodiff](autodiff.md).
 
 The explicit sampled shape route and tensor rasters under NVF retain fixed geometry:
 material derivatives are supported, shape and lattice derivatives are refused.
