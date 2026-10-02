@@ -37,7 +37,7 @@ import pytest
 
 import wavebit
 from wavebit import eps_from_index
-from wavebit._core import solve_1d as _s1
+from wavebit._core import conventions as _conventions
 from wavebit._core.backend import array_namespace
 from wavebit._core.conventions import boundary_kz, mode_q
 
@@ -323,9 +323,12 @@ LAYER_CASES = [
 
 
 def _grating(tetm, thickness, **kw):
+    # SMM, because the freedom pinned below is SMM's. ETM's recursion inverts a transmission into
+    # the medium below each layer, so its labels are not free: they take the half-space's root
+    # (`etm_mode_q`), pinned in `tests/test_etm_layer_labels.py`.
     cell = eps_from_index(np.array([[[1.0] * 8 + [3.4] * 8]]))
     return dict(backend=0, tetm=tetm, truncation_order=6, wavelength=WL, period=[300.0], structure=cell,
-                thickness=[thickness], **kw)
+                thickness=[thickness], layer_algorithm='SMM', **kw)
 
 
 def _run(cfg):
@@ -341,13 +344,14 @@ def _run(cfg):
 @pytest.mark.parametrize('tetm', ['te', 'tm'], ids=['te', 'tm'])
 @pytest.mark.parametrize('case', LAYER_CASES, ids=[c[0] for c in LAYER_CASES])
 def test_a_layer_mode_root_is_free(case, tetm):
-    """Relabelling which of ``+-q`` is "down" for a layer mode cannot move the answer.
+    """Relabelling which of ``+-q`` is "down" for a layer mode cannot move an SMM answer.
 
     This is what makes ``mode_q`` and ``boundary_kz`` selecting *unrelated* roots at complex
     ``k_par`` legitimate rather than a defect: they are answering different questions. A
     half-space's root is a boundary condition and there is only one right answer;
     a layer's ``+-q`` pair is used in full by the stack algebra, so the label is free and
-    ``mode_q`` may pick on whatever grounds it likes.
+    ``mode_q`` may pick on whatever grounds it likes -- as long as the layers are joined by
+    scattering matrices. ETM's are not free (``tests/test_etm_layer_labels.py``).
 
     It picks on numerical grounds: ``Re(q) >= 0`` keeps ``|exp(-k0*q*d)| <= 1``. That is not
     decoration — driven with ``boundary_kz``'s rule instead, 47% of the modes of this layer
@@ -360,7 +364,7 @@ def test_a_layer_mode_root_is_free(case, tetm):
     base = _run(cfg)
     assert np.abs(base).max() > 1e-3, 'the amplitude read is empty, so relabelling cannot move it'
 
-    original = _s1.mode_q
+    original = _conventions.mode_q
     worst = 0.0
     try:
         for seed in range(6):
@@ -370,10 +374,10 @@ def test_a_layer_mode_root_is_free(case, tetm):
                 q = _o(xp, w)
                 return xp.where(xp.asarray(_rng.random(np.shape(q)) < 0.5), -q, q)
 
-            _s1.mode_q = relabelled
+            _conventions.mode_q = relabelled
             worst = max(worst, float(np.max(np.abs(_run(cfg) - base))))
     finally:
-        _s1.mode_q = original
+        _conventions.mode_q = original
     assert worst < 1e-10, worst
 
 
@@ -382,9 +386,10 @@ def test_the_mode_q_tie_break_is_worth_nothing():
 
     It fires only where ``Re(q) == 0``, where ``|exp(-k0*q*d)| == 1`` either way — so it
     cannot be serving boundedness, and by the freedom above it cannot be serving the answer.
-    Inverting it moves nothing (measured 0.0 exactly on the complex-``k_par`` cases, 1.4e-15
-    on the real-angle one). Stated so that nobody re-derives it from ``boundary_kz``'s
-    tie-break, which is the opposite sign and *does* decide something.
+    Inverting it moves this SMM solve by 3.0e-16, and by exactly 0.0 when ``theta`` carries an
+    imaginary part of 1e-9. Stated so that nobody re-derives it from ``boundary_kz``'s
+    tie-break, which is the opposite sign and *does* decide something. ETM does not read it:
+    its labels come from ``etm_mode_q``.
     """
     def inverted(xp, eigenvalue):
         # `xp.sqrt`, matching `mode_q`. Spelling it `** 0.5` here would make this mirror
@@ -397,12 +402,12 @@ def test_the_mode_q_tie_break_is_worth_nothing():
     cfg = _grating('te', 120.0, top=eps_from_index(1.5 + 0.3j), bot=eps_from_index(1.5),
                    theta=0.6)
     base = _run(cfg)
-    original = _s1.mode_q
+    original = _conventions.mode_q
     try:
-        _s1.mode_q = inverted
+        _conventions.mode_q = inverted
         assert float(np.max(np.abs(_run(cfg) - base))) < 1e-12
     finally:
-        _s1.mode_q = original
+        _conventions.mode_q = original
 
 
 def test_the_two_selectors_disagree_at_complex_k_par_by_design():
@@ -410,7 +415,8 @@ def test_the_two_selectors_disagree_at_complex_k_par_by_design():
 
     Pinned because it looks like a bug and is not. ``mode_q`` returns ``+i*kz`` rather than
     ``-i*kz`` for the layer below — the other root — and that is allowed by
-    ``test_a_layer_mode_root_is_free``.
+    ``test_a_layer_mode_root_is_free``. ETM's rule, ``etm_mode_q``, takes ``-i*kz`` there
+    instead, because its recursion is the one place the label is not free.
     """
     eps, k_par = 2.0 + 0j, (1.5 + 0.3j) * np.sin(0.6)
 

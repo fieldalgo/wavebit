@@ -26,7 +26,7 @@ Stages (matching the legacy chain, kept as one function each to make bit-parity 
 """
 from .backend import (array_namespace, as_array, check_finite,
                       check_physical, eig)
-from .conventions import (boundary_kz, incident_column, incident_kz, mode_q,
+from .conventions import (boundary_kz, incident_column, incident_kz, layer_root,
                           order_azimuth, order_frame_sign)
 from .enums import Answers, answers_of
 from .power import (incident_power, net_power, power_for_real_k,
@@ -84,15 +84,18 @@ def _block(xp, rows):
     return xp.concat([xp.concat(r, axis=1) for r in rows], axis=0)
 
 
-def layer_modes_1d(xp, tetm_index, kx, I, epx_conv, epy_conv, epz_conv_i, C, mu=None):
+def layer_modes_1d(xp, tetm_index, kx, I, epx_conv, epy_conv, epz_conv_i, C, mu=None, k0_d=None):
     """Eigenmodes ``(W, V, q)`` of one 1D TE / TM layer.
 
     ``W`` expands the continuous primary field (``E_y`` for TE, ``H_y`` for TM), ``V`` its
-    partner, and ``q`` are the modal decay constants used as ``exp(-k0*q*d)``. The principal
-    square root keeps ``Re(q) >= 0``, so that exponential never grows.
+    partner, and ``q`` are the modal decay constants used as ``exp(-k0*q*d)``. Without
+    ``k0_d`` the root keeps ``Re(q) >= 0``, so that exponential never grows.
 
     Shared by the ETM (:func:`solve_1d`) and SMM (:mod:`wavebit._core.scattering`) connecting
     algorithms — the mode algebra is a property of the layer, not of how layers are joined.
+    Which of ``±q`` is labelled "down" is the one exception: ETM passes the layer's optical
+    thickness ``k0_d`` for the labels its recursion needs, and SMM passes nothing
+    (:func:`~wavebit._core.conventions.layer_root`).
 
     ``mu`` is an optional ``(mux_conv, muy_conv, muz_conv_i)`` permeability triple in the
     permittivity's own convention — ``muz_conv_i`` inverted — or ``None`` for a non-magnetic
@@ -133,7 +136,7 @@ def layer_modes_1d(xp, tetm_index, kx, I, epx_conv, epy_conv, epz_conv_i, C, mu=
             A = mux_conv @ A
         from .modal_gradient import _stop, generator
         w, W = eig(_stop(A))
-        q = generator(xp, A, w, W, mode_q(xp, xp.astype(w, C)), square_root=True)
+        q = generator(xp, A, w, W, layer_root(xp, xp.astype(w, C), k0_d), square_root=True)
         # `V = W * q` is the mu = 1 form; the general one divides out the same `mu_x` the
         # operator multiplied in, which is what the TM branch does with `eps_x`. Branched
         # rather than inverting an identity: `inv(I) @ W` is bit-identical but costs an
@@ -147,7 +150,8 @@ def layer_modes_1d(xp, tetm_index, kx, I, epx_conv, epy_conv, epz_conv_i, C, mu=
         from .modal_gradient import _stop, generator
         operator = epx_conv @ B
         w, W = eig(_stop(operator))
-        q = generator(xp, operator, w, W, mode_q(xp, xp.astype(w, C)), square_root=True)
+        q = generator(xp, operator, w, W, layer_root(xp, xp.astype(w, C), k0_d),
+                      square_root=True)
         base = xp.linalg.inv(epx_conv) @ W
         V = base @ q if q.ndim == 2 else base * q
     else:
@@ -156,7 +160,7 @@ def layer_modes_1d(xp, tetm_index, kx, I, epx_conv, epy_conv, epz_conv_i, C, mu=
 
 
 def layer_modes_1d_conical(xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv_i, C,
-                           mu=None):
+                           mu=None, k0_d=None):
     """Raw (unrotated) eigenmodes of one conical 1D layer.
 
     Returns ``(W1, W2, q1, q2, V_11, V_12, V_21, V_22)`` — the two decoupled mode families and
@@ -184,8 +188,9 @@ def layer_modes_1d_conical(xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv
     reaches :func:`~wavebit._core.backend.check_finite`, whose message prescribes the one-ULP
     detune — where the old spelling died in LAPACK with no advice.
 
-    ``mu`` is the optional ``(mux_conv, muy_conv, muz_conv_i)`` triple
-    :func:`layer_modes_1d` documents, ``None`` for a non-magnetic layer.
+    ``mu`` is the optional ``(mux_conv, muy_conv, muz_conv_i)`` triple and ``k0_d`` the label
+    choice :func:`layer_modes_1d` documents, ``None`` for a non-magnetic layer and for the
+    bounded roots respectively.
 
     **Why the two families still decouple with a permeability**, which is the one thing here
     that had to be checked rather than assumed. Written out, the coupled ``Omega_L @ Omega_R``
@@ -223,8 +228,10 @@ def layer_modes_1d_conical(xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv
     operator2 = Ky2 + B @ epx_conv
     w1, W1 = eig(_stop(operator1))
     w2, W2 = eig(_stop(operator2))
-    q1 = generator(xp, operator1, w1, W1, mode_q(xp, xp.astype(w1, C)), square_root=True)
-    q2 = generator(xp, operator2, w2, W2, mode_q(xp, xp.astype(w2, C)), square_root=True)
+    q1 = generator(xp, operator1, w1, W1, layer_root(xp, xp.astype(w1, C), k0_d),
+                   square_root=True)
+    q2 = generator(xp, operator2, w2, W2, layer_root(xp, xp.astype(w2, C), k0_d),
+                   square_root=True)
 
     ky = Ky[0, 0]                    # Ky == ky * I on this path (single y order)
     ky_sq = Ky2[0, 0]
@@ -431,8 +438,11 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
         d = thickness[layer_index]
         layer_mu = _layer_mu(I, mu_all, layer_index)
 
+        # `k0*d` asks for the ETM's labels (:func:`~wavebit._core.conventions.etm_mode_q`):
+        # this recursion inverts a transmission into the medium below, so a layer's `+`
+        # modes have to be the waves that medium receives.
         W, V, q = layer_modes_1d(xp, tetm_index, kx, I, epx_conv, epy_conv, epz_conv_i, C,
-                                 mu=layer_mu)
+                                 mu=layer_mu, k0_d=k0*d)
 
         from .modal_gradient import exponential
         X = exponential(xp, q, -k0*d)
@@ -647,8 +657,10 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickne
         d = thickness[layer_index]
         layer_mu = _layer_mu(I, mu_all, layer_index)
 
+        # The ETM's labels, for the reason :func:`solve_1d` gives.
         W1, W2, q1, q2, V_11, V_12, V_21, V_22 = layer_modes_1d_conical(
-            xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv_i, C, mu=layer_mu)
+            xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv_i, C, mu=layer_mu,
+            k0_d=k0*d)
 
         from .modal_gradient import exponential, combine
         X_1 = exponential(xp, q1, -k0*d)

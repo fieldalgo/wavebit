@@ -16,8 +16,8 @@ to the conical versions, so this module reuses ``solve_1d``'s boundary init and
 ``final_matching`` verbatim.
 """
 from .backend import (_concrete, _readable, array_namespace, as_array, carries_autodiff,
-                      check_mode_cutoff, eig)
-from .conventions import boundary_kz, mode_q, order_azimuth
+                      check_mode_cutoff, checked_float, eig)
+from .conventions import boundary_kz, layer_root, order_azimuth
 from .enums import Answers, answers_of
 from .solve_1d import _block, _diag, _is_backside, _mirrored_scene, final_matching
 
@@ -73,7 +73,7 @@ def order_grid_kxy(xp, kx, ky):
             xp.broadcast_to(xp.reshape(ky, (-1, 1)), (n_orders_v, n_orders_u)))
 
 
-def _rebuild_grazing_cluster(xp, w, W, V, q, Omega_L, Omega_R):
+def _rebuild_grazing_cluster(xp, w, W, V, q, Omega_L, Omega_R, k0_d=None):
     """Re-derive the grazing eigenvalue cluster from the coupled first-order problem.
 
     Returns ``(W, V, q)`` as NumPy arrays with the cluster columns replaced, ``None`` to
@@ -104,7 +104,8 @@ def _rebuild_grazing_cluster(xp, w, W, V, q, Omega_L, Omega_R):
     parallel — basis, so the k modes are chosen greedily to keep the E-parts *and* H-parts
     jointly independent (both matrices are inverted downstream); a ``+-`` twin scores ~0 on
     both sides once its partner is in and is never double-picked. Per column the member is
-    branch-fixed to the root :func:`~wavebit._core.conventions.mode_q` would take, and kept
+    branch-fixed to the root :func:`~wavebit._core.conventions.layer_root` takes for the rest
+    of the layer (``k0_d`` is passed through, so an ETM layer keeps one rule), and kept
     at ``eig``'s joint normalization: a mode may then carry a tiny E-part (a pure-H graze)
     or a tiny H-part (the classic E-graze) but never both, which is the structure the
     interface inversions tolerate — normalizing either part to unit instead was measured to
@@ -160,9 +161,12 @@ def _rebuild_grazing_cluster(xp, w, W, V, q, Omega_L, Omega_R):
     Wc = np.empty((W.shape[0], k), dtype=W.dtype)
     Vc = np.empty_like(Wc)
     qc = np.empty(k, dtype=W.dtype)
+    # Read as a number, the way the rest of this function reads its inputs: a thickness can be a
+    # torch tensor that requires grad while the operator does not, and then this is entered.
+    k0_d = None if k0_d is None else checked_float(k0_d)
     for i, col in enumerate(sel):
         mu_i = mu_e[col]
-        q_i = mode_q(np, np.asarray([mu_i ** 2]))[0]
+        q_i = layer_root(np, np.asarray([mu_i ** 2]), k0_d)[0]
         gE, gH = g[:k, col], g[k:, col]
         if abs(q_i - mu_i) > abs(q_i + mu_i):
             gH = -gH                             # took the -q member; its H part flips
@@ -176,12 +180,15 @@ def _rebuild_grazing_cluster(xp, w, W, V, q, Omega_L, Omega_R):
 
 
 def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epyx_conv, C,
-                   mu=None):
+                   mu=None, k0_d=None):
     """Raw (unrotated) eigenmodes ``(W, V, q)`` of one 2D layer.
 
-    ``W`` is the ``[Ex; Ey]`` mode matrix and ``q`` the modal decay constants; the principal
-    square root keeps ``Re(q) >= 0`` so ``exp(-k0*q*d)`` never grows. Shared by the ETM
-    (:func:`solve_2d`) and SMM (:mod:`wavebit._core.scattering`) connecting algorithms.
+    ``W`` is the ``[Ex; Ey]`` mode matrix and ``q`` the modal decay constants; without ``k0_d``
+    the root keeps ``Re(q) >= 0`` so ``exp(-k0*q*d)`` never grows. Shared by the ETM
+    (:func:`solve_2d`) and SMM (:mod:`wavebit._core.scattering`) connecting algorithms, which
+    differ only in which of ``±q`` they label "down": ETM passes the layer's optical thickness
+    ``k0_d`` (:func:`~wavebit._core.conventions.layer_root`, as in
+    :func:`~wavebit._core.solve_1d.layer_modes_1d`).
 
     The two blocks are the factors of ``d2E/dz2 = P Q E``: ``Omega2_LR`` is the product written
     out, ``Omega_R`` the right factor kept so ``V`` can recover ``H``. **They must carry the
@@ -285,7 +292,7 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
         del Omega2_LR
     if Omega_R is None:
         Omega_R = right_factor()
-    q = mode_q(xp, xp.astype(w, C))
+    q = layer_root(xp, xp.astype(w, C), k0_d)
     V = (Omega_R @ W) / q
 
     # At an exact Rayleigh point (an order on a layer's light line, q -> 0) this V is wrong
@@ -305,7 +312,7 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
         Omega_L = _block(xp, [[-Cc, B], [-D, E]])
         del B, D, Cc, E
         try:
-            rebuilt = _rebuild_grazing_cluster(xp, w, W, V, q, Omega_L, Omega_R)
+            rebuilt = _rebuild_grazing_cluster(xp, w, W, V, q, Omega_L, Omega_R, k0_d)
         except FloatingPointError:
             raise                                # the defective-cluster refusal, on purpose
         except Exception:
@@ -479,8 +486,11 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
             I if mu_all[1] is None else mu_all[1][layer_index],
             *(None if s is None else s[layer_index] for s in mu_all[2:]))
 
+        # The ETM's labels (:func:`~wavebit._core.conventions.etm_mode_q`): this recursion
+        # inverts a transmission into the medium below, so a layer's `+` modes have to be
+        # the waves that medium receives.
         W, V, q = layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i,
-                                 epxy_conv, epyx_conv, C, mu=layer_mu)
+                                 epxy_conv, epyx_conv, C, mu=layer_mu, k0_d=k0*d)
 
         big_W, big_V = sp_modes_2d(xp, W, V, F_c, F_s, n_orders)
         if not keep_field:

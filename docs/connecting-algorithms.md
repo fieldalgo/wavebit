@@ -10,6 +10,8 @@ Targets:
 - `wavebit/_core/solve_2d.py`, `solve_1d.py` — the ETM recursion (`big_A_i`, `big_T`)
 - `wavebit/_core/scattering.py` — the SMM cascade
 - `wavebit/_core/solve_2d_4ff.py` — all three, on the first-order path
+- `wavebit/_core/conventions.py` — `etm_mode_q` / `layer_root`, the one place the two algorithms
+  label a layer's modes differently (§10)
 
 **The keyword is `layer_algorithm`** (it was `connecting_algo` until 2026-08-20; the values
 `'ETM'` / `'SMM'` / `'TMM'` did not move). "Connecting algorithm" stays the name of the *idea*
@@ -51,7 +53,9 @@ gratings, rather than assumed.
 | `'TMM'` | **not offered** | diagnostic only | refuses past modal exponent 9 | 0.94x |
 
 1. ETM and SMM are **the same answer**, to 8e-16 on a real grating. Choosing between them is a
-   cost and structure decision, never an accuracy one.
+   cost and structure decision, never an accuracy one. At a complex in-plane wavevector that
+   took ETM labelling its layers' modes by the half-space's rule (§10); before 2026-10-02 it
+   lost up to 12 digits there.
 2. ETM is cheaper everywhere measured, so it is the default on both paths.
 3. A plain transfer matrix is not a third option you would ever pick. It cannot run a grating at
    all — not because layers are thick, but because **diffraction orders are evanescent**, and it
@@ -111,7 +115,8 @@ decay by construction, and layers compose by the Redheffer star product.
 
 Both rest on the same physical fact — a mode carrying energy towards `+z` cannot gain amplitude
 on the way, so `Im(lam_f) >= 0` — which is why neither is stable in a **gain** medium. There the
-growth is the physics rather than an artefact, and nothing guards it.
+growth is the physics rather than an artefact, and nothing guards it. A complex in-plane
+wavevector breaks the same fact without any gain, and §10 is what that costs ETM.
 
 ## 3. They agree
 
@@ -364,6 +369,101 @@ the coupled path — `polarization` or `psi` at `phi = 0` on a 1D grating, inste
 
 Multiplying two matrices by hand with `redheffer_star` skips that check. It is internal for
 that reason: it operates on gap-basis per-layer blocks, which carry no ports at all.
+
+## 10. ETM's labels at a complex in-plane wavevector
+
+Written 2026-10-02. NumPy, float64 unless noted.
+
+ETM and SMM consume the same modes, but not the same **labels**. A layer mode comes as a `±q`
+pair, and which root is called "down" (`+`) is a choice. In exact arithmetic it is free, and SMM
+keeps it free in practice: flipping a random half of the roots in the scene below moved SMM's
+`r0` by at most 1.3e-10. ETM is not free to choose.
+
+**Why.** The recursion writes everything below an interface in terms of the layer's `+`
+amplitudes, through `a = (W^-1 F + V^-1 G)/2`, and inverts it (`big_A_i`). So `a` is the inverse of
+a *transmission*, from the layer's `+` modes into the medium below, and it is well conditioned only
+when those modes are the waves that medium receives: the root `boundary_kz` gives the same plane
+wave. A `+` mode that travels *up* turns that entry of `a` into a reflection, and an interface
+that does not reflect the mode makes `a` singular. SMM never meets this, because it joins every
+layer through its gap medium, whose `kz = 1` no layer mode resembles.
+
+**When the labels part.** `mode_q` takes the decaying root, `Re(q) >= 0`. At every real `k_par` in
+a passive layer that is the half-space's root too, bit for bit (4e5 random media). A complex
+`k_par` (a complex `theta`) or a gain layer puts `q**2` above the real axis, and there a
+propagating mode's decaying root travels up.
+
+**The case that showed it.** A 1D grating of permittivities `[1, 25, 1, 25, 25, 25]`, period
+2000 nm, 100 nm thick, vacuum above, `eps = 25` below, `truncation_order = 30`, 900 nm, conical at
+`phi = 0.3`, `theta = 0.5 + 0.3j`. Its wide `eps = 25` block rests on the `eps = 25` substrate, so
+the modes confined to it cross into the substrate with nothing to reflect them:
+
+| | real `theta = 0.5` | `theta = 0.5 + 0.3j`, decaying labels | `0.5 + 0.3j`, ETM labels |
+|---|---|---|---|
+| cond(`a`) at the substrate | 1.2e+02 | **2.6e+15** | 1.4e+02 |
+| `r0` moved by a 1e-14 nudge of `theta`, ETM | 1e-15 | **2.1e-04** | 8.1e-16 |
+| same, SMM | 1e-15 | 2.0e-15 | 2.0e-15 |
+
+The smallest singular value of `a` was 5.1e-15, carried by modes such as `q = 0.002348+4.978114j`:
+a real part of 0.0023 is enough for the decaying rule to pick the upward root. A nudge of 1e-10
+or 1e-6 moved ETM by as much (7.0e-05, 6.6e-05), so this was a floor, not conditioning. It needs
+both a mislabelled mode and an interface it crosses unreflected. A 1 nm `eps = 1` film between
+grating and substrate makes the interface reflect, and the floor went (1.9e-15, decaying labels
+kept). It needs high contrast too: the same grating with permittivities 1 and 2.25 moved by
+4.2e-15. A uniform layer never shows it, because its orders do not mix, so a near-zero diagonal
+entry of `a` only rescales its own column.
+
+**The rule.** `etm_mode_q` takes the half-space's root, `Re(q) > Im(q)` (Maystre's cut in `q`'s
+variables, `q = -i*kz`). The exception is a root that grows across the layer by more than
+`G = eps**-0.25` (8192 at double precision); there it keeps the decaying root. A growing root
+costs the recursion about `eps*G**2`, because the reflection state carries the round trip. The
+decaying root costs `eps/(r*G**2)`, with `r` the mode's reflection, which is at worst `1/G**2`.
+The two cross at `eps**-0.25`, where either loses at most `sqrt(eps)`, about 1.5e-8. Measured on
+two thick layers, as `|ETM - SMM|` against the cap:
+
+| cap | 2 | e | 4 | 1e2 | **8192** | 1e6 | 1e8 | none |
+|---|---|---|---|---|---|---|---|---|
+| 50 um, `theta = 0.5+0.3j` | 6.8e-05 | 6.1e-14 | 2.0e-14 | 2.2e-14 | **2.2e-14** | 2.2e-14 | 2.2e-14 | 2.7 |
+| 200 um, `theta = 1.2+0.5j` | 2.6e-06 | 2.6e-06 | 2.6e-06 | 2.6e-06 | **1.9e-12** | 2.7e-12 | 4.9e-11 | 1.6 |
+
+Uncapped, near-cutoff modes grew by up to `e**167` across the 50 um layer. SMM keeps `mode_q`'s
+labels: it needs none of this, and handed the uncapped labels it broke as well.
+
+**What it changed.** `|ETM - SMM|` in `r0`, with the decaying labels and with `etm_mode_q`:
+
+| scene (100 nm unless noted) | before | after |
+|---|---|---|
+| 1D TE, `theta = 0.5+0.3j` | 2.5e-06 | 1.2e-16 |
+| 1D TM, `theta = 0.5+0.3j` | 3.8e-10 | 1.1e-15 |
+| conical, `theta = 0.5+0.3j` | 5.1e-05 | 3.1e-16 |
+| conical, `theta = 0.5+0.03j` | 9.1e-06 | 2.0e-15 |
+| conical, `theta = 1.2+0.5j` | 5.5e-06 | 8.5e-16 |
+| conical, `theta = 0.5+0.3j`, 50 um | 6.8e-05 | 2.2e-14 |
+| 2D, 6x6 cell, `truncation_order = (6, 6)` | 5.1e-06 | 1.1e-14 |
+| evanescent, `Re(theta) = pi/2 - 7.5e-8` | 1.0e-05 | 3.8e-15 |
+| evanescent, `Re(theta) = pi/2 - 1e-4` | 3.6e-05 | 7.8e-15 |
+| evanescent, `Re(theta) = pi/2 - 1e-2` | 9.8e-06 | 8.2e-15 |
+
+The evanescent rows are `theta = Re + i*arccosh(sqrt(1.6**2 + 1.2**2 + 1e-4))` at
+`phi = arctan(1.2/1.6001)`. The first offset is what the engine's float32 clamp produces, and the
+same point at complex64 went from 5.1e-02 to 1.9e-06 off double precision (largest over all
+orders; SMM 3.4e-06), with no `branch_tolerance`: the new label reads the sign of `Re(q) - Im(q)`,
+which round-off on `Re(q)` cannot flip. Every real-angle solve is unchanged to the bit (24 checked,
+TE, TM, conical and real-`kx` evanescent incidence), since the two rules then pick the same root and
+nothing grows. `tests/test_etm_layer_labels.py` pins the table, each case with a control that puts
+the old rule back and must break it.
+
+**What it needs from the half-space rule.** A layer can follow the half-space's root only if that
+root does not grow in an evanescent order, or the layer's exponentials would. Maystre's cut keeps
+every evanescent root decaying. The continuation rule it replaced on 2026-10-02 did not
+(`docs/branch-cuts.md`), and under it the labels above left ETM 5.8e-06 off SMM at 100 nm. At
+1 um neither algorithm was stable: SMM gave `r0 = 4.1191+3.5004j` and moved 3.2e-02 under the
+nudge, where Maystre's cut gives `-0.6412-0.2681j` and 5.0e-15.
+
+**What is left.** The cap's worst case, `sqrt(eps)`, needs a mode that grows by about 8192 across a
+layer *and* crosses an interface with a rounding-level reflection; no scene measured reached it.
+Far thicker layers are out of reach for both algorithms: at 1 mm and `theta = 0.5+0.3j`, SMM itself
+moved 3.9e-02 under the nudge. The 4ff path splits its modes in `split_forward_backward` by the
+same partition (attenuation where decay dominates, energy flow otherwise), without a cap.
 
 ## References
 

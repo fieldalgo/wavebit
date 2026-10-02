@@ -56,7 +56,8 @@ from typing import NamedTuple
 
 import numpy as np
 
-from .backend import AxisNameWarning, UnresolvedBranchWarning, _concrete, _device_of, array_namespace, as_array
+from .backend import (AxisNameWarning, UnresolvedBranchWarning, _concrete, _device_of,
+                      array_namespace, as_array, in_namespace)
 
 _FLAT = 1e-12      # below this, a layer root's real part counts as zero and the tie-break decides
 
@@ -94,15 +95,17 @@ def branch_tolerance(value):
     zero. At complex64 the ``Re(q)`` of a mode that should be exactly propagating is round-off
     (~1e-7), so the label comes from the sign of noise. In exact arithmetic the label is free
     (``tests/test_branch_selection.py``), and the SMM layer algorithm stays free of it in
-    practice. ETM does not. Raising the cutoff sends those modes to the tie-break. Measured
-    against double precision (``truncation_order=30``, NumPy, ``docs/branch-cuts.md``):
+    practice. Raising the cutoff sends those modes to the tie-break. ETM read the same labels
+    until 2026-10-02 and was not free of them; it now takes :func:`etm_mode_q`'s, which read no
+    cutoff. Measured against double precision (``truncation_order=30``, NumPy,
+    ``docs/branch-cuts.md``):
 
     ===========================================  ==========  ==========
     ``value``                                    1e-12       1e-5
     ===========================================  ==========  ==========
-    evanescent incidence, ETM                    5.1e-02     1.9e-06
+    evanescent incidence, ETM                    1.9e-06     1.9e-06
     evanescent incidence, SMM                    3.4e-06     1.3e-06
-    weak absorber at a complex angle, ETM        6.2e-03     5.1e-05
+    weak absorber at a complex angle, ETM        3.1e-07     3.1e-07
     weak absorber at a complex angle, SMM        4.4e-07     3.8e-07
     ===========================================  ==========  ==========
 
@@ -143,16 +146,18 @@ def _check_resolvable(xp, v, decision, floor):
     """Warn when a root was chosen by the sign of a value the dtype cannot resolve.
 
     ``decision`` is the real quantity whose sign the caller reads: ``Re(q)`` in :func:`mode_q`,
-    ``Re(kz) + Im(kz)`` in :func:`boundary_kz`. ``floor`` is the size below which the caller
-    stops reading it and lets a tie-break decide, so values there were never read. It is
-    ``_FLAT`` for :func:`mode_q`, and 0 for :func:`boundary_kz`, which has no tie-break.
+    ``Re(q) - Im(q)`` in :func:`etm_mode_q`, ``Re(kz) + Im(kz)`` in :func:`boundary_kz`.
+    ``floor`` is the size below which the caller stops reading it and lets a tie-break decide,
+    so values there were never read. It is ``_FLAT`` for :func:`mode_q`, and 0 for the other
+    two, which have no tie-break.
 
     A sign is answerable only while the value stands clear of round-off, which is ~1e-16 of
     ``|v|`` at complex128 and ~1e-7 at complex64. For a layer mode that should be exactly
-    propagating, ``Re(q)`` *is* that round-off at single precision, so its label comes from
-    noise. ``Re(kz) + Im(kz)`` is at least ``|kz|`` for every real ``k_par`` in a passive medium,
-    so this check finds nothing in a half-space unless ``kz**2`` sits on Maystre's cut. Measured
-    in ``docs/branch-cuts.md``.
+    propagating, ``Re(q)`` *is* that round-off at single precision, so :func:`mode_q`'s label
+    comes from noise -- harmlessly, since only SMM reads those labels and SMM does not depend
+    on them. The other two decisions are at least ``|v|`` from zero for every real ``k_par`` in
+    a passive medium, so they find nothing unless ``q**2`` or ``kz**2`` sits on its cut.
+    Measured in ``docs/branch-cuts.md``.
 
     So this reports rather than repairs. It is silent at complex128 and fires at complex64,
     which makes it a check on the precision rather than on the physics. It costs nothing
@@ -216,15 +221,22 @@ def mode_q(xp, eigenvalue):
     downward wave is ``q = -i*kz``, i.e. ``Im(q) <= 0``.
 
     Both of those are *conditioning* statements, not physics. A layer's ``±q`` pair is used in
-    full by the stack algebra, so the label is free: flipping any subset of a layer's roots
-    moves the solve by 1.5e-13 at 40 nm, and the Airy recursion by 2.0e-15 over 4000 random
-    stacks. What ``Re(q) >= 0`` buys is ``|exp(-k0*q*d)| <= 1``; the ``Im(q) <= 0`` tie-break
-    fires only where that modulus is 1 either way and so buys nothing measurable — inverting
-    it moves the answer by exactly 0.
+    full by the stack algebra, so in exact arithmetic the label is free, and the SMM connecting
+    algorithm keeps it free in practice: flipping any subset of a layer's roots moves the solve
+    by 1.5e-13 at 40 nm, and the Airy recursion by 2.0e-15 over 4000 random stacks. What
+    ``Re(q) >= 0`` buys is ``|exp(-k0*q*d)| <= 1``; the ``Im(q) <= 0`` tie-break fires only
+    where that modulus is 1 either way and so buys nothing measurable — inverting it moves the
+    answer by exactly 0.
 
-    So do not "repair" this to agree with :func:`boundary_kz` at complex ``k_par``. The two
-    disagree there on purpose, and the disagreement is pinned in
-    ``tests/test_branch_selection.py``. See ``docs/time-convention-audit.md`` §5.
+    ETM is the exception, and :func:`etm_mode_q` is its rule. That recursion inverts a
+    transmission into the medium below each layer, so it needs a layer's ``+`` modes to be the
+    waves that medium receives -- :func:`boundary_kz`'s root. This function's root is that one
+    at every real ``k_par`` in a passive layer and is not where ``q**2`` lies above the real
+    axis (a complex ``k_par``, or gain): there a propagating mode's decaying root travels up,
+    and an ETM solve built on it lost 12 digits. So the two rules disagree at complex ``k_par``
+    on purpose, and this is the right one for everything except the ETM recursion -- which
+    itself falls back to it wherever the other root would grow. Pinned in
+    ``tests/test_branch_selection.py`` and ``tests/test_etm_layer_labels.py``.
     """
     # `xp.sqrt` for the same reason as :func:`boundary_kz` -- `**0.5` leaves a 6.1e-17 real
     # part on a lossless propagating mode, where `Re(q)` is meant to be a hard 0. Nothing
@@ -235,6 +247,73 @@ def mode_q(xp, eigenvalue):
     _check_resolvable(xp, v, xp.real(v), _FLAT)
     flip = xp.where(xp.abs(xp.real(v)) > _FLAT, xp.real(v) < 0, xp.imag(v) > 0)
     return xp.where(flip, -v, v)
+
+
+def etm_mode_q(xp, eigenvalue, k0_d):
+    """A layer mode's ``q`` for the enhanced-transmittance (ETM) recursion: the half-space's root.
+
+    ``k0_d`` is the layer's optical thickness ``k0*d``. The label is the one :func:`boundary_kz`
+    would give the same plane wave -- ``q = -i*kz`` with ``Re(kz) + Im(kz) > 0``, which in
+    ``q``'s own variables reads ``Re(q) > Im(q)`` -- except where that root grows across the
+    layer by more than ``eps**-0.25``; there the decaying root is kept, as :func:`mode_q`
+    keeps it everywhere.
+
+    **Why ETM needs a label at all.** Its interface factor ``a = (W^-1 F + V^-1 G)/2`` maps the
+    field below an interface onto the layer's ``+`` amplitudes and is then inverted, so it is
+    the inverse of a *transmission*: it is well conditioned only if the ``+`` modes are the
+    waves the region below receives. At a real in-plane wavevector in a passive layer
+    :func:`mode_q`'s decaying root is that wave, bit for bit. A complex ``k_par`` (or a gain
+    layer) puts ``q**2`` above the real axis, and there a propagating mode's decaying root
+    travels *up*. Where such a mode crosses an interface with nothing to reflect it -- an
+    ``eps = 25`` region resting on an ``eps = 25`` substrate -- the smallest singular value of
+    ``a`` is that mode's reflection, ~1e-14, and the recursion loses ~12 digits: a 1e-14 nudge
+    of a complex ``theta`` moved ``r`` by 2e-4 where SMM moved 2e-15. SMM never sees it,
+    because it joins every layer through its gap medium, whose ``kz = 1`` no layer mode
+    resembles. So the label is free for SMM and is not free for ETM.
+
+    **Why the cap.** The half-space's root of such a mode grows downward, by
+    ``G = |exp(-k0*q*d)|`` across the layer. The recursion carries that round trip as ``G**2``
+    in its reflection state, and loses ``eps*G**2`` to it; uncapped, a 10 um layer at
+    ``theta = 0.5+0.3j`` broke both algorithms, its near-cutoff modes growing by up to
+    ``e**33`` across it. The decaying root costs ``eps/(r*G**2)`` instead, ``r`` being the
+    mode's reflection, which is no worse than ``1/G**2`` however small ``r`` is. The two costs cross at ``G = eps**-0.25`` (8192 at double precision, 54 at
+    single), so the half-space's root is taken up to there and the decaying one past it.
+    Measured on two thick layers, a cap of 8192 matched SMM in both (2e-14 at 50 um, 2e-12 at
+    200 um); a cap of 100 or less left 2.6e-6 at 200 um, 1e8 lost a decade and a half there,
+    and no cap at all broke both. A thick layer therefore converges to :func:`mode_q`'s
+    labels and a thin one to :func:`boundary_kz`'s, and in the thin limit a layer of a
+    half-space's own material has exactly that half-space's waves for its ``+`` modes.
+
+    Bit-identical to :func:`mode_q` wherever ``q**2`` lies in the closed lower half plane --
+    every real ``k_par`` in a passive layer -- since the two rules then pick the same root and
+    the cap cannot fire. ``docs/connecting-algorithms.md`` holds the measurements.
+    """
+    v = xp.sqrt(eigenvalue)
+    # Its decision is the sign of `Re(q) - Im(q)`, at least `|q|` from zero for every passive layer
+    # at a real `k_par`: round-off on `Re(q)` alone, which is what a propagating mode's real
+    # part is at single precision, cannot flip it.
+    _check_resolvable(xp, v, xp.real(v) - xp.imag(v), 0.0)
+    q = xp.where(xp.real(v) - xp.imag(v) < 0, -v, v)
+    # `log(1/eps)/4` nepers: `|exp(-k0*q*d)| > eps**-0.25` is `Re(q)*k0*d < -nepers`.
+    nepers = -0.25 * float(np.log(xp.finfo(v.dtype).eps))
+    # Placed the way `modal_gradient.exponential` places its scale, and for its reason: a
+    # traced thickness is cast, never rebuilt with a `device=` (which JAX cannot batch).
+    real = xp.real(v).dtype
+    if in_namespace(xp, k0_d):
+        k0_d = xp.astype(k0_d, real)
+    else:
+        k0_d = xp.asarray(k0_d, dtype=real, device=getattr(v, 'device', None))
+    return xp.where(xp.real(q) * k0_d < -nepers, -q, q)
+
+
+def layer_root(xp, eigenvalue, k0_d=None):
+    """A layer mode's ``q``: :func:`etm_mode_q` given the layer's ``k0*d``, :func:`mode_q` without.
+
+    The one place a layer's root is chosen, so the mode builders take the connecting algorithm's
+    need as an argument instead of each spelling a rule. ETM passes ``k0_d``; SMM and everything
+    else pass nothing and keep the bounded root.
+    """
+    return mode_q(xp, eigenvalue) if k0_d is None else etm_mode_q(xp, eigenvalue, k0_d)
 
 
 def boundary_kz(xp, eps, k_par_sq):

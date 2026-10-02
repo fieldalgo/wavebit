@@ -406,8 +406,8 @@ _REGIMES = {
     'real angle': dict(),
     'complex angle': dict(theta=_COMPLEX_THETA, phi=_COMPLEX_PHI),
     # (1.4 + 1e-5j)**2 -- the weak absorber, as permittivity. A real angle there is a phase
-    # angle with a real k_par (2026-09), so its half-space roots are resolved; the warning at
-    # complex64 comes from layer modes, whose Re(q) is round-off at that precision.
+    # angle with a real k_par (2026-09), so its half-space roots are resolved, and so are ETM's
+    # layer labels (2026-10-02).
     'weak absorber': dict(top=1.9599999998999997 + 2.8e-05j, theta=0.6, phi=0.4),
 }
 
@@ -421,15 +421,72 @@ def test_double_precision_resolves_every_branch(backend, regime):
 
 @pytest.mark.parametrize('regime', list(_REGIMES))
 @pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
-def test_single_precision_reports_an_unresolvable_branch(backend, regime):
-    """complex64 cannot answer the question, and says so instead of guessing quietly.
+def test_single_precision_reads_no_branch_from_round_off(backend, regime):
+    """complex64 now answers every branch question these regimes ask, and says nothing.
 
-    Every backend, deliberately: unlike the guards in ``_core/backend.py`` this one is not
-    NumPy-only. When it was written, the backends it would have skipped returned the *worst*
-    answers here: NumPy 1.80, JAX 4.12 and PyTorch 5.68 at the same point, under the half-space
-    rule of the day. They are the paths taken for gradients and GPUs.
+    Every decision on this ETM solve reads a value at least ``|v|`` from zero: the half-space's
+    ``Re(kz) + Im(kz)`` (Maystre's cut) and the layer label's ``Re(q) - Im(q)``
+    (``etm_mode_q``), both since 2026-10-02. Neither is round-off, so the warning stays quiet and
+    the answer holds -- within 3e-6 of double precision on every backend here. In 2026-08 the
+    same point was 1.80 off on NumPy, 4.12 on JAX and 5.68 on PyTorch, and ETM was still 5e-2
+    off until its labels moved.
+
+    Every backend, deliberately: unlike the guards in ``_core/backend.py`` this check is not
+    NumPy-only, and the backends it would have skipped are the paths taken for gradients and
+    GPUs. Where a decision genuinely sits on a cut it still fires; see the test below.
     """
-    assert _branch_warnings(complex_dtype=1, backend=backend, **_REGIMES[regime])
+    kw = _REGIMES[regime]
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter('always')
+        single = _branch_solve(1, backend=backend, **kw).s_inc.r_s
+    assert [r for r in rec if issubclass(r.category, UnresolvedBranchWarning)] == []
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        double = _branch_solve(0, backend=backend, **kw).s_inc.r_s
+    error = np.abs(np.asarray(single, dtype=np.complex128)
+                   - np.asarray(double, dtype=np.complex128)).max()
+    assert error < 1e-5, error
+
+
+def _on_a_cut(backend, which, single=True):
+    """One branch decision placed 4e-7 off its cut, and the UnresolvedBranchWarnings it raised.
+
+    A margin of ~3e-7 on a root of size 1 is inside complex64's round-off (8 eps ~ 1e-6) and
+    far outside complex128's. ``'half-space'`` puts ``kz**2`` beside the negative imaginary axis
+    (Maystre's cut); ``'layer'`` puts ``q**2`` beside the positive imaginary one, which is the
+    same cut in ``q = -i*kz``.
+    """
+    from wavebit._core.conventions import boundary_kz, etm_mode_q
+    if backend == 0:
+        make = lambda v: np.asarray(v, dtype=np.complex64 if single else np.complex128)
+    elif backend == 1:
+        jnp = pytest.importorskip('jax.numpy')
+        make = lambda v: jnp.asarray(v, dtype=jnp.complex64 if single else jnp.complex128)
+    else:
+        torch = pytest.importorskip('torch')
+        make = lambda v: torch.tensor(v, dtype=torch.complex64 if single else torch.complex128)
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter('always')
+        if which == 'half-space':
+            eps = make(4e-7 - 1j)
+            boundary_kz(array_namespace(eps), eps, make(0j))
+        else:
+            eigenvalue = make(-4e-7 + 1j)
+            etm_mode_q(array_namespace(eigenvalue), eigenvalue, 0.7)
+    return [r for r in rec if issubclass(r.category, UnresolvedBranchWarning)]
+
+
+@pytest.mark.parametrize('which', ['half-space', 'layer'])
+@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+def test_a_decision_on_its_cut_still_reports_at_single_precision(backend, which):
+    """The warning is not retired with the round-off it used to report: a cut still has one.
+
+    Off a cut, neither the half-space's nor ETM's decision can be flipped by round-off. On one --
+    ``kz**2`` or ``q**2`` within round-off of the imaginary axis it is cut along -- it can, and
+    then complex64 says so while complex128, four hundred million times finer, stays quiet.
+    """
+    assert len(_on_a_cut(backend, which)) == 1
+    assert _on_a_cut(backend, which, single=False) == []
 
 
 def test_a_traced_single_precision_solve_says_it_could_not_be_checked():
@@ -491,8 +548,8 @@ def test_the_check_does_not_break_tracing():
 
 
 def test_branch_warning_message_carries_no_numbers():
-    a = str(_branch_warnings(complex_dtype=1)[0].message)
-    b = str(_branch_warnings(complex_dtype=1, **_REGIMES['complex angle'])[0].message)
+    a = str(_on_a_cut(0, 'half-space')[0].message)
+    b = str(_on_a_cut(0, 'layer')[0].message)
     assert a == b
 
 
@@ -508,30 +565,8 @@ def test_branch_tolerance_is_scoped_and_restores():
     assert conventions._FLAT == before
 
 
-def test_branch_tolerance_rescues_a_complex_angle_at_single_precision():
-    """The escape hatch has to actually move the answer, or it is decoration.
-
-    Double precision is the reference. At complex64, on the default ETM layer algorithm, the
-    evanescent point is 5.1e-2 off it, from layer modes whose ``Re(q)`` is round-off and whose
-    label is then the sign of noise. Raising the cutoff sends them to the tie-break and brings
-    the answer to ~2e-6. Before 2026-10-02 the same point was 4.5 off, because the half-space
-    root read the sign of noise too.
-    """
-    ref = np.asarray(_branch_solve(0, **_REGIMES['complex angle']).s_inc.r_s).ravel()
-
-    def err():
-        got = np.asarray(_branch_solve(1, **_REGIMES['complex angle']).s_inc.r_s).ravel()
-        return float(np.abs(got - ref).max())
-
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore')
-        assert err() > 1e-3
-        with wavebit.branch_tolerance(1e-5):
-            assert err() < 1e-5
-
-
-def _smm_branch_error(cutoff, **kw):
-    """complex64 against complex128 on the SMM layer algorithm, at one branch cutoff."""
+def _branch_error(algorithm, cutoff=1e-12, **kw):
+    """complex64 against complex128 on one layer algorithm, at one branch cutoff."""
     def r_s(complex_dtype):
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
@@ -539,24 +574,25 @@ def _smm_branch_error(cutoff, **kw):
                 backend=0, psi=np.pi / 2, bot=25.0, truncation_order=[30], wavelength=900e-9,
                 period=[2000e-9], structure=_BRANCH_STRUCTURE, thickness=[100e-9],
                 complex_dtype=complex_dtype, fourier_coefficients='integrated',
-                factorization='li', layer_algorithm='SMM', **kw).solve()
+                factorization='li', layer_algorithm=algorithm, **kw).solve()
         return np.asarray(res.s_inc.r_s, dtype=np.complex128).ravel()
     ref = r_s(0)
     with wavebit.branch_tolerance(cutoff):
         return float(np.abs(r_s(1) - ref).max())
 
 
-def test_single_precision_evanescent_incidence_needs_no_override():
-    """The half-space root no longer reads round-off, so single precision holds on its own.
+@pytest.mark.parametrize('algorithm', ['ETM', 'SMM'])
+def test_single_precision_evanescent_incidence_needs_no_override(algorithm):
+    """Neither the half-space root nor ETM's layer labels read round-off any more.
 
     complex64 rounds ``Re(theta) = pi/2`` up past it, and the engine clamps it just below,
     so the in-plane wavevector carries a genuine imaginary part of ~1e-7. Maystre's cut is
     continuous there. The rule before 2026-10-02 had its cut on the real evanescent axis, and
     there it turned half of the evanescent orders into growing ones: 8.2 against double
-    precision. SMM is used because its layer labels are free in practice. ETM's are not, which
-    the test above covers.
+    precision. ETM was 5.1e-2 off until the same day, from layer labels read off the sign of
+    a round-off ``Re(q)``; ``etm_mode_q`` reads ``Re(q) - Im(q)``. Now ETM 1.9e-6, SMM 3.4e-6.
     """
-    assert _smm_branch_error(1e-12, top=1.0, **_REGIMES['complex angle']) < 1e-4
+    assert _branch_error(algorithm, top=1.0, **_REGIMES['complex angle']) < 1e-5
 
 
 def test_raising_the_cutoff_no_longer_costs_a_weak_absorber():
@@ -568,7 +604,7 @@ def test_raising_the_cutoff_no_longer_costs_a_weak_absorber():
     ``k_par = n_top*sin(theta)``, which a real angle had in 2026-08. Measured now: 3.8e-7.
     """
     weak = dict(top=1.9599999998999997 + 2.8e-05j, theta=0.6 + 1e-12j, phi=0.4)
-    assert _smm_branch_error(1e-5, **weak) < 1e-5
+    assert _branch_error('SMM', 1e-5, **weak) < 1e-5
 
 
 # --- tier four: a value that arrived below the precision it was asked to be solved at --------
