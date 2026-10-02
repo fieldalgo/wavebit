@@ -1060,7 +1060,14 @@ def _distance_gradient(interface_mask, shape, lattice=None):
             # and is not: it drops the metric's smooth half. Measured, that cost ~10% of
             # ``d/d a2x`` on a hex cell, and the error did not shrink with raster resolution,
             # which is what said it was systematic rather than quantisation.
-            import jax
+            #
+            # PyTorch is eager, so there the choice is read off the basis's value directly, and
+            # the same rebuild carries the metric's derivative. This branch was JAX's alone, and
+            # a PyTorch basis under autograd met `jax.lax.stop_gradient` here: a TypeError on an
+            # oblique cell, and a `period`, which the solver detached for this field, came back
+            # with the normal field's dependence on it dropped -- 22% off a central difference
+            # in a period derivative on a 0.77 x 0.61 cell, where JAX agreed with it.
+            xp_ = array_namespace(J)
 
             def _index_offsets(Jc):
                 """``(dj, di)`` to the nearest interface pixel, on the 3x3 periodic tiling."""
@@ -1076,11 +1083,15 @@ def _distance_gradient(interface_mask, shape, lattice=None):
                 return ((idx[0] - jj)[core].astype(float),
                         (idx[1] - ii)[core].astype(float))
 
-            spec = jax.ShapeDtypeStruct((ny_, nx_), np.float64)
-            # `stop_gradient` states what is true: no tangent belongs on a choice of pixel.
-            dj, di = jax.pure_callback(_index_offsets, (spec, spec),
-                                       jax.lax.stop_gradient(J))
-            xp_ = array_namespace(J)
+            if 'jax' in xp_.__name__:
+                import jax
+                spec = jax.ShapeDtypeStruct((ny_, nx_), np.float64)
+                # `stop_gradient` states what is true: no tangent belongs on a choice of pixel.
+                dj, di = jax.pure_callback(_index_offsets, (spec, spec),
+                                           jax.lax.stop_gradient(J))
+            else:
+                dj, di = (as_array(xp_, offset, dtype=J.dtype, device=_device(xp_, J))
+                          for offset in _index_offsets(_to_numpy(J)))
             scale_ = xp_.sqrt(J[0, 0] ** 2 + J[1, 0] ** 2)
             a_, b_ = J[0, 0] / scale_, J[0, 1] / scale_
             c_, d_ = J[1, 0] / scale_, J[1, 1] / scale_
@@ -1105,7 +1116,10 @@ def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=No
     This is a **geometry** quantity — it depends on where the material interfaces sit, not on
     the permittivity values carried between them — so it is computed eagerly in NumPy/SciPy
     and then held fixed while gradients flow through the permittivity. That holds for every
-    ``method``: the field is a constant to the solve, whatever the backend.
+    ``method``: the field is a constant to the permittivity, whatever the backend. Not to the
+    cell: ``'distance'`` rebuilds its distances in a traced ``lattice`` and carries the
+    cell's derivative (on JAX and PyTorch alike), and the other three, which read the cell
+    in NumPy, refuse a traced one by name (``normal_methods._TRACED_CELL``).
 
     ``method`` selects the construction (:class:`~wavebit._core.enums.NormalMethod`;
     ``None`` means ``'distance'``, the original). The default body below is ``'distance'``:
@@ -1210,10 +1224,29 @@ def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=No
     # (`tests/test_oblique_lattice.py::test_a_one_row_skewed_cell_is_the_grating_it_draws`).
     # An axis-aligned cell gives back exactly (1.0, 0.0) / (0.0, 1.0), to the bit.
     if 1 in shape:
-        if lattice is None:
+        cols = None if lattice is None else getattr(lattice, 'columns', lattice)
+        try:
+            A = None if cols is None else np.asarray(cols, dtype=float)
+        except Exception:                       # noqa: BLE001 - a traced basis, not a mistake
+            A = False
+        if lattice is None or (A is False and getattr(lattice, 'axis_aligned', False)):
+            # An axis-aligned cell's `b` lies along its axis whatever its lengths, so a traced
+            # `period` moves nothing here and has no number to give.
             ux, uy = (1.0, 0.0) if shape[0] == 1 else (0.0, 1.0)
+        elif A is False:
+            # A traced skewed cell: `b` is a row of `A^-1`, `(a22, -a12)` or `(-a21, a11)` over
+            # the determinant, built here in the cell's namespace so the normal carries the
+            # cell's derivative. It read the cell through NumPy and raised for every tracer.
+            _xp = array_namespace(cols)
+            det = cols[0, 0] * cols[1, 1] - cols[0, 1] * cols[1, 0]
+            b0, b1 = ((cols[1, 1] / det, -cols[0, 1] / det) if shape[0] == 1
+                      else (-cols[1, 0] / det, cols[0, 0] / det))
+            norm = _xp.hypot(b0, b1)
+            ones = _xp.ones(shape, dtype=cols.dtype, device=_device(_xp, cols))
+            field = (ones * (b0 / norm), ones * (b1 / norm))
+            return field + (ones,) if with_magnitude else field
         else:
-            recip = np.linalg.inv(np.asarray(lattice, dtype=float))
+            recip = np.linalg.inv(A)
             b = recip[0] if shape[0] == 1 else recip[1]
             ux, uy = b / np.hypot(b[0], b[1])
         # Magnitude 1, i.e. no circular deformation. A one-cell axis carries no interface of

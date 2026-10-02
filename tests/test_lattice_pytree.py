@@ -383,6 +383,116 @@ def test_the_raster_path_differentiates_the_basis_through_its_index_offsets():
     assert np.count_nonzero(np.abs(g) > 1e-12) == 4, g
 
 
+_SQUARE_ROD = np.ones((1, 8, 8), dtype=complex)
+_SQUARE_ROD[0, 2:6, 2:5] = 9.0 + 0.2j
+_ONE_ROW = np.ones((1, 1, 12), dtype=complex)
+_ONE_ROW[0, 0, 3:8] = 6.0 + 0.2j
+_CELL_CASES = {
+    # (raster, cell given the parameter, point, truncation)
+    'period': (_SQUARE_ROD, lambda p, lift: dict(period=[p, lift(0.61)]), 0.77, [2, 2]),
+    'oblique angle': (_SQUARE_ROD, lambda p, lift: dict(lattice=wavebit.Lattice.oblique(0.77, 0.77, p)),
+                      np.radians(100.0), [2, 2]),
+    'one row, period': (_ONE_ROW, lambda p, lift: dict(period=[p, lift(0.61)]), 0.77, [3, 0]),
+    'one row, oblique angle': (_ONE_ROW, lambda p, lift: dict(lattice=wavebit.Lattice.oblique(0.77, 0.61, p)),
+                               np.radians(100.0), [3, 0]),
+}
+
+
+def _nvf_raster_read_out(backend, case, p, **options):
+    raster, cell, _, truncation = _CELL_CASES[case]
+    if backend == 1:
+        import jax.numpy as xp
+    elif backend == 2:
+        import torch as xp
+    else:
+        xp = np
+    lift = (lambda v: xp.asarray(np.asarray(v))) if backend else np.asarray
+    s = wavebit.rcwa(backend=backend, structure=lift(raster), thickness=[0.2], theta=0.2, phi=0.3,
+                     psi=0.4, wavelength=0.777, top=1.0, bot=2.25, truncation_order=truncation,
+                     factorization='nvf', layer_algorithm='SMM', **cell(p, lift), **options)
+    r = s.solve()
+    a = r.r_s.reshape(-1)[3]
+    return r.R.sum().real - 0.7 * r.T.sum().real + 0.4 * a.real + 0.9 * a.imag
+
+
+@pytest.mark.parametrize('backend', [1, 2], ids=['jax', 'torch'])
+@pytest.mark.parametrize('case', list(_CELL_CASES))
+def test_the_raster_normal_field_carries_the_cell_on_both_backends(case, backend):
+    """The NVF raster's normal field is built in the cell's metric, and the ``'distance'``
+    construction rebuilds the distance in it from host-chosen pixel offsets, so it carries the
+    cell's derivative. That branch was JAX's alone (a ``pure_callback``). On PyTorch a ``period``
+    under autograd was detached for the field -- the derivative 22% off a central difference on
+    this 8 x 8 raster, with no error -- and a skewed cell under autograd met
+    ``jax.lax.stop_gradient`` and raised a ``TypeError``. A one-row raster read the cell through
+    NumPy and raised for every traced cell on both backends but a PyTorch ``period``."""
+    if backend == 1:
+        jax = pytest.importorskip('jax')
+        import jax.numpy as jnp
+        wavebit.enable_x64()
+    else:
+        torch = pytest.importorskip('torch')
+    _, _, at, _ = _CELL_CASES[case]
+    h = 1e-6
+    near = (_nvf_raster_read_out(0, case, at + h) - _nvf_raster_read_out(0, case, at - h)) / (2 * h)
+    far = (_nvf_raster_read_out(0, case, at + 2 * h) - _nvf_raster_read_out(0, case, at - 2 * h)) / (4 * h)
+    finite = (4 * near - far) / 3
+    if backend == 1:
+        got = float(jax.grad(lambda p: _nvf_raster_read_out(1, case, p))(jnp.asarray(at)))
+    else:
+        x = torch.tensor(at, dtype=torch.float64, requires_grad=True)
+        got = float(torch.autograd.grad(_nvf_raster_read_out(2, case, x), x)[0])
+    assert got == pytest.approx(finite, rel=1e-6), (got, finite)
+
+
+@pytest.mark.parametrize('backend', [1, 2], ids=['jax', 'torch'])
+@pytest.mark.parametrize('method', ['contour', 'spectral', 'smooth'])
+def test_a_normal_field_built_in_numpy_refuses_a_traced_cell_by_name(method, backend):
+    """``'contour'``, ``'spectral'`` and ``'smooth'`` read the cell's metric in NumPy, so a cell
+    derivative cannot pass through them. JAX raised ``TracerArrayConversionError`` there; PyTorch
+    detached a ``period`` and returned the derivative without the field's share, 15%, 6% and
+    0.09% off a central difference on this raster. Both now name the limit and the method that
+    carries it."""
+    if method == 'contour':
+        pytest.importorskip('contourpy', reason="raster_normal_method='contour' needs the optional dependency")
+    if backend == 1:
+        jax = pytest.importorskip('jax')
+        import jax.numpy as jnp
+        wavebit.enable_x64()
+        run = lambda: jax.grad(lambda p: _nvf_raster_read_out(
+            1, 'period', p, raster_normal_method=method))(jnp.asarray(0.77))
+    else:
+        torch = pytest.importorskip('torch')
+        x = torch.tensor(0.77, dtype=torch.float64, requires_grad=True)
+        run = lambda: _nvf_raster_read_out(2, 'period', x, raster_normal_method=method)
+    with pytest.raises(TypeError, match="raster_normal_method='distance' carries it"):
+        run()
+
+
+def test_a_freeze_takes_its_record_on_the_cell_s_value():
+    """A freeze is the eager pass, and its record is taken on the cell's value -- a PyTorch
+    ``period`` under autograd included, which the live solve no longer detaches for the normal
+    field. A replay holds that field fixed on both backends, so their derivatives agree."""
+    jax = pytest.importorskip('jax')
+    torch = pytest.importorskip('torch')
+    import jax.numpy as jnp
+    wavebit.enable_x64()
+
+    def replayed(backend, p):
+        lift = (lambda v: jnp.asarray(np.asarray(v))) if backend == 1 else (lambda v: torch.as_tensor(np.asarray(v)))
+        s = wavebit.rcwa(backend=backend, structure=lift(_SQUARE_ROD), period=[p, lift(0.61)],
+                         thickness=[0.2], theta=0.2, phi=0.3, psi=0.4, wavelength=0.777, top=1.0,
+                         bot=2.25, truncation_order=[2, 2], factorization='nvf', layer_algorithm='SMM')
+        return s, jnp if backend == 1 else torch
+
+    x = torch.tensor(0.77, dtype=torch.float64, requires_grad=True)
+    solver, _ = replayed(2, x)
+    geometry = solver.freeze_geometry()
+    got = torch.autograd.grad(solver.solve(geometry=geometry).R.sum().real, x)[0]
+    geometry_jax = replayed(1, 0.77)[0].freeze_geometry()
+    want = jax.grad(lambda p: jnp.sum(replayed(1, p)[0].solve(geometry=geometry_jax).R).real)(jnp.asarray(0.77))
+    assert float(got) == pytest.approx(float(want), rel=1e-11)
+
+
 # ------------------------------------------------- one lattice, two uses: `meshgrid_xy` and `rcwa`
 
 #: The scene both of the next two tests are sited on: a genuine Cartesian circle in a cell that

@@ -751,6 +751,16 @@ so RCWA is not the tool for them.
 
 Pinned as `tests/test_lattice_pytree.py::test_the_raster_basis_gradient_is_the_shear_along_one`.
 
+**Under NVF the raster's normal field moves with the cell too**, and only its `'distance'`
+construction carries that derivative: the nearest interface pixel is chosen on the host from the
+cell's value, and the distance to it is rebuilt in the traced metric. That holds on JAX and
+PyTorch alike since 2026-10-02. Before, it was JAX's alone. PyTorch raised a `TypeError` for a
+skewed cell under autograd. A `period` under autograd was detached for the field, so its
+derivative lost the field's share, 22% of it on an 8 x 8 raster on a 0.77 x 0.61 cell, with no
+error. `'contour'`, `'spectral'` and `'smooth'` build the field in NumPy from the metric, so a
+cell derivative through them raises a `TypeError` that says so, on both backends
+(`tests/test_lattice_pytree.py::test_the_raster_normal_field_carries_the_cell_on_both_backends`).
+
 ## What is binary and what is not — the table that decides the path
 
 Everything above is about *which* derivative you get. This is about *whether* you get one, and

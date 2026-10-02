@@ -1508,7 +1508,7 @@ class CoreSolveMixin:
         """Whether the cell is ``diag(Lx, Ly)`` — i.e. whether the separable k-layout applies."""
         return self._lattice_basis is None or _lattice.is_axis_aligned(self._lattice_basis)
 
-    def _geometry_lattice_for(self, geometry):
+    def _geometry_lattice_for(self, geometry, *, freezing=False):
         """The cell basis the *geometry* steps should use — live, or recovered from the record.
 
         One accessor rather than two, because a skewed basis and a non-square pixel are the
@@ -1530,6 +1530,14 @@ class CoreSolveMixin:
 
         Parametric shapes instead rebuild their projectors in the live cell metric,
         retaining derivatives of both periods even when their values are readable.
+
+        So does the raster's normal field, which is built in the cell metric too (the
+        ``'distance'`` construction carries its derivative): a PyTorch ``period`` under autograd
+        is readable -- it detaches -- and was read, so the field was built on the detached
+        cell and its share of a period derivative dropped, 22% of one on a 0.77 x 0.61 NVF
+        raster, where JAX's traced period was right. Without a record it stays live now, as
+        JAX's does. ``freezing`` asks for the readable cell regardless: a freeze is the eager
+        pass, and its record is taken on the cell's value.
         """
         if not self.lattice_is_axis_aligned:
             return self._lattice_basis
@@ -1539,7 +1547,8 @@ class CoreSolveMixin:
             # the numerical geometry builder must retain their derivatives.
             return self.lattice
         period = _concrete_period(self.period)
-        if period is not None:
+        live = geometry is None and not freezing and _holds_autodiff(self.period)
+        if period is not None and not live:
             return _lattice.as_lattice(period=period)
         if geometry is not None:
             recorded = _recorded_lattice(geometry.normal_field_source)
@@ -4366,7 +4375,7 @@ class CoreFactorizationMixin:
         # `kx` it will meet. Its entries do not otherwise care where the window sits
         # -- `(i, j)` is the harmonic `i - j` -- so only the size travels here.
         (_, half_width_u), (_, half_width_v) = self.order_window
-        basis = self._geometry_lattice_for(None)
+        basis = self._geometry_lattice_for(None, freezing=True)
         self._refuse_a_freeze_on_a_tracer(basis)
 
         # The two axes decide independently what has to be frozen: NVF needs the normal

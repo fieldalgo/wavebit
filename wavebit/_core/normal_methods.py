@@ -96,8 +96,19 @@ def _metric(lattice, shape):
     if lattice is None:
         return np.eye(2)
     n_v, n_u = shape
-    M = np.asarray(jacobian(lattice, n_v, n_u), dtype=float)
+    try:
+        M = np.asarray(jacobian(lattice, n_v, n_u), dtype=float)
+    except Exception:                           # noqa: BLE001 - a cell under autodiff
+        raise TypeError(_TRACED_CELL) from None
     return M / (float(np.hypot(M[0, 0], M[1, 0])) or 1.0)
+
+
+#: What a cell under autodiff meets in a construction that reads its metric in NumPy.
+_TRACED_CELL = (
+    "raster_normal_method='contour', 'spectral' and 'smooth' build the normal field in NumPy "
+    "from the cell's metric, so a derivative with respect to the cell (period or lattice) "
+    "cannot pass through them. raster_normal_method='distance' carries it, on JAX and PyTorch "
+    "alike.")
 
 
 def _steps(M):
