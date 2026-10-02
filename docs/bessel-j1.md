@@ -197,7 +197,8 @@ wavebit.get_j1_implementation()
   default does not pretend one does.
 - **`'hybrid'`** always, when you want the traced backends comparable regardless of dtype, or
   one fewer variable while profiling something else.
-- **`'native'`** `torch.special.bessel_j1`, wrapped for the autograd backward it does not ship.
+- **`'native'`** `torch.special.bessel_j1`, wrapped for the derivative it does not ship, in reverse
+  and forward mode (`backward`, `jvp`) and under `torch.func`.
   Faster as a function; that is 0.01-0.3% of a solve, so speed is rarely the reason.
 
 **JAX ignores the setting**, in every mode, and `'native'` deliberately does not raise for it:

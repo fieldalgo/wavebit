@@ -856,7 +856,8 @@ def set_j1_implementation(name):
         else and you want one fewer variable.
 
     ``'native'``
-        ``torch.special.bessel_j1``, wrapped for the autograd backward it does not ship.
+        ``torch.special.bessel_j1``, wrapped for the derivative it does not ship -- a ``backward``
+        and a ``jvp``, and a functorch rule for ``torch.func``.
         Faster as a function -- 29-170x -- though that is 0.01-0.3% of a solve, so this is
         rarely the reason to choose it. **Costs four orders of accuracy in float64.**
 
@@ -923,27 +924,46 @@ class _TorchBesselJ1Meta(type):
             import torch
 
             class _Impl(torch.autograd.Function):
+                # `forward` without `ctx` and a `setup_context`, so `torch.func` transforms take
+                # the rule too; elementwise, so their `vmap` rule is generated.
+                generate_vmap_rule = True
+
                 @staticmethod
-                def forward(ctx, x):
-                    ctx.save_for_backward(x)
+                def forward(x):
                     return torch.special.bessel_j1(x)
 
                 @staticmethod
+                def setup_context(ctx, inputs, output):
+                    (x,) = inputs
+                    ctx.save_for_backward(x)
+                    ctx.save_for_forward(x)
+
+                @staticmethod
                 def backward(ctx, grad_out):
-                    # dJ1/dx = J0(x) - J1(x)/x, and 1/2 at x = 0.
                     (x,) = ctx.saved_tensors
-                    safe = torch.where(x == 0, torch.ones_like(x), x)
-                    dj1 = torch.where(
-                        x == 0, torch.full_like(x, 0.5),
-                        torch.special.bessel_j0(x) - torch.special.bessel_j1(x) / safe)
-                    return grad_out * dj1
+                    return grad_out * _torch_j1_derivative(x)
+
+                @staticmethod
+                def jvp(ctx, tangent):
+                    # Forward mode: `torch.autograd.forward_ad` and `torch.func.jvp`. Without it
+                    # a dual raised PyTorch's own "jvp is not implemented" error.
+                    (x,) = ctx.saved_tensors
+                    return tangent * _torch_j1_derivative(x)
 
             cls._impl = _Impl
         return cls._impl.apply(x)
 
 
+def _torch_j1_derivative(x):
+    """``dJ1/dx = J0(x) - J1(x)/x``, and 1/2 at ``x = 0``."""
+    import torch
+    safe = torch.where(x == 0, torch.ones_like(x), x)
+    return torch.where(x == 0, torch.full_like(x, 0.5),
+                       torch.special.bessel_j0(x) - torch.special.bessel_j1(x) / safe)
+
+
 class _TorchBesselJ1(metaclass=_TorchBesselJ1Meta):
-    """``torch.special.bessel_j1`` with the analytic backward it is missing."""
+    """``torch.special.bessel_j1`` with the analytic derivative it is missing, in both modes."""
 
 
 def jinc(x):

@@ -740,3 +740,41 @@ def test_a_mixed_second_derivative_differentiates_the_rule_once():
     backward_over_forward = float(torch.autograd.grad(tangent, e)[0])
     assert forward_over_backward == pytest.approx(finite, rel=1e-6)
     assert backward_over_forward == pytest.approx(finite, rel=1e-6)
+
+
+# ------------------------------------------------------------------------------- the other rules
+
+def test_native_j1_forward_mode():
+    """PyTorch's own ``bessel_j1`` (``set_j1_implementation('native')``, and the default below
+    float64) is wrapped in an ``autograd.Function`` for the derivative PyTorch does not ship. It
+    had a ``backward`` only, so a ``forward_ad`` dual through a disc raised PyTorch's "jvp is
+    not implemented"; it now carries the same ``J0 - J1/x`` as a ``jvp``, and a ``setup_context``
+    so that ``torch.func`` takes it too."""
+    torch = pytest.importorskip('torch')
+    from torch.autograd import forward_ad
+    from wavebit._core.backend import j1, set_j1_implementation
+    previous = set_j1_implementation('native')
+    try:
+        f, at, _ = PATHS['shape, disc lx']
+        value, finite = _difference('shape, disc lx')
+        w = _weights(value.size)
+        with forward_ad.dual_level():
+            dual = forward_ad.make_dual(torch.tensor(at, dtype=torch.float64),
+                                        torch.tensor(1.0, dtype=torch.float64))
+            tangent = forward_ad.unpack_dual(f(2, dual)).tangent.numpy()
+        x = torch.tensor(at, dtype=torch.float64, requires_grad=True)
+        (torch.as_tensor(w) * f(2, x)).sum().backward()
+        assert float(w @ tangent) == pytest.approx(float(x.grad), rel=1e-11)
+        # The native J1 is accurate to ~4e-7 in float64 (docs/bessel-j1.md), so the scene's
+        # derivative is too.
+        assert _close(tangent, finite, 1e-5), (tangent, finite)
+
+        points = torch.tensor([0.0, 0.3, 2.0, 9.0], dtype=torch.float64)
+        exact = (torch.special.bessel_j0(points[1:]) - torch.special.bessel_j1(points[1:]) / points[1:])
+        _, through_func = torch.func.jvp(j1, (points,), (torch.ones_like(points),))
+        np.testing.assert_allclose(through_func[1:].numpy(), exact.numpy(), rtol=1e-15)
+        assert float(through_func[0]) == 0.5
+        np.testing.assert_allclose(torch.func.vmap(torch.func.grad(j1))(points).numpy(),
+                                   through_func.numpy(), rtol=1e-15)
+    finally:
+        set_j1_implementation(previous)
