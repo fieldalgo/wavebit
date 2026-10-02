@@ -324,26 +324,47 @@ def test_a_python_list_of_points_keeps_double_precision(backend, bid, path):
     assert np.abs(got - ref).max() < 1e-11 * np.abs(ref).max(), np.abs(got - ref).max()
 
 
-def test_traced_thickness_with_explicit_z_says_why_it_cannot():
+@pytest.mark.parametrize('side', ['top', 'bottom'])
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
+def test_traced_thickness_with_explicit_z_says_why_it_cannot(backend, side):
     """Bucketing a z into a layer is data-dependent, so it refuses instead of guessing.
 
     Counts stay traceable — that path never asks which layer a point is in — so the refusal is
     specific to explicit ``sample_z``, and the message says what to do instead.
+
+    PyTorch was not refused until 2026-10-02: ``float`` reads a tensor under autograd, so the
+    bucketing went through and the thickness's derivative was dropped. From above, where the
+    heights are mirrored into the propagation frame first, the mirroring gave up on the same
+    tensor and the unmirrored heights were bucketed, so the field itself came back wrong too.
+    The result's own ``reconstruct_field`` takes these derivatives exactly (``fields.md``).
     """
-    jax = pytest.importorskip('jax')
-    import jax.numpy as jnp
+    if backend == 'jax':
+        jax = pytest.importorskip('jax')
+        import jax.numpy as xp
+        traced = lambda: xp.asarray(THICK)
+    else:
+        torch = pytest.importorskip('torch')
+        xp = torch
+        traced = lambda: torch.tensor(THICK, dtype=torch.float64, requires_grad=True)
 
     def run(thick, sample_z):
-        s = wavebit.rcwa(backend=1, top=1.0, bot=1.0, wavelength=WL,
+        s = wavebit.rcwa(backend=1 if backend == 'jax' else 2, top=1.0, bot=1.0, wavelength=WL,
                          thickness=thick, theta=np.deg2rad(24.0), tetm='tm', phi=None,
-                         truncation_order=4, period=[PERIOD[0]], structure=jnp.asarray(TWO_LAYER),
-                         fourier_coefficients='integrated', answers='field')
+                         truncation_order=4, period=[PERIOD[0]], structure=xp.asarray(TWO_LAYER),
+                         fourier_coefficients='integrated', answers='field', incidence_side=side)
         s.solve()
-        return jnp.sum(jnp.abs(s.reconstruct_field(sample_x=5, sample_y=1, sample_z=sample_z)) ** 2)
+        return xp.sum(xp.abs(s.reconstruct_field(sample_x=5, sample_y=1, sample_z=sample_z)) ** 2)
 
     # a count traces fine, gradient and all
-    g = jax.grad(lambda t: run(t, 3))(jnp.asarray(THICK))
+    if backend == 'jax':
+        g = jax.grad(lambda t: run(t, 3))(traced())
+    else:
+        thick = traced()
+        g, = torch.autograd.grad(run(thick, 3), thick)
     assert np.all(np.isfinite(np.asarray(g)))
 
     with pytest.raises(TypeError, match='traced'):
-        jax.grad(lambda t: run(t, np.array([50.0, 200.0])))(jnp.asarray(THICK))
+        if backend == 'jax':
+            jax.grad(lambda t: run(t, np.array([50.0, 200.0])))(traced())
+        else:
+            run(traced(), np.array([50.0, 200.0]))

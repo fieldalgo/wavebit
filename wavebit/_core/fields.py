@@ -423,6 +423,14 @@ def _z_plan(sample_z, layer_info_list, d_index, interface_side='right'):
     for entry in layer_info_list[::-1]:          # propagation-frame entry first
         d = entry[d_index]
         try:
+            # Asked before `float`, which a PyTorch tensor under autograd answers: it read the
+            # value and dropped the derivative, so a thickness derivative of the field at
+            # explicit heights came back wrong with no error -- 7% off a central difference on
+            # a two-layer TE grating lit from below; lit from above, where `to_mirrored_z` gave
+            # up on the same tensor and the unmirrored heights were bucketed, the field itself
+            # was 1.7 off. A JAX tracer refuses `float` on its own.
+            if carries_autodiff(d):
+                raise TypeError('a thickness under autodiff')
             ds.append(float(d))
         except Exception as e:                   # a JAX/torch tracer, typically
             raise TypeError(
