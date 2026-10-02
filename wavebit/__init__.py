@@ -86,7 +86,6 @@ from ._core.backend import (AutoDetuneWarning, AxisNameWarning, ComplexIncidence
                             PrecisionLossWarning, RayleighPointWarning,
                             UnphysicalResultWarning, UnresolvedBranchWarning,
                             get_j1_implementation, set_j1_implementation)
-from ._core.conventions import branch_tolerance
 from ._core.draw import plot_structure, slice_structure
 from ._core.enums import (Answers, Backend, Tetm, FourierCoefficients, Factorization,
                           Formulation, Nesting, NormalMethod, Projector)
@@ -144,7 +143,6 @@ __all__ = [
     'AxisNameWarning', 'ComplexIncidenceWarning', 'PrecisionLossWarning', 'RayleighPointWarning',
     'UnphysicalResultWarning', 'UnresolvedBranchWarning',
     'get_j1_implementation', 'set_j1_implementation',
-    'branch_tolerance',
     'plot_structure', 'slice_structure',
     'Answers', 'Backend', 'Tetm', 'FourierCoefficients', 'Factorization', 'Formulation',
     'NormalMethod', 'Projector', 'Nesting',

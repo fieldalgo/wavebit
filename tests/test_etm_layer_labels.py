@@ -125,15 +125,16 @@ def test_the_cap_is_what_keeps_a_thick_layer():
 
 #: ``Re(theta)`` offsets below pi/2 at the evanescent point of ``tests/test_fp_warnings.py``.
 #: 7.5e-8 is what the engine's float32 clamp (``_incident_kxy``) produces there, which makes
-#: ``Im(k_par)`` ~1e-7: the decaying root then took its label from the sign of a ``Re(q)`` of
-#: ~1e-10, and ``branch_tolerance(1e-5)`` rescued it. At 1e-4 and 1e-2 that real part is
-#: genuine and no cutoff helped.
+#: ``Im(k_par)`` ~1e-7: the decaying root then took its label from the sign of a ``Re(q)`` that
+#: small, and raising the branch cutoff to 1e-5 (``branch_tolerance``, removed the same day as
+#: this rule landed) sent those modes to the tie-break. At 1e-4 and 1e-2 that real part is
+#: larger and no cutoff helped.
 EVANESCENT_OFFSETS = [7.5e-8, 1e-4, 1e-2]
 
 
 @pytest.mark.parametrize('offset', EVANESCENT_OFFSETS, ids=['f32_clamp', '1e-4', '1e-2'])
 def test_evanescent_incidence_needs_no_override(offset):
-    """ETM matches SMM at evanescent incidence with no ``branch_tolerance``.
+    """ETM matches SMM at evanescent incidence with no override of any branch cutoff.
 
     The decaying root left ETM 1.0e-5, 3.6e-5 and 9.8e-6 off SMM at these three offsets.
     """

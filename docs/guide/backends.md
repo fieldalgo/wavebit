@@ -63,12 +63,11 @@ wavebit.rcwa(backend=1, device=1, complex_dtype=1, ...)     # JAX, GPU, single p
 32-bit halves the memory and is not always safe: two numbers differing by eight or more digits
 cancel silently — no warning, no error — and a convolution matrix routinely holds both. Reach
 for it only once you have checked that your problem does not. Evanescent (complex-angle)
-incidence was the one case that failed outright at 32 bits until 2026-10-02. The half-space
-root is now resolved there. On the default ETM algorithm, however, the layer modes' labels
-still come from round-off: one measured point was 5e-2 off double precision. Use
-`layer_algorithm='SMM'` (3.4e-6 at that point) or `wavebit.branch_tolerance(1e-5)` (1.9e-6)
-there. The solver warns `UnresolvedBranchWarning` when a label was read from round-off. See
-[`../branch-cuts.md`](../branch-cuts.md).
+incidence was the one case that failed outright at 32 bits until 2026-10-02. Both of its
+branch decisions are now resolved there, the half-space root and the ETM layer labels: one
+measured point is 1.9e-6 off double precision on ETM and 3.4e-6 on SMM, where it was 5.1e-2
+on ETM. The solver warns `UnresolvedBranchWarning` when a branch was still read from
+round-off, which takes a root sitting on its cut. See [`../branch-cuts.md`](../branch-cuts.md).
 
 Tutorials [`03-jax`](https://github.com/fieldalgo/wavebit/blob/develop/tutorials/03-device-and-datatype-jax.ipynb) and
 [`03-torch`](https://github.com/fieldalgo/wavebit/blob/develop/tutorials/03-device-and-datatype-torch.ipynb) work through both keywords.

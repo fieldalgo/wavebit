@@ -56,7 +56,7 @@ conventions differ. This audit went looking. Four results:
 | | Question | Answer | Moved? |
 | --- | --- | --- | --- |
 | **1** | Which priority is right for a half-space, `Re(kz) > 0` or `Im(kz) >= 0`? | **Neither, on its own.** `Re(kz) > 0` with an `Im` tie-break is right for every real `k_par` and for most complex ones; a third condition decides the rest. *(2026-10-02: the third condition became Maystre's cut; see the note above)* | **yes** — `_off_principal_branch`, since replaced |
-| **2** | Is `mode_q` disagreeing with `boundary_kz` at complex `k_par` a defect? | **No** — a layer's `±q` is a label and a half-space's `kz` is a boundary condition. The label is measured free to 2.0e-15 | no |
+| **2** | Is `mode_q` disagreeing with `boundary_kz` at complex `k_par` a defect? | **No** — a layer's `±q` is a label and a half-space's `kz` is a boundary condition. The label is measured free to 2.0e-15. *(2026-10-02: free for SMM only. ETM inverts a transmission into the medium below each layer and lost 12 digits on the decaying label; its layers now take the half-space's root where it does not grow — §5's note)* | **yes**, for ETM — `etm_mode_q` |
 | **3** | Is the TM discrepancy against the mpmath Airy reference a solver defect? | **No — and (corrected 2026-08-12) not a reference defect either**: the compared numbers were the coupled path's TM *efficiency* and the reference's `|r_p|²`, which for an absorbing superstrate differ by exactly `|n_top|²·Re(n_top⁻²)` — two conventions of a quantity the contract excludes. Solver matches both references to 4.3e-16 on amplitudes | no |
 | **4** | Any other flip residue? | **One live**: the painted-polygon builder still wrote `conj(n)**2`, turning an absorbing painted layer into gain. Plus one sentence of prose left in the old convention | **yes** — `boundary.py` |
 
@@ -334,6 +334,18 @@ The algebra is free; the arithmetic is not. `mode_q` spends the freedom on condi
 its tie-break — which fires only where `|exp(-k0*q*d)| == 1` either way — decides nothing at
 all. That last point is stated because it is the one a reader is most likely to "fix" by
 copying `boundary_kz`'s opposite tie-break, which would be a no-op dressed as a correction.
+
+> **Corrected (2026-10-02): free for SMM, not for ETM.** Every measurement above is a thin layer
+> whose relabelled modes reflect at its interfaces, and there ETM is free too. ETM is not free in
+> general: its interface factor `a = (W^-1 F + V^-1 G)/2` is the inverse of a transmission from a
+> layer's `+` modes into the medium below, so a `+` mode that travels up turns it into a
+> reflection. At a complex `k_par` the decaying root of a propagating mode does travel up, and an
+> `eps = 25` block resting on an `eps = 25` substrate does not reflect it: `cond(a)` reached
+> 2.6e15 and a 1e-14 nudge of `theta` moved ETM's `r0` by 2e-4, SMM's by 2e-15. The boundary
+> rule's labels, the table above shows, cannot simply replace `mode_q`'s, because they grow; ETM
+> now takes them up to a growth of `eps**-0.25` across the layer and the decaying root past it
+> (`etm_mode_q`). SMM, whose gap medium no layer mode resembles, keeps `mode_q`. Measurements:
+> [`connecting-algorithms.md`](connecting-algorithms.md) §10.
 
 ---
 

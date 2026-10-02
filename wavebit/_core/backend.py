@@ -258,18 +258,18 @@ class UnphysicalResultWarning(UserWarning):
 class UnresolvedBranchWarning(UserWarning):
     """A ``sqrt`` branch was chosen from a value that carries no information about it.
 
-    Choosing a root reads the sign of a value: ``Re(kz) + Im(kz)`` for a half-space,
-    ``Re(q) - Im(q)`` for a layer mode under ETM, and ``Re(q)`` for one under SMM. A sign is
-    answerable only while the value stands clear of the working precision's round-off. The
-    first two are at least ``|kz|`` (``|q|``) at every real ``k_par`` in a passive medium, so they
-    always are, away from their cuts. A layer mode that should be exactly propagating has a
-    ``Re(q)`` that is round-off itself, ~1e-7 at complex64, so the SMM label then comes from the
-    sign of noise -- which SMM does not depend on. Until 2026-10-02 ETM read that label too, and
-    lost 5e-2 to it against double precision at evanescent incidence; it is 1.9e-6 there now.
+    Choosing a root reads the sign of a value: ``Re(kz) + Im(kz)`` for a half-space and
+    ``Re(q) - Im(q)`` for a layer mode under ETM. A sign is answerable only while the value
+    stands clear of the working precision's round-off. Both are at least ``|kz|`` (``|q|``) at
+    every real ``k_par`` in a passive medium, so this fires only where ``kz**2`` or ``q**2`` sits
+    within round-off of its cut -- far more often at complex64 than at complex128, where it has
+    not been seen outside a constructed case.
 
-    Until 2026-10-02 the half-space rule also read ``Re(kz)`` alone, and a single-precision solve
-    could return ``|R| ~ 4`` from it. Its own category so it can be escalated or silenced on its
-    own; see ``docs/branch-cuts.md``.
+    Until 2026-10-02 both decisions read a real part alone, which at complex64 *is* round-off for
+    an exactly propagating or evanescent wave: a single-precision solve returned ``|R| ~ 4`` from
+    the half-space rule, and ETM lost 5e-2 to its layer labels. SMM's layer labels still read
+    ``Re(q)`` alone, but SMM does not depend on them, so they are not checked. Its own category
+    so it can be escalated or silenced on its own; see ``docs/branch-cuts.md``.
     """
 
 

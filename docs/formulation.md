@@ -431,7 +431,10 @@ normalization is not convention-free, so `de_ri` is not compared against anythin
 
 Every `sqrt` above is a physical decision, centralized in `_core/conventions.py`:
 
-- **layer** `q`: `Re(q) ≥ 0` (`mode_q`) — a conditioning choice on a free label;
+- **layer** `q`: under SMM `Re(q) ≥ 0` (`mode_q`), a conditioning choice on a free label; under
+  ETM the half-space's root wherever it grows by less than `eps**-0.25` across the layer
+  (`etm_mode_q`), because that recursion inverts a transmission and its labels are not free
+  (`docs/connecting-algorithms.md` §10);
 - **half-space** `kz`: Maystre's cut, `Re(kz) + Im(kz) > 0` (`boundary_kz`, since 2026-10-02).
   At every real `k_par` in a passive medium this is the principal root (`Re > 0`, tie `Im > 0`).
   Below the real axis of `kz**2`, reached by a complex angle or a gain medium, it is the root

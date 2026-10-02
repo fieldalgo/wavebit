@@ -446,7 +446,7 @@ labels: it needs none of this, and handed the uncapped labels it broke as well.
 The evanescent rows are `theta = Re + i*arccosh(sqrt(1.6**2 + 1.2**2 + 1e-4))` at
 `phi = arctan(1.2/1.6001)`. The first offset is what the engine's float32 clamp produces, and the
 same point at complex64 went from 5.1e-02 to 1.9e-06 off double precision (largest over all
-orders; SMM 3.4e-06), with no `branch_tolerance`: the new label reads the sign of `Re(q) - Im(q)`,
+orders; SMM 3.4e-06), with no branch cutoff to override: the new label reads the sign of `Re(q) - Im(q)`,
 which round-off on `Re(q)` cannot flip. Every real-angle solve is unchanged to the bit (24 checked,
 TE, TM, conical and real-`kx` evanescent incidence), since the two rules then pick the same root and
 nothing grows. `tests/test_etm_layer_labels.py` pins the table, each case with a control that puts

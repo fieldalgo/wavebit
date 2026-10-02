@@ -384,12 +384,12 @@ def test_guards_step_aside_for_a_jit_tracer():
 _BRANCH_STRUCTURE = np.array([[[0, 1, 0, 1, 1, 1]]]) * 24 + 1
 
 
-def _branch_solve(complex_dtype, top=1.0, theta=0.4, phi=0.3, backend=0):
+def _branch_solve(complex_dtype, top=1.0, theta=0.4, phi=0.3, backend=0, layer_algorithm='ETM'):
     return wavebit.rcwa(
         backend=backend, psi=np.pi / 2, top=top, bot=25.0, theta=theta, phi=phi, truncation_order=[30],
         wavelength=900e-9, period=[2000e-9], structure=_BRANCH_STRUCTURE, thickness=[100e-9],
         complex_dtype=complex_dtype, fourier_coefficients='integrated',
-        factorization='li').solve()
+        factorization='li', layer_algorithm=layer_algorithm).solve()
 
 
 def _branch_warnings(**kw):
@@ -419,30 +419,33 @@ def test_double_precision_resolves_every_branch(backend, regime):
     assert _branch_warnings(complex_dtype=0, backend=backend, **_REGIMES[regime]) == []
 
 
+@pytest.mark.parametrize('algorithm', ['ETM', 'SMM'])
 @pytest.mark.parametrize('regime', list(_REGIMES))
 @pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
-def test_single_precision_reads_no_branch_from_round_off(backend, regime):
+def test_single_precision_reads_no_branch_from_round_off(backend, regime, algorithm):
     """complex64 now answers every branch question these regimes ask, and says nothing.
 
-    Every decision on this ETM solve reads a value at least ``|v|`` from zero: the half-space's
+    Every decision an ETM solve reads is at least ``|v|`` from zero: the half-space's
     ``Re(kz) + Im(kz)`` (Maystre's cut) and the layer label's ``Re(q) - Im(q)``
     (``etm_mode_q``), both since 2026-10-02. Neither is round-off, so the warning stays quiet and
-    the answer holds -- within 3e-6 of double precision on every backend here. In 2026-08 the
-    same point was 1.80 off on NumPy, 4.12 on JAX and 5.68 on PyTorch, and ETM was still 5e-2
-    off until its labels moved.
+    the answer holds -- within 3e-6 of double precision on every backend here. SMM's layer labels
+    still come from a round-off ``Re(q)``, but SMM does not depend on them, so they are not
+    checked: they used to warn on every one of these solves while the answer sat within 6.4e-6.
+    In 2026-08 the same point was 1.80 off on NumPy, 4.12 on JAX and 5.68 on PyTorch, and ETM
+    was still 5e-2 off until its labels moved.
 
     Every backend, deliberately: unlike the guards in ``_core/backend.py`` this check is not
     NumPy-only, and the backends it would have skipped are the paths taken for gradients and
     GPUs. Where a decision genuinely sits on a cut it still fires; see the test below.
     """
-    kw = _REGIMES[regime]
+    kw = dict(_REGIMES[regime], backend=backend, layer_algorithm=algorithm)
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
-        single = _branch_solve(1, backend=backend, **kw).s_inc.r_s
+        single = _branch_solve(1, **kw).s_inc.r_s
     assert [r for r in rec if issubclass(r.category, UnresolvedBranchWarning)] == []
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        double = _branch_solve(0, backend=backend, **kw).s_inc.r_s
+        double = _branch_solve(0, **kw).s_inc.r_s
     error = np.abs(np.asarray(single, dtype=np.complex128)
                    - np.asarray(double, dtype=np.complex128)).max()
     assert error < 1e-5, error
@@ -557,16 +560,8 @@ def test_branch_warning_category_is_exported():
     assert wavebit.UnresolvedBranchWarning is UnresolvedBranchWarning
 
 
-def test_branch_tolerance_is_scoped_and_restores():
-    import wavebit._core.conventions as conventions
-    before = conventions._FLAT
-    with wavebit.branch_tolerance(1e-6):
-        assert conventions._FLAT == 1e-6
-    assert conventions._FLAT == before
-
-
-def _branch_error(algorithm, cutoff=1e-12, **kw):
-    """complex64 against complex128 on one layer algorithm, at one branch cutoff."""
+def _branch_error(algorithm, **kw):
+    """complex64 against complex128 on one layer algorithm."""
     def r_s(complex_dtype):
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
@@ -576,9 +571,7 @@ def _branch_error(algorithm, cutoff=1e-12, **kw):
                 complex_dtype=complex_dtype, fourier_coefficients='integrated',
                 factorization='li', layer_algorithm=algorithm, **kw).solve()
         return np.asarray(res.s_inc.r_s, dtype=np.complex128).ravel()
-    ref = r_s(0)
-    with wavebit.branch_tolerance(cutoff):
-        return float(np.abs(r_s(1) - ref).max())
+    return float(np.abs(r_s(1) - r_s(0)).max())
 
 
 @pytest.mark.parametrize('algorithm', ['ETM', 'SMM'])
@@ -595,16 +588,19 @@ def test_single_precision_evanescent_incidence_needs_no_override(algorithm):
     assert _branch_error(algorithm, top=1.0, **_REGIMES['complex angle']) < 1e-5
 
 
-def test_raising_the_cutoff_no_longer_costs_a_weak_absorber():
-    """The trade that made ``branch_tolerance`` a scoped override is gone.
+@pytest.mark.parametrize('algorithm', ['ETM', 'SMM'])
+def test_a_weak_absorber_at_a_complex_angle_holds_at_single_precision(algorithm):
+    """The case that once made a branch cutoff a trade, with no cutoff left to trade.
 
-    In 2026-08 a raised cutoff rescued the complex angle and broke a weakly absorbing
-    superstrate, because the half-space rule then decided on the same cutoff. That was 0.99 off
-    double precision at 1e-5 here. ``theta = 0.6 + 1e-12j`` is the formal reading,
-    ``k_par = n_top*sin(theta)``, which a real angle had in 2026-08. Measured now: 3.8e-7.
+    In 2026-08 a weakly absorbing superstrate had a genuine ``Re(kz)`` at the scale of complex64
+    round-off, so the half-space rule's cutoff could serve it or the complex angle above, not
+    both, and ``branch_tolerance`` was exposed to choose (0.99 off double precision at 1e-5
+    here). Maystre's cut and ``etm_mode_q`` read no cutoff, and the override was removed on
+    2026-10-02. ``theta = 0.6 + 1e-12j`` is the formal reading, ``k_par = n_top*sin(theta)``,
+    which a real angle had in 2026-08. Measured now: ETM 3.1e-7, SMM 4.4e-7.
     """
     weak = dict(top=1.9599999998999997 + 2.8e-05j, theta=0.6 + 1e-12j, phi=0.4)
-    assert _branch_error('SMM', 1e-5, **weak) < 1e-5
+    assert _branch_error(algorithm, **weak) < 1e-5
 
 
 # --- tier four: a value that arrived below the precision it was asked to be solved at --------

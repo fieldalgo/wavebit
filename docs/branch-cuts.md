@@ -8,14 +8,16 @@ float32.
 below. First, failure two (§4) is not a limit of single precision for the half-space root. The
 old rule's cut lay along the real evanescent axis, and complex64 gave `kx` a genuine imaginary
 part of ~1e-7. Under the new rule the float32 SMM solve is within 3.4e-6 of float64 at the point
-that was 4.5 off. What remains at single precision is a layer-label effect on the ETM algorithm,
-and `branch_tolerance` still addresses it. Second, the trade in §4's "And offers a scoped
-override" belonged to the old half-space rule. Under the new one a raised cutoff costs nothing
-measured.
+that was 4.5 off. What remained at single precision was a layer-label effect on the ETM
+algorithm, fixed the same day: ETM's layers now take the half-space's root too (`etm_mode_q`,
+[`connecting-algorithms.md`](connecting-algorithms.md) §10), and the same point is 1.9e-6 off.
+Second, the trade in §4's "And offers a scoped override" belonged to the old half-space rule.
+With neither rule reading a cutoff any more, `branch_tolerance` overrode nothing that moved an
+answer, and it was removed.
 
 Targets:
-- `wavebit/_core/conventions.py` — `mode_q`, `boundary_kz`, `incident_kz`,
-  `_check_resolvable`, `branch_tolerance`
+- `wavebit/_core/conventions.py` — `mode_q`, `etm_mode_q`, `boundary_kz`, `incident_kz`,
+  `_check_resolvable`
 - `wavebit/_core/solve_1d.py` — `solve_1d` stage 3, `final_matching`
 - `tests/references/test_reticolo_conical_sweep.py` — the RETICOLO oracle
 - `tests/test_fp_warnings.py` — the three tiers of "this result is not trustworthy"
@@ -31,12 +33,15 @@ one a limit — and neither was visible at a real incidence angle:
 | | Symptom | Cause | Fixed |
 | --- | --- | --- | --- |
 | **Respelled root** | complex `theta` returned `R = -delta`, `T = 0` — a grating that scatters nothing | the incident wave's `kz` was written two ways that agree only for real angles | `incident_kz` |
-| **Unresolvable branch** | complex64 returns \|R\| ~ 4 on all three backends, each wrong differently | at that precision `Re(v)` *is* round-off, so the branch is taken from the sign of noise | it warns, and offers a scoped override. **The half-space part was fixed on 2026-10-02 (§8)**; a layer-label part remains on ETM |
+| **Unresolvable branch** | complex64 returns \|R\| ~ 4 on all three backends, each wrong differently | at that precision `Re(v)` *is* round-off, so the branch is taken from the sign of noise | it warned, and offered a scoped override. **Both parts were fixed on 2026-10-02**: the half-space by Maystre's cut (§8), ETM's layer labels by `etm_mode_q`; the override was removed |
 
 The first was invisible because **a real incidence angle makes it an identity**; it is fixed and
-double precision is now exact to 1e-14 everywhere measured. The second is not a bug that can be
-fixed — single precision does not carry the information the decision needs — so the solver
-detects it and says so. The oracle that found both is a 2024 sweep over complex angles.
+double precision is now exact to 1e-14 everywhere measured. The second was taken, until
+2026-10-02, for a limit that cannot be fixed — single precision does not carry the information
+a decision on `Re(v)` alone needs — so the solver detected it and said so. It turned out to be a
+property of the two rules rather than of single precision: decisions that read `Re(kz) + Im(kz)`
+and `Re(q) - Im(q)` are answerable at complex64 (§8). The oracle that found both is a 2024 sweep
+over complex angles.
 
 ---
 
@@ -93,9 +98,13 @@ so "down" below is public `-z` under top incidence and public `+z` under bottom 
 > unchanged.
 >
 > **Superseded for the half-space (2026-10-02):** `_off_principal_branch` is gone, and
-> `boundary_kz` takes Maystre's cut (§8). The layer half of this box stands. Since 2026-09 a real
-> angle in an absorbing superstrate is a phase angle with a real `k_par`, so only a complex
-> `theta` reaches this regime.
+> `boundary_kz` takes Maystre's cut (§8). The layer half of this box stands for SMM only. ETM
+> inverts a transmission into the medium below each layer, so its labels are not free: a
+> mislabelled mode crossing an unreflecting interface lost 12 digits, and ETM now takes the
+> half-space's root, capped where it would grow (`etm_mode_q`,
+> [`connecting-algorithms.md`](connecting-algorithms.md) §10). Since 2026-09 a real angle in an
+> absorbing superstrate is a phase angle with a real `k_par`, so only a complex `theta` reaches
+> this regime.
 
 Everything below is a consequence of two questions that rule leaves open:
 
@@ -232,8 +241,9 @@ matching a reference.
 ## 4. Failure two — a question single precision cannot answer
 
 Both branch rules asked the same thing, `is Re(v) zero?`, and answered it against a fixed
-number. Since 2026-10-02 only `mode_q` does; the half-space rule reads the sign of
-`Re(v) + Im(v)`, which no real `k_par` brings near zero (§8):
+number. Since 2026-10-02 only `mode_q` does, for SMM's layers, which do not depend on the
+answer; the half-space rule reads the sign of `Re(v) + Im(v)` and ETM's layers that of
+`Re(q) - Im(q)`, which no real `k_par` brings near zero (§8):
 
 ```python
 _FLAT = 1e-12
@@ -415,8 +425,10 @@ four orders clear of round-off, and moving it can only hurt.
 > read the same cutoff. Since the half-space moved to Maystre's cut, the override moves only
 > `mode_q`'s layer labels. In the weak absorber's configuration (re-created with the formal
 > `theta = 0.6 + 1e-12j`) a raised cutoff no longer costs anything measured: SMM 4.4e-7 at
-> `1e-12` and 3.8e-7 at `1e-5`, where the old rule gave 0.99. The rule above is now simply:
-> raise it if `UnresolvedBranchWarning` fires on an ETM solve. §8 has the table.
+> `1e-12` and 3.8e-7 at `1e-5`, where the old rule gave 0.99. ETM's layers stopped reading it the
+> same day (`etm_mode_q`), after which the override moved nothing but SMM's layer labels, which
+> SMM does not depend on, and it was removed. This section is kept as the record of why it
+> existed; §8 has the table.
 
 ## 5. What it bought
 
@@ -455,8 +467,8 @@ What pins it now, in `tests/references/test_reticolo_conical_sweep.py`:
 | `test_evanescent_incidence_matches_reticolo` | failure one, from the 2024 golden |
 | `test_uniform_stack_does_not_diffract_at_a_complex_angle` | failure one *away* from `Re(theta)=pi/2`, where it diverged to ~7e3 instead of going quiet |
 | `test_double_precision_resolves_every_branch[3 regimes]` | that the warning is silent where the answer is trustworthy |
-| `test_single_precision_reports_an_unresolvable_branch[3 regimes]` | that it fires where it is not |
-| `test_branch_tolerance_rescues_a_complex_angle…` | that the override actually moves the answer |
+| `test_single_precision_reads_no_branch_from_round_off[3 regimes, ETM and SMM]` | that complex64 now resolves these regimes, silently and within 1e-5 of double (since 2026-10-02; until then it fired here) |
+| `test_a_decision_on_its_cut_still_reports_at_single_precision` | that it still fires where a root sits within round-off of its cut |
 
 The float64/float32 pair is the load-bearing one: zero false positives at double precision is
 what makes the warning worth emitting at all.
@@ -522,15 +534,16 @@ the real evanescent axis. That had three measured consequences.
   ~1e-7. The old cut then flipped half of the evanescent orders. At the §4 point
   (`truncation_order=30`, NumPy), float32 against float64:
 
-  | | old rule | Maystre's cut |
-  | --- | --- | --- |
-  | SMM | 8.2 | 3.4e-6 |
-  | ETM (the default) | 5.2 | 5.1e-2 |
-  | ETM, `branch_tolerance(1e-5)` | 1.9e-6 | 1.9e-6 |
+  | | old rule | Maystre's cut | and `etm_mode_q` |
+  | --- | --- | --- | --- |
+  | SMM | 8.2 | 3.4e-6 | 3.4e-6 |
+  | ETM (the default) | 5.2 | 5.1e-2 | 1.9e-6 |
 
-  The ETM residue comes from layer labels. `mode_q` reads `Re(q)` at round-off for exactly
-  propagating modes, and at a complex `k_par` ETM is not label-free the way SMM is. Raising
-  the cutoff sends those modes to the tie-break.
+  The ETM residue in the middle column came from layer labels. `mode_q` reads `Re(q)` at
+  round-off for exactly propagating modes, and at a complex `k_par` ETM is not label-free the
+  way SMM is. A raised branch cutoff (`branch_tolerance(1e-5)`, since removed) sent those modes
+  to the tie-break and gave 1.9e-6; `etm_mode_q` reads `Re(q) - Im(q)` and gets there with no
+  cutoff ([`connecting-algorithms.md`](connecting-algorithms.md) §10).
 * **Gain read as loss.** Under total internal reflection into a gain medium, the principal
   root is the lossy medium's root conjugated. So `R(1 - 0.05i) = R(1 + 0.05i) = 0.7907` at
   45 deg.

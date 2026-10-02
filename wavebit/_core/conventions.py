@@ -51,7 +51,6 @@ Backend-agnostic: pass the array namespace as ``xp`` (``numpy`` / ``jax.numpy`` 
 
 import warnings
 
-import contextlib
 from typing import NamedTuple
 
 import numpy as np
@@ -59,7 +58,10 @@ import numpy as np
 from .backend import (AxisNameWarning, UnresolvedBranchWarning, _concrete, _device_of,
                       array_namespace, as_array, in_namespace)
 
-_FLAT = 1e-12      # below this, a layer root's real part counts as zero and the tie-break decides
+# Below this a layer root's real part counts as zero and `mode_q`'s tie-break decides. Only the
+# SMM recursion reads those labels, and it does not depend on them; the constant is kept so that
+# they stay what they were, to the bit.
+_FLAT = 1e-12
 
 _PI = 3.141592653589793
 _HALF_PI = 1.5707963267948966
@@ -87,51 +89,6 @@ def incident_phase_index(xp, epsilon_mu, theta):
     return xp.where(positive, large_root, small_root)
 
 
-@contextlib.contextmanager
-def branch_tolerance(value):
-    """Override the cutoff below which a layer root's ``Re(q)`` counts as zero. Advanced, and scoped.
-
-    :func:`mode_q` labels a layer mode by the sign of ``Re(q)``, and by a tie-break where that is
-    zero. At complex64 the ``Re(q)`` of a mode that should be exactly propagating is round-off
-    (~1e-7), so the label comes from the sign of noise. In exact arithmetic the label is free
-    (``tests/test_branch_selection.py``), and the SMM layer algorithm stays free of it in
-    practice. Raising the cutoff sends those modes to the tie-break. ETM read the same labels
-    until 2026-10-02 and was not free of them; it now takes :func:`etm_mode_q`'s, which read no
-    cutoff. Measured against double precision (``truncation_order=30``, NumPy,
-    ``docs/branch-cuts.md``):
-
-    ===========================================  ==========  ==========
-    ``value``                                    1e-12       1e-5
-    ===========================================  ==========  ==========
-    evanescent incidence, ETM                    1.9e-06     1.9e-06
-    evanescent incidence, SMM                    3.4e-06     1.3e-06
-    weak absorber at a complex angle, ETM        3.1e-07     3.1e-07
-    weak absorber at a complex angle, SMM        4.4e-07     3.8e-07
-    ===========================================  ==========  ==========
-
-    A half-space's root does not read this cutoff. :func:`boundary_kz` decides on the sign of
-    ``Re(kz) + Im(kz)``, and no real ``k_par`` brings that near zero. Until 2026-10-02 it did read
-    it, and that rule is what made this override a trade. A raised cutoff rescued the complex
-    angle and broke the weak absorber: 0.99 at 1e-5, in the last two rows' configuration. Under
-    the present rule, no row above gets worse when the cutoff is raised.
-
-    At complex128 nothing here applies: round-off is ~1e-16, the default stands four orders
-    clear of it, and moving it can only make things worse. :class:`UnresolvedBranchWarning`
-    fires when a label was read from round-off, so reach for this only after seeing it.
-
-    Not thread-safe — it swaps a module-level constant for the duration of the block::
-
-        with wavebit.branch_tolerance(1e-5):
-            res = solver.solve()
-    """
-    global _FLAT
-    old = _FLAT
-    _FLAT = float(value)
-    try:
-        yield
-    finally:
-        _FLAT = old
-
 # How many eps of slack to allow for the round-off accumulated in forming the radicand and
 # taking the root. Not a branch threshold — it decides nothing, it only bounds where the
 # branch decision stops being answerable. See :func:`_check_resolvable`.
@@ -145,23 +102,22 @@ _SINGLE_EPS = 1e-10
 def _check_resolvable(xp, v, decision, floor):
     """Warn when a root was chosen by the sign of a value the dtype cannot resolve.
 
-    ``decision`` is the real quantity whose sign the caller reads: ``Re(q)`` in :func:`mode_q`,
-    ``Re(q) - Im(q)`` in :func:`etm_mode_q`, ``Re(kz) + Im(kz)`` in :func:`boundary_kz`.
-    ``floor`` is the size below which the caller stops reading it and lets a tie-break decide,
-    so values there were never read. It is ``_FLAT`` for :func:`mode_q`, and 0 for the other
-    two, which have no tie-break.
+    ``decision`` is the real quantity whose sign the caller reads: ``Re(q) - Im(q)`` in
+    :func:`etm_mode_q`, ``Re(kz) + Im(kz)`` in :func:`boundary_kz`. ``floor`` is the size below
+    which the caller stops reading it and lets a tie-break decide, so values there were never
+    read; both callers pass 0, having no tie-break.
 
     A sign is answerable only while the value stands clear of round-off, which is ~1e-16 of
-    ``|v|`` at complex128 and ~1e-7 at complex64. For a layer mode that should be exactly
-    propagating, ``Re(q)`` *is* that round-off at single precision, so :func:`mode_q`'s label
-    comes from noise -- harmlessly, since only SMM reads those labels and SMM does not depend
-    on them. The other two decisions are at least ``|v|`` from zero for every real ``k_par`` in
-    a passive medium, so they find nothing unless ``q**2`` or ``kz**2`` sits on its cut.
-    Measured in ``docs/branch-cuts.md``.
+    ``|v|`` at complex128 and ~1e-7 at complex64. Both decisions are at least ``|v|`` from zero
+    for every real ``k_par`` in a passive medium, so this finds nothing unless ``q**2`` or
+    ``kz**2`` sits within round-off of its cut -- which complex64 reaches about four hundred
+    million times sooner. :func:`mode_q` does not call it: its ``Re(q)`` *is* round-off for an
+    exactly propagating mode at single precision, but only SMM reads those labels and SMM does
+    not depend on them, so a warning there was a false alarm on every single-precision SMM
+    solve. Measured in ``docs/branch-cuts.md``.
 
-    So this reports rather than repairs. It is silent at complex128 and fires at complex64,
-    which makes it a check on the precision rather than on the physics. It costs nothing
-    measurable: two absolute values on an array the solve already built.
+    So this reports rather than repairs. It costs nothing measurable: two absolute values on an
+    array the solve already built.
 
     Unlike the guards in ``_core/backend.py`` this is **not** NumPy-only, and deliberately so:
     the backends it would have skipped are the ones that need it most. When it was written,
@@ -244,7 +200,8 @@ def mode_q(xp, eigenvalue):
     # `|exp(-k0*q*d)|` by ~1e-17), so this is consistency of spelling rather than a fix; the
     # tie-break itself is untouched and still disagrees with `boundary_kz` on purpose.
     v = xp.sqrt(eigenvalue)
-    _check_resolvable(xp, v, xp.real(v), _FLAT)
+    # No `_check_resolvable` here: at single precision `Re(v)` is round-off for an exactly
+    # propagating mode, so the label is noise -- and free, since only SMM reads it.
     flip = xp.where(xp.abs(xp.real(v)) > _FLAT, xp.real(v) < 0, xp.imag(v) > 0)
     return xp.where(flip, -v, v)
 
