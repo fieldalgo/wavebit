@@ -99,6 +99,13 @@ def test_both_conditions_hold_at_once_for_a_real_k_par():
 # n_top, n_bot, layer index, thickness, and the angle where the principal root changes sheet.
 # `theta_cut` is arcsin(sqrt(Im(eps_bot)/Im(eps_top))); it exists only when BOTH half-spaces
 # absorb and the superstrate is the lossier one.
+#
+# The cases were found under the formal reading of a real angle, `k_par = n_top*sin(theta)`.
+# Since 2026-09 a real angle in an absorbing superstrate is a phase angle with a real `k_par`,
+# and only a complex `theta` reaches the formal reading. `_FORMAL` is the smallest imaginary
+# part that does: it selects the formal reading and leaves the segment the cases were written
+# for where it was. Without it these cases solve at a real `k_par` and pass under any rule.
+_FORMAL = 1e-9j
 JUMP_CASES = [
     ('lossy_dielectric_on_gold', 1.5 + 0.4j, AU, 2.0, 120.0, 1.2490457724),
     ('gold_like_on_gold', 0.2 + 3.2j, AU, 2.0, 120.0, 1.1644189301),
@@ -112,7 +119,7 @@ def _amp(n_top, n_bot, n_layer, d, theta, tetm):
     # half-space *permittivities* below and would read circularly if both were the same
     # spelling. The conversion happens here, where the public API takes over.
     solver = wavebit.rcwa(backend=0, tetm=tetm, top=eps_from_index(n_top),
-                            bot=eps_from_index(n_bot), theta=theta,
+                            bot=eps_from_index(n_bot), theta=theta + _FORMAL,
                             truncation_order=0, wavelength=WL, period=[WL * 2],
                             structure=eps_from_index(np.array([[[n_layer, n_layer]]])),
                             thickness=[d])
