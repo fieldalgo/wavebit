@@ -168,7 +168,11 @@ DEGENERATE = [
 
 @pytest.mark.parametrize('name,diag', DEGENERATE, ids=[c[0] for c in DEGENERATE])
 def test_degenerate_eigenvalues_give_a_finite_gradient(name, diag):
-    """The native rules return NaN for every one of these but the first."""
+    """The native rules return NaN for every one of these but the first, through a loss that
+    reads the eigenvectors (:func:`_matrix_function`). On PyTorch through that loss too: a loss
+    of the eigenvalues alone, ``sum |w|^2``, the native rule keeps finite, so it could not tell
+    this rule from the native one -- and since ``eig`` hands PyTorch's own ``linalg.eig`` every
+    input that carries no derivative, which branch a tensor takes is worth a check that fails."""
     B = jnp.asarray(_rand(np.random.default_rng(2), 5))
     M = jnp.asarray(np.diag(np.array(diag, dtype=complex)))
 
@@ -178,8 +182,7 @@ def test_degenerate_eigenvalues_give_a_finite_gradient(name, diag):
     torch = pytest.importorskip('torch')
     Mt = torch.tensor(np.diag(np.array(diag, dtype=complex)), dtype=torch.complex128,
                       requires_grad=True)
-    w, V = eig(Mt)
-    torch.real(torch.sum(w * torch.conj(w))).backward()
+    _matrix_function(Mt, torch).backward()
     assert bool(torch.isfinite(Mt.grad).all()), (name, Mt.grad)
 
 

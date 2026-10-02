@@ -34,6 +34,13 @@ _DUAL = (' is not supported: it is a mixed second order, or a first-order backwa
          'graph built while a forward_ad dual level was open -- build the reverse pass outside the '
          'dual level')
 
+#: What a ``torch.func`` transform through the modal operator raises with.
+_FUNCTORCH = ('modal generator derivatives are not differentiable under torch.func transforms '
+              '(grad, jvp, jacrev, jacfwd, vmap of a derivative): their torch.autograd.Function '
+              'has no functorch rule. Use torch.autograd instead -- backward(), '
+              'torch.autograd.grad or torch.autograd.forward_ad -- which they support to first '
+              'order')
+
 _JAX_DELTA = None
 _TORCH_DELTA = None
 
@@ -74,7 +81,16 @@ def _variation(operator, basis):
     if 'jax' in xp.__name__:
         return _jax_variation()(operator, basis)
     if 'torch' in xp.__name__:
-        return _torch_variation()(operator, basis, forward_tangent(operator))
+        try:
+            return _torch_variation()(operator, basis, forward_tangent(operator))
+        except RuntimeError as error:
+            # `torch.func` refuses an `autograd.Function` without a functorch rule, naming
+            # `setup_context`; that is said here in this rule's own terms. There is no rule to
+            # offer: the first-order guard below reads `torch.is_grad_enabled()`, which
+            # `torch.func.grad` turns on for every backward pass.
+            if 'setup_context' not in str(error):
+                raise
+            raise NotImplementedError(_FUNCTORCH) from error
     return xp.zeros_like(operator)
 
 

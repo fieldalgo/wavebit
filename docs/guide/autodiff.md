@@ -420,13 +420,18 @@ Both come back with no error. SMM is exact in all of them (11.18 and 0.002997).
 Use `layer_algorithm='SMM'`, or `create_graph=True` with the order above, for
 these second derivatives on PyTorch.
 
+`torch.func` transforms (`jvp`, `grad`, `jacrev`, `jacfwd`) raise
+`NotImplementedError` naming `torch.func` through any solve that reaches the
+modal rule, whose `torch.autograd.Function` has no functorch rule. Use
+`torch.autograd` there.
+
 ## What cannot be traced
 
 | | Why |
 | --- | --- |
 | An **explicit `sample_z`** in the legacy `solver.reconstruct_field`, with respect to `thickness` | this solver method buckets using concrete thicknesses and refuses traced ones; counts stay traceable. The result-owned `result.reconstruct_field` supports explicit heights and thickness derivatives while each point stays in its layer; see [fields](fields.md#differentiating-internal-fields) |
 | `torch.compile` | not a supported path — the solve is almost entirely LAPACK calls the compiler forwards untouched, and below torch 2.13 it does not run at all ([`../torch-compile.md`](../torch-compile.md)) |
-| **`torch.func` transforms through `solve()`** (`torch.func.jvp`, `grad`, `jacrev`, `jacfwd`) | not supported: the eigensolve's `torch.autograd.Function` has no functorch rule, and PyTorch raises its own `setup_context` error there. Use `torch.autograd`, whose reverse mode and `forward_ad` both work ([Forward mode](#forward-mode)) |
+| **`torch.func` transforms through `solve()`** (`torch.func.jvp`, `grad`, `jacrev`, `jacfwd`) | refused by name where a solve reaches the modal rule, whose `torch.autograd.Function` has no functorch rule; use `torch.autograd`, whose reverse mode and `forward_ad` both work ([Forward mode](#forward-mode)). A parameter that reaches no rule, such as a thickness, is exact under `torch.func` |
 | **Second derivatives where a layer's modal operator moves under both** (`jax.hessian`, `jacfwd(jacrev)`, `jvp(grad)`, `create_graph=True`, PyTorch's mixed orders) | refused by name; the modal rule is first order. One parameter that moves no operator, such as a thickness, is not refused ([Forward mode](#forward-mode)) |
 
 One trap worth naming because it passes: **build the solver outside the trace.** A jit test

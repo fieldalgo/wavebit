@@ -778,3 +778,21 @@ def test_native_j1_forward_mode():
                                    through_func.numpy(), rtol=1e-15)
     finally:
         set_j1_implementation(previous)
+
+
+@pytest.mark.parametrize('transform', ['jvp', 'grad', 'jacrev', 'jacfwd'])
+def test_torch_func_is_refused_by_name(transform):
+    """``torch.func`` needs a functorch rule the modal ``autograd.Function`` does not have (its
+    first-order guard reads ``torch.is_grad_enabled()``, which ``torch.func.grad`` sets on every
+    backward pass), so through ``solve()`` it is refused by name, pointing at ``torch.autograd``.
+    Before, every ``torch.func`` transform of a solve died on PyTorch's own ``setup_context``
+    error at the eigensolve, a function no derivative ever flows through."""
+    torch = pytest.importorskip('torch')
+    x = torch.tensor(0.0, dtype=torch.float64)
+    scene = lambda p: _second_order_scene(2, p)
+    run = {'jvp': lambda: torch.func.jvp(scene, (x,), (torch.ones_like(x),)),
+           'grad': lambda: torch.func.grad(scene)(x),
+           'jacrev': lambda: torch.func.jacrev(scene)(x),
+           'jacfwd': lambda: torch.func.jacfwd(scene)(x)}[transform]
+    with pytest.raises(NotImplementedError, match='torch.func'):
+        run()

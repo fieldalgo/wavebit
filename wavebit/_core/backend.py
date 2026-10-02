@@ -707,7 +707,13 @@ def eig(A):
     xp = ac.array_namespace(A)
     name = xp.__name__
     if 'torch' in name:
-        return _torch_eig(A)
+        # The Function exists only to carry a derivative. Every solve hands this a detached
+        # operator -- the modal rule (`modal_gradient`) carries the layer's derivative instead --
+        # so where there is none to carry it is not entered, with the same values. That keeps a
+        # `torch.func` transform, which refuses any `autograd.Function` without a functorch
+        # rule, from dying here with PyTorch's `setup_context` error before it reaches the rule
+        # that names its limit.
+        return _torch_eig(A) if carries_autodiff(A) else _eig_raw(A)
     if 'jax' in name:
         return _jax_eig(A)
     return _eig_raw(A)
