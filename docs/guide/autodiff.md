@@ -272,9 +272,9 @@ like the modal operator's: `NotImplementedError` on JAX, and `RuntimeError` on
 PyTorch, for `create_graph=True` and for either mixed order (a `forward_ad`
 tangent carried through a backward pass, or a backward pass through one). On a
 passive dielectric layer the floor is the identity and a Hessian of
-`eps_conv_matrices()` stays exact. Under `jax.jit`, whether the floor binds is
-not known when the trace is built, so a second derivative through any NVF layer
-is refused there.
+`eps_conv_matrices()` stays exact. Under `jax.jit` and `jax.checkpoint`, whether
+the floor binds is not known when the trace is built, so a second derivative
+through any NVF layer is refused there.
 
 The floor also has a kink. As the design moves, a singular value can cross the
 floor. On a metal with loss the response stays continuous there, but its

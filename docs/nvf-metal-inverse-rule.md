@@ -206,9 +206,12 @@ the floor binds now raises, as the modal operator's does — `NotImplementedErro
 `RuntimeError` on PyTorch for `create_graph=True` and for either mixed order, a `forward_ad`
 tangent carried through a backward pass or a backward pass through one (each read the same
 +4.193117 unrefused). On a passive dielectric layer the floor is the identity and the Hessian
-stays exact (−2.125e-3 in every mode on that read-out). Under `jax.jit`,
-whether the floor binds is not known when the trace is built, so there a second derivative
-through any NVF layer is refused. `solve()` itself refused second derivatives before the floor
+stays exact (−2.125e-3 in every mode on that read-out). Under `jax.jit`, and under
+`jax.checkpoint`, which stages the function the same way, whether the floor binds is not known
+when the trace is built, so there a second derivative through any NVF layer is refused. Until
+2026-10-02 the refusal under `jax.checkpoint` was dropped: it was a call whose result went
+unread, which the checkpoint's partial evaluation removes as dead code, and `jax.hessian` of the
+checkpointed read-out returned −0.8494 where −17.546 is right. `solve()` itself refused second derivatives before the floor
 existed, at the modal operator; `eps_conv_matrices()` is the route this closes.
 
 **A kink where a singular value crosses the floor.** The floored matrix is continuous there and

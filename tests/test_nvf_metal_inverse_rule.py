@@ -739,7 +739,9 @@ def test_torch_func_is_refused_by_name_where_the_floor_binds(transform, metal):
         assert float(run()) == pytest.approx(_conv_difference(material), rel=RELATIVE)
 
 
-@pytest.mark.parametrize('backend', ['jax', 'jit', 'torch', 'torch, reverse over forward_ad',
+@pytest.mark.parametrize('backend', ['jax', 'jit', 'jax.checkpoint, grad of grad',
+                                     'jax.checkpoint, hessian', 'torch',
+                                     'torch, reverse over forward_ad',
                                      'torch, forward_ad over reverse'])
 @pytest.mark.parametrize('metal', [True, False], ids=['gold, floor binds', 'dielectric'])
 def test_a_second_derivative_through_the_floor_is_refused_where_it_binds(backend, metal):
@@ -754,10 +756,18 @@ def test_a_second_derivative_through_the_floor_is_refused_where_it_binds(backend
     tangent carried through a backward pass -- which, unrefused, read the same +4.193117.
 
     Where the floor does not bind the map is the identity and the Hessian stays exact (-2.1e-3
-    on the dielectric), in every mode. Under ``jax.jit`` whether it binds is not known when the
-    trace is built, so a second derivative through any NVF layer is refused there.
+    on the dielectric), in every mode. Under ``jax.jit`` and ``jax.checkpoint`` whether it binds
+    is not known when the trace is built, so a second derivative through any NVF layer is refused
+    there.
+
+    ``jax.checkpoint`` stages the rule's tangent and partially evaluates it before the outer
+    derivative arrives, and that pass drops whatever the tangent computes and does not read. The
+    refusal was such a call until 2026-10-02, so under ``jax.checkpoint`` it was dropped and the
+    partial Hessian came back: -0.8494 on the gold through ``jax.hessian`` and through
+    ``jax.grad`` of ``jax.grad`` alike, where a difference of the first derivative reads -17.546.
     """
     material = GOLD if metal else DIELECTRIC
+    staged = backend == 'jit' or 'checkpoint' in backend
     if backend.startswith('torch'):
         torch = pytest.importorskip('torch')
         from torch.autograd import forward_ad
@@ -793,10 +803,12 @@ def test_a_second_derivative_through_the_floor_is_refused_where_it_binds(backend
         jax = pytest.importorskip('jax')
         jax.config.update('jax_enable_x64', True)
         import jax.numpy as jnp
-        geometry = _conv_solver(1, material).freeze_geometry() if backend == 'jit' else None
+        geometry = _conv_solver(1, material).freeze_geometry() if staged else None
         read_out = _conv_read_out(1, material, geometry=geometry)
+        if 'checkpoint' in backend:
+            read_out = jax.checkpoint(read_out)
         gradient = jax.grad(read_out)
-        hessian = jax.grad(gradient)
+        hessian = jax.hessian(read_out) if 'hessian' in backend else jax.grad(gradient)
         first = lambda x: float(gradient(jnp.asarray(x)))
         second = lambda x: float(hessian(jnp.asarray(x)))
         refusal = NotImplementedError
@@ -808,6 +820,13 @@ def test_a_second_derivative_through_the_floor_is_refused_where_it_binds(backend
             assert float(compiled) == pytest.approx(first(140.0), rel=1e-12)
             with pytest.raises(refusal, match='first order'):
                 jax.jit(hessian)(jnp.asarray(140.0))
+            return
+        if staged:
+            # `jax.checkpoint` stages the read-out as `jax.jit` does, so whether the floor binds
+            # is not known there either, and the dielectric is refused as well.
+            assert first(140.0) == pytest.approx(_conv_difference(material), rel=RELATIVE)
+            with pytest.raises(refusal, match='first order'):
+                second(140.0)
             return
         assert first(140.0) == pytest.approx(_conv_difference(material), rel=RELATIVE)
         if metal:

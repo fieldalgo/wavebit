@@ -1775,8 +1775,9 @@ def _floor_singular_values(xp, B, floor):
     ``NotImplementedError`` on JAX, ``RuntimeError`` on PyTorch for ``create_graph=True`` and for
     either mixed order (a ``forward_ad`` tangent carried through a backward pass, or a backward
     pass through one). Where the floor does not bind -- every passive dielectric layer -- the map
-    is the identity and its Hessian is exact. Under ``jax.jit`` whether the floor binds is not
-    known when the trace is built, so there a second derivative through any NVF layer is refused.
+    is the identity and its Hessian is exact. Under ``jax.jit`` and ``jax.checkpoint``, which
+    stages the function as ``jax.jit`` does, whether the floor binds is not known when the trace
+    is built, so there a second derivative through any NVF layer is refused.
 
     **A kink where a singular value crosses the floor.** The matrix is continuous there, its
     derivative is not: that mode's gain steps from 0 (held at the floor) to 1 (its own). A
@@ -1825,8 +1826,9 @@ def _forward_tangent(x):
 
 #: What a second derivative through a floored layer raises with.
 _SECOND_ORDER = ('the NVF inverse-rule floor supports first order only where it binds (a metal '
-                 'beside a dielectric; under jax.jit, every NVF layer, since whether it binds is '
-                 'not known when the trace is built): its curvature is not implemented')
+                 'beside a dielectric; under jax.jit or jax.checkpoint, every NVF layer, since '
+                 'whether it binds is not known when the trace is built): its curvature is not '
+                 'implemented')
 
 #: What a ``torch.func`` transform through a floored layer raises with.
 _FUNCTORCH = ('the NVF inverse-rule floor is not differentiable under torch.func transforms '
@@ -1872,11 +1874,16 @@ def _jax_floor():
         def _tangent(primals, tangents):
             B, floor, U, s, Vh, lifted, clip = primals
             dB, dfloor = tangents[:2]
-            # Called for what its own derivative does: it is differentiated only when this rule
-            # is, which is a second derivative of the floored matrix.
+            # Passed through for what their own derivative does: this rule is differentiated
+            # only for a second derivative of the floored matrix, and then they raise. Their
+            # outputs are what the rule goes on to read, and that is load-bearing. A bare call
+            # whose result is dropped is dead code to JAX's partial evaluation, which removes it
+            # under `jax.checkpoint` before the outer derivative reaches it: on the gold disks
+            # `jax.hessian(jax.checkpoint(f))` of an `eps_conv_matrices()` read-out returned
+            # -2.1117 where a difference of `jax.grad` reads -7.1903, with no error.
             binds = jnp.any(clip)
-            first_order_only(B, binds)
-            first_order_only(floor, binds)
+            B = first_order_only(B, binds)
+            floor = first_order_only(floor, binds)
             return (B + jax.lax.stop_gradient(lifted - B),
                     dB + _floor_derivative(jnp, dB, dfloor, U, s, Vh, floor, clip))
 
