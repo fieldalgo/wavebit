@@ -52,7 +52,6 @@ def test_a_traced_index_lowers_and_runs_as_the_concrete_scene(kind, ranged):
     the seed; the Box plans none (a junction alone), so its traced value is planned live, as
     before material seeds, with or without plan=. Measured: coefficients within 9.2e-15 of
     their peak, fields within 5.4e-16."""
-    import torch
     rtt = runtime('torch')
     seed = POINTS[kind][0]
     p = quiet(fd.plan, scene(seed, kind=kind, ranged=ranged, steps=40))
@@ -161,7 +160,6 @@ GUARD_CASES = ((2.25, True), (2.7, False), (.2, False), (-1., False), (0., False
 def test_a_traced_index_past_a_door_runs_to_nan(eps, stable):
     """The run returns NaN fields and ``stable`` False where the concrete path refuses the same
     value by name (``fdtd_traced_material_guards.json``)."""
-    import torch
     rtt = runtime('torch')
     p = quiet(fd.plan, scene(POINTS['cylinder'][0], steps=20))
     v = _traced(POINTS['cylinder'][0][:3] + (eps,))

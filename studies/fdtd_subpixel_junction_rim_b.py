@@ -6,7 +6,6 @@ the registered rows at 24/48/96 are read from the study's log, not solved again.
 import json
 import math
 
-import numpy as np
 
 import fdtd_subpixel_junction as S
 

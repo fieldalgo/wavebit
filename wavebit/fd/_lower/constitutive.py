@@ -100,7 +100,7 @@ def lower(scene, plan, rt, report=None, proxy_stats=None, proxy_by_index=None, n
     With the cross coefficients off its diagonal it is that node's Kottke tensor, what the
     star lift moves each node's star toward (``stars.lift``).
     """
-    from .._shapes import Box, Sphere, occupancy
+    from .._shapes import Sphere, occupancy
     from .checks import _CLIP_ROUNDOFF
     from .._kernel.stencil import StencilTerm
     background, structures = materials_of(scene)

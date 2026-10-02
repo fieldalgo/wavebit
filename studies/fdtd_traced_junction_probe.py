@@ -87,7 +87,6 @@ def objectives(v, backend, plan, **kwargs):
 
 
 def masks_mode(kind='cylinder', plane=PLANE):
-    from wavebit.fd._lower import junction
     from wavebit.fd._lower.junction import _points, live_write
     warnings.filterwarnings('ignore')
     rt = runtime('numpy')

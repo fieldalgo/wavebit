@@ -6,7 +6,6 @@ import dataclasses
 import sys
 import time
 
-import numpy as np
 
 import fdtd_subpixel_junction as S
 import wavebit.fd as fd

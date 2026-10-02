@@ -211,7 +211,7 @@ def _share(shape, points, grid):
 
 def classify(scene, grid, ia, ib, count):
     """A record, or an explanatory string retaining the original shared-surface refusal."""
-    from ..geometry import Box, Cylinder
+    from ..geometry import Cylinder
     from .._shapes import occupancy
     from .checks import _CLIP_ROUNDOFF, _shared_surface_voxels
     from .coefficients import materials_of

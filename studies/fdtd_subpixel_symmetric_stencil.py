@@ -115,7 +115,7 @@ def replace(scene,p,params,center,radius,eps,components):
 
 
 def cylinder(cpw=40,placement=(0.,0.)):
-    import time,warnings
+    import time
     from studies.fdtd_subpixel_coupled_cylinder import prepare,solve
     from studies.fdtd_subpixel_mie_cylinder import scene_for,SCHEDULE,CONTOUR,RADIUS,incident_intensity,scattered_flux,cylinder_cross_sections
     from wavebit.fd._lower import plan,lower
