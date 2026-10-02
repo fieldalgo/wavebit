@@ -1871,9 +1871,10 @@ def _traced_material_notes(material):
              'the cells per wavelength of the traced medium are unavailable in this report, '
              'and the plan was certified at the values it was built with. Run the concrete '
              'values to inspect them. The runtime checks positivity, the time-step bound, '
-             'the lifted operator\'s stability and 8 cells per wavelength in a traced plain '
-             'Material (at the band\'s shortest and every Diffraction wavelength) at the '
-             'traced values; these checks do not establish physical convergence.')]
+             'the lifted operator\'s stability, 8 cells per wavelength in a traced plain '
+             'Material (at the band\'s shortest and every Diffraction wavelength) and the '
+             'grazing rule in a PML layer at the traced values; these checks do not '
+             'establish physical convergence.')]
 
 
 def _lift_notes(scene, plan, lifted=None):

@@ -143,9 +143,10 @@ partners lowers as in a concrete scene. A structure's ``eps`` and ``mu`` may be 
 together with the geometry, each as one scalar of a plain ``Material``, and so may a
 smoothed structure's with concrete geometry: the plan is built from concrete values and
 the run reads the traced ones, held at run time to positivity, the time-step bound, the
-lifted operator's stability and 8 cells per wavelength. A medium filling a PML layer, the
-background of a scene with a PML, a PlaneWave or TFSF source or a lattice FarField,
-conductivities and pole parameters stay concrete there. See
+lifted operator's stability, 8 cells per wavelength and the grazing rule (a substrate
+filling a PML may be traced). A medium filling a stabilized PML layer the grazing rule
+judges, the background of a scene with a PML matched to it, a PlaneWave or TFSF source or a
+lattice FarField, conductivities and pole parameters stay concrete there. See
 ``docs/guide/fd-differentiation.md``.
 Every source (Dipole, PlaneWave, TFSF) and monitor (Record, Field, Flux, Diffraction,
 FarField) is admitted; the two cell layers where a PlaneWave or TFSF normalisation or a

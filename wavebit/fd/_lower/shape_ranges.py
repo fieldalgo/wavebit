@@ -161,17 +161,20 @@ def _read_as_one_number(scene, plan, key):
                for s in scene.structures if s.shape.body() is not None)
 
 
-def _surveyed_media(scene, plan):
-    """``{'structures[i]', ...}``: the media the grazing survey judges orders in.
+def _stabilized_media(scene, plan):
+    """``{'structures[i]', ...}``: the media filling a stabilized PML layer the grazing survey
+    judges orders in.
 
     ``grazing._survey`` judges orders only for a scene with exactly one PlaneWave and a
     Diffraction monitor, on the PML faces along that wave's axis, in each medium filling the
-    layer (``grazing._layer_media``, whose labels these are); a medium elsewhere, or in a
-    Dipole or TFSF scene, is read by no host rule.
+    layer (``grazing._layer_media``, whose labels these are). On a pure-stretch face the
+    verdict is a threshold in the order's exit cos, which :func:`grazing_guard` holds a
+    traced medium to at run time; on a face with ``stabilize > 0`` it is also the face's exact
+    discrete return (``grazing._judge``), which has no runtime twin.
     """
     from ..boundaries import PML
     from ..monitors import Diffraction
-    from .grazing import _layer_media
+    from .grazing import _layer_media, _stabilize
     from .monitors import plane_waves
     waves = plane_waves(scene)
     if len(waves) != 1 or not any(isinstance(m, Diffraction) for m in scene.monitors):
@@ -180,7 +183,7 @@ def _surveyed_media(scene, plan):
     out = set()
     for side in ('-', '+'):
         face = scene.boundaries.face('xyz'[P] + side)
-        if isinstance(face, PML):
+        if isinstance(face, PML) and _stabilize(face) > 0.0:
             out |= {label for label, _ in _layer_media(scene, plan.grid, P, side, face.cells)}
     return out
 
@@ -234,7 +237,8 @@ def _seeded_materials(scene, plan, where, substitute=True):
     the runtime guards judge those: the time-step bound with the lifted operator
     (``constitutive.guard``, ``params._traced_guard``), positivity
     (``params._material_door_guard``), every star's positivity at its lift
-    (``constitutive.lift``) and the resolution floor (:func:`resolution_guard`). Only the
+    (``constitutive.lift``), the resolution floor (:func:`resolution_guard`) and the
+    grazing rule on a pure-stretch PML face (:func:`grazing_guard`). Only the
     traced leaves are restored; a concrete value beside them is checked as it is.
 
     What has no runtime twin is refused instead, by name:
@@ -251,9 +255,10 @@ def _seeded_materials(scene, plan, where, substitute=True):
       (``results`` refuses a traced one after the run), all built on the host (a cell driven
       by Dipoles, with any PML matched to a concrete medium of its own, reads it nowhere
       else);
-    * a traced structure filling a PML layer the grazing survey reads (:func:`_surveyed_media`):
-      the rule judges the orders in each medium filling that layer on the host only, so a
-      moved index could make an order the layer cannot absorb;
+    * a traced structure filling a stabilized PML layer the grazing survey reads
+      (:func:`_stabilized_media`): the rule judges the orders there on the face's exact return
+      too, on the host only (on a pure-stretch face :func:`grazing_guard` holds it at run
+      time);
     * a traced material in a smoothed region where a fractional fill reaches a ``Symmetry``
       plane (:func:`_mirror_could_couple`): the mirror check reads the cross coefficients,
       which vanish where the plan's own values have no contrast, so a seed equal to its
@@ -277,7 +282,7 @@ def _seeded_materials(scene, plan, where, substitute=True):
     background, structures = None, list(scene.structures)
     grid = plan.grid
     pml = dict(plan.pml_cells)
-    surveyed = _surveyed_media(scene, plan) if materials_traced(scene) else set()
+    stabilized = _stabilized_media(scene, plan) if materials_traced(scene) else set()
     for key, material in _materials(scene):
         material = as_material(material)
         if not _carries(material):
@@ -308,13 +313,13 @@ def _seeded_materials(scene, plan, where, substitute=True):
                     'column\'s transverse wavevector and drive, the grazing survey and the '
                     'lattice far-field map are built from it on the host. Give each PML a '
                     'concrete background=, or differentiate a structure\'s material instead.')
-        elif label in surveyed:
+        elif label in stabilized:
             raise ValueError(
-                f'{label} has a traced material value and fills a PML layer along the '
-                f'PlaneWave\'s axis; in a scene {where}, the grazing rule judges the orders a '
-                'Diffraction monitor asks for in each medium filling that layer, on the host '
-                'only, at the values the plan was built with, so a traced one could move an '
-                'order past what the layer absorbs. Keep that material concrete.')
+                f'{label} has a traced material value and fills a stabilized PML layer along '
+                f'the PlaneWave\'s axis; in a scene {where}, the grazing rule judges the orders '
+                'a Diffraction monitor asks for there on the face\'s exact return, on the host '
+                'only, at the values the plan was built with. Keep that material concrete, or '
+                'the face a pure stretch (stabilize=0), whose rule is checked at run time.')
         seed = seeds.get(key)
         if not substitute and seed is None:
             continue
@@ -703,6 +708,63 @@ def seeded(scene, plan):
     return traced(scene) or (plan is not None and materials_traced(scene) and _coupled(plan))
 
 
+def _floor_index(scene, plan):
+    """The largest index ``checks.check_wavelength_resolution`` admits, ``w / 8 dx`` at the
+    shortest of the sources' ``band.shortest_wavelength`` and every ``Diffraction``
+    wavelength; None when no such wavelength is concrete."""
+    from ..monitors import Diffraction
+    from .sources import shortest_wavelength
+    wavelengths = [w for m in scene.monitors if isinstance(m, Diffraction)
+                   for w in m.wavelengths]
+    band = shortest_wavelength(scene)
+    if band is not None:
+        wavelengths.append(band)
+    return min(wavelengths) / (8.0 * plan.dx) if wavelengths else None
+
+
+def grazing_guard(scene, plan, rt, previous):
+    """The grazing rule, asked of every traced medium in a judged PML layer at run time.
+
+    ``grazing.enforce`` refuses an order a pure-stretch PML face cannot absorb -- one that
+    leaves at an exit cos below what the face accepts -- counting the orders in each medium
+    filling the layer at the plan's values. A traced plain Material there is held to the same
+    rule here: its live ``min_c eps_c mu_c`` may not fall in any interval
+    ``grazing.refused_bands`` finds (orders counted up to the resolution floor,
+    :func:`resolution_guard`'s, above which the run is ``nan`` already), or the run's
+    coefficients are ``nan``. Built only for a seeded scene with a traced material in such a
+    layer, so every other run's ``stable`` is unchanged.
+    """
+    if not (materials_traced(scene) and seeded(scene, plan)):
+        return previous
+    from ..materials import Material, as_material
+    from .grazing import refused_bands
+    floor = _floor_index(scene, plan)
+    if floor is None:
+        return previous
+    bands = refused_bands(scene, plan, floor)
+    valid = None
+    for key, material in _materials(scene):
+        material = as_material(material)
+        if type(material) is not Material or not _carries(material):
+            continue
+        label = 'the background' if key < 0 else f'structures[{key}]'
+        intervals = [b for (_, medium), held in bands.items() if medium == label for b in held]
+        if not intervals:
+            continue
+        index = None
+        for e, m in zip(material.eps, material.mu_value):
+            product = rt.array(e, 'float64') * rt.array(m, 'float64')
+            index = product if index is None else rt.xp.minimum(index, product)
+        for low, high in intervals:
+            ok = ~((index > low) & (index < high))
+            valid = ok if valid is None else valid & ok
+    if valid is None:
+        return previous
+    value = rt.constant(rt.xp.where(valid, rt.array(1., 'float64'),
+                                    rt.array(float('nan'), 'float64')))
+    return value if previous is None else previous * value
+
+
 def resolution_guard(scene, plan, rt, previous):
     """The plan's resolution door, asked of every traced medium at run time.
 
@@ -717,16 +779,10 @@ def resolution_guard(scene, plan, rt, previous):
     if not (materials_traced(scene) and seeded(scene, plan)):
         return previous
     from ..materials import Material, as_material
-    from ..monitors import Diffraction
-    from .sources import shortest_wavelength
-    wavelengths = [w for m in scene.monitors if isinstance(m, Diffraction)
-                   for w in m.wavelengths]
-    band = shortest_wavelength(scene)
-    if band is not None:
-        wavelengths.append(band)
-    if not wavelengths:
+    floor = _floor_index(scene, plan)
+    if floor is None:
         return previous
-    limit = rt.array((min(wavelengths) / (8.0 * plan.dx)) ** 2, 'float64')
+    limit = rt.array(floor ** 2, 'float64')
     valid = None
     for _, material in _materials(scene):
         material = as_material(material)

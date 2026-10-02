@@ -94,14 +94,16 @@ Three things in that scene are what make the shape traceable:
 * **The height moves with the centre**: the centre is `PLANE + height / 2`, so the base
   stays on the substrate's face. A pillar whose base leaves the face is not the pillar the
   plan's junction was built for.
-* **The substrate stays concrete**, and so does its material (it fills the bottom PML; see
-  below).
+* **The substrate's shape stays concrete.** Its permittivity may be traced as well -- pass
+  `fd.Material(eps=...)` with a leaf to the first structure -- although it fills the bottom
+  PML: the rule that keeps a PML from being asked to absorb an order leaving too steeply is
+  held at run time (see below).
 
 ## What may be traced
 
 | Leaf | Where | Notes |
 | --- | --- | --- |
-| `eps`, `mu` of a plain `fd.Material` | any structure, the background | One scalar each (`eps=x`, not `eps=(x, y, z)`). With traced geometry or beside a Sphere, Cylinder, Prism or turned Box: not a structure reaching a PML layer, and not the background when the scene has a PML or a PlaneWave or TFSF source. A flush junction's media -- the pillar, its face, the background -- name no `mu`, traced or not (only electric junctions are measured). |
+| `eps`, `mu` of a plain `fd.Material` | any structure, the background | One scalar each (`eps=x`, not `eps=(x, y, z)`). With traced geometry or beside a Sphere, Cylinder, Prism or turned Box: not a structure filling a stabilized PML layer (`PML(stabilize=...)`) along a PlaneWave's axis in a scene with a Diffraction monitor, and not the background when a PML is matched to it or the scene has a PlaneWave or TFSF source or a `FarField(propagation='yee')`. A flush junction's media -- the pillar, its face, the background -- name no `mu`, traced or not (only electric junctions are measured). |
 | `sigma` of `fd.Conductor`, pole parameters of `fd.Dispersive` | structures | Refused with traced geometry or beside a Sphere, Cylinder, Prism or turned Box when run with `fd.run`, where they have no certificate. |
 | `radius`, `center` | `fd.Sphere(range=...)` | |
 | `radius`, `height`, `center` | `fd.Cylinder(range=...)` | `axis` stays static. |
@@ -137,14 +139,19 @@ gradients, and `result.diagnostics['stable']` reads `False`. The runtime checks:
 | Time step | the smallest index puts `dt` past the stability bound | "stability bound" |
 | Lifted operator | a star of the smoothed operator is not positive definite at its lift | constitutive certificate |
 | Resolution | a traced medium falls below 8 cells per wavelength (`eps * mu` above `(w / 8 dx)**2`) at the band's shortest wavelength or any shorter `Diffraction` wavelength `w` | "cells per wavelength" |
+| Grazing order | a traced medium filling a PML layer along a PlaneWave's axis lets an order a `Diffraction` monitor asks for leave at an exit angle the layer does not accept | "Grazing order refused" |
 
-The resolution check runs with traced geometry or beside a Sphere, Cylinder, Prism or turned
-Box. Elsewhere -- a traced `eps` on a Slab, a Region or an unturned Box with concrete
+The resolution and grazing checks run with traced geometry or beside a Sphere, Cylinder,
+Prism or turned Box. Elsewhere -- a traced `eps` on a Slab, a Region or an unturned Box with concrete
 geometry -- the plan only warns that it could not count the cells, and holding the value
 under the floor is yours. At `dx = 0.05` and the band above (shortest wavelength 0.642), the
 floor admits `eps * mu` up to `(0.642 / (8 * 0.05))**2 = 2.58`: a pillar index past 1.6
-needs a finer grid. If an optimizer's step returns `nan`, step back and bound the variable;
-the run's report (`result.report.warnings`) names the checks a traced value is held to.
+needs a finer grid. In the same cell (period 0.6, 8-cell PMLs) the substrate's first
+diffracted orders begin to propagate at wavelength 0.95 once its `eps` passes
+`(0.95 / 0.6)**2 = 2.507`, just above the horizon, which no PML absorbs: from there the run
+is `nan`, as the concrete scene is refused. If an optimizer's step returns `nan`, step back
+and bound the variable; the run's report (`result.report.warnings`) names the checks a
+traced value is held to.
 
 ## What is refused, and why
 
@@ -155,8 +162,8 @@ for them. They apply with traced geometry or beside a Sphere, Cylinder, Prism or
 | Refused | Why | What to do |
 | --- | --- | --- |
 | A traced `eps` or `mu` given per axis | the smoothed operator is built for one isotropic number | trace one scalar |
-| A traced background in a scene with a PML or a PlaneWave or TFSF source | the plane-wave source's transverse wavevector, the PML match and the grazing survey are built from it once | differentiate a structure instead |
-| A traced material filling a PML layer (a substrate running into the absorber) | the rule that keeps grazing orders out of a PML is judged on the plan's values only | keep it concrete |
+| A traced background where a PML is matched to it (no `background=` of its own), or with a PlaneWave or TFSF source or a lattice `FarField` | the PML match, the plane-wave source's transverse wavevector, the grazing survey and the far-field map are built from it once | give each PML a concrete `background=`, or differentiate a structure instead |
+| A traced material filling a stabilized PML layer the grazing rule judges | on a stabilized face the rule reads the face's exact return, on the host only | keep it concrete, or the face a pure stretch |
 | A traced material beside a smoothed region on a `Symmetry` plane | the mirror check reads the plan's contrast, which may be zero | keep the region a cell off the mirror |
 | A traced medium at a `Diffraction` plane with `orders=None` | the propagating orders cannot be counted for a traced index | give `orders=` |
 | A body with traced geometry as the face a pillar stands on | the junction is differentiated through its standing body only | keep the face's geometry concrete |
@@ -169,7 +176,8 @@ The derivative is that of the discrete solver, exactly. On the probe's version o
 above (`studies/fdtd_traced_material_probe.py`: three wavelengths, T and R, the centre's x
 as a fourth leaf), JAX and Torch agree to `3e-15`, and both agree with central differences
 of the concrete NumPy solver -- each perturbed geometry planned on its own -- to `9e-8` for
-the shape and `4e-9` for the permittivity at a step of `3e-6`. Two caveats:
+the shape and `4e-9` for the pillar's permittivity at a step of `3e-6`, `1e-9` for the
+substrate's. Two caveats:
 
 * **The discrete solver is piecewise smooth.** At a few isolated geometries a voxel's
   classification switches (a cylinder's nearest face changes from its wall to its cap, a
@@ -178,8 +186,11 @@ the shape and `4e-9` for the permittivity at a step of `3e-6`. Two caveats:
 * **A derivative is not a convergence statement.** The cell above uses thin PMLs and a
   short run to be quick, and there the lossless cell's `T + R` misses 1 by about `5e-4`.
   With 24-cell PMLs, a `.05` band and 6000 steps it is 1 to `1.1e-6`, and the
-  derivatives keep `dT + dR = 0` to `5e-5` of `dT` for the permittivity and `6e-5` for the
-  radius. Check your own observable under refinement before trusting its optimum.
+  derivatives keep `dT + dR = 0` to `5e-5` of `dT` for the pillar's permittivity and
+  `6e-5` for the radius. The substrate's permittivity shows `dT + dR` of about `5e-5`
+  (0.2% of its small `dT`): the residual `T + R - 1` itself ripples at the `1e-6` level as
+  the thick substrate's optical path changes, and that is its slope. Check your own
+  observable under refinement before trusting its optimum.
 
 ## Which backend
 

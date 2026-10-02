@@ -497,8 +497,127 @@ def extras_mode():
     _write('extras', out)
 
 
+#: Radius, height, centre x, pillar eps, substrate eps.
+SUBSTRATE = np.array((.12, .3, .011, 2.25, 2.1))
+#: The substrate eps the first orders begin to propagate in at wavelength .95 (period .6):
+#: (.95 / .6)^2; with the 8-cell PMLs every such order is refused up to the resolution floor.
+GRAZING_ONSET = (.95 / .6) ** 2
+
+
+def substrate_scene(v=SUBSTRATE, **kwargs):
+    """The cylinder cell with the substrate's permittivity ``v[4]`` a leaf too. The bottom PML
+    keeps its concrete ``background=GLASS``: the stretch's match, not the medium in it."""
+    base = scene(v[:4], **kwargs)
+    substrate, pillar = base.structures
+    return base.replace(structures=(substrate.replace(material=fd.Material(eps=v[4])),
+                                    pillar))
+
+
+def substrate_objectives(v, backend, plan, **kwargs):
+    result = fd.run(substrate_scene(v, **kwargs), backend, plan=plan)
+    return (result['T'].orders.given.T[:, 0, 0].sum(), result['R'].orders.given.R[:, 0, 0].sum())
+
+
+def substrate_mode():
+    """A traced substrate: equal to the concrete scene, the five-leaf Jacobian, the grazing
+    guard against the plan's own refusal across the onset, and settled energy."""
+    import dataclasses
+    import torch
+    warnings.filterwarnings('ignore')
+    rtt = runtime('torch')
+    out = dict(equal=[], differences=[], onset=GRAZING_ONSET)
+    t = lambda x: torch.tensor(x, dtype=torch.float64, requires_grad=True)
+    p = fd.plan(substrate_scene(SUBSTRATE, steps=40))
+    for v in (tuple(SUBSTRATE), (.127, .21, 0., 2., 2.3), (.1, .25, -.013, 2.4, 1.8)):
+        ran = fd.run(substrate_scene([t(x) for x in v], steps=40), 'torch', plan=p)
+        want = fd.run(substrate_scene(v, steps=40)).final.E
+        out['equal'].append(dict(point=v, E=float(np.max(abs(rtt.numpy(ran.final.E.detach())
+                                                              - want)) / np.max(abs(want)))))
+        print(out['equal'][-1], flush=True)
+    _write('substrate', out)
+    point = SUBSTRATE.copy()
+    p = fd.plan(substrate_scene(point))
+
+    def values(v):
+        return np.array([float(x) for x in substrate_objectives(v, 'numpy', None)])
+    for h in (1e-4, 1e-5, 3e-6, 1e-6):
+        jac = np.array([(values(point + d) - values(point - d)) / (2 * h)
+                        for d in np.eye(5) * h]).T
+        out['differences'].append(dict(step=h, jacobian=jac.tolist()))
+        _write('substrate', out)
+        print('central difference', h, jac.tolist(), flush=True)
+    for backend in ('jax', 'torch'):
+        started = time.perf_counter()
+        runtime(backend)
+        if backend == 'jax':
+            import jax
+            import jax.numpy as jnp
+            fn = lambda v: jnp.stack(substrate_objectives(v, 'jax', p))
+            jac = np.asarray(jax.jacrev(fn)(jnp.asarray(point)))
+        else:
+            v = torch.tensor(point, dtype=torch.float64, requires_grad=True)
+            outs = substrate_objectives(v, 'torch', p)
+            jac = np.array([torch.autograd.grad(o, v, retain_graph=True)[0].numpy()
+                            for o in outs])
+        out[backend] = dict(jacobian=jac.tolist(), seconds=time.perf_counter() - started)
+        _write('substrate', out)
+    reference = np.array(out['jax']['jacobian'])
+    out['relative_errors'] = {str(d['step']): float(np.max(abs(np.array(d['jacobian'])
+                                                              - reference) / abs(reference)))
+                              for d in out['differences']}
+    out['relative_errors_substrate'] = {str(d['step']): float(np.max(
+        abs(np.array(d['jacobian'])[:, 4] - reference[:, 4]) / abs(reference[:, 4])))
+        for d in out['differences']}
+    out['jax_torch_max_abs'] = float(np.max(abs(np.array(out['torch']['jacobian'])
+                                                - reference)))
+    print('relative errors', out['relative_errors'], 'substrate',
+          out['relative_errors_substrate'], 'jax-torch', out['jax_torch_max_abs'], flush=True)
+    _write('substrate', out)
+    # The guard against the plan's own refusal, across the onset and up to the floor.
+    q = fd.plan(substrate_scene(SUBSTRATE, steps=20))
+    out['sweep'] = []
+    for eps in (2.4, 2.5, 2.506, 2.5069, 2.5070, 2.508, 2.52, 2.55, 2.575):
+        traced = substrate_scene([t(x) for x in SUBSTRATE[:4]] + [t(eps)], steps=20)
+        stable = bool(fd.run(traced, 'torch', plan=q).diagnostics['stable'])
+        try:
+            fd.plan(substrate_scene(tuple(SUBSTRATE[:4]) + (eps,), steps=20))
+            planned = True
+        except ValueError as err:
+            planned = 'Grazing order refused' not in str(err) and str(err)[:120]
+        out['sweep'].append(dict(eps=eps, stable=stable, planned=planned))
+        print(out['sweep'][-1], flush=True)
+    _write('substrate', out)
+    # Settled: dT + dR for the substrate's eps, 24-cell PMLs, a .05 band, 6000 steps.
+    cells, steps, df, h = 24, 6000, .05, 3e-6
+
+    def make(v):
+        base = substrate_scene(v)
+        pw = base.sources[0].replace(band=fd.Band(wavelength=1., df=df))
+        grow = (cells - junction.CELLS) * junction.DX
+        return dataclasses.replace(
+            base, sources=(pw,), run=fd.Run(steps=steps, courant=.5),
+            domain=fd.Domain(size=(.6, .6, 2.1 + 2 * grow), center=(0., 0., .05)),
+            boundaries=fd.Boundaries(**fd.Bloch.from_source(pw), z=(
+                fd.PML(cells=cells, wavelength=1., background=junction.GLASS),
+                fd.PML(cells=cells, wavelength=1.))))
+
+    def rows(v):
+        result = fd.run(make(v), 'numpy')
+        return (np.asarray(result['T'].orders.given.T[:, 0, 0]),
+                np.asarray(result['R'].orders.given.R[:, 0, 0]))
+    T, R = rows(SUBSTRATE)
+    d = np.eye(5)[4] * h
+    plus, minus = rows(SUBSTRATE + d), rows(SUBSTRATE - d)
+    dT, dR = (plus[0] - minus[0]) / (2 * h), (plus[1] - minus[1]) / (2 * h)
+    out['settled'] = dict(cells=cells, steps=steps, df=df, step=h,
+                          energy_residual=(T + R - 1).tolist(), dT0=dT.tolist(),
+                          dR0=dR.tolist(), dT_plus_dR=(dT + dR).tolist())
+    print(out['settled'], flush=True)
+    _write('substrate', out)
+
+
 if __name__ == '__main__':
     mode = sys.argv[1] if len(sys.argv) > 1 else 'equal'
     {'equal': equal_mode, 'measure': measure_mode, 'multi': multi_mode,
      'sphere': sphere_mode, 'settled': settled_mode, 'guards': guards_mode,
-     'extras': extras_mode}[mode](*sys.argv[2:5])
+     'extras': extras_mode, 'substrate': substrate_mode}[mode](*sys.argv[2:5])

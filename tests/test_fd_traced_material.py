@@ -13,13 +13,16 @@ import wavebit.fd as fd
 from wavebit.fd._lower.shape_ranges import planning_scene
 from wavebit.fd._runtime import runtime
 from studies.fdtd_traced_material_probe import (MULTI, PARTNERS, POINTS, SPHERE,
-                                                 closed_scene, dimer, junction_scene,
-                                                 multi_objective, multi_scene, objectives,
-                                                 open_box, partners_loss, pml_box, scene,
-                                                 sphere_objective, sphere_scene)
+                                                 SUBSTRATE, closed_scene, dimer,
+                                                 junction_scene, multi_objective, multi_scene,
+                                                 objectives, open_box, partners_loss, pml_box,
+                                                 scene, sphere_objective, sphere_scene,
+                                                 substrate_objectives, substrate_scene)
 from test_fd_sphere_range import quiet
 
 TOLERANCE = 128 * np.finfo(float).eps
+#: ``grazing.GRAZING_EXPONENT``, the grading's ``g`` at its design wavelength.
+GRAZING_G = .919
 
 
 def _traced(values, keep=()):
@@ -181,6 +184,12 @@ def _t(x):
     return torch.tensor(x, dtype=torch.float64, requires_grad=True)
 
 
+def stabilized(s, rho=.05):
+    """``s`` with its bottom PML stabilized."""
+    z = s.boundaries.z
+    return s.replace(boundaries=s.boundaries.replace(z=(z[0].replace(stabilize=rho), z[1])))
+
+
 def _refused(message, function, *args, **kwargs):
     """``function`` refuses by name: a ValueError matching ``message``. Any other outcome --
     no refusal, another reason, another exception -- fails by assertion."""
@@ -208,10 +217,10 @@ def test_what_no_runtime_guard_covers_is_refused_by_name(monkeypatch):
         (traced.replace(structures=(sub, pillar.replace(material=fd.Material(
             eps=(e, e * 1., e))))), p, r'traced Cylinder requires isotropic lossless Material'),
         # The substrate fills the bottom PML along the PlaneWave's axis, where the T plane's
-        # orders are judged (grazing._survey); without the PlaneWave and the Diffraction
-        # monitors (_cell) no host rule reads it.
-        (traced.replace(structures=(sub.replace(material=fd.Material(eps=_t(2.1))), pillar)),
-         full, r'structures\[0\] has a traced material value and fills a PML layer'),
+        # orders are judged (grazing._survey): on a stabilized face, on its exact return too.
+        (stabilized(traced).replace(structures=(sub.replace(material=fd.Material(
+            eps=_t(2.1))), pillar)), quiet(fd.plan, stabilized(scene(POINTS['cylinder'][0]))),
+         r'structures\[0\] has a traced material value and fills a stabilized PML layer'),
         (traced.replace(structures=(sub.replace(material=fd.Conductor(eps=2.1, sigma=_t(.1))),
                                     pillar)), p,
          r'structures\[0\] has a traced value in an fd.Conductor'),
@@ -223,10 +232,11 @@ def test_what_no_runtime_guard_covers_is_refused_by_name(monkeypatch):
     for current, plan, message in cases:
         _refused(message, planning_scene, current, plan)
     # Without the Diffraction monitors the survey judges no orders, so nothing on the host
-    # reads the traced substrate's value, PlaneWave or not.
+    # reads the traced substrate's value, PlaneWave or not, stabilized face or not.
     for sources in ((), traced.sources):
-        q = quiet(fd.plan, scene(POINTS['cylinder'][0]).replace(sources=sources, monitors=()))
-        _ran(planning_scene, traced.replace(structures=(sub.replace(
+        q = quiet(fd.plan, stabilized(scene(POINTS['cylinder'][0]).replace(sources=sources,
+                                                                            monitors=())))
+        _ran(planning_scene, stabilized(traced).replace(structures=(sub.replace(
             material=fd.Material(eps=_t(2.1))), pillar), sources=sources, monitors=()), q)
     # The background's three readers, each alone: the PlaneWave with both PMLs matched to
     # media of their own; a PML matched to it in a Dipole scene; a lattice FarField in an
@@ -439,3 +449,70 @@ def test_a_jitted_run_reuses_one_program_across_indices():
         _close(fields[-1], quiet(fd.run, scene(point[:3] + (eps,), steps=40)).final.E)
     assert np.max(abs(fields[1] - fields[0])) > 1e-2 * np.max(abs(fields[0]))
     assert compiled._cache_size() == 1
+
+
+def test_a_traced_substrate_runs_and_differentiates_as_the_concrete_scene():
+    """The substrate's permittivity traced with the pillar's shape and index: it fills the
+    bottom PML, whose grazing rule is held at run time. A 40-step run equals the concrete scene
+    at three points (8.9e-17 to 1.8e-16 of the peak), and the five-leaf Jacobian of T and R
+    equals central differences: the substrate column within 5.0e-9, 1.5e-10, 1.1e-9, 3.2e-9 at
+    steps 1e-4 .. 1e-6, the whole within 9.2e-8 at 3e-6 (``fdtd_traced_material_substrate.json``).
+    Step 3e-6, the existing 2e-6 budget."""
+    import torch
+    rtt = runtime('torch')
+    p = quiet(fd.plan, substrate_scene(SUBSTRATE, steps=40))
+    for v in (tuple(SUBSTRATE), (.127, .21, 0., 2., 2.3), (.1, .25, -.013, 2.4, 1.8)):
+        ran = _ran(fd.run, substrate_scene(_traced(v), steps=40), 'torch', plan=p)
+        _close(rtt.numpy(ran.final.E.detach()),
+               quiet(fd.run, substrate_scene(v, steps=40)).final.E)
+    p = quiet(fd.plan, substrate_scene(SUBSTRATE))
+    h = 3e-6
+
+    def values(v):
+        return np.array([float(x) for x in quiet(substrate_objectives, v, 'numpy', None)])
+    expected = np.array([(values(SUBSTRATE + d) - values(SUBSTRATE - d)) / (2 * h)
+                         for d in np.eye(5) * h]).T
+    v = torch.tensor(SUBSTRATE, dtype=torch.float64, requires_grad=True)
+    out = _ran(substrate_objectives, v, 'torch', p)
+    got = np.array([torch.autograd.grad(o, v, retain_graph=True)[0].numpy() for o in out])
+    assert np.all(expected != 0)
+    np.testing.assert_allclose(got, expected, rtol=2e-6, atol=0.)
+
+
+def test_the_grazing_rule_holds_a_traced_substrate_at_run_time():
+    """``grazing.accepted_cos`` is ``grazing._pure_verdict``'s acceptance on a grid of every
+    argument it reads; and a traced substrate runs to NaN exactly where the plan of the
+    concrete scene refuses a grazing order. In the cell (period .6, 8-cell PMLs) the first
+    orders start to propagate in the glass at wavelength .95 for eps (.95/.6)^2 = 2.50694, at
+    exit cos 0 -- refused up to the resolution floor 2.576. With the T plane asking for
+    wavelength .62 instead, the band of refused indices closes again below the floor: an
+    order that starts at eps 1.068 leaves steeply enough from about 1.28 on."""
+    from wavebit.fd._lower import grazing
+    for R in (1e-16, 1e-12, 1e-8, 1e-6):
+        for cells in (8, 24):
+            for periods in (None, 100., 160., 400.):
+                for g in (.89, GRAZING_G, .93):
+                    c = grazing.accepted_cos(R, cells, g, periods)
+                    for cos in np.linspace(0., 1., 2001):
+                        assert (grazing._pure_verdict(cos, R, cells, g, periods) == 'ok') == (
+                            cos >= c), (R, cells, periods, g, cos)
+
+    def judged(make, eps):
+        point = tuple(SUBSTRATE[:4]) + (eps,)
+        p = quiet(fd.plan, make(SUBSTRATE))
+        stable = bool(_ran(fd.run, make(_traced(point)), 'torch', plan=p)
+                      .diagnostics['stable'])
+        try:
+            quiet(fd.plan, make(point))
+            planned = True
+        except ValueError as error:
+            assert 'Grazing order refused' in str(error), error
+            planned = False
+        return stable, planned
+    default = lambda v: substrate_scene(v, steps=20)
+    short = lambda v: default(v).replace(monitors=(fd.Diffraction(
+        'T', z=-.55, side='transmit', wavelengths=(.62,), orders=0),))
+    for make, eps, accepted in ((default, 2.5069, True), (default, 2.5070, False),
+                                (default, 2.55, False), (short, 1.05, True),
+                                (short, 1.2, False), (short, 1.5, True)):
+        assert judged(make, eps) == (accepted, accepted), (eps, accepted)

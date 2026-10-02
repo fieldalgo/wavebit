@@ -144,24 +144,36 @@ def test_a_concrete_partner_must_stay_a_cell_off_every_traced_halo():
         planning_scene(traced, quiet(fd.plan, concrete))
 
 
-def test_a_traced_partner_material_in_a_pml_or_with_poles_is_refused():
+def test_a_traced_partner_material_in_a_stabilized_pml_or_with_poles_is_refused():
     """A partner's traced eps is planned at the plan's value and lowered live
-    (tests/test_fd_traced_material.py), but not this substrate's: it fills the bottom PML,
-    whose grazing survey is judged on the host only. A traced pole parameter has no seed."""
+    (tests/test_fd_traced_material.py), this substrate's too, though it fills the bottom PML:
+    the grazing rule on a pure-stretch face is held at run time (shape_ranges.grazing_guard).
+    On a stabilized face the rule reads the face's exact return, on the host only, so a
+    traced substrate there is refused; a traced pole parameter has no seed."""
     import torch
-    p = quiet(fd.plan, scene('substrate'))
     eps = torch.tensor(2.1, dtype=torch.float64, requires_grad=True)
     omega = torch.tensor(20., dtype=torch.float64, requires_grad=True)
-    for material, message in ((fd.Material(eps=eps), r'structures\[0\] has a traced material '
-                                                     r'value and fills a PML layer'),
-                              (fd.Dispersive(eps_inf=1., poles=(fd.Drude(omega_p=omega,
-                                                                         gamma=.5),)),
-                               r'structures\[0\] has a traced value in an fd.Dispersive')):
+
+    def traced(material, stabilize):
         current = _traced_pillar()
-        current = current.replace(structures=(current.structures[0].replace(
-            material=material),) + current.structures[1:])
+        z = current.boundaries.z
+        return current.replace(structures=(current.structures[0].replace(
+            material=material),) + current.structures[1:], boundaries=current.boundaries.replace(
+                z=(z[0].replace(stabilize=stabilize), z[1])))
+    p = quiet(fd.plan, scene('substrate'))
+    concrete = planning_scene(traced(fd.Material(eps=eps), 0.), p)
+    assert concrete.structures[0].material.eps == (2.1, 2.1, 2.1)
+    stabilized = scene('substrate')
+    z = stabilized.boundaries.z
+    stabilized = quiet(fd.plan, stabilized.replace(boundaries=stabilized.boundaries.replace(
+        z=(z[0].replace(stabilize=.05), z[1]))))
+    for material, plan, message in (
+            (fd.Material(eps=eps), stabilized,
+             r'structures\[0\] has a traced material value and fills a stabilized PML layer'),
+            (fd.Dispersive(eps_inf=1., poles=(fd.Drude(omega_p=omega, gamma=.5),)), p,
+             r'structures\[0\] has a traced value in an fd.Dispersive')):
         with pytest.raises(ValueError, match=message):
-            planning_scene(current, p)
+            planning_scene(traced(material, .05 if plan is stabilized else 0.), plan)
 
 
 def junction_scene(radius=.2):

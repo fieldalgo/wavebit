@@ -382,6 +382,65 @@ def _pure_verdict(c, reflection, cells, g, periods):
     return 'ok'
 
 
+def accepted_cos(reflection, cells, g, periods):
+    """The lowest exit ``cos`` :func:`_pure_verdict` calls ``'ok'``, the only verdict
+    :func:`enforce` passes: above the floor's reach and the face's own, and above the default
+    target's reach unless the face declares ``GRAZING_CELLS`` and the run lasts
+    ``GRAZING_PERIODS``."""
+    lowest = max(cos_min(FLOOR_REFLECTION, g=g), cos_min(reflection, g=g))
+    if cells < GRAZING_CELLS or periods is None or periods < GRAZING_PERIODS * (1.0 - 1e-9):
+        lowest = max(lowest, cos_min(DEFAULT_REFLECTION, g=g))
+    return lowest
+
+
+def refused_bands(scene, plan, n_max):
+    """``{(face name, medium label): ((low, high), ...)}``: what the orders' rows would refuse.
+
+    For each medium filling a PML layer that :func:`_survey` judges orders in -- one
+    PlaneWave, a Diffraction monitor, a concrete Bloch phase, the faces along the wave's axis
+    -- the open intervals of ``n^2`` (the medium's ``min_c eps_c mu_c``) in which some order
+    propagates at an exit cos the face's pure stretch does not accept (:func:`accepted_cos`),
+    at every wavelength a Diffraction monitor asks for: an order of transverse wavenumber
+    ``K`` propagates for ``n^2 k0^2 > K^2`` and exits at ``cos^2 = 1 - K^2 / (n^2 k0^2)``, so it
+    is refused for ``K^2 / k0^2 < n^2 < K^2 / (k0^2 (1 - c^2))``. Orders are counted at
+    ``n_max``; a larger index is the caller's to refuse. A stabilized face's rows are judged
+    on the face's exact return as well (:func:`_judge`), which these bands do not hold; the
+    caller keeps a traced medium out of such a layer. ``{}`` where the survey judges no
+    orders.
+    """
+    from ..monitors import Diffraction
+    from .monitors import plane_waves
+    waves = plane_waves(scene)
+    diffraction = [m for m in scene.monitors if isinstance(m, Diffraction)]
+    if len(waves) != 1 or not diffraction:
+        return {}
+    pw = waves[0]
+    P = pw.axis
+    kpar = [_transverse_k(scene, plan.grid, a) for a in range(3) if a != P]
+    if any(k is None or k[0] is None for k in kpar):
+        return {}
+    wanted = sorted({w for m in diffraction for w in m.wavelengths})
+    periods = _periods(scene, plan, pw)
+    design = dict(plan.pml_wavelengths)
+    out = {}
+    for side in ('-', '+'):
+        name = AXES[P] + side
+        face = scene.boundaries.face(name)
+        if not isinstance(face, PML):
+            continue
+        bands = []
+        for w in wanted:
+            c = accepted_cos(face.reflection, face.cells, exponent(w / design[name]), periods)
+            k0 = 2.0 * math.pi / w
+            for _, _, (ku, kv) in _orders(kpar, n_max, w):
+                low = (ku * ku + kv * kv) / (k0 * k0)
+                if low > 0.0:
+                    bands.append((low, low / (1.0 - c * c)))
+        for label, _ in _layer_materials(scene, plan.grid, P, side, face.cells):
+            out[(name, label)] = tuple(bands)
+    return out
+
+
 def _judge(scene, plan, rows, face, face_wavelength, n, k_pars, axis1d, pols, periods):
     """``rows`` (one wavelength, one face) with their verdicts, judged with the ``g`` of that
     wavelength against the face's design wavelength.
@@ -433,6 +492,12 @@ def _judge(scene, plan, rows, face, face_wavelength, n, k_pars, axis1d, pols, pe
 
 def _layer_media(scene, grid, P, side, cells):
     """``[(label, index or None), ...]``: the materials filling the absorbing layer's cells."""
+    return [(label, m.index_bound()) for label, m in _layer_materials(scene, grid, P, side,
+                                                                       cells)]
+
+
+def _layer_materials(scene, grid, P, side, cells):
+    """``[(label, material), ...]``: what :func:`_layer_media` reads the index of."""
     k = cells - 1 if side == '-' else grid.n[P] - cells
     background = as_material(scene.background, 'Scene(background=)')
     from .._post import layer_share
@@ -448,7 +513,7 @@ def _layer_media(scene, grid, P, side, cells):
     # of the layer -- asked of each shape's own fill (``_post.layer_share``), not of a box.
     media = [('the background', background)] if not full else []
     media += [(f'structures[{i}]', m) for i, m in owners.items()]
-    return [(label, m.index_bound()) for label, m in media]
+    return media
 
 
 def _periods(scene, plan, pw):

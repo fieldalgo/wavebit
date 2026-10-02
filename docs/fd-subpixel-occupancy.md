@@ -2793,8 +2793,8 @@ certificate taken on the host has one of three fates:
   cell of a smoothed support (`constitutive.lower` and `junction.tables` read component 0);
   a traced background where a PML is matched to it, a PlaneWave or TFSF source reads it or
   a lattice FarField maps it; a traced medium filling a PML layer the grazing survey judges
-  (one PlaneWave, a Diffraction monitor, a face along the wave's axis:
-  `shape_ranges._surveyed_media`, from `grazing._layer_media`); a traced material in a
+  (one PlaneWave, a Diffraction monitor, a face along the wave's axis -- superseded for a
+  pure-stretch face by "A traced substrate: the grazing rule at run time" below); a traced material in a
   smoothed region where a fractional fill reaches a Symmetry plane
   (`shape_ranges._mirror_could_couple`: the plan's mirror check reads cross coefficients
   that vanish where the seed has no contrast); and a traced medium at a Diffraction plane
@@ -2923,3 +2923,82 @@ files are under `before_final/`). Counts and timings are in
 `studies/results/fdtd_traced_material_validation.json`, the runner is
 `studies/fdtd_traced_material_validation.py`, and the raw logs are under
 `studies/results/fdtd_traced_material_controls/`.
+
+### A traced substrate: the grazing rule at run time (C6, 2026-10-02)
+
+The previous section refused a traced material filling a PML layer that the grazing survey
+judges, because the survey (`grazing._survey`) counts the Diffraction orders in each medium
+filling the layer on the host only. That refusal kept the metasurface's substrate concrete:
+it runs through the bottom PML. The survey is now held at run time instead, so the
+substrate's permittivity may be traced with the pillar's shape and index; only a stabilized
+face (`PML(stabilize > 0)`), whose verdict also reads the face's exact discrete return
+(`grazing._judge`, `layer_return`), keeps the refusal.
+
+**The rule as a set of intervals.** On a pure-stretch face the verdict of an order is a
+threshold in its exit cos: `grazing.accepted_cos` is the lowest cos `_pure_verdict` calls
+`'ok'` (above the floor's and the face's reach, and the default target's unless the face has
+24 cells and the run 160 periods), checked equal to it on a grid of every argument. An order
+of transverse wavenumber `K` propagates in index `n` at wavelength `w` for `n^2 k0^2 > K^2`
+and leaves at `cos^2 = 1 - K^2 / (n^2 k0^2)`, so it is refused for
+`K^2/k0^2 < n^2 < K^2/(k0^2 (1 - c^2))`. `grazing.refused_bands` lists these intervals for
+every medium the survey would judge (the same conditions: one PlaneWave, a Diffraction
+monitor, a concrete Bloch phase, the PML faces along the wave's axis, the media from
+`grazing._layer_materials`, which `_layer_media` now reads), counting orders up to the
+resolution floor, above which `resolution_guard` makes the run `nan` already.
+`shape_ranges.grazing_guard` holds every traced plain Material in such a layer to them: its
+live `min_c eps_c mu_c` may not lie in any interval. Like the other guards it is built only
+for a seeded scene with a traced material, so every other run's `stable` is unchanged.
+
+**Measurements** (`studies/fdtd_traced_material_probe.py`, mode `substrate`;
+`fdtd_traced_material_substrate.json`, logs under
+`studies/results/fdtd_traced_substrate_controls/`).
+
+* The cell with the substrate's eps traced beside the pillar's shape and index, a 40-step
+  run from the seed's plan: equal to the concrete scene at three points (substrate eps 1.8,
+  2.1, 2.3) within `1.8e-16` of the peak.
+* Reverse mode against NumPy central differences for (radius, height, centre x, pillar eps,
+  substrate eps): the substrate column within `5.0e-9`, `1.5e-10`, `1.1e-9`, `3.2e-9` at
+  steps `1e-4` .. `1e-6`; the other columns reproduce the previous section's; JAX and Torch
+  within `1.0e-15`. `dT/d eps_substrate` is `-0.107` and `dR/d eps_substrate` `0.104`, summed over the three wavelengths.
+* The guard against the plan of the concrete scene, across the onset of the first orders in
+  the glass at wavelength .95 (`(.95/.6)^2 = 2.50694`): 2.4, 2.5, 2.506 and 2.5069 run and
+  plan; 2.5070, 2.508, 2.52, 2.55 and 2.575 run to `nan` and are refused ("Grazing order
+  refused"). With the T plane at wavelength .62 the refused band closes again below the
+  floor -- 1.05 and 1.5 run, 1.2 does not, as the plans say (the regression).
+* Physics: in the settled cell (24-cell PMLs, a `.05` band, 6000 steps) the substrate's eps
+  derivatives keep `dT + dR` to `5.7e-5`, `3.7e-5`, `5.1e-5` at the three wavelengths -- 0.19%
+  of its small `dT` (`-0.030` per wavelength), against 0.005% for the pillar's eps. That is
+  the slope of the residual itself: `T + R - 1` stays within `1.4e-6` from substrate eps 2.0
+  to 2.2 but ripples at that level as the thick substrate's optical path changes
+  (`substrate_residual_sweep.json`), and matching the bottom PML to each perturbed medium
+  changes the derivatives by under `4e-6` (`substrate_settled_matched.json`), so the PML's
+  match held at the seed is not the cause.
+
+**Regressions** (`tests/test_fd_traced_material.py`, two new functions; the refusal test now
+refuses a substrate only in a stabilized layer and admits one without the Diffraction
+monitors; `tests/test_fd_traced_partner_grad.py`'s partner test admits the substrate on the
+pure stretch and refuses it on a stabilized face): the traced substrate against the concrete
+scene and its five-leaf Jacobian; `accepted_cos` against `_pure_verdict` on the grid, and the
+guard against the plan at six points across both ends of a refused band.
+
+**Witnesses** (`studies/fdtd_traced_substrate_mutations.py`). Twelve mutations of the
+production source, each failed by an assertion or a missing refusal and restored byte for
+byte, all on the first run: the guard dropped, a band left open above, no band found, the
+guard reading another medium's bands, `accepted_cos` without the default target's reach or
+without the face's own, the stabilized door dropped (two tests), applied to every face, or
+without the Diffraction condition, and the Diffraction normalisation's and the junction
+face's permittivity detached.
+
+**Validation.** Final fd source SHA-256
+`b1429303d2a81fbf223edbbe7e27f8535154c4ef206d046ac2ed3a826138b1a1`. The full fd/docs tier
+collected 2747 cases and exited 0 with 2739 passed and 8 skipped (2173.67 seconds); the
+separate slow tier collected and passed all 80 cases, exit 0 (1084.26 seconds). Reported
+totals match collection, with no INTERNALERROR or worker crash. The four read-only freezers
+reproduced all 143/288/140/570 committed arrays bit for bit; no golden was rewritten. Every
+probe mode, the previous section's included, was rerun at the final source and reproduced
+its earlier JSON bit for bit, timings aside
+(`studies/results/fdtd_traced_substrate_controls/rerun_at_final_source.json`; the earlier
+files are under `before_final/`). Counts and timings are in
+`studies/results/fdtd_traced_substrate_validation.json`, the runner is
+`studies/fdtd_traced_substrate_validation.py`, and the raw logs are under
+`studies/results/fdtd_traced_substrate_controls/`.

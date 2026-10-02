@@ -745,9 +745,10 @@ class Sphere(Shape):
     without a range (a substrate Slab, a Region, an unranged body, a lossy or dispersive
     layer) may join them when each, widened by one cell, stays off every traced halo; a
     flush junction among them lowers as usual. A body's or partner's ``eps`` and ``mu`` may be
-    traced with the geometry, each as one scalar of a plain Material; a medium filling a PML
-    layer, the background of a scene with a PML or plane-wave source, conductivities and
-    pole parameters stay concrete. A traced
+    traced with the geometry, each as one scalar of a plain Material, a substrate's in a PML
+    included; a medium filling a stabilized PML layer, the background of a scene with a
+    plane-wave source or a PML matched to it, conductivities and pole parameters stay
+    concrete. A traced
     Cylinder or unturned Box may stand flush on an unranged smoothed Box face under
     ``junction='split'``, with its base held on the face. Every
     source and monitor family is admitted, provided the cell layers where a PlaneWave or TFSF
