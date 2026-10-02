@@ -432,8 +432,10 @@ normalization is not convention-free, so `de_ri` is not compared against anythin
 Every `sqrt` above is a physical decision, centralized in `_core/conventions.py`:
 
 - **layer** `q`: `Re(q) ≥ 0` (`mode_q`) — a conditioning choice on a free label;
-- **half-space** `kz`: principal root (`Re > 0`, tie `Im > 0`) plus the branch-sheet test
-  `_off_principal_branch` for the both-sides-absorbing regime.
+- **half-space** `kz`: Maystre's cut, `Re(kz) + Im(kz) > 0` (`boundary_kz`, since 2026-10-02).
+  At every real `k_par` in a passive medium this is the principal root (`Re > 0`, tie `Im > 0`).
+  Below the real axis of `kz**2`, reached by a complex angle or a gain medium, it is the root
+  that limiting absorption reaches.
 
 The derivations and measurements are in `docs/time-convention-audit.md` and
 `docs/branch-cuts.md`; nothing there is repeated here.

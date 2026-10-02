@@ -1,26 +1,26 @@
-"""A complex transverse wavevector against RETICOLO, where the two solvers' roots coincide.
+"""A complex transverse wavevector against RETICOLO, on both sides of the old split.
 
 A direct ``kx`` / ``ky`` must be real; a complex ``theta`` / ``phi`` is the one door to a complex
 one, through the formal ``kx/k0 = n*sin(theta)*cos(phi)``. Nothing else in the suite checks that
 path against an outside solver: ``test_reticolo_conical_sweep`` reaches complex *angles*, but
 every one of them is evanescent incidence (``Re(theta) = pi/2``), whose ``kx`` is real.
 
-What an oracle can say here is limited, and the limit is why the cases look the way they do.
 With a complex ``kx`` no root of ``kz`` both carries power away and decays away, so each solver
-picks one by its own rule, and the rules differ:
+picks one by its own rule:
 
-* this solver: the principal root, ``Re(kz) > 0``, moved to the other sheet only where the path
-  from normal incidence crosses the cut (:func:`~wavebit._core.conventions._off_principal_branch`);
-* RETICOLO: Maystre's cut, ``retsqrt(x, -1)`` -- the root with ``Re(kz) + Im(kz) > 0``;
+* this solver and RETICOLO: Maystre's cut, the root with ``Re(kz) + Im(kz) > 0`` (RETICOLO's
+  ``retsqrt(x, -1)``; this solver's :func:`~wavebit._core.conventions.boundary_kz` since
+  2026-10-02);
 * fmmax: ``Im(kz) > 0``, always.
 
-Where every order's ``kz**2`` lies in the upper half plane, all three coincide. Outside it they
-need not: on a lossless-top grating at ``theta = 0.2+0.1j`` this solver keeps growing evanescent
-orders (``Im(kz) < 0``) that RETICOLO's cut replaces with decaying ones, and R moves by 0.11.
-No oracle can arbitrate that -- it is a convention, not an error -- so the cases below stay where
-this solver and RETICOLO agree, and :func:`test_cases_stay_where_the_roots_agree` fails if an
-edit walks one out. The interface cases sit where fmmax does *not* agree, which pins that this
-solver is on RETICOLO's side of that split rather than fmmax's.
+Until 2026-10-02 this solver took the principal root, continued from normal incidence, which
+agrees with Maystre's cut only where every order's ``kz**2`` keeps ``Re(kz) > 0``. The first five
+cases were chosen inside that agreement, so they held across the change. The lossless-top grating
+cases sit outside it. Their evanescent orders fall below the real axis, and the old rule let them
+grow where Maystre's cut keeps them decaying. ``R`` moved by 0.11 there, and
+:func:`test_the_lossless_top_cases_reach_the_old_split` fails if an edit walks them back inside.
+The interface cases sit where fmmax does *not* agree, which pins that this solver is on
+RETICOLO's side of that split rather than fmmax's.
 
 The golden stores per-order reflected and transmitted efficiencies and the zeroth-order
 reflection amplitude. Higher-order amplitudes are left out on purpose: they carry a phase
@@ -29,7 +29,10 @@ and the zeroth order do not. RETICOLO's default mode selection reports nothing a
 ``kx``; ``interface/reticolo_res2_all_modes.m`` says how the generator gets past that.
 
 Measured when the golden was made (2026-09-26): efficiencies agree to 1e-16 .. 4e-15, the
-zeroth-order amplitudes to 5e-16 .. 1.8e-15.
+zeroth-order amplitudes to 5e-16 .. 1.8e-15. The lossless-top cases were added on 2026-10-02.
+The regenerated golden kept the first five cases bit for bit. The new cases agree to
+1.2e-15 .. 1.9e-15 in efficiency and 1.4e-15 .. 1.7e-15 in the zeroth-order amplitude. Under
+the old rule they missed by 0.003 .. 0.06 in efficiency.
 """
 import pathlib
 
@@ -70,7 +73,23 @@ CASES = {
     'tm_grating_absorbing_halfspaces': dict(tetm='tm', theta=_THETA_GRATING, top=2.25 + 1j,
                                             bot=2.25 + 0.5j, truncation_order=5, period=[0.7],
                                             wavelength=0.9, structure=_HALF, thickness=[0.15]),
+    # The same grating between lossless half-spaces, at angles the old rule answered differently.
+    # Air's evanescent orders fall below the real axis: the positive ones at +Im(theta), the
+    # negative ones at -Im(theta).
+    'te_grating_lossless_top': dict(tetm='te', theta=0.2 + 0.1j, top=1.0, bot=2.25,
+                                    truncation_order=5, period=[0.7], wavelength=0.9,
+                                    structure=_HALF, thickness=[0.15]),
+    'tm_grating_lossless_top': dict(tetm='tm', theta=0.2 + 0.1j, top=1.0, bot=2.25,
+                                    truncation_order=5, period=[0.7], wavelength=0.9,
+                                    structure=_HALF, thickness=[0.15]),
+    'te_grating_lossless_top_below_axis': dict(tetm='te', theta=0.2 - 0.1j, top=1.0, bot=2.25,
+                                               truncation_order=5, period=[0.7], wavelength=0.9,
+                                               structure=_HALF, thickness=[0.15]),
 }
+
+#: The cases added on 2026-10-02, outside what the old rule agreed with.
+_LOSSLESS_TOP = ('te_grating_lossless_top', 'tm_grating_lossless_top',
+                 'te_grating_lossless_top_below_axis')
 
 
 def _solver(name):
@@ -85,21 +104,26 @@ def _golden():
 
 
 @pytest.mark.parametrize('name', list(CASES))
-def test_cases_stay_where_the_roots_agree(name):
-    """Oracle-free: every case is a complex kx, and RETICOLO's cut takes this solver's roots.
+def test_every_case_is_a_complex_kx(name):
+    """Oracle-free: a real ``kx`` would pass everything below and prove nothing about this path."""
+    kx = np.asarray(_solver(name).order_kxy()[0]).ravel()
+    centre = CASES[name]['truncation_order']
+    assert abs(kx[centre].imag) > 1e-3, f'{name}: kx = {kx[centre]} is not complex'
 
-    The first assertion keeps the file honest about what it tests (a real ``kx`` would pass
-    everything below and prove nothing about this path). The second is the scope of the oracle:
-    were an order's root to have ``Re(kz) + Im(kz) <= 0``, RETICOLO would take the other one and
-    a disagreement would be a convention, not a finding.
+
+@pytest.mark.parametrize('name', _LOSSLESS_TOP)
+def test_the_lossless_top_cases_reach_the_old_split(name):
+    """Some order there takes a decaying root with ``Re(kz) < 0``, the one the old rule refused.
+
+    The principal root keeps ``Re(kz) >= 0``, and so did this solver until 2026-10-02 wherever
+    its continuation fix stayed silent, as it does over a lossless half-space. An order with
+    ``Re(kz) < 0`` is therefore one where the two rules differ. Without one, these cases could
+    not tell the rules apart, and the golden would pin nothing about the choice.
     """
     kw = CASES[name]
     kx = np.asarray(_solver(name).order_kxy()[0]).ravel()
-    centre = kw['truncation_order']
-    assert abs(kx[centre].imag) > 1e-3, f'{name}: kx = {kx[centre]} is not complex'
-    for side in ('top', 'bot'):
-        kz = np.asarray(boundary_kz(np, complex(kw[side]), kx ** 2)).ravel()
-        assert np.all(kz.real + kz.imag > 0), (name, side, kz)
+    kz = np.asarray(boundary_kz(np, complex(kw['top']), kx ** 2)).ravel()
+    assert np.any(kz.real < -1e-3), kz
 
 
 @pytest.mark.parametrize('name', ['te_interface_absorbing_top', 'tm_interface_absorbing_top'])
@@ -122,17 +146,27 @@ def test_orders_match_reticolo(name):
     ``atol=1e-11`` is the round-off room ``test_reticolo_golden`` uses; the measured disagreement
     is 1e-16 .. 4e-15. The solve must also say that its R and T are formal: the warning is part
     of the contract at a complex ``kx``, and so is the NaN in ``power_entering``.
+
+    One convention differs, and only in sign. An order whose root decays with ``Re(kz) < 0``
+    (the lossless-top cases' evanescent orders) carries its z-flux back toward the stack. This
+    solver's formal ratio keeps that sign and comes out negative. RETICOLO reports the same
+    magnitude, positive. The amplitudes agree, so the comparison flips those orders rather than
+    taking magnitudes everywhere, which would also hide a sign error on every other order.
     """
     g = _golden()
     kw = CASES[name]
     n = kw['truncation_order']
     with pytest.warns(wavebit.ComplexIncidenceWarning):
         result = _solver(name).solve()
-    for kind, values in (('r', result.R), ('t', result.T)):
+    kx = np.asarray(_solver(name).order_kxy()[0]).ravel()
+    for kind, values, side in (('r', result.R, 'top'), ('t', result.T, 'bot')):
         order = g[f'{name}__order_{kind}']
         assert sorted(order.tolist()) == list(range(-n, n + 1)), order
-        np.testing.assert_allclose(np.asarray(values).ravel()[order + n], g[f'{name}__eff_{kind}'],
-                                   atol=1e-11, rtol=0, err_msg=f'{name}: {kind}')
+        kz = np.asarray(boundary_kz(np, complex(kw[side]), kx ** 2)).ravel()
+        flux_sign = np.where(kz.real < 0, -1.0, 1.0)[order + n]
+        np.testing.assert_allclose(np.asarray(values).ravel()[order + n] * flux_sign,
+                                   g[f'{name}__eff_{kind}'], atol=1e-11, rtol=0,
+                                   err_msg=f'{name}: {kind}')
     amplitude = result.incident.r_s if kw['tetm'] == 'te' else result.incident.r_p
     # The specular order only, which is why the pure 1D path moving into the per-order s/p
     # frame (2026-09-27) left this untouched: RETICOLO's 1D amplitudes are Cartesian like the

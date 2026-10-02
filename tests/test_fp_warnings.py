@@ -405,9 +405,9 @@ _COMPLEX_PHI = np.arctan(1.2 / 1.6001, dtype=np.complex128)
 _REGIMES = {
     'real angle': dict(),
     'complex angle': dict(theta=_COMPLEX_THETA, phi=_COMPLEX_PHI),
-    # Its genuine Re(kz) sits at the same scale as the round-off above; that overlap is why
-    # no fixed cutoff serves both, and why this warns rather than being repaired.
-    # (1.4 + 1e-5j)**2 -- the weak absorber, as permittivity.
+    # (1.4 + 1e-5j)**2 -- the weak absorber, as permittivity. A real angle there is a phase
+    # angle with a real k_par (2026-09), so its half-space roots are resolved; the warning at
+    # complex64 comes from layer modes, whose Re(q) is round-off at that precision.
     'weak absorber': dict(top=1.9599999998999997 + 2.8e-05j, theta=0.6, phi=0.4),
 }
 
@@ -425,9 +425,9 @@ def test_single_precision_reports_an_unresolvable_branch(backend, regime):
     """complex64 cannot answer the question, and says so instead of guessing quietly.
 
     Every backend, deliberately: unlike the guards in ``_core/backend.py`` this one is not
-    NumPy-only, because the backends it would have skipped return the *worst* answers here —
-    NumPy 1.80, JAX 4.12, PyTorch 5.68 at the same point — and they are the paths taken for
-    gradients and GPUs.
+    NumPy-only. When it was written, the backends it would have skipped returned the *worst*
+    answers here: NumPy 1.80, JAX 4.12 and PyTorch 5.68 at the same point, under the half-space
+    rule of the day. They are the paths taken for gradients and GPUs.
     """
     assert _branch_warnings(complex_dtype=1, backend=backend, **_REGIMES[regime])
 
@@ -511,9 +511,11 @@ def test_branch_tolerance_is_scoped_and_restores():
 def test_branch_tolerance_rescues_a_complex_angle_at_single_precision():
     """The escape hatch has to actually move the answer, or it is decoration.
 
-    Double precision is the reference; at complex64 the default cutoff is 4.5 off it, and
-    raising the cutoff brings it to ~1e-6. The same setting is *wrong* for a weak absorber —
-    that trade is the documented reason this is a scoped override and not a new default.
+    Double precision is the reference. At complex64, on the default ETM layer algorithm, the
+    evanescent point is 5.1e-2 off it, from layer modes whose ``Re(q)`` is round-off and whose
+    label is then the sign of noise. Raising the cutoff sends them to the tie-break and brings
+    the answer to ~2e-6. Before 2026-10-02 the same point was 4.5 off, because the half-space
+    root read the sign of noise too.
     """
     ref = np.asarray(_branch_solve(0, **_REGIMES['complex angle']).s_inc.r_s).ravel()
 
@@ -523,9 +525,50 @@ def test_branch_tolerance_rescues_a_complex_angle_at_single_precision():
 
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        assert err() > 1.0
+        assert err() > 1e-3
         with wavebit.branch_tolerance(1e-5):
             assert err() < 1e-5
+
+
+def _smm_branch_error(cutoff, **kw):
+    """complex64 against complex128 on the SMM layer algorithm, at one branch cutoff."""
+    def r_s(complex_dtype):
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            res = wavebit.rcwa(
+                backend=0, psi=np.pi / 2, bot=25.0, truncation_order=[30], wavelength=900e-9,
+                period=[2000e-9], structure=_BRANCH_STRUCTURE, thickness=[100e-9],
+                complex_dtype=complex_dtype, fourier_coefficients='integrated',
+                factorization='li', layer_algorithm='SMM', **kw).solve()
+        return np.asarray(res.s_inc.r_s, dtype=np.complex128).ravel()
+    ref = r_s(0)
+    with wavebit.branch_tolerance(cutoff):
+        return float(np.abs(r_s(1) - ref).max())
+
+
+def test_single_precision_evanescent_incidence_needs_no_override():
+    """The half-space root no longer reads round-off, so single precision holds on its own.
+
+    complex64 rounds ``Re(theta) = pi/2`` up past it, and the engine clamps it just below,
+    so the in-plane wavevector carries a genuine imaginary part of ~1e-7. Maystre's cut is
+    continuous there. The rule before 2026-10-02 had its cut on the real evanescent axis, and
+    there it turned half of the evanescent orders into growing ones: 8.2 against double
+    precision. SMM is used because its layer labels are free in practice. ETM's are not, which
+    the test above covers.
+    """
+    assert _smm_branch_error(1e-12, top=1.0, **_REGIMES['complex angle']) < 1e-4
+
+
+def test_raising_the_cutoff_no_longer_costs_a_weak_absorber():
+    """The trade that made ``branch_tolerance`` a scoped override is gone.
+
+    In 2026-08 a raised cutoff rescued the complex angle and broke a weakly absorbing
+    superstrate, because the half-space rule then decided on the same cutoff. That was 0.99 off
+    double precision at 1e-5 here. ``theta = 0.6 + 1e-12j`` is the formal reading,
+    ``k_par = n_top*sin(theta)``, which a real angle had in 2026-08. Measured now: 3.8e-7.
+    """
+    weak = dict(top=1.9599999998999997 + 2.8e-05j, theta=0.6 + 1e-12j, phi=0.4)
+    assert _smm_branch_error(1e-5, **weak) < 1e-5
 
 
 # --- tier four: a value that arrived below the precision it was asked to be solved at --------

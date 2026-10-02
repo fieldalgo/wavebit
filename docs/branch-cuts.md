@@ -3,6 +3,16 @@
 Written: 2026-08-11. Measured on CPU (Apple Accelerate), NumPy / JAX / PyTorch, float64 and
 float32.
 
+**Half-space rule changed (2026-10-02).** `boundary_kz` now takes Maystre's cut, the root with
+`Re(kz) + Im(kz) > 0`. §8 gives the reasons and the measurements, and it supersedes two claims
+below. First, failure two (§4) is not a limit of single precision for the half-space root. The
+old rule's cut lay along the real evanescent axis, and complex64 gave `kx` a genuine imaginary
+part of ~1e-7. Under the new rule the float32 SMM solve is within 3.4e-6 of float64 at the point
+that was 4.5 off. What remains at single precision is a layer-label effect on the ETM algorithm,
+and `branch_tolerance` still addresses it. Second, the trade in §4's "And offers a scoped
+override" belonged to the old half-space rule. Under the new one a raised cutoff costs nothing
+measured.
+
 Targets:
 - `wavebit/_core/conventions.py` — `mode_q`, `boundary_kz`, `incident_kz`,
   `_check_resolvable`, `branch_tolerance`
@@ -21,7 +31,7 @@ one a limit — and neither was visible at a real incidence angle:
 | | Symptom | Cause | Fixed |
 | --- | --- | --- | --- |
 | **Respelled root** | complex `theta` returned `R = -delta`, `T = 0` — a grating that scatters nothing | the incident wave's `kz` was written two ways that agree only for real angles | `incident_kz` |
-| **Unresolvable branch** | complex64 returns \|R\| ~ 4 on all three backends, each wrong differently | at that precision `Re(v)` *is* round-off, so the branch is taken from the sign of noise | **not fixable** — it warns, and offers a scoped override |
+| **Unresolvable branch** | complex64 returns \|R\| ~ 4 on all three backends, each wrong differently | at that precision `Re(v)` *is* round-off, so the branch is taken from the sign of noise | it warns, and offers a scoped override. **The half-space part was fixed on 2026-10-02 (§8)**; a layer-label part remains on ETM |
 
 The first was invisible because **a real incidence angle makes it an identity**; it is fixed and
 double precision is now exact to 1e-14 everywhere measured. The second is not a bug that can be
@@ -81,6 +91,11 @@ so "down" below is public `-z` under top incidence and public `+z` under bottom 
 > (`test_the_two_selectors_disagree_at_complex_k_par_by_design` is the exact case above).
 > Everything below this box concerns the regimes where the identity does hold, and stands
 > unchanged.
+>
+> **Superseded for the half-space (2026-10-02):** `_off_principal_branch` is gone, and
+> `boundary_kz` takes Maystre's cut (§8). The layer half of this box stands. Since 2026-09 a real
+> angle in an absorbing superstrate is a phase angle with a real `k_par`, so only a complex
+> `theta` reaches this regime.
 
 Everything below is a consequence of two questions that rule leaves open:
 
@@ -216,7 +231,9 @@ matching a reference.
 
 ## 4. Failure two — a question single precision cannot answer
 
-Both branch rules ask the same thing, `is Re(v) zero?`, and answer it against a fixed number:
+Both branch rules asked the same thing, `is Re(v) zero?`, and answered it against a fixed
+number. Since 2026-10-02 only `mode_q` does; the half-space rule reads the sign of
+`Re(v) + Im(v)`, which no real `k_par` brings near zero (§8):
 
 ```python
 _FLAT = 1e-12
@@ -394,6 +411,13 @@ with wavebit.branch_tolerance(1e-5):      # lossless superstrate, complex angle,
 superstrate absorbs at all.** At complex128 it applies to nothing — the default already stands
 four orders clear of round-off, and moving it can only hurt.
 
+> **Superseded (2026-10-02).** The weak-absorber column measured the old half-space rule, which
+> read the same cutoff. Since the half-space moved to Maystre's cut, the override moves only
+> `mode_q`'s layer labels. In the weak absorber's configuration (re-created with the formal
+> `theta = 0.6 + 1e-12j`) a raised cutoff no longer costs anything measured: SMM 4.4e-7 at
+> `1e-12` and 3.8e-7 at `1e-5`, where the old rule gave 0.99. The rule above is now simply:
+> raise it if `UnresolvedBranchWarning` fires on an ETM solve. §8 has the table.
+
 ## 5. What it bought
 
 Max `|solver - RETICOLO|` on `Re(R_s)` of the (0,0) order, over all 441 points, `truncation_order=80`:
@@ -451,3 +475,92 @@ RETICOLO run by `gen_goldens_reticolo_conical_sweep.py`. Everything the tests ne
 repository; the study it was cut from — notebooks, the raw `.mat` files, before/after data and
 the figures — is retained privately by the authors and is not required to reproduce anything
 here. Regenerating the golden needs a RETICOLO installation and nothing else.
+
+---
+
+## 8. Maystre's cut (2026-10-02)
+
+### The rule
+
+```
+kz = sqrt(eps - k_par**2),   the root with Re(kz) + Im(kz) > 0
+```
+
+The cut runs along the negative imaginary axis of `kz**2`. A passive medium at real `k_par`
+has `kz**2` in the closed upper half plane. Its principal root is in the closed first
+quadrant, where `Re(kz) + Im(kz) >= |kz|`, so on every real-`k_par` input the rule is the
+principal root, bit for bit. That held over 4e5 random samples on each of the lossless and
+absorbing branches, and every real-angle solve in the suite is unchanged. The rule differs
+from the principal root only where `kz**2` falls below the real axis, which takes a complex
+`theta` or a gain medium. RETICOLO takes the same cut (`retsqrt(x, -1)`, its "coupure de
+Maystre"; J. P. Hugonin and P. Lalanne, *RETICOLO software for grating analysis*,
+arXiv:2101.00901).
+
+### Why this cut
+
+| | what it is | measured |
+| --- | --- | --- |
+| **limiting absorption** | Add `i*L` to the half-space's `eps` until `kz**2` is in the upper half plane, then remove it at fixed `k_par`, tracking the root by continuity. `kz**2` moves straight down, so it can reach the branch point only on the negative imaginary axis. That axis is this cut | 3000/3000 random `kz**2` |
+| **switching gain on** | For `Im(eps) < 0` the same walk passes `Im(eps) = 0`, so it gives the root reached by turning the gain on from zero. At real `k_par` that is the causal answer for ordinary weak gain away from the critical angle (J. Skaar, Phys. Rev. E 73, 026605, 2006; J. O. Grepstad and J. Skaar, Opt. Express 19, 21404, 2011) | glass onto `1 - 0.05i`, 45 deg, TE: `R = 1.2646` |
+| **continuity across the real axis** | The cut meets the real `k_par` axis only at the Rayleigh point, so nothing jumps as `Im(k_par) -> 0` from either side | 2e5 random orders at `Im(kx) = +-1e-9`: all within 1e-6 of the real-axis root |
+| **an outside oracle** | RETICOLO takes the same cut | lossless-top grating at `theta = 0.2 +- 0.1i`: 2e-15 |
+
+### What the old rule got wrong
+
+From 2026-08-12 the half-space took the principal root, flipped where the straight segment
+from normal incidence, `kz2(t) = eps - t*k_par**2`, crossed the negative real axis
+(`_off_principal_branch`). Over a lossless half-space the flip never fires. The rule was then
+the bare principal root, whose cut is the negative real axis of `kz**2`, which in `k_par` is
+the real evanescent axis. That had three measured consequences.
+
+* **Any imaginary part, however small, flipped evanescent orders.** Every evanescent order
+  with `Re(kx)*Im(kx) > 0` took the growing root: 6858 of 6858 at `Im(kx) = 1e-3`, and the
+  same at `1e-9`. The grating above moved `r0` by 0.22 at `Im(theta) = +1e-9` and by 0.36 at
+  `-1e-9`. RETICOLO did not move.
+* **Failure two in §4 was mostly this.** complex64 rounds `Re(theta) = pi/2` up, and
+  `_incident_kxy` clamps it to just below, which gives `kx` a genuine imaginary part of
+  ~1e-7. The old cut then flipped half of the evanescent orders. At the §4 point
+  (`truncation_order=30`, NumPy), float32 against float64:
+
+  | | old rule | Maystre's cut |
+  | --- | --- | --- |
+  | SMM | 8.2 | 3.4e-6 |
+  | ETM (the default) | 5.2 | 5.1e-2 |
+  | ETM, `branch_tolerance(1e-5)` | 1.9e-6 | 1.9e-6 |
+
+  The ETM residue comes from layer labels. `mode_q` reads `Re(q)` at round-off for exactly
+  propagating modes, and at a complex `k_par` ETM is not label-free the way SMM is. Raising
+  the cutoff sends those modes to the tie-break.
+* **Gain read as loss.** Under total internal reflection into a gain medium, the principal
+  root is the lossy medium's root conjugated. So `R(1 - 0.05i) = R(1 + 0.05i) = 0.7907` at
+  45 deg.
+
+### The alternatives
+
+| rule | its cut | verdict |
+| --- | --- | --- |
+| principal root, continued from normal incidence (2026-08-12) | the real evanescent axis | the three defects above |
+| `Im(kz) > 0` (fmmax; RETICOLO's "coupure de Petit") | the real propagating axis | the mirror image: a propagating order takes the incoming wave at any `Im(kx)`. Gain at normal incidence (glass onto `1 - 0.05i`) gives `R = 24.98` |
+| continuation from the nearest real `kx` (the "path D" that `time-convention-audit.md` §3 mandated) | vertical lines through the Rayleigh points | equals Maystre's cut except in a sliver of width `Im(kx)**2 / (2*sqrt(eps))` just past each Rayleigh point (0 of 20000 orders differ at `Im(kx) = 0.01`; all 121 orders of a 2D grating agree to 4e-15), and far from the axis in metallic cases. It needs `Im(kx)` and `Im(ky)` passed through every kernel, and no outside code takes it |
+| Maystre's cut | the negative imaginary axis of `kz**2` | adopted |
+
+In a lossy half-space every continuation agrees inside `|Im(kx)| < Im(sqrt(eps))` (2000 of
+2000 random cases). Outside that band a complex-`kx` plane wave is not the steady state of
+any real source, and the rules are conventions. Of those conventions, Maystre's equals
+limiting absorption and is what an outside code uses.
+
+### What it does not settle
+
+* Within about a degree of the critical angle, a gain half-space has no right answer at a
+  single frequency: the causal flip angle depends on the dispersion of `eps`.
+* Far from the real axis, where the rules differ, the choice is a convention. A study that
+  needs a particular sheet for each order, as a leaky-mode pole search does, needs more than
+  one default.
+* At a complex `kx`, an order whose root decays with `Re(kz) < 0` has a negative formal
+  efficiency. RETICOLO reports the magnitude, and
+  `tests/references/test_reticolo_complex_kx_golden.py` applies that sign when it compares.
+
+Pinned in `tests/test_branch_selection.py` (the limiting-absorption walk, continuity across the
+real axis, the grating, gain under total internal reflection), `tests/test_fp_warnings.py`
+(single precision) and `tests/references/test_reticolo_complex_kx_golden.py` (RETICOLO, on both
+sides of the old split).

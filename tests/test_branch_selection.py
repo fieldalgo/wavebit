@@ -4,25 +4,29 @@
 kernels' local frame, from their entry face into the stack, whose ``z`` is not, in general,
 the public height: it coincides with it under bottom incidence and is its mirror
 (``h_total - z``) under top incidence -- and are *not* the same rule.
-``docs/time-convention-audit.md`` derives them; this file pins what the derivation decided, in
-the regime where the two requirements come apart.
+``docs/branch-cuts.md`` and ``docs/time-convention-audit.md`` derive them; this file pins what
+was decided, in the regime where the two requirements come apart.
 
-The regime is a **complex in-plane wavevector** — an absorbing superstrate at oblique
-incidence, or a complex incidence angle. For every real ``k_par`` a passive medium has
-``Im(kz**2) = Im(eps) >= 0``, so ``kz**2`` lies in the closed upper half plane and its
-principal root is in the first quadrant: ``Re(kz) > 0`` and ``Im(kz) > 0`` hold *at the same
-time* and no rule can distinguish itself. Nothing in the suite reached past that until this
-file, which is why the defect below survived: every absorbing-superstrate test in
-``test_lossy_media.py`` runs at ``truncation_order=0`` with a lossless substrate, where the two candidate
-answers coincide.
+That regime is ``kz**2`` below the real axis. Two things put it there: a **complex in-plane
+wavevector**, and a **gain** half-space. Since 2026-09 only a complex incidence angle reaches a
+complex in-plane wavevector, because a real angle in an absorbing superstrate is a phase angle
+with a real ``k_par``. For every real ``k_par``, a passive medium has
+``Im(kz**2) = Im(eps) >= 0``, so ``kz**2`` lies in the closed upper half plane and its principal
+root is in the first quadrant. ``Re(kz) > 0`` and ``Im(kz) > 0`` then hold *at the same time*,
+and no rule can distinguish itself there.
 
-What it pins:
+Below the axis the half-space takes Maystre's cut, ``Re(kz) + Im(kz) > 0`` (since 2026-10-02).
+What this file pins:
 
-* the rule is a **no-op for every real** ``k_par`` — the correction is provably scoped, so no
-  released number can move because of it;
-* ``r(theta)`` has no step discontinuity where the physics is analytic — the observable the
-  defect was found with, and the one it is fixed against;
-* the root agrees with the continuation from normal incidence, computed by brute force;
+* the rule is a **no-op for every real** ``k_par`` in a passive medium, bit for bit;
+* the root is the **limit of the half-space's own absorption**, computed by brute force; for a
+  gain medium, that is the root reached by switching the gain on;
+* nothing jumps as ``Im(k_par)`` passes through zero, neither the root nor a grating's ``r``.
+  The rule before this one lacked that property;
+* ``r(theta)`` has no step where the physics is analytic. That is the observable the 2026-08
+  defect was found with;
+* a gain half-space under total internal reflection reflects more than it receives
+  (evanescent gain);
 * a **layer's** root is free, which is what makes ``mode_q`` disagreeing with ``boundary_kz``
   legitimate rather than a defect.
 """
@@ -53,7 +57,11 @@ AU = 0.18 + 3.0j
 
 
 def _principal(eps, k_par_sq):
-    """``boundary_kz`` as it stood before the correction: the principal root, Im tie-break."""
+    """The principal root with an ``Im`` tie-break: ``boundary_kz`` before 2026-08-12.
+
+    It is still the answer at every real ``k_par`` in a passive medium, which is what the
+    no-op test below holds the present rule to.
+    """
     v = np.sqrt(np.asarray(eps - k_par_sq, dtype=complex))
     flip = np.where(np.abs(v.real) > 1e-12, v.real < 0, v.imag < 0)
     return np.where(flip, -v, v)
@@ -65,9 +73,10 @@ def _principal(eps, k_par_sq):
 def test_the_rule_is_a_no_op_for_every_real_k_par(lossy):
     """Bit-identical to the principal root wherever ``k_par`` is real.
 
-    This is the guard that keeps the correction from being able to move a released number.
-    ``Im(kz**2) = Im(eps) >= 0`` for a passive medium at real ``k_par``, so the segment the
-    correction tracks never leaves the closed upper half plane and never meets the cut.
+    This is the guard that keeps a change of the half-space rule from moving a released number.
+    ``Im(kz**2) = Im(eps) >= 0`` for a passive medium at real ``k_par``. The principal root is
+    then in the closed first quadrant, where ``Re(kz) + Im(kz) >= |kz|``, so Maystre's cut never
+    takes the other root. That held for the 2026-08-12 continuation rule too, for its own reason.
 
     Measured ``0.0`` — exactly, not approximately — over 4e5 samples on each branch.
     """
@@ -135,15 +144,20 @@ def _amp(n_top, n_bot, n_layer, d, theta, tetm):
 def test_reflection_is_analytic_across_the_branch_change(case, tetm):
     """``r(theta)`` must have no step where nothing physical happens.
 
-    ``kz_bot**2(theta) = eps_bot - eps_top*sin^2(theta)`` is a straight segment that stays
-    9.03 clear of its only branch point (``kz**2 = 0``) over the whole sweep, so ``r`` is an
-    analytic function of ``theta`` there and any step is the branch rule, not the physics.
+    ``kz_bot**2(theta) = eps_bot - eps_top*sin^2(theta)`` is a straight segment. For the
+    lossy dielectric it stays 9.03 clear of its only branch point (``kz**2 = 0``) over the whole
+    sweep, so ``r`` is an analytic function of ``theta`` there and any step is the branch rule,
+    not the physics.
 
-    The principal root changes sheet mid-segment and produced exactly that step: **2.96 in
-    ``r`` across 6.7e-05 rad** for the TE case here, 6.16 for TM — on a quantity of order 1.
-    It is invisible to every other kind of check. It does not break energy conservation
-    (efficiencies are not even defined against 1 for an absorbing superstrate), it is smooth
-    on either side, and both halves are individually plausible.
+    At ``theta_cut`` the segment crosses the negative real axis, the principal root's cut. The
+    principal root changed sheet there and produced exactly that step: **2.96 in ``r`` across
+    6.7e-05 rad** for the TE case here, 6.16 for TM, on a quantity of order 1. It is invisible
+    to every other kind of check. It does not break energy conservation (efficiencies are not
+    even defined against 1 for an absorbing superstrate), it is smooth on either side, and both
+    halves are individually plausible. Maystre's cut is the negative *imaginary* axis, which the
+    lossy dielectric's segment never meets. The gold-like top's segment does meet it, at
+    1.215 rad, 0.045 from the branch point, outside the window tested here. Close to a branch
+    point no rule is continuous along every path.
 
     Halving the step is the discriminator, and it is a *ratio* test rather than an absolute
     one on purpose: the analytic slope through this angle is large (77 in ``r`` per radian for
@@ -164,44 +178,137 @@ def test_reflection_is_analytic_across_the_branch_change(case, tetm):
 # --------------------------------------------------- the root itself, against a brute walk
 
 WALK_CASES = [
-    # eps_bot, k_par, and whether the correction moves the root there
-    ('lossless_substrate_under_a_lossy_prism', 1.0 + 0j, (1.5 + 0.3j) * np.sin(0.9), False),
-    ('lossless_substrate_steep', 1.0 + 0j, (1.5 + 0.3j) * np.sin(1.31), False),
+    # eps, k_par, and whether the root is not the principal one there
+    ('lossless_substrate_under_a_lossy_prism', 1.0 + 0j, (1.5 + 0.3j) * np.sin(0.9), True),
+    ('lossless_substrate_steep', 1.0 + 0j, (1.5 + 0.3j) * np.sin(1.31), True),
     ('gold_under_a_lossier_top', AU ** 2, (1.5 + 0.4j) * np.sin(1.30), True),
-    ('gold_under_a_gold_like_top', AU ** 2, (0.2 + 3.2j) * np.sin(1.30), True),
+    ('gold_under_a_gold_like_top', AU ** 2, (0.2 + 3.2j) * np.sin(1.30), False),
     ('lossless_metal_under_an_absorbing_top', -9.0 + 0j, (1.5 + 0.4j) * np.sin(0.9), True),
     ('absorbing_on_both_sides', AU ** 2, (1.5 + 0.02j) * np.sin(0.4), False),
+    ('gain_under_total_internal_reflection', 1.0 - 0.05j, 1.5 * np.sin(np.pi / 4) + 0j, True),
+    ('gain_propagating', 1.0 - 0.05j, 1.5 * np.sin(0.3) + 0j, False),
 ]
 
 
 @pytest.mark.parametrize('case', WALK_CASES, ids=[c[0] for c in WALK_CASES])
-def test_the_root_is_the_continuation_from_normal_incidence(case):
-    """The closed form must agree with tracking the root by hand.
+def test_the_root_is_the_limit_of_the_half_spaces_own_absorption(case):
+    """The rule must agree with tracking the root by hand as absorption is taken away.
 
-    ``kz**2 = eps - k_par_sq`` has one branch point, at ``kz**2 = 0``, so the physical root is
-    the one reached by deforming continuously from a configuration that is not in doubt. Take
-    ``k_par_sq`` to zero: at ``t = 0`` the root is ``sqrt(eps)`` — normal incidence in a
-    homogeneous passive medium — and the walk below follows it out to ``t = 1`` by always
-    taking whichever of ``+-sqrt`` is nearer the previous step. No rule, no priority, no
-    physics beyond "the parameter moved a little, so the root did too".
+    Add ``i*L`` to the half-space's permittivity, with ``L`` large enough to lift ``kz**2`` into
+    the upper half plane. The root there is the first-quadrant one, both outgoing and decaying,
+    and not in doubt. Take the absorption away at fixed ``k_par`` and follow the root by always
+    taking whichever of ``+-sqrt`` is nearer the previous step. No rule, no priority, no physics
+    beyond "the parameter moved a little, so the root did too". ``kz**2`` moves straight down, so
+    the walk can reach the branch point only along the negative imaginary axis. That makes
+    Maystre's cut the closed form of this walk. For a gain medium the walk passes
+    ``Im(eps) = 0`` and goes on, so it is also the root reached by switching the gain on.
 
-    ``_off_principal_branch`` is the closed form of that walk, available because
-    ``Im(kz2(t))`` is linear in ``t`` and so meets the real axis at most once.
+    Until 2026-10-02 the rule was the continuation from normal incidence instead. It disagreed
+    with this walk on the two lossless substrates, where it let an evanescent field grow, and on
+    the gold-like top. It also took the principal root under total internal reflection into a
+    gain medium, which is the root of a lossy one.
     """
     _, eps, k_par, moves = case
-    k_par_sq = complex(k_par) ** 2
+    kz2 = complex(eps) - complex(k_par) ** 2
+    lift = abs(kz2.imag) + 10.0
 
     kz = None
-    for t in np.linspace(0.0, 1.0, 40_000):
-        v = np.sqrt(complex(eps) - t * k_par_sq)
+    for s in np.linspace(0.0, 1.0, 40_000):
+        v = np.sqrt(kz2 + 1j * lift * (1.0 - s))
         if kz is None:
-            kz = complex(boundary_kz(np, eps, 0.0))       # t = 0: kz2 = eps, not in doubt
+            kz = v                     # upper half plane: the principal root, first quadrant
         else:
             kz = v if abs(v - kz) <= abs(-v - kz) else -v
 
-    got = complex(boundary_kz(np, eps, k_par_sq))
+    got = complex(boundary_kz(np, eps, complex(k_par) ** 2))
     assert abs(got - kz) < 1e-9, (got, kz)
-    assert (abs(got - complex(_principal(eps, k_par_sq))) > 1e-9) == moves
+    assert (abs(got - complex(_principal(eps, complex(k_par) ** 2))) > 1e-9) == moves
+
+
+def test_the_root_continues_across_the_real_k_par_axis():
+    """A vanishing ``Im(k_par)`` must leave the root where the real axis put it.
+
+    Random lossless and absorbing media, evanescent and propagating orders alike. At
+    ``Im(k_par) = +-1e-9`` the root stays within 1e-6 of the real-axis one, given a margin
+    from the Rayleigh point, where ``kz**2`` sits on the branch point itself.
+
+    The rule before 2026-10-02 failed exactly this. Its cut lay along the real evanescent axis,
+    so every evanescent order with ``Re(k_par)*Im(k_par) > 0`` took the growing root at any
+    ``Im(k_par)``, round-off included: 6858 of 6858 such orders at ``Im(k_par) = 1e-3``.
+    """
+    rng = np.random.default_rng(20261002)
+    n = 100_000
+    for lossy in (False, True):
+        eps = rng.uniform(1, 6, n) + (1j * rng.uniform(0, 2, n) if lossy else 0j)
+        a = rng.uniform(-6, 6, n)
+        clear = np.abs(a ** 2 - eps.real) > 1e-3
+        on_axis = boundary_kz(np, eps, a ** 2 + 0j)
+        for sign in (1, -1):
+            off_axis = boundary_kz(np, eps, (a + sign * 1e-9j) ** 2)
+            assert np.max(np.abs(off_axis - on_axis)[clear]) < 1e-6, (lossy, sign)
+
+
+def _grating_r0(theta):
+    """Air over glass with a binary 9/1 grating, eleven orders: the zeroth reflection amplitude."""
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        res = wavebit.rcwa(backend=0, tetm='te', top=1.0, bot=2.25, theta=theta, truncation_order=5,
+                           wavelength=0.9, period=[0.7], structure=np.array([[[9.0, 1.0]]]),
+                           thickness=[0.15], fourier_coefficients='integrated').solve()
+    amp = np.asarray(res.incident.r_s).ravel()
+    return complex(amp[len(amp) // 2])
+
+
+def test_a_grating_is_continuous_as_its_angle_leaves_the_real_axis():
+    """The observable for the property above: ``r0`` as ``Im(theta)`` passes through zero.
+
+    At ``theta = 0.2`` both first orders are evanescent in air. Under the rule before
+    2026-10-02, ``Im(theta) = +1e-9`` moved ``r0`` by 0.22 and ``-1e-9`` by 0.36. Each sign
+    turned the evanescent orders on one side into growing ones. RETICOLO, whose cut this rule
+    now takes, moves by nothing. ``test_reticolo_complex_kx_golden`` holds the same grating to
+    RETICOLO's numbers at a finite ``Im(theta)``.
+    """
+    base = _grating_r0(0.2)
+    for im in (1e-9, -1e-9):
+        assert abs(_grating_r0(0.2 + 1j * im) - base) < 1e-7, im
+
+
+@pytest.mark.parametrize('theta_deg, gain_exceeds_loss', [(20.0, False), (45.0, True)],
+                         ids=['below_critical', 'total_internal_reflection'])
+def test_a_gain_substrate_reflects_as_switching_its_gain_on_says(theta_deg, gain_exceeds_loss):
+    """Glass onto ``eps = 1 -+ 0.05i``: gain and loss reflect alike below the critical angle only.
+
+    The Fresnel coefficient is evaluated here with the root reached by switching the gain on
+    from zero, written out independently of ``boundary_kz``. Below the critical angle that root
+    grows forward, ``r_gain = conj(r_loss)``, and the two media reflect alike. Under total
+    internal reflection it is the decaying root with ``Re(kz) < 0``, and the reflectance
+    exceeds one: evanescent gain (J. O. Grepstad and J. Skaar, Opt. Express 19, 21404, 2011).
+    At 45 degrees TE that is ``R = 1.2646``. Until 2026-10-02 this solve returned 0.7907, the
+    *lossy* mirror's value: the principal root read the gain as loss.
+    """
+    theta = np.deg2rad(theta_deg)
+
+    def solved(eps_bot):
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            res = wavebit.rcwa(backend=0, tetm='te', top=2.25, bot=eps_bot, theta=theta,
+                               truncation_order=0, wavelength=WL, period=[WL * 2],
+                               structure=np.full((1, 1, 2), 2.25), thickness=[100.0]).solve()
+        return float(np.sum(res.R))
+
+    k_top = np.sqrt(2.25 * np.cos(theta) ** 2)
+    kz2 = (1.0 - 0.05j) - 2.25 * np.sin(theta) ** 2
+    k_bot = np.sqrt(kz2)
+    if kz2.real < 0:                   # evanescent before the gain: the gain keeps it decaying
+        k_bot = k_bot if k_bot.imag > 0 else -k_bot
+    else:                              # propagating before the gain: it keeps carrying power down
+        k_bot = k_bot if k_bot.real > 0 else -k_bot
+    switched_on = abs((k_top - k_bot) / (k_top + k_bot)) ** 2
+
+    gain, loss = solved(1.0 - 0.05j), solved(1.0 + 0.05j)
+    assert abs(gain - switched_on) < 1e-12, (gain, switched_on)
+    assert (gain > loss + 1e-3) == gain_exceeds_loss, (gain, loss)
+    assert (gain > 1.0) == gain_exceeds_loss
 
 
 # ---------------------------------------------------------------- a layer's root is free

@@ -258,15 +258,18 @@ class UnphysicalResultWarning(UserWarning):
 class UnresolvedBranchWarning(UserWarning):
     """A ``sqrt`` branch was chosen from a value that carries no information about it.
 
-    Selecting the physical root asks whether ``Re(v)`` is zero, and that is answerable only
-    while ``Re(v)`` stands clear of the working precision's round-off. At complex64 it often
-    does not: round-off is ~1e-7, and both a lossless layer at a complex incidence angle and a
-    weakly absorbing superstrate put real parts at exactly that scale — one of them noise, the
-    other signal, and nothing in the value distinguishes them. The branch is then taken from
-    the sign of round-off, which is why a single-precision solve can return ``|R| ~ 4`` while
-    the same solve at double precision is exact to 1e-14.
+    Choosing a root reads the sign of a value: ``Re(q)`` for a layer mode, and
+    ``Re(kz) + Im(kz)`` for a half-space. A sign is answerable only while the value stands
+    clear of the working precision's round-off. A half-space's value is at least ``|kz|`` at
+    every real ``k_par`` in a passive medium, so it always is. A layer mode that should be
+    exactly propagating has a ``Re(q)`` that is round-off itself, ~1e-7 at complex64, and its
+    label then comes from the sign of noise. The label is free in exact arithmetic and with the
+    SMM layer algorithm. ETM loses accuracy to it: 5e-2 against double precision at evanescent
+    incidence, where double precision is exact to 1e-14.
 
-    Its own category so it can be escalated or silenced on its own; see ``docs/branch-cuts.md``.
+    Until 2026-10-02 the half-space rule also read ``Re(kz)`` alone, and a single-precision solve
+    could return ``|R| ~ 4`` from it. Its own category so it can be escalated or silenced on its
+    own; see ``docs/branch-cuts.md``.
     """
 
 
@@ -322,11 +325,13 @@ class ComplexIncidenceWarning(UserWarning):
     through the formal ``kx/k0 = n*sin(theta)*cos(phi)`` parameterization. Such a wave's
     intensity varies along the surface, and in the exit medium no root of ``kz`` both carries
     power away and decays away, so which one a solver takes is a convention: measured on one
-    interface (top 4+3i, bot 2.25), fmmax's ``Im(kz) > 0`` gave ``r = 1.727-1.966i`` where
-    this solver and RETICOLO's Maystre cut (``Re(kz) + Im(kz) > 0``) gave ``0.252+0.287i``;
+    interface (top 4+3i, bot 2.25), fmmax's ``Im(kz) > 0`` gave ``r = 1.727-1.966i``, where
+    this solver gave ``0.252+0.287i``. So did RETICOLO, whose Maystre cut
+    (``Re(kz) + Im(kz) > 0``) this solver has taken since 2026-10-02;
     see ``docs/time-convention-audit.md`` section 9. The per-order ``R`` and ``T``
-    are then amplitude-derived ratios rather than fractions of an incident power -- their sum
-    exceeds 1 on a lossless stack -- and ``power_entering`` and ``absorption`` are NaN.
+    are then amplitude-derived ratios rather than fractions of an incident power. Their sum
+    can exceed 1 on a lossless stack. An order whose root decays with ``Re(kz) < 0`` gives a
+    negative ratio. ``power_entering`` and ``absorption`` are NaN.
 
     Evanescent incidence (``theta = pi/2 + 1j*alpha``) keeps ``kx`` real and does not fire.
     For an absorbing incident medium, a real ``theta`` is the physical input: the phase angle

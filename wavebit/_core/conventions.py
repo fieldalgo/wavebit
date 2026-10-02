@@ -33,15 +33,18 @@ for a real in-plane wavevector. It is an identity there and nothing else: with a
 ``k_par`` the two functions return *unrelated* roots, and that is correct rather than a
 defect. A half-space's root is a boundary condition, so there is one right answer; a layer's
 ``±q`` pair is used in full by the stack algebra, so its label is free and ``mode_q`` spends
-that freedom on keeping ``exp(-k0*q*d)`` inside the unit disc. Driving a layer with
-``boundary_kz``'s rule instead makes 47% of its modes grow and raises ``FloatingPointError``
-by 4 um of thickness. Pinned in ``tests/test_branch_selection.py``.
+that freedom on keeping ``exp(-k0*q*d)`` inside the unit disc. A half-space rule may keep a
+growing root, so it is no rule for a layer. Measured in 2026-08 with the half-space rule of
+that day: driving a layer with it made 47% of the layer's modes grow and raised
+``FloatingPointError`` by 4 um of thickness. Pinned in ``tests/test_branch_selection.py``.
 
-Selecting on ``Im`` alone is wrong for either: with a complex in-plane wavevector (an
-absorbing superstrate at oblique incidence) even a lossless layer can have ``Im(kz) < 0``,
-and forcing it positive returns ``|r| > 1``. Selecting on ``Re`` alone is *also* not the
-whole rule for a half-space — see :func:`_off_principal_branch`, which is what decides
-between them where they part. ``docs/time-convention-audit.md`` derives all of it.
+For a half-space, ``Re(kz) > 0`` (carries energy down) and ``Im(kz) >= 0`` (does not grow)
+name the same root -- the principal one -- at every real in-plane wavevector in a passive
+medium. They part only where ``kz**2`` falls below the real axis: a complex ``theta``, or a gain
+medium. Neither alone is the rule there. ``Im`` first takes the incoming wave of a propagating
+order, and ``Re`` first lets an evanescent order grow at any ``Im(k_par)``, however small.
+:func:`boundary_kz` takes Maystre's cut, which is the limit of the half-space's own absorption;
+``docs/branch-cuts.md`` measures it against the alternatives.
 
 Backend-agnostic: pass the array namespace as ``xp`` (``numpy`` / ``jax.numpy`` / ``torch``).
 """
@@ -55,7 +58,7 @@ import numpy as np
 
 from .backend import AxisNameWarning, UnresolvedBranchWarning, _concrete, _device_of, array_namespace, as_array
 
-_FLAT = 1e-12      # below this, a real part counts as zero and the tie-break decides
+_FLAT = 1e-12      # below this, a layer root's real part counts as zero and the tie-break decides
 
 _PI = 3.141592653589793
 _HALF_PI = 1.5707963267948966
@@ -85,33 +88,37 @@ def incident_phase_index(xp, epsilon_mu, theta):
 
 @contextlib.contextmanager
 def branch_tolerance(value):
-    """Override the "is ``Re(v)`` zero?" cutoff for the enclosed solves. Advanced, and scoped.
+    """Override the cutoff below which a layer root's ``Re(q)`` counts as zero. Advanced, and scoped.
 
-    Exists because at single precision there is no right answer to bake in. ``Re(v)`` for a
-    root that should be pure-imaginary is round-off ~1e-7 at complex64, and a weakly absorbing
-    superstrate carries a *genuine* real part at the same scale — the two overlap, so any fixed
-    cutoff has to sacrifice one of them. Measured against double precision (``truncation_order=30``,
-    ``docs/branch-cuts.md``):
+    :func:`mode_q` labels a layer mode by the sign of ``Re(q)``, and by a tie-break where that is
+    zero. At complex64 the ``Re(q)`` of a mode that should be exactly propagating is round-off
+    (~1e-7), so the label comes from the sign of noise. In exact arithmetic the label is free
+    (``tests/test_branch_selection.py``), and the SMM layer algorithm stays free of it in
+    practice. ETM does not. Raising the cutoff sends those modes to the tie-break. Measured
+    against double precision (``truncation_order=30``, NumPy, ``docs/branch-cuts.md``):
 
-    ============================  ==========  ==========  ==========
-    ``value``                     1e-12       1e-6        1e-5
-    ============================  ==========  ==========  ==========
-    lossless, complex angle       4.51        1.3e-06     3.4e-07
-    weakly absorbing superstrate  1.9e-04     7.4e-01     1.75
-    ============================  ==========  ==========  ==========
+    ===========================================  ==========  ==========
+    ``value``                                    1e-12       1e-5
+    ===========================================  ==========  ==========
+    evanescent incidence, ETM                    5.1e-02     1.9e-06
+    evanescent incidence, SMM                    3.4e-06     1.3e-06
+    weak absorber at a complex angle, ETM        6.2e-03     5.1e-05
+    weak absorber at a complex angle, SMM        4.4e-07     3.8e-07
+    ===========================================  ==========  ==========
 
-    The rule that follows is statable, which is the only reason this is exposed rather than
-    guessed at: **raise it for a lossless superstrate at a complex incidence angle; leave it
-    alone if the superstrate absorbs at all.** Any absorption makes the root genuinely complex
-    and the degeneracy never arises — a solve containing both regimes wants the default.
+    A half-space's root does not read this cutoff. :func:`boundary_kz` decides on the sign of
+    ``Re(kz) + Im(kz)``, and no real ``k_par`` brings that near zero. Until 2026-10-02 it did read
+    it, and that rule is what made this override a trade. A raised cutoff rescued the complex
+    angle and broke the weak absorber: 0.99 at 1e-5, in the last two rows' configuration. Under
+    the present rule, no row above gets worse when the cutoff is raised.
 
-    At complex128 nothing here applies: round-off is ~1e-16, the default already stands four
-    orders clear of it, and moving this can only make things worse. :class:`UnresolvedBranchWarning`
-    fires exactly when the question has become unanswerable, so reach for this only after seeing it.
+    At complex128 nothing here applies: round-off is ~1e-16, the default stands four orders
+    clear of it, and moving it can only make things worse. :class:`UnresolvedBranchWarning`
+    fires when a label was read from round-off, so reach for this only after seeing it.
 
     Not thread-safe — it swaps a module-level constant for the duration of the block::
 
-        with wavebit.branch_tolerance(1e-6):
+        with wavebit.branch_tolerance(1e-5):
             res = solver.solve()
     """
     global _FLAT
@@ -132,27 +139,30 @@ _NOISE_EPS = 8.0
 _SINGLE_EPS = 1e-10
 
 
-def _check_resolvable(xp, v):
-    """Warn when the branch is being decided from a real part the dtype cannot resolve.
+def _check_resolvable(xp, v, decision, floor):
+    """Warn when a root was chosen by the sign of a value the dtype cannot resolve.
 
-    :func:`mode_q` and :func:`boundary_kz` both ask "is ``Re(v)`` zero?" and answer it against
-    ``_FLAT``. That question has no dtype-independent answer: round-off on ``Re(v)`` is ~1e-16
-    at complex128 and ~1e-7 at complex64, and ``_FLAT`` sits between them. At single precision
-    the comparison therefore reads the *sign of noise*, and no other threshold fixes it —
-    a lossless layer at a complex angle needs the cutoff raised, a weakly absorbing superstrate
-    needs it left alone, and their real parts overlap. Measured in ``docs/branch-cuts.md``.
+    ``decision`` is the real quantity whose sign the caller reads: ``Re(q)`` in :func:`mode_q`,
+    ``Re(kz) + Im(kz)`` in :func:`boundary_kz`. ``floor`` is the size below which the caller
+    stops reading it and lets a tie-break decide, so values there were never read. It is
+    ``_FLAT`` for :func:`mode_q`, and 0 for :func:`boundary_kz`, which has no tie-break.
 
-    So this reports rather than repairs. It is silent at complex128 (0 of 244 decisions
-    unresolvable across lossless, complex-angle and weakly-absorbing cases) and fires at
-    complex64 (12 to 128 of 244), which makes it a check on the precision rather than on the
-    physics — and it costs nothing measurable, being two absolute values on an array the solve
-    already built.
+    A sign is answerable only while the value stands clear of round-off, which is ~1e-16 of
+    ``|v|`` at complex128 and ~1e-7 at complex64. For a layer mode that should be exactly
+    propagating, ``Re(q)`` *is* that round-off at single precision, so its label comes from
+    noise. ``Re(kz) + Im(kz)`` is at least ``|kz|`` for every real ``k_par`` in a passive medium,
+    so this check finds nothing in a half-space unless ``kz**2`` sits on Maystre's cut. Measured
+    in ``docs/branch-cuts.md``.
+
+    So this reports rather than repairs. It is silent at complex128 and fires at complex64,
+    which makes it a check on the precision rather than on the physics. It costs nothing
+    measurable: two absolute values on an array the solve already built.
 
     Unlike the guards in ``_core/backend.py`` this is **not** NumPy-only, and deliberately so:
-    the backends it would have skipped are the ones that need it most. Measured at the same
-    complex64 point, NumPy returns ``|R| = 1.80`` and warns while JAX returns 4.12 and PyTorch
-    5.68 — the two worst answers, silently, on the paths people reach for when they want
-    gradients or a GPU.
+    the backends it would have skipped are the ones that need it most. When it was written,
+    under the half-space rule of 2026-08, one complex64 point returned ``|R| = 1.80`` on NumPy,
+    with a warning. JAX returned 4.12 and PyTorch 5.68 at the same point, silently. Those were
+    the two worst answers, on the paths people reach for when they want gradients or a GPU.
 
     What actually blocks the check is an *abstract* value, not a namespace: a JAX tracer under
     ``jit``/``grad``, a PyTorch ``FakeTensor`` under ``compile``. So the reduction runs in the
@@ -164,9 +174,9 @@ def _check_resolvable(xp, v):
         eps = xp.finfo(v.dtype).eps
     except Exception:
         return                                  # not a float/complex dtype
-    re, mag = xp.abs(xp.real(v)), xp.abs(v)
+    margin, mag = xp.abs(decision), xp.abs(v)
     noise = _NOISE_EPS * eps * xp.maximum(mag, xp.asarray(1e-30, dtype=mag.dtype))
-    flagged = xp.any((re > _FLAT) & (re < noise))
+    flagged = xp.any((margin > floor) & (margin < noise))
     try:
         hit = bool(flagged)
     except Exception:
@@ -188,7 +198,7 @@ def _check_resolvable(xp, v):
     if hit:
         import warnings
         warnings.warn(
-            'a square-root branch was decided from a real part smaller than this dtype can '
+            'a square-root branch was decided from a value smaller than this dtype can '
             'resolve, so the choice came from round-off rather than from the physics. The '
             'result is finite and may be badly wrong. Re-run at double precision '
             '(complex_dtype=0); docs/branch-cuts.md covers the single-precision case.',
@@ -222,7 +232,7 @@ def mode_q(xp, eigenvalue):
     # `|exp(-k0*q*d)|` by ~1e-17), so this is consistency of spelling rather than a fix; the
     # tie-break itself is untouched and still disagrees with `boundary_kz` on purpose.
     v = xp.sqrt(eigenvalue)
-    _check_resolvable(xp, v)
+    _check_resolvable(xp, v, xp.real(v), _FLAT)
     flip = xp.where(xp.abs(xp.real(v)) > _FLAT, xp.real(v) < 0, xp.imag(v) > 0)
     return xp.where(flip, -v, v)
 
@@ -233,13 +243,34 @@ def boundary_kz(xp, eps, k_par_sq):
     ``exp(+i*k0*kz*z)`` travels down -- along the kernels' local ``+z``, from their entry face
     into the stack, a ``z`` that is not, in general, the public height: it coincides with it
     under bottom incidence and is its mirror ``h_total - z`` under top incidence (see the
-    module docstring) -- so the physical root carries energy that way: ``Re(kz) > 0``. A purely
-    evanescent order has no real part, and there the decaying choice is ``Im(kz) > 0``. That pair is
-    the principal square root, and it is the whole answer for every real ``k_par`` — a passive
-    medium has ``Im(eps) >= 0``, so ``kz**2`` lies in the closed upper half plane and its
-    principal root is in the first quadrant, satisfying *both* conditions at once. The two only
-    become separate demands when ``k_par`` is complex, and then a third thing decides between
-    them; see :func:`_off_principal_branch` and ``docs/time-convention-audit.md``.
+    module docstring). At every real ``k_par`` in a passive medium the answer is not in doubt.
+    ``Im(eps) >= 0`` puts ``kz**2`` in the closed upper half plane, and its principal root lies in
+    the closed first quadrant, so it both carries energy down (``Re(kz) > 0``) and does not grow
+    (``Im(kz) >= 0``).
+
+    A complex ``k_par`` (from a complex ``theta``) or a gain medium (``Im(eps) < 0``) can put
+    ``kz**2`` below the real axis, and there no root does both. The root taken there is the one
+    with ``Re(kz) + Im(kz) > 0``. That is Maystre's cut, which runs along the negative imaginary
+    axis of ``kz**2``. Give the half-space enough absorption to lift ``kz**2`` into the upper half
+    plane, then take that absorption away at fixed ``k_par``: the root this limiting absorption
+    reaches is Maystre's. For a gain medium it is the same root as switching the gain on from
+    zero. At a real ``k_par`` that gives the causal answer for ordinary weak gain away from the
+    critical angle: a forward-growing wave, and evanescent gain (``|r| > 1``) under total
+    internal reflection.
+
+    The rule agrees with the principal root wherever that root lies in the closed first
+    quadrant, so it is bit-identical to it at every real ``k_par`` in a passive medium. Its cut
+    meets the real ``k_par`` axis only at the Rayleigh point, so a solve is continuous as
+    ``Im(k_par) -> 0`` from either side. Until 2026-10-02 the rule was the principal root
+    continued from normal incidence. That rule's cut lay along the real evanescent axis, so any
+    ``Im(k_par)``, even one the size of round-off, made the evanescent orders on one side grow.
+    ``docs/branch-cuts.md`` measures the two rules and the alternatives. On the cut itself
+    (``Re(kz**2) = 0``, ``Im(kz**2) < 0``), the root with ``Re(kz) > 0`` is kept.
+
+    RETICOLO takes the same cut (``retsqrt(x, -1)``, its "coupure de Maystre"): J. P. Hugonin and
+    P. Lalanne, *RETICOLO software for grating analysis*, Institut d'Optique (2005),
+    arXiv:2101.00901. The gain behaviour is that of J. Skaar, Phys. Rev. E 73, 026605 (2006),
+    and J. O. Grepstad and J. Skaar, Opt. Express 19, 21404 (2011).
     """
     kz2 = eps - k_par_sq
     # `xp.sqrt`, not `kz2 ** 0.5`. On a negative real `kz2` -- every purely evanescent order --
@@ -249,46 +280,9 @@ def boundary_kz(xp, eps, k_par_sq):
     # The residue is not decorative: an evanescent order's efficiency carries a factor
     # `Re(kz)`, so the spelling alone decides whether a cut-off channel reports 0.0 or 1e-19.
     v = xp.sqrt(kz2)
-    _check_resolvable(xp, v)
-    flip = xp.where(xp.abs(xp.real(v)) > _FLAT, xp.real(v) < 0, xp.imag(v) < 0)
-    v = xp.where(flip, -v, v)
-    return xp.where(_off_principal_branch(xp, eps, k_par_sq, kz2), -v, v)
-
-
-def _off_principal_branch(xp, eps, k_par_sq, kz2):
-    """True where the principal root is on the wrong sheet of ``sqrt(eps - k_par_sq)``.
-
-    ``kz**2`` has exactly one branch point, at ``kz**2 == 0``, so the physical root is the
-    one reached by deforming continuously from a configuration that is not in doubt. Take
-    the in-plane wavevector to zero:
-
-        kz2(t) = eps - t*k_par_sq,     t: 0 -> 1
-
-    At ``t = 0`` this is ``sqrt(eps)`` — normal incidence in a homogeneous passive medium,
-    where nothing is ambiguous. ``Im(kz2(t))`` is *linear* in ``t``, so the segment meets the
-    real axis at most once, at ``t* = Im(eps)/Im(k_par_sq)``, and the principal root (whose
-    cut is the negative real axis) stops being the continuous one exactly when that meeting
-    happens on the negative side. Hence the three conditions below, and a sign flip when all
-    three hold.
-
-    It cannot fire for a real ``k_par_sq``: ``Im(kz2)`` is then constant at ``Im(eps) >= 0``
-    and the segment never leaves the closed upper half plane. Measured bit-for-bit identical
-    over 4e5 random passive half-spaces at real ``k_par``, lossless and lossy alike.
-
-    What it does fire on is a half-space under a *lossier* one at oblique incidence — both
-    sides absorbing, which makes ``Im(k_par_sq)`` exceed ``Im(eps)``. There the principal
-    root has ``Im(kz) < 0``: a field growing without bound into an absorbing medium that has
-    no source in it. The symptom is a step discontinuity in the reflected amplitude as
-    ``theta`` is swept — 2.96 in ``r`` across 6.7e-05 rad for a lossy dielectric on gold,
-    at an angle where ``kz**2`` stands 9.03 clear of its branch point and the physics is
-    analytic. See ``docs/time-convention-audit.md`` §4.
-    """
-    zero = xp.zeros_like(kz2)
-    eps_a, kp = eps + zero, k_par_sq + zero
-    down = xp.imag(kp) > 0                       # only a descending segment can reach R-
-    t = xp.imag(eps_a) / xp.where(down, xp.imag(kp), xp.ones_like(xp.imag(kp)))
-    return xp.logical_and(down,
-                          xp.logical_and(t < 1, (xp.real(eps_a) - t * xp.real(kp)) < 0))
+    decision = xp.real(v) + xp.imag(v)
+    _check_resolvable(xp, v, decision, 0.0)
+    return xp.where(decision < 0, -v, v)
 
 
 def incident_kz(kz_top, index):

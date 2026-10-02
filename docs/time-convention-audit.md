@@ -19,8 +19,26 @@ public top incidence as their z-mirrored scene (`_core/engine.py`, `_kernel_inci
 Read "down" below as the kernels' `+z` — public `-z` under top incidence — and see
 [`conventions.md`](conventions.md#geometry-and-propagation) for the public frame.
 
+**Half-space rule superseded (2026-10-02).** `boundary_kz` now takes Maystre's cut, the root
+with `Re(kz) + Im(kz) > 0`, and `_off_principal_branch` is gone; see
+[branch-cuts.md §8](branch-cuts.md#8-maystres-cut-2026-10-02). A re-walk of §3 found three
+problems with this audit's half-space finding.
+
+* §3's "`A = B = D` on every row" does not reproduce on the two lossless-substrate rows.
+  Path A lands on the growing root there, while B, D and C all land on the decaying one.
+* The closed form §3 shipped is path A's segment, not the path D it names as the mandate.
+* Limiting absorption, path C, is exactly Maystre's cut. It is not the odd one out: it agrees
+  with B and D wherever they agree with each other. Path B is the most physical deformation,
+  since it switches on the prism's absorption from zero. It never lets a lossless substrate's
+  evanescent field grow, so §2's flux argument cannot single out the growing root.
+
+The rest of this audit stands: §2's measurements, items 2-4, and the layer half of everything.
+The both-sides-absorbing step of §4 also stays fixed under the new rule. Since 2026-09 a real
+angle in an absorbing superstrate is a phase angle with a real `k_par`, so every complex-`k_par`
+case below is now reached only through a complex `theta`.
+
 Targets:
-- `wavebit/_core/conventions.py` — `boundary_kz`, `_off_principal_branch`, `mode_q`
+- `wavebit/_core/conventions.py` — `boundary_kz`, `_off_principal_branch` (removed 2026-10-02), `mode_q`
 - `wavebit/_core/boundary.py` — `conv_mats`
 - `wavebit/_core/scattering.py` — the SMM incident amplitude (prose only)
 - `wavebit/_core/solve_2d_4ff.py` — `split_forward_backward` (scope note only)
@@ -37,7 +55,7 @@ conventions differ. This audit went looking. Four results:
 
 | | Question | Answer | Moved? |
 | --- | --- | --- | --- |
-| **1** | Which priority is right for a half-space, `Re(kz) > 0` or `Im(kz) >= 0`? | **Neither, on its own.** `Re(kz) > 0` with an `Im` tie-break is right for every real `k_par` and for most complex ones; a third condition decides the rest | **yes** — `_off_principal_branch` |
+| **1** | Which priority is right for a half-space, `Re(kz) > 0` or `Im(kz) >= 0`? | **Neither, on its own.** `Re(kz) > 0` with an `Im` tie-break is right for every real `k_par` and for most complex ones; a third condition decides the rest. *(2026-10-02: the third condition became Maystre's cut; see the note above)* | **yes** — `_off_principal_branch`, since replaced |
 | **2** | Is `mode_q` disagreeing with `boundary_kz` at complex `k_par` a defect? | **No** — a layer's `±q` is a label and a half-space's `kz` is a boundary condition. The label is measured free to 2.0e-15 | no |
 | **3** | Is the TM discrepancy against the mpmath Airy reference a solver defect? | **No — and (corrected 2026-08-12) not a reference defect either**: the compared numbers were the coupled path's TM *efficiency* and the reference's `|r_p|²`, which for an absorbing superstrate differ by exactly `|n_top|²·Re(n_top⁻²)` — two conventions of a quantity the contract excludes. Solver matches both references to 4.3e-16 on amplitudes | no |
 | **4** | Any other flip residue? | **One live**: the painted-polygon builder still wrote `conj(n)**2`, turning an absorbing painted layer into gain. Plus one sentence of prose left in the old convention | **yes** — `boundary.py` |
@@ -146,6 +164,12 @@ always taking whichever of `±sqrt` was nearer the previous step — no priority
 
 Result, on seven configurations spanning lossless and absorbing substrates. `A = B = D` on
 every row, so they are one column; `=` means "the same root as the shipped rule".
+
+> **Re-walked 2026-10-02: the merged column does not reproduce.** On the two lossless-substrate
+> rows only path A reaches the root in the table. B and D (and C) reach `−0.397235+0.695107j`
+> and `−0.388775+1.080525j`, the decaying roots. That is also Maystre's cut, which the solver
+> has taken since that date. The walker code behind this table is not in the repository. The
+> repository's own test walked only path A.
 
 | case | shipped rule | **A = B = D** | C (limiting absorption) |
 | --- | --- | --- | --- |
@@ -561,10 +585,17 @@ was found and nothing was changed.
   says so with `ComplexIncidenceWarning`, and
   `tests/references/test_reticolo_complex_kx_golden.py` pins agreement with RETICOLO only
   where the two rules coincide, asserting that its cases stay there.
+  **Resolved 2026-10-02:** this solver now takes RETICOLO's cut. The golden test gained the
+  lossless-top grating and agrees with RETICOLO there to 2e-15.
 
 ---
 
 ## 10. What pins it
+
+*(As of 2026-08-12. Since 2026-10-02 the walk test is
+`test_the_root_is_the_limit_of_the_half_spaces_own_absorption`, and the file also pins
+continuity across the real axis and gain under total internal reflection; see
+[branch-cuts.md §8](branch-cuts.md#8-maystres-cut-2026-10-02).)*
 
 `tests/test_branch_selection.py` (21 cases). Every one of these fails on the pre-correction
 rule — checked by stashing it, which is the only evidence that a test about a branch cut is
