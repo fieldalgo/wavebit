@@ -57,7 +57,7 @@ from typing import Any
 
 import numpy as np
 
-from .backend import array_namespace, as_array, carries_autodiff, checked_float
+from .backend import array_namespace, as_array, carries_autodiff, checked_float, constant_array
 
 __all__ = ['DrawnOn', 'Lattice', 'as_lattice', 'meshgrid_xy', 'is_axis_aligned', 'jacobian',
            'order_kxy', 'periods_of', 'reduced_basis', 'reduction_transform', 'sample_grid']
@@ -445,7 +445,7 @@ def as_lattice(period=None, lattice=None):
         if isinstance(lattice, Lattice):
             return lattice
         try:
-            A = np.asarray(lattice, dtype=float)
+            A = constant_array(lattice)
         except Exception:                       # noqa: BLE001 - a tracer, not a mistake
             # A basis handed in already traced. Its numbers are the point -- that is the whole
             # reason this is a pytree -- but `axis_aligned` cannot be read off a tracer, so it
@@ -484,7 +484,7 @@ def as_lattice(period=None, lattice=None):
     if period is None:
         raise ValueError('as_lattice: needs one of period or lattice')
     try:
-        p = np.atleast_1d(np.asarray(period, dtype=float))
+        p = np.atleast_1d(constant_array(period))
     except Exception:                       # noqa: BLE001 - a traced period, not a mistake
         # `period` is the variable under differentiation. Its *shape* is still a diagonal, so
         # `axis_aligned` is known without reading a number -- which is the whole reason that
@@ -666,7 +666,7 @@ def periods_of(A):
     """
     cols = A.columns if isinstance(A, Lattice) else A
     try:
-        M = np.asarray(cols, dtype=float)
+        M = constant_array(cols)
     except Exception:                       # noqa: BLE001 - a tracer, not a mistake
         xp = array_namespace(cols)
         return (xp.hypot(cols[0, 0], cols[1, 0]), xp.hypot(cols[0, 1], cols[1, 1]))
@@ -689,7 +689,7 @@ def jacobian(A, n_v, n_u):
     """
     cols = A.columns if isinstance(A, Lattice) else A
     try:
-        M = np.asarray(cols, dtype=float)
+        M = constant_array(cols)
     except Exception:                       # noqa: BLE001 - a tracer, not a mistake
         xp = array_namespace(cols)
         return xp.stack([cols[:, 0] / n_u, cols[:, 1] / n_v], axis=-1)

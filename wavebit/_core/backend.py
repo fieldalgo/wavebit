@@ -24,13 +24,63 @@ def carries_autodiff(value):
 
     Every JAX tracer counts, including a plain JIT input: that compiled function can later
     be differentiated with grad(jit(f)). Deciding only when a JVP tracer arrives would make
-    the derivative depend on transformation order. Eager arrays need no special treatment.
+    the derivative depend on transformation order. On PyTorch both modes count: a tensor
+    under reverse mode (``requires_grad``) and a forward-mode dual (:func:`forward_tangent`),
+    which has ``requires_grad`` False -- asking only the first sent every dual down the
+    constant branch of each dispatch that reads this, and the tangent came back wrong with no
+    error. Eager arrays need no special treatment.
     """
     if getattr(value, 'requires_grad', False):
+        return True
+    if forward_tangent(value):
         return True
     import sys
     jax = sys.modules.get('jax')
     return jax is not None and isinstance(value, jax.core.Tracer)
+
+
+def forward_tangent(x):
+    """Whether ``x`` is a PyTorch forward-mode dual: ``torch.autograd.forward_ad``'s, which
+    ``torch.func.jvp`` and ``jacfwd`` make too. A dual has ``requires_grad`` False, so a test
+    for reverse mode alone does not see it, and the constant branch hands the tangent a zero:
+    on the gold disks at 81 harmonics a directional derivative of a read-out of
+    ``eps_conv_matrices()`` read -0.538854 through the inverse-rule floor where reverse mode
+    and a central difference read -27.626431, and ``d(R + T)/d(diameter)`` of dielectric disks
+    at 81 harmonics -5.48e-6 through the modal operator where they read -7.35e-5, with no
+    error. ``False`` for anything that is not a PyTorch tensor, without importing PyTorch.
+
+    A tensor, not anything of PyTorch's: inside a dual level ``unpack_dual`` raises
+    ``TypeError`` for a ``torch.dtype``, ``device`` or ``Size``, which the solver holds and
+    ``engine._holds_autodiff`` walks on an ``auto_detune`` retry -- a plain solve at a Rayleigh
+    point raised there whenever a dual level was open."""
+    import sys
+    torch = sys.modules.get('torch')
+    if torch is None or not isinstance(x, torch.Tensor):
+        return False
+    from torch.autograd import forward_ad
+    return forward_ad.unpack_dual(x).tangent is not None
+
+
+def constant_array(value, dtype=float):
+    """``np.asarray(value, dtype=dtype)``, refusing a value that carries a derivative.
+
+    The test this package spells as ``try: np.asarray(v) ... except: <the traced path>`` relies
+    on the conversion refusing a value under autodiff. A JAX tracer and a PyTorch tensor with
+    ``requires_grad`` both refuse; a ``torch.autograd.forward_ad`` dual does not -- it converts
+    to its primal, the tangent dropped -- so that test sent a dual down the constant path with
+    no error. A ``period`` given as a dual became a NumPy lattice, and the field's sample grid
+    on it lost its derivative: 0.55% off reverse mode in a weighted read-out of the field of a
+    2D grating, 20% in one of its samples. This raises ``TypeError`` for a dual, in a list or
+    tuple as well, so every such test sends it where reverse mode goes.
+    """
+    stack = [value]
+    while stack:
+        item = stack.pop()
+        if isinstance(item, (list, tuple)):
+            stack.extend(item)
+        elif forward_tangent(item):
+            raise TypeError('a forward-mode dual is not a constant')
+    return _np.asarray(value, dtype=dtype)
 
 
 def in_namespace(xp, v):

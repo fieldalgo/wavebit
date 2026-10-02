@@ -141,9 +141,13 @@ def to_mirrored_z(sample_z, thickness):
 
     A traced thickness passes through untouched as well, so that the refusal a caller sees is
     :func:`_z_plan`'s -- which says why a data-dependent layer choice cannot be traced -- rather
-    than a numpy conversion error raised here first.
+    than a numpy conversion error raised here first. Asked of each thickness rather than left
+    to the conversion, which a PyTorch forward-mode dual passes, its tangent dropped.
     """
     if is_count(sample_z):
+        return sample_z
+    if any(carries_autodiff(d) for d in (thickness if isinstance(thickness, (list, tuple))
+                                         else (thickness,))):
         return sample_z
     try:
         ds = _np.asarray(thickness, dtype=float)

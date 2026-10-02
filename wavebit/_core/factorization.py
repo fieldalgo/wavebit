@@ -105,8 +105,9 @@ worked (``tests/test_conv_matrices_accessor.py``). The builders are what disagre
 import math
 from typing import NamedTuple
 
-from .backend import array_namespace, as_array, carries_autodiff
+from .backend import array_namespace, as_array, carries_autodiff, constant_array, forward_tangent
 from .enums import DEFAULT_NESTING, Nesting, nesting_of
+from .modal_gradient import _CREATE_GRAPH, _DUAL
 from .geometry import StaleGeometryError
 
 
@@ -1020,7 +1021,12 @@ def _distance_gradient(interface_mask, shape, lattice=None):
         n_v, n_u = shape
         J = jacobian(lattice, n_v, n_u)
         try:
-            scale = float(np.hypot(J[0, 0], J[1, 0]))
+            # Through `constant_array`, which refuses a PyTorch forward-mode dual as NumPy
+            # refuses a tensor under autograd: `float(np.hypot(...))` and `np.linalg.inv` below
+            # convert a dual without complaint, its tangent dropped, and a cell derivative in
+            # forward mode came back 23% off a central difference on an 8 x 8 oblique raster.
+            concrete = constant_array(J)
+            scale = float(np.hypot(concrete[0, 0], concrete[1, 0]))
         except Exception:                   # noqa: BLE001 - a traced basis, not a mistake
             scale = None
 
@@ -1031,7 +1037,7 @@ def _distance_gradient(interface_mask, shape, lattice=None):
             # `sampling=(1, 1)` and a `J^-T` of the identity, which is bit-identical to taking
             # no metric at all. Without it those cells moved by ~7e-15 purely from multiplying
             # a factor in and dividing it back out.
-            J = J / (scale or 1.0)
+            J = concrete / (scale or 1.0)
             # Physical length of one index step along each axis: axis 0 walks a2/n_v, axis 1
             # a1/n_u. Exact for an axis-aligned cell; for a sheared one it is the best
             # `sampling` can say, since scipy's transform has no way to express a non-diagonal
@@ -1226,7 +1232,7 @@ def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=No
     if 1 in shape:
         cols = None if lattice is None else getattr(lattice, 'columns', lattice)
         try:
-            A = None if cols is None else np.asarray(cols, dtype=float)
+            A = None if cols is None else constant_array(cols)
         except Exception:                       # noqa: BLE001 - a traced basis, not a mistake
             A = False
         if lattice is None or (A is False and getattr(lattice, 'axis_aligned', False)):
@@ -1792,10 +1798,11 @@ def _floor_singular_values(xp, B, floor):
     two singular values on the same side of the floor: as a JAX ``custom_jvp`` rule (forward and
     reverse mode alike) and as a PyTorch ``autograd.Function`` with a ``backward`` and a ``jvp``
     (reverse mode and ``torch.autograd.forward_ad`` alike). A PyTorch dual has ``requires_grad``
-    False, so :func:`_forward_tangent` is asked as well as :func:`carries_autodiff`; without it a
-    forward-mode derivative went down the plain branch and came back with the floored part's
-    tangent zero, silently. ``torch.func`` transforms, for which the Function has no rule, are
-    refused by name (:data:`_FUNCTORCH`) where the floor binds. Where the floor does not bind,
+    False, which is why :func:`~wavebit._core.backend.carries_autodiff` asks
+    :func:`~wavebit._core.backend.forward_tangent` as well; without it a forward-mode derivative
+    went down the plain branch and came back with the floored part's tangent zero, silently.
+    ``torch.func`` transforms, for which the Function has no rule, are refused by name
+    (:data:`_FUNCTORCH`) where the floor binds. Where the floor does not bind,
     the ``where`` returns ``B`` and the derivative is precisely what it was before the floor
     existed. Where it binds the derivative is exact. The lift held as a bare constant instead
     would return the *unfloored* closing's derivative at the floored point: measured 39x too
@@ -1826,15 +1833,14 @@ def _floor_singular_values(xp, B, floor):
     floor = as_array(xp, floor, dtype=s.dtype, device=_device(xp, s))
     clip = s < _no_gradient(floor)
     lifted = (U * xp.astype(xp.maximum(s, _no_gradient(floor)), U.dtype)[..., None, :]) @ Vh
-    if not (carries_autodiff(B) or carries_autodiff(floor)
-            or _forward_tangent(B) or _forward_tangent(floor)):
+    if not (carries_autodiff(B) or carries_autodiff(floor)):
         return xp.where(xp.any(clip), B + (lifted - B), B)
     if 'torch' in xp.__name__:
         # Eager, so whether the floor binds is known here, and a layer where it does not is
         # handed back untouched: its derivatives, of any order, are the identity's.
         if not bool(xp.any(clip)):
             return B
-        dual = _forward_tangent(B) or _forward_tangent(floor)
+        dual = forward_tangent(B) or forward_tangent(floor)
         try:
             return _torch_floor()(B, floor, U, s, Vh, lifted, clip, dual)
         except RuntimeError as error:
@@ -1842,19 +1848,6 @@ def _floor_singular_values(xp, B, floor):
                 raise
             raise NotImplementedError(_FUNCTORCH) from error
     return xp.where(xp.any(clip), _jax_floor()(B, floor, U, s, Vh, lifted, clip), B)
-
-
-def _forward_tangent(x):
-    """Whether ``x`` is a PyTorch forward-mode dual: ``torch.autograd.forward_ad``'s, which
-    ``torch.func.jvp`` and ``jacfwd`` make too. A dual has ``requires_grad`` False, so
-    :func:`carries_autodiff` -- which asks about reverse mode -- does not see it, and the plain
-    branch would hand the floored part a zero tangent: on the gold disks at 81 harmonics a
-    directional derivative of a read-out of ``eps_conv_matrices()`` read -0.538854 where reverse
-    mode and a central difference read -27.626431, with no error."""
-    if not type(x).__module__.startswith('torch'):
-        return False
-    from torch.autograd import forward_ad
-    return forward_ad.unpack_dual(x).tangent is not None
 
 
 #: What a second derivative through a floored layer raises with.
@@ -1961,11 +1954,10 @@ def _torch_floor():
             @staticmethod
             def backward(ctx, cotangent):
                 if torch.is_grad_enabled():
-                    raise RuntimeError(_SECOND_ORDER + '; create_graph=True is not supported')
+                    raise RuntimeError(_SECOND_ORDER + _CREATE_GRAPH)
                 if ctx.dual:
                     raise RuntimeError(_SECOND_ORDER + '; a backward pass through a floor built '
-                                                       'from a forward-mode dual (a mixed second '
-                                                       'order) is not supported')
+                                                       'from a forward-mode dual' + _DUAL)
                 U, s, Vh, floor, clip = ctx.saved_tensors
                 floor = floor.detach()
                 xp = array_namespace(U)

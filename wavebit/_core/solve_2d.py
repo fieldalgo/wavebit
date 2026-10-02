@@ -15,7 +15,8 @@ Optional off-axis convolution blocks (``epxy`` / ``epyx``, produced by the NVF f
 to the conical versions, so this module reuses ``solve_1d``'s boundary init and
 ``final_matching`` verbatim.
 """
-from .backend import _concrete, _readable, array_namespace, as_array, check_mode_cutoff, eig
+from .backend import (_concrete, _readable, array_namespace, as_array, carries_autodiff,
+                      check_mode_cutoff, eig)
 from .conventions import boundary_kz, mode_q, order_azimuth
 from .enums import Answers, answers_of
 from .solve_1d import _block, _diag, _is_backside, _mirrored_scene, final_matching
@@ -275,8 +276,8 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
     # later if the existing grazing guard requires it; ordinary modes do
     # not retain its four dense blocks or an unused right factor here.
     del B, D, Cc, E
-    from .modal_gradient import _stop, _traced
-    differentiated = _traced(Omega2_LR)
+    from .modal_gradient import _stop
+    differentiated = carries_autodiff(Omega2_LR)
     w, W = eig(_stop(Omega2_LR))
     if not differentiated:
         # Only autodiff needs the original operator after the eigensolve.

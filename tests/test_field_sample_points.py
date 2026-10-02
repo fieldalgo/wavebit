@@ -325,7 +325,7 @@ def test_a_python_list_of_points_keeps_double_precision(backend, bid, path):
 
 
 @pytest.mark.parametrize('side', ['top', 'bottom'])
-@pytest.mark.parametrize('backend', ['jax', 'torch'])
+@pytest.mark.parametrize('backend', ['jax', 'torch', 'torch, forward_ad'])
 def test_traced_thickness_with_explicit_z_says_why_it_cannot(backend, side):
     """Bucketing a z into a layer is data-dependent, so it refuses instead of guessing.
 
@@ -336,7 +336,9 @@ def test_traced_thickness_with_explicit_z_says_why_it_cannot(backend, side):
     bucketing went through and the thickness's derivative was dropped. From above, where the
     heights are mirrored into the propagation frame first, the mirroring gave up on the same
     tensor and the unmirrored heights were bucketed, so the field itself came back wrong too.
-    The result's own ``reconstruct_field`` takes these derivatives exactly (``fields.md``).
+    The result's own ``reconstruct_field`` takes these derivatives exactly (``fields.md``). A
+    PyTorch forward-mode dual is refused alike: it converts in NumPy and reads in ``float``, so
+    only asking whether it carries a derivative tells it from a number.
     """
     if backend == 'jax':
         jax = pytest.importorskip('jax')
@@ -344,8 +346,13 @@ def test_traced_thickness_with_explicit_z_says_why_it_cannot(backend, side):
         traced = lambda: xp.asarray(THICK)
     else:
         torch = pytest.importorskip('torch')
+        from torch.autograd import forward_ad
         xp = torch
-        traced = lambda: torch.tensor(THICK, dtype=torch.float64, requires_grad=True)
+        if backend == 'torch':
+            traced = lambda: torch.tensor(THICK, dtype=torch.float64, requires_grad=True)
+        else:
+            traced = lambda: forward_ad.make_dual(torch.tensor(THICK, dtype=torch.float64),
+                                                  torch.ones(2, dtype=torch.float64))
 
     def run(thick, sample_z):
         s = wavebit.rcwa(backend=1 if backend == 'jax' else 2, top=1.0, bot=1.0, wavelength=WL,
@@ -358,13 +365,20 @@ def test_traced_thickness_with_explicit_z_says_why_it_cannot(backend, side):
     # a count traces fine, gradient and all
     if backend == 'jax':
         g = jax.grad(lambda t: run(t, 3))(traced())
-    else:
+    elif backend == 'torch':
         thick = traced()
         g, = torch.autograd.grad(run(thick, 3), thick)
+    else:
+        with forward_ad.dual_level():
+            g = forward_ad.unpack_dual(run(traced(), 3)).tangent
+        assert g is not None
     assert np.all(np.isfinite(np.asarray(g)))
 
     with pytest.raises(TypeError, match='traced'):
         if backend == 'jax':
             jax.grad(lambda t: run(t, np.array([50.0, 200.0])))(traced())
-        else:
+        elif backend == 'torch':
             run(traced(), np.array([50.0, 200.0]))
+        else:
+            with forward_ad.dual_level():
+                run(traced(), np.array([50.0, 200.0]))

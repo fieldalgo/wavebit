@@ -17,7 +17,7 @@ Targets:
 - `wavebit/_core/factorization.py::_floor_singular_values` — the floor
 - `wavebit/_core/factorization.py::_floor_derivative` — its derivative, in closed form
 - `wavebit/_core/factorization.py::_jax_floor`, `_torch_floor` — where that derivative enters autodiff (reverse and forward mode), and where a second derivative is refused
-- `wavebit/_core/factorization.py::_forward_tangent` — how a PyTorch forward-mode dual, which has no `requires_grad`, is recognised
+- `wavebit/_core/backend.py::forward_tangent` — how a PyTorch forward-mode dual, which has no `requires_grad`, is recognised (`carries_autodiff` asks it)
 - `wavebit/_core/factorization.py::INVERSE_RULE_BOUND` — the one constant, and why it is 2
 - `wavebit/_core/factorization.py::nvf_conv_matrices`, `nvf_conv_matrices_integrated` — the raster builders' bound, the raster's largest `|eps|`
 - `wavebit/_core/boundary.py::conv_mats` — the boundary path's bound, taken region by region
@@ -193,9 +193,10 @@ read −27.626431 and −17.338962; it now gives the reverse-mode values to 1e-1
 transforms (`jvp`, `grad`, `jacfwd`, …) need a functorch rule the floor's `autograd.Function`
 does not have, and where the floor binds they raise a `NotImplementedError` that says so and
 points at `torch.autograd`; before, `torch.func.jvp` returned the same −0.538854. On a layer
-where the floor does not bind it is never reached and `torch.func` is exact. `solve()` itself is
-not forward-mode safe on PyTorch: its modal operator asks `requires_grad` too, and a
-`forward_ad` derivative of `R + T` through it is wrong on a dielectric as well, floor or none.
+where the floor does not bind it is never reached and `torch.func` is exact. A whole `solve()`
+is exact in forward mode too: its modal operator, which asked `requires_grad` as well and gave a
+wrong `forward_ad` derivative of `R + T` on a dielectric, floor or none, has carried a forward
+rule since 2026-10-02 (the autodiff guide's "Forward mode").
 
 **First derivatives only.** The closed form is linear in `dB` with coefficients from the
 detached SVD, so a second derivative taken through it would lack the floor's curvature. Through

@@ -68,6 +68,7 @@ Shared conventions, stated once:
 """
 import numpy as np
 
+from .backend import constant_array
 from .lattice import is_axis_aligned, jacobian
 
 
@@ -97,7 +98,7 @@ def _metric(lattice, shape):
         return np.eye(2)
     n_v, n_u = shape
     try:
-        M = np.asarray(jacobian(lattice, n_v, n_u), dtype=float)
+        M = constant_array(jacobian(lattice, n_v, n_u))
     except Exception:                           # noqa: BLE001 - a cell under autodiff
         raise TypeError(_TRACED_CELL) from None
     return M / (float(np.hypot(M[0, 0], M[1, 0])) or 1.0)

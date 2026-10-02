@@ -279,7 +279,10 @@ and `truncation_order` modest; where there is nothing to win (`shape_nvf_grid_si
 
 The key is `None` — no reuse, rebuild — whenever a value it would have to hold is traced or under
 autograd, which is what keeps this from touching a gradient. A JAX tracer cannot be converted, so
-it refuses itself; a PyTorch tensor converts happily and is refused by hand on `requires_grad`.
+it refuses itself; a PyTorch tensor converts happily and is refused by hand, on `requires_grad`
+and, since 2026-10-02, as a `forward_ad` dual, which does not set it: until then a forward-mode
+solve after a plain one at the same width was served the plain build, and its tangent read 1.002
+where reverse mode reads 1.186 (`tests/test_forward_mode.py`, the rectangle's width).
 A layer of several shapes is rebuilt whenever any of them moves: the offsets from the first
 shape enter the field itself, and even a rigid slide changes them by an ulp, which the key sees.
 Holding the field fixed across a move instead would be

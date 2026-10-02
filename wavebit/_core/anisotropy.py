@@ -10,7 +10,7 @@ from typing import NamedTuple
 
 import numpy as np
 
-from .backend import array_namespace, as_array, _concrete
+from .backend import array_namespace, as_array, _concrete, carries_autodiff, forward_tangent
 from .domain import Material, as_material
 from .geometry import StaticGeometry, StaleGeometryError
 from . import factorization as fac
@@ -211,7 +211,7 @@ def _shape_snapshot(solver, basis=None, n=None):
                 # Reject geometry tangents rather than return a plausible zero gradient.
                 geometry = {k:v for k,v in shape.items() if k != 'material'}
                 for v in geometry.values():
-                    if getattr(v, 'requires_grad', False) or 'Tracer' in type(v).__name__:
+                    if carries_autodiff(v):
                         raise ValueError('sampled tensor shapes do not support geometry derivatives; '
                                          'keep geometry fixed and differentiate material values')
                 key.append(tuple(sorted((k, repr(fac._to_numpy(v)) if hasattr(v, 'shape') else repr(v))
@@ -257,8 +257,9 @@ def _field(solver, structure, quantity, snapshot=None):
 def _geometry_derivative(value):
     if isinstance(value, (tuple, list)):
         return any(_geometry_derivative(v) for v in value)
-    # JIT's constant tracers are allowed; a JVP/linearization of geometry is not.
-    return (getattr(value, 'requires_grad', False)
+    # JIT's constant tracers are allowed; a JVP/linearization of geometry is not, and neither
+    # is either PyTorch mode: `requires_grad` or a `forward_ad` dual, which does not set it.
+    return (getattr(value, 'requires_grad', False) or forward_tangent(value)
             or type(value).__name__ in ('JVPTracer', 'LinearizeTracer'))
 
 

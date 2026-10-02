@@ -415,7 +415,7 @@ def _nvf_raster_read_out(backend, case, p, **options):
     return r.R.sum().real - 0.7 * r.T.sum().real + 0.4 * a.real + 0.9 * a.imag
 
 
-@pytest.mark.parametrize('backend', [1, 2], ids=['jax', 'torch'])
+@pytest.mark.parametrize('backend', [1, 2, 'forward_ad'], ids=['jax', 'torch', 'torch, forward_ad'])
 @pytest.mark.parametrize('case', list(_CELL_CASES))
 def test_the_raster_normal_field_carries_the_cell_on_both_backends(case, backend):
     """The NVF raster's normal field is built in the cell's metric, and the ``'distance'``
@@ -424,13 +424,19 @@ def test_the_raster_normal_field_carries_the_cell_on_both_backends(case, backend
     under autograd was detached for the field -- the derivative 22% off a central difference on
     this 8 x 8 raster, with no error -- and a skewed cell under autograd met
     ``jax.lax.stop_gradient`` and raised a ``TypeError``. A one-row raster read the cell through
-    NumPy and raised for every traced cell on both backends but a PyTorch ``period``."""
+    NumPy and raised for every traced cell on both backends but a PyTorch ``period``.
+
+    A PyTorch forward-mode dual passes a NumPy conversion that a tensor under autograd fails, its
+    tangent dropped; each of these reads asks ``constant_array`` first, so a dual takes the same
+    branch reverse mode does. Without it the tangents here came back 21-23% off, with no error,
+    all but the one-row period's, which the shortcut answers without reading the cell."""
     if backend == 1:
         jax = pytest.importorskip('jax')
         import jax.numpy as jnp
         wavebit.enable_x64()
     else:
         torch = pytest.importorskip('torch')
+        from torch.autograd import forward_ad
     _, _, at, _ = _CELL_CASES[case]
     h = 1e-6
     near = (_nvf_raster_read_out(0, case, at + h) - _nvf_raster_read_out(0, case, at - h)) / (2 * h)
@@ -438,13 +444,18 @@ def test_the_raster_normal_field_carries_the_cell_on_both_backends(case, backend
     finite = (4 * near - far) / 3
     if backend == 1:
         got = float(jax.grad(lambda p: _nvf_raster_read_out(1, case, p))(jnp.asarray(at)))
-    else:
+    elif backend == 2:
         x = torch.tensor(at, dtype=torch.float64, requires_grad=True)
         got = float(torch.autograd.grad(_nvf_raster_read_out(2, case, x), x)[0])
+    else:
+        with forward_ad.dual_level():
+            dual = forward_ad.make_dual(torch.tensor(at, dtype=torch.float64),
+                                        torch.tensor(1.0, dtype=torch.float64))
+            got = float(forward_ad.unpack_dual(_nvf_raster_read_out(2, case, dual)).tangent)
     assert got == pytest.approx(finite, rel=1e-6), (got, finite)
 
 
-@pytest.mark.parametrize('backend', [1, 2], ids=['jax', 'torch'])
+@pytest.mark.parametrize('backend', [1, 2, 'forward_ad'], ids=['jax', 'torch', 'torch, forward_ad'])
 @pytest.mark.parametrize('method', ['contour', 'spectral', 'smooth'])
 def test_a_normal_field_built_in_numpy_refuses_a_traced_cell_by_name(method, backend):
     """``'contour'``, ``'spectral'`` and ``'smooth'`` read the cell's metric in NumPy, so a cell
@@ -460,10 +471,19 @@ def test_a_normal_field_built_in_numpy_refuses_a_traced_cell_by_name(method, bac
         wavebit.enable_x64()
         run = lambda: jax.grad(lambda p: _nvf_raster_read_out(
             1, 'period', p, raster_normal_method=method))(jnp.asarray(0.77))
-    else:
+    elif backend == 2:
         torch = pytest.importorskip('torch')
         x = torch.tensor(0.77, dtype=torch.float64, requires_grad=True)
         run = lambda: _nvf_raster_read_out(2, 'period', x, raster_normal_method=method)
+    else:
+        torch = pytest.importorskip('torch')
+        from torch.autograd import forward_ad
+
+        def run():
+            with forward_ad.dual_level():
+                dual = forward_ad.make_dual(torch.tensor(0.77, dtype=torch.float64),
+                                            torch.tensor(1.0, dtype=torch.float64))
+                _nvf_raster_read_out(2, 'period', dual, raster_normal_method=method)
     with pytest.raises(TypeError, match="raster_normal_method='distance' carries it"):
         run()
 

@@ -262,8 +262,8 @@ Forward mode gets the same derivative: `jax.jvp` and `jax.jacfwd`, and
 `torch.autograd.forward_ad` on PyTorch. `torch.func` transforms (`jvp`, `grad`,
 `jacfwd`, ...) raise `NotImplementedError` where the floor binds, since the
 floor's `torch.autograd.Function` has no functorch rule; use `torch.autograd`
-there. Forward mode through `solve()` is a separate matter, unsupported on both
-backends; see the table below.
+there. Forward mode through a whole `solve()` works too; see
+[Forward mode](#forward-mode).
 
 It supports first derivatives only. The closed form is linear in the change of
 `<1/eps>`, so a second derivative through it would lack the floor's curvature.
@@ -330,13 +330,104 @@ so it can require more work and memory than an eager forward solve. Use the
 first derivatives with a first-order optimizer, and still check Fourier and
 geometry-resolution convergence for the physical problem being optimized.
 
+## Forward mode
+
+`jax.jvp`, `jax.jacfwd` and `torch.autograd.forward_ad` give the same first
+derivative as reverse mode, through `solve()`, `result.reconstruct_field`, the
+scattering matrix and `solve_field`. Here, in a disc's diameter:
+
+```python
+def transmission(width, backend):
+    disc = dict(type='circle', lx=width, material=12.25)
+    return wavebit.rcwa(backend=backend, structure=[dict(background=1.0, shapes=[disc])],
+                        ...).solve().T
+
+primal, tangent = jax.jvp(lambda w: transmission(w, 1), (jnp.asarray(w0),), (jnp.asarray(1.0),))
+```
+
+and on PyTorch:
+
+```python
+from torch.autograd import forward_ad
+with forward_ad.dual_level():
+    width = forward_ad.make_dual(torch.tensor(w0, dtype=torch.float64),
+                                 torch.tensor(1.0, dtype=torch.float64))
+    tangent = forward_ad.unpack_dual(transmission(width, 2)).tangent
+```
+
+A forward pass carries one input direction, a reverse pass one output, so forward
+mode suits a few design parameters against many outputs: every order's
+efficiency, a field cell, or a scattering matrix against one geometry parameter.
+
+The modal operator's rule is linear in the change of the operator, `V^-1 dA V`
+with the modal basis `V` held fixed, so it serves both modes: forward mode
+carries it as written, reverse mode its transpose.
+[`tests/test_forward_mode.py`](https://github.com/fieldalgo/wavebit/blob/develop/tests/test_forward_mode.py)
+checks the forward tangent of `R`, `T`, amplitudes and fields against reverse
+mode, to 1e-11, and against central differences, to their step-limited accuracy.
+It does so in geometry, material, incidence and the cell itself, on these
+paths:
+
+- 1D TE and TM, and conical;
+- 2D with the Li, Laurent and NVF factorizations, and the z-coupled formulation;
+- shapes on rectangular, hexagonal and oblique cells, including a layer of two
+  shapes, and a cell given as a bare array or as nested lists;
+- an NVF raster's period and cell angle (through the `'distance'` normal field,
+  the construction that carries a cell derivative; see
+  [`../oblique-lattice.md`](../oblique-lattice.md));
+- a metal where the NVF floor binds, magnetic and tensor materials;
+- `excitation`, the scattering matrix and `solve_field`;
+- the `auto_detune` retry at a Rayleigh point.
+
+Where a central difference cannot judge a derivative, it cannot judge either
+mode: the NVF steps above apply to forward mode unchanged.
+
+Second derivatives are refused, by name, wherever the modal operator moves
+under both derivatives. That is where differentiating its first-order rule again
+would return a partial Hessian:
+
+- On JAX, `jax.hessian`, `jax.jacfwd(jax.jacrev(f))`, `jax.jvp` of `jax.grad` and
+  the others raise `NotImplementedError` once the operator carries a tangent of
+  the outer transformation. That holds under `jax.jit` and `jax.checkpoint` too.
+- On PyTorch, a `RuntimeError` is raised for `create_graph=True` through the
+  rule, and for a backward pass through an operator built from a `forward_ad`
+  dual, which is where both mixed orders reach it.
+
+The PyTorch signal is the dual itself. So a first-order backward pass through a
+graph built while a dual level was open is refused as well, even after the level
+has closed. Take the reverse pass outside the dual level.
+
+A second derivative in which a parameter moves no operator differentiates the
+rule at most once, and is not refused. A thickness is one such parameter, alone
+or beside a permittivity. These second derivatives are exact:
+
+- through `jax.hessian` and every JAX order of a mixed derivative;
+- through `create_graph=True`. For a mixed one, take the thickness first: taken
+  in the permittivity first, the backward pass runs the rule with grad mode on,
+  and is refused.
+
+PyTorch's `forward_ad` combined with a backward pass is not exact here on ETM.
+`torch.linalg.solve`'s backward does not carry its matrix's tangent under
+forward mode (torch 2.13; its `linalg.inv` and `lu_solve` are exact), and the 2D
+ETM path solves through it. Measured on a 2D raster:
+
+- a thickness Hessian by `forward_ad` over a backward pass read 1.284 against
+  11.18;
+- `d2/(d eps d thickness)`, by either mixed order, read 0.004266 and 0.004953
+  against 0.002997.
+
+Both come back with no error. SMM is exact in all of them (11.18 and 0.002997).
+Use `layer_algorithm='SMM'`, or `create_graph=True` with the order above, for
+these second derivatives on PyTorch.
+
 ## What cannot be traced
 
 | | Why |
 | --- | --- |
 | An **explicit `sample_z`** in the legacy `solver.reconstruct_field`, with respect to `thickness` | this solver method buckets using concrete thicknesses and refuses traced ones; counts stay traceable. The result-owned `result.reconstruct_field` supports explicit heights and thickness derivatives while each point stays in its layer; see [fields](fields.md#differentiating-internal-fields) |
 | `torch.compile` | not a supported path — the solve is almost entirely LAPACK calls the compiler forwards untouched, and below torch 2.13 it does not run at all ([`../torch-compile.md`](../torch-compile.md)) |
-| **Forward mode through `solve()`** (`jax.jvp`, `jax.jacfwd`, `torch.autograd.forward_ad`, `torch.func.jvp`) | not supported; use reverse mode. The modal operator's first-order rule is reverse-only: JAX raises (`can't apply forward-mode autodiff (jvp) to a custom_vjp function`), and so does `torch.func.jvp`, but PyTorch's `forward_ad` does not say so. Its rule is entered only when an input has `requires_grad`, which a forward-mode dual does not set, so the tangent of `R + T` comes back wrong without an error (−5.48e-6 against −7.35e-5 on dielectric disks at 81 harmonics). The inverse-rule floor itself supports forward mode (above), and `eps_conv_matrices()` of a shape layer is exact in it |
+| **`torch.func` transforms through `solve()`** (`torch.func.jvp`, `grad`, `jacrev`, `jacfwd`) | not supported: the eigensolve's `torch.autograd.Function` has no functorch rule, and PyTorch raises its own `setup_context` error there. Use `torch.autograd`, whose reverse mode and `forward_ad` both work ([Forward mode](#forward-mode)) |
+| **Second derivatives where a layer's modal operator moves under both** (`jax.hessian`, `jacfwd(jacrev)`, `jvp(grad)`, `create_graph=True`, PyTorch's mixed orders) | refused by name; the modal rule is first order. One parameter that moves no operator, such as a thickness, is not refused ([Forward mode](#forward-mode)) |
 
 One trap worth naming because it passes: **build the solver outside the trace.** A jit test
 that constructs the solver *inside* the traced function never flattens it as a pytree, so a

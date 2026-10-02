@@ -159,7 +159,7 @@ from collections import namedtuple
 import numpy as _np
 
 from . import overlap as _overlap
-from .backend import array_namespace, as_array, checked_float, j1, jinc, sinc
+from .backend import array_namespace, as_array, checked_float, forward_tangent, j1, jinc, sinc
 from .domain import as_material
 from .enums import near_match, quantity_note
 from .factorization import ConvMatrices, check_normal_grid, _nvf_assemble
@@ -2285,9 +2285,11 @@ def _static_float(v):
     Two refusals, and they are different. A JAX tracer cannot be converted at all, so ``float``
     raises on its own. A PyTorch tensor *can* be converted -- which is exactly the trap
     :func:`layer_needs_resolving` documents -- so one that carries ``requires_grad`` has to be
-    refused explicitly, or a sweep over it would be served a result built at the first value.
+    refused explicitly, or a sweep over it would be served a result built at the first value --
+    under either PyTorch mode, ``requires_grad`` or a ``forward_ad`` dual, which does not set it
+    (:func:`~wavebit._core.backend.forward_tangent`).
     """
-    if getattr(v, 'requires_grad', False):
+    if getattr(v, 'requires_grad', False) or forward_tangent(v):
         raise TypeError('a value under torch autograd is not a cache key')
     detach = getattr(v, 'detach', None)
     if detach is not None:
@@ -2297,7 +2299,7 @@ def _static_float(v):
 
 def _static_complex(v):
     """``v`` as a plain complex, with :func:`_static_float`'s two refusals -- for a material."""
-    if getattr(v, 'requires_grad', False):
+    if getattr(v, 'requires_grad', False) or forward_tangent(v):
         raise TypeError('a value under torch autograd is not a cache key')
     detach = getattr(v, 'detach', None)
     if detach is not None:
