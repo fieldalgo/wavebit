@@ -57,7 +57,7 @@ from typing import Any
 
 import numpy as np
 
-from .backend import array_namespace, as_array, checked_float
+from .backend import array_namespace, as_array, carries_autodiff, checked_float
 
 __all__ = ['DrawnOn', 'Lattice', 'as_lattice', 'meshgrid_xy', 'is_axis_aligned', 'jacobian',
            'order_kxy', 'periods_of', 'reduced_basis', 'reduction_transform', 'sample_grid']
@@ -320,10 +320,29 @@ class Lattice:
         assumed -- but to 1e-16 and not to the bit, since ``cos(pi/2)`` is 6.1e-17. Use
         :meth:`rectangular` where an exact diagonal is wanted, which is every case that does not
         have an angle to vary.
+
+        Any of the three can be the design variable, so the namespace is read off whichever of
+        the three carries a derivative (:func:`carries_autodiff`); a concrete array of another
+        framework is a number here, as it was. The namespace was the angle's alone, and a
+        traced length beside a plain angle took the NumPy branch:
+        ``np.stack`` refused a tensor under autograd and a JAX tracer, and converted a PyTorch
+        forward-mode dual to its primal, so ``hexagonal(a)`` of a dual ``a`` came back a constant
+        basis and its derivative zero, with no error.
         """
-        xp = array_namespace(angle) if not isinstance(angle, (int, float)) else np
-        a = as_array(xp, angle) if xp is not np else float(angle)
-        if xp is np and not (1e-9 < abs(float(np.sin(a))) ):
+        traced = [v for v in (lx, ly, angle) if carries_autodiff(v)]
+        if traced:
+            xp = array_namespace(*traced)
+        else:
+            xp = array_namespace(angle) if not isinstance(angle, (int, float)) else np
+        if xp is np:
+            a = float(angle)
+        elif traced and not any(v is angle for v in traced):
+            # A plain angle beside a traced length, in the length's precision: PyTorch would
+            # otherwise make it its default float32, and the cell single precision.
+            a = as_array(xp, angle, dtype=traced[0].dtype)
+        else:
+            a = as_array(xp, angle)
+        if isinstance(angle, (int, float)) and not (1e-9 < abs(float(np.sin(float(angle))))):
             raise ValueError(
                 f'Lattice.oblique: angle={angle!r} rad puts a1 and a2 on the same line, so the cell has no '
                 f'area. Use a value strictly between 0 and pi (np.radians(60) for a hex rhombus).')

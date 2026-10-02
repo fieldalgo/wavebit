@@ -279,6 +279,68 @@ def test_the_angle_itself_is_a_design_variable():
     assert np.isfinite(g) and abs(g) > 1e-12
 
 
+@pytest.mark.parametrize('backend', [1, 2])
+@pytest.mark.parametrize('which', ['hexagonal a', 'oblique lx', 'oblique ly'])
+def test_a_traced_length_beside_a_plain_angle_is_a_design_variable(which, backend):
+    """``oblique`` took its namespace from the angle alone, so a traced length beside a Python
+    angle went down the NumPy branch: ``np.stack`` raised for a JAX tracer and for a tensor under
+    autograd, and converted a PyTorch forward-mode dual to its primal -- a constant basis and a
+    zero derivative, silently. Now the basis is traced whichever argument is, and the length's
+    derivative is the closed form ``d[lx, ly cos; 0, ly sin]``; the plain angle is taken in the
+    length's precision, so the values are NumPy's."""
+    angle = np.radians(104.0)
+    build = {'hexagonal a': lambda x: wavebit.Lattice.hexagonal(x),
+             'oblique lx': lambda x: wavebit.Lattice.oblique(x, 420.0, angle),
+             'oblique ly': lambda x: wavebit.Lattice.oblique(420.0, x, angle)}[which]
+    angle = 2.0 * np.pi / 3.0 if which == 'hexagonal a' else angle
+    c, s = np.cos(angle), np.sin(angle)
+    exact = {'hexagonal a': [[1.0, c], [0.0, s]], 'oblique lx': [[1.0, 0.0], [0.0, 0.0]],
+             'oblique ly': [[0.0, c], [0.0, s]]}[which]
+    plain = np.asarray(build(400.0))
+    if backend == 1:
+        jax = pytest.importorskip('jax')
+        import jax.numpy as jnp
+        wavebit.enable_x64()
+        columns = lambda x: jnp.asarray(build(x).columns)
+        value, derivative = columns(jnp.asarray(400.0)), jax.jacfwd(columns)(jnp.asarray(400.0))
+        reverse = jax.jacrev(columns)(jnp.asarray(400.0))
+        np.testing.assert_array_equal(np.asarray(reverse), np.asarray(derivative))
+    else:
+        torch = pytest.importorskip('torch')
+        x = torch.tensor(400.0, dtype=torch.float64, requires_grad=True)
+        built = build(x)
+        assert built.axis_aligned is False
+        value = built.columns
+        derivative = torch.stack([torch.autograd.grad(value[i, j], x, retain_graph=True)[0]
+                                  for i in range(2) for j in range(2)]).reshape(2, 2)
+        value = value.detach()
+    np.testing.assert_allclose(np.asarray(value), plain, rtol=1e-15, atol=1e-12)
+    np.testing.assert_allclose(np.asarray(derivative), exact, rtol=1e-15, atol=1e-15)
+
+
+@pytest.mark.parametrize('spelling', ['torch', 'jax'])
+def test_a_concrete_length_of_another_framework_is_still_a_number(spelling):
+    """Only an argument that carries a derivative chooses ``oblique``'s namespace. A concrete
+    PyTorch or JAX scalar is a number, as it was before the namespace was read off the lengths:
+    ``hexagonal`` of one gives NumPy's basis to the bit, and a NumPy solve over it gives the bits
+    a Python float gives. Counting every non-NumPy array as traced kept the other framework's
+    array, and the NumPy solve over the PyTorch spelling then raised."""
+    if spelling == 'torch':
+        torch = pytest.importorskip('torch')
+        a = torch.tensor(400.0, dtype=torch.float64)
+    else:
+        pytest.importorskip('jax')
+        wavebit.enable_x64()
+        import jax.numpy as jnp
+        a = jnp.asarray(400.0)
+    plain = wavebit.Lattice.hexagonal(400.0)
+    other = wavebit.Lattice.hexagonal(a)
+    assert np.asarray(other.columns).tobytes() == np.asarray(plain.columns).tobytes()
+    eps = np.ones((16, 16))
+    eps[4:12, 5:11] = 4.0
+    assert _sum_t(other, eps, truncation=2) == _sum_t(plain, eps, truncation=2)
+
+
 def test_the_raster_path_differentiates_the_basis_through_its_index_offsets():
     """The distance transform runs on the host; only the pixel *choice* is held fixed.
 
