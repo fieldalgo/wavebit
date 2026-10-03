@@ -277,12 +277,23 @@ def _refuse_shaped_half_space(material, where):
 def _half_space_index(material, where='top'):
     """``sqrt(eps*mu)`` -- the one place a half-space material becomes an index.
 
-    **The branch is verified, not chosen.** A passive medium has ``Im(eps) >= 0`` in this
-    project's ``e^{-iwt}`` convention, so ``eps*mu`` lies in the closed upper half plane, whose
-    principal square root lies in the first quadrant: ``Im(n) >= 0``, which is loss again. That
-    is the same argument :func:`~wavebit._core.conventions.boundary_kz` rests on, and it is why
+    **The branch is verified, not chosen -- for a non-magnetic medium.** A passive permittivity
+    has ``Im(eps) >= 0`` in this project's ``e^{-iwt}`` convention, so it lies in the closed
+    upper half plane, whose principal square root lies in the first quadrant: ``Im(n) >= 0``,
+    which is loss again. That is the same argument
+    :func:`~wavebit._core.conventions.boundary_kz` rests on, and it is why
     :func:`~wavebit._core.domain.index_from_eps` -- which is the principal root and nothing
     else -- is already the right function here. No branch rule is invented.
+
+    A passive *magnetic* medium need not keep that. A magnetic metal, ``eps = -2+0.01j`` with
+    ``mu = 0.1+0.5j``, multiplies to ``-0.205-0.999j``, and its principal ``n = 0.638-0.783j``
+    reads as gain. No branch is decided on that ``n``: every ``kz`` is taken from
+    ``n**2 = eps*mu`` by ``boundary_kz``, and a real angle reaches ``kx`` through ``eps*mu``
+    too (``incident_phase_index``), so ``R`` and ``T`` are right
+    (``tests/test_negative_index_half_space.py::test_one_negative_real_part_is_not_refused``).
+    What reads it is the public ``n_top`` / ``n_bot``, and the formal ``kx = n*sin(theta)`` of
+    a complex angle. The case where the root itself would be wrong, a negative-index medium,
+    is refused (:func:`_refuse_negative_index_half_space`).
 
     ``mu`` multiplies in rather than being dropped: the index of a magnetic medium is
     ``sqrt(eps*mu)``, and every ``kz``, every Snell relation and the whole order grid are
@@ -300,9 +311,62 @@ def _half_space_index(material, where='top'):
     second line and multiplies by an exact one, so the two answers agree anyway.
     """
     _refuse_shaped_half_space(material, where)
+    _refuse_negative_index_half_space(material, where)
     if not material.is_magnetic:
         return index_from_eps(material.epsilon)
     return index_from_eps(material.epsilon * material.mu)
+
+
+def _refuse_negative_index_half_space(material, where):
+    """A negative-index half-space is refused: where it propagates, its root is the other one.
+
+    In a negative-index medium the wave that carries power away from the interface advances its
+    phase *toward* it. :func:`~wavebit._core.conventions.boundary_kz` sees only ``eps*mu``, and
+    for these media that product looks like an ordinary forward medium -- a passive pair such as
+    ``eps = -2+0.1j``, ``mu = -1+0.1j`` even multiplies to ``Im(eps*mu) < 0``, which reads as
+    gain. So the root it takes advances its phase away from the interface -- and, for that
+    passive pair, grows -- and the answer is finite and wrong: glass onto it at normal incidence
+    returns ``R = 929`` and ``T = -928`` against a true ``R = 0.0011``. Nothing downstream can
+    tell, since no result guard inspects ``R`` and ``T`` (``docs/result-guards.md``).
+
+    **Which media.** For a passive medium the root is wrong only where ``Re(kz**2) > 0`` and
+    ``Im(kz**2) < 0`` (a propagating root with ``Im(kz) > 0`` and ``Re(kz) < -Im(kz)``). With
+    ``Im(eps), Im(mu) >= 0`` the second needs one real part negative, and the first,
+    ``Re(eps*mu) > k_par**2 >= 0``, then needs the other negative too. So the refusal asks for
+    ``Re(eps) < 0``, ``Re(mu) < 0`` and ``Re(eps*mu) > 0``: a medium in which some order -- the
+    normal one at least -- propagates. It is decided on the material, not per order, so a scene
+    whose every order happens to have ``k_par**2 > Re(eps*mu)`` is refused too, though its
+    answer would be right. A pair so lossy that ``Re(eps*mu) <= 0`` propagates at no ``k_par``:
+    every root decays, Maystre's is the decaying one, and it is accepted
+    (``tests/test_negative_index_half_space.py::test_a_lossy_double_negative_is_solved``). An
+    active pair meeting the same test is refused as well; no root rule is established there.
+
+    A finite layer of the same medium is fine and is not touched: a layer keeps both roots, so
+    its scattering matrix does not depend on which one is labelled forward
+    (``tests/test_negative_index_half_space.py::test_a_negative_index_slab_matches_airy``).
+
+    Checked on the value, so it runs eagerly and under an un-jitted ``jax.grad`` and is skipped
+    under ``jax.jit``, where there is no value to read (:func:`~wavebit._core.backend._concrete`).
+    Only a named ``mu`` can be negative, so a non-magnetic medium never reaches the comparison.
+    ``solve_conv``'s own ``eps_top`` / ``mu_top`` / ``eps_bot`` / ``mu_bot`` are checked by
+    :func:`_refuse_negative_index_pair` too, since they need not be the scene's materials.
+    """
+    if material.is_magnetic:
+        _refuse_negative_index_pair(material.epsilon, material.mu, where)
+
+
+def _refuse_negative_index_pair(epsilon, mu, where):
+    """The value test of :func:`_refuse_negative_index_half_space`, on a bare ``(eps, mu)``."""
+    real = lambda v: getattr(v, 'real', v)
+    negative = _concrete((real(epsilon) < 0) & (real(mu) < 0) & (real(epsilon * mu) > 0))
+    if negative:
+        raise ValueError(
+            f'`{where}` is a negative-index half-space: Re(eps) < 0 and Re(mu) < 0, and '
+            'Re(eps*mu) > 0, so waves propagate in it. Such a wave advances its phase toward '
+            'the interface while its power flows away, and the half-space root takes the '
+            'opposite one, so the result would be finite and wrong. Put the medium in '
+            '`structure` as a layer -- a layer keeps both roots and is solved exactly -- with an '
+            'ordinary half-space beyond it.')
 
 
 def _recorded_lattice(normal_field_source):
@@ -3449,6 +3513,13 @@ class CoreFactorizationMixin:
                    epzx_conv_all=None, epzy_conv_all=None, mu=None,
                    mu_top=None, mu_bot=None, eps_top=None, eps_bot=None):
         """Solve kernel-frame matrices, as returned by the private Fourier builders."""
+        # Half-space terms handed in here need not be the scene's materials, which the setters
+        # already checked; a magnetic pair is held to the same negative-index refusal.
+        for where, n, epsilon, mu_side in (('top', self.n_top, eps_top, mu_top),
+                                           ('bot', self.n_bot, eps_bot, mu_bot)):
+            if mu_side is not None:
+                _refuse_negative_index_pair(n * n / mu_side if epsilon is None else epsilon,
+                                            mu_side, where)
         before = self._grating_type
         self._assign_grating_type()
         z_row = (epxz_conv_all, epyz_conv_all, epzx_conv_all, epzy_conv_all)

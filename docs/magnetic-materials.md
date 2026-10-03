@@ -181,6 +181,21 @@ admittance is caught without fmmax being trusted at all.
 `eps = 0.5, mu = 2.0`: index-matched to vacuum, impedance-mismatched. A boundary carrying only
 `n` sees no interface and returns `R = 0`. The answer is 0.111.
 
+**A refusal for a negative-index half-space.** `boundary_kz` reads only `eps*mu`, and when both
+real parts are negative and the medium propagates (`Re(eps*mu) > 0`) that product looks like
+an ordinary forward medium, so the half-space root advances its phase away from the interface,
+the wrong way for this medium. Glass onto `eps = -2+0.1i`, `mu = -1+0.1i` returned `R = 929`
+against a true `0.0011`, and the closed form above is how that was measured. Since 2026-10-03
+such a half-space is refused where it is set, and so are `solve_conv`'s own half-space terms.
+A pair too lossy to propagate (`Re(eps*mu) <= 0`, such as `eps = mu = -1+1.2i`) keeps the
+decaying root, which is the right one, and is accepted. The refused pair as a layer keeps both
+roots and matches the Airy formula to `1e-12` (`tests/test_negative_index_half_space.py`).
+
+**One index that reads as gain.** A passive magnetic medium can multiply to `Im(eps*mu) < 0`
+with one real part negative: `eps = -2+0.01i`, `mu = 0.1+0.5i` gives `n_bot = 0.638-0.783i`.
+Nothing decides a branch on that `n`; every `kz` comes from `n**2`, and `R` and `T` match the
+closed form. Only the public `n_top` / `n_bot` and a complex angle's formal `kx` read it.
+
 **Reciprocity** for the backside mirror, where `mu_top` and `mu_bot` must swap (the kernels'
 backside: public bottom incidence when this was written, public top incidence since
 2026-09-21; comparing the two sides reaches it either way). Transmittance is

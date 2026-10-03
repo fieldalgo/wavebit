@@ -43,7 +43,7 @@ Explained in [Describing a scene](../guide/scene.md).
 | --- | --- | --- |
 | `structure` | `None` | the layers. An `ndarray` of shape `(n_layers, Ny, Nx)` is a **raster** of relative permittivity; a `list` of `dict(background=..., shapes=[...])` is the **parametric** path |
 | `thickness` | `(0.,)` | one length per layer, same unit as `period` |
-| `top` | `1.` | superstrate material — a `Material`, or a bare relative permittivity |
+| `top` | `1.` | superstrate material — a `Material`, or a bare relative permittivity. A negative-index pair (`Re(eps) < 0`, `Re(mu) < 0` and `Re(eps*mu) > 0`, so it propagates) is refused: its half-space root is the other one; put it in a layer |
 | `bot` | `1.` | substrate, read the same way |
 | `mu` | `None` | **raster path only**: the permeability field, `(n_layers, Ny, Nx)`, beside `structure`. On the shape paths a permeability belongs to each `Material`, so naming it here is refused |
 

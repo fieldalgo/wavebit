@@ -277,7 +277,9 @@ For a positive-index lossless incident medium, `b=0` and `a>0`, giving
 `N=sqrt(epsilon_r*mu_r)` and the usual angle formula exactly. The absorbing
 phase-angle definition requires `abs(theta) < pi/2`; its wavevector diverges at
 grazing. The formula describes inward phase propagation; negative-index
-half-space branch selection is a separate unsupported case.
+half-space branch selection is a separate unsupported case. A half-space with `Re(eps) < 0`,
+`Re(mu) < 0` and `Re(eps*mu) > 0` is refused where it is set; the same medium as a layer is
+solved exactly ([`result-guards.md`](result-guards.md) §2).
 
 An angle with a **nonzero imaginary part** retains the formal
 `kx/k0 = n*sin(theta)*cos(phi)`, `ky/k0 = n*sin(theta)*sin(phi)`

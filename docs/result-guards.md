@@ -8,6 +8,8 @@ Targets:
 - `wavebit/_core/backend.py::check_finite` — the one result guard that survives
 - `wavebit/_core/solve_1d.py::final_matching` — where it runs on the 1D path
 - `wavebit/_core/scattering.py` — where it runs on the 2D path
+- `wavebit/_core/engine.py::_refuse_negative_index_half_space` — the one input the removed
+  check flagged that no test covered, now refused where it is set
 - `tests/test_fp_warnings.py` — the unit-level contract
 - `tests/test_rayleigh_guard.py` — the end-to-end case it was written for
 - `tests/test_lossy_media.py` — the closed-form tests that replaced it where it caught defects
@@ -73,6 +75,16 @@ on an absorbing medium: the substrate tests compared only `R`, and the builder t
 indices, where `conj(n)**2 == n**2`. What ended it is a closed-form test per path, the Airy
 answer of an absorbing stack through each, at `1e-12`. A closed form also catches a wrong
 answer below one, which `check_physical` never could.
+
+One input it flagged had no test at all: a **negative-index half-space** (`Re(eps) < 0`,
+`Re(mu) < 0`, and `Re(eps*mu) > 0` so that it propagates). The half-space root reads only
+`eps*mu`, and for these media it takes the root that advances its phase away from the
+interface, which is the wrong one. Glass onto
+`eps = -2+0.1i`, `mu = -1+0.1i` returned `R = 929`, `T = -928` at normal incidence against a
+true `0.0011`. Since the removal that half-space is refused where it is set
+(`wavebit/_core/engine.py::_refuse_negative_index_half_space`), and
+`tests/test_negative_index_half_space.py` pins both the refusal and its advice: the same medium
+as a layer keeps both roots and matches the Airy formula to `1e-12`.
 
 ## 3. What replaces it
 
