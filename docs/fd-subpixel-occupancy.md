@@ -3002,3 +3002,33 @@ files are under `before_final/`). Counts and timings are in
 `studies/results/fdtd_traced_substrate_validation.json`, the runner is
 `studies/fdtd_traced_substrate_validation.py`, and the raw logs are under
 `studies/results/fdtd_traced_substrate_controls/`.
+
+### The metasurface against RCWA (C7, 2026-10-03)
+
+C7 asked whether the public path -- every default, the split junction under a pillar flush on
+its substrate -- gives `wavebit.rcwa`'s diffraction orders for periodic metasurface cells under
+oblique and conical plane waves, and converges to them at second order. The protocol was
+registered before the campaign ran, after two adversarial reviews; the full record is
+[`fd-metasurface-validation.md`](fd-metasurface-validation.md).
+
+**C7 does not pass under that rule.** The epsilon-4 cylinder cell (eight orders) passes both
+polarisations at orders 1.84 to 1.97, every one of its 72 cells consistent with RCWA. The
+epsilon-12 box under conical incidence agrees with RCWA in all 54 cells but converges at
+orders 1.51 to 1.75, under the 1.8 line. The epsilon-5.8 cylinder fails in one cell of 27 for
+p -- a cross-polarised amplitude zero by symmetry, where the grid's leak (2.7e-4 at 100 cells
+per wavelength) falls slower than second order -- and its s efficiencies outran their RCWA
+reference, so that pair is not judgeable. The junction campaign's cylinders had converged at
+1.73 to 1.74 under the same statistic; this time the cylinders passed and the box did not, and
+the campaign does not say which of the box's creases, its junction rim or the conical incidence
+holds its order down. That is the next measurement.
+
+**Validation.** No production source changed in C7 (fd source SHA-256
+`50574088a3e1e766f334890bcbbd5dbd5ad1dc600c9469766f65d63c949832d9`, the tree of `273514f4`).
+The full fd/docs tier collected 2753 cases and exited 0 with 2745 passed and 8 skipped
+(2123.80 seconds); the separate slow tier collected and passed all 81 cases, the new M3 test
+among them, exit 0 (1120.79 seconds). Reported totals match collection, with no INTERNALERROR
+or worker crash. The four read-only freezers reproduced all 143/288/140/570 committed arrays
+bit for bit; no golden was rewritten. `ruff check .` (0.16.2) and `sphinx-build -W` pass.
+Counts and timings are in `studies/results/fdtd_metasurface_validation.json`, the runner is
+`studies/fdtd_metasurface_validation.py`, and the raw logs are under
+`studies/results/fdtd_metasurface_controls/`.
