@@ -7,6 +7,11 @@ to and including "Where the code has to change" records the state **before** the
 "Stage" sections record the fix. Probe scripts, raw outputs and run logs were not committed;
 the numbers quoted here are the record.
 
+**2026-10-03:** `check_physical` and `UnphysicalResultWarning`, which several sections below
+fix or describe, were removed afterwards; see [`result-guards.md`](result-guards.md). The power
+quantities this audit set up (`power_entering`, the NaN for a complex transverse wavevector)
+are unchanged.
+
 Targets:
 - `wavebit/_core/power.py` — `wave_power`, `net_power`, `incident_power`, `transverse_k_is_real`
 - `wavebit/_core/conventions.py` — `incident_phase_index`
@@ -167,7 +172,7 @@ paths' `r_p` amplitudes agree within `1e-12`.
    a complex incidence medium. The true incident power has to be computed from the E/H
    amplitudes and the per-polarization admittance. At a complex incidence angle the s/p
    weighting needs checking too.
-3. `backend.py::check_physical` skips the power check when the incident index is complex. The
+3. `check_physical` (removed 2026-10-03) skipped the power check when the incident index is complex. The
    general absorbing-incidence cases reproduced above returned values with no warning.
 4. In `engine.py::_incident_kxy`, a complex refractive index times a real incidence angle makes
    the transverse wavevector complex too. That is an incident wave whose intensity also varies

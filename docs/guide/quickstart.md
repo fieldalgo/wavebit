@@ -53,10 +53,9 @@ The direct amplitude properties read `result.incident`, the response to the actu
 incident state. For example, `result.r_s` is the same array as `result.incident.r_s`.
 
 Every eager NumPy solve also checks what it hands back: a NaN or infinity raises
-`FloatingPointError` naming the contaminated array, and a finite result that cannot be physical
-warns `UnphysicalResultWarning`. The power check compares transmission with net entering
-power. If you are modelling gain (`Im(eps) < 0` here), negative absorption is expected
-and that warning can be a false positive — filter that category.
+`FloatingPointError` naming the contaminated array. There is deliberately no generic
+"`R + T` above one" warning, because that can be the right answer for a medium with gain
+(`Im(eps) < 0` here) — see [`result-guards.md`](../result-guards.md).
 
 ## What to read next
 

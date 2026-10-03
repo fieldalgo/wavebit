@@ -1026,9 +1026,8 @@ def _check_polar_angle(theta):
 
     Angles here are **radians**, and nothing in the arithmetic objects to being handed
     degrees: ``theta=10`` is 573 degrees, and the solver returns finite numbers for it that
-    conserve no energy. Worse, they look like absorption, so the solver's own physical check
-    passes them — it declines to flag ``R + T < 1`` precisely because a lossy stack does that
-    legitimately, and it cannot tell the two apart.
+    conserve no energy. Worse, they look like absorption: ``R + T < 1`` is what a lossy stack
+    does legitimately, so nothing in the result can tell the two apart.
 
     Nothing downstream can catch this, so it is caught here. A polar angle at or beyond
     pi/2 is light arriving from behind the stack, so the bound costs no legitimate use.

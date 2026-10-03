@@ -63,7 +63,7 @@ from typing import NamedTuple
 
 import numpy as np
 
-from .backend import _device_of, array_namespace, as_array, check_finite, check_physical
+from .backend import _device_of, array_namespace, as_array, check_finite
 from .conventions import boundary_kz, order_azimuth, order_frame_sign
 from .enums import Answers, answers_of
 from .conventions import incident_column
@@ -682,7 +682,6 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
         / incoming_power, kx)
 
     check_finite(xp, de_ri=de_ri, de_ti=de_ti)
-    check_physical(xp, de_ri, de_ti, n_ref, power_entering=entering)
 
     if not answers.covers(Answers.AMPLITUDE):
         return de_ri, de_ti, entering
@@ -822,8 +821,6 @@ def _sp_scattering_result(xp, C, S, kx, ky, kz_top, kz_bot, n_top, n_bot,
         xp, xp.sum(flux, axis=(-2, -1)) / xp.stack(powers), kx, ky)
 
     check_finite(xp, de_ri=eff[0][0] + eff[1][0], de_ti=eff[2][0] + eff[3][0])
-    check_physical(xp, eff[0][0] + eff[1][0], eff[2][0] + eff[3][0], n_ref,
-                   power_entering=entering[0])
 
     if not keep_amplitude:
         return (eff[0][0] + eff[1][0], eff[2][0] + eff[3][0], entering[0]), c_inc

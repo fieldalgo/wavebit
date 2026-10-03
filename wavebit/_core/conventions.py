@@ -948,9 +948,9 @@ def reject_complex_angle(psi, message=None):
     one, and it was wrong in a way nothing downstream could catch. ``(sin(psi), cos(psi))``
     is a unit pair only for real ``psi``; for ``Im(psi) = b`` the incident flux comes out
     ``cosh(2b)``, so every efficiency is scaled by a factor the solver never applied.
-    On a lossless stack ``R + T > 1`` raises ``UnphysicalResultWarning``, but an absorbing
-    one absorbs the discrepancy: a measured case returned ``R + T = 0.998`` where the
-    right answer was ``0.647``, with no warning anywhere.
+    Nothing downstream reads the discrepancy: a measured case returned ``R + T = 0.998``
+    where the right answer was ``0.647``, which is an ordinary absorbing number. Refusing
+    the input here is the only place it can be caught.
 
     Nor does it buy the states it looks like it should. ``a_s/a_p = tan(psi)``, and
     ``tan(z) = ±i`` reduces to ``exp(±iz) = 0``, which has no solution — the circular

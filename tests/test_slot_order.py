@@ -6,8 +6,9 @@ here rather than left to each builder's docstring because the failure is silent.
 ``solve_conv`` took ``(epx, epy, epz_i, epxy, epyx)``; splatting one into the other put the
 inverted zz matrix in the ``epxy`` slot, and the solve answered with a full set of plausible
 efficiencies rather than raising. On a lossless passive pillar it returned ``R + T = 1.61``
-where the same structure gives ``1.0000000000`` -- only ``UnphysicalResultWarning`` fired, and
-the three-slot builders splatted correctly the whole time, which is what made it a trap.
+where the same structure gives ``1.0000000000`` -- and the three-slot builders splatted
+correctly the whole time, which is what made it a trap. The energy assertion below is what
+catches it; the generic result warning that also fired at the time has since been removed.
 
 ``solve_conv``'s order is the fixed one: ``epz_i`` is required (it eliminates ``E_z`` on
 every solve) and the off-diagonal pair defaults to ``None``, so Python cannot take ``epz_i``
@@ -33,8 +34,6 @@ what :class:`~wavebit._core.factorization.ConvMatrices` is for: reaching a singl
 Oracle tier: **physics** (energy on a lossless passive layer), plus a structural identity and a
 declaration check. None is a golden -- nothing here compares the code to its own past output.
 """
-import contextlib
-import warnings
 
 import numpy as np
 from wavebit._core.lattice import as_lattice
@@ -43,18 +42,6 @@ import pytest
 import wavebit
 from wavebit._core import parametric as _parametric
 from wavebit._core import factorization as _fac
-
-
-@contextlib.contextmanager
-def _no_unphysical_warning():
-    """``UnphysicalResultWarning`` promoted to an error for the duration of the solve.
-
-    That warning is what the shipped code emits when R + T leaves 1. Letting it pass while
-    asserting on the number would be checking the same thing twice and reporting it once.
-    """
-    with warnings.catch_warnings():
-        warnings.simplefilter('error', wavebit.UnphysicalResultWarning)
-        yield
 
 
 GRID, MAX_ORDER = 48, 4
@@ -143,8 +130,7 @@ def test_a_splatted_builder_conserves_energy(name):
     slots = BUILDERS[name]()
     assert len(slots) == 5, f'{name} returned {len(slots)} slots'
 
-    with _no_unphysical_warning():
-        res = wavebit.rcwa(truncation_order=[MAX_ORDER, MAX_ORDER], **KW)._solve_conv(*slots)
+    res = wavebit.rcwa(truncation_order=[MAX_ORDER, MAX_ORDER], **KW)._solve_conv(*slots)
 
     total = float(np.asarray(res.incident.R).sum() + np.asarray(res.incident.T).sum())
     assert abs(total - 1.0) < 1e-6, (

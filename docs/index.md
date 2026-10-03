@@ -43,8 +43,8 @@ generated from the docstrings.
 :link: decisions/index
 :link-type: doc
 
-Why a default is what it is, and what was measured to decide it. Twenty-six write-ups, cited
-from the code they explain.
+Why a default is what it is, and what was measured to decide it: the write-ups, cited from
+the code they explain.
 :::
 
 ::::

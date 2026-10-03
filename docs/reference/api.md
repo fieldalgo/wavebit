@@ -156,8 +156,6 @@ See [Materials and wavelength sweeps](../guide/materials.md) for assignment and 
 ```{eval-rst}
 .. autofunction:: wavebit.enable_x64
 
-.. autoclass:: wavebit.UnphysicalResultWarning
-   :members:
 
 .. autoclass:: wavebit.PrecisionLossWarning
    :members:

@@ -127,6 +127,7 @@ subtrees:
       - file: connecting-algorithms
       - file: what-a-solve-answers
       - file: multimode-incidence
+      - file: result-guards
     - caption: Numerical conventions
       entries:
       - file: amplitude-sp-frame

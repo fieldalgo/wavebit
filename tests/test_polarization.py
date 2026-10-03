@@ -346,9 +346,9 @@ def test_complex_psi_is_refused(backend):
 
     ``(sin(psi), cos(psi))`` is unit only for real ``psi``; with ``Im(psi) = b`` the incident
     flux becomes ``cosh(2b)`` and the ``psi`` path does not normalize it away (it has nothing
-    to normalize for a real angle). A lossless stack then trips ``UnphysicalResultWarning``,
-    but an absorbing one hides it — the case below returned ``R + T = 0.998`` where the right
-    answer was 0.647.
+    to normalize for a real angle). Nothing downstream can see it — the case below returned
+    ``R + T = 0.998`` where the right answer was 0.647, which is an ordinary absorbing
+    number. Refusing the input is the only place it is catchable.
     """
     for bad in (0.7 + 0.5j, 1j, complex(0, 1e-12)):
         with pytest.raises(ValueError, match='psi must be a real angle'):

@@ -469,8 +469,8 @@ def test_degrees_where_radians_belong_are_refused():
     """The trap this rule exists for: nothing downstream can catch it.
 
     A polar angle of 10 makes the solver return finite numbers that conserve no energy, and
-    they look like absorption — which the solver's physical check deliberately permits,
-    since a lossy stack does exactly that. So the only place it can be caught is here.
+    they look like absorption, which a lossy stack does legitimately. So the only place it can
+    be caught is here.
     """
     with pytest.raises(SpecError, match=r'RADIANS'):
         JobSpec.from_dict({**BINARY_GRATING,

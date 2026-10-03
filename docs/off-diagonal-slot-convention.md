@@ -458,8 +458,10 @@ put `epz_i` in the `epxy` slot. (The recipe above uses the private door for the 
 builder's corner-frame output; this history concerns the unchanged slot order.) Nothing
 raised. On a lossless passive pillar it returned a full
 set of plausible efficiencies summing to `R + T = 1.61`, against `1.0000000000` for the same
-structure solved properly — only `UnphysicalResultWarning` fired. The same idiom was correct for
-the three-slot isotropic builders throughout, which is what made it a trap rather than a mistake.
+structure solved properly — only a generic result warning fired, and that warning has since been
+removed ([`result-guards.md`](result-guards.md)); `tests/test_slot_order.py` asserts the energy
+directly instead. The same idiom was correct for the three-slot isotropic builders throughout,
+which is what made it a trap rather than a mistake.
 
 It had already been found once, inside `factorization.py`: `pn_mu_conv_matrices` existed solely
 to swap the two groups on the way to `layer_modes_2d`, its docstring describing the identical

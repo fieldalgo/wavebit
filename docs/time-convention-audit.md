@@ -389,8 +389,10 @@ were on real indices, so agreeing proved nothing about this. The same blind-spot
 parametric path had before `test_absorbing_layer_via_the_parametric_path` was written, and the
 same shape as the NVF goldens all being 1D or square-pixel.
 
-`check_physical` *does* fire here (`R + T > 1` on a real `n_top`), as a warning. It is the
-only thing that did.
+The generic result warning of the day *did* fire here (`R + T > 1` on a real `n_top`), and it
+was the only thing that did. That warning has since been removed — it could not tell this case
+from a structure that legitimately amplifies, and fired on both. See
+[`result-guards.md`](result-guards.md).
 
 ### And one sentence of residue in prose
 

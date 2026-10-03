@@ -6,7 +6,6 @@ convention under complex materials, analytic formulas vs a fine midpoint DFT, ax
 equivalence with the raster-NVF path, energy conservation, cross-backend agreement,
 differentiability, and the convergence advantage over the staircase path.
 """
-import warnings
 
 import numpy as np
 import pytest
@@ -18,7 +17,6 @@ from wavebit._core.parametric import (
     shape_ft as _shape_ft, conv_matrix_2d as _conv_matrix_2d,
     assemble_eps_coeffs as _assemble_eps_coeffs, normal_vector_field_analytical as _nvf_analytic,
     _sampled_coeffs)
-from wavebit._core.backend import UnphysicalResultWarning
 from wavebit._core.factorization import fourier2d_pointwise as _pointwise
 
 
@@ -276,9 +274,8 @@ def test_metal_rod_absorbs_end_to_end(psi):
 
     The coefficient test above pins the material convention; this pins that nothing
     downstream undoes it.
-    ``conj(n)**2`` turned this rod into a gain medium, and a passive stack that returns
-    ``R + T > 1`` is exactly what ``check_physical`` exists to catch — so the warning being
-    absent is as much the assertion as the number is.
+    ``conj(n)**2`` turned this rod into a gain medium, which the upper bound on ``total``
+    below is what refuses: a rod that amplifies leaves the asserted band upward.
 
     Why this rather than a comparison against the same rod rastered: the two NVF schemes do not
     agree closely for a metal. Their gap here is ~3e-3 on ``sum(T)`` at ``truncation_order=8`` and does
@@ -295,11 +292,9 @@ def test_metal_rod_absorbs_end_to_end(psi):
                                                    lx=L * P, ly=L * P, angle=0.0,
                                                    material=EPS_METAL)])]
 
-    with warnings.catch_warnings():
-        warnings.simplefilter('error', UnphysicalResultWarning)
-        res = wavebit.rcwa(backend=0, structure=structure, psi=psi, top=1.0, bot=2.25,
-                             theta=0.35, phi=0.4, period=(P, P), wavelength=0.777,
-                             thickness=(0.25,), truncation_order=(8, 8)).solve()
+    res = wavebit.rcwa(backend=0, structure=structure, psi=psi, top=1.0, bot=2.25,
+                         theta=0.35, phi=0.4, period=(P, P), wavelength=0.777,
+                         thickness=(0.25,), truncation_order=(8, 8)).solve()
 
     total = float(np.sum(np.asarray(res.R)).real + np.sum(np.asarray(res.T)).real)
     assert 0.5 < total < 0.95, total       # absorbing, and absorbing by a visible margin

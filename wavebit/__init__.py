@@ -84,7 +84,7 @@ def enable_x64():
 from .main import rcwa
 from ._core.backend import (AutoDetuneWarning, AxisNameWarning, ComplexIncidenceWarning,
                             PrecisionLossWarning, RayleighPointWarning,
-                            UnphysicalResultWarning, UnresolvedBranchWarning,
+                            UnresolvedBranchWarning,
                             get_j1_implementation, set_j1_implementation)
 from ._core.draw import plot_structure, slice_structure
 from ._core.enums import (Answers, Backend, Tetm, FourierCoefficients, Factorization,
@@ -141,7 +141,7 @@ __all__ = [
     'enable_x64',
     'AutoDetuneWarning',
     'AxisNameWarning', 'ComplexIncidenceWarning', 'PrecisionLossWarning', 'RayleighPointWarning',
-    'UnphysicalResultWarning', 'UnresolvedBranchWarning',
+    'UnresolvedBranchWarning',
     'get_j1_implementation', 'set_j1_implementation',
     'plot_structure', 'slice_structure',
     'Answers', 'Backend', 'Tetm', 'FourierCoefficients', 'Factorization', 'Formulation',

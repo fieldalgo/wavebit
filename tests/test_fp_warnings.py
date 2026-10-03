@@ -21,8 +21,8 @@ What this file pins:
   factorizations, the parametric builder, field reconstruction — which is what the version floor
   buys and would catch a regression to a broken NumPy;
 * the result is right, checked by energy conservation rather than a frozen number;
-* contamination is loud, in two tiers: a non-finite efficiency raises, and a finite but
-  physically impossible one warns. Both point at the structure rather than at the arithmetic.
+* contamination is loud where it announces itself: a non-finite efficiency raises, pointing
+  at the structure rather than at the arithmetic.
 """
 import pathlib
 import warnings
@@ -31,10 +31,8 @@ import numpy as np
 import pytest
 
 import wavebit
-from wavebit._core.backend import (PrecisionLossWarning, UnphysicalResultWarning,
-                                     UnresolvedBranchWarning,
-                                     array_namespace, check_finite,
-                                     check_physical)
+from wavebit._core.backend import (PrecisionLossWarning, UnresolvedBranchWarning,
+                                     array_namespace, check_finite)
 from wavebit._core.solve_1d import final_matching
 
 # The messages NumPy emits for the FP status flags. Anything else a solve warns about is a
@@ -225,99 +223,6 @@ def test_finiteness_guard_fires_from_the_solve_path():
                        ky=np.zeros(1, dtype=C))
 
 
-# --- tier 2: finite, but not a physical result ----------------------------------------------
-
-def _physical(R, T, n_top=1.0):
-    """Run the plausibility check, returning the warnings it emitted.
-
-    ``n_top`` and not ``top``: :func:`check_physical` is a core function, and there the
-    quantity genuinely is a refractive index -- it normalises the incident power. Only the
-    public boundary flipped to permittivity.
-    """
-    xp = array_namespace(np.zeros(1))
-    with warnings.catch_warnings(record=True) as rec:
-        warnings.simplefilter('always')
-        check_physical(xp, np.asarray(R), np.asarray(T), n_top)
-    return [r for r in rec if issubclass(r.category, UnphysicalResultWarning)]
-
-
-def test_physical_check_passes_a_lossless_result():
-    assert _physical([0.4, 0.1], [0.5]) == []
-
-
-def test_physical_check_allows_absorption():
-    """``R + T < 1`` is just a lossy stack — never a complaint."""
-    assert _physical([0.1, 0.05], [0.2]) == []
-
-
-def test_physical_check_warns_on_negative_efficiency():
-    w = _physical([0.6, -0.2], [0.5])
-    assert len(w) == 1
-    assert 'negative' in str(w[0].message)
-
-
-def test_physical_check_warns_on_gain_from_a_passive_stack():
-    w = _physical([0.9, 0.4], [0.5])
-    assert len(w) == 1
-    assert 'above 1' in str(w[0].message)
-
-
-def test_physical_check_reports_both_problems_at_once():
-    w = _physical([1.6, -0.2], [0.5])
-    assert len(w) == 1
-    assert 'negative' in str(w[0].message) and 'above 1' in str(w[0].message)
-
-
-def test_physical_check_tolerates_roundoff():
-    """A lossless solve lands on 1 to ~1e-14; that must never warn."""
-    assert _physical([0.5 + 1e-14], [0.5]) == []
-
-
-def test_physical_check_needs_net_entering_power_for_an_absorbing_superstrate():
-    """Without interference, R and T alone cannot determine the absorption balance."""
-    assert _physical([0.9, 0.4], [0.5], n_top=1.0 + 0.3j) == []
-
-
-def test_physical_check_uses_net_entering_power_for_an_absorbing_superstrate():
-    xp = array_namespace(np.zeros(1))
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter('always')
-        check_physical(xp, np.array([.054]), np.array([.984]), 1.5 + .3j,
-                       power_entering=np.array(.984))
-    assert not caught  # R+T > 1 does not imply gain at this absorbing interface.
-    with pytest.warns(UnphysicalResultWarning, match='net entering'):
-        check_physical(xp, np.array([.054]), np.array([.99]), 1.5 + .3j,
-                       power_entering=np.array(.984))
-
-
-def test_physical_warning_message_carries_no_numbers():
-    """Constant text is what lets the default filter collapse a sweep into one report."""
-    a = str(_physical([0.9, 0.4], [0.5])[0].message)
-    b = str(_physical([2.7, 0.4], [0.9])[0].message)
-    assert a == b
-
-
-def test_physical_warning_can_be_escalated_to_an_error():
-    xp = array_namespace(np.zeros(1))
-    with warnings.catch_warnings():
-        warnings.simplefilter('error', UnphysicalResultWarning)
-        with pytest.raises(UnphysicalResultWarning):
-            check_physical(xp, np.array([0.9, 0.4]), np.array([0.5]), 1.0)
-
-
-def test_warning_category_is_exported():
-    """Filtering it is a user-facing action, so the name has to be reachable."""
-    assert wavebit.UnphysicalResultWarning is UnphysicalResultWarning
-
-
-def test_healthy_solves_emit_no_unphysical_warning():
-    with warnings.catch_warnings(record=True) as rec:
-        warnings.simplefilter('always')
-        wavebit.rcwa(backend=0, structure=_structure_2d(), thickness=[600], period=[700, 700],
-                       wavelength=WL, truncation_order=[8, 8], psi=0.0, bot=EPS_SI).solve()
-    assert [r for r in rec if issubclass(r.category, UnphysicalResultWarning)] == []
-
-
 # --- the line is concreteness, not the namespace ---------------------------------------------
 #
 # These two used to assert the opposite: that both guards were no-ops on anything that was not
@@ -334,8 +239,6 @@ def test_guards_read_eager_jax_values():
     xp = array_namespace(jnp.zeros(1))
     with pytest.raises(FloatingPointError):
         check_finite(xp, R=jnp.asarray([np.nan]))
-    with pytest.warns(UnphysicalResultWarning):
-        check_physical(xp, jnp.asarray([9.0]), jnp.asarray([9.0]), 1.0)
 
 
 def test_guards_read_eager_torch_values():
@@ -343,8 +246,6 @@ def test_guards_read_eager_torch_values():
     xp = array_namespace(torch.zeros(1))
     with pytest.raises(FloatingPointError):
         check_finite(xp, R=torch.tensor([float('nan')]))
-    with pytest.warns(UnphysicalResultWarning):
-        check_physical(xp, torch.tensor([9.0]), torch.tensor([9.0]), 1.0)
 
 
 def test_guards_step_aside_for_a_jit_tracer():
@@ -362,23 +263,18 @@ def test_guards_step_aside_for_a_jit_tracer():
     def f(x):
         xp = array_namespace(x)
         check_finite(xp, R=x)
-        check_physical(xp, x, x, 1.0)
         return jnp.sum(x)
 
-    with warnings.catch_warnings(record=True) as rec:
-        warnings.simplefilter('always')
-        out = jax.jit(f)(jnp.asarray([np.nan, 9.0]))
+    out = jax.jit(f)(jnp.asarray([np.nan, 9.0]))
     assert np.isnan(float(out))
-    assert [r for r in rec if issubclass(r.category, UnphysicalResultWarning)] == []
 
 
-# --- tier three: a branch decided from round-off ---------------------------------------------
+# --- the other tier: a branch decided from round-off ---------------------------------------------
 #
-# check_finite catches contamination that announces itself, check_physical catches a finite
-# result that cannot be physical. Both read the *result*. This tier reads the arithmetic: a
-# sqrt branch is a discrete choice, and at complex64 the quantity it is taken from is often
-# pure round-off. The answer stays finite and stays physical (the degenerate case is perfectly
-# unitary), so neither tier above it fires. See docs/branch-cuts.md.
+# check_finite catches contamination that announces itself, and it reads the *result*. This
+# tier reads the arithmetic: a sqrt branch is a discrete choice, and at complex64 the quantity
+# it is taken from is often pure round-off. The answer stays finite (the degenerate case is
+# perfectly unitary), so the tier above it does not fire. See docs/branch-cuts.md.
 
 #: A 1/5 index grating, written as its permittivities: 1 and 25.
 _BRANCH_STRUCTURE = np.array([[[0, 1, 0, 1, 1, 1]]]) * 24 + 1
@@ -603,7 +499,7 @@ def test_a_weak_absorber_at_a_complex_angle_holds_at_single_precision(algorithm)
     assert _branch_error(algorithm, **weak) < 1e-5
 
 
-# --- tier four: a value that arrived below the precision it was asked to be solved at --------
+# --- a value that arrived below the precision it was asked to be solved at --------------------
 
 def _precision_warnings(theta, backend=0, complex_dtype=0):
     with warnings.catch_warnings(record=True) as rec:
