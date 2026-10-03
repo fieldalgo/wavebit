@@ -3020,7 +3020,10 @@ per wavelength) falls slower than second order -- and its s efficiencies outran 
 reference, so that pair is not judgeable. The junction campaign's cylinders had converged at
 1.73 to 1.74 under the same statistic; this time the cylinders passed and the box did not, and
 the campaign does not say which of the box's creases, its junction rim or the conical incidence
-holds its order down. That is the next measurement.
+holds its order down. A registered follow-up (`studies/fdtd_metasurface_corners.py`) ruled out the
+first suspect, the corners' field singularity: M3's cross-section as a ridge converged at second
+order from 40 to 320 cells per wavelength at epsilon 12 and 4 alike, where the corner exponents
+predicted 1.37 to 1.61. What lowers M3's order is three-dimensional.
 
 **Validation.** No production source changed in C7 (fd source SHA-256
 `50574088a3e1e766f334890bcbbd5dbd5ad1dc600c9469766f65d63c949832d9`, the tree of `273514f4`).

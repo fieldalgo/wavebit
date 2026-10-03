@@ -2,7 +2,8 @@
 
 Written: 2026-10-03
 
-Targets: `studies/fdtd_metasurface_rcwa.py`, `studies/fdtd_metasurface_mutations.py`,
+Targets: `studies/fdtd_metasurface_rcwa.py`, `studies/fdtd_metasurface_corners.py`,
+`studies/fdtd_metasurface_mutations.py`,
 `tests/test_fd_metasurface.py`, `tests/references/fd_metasurface_rows.json`,
 `wavebit/fd/_post.py`, `wavebit/fd/_assemble.py`, `wavebit/fd/monitors.py`,
 `docs/guide/fd-metasurface.md`.
@@ -34,6 +35,11 @@ than 8e-7, JAX and Torch within 1e-14 of NumPy, `sum R + sum T` within about 1e-
 and shift instruments within 2e-11, the protocol the registered one. The prediction stated
 before the data -- the cylinders, at the junction campaign's 1.73-1.74, might fail criterion 3
 -- did not come true; the box did.
+
+**The first suspect for M3, the corners' field singularity, is ruled out** at the resolutions
+these runs use: a registered follow-up ran M3's cross-section as a ridge, whose only corners are
+its edges, and it converged at second order from 40 to 320 cells per wavelength at epsilon 12
+and 4 alike ("Is it the corners?" below). What lowers M3's order is three-dimensional.
 
 ## The question
 
@@ -231,7 +237,8 @@ discretisation converges at first order: the candidates are the box's creases (i
 and top edges, where the cross terms take the nearest surface's normal as a stand-in,
 [`fd-subpixel-occupancy.md`](fd-subpixel-occupancy.md)), the junction's rim where box, glass
 and air meet, and the conical incidence that only M3 has. The junction campaign's own epsilon-12
-box (D', normal incidence, the zeroth order only) converged at 1.89.
+box (D', normal incidence, the zeroth order only) converged at 1.89. The corners' own singularity was tested
+first and ruled out at these resolutions (below, "Is it the corners?").
 
 **M2 p's one cell.** The cross-polarised `t_s` of the `(0, 0)` order is zero in RCWA (1e-13);
 FDTD's runs give 1.68e-3, 6.0e-4 and 2.65e-4 at 1.05 and 25, 50 and 100 cells per wavelength
@@ -257,6 +264,64 @@ outside. So criteria 3 and 4 can fail on these numbers, and a pass is not a pass
 took 20 minutes, M2 at 100 19 minutes, M3 at 120 84 minutes per run; the RCWA ladders took
 16 minutes (M1), 18 (M2) and 2.3 hours (M3, whose top truncation took 18 minutes per
 wavelength).
+
+## Is it the corners? (2026-10-03)
+
+The first explanation for M3 was the one the subpixel-smoothing literature gives for sharp
+dielectric corners: the field there goes as `r^(nu - 1)`, and an integrated quantity's
+smoothing error falls as `dx^(2 nu)` rather than `dx^2` (Farjadpour et al., Opt. Lett. 31, 2972
+(2006); Oskooi et al., Opt. Lett. 34, 2778 (2009)). The owner chose to test it before anything
+else. `studies/fdtd_metasurface_corners.py` registered a prediction and a rule before its
+campaign (hash recorded at 2026-10-03T20:52:08+0900) and ran it.
+
+**The prediction.** A transfer-matrix condition gives each corner's exponent; two independent
+derivations (a parity and nodal-system one with closed forms, and a spectral-element angular
+eigenproblem checked by a graded finite-volume solve) agree with it to 1e-9, and a third check
+to 40 digits (`studies/results/fdtd_metasurface_corners_crosscheck.md`).
+For an epsilon-12 right angle in air `nu` is 0.7219 (order 1.444); for the base edge where an
+epsilon-12 pillar, air and the 2.25 glass meet, 0.6845 (order 1.369); at epsilon 4 the two give
+1.612 and 1.591. Farjadpour et al. quote 0.702 for their epsilon-12 corner; its exact exponent
+is `(2/pi) arccos(11/26) = 0.7219`, and none of the derivations could produce 0.702 from the
+paper's geometry -- the measured 1.4 they report agrees with 1.444 either way.
+
+**The test.** M3's cross-section made a ridge uniform along y -- its only corners the four
+edges, its run two-dimensional and cheap enough for 320 cells per wavelength -- at epsilon 12
+(R12) and epsilon 4 (R4), and an epsilon-12 film with no corner at all (F12), all under M3's
+conical incidence, against 1D RCWA references converged to 1e-5. The rule asked the local order
+between 160 and 320 cells per wavelength to fall within 0.25 of the prediction for both ridges,
+R4's above R12's, with F12 at least 1.8 as the control.
+
+| Scene | Predicted | `A` at 40 / 80 / 160 / 320 | Local order 160 to 320 (`A`, `F`) |
+| --- | --- | --- | --- |
+| R12 | 1.37 - 1.44 | 6.1e-2 / 1.4e-2 / 3.5e-3 / 8.8e-4 | 2.00, 2.01 |
+| R4 | 1.59 - 1.61 | 7.6e-3 / 1.9e-3 / 4.7e-4 / 1.2e-4 | 2.00, 2.01 |
+| F12 | 2 | 8.7e-2 / 2.2e-2 / 5.5e-3 / 1.4e-3 | 2.00, 2.00 |
+
+**The explanation is contradicted.** Every run settled, every reference could judge, the
+control held -- and both ridges converge at second order from 40 cells to 320, every step a
+factor of four, the median cell's local order 2.00 as well. Within the resolutions any
+metasurface run uses, the corners of a ridge -- the epsilon-12 right angles and the base edges
+where pillar, air and glass meet -- do not hold the order down under this smoothing. Whatever
+makes M3 converge at 1.5 to 1.75 is three-dimensional: the box's vertical edges, its vertices,
+or the junction's rim where it turns a corner. The asymptotic `dx^(2 nu)` regime may lie beyond
+320 cells per wavelength; the measurement says only that it does not reach down to where these
+runs live.
+
+Before registration a dry run of every command on a toy configuration (rungs 40 and 80, 40
+periods, a small RCWA ladder) was seen: local orders between 40 and 80 of 2.10 / 2.05 (R12), 2.00
+/ 1.99 (R4) and 1.99 / 1.95 (F12). The rule was written before that run and not changed after;
+the study's docstring says so, and the dry run's rows and report are kept beside the campaign's.
+The registration records the study file's SHA-256, and the file committed with the results is
+that file byte for byte.
+
+The follow-up changed no production source. Its gates: the full fd/docs tier 2745 passed and 8
+skipped of 2753, the slow tier 81 of 81, the four freezers 143/288/140/570 arrays bit for bit,
+`ruff check .` and `sphinx-build -W` clean (`studies/results/fdtd_metasurface_corners_validation.json`,
+logs under `studies/results/fdtd_metasurface_corners_controls/`). A first attempt stopped on the
+documentation contract -- the cross-check record cited its scripts from its own folder, and a
+copy of the registered study, kept beside the logs as C7's is, cited paths from the study's
+directory; the record was corrected, the copy dropped (the committed study is the registered
+file), and the attempt's logs are kept.
 
 ## What the tests hold
 
@@ -296,8 +361,9 @@ Counts and timings are in `studies/results/fdtd_metasurface_validation.json`, th
 
 ## What this does not show
 
-* **Why M3 converges at first order in part.** The campaign does not separate the box's
-  creases, its junction rim and conical incidence; that is the next measurement.
+* **Why M3 converges below second order.** Not the corners of its cross-section ("Is it the
+  corners?"); its vertical edges, its vertices and the junction's rim at the box's corners
+  remain, and no measurement here separates them.
 * **One pillar per cell.** No supercell, so no plan with several junctions, as a
   phase-gradient metasurface has.
 * **Two body kinds.** Cylinders and unturned boxes, the bodies a junction supports; no prism,
