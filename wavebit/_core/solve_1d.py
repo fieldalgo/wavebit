@@ -24,7 +24,7 @@ Stages (matching the legacy chain, kept as one function each to make bit-parity 
   2. per-layer eig+couple— Redheffer/transfer propagation from the bottom layer up
   3. final matching      — incident field -> R, T -> diffraction efficiency
 """
-from .backend import (array_namespace, as_array, check_finite,
+from .backend import (array_namespace, as_array, check_finite, division_at_a_cutoff,
                       eig)
 from .conventions import (boundary_kz, incident_column, incident_kz, layer_root,
                           order_azimuth, order_frame_sign)
@@ -262,16 +262,22 @@ def layer_modes_1d_conical(xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv
         # `A mu_x W1 = W1 diag(wA)`, which is where the leading `mu_x` comes from -- the same
         # substitution that keeps this function free of `inv(A)` at a Rayleigh point, one slot
         # richer. `Kx muz_i` inside `V_12` is the dual of the `Kx epz_conv_i` in `V_21`.
-        V_11 = W1 * (q1 / wA)
-        V_12 = W1 @ ((ky / wA)[:, None] * (W1_i @ Kx @ W2 if muz_conv_i is None
-                                           else W1_i @ Kx @ muz_conv_i @ W2))
-        if mu is not None:
-            V_11 = mux_conv @ V_11
-            V_12 = mux_conv @ V_12
-        # The H-side blocks are untouched by a permeability, and that is the duality rather than
-        # an omission: they are built from `B**-1`, whose eigenrelation carries `eps_x`.
-        V_21 = epx_conv @ (W2 * (ky / wB)) @ (W2_i @ Kx @ epz_conv_i @ W1)
-        V_22 = epx_conv @ W2 * (q2 / wB)
+        # `wA` and `wB` are exactly zero where an order's `kx**2` meets the layer's permittivity.
+        # With `ky == 0` that is a Rayleigh point and the quotients are 0/0; with `ky != 0` the
+        # numerators stay nonzero, the quotients are inf, and the products below turn them into
+        # NaN. Either way `check_finite` refuses the result downstream, so NumPy's own warnings
+        # are silenced over the whole block (see `division_at_a_cutoff`).
+        with division_at_a_cutoff():
+            V_11 = W1 * (q1 / wA)
+            V_12 = W1 @ ((ky / wA)[:, None] * (W1_i @ Kx @ W2 if muz_conv_i is None
+                                               else W1_i @ Kx @ muz_conv_i @ W2))
+            if mu is not None:
+                V_11 = mux_conv @ V_11
+                V_12 = mux_conv @ V_12
+            # The H-side blocks are untouched by a permeability, and that is the duality rather
+            # than an omission: they are built from `B**-1`, whose eigenrelation carries `eps_x`.
+            V_21 = epx_conv @ (W2 * (ky / wB)) @ (W2_i @ Kx @ epz_conv_i @ W1)
+            V_22 = epx_conv @ W2 * (q2 / wB)
     return W1, W2, q1, q2, V_11, V_12, V_21, V_22
 
 

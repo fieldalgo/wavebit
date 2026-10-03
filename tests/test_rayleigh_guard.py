@@ -397,6 +397,46 @@ def test_auto_detune_rescues_the_refused_point():
     assert abs(R - _truth(3)) < TOL and abs(R + T - 1.0) < TOL
 
 
+@pytest.mark.parametrize('case', ['1D', '1D ky', '2D'])
+def test_auto_detune_retries_under_an_error_filter(case):
+    """The refused attempt's arithmetic is not the caller's business, even under ``'error'``.
+
+    At the exact point the layer build divides by a zero mode eigenvalue, and the NaN is
+    refused or rebuilt downstream. NumPy's own ``RuntimeWarning`` for that division reached the
+    caller once the ladder stopped catching warnings (2026-10-03), and under
+    ``filterwarnings('error', category=RuntimeWarning)`` it *raised*, so the ladder never
+    retried. ``backend.division_at_a_cutoff`` silences exactly those blocks: the 1D conical
+    E/H blocks and the 2D ``V = Omega_R W / q``.
+
+    ``'1D ky'`` lights the same stack at ``phi = pi/2``, so ``kx_3**2`` still meets the
+    spacer's permittivity while ``ky != 0``. There the quotient is ``inf``, not NaN, and the
+    warning comes from the *product* after the division. Silencing the divisions alone
+    passed ``'1D'`` and failed this one. Removing the 1D block fails both 1D cases; removing
+    the 2D one fails ``'2D'``.
+    """
+    from wavebit._core.backend import AutoDetuneWarning
+    tilt = dict(theta=0.3, phi=np.pi / 2)
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter('always')
+        warnings.filterwarnings('error', category=RuntimeWarning)
+        if case == '1D':
+            R, T = _totals(_solve(0, 3, auto_detune=True))
+        elif case == '1D ky':
+            R, T = _totals(_solve(0, 3, auto_detune=True, **tilt))
+        else:
+            R, T = _totals(_solve_2d(1.5, 'ETM', auto_detune=True))
+    if case == '1D':
+        truth = _truth(3)
+    elif case == '1D ky':
+        truth, _ = _totals(_solve(0, 3, wavelength=WL * (1 + 1e-8), **tilt))
+    else:
+        truth, _ = _totals(_solve_2d(1.5, 'ETM', wavelength=WL * (1 + 1e-8)))
+    assert not any(issubclass(r.category, RuntimeWarning) for r in rec), [str(r.message) for r in rec]
+    if case != '2D':                     # 2D may rebuild on the first pass, platform by platform
+        assert any(issubclass(r.category, AutoDetuneWarning) for r in rec)
+    assert abs(R - truth) < (TOL if case == '1D' else 1e-4) and abs(R + T - 1.0) < 1e-4
+
+
 @pytest.mark.parametrize('truncation_order', BAND_MAX_ORDER)
 def test_auto_detune_lands_every_band_order(truncation_order):
     """Whichever class this LAPACK puts a band order in, the default returns the truth.
@@ -449,6 +489,104 @@ def test_auto_detune_accepts_an_explicit_step():
     assert any(issubclass(r.category, AutoDetuneWarning) for r in rec)
     assert mee.wavelength == WL * (1 + 1e-9)
     assert abs(R + T - 1.0) < 1e-6
+
+
+def _ordinary_solver():
+    """The ordinary 520 nm stack: no degeneracy, so the ladder has nothing to retry."""
+    return wavebit.rcwa(backend=0, wavelength=520.0, truncation_order=[5, 0], structure=_STACK,
+                        **_KW)
+
+
+def _constant_notice():
+    """One fixed source line, so the default filter's registry can collapse repeats."""
+    warnings.warn('a constant notice from inside the solve', UserWarning, stacklevel=1)
+
+
+def test_auto_detune_lets_a_sweep_collapse_a_constant_warning():
+    """The ladder catches nothing, so a constant-text warning is one report per sweep.
+
+    The ladder used to wrap every solve in ``catch_warnings(record=True)`` to look for the
+    Rayleigh warning, then replay the rest with ``warn_explicit``. ``catch_warnings`` bumps the
+    filters version on entry and exit, which empties every ``__warningregistry__``. So under the
+    default filter a constant-text warning came back once per sweep point on the default
+    ``solve()``, where ``auto_detune=False`` showed it once. Measured before the change: 20
+    reports for these 20 points.
+    """
+    solver = _ordinary_solver()
+    original = solver._solve_built
+
+    def noisy(geometry):
+        _constant_notice()
+        return original(geometry)
+
+    solver._solve_built = noisy
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter('default')
+        for k in range(20):
+            solver.solve(wavelength=520.0 + k)            # auto_detune=True, the default
+    assert len([r for r in rec if 'constant notice' in str(r.message)]) == 1
+
+
+def _grazing_on(calls_that_graze):
+    """A `_solve_built` stand-in that trips the Rayleigh check on the listed calls (1-based)."""
+    from wavebit._core.backend import check_mode_cutoff
+    calls = []
+
+    def install(solver):
+        original = solver._solve_built
+
+        def solve_built(geometry):
+            calls.append(solver.wavelength)
+            if len(calls) in calls_that_graze:
+                check_mode_cutoff(array_namespace(np.zeros(1)), np.array([0.0, 1.0]))
+            return original(geometry)
+
+        solver._solve_built = solve_built
+        return calls
+    return install
+
+
+def test_the_ladder_hears_the_rayleigh_check_on_its_own_channel():
+    """A Rayleigh hit reaches the ladder without passing through the warnings machinery.
+
+    The caller sees the retry (:class:`AutoDetuneWarning`, the moved wavelength) and not the
+    hit of the attempt the ladder discarded. A channel that lost the hit would return the
+    exact-point answer silently; one that leaked it would show a RayleighPointWarning for a
+    condition the returned solve does not have.
+    """
+    from wavebit._core.backend import AutoDetuneWarning, RayleighPointWarning
+    solver = _ordinary_solver()
+    calls = _grazing_on({1})(solver)
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter('always')
+        solver.solve()
+    assert calls == [520.0, 520.0 * (1 + 1e-12)], calls
+    assert not any(issubclass(r.category, RayleighPointWarning) for r in rec), rec
+    notices = [str(r.message) for r in rec if issubclass(r.category, AutoDetuneWarning)]
+    assert len(notices) == 1 and 'wavelength' in notices[0] and 'did not clear' not in notices[0]
+
+
+def test_a_condition_the_ladder_cannot_clear_still_warns():
+    """If every rung still grazes, the caller hears the Rayleigh warning once, and why."""
+    from wavebit._core.backend import AutoDetuneWarning, RayleighPointWarning
+    solver = _ordinary_solver()
+    calls = _grazing_on({1, 2, 3})(solver)
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter('always')
+        solver.solve()
+    assert len(calls) == 2, calls                         # theta = 0: the wavelength rung only
+    assert len([r for r in rec if issubclass(r.category, RayleighPointWarning)]) == 1
+    notices = [str(r.message) for r in rec if issubclass(r.category, AutoDetuneWarning)]
+    assert len(notices) == 1 and 'did not clear' in notices[0]
+
+
+def test_the_rayleigh_check_warns_directly_outside_the_ladder():
+    """With no ladder listening (``auto_detune=False``), the check is an ordinary warning."""
+    from wavebit._core.backend import RayleighPointWarning
+    solver = _ordinary_solver()
+    _grazing_on({1})(solver)
+    with pytest.warns(RayleighPointWarning):
+        solver.solve(auto_detune=False)
 
 
 def _theta_exactly_on(n_top, target):

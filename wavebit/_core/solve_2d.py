@@ -16,7 +16,7 @@ to the conical versions, so this module reuses ``solve_1d``'s boundary init and
 ``final_matching`` verbatim.
 """
 from .backend import (_concrete, _readable, array_namespace, as_array, carries_autodiff,
-                      check_mode_cutoff, checked_float, eig)
+                      check_mode_cutoff, checked_float, division_at_a_cutoff, eig)
 from .conventions import boundary_kz, layer_root, order_azimuth
 from .enums import Answers, answers_of
 from .solve_1d import _block, _diag, _is_backside, _mirrored_scene, final_matching
@@ -293,7 +293,9 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
     if Omega_R is None:
         Omega_R = right_factor()
     q = layer_root(xp, xp.astype(w, C), k0_d)
-    V = (Omega_R @ W) / q
+    V = Omega_R @ W
+    with division_at_a_cutoff():                 # q == 0 on a light line; rebuilt or refused below
+        V = V / q
 
     # At an exact Rayleigh point (an order on a layer's light line, q -> 0) this V is wrong
     # with no arithmetic to blame: the grazing cluster's eigvecs of the *product* Omega2 are

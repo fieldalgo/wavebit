@@ -10,6 +10,8 @@ supplies rather than delegates: both frameworks can differentiate a non-symmetri
 eigenvalues and return NaN when that fails, which an ordinary structure can cause. See the
 note above :func:`eig`. NumPy needs no gradient.
 """
+import contextvars
+
 import array_api_compat as ac
 import numpy as _np
 
@@ -353,6 +355,50 @@ class AutoDetuneWarning(UserWarning):
 # suite runs green with the check in place.
 _CUTOFF_REL = 1e-13
 
+_RAYLEIGH_MESSAGE = (
+    'a layer eigenmode sits within round-off of its cutoff (a Rayleigh/grazing '
+    'condition) on the 2D path, which loses that mode to cancellation — the result '
+    'is finite and may be wrong at the 1e-5 level near the condition, growing to '
+    'order 1 exactly on it, with no other sign. Move off the condition: one ULP of '
+    'wavelength, period or angle is enough, and solve(auto_detune=True), the '
+    'default, does that retry for you. (The 1D paths solve this point exactly; a '
+    'y-invariant cell routed through the 1D solves does not need the detune.)')
+
+#: Set by ``solve``'s auto_detune ladder around each solve it runs; :func:`check_mode_cutoff`
+#: reports a hit here instead of warning, and the ladder decides what the caller sees.
+#:
+#: A direct channel rather than the warnings machinery, because the ladder used to catch every
+#: warning of every solve (``catch_warnings(record=True)``) to look for this one and then replay
+#: the rest. ``catch_warnings`` bumps the filters version on entry and exit, which empties every
+#: module's ``__warningregistry__``, so a warning with constant text -- written that way so the
+#: default filter shows it once per sweep -- came back once per sweep point on the default
+#: ``solve()``: measured, 5 reports for 5 points where ``auto_detune=False`` gave 1. Passing a
+#: persistent registry to ``warn_explicit`` does not help (the version bump clears it too). With
+#: this channel the ladder catches nothing, and every other warning reaches the caller's
+#: filters as the solve emitted it.
+_RAYLEIGH_LISTENER = contextvars.ContextVar('_RAYLEIGH_LISTENER', default=None)
+
+
+def division_at_a_cutoff():
+    """Silence NumPy's divide/invalid flags where a layer's mode eigenvalue divides.
+
+    That divisor is exactly zero where an order meets the layer's light line (a Rayleigh point;
+    in conical incidence also where ``kx**2`` alone meets it), and what the zero makes is
+    handled downstream: the 2D coupled-cluster rebuild replaces the columns
+    (:func:`wavebit._core.solve_2d._rebuild_grazing_cluster`), or :func:`check_finite` refuses
+    the NaN with a structural hint. The block covered includes the products that carry an
+    ``inf`` quotient into NaN. NumPy's own ``RuntimeWarning`` adds nothing to either outcome.
+    It did harm: from an attempt the ``auto_detune`` ladder discarded it reached the caller,
+    and under a caller's ``simplefilter('error', RuntimeWarning)`` it raised before the ladder
+    could retry (``tests/test_rayleigh_guard.py::test_auto_detune_retries_under_an_error_filter``).
+
+    Only ``divide`` and ``invalid``, and only around those blocks; ``over`` and ``under``
+    keep the caller's policy. A caller's ``np.seterr(divide='raise')`` is overridden there too,
+    which trades a ``FloatingPointError`` at the division for the refusal or the rebuild.
+    NumPy only: JAX and PyTorch raise no floating-point warnings.
+    """
+    return _np.errstate(divide='ignore', invalid='ignore')
+
 
 def check_mode_cutoff(xp, eigenvalues):
     """Warn when a layer eigenvalue is at round-off scale relative to the spectrum.
@@ -378,16 +424,12 @@ def check_mode_cutoff(xp, eigenvalues):
     aw = xp.abs(_readable(eigenvalues, xp))
     flag = _concrete(xp.min(aw) < _CUTOFF_REL * xp.max(aw))
     if flag:
+        listener = _RAYLEIGH_LISTENER.get()
+        if listener is not None:
+            listener.append(_RAYLEIGH_MESSAGE)      # the ladder retries; it says what stands
+            return
         import warnings
-        warnings.warn(
-            'a layer eigenmode sits within round-off of its cutoff (a Rayleigh/grazing '
-            'condition) on the 2D path, which loses that mode to cancellation — the result '
-            'is finite and may be wrong at the 1e-5 level near the condition, growing to '
-            'order 1 exactly on it, with no other sign. Move off the condition: one ULP of '
-            'wavelength, period or angle is enough, and solve(auto_detune=True), the '
-            'default, does that retry for you. (The 1D paths solve this point exactly; a '
-            'y-invariant cell routed through the 1D solves does not need the detune.)',
-            RayleighPointWarning, stacklevel=3)
+        warnings.warn(_RAYLEIGH_MESSAGE, RayleighPointWarning, stacklevel=3)
 
 
 def _real_itemsize(dtype):

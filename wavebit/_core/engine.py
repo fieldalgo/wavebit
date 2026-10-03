@@ -4622,7 +4622,10 @@ class CoreFactorizationMixin:
         and let the refusal or the warning through; pass a float to choose the relative step
         (the default is sized for double precision — complex64 resolves nothing below ~1e-7,
         use ~1e-5 there). A traced solve (``jax.jit``) skips every guard and therefore never
-        retries — the same line the guards themselves draw.
+        retries — the same line the guards themselves draw. The ladder hears the Rayleigh
+        condition on a channel of its own and catches no warnings: every other warning reaches
+        the caller's filters as the solve emitted it, so a constant-text warning stays one
+        report per sweep, and on a retry the discarded attempt's warnings are reported too.
 
         During autodiff a default retry uses a relative step of at least ``1e-8``
         (64 machine eps for a lower-precision dtype). The smaller forward default can
@@ -4660,18 +4663,27 @@ class CoreFactorizationMixin:
 
         import warnings
         from numpy.linalg import LinAlgError
-        from .backend import AutoDetuneWarning, RayleighPointWarning
+        from .backend import AutoDetuneWarning, RayleighPointWarning, _RAYLEIGH_LISTENER
+
+        def listened():
+            # The Rayleigh check reports to this list instead of warning (backend
+            # `_RAYLEIGH_LISTENER`), so nothing here catches warnings: every other one reaches
+            # the caller's filters as the solve emitted it, and a constant-text warning stays
+            # one report per sweep rather than one per point.
+            hits = []
+            token = _RAYLEIGH_LISTENER.set(hits)
+            try:
+                return self._solve_built(geometry), hits
+            finally:
+                _RAYLEIGH_LISTENER.reset(token)
+
         step = _AUTO_DETUNE_REL if auto_detune is True else float(auto_detune)
         original = None
         try:
-            with warnings.catch_warnings(record=True) as rec:
-                warnings.simplefilter('always')
-                res = self._solve_built(geometry)
-            if not any(issubclass(r.category, RayleighPointWarning) for r in rec):
-                for r in rec:                  # not ours to handle: replay for the caller
-                    warnings.warn_explicit(r.message, r.category, r.filename, r.lineno)
+            res, hits = listened()
+            if not hits:
                 return res
-            cause = 'RayleighPointWarning fired'
+            cause = 'a layer mode sat on its cutoff (RayleighPointWarning)'
         except (FloatingPointError, LinAlgError, RuntimeError) as exc:
             # RuntimeError only for the backend whose LinAlgError spells itself that way
             # (torch._C._LinAlgError); anything else is not a degeneracy and not ours to retry.
@@ -4699,15 +4711,13 @@ class CoreFactorizationMixin:
         except Exception:
             pass                               # unreadable theta: wavelength rung only
         saved = {k: getattr(self, k) for k in knobs}
-        candidate = None if original is not None else (res, rec, [])
+        candidate = None if original is not None else (res, hits, [])
         applied = []
         for knob in knobs:
             setattr(self, knob, saved[knob] * (1 + step))
             applied.append(knob)
             try:
-                with warnings.catch_warnings(record=True) as rung_rec:
-                    warnings.simplefilter('always')
-                    rung_res = self._solve_built(geometry)
+                rung_res, rung_hits = listened()
             except (FloatingPointError, LinAlgError, RuntimeError) as exc:
                 if isinstance(exc, RuntimeError) and 'linalg' not in type(exc).__name__.lower():
                     for k in applied:
@@ -4716,18 +4726,18 @@ class CoreFactorizationMixin:
                 setattr(self, knob, saved[knob])   # this rung did not take
                 applied.pop()
                 continue
-            candidate = (rung_res, rung_rec, list(applied))
-            if not any(issubclass(r.category, RayleighPointWarning) for r in rung_rec):
+            candidate = (rung_res, rung_hits, list(applied))
+            if not rung_hits:
                 break                          # off the condition: this is the answer
         if candidate is None:
             # Every rung refused as well (applied is empty — each failure restored its knob).
             # The asked-for point is the honest thing to report, message and all.
             raise original from None
 
-        res, rung_rec, moved = candidate
-        for r in rung_rec:                     # the returned solve's own warnings, replayed
-            warnings.warn_explicit(r.message, r.category, r.filename, r.lineno)
-        cleared = not any(issubclass(r.category, RayleighPointWarning) for r in rung_rec)
+        res, hits, moved = candidate
+        for message in hits:                   # the condition outlived the ladder: say so
+            warnings.warn(message, RayleighPointWarning, stacklevel=2)
+        cleared = not hits
         if moved:
             where = ', '.join(f'{k}*(1+{step:g}) = {getattr(self, k)!r}' for k in moved)
             tail = ('The solver keeps these values. Pass auto_detune=False to solve exactly '
