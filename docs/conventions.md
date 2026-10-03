@@ -15,7 +15,7 @@ the diff looks like.
 | --- | --- |
 | time factor | `e^{-iωt}` — a physical field is `Re[E(r) e^{-iωt}]` |
 | loss | `Im(eps) > 0`, equivalently `Im(n) > 0` — the sign indices are tabulated with (`n + 1j*k`) |
-| gain | `Im(eps) < 0`; a solve may then legitimately return `R + T > 1`, and nothing in the library treats that as an error |
+| gain | `Im(eps) < 0`; a solve may then legitimately return `R + T > 1`, and nothing in the library treats that as an error. A gain half-space takes Maystre's root; near grazing, where a finite beam's response depends on its width, the solve warns `GainCutoffWarning` ([branch-cuts.md](branch-cuts.md#gain-near-grazing)) |
 
 Same statement as fmmax's; RETICOLO's efficiencies and amplitudes agree with this
 convention with no conversion (pinned to 4e-14 by the RETICOLO goldens). All complex

@@ -8,11 +8,11 @@ from dataclasses import dataclass, fields
 
 import numpy as np
 
-from .backend import as_array, check_finite
+from .backend import GainCutoffWarning, _concrete, as_array, check_finite
 from .enums import Answers, answers_of
 from .field_result import ResultFields, source_state
-from .conventions import boundary_kz, parse_excitation
-from .engine import _unknown_attribute, _holds_tracer
+from .conventions import boundary_kz, gain_cutoff_band, parse_excitation
+from .engine import _GAIN_CUTOFF_MESSAGE, _unknown_attribute, _holds_tracer
 from .sources import (Source, PlaneWave, OrderExcitation, GaussianBeam, ElectricDipole, source_list, _positive)
 from .source_expansion import resolve_wave, gaussian_waves, dipole_layers
 from .scattering import redheffer_star
@@ -483,6 +483,7 @@ class CoherentSolver:
         spectra = {(side, part): [] for side in ('top', 'bottom') for part in ('incoming', 'outgoing')}
         solved = []
         keep = scene.answers.covers(Answers.FIELD)
+        near_grazing = set()
         for group in groups:
             offsets = np.array([b[1] for b in group['inputs']] or [[0, 0]])
             low, high = offsets.min(axis=0)-half, offsets.max(axis=0)+half
@@ -523,6 +524,8 @@ class CoherentSolver:
                 mr = basis._as_complex(material.mu_value)
                 ports[side, 1] = _plane_basis(xp, kx, ky, er, mr, 1)
                 ports[side, -1] = _plane_basis(xp, kx, ky, er, mr, -1)
+                if group['inputs'] and _concrete(xp.any(gain_cutoff_band(xp, er, mr, kx*kx + ky*ky))):
+                    near_grazing.add(side)
             a = {side: xp.zeros((2*count,), dtype=C, device=scene._array_device) for side in ('top', 'bottom')}
             for side, offset, amp, pair, azimuth, actual in group['inputs']:
                 ij = offset-centre+widths
@@ -556,6 +559,17 @@ class CoherentSolver:
             internal = _inside_amplitudes(xp, state, a['bottom'], a['top']) if keep else None
             solved.append(dict(k0=k0, kxy=kxy, kx=kx, ky=ky, n=count, internal=internal,
                                edges=segment_edges, source_heights=source_heights))
+        # Once per side for the whole solve, however many Bloch sectors a Gaussian beam spread
+        # over: the same test and text as an ordinary solve
+        # (`CoreFactorizationMixin._warn_gain_cutoff`), on the ports' own eps and mu. Only
+        # sectors lit by an external wave (PlaneWave, GaussianBeam, OrderExcitation) are
+        # tested. A dipole is a point source, the sharp-edged case the band does not describe.
+        # Eager only -- `_concrete` reads None on a trace.
+        for side in ('top', 'bottom'):
+            if side in near_grazing:
+                import warnings
+                warnings.warn(_GAIN_CUTOFF_MESSAGE.format(side=side), GainCutoffWarning,
+                              stacklevel=3)
         joined = {key: _Spectrum(xp.concat([s.kxy for s in items]), xp.concat([s.field for s in items]))
                   for key, items in spectra.items()}
         result = CoherentResult(xp, joined, solved, lattice, scene.wavelength, scene.thickness,

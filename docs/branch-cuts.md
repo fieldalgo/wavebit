@@ -562,10 +562,88 @@ In a lossy half-space every continuation agrees inside `|Im(kx)| < Im(sqrt(eps))
 any real source, and the rules are conventions. Of those conventions, Maystre's equals
 limiting absorption and is what an outside code uses.
 
+### Gain near grazing
+
+A gain half-space (`Im(eps) < 0` or `Im(mu) < 0`) takes Maystre's root, the root of switching
+the gain on from zero at this frequency. One caveat stays, and the solve reports it with
+`GainCutoffWarning`.
+
+**A plane wave is not what a measurement sees here.** For a single Lorentz gain line every
+nonzero `kx` has a branch point in the upper half of complex frequency, so an infinitely wide
+plane wave over a gain medium has no true steady state at any oblique angle (J. Skaar, Phys. Rev. E 73,
+026605, 2006). A finite beam does have one. It follows from pushing the in-plane wavevector
+contour below the gain medium's branch point as `Im(w)` falls to zero (R. J. Briggs,
+*Electron-Stream Interaction with Plasmas*, MIT Press, 1964). `studies/gain_cutoff_band.py`
+computes it for Gaussian beams of width `W`, from glass onto a Lorentz line pinned to
+`eps = 1 - 0.05i`, TE. The natural length is the gain length
+`L_g = 2*sqrt(Re eps)/(k0*abs(Im eps))`, here `40/k0`. The ratio below is
+`abs(Re kz**2) / abs(Im kz**2)`, and the deviation is the beam's reflected field at its centre
+against the same beam under Maystre's root, relative to the incident field:
+
+| angle | ratio | `W/L_g = 2.5` | `5` | `10` | `20` |
+| --- | --- | --- | --- | --- | --- |
+| 42.0 deg | 0.15 | `abs(E_r/E_inc)**2 = 2.13` | 181 | — | — |
+| 43.3 deg | 1.17 | deviation 4.4e-2 | 1.9e-3 | 2.0e-6 | 1.5e-16 |
+| 43.8 deg | 1.56 | 5.1e-3 | 2.7e-6 | 1.8e-17 | 2.2e-60 |
+| 44.5 deg | 2.11 | 6.0e-5 | 1.6e-11 | 6.2e-38 | 8.2e-142 |
+
+* **Below a ratio of about 1** (`abs(kx - Re sqrt(eps)) < abs(Im sqrt(eps))`), the field at
+  the beam centre grows with the beam's width without bound: light skimming the interface is amplified along
+  it, and the field at the beam centre is a lateral wave fed from upstream (it grows downstream
+  at about `abs(Im sqrt(eps))*k0`, 0.021 to 0.024 measured). No plane-wave value describes it.
+* **Beyond 1**, the beam converges to Maystre's value, whatever the gain's dispersion, but only
+  once it is a few gain lengths wide. "Whatever the dispersion" assumes the branch point
+  crosses the real `kx` axis once as `Im(w)` falls to zero; see "What it cannot see". The tip of the contour weighs about
+  `exp(-(ratio**2 - 1)*(W/L_g)**2/4)`.
+
+**The band.** The solve warns per order where `abs(Re kz**2) < 2*abs(Im kz**2)`, with
+`kz**2 = eps*mu - k_par**2` in units of `k0**2`. For weak gain that is an in-plane wavevector
+within about `2*k0*abs(Im n)` of grazing in the gain medium. It holds the window where a beam's
+response grows with its width, plus the zone where a beam a few gain lengths wide has not yet
+converged. At the edge itself a beam needs `W/L_g` of 2.0 to 2.6 to come within 1e-3 of
+Maystre's value, and 3.4 to 4.3 for 1e-6, on the slower side of the band and across
+`abs(Im eps)` from 0.005 to 0.2.
+
+At `abs(Im eps) = 0.05` it fires on 51 of the 900 angles from 0 to 89.9 deg; at 0.005 on 5,
+at 0.2 on 210. In a grating every order has its own grazing condition in the gain medium, so
+the band recurs near each order's Rayleigh condition. `solver.gain_cutoff_band()` returns the
+per-order verdict for each side, and it traces, so a `jax.jit` or `vmap` caller can read it
+where the warning cannot run. `CoherentSolver` runs the same test on its own ports for the
+sectors a `PlaneWave`, `GaussianBeam` or `OrderExcitation` lights. It skips dipole sources
+(see below).
+
+**The fixed-kx flip does not set it.** Continue the root in complex frequency at fixed real
+`kx` and it flips at an angle that moves with the gain's dispersion: 41.2462 / 41.8212 /
+42.4828 deg for three line centres here, and up to a ratio of 4.9 on a fine grid of lines. A
+finite beam does not see that flip. Its answer depends on `eps` at this frequency and on the
+branch point crossing the real axis once. Beams centred at ratios 3 and 4 below a flip at 4.93
+go to Maystre's value (0.4146, 0.3648), not to the fixed-kx one (2.4118, 2.7412).
+
+**Why a warning, not a refusal.** The value is the exact answer to a stated problem, the band
+has no provable edge, and a refusal would stop a sweep and NaN a traced solve. That is the
+history of the Rayleigh-band refusals, two of which were reverted
+([`rayleigh-points.md`](rayleigh-points.md)). The text is constant, so the default filter
+shows it once per sweep, and it is not an `auto_detune` trigger, since a one-ULP nudge cannot
+leave a band this wide.
+
+**What it cannot see.**
+* Sharp-edged illumination. A top-hat aperture seeds a growing lateral wave at its edges at any
+  angle: at ratio 2.11 it deviates by 6.3e-2 to 34 for apertures of 100 to 800 `1/k0`, and at
+  ratio 6.41 by 3.3e-2 to 13. The band is a property of smooth beams.
+* A medium whose branch point does not cross the real `kx` axis exactly once as `Im(w)` falls.
+  Every stable line in the study crosses once, but such a medium needs a different contour, and
+  no single-frequency check can tell.
+* A gain *layer* between passive half-spaces chooses no half-space root, but its amplified
+  guided modes can make a beam's response depend on its width in the same way. The warning
+  does not check layers. `ScatteringMatrix.cascade` does not re-check a joined stack.
+* Dipole sources in `CoherentSolver`. A point source is sharp-edged, the case the band does
+  not describe.
+
 ### What it does not settle
 
-* Within about a degree of the critical angle, a gain half-space has no right answer at a
-  single frequency: the causal flip angle depends on the dispersion of `eps`.
+* Gain near grazing: see the previous section. The warning marks where the plane-wave answer
+  stops describing a smooth beam; sharp-edged illumination of a gain half-space has no such
+  band.
 * Far from the real axis, where the rules differ, the choice is a convention. A study that
   needs a particular sheet for each order, as a leaky-mode pole search does, needs more than
   one default.
@@ -574,6 +652,7 @@ limiting absorption and is what an outside code uses.
   `tests/references/test_reticolo_complex_kx_golden.py` applies that sign when it compares.
 
 Pinned in `tests/test_branch_selection.py` (the limiting-absorption walk, continuity across the
-real axis, the grating, gain under total internal reflection), `tests/test_fp_warnings.py`
+real axis, the grating, gain under total internal reflection), `tests/test_gain_cutoff.py`
+(the near-grazing band), `tests/test_fp_warnings.py`
 (single precision) and `tests/references/test_reticolo_complex_kx_golden.py` (RETICOLO, on both
 sides of the old split).

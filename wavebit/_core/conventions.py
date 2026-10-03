@@ -303,6 +303,10 @@ def boundary_kz(xp, eps, k_par_sq):
     ``docs/branch-cuts.md`` measures the two rules and the alternatives. On the cut itself
     (``Re(kz**2) = 0``, ``Im(kz**2) < 0``), the root with ``Re(kz) > 0`` is kept.
 
+    Near grazing in a gain half-space no plane-wave value is the answer, and the solve says so
+    with :class:`~wavebit._core.backend.GainCutoffWarning` (checked in the engine, per side,
+    with :func:`gain_cutoff_band`); this function only chooses the root.
+
     RETICOLO takes the same cut (``retsqrt(x, -1)``, its "coupure de Maystre"): J. P. Hugonin and
     P. Lalanne, *RETICOLO software for grating analysis*, Institut d'Optique (2005),
     arXiv:2101.00901. The gain behaviour is that of J. Skaar, Phys. Rev. E 73, 026605 (2006),
@@ -319,6 +323,46 @@ def boundary_kz(xp, eps, k_par_sq):
     decision = xp.real(v) + xp.imag(v)
     _check_resolvable(xp, v, decision, 0.0)
     return xp.where(decision < 0, -v, v)
+
+
+#: The band of :func:`gain_cutoff_band`: ``|Re(kz**2)| < _GAIN_CUTOFF_RATIO * |Im(kz**2)|``.
+#: Measured in ``studies/gain_cutoff_band.py`` (log in ``studies/results/``), for the steady
+#: response of a Gaussian beam of width ``W`` (Briggs-Bers: R. J. Briggs, Electron-Stream
+#: Interaction with Plasmas, MIT Press, 1964), glass onto a Lorentz gain line pinned to
+#: ``eps = 1 - 0.05i``, with the gain length ``L_g = 2*sqrt(Re eps)/(k0*|Im eps|)``:
+#:
+#: - Where the field at the beam centre grows with the beam's width: a ratio below about 1. At
+#:   0.15, |E_r/E_inc|**2 there is 2.13 / 181 / 1.1e8 for W/L_g = 2.5 / 5 / 7.5.
+#: - Beyond 1 a beam converges to the same beam under Maystre's root, but slowly. At 1.17 it is
+#:   off by 4.4e-2 / 1.9e-3 / 2.0e-6 / 1.5e-16 for W/L_g = 2.5 / 5 / 10 / 20. At the edge of 2,
+#:   a beam of W/L_g = 2.0 .. 2.6 comes within 1e-3 (3.4 .. 4.3 for 1e-6) on the slower side,
+#:   at |Im eps| 0.005 .. 0.2.
+#: - The fixed-kx causal root of a dispersive line (J. Skaar, Phys. Rev. E 73, 026605, 2006)
+#:   flips at angles that move with the line, up to a ratio of 4.9 on a fine grid; a beam does
+#:   not see those flips, so they do not set this constant.
+_GAIN_CUTOFF_RATIO = 2.0
+
+
+def gain_cutoff_band(xp, epsilon, mu, k_par_sq):
+    """Per order: does a gain half-space put this order in the band near grazing?
+
+    True where the medium has gain (``Im(epsilon) < 0`` or ``Im(mu) < 0``), ``kz**2`` lies below
+    the real axis, and ``|Re(kz**2)| < _GAIN_CUTOFF_RATIO * |Im(kz**2)|``, with
+    ``kz**2 = epsilon*mu - k_par_sq`` normalised by ``k0``. There a finite beam's response
+    depends on its width, and the plane-wave value is only what Maystre's root gives; see
+    :class:`~wavebit._core.backend.GainCutoffWarning`.
+
+    Keyed on the material's own gain, not on ``Im(epsilon*mu) < 0``: a passive medium with
+    ``Re(epsilon) < 0`` and ``Re(mu) < 0`` has a product below the real axis without any gain.
+    Traceable: elementwise comparisons only, so it is the per-order verdict a ``jax.jit`` or
+    ``vmap`` caller can still read when the warning cannot run.
+    """
+    zero = xp.zeros_like(k_par_sq)
+    epsilon, mu = epsilon + zero, mu + zero
+    kz2 = epsilon*mu - k_par_sq
+    gain = (xp.imag(epsilon) < 0) | (xp.imag(mu) < 0)
+    near = xp.abs(xp.real(kz2)) < _GAIN_CUTOFF_RATIO*xp.abs(xp.imag(kz2))
+    return gain & (xp.imag(kz2) < 0) & near
 
 
 def incident_kz(kz_top, index):

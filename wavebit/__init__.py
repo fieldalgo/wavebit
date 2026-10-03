@@ -83,6 +83,7 @@ def enable_x64():
 
 from .main import rcwa
 from ._core.backend import (AutoDetuneWarning, AxisNameWarning, ComplexIncidenceWarning,
+                            GainCutoffWarning,
                             PrecisionLossWarning, RayleighPointWarning,
                             UnresolvedBranchWarning,
                             get_j1_implementation, set_j1_implementation)
@@ -140,7 +141,8 @@ __all__ = [
     # Defined in this file rather than imported -- see `enable_x64` above.
     'enable_x64',
     'AutoDetuneWarning',
-    'AxisNameWarning', 'ComplexIncidenceWarning', 'PrecisionLossWarning', 'RayleighPointWarning',
+    'AxisNameWarning', 'ComplexIncidenceWarning', 'GainCutoffWarning', 'PrecisionLossWarning',
+    'RayleighPointWarning',
     'UnresolvedBranchWarning',
     'get_j1_implementation', 'set_j1_implementation',
     'plot_structure', 'slice_structure',

@@ -274,6 +274,19 @@ def _refuse_shaped_half_space(material, where):
                 'plane waves that `sqrt(eps*mu)` alone defines.')
 
 
+#: The text of :class:`~wavebit._core.backend.GainCutoffWarning`, constant apart from the side
+#: so the default filter shows it once per sweep.
+_GAIN_CUTOFF_MESSAGE = (
+    'an order in the gain {side} half-space (Im(eps) or Im(mu) < 0) is within about '
+    '2*k0*|Im(n)| of grazing in its in-plane wavevector. There, light skimming the interface is '
+    'amplified along it, so a finite beam\'s response depends on the beam\'s width, and close '
+    'to grazing no beam settles on a plane-wave value. The value returned is Maystre\'s root -- '
+    'the gain switched on from zero at this frequency -- which is what a smooth beam a few gain '
+    'lengths wide converges to away from grazing; it steps where Re(kz**2) changes sign. This '
+    'is not a failed solve. On an rcwa solver, gain_cutoff_band() names the orders; see '
+    'docs/branch-cuts.md, "Gain near grazing".')
+
+
 def _half_space_index(material, where='top'):
     """``sqrt(eps*mu)`` -- the one place a half-space material becomes an index.
 
@@ -3597,8 +3610,73 @@ class CoreFactorizationMixin:
         result = self._RESULT(incident, s_inc, p_inc, order_window=self.order_window)
         result._field_state = ordinary_state(self, spectra)
         self._warn_complex_incidence()
+        self._warn_gain_cutoff(eps_top=eps_top, eps_bot=eps_bot, mu_top=mu_top, mu_bot=mu_bot)
 
         return result
+
+    def gain_cutoff_band(self):
+        """Which orders sit near grazing in a gain half-space, per side.
+
+        Returns ``{'top': mask, 'bottom': mask}``, boolean arrays in the order layout of
+        :meth:`order_kxy` after :func:`~wavebit._core.solve_2d.order_grid_kxy` (one entry per
+        retained order). An entry is True where that half-space has gain and the order's
+        ``kz**2`` lies in the band ``|Re(kz**2)| < 2*|Im(kz**2)|``: there a finite beam's
+        response depends on its width, and the solve's value is only Maystre's root. See
+        :class:`~wavebit._core.backend.GainCutoffWarning`, which a solve emits on the same test.
+
+        Traceable, so a ``jax.jit`` or ``vmap`` caller, for whom the warning cannot run, can
+        still read the verdict per point. All False for passive half-spaces.
+
+        A magnetic scene reads the half-spaces' own ``epsilon`` and ``mu``, as
+        :meth:`_solve_built` hands them to the solve. The index alone cannot answer: gain in
+        ``eps`` under a lossier ``mu`` multiplies to a lossy-looking ``n``.
+        """
+        if self._is_magnetic():
+            return self._gain_cutoff_masks(eps_top=self._top.epsilon, eps_bot=self._bot.epsilon,
+                                           mu_top=self._top.mu, mu_bot=self._bot.mu)
+        return self._gain_cutoff_masks()
+
+    def _gain_cutoff_masks(self, eps_top=None, eps_bot=None, mu_top=None, mu_bot=None):
+        """:meth:`gain_cutoff_band`, on the half-space terms a solve was handed.
+
+        The same per-order ``k_par`` and the same ``epsilon`` recovery as
+        :func:`~wavebit._core.field_result.ordinary_spectra`, so the band is tested on the
+        ``kz`` the kernels used.
+        """
+        from .conventions import gain_cutoff_band
+        from .solve_2d import order_grid_kxy
+        xp = self.xp
+        gx, gy = order_grid_kxy(xp, *self.order_kxy())
+        k_par_sq = gx*gx + gy*gy
+        masks = {}
+        for side, n, epsilon, mu in (('top', self.n_top, eps_top, mu_top),
+                                     ('bottom', self.n_bot, eps_bot, mu_bot)):
+            mu = 1. if mu is None else mu
+            epsilon = n*n/mu if epsilon is None else epsilon
+            masks[side] = gain_cutoff_band(xp, epsilon, mu, k_par_sq)
+        return masks
+
+    def _warn_gain_cutoff(self, eps_top=None, eps_bot=None, mu_top=None, mu_bot=None):
+        """Say once per side when a gain half-space has an order in the near-grazing band.
+
+        Eager only, the line every guard in this class draws: a traced solve has no value to
+        test and stays silent (:meth:`gain_cutoff_band` traces). A complex incident wavevector
+        is left to :class:`~wavebit._core.backend.ComplexIncidenceWarning`: its ``R`` and ``T``
+        are already formal, and the band is a statement about real ``k_par``.
+        """
+        import warnings
+        from .backend import GainCutoffWarning
+        from .power import transverse_k_is_real
+        k_inc_x, k_inc_y = self._incident_kxy(self.wavelength)
+        xp = array_namespace(k_inc_x)
+        if _concrete(transverse_k_is_real(xp, k_inc_x, k_inc_y)) is not True:
+            return
+        masks = self._gain_cutoff_masks(eps_top=eps_top, eps_bot=eps_bot,
+                                        mu_top=mu_top, mu_bot=mu_bot)
+        for side in ('top', 'bottom'):
+            if _concrete(self.xp.any(masks[side])):
+                warnings.warn(_GAIN_CUTOFF_MESSAGE.format(side=side), GainCutoffWarning,
+                              stacklevel=3)
 
     def _warn_complex_incidence(self):
         """Say once per solve that a complex incident ``kx`` / ``ky`` made R and T formal.

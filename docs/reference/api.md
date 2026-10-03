@@ -19,7 +19,7 @@ properties every one of them carries.
 
 ```{eval-rst}
 .. autoclass:: wavebit._core.engine.CoreFactorizationMixin
-   :members: solve, reconstruct_field, freeze_geometry, solve_conv, eps_conv_matrices, mu_conv_matrices, factorization, fourier_coefficients, raster_normal_method, nvf_projector, li_nesting, shape_nvf_grid_size
+   :members: solve, reconstruct_field, freeze_geometry, solve_conv, eps_conv_matrices, mu_conv_matrices, gain_cutoff_band, factorization, fourier_coefficients, raster_normal_method, nvf_projector, li_nesting, shape_nvf_grid_size
 
 
 .. autoclass:: wavebit._core.engine.CoreSolveMixin
@@ -173,6 +173,9 @@ See [Materials and wavelength sweeps](../guide/materials.md) for assignment and 
    :members:
 
 .. autoclass:: wavebit.ComplexIncidenceWarning
+   :members:
+
+.. autoclass:: wavebit.GainCutoffWarning
    :members:
 
 ```

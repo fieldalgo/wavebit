@@ -333,6 +333,40 @@ class ComplexIncidenceWarning(UserWarning):
     """
 
 
+class GainCutoffWarning(UserWarning):
+    """An order of a gain half-space sits near grazing, where no plane-wave value is the answer.
+
+    A half-space with gain (``Im(eps) < 0`` or ``Im(mu) < 0``) takes Maystre's root, which is
+    the root of switching the gain on from zero at this frequency
+    (:func:`~wavebit._core.conventions.boundary_kz`). Away from grazing a smooth (Gaussian)
+    beam a few gain lengths wide converges to that value, whatever the gain's dispersion, as
+    long as the medium's branch point crosses the real in-plane wavevector axis once as
+    ``Im(w)`` falls to zero (every stable Lorentz line studied does). Near
+    grazing it does not: light skimming the interface is amplified along it, so a beam's
+    response depends on its width, and close enough to grazing it grows with the width without
+    bound. A sharp-edged beam seeds such a growing wave at its edges at any angle, which no
+    per-order band can flag. The band
+    is ``|Re(kz**2)| < 2*|Im(kz**2)|`` per order, which for weak gain is an in-plane
+    wavevector within about ``2*k0*|Im(n)|`` of grazing. It holds the window where a Gaussian
+    beam's response grows with its width (a ratio below about 1) and the zone beyond it where a
+    beam a few gain lengths wide has not yet converged;
+    :meth:`~wavebit._core.engine.CoreFactorizationMixin.gain_cutoff_band` names the orders, and
+    ``docs/branch-cuts.md`` ("Gain near grazing") gives the measurements behind it.
+
+    A warning rather than a refusal: the value is the exact answer to a stated problem, the
+    band has no provable edge, and a refusal would stop a sweep and NaN a traced solve, which
+    is the history of the Rayleigh-band refusals (``docs/rayleigh-points.md``). Constant text,
+    so the default filter shows it once per sweep. Not an ``auto_detune`` trigger: a one-ULP
+    nudge cannot leave a band this wide. A traced solve cannot check and stays silent; call
+    :meth:`~wavebit._core.engine.CoreFactorizationMixin.gain_cutoff_band`, which traces.
+    ``ScatteringMatrix.cascade`` does not re-check a joined stack: each piece was checked by
+    its own solve, against its own half-spaces. ``CoherentSolver`` runs the same test on its
+    own ports for the sectors a ``PlaneWave``, ``GaussianBeam`` or ``OrderExcitation`` lights,
+    once per side per solve. It skips dipole sources: a point source is sharp-edged, the case
+    the band does not describe.
+    """
+
+
 class AutoDetuneWarning(UserWarning):
     """An ``auto_detune`` retry moved the solve off the requested point — this is the record.
 
