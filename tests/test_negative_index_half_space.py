@@ -22,7 +22,7 @@ import numpy as np
 import pytest
 
 import wavebit
-from wavebit._core.conventions import boundary_kz, signed_index
+from wavebit._core.conventions import boundary_kz, gain_cutoff_band, signed_index
 
 PERIOD, WL, N_GLASS = 1000.0, 500.0, 1.5
 PASSIVE = (-2 + 0.1j, -1 + 0.1j)
@@ -994,12 +994,60 @@ def test_a_gaussian_beam_from_a_negative_index_side_is_refused():
 @pytest.mark.parametrize('pair', [GAIN, GAIN_IN_MU], ids=['gain', 'gain_in_mu'])
 @pytest.mark.parametrize('side', ['top', 'bot'])
 def test_an_active_negative_index_half_space_is_refused(side, pair):
-    """No root rule is established for gain in a propagating double negative."""
+    """No single-frequency root rule exists for gain in a propagating double negative (Skaar
+    2006; Nistad and Skaar 2008), so it is refused where it is set, and the setter leaves the
+    solver as it was."""
     solver = _solver()
     before = (getattr(solver, side), getattr(solver, f'n_{side}'))
-    with pytest.raises(ValueError, match='active negative-index half-space'):
+    with pytest.raises(ValueError, match=r'active negative-index half-space(.|\n)*Skaar'):
         setattr(solver, side, wavebit.Material(*pair))
     assert (getattr(solver, side), getattr(solver, f'n_{side}')) == before
+
+
+def test_the_gain_band_of_a_double_negative_is_the_mirror_image():
+    """Gain raises ``kz**2`` in a double negative, so its band near grazing lies above the real
+    axis: the band of a double negative ``(eps, mu)`` is that of its double-positive mirror
+    ``(-conj(eps), -conj(mu))`` to the bit, gain or loss in either factor, at every ``k_par``. A
+    passive double negative is never flagged, and an active one is -- testing the lower half
+    plane for every medium flagged none."""
+    rng = np.random.default_rng(5)
+    k_par_sq = np.linspace(0.0, 9.0, 901)
+    for _ in range(300):
+        eps = rng.uniform(-5, -0.1) + 1j * rng.uniform(-0.5, 0.5)
+        mu = rng.uniform(-3, -0.1) + 1j * rng.uniform(-0.5, 0.5)
+        band = gain_cutoff_band(np, eps, mu, k_par_sq)
+        mirror = gain_cutoff_band(np, -np.conj(eps), -np.conj(mu), k_par_sq)
+        np.testing.assert_array_equal(band, mirror)
+    for pair in (PASSIVE, LOSSLESS, ASYM, HIGH):
+        assert not gain_cutoff_band(np, *pair, k_par_sq).any()
+    flagged = gain_cutoff_band(np, *GAIN, k_par_sq)
+    assert flagged.any() and not flagged.all()
+    assert np.all((GAIN[0] * GAIN[1] - k_par_sq[flagged]).imag > 0)
+    # Gain in mu under more loss in eps leaves the product on the passive side: no band, as for
+    # the ordinary mirror of that medium.
+    assert not gain_cutoff_band(np, *GAIN_IN_MU, k_par_sq).any()
+
+
+def test_the_gain_band_flags_an_active_double_negative_under_jit():
+    """Under ``jax.jit`` the refusal cannot read the medium, so an active propagating double
+    negative is solved with the mirror rule -- and ``gain_cutoff_band()``, which traces, names its
+    orders near grazing: glass lit at 60 degrees onto ``eps = -2-0.1i``, ``mu = -1-0.1i`` puts
+    the specular order at ``kz**2 = 0.30+0.30i``. Eagerly the same medium is refused."""
+    pytest.importorskip('jax')
+    wavebit.enable_x64()
+    import jax
+    import jax.numpy as jnp
+
+    def band(re_eps):
+        solver = _grating('conical', 'SMM', nim=(re_eps + 1j * GAIN[0].imag, GAIN[1]),
+                          backend=1)
+        solver.theta = np.deg2rad(60.0)
+        return solver.gain_cutoff_band()['bottom']
+
+    flagged = np.asarray(jax.jit(band)(jnp.asarray(GAIN[0].real)))
+    assert flagged.any() and not flagged.all()
+    with pytest.raises(ValueError, match='active negative-index half-space'):
+        band(GAIN[0].real)
 
 
 def test_solve_conv_half_space_terms_are_read():

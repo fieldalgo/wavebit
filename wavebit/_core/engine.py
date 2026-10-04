@@ -280,8 +280,9 @@ _GAIN_CUTOFF_MESSAGE = (
     'an order in the gain {side} half-space (Im(eps) or Im(mu) < 0) is within about '
     '2*k0*|Im(n)| of grazing in its in-plane wavevector. There, light skimming the interface is '
     'amplified along it, so a finite beam\'s response depends on the beam\'s width, and close '
-    'to grazing no beam settles on a plane-wave value. The value returned is Maystre\'s root -- '
-    'the gain switched on from zero at this frequency -- which is what a smooth beam a few gain '
+    'to grazing no beam settles on a plane-wave value. The value returned is Maystre\'s root '
+    '(its mirror in a double negative) -- the gain switched on from zero at this frequency -- '
+    'which is what a smooth beam a few gain '
     'lengths wide converges to away from grazing; it steps where Re(kz**2) changes sign. This '
     'is not a failed solve. On an rcwa solver, gain_cutoff_band() names the orders; see '
     'docs/branch-cuts.md, "Gain near grazing".')
@@ -391,11 +392,16 @@ def _refuse_negative_index_half_space(material, where):
     its decaying root (``tests/test_negative_index_half_space.py``).
 
     **What stays refused.** An *active* pair (``Im(eps) < 0`` or ``Im(mu) < 0``) with
-    ``Re(eps*mu) > 0``: no root rule is established for it, and the limiting-absorption argument
-    that fixes the passive root says nothing about gain. Refused here, where it is set, whichever
-    side it is on. An active double negative too lossy to propagate (``Re(eps*mu) <= 0``) is
-    accepted as before -- both rules take the same root wherever ``Re(kz**2) < 0``, so its
-    answer is the one it had.
+    ``Re(eps*mu) > 0``: no single-frequency root rule exists for it. Whether a wave in an active
+    negative-index medium grows or decays toward the interface, and so which root and which
+    sign of the index are physical, depends on the medium's dispersion, not on ``eps`` and
+    ``mu`` at one frequency (J. Skaar, Phys. Rev. E 73, 026605 (2006); B. Nistad and J. Skaar,
+    Phys. Rev. E 78, 036603 (2008)); the limiting-absorption argument that fixes the passive
+    root says nothing about gain. Refused here, where it is set, whichever side it is on. An
+    active double negative too lossy to propagate (``Re(eps*mu) <= 0``) is accepted as before
+    -- both rules take the same root wherever ``Re(kz**2) < 0``, so its answer is the one it
+    had -- and, like any gain half-space, has its orders near grazing named by
+    :func:`~wavebit._core.conventions.gain_cutoff_band`.
 
     A passive double negative may be either side, lit or not. As the lit side its ``theta``
     names the direction its incident light travels (exactly, when it is lossless),
@@ -405,6 +411,9 @@ def _refuse_negative_index_half_space(material, where):
 
     Checked on the value, so it runs eagerly and under an un-jitted ``jax.grad`` and is skipped
     under ``jax.jit``, where there is no value to read (:func:`~wavebit._core.backend._concrete`).
+    There the medium is solved with the mirror rule, and the traceable
+    :meth:`CoreFactorizationMixin.gain_cutoff_band` -- whose gain side is above the axis for a
+    double negative -- is what flags its orders near grazing.
     Only a named ``mu`` can be negative, so a non-magnetic medium never reaches the comparison.
     ``solve_conv``'s own ``eps_top`` / ``mu_top`` / ``eps_bot`` / ``mu_bot`` are checked by
     :func:`_refuse_negative_index_pair` too, since they need not be the scene's materials.
@@ -425,9 +434,12 @@ def _refuse_negative_index_pair(epsilon, mu, where):
             f'`{where}` is an active negative-index half-space: Re(eps) < 0 and Re(mu) < 0, '
             'Re(eps*mu) > 0 so waves propagate in it, and Im(eps) < 0 or Im(mu) < 0. A passive '
             'double negative is solved with its own root -- its loss lowers kz**2, and the '
-            'limiting absorption from below picks the decaying root -- but no root rule is '
-            'established for gain in such a medium. Put it in `structure` as a layer -- a '
-            'layer keeps both roots -- with an ordinary half-space beyond it.')
+            'limiting absorption from below picks the decaying root -- but no single-frequency '
+            'root rule exists for an active one: whether its waves grow or decay toward the '
+            'interface depends on the dispersion of eps and mu, not on their values at one '
+            'frequency (J. Skaar, Phys. Rev. E 73, 026605 (2006); B. Nistad and J. Skaar, '
+            'Phys. Rev. E 78, 036603 (2008)). Put it in `structure` as a layer -- a layer keeps '
+            'both roots -- with an ordinary half-space beyond it.')
 
 
 def _recorded_lattice(normal_field_source):
@@ -3837,12 +3849,18 @@ class CoreFactorizationMixin:
         Returns ``{'top': mask, 'bottom': mask}``, boolean arrays in the order layout of
         :meth:`order_kxy` after :func:`~wavebit._core.solve_2d.order_grid_kxy` (one entry per
         retained order). An entry is True where that half-space has gain and the order's
-        ``kz**2`` lies in the band ``|Re(kz**2)| < 2*|Im(kz**2)|``: there a finite beam's
-        response depends on its width, and the solve's value is only Maystre's root. See
-        :class:`~wavebit._core.backend.GainCutoffWarning`, which a solve emits on the same test.
+        ``kz**2`` lies in the band ``|Re(kz**2)| < 2*|Im(kz**2)|`` on the gain side of the real
+        axis (above it for a double negative): there a finite beam's response depends on its
+        width, and the solve's value is only what the root rule gives (Maystre's cut, or its
+        mirror for a double negative). See :class:`~wavebit._core.backend.GainCutoffWarning`,
+        which a solve emits on the same test.
 
         Traceable, so a ``jax.jit`` or ``vmap`` caller, for whom the warning cannot run, can
-        still read the verdict per point. All False for passive half-spaces.
+        still read the verdict per point. All False for passive half-spaces. It flags the band
+        only: an active double negative that propagates, refused eagerly where it is set, is
+        solved under ``jax.jit`` with the mirror root on every order, and the orders outside
+        the band carry no physical answer either,
+        so check such a material once outside the trace.
 
         A magnetic scene reads the half-spaces' own ``epsilon`` and ``mu``, as
         :meth:`_solve_built` hands them to the solve. The index alone cannot answer: gain in

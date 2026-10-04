@@ -589,23 +589,36 @@ _GAIN_CUTOFF_RATIO = 2.0
 def gain_cutoff_band(xp, epsilon, mu, k_par_sq):
     """Per order: does a gain half-space put this order in the band near grazing?
 
-    True where the medium has gain (``Im(epsilon) < 0`` or ``Im(mu) < 0``), ``kz**2`` lies below
-    the real axis, and ``|Re(kz**2)| < _GAIN_CUTOFF_RATIO * |Im(kz**2)|``, with
+    True where the medium has gain (``Im(epsilon) < 0`` or ``Im(mu) < 0``), ``kz**2`` lies on
+    the gain side of the real axis, and ``|Re(kz**2)| < _GAIN_CUTOFF_RATIO * |Im(kz**2)|``, with
     ``kz**2 = epsilon*mu - k_par_sq`` normalised by ``k0``. There a finite beam's response
-    depends on its width, and the plane-wave value is only what Maystre's root gives; see
+    depends on its width, and the plane-wave value is only what the root rule gives; see
     :class:`~wavebit._core.backend.GainCutoffWarning`.
 
-    Keyed on the material's own gain, not on ``Im(epsilon*mu) < 0``: a passive medium with
-    ``Re(epsilon) < 0`` and ``Re(mu) < 0`` has a product below the real axis without any gain.
-    Traceable: elementwise comparisons only, so it is the per-order verdict a ``jax.jit`` or
-    ``vmap`` caller can still read when the warning cannot run.
+    **The gain side is below the axis, or above it in a double negative.** Gain lowers ``kz**2``
+    in an ordinary medium and *raises* it where ``Re(epsilon) < 0`` and ``Re(mu) < 0``, since
+    ``Im(eps*mu) = Re(eps) Im(mu) + Im(eps) Re(mu)``: there the band is the mirror image, the
+    one :func:`boundary_kz`'s mirrored cut runs through. The band of a double negative is that
+    of its double-positive mirror ``(-conj(epsilon), -conj(mu))`` to the bit. Testing the lower
+    half plane for every
+    medium flagged no active double negative at all. An active double negative that
+    propagates is refused where it is set (``engine._refuse_negative_index_half_space``), so it
+    reaches this only where that refusal cannot read a value -- under ``jax.jit`` -- which is
+    where this verdict is the one left to read.
+
+    Keyed on the material's own gain, not on the sign of ``Im(epsilon*mu)``: a passive double
+    negative has a product below the real axis without any gain. Traceable: elementwise
+    comparisons only, so it is the per-order verdict a ``jax.jit`` or ``vmap`` caller can still
+    read when the warning cannot run.
     """
     zero = xp.zeros_like(k_par_sq)
     epsilon, mu = epsilon + zero, mu + zero
     kz2 = epsilon*mu - k_par_sq
     gain = (xp.imag(epsilon) < 0) | (xp.imag(mu) < 0)
     near = xp.abs(xp.real(kz2)) < _GAIN_CUTOFF_RATIO*xp.abs(xp.imag(kz2))
-    return gain & (xp.imag(kz2) < 0) & near
+    mirrored = (xp.real(epsilon) < 0) & (xp.real(mu) < 0)
+    gain_side = xp.where(mirrored, xp.imag(kz2) > 0, xp.imag(kz2) < 0)
+    return gain & gain_side & near
 
 
 def incident_kz(kz_top, index):
