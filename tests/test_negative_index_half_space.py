@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 
 import wavebit
-from wavebit._core.conventions import boundary_kz
+from wavebit._core.conventions import boundary_kz, signed_index
 
 PERIOD, WL, N_GLASS = 1000.0, 500.0, 1.5
 PASSIVE = (-2 + 0.1j, -1 + 0.1j)
@@ -154,16 +154,237 @@ def test_a_passive_far_side_says_nothing():
     (-2 + 0.01j, 0.1 + 0.5j),    # eps*mu = -0.205-0.999j: below the axis, principal n reads as gain
 ])
 def test_one_negative_real_part_keeps_maystres_root(eps, mu):
-    """Only both negative is the backward-wave medium. One alone keeps its root, and the
-    reflectance agrees with the closed-form interface for s and p.
+    """Only both negative is the backward-wave medium. One alone keeps Maystre's root, and
+    ``r``, ``t``, ``R`` and ``T`` agree with the closed-form interface for s and p.
 
-    The last pair is passive yet its ``n_bot`` has ``Im(n) < 0``: no ``kz`` is decided on
-    ``n``, only on ``n**2``, which is what this pins (``engine._half_space_index``). Its ``t_p``
-    still reads that ``n`` and is not compared here (``docs/magnetic-materials.md``)."""
-    result = _solver(bot=wavebit.Material(eps, mu=mu)).solve()
-    expected = _interface(0.0, eps, mu)
-    for pol, sub in (('s', result.s_inc), ('p', result.p_inc)):
-        np.testing.assert_allclose(float(np.sum(sub.R)), expected[pol][2], atol=1e-12)
+    The last pair is passive and negative-phase-velocity (``Im(eps*mu) < 0``): its index is
+    ``sqrt(eps)*sqrt(mu) = -0.638+0.783j``, the negative of the principal root of the product,
+    which reads as gain. ``t_p`` reads that sign (``conventions.signed_index``); with the
+    principal root it was ``-t_s`` at normal incidence."""
+    _check_interface(eps, mu, thetas=(0.0, 30.0, 60.0))
+
+
+def test_the_signed_index_is_the_product_of_the_two_roots():
+    """``signed_index(eps, mu) == sqrt(eps)*sqrt(mu)`` on passive pairs of every sign, the
+    principal root of ``eps*mu`` itself -- to the bit -- wherever that root keeps
+    ``Im(n) >= 0``, and its exact negation where it does not.
+
+    The pairs placed on the boundary of the negative-phase-velocity class (``eps*mu`` on the
+    negative real axis, to within a few ulp) are where the sign of ``Re(sqrt(eps)*sqrt(mu))``
+    alone is round-off: read that way, 18% of them came back with the gain-reading root."""
+    rng = np.random.default_rng(11)
+    eps = rng.uniform(-5, 5, 4000) + 1j * rng.uniform(0, 2, 4000)
+    mu = rng.uniform(-5, 5, 4000) + 1j * rng.uniform(0, 2, 4000)
+    mu[::4] = mu[::4].real + 0j                               # lossless factors, both signs
+    eps[1::4] = eps[1::4].real + 0j
+    # The class boundary: Im(eps*mu) = 0 with Re(eps*mu) < 0, nudged by a few ulp either way.
+    e_b = rng.uniform(-5, 5, 2000) + 1j * rng.uniform(0.01, 2, 2000)
+    m_re = rng.uniform(-5, 5, 2000)
+    m_im = -e_b.imag * m_re / e_b.real
+    keep = m_im > 0
+    e_b, m_re, m_im = e_b[keep], m_re[keep], m_im[keep]
+    m_b = m_re + 1j * (m_im + rng.integers(-3, 4, m_im.size) * np.spacing(m_im))
+    eps, mu = np.concatenate([eps, e_b]), np.concatenate([mu, m_b])
+    n = signed_index(eps, mu)
+    product = np.sqrt(eps + 0j) * np.sqrt(mu + 0j)
+    np.testing.assert_allclose(n, product, rtol=1e-12, atol=0)
+    principal = np.sqrt(eps * mu)
+    same = (n == principal)
+    assert np.all(n[~same] == -principal[~same])
+    assert np.all((n.view(float) == principal.view(float)).reshape(-1, 2).all(axis=1) == same)
+    assert np.all(principal[same].imag >= 0) and np.any(~same)
+    # Python numbers: through cmath, a Python complex back, the same root.
+    for e, m in [(-2 + 0.1j, -1 + 0.1j), (-2 + 0.01j, 0.1 + 0.5j), (2.25, 1.3), (-2.0, -1.0)]:
+        got = signed_index(e, m)
+        assert type(got) is complex
+        assert got == pytest.approx(np.sqrt(complex(e)) * np.sqrt(complex(m)), abs=1e-15)
+    # A signed zero in a lossless factor is lossless, not gain.
+    assert signed_index(complex(-2.0, -0.0), -1.0 + 0j).real < 0
+
+
+@pytest.mark.parametrize('eps', [-(4 + 0j), complex(-3.0, -0.0), np.complex128(-(4 + 0j)),
+                                 -4 + 0j, 2.25, -2 + 0.1j, np.complex128(2 + 0.1j)])
+def test_naming_mu_one_keeps_the_non_magnetic_index_and_amplitudes(eps):
+    """``Material(eps, mu=1.0)`` takes the permeability path and must compute the numbers the
+    non-magnetic path does. The hard inputs are lossless metals written with a signed zero,
+    ``-(4+0j) == -4-0j``: ``eps*mu`` sits exactly on the negative real axis, where the principal
+    root ``-2j`` and its negation are equally lossless. The signed index keeps the principal root
+    there (``conventions.signed_index``), as ``sqrt(eps)`` does; turned to ``+2j`` it flipped
+    ``t_p`` against the non-magnetic solve of the same medium. Also pinned: ``n_bot`` keeps the
+    type the principal root gave it, a NumPy scalar for a NumPy scalar."""
+    out = {}
+    for name, bot in (('plain', eps), ('named', wavebit.Material(eps, mu=1.0))):
+        solver = _solver(bot=bot, theta=0.3, path='tm', algo='ETM')
+        result = solver.solve()
+        out[name] = (solver.n_bot, _host(result.incident.t_p), _host(result.incident.r_p))
+    plain, named = out['plain'], out['named']
+    assert type(named[0]) is type(plain[0])
+    assert np.asarray(named[0]).tobytes() == np.asarray(plain[0]).tobytes()
+    for a, b in zip(plain[1:], named[1:]):
+        np.testing.assert_allclose(b, a, rtol=1e-14, atol=1e-15)
+
+
+def test_on_the_axis_the_signed_index_is_the_principal_root():
+    """Lossless ``eps*mu`` exactly on the negative real axis, every placement of signed zeros:
+    no wave propagates, ``n`` is imaginary either way, and the index stays the principal
+    ``sqrt(eps*mu)`` it always was. A lossless double negative written with signed zeros is
+    still ``-sqrt(2)``, and a lossy medium that lands on the axis still decays."""
+    zeros = (0.0, -0.0)
+    for e, m in ((-4.0, 1.0), (-4.0, 2.0), (2.0, -1.0), (0.5, -0.5)):
+        for ze in zeros:
+            for zm in zeros:
+                eps, mu = complex(e, ze), complex(m, zm)
+                principal = np.sqrt(np.complex128(eps * mu))
+                for got in (signed_index(eps, mu),
+                            signed_index(np.asarray([eps]), np.asarray([mu]))[0]):
+                    assert np.asarray(got).tobytes() == np.asarray(principal).tobytes(), (eps, mu)
+    for ze in zeros:
+        for zm in zeros:
+            assert signed_index(complex(-2.0, ze), complex(-1.0, zm)) == -np.sqrt(2.0)
+    assert signed_index(-2 + 0.1j, 1 + 0.05j).imag > 0       # Im(eps*mu) = +0 exactly
+
+
+def _maystre_root(z):
+    """Maystre's root of each factor, written out: principal, negated where ``Re + Im < 0``."""
+    r = np.sqrt(np.asarray(z, dtype=complex) + 0j)
+    return np.where(r.real + r.imag < 0, -r, r)
+
+
+def test_each_factors_root_is_maystres():
+    """``n = sqrt(eps)*sqrt(mu)`` with each factor's root on Maystre's cut (A. A. Govyadinov,
+    V. A. Podolskiy and M. A. Noginov, Appl. Phys. Lett. 91, 191103 (2007)), steering the
+    principal ``sqrt(eps*mu)``. It is the principal-factor rule to the bit for every medium
+    without exactly one gain-metal factor (``Re < 0``, ``Im < 0``) -- every passive medium among
+    them -- and its exact negation for those, on the array path and on Python numbers alike, and
+    on JAX and PyTorch arrays."""
+    rng = np.random.default_rng(29)
+    size = 20000
+    eps = rng.uniform(-3, 3, size) + 1j * rng.uniform(-1, 1, size)
+    mu = rng.uniform(-3, 3, size) + 1j * rng.uniform(-1, 1, size)
+    eps[::7] = eps[::7].real + 0j                              # lossless factors, both signs
+    mu[1::7] = mu[1::7].real + 0j
+    r = np.sqrt(eps * mu)
+    turn = lambda q: np.where(((np.conj(r) * q).real < 0) & (r.real != 0), -r, r)
+    want = turn(_maystre_root(eps) * _maystre_root(mu))
+    before = turn(np.sqrt(eps + 0j) * np.sqrt(mu + 0j))
+    n = signed_index(eps, mu)
+    assert n.tobytes() == want.tobytes()
+    gain_metal = lambda z: (z.real < 0) & (z.imag < 0)
+    one = gain_metal(eps) ^ gain_metal(mu)
+    assert 0.2 < one.mean() < 0.5
+    assert n[~one].tobytes() == before[~one].tobytes()
+    assert np.all(n[one] == -before[one])
+    for i in range(0, size, 97):
+        got = signed_index(complex(eps[i]), complex(mu[i]))
+        assert type(got) is complex and (np.conj(got) * n[i]).real > 0
+    # A factor on Maystre's cut itself, sqrt(-2j) = 1-1j exactly: its tie keeps the root, as
+    # `boundary_kz`'s does, so the index points along the half-space's kz there too.
+    for m in (1.0 + 0j, 2.25 + 0j):
+        kz = boundary_kz(np, np.asarray([-2j * m]), np.zeros(1), medium=(-2j, m))[0]
+        for got in (signed_index(-2j, m), signed_index(np.asarray([-2j]), np.asarray([m]))[0]):
+            assert got == kz
+    for backend in ('jax', 'torch'):
+        lib = pytest.importorskip(backend)
+        if backend == 'jax':
+            wavebit.enable_x64()
+            got = np.asarray(signed_index(lib.numpy.asarray(eps), lib.numpy.asarray(mu)))
+        else:
+            got = signed_index(lib.tensor(eps), lib.tensor(mu)).numpy()
+        assert np.all((np.conj(got) * n).real > 0), backend
+
+
+def test_a_factor_on_maystres_cut_keeps_its_root_whatever_the_round_off():
+    """A factor exactly on the negative imaginary axis (``Re = 0``, ``Im < 0``) has both roots on
+    Maystre's cut, ``Re + Im = 0``, and the tie keeps the principal one. The computed sum is
+    round-off of either sign, by backend: reading it turned the index of ``(-0.1j, -3)`` -- no
+    double negative, no gain-metal factor -- against the ``kz`` it is solved with, so ``t_p`` was
+    ``-t_s`` at normal incidence on NumPy, JAX and Python numbers and ``+t_s`` on PyTorch, and
+    with ``mu = -3`` so it went for 67 of the factors ``-0.01j .. -3.00j``. The decision is now
+    read off the factor (``conventions._maystre_factor``): the index points along ``kz`` for
+    every one of them, on every backend, either factor on the axis, and ``t_p = t_s``."""
+    b = np.round(np.arange(1, 301) * 0.01, 2)
+    axis = np.asarray([complex(0.0, -x) for x in b])
+    other = np.full_like(axis, -3 + 0j)
+    kz = boundary_kz(np, axis * other, np.zeros(axis.size), medium=(axis, other))
+    assert np.all(kz.real > 0) and np.all(kz.imag > 0)       # kz**2 = 3bi: no tie in kz
+    for eps, mu in ((axis, other), (other, axis)):
+        got = {'numpy': signed_index(eps, mu),
+               'python': np.asarray([signed_index(complex(e), complex(m))
+                                     for e, m in zip(eps, mu)])}
+        for backend in ('jax', 'torch'):
+            lib = pytest.importorskip(backend)
+            if backend == 'jax':
+                wavebit.enable_x64()
+                got[backend] = np.asarray(signed_index(lib.numpy.asarray(eps),
+                                                       lib.numpy.asarray(mu)))
+            else:
+                got[backend] = signed_index(lib.tensor(eps), lib.tensor(mu)).numpy()
+        for name, n in got.items():
+            assert np.all((np.conj(n) * kz).real > 0), name
+            np.testing.assert_allclose(n, kz, rtol=1e-15, atol=0, err_msg=name)
+    # Through the solver, the materials as Python numbers and as each backend's arrays.
+    for backend, wrap in ((0, complex), (0, np.asarray), (1, 'jax'), (2, 'torch')):
+        if wrap == 'jax':
+            jnp = pytest.importorskip('jax').numpy
+            wrap = jnp.asarray
+        elif wrap == 'torch':
+            torch = pytest.importorskip('torch')
+            wrap = lambda v: torch.tensor(v, dtype=torch.complex128)   # noqa: E731
+        medium = wavebit.Material(wrap(-0.1j), mu=wrap(-3 + 0j))
+        solver = _solver(bot=medium, theta=0.0, path='2d', backend=backend)
+        result = solver.solve()
+        t_s = complex(np.sum(_host(result.s_inc.t_s)))
+        t_p = complex(np.sum(_host(result.p_inc.t_p)))
+        assert abs(t_p - t_s) < 1e-13 * abs(t_s), (backend, wrap)
+        assert complex(_host(solver.n_bot)).real > 0
+
+
+@pytest.mark.parametrize('eps, mu, along', [
+    ((-2 - 0.1j), 1.0 + 0j, True),         # a gain metal named with mu = 1: evanescent
+    ((2 + 0.1j), (-1 - 0.1j), True),       # the gain metal in mu
+    ((-2 - 0.01j), (0.1 - 0.5j), True),    # a magnetic metal with gain
+    ((-2 + 0.01j), (0.1 + 0.5j), True),    # passive, for contrast
+    ((-0.1 - 2j), (0.1 + 2j), False),      # a gain-metal factor that propagates: against kz
+])
+def test_t_p_is_t_s_at_normal_incidence_where_the_index_points_along_kz(eps, mu, along):
+    """At normal incidence an isotropic interface has no s or p: the far side's ``kz`` is
+    ``+-n``, and ``t_p = t_s`` exactly when the signed index points along the ``kz`` the
+    half-space is solved with, ``t_p = -t_s`` when it points against it.
+
+    With each factor's root principal, every medium with one gain-metal factor that does not
+    propagate pointed against its ``kz`` (``t_p = -t_s``); with Maystre's roots they point along
+    it. The few that propagate go the other way (study section 3: 5,839 of 400,000 random media
+    against 93,797); the last case pins that, so a change to it is a decision, not an accident."""
+    medium = wavebit.Material(eps, mu=mu)
+    solver = _solver(bot=medium, theta=0.0, path='2d')
+    result = solver.solve()
+    n = complex(solver.n_bot)
+    kz = boundary_kz(np, np.asarray([eps * mu]), np.zeros(1), medium=(eps, mu))[0]
+    assert ((np.conj(n) * kz).real > 0) == along
+    t_s = complex(np.sum(_host(result.s_inc.t_s)))
+    t_p = complex(np.sum(_host(result.p_inc.t_p)))
+    assert abs(t_p - (1 if along else -1) * t_s) < 1e-13 * abs(t_s)
+
+
+@pytest.mark.parametrize('which', ['eps', 'mu'])
+def test_t_p_is_continuous_across_a_real_part_seam(which):
+    """``Re(eps)`` (with ``mu = -1+0.1j``) or ``Re(mu)`` (with ``eps = -2+0.1j``) crossing zero
+    takes a passive far side into and out of the double-negative class, and nothing physical
+    happens there: ``n_bot`` and every amplitude move by ``O(x)``. A sign keyed on both real
+    parts being negative made ``n_bot`` and ``t_p`` jump by ``2*n`` at the seam, which no power
+    quantity and no gradient sees."""
+    pair = ((lambda x: (x + 0.3j, -1 + 0.1j)) if which == 'eps' else
+            (lambda x: (-2 + 0.1j, x + 0.4j)))
+    rows = []
+    for x in (-1e-9, -1e-12, 0.0, 1e-12, 1e-9):
+        solver = _grating('conical', 'SMM', nim=pair(x))
+        result = solver.solve(auto_detune=False)
+        rows.append(np.concatenate([[solver.n_bot]] + [
+            np.ravel(_host(getattr(v, f))) for v in _variants(result, 'conical')
+            for f in ('r_s', 'r_p', 't_s', 't_p')]))
+    rows = np.asarray(rows)
+    assert np.max(np.abs(np.diff(rows, axis=0))) < 1e-8
+    assert np.min(np.abs(rows[:, 0])) > 0.2
 
 
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
@@ -383,6 +604,143 @@ def test_the_coherent_door_agrees_with_the_ordinary_solve():
     points = dict(sample_x=[-123.0, 211.0], sample_y=[0.0], sample_z=[10.0, 90.0])
     np.testing.assert_allclose(coherent.reconstruct_field(**points),
                                ordinary.reconstruct_field(**points), atol=1e-12)
+
+
+# ------------------------------------------------------------------- the mirror medium, -conj
+
+def _mirrored(value):
+    """``-conj(value)``; a number stays a Python complex, so both scenes take one square root.
+
+    (``cmath.sqrt`` and NumPy's differ in the last bit on some arguments, and a mirror that
+    handed the index a NumPy scalar where the original handed a Python one moved ``t_p`` by
+    an ulp for that reason alone.)"""
+    return complex(-np.conj(value)) if np.ndim(value) == 0 else -np.conj(value)
+
+
+def _amplitudes_by_name(result):
+    """``{'incident.r_s': array, ...}``: every amplitude and power the result carries."""
+    out = {}
+    for name in ('incident', 's_inc', 'p_inc'):
+        sub = getattr(result, name, None)
+        for field in ('r_s', 'r_p', 't_s', 't_p', 'R', 'T'):
+            value = None if sub is None else getattr(sub, field, None)
+            if value is not None:
+                out[f'{name}.{field}'] = np.ravel(_host(value))
+    return out
+
+
+def _mirror_scene(path, algo, side, theta, far, eps=None, mu=None, thickness=(10.0,),
+                  truncation_order=None):
+    """Glass ``(2.25, 1)`` lit at ``theta`` onto the half-space ``far`` through the raster layers
+    ``eps`` / ``mu`` -- or through none, by ``solve_conv``, when they are ``None``."""
+    shape = (1, 1, 4) if path in ('te', 'tm', 'conical') else (1, 2, 2)
+    layers = eps is not None
+    if not layers:
+        eps, mu = np.full(shape, 2.25 + 0j), np.full(shape, 1.0 + 0j)
+    glass, medium = wavebit.Material(2.25 + 0j, mu=1.0 + 0j), wavebit.Material(*far)
+    top, bot = (glass, medium) if side == 'top' else (medium, glass)
+    common = dict(top=top, bot=bot, theta=theta, wavelength=WL, layer_algorithm=algo,
+                  thickness=list(thickness), answers='amplitude', incidence_side=side,
+                  structure=eps, mu=mu)
+    if path in ('te', 'tm'):
+        solver = wavebit.rcwa(**common, tetm=path, period=[700.0],
+                              truncation_order=truncation_order or 3)
+    elif path == 'conical':
+        solver = wavebit.rcwa(**common, phi=0.6, psi=0.3, period=[700.0],
+                              truncation_order=truncation_order or 3)
+    else:
+        solver = wavebit.rcwa(**common, phi=0.6, psi=0.3, period=(700.0, 630.0),
+                              truncation_order=truncation_order or (1, 1))
+        if path == '4ff':
+            solver.formulation = '4ff'
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        if layers:
+            return _amplitudes_by_name(solver.solve(auto_detune=False))
+        e, m = solver.eps_conv_matrices(), solver.mu_conv_matrices()
+        solver.thickness = []
+        return _amplitudes_by_name(solver.solve_conv(
+            *(None if a is None else a[:0] for a in e), mu=tuple(None if a is None else a[:0]
+                                                               for a in m),
+            eps_top=solver.top.epsilon, mu_top=solver.top.mu, eps_bot=solver.bot.epsilon,
+            mu_bot=solver.bot.mu))
+
+
+MIRROR_PAIRS = {'lossy': (2 + 0.1j, 1.5 + 0.05j), 'lossless': (2.25 + 0j, 1.3 + 0j),
+                'lossless, evanescent at 60 deg': (1.2 + 0j, 1.0 + 0j)}
+
+
+@pytest.mark.parametrize('algo', ['ETM', 'SMM'])
+@pytest.mark.parametrize('side', ['top', 'bottom'])
+@pytest.mark.parametrize('path', ['te', 'tm', 'conical', '2d', '4ff'])
+def test_the_mirror_medium_conjugates_every_reflection(path, side, algo):
+    """Light from a real medium at a real angle: a far half-space ``(eps, mu)`` replaced by
+    ``(-conj(eps), -conj(mu))`` sends every reflection amplitude to its conjugate and leaves
+    ``|r|`` and ``|t|`` -- every ``R`` and ``T`` -- unchanged. The mirror medium is A. Lakhtakia's
+    conjugation symmetry (Microwave Opt. Technol. Lett. 40, 160 (2004)), which conjugates ``E``
+    and ``H``; V. Grunhut and R. A. Depine (Eur. Phys. J. D 62, 227 (2011)) apply it to a flat
+    interface, where the Fresnel coefficients change phase and not magnitude. The mirror of a
+    positive medium is a double negative: its root
+    is ``-conj`` of the other's (the mirror of Maystre's cut is ``-conj(maystre(conj z))``), its
+    admittances ``kz/mu`` and ``kz/eps`` are the conjugates, and its signed index is
+    ``-conj(n)``, so ``t`` goes to ``conj(t)`` too. Every operation the solve does on the bare
+    interface is one whose conjugate is the conjugate operation, so this is exact: measured
+    bit for bit on every path, side and algorithm, lossy and lossless, propagating and
+    evanescent in the far medium, 0, 0.3 rad and 60 degrees. It fails if the double negative
+    takes Maystre's root or the principal index."""
+    for name, far in MIRROR_PAIRS.items():
+        for theta in (0.0, 0.3, np.deg2rad(60.0)):
+            plain = _mirror_scene(path, algo, side, theta, far)
+            mirror = _mirror_scene(path, algo, side, theta, tuple(_mirrored(v) for v in far))
+            for key, value in plain.items():
+                want = value if key.endswith(('.R', '.T')) else np.conj(value)
+                assert np.array_equal(mirror[key], want), (name, theta, key)
+
+
+def test_mirroring_everything_below_the_light_conjugates_it_through_layers():
+    """The same identity, layer by layer: under ``(eps, mu) -> (-conj(eps), -conj(mu))`` a layer's
+    first-order system becomes its conjugate, so its transfer matrix does, and with every layer
+    and the far half-space mirrored the reflection conjugates again -- provided every retained
+    order propagates in the lit medium, whose admittances are then real. Two lossy layers, a
+    positive and a double negative, become a double negative and a positive one; a grating
+    symmetric about the cell centre (whose convolution matrices are then symmetric) mirrors the
+    same way. Measured 7.8e-15 at worst, relative to ``max(1, |amplitude|)``. It exercises the
+    double-negative layers' modes on every path (their labels move no exact answer, so it does
+    not see those)."""
+    def uniform(path):
+        shape = (1, 9) if path in ('te', 'tm', 'conical') else (5, 5)
+        return (np.stack([np.full(shape, 2 + 0.1j), np.full(shape, -3 + 0.2j)]),
+                np.stack([np.full(shape, 1.2 + 0.05j), np.full(shape, -1.1 + 0.1j)]))
+
+    def grating(path):
+        shape = (1, 1, 9) if path in ('te', 'tm', 'conical') else (1, 5, 5)
+        eps, mu = np.full(shape, 2.0 + 0.1j), np.full(shape, 1.0 + 0j)
+        middle = (0, 0, slice(3, 6)) if len(shape) == 3 and shape[1] == 1 else (
+            0, slice(1, 4), 2)
+        eps[middle], mu[middle] = -3 + 0.3j, -1.2 + 0.1j
+        return eps, mu
+
+    worst = 0.0
+    for path in ('te', 'tm', 'conical', '2d', '4ff'):
+        for build, thickness in ((uniform, (60.0, 90.0)), (grating, (60.0,))):
+            eps, mu = build(path)
+            for far in MIRROR_PAIRS.values():
+                for algo in ('ETM', 'SMM'):
+                    for side in ('top', 'bottom'):
+                        for theta in (0.0, 0.2):
+                            kw = dict(thickness=thickness,
+                                      truncation_order=1 if path in ('te', 'tm', 'conical')
+                                      else (1, 1))
+                            plain = _mirror_scene(path, algo, side, theta, far, eps, mu, **kw)
+                            mirror = _mirror_scene(path, algo, side, theta,
+                                                   tuple(_mirrored(v) for v in far),
+                                                   _mirrored(eps), _mirrored(mu), **kw)
+                            for key, value in plain.items():
+                                want = value if key.endswith(('.R', '.T')) else np.conj(value)
+                                gap = np.abs(mirror[key] - want).max() / max(
+                                    1.0, np.abs(value).max())
+                                worst = max(worst, gap)
+    assert worst < 1e-13
 
 
 # --------------------------------------------------------------------------- what is refused

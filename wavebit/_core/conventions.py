@@ -350,10 +350,16 @@ def boundary_kz(xp, eps, k_par_sq, medium=None):
     S. Guenneau, M. Zerrad and C. Amra, arXiv:1312.6288 (2013), and PyMoosh's code (D. Langevin
     et al., J. Opt. Soc. Am. B 41, A67 (2024)) state the same switch. None writes it as a cut on
     the positive imaginary axis, and the literature has no name for that cut; "the mirror of
-    Maystre's cut" is a description. The rule assumes ``Im(eps) >= 0`` and ``Im(mu) >= 0``; the
-    effective ``Im(mu)`` of a homogenised passive medium can be negative (B. Gralak, C. R.
-    Physique 21, 343 (2020)), and then neither cut is the outgoing wave -- such a double negative
-    propagates and the engine refuses it as active.
+    Maystre's cut" is a description. The mirror medium ``(-conj(eps), -conj(mu))`` is
+    A. Lakhtakia's conjugation symmetry, Microwave Opt. Technol. Lett. 40, 160 (2004), which
+    conjugates ``E`` and ``H``; V. Grunhut and R. A. Depine, Eur. Phys. J. D 62, 227 (2011),
+    apply it to a flat interface, where it changes the phase of the Fresnel coefficients and not
+    their magnitude. Lit from a lossless medium with the far side mirrored, its consequence for a
+    solve is ``r -> conj(r)``, to the bit (``tests/test_negative_index_half_space.py``). The rule
+    assumes ``Im(eps) >= 0`` and ``Im(mu) >= 0``; the effective
+    ``Im(mu)`` of a homogenised passive medium can be negative (B. Gralak, C. R. Physique 21, 343
+    (2020)), and then neither cut is the outgoing wave -- such a double negative propagates and
+    the engine refuses it as active.
 
     ``medium`` is the half-space's ``(epsilon, mu)`` and selects that rule where both real parts
     are negative; ``None`` -- a caller holding only ``eps*mu``, and every non-magnetic solve --
@@ -401,6 +407,152 @@ def double_negative(xp, epsilon, mu, like):
     """
     zero = xp.zeros_like(like)
     return (xp.real(epsilon + zero) < 0) & (xp.real(mu + zero) < 0)
+
+
+def _maystre_factor(factor):
+    """``sqrt(factor)`` on Maystre's cut: the principal root, negated where ``Re + Im < 0``.
+
+    The root of switching the factor's loss or gain on from its lossless value
+    (:func:`boundary_kz`'s rule, with its tie: ``Re + Im == 0`` keeps the principal root). It is
+    the principal root itself wherever that lies in the closed first quadrant or has ``Re > 0``
+    -- every factor in the closed upper half plane, and every active factor with ``Re > 0`` --
+    and differs only for an active factor with ``Re < 0`` (a gain metal).
+
+    **Decided on the factor, not on the root's round-off.** For the principal root
+    ``w = u + iv`` of ``z`` (``u >= 0``), ``Re(z) = (u - v)(u + v)`` and ``Im(z) = 2uv``: where
+    ``v < 0``, ``u + v < 0`` exactly when ``Re(z) < 0``, and where ``v >= 0`` never. So
+    ``Re(w) + Im(w) < 0`` is ``Re(z) < 0`` and ``Im(w) < 0``, two signs no round-off moves
+    (``sqrt`` gives ``Im(w)`` the sign of a nonzero ``Im(z)``), and the tie, ``Re(z) = 0``
+    with ``Im(z) < 0``, is never negated. Read off the computed sum, the tie was round-off --
+    ``Re + Im`` of a root of ``-0.1j`` comes out ``-2.8e-17``, ``+2.8e-17`` or exactly 0 by
+    backend and by the sign of a zero real part -- so ``(eps, mu) = (-0.1j, -3)``, no double
+    negative and no gain-metal factor, had its index turned against its ``kz`` (``t_p = -t_s``
+    at normal incidence) on NumPy, JAX and :mod:`cmath` and not on PyTorch, and with ``mu = -3``
+    so did 67 of the 300 factors ``-0.01j .. -3.00j``, on all but PyTorch. On the negative
+    real axis, ``Im(z) = 0``, the root is ``+-i*sqrt(-Re(z))`` and ``Im(w)`` alone decides, as
+    the sum did. A Python number stays one; an array goes through ``where``.
+    """
+    from .domain import index_from_eps          # `domain` imports this module
+    root = index_from_eps(factor)
+    if not hasattr(root, 'dtype'):
+        return -root if factor.real < 0 and root.imag < 0 else root
+    xp = array_namespace(root)
+    out = xp.where((xp.real(factor) < 0) & (xp.imag(root) < 0), -root, root)
+    return out[()] if isinstance(root, np.generic) else out
+
+
+def signed_index(epsilon, mu):
+    """A magnetic half-space's index, ``n = sqrt(epsilon)*sqrt(mu)``, each root on Maystre's cut.
+
+    The one place an ``(epsilon, mu)`` pair becomes an index. The public ``n_top`` / ``n_bot``
+    (``engine._half_space_index``), and through them the kernels, the incident ``kx`` and the
+    field door, read it, and so does the coherent door's plane-wave basis
+    (``illumination._plane_basis``): two spellings could disagree about what a ``p`` amplitude
+    or an angle means. A non-magnetic medium never comes here; its index is
+    :func:`~wavebit._core.domain.index_from_eps` of ``epsilon`` alone.
+
+    **Why a product of two roots.** ``eps*mu`` has two square roots, and only one is the index.
+    For a passive medium each factor lies in the closed upper half plane, so each principal root
+    lies in the closed first quadrant and their product in the closed upper half plane:
+    ``Im(n) >= 0``, the loss of this ``e^{-iwt}`` convention, whatever the signs of the real
+    parts. The principal root of the product does not keep that. A passive double negative
+    (``eps = -2+0.1j``, ``mu = -1+0.1j``) multiplies to ``1.99-0.3j``, whose principal root
+    ``1.41-0.11j`` reads as gain, and so does a passive magnetic metal (``eps = -2+0.01j``,
+    ``mu = 0.1+0.5j``, product ``-0.205-0.999j``). The index of both is the *negative* of that
+    root, with ``Re(n) < 0``: they are negative-phase-velocity media, in which the phase
+    advances against the power. V. G. Veselago, Sov. Phys. Usp. 10, 509 (1968), writes
+    ``n = p*sqrt(eps*mu)`` with ``p = -1`` for the double negative; the condition
+    ``Re(sqrt(eps)*sqrt(mu)) < 0`` for the whole class is that of M. W. McCall, A. Lakhtakia and
+    W. S. Weiglhofer, Eur. J. Phys. 23, 353 (2002), and R. A. Depine and A. Lakhtakia, Microwave
+    Opt. Technol. Lett. 41, 315 (2004). For a passive medium off the real axis of ``eps*mu`` it
+    is ``Im(eps*mu) < 0`` (R. Ruppin's form, which Depine and Lakhtakia give); a lossless double
+    negative sits on that axis, ``Im(eps*mu) = 0``, and is negative-phase-velocity all the same.
+    It never holds for a non-magnetic medium, and among media in which waves propagate
+    (``Re(eps*mu) > 0``) it holds exactly for the double negatives. For a passive medium the
+    product of principal roots is also the causal index, the one that continues analytically
+    into the upper half of the complex-frequency plane (J. Skaar, URSI EMTS 2010,
+    arXiv:1008.2874).
+
+    **Each factor's root is Maystre's**, the one with ``Re + Im >= 0``: the root of switching
+    that factor's loss or gain on from its lossless value, the rule :func:`boundary_kz` gives a
+    half-space. A. A. Govyadinov, V. A. Podolskiy and M. A. Noginov, Appl. Phys. Lett. 91,
+    191103 (2007), take ``n = sqrt(eps)*sqrt(mu)`` with each factor's root cut along the
+    negative imaginary axis, which is this cut; they note that their table of which media decay
+    and which grow cannot be reduced to a single cut in the complex plane. For every passive
+    factor it *is* the principal root -- both lie in the closed first quadrant -- and so it is
+    for an active factor with ``Re > 0``; so every passive medium, and every active one without
+    a gain-metal factor, keeps the index it had to the bit. The two differ only for an active
+    factor with ``Re < 0`` (``Im < 0``: a gain metal), whose principal root has ``Re + Im < 0``,
+    and a medium with exactly one such factor gets the exact negation of its former index. A
+    factor exactly on the negative imaginary axis is the cut's tie and keeps its principal root,
+    decided on the factor's real part rather than on the root's round-off
+    (:func:`_maystre_factor`).
+
+    For an active medium the sign is a convention -- no rule at one frequency says which index
+    is physical (J. Skaar, Phys. Rev. E 73, 026605 (2006), and URSI EMTS 2010) -- and this one
+    is chosen to point along the root the solve takes: at normal incidence the half-space's
+    ``kz`` is ``+-n``, and ``t_p = t_s`` there exactly when ``n`` points along it. On 400,000
+    random media it does for every passive
+    medium either way and for 97.6% of active ones with no gain-metal factor either way; with a
+    gain-metal factor, not double negative, for all 93,797 that are evanescent (none under
+    principal factors) and for none of the 5,839 that propagate (all under principal factors);
+    never for an active double negative that does not propagate (both factors flip, so nothing
+    changes); and for every active double negative that propagates, which is refused. One
+    consequence: a gain metal named with ``mu = 1`` (``Material(-2-0.1j, mu=1.0)``) now has the
+    opposite ``n`` -- and ``t_p`` -- to the same permittivity unnamed, whose index stays
+    :func:`~wavebit._core.domain.index_from_eps`, the principal root.
+
+    **What the sign decides.** ``n**2`` does not depend on it, so no ``kz`` does. The kernels
+    quote a ``p`` amplitude along a ``p_hat`` normalised by ``n``, so it sets the sign of
+    ``t_p`` (with the principal root, a far side of either medium above had ``t_p = -t_s`` at
+    normal incidence), and on the lit side it sets the sign of the incident ``kx`` for a real
+    angle (``engine.CoreSolveMixin._incident_kxy``).
+
+    **How it is computed.** The principal ``sqrt(eps*mu)`` -- the expression this index always
+    was -- negated where it points away from ``sqrt(eps)*sqrt(mu)``: where
+    ``Re(conj(r)*q) < 0``, ``r`` the principal root and ``q`` the product of the two factors'
+    roots, each principal and then taken to Maystre's cut (:func:`_maystre_factor`). A medium
+    that is not negative-phase-velocity gets ``r`` itself, to the bit; one that is gets ``-r``,
+    an exact negation, so ``n**2`` keeps its bits. ``q`` only steers: it equals ``r`` or ``-r``
+    up to round-off, so the projection is ``+-|n|**2`` and its sign is never in doubt, where the
+    sign of ``Re(q)`` alone is round-off on the boundary of the class -- ``eps*mu`` on the
+    negative real axis, where ``n`` is imaginary. On 199930 passive pairs placed on that
+    boundary to within 3 ulp, reading ``Re(q)`` alone returned the gain-reading root for 35855
+    and the projection for none; off it the two agree to the bit on 1e6 random passive pairs.
+    ``q`` is formed from
+    ``epsilon + 0j`` and ``mu + 0j``, so a signed zero in a lossless value counts as lossless,
+    not as gain: a lossless double negative written ``(complex(-2, -0.0), -1+0j)`` is
+    ``-sqrt(2)``, not ``+sqrt(2)``. (Spell such a zero with ``complex()``: the expression
+    ``-2-0j`` has a ``+0.0`` imaginary part on Python 3.12 and 3.13 and a ``-0.0`` one from 3.14,
+    which converts the real operand of mixed real-complex arithmetic to a float, CPython
+    gh-69639.) The result is continuous across
+    ``Re(eps) = 0`` and ``Re(mu) = 0`` for every passive medium; a test on the signs of the real
+    parts steps there.
+
+    **Except on the axis itself.** Where ``eps*mu`` lies exactly on the negative real axis the
+    principal root is purely imaginary (``Re(r) == 0``), and ``-r`` is no more passive than
+    ``r``: the medium carries no wave, and which lip of the cut a lossless value sits on is
+    decided by the sign of a zero. There ``r`` is returned unturned, the root the index always
+    was and the one the non-magnetic index takes, so ``Material(-(4+0j), mu=1.0)`` has the
+    ``n_top`` -- and the ``t_p`` -- of ``-(4+0j)`` alone, as naming ``mu = 1`` promises. Off the
+    axis ``Re(r) > 0`` and nothing changes. A lossy medium that lands on the axis
+    (``eps = -2+0.1j``, ``mu = 1+0.05j``) has ``Im(eps*mu) = +0`` and gets the decaying root
+    either way.
+
+    Python numbers in, a Python number out (through :mod:`cmath`, as ``index_from_eps``); a NumPy
+    scalar in, a NumPy scalar out, as the principal root gave. Arrays and tracers go through
+    their own namespace, with ``where`` rather than a branch on a value, so the sign is decided
+    under ``jax.jit`` too.
+    """
+    from .domain import index_from_eps          # `domain` imports this module
+    n = index_from_eps(epsilon * mu)
+    q = _maystre_factor(epsilon + 0j) * _maystre_factor(mu + 0j)
+    if not hasattr(n, 'dtype') and not hasattr(q, 'dtype'):
+        return -n if (n.conjugate() * q).real < 0 and n.real != 0 else n
+    xp = array_namespace(n if hasattr(n, 'dtype') else q)
+    out = xp.where((xp.real(xp.conj(n) * q) < 0) & (xp.real(n) != 0), -n, n)
+    # `where` hands NumPy scalars back as 0-d arrays; the index was a scalar before it was signed.
+    return out[()] if isinstance(n, np.generic) else out
 
 
 def half_space_medium(epsilon, mu):

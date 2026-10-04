@@ -24,7 +24,7 @@ from .backend import _concrete, _device_of, array_namespace, as_array, check_inp
 from .conventions import (_CHI_POLARIZATION_CLASH, _COMPLEX_CHI, _DIRECTION_CLASH,
                           _PSI_POLARIZATION_CLASH, _TETM_INCIDENCE_CLASH,
                           centre_parity, corner_column, swap_fourier_origin, incident_phase_index,
-                          incident_sp_amplitudes, lit_orders, order_window,
+                          incident_sp_amplitudes, lit_orders, order_window, signed_index,
                           parse_order_pair, reject_complex_angle, transverse_component_problem,
                           warn_if_xy_on_a_skewed_cell)
 from .domain import Material, as_material, index_from_eps
@@ -288,45 +288,36 @@ _GAIN_CUTOFF_MESSAGE = (
 
 
 def _half_space_index(material, where='top'):
-    """``sqrt(eps*mu)`` -- the one place a half-space material becomes an index.
+    """A half-space's refractive index -- the one place a half-space material becomes one.
 
-    **The branch is verified, not chosen -- for a non-magnetic medium.** A passive permittivity
-    has ``Im(eps) >= 0`` in this project's ``e^{-iwt}`` convention, so it lies in the closed
-    upper half plane, whose principal square root lies in the first quadrant: ``Im(n) >= 0``,
-    which is loss again. That is the same argument
+    **A non-magnetic medium: the principal ``sqrt(eps)``, verified rather than chosen.** A
+    passive permittivity has ``Im(eps) >= 0`` in this project's ``e^{-iwt}`` convention, so it
+    lies in the closed upper half plane, whose principal square root lies in the first
+    quadrant: ``Im(n) >= 0``, which is loss again. That is the same argument
     :func:`~wavebit._core.conventions.boundary_kz` rests on, and it is why
-    :func:`~wavebit._core.domain.index_from_eps` -- which is the principal root and nothing
-    else -- is already the right function here. No branch rule is invented.
+    :func:`~wavebit._core.domain.index_from_eps` -- the principal root and nothing else -- is
+    already the right function here.
 
-    A passive *magnetic* medium need not keep that. A magnetic metal, ``eps = -2+0.01j`` with
-    ``mu = 0.1+0.5j``, multiplies to ``-0.205-0.999j``, and its principal ``n = 0.638-0.783j``
-    reads as gain. No ``kz`` is decided on that ``n``: every ``kz`` is taken from
-    ``n**2 = eps*mu`` by ``boundary_kz``, and a real angle reaches ``kx`` through ``eps*mu``
-    too (``incident_phase_index``), so ``R`` and ``T`` are right
-    (``tests/test_negative_index_half_space.py::test_one_negative_real_part_keeps_maystres_root``).
-    What reads it is the public ``n_top`` / ``n_bot``, the formal ``kx = n*sin(theta)`` of
-    a complex angle, and the sign of a transmitted ``t_p``: the kernels quote it along a
-    ``p_hat`` normalised by this ``n``, so with the principal root that medium's ``t_p`` is
-    ``-t_s`` at normal incidence where the physical index ``sqrt(eps)*sqrt(mu) = -0.638+0.783j``
-    would give ``+t_s``. Left as it was here; the double negative below is the case this
-    function now signs.
-
-    **A double negative takes the negative root.** With ``Re(eps) < 0`` and ``Re(mu) < 0`` the
-    index is ``-sqrt(eps*mu)``: Veselago's ``n < 0``, the product ``sqrt(eps)*sqrt(mu)`` of the
-    two passive roots, and the root :func:`~wavebit._core.conventions.boundary_kz` takes for
-    such a medium at normal incidence. ``n**2`` is unchanged to the bit -- negation is exact --
-    so no ``kz`` moves; what the sign sets is ``n/mu = sqrt(eps/mu)``, the medium's admittance,
-    with a positive real part as a passive medium's must have, and with it the transmitted
-    ``t_p`` (``t_p = t_s`` at normal incidence, as for any other medium) and the ``p_hat`` the
-    field state expands it with. The test is on the material, eagerly where the values are
-    concrete and by ``where`` under a trace, so a non-double-negative medium returns the
-    principal root itself.
+    **A magnetic medium: ``sqrt(eps)*sqrt(mu)``** (:func:`~wavebit._core.conventions.signed_index`).
+    The principal root of the product is the index wherever it keeps ``Im(n) >= 0`` for a
+    passive medium, and returned to the bit there. It does not for a negative-phase-velocity
+    medium -- every passive double negative (``eps = -2+0.1j``, ``mu = -1+0.1j``) and the
+    passive magnetic metals (``eps = -2+0.01j``, ``mu = 0.1+0.5j``) -- whose index is that
+    root's negative, ``Re(n) < 0`` (Veselago's ``n < 0``). Negation is exact, so ``n**2`` keeps
+    its bits and no ``kz`` moves: every ``kz`` is taken from ``n**2 = eps*mu`` by
+    ``boundary_kz``. What the sign sets is ``n/mu``, the medium's admittance, with the positive
+    real part a passive medium's must have, and with it the sign of a transmitted ``t_p``
+    (``t_p = t_s`` at normal incidence, as for any medium; with the principal root it was
+    ``-t_s``), the ``p_hat`` the field state expands it with, and -- on the lit side -- the
+    direction of the incident ``kx`` for a real angle (:meth:`CoreSolveMixin._incident_kxy`).
+    The public ``n_top`` / ``n_bot`` read this, and a complex angle's formal
+    ``kx = n*sin(theta)`` does.
 
     ``mu`` multiplies in rather than being dropped: the index of a magnetic medium is
-    ``sqrt(eps*mu)``, and every ``kz``, every Snell relation and the whole order grid are
-    written in terms of it. The two admittances the boundary needs -- ``kz/eps`` and ``kz/mu``
-    -- are recovered from ``mu`` separately (see :func:`wavebit._core.solve_2d.solve_2d`), so
-    nothing here has to keep them apart.
+    ``sqrt(eps*mu)`` up to that sign, and every ``kz``, every Snell relation and the whole order
+    grid are written in terms of it. The two admittances the boundary needs -- ``kz/eps`` and
+    ``kz/mu`` -- are recovered from ``mu`` separately (see :func:`wavebit._core.solve_2d.solve_2d`),
+    so nothing here has to keep them apart.
 
     An **unnamed** ``mu`` is left out of the product entirely rather than folded in as a
     literal one. That is not a micro-optimisation: it keeps ``sqrt(eps)`` bit-for-bit what it
@@ -341,13 +332,7 @@ def _half_space_index(material, where='top'):
     _refuse_negative_index_half_space(material, where)
     if not material.is_magnetic:
         return index_from_eps(material.epsilon)
-    n = index_from_eps(material.epsilon * material.mu)
-    flag = _double_negative(material.epsilon, material.mu)
-    concrete = _concrete(flag)
-    if concrete is not None:
-        return -n if concrete else n
-    xp = array_namespace(n)
-    return xp.where(flag, -n, n)
+    return signed_index(material.epsilon, material.mu)
 
 
 def _real_part(value):
@@ -1023,10 +1008,13 @@ class CoreSolveMixin:
 
     @property
     def n_top(self):
-        """The superstrate's refractive index, ``sqrt(eps*mu)`` -- **derived, read-only**.
+        """The superstrate's refractive index, ``sqrt(eps)*sqrt(mu)`` -- **derived, read-only**.
 
-        The root of a double negative (``Re(eps) < 0`` and ``Re(mu) < 0``) is the negative one,
-        Veselago's ``n < 0`` (:func:`_half_space_index`).
+        Each root principal, so ``Im(n) >= 0`` for every passive medium; a negative-phase-velocity
+        medium -- every passive double negative, and passive magnetic metals -- has
+        ``Re(n) < 0``, Veselago's ``n < 0`` (:func:`_half_space_index`,
+        :func:`~wavebit._core.conventions.signed_index`). A non-magnetic medium's is
+        ``sqrt(eps)``.
 
         Every solve reads this rather than :attr:`top`, and it is not settable: two spellings
         of one medium that could disagree is exactly the state this type exists to remove.
