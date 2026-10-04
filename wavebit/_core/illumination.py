@@ -12,8 +12,7 @@ from .backend import GainCutoffWarning, _concrete, as_array, check_finite
 from .enums import Answers, answers_of
 from .field_result import ResultFields, source_state
 from .conventions import boundary_kz, gain_cutoff_band, parse_excitation, signed_index
-from .engine import (_GAIN_CUTOFF_MESSAGE, _unknown_attribute, _holds_tracer,
-                     _refuse_negative_index_pair)
+from .engine import _GAIN_CUTOFF_MESSAGE, _unknown_attribute, _holds_tracer
 from .sources import (Source, PlaneWave, OrderExcitation, GaussianBeam, ElectricDipole, source_list, _positive)
 from .source_expansion import resolve_wave, gaussian_waves, dipole_layers
 from .scattering import redheffer_star
@@ -449,12 +448,6 @@ class CoherentSolver:
                 waves.append(source)
         for beam in waves:
             side = beam.side
-            # A propagating double negative is supported as a far side only: the lit side's
-            # angle would have to say whether it follows the phase or the power.
-            material = scene.top if side == 'top' else scene.bot
-            if material.is_magnetic:
-                _refuse_negative_index_pair(material.epsilon, material.mu,
-                                            'top' if side == 'top' else 'bot', lit=True)
             amplitude = as_array(xp, beam.amplitude, dtype=C, device=scene._array_device)
             if amplitude.ndim != 0 or not bool(xp.all(xp.isfinite(amplitude))):
                 raise ValueError('PlaneWave amplitude must be one finite complex number.')

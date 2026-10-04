@@ -308,12 +308,15 @@ def ordinary_spectra(solver, variants, *, eps_top=None, eps_bot=None, mu_top=Non
     (cx, hx), (cy, hy) = solver.order_window
     specular = (hy-cy)*(2*hx+1) + hx-cx
     delta = _array(xp, incident_column(xp, dtype, solver._lit(), gx.shape[0], specular), kxy)
-    angle = order_azimuth(xp, gy, gx, solver.phi)
+    # The kernels' frame, at k_par = 0 too: the azimuth they were handed, `phi + pi` for a
+    # negative-index lit side at normal incidence (`CoreSolveMixin._frame_azimuth`).
+    frame_azimuth = solver._frame_azimuth()
+    angle = order_azimuth(xp, gy, gx, frame_azimuth)
     c, s = xp.cos(angle), xp.sin(angle)
     if kind in ('te', 'tm'):
         # The pure 1D path's own per-order frame, exactly: `s_hat = sigma * y_hat` on the
         # ky == 0 row, spelled without the angle so no `sin(pi)` reaches the zero component.
-        c, s = xp.astype(order_frame_sign(xp, gx), gx.dtype), xp.zeros_like(gx)
+        c, s = xp.astype(order_frame_sign(xp, gx, frame_azimuth), gx.dtype), xp.zeros_like(gx)
     materials = {'top': (solver.n_top, eps_top, mu_top),
                  'bottom': (solver.n_bot, eps_bot, mu_bot)}
 

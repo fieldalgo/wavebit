@@ -377,11 +377,13 @@ def _refuse_negative_index_half_space(material, where):
     that fixes the passive root says nothing about gain. Refused here, where it is set, whichever
     side it is on. An active double negative too lossy to propagate (``Re(eps*mu) <= 0``) is
     accepted as before -- both rules take the same root wherever ``Re(kz**2) < 0``, so its
-    answer is the one it had. The other refusal is the *lit* side: a propagating double
-    negative cannot be the incidence medium, because ``theta`` and ``kx`` there would have to
-    say whether they follow the phase or the power, which run opposite ways. That depends on
-    ``incidence_side``, so it is checked at the solve (:meth:`CoreFactorizationMixin._solve_conv`,
-    and the coherent door's inputs), not here.
+    answer is the one it had.
+
+    A passive double negative may be either side, lit or not. As the lit side its ``theta``
+    names the direction its incident light travels (exactly, when it is lossless),
+    ``k_par = s*N*sin(theta)`` with ``s = -1``
+    (:meth:`CoreSolveMixin._incident_kxy`); until that was decided it was refused there,
+    because phase and power run opposite ways in it and an angle had to say which it followed.
 
     Checked on the value, so it runs eagerly and under an un-jitted ``jax.grad`` and is skipped
     under ``jax.jit``, where there is no value to read (:func:`~wavebit._core.backend._concrete`).
@@ -393,11 +395,11 @@ def _refuse_negative_index_half_space(material, where):
         _refuse_negative_index_pair(material.epsilon, material.mu, where)
 
 
-def _refuse_negative_index_pair(epsilon, mu, where, lit=False):
-    """The value tests of :func:`_refuse_negative_index_half_space`, on a bare ``(eps, mu)``.
+def _refuse_negative_index_pair(epsilon, mu, where):
+    """The value test of :func:`_refuse_negative_index_half_space`, on a bare ``(eps, mu)``.
 
-    Refuses a propagating double negative that is active, or -- with ``lit`` -- that is the
-    incidence medium. Silent under a trace, as every value guard is.
+    Refuses a propagating double negative that is active. Silent under a trace, as every value
+    guard is.
     """
     propagating = _propagating_double_negative(epsilon, mu)
     if _concrete(propagating & ((_imag_part(epsilon) < 0) | (_imag_part(mu) < 0))):
@@ -408,14 +410,6 @@ def _refuse_negative_index_pair(epsilon, mu, where, lit=False):
             'limiting absorption from below picks the decaying root -- but no root rule is '
             'established for gain in such a medium. Put it in `structure` as a layer -- a '
             'layer keeps both roots -- with an ordinary half-space beyond it.')
-    if lit and _concrete(propagating):
-        raise ValueError(
-            f'`{where}` is the incidence medium and a negative-index half-space: Re(eps) < 0, '
-            'Re(mu) < 0 and Re(eps*mu) > 0. As the far side it is supported; as the lit side '
-            'the incident angle would have to say whether it follows the phase or the power, '
-            'which run opposite ways in such a medium, and that is not defined. Illuminate '
-            'from the other side, or put the medium in `structure` as a layer below an '
-            'ordinary incidence medium.')
 
 
 def _recorded_lattice(normal_field_source):
@@ -1034,9 +1028,12 @@ class CoreSolveMixin:
     def n_inc(self):
         """The incidence medium's index — the one ``theta`` / ``phi`` / ``kx`` live in.
 
-        Real angles use the phase direction with uniform incident intensity along
-        the surface. In a lossless medium this reduces to ``n_inc*sin(theta)``;
-        absorbing media use the full material in :meth:`_incident_kxy`.
+        Signed, as :attr:`n_top` is: ``Re(n_inc) < 0`` for a negative-phase-velocity medium.
+        Real angles are those of ``s*Re(k)``, ``s = sign(Re(n_inc))``: the direction of the
+        incident light in a lossless medium, with uniform incident intensity along the surface
+        in any. In a lossless medium of either sign this reduces to
+        ``kx = n_inc*sin(theta)*cos(phi)``; absorbing media use the full material in
+        :meth:`_incident_kxy`.
         """
         return self.n_bot if self._incidence_side == 'bottom' else self.n_top
 
@@ -1705,11 +1702,20 @@ class CoreSolveMixin:
 
     @property
     def theta(self):
-        """Phase polar angle in radians, measured from the inward surface normal.
+        """Polar angle in radians of the incident light, from the lit side's inward normal.
 
-        Real ``theta`` and ``phi`` specify uniform incident intensity along the
-        surface, including in absorbing media. Complex angles instead retain
-        the formal ``n*sin(theta)`` parameterization for advanced illumination.
+        Real ``theta`` and ``phi`` are the polar and azimuthal angles of ``s*Re(k)``, the
+        incident wave's phase direction turned to point where its light goes:
+        ``k_par/k0 = s*N*sin(theta)*(cos(phi), sin(phi))``, ``N`` the lit medium's phase index
+        and ``s`` the sign of its index -- ``+1`` except in a negative-phase-velocity medium such
+        as a double negative, whose phase travels against its power (:meth:`_incident_kxy`).
+        In a lossless medium of either sign that is exactly the direction the incident power
+        travels. In an absorbing one the intensity is uniform along the surface, and the
+        Poynting vector departs from ``theta`` by an amount set by the loss and the
+        polarization -- 1.7 degrees for p light at 45.8 degrees in ``eps = 2+0.5j``, and to
+        the other side of the normal for p light in a metal (``docs/conventions.md``).
+        Complex angles instead retain the formal ``n*sin(theta)`` parameterization, with the
+        same signed ``n``, for advanced illumination.
         """
         return self._theta
 
@@ -2308,19 +2314,51 @@ class CoreSolveMixin:
     def _incident_kxy(self, wavelength):
         """The incident in-plane wavevector, ``(k_inc_x, k_inc_y)``, normalized by ``k0``.
 
-        Real angles describe the phase direction and impose real transverse k.
-        ``incident_phase_index`` obtains its magnitude from the full complex
-        epsilon*mu of the illuminated half-space. Complex angles retain the
-        formal n*sin(theta) parameterization; no imaginary component is discarded.
+        **A real angle names the direction the incident light travels.** ``theta`` and ``phi``
+        are the polar and azimuthal angles, from the inward normal of the lit half-space, of the
+        direction in which the incident wave carries its power toward the structure, and they
+        fix a real transverse wavevector:
+        ``k_par/k0 = s * N * sin(theta) * (cos(phi), sin(phi))``. ``N = |Re(k)|/k0`` is the lit
+        medium's phase index (:func:`~wavebit._core.conventions.incident_phase_index`, from the
+        full complex ``eps*mu``; ``N = |n|`` when it is lossless), and ``s = sign(Re(n))`` is the
+        sign of its index ``n = sqrt(eps)*sqrt(mu)``
+        (:func:`~wavebit._core.conventions.signed_index`): ``+1`` for every non-magnetic and
+        every ordinary magnetic medium, which is all that existed before, and ``-1`` for a
+        negative-phase-velocity medium, whose phase advances against its power. So in a lossless
+        medium of either sign ``kx = n*sin(theta)*cos(phi)`` with the signed ``n`` -- Snell's law
+        as V. G. Veselago, Sov. Phys. Usp. 10, 509 (1968), and J. B. Pendry, Phys. Rev. Lett. 85,
+        3966 (2000), state it -- and ``theta`` is exactly the incident power direction: lit from
+        ``n = -sqrt(2)`` at 20 degrees onto glass, the transmitted beam leaves at -18.81 degrees.
+        In a positive-index medium ``s*Re(k)`` is also the phase direction, which is what this
+        angle always meant there. The incident ``kz`` is the half-space's own root at that
+        ``k_par`` (:func:`~wavebit._core.conventions.boundary_kz`, the mirror of Maystre's cut
+        for a double negative), so in an absorbing medium of either sign the incident wave
+        weakens as it approaches the structure. ``theta`` and ``phi`` are then the angles of
+        ``s*Re(k)``, and the Poynting vector departs from them by an amount set by the loss and
+        the polarization, which the angle does not try to undo: measured at 45.8 degrees,
+        ``eps = 2+0.5j`` carries p light at 44.1 and s light at 45.8; a lossy double negative
+        (``-3+0.1j``, ``-0.5+0.05j``) at 45.7 / 45.4; a strongly absorbing one
+        (``-1+1j``, ``-1+0.5j``) at 25.7 / 33.2; and a metal (``-10+1j``) carries p light at
+        -45.5, across the normal.
 
-        The historical grazing clamp remains for lossless and complex-angle
-        inputs. Absorbing real-angle incidence must have abs(theta) < pi/2:
-        at grazing no finite wavevector satisfies uniform surface intensity.
-        Invalid traced inputs yield NaNs when their value cannot be checked eagerly.
+        As ``theta -> 0+`` in a negative-index medium ``k_par`` points along ``phi + pi``, so the
+        per-order s/p frame at exactly ``theta = 0`` is taken at that azimuth
+        (:meth:`_frame_azimuth`): the incident field is continuous through normal incidence.
 
-        Direct kx/ky inputs are physical wavenumbers and are divided by k0 here.
-        In angle mode dispersive materials have already been evaluated at the
-        current wavelength.
+        **A complex angle** keeps the formal ``k_par/k0 = n*sin(theta)*(cos(phi), sin(phi))``
+        with the same signed ``n``, so as ``Im(theta) -> 0`` it meets the real angle exactly in
+        a lossless medium, and on the same side of the normal in an absorbing one (where the
+        two parameterisations differ by design: ``N`` against the complex ``n``). No imaginary
+        component is discarded.
+
+        The historical grazing clamp remains for lossless and complex-angle inputs. Absorbing
+        real-angle incidence must have ``abs(theta) < pi/2``: at grazing no finite wavevector
+        satisfies uniform surface intensity. Invalid traced inputs yield NaNs when their value
+        cannot be checked eagerly.
+
+        Direct kx/ky inputs are physical wavenumbers, divided by k0 here, and say nothing about
+        a sign: they are taken as given whatever the lit medium. In angle mode dispersive
+        materials have already been evaluated at the current wavelength.
         """
         xp, C = self.xp, self.complex_dtype
         if self.kx is not None or self.ky is not None:
@@ -2338,19 +2376,65 @@ class CoreSolveMixin:
                                  | ((b == 0) & (a <= 0)))
         if _concrete(xp.any(invalid)):
             raise ValueError(
-                'phase-angle incidence requires a propagating incident wave; in an '
-                'absorbing half-space, abs(theta) must be less than pi/2 radians')
+                'real-angle incidence requires a propagating incident wave: a lossless lit '
+                'half-space must carry one (Re(eps*mu) > 0), and in an absorbing one '
+                'abs(theta) must be less than pi/2 radians')
         # Mask before arithmetic so an unused branch cannot contaminate AD with NaNs.
         use_phase = real_angles & ~invalid
         phase_medium = xp.where(use_phase, epsilon_mu, xp.ones_like(epsilon_mu))
         phase_theta = xp.where(use_phase, xp.real(theta), xp.zeros_like(xp.real(theta)))
         phase_index = incident_phase_index(xp, phase_medium, phase_theta)
+        negative = self._lit_index_is_negative()
+        if negative is not None:
+            # `s*N`: a selection, so an ordinary medium keeps `N` to the bit.
+            phase_index = xp.where(negative, -phase_index, phase_index)
         index = xp.where(real_angles, phase_index, self.n_inc)
         index = xp.where(invalid, xp.full_like(index, float('nan')), index)
         clamped = xp.asarray(_HALF_PI_F32_BELOW, dtype=C) + xp.imag(theta) * 1j
         sin_theta = xp.sin(xp.where(xp.real(theta) >= _HALF_PI_F32, clamped, theta))
         return (xp.astype(index * sin_theta * xp.cos(phi), C),
                 xp.astype(index * sin_theta * xp.sin(phi), C))
+
+    def _lit_index_is_negative(self):
+        """``Re(n_inc) < 0`` -- a boolean, an array of one under a trace -- or ``None``.
+
+        ``None`` is structural: the lit half-space names no permeability, so its index is the
+        principal ``sqrt(eps)`` and cannot be negative, and the callers keep their arithmetic
+        untouched. Otherwise this is the sign ``s`` of :meth:`_incident_kxy`, read off the signed
+        index the solve uses (:func:`_half_space_index`), so the angle, the frame and the
+        kernels' ``n/mu`` cannot disagree about it.
+        """
+        material = self.bot if self._incidence_side == 'bottom' else self.top
+        if not material.is_magnetic:
+            return None
+        return self.xp.real(self._as_complex(self.n_inc)) < 0
+
+    def _frame_azimuth(self):
+        """The azimuth the per-order s/p frame takes at ``k_par = 0``: ``phi``, or ``phi + pi``.
+
+        At exactly normal incidence the zeroth order's in-plane wavevector has no direction, and
+        the frame -- which the incident polarization is written in -- takes the incidence
+        azimuth by convention (:func:`~wavebit._core.conventions.order_azimuth`). That
+        convention is the limit ``theta -> 0+`` of ``k_par``'s own direction, and in a
+        negative-phase-velocity lit medium ``k_par`` points along ``phi + pi``
+        (:meth:`_incident_kxy`), so that is the azimuth handed over there; otherwise ``phi``
+        itself, the same object. Without it the incident field changed sign between
+        ``theta = 0`` and ``theta = 1e-9``. Direct ``kx`` / ``ky`` are unchanged: they carry no
+        angle to turn.
+        """
+        phi = self.phi
+        if self.kx is not None or self.ky is not None:
+            return phi
+        negative = self._lit_index_is_negative()
+        if negative is None:
+            return phi
+        flag = _concrete(negative)
+        if flag is False:
+            return phi
+        base = self._as_complex(0.0 if phi is None else phi)
+        if flag is True:
+            return base + _np.pi
+        return self.xp.where(negative, base + _np.pi, base)
 
     def _centre_phase(self):
         """``exp(-1j * k_inc . o)``, ``o = (a1 + a2)/2``: the kernels' field to the public one.
@@ -2740,6 +2824,7 @@ class CoreSolveMixin:
             self.tetm_index, wavelength, kx, self.n_bot, self.n_top, self.theta,
             self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
+            phi=self._frame_azimuth(),
             incidence_side=self._kernel_incidence_side, answers=self._answers,
             lit=self._kernel_lit(), mu=self._mu_1d(mu),
             mu_top=1.0 if mu_bot is None else mu_bot,
@@ -2755,7 +2840,7 @@ class CoreSolveMixin:
         return self._finish(solve(
             wavelength, kx, ky, self.n_bot, self.n_top, self.theta, self._incidence_pair(), self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
-            phi=self.phi, incidence_side=self._kernel_incidence_side,
+            phi=self._frame_azimuth(), incidence_side=self._kernel_incidence_side,
             answers=self._answers, lit=self._kernel_lit(), mu=self._mu_1d(mu),
             mu_top=1.0 if mu_bot is None else mu_bot,
             mu_bot=1.0 if mu_top is None else mu_top,
@@ -2779,7 +2864,7 @@ class CoreSolveMixin:
                 epxy_conv_all=epxy_conv_all, epyx_conv_all=epyx_conv_all,
                 epxz_conv_all=epxz_conv_all, epyz_conv_all=epyz_conv_all,
                 epzx_conv_all=epzx_conv_all, epzy_conv_all=epzy_conv_all,
-                phi=self.phi, incidence_side=self._kernel_incidence_side,
+                phi=self._frame_azimuth(), incidence_side=self._kernel_incidence_side,
                 answers=self._answers, layer_algorithm=self.layer_algorithm,
                 lit=self._kernel_lit(), mu=mu,
                 mu_top=1.0 if mu_bot is None else mu_bot,
@@ -2790,7 +2875,7 @@ class CoreSolveMixin:
             wavelength, kx, ky, self.n_bot, self.n_top, self.theta, self._incidence_pair(), self.thickness,
             epx_conv_all, epy_conv_all, epz_conv_i_all,
             epxy_conv_all=epxy_conv_all, epyx_conv_all=epyx_conv_all,
-            phi=self.phi, incidence_side=self._kernel_incidence_side,
+            phi=self._frame_azimuth(), incidence_side=self._kernel_incidence_side,
             answers=self._answers, lit=self._kernel_lit(), mu=mu,
             mu_top=1.0 if mu_bot is None else mu_bot,
             mu_bot=1.0 if mu_top is None else mu_top,
@@ -3569,15 +3654,13 @@ class CoreFactorizationMixin:
                    mu_top=None, mu_bot=None, eps_top=None, eps_bot=None):
         """Solve kernel-frame matrices, as returned by the private Fourier builders."""
         # Half-space terms handed in here need not be the scene's materials, which the setters
-        # already checked; a magnetic pair is held to the same negative-index refusals. The
-        # lit side's is checked only here: it depends on `incidence_side`, which a setter of
-        # `top` / `bot` cannot know.
-        lit = 'bot' if self._incidence_side == 'bottom' else 'top'
+        # already checked; a magnetic pair is held to the same refusal of an active, propagating
+        # double negative.
         for where, n, epsilon, mu_side in (('top', self.n_top, eps_top, mu_top),
                                            ('bot', self.n_bot, eps_bot, mu_bot)):
             if mu_side is not None:
                 _refuse_negative_index_pair(n * n / mu_side if epsilon is None else epsilon,
-                                            mu_side, where, lit=where == lit)
+                                            mu_side, where)
         before = self._grating_type
         self._assign_grating_type()
         z_row = (epxz_conv_all, epyz_conv_all, epzx_conv_all, epzy_conv_all)
@@ -3749,7 +3832,7 @@ class CoreFactorizationMixin:
             'Its intensity varies along the surface, so R and T are formal per-order ratios '
             'rather than fractions of an incident power -- their sum can exceed 1 on a '
             'lossless stack -- and power_entering and absorption are NaN. For an absorbing '
-            'incident medium, give a real theta: the phase angle keeps kx and ky real. See '
+            'incident medium, give a real theta: a real angle keeps kx and ky real. See '
             'docs/conventions.md#phase-incidence.',
             ComplexIncidenceWarning, stacklevel=3)
 

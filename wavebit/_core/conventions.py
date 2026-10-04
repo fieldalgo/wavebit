@@ -68,16 +68,19 @@ _HALF_PI = 1.5707963267948966
 
 
 def incident_phase_index(xp, epsilon_mu, theta):
-    """Return ``|Re(k)| / k0`` for a real phase angle and real transverse k.
+    """Return ``|Re(k)| / k0`` for a real incidence angle and real transverse k.
 
     Write ``epsilon_mu = a + i*b`` and the inward normal wavevector as
     ``q/k0 = N*cos(theta) + i*alpha``. Dispersion gives
     ``N**2 - alpha**2 = a`` and ``2*N*cos(theta)*alpha = b``; hence
-    ``N**2 = (a + hypot(a, b/cos(theta))) / 2``.
+    ``N**2 = (a + hypot(a, b/cos(theta))) / 2``. ``b`` enters squared, so the same ``N``
+    serves a negative-phase-velocity medium, whose ``Re(k)`` points the other way
+    (``q/k0 = -N*cos(theta) + i*alpha``); the caller applies that sign, ``s``, to ``kx`` and
+    ``ky`` (``engine.CoreSolveMixin._incident_kxy``). ``N >= 0`` always.
 
     Both material components are retained. The rationalized negative-a branch
     avoids cancellation for a weakly absorbing metal. Inputs are backend arrays;
-    the caller validates the phase angle and masks unused complex-angle inputs.
+    the caller validates the angle and masks unused complex-angle inputs.
     """
     a, b = xp.real(epsilon_mu), xp.imag(epsilon_mu)
     loss = b / xp.cos(theta)
@@ -613,8 +616,9 @@ def incident_kz(kz_top, index):
     the reliable way to guarantee that is to take it from the vector the other side already
     uses — ``kz_top[index]`` — instead of writing ``n_top * cos(theta)`` a second time.
 
-    The two spellings agree for a real incidence angle in a lossless medium. In an
-    absorbing medium, a real phase angle instead specifies real transverse k, and
+    The two spellings agree for a real incidence angle in a lossless medium, a negative-index
+    one included (``n_top`` is signed, and so is its root). In an
+    absorbing medium, a real angle instead specifies real transverse k, and
     ``n*cos(theta)`` is not its normal wavevector. They can also part company when
     ``theta`` is complex (evanescent illumination), where ``cos(theta)`` is
     negative-imaginary while :func:`boundary_kz` forces ``Im(kz) > 0``. The two sides then
@@ -1013,7 +1017,7 @@ def order_azimuth(xp, ky, kx, phi):
     return xp.reshape(xp.where(zero_kx & (ky == 0), incident, varphi), (-1,))
 
 
-def order_frame_sign(xp, kx):
+def order_frame_sign(xp, kx, phi=None):
     """``s_hat . y_hat`` of every order on the ``ky == 0`` row: ``-1`` where ``Re(kx) < 0``, else ``+1``.
 
     The pure 1D path's whole s/p frame. With ``ky == 0`` and the origin azimuth ``0`` -- the only
@@ -1025,7 +1029,12 @@ def order_frame_sign(xp, kx):
     rule that cannot be *called* has to be *compared*.
 
     * ``kx == 0`` (``-0.0`` included) is ``+1``: the origin rule at ``phi = 0``, which is what
-      ``order_azimuth`` answers there.
+      ``order_azimuth`` answers there. ``phi`` is that origin azimuth when it is not ``0``: the
+      engine hands over ``pi`` at normal incidence from a negative-index medium, where
+      ``k_par`` points the other way as ``theta -> 0+``
+      (``engine.CoreSolveMixin._frame_azimuth``), and the sign at ``kx == 0`` is then that of
+      ``cos(phi)``, ``-1``. ``None`` (the default) is ``phi = 0`` in the arithmetic this always
+      had.
     * A purely imaginary ``kx`` (a complex ``theta``) is ``+1`` too, as there: the half-turn is
       keyed on ``Re(kx)``, never on ``sign(kx)``, which is complex-valued on a complex array.
 
@@ -1035,7 +1044,11 @@ def order_frame_sign(xp, kx):
     traced through a condition, and the derivative is zero rather than a NaN.
     """
     one = xp.ones_like(xp.real(kx))
-    return xp.where(xp.real(kx) < 0, -one, one)
+    sign = xp.where(xp.real(kx) < 0, -one, one)
+    if phi is None:
+        return sign
+    turned = xp.real(xp.cos(as_array(xp, phi, dtype=kx.dtype, device=_device_of(kx)))) < 0
+    return xp.where((kx == 0) & turned, -one, sign)
 
 
 def _order_count(value, name, which):
@@ -1145,10 +1158,10 @@ _COMPLEX_TRANSVERSE_K = (
     '; it was complex. A direct kx/ky states illumination of uniform intensity along the '
     'surface, which a real transverse wavevector gives and a complex one cannot -- in an '
     'absorbing medium too, where the loss belongs in kz. For absorbing incidence give a real '
-    'theta/phi instead: the phase angle keeps kx and ky real. A complex transverse wavevector '
+    'theta/phi instead: a real angle keeps kx and ky real. A complex transverse wavevector '
     'is reachable only through a complex theta/phi, which keep the formal '
     'kx/k0 = n*sin(theta)*cos(phi), ky/k0 = n*sin(theta)*sin(phi) with n the incident '
-    'half-space index (for ky = 0: theta = arcsin(kx/(k0*n)), phi = 0); R and T are then '
+    'half-space index, signed (for ky = 0: theta = arcsin(kx/(k0*n)), phi = 0); R and T are then '
     'formal ratios, power_entering and absorption are NaN, and a ComplexIncidenceWarning says '
     'so. See docs/conventions.md#phase-incidence.')
 

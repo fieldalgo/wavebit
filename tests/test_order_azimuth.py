@@ -582,6 +582,36 @@ def test_the_1d_frame_sign_is_exactly_the_azimuths_cosine(backend, name, dtype):
         assert np.abs(np.sin(angle)).max() <= (2e-16 if dtype == np.complex128 else 1e-7)
 
 
+@pytest.mark.parametrize('dtype', [np.complex128, np.complex64])
+@pytest.mark.parametrize('backend, name', [(0, 'numpy'), (1, 'jax'), (2, 'torch')])
+def test_the_1d_frame_sign_takes_its_origin_azimuth(backend, name, dtype):
+    """With ``phi = pi`` -- what the engine hands over at normal incidence from a negative-index
+    medium (``CoreSolveMixin._frame_azimuth``) -- the entries at ``kx == 0``, both signed zeros,
+    turn to ``-1`` and nothing else moves: still exactly ``cos(order_azimuth(0*kx, kx, pi))``.
+    ``phi = 0`` is the default to the bit, and a purely imaginary ``kx`` is not the origin."""
+    from wavebit._core.conventions import order_frame_sign
+    if backend == 1:
+        pytest.importorskip('jax')
+        wavebit.enable_x64()
+    elif backend == 2:
+        pytest.importorskip('torch')
+    kx = _row(backend, dtype)
+    xp = array_namespace(kx)
+
+    def host(v):
+        return np.asarray(v.cpu() if hasattr(v, 'cpu') else v)
+
+    stored = np.asarray(_ROW, dtype=dtype)
+    want = np.where((np.real(stored) < 0) | (stored == 0), -1.0, 1.0)
+    turned = host(order_frame_sign(xp, kx, np.pi))
+    assert turned.dtype == host(order_frame_sign(xp, kx)).dtype
+    assert np.array_equal(turned, want), (name, turned, want)
+    assert (turned[:2] == -1).all() and (turned[8:10] == 1).all() and (turned[11:] == 1).all()
+    angle = host(order_azimuth(xp, 0 * kx, kx, np.pi))
+    assert np.array_equal(np.real(np.cos(angle)), turned), name
+    assert np.array_equal(host(order_frame_sign(xp, kx, 0.0)), host(order_frame_sign(xp, kx)))
+
+
 def test_the_1d_frame_sign_traces_and_differentiates_to_zero():
     """Traced ``kx`` compiles, and the derivative is a clean zero, including at ``kx == 0``.
 

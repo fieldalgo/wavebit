@@ -327,7 +327,7 @@ class ComplexIncidenceWarning(UserWarning):
     negative ratio. ``power_entering`` and ``absorption`` are NaN.
 
     Evanescent incidence (``theta = pi/2 + 1j*alpha``) keeps ``kx`` real and does not fire.
-    For an absorbing incident medium, a real ``theta`` is the physical input: the phase angle
+    For an absorbing incident medium, a real ``theta`` is the physical input: a real angle
     keeps ``kx`` real and puts the loss in ``kz``. Its own category so a study that means the
     formal parameterization can silence it without silencing anything else.
     """

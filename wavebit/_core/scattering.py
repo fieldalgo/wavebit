@@ -534,8 +534,8 @@ def _port_disagreement(a, b):
                 'in the incidence medium, so the same angle means a different `k_par` on either '
                 'side of a material step. Choose the angles for the same transverse '
                 'wavevector in both media, and check `order_kxy()` matches before composing. '
-                'For lossless positive-index media this is '
-                '`theta_b = arcsin(sin(theta_a) * n_a / n_b)`')
+                'For lossless media this is `theta_b = arcsin(sin(theta_a) * n_a / n_b)` with '
+                'the signed indices `n_top` / `n_bot` (negative for a negative-index medium)')
     if differ(a.index, b.index) or differ(a.mu, b.mu):
         return ('they open into different half-spaces. The joint medium is a basis rather than '
                 'a layer -- any index will do, and a zero-thickness one changes nothing -- but '
@@ -548,7 +548,7 @@ def _port_disagreement(a, b):
 def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
            epx_conv_all, epy_conv_all, epz_conv_i_all,
            incidence_side='top', answers=Answers.EFFICIENCY, lit=None,
-           mu=None, mu_top=1.0, mu_bot=1.0, eps_top=None, eps_bot=None):
+           mu=None, mu_top=1.0, mu_bot=1.0, eps_top=None, eps_bot=None, phi=None):
     """Solve a 1D grating stack by scattering matrices — SMM twin of :func:`solve_1d`.
 
     Same arguments and same returns as :func:`wavebit._core.solve_1d.solve_1d`, so the two are
@@ -581,8 +581,9 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     backside = _is_backside(incidence_side)
     xp, C, kx, _ = _prepare(epx_conv_all, kx)
     mu_all = (None,) * 3 if mu is None else tuple(mu)
-    # Each order's s/p frame on this row, the ETM twin's `sigma` (see there).
-    sigma = order_frame_sign(xp, kx)
+    # Each order's s/p frame on this row, the ETM twin's `sigma` (see there); `phi` is the
+    # frame's azimuth at kx == 0, as there.
+    sigma = order_frame_sign(xp, kx, phi)
 
     n_orders_u = kx.shape[0]
     k0 = 2 * _PI / wavelength

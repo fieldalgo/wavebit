@@ -320,7 +320,7 @@ def _layer_mu(I, mu_all, layer_index):
 def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
              epx_conv_all, epy_conv_all, epz_conv_i_all,
              incidence_side='top', answers=Answers.EFFICIENCY, lit=None,
-             mu=None, mu_top=1.0, mu_bot=1.0, eps_top=None, eps_bot=None):
+             mu=None, mu_top=1.0, mu_bot=1.0, eps_top=None, eps_bot=None, phi=None):
     """Solve a 1D grating stack for reflection/transmission diffraction efficiency.
 
     Args:
@@ -365,6 +365,11 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
             ``mu_bot`` or with neither; half a pair describes a medium whose index and
             permittivity disagree. Same argument as
             :func:`~wavebit._core.solve_2d.solve_2d`'s, which see.
+        phi: the frame's azimuth at ``kx == 0``, the only place this path reads an azimuth
+            (:func:`~wavebit._core.conventions.order_frame_sign`): ``None`` or ``0`` (an order
+            exactly at ``kx == 0`` has ``s_hat = +y``), or ``pi``, which the engine passes at
+            normal incidence from a negative-index medium (``s_hat = -y`` there, the limit of
+            ``theta -> 0+``).
 
     Returns:
         ``(de_ri, de_ti, power_entering)`` — reflected / transmitted efficiency arrays,
@@ -403,7 +408,7 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     # Every order's own s/p frame on this row: `s_hat = sigma * y_hat`, `p_hat` turning over
     # with it (:func:`~wavebit._core.conventions.order_frame_sign`). `kx` is the incidence
     # medium's and the mirror above does not touch it, so one `sigma` serves both sides.
-    sigma = order_frame_sign(xp, kx)
+    sigma = order_frame_sign(xp, kx, phi)
 
     n_orders_u = kx.shape[0]
     k0 = 2 * 3.141592653589793 / wavelength

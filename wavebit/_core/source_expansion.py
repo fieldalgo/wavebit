@@ -34,7 +34,10 @@ def resolve_wave(solver, wave):
     q = xp.stack(probe._incident_kxy(scene.wavelength)) * (2*np.pi/scene.wavelength)
     if not np.all(np.isfinite(_host(q))) or np.any(np.abs(_host(q).imag) > 1e-12):
         raise ValueError('Coherent sources require finite real kx and ky.')
-    return q, probe._incidence_pair(), 0. if probe.phi is None else probe.phi
+    # The frame azimuth at k_par = 0 is the ordinary solve's: `phi`, or `phi + pi` from a
+    # negative-index side, the limit of theta -> 0+ (`CoreSolveMixin._frame_azimuth`).
+    azimuth = probe._frame_azimuth()
+    return q, probe._incidence_pair(), 0. if azimuth is None else azimuth
 
 
 def gaussian_waves(solver, source):
@@ -46,6 +49,15 @@ def gaussian_waves(solver, source):
     pair = np.array([complex(_host(p)) for p in pair])
     material = scene.top if source.side == 'top' else scene.bot
     er, mu = complex(_host(material.epsilon)), complex(_host(material.mu_value))
+    if er.real < 0 and mu.real < 0:
+        # A negative-index medium's beam would be built from waves whose phase recedes from the
+        # structure while their power arrives; its angular spectrum, transversality and focus
+        # phase are not written for that, so it is refused rather than built forward-phase.
+        raise ValueError(
+            'GaussianBeam requires a lossless positive-index isotropic incident medium; the '
+            f'{source.side} half-space is a negative-index one (Re(eps) < 0 and Re(mu) < 0). '
+            'Expand the beam into PlaneWave sources lit from that side, which are supported, '
+            'or illuminate from the other side.')
     if er.imag or mu.imag or er.real <= 0 or mu.real <= 0:
         raise ValueError('GaussianBeam requires a lossless positive-index isotropic incident medium.')
     k0 = float(2*np.pi/_host(scene.wavelength))

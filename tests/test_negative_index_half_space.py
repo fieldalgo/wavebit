@@ -1,14 +1,20 @@
-"""A negative-index half-space: solved as the far side, refused where it is lit or active.
+"""A negative-index half-space: solved on either side, lit or not; refused where it is active.
 
 ``boundary_kz`` used to see only ``eps*mu``, and for ``Re(eps) < 0`` and ``Re(mu) < 0`` with
 ``Re(eps*mu) > 0`` that product looks like an ordinary forward medium, so the half-space took
 the root that advances its phase away from the interface: glass onto the passive pair
 ``eps = -2+0.1j``, ``mu = -1+0.1j`` returned ``R = 929``, ``T = -928`` at normal incidence
 against a true ``0.0011``. A double negative now takes the mirror of Maystre's cut, the
-decaying root (``docs/branch-cuts.md`` section 9), and its index is ``-sqrt(eps*mu)``.
+decaying root (``docs/branch-cuts.md`` section 9), and a magnetic half-space's index is
+``sqrt(eps)*sqrt(mu)`` (``conventions.signed_index``), negative for a negative-phase-velocity
+medium. Lit from such a medium, ``theta`` / ``phi`` name the direction the incident light
+travels: ``k_par = s*N*sin(theta)``, ``s = sign(Re(n))``.
 
 The oracles here need no root rule of their own: closed-form Fresnel coefficients on the
-decaying root, and a thick lossy slab of the same medium, which as a layer keeps both roots.
+decaying root, the Poynting vector of the field the solve returns, and a thick lossy slab of
+the same medium, which as a layer keeps both roots. Every lit-side case uses an asymmetric
+medium (``|mu| != 1``) and an oblique azimuth where it has one, so a sign-blind answer or a
+twin substituted for the medium cannot pass.
 """
 import warnings
 
@@ -24,6 +30,8 @@ LOSSLESS = (-2 + 0j, -1 + 0j)
 HIGH = (-6 + 0.3j, -1.5 + 0.05j)
 GAIN = (-2 - 0.1j, -1 - 0.1j)
 GAIN_IN_MU = (-2 + 0.1j, -1 - 0.01j)
+ASYM = (-3 + 0.1j, -0.5 + 0.05j)
+ASYM_LOSSLESS = (-3 + 0j, -0.5 + 0j)
 D_LAYER = 37.0
 
 
@@ -32,7 +40,7 @@ def _host(v):
 
 
 def _solver(top=N_GLASS ** 2, bot=N_GLASS ** 2, theta=0.0, algo='SMM', backend=0, path='2d',
-            side='top', **kw):
+            side='top', phi=None, **kw):
     """One uniform glass layer between the given half-spaces; the zeroth order only."""
     common = dict(backend=backend, top=top, bot=bot, theta=theta, wavelength=WL,
                   thickness=kw.pop('thickness', [D_LAYER]), layer_algorithm=algo,
@@ -41,10 +49,11 @@ def _solver(top=N_GLASS ** 2, bot=N_GLASS ** 2, theta=0.0, algo='SMM', backend=0
         return wavebit.rcwa(**common, tetm=path, truncation_order=0, period=[PERIOD],
                             structure=np.full((1, 1, 2), N_GLASS ** 2, dtype=complex))
     if path == 'conical':
-        return wavebit.rcwa(**common, phi=0.4, psi=0.0, truncation_order=0, period=[PERIOD],
+        return wavebit.rcwa(**common, phi=0.4 if phi is None else phi, psi=0.0,
+                            truncation_order=0, period=[PERIOD],
                             structure=np.full((1, 1, 2), N_GLASS ** 2, dtype=complex))
-    solver = wavebit.rcwa(**common, phi=0.4 if path == '4ff' else 0.0, psi=0.0,
-                          truncation_order=(0, 0), period=(PERIOD, PERIOD))
+    solver = wavebit.rcwa(**common, phi=(0.4 if path == '4ff' else 0.0) if phi is None else phi,
+                          psi=0.0, truncation_order=(0, 0), period=(PERIOD, PERIOD))
     solver.structure = np.full((1, 2, 2), N_GLASS ** 2, dtype=complex)
     if path == '4ff':
         solver.formulation = '4ff'
@@ -87,6 +96,50 @@ def _check_interface(eps, mu, path='2d', algo='SMM', side='top', thetas=(0., 30.
         theta = np.deg2rad(theta_deg)
         result = _solver(theta=theta, algo=algo, path=path, side=side, **scene).solve()
         expected = _interface(theta, eps, mu)
+        subs = {'te': {'s': result.incident}, 'tm': {'p': result.incident}}.get(
+            path, {'s': result.s_inc, 'p': result.p_inc})
+        for pol, sub in subs.items():
+            r, t = (sub.r_s, sub.t_s) if pol == 's' else (sub.r_p, sub.t_p)
+            got = [complex(np.sum(_host(r))), complex(np.sum(_host(t))),
+                   float(np.sum(_host(sub.R))), float(np.sum(_host(sub.T)))]
+            np.testing.assert_allclose(got, expected[pol], rtol=0, atol=1e-12,
+                                       err_msg=f'{pol} at {theta_deg} deg, {path} {algo}')
+
+
+def _phase_index(eps, mu, theta):
+    """``N = |Re(k)|/k0`` at a real angle: ``N**2 = (a + hypot(a, b/cos(theta)))/2``."""
+    a, b = (eps * mu).real, (eps * mu).imag
+    return np.sqrt((a + np.hypot(a, b / np.cos(theta))) / 2)
+
+
+def _lit_interface(theta, eps, mu):
+    """``(eps, mu)`` lit at ``theta`` onto glass through ``D_LAYER`` of glass.
+
+    The incidence is the one ``theta`` names: ``k_par = s*N*sin(theta)``, ``s`` the sign of
+    ``Re(sqrt(eps)*sqrt(mu))``, and the incident ``kz`` the decaying root (``Re(kz) < 0`` for a
+    lossless double negative: the phase recedes while the power arrives). ``t_p`` is the E ratio,
+    ``t_H (n1/mu1)/(n2/mu2)`` with the signed ``n1``. Returns ``{pol: (r, t, R, T)}``."""
+    n1 = np.sqrt(complex(eps)) * np.sqrt(complex(mu))
+    k_par = np.sign(n1.real) * _phase_index(eps, mu, theta) * np.sin(theta)
+    k1, k2 = _decaying_root(eps, mu, k_par), np.sqrt(N_GLASS ** 2 - k_par ** 2 + 0j)
+    phase = np.exp(2j * np.pi / WL * k2 * D_LAYER)
+    a, b = k1 / mu, k2
+    r, t = (a - b) / (a + b), 2 * a / (a + b)
+    s = (r, t * phase, abs(r) ** 2, abs(t) ** 2 * b.real / a.real)
+    a, b = k1 / eps, k2 / N_GLASS ** 2
+    r, t = (a - b) / (a + b), 2 * a / (a + b)
+    p = (r, t * (n1 / mu) / N_GLASS * phase, abs(r) ** 2, abs(t) ** 2 * b.real / a.real)
+    return {'s': s, 'p': p}
+
+
+def _check_lit_interface(eps, mu, path='2d', algo='SMM', side='top',
+                         thetas=(0., 20., 35., 60.)):
+    half = wavebit.Material(eps, mu=mu)
+    scene = dict(top=half) if side == 'top' else dict(bot=half)
+    for theta_deg in thetas:
+        theta = np.deg2rad(theta_deg)
+        result = _solver(theta=theta, algo=algo, path=path, side=side, phi=0.0, **scene).solve()
+        expected = _lit_interface(theta, eps, mu)
         subs = {'te': {'s': result.incident}, 'tm': {'p': result.incident}}.get(
             path, {'s': result.s_inc, 'p': result.p_inc})
         for pol, sub in subs.items():
@@ -487,17 +540,26 @@ G2[4, 0:2] = 2.25
 H, P_G = 180.0, 700.0
 
 
-def _grating(path, algo, nim=PASSIVE, d=None, backend=0, answers='amplitude'):
-    """glass (lit) / grating / NIM half-space, or / NIM slab of thickness ``d`` / glass."""
+def _grating(path, algo, nim=PASSIVE, d=None, backend=0, answers='amplitude', lit=None,
+             side='top', theta=0.3, phi=0.4):
+    """glass (lit) / grating / NIM half-space, or / NIM slab of thickness ``d`` / glass.
+
+    With ``lit``, that medium is the lit half-space on ``side`` and glass the far one."""
     eps, mu = nim
     common = dict(backend=backend, top=N_GLASS ** 2, wavelength=WL, layer_algorithm=algo,
-                  theta=0.3, answers=answers)
+                  theta=theta, answers=answers)
     if path in ('te', 'tm', 'conical'):
         grating, kw = G1[None, None, :], dict(period=[P_G], truncation_order=3)
     else:
         grating, kw = G2[None], dict(period=(P_G, 0.9 * P_G), truncation_order=(1, 1))
-    kw.update(tetm=path) if path in ('te', 'tm') else kw.update(phi=0.4, psi=0.3)
-    if d is None:
+    kw.update(tetm=path) if path in ('te', 'tm') else kw.update(phi=phi, psi=0.3)
+    if lit is not None:
+        half = wavebit.Material(*lit)
+        common.update(top=half, bot=N_GLASS ** 2) if side == 'top' else common.update(
+            bot=half)
+        solver = wavebit.rcwa(**common, **kw, thickness=[H], structure=grating,
+                              incidence_side=side)
+    elif d is None:
         solver = wavebit.rcwa(**common, **kw, bot=wavebit.Material(eps, mu=mu),
                               thickness=[H], structure=grating)
     else:
@@ -745,17 +807,188 @@ def test_mirroring_everything_below_the_light_conjugates_it_through_layers():
 
 # --------------------------------------------------------------------------- what is refused
 
-@pytest.mark.parametrize('pair', [PASSIVE, LOSSLESS], ids=['passive', 'lossless'])
+# --------------------------------------------------------------------------- the lit side
+
+@pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 @pytest.mark.parametrize('side', ['top', 'bottom'])
-def test_a_lit_negative_index_half_space_is_refused_at_the_solve(side, pair):
-    """Setting it is fine -- which side is lit is not known yet -- and lighting the other side
-    solves. Kills a refusal that forgot ``incidence_side`` and one that came back to the setter."""
-    where = 'top' if side == 'top' else 'bot'
-    solver = _solver(side=side, **{where: wavebit.Material(*pair)})
-    with pytest.raises(ValueError, match='incidence medium and a negative-index'):
-        solver.solve()
-    solver.incidence_side = 'bottom' if side == 'top' else 'top'
-    assert np.isfinite(float(np.sum(solver.solve().R)))
+@pytest.mark.parametrize('path', ['te', 'tm', 'conical', '2d', '4ff'])
+def test_a_lit_negative_index_half_space_matches_the_closed_form(path, side, algo):
+    """``r``, ``t``, ``R``, ``T`` for s and p at 0, 20, 35 and 60 degrees, lit from an asymmetric
+    lossy double negative (``eps = -3+0.1i``, ``mu = -0.5+0.05i``) and from its lossless twin,
+    onto glass. Measured 1.3e-15 at worst. This pins the lit side's root (the incident ``kz``
+    decays toward the structure), its power normalisation and the sign of ``t_p`` (the signed
+    ``n1``); on a planar interface ``kx`` enters only squared, so the direction it takes is
+    pinned by the Poynting, refraction and reciprocity tests below."""
+    for pair in (ASYM, ASYM_LOSSLESS):
+        _check_lit_interface(*pair, path=path, algo=algo, side=side)
+
+
+@pytest.mark.parametrize('side', ['top', 'bottom'])
+@pytest.mark.parametrize('pair', [ASYM_LOSSLESS, (2.25 + 0j, 1.3 + 0j)], ids=['nim', 'ordinary'])
+def test_theta_and_phi_are_the_direction_the_incident_power_travels(pair, side):
+    """The Poynting vector of the incident field the solve returns (``boundary_fields(...,
+    part='incoming')``) points at ``theta = 35`` degrees from the lit side's inward normal, at
+    azimuth ``phi = 0.6`` rad, for s, p and a mixed polarization -- in a lossless double
+    negative as in an ordinary medium; measured to 1e-13 degrees. Its wavevector points the
+    other way in the double negative: ``kx = n*sin(theta)*cos(phi)`` with ``n = -sqrt(1.5)``."""
+    theta, phi = np.deg2rad(35.0), 0.6
+    half = wavebit.Material(*pair)
+    n = np.sqrt(pair[0]) * np.sqrt(pair[1])
+    scene = dict(top=half) if side == 'top' else dict(bot=half)
+    inward = np.array([0.0, 0.0, -1.0 if side == 'top' else 1.0])
+    for psi in (0.0, np.pi / 2, 0.7):
+        solver = _solver(theta=theta, phi=phi, side=side, answers='field', **scene)
+        solver.psi = psi
+        result = solver.solve()
+        kx, ky = (complex(np.ravel(_host(k))[0]) for k in solver.order_kxy())
+        np.testing.assert_allclose([kx, ky], n.real * np.sin(theta) * np.array(
+            [np.cos(phi), np.sin(phi)]), rtol=0, atol=1e-14)
+        field = _host(result.boundary_fields(side, [0.0], [0.0], part='incoming'))[0, 0]
+        poynting = 0.5 * np.real(np.cross(field[:3], np.conj(field[3:])))
+        polar = np.degrees(np.arccos(poynting @ inward / np.linalg.norm(poynting)))
+        azimuth = np.arctan2(poynting[1], poynting[0])
+        assert abs(polar - 35.0) < 1e-10 and abs(azimuth - phi) < 1e-12, (psi, polar, azimuth)
+
+
+def test_light_from_a_negative_index_medium_refracts_negatively():
+    """Lit from ``n = -sqrt(2)`` (``eps = -2``, ``mu = -1``) at 20 degrees onto glass, the
+    transmitted power leaves at ``-18.81`` degrees, on the same side of the normal it came from:
+    ``n1 sin(theta1) = n2 sin(theta2)`` with the signed index (J. B. Pendry, Phys. Rev. Lett. 85,
+    3966 (2000)). Read off the transmitted field's Poynting vector, oblique 2D, both sides."""
+    theta, phi = np.deg2rad(20.0), 0.6
+    expected = np.degrees(np.arcsin(-np.sqrt(2) * np.sin(theta) / N_GLASS))
+    assert abs(expected + 18.8117) < 1e-4
+    for side in ('top', 'bottom'):
+        far = 'bottom' if side == 'top' else 'top'
+        scene = {('top' if side == 'top' else 'bot'): wavebit.Material(*LOSSLESS)}
+        result = _solver(theta=theta, phi=phi, side=side, answers='field', **scene).solve()
+        field = _host(result.boundary_fields(far, [0.0], [0.0], part='outgoing'))[0, 0]
+        poynting = 0.5 * np.real(np.cross(field[:3], np.conj(field[3:])))
+        along = poynting[0] * np.cos(phi) + poynting[1] * np.sin(phi)
+        normal = abs(poynting[2])
+        assert abs(np.degrees(np.arctan2(along, normal)) - expected) < 1e-10
+        assert abs(poynting[0] * np.sin(phi) - poynting[1] * np.cos(phi)) < 1e-14
+
+
+@pytest.mark.parametrize('algo', ['ETM', 'SMM'])
+@pytest.mark.parametrize('tetm', ['te', 'tm'])
+def test_a_grating_lit_from_a_negative_index_side_is_reciprocal(tetm, algo):
+    """A grating lit from a lossless double negative (``eps = -3``, ``mu = -0.5``) at 0.35 rad
+    diffracts into glass with the efficiency of the reciprocal problem -- lit from the glass
+    against the direction of that order, read in the double negative against the direction of
+    the incident wave -- for orders +1 and -1, to round-off. Both problems retain mirrored
+    order windows (zero-weight ``excitation`` entries pin them), so truncation cannot part
+    them. The reciprocal problem's illumination is direct ``kx`` from an ordinary medium: no
+    root rule, index sign or angle semantics of the double negative enters it except as the
+    far side the slab test pins."""
+    def solve(side, excitation, **incidence):
+        solver = wavebit.rcwa(backend=0, wavelength=WL, period=[P_G], structure=G1[None, None, :],
+                              thickness=[H], truncation_order=3, tetm=tetm, layer_algorithm=algo,
+                              top=wavebit.Material(*ASYM_LOSSLESS), bot=N_GLASS ** 2,
+                              incidence_side=side, excitation=excitation, **incidence)
+        T = np.ravel(_host(solver.solve(auto_detune=False).T))
+        (centre, half), _ = solver.order_window
+        return list(range(centre - half, centre + half + 1)), np.ravel(
+            _host(solver.order_kxy()[0])).real, T
+    for m in (1, -1):
+        orders, kx, forward = solve('top', {0: 1.0, m: 0.0, -m: 0.0}, theta=0.35)
+        kx_inc = kx[orders.index(0)]
+        assert kx_inc < 0
+        orders_b, _, backward = solve('bottom', {-m: 1.0, 0: 0.0, m: 0.0},
+                                      kx=-kx_inc * 2 * np.pi / WL)
+        assert forward[orders.index(m)] > 1e-3
+        assert abs(forward[orders.index(m)] - backward[orders_b.index(0)]) < 1e-12
+
+
+@pytest.mark.parametrize('algo', ['ETM', 'SMM'])
+@pytest.mark.parametrize('side', ['top', 'bottom'])
+@pytest.mark.parametrize('path', ['te', 'tm', 'conical', '2d', '4ff'])
+def test_the_incident_field_is_continuous_through_normal_incidence(path, side, algo):
+    """``theta = 0`` against ``theta = 1e-9`` on a grating lit from a double negative, at
+    ``phi = 0.6`` where there is an azimuth: the amplitudes, ``r_xyz`` / ``t_xyz``, the
+    reconstructed field and the incident field itself move by ``O(1e-9)``. As ``theta -> 0+``
+    ``k_par`` points along ``phi + pi`` there, so the frame at exactly normal incidence is taken
+    at that azimuth (``CoreSolveMixin._frame_azimuth``); at ``phi`` it negated the incident
+    field and every amplitude."""
+    rows = []
+    for theta in (0.0, 1e-9):
+        solver = _grating(path, algo, lit=ASYM, side=side, theta=theta, answers='field', phi=0.6)
+        result = solver.solve(auto_detune=False)
+        sub = result.incident
+        ys = [0.0, 77.0] if path in ('2d', '4ff') else [0.0]
+        rows.append(np.concatenate(
+            [np.ravel(_host(getattr(sub, f))) for f in ('r_s', 'r_p', 't_s', 't_p', 'r_xyz',
+                                                       't_xyz')]
+            + [np.ravel(_host(result.reconstruct_field([0.0, 123.0], ys, [10.0, 90.0]))),
+               np.ravel(_host(result.boundary_fields(side, [0.0, 50.0], [0.0],
+                                                     part='incoming')))]))
+    assert np.max(np.abs(rows[1] - rows[0])) < 1e-7
+    assert np.max(np.abs(rows[0])) > 0.1
+
+
+@pytest.mark.parametrize('path', ['te', 'tm', 'conical'])
+def test_a_complex_angle_meets_the_real_one(path):
+    """``theta = 0.35 + 1e-9i`` against ``0.35``, lit from a double negative. Lossless, the two
+    parameterisations are one (``n = s*N``), and every amplitude moves by ``O(1e-9)``. Lossy,
+    the formal ``n*sin(theta)`` and ``s*N*sin(theta)`` differ by design (about 0.03 here, as
+    for any absorbing medium) but sit on the same side of the normal; reading the real angle
+    as the phase direction put them about 1 apart."""
+    def solved(pair, theta):
+        solver = _grating(path, 'SMM', lit=pair, theta=theta)
+        result = solver.solve(auto_detune=False)
+        return (np.ravel(_host(solver.order_kxy()[0])),
+                np.concatenate([np.ravel(_host(getattr(result.incident, f)))
+                                for f in ('R', 'r_s', 'r_p', 't_s', 't_p')]))
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', wavebit.ComplexIncidenceWarning)
+        kx_real, real = solved(ASYM_LOSSLESS, 0.35)
+        kx_complex, formal = solved(ASYM_LOSSLESS, 0.35 + 1e-9j)
+        assert np.max(np.abs(kx_complex - kx_real)) < 1e-8
+        assert np.max(np.abs(formal - real)) < 1e-7
+        kx_real, _ = solved(ASYM, 0.35)
+        kx_complex, _ = solved(ASYM, 0.35 + 1e-9j)
+    assert np.max(np.abs(kx_complex - kx_real)) < 0.1
+    assert kx_real[3].real < 0 and kx_complex[3].real < 0
+
+
+@pytest.mark.parametrize('pair', [ASYM, ASYM_LOSSLESS], ids=['lossy', 'lossless'])
+@pytest.mark.parametrize('side', ['top', 'bottom'])
+def test_the_coherent_door_lights_a_negative_index_side_as_the_ordinary_solve(side, pair):
+    """``excitation={side: PlaneWave(theta, phi, polarization)}`` from a double negative against
+    the ordinary SMM solve lit from it: power and field, at ``(0.35, 0.6)`` and at normal
+    incidence with ``phi = 0.6`` and ``2.5``, where the frame takes ``phi + pi``
+    (``source_expansion.resolve_wave``). Measured 2e-15 in power and 6e-14 in field."""
+    pol = (0.6, 0.8j)
+    half = wavebit.Material(*pair)
+    scene = dict(top=half, bot=N_GLASS ** 2) if side == 'top' else dict(top=N_GLASS ** 2,
+                                                                         bot=half)
+    opts = dict(wavelength=WL, period=[P_G], structure=G1[None, None, :], thickness=[H],
+                truncation_order=(3, 0), answers='field', **scene)
+    for theta, phi in ((0.35, 0.6), (0.0, 0.6), (0.0, 2.5)):
+        coherent = wavebit.rcwa(**opts, excitation={side: wavebit.PlaneWave(
+            theta=theta, phi=phi, polarization=pol)}).solve()
+        ordinary = wavebit.rcwa(**opts, theta=theta, phi=phi, polarization=pol,
+                                layer_algorithm='SMM', incidence_side=side).solve(
+            auto_detune=False)
+        back, through = ((coherent.output_top, coherent.output_bottom) if side == 'top' else
+                         (coherent.output_bottom, coherent.output_top))
+        assert abs(float(back) - float(np.sum(ordinary.R))) < 1e-12
+        assert abs(float(through) - float(np.sum(ordinary.T))) < 1e-12
+        points = dict(sample_x=[-123.0, 211.0], sample_y=[0.0], sample_z=[10.0, 90.0])
+        np.testing.assert_allclose(_host(coherent.reconstruct_field(**points)),
+                                   _host(ordinary.reconstruct_field(**points)), atol=1e-12)
+
+
+def test_a_gaussian_beam_from_a_negative_index_side_is_refused():
+    """Its angular spectrum, transversality and focal phase are written for waves whose phase
+    and power travel together; refused by name rather than built forward-phase."""
+    opts = dict(wavelength=WL, period=[P_G], structure=G1[None, None, :], thickness=[H],
+                truncation_order=(2, 0), top=wavebit.Material(*ASYM_LOSSLESS),
+                bot=N_GLASS ** 2, answers='field',
+                power_region=((-1000.0, 1000.0), (-1000.0, 1000.0)))
+    beam = wavebit.GaussianBeam(waist=2000.0, theta=0.2)
+    with pytest.raises(ValueError, match='negative-index'):
+        wavebit.rcwa(**opts, excitation=[beam]).solve()
 
 
 @pytest.mark.parametrize('pair', [GAIN, GAIN_IN_MU], ids=['gain', 'gain_in_mu'])
@@ -773,23 +1006,13 @@ def test_solve_conv_half_space_terms_are_read():
     """``solve_conv`` takes its own half-space terms; they need not be the scene's materials.
 
     The scene's substrate is the non-magnetic ``1.99-0.3j``, which is what the pair multiplies
-    to; handed over as ``eps_bot`` / ``mu_bot`` it is the far side and is solved with its own
-    root. Handed over as the lit side's, it is refused."""
+    to; handed over as ``eps_bot`` / ``mu_bot`` it is solved with its own root."""
     eps, mu = PASSIVE
     solver = _solver(bot=complex(eps * mu))
     result = solver.solve_conv(*solver.eps_conv_matrices(), mu_bot=mu, eps_bot=eps)
     expected = _interface(0.0, eps, mu)
     for pol, sub in (('s', result.s_inc), ('p', result.p_inc)):
         np.testing.assert_allclose(float(np.sum(sub.R)), expected[pol][2], atol=1e-12)
-    with pytest.raises(ValueError, match='incidence medium and a negative-index'):
-        solver.solve_conv(*solver.eps_conv_matrices(), mu_top=mu, eps_top=eps)
-
-
-def test_the_coherent_door_refuses_a_lit_negative_index_side():
-    opts = dict(wavelength=WL, period=[P_G], structure=G1[None, None, :], thickness=[H],
-                truncation_order=(2, 0), top=N_GLASS ** 2, bot=wavebit.Material(*PASSIVE))
-    with pytest.raises(ValueError, match='incidence medium and a negative-index'):
-        wavebit.rcwa(**opts, excitation={'bottom': wavebit.PlaneWave(theta=0.3)}).solve()
 
 
 # ----------------------------------------------------------------------------- the backends
@@ -810,15 +1033,44 @@ def test_the_backends_agree(backend):
 
 
 def test_the_refusals_read_torch_values_eagerly():
+    """Torch tensors as the material: a lit passive double negative is solved, as on NumPy, and
+    an active one is refused where it is set."""
     torch = pytest.importorskip('torch')
-    eps = torch.tensor(PASSIVE[0], dtype=torch.complex128)
-    mu = torch.tensor(PASSIVE[1], dtype=torch.complex128)
-    solver = _solver(backend=2, top=wavebit.Material(eps, mu=mu))
-    with pytest.raises(ValueError, match='incidence medium and a negative-index'):
-        solver.solve()
+    eps = torch.tensor(ASYM[0], dtype=torch.complex128)
+    mu = torch.tensor(ASYM[1], dtype=torch.complex128)
+    theta = np.deg2rad(35.0)
+    got = _solver(backend=2, theta=theta, phi=0.6, top=wavebit.Material(eps, mu=mu)).solve()
+    want = _solver(theta=theta, phi=0.6, top=wavebit.Material(*ASYM)).solve()
+    for name in ('R', 'T', 'r_s', 'r_p', 't_s', 't_p'):
+        np.testing.assert_allclose(_host(getattr(got.incident, name)),
+                                   _host(getattr(want.incident, name)), rtol=0, atol=1e-13)
     gain = [torch.tensor(v, dtype=torch.complex128) for v in GAIN]
     with pytest.raises(ValueError, match='active negative-index half-space'):
         _solver(backend=2, bot=wavebit.Material(gain[0], mu=gain[1]))
+
+
+def test_jit_through_a_lit_negative_index_superstrate():
+    """Under ``jax.jit`` the lit medium's ``Re(eps)`` is traced, so the sign of ``kx`` and the
+    frame's azimuth at normal incidence come from ``where`` on the traced index rather than
+    from a branch: ``R`` and every amplitude match NumPy at 35 degrees and at normal incidence
+    with ``phi = 0.6``."""
+    pytest.importorskip('jax')
+    wavebit.enable_x64()
+    import jax
+    import jax.numpy as jnp
+
+    def amplitudes(result):
+        sub = result.incident
+        return [sub.R, sub.r_s, sub.r_p, sub.t_s, sub.t_p]
+
+    for theta in (0.35, 0.0):
+        eager = amplitudes(_grating('conical', 'SMM', lit=ASYM, theta=theta, phi=0.6).solve(
+            auto_detune=False))
+        traced = jax.jit(lambda re_eps: amplitudes(_grating(
+            'conical', 'SMM', lit=(re_eps + 1j * ASYM[0].imag, ASYM[1]), backend=1,
+            theta=theta, phi=0.6).solve(auto_detune=False)))(jnp.asarray(ASYM[0].real))
+        for a, b in zip(traced, eager):
+            np.testing.assert_allclose(np.asarray(a), _host(b), rtol=0, atol=1e-12)
 
 
 def test_jit_and_grad_through_a_negative_index_substrate():

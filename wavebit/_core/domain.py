@@ -693,9 +693,15 @@ class Incidence(_DeclaredFieldsOnly):
     ``incidence_side`` is ``'top'`` or ``'bottom'`` — illumination is part of the incidence,
     not of the scene, which is why it lives here rather than on :class:`Stack`. ``theta`` /
     ``phi`` are measured in the incidence medium (``bot``'s normal for ``'bottom'``).
-    Real angles specify the phase direction with uniform incident intensity along
-    the surface, including in absorbing media. A nonzero imaginary angle instead
-    specifies the formal complex-angle wavevector ``n*sin(theta)``.
+    Real angles are those of ``s*Re(k)``: ``k_par = s*N*sin(theta)``, ``N`` the incidence
+    medium's phase index and ``s`` the sign of its index -- ``+1`` except in a
+    negative-phase-velocity medium, where the phase runs against the light
+    (:meth:`~wavebit._core.engine.CoreSolveMixin._incident_kxy`). In a lossless medium that is
+    exactly the direction the incident light travels; in an absorbing one the intensity is
+    uniform along the surface and the Poynting vector departs from it by an amount set by the
+    loss and the polarization (``docs/conventions.md``). A nonzero imaginary angle
+    instead specifies the formal complex-angle wavevector ``n*sin(theta)``, with the same
+    signed ``n``.
 
     Alternatively, give real Cartesian ``kx`` and/or ``ky`` in inverse length
     units (nm**-1 when wavelength is in nm). The omitted component is zero.

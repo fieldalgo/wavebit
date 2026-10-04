@@ -127,6 +127,17 @@ def test_absorbing_grazing_phase_angle_is_refused(backend, theta):
         solver.order_kxy()
 
 
+@pytest.mark.parametrize('top', [-4.0, wavebit.Material(-4.0, mu=1.0),
+                                 wavebit.Material(-2.0, mu=2.0)], ids=['metal', 'mu-one', 'mng'])
+def test_a_lossless_lit_medium_that_carries_no_wave_is_refused_by_name(top):
+    """A lossless lit half-space with ``Re(eps*mu) <= 0`` carries no wave, so no real angle
+    names a direction in it; the refusal names that condition, not only the absorbing medium's
+    ``abs(theta) < pi/2``, which such a medium meets."""
+    solver = wavebit.rcwa(top=top, theta=0.3, period=[1000., 1000.], truncation_order=0)
+    with pytest.raises(ValueError, match=r'lossless lit half-space must carry one'):
+        solver.order_kxy()
+
+
 def test_oblique_lattice_and_dispersive_conditions_use_the_same_phase_vector():
     material = wavebit.TabulatedMaterial([500., 700.], [4. + 1j, 6. + 2j])
     lattice = wavebit.Lattice.from_columns([[900., 300.], [0., 800.]])
