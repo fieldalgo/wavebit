@@ -3023,7 +3023,14 @@ the campaign does not say which of the box's creases, its junction rim or the co
 holds its order down. A registered follow-up (`studies/fdtd_metasurface_corners.py`) ruled out the
 first suspect, the corners' field singularity: M3's cross-section as a ridge converged at second
 order from 40 to 320 cells per wavelength at epsilon 12 and 4 alike, where the corner exponents
-predicted 1.37 to 1.61. What lowers M3's order is three-dimensional.
+predicted 1.37 to 1.61. What lowers M3's order is three-dimensional. A second registered
+follow-up (`studies/fdtd_metasurface_lifted.py`, 2026-10-04) showed that the low order does not
+need the junction's rim. It lifted the box 0.10 off its glass, so no voxel holds pillar and glass
+together. The box then converged at the same order: the reference-free self-convergence orders
+were 1.69 / 1.54, against the flush box's 1.63 / 1.47. So the split junction is not needed to
+hold M3 down. Whether it adds a low-order error of its own in the flush box, the lift cannot
+say, because the lift also gives the base edges and vertices in air. The candidates left are the
+box's vertical edges, its vertices, and its y faces with the edges along x.
 
 **Validation.** No production source changed in C7 (fd source SHA-256
 `50574088a3e1e766f334890bcbbd5dbd5ad1dc600c9469766f65d63c949832d9`, the tree of `273514f4`).

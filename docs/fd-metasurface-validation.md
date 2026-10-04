@@ -3,7 +3,7 @@
 Written: 2026-10-03
 
 Targets: `studies/fdtd_metasurface_rcwa.py`, `studies/fdtd_metasurface_corners.py`,
-`studies/fdtd_metasurface_mutations.py`,
+`studies/fdtd_metasurface_lifted.py`, `studies/fdtd_metasurface_mutations.py`,
 `tests/test_fd_metasurface.py`, `tests/references/fd_metasurface_rows.json`,
 `wavebit/fd/_post.py`, `wavebit/fd/_assemble.py`, `wavebit/fd/monitors.py`,
 `docs/guide/fd-metasurface.md`.
@@ -40,6 +40,13 @@ before the data -- the cylinders, at the junction campaign's 1.73-1.74, might fa
 these runs use: a registered follow-up ran M3's cross-section as a ridge, whose only corners are
 its edges, and it converged at second order from 40 to 320 cells per wavelength at epsilon 12
 and 4 alike ("Is it the corners?" below). What lowers M3's order is three-dimensional.
+
+**Nor does it need the junction's rim.** A second registered follow-up lifted the box 0.10 off
+its glass. It converges at the same order: self-convergence orders 1.69 / 1.54 (amplitudes /
+efficiencies), against 1.63 / 1.47 for the flush box. This statistic needs no reference. On C7's
+own rows it puts M3 s, and M3 p's efficiencies, below second order as C7 did. M3's low order
+does not need the rim; whether the rim adds a low-order error of its own in the flush box, the
+lift cannot say ("Is it the rim?" below).
 
 ## The question
 
@@ -323,6 +330,210 @@ copy of the registered study, kept beside the logs as C7's is, cited paths from 
 directory; the record was corrected, the copy dropped (the committed study is the registered
 file), and the attempt's logs are kept.
 
+## Is it the rim? (2026-10-04)
+
+With the cross-section's corners ruled out, this study named three suspects, all
+three-dimensional: the box's four vertical edges, its eight vertices, and the junction's rim,
+where pillar, air and glass meet along the base perimeter and turn the box's corners. A fourth
+was missed until a review after this campaign: the box's y faces and its edges along x, which
+the ridge of "Is it the corners?" (uniform along y) did not have. The rim was the one suspect a
+single change could remove. The owner chose to lift the box off its glass and see whether the order came
+back. The study is `studies/fdtd_metasurface_lifted.py`; its rule was registered before its first
+FDTD row.
+
+**The scene.** The scene is M3 in every respect except that the box's base sits `GAP = 0.10`
+above the glass. That is 4, 8 and 12 cells at 40, 80 and 120 cells per wavelength, so every face
+keeps its fraction of a cell. At the lowest rung, three voxels of pure air separate the box's
+smoothed base from the glass's smoothed face, so no voxel holds pillar and glass together.
+Lifting the box also gives its base four edges and four vertices in air. The study can therefore
+show one of two things:
+
+* the order comes back without the rim (the rim is *implicated*);
+* the order does not come back (the rim is *not necessary* for the low order: the box itself
+  suffices, through its edges, its vertices or its y faces).
+
+The reference is C7's: the raster with Li's rule and the exact series, with the air layer added
+under the box. Only s incidence is run.
+
+**The statistic does not lean on RCWA.** A first draft judged the lifted box by the local
+order, between 80 and 120 cells, of the error against the top of the RCWA ladder. That is the
+corner study's statistic. C7's own criterion 3 fits the slope over all three rungs, which is why
+C7 quotes 1.64 / 1.51 where the table below has 1.65 / 1.53. An adversarial review of that draft
+found the statistic still moving with the ladder. C7's flush M3 s reads these local orders
+against each ladder top:
+
+| Ladder top | 20 | 26 | 28 | 30 | 32 |
+| --- | --- | --- | --- | --- | --- |
+| amplitude | 1.42 | 1.55 | 1.60 | 1.61 | 1.65 |
+| efficiency | 1.23 | 1.42 | 1.46 | 1.51 | 1.53 |
+
+The reference was still converging at the size where the draft's thresholds, 0.05 apart, would
+have decided. The verdict therefore rests on the *self-convergence order*, which has no reference
+in it. Let `D1` be the largest change of any cell between rungs 40 and 80, and `D2` the largest
+between 80 and 120. The order `p` solves `(40^-p - 80^-p) / (80^-p - 120^-p) = D1 / D2`.
+
+On C7's own rows, this statistic puts M3 below second order where C7 did, with one exception.
+Flush M3 s reads 1.63 (amplitudes) and 1.47 (efficiencies), and M3 p reads 1.90 and 1.64. M3 p's
+amplitudes would clear a 1.8 line by this statistic, where C7 had 1.75 for them. Its efficiencies
+would not, so C7's fail for M3 p stands either way. For M3 s and M3 p's efficiencies, the
+sub-second order is in the FDTD answers themselves, not in the reference. The control cell M1
+reads 2.04 / 2.03 (s) and 2.14 / 1.97 (p). M1 s's amplitudes, referred to a pillar misplaced by
+one cell (an error first order in the cell), read 0.92. A misplacement does not touch
+efficiencies, which stay at 2.03.
+
+**The rule.** Write `dA` and `dF` for the lifted box's self-convergence orders minus the flush
+box's (amplitudes and efficiencies):
+
+* *implicated*: both rise by at least 0.2, and the lifted orders both reach 1.8;
+* *partial*: both rise by at least 0.2, but the lifted orders do not both reach 1.8;
+* *not necessary*: neither rises by more than 0.1;
+* *inconclusive*: anything else.
+
+RCWA keeps two jobs:
+
+* it must show the lifted runs converging toward their own reference (local order at least 1);
+* it gives a second view of the change, lifted minus flush, at each of three ladder tops. A
+  verdict the reference contradicts there becomes *inconclusive (the reference disagrees)*.
+
+Validity is C7's criterion 1 applied to each run: it settles at 120 periods or its one
+180-period repeat does, with no growth or unsettled warning, not marked unstable, at the
+fixed-k angle, and with every cell present and finite. C7's backend comparison is not repeated:
+each lifted rung ran on one backend only, 40 on NumPy and 80 and 120 on JAX (the 80-cell rung's
+180-period run-length check also on JAX). The run-length check and the
+controls are this study's own:
+
+* the run-length line is a tenth of `D2` (C7's was a tenth of the finest error against the
+  reference), applied to the lifted box's 80-cell pair and to the flush box's;
+* the controls are the two M1 readings above, which must be at least 1.8 and at most 1.5.
+
+The lifted rows must also be compared at the flush box's rungs and ladder tops.
+
+**The rim is not necessary.** The campaign ran from 12:08 to 15:13 on 2026-10-04 (report
+`studies/results/fdtd_metasurface_lifted_report.log`). Every run settled at 120 periods. The
+middle rung's repeat at 180 periods moved no cell by more than 2.4e-7, against lines of 4.3e-4
+and 3.1e-4. Every control
+held. Lifting the box changed the order by less than 0.1:
+
+| Box | `D1` / `D2`, amplitudes | `D1` / `D2`, efficiencies | `p_A` | `p_F` | Median cell |
+| --- | --- | --- | --- | --- | --- |
+| flush (C7's rows) | 1.50e-2 / 3.46e-3 | 7.47e-3 / 1.89e-3 | 1.633 | 1.471 | 1.809 |
+| lifted 0.10 | 1.93e-2 / 4.30e-3 | 1.27e-2 / 3.10e-3 | 1.690 | 1.538 | 1.831 |
+
+`dA` is +0.057 and `dF` is +0.067. The reference's view lets the verdict stand: lifted minus
+flush, the local orders against the tops 20, 26 and 28 differ by -0.19 / -0.04, -0.08 / -0.01
+and -0.06 / +0.01, none of them near the 0.2 rise the rule tests. The view is a weak instrument,
+though. Its amplitude differences have the opposite sign to `dA`, and they drift by 0.13 across
+the three tops, more than the change being measured. The premise that the reference's error
+largely cancels between the two boxes did not hold well. Against its own top (28), the lifted box's worst errors fall from 2.8e-2 to
+9.2e-3 to 4.9e-3 (amplitudes) and from 2.0e-2 to 6.9e-3 to 3.8e-3 (efficiencies). That is local
+orders 1.54 and 1.47: it converges toward its reference. Rung 28 could not judge absolute
+accuracy by C7's standard: the truncations below it spread by `u` = 1.7e-3, more than a third
+of the finest amplitude error. The rule does not ask it to. The lifted box is *less* accurate
+than the flush one at every rung, each against its own top 28: its amplitude errors are 1.27 to
+1.31 times the flush box's, its efficiency errors 1.62 to 1.68 times. The two scenes differ
+optically, so that ratio is not a count of creases. It converges at the same rate.
+
+So M3's low order does not need the junction: without the rim the box converges as slowly.
+This does not show that the rim adds nothing in the flush box, because the lift also gives the
+base edges and vertices in air. Three candidates are left: the box's vertical edges, its
+vertices, and its y faces with the edges along x, which no ridge here had. The corner
+cross-check's vertex exponent does not point at the vertices either. It is `lambda` 0.58
+at an epsilon-12 box's corner, so a vertex should contribute `dx^(2 lambda + 1)`, about
+`dx^2.16`. The ridge's edges showed that this asymptotic theory need not hold at these
+resolutions, and no vertex's convergence was measured, so that prediction does not rule the
+vertices out.
+
+**What was seen first.** The harness was tried twice on an epsilon-6 box, a different material,
+against toy ladders:
+
+* The first draft (`GAP` 0.05, rungs 40 / 60 / 80) ran end to end under its own statistic: the
+  local order against a toy top, which could not judge. It printed no self-convergence order.
+* The file the second dry run used (SHA-256 `f71c2dd2...`), at rungs 30 / 40 / 60, read
+  self-convergence orders 2.30 and 2.48. A first attempt at 20 / 30 / 40 had been refused by the
+  plan as under-resolved.
+
+The registered rule replaced the draft's after the first dry run: that run's numbers were seen
+before the self-convergence statistic, its thresholds and `GAP` 0.10 were written. The rule was
+written before the second dry run. Since then it has changed only at the second registration
+below. The dry runs' rows and reports, and the second's copy of its file, are kept in
+`studies/results/fdtd_metasurface_lifted_dryrun/`.
+
+**A second registration.** The rule was first registered with C7's whole ladder (20 to 32). The
+campaign was stopped by hand before any FDTD row, after four RCWA rows. An RCWA solve of this
+size allocates about 34 complex matrices of size 2N x 2N, for one layer or two alike
+(`studies/results/fdtd_metasurface_lifted_memory/`). That is some 23 GB at rung 28, 31 GB at
+rung 30 and 39 GB at rung 32, against 21 GB of free memory and 31 GB of free commit on this
+machine that day. Rung 28 fits only by paging, rung 30 would leave under 1 GB of commit, and
+rung 32 exceeds it.
+
+The rule was registered again with the ladder ending at rung 28, with the reference's view
+taken at tops 20, 26 and 28, where C7's flush rows exist. The rung-28 solves ran. During the first
+of them, the only one whose memory was recorded, free memory fell to 3.5 GB and free commit to
+9.1 GB, so it paged. Two more things in the code changed with the
+second registration, and `part_register`'s docstring with them:
+
+* the registration guard now refuses only when the log holds FDTD rows (it had refused on any
+  row), which is what let the second registration stand over four RCWA rows;
+* the slice the spread `u` reads (printed for information only) went from `LADDER[-4:-1]` to
+  `LADDER[:-1]`. On the three-rung ladder both select rungs 20 and 26, so no printed number
+  depends on it.
+
+The four RCWA rows were reused: their provenance key covers the solve, not the ladder. Three
+things from the first attempt are kept:
+
+* the first registration;
+* the stopped campaign's log;
+* the first registration's file,
+  `studies/results/fdtd_metasurface_lifted_registered_attempt1.py.txt`. It was rebuilt from the
+  second dry run's copy and the one paragraph it changed, and checked against the registered
+  hash.
+
+The study file committed with the results hashes to the second registration.
+
+**Corrections to the registered docstring.** The study file is left as registered, so its
+docstring keeps seven inaccuracies a review found after the campaign. Six are in its prose. The
+seventh is the wording of rule item 1, which the code applies as described in the last bullet.
+The rule's thresholds and its code are not among them.
+
+* It calls the local order "C7's statistic". C7's criterion 3 is a least-squares slope.
+* It says this machine "cannot hold" C7's top two rungs. C7's ladder ran them on 2026-10-03. What
+  could not hold them was the memory and commit free on 2026-10-04.
+* Its registration history says "nothing else changed". The guard and the `u` slice changed too
+  (above).
+* It says the registration records M1 s's readings at 0.25 and 0.5 of a cell off its axis (1.61
+  and 1.05). The registration records only the one-cell reading. The review recomputed the other
+  two as 1.609 and 1.053.
+* It reads a *not necessary* outcome as "the vertical edges and vertices suffice". The y faces
+  and the edges along x belong in that list.
+* Its disclosure paragraph calls the second dry run's file "This file (SHA-256 `f71c2dd2...`)",
+  and the kept copy "the second's copy of this file". The registered file hashes to
+  `5af4a441...` and was never dry-run. `f71c2dd2` is the dry run's file, identical to the first
+  registration's file (`fe87f8f9`) but for that paragraph, as the docstring says. The changes
+  from it to the registered file are listed in
+  `studies/results/fdtd_metasurface_lifted_dryrun/README.md`.
+* Rule item 1's "C7's own run-length check included" means the flush box's own 120- and
+  180-period pair. It is judged by this study's line, a tenth of `D2`, not by C7's.
+
+Separately, the docstring's expectation that the reference's error "largely cancels" between the
+two boxes was tested by the campaign. It held for the efficiencies, whose difference drifts by
+0.05 across the three tops, but not for the amplitudes, which drift by 0.13 (above).
+
+This follow-up changed no production source either: the fd source SHA-256 is still
+`50574088a3e1e766f334890bcbbd5dbd5ad1dc600c9469766f65d63c949832d9`. Its gates:
+
+* the full fd/docs tier: 2745 passed and 8 skipped of 2753 (2316 seconds);
+* the slow tier: 81 of 81 (1226 seconds);
+* the four freezers: 143/288/140/570 arrays, bit for bit;
+* `ruff check .` (0.16.2): clean (`ruff.log`);
+* `sphinx-build -W`: clean, before and after the review's corrections
+  (`sphinx_before_review.log`, `sphinx_after_review.log`);
+* the documentation contract, rerun after the corrections: 66 passed
+  (`docs_contract_after_review.log`).
+
+Reported totals match collection, with no INTERNALERROR and no worker crash. The pytest tiers and
+the freezers are recorded in `studies/results/fdtd_metasurface_lifted_validation.json`. All the
+logs named above are under `studies/results/fdtd_metasurface_lifted_controls/`.
+
 ## What the tests hold
 
 `tests/test_fd_metasurface.py` keeps three things in the suite.
@@ -361,9 +572,10 @@ Counts and timings are in `studies/results/fdtd_metasurface_validation.json`, th
 
 ## What this does not show
 
-* **Why M3 converges below second order.** Not the corners of its cross-section ("Is it the
-  corners?"); its vertical edges, its vertices and the junction's rim at the box's corners
-  remain, and no measurement here separates them.
+* **Why M3 converges below second order.** It is not the corners of its xz cross-section ("Is
+  it the corners?"), and it does not need the junction's rim ("Is it the rim?"). Left: its
+  vertical edges, its vertices, and its y faces with the edges along x, which no ridge here had.
+  No measurement here separates them.
 * **One pillar per cell.** No supercell, so no plan with several junctions, as a
   phase-gradient metasurface has.
 * **Two body kinds.** Cylinders and unturned boxes, the bodies a junction supports; no prism,
@@ -390,3 +602,9 @@ file it runs from is the registered protocol. The campaign of record took 8.5 ho
 machine (02:19 to 10:52): 2.8 hours of RCWA ladders and 5.6 of FDTD, two thirds of that the M3
 runs at 120 cells per wavelength. `python studies/fdtd_metasurface_mutations.py` repeats the
 tests' mutation witnesses.
+
+`python studies/fdtd_metasurface_corners.py` and `python studies/fdtd_metasurface_lifted.py`
+run the two follow-ups the same way. The lifted box's campaign of record took 3.1 hours (12:08
+to 15:13 on 2026-10-04): 1 hour of RCWA ladder, then 2 hours of FDTD, 1.5 of them the run at 120
+cells per wavelength. Four of the nine ladder solves (14 minutes) had run in the stopped first
+campaign and were reused, so a run from scratch takes about 3.3 hours.

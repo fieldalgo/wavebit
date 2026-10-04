@@ -175,7 +175,12 @@ wavelength *inside* the densest material (so 25 is the floor for epsilon 5.8 at 
 for epsilon 12) and warns below 12. The two cylinders' errors fall at second order -- each
 doubling divides them by about four; the epsilon-12 box's falls at order 1.5 to 1.75, so a
 doubling divides it by about three ([`../fd-metasurface-validation.md`](../fd-metasurface-validation.md)
-says what is and is not known about why).
+says what is and is not known about why). The slower rate does not need the box's contact with
+the glass. The same box lifted 0.1 off its substrate converges at the same rate, with errors
+1.3 times (amplitudes) and 1.6 to 1.7 times (efficiencies) larger. Whether the contact adds an
+error of its own when the box stands on the glass is not known, because lifting the box also
+leaves its base edges in air. Leaving a gap under the pillar will not buy back the
+order.
 
 Two practical consequences:
 
