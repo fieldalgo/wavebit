@@ -85,6 +85,31 @@ def constant_array(value, dtype=float):
     return _np.asarray(value, dtype=dtype)
 
 
+def principal_sqrt(xp, z):
+    """``xp.sqrt(z)`` of a complex array, on the lip a signed zero names -- on every backend.
+
+    The principal root's cut is the negative real axis, and a value on it sits on the lip the
+    sign of its zero imaginary part names (W. Kahan, "Branch cuts for complex elementary
+    functions, or Much ado about nothing's sign bit", in *The State of the Art in Numerical
+    Analysis*, eds. A. Iserles and M. J. D. Powell, Clarendon Press (1987); ISO/IEC 9899:1999
+    section 7.3.3 and Annex G): ``sqrt(complex(-4, -0.0))`` is ``-2j``,
+    ``sqrt(complex(-4, +0.0))`` is ``+2j``. NumPy,
+    PyTorch and :mod:`cmath` do; ``jax.numpy.sqrt`` (measured on jax and jaxlib 0.11.0,
+    complex64 and complex128, eager and under ``jit``) returns ``+2j`` for both, so a lossless
+    value written with ``-0.0`` got the other root on JAX alone. Where it does, the root is
+    negated -- as ``0 - w``, which keeps the real zero ``+0.0`` and so NumPy's bits, and not as
+    ``conj(w)``, so that its derivative is the chosen root's own, ``1/(2*(-w))`` -- and every
+    other value is ``jnp.sqrt``'s to the bit. NumPy and PyTorch are handed back ``xp.sqrt``
+    itself, untouched.
+    """
+    root = xp.sqrt(z)
+    if 'jax' not in xp.__name__:
+        return root
+    im = xp.imag(z)
+    other_lip = (xp.real(z) < 0) & (im == 0) & xp.signbit(im) & (xp.imag(root) > 0)
+    return xp.where(other_lip, 0.0 - root, root)
+
+
 def in_namespace(xp, v):
     """Whether ``v`` is an array of ``xp`` itself -- an array, a tensor or a tracer of it.
 

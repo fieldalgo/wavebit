@@ -38,7 +38,7 @@ from typing import Any, Optional
 
 from .conventions import (_COMPLEX_CHI, _DIRECTION_CLASH, incidence_clashes, reject_complex_angle,
                           transverse_component_problem, wavelength_problem)
-from .backend import _concrete, array_namespace
+from .backend import _concrete, array_namespace, principal_sqrt
 from .enums import Tetm  # noqa: F401  (re-exported for spec's tetm parsing)
 
 
@@ -367,12 +367,15 @@ def index_from_eps(eps):
     for real ``k_par``, and it is the reason no branch rule is invented here.
 
     **The hazard is the negative side of zero.** The principal cut runs along the negative
-    real axis, and IEEE signed zero decides which lip a value sits on: ``eps = -2 + 0j`` gives
-    ``+1.4142j`` (an evanescent, decaying medium -- correct) while ``eps = -2 - 0j`` gives
-    ``-1.4142j``, a *gain* medium, from an imaginary part that is not merely small but
-    identically zero with a sign bit set. The same trap at a smaller scale: a lossless value
-    that has been through arithmetic can come out as ``4 - 1e-18j``, and its root
-    ``2 - 2.5e-19j`` is nominally active. Neither is repaired here, because a helper cannot
+    real axis, and IEEE signed zero decides which lip a value sits on: ``complex(-2, +0.0)``
+    gives ``+1.4142j`` (an evanescent, decaying medium -- correct) while ``complex(-2, -0.0)``
+    gives ``-1.4142j``, a *gain* medium, from an imaginary part that is not merely small but
+    identically zero with a sign bit set. Spell the zero with ``complex()``: whether the
+    expression ``-2 - 0j`` carries ``-0.0`` depends on the Python version (``+0.0`` on 3.12 and
+    3.13; ``-0.0`` from 3.14, which converts the real operand of mixed real-complex arithmetic
+    to a float rather than to a complex, CPython gh-69639). The same trap at a smaller scale: a
+    lossless value that has been through arithmetic can come out as ``4 - 1e-18j``, and its
+    root ``2 - 2.5e-19j`` is nominally active. Neither is repaired here, because a helper cannot
     tell round-off from a deliberately active medium, and clamping would quietly make gain
     media unrepresentable. Callers that build a permittivity by subtraction and then take a
     root should keep ``Im`` non-negative themselves.
@@ -385,14 +388,21 @@ def index_from_eps(eps):
     at all, so eager and traced calls would disagree about the output type. Uniform beats
     convenient; a caller that has verified its medium is lossless can take ``.real``.
 
-    For a magnetic medium the index is ``index_from_eps(eps * mu)``. Not a keyword argument
-    here on purpose -- written out, the multiplication is visible at the call site, which is
-    where a forgotten ``mu`` would otherwise hide.
+    **Not a magnetic medium's index.** That is
+    :func:`~wavebit._core.conventions.signed_index`, ``sqrt(eps)*sqrt(mu)``: the principal root
+    of ``eps*mu`` for an ordinary medium and its negation for a negative-phase-velocity one,
+    every passive double negative and passive magnetic metal among them.
+    This takes no ``mu`` on purpose: the sign
+    needs both factors, and their product has lost it.
 
     Backend-agnostic: arrays and tracers go through their own namespace's ``sqrt`` (with a
     width-preserving promotion to complex -- ``float32`` in gives ``complex64`` out), and
-    Python scalars go through :mod:`cmath`, which agrees with NumPy bit for bit including the
-    signed-zero case above.
+    Python scalars go through :mod:`cmath`. All of them take the lip a signed zero names --
+    JAX's ``sqrt`` takes the upper one for both zeros, and
+    :func:`~wavebit._core.backend.principal_sqrt` turns it there -- so a value on the cut gets
+    one root on every backend. Elsewhere they are each their library's ``sqrt``, which need not
+    agree to the last bit: :mod:`cmath` and NumPy differ by one or two ulp in a component on 45
+    of 2,000 random products ``eps*mu``.
     """
     if hasattr(eps, 'dtype'):
         xp = array_namespace(eps)
@@ -401,7 +411,7 @@ def index_from_eps(eps):
             # single-precision caller is not silently widened to complex128. Exact: the real
             # part is multiplied by 1.0 and the (zero) imaginary part contributes nothing.
             eps = eps * (1 + 0j)
-        return xp.sqrt(eps)
+        return principal_sqrt(xp, eps)
     return _complex_sqrt(complex(eps))
 
 

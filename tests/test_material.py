@@ -268,15 +268,69 @@ def test_index_from_eps_negative_zero_is_the_documented_hazard():
     """The trap, pinned so that it stays *known* rather than becoming a surprise.
 
     The principal cut runs along the negative real axis and IEEE signed zero decides which lip
-    a value sits on. ``-2 + 0j`` gives ``+1.4142j`` (decaying, correct) and ``-2 - 0j`` gives
-    ``-1.4142j``, a gain medium, from an imaginary part that is identically zero with a sign
-    bit set. Nothing clamps it here: a helper cannot tell round-off from a deliberately active
+    a value sits on. ``complex(-2, 0.0)`` gives ``+1.4142j`` (decaying, correct) and
+    ``complex(-2, -0.0)`` gives ``-1.4142j``, a gain medium, from an imaginary part that is
+    identically zero with a sign bit set. (The expression ``-2 - 0j`` is not the second before
+    Python 3.14: its imaginary part is ``+0.0`` there.) Nothing clamps it here: a helper cannot tell round-off from a deliberately active
     medium, and clamping would make gain media unrepresentable. Callers that build a
     permittivity by subtraction own this.
     """
     assert index_from_eps(complex(-2.0, 0.0)).imag > 0
     assert index_from_eps(complex(-2.0, -0.0)).imag < 0       # the hazard, not a bug here
     assert index_from_eps(complex(4.0, -1e-18)).imag < 0      # round-off scale, same lip
+
+
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
+def test_a_signed_zero_names_the_same_root_on_every_backend(backend):
+    """The lip a signed zero names is the same on every backend, and so is everything read from it.
+
+    ``jax.numpy.sqrt`` put both zeros on the upper lip (jaxlib 0.11.0, eager and under ``jit``,
+    complex64 and complex128): ``sqrt(complex(-4, -0.0)) = +2j`` where NumPy, PyTorch and
+    :mod:`cmath` give ``-2j``. So a lossless value written with ``-0.0`` and handed in as a JAX
+    array got the other root from ``index_from_eps`` and ``signed_index``, the other ``n_bot``
+    and the other sign of ``t_p`` (``+t_s`` against ``-t_s`` at normal incidence).
+    ``backend.principal_sqrt`` turns it there; off the cut JAX's root is its own to the bit.
+    """
+    import cmath
+    from wavebit._core.conventions import signed_index
+    values = [complex(-2, 0.0), complex(-2, -0.0), complex(-4, -0.0), complex(-0.5, -0.0),
+              complex(-3, 1e-300), complex(2.25, 0.1)]
+    want = np.asarray([cmath.sqrt(v) for v in values])
+    if backend == 'numpy':
+        convert, back, solver_backend = np.asarray, np.asarray, 0
+    elif backend == 'jax':
+        jax = pytest.importorskip('jax')
+        wavebit.enable_x64()
+        convert, back, solver_backend = jax.numpy.asarray, np.asarray, 1
+    else:
+        torch = pytest.importorskip('torch')
+        convert = lambda v: torch.tensor(v, dtype=torch.complex128)   # noqa: E731
+        back, solver_backend = (lambda t: t.numpy()), 2
+    for dtype in (np.complex128, np.complex64):
+        got = back(index_from_eps(convert(np.asarray(values, dtype=dtype))))
+        assert np.all(np.sign(got.imag) == np.sign(want.imag)), dtype
+        np.testing.assert_allclose(got, want, rtol=1e-6)
+    if backend == 'jax':
+        eager = np.asarray(index_from_eps(jax.numpy.asarray(values)))
+        traced = np.asarray(jax.jit(index_from_eps)(jax.numpy.asarray(values)))
+        assert traced.tobytes() == eager.tobytes()
+        # On the cut the bits are NumPy's, the real zero included.
+        on_cut = slice(0, 4)
+        assert eager[on_cut].tobytes() == np.sqrt(np.asarray(values[on_cut])).tobytes()
+    assert complex(back(signed_index(convert(complex(-4, -0.0)), convert(1 + 0j)))) == -2j
+    outcome = {}
+    for tetm in ('te', 'tm'):
+        solver = wavebit.rcwa(
+            backend=solver_backend, top=Material(1 + 0j, mu=1 + 0j),
+            bot=Material(convert(complex(-4, -0.0)), mu=convert(1 + 0j)), theta=0.0,
+            wavelength=500.0, period=[300.0], truncation_order=0, thickness=[50.0],
+            structure=np.full((1, 1, 4), 2.25 + 0j), mu=np.full((1, 1, 4), 1 + 0j), tetm=tetm,
+            answers='amplitude')
+        result = solver.solve(auto_detune=False)
+        amplitude = result.incident.t_s if tetm == 'te' else result.incident.t_p
+        outcome[tetm] = complex(np.ravel(back(amplitude))[0])
+        assert complex(back(solver.n_bot)) == -2j
+    assert abs(outcome['tm'] + outcome['te']) < 1e-13 * abs(outcome['te'])
 
 
 def test_the_two_conversions_round_trip():
