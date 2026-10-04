@@ -50,6 +50,7 @@ differ are exactly the `__stack` pair above.
 | **RETICOLO**, the **conical** field | `field_1d_conical` on a *patterned* layer — an azimuth and a discontinuity at once, which nothing else here reached | same | `golden_reticolo_conical_field.npz` |
 | **fmmax**, `Formulation.FFT` | `factorization='laurent'`, the same operator: **identity** on patterned layers -- 6.1e-13 to 3.2e-11 in total and per order, on a rectangular cell, a lossy metal and a hexagonal one -- once fmmax's sampled coefficients are extrapolated to the exact ones | the `fwref` env | `golden_fmmax_laurent.npz` |
 | **fmmax**, **double negatives** | gratings on a lossy double-negative substrate (1D and 2D, `\|mu\| != 1`), double-negative pixels inside a grating (patterned `eps` and `mu`), and a grating lit **from** a lossy double negative: every order's unpolarized `R` and `T`, ETM and SMM, through the `theta` door and the direct-`k` door -- **identity**, 2.7e-14 to 6.2e-12, once the quadrature is extrapolated away as for the row above | the `fwref` env | `golden_fmmax_dng.npz` |
+| **PyMoosh** 4.0.1 (MIT), **lossless double negatives** | flat multilayers with a lossless double negative as the substrate, as the lit superstrate, as an inner layer, and all three: `r`, `t`, `R`, `T`, TE and TM, four in-plane wavevectors each, on the TE/TM, 2D and 4ff paths, ETM and SMM -- 8.8e-15 at worst. The case fmmax cannot arbitrate | a throwaway venv with PyMoosh 4.0.1 -- see its generator | `golden_pymoosh_dng.npz` |
 | **RETICOLO**, a **crossed** grating in both of Li's nestings | the 2D Li build, `li_nesting='fixed'` against `parm.res1.li = 1` and `'symmetric'` against `li = 0` — the one case here that can tell the two apart (a 1D grating cannot) | Octave + RETICOLO V10, with `li` set by hand: the bridge does not expose it | inline in `test_reticolo_li_nesting.py`, totals to ten decimals (2026-09) |
 
 A fourth oracle lives outside this directory: the Berreman 4x4 in
@@ -278,6 +279,40 @@ answer -- and the scenes where the labels decide a `LinAlgError` are lossless, w
 choice has no loss to read. Those are held to SMM and closed forms in
 `tests/test_negative_index_layers.py`.
 
+### PyMoosh: the lossless double negatives fmmax cannot read (2026-10-04)
+
+`golden_pymoosh_dng.npz` is the outside check for **lossless** double negatives in flat stacks.
+fmmax keeps every mode with `Im(kz) > 0`, which has nothing to read on a lossless order;
+PyMoosh (D. Langevin et al., *J. Opt. Soc. Am. B* **41**, A67 (2024)) writes its choice down in
+`coefficient_S`: the principal `kz`, negated in a lit or last medium with `Re(eps) < 0` and
+`Re(mu) < 0` (the last one only where `Re(kz) != 0`), and inner layers flipped to
+`Im(kz) >= 0`. On every lossless medium that is this solver's root -- Maystre's cut, or its
+mirror for a double negative -- and the two codes share nothing else (2x2 scalar scattering
+matrices against an RCWA stack at `truncation_order = 0`).
+
+Two of its conventions decide how the comparison is set up. **Its angle is the phase's**:
+`alpha = sqrt(eps*mu)*k0*sin(theta)` with the principal root, so from a double negative its `kx`
+has the sign opposite to the one this solver's `theta` (the light's direction) gives. The golden
+holds PyMoosh's `kx`, which this solver takes through its `kx` door; a flat stack answers both
+signs alike, so the sign of a lit double negative's `k_par` is the fmmax golden's to check, not
+this one's. **Its TM amplitudes are `H_y` ratios**: this solver's `r_p` is that ratio and its
+`t_p` the `E` ratio, `t_H (n1/mu1)/(n2/mu2)` with the signed index, which the test undoes with an
+index it writes out itself. With those, every row agrees to 8.8e-15 (numpy 2.5.1 here, 2.5.3
+in PyMoosh's environment); a double negative beyond the lit side replaced by its positive mirror
+misses by 1.8 to 2.9. A lossless lit double negative has exactly its mirror's admittances, so
+no flat stack can tell those two apart; what that case pins is the incident wave's root and the
+sign of the index in `t_p` (reverting the mirror cut or the signed index fails the test; an
+unsigned `k_par` and the layer labels do not, as said).
+
+**Where PyMoosh is not an oracle**, found while choosing the cases, both from its inner-layer
+rule: a lossless double-negative layer keeps the principal root, whose power runs against the
+label, and wherever that admittance cancels a neighbour's the interface matrix divides by zero.
+A `(-3, -0.5)` layer on a `(-3, -0.5)` substrate returns `NaN` at every angle (the stack this
+solver's own label rule was fixed for, `tests/test_negative_index_layers.py`); a `(-6, -1.5)`
+layer beside `(4, 1)`, which have the same impedance, returns `R + T = 3.10` at normal incidence
+and `1 + 2.6e-10` at 1e-3 rad. The cases avoid both, and the generator refuses any row with
+`|R + T - 1| > 1e-12`. Rerunning the generator reproduces the file byte for byte.
+
 ### A generator that could not reproduce its own golden
 
 Found 2026-08-15 while building the row above, by regenerating `golden_reticolo.npz` to check
@@ -503,6 +538,15 @@ texture holding a full 3x3 permittivity tensor, and `nn = 0`.
 
 > M.F. Schubert and A.M. Hammond, *Fourier modal method for inverse design of
 > metasurface-enhanced micro-LEDs* (2023). [arXiv:2308.08573](https://arxiv.org/abs/2308.08573)
+
+**PyMoosh** (MIT licence: its `LICENSE.txt` and package metadata; the header of its
+`__init__.py` carries GPL-3 boilerplate that ends by pointing to the MIT licence, checked in
+4.0.1).
+
+> D. Langevin, P. Bennet, A. Khaireh-Walieh, P. Wiecha, O. Teytaud and A. Moreau, *PyMoosh: a
+> comprehensive numerical toolkit for computing the optical properties of multilayered
+> structures*, J. Opt. Soc. Am. B **41**, A67 (2024).
+> [doi:10.1364/JOSAB.506175](https://doi.org/10.1364/JOSAB.506175)
 
 ### What RETICOLO's records and packages say about its licence
 
