@@ -1006,13 +1006,53 @@ def test_solve_conv_half_space_terms_are_read():
     """``solve_conv`` takes its own half-space terms; they need not be the scene's materials.
 
     The scene's substrate is the non-magnetic ``1.99-0.3j``, which is what the pair multiplies
-    to; handed over as ``eps_bot`` / ``mu_bot`` it is solved with its own root."""
+    to; handed over as ``eps_bot`` / ``mu_bot`` it is solved with its own root, and its index
+    with the pair's sign, so ``t_p == t_s`` at normal incidence as on the magnetic scene."""
     eps, mu = PASSIVE
     solver = _solver(bot=complex(eps * mu))
     result = solver.solve_conv(*solver.eps_conv_matrices(), mu_bot=mu, eps_bot=eps)
     expected = _interface(0.0, eps, mu)
     for pol, sub in (('s', result.s_inc), ('p', result.p_inc)):
-        np.testing.assert_allclose(float(np.sum(sub.R)), expected[pol][2], atol=1e-12)
+        r, t = (sub.r_s, sub.t_s) if pol == 's' else (sub.r_p, sub.t_p)
+        got = [complex(np.sum(r)), complex(np.sum(t)), float(np.sum(sub.R)), float(np.sum(sub.T))]
+        np.testing.assert_allclose(got, expected[pol], rtol=0, atol=1e-12)
+    assert solver.n_bot.real > 0           # the scene's own index, once the solve is over
+
+
+@pytest.mark.parametrize('where', ['top', 'bot'])
+def test_a_solve_conv_pair_signs_the_index_it_is_solved_with(where):
+    """A non-magnetic scene holding ``eps*mu`` of the asymmetric double negative, split by
+    ``solve_conv`` into that pair, is the magnetic scene: every amplitude (``t_p`` and
+    ``r_xyz`` / ``t_xyz`` included) and the result's field agree to the bit, lit from the pair
+    (``kx`` turned, ``theta = 0.6``, ``phi = 0.6``; and the frame at normal incidence) or not.
+    The solver's indices are its materials' again afterwards, and its own
+    ``reconstruct_field``, which reads the incidence live, refuses after a pair turned the lit
+    side's sign rather than mixing the two scenes."""
+    def scene(material, theta):
+        sides = (dict(top=material, bot=N_GLASS ** 2) if where == 'top' else
+                 dict(top=N_GLASS ** 2, bot=material))
+        return wavebit.rcwa(backend=0, wavelength=WL, period=(P_G, 0.9 * P_G),
+                            truncation_order=(1, 1), structure=G2[None], thickness=[H],
+                            theta=theta, phi=0.6, psi=0.3, answers='field', **sides)
+    points = ([0.0, 100.0], [0.0, 50.0], [10.0, 90.0])
+    for theta in (0.6, 0.0):
+        reference = scene(wavebit.Material(*ASYM), theta).solve(auto_detune=False)
+        solver = scene(complex(ASYM[0] * ASYM[1]), theta)
+        result = solver.solve_conv(*solver.eps_conv_matrices(),
+                                   **{f'eps_{where}': ASYM[0], f'mu_{where}': ASYM[1]})
+        for name in ('R', 'T', 'r_s', 'r_p', 't_s', 't_p', 'r_xyz', 't_xyz'):
+            np.testing.assert_array_equal(_host(getattr(result.incident, name)),
+                                          _host(getattr(reference.incident, name)), err_msg=name)
+        np.testing.assert_array_equal(_host(result.reconstruct_field(*points)),
+                                      _host(reference.reconstruct_field(*points)))
+        assert solver.n_top.real > 0 and solver.n_bot.real > 0
+        if where == 'top':
+            with pytest.raises(RuntimeError, match='scene has changed'):
+                solver.reconstruct_field(*points)
+        else:
+            field = _host(result.reconstruct_field(*points))
+            np.testing.assert_allclose(_host(solver.reconstruct_field(*points)).reshape(
+                field.shape), field, rtol=0, atol=1e-12)
 
 
 # ----------------------------------------------------------------------------- the backends
@@ -1102,3 +1142,39 @@ def test_jit_and_grad_through_a_negative_index_substrate():
     h = 1e-6
     fd = (float(total_R(-2.0 + h)) - float(total_R(-2.0 - h))) / (2 * h)
     assert abs(auto - fd) < 1e-7 * max(abs(fd), 1e-3)
+
+
+def test_under_jit_the_scenes_own_pairs_sign_nothing():
+    """The ordinary solve hands the kernels the scene's own ``(eps, mu)`` pairs, whose index
+    already is ``signed_index`` of those very objects. Under ``jax.jit`` a traced material's
+    sign cannot be read, and re-signing the index by its own pair wrapped it in a ``where`` and
+    marked the indices as pair-signed -- so a non-magnetic lit side's ``kx`` and frame took a
+    traced ``where`` too, because a *far* side was magnetic. Both moved jitted results by a few
+    ulp against develop for media with nothing negative anywhere.
+
+    Pinned structurally: the scene's own pairs leave both indices the same objects and mark no
+    side, and a foreign pair marks only its own side, so the lit sign of a non-magnetic lit side
+    stays ``None`` (no ``where`` at all) while the far side is traced."""
+    pytest.importorskip('jax')
+    wavebit.enable_x64()
+    import jax
+    import jax.numpy as jnp
+
+    seen = {}
+
+    def probe(re_eps):
+        solver = _grating('conical', 'SMM', nim=(re_eps + 0.1j, 1 + 0.1j), backend=1)
+        bot = solver._bot
+        n_top, n_bot = solver._n_top, solver._n_bot
+        with solver._indices_signed_by_pairs(solver._top.epsilon, solver._top.mu,
+                                             bot.epsilon, bot.mu):
+            seen['own'] = (solver._indices_from_pairs, solver._n_top is n_top,
+                           solver._n_bot is n_bot, solver._lit_index_is_negative())
+        # A foreign far-side pair: the split of the scene's eps*mu into (eps*mu/2, 2).
+        with solver._indices_signed_by_pairs(None, None, bot.epsilon * bot.mu / 2, 2.0 + 0j):
+            seen['foreign'] = (solver._indices_from_pairs, solver._lit_index_is_negative())
+        return solver.solve(auto_detune=False).R.sum()
+
+    jax.jit(probe)(jnp.asarray(2.0))
+    assert seen['own'] == (frozenset(), True, True, None)
+    assert 'top' not in seen['foreign'][0] and seen['foreign'][1] is None

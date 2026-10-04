@@ -335,6 +335,24 @@ def _half_space_index(material, where='top'):
     return signed_index(material.epsilon, material.mu)
 
 
+def _index_along(n, reference):
+    """``n``, or ``-n`` where it points away from ``reference``: ``Re(conj(n)*reference) < 0``.
+
+    The object itself whenever nothing turns -- eagerly decided, so the ordinary solve keeps its
+    bits and its objects -- and a ``where`` under a trace.
+    """
+    if not hasattr(n, 'dtype') and not hasattr(reference, 'dtype'):
+        return -n if (n.conjugate() * reference).real < 0 else n
+    xp = array_namespace(n if hasattr(n, 'dtype') else reference)
+    turn = xp.real(xp.conj(as_array(xp, n)) * reference) < 0
+    concrete = _concrete(turn)
+    if concrete is False:
+        return n
+    if concrete is True:
+        return -n
+    return xp.where(turn, -n, n)
+
+
 def _real_part(value):
     """``Re(value)`` of a Python number or an array of any backend, without a namespace."""
     return getattr(value, 'real', value)
@@ -2404,8 +2422,9 @@ class CoreSolveMixin:
         index the solve uses (:func:`_half_space_index`), so the angle, the frame and the
         kernels' ``n/mu`` cannot disagree about it.
         """
-        material = self.bot if self._incidence_side == 'bottom' else self.top
-        if not material.is_magnetic:
+        side = 'bot' if self._incidence_side == 'bottom' else 'top'
+        material = self.bot if side == 'bot' else self.top
+        if not (material.is_magnetic or side in self._indices_from_pairs):
             return None
         return self.xp.real(self._as_complex(self.n_inc)) < 0
 
@@ -3661,6 +3680,76 @@ class CoreFactorizationMixin:
             if mu_side is not None:
                 _refuse_negative_index_pair(n * n / mu_side if epsilon is None else epsilon,
                                             mu_side, where)
+        with self._indices_signed_by_pairs(eps_top, mu_top, eps_bot, mu_bot):
+            return self._solve_conv_signed(
+                epx_conv_all, epy_conv_all, epz_conv_i_all, epxy_conv_all, epyx_conv_all,
+                epxz_conv_all, epyz_conv_all, epzx_conv_all, epzy_conv_all, mu=mu,
+                mu_top=mu_top, mu_bot=mu_bot, eps_top=eps_top, eps_bot=eps_bot)
+
+    #: The sides (``'top'`` / ``'bot'``) whose half-space index a ``solve_conv`` pair signed, for
+    #: as long as :meth:`_indices_signed_by_pairs` holds them, so that
+    #: :meth:`_lit_index_is_negative` reads the lit side's even on a scene whose materials name no
+    #: permeability. Per side: a far side's pair says nothing about the lit side's sign.
+    #: Structural, never a value.
+    _indices_from_pairs = frozenset()
+
+    @_contextlib.contextmanager
+    def _indices_signed_by_pairs(self, eps_top=None, mu_top=None, eps_bot=None, mu_bot=None):
+        """Sign ``n_top`` / ``n_bot`` by the half-space pairs a solve was handed, for its duration.
+
+        ``solve_conv`` takes ``(eps_side, mu_side)`` terms that need not be the scene's
+        materials, and the usual way to use them is to split a scene's ``n**2`` into a
+        permittivity and a permeability. ``n**2`` fixes every ``kz``; the sign of ``n`` does not
+        come with it, and it is what the kernels quote ``t_p`` with, what a lit side's real angle
+        turns ``kx`` by (:meth:`_incident_kxy`) and what the frame at normal incidence reads
+        (:meth:`_frame_azimuth`). A non-magnetic scene holding ``1.99-0.3j`` split into the
+        double negative ``(-2+0.1j, -1+0.1j)`` solved with the scene's principal root, so its
+        ``t_p`` was ``-t_s`` at normal incidence. So where a pair is given, the index is the
+        scene's ``n`` turned to point along the pair's own
+        (:func:`~wavebit._core.conventions.signed_index`) -- negated where
+        ``Re(conj(n) * n_pair) < 0``, otherwise the same object. A pair that is the scene's own
+        material, which is how :meth:`_solve_built` calls, signs nothing, so the ordinary solve
+        keeps its bits.
+
+        Scoped to the one solve, as the pairs are: afterwards the solver's indices are its
+        materials' again. Its own :meth:`reconstruct_field` reads the incidence live, so after a
+        solve whose pair turned the *lit* side's index it refuses as a changed scene
+        (:meth:`_reconstruction_scene` records that sign); the result's field door kept what the
+        solve used and answers. A far side's sign reaches no live read.
+        """
+        saved = (self._n_top, self._n_bot)
+        turned = set()
+        for name, epsilon, mu_side in (('top', eps_top, mu_top), ('bot', eps_bot, mu_bot)):
+            if mu_side is None:
+                continue
+            material = self._top if name == 'top' else self._bot
+            if epsilon is material.epsilon and mu_side is material.mu:
+                # The scene's own pair, which is how `_solve_built` calls: the index already is
+                # `signed_index` of these very objects. Decided by identity, so a traced material
+                # adds no `where` to the program and the lit side's sign stays structural.
+                continue
+            n = getattr(self, f'_n_{name}')
+            signed = _index_along(n, signed_index(n * n / mu_side if epsilon is None
+                                                  else epsilon, mu_side))
+            if signed is not n:
+                setattr(self, f'_n_{name}', signed)
+                turned.add(name)
+        if not turned:
+            yield
+            return
+        self._indices_from_pairs = frozenset(turned)
+        try:
+            yield
+        finally:
+            self._n_top, self._n_bot = saved
+            self.__dict__.pop('_indices_from_pairs', None)
+
+    def _solve_conv_signed(self, epx_conv_all, epy_conv_all, epz_conv_i_all,
+                           epxy_conv_all=None, epyx_conv_all=None,
+                           epxz_conv_all=None, epyz_conv_all=None,
+                           epzx_conv_all=None, epzy_conv_all=None, mu=None,
+                           mu_top=None, mu_bot=None, eps_top=None, eps_bot=None):
+        """:meth:`_solve_conv` once the half-space indices carry the pairs' signs."""
         before = self._grating_type
         self._assign_grating_type()
         z_row = (epxz_conv_all, epyz_conv_all, epzx_conv_all, epzy_conv_all)
@@ -3946,6 +4035,10 @@ class CoreFactorizationMixin:
                       components(value)
                       for medium in (self._top, self._bot)
                       for value in (medium.epsilon, medium.mu)),
+                # The sign of the lit side's index, which a `solve_conv` pair may have turned for
+                # its solve alone (`_indices_signed_by_pairs`): the incidence is read live through
+                # it, so a field after such a solve would mix the two.
+                components(self.n_inc)[0].real < 0,
                 # The retained window, which `order_kxy` also reads live. An `excitation` whose
                 # keys move its centre keeps its size, so no shape mismatch catches it: the modes
                 # are read one order off (the same grating, `excitation` None -> {1: 1.0}: 1.87
