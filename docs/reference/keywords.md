@@ -25,8 +25,8 @@ Explained in [Saying what the light is](../guide/light.md).
 | Keyword | Default | What it takes |
 | --- | --- | --- |
 | `wavelength` | `1.` | free-space wavelength, in whatever unit `period` and `thickness` share |
-| `theta` | `0.` in angle mode; `None` with direct k | phase polar angle from the inward normal, radians. Real angles give uniform surface illumination, including in absorbing incident media. A nonzero imaginary part selects the formal complex-angle parameterization; see [phase incidence](../conventions.md#phase-incidence) |
-| `phi` | `None` | azimuth of the plane of incidence, radians. `None` is "not named", which the pure 1D path requires |
+| `theta` | `0.` in angle mode; `None` with direct k | polar angle of the incident light's direction from the inward normal, radians: the direction its power travels in a lossless medium of either sign of index (in a negative-index medium the in-plane wavevector then points the other way). Real angles give uniform surface illumination, including in absorbing incident media. A nonzero imaginary part selects the formal complex-angle parameterization; see [real-angle incidence](../conventions.md#real-angle-incidence) and [negative-index media](../negative-index-media.md) |
+| `phi` | `None` | azimuth of the incident light's direction, radians. `None` is "not named", which the pure 1D path requires |
 | `kx`, `ky` | `None` | direct real Cartesian transverse angular wavenumbers, in inverse length units; an omitted component is zero. Alternative to `theta`/`phi`; these are physical values, not divided by k0. See [direction inputs](../guide/light.md#two-ways-to-specify-direction) |
 | `tetm` | `None` | `'te'` / `'tm'`. A **declaration** that polarization and azimuth are not degrees of freedom here; one-row raster structures only, and it is what buys the pure TE/TM formulation (a shape structure, a tensor, a z row, `formulation='4ff'`, or no structure after anything but a pure solve, is refused by name, with the pair below as the fix). The same light and the same per-order amplitudes as `polarization=(1, 0)` / `(0, 1)` at `phi = 0`; its scattering matrix is that solve's s-s / p-p block, and `s_inc` / `p_inc` stay `None` |
 | `psi` | `pi/2` (s/TE) | polarization angle, radians. `pi/2` is s/TE, `0` is p/TM |
@@ -43,7 +43,7 @@ Explained in [Describing a scene](../guide/scene.md).
 | --- | --- | --- |
 | `structure` | `None` | the layers. An `ndarray` of shape `(n_layers, Ny, Nx)` is a **raster** of relative permittivity; a `list` of `dict(background=..., shapes=[...])` is the **parametric** path |
 | `thickness` | `(0.,)` | one length per layer, same unit as `period` |
-| `top` | `1.` | superstrate material — a `Material`, or a bare relative permittivity. A negative-index pair (`Re(eps) < 0`, `Re(mu) < 0` and `Re(eps*mu) > 0`, so it propagates) is refused: its half-space root is the other one; put it in a layer |
+| `top` | `1.` | superstrate material — a `Material`, or a bare relative permittivity. A passive double negative (`Re(eps) < 0`, `Re(mu) < 0`) is solved on either side, lit or not; an active one that propagates (`Re(eps*mu) > 0`, and `Im(eps) < 0` or `Im(mu) < 0`) is refused. See [negative-index media](../negative-index-media.md) |
 | `bot` | `1.` | substrate, read the same way |
 | `mu` | `None` | **raster path only**: the permeability field, `(n_layers, Ny, Nx)`, beside `structure`. On the shape paths a permeability belongs to each `Material`, so naming it here is refused |
 

@@ -34,8 +34,8 @@ problems with this audit's half-space finding.
 
 The rest of this audit stands: §2's measurements, items 2-4, and the layer half of everything.
 The both-sides-absorbing step of §4 also stays fixed under the new rule. Since 2026-09 a real
-angle in an absorbing superstrate is a phase angle with a real `k_par`, so every complex-`k_par`
-case below is now reached only through a complex `theta`.
+angle in an absorbing superstrate fixes a real `k_par` (`docs/conventions.md`, "Real-angle
+incidence"), so every complex-`k_par` case below is now reached only through a complex `theta`.
 
 Targets:
 - `wavebit/_core/conventions.py` — `boundary_kz`, `_off_principal_branch` (removed 2026-10-02), `mode_q`
@@ -438,8 +438,8 @@ formulation. Fixed as prose; nothing numerical moved.
 > that their `r_p` amplitudes agree to 1e-12, at normal incidence and at a real
 > `n_top·sinθ = 0.5`, for ETM and SMM. The measurement above does not rerun as written:
 > it took `k_x/k0 = n_top·sinθ = 0.847+0.169i`, whereas a real `θ` in an absorbing medium
-> is now a phase angle with a real `k_x` (`0.854` here; `docs/conventions.md`, Phase
-> incidence), so the same input names a different incident wave.
+> now fixes a real `k_x` (`0.854` here; `docs/conventions.md`, "Real-angle incidence"), so
+> the same input names a different incident wave.
 
 What follows is the original investigation, kept because its measurements stand: the solver
 agrees with two independent references to machine precision, and the spelling table remains

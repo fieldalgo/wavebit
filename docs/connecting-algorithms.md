@@ -11,7 +11,8 @@ Targets:
 - `wavebit/_core/scattering.py` — the SMM cascade
 - `wavebit/_core/solve_2d_4ff.py` — all three, on the first-order path
 - `wavebit/_core/conventions.py` — `etm_mode_q` / `layer_root`, the one place the two algorithms
-  label a layer's modes differently (§10)
+  label a layer's modes differently (§10), and `layer_label_rule` / `power_down_labels`, how a
+  double-negative layer is labelled (§11)
 
 **The keyword is `layer_algorithm`** (it was `connecting_algo` until 2026-08-20; the values
 `'ETM'` / `'SMM'` / `'TMM'` did not move). "Connecting algorithm" stays the name of the *idea*
@@ -55,7 +56,10 @@ gratings, rather than assumed.
 1. ETM and SMM are **the same answer**, to 8e-16 on a real grating. Choosing between them is a
    cost and structure decision, never an accuracy one. At a complex in-plane wavevector that
    took ETM labelling its layers' modes by the half-space's rule (§10); before 2026-10-02 it
-   lost up to 12 digits there.
+   lost up to 12 digits there. A double-negative layer is labelled by where its modes' power
+   goes (§11); before 2026-10-04 ETM raised `LinAlgError` on a quarter of the stacks that rest
+   one on its own medium. The one stack ETM cannot write is Pendry's perfect-lens pair, which
+   it names (§11).
 2. ETM is cheaper everywhere measured, so it is the default on both paths.
 3. A plain transfer matrix is not a third option you would ever pick. It cannot run a grating at
    all — not because layers are thick, but because **diffraction orders are evanescent**, and it
@@ -465,6 +469,254 @@ Far thicker layers are out of reach for both algorithms: at 1 mm and `theta = 0.
 moved 3.9e-02 under the nudge. The 4ff path splits its modes in `split_forward_backward` by the
 same partition (attenuation where decay dominates, energy flow otherwise), without a cap.
 
+## 11. Double-negative layers: the label follows the power
+
+Written 2026-10-04. NumPy, float64 unless noted.
+
+§10 gave every ETM layer the root a half-space of the same medium takes, Maystre's cut. A
+half-space whose permittivity and permeability both have negative real parts takes the *mirror*
+of that cut ([`branch-cuts.md`](branch-cuts.md) §9), because such a medium carries its power
+against its phase (V. G. Veselago, *Sov. Phys. Usp.* **10**, 509 (1968)). Its layers kept
+Maystre's cut until this section, and that was wrong for the same reason. The rest of the
+subject -- the half-space root, the signed index, the incidence angles, refusals and evidence --
+is [`negative-index-media.md`](negative-index-media.md).
+
+**Words used below.** A *double negative* (DNG) is a medium with `Re(epsilon) < 0` and
+`Re(mu) < 0` -- for a tensor, every diagonal entry of each in the lab frame (the principal
+values when the tensor is diagonal). A layer is *uniform* when its material is the same
+everywhere in the cell (its convolution matrices are `c*I`), *patterned* otherwise. The *flux* of a mode is the time-averaged Poynting `z` component it carries on its own.
+
+### What went wrong
+
+At a real `k_par`, a passive double negative puts `q**2 = k_par**2 - eps*mu` in the closed
+*upper* half plane, since `Im(eps*mu) = Re(eps) Im(mu) + Im(eps) Re(mu) < 0`. There Maystre's root
+(`Re(q) > Im(q)`) is the one that advances its phase downward -- and in a double negative that
+wave carries its power *up*. So a double-negative layer's `+` modes were the waves leaving the
+region below, not the ones it receives, and `a = (W^-1 F + V^-1 G)/2` (§10) was the projection of
+the received field onto waves going the other way. A layer resting on a medium that receives its
+waves without reflection -- the same medium -- made `a` exactly singular.
+
+| uniform DNG layer on its own DNG half-space, 720 scenes | ETM `LinAlgError` | SMM `LinAlgError` |
+|---|---|---|
+| `(-2, -1)`, lossless | 63 | 12 |
+| `(-6, -1.5)`, lossless | 105 | 0 |
+| `(-2+0.1i, -1+0.1i)` | 3 | 0 |
+| `(-3+0.1i, -0.5+0.05i)` | 0 | 0 |
+| after this section, all four | **0** (worst ETM-SMM 8.7e-16) | **0** |
+
+The scan ran the TE, TM, conical, 2D and 4ff paths, vacuum and glass superstrates, three
+(period, wavelength) pairs, 37/150/900 nm, real and complex angles. By path the ETM failures were
+63 TE, 66 TM, 24 conical, 18 2D, and none on 4ff, which has always split its modes by flux
+(`solve_2d_4ff.py::split_forward_backward`). Where the zero did not come out exact the answers
+were still right -- a uniform layer's orders do not mix, so a tiny diagonal entry of `a` only
+rescales its own column -- which is why this stayed hidden behind the cases that raised.
+
+**SMM met it too, at its gap medium.** SMM's labels are free in exact arithmetic (§10), and
+`mode_q` spends the freedom on keeping `exp(-k0*q*d)` bounded: `Re(q) >= 0`, ties broken by
+`Im(q) <= 0`. That tie is the phase-down root, so a lossless double negative's propagating modes
+were labelled against their power. SMM joins every layer through a gap of `eps = 1 + kx**2`,
+`mu = 1`, whose `kz` is 1 on every order; for `eps = -2`, `mu = -1` at `kx = 1` the layer's mode
+has `kz = 1` as well, the layer is the gap's exact mirror, and the gap-to-layer factor `A` was
+exactly singular. Period 1000 nm at 500 nm puts orders +-2 there at normal incidence: the 12 SMM
+failures above. A mode labelled by its power can never make `A` singular -- the gap's downward
+wave carries power down, and no combination of upward-power modes can match it.
+
+**A patterned layer holding a double negative** has modes of both kinds and modes between them.
+On 360 random patterned scenes (TE, TM, conical, 2D; double-negative backgrounds with ordinary
+inclusions and the reverse, fill 0.03 to 0.97, one or two layers, on double-negative, glass or
+vacuum half-spaces, either side lit), ETM against SMM:
+
+| | scenes | before: `LinAlgError` | before: worst finite | after: `LinAlgError` | after: worst |
+|---|---|---|---|---|---|
+| oblique, real or complex angle | 274 | 15 | 2.7e-09 | **0** | **6.1e-13** |
+| exactly normal incidence | 86 | 9 | 1.4e-03 | **0** | 1.4e-03 (see below) |
+
+And on §10's own scene with its `eps = 25` block made the double negative `(-25, -1)` --
+permittivities `[1, X, 1, X, X, X]` over 2000 nm, 100 nm thick, on a half-space of `X`,
+`truncation_order = 30`, 900 nm -- where the wide block rests on its own medium:
+
+| `|ETM - SMM|`, all amplitudes | TE | TM | conical, `phi = 0.3` |
+|---|---|---|---|
+| `theta = 0.5`, before | 6.6e-07 | 1.0e-05 | 1.4e-05 |
+| `theta = 0.5`, after | 1.2e-14 | 5.5e-15 | 6.4e-14 |
+| `theta = 0.5+0.3i`, before | 7.5e-07 | 2.7e-04 | 1.2e-04 |
+| `theta = 0.5+0.3i`, after | 4.0e-14 | 1.2e-14 | 1.5e-13 |
+
+### The rule
+
+| layer | ETM's `+` root | SMM's `+` root |
+|---|---|---|
+| no double-negative region (every layer before this section) | Maystre's cut, capped (§10) | decaying; tie `Im(q) <= 0` |
+| uniform double negative | the **mirror**, `Re(q) + Im(q) > 0`, capped | decaying; tie `Im(q) >= 0` |
+| patterned, holding a double-negative region | **per mode**: propagation-dominated (`|Im q| > |Re q|`) with resolvable flux, the root whose flux is positive; otherwise the decaying root; capped | decaying; tie broken by the flux |
+
+* **Uniform: the half-space's own rule.** `etm_mode_q(..., mirrored)` is
+  `conj(etm_mode_q(conj(q**2)))` before the cap, to the bit, and equals `-i*kz` of the
+  half-space's mirrored root (`boundary_kz` with the medium) on every order, real or complex
+  `k_par`. So a layer of the half-space's own medium has `a = I` again, as an ordinary layer on
+  its own substrate does. `mode_q(..., mirrored)` mirrors only the tie: a lossless propagating
+  mode is labelled `Im(q) >= 0`, by its power.
+* **Patterned: the flux.** `power_down_labels` reads each mode's flux,
+  `-Im(sum(X * conj(Y)))/2` with `(X, Y) = (H_s, E_s)` for an s wave and `(F_p, H_p)` for a p
+  wave -- the boundary variables a substrate seed is written in, so a downward wave of a lossless
+  half-space comes out at `Re(kz/mu)/2` and `Re(kz/eps)/2`, positive (`solve_1d.py::mode_flux`,
+  and `solve_2d.py::mode_flux_2d` for the unrotated 2D pair). "Resolvable" is the 4ff split's own
+  threshold, `|flux| > 1e-12 * sum(|psi|**2)`. Where decay dominates the flux is not read: a
+  truncated operator can give an evanescent mode a small flux of either sign, which is the reason
+  the 4ff split reads attenuation there, and following it would hand ETM a growing root. ETM then
+  applies §10's cap; SMM never takes a growing root and lets the flux break only `mode_q`'s tie.
+* **Everything else is untouched, structurally.** The engine reads each layer's materials
+  (`engine.py::CoreFactorizationMixin._layer_double_negative`: does the layer hold a point
+  where both real parts are negative, and is it one medium) and hands the kernels a
+  `DoubleNegativeLayer(holds, uniform)` per layer. A layer that holds none takes the very
+  arithmetic it had: the builders get `(mirrored, patterned) = (None, None)` from
+  `layer_label_rule` and make the call they always made.
+
+**Why per mode, and why the flux.** A patterned layer has no one medium to mirror. Each single
+cut fails one limit: Maystre's sends a backward mode up, which is everything above, and the
+mirror sends a forward one up -- a glass layer with one pixel of double negative, labelled by
+the mirror, resting on glass. Labelling by decay, which is what SMM does, is right for every
+lossy mode at a real `k_par` (a mode's flux decays in the direction it travels) but leaves the
+lossless tie open and, at a complex `k_par`, sends propagating modes up: §10's failure. Measured
+on a 1D harness that swapped only the labels of double-negative layers (400 scenes: blocks of
+double negative on their own medium, ordinary blocks with double-negative inclusions on theirs,
+near-uniform layers of both kinds, lossless mixtures, real and complex angles, 150 nm and
+1.5 um), `|ETM - SMM|`:
+
+| labels for a double-negative layer | `LinAlgError` | worst otherwise | `(-25, -1)` block, `0.5+0.3i`, TE / TM |
+|---|---|---|---|
+| Maystre's cut (before) | 14 | 1e-10 | 7e-07 / 3e-04 |
+| decaying, `Im(q) <= 0` tie | 12 | 1e-10 | 1e-10 / 4e-11 |
+| decaying, tie by flux | 4 (uniform, complex angle) | 9e-12 | 1e-10 / 4e-11 |
+| mirror cut for any layer holding one | 0 | 9e-12 | 3e-14 / 1e-14 |
+| **mirror if uniform, else the flux per mode** (shipped) | **0** | 2e-10 | **4e-14 / 1e-14** |
+
+The mirror for every layer measured well, but it is the wrong cut for the ordinary modes of a
+layer that is mostly ordinary, and is saved there only by the cap; the flux has no such limit.
+Its one cost is the cap's: on lossless double-negative/glass mixtures at `theta = 0.3+0.05i` it
+takes power-down roots that grow, up to `eps**-0.25`, and lost 2e-10 where decaying labels lost
+2e-12 -- the trade §10 made for ordinary layers, made the same way. (At the real `theta = 0.5`
+the block's lossless modes also show why the tie matters: decaying labels with `mode_q`'s tie
+were 2e-06 / 1e-05 off.)
+
+### What it costs, and what stays the same
+
+* **Every scene without a double-negative layer is byte-identical** to develop (`0dfc4ce`):
+  108,640 NumPy arrays of magnetic-layer scenes (ordinary magnetic, lossy, gain, magnetic metal,
+  mu-negative, eps-negative beside mu-negative, the `Re = 0` seams; TE, TM, conical, 2D, 4ff and
+  an oblique lattice; ETM and SMM; real, normal, complex and grazing angles; both sides; fields,
+  scattering blocks and `solve_conv` relays), 38,652 eager JAX and 38,652 eager PyTorch, and 48
+  `jax.jit` arrays: 24 with the raster itself traced, 24 with `theta` traced over a concrete
+  raster. The engine reads materials under the JAX backend's compile-time evaluation, so a
+  concrete raster gives a Python `False` even inside a trace and no `where` is staged for an
+  ordinary layer.
+* A traced double negative (`jax.jit` over the raster) is selected with `where`, never branched
+  on: ETM through the trace matches NumPy to 6.1e-14 on uniform and patterned layers.
+* Cost: a patterned double-negative layer pays for its modes' flux, `O(n**2)` (plus two matrix
+  products on the conical path, whose partner blocks are formed later); a uniform one pays
+  nothing; no other layer pays anything.
+* `solve_conv` takes matrices, not materials. It reads the scene's own materials when the layer
+  counts match, so `solve_conv(*eps_conv_matrices(), mu=mu_conv_matrices(), ...)` is `solve()` to
+  the bit for a double-negative scene too; a layer the scene calls ordinary says nothing there, and
+  a uniform double negative is then read off its matrices (`c*I`). A label moves no exact answer,
+  only conditioning, so a matrix that is not the scene's costs digits at worst, never the answer.
+
+### Pendry's pair: a double negative beside its exact negation
+
+A uniform layer of `(eps, mu)` next to a medium of `(-eps, -mu)` -- the textbook perfect lens,
+`(-1, -1)` in vacuum, is one (J. B. Pendry, *Phys. Rev. Lett.* **85**, 3966 (2000)). On every
+evanescent order the two decaying roots are equal and the admittances `kz/mu` and `kz/(-mu)` are
+each other's negatives.
+
+**Is it singular?** The *single interface* is: `r = (Y1 - Y2)/(Y1 + Y2)` has a pole at every
+evanescent `k_par`, a surface mode on each. A *layer* of it is not. A finite layer on its mirror
+carries only the mode that grows toward the mirror, and transmits an evanescent order as
+
+```
+t = 2 ka/(ka + kn) * exp(kn * k0 * d),    ka, kn = sqrt(k_par**2 - eps_above*mu_above), sqrt(k_par**2 - eps*mu)
+```
+
+finite at any thickness -- Pendry's amplification. SMM's scattering matrix has it order by order
+(`(-2, -1)` on `(2, 1)`, wavelength 600 nm, period 700 nm, vacuum above): every evanescent order
+to 2e-15 relative at 30 and 100 nm and to 5e-10 at 300 nm (amplification 4.3e4, round-off growing
+with `exp(2*kn*k0*d)`); at 600 nm the highest orders fall short of the closed form (7.4e8 against
+1.9e9), where `exp(2*kn*k0*d)` passes `1/eps`. The plane wave on uniform layers excites none of
+those orders, and its answer is finite, exact, and the limit of the lossy one: loss `delta` in
+both parameters moves the amplitudes linearly, by 0.27, 0.92 and 2.8 times `delta` at 30, 100
+and 300 nm. What is *not* finite is the limit over orders. The amplification grows without
+bound with `k_par`, so wherever a patterned layer excites evanescent orders the lossless answer
+does not converge in `truncation_order` -- specular `R` of a grating on a 100 nm lens went
+0.1011, 0.0921, 0.0873, 0.0856 at truncation 5, 10, 20, 40 -- and loss is what bounds it: at
+`delta = 1e-3` the same sequence settles at 0.0861. Each loss cuts the amplification off where
+`delta * exp(2*kn*k0*d)` reaches 1 (D. R. Smith et al., *Appl. Phys. Lett.* **82**, 1506 (2003)).
+So the pair is physical with loss, a lossless answer is a fixed-truncation answer, and SMM gives
+that answer.
+
+**What ETM does.** Its `a` for the layer is `(1 + Y_below/Y_layer)/2`, and that is zero on every
+evanescent order under the decaying label, the mirror's included. The growing label would make
+it 1, but it grows by `exp(kn*k0*d)` -- the amplification itself -- which passes §10's cap at
+high orders, where the recursion would then lose `eps*G**2`. Floating point usually leaves `a` a
+round-off away from zero, and then the answer is still SMM's: to 1e-13 on every configuration
+measured (1D and 2D, conical, lit from either side, the pair at the exit or inside the stack, with
+and without a grating, 30 nm to 2.5 um). Where the zero comes out exact -- uniform stacks with
+the mirror at the exit on the pure TE/TM path, the lens with its mirror on both sides, the 2D
+path at some truncations -- the inversion fails, and the solve now says why instead of retrying
+the wavelength (the zero does not move with it):
+
+```
+ValueError: layer_algorithm='ETM' could not solve this stack: layer 0 is a uniform double
+negative (eps = -2+0j, mu = -1+0j) beside the bottom half-space, made of its exact negation --
+the perfect-lens pair ... layer_algorithm='SMM' solves it ...
+```
+
+raised from the `LinAlgError` (NumPy, PyTorch) or the non-finite result (JAX) it explains. The
+double negative may be the substrate instead: an ordinary layer of `(2, 1)` on `(-2, -1)` is the
+same pair, ETM's `a` for the layer is zero in the same way, and the message then says "the bottom
+half-space is a uniform double negative ... beside layer 0" (until 2026-10 it looked only for a
+double-negative *layer*, and this stack raised a bare `LinAlgError` on the TE, TM and 2D paths).
+SMM's answer there is a closed form: the layer cancels an equal thickness of the substrate (J. B.
+Pendry and S. A. Ramakrishna, *J. Phys.: Condens. Matter* **15**, 6345 (2003)), so the stack
+reflects exactly as vacuum onto `(-2, -1)`, which is the `R` of vacuum onto `(2, 1)` and of the lens
+the other way round. It is read off the convolution matrices and the half-spaces, so `solve_conv`
+gets it too; under
+`jax.jit` there is nothing to read and ETM returns what the inversion gave. A pair with any loss
+is not exact and is solved (1e-9 of loss: ETM to SMM 1e-13).
+
+**Both members semi-infinite is another problem, and it is refused where it has to be.** Two
+lossless half-spaces that are each other's negation, with nothing between them but uniform layers of
+the two media, have no scattering matrix at all: the single interface's pole at every evanescent
+`k_par` is the whole stack's (B. Gralak and D. Maystre, *C. R. Physique* **13**, 786 (2012); M.
+Cassier and P. Joly, arXiv:2504.00235 (2025)), and a layer of either medium only moves it (a layer
+of `(-eps, -mu)` cancels an equal thickness of `(eps, mu)`). Neither algorithm answered it -- NumPy
+raised `LinAlgError` without a layer, and with layers SMM returned evanescent amplitudes that were
+round-off -- so the pair is refused before either runs, with the reason and its sources, wherever
+the truncation retains an evanescent order. A truncation of propagating orders only never meets the
+pole: uniform layers couple no two orders, every retained order is matched, and both algorithms
+solve it, `r = 0` and `t = 1`. [`negative-index-media.md`](negative-index-media.md) §9 has the
+measurements.
+
+### What it does not cover
+
+* **At and near normal incidence, a lossless double negative beside an ordinary region can be
+  numerically singular on both algorithms.** Three of the 86 normal-incidence scenes above
+  disagree by 2e-07 to 1.4e-03, identically before and after this section. Two of them fall below
+  1e-9 at `theta = 1e-9` while the amplitudes themselves jump (0.97 to 0.73, 3.5 to 0.77): a
+  nearly defective pair of modes at `kx = 0`. The third, a lossless `(-2, -1)` layer patterned
+  with a metal, stays 6.9e-05 apart up to 1e-6 rad off the normal and is 5.6e-10 apart at 1e-4,
+  also identically before and after. Not a labelling question, and not caught by `auto_detune`,
+  since nothing raises.
+* **Lossless half-and-half mixtures on the conical path** stay 1e-11 to 1.5e-10 apart (`(-2, -1)`
+  beside `(2, 1.5)`, fill 0.5), before and after: the inverse rule's `[[1/eps]]` averages to nearly
+  zero there and puts eigenvalues near `1e9` in the second mode family. The amplitudes swing by a
+  factor of three with `theta` at 1e-9; 1e-6 of loss brings the two algorithms to 1e-13.
+* **Anisotropic double negatives** count only when every lab-frame diagonal entry of both
+  tensors is negative; a hyperbolic layer keeps Maystre's labels -- unless it is rotated so that
+  its lab-frame diagonal is all negative, which the test reads as a double negative. So do its backward modes, if it has any,
+  and so does any ordinary layer -- a plasmonic grating, say -- whose modes run backward: the
+  per-mode rule is only switched on where a double negative was named.
+* **An active double-negative layer** is labelled like a passive one. Unlike a half-space it is
+  not refused: a finite layer keeps both roots, and only the conditioning depends on the choice.
+
 ## References
 
 - M. G. Moharam, D. A. Pommet, E. B. Grann and T. K. Gaylord, "Stable implementation of the
@@ -474,3 +726,16 @@ same partition (attenuation where decay dominates, energy flow otherwise), witho
   diffraction gratings", *J. Opt. Soc. Am. A* **13**(5), 1024 (1996).
 - R. Redheffer, "Difference equations and functional equations in transmission-line theory",
   in *Modern Mathematics for the Engineer*, McGraw-Hill (1961).
+- V. G. Veselago, "The electrodynamics of substances with simultaneously negative values of
+  epsilon and mu", *Sov. Phys. Usp.* **10**(4), 509 (1968).
+- J. B. Pendry, "Negative refraction makes a perfect lens", *Phys. Rev. Lett.* **85**(18), 3966
+  (2000).
+- D. R. Smith, D. Schurig, M. Rosenbluth, S. Schultz, S. A. Ramakrishna and J. B. Pendry,
+  "Limitations on subdiffraction imaging with a negative refractive index slab", *Appl. Phys.
+  Lett.* **82**(10), 1506 (2003).
+- J. B. Pendry and S. A. Ramakrishna, "Focusing light using negative refraction", *J. Phys.:
+  Condens. Matter* **15**, 6345 (2003).
+- B. Gralak and D. Maystre, "Negative index materials and time-harmonic electromagnetic field",
+  *C. R. Physique* **13**, 786 (2012).
+- M. Cassier and P. Joly, "An operator approach to the analysis of electromagnetic wave
+  propagation in dispersive media. Part 2: transmission problems", arXiv:2504.00235 (2025).

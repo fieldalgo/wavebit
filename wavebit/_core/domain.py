@@ -391,8 +391,8 @@ def index_from_eps(eps):
     **Not a magnetic medium's index.** That is
     :func:`~wavebit._core.conventions.signed_index`, ``sqrt(eps)*sqrt(mu)``: the principal root
     of ``eps*mu`` for an ordinary medium and its negation for a negative-phase-velocity one,
-    every passive double negative and passive magnetic metal among them.
-    This takes no ``mu`` on purpose: the sign
+    every passive double negative and passive magnetic metal among them
+    (``docs/negative-index-media.md`` section 6). This takes no ``mu`` on purpose: the sign
     needs both factors, and their product has lost it.
 
     Backend-agnostic: arrays and tracers go through their own namespace's ``sqrt`` (with a
@@ -402,7 +402,7 @@ def index_from_eps(eps):
     :func:`~wavebit._core.backend.principal_sqrt` turns it there -- so a value on the cut gets
     one root on every backend. Elsewhere they are each their library's ``sqrt``, which need not
     agree to the last bit: :mod:`cmath` and NumPy differ by one or two ulp in a component on 45
-    of 2,000 random products ``eps*mu``.
+    of 2,000 random products ``eps*mu`` (``studies/negative_index_media.py``, section 13).
     """
     if hasattr(eps, 'dtype'):
         xp = array_namespace(eps)

@@ -15,6 +15,14 @@ Second, the trade in §4's "And offers a scoped override" belonged to the old ha
 With neither rule reading a cutoff any more, `branch_tolerance` overrode nothing that moved an
 answer, and it was removed.
 
+**Double negatives take the mirror of that cut (2026-10-03).** A half-space with
+`Re(eps) < 0` and `Re(mu) < 0` takes the root with `Im(kz) - Re(kz) > 0`, the limiting absorption
+of its own loss, which lowers `kz**2` where an ordinary medium's raises it. Maystre's cut, read
+off `eps*mu` alone, took the growing root there (glass onto `eps = -2+0.1i`, `mu = -1+0.1i`:
+`R = 928.78` against `0.0010767`). §9 states the rule; the whole subject -- the signed index, what
+`theta` means in such a medium, the layers, the evidence -- is
+[`negative-index-media.md`](negative-index-media.md).
+
 Targets:
 - `wavebit/_core/conventions.py` — `mode_q`, `etm_mode_q`, `boundary_kz`, `incident_kz`,
   `_check_resolvable`
@@ -103,8 +111,8 @@ so "down" below is public `-z` under top incidence and public `+z` under bottom 
 > mislabelled mode crossing an unreflecting interface lost 12 digits, and ETM now takes the
 > half-space's root, capped where it would grow (`etm_mode_q`,
 > [`connecting-algorithms.md`](connecting-algorithms.md) §10). Since 2026-09 a real angle in an
-> absorbing superstrate is a phase angle with a real `k_par`, so only a complex `theta` reaches
-> this regime.
+> absorbing superstrate fixes a real `k_par` ([`conventions.md`](conventions.md#real-angle-incidence)),
+> so only a complex `theta` reaches this regime.
 
 Everything below is a consequence of two questions that rule leaves open:
 
@@ -508,6 +516,20 @@ from the principal root only where `kz**2` falls below the real axis, which take
 Maystre"; J. P. Hugonin and P. Lalanne, *RETICOLO software for grating analysis*,
 arXiv:2101.00901).
 
+**The name.** "Maystre's cut" is RETICOLO's name, from its source code (`retsqrt.m`); its manual
+does not use it. In print the convention is written `Re(sqrt(x)) + Im(sqrt(x)) > 0`: P. Lalanne
+and T. Wu (arXiv:2508.10742 (2025)) attribute it to R. Petit (ed.), *Electromagnetic Theory of
+Gratings* (Springer, 1980), and P. Lalanne and J.-P. Hugonin (arXiv:2609.10076 (2026)) cite
+H. Benisty, J.-J. Greffet and P. Lalanne, *Introduction to Nanophotonics* (Oxford University
+Press, 2022), §18.4.3, for it. Neither names Maystre. Together with §9's mirror, the rule is *the
+limiting-absorption root, with the loss applied to `eps` and `mu` separately*; why that name and
+not "the causal root" or "Petit's cut" is in [`negative-index-media.md`](negative-index-media.md)
+§5, "What to call it".
+
+**Not for a double negative.** The cut is decided on `eps*mu`, and for a medium with both real
+parts negative that product sits where a gain medium's does, so the rule above takes the root that
+grows. Such a half-space takes this cut's mirror image, §9.
+
 ### Why this cut
 
 | | what it is | measured |
@@ -565,8 +587,32 @@ limiting absorption and is what an outside code uses.
 ### Gain near grazing
 
 A gain half-space (`Im(eps) < 0` or `Im(mu) < 0`) takes Maystre's root, the root of switching
-the gain on from zero at this frequency. One caveat stays, and the solve reports it with
-`GainCutoffWarning`.
+the gain on from zero at this frequency. Two caveats stay: which physical answer that root is,
+which no single-frequency solve can settle (next), and near grazing, where a plane wave stops
+describing a beam, which the solve reports with `GainCutoffWarning` (after it).
+
+**Which answer this is.** Maystre's root is the answer for *weak, conventional* gain, and the
+literature does not settle more than that; the solver's behaviour is unchanged by what follows.
+
+* J. O. Grepstad and J. Skaar (*Opt. Express* **19**, 21404 (2011)), in this time convention,
+  obtain evanescent gain beyond the critical angle (`R > 1`) for weak conventional gain by
+  continuing from high frequency. Their `kz` changes sign only at the critical point, where
+  `Re(kz**2) = 0` -- where Maystre's cut jumps in a gain medium, and where the band below sits.
+* It is contested. T. S. Mansuripur and M. Mansuripur (*Appl. Phys. Lett.* **104**, 121106 (2014))
+  argue that a semi-infinite gain medium gives no single-surface amplified total internal
+  reflection, which is the `0.7907` the old rule gave (§8 above); A. E. Siegman (*Opt. Photon.
+  News* **21**(1), 38 (2010), a magazine article, known here from the abstract of a related talk)
+  argues against the amplification too.
+* It can be the wrong root for a strongly dispersive active medium. Y.-F. Chen, P. Fischer and
+  F. W. Wise (*Phys. Rev. Lett.* **95**, 067402 (2005)) propose an active, non-magnetic medium that
+  refracts negatively where Maystre's cut takes the root of positive refraction, and B. Nistad
+  and J. Skaar (*Opt. Express* **15**, 10935 (2007)) find a negative index in an active
+  right-handed medium. Which root such a medium takes is fixed by its whole dispersion; at one
+  frequency even weak gain at oblique incidence can leave `kz` without a meaning (J. Skaar, URSI
+  EMTS 2010, arXiv:1008.2874).
+
+[`negative-index-media.md`](negative-index-media.md) §18 places this among the rest of that
+literature.
 
 **A plane wave is not what a measurement sees here.** For a single Lorentz gain line every
 nonzero `kx` has a branch point in the upper half of complex frequency, so an infinitely wide
@@ -656,3 +702,136 @@ real axis, the grating, gain under total internal reflection), `tests/test_gain_
 (the near-grazing band), `tests/test_fp_warnings.py`
 (single precision) and `tests/references/test_reticolo_complex_kx_golden.py` (RETICOLO, on both
 sides of the old split).
+
+---
+
+## 9. Double negatives: the mirror of Maystre's cut (2026-10-03)
+
+### The rule
+
+```
+Re(eps) < 0 and Re(mu) < 0:   kz = sqrt(eps*mu - k_par**2),   the root with Im(kz) - Re(kz) > 0
+                               (on the cut, Im(kz) - Re(kz) == 0, the tie keeps -v)
+otherwise:                     Maystre's root, Re(kz) + Im(kz) > 0
+```
+
+The tie is Maystre's mirrored, so the double-negative rule is `-conj(maystre(conj(kz**2)))` to
+the bit, signed zeros included.
+
+`boundary_kz` takes the half-space's `(eps, mu)` as `medium` and decides on the material, not
+on `eps*mu`. The product cannot tell a passive double negative from a gain medium: `eps =
+-2+0.1i`, `mu = -1+0.1i` multiplies to `1.99-0.3i`. The kernels pass the pair whenever the
+scene is magnetic (`conventions.half_space_medium`), and a non-magnetic solve passes nothing,
+so its arithmetic does not change.
+
+### Why this cut
+
+It is the same limiting absorption as §8, run for the medium's own loss.
+`Im(eps*mu) = Re(eps) Im(mu) + Im(eps) Re(mu)`, so loss *lowers* `kz**2` when both real parts
+are negative, where it raises it in an ordinary medium. Give a double negative enough loss to
+push `kz**2` into the lower half plane, take the decaying root (the second quadrant), and remove
+the loss at fixed `k_par`. `kz**2` moves straight up, so it can reach the branch point only on
+the positive imaginary axis, which is this cut. It is Maystre's cut under `kz -> -conj(kz)`,
+and at every real `k_par` of a passive double negative it gives `Im(kz) >= 0` and, on a
+lossless propagating order, `Re(kz) < 0`, so `Re(kz/mu) > 0`: power leaves the interface while
+the phase comes toward it (V. G. Veselago, Sov. Phys. Usp. 10, 509 (1968)). The decision is at
+least `|kz|` from zero there.
+
+The rule is the published one, though the cut is not. M. Cassier, C. Hazard and P. Joly
+(*Commun. PDE* **42**, 1707 (2017); **47**, 1217 (2022)) prove it for a lossless Drude
+half-space whose `eps` and `mu` are both dispersive: the limiting-absorption root, with the loss
+on each factor, changes sign exactly in the bands where both are negative. H.-M. Nguyen and S. Sil
+(*Commun. Math. Phys.* **379**, 145 (2020)) put the loss on `eps` and `mu` separately for a
+bounded negative inclusion. M. Cassier, P. Joly and M. Kachanovska (*Comput. Math. Appl.* **74**,
+2792 (2017), Theorem 3.34) show that a passive, non-dissipative local material carries backward
+waves exactly where `eps < 0` and `mu < 0` -- the trigger, in the lossless limit. R. A. Depine and
+A. Lakhtakia (*Optik* **116**, 31 (2005)) state the lossless mirror for the eigenvalues of a modal
+(C) method over a negative-phase-velocity half-space, and M. Lequime et al. (arXiv:1312.6288
+(2013)) and PyMoosh's code (D. Langevin et al., *J. Opt. Soc. Am. B* **41**, A67 (2024)) state the
+same switch independently. None of them writes it as a cut on the positive imaginary axis of
+`kz**2`, and the literature has no name for that cut: "the mirror of Maystre's cut" is a
+description ([`negative-index-media.md`](negative-index-media.md) §5 and §18).
+
+The two rules take the same root wherever `Re(kz**2) < 0`. They part only on
+`Re(kz**2) >= 0` -- every propagating order of a double negative, where Maystre's root grew --
+and on the negative imaginary axis itself, Maystre's cut, where his tie-break keeps the growing
+root of a passive double negative (`eps = mu = -1+1i` at normal incidence). A double negative
+too lossy to propagate anywhere (`Re(eps*mu) <= 0`) therefore keeps its `kz` to the bit.
+
+The half-space's index follows: `n = sqrt(eps)*sqrt(mu)`, each factor's root on Maystre's cut --
+the principal root for every passive factor (`conventions.signed_index`; A. A. Govyadinov,
+V. A. Podolskiy and M. A. Noginov, Appl. Phys. Lett. 91, 191103 (2007)) -- which for a passive
+double negative is the negative of the principal `sqrt(eps*mu)` and the root above at
+`k_par = 0`. The same product negates the
+principal root of every negative-phase-velocity medium (M. W. McCall, A. Lakhtakia and
+W. S. Weiglhofer, Eur. J. Phys. 23, 353 (2002)), which includes passive magnetic metals that
+are not double negatives, and of no other. Only the sign moves, so `n**2` and every `kz` are
+unchanged; what it sets is `n/mu`, the admittance with which the kernels quote `t_p` and the
+field state expands it, and on the lit side the direction of the incident `k_par`. With the
+principal root the far side's `t_p` was `-t_s` at normal incidence. A factor exactly on the
+negative imaginary axis is the cut's tie and keeps its principal root, decided on the factor's
+real part rather than on the round-off of the root's `Re + Im`. Which media it negates, the signed
+zeros, that tie and the class boundary: [`negative-index-media.md`](negative-index-media.md) §6.
+
+### What it was measured against
+
+Glass onto a double negative, closed-form Fresnel `r` and `t` for s and p, 0/30/60/80 degrees,
+lit from either side, on the pure TE and TM, conical, 2D and 4ff paths, ETM and SMM: `3.2e-15`
+at worst over `(-2+0.1i, -1+0.1i)`, `(-3+0.1i, -0.5+0.05i)`, the lossless `(-2, -1)` and
+`(-6+0.3i, -1.5+0.05i)`. A grating on the half-space against the same grating on a 16 um lossy
+slab of the medium, which as a layer keeps both roots and needs no rule: every order's `R`
+agrees to `4.0e-16`, and the power the slab takes in is the half-space's `T` to `1.7e-15`, on
+every path and both algorithms. The lossless half-space is the limit of that slab as its loss
+goes to zero: on the conical grating `1e-5` of loss on a 128 mm slab is within `1.9e-5` of it,
+and a Richardson step on `1e-4` and `1e-5` within `2.3e-8`. `studies/negative_index_media.py`
+prints all of these (section 8 of its log).
+
+### Layers of a double negative
+
+A layer keeps both roots, so its label is a choice of basis rather than a boundary condition --
+but ETM's recursion is not free to make it (`connecting-algorithms.md` §10). A uniform
+double-negative layer takes this section's mirror for its labels, exactly as its half-space
+does, and a patterned layer holding one is labelled mode by mode by the direction of its power;
+SMM's tie is mirrored the same way. Measured, and the perfect-lens pair that ETM cannot write,
+in [`connecting-algorithms.md`](connecting-algorithms.md) §11.
+
+### A lit double negative
+
+Solved since 2026-10-04. `theta` and `phi` name the direction the incident light travels, as
+they always did, so the in-plane wavevector of a double negative's incident wave points the
+other way: `k_par = s*N*sin(theta)*(cos(phi), sin(phi))` with `s = -1`, and the incident `kz`
+is this section's root at that `k_par`, decaying toward the structure. Until that meaning was
+settled the lit side was refused: phase and power run opposite ways in it, and an angle had to
+say which it followed. The rule, the frame at `theta = 0` and the measurements are in
+[`negative-index-media.md`](negative-index-media.md) §7; fmmax agrees through the `theta` door
+to 2.7e-14 per order (`tests/references/test_fmmax_dng_golden.py`).
+
+### What it does not cover
+
+* **An active double negative** that propagates. Refused where it is set, either side: the
+  limiting absorption that fixes the passive root says nothing about gain, and no
+  single-frequency rule can (J. Skaar, Phys. Rev. E 73, 026605 (2006); B. Nistad and J. Skaar,
+  Phys. Rev. E 78, 036603 (2008)). Under `jax.jit`, where no refusal can read the value, the
+  medium is solved with this section's root on every order, and `gain_cutoff_band` flags only
+  the orders in its band near grazing: a double negative's gain band sits at `Im(kz**2) > 0`, the
+  mirror of an ordinary gain medium's, and the traceable mask reads
+  `where(double_negative, Im(kz**2) > 0, Im(kz**2) < 0)`. The other orders are solved unflagged,
+  with no physical answer behind them either, so check such a material once eagerly, outside the
+  trace ([`negative-index-media.md`](negative-index-media.md) §10).
+* **A caller holding only `eps*mu`.** A kernel called with `mu_bot` and no `eps_bot` takes
+  Maystre's root. The engine always passes both on a magnetic scene.
+* **Two lossless half-spaces that are each other's negation**, `(eps, mu)` and `(-eps, -mu)`. No
+  root rule helps: on every evanescent order both take the same decaying root, their admittances
+  cancel, and the time-harmonic problem has no solution (B. Gralak and D. Maystre, C. R. Physique
+  13, 786 (2012); M. Cassier and P. Joly, arXiv:2504.00235 (2025)). Refused, with uniform layers
+  of the two media between them or none, wherever the truncation retains an evanescent order; on
+  a propagating order the two cuts take opposite roots, the admittances are equal, and a
+  truncation of propagating orders only is solved, `r = 0` and `t = 1`
+  ([`negative-index-media.md`](negative-index-media.md) §9).
+* **`Im(eps)` and `Im(mu)` of opposite signs.** The rule assumes both non-negative; the effective
+  `Im(mu)` of a passive homogenised medium can be negative (B. Gralak, C. R. Physique 21, 343
+  (2020)), and then neither cut is the outgoing wave. Such a double negative always propagates and
+  is refused as active ([`negative-index-media.md`](negative-index-media.md) §10).
+* **A tensor half-space.** Half-spaces are isotropic. A hyperbolic one would need its waves sorted
+  by Poynting flux one by one, not a cut per medium
+  ([`negative-index-media.md`](negative-index-media.md) §15).

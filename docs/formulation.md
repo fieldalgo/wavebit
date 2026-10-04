@@ -34,7 +34,7 @@ Conventions, all of them, up front:
 | decay along +z | `Im(kz) > 0` |
 | plane-wave phase | `exp(+i k0 (kx x + ky y + kz z))` |
 | Fourier series of `eps` | `eps(x) = Σ_p c_p exp(+i 2π p x / Λ)` |
-| order vectors | `kx_m = n_I sinθ cosφ + m λ/Λx`, `m = -M..M` (same for `ky_n`) |
+| order vectors | `kx_m = n_I sinθ cosφ + m λ/Λx`, `m = -M..M` (same for `ky_n`); `n_I` is the lit medium's signed index (negative in a negative-index medium), and an absorbing lit medium uses `s` times its phase index instead, `s = sign(Re(n_I))` (`docs/conventions.md`, "Real-angle incidence") |
 | normalized H | `H̃ = Z0 H`, `Z0 = sqrt(μ0/ε0)` |
 | partner variable | `U = +i H̃_t` for an E-primary, `Q = -i E_t` for an H-primary |
 
@@ -434,11 +434,16 @@ Every `sqrt` above is a physical decision, centralized in `_core/conventions.py`
 - **layer** `q`: under SMM `Re(q) ≥ 0` (`mode_q`), a conditioning choice on a free label; under
   ETM the half-space's root wherever it grows by less than `eps**-0.25` across the layer
   (`etm_mode_q`), because that recursion inverts a transmission and its labels are not free
-  (`docs/connecting-algorithms.md` §10);
+  (`docs/connecting-algorithms.md` §10). A uniform double-negative layer takes the mirror of
+  either rule and a patterned one holding a double negative its modes' power flux
+  (`layer_label_rule`, `docs/connecting-algorithms.md` §11);
 - **half-space** `kz`: Maystre's cut, `Re(kz) + Im(kz) > 0` (`boundary_kz`, since 2026-10-02).
   At every real `k_par` in a passive medium this is the principal root (`Re > 0`, tie `Im > 0`).
   Below the real axis of `kz**2`, reached by a complex angle or a gain medium, it is the root
-  that limiting absorption reaches.
+  that limiting absorption reaches. A double negative (`Re(eps) < 0` and `Re(mu) < 0`) takes the
+  mirror of that cut, `Im(kz) - Re(kz) > 0`, its own limiting absorption
+  (`docs/negative-index-media.md` §5), and its index `n` -- every `n` in this derivation -- is
+  `sqrt(eps)*sqrt(mu)`, negative there (§6).
 
 The derivations and measurements are in `docs/time-convention-audit.md` and
 `docs/branch-cuts.md`; nothing there is repeated here.

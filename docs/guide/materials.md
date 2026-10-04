@@ -67,6 +67,13 @@ the non-magnetic path, physically relative permeability one. Supplying `mu=1`
 explicitly selects the magnetic path. `Material.at(wavelength)` returns the same
 constant object; it does not broadcast a constant to a wavelength array.
 
+A `Material` whose permittivity and permeability both have negative real parts, such as
+`Material(-2 + 0.1j, mu=-1 + 0.1j)`, is a double negative: a negative-index medium. It works as
+either half-space, lit or not, and in any layer; an active one (gain) that propagates is refused.
+Its index, as `solver.n_top` / `n_bot` report it, is `sqrt(eps)*sqrt(mu)` with `Re(n) < 0`, and
+`theta` from such a side still names the direction the light travels. [Negative-index
+media](../negative-index-media.md) explains what that changes and why.
+
 Models work in shape `material`, layer `background`, and `top` / `bot` slots.
 `solver.top`, `solver.bot` and `solver.structure` expose their evaluated numerical
 values at the current wavelength. To change a region, assign `top`, `bot` or a

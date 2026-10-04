@@ -15,7 +15,7 @@ the diff looks like.
 | --- | --- |
 | time factor | `e^{-iωt}` — a physical field is `Re[E(r) e^{-iωt}]` |
 | loss | `Im(eps) > 0`, equivalently `Im(n) > 0` — the sign indices are tabulated with (`n + 1j*k`) |
-| gain | `Im(eps) < 0`; a solve may then legitimately return `R + T > 1`, and nothing in the library treats that as an error. A gain half-space takes Maystre's root; near grazing, where a finite beam's response depends on its width, the solve warns `GainCutoffWarning` ([branch-cuts.md](branch-cuts.md#gain-near-grazing)) |
+| gain | `Im(eps) < 0`; a solve may then legitimately return `R + T > 1`, and nothing in the library treats that as an error. A gain half-space takes Maystre's root, which is the answer for weak, conventional gain -- contested in the literature, and the wrong root for some strongly dispersive active media ([branch-cuts.md](branch-cuts.md#gain-near-grazing)); near grazing, where a finite beam's response depends on its width, the solve warns `GainCutoffWarning`. An active **double negative** that propagates is refused: no single-frequency rule picks its root ([negative-index-media.md](negative-index-media.md)) |
 
 Same statement as fmmax's; RETICOLO's efficiencies and amplitudes agree with this
 convention with no conversion (pinned to 4e-14 by the RETICOLO goldens). All complex
@@ -94,22 +94,30 @@ Two conversions are exported for callers holding the other quantity:
 | function | value |
 | --- | --- |
 | `wavebit.eps_from_index(n, mu=...)` | `n**2 / mu` for isotropic materials; omitting `mu` gives `n**2` (relative permeability one). The index and permeability must describe the same wavelength. Assign the same `mu` to the resulting `Material`. |
-| `wavebit.index_from_eps(eps)` | the **principal** root, always complex. A passive medium has `Im(eps) >= 0`, which is the closed upper half plane, whose principal root has `Im(n) >= 0` — loss again. The hazard is the negative side of zero: `-2 + 0j` gives `+1.414j` (decaying, right) and `-2 - 0j` gives `-1.414j` (gain), and a lossless value that has been through arithmetic can come out as `4 - 1e-18j`. Neither is repaired, because nothing can tell round-off from a deliberately active medium; keep `Im(eps)` non-negative yourself before taking a root |
+| `wavebit.index_from_eps(eps)` | the **principal** root, always complex. A passive medium has `Im(eps) >= 0`, which is the closed upper half plane, whose principal root has `Im(n) >= 0` — loss again. The hazard is the negative side of zero: `complex(-2, +0.0)` gives `+1.414j` (decaying, right) and `complex(-2, -0.0)` gives `-1.414j` (gain) -- spell the zero with `complex()`, since the expression `-2 - 0j` has a `+0.0` imaginary part on Python 3.12 and 3.13 and a `-0.0` one from 3.14 (which converts the real operand of mixed real-complex arithmetic to a float, CPython gh-69639) -- and a lossless value that has been through arithmetic can come out as `4 - 1e-18j`. Neither is repaired, because nothing can tell round-off from a deliberately active medium; keep `Im(eps)` non-negative yourself before taking a root. The lip is the same on every backend: JAX's own `sqrt(complex(-1, -0.0))` is `+1j` (JAX 0.11.0) where NumPy, PyTorch and `cmath` give `-1j`, and `index_from_eps` turns JAX's root there ([negative-index-media.md](negative-index-media.md) §15) |
 
-For a magnetic medium the index is `index_from_eps(eps*mu)`, written out rather than hidden in
-a keyword, because that is where a forgotten `mu` would otherwise hide.
+For a magnetic medium the index is `sqrt(eps)*sqrt(mu)`, each root on Maystre's cut (the
+principal root for every passive factor): the principal `index_from_eps(eps*mu)` for every
+ordinary medium, to the bit, and its exact negation for a negative-phase-velocity medium --
+every passive double negative (`Re(eps) < 0` and `Re(mu) < 0`) and the passive magnetic metals
+-- whose principal root would read as gain. A gain-metal factor (`Re < 0`, `Im < 0`) is the one
+place the two roots differ, and there a magnetic medium's index -- `mu = 1` named included --
+can be the negation of the non-magnetic `index_from_eps`. The
+solver's `n_top` / `n_bot` are that signed index; [negative-index-media.md](negative-index-media.md)
+§6 says which media it negates and why.
 
 ### Where the refractive index is still the quantity
 
 The flip is about what a *material slot* holds; it does not rename the physics. The index
 remains the right quantity in Snell's law and in the half-space relation
-`n = sqrt(eps*mu)`. Real phase angles in absorbing incident media use the full
-complex `eps*mu` as described under [Phase incidence](#phase-incidence).
+`n**2 = eps*mu`, with the sign of `n` negative in a negative-index medium. Real angles in
+absorbing incident media use the full complex `eps*mu` as described under
+[Real-angle incidence](#real-angle-incidence).
 
 Concretely, `n_top` and `n_bot` still exist and still mean the refractive index — as
 **derived, read-only** properties. Assigning `top` stores the material and refreshes
-`n_top = sqrt(eps*mu)`; assigning `n_top` raises. Two spellings of one medium that could
-disagree is exactly the state the type exists to remove.
+`n_top = sqrt(eps)*sqrt(mu)` (signed, above); assigning `n_top` raises. Two spellings of one
+medium that could disagree is exactly the state the type exists to remove.
 
 ## Geometry and propagation
 
@@ -123,13 +131,17 @@ Layers are listed **bottom to top**: `structure[0]` is adjacent to `bot`, and
 stacks and `Stack.layers[i]` all describe the same layer. Its lower and upper heights are
 `sum(thickness[:i])` and `sum(thickness[:i+1])`. Adding a layer to the end builds upward.
 
-`incidence_side='top'` (the default) sends light downward (`kz<0` for a propagating wave);
-`incidence_side='bottom'` sends it upward (`kz>0`). Neither changes the geometry, indexing,
-or returned field axes. `theta` is measured from the inward normal of the selected face:
-`-z` at the top, `+z` at the bottom. `phi` describes the in-plane wavevector from `+x`
-toward `+y` in the fixed public frame. For real incident angles in a lossless positive-index medium,
+`incidence_side='top'` (the default) sends light downward (`kz<0` for a propagating wave in a
+positive-index medium); `incidence_side='bottom'` sends it upward (`kz>0`). In a negative-index
+lit medium the phase, and so `Re(kz)`, runs the other way while the light still goes down or
+up. Neither changes the geometry, indexing, or returned field axes. `theta` is measured from the inward normal of the selected face:
+`-z` at the top, `+z` at the bottom. `theta` and `phi` are the direction the incident light
+travels toward the structure, `phi` measured from `+x` toward `+y` in the fixed public frame.
+For real incident angles in a lossless medium,
 `k/k0 = n_inc * (sin(theta)*cos(phi), sin(theta)*sin(phi), sigma*cos(theta))`, with
-`sigma=-1` for top incidence and `+1` for bottom incidence.
+`sigma=-1` for top incidence and `+1` for bottom incidence and `n_inc` the **signed** index:
+in a negative-index medium (`n_inc < 0`) the wavevector points against the light, as its phase
+does. [Real-angle incidence](#real-angle-incidence) has the general (absorbing) statement.
 
 Alternatively, specify real `kx`/`ky` directly in inverse length units, without
 `theta`/`phi`. An omitted component is zero. These are Cartesian angular
@@ -238,56 +250,89 @@ All angles are **radians**.
 
 | angle | meaning |
 | --- | --- |
-| `theta` | phase polar angle, measured from the inward normal in the incidence medium; real angles specify uniform incident intensity along the surface |
-| `phi` | azimuth of the plane of incidence, from the `+x` axis |
+| `theta` | polar angle of the incident **light**, measured from the inward normal in the incidence medium: the direction its power travels in a lossless medium, of either sign of index. Real angles specify uniform incident intensity along the surface; see [Real-angle incidence](#real-angle-incidence) |
+| `phi` | azimuth of the incident light's direction, from the `+x` axis |
 | `psi` | polarization: the angle of **E** from the p direction in the plane transverse to **k**. `psi = pi/2` is pure s (TE-like), `psi = 0` pure p (TM-like). **Real** — a complex `psi` is refused, see below |
 | `chi` | ellipticity angle: `tan(chi)` is the polarization ellipse's minor/major axis ratio and its sign is the rotation direction (`chi > 0` turns like `(1, -1j)`; see "Which way the circular states rotate" below). `chi = 0` is linear (the `psi` spelling), `|chi| = pi/4` circular. Real, like `psi`. Naming it selects the `(psi, chi)` chart — see below |
 | `tetm` (1D only) | `'te'` / `'tm'` — a **declaration**, not an angle: it says this problem has no polarization and no azimuth degree of freedom, which is what makes the pure 1D TE/TM formulation legal (2-4x faster than conical, measured). Refused on a 2D cell, with `truncation_order[1] != 0`, or beside a nonzero `phi` / a `psi` / a `polarization`; and, by name, on every solve that cannot take the pure 1D path — a shape structure, a tensor material, a z row handed to `solve_conv`, `formulation='4ff'`, or no structure after anything but a pure solve (a solver holding none keeps the layout its last solve took, 2D if it never solved, and a kept pure layout re-checks `phi`, `ky`, the cell's skew and `truncation_order[1]` as the raster that chose it was checked). Since 2026-09-27; before, all but the tensor raised a `TypeError` from deep in the solve, or — with `tetm` assigned after construction — answered for s light whichever it named. `psi` reads back `None` under it — a declared-away degree of freedom is absent, not defaulted. It lights and reports exactly what `polarization=(1, 0)` / `(0, 1)` at `phi = 0` does, to ~1e-14: the same amplitudes in the same per-order s/p frame, the same `excitation` weights, the same unit-E incident field; its scattering matrix is the conical one's s-s / p-p *block*, in the same port variables. What it does not carry is the other polarization: `s_inc` / `p_inc` are `None`, and the cross-polarized amplitudes are exact zeros where the conical path has ~1e-16. Since 2026-09-27; before, it quoted `E_y` / `H_y` on every order (a sign apart on every order across `kx = 0` from the incident one), was lit by `+y` at any angle, and its TM input was a unit `H_y` |
 
-### Phase incidence
+### Real-angle incidence
 
 For real `theta` and `phi`, the incident wave has **uniform intensity along the
-structure surface**. Both transverse components `kx`, `ky` are real. `theta`
-specifies the direction of `Re(k)` in the illuminated half-space, not a direction
-in a hypothetical external medium and not the Poynting-vector direction.
-The latter can differ from the phase direction in an absorbing medium.
-This describes a single plane wave. Multiple waves supplied through `excitation`
-can interfere within a cell; with real transverse wavevectors their intensity
-repeats from cell to cell.
+structure surface**: both transverse components `kx`, `ky` are real. `theta` and `phi` refer to
+the illuminated half-space itself, not to a hypothetical external medium. This describes a
+single plane wave. Multiple waves supplied through `excitation` can interfere within a cell;
+with real transverse wavevectors their intensity repeats from cell to cell.
 
-For an isotropic incident material, write `epsilon_r * mu_r = a + i*b` and
-`k0 = 2*pi/wavelength`. The phase magnitude `N = |Re(k)|/k0` is
+For an isotropic incident material, write `epsilon_r * mu_r = a + i*b`,
+`k0 = 2*pi/wavelength`, and `s = sign(Re(n))` for the signed index
+`n = sqrt(epsilon_r)*sqrt(mu_r)` (`+1` for every medium except a negative-phase-velocity one,
+such as a double negative). The phase magnitude `N = |Re(k)|/k0` is
 
 $$
 N^2 = \frac{a + \sqrt{a^2 + b^2/\cos^2\theta}}{2},
 \qquad
-k_x=k_0N\sin\theta\cos\phi,\quad
-k_y=k_0N\sin\theta\sin\phi.
+k_x=s\,k_0N\sin\theta\cos\phi,\quad
+k_y=s\,k_0N\sin\theta\sin\phi.
 $$
 
-This follows by writing the inward normal component as
-`q/k0 = N*cos(theta) + i*alpha` and imposing both parts of dispersion:
-`N**2 - alpha**2 = a`, `2*N*cos(theta)*alpha = b`.
-The full complex material is used; this is not `sqrt(real(epsilon_r))`.
-The normal wavevector satisfies `kz**2 = k0**2*epsilon_r*mu_r - kx**2 - ky**2`.
-The public `kz` is negative for ordinary top incidence and positive for bottom
-incidence, with the attenuation sign following that direction.
+`theta` and `phi` are therefore the angles of **`s * Re(k)`**: the incident wave's phase
+direction, turned to point where its light goes. In a positive-index medium that is the phase
+direction itself, which is what this angle has meant since real-angle incidence in absorbing
+media landed. In a negative-index medium the phase advances against the power (V. G. Veselago,
+Sov. Phys. Usp. 10, 509 (1968)), so the same light has its in-plane wavevector along
+`phi + pi`. In a **lossless** medium of either sign `s * Re(k)` is the Poynting vector's
+direction, `theta` is exactly the direction the incident power travels, and the formula reduces
+to `kx = k0*n*sin(theta)*cos(phi)` with the signed `n`: Snell's law as Veselago and
+J. B. Pendry (Phys. Rev. Lett. 85, 3966 (2000)) write it. Lit from `n = -sqrt(2)` at 20 degrees
+onto glass, the light leaves at -18.81 degrees.
 
-For a positive-index lossless incident medium, `b=0` and `a>0`, giving
-`N=sqrt(epsilon_r*mu_r)` and the usual angle formula exactly. The absorbing
-phase-angle definition requires `abs(theta) < pi/2`; its wavevector diverges at
-grazing. The formula describes inward phase propagation; negative-index
-half-space branch selection is a separate unsupported case. A half-space with `Re(eps) < 0`,
-`Re(mu) < 0` and `Re(eps*mu) > 0` is refused where it is set; the same medium as a layer is
-solved exactly ([`result-guards.md`](result-guards.md) §2).
+This is a convention Wavebit chose -- the direction of the incident power, the Poynting vector,
+exact in a lossless medium and the angle of `s * Re(k)` in an absorbing one -- not a causal
+statement: causality-based criteria for a negative index test the group velocity, which is not
+the Poynting vector (P. Kinsler and M. W. McCall, Phys. Rev. Lett. 101, 167401 (2008)). No
+published source found defines an incidence angle inside a double negative. PyMoosh
+(D. Langevin et al., J. Opt. Soc. Am. B 41, A67 (2024)) takes the phase's angle instead, so from a
+lossless double negative its `kx` at a given `theta` is the negative of Wavebit's (from an
+absorbing one it is complex, with a real part of the opposite sign); compare the two through
+`kx`, not `theta` ([`negative-index-media.md`](negative-index-media.md) §7).
+
+`N` follows by writing the inward normal component as `q/k0 = N*cos(theta) + i*alpha` (for
+`s = -1`, `-N*cos(theta) + i*alpha`) and imposing both parts of dispersion:
+`N**2 - alpha**2 = a`, `2*s*N*cos(theta)*alpha = b` (`b` enters `N` only squared, so one `N`
+serves both signs, and `alpha` comes out positive for every passive medium). The full complex
+material is used; this is not `sqrt(real(epsilon_r))`. The normal
+wavevector satisfies `kz**2 = k0**2*epsilon_r*mu_r - kx**2 - ky**2` and is the half-space's own
+root (Maystre's cut, or its mirror for a double negative: [`branch-cuts.md`](branch-cuts.md)
+§8, §9), so the incident wave decays toward the structure in an absorbing medium of either sign.
+The public `kz` of an ordinary medium is negative for top incidence and positive for bottom
+incidence; in a negative-index medium its real part has the other sign.
+
+In an **absorbing** medium the Poynting vector departs from `s * Re(k)` by an amount set by the
+loss and the polarization, which the angle does not try to undo (a power direction that depends
+on the polarization cannot fix one `k_par` for both). At 45.8 degrees, `epsilon_r = 2+0.5i`
+carries p light at 44.1 degrees and s light at 45.8; a metal (`-10+1i`) carries p light at
+-45.5 degrees, across the normal ([`negative-index-media.md`](negative-index-media.md) §7 has
+the table). The absorbing real-angle definition requires `abs(theta) < pi/2`; its wavevector
+diverges at grazing. A lit medium that carries no wave at all (`b = 0`, `a <= 0`) has no real
+angle, and one is refused.
+
+**Negative-index lit side.** A half-space with `Re(eps) < 0`, `Re(mu) < 0` and
+`Re(eps*mu) > 0` is solved lit or not: its root is the mirror of Maystre's cut (the decaying
+one, `Re(kz) < 0` on a lossless propagating order) and its index Veselago's negative one
+(`branch-cuts.md` §9, [`negative-index-media.md`](negative-index-media.md) §5 and §6, which
+also says why `theta` names the light's direction rather than its phase's, §7). At exactly
+`theta = 0` the per-order frame takes the limit `theta -> 0+` of `k_par`'s direction, which is
+`phi + pi` there, so the incident field is continuous through normal incidence. An active one
+(`Im(eps) < 0` or `Im(mu) < 0`) is refused where it is set.
 
 An angle with a **nonzero imaginary part** retains the formal
 `kx/k0 = n*sin(theta)*cos(phi)`, `ky/k0 = n*sin(theta)*sin(phi)`
-parameterization for advanced illumination. These complex parameters do not
-have the meaning of real phase angles. A value such as `0.4+0j` is a real
-phase angle. The two interpretations are not an analytic continuation across
-the real-angle boundary in an absorbing medium; use real angle variables
-when differentiating the phase-incidence model.
+parameterization for advanced illumination, with the same signed `n`. These complex
+parameters do not have the meaning of real angles. A value such as `0.4+0j` is a real angle.
+In a lossless medium the two meet as `Im(theta) -> 0`; in an absorbing one they are not an
+analytic continuation of each other across the real-angle boundary (`N` against the complex
+`n`); use real angle variables when differentiating the real-angle model.
 
 When that parameterization leaves the transverse wavevector with a nonzero
 imaginary part, the incident intensity varies along the surface. Evanescent
@@ -299,11 +344,12 @@ Which root of `kz` the exit medium takes is a convention at a complex `kx`, and
 other solvers choose differently (`docs/time-convention-audit.md` §9). This is
 the only route to a complex transverse wavevector. A direct `kx`/`ky` must be
 real, and refusing a complex one names this route: for `ky = 0`,
-`theta = arcsin(kx/(k0*n))`, `phi = 0`.
+`theta = arcsin(kx/(k0*n))`, `phi = 0`. A direct `kx`/`ky` carries no angle and is taken as
+given whatever the lit medium; at `kx = ky = 0` its s/p basis uses azimuth zero.
 
 `order_kxy()` returns wavevectors **divided by `k0`**, including reciprocal
 lattice shifts for each retained order. Multiply by `2*pi/wavelength` for
-physical inverse-length units. See [Light inputs](guide/light.md#phase-direction-and-absorbing-incidence)
+physical inverse-length units. See [Light inputs](guide/light.md#what-theta-and-phi-mean)
 for an example.
 
 ### General (elliptical) polarization
@@ -428,9 +474,9 @@ handedness labels flip with it.
 The retained orders are `m = -half_width_u..half_width_u`, `n = -half_width_v..half_width_v`, with normalized in-plane
 wavevectors `kx_m/k0 = kx_inc/k0 + m*lambda/period_x` on an axis-aligned cell
 (and correspondingly for `ky_n`). The incident components follow
-[Phase incidence](#phase-incidence) using `top` for top incidence and `bot`
+[Real-angle incidence](#real-angle-incidence) using `top` for top incidence and `bot`
 for bottom incidence. For a lossless incidence medium this is the usual
-`kx_inc/k0 = n_inc*sin(theta)*cos(phi)`. Per-order
+`kx_inc/k0 = n_inc*sin(theta)*cos(phi)`, with the signed `n_inc`. Per-order
 arrays have shape `(n_orders_v, n_orders_u)` — **`y` first, the transpose of the `truncation_order=[x, y]` input
 order** — with the incident order at the centre `[half_width_v, half_width_u]` and `m` increasing along
 the last axis.
@@ -569,14 +615,18 @@ Amplitude fine print, stated once so it never has to be discovered:
   and its ports say which: `Port.channel` is `'te'` / `'tm'` there and `'sp'` on every coupled
   path, and `cascade` refuses to join two channels;
 - at `theta = 0` the zeroth order has no in-plane wavevector to take a direction from, and
-  `phi` supplies one — as a **direction**, not a line. `phi` and `phi + pi` therefore
+  `phi` supplies one — as a **direction**, not a line — the limit `theta -> 0+` of `k_par`'s
+  own direction: `phi` itself, or `phi + pi` from a negative-index lit side, where `k_par`
+  points against the light (so the field is continuous through normal incidence there too). `phi` and `phi + pi` therefore
   describe incident fields of opposite sign for the same `psi`, and the solve returns the
   negated field and amplitudes to match; they are the same illumination only up to that
   sign. Equivalently, `(phi + pi, psi)` is `(phi, polarization=(-a_s, -a_p))`. Until
   2026-08-16 the two spellings disagreed, and the `phi + pi` one silently answered for
   `phi`;
 - the p sign convention is the one where a single interface at normal incidence gives
-  `r_p = (n2 - n1)/(n2 + n1) = -r_s`;
+  `r_p = (n2 - n1)/(n2 + n1) = -r_s` (non-magnetic media), and `r_p = -r_s`, `t_p = t_s` for
+  any media, double negatives and magnetic metals included: every `n` in a `p_hat` is the
+  signed index, so `n/mu` keeps a positive real part;
 - `r_xyz` / `t_xyz` are the frame-free spelling of the same waves, per unit incident amplitude
   exactly as `r_s` is, in the public frame (`+z` up):
 
@@ -665,6 +715,7 @@ Amplitude fine print, stated once so it never has to be discovered:
 | `psi` and `chi` are real; the chart reaches the circular states; both coordinates and the pair carry gradients through a pytree | `tests/test_polarization.py` (the refusal on all three backends, and the pair's gradient checked against the `psi` path's rather than a frozen number) |
 | the circular states' rotation sense | measured on the incident field against its Poynting vector, both sides, pair and chart, conical and 2D (`tests/test_polarization.py`: `test_a_circular_state_turns_as_the_table_says`, `test_the_solved_field_turns_the_same_way`); derived above from the (s, p)→(x, y) calibration (`tests/test_uniform_anisotropic.py`) and the gyrotropic eigenstate assignment (`tests/test_polarization.py`), neither of which can see a mirrored frame |
 | square-root branches behind `kz` | `tests/test_branch_selection.py` |
+| negative-index media: the signed index, the mirror root, what `theta` means on a lit negative-index side, the frame at `theta = 0` there, the refusal of an active one | `tests/test_negative_index_half_space.py` (closed-form Fresnel both sides, the incident Poynting vector against `theta` and `phi`, negative refraction, a thick lossy slab, reciprocity, backends, `jit`), `tests/test_negative_index_layers.py` (layers, ETM against SMM), `tests/references/test_fmmax_dng_golden.py` (fmmax, per order, through the `theta` door) |
 | the field cell's `+z` (that `Ez`, `Hx`, `Hy` share the frame the phase and layer order use) | `tests/test_field_core.py` — the curl residual **and its convergence rate**, per path, plus the control that the pre-2026-08-14 frame fails it. Not the legacy golden, which was frozen in that frame and is transformed at the comparison |
 | the whole surface, per backend | `tests/test_golden_legacy_parity.py` |
 

@@ -782,6 +782,14 @@ cell integrals of general complex transverse wavevectors. Not yet committed.
 
 ## Stage 3: phase incidence angle for a lossy incidence half-space
 
+> **Extended on 2026-10-04.** This stage defined a real angle as the direction of phase advance,
+> which is the direction the light travels in every positive-index medium and is unchanged for
+> all of them. A negative-index lit side, which did not exist here then, runs its phase against
+> its power, and `theta` names the light's direction there too: `k_par = s*N*sin(theta)` with
+> `s = sign(Re(sqrt(eps)*sqrt(mu)))`, `-1` for such a medium. Read `docs/conventions.md`
+> ("Real-angle incidence") and `docs/negative-index-media.md` for the current statement; the
+> record below is the stage as it was.
+
 Real `theta`, `phi` are defined as **the direction of phase advance inside the selected
 incidence half-space**. The incident wave's intensity is uniform along the structure surface,
 so the transverse wavevector is real. No fictitious air layer or finite absorbing layer is

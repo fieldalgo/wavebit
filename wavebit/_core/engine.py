@@ -499,7 +499,8 @@ def _negation_pair_message(top, bottom, n_layers, evanescent, retained):
         'medium a loss (Im(eps) > 0 or Im(mu) > 0) to solve a neighbouring problem that has an '
         'answer; a truncation that retains only propagating orders (truncation_order=0 at a '
         'real angle, or a longer period) is solved as it stands. A finite layer of the '
-        "negation between other media, Pendry's lens, is a different stack and is solved.")
+        "negation between other media, Pendry's lens, is a different stack and is solved. See "
+        'docs/negative-index-media.md, section 9.')
 
 
 def _scalar_slot(slot):
@@ -2499,7 +2500,7 @@ class CoreSolveMixin:
         ``eps = 2+0.5j`` carries p light at 44.1 and s light at 45.8; a lossy double negative
         (``-3+0.1j``, ``-0.5+0.05j``) at 45.7 / 45.4; a strongly absorbing one
         (``-1+1j``, ``-1+0.5j``) at 25.7 / 33.2; and a metal (``-10+1j``) carries p light at
-        -45.5, across the normal.
+        -45.5, across the normal (``studies/negative_index_media.py``, section 4 of its log).
 
         As ``theta -> 0+`` in a negative-index medium ``k_par`` points along ``phi + pi``, so the
         per-order s/p frame at exactly ``theta = 0`` is taken at that azimuth
@@ -4028,7 +4029,8 @@ class CoreFactorizationMixin:
         such scenes per backend (every path, ETM and SMM, either side lit, with and without
         layers; ``tests/test_negative_index_layers.py``), where this refusal once stopped them
         with a reason that did not hold. With an evanescent order retained the solve does not
-        answer. With this refusal switched off and no layer between, it raises
+        answer. With this refusal switched off (``docs/negative-index-media.md`` section 9, from
+        ``studies/negative_index_media.py`` section 12) and no layer between, it raises
         ``LinAlgError`` on NumPy on every path, ``FloatingPointError`` on JAX, and on PyTorch
         ``LinAlgError`` on all but 2D and 4ff SMM, which return a finite answer; with uniform
         layers of the two media SMM returns a finite answer whose amplitudes on the 4ff path,
@@ -4152,7 +4154,7 @@ class CoreFactorizationMixin:
         still read the verdict per point. All False for passive half-spaces. It flags the band
         only: an active double negative that propagates, refused eagerly where it is set, is
         solved under ``jax.jit`` with the mirror root on every order, and the orders outside
-        the band carry no physical answer either,
+        the band carry no physical answer either (``docs/negative-index-media.md`` section 10),
         so check such a material once outside the trace.
 
         A magnetic scene reads the half-spaces' own ``epsilon`` and ``mu``, as
@@ -4233,7 +4235,7 @@ class CoreFactorizationMixin:
             'rather than fractions of an incident power -- their sum can exceed 1 on a '
             'lossless stack -- and power_entering and absorption are NaN. For an absorbing '
             'incident medium, give a real theta: a real angle keeps kx and ky real. See '
-            'docs/conventions.md#phase-incidence.',
+            'docs/conventions.md#real-angle-incidence.',
             ComplexIncidenceWarning, stacklevel=3)
 
     #: The scene of the last solve: a tuple of numbers, ``None`` when a condition it reads

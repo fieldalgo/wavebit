@@ -9,7 +9,7 @@ Targets:
 - `wavebit/_core/solve_1d.py::final_matching` — where it runs on the 1D path
 - `wavebit/_core/scattering.py` — where it runs on the 2D path
 - `wavebit/_core/engine.py::_refuse_negative_index_half_space` — the one input the removed
-  check flagged that no test covered, now refused where it is set
+  check flagged that no test covered, refused for a while and now solved on the far side
 - `tests/test_fp_warnings.py` — the unit-level contract
 - `tests/test_rayleigh_guard.py` — the end-to-end case it was written for
 - `tests/test_lossy_media.py` — the closed-form tests that replaced it where it caught defects
@@ -81,10 +81,16 @@ One input it flagged had no test at all: a **negative-index half-space** (`Re(ep
 `eps*mu`, and for these media it takes the root that advances its phase away from the
 interface, which is the wrong one. Glass onto
 `eps = -2+0.1i`, `mu = -1+0.1i` returned `R = 929`, `T = -928` at normal incidence against a
-true `0.0011`. Since the removal that half-space is refused where it is set
-(`wavebit/_core/engine.py::_refuse_negative_index_half_space`), and
-`tests/test_negative_index_half_space.py` pins both the refusal and its advice: the same medium
-as a layer keeps both roots and matches the Airy formula to `1e-12`.
+true `0.0011` -- with `R + T = 1` exactly, an identity of the interface conditions whichever root
+is taken, so no energy test could have caught it
+([`negative-index-media.md`](negative-index-media.md) §3). After the removal that half-space was
+refused where it was set. It is now
+solved with its own root, the mirror of Maystre's cut ([`branch-cuts.md`](branch-cuts.md) §9),
+on either side and lit or not ([`negative-index-media.md`](negative-index-media.md)), and
+refused only where it is active
+(`wavebit/_core/engine.py::_refuse_negative_index_half_space`).
+`tests/test_negative_index_half_space.py` pins it against closed forms and against a thick
+lossy slab of the same medium, a layer, which keeps both roots and so needs no root rule.
 
 ## 3. What replaces it
 

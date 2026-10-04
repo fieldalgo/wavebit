@@ -8,8 +8,8 @@ See [Keyword reference](../reference/keywords.md#the-light) for defaults.
 
 | Input | Meaning | Held fixed during a wavelength sweep |
 | --- | --- | --- |
-| `theta`, `phi` | phase polar angle and azimuth, in radians | angles; k changes with wavelength and incident material dispersion |
-| `kx`, `ky` | real Cartesian transverse angular wavenumbers | physical kx and ky; the phase angle may change |
+| `theta`, `phi` | the direction the incident light travels, polar angle and azimuth, in radians | angles; k changes with wavelength and incident material dispersion |
+| `kx`, `ky` | real Cartesian transverse angular wavenumbers | physical kx and ky; the angle may change |
 
 `kx` and `ky` have inverse length units: nm**-1 when `wavelength`, `period` and
 `thickness` use nm. They are **not divided by k0** and are not reciprocal-lattice
@@ -49,11 +49,13 @@ by `2*pi/wavelength` to recover inverse length units.
 Direct components must be finite real scalars. This sets uniform single-wave
 intensity along the surface; a zero-power evanescent incident wave cannot define
 normalized diffraction efficiencies and is refused. A complex component is refused
-too, in absorbing media as well: there a real `theta` is the input, and the phase
+too, in absorbing media as well: there a real `theta` is the input, and a real
 angle keeps `kx` real. A complex transverse wavevector is reachable only through a
 complex `theta`/`phi`, whose `R` and `T` are formal (see
-[Phase incidence](../conventions.md#phase-incidence)). With `kx=ky=0`, the s/p basis
-uses azimuth zero (s along y, p in xz); choose `polarization` to orient the field.
+[Real-angle incidence](../conventions.md#real-angle-incidence)). Direct components carry no
+angle, so they are taken as given in any medium, a negative-index one included. With
+`kx=ky=0`, the s/p basis uses azimuth zero (s along y, p in xz); choose `polarization` to
+orient the field.
 For pure 1D `tetm` input, omit `ky` (it is zero); use `polarization` for conical incidence.
 
 `wavebit.Incidence(kx=..., ky=...)`, `JobSpec` serialization, `kx`/`ky` sweeps and
@@ -62,18 +64,39 @@ from angles to direct k, clear `theta` and `phi` with `None` before assigning k.
 To switch back, clear both k components first. Changing k requires another solve
 before reconstructing fields.
 
-## Phase direction and absorbing incidence
+## What `theta` and `phi` mean
 
-`theta` is the angle of the incident wave's **phase direction** from the inward
-normal; `phi` is its azimuth in the fixed x/y axes. Real angles specify uniform
-incident intensity along the surface. They refer to the selected `top` or `bot`
-half-space itself. No additional air layer is assumed.
+`theta` and `phi` are **the direction the incident light comes in**: the polar angle from the
+inward normal of the lit half-space and the azimuth from `+x` toward `+y`, in the fixed x/y
+axes. They refer to the selected `top` or `bot` half-space itself; no additional air layer is
+assumed. Real angles specify uniform incident intensity along the surface.
 
-In an absorbing incident medium, Wavebit computes real transverse wavevectors
-from that phase direction and the full complex permittivity and permeability.
-The normal wavevector remains complex and describes absorption during propagation.
-For a lossless positive-index medium, this reduces to the familiar
-`kx = k0*n*sin(theta)*cos(phi)` and `ky = k0*n*sin(theta)*sin(phi)`.
+What that fixes is the in-plane wavevector:
+
+```text
+k_par / k0 = s * N * sin(theta) * (cos(phi), sin(phi))
+```
+
+`N` is the lit medium's phase index -- `|n|` if it is lossless -- and `s` the sign of its index
+`n = sqrt(eps)*sqrt(mu)`. Three cases cover every medium:
+
+* **A lossless positive-index medium** (`s = +1`, `N = n`): the familiar
+  `kx = k0*n*sin(theta)*cos(phi)`, `ky = k0*n*sin(theta)*sin(phi)`. Phase and power travel
+  together, and `theta` is both directions.
+* **A negative-index medium** (`s = -1`: a double negative, `Re(eps) < 0` and `Re(mu) < 0`, or
+  another negative-phase-velocity medium such as a passive magnetic metal). The phase travels
+  against the power, so the same light has its wavevector the other way:
+  `kx = -k0*|n|*sin(theta)*cos(phi)`. Lossless, that is still `kx = k0*n*sin(theta)*cos(phi)`
+  with the signed `n < 0` -- Snell's law with a negative index. Light arriving from
+  `n = -sqrt(2)` at 20 degrees enters glass at -18.81 degrees, on the same side of the normal
+  it came from: negative refraction.
+* **An absorbing medium** of either sign: `N` comes from the full complex `eps*mu`, the normal
+  wavevector is complex and the incident wave weakens on its way to the structure. `theta` and
+  `phi` are then the angles of `s * Re(k)`, and the Poynting vector departs from them by an
+  amount set by the loss and the polarization -- by 1.7 degrees for p light at 45.8 degrees in
+  `eps = 2+0.5i`, and to the other side of the normal for p light in a metal (the table is in
+  [negative-index media](../negative-index-media.md) §7). Absorbing real-angle incidence
+  requires `abs(theta) < pi/2`.
 
 ```python
 import numpy as np
@@ -93,11 +116,26 @@ ky = (2 * np.pi / solver.wavelength) * ky_over_k0
 result = solver.solve()
 ```
 
-Here 30 degrees is the phase angle **inside the absorbing incident half-space**.
-In absorbing media the phase direction and energy-flow direction need not agree.
-The [derivation and complex-angle convention](../conventions.md#phase-incidence)
-state the precise meaning of the input. Absorbing phase incidence requires
-`abs(theta) < pi/2`.
+Here 30 degrees is the angle **inside the absorbing incident half-space**. Lit from a
+negative-index medium the same script runs unchanged; only the sign of `kx` differs:
+
+```python
+nim = wavebit.Material(-3 + 0.1j, mu=-0.5 + 0.05j)      # n_top = -1.2254+0.0816j
+solver = wavebit.rcwa(
+    top=nim, bot=2.25,
+    wavelength=1000., period=[1200., 1200.],
+    theta=np.deg2rad(30.), phi=0.,
+    structure=np.full((1, 2, 2), 2.25), thickness=[100.],
+    truncation_order=0,
+)
+solver.order_kxy()[0]           # negative: the light travels along +x, its phase along -x
+```
+
+At exactly `theta = 0` the s/p frame takes the direction `k_par` approaches as `theta -> 0+`:
+`phi`, or `phi + pi` from a negative-index side, so the incident field is continuous through
+normal incidence on either. The [derivation and complex-angle
+convention](../conventions.md#real-angle-incidence) state the precise meaning of the input, and
+[negative-index media](../negative-index-media.md) everything about double negatives.
 
 Power is referenced to the incident wave at its interface with the finite stack.
 `result.power_entering` includes incident/reflected interference;

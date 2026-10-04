@@ -500,7 +500,12 @@ gaussian_result = gaussian.solve(power_region=((-3000., 3000.), (-3000., 3000.))
 `waist` is the scalar envelope's 1/e amplitude radius. `focus` is global xyz in
 scene lengths; `amplitude` is the electric vector norm and common phase at the
 focus in the absence of the structure. The incident medium must be isotropic,
-lossless, and have positive epsilon and mu. `sampling` gives the midpoint grid
+lossless, and have positive epsilon and mu: a beam launched from a negative-index side is
+refused, because its angular spectrum, transversality and focal phase are written for waves
+whose phase and power travel together. A `PlaneWave` from a negative-index side is supported,
+with `theta` and `phi` meaning what they mean to the ordinary solve -- the light's direction
+([`negative-index-media.md`](negative-index-media.md) §7) -- so such a beam can be built from
+`PlaneWave` sources lit from that side. `sampling` gives the midpoint grid
 sizes; `spectral_extent` (default 4) covers +/-spectral_extent/waist in each beam
 transverse direction. Converge both parameters. A finite k spacing produces
 spatial replicas, so increase sampling to move them away from the observation area.

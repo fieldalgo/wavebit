@@ -233,12 +233,13 @@ one and returns amplitudes.
 repo leans on most. The checks in `tests/test_excitation.py` are internal (the SMM cascade
 against the ETM matching) for that reason; fmmax or S4 would have to be the external one.
 
-## 8. Incident power and phase angles
+## 8. Incident power and real angles
 
 The incident order's normal wavevector is read from its half-space mode. It is
-`n_inc*cos(theta)` for a real angle in a lossless medium. For absorbing real-angle
-incidence, use the [phase-direction construction](conventions.md#phase-incidence);
-the same formula with complex `n_inc` is not its normal wavevector.
+`n_inc*cos(theta)` for a real angle in a lossless positive-index medium. For absorbing or
+negative-index real-angle incidence, use the [real-angle
+construction](conventions.md#real-angle-incidence); the same formula with complex `n_inc` is
+not its normal wavevector.
 
 Each illuminated order is weighted by its own real power admittance: `Re(kz/mu)`
 for electric s amplitudes and `Re(kz/epsilon)` for magnetic p amplitudes, with the

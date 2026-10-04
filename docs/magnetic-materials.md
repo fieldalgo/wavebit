@@ -181,20 +181,50 @@ admittance is caught without fmmax being trusted at all.
 `eps = 0.5, mu = 2.0`: index-matched to vacuum, impedance-mismatched. A boundary carrying only
 `n` sees no interface and returns `R = 0`. The answer is 0.111.
 
-**A refusal for a negative-index half-space.** `boundary_kz` reads only `eps*mu`, and when both
-real parts are negative and the medium propagates (`Re(eps*mu) > 0`) that product looks like
-an ordinary forward medium, so the half-space root advances its phase away from the interface,
-the wrong way for this medium. Glass onto `eps = -2+0.1i`, `mu = -1+0.1i` returned `R = 929`
-against a true `0.0011`, and the closed form above is how that was measured. Since 2026-10-03
-such a half-space is refused where it is set, and so are `solve_conv`'s own half-space terms.
-A pair too lossy to propagate (`Re(eps*mu) <= 0`, such as `eps = mu = -1+1.2i`) keeps the
-decaying root, which is the right one, and is accepted. The refused pair as a layer keeps both
-roots and matches the Airy formula to `1e-12` (`tests/test_negative_index_half_space.py`).
+**A negative-index half-space, on the far side.** When both real parts are negative and the
+medium propagates (`Re(eps*mu) > 0`), `eps*mu` looks like an ordinary forward medium, and
+Maystre's root advances its phase away from the interface, the wrong way for this medium.
+Glass onto `eps = -2+0.1i`, `mu = -1+0.1i` returned `R = 929` against a true `0.0011`, and the
+closed form above is how that was measured; such a half-space was refused on 2026-10-03.
+The kernels now hand `boundary_kz` the half-space's own `(eps, mu)` whenever the scene is
+magnetic, and a double negative takes the mirror of Maystre's cut, the decaying root
+([`branch-cuts.md`](branch-cuts.md) §9): the limiting-absorption root with the loss on `eps` and
+`mu` separately, which M. Cassier, C. Hazard and P. Joly (Commun. PDE 42, 1707 (2017)) prove for
+a dispersive double-negative half-space. Its index is `n = sqrt(eps)*sqrt(mu)`, each factor's
+root on Maystre's cut (the principal root for a passive factor), the negative of the principal
+`sqrt(eps*mu)`, so `n/mu`, the admittance, keeps a positive real part and `t_p = t_s` at normal
+incidence. Measured against the closed-form interface (s and p, `r` and
+`t`, 0 to 80 degrees, both sides, every path and both connecting algorithms) to `3.2e-15`, and
+against a thick lossy slab of the medium -- a layer keeps both roots, so that comparison depends
+on no root choice -- to `4e-16` in every order's `R` (`tests/test_negative_index_half_space.py`;
+the numbers are `studies/negative_index_media.py`'s), and against fmmax per order
+(`tests/references/test_fmmax_dng_golden.py`). **Lit** from such a
+medium it is solved too: `theta` names the light's direction and its in-plane wavevector points
+the other way ([`negative-index-media.md`](negative-index-media.md) §7). Still refused: an
+active one that propagates (where it is set), and two lossless half-spaces that are each
+other's negation, `(eps, mu)` and `(-eps, -mu)`, which have no time-harmonic solution on an
+evanescent order -- refused wherever the truncation retains one
+([`negative-index-media.md`](negative-index-media.md) §9). A pair too lossy to propagate
+(`Re(eps*mu) <= 0`, such as `eps = mu = -1+1.2i`) takes the same root under both rules, so its
+`R` and `T` are unchanged; its index is now negative too, which flips its `t_p` (exactly).
 
-**One index that reads as gain.** A passive magnetic medium can multiply to `Im(eps*mu) < 0`
-with one real part negative: `eps = -2+0.01i`, `mu = 0.1+0.5i` gives `n_bot = 0.638-0.783i`.
-Nothing decides a branch on that `n`; every `kz` comes from `n**2`, and `R` and `T` match the
-closed form. Only the public `n_top` / `n_bot` and a complex angle's formal `kx` read it.
+**A negative-index layer.** The same sign question has a layer form. A layer's modes come as
+`+-q` pairs, and ETM has to call the root the region below receives "down"; Maystre's root does
+that for an ordinary layer and does the opposite for a double negative, so a double-negative
+layer resting on its own medium made ETM's interface factor singular. A uniform double negative
+now takes the mirror of the rule, as its half-space does, and a patterned layer holding one is
+labelled per mode by its power flux ([`connecting-algorithms.md`](connecting-algorithms.md) §11).
+
+**A magnetic metal is a negative-index medium too.** A passive magnetic medium can multiply to
+`Im(eps*mu) < 0` with one real part negative: `eps = -2+0.01i`, `mu = 0.1+0.5i`. Its principal
+root `0.638-0.783i` reads as gain, and its index is the negative of it,
+`sqrt(eps)*sqrt(mu) = -0.638+0.783i`: it is a negative-phase-velocity medium although not a
+double negative. No `kz` is decided on that `n`; every `kz` comes from `n**2`, and `R` and `T`
+match the closed form either way. The public `n_top` / `n_bot`, a complex angle's formal `kx`,
+a real angle's `k_par` from it, and the sign of a transmitted `t_p` read it. Until 2026-10-04
+the index was the principal root, and that medium's `t_p` was `-t_s` at normal incidence; it is
+`t_s` now (`0.8319-0.4608i` for both, glass onto it), as for every other medium.
+[`negative-index-media.md`](negative-index-media.md) §6 tabulates which media are negated.
 
 **Reciprocity** for the backside mirror, where `mu_top` and `mu_bot` must swap (the kernels'
 backside: public bottom incidence when this was written, public top incidence since

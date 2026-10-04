@@ -494,7 +494,8 @@ def boundary_kz(xp, eps, k_par_sq, medium=None):
     and it can be the wrong root for a strongly dispersive active medium (Y.-F. Chen, P. Fischer
     and F. W. Wise, Phys. Rev. Lett. 95, 067402 (2005); B. Nistad and J. Skaar, Opt. Express 15,
     10935 (2007)), whose root is fixed by its whole dispersion and not by ``eps`` at one
-    frequency (J. Skaar, URSI EMTS 2010, arXiv:1008.2874).
+    frequency (J. Skaar, URSI EMTS 2010, arXiv:1008.2874). ``docs/negative-index-media.md``
+    section 18 says what the literature does and does not settle.
 
     The rule agrees with the principal root wherever that root lies in the closed first
     quadrant, so it is bit-identical to it at every real ``k_par`` in a passive medium. Its cut
@@ -688,7 +689,7 @@ def signed_index(epsilon, mu):
     is physical (J. Skaar, Phys. Rev. E 73, 026605 (2006), and URSI EMTS 2010) -- and this one
     is chosen to point along the root the solve takes: at normal incidence the half-space's
     ``kz`` is ``+-n``, and ``t_p = t_s`` there exactly when ``n`` points along it. On 400,000
-    random media it does for every passive
+    random media (``studies/negative_index_media.py``, section 3) it does for every passive
     medium either way and for 97.6% of active ones with no gain-metal factor either way; with a
     gain-metal factor, not double negative, for all 93,797 that are evanescent (none under
     principal factors) and for none of the 5,839 that propagate (all under principal factors);
@@ -714,8 +715,8 @@ def signed_index(epsilon, mu):
     sign of ``Re(q)`` alone is round-off on the boundary of the class -- ``eps*mu`` on the
     negative real axis, where ``n`` is imaginary. On 199930 passive pairs placed on that
     boundary to within 3 ulp, reading ``Re(q)`` alone returned the gain-reading root for 35855
-    and the projection for none; off it the two agree to the bit on 1e6 random passive pairs.
-    ``q`` is formed from
+    and the projection for none; off it the two agree to the bit on 1e6 random passive pairs
+    (``studies/negative_index_media.py``, section 3 of its log). ``q`` is formed from
     ``epsilon + 0j`` and ``mu + 0j``, so a signed zero in a lossless value counts as lossless,
     not as gain: a lossless double negative written ``(complex(-2, -0.0), -1+0j)`` is
     ``-sqrt(2)``, not ``+sqrt(2)``. (Spell such a zero with ``complex()``: the expression
@@ -1376,7 +1377,7 @@ _COMPLEX_TRANSVERSE_K = (
     'kx/k0 = n*sin(theta)*cos(phi), ky/k0 = n*sin(theta)*sin(phi) with n the incident '
     'half-space index, signed (for ky = 0: theta = arcsin(kx/(k0*n)), phi = 0); R and T are then '
     'formal ratios, power_entering and absorption are NaN, and a ComplexIncidenceWarning says '
-    'so. See docs/conventions.md#phase-incidence.')
+    'so. See docs/conventions.md#real-angle-incidence.')
 
 
 def transverse_component_problem(value, name):

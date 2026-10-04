@@ -40,8 +40,8 @@ case                    Wavebit     tolerance used   fmmax stock  Li rule   mirr
 The tolerance is the extrapolation's own -- the distance between the estimates from the coarser
 and the finer three samplings, which bounds the finer one's error from above -- plus 1e-12 of
 round-off (``ROUND_OFF``); the column includes both. Under numpy 2.5.1 the Wavebit column reads
-5.9e-14, 7.5e-14, 6.1e-12 and 2.7e-14: another BLAS, the last digit. The raw gap falls by 4.00
-per doubling of the samples at every level, the premise the
+5.9e-14, 7.5e-14, 6.1e-12 and 2.7e-14 (``studies/negative_index_media.py``, section 8 of its
+log): another BLAS, the last digit. The raw gap falls by 4.00 per doubling of the samples at every level, the premise the
 extrapolation rests on, and the test checks it before using it.
 
 Values are frozen by ``gen_goldens_fmmax_dng.py``, which needs the ``fwref`` env. Nothing here

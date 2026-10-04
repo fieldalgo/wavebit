@@ -58,6 +58,7 @@ subtrees:
       - file: full-tensor-patterns
       - file: tensor-shape-integration
       - file: magnetic-materials
+      - file: negative-index-media
     - caption: NVF construction and validation
       entries:
       - file: nvf-energy-engine
