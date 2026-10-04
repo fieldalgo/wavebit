@@ -49,6 +49,7 @@ differ are exactly the `__stack` pair above.
 | **RETICOLO**, the in-cell **field** | the *pure TE/TM 1D* path (`field_1d`), which the two rows above never reach — **1e-14 on gratings**, five components of six | Octave + `RETICOLO_PATH` | `golden_reticolo_field.npz` |
 | **RETICOLO**, the **conical** field | `field_1d_conical` on a *patterned* layer — an azimuth and a discontinuity at once, which nothing else here reached | same | `golden_reticolo_conical_field.npz` |
 | **fmmax**, `Formulation.FFT` | `factorization='laurent'`, the same operator: **identity** on patterned layers -- 6.1e-13 to 3.2e-11 in total and per order, on a rectangular cell, a lossy metal and a hexagonal one -- once fmmax's sampled coefficients are extrapolated to the exact ones | the `fwref` env | `golden_fmmax_laurent.npz` |
+| **fmmax**, **double negatives** | gratings on a lossy double-negative substrate (1D and 2D, `\|mu\| != 1`), double-negative pixels inside a grating (patterned `eps` and `mu`), and a grating lit **from** a lossy double negative: every order's unpolarized `R` and `T`, ETM and SMM, through the `theta` door and the direct-`k` door -- **identity**, 2.7e-14 to 6.2e-12, once the quadrature is extrapolated away as for the row above | the `fwref` env | `golden_fmmax_dng.npz` |
 | **RETICOLO**, a **crossed** grating in both of Li's nestings | the 2D Li build, `li_nesting='fixed'` against `parm.res1.li = 1` and `'symmetric'` against `li = 0` — the one case here that can tell the two apart (a 1D grating cannot) | Octave + RETICOLO V10, with `li` set by hand: the bridge does not expose it | inline in `test_reticolo_li_nesting.py`, totals to ten decimals (2026-09) |
 
 A fourth oracle lives outside this directory: the Berreman 4x4 in
@@ -246,6 +247,36 @@ both polarizations, where the mirrored order index misses by 1.3e-2 to 7.4e-2 an
 4e-2 to 2e-1. The order set is handed to fmmax as an explicit `Expansion`: its own
 parallelogramic truncation balances the sides in k-space, which on the 700 x 560 cell keeps
 17 x 13 orders where `truncation_order=(7, 7)` keeps 15 x 15.
+
+### Double negatives: what fmmax can arbitrate, and what it cannot (2026-10-04)
+
+`golden_fmmax_dng.npz` is the outside check on negative-index media (`docs/branch-cuts.md` §9:
+the mirror of Maystre's cut, the signed index, the meaning of `theta` on a lit negative-index
+side). fmmax makes none of this solver's choices. It keeps each layer's modes with
+`Im(kz) > 0`, which is the physical root for **every lossy medium, of either sign of index** --
+limiting absorption needs no sign of `Re(n)` once there is loss -- and the wrong one, or a
+round-off one, for a lossless double negative. So every negative-index medium in the golden is
+lossy and has `|mu| != 1`; the lossless limit is pinned elsewhere (closed forms and thick lossy
+slabs, `tests/test_negative_index_half_space.py`).
+
+Two things make the comparison one of identity, and both were inherited rather than invented:
+the generator freezes four samplings per pixel and two flavours of the centring phase exactly as
+the FFT row above does, and the quantity frozen is each order's **unpolarized** efficiency,
+`trace(H_in^-1 H_out)/2`, so that the arbitrary polarization mix in which fmmax's general
+eigensolver returns a lossy double negative's two order-0 modes does not have to be matched to
+this solver's s and p. Measured at freezing (fmmax 1.7.1, jax 0.10.2, numpy 2.4.6): the raw gap
+falls by 4.00 per doubling of the samples; the extrapolated gap, worst order per case, is 2.7e-14
+to 6.2e-12 against tolerances (the extrapolation's spread plus 1e-12 of round-off) of 2.7e-12 to
+3.9e-10; the stock run sits 2.3e-9 to 3.9e-9 away (its float32 phase);
+Li's rules miss by 8e-3 to 4e-2. The mirror cut switched off fails every case, an unsigned
+`k_par` fails the lit case through the `theta` door, and develop fails 32 of 35 tests. Rerunning
+the generator reproduces all 73 arrays byte for byte.
+
+What it cannot arbitrate is ETM's *labelling* of a double-negative layer's modes. On these lossy
+scenes either label rule gives the SMM answer to 1e-15 -- a label moves conditioning, not the
+answer -- and the scenes where the labels decide a `LinAlgError` are lossless, where fmmax's own
+choice has no loss to read. Those are held to SMM and closed forms in
+`tests/test_negative_index_layers.py`.
 
 ### A generator that could not reproduce its own golden
 
