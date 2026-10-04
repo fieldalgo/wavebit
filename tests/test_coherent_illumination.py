@@ -206,6 +206,64 @@ def test_normal_incidence_azimuth_rotates_jones_axes():
     np.testing.assert_allclose(a.boundary_fields('top', [0.]), b.boundary_fields('top', [0.]), atol=1e-12)
 
 
+@pytest.mark.parametrize('top', ['lossy', 'nim'])
+def test_torch_gradients_at_normal_incidence_are_the_one_sided_limit(top):
+    """At ``theta = 0`` the incident order sits at ``k_par = 0``, where the port basis used to
+    take ``sqrt(kx**2 + ky**2)``: its infinite derivative met a zero ``dk`` as ``NaN``, so every
+    Torch gradient through a normal-incidence ``PlaneWave`` was ``NaN`` -- with respect to the
+    lit medium's permittivity too, which does not move ``k_par`` at all. And with the frame there
+    fixed at azimuth ``0`` while ``k_par`` leaves along ``phi``, a finite square root would still
+    have given ``p_hat`` no tilt, so ``dE_z/dtheta`` came out ``0``.
+
+    Pinned against finite differences on the NumPy backend: the derivative with respect to the
+    lit medium's ``Re(eps)`` (central) and with respect to ``theta`` (one-sided, ``theta`` cannot
+    be negative here), of the output powers and of every field component at both faces, lit
+    from a lossy dielectric and from a lossy double negative, at ``phi = 0.6``."""
+    torch = pytest.importorskip('torch')
+    grating = np.array([[[4., 4., 1., 1., 2.25, 2.25]]], dtype=complex)
+
+    def lit(x):
+        return wavebit.Material(x + 0.01j) if top == 'lossy' else wavebit.Material(
+            x - 5.25 + 0.1j, mu=-0.5 + 0.05j)
+
+    def outputs(re_eps, theta, backend):
+        r = wavebit.rcwa(backend=backend, wavelength=500., period=[700.], structure=grating,
+                         thickness=[180.], truncation_order=(3, 0), answers='field', top=lit(re_eps),
+                         bot=2.25, excitation={'top': wavebit.PlaneWave(
+                             theta=theta, phi=0.6, polarization=(0.6, 0.8j))}).solve()
+        fields = [r.boundary_fields(side, [37.], [0.], part=part).reshape(-1)
+                  for side, part in (('top', 'incoming'), ('top', 'outgoing'), ('bottom', 'total'))]
+        return [r.output_top, r.output_bottom] + fields
+
+    def flat(values):
+        return np.concatenate([np.ravel(host(v)) for v in values])
+
+    def autodiff(which):
+        x = torch.tensor(2.25 if which == 'eps' else 0.0, dtype=torch.float64, requires_grad=True)
+        values = outputs(x, 0.0, 2) if which == 'eps' else outputs(2.25, x, 2)
+        out = []
+        for v in values:
+            v = torch.reshape(torch.as_tensor(v), (-1,)).to(torch.complex128)
+            for k in range(v.shape[0]):
+                pair = []
+                for part in (torch.real(v[k]), torch.imag(v[k])):
+                    grad, = torch.autograd.grad(part, x, retain_graph=True, allow_unused=True)
+                    pair.append(0.0 if grad is None else float(grad))
+                out.append(pair[0] + 1j * pair[1])
+        return np.asarray(out)
+
+    h = 1e-6
+    fd_eps = (flat(outputs(2.25 + h, 0.0, 0)) - flat(outputs(2.25 - h, 0.0, 0))) / (2 * h)
+    ad_eps = autodiff('eps')
+    assert np.all(np.isfinite(ad_eps))
+    np.testing.assert_allclose(ad_eps, fd_eps, rtol=0, atol=1e-7 * np.abs(fd_eps).max())
+    h = 1e-8
+    fd_theta = (flat(outputs(2.25, h, 0)) - flat(outputs(2.25, 0.0, 0))) / h
+    ad_theta = autodiff('theta')
+    assert np.all(np.isfinite(ad_theta))
+    np.testing.assert_allclose(ad_theta, fd_theta, rtol=0, atol=1e-6 * np.abs(fd_theta).max())
+
+
 def test_cancellation_and_conflicting_or_evanescent_inputs_are_rejected():
     with pytest.raises(ValueError, match='not both'):
         wavebit.PlaneWave(theta=.2, kx=.3)

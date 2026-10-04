@@ -48,7 +48,7 @@ def _host(value):
                          'sources eagerly, outside jit/compile.') from exc
 
 
-def _plane_basis(xp, kx, ky, epsilon, mu, direction):
+def _plane_basis(xp, kx, ky, epsilon, mu, direction, azimuth=None):
     """Electric s/p columns as physical (Ex,Ey,Ez,Z0Hx,Z0Hy,Z0Hz).
 
     ``kz`` is the half-space's own root, a double negative's included (``boundary_kz``), and
@@ -57,13 +57,32 @@ def _plane_basis(xp, kx, ky, epsilon, mu, direction):
     ``sqrt(eps)*sqrt(mu)``, negative for a negative-phase-velocity medium. The outgoing spectra
     are physical fields whatever that sign; an input polarization reads it, so a ``PlaneWave``'s
     ``(a_s, a_p)`` means here what it means to the ordinary solve.
+
+    **At ``k_par = 0``** the frame has no direction of its own and takes ``azimuth`` (``0`` when
+    it is ``None``): the direction in which that order's ``k_par`` leaves the origin when the
+    input sitting there tilts (``CoherentSolver._solve``). ``|k_par|`` is then read as the
+    projection on that direction, which is ``0`` there and has the derivative a tilt gives it,
+    and the frame does not turn along the tilt. Both matter only to autodiff: ``sqrt`` of
+    ``kx**2 + ky**2`` has an infinite derivative at zero, which met a zero ``dk`` as ``NaN`` in
+    every gradient through a normal-incidence solve (Torch, with respect to the lit medium too),
+    and a frame fixed at azimuth ``0`` while ``k_par`` leaves along ``phi`` gave ``p_hat`` the
+    wrong tilt, so ``dE_z/dtheta`` came out ``0`` where it is not.
     """
     kz = boundary_kz(xp, epsilon * mu, kx*kx + ky*ky, (epsilon, mu))
     index = signed_index(epsilon, mu)
-    rho = xp.sqrt(xp.real(kx)**2 + xp.real(ky)**2)
-    safe = xp.where(rho == 0, xp.ones_like(rho), rho)
-    c = xp.where(rho == 0, xp.ones_like(rho), kx / safe)
-    s = xp.where(rho == 0, xp.zeros_like(rho), ky / safe)
+    rho2 = xp.real(kx)**2 + xp.real(ky)**2
+    origin = rho2 == 0
+    if azimuth is None:
+        c0, s0 = xp.ones_like(rho2), xp.zeros_like(rho2)
+    else:
+        a = as_array(xp, azimuth, dtype=kx.dtype, device=getattr(kx, 'device', None))
+        c0, s0 = xp.real(xp.cos(a)) + xp.zeros_like(rho2), xp.real(xp.sin(a)) + xp.zeros_like(rho2)
+    # `+ 0.0` keeps the zero at the origin a +0, the sqrt's, in every combination of signs.
+    radial = (xp.real(kx) * c0 + xp.real(ky) * s0) + 0.0
+    rho = xp.where(origin, radial, xp.sqrt(xp.where(origin, xp.ones_like(rho2), rho2)))
+    safe = xp.where(origin, xp.ones_like(rho), rho)
+    c = xp.where(origin, c0, kx / safe)
+    s = xp.where(origin, s0, ky / safe)
     zero = xp.zeros_like(kx)
     es = xp.stack([-s, c, zero], axis=-1)
     ep = xp.stack([-kz*c/index, -kz*s/index, direction*rho/index], axis=-1)
@@ -525,13 +544,21 @@ class CoherentSolver:
                 mu = [None if a is None else a*gauge for a in mu]
                 for (e, _), (magnetic, _) in zip(layers, _conv_layers(xp, mu, basis.thickness, count, C)):
                     e['mu_blocks'] = magnetic
+            def at_origin(actual):
+                return np.linalg.norm(_host(actual)) < 32*np.finfo(_host(xp.real(actual)).dtype).eps*float(abs(_host(k0)))
+
+            # The frame at k_par = 0 is the azimuth of the first input sitting there: the way its
+            # k_par leaves the origin as it tilts (`_plane_basis`). Another input at the origin
+            # with a different azimuth has its polarization turned by the difference.
+            origin_azimuth = next((azimuth for _, _, _, _, azimuth, actual in group['inputs']
+                                   if at_origin(actual)), None)
             ports = {}
             for side in ('top', 'bottom'):
                 material = basis.top if side == 'top' else basis.bot
                 er = basis._as_complex(material.epsilon)
                 mr = basis._as_complex(material.mu_value)
-                ports[side, 1] = _plane_basis(xp, kx, ky, er, mr, 1)
-                ports[side, -1] = _plane_basis(xp, kx, ky, er, mr, -1)
+                ports[side, 1] = _plane_basis(xp, kx, ky, er, mr, 1, origin_azimuth)
+                ports[side, -1] = _plane_basis(xp, kx, ky, er, mr, -1, origin_azimuth)
                 if group['inputs'] and _concrete(xp.any(gain_cutoff_band(xp, er, mr, kx*kx + ky*ky))):
                     near_grazing.add(side)
             a = {side: xp.zeros((2*count,), dtype=C, device=scene._array_device) for side in ('top', 'bottom')}
@@ -539,9 +566,10 @@ class CoherentSolver:
                 ij = offset-centre+widths
                 index = int(ij[1]*(2*widths[0]+1)+ij[0])
                 pol = xp.stack(pair)
-                if np.linalg.norm(_host(actual)) < 32*np.finfo(_host(xp.real(actual)).dtype).eps*float(abs(_host(k0))):
-                    azimuth = as_array(xp, azimuth, dtype=C, device=scene._array_device)
-                    c, s = xp.cos(azimuth), xp.sin(azimuth)
+                if at_origin(actual) and azimuth is not origin_azimuth:
+                    turn = (as_array(xp, azimuth, dtype=C, device=scene._array_device)
+                            - as_array(xp, origin_azimuth, dtype=C, device=scene._array_device))
+                    c, s = xp.cos(turn), xp.sin(turn)
                     pol = xp.stack([pol[0]*c-pol[1]*s, pol[0]*s+pol[1]*c])
                 direction = -1 if side == 'top' else 1
                 wave = ports[side, direction][index] @ pol
