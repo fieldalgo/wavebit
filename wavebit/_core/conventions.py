@@ -169,7 +169,7 @@ def _check_resolvable(xp, v, decision, floor):
             UnresolvedBranchWarning, stacklevel=3)
 
 
-def mode_q(xp, eigenvalue):
+def mode_q(xp, eigenvalue, mirrored=None):
     """Modal decay constant ``q`` of a layer mode, from its eigenvalue ``q**2``.
 
     A mode varies as ``exp(-k0*q*z)`` with ``z`` measured downward in the kernels' local frame
@@ -196,6 +196,19 @@ def mode_q(xp, eigenvalue):
     on purpose, and this is the right one for everything except the ETM recursion -- which
     itself falls back to it wherever the other root would grow. Pinned in
     ``tests/test_branch_selection.py`` and ``tests/test_etm_layer_labels.py``.
+
+    **A uniform double-negative layer mirrors the tie** (``mirrored``, from
+    :func:`layer_label_rule`; ``None`` everywhere else, which is the arithmetic above to
+    the bit). A lossless propagating mode of such a layer carries its power against its phase
+    (V. G. Veselago, Sov. Phys. Usp. 10, 509 (1968)), so its downward wave is ``Im(q) >= 0``,
+    the root :func:`boundary_kz` gives a half-space of the same medium; the rule is then
+    ``conj(mode_q(conj(q**2)))``. The label stops being free there: SMM's gap medium has
+    ``kz = 1`` on every order, and a mode labelled against its power whose admittance equals
+    the gap's makes the gap-to-layer factor exactly singular. ``eps = -2``, ``mu = -1`` at
+    ``kx = 1`` is the gap's own mirror (``eps_gap = 1 + kx**2 = 2``) and raised
+    ``LinAlgError`` under the old tie. A patterned layer that holds a double negative breaks
+    the tie by each mode's power flux instead (:func:`power_down_labels`). Measured in
+    ``docs/connecting-algorithms.md`` section 11.
     """
     # `xp.sqrt` for the same reason as :func:`boundary_kz` -- `**0.5` leaves a 6.1e-17 real
     # part on a lossless propagating mode, where `Re(q)` is meant to be a hard 0. Nothing
@@ -206,10 +219,15 @@ def mode_q(xp, eigenvalue):
     # No `_check_resolvable` here: at single precision `Re(v)` is round-off for an exactly
     # propagating mode, so the label is noise -- and free, since only SMM reads it.
     flip = xp.where(xp.abs(xp.real(v)) > _FLAT, xp.real(v) < 0, xp.imag(v) > 0)
+    if mirrored is not None:
+        # A selection, not new arithmetic: a layer that is not a uniform double negative is
+        # handed back the comparison above, so its root keeps its bits.
+        mirror = xp.where(xp.abs(xp.real(v)) > _FLAT, xp.real(v) < 0, xp.imag(v) < 0)
+        flip = mirror if mirrored is True else xp.where(mirrored, mirror, flip)
     return xp.where(flip, -v, v)
 
 
-def etm_mode_q(xp, eigenvalue, k0_d):
+def etm_mode_q(xp, eigenvalue, k0_d, mirrored=None):
     """A layer mode's ``q`` for the enhanced-transmittance (ETM) recursion: the half-space's root.
 
     ``k0_d`` is the layer's optical thickness ``k0*d``. The label is the one :func:`boundary_kz`
@@ -247,33 +265,208 @@ def etm_mode_q(xp, eigenvalue, k0_d):
     Bit-identical to :func:`mode_q` wherever ``q**2`` lies in the closed lower half plane --
     every real ``k_par`` in a passive layer -- since the two rules then pick the same root and
     the cap cannot fire. ``docs/connecting-algorithms.md`` holds the measurements.
+
+    **A uniform double-negative layer takes the mirror** (``mirrored``, from
+    :func:`layer_label_rule`; ``None`` everywhere else, which is the arithmetic above to
+    the bit). The half-space of the same medium takes the mirror of Maystre's cut
+    (:func:`boundary_kz`), so this does too: ``Re(q) + Im(q) > 0``, which is
+    ``conj(etm_mode_q(conj(q**2)))`` before the cap. Its passive ``q**2`` lies in the closed
+    *upper* half plane at every real ``k_par``, where Maystre's root is the one that grows and
+    advances its phase downward -- against the power -- so a layer of a double negative resting
+    on the same medium had a singular ``a``: ``LinAlgError`` on 171 of 720 such scenes, every
+    path but 4ff. With the mirror ``a`` is the identity there, as for an ordinary layer on its
+    own substrate. The cap is the same cap, since it is about growth and not about the cut. A
+    *patterned* layer holding a double negative has no one medium to mirror and takes
+    :func:`power_down_labels` per mode. ``docs/connecting-algorithms.md`` section 11.
     """
     v = xp.sqrt(eigenvalue)
     # Its decision is the sign of `Re(q) - Im(q)`, at least `|q|` from zero for every passive layer
     # at a real `k_par`: round-off on `Re(q)` alone, which is what a propagating mode's real
-    # part is at single precision, cannot flip it.
-    _check_resolvable(xp, v, xp.real(v) - xp.imag(v), 0.0)
-    q = xp.where(xp.real(v) - xp.imag(v) < 0, -v, v)
+    # part is at single precision, cannot flip it. The mirror's, `Re(q) + Im(q)`, is the same
+    # distance from zero for a passive double negative.
+    if mirrored is True:
+        decision = xp.real(v) + xp.imag(v)
+    elif mirrored is None:
+        decision = xp.real(v) - xp.imag(v)
+    else:                                       # traced: select, so either side keeps its bits
+        decision = xp.where(mirrored, xp.real(v) + xp.imag(v), xp.real(v) - xp.imag(v))
+    _check_resolvable(xp, v, decision, 0.0)
+    q = xp.where(decision < 0, -v, v)
+    return _capped(xp, q, k0_d)
+
+
+def _capped(xp, q, k0_d):
+    """``q``, with every root that grows by more than ``eps**-0.25`` across ``k0_d`` flipped.
+
+    The cap of :func:`etm_mode_q`, which says why; shared with :func:`power_down_labels`.
+    """
+    return xp.where(_grows(xp, q, k0_d), -q, q)
+
+
+def _grows(xp, q, k0_d):
+    """Where ``|exp(-k0*q*d)|`` exceeds ``eps**-0.25``: the roots :func:`_capped` turns."""
     # `log(1/eps)/4` nepers: `|exp(-k0*q*d)| > eps**-0.25` is `Re(q)*k0*d < -nepers`.
-    nepers = -0.25 * float(np.log(xp.finfo(v.dtype).eps))
+    nepers = -0.25 * float(np.log(xp.finfo(q.dtype).eps))
     # Placed the way `modal_gradient.exponential` places its scale, and for its reason: a
     # traced thickness is cast, never rebuilt with a `device=` (which JAX cannot batch).
-    real = xp.real(v).dtype
+    real = xp.real(q).dtype
     if in_namespace(xp, k0_d):
         k0_d = xp.astype(k0_d, real)
     else:
-        k0_d = xp.asarray(k0_d, dtype=real, device=getattr(v, 'device', None))
-    return xp.where(xp.real(q) * k0_d < -nepers, -q, q)
+        k0_d = xp.asarray(k0_d, dtype=real, device=getattr(q, 'device', None))
+    return xp.real(q) * k0_d < -nepers
 
 
-def layer_root(xp, eigenvalue, k0_d=None):
+def layer_root(xp, eigenvalue, k0_d=None, mirrored=None):
     """A layer mode's ``q``: :func:`etm_mode_q` given the layer's ``k0*d``, :func:`mode_q` without.
 
     The one place a layer's root is chosen, so the mode builders take the connecting algorithm's
     need as an argument instead of each spelling a rule. ETM passes ``k0_d``; SMM and everything
-    else pass nothing and keep the bounded root.
+    else pass nothing and keep the bounded root. ``mirrored`` is
+    :func:`layer_label_rule`'s verdict on the layer, passed to either rule -- and only when there
+    is one, so every other layer makes the call it always made.
     """
-    return mode_q(xp, eigenvalue) if k0_d is None else etm_mode_q(xp, eigenvalue, k0_d)
+    if mirrored is None:
+        return mode_q(xp, eigenvalue) if k0_d is None else etm_mode_q(xp, eigenvalue, k0_d)
+    return (mode_q(xp, eigenvalue, mirrored) if k0_d is None
+            else etm_mode_q(xp, eigenvalue, k0_d, mirrored))
+
+
+class DoubleNegativeLayer(NamedTuple):
+    """The engine's word on one layer, which the mode builders read as ``dng``.
+
+    Each field is ``True``, ``False`` or a traced boolean -- a raster or a material that is a
+    tracer under ``jax.jit`` cannot be read, and is then selected on rather than branched on.
+    """
+    #: The layer holds a region where ``Re(epsilon) < 0`` and ``Re(mu) < 0``.
+    holds: object
+    #: The layer is one uniform medium; ``None`` when not known, and then
+    #: :func:`uniform_double_negative` reads it off the layer's own matrices.
+    uniform: object = None
+
+
+def uniform_double_negative(xp, eps_slots, mu_slots, zero_slots=()):
+    """Is this layer one uniform double-negative medium? Read off its own convolution matrices.
+
+    ``eps_slots`` / ``mu_slots`` are the layer's diagonal slots (``epx``, ``epy``, ``epz_i`` and
+    their permeability twins; ``None`` entries are skipped) and ``zero_slots`` its off-diagonal
+    ones. True where every diagonal slot is ``c*I`` with ``Re(c) < 0`` -- ``epz_i`` holds
+    ``1/eps_zz``, whose real part has the sign of ``Re(eps_zz)`` -- and every off-diagonal slot
+    is zero: a uniform medium with every principal component of ``epsilon`` and of ``mu``
+    negative, which is what :func:`double_negative` asks of a half-space. Every builder returns
+    a uniform layer as exactly ``c*I``, so this classifies ``solve_conv``'s hand-built slots the
+    way the engine's materials classify ``solve()``'s (:class:`DoubleNegativeLayer`); it is what
+    the builders fall back on when the engine said nothing.
+
+    ``False`` for a readable no, ``True`` for a readable yes, and the traced boolean itself
+    under ``jax.jit``. Comparisons only: no gradient passes through it.
+    """
+    verdict = False
+    for slot in (*eps_slots, *mu_slots):
+        if slot is None:
+            continue
+        c = slot[0, 0]
+        eye = xp.eye(slot.shape[0], dtype=slot.dtype, device=getattr(slot, 'device', None))
+        one = xp.all(slot == c * eye) & (xp.real(c) < 0)
+        verdict = one if verdict is False else verdict & one
+    if verdict is False:
+        return False
+    for slot in zero_slots:
+        if slot is not None:
+            verdict = verdict & xp.all(slot == 0)
+    readable = _concrete(verdict)
+    return verdict if readable is None else readable
+
+
+def _both(a, b):
+    """``a and b`` over ``True`` / ``False`` / traced, with ``None`` for a readable no."""
+    if a is False or b is False:
+        return None
+    if a is True:
+        return b
+    if b is True:
+        return a
+    return a & b
+
+
+def layer_label_rule(xp, dng, eps_slots, mu_slots, zero_slots=()):
+    """``(mirrored, patterned)``: which label rule a layer's modes take, beyond the plain one.
+
+    ``mirrored`` -- a uniform double negative -- goes to :func:`layer_root`, which then takes the
+    mirror of the plain rule, as :func:`boundary_kz` does for a half-space of the same medium.
+    ``patterned`` -- a layer that holds a double-negative region and is not one uniform medium
+    -- goes to :func:`power_down_labels`, which labels its modes one by one by their power
+    flux. Each is ``None`` when it certainly does not apply, which is every non-magnetic layer
+    (``mu_slots is None``) and every layer the engine found free of double negatives, so those
+    keep their arithmetic structurally; ``True`` when it certainly does; a traced boolean
+    otherwise.
+
+    ``dng`` is the engine's :class:`DoubleNegativeLayer`, or ``None`` when it said nothing
+    (``solve_conv`` without a scene to read): then only the uniform case is recognised, from the
+    slots (:func:`uniform_double_negative`). Nothing here moves an exact answer -- a label is a
+    choice of basis -- only how well ETM's recursion, and SMM's gap factor, are conditioned.
+    """
+    if mu_slots is None:
+        return None, None
+    if dng is None:
+        uniform = uniform_double_negative(xp, eps_slots, mu_slots, zero_slots)
+        return _both(uniform, True), None
+    holds, uniform = dng
+    if holds is False:
+        return None, None
+    if uniform is None:
+        uniform = uniform_double_negative(xp, eps_slots, mu_slots, zero_slots)
+    other = (not uniform) if isinstance(uniform, bool) else ~uniform
+    return _both(holds, uniform), _both(holds, other)
+
+
+#: Flux below this, on a mode normalised to unit energy, counts as none: the direction is then
+#: decided by decay. The constant and the normalisation of the 4ff split
+#: (:func:`~wavebit._core.solve_2d_4ff.split_forward_backward`).
+_FLUX_FLAT = 1e-12
+
+
+def power_down_labels(xp, q, flux, energy, k0_d, active):
+    """Relabel a patterned double-negative layer's modes by where their power goes.
+
+    ``q`` are the labels the layer's rule gave, ``flux`` each mode's time-averaged Poynting
+    ``z`` component under those labels (it changes sign with the label), ``energy`` its
+    ``sum(|psi|**2)``, and ``active`` where the rule applies (:func:`layer_label_rule`).
+    Returns ``(q, flip)``: the new labels and where they moved, so the caller can turn the
+    partner field with them.
+
+    **Why per mode.** A layer that holds a double-negative region beside an ordinary one has
+    modes of both kinds and modes between them, and no single cut labels them all: Maystre's
+    root advances the phase of a backward mode downward, against its power, and the mirror cut
+    does the same to a forward one. What :func:`etm_mode_q` asks of a label -- that the ``+``
+    mode be a wave the region below receives -- is about power, so this reads the power: a
+    *propagation-dominated* mode (``|Im(q)| > |Re(q)|``) whose flux is resolvable takes the root
+    that carries power down; any other mode takes the decaying root, which for a passive layer at
+    a real ``k_par`` is the same root, since a mode's flux decays in the direction it travels.
+    That is the rule the 4ff path has always split its modes with
+    (:func:`~wavebit._core.solve_2d_4ff.split_forward_backward`), so the two formulations now
+    agree about which way a patterned negative-index layer's modes go.
+
+    ETM (``k0_d`` given) then applies :func:`etm_mode_q`'s cap. SMM (``k0_d is None``) never
+    takes a growing root: it keeps the decaying one and lets the flux break only the tie
+    :func:`mode_q` breaks by ``Im(q) <= 0``, the lossless propagating mode.
+
+    Measured against SMM (``docs/connecting-algorithms.md`` section 11): on 274 random
+    patterned scenes at oblique incidence on the 1D TE/TM, conical and 2D paths Maystre's labels
+    raised ``LinAlgError`` on 15 and lost up to 2.7e-9 on the rest, these at most 6.1e-13; on a
+    high-contrast double-negative block resting on its own medium, 2.7e-4 against 1.5e-13.
+    """
+    re, im = xp.real(q), xp.imag(q)
+    sure = xp.abs(flux) > _FLUX_FLAT * energy
+    if k0_d is None:
+        flip = xp.where(xp.abs(re) > _FLAT, re < 0, xp.where(sure, flux < 0, im > 0))
+    else:
+        decaying = xp.where(xp.abs(re) > _FLAT, re < 0, im > 0)
+        flip = xp.where((xp.abs(im) > xp.abs(re)) & sure, flux < 0, decaying)
+        flip = flip != _grows(xp, xp.where(flip, -q, q), k0_d)
+    if active is not True:
+        flip = flip & active
+    return xp.where(flip, -q, q), flip
 
 
 def boundary_kz(xp, eps, k_par_sq, medium=None):

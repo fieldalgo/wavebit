@@ -27,7 +27,8 @@ Stages (matching the legacy chain, kept as one function each to make bit-parity 
 from .backend import (array_namespace, as_array, check_finite, division_at_a_cutoff,
                       eig)
 from .conventions import (boundary_kz, half_space_medium, incident_column, incident_kz,
-                          layer_root, order_azimuth, order_frame_sign)
+                          layer_label_rule, layer_root, order_azimuth, order_frame_sign,
+                          power_down_labels)
 from .enums import Answers, answers_of
 from .power import (incident_power, net_power, power_for_real_k,
                     sp_incident_power, wave_power)
@@ -84,7 +85,37 @@ def _block(xp, rows):
     return xp.concat([xp.concat(r, axis=1) for r in rows], axis=0)
 
 
-def layer_modes_1d(xp, tetm_index, kx, I, epx_conv, epy_conv, epz_conv_i, C, mu=None, k0_d=None):
+def mode_flux(xp, X, Y):
+    """Each mode's time-averaged Poynting ``z`` component, and its energy ``sum(|psi|**2)``.
+
+    ``-Im(sum(X*conj(Y)))/2`` and ``sum(|X|**2) + sum(|Y|**2)`` over each column. The pairs
+    are the s/p boundary variables a substrate seed is written in, with ``X`` the one that
+    carries the admittance: ``(X, Y) = (H_s, E_s)`` for an s wave and ``(F_p, H_p)`` for a p
+    wave -- a pure path's partner and primary, either polarization. A downward wave of a
+    lossless half-space then comes out positive, ``Re(kz/mu)/2`` and ``Re(kz/eps)/2``. The
+    variables are tangential fields, matched across every interface, so the same form is the
+    flux of a layer mode. What :func:`~wavebit._core.conventions.power_down_labels` reads.
+    """
+    flux = -0.5 * xp.imag(xp.sum(X * xp.conj(Y), axis=0))
+    energy = xp.sum(xp.abs(X) ** 2, axis=0) + xp.sum(xp.abs(Y) ** 2, axis=0)
+    return flux, energy
+
+
+def _labels(xp, w, C, k0_d, mirrored, patterned, flux_of):
+    """A layer's roots: :func:`~wavebit._core.conventions.layer_root`, then, where the layer holds
+    a double-negative region, :func:`~wavebit._core.conventions.power_down_labels`.
+
+    ``flux_of(q)`` returns ``(flux, energy)`` of the modes under the labels ``q``. Values only:
+    the labels are decided before :func:`~wavebit._core.modal_gradient.generator` sees them.
+    """
+    q = layer_root(xp, xp.astype(w, C), k0_d, mirrored)
+    if patterned is not None:
+        q, _ = power_down_labels(xp, q, *flux_of(q), k0_d, patterned)
+    return q
+
+
+def layer_modes_1d(xp, tetm_index, kx, I, epx_conv, epy_conv, epz_conv_i, C, mu=None, k0_d=None,
+                   dng=None):
     """Eigenmodes ``(W, V, q)`` of one 1D TE / TM layer.
 
     ``W`` expands the continuous primary field (``E_y`` for TE, ``H_y`` for TM), ``V`` its
@@ -96,6 +127,13 @@ def layer_modes_1d(xp, tetm_index, kx, I, epx_conv, epy_conv, epz_conv_i, C, mu=
     Which of ``±q`` is labelled "down" is the one exception: ETM passes the layer's optical
     thickness ``k0_d`` for the labels its recursion needs, and SMM passes nothing
     (:func:`~wavebit._core.conventions.layer_root`).
+
+    ``dng`` is the engine's word on the layer's materials
+    (:class:`~wavebit._core.conventions.DoubleNegativeLayer`), or ``None`` when it said nothing.
+    A uniform double negative is labelled by the mirror of the plain rule, as a half-space of
+    the same medium is; a patterned layer holding one is labelled per mode by its power flux
+    (:func:`~wavebit._core.conventions.layer_label_rule`). No other layer is touched, and no
+    label moves an exact answer.
 
     ``mu`` is an optional ``(mux_conv, muy_conv, muz_conv_i)`` permeability triple in the
     permittivity's own convention — ``muz_conv_i`` inverted — or ``None`` for a non-magnetic
@@ -125,6 +163,9 @@ def layer_modes_1d(xp, tetm_index, kx, I, epx_conv, epy_conv, epz_conv_i, C, mu=
     ``mu_x`` in the TM line. A scalar ``mu`` cannot tell the two apart.
     """
     mux_conv, muy_conv, muz_conv_i = (I, I, None) if mu is None else mu
+    mirrored, patterned = layer_label_rule(
+        xp, dng, (epx_conv, epy_conv, epz_conv_i),
+        None if mu is None else (mux_conv, muy_conv, muz_conv_i))
     if tetm_index == 0:  # TE
         Kx = _diag(xp, kx)
         # `muz_conv_i` sits between the K factors exactly as `epz_conv_i` does in the TM
@@ -136,12 +177,15 @@ def layer_modes_1d(xp, tetm_index, kx, I, epx_conv, epy_conv, epz_conv_i, C, mu=
             A = mux_conv @ A
         from .modal_gradient import _stop, generator
         w, W = eig(_stop(A))
-        q = generator(xp, A, w, W, layer_root(xp, xp.astype(w, C), k0_d), square_root=True)
         # `V = W * q` is the mu = 1 form; the general one divides out the same `mu_x` the
         # operator multiplied in, which is what the TM branch does with `eps_x`. Branched
         # rather than inverting an identity: `inv(I) @ W` is bit-identical but costs an
         # O(n**3) inverse a non-magnetic solve never paid.
         base = W if mu is None else xp.linalg.inv(mux_conv) @ W
+        q = generator(xp, A, w, W,
+                      _labels(xp, w, C, k0_d, mirrored, patterned,
+                              lambda q: mode_flux(xp, base * q, W)),
+                      square_root=True)
         V = base @ q if q.ndim == 2 else base * q
     elif tetm_index == 1:  # TM
         # `- muy_conv` is `- I` to the bit when non-magnetic: the fallback above binds
@@ -150,9 +194,13 @@ def layer_modes_1d(xp, tetm_index, kx, I, epx_conv, epy_conv, epz_conv_i, C, mu=
         from .modal_gradient import _stop, generator
         operator = epx_conv @ B
         w, W = eig(_stop(operator))
-        q = generator(xp, operator, w, W, layer_root(xp, xp.astype(w, C), k0_d),
-                      square_root=True)
         base = xp.linalg.inv(epx_conv) @ W
+        # TM's primary is `H_y` (the `H_p` of the s/p pair) and its partner the `F_p`, so the
+        # partner leads, as it does for TE's `H_s`.
+        q = generator(xp, operator, w, W,
+                      _labels(xp, w, C, k0_d, mirrored, patterned,
+                              lambda q: mode_flux(xp, base * q, W)),
+                      square_root=True)
         V = base @ q if q.ndim == 2 else base * q
     else:
         raise ValueError(f'tetm_index must be 0 (TE) or 1 (TM), got {tetm_index!r}')
@@ -160,7 +208,7 @@ def layer_modes_1d(xp, tetm_index, kx, I, epx_conv, epy_conv, epz_conv_i, C, mu=
 
 
 def layer_modes_1d_conical(xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv_i, C,
-                           mu=None, k0_d=None):
+                           mu=None, k0_d=None, dng=None):
     """Raw (unrotated) eigenmodes of one conical 1D layer.
 
     Returns ``(W1, W2, q1, q2, V_11, V_12, V_21, V_22)`` — the two decoupled mode families and
@@ -188,9 +236,9 @@ def layer_modes_1d_conical(xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv
     reaches :func:`~wavebit._core.backend.check_finite`, whose message prescribes the one-ULP
     detune — where the old spelling died in LAPACK with no advice.
 
-    ``mu`` is the optional ``(mux_conv, muy_conv, muz_conv_i)`` triple and ``k0_d`` the label
-    choice :func:`layer_modes_1d` documents, ``None`` for a non-magnetic layer and for the
-    bounded roots respectively.
+    ``mu`` is the optional ``(mux_conv, muy_conv, muz_conv_i)`` triple and ``k0_d`` / ``dng``
+    the label choice :func:`layer_modes_1d` documents, ``None`` for a non-magnetic layer, for
+    the bounded roots and for no word on a double negative respectively.
 
     **Why the two families still decouple with a permeability**, which is the one thing here
     that had to be checked rather than assumed. Written out, the coupled ``Omega_L @ Omega_R``
@@ -218,6 +266,9 @@ def layer_modes_1d_conical(xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv
     since before there was a permeability to put in one of them.
     """
     mux_conv, muy_conv, muz_conv_i = (I, I, None) if mu is None else mu
+    mirrored, patterned = layer_label_rule(
+        xp, dng, (epx_conv, epy_conv, epz_conv_i),
+        None if mu is None else (mux_conv, muy_conv, muz_conv_i))
     # `A` is Faraday's row and takes `muz_i` between the K factors; `B` is Ampere's and keeps
     # `epz_i` where it always was. `Kx2` is `Kx @ Kx` for a diagonal Kx, kept as the diagonal
     # build where there is no mu_zz so the non-magnetic product is the one it was.
@@ -228,9 +279,22 @@ def layer_modes_1d_conical(xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv
     operator2 = Ky2 + B @ epx_conv
     w1, W1 = eig(_stop(operator1))
     w2, W2 = eig(_stop(operator2))
-    q1 = generator(xp, operator1, w1, W1, layer_root(xp, xp.astype(w1, C), k0_d),
+
+    def family_flux(W_f, w_f, slot):
+        # Unrotated, a family-1 mode is `H_s = W1` against `E_s = V_11 = mu_x W1 q1/wA`, and a
+        # family-2 mode `F_p = W2` against `H_p = V_22 = eps_x W2 q2/wB`, the blocks built below;
+        # the per-order s/p rotation leaves the flux as it is. Formed only when it is read.
+        def of(q):
+            with division_at_a_cutoff():
+                other = (slot @ W_f) * (q / (w_f - Ky2[0, 0]))
+            return mode_flux(xp, W_f, other)
+        return of
+
+    q1 = generator(xp, operator1, w1, W1,
+                   _labels(xp, w1, C, k0_d, mirrored, patterned, family_flux(W1, w1, mux_conv)),
                    square_root=True)
-    q2 = generator(xp, operator2, w2, W2, layer_root(xp, xp.astype(w2, C), k0_d),
+    q2 = generator(xp, operator2, w2, W2,
+                   _labels(xp, w2, C, k0_d, mirrored, patterned, family_flux(W2, w2, epx_conv)),
                    square_root=True)
 
     ky = Ky[0, 0]                    # Ky == ky * I on this path (single y order)
@@ -320,7 +384,7 @@ def _layer_mu(I, mu_all, layer_index):
 def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
              epx_conv_all, epy_conv_all, epz_conv_i_all,
              incidence_side='top', answers=Answers.EFFICIENCY, lit=None,
-             mu=None, mu_top=1.0, mu_bot=1.0, eps_top=None, eps_bot=None, phi=None):
+             mu=None, mu_top=1.0, mu_bot=1.0, eps_top=None, eps_bot=None, phi=None, dng=None):
     """Solve a 1D grating stack for reflection/transmission diffraction efficiency.
 
     Args:
@@ -370,6 +434,13 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
             exactly at ``kx == 0`` has ``s_hat = +y``), or ``pi``, which the engine passes at
             normal incidence from a negative-index medium (``s_hat = -y`` there, the limit of
             ``theta -> 0+``).
+        dng: per layer, in the same positive-z list order as ``thickness``, the engine's word
+            on its materials (:class:`~wavebit._core.conventions.DoubleNegativeLayer`: does it
+            hold a double-negative region, is it one medium), or ``None`` for no word. ``None``
+            for the whole stack is a scene in which no layer can be one. Only the labels of a
+            layer's modes read it (:func:`layer_modes_1d`), so it moves no exact answer, only
+            how well the recursion is conditioned; it reverses with the layers under backside
+            incidence.
 
     Returns:
         ``(de_ri, de_ti, power_entering)`` — reflected / transmitted efficiency arrays,
@@ -394,8 +465,9 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
         # `mu` reverses with the layers it belongs to -- `z -> -z` leaves a layer's in-plane
         # tensor alone whether it is eps or mu -- so it is the same mirror, three stacks wider.
         (n_top, n_bot, thickness, epx_conv_all, epy_conv_all, epz_conv_i_all,
-         *mu_all) = _mirrored_scene(n_top, n_bot, thickness,
-                                    epx_conv_all, epy_conv_all, epz_conv_i_all, *mu_all)
+         *mu_all, dng) = _mirrored_scene(n_top, n_bot, thickness,
+                                         epx_conv_all, epy_conv_all, epz_conv_i_all, *mu_all,
+                                         dng)
         # The half-spaces swap with the indices they belong to -- all three quantities of
         # each, or the mirrored scene takes its permittivity from the far side.
         mu_top, mu_bot = mu_bot, mu_top
@@ -455,7 +527,8 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
         # this recursion inverts a transmission into the medium below, so a layer's `+`
         # modes have to be the waves that medium receives.
         W, V, q = layer_modes_1d(xp, tetm_index, kx, I, epx_conv, epy_conv, epz_conv_i, C,
-                                 mu=layer_mu, k0_d=k0*d)
+                                 mu=layer_mu, k0_d=k0*d,
+                                 dng=None if dng is None else dng[layer_index])
 
         from .modal_gradient import exponential
         X = exponential(xp, q, -k0*d)
@@ -586,7 +659,7 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
 def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                      epx_conv_all, epy_conv_all, epz_conv_i_all,
                      *, phi, incidence_side='top', answers=Answers.EFFICIENCY, lit=None,
-                     mu=None, mu_top=1.0, mu_bot=1.0, eps_top=None, eps_bot=None):
+                     mu=None, mu_top=1.0, mu_bot=1.0, eps_top=None, eps_bot=None, dng=None):
     """Solve a general 1D grating (arbitrary azimuth/polarization) for the given ``psi``.
 
     The conical case couples the s and p polarizations, so the per-layer modes and the boundary
@@ -600,7 +673,8 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickne
     :func:`~wavebit._core.conventions.incident_sp_amplitudes`.
 
     ``mu`` / ``mu_top`` / ``mu_bot`` / ``eps_top`` / ``eps_bot`` are the permeability and the
-    half-space terms :func:`solve_1d` documents, in the same three slots
+    half-space terms :func:`solve_1d` documents, and ``dng`` the per-layer word it documents,
+    in the same three slots
     (:func:`layer_modes_1d_conical` says why the coupled 1D operator still takes three where
     the 2D path takes five). Non-magnetic throughout is bit-identical to the arithmetic that
     predates them.
@@ -611,8 +685,9 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickne
         # `mu` reverses with its layers and the half-space triples swap, exactly as in
         # :func:`solve_1d`; the mirror is one function and takes three more stacks.
         (n_top, n_bot, thickness, epx_conv_all, epy_conv_all, epz_conv_i_all,
-         *mu_all) = _mirrored_scene(n_top, n_bot, thickness,
-                                    epx_conv_all, epy_conv_all, epz_conv_i_all, *mu_all)
+         *mu_all, dng) = _mirrored_scene(n_top, n_bot, thickness,
+                                         epx_conv_all, epy_conv_all, epz_conv_i_all, *mu_all,
+                                         dng)
         mu_top, mu_bot = mu_bot, mu_top
         eps_top, eps_bot = eps_bot, eps_top
     kx = as_array(xp, kx)
@@ -674,7 +749,7 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickne
         # The ETM's labels, for the reason :func:`solve_1d` gives.
         W1, W2, q1, q2, V_11, V_12, V_21, V_22 = layer_modes_1d_conical(
             xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv_i, C, mu=layer_mu,
-            k0_d=k0*d)
+            k0_d=k0*d, dng=None if dng is None else dng[layer_index])
 
         from .modal_gradient import exponential, combine
         X_1 = exponential(xp, q1, -k0*d)

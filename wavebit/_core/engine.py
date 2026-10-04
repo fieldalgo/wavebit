@@ -21,8 +21,8 @@ from . import factorization as _fac
 from . import anisotropy as _anisotropy
 from . import lattice as _lattice
 from .backend import _concrete, _device_of, array_namespace, as_array, check_input_precision, checked_float
-from .conventions import (_CHI_POLARIZATION_CLASH, _COMPLEX_CHI, _DIRECTION_CLASH,
-                          _PSI_POLARIZATION_CLASH, _TETM_INCIDENCE_CLASH,
+from .conventions import (DoubleNegativeLayer, _CHI_POLARIZATION_CLASH, _COMPLEX_CHI,
+                          _DIRECTION_CLASH, _PSI_POLARIZATION_CLASH, _TETM_INCIDENCE_CLASH,
                           centre_parity, corner_column, swap_fourier_origin, incident_phase_index,
                           incident_sp_amplitudes, lit_orders, order_window, signed_index,
                           parse_order_pair, reject_complex_angle, transverse_component_problem,
@@ -2829,7 +2829,7 @@ class CoreSolveMixin:
         return None if mu is None else tuple(mu)[:3]
 
     def _solve_1d(self, epx_conv_all, epy_conv_all, epz_conv_i_all,
-                  mu=None, mu_top=None, mu_bot=None, eps_top=None, eps_bot=None):
+                  mu=None, mu_top=None, mu_bot=None, eps_top=None, eps_bot=None, dng=None):
         if self._polarization is not None:
             # Unreachable through solve — `_assign_grating_type` sends a structure with a
             # pair to the conical path, which carries both polarizations — so this only
@@ -2860,10 +2860,11 @@ class CoreSolveMixin:
             lit=self._kernel_lit(), mu=self._mu_1d(mu),
             mu_top=1.0 if mu_bot is None else mu_bot,
             mu_bot=1.0 if mu_top is None else mu_top,
-            eps_top=eps_bot, eps_bot=eps_top))
+            eps_top=eps_bot, eps_bot=eps_top, dng=dng))
 
     def _solve_1d_conical(self, epx_conv_all, epy_conv_all, epz_conv_i_all,
-                          mu=None, mu_top=None, mu_bot=None, eps_top=None, eps_bot=None):
+                          mu=None, mu_top=None, mu_bot=None, eps_top=None, eps_bot=None,
+                          dng=None):
         solve = self._solve_fn('conical')
         self._formulation_assigned = Formulation.TWO_FIELD
         wavelength = self.wavelength
@@ -2875,13 +2876,13 @@ class CoreSolveMixin:
             answers=self._answers, lit=self._kernel_lit(), mu=self._mu_1d(mu),
             mu_top=1.0 if mu_bot is None else mu_bot,
             mu_bot=1.0 if mu_top is None else mu_top,
-            eps_top=eps_bot, eps_bot=eps_top))
+            eps_top=eps_bot, eps_bot=eps_top, dng=dng))
 
     def _solve_2d(self, epx_conv_all, epy_conv_all, epz_conv_i_all,
                  epxy_conv_all=None, epyx_conv_all=None,
                  epxz_conv_all=None, epyz_conv_all=None,
                  epzx_conv_all=None, epzy_conv_all=None, mu=None, mu_top=None, mu_bot=None,
-                 eps_top=None, eps_bot=None):
+                 eps_top=None, eps_bot=None, dng=None):
         # None means no explicit magnetic half-space; numeric defaults resolve
         # only at the kernel boundary, so tracing never branches on mu values.
         wavelength = self.wavelength
@@ -2910,7 +2911,7 @@ class CoreSolveMixin:
             answers=self._answers, lit=self._kernel_lit(), mu=mu,
             mu_top=1.0 if mu_bot is None else mu_bot,
             mu_bot=1.0 if mu_top is None else mu_top,
-            eps_top=eps_bot, eps_bot=eps_top))
+            eps_top=eps_bot, eps_bot=eps_top, dng=dng))
 
 
 # The rules a modeling path builds on every structure it accepts, its default first.
@@ -3675,15 +3676,19 @@ class CoreFactorizationMixin:
         mu = swap_fourier_origin(mu, *window)
         return self._solve_conv(
             *eps, mu=mu,
-            mu_top=mu_top, mu_bot=mu_bot, eps_top=eps_top, eps_bot=eps_bot)
+            mu_top=mu_top, mu_bot=mu_bot, eps_top=eps_top, eps_bot=eps_bot,
+            layer_dng=self._layer_double_negative(like=epx_conv_all) if mu is not None else None)
 
     @device_scoped
     def _solve_conv(self, epx_conv_all, epy_conv_all, epz_conv_i_all,
                    epxy_conv_all=None, epyx_conv_all=None,
                    epxz_conv_all=None, epyz_conv_all=None,
                    epzx_conv_all=None, epzy_conv_all=None, mu=None,
-                   mu_top=None, mu_bot=None, eps_top=None, eps_bot=None):
-        """Solve kernel-frame matrices, as returned by the private Fourier builders."""
+                   mu_top=None, mu_bot=None, eps_top=None, eps_bot=None, layer_dng=None):
+        """Solve kernel-frame matrices, as returned by the private Fourier builders.
+
+        ``layer_dng`` is :meth:`_layer_double_negative`, which only labels modes; see there.
+        """
         # Half-space terms handed in here need not be the scene's materials, which the setters
         # already checked; a magnetic pair is held to the same refusal of an active, propagating
         # double negative.
@@ -3696,7 +3701,8 @@ class CoreFactorizationMixin:
             return self._solve_conv_signed(
                 epx_conv_all, epy_conv_all, epz_conv_i_all, epxy_conv_all, epyx_conv_all,
                 epxz_conv_all, epyz_conv_all, epzx_conv_all, epzy_conv_all, mu=mu,
-                mu_top=mu_top, mu_bot=mu_bot, eps_top=eps_top, eps_bot=eps_bot)
+                mu_top=mu_top, mu_bot=mu_bot, eps_top=eps_top, eps_bot=eps_bot,
+                layer_dng=layer_dng)
 
     #: The sides (``'top'`` / ``'bot'``) whose half-space index a ``solve_conv`` pair signed, for
     #: as long as :meth:`_indices_signed_by_pairs` holds them, so that
@@ -3760,7 +3766,8 @@ class CoreFactorizationMixin:
                            epxy_conv_all=None, epyx_conv_all=None,
                            epxz_conv_all=None, epyz_conv_all=None,
                            epzx_conv_all=None, epzy_conv_all=None, mu=None,
-                           mu_top=None, mu_bot=None, eps_top=None, eps_bot=None):
+                           mu_top=None, mu_bot=None, eps_top=None, eps_bot=None,
+                           layer_dng=None):
         """:meth:`_solve_conv` once the half-space indices carry the pairs' signs."""
         before = self._grating_type
         self._assign_grating_type()
@@ -3807,16 +3814,17 @@ class CoreFactorizationMixin:
         if self._grating_type == 0:
             result_dict = self._solve_1d(epx_conv_all, epy_conv_all, epz_conv_i_all,
                                          mu=mu, mu_top=mu_top, mu_bot=mu_bot,
-                                         eps_top=eps_top, eps_bot=eps_bot)
+                                         eps_top=eps_top, eps_bot=eps_bot, dng=layer_dng)
         elif self._grating_type == 1:
             result_dict = self._solve_1d_conical(epx_conv_all, epy_conv_all, epz_conv_i_all,
                                                  mu=mu, mu_top=mu_top, mu_bot=mu_bot,
-                                                 eps_top=eps_top, eps_bot=eps_bot)
+                                                 eps_top=eps_top, eps_bot=eps_bot,
+                                                 dng=layer_dng)
         else:
             result_dict = self._solve_2d(epx_conv_all, epy_conv_all, epz_conv_i_all,
                                          epxy_conv_all, epyx_conv_all, *z_row, mu=mu,
                                          mu_top=mu_top, mu_bot=mu_bot,
-                                         eps_top=eps_top, eps_bot=eps_bot)
+                                         eps_top=eps_top, eps_bot=eps_bot, dng=layer_dng)
 
         # The boundary spectra and the per-order Cartesian vectors are one arithmetic
         # (`ordinary_spectra`), read off the packed amplitudes before any `ResultSub` exists, so
@@ -5625,6 +5633,125 @@ class CoreFactorizationMixin:
             return self._mu is not None
         return any(m.is_magnetic for m in self._structure_materials())
 
+    def _layer_double_negative(self, like=None):
+        """Per layer, what its materials say to the label rules: the kernels' ``dng``.
+
+        A tuple of :class:`~wavebit._core.conventions.DoubleNegativeLayer` in the structure's
+        layer order -- does the layer hold a region with ``Re(epsilon) < 0`` and ``Re(mu) < 0``
+        (the test :func:`~wavebit._core.conventions.double_negative` puts to a half-space; for a
+        tensor, every diagonal entry of each in the lab frame -- the principal values when the
+        tensor is diagonal, so a rotated hyperbolic tensor whose diagonal is negative counts),
+        and is it one uniform medium -- each ``True``, ``False``, or the traced boolean itself
+        when the raster or a material is a tracer. ``None`` when no layer is magnetic: no layer can be one.
+
+        Read from the materials, where the answer is concrete whenever they are -- under
+        ``jax.jit`` too, unless the raster itself is traced -- so a scene without a double
+        negative passes ``False`` and its kernels keep their arithmetic, structurally, even in a
+        trace. The convolution matrices are traced there whatever the materials are.
+
+        **It only labels modes.** Which of a mode's ``+-q`` the recursion calls ``+`` moves no
+        exact answer, only conditioning (``docs/connecting-algorithms.md`` section 11). That is
+        what makes it safe for :meth:`solve_conv` to read the scene's materials for matrices it
+        was handed (``like``: those matrices, whose layer count must match, or nothing is said):
+        there a layer the scene calls ordinary says nothing, uniformity is read off the
+        matrices, and a wrong word costs digits in the worst case, never the answer.
+        """
+        if not self._layers_are_magnetic() or self._structure is None:
+            return None
+        # A concrete raster stays concrete inside a trace (`_eager`), so a scene with no double
+        # negative passes a Python `False` and the kernels take no `where` for it.
+        with self._eager():
+            return self._read_layer_double_negative(like)
+
+    def _read_layer_double_negative(self, like):
+        """:meth:`_layer_double_negative`'s reading of the materials, under ``_eager``."""
+        structure = self._structure
+
+        def negative(value, tensor_ndim):
+            # `tensor_ndim` is the rank at which a value holds a 3x3 tensor per point -- 5 for a
+            # raster, 2 for a material -- so a 3x3 scalar raster is not read as one.
+            xp = array_namespace(value) if hasattr(value, 'shape') else _np
+            value = value if hasattr(value, 'shape') else _np.asarray(value)
+            if value.ndim == tensor_ndim:
+                return xp.all(xp.stack([xp.real(value[..., i, i]) for i in range(3)], axis=-1)
+                              < 0, axis=-1)
+            return xp.real(value) < 0
+
+        def negative_material(value):
+            # One flag for a material's value -- a scalar, three principal values or a 3x3
+            # tensor (`anisotropy.as_tensor`) -- with every lab-frame diagonal entry negative. Read
+            # component by component: three principal values compared at once are three flags,
+            # which reached the label rules as a (3,) mask and broadcast against the modes.
+            shape = _anisotropy.tensor_shape(value)
+            if shape == ():
+                return read(negative(value, 2))
+            components = ([value[i] for i in range(3)] if shape == (3,)
+                          else [value[i][i] for i in range(3)])
+            out = True
+            for component in components:
+                out = both(out, read(negative(component, 2)))
+            return out
+
+        def read(flag):
+            # A Python bool where the value can be read, the traced flag itself where it cannot.
+            readable = _concrete(flag)
+            return flag if readable is None else readable
+
+        def both(a, b):
+            # `a and b` over Python bools and traced flags. Every readable flag is a Python
+            # bool by now, so flags of two namespaces -- a NumPy scalar from a Python number, a
+            # Torch tensor from a tensor material -- are never combined with `&`.
+            if a is False or b is False:
+                return False
+            return b if a is True else a if b is True else a & b
+
+        def either(a, b):
+            if a is True or b is True:
+                return True
+            return b if a is False else a if b is False else a | b
+
+        def equal(values):
+            # Every value equal to the first: one uniform medium. Values are arrays or numbers.
+            first, out = values[0], True
+            for value in values[1:]:
+                xp = array_namespace(value) if hasattr(value, 'shape') else (
+                    array_namespace(first) if hasattr(first, 'shape') else _np)
+                out = both(out, read(xp.all(xp.asarray(value == first))))
+            return out
+
+        layers = []
+        if self._modeling_path == ModelingPath.RASTER:
+            xp = self.xp
+            region = negative(structure, 5) & negative(self._mu, 5)
+            points = int(_np.prod([int(n) for n in region.shape[1:]]))
+            for i in range(region.shape[0]):
+                eps_i = xp.reshape(structure[i], (points, -1))
+                mu_i = xp.reshape(self._mu[i], (points, -1))
+                layers.append((read(xp.any(region[i])),
+                               read(xp.all(eps_i == eps_i[:1]) & xp.all(mu_i == mu_i[:1]))))
+        else:
+            for layer in structure:
+                materials = [as_material(value) for value in [layer.get('background', 1.0)] + [
+                    shape.get('material', 1.0) for shape in layer.get('shapes', [])]]
+                holds = False
+                for material in materials:
+                    holds = either(holds, both(negative_material(material.epsilon),
+                                               negative_material(material.mu_value)))
+                uniform = both(equal([m.epsilon for m in materials]),
+                               equal([m.mu_value for m in materials]))
+                layers.append((holds, uniform))
+        if like is not None and len(layers) != len(like):
+            return None
+        out = []
+        for holds, uniform in layers:
+            if like is not None:
+                # Matrices handed in from outside: an ordinary layer of the scene says nothing,
+                # and uniformity is read off the matrices themselves.
+                out.append(None if holds is False else DoubleNegativeLayer(holds))
+            else:
+                out.append(DoubleNegativeLayer(holds, uniform))
+        return tuple(out)
+
     def _structure_materials(self):
         """Every :class:`~wavebit._core.domain.Material` named inside a shape structure."""
         out = []
@@ -5725,6 +5852,8 @@ class CoreFactorizationMixin:
         eps = self._eps_conv_matrices(geometry)
         if not self._is_magnetic():
             return self._solve_conv(*eps)
-        return self._solve_conv(*eps, mu=self._mu_conv_matrices(geometry),
+        mu = self._mu_conv_matrices(geometry)
+        return self._solve_conv(*eps, mu=mu,
                                mu_top=self._top.mu, mu_bot=self._bot.mu,
-                               eps_top=self._top.epsilon, eps_bot=self._bot.epsilon)
+                               eps_top=self._top.epsilon, eps_bot=self._bot.epsilon,
+                               layer_dng=None if mu is None else self._layer_double_negative())

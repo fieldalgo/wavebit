@@ -17,9 +17,10 @@ to the conical versions, so this module reuses ``solve_1d``'s boundary init and
 """
 from .backend import (_concrete, _readable, array_namespace, as_array, carries_autodiff,
                       check_mode_cutoff, checked_float, division_at_a_cutoff, eig)
-from .conventions import boundary_kz, half_space_medium, layer_root, order_azimuth
+from .conventions import (boundary_kz, half_space_medium, layer_label_rule, layer_root,
+                          order_azimuth, power_down_labels)
 from .enums import Answers, answers_of
-from .solve_1d import _block, _diag, _is_backside, _mirrored_scene, final_matching
+from .solve_1d import _block, _diag, _is_backside, _mirrored_scene, final_matching, mode_flux
 
 # Engage the coupled-cluster rebuild (see `_rebuild_grazing_cluster`) below this
 # min|w|/max|w| ratio. Well above `backend._CUTOFF_REL` (the warn threshold) on purpose,
@@ -73,7 +74,24 @@ def order_grid_kxy(xp, kx, ky):
             xp.broadcast_to(xp.reshape(ky, (-1, 1)), (n_orders_v, n_orders_u)))
 
 
-def _rebuild_grazing_cluster(xp, w, W, V, q, Omega_L, Omega_R, k0_d=None):
+def mode_flux_2d(xp, W, V):
+    """:func:`~wavebit._core.solve_1d.mode_flux` of 2D layer modes, from the unrotated pair.
+
+    ``W = [Ex; Ey]`` and ``V`` its partner, which :func:`sp_modes_2d` turns into ``(E_s, F_p) =
+    (Ey, Ex)`` and ``(H_s, H_p) = (V_x, V_y)`` at zero azimuth; the per-order rotation it
+    applies otherwise leaves the flux as it is. So ``X = (V_x, Ex)`` against ``Y = (Ey, V_y)``.
+    """
+    n = W.shape[0] // 2
+    return mode_flux(xp, xp.concat([V[:n], W[:n]], axis=0), xp.concat([W[n:], V[n:]], axis=0))
+
+
+def _power_down_2d(xp, W, V, q, k0_d, patterned):
+    """:func:`~wavebit._core.conventions.power_down_labels` on 2D modes; ``V`` turns with ``q``."""
+    q, flip = power_down_labels(xp, q, *mode_flux_2d(xp, W, V), k0_d, patterned)
+    return xp.where(flip, -V, V), q
+
+
+def _rebuild_grazing_cluster(xp, w, W, V, q, Omega_L, Omega_R, k0_d=None, mirrored=None):
     """Re-derive the grazing eigenvalue cluster from the coupled first-order problem.
 
     Returns ``(W, V, q)`` as NumPy arrays with the cluster columns replaced, ``None`` to
@@ -105,8 +123,8 @@ def _rebuild_grazing_cluster(xp, w, W, V, q, Omega_L, Omega_R, k0_d=None):
     jointly independent (both matrices are inverted downstream); a ``+-`` twin scores ~0 on
     both sides once its partner is in and is never double-picked. Per column the member is
     branch-fixed to the root :func:`~wavebit._core.conventions.layer_root` takes for the rest
-    of the layer (``k0_d`` is passed through, so an ETM layer keeps one rule), and kept
-    at ``eig``'s joint normalization: a mode may then carry a tiny E-part (a pure-H graze)
+    of the layer (``k0_d`` and ``mirrored`` are passed through, so an ETM layer and a uniform
+    double negative keep one rule), and kept at ``eig``'s joint normalization: a mode may then carry a tiny E-part (a pure-H graze)
     or a tiny H-part (the classic E-graze) but never both, which is the structure the
     interface inversions tolerate — normalizing either part to unit instead was measured to
     plant an inconsistent O(1/eps) column and lose three digits.
@@ -166,7 +184,7 @@ def _rebuild_grazing_cluster(xp, w, W, V, q, Omega_L, Omega_R, k0_d=None):
     k0_d = None if k0_d is None else checked_float(k0_d)
     for i, col in enumerate(sel):
         mu_i = mu_e[col]
-        q_i = layer_root(np, np.asarray([mu_i ** 2]), k0_d)[0]
+        q_i = layer_root(np, np.asarray([mu_i ** 2]), k0_d, mirrored)[0]
         gE, gH = g[:k, col], g[k:, col]
         if abs(q_i - mu_i) > abs(q_i + mu_i):
             gH = -gH                             # took the -q member; its H part flips
@@ -180,7 +198,7 @@ def _rebuild_grazing_cluster(xp, w, W, V, q, Omega_L, Omega_R, k0_d=None):
 
 
 def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epyx_conv, C,
-                   mu=None, k0_d=None):
+                   mu=None, k0_d=None, dng=None):
     """Raw (unrotated) eigenmodes ``(W, V, q)`` of one 2D layer.
 
     ``W`` is the ``[Ex; Ey]`` mode matrix and ``q`` the modal decay constants; without ``k0_d``
@@ -188,7 +206,8 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
     (:func:`solve_2d`) and SMM (:mod:`wavebit._core.scattering`) connecting algorithms, which
     differ only in which of ``±q`` they label "down": ETM passes the layer's optical thickness
     ``k0_d`` (:func:`~wavebit._core.conventions.layer_root`, as in
-    :func:`~wavebit._core.solve_1d.layer_modes_1d`).
+    :func:`~wavebit._core.solve_1d.layer_modes_1d`). ``dng`` is the engine's word on a
+    double-negative region, read as :func:`~wavebit._core.solve_1d.layer_modes_1d` reads it.
 
     The two blocks are the factors of ``d2E/dz2 = P Q E``: ``Omega2_LR`` is the product written
     out, ``Omega_R`` the right factor kept so ``V`` can recover ``H``. **They must carry the
@@ -231,6 +250,10 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
     """
     mux_conv, muy_conv, muz_conv_i, muxy_conv, muyx_conv = (
         (I, I, None, None, None) if mu is None else mu)
+    mirrored, patterned = layer_label_rule(
+        xp, dng, (epx_conv, epy_conv, epz_conv_i),
+        None if mu is None else (mux_conv, muy_conv, muz_conv_i),
+        (epxy_conv, epyx_conv, muxy_conv, muyx_conv))
     kx, ky = xp.linalg.diagonal(Kx), xp.linalg.diagonal(Ky)
 
     def left_blocks():
@@ -292,10 +315,13 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
         del Omega2_LR
     if Omega_R is None:
         Omega_R = right_factor()
-    q = layer_root(xp, xp.astype(w, C), k0_d)
+    q = layer_root(xp, xp.astype(w, C), k0_d, mirrored)
     V = Omega_R @ W
     with division_at_a_cutoff():                 # q == 0 on a light line; rebuilt or refused below
         V = V / q
+    if patterned is not None:
+        # Before the generator, which must see the labels the layer keeps.
+        V, q = _power_down_2d(xp, W, V, q, k0_d, patterned)
 
     # At an exact Rayleigh point (an order on a layer's light line, q -> 0) this V is wrong
     # with no arithmetic to blame: the grazing cluster's eigvecs of the *product* Omega2 are
@@ -314,7 +340,7 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
         Omega_L = _block(xp, [[-Cc, B], [-D, E]])
         del B, D, Cc, E
         try:
-            rebuilt = _rebuild_grazing_cluster(xp, w, W, V, q, Omega_L, Omega_R, k0_d)
+            rebuilt = _rebuild_grazing_cluster(xp, w, W, V, q, Omega_L, Omega_R, k0_d, mirrored)
         except FloatingPointError:
             raise                                # the defective-cluster refusal, on purpose
         except Exception:
@@ -323,7 +349,11 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
             # auto_detune ladder then re-solves off the point with the graph intact.
             rebuilt = None
         if rebuilt is not None:
-            return tuple(xp.astype(xp.asarray(a), C) for a in rebuilt)
+            W, V, q = (xp.astype(xp.asarray(a), C) for a in rebuilt)
+            if patterned is not None:
+                # The rebuilt cluster took `layer_root`'s labels; the per-mode rule reads them.
+                V, q = _power_down_2d(xp, W, V, q, k0_d, patterned)
+            return W, V, q
     check_mode_cutoff(xp, w)
     if differentiated:
         from .modal_gradient import generator, inverse
@@ -371,7 +401,7 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
              epx_conv_all, epy_conv_all, epz_conv_i_all,
              epxy_conv_all=None, epyx_conv_all=None,
              *, phi, incidence_side='top', answers=Answers.EFFICIENCY, lit=None,
-             mu=None, mu_top=1.0, mu_bot=1.0, eps_top=None, eps_bot=None):
+             mu=None, mu_top=1.0, mu_bot=1.0, eps_top=None, eps_bot=None, dng=None):
     """Solve a 2D grating stack for the given incidence.
 
     ``incidence`` is the resolved incident amplitude pair ``(a_s, a_p)`` at unit flux — whatever
@@ -421,9 +451,9 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
         # mu reverses with the layers it belongs to. `z -> -z` leaves a layer's in-plane tensor
         # alone whether it is eps or mu, so the mirror is the same one, with five more stacks.
         (n_top, n_bot, thickness, epx_conv_all, epy_conv_all, epz_conv_i_all,
-         epxy_conv_all, epyx_conv_all, *mu_all) = _mirrored_scene(
+         epxy_conv_all, epyx_conv_all, *mu_all, dng) = _mirrored_scene(
             n_top, n_bot, thickness, epx_conv_all, epy_conv_all, epz_conv_i_all,
-            epxy_conv_all, epyx_conv_all, *mu_all)
+            epxy_conv_all, epyx_conv_all, *mu_all, dng)
         # The half-spaces swap with the indices they belong to -- all three quantities of
         # each, or the mirrored scene would take its permittivity from the far side.
         mu_top, mu_bot = mu_bot, mu_top
@@ -494,7 +524,8 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
         # inverts a transmission into the medium below, so a layer's `+` modes have to be
         # the waves that medium receives.
         W, V, q = layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i,
-                                 epxy_conv, epyx_conv, C, mu=layer_mu, k0_d=k0*d)
+                                 epxy_conv, epyx_conv, C, mu=layer_mu, k0_d=k0*d,
+                                 dng=None if dng is None else dng[layer_index])
 
         big_W, big_V = sp_modes_2d(xp, W, V, F_c, F_s, n_orders)
         if not keep_field:

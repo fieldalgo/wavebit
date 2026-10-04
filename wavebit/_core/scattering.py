@@ -548,7 +548,7 @@ def _port_disagreement(a, b):
 def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
            epx_conv_all, epy_conv_all, epz_conv_i_all,
            incidence_side='top', answers=Answers.EFFICIENCY, lit=None,
-           mu=None, mu_top=1.0, mu_bot=1.0, eps_top=None, eps_bot=None, phi=None):
+           mu=None, mu_top=1.0, mu_bot=1.0, eps_top=None, eps_bot=None, phi=None, dng=None):
     """Solve a 1D grating stack by scattering matrices — SMM twin of :func:`solve_1d`.
 
     Same arguments and same returns as :func:`wavebit._core.solve_1d.solve_1d`, so the two are
@@ -630,7 +630,7 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
         layer_mu = _layer_mu(I, mu_all, layer_index)
         W, V, q = layer_modes_1d(xp, tetm_index, kx, I, epx_conv_all[layer_index],
                                  epy_conv_all[layer_index], epz_conv_i_all[layer_index], C,
-                                 mu=layer_mu)
+                                 mu=layer_mu, dng=None if dng is None else dng[layer_index])
         d = thickness[layer_index]
         from .modal_gradient import exponential
         X = exponential(xp, q, -k0*d)
@@ -964,7 +964,7 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
 def smm_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                    epx_conv_all, epy_conv_all, epz_conv_i_all,
                    *, phi, incidence_side='top', answers=Answers.EFFICIENCY, lit=None,
-                   mu=None, mu_top=1.0, mu_bot=1.0, eps_top=None, eps_bot=None):
+                   mu=None, mu_top=1.0, mu_bot=1.0, eps_top=None, eps_bot=None, dng=None):
     """Solve a conical 1D grating by scattering matrices — SMM twin of :func:`solve_1d_conical`.
 
     Same arguments and returns as :func:`smm_1d`; ``polarization`` is the complex amplitude
@@ -999,7 +999,7 @@ def smm_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
         W1, W2, q1, q2, V_11, V_12, V_21, V_22 = layer_modes_1d_conical(
             xp, Kx, Ky, Kx2, Ky2, I, epx_conv_all[layer_index],
             epy_conv_all[layer_index], epz_conv_i_all[layer_index], C,
-            mu=_layer_mu(I, mu_all, layer_index))
+            mu=_layer_mu(I, mu_all, layer_index), dng=None if dng is None else dng[layer_index])
         big_W, big_V = sp_modes_1d_conical(xp, F_c, F_s, W1, W2, V_11, V_12, V_21, V_22)
         W = _block(xp, [[W1, W2]])
         V = _block(xp, [[V_11, V_12], [V_21, V_22]])
@@ -1016,7 +1016,7 @@ def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
            epx_conv_all, epy_conv_all, epz_conv_i_all,
            epxy_conv_all=None, epyx_conv_all=None,
            *, phi, incidence_side='top', answers=Answers.EFFICIENCY, lit=None,
-           mu=None, mu_top=1.0, mu_bot=1.0, eps_top=None, eps_bot=None):
+           mu=None, mu_top=1.0, mu_bot=1.0, eps_top=None, eps_bot=None, dng=None):
     """Solve a 2D grating stack by scattering matrices — SMM twin of :func:`solve_2d`.
 
     Same arguments and returns as :func:`smm_1d`; ``incidence`` is the resolved complex
@@ -1056,7 +1056,8 @@ def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
             *(None if t is None else t[layer_index] for t in mu_all[2:]))
         W, V, q = layer_modes_2d(xp, Kx, Ky, I, epx_conv_all[layer_index],
                                  epy_conv_all[layer_index], epz_conv_i_all[layer_index],
-                                 epxy_conv, epyx_conv, C, mu=layer_mu)
+                                 epxy_conv, epyx_conv, C, mu=layer_mu,
+                                 dng=None if dng is None else dng[layer_index])
         big_W, big_V = sp_modes_2d(xp, W, V, F_c, F_s, n_orders)
         return big_W, big_V, q, W, V
 
