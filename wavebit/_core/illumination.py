@@ -11,8 +11,9 @@ import numpy as np
 from .backend import GainCutoffWarning, _concrete, as_array, check_finite
 from .enums import Answers, answers_of
 from .field_result import ResultFields, source_state
-from .conventions import boundary_kz, gain_cutoff_band, parse_excitation
-from .engine import _GAIN_CUTOFF_MESSAGE, _unknown_attribute, _holds_tracer
+from .conventions import boundary_kz, double_negative, gain_cutoff_band, parse_excitation
+from .engine import (_GAIN_CUTOFF_MESSAGE, _unknown_attribute, _holds_tracer,
+                     _refuse_negative_index_pair)
 from .sources import (Source, PlaneWave, OrderExcitation, GaussianBeam, ElectricDipole, source_list, _positive)
 from .source_expansion import resolve_wave, gaussian_waves, dipole_layers
 from .scattering import redheffer_star
@@ -49,9 +50,17 @@ def _host(value):
 
 
 def _plane_basis(xp, kx, ky, epsilon, mu, direction):
-    """Electric s/p columns as physical (Ex,Ey,Ez,Z0Hx,Z0Hy,Z0Hz)."""
-    kz = boundary_kz(xp, epsilon * mu, kx*kx + ky*ky)
+    """Electric s/p columns as physical (Ex,Ey,Ez,Z0Hx,Z0Hy,Z0Hz).
+
+    ``kz`` is the half-space's own root, a double negative's included (``boundary_kz``), and
+    the index normalising ``p_hat`` is signed the way the ordinary solve signs ``n_top`` /
+    ``n_bot`` (``engine._half_space_index``): negative for a double negative, so that ``p_hat``
+    follows the power rather than the phase. The outgoing spectra are physical fields whatever
+    that sign; only an input polarization would read it, and a lit double negative is refused.
+    """
+    kz = boundary_kz(xp, epsilon * mu, kx*kx + ky*ky, (epsilon, mu))
     index = xp.sqrt(epsilon * mu + 0j)
+    index = xp.where(double_negative(xp, epsilon, mu, index), -index, index)
     rho = xp.sqrt(xp.real(kx)**2 + xp.real(ky)**2)
     safe = xp.where(rho == 0, xp.ones_like(rho), rho)
     c = xp.where(rho == 0, xp.ones_like(rho), kx / safe)
@@ -440,6 +449,12 @@ class CoherentSolver:
                 waves.append(source)
         for beam in waves:
             side = beam.side
+            # A propagating double negative is supported as a far side only: the lit side's
+            # angle would have to say whether it follows the phase or the power.
+            material = scene.top if side == 'top' else scene.bot
+            if material.is_magnetic:
+                _refuse_negative_index_pair(material.epsilon, material.mu,
+                                            'top' if side == 'top' else 'bot', lit=True)
             amplitude = as_array(xp, beam.amplitude, dtype=C, device=scene._array_device)
             if amplitude.ndim != 0 or not bool(xp.all(xp.isfinite(amplitude))):
                 raise ValueError('PlaneWave amplitude must be one finite complex number.')

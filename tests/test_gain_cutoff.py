@@ -90,7 +90,7 @@ def test_a_lossy_twin_is_silent(theta_deg):
 
 
 #: Passive (``Im(eps), Im(mu) > 0``) yet ``Im(eps*mu) < 0``: ``eps*mu = -0.205 - 0.999i``.
-#: One real part is negative, so it is not the refused negative-index pair.
+#: One real part is negative, so it is not a double negative.
 _MAGNETIC_METAL = Material(-2 + 0.01j, mu=0.1 + 0.5j)
 
 
@@ -112,7 +112,7 @@ def test_a_passive_magnetic_metal_is_silent(theta_deg):
 def test_the_band_reads_the_material_not_the_radicand():
     """A passive medium with ``Re(eps), Re(mu) < 0`` has ``Im(eps*mu) < 0`` and no gain.
 
-    The function answers for it; the engine refuses such a half-space before asking
+    The function answers for it, and a solve with such a far side stays silent
     (``tests/test_negative_index_half_space.py``)."""
     from wavebit._core.conventions import gain_cutoff_band
     nim = -1 + 0.1j

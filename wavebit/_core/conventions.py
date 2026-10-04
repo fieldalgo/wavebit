@@ -273,7 +273,7 @@ def layer_root(xp, eigenvalue, k0_d=None):
     return mode_q(xp, eigenvalue) if k0_d is None else etm_mode_q(xp, eigenvalue, k0_d)
 
 
-def boundary_kz(xp, eps, k_par_sq):
+def boundary_kz(xp, eps, k_par_sq, medium=None):
     """``kz`` of a homogeneous half-space for the downward-going wave.
 
     ``exp(+i*k0*kz*z)`` travels down -- along the kernels' local ``+z``, from their entry face
@@ -292,7 +292,13 @@ def boundary_kz(xp, eps, k_par_sq):
     reaches is Maystre's. For a gain medium it is the same root as switching the gain on from
     zero. At a real ``k_par`` that gives the causal answer for ordinary weak gain away from the
     critical angle: a forward-growing wave, and evanescent gain (``|r| > 1``) under total
-    internal reflection.
+    internal reflection. That is the answer for weak, conventional gain (J. O. Grepstad and
+    J. Skaar, below), not a general one: it is contested (T. S. Mansuripur and M. Mansuripur,
+    Appl. Phys. Lett. 104, 121106 (2014); A. E. Siegman, Opt. Photon. News 21(1), 38 (2010)),
+    and it can be the wrong root for a strongly dispersive active medium (Y.-F. Chen, P. Fischer
+    and F. W. Wise, Phys. Rev. Lett. 95, 067402 (2005); B. Nistad and J. Skaar, Opt. Express 15,
+    10935 (2007)), whose root is fixed by its whole dispersion and not by ``eps`` at one
+    frequency (J. Skaar, URSI EMTS 2010, arXiv:1008.2874).
 
     The rule agrees with the principal root wherever that root lies in the closed first
     quadrant, so it is bit-identical to it at every real ``k_par`` in a passive medium. Its cut
@@ -309,8 +315,58 @@ def boundary_kz(xp, eps, k_par_sq):
 
     RETICOLO takes the same cut (``retsqrt(x, -1)``, its "coupure de Maystre"): J. P. Hugonin and
     P. Lalanne, *RETICOLO software for grating analysis*, Institut d'Optique (2005),
-    arXiv:2101.00901. The gain behaviour is that of J. Skaar, Phys. Rev. E 73, 026605 (2006),
-    and J. O. Grepstad and J. Skaar, Opt. Express 19, 21404 (2011).
+    arXiv:2101.00901. The name is that of RETICOLO's source; its manual does not use it. In print
+    the convention is ``Re(sqrt(x)) + Im(sqrt(x)) > 0``, which P. Lalanne and T. Wu,
+    arXiv:2508.10742 (2025), attribute to R. Petit (ed.), *Electromagnetic Theory of Gratings*
+    (Springer, 1980). The gain behaviour is that of J. Skaar, Phys. Rev. E 73, 026605 (2006),
+    and J. O. Grepstad and J. Skaar, Opt. Express 19, 21404 (2011), whose ``kz`` changes sign
+    only at the critical point, where this cut jumps in a gain medium.
+
+    **A double-negative medium takes the mirror of Maystre's cut.** ``eps`` is ``eps*mu`` and
+    cannot say which way the medium's own loss moves ``kz**2``. For an ordinary medium loss
+    lifts it (``Im(eps*mu)`` grows), and the limiting absorption above is Maystre's cut. With
+    ``Re(epsilon) < 0`` and ``Re(mu) < 0`` loss *lowers* it, since
+    ``Im(eps*mu) = Re(eps) Im(mu) + Im(eps) Re(mu)``: a passive double negative puts ``kz**2``
+    in the closed lower half plane, where Maystre's root advances its phase away from the
+    interface and grows wherever ``Re(kz**2) > 0`` -- the wrong root for a medium whose power
+    and phase travel opposite ways (V. G. Veselago, Sov. Phys. Usp. 10, 509 (1968)). The same
+    limiting absorption run from below takes the root with ``Im(kz) - Re(kz) > 0``, whose cut is
+    the *positive* imaginary axis of ``kz**2``, the mirror of Maystre's under
+    ``kz -> -conj(kz)``. At every real ``k_par`` in a passive double negative it is the decaying
+    root, ``Im(kz) >= 0``, and a lossless propagating order gets ``Re(kz) < 0``, so
+    ``Re(kz/mu) > 0`` and its power flows away. The decision is at least ``|kz|`` from zero
+    there, as Maystre's is for an ordinary medium.
+
+    Both cuts together are *the limiting-absorption root, with the loss applied to eps and mu
+    separately*. M. Cassier, C. Hazard and P. Joly, Commun. PDE 42, 1707 (2017) and 47, 1217
+    (2022), prove it for a lossless Drude half-space with both ``eps`` and ``mu`` dispersive: the
+    root, taken with the loss on each factor, changes sign exactly in the bands where both are
+    negative. H.-M. Nguyen and S. Sil, Commun. Math. Phys. 379, 145 (2020), put the loss on
+    ``eps`` and ``mu`` separately (for a bounded inclusion). The trigger is, in the lossless
+    limit, where a passive non-dissipative local material carries backward waves: M. Cassier,
+    P. Joly and M. Kachanovska, Comput. Math. Appl. 74, 2792 (2017), Theorem 3.34, for passive
+    materials only (their Remark 3.35). R. A. Depine and A. Lakhtakia, Optik 116, 31 (2005),
+    state the lossless mirror for a modal (C) method's eigenvalues; M. Lequime, B. Gralak,
+    S. Guenneau, M. Zerrad and C. Amra, arXiv:1312.6288 (2013), and PyMoosh's code (D. Langevin
+    et al., J. Opt. Soc. Am. B 41, A67 (2024)) state the same switch. None writes it as a cut on
+    the positive imaginary axis, and the literature has no name for that cut; "the mirror of
+    Maystre's cut" is a description. The rule assumes ``Im(eps) >= 0`` and ``Im(mu) >= 0``; the
+    effective ``Im(mu)`` of a homogenised passive medium can be negative (B. Gralak, C. R.
+    Physique 21, 343 (2020)), and then neither cut is the outgoing wave -- such a double negative
+    propagates and the engine refuses it as active.
+
+    ``medium`` is the half-space's ``(epsilon, mu)`` and selects that rule where both real parts
+    are negative; ``None`` -- a caller holding only ``eps*mu``, and every non-magnetic solve --
+    takes Maystre's cut, as does any medium with one real part non-negative. Where it is given
+    and the medium is not double negative the decision is Maystre's to the bit, and so is the
+    root. The two rules pick the same root wherever ``Re(kz**2) < 0``, so a double negative too
+    lossy to propagate anywhere (``Re(eps*mu) <= 0``) keeps its bits; they part on
+    ``Re(kz**2) >= 0``, and on the negative imaginary axis itself, Maystre's own cut, where his
+    tie-break keeps the growing root of a passive double negative. On the mirror cut itself
+    (``Re(kz**2) = 0``, ``Im(kz**2) > 0``, reachable only with gain or a complex ``k_par``) the
+    root with ``Re(kz) < 0`` is kept, Maystre's tie-break mirrored: the double-negative rule is
+    ``-conj(maystre(conj(kz**2)))`` to the bit, the ordinary rule run on the mirror medium
+    ``(-conj(eps), -conj(mu))``.
     """
     kz2 = eps - k_par_sq
     # `xp.sqrt`, not `kz2 ** 0.5`. On a negative real `kz2` -- every purely evanescent order --
@@ -321,8 +377,40 @@ def boundary_kz(xp, eps, k_par_sq):
     # `Re(kz)`, so the spelling alone decides whether a cut-off channel reports 0.0 or 1e-19.
     v = xp.sqrt(kz2)
     decision = xp.real(v) + xp.imag(v)
+    if medium is None:
+        _check_resolvable(xp, v, decision, 0.0)
+        return xp.where(decision < 0, -v, v)
+    # A selection, not arithmetic on `decision`: where the medium is not double negative
+    # `where` hands back Maystre's decision and comparison themselves, so the root is the same
+    # bits. On the double-negative side the tie goes the other way (`<=`), which makes the rule
+    # the exact mirror -conj(maystre(conj(z))), signed zeros included.
+    mirror = double_negative(xp, *medium, v)
+    decision = xp.where(mirror, xp.imag(v) - xp.real(v), decision)
     _check_resolvable(xp, v, decision, 0.0)
-    return xp.where(decision < 0, -v, v)
+    return xp.where(xp.where(mirror, decision <= 0, decision < 0), -v, v)
+
+
+def double_negative(xp, epsilon, mu, like):
+    """``Re(epsilon) < 0`` and ``Re(mu) < 0``, broadcast against ``like`` -- traceable.
+
+    The material test that sends a half-space to the mirror of Maystre's cut
+    (:func:`boundary_kz`). Decided on the material, not on ``eps*mu``: the product of a passive
+    double negative is the product of a gain medium with both real parts positive. ``epsilon``
+    and ``mu`` may be Python numbers or 0-d arrays; adding a zero of ``like``'s shape and dtype
+    puts them in its namespace, as :func:`gain_cutoff_band` does.
+    """
+    zero = xp.zeros_like(like)
+    return (xp.real(epsilon + zero) < 0) & (xp.real(mu + zero) < 0)
+
+
+def half_space_medium(epsilon, mu):
+    """A kernel's ``(eps_side, mu_side)`` as :func:`boundary_kz`'s ``medium``, or ``None``.
+
+    Structural, so a trace never branches on a value: the engine hands the kernels a half-space
+    permittivity exactly when the scene is magnetic, and only then can a medium be double
+    negative. A non-magnetic solve passes ``None`` and keeps Maystre's arithmetic, unchanged.
+    """
+    return None if epsilon is None else (epsilon, mu)
 
 
 #: The band of :func:`gain_cutoff_band`: ``|Re(kz**2)| < _GAIN_CUTOFF_RATIO * |Im(kz**2)|``.

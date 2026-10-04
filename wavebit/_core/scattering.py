@@ -64,7 +64,7 @@ from typing import NamedTuple
 import numpy as np
 
 from .backend import _device_of, array_namespace, as_array, check_finite
-from .conventions import boundary_kz, order_azimuth, order_frame_sign
+from .conventions import boundary_kz, half_space_medium, order_azimuth, order_frame_sign
 from .enums import Answers, answers_of
 from .conventions import incident_column
 from .solve_1d import (_block, _diag, _is_backside, _layer_mu, _pack,
@@ -591,8 +591,8 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
 
     # Boundary branches come from the same place the ETM path takes them, so the two
     # algorithms answer identically.
-    kz_top = boundary_kz(xp, n_top ** 2, kx ** 2)
-    kz_bot = boundary_kz(xp, n_bot ** 2, kx ** 2)
+    kz_top = boundary_kz(xp, n_top ** 2, kx ** 2, half_space_medium(eps_top, mu_top))
+    kz_bot = boundary_kz(xp, n_bot ** 2, kx ** 2, half_space_medium(eps_bot, mu_bot))
     if eps_top is None:
         eps_top = n_top ** 2 / mu_top     # n stays the index; eps carries the mu
     if eps_bot is None:
@@ -880,8 +880,10 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
     big_I = xp.astype(xp.eye(2 * n_orders), C)
 
     k_par_sq = kx_g ** 2 + ky_g ** 2
-    kz_top = xp.reshape(boundary_kz(xp, n_top ** 2, k_par_sq), (-1,))
-    kz_bot = xp.reshape(boundary_kz(xp, n_bot ** 2, k_par_sq), (-1,))
+    kz_top = xp.reshape(boundary_kz(xp, n_top ** 2, k_par_sq,
+                                    half_space_medium(eps_top, mu_top)), (-1,))
+    kz_bot = xp.reshape(boundary_kz(xp, n_bot ** 2, k_par_sq,
+                                    half_space_medium(eps_bot, mu_bot)), (-1,))
     # `n` stays the refractive index and `eps` carries the `mu`, so the two are recoverable
     # from each other -- but only up to rounding, since the index reached this call through a
     # square root. The engine holds both numbers and passes them; a caller that holds only an

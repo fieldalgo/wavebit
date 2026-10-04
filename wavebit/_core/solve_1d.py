@@ -26,8 +26,8 @@ Stages (matching the legacy chain, kept as one function each to make bit-parity 
 """
 from .backend import (array_namespace, as_array, check_finite, division_at_a_cutoff,
                       eig)
-from .conventions import (boundary_kz, incident_column, incident_kz, layer_root,
-                          order_azimuth, order_frame_sign)
+from .conventions import (boundary_kz, half_space_medium, incident_column, incident_kz,
+                          layer_root, order_azimuth, order_frame_sign)
 from .enums import Answers, answers_of
 from .power import (incident_power, net_power, power_for_real_k,
                     sp_incident_power, wave_power)
@@ -413,9 +413,11 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
 
     # --- stage 1: boundary init (port of transfer_1d_1) --------------------------------
     # One kz per half-space on the downward branch; it serves both the substrate admittance
-    # and the efficiency factors. Scalars promote against the complex kx.
-    kz_top = boundary_kz(xp, n_top ** 2, kx ** 2)
-    kz_bot = boundary_kz(xp, n_bot ** 2, kx ** 2)
+    # and the efficiency factors. Scalars promote against the complex kx. A caller holding a
+    # half-space's permittivity hands its `(eps, mu)` over, which is what tells a double
+    # negative's root from an ordinary one (`boundary_kz`); without it the root is Maystre's.
+    kz_top = boundary_kz(xp, n_top ** 2, kx ** 2, half_space_medium(eps_top, mu_top))
+    kz_bot = boundary_kz(xp, n_bot ** 2, kx ** 2, half_space_medium(eps_bot, mu_bot))
 
     if eps_bot is None:
         eps_bot = n_bot ** 2 / mu_bot     # n stays the refractive index; eps carries the mu
@@ -627,8 +629,10 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickne
 
     # --- stage 1: boundary init (transfer_1d_conical_1) --------------------------------
     k_par_sq = kx ** 2 + ky_col ** 2
-    kz_top = xp.reshape(boundary_kz(xp, n_top ** 2, k_par_sq), (-1,))
-    kz_bot = xp.reshape(boundary_kz(xp, n_bot ** 2, k_par_sq), (-1,))
+    kz_top = xp.reshape(boundary_kz(xp, n_top ** 2, k_par_sq,
+                                    half_space_medium(eps_top, mu_top)), (-1,))
+    kz_bot = xp.reshape(boundary_kz(xp, n_bot ** 2, k_par_sq,
+                                    half_space_medium(eps_bot, mu_bot)), (-1,))
     varphi = order_azimuth(xp, ky_col, kx, phi)
 
     if eps_bot is None:

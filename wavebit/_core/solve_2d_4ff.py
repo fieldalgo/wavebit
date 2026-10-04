@@ -30,7 +30,7 @@ from cmath import sqrt as _csqrt
 
 from .backend import array_namespace, as_array, eig
 from .modal_gradient import _stop, split_generator, exponential, combine
-from .conventions import boundary_kz, order_azimuth
+from .conventions import boundary_kz, half_space_medium, order_azimuth
 from .enums import Answers, answers_of
 from .solve_1d import _block, _diag, _is_backside, _mirrored_scene, final_matching
 from .solve_2d import order_grid_kxy, sp_modes_2d
@@ -593,6 +593,10 @@ def solve_2d_4ff(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
         per_layer, mu_all = mirror_z(per_layer), mirror_z(mu_all)
         mu_top, mu_bot = mu_bot, mu_top
         eps_top, eps_bot = eps_bot, eps_top
+    # Read before the recovery below, which fills the permittivities in: only a caller that
+    # held them can name a double negative (`half_space_medium`).
+    medium_top = half_space_medium(eps_top, mu_top)
+    medium_bot = half_space_medium(eps_bot, mu_bot)
     if eps_top is None:
         eps_top = n_top ** 2 / mu_top
     if eps_bot is None:
@@ -612,8 +616,8 @@ def solve_2d_4ff(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     theta = 0.0 if theta is None else theta
 
     k_par_sq = kx_g ** 2 + ky_g ** 2
-    kz_top = xp.reshape(boundary_kz(xp, n_top ** 2, k_par_sq), (-1,))
-    kz_bot = xp.reshape(boundary_kz(xp, n_bot ** 2, k_par_sq), (-1,))
+    kz_top = xp.reshape(boundary_kz(xp, n_top ** 2, k_par_sq, medium_top), (-1,))
+    kz_bot = xp.reshape(boundary_kz(xp, n_bot ** 2, k_par_sq, medium_bot), (-1,))
     varphi = order_azimuth(xp, ky_g, kx_g, phi)
 
     Kx = _diag(xp, xp.reshape(kx_g, (-1,)))

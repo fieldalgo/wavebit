@@ -17,7 +17,7 @@ to the conical versions, so this module reuses ``solve_1d``'s boundary init and
 """
 from .backend import (_concrete, _readable, array_namespace, as_array, carries_autodiff,
                       check_mode_cutoff, checked_float, division_at_a_cutoff, eig)
-from .conventions import boundary_kz, layer_root, order_azimuth
+from .conventions import boundary_kz, half_space_medium, layer_root, order_azimuth
 from .enums import Answers, answers_of
 from .solve_1d import _block, _diag, _is_backside, _mirrored_scene, final_matching
 
@@ -446,8 +446,10 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
 
     # --- stage 1: boundary init (transfer_2d_1 == transfer_1d_conical_1) ----------------
     k_par_sq = kx_g ** 2 + ky_g ** 2
-    kz_top = xp.reshape(boundary_kz(xp, n_top ** 2, k_par_sq), (-1,))
-    kz_bot = xp.reshape(boundary_kz(xp, n_bot ** 2, k_par_sq), (-1,))
+    kz_top = xp.reshape(boundary_kz(xp, n_top ** 2, k_par_sq,
+                                    half_space_medium(eps_top, mu_top)), (-1,))
+    kz_bot = xp.reshape(boundary_kz(xp, n_bot ** 2, k_par_sq,
+                                    half_space_medium(eps_bot, mu_bot)), (-1,))
     varphi = order_azimuth(xp, ky_g, kx_g, phi)
 
     if eps_bot is None:

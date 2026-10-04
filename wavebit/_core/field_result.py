@@ -286,7 +286,8 @@ def ordinary_spectra(solver, variants, *, eps_top=None, eps_bot=None, mu_top=Non
     s/p -> xyz basis would be one more copy of the rule ``order_azimuth`` /
     ``order_frame_sign`` state.
     """
-    from .conventions import boundary_kz, order_azimuth, order_frame_sign, incident_column
+    from .conventions import (boundary_kz, half_space_medium, order_azimuth, order_frame_sign,
+                              incident_column)
     from .solve_2d import order_grid_kxy
 
     incident = variants.get('incident')
@@ -320,8 +321,11 @@ def ordinary_spectra(solver, variants, *, eps_top=None, eps_bot=None, mu_top=Non
         """Six Cartesian field components for this port's two amplitude channels."""
         n, epsilon, mu = materials[side]
         mu = _array(xp, 1. if mu is None else mu, kxy)
+        # The kernels' own root: a held permittivity names the medium, and only then can it be
+        # a double negative (`half_space_medium`).
+        medium = half_space_medium(epsilon, mu)
         epsilon = n*n/mu if epsilon is None else epsilon
-        kz = boundary_kz(xp, epsilon*mu, gx*gx+gy*gy)
+        kz = boundary_kz(xp, epsilon*mu, gx*gx+gy*gy, medium)
         rho = gx*c + gy*s
         zero = xp.zeros_like(gx)
         es = xp.stack([-s, c, zero], axis=-1)
