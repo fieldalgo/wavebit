@@ -442,6 +442,136 @@ def _refuse_negative_index_pair(epsilon, mu, where):
             'both roots -- with an ordinary half-space beyond it.')
 
 
+#: Two media are each other's negation, or a slot is ``c*I``, to this relative tolerance: the
+#: round-off of how a value reached the solve (``1/(1/eps)`` for ``epz_i``, ``n*n/mu`` for a
+#: half-space handed over as an index), not a physical mismatch.
+_NEGATION_RTOL = 1e-12
+
+
+def _slot_is(slot, value, tolerance):
+    """Is a convolution slot ``value*I`` to ``tolerance * max(|value|, 1)``?
+
+    A plain ``bool``: ``False`` for a slot that is not, and for a tracer, which has no value to
+    compare. ``value`` is a Python number.
+    """
+    xp = array_namespace(slot)
+    eye = xp.eye(slot.shape[0], dtype=slot.dtype, device=getattr(slot, 'device', None))
+    bound = tolerance * max(abs(value), 1.0)
+    return _concrete(xp.all(xp.abs(slot - value * eye) <= bound)) is True
+
+
+def _readable_complex(value):
+    """``complex(value)`` for a scalar that has a value -- an un-jitted grad tracer has one, and
+    ``.item()`` reads it where ``complex()`` refuses -- else ``None``."""
+    try:
+        return complex(value.item() if hasattr(value, 'item') else value)
+    except Exception:
+        return None
+
+
+def _negation_pair_message(top, bottom, n_layers, evanescent, retained):
+    """:meth:`CoreFactorizationMixin._refuse_half_space_negation_pair`'s message.
+
+    ``evanescent`` of the ``retained`` orders have ``Re(kz**2) < 0``, at least one."""
+    (e_t, m_t), (e_b, m_b) = top, bottom
+    between = ('with no layer between them' if not n_layers else
+               'and every layer between them is a uniform layer of one of the two')
+    return (
+        f'the top half-space (eps = {e_t:g}, mu = {m_t:g}) and the bottom half-space '
+        f"(eps = {e_b:g}, mu = {m_b:g}) are lossless and each other's exact negation, "
+        f'{between}, and {evanescent} of the {retained} retained orders '
+        f'{"is" if evanescent == 1 else "are"} evanescent. On an evanescent order that pair '
+        'has no time-harmonic solution. Every order is evanescent '
+        'in both media or in neither, and on an evanescent one the two decaying waves share kz '
+        'while their admittances, kz/mu and kz/(-mu), cancel: the interface reflects with a '
+        'pole at every evanescent in-plane wavevector, a surface mode on each, and the '
+        'scattering matrix does not exist. A loss gamma in either medium removes the poles, '
+        "and an evanescent order's response then grows like 1/gamma as gamma -> 0: there is "
+        'no lossless limit (B. Gralak and D. Maystre, C. R. Physique 13, 786 (2012); '
+        'M. Cassier, C. Hazard and P. Joly, Commun. PDE 42, 1707 (2017) and 47, 1217 (2022); '
+        'M. Cassier and P. Joly, arXiv:2504.00235 (2025)). Layers of the two media change '
+        'nothing: a layer of (-eps, -mu) cancels an equal thickness of (eps, mu) (J. B. Pendry '
+        'and S. A. Ramakrishna, J. Phys.: Condens. Matter 15, 6345 (2003)), so the stack is '
+        'this one interface, moved. Its propagating orders are matched -- r = 0, t = 1, the '
+        'limit of any small loss -- but a solve cannot reach them past the retained '
+        'evanescent orders, which make its system singular: without this refusal it raised '
+        'LinAlgError or returned their amplitudes as round-off of order one. Give either '
+        'medium a loss (Im(eps) > 0 or Im(mu) > 0) to solve a neighbouring problem that has an '
+        'answer; a truncation that retains only propagating orders (truncation_order=0 at a '
+        'real angle, or a longer period) is solved as it stands. A finite layer of the '
+        "negation between other media, Pendry's lens, is a different stack and is solved.")
+
+
+def _scalar_slot(slot):
+    """``c`` when a convolution slot is exactly ``c*I`` -- a uniform layer -- else ``None``.
+
+    ``None`` too when the slot is a tracer, which has no value to compare.
+    """
+    if slot is None:
+        return 1.0
+    xp = array_namespace(slot)
+    eye = xp.eye(slot.shape[0], dtype=slot.dtype, device=getattr(slot, 'device', None))
+    if not _concrete(xp.all(slot == slot[0, 0] * eye)):
+        return None
+    value = slot[0, 0]
+    return complex(value.item() if hasattr(value, 'item') else value)
+
+
+def _perfect_lens(layers, below, above):
+    """The message for an ETM failure on a uniform double negative beside its exact negation.
+
+    ``layers`` are the layers' ``(eps_slots, mu_slots)`` as scalars -- ``None`` for a patterned
+    or traced layer -- in positive-z order, ``below`` / ``above`` the half-spaces' pairs. A
+    uniform layer beside a uniform medium that is its exact negation, ``(eps, mu)`` against
+    ``(-eps, -mu)``, one of the two a double negative (``Re(eps) < 0`` and ``Re(mu) < 0``) --
+    the layer itself, or the half-space it rests on, as for a glass layer on a double-negative
+    substrate: their admittances on every evanescent order are each other's negatives,
+    ``kz/mu`` against ``kz/(-mu)`` on the same decaying ``kz``, so the interface has a surface
+    mode at every evanescent ``k_par`` (J. B. Pendry, Phys. Rev. Lett. 85, 3966 (2000)). ETM
+    writes a layer through the transmission from its downward modes into the region below it,
+    ``a = (1 + Y_below/Y_layer)/2``, and that is zero on each of those orders under the
+    decaying label, the mirror's included; the growing one would grow by Pendry's amplification
+    itself, past the cap. Floating point usually leaves ``a`` a round-off away from zero, and the
+    answer is then SMM's to 1e-13 (measured: 1D, conical and 2D, either side lit, the pair inside
+    the stack or at its exit, with and without a grating); where the zero comes out exact the
+    inversion fails, and this says why. SMM joins layers through a gap medium and never meets
+    it. ``None`` when no such pair is in the stack. Two half-spaces with no layer between them
+    are not looked at: that pair has no scattering matrix at all, so "SMM solves it" would be
+    false, and the lossless one is refused before any algorithm runs
+    (:meth:`CoreFactorizationMixin._refuse_half_space_negation_pair`).
+    """
+    media = [below, *layers, above]
+
+    def name(k):
+        return ('the bottom half-space' if k == 0 else
+                'the top half-space' if k == len(media) - 1 else f'layer {k - 1}')
+
+    for i in range(len(media) - 1):
+        if media[i] is None or media[i + 1] is None or len(media) == 2:
+            continue
+        for k, other in ((i, i + 1), (i + 1, i)):
+            (eps, mu), (eps_o, mu_o) = media[k], media[other]
+            double_negative = all(v.real < 0 for v in (*eps, *mu))
+            negated = all(abs(x + y) <= _NEGATION_RTOL * abs(x)
+                          for x, y in zip((*eps, *mu), (*eps_o, *mu_o)))
+            if double_negative and negated:
+                return (
+                    f"layer_algorithm='ETM' could not solve this stack: {name(k)} is a uniform "
+                    f'double negative (eps = {eps[1]:g}, mu = {mu[1]:g}) beside {name(other)}, '
+                    'made of its exact negation -- the perfect-lens pair (J. B. '
+                    'Pendry, Phys. Rev. Lett. 85, 3966 (2000)). Their interface carries a surface '
+                    'mode at every evanescent in-plane wavevector, so ETM, which writes each '
+                    'layer through the transmission from its downward modes into the medium '
+                    'below, divides by zero on every evanescent order, and here the zero came '
+                    "out exact. The stack itself is finite: layer_algorithm='SMM' solves it, "
+                    'exactly for a plane wave on uniform layers. Under a patterned layer the '
+                    'evanescent orders it excites are amplified by exp(kappa*k0*d) across the '
+                    'pair, without bound in the order, so the lossless answer does not converge '
+                    'in truncation_order; a little loss in either medium is what makes it a '
+                    'physical one. See docs/connecting-algorithms.md, section 11.')
+    return None
+
+
 def _recorded_lattice(normal_field_source):
     """The cell basis a frozen record was taken on, or ``None`` if it does not name one.
 
@@ -3697,6 +3827,10 @@ class CoreFactorizationMixin:
             if mu_side is not None:
                 _refuse_negative_index_pair(n * n / mu_side if epsilon is None else epsilon,
                                             mu_side, where)
+        self._refuse_half_space_negation_pair(
+            (epx_conv_all, epy_conv_all, epz_conv_i_all),
+            (epxy_conv_all, epyx_conv_all, epxz_conv_all, epyz_conv_all, epzx_conv_all,
+             epzy_conv_all), mu, eps_top, mu_top, eps_bot, mu_bot)
         with self._indices_signed_by_pairs(eps_top, mu_top, eps_bot, mu_bot):
             return self._solve_conv_signed(
                 epx_conv_all, epy_conv_all, epz_conv_i_all, epxy_conv_all, epyx_conv_all,
@@ -3811,20 +3945,35 @@ class CoreFactorizationMixin:
                 'needs the off-diagonals needs the 2D path, which a structure varying in y '
                 'routes to.')
 
-        if self._grating_type == 0:
-            result_dict = self._solve_1d(epx_conv_all, epy_conv_all, epz_conv_i_all,
-                                         mu=mu, mu_top=mu_top, mu_bot=mu_bot,
-                                         eps_top=eps_top, eps_bot=eps_bot, dng=layer_dng)
-        elif self._grating_type == 1:
-            result_dict = self._solve_1d_conical(epx_conv_all, epy_conv_all, epz_conv_i_all,
-                                                 mu=mu, mu_top=mu_top, mu_bot=mu_bot,
-                                                 eps_top=eps_top, eps_bot=eps_bot,
-                                                 dng=layer_dng)
-        else:
-            result_dict = self._solve_2d(epx_conv_all, epy_conv_all, epz_conv_i_all,
-                                         epxy_conv_all, epyx_conv_all, *z_row, mu=mu,
-                                         mu_top=mu_top, mu_bot=mu_bot,
-                                         eps_top=eps_top, eps_bot=eps_bot, dng=layer_dng)
+        from numpy.linalg import LinAlgError
+        try:
+            if self._grating_type == 0:
+                result_dict = self._solve_1d(epx_conv_all, epy_conv_all, epz_conv_i_all,
+                                             mu=mu, mu_top=mu_top, mu_bot=mu_bot,
+                                             eps_top=eps_top, eps_bot=eps_bot, dng=layer_dng)
+            elif self._grating_type == 1:
+                result_dict = self._solve_1d_conical(epx_conv_all, epy_conv_all,
+                                                     epz_conv_i_all, mu=mu, mu_top=mu_top,
+                                                     mu_bot=mu_bot, eps_top=eps_top,
+                                                     eps_bot=eps_bot, dng=layer_dng)
+            else:
+                result_dict = self._solve_2d(epx_conv_all, epy_conv_all, epz_conv_i_all,
+                                             epxy_conv_all, epyx_conv_all, *z_row, mu=mu,
+                                             mu_top=mu_top, mu_bot=mu_bot,
+                                             eps_top=eps_top, eps_bot=eps_bot, dng=layer_dng)
+        except (FloatingPointError, LinAlgError, RuntimeError) as exc:
+            # A singular ETM step beside Pendry's pair is that pair, not a grazing order: say so,
+            # as a ValueError the auto_detune ladder does not retry -- moving the wavelength
+            # only re-rolls the round-off. RuntimeError only for torch's LinAlgError.
+            if (self.layer_algorithm == 'ETM' and mu is not None
+                    and not (isinstance(exc, RuntimeError)
+                             and 'linalg' not in type(exc).__name__.lower())):
+                message = self._perfect_lens_message(epx_conv_all, epy_conv_all,
+                                                     epz_conv_i_all, mu, eps_top, mu_top,
+                                                     eps_bot, mu_bot)
+                if message is not None:
+                    raise ValueError(message) from exc
+            raise
 
         # The boundary spectra and the per-order Cartesian vectors are one arithmetic
         # (`ordinary_spectra`), read off the packed amplitudes before any `ResultSub` exists, so
@@ -3850,6 +3999,142 @@ class CoreFactorizationMixin:
         self._warn_gain_cutoff(eps_top=eps_top, eps_bot=eps_bot, mu_top=mu_top, mu_bot=mu_bot)
 
         return result
+
+    def _refuse_half_space_negation_pair(self, diagonal, off_diagonal, mu,
+                                         eps_top, mu_top, eps_bot, mu_bot):
+        """Refuse two lossless half-spaces that are each other's negation, nothing else between,
+        where a retained order is evanescent.
+
+        ``(eps, mu)`` above ``(-eps, -mu)``, both lossless -- glass ``(2.25, 1)`` on
+        ``(-2.25, -1)`` -- share ``kz**2`` on every order, so an order is evanescent in both or
+        in neither. On an evanescent one both roots take the same decaying ``kz`` (the two cuts
+        agree wherever ``Re(kz**2) < 0``), and the admittances ``kz/mu`` and ``kz/(-mu)`` cancel:
+        the interface's reflection has a pole at every evanescent ``k_par``, and the scattering
+        matrix does not exist. With a loss ``gamma`` in either medium it does, and an excited
+        evanescent order's response grows like ``1/gamma`` (measured: ``gamma*|r|`` constant to
+        three digits from 1e-3 to 1e-12, under evanescent incidence), so there is no lossless
+        limit: B. Gralak and D. Maystre, C. R. Physique 13, 786 (2012), for the ``-1`` half-space
+        against vacuum; M. Cassier, C. Hazard and P. Joly, Commun. PDE 42, 1707 (2017) and 47,
+        1217 (2022), and M. Cassier and P. Joly, arXiv:2504.00235 (2025), who show the transmission
+        problem ill-posed when both contrasts are ``-1``.
+
+        **Only a retained evanescent order makes a solve singular.** On a propagating order the
+        mirror root is ``-kz`` (the cuts part wherever ``Re(kz**2) > 0``), the admittances are
+        equal, and the order is matched -- ``r = 0``, ``t = 1``, the limit of any small loss.
+        Uniform layers couple no two orders, so a truncation that retains no evanescent order
+        (``truncation_order=0`` at a real angle, or a period long enough that every retained
+        order propagates) has a regular system and is solved: ``R <= 5e-30``, ``T = 1`` to
+        2e-15 and every amplitude within 1.4e-12 of the neighbour with a loss of 1e-12, on 160
+        such scenes per backend (every path, ETM and SMM, either side lit, with and without
+        layers; ``tests/test_negative_index_layers.py``), where this refusal once stopped them
+        with a reason that did not hold. With an evanescent order retained the solve does not
+        answer. With this refusal switched off and no layer between, it raises
+        ``LinAlgError`` on NumPy on every path, ``FloatingPointError`` on JAX, and on PyTorch
+        ``LinAlgError`` on all but 2D and 4ff SMM, which return a finite answer; with uniform
+        layers of the two media SMM returns a finite answer whose amplitudes on the 4ff path,
+        in orders a uniform stack does not excite, are round-off of order one, and ETM a finite
+        answer or its perfect-lens message. Decided per order on ``Re(kz**2) < 0`` from the
+        solve's own ``k_par`` (:meth:`order_kxy`), which is also right for a complex ``theta``:
+        there the two cuts take the same root exactly where ``Re(kz**2) < 0``. An order with
+        ``kz**2 = 0`` exactly is a Rayleigh point, left to the solve's own handling of one.
+
+        **Layers of the two media are the same pair.** A layer of ``(-eps, -mu)`` cancels an
+        equal thickness of ``(eps, mu)`` -- its first-order system is the negative of the
+        other's, so its transfer over ``d`` is the other's over ``-d`` (J. B. Pendry and S. A.
+        Ramakrishna, J. Phys.: Condens. Matter 15, 6345 (2003)) -- so any uniform layers of the
+        two media, in any order and thickness, leave the bare interface, moved. Anything else
+        between the half-spaces -- a third medium, a patterned layer -- and the stack is
+        another problem, solved as before; so is a finite layer of the negation between other
+        media, Pendry's lens (:func:`_perfect_lens`).
+
+        Lossless means ``Im == 0`` exactly, on all four values: a lossy pair is never refused,
+        however small its loss. Read on the values -- the media's and the orders' ``k_par`` --
+        so it runs eagerly and under an un-jitted ``jax.grad``, and is silent under ``jax.jit``
+        wherever either is a tracer, where there is no value to read; a non-magnetic scene (no
+        half-space permeability) cannot hold the pair and reads nothing.
+        """
+        if mu_top is None and mu_bot is None:
+            return                          # mu = 1 on both sides: never each other's negation
+        sides = []
+        for epsilon, mu_side, n in ((eps_top, mu_top, self.n_top), (eps_bot, mu_bot, self.n_bot)):
+            m = 1.0 if mu_side is None else mu_side
+            sides.append((n * n / m if epsilon is None else epsilon, m))
+        (e_t, m_t), (e_b, m_b) = sides
+        lossless = ((_imag_part(e_t) == 0) & (_imag_part(m_t) == 0)
+                    & (_imag_part(e_b) == 0) & (_imag_part(m_b) == 0))
+        negated = ((abs(e_t + e_b) <= _NEGATION_RTOL * abs(e_t))
+                   & (abs(m_t + m_b) <= _NEGATION_RTOL * abs(m_t)))
+        if _concrete(lossless & negated) is not True:
+            return
+        top = (_readable_complex(e_t), _readable_complex(m_t))
+        bottom = (_readable_complex(e_b), _readable_complex(m_b))
+        if None in (*top, *bottom):
+            return
+        tolerance = max(_NEGATION_RTOL, 64 * float(self.xp.finfo(self.float_dtype).eps))
+        mu = None if mu is None else tuple(mu) + (None,) * (5 - len(tuple(mu)))
+
+        def diagonal_is(slot, value):
+            # An absent permeability slot is the identity.
+            return (abs(value - 1) <= tolerance if slot is None
+                    else _slot_is(slot, value, tolerance))
+
+        def layer_is(i, epsilon, mu_value):
+            ex, ey, ez_i = (s[i] for s in diagonal)
+            if not (_slot_is(ex, epsilon, tolerance) and _slot_is(ey, epsilon, tolerance)
+                    and _slot_is(ez_i, 1 / epsilon, tolerance)):
+                return False
+            if any(s is not None and not _slot_is(s[i], 0, tolerance) for s in off_diagonal):
+                return False
+            if mu is None:
+                return abs(mu_value - 1) <= tolerance
+            mx, my, mz_i = (None if s is None else s[i] for s in mu[:3])
+            return (diagonal_is(mx, mu_value) and diagonal_is(my, mu_value)
+                    and diagonal_is(mz_i, 1 / mu_value)
+                    and all(s is None or _slot_is(s[i], 0, tolerance) for s in mu[3:]))
+
+        n_layers = len(diagonal[0])
+        if not all(layer_is(i, *top) or layer_is(i, *bottom) for i in range(n_layers)):
+            return
+        from .solve_2d import order_grid_kxy
+        xp = self.xp
+        gx, gy = order_grid_kxy(xp, *self.order_kxy())
+        evanescent = xp.real(top[0] * top[1] - (gx * gx + gy * gy)) < 0
+        if _concrete(xp.any(evanescent)) is not True:
+            return
+        count = xp.sum(xp.astype(evanescent, xp.int64))
+        count = int(count.item() if hasattr(count, 'item') else count)
+        retained = int(_np.prod(tuple(evanescent.shape)))
+        raise ValueError(_negation_pair_message(top, bottom, n_layers, count, retained))
+
+    def _perfect_lens_message(self, epx_conv_all, epy_conv_all, epz_conv_i_all, mu,
+                              eps_top, mu_top, eps_bot, mu_bot):
+        """:func:`_perfect_lens` on this solve's slots and half-spaces, when readable.
+
+        Read off the convolution matrices, so ``solve_conv``'s are checked as ``solve()``'s are;
+        silent where a slot or a half-space is a tracer, as every value guard is.
+        """
+        mu = tuple(mu) + (None,) * (3 - len(tuple(mu)))
+        layers = []
+        for i in range(len(epx_conv_all)):
+            eps = [_scalar_slot(epx_conv_all[i]), _scalar_slot(epy_conv_all[i]),
+                   _scalar_slot(epz_conv_i_all[i])]
+            mus = [_scalar_slot(None if s is None else s[i]) for s in mu[:3]]
+            if any(v is None for v in (*eps, *mus)):
+                layers.append(None)
+                continue
+            eps[2], mus[2] = 1 / eps[2], 1 / mus[2]
+            layers.append((eps, mus))
+
+        def half(epsilon, mu_side, n):
+            try:
+                m = 1.0 if mu_side is None else complex(mu_side)
+                e = complex(n * n / m) if epsilon is None else complex(epsilon)
+            except Exception:
+                return None
+            return [e] * 3, [m] * 3
+
+        return _perfect_lens(layers, half(eps_bot, mu_bot, self.n_bot),
+                             half(eps_top, mu_top, self.n_top))
 
     def gain_cutoff_band(self):
         """Which orders sit near grazing in a gain half-space, per side.

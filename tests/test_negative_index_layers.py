@@ -576,3 +576,349 @@ def _amplitudes_jax(result):
             if v is not None:
                 out.append(jnp.ravel(v))
     return jnp.concatenate(out)
+
+
+# ------------------------------------------------------------------------- Pendry's perfect lens
+
+def _lens(algo, delta=0.0, backend=0, thickness=100.0):
+    """A uniform ``(-2, -1)`` layer on its double-positive mirror ``(2, 1)``, lit from vacuum."""
+    nim = (-2 + 1j * delta, -1 + 1j * delta)
+    return _solver('te', algo, _uniform('te', nim[0]), _uniform('te', nim[1]), theta=0.25,
+                   bot=Material(2.0, mu=1.0), thickness=[thickness], backend=backend,
+                   truncation_order=4)
+
+
+def test_the_perfect_lens_pair_is_finite_and_smm_has_it():
+    """The single interface is singular; a layer of it is not.
+
+    Between ``(eps, mu)`` and ``(-eps, -mu)`` the admittances of every evanescent order cancel,
+    ``kz/mu + kz/(-mu) = 0``, so the semi-infinite pair has a surface mode at every evanescent
+    ``k_par``: its ``r`` and ``t`` there are poles (J. B. Pendry, Phys. Rev. Lett. 85, 3966
+    (2000)). A finite layer on its mirror instead carries only the mode that grows toward the
+    mirror, and transmits an evanescent order with ``t = 2*ka/(ka + kn) * exp(kn*k0*d)`` --
+    Pendry's amplification, finite at any thickness. SMM's scattering matrix has exactly that,
+    order by order, and its plane-wave answer is the limit of the lossy one as the loss goes
+    to zero, linearly.
+    """
+    solver = _lens('SMM')
+    base = _amplitudes(solver.solve(auto_detune=False))
+    S21 = _host(solver.scattering.S21)
+    kx = _host(solver.order_kxy()[0]).ravel().real
+    k0, d = 2 * np.pi / WL, 100.0
+    checked = 0
+    for m, k in enumerate(kx):
+        if k ** 2 <= 2.0:
+            continue                         # propagating in the lens: no amplification
+        ka, kn = np.sqrt(k ** 2 - 1), np.sqrt(k ** 2 - 2)
+        closed = 2 * ka / (ka + kn) * np.exp(kn * k0 * d)
+        assert abs(abs(S21[m, m]) - closed) < 1e-12 * closed, (k, abs(S21[m, m]), closed)
+        checked += 1
+    assert checked >= 4 and closed > 10
+    for delta in (1e-9, 1e-7):
+        moved = np.abs(_amplitudes(_lens('SMM', delta).solve(auto_detune=False)) - base).max()
+        assert 1e-3 * delta < moved < 1e3 * delta
+
+
+@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+def test_etm_names_the_perfect_lens_pair_where_it_cannot_write_it(backend):
+    """ETM writes a layer through its transmission into the medium below, and on Pendry's pair
+    that is zero on every evanescent order. Here the zero comes out exact and the inversion
+    fails -- ``LinAlgError`` on NumPy and Torch, a non-finite result on JAX -- and the solve says
+    which pair it is and that SMM solves it, rather than retrying the wavelength for nothing."""
+    if backend == 1:
+        pytest.importorskip('jax')
+        wavebit.enable_x64()
+    if backend == 2:
+        pytest.importorskip('torch')
+    with pytest.raises(ValueError, match='perfect-lens pair') as caught:
+        _lens('ETM', backend=backend).solve()
+    assert caught.value.__cause__ is not None
+    assert 'Singular' in str(caught.value.__cause__) or 'non-finite' in str(
+        caught.value.__cause__) or 'singular' in str(caught.value.__cause__)
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')
+        _lens('SMM', backend=backend).solve(auto_detune=False)
+
+
+def test_a_lossy_lens_is_not_the_pair():
+    """Any loss breaks the exact cancellation, and ETM solves the layer again -- the message is
+    for the exact pair only, and only where ETM actually failed on it."""
+    etm = _amplitudes(_lens('ETM', 1e-9).solve(auto_detune=False))
+    smm = _amplitudes(_lens('SMM', 1e-9).solve(auto_detune=False))
+    assert np.abs(etm - smm).max() < 1e-13
+
+
+def _lens_on_its_negation(algo, backend=0):
+    """The roles swapped: a uniform ``(2, 1)`` layer on a ``(-2, -1)`` substrate, lit from vacuum."""
+    return _solver('te', algo, _uniform('te', 2.0), _uniform('te', 1.0), theta=0.25,
+                   bot=Material(-2.0 + 0j, mu=-1.0 + 0j), thickness=[100.0], backend=backend,
+                   truncation_order=4)
+
+
+@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+def test_etm_names_the_pair_when_the_double_negative_is_the_substrate(backend):
+    """The same pair with the double negative as the half-space: ETM writes the ordinary layer
+    through its transmission into the substrate, ``(1 + Y_below/Y_layer)/2``, zero on every
+    evanescent order. ETM raised a bare ``LinAlgError`` here (NumPy, PyTorch; non-finite on
+    JAX) on the TE, TM and 2D paths, because the message only looked for a double-negative
+    *layer*; now it names the pair and points to SMM.
+
+    SMM's answer is a closed form. The layer cancels an equal thickness of the substrate (J. B.
+    Pendry and S. A. Ramakrishna, J. Phys.: Condens. Matter 15, 6345 (2003)), so the stack
+    reflects as vacuum onto ``(-2, -1)`` does; and the lens the other way round,
+    ``(-2, -1)`` on ``(2, 1)``, reflects as vacuum onto ``(2, 1)``, the same ``R``."""
+    if backend == 1:
+        pytest.importorskip('jax')
+        wavebit.enable_x64()
+    if backend == 2:
+        pytest.importorskip('torch')
+    with pytest.raises(ValueError, match='perfect-lens pair') as caught:
+        _lens_on_its_negation('ETM', backend=backend).solve()
+    assert 'the bottom half-space is a uniform double negative' in str(caught.value)
+    assert caught.value.__cause__ is not None
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')
+        swapped = _lens_on_its_negation('SMM', backend=backend).solve(auto_detune=False)
+        lens = _lens('SMM', backend=backend).solve(auto_detune=False)
+    R_s, _ = _interface_R(0.25, -2.0 + 0j, -1.0 + 0j)
+    for result in (swapped, lens):
+        R = _host(result.incident.R)
+        assert abs(R.sum() - R_s) < 1e-13 and abs(R.max() - R_s) < 1e-13
+
+
+# ------------------------------------------------- two half-spaces that are each other's negation
+
+NEGATION = (3.0 + 0j, 1.5 + 0j)          # (eps, mu); its negation is the double negative
+NEGATED = (-3.0 + 0j, -1.5 + 0j)
+STACKS = {'none': (), 'own': ('top',), 'both': ('bot', 'top'), 'three': ('top', 'bot', 'top')}
+#: Truncations that retain evanescent orders at ``theta = 0.3``: 6 of 11 on the 1D paths at their
+#: default, 9 of 25 on the 2D ones at ``(2, 2)`` -- their default ``(1, 1)`` retains none.
+EVANESCENT_KEPT = {'te': None, 'tm': None, 'conical': None, '2d': (2, 2), '4ff': (2, 2)}
+
+
+def _negation_scene(path, algo, stack, *, flip=False, side='top', backend=0, bot=None,
+                    theta=0.3, delta=0.0, period=P, truncation_order=None):
+    """``NEGATION`` above ``NEGATED`` (``flip``: below it), with uniform layers of the two named
+    by ``stack``; ``delta`` adds a loss to the double negative wherever it is."""
+    lossy = (NEGATED[0] + 1j * delta, NEGATED[1] + 1j * delta)
+    top, below = (lossy, NEGATION) if flip else (NEGATION, lossy)
+    below = below if bot is None else bot
+    media = {'top': top, 'bot': below}
+    names = STACKS[stack] or ('top',)           # the empty stack is stripped after the build
+    eps = np.stack([_uniform(path, media[n][0])[0] for n in names])
+    mu = np.stack([_uniform(path, media[n][1])[0] for n in names])
+    solver = _solver('2d' if path == '4ff' else path, algo, eps, mu, theta=theta,
+                     top=Material(top[0], mu=top[1]), bot=Material(below[0], mu=below[1]),
+                     thickness=[80.0, 120.0, 50.0][:len(names)], side=side, backend=backend,
+                     period=period, truncation_order=truncation_order)
+    if path == '4ff':
+        solver.formulation = '4ff'
+    if STACKS[stack]:
+        return solver, lambda: solver.solve(auto_detune=False)
+    return solver, lambda: _without_layers(solver)
+
+
+def _without_layers(solver):
+    """The same scene with no layer at all, through ``solve_conv`` and its half-space pairs."""
+    eps, mu = solver.eps_conv_matrices(), solver.mu_conv_matrices()
+    solver.thickness = []
+    return solver.solve_conv(*(None if a is None else a[:0] for a in eps),
+                             mu=tuple(None if a is None else a[:0] for a in mu),
+                             eps_top=solver.top.epsilon, mu_top=solver.top.mu,
+                             eps_bot=solver.bot.epsilon, mu_bot=solver.bot.mu)
+
+
+NEGATION_CASES = [(path, algo, stack, flip, side)
+                  for path in ('te', 'tm', 'conical', '2d', '4ff') for algo in ('ETM', 'SMM')
+                  for stack in ('none', 'own', 'three') for flip in (False, True)
+                  for side in ('top', 'bottom') if (stack, flip) != ('three', True)]
+
+
+@pytest.mark.parametrize('path, algo, stack, flip, side', NEGATION_CASES,
+                         ids=['-'.join(map(str, c)) for c in NEGATION_CASES])
+def test_two_half_spaces_that_are_each_others_lossless_negation_are_refused(
+        path, algo, stack, flip, side):
+    """``(eps, mu)`` against ``(-eps, -mu)``, both lossless, as the two half-spaces: on every
+    evanescent order the decaying waves share ``kz`` and their admittances cancel, so the
+    interface reflects with a pole at every evanescent ``k_par`` and the scattering matrix does
+    not exist -- the time-harmonic problem has no solution (B. Gralak and D. Maystre, C. R.
+    Physique 13, 786 (2012); M. Cassier and P. Joly, arXiv:2504.00235 (2025)). Uniform layers of
+    the two media are the same pair, its interface moved: a layer of ``(-eps, -mu)`` cancels an
+    equal thickness of ``(eps, mu)`` (J. B. Pendry and S. A. Ramakrishna, J. Phys.: Condens.
+    Matter 15, 6345 (2003)).
+
+    Before this was refused the solve did not answer it: with no layer every path raised
+    ``LinAlgError`` (NumPy), ``FloatingPointError`` (JAX) or, on Torch, all but 2D and 4ff SMM;
+    with layers SMM returned a finite answer whose 4ff evanescent amplitudes were round-off of
+    order one where they must be zero, and ETM raised ``LinAlgError`` or a perfect-lens message
+    that called the stack finite. Now every path, either algorithm, either side lit and either
+    medium on top refuses it before anything is solved, naming both media and how many of the
+    retained orders are evanescent.
+    """
+    solver, solve = _negation_scene(path, algo, stack, flip=flip, side=side,
+                                    truncation_order=EVANESCENT_KEPT[path])
+    from wavebit._core.solve_2d import order_grid_kxy
+    gx, gy = order_grid_kxy(np, *solver.order_kxy())
+    evanescent = int(np.sum((NEGATION[0] * NEGATION[1] - gx * gx - gy * gy).real < 0))
+    with pytest.raises(ValueError, match="each other's exact negation") as caught:
+        solve()
+    message = str(caught.value)
+    for value in (NEGATION, NEGATED):
+        assert f'eps = {value[0]:g}, mu = {value[1]:g}' in message
+    assert 'Gralak and D. Maystre' in message and 'arXiv:2504.00235' in message
+    assert ('no layer between' in message) == (stack == 'none')
+    assert f'{evanescent} of the {gx.size} retained orders are evanescent' in message
+    assert 0 < evanescent < gx.size
+
+
+@pytest.mark.parametrize('path', ['te', 'tm', 'conical', '2d', '4ff'])
+def test_the_negation_pair_with_no_evanescent_order_retained_is_solved(path):
+    """Only a retained evanescent order makes the pair singular: on a propagating one the mirror
+    root is ``-kz``, the admittances are equal and the order is matched, and uniform layers
+    couple no two orders. So a truncation that keeps only propagating orders -- the specular one
+    alone, or every order of a long period -- is solved, with the matched answer the lossy
+    neighbours converge to (``R = 0``, ``T = 1``), every path, ETM and SMM, either side lit,
+    either medium on top, with and without layers. The refusal used to stop these too, saying
+    that retained evanescent orders made the system singular when there were none.
+
+    Its control: the same scenes lit by an evanescent wave (``theta = pi/2 - 0.5i``), whose one
+    retained order is evanescent, are still refused."""
+    one_d = path in ('te', 'tm', 'conical')
+    specular, long_period = (0, 3) if one_d else ((0, 0), (1, 1))
+    for algo in ('ETM', 'SMM'):
+        for stack, flip in (('none', False), ('own', False), ('own', True), ('three', False)):
+            for side in ('top', 'bottom'):
+                for period, truncation_order in ((P, specular), (10 * P, long_period)):
+                    common = dict(flip=flip, side=side, period=period,
+                                  truncation_order=truncation_order)
+                    solver, solve = _negation_scene(path, algo, stack, **common)
+                    result = solve()
+                    sub = result.incident if result.incident is not None else result.s_inc
+                    assert float(np.sum(_host(sub.R)).real) < 1e-28
+                    assert abs(float(np.sum(_host(sub.T)).real) - 1) < 1e-13
+                    lossy = _negation_scene(path, algo, stack, delta=1e-12, **common)[1]()
+                    assert np.abs(_amplitudes(result) - _amplitudes(lossy)).max() < 1e-10
+                    with pytest.raises(ValueError, match="each other's exact negation") as caught:
+                        _negation_scene(path, algo, stack, theta=np.pi / 2 - 0.5j,
+                                        flip=flip, side=side, truncation_order=specular)[1]()
+                    assert '1 of the 1 retained orders is evanescent' in str(caught.value)
+
+
+@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+def test_the_negation_pair_is_refused_on_every_backend(backend):
+    """The test reads values, so it runs on JAX and Torch eagerly as on NumPy -- and under an
+    un-jitted ``jax.grad``, whose tracer carries its value -- and the spellings of the pair that
+    reach it differently are refused too: a half-space that names no permeability (``mu = 1``),
+    a layer that names none, and a ``solve_conv`` pair whose permittivity is left to
+    ``n**2/mu``."""
+    if backend == 1:
+        pytest.importorskip('jax')
+        wavebit.enable_x64()
+    if backend == 2:
+        pytest.importorskip('torch')
+    for path, stack in (('te', 'none'), ('2d', 'three'), ('conical', 'own')):
+        with pytest.raises(ValueError, match="each other's exact negation"):
+            _negation_scene(path, 'SMM', stack, backend=backend,
+                            truncation_order=EVANESCENT_KEPT[path])[1]()
+    glass = wavebit.rcwa(backend=backend, top=2.25, bot=Material(-2.25 + 0j, mu=-1.0 + 0j),
+                         theta=0.3, wavelength=WL, period=[P], truncation_order=5, tetm='te',
+                         thickness=[70.0], structure=_uniform('te', 2.25))
+    with pytest.raises(ValueError, match="each other's exact negation"):
+        glass.solve(auto_detune=False)
+    solver, _ = _negation_scene('te', 'SMM', 'own', backend=backend)
+    with pytest.raises(ValueError, match="each other's exact negation"):
+        solver.solve_conv(*solver.eps_conv_matrices(), mu=solver.mu_conv_matrices(),
+                          mu_top=NEGATION[1], eps_bot=NEGATED[0], mu_bot=NEGATED[1])
+    if backend == 1:
+        import jax
+        import jax.numpy as jnp
+
+        def total_R(re_eps):
+            solver = _solver('te', 'SMM', _uniform('te', NEGATED[0]), _uniform('te', NEGATED[1]),
+                             theta=0.3, top=Material(re_eps + 0j, mu=NEGATION[1]),
+                             bot=Material(*NEGATED), thickness=[80.0], backend=1)
+            return solver.solve(auto_detune=False).incident.R.sum().real
+
+        with pytest.raises(ValueError, match="each other's exact negation"):
+            jax.grad(total_R)(jnp.asarray(NEGATION[0].real))
+
+
+@pytest.mark.parametrize('path', ['te', 'tm', 'conical', '2d', '4ff'])
+def test_a_lossy_negation_pair_is_solved_and_has_no_lossless_limit(path):
+    """Any loss, however small, is solved, and shows why the exact pair is refused.
+
+    Lit by a propagating wave the pair is matched, ``r = 0`` and ``t = 1`` in the limit, and the
+    solve gets there: ``R`` falls with the loss and ETM agrees with SMM. Lit by an evanescent
+    one (a complex angle), the incident order sits on the pole: ``|r|`` grows like ``1/delta``,
+    ``delta*|r|`` constant to three digits from 1e-6 to 1e-12 -- the ``1/gamma`` of Gralak and
+    Maystre, with no limit as the loss goes. A real mismatch of 1e-9 is not the pair either.
+    """
+    scaled = []
+    for delta in (1e-6, 1e-9, 1e-12):
+        etm = _negation_scene(path, 'ETM', 'own', delta=delta)[1]()
+        smm = _negation_scene(path, 'SMM', 'own', delta=delta)[1]()
+        assert np.abs(_amplitudes(etm) - _amplitudes(smm)).max() < 1e-12
+        R = smm.incident.R if smm.incident is not None else smm.s_inc.R
+        assert float(np.sum(_host(R))) < 10 * delta
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            lit = _negation_scene(path, 'SMM', 'own', delta=delta,
+                                  theta=np.pi / 2 - 0.5j)[1]()
+        scaled.append(delta * np.abs(_amplitudes(lit)).max())
+    assert scaled[0] > 1e-3
+    np.testing.assert_allclose(scaled[1:], scaled[0], rtol=1e-3)
+    mismatched = (NEGATED[0] * (1 + 1e-9), NEGATED[1])
+    result = _negation_scene(path, 'SMM', 'own', bot=mismatched)[1]()
+    assert np.all(np.isfinite(_amplitudes(result)))
+
+
+@pytest.mark.parametrize('path', ['te', 'tm', 'conical', '2d', '4ff'])
+def test_a_third_medium_between_the_pair_is_another_stack(path):
+    """The pair is refused only when nothing but its own two media lies between the
+    half-spaces. A vacuum layer, a layer with the top medium's ``eps`` but not its ``mu``, one
+    with its ``eps`` in the plane but not along z or with its diagonal and an in-plane
+    off-diagonal (where a path takes a tensor), or a patterned layer makes a stack with an answer, and ETM and SMM agree on it (measured 2.4e-13 at worst,
+    under the grating)."""
+    shape = _uniform(path, 0)[0].shape
+    patterned_eps, patterned_mu = np.full(shape, NEGATION[0]), np.full(shape, NEGATION[1])
+    patterned_eps[..., :2, :3], patterned_mu[..., :2, :3] = 1.0, 1.0
+    uniaxial = np.zeros(shape + (3, 3), dtype=complex)
+    uniaxial[..., 0, 0] = uniaxial[..., 1, 1] = NEGATION[0]
+    uniaxial[..., 2, 2] = 5.0
+    layers = [(np.ones(shape), np.ones(shape)),
+              (np.full(shape, NEGATION[0]), np.ones(shape)),
+              (patterned_eps, patterned_mu)]
+    if path not in ('te', 'tm'):                     # `tetm` takes no tensor
+        layers.append((uniaxial, np.full(shape, NEGATION[1])))
+    if path in ('2d', '4ff'):                        # the 1D operators take no eps_xy
+        sheared = uniaxial.copy()
+        sheared[..., 2, 2] = NEGATION[0]
+        sheared[..., 0, 1] = sheared[..., 1, 0] = 0.5
+        layers.append((sheared, np.full(shape, NEGATION[1])))
+    for eps, mu in layers:
+        got = {}
+        for algo in ('ETM', 'SMM'):
+            solver = _solver('2d' if path == '4ff' else path, algo, eps[None], mu[None],
+                             theta=0.3, top=Material(*NEGATION), bot=Material(*NEGATED),
+                             thickness=[60.0])
+            if path == '4ff':
+                solver.formulation = '4ff'
+            got[algo] = _amplitudes(solver.solve(auto_detune=False))
+        assert np.all(np.isfinite(got['SMM']))
+        assert np.abs(got['ETM'] - got['SMM']).max() < 1e-12
+
+
+def test_the_lens_message_never_calls_two_half_spaces_finite():
+    """Gain that exactly cancels the loss makes an exact negation that is not lossless: a lossy
+    double negative ``(-2.25+0.1j, -1)`` under a gain medium ``(2.25-0.1j, 1)``. It shares the
+    lossless pair's pole on every evanescent order, and with no layer between them it has no
+    scattering matrix either, so ETM's perfect-lens message -- "SMM solves it" -- must not be
+    raised for it. It is not refused (only the lossless pair is), and the solve fails as the
+    singular system makes it fail."""
+    gain, lossy = (2.25 - 0.1j, 1.0 + 0j), (-2.25 + 0.1j, -1.0 + 0j)
+    solver = _solver('te', 'ETM', _uniform('te', gain[0]), _uniform('te', gain[1]), theta=0.3,
+                     top=Material(*gain), bot=Material(*lossy), thickness=[80.0],
+                     period=300.0, wavelength=500.0)
+    with pytest.raises(Exception) as caught:
+        _without_layers(solver)
+    assert 'solves it' not in str(caught.value)
