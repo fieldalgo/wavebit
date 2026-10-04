@@ -512,6 +512,59 @@ def test_the_denominator_clamp_is_what_saves_the_gradient():
     assert np.all(np.isfinite(np.asarray(jax.grad(clamped)(kx))))
 
 
+def test_the_column_carries_its_derivative_along_kx():
+    """On the ``kx == 0`` column the azimuth is ``+-pi/2`` -- a constant, which has no
+    derivative along ``kx``. ``atan2(ky, kx)`` does: ``-1/ky``, the rate at which the frame of a
+    ``(0, n)`` order turns as ``kx`` leaves zero. The column is written ``+-pi/2 - kx/ky``, the
+    same value to the bit (the term is a signed zero there), and its gradient is pinned against
+    the analytic one, for real and complex ``ky`` of either sign."""
+    jax = pytest.importorskip('jax')
+    wavebit.enable_x64()
+    import jax.numpy as jnp
+
+    ky = jnp.asarray([0.4, -0.7, 0.3 + 0.2j, -0.5 + 0.1j], dtype=jnp.complex128)
+
+    def column(kx_real):
+        kx = jnp.zeros_like(ky) + jnp.astype(kx_real, jnp.complex128)
+        return order_azimuth(array_namespace(kx), ky, kx, 0.6)
+
+    value = column(jnp.asarray(0.0))
+    np.testing.assert_array_equal(np.asarray(value).real,
+                                  np.where(np.real(np.asarray(ky)) < 0, -np.pi / 2, np.pi / 2))
+    grad_re = jax.jacfwd(lambda x: jnp.real(column(x)))(jnp.asarray(0.0))
+    grad_im = jax.jacfwd(lambda x: jnp.imag(column(x)))(jnp.asarray(0.0))
+    np.testing.assert_allclose(np.asarray(grad_re) + 1j * np.asarray(grad_im),
+                               -1 / np.asarray(ky), rtol=1e-15, atol=0)
+
+
+@pytest.mark.parametrize('formulation', [None, '4ff'])
+def test_the_theta_derivative_at_normal_incidence_on_a_2d_grating(formulation):
+    """A 2D grating at exactly ``theta = 0``: every ``(0, n)`` order sits on the ``kx == 0``
+    column, and ``jax.grad`` of ``R`` with respect to ``theta`` read the column's frame as
+    constant -- ``-1.98e-4`` against the ``5.45e-4`` that one-sided differences on either side
+    agree on, for every polarization, while ``theta = 1e-4`` was right. Pinned against the
+    central difference, which ``R``'s smoothness through ``theta = 0`` makes the reference."""
+    jax = pytest.importorskip('jax')
+    wavebit.enable_x64()
+    import jax.numpy as jnp
+    grating = np.ones((6, 6), dtype=complex)
+    grating[1:4, 2:5] = 4.0
+    grating[4, 0:2] = 2.25
+
+    def reflected(theta, backend):
+        s = wavebit.rcwa(backend=backend, top=2.25, bot=2.25, wavelength=500.0, theta=theta,
+                         phi=0.6, psi=0.3, period=(700.0, 630.0), truncation_order=(1, 1),
+                         thickness=[180.0], structure=grating[None])
+        if formulation:
+            s.formulation = formulation
+        return s.solve(auto_detune=False).R.sum()
+
+    h = 1e-6
+    fd = (float(np.real(reflected(h, 0))) - float(np.real(reflected(-h, 0)))) / (2 * h)
+    ad = float(jax.grad(lambda t: jnp.real(reflected(t, 1)))(jnp.asarray(0.0)))
+    assert ad == pytest.approx(fd, rel=1e-6)
+
+
 # ---------------------------------------------------------------- the ky == 0 row, exactly
 
 #: Every kind of kx the pure 1D row can hold: both signed zeros, a subnormal-sized pair that

@@ -1214,6 +1214,13 @@ def order_azimuth(xp, ky, kx, phi):
     right_angle = xp.where(xp.real(ky_b) < 0,
                            xp.full_like(varphi, -_HALF_PI),
                            xp.full_like(varphi, _HALF_PI))
+    # Beside the column atan2(ky, kx) = +-pi/2 - kx/ky + O(kx**3). On it kx is a zero, so the
+    # term adds a signed zero and the value is the right angle to the bit; what it adds is the
+    # derivative along kx, -1/ky, which a constant drops. Without it AD of anything that reads
+    # the frame off the column -- every (0, n) order of a 2D grid at normal incidence -- came
+    # out wrong at exactly theta = 0 (dR/dtheta -2.0e-4 against 5.4e-4), right at 1e-4.
+    safe_ky = xp.where(ky_b == 0, xp.ones_like(ky_b), ky_b)
+    right_angle = right_angle - (kx + xp.zeros_like(varphi)) / safe_ky
     varphi = xp.where(zero_kx, right_angle, varphi)
 
     p = as_array(xp, 0.0 if phi is None else phi, dtype=varphi.dtype)
