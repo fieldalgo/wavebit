@@ -3,7 +3,8 @@
 Written: 2026-10-03
 
 Targets: `studies/fdtd_metasurface_rcwa.py`, `studies/fdtd_metasurface_corners.py`,
-`studies/fdtd_metasurface_lifted.py`, `studies/fdtd_metasurface_mutations.py`,
+`studies/fdtd_metasurface_lifted.py`, `studies/fdtd_metasurface_ridges.py`,
+`studies/fdtd_metasurface_mutations.py`,
 `tests/test_fd_metasurface.py`, `tests/references/fd_metasurface_rows.json`,
 `wavebit/fd/_post.py`, `wavebit/fd/_assemble.py`, `wavebit/fd/monitors.py`,
 `docs/guide/fd-metasurface.md`.
@@ -36,10 +37,12 @@ and shift instruments within 2e-11, the protocol the registered one. The predict
 before the data -- the cylinders, at the junction campaign's 1.73-1.74, might fail criterion 3
 -- did not come true; the box did.
 
-**The first suspect for M3, the corners' field singularity, is ruled out** at the resolutions
-these runs use: a registered follow-up ran M3's cross-section as a ridge, whose only corners are
-its edges, and it converged at second order from 40 to 320 cells per wavelength at epsilon 12
-and 4 alike ("Is it the corners?" below). What lowers M3's order is three-dimensional.
+**The first suspect for M3, the corners' field singularity, did not show in its xz
+cross-section** at the resolutions these runs use. A registered follow-up ran that cross-section
+as a ridge, whose only corners are its edges, and it converged at second order from 40 to 320
+cells per wavelength at epsilon 12 and 4 alike ("Is it the corners?" below). That study read
+what lowers M3's order as three-dimensional. The third follow-up below takes away part of that
+reading's premise.
 
 **Nor does it need the junction's rim.** A second registered follow-up lifted the box 0.10 off
 its glass. It converges at the same order: self-convergence orders 1.69 / 1.54 (amplitudes /
@@ -47,6 +50,19 @@ efficiencies), against 1.63 / 1.47 for the flush box. This statistic needs no re
 own rows it puts M3 s, and M3 p's efficiencies, below second order as C7 did. M3's low order
 does not need the rim; whether the rim adds a low-order error of its own in the flush box, the
 lift cannot say ("Is it the rim?" below).
+
+**The y faces: second by the registered rule, and not cleared.** A third registered follow-up
+ran M3's yz cross-section as a 2D ridge. Its rule was settled by three reviews before any FDTD
+row of its epsilon-12 scenes. Its registered statistic, the worst cell over three wavelengths,
+read second order (1.91 to 1.95 between 80 and 320 cells per wavelength), and every control
+held. That worst cell sits at the ridge's resonance.
+
+Split by wavelength after the campaign, the worst amplitude cell away from the resonance
+converges at 1.65 (wavelength 0.95) and 1.82 (1.0) between 160 and 320. Both orders have fallen
+at every step, and one single cell reads 1.56. The xz ridge's worst cell reads 2.00 to 2.02 at
+every wavelength. So the y faces and the edges along x are a suspect again, but a loose one: at
+M3's coarser rungs the yz ridge's worst amplitude cell reads 1.86 to 1.90, where M3 s's
+zeroth order is already below 1.65 at every wavelength ("Is it the y faces?" below).
 
 ## The question
 
@@ -245,7 +261,8 @@ and top edges, where the cross terms take the nearest surface's normal as a stan
 [`fd-subpixel-occupancy.md`](fd-subpixel-occupancy.md)), the junction's rim where box, glass
 and air meet, and the conical incidence that only M3 has. The junction campaign's own epsilon-12
 box (D', normal incidence, the zeroth order only) converged at 1.89. The corners' own singularity was tested
-first and ruled out at these resolutions (below, "Is it the corners?").
+first, in the xz cross-section, and did not show there at these resolutions (below, "Is it the
+corners?"; but see "Is it the y faces?").
 
 **M2 p's one cell.** The cross-polarised `t_s` of the `(0, 0)` order is zero in RCWA (1e-13);
 FDTD's runs give 1.68e-3, 6.0e-4 and 2.65e-4 at 1.05 and 25, 50 and 100 cells per wavelength
@@ -312,7 +329,8 @@ where pillar, air and glass meet -- do not hold the order down under this smooth
 makes M3 converge at 1.5 to 1.75 is three-dimensional: the box's vertical edges, its vertices,
 or the junction's rim where it turns a corner. The asymptotic `dx^(2 nu)` regime may lie beyond
 320 cells per wavelength; the measurement says only that it does not reach down to where these
-runs live.
+runs live. (The third follow-up, "Is it the y faces?", later found M3's yz cross-section not
+cleared, which takes away part of this reading's premise.)
 
 Before registration a dry run of every command on a toy configuration (rungs 40 and 80, 40
 periods, a small RCWA ladder) was seen: local orders between 40 and 80 of 2.10 / 2.05 (R12), 2.00
@@ -534,6 +552,190 @@ Reported totals match collection, with no INTERNALERROR and no worker crash. The
 the freezers are recorded in `studies/results/fdtd_metasurface_lifted_validation.json`. All the
 logs named above are under `studies/results/fdtd_metasurface_lifted_controls/`.
 
+## Is it the y faces? (2026-10-04)
+
+The corner study's ridge was M3's xz cross-section. M3's yz cross-section -- the box's y faces
+and its edges along x -- had not been tried. The owner chose to run it. The study is
+`studies/fdtd_metasurface_ridges.py`. Its rule was registered at 22:41:09 on 2026-10-04, before
+any FDTD row of its epsilon-12 scenes and after three adversarial reviews (22, 25 and 18
+confirmed findings).
+
+**What a 2D scene can test.** A first draft also differenced each ridge's uniform axis on the
+grid, with a Bloch phase over 4 cells. It asked whether differencing along an edge lowers the
+order, as 3D M3 differences every edge. A review showed that on a uniform axis this is the
+`Axis1D` problem at `k_eff = (2/dx) sin(k dx/2)`: a smooth shift of order `dx^2`, which cannot
+lower an order. Its RCWA solve at `k_eff` reproduced, cell by cell, the difference between the
+dry run's Bloch and `Axis1D` yz ridges. Those scenes were dropped. M3's finite edges, its
+vertices and its edges along z have no 2D twin.
+
+**The scenes.**
+
+* `Y12` is M3's yz cross-section: an epsilon-12 ridge 0.20 wide in a 0.50 cell, 0.30 high on the
+  glass, uniform along x, under M3's wave, its axis placed as M3's.
+* `X12` is `Y12` turned a quarter turn about z. The turn maps the Yee grid onto itself, so a
+  solver that treats x and y alike gives the same numbers.
+* `F12` is the corner study's film, the control.
+
+The rungs are 40, 80, 160 and 320, s and p, zeroth order only. The RCWA reference ladder runs to
+N = 800.
+
+**The rule.** A scene's class reads four local orders: `A` and `F`, at the steps 80 -> 160 and
+160 -> 320, each the worst cell over the three wavelengths and both incident polarisations.
+
+* *second* when all four lie in [1.8, 2.3];
+* *low* when all four are at most 1.75;
+* *mixed* otherwise.
+
+The step 40 -> 80 is printed but not judged. An RCWA scan found a p resonance of the epsilon-12
+yz ridge at the band's long end (R_p 0.61, 0.41 and 0.10 at 1.025, 1.05 and 1.075), and a grid
+error that shifts it answers nonlinearly at coarse rungs. The upper line keeps out of *second*
+an order above 2. Such an order can come from a first-order term cancelling the second-order one,
+from a higher-order term, or from the resonance's nonlinear response.
+
+The controls:
+
+* `F12`'s local orders are at least 1.8 at every step, 40 -> 80 included, and it reproduces the
+  corner study's rows;
+* *the xz premise*: the corner study's `R12` rows, scored under this rule, must class second;
+* *a first-order control in two signs*: `Y12`'s rows, scored against a ridge narrower and one
+  wider by 1/32 of a cell at each rung, must not class second;
+* *symmetry*: `X12` reproduces `Y12` to 1e-10.
+
+**The registered verdict: second.** The campaign ran from 22:41 to 23:28 on 2026-10-04 (report
+`studies/results/fdtd_metasurface_ridges_report.log`). Every run settled, and every check held:
+
+* the reference's spread `u` was 3.8e-6, against a gate of 2.6e-5;
+* the run-length check moved no cell by more than 4.7e-7;
+* `X12` matched `Y12` to 4.8e-14;
+* the film reproduced the corner study's rows to 0.0.
+
+| Scene | 40 -> 80 (not judged) | 80 -> 160 | 160 -> 320 | Class |
+| --- | --- | --- | --- | --- |
+| `Y12`, the yz ridge | 1.90 / 1.89 | 1.92 / 1.95 | 1.91 / 1.94 | second |
+| `R12`, the corner study's xz ridge, under this rule | -- | 2.00 / 2.01 | 2.00 / 2.01 | second |
+| `F12`, the film | 1.99 / 1.95 | 2.00 / 1.99 | 2.00 / 2.00 | (control) |
+| `Y12` against a ridge 1/32 cell narrower | -- | 1.35 / 1.35 | 1.22 / 1.22 | low |
+| `Y12` against a ridge 1/32 cell wider | -- | 0.17 / -0.38 | 0.56 / 0.57 | low |
+
+The orders are given as `A` / `F`. `Y12`'s worst errors are:
+
+* `A`: 6.9e-2, 1.8e-2, 4.9e-3 and 1.3e-3 at 40, 80, 160 and 320;
+* `F`: 7.1e-2, 1.9e-2, 5.0e-3 and 1.3e-3.
+
+Its reference-free self-convergence orders read 1.91 / 1.86 (40, 80, 160) and 1.92 / 1.95 (80,
+160, 320).
+
+The wider-ridge control's step 80 -> 160 reads near zero because, at rung 80, its injected term
+and `Y12`'s own error nearly cancel. At 160 and 320 the term is 2.3 to 4.4 times `Y12`'s
+amplitude error and 2.4 to 4.7 times its efficiency error.
+Both controls class low, as the rule requires. Both inject a term several times `Y12`'s own
+error, because the proxy the docstring cites over-predicted that error by 1.6 to 2.7 times. So
+they show that the rule catches a first-order term that large, not one a fraction of `Y12`'s
+error.
+
+**But the y faces are not cleared.** After the campaign, a review split the same rows by
+wavelength (`studies/results/fdtd_metasurface_ridges_split/split.py`, output in `split.log`
+beside it). The rule did not register this analysis. At every rung the worst cell is a p cell at
+1.05, near the resonance, and it converges at about 1.9; that cell sets the registered statistic.
+Away from the resonance the amplitudes converge more slowly, and their order keeps falling:
+
+| `Y12` amplitudes, worst cell | 40 -> 80 | 80 -> 160 | 160 -> 320 |
+| --- | --- | --- | --- |
+| at 0.95 | 1.86 | 1.70 | 1.65 |
+| at 1.0 | 1.89 | 1.86 | 1.82 |
+| at 1.05 | 1.90 | 1.92 | 1.91 |
+| at 0.95, s incidence, `t_s` alone | 1.73 | 1.62 | 1.56 |
+
+Other readings:
+
+* The reference-free self-convergence of the amplitudes at 0.95 reads 1.95 (40, 80, 160) and
+  1.73 (80, 160, 320), so the fall is not the reference's.
+* The worst efficiency cell reads 1.90 to 2.00 at every wavelength at the judged steps. Single
+  efficiency cells scatter more: under s incidence the order falls 2.15, 2.00, 1.84 at 0.95,
+  and rises to 2.36 at 1.0.
+* The xz ridge `R12`'s worst cell reads 2.00 to 2.02 at every wavelength at the judged steps.
+
+A local order that keeps falling below 2 as the grid refines means a term weaker than second
+order is overtaking the second-order one. Three things could be that term, and four rungs do not
+separate them:
+
+* a corner singularity, whose `dx^(2 nu)` term outlasts the `dx^2` one (the corner study's
+  exponents are 1.44 for an epsilon-12 right angle in air and 1.37 for the base);
+* a first-order term smaller than the ones the controls inject;
+* a term the resonance amplifies.
+
+The xz ridge `R12` has the same two kinds of corner, with the same exponents, and it read 2.00
+up to 320 cells; a corner explanation does not yet account for that.
+
+The match with M3 is loose, too:
+
+* the yz ridge's worst amplitude cell at each wavelength falls below 1.8 only from the step
+  80 -> 160 on. At M3's coarser rungs (40 -> 80) it reads 1.86 to 1.90, where M3 s's worst
+  amplitude cell already reads 1.63. Single cells of the ridge read lower there: at 0.95, 1.73
+  to 1.77, including the cell that reaches 1.56. At 1.0 and 1.05 none reads below 1.77;
+* compared on the zeroth order, the only order the ridge has, M3 s's amplitudes self-converge
+  at 1.61, 1.59 and 1.43 at 0.95, 1.0 and 1.05 (rungs 40, 80, 120). Over 40, 80 and 160 the yz
+  ridge's amplitudes self-converge at 1.95, 1.90 and 1.91. So M3 s is low at every wavelength
+  at rungs where the ridge is not. M3 p's zeroth order reads 1.90, 1.81 and 1.85.
+
+So the registered reading -- that what holds M3 down is three-dimensional -- loses part of its
+premise, though nothing here refutes it. The yz cross-section carries a sub-second component of
+its own at 0.95 and 1.0, clearest beyond 80 cells. That was read after the fact from one campaign. It
+makes the y faces and the edges along x a suspect again. It does not show that they hold M3 down,
+and its mechanism is not known.
+
+The larger error is not only the resonance's either. `Y12`'s amplitude error at rung 320 is 3.0
+times `R12`'s at 0.95 (1.10e-3 against 3.65e-4), away from the resonance. Only the efficiency
+excess sits at the resonant wavelength.
+
+**What was seen first.** Three dry runs tried the harness on epsilon-6 ridges against a toy
+ladder before registration. Their numbers are disclosed in the study's docstring, and their
+overrides, passes and digests in `studies/results/fdtd_metasurface_ridges_dryrun/README.md`. The
+epsilon-6 ridges have no resonance in the band (R_p 0.019 to 0.028 from 0.95 to 1.05), so the
+dry runs could not show it. The judged steps moved to 80 -> 160 and 160 -> 320 on the RCWA scan
+and a review's RCWA proxy, not on an FDTD row of these ridges.
+
+**Corrections to the registered docstring.** The study file is left as registered. Its
+docstring keeps these inaccuracies:
+
+* Its *second* reading ("What holds M3 down is three-dimensional") loses part of its premise
+  to the per-wavelength split of the same rows (above).
+* It calls the first-order control's term "not large" against `Y12`'s own error. It cites a
+  proxy that put `Y12`'s A at 0.8 to 1.3e-2 at rung 160 and 2.1 to 3.2e-3 at 320. The measured
+  errors are 1.6 to 2.7 times smaller, so the term was 2.3 to 4.4 times `Y12`'s amplitude
+  error and 2.4 to 4.7 times its efficiency error.
+* It says an order above 2 "comes from cancellation". It can also come from a higher-order term
+  or from the resonance's nonlinear response.
+* It gives the epsilon-6 ridges' R_p as 0.019 to 0.031. In the band it is 0.019 to 0.028; the
+  0.031 is at 1.125.
+* Its list of how it differs from dry run 3's draft leaves out two changes:
+  * the verdict now names every reason a *second* `Y12` is not read, where the draft named the
+    first;
+  * item 2's rationale for the control was rewritten.
+* "A review before registration showed this identity on the dry run's rows": the review's RCWA
+  solve at `k_eff` reproduced the Bloch-minus-`Axis1D` difference of the dry run's yz ridge cell
+  by cell. The dropped Bloch twin of the corner ridge had no `Axis1D` partner.
+
+The campaign took 47 minutes:
+
+* RCWA ladders: 15 minutes;
+* the control references: 18 minutes;
+* FDTD: 14 minutes.
+
+No production source changed either: the fd source SHA-256 is still `50574088...`. Its gates:
+
+* the full fd/docs tier: 2745 passed and 8 skipped of 2753 (2289 seconds);
+* the slow tier: 81 of 81 (1129 seconds);
+* the four freezers: 143/288/140/570 arrays, bit for bit;
+* `ruff check .` (0.16.2): clean (`ruff.log`);
+* `sphinx-build -W`: clean (`sphinx.log`);
+* the documentation contract, rerun after the record's corrections: 66 passed
+  (`docs_contract_after_review.log`).
+
+Reported totals match collection, with no INTERNALERROR and no worker crash. The pytest tiers and
+the freezers are recorded in `studies/results/fdtd_metasurface_ridges_validation.json`. All the
+logs named above are under `studies/results/fdtd_metasurface_ridges_controls/`.
+
 ## What the tests hold
 
 `tests/test_fd_metasurface.py` keeps three things in the suite.
@@ -572,10 +774,14 @@ Counts and timings are in `studies/results/fdtd_metasurface_validation.json`, th
 
 ## What this does not show
 
-* **Why M3 converges below second order.** It is not the corners of its xz cross-section ("Is
-  it the corners?"), and it does not need the junction's rim ("Is it the rim?"). Left: its
-  vertical edges, its vertices, and its y faces with the edges along x, which no ridge here had.
-  No measurement here separates them.
+* **Why M3 converges below second order.** Its xz cross-section does not hold it down as a 2D
+  ridge ("Is it the corners?"), and it does not need the junction's rim ("Is it the rim?"). Its
+  yz cross-section reads second order under the registered worst-cell statistic ("Is it the y
+  faces?"). But split by wavelength, that cross-section's worst amplitude cell converges at
+  1.65 (0.95) and 1.82 (1.0) between 160 and 320, still falling. That was found after the fact.
+  It makes the y faces a suspect again without showing that they hold M3 down, and the
+  mechanism is unknown. The vertical edges, the vertices and the field along finite edges
+  remain candidates too.
 * **One pillar per cell.** No supercell, so no plan with several junctions, as a
   phase-gradient metasurface has.
 * **Two body kinds.** Cylinders and unturned boxes, the bodies a junction supports; no prism,
@@ -608,3 +814,5 @@ run the two follow-ups the same way. The lifted box's campaign of record took 3.
 to 15:13 on 2026-10-04): 1 hour of RCWA ladder, then 2 hours of FDTD, 1.5 of them the run at 120
 cells per wavelength. Four of the nine ladder solves (14 minutes) had run in the stopped first
 campaign and were reused, so a run from scratch takes about 3.3 hours.
+`python studies/fdtd_metasurface_ridges.py` runs the third follow-up; its campaign took 47
+minutes.

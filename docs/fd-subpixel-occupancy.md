@@ -3021,16 +3021,23 @@ reference, so that pair is not judgeable. The junction campaign's cylinders had 
 1.73 to 1.74 under the same statistic; this time the cylinders passed and the box did not, and
 the campaign does not say which of the box's creases, its junction rim or the conical incidence
 holds its order down. A registered follow-up (`studies/fdtd_metasurface_corners.py`) ruled out the
-first suspect, the corners' field singularity: M3's cross-section as a ridge converged at second
-order from 40 to 320 cells per wavelength at epsilon 12 and 4 alike, where the corner exponents
-predicted 1.37 to 1.61. What lowers M3's order is three-dimensional. A second registered
+first suspect, the corners' field singularity, in M3's xz cross-section: that cross-section as a
+ridge converged at second order from 40 to 320 cells per wavelength at epsilon 12 and 4 alike,
+where the corner exponents predicted 1.37 to 1.61. That was read as meaning that what lowers
+M3's order is three-dimensional; the third follow-up below weakens that reading. A second registered
 follow-up (`studies/fdtd_metasurface_lifted.py`, 2026-10-04) showed that the low order does not
 need the junction's rim. It lifted the box 0.10 off its glass, so no voxel holds pillar and glass
 together. The box then converged at the same order: the reference-free self-convergence orders
 were 1.69 / 1.54, against the flush box's 1.63 / 1.47. So the split junction is not needed to
 hold M3 down. Whether it adds a low-order error of its own in the flush box, the lift cannot
-say, because the lift also gives the base edges and vertices in air. The candidates left are the
-box's vertical edges, its vertices, and its y faces with the edges along x.
+say, because the lift also gives the base edges and vertices in air. A third follow-up
+(`studies/fdtd_metasurface_ridges.py`) ran M3's yz cross-section as a 2D ridge. Its registered
+worst-cell statistic read second order (1.91 to 1.95), but that cell sits at the ridge's
+resonance. Split by wavelength after the campaign, its worst amplitude cell away from the
+resonance converges at 1.65 (wavelength 0.95) and 1.82 (1.0) between 160 and 320 cells per
+wavelength, still falling, unlike the xz ridge's 2.00. The y faces and the edges along x are
+therefore a suspect again. But the yz ridge's worst amplitude cell reads about 1.9 at M3's
+coarser rungs, where M3 is already low, and the mechanism is not known.
 
 **Validation.** No production source changed in C7 (fd source SHA-256
 `50574088a3e1e766f334890bcbbd5dbd5ad1dc600c9469766f65d63c949832d9`, the tree of `273514f4`).

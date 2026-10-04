@@ -180,7 +180,10 @@ the glass. The same box lifted 0.1 off its substrate converges at the same rate,
 1.3 times (amplitudes) and 1.6 to 1.7 times (efficiencies) larger. Whether the contact adds an
 error of its own when the box stands on the glass is not known, because lifting the box also
 leaves its base edges in air. Leaving a gap under the pillar will not buy back the
-order.
+order. Run as 2D ridges, the box's xz cross-section converges at second order. Its yz
+cross-section's amplitudes, away from a resonance, converge more slowly between 160 and 320
+cells per wavelength (the worst cell at about 1.65 to 1.8), though at 40 to 80 cells that
+worst cell still reads about 1.9. Whether the box's y faces cause its slower rate is still being investigated.
 
 Two practical consequences:
 
