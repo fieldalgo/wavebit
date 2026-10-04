@@ -38,6 +38,8 @@ from .solve_2d import order_grid_kxy, sp_modes_2d
 # Flux below this, on a mode normalised to unit energy, is taken as none — the mode is
 # evanescent and direction is decided by decay instead. See split_forward_backward.
 _FLAT = 1e-12
+#: float64's machine epsilon; ``_FLAT`` is scaled by the working dtype's against it.
+_EPS64 = 2.220446049250313e-16
 
 # The transfer inverts a matrix holding exp(+x) and exp(-x) at once, so it loses relative
 # precision like eps*exp(2x) -- measured 1.2e-8 at x = 9.1 against a predicted 1.8e-8, and 8.5e-4
@@ -111,7 +113,14 @@ def split_forward_backward(xp, M, n_orders):
     # for propagation-dominated modes use energy flow (also allowing negative
     # phase velocity). The count check below still rejects ambiguous splits.
     decay_dominated = xp.abs(xp.imag(lam)) > xp.abs(xp.real(lam))
-    forward = xp.where(decay_dominated | (xp.abs(flux) <= _FLAT),
+    # `_FLAT` is about 4500 ulp of float64; the same count of ulp at the working precision. A
+    # mode that carries no flux -- one of a complex quadruplet (lam, -lam, conj) of a lossless
+    # patterned negative-index layer, propagation-dominated by |Re| > |Im| -- comes out of a
+    # single-precision eig with a flux of ~1e-7 of either sign, which 1e-12 read as a direction:
+    # JAX and Torch split such a layer 17/19 and 16/20 at complex64 and refused it. Exactly
+    # `_FLAT` in double precision, where the factor is one.
+    flat = _FLAT * (float(xp.finfo(flux.dtype).eps) / _EPS64)
+    forward = xp.where(decay_dominated | (xp.abs(flux) <= flat),
                        xp.imag(lam) > 0, flux > 0)
 
     # 1.0 forward / 0.0 backward, in `flux`'s own real dtype -- asking for int64 here is what

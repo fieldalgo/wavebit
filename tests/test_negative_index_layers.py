@@ -517,6 +517,39 @@ def test_three_principal_values_are_one_flag_and_solve_as_their_tensor(name):
             assert np.abs(value - out['SMM', 'tensor']).max() < 1e-12 * scale, (name, shape, key)
 
 
+@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+def test_the_4ff_split_reads_flux_at_the_working_precision(backend):
+    """A lossless patterned double negative has complex quadruplets of modes (``lam``, ``-lam``
+    and their conjugates) that carry no flux and are propagation-dominated (``|Re| > |Im|``).
+    In single precision their computed flux is ~1e-7 of either sign, and the 4ff split's
+    threshold of 1e-12 -- about 4500 ulp of float64 -- read it as a direction: JAX and Torch
+    found 17 and 16 forward modes of 18 and refused the layer at ``complex_dtype=1``. The
+    threshold is now that many ulp of the working dtype, the same 1e-12 in double precision.
+    The single-precision answer is held to the double-precision one."""
+    pytest.importorskip({0: 'numpy', 1: 'jax', 2: 'torch'}[backend])
+    if backend == 1:
+        wavebit.enable_x64()
+    mask = np.zeros((6, 6))
+    mask[1:4, 2:5] = 1
+    glass = np.zeros((6, 6))
+    glass[4, 0:2] = 1
+    eps = (mask * -2.5 + glass * 2.25 + (1 - mask - glass))[None].astype(complex)
+    mu = (mask * -1.5 + (1 - mask))[None].astype(complex)
+
+    def reflected(backend, complex_dtype):
+        s = wavebit.rcwa(backend=backend, top=2.25, bot=2.25, wavelength=500.0, theta=0.35,
+                         phi=0.6, psi=0.3, period=(700.0, 630.0), truncation_order=(1, 1),
+                         thickness=[120.0], structure=eps, complex_dtype=complex_dtype,
+                         layer_algorithm='SMM')
+        s.mu = mu
+        s.formulation = '4ff'
+        return np.asarray(_host(s.solve(auto_detune=False).R), dtype=float)
+
+    single = reflected(backend, 1)
+    double = reflected(0, 0)
+    np.testing.assert_allclose(single, double, rtol=0, atol=1e-5)
+
+
 def test_an_ordinary_layer_takes_no_new_rule():
     """Every layer without a double negative is handed back the plain rule, structurally:
     ``(None, None)``, so its arithmetic is the one it had -- a non-magnetic layer, a magnetic one
