@@ -4,6 +4,7 @@ Written: 2026-10-03
 
 Targets: `studies/fdtd_metasurface_rcwa.py`, `studies/fdtd_metasurface_corners.py`,
 `studies/fdtd_metasurface_lifted.py`, `studies/fdtd_metasurface_ridges.py`,
+`studies/fdtd_metasurface_fine.py`,
 `studies/fdtd_metasurface_mutations.py`,
 `tests/test_fd_metasurface.py`, `tests/references/fd_metasurface_rows.json`,
 `wavebit/fd/_post.py`, `wavebit/fd/_assemble.py`, `wavebit/fd/monitors.py`,
@@ -63,6 +64,16 @@ at every step, and one single cell reads 1.56. The xz ridge's worst cell reads 2
 every wavelength. So the y faces and the edges along x are a suspect again, but a loose one: at
 M3's coarser rungs the yz ridge's worst amplitude cell reads 1.86 to 1.90, where M3 s's
 zeroth order is already below 1.65 at every wavelength ("Is it the y faces?" below).
+
+**The cellwise extension through 640 resolves low orders in y ridges.** The fourth follow-up
+registers every wavelength and observable separately. After its time and absorber checks,
+the reference-free rule classifies 6 of 36 original-ridge cells as low, 4 of 36 epsilon-4
+cells, and 32 of 36 cells of a ridge reduced to height 0.10. The cornerless film's 24 resolved
+cells are second order; its 12 vanishing cross-polarised cells remain unresolved. The lower
+ridge's strong sampled reflection peak is outside the measured band, so that in-band peak
+is not necessary for low order in a y ridge. Its tail remains, and changing height changes
+the corner fields too. These finite-grid results do not identify the mechanism or establish
+that it causes M3's coarser-grid behaviour ("The y ridge through 640 cells" below).
 
 ## The question
 
@@ -736,6 +747,214 @@ Reported totals match collection, with no INTERNALERROR and no worker crash. The
 the freezers are recorded in `studies/results/fdtd_metasurface_ridges_validation.json`. All the
 logs named above are under `studies/results/fdtd_metasurface_ridges_controls/`.
 
+## The y ridge through 640 cells (2026-10-05--06)
+
+The owner chose to extend the y-ridge study before C8. This follow-up registers
+every wavelength and observable separately, after the previous campaign's
+worst-cell statistic hid slower cells. `studies/fdtd_metasurface_fine.py` was
+registered at 20:42:24 KST on 2026-10-05, before its new FDTD rows. Its saved copy,
+registration, ledger, worker logs and report use the prefix
+`studies/results/fdtd_metasurface_fine`. The registration fingerprints the study,
+its dependencies, the package, the historical inputs and numerical versions.
+
+**Choosing the controls before FDTD.** Reference-only scans used N = 40 and 80
+at 17 wavelengths from 0.90 to 1.10, in steps of 0.0125. The original height-0.30
+ridge has a sampled p-reflection peak near 1.025. Halving the height to 0.15 did
+not remove the peak: it moved to 0.975 and reached 0.965. Height 0.20 moved it to
+1.0 (0.876). Height 0.10 moved the strong peak to 0.9125 (0.944), outside the
+measured band 0.95--1.05, and was selected as `D12`. Its sampled p reflectance in
+that band decreases from 0.798 to 0.550. The largest N = 40 to 80 change in p
+reflectance among all five scanned scenes was 5.6e-5. These scans select a
+geometry; the campaign uses a much finer reference ladder to measure errors.
+
+The rejected heights and their raw rows remain in `fdtd_metasurface_fine_scan`
+and `fdtd_metasurface_fine_scan_more` (`.py`, `.jsonl` and `.log`). The first scan
+called height 0.15 `D12`; the registered campaign's `D12` means height 0.10,
+called `H10` in the second scan. The explicit height in each row disambiguates
+them. A smooth sampled band does not prove that no resonance is present. The
+strong peak's tail remains, and changing height also changes the corner fields.
+
+![Reference-only scans showing the height-dependent p peak and the epsilon-4 control.](figures/fdtd_metasurface_fine_prescan.png)
+
+The plot uses N = 80 samples and straight connecting segments, not a search for
+the exact resonance maximum (`studies/fdtd_metasurface_fine_plot.py`). The shaded
+band is where the FDTD convergence is measured.
+
+| Scene | Epsilon | Height | Purpose |
+| --- | --- | --- | --- |
+| `Y12` | 12 | 0.30 | Extend the original yz ridge |
+| `Y4` | 4 | 0.30 | Lower dielectric contrast |
+| `D12` | 12 | 0.10 | Move the sampled strong peak outside the measured band |
+| `F12` | 12 | 0.30 | Cornerless propagation control |
+
+The ridges retain width 0.20, period 0.50, substrate epsilon 2.25, theta 25,
+phi 30 and the old placement within a cell. The rungs are 80/160/320/640, both
+incident polarisations and wavelengths 0.95/1.0/1.05. Each scene reports all 36
+cells: four outgoing complex amplitudes and two efficiencies, for each incident
+polarisation and wavelength. Historical `Y12` and `F12` rows through 320 are
+reused with their input hashes checked. A new `Y12` 160 s replay must reproduce
+the old 18 numbers within 1e-10.
+
+**The registered measurement rule.**
+
+* Every FDTD run must satisfy the preceding ridge study's finite-value, angle,
+  stability, decay and warning checks. An unsettled 120-period run gets one
+  180-period replacement.
+* At 320, every scene and incident polarisation also runs for 180 periods and
+  with 48 absorber cells instead of 24. The sum of the two absolute changes is
+  a per-cell numerical noise proxy. If twice this proxy exceeds one tenth of
+  either final grid change, both controls also run at 640. The larger proxy is
+  retained; a failed uncertainty gate makes the cell unresolved.
+* RCWA starts at N = 300/400/600/800. The maximum distance from the last three
+  preceding truncations to the top is a per-cell reference spread. If it exceeds
+  2% of a resolved error in the final three rungs, that scene and wavelength
+  extend to 1000, then 1200. At the cap, unresolved references stay unresolved.
+* Each cell reports direct orders at 160 -> 320 and 320 -> 640, and a reference-free
+  self-order from the changes across 160/320/640. Direct intervals use the
+  reference spread plus the noise proxy; self-order intervals use twice the
+  proxy. These are empirical intervals, not rigorous error bounds.
+* An interval wholly in [1.8, 2.3] is *second*, with upper end at most 1.75 is
+  *low*, otherwise *mixed*. A failed uncertainty or positivity gate is
+  *unresolved*. Differences at or below 1e-10 are unresolved. The per-wavelength
+  maximum errors are descriptive and never override a slower resolved cell.
+* `F12` must be second in its worst amplitude and efficiency at each wavelength
+  over the final step. Exactly vanishing cross-polarised cells need not have a
+  resolved order.
+
+**FDTD controls and reference-free results.** All 49 FDTD rows pass the finite-value,
+angle, stability, decay and warning checks; 12 are reused base rows. The 16 new
+320-cell time/absorber variants pass the noise gate for all 132 cells with resolved
+grid changes. The largest ratio of twice the noise proxy to the smaller final
+grid change is 0.08284 (the `Y4` s-reflected `r_s` at wavelength 1.05), below 0.1.
+No condition triggers a 640-cell control repeat, and no unsettled base run needs
+replacement. Across all FDTD rows, the largest absolute `R + T - 1` is 1.30e-6.
+The film's six worst-amplitude/efficiency interval checks all classify as second.
+
+| Scene | Low self-order | Second | Mixed | Unresolved |
+| --- | --- | --- | --- | --- |
+| `Y12` | 6 | 29 | 1 | 0 |
+| `Y4` | 4 | 30 | 2 | 0 |
+| `D12` | 32 | 1 | 3 | 0 |
+| `F12` | 0 | 24 | 0 | 12 |
+
+Each row contains all 36 cells. These self-orders use the 160/320/640 differences
+and their measured noise proxies; RCWA precision cannot change them. `F12`'s
+unresolved cells are its vanishing cross-polarised amplitudes. In `Y12`, the
+s-to-s transmitted amplitude at wavelength 0.95, tracked before this extension,
+has a self-order interval [1.5841, 1.5874]. Its direct 320-to-640 interval is
+[1.4984, 1.5456], using the sufficient N = 800 reference ladder at this wavelength.
+Both classify as low. Its raw direct orders over 80-to-160, 160-to-320 and
+320-to-640 are 1.619, 1.563 and 1.522, with the same reference: there is no return
+to second order in this measured range. The contrast control's three s-reflected `r_s` cells also
+have low self-order intervals, despite their much smaller absolute errors.
+
+![All 144 reference-free self-orders, with the registered interval classifications.](figures/fdtd_metasurface_fine_self_orders.png)
+
+**Final references and direct orders.** Five scene/wavelength groups required
+the registered reference refinement. Nine extra solves brought every ridge
+cell's spread below 2% of its smallest reference error at 160/320/640. The film
+uses the N = 0 uniform-layer reference. N is the RCWA truncation setting, not
+the FDTD resolution or a literal count of Fourier components.
+
+| Scene | Wavelength | Final N | Largest reference spread / smallest final-three-rung error |
+| --- | --- | --- | --- |
+| `Y12` | 0.95 | 800 | 1.311% |
+| `Y12` | 1.00 | 1200 | 1.056% |
+| `Y12` | 1.05 | 1000 | 1.441% |
+| `Y4` | 0.95 | 1200 | 1.133% |
+| `Y4` | 1.00 | 1200 | 1.281% |
+| `Y4` | 1.05 | 1200 | 1.500% |
+| `D12` | 0.95 | 800 | 1.412% |
+| `D12` | 1.00 | 800 | 1.274% |
+| `D12` | 1.05 | 800 | 1.389% |
+
+These empirical spreads satisfy the registered precision gate; they are not
+rigorous bounds on the reference's distance to the continuum solution. With
+those references, the final 320-to-640 direct interval classes are:
+
+| Scene | Low direct order | Second | Mixed | Unresolved |
+| --- | --- | --- | --- | --- |
+| `Y12` | 9 | 20 | 7 | 0 |
+| `Y4` | 7 | 18 | 11 | 0 |
+| `D12` | 34 | 1 | 1 | 0 |
+| `F12` | 0 | 24 | 0 | 12 |
+
+![All 144 final-step reference-based orders, with the registered interval classifications.](figures/fdtd_metasurface_fine_reference_orders.png)
+
+The numbers in both plots are point estimates; the colours classify the entire
+empirical interval. A mixed cell can lie above 2.3 as well as between the low
+and second bands. Direct and self-orders need not agree on these finite rungs:
+for example, `Y12`'s s-to-s transmitted amplitude at wavelength 1.0 is direct-low
+([1.7265, 1.7369]) but self-second ([1.8240, 1.8248]). This is evidence against
+treating every cell as a single error power already at its asymptote.
+
+At 640, `Y4`'s three s-reflected `r_s` errors are only 3.91e-6, 2.94e-6 and
+2.14e-6, but their direct intervals are all low: [1.4367, 1.5866],
+[1.3803, 1.5962] and [1.2838, 1.6265]. For the lower `D12`, the s-to-s
+transmitted amplitude has direct orders 1.485, 1.473 and 1.464; all three
+intervals are low. These are finite-grid measurements, not fitted corner
+exponents.
+
+The descriptive worst-amplitude errors of `Y12` at 640 are 3.646e-4, 2.184e-4
+and 3.540e-4 at wavelengths 0.95, 1.0 and 1.05; their last-step orders are
+1.590, 1.752 and 1.878. The overall maximum has moved from wavelength 1.05
+through 320 to wavelength 0.95 at 640. The corresponding worst-efficiency
+orders are 1.843, 1.945 and 1.903. These maxima do not replace the cellwise rule
+or retroactively change the previous study's registered verdict.
+
+**A negative self-order is not a negative asymptotic exponent.** `D12`'s
+s-reflected efficiency at wavelength 0.95 has reference errors 1.002e-4,
+7.448e-5 and 3.778e-5 at 160/320/640: the errors decrease. Its two grid changes
+are 2.569e-5 and 3.670e-5, so the self-order is -0.514, with interval
+[-0.5433, -0.4857]. The increasing changes do not mean that the reference error
+increased. These rungs are not described by one error power, and the registered
+finite-grid class must not be promoted to an asymptotic or causal conclusion.
+
+This extension stops at 640. The low cells in `D12` show that the original
+ridge's in-band strong sampled peak is not necessary for low order in a y ridge;
+they do not eliminate every resonance effect. A contrast trend can be consistent
+with corner exponents without identifying the mechanism. In particular, the
+small `Y4` reflection cells and `D12` efficiency cells do not all follow one power
+over these rungs. M3's coarser-grid behaviour remains a separate question: the
+3D box has no new convergence ladder here, and this extension does not explain why the earlier xz
+ridge looked second order through 320. This study cannot change C7's original
+failed gate into a pass.
+
+The inherited worker metadata names `9f67bbf2` as the base commit. Its injected
+`dirty: false` field is not a measurement of Git cleanliness: these study files
+were uncommitted during the run. The registration's source and package hashes,
+checked by every worker, identify the actual numerical code.
+
+The procedural audit (`studies/fdtd_metasurface_fine_audit.py`, output
+`studies/results/fdtd_metasurface_fine_audit.log`) checks all 103 ledger rows:
+33 imported rows retain their original values, and 70 new rows match their raw
+worker JSONs, with exit 0 and no repeated attempts. It reconstructs the
+conditional control and reference-refinement decisions using only the reference
+levels available at each decision, and compares all 144 saved cells to the
+frozen reporter. The replay gap is exactly zero. This is a single-agent
+procedural audit, not an independent physical model or independent agent review.
+
+**Validation of the 640-cell extension.** The full fd/docs tier collected 2753
+cases and exited 0 with 2745 passed and 8 skipped (2130.36 seconds). The separate
+slow tier collected and passed all 81 cases, exit 0 (1117.10 seconds), including
+the existing 40-cell M3 campaign-row replay. That replay is a regression check,
+not a new 3D convergence ladder. The reported totals match collection, with no
+INTERNALERROR or worker crash. The four read-only freezers reproduced
+143/288/140/570 arrays bit for bit, 1141 in total; nothing was rewritten.
+`studies/results/fdtd_metasurface_fine_validation.json` records the exit codes,
+counts, elapsed times and unchanged fd source hash `50574088...`.
+
+The raw logs, including pytest's diagnostic warnings, are under
+`studies/results/fdtd_metasurface_fine_controls/`. Ruff 0.16.2 reports no findings;
+the repository-wide scan retains filesystem-access warnings, while the explicit
+`wavebit tests studies docs` scan and the seven new study scripts are clean
+(`ruff_source_trees.log`, `ruff_study.log`). The final documentation contract
+passes all 66 cases (`docs_contract.log`), and `sphinx-build -W` succeeds
+(`sphinx.log`). The initial method-only Sphinx attempt's four blocked public
+inventory fetches remain in `sphinx_method_preview.log`; the successful retry
+and subsequent builds are retained separately. No new pytest function or
+production source change was introduced by this extension.
+
 ## What the tests hold
 
 `tests/test_fd_metasurface.py` keeps three things in the suite.
@@ -774,14 +993,16 @@ Counts and timings are in `studies/results/fdtd_metasurface_validation.json`, th
 
 ## What this does not show
 
-* **Why M3 converges below second order.** Its xz cross-section does not hold it down as a 2D
-  ridge ("Is it the corners?"), and it does not need the junction's rim ("Is it the rim?"). Its
-  yz cross-section reads second order under the registered worst-cell statistic ("Is it the y
-  faces?"). But split by wavelength, that cross-section's worst amplitude cell converges at
-  1.65 (0.95) and 1.82 (1.0) between 160 and 320, still falling. That was found after the fact.
-  It makes the y faces a suspect again without showing that they hold M3 down, and the
-  mechanism is unknown. The vertical edges, the vertices and the field along finite edges
-  remain candidates too.
+* **Why M3 converges below second order.** Its xz cross-section has no resolved low-order
+  term at the measured rungs ("Is it the corners?"), and the box does not need the junction's
+  rim ("Is it the rim?"). The yz ridge's original registered worst-cell statistic reads
+  second order ("Is it the y faces?"); the later registered cellwise extension through 640
+  resolves low orders in the original ridge, in an epsilon-4 control and in a lower ridge
+  whose strong sampled reflection peak is outside the measured band. Thus low order in a
+  y ridge does not require that in-band peak. This does not identify M3's cause: its low
+  order appears at coarser rungs, no new M3 convergence ladder was run, and changing height
+  changes corner fields as well as resonances. The vertical edges, vertices and field
+  along finite edges remain candidates too.
 * **One pillar per cell.** No supercell, so no plan with several junctions, as a
   phase-gradient metasurface has.
 * **Two body kinds.** Cylinders and unturned boxes, the bodies a junction supports; no prism,
@@ -816,3 +1037,24 @@ cells per wavelength. Four of the nine ladder solves (14 minutes) had run in the
 campaign and were reused, so a run from scratch takes about 3.3 hours.
 `python studies/fdtd_metasurface_ridges.py` runs the third follow-up; its campaign took 47
 minutes.
+
+`python studies/fdtd_metasurface_fine.py run` applies the fourth follow-up's time/absorber
+controls and adaptive reference rule, reusing successful rows only under the recorded
+identity. Run from the checkout root with `PYTHONPATH` pointing to that checkout and
+`OMP_NUM_THREADS`, `OPENBLAS_NUM_THREADS` and `MKL_NUM_THREADS` set to `1`. The recorded
+Python and numerical-library versions are required; an identity mismatch stops the run.
+The `report` command summarizes saved rows without launching missing calculations; use
+`run` to complete the registered procedure first. The six new ridge runs at 640 took
+34.6 to 43.2 minutes each on this machine, while each cornerless film run took about
+27 seconds. Each numerical worker exits before the next one starts.
+The completed campaign ran from 20:45 on 2026-10-05 to 03:09 on 2026-10-06 KST,
+about 6.4 hours: new workers recorded 4.60 hours of FDTD and 1.78 hours of RCWA.
+Those times exclude the reference-only selection scans and subsequent regression
+checks; reused historical rows are not charged again.
+
+`python studies/fdtd_metasurface_fine_order_plot.py` draws both complete classification
+matrices from the finished report. `python studies/fdtd_metasurface_fine_validation.py`
+runs the full fd/docs tier, the separate slow tier and the four read-only freezers
+sequentially. `python studies/fdtd_metasurface_fine_audit.py` checks the saved evidence
+without launching numerical solves. Keep the registration, saved source, input scans, ledger and worker logs
+together when reproducing or reviewing this extension.

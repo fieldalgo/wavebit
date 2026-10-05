@@ -3020,11 +3020,11 @@ per wavelength) falls slower than second order -- and its s efficiencies outran 
 reference, so that pair is not judgeable. The junction campaign's cylinders had converged at
 1.73 to 1.74 under the same statistic; this time the cylinders passed and the box did not, and
 the campaign does not say which of the box's creases, its junction rim or the conical incidence
-holds its order down. A registered follow-up (`studies/fdtd_metasurface_corners.py`) ruled out the
-first suspect, the corners' field singularity, in M3's xz cross-section: that cross-section as a
+holds its order down. A registered follow-up (`studies/fdtd_metasurface_corners.py`) did not
+detect a low-order term in M3's xz cross-section at the measured rungs: that cross-section as a
 ridge converged at second order from 40 to 320 cells per wavelength at epsilon 12 and 4 alike,
-where the corner exponents predicted 1.37 to 1.61. That was read as meaning that what lowers
-M3's order is three-dimensional; the third follow-up below weakens that reading. A second registered
+where the corner exponents suggested 1.37 to 1.61. That was read as meaning that what lowers
+M3's order is three-dimensional; the y-ridge follow-ups below weaken that reading. A second registered
 follow-up (`studies/fdtd_metasurface_lifted.py`, 2026-10-04) showed that the low order does not
 need the junction's rim. It lifted the box 0.10 off its glass, so no voxel holds pillar and glass
 together. The box then converged at the same order: the reference-free self-convergence orders
@@ -3038,6 +3038,18 @@ resonance converges at 1.65 (wavelength 0.95) and 1.82 (1.0) between 160 and 320
 wavelength, still falling, unlike the xz ridge's 2.00. The y faces and the edges along x are
 therefore a suspect again. But the yz ridge's worst amplitude cell reads about 1.9 at M3's
 coarser rungs, where M3 is already low, and the mechanism is not known.
+
+A fourth follow-up (`studies/fdtd_metasurface_fine.py`, registered 2026-10-05) extends the
+yz ridge to 640 cells per wavelength and registers each wavelength and observable separately.
+After the time and absorber checks, the reference-free self-order rule resolves low order in
+6 of 36 original-ridge cells, 4 of 36 epsilon-4 cells and 32 of 36 height-0.10 cells. The
+cornerless film has 24 resolved second-order cells and 12 unresolved, vanishing cross-polarised
+cells. The lower ridge moves the strong sampled reflection peak outside the measured band,
+so that in-band peak is not necessary for low order in a y ridge. Its tail remains, and height
+also changes the corner fields; neither this control nor the contrast trend identifies a
+mechanism. The extension adds no new M3 convergence ladder and does not make C7 pass. The
+complete cellwise record and the distinction between direct and self-orders are in the
+validation document linked above.
 
 **Validation.** No production source changed in C7 (fd source SHA-256
 `50574088a3e1e766f334890bcbbd5dbd5ad1dc600c9469766f65d63c949832d9`, the tree of `273514f4`).

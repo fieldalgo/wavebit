@@ -172,7 +172,7 @@ polarisations and three wavelengths -- the worst cell, not a typical one:
 
 "Cells per wavelength" counts the vacuum wavelength; the planner refuses fewer than 8 cells per
 wavelength *inside* the densest material (so 25 is the floor for epsilon 5.8 at this band, 40
-for epsilon 12) and warns below 12. The two cylinders' errors fall at second order -- each
+for epsilon 12) and warns below 12. The two cylinders' largest errors fall at second order -- each
 doubling divides them by about four; the epsilon-12 box's falls at order 1.5 to 1.75, so a
 doubling divides it by about three ([`../fd-metasurface-validation.md`](../fd-metasurface-validation.md)
 says what is and is not known about why). The slower rate does not need the box's contact with
@@ -180,20 +180,28 @@ the glass. The same box lifted 0.1 off its substrate converges at the same rate,
 1.3 times (amplitudes) and 1.6 to 1.7 times (efficiencies) larger. Whether the contact adds an
 error of its own when the box stands on the glass is not known, because lifting the box also
 leaves its base edges in air. Leaving a gap under the pillar will not buy back the
-order. Run as 2D ridges, the box's xz cross-section converges at second order. Its yz
-cross-section's amplitudes, away from a resonance, converge more slowly between 160 and 320
-cells per wavelength (the worst cell at about 1.65 to 1.8), though at 40 to 80 cells that
-worst cell still reads about 1.9. Whether the box's y faces cause its slower rate is still being investigated.
+order. Run as 2D ridges, the box's xz cross-section converges at second order through 320
+cells per wavelength. The yz cross-section has slower individual amplitudes through 640:
+at wavelength 0.95 its s-to-s transmitted amplitude has a reference-based order about 1.52
+over the final doubling, and a reference-free self-order about 1.59 over 160/320/640.
+The registered time and absorber checks resolve that low order. Moving the ridge's strong
+sampled reflection peak outside the measured band by reducing its height also leaves low
+orders. Changing height changes the corner fields too, so these controls do not identify the
+mechanism or show that it causes the 3D box's coarser-grid behaviour. This extension adds no
+new 3D convergence ladder; the existing 40-cell M3 regression row is replayed by the slow tests.
 
 Two practical consequences:
 
 * **For a percent on every order, 40 cells per wavelength is about right for these indices**,
   and a coarse run is a fair first look: at the floor the worst order is off by a few percent,
   most by much less.
-* **Check a design at two resolutions.** If the number you care about moves by `d` from `n` to
-  `2n` cells per wavelength, the finer run is off by about `d/3` when the error falls at second
-  order and about `d/2` when it falls at first; a Richardson step, `X(2n) + (X(2n) - X(n))/3`,
-  estimates the limit when it is second order.
+* **Check the wavelength and observable you care about at several resolutions.** A maximum
+  over many cells can hide smaller components that converge more slowly. If the error follows
+  a single power `C n^(-p)` and the number moves by `d` from `n` to `2n` cells per wavelength,
+  the finer error is `d/(2^p - 1)`: `d/3` at second order and `d` at first order. Use at least
+  three resolutions to estimate the order and check its stability before using the second-order
+  Richardson estimate `X(2n) + (X(2n) - X(n))/3`. The ridge extension contains cancellations
+  for which a single-power model does not describe the sampled rungs.
 
 A run's cost grows as the fourth power of the resolution (three dimensions and the time step).
 On a 12-thread CPU with JAX the 80-cell epsilon-4 cell took 20 minutes and the 120-cell
