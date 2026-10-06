@@ -779,10 +779,14 @@ class Sphere(Shape):
        A finite sum of passive Debye poles uses coupled normal relaxation modes,
        with one reserved memory slot per declared pole and exact zero/equal-time
        reductions. The existing one- and two-pole routes retain their calculations.
-       General conductive bodies, lossy junctions, mixed pole families and curved
+       A finite Drude/Lorentz sum may have unequal damping; its physical
+       polarizations share a normal restoring force and the corresponding energy
+       cross term. General conductive bodies, lossy junctions, mixed
+       Debye/oscillator families and curved
        dispersive interfaces remain refused. See ``docs/fd-conductive-film.md``,
        ``docs/fd-single-pole-film.md``, ``docs/fd-debye-film.md``,
-       ``docs/fd-two-debye-film.md`` and ``docs/fd-debye-sum-film.md`` for the exact
+       ``docs/fd-two-debye-film.md``, ``docs/fd-debye-sum-film.md`` and
+       ``docs/fd-oscillator-sum-film.md`` for the exact
        contracts and validation status.
     2. **No wrapping face.** A sphere that reaches a ``Periodic`` or ``Bloch`` face is refused
        because resolving its wrapped part means summing the geometry over the image ring, and

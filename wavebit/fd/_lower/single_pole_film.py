@@ -161,12 +161,15 @@ def refuse_mismatch(scene, plan):
     if alternative is None:
         from .debye_sum_film import descriptor as debye_sum_descriptor
         alternative = debye_sum_descriptor(scene, plan.grid)
+    if alternative is None:
+        from .oscillator_sum_film import descriptor as oscillator_sum_descriptor
+        alternative = oscillator_sum_descriptor(scene, plan.grid)
     if not expected and alternative is None and any(s.discretisation == 'voxel' and isinstance(s.material, Dispersive)
                             and s.shape.body() is not None
                             for s in (getattr(scene, 'structures', ()) or ())):
         raise ValueError('dispersive smoothing is limited to one concrete axis-aligned film '
-                         'with one passive Drude or Lorentz pole, or a finite sum of passive '
-                         'Debye poles, in a plain lossless host, '
+                         'with a finite passive Drude/Lorentz sum or Debye sum, '
+                         'in a plain lossless host, '
                          'separated interfaces outside absorbing layers, and no initial '
                          'fields or differentiation. A prepared non-film plan cannot '
                          'bypass this bounded C8 scope.')

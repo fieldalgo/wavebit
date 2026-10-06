@@ -3300,3 +3300,57 @@ within the passive Debye film family. Curved dispersive bodies, mixed pole
 families, lossy or dispersive hosts, junctions and geometry/material/band
 derivatives remain outside it. Earlier records keep their original scopes;
 general C8 smoothing remains incomplete and C7 remains unpassed.
+
+### Bounded C8 scope: a finite Drude/Lorentz sum in one film (2026-10-07)
+
+The [oscillator-sum film document](fd-oscillator-sum-film.md) records an
+implemented realization for two or more declared passive Drude/Lorentz
+poles, including unequal damping. The geometry remains one concrete,
+unturned and unranged voxel `Box`, uniform along exactly two complete
+grid axes, in a plain isotropic non-magnetic dielectric host. Its normal
+support stays inside the domain and every support cell stays clear of
+absorbing layers. No partner, junction or initial field is admitted.
+
+The normal harmonic response couples the complete oscillator susceptibility
+through the sum of physical polarizations. Each declared slot retains its
+own damping and unshifted resonance. One shared sum supplies the rank-one
+restoring force; one spatially weighted cross term completes the energy.
+The active bulk resonance plus summed active strengths bounds the coupled
+normal material block under the existing CFL policy. An analytic
+whole-band upper bound covers bulk phase and skin scales, including
+interior oscillator peaks, but does not establish interface convergence.
+
+Six calibration rows on two synthetic material families complete on NumPy,
+JAX and Torch with stable fields and finite energy. Maximum r/t errors are
+0.002272591954/0.0009530150183 for the mixed-metal film and
+0.0006533071788/0.002072997834 for the multiple-Lorentz film. The inherited
+0.005/0.010 regression ceilings were accepted unchanged after measurement
+for these known configurations only; maximum scaled backend difference is
+2.828891e-15. Mixed-metal absorber-proximity warnings remain recorded.
+All 684 targeted cases pass, including 148 cases across nine new functions,
+with unchanged production identity. All ten actual mutation witnesses
+covering the nine functions are accepted, every source byte is restored,
+and the restored 148-case baseline passes. The registered 40-worker
+campaign completes all 40 workers without replacement or stop. Among 48
+self-orders, 45 are second, two mixed and one unresolved. The 96 direct
+pairs contain 90 second, one mixed and five unresolved; the final 48 pairs
+contain 44 second and four unresolved. The two mixed self-orders are
+s-reflection at fraction 0.3 and wavelength 1.1, one in each family; their
+final direct intervals are second. All four unresolved final direct pairs
+are multiple-Lorentz p-reflection: fraction 0.3 at wavelengths 0.9/1.0/1.1,
+and fraction 0.1 at 1.1. Their proxy shares are 0.144745/0.194767/0.475190
+and 0.114333 against the fixed 0.1 line. The main document retains every
+exception. Maximum complex error across r/t falls from 0.004404282404 at
+40 cells to 0.0002814617724 at 160. A saved-data audit independently
+reconstructs every verdict; passing that audit does not erase mixed or
+unresolved cells. The empirical middle-grid proxy is not a rigorous
+fine-grid error bound. Full regression passes 3,434 cases with eight skips
+and the separate slow tier passes all 81. All four read-only freezers
+reproduce 143/288/140/570 arrays bit for bit (1,141 total), with no golden
+writes. The completed numerical records are retained in
+`studies/results/fdtd_oscillator_sum_film_validation.json`. Existing
+single-oscillator and Debye paths retain
+their own implementations and evidence, including their unresolved cells.
+This extension does not mix Debye with Drude/Lorentz poles or admit curved
+bodies, lossy/dispersive hosts, junctions or geometry/material/band
+derivatives. General C8 smoothing remains incomplete and C7 remains unpassed.

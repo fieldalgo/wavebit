@@ -531,6 +531,8 @@ class InteriorEnergy:
                                   for o, (c0, c1) in zip(offsets, cells))
         field = E[(comps,) + tuple(slice(c0, c1) for c0, c1 in cells)]
         total = 0.0
+        rank_one = 'energy_rank_one' in coefficients
+        sum_new = sum_old = None
         for j in range(n_poles):
             if 'energy_inverse_delta' in coefficients:
                 # The induced interface Debye pole varies by cell. Weight each cell
@@ -559,6 +561,12 @@ class InteriorEnergy:
                 total = total + rt.weighted_energy(step/dt, inverse)
                 total = total + rt.real_inner(new, old, potential)
                 total = total - rt.real_inner(field, step, active)
+                if rank_one:
+                    # Physical polarization components share one normal restoring
+                    # force. Mask inactive slots before forming its single sum.
+                    held_new, held_old = active*new, active*old
+                    sum_new = held_new if sum_new is None else sum_new+held_new
+                    sum_old = held_old if sum_old is None else sum_old+held_old
                 continue
             gain, hold, drive = (rt.constant(coefficients[key][j])
                                  for key in ('step_gain', 'hold', 'drive'))
@@ -598,6 +606,14 @@ class InteriorEnergy:
             else:
                 value = rt.xp.where(hold == 0.0, debye, second)
             total = total + (value if live is None else rt.xp.where(live, value, 0.0))
+        if rank_one:
+            # The diagonal potential above uses the unshifted bulk resonance.
+            # Add alpha/kappa Re(sum(Pnew) conj(sum(Pold))) once, after summing
+            # active physical polarizations in this component/region selection.
+            shape = mem['P'][0].shape
+            weight = rt.xp.broadcast_to(rt.constant(coefficients['energy_rank_one']),
+                                        shape)[inside]
+            total = total + rt.real_inner(sum_new, sum_old, weight)
         return total
 
     def series(self, plan, acc):

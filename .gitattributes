@@ -50,3 +50,13 @@ wavebit/fd/_lower/debye_sum_film.py text eol=lf
 wavebit/fd/_lower/debye_sum_resolution.py text eol=lf
 studies/results/fdtd_debye_sum_film* -text
 studies/results/fdtd_debye_sum_film*/** -text
+
+# Oscillator-sum source and raw evidence preserve validated bytes.
+studies/fdtd_oscillator_sum_film_*.py text eol=lf
+docs/fd-oscillator-sum-film.md text eol=lf
+tests/test_fd_oscillator_sum_film.py text eol=lf
+wavebit/fd/_lower/oscillator_sum_film.py text eol=lf
+wavebit/fd/_lower/oscillator_sum_resolution.py text eol=lf
+wavebit/fd/_kernel/observe.py text eol=crlf
+studies/results/fdtd_oscillator_sum_film* -text
+studies/results/fdtd_oscillator_sum_film*/** -text

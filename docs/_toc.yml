@@ -31,6 +31,7 @@ subtrees:
   - file: fd-debye-film
   - file: fd-two-debye-film
   - file: fd-debye-sum-film
+  - file: fd-oscillator-sum-film
   - file: fd-sphere-clip-jit
   - file: fd-symmetric-stencil
   - file: fd-lattice-radiation

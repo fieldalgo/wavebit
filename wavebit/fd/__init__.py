@@ -54,7 +54,7 @@ the one asked for: for an interface that does not land on a cell boundary, a con
 in ``dx`` is the route to a right answer, or, for a lossless non-dispersive layer, the layer
 spelled as the smoothed ``fd.Box`` spanning the other two axes, whose faces are where they were
 asked (stage 4, gate G5); a Conductor or Dispersive layer stays a cell-snapped ``fd.Slab``
-outside the bounded conductive and single-pole film scopes described below. General lossy-body and
+outside the bounded conductive and dispersive film scopes described below. General lossy-body and
 dispersive-interface smoothing remain later C8 work.
 
 Stage 2 adds sources, each a term in the kernel's additive slot::
@@ -236,6 +236,15 @@ only exact equal times or zero increments. The existing one- and two-pole
 routes retain their calculations. Mixed pole families, curved interfaces,
 dispersive hosts and differentiation remain outside this extension.
 See ``docs/fd-debye-sum-film.md`` for numerical admission and validation limits.
+
+A finite sum of two or more passive Drude/Lorentz poles, with unequal damping,
+uses coupled physical polarizations in the same isolated concrete film. Each
+declared pole retains its memory slot; the normal restoring force couples
+their sum, with the corresponding cross term in the energy observer. A
+conservative whole-band bulk bound includes every active interior resonance.
+Mixed Debye/oscillator families, lossy hosts, curved interfaces and
+differentiation remain outside this extension. See
+``docs/fd-oscillator-sum-film.md`` for its contract and validation status.
 
 Stage 4's C3 adds a second material discretisation, **opt in and per structure**::
 

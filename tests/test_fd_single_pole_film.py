@@ -226,8 +226,9 @@ def refused_scene(case):
         own = own.replace(eps_inf=(4., 5., 4.))
     elif case == 'magnetic':
         own = own.replace(mu=2.)
-    elif case == 'two-poles':
-        own = own.replace(poles=own.poles + (fd.Drude(omega_p=2., gamma=1.),))
+    # Oscillator sums are admitted; adding first-order Debye memory remains unsupported.
+    elif case == 'mixed-debye-oscillator':
+        own = own.replace(poles=own.poles + (fd.Debye(tau=.2, delta_eps=1.),))
     # Finite passive Debye sums are admitted; mixed pole families remain refused.
     elif case == 'three-mixed-poles':
         own = own.replace(poles=(fd.Debye(tau=.1), fd.Debye(tau=.2),
@@ -261,7 +262,7 @@ def refused_scene(case):
 
 
 @pytest.mark.parametrize('case', ('finite-box', 'sphere', 'turned', 'ranged', 'anisotropic',
-    'magnetic', 'two-poles', 'three-mixed-poles', 'background-loss', 'background-magnetic', 'partner',
+    'magnetic', 'mixed-debye-oscillator', 'three-mixed-poles', 'background-loss', 'background-magnetic', 'partner',
     'initial', 'stencil', 'pml-normal', 'sub-dx', 'transverse-halo', 'transverse-absorber'))
 def test_unsupported_single_pole_films_are_refused_by_name(case):
     with pytest.raises(ValueError) as caught:

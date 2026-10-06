@@ -427,6 +427,9 @@ def check_smoothed(scene, grid):
     film = conductive_film(scene, grid)
     from .single_pole_film import descriptor as single_pole_film
     dispersive_film = single_pole_film(scene, grid)
+    if dispersive_film is None:
+        from .oscillator_sum_film import descriptor as oscillator_sum_film
+        dispersive_film = oscillator_sum_film(scene, grid)
     from .debye_film import descriptor as debye_film
     relaxation_film = debye_film(scene, grid)
     if relaxation_film is None:
@@ -556,7 +559,8 @@ def check_smoothed(scene, grid):
                 f'plausible number and a wrong one. Use the cell-snapped fd.Region for the lossy '
                 f'or dispersive part (first order in dx, and the whole of stages 1-3 rests on '
                 f'it), or keep it out of the smoothed shape\'s cells. C8 currently admits '
-                f'one concrete axis-aligned conductive or single Drude/Lorentz film in a plain dielectric, '
+                f'one concrete axis-aligned conductive, Drude/Lorentz-sum or Debye-sum '
+                f'film in a plain dielectric, '
                 f'clear of absorbing layers, with no initial field; this scene is outside '
                 f'that measured scope.')
         for material, name in media:
@@ -1742,6 +1746,8 @@ def cfl_bound(scene, plan):
     background, structures = _background(scene), tuple(getattr(scene, 'structures', ()) or ())
     materials = [background] + [s.material for s in structures]
     n_min, resonance, coupling = None, 0.0, 0.0
+    from .oscillator_sum_film import policy_rate as oscillator_policy_rate
+    oscillator_rate = oscillator_policy_rate(scene, plan)
     from .debye_film import policy_rate as debye_policy_rate
     relaxation_rate = debye_policy_rate(scene, plan)
     if relaxation_rate is None:
@@ -1757,10 +1763,10 @@ def cfl_bound(scene, plan):
         n_min = n if n_min is None else min(n_min, n)
         strength_sum = 0.0
         for pole in material.poles:
-            if relaxation_rate is not None:
-                # These scopes have one Debye film and a plain host. The replacement
-                # rate includes every bulk pole without evaluating inactive tau**2 or
-                # counting the same memory twice; inactive poles need no division.
+            if relaxation_rate is not None or oscillator_rate is not None:
+                # These scopes have one film and a plain host. Their robust replacement
+                # rate includes every active pole without evaluating inactive extreme
+                # frequencies/times or counting the same memory twice.
                 continue
             w0_squared, strength = pole.rate()
             w0_squared, strength = concrete(w0_squared), concrete(strength)
@@ -1788,6 +1794,8 @@ def cfl_bound(scene, plan):
         rate += film_rate
     if relaxation_rate is not None:
         rate = max(rate, relaxation_rate)
+    if oscillator_rate is not None:
+        rate = max(rate, oscillator_rate)
     return 1.0 / math.sqrt(1.0 / vacuum ** 2 + rate / 4.0), None
 
 
@@ -1806,9 +1814,15 @@ def check_stability(scene, plan):
     if relaxation_rate is None:
         from .debye_sum_film import policy_rate as debye_sum_policy_rate
         relaxation_rate = debye_sum_policy_rate(scene, plan)
+    from .oscillator_sum_film import policy_rate as oscillator_policy_rate
+    oscillator_rate = oscillator_policy_rate(scene, plan)
     poles = [(name, p) for name, p in _all_poles(scene)]
     worst = ''
-    if poles and relaxation_rate is not None and len(poles) > 2:
+    if oscillator_rate is not None:
+        worst = (' The bounded oscillator-sum film includes the maximum active bulk '
+                 'resonance plus every active strength divided by the film permittivity; '
+                 'this also bounds its coupled normal response.')
+    elif poles and relaxation_rate is not None and len(poles) > 2:
         worst = (' The bounded Debye-sum film includes the combined bulk and '
                  'transformed local relaxation rates of every active pole.')
     elif poles and relaxation_rate is not None and len(poles) > 1:
@@ -2059,9 +2073,20 @@ def _smoothed_notes(scene, plan, rows=None):
                     'plain dielectric. Validate observables under refinement and '
                     'check duration and absorbers separately. The spectral guard '
                     'covers bulk scales only. See docs/fd-debye-sum-film.md.'))
+    from .oscillator_sum_film import descriptor as oscillator_sum_descriptor
+    sum_oscillator_film = oscillator_sum_descriptor(scene, plan.grid)
+    if sum_oscillator_film is not None:
+        out.append((SubpixelAccuracyWarning,
+                    'The oscillator-sum film uses coupled physical polarizations for '
+                    'the harmonic normal and arithmetic tangential response, with '
+                    'each Drude/Lorentz pole retaining its own damping. This bounded '
+                    'C8 scope is one concrete axis-aligned film in a plain dielectric. '
+                    'Validate observables under refinement and check duration and '
+                    'absorbers separately. The spectral guard covers bulk scales only. '
+                    'See docs/fd-oscillator-sum-film.md.'))
     if (len(asked) < len(smoothed) and film is None and dispersive_film is None
             and relaxation_film is None and two_relaxation_film is None
-            and sum_relaxation_film is None):
+            and sum_relaxation_film is None and sum_oscillator_film is None):
         # The controlled C3 tensor study measured p=2.02267353134 at eps=2.25,
         # R/lambda=.25, 20/28/40 cells per wavelength and three grid placements.
         # It does not certify the production engine across the remaining contrasts.
@@ -2273,6 +2298,10 @@ def _resolution_notes(scene, plan):
     debye_sum_notes = debye_sum_resolution_notes(scene, plan, _wavelength(scene, plan))
     if debye_sum_notes is not None:
         return debye_sum_notes
+    from .oscillator_sum_resolution import notes as oscillator_sum_resolution_notes
+    oscillator_sum_notes = oscillator_sum_resolution_notes(scene, plan, _wavelength(scene, plan))
+    if oscillator_sum_notes is not None:
+        return oscillator_sum_notes
     from .conductive_film import descriptor
     conductive = descriptor(scene, plan.grid) is not None
     materials = [('Scene(background=)', _background(scene))]
@@ -2380,6 +2409,9 @@ def check_wavelength_resolution(scene, grid):
     from .debye_sum_resolution import validate as validate_debye_sum_resolution
     if validate_debye_sum_resolution(scene, grid):
         return
+    from .oscillator_sum_resolution import validate as validate_oscillator_sum_resolution
+    if validate_oscillator_sum_resolution(scene, grid):
+        return
     from ..monitors import Diffraction
     from .conductive_film import descriptor
     conductive = descriptor(scene, grid) is not None
@@ -2441,6 +2473,10 @@ def _proximity_notes(scene, plan):
         from .debye_sum_film import descriptor as debye_sum_descriptor
         from .debye_sum_resolution import index_at as film_index_at
         film = debye_sum_descriptor(scene, plan.grid)
+    if film is None:
+        from .oscillator_sum_film import descriptor as oscillator_sum_descriptor
+        from .oscillator_sum_resolution import index_at as film_index_at
+        film = oscillator_sum_descriptor(scene, plan.grid)
     out, grid = [], plan.grid
     for index, structure in enumerate(getattr(scene, 'structures', ()) or ()):
         if film is not None:
