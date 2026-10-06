@@ -3051,6 +3051,21 @@ mechanism. The extension adds no new M3 convergence ladder and does not make C7 
 complete cellwise record and the distinction between direct and self-orders are in the
 validation document linked above.
 
+A fifth follow-up compares the 3D box at heights 0.30 and 0.60 (2026-10-06).
+Its first registered 40/80/120 campaign stopped incomplete: the tall 40-cell
+run remained unsettled at its 180-period cap. After a separately registered
+time calibration, a new common 40/60/80 comparison completed, using 540-period
+tall runs and 720-period time/absorber controls at 60 cells. All 108 self-order
+cells pass the registered noise gate. The baseline has 22 low, 23 second and
+nine mixed cells; the tall box has 11 low, 20 second and 23 mixed. The measured
+changes go in both directions, and every tall cell's final direct-error order
+is unresolved by the capped RCWA reference. The result establishes neither
+uniform second order nor greater accuracy for the taller box. Height changes
+corner fields and resonances together, so it does not isolate M3's mechanism;
+**C7 remains unpassed**. There is no new p-incidence ladder or tall 120-cell
+result. The failed protocol, calibration and completed comparison are preserved
+separately in the validation document and `studies/results/fdtd_metasurface_tall*`.
+
 **Validation.** No production source changed in C7 (fd source SHA-256
 `50574088a3e1e766f334890bcbbd5dbd5ad1dc600c9469766f65d63c949832d9`, the tree of `273514f4`).
 The full fd/docs tier collected 2753 cases and exited 0 with 2745 passed and 8 skipped

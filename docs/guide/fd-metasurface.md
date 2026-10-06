@@ -190,7 +190,17 @@ orders. Changing height changes the corner fields too, so these controls do not 
 mechanism or show that it causes the 3D box's coarser-grid behaviour. This extension adds no
 new 3D convergence ladder; the existing 40-cell M3 regression row is replayed by the slow tests.
 
-Two practical consequences:
+A later 3D comparison doubles the box's height and uses a common 40/60/80
+ladder after a separate run-length calibration. With time and absorber controls,
+the original height has 22 low, 23 second and nine mixed self-order cells; the
+tall box has 11 low, 20 second and 23 mixed. The changes go in both directions,
+so height does not restore uniform second order. These are finite-grid
+reference-free classes: the capped RCWA ladder cannot resolve any tall cell's
+final direct-error order under the registered spread rule. Fewer low cells do
+not establish a more accurate design or identify the slow-convergence cause.
+C7 remains unpassed; the full 108-cell comparison is in the validation document.
+
+Three practical consequences:
 
 * **For a percent on every order, 40 cells per wavelength is about right for these indices**,
   and a coarse run is a fair first look: at the floor the worst order is off by a few percent,
@@ -202,7 +212,16 @@ Two practical consequences:
   three resolutions to estimate the order and check its stability before using the second-order
   Richardson estimate `X(2n) + (X(2n) - X(n))/3`. The ridge extension contains cancellations
   for which a single-power model does not describe the sampled rungs.
+* **Check run length separately from mesh refinement.** Doubling M3's height to 0.60
+  leaves a substantial transient: at 40 cells, both 120 and 180 periods fail the
+  1e-5 monitor-decay line. At 240 periods the decay check passes, but the largest
+  `|R + T - 1|` across the band is still about 0.5%. That warning line is not an
+  error bound on a spectral observable. Compare longer runs and thicker absorbers
+  at matched times, and require their changes to be small relative to the grid
+  changes being interpreted. The time calibration is recorded in the validation
+  document above; it is not itself a spatial-convergence result.
 
-A run's cost grows as the fourth power of the resolution (three dimensions and the time step).
+For a fixed duration, a run's cost grows as the fourth power of the resolution
+(three dimensions and the time step). A longer-lived geometry can also require more periods.
 On a 12-thread CPU with JAX the 80-cell epsilon-4 cell took 20 minutes and the 120-cell
 epsilon-12 cell 84; at 20 to 40 cells a run takes seconds to a few minutes.

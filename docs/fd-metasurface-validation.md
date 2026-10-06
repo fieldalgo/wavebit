@@ -1021,6 +1021,204 @@ s incidence with all 54 cells retained, a baseline absorber check and matched
 time/absorber controls on the tall scene; no outcome from that candidate has
 been measured or preregistered here.
 
+## Registered bounded height comparison (2026-10-06)
+
+`studies/fdtd_metasurface_tall.py` defines the follow-up to the readiness study.
+It compares the original height 0.30 with height 0.60 at 40/80/120 cells per
+wavelength, retaining the footprint, glass contact, incidence, fractional face
+positions and phase conventions. Only s incidence has a new FDTD convergence
+ladder. The reference solver also returns p coefficients; they are retained but
+not classified here. Every
+propagating amplitude and efficiency is retained at each of the three
+wavelengths, giving 54 cells per height. The baseline data and the earlier
+time-only analysis were already known; the tall response is prospective.
+
+The primary statistic uses the phase-corrected changes between adjacent grids.
+It inverts the unequal-rung power-law ratio separately in every cell, retaining
+negative finite-grid orders and the continuous zero-order limit. For a single
+leading error proportional to `n^(-p)`, the change ratio is
+`(2^p - 1) / (1 - (2/3)^p)`, with limit `log(2)/log(1.5)` at zero.
+Inverting the measured ratio does not prove that the three complex values
+actually follow one power. Both heights
+have 80-cell time and absorber controls: 180 versus 120 periods and 48 versus
+24 PML cells. Their summed absolute moves form an empirical noise proxy. Twice
+that proxy must be at most one tenth of the smaller grid change; the same
+twice-proxy also widens the two changes when calculating the self-order interval.
+The inherited interval classes are second inside [1.8, 2.3], low when the upper
+end is at most 1.75, and mixed otherwise. Failed validity, noise or positivity
+checks, and changes at or below 1e-10, remain unresolved.
+
+This bounded protocol has no conditional finer absorber/time controls. An
+80-cell proxy is not a rigorous bound on the 120-cell calculation. A merely
+unsettled base run receives one 180-period replacement; failed controls do not
+receive an unregistered extension. A fresh original-height 40-cell replay must
+match every raw value and phase-corrected cell to 1e-10 before new target runs.
+
+The tall RCWA ladder is fixed at N = 12/16/20/24, with a resource check before
+each solve. The baseline retains its previously measured N = 20/26/28/30/32
+ladder. The maximum distance of the preceding three truncations from the top
+is the empirical reference spread. Direct error orders require this spread to
+be at most 2% of both endpoint errors, along with the noise and positivity
+checks. The unequal reference ladders are reported explicitly. Reference-free
+self-orders remain available when the capped reference cannot resolve a direct
+order. No tolerance or reference cap changes in response to the tall results.
+
+Tall-minus-baseline intervals are descriptive. Changing height simultaneously
+changes vertical-edge length, fields at corners and resonances, so this
+comparison cannot assign the cause to one of them, establish an asymptote,
+describe a new p-incidence convergence result, or certify C7. Registration, a frozen source
+copy, original inputs, worker attempts and the complete cell report use the
+`studies/results/fdtd_metasurface_tall*` prefix. All workers check the registered
+code, dependency, package, version and input identities. The companion audit
+recomputes all cells and verifies imported data and raw worker records; it is a
+single-agent procedural audit, not independent physical or agent review.
+
+**Original execution: stopped after a validity failure, incomplete.** All 12 new
+tall-box reference solves finished, the baseline 40-cell replay reproduced every
+raw value exactly, and the new baseline 80-cell absorber control passed. With
+both time and absorber proxies, the baseline has 24 low, 23 second and 7 mixed
+self-order cells; none fails the noise gate, whose largest share is 0.003005
+against the registered 0.1 line. Under this experiment's per-cell 2% reference
+spread rule, its final direct-error order is unresolved in 53 cells and mixed
+in one. This is a separate baseline check, not a completed height comparison.
+
+The tall 40-cell run did not settle within the registered time budget:
+
+| Duration, periods | Reflection decay | Transmission decay | Valid at the 1e-5 line? |
+| --- | --- | --- | --- |
+| 120 | 3.77124e-4 | 5.34255e-5 | No |
+| 180, registered replacement | 5.10871e-5 | 7.15925e-6 | No |
+
+Both runs are numerically stable, but the selected 180-period row still has an
+unsettled-field warning. Its largest absolute energy residual is 0.0088462;
+the 120-period row's is 0.0646909. These are insufficient-duration results,
+not accepted spatial-convergence data. The running tall 80-cell base worker
+was deliberately stopped once the invalid selected 40-cell row was confirmed:
+finishing the remaining rungs cannot repair that failure within the frozen
+protocol. Its empty raw log, nonzero worker exit, controller failure and the
+reason in `fdtd_metasurface_tall_halt.json` are retained. No tall 80- or 120-cell
+result or tall spatial-order verdict was produced. This operational early stop
+does **not** count as completion of the preregistered experiment.
+
+`fdtd_metasurface_tall_audit.py` checks all 36 original ledger rows: 19 imports,
+16 completed new workers, and one intentionally stopped worker. It verifies
+the raw files, the exact replay, the unresolved validity failure and the
+absence of a completed height report. Its `.log` and
+`fdtd_metasurface_tall_abort_report.json` retain the audit and all 54 separately
+valid baseline cells. The original source and registration remain frozen.
+
+A separate time calibration, `studies/fdtd_metasurface_tall_time.py`, was
+registered after disclosing this failure. It fixes additional durations
+240/360/540 at the same tall 40-cell scene before measuring them. It measures
+settling and all per-cell time changes, not spatial orders. Any subsequent
+spatial experiment must disclose these calibration data and register its own
+durations; longer runs do not retroactively rescue the original protocol.
+
+**Time calibration completed.** The 240/360/540-period runs all pass the 1e-5
+decay line. Their reflection decays are 6.89956e-6, 1.28594e-7 and 3.53926e-10,
+but their largest absolute energy residuals are respectively 0.00499303,
+0.00158801 and 0.0000656671. Passing the decay warning line alone does not
+establish the precision of a spectral observable. The largest per-cell move
+from 360 to 540 periods is 0.000852904; the full 54-cell time record is in
+`fdtd_metasurface_tall_time_report.json`. It contains no spatial-order verdict.
+
+![Tall-box time calibration: monitor decay and energy residual at every measured duration](figures/fdtd_metasurface_tall_time_calibration.png)
+
+### Time-calibrated comparison on 40/60/80
+
+`studies/fdtd_metasurface_tall_settled.py` was registered at
+2026-10-06T10:54:40+09:00, after disclosing all of the original failure and time
+calibration data. Its fingerprint begins `4474580ea1f2712c`. This is a new
+experiment: **both heights use 40/60/80**, limiting cost after the time increase.
+It does not supply the missing 120-cell tall result. Fractional face positions,
+footprints, materials, illumination and phase conventions are unchanged.
+The new 60-cell plans and the revised unequal-rung order instrument pass the
+preflight. The valid, already observed 540-period tall 40-cell row is imported
+explicitly, along with the baseline endpoints, references and earlier exact
+baseline replay. No tall 60- or 80-cell result was available for registration.
+
+Baseline runs use 120 periods and the tall runs 540. A merely unsettled base
+run gets one replacement at 180 or 720, respectively; a still-invalid selected
+row triggers a registered early stop before spending later large runs on an
+invalid ladder. The outcome of that stop is an unresolved comparison, never
+a spatial-order claim. The validity and classification thresholds are unchanged.
+
+Controls are at 60 cells. Each height runs its longer duration (180 or 720)
+with both 24 and 48 PML cells. Both controls must settle, with no further
+extension. Noise is `|long24 - base24| + |long48 - long24|`, so the absorber
+comparison uses matched times. Twice the proxy must be at most 0.1 of the
+smaller adjacent grid change, and also widens the changes in the self-order
+interval. A 60-cell proxy is not a rigorous error bound at 80 cells.
+The one-power ratio is now `(1.5^p - 1)/(1 - (3/4)^p)`; its zero limit and
+negative orders are retained. All 54 cells per height and descriptive
+tall-minus-baseline intervals are reported. The inherited references and
+per-cell 2% spread rule stay fixed, without new reference refinement.
+
+The longer times and reduced common ladder are calibration-informed design
+choices. They cannot be presented as preregistered results of the original
+failed campaign, evidence at 120 cells, a causal separation of corners and
+resonances, or a C7 pass.
+
+**The calibrated comparison completed, with valid controls.** All seven new
+FDTD workers finished on their first attempt; no conditional replacement or
+registered stop was needed. The ledger has 31 explicitly imported rows and
+seven new rows. All 108 cell records pass the self-order noise gate. The largest
+twice-proxy share of the smaller grid change is 0.001250 for the baseline and
+0.029962 for the tall box, against the fixed 0.1 line. Across the selected
+runs the largest `|R + T - 1|` is 7.25964e-5; that energy check is not an
+error bound on individual amplitudes.
+
+| Height | Wavelength | Low | Second | Mixed | Unresolved self-order |
+| --- | --- | --- | --- | --- | --- |
+| 0.30 | 0.95 | 6 | 7 | 5 | 0 |
+| 0.30 | 1.00 | 5 | 10 | 3 | 0 |
+| 0.30 | 1.05 | 11 | 6 | 1 | 0 |
+| **0.30 total** | **all three** | **22** | **23** | **9** | **0** |
+| 0.60 | 0.95 | 0 | 1 | 17 | 0 |
+| 0.60 | 1.00 | 7 | 8 | 3 | 0 |
+| 0.60 | 1.05 | 4 | 11 | 3 | 0 |
+| **0.60 total** | **all three** | **11** | **20** | **23** | **0** |
+
+![Self-order estimates and intervals for every wavelength and observable at both box heights](figures/fdtd_metasurface_tall_settled_orders.png)
+
+Height changes the measured finite-grid behaviour, without restoring uniform
+second order. Of the baseline's 22 low cells, 11 become second, eight mixed and
+three remain low; eight other cells become low in the tall box. Descriptive
+tall-minus-baseline intervals are positive in 38 cells and negative in 16.
+These are intervals propagated from the empirical noise proxy, not statistical
+confidence intervals or proof of an asymptotic exponent. The point estimates
+span -2.33 to 4.28 for the baseline and -0.22 to 6.63 for the tall box. Negative
+and unusually large finite-grid orders are retained; three samples and their
+change magnitudes do not establish a single leading error power.
+
+The capped references cannot resolve the final direct-error order in any of
+the tall box's 54 cells under the registered 2% spread rule. For the baseline,
+51 are unresolved, one low and two mixed. Reference-free self-order classes
+therefore must not be presented as certified accuracy against RCWA. In
+particular, fewer low self-order cells do not establish that the tall box is
+more accurate. Changing height also changes corner fields and resonances;
+this study does not identify M3's slow-convergence mechanism and **C7 remains
+unpassed**. There is no new p-incidence ladder or tall 120-cell result.
+
+The new spatial workers took 8843.31 seconds (2.46 hours) in total, from 10:56
+to 13:23 KST on 2026-10-06; this excludes the earlier failed campaign and time
+calibration. The 80-cell tall run alone took 3492.28 seconds. The full cell
+report, descriptive summary, audit and plots are saved under
+`studies/results/fdtd_metasurface_tall_settled*`. The audit verifies every raw
+worker and imported row, recomputes all 108 spatial records and checks the
+54-cell calibration without rewriting its frozen report.
+
+**Validation for the height follow-up.** The original-abort audit, calibration
+audit and completed-comparison audit pass. The documentation tier collects and
+passes all 66 cases, exit 0. No production or test source changed. The full and
+slow suites and read-only freezers were **not rerun** for this study: their
+recent results from `fdtd_metasurface_fine_validation.json` are reused only
+after verifying the exact package identity and unchanged production/tests since
+`33aab0f9`. Those prior runs collected 2753 full-tier cases (2745 passed, eight
+skipped), passed all 81 slow cases, and reproduced 1141 freezer arrays bit for
+bit. The new audit/docs exits and the explicit evidence-reuse record are in
+`fdtd_metasurface_tall_validation.json`.
+
 ## What the tests hold
 
 `tests/test_fd_metasurface.py` keeps three things in the suite.
@@ -1066,9 +1264,12 @@ Counts and timings are in `studies/results/fdtd_metasurface_validation.json`, th
   resolves low orders in the original ridge, in an epsilon-4 control and in a lower ridge
   whose strong sampled reflection peak is outside the measured band. Thus low order in a
   y ridge does not require that in-band peak. This does not identify M3's cause: its low
-  order appears at coarser rungs, no new M3 convergence ladder was run, and changing height
-  changes corner fields as well as resonances. The vertical edges, vertices and field
-  along finite edges remain candidates too.
+  order appears at coarser rungs, the ridge extension ran no new M3 convergence ladder, and changing height
+  changes corner fields as well as resonances. The later calibrated 3D height comparison
+  on 40/60/80 changes the cellwise self-orders in both directions and retains 11 low
+  cells in the tall box. Its capped reference leaves every tall final direct-error
+  order unresolved. The vertical edges, vertices and field along finite edges remain
+  candidates too; the height result does not separate these causes.
 * **One pillar per cell.** No supercell, so no plan with several junctions, as a
   phase-gradient metasurface has.
 * **Two body kinds.** Cylinders and unturned boxes, the bodies a junction supports; no prism,
@@ -1124,3 +1325,28 @@ runs the full fd/docs tier, the separate slow tier and the four read-only freeze
 sequentially. `python studies/fdtd_metasurface_fine_audit.py` checks the saved evidence
 without launching numerical solves. Keep the registration, saved source, input scans, ledger and worker logs
 together when reproducing or reviewing this extension.
+
+The height follow-up has three separately frozen protocols. The original
+`studies/fdtd_metasurface_tall.py` campaign stopped with an invalid selected
+40-cell row and remains incomplete. Do not resume it or append to its ledger:
+the subsequent protocols identify that preserved failure record by hash.
+`python studies/fdtd_metasurface_tall_audit.py` checks its imported evidence,
+completed workers and intentional stop without launching field solves.
+
+`studies/fdtd_metasurface_tall_time.py` fixes the later 240/360/540-period
+calibration; `studies/fdtd_metasurface_tall_settled.py` fixes the new common
+40/60/80 ladder and its 540/720-period tall runs. The latter's `run` command
+reuses recorded successful rows under the exact registered identity and stops
+at the registered validity limits; its `report` command only recomputes the
+saved rows. Use the same interpreter, checkout `PYTHONPATH` and three thread
+environment variables described above. Preserve all registrations, saved
+source copies, imported inputs, raw attempts and ledgers together.
+
+`python studies/fdtd_metasurface_tall_settled_audit.py` checks the raw calibration
+and spatial records, recomputes the 54 calibration cell records without rewriting
+their frozen report, and verifies all 108 spatial cell records. An incomplete
+comparison must retain its registered stop reason; placeholder records do not
+count as resolved spatial orders. After a complete comparison,
+`python studies/fdtd_metasurface_tall_summary.py` summarizes every cell and
+`python studies/fdtd_metasurface_tall_plot.py` plots the complete classification
+matrix. These procedural audits are not independent physics reviews.
