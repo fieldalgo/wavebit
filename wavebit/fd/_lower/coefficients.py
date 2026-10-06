@@ -445,6 +445,10 @@ def build(scene, plan, rt):
         from .oscillator_sum_film import descriptor, material_profiles
         film_profiles = material_profiles(scene, plan, rt)
         film = descriptor(scene, plan.grid) if film_profiles is not None else None
+    if film_profiles is None:
+        from .hybrid_film import descriptor, material_profiles
+        film_profiles = material_profiles(scene, plan, rt)
+        film = descriptor(scene, plan.grid) if film_profiles is not None else None
     if film_profiles is not None:
         # The supported films vary on one axis and lower their exact local response
         # separately from the ordinary occupancy painter.

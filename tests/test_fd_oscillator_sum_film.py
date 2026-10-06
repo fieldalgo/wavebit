@@ -302,10 +302,12 @@ def refused_scene(case):
         own = own.replace(eps_inf=(4., 5., 4.))
     elif case == 'magnetic':
         own = own.replace(mu=2.)
-    # Oscillator sums are admitted; mixing first-order Debye memory remains refused.
-    elif case == 'appended-debye':
+    # Mixed pole families are admitted only in a lossless host; this combination stays unsupported.
+    elif case == 'appended-debye-lossy-host':
+        scene = scene.replace(background=fd.Conductor(eps=1., sigma=.2))
         own = own.replace(poles=own.poles+(fd.Debye(tau=.2, delta_eps=1.),))
-    elif case == 'mixed-poles':
+    elif case == 'mixed-poles-lossy-host':
+        scene = scene.replace(background=fd.Conductor(eps=1., sigma=.2))
         own = own.replace(poles=(own.poles[0], fd.Debye(tau=.2, delta_eps=1.)))
     elif case == 'background-loss':
         return scene.replace(background=fd.Conductor(eps=1., sigma=.2))
@@ -336,7 +338,7 @@ def refused_scene(case):
 
 
 @pytest.mark.parametrize('case', ('finite-box', 'sphere', 'turned', 'ranged', 'anisotropic',
-    'magnetic', 'appended-debye', 'mixed-poles', 'background-loss', 'background-magnetic', 'partner',
+    'magnetic', 'appended-debye-lossy-host', 'mixed-poles-lossy-host', 'background-loss', 'background-magnetic', 'partner',
     'initial', 'stencil', 'pml-normal', 'sub-dx', 'transverse-halo', 'transverse-absorber',
     'unrepresentable-strength'))
 def test_unsupported_oscillator_sum_films_are_refused_by_name(case):

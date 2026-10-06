@@ -246,6 +246,16 @@ Mixed Debye/oscillator families, lossy hosts, curved interfaces and
 differentiation remain outside this extension. See
 ``docs/fd-oscillator-sum-film.md`` for its contract and validation status.
 
+A concrete isolated film may additionally declare a mixture of passive Debye
+and Drude/Lorentz poles. Its hybrid term preserves the bilinear Debye and
+centered oscillator response symbols, coupled by the normal harmonic rule.
+It carries four arrays per declared pole and uses an integer-time passive
+storage distinct from the single-family observers. The stability policy
+uses physical high-frequency permittivity and retains a conservative Debye
+penalty. No lossy host, curved interface, junction or differentiation support
+is implied. See ``docs/fd-hybrid-film.md`` for the precise admitted scope and
+validation record; the general C8 work remains incomplete.
+
 Stage 4's C3 adds a second material discretisation, **opt in and per structure**::
 
     fd.Structure(fd.Sphere(radius=0.2), glass, discretisation='stencil')

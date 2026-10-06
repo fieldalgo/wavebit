@@ -6,8 +6,9 @@ see before spending the time: a size that was snapped up to whole cells, a Bloch
 that made the run complex, a box under two cells thick. ``check`` prints the report and
 returns it; ``run`` builds the same report silently and attaches it to the result.
 
-``bytes_per_state`` includes every declared pole's P, previous and delta arrays over its
-compact support, including reserved inactive slots. It is not a total memory forecast:
+``bytes_per_state`` includes every declared pole's P, previous and delta arrays, plus
+a hybrid film's auxiliary array, over its compact support, including reserved inactive
+slots. It is not a total memory forecast:
 source histories and auxiliary source columns, observer and energy-diagnostic arrays,
 runtime scratch, temporaries, checkpoints and allocator/Python overhead are excluded.
 Parameters and DFT accumulators have separate report entries.
@@ -235,10 +236,11 @@ def report(scene, p=None, params=None):
     psi = sum(4 * face.cells * (p.cells // p.grid.n['xyz'.index(face.name[0])])
               for face in p.cpml) * itemsize
     flux_memory = sum(3 * np.prod(t.region.shape) for t in p.constitutive) * itemsize
-    # PoleTerm.init_mem reserves P, previous and delta, each a three-component array.
-    # All current film subclasses inherit that layout, including inactive declared slots.
-    # Keep this a static count: initializing full buffers would defeat a pre-run report.
-    polarization_memory = sum(9 * t.n_poles * np.prod(t.region.shape)
+    # PoleTerm reserves three histories; a hybrid film declares a fourth auxiliary
+    # array per slot. Count every declared slot, including inactive ones, statically:
+    # initializing full buffers here would defeat a pre-run report.
+    polarization_memory = sum(3 * getattr(t, 'memory_arrays_per_pole', 3)
+                              * t.n_poles * np.prod(t.region.shape)
                               for t in p.terms if isinstance(t, PoleTerm)) * itemsize
     absorbers = tuple((name, 'PML' if (name, cells) in p.pml_cells else 'Absorber', cells)
                       for name, cells in p.absorbing_faces)

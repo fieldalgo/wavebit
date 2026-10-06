@@ -164,6 +164,9 @@ def refuse_mismatch(scene, plan):
     if alternative is None:
         from .oscillator_sum_film import descriptor as oscillator_sum_descriptor
         alternative = oscillator_sum_descriptor(scene, plan.grid)
+    if alternative is None:
+        from .hybrid_film import descriptor as hybrid_descriptor
+        alternative = hybrid_descriptor(scene, plan.grid)
     if not expected and alternative is None and any(s.discretisation == 'voxel' and isinstance(s.material, Dispersive)
                             and s.shape.body() is not None
                             for s in (getattr(scene, 'structures', ()) or ())):

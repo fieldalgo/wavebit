@@ -211,8 +211,9 @@ def refused_scene(case):
         material = fd.Conductor(eps=4., sigma=(8., 9., 8.))
     elif case == 'magnetic':
         material = fd.Conductor(eps=4.0, sigma=8.0, mu=2.0)
-    # Finite passive Debye sums are admitted; mixed pole families remain refused.
-    elif case == 'pole':
+    # Mixed pole families are admitted only in a lossless host; this combination stays unsupported.
+    elif case == 'pole-lossy-host':
+        scene = scene.replace(background=fd.Conductor(eps=1., sigma=.2))
         material = fd.Dispersive(eps_inf=4.0, poles=(fd.Debye(tau=.1), fd.Debye(tau=.2),
                                                       fd.Lorentz(omega_0=5., gamma=1., strength=2.)))
     elif case == 'background-loss':
@@ -245,7 +246,7 @@ def refused_scene(case):
 
 
 @pytest.mark.parametrize('case', ('finite-box', 'sphere', 'turned', 'ranged',
-                                  'anisotropic', 'anisotropic-sigma', 'magnetic', 'pole',
+                                  'anisotropic', 'anisotropic-sigma', 'magnetic', 'pole-lossy-host',
                                   'background-loss', 'background-magnetic', 'partner',
                                   'initial', 'pml-normal', 'sub-dx', 'transverse-halo',
                                   'transverse-absorber'))

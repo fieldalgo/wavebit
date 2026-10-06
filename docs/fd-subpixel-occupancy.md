@@ -3354,3 +3354,70 @@ their own implementations and evidence, including their unresolved cells.
 This extension does not mix Debye with Drude/Lorentz poles or admit curved
 bodies, lossy/dispersive hosts, junctions or geometry/material/band
 derivatives. General C8 smoothing remains incomplete and C7 remains unpassed.
+
+### Bounded C8 scope: one mixed Debye and oscillator film (2026-10-07)
+
+The [mixed-family film document](fd-hybrid-film.md) records the implemented
+realization for a material with at least one declared
+passive Debye pole and one declared passive Drude or Lorentz pole. The
+geometry remains one concrete axis-aligned isolated flat Box in a plain
+isotropic nonmagnetic lossless host, spanning exactly two grid axes and
+clear of every absorbing layer. Initial fields, partners and junctions
+remain outside this scope.
+
+The normal response couples physical polarization sums. Debye memories
+retain the bilinear frequency law, while oscillator memories retain the
+centred law with each pole's own damping. Four vector arrays per declared
+pole preserve the observer clock without inverting an update that may be
+singular. The modified discrete storage includes the shared restoring
+energy and a force-square correction. Active Debye relaxations can still
+dissipate when oscillator damping is zero; the lossless conservation
+control has inactive Debye declarations and lossless oscillators.
+
+The closed-system argument uses physical high-frequency permittivity in
+the curl term. Planning retains both the oscillator rate and a conservative
+Debye budget. A sum of analytic bulk spectral bounds covers positive
+source bands and declared wavelength samples; this is not a convergence
+or floating-point stability claim. Six calibration rows on NumPy/JAX/Torch
+complete with stable fields and finite energy. Maximum r/t errors are
+0.002103337008/0.0009106264580 for the mixed-metal film and
+0.002903755513/0.005908102518 for the mixed-dielectric film. The inherited
+0.005/0.010 known-row ceilings were accepted unchanged after disclosure;
+maximum scaled backend difference is 2.336255e-15. The metal's absorber
+clearance warning remains (0.775 versus local half-wavelength 0.840433).
+
+All 918 targeted cases pass, including 156 hybrid cases and 78 allocation
+cases. Thirteen actual production mutations across ten functions produce
+intended assertion witnesses, followed by exact restoration and 234 clean
+passes. The registered campaign completes 40 workers without replacement
+or stop: 47/48 self-orders are second and one mixed; 95/96 direct pairs
+are second and one unresolved, including 47/48 second final pairs. Both
+exceptions are mixed-metal reflection at fraction 0.3. The s cell at
+wavelength 1.1 has self interval [1.771050189,1.771278906], with both
+direct intervals second. The p cell at wavelength 0.9 has final proxy
+share 0.1015024822, above 0.1; its point order 2.020241825 does not remove
+the unresolved verdict. All mixed-dielectric self/direct intervals are second.
+
+Maximum complex error across r/t decreases from 0.006596787190 at 40 cells
+to 0.0004104645604 at 160. The coarse maximum exceeds the known-row r
+ceiling 0.005 in a different configuration; that ceiling is not a campaign
+accuracy gate. Maximum empirical n80 proxy is 4.394895248e-6, not a
+rigorous fine-grid uncertainty bound. The two matching coarse NumPy
+physical payloads repeat their disclosed calibration exactly. Controller
+and independent saved-data audits pass while retaining the exceptions;
+the independent audit checks 280 hashes and five proof groups. Full
+regression completes with 3,669 passed and eight skipped out of 3,677,
+exit zero; the separate slow tier passes all 81. All four read-only
+freezers reproduce 143/288/140/570 arrays bit for bit (1,141 total), with
+no golden writes. Raw warnings and stage-2/3 provenance-only notices are
+retained. The numerical records are in
+`studies/results/fdtd_hybrid_film_validation.json`. Final documentation
+and preservation acceptance use separate execution records and required
+checks described in the main article. No broader convergence claim follows
+from these registered three- and five-pole examples.
+
+Old single-family routes and all previous evidence keep their original
+scopes, including mixed and noise-unresolved oscillator results. This
+bounded extension does not admit curved dispersive interfaces, lossy or
+dispersive hosts, junctions or geometry/material/band derivatives. General
+C8 smoothing remains incomplete and C7 remains unpassed.

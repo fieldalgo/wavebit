@@ -67,3 +67,12 @@ tests/test_fd_state_bytes.py text eol=lf
 wavebit/fd/_check.py text eol=crlf
 studies/results/fdtd_state_bytes* -text
 studies/results/fdtd_state_bytes*/** -text
+
+# Hybrid-film source and original evidence retain verified checkout bytes.
+studies/fdtd_hybrid_film_*.py text eol=lf
+docs/fd-hybrid-film.md text eol=lf
+tests/test_fd_hybrid_film.py text eol=lf
+wavebit/fd/_lower/hybrid_film.py text eol=lf
+wavebit/fd/_lower/hybrid_resolution.py text eol=lf
+studies/results/fdtd_hybrid_film* -text
+studies/results/fdtd_hybrid_film*/** -text

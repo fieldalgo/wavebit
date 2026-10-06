@@ -54,6 +54,7 @@ be runnable as written.
 | [`../fd-two-debye-film.md`](../fd-two-debye-film.md) | Which two-Debye films are admitted, how are their coupled modes represented, and what do the registered measurements and completed numerical gates establish? |
 | [`../fd-debye-sum-film.md`](../fd-debye-sum-film.md) | What is the finite-Debye-count film contract, how does its normal law couple all poles, and what do the registered measurements and completed numerical gates establish? |
 | [`../fd-oscillator-sum-film.md`](../fd-oscillator-sum-film.md) | Which finite Drude/Lorentz sums are admitted in an isolated film, how are their memories coupled, and what do the completed numerical gates and explicit physical exceptions establish? |
+| [`../fd-hybrid-film.md`](../fd-hybrid-film.md) | How does an isolated mixed Debye/Drude/Lorentz film preserve both discrete laws, what do the registered campaign and completed numerical gates establish, and which physical exceptions and scope limits remain? |
 
 ### Advanced
 

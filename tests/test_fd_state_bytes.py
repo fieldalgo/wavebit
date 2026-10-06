@@ -20,7 +20,7 @@ CASES = (
     'vacuum', 'voxel-mixed', 'two-voxel-regions', 'cpml-voxel-mixed',
     'conductive-film', 'conductive-inactive-film', 'lorentz-film',
     'debye-film', 'two-debye-collapsed-film', 'debye-sum-collapsed-film',
-    'oscillator-sum-film', 'constitutive-control',
+    'oscillator-sum-film', 'hybrid-film', 'constitutive-control',
 )
 
 
@@ -80,6 +80,7 @@ def test_report_counts_the_initialized_main_state(case, complex_fields, backend,
                 debye, fd.Debye(tau=.2, delta_eps=0.), debye,
                 fd.Debye(tau=.2, delta_eps=0.))),
             'oscillator-sum-film': fd.Dispersive(eps_inf=4., poles=(drude, lorentz, inactive)),
+            'hybrid-film': fd.Dispersive(eps_inf=4., poles=(debye, drude, inactive)),
         }
         structures = (fd.Structure(fd.Box(size=(1.2, 1.2, .54), center=(0., 0., .03)),
                                    materials[case]),)

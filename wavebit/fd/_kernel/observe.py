@@ -522,11 +522,57 @@ class InteriorEnergy:
             a, k, a[k] + self.magnetic(H, new, None, params, rt, mem)), acc)
 
     @staticmethod
+    def _hybrid_pole(mem, E, coefficients, n_poles, cells, offsets, rt, comps):
+        """Hybrid material part of the closed-Yee integer-time storage.
+
+        At E^n, previous holds y_D^n or q_O^n; aux holds D^(n+1/2)
+        or the centered oscillator velocity vbar^n. The magnetic observer
+        already supplies H_old.H_new, including the field curl correction.
+        Remove the Debye affine shift from its update-permittivity E weight.
+        Inactive/family masks act before sums, products and squared norms.
+        """
+        inside = (comps,) + tuple(slice(o, o + (c1 - c0))
+                                  for o, (c0, c1) in zip(offsets, cells))
+        field = E[(comps,) + tuple(slice(c0, c1) for c0, c1 in cells)]
+        shape = mem['P'][0].shape
+
+        def weight(name, slot=None):
+            value = coefficients[name] if slot is None else coefficients[name][slot]
+            return rt.xp.broadcast_to(rt.constant(value), shape)[inside]
+
+        rank_one = weight('energy_rank_one')
+        total, physical = 0.0, None
+        positions = []
+        for j in range(n_poles):
+            debye_active = weight('energy_debye_active', j)
+            oscillator_active = weight('energy_oscillator_active', j)
+            previous = mem['previous'][j][inside]
+            debye = debye_active * previous + weight('debye_c', j) * field
+            oscillator = oscillator_active * previous
+            velocity = oscillator_active * mem['aux'][j][inside]
+            held = debye + oscillator
+            physical = held if physical is None else physical + held
+            positions.append((oscillator, oscillator_active))
+            total = total + rt.weighted_energy(debye, weight('energy_inverse_delta', j))
+            total = total + rt.weighted_energy(oscillator,
+                                               weight('energy_resonance_over_strength', j))
+            total = total + rt.weighted_energy(velocity, weight('energy_kinetic', j))
+        for j, (position, active) in enumerate(positions):
+            force = (weight('energy_resonance_over_strength', j) * position
+                     + (active * rank_one) * physical - active * field)
+            total = total - rt.weighted_energy(force, weight('energy_force_weight', j))
+        total = total + rt.weighted_energy(physical, rank_one)
+        return total - rt.weighted_energy(field, weight('energy_hybrid_shift'))
+
+    @staticmethod
     def _pole(mem, E, coefficients, n_poles, cells, offsets, dt, rt, comps=slice(None)):
         """The stored energy of one dispersive structure's poles over ``cells`` (the part of
         its slab from ``offsets``), components ``comps``, at the level of ``E^n``:
         ``V^(n+1/2) - E^n . (P^(n+1) - P^n)``, or Debye's ``|P^n|^2 / delta_eps - c |E^n|^2``
         (the class)."""
+        if 'energy_hybrid_shift' in coefficients:
+            return InteriorEnergy._hybrid_pole(
+                mem, E, coefficients, n_poles, cells, offsets, rt, comps)
         inside = (comps,) + tuple(slice(o, o + (c1 - c0))
                                   for o, (c0, c1) in zip(offsets, cells))
         field = E[(comps,) + tuple(slice(c0, c1) for c0, c1 in cells)]

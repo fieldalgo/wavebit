@@ -93,6 +93,8 @@ def lower(scene, plan, rt='numpy', device=None):
     refuse_debye_sum_film_mismatch(scene, plan)
     from .oscillator_sum_film import refuse_mismatch as refuse_oscillator_sum_film_mismatch
     refuse_oscillator_sum_film_mismatch(scene, plan)
+    from .hybrid_film import refuse_mismatch as refuse_hybrid_film_mismatch
+    refuse_hybrid_film_mismatch(scene, plan)
     from .single_pole_resolution import validate as validate_film_resolution
     validate_film_resolution(scene, plan.grid)
     from .debye_resolution import validate as validate_debye_resolution
@@ -103,6 +105,8 @@ def lower(scene, plan, rt='numpy', device=None):
     validate_debye_sum_resolution(scene, plan.grid)
     from .oscillator_sum_resolution import validate as validate_oscillator_sum_resolution
     validate_oscillator_sum_resolution(scene, plan.grid)
+    from .hybrid_resolution import validate as validate_hybrid_resolution
+    validate_hybrid_resolution(scene, plan.grid)
     from .junction import refuse_mismatch
     refuse_mismatch(scene, plan)
     from .shape_ranges import refuse_mismatch as refuse_range_mismatch
@@ -329,17 +333,21 @@ def _poles(scene, plan, rt):
                                 pole_params as debye_sum_film_poles)
     from .oscillator_sum_film import (OscillatorSumFilmTerm, descriptor as oscillator_sum_descriptor,
                                      pole_params as oscillator_sum_film_poles)
+    from .hybrid_film import (HybridFilmTerm, descriptor as hybrid_descriptor,
+                              pole_params as hybrid_film_poles)
     structures = [s for s in (getattr(scene, 'structures', ()) or ()) if s.material.poles]
     if (descriptor(scene, plan.grid) is not None
             or debye_descriptor(scene, plan.grid) is not None
             or two_debye_descriptor(scene, plan.grid) is not None
             or debye_sum_descriptor(scene, plan.grid) is not None
-            or oscillator_sum_descriptor(scene, plan.grid) is not None):
+            or oscillator_sum_descriptor(scene, plan.grid) is not None
+            or hybrid_descriptor(scene, plan.grid) is not None):
         structures = []                     # represented by one spatial film term instead
     out = {}
     for term in plan.terms:
         if isinstance(term, (InterfacePoleTerm, DispersiveFilmTerm, DebyeFilmTerm,
-                             TwoDebyeFilmTerm, DebyeSumFilmTerm, OscillatorSumFilmTerm)):
+                             TwoDebyeFilmTerm, DebyeSumFilmTerm, OscillatorSumFilmTerm,
+                             HybridFilmTerm)):
             continue
         if not hasattr(term, 'n_poles'):
             continue                                    # a test hook's term, not a pole set
@@ -369,6 +377,7 @@ def _poles(scene, plan, rt):
     out.update(two_debye_film_poles(scene, plan, rt))
     out.update(debye_sum_film_poles(scene, plan, rt))
     out.update(oscillator_sum_film_poles(scene, plan, rt))
+    out.update(hybrid_film_poles(scene, plan, rt))
     return out
 
 

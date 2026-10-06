@@ -325,10 +325,12 @@ def refused_scene(case):
         own = own.replace(eps_inf=(4., 5., 4.))
     elif case == 'magnetic':
         own = own.replace(mu=2.)
-    # Finite passive Debye sums are admitted; mixed pole families remain refused.
-    elif case == 'three-mixed-poles':
+    # Mixed pole families are admitted only in a lossless host; this combination stays unsupported.
+    elif case == 'three-mixed-poles-lossy-host':
+        scene = scene.replace(background=fd.Conductor(eps=1., sigma=.2))
         own = own.replace(poles=own.poles+(fd.Lorentz(omega_0=5., gamma=1., strength=2.),))
-    elif case == 'mixed-poles':
+    elif case == 'mixed-poles-lossy-host':
+        scene = scene.replace(background=fd.Conductor(eps=1., sigma=.2))
         own = own.replace(poles=(own.poles[0], fd.Lorentz(omega_0=5., gamma=1., strength=2.)))
     elif case == 'background-loss':
         return scene.replace(background=fd.Conductor(eps=1., sigma=.2))
@@ -359,7 +361,7 @@ def refused_scene(case):
 
 
 @pytest.mark.parametrize('case', ('finite-box', 'sphere', 'turned', 'ranged', 'anisotropic',
-    'magnetic', 'three-mixed-poles', 'mixed-poles', 'background-loss', 'background-magnetic', 'partner',
+    'magnetic', 'three-mixed-poles-lossy-host', 'mixed-poles-lossy-host', 'background-loss', 'background-magnetic', 'partner',
     'initial', 'stencil', 'pml-normal', 'sub-dx', 'transverse-halo', 'transverse-absorber'))
 def test_unsupported_two_debye_films_are_refused_by_name(case):
     with pytest.raises(ValueError) as caught:

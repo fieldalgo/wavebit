@@ -380,6 +380,9 @@ def _pole_terms(scene, grid):
     if not film_terms:
         from .oscillator_sum_film import terms as oscillator_sum_terms
         film_terms = oscillator_sum_terms(scene, grid)
+    if not film_terms:
+        from .hybrid_film import terms as hybrid_terms
+        film_terms = hybrid_terms(scene, grid)
     if film_terms:
         return film_terms
     terms = []

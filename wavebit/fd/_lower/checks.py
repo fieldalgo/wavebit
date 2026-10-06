@@ -430,6 +430,9 @@ def check_smoothed(scene, grid):
     if dispersive_film is None:
         from .oscillator_sum_film import descriptor as oscillator_sum_film
         dispersive_film = oscillator_sum_film(scene, grid)
+    if dispersive_film is None:
+        from .hybrid_film import descriptor as hybrid_film
+        dispersive_film = hybrid_film(scene, grid)
     from .debye_film import descriptor as debye_film
     relaxation_film = debye_film(scene, grid)
     if relaxation_film is None:
@@ -1748,6 +1751,8 @@ def cfl_bound(scene, plan):
     n_min, resonance, coupling = None, 0.0, 0.0
     from .oscillator_sum_film import policy_rate as oscillator_policy_rate
     oscillator_rate = oscillator_policy_rate(scene, plan)
+    from .hybrid_film import policy_rate as hybrid_policy_rate
+    hybrid_rate = hybrid_policy_rate(scene, plan)
     from .debye_film import policy_rate as debye_policy_rate
     relaxation_rate = debye_policy_rate(scene, plan)
     if relaxation_rate is None:
@@ -1763,7 +1768,7 @@ def cfl_bound(scene, plan):
         n_min = n if n_min is None else min(n_min, n)
         strength_sum = 0.0
         for pole in material.poles:
-            if relaxation_rate is not None or oscillator_rate is not None:
+            if relaxation_rate is not None or oscillator_rate is not None or hybrid_rate is not None:
                 # These scopes have one film and a plain host. Their robust replacement
                 # rate includes every active pole without evaluating inactive extreme
                 # frequencies/times or counting the same memory twice.
@@ -1796,6 +1801,8 @@ def cfl_bound(scene, plan):
         rate = max(rate, relaxation_rate)
     if oscillator_rate is not None:
         rate = max(rate, oscillator_rate)
+    if hybrid_rate is not None:
+        rate = max(rate, hybrid_rate)
     return 1.0 / math.sqrt(1.0 / vacuum ** 2 + rate / 4.0), None
 
 
@@ -1816,9 +1823,15 @@ def check_stability(scene, plan):
         relaxation_rate = debye_sum_policy_rate(scene, plan)
     from .oscillator_sum_film import policy_rate as oscillator_policy_rate
     oscillator_rate = oscillator_policy_rate(scene, plan)
+    from .hybrid_film import policy_rate as hybrid_policy_rate
+    hybrid_rate = hybrid_policy_rate(scene, plan)
     poles = [(name, p) for name, p in _all_poles(scene)]
     worst = ''
-    if oscillator_rate is not None:
+    if hybrid_rate is not None:
+        worst = (' The bounded hybrid film includes every active oscillator and a '
+                 'conservative Debye penalty. Its curl bound uses the physical '
+                 'high-frequency permittivity, not the affine update shift.')
+    elif oscillator_rate is not None:
         worst = (' The bounded oscillator-sum film includes the maximum active bulk '
                  'resonance plus every active strength divided by the film permittivity; '
                  'this also bounds its coupled normal response.')
@@ -2084,9 +2097,20 @@ def _smoothed_notes(scene, plan, rows=None):
                     'Validate observables under refinement and check duration and '
                     'absorbers separately. The spectral guard covers bulk scales only. '
                     'See docs/fd-oscillator-sum-film.md.'))
+    from .hybrid_film import descriptor as hybrid_descriptor
+    hybrid = hybrid_descriptor(scene, plan.grid)
+    if hybrid is not None:
+        out.append((SubpixelAccuracyWarning,
+                    'The hybrid film couples Debye and Drude/Lorentz polarizations '
+                    'while retaining their distinct discrete response symbols. '
+                    'This bounded C8 scope is one concrete axis-aligned film in a '
+                    'plain dielectric. Validate observables under refinement and '
+                    'check duration and absorbers separately. The spectral guard '
+                    'covers bulk scales only. See docs/fd-hybrid-film.md.'))
     if (len(asked) < len(smoothed) and film is None and dispersive_film is None
             and relaxation_film is None and two_relaxation_film is None
-            and sum_relaxation_film is None and sum_oscillator_film is None):
+            and sum_relaxation_film is None and sum_oscillator_film is None
+            and hybrid is None):
         # The controlled C3 tensor study measured p=2.02267353134 at eps=2.25,
         # R/lambda=.25, 20/28/40 cells per wavelength and three grid placements.
         # It does not certify the production engine across the remaining contrasts.
@@ -2302,6 +2326,10 @@ def _resolution_notes(scene, plan):
     oscillator_sum_notes = oscillator_sum_resolution_notes(scene, plan, _wavelength(scene, plan))
     if oscillator_sum_notes is not None:
         return oscillator_sum_notes
+    from .hybrid_resolution import notes as hybrid_resolution_notes
+    hybrid_notes = hybrid_resolution_notes(scene, plan, _wavelength(scene, plan))
+    if hybrid_notes is not None:
+        return hybrid_notes
     from .conductive_film import descriptor
     conductive = descriptor(scene, plan.grid) is not None
     materials = [('Scene(background=)', _background(scene))]
@@ -2412,6 +2440,9 @@ def check_wavelength_resolution(scene, grid):
     from .oscillator_sum_resolution import validate as validate_oscillator_sum_resolution
     if validate_oscillator_sum_resolution(scene, grid):
         return
+    from .hybrid_resolution import validate as validate_hybrid_resolution
+    if validate_hybrid_resolution(scene, grid):
+        return
     from ..monitors import Diffraction
     from .conductive_film import descriptor
     conductive = descriptor(scene, grid) is not None
@@ -2477,6 +2508,10 @@ def _proximity_notes(scene, plan):
         from .oscillator_sum_film import descriptor as oscillator_sum_descriptor
         from .oscillator_sum_resolution import index_at as film_index_at
         film = oscillator_sum_descriptor(scene, plan.grid)
+    if film is None:
+        from .hybrid_film import descriptor as hybrid_descriptor
+        from .hybrid_resolution import index_at as film_index_at
+        film = hybrid_descriptor(scene, plan.grid)
     out, grid = [], plan.grid
     for index, structure in enumerate(getattr(scene, 'structures', ()) or ()):
         if film is not None:
