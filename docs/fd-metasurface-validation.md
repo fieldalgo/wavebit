@@ -955,6 +955,72 @@ inventory fetches remain in `sphinx_method_preview.log`; the successful retry
 and subsequent builds are retained separately. No new pytest function or
 production source change was introduced by this extension.
 
+## Readiness for a 3D height probe (2026-10-06)
+
+`studies/fdtd_metasurface_height_preflight.py` is a preparation and historical-data
+audit, **not a registered tall-box campaign**. It performs no new FDTD or RCWA
+field solve. Its `.json` and `.log` under `studies/results/` retain all 108 old
+M3 cells, source/input hashes, geometry checks, cost estimates and a resource
+snapshot. These findings were seen before any proposed height-study protocol.
+
+The script reads the existing 40/80/120 M3 rows and the 80-cell 180-period
+controls. Unlike the earlier worst-cell statistic, it computes each cell's
+self-order separately. It inverts the unequal-rung ratio with its continuous
+zero-order limit and retains negative finite-grid orders; analytic sequences
+check the instrument at negative, first and second orders. The same
+[1.8, 2.3] / upper-at-most-1.75 bands are applied to intervals using twice the
+time-only proxy. **There is no absorber-variation proxy here**, so these are
+provisional, post-hoc categories rather than fully controlled classifications:
+
+| Incidence | Low, time-only | Second, time-only | Mixed | Unresolved |
+| --- | --- | --- | --- | --- |
+| s | 24 | 23 | 7 | 0 |
+| p | 28 | 21 | 5 | 0 |
+
+Twice the time proxy divided by the smaller grid change is at most 0.001811
+for s and 0.010053 for p, both below the inherited 0.1 line. A height study
+still needs absorber checks on the baseline as well as the changed scene.
+Category counts do not rank total error between polarisations, establish an
+asymptotic exponent, or revise C7's original registered verdict.
+
+The proposed height change is 0.30 to 0.60, retaining the original footprint,
+periods, incidence and glass contact. All six faces retain their fractions of
+a cell at 40/80/120: (0.25, 0.25, 0.35, 0.35, 0.15, 0.15). Both heights pass
+the public 40-cell plan, with the same step count. The finer grids are layout
+estimates, not executed plans or field solves. The tall grids would be
+52 x 20 x 161, 104 x 40 x 273 and 156 x 60 x 385. Scaling the previous s-run
+wall times by cell count estimates about 111, 823 and 5531 seconds, roughly
+1.8 hours for the three base runs alone. Time/absorber controls, references and
+regression checks are additional; these estimates are not new timing measurements.
+
+Reference memory is a material constraint. The earlier lifted-box study measured
+about 34 dense complex matrices of side twice the Fourier-order count. Applied
+to the proposed one-layer reference, that estimate gives:
+
+| RCWA truncation setting N | Estimated peak, GiB |
+| --- | --- |
+| 20 | 5.73 |
+| 24 | 11.68 |
+| 26 | 15.99 |
+| 28 | 21.39 |
+| 32 | 36.18 |
+
+The saved snapshot has 17.62 GiB of available physical memory and 23.56 GiB
+of commit headroom. Among the sampled settings, N = 24 is the largest that
+fits both with a 2-GiB resource reserve. This is an allocation estimate and
+time-specific snapshot, not a permanent machine limit or a physics tolerance.
+A future protocol should check resources again, fix a bounded ladder before
+new FDTD data, and leave reference-based orders unresolved if that ladder
+cannot judge them. Reference-free cellwise orders can be the primary statistic.
+
+Changing height alters vertical-edge length, the fields at vertices and the
+resonances together. The question a height probe can answer is whether the
+measured low order changes with height. It cannot by itself assign the cause
+to edges, vertices or resonances. A bounded next candidate is the original
+s incidence with all 54 cells retained, a baseline absorber check and matched
+time/absorber controls on the tall scene; no outcome from that candidate has
+been measured or preregistered here.
+
 ## What the tests hold
 
 `tests/test_fd_metasurface.py` keeps three things in the suite.
