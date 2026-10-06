@@ -28,6 +28,7 @@ subtrees:
   - file: fd-metasurface-validation
   - file: fd-conductive-film
   - file: fd-single-pole-film
+  - file: fd-debye-film
   - file: fd-sphere-clip-jit
   - file: fd-symmetric-stencil
   - file: fd-lattice-radiation

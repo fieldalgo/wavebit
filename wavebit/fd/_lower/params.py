@@ -85,8 +85,12 @@ def lower(scene, plan, rt='numpy', device=None):
     refuse_film_mismatch(scene, plan)
     from .single_pole_film import refuse_mismatch as refuse_dispersive_film_mismatch
     refuse_dispersive_film_mismatch(scene, plan)
+    from .debye_film import refuse_mismatch as refuse_debye_film_mismatch
+    refuse_debye_film_mismatch(scene, plan)
     from .single_pole_resolution import validate as validate_film_resolution
     validate_film_resolution(scene, plan.grid)
+    from .debye_resolution import validate as validate_debye_resolution
+    validate_debye_resolution(scene, plan.grid)
     from .junction import refuse_mismatch
     refuse_mismatch(scene, plan)
     from .shape_ranges import refuse_mismatch as refuse_range_mismatch
@@ -305,12 +309,15 @@ def _poles(scene, plan, rt):
     from .conductive_film import InterfacePoleTerm, pole_params as film_poles
     from .single_pole_film import (DispersiveFilmTerm, descriptor,
                                     pole_params as dispersive_film_poles)
+    from .debye_film import (DebyeFilmTerm, descriptor as debye_descriptor,
+                            pole_params as debye_film_poles)
     structures = [s for s in (getattr(scene, 'structures', ()) or ()) if s.material.poles]
-    if descriptor(scene, plan.grid) is not None:
+    if (descriptor(scene, plan.grid) is not None
+            or debye_descriptor(scene, plan.grid) is not None):
         structures = []                     # represented by one spatial film term instead
     out = {}
     for term in plan.terms:
-        if isinstance(term, (InterfacePoleTerm, DispersiveFilmTerm)):
+        if isinstance(term, (InterfacePoleTerm, DispersiveFilmTerm, DebyeFilmTerm)):
             continue
         if not hasattr(term, 'n_poles'):
             continue                                    # a test hook's term, not a pole set
@@ -336,6 +343,7 @@ def _poles(scene, plan, rt):
             f'Use fd.plan(scene) for this scene, or take the structures out of it.')
     out.update(film_poles(scene, plan, rt))
     out.update(dispersive_film_poles(scene, plan, rt))
+    out.update(debye_film_poles(scene, plan, rt))
     return out
 
 

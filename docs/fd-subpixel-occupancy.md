@@ -3155,3 +3155,46 @@ source identity are retained in
 implementation and its required numerical gates are complete on the feature
 branch. This is not a blanket physical pass.
 General C8 smoothing remains incomplete, and C7 remains unpassed.
+
+### Bounded C8 scope: one Debye film (2026-10-06)
+
+The [Debye-film document](fd-debye-film.md) records the implemented contract
+for one concrete isolated voxel `Box` containing exactly one passive
+`Debye` pole in a plain isotropic lossless host. It retains the prior films'
+unturned, unranged, non-magnetic geometry limits: exactly two fully spanned
+axes with one-cell transverse overhangs, normal thickness at least one cell,
+normal support strictly inside the domain and all support clear of
+absorbers. No partner, initial field or traced geometry/material/band values
+are included. The increment is nonnegative and the relaxation time positive.
+
+The normal harmonic law remains one Debye pole, with transformed increment
+and a shorter relaxation time; the tangential law is arithmetic. The split
+memory and spatial Debye energy weights reuse the existing kernel. The
+conservative material time-step policy takes the maximum of the bulk and
+actual transformed-cell rates, since the latter can exceed the former.
+Its spectral guard concerns bulk phase and skin scales, not a convergence
+guarantee.
+
+The registered `eps_inf=2`, `delta_eps=6`, `tau=0.15` film study completes
+all 20 workers without a replacement or stop. It covers face fractions 0.3
+and 0.1, s and p polarization, wavelengths 0.9, 1.0 and 1.1, and the
+40/80/160 mesh ladder with an exact transverse derivative. All 24
+self-orders and 48 direct-order pairs, including all 24 final pairs, fall
+within the registered second-order sensitivity intervals. The largest
+absolute complex error decreases from 0.008585756353 at 40 cells to
+0.000537387641 at 160. The time/PML proxy remains empirical; this result
+does not certify every admitted material, geometry or derivative.
+
+Both combined targeted attempts pass all 247 cases. After isolating a
+source-band test that another refusal had masked, all nine actual mutation
+witnesses are accepted and all 99 restored Debye cases pass. The full tier
+passes with 2,994 passed and eight skipped out of 3,002 collected; all 81
+slow cases pass. Four read-only freezers reproduce 143, 288, 140 and 570
+arrays bit for bit, without rewriting a golden. These outcomes are retained
+in `studies/results/fdtd_debye_film_validation.json`. The first full attempt's
+documentation-snapshot packaging failure and exact compressed preservation
+are disclosed in the linked document and evidence annotation; production
+code, live tests and numerical criteria were unchanged for the successful
+retry. The bounded implementation and numerical gates are complete on the
+feature branch. Earlier physical records retain their original material scopes.
+General C8 smoothing remains incomplete, and C7 remains unpassed.

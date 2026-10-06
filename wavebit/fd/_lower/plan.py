@@ -368,6 +368,9 @@ def _pole_terms(scene, grid):
     """
     from .single_pole_film import terms as dispersive_terms
     film_terms = dispersive_terms(scene, grid)
+    if not film_terms:
+        from .debye_film import terms as debye_terms
+        film_terms = debye_terms(scene, grid)
     if film_terms:
         return film_terms
     terms = []

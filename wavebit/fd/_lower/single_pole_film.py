@@ -153,11 +153,13 @@ def refuse_mismatch(scene, plan):
                  if isinstance(t, DispersiveFilmTerm)
                  or getattr(t, 'name', '').startswith('dispersive_film['))
     expected = terms(scene, plan.grid)
-    if not expected and any(s.discretisation == 'voxel' and isinstance(s.material, Dispersive)
+    from .debye_film import descriptor as debye_descriptor
+    alternative = debye_descriptor(scene, plan.grid)
+    if not expected and alternative is None and any(s.discretisation == 'voxel' and isinstance(s.material, Dispersive)
                             and s.shape.body() is not None
                             for s in (getattr(scene, 'structures', ()) or ())):
         raise ValueError('dispersive smoothing is limited to one concrete axis-aligned film '
-                         'with one passive Drude or Lorentz pole in a plain lossless host, '
+                         'with one passive Drude, Lorentz or Debye pole in a plain lossless host, '
                          'separated interfaces outside absorbing layers, and no initial '
                          'fields or differentiation. A prepared non-film plan cannot '
                          'bypass this bounded C8 scope.')

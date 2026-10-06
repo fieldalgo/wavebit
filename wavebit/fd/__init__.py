@@ -207,9 +207,20 @@ The source band must be concrete; a conservative bound checks its entire positiv
 frequency interval, including interior Lorentz resonances, and every requested
 monitor wavelength is checked separately for phase and skin resolution. These are
 bulk mesh floors, not error bounds. See ``docs/fd-single-pole-film.md`` for its
-validation status. Multiple poles, declared Debye films, curved dispersive bodies,
+validation status. Multiple poles, curved dispersive bodies,
 lossy junctions and geometry/material/band differentiation remain outside this scope. C8 as a whole is
 not complete, and C7 remains unpassed.
+
+The same isolated geometry also admits exactly one passive ``Debye(tau=...,
+delta_eps=...)`` pole. The normal harmonic mixture shifts its relaxation time
+and strength; tangential cells retain the arithmetic response. The explicit
+split memory includes a local instantaneous permittivity shift and spatial
+energy weights. Its conservative time-step policy includes the maximum of
+the bulk and actual mixed-cell relaxation rates, which can exceed the bulk
+value. Concrete positive source bands and every requested wavelength receive
+a bulk spectral-resolution check. Zero strength is allowed; geometry, material
+and source-band differentiation and multiple poles remain outside this scope.
+See ``docs/fd-debye-film.md`` for the bounded contract and validation record.
 
 Stage 4's C3 adds a second material discretisation, **opt in and per structure**::
 

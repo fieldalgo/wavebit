@@ -427,6 +427,8 @@ def check_smoothed(scene, grid):
     film = conductive_film(scene, grid)
     from .single_pole_film import descriptor as single_pole_film
     dispersive_film = single_pole_film(scene, grid)
+    from .debye_film import descriptor as debye_film
+    relaxation_film = debye_film(scene, grid)
     for index, structure, body in smoothed:
         box = structure.shape.support(grid)
         where = f'structures[{index}] ({structure.shape.describe()})'
@@ -528,8 +530,9 @@ def check_smoothed(scene, grid):
         for material, name in media:
             if not isinstance(material, (Conductor, Dispersive)):
                 continue
-            if (film is not None or dispersive_film is not None) and name == where:
-                continue  # These two bounded C8 film scopes carry their exact memory.
+            if (film is not None or dispersive_film is not None
+                    or relaxation_film is not None) and name == where:
+                continue  # These bounded C8 film scopes carry their exact memory.
             what = ('a conductivity' if isinstance(material, Conductor)
                     else f'{len(material.poles)} pole(s)')
             # Door 4 below reads the self case the same way. A structure does not "share cells
@@ -1733,6 +1736,8 @@ def cfl_bound(scene, plan):
     background, structures = _background(scene), tuple(getattr(scene, 'structures', ()) or ())
     materials = [background] + [s.material for s in structures]
     n_min, resonance, coupling = None, 0.0, 0.0
+    from .debye_film import policy_rate as debye_policy_rate
+    relaxation_rate = debye_policy_rate(scene, plan)
     for material in materials:
         n = material.index_bound()
         if n is None:
@@ -1740,6 +1745,11 @@ def cfl_bound(scene, plan):
         n_min = n if n_min is None else min(n_min, n)
         strength_sum = 0.0
         for pole in material.poles:
+            if relaxation_rate is not None:
+                # This scope has one Debye film and a plain host. Its replacement
+                # rate below includes the bulk pole without evaluating tau**2 or
+                # counting the same memory twice; inactive poles need no division.
+                continue
             w0_squared, strength = pole.rate()
             w0_squared, strength = concrete(w0_squared), concrete(strength)
             if w0_squared is None or strength is None:
@@ -1764,6 +1774,8 @@ def cfl_bound(scene, plan):
     film_rate = conductive_rate(scene, plan)
     if film_rate:
         rate += film_rate
+    if relaxation_rate is not None:
+        rate = max(rate, relaxation_rate)
     return 1.0 / math.sqrt(1.0 / vacuum ** 2 + rate / 4.0), None
 
 
@@ -1774,16 +1786,24 @@ def check_stability(scene, plan):
         return False
     if plan.dt < bound:
         return True
+    from .debye_film import policy_rate as debye_policy_rate
+    relaxation_rate = debye_policy_rate(scene, plan)
     poles = [(name, p) for name, p in _all_poles(scene)]
     worst = ''
     if poles:
-        name, pole = max(poles, key=lambda np_: sum(abs(v) for v in _rate_values(np_[1])))
+        # The supported Debye film has one pole. Its scoped rate also avoids
+        # evaluating an inactive extreme relaxation time in the diagnostic.
+        name, pole = (poles[0] if relaxation_rate is not None else
+                      max(poles, key=lambda np_: sum(abs(v) for v in _rate_values(np_[1]))))
         worst = (f' The tightest pole is {name}: {type(pole).__name__}'
                  f'({", ".join(f"{f}={getattr(pole, f)!r}" for f in pole.__dataclass_fields__)}).')
     from .conductive_film import extra_rate as conductive_rate
     if conductive_rate(scene, plan):
         worst += (' The conductive film carries an induced interface Debye pole; its '
                   'conservative rate is included in this bound.')
+    if relaxation_rate is not None:
+        worst += (' The Debye film includes the maximum bulk and actual local '
+                  'relaxation rate under the existing conservative Debye policy.')
     from ..boundaries import Axis1D
     axis1d = [f'{a} (k_max = {scene.boundaries.face(a + "-").k_max:g})' for a in 'xyz'
               if isinstance(scene.boundaries.face(a + '-'), Axis1D)]
@@ -1985,7 +2005,18 @@ def _smoothed_notes(scene, plan, rows=None):
                     'The source-band mesh bound certifies bulk material scales only; '
                     'validate observables under refinement and check run duration '
                     'separately. See docs/fd-single-pole-film.md.'))
-    if len(asked) < len(smoothed) and film is None and dispersive_film is None:
+    from .debye_film import descriptor as debye_descriptor
+    relaxation_film = debye_descriptor(scene, plan.grid)
+    if relaxation_film is not None:
+        out.append((SubpixelAccuracyWarning,
+                    'The Debye film uses spatial relaxation memory for the exact '
+                    'harmonic normal and arithmetic tangential response. This C8 '
+                    'scope is one concrete axis-aligned film in a plain dielectric. '
+                    'The source-band mesh bound certifies bulk scales only; validate '
+                    'observables under refinement and check run duration and absorbers '
+                    'separately. See docs/fd-debye-film.md.'))
+    if (len(asked) < len(smoothed) and film is None and dispersive_film is None
+            and relaxation_film is None):
         # The controlled C3 tensor study measured p=2.02267353134 at eps=2.25,
         # R/lambda=.25, 20/28/40 cells per wavelength and three grid placements.
         # It does not certify the production engine across the remaining contrasts.
@@ -2185,6 +2216,10 @@ def _resolution_notes(scene, plan):
     film_notes = film_resolution_notes(scene, plan, _wavelength(scene, plan))
     if film_notes is not None:
         return film_notes
+    from .debye_resolution import notes as debye_resolution_notes
+    debye_notes = debye_resolution_notes(scene, plan, _wavelength(scene, plan))
+    if debye_notes is not None:
+        return debye_notes
     from .conductive_film import descriptor
     conductive = descriptor(scene, plan.grid) is not None
     materials = [('Scene(background=)', _background(scene))]
@@ -2283,6 +2318,9 @@ def check_wavelength_resolution(scene, grid):
     from .single_pole_resolution import validate as validate_film_resolution
     if validate_film_resolution(scene, grid):
         return
+    from .debye_resolution import validate as validate_debye_resolution
+    if validate_debye_resolution(scene, grid):
+        return
     from ..monitors import Diffraction
     from .conductive_film import descriptor
     conductive = descriptor(scene, grid) is not None
@@ -2332,6 +2370,10 @@ def _proximity_notes(scene, plan):
     from .single_pole_film import descriptor as single_pole_descriptor
     from .single_pole_resolution import index_at as film_index_at
     film = single_pole_descriptor(scene, plan.grid)
+    if film is None:
+        from .debye_film import descriptor as debye_descriptor
+        from .debye_resolution import index_at as film_index_at
+        film = debye_descriptor(scene, plan.grid)
     out, grid = [], plan.grid
     for index, structure in enumerate(getattr(scene, 'structures', ()) or ()):
         if film is not None:

@@ -50,6 +50,7 @@ be runnable as written.
 | [`fd-metasurface.md`](fd-metasurface.md) | How do I solve a periodic metasurface cell with the general FDTD engine, read its diffraction orders, compare them with RCWA, and how fine a grid does it need? |
 | [`../fd-conductive-film.md`](../fd-conductive-film.md) | What does the first C8 conductive-film implementation admit, why does its normal interface need memory, and what validation remains? |
 | [`../fd-single-pole-film.md`](../fd-single-pole-film.md) | Which isolated flat films with one Drude or Lorentz pole are admitted, and which spectral limits and validation results apply? |
+| [`../fd-debye-film.md`](../fd-debye-film.md) | Which isolated Debye films are admitted, how do their relaxation and planning bound change, and what do the measured validation results establish? |
 
 ### Advanced
 
