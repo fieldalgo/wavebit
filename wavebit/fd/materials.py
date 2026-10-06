@@ -52,7 +52,7 @@ In this package's ``e^{-i w t}`` convention a lossy material has ``Im(eps) > 0``
 """
 import math
 
-from ._spec import is_jax_typed, spec
+from ._spec import is_jax_typed, spec, torch_carried
 
 __all__ = ['Material', 'Conductor', 'Dispersive', 'Drude', 'Lorentz', 'Debye',
            'MaterialBase', 'Pole', 'eps_at', 'concrete', 'as_material']
@@ -357,6 +357,15 @@ class Lorentz(Pole):
                                                           strict=False))
 
     def eps_term(self, omega):
+        # A concrete inactive oscillator is zero even at its removable resonance.
+        # A zero primal with a carried strength must keep d(chi)/d(strength).
+        # Check host equality too: float() can underflow an extended-precision value.
+        # A captured JAX constant instead avoids staging equality into a Python bool.
+        if (not torch_carried(self.strength) and concrete(self.strength) == 0
+                and (is_jax_typed(self.strength) or self.strength == 0)):
+            # Zero each finite operand separately: no squares/products may overflow,
+            # and traced frequency, resonance and damping retain their zero tangents.
+            return 0j * omega + 0j * self.omega_0 + 0j * self.gamma + 0j * self.strength
         return self.strength / (self.omega_0 ** 2 - omega ** 2 - 1j * self.gamma * omega)
 
     def coefficients(self, dt):

@@ -76,3 +76,10 @@ wavebit/fd/_lower/hybrid_film.py text eol=lf
 wavebit/fd/_lower/hybrid_resolution.py text eol=lf
 studies/results/fdtd_hybrid_film* -text
 studies/results/fdtd_hybrid_film*/** -text
+
+# Inactive Lorentz analytic correction and raw validation evidence.
+wavebit/fd/materials.py text eol=crlf
+studies/fdtd_inactive_lorentz_*.py text eol=lf
+tests/test_fd_inactive_lorentz.py text eol=lf
+studies/results/fdtd_inactive_lorentz* -text
+studies/results/fdtd_inactive_lorentz*/** -text

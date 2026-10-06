@@ -99,6 +99,28 @@ Three things in that scene are what make the shape traceable:
   PML: the rule that keeps a PML from being asked to absorb an order leaving too steeply is
   held at run time (see below).
 
+## An inactive Lorentz term in the analytic response
+
+For finite inputs, `fd.Lorentz(..., strength=0).eps_term(omega)` contributes zero,
+including at its undamped resonance. `fd.eps_at` inherits this convention when it
+sums the poles: an exactly inactive oscillator contributes no susceptibility, so
+its otherwise indeterminate `0 / 0` is removed before evaluating the denominator.
+This shortcut requires a concrete, exactly zero strength; it is not a tolerance
+that removes small nonzero strengths.
+
+A strength being differentiated may have a value of zero without being inactive.
+Away from resonance, for `D = omega_0**2 - omega**2 - 1j*gamma*omega`, its derivative
+is `d(eps_term)/d(strength) = 1/D`. That dependence is retained for traced strengths,
+including forward-mode tangents; a zero value alone must not detach it. Conversely,
+with a concrete inactive strength, derivatives with respect to finite frequency,
+resonance and damping remain zero. The undamped resonance of an active or
+strength-traced oscillator remains singular; this convention supplies no finite
+regularization or derivative there.
+
+This is the analytic material response. It does not change the time-domain pole
+recurrence, its stability policy, or which material and geometry derivatives a
+planned `fd.run` admits.
+
 ## What may be traced
 
 | Leaf | Where | Notes |
