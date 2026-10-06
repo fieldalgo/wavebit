@@ -60,3 +60,10 @@ wavebit/fd/_lower/oscillator_sum_resolution.py text eol=lf
 wavebit/fd/_kernel/observe.py text eol=crlf
 studies/results/fdtd_oscillator_sum_film* -text
 studies/results/fdtd_oscillator_sum_film*/** -text
+
+# State-byte report source and raw evidence preserve verified checkout bytes.
+studies/fdtd_state_bytes_*.py text eol=lf
+tests/test_fd_state_bytes.py text eol=lf
+wavebit/fd/_check.py text eol=crlf
+studies/results/fdtd_state_bytes* -text
+studies/results/fdtd_state_bytes*/** -text

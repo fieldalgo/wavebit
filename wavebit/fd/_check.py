@@ -1,21 +1,28 @@
 """``check(scene) -> Report``: what the run would be, before it is run.
 
-Cells per axis and in total, ``dt`` and the duration, the dtype, the bytes one state
-occupies (E and H; the curl scratch on NumPy doubles it), and the warnings a reader should
+Cells per axis and in total, ``dt`` and the duration, the dtype, the logical main-state
+array payload (E/H, CPML histories and material memory), and the warnings a reader should
 see before spending the time: a size that was snapped up to whole cells, a Bloch face
 that made the run complex, a box under two cells thick. ``check`` prints the report and
 returns it; ``run`` builds the same report silently and attaches it to the result.
+
+``bytes_per_state`` includes every declared pole's P, previous and delta arrays over its
+compact support, including reserved inactive slots. It is not a total memory forecast:
+source histories and auxiliary source columns, observer and energy-diagnostic arrays,
+runtime scratch, temporaries, checkpoints and allocator/Python overhead are excluded.
+Parameters and DFT accumulators have separate report entries.
 
 Stage 3 adds one line per frequency-domain monitor: the bytes of its DFT accumulators (complex
 per point per frequency, plus the per-step region energy the decay diagnostic reads; NumPy
 holds one scratch of the same size beside each, which is not counted), and says
 so when a ``Diffraction(polarizations='both')`` makes the run two solves. A scene without such
-a monitor prints exactly what it printed before.
+a monitor has no monitor line.
 """
 import dataclasses
 
 import numpy as np
 
+from ._kernel.poles import PoleTerm
 from ._lower import plan as _plan
 from ._lower.checks import notes as _notes, shown
 from ._lower.coefficients import params_bytes
@@ -33,6 +40,8 @@ class Report:
     steps: int
     duration: float
     dtype: str
+    #: Main-grid E/H, CPML and material-array payload; excludes source/observer/diagnostic
+    #: storage and runtime overhead. This is not the byte count of the whole state pytree.
     bytes_per_state: int
     warnings: tuple
     skeleton: str
@@ -69,7 +78,7 @@ class Report:
             f'dx         {self.dx:g}',
             f'dt         {self.dt:g}   steps {self.steps}   duration {self.duration:g}',
             f'dtype      {self.dtype}',
-            f'state      {self.bytes_per_state / 1e6:.2f} MB (E and H)',
+            f'state      {self.bytes_per_state / 1e6:.2f} MB (E, H, CPML and material memory)',
             (f'params     {self.bytes_per_params / 1e6:.2f} MB (coefficients, profiles)'
              if self.params_known else
              'params     unknown (a traced value: the params could not be built on NumPy)'),
@@ -226,6 +235,11 @@ def report(scene, p=None, params=None):
     psi = sum(4 * face.cells * (p.cells // p.grid.n['xyz'.index(face.name[0])])
               for face in p.cpml) * itemsize
     flux_memory = sum(3 * np.prod(t.region.shape) for t in p.constitutive) * itemsize
+    # PoleTerm.init_mem reserves P, previous and delta, each a three-component array.
+    # All current film subclasses inherit that layout, including inactive declared slots.
+    # Keep this a static count: initializing full buffers would defeat a pre-run report.
+    polarization_memory = sum(9 * t.n_poles * np.prod(t.region.shape)
+                              for t in p.terms if isinstance(t, PoleTerm)) * itemsize
     absorbers = tuple((name, 'PML' if (name, cells) in p.pml_cells else 'Absorber', cells)
                       for name, cells in p.absorbing_faces)
     params_known = True
@@ -252,7 +266,8 @@ def report(scene, p=None, params=None):
     return Report(cells=grid.n, requested_size=requested, size=grid.size, dx=p.dx, dt=p.dt,
                   discretisations=_discretisation_lines(p), junctions=junction_rows(p),
                   steps=p.steps, duration=p.steps * p.dt, dtype=p.dtype,
-                  bytes_per_state=2 * 3 * p.cells * itemsize + psi + flux_memory,
+                  bytes_per_state=(2 * 3 * p.cells * itemsize + psi + flux_memory
+                                   + polarization_memory),
                   warnings=tuple(warnings),
                   skeleton=p.skeleton, bytes_per_params=params_bytes(params),
                   absorbers=absorbers, spans=p.spans, monitors=monitors, solves=solves,
